@@ -1,0 +1,700 @@
+<template>
+    <DefaultLayout>
+        <div class="d-flex flex-wrap justify-space-between gap-4 mb-6">
+            <div class="d-flex flex-column justify-center">
+                <h4 class="text-h4 mb-1">
+                    💰 Add New Sale/Cotización
+                </h4>
+                <p class="text-body-1 mb-0">
+                    Orders placed across your store
+                </p>
+            </div>
+        </div>
+
+        <b-row class="mt-2">
+            <b-col lg="5" md="5">
+                <b-card no-body :class="{ 'border-sale': state_sale == 1 }">
+                    <b-card-header class="text-center">
+                        <i class="fas fa-cart-plus fs-18"></i>
+                        <b-card-title class="py-1">VENTA</b-card-title>
+                        <b-form-radio name="state_sale" @click="state_sale = 1" value="1" checked></b-form-radio>
+                    </b-card-header>
+                </b-card>
+            </b-col>
+            <b-col lg="2" md="2">
+            </b-col>
+            <b-col lg="5" md="5">
+                <b-card no-body :class="{ 'border-sale': state_sale == 2 }">
+                    <b-card-header class="text-center">
+                        <i class="fas fa-file-alt fs-18"></i>
+                        <b-card-title class="py-1">COTIZACIÓN</b-card-title>
+                        <b-form-radio name="state_sale" @click="state_sale = 2" value="2"></b-form-radio>
+                    </b-card-header>
+                </b-card>
+            </b-col>
+        </b-row>
+        <b-card no-body>
+            <b-card-header>
+                <b-card-title>🔩 Datos Generales</b-card-title>
+            </b-card-header>
+            <b-card-body class="pt-0">
+
+                <b-row>
+                    <b-col lg="2">
+                        <label for="is_exportacion-c" class="col-form-label text-lg-end">Exportación: </label>
+                        <div class="d-flex">
+                            <b-form-radio name="is_exportacion-c" @click="is_exportacion = 0" value="0"
+                                :checked="is_exportacion == 0">No</b-form-radio>
+                            {{ " " }}
+                            <b-form-radio name="is_exportacion-c" class="mx-2" @click="is_exportacion = 1" value="1"
+                                :checked="is_exportacion == 1">Si</b-form-radio>
+                            {{ " " }}
+                        </div>
+                    </b-col>
+                    <b-col lg="2" md="3">
+                        <label for="n-transaction" class="col-form-label text-lg-end">N° de Venta/Cotización: </label>
+                        <b-form-input type="text" id="n-transaction" v-model="n_transaction" placeholder="000000" />
+                    </b-col>
+                    <b-col lg="2" md="3">
+                        <label for="n-f-emision" class="col-form-label text-lg-end">Fecha de Emisión: </label>
+                        <b-form-input type="date" id="n-f-emision" v-model="today" />
+                    </b-col>
+                    <b-col lg="5" md="5">
+                        <label for="n-f-clients" class="col-form-label text-lg-end">Clientes: </label>
+                        <select id="n-f-clients">
+                            <option value="">Selec. Cliente</option>
+                            <template v-for="(client, index) in clients" :key="index">
+                                <option :value="client.id">{{ client.full_name }}</option>
+                            </template>
+                        </select>
+        <b v-if="client_selected">{{ client_selected.type_client == 1 ? 'CLIENTE FINAL' : 'CLIENTE EMPRESA' }}</b>
+                    </b-col>
+
+                    <b-col lg="5" v-if="is_exportacion == 0">
+                        <label for="retencion-igv-c" class="col-form-label text-lg-end">Retenciones IGV: </label>
+                        <div class="d-flex">
+                            <b-form-radio name="retencion-igv-c" @click="retencion_igv = 0" value="0"
+                                :checked="retencion_igv == 0">Ninguno</b-form-radio>
+                            {{ " " }}
+                            <b-form-radio name="retencion-igv-c" class="mx-2" @click="retencion_igv = 1" value="1"
+                                :checked="retencion_igv == 1">Retención</b-form-radio>
+                            {{ " " }}
+                            <b-form-radio name="retencion-igv-c" class="mx-2" @click="retencion_igv = 2" value="2"
+                                :checked="retencion_igv == 2">Detracción</b-form-radio>
+                            {{ " " }}
+                            <b-form-radio name="retencion-igv-c" class="mx-2" @click="retencion_igv = 3" value="3"
+                                :checked="retencion_igv == 3">Percepción</b-form-radio>
+                        </div>
+                    </b-col>
+
+                    <b-col lg="2">
+                        <label for="is_anticipo-c" class="col-form-label text-lg-end">Anticipo: </label>
+                        <div class="d-flex">
+                            <b-form-radio name="is_anticipo-c" @click="is_anticipo = 0" value="0"
+                                :checked="is_anticipo == 0">No</b-form-radio>
+                            {{ " " }}
+                            <b-form-radio name="is_anticipo-c" class="mx-2" @click="is_anticipo = 1" value="1"
+                                :checked="is_anticipo == 1">Si</b-form-radio>
+                            {{ " " }}
+                        </div>
+                    </b-col>
+                    <b-col lg="2" v-if="is_anticipo == 1">
+                        <div class="d-flex align-items-center">
+                            <div>
+                                <label for="n-of-comprobante" class="col-form-label">N° de Compr. o N° Venta: </label>
+                                <b-form-input type="text" id="n-of-comprobante" v-model="n_comprobante_anticipo"
+                                    @keyup.enter="searchAnticipo()" placeholder=""
+                                    :disabled="sale_anticipo ? true : false" />
+                            </div>
+                            <div v-if="sale_anticipo">
+                                <b-button type="button" class="rounded-pill btn btn-info" @click="resetAnticipo()">
+                                    <i class="fas fa-window-close ml-3"></i>
+                                </b-button>
+                            </div>
+                        </div>
+                    </b-col>
+                    <b-col lg="2">
+                        <label for="FB" class="col-form-label text-lg-end">Tipo: </label>
+                        <b-form-select id="FB" v-model="serie">
+                            <option value="F001">F001</option>
+                            <option value="B001">B001</option>
+                        </b-form-select>
+                    </b-col>
+                </b-row>
+
+            </b-card-body>
+        </b-card>
+
+        <b-card no-body>
+            <b-card-header>
+                <b-card-title>📦 Datos del Producto</b-card-title>
+            </b-card-header>
+            <b-card-body class="pt-0">
+                <b-row>
+                    <b-col lg="6" md="6">
+                        <div class="row">
+                            <div class="col-12">
+                                <label for="n-f-products" class="col-form-label text-lg-end">Productos: </label>
+                                <select id="n-f-products">
+                                    <option value="">Selec. Producto</option>
+
+                                    <template v-for="(product, index) in products" :key="index">
+                                        <option :value="product.id" :data-stock="product.stock">
+                                            {{ product.title }}
+                                        </option>
+                                    </template>
+                                </select>
+
+
+                            </div>
+                            <div class="col-12 mt-2" v-if="product_selected">
+                                <span v-if="product_selected.is_icbper == 2">Es Bolsa de Plastico</span>
+                                <span v-if="product_selected.is_ivap == 2">Es Arroz Pilado</span>
+                            </div>
+                        </div>
+                    </b-col>
+                    <b-col lg="3" md="3">
+                        <b-row>
+                            <b-col lg="12" md="12"
+                                v-if="product_selected && product_selected?.is_ivap == 1 && is_exportacion == 0">
+                                <label for="n-f-type-operation" class="col-form-label text-lg-end">Tipo de Operación:
+                                </label>
+                                <b-form-select id="n-f-type-operation" v-model="type_operation">
+                                    <option value="10">Gravado - Operación Onerosa</option>
+                                    <option value="20">Exonerado - Operación Onerosa</option>
+                                    <option value="30">Inafecto - Operación Onerosa</option>
+                                    <option value="11">Gravado – Retiro por premio</option>
+                                </b-form-select>
+                            </b-col>
+                            <b-col lg="12" md="12" v-if="product_selected && is_exportacion == 1">
+                                <label for="n-f-type-operation" class="col-form-label text-lg-end">Tipo de Operación:
+                                </label>
+                                <b-form-select id="n-f-type-operation" v-model="type_operation">
+                                    <option value="40">Exportación de Bienes o Servicios</option>
+                                </b-form-select>
+                            </b-col>
+                            <b-col lg="12" md="12"
+                                v-if="product_selected && product_selected?.is_ivap == 2 && is_exportacion == 0">
+                                <label for="n-f-type-operation" class="col-form-label text-lg-end">Tipo de Operación:
+                                </label>
+                                <b-form-select id="n-f-type-operation" v-model="type_operation">
+                                    <option value="17">Gravado - IVAP</option>
+                                </b-form-select>
+                            </b-col>
+                            <b-col lg="12" md="12" v-if="product_selected && product_selected.is_discount == 2">
+                                <label for="n-f-discount" class="col-form-label text-lg-end">Descuento: </label>
+                                <b-form-input type="number" id="n-f-discount" v-model="discount" placeholder="" />
+                            </b-col>
+                        </b-row>
+                    </b-col>
+                    <b-col lg="2" md="2">
+                        <b-row>
+                            <b-col lg="12" md="12">
+                                <label for="n-f-cantidad" class="col-form-label text-lg-end">Cantidad: </label>
+                                <b-form-input type="number" id="n-f-cantidad" v-model="quantity" placeholder="" />
+                            </b-col>
+                            <b-col lg="12" md="12">
+                                <label for="n-f-precio-base" class="col-form-label text-lg-end">Precio Base: </label>
+                                <b-form-input type="number" id="n-f-precio-base" v-model="price_base" placeholder="" />
+                            </b-col>
+                        </b-row>
+                    </b-col>
+                    <b-col lg="1" md="1" class="text-end mt-4">
+                        <b-button type="button" variant="success" @click="addProduct()">
+                            <i class="far fa-plus-square ml-3"></i>
+                        </b-button>
+                    </b-col>
+                </b-row>
+            </b-card-body>
+        </b-card>
+
+        <b-card no-body>
+            <b-card-header>
+                <b-card-title>📒 Detalle de la {{ state_sale == 1 ? 'Venta' : 'Cotización' }}</b-card-title>
+            </b-card-header>
+            <b-card-body class="pt-0">
+                <b-row>
+                    <b-col lg="12">
+                        <div class="table-responsive m-0">
+                            <table class="table datatable">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Id</th>
+                                        <th>Producto</th>
+                                        <th>Unidad</th>
+                                        <th>Cantidad</th>
+                                        <th>Precio Base</th>
+                                        <th>Igv</th>
+                                        <th>Descuento</th>
+                                        <th>Precio Final</th>
+                                        <th>SubTotal</th>
+                                        <th>Acción</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr v-for="(sale_detail, index) in sale_details" :key="index">
+                                        <td>{{ index + 1 }}</td>
+                                        <td>{{ sale_detail.product.title }}</td>
+                                        <td>{{ sale_detail.unidad_medida }}</td>
+                                        <td>{{ sale_detail.quantity }}</td>
+                                        <td>{{ currency }} {{ sale_detail.price_base }}</td>
+                                        <td>{{ currency }} {{ (sale_detail.igv + sale_detail.icbper).toFixed(2) }}</td>
+                                        <td>{{ currency }} {{ sale_detail.discount }}</td>
+                                        <td>{{ currency }} {{ sale_detail.price_final }}</td>
+                                        <td v-if="![11].includes(sale_detail.tip_afe_igv)">{{ currency }} {{
+                                            sale_detail.subtotal }}</td>
+                                        <td v-if="[11].includes(sale_detail.tip_afe_igv)">{{ currency }} 0 </td>
+                                        <td>
+                                            <b-button type="button" variant="danger" @click="deleteSaleDetail(index)">
+                                                <i class="fas fa-prescription-bottle"></i>
+                                            </b-button>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </b-col>
+                    <b-col lg="6">
+                        <b-row>
+                            <b-col lg="4">
+                                <label for="n-discount-global" class="col-form-label text-lg-end">Descuento Global:
+                                </label>
+                                <b-form-input type="number" id="n-discount-global" v-model="discount_global"
+                                    @keyup.enter="sumDetails()" placeholder="" />
+                            </b-col>
+                        </b-row>
+                    </b-col>
+                    <b-col lg="6" class="mt-2">
+                        <table style="width: 90%;">
+                            <tr>
+                                <td>IGV</td>
+                                <td>{{ currency }} {{ getIgvTotal() }}</td>
+                            </tr>
+
+                            <tr>
+                                <td>Descuento</td>
+                                <td>{{ currency }} {{ discount_total + discount_global }}</td>
+                            </tr>
+
+                            <tr>
+                                <td>SubTotal</td>
+                                <td>{{ currency }} {{ getSubTotalSale() }}</td>
+                            </tr>
+
+                            <tr>
+                                <td>Total</td>
+                                <td>{{ currency }} {{ getTotalSales() }}</td>
+                            </tr>
+
+                        </table>
+                    </b-col>
+                </b-row>
+            </b-card-body>
+        </b-card>
+        /* Card de pagos */
+        <b-card no-body>
+            <b-card-header>
+                <b-card-title>💵 Pagos</b-card-title>
+            </b-card-header>
+            <b-card-body class="pt-0">
+                <b-row>
+                    <b-col lg="3">
+                        <label for="type-pay-c" class="col-form-label text-lg-end">Tipo: </label>
+                        <div class="d-flex">
+                            <b-form-radio name="type-pay-c" @click="type_payment = 1" value="1"
+                                :checked="type_payment == 1">Al
+                                contado</b-form-radio>
+                            {{ " " }}
+                            <b-form-radio name="type-pay-c" class="mx-2" @click="type_payment = 2" value="2"
+                                :checked="type_payment == 2">Credito</b-form-radio>
+                        </div>
+                    </b-col>
+                    <b-col lg="3">
+                        <label for="n-f-method-payment" class="col-form-label text-lg-end">Metodo de Pago: </label>
+                        <b-form-select id="n-f-method-payment" v-model="method_payment">
+                            <option value="EFECTIVO">EFECTIVO</option>
+                            <option value="TRANSFERENCIA">TRANSFERENCIA</option>
+                            <option value="YAPE">YAPE</option>
+                            <option value="PLIN">PLIN</option>
+                            <option value="TARJETA DE CREDITO">TARJETA DE CREDITO</option>
+                        </b-form-select>
+                    </b-col>
+                    <b-col lg="2">
+                        <label for="n-f-amount" class="col-form-label text-lg-end">Monto: </label>
+                        <b-form-input type="number" id="n-f-amount" v-model="amount" placeholder="" />
+                    </b-col>
+                    <b-col lg="3" v-if="type_payment == 2">
+                        <label for="n-f-payment" class="col-form-label text-lg-end">Fecha de Pago: </label>
+                        <b-form-input type="date" id="n-f-payment" v-model="date_payment" />
+                    </b-col>
+                    <b-col lg="1">
+                        <label class="col-form-label text-lg-end">Agregar: </label>
+                        <b-button type="button" variant="primary" @click="addPayment()">
+                            <i class="far fa-plus-square ml-3"></i>
+                        </b-button>
+                    </b-col>
+                </b-row>
+
+                <b-row class="mt-2">
+                    <b-col lg="6">
+                        <div class="table-responsive m-0">
+                            <table class="table datatable">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Id</th>
+                                        <th>Metodo de Pago</th>
+                                        <th>Monto</th>
+                                        <th v-if="type_payment == 2">Fecha de Pago</th>
+                                        <th>Acción</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr v-for="(sale_payment, index) in sale_payments" :key="index">
+                                        <td>{{ index + 1 }}</td>
+                                        <td>{{ sale_payment.method_payment }}</td>
+                                        <td>{{ currency }} {{ sale_payment.amount }}</td>
+                                        <td v-if="type_payment == 2">{{ sale_payment.date_payment }}</td>
+                                        <td>
+                                            <b-button type="button" variant="danger" @click="removePayment(index)">
+                                                <i class="fas fa-prescription-bottle"></i>
+                                            </b-button>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </b-col>
+                    <b-col lg="3" md="3">
+                        <label for="description-product" class="col-form-label text-lg-end">Descripción: </label>
+                        <b-form-textarea type="textarea" v-model="description" rows="5" id="description-product" />
+                    </b-col>
+                    <b-col lg="3" md="3" class="text-end">
+                        <b-button type="button" variant="primary" @click="store()">
+                            <i class="far fa-plus-square ml-3"></i> Guardar {{ state_sale == 1 ? 'Venta' : 'Cotización'
+                            }}
+                        </b-button>
+                    </b-col>
+                </b-row>
+
+            </b-card-body>
+        </b-card>
+
+    </DefaultLayout>
+</template>
+
+<script setup lang="ts">
+import DefaultLayout from '@/layouts/DefaultLayout.vue';
+import httpClient from '@/helpers/http-client';
+import type { AxiosResponse } from 'axios';
+import Swal from "sweetalert2/dist/sweetalert2.js";
+import { onMounted, ref } from 'vue';
+import type { SaleConfig, Sale, SaleDetail, SalePayment } from '@/types/sales';
+import type { Client } from '@/types/clients';
+import type { Product } from '@/types/products';
+import Selectr from 'mobius1-selectr';
+import { set } from '@vueuse/core';
+type TVueSwalInstance = typeof Swal & typeof Swal.fire;
+
+
+const clients = ref<Client[]>([]);
+const products = ref<Product[]>([]);
+const client_selected = ref<Client | undefined>(undefined);
+const product_selected = ref<Product | undefined>(undefined);
+
+const state_sale = ref<number>(1);
+const is_exportacion = ref<number>(0);
+const n_transaction = ref<string>("");
+const today = ref<Date | string>("");
+const retencion_igv = ref<number>(0);
+
+const is_anticipo = ref<number>(0);
+const n_comprobante_anticipo = ref<string>("");
+const sale_anticipo = ref<number>(0);
+const serie = ref<string>("F001");
+const type_operation = ref<string>("");
+const discount = ref<number>(0);
+const quantity = ref<number>(0);
+const price_base = ref<number>(0);
+
+const sale_details = ref<SaleDetail[]>([]);
+const currency = ref<string>("s/.");
+const discount_total = ref<number>(0);
+const discount_global = ref<number>(0);
+
+//pagos
+const type_payment = ref<number>(1);
+const method_payment = ref<string>("EFECTIVO");
+const amount = ref<number>(0);
+const date_payment = ref<Date | string>("");
+const sale_payments = ref<SalePayment[]>([]);
+const description = ref<string>("");
+
+const clientSelectr = ref<any>(null);//esto es una variable para captar el id del cliente
+const productSelectr = ref<any>(null);//esto es una variable para captar el id del producto
+const igv_total = ref<number>(0);
+const sale_total = ref<number>(0);
+const sale_subtotal = ref<number>(0);
+
+
+const getPriceBaseCF = () => { //precio base cliente final
+    if (product_selected.value) {
+        if (product_selected.value.include_igv == 1) { //no incluye igv
+            return (product_selected.value.price_general);
+        } else {
+            return (product_selected.value.price_general / 1.18).toFixed(6);
+        }
+    }
+    return 0;
+}
+
+const getPriceBaseCE = () => { //precio base cliente empresa
+    if (product_selected.value) {
+        if (product_selected.value.include_igv == 1) { //no incluye igv
+            return (product_selected.value.price_company);
+        } else {
+            return (product_selected.value.price_company / 1.18).toFixed(6);
+        }
+    }
+    return 0;
+}
+
+
+const config = async () => {
+    try {
+        const res: AxiosResponse<SaleConfig> = await httpClient.get(
+            `sales/config`);
+        n_transaction.value = res.data.n_transaction;
+        today.value = res.data.today;
+        clients.value = res.data.clients.data;
+        products.value = res.data.products.data;
+        console.log(res);
+
+        setTimeout(() => {
+            clientSelectr.value = new Selectr('#n-f-clients');
+            productSelectr.value = new Selectr('#n-f-products', {
+                searchable: true,
+
+                renderOption(option: any) {//
+                    if (!option.value) return option.text;
+
+                    const stock = option.dataset.stock ?? 0;
+
+                    return `
+                    <div style="display:flex;justify-content:space-between; width:100%;">
+                        <span>${option.text}</span>
+                        <span style="font-size:12px;color:${stock <= 5 ? 'red' : '#6b7280'};">stock: ${stock}</span>
+                    </div>
+    `;
+                },
+
+                renderSelection(option: any) {
+                    return option.text;
+                }
+            });
+
+
+
+            clientSelectr.value.on("selectr.change", (option: any) => {
+                console.log(option.value);
+                client_selected.value = clients.value.find(client => client.id == option.value);
+                if (product_selected.value && client_selected.value) {
+                    if (client_selected.value.type_client === 1) { //CLIENTE FINAL
+                        price_base.value = getPriceBaseCF();
+                    }
+                    if (client_selected.value.type_client === 2) { // CLIENTE EMPRESA
+                        price_base.value = getPriceBaseCE();
+                    }
+                }
+            })
+
+            productSelectr.value.on("selectr.change", (option: any) => {
+                console.log(option.value);
+                product_selected.value = products.value.find(product => product.id == option.value);
+                if (product_selected.value) {
+                    if (product_selected.value?.is_ivap == 1 && is_exportacion.value == 0) {
+                        type_operation.value = "10";
+                    };
+                    if (is_exportacion.value == 1) {
+                        type_operation.value = "40";
+                    }
+                    if (product_selected.value?.is_ivap == 2 && is_exportacion.value == 0) {
+                        type_operation.value = "17";
+                    };
+                }
+
+
+
+
+                if (client_selected.value) {
+                    if (client_selected.value.type_client == 1) {//CLIENTE FINAL
+                        price_base.value = getPriceBaseCF();
+                    }
+                    if (client_selected.value.type_client == 2) {// CLIENTE EMPRESA
+                        price_base.value = getPriceBaseCE();
+                    }
+                } else {
+                    price_base.value = product_selected.value?.price_general ?? 0;
+                }
+            })
+
+        }, 25);
+
+    } catch (error) {
+        console.log(error);
+
+    }
+
+}
+
+
+const searchAnticipo = () => {
+
+}
+const resetAnticipo = () => {
+
+}
+const addProduct = () => {
+
+    if (!product_selected.value) {
+        (Swal as TVueSwalInstance).fire({
+            icon: 'error',
+            title: 'Error',
+            text: 'Necesitas seleccionar un producto',
+        });
+        return;
+    }
+    if (quantity.value <= 0) {
+        (Swal as TVueSwalInstance).fire({
+            icon: 'error',
+            title: 'Error',
+            text: 'Necesitas digitar la cantidad del producto',
+        });
+        return;
+    }
+    if (price_base.value <= 0) {
+        (Swal as TVueSwalInstance).fire({
+            icon: 'error',
+            title: 'Error',
+            text: 'Necesitas digitar el precio unitario del producto',
+        });
+        return;
+    }
+    let DISCOUNT_TOTAL = discount.value * quantity.value;
+    let SUBTOTAL = Number(((price_base.value * quantity.value) - DISCOUNT_TOTAL).toFixed(3));
+    let PERCENTAGE_IGV = 0.18;
+    let IGV = SUBTOTAL * PERCENTAGE_IGV;
+    let PRECIO_FINAL = Number(((SUBTOTAL + IGV) / quantity.value).toFixed(3));
+
+    sale_details.value.unshift({
+        product: product_selected.value,
+        unidad_medida: product_selected.value.unidad_medida,
+        price_base: price_base.value,
+        price_final: PRECIO_FINAL,
+        quantity: quantity.value,
+        discount: DISCOUNT_TOTAL,
+        igv: IGV,
+        subtotal: SUBTOTAL,
+        per_icbper: 0, //porcentaje de icbper
+        icbper: 0,
+        tip_afe_igv: type_operation.value,
+        percentage_isc: 0,
+        isc: 0
+    });
+    sumDetails();
+    resetDataItem();
+
+}
+const deleteSaleDetail = (index: number) => {
+   
+}
+const resetDataItem = () => {
+    productSelectr.value.setValue("");
+    product_selected.value = undefined;
+    price_base.value = 0;
+    quantity.value = 0;
+    discount.value = 0;
+    type_operation.value = "10";
+}
+
+const sumDetails = () => {
+    igv_total.value = Number((sale_details.value.reduce((sum: number, sale_detail: any) => (sum + sale_detail.igv), 0)).toFixed(3));
+    sale_subtotal.value = Number((sale_details.value.reduce((sum: Number, sale_detail: any) => sum + sale_detail.subtotal, 0)).toFixed(3));
+    discount_total.value = Number((sale_details.value.reduce((sum: number, sale_detail) => sum + sale_detail.discount, 0)).toFixed(3));
+    sale_total.value = Number((igv_total.value + sale_subtotal.value).toFixed(3));
+}
+const getIgvTotal = () => {
+    return igv_total.value;
+}
+const getSubTotalSale = () => {
+    return sale_subtotal.value;
+}
+const getTotalSales = () => {
+    return sale_total.value;
+}
+const addPayment = () => {
+
+}
+const removePayment = (index: number) => {
+
+}
+const store = () => {
+
+}
+
+
+/**
+ * Agrega un producto a la lista de detalles de la venta
+ * 
+ * @throws {Error} Si el producto ya se encuentra en la lista
+ * @throws {Error} Si no se ha seleccionado un producto
+ * @throws {Error} Si no se ha digitado la cantidad del producto
+ * @throws {Error} Si no se ha digitado el precio unitario del producto
+ */
+const addProduct2 = () => {
+    if (!price_unit.value || price_unit.value == 0) {
+        // message_text.value = "Necesitas digitar el precio unitario del producto";
+        return;
+    }
+    if (!quantity.value || quantity.value == 0) {
+        // message_text.value = "Necesitas digitar la cantidad del producto";
+        return;
+    }
+    if (!product_selected.value) {
+        // message_text.value = "Necesitas seleccionar un producto";
+        return;
+    }
+
+    let PRODUCT_EXITS = sale_details.value.find((sldt) => sldt.product.id == product_selected.value?.id);
+    if (PRODUCT_EXITS) {
+        message_text.value = "El producto ya se encuentra en la lista";
+        // setTimeout(() => {
+        //     warning_alert.value = true;
+        // }, 25);
+        return;
+    }
+
+    let DISCOUNT_TOTAL = discount.value * quantity.value;
+
+    // let TOTAL_VENTA_BASE = quantity.value * price_unit.value;
+    let TOTAL_VENTA = (quantity.value * price_unit.value) - DISCOUNT_TOTAL;
+    let IGV = TOTAL_VENTA * 0.18;
+    let PRECIO_FINAL = Number(((TOTAL_VENTA + IGV) / quantity.value).toFixed(2));
+
+    sale_details.value.push({
+        product: product_selected.value,
+        unidad_medida: product_selected.value.unidad_medida,
+        price_base: price_unit.value,
+        price_final: PRECIO_FINAL,
+        quantity: quantity.value,
+        discount: DISCOUNT_TOTAL,
+        igv: Number(IGV.toFixed(2)),
+        subtotal: TOTAL_VENTA,
+    });
+    console.log(sale_details.value);
+    //resetDataItem();
+}
+
+onMounted(() => {
+    config();
+});
+</script>
