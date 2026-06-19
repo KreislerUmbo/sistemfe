@@ -29,12 +29,20 @@ import "listree/dist/listree.min.css";
 import "bootstrap-vue-next/dist/bootstrap-vue-next.css";
 import "@/assets/scss/app.scss";
 import "@/assets/scss/icons.scss";
+import { useClientAuthStore } from "@/stores/clientAuth";
+// main.js (o main.ts)
+//import 'bootstrap/dist/css/bootstrap.min.css'
+//import 'bootstrap'
+const pinia = createPinia();
 
 const app = createApp(App);
-
-app.use(createPinia());
+app.use(pinia);
 app.use(router);
 app.use(createBootstrap({ components: true, directives: true }));
 app.use(VueApexCharts);
 
-app.mount("#app");
+// Restaurar sesión cliente
+const clientAuth = useClientAuthStore(pinia);
+clientAuth.initializeAuth().finally(() => {
+    app.mount("#app");
+});

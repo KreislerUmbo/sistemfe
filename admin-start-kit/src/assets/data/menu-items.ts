@@ -15,10 +15,48 @@ export const MENU_ITEMS: MenuItemType[] = [
     permission: "all",
   },
   {
+    key: "Adminportal",
+    label: "ADMIN PORTAL",
+    isTitle: true,
+    permissions: ['list_categorie_system', 'edit_categorie_system', 'list_system', 'list_plain', 'edit_plain',
+    ]
+  },
+  {
+    key: "system_categories",
+    icon: "fas fa-life-ring",
+    label: "Categorias Sistemas",
+    route: { name: "system_categories.index" },
+    parentKey: "system_categories",
+    permission: 'list_categorie_system',
+  },
+  {
+    key: "systems",
+    label: "Sistemas",
+    isTitle: false,
+    icon: "fa-brands fa-windows",
+    children: [
+      {
+        key: "register_system",
+        label: "Registrar",
+        route: { name: "system.register" },
+        parentKey: "systems",
+        permission: 'register_system',
+      },
+      {
+        key: "list_systems",
+        label: "Listar",
+        route: { name: "systems.index" },
+        parentKey: "systems",
+        permission: 'list_system',
+      },
+    ],
+  },
+
+  {
     key: "Accesos",
     label: "ACCESS",
     isTitle: true,
-    permissions: ['list_role','list_user']
+    permissions: ['list_role', 'list_user']
   },
   {
     key: "roles",
@@ -40,8 +78,8 @@ export const MENU_ITEMS: MenuItemType[] = [
     key: "Comercial",
     label: "COMERCIAL",
     isTitle: true,
-    permissions: ['list_categorie','list_product','register_product','list_client','register_sale','list_sale',
-      'register_guia_remision','list_guia_remision'
+    permissions: ['list_categorie', 'list_product', 'register_product', 'list_client', 'register_sale', 'list_sale',
+      'register_guia_remision', 'list_guia_remision'
     ]
   },
   {
@@ -98,7 +136,7 @@ export const MENU_ITEMS: MenuItemType[] = [
       {
         key: "list_sales",
         label: "Listar",
-        route: { name: "dashboards.ecommerce" },
+        route: { name: "sale.list" },
         parentKey: "sales",
         permission: 'list_sale',
       },

@@ -2,16 +2,19 @@
 
 namespace App\Models\Client;
 
+
+use Illuminate\Foundation\Auth\User as Authenticatable;
 use App\Models\User;
 use Carbon\Carbon;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use PHPOpenSourceSaver\JWTAuth\Contracts\JWTSubject;
 
-class Client extends Model
+class Client extends Authenticatable implements JWTSubject
 {
-    use SoftDeletes;
+    use  SoftDeletes;
     //use HasFactory; //esto sirve para usar el factory de la base de datos osea para crear registros en la base de datos
+    protected $table = 'clients';
     protected $fillable = [
         "name",
         "surname",
@@ -33,8 +36,23 @@ class Client extends Model
         "provincia",
         "region",
         "state", //1=activo 0=inactivo
-    ];
+        "password", //para los clientes que vienen del portal
+        "email_verified_at",
+        "last_login_at",
+        "remember_token",
 
+    ];
+    protected $hidden = ['password', 'remember_token']; //ocultar la contraseña
+
+    public function getJWTIdentifier()
+    {
+        return $this->getKey();
+    }
+
+    public function getJWTCustomClaims()
+    {
+        return [];
+    }
     public function setCreatedAtAttribute($value)
     {
         date_default_timezone_set('America/Lima');
@@ -50,6 +68,10 @@ class Client extends Model
 
     public function user()
     {
-        return $this->belongsTo(User::class,"user_id");
+        return $this->belongsTo(User::class, "user_id");
+    }
+    public function setPasswordAttribute($value) //para encriptar la contraseña
+    {
+        $this->attributes['password'] = bcrypt($value);
     }
 }

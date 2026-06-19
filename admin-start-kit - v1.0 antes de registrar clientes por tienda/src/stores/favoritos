@@ -1,0 +1,25 @@
+// frontend/src/stores/favoritos.js
+import { defineStore } from 'pinia'
+
+export const useFavoritosStore = defineStore('favoritos', {
+  state: () => ({
+    items: [] // array de productos favoritos { id, nombre, precio, imagen, slug }
+  }),
+  getters: {
+    totalItems: (state) => state.items.length,
+    isFavorite: (state) => (id) => state.items.some(item => item.id === id)
+  },
+  actions: {
+    toggleFavorito(producto) {
+      const exists = this.items.find(item => item.id === producto.id)
+      if (exists) {
+        this.items = this.items.filter(item => item.id !== producto.id)
+      } else {
+        this.items.push({ ...producto })
+      }
+    },
+    removeFavorito(id) {
+      this.items = this.items.filter(item => item.id !== id)
+    }
+  }
+})

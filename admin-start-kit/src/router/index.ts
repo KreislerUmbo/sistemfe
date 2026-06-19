@@ -2,6 +2,10 @@ import { createRouter, createWebHistory } from "vue-router";
 import { allRoute } from "@/router/routes";
 import { useAuthStore } from "@/stores/auth";
 import type { User } from "@/types/auth";
+import { useClientAuthStore } from '@/stores/clientAuth'
+
+
+
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -19,13 +23,23 @@ router.beforeEach((to, from, next) => {
 router.beforeEach((routeTo, routeFrom, next) => {
   // Check if auth is required on this route
   // (including nested routes).
-  
+
   const useAuth = useAuthStore();
+  const clientAuth = useClientAuthStore()
+  const clientRequired = routeTo.matched.some(
+    route => route.meta.clientAuth
+  )
+  if (clientRequired && !clientAuth.isAuthenticated) {
+    return next({
+      name: 'portal.login',
+      query: { redirectedFrom: routeTo.fullPath }
+    })
+  }
 
   const authLogin = routeTo.matched.some((route) => route.meta.authLogin);
-  if(authLogin){
+  if (authLogin) {
     if (useAuth.isAuthenticated()) {
-      return  redirectToDashboard();
+      return redirectToDashboard();
     }
   }
 
@@ -36,9 +50,9 @@ router.beforeEach((routeTo, routeFrom, next) => {
 
   // If auth is required and the user is logged in...
   if (authRequired && useAuth.isAuthenticated()) {
-    if(useAuth.isPermitedRoute(routeTo.meta.permission+"")){
+    if (useAuth.isPermitedRoute(routeTo.meta.permission + "")) {
       return next();
-    }else{
+    } else {
       return redirectToNoAuthorize();
     }
   }
@@ -52,10 +66,10 @@ router.beforeEach((routeTo, routeFrom, next) => {
     next({ name: "auth.sign-in", query: { redirectedFrom: routeTo.fullPath } });
   }
   function redirectToDashboard() {
-    next({ name: "dashboards.analytics"});
+    next({ name: "dashboards.analytics" });
   }
   function redirectToNoAuthorize() {
-    next({ name: "error.500"});
+    next({ name: "error.500" });
   }
 });
 
