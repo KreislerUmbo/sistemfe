@@ -15,7 +15,7 @@
                 class="iconoir-peace-hand h3 align-self-center mb-0 text-primary"
               ></i>
             </div>
-            <h5 class="mt-3">Mannat Themes</h5>
+            <h5 class="mt-3">UmboSystem</h5>
             <p class="mb-3 text-muted">
               Rizz is a high quality web applications.
             </p>

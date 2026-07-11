@@ -25,6 +25,8 @@ class Client extends Authenticatable implements JWTSubject
         "type_client", //1 es cliente normal y 2 es empresa 
         "type_document",
         "n_document",
+        "cod_tipo_doc_sunat",
+        "es_amazonia",
         "gender",
         "birth_date", //fecha de cumpleaños
         "user_id",
@@ -37,12 +39,20 @@ class Client extends Authenticatable implements JWTSubject
         "region",
         "state", //1=activo 0=inactivo
         "password", //para los clientes que vienen del portal
-        "email_verified_at",
-        "last_login_at",
-        "remember_token",
+        "email_verified_at",//para los clientes que vienen del portal
+        "last_login_at",//para los clientes que vienen del portal
+        "remember_token",//para los clientes que vienen del portal
+
+        "regimen_tributario",
+        "es_agente_retencion",
 
     ];
     protected $hidden = ['password', 'remember_token']; //ocultar la contraseña
+
+      protected $casts = [
+        'es_amazonia' => 'boolean', // garantiza true/false, nunca "0"/"1" como string
+        'es_agente_retencion' => 'boolean',
+    ]; 
 
     public function getJWTIdentifier()
     {

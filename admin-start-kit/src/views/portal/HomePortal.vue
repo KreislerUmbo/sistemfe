@@ -10,7 +10,7 @@
 
 <script setup>
 import HeroPortal from '@/components/portal/HeroPortal.vue'
-import SeccionSistemasEmpresariales from '@/components/Portal/SeccionSistemasEmpresariales.vue'
+import SeccionSistemasEmpresariales from '@/components/portal/SeccionSistemasEmpresariales.vue'
 import SeccionCategorias from '@/components/portal/SeccionCategorias.vue'
 import SeccionServicios from '@/components/portal/SeccionServicios.vue'
 </script>

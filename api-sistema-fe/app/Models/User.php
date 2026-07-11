@@ -36,6 +36,7 @@ class User extends Authenticatable implements JWTSubject
         'gender',
         'address',
         'state',
+        'formato_impresion_default', // 'a4' o 'ticket80mm' — usado por defecto al imprimir comprobantes
     ];
 
     /**

@@ -18,22 +18,45 @@ class SaleDetail extends Model
         "sale_id",
         "product_id",
         "product_categorie_id",
+
+        // Tipo de afectación IGV (Catálogo 07 SUNAT)
+        // Siempre como string: '10', '17', '20', '30', '40'
         "tip_afe_igv",
+
+        // ICBPER (bolsa plástica)
         "per_icbper",
         "icbper",
+
+        // ISC (Impuesto Selectivo al Consumo)
         "percentage_isc",
         "isc",
+        
+        // Régimen ISC: '01'=Al valor, '02'=Específico, '03'=Al valor/PVP
+        "tipo_isc",
+        'monto_isc_fijo',
+
         "unidad_medida",
+         // Cantidades y precios
+
         "quantity",
         "price_base",
         "price_final",
         "discount",
+
+         // Totales de la línea
         "subtotal",
         "igv",
+        
+        "mto_valor_venta",
+        "mto_base_igv",
+        "porcentaje_igv",
+        "total_impuestos",
+        // Campos requeridos por Greenter
+
         "description",
     ];
 
-     public function setCreatedAtAttribute($value)
+    public function setCreatedAtAttribute($value)
     {
         date_default_timezone_set('America/Lima');
         $this->attributes["created_at"] = Carbon::now();

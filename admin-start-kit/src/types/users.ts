@@ -18,6 +18,7 @@ export type User = {
     type_document:string,
     n_document:string,
     gender:string,
+    formato_impresion_default?: 'a4' | 'ticket80mm',
     created_at:string
 }
 //este es para  los return de los index,store,update,

@@ -21,7 +21,10 @@ export type Product = {
     include_igv:number,
     is_icbper:number,
     is_ivap:number,
-    is_isc:number,
+    is_isc:boolean,
+    tipo_isc:string,
+    monto_isc_fijo:number,
+    contenido_neto_litros?:number,
     state:number,
     state_stock:number,
     unidad_medida:string,
@@ -29,6 +32,10 @@ export type Product = {
     created_at:string,
     percentage_isc:number,
     is_especial_nota:number,
+    tipo_bien_servicio:string,
+    codigo_detraccion:string,
+    aplica_percepcion:boolean,
+    tip_afe_igv_default:string
 }
 
 export type Products = {

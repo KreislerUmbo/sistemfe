@@ -1,102 +1,127 @@
 [
     {
     "id": "01",
-    "name": "Amazonas"
+    "name": "Amazonas",
+    "es_amazonia": true
   },
   {
     "id": "02",
-    "name": "Áncash"
+    "name": "Áncash",
+     "es_amazonia": false
   },
   {
     "id": "03",
-    "name": "Apurímac"
+    "name": "Apurímac",
+     "es_amazonia": false
   },
   {
     "id": "04",
-    "name": "Arequipa"
+    "name": "Arequipa",
+     "es_amazonia": false
   },
   {
     "id": "05",
-    "name": "Ayacucho"
+    "name": "Ayacucho",
+     "es_amazonia": false
   },
   {
     "id": "06",
-    "name": "Cajamarca"
+    "name": "Cajamarca",
+     "es_amazonia": false
   },
   {
     "id": "07",
-    "name": "Callao"
+    "name": "Callao",
+     "es_amazonia": false
   },
   {
     "id": "08",
-    "name": "Cusco"
+    "name": "Cusco",
+     "es_amazonia": false
   },
   {
     "id": "09",
-    "name": "Huancavelica"
+    "name": "Huancavelica",
+     "es_amazonia": false
   },
   {
     "id": "10",
-    "name": "Huánuco"
+    "name": "Huánuco",
+     "es_amazonia": false
   },
   {
     "id": "11",
-    "name": "Ica"
+    "name": "Ica",
+     "es_amazonia": false
   },
   {
     "id": "12",
-    "name": "Junín"
+    "name": "Junín",
+     "es_amazonia": false
   },
   {
     "id": "13",
-    "name": "La Libertad"
+    "name": "La Libertad",
+     "es_amazonia": false
   },
   {
     "id": "14",
-    "name": "Lambayeque"
+    "name": "Lambayeque",
+     "es_amazonia": false
   },
   {
     "id": "15",
-    "name": "Lima"
+    "name": "Lima",
+     "es_amazonia": false
   },
   {
     "id": "16",
-    "name": "Loreto"
+    "name": "Loreto",
+     "es_amazonia": true
   },
   {
     "id": "17",
-    "name": "Madre de Dios"
+    "name": "Madre de Dios",
+     "es_amazonia": true
   },
   {
     "id": "18",
-    "name": "Moquegua"
+    "name": "Moquegua",
+     "es_amazonia": false
   },
   {
     "id": "19",
-    "name": "Pasco"
+    "name": "Pasco",
+     "es_amazonia": false
   },
   {
     "id": "20",
-    "name": "Piura"
+    "name": "Piura",
+     "es_amazonia": false
   },
   {
     "id": "21",
-    "name": "Puno"
+    "name": "Puno",
+     "es_amazonia": false
   },
   {
     "id": "22",
-    "name": "San Martín"
+    "name": "San Martín",
+     "es_amazonia": true
   },
   {
     "id": "23",
-    "name": "Tacna"
+    "name": "Tacna",
+     "es_amazonia": false
   },
   {
     "id": "24",
-    "name": "Tumbes"
+    "name": "Tumbes",
+     "es_amazonia": false
   },
   {
     "id": "25",
-    "name": "Ucayali"
+    "name": "Ucayali",
+     "es_amazonia": true
   }
 ]

@@ -106,7 +106,7 @@
                                         v-if="product.include_igv == 1">Con. Igv</b-badge>
                                     {{ " " }}
                                     <b-badge :variant="null" class="bg-transparent border border-warning text-warning"
-                                        v-if="product.include_igv == 2">Sin. Igv</b-badge>
+                                        v-if="product.include_igv == 0">Sin. Igv</b-badge>
                                     {{ " " }}
                                 </b-td>
                                 <b-td>

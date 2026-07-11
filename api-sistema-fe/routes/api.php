@@ -13,6 +13,8 @@ use App\Http\Controllers\Product\CategorieController;
 use App\Http\Controllers\Product\ProductController;
 use App\Http\Controllers\Role\RoleController;
 use App\Http\Controllers\Sale\FacturacionElectronicaController;
+use App\Http\Controllers\Sale\NotaController;
+use App\Http\Controllers\Sale\NotaElectronicaController;
 use App\Http\Controllers\Sale\SaleController;
 use App\Http\Controllers\Sale\SaleDetailController;
 use App\Http\Controllers\Sale\SalePaymentController;
@@ -64,6 +66,8 @@ Route::group([
 
     //product
     Route::get("products/config", [ProductController::class, 'config']); //para traer las categorias
+
+    Route::get("catalogs/tributarios", [ProductController::class, 'catalogsTributarios']); //para traer las catalogsTributarios
     Route::post("products/{id}", [ProductController::class, 'update']); //para editar y tiene imagenes
     Route::resource("products", ProductController::class);
 
@@ -78,12 +82,36 @@ Route::group([
 
     Route::resource("sale_details", SaleDetailController::class);
     Route::resource("sale_payments", SalePaymentController::class);
-    Route::post("seend_sunat", [FacturacionElectronicaController::class, 'sunat_seend']);
+    Route::post("enviarSunat", [FacturacionElectronicaController::class, 'enviarSunat']);
+
+    // notas de crédito/débito
+    Route::get("notas/config", [NotaElectronicaController::class, 'config']);
+    Route::get("notas", [NotaElectronicaController::class, 'index']);
+    Route::get("notas/{id}", [NotaElectronicaController::class, 'show']);
+    Route::post("notas", [NotaElectronicaController::class, 'store']);
+    Route::post("notas/preview", [NotaElectronicaController::class, 'preview']);
+    Route::post("notas/enviar-sunat", [NotaElectronicaController::class, 'enviarNotaSunat']);
+
+    // URL firmada temporal para ver/imprimir el PDF de la nota (ver notas-pdf/{id} más abajo)
+    Route::get("notas-pdf-url/{id}", [NotaController::class, 'pdfSignedUrl']);
+
+    // URL firmada temporal para ver/imprimir el PDF del comprobante (ver sales-pdf/{id} más abajo)
+    Route::get("sales-pdf-url/{id}", [SaleController::class, 'pdfSignedUrl']);
+
+    Route::resource("recursos", ProductController::class);
 
     Route::middleware('auth:api')->group(function () {});
 });
 
-Route::get("sales-pdf/{id}", [SaleController::class, 'pdf']);
+// Requiere URL firmada (ver SaleController::pdfSignedUrl, arriba, dentro del grupo auth:api)
+Route::get("sales-pdf/{id}", [SaleController::class, 'pdf'])
+    ->name('sales.pdf')
+    ->middleware('signed');
+
+// Requiere URL firmada (ver NotaController::pdfSignedUrl, arriba, dentro del grupo auth:api)
+Route::get("notas-pdf/{id}", [NotaController::class, 'pdf'])
+    ->name('notas.pdf')
+    ->middleware('signed');
 
 
 

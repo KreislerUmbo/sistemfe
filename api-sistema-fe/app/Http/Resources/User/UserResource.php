@@ -31,6 +31,7 @@ class UserResource extends JsonResource
             'type_document' => $this->resource->type_document,
             'n_document' => $this->resource->n_document,
             'gender' => $this->resource->gender,
+            'formato_impresion_default' => $this->resource->formato_impresion_default,
             'created_at' => $this->resource->created_at->format('Y-m-d H:i:s'),
         ];
     }

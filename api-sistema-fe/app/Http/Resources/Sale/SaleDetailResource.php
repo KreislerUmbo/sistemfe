@@ -24,13 +24,17 @@ class SaleDetailResource extends JsonResource
             'product_categorie' => [
                 'title' => $this->resource->product_categorie->title
             ],
-            'unidade_medida' => $this->resource->unidad_medida,
+            'unidad_medida' => $this->resource->unidad_medida,
             'quantity' => (float)$this->resource->quantity,
             'price_base' => (float)$this->resource->price_base,
             'price_final' => (float) $this->resource->price_final,
             'discount' => (float) $this->resource->discount,
             'subtotal' => (float) $this->resource->subtotal,
             'igv' => (float) $this->resource->igv,
+            'mto_valor_venta' => (float) $this->resource->mto_valor_venta,
+            'mto_base_igv' => (float) $this->resource->mto_base_igv,
+            'porcentaje_igv' => (float) $this->resource->porcentaje_igv,
+            'total_impuestos' => (float) $this->resource->total_impuestos,
             'description' => $this->resource->description,
 
             'tip_afe_igv' =>  $this->resource->tip_afe_igv,

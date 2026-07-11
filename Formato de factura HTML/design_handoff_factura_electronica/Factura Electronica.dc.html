@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body { margin: 0; background: oklch(0.94 0.005 250); }
+  </style>
+  <script src="./image-slot.js"></script>
+</helmet>
+
+<div style="min-height:100vh; display:flex; justify-content:center; padding:40px 16px; box-sizing:border-box; font-family:Arial, Helvetica, sans-serif; color:#111111;">
+  <div style="width:800px; max-width:100%; background:#ffffff; border:1px solid #999999; padding:24px; box-sizing:border-box;">
+
+    <!-- HEADER -->
+    <div style="display:flex; gap:20px; align-items:flex-start; border-bottom:2px solid #111111; padding-bottom:16px;">
+      <div style="width:170px; height:70px; flex:0 0 auto;">
+        <image-slot id="logo-empresa" shape="rect" fit="contain" placeholder="LOGO"></image-slot>
+      </div>
+      <div style="flex:1 1 auto; font-size:12px; line-height:1.5;">
+        <div style="font-weight:700; font-size:14px; text-transform:uppercase;">RAZÓN SOCIAL DE LA EMPRESA S.A.C.</div>
+        <div>AV. EJEMPLO NRO. 123</div>
+        <div>DISTRITO - PROVINCIA - DEPARTAMENTO</div>
+        <div>Teléfono: 999999999 &nbsp;·&nbsp; Email: facturacion@empresa.com</div>
+      </div>
+      <div style="flex:0 0 220px; border:1px solid #111111; text-align:center; padding:10px 8px; box-sizing:border-box;">
+        <div style="font-size:13px; font-weight:700; letter-spacing:0.5px;">RUC 00000000000</div>
+        <div style="font-size:15px; font-weight:700; margin-top:6px; text-transform:uppercase;">FACTURA ELECTRÓNICA</div>
+        <div style="font-size:14px; font-weight:700; margin-top:4px; font-family:'Courier New', monospace;">F001-00000001</div>
+      </div>
+    </div>
+
+    <!-- CLIENTE / FECHAS -->
+    <div style="display:flex; gap:12px; margin-top:16px;">
+      <div style="flex:1 1 60%; border:1px solid #999999; padding:10px 12px; font-size:12px; box-sizing:border-box;">
+        <div style="font-weight:700; margin-bottom:6px;">DATOS DEL CLIENTE</div>
+        <div style="display:grid; grid-template-columns:110px 1fr; row-gap:3px;">
+          <div>RUC</div><div>: 00000000000</div>
+          <div>DENOMINACIÓN</div><div>: NOMBRE DEL CLIENTE S.A.</div>
+          <div>DIRECCIÓN</div><div>: DIRECCIÓN DE EJEMPLO 000, DISTRITO - CIUDAD</div>
+        </div>
+      </div>
+      <div style="flex:1 1 40%; border:1px solid #999999; padding:10px 12px; font-size:12px; box-sizing:border-box;">
+        <div style="display:grid; grid-template-columns:135px 1fr; row-gap:6px;">
+          <div>FECHA EMISIÓN</div><div>: 00/00/0000</div>
+          <div>FECHA DE VENC.</div><div>: 00/00/0000</div>
+          <div>MONEDA</div><div>: SOLES</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TABLA -->
+    <div style="margin-top:16px;">
+      <div style="display:grid; grid-template-columns:50px 45px 55px 1fr 90px 90px 100px; background:#e6e6e6; border:1px solid #999999; font-size:11px; font-weight:700; padding:8px 6px; box-sizing:border-box;">
+        <div>CANT.</div><div>UM</div><div>CÓD.</div><div>DESCRIPCIÓN</div>
+        <div style="text-align:right;">V.U</div><div style="text-align:right;">P.U</div><div style="text-align:right;">IMPORTE</div>
+      </div>
+
+      <div style="display:grid; grid-template-columns:50px 45px 55px 1fr 90px 90px 100px; font-size:11px; padding:6px; border-left:1px solid #999999; border-right:1px solid #999999; box-sizing:border-box;">
+        <div>1</div><div>NIU</div><div>001</div><div>DETALLE DEL PRODUCTO O SERVICIO</div>
+        <div style="text-align:right;">500.000</div><div style="text-align:right;">590.000</div><div style="text-align:right;">590.00</div>
+      </div>
+      <div style="display:grid; grid-template-columns:50px 45px 55px 1fr 90px 90px 100px; font-size:11px; padding:6px; border-left:1px solid #999999; border-right:1px solid #999999; box-sizing:border-box;">
+        <div>5</div><div>ZZ</div><div>001</div><div>DETALLE DEL SERVICIO</div>
+        <div style="text-align:right;">20.000</div><div style="text-align:right;">23.600</div><div style="text-align:right;">118.00</div>
+      </div>
+
+      <div style="height:22px; border-left:1px solid #999999; border-right:1px solid #999999; border-top:1px solid #eeeeee; box-sizing:border-box;"></div>
+      <div style="height:22px; border-left:1px solid #999999; border-right:1px solid #999999; border-top:1px solid #eeeeee; box-sizing:border-box;"></div>
+      <div style="height:22px; border-left:1px solid #999999; border-right:1px solid #999999; border-top:1px solid #eeeeee; box-sizing:border-box;"></div>
+      <div style="height:22px; border-left:1px solid #999999; border-right:1px solid #999999; border-top:1px solid #eeeeee; box-sizing:border-box;"></div>
+      <div style="height:22px; border-left:1px solid #999999; border-right:1px solid #999999; border-top:1px solid #eeeeee; box-sizing:border-box;"></div>
+      <div style="border:1px solid #999999; border-top:none; height:1px; box-sizing:border-box;"></div>
+    </div>
+
+    <!-- TOTALES -->
+    <div style="display:flex; justify-content:flex-end; margin-top:14px;">
+      <div style="width:260px; font-size:12px;">
+        <div style="display:grid; grid-template-columns:1fr 30px 90px; row-gap:5px;">
+          <div>GRAVADA</div><div>S/</div><div style="text-align:right;">600.00</div>
+          <div>IGV 18.00 %</div><div>S/</div><div style="text-align:right;">108.00</div>
+          <div style="font-weight:700; border-top:1px solid #111111; padding-top:5px;">TOTAL</div>
+          <div style="font-weight:700; border-top:1px solid #111111; padding-top:5px;">S/</div>
+          <div style="font-weight:700; border-top:1px solid #111111; padding-top:5px; text-align:right;">708.00</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- IMPORTE EN LETRAS -->
+    <div style="margin-top:14px; border:1px solid #999999; border-radius:14px; padding:10px 16px; font-size:12px; text-align:center;">
+      <span style="font-weight:700;">IMPORTE EN LETRAS:</span> SETECIENTOS OCHO CON 00/100 SOLES
+    </div>
+
+    <!-- GUIA DE REMISION -->
+    <div style="margin-top:12px; border:1px solid #999999; border-radius:14px; padding:8px 16px; font-size:12px; text-align:center;">
+      <span style="font-weight:700;">GUÍA DE REMISIÓN REMITENTE:</span> (&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)
+    </div>
+
+    <!-- FOOTER -->
+    <div style="display:flex; gap:16px; margin-top:16px;">
+      <div style="flex:1 1 auto; border:1px solid #999999; padding:10px 14px; font-size:11px; line-height:1.6; box-sizing:border-box;">
+        <div>Representación impresa de la FACTURA ELECTRÓNICA, visita <span style="text-decoration:underline;">www.ejemplo.com/00000000000</span></div>
+        <div>Autorizado mediante Resolución de Intendencia No. <strong>000-000-0000000</strong></div>
+        <div>Resumen: <span style="font-family:'Courier New', monospace;">xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx=</span></div>
+      </div>
+      <div style="flex:0 0 130px; height:130px;">
+        <image-slot id="qr-factura" shape="rect" fit="contain" placeholder="QR"></image-slot>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:880,&quot;height&quot;:1100}}"></script>
+</body>
+</html>

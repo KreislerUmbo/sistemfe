@@ -138,6 +138,15 @@
                 </b-col>
 
                 <b-col lg="4">
+                    <label for="formato_impresion_default-user" class="col-form-label text-lg-end">Formato de
+                        impresión por defecto: </label>
+                    <b-form-select id="formato_impresion_default-user" v-model="formato_impresion_default">
+                        <option value="a4">A4</option>
+                        <option value="ticket80mm">Ticket térmico 80mm</option>
+                    </b-form-select>
+                </b-col>
+
+                <b-col lg="4">
                     <fieldset>
                         <legend class="col-form-label text-lg-end">Género:</legend>
 
@@ -224,6 +233,7 @@ const type_document = ref<string>('DNI');
 const n_document = ref<string>('');
 const gender = ref<string>('M');
 const state = ref<number>(1); // 1: Activo, 2: Inactivo
+const formato_impresion_default = ref<'a4' | 'ticket80mm'>('a4'); // formato de impresión de comprobantes por defecto
 const password = ref<string>('');
 const FILE_AVATAR = ref<File | undefined>(undefined);
 const IMAGEN_PREVIZUALIZA = ref<string | ArrayBuffer | null>(null);
@@ -287,6 +297,7 @@ const clearFields = () => {
     role_id.value = '';
     email.value = '';
     phone.value = 0;
+    formato_impresion_default.value = 'a4';
 };
 
 
@@ -341,6 +352,7 @@ const store = async () => {
         formData.append('gender', gender.value);
         formData.append('password', password.value);
         formData.append('state', state.value + "");
+        formData.append('formato_impresion_default', formato_impresion_default.value);
         if (FILE_AVATAR.value) {
             formData.append('imagen', FILE_AVATAR.value);
         }
@@ -418,6 +430,7 @@ const editUser = (user: User) => {
     n_document.value = user.n_document;
     gender.value = user.gender;
     state.value = user.state;
+    formato_impresion_default.value = user.formato_impresion_default ?? 'a4';
     IMAGEN_PREVIZUALIZA.value = user.avatar ?? '';// ?? es un operador de fusión nula que asigna una cadena vacía si user.avatar es undefined o null
     FILE_AVATAR.value = undefined; // Reiniciar el archivo de avatar
 

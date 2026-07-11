@@ -41,7 +41,8 @@ class ProductController extends Controller
                 'categoria' => $p->categorie->title ?? '',
                 'categoria_id' => $p->categorie_id,
                 'stock' => $p->stock,
-                'imagen' => $p->imagen ? env("APP_URL") . "storage/" . $p->imagen : null,
+                'imagen' => asset('storage/' . $p->imagen),
+               // 'imagen' => $p->imagen ? env("APP_URL") . "storage/" . $p->imagen : null,
                 'descripcion' => $p->description ?? '',
                 'rating' => 4.5,
                 'ratingCount' => rand(10, 200)

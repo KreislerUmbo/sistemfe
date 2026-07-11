@@ -132,7 +132,8 @@ class AuthController extends Controller
                     "id" => auth('api')->user()->role->id,
                     "name" => auth('api')->user()->role->name,
                 ],
-                "permissions" => $permissions
+                "permissions" => $permissions,
+                "formato_impresion_default" => auth('api')->user()->formato_impresion_default,
             ],
         ]);
     }

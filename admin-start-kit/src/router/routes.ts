@@ -288,6 +288,56 @@ const comercialRoutes = [
     },
     component: () => import("@/views/sale/edit.vue"),
   },
+  {
+    path: "/sale/nota/:id",
+    name: "sale.nota",
+    meta: {
+      title: setTitle("Emitir Nota de Crédito/Débito"),
+      authRequired: true,
+      permission: 'nota_electronica',
+    },
+    component: () => import("@/views/sale/nota-create.vue"),
+  },
+  {
+    path: "/nota/list",
+    name: "nota.list",
+    meta: {
+      title: setTitle("Notas de Crédito/Débito"),
+      authRequired: true,
+      permission: 'list_nota_electronica',
+    },
+    component: () => import("@/views/sale/nota-list.vue"),
+  },
+  {
+    path: "/recursos/index",
+    name: "recursos.index",
+    meta: {
+      title: setTitle("Listar Recursos"),
+      authRequired: true,
+      permission: 'list_recurso',
+    },
+    component: () => import("@/views/recursos/index.vue"),
+  },
+  {
+    path: "/recursos/register",
+    name: "recurso.register",
+    meta: {
+      title: setTitle("Registrar Recurso"),
+      authRequired: true,
+      permission: 'register_recurso',
+    },
+    component: () => import("@/views/recursos/register.vue"),
+  },
+  {
+    path: "/recursos/manual",
+    name: "recurso.manual",
+    meta: {
+      title: setTitle("Manual de Sistema"),
+      authRequired: true,
+      permission: 'register_recurso',
+    },
+    component: () => import("@/views/recursos/manual.vue"),
+  },
 
 ];
 

@@ -1,5 +1,6 @@
 import type { Client } from "./clients"
 import type { Product } from "./products"
+import type { NoteSummary } from "./notes"
 
 export type SaleConfig = {
     today: string,
@@ -26,6 +27,7 @@ export type SaleDetail = {
     },
     unidad_medida: string,
     quantity: number,
+    discount_percent?: number;
     price_base: number,
     price_final: number,
     discount: number,
@@ -33,12 +35,20 @@ export type SaleDetail = {
     igv: number,
     description?: string,
 
+    mto_valor_venta: number,
+    mto_base_igv: number,
+    porcentaje_igv: number,
+    total_impuestos: number,
+    tipo_isc: string,
+    monto_isc_fijo: number,
+    contenido_neto_litros?: number,
+
     // opcionales mientras se construye
-    tip_afe_igv?: string
-    icbper?: number
+    tip_afe_igv: string
+    icbper: number
     percentage_isc?: number
     per_icbper?: number
-    isc?: number
+    isc: number
 }
 
 export type SaleDetailResponse = {
@@ -60,6 +70,8 @@ export type SalePayment = {
 }
 export type Sale = {
     id: string,
+    date: string,
+    destino: string,
     n_transaction: string,
     user_id: string,
     user: {
@@ -69,6 +81,10 @@ export type Sale = {
     client: {
         id: string,
         full_name: string,
+        type_client?: number,
+        n_document: string,
+        address?: string,
+        phone?: string
     },
     n_document: string,
     correlativo: string,
@@ -92,7 +108,7 @@ export type Sale = {
     created_at: string,
     created_at_format: string,
     sale_details: SaleDetail[],
-    payments: SalePayment[],
+    sale_payments: SalePayment[],
     // 
     serie: string,
     retencion_igv: number,
@@ -105,8 +121,17 @@ export type Sale = {
     is_exportacion: number,
     currency: string,
     ce_anticipo: any,
-    // 
-    notas: any[],
+    // Notas de Crédito/Débito ya emitidas sobre esta venta (campos
+    // compactos — ver SaleResource::toArray()). Requiere que el backend
+    // haya hecho with('notes'); si no, viene como [].
+    notes: NoteSummary[],
+    monto_retencion?: number,
+    monto_detraccion?: number,
+    monto_percepcion?: number,
+    mto_oper_exoneradas?: number,
+    codigo_detraccion: string
+    porcentaje_detraccion: number,
+    is_locked?: boolean;
 }
 
 export type Sales = {
@@ -121,6 +146,7 @@ export type SaleResponse = {
     message: string | number,
     code?: number,
     sale?: Sale,
+    sale_id?: string | number,
     error?: any,
 
 }

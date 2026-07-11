@@ -7,6 +7,7 @@ export type User = {
   role?: Role;
   token?: string;
   permissions?: Array<string>,
+  formato_impresion_default?: 'a4' | 'ticket80mm';
 };
 export type Role = {
   id?: string;

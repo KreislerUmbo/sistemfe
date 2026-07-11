@@ -12,7 +12,7 @@
 </template>
 
 <script setup>
-import NavPortal from '@/components/Portal/NavbarPortal.vue'
-import FooterPortal from '@/components/Portal/FooterPortal.vue'
-import CartDrawer from '@/components/Portal/CartDrawer.vue'
+import NavPortal from '@/components/portal/NavbarPortal.vue'
+import FooterPortal from '@/components/portal/FooterPortal.vue'
+import CartDrawer from '@/components/portal/CartDrawer.vue'
 </script>

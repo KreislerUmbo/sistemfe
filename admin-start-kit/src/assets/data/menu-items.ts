@@ -49,6 +49,7 @@ export const MENU_ITEMS: MenuItemType[] = [
         parentKey: "systems",
         permission: 'list_system',
       },
+
     ],
   },
 
@@ -140,6 +141,13 @@ export const MENU_ITEMS: MenuItemType[] = [
         parentKey: "sales",
         permission: 'list_sale',
       },
+      {
+        key: "list_notas",
+        label: "Notas de Crédito/Débito",
+        route: { name: "nota.list" },
+        parentKey: "sales",
+        permission: 'list_nota_electronica',
+      },
     ],
   },
   {
@@ -171,5 +179,41 @@ export const MENU_ITEMS: MenuItemType[] = [
     route: { name: "company.index" },
     parentKey: "configurat",
     permission: 'company',
+  },
+  {
+    key: "recursos_cliente",
+    label: "RECURSOS CLIENTE",
+    isTitle: true,
+    permissions: ['list_recurso', 'register_recurso']
+  },
+  {
+    key: "recursos",
+    label: "Recursos",
+    isTitle: false,
+    icon: "fas fa-qrcode",
+    children: [
+      {
+        key: "list_recursos",
+        label: "Listar",
+        route: { name: "recursos.index" },
+        parentKey: "recursos",
+        permission: 'list_recurso',
+      },
+      {
+        key: "register_recursos",
+        label: "Registrar",
+        route: { name: "recurso.register" },
+        parentKey: "recurso",
+        permission: 'register_recurso',
+      },
+      {
+        key: "manual",
+        label: "Manual del Sistema",
+        route: { name: "recurso.manual" },
+        parentKey: "recurso",
+        permission: 'register_recurso',
+      },
+
+    ],
   },
 ]
