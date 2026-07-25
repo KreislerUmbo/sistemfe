@@ -172,44 +172,118 @@ Caso distinto y con flujo propio. Pasajes aéreos + hotelería internacional,
 con o sin fechas programadas. El precio no es estático (varía por
 temporada/fecha), así que no se cotiza con tarifa fija en el sistema.
 
-**Flujo real de compra confirmado:**
+**Flujo real de compra confirmado (actualizado 25-jul-2026 con detalle del
+proceso manual actual):**
 ```
 1. Prospecto pide paquete internacional (ej. Punta Cana)
 2. Agencia recopila: fechas, # pax, tipo (adulto/niño/infante),
    nivel de servicio deseado (todo incluido vs. solo hotel+traslados+
    actividades)
-3. Agencia consulta a VARIOS proveedores mayoristas con esos datos
-4. Cada mayorista devuelve hasta 3 alternativas propias, YA EMPAQUETADAS
-   (un precio que contempla hotel + aerolínea + lo que corresponda —
-   no se desglosa en ítems atómicos como lo local)
-5. Agencia compara entre mayoristas, elige la mejor opción de costo
-6. Agencia arma SU cotización final (aplica margen) y se la pasa al cliente
-7. Cliente acepta
-8. RECIÉN AHÍ la agencia pide un adelanto al cliente y reserva/paga
+3. Agencia consulta a VARIOS proveedores mayoristas (ej. Nuevo Mundo
+   Viajes, Viajes Falabella, Inter-agencias) — cada mayorista tiene su
+   propio sistema donde la agencia cotiza como aliado
+4. Cada mayorista devuelve una cotización con VARIAS opciones de hotel,
+   cada una con precio por tipo de habitación (matrimonial/doble/triple)
+   — no es un solo número, es una matriz (ver más abajo, confirmado con
+   documentos reales de la agencia)
+5. HOY (proceso manual que este sistema busca agilizar): la agencia lleva
+   esos números a un Excel aparte para cuadrar costo + margen/fee +
+   impuestos + precio final, y luego arma un Word con el resumen de
+   precios, opciones de hotel e itinerario para el cliente — este paso es
+   el que más demora al vendedor
+6. Agencia compara entre mayoristas, elige la mejor opción de costo
+7. Agencia arma SU cotización final (aplica margen) y se la pasa al cliente
+8. Cliente acepta
+9. RECIÉN AHÍ la agencia pide un adelanto al cliente y reserva/paga
    adelanto o espera factura final a la mayorista elegida
 ```
 La compra/reserva real con la mayorista ocurre **después** de la
 aceptación del cliente — mismo disparador que la creación de `reserva`
 (sección 4).
 
-**Comparación entre mayoristas (registro liviano, no ítem por ítem):**
+**Objetivo del sistema respecto al paso 5:** que el vendedor cargue los
+números que le da el mayorista directamente en la estructura de abajo, y
+el sistema calcule margen/fee/precio final automáticamente (con el default
+del mayorista, editable si hace falta) y genere el PDF de cotización
+directo — sin pasar por Excel ni Word aparte.
+
+**Comparación entre mayoristas (header — registro liviano por mayorista consultado):**
 ```
 opcion_mayorista
  - alternativa_id
  - proveedor_id             (proveedor tipo "mayorista")
  - salida_mayorista_id       ← nullable, ver más abajo
  - moneda: PEN | USD         (casi siempre USD, pero queda como campo)
- - precio_costo               (un solo número, el que da la mayorista)
- - incluye                    (texto corto o checklist rápido: vuelo, hotel,
-                                traslado, seguro, todo incluido)
- - notas                      (libre, ej. "hotel 4 estrellas, vuelo con
-                                escala en Bogotá")
+ - incluye                    (texto corto o checklist: traslados,
+                                seguro, guía — lo que va en TODAS las
+                                opciones de hotel de este mayorista)
+ - notas                      (libre, ej. "vuelo con escala en Bogotá")
+ - vuelo_aerolinea
+ - vuelo_detalle              (texto: tramos ida/vuelta, fechas, horas,
+                                equipaje permitido — informativo, no
+                                estructurado en columnas porque cada
+                                cotización trae un formato distinto del
+                                mayorista)
  - estado: candidata | elegida | descartada
 ```
-Cuando se marca `elegida`, se convierte en el ítem internacional de la
-alternativa del cliente (con el margen de la agencia ya aplicado). Las
-demás quedan `descartada` pero visibles, como historial de por qué se
-eligió esa mayorista.
+
+**Actualizado 25-jul-2026 — matriz de precio por hotel × tipo de
+habitación (validado con documentos reales: Panamá, Cusco, Alto Mayo —
+las 3 categorías de paquete usan la misma estructura, no es exclusivo de
+internacional):**
+```
+opciones_hotel   (aplica tanto a opcion_mayorista como a paquetes_plantilla,
+                   ver sección 3.7 — misma estructura, un solo motor)
+ - id
+ - opcion_mayorista_id   ← nullable
+ - paquete_plantilla_id   ← nullable (uno de los dos, no ambos)
+ - proveedor_id            ← nullable, si el hotel ya existe como
+                              proveedor registrado (más común en local/
+                              nacional); en internacional casi siempre
+                              queda null porque es un hotel gestionado
+                              por el mayorista, sin tarifa propia en el
+                              sistema
+ - nombre_hotel
+ - categoria_estrellas
+
+opciones_hotel_tarifas
+ - opcion_hotel_id
+ - tipo_habitacion: matrimonial | doble | triple | familiar
+ - precio_costo            (lo que da el mayorista/proveedor)
+ - precio_venta            (calculado con el margen del mayorista,
+                             editable — ver regla de margen abajo)
+```
+
+**Margen automático por mayorista (confirmado 25-jul-2026):**
+```
+proveedores (campos nuevos, aplica sobre todo a tipo "mayorista")
+ - margen_default_tipo: porcentaje | fijo
+ - margen_default_valor
+```
+Al cargar los precios de costo de una opción de hotel, el sistema calcula
+`precio_venta` automáticamente con el margen default de ese mayorista —
+el vendedor puede editarlo línea por línea si la negociación puntual fue
+distinta, sin perder el default para la próxima vez.
+
+**Tours opcionales (confirmado 25-jul-2026 — distinto de `items_incluidos`,
+que sí va en el precio base):**
+```
+opcion_mayorista_opcionales
+ - opcion_mayorista_id
+ - nombre                   (ej. "Excursión a San Blas")
+ - precio_por_persona
+ - moneda
+ - incluye / no_incluye     (texto)
+```
+Se muestran en el PDF como actividades que el cliente puede agregar,
+separadas del precio del paquete base — nunca se suman automáticamente al
+total salvo que el cliente las pida explícitamente.
+
+Cuando se marca `elegida`, la opción de hotel elegida (con su tipo de
+habitación) se convierte en el ítem internacional de la alternativa del
+cliente (con el margen de la agencia ya aplicado). Las demás quedan
+`descartada` pero visibles, como historial de por qué se eligió esa
+mayorista.
 
 **Salidas de catálogo del mayorista (paquetes armados en fechas fijas):**
 A veces la mayorista no cotiza a medida, sino que ofrece un paquete ya
@@ -251,6 +325,15 @@ dentro de una misma alternativa. Máximo 5 alternativas por cotización.
 
 ```
 cotizaciones (header)
+ - codigo_prefijo   (NUEVO 25-jul-2026 — libre, ingresado por el vendedor,
+                      ej. "PDKM-CZ"; sin catálogo forzado)
+ - codigo            (NUEVO — calculado: {codigo_prefijo}-{año}-{correlativo},
+                       ej. "PDKM-CZ-2026-001". Correlativo propio POR
+                       PREFIJO, no global de la agencia — permite ver de
+                       un vistazo "vamos en la cotización #3 de este
+                       paquete". Único por tenant, es lo que el vendedor
+                       usa para ubicar la cotización sin memorizar IDs
+                       internos)
  - cliente_id, destino, fecha_viaje_tentativa
  - (NO se repite en cada alternativa)
 
@@ -452,18 +535,69 @@ Pensando también en el portal web que se construirá en una fase futura
 aparte (no ahora): los "paquetes enlatados" que se arman para vender
 directo (empaquetados, o un tour/actividad suelta) son plantillas
 reutilizables, independientes de cualquier cotización puntual — mismo
-concepto de servicios atómicos, solo que predefinido:
+concepto de servicios atómicos, solo que predefinido.
+
+**Actualizado 24-jul-2026 — ver `plan-modulo-tours-catalogo.md`:** confirmado
+que "tour" (usado en `tour_itinerario_items.tour_id`, sección 5.1) y
+`paquetes_plantilla` son la **misma entidad**, no dos tablas distintas —
+validado con documentos reales de tours de la agencia (Full Day Alto Mayo,
+Tours Lamas Nativo), que traen ficha completa (duración, horarios, lugar de
+recojo, incluye/no incluye, recomendaciones), no solo nombre y precio:
 ```
 paquetes_plantilla
+ - codigo                  (NUEVO 25-jul-2026 — el vendedor ingresa un
+                             prefijo libre, ej. "PDKM-CZ"; confirmado con
+                             documentos reales de la agencia que ya usan
+                             este patrón de códigos. Único, visible al
+                             cliente en el PDF)
+ - categoria: local | nacional | internacional   (NUEVO — la agencia ya
+                             piensa y organiza sus paquetes así,
+                             confirmado con los 3 documentos reales)
  - nombre, descripción, fotos
  - destino_atractivo_id (o varios, vía destino_servicio)
+ - duracion_horas
+ - hora_salida / hora_retorno
+ - lugar_recojo            (texto, ej. "Hoteles ubicados dentro de la ciudad")
+ - no_incluye               (texto/lista, ej. "Gastos extras, propinas, bebidas")
+ - recomendaciones           (texto/lista, ej. "Ropa cómoda, bloqueador, agua")
+ - vuelo_incluido: boolean   (NUEVO — ej. Cusco/Panamá sí, Alto Mayo no)
+ - vuelo_aerolinea            (NUEVO)
+ - vuelo_detalle               (NUEVO — texto libre: tramos, fechas, horas,
+                                 equipaje permitido; no estructurado en
+                                 columnas porque el itinerario tentativo
+                                 cambia según la fecha de salida real)
  - items_incluidos        (1 o más servicios/tarifas con precio ya fijado
-                            — puede ser un solo ítem, ej. un tour suelto)
- - precio_venta_final
+                            — puede ser un solo ítem, ej. un tour suelto.
+                            Esto es lo que genera el "Incluye" del PDF
+                            automáticamente — NO es texto libre, cada
+                            ítem es un destino_servicio + proveedor_tarifa
+                            real)
+ - precio_venta_final     (actualizado 25-jul-2026 — ya no es el único
+                            precio real, ver nota abajo: queda como precio
+                            "desde" para listados)
  - vigencia_desde / vigencia_hasta
  - publicado_web (boolean, default false — hoy no hace nada, es el
                    interruptor que usará el futuro portal web)
 ```
+
+**Actualizado 25-jul-2026 — matriz de precio por hotel × tipo de
+habitación (reemplaza `precio_venta_final` como único monto):**
+validado con los 3 documentos reales (Alto Mayo, Cusco, Panamá) — un
+paquete no tiene un solo precio, tiene varias opciones de hotel, cada una
+con precio distinto según matrimonial/doble/triple/familiar. Se comparte
+la misma estructura `opciones_hotel`/`opciones_hotel_tarifas` definida en
+la sección 2.4 para `opcion_mayorista` — un solo motor para las 3
+categorías de paquete, no una tabla de precios por cada una:
+```
+opciones_hotel (ver estructura completa en sección 2.4)
+ - paquete_plantilla_id → esta tabla (en vez de opcion_mayorista_id)
+ - proveedor_id            (nullable — si el hotel ya es un proveedor
+                             registrado, se reutiliza su tarifa real en
+                             vez de solo texto)
+```
+`precio_venta_final` queda como el precio "desde" mostrado en listados
+(el más barato de todas las opciones de hotel), no como el único precio
+real del paquete.
 Un vendedor puede partir de un `paquete_plantilla` al armar una
 alternativa, en vez de construir todo desde cero — ahorra tiempo hoy y
 deja lista la base para cuando se construya el portal (proyecto aparte,
@@ -692,10 +826,15 @@ cuota correspondiente de este cronograma.
 
   ```
   tour_itinerario_items
-   - tour_id
+   - tour_id → paquetes_plantilla.id (confirmado 24-jul-2026, misma
+                entidad — ver plan-modulo-tours-catalogo.md)
    - dia_relativo (1, 2, 3...)
-   - hora
-   - destino_atractivo_id
+   - hora    (nullable — no todo tour trae hora por parada, ej. Lamas
+              Nativo solo tiene horario general de salida/retorno)
+   - orden   (NUEVO 24-jul-2026 — secuencia de actividades del día
+              cuando no hay hora exacta por parada)
+   - destino_atractivo_id  (puede ser zona/lugar/atractivo, cualquier
+                             nivel del árbol — ver 5.2)
    - descripción de la actividad
   ```
 
@@ -712,24 +851,61 @@ cuota correspondiente de este cronograma.
   tour de catálogo), la fecha se asigna directamente al `reserva_item`,
   sin `dia_relativo` de por medio.
 
-### 5.2 Catálogo de destinos/atractivos (para el PDF con fotos)
-Catálogo reutilizable, independiente del proveedor que opera en ese lugar
-(evita subir la misma foto de un atractivo N veces para N tours distintos
-que pasan por ahí).
+### 5.2 Catálogo de destinos/atractivos y servicios (actualizado 24-jul-2026 — ver `plan-modulo-tours-catalogo.md`)
+**Se reemplaza el modelo plano anterior** por un árbol de 3 niveles,
+validado con tours reales de la agencia (Full Day Alto Mayo, Tours Lamas
+Nativo): zona → lugar → atractivo. Catálogo reutilizable, independiente
+del proveedor que opera en ese lugar (evita subir la misma foto de un
+atractivo N veces para N tours distintos que pasan por ahí).
 
 ```
-destinos_atractivos
- - nombre, descripción, ubicación/región
- - fotos (varias por destino)
+destinos_atractivos (autoreferenciada, 3 niveles)
+ - id
+ - parent_id   (nullable: null=zona, 1 nivel=lugar, 2 niveles=atractivo)
+ - nombre       (ej. "Alto Mayo" zona / "Moyobamba" lugar /
+                  "Orquideario" atractivo)
+ - tipo          -- 'zona' | 'lugar' | 'atractivo'
+ - descripcion
+ - fotos (varias por registro)
+```
+
+Caso real que validó el árbol: un tour a "Alto Mayo" (zona) incluye
+Moyobamba y Rioja (lugares), y dentro de Rioja está Tioyacu (atractivo,
+la naciente de agua). El transporte cobra distinto por **lugar**
+(Moyobamba vs. Rioja), mientras que las entradas cobran por **atractivo**
+específico (entrada al orquideario ≠ entrada a otro atractivo) — por eso
+`destino_servicio` no se restringe a un solo nivel:
+
+```
+servicios (catálogo reutilizable — NUEVO 24-jul-2026, no existía)
+ - id
+ - nombre             (ej. "Traslado ida y vuelta", "Traslado
+                        aeropuerto-hotel", "City tour medio día",
+                        "Full day", "Hospedaje", "Entrada/Boleto")
+ - tipo_proveedor_id   (opcional, filtra qué servicios aplican según el
+                         tipo de proveedor — ej. "Hospedaje" no aplica
+                         a Transporte)
 
 destino_servicio (tabla puente)
- - vincula un destino/atractivo con los servicios/tours que lo incluyen
+ - destino_id    → destinos_atractivos.id, CUALQUIER nivel (zona/lugar/
+                    atractivo) — no restringido a un solo nivel; el
+                    transporte normalmente cuelga de nivel lugar, las
+                    entradas de nivel atractivo
+ - servicio_id    → servicios.id
 ```
 
-### 5.3 Asignación de guías
-Catálogo simple, sin manejo de disponibilidad/calendario por ahora
-(coincide con que se asigna recién un día antes y no debe bloquear el
-resto del flujo):
+Caso real completo: mismo proveedor (Transportes San Martín), mismo tipo
+de servicio (transporte), pero dos `destino_servicio` distintos con
+tarifa propia cada uno — "Traslado ida y vuelta" incluido en un full day
+(S/90) vs. "Traslado aeropuerto-hotel" suelto para una reserva de solo
+hotel (S/25). Ver `proveedor_servicios`/`proveedor_tarifas` en
+`plan-modulo-proveedores.md`.
+
+### 5.3 Asignación y tarifas de guías (actualizado 25-jul-2026)
+Catálogo simple para datos personales, sin manejo de disponibilidad/
+calendario (confirmado: los guías son freelance, trabajan con varias
+agencias a la vez — la agencia no controla su calendario completo, solo
+necesita saber quién está asignado, sin validar choques de horario):
 
 ```
 guias
@@ -737,9 +913,44 @@ guias
  - activo   (para desactivar sin borrar histórico)
 ```
 
-En el formulario de `reserva_items`, el campo `guia_id` se presenta como
-un select **con búsqueda** (no texto libre) — queda referenciado y
-reportable, sin lógica de choques de horario por ahora.
+**Tarifas — NUEVO 25-jul-2026:** el guía se paga por día, y varía según
+destino y modalidad (un grupo que va a otra región tiene tarifa distinta
+que un tour local de un día). Como el cliente ve "Guía de Turismo" dentro
+del "Incluye" de los tours reales de la agencia (confirmado en
+`plan-modulo-tours-catalogo.md`), el guía necesita costo **y** precio de
+venta — mismo patrón que cualquier otro proveedor:
+
+```
+guia_tarifas
+ - guia_id
+ - destino_id            → destinos_atractivos.id (zona o lugar, ej.
+                            "Alto Mayo" o "Cusco")
+ - modalidad: dia_local | grupo_multidia
+ - costo_diario            (lo que se le paga al guía por día)
+ - tipo_margen: porcentaje | fijo
+ - margen_valor
+     -- precio_venta_diario = costo_diario + margen_valor
+ - moneda
+ - vigente_desde / vigente_hasta   (versionado, mismo patrón que
+                                     proveedor_tarifas — nunca se
+                                     sobrescribe un precio ya usado)
+```
+
+**Cálculo del costo total para un tour:** `costo_diario × número de días
+del tour` — el número de días sale de `tour_itinerario_items` (el
+`dia_relativo` máximo del tour). Un full day de 1 día usa `× 1`; un tour
+de 3 días a otra región usa `× 3`.
+
+**Sin piso de descuento** (a diferencia de `proveedor_tarifas`) — no se
+pidió control de choques de horario ni bloqueo de precio para guías, así
+que por ahora no lleva `descuento_maximo_pct`/`margen_minimo_pct`. Se
+puede agregar después con el mismo patrón si hace falta.
+
+En `items_incluidos` (paquetes_plantilla) y en `reserva_items`, "Guía de
+Turismo" ahora referencia `guia_tarifas` (no solo `guias` directo) — el
+campo `guia_id` en `reserva_items` se presenta como un select **con
+búsqueda** (no texto libre) — queda referenciado y reportable, sin lógica
+de choques de horario por ahora.
 
 ### 5.4 Tres documentos distintos
 - **PDF de alternativa/cotización**: comercial, enfocado en precio,
@@ -955,7 +1166,7 @@ a seguir cuando se diseñe el frontend:
 
 ---
 
-## 8. Reporte operativo por fecha (pendiente de detallar a fondo)
+## 8. Reporte operativo por fecha (actualizado 25-jul-2026 — RESUELTO)
 
 Requisito original: poder ver, para una fecha dada, qué pasajeros tienen
 tours/paquetes/hotel/otros servicios ese día, a qué destino, en qué hotel
@@ -966,9 +1177,108 @@ aerolínea).
 Se resuelve como una vista/consulta sobre `reserva_items` +
 `reserva_item_pasajero` + `reserva_pasajeros`, agrupada por fecha,
 filtrando `reserva.estado != cancelada` — no es una tabla nueva, es un
-reporte derivado del modelo ya definido arriba. Falta diseñar la
-pantalla/formato exacto — pendiente para la Fase 3 (frontend) o antes si
-se prioriza.
+reporte derivado del modelo ya definido arriba.
+
+**Un solo reporte, con selector de rango de fecha** (hoy / esta semana /
+rango personalizado) — no dos pantallas separadas para uso diario vs.
+planificación, es el mismo reporte con distinto filtro por defecto.
+
+**Columnas:** pasajero, servicio, destino, hora, guía asignado, hotel,
+alimentación especial, discapacidad, vuelos. **Alerta visual** si falta
+guía asignado, para detectarlo y resolverlo desde la misma pantalla.
+
+**Acciones inline (confirmado 25-jul-2026):**
+- Reasignar/asignar guía directamente desde el reporte
+- Marcar check-in del pasajero
+
+```
+reserva_item_pasajero (campos nuevos)
+ - checkin_realizado: boolean, default false
+ - checkin_hora        (nullable, se llena al marcar)
+```
+
+**Dos formatos (confirmado — ambos, no uno u otro):**
+- **Pantalla en el sistema:** tabla filtrable con las acciones inline de
+  arriba.
+- **PDF/impreso:** mismo filtro de fecha, versión de solo lectura sin
+  botones de acción — pensado para repartir al equipo en campo sin
+  acceso al sistema (imprimir o compartir por WhatsApp).
+
+---
+
+## 8bis. Sistema de recordatorios / notificaciones en el sistema (NUEVO 25-jul-2026)
+
+Surgió al diseñar el reporte operativo, pero es un módulo transversal, no
+exclusivo de reportes — resuelve dos módulos que ya estaban catalogados
+pero nunca diseñados en `plan-modulo-planes-acceso.md`
+(`aviso_pasaportes_vencer`, `felicitaciones_cumpleanos`), más casos
+nuevos (pago a mayorista próximo, cotización estancada).
+
+**Objetivo:** mensajes flotantes (notificación tipo toast) dentro del
+sistema, mientras el usuario está trabajando — no push ni email, solo
+en-app. Configurable para no saturar: posponer 1h/8h, omitir por tipo,
+o forzado por el admin si lo considera importante.
+
+```
+tipos_recordatorio (catálogo — qué puede generar un recordatorio)
+ - codigo: pago_proveedor_pendiente | cumpleanos_cliente |
+           cotizacion_estancada | documento_por_vencer | personalizado
+ - nombre
+ - automatico: boolean   -- true = el sistema lo genera solo (pago
+                             próximo, cumpleaños, cotización estancada,
+                             documento por vencer); false = alguien lo
+                             crea a mano (personalizado)
+
+recordatorios
+ - tipo_id
+ - entidad_tipo: reserva | cotizacion | cliente | pago_proveedor | libre
+ - entidad_id       (nullable si es libre/personalizado sin entidad)
+ - titulo, mensaje
+ - fecha_disparo     (cuándo debe aparecer)
+ - usuario_id          (nullable si es para un rol completo)
+ - rol_destino: vendedor | admin | todos
+ - creado_por           (admin puede crear para otros; vendedor solo
+                          para sí mismo)
+ - forzado: boolean      -- si el admin lo marca importante, el vendedor
+                             puede posponer pero NO descartar del todo —
+                             vuelve a aparecer igual
+ - estado: pendiente | visto | pospuesto | descartado
+
+recordatorio_snooze_config (preferencia por usuario y tipo)
+ - usuario_id
+ - tipo_id
+ - snooze_minutos: 60 | 480 | personalizado   ("1 hora", "8 horas")
+ - omitir: boolean   (el usuario apaga ese tipo para sí mismo, salvo que
+                       esté `forzado` por el admin — ahí no puede omitirlo)
+```
+
+**Disparadores automáticos confirmados, todos con default configurable
+por agencia (no hardcodeado):**
+
+```
+configuracion_agencia (campos nuevos)
+ - dias_aviso_pago_proveedor       (default 2 — avisa 2 días antes de
+                                      cronograma_pago_proveedor.fecha_vencimiento)
+ - dias_cotizacion_estancada        (default 15 — alternativa en estado
+                                      'enviada' sin cambiar de estado por
+                                      N días)
+```
+- **Pago a proveedor/mayorista próximo:** automático desde
+  `cronograma_pago_proveedor.fecha_vencimiento` (ya existente, sección
+  4.6), restando `dias_aviso_pago_proveedor`.
+- **Cumpleaños de cliente:** automático desde
+  `pasajeros_catalogo.fecha_nacimiento` (o del cliente), un día antes.
+- **Cotización estancada:** automático, alternativa en `enviada` sin
+  cambiar de estado por `dias_cotizacion_estancada` días.
+- **Documento por vencer:** ya existía como alerta pasiva (sección 6.5,
+  `meses_margen_vencimiento_documento`) — ahora también dispara
+  recordatorio, mismo mecanismo, no duplica lógica.
+- **Personalizado:** el admin o el vendedor crea uno manual, asociado a
+  una reserva/cotización/cliente o libre (ej. "llamar a fulano mañana").
+
+**Visibilidad por rol (confirmado 25-jul-2026):** el admin ve **todos**
+los recordatorios pendientes de todos los vendedores en una sola vista
+(supervisión de equipo) — cada vendedor ve solo los suyos.
 
 ---
 
@@ -976,8 +1286,6 @@ se prioriza.
 
 - **Gestión de proveedores a fondo** (altas, bajas, negociación de
   tarifas) — confirmado como módulo aparte, aún no abordado en detalle.
-- Falta definir la pantalla/formato exacto del reporte operativo por
-  fecha (sección 8).
 - Falta detallar los formularios CRUD predecesores (proveedores, tarifas,
   tipo de cambio) antes de tocar el flujo de cotización propiamente.
 - **Tratamiento tributario mixto dentro de una misma reserva/venta**:
@@ -1015,3 +1323,7 @@ se prioriza.
 | 24-jul-2026 | Reconciliación con `plan-modulo-proveedores.md` (sesión de cruce entre módulos): se reemplaza `tipo_proveedor: regular \| mayorista` por FK a catálogo formal `proveedor_tipos` (central + config por tenant); se confirma que guías turísticos se mantienen como tabla propia `guias` (no se migra a tipo de proveedor); se reemplaza el filtro "sugerido no bloqueante" de destino por modelo estructural `proveedor_servicios`, porque proveedores de transporte cobran distinto por destino (caso real: Lamas vs. Moyobamba) |
 | 24-jul-2026 | Se reemplaza `fecha_inicio_vigencia`/`fecha_fin_vigencia` sueltas por catálogo reutilizable `temporadas` + `temporada_ocurrencias` en `proveedor_tarifas` (evita repetir fechas por proveedor cada año, permite agrupar reportes por temporada); se agrega `descuento_maximo_pct`/`margen_minimo_pct` como piso de descuento protegido al cotizar (pendiente de confirmación del usuario) |
 | 24-jul-2026 | Modelo de descuento ágil en cotizaciones: `descuento_global_pct` a nivel de alternativa (se reparte a cada línea respetando su piso individual) + `descuento_pct`/`precio_convertido` sincronizados bidireccionalmente por línea en `alternativa_items` (renombrado desde `precio_calculado`, separado ahora en `costo_snapshot`/`precio_venta_snapshot`), con validación del piso en vivo mientras el vendedor edita. Formato de PDF hecho configurable por agencia (`configuracion_agencia.formato_descuento_pdf` / `mostrar_descuento_como_linea`) — las 3 variantes de visualización no son excluyentes a nivel de dato, solo cambian la plantilla |
+| 24-jul-2026 | Sesión de módulo 2 (catálogo de destinos/tours, ver `plan-modulo-tours-catalogo.md`): se confirma que "tour" (`tour_itinerario_items.tour_id`) y `paquetes_plantilla` son la misma entidad, validado con documentos reales de tours (Full Day Alto Mayo, Tours Lamas Nativo); se agregan campos de cabecera a `paquetes_plantilla` (duración, horarios, lugar de recojo, no incluye, recomendaciones); `destinos_atractivos` pasa de plano a árbol de 3 niveles (zona/lugar/atractivo, autoreferenciado); se crea catálogo `servicios` (nuevo, no existía) y `destino_servicio` ahora puede apuntar a cualquier nivel del árbol, no solo a un destino plano — caso real: transporte cobra por lugar, entradas cobran por atractivo; se agrega campo `orden` a `tour_itinerario_items` para secuenciar actividades sin hora exacta |
+| 25-jul-2026 | Sesión sobre paquetes locales/nacionales/internacionales, validada con 3 documentos reales de la agencia (Alto Mayo, Cusco, Panamá). Hallazgo principal: el precio no es un monto único — es una matriz por hotel × tipo de habitación (matrimonial/doble/triple/familiar), aplica a las 3 categorías, no solo internacional. Se crea `opciones_hotel`/`opciones_hotel_tarifas` compartida entre `paquetes_plantilla` y `opcion_mayorista`. Se documenta el flujo real de mayoristas (Nuevo Mundo, Falabella, Inter-agencias) — hoy pasa por Excel + Word manual, el sistema busca reemplazar ese paso. Se agrega margen automático por mayorista (`proveedores.margen_default_tipo/valor`, editable por línea). Se agregan tours opcionales (`opcion_mayorista_opcionales`, precio aparte del paquete base) y datos de vuelo (aerolínea, detalle) tanto a `paquetes_plantilla` como a `opcion_mayorista`. Se agrega `paquetes_plantilla.codigo`/`categoria` (local/nacional/internacional), confirmado con el patrón de códigos que ya usa la agencia (PDKM-CZ, PDKM-AM). Se agrega `cotizaciones.codigo` (prefijo libre + año + correlativo por prefijo) como identificador único de cotización. |
+| 25-jul-2026 | Módulo de guías a fondo: confirmado que son freelance (trabajan con varias agencias, no se controla su calendario completo — sin choques de horario por ahora). Se agrega `guia_tarifas` (costo/margen por guía × destino × modalidad dia_local/grupo_multidia, versionado igual que `proveedor_tarifas`, sin piso de descuento por ahora). Resuelve el pendiente dejado en `plan-modulo-tours-catalogo.md` §6 sobre si "Guía de Turismo" en `items_incluidos` necesita tarifa propia — sí la necesita. |
+| 25-jul-2026 | Reporte operativo por fecha resuelto (§8): un solo reporte con selector de rango (hoy/semana/personalizado), acciones inline (reasignar guía, marcar check-in — nuevo `reserva_item_pasajero.checkin_realizado`/`checkin_hora`), y versión PDF de solo lectura para repartir al equipo. Se agrega módulo nuevo transversal de recordatorios/notificaciones en-app (§8bis) — resuelve los módulos `aviso_pasaportes_vencer`/`felicitaciones_cumpleanos` que estaban catalogados en `plan-modulo-planes-acceso.md` sin diseñar, más casos nuevos (pago a mayorista próximo con `dias_aviso_pago_proveedor` default 2, cotización estancada con `dias_cotizacion_estancada` default 15, ambos configurables). Recordatorios con snooze (1h/8h/omitir) y flag `forzado` para que el admin marque uno como no descartable. Admin ve todos los recordatorios del equipo, vendedor solo los suyos. |
