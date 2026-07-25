@@ -187,4 +187,163 @@ export const PERMISOS = [
             },
         ]
     },
+    {
+        // Módulo Caja — Fase 0 (plan-modulo-caja.md §3).
+        'name': 'Métodos de Pago',
+        'permisos': [
+            {
+                name: 'Registrar',
+                permiso: 'register_payment_method',
+            },
+            {
+                name: 'Listado',
+                permiso: 'list_payment_method',
+            },
+            {
+                name: 'Editar',
+                permiso: 'edit_payment_method',
+            },
+            {
+                name: 'Eliminar',
+                permiso: 'delete_payment_method',
+            },
+        ]
+    },
+    {
+        'name': 'Proveedores',
+        'permisos': [
+            {
+                name: 'Registrar',
+                permiso: 'register_supplier',
+            },
+            {
+                name: 'Listado',
+                permiso: 'list_supplier',
+            },
+            {
+                name: 'Editar',
+                permiso: 'edit_supplier',
+            },
+            {
+                name: 'Eliminar',
+                permiso: 'delete_supplier',
+            },
+        ]
+    },
+    {
+        'name': 'Conceptos de Caja',
+        'permisos': [
+            {
+                name: 'Registrar',
+                permiso: 'register_cash_concept',
+            },
+            {
+                name: 'Listado',
+                permiso: 'list_cash_concept',
+            },
+            {
+                name: 'Editar',
+                permiso: 'edit_cash_concept',
+            },
+            {
+                name: 'Eliminar',
+                permiso: 'delete_cash_concept',
+            },
+        ]
+    },
+    {
+        // Módulo Caja — Fase 2 (plan-modulo-caja.md §9).
+        'name': 'Caja (Apertura/Cierre)',
+        'permisos': [
+            {
+                name: 'Abrir/cerrar turno propio',
+                permiso: 'cash.open_session',
+            },
+            {
+                name: 'Ver todas las cajas/sedes (reportes, fase futura)',
+                permiso: 'cash.view_all',
+            },
+            {
+                name: 'Cerrar sesión de otro cajero',
+                permiso: 'cash.close_others_session',
+            },
+            {
+                // Módulo Caja — Fase 4 (plan-modulo-caja.md §6).
+                name: 'Aprobar/rechazar egresos pendientes',
+                permiso: 'cash.approve_expenses',
+            },
+        ]
+    },
+    {
+        // Módulo Amortizaciones — permisos de anulación creados en el
+        // backend (migraciones tenant 2026_07_15_12/13/14) pero nunca
+        // agregados a este catálogo — sin esto no eran asignables desde
+        // la UI de Roles.
+        'name': 'Créditos (Amortizaciones)',
+        'permisos': [
+            {
+                name: 'Anular cuota',
+                permiso: 'anular-cuota-credito',
+            },
+            {
+                name: 'Anular pago',
+                permiso: 'anular-pago-credito',
+            },
+            {
+                name: 'Liquidar devolución',
+                permiso: 'liquidar-devolucion-credito',
+            },
+            {
+                name: 'Reemplazar comprobante',
+                permiso: 'reemplazar-comprobante-credito',
+            },
+        ]
+    },
+    {
+        // Módulo de series de comprobantes — CRUD de catálogo, mismo criterio
+        // que Métodos de Pago (sin permiso de eliminar: no hay borrado real,
+        // solo desactivar).
+        'name': 'Series de Comprobantes',
+        'permisos': [
+            {
+                name: 'Registrar',
+                permiso: 'register_serie_comprobante',
+            },
+            {
+                name: 'Listado',
+                permiso: 'list_serie_comprobante',
+            },
+            {
+                name: 'Editar',
+                permiso: 'edit_serie_comprobante',
+            },
+        ]
+    },
+    {
+        // Módulo de series de comprobantes — Paso 3.5. can_switch_branch:
+        // permiso independiente de rol (un cajero de confianza que cubre más
+        // de una sucursal), mismo criterio que cash.close_others_session.
+        // emitir_*: qué tipos de documento puede emitir cada usuario desde
+        // register.vue/edit.vue (validado también en SaleController::store(),
+        // no solo en el frontend).
+        'name': 'Emisión de Comprobantes',
+        'permisos': [
+            {
+                name: 'Cambiar de sucursal al emitir (multi-sede)',
+                permiso: 'can_switch_branch',
+            },
+            {
+                name: 'Emitir Factura',
+                permiso: 'emitir_factura',
+            },
+            {
+                name: 'Emitir Boleta',
+                permiso: 'emitir_boleta',
+            },
+            {
+                name: 'Emitir Nota de Venta',
+                permiso: 'emitir_nota_venta',
+            },
+        ]
+    },
 ];

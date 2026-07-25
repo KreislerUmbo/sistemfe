@@ -12,6 +12,7 @@ export type User = {
     email:string,
     role_id:string,
     role:RoleUser,
+    branch_id?: number,
     phone?:number,
     state:number, // 1: Activo, 2: Inactivo
     avatar?:string,

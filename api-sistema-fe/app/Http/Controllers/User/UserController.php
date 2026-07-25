@@ -54,7 +54,7 @@ class UserController extends Controller
         }
 
         if ($request->hasFile("imagen")) {
-            $path = Storage::putFile("users", $request->file("imagen"));
+            $path = Storage::disk('public')->putFile("users", $request->file("imagen"));
              $request->merge(["avatar" => $path]);
         }
 
@@ -99,11 +99,11 @@ class UserController extends Controller
         $user = User::findOrFail($id);
         if ($request->hasFile("imagen")) {
             // Si ya existe una imagen de avatar, eliminarla del almacenamiento
-            if ($user->avatar && Storage::exists($user->avatar)) {
-                Storage::delete($user->avatar);
+            if ($user->avatar && Storage::disk('public')->exists($user->avatar)) {
+                Storage::disk('public')->delete($user->avatar);
             }
             // Subir la nueva imagen 
-            $path = Storage::putFile("users", $request->file("imagen"));
+            $path = Storage::disk('public')->putFile("users", $request->file("imagen"));
             //y agregar la ruta de la nueva imagen al request
             $request->merge(["avatar" => $path]);
         }
@@ -135,8 +135,8 @@ class UserController extends Controller
     public function destroy(string $id)
     {
         $user = User::findOrFail($id);
-        if ($user->avatar && Storage::exists($user->avatar)) {
-            Storage::delete($user->avatar);
+        if ($user->avatar && Storage::disk('public')->exists($user->avatar)) {
+            Storage::disk('public')->delete($user->avatar);
         }
         $user->delete();
         return response()->json([

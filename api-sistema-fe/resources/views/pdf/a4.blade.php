@@ -136,6 +136,25 @@
             text-align: right;
         }
 
+        /* ── Forma de pago ──────────────────────────────────────── */
+        .pagos-table {
+            width: 100%;
+            margin-top: 6px;
+        }
+
+        .pagos-table th {
+            font-size: 10px;
+            text-align: left;
+            border-bottom: 1px solid #999999;
+            padding: 3px 4px;
+        }
+
+        .pagos-table td {
+            font-size: 11px;
+            padding: 3px 4px;
+            border-bottom: 1px solid #eeeeee;
+        }
+
         /* ── Totales ────────────────────────────────────────────── */
         .totales {
             width: 280px;
@@ -360,8 +379,33 @@
             </tfoot>
         </table>
 
-        {{-- ══════════════════ TOTALES ══════════════════ --}}
+        {{-- ══════════════════ FORMA DE PAGO / TOTALES ══════════════════ --}}
         @php $resumen = $venta->resumenImpresion(); @endphp
+        <table style="width:100%; margin-top:16px;">
+            <tr>
+                <td style="width:58%; vertical-align:top;">
+                    @if ($venta->sale_payments->isNotEmpty())
+                        <div class="info-box">
+                            <div class="titulo">FORMA DE PAGO</div>
+                            <table class="pagos-table">
+                                <tr>
+                                    <th>Método</th>
+                                    <th>Fecha</th>
+                                    <th class="right">Monto</th>
+                                </tr>
+                                @foreach ($venta->sale_payments->sortBy('date_payment') as $pago)
+                                    <tr>
+                                        <td>{{ $pago->method_payment }}</td>
+                                        <td>{{ \Carbon\Carbon::parse($pago->date_payment)->format('d/m/Y') }}</td>
+                                        <td class="right">{{ $venta->currency === 'USD' ? 'US$' : 'S/' }} {{ number_format($pago->amount, 2) }}</td>
+                                    </tr>
+                                @endforeach
+                            </table>
+                        </div>
+                    @endif
+                </td>
+                <td style="width:2%;"></td>
+                <td style="width:40%; vertical-align:top;">
         <table class="totales">
             @if ($venta->mto_oper_gravadas > 0)
                 <tr>
@@ -460,6 +504,9 @@
                     <td class="valor">{{ number_format($venta->debt, 2) }}</td>
                 </tr>
             @endif
+        </table>
+                </td>
+            </tr>
         </table>
 
         {{-- ══════════════════ IMPORTE EN LETRAS ══════════════════ --}}

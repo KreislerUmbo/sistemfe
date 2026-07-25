@@ -127,16 +127,16 @@ export const MENU_ITEMS: MenuItemType[] = [
     isTitle: false,
     icon: "fas fa-money-check-alt",
     children: [
-      {
+ /*      {
         key: "register_sale",
         label: "Registrar",
         route: { name: "sale.register" },
         parentKey: "sales",
         permission: 'register_sale',
-      },
+      }, */
       {
         key: "list_sales",
-        label: "Listar",
+        label: "Mis Ventas",
         route: { name: "sale.list" },
         parentKey: "sales",
         permission: 'list_sale',
@@ -147,6 +147,55 @@ export const MENU_ITEMS: MenuItemType[] = [
         route: { name: "nota.list" },
         parentKey: "sales",
         permission: 'list_nota_electronica',
+      },
+/*       {
+        key: "register_advance",
+        label: "Adelantos — Registrar",
+        route: { name: "advances.create" },
+        parentKey: "sales",
+        permission: 'register_advance',
+      }, */
+      {
+        key: "list_advances",
+        label: " Emitir Anticipos",
+        route: { name: "advances.index" },
+        parentKey: "sales",
+        permission: 'list_advance',
+      },
+      {
+        key: "credit_receivables",
+        label: "Ventas por Cobrar",
+        route: { name: "credit_receivables.index" },
+        parentKey: "sales",
+        permission: 'list_sale',
+      },
+    ],
+  },
+  // Módulo Caja — Fase 2 (turno activo) + Fase 5 (historial/dashboard,
+  // plan-modulo-caja.md §9, §11). Padre con dos hijos porque cada uno se
+  // gatea con un permiso distinto y no son excluyentes (§9: "un usuario
+  // puede tener ambos") — un cajero solo-open_session ve solo "Turno
+  // Activo", un admin solo-view_all ve solo "Historial y Reportes", y quien
+  // tiene ambos ve las dos entradas.
+  {
+    key: "cash_session",
+    icon: "fas fa-cash-register",
+    label: "Caja",
+    isTitle: false,
+    children: [
+      {
+        key: "cash_session_turno",
+        label: "Turno Activo",
+        route: { name: "cash.session" },
+        parentKey: "cash_session",
+        permission: 'cash.open_session',
+      },
+      {
+        key: "cash_session_dashboard",
+        label: "Historial y Reportes",
+        route: { name: "cash.dashboard" },
+        parentKey: "cash_session",
+        permission: 'cash.view_all',
       },
     ],
   },
@@ -176,9 +225,46 @@ export const MENU_ITEMS: MenuItemType[] = [
     key: "configurat",
     icon: "fas fa-wrench",
     label: "Configuraciones",
-    route: { name: "company.index" },
-    parentKey: "configurat",
-    permission: 'company',
+    isTitle: false,
+    children: [
+      {
+        key: "company",
+        label: "Datos de la empresa",
+        route: { name: "company.index" },
+        parentKey: "configurat",
+        permission: 'company',
+      },
+      // Módulo Caja — Fase 0 (plan-modulo-caja.md §3).
+      {
+        key: "payment_methods",
+        label: "Métodos de Pago",
+        route: { name: "payment-methods.index" },
+        parentKey: "configurat",
+        permission: 'list_payment_method',
+      },
+      // Módulo de series de comprobantes.
+      {
+        key: "series_comprobante",
+        label: "Series de Comprobantes",
+        route: { name: "series-comprobante.index" },
+        parentKey: "configurat",
+        permission: 'list_serie_comprobante',
+      },
+      {
+        key: "suppliers",
+        label: "Proveedores",
+        route: { name: "suppliers.index" },
+        parentKey: "configurat",
+        permission: 'list_supplier',
+      },
+      {
+        key: "cash_concepts",
+        label: "Conceptos de Caja",
+        route: { name: "cash-concepts.index" },
+        parentKey: "configurat",
+        permission: 'list_cash_concept',
+      },
+    ],
   },
   {
     key: "recursos_cliente",

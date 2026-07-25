@@ -93,11 +93,48 @@ class TotalesComprobanteCalculator
         // ── IGV total del comprobante ─────────────────────────────────
         // Solo se suma el IGV de operaciones que generan IGV real
         // Las exoneradas e inafectas siempre tienen igv = 0
+        //
+        // Con descuento global, el igv crudo de cada línea gravada ('10')
+        // no sirve tal cual: GreenterService::getDetallesComprobante()
+        // recalcula el IGV de cada línea sobre su base ya neta del
+        // descuento prorrateado, y si acá se suma el igv crudo (sin
+        // descuento) el TaxAmount del header queda descuadrado contra la
+        // suma de líneas — SUNAT rechaza (error 3291, venta #5,
+        // 2026-07-14: mezcla de línea gravada + exonerada con descuento
+        // global). Las gratuitas ('11') no reciben descuento (no están en
+        // lineas_cobro/subtotal_bruto del frontend tampoco), así que su
+        // igv se suma tal cual.
         $codigos_con_igv = ['10', '11'];
-        $datos['mto_igv'] = round(
-            $detalles->whereIn('tip_afe_igv', $codigos_con_igv)->sum('igv'),
-            2
-        );
+        if ($descuentoGlobal > 0) {
+            $subtotal_prorrateable = $detalles->whereIn('tip_afe_igv', ['10', '20', '30'])->sum('subtotal');
+
+            // data_get() en vez de $d->subtotal: $detalles puede traer
+            // Eloquent models (Sale::sale_details, un objeto por línea) o
+            // arrays planos (clonarLineasTotal() para notas NC04 — ver
+            // NotaElectronicaController) — el acceso a propiedad con "->"
+            // falla en silencio (warning + null) contra un array, dejando
+            // el IGV en 0 para notas con descuento global.
+            $igv_gravadas_neto = $detalles->where('tip_afe_igv', '10')->reduce(
+                function ($carry, $d) use ($descuentoGlobal, $subtotal_prorrateable) {
+                    $subtotalLinea  = (float) data_get($d, 'subtotal');
+                    $porcentajeIgv  = (float) data_get($d, 'porcentaje_igv');
+                    $proporcion     = $subtotal_prorrateable > 0 ? $subtotalLinea / $subtotal_prorrateable : 0;
+                    $descuentoLinea = round($descuentoGlobal * $proporcion, 2);
+                    $baseNeta       = $subtotalLinea - $descuentoLinea;
+                    return $carry + ($baseNeta * ($porcentajeIgv / 100));
+                },
+                0
+            );
+
+            $igv_gratuitas = $detalles->where('tip_afe_igv', '11')->sum('igv');
+
+            $datos['mto_igv'] = round($igv_gravadas_neto + $igv_gratuitas, 2);
+        } else {
+            $datos['mto_igv'] = round(
+                $detalles->whereIn('tip_afe_igv', $codigos_con_igv)->sum('igv'),
+                2
+            );
+        }
 
         // IGV de operaciones gratuitas (se declara separado en el XML)
         $datos['mto_igv_gratuitas'] = $detalles
@@ -115,11 +152,20 @@ class TotalesComprobanteCalculator
             + $datos['isc'];
 
         // ── Valor de venta = base total sin impuestos ─────────────────
-        // Suma los subtotales de todas las operaciones menos el descuento global
-        $codigos_todas_operaciones = ['10','20','30','40','17'];
-        $datos['valor_venta'] = $detalles
-            ->whereIn('tip_afe_igv', $codigos_todas_operaciones)
-            ->sum('subtotal') - $descuentoGlobal;
+        // Se arma sumando los buckets ya calculados arriba (gravadas,
+        // exoneradas, inafectas — ya netos del descuento global si aplica
+        // — más exportación e IVAP) en vez de volver a sumar el subtotal
+        // crudo de $detalles y restar $descuentoGlobal de nuevo: ese
+        // segundo camino independiente podía descuadrarse en algunos
+        // céntimos contra los buckets de arriba (cada uno redondea su
+        // propia porción del descuento por separado). Sumar los buckets
+        // ya mutados garantiza que valor_venta cuadre por construcción
+        // con lo que el XML declara por categoría.
+        $datos['valor_venta'] = $datos['mto_oper_gravadas']
+            + $datos['mto_oper_exoneradas']
+            + $datos['mto_oper_inafectas']
+            + $datos['mto_oper_exportacion']
+            + $datos['mto_base_ivap'];
 
         // ── Subtotal = valor venta + total impuestos ──────────────────
         $datos['sub_total'] = $datos['valor_venta'] + $datos['total_impuestos'];

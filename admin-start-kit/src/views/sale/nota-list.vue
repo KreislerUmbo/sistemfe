@@ -8,6 +8,9 @@
                 </h5>
                 <small class="text-muted">{{ totalRows }} registro(s) encontrado(s)</small>
             </div>
+            <router-link :to="{ name: 'notas.create' }" class="btn btn-primary btn-sm">
+                <i class="fas fa-plus me-1"></i> Nueva Nota Crédito/Débito
+            </router-link>
         </div>
 
         <div class="card border-0 shadow-sm mb-3">

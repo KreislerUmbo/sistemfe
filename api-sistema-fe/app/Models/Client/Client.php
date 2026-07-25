@@ -6,14 +6,15 @@ namespace App\Models\Client;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use App\Models\User;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use PHPOpenSourceSaver\JWTAuth\Contracts\JWTSubject;
 
 class Client extends Authenticatable implements JWTSubject
 {
-    use  SoftDeletes;
-    //use HasFactory; //esto sirve para usar el factory de la base de datos osea para crear registros en la base de datos
+    use SoftDeletes;
+    use HasFactory; // habilitado para el módulo Amortizaciones — necesario para ClientFactory (tests)
     protected $table = 'clients';
     protected $fillable = [
         "name",
@@ -46,6 +47,7 @@ class Client extends Authenticatable implements JWTSubject
         "regimen_tributario",
         "es_agente_retencion",
 
+        "saldo_a_favor", // Módulo Amortizaciones — plan-modulo-amortizaciones.md §2.6
     ];
     protected $hidden = ['password', 'remember_token']; //ocultar la contraseña
 
@@ -61,7 +63,9 @@ class Client extends Authenticatable implements JWTSubject
 
     public function getJWTCustomClaims()
     {
-        return [];
+        return [
+            'tenant_id' => tenant('id'),
+        ];
     }
     public function setCreatedAtAttribute($value)
     {
@@ -79,6 +83,12 @@ class Client extends Authenticatable implements JWTSubject
     public function user()
     {
         return $this->belongsTo(User::class, "user_id");
+    }
+
+    // Módulo Amortizaciones — plan-modulo-amortizaciones.md §6.2
+    public function paymentReceipts()
+    {
+        return $this->hasMany(\App\Models\Credit\PaymentReceipt::class, "client_id");
     }
     public function setPasswordAttribute($value) //para encriptar la contraseña
     {

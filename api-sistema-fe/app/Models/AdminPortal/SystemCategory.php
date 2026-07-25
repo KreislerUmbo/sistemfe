@@ -5,11 +5,12 @@ namespace App\Models\AdminPortal;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Carbon;
+use Stancl\Tenancy\Database\Concerns\CentralConnection;
 
 
 class SystemCategory extends Model
 {
-    use SoftDeletes;
+    use SoftDeletes, CentralConnection;
     protected $table = 'system_categories';// Nombre de la tabla
     protected $fillable = [// Campos de la tabla
         'nombre',

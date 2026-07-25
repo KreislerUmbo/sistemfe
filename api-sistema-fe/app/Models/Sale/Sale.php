@@ -18,10 +18,18 @@ class Sale extends Model
     protected $table = "sales";
 
     protected $fillable = [
+        // ── Tipo de comprobante ────────────────────────────────────────
+        // 'sale' (default) = venta normal. 'advance' = comprobante de
+        // adelanto de cliente (ver módulo Adelantos) — fuerza tipo de
+        // operación '0104' en FacturacionElectronicaController::enviarSunat().
+        "type",
+
         // ── Identificación del comprobante ────────────────────────────
-        "serie",            // F001 (factura) o B001 (boleta)
-        "correlativo",      // número correlativo asignado al emitir en SUNAT
-        "n_operacion",      // serie-correlativo: ej. F001-00000001
+        "serie",            // F001 (factura) o B001 (boleta) — resuelto por SerieComprobanteService
+        "tipo_comprobante_codigo", // '01' factura, '03' boleta, 'NV' nota de venta, etc. — ver tipos_comprobante
+        "serie_comprobante_id",    // FK a serie_comprobantes — fila exacta usada, para reservar su correlativo
+        "correlativo",      // número correlativo — reservado en enviarSunat() (fiscal) o al crear (NV)
+        "n_operacion",      // serie-correlativo: ej. F001-00000001 — SOLO para documentos fiscales enviados a SUNAT
         "n_transaction",    // número interno de la venta (antes de emitir)
         "date",             // fecha de emisión
 
@@ -114,12 +122,76 @@ class Sale extends Model
         "cdr",            // ruta del archivo CDR (respuesta de SUNAT)
         "xml",            // ruta del archivo XML generado por Greenter
         "hash_cpe",       // hash SUNAT (DigestValue) del XML firmado, para el QR
+        "type",           // venta, antipo
+        // ── Rechazo SUNAT ──────────────────────────────────────────────
+        // Antes se perdía (solo se devolvía una vez en el response
+        // transitorio) — ver enviarSunat(), rama de rechazo/excepción.
+        "sunat_error_code",
+        "sunat_error_message",
+        "sunat_sent_at",
+
+        // ── Módulo Amortizaciones (ver plan-modulo-amortizaciones.md §2.1) ──
+        "condicion_pago",     // 'contado' | 'credito'
+        "credit_type",        // 'cuotas_fijas' | 'libre', solo si condicion_pago='credito'
+        "aplica_mora",
+        "tasa_mora",          // null = usa default de companies
+        "tipo_mora",          // 'fijo_por_cuota' | 'porcentaje_diario' | 'porcentaje_fijo_unico'
+        "fecha_limite_pago",  // solo relevante en credit_type='libre' con aplica_mora=true
+        "saldo_pendiente",    // cacheado, se recalcula en cada aplicación de pago (Fase 3-4)
+        "replaces_sale_id",   // venta nueva → venta que reemplaza (§3.13)
+    ];
+
+    protected $casts = [
+        "sunat_sent_at" => "datetime",
+        "aplica_mora" => "boolean",
+        "fecha_limite_pago" => "date",
     ];
 
     public function isEditable(): bool
     {
         // Si tiene CDR o estado SUNAT es 'ACEPTADO', no se puede editar
         return is_null($this->cdr);
+    }
+
+    // ── Siguiente número de transacción interno ────────────────────────
+    // No confundir con el correlativo SUNAT (ese lo reserva
+    // FacturacionElectronicaController::reservarCorrelativo()). Usa
+    // withTrashed() + MAX() sobre TODA la tabla (no "la última fila por
+    // id") para que un borrado (soft o forceDelete) nunca haga que el
+    // contador retroceda y reparta un número ya usado — antes,
+    // AdvanceController::store() ni siquiera seteaba n_transaction, así
+    // que si la venta más reciente por id era un adelanto, la siguiente
+    // venta calculaba null + 1 = 1 y salía "00000001" (ver incidente
+    // 2026-07-12, memoria del proyecto — módulo Adelantos).
+    public static function siguienteNumeroTransaccion(): string
+    {
+        $max = static::withTrashed()
+            ->whereNotNull('n_transaction')
+            ->selectRaw("MAX(NULLIF(n_transaction, '')::integer) as max_val")
+            ->value('max_val');
+
+        return str_pad((string) ((int) ($max ?? 999) + 1), 8, '0', STR_PAD_LEFT);
+    }
+
+    // ── Protección: nunca destruir permanentemente un comprobante ya
+    // enviado a SUNAT ───────────────────────────────────────────────────
+    // Un forceDelete() aquí libera su correlativo/n_transaction para que
+    // se le vuelva a repartir a otro comprobante — causó una colisión
+    // real de correlativo con SUNAT el 2026-07-12 (dos comprobantes
+    // distintos terminaron con el mismo F001-XX). Si de verdad hay que
+    // purgar una fila de prueba con n_operacion asignado, hacerlo a mano
+    // en la BD, nunca vía Eloquent.
+    public function forceDelete()
+    {
+        if ($this->n_operacion) {
+            throw new \RuntimeException(
+                "No se puede eliminar permanentemente la venta #{$this->id} " .
+                "({$this->n_operacion}): ya fue enviada a SUNAT y borrarla " .
+                "liberaría su correlativo para que se reasigne por error."
+            );
+        }
+
+        return parent::forceDelete();
     }
 
 
@@ -160,6 +232,40 @@ class Sale extends Model
     public function notes()
     {
         return $this->hasMany(Note::class, "sale_id");
+    }
+
+    // Adelantos aplicados a ESTA venta (venta final que descuenta el
+    // anticipo) — no confundir con el caso donde esta venta ES el
+    // comprobante de un adelanto (type='advance'), que se referencia desde
+    // Advance::sale(), no desde acá.
+    public function advance_applications()
+    {
+        return $this->hasMany(\App\Models\Advance\AdvanceApplication::class, "sale_id");
+    }
+
+    // ── Módulo Amortizaciones (plan-modulo-amortizaciones.md §6.2) ─────
+    public function installments()
+    {
+        return $this->hasMany(\App\Models\Credit\Installment::class, "sale_id");
+    }
+
+    public function paymentApplications()
+    {
+        return $this->hasMany(\App\Models\Credit\PaymentApplication::class, "sale_id");
+    }
+
+    // Venta original que ESTA venta reemplaza (§3.13) — solo tiene valor si
+    // esta fila nació como reemplazo de un comprobante anulado.
+    public function replacesSale()
+    {
+        return $this->belongsTo(Sale::class, "replaces_sale_id");
+    }
+
+    // Inverso: venta(s) que reemplazaron a ESTA. hasMany (no hasOne) porque
+    // replaces_sale_id no tiene constraint de unicidad a nivel de BD.
+    public function replacedBy()
+    {
+        return $this->hasMany(Sale::class, "replaces_sale_id");
     }
 
     // ── ¿Ya tiene una Nota de Crédito TOTAL aceptada? ───────────────────
@@ -313,5 +419,28 @@ class Sale extends Model
         }
 
         return $query;
+    }
+
+    // ── Scope para reportes SUNAT/PLE (Módulo de series de comprobantes) ──
+    // Cualquier query que alimente un futuro Registro de Ventas SUNAT/PLE
+    // (todavía no construido en el sistema) DEBE usar este scope o el mismo
+    // filtro — nunca inferir el tipo de documento parseando el prefijo de
+    // 'serie', eso se rompe apenas exista una serie NV con un prefijo no
+    // estándar. tipo_comprobante_codigo=null (ventas creadas antes de este
+    // módulo, sin backfill) se trata como fiscal por compatibilidad: 'NV'
+    // no existía como tipo de documento antes de este módulo, así que toda
+    // venta vieja sin esta columna es, por definición, fiscal.
+    //
+    // Nota de venta SÍ debe incluirse en: cierre de caja (dinero real que
+    // entró a caja), kardex/stock (ya descuenta inventario igual que
+    // cualquier venta), y un listado general de ventas internas separado
+    // del Registro de Ventas fiscal — este scope es exclusivamente para el
+    // reporte fiscal/PLE, no para esos otros usos.
+    public function scopeSoloDocumentosFiscales($query)
+    {
+        return $query->where(function ($q) {
+            $q->whereNull('tipo_comprobante_codigo')
+                ->orWhere('tipo_comprobante_codigo', '<>', 'NV');
+        });
     }
 }

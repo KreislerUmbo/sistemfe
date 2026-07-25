@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "build-only": "vite build",
     "type-check": "vue-tsc --build --force",
-    "format": "prettier --write src/"
+    "format": "prettier --write src/",
+    "test": "vitest run"
   },
   "dependencies": {
     "@fullcalendar/core": "^6.1.14",
@@ -73,6 +74,7 @@
     "typescript": "^5.5.3",
     "unplugin-vue-components": "^0.27.2",
     "vite": "^5.3.1",
+    "vitest": "^4.1.10",
     "vue-tsc": "^2.0.26"
   }
 }

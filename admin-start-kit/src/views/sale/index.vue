@@ -273,7 +273,7 @@
 
                                 <!-- Total -->
                                 <td class="text-end fw-bold">{{ sale.currency }} {{ Number(sale.total ?? 0).toFixed(2)
-                                }}</td>
+                                    }}</td>
 
                                 <!-- Fecha -->
                                 <td class="text-center small text-muted">{{ sale.created_at_format }}</td>
@@ -281,10 +281,14 @@
                                 <!-- SUNAT -->
                                 <td class="text-center">
                                     <div class="d-flex align-items-center justify-content-center gap-1">
-                                        <!-- Sin correlativo: botón enviar -->
-                                        <button v-if="!sale.correlativo && sale.state_sale == 1" type="button"
+                                        <!-- Botón enviar/reintentar — antes solo se mostraba con
+                                             !sale.correlativo, lo que dejaba sin forma de reintentar una
+                                             venta cuyo correlativo ya se quemó en un envío rechazado
+                                             (xml/cdr null pero correlativo seteado). -->
+                                        <button v-if="!(sale.xml && sale.cdr) && sale.state_sale == 1" type="button"
                                             class="btn btn-sm btn-outline-primary py-0 px-2" @click="enviarSunat(sale)"
-                                            :disabled="loadingSunat === sale.id" title="Enviar a SUNAT">
+                                            :disabled="loadingSunat === sale.id"
+                                            :title="sale.correlativo ? 'Reintentar envío a SUNAT' : 'Enviar a SUNAT'">
                                             <span v-if="loadingSunat === sale.id">
                                                 <span class="spinner-border spinner-border-sm"></span>
                                             </span>
@@ -322,9 +326,16 @@
                                         <!-- Cotización no tiene acciones SUNAT -->
                                         <span v-if="sale.state_sale == 2" class="text-muted small">N/A</span>
 
-                                        <!-- Estado simplificado -->
-                                        <span v-if="sale.correlativo"
+                                        <!-- Estado simplificado — antes se mostraba "Aceptado" con solo
+                                             sale.correlativo, que queda seteado incluso cuando SUNAT
+                                             rechaza el envío (se reserva antes de mandar). -->
+                                        <span v-if="sale.xml && sale.cdr"
                                             class="badge bg-success-subtle text-success border border-success-subtle small">Aceptado</span>
+                                        <span v-else-if="sale.correlativo"
+                                            class="badge bg-danger-subtle text-danger border border-danger-subtle small"
+                                            :title="sale.sunat_error_message ?? 'Sin detalle del motivo'">
+                                            Rechazado
+                                        </span>
                                     </div>
                                 </td>
 
@@ -620,13 +631,7 @@ const condicionesTributarias = (sale: Sale): CondicionTributaria[] => {
     const condiciones: CondicionTributaria[] = [];
 
     switch (Number(sale.retencion_igv)) {
-        case 0:
-            condiciones.push({
-                tipo: 'gravado',
-                label: 'Gravado',
-                detalle: `Gravado: ${sale.currency} ${Number(sale.monto_retencion ?? 0).toFixed(2)}`,
-            });
-            break;
+
         case 1:
             condiciones.push({
                 tipo: 'retencion',
@@ -657,6 +662,12 @@ const condicionesTributarias = (sale: Sale): CondicionTributaria[] => {
 
     if (Number(sale.is_exportacion) === 1) {
         condiciones.push({ tipo: 'exportacion', label: 'Exportación', detalle: 'Operación de exportación' });
+    }
+    if (Number(sale.retencion_igv == 0) && sale.type == 'advance') {
+        condiciones.push({ tipo: 'anticipo', label: 'Anticipo', detalle: 'Operación de anticipos' });
+    }
+    if (Number(sale.mto_oper_gravadas) > 0) {
+        condiciones.push({ tipo: 'gravado', label: 'Gravado', detalle: 'Operación Gravado' });
     }
 
     return condiciones;
@@ -838,5 +849,9 @@ watch([state_sale, type_payment], () => {
 
 .tax-exportacion {
     background: #64748b;
+}
+
+.tax-anticipo {
+    background: hsl(54, 100%, 63%);
 }
 </style>

@@ -64,6 +64,7 @@ class SaleResource extends JsonResource
             'n_transaction' => $this->resource->n_transaction
                 ?? str_pad($this->resource->id, 8, "0", STR_PAD_LEFT),
             'serie'        => $this->resource->serie,
+            'tipo_comprobante_codigo' => $this->resource->tipo_comprobante_codigo,
             'correlativo'  => $this->resource->correlativo,
             'n_operacion'  => $this->resource->n_operacion,
             'date'         => $this->resource->date,
@@ -159,11 +160,33 @@ class SaleResource extends JsonResource
             'paid_out'      => (float) ($this->resource->paid_out ?? 0),
             'description'   => $this->resource->description,
 
+            // ── Módulo Amortizaciones — datos para poder editar una venta
+            // a crédito desde sale/edit.vue (corregir pago inicial y
+            // regenerar cronograma antes de enviar a SUNAT) ─────────────
+            'condicion_pago'  => $this->resource->condicion_pago,
+            'credit_type'     => $this->resource->credit_type,
+            'saldo_pendiente' => (float) ($this->resource->saldo_pendiente ?? 0),
+            'aplica_mora'     => (bool) $this->resource->aplica_mora,
+            'tasa_mora'       => (float) ($this->resource->tasa_mora ?? 0),
+            'tipo_mora'       => $this->resource->tipo_mora,
+            // true si ya hay plata comprometida por fuera de esta pantalla
+            // (cuota cobrada o adelanto aplicado) — el frontend usa esto
+            // para bloquear la edición de productos/pago inicial.
+            'tiene_cobros_formales' => $this->resource->paymentApplications()->where('estado', 'activo')->exists()
+                || $this->resource->advance_applications()->exists(),
+
             // ── Facturación electrónica ───────────────────────────
             // cdr y xml: retornar la ruta directamente (sin concatenar URL)
             // El frontend arma la URL completa con getFileUrl()
             'cdr' => $this->resource->cdr,
             'xml' => $this->resource->xml,
+
+
+            'type'=> $this->resource->type,
+            // Motivo de rechazo SUNAT (si lo hay) — correlativo puede estar
+            // seteado sin xml/cdr cuando un envío fue rechazado o falló.
+            'sunat_error_message' => $this->resource->sunat_error_message,
+            'sunat_sent_at'        => $this->resource->sunat_sent_at?->format('Y-m-d H:i:s'),
 
             // ── Fechas ────────────────────────────────────────────
             'created_at'        => $this->resource->created_at?->format('Y-m-d h:i A'),

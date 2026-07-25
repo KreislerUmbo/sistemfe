@@ -66,6 +66,13 @@ class Note extends Model
         "total_impuestos",
         "valor_venta",
         "mto_imp_venta",
+        // Solo NC04 (Descuento global): monto ingresado por el usuario,
+        // aplicado sobre el clon completo de la venta. Se persiste acá (no
+        // vive en ninguna note_detail) para que enviarNotaSunat() pueda
+        // recalcular los mismos totales al releer note_details desde la BD,
+        // y para que GreenterService::getNote() arme las líneas del XML
+        // netas del descuento — mismo mecanismo que sales.discount_global.
+        "discount_global",
         "redondeo",
 
         "reponer_stock",

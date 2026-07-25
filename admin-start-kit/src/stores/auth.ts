@@ -26,16 +26,21 @@ export const useAuthStore = defineStore("auth_store", () => {
 
   const getUser = () => user.value;
 
+  // "a|b" = OR (tiene cualquiera de los dos) — mismo criterio que el
+  // middleware permission: de Spatie en el backend (Módulo Caja — Fase 5,
+  // necesario para gatear cash.history/cash.dashboard a
+  // "cash.open_session O cash.view_all"). Un solo permiso sin "|" se
+  // comporta exactamente igual que antes.
   const isPermitedRoute = (permission: string) => {
     let USER = user.value;
     if (USER && USER.role?.name != 'Super-Admin') {
       //LISTA DE PERMISOS DEL USUARIO AUTENTICADO
       let permissions = USER.permissions;
-      if (permissions?.includes(permission) || permission == 'all') {
+      if (permission == 'all') {
         return true;
-      } else {
-        return false;
       }
+      let opciones = permission.split('|');
+      return opciones.some((p) => permissions?.includes(p));
     }
     return true;
   }

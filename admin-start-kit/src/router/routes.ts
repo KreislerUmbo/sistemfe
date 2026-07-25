@@ -208,6 +208,85 @@ const comercialRoutes = [
     },
     component: () => import("@/views/categories/index.vue"),
   },
+  // Módulo Caja — Fase 0 (plan-modulo-caja.md §3).
+  {
+    path: "/payment-methods",
+    name: "payment-methods.index",
+    meta: {
+      title: setTitle("Métodos de Pago"),
+      authRequired: true,
+      permission: 'list_payment_method',
+    },
+    component: () => import("@/views/cash/payment-methods.vue"),
+  },
+  {
+    path: "/suppliers",
+    name: "suppliers.index",
+    meta: {
+      title: setTitle("Proveedores"),
+      authRequired: true,
+      permission: 'list_supplier',
+    },
+    component: () => import("@/views/cash/suppliers.vue"),
+  },
+  {
+    path: "/cash-concepts",
+    name: "cash-concepts.index",
+    meta: {
+      title: setTitle("Conceptos de Caja"),
+      authRequired: true,
+      permission: 'list_cash_concept',
+    },
+    component: () => import("@/views/cash/cash-concepts.vue"),
+  },
+  // Módulo de series de comprobantes.
+  {
+    path: "/series-comprobante",
+    name: "series-comprobante.index",
+    meta: {
+      title: setTitle("Series de Comprobantes"),
+      authRequired: true,
+      permission: 'list_serie_comprobante',
+    },
+    component: () => import("@/views/series-comprobante/index.vue"),
+  },
+  // Módulo Caja — Fase 2 (plan-modulo-caja.md §9).
+  {
+    path: "/caja",
+    name: "cash.session",
+    meta: {
+      title: setTitle("Caja"),
+      authRequired: true,
+      permission: 'cash.open_session',
+    },
+    component: () => import("@/views/cash/session.vue"),
+  },
+  // Módulo Caja — Fase 5 (plan-modulo-caja.md §9, §11: reportes).
+  // cash.open_session|cash.view_all: cualquiera con acceso al módulo puede
+  // ver su propio historial (o todo, con cash.view_all) — ver
+  // isPermitedRoute() en stores/auth.ts (soporte "|" agregado esta fase).
+  {
+    path: "/caja/historial",
+    name: "cash.history",
+    meta: {
+      title: setTitle("Historial de Caja"),
+      authRequired: true,
+      permission: 'cash.open_session|cash.view_all',
+    },
+    component: () => import("@/views/cash/history.vue"),
+  },
+  // Dashboard admin — binario, exclusivo de cash.view_all (mismo criterio
+  // que el backend, ver CashSessionController::dashboard()).
+  {
+    path: "/caja/dashboard",
+    name: "cash.dashboard",
+    meta: {
+      title: setTitle("Dashboard de Caja"),
+      authRequired: true,
+      permission: 'cash.view_all',
+    },
+    component: () => import("@/views/cash/dashboard.vue"),
+  },
   {
     path: "/company",
     name: "company.index",
@@ -307,6 +386,66 @@ const comercialRoutes = [
       permission: 'list_nota_electronica',
     },
     component: () => import("@/views/sale/nota-list.vue"),
+  },
+  {
+    path: "/nota/create",
+    name: "notas.create",
+    meta: {
+      title: setTitle("Nueva Nota de Crédito/Débito"),
+      authRequired: true,
+      permission: 'nota_electronica',
+    },
+    component: () => import("@/views/sale/nota-create.vue"),
+  },
+  {
+    path: "/advances/list",
+    name: "advances.index",
+    meta: {
+      title: setTitle("Adelantos"),
+      authRequired: true,
+      permission: 'list_advance',
+    },
+    component: () => import("@/views/advances/index.vue"),
+  },
+  {
+    path: "/advances/create",
+    name: "advances.create",
+    meta: {
+      title: setTitle("Nuevo Adelanto"),
+      authRequired: true,
+      permission: 'register_advance',
+    },
+    component: () => import("@/views/advances/create.vue"),
+  },
+  {
+    path: "/advances/:id",
+    name: "advances.show",
+    meta: {
+      title: setTitle("Detalle de Adelanto"),
+      authRequired: true,
+      permission: 'list_advance',
+    },
+    component: () => import("@/views/advances/show.vue"),
+  },
+  {
+    path: "/cuentas-por-cobrar",
+    name: "credit_receivables.index",
+    meta: {
+      title: setTitle("Cuentas por Cobrar"),
+      authRequired: true,
+      permission: 'list_sale',
+    },
+    component: () => import("@/views/credit/index.vue"),
+  },
+  {
+    path: "/cuentas-por-cobrar/cliente/:id",
+    name: "credit_receivables.client",
+    meta: {
+      title: setTitle("Estado de Cuenta"),
+      authRequired: true,
+      permission: 'list_sale',
+    },
+    component: () => import("@/views/credit/client-detail.vue"),
   },
   {
     path: "/recursos/index",

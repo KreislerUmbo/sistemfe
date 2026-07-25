@@ -1,0 +1,152 @@
+<?xml version="1.0" encoding="utf-8"?>
+<CreditNote xmlns="urn:oasis:names:specification:ubl:schema:xsd:CreditNote-2" xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2" xmlns:ds="http://www.w3.org/2000/09/xmldsig#" xmlns:ext="urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2">
+  <ext:UBLExtensions>
+    <ext:UBLExtension>
+      <ext:ExtensionContent>
+        <ds:Signature Id="GreenterSign">
+          <ds:SignedInfo>
+            <ds:CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"/>
+            <ds:SignatureMethod Algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha1"/>
+            <ds:Reference URI="">
+              <ds:Transforms>
+                <ds:Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature"/>
+              </ds:Transforms>
+              <ds:DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha1"/>
+              <ds:DigestValue>yCx41c0hqg0ertzykGK6MhTsMTU=</ds:DigestValue>
+            </ds:Reference>
+          </ds:SignedInfo>
+          <ds:SignatureValue>zRzbAyxBxrtD/rSsMfKYZ8tGmsbfnIKGnf+HtTGnD2mjybaevJqHcHTD73AH2K3oCoMN8oyfhINQj/JprtfXkZ5g+ot927MdFYyITTfL7Lwsm5WubAm5wQMFldSY6zOYYqOgXn6s74sJCtaCKjsi/Zw0vU7QBEXLFSRRzRZYeKhyeBM6obOS+G3tsI3OhQJoy5x4hlEhf62XzJNWck/s8VG1+/HGnpBhkqqFW/CX8lhp1gFgpMgRzs/7mFdx1TkM0ZOFquVW2XYPELC3xUVIz7jPc2RWWBeAWGhKEU3DEgIbthXQFHY3sehbKhdKG8ntEQOCnHLtnG4CRhm/omMeNQ==</ds:SignatureValue>
+          <ds:KeyInfo>
+            <ds:X509Data>
+              <ds:X509Certificate>MIIFBzCCA++gAwIBAgIIbKrM9WJRHaIwDQYJKoZIhvcNAQELBQAwggENMRswGQYKCZImiZPyLGQBGRYLTExBTUEuUEUgU0ExCzAJBgNVBAYTAlBFMQ0wCwYDVQQIDARMSU1BMQ0wCwYDVQQHDARMSU1BMRgwFgYDVQQKDA9UVSBFTVBSRVNBIFMuQS4xRTBDBgNVBAsMPEROSSA5OTk5OTk5IFJVQyAyMDYwNjI5NjUyNiAtIENFUlRJRklDQURPIFBBUkEgREVNT1NUUkFDScOTTjFEMEIGA1UEAww7Tk9NQlJFIFJFUFJFU0VOVEFOVEUgTEVHQUwgLSBDRVJUSUZJQ0FETyBQQVJBIERFTU9TVFJBQ0nDk04xHDAaBgkqhkiG9w0BCQEWDWRlbW9AbGxhbWEucGUwHhcNMjUwNDE0MjEwMTM5WhcNMjcwNDE0MjEwMTM5WjCCAQ0xGzAZBgoJkiaJk/IsZAEZFgtMTEFNQS5QRSBTQTELMAkGA1UEBhMCUEUxDTALBgNVBAgMBExJTUExDTALBgNVBAcMBExJTUExGDAWBgNVBAoMD1RVIEVNUFJFU0EgUy5BLjFFMEMGA1UECww8RE5JIDk5OTk5OTkgUlVDIDIwNjA2Mjk2NTI2IC0gQ0VSVElGSUNBRE8gUEFSQSBERU1PU1RSQUNJw5NOMUQwQgYDVQQDDDtOT01CUkUgUkVQUkVTRU5UQU5URSBMRUdBTCAtIENFUlRJRklDQURPIFBBUkEgREVNT1NUUkFDScOTTjEcMBoGCSqGSIb3DQEJARYNZGVtb0BsbGFtYS5wZTCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBAObqNAtwI46EmGh4gkGMM6wv/qihMwM5HBCtIKaKZsE0BnCkgb/xQT0nuA+Vp9S0Dh+duMH+LL+MZB4tJuiepqV4FENqIDjPmESZyoHkKIoMMu4LqoDloGfBZqkJ6OA2Urw0gQAdvSUjyLf1+2INfIP+exNGXsS67nLgKQM15xhZmFCQOHrvo9UJXJGIOdY+9KQa44CWOh6FUwuZjLzXIQCXrjDjDOM7EVVhbLuLhqpdcXRj8bQpylV8dEXVuFNYSqEfWoHyBnh1qmqzsHj/tkaU/P2btiDCjHhS8/a5Jlj18W61wyQ9EFPk9NRfjLi75H4HX7viAlRD5sMViNog9e8CAwEAAaNnMGUwHQYDVR0OBBYEFCeJaXZuCKGRstVyP4J9lLUqZXY7MB8GA1UdIwQYMBaAFCeJaXZuCKGRstVyP4J9lLUqZXY7MBMGA1UdJQQMMAoGCCsGAQUFBwMBMA4GA1UdDwEB/wQEAwIHgDANBgkqhkiG9w0BAQsFAAOCAQEAkp6nKgqINrFhORtGyNjMlJIbuwIifytPr8oI4xsGLH/DIzWzGxVoW0f5ha1yEemnMUF3UFj6dpW1Kbgwlt6G4spUfJpkEWs9RkgjqJVe9mjyxf1tXB3GaDRqRv2+J5oNSCvHPGCulCO2cQIY4fnc9N+G0och9OfR6waRnSqnhia6svSlqgYUrcyV4ppAxD0LVT+Ccw8pS1/+AOYdWC/30MS1cJe3A4ZMQI0ODfwndgjCswIzSJgE0/XMrIg5txgA/I7nHr6/Z/4IptFZdD4K82LRG0yWQvDXh837Oyys5ufr8y//11s4PV0ReQjoE98nxOybhLpKbiSbqMKDLl0zWQ==</ds:X509Certificate>
+            </ds:X509Data>
+          </ds:KeyInfo>
+        </ds:Signature>
+      </ext:ExtensionContent>
+    </ext:UBLExtension>
+  </ext:UBLExtensions>
+  <cbc:UBLVersionID>2.1</cbc:UBLVersionID>
+  <cbc:CustomizationID>2.0</cbc:CustomizationID>
+  <cbc:ID>FC01-7</cbc:ID>
+  <cbc:IssueDate>2026-07-14</cbc:IssueDate>
+  <cbc:IssueTime>21:05:22</cbc:IssueTime>
+  <cbc:Note languageLocaleID="1000"><![CDATA[VEINTE CON 00/100 SOLES]]></cbc:Note>
+  <cbc:DocumentCurrencyCode>PEN</cbc:DocumentCurrencyCode>
+  <cac:DiscrepancyResponse>
+    <cbc:ReferenceID>F001-00000023</cbc:ReferenceID>
+    <cbc:ResponseCode>09</cbc:ResponseCode>
+    <cbc:Description>Disminución en el valor</cbc:Description>
+  </cac:DiscrepancyResponse>
+  <cac:BillingReference>
+    <cac:InvoiceDocumentReference>
+      <cbc:ID>F001-00000023</cbc:ID>
+      <cbc:DocumentTypeCode>01</cbc:DocumentTypeCode>
+    </cac:InvoiceDocumentReference>
+  </cac:BillingReference>
+  <cac:Signature>
+    <cbc:ID>SIGN10443592861</cbc:ID>
+    <cac:SignatoryParty>
+      <cac:PartyIdentification>
+        <cbc:ID>10443592861</cbc:ID>
+      </cac:PartyIdentification>
+      <cac:PartyName>
+        <cbc:Name><![CDATA[Kreisler Umbo Ruiz]]></cbc:Name>
+      </cac:PartyName>
+    </cac:SignatoryParty>
+    <cac:DigitalSignatureAttachment>
+      <cac:ExternalReference>
+        <cbc:URI>#GREENTER-SIGN</cbc:URI>
+      </cac:ExternalReference>
+    </cac:DigitalSignatureAttachment>
+  </cac:Signature>
+  <cac:AccountingSupplierParty>
+    <cac:Party>
+      <cac:PartyIdentification>
+        <cbc:ID schemeID="6">10443592861</cbc:ID>
+      </cac:PartyIdentification>
+      <cac:PartyName>
+        <cbc:Name><![CDATA[umbosystem]]></cbc:Name>
+      </cac:PartyName>
+      <cac:PartyLegalEntity>
+        <cbc:RegistrationName><![CDATA[Kreisler Umbo Ruiz]]></cbc:RegistrationName>
+        <cac:RegistrationAddress>
+          <cbc:ID>220801</cbc:ID>
+          <cbc:AddressTypeCode>0000</cbc:AddressTypeCode>
+          <cbc:CityName>Rioja</cbc:CityName>
+          <cbc:CountrySubentity>San Martín</cbc:CountrySubentity>
+          <cbc:District>Rioja</cbc:District>
+          <cac:AddressLine>
+            <cbc:Line><![CDATA[Manco Inca 278]]></cbc:Line>
+          </cac:AddressLine>
+          <cac:Country>
+            <cbc:IdentificationCode>PE</cbc:IdentificationCode>
+          </cac:Country>
+        </cac:RegistrationAddress>
+      </cac:PartyLegalEntity>
+    </cac:Party>
+  </cac:AccountingSupplierParty>
+  <cac:AccountingCustomerParty>
+    <cac:Party>
+      <cac:PartyIdentification>
+        <cbc:ID schemeID="6">20232663694</cbc:ID>
+      </cac:PartyIdentification>
+      <cac:PartyLegalEntity>
+        <cbc:RegistrationName><![CDATA[AG VIAJES Y TURISM QUIQUIRIQUI TOURS SRL]]></cbc:RegistrationName>
+      </cac:PartyLegalEntity>
+    </cac:Party>
+  </cac:AccountingCustomerParty>
+  <cac:TaxTotal>
+    <cbc:TaxAmount currencyID="PEN">0.00</cbc:TaxAmount>
+    <cac:TaxSubtotal>
+      <cbc:TaxableAmount currencyID="PEN">20.00</cbc:TaxableAmount>
+      <cbc:TaxAmount currencyID="PEN">0</cbc:TaxAmount>
+      <cac:TaxCategory>
+        <cac:TaxScheme>
+          <cbc:ID>9997</cbc:ID>
+          <cbc:Name>EXO</cbc:Name>
+          <cbc:TaxTypeCode>VAT</cbc:TaxTypeCode>
+        </cac:TaxScheme>
+      </cac:TaxCategory>
+    </cac:TaxSubtotal>
+  </cac:TaxTotal>
+  <cac:LegalMonetaryTotal>
+    <cbc:PayableRoundingAmount currencyID="PEN">0.00</cbc:PayableRoundingAmount>
+    <cbc:PayableAmount currencyID="PEN">20.00</cbc:PayableAmount>
+  </cac:LegalMonetaryTotal>
+  <cac:CreditNoteLine>
+    <cbc:ID>1</cbc:ID>
+    <cbc:CreditedQuantity unitCode="NIU">1</cbc:CreditedQuantity>
+    <cbc:LineExtensionAmount currencyID="PEN">20.00</cbc:LineExtensionAmount>
+    <cac:PricingReference>
+      <cac:AlternativeConditionPrice>
+        <cbc:PriceAmount currencyID="PEN">20</cbc:PriceAmount>
+        <cbc:PriceTypeCode>01</cbc:PriceTypeCode>
+      </cac:AlternativeConditionPrice>
+    </cac:PricingReference>
+    <cac:TaxTotal>
+      <cbc:TaxAmount currencyID="PEN">0.00</cbc:TaxAmount>
+      <cac:TaxSubtotal>
+        <cbc:TaxableAmount currencyID="PEN">20.00</cbc:TaxableAmount>
+        <cbc:TaxAmount currencyID="PEN">0.00</cbc:TaxAmount>
+        <cac:TaxCategory>
+          <cbc:Percent>0</cbc:Percent>
+          <cbc:TaxExemptionReasonCode>20</cbc:TaxExemptionReasonCode>
+          <cac:TaxScheme>
+            <cbc:ID>9997</cbc:ID>
+            <cbc:Name>EXO</cbc:Name>
+            <cbc:TaxTypeCode>VAT</cbc:TaxTypeCode>
+          </cac:TaxScheme>
+        </cac:TaxCategory>
+      </cac:TaxSubtotal>
+    </cac:TaxTotal>
+    <cac:Item>
+      <cbc:Description><![CDATA[BOLSA PLÁSTICA PARA EMPAQUE]]></cbc:Description>
+      <cac:SellersItemIdentification>
+        <cbc:ID>DEEQDSDS</cbc:ID>
+      </cac:SellersItemIdentification>
+    </cac:Item>
+    <cac:Price>
+      <cbc:PriceAmount currencyID="PEN">20</cbc:PriceAmount>
+    </cac:Price>
+  </cac:CreditNoteLine>
+</CreditNote>

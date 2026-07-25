@@ -23,6 +23,24 @@ export type NoteMotivo = {
     permite_total: boolean;
     permite_parcial: boolean;
     solo_factura: boolean;
+    // Oculta el motivo del formulario hasta que su cálculo esté implementado
+    // y probado contra SUNAT BETA — ver NotaElectronicaController::armarLineasParciales()
+    disponible_flujo_simple: boolean;
+    // Qué input mostrar por línea en modo parcial — null si no aplica
+    // (total-only o concepto libre de ND)
+    modo_parcial?: "cantidad" | "monto" | null;
+};
+
+// Resultado de GET notas/buscar-venta — versión mínima de Sale, solo lo
+// necesario para mostrar en el dropdown de búsqueda del flujo "Nueva Nota"
+export type SaleSearchResult = {
+    id: number;
+    serie: string;
+    correlativo?: number | null;
+    n_operacion?: string | null;
+    currency: string;
+    total: number;
+    client?: { id: number; full_name: string; n_document: string };
 };
 
 export type NoteConfig = {
@@ -89,6 +107,7 @@ export type NotaItemRequest = {
     product_id: number;
     quantity: number;
     subtotal?: number; // requerido solo si sale_detail_id se omite (concepto libre ND)
+    monto?: number; // modo monto (motivos con modo_parcial === 'monto') — ver Fase 2 del plan
 };
 
 export type NotaPreviewResponse = {

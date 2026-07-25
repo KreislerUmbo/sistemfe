@@ -47,6 +47,20 @@ return [
             'report' => false,
         ],
 
+        // Disco privado real (plan-panel-superadmin.md, Fase B.2) — 'local'/'public'
+        // apuntan a la MISMA carpeta (storage/app/public, symlinkeada como público vía
+        // storage:link), así que no servían para nada que no deba ser accesible por
+        // URL. certificados SUNAT es el primer uso real. 'throw' => true a propósito:
+        // un certificado digital que falla en guardar/leer en silencio (permisos,
+        // disco lleno, archivo corrupto) es exactamente el tipo de fallo silencioso que
+        // esta fase existe para eliminar — se prefiere una excepción explícita.
+        'private' => [
+            'driver' => 'local',
+            'root' => storage_path('app/private'),
+            'visibility' => 'private',
+            'throw' => true,
+        ],
+
         's3' => [
             'driver' => 's3',
             'key' => env('AWS_ACCESS_KEY_ID'),

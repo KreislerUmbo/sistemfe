@@ -122,6 +122,16 @@
                 </b-col>
 
                 <b-col lg="4">
+                    <label for="branch_id_list" class="col-form-label text-lg-end">Sucursal: </label>
+                    <b-form-select id="branch_id_list" v-model="branch_id">
+                        <option :value="undefined">Selec. Sucursal</option>
+                        <template v-for="(branch, index) in branches" :key="index">
+                            <option :value="branch.id">{{ branch.name }}</option>
+                        </template>
+                    </b-form-select>
+                </b-col>
+
+                <b-col lg="4">
                     <label for="type_document_list" class="col-form-label text-lg-end">Tipo de documento: </label>
                     <b-form-select id="type_document_list" v-model="type_document">
                         <option value="DNI">DNI</option>
@@ -214,6 +224,7 @@ import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import httpClient from '@/helpers/http-client';
 import type { AxiosResponse } from 'axios';
 import type { RoleUser, User, UserResponse, Users } from '@/types/users';
+import type { Branch } from '@/types/cash-session';
 import { onMounted, ref, watch } from 'vue';
 
 import Swal from "sweetalert2/dist/sweetalert2.js";
@@ -229,6 +240,8 @@ const email = ref<string>('');
 const phone = ref<number | undefined>(undefined);
 const roles = ref<RoleUser[]>([]);
 const role_id = ref<string | undefined>(undefined);
+const branches = ref<Branch[]>([]);
+const branch_id = ref<number | undefined>(undefined);
 const type_document = ref<string>('DNI');
 const n_document = ref<string>('');
 const gender = ref<string>('M');
@@ -295,6 +308,7 @@ const clearFields = () => {
     FILE_AVATAR.value = undefined;
     IMAGEN_PREVIZUALIZA.value = null;
     role_id.value = '';
+    branch_id.value = undefined;
     email.value = '';
     phone.value = 0;
     formato_impresion_default.value = 'a4';
@@ -347,6 +361,9 @@ const store = async () => {
         formData.append('email', email.value);
         formData.append('phone', phone.value + "");
         formData.append('role_id', role_id.value + "");
+        if (branch_id.value) {
+            formData.append('branch_id', branch_id.value + "");
+        }
         formData.append('type_document', type_document.value);
         formData.append('n_document', n_document.value);
         formData.append('gender', gender.value);
@@ -426,6 +443,7 @@ const editUser = (user: User) => {
     email.value = user.email;
     phone.value = user.phone;
     role_id.value = user.role.id;
+    branch_id.value = user.branch_id;
     type_document.value = user.type_document;
     n_document.value = user.n_document;
     gender.value = user.gender;
@@ -476,8 +494,18 @@ const removeUser = (user: User) => {
 };
 
 
+const cargarBranches = async () => {
+    try {
+        const res = await httpClient.get<{ branches: Branch[] }>('branches?active=1');
+        branches.value = res.data.branches;
+    } catch (error) {
+        console.log(error);
+    }
+};
+
 onMounted(() => {
     list();
+    cargarBranches();
 });
 
 watch(ModalRegisterUser, (value) => {

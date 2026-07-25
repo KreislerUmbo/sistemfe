@@ -48,6 +48,15 @@ return [
             'driver' => 'jwt',
             'provider' => 'clients',
         ],
+        // Panel superadmin — guard completamente separado del guard 'api' de
+        // tenants. Aislamiento reforzado por el claim 'guard' del JWT
+        // (CentralUser::getJWTCustomClaims()) + EnsureTokenIsCentralGuard,
+        // no solo por tener un provider distinto (el secreto JWT es
+        // compartido entre guards).
+        'central' => [
+            'driver' => 'jwt',
+            'provider' => 'central_users',
+        ],
     ],
 
     /*
@@ -75,6 +84,11 @@ return [
         'clients' => [
             'driver' => 'eloquent',
             'model' => App\Models\Client\Client::class], // nuevo
+
+        'central_users' => [
+            'driver' => 'eloquent',
+            'model' => App\Models\Central\CentralUser::class,
+        ],
 
         // 'users' => [
         //     'driver' => 'database',

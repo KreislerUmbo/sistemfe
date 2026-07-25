@@ -29,6 +29,10 @@ class User extends Authenticatable implements JWTSubject
         'password',
         'surname',
         'role_id',
+        // Módulo de series de comprobantes — sucursal fija del usuario,
+        // determina qué series ve en register.vue/edit.vue salvo que tenga
+        // el permiso can_switch_branch.
+        'branch_id',
         'phone',
         'avatar',
         'type_document',
@@ -81,7 +85,9 @@ class User extends Authenticatable implements JWTSubject
      */
     public function getJWTCustomClaims()
     {
-        return [];
+        return [
+            'tenant_id' => tenant('id'),
+        ];
     }
 
 

@@ -158,8 +158,18 @@ class ProductController extends Controller
         $data['is_isc'] = $request->boolean('is_isc') ? 1 : 0;
         $data = $this->normalizeIscFields($data);
 
+        if (!empty($data['codigo_detraccion'])) {
+            $existe_detraccion = DetractionCode::where('codigo', $data['codigo_detraccion'])
+                ->where('estado', true)
+                ->exists();
+
+            if (!$existe_detraccion) {
+                abort(422, 'Código de detracción inválido');
+            }
+        }
+
         if ($request->hasFile('image')) {
-            $path = Storage::putFile("products", $request->file("image"));
+            $path = Storage::disk('public')->putFile("products", $request->file("image"));
             $data['imagen'] = $path;
         }
 
@@ -222,11 +232,21 @@ class ProductController extends Controller
         $data['is_isc'] = $request->boolean('is_isc') ? 1 : 0;
         $data = $this->normalizeIscFields($data);
 
-        if ($request->hasFile('image')) {
-            if ($product->imagen && Storage::exists($product->imagen)) {
-                Storage::delete($product->imagen);
+        if (!empty($data['codigo_detraccion'])) {
+            $existe_detraccion = DetractionCode::where('codigo', $data['codigo_detraccion'])
+                ->where('estado', true)
+                ->exists();
+
+            if (!$existe_detraccion) {
+                abort(422, 'Código de detracción inválido');
             }
-            $path = Storage::putFile("products", $request->file("image"));
+        }
+
+        if ($request->hasFile('image')) {
+            if ($product->imagen && Storage::disk('public')->exists($product->imagen)) {
+                Storage::disk('public')->delete($product->imagen);
+            }
+            $path = Storage::disk('public')->putFile("products", $request->file("image"));
             $data['imagen'] = $path;
         }
 

@@ -104,6 +104,14 @@ export type Sale = {
     type_payment: number,
     debt: number,
     paid_out: number,
+    // Módulo Amortizaciones — ver SaleResource.php
+    condicion_pago?: string,
+    credit_type?: string | null,
+    saldo_pendiente?: number,
+    aplica_mora?: boolean,
+    tasa_mora?: number,
+    tipo_mora?: string | null,
+    tiene_cobros_formales?: boolean,
     description: string,
     created_at: string,
     created_at_format: string,
@@ -111,12 +119,15 @@ export type Sale = {
     sale_payments: SalePayment[],
     // 
     serie: string,
+    tipo_comprobante_codigo?: string | null,
     retencion_igv: number,
     discount_global: number,
     n_comprobante_anticipo: string,
     amount_anticipo: number,
     cdr: string,
     xml: string,
+    sunat_error_message?: string | null,
+    sunat_sent_at?: string | null,
     igv_discount_general: number,
     is_exportacion: number,
     currency: string,
@@ -132,6 +143,8 @@ export type Sale = {
     codigo_detraccion: string
     porcentaje_detraccion: number,
     is_locked?: boolean;
+    type?:string,
+    mto_oper_gravadas?: number,
 }
 
 export type Sales = {

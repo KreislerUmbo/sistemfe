@@ -10,13 +10,36 @@
                     Sobre {{ sale.serie }}-{{ String(sale.correlativo).padStart(8, '0') }} — {{ sale.client?.full_name }}
                 </small>
             </div>
-            <router-link :to="{ name: 'sale.list' }" class="btn btn-outline-secondary btn-sm">
-                <i class="fas fa-arrow-left me-1"></i> Volver a ventas
+            <router-link :to="volverRoute" class="btn btn-outline-secondary btn-sm">
+                <i class="fas fa-arrow-left me-1"></i> Volver
             </router-link>
         </div>
 
         <div v-if="loading" class="text-center py-5">
             <span class="spinner-border text-primary"></span>
+        </div>
+
+        <!-- ═══════════════════ BÚSQUEDA DE VENTA (entrada sin :id) ═══════════════════ -->
+        <div v-else-if="!sale && modoBusqueda" class="card border-0 shadow-sm">
+            <div class="card-body position-relative">
+                <label class="form-label fw-semibold">Buscar venta</label>
+                <input type="text" class="form-control" v-model="buscarText"
+                    placeholder="Buscar por cliente, DNI/RUC, o serie-correlativo..."
+                    @input="onBuscarVentaInput" autocomplete="off">
+                <div v-if="buscarSugerencias.length > 0" class="list-group mt-1"
+                    style="max-height:260px;overflow-y:auto;box-shadow:0 4px 8px rgba(0,0,0,.1)">
+                    <button type="button" class="list-group-item list-group-item-action"
+                        v-for="s in buscarSugerencias" :key="s.id" @mousedown.prevent="seleccionarVenta(s)">
+                        <div class="d-flex justify-content-between">
+                            <span>{{ s.serie }}-{{ String(s.correlativo).padStart(8, '0') }} — {{ s.client?.full_name }}</span>
+                            <small class="text-muted">{{ s.currency === 'USD' ? 'US$' : 'S/' }} {{ Number(s.total).toFixed(2) }}</small>
+                        </div>
+                    </button>
+                </div>
+                <small v-else-if="buscarText.trim().length >= 2 && !buscando" class="text-muted d-block mt-1">
+                    Sin resultados. Solo se muestran ventas ya aceptadas por SUNAT.
+                </small>
+            </div>
         </div>
 
         <div v-else-if="!sale" class="alert alert-danger">
@@ -117,8 +140,17 @@
                         :placeholder="motivoSeleccionado?.label ?? ''"></textarea>
                 </div>
 
+                <!-- Descuento global (NC04) — sin tabla de ítems, un solo monto ─── -->
+                <div class="mb-3" v-if="esDescuentoGlobal">
+                    <label class="form-label fw-semibold">Monto del descuento global ({{ moneda }})</label>
+                    <input type="number" class="form-control" min="0.01" step="0.01" v-model.number="descuentoGlobal">
+                    <small class="text-muted">
+                        Se aplica sobre el total de la venta, prorrateado entre gravadas/exoneradas/inafectas.
+                    </small>
+                </div>
+
                 <!-- Total / Parcial -->
-                <div class="mb-3" v-if="motivoSeleccionado">
+                <div class="mb-3" v-if="motivoSeleccionado && !esDescuentoGlobal">
                     <label class="form-label fw-semibold">Alcance</label>
                     <div class="btn-group d-block">
                         <button type="button" class="btn btn-sm" :disabled="!motivoSeleccionado.permite_total"
@@ -135,7 +167,7 @@
                 </div>
 
                 <!-- Líneas parciales -->
-                <div v-if="tipoAfectacion === 'parcial'" class="mb-3">
+                <div v-if="tipoAfectacion === 'parcial' && !esDescuentoGlobal" class="mb-3">
                     <label class="form-label fw-semibold">Ítems de la venta</label>
                     <table class="table table-sm table-bordered align-middle">
                         <thead class="table-light">
@@ -143,7 +175,8 @@
                                 <th style="width:36px;"></th>
                                 <th>Producto</th>
                                 <th style="width:100px;">Cant. vendida</th>
-                                <th style="width:130px;">Cant. a {{ tipoDoc === '07' ? 'acreditar' : 'debitar' }}</th>
+                                <th style="width:130px;" v-if="esModoMonto">Monto a {{ tipoDoc === '07' ? 'acreditar' : 'debitar' }} ({{ moneda }})</th>
+                                <th style="width:130px;" v-else>Cant. a {{ tipoDoc === '07' ? 'acreditar' : 'debitar' }}</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -153,7 +186,11 @@
                                 </td>
                                 <td>{{ linea.detalle.product?.title }}</td>
                                 <td>{{ linea.detalle.quantity }}</td>
-                                <td>
+                                <td v-if="esModoMonto">
+                                    <input type="number" class="form-control form-control-sm" min="0" step="0.01"
+                                        v-model.number="linea.monto" :disabled="!linea.seleccionado">
+                                </td>
+                                <td v-else>
                                     <input type="number" class="form-control form-control-sm" min="0" step="0.0001"
                                         :max="tipoDoc === '07' ? linea.detalle.quantity : undefined"
                                         v-model.number="linea.cantidad" :disabled="!linea.seleccionado">
@@ -189,7 +226,7 @@
                 </div>
 
                 <!-- Reponer stock -->
-                <div class="form-check mb-3" v-if="tipoDoc === '07'">
+                <div class="form-check mb-3" v-if="tipoDoc === '07' && !esDescuentoGlobal">
                     <input class="form-check-input" type="checkbox" id="reponerStock" v-model="reponerStock">
                     <label class="form-check-label" for="reponerStock">
                         Reponer stock de los productos acreditados
@@ -288,14 +325,27 @@ import { useRoute } from "vue-router";
 import Swal from "sweetalert2/dist/sweetalert2.js";
 import httpClient from "@/helpers/http-client";
 import type { Sale, SaleDetail } from "@/types/sales";
-import type { Note, NoteConfig, NoteMotivo, NotaItemRequest } from "@/types/notes";
+import type { Note, NoteConfig, NoteMotivo, NotaItemRequest, SaleSearchResult } from "@/types/notes";
 import type { Product } from "@/types/products";
 import { imprimirNota } from "@/composables/usePrintComprobante";
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
 
 const route = useRoute();
-const saleId = route.params.id as string;
+const saleId = ref<string | undefined>(route.params.id as string | undefined);
+
+// Entrada sin :id (botón "Nueva Nota" en /nota/list) — hay que buscar la
+// venta antes de mostrar el formulario. Entrando desde /sale/nota/:id
+// (flujo simple, botón en la fila de una venta) esto nunca se activa.
+const modoBusqueda = ref(!saleId.value);
+const volverRoute = computed(() =>
+    route.name === "notas.create" ? { name: "nota.list" } : { name: "sale.list" }
+);
+
+const buscarText = ref("");
+const buscarSugerencias = ref<SaleSearchResult[]>([]);
+const buscando = ref(false);
+let buscarTimeout: ReturnType<typeof setTimeout> | undefined;
 
 const loading = ref(true);
 const sale = ref<Sale | null>(null);
@@ -307,7 +357,7 @@ const desMotivo = ref<string>("");
 const tipoAfectacion = ref<"total" | "parcial">("total");
 const reponerStock = ref(false);
 
-type LineaSeleccionable = { detalle: SaleDetail; seleccionado: boolean; cantidad: number };
+type LineaSeleccionable = { detalle: SaleDetail; seleccionado: boolean; cantidad: number; monto: number };
 const lineasSeleccionables = ref<LineaSeleccionable[]>([]);
 const conceptosLibres = ref<{ product_id: number | ""; quantity: number; subtotal: number }[]>([]);
 
@@ -331,6 +381,7 @@ const motivosDisponibles = computed<NoteMotivo[]>(() => {
     const catalogo = tipoDoc.value === "07" ? "09" : "10";
     return config.value.motivos.filter((m) => {
         if (m.catalogo !== catalogo) return false;
+        if (!m.disponible_flujo_simple) return false;
         if (m.solo_factura && tipoDocAfectado.value === "03") return false;
         return true;
     });
@@ -339,6 +390,12 @@ const motivosDisponibles = computed<NoteMotivo[]>(() => {
 const motivoSeleccionado = computed<NoteMotivo | undefined>(() =>
     motivosDisponibles.value.find((m) => m.codigo === codMotivo.value)
 );
+
+const esModoMonto = computed(() => motivoSeleccionado.value?.modo_parcial === "monto");
+const esDescuentoGlobal = computed(() =>
+    motivoSeleccionado.value?.catalogo === "09" && motivoSeleccionado.value?.codigo === "04"
+);
+const descuentoGlobal = ref<number>(0);
 
 const requiereDescripcionDetallada = computed(() => {
     if (!motivoSeleccionado.value) return false;
@@ -350,7 +407,11 @@ const requiereDescripcionDetallada = computed(() => {
 
 const productosEspeciales = computed<Product[]>(() => config.value?.product_notes?.data ?? []);
 
-const puedeCalcular = computed(() => !!motivoSeleccionado.value);
+const puedeCalcular = computed(() => {
+    if (!motivoSeleccionado.value) return false;
+    if (esDescuentoGlobal.value) return descuentoGlobal.value > 0;
+    return true;
+});
 const puedeCrear = computed(() => !!motivoSeleccionado.value && !!totalesPreview.value);
 
 const estadoLabel = computed(() => {
@@ -376,6 +437,7 @@ function cambiarTipoDoc(t: "07" | "08") {
     codMotivo.value = "";
     tipoAfectacion.value = "total";
     totalesPreview.value = null;
+    descuentoGlobal.value = 0;
 }
 
 function onMotivoChange() {
@@ -397,15 +459,28 @@ function onMotivoChange() {
 function armarItems(): NotaItemRequest[] {
     const items: NotaItemRequest[] = [];
 
-    lineasSeleccionables.value
-        .filter((l) => l.seleccionado && l.cantidad > 0)
-        .forEach((l) => {
-            items.push({
-                sale_detail_id: Number(l.detalle.id),
-                product_id: Number(l.detalle.product_id),
-                quantity: l.cantidad,
+    if (esModoMonto.value) {
+        lineasSeleccionables.value
+            .filter((l) => l.seleccionado && l.monto > 0)
+            .forEach((l) => {
+                items.push({
+                    sale_detail_id: Number(l.detalle.id),
+                    product_id: Number(l.detalle.product_id),
+                    quantity: l.detalle.quantity,
+                    monto: l.monto,
+                });
             });
-        });
+    } else {
+        lineasSeleccionables.value
+            .filter((l) => l.seleccionado && l.cantidad > 0)
+            .forEach((l) => {
+                items.push({
+                    sale_detail_id: Number(l.detalle.id),
+                    product_id: Number(l.detalle.product_id),
+                    quantity: l.cantidad,
+                });
+            });
+    }
 
     if (tipoDoc.value === "08") {
         conceptosLibres.value
@@ -426,11 +501,14 @@ async function calcularPreview() {
     loadingPreview.value = true;
     try {
         const payload: any = {
-            sale_id: saleId,
+            sale_id: saleId.value,
             tipo_doc: tipoDoc.value,
+            cod_motivo: codMotivo.value,
             tipo_afectacion: tipoAfectacion.value,
         };
-        if (tipoAfectacion.value === "parcial") {
+        if (esDescuentoGlobal.value) {
+            payload.descuento_global = descuentoGlobal.value;
+        } else if (tipoAfectacion.value === "parcial") {
             payload.items = armarItems();
         }
 
@@ -452,14 +530,16 @@ async function crearNota() {
     loadingCrear.value = true;
     try {
         const payload: any = {
-            sale_id: saleId,
+            sale_id: saleId.value,
             tipo_doc: tipoDoc.value,
             cod_motivo: codMotivo.value,
             des_motivo: desMotivo.value,
             tipo_afectacion: tipoAfectacion.value,
             reponer_stock: reponerStock.value,
         };
-        if (tipoAfectacion.value === "parcial") {
+        if (esDescuentoGlobal.value) {
+            payload.descuento_global = descuentoGlobal.value;
+        } else if (tipoAfectacion.value === "parcial") {
             payload.items = armarItems();
         }
 
@@ -566,26 +646,56 @@ function reiniciarFormulario() {
     totalesPreview.value = null;
     codMotivo.value = "";
     desMotivo.value = "";
-    lineasSeleccionables.value.forEach((l) => { l.seleccionado = false; l.cantidad = 0; });
+    lineasSeleccionables.value.forEach((l) => { l.seleccionado = false; l.cantidad = 0; l.monto = 0; });
     conceptosLibres.value = [];
+    descuentoGlobal.value = 0;
 }
 
-onMounted(async () => {
+// ── Búsqueda de venta (entrada por notas.create, sin :id en la ruta) ──────
+// Mismo patrón que el buscador de cliente en advances/create.vue: debounce
+// 300ms + GET con "q" + dropdown de resultados.
+function onBuscarVentaInput() {
+    clearTimeout(buscarTimeout);
+    const q = buscarText.value.trim();
+    if (q.length < 2) {
+        buscarSugerencias.value = [];
+        return;
+    }
+    buscarTimeout = setTimeout(async () => {
+        buscando.value = true;
+        try {
+            const { data } = await httpClient.get("notas/buscar-venta", { params: { q } });
+            buscarSugerencias.value = data.sales;
+        } catch {
+            buscarSugerencias.value = [];
+        } finally {
+            buscando.value = false;
+        }
+    }, 300);
+}
+
+async function seleccionarVenta(s: SaleSearchResult) {
+    buscarSugerencias.value = [];
+    buscarText.value = `${s.serie}-${String(s.correlativo).padStart(8, "0")}`;
+    saleId.value = String(s.id);
+    await cargarVenta();
+}
+
+async function cargarVenta() {
+    if (!saleId.value) return;
     loading.value = true;
     try {
-        const [saleRes, configRes] = await Promise.all([
-            httpClient.get(`sales/${saleId}`),
-            httpClient.get("notas/config"),
-        ]);
-
-        sale.value = saleRes.data.sale ?? saleRes.data;
-        config.value = configRes.data;
+        const { data } = await httpClient.get(`sales/${saleId.value}`);
+        sale.value = data.sale ?? data;
 
         lineasSeleccionables.value = (sale.value?.sale_details ?? []).map((detalle) => ({
             detalle,
             seleccionado: false,
             cantidad: Number(detalle.quantity),
+            monto: 0,
         }));
+
+        modoBusqueda.value = false;
     } catch (e: any) {
         (Swal as TVueSwalInstance).fire(
             "Error",
@@ -593,6 +703,26 @@ onMounted(async () => {
             "error"
         );
     } finally {
+        loading.value = false;
+    }
+}
+
+onMounted(async () => {
+    loading.value = true;
+    try {
+        const { data } = await httpClient.get("notas/config");
+        config.value = data;
+    } catch (e: any) {
+        (Swal as TVueSwalInstance).fire(
+            "Error",
+            e.response?.data?.message ?? "No se pudo cargar la configuración de notas.",
+            "error"
+        );
+    }
+
+    if (saleId.value) {
+        await cargarVenta();
+    } else {
         loading.value = false;
     }
 });

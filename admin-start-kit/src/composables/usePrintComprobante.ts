@@ -102,6 +102,55 @@ export async function imprimirNota(
     }
 }
 
+// Mismo flujo que imprimirComprobante()/imprimirNota(), para el recibo de
+// pago (documento interno, sin QR fiscal — ver PaymentReceiptController::pdfSignedUrl()).
+export async function imprimirReciboPago(
+    receiptId: string | number,
+    formatoDefault: FormatoImpresion = 'a4',
+): Promise<void> {
+    const result = await Swal.fire({
+        title: '¿Desea imprimir el recibo de pago?',
+        icon: 'question',
+        html: `
+            <div style="text-align:left;display:inline-block;">
+                <label style="display:block;margin:6px 0;">
+                    <input type="radio" name="formato_impresion_recibo" value="a4" ${formatoDefault === 'a4' ? 'checked' : ''}>
+                    Formato A4
+                </label>
+                <label style="display:block;margin:6px 0;">
+                    <input type="radio" name="formato_impresion_recibo" value="ticket80mm" ${formatoDefault === 'ticket80mm' ? 'checked' : ''}>
+                    Ticket térmico 80mm
+                </label>
+            </div>
+        `,
+        showCancelButton: true,
+        confirmButtonText: 'Imprimir',
+        cancelButtonText: 'Omitir',
+        preConfirm: () => {
+            const seleccionado = document.querySelector<HTMLInputElement>(
+                'input[name="formato_impresion_recibo"]:checked',
+            );
+            return seleccionado?.value ?? formatoDefault;
+        },
+    });
+
+    if (!result.isConfirmed) {
+        return;
+    }
+
+    const formato = (result.value as FormatoImpresion) ?? formatoDefault;
+
+    try {
+        const { data } = await httpClient.get(`payment-receipts-pdf-url/${receiptId}`, {
+            params: { format: formato },
+        });
+
+        abrirEImprimir(data.url);
+    } catch (e: any) {
+        Swal.fire('Error', e.response?.data?.message ?? 'No se pudo generar el PDF del recibo de pago.', 'error');
+    }
+}
+
 // Intento best-effort de disparar el diálogo de impresión automáticamente.
 // El PDF vive en otro origen (backend), así que el navegador puede bloquear
 // el acceso a la ventana — en ese caso, el usuario igual puede imprimir

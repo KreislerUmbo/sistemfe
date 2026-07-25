@@ -113,6 +113,38 @@ return [
             // 'trust_server_certificate' => env('DB_TRUST_SERVER_CERTIFICATE', 'false'),
         ],
 
+        // Conexión central para stancl/tenancy: base fija (db_tenant_central),
+        // no depende de DB_CONNECTION/DB_DATABASE para no romperse si esos
+        // envs cambian de significado más adelante (ej. al apuntar la
+        // conexión default a una tenant DB).
+        //
+        // Consolidada acá (plan-panel-superadmin.md, "B.0.5") — hasta este punto
+        // 'central' apuntaba a sv_facturacion y el panel superadmin (Fase 0) vivía
+        // aparte en una clave 'db_tenant_central' distinta, precisamente para no
+        // arrastrar de un solo golpe tenants/domains + los 7 catálogos SUNAT/
+        // AdminPortal (y sus 4 dependientes reales: system_modules/system_features/
+        // system_media/plans, encontrados recién al hacer este movimiento). Como el
+        // proyecto está en desarrollo puro (sin despliegue/facturación real), se
+        // migraron esas 13 tablas (dump+restore, verificado fila por fila) y se
+        // dropearon de sv_facturacion — ya no hay dos conexiones para lo mismo.
+        // Los modelos App\Models\Central\* (CentralUser/CentralRole/PlatformSetting/
+        // CentralAuditLog) volvieron a declarar 'central' en vez de la clave
+        // separada que ya no existe.
+        'central' => [
+            'driver' => 'pgsql',
+            'url' => env('DB_URL'),
+            'host' => env('DB_HOST', '127.0.0.1'),
+            'port' => env('DB_PORT', '5432'),
+            'database' => 'db_tenant_central',
+            'username' => env('DB_USERNAME', 'root'),
+            'password' => env('DB_PASSWORD', ''),
+            'charset' => env('DB_CHARSET', 'utf8'),
+            'prefix' => '',
+            'prefix_indexes' => true,
+            'search_path' => 'public',
+            'sslmode' => 'prefer',
+        ],
+
     ],
 
     /*

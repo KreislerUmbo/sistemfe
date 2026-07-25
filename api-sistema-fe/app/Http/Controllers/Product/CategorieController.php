@@ -48,7 +48,7 @@ class CategorieController extends Controller
         }
 
         if ($request->hasFile('image')) {
-            $path = Storage::putFile("categories", $request->file("image"));
+            $path = Storage::disk('public')->putFile("categories", $request->file("image"));
             $request->merge(['imagen' => $path]);
         }
 
@@ -95,11 +95,11 @@ class CategorieController extends Controller
         $categorie = Categorie::find($id);
 
         if ($request->hasFile('image')) {
-            if ($categorie->image && Storage::exists($categorie->image)) { //Storage::exists verifica si el archivo existe en el storage
-                Storage::delete($categorie->image);
+            if ($categorie->image && Storage::disk('public')->exists($categorie->image)) { //Storage::exists verifica si el archivo existe en el storage
+                Storage::disk('public')->delete($categorie->image);
             }
 
-            $path = Storage::putFile("categories", $request->file("image"));
+            $path = Storage::disk('public')->putFile("categories", $request->file("image"));
             $request->merge(['imagen' => $path]);
         }
 
@@ -127,8 +127,8 @@ class CategorieController extends Controller
         $categorie = Categorie::find($id);
 
 
-        if ($categorie->imagen && Storage::exists($categorie->imagen)) { //Storage::exists verifica si el archivo existe en el storage
-            Storage::delete($categorie->imagen);
+        if ($categorie->imagen && Storage::disk('public')->exists($categorie->imagen)) { //Storage::exists verifica si el archivo existe en el storage
+            Storage::disk('public')->delete($categorie->imagen);
         }
 
         $categorie->delete();

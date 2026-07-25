@@ -194,6 +194,20 @@
         </tr>
     </table>
 
+    @if ($venta->sale_payments->isNotEmpty())
+        <div class="linea"></div>
+
+        <div class="bold">FORMA DE PAGO</div>
+        <table class="totales">
+            @foreach ($venta->sale_payments->sortBy('date_payment') as $pago)
+                <tr>
+                    <td>{{ $pago->method_payment }} ({{ \Carbon\Carbon::parse($pago->date_payment)->format('d/m/Y') }})</td>
+                    <td class="right">{{ $venta->currency }} {{ number_format($pago->amount, 2) }}</td>
+                </tr>
+            @endforeach
+        </table>
+    @endif
+
     <div class="linea"></div>
 
     <div>SON: {{ $resumen['monto_en_letras'] }}</div>

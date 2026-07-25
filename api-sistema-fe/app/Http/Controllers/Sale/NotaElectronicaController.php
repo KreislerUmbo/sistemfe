@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Sale;
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\Greenter\GreenterService;
 use App\Http\Resources\Product\ProductCollection;
+use App\Models\Advance\Advance;
+use App\Models\Advance\AdvanceRefund;
 use App\Models\Company;
 use App\Models\Product\Product;
 use App\Models\Sale\Note;
@@ -42,6 +44,15 @@ use Throwable;
 // }
 class NotaElectronicaController extends Controller
 {
+    // Motivos de catálogo 09 (NC) que ajustan VALOR sin devolución física de
+    // unidades — sus note_details conservan quantity = cantidad original de
+    // la línea (ver NoteDetailAmountCalculator::porMonto() y la rama NC04 en
+    // store()/preview()). Se excluyen del tope de "cantidad disponible para
+    // acreditar" (armarLineasParciales(), validarYReservarCorrelativoNota())
+    // porque no consumen cantidad — sumarlos ahí bloquearía notas legítimas
+    // sobre una línea que ya tuvo un ajuste de valor.
+    private const MOTIVOS_VALOR_SIN_CANTIDAD = ['04', '05', '08', '09'];
+
     protected $greenter_service;
     protected $totales_calculator;
     protected $note_detail_calculator;
@@ -77,6 +88,41 @@ class NotaElectronicaController extends Controller
             'motivos'       => $motivos,
             'product_notes' => ProductCollection::make($productos_especiales_nota),
         ]);
+    }
+
+    // ── Buscar venta aceptada por SUNAT (flujo "Nueva Nota Crédito/Débito"
+    // desde /nota/list, sin partir de una venta ya elegida) ────────────
+    // Solo ventas con xml/cdr (aceptadas) — no tiene sentido emitir una
+    // nota sobre un comprobante que SUNAT nunca aceptó. Busca por
+    // cliente (nombre/documento) o por serie-correlativo/n_operacion.
+    public function buscarVenta(Request $request)
+    {
+        $q = trim((string) $request->get('q', ''));
+        if (mb_strlen($q) < 2) {
+            return response()->json(['sales' => []]);
+        }
+
+        $ventas = Sale::with('client:id,full_name,n_document')
+            ->whereNotNull('xml')
+            ->whereNotNull('cdr')
+            ->where(function ($query) use ($q) {
+                $query->whereRaw(
+                    "(COALESCE(serie, '') || '-' || LPAD(COALESCE(correlativo::text, ''), 8, '0')) ILIKE ?",
+                    ["%{$q}%"]
+                )
+                    ->orWhere('n_operacion', 'ILIKE', "%{$q}%")
+                    ->orWhereHas('client', function ($cq) use ($q) {
+                        $cq->whereRaw(
+                            "(COALESCE(full_name, '') || ' ' || COALESCE(n_document, '')) ILIKE ?",
+                            ["%{$q}%"]
+                        );
+                    });
+            })
+            ->orderBy('id', 'desc')
+            ->limit(15)
+            ->get(['id', 'serie', 'correlativo', 'n_operacion', 'client_id', 'currency', 'total']);
+
+        return response()->json(['sales' => $ventas]);
     }
 
     // ── Consultar una nota (para refrescar su estado tras enviar) ──────
@@ -160,20 +206,32 @@ class NotaElectronicaController extends Controller
         }
 
         // ── Armar las líneas de la nota ────────────────────────────────
-        $lineasNota = $tipo_afectacion === 'total'
-            ? $this->clonarLineasTotal($sale)
-            : $this->armarLineasParciales($sale, $tipo_doc, $request->items ?? []);
+        // NC04 (descuento global) es un caso aparte: clona TODAS las
+        // líneas (como una nota total) pero aplica un único descuento
+        // sobre el conjunto — no encaja en el dicotomía total/parcial de
+        // armarLineasParciales() (no hay selección de ítems).
+        $esDescuentoGlobal = $this->esMotivoDescuentoGlobal($motivo);
+
+        if ($esDescuentoGlobal) {
+            $lineasNota = $this->clonarLineasTotal($sale);
+            $descuentoGlobalNota = $this->validarDescuentoGlobal($request, $sale);
+        } else {
+            $lineasNota = $tipo_afectacion === 'total'
+                ? $this->clonarLineasTotal($sale)
+                : $this->armarLineasParciales($sale, $tipo_doc, $request->items ?? []);
+            $descuentoGlobalNota = 0;
+        }
 
         if ($lineasNota->isEmpty()) {
             abort(422, 'La nota debe tener al menos una línea.');
         }
 
         // ── Calcular totales (compartido con ventas) ────────────────────
-        $datos = $this->totales_calculator->calcular($lineasNota, 0);
+        $datos = $this->totales_calculator->calcular($lineasNota, $descuentoGlobalNota);
 
         $nota = DB::transaction(function () use (
             $sale, $tipo_doc, $tipo_doc_afectado, $motivo, $des_motivo,
-            $tipo_afectacion, $datos, $lineasNota, $request
+            $tipo_afectacion, $datos, $lineasNota, $request, $descuentoGlobalNota
         ) {
             $nota = Note::create([
                 'sale_id'              => $sale->id,
@@ -188,6 +246,7 @@ class NotaElectronicaController extends Controller
                 'client_id'            => $sale->client_id,
                 'cod_tipo_doc_cliente' => $sale->cod_tipo_doc_cliente,
                 'currency'             => $sale->currency,
+                'discount_global'      => $descuentoGlobalNota,
                 'mto_oper_gravadas'    => $datos['mto_oper_gravadas'],
                 'mto_oper_exoneradas'  => $datos['mto_oper_exoneradas'],
                 'mto_oper_inafectas'   => $datos['mto_oper_inafectas'],
@@ -226,11 +285,21 @@ class NotaElectronicaController extends Controller
         $sale = Sale::with('sale_details.product')->findOrFail($request->sale_id);
         $tipo_doc = (string) $request->tipo_doc;
 
-        $lineasNota = $request->tipo_afectacion === 'total'
-            ? $this->clonarLineasTotal($sale)
-            : $this->armarLineasParciales($sale, $tipo_doc, $request->items ?? []);
+        // preview() no valida el motivo completo (ver validarMotivo(), solo
+        // lo llama store()) — para NC04 alcanza con mirar cod_motivo directo.
+        $esDescuentoGlobal = $tipo_doc === '07' && (string) $request->cod_motivo === '04';
 
-        $datos = $this->totales_calculator->calcular($lineasNota, 0);
+        if ($esDescuentoGlobal) {
+            $lineasNota = $this->clonarLineasTotal($sale);
+            $descuentoGlobalNota = $this->validarDescuentoGlobal($request, $sale);
+        } else {
+            $lineasNota = $request->tipo_afectacion === 'total'
+                ? $this->clonarLineasTotal($sale)
+                : $this->armarLineasParciales($sale, $tipo_doc, $request->items ?? []);
+            $descuentoGlobalNota = 0;
+        }
+
+        $datos = $this->totales_calculator->calcular($lineasNota, $descuentoGlobalNota);
 
         return response()->json([
             'totales' => $datos,
@@ -277,7 +346,7 @@ class NotaElectronicaController extends Controller
         $nota->refresh();
         $nota->load('note_details.product');
 
-        $datos_nota = $this->totales_calculator->calcular($nota->note_details, 0);
+        $datos_nota = $this->totales_calculator->calcular($nota->note_details, (float) ($nota->discount_global ?? 0));
         $datos_nota['tipo_doc']    = $nota->tipo_doc;
         $datos_nota['serie']       = $nota->serie;
         $datos_nota['correlativo'] = $correlativo;
@@ -331,6 +400,21 @@ class NotaElectronicaController extends Controller
                 }
             }
 
+            // ── Si esta nota es el reembolso de un adelanto ────────────
+            // (ver módulo Adelantos, AdvanceController::refund()), recién
+            // acá se actualiza el saldo — una NC creada pero rechazada no
+            // debe dejar el adelanto marcado como reembolsado.
+            $reembolsoAdelanto = AdvanceRefund::where('note_id', $nota->id)->first();
+            if ($reembolsoAdelanto) {
+                $adelanto = Advance::where('id', $reembolsoAdelanto->advance_id)->lockForUpdate()->first();
+                $adelanto->refunded_amount = round(
+                    (float) $adelanto->refunded_amount + (float) $reembolsoAdelanto->amount_refunded,
+                    2
+                );
+                $adelanto->refreshStatus();
+                $adelanto->save();
+            }
+
             return response()->json([
                 'note'     => $nota->fresh('note_details.product'),
                 'response' => $respuesta,
@@ -365,8 +449,13 @@ class NotaElectronicaController extends Controller
 
             // Cantidad disponible — solo para líneas de Nota de Crédito.
             // Las líneas de Nota de Débito no tienen tope (son un cargo
-            // adicional, no una merma).
-            if ($nota->tipo_doc === '07') {
+            // adicional, no una merma). Los motivos "de valor" (04
+            // descuento global, 05/08/09 modo monto) mantienen quantity =
+            // cantidad original de la línea (no representan una devolución
+            // física — ver NoteDetailAmountCalculator::porMonto()), así que
+            // ni cuentan como "ya acreditado" para otras notas ni se
+            // validan ellos mismos contra este tope de cantidad.
+            if ($nota->tipo_doc === '07' && !in_array($nota->cod_motivo, self::MOTIVOS_VALOR_SIN_CANTIDAD, true)) {
                 foreach ($nota->note_details as $detalle) {
                     if (!$detalle->sale_detail_id) {
                         continue;
@@ -376,7 +465,9 @@ class NotaElectronicaController extends Controller
 
                     $yaAcreditado = NoteDetail::where('sale_detail_id', $detalle->sale_detail_id)
                         ->where('id', '!=', $detalle->id)
-                        ->whereHas('note', fn ($q) => $q->where('tipo_doc', '07')->where('status', 'aceptado'))
+                        ->whereHas('note', fn ($q) => $q->where('tipo_doc', '07')
+                            ->where('status', 'aceptado')
+                            ->whereNotIn('cod_motivo', self::MOTIVOS_VALOR_SIN_CANTIDAD))
                         ->sum('quantity');
 
                     if ($yaAcreditado + $detalle->quantity > $original->quantity) {
@@ -435,6 +526,35 @@ class NotaElectronicaController extends Controller
         return [$motivo, $des_motivo];
     }
 
+    // ── NC04 (Descuento global) — sin tabla de ítems, un solo monto ─────
+    private function esMotivoDescuentoGlobal(NoteMotivo $motivo): bool
+    {
+        return $motivo->catalogo === '09' && $motivo->codigo === '04';
+    }
+
+    // ── Validar el monto de descuento global (NC04) ──────────────────────
+    // No puede superar el valor de venta (sin impuestos) de la venta
+    // original — mismo criterio de tope que TotalesComprobanteCalculator
+    // usa para prorratear (solo gravadas/exoneradas/inafectas reciben
+    // descuento, exportación e IVAP quedan fuera).
+    private function validarDescuentoGlobal(Request $request, Sale $sale): float
+    {
+        $descuento = round((float) ($request->descuento_global ?? 0), 2);
+        if ($descuento <= 0) {
+            abort(422, 'El descuento global debe ser mayor a cero.');
+        }
+
+        $valorVentaTotal = (float) $sale->sale_details
+            ->whereIn('tip_afe_igv', ['10', '20', '30'])
+            ->sum('subtotal');
+
+        if ($descuento > $valorVentaTotal) {
+            abort(422, "El descuento global no puede superar el valor de venta de la venta (S/ {$valorVentaTotal}).");
+        }
+
+        return $descuento;
+    }
+
     // ── Clonar todas las líneas de la venta tal cual (nota TOTAL) ───────
     // Copia directa de los montos ya almacenados — cero recálculo, cero
     // riesgo de descuadre de céntimos contra lo que SUNAT ya aceptó.
@@ -476,11 +596,6 @@ class NotaElectronicaController extends Controller
         $lineas = collect();
 
         foreach ($items as $item) {
-            $cantidad = (float) ($item['quantity'] ?? 0);
-            if ($cantidad <= 0) {
-                abort(422, 'La cantidad de cada línea debe ser mayor a cero.');
-            }
-
             $saleDetailId = $item['sale_detail_id'] ?? null;
 
             if ($saleDetailId) {
@@ -489,11 +604,59 @@ class NotaElectronicaController extends Controller
                     abort(422, "La línea sale_detail #{$saleDetailId} no pertenece a esta venta.");
                 }
 
+                $tieneMonto = array_key_exists('monto', $item) && $item['monto'] !== null && $item['monto'] !== '';
+
+                // ── Modo monto — ajuste de valor sin devolución de unidades
+                // (NC 05/08/09, ND 02 — ver modo_parcial en note_motivos) ──
+                if ($tieneMonto) {
+                    $monto = round((float) $item['monto'], 2);
+                    if ($monto <= 0) {
+                        abort(422, "El monto de la línea del producto \"{$original->product->title}\" debe ser mayor a cero.");
+                    }
+
+                    // Tope: el monto no puede superar el valor con IGV de la
+                    // línea original menos lo ya acreditado por NC aceptadas
+                    // sobre esa misma línea (mismo criterio que el tope de
+                    // cantidad de abajo, pero en soles).
+                    $valorLineaConIgv = round((float) $original->subtotal + (float) $original->igv, 2);
+
+                    if ($tipoDoc === '07') {
+                        $yaAcreditadoMonto = (float) NoteDetail::where('sale_detail_id', $saleDetailId)
+                            ->whereHas('note', fn ($q) => $q->where('tipo_doc', '07')->where('status', 'aceptado'))
+                            ->selectRaw('COALESCE(SUM(subtotal + igv), 0) as total')
+                            ->value('total');
+                        $disponibleMonto = round($valorLineaConIgv - $yaAcreditadoMonto, 2);
+                        if ($monto > $disponibleMonto) {
+                            abort(422, "El monto de la línea del producto \"{$original->product->title}\" excede el disponible para acreditar (disponible: S/ {$disponibleMonto}).");
+                        }
+                    } elseif ($monto > $valorLineaConIgv) {
+                        abort(422, "El monto de la línea del producto \"{$original->product->title}\" no puede superar el valor original de la línea (S/ {$valorLineaConIgv}).");
+                    }
+
+                    $montos = $this->note_detail_calculator->porMonto($original, $monto);
+                    $lineas->push(array_merge($montos, [
+                        'sale_detail_id' => $original->id,
+                        'product_id'     => $original->product_id,
+                    ]));
+                    continue;
+                }
+
+                // ── Modo cantidad (NC 07 — devolución por ítem) ──────────
+                $cantidad = (float) ($item['quantity'] ?? 0);
+                if ($cantidad <= 0) {
+                    abort(422, 'La cantidad de cada línea debe ser mayor a cero.');
+                }
+
                 // Chequeo blando de cantidad disponible — solo NC. El
-                // autoritativo con lock corre en enviarNotaSunat().
+                // autoritativo con lock corre en enviarNotaSunat(). Excluye
+                // motivos "de valor" (ver MOTIVOS_VALOR_SIN_CANTIDAD): no
+                // consumen cantidad, así que no deben contar como "ya
+                // acreditado" acá.
                 if ($tipoDoc === '07') {
                     $yaAcreditado = NoteDetail::where('sale_detail_id', $saleDetailId)
-                        ->whereHas('note', fn ($q) => $q->where('tipo_doc', '07')->where('status', 'aceptado'))
+                        ->whereHas('note', fn ($q) => $q->where('tipo_doc', '07')
+                            ->where('status', 'aceptado')
+                            ->whereNotIn('cod_motivo', self::MOTIVOS_VALOR_SIN_CANTIDAD))
                         ->sum('quantity');
                     $disponible = $original->quantity - $yaAcreditado;
                     if ($cantidad > $disponible) {
@@ -512,6 +675,11 @@ class NotaElectronicaController extends Controller
             // ── Concepto libre — solo válido para ND ─────────────────────
             if ($tipoDoc !== '08') {
                 abort(422, 'Solo las Notas de Débito admiten conceptos libres sin línea de venta asociada.');
+            }
+
+            $cantidad = (float) ($item['quantity'] ?? 0);
+            if ($cantidad <= 0) {
+                abort(422, 'La cantidad de cada línea debe ser mayor a cero.');
             }
 
             $producto = Product::find($item['product_id'] ?? null);

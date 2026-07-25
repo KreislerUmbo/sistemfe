@@ -41,14 +41,14 @@
                          Selector simple que despliega solo lo necesario.
                          Reemplaza los 4 botones de retención/detracción/percepción/anticipo
                     ───────────────────────────────────────────────────── -->
-                    <div class="col-6 col-md-4" v-if="is_exportacion == 0">
+                    <div class="col-6 col-md-4" v-if="is_exportacion == 0 && tipoEsFiscal">
                         <label class="form-label mb-1 small fw-semibold text-secondary">
                             <i class="fas fa-sliders-h me-1"></i>Condiciones Especiales
                         </label>
                         <div>
                             <select v-model="condicion_especial" class="form-select form-select-sm">
                                 <option value="0">— Ninguna (venta normal) —</option>
-                                <option value="anticipo">Anticipo (comprobante previo)</option>
+                                <option value="anticipo">Aplicar adelanto(s) del cliente</option>
                                 <option value="exportacion">Exportación (0% IGV)</option>
                                 <option value="1">Retención IGV 3% (R.S. 037-2002)</option>
                                 <option value="2">Detracción SPOT (R.S. 183-2004)</option>
@@ -71,7 +71,7 @@
                     </div>
 
                     <!-- Destino (Ley 27037) -->
-                    <div class="col-3 col-md-3" v-if="condicion_especial !== 'exportacion'">
+                    <div class="col-3 col-md-3" v-if="condicion_especial !== 'exportacion' && tipoEsFiscal">
                         <label class="form-label mb-1 small fw-semibold text-secondary">
                             <i class="fas fa-map-marker-alt me-1"></i>Destino
                         </label>
@@ -153,15 +153,37 @@
                     </div>
 
 
-                    <!-- Comprobante — autocompletado según cliente -->
+                    <!-- Sucursal — solo visible con permiso can_switch_branch; -->
+                    <!-- el resto de usuarios emite siempre desde su sucursal fija (users.branch_id). -->
+                    <div class="col-6 col-md-2" v-if="puedeCambiarSucursal">
+                        <label class="form-label mb-1 small fw-semibold text-secondary">
+                            <i class="fas fa-store me-1"></i>Sucursal
+                        </label>
+                        <select v-model="branch_id_seleccionado" class="form-select form-select-sm">
+                            <option v-for="b in branches" :key="b.id" :value="b.id">{{ b.name }}</option>
+                        </select>
+                    </div>
+
+                    <!-- Comprobante — tipo de documento, autocompletado según cliente -->
+                    <!-- Solo lista lo que activo_greenter=true (tipos fiscales soportados -->
+                    <!-- hoy por GreenterService) o codigo='NV' Y el usuario puede emitir -->
+                    <!-- (permiso emitir_factura/emitir_boleta/emitir_nota_venta) — la -->
+                    <!-- serie real la resuelve el backend según sucursal+tipo+moneda. -->
                     <div class="col-6 col-md-2">
                         <label class="form-label mb-1 small fw-semibold text-secondary">
-                            <i class="fas fa-file-invoice me-1"></i>Comprobante
+                            <i class="fas fa-file-invoice me-1"></i>Tipo de Documento
                         </label>
-                        <select v-model="serie" class="form-select form-select-sm">
-                            <option value="F001">F001 — Factura</option>
-                            <option value="B001">B001 — Boleta</option>
+                        <select v-model="tipo_comprobante_codigo" class="form-select form-select-sm">
+                            <option v-for="t in tiposComprobanteVisibles" :key="t.codigo" :value="t.codigo">
+                                {{ t.nombre }}
+                            </option>
                         </select>
+                        <small class="text-muted d-block" v-if="serieResuelta">
+                            Serie: <strong>{{ serieResuelta.serie }}</strong> (próx. correlativo #{{ serieResuelta.siguiente_correlativo }})
+                        </small>
+                        <small class="text-danger d-block" v-else-if="errorSeriePreview">
+                            {{ errorSeriePreview }}
+                        </small>
                         <small class="text-muted" v-if="client_selected">
                             Auto según cliente
                         </small>
@@ -203,23 +225,57 @@
 
                     <!-- Campos que aparecen según condición seleccionada -->
 
-                    <!-- Anticipo -->
-                    <div class="col-12 col-md-4" v-if="condicion_especial === 'anticipo'">
+                    <!-- Adelantos disponibles del cliente -->
+                    <div class="col-12" v-if="condicion_especial === 'anticipo'">
                         <label class="form-label mb-1 small fw-semibold text-secondary">
-                            <i class="fas fa-receipt me-1"></i>N° Comprobante de Anticipo
+                            <i class="fas fa-hand-holding-usd me-1"></i>Adelantos disponibles
                         </label>
-                        <div class="input-group input-group-sm">
-                            <b-form-input type="text" v-model="n_comprobante_anticipo" @keyup.enter="searchAnticipo()"
-                                placeholder="Ej: F001-00000123" :disabled="sale_anticipo > 0" size="sm" />
-                            <button v-if="sale_anticipo > 0" type="button" class="btn btn-outline-danger btn-sm"
-                                @click="resetAnticipo()">
-                                <i class="fas fa-times"></i>
-                            </button>
-                            <button v-else type="button" class="btn btn-outline-primary btn-sm"
-                                @click="searchAnticipo()">
-                                <i class="fas fa-search"></i>
-                            </button>
+                        <div v-if="!client_selected" class="text-muted small">
+                            Selecciona un cliente primero.
                         </div>
+                        <div v-else-if="loadingAdvances" class="text-muted small">
+                            <span class="spinner-border spinner-border-sm me-1"></span>Buscando adelantos...
+                        </div>
+                        <div v-else-if="availableAdvances.length === 0" class="text-muted small">
+                            Este cliente no tiene adelantos disponibles.
+                        </div>
+                        <table v-else class="table table-sm table-bordered align-middle mb-1">
+                            <thead class="table-light">
+                                <tr>
+                                    <th style="width:36px;"></th>
+                                    <th>Adelanto</th>
+                                    <th class="text-end" style="width:130px;">Disponible</th>
+                                    <th style="width:140px;">Monto a aplicar</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr v-for="a in availableAdvances" :key="a.id">
+                                    <td>
+                                        <input type="checkbox" v-model="a.seleccionado" @change="onAdvanceToggle(a)">
+                                    </td>
+                                    <td>
+                                        Adelanto #{{ a.id }}
+                                        ({{ a.currency === 'USD' ? 'US$' : 'S/' }} {{ Number(a.amount).toFixed(2) }})
+                                    </td>
+                                    <td class="text-end">
+                                        {{ a.currency === 'USD' ? 'US$' : 'S/' }} {{ a.available_balance.toFixed(2) }}
+                                    </td>
+                                    <td>
+                                        <input type="number" class="form-control form-control-sm" min="0"
+                                            :max="a.available_balance" step="0.01" v-model.number="a.monto_aplicado"
+                                            :disabled="!a.seleccionado">
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        <small class="text-danger d-block" v-if="totalAdelantosAplicados() > sale_total">
+                            La suma de adelantos aplicados no puede superar el total de la venta.
+                        </small>
+                        <small class="text-muted d-block" v-if="totalAdelantosAplicados() > 0">
+                            Total a pagar con adelanto aplicado:
+                            {{ currency === 'USD' ? 'US$' : 'S/' }}
+                            {{ Math.max(0, sale_total - totalAdelantosAplicados()).toFixed(2) }}
+                        </small>
                     </div>
 
                     <!-- Detracción — selector de código del Anexo SUNAT -->
@@ -458,7 +514,14 @@
                                 </tr>
                             </tbody>
                             <tfoot>
-                                <tr class="bg-primary text-white">
+                                <tr v-if="condicion_especial == 'anticipo'" class="bg-primary text-white">
+                                    <td class="fw-bold fs-6 ps-2">MONTO A PAGAR - ANTICIPOS</td>
+                                    <td class="fw-bold fs-6 text-end pe-2">
+                                        {{ currency === 'USD' ? 'US$' : 'S/' }}
+                                        {{ Math.max(0, sale_total - totalAdelantosAplicados()).toFixed(2) }}
+                                    </td>
+                                </tr>
+                                <tr v-else class="bg-primary text-white">
                                     <td class="fw-bold fs-6 ps-2">MONTO A PAGAR</td>
                                     <td class="fw-bold fs-6 text-end pe-2">
                                         {{ currency }} {{ getTotalSales().toFixed(2) }}
@@ -501,31 +564,126 @@
                             </label>
                         </div>
                     </div>
+                    <div class="col-12" v-if="type_payment == 2">
+                        <p class="small text-muted mb-0">
+                            <i class="fas fa-info-circle me-1"></i>
+                            Esto registra un <strong>pago inicial (cuota inicial) opcional</strong>, no el cobro
+                            completo de la venta — se descuenta del monto que se financiará con el cronograma de
+                            cuotas. El seguimiento de cobros de la venta a crédito se hace después, desde
+                            Cuentas por Cobrar.
+                        </p>
+                    </div>
                     <div class="col-6 col-md-3">
-                        <label class="form-label mb-1 small fw-semibold text-secondary">Método</label>
+                        <label class="form-label mb-1 small fw-semibold text-secondary">
+                            {{ type_payment == 2 ? 'Método (pago inicial)' : 'Método' }}
+                        </label>
                         <select v-model="method_payment" class="form-select form-select-sm">
-                            <option value="EFECTIVO">💵 Efectivo</option>
-                            <option value="TRANSFERENCIA">🏦 Transferencia</option>
-                            <option value="YAPE">📱 Yape</option>
-                            <option value="PLIN">📱 Plin</option>
-                            <option value="TARJETA DE CREDITO">💳 Tarjeta de Crédito</option>
+                            <option v-for="pm in paymentMethods" :key="pm.id" :value="pm.code">{{ pm.name }}</option>
                         </select>
                     </div>
                     <div class="col-6 col-md-2">
-                        <label class="form-label mb-1 small fw-semibold text-secondary">Monto</label>
+                        <label class="form-label mb-1 small fw-semibold text-secondary">
+                            {{ type_payment == 2 ? 'Monto (pago inicial)' : 'Monto' }}
+                        </label>
                         <b-input-group size="sm">
                             <b-input-group-text>{{ currency }}</b-input-group-text>
                             <b-form-input type="number" v-model.number="amount" placeholder="0.00" size="sm" />
                         </b-input-group>
                     </div>
-                    <div class="col-6 col-md-2" v-if="type_payment == 2">
-                        <label class="form-label mb-1 small fw-semibold text-secondary">Fecha de Pago</label>
-                        <b-form-input type="date" v-model="date_payment" size="sm" />
-                    </div>
                     <div class="col-6 col-md-2">
                         <button type="button" class="btn btn-primary btn-sm w-100 fw-semibold" @click="addPayment()">
-                            <i class="fas fa-plus me-1"></i>Agregar Pago
+                            <i class="fas fa-plus me-1"></i>{{ type_payment == 2 ? 'Agregar Pago Inicial' : 'Agregar Pago' }}
                         </button>
+                    </div>
+                </div>
+
+                <!-- Configuración de Crédito (Módulo Amortizaciones — Fase 8) -->
+                <div class="row g-3 align-items-end pb-3 border-bottom mb-3" v-if="type_payment == 2">
+                    <div class="col-12">
+                        <div class="alert alert-warning py-2 px-3 mb-2 small">
+                            <i class="fas fa-info-circle me-1"></i>
+                            Venta a crédito — genera un cronograma de cuotas fijas (módulo de
+                            Amortizaciones). Por ahora solo se soporta <strong>cuotas fijas</strong>
+                            desde este formulario.
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-2">
+                        <label class="form-label mb-1 small fw-semibold text-secondary">N° de cuotas</label>
+                        <b-form-input type="number" v-model.number="num_cuotas" min="1" max="60" size="sm" />
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <label class="form-label mb-1 small fw-semibold text-secondary">Periodicidad</label>
+                        <select v-model="periodicidad" class="form-select form-select-sm">
+                            <option value="mensual">Mensual</option>
+                            <option value="quincenal">Quincenal</option>
+                            <option value="semanal">Semanal</option>
+                            <option value="personalizada">Personalizada (fechas manuales)</option>
+                        </select>
+                    </div>
+                    <div class="col-12 col-md-3">
+                        <button type="button" class="btn btn-outline-primary btn-sm w-100 fw-semibold"
+                            :disabled="generandoCronograma" @click="generarCronogramaSugerido()">
+                            <i class="fas fa-magic me-1"></i>Generar cronograma sugerido
+                        </button>
+                    </div>
+                    <div class="col-6 col-md-2">
+                        <div class="form-check form-switch pt-4">
+                            <input class="form-check-input" type="checkbox" role="switch" id="aplica-mora"
+                                v-model="aplica_mora">
+                            <label class="form-check-label small fw-semibold text-secondary"
+                                for="aplica-mora">Aplica mora</label>
+                        </div>
+                    </div>
+                    <template v-if="aplica_mora">
+                        <div class="col-6 col-md-2">
+                            <label class="form-label mb-1 small fw-semibold text-secondary">Tasa de mora</label>
+                            <b-form-input type="number" v-model.number="tasa_mora" step="0.01" min="0" size="sm" />
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <label class="form-label mb-1 small fw-semibold text-secondary">Tipo de mora</label>
+                            <select v-model="tipo_mora" class="form-select form-select-sm">
+                                <option value="fijo_por_cuota">Monto fijo por cuota vencida</option>
+                                <option value="porcentaje_diario">% diario sobre saldo vencido</option>
+                                <option value="porcentaje_fijo_unico">% fijo único sobre saldo vencido</option>
+                            </select>
+                        </div>
+                    </template>
+
+                    <div class="col-12" v-if="cronograma.length > 0">
+                        <p class="small fw-semibold text-secondary mb-1">
+                            <i class="fas fa-calendar-check me-1"></i>Cronograma de cuotas
+                        </p>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-bordered align-middle mb-0">
+                                <thead class="table-light">
+                                    <tr class="small text-secondary text-uppercase">
+                                        <th>#</th>
+                                        <th>Monto</th>
+                                        <th>Fecha de vencimiento</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr v-for="(c, idx) in cronograma" :key="idx">
+                                        <td class="small text-muted">{{ c.numero_cuota }}</td>
+                                        <td>
+                                            <b-input-group size="sm">
+                                                <b-input-group-text>{{ currency }}</b-input-group-text>
+                                                <b-form-input type="number" v-model.number="c.monto_programado"
+                                                    step="0.01" size="sm" />
+                                            </b-input-group>
+                                        </td>
+                                        <td>
+                                            <b-form-input type="date" v-model="c.fecha_vencimiento" size="sm" />
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="small mt-1"
+                            :class="Math.abs(sumaCronograma() - montoAFinanciar()) < 0.01 ? 'text-success' : 'text-danger fw-bold'">
+                            Suma cronograma: {{ currency }} {{ sumaCronograma().toFixed(2) }}
+                            / Monto a financiar: {{ currency }} {{ montoAFinanciar().toFixed(2) }}
+                        </div>
                     </div>
                 </div>
 
@@ -534,7 +692,8 @@
                     <!-- Tabla de pagos -->
                     <div class="col-12 col-md-5">
                         <p class="small fw-semibold text-secondary mb-1">
-                            <i class="fas fa-list-ul me-1"></i>Pagos registrados
+                            <i class="fas fa-list-ul me-1"></i>
+                            {{ type_payment == 2 ? 'Pago(s) inicial(es) registrado(s)' : 'Pagos registrados' }}
                         </p>
                         <div class="table-responsive">
                             <table class="table table-sm table-hover align-middle mb-0">
@@ -543,22 +702,19 @@
                                         <th>#</th>
                                         <th>Método</th>
                                         <th class="text-end">Monto</th>
-                                        <th v-if="type_payment == 2">Fecha</th>
                                         <th></th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     <tr v-if="sale_payments.length === 0">
-                                        <td colspan="5" class="text-center text-muted fst-italic py-3 small">
-                                            Sin pagos aún
+                                        <td colspan="4" class="text-center text-muted fst-italic py-3 small">
+                                            {{ type_payment == 2 ? 'Sin pago inicial' : 'Sin pagos aún' }}
                                         </td>
                                     </tr>
                                     <tr v-for="(p, index) in sale_payments" :key="index">
                                         <td class="text-muted small">{{ index + 1 }}</td>
                                         <td class="fw-semibold small">{{ p.method_payment }}</td>
                                         <td class="text-end fw-bold">{{ currency }} {{ p.amount }}</td>
-                                        <td v-if="type_payment == 2" class="small text-muted">{{ p.date_payment }}
-                                        </td>
                                         <td>
                                             <button type="button" class="btn btn-outline-danger btn-sm py-0 px-2"
                                                 @click="removePayment(index)">
@@ -653,12 +809,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted } from 'vue';
+import { ref, computed, watch, onMounted } from 'vue';
 import type { AxiosResponse } from 'axios';
 import httpClient from '@/helpers/http-client';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import Swal from 'sweetalert2/dist/sweetalert2.js';
 import type { SaleDetail, SaleConfig, SaleResponse } from '@/types/sales';
+import type { PaymentMethod, PaymentMethods } from '@/types/cash';
+import type { ClientAdvance } from '@/types/advances';
 import type { Client } from '@/types/clients';
 import type { Product } from '@/types/products';
 import ClientFormQuick from '@/components/Sales/ClientFormQuick.vue';
@@ -666,8 +824,25 @@ import ProductFormQuick from '@/components/Sales/ProductFormQuick.vue';
 import { imprimirComprobante } from '@/composables/usePrintComprobante';
 import { getPrecioBaseSinIgv } from '@/composables/useProductPricing';
 import { useAuthStore } from '@/stores/auth';
+import { resolverTipAfeIgv as resolverTipAfeIgvPuro } from '@/utils/resolverTipAfeIgv';
+import type { Branch } from '@/types/cash-session';
+import type { TipoComprobante } from '@/types/series-comprobante';
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
+
+const authStore = useAuthStore();
+
+// Mapa tipo_comprobante_codigo → permiso Spatie que habilita emitirlo desde
+// este formulario — mismo mapa que SaleController::PERMISOS_EMISION en el
+// backend (fuente de verdad real: el backend rechaza con 422 aunque este
+// filtro del frontend se saltee de alguna forma). '07'/'08' (NC/ND) no
+// tienen entrada acá a propósito — se emiten desde el flujo de Notas, no
+// desde este formulario.
+const PERMISOS_EMISION: Record<string, string> = {
+    '01': 'emitir_factura',
+    '03': 'emitir_boleta',
+    'NV': 'emitir_nota_venta',
+};
 
 // ── Datos maestros ─────────────────────────────────────────────────
 const clients = ref<Client[]>([]);
@@ -699,15 +874,78 @@ const state_sale = ref<number>(1);     // 1=venta, 2=cotización
 const is_exportacion = ref<number>(0);
 const n_transaction = ref<string>('');
 const today = ref<string>('');
-const serie = ref<string>('B001'); // default boleta — cambia según cliente
+// Módulo de series de comprobantes — reemplaza el 'serie' de texto libre de
+// antes. La serie real (F001/B001/NV001/...) la resuelve el backend según
+// sucursal+tipo+moneda (SerieComprobanteService::resolverSerie()) — este
+// formulario solo elige el TIPO, nunca la serie directamente.
+const tipo_comprobante_codigo = ref<string>('03'); // default boleta — cambia según cliente
+const tiposComprobante = ref<TipoComprobante[]>([]);
+const branches = ref<Branch[]>([]);
+const branch_id_seleccionado = ref<number | undefined>(undefined);
+
+const puedeCambiarSucursal = computed(() => authStore.isPermitedRoute('can_switch_branch'));
+
+// Solo lo que el catálogo marca disponible para crear series
+// (activo_greenter=true O 'NV', ya filtrado por el backend en
+// ?disponibles_para_serie=1) Y que el usuario autenticado puede emitir
+// (permiso emitir_*) — un cajero con solo emitir_nota_venta ni siquiera ve
+// factura/boleta como opción.
+const tiposComprobanteVisibles = computed(() =>
+    tiposComprobante.value.filter((t) => {
+        const permiso = PERMISOS_EMISION[t.codigo];
+        return permiso ? authStore.isPermitedRoute(permiso) : false;
+    })
+);
+
+const tipoEsFiscal = computed(() => {
+    const tipo = tiposComprobante.value.find((t) => t.codigo === tipo_comprobante_codigo.value);
+    return tipo ? tipo.es_documento_sunat : true; // default true: no ocultar de más antes de cargar el catálogo
+});
+
+// Preview en vivo de la serie que va a resolver el backend — el <select>
+// viejo mostraba "F001 — Factura" directamente; el selector de tipo de
+// documento nuevo no dice nada por sí solo sobre QUÉ serie/correlativo se
+// va a usar. Se recalcula cada vez que cambia tipo/moneda/sucursal.
+const serieResuelta = ref<{ serie: string; siguiente_correlativo: number } | null>(null);
+const errorSeriePreview = ref<string>('');
+let previewSerieTimeout: any = null;
+
+const previsualizarSerie = async () => {
+    if (!tipo_comprobante_codigo.value) {
+        serieResuelta.value = null;
+        return;
+    }
+
+    try {
+        const params = new URLSearchParams();
+        params.set('tipo_comprobante_codigo', tipo_comprobante_codigo.value);
+        params.set('currency', currency.value);
+        if (puedeCambiarSucursal.value && branch_id_seleccionado.value) {
+            params.set('branch_id', String(branch_id_seleccionado.value));
+        }
+
+        const res = await httpClient.get<{ serie: string; siguiente_correlativo: number }>(
+            `sales/serie-preview?${params.toString()}`
+        );
+        serieResuelta.value = res.data;
+        errorSeriePreview.value = '';
+    } catch (error: any) {
+        serieResuelta.value = null;
+        errorSeriePreview.value = error.response?.data?.message ?? 'No se pudo resolver la serie para este tipo de documento.';
+    }
+};
+
 const type_operation = ref<string>('10');
 const destino = ref<string>('amazonia'); // default Amazonía — empresa en San Martín
 
 // ── Condiciones especiales de venta ─────────────────────────────
 // '0'=ninguna, 'anticipo', '1'=retención, '2'=detracción, '3'=percepción
 const condicion_especial = ref<string>('0');
-const n_comprobante_anticipo = ref<string>('');
-const sale_anticipo = ref<number>(0);
+
+// ── Adelantos disponibles del cliente seleccionado ───────────────
+type AdvanceCheckoutItem = ClientAdvance & { seleccionado: boolean; monto_aplicado: number };
+const availableAdvances = ref<AdvanceCheckoutItem[]>([]);
+const loadingAdvances = ref<boolean>(false);
 
 // Detracción — selección del código del Anexo SUNAT
 const codigo_detraccion_sel = ref<string>('');
@@ -774,6 +1012,28 @@ const amount = ref<number>(0);
 const date_payment = ref<string>('');
 const sale_payments = ref<any[]>([]);
 
+// Módulo Caja — Fase 0 (plan-modulo-caja.md §3): picker dinámico en vez del
+// <option> hardcodeado. method_payment sigue enviándose igual que antes
+// (el 'code' tal cual, ej. "YAPE") — cero cambios en el payload de la venta.
+const paymentMethods = ref<PaymentMethod[]>([]);
+
+// ── Configuración de Crédito (Módulo Amortizaciones — Fase 8) ─────
+// Solo credit_type='cuotas_fijas' — 'libre' queda fuera de alcance de
+// esta fase (decisión explícita, plan-modulo-amortizaciones.md §6 pto 8).
+const credit_type = ref<string>('cuotas_fijas');
+const num_cuotas = ref<number>(3);
+const periodicidad = ref<string>('mensual');
+const cronograma = ref<{ numero_cuota: number; monto_programado: number; fecha_vencimiento: string }[]>([]);
+const aplica_mora = ref<boolean>(false);
+const tasa_mora = ref<number>(0);
+const tipo_mora = ref<string>('porcentaje_diario');
+const generandoCronograma = ref<boolean>(false);
+const company_mora_defaults = ref<{ mora_habilitada_default: boolean; tasa_mora_default: number | null; tipo_mora_default: string | null }>({
+    mora_habilitada_default: false,
+    tasa_mora_default: null,
+    tipo_mora_default: null,
+});
+
 // Totales
 const igv_total = ref<number>(0);
 const sale_total = ref<number>(0);
@@ -781,6 +1041,10 @@ const sale_subtotal = ref<number>(0);
 const icbper_total = ref<number>(0);
 const isc_total = ref<number>(0);
 const total_payments = ref<number>(0);
+// Subtotal bruto de las líneas cobrables (excluye gratuitas) — lo calcula
+// sumDetails() y lo reutiliza store() para netear mto_oper_* del descuento
+// global con la misma proporción que ya usa el IGV.
+const subtotalBrutoCobro = ref<number>(0);
 
 // ── Métodos de cliente ────────────────────────────────────────────
 
@@ -873,9 +1137,13 @@ const selectClient = (client: Client) => {
     client_address.value = client.address || '';
     clientNotFound.value = false;
 
-    // ── Autocompletar comprobante según tipo de documento del cliente ──
-    // RUC → Factura (F001), DNI y otros → Boleta (B001)
-    serie.value = client.type_document === 'RUC' ? 'F001' : 'B001';
+    // ── Autocompletar tipo de documento según tipo de documento del cliente ──
+    // RUC → Factura ('01'), DNI y otros → Boleta ('03') — solo si el usuario
+    // puede emitir ese tipo; si no, se deja el que ya estaba seleccionado.
+    const tipoSugerido = client.type_document === 'RUC' ? '01' : '03';
+    if (tiposComprobanteVisibles.value.some((t) => t.codigo === tipoSugerido)) {
+        tipo_comprobante_codigo.value = tipoSugerido;
+    }
 
     // ── Sugerir destino según zona del cliente ─────────────────────
     // Si el cliente es de zona Amazonía, pre-seleccionar 'amazonia'
@@ -885,6 +1153,8 @@ const selectClient = (client: Client) => {
     }
     // Si no es Amazonía, no cambiar automáticamente — puede ser
     // un cliente de Lima que compra acá o uno local que envía fuera
+
+    cargarAdelantosDisponibles(client.id);
 };
 
 const clearClientSelection = () => {
@@ -893,7 +1163,8 @@ const clearClientSelection = () => {
     clientSuggestions.value = [];
     client_address.value = '';
     clientNotFound.value = false;
-    serie.value = 'B001'; // resetear a boleta por defecto
+    tipo_comprobante_codigo.value = '03'; // resetear a boleta por defecto
+    availableAdvances.value = [];
 };
 
 // ── Métodos de producto ───────────────────────────────────────────
@@ -934,28 +1205,10 @@ const searchProducts = async (query: string) => {
 };
 
 // ── Resolver tip_afe_igv según las reglas de negocio ─────────────
-// Esta es la función central que integra todo lo que definimos:
-// producto + destino + exportación → tip_afe_igv correcto
-const resolverTipAfeIgv = (product: Product): string => {
-    // Exportación siempre gana sobre cualquier otra regla
-    if (is_exportacion.value === 1) return '40';
-
-    // Producto exonerado o inafecto por naturaleza propia
-    // (no depende del destino — ej: medicamentos del Apéndice I)
-    if (['20', '30'].includes(product.tip_afe_igv_default ?? '10')) {
-        return product.tip_afe_igv_default;
-    }
-
-    // IVAP (arroz pilado) — siempre aplica independientemente del destino
-    if (product.is_ivap === 2) return '17';
-
-    // Ley 27037 Amazonía — bien o servicio entregado en la zona
-    // El cliente puede ser de cualquier lugar — lo que importa es el destino
-    if (destino.value === 'amazonia') return '20';
-
-    // Caso por defecto: gravado con IGV normal
-    return '10';
-};
+// Lógica pura extraída a src/utils/resolverTipAfeIgv.ts (testeada ahí
+// con Vitest) — acá solo se cierra sobre los refs de esta vista.
+const resolverTipAfeIgv = (product: Product): string =>
+    resolverTipAfeIgvPuro(product, destino.value, is_exportacion.value);
 
 const selectAndAddProduct = (product: Product) => {
     if (product.stock <= 0 && product.disponiblidad !== 1) {
@@ -1063,7 +1316,7 @@ const updateItem = (index: number) => {
                 isc = mto_base_igv * (item.product.percentage_isc / 100);
                 break;
             case '02': // Específico (monto fijo — por litro si el producto
-                       // tiene contenido_neto_litros, si no, directo por unidad)
+                // tiene contenido_neto_litros, si no, directo por unidad)
                 // PENDIENTE: contenido_neto_litros solo cubre productos líquidos.
                 // Cigarrillos/combustibles (también Específico) necesitan un
                 // factor de contenido no-líquido — ver nota en product/register.vue.
@@ -1160,6 +1413,19 @@ const getTotalSales = (): number => sale_total.value;
 
 const getBaseForRegimen = (): number => getTotalFactura();
 
+// ── Subtotal de línea neto del descuento global (prorrateado) ────────
+// Único punto de cálculo para "subtotal de línea ya con el descuento
+// global aplicado" — lo usan tanto el IGV (sumDetails()) como los
+// mto_oper_* que se mandan a SUNAT (store()). Antes cada uno lo
+// calculaba por separado y solo el IGV restaba el descuento; ese
+// desfase entre el total (neto) y mto_oper_exoneradas/gravadas/etc.
+// (brutos) causaba el error SUNAT 3275 en ventas con descuento global.
+const subtotalNetoDescuentoGlobal = (d: SaleDetail, subtotalBruto: number): number => {
+    const descuento = Number(discount_global.value) || 0;
+    const proporcion = subtotalBruto > 0 ? d.subtotal / subtotalBruto : 0;
+    return d.subtotal - (descuento * proporcion);
+};
+
 const sumDetails = () => {
     if (isNaN(discount_global.value) || discount_global.value === null) {
         discount_global.value = 0;
@@ -1174,10 +1440,10 @@ const sumDetails = () => {
     // respetando la tasa propia de cada línea — necesario porque una
     // misma venta puede mezclar líneas gravadas, exoneradas e IVAP.
     const subtotal_bruto = lineas_cobro.reduce((s, d) => s + d.subtotal, 0);
+    subtotalBrutoCobro.value = subtotal_bruto;
     const descuento_global_actual = Number(discount_global.value) || 0;
     igv_total.value = Number(lineas_cobro.reduce((s, d) => {
-        const proporcion = subtotal_bruto > 0 ? d.subtotal / subtotal_bruto : 0;
-        const base_neta = d.subtotal - (descuento_global_actual * proporcion);
+        const base_neta = subtotalNetoDescuentoGlobal(d, subtotal_bruto);
         return s + (base_neta * (d.porcentaje_igv / 100));
     }, 0).toFixed(4));
     // ICBPER: monto fijo por unidad (bolsa), no depende del valor de venta
@@ -1235,7 +1501,7 @@ const sumDetails = () => {
         const minimo_detraccion = Number(codigo_sel?.monto_minimo ?? 700);
 
 
-        
+
         if (base_regimen > minimo_detraccion) {
             monto_detraccion.value = Number(
                 (base_regimen * porcentaje_detraccion_sel.value).toFixed(2)
@@ -1274,18 +1540,74 @@ const onDetractionCodeChange = () => {
     sumDetails();
 };
 
-// ── Anticipo ──────────────────────────────────────────────────────
-const searchAnticipo = () => {
-    if (!n_comprobante_anticipo.value.trim()) {
-        (Swal as TVueSwalInstance).fire('Advertencia', 'Ingresa un número de comprobante.', 'warning');
-        return;
+// ── Adelantos disponibles del cliente ────────────────────────────
+const cargarAdelantosDisponibles = async (clientId: number | string) => {
+    loadingAdvances.value = true;
+    availableAdvances.value = [];
+    try {
+        const { data } = await httpClient.get(`clients/${clientId}/advances`);
+        availableAdvances.value = (data.advances ?? []).map((a: ClientAdvance) => ({
+            ...a,
+            seleccionado: false,
+            monto_aplicado: 0,
+        }));
+    } catch {
+        // Silencioso — un fallo acá no debe bloquear el registro de la venta.
+        availableAdvances.value = [];
+    } finally {
+        loadingAdvances.value = false;
     }
-    (Swal as TVueSwalInstance).fire('Buscando...', 'Función pendiente de implementar.', 'info');
 };
 
-const resetAnticipo = () => {
-    n_comprobante_anticipo.value = '';
-    sale_anticipo.value = 0;
+const onAdvanceToggle = (a: AdvanceCheckoutItem) => {
+    a.monto_aplicado = a.seleccionado ? a.available_balance : 0;
+};
+
+const totalAdelantosAplicados = (): number => {
+    return availableAdvances.value
+        .filter(a => a.seleccionado)
+        .reduce((s, a) => s + (Number(a.monto_aplicado) || 0), 0);
+};
+
+// ── Configuración de Crédito (Módulo Amortizaciones — Fase 8) ─────
+// Monto que financia el cronograma: total menos adelantos aplicados menos
+// pagos iniciales ya ingresados (ej. cuota inicial en efectivo) — mismo
+// cálculo que ya usa store() para 'debt', reusado acá para el preview y
+// la validación en vivo de la suma del cronograma.
+const montoAFinanciar = (): number => {
+    const totalAdelantos = condicion_especial.value === 'anticipo' ? totalAdelantosAplicados() : 0;
+    return Math.max(0, getTotalSales() - totalAdelantos - total_payments.value);
+};
+
+const sumaCronograma = (): number =>
+    cronograma.value.reduce((s, c) => s + (Number(c.monto_programado) || 0), 0);
+
+const aplicarDefaultsMora = () => {
+    aplica_mora.value = company_mora_defaults.value.mora_habilitada_default;
+    tasa_mora.value = company_mora_defaults.value.tasa_mora_default ?? 0;
+    tipo_mora.value = company_mora_defaults.value.tipo_mora_default ?? 'porcentaje_diario';
+};
+
+const generarCronogramaSugerido = async () => {
+    const monto = montoAFinanciar();
+    if (monto <= 0) {
+        (Swal as TVueSwalInstance).fire('Error', 'No hay monto a financiar (el total ya está cubierto por adelantos/pagos).', 'error');
+        return;
+    }
+    generandoCronograma.value = true;
+    try {
+        const res = await httpClient.post('installments/schedule-preview', {
+            monto_total: monto,
+            num_cuotas: num_cuotas.value,
+            periodicidad: periodicidad.value,
+            fecha_anchor: today.value,
+        });
+        cronograma.value = (res.data as any).cronograma;
+    } catch (error: any) {
+        (Swal as TVueSwalInstance).fire('Error', error?.response?.data?.message ?? 'No se pudo generar el cronograma.', 'error');
+    } finally {
+        generandoCronograma.value = false;
+    }
 };
 
 // ── Pagos ─────────────────────────────────────────────────────────
@@ -1295,9 +1617,6 @@ const addPayment = () => {
     }
     if (amount.value <= 0) {
         (Swal as TVueSwalInstance).fire('Error', 'El monto debe ser mayor a 0.', 'error'); return;
-    }
-    if (type_payment.value == 2 && !date_payment.value) {
-        (Swal as TVueSwalInstance).fire('Error', 'La fecha de pago es obligatoria en crédito.', 'error'); return;
     }
     if (getTotalSales() < (amount.value + total_payments.value)) {
         (Swal as TVueSwalInstance).fire('Error', 'El monto no puede superar el total de la venta.', 'error'); return;
@@ -1333,18 +1652,65 @@ const store = async () => {
     if (sale_details.value.length === 0) {
         (Swal as TVueSwalInstance).fire({ icon: 'error', title: 'Error', text: 'Agrega al menos un producto.' }); return;
     }
-    if (state_sale.value === 1 && sale_payments.value.length === 0 && getTotalSales() > 0) {
+    const totalAdelantos = condicion_especial.value === 'anticipo' ? totalAdelantosAplicados() : 0;
+    const totalConAdelanto = getTotalSales() - totalAdelantos;
+
+    // Re-validar acá (no solo en addPayment()): el total pudo bajar después
+    // de agregar un pago (se quitó una línea, cambió un descuento/régimen),
+    // dejando un pago ya agregado por encima del total sin que nada lo avise.
+    if (total_payments.value > totalConAdelanto + 0.009) {
+        (Swal as TVueSwalInstance).fire({
+            icon: 'error', title: 'Error',
+            text: `Los pagos (${currency.value} ${total_payments.value.toFixed(2)}) superan el total a pagar ` +
+                `(${currency.value} ${totalConAdelanto.toFixed(2)}). Ajusta los pagos antes de guardar.`,
+        }); return;
+    }
+
+    // Requiere al menos un pago solo si NO es crédito — una venta a
+    // crédito puede financiarse 100% vía cronograma sin pago inicial.
+    if (state_sale.value === 1 && sale_payments.value.length === 0 && totalConAdelanto > 0 && type_payment.value != 2) {
         (Swal as TVueSwalInstance).fire({ icon: 'error', title: 'Error', text: 'Agrega al menos un pago para la venta.' }); return;
     }
     if (condicion_especial.value === '2' && !codigo_detraccion_sel.value) {
         (Swal as TVueSwalInstance).fire({ icon: 'error', title: 'Error', text: 'Selecciona el código de detracción.' }); return;
     }
+    if (condicion_especial.value === 'anticipo') {
+        if (totalAdelantos <= 0) {
+            (Swal as TVueSwalInstance).fire({ icon: 'error', title: 'Error', text: 'Selecciona al menos un adelanto y un monto a aplicar.' }); return;
+        }
+        if (totalAdelantos > getTotalSales()) {
+            (Swal as TVueSwalInstance).fire({ icon: 'error', title: 'Error', text: 'La suma de adelantos aplicados no puede superar el total de la venta.' }); return;
+        }
+    }
 
-    // Estado de pago derivado automáticamente
+    // ── Validación de Configuración de Crédito (Módulo Amortizaciones — Fase 8) ──
+    // Espeja la validación de validarConfiguracionCredito() en el backend
+    // (SaleController.php) para dar feedback inmediato — el backend sigue
+    // siendo la fuente de verdad, esto solo evita un viaje HTTP inútil.
+    if (type_payment.value == 2) {
+        if (credit_type.value !== 'cuotas_fijas') {
+            (Swal as TVueSwalInstance).fire({ icon: 'error', title: 'Error', text: 'Solo se soporta crédito con cuotas fijas por ahora.' }); return;
+        }
+        if (cronograma.value.length === 0) {
+            (Swal as TVueSwalInstance).fire({ icon: 'error', title: 'Error', text: 'Genera el cronograma de cuotas antes de guardar.' }); return;
+        }
+        if (Math.abs(sumaCronograma() - montoAFinanciar()) > 0.01) {
+            (Swal as TVueSwalInstance).fire({
+                icon: 'error', title: 'Error',
+                text: `La suma del cronograma (${currency.value} ${sumaCronograma().toFixed(2)}) no calza con el monto ` +
+                    `a financiar (${currency.value} ${montoAFinanciar().toFixed(2)}).`,
+            }); return;
+        }
+        if (aplica_mora.value && (!tasa_mora.value || tasa_mora.value <= 0)) {
+            (Swal as TVueSwalInstance).fire({ icon: 'error', title: 'Error', text: 'Si aplica mora, la tasa debe ser mayor a 0.' }); return;
+        }
+    }
+
+    // Estado de pago derivado automáticamente (considera lo ya cubierto por adelantos)
     let estado_pago = 1; // pendiente
     if (state_sale.value === 1) {
-        if (total_payments.value === getTotalSales()) estado_pago = 3;      // pagado completo
-        else if (total_payments.value > 0) estado_pago = 2;      // pago parcial
+        if (total_payments.value >= totalConAdelanto) estado_pago = 3;      // pagado completo
+        else if (total_payments.value > 0 || totalAdelantos > 0) estado_pago = 2;      // pago parcial
     }
 
     // Mapear condicion_especial → retencion_igv (campo de la BD)
@@ -1354,7 +1720,10 @@ const store = async () => {
 
     const data = {
         // Identificación
-        serie: serie.value,
+        tipo_comprobante_codigo: tipo_comprobante_codigo.value,
+        ...(puedeCambiarSucursal.value && branch_id_seleccionado.value
+            ? { branch_id: branch_id_seleccionado.value }
+            : {}),
         n_transaction: n_transaction.value,
         date: today.value,
 
@@ -1381,9 +1750,11 @@ const store = async () => {
         porcentaje_retencion: porcentaje_retencion_sel.value,
         monto_retencion: monto_retencion.value,
 
-        // Anticipo
-        n_comprobante_anticipo: condicion_especial.value === 'anticipo' ? n_comprobante_anticipo.value : null,
-        amount_anticipo: sale_anticipo.value,
+        // Adelantos aplicados — el backend valida saldo/pertenencia al
+        // cliente y neta el total del comprobante (ver módulo Adelantos)
+        advance_applications: availableAdvances.value
+            .filter(a => a.seleccionado && a.monto_aplicado > 0)
+            .map(a => ({ advance_id: a.id, amount: a.monto_aplicado })),
 
         // Totales calculados (el backend no recalcula — usa estos valores)
         subtotal: sale_subtotal.value,
@@ -1393,11 +1764,20 @@ const store = async () => {
         discount_global: discount_global.value,
         igv_discount_general: 0,  // deprecated — mantener por compatibilidad
 
-        // Totales por tipo de operación para Greenter
-        mto_oper_gravadas: sale_details.value.filter(d => d.tip_afe_igv === '10').reduce((s, d) => s + d.subtotal, 0),
-        mto_oper_exoneradas: sale_details.value.filter(d => d.tip_afe_igv === '20').reduce((s, d) => s + d.subtotal, 0),
-        mto_oper_inafectas: sale_details.value.filter(d => d.tip_afe_igv === '30').reduce((s, d) => s + d.subtotal, 0),
-        mto_oper_exportacion: sale_details.value.filter(d => d.tip_afe_igv === '40').reduce((s, d) => s + d.subtotal, 0),
+        // Totales por tipo de operación para Greenter — netos del descuento
+        // global (prorrateado, ver subtotalNetoDescuentoGlobal()). SUNAT
+        // rechaza (error 3275) si estos no cuadran con el total, que ya
+        // sale neto del descuento (ver getSubTotalSale()).
+        mto_oper_gravadas: sale_details.value.filter(d => d.tip_afe_igv === '10')
+            .reduce((s, d) => s + subtotalNetoDescuentoGlobal(d, subtotalBrutoCobro.value), 0),
+        mto_oper_exoneradas: sale_details.value.filter(d => d.tip_afe_igv === '20')
+            .reduce((s, d) => s + subtotalNetoDescuentoGlobal(d, subtotalBrutoCobro.value), 0),
+        mto_oper_inafectas: sale_details.value.filter(d => d.tip_afe_igv === '30')
+            .reduce((s, d) => s + subtotalNetoDescuentoGlobal(d, subtotalBrutoCobro.value), 0),
+        mto_oper_exportacion: sale_details.value.filter(d => d.tip_afe_igv === '40')
+            .reduce((s, d) => s + subtotalNetoDescuentoGlobal(d, subtotalBrutoCobro.value), 0),
+        // Gratuitas quedan brutas — no llevan descuento, están excluidas de
+        // lineas_cobro/subtotal_bruto en sumDetails().
         mto_oper_gratuitas: sale_details.value.filter(d => d.tip_afe_igv === '11').reduce((s, d) => s + d.subtotal, 0),
 
         // Impuestos desagregados
@@ -1409,10 +1789,11 @@ const store = async () => {
         mto_imp_venta: Math.round(getTotalFactura() * 10) / 10,
         redondeo: Math.round((Math.round(getTotalFactura() * 10) / 10 - getTotalFactura()) * 100) / 100,
 
-        // Estado y deuda
+        // Estado y deuda — netos del adelanto aplicado (el dinero del
+        // adelanto ya se recibió antes, en su propio comprobante)
         state_payment: estado_pago,
-        debt: getTotalSales() - total_payments.value,
-        paid_out: total_payments.value,
+        debt: Math.max(0, totalConAdelanto - total_payments.value),
+        paid_out: total_payments.value + totalAdelantos,
 
         // Detalles — incluyen todos los campos para Greenter
         sale_details: sale_details.value,
@@ -1421,6 +1802,17 @@ const store = async () => {
         payments: sale_payments.value,
 
         description: description.value,
+
+        // Configuración de Crédito (Módulo Amortizaciones — Fase 8) — solo
+        // se manda si es venta a crédito, mismo criterio que el backend
+        // usa para derivar condicion_pago de type_payment.
+        ...(type_payment.value == 2 ? {
+            credit_type: credit_type.value,
+            cronograma: cronograma.value,
+            aplica_mora: aplica_mora.value,
+            tasa_mora: aplica_mora.value ? tasa_mora.value : null,
+            tipo_mora: aplica_mora.value ? tipo_mora.value : null,
+        } : {}),
     };
 
     try {
@@ -1470,9 +1862,8 @@ const resetData = () => {
     codigo_detraccion_sel.value = '';
     porcentaje_detraccion_sel.value = 0;
     discount_global.value = 0;
-    n_comprobante_anticipo.value = '';
-    sale_anticipo.value = 0;
-    serie.value = 'B001';
+    availableAdvances.value = [];
+    tipo_comprobante_codigo.value = '03';
     is_exportacion.value = 0;
     currency.value = 'PEN';
     destino.value = 'amazonia';
@@ -1483,6 +1874,11 @@ const resetData = () => {
     method_payment.value = 'EFECTIVO';
     amount.value = 0;
     date_payment.value = '';
+    credit_type.value = 'cuotas_fijas';
+    num_cuotas.value = 3;
+    periodicidad.value = 'mensual';
+    cronograma.value = [];
+    aplicarDefaultsMora();
     sumDetails();
 };
 
@@ -1527,10 +1923,74 @@ const config = async () => {
         // Inicializar tasas de regímenes desde BD
         porcentaje_retencion_sel.value = getRetencionTasa();
         porcentaje_percepcion_sel.value = getPercepcionTasa();
+
+        // Defaults de mora de la empresa (Módulo Amortizaciones — Fase 8) —
+        // prellenan el checkbox aplica_mora de Configuración de Crédito,
+        // editable por venta puntual.
+        company_mora_defaults.value = (res.data as any).company_mora_defaults ?? company_mora_defaults.value;
+        aplicarDefaultsMora();
     } catch (error) {
         console.error(error);
     }
 };
+
+// Módulo Caja — Fase 0 (plan-modulo-caja.md §3). Endpoint propio (no
+// sales/config) — este catálogo no es exclusivo de ventas.
+const loadPaymentMethods = async () => {
+    try {
+        const res: AxiosResponse<PaymentMethods> = await httpClient.get('payment-methods?active=1');
+        paymentMethods.value = res.data.payment_methods;
+    } catch (error) {
+        console.error(error);
+    }
+};
+
+// ── Módulo de series de comprobantes ──────────────────────────────
+const cargarTiposYSucursales = async () => {
+    try {
+        const resTipos = await httpClient.get<{ tipos_comprobante: TipoComprobante[] }>(
+            'tipos-comprobante?disponibles_para_serie=1'
+        );
+        tiposComprobante.value = resTipos.data.tipos_comprobante;
+
+        if (puedeCambiarSucursal.value) {
+            const resBranches = await httpClient.get<{ branches: Branch[] }>('branches?active=1');
+            branches.value = resBranches.data.branches;
+            branch_id_seleccionado.value = branches.value[0]?.id;
+        }
+
+        previsualizarSerie();
+    } catch (error) {
+        console.error(error);
+    }
+};
+
+// ── Limpieza de campos fiscales al cambiar de tipo de documento ────
+// Mismo principio que "Configuración de Crédito": regenerar en vez de
+// conservar estado potencialmente inconsistente. Se limpia SIEMPRE que el
+// tipo cambia (no solo al entrar/salir de nota de venta) — si el usuario
+// vuelve a un tipo fiscal, los campos aparecen vacíos, nunca con el valor
+// que tenían antes de ocultarse.
+const resetCamposFiscales = () => {
+    condicion_especial.value = '0';
+    destino.value = 'amazonia';
+    is_exportacion.value = 0;
+    codigo_detraccion_sel.value = '';
+    porcentaje_detraccion_sel.value = 0;
+    monto_detraccion.value = 0;
+    monto_retencion.value = 0;
+    monto_percepcion.value = 0;
+};
+
+watch(tipo_comprobante_codigo, () => resetCamposFiscales());
+
+// Debounce corto: currency/branch_id_seleccionado pueden cambiar seguido
+// (ej. el usuario tipeando), tipo_comprobante_codigo cambia por selección
+// directa — todos disparan la misma previsualización.
+watch([tipo_comprobante_codigo, currency, branch_id_seleccionado], () => {
+    clearTimeout(previewSerieTimeout);
+    previewSerieTimeout = setTimeout(previsualizarSerie, 200);
+});
 
 // ── Watchers ──────────────────────────────────────────────────────
 watch(discount_global, () => sumDetails());
@@ -1591,7 +2051,11 @@ watch(currency_iso, (nuevo) => {
     currency_symbol.value = nuevo === 'USD' ? '$' : 'S/.';
 });
 
-onMounted(() => config());
+onMounted(() => {
+    config();
+    loadPaymentMethods();
+    cargarTiposYSucursales();
+});
 </script>
 
 <style scoped>
