@@ -22,7 +22,7 @@ Lo que sí falta es la separación **dentro** de `database/migrations/tenant/`:
 ```
 database/migrations/               ← YA EXISTE, conexión central, no se toca
 └── tenant/                        ← YA EXISTE como carpeta, pero todo
-    ├── (todas las ~76 migraciones   plano adentro, sin distinguir
+    ├── (todas las 67 migraciones    plano adentro, sin distinguir
     │    de facturación, hoy planas)  qué es core de qué es vertical
     │
     │   ↓ se reorganiza en:
@@ -57,7 +57,7 @@ Y dejar `tenants:provision` capaz de recibir el `giro` y correr
   módulo 11 — son conceptos distintos a pesar del nombre parecido
   (`plans` acá vs `tenant_plans` allá). Se descarta como riesgo.
 
-- **`database/migrations/tenant/`** — conexión tenant, ~76 migraciones,
+- **`database/migrations/tenant/`** — conexión tenant, 67 migraciones,
   **todas de facturación/retail, ninguna específica de agencia de
   viajes todavía** (confirmado visualmente: users, clients, companies,
   products, sales, orders, notes, advances, sunat_configs, credits,
@@ -101,7 +101,7 @@ el campo `giro`.
 ### 5.1 Riesgo de orden — bajo para este primer movimiento, real para el futuro
 Como **todo** el contenido de `tenant/` se mueve junto a `tenant/core/`
 (nada se separa todavía, no hay vertical con contenido), el orden
-relativo entre los 76 archivos no cambia — siguen ordenándose por
+relativo entre los 67 archivos no cambia — siguen ordenándose por
 timestamp de nombre dentro de la misma carpeta. El riesgo real aparece
 **después**, el día que empiecen a crear migraciones dentro de
 `verticals/agencia-viajes/` que dependan de tablas de `core/` (ej. una
@@ -185,3 +185,4 @@ carpetas de migraciones le corresponden a este giro".
 | 23-jul-2026 | Inventario real verificado contra capturas del repo. Corrección importante: la separación central/tenant ya existe (`database/migrations/` vs `database/migrations/tenant/`); el trabajo real es separar core/verticals **dentro** de `tenant/`. Confirmado que las 76 migraciones actuales son 100% facturación/retail, ninguna de vertical — se mueven todas juntas a `tenant/core/` sin necesidad de clasificar caso por caso. Descartada colisión con tablas `systems`/`plans`/`system_modules` (confirmado: contenido de marketing, sin relación con acceso de tenants). Riesgo de orden de migraciones recalificado como bajo para este movimiento inicial. |
 | 23-jul-2026 | Gap 5.2 resuelto: `giro='retail'` como default en la migración, con comentario explicativo en la columna. Cubre backfill automático de tenants existentes sin `UPDATE` manual aparte. |
 | 23-jul-2026 | Gap 5.3 resuelto: se crea un tenant nuevo y dedicado (ej. `agenciatest`) con `giro=agencia_viajes` desde el inicio, no se reutiliza `sandbox` — decisión explícita del usuario para no mezclar el historial de pruebas de facturación/panel superadmin con las primeras pruebas del vertical nuevo. **Con esto, toda la sección 5 queda cerrada — módulo 0 listo para pasar a ejecución.** |
+| 27-jul-2026 | Corrección de conteo: el "~76" era una estimación; conteo real verificado contra el repo es 67 migraciones en tenant/. No cambia ninguna decisión de este documento, solo el número exacto citado en 3 lugares. |

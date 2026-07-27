@@ -24,6 +24,7 @@ reservas, itinerarios, destinos y tours de agencias de viajes vive acá.
 | Documento | Qué cubre |
 |---|---|
 | `plan-general-vertical-agencia-viajes.md` | Documento raíz del vertical — objetivo, fases, mapa de módulos |
+| `plan-hoja-de-ruta-ejecucion.md` | Punto de entrada para Claude Code — las 11 sesiones de construcción en orden estricto, con checklist de avance y convención de ramas/commits. Consultar antes de abrir cualquier sesión nueva. |
 | `plan-modulo-proveedores.md` | Catálogo de proveedores, tarifas, temporadas, costo/margen/piso de descuento — **completo en modelo de datos** |
 | `plan-modulo-cotizaciones-reservas.md` | Cotizaciones, alternativas, reservas, itinerarios, integración con el core de ventas |
 | `plan-modulo-tours-catalogo.md` | Catálogo de destinos (árbol 3 niveles zona/lugar/atractivo), servicios, y confirmación de que "tour" = `paquetes_plantilla` — resuelve el bloqueante del módulo 2, validado con tours reales |
