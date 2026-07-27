@@ -60,17 +60,24 @@ deben perderse. No es un plan de módulo — para eso está `docs/planning/`.
   después de que la tabla exista en el tenant. Hasta entonces, un
   proveedor nuevo no tiene ningún tipo habilitado por defecto — hay que
   cargar `proveedor_tipos_config` a mano por tenant.
-- **`TenantProvisioningService::eliminarSiVacio()` no conoce las tablas
-  del vertical agencia_viajes** (`proveedores`, `destinos_atractivos`,
-  `destino_servicio`, `servicios`, `guias`, `proveedor_tipos_config`,
-  `configuracion_agencia`) — solo chequea Company/SunatConfig/Client/
-  Product/Sale (código de antes de que este vertical existiera). Un
-  tenant `agencia_viajes` con proveedores/destinos reales cargados pero
-  sin Company/cliente/producto/venta todavía se sigue considerando
-  "vacío" y se puede borrar de verdad desde el botón "Eliminar" del
-  panel superadmin — pérdida de datos real, no solo cosmética. Detectado
-  al usar el método para limpiar un tenant de prueba en esta sesión (ahí
-  es el comportamiento correcto — es lo que hace justamente inseguro el
-  caso real). Pendiente: agregar esos conteos a la condición de
-  `eliminarSiVacio()` cuando se retome el panel superadmin o alguna
-  sesión de agencia_viajes toque este método.
+- **PRIORIDAD — no dejar languidecer.** `TenantProvisioningService::
+  eliminarSiVacio()` no conoce las tablas del vertical agencia_viajes
+  (`proveedores`, `destinos_atractivos`, `destino_servicio`, `servicios`,
+  `guias`, `proveedor_tipos_config`, `configuracion_agencia`) — solo
+  chequea Company/SunatConfig/Client/Product/Sale (código de antes de
+  que este vertical existiera). Un tenant `agencia_viajes` con
+  proveedores/destinos reales cargados pero sin Company/cliente/
+  producto/venta todavía se sigue considerando "vacío" y se puede borrar
+  de verdad desde el botón "Eliminar" del panel superadmin — riesgo real
+  de pérdida de datos, no cosmético. Detectado al usar el método para
+  limpiar un tenant de prueba en Sesión 3.
+  **Decisión explícita del usuario (27-jul-2026): no diferir "hasta que
+  se retome el panel superadmin" — las 7 tablas del bloque que dispara
+  este hueco ya están todas construidas (Sesiones 2-3), así que conviene
+  resolverlo como su propia mini-sesión corta apenas cierre este bloque,
+  antes de seguir de lleno con Sesión 4 en adelante.** Es un fix chico:
+  agregar los 7 conteos (`Proveedor::count()`, etc.) a la condición de
+  `$tieneDatos` en `eliminarSiVacio()` — mismo patrón que ya usa para
+  Company/Client/Product/Sale. No forma parte del árbol de dependencias
+  de `plan-hoja-de-ruta-ejecucion.md` (no bloquea ninguna sesión
+  numerada), por eso vive acá y no como fila nueva de esa tabla.
