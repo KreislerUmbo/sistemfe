@@ -45,3 +45,18 @@ deben perderse. No es un plan de módulo — para eso está `docs/planning/`.
   `TenantProvisioningService::migrarVertical()`) — si algún giro futuro no
   convierte 1:1 con esa regla, `migrarVertical()` va a necesitar un mapeo
   explícito por giro en vez de la conversión automática actual.
+
+## Sesión 3 (Puente destino↔servicio + proveedores) — 27-jul-2026
+
+- **`proveedor_tipos_config` se crea vacía, sin sembrado automático al
+  provisionar.** El plan (`plan-modulo-proveedores.md` §2.6) dice
+  "habilitado default true, sembrado al provisionar con todo el
+  catálogo" — copiar todas las filas de `proveedor_tipos` (central) a
+  `proveedor_tipos_config` (tenant, con `habilitado=true`) para cada
+  tenant `agencia_viajes` nuevo. No implementado en esta sesión a
+  propósito (decisión explícita del usuario). Cuando se resuelva, el
+  lugar natural es `TenantProvisioningService::provision()`, mismo punto
+  donde ya corre `migrarVertical()` — condicionado a `giro=agencia_viajes`,
+  después de que la tabla exista en el tenant. Hasta entonces, un
+  proveedor nuevo no tiene ningún tipo habilitado por defecto — hay que
+  cargar `proveedor_tipos_config` a mano por tenant.
