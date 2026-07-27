@@ -205,10 +205,17 @@ return [
 
     /**
      * Parameters used by the tenants:migrate command.
+     *
+     * --path apunta a tenant/core/ (no tenant/ plano) desde
+     * plan-modulo-infraestructura-multitenant.md §4: tenant/core/ corre en TODOS los
+     * tenants sin importar el giro. Las migraciones de tenant/verticals/{giro}/ NO
+     * pasan por este config — TenantProvisioningService::provision() las corre aparte,
+     * scopeadas al tenant nuevo, después de que este path corra vía el job automático
+     * MigrateDatabase (evento TenantCreated).
      */
     'migration_parameters' => [
         '--force' => true, // This needs to be true to run migrations in production.
-        '--path' => [database_path('migrations/tenant')],
+        '--path' => [database_path('migrations/tenant/core')],
         '--realpath' => true,
     ],
 

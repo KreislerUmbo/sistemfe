@@ -12,6 +12,9 @@ use Stancl\Tenancy\Database\Models\Tenant as BaseTenant;
  * @property string $razon_social
  * @property string $status           'activo' | 'archivado' — columna real (ver getCustomColumns()).
  * @property \Illuminate\Support\Carbon|null $fecha_archivado  Columna real.
+ * @property string $giro             'retail' | 'agencia_viajes' | futuros verticales — columna real (ver getCustomColumns()).
+ * @property string $tipo             'real' | 'demo' — columna real.
+ * @property string $sunat_modo       'pruebas' | 'produccion' — columna real.
  */
 class Tenant extends BaseTenant implements TenantWithDatabase
 {
@@ -37,13 +40,15 @@ class Tenant extends BaseTenant implements TenantWithDatabase
     /**
      * VirtualColumn (HasDataColumn) por default solo trata 'id' como columna real —
      * cualquier otro atributo asignado se enviaría al JSON 'data' en vez de quedar en
-     * la columna real de Postgres. status/fecha_archivado SÍ son columnas reales
-     * (migración add_status_to_tenants_table) porque se necesitan queryables/indexables
-     * para los jobs de §11.3/§11.4 (recorrer tenants activos) — a diferencia de
-     * ruc/razon_social, que son solo un vínculo liviano sin necesidad de índice.
+     * la columna real de Postgres. status/fecha_archivado/giro/tipo/sunat_modo SÍ son
+     * columnas reales (migraciones add_status_to_tenants_table /
+     * add_giro_tipo_sunat_modo_to_tenants_table) porque se necesitan queryables —
+     * `giro` en particular decide qué migraciones de vertical corre
+     * TenantProvisioningService::provision() — a diferencia de ruc/razon_social, que
+     * son solo un vínculo liviano sin necesidad de índice.
      */
     public static function getCustomColumns(): array
     {
-        return array_merge(parent::getCustomColumns(), ['status', 'fecha_archivado']);
+        return array_merge(parent::getCustomColumns(), ['status', 'fecha_archivado', 'giro', 'tipo', 'sunat_modo']);
     }
 }
