@@ -60,3 +60,17 @@ deben perderse. No es un plan de módulo — para eso está `docs/planning/`.
   después de que la tabla exista en el tenant. Hasta entonces, un
   proveedor nuevo no tiene ningún tipo habilitado por defecto — hay que
   cargar `proveedor_tipos_config` a mano por tenant.
+- **`TenantProvisioningService::eliminarSiVacio()` no conoce las tablas
+  del vertical agencia_viajes** (`proveedores`, `destinos_atractivos`,
+  `destino_servicio`, `servicios`, `guias`, `proveedor_tipos_config`,
+  `configuracion_agencia`) — solo chequea Company/SunatConfig/Client/
+  Product/Sale (código de antes de que este vertical existiera). Un
+  tenant `agencia_viajes` con proveedores/destinos reales cargados pero
+  sin Company/cliente/producto/venta todavía se sigue considerando
+  "vacío" y se puede borrar de verdad desde el botón "Eliminar" del
+  panel superadmin — pérdida de datos real, no solo cosmética. Detectado
+  al usar el método para limpiar un tenant de prueba en esta sesión (ahí
+  es el comportamiento correcto — es lo que hace justamente inseguro el
+  caso real). Pendiente: agregar esos conteos a la condición de
+  `eliminarSiVacio()` cuando se retome el panel superadmin o alguna
+  sesión de agencia_viajes toque este método.
