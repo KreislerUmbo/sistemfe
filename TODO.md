@@ -33,3 +33,15 @@ deben perderse. No es un plan de módulo — para eso está `docs/planning/`.
   centrales en sesiones futuras, conviene resolver el mecanismo de una
   vez para los 4 (2 viejos + 2 nuevos) en lugar de ir sumando seeders
   sueltos sin dueño.
+
+## Sesión 2 (Catálogos por tenant, sin dependencias) — 27-jul-2026
+
+- **Convención `giro` (snake_case) → carpeta vertical (kebab-case), ya
+  formalizada como regla — ver `plan-modulo-infraestructura-multitenant.md`
+  §1.1.** Anotado acá solo como recordatorio de que existe: cualquier
+  vertical nuevo (Sesión de infraestructura de un rubro futuro) tiene que
+  nombrar su carpeta bajo `tenant/verticals/` siguiendo esa conversión
+  directa (`str_replace('_', '-', $giro)`, la misma que usa
+  `TenantProvisioningService::migrarVertical()`) — si algún giro futuro no
+  convierte 1:1 con esa regla, `migrarVertical()` va a necesitar un mapeo
+  explícito por giro en vez de la conversión automática actual.

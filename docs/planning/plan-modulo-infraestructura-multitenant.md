@@ -36,6 +36,23 @@ Y dejar `tenants:provision` capaz de recibir el `giro` y correr
 `--path=database/migrations/tenant/core` +
 `--path=database/migrations/tenant/verticals/{giro}` en ese orden.
 
+### 1.1 Regla de nombres — `giro` (snake_case) → carpeta (kebab-case)
+
+**Regla formal, no solo convención implícita** (agregada 27-jul-2026 tras
+un bug real, ver sección 7): el valor de `tenants.giro` se escribe siempre
+en snake_case (`agencia_viajes`, `retail`, futuros verticales), pero la
+carpeta correspondiente bajo `database/migrations/tenant/verticals/` se
+escribe siempre en kebab-case (`agencia-viajes`) — mismo criterio que las
+ramas `feature/sesion-N-*`. `TenantProvisioningService::migrarVertical()`
+convierte uno a otro con `str_replace('_', '-', $giro)` antes de construir
+el path; **cualquier vertical nuevo debe seguir esta misma conversión
+directa al nombrar su carpeta** (ej. `giro='veterinaria'` → carpeta
+`veterinaria/`, sin guion que convertir — trivial; un giro compuesto como
+`agencia_viajes` sí depende de la conversión). Si algún día se necesita un
+giro cuyo nombre no convierta 1:1 con esta regla (rarísimo, pero posible),
+`migrarVertical()` tendría que dejar de asumir la conversión automática y
+pasar a un mapeo explícito por giro — no ha hecho falta hasta ahora.
+
 ## 2. Inventario real verificado (23-jul-2026)
 
 **Confirmado por captura directa de ambas carpetas:**
@@ -186,3 +203,4 @@ carpetas de migraciones le corresponden a este giro".
 | 23-jul-2026 | Gap 5.2 resuelto: `giro='retail'` como default en la migración, con comentario explicativo en la columna. Cubre backfill automático de tenants existentes sin `UPDATE` manual aparte. |
 | 23-jul-2026 | Gap 5.3 resuelto: se crea un tenant nuevo y dedicado (ej. `agenciatest`) con `giro=agencia_viajes` desde el inicio, no se reutiliza `sandbox` — decisión explícita del usuario para no mezclar el historial de pruebas de facturación/panel superadmin con las primeras pruebas del vertical nuevo. **Con esto, toda la sección 5 queda cerrada — módulo 0 listo para pasar a ejecución.** |
 | 27-jul-2026 | Corrección de conteo: el "~76" era una estimación; conteo real verificado contra el repo es 67 migraciones en tenant/. No cambia ninguna decisión de este documento, solo el número exacto citado en 3 lugares. |
+| 27-jul-2026 | Bug real encontrado y corregido en Sesión 2 (ejecución, `plan-hoja-de-ruta-ejecucion.md`): `migrarVertical()` construía el path con `$giro` tal cual (snake_case), pero la carpeta real usa kebab-case — quedó oculto en Sesión 0 porque `verticals/agencia-viajes/` estaba vacía (path inexistente y path vacío dan el mismo resultado observable). Corregido con `str_replace('_', '-', $giro)`. Se agrega sección 1.1 formalizando la regla de nombres para que no se repita con el próximo vertical. |
