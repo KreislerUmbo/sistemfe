@@ -60,24 +60,25 @@ deben perderse. No es un plan de módulo — para eso está `docs/planning/`.
   después de que la tabla exista en el tenant. Hasta entonces, un
   proveedor nuevo no tiene ningún tipo habilitado por defecto — hay que
   cargar `proveedor_tipos_config` a mano por tenant.
-- **PRIORIDAD — no dejar languidecer.** `TenantProvisioningService::
-  eliminarSiVacio()` no conoce las tablas del vertical agencia_viajes
-  (`proveedores`, `destinos_atractivos`, `destino_servicio`, `servicios`,
-  `guias`, `proveedor_tipos_config`, `configuracion_agencia`) — solo
-  chequea Company/SunatConfig/Client/Product/Sale (código de antes de
-  que este vertical existiera). Un tenant `agencia_viajes` con
-  proveedores/destinos reales cargados pero sin Company/cliente/
-  producto/venta todavía se sigue considerando "vacío" y se puede borrar
-  de verdad desde el botón "Eliminar" del panel superadmin — riesgo real
-  de pérdida de datos, no cosmético. Detectado al usar el método para
-  limpiar un tenant de prueba en Sesión 3.
-  **Decisión explícita del usuario (27-jul-2026): no diferir "hasta que
-  se retome el panel superadmin" — las 7 tablas del bloque que dispara
-  este hueco ya están todas construidas (Sesiones 2-3), así que conviene
-  resolverlo como su propia mini-sesión corta apenas cierre este bloque,
-  antes de seguir de lleno con Sesión 4 en adelante.** Es un fix chico:
-  agregar los 7 conteos (`Proveedor::count()`, etc.) a la condición de
-  `$tieneDatos` en `eliminarSiVacio()` — mismo patrón que ya usa para
-  Company/Client/Product/Sale. No forma parte del árbol de dependencias
-  de `plan-hoja-de-ruta-ejecucion.md` (no bloquea ninguna sesión
-  numerada), por eso vive acá y no como fila nueva de esa tabla.
+- **✅ RESUELTO 27-jul-2026 (rama `fix/eliminar-si-vacio-agencia-viajes`).**
+  `TenantProvisioningService::eliminarSiVacio()` no conocía las 7 tablas
+  del vertical agencia_viajes (`proveedores`, `destinos_atractivos`,
+  `destino_servicio`, `servicios`, `guias`, `proveedor_tipos_config`,
+  `configuracion_agencia`) — solo chequeaba Company/SunatConfig/Client/
+  Product/Sale, código de antes de que este vertical existiera. Un
+  tenant `agencia_viajes` con proveedores/destinos reales cargados pero
+  sin Company/cliente/producto/venta todavía se seguía considerando
+  "vacío" y se podía borrar de verdad desde el botón "Eliminar" del
+  panel superadmin — riesgo real de pérdida de datos, no cosmético.
+  Corregido agregando `tieneDatosVerticalAgenciaViajes()` (cuenta las 6
+  tablas de catálogo/relación, con un `Schema::hasTable('configuracion_agencia')`
+  como gate único para no romper contra tenants retail que nunca migraron
+  ese set) + `configuracionAgenciaFueEditada()` (la fila default siempre
+  existe — se compara contra los valores exactos de la migración en vez
+  de solo "existe", mismo criterio ya usado para el producto placeholder
+  `ADELANTO-001`). Ver docstring de `eliminarSiVacio()` para el detalle
+  completo. Verificado contra dev real: tenant recién provisionado sigue
+  eliminable, el mismo tenant con datos reales en 3 tablas queda
+  rechazado, editar un solo campo de `configuracion_agencia` sin tocar
+  ninguna otra tabla también rechaza (aislado), y `sandbox` (retail) no
+  lanza ningún error de tabla inexistente.
