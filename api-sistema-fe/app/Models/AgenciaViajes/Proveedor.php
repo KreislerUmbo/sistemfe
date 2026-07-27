@@ -45,4 +45,9 @@ class Proveedor extends Model
         'estado' => 'boolean',
         'margen_default_valor' => 'decimal:2',
     ];
+
+    public function proveedorServicios()
+    {
+        return $this->hasMany(ProveedorServicio::class, 'proveedor_id');
+    }
 }

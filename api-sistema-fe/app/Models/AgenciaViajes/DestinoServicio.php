@@ -27,4 +27,9 @@ class DestinoServicio extends Model
     {
         return $this->belongsTo(Servicio::class, 'servicio_id');
     }
+
+    public function proveedorServicios()
+    {
+        return $this->hasMany(ProveedorServicio::class, 'destino_servicio_id');
+    }
 }
