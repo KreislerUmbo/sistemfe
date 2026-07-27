@@ -13,6 +13,8 @@ use App\Models\User;
 use Database\Seeders\CashConceptSeeder;
 use Database\Seeders\PaymentMethodSeeder;
 use Database\Seeders\PermissionsDemoSeeder;
+use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
 use Spatie\Permission\Models\Role;
 use Stancl\Tenancy\Database\Models\Domain;
@@ -27,7 +29,10 @@ class TenantProvisioningService
     /**
      * $data espera: ruc, razon_social, razon_social_comercial, domain, admin_name,
      * admin_email, admin_password (opcional — si se omite, se genera uno random,
-     * recuperable después con getLastGeneratedPassword()).
+     * recuperable después con getLastGeneratedPassword()), giro/tipo (opcionales — si
+     * se omiten, no se setean explícito y quedan en el default de la migración:
+     * giro=retail, tipo=real. El caller HTTP (TenantAdminController) todavía no los
+     * pasa — cambio 100% aditivo, no le cambia el comportamiento).
      */
     public function provision(array $data): Tenant
     {
@@ -38,6 +43,8 @@ class TenantProvisioningService
         $adminName = $data['admin_name'];
         $adminEmail = $data['admin_email'];
         $adminPassword = $data['admin_password'] ?? null;
+        $giro = $data['giro'] ?? null;
+        $tipo = $data['tipo'] ?? null;
 
         $this->validarDatos($ruc, $domain);
 
@@ -51,21 +58,33 @@ class TenantProvisioningService
         try {
             // Tenant::create() dispara sincrónicamente CreateDatabase + MigrateDatabase
             // (TenancyServiceProvider, shouldBeQueued(false)) — al volver de este create(),
-            // la base física y sus migraciones tenant ya corrieron.
+            // la base física y las migraciones de tenant/core/ ya corrieron (config
+            // tenancy.migration_parameters --path, plan-modulo-infraestructura-multitenant.md
+            // §4). Las de tenant/verticals/{giro}/ corren aparte, ver migrarVertical().
             //
             // 'id' explícito = subdominio, en vez de dejar que UUIDGenerator (config
             // tenancy.id_generator) genere un UUID random: la base física se llama
             // prefix+id+suffix ("tenant" + id), así que un id legible da bases como
             // "tenantumbo" en vez de "tenant48ba1298-...", identificables a simple vista
             // en pgAdmin/psql sin tener que cruzar contra la tabla tenants.
-            $tenant = Tenant::create([
+            $tenantAttributes = [
                 'id' => $domain,
                 'ruc' => $ruc,
                 'razon_social' => $razonSocial,
                 'razon_social_comercial' => $razonSocialComercial,
-            ]);
+            ];
+            if ($giro !== null) {
+                $tenantAttributes['giro'] = $giro;
+            }
+            if ($tipo !== null) {
+                $tenantAttributes['tipo'] = $tipo;
+            }
+
+            $tenant = Tenant::create($tenantAttributes);
 
             $tenant->domains()->create(['domain' => $domain]);
+
+            $this->migrarVertical($tenant, $giro);
 
             $tenant->run(function () use ($adminName, $adminEmail, $adminPassword) {
                 (new PermissionsDemoSeeder())->run();
@@ -99,6 +118,35 @@ class TenantProvisioningService
     public function getLastGeneratedPassword(): ?string
     {
         return $this->lastGeneratedPassword;
+    }
+
+    /**
+     * Corre las migraciones de tenant/verticals/{giro}/ (si existen) SOLO para el
+     * tenant recién creado — plan-modulo-infraestructura-multitenant.md §4. tenant/core/
+     * ya corrió automáticamente vía el evento TenantCreated (config
+     * tenancy.migration_parameters), esto es el segundo paso, condicional. No-op si
+     * $giro viene null (caller HTTP que todavía no lo pasa) o si la carpeta del giro
+     * no existe/está vacía (ej. agencia-viajes hoy, solo tiene un .gitkeep) — 'retail'
+     * en particular nunca tiene carpeta propia, todo su contenido ya es core/.
+     */
+    private function migrarVertical(Tenant $tenant, ?string $giro): void
+    {
+        if (empty($giro)) {
+            return;
+        }
+
+        $path = database_path("migrations/tenant/verticals/{$giro}");
+
+        if (! File::isDirectory($path) || count(File::glob("{$path}/*.php")) === 0) {
+            return;
+        }
+
+        Artisan::call('tenants:migrate', [
+            '--tenants' => [$tenant->getTenantKey()],
+            '--path' => [$path],
+            '--realpath' => true,
+            '--force' => true,
+        ]);
     }
 
     /**
