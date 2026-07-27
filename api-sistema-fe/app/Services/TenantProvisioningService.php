@@ -126,8 +126,17 @@ class TenantProvisioningService
      * ya corrió automáticamente vía el evento TenantCreated (config
      * tenancy.migration_parameters), esto es el segundo paso, condicional. No-op si
      * $giro viene null (caller HTTP que todavía no lo pasa) o si la carpeta del giro
-     * no existe/está vacía (ej. agencia-viajes hoy, solo tiene un .gitkeep) — 'retail'
-     * en particular nunca tiene carpeta propia, todo su contenido ya es core/.
+     * no existe/está vacía — 'retail' en particular nunca tiene carpeta propia, todo
+     * su contenido ya es core/.
+     *
+     * str_replace: los valores de `giro` son snake_case (agencia_viajes, ver
+     * migración add_giro_tipo_sunat_modo_to_tenants_table), pero las carpetas de
+     * verticals/ son kebab-case (agencia-viajes, mismo criterio que las ramas
+     * feature/sesion-N-*) — sin este mapeo, el path construido nunca existe y esto
+     * queda como no-op silencioso para CUALQUIER giro con carpeta real. Bug real
+     * encontrado en Sesión 2 (quedó oculto en Sesión 0 porque la carpeta estaba
+     * vacía — un path que no existe y un path vacío producen el mismo resultado
+     * observable: cero migraciones corridas).
      */
     private function migrarVertical(Tenant $tenant, ?string $giro): void
     {
@@ -135,7 +144,8 @@ class TenantProvisioningService
             return;
         }
 
-        $path = database_path("migrations/tenant/verticals/{$giro}");
+        $carpeta = str_replace('_', '-', $giro);
+        $path = database_path("migrations/tenant/verticals/{$carpeta}");
 
         if (! File::isDirectory($path) || count(File::glob("{$path}/*.php")) === 0) {
             return;
