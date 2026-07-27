@@ -95,6 +95,12 @@ class ProvisionTenant extends Command
 
         $generatedPassword = $service->getLastGeneratedPassword();
 
+        // fresh(): sunat_modo nunca se setea explícito en provision() (queda al default
+        // de la migración), así que el objeto en memoria no lo trae hasta releerlo de la
+        // base — sin esto, la tabla de abajo muestra sunat_modo en blanco aunque la
+        // columna real en Postgres ya quedó en 'pruebas'.
+        $tenant = $tenant->fresh();
+
         $this->info('Tenant provisionado correctamente.');
         $this->table(['Campo', 'Valor'], [
             ['tenant_id', $tenant->id],
