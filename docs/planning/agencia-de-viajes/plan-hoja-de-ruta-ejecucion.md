@@ -33,7 +33,7 @@
 | # | Sesión | Qué construir | Documento de referencia (sección exacta) | Estado |
 |---|---|---|---|---|
 | 0 | Infraestructura core/verticals | Separación `database/migrations/core/` vs `verticals/agencia-viajes/`, campo `giro` en `tenants`, `tenants:provision` | `arquitectura-multitenant-backend.md`, `plan-modulo-infraestructura-multitenant.md` | [x] 27-jul-2026 — `4cd3944` |
-| 1 | Catálogos centrales | `proveedor_tipos`, `temporadas` (ambos con columna `giro`) | `plan-modulo-proveedores.md` §2.6 | [ ] |
+| 1 | Catálogos centrales | `proveedor_tipos`, `temporadas` (ambos con columna `giro`) | `plan-modulo-proveedores.md` §2.6 | [x] 27-jul-2026 — `7279ec8` |
 | 2 | Catálogos por tenant, sin dependencias | `destinos_atractivos` (árbol 3 niveles), `servicios`, `configuracion_agencia`, `guias` | `plan-modulo-tours-catalogo.md` completo (es corto) | [ ] |
 | 3 | Puente destino↔servicio + proveedores | `destino_servicio`, `proveedores`, `proveedor_tipos_config` | `plan-modulo-tours-catalogo.md` §4, `plan-modulo-proveedores.md` §2.6 | [ ] |
 | 4 | Proveedor × destino | `proveedor_servicios` | `plan-modulo-proveedores.md` §2.6 | [ ] |
@@ -74,3 +74,4 @@ esta tabla:
 |---|---|
 | 25-jul-2026 | Primera versión: 11 sesiones desglosadas del árbol de dependencias de `plan-modulo-maestros-iniciales.md`, con checklist de avance y convención de commits. |
 | 27-jul-2026 | Sesión 0 cerrada y verificada end-to-end contra dev real (commit final `4cd3944`, rama `feature/sesion-0-infraestructura` mergeada a `main`): 67 migraciones movidas a `tenant/core/`, carpeta `tenant/verticals/agencia-viajes/` creada, `giro`/`tipo`/`sunat_modo` agregados a `tenants` (central), `tenants:provision` actualizado. Ver `TODO.md` (raíz del repo) para 2 pendientes menores anotados durante la verificación. |
+| 27-jul-2026 | Sesión 1 cerrada y verificada contra dev real (commit final `7279ec8`, rama `feature/sesion-1-catalogos-centrales` mergeada a `main`): catálogos centrales `proveedor_tipos`/`temporadas` (`plan-modulo-proveedores.md` §2.6), namespace nuevo `App\Models\AgenciaViajes`, seeders standalone con datos de ejemplo (`giro=agencia_viajes`). Ver `TODO.md` para el pendiente de automatizar cuándo/cómo corren estos seeders centrales. |

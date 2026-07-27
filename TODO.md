@@ -19,3 +19,17 @@ deben perderse. No es un plan de módulo — para eso está `docs/planning/`.
   Cuando se construya el wizard del panel superadmin, `TenantAdminController`
   va a necesitar empezar a pasarlos explícitos (mismo whitelist que ya
   valida `tenants:provision`: `retail`/`agencia_viajes` y `real`/`demo`).
+
+## Sesión 1 (Catálogos centrales) — 27-jul-2026
+
+- **Seeders de catálogos centrales sin mecanismo de disparo automatizado.**
+  `ProveedorTipoSeeder`/`TemporadaSeeder` (nuevos, Sesión 1) quedan
+  standalone — mismo problema ya documentado en `CLAUDE.md` para
+  `TaxConfigSeeder`/`DetractionCodeSeeder`: corren a mano una sola vez
+  contra `db_tenant_central`, no por tenant, y no hay ningún comando ni
+  paso de `tenants:provision` que los dispare. No bloquea nada hoy (ya
+  corridos en dev), pero no está cubierto por ninguna de las 11 sesiones
+  de `plan-hoja-de-ruta-ejecucion.md` — si se agregan más catálogos
+  centrales en sesiones futuras, conviene resolver el mecanismo de una
+  vez para los 4 (2 viejos + 2 nuevos) en lugar de ir sumando seeders
+  sueltos sin dueño.
