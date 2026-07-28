@@ -350,6 +350,14 @@ class TenantProvisioningService
      *   tenant al migrar), este seeder es standalone y NO corre en tenants:provision, así
      *   que cualquier fila acá (incluida la carga inicial) implica que alguien la corrió
      *   a mano después de provisionar — configuración real, no un default automático.
+     * - sale_detail_items (Sesión 9b) no necesita chequeo propio: reserva_item_id es NOT
+     *   NULL, misma cadena que reserva (arriba) → Client::count() > 0 — alcanza sin
+     *   importar sale_detail_id (que además apunta a `sale_details`, tabla CORE ya fuera
+     *   del alcance de este método).
+     * - pago_proveedor (Sesión 9b) tampoco necesita chequeo propio, mismo razonamiento
+     *   exacto que cronograma_pago_proveedor (arriba): ambas FK nullable, pero la regla
+     *   "uno de los dos" garantiza un camino real hasta Proveedor (directo o vía
+     *   OpcionMayorista.proveedor_id, NOT NULL). Mismo límite residual aceptado.
      *
      * Debe llamarse DENTRO de $tenant->run() (mismo contrato que el resto de los chequeos
      * de eliminarSiVacio() — usa el connection default resuelto por DatabaseTenancyBootstrapper).
