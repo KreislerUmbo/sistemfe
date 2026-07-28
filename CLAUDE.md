@@ -1156,3 +1156,68 @@ entre bases distintas):
   público), particionado por tenant vía `FilesystemTenancyBootstrapper`. El certificado
   demo central compartido (`certificate-demo.pem`, para tenants en `beta` sin certificado
   propio todavía) sigue con `base_path()` directo a propósito, fuera de este disco.
+
+## Vertical secundario: Agencia de Viajes (`giro=agencia_viajes`, multi-tenant)
+
+Segundo giro de negocio sobre el mismo backend multi-tenant (ver "Migración a
+multi-tenancy" arriba, de la que depende directamente) — apoyado en el core de
+ventas/SUNAT/caja ya existente, sin reimplementar nada fiscal. No toca
+`sv_facturacion`/`umbo`/`sandbox` (retail) salvo el punto puntual de Sesión 9a
+señalado abajo. Documentación propia y completa en
+`docs/planning/agencia-de-viajes/` — `plan-general-vertical-agencia-viajes.md`
+es el índice vivo (fases/módulos/estado), `plan-hoja-de-ruta-ejecucion.md`
+tiene el detalle sesión por sesión con checklist de avance y commits reales;
+este resumen no repite ese detalle.
+
+**Modelo de datos completo (Sesiones 0-10, 27/28-jul-2026, todas mergeadas a
+`main`):** infraestructura de provisioning por `giro` (migraciones separadas
+`tenant/core/` vs. `tenant/verticals/agencia-viajes/`, namespace propio
+`App\Models\AgenciaViajes`); catálogos centrales (`proveedor_tipos`,
+`temporadas`) y por tenant (`destinos_atractivos` en árbol de 3 niveles,
+`servicios`, `guias`+`guia_tarifas`, `configuracion_agencia` singleton);
+proveedores y tarifas (`proveedores`, `proveedor_tarifas` con margen/piso de
+descuento/precio adulto-niño-infante, `proveedor_servicios`,
+`opciones_hotel`/`opciones_hotel_tarifas`); catálogo de tours vendibles
+(`paquetes_plantilla`, `tour_itinerario_items`); motor de cotización completo
+(`cotizaciones` con correlativo por prefijo, `cotizacion_pasajeros`,
+`alternativas` con hasta 5 combos por cotización, `alternativa_items`,
+`opcion_mayorista`/`salidas_mayorista` para paquetes internacionales,
+`tipo_cambio_agencia`); reserva y todo lo que dispara (`reserva`,
+`reserva_ventas` como tabla puente hacia `Sale` — soporta múltiples ventas por
+reserva, ej. una por familia —, `reserva_pasajeros`, `reserva_items`,
+`reserva_item_pasajero` con check-in, `reserva_anticipos`,
+`cronograma_pago_proveedor`, `reglas_cancelacion`); integración parcial con el
+core de ventas (`sale_detail_items`, `pago_proveedor`, `pasajeros_catalogo`/
+`pasajero_documentos` con almacenamiento privado, `products.controla_stock`);
+y reporte operativo + recordatorios (`tipos_recordatorio`/`recordatorios`/
+`recordatorio_snooze_config`, este último con `entidad_id` deliberadamente
+polimórfico sin FK real).
+
+**Patrón de verificación repetido en cada sesión:** cada cierre traza la
+cadena de FK contra `TenantProvisioningService::tieneDatosVerticalAgenciaViajes()`
+(usado por `eliminarSiVacio()`, botón "Eliminar" del panel superadmin) para
+que ninguna tabla nueva del vertical quede sin chequear — 3 recurrencias
+reales del mismo gap encontradas y corregidas en el camino (Sesiones 3, 5,
+7b), documentadas en `TODO.md` (raíz del repo). Todas las Sesiones 0-10
+verificadas contra tenants `agencia_viajes` descartables (provisionados y
+destruidos en la misma sesión), nunca contra `umbo`/`sandbox` — excepto
+Sesión 9a, que sí tocó `sandbox` (retail) a propósito por ser la única parte
+del vertical que modifica tablas CORE compartidas (`products.controla_stock`).
+
+**Sin API REST ni frontend todavía — solo backend/modelo de datos.** La
+Sesión 11 original ("Frontend") se dividió en **11a** (API REST + CRUD de
+maestros: proveedores, destinos, temporadas, guías, configuración), **11b**
+(cotizador — layout de 3 columnas biblioteca/lienzo día-por-día/precio en
+vivo, descartando el wizard de tarjetas de `sale/register.vue` por ser
+cotizar un proceso exploratorio, no lineal; `PriceEngineService` como motor
+de precios único; `cotizacion_pasaje_aereo` para pasajes aéreos sueltos con
+desglose de cargos validado contra normativa MTC 2026), **11c**
+(reserva/pasajeros) y **11d** (reporte operativo + recordatorios, pantallas)
+— ninguna construida todavía. El diseño UX de 11b ya se validó con un
+prototipo HTML clickeable (fuera del repo), contrastado contra Travefy/Ezus/
+Tourwriter. 3 retrofits sobre tablas ya mergeadas quedaron confirmados antes
+de picar código (van dentro de las migraciones de 11a-11c, no sueltos):
+`proveedor_tarifas.tipo_habitacion` (Sesión 5), `alternativa_items.origen_tipo`/
+`cantidad`/`descripcion_manual` (Sesión 7), y `reserva_items.proveedor_tarifa_id`
+reasignable (Sesión 8, mismo patrón que `guia_id`) — detalle completo de cada
+decisión en el historial de `plan-modulo-cotizaciones-reservas.md`.

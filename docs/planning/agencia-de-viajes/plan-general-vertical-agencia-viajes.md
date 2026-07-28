@@ -1,7 +1,9 @@
 # Plan General — Vertical "Agencia de Viajes" sobre backend multi-tenant
 
 > Documento vivo. Se actualiza a medida que avanzamos en cada fase.
-> Última actualización: 22-jul-2026 — v0.2 (módulo cotizaciones/reservas en desarrollo activo)
+> Última actualización: 28-jul-2026 — v0.3 (modelo de datos completo,
+> Sesiones 0-10 de `plan-hoja-de-ruta-ejecucion.md` construidas y mergeadas;
+> falta API REST + frontend, Sesiones 11a-11d)
 >
 > Referencia de arquitectura base: `arquitectura-multitenant-backend.md`
 
@@ -41,10 +43,10 @@ armado de tour, pasajeros, reserva.
 
 | Fase | Nombre | Estado | Depende de |
 |---|---|---|---|
-| 0 | Infraestructura core/verticals | 🔜 Por iniciar | — |
-| 1 | Modelado de dominio agencia de viajes | 🟡 En desarrollo activo — módulo cotizaciones/reservas avanzado, ver sub-plan | Fase 0 |
-| 2 | Integración vertical → core (ventas/facturación/caja) | ⏳ Pendiente | Fase 1 |
-| 3 | Frontend (plantilla Rizz) para agencia de viajes | ⏳ Pendiente, puede solaparse parcialmente con Fase 1 avanzada | Fase 1 (modelo estable) |
+| 0 | Infraestructura core/verticals | ✅ Completa — 27-jul-2026, `4cd3944` (Sesión 0 de la hoja de ruta) | — |
+| 1 | Modelado de dominio agencia de viajes | ✅ Modelo de datos completo — Sesiones 0-10 de `plan-hoja-de-ruta-ejecucion.md`, 27/28-jul-2026 (ver sección 5). Falta la capa de API REST/CRUD (Sesión 11a) | Fase 0 |
+| 2 | Integración vertical → core (ventas/facturación/caja) | 🟡 Iniciada — Sesión 9 conectó `sale_detail_items`/`pago_proveedor`/`products.controla_stock` al core; falta el flujo real reserva→`Sale`→SUNAT→caja de punta a punta vía API (Sesiones 11a-11c) | Fase 1 |
+| 3 | Frontend (plantilla Rizz) para agencia de viajes | 🟡 Diseño UX del cotizador validado con prototipo HTML (28-jul-2026, ver `plan-modulo-cotizaciones-reservas.md` §7.1) — construcción real sin empezar (Sesiones 11a-11d) | Fase 1 (modelo estable) |
 | 4 | Provisioning end-to-end + primer tenant piloto | ⏳ Pendiente | Fases 0-3 |
 
 La numeración es de orden lógico, no estrictamente secuencial: la Fase 3
@@ -63,16 +65,16 @@ detalle vive en el sub-plan de cada uno, no acá.
 
 | # | Módulo | Qué cubre (resumen) | Estado | Sub-plan |
 |---|---|---|---|---|
-| 0 | Infraestructura multi-tenant | Separación `core/` vs `verticals/`, campo `giro` en `tenants`, `tenants:provision` | 🔜 Por iniciar | Sección 4 de este doc |
-| 1 | Proveedores | Catálogo por tipo (hotel/transporte/restaurante/otros), tarifas (corporativa/grupal/pública), márgenes, precio adulto/niño | ⏳ Sin iniciar como módulo propio (algunos campos ya salieron en el hilo de cotizaciones) | `plan-modulo-proveedores.md` (pendiente de crear) |
-| 2 | Catálogo de tours/paquetes | Plantillas de tour, itinerario por día relativo, destinos/atractivos con fotos | 🟡 Parcialmente definido dentro del módulo de cotizaciones | Se separará a `plan-modulo-tours-catalogo.md` cuando corresponda |
-| 3 | Cotizaciones y alternativas | Armado de cotización, hasta 5 alternativas por combinación completa, cálculo de precio, PDF comercial | 🟡 En maduración — **sesión aparte** | `plan-modulo-cotizaciones-reservas.md` |
-| 4 | Reservas y pasajeros | Datos completos de pasajero, asignación pasajero↔servicio, control operativo | 🟡 En maduración — **sesión aparte**, mismo documento que el módulo 3 | `plan-modulo-cotizaciones-reservas.md` |
-| 5 | Itinerarios | Día relativo en plantilla, resuelto a fecha real en reserva, PDF con fotos | 🟡 Definido a nivel de diseño dentro del módulo 3/4 | Mismo doc que 3/4 por ahora |
-| 6 | Reportes operativos | Vista por fecha: pasajero, destino, hotel, guía, datos relevantes, vuelos | ⏳ Sin iniciar | `plan-modulo-reportes-operativos.md` (pendiente de crear) |
-| 7 | Guías turísticos | Asignación y disponibilidad (normalmente se asigna un día antes) | ⏳ Sin iniciar, ni siquiera se definió si es tabla propia o campo simple | Pendiente decidir si va en módulo propio o dentro de Proveedores |
-| 8 | Integración con el core | Reserva → venta → comprobante SUNAT → caja; pagos/anticipos | ⏳ Sin iniciar | Corresponde a Fase 2 (sección 6) |
-| 9 | Frontend (plantilla Rizz) | Cotizador, calendario de disponibilidad, gestión de pasajeros | ⏳ Sin iniciar | Corresponde a Fase 3 (sección 7) |
+| 0 | Infraestructura multi-tenant | Separación `core/` vs `verticals/`, campo `giro` en `tenants`, `tenants:provision` | ✅ Completo — Sesión 0 | Sección 4 de este doc |
+| 1 | Proveedores | Catálogo por tipo (hotel/transporte/restaurante/otros), tarifas (corporativa/grupal/pública/privada), márgenes + piso de descuento, precio adulto/niño/infante, versionado por temporada | ✅ Modelo de datos completo — Sesiones 1, 3, 4, 5 (`proveedor_tipos`, `proveedores`, `proveedor_servicios`, `proveedor_tarifas`, `temporadas`); retrofit `tipo_habitacion` confirmado para Sesión 11a | `plan-modulo-proveedores.md` |
+| 2 | Catálogo de tours/paquetes | Plantillas de tour (`paquetes_plantilla`), itinerario por día relativo, destinos/atractivos (árbol 3 niveles) con fotos, matriz de precio por hotel×habitación | ✅ Modelo de datos completo — Sesión 6 (+ `opciones_hotel`/`opciones_hotel_tarifas` de Sesión 5) | `plan-modulo-tours-catalogo.md` |
+| 3 | Cotizaciones y alternativas | Armado de cotización, hasta 5 alternativas por combinación completa, cálculo de precio, PDF comercial, paquetes internacionales vía mayorista | ✅ Modelo de datos completo — Sesión 7 (`cotizaciones`, `alternativas`, `alternativa_items`, `opcion_mayorista`, `salidas_mayorista`, `tipo_cambio_agencia`). Diseño UX del cotizador (Sesión 11b) validado con prototipo, sin construir | `plan-modulo-cotizaciones-reservas.md` |
+| 4 | Reservas y pasajeros | Datos completos de pasajero, asignación pasajero↔servicio, control operativo, cancelación/reembolso, anticipos | ✅ Modelo de datos completo — Sesión 8 (`reserva`, `reserva_pasajeros`, `reserva_items`, `reserva_item_pasajero`, `reserva_ventas`, `reserva_anticipos`, `reglas_cancelacion`) + Sesión 9c (`pasajeros_catalogo`/`pasajero_documentos`) | `plan-modulo-cotizaciones-reservas.md` |
+| 5 | Itinerarios | Día relativo en plantilla, resuelto a fecha real en reserva, PDF con fotos | ✅ Modelo de datos completo — Sesiones 6 (plantilla) y 8 (resolución a fecha real) | Mismo doc que 3/4 |
+| 6 | Reportes operativos | Vista por fecha: pasajero, destino, hotel, guía, datos relevantes, vuelos, check-in | ✅ Modelo de datos completo — Sesión 10 (`reserva_item_pasajero.checkin_realizado`/`checkin_hora`; el reporte en sí es una consulta, no tabla nueva). Pantalla pendiente (Sesión 11d) | `plan-modulo-cotizaciones-reservas.md` §8 (nunca se separó a un doc propio) |
+| 7 | Guías turísticos | Asignación (normalmente un día antes, sin control de choques de horario — son freelance) y tarifas por destino/modalidad | ✅ Resuelto — tabla propia `guias` (Sesión 2) + `guia_tarifas` (Sesión 5), no se migró a un tipo más de Proveedores (decisión confirmada 24-jul-2026) | `plan-modulo-cotizaciones-reservas.md` §5.3 |
+| 8 | Integración con el core | Reserva → venta → comprobante SUNAT → caja; pagos/anticipos; recordatorios (§8bis) | 🟡 Iniciada — Sesión 9 (`sale_detail_items`, `pago_proveedor`, `products.controla_stock`) + Sesión 10 (`tipos_recordatorio`/`recordatorios`/`recordatorio_snooze_config`). Falta el flujo real reserva→`Sale` de punta a punta vía API (Sesiones 11a-11c) | Corresponde a Fase 2 (sección 6) |
+| 9 | Frontend (plantilla Rizz) | Cotizador, calendario de disponibilidad, gestión de pasajeros | 🟡 Diseño UX del cotizador validado con prototipo HTML (28-jul-2026) — construcción sin empezar, dividida en Sesiones 11a-11d | Corresponde a Fase 3 (sección 7) |
 | 10 | Portal web público (ventas) | Vitrina de tours/paquetes por destino/categoría, admin de contenido publicado, cotizador online de autoservicio (fase 1: leads con seguimiento por llamada/correo; fase 2 en ~1 año: pasarela de pago) | ⏳ Sin iniciar — explícitamente para el final del proyecto, pero el modelo de datos ya se preparó para no duplicar | `plan-modulo-portal-web.md` (pendiente de crear) |
 | 11 | Planes y control de acceso por módulo | Habilitar/deshabilitar funcionalidad según plan contratado (económico/estándar/pro) + add-ons sueltos con costo adicional (ej. facturador +S/20) | 🟡 Sub-plan creado, con gaps identificados (ver documento) — pendiente de alimentar en otra sesión | `plan-modulo-planes-acceso.md` |
 
@@ -125,121 +127,187 @@ adelante porque tiene bastante peso propio).
 
 ---
 
-## 4. Fase 0 — Infraestructura core/verticals (EN CURSO)
+## 4. Fase 0 — Infraestructura core/verticals (✅ COMPLETA — 27-jul-2026)
 
 Objetivo: que el sistema soporte múltiples giros de negocio a nivel de
 provisioning, sin tocar aún lógica de negocio de viajes.
 
 Checklist:
-- [ ] Mover las ~76 migraciones actuales de facturación a
-      `database/migrations/core/` (refactor mecánico, sin tocar contenido)
-- [ ] Verificar en staging que el orden de dependencias entre migraciones
+- [x] Mover las ~67 migraciones actuales de facturación a
+      `database/migrations/tenant/core/` (refactor mecánico, sin tocar contenido)
+- [x] Verificar en staging que el orden de dependencias entre migraciones
       no se rompe al moverlas de carpeta
-- [ ] Agregar campo `giro` (o `vertical`) a la tabla `tenants` (central)
-- [ ] Crear carpeta vacía `database/migrations/verticals/agencia-viajes/`
-- [ ] Actualizar `tenants:provision` para que reciba el `giro` y corra
-      `--path=database/migrations/core` + `--path=.../verticals/{giro}`
-      según corresponda
-- [ ] Probar provisioning de un tenant de prueba con giro `agencia_viajes`
-      (aunque la carpeta del vertical esté vacía todavía) para validar que
-      el mecanismo funciona de punta a punta
+- [x] Agregar campo `giro` (`retail`/`agencia_viajes`) + `tipo` + `sunat_modo`
+      a la tabla `tenants` (central)
+- [x] Crear carpeta `database/migrations/tenant/verticals/agencia-viajes/`
+      (vacía en esta fase, con contenido real desde Sesión 2)
+- [x] Actualizar `tenants:provision` para que reciba el `giro` y corra
+      las migraciones de `core/` + `verticals/{giro}` según corresponda
+- [x] Probar provisioning de un tenant de prueba con giro `agencia_viajes`
+      de punta a punta
 
-Sub-plan detallado: se genera cuando arranquemos la ejecución (siguiente
-paso de esta conversación).
+Commit final: `4cd3944`, rama `feature/sesion-0-infraestructura` mergeada a
+`main` (Sesión 0 de `plan-hoja-de-ruta-ejecucion.md`). Detalle completo y
+hallazgos en el historial de ese documento y en `TODO.md` (Sesión 0).
 
 ---
 
-## 5. Fase 1 — Modelado de dominio (agencia de viajes)
+## 5. Fase 1 — Modelado de dominio (agencia de viajes) — ✅ MODELO DE DATOS COMPLETO
 
 Objetivo: convertir el proceso real de la agencia (Excels, forma de
 cotizar, forma de armar tours, manejo de pasajeros) en un modelo de datos.
 
-**Estado real (a partir de conversación directa con el usuario sobre cómo
-opera la agencia — no se llegó a usar Excel, se levantó el proceso
-directamente):**
+**Estado real (28-jul-2026):** las Sesiones 0-10 de
+`plan-hoja-de-ruta-ejecucion.md` están construidas y mergeadas a `main` —
+el modelo de datos completo del vertical (migraciones + modelos Eloquent +
+seeders standalone donde corresponde) queda de pie. Lo que falta no es
+diseño ni schema: es la capa de API REST/CRUD y el frontend (Sesiones
+11a-11d, ver sección 3.1 y `plan-hoja-de-ruta-ejecucion.md`).
 
-Módulo de **Cotizaciones / Alternativas / Reservas / Itinerarios** ya tiene
-modelo de datos consolidado. Ver detalle completo en
-`plan-modulo-cotizaciones-reservas.md`. Resumen de decisiones clave:
+Módulo de **Cotizaciones / Alternativas / Reservas / Itinerarios** — ver
+detalle completo en `plan-modulo-cotizaciones-reservas.md` (documento vivo,
+con historial completo de cada decisión). Resumen de decisiones clave:
 - No se distingue "paquete" de "personalizado" a nivel de datos — todo es
   una lista de servicios atómicos; un paquete es solo una plantilla con
   precio fijado.
 - Proveedores manejan varias tarifas (corporativa/grupal/pública,
-  compartido/privado), con margen % o fijo, y precio adulto/niño donde el
-  corte de edad de "niño" varía por proveedor/servicio.
-- Cotización = header (cliente + pasajeros como conteo) + hasta 5
+  compartido/privado), con margen % o fijo + piso de descuento protegido,
+  precio adulto/niño/infante (corte de edad configurable por proveedor),
+  versionado por temporada (`temporadas`/`temporada_ocurrencias`).
+- Cotización = header (cliente + pasajeros como conteo por edad) + hasta 5
   `alternativas` (combos completos, no mezclables entre sí) + PDF propio
-  por alternativa.
+  por alternativa. Paquetes internacionales vía mayorista
+  (`opcion_mayorista`, matriz de precio por hotel×tipo de habitación,
+  `salidas_mayorista` como catálogo de fechas fijas).
 - Alternativa aceptada → crea `reserva` con pasajeros completos (nombre,
-  documento, alimentación, discapacidad) y asignación pasajero↔servicio.
-- Itinerario en dos niveles: día relativo en la plantilla del tour,
-  resuelto a fecha real en la reserva. Catálogo de destinos/atractivos
-  con fotos, reutilizable entre tours.
+  documento, alimentación, discapacidad, perfil reutilizable vía
+  `pasajeros_catalogo`/`pasajero_documentos`) y asignación
+  pasajero↔servicio (`reserva_item_pasajero`, con check-in desde Sesión 10).
+- Itinerario en dos niveles: día relativo en la plantilla del tour
+  (`tour_itinerario_items`), resuelto a fecha real en la reserva. Catálogo
+  de destinos/atractivos en árbol de 3 niveles (zona/lugar/atractivo), con
+  fotos, reutilizable entre tours.
+- Guías turísticos como tabla propia `guias` + `guia_tarifas` (freelance,
+  sin control de choques de horario).
+- Cancelación/reembolso: `reglas_cancelacion` por franja de días, y
+  liberación de cupo en `salidas_mayorista` al cancelar (esto sí entró en
+  el primer lanzamiento — el resto de la lógica de cancelación es Fase 2
+  del sub-plan, no de este documento).
+- Sistema transversal de recordatorios en-app (§8bis del sub-plan):
+  `tipos_recordatorio`/`recordatorios`/`recordatorio_snooze_config`, con
+  snooze y flag `forzado` por el admin.
 
-**Insumos que siguen pendientes (no bloquean lo ya definido, pero faltan
-para cerrar la fase por completo):**
-- Módulo de proveedores a fondo (altas/bajas, negociación de tarifas)
-- Pagos/anticipos (impacta directamente la Fase 2)
-- Asignación de guías (tabla propia vs. campo simple)
-- Proceso de compra de pasajes/hoteles internacionales con proveedores
-  aliados
-- Excel(s) de cotización actual, si existen, para contrastar contra el
-  modelo ya levantado por conversación
+**Insumos que estaban pendientes en la versión anterior de este documento —
+resueltos:**
+- ~~Pagos/anticipos~~ → resuelto: `reserva_anticipos` (etiqueta un
+  `Advance` del core contra una reserva antes de facturar, Sesión 8b) +
+  `cronograma_pago_proveedor`/`pago_proveedor` para lo que la agencia paga
+  a sus proveedores (Sesiones 8b/9b).
+- ~~Asignación de guías (tabla propia vs. campo simple)~~ → resuelto:
+  tabla propia (ver arriba).
+- ~~Proceso de compra de pasajes/hoteles internacionales~~ → resuelto a
+  nivel de modelo: `opcion_mayorista`/`salidas_mayorista` (Sesión 7b). El
+  motor de precios para pasajes aéreos SUELTOS (`cotizacion_pasaje_aereo`,
+  `PriceEngineService`) quedó diseñado (28-jul-2026) pero no construido —
+  va en Sesión 11b.
+- **Sigue pendiente, no bloquea nada:** módulo de proveedores a fondo
+  (altas/bajas, negociación de tarifas) como flujo operativo — el modelo
+  de datos ya existe, falta la UI de gestión (parte de Sesión 11a).
+  Contrastar contra Excel(s) de cotización reales, si existen — el proceso
+  se levantó por conversación directa y se validó con 3 documentos reales
+  de la agencia (Alto Mayo, Cusco, Panamá), no se descartó por completo.
 
-**Entidades núcleo ya definidas** (detalle completo en el sub-plan):
-`proveedores`, `proveedor_tarifas`, `cotizaciones`, `cotizacion_pasajeros`,
-`alternativas`, `alternativa_items`, `reserva`, `reserva_pasajeros`,
-`reserva_items`, `reserva_item_pasajero`, `tour_itinerario_items`,
-`destinos_atractivos`, `destino_servicio`.
+**Entidades núcleo** (lista larga — detalle completo en cada sub-plan, no
+se repite acá): `proveedores`, `proveedor_tarifas`, `proveedor_servicios`,
+`guias`, `guia_tarifas`, `destinos_atractivos`, `servicios`,
+`destino_servicio`, `paquetes_plantilla`, `tour_itinerario_items`,
+`opciones_hotel`/`opciones_hotel_tarifas`, `cotizaciones`,
+`cotizacion_pasajeros`, `alternativas`, `alternativa_items`,
+`opcion_mayorista`, `opcion_mayorista_opcionales`, `salidas_mayorista`,
+`tipo_cambio_agencia`, `reserva`, `reserva_ventas`, `reserva_pasajeros`,
+`reserva_items`, `reserva_item_pasajero`, `reserva_anticipos`,
+`cronograma_pago_proveedor`, `reglas_cancelacion`, `pago_proveedor`,
+`sale_detail_items`, `pasajeros_catalogo`, `pasajero_documentos`,
+`tipos_recordatorio`, `recordatorios`, `recordatorio_snooze_config`.
 
-Pendiente de definir: la tabla puente exacta hacia el core
-(`ventas.origen_type`/`origen_id` sigue como hipótesis, se confirma en
-Fase 2).
+Puente hacia el core: resuelto como `reserva_ventas` (tabla puente real con
+`sale_id`, no la hipótesis `origen_type`/`origen_id` que este documento
+mencionaba antes) — ver sección 6.
 
-Sub-planes de esta fase:
-- `plan-modulo-cotizaciones-reservas.md` ← **en desarrollo activo, ya
-  consolidado con lo definido hasta ahora**
-- `plan-modulo-proveedores.md` (pendiente de crear)
-- `plan-modulo-tours-salidas.md` (pendiente de crear)
+Sub-planes de esta fase (los 3 ya existen, ninguno queda "pendiente de
+crear"):
+- `plan-modulo-cotizaciones-reservas.md` — el más grande, cubre
+  cotizaciones/alternativas/reservas/itinerarios/reportes/recordatorios
+- `plan-modulo-proveedores.md`
+- `plan-modulo-tours-catalogo.md`
 
 ---
 
-## 6. Fase 2 — Integración con el core
+## 6. Fase 2 — Integración con el core (🟡 iniciada en Sesión 9)
 
 Objetivo: que una reserva confirmada genere una venta real, con su
 comprobante SUNAT y su registro de caja, usando el core existente sin
 duplicar lógica fiscal.
 
-Puntos a definir aquí (todavía abiertos):
-- ¿Una reserva genera una sola venta, o puede facturarse en partes (ej.
-  anticipo + saldo)?
-- Cómo se refleja un pasajero individual dentro de un comprobante que
-  factura a un titular/cliente.
-- Reutilización de `cajas`/cobros existentes sin cambios, o necesitan
-  algún campo adicional para distinguir cobros de viajes (ej. moneda
-  extranjera, anticipos).
+Puntos que este documento dejaba abiertos — respondidos en
+`plan-modulo-cotizaciones-reservas.md` §6 (Sesión 9) y §4.3/§4.4:
+- **¿Una reserva genera una sola venta, o puede facturarse en partes?**
+  Puede ser N — `reserva_ventas` es una tabla puente (no un `sale_id`
+  simple) que soporta tanto un solo responsable pagando todo, como cada
+  familia/pasajero con su propia venta y su propio cronograma de crédito
+  (caso colegios). También soporta "documento adicional" vs. "todo en un
+  solo documento" (NC + reemplazo) cuando se agrega un servicio después de
+  facturar.
+- **Pasajero individual dentro de un comprobante:** se resuelve por
+  `sale_detail_items` (tabla puente entre `sale_details` y
+  `reserva_items`) + `sale_details.descripcion_detalle` (texto concatenado
+  de qué incluye la línea) — no se crea una línea de factura por
+  pasajero, se agrupa por tipo de servicio con restricción de no mezclar
+  tratamientos tributarios distintos en una misma línea.
+- **Reutilización de cajas/cobros:** productos genéricos por tipo de
+  servicio (`products.controla_stock=false`) para no tocar `SaleDetail`
+  (que exige `product_id` con stock/ISC/categoría). El módulo de Caja (ver
+  "Estado actual del proyecto" en `CLAUDE.md` raíz) es genérico, no
+  vertical-específico — no necesitó cambios propios para viajes.
 
-Se detalla cuando cerremos Fase 1.
+**Lo que SÍ sigue sin resolver (bloquea Sesiones 11a-11c, no bloquea nada
+de lo ya construido):** no existe todavía ningún controller/endpoint que
+efectivamente tome una `alternativa` aceptada y dispare la creación real de
+`reserva` + `Sale` + envío a SUNAT — todo lo de arriba es modelo de datos y
+diseño, verificado con datos reales en tenants descartables, pero nunca
+ejecutado a través de una API real. Esa es la Sesión 11a/11c.
 
 ---
 
-## 7. Fase 3 — Frontend (plantilla Rizz)
+## 7. Fase 3 — Frontend (plantilla Rizz) — 🟡 diseño UX validado, sin construir
 
 Objetivo: extender la plantilla Rizz (ya usada para facturación) con las
 pantallas propias del vertical: cotizador, calendario de salidas, gestión
 de pasajeros.
 
-Ideas a explorar (de patrones comunes en sistemas de agencias, para
-validar cuáles aplican a este negocio en particular):
-- Cotizador tipo "carrito" donde se arma la cotización agregando
-  pasajeros/servicios antes de calcular el total
-- Vista de calendario/disponibilidad por salida (cupos ocupados vs
-  disponibles)
-- Checklist de documentación por pasajero (¿DNI/pasaporte completo?
-  ¿seguro contratado?) como parte del flujo de reserva, no como
-  formulario aparte
+**Modelo de datos de Fase 1 ya estable (Sesiones 0-10) — el diseño de esta
+fase arrancó el 28-jul-2026**, resuelto en `plan-modulo-cotizaciones-reservas.md`
+§7/§7.1, no acá (este documento no repite el detalle de layout):
+- **Descartado** el wizard de tarjetas numeradas de `sale/register.vue`
+  (Ventas) — cotizar es exploratorio (probar combinaciones, comparar
+  precio), no una transacción lineal. Se investigó software real del
+  rubro (Travefy, Ezus, Tourwriter) antes de diseñar.
+- **Layout elegido:** 3 columnas — biblioteca de tarifas (filtrada por
+  destino) / lienzo día-por-día con pestañas de alternativas / precio en
+  vivo editable. Toggle Local-Nacional (biblioteca) vs. Internacional
+  (comparador de cotizaciones de mayorista). Validado con un prototipo
+  HTML clickeable (fuera del repo, en la conversación de diseño) antes de
+  programar componentes Vue reales.
+- El "cotizador tipo carrito" y el "checklist de documentación por
+  pasajero" de la versión anterior de este documento **sí se confirmaron**
+  como parte del diseño (ver detalle en el sub-plan); la "vista de
+  calendario/disponibilidad por salida" quedó fuera — el negocio no pidió
+  control de cupo salvo el contador informativo de `salidas_mayorista`
+  (sección 3.6 del sub-plan, no bloqueante).
 
-Se detalla cuando el modelo de datos de Fase 1 esté estable.
+**Construcción real:** dividida en Sesiones 11a (API REST + maestros),
+11b (cotizador), 11c (reserva/pasajeros), 11d (reporte + recordatorios) —
+ver `plan-hoja-de-ruta-ejecucion.md`. Ninguna empezada todavía.
 
 ---
 
@@ -273,3 +341,6 @@ en el wizard del panel superadmin.
 | 22-jul-2026 | Agregado módulo 10 (Portal web) al mapa, con decisiones de arquitectura para evitar duplicar itinerarios y reutilizar el motor de cotizaciones/alternativas ya definido |
 | 22-jul-2026 | Agregado módulo 11 (Planes y control de acceso por módulo): planes base + add-ons, separado del campo giro/vertical |
 | 22-jul-2026 | Creado sub-plan `plan-modulo-planes-acceso.md` con evaluación de gaps (ciclo de vida de suscripción, límites de uso, dependencias entre módulos) |
+| 25-jul-2026 | Creado `plan-hoja-de-ruta-ejecucion.md` — traduce el árbol de dependencias del modelo de datos a 11 sesiones concretas de ejecución (luego 15, ver 28-jul-2026), con checklist de avance. A partir de acá el detalle sesión-por-sesión vive en ese documento, no en este — este documento pasa a ser el índice/resumen de alto nivel. |
+| 27/28-jul-2026 | **Fase 0 cerrada** (Sesión 0, commit `4cd3944`) y **Fase 1 — modelo de datos completo** (Sesiones 1-10, hasta `28c76f7`): las 10 primeras sesiones de la hoja de ruta construidas y mergeadas a `main` — catálogos centrales/tenant, proveedores y tarifas, catálogo de tours, motor de cotización completo, reserva y todo lo que dispara, integración parcial con el core de ventas (Sesión 9), y reporte operativo + recordatorios (Sesión 10). Los 3 sub-planes de Fase 1 (`plan-modulo-proveedores.md`, `plan-modulo-tours-catalogo.md`, `plan-modulo-cotizaciones-reservas.md`) ya existen — ninguno queda "pendiente de crear". Detalle sesión por sesión, con hallazgos y bugs reales corregidos en el camino, en el historial de `plan-hoja-de-ruta-ejecucion.md` y en `TODO.md` (raíz del repo). Secciones 3, 3.1, 4, 5, 6 y 7 de este documento actualizadas para reflejar el estado real (antes decían "por iniciar"/"pendiente" pese a estar avanzado). |
+| 28-jul-2026 | Diseño (sin construir) de la Sesión 11 original ("Frontend"), dividida en **11a/11b/11c/11d** por alcance real mayor al esperado — ver sección 7. Motor de precios único (`PriceEngineService`) y tabla `cotizacion_pasaje_aereo` para pasajes aéreos sueltos diseñados y validados contra normativa MTC 2026. 2 retrofits confirmados sobre tablas ya mergeadas (`proveedor_tarifas.tipo_habitacion`; `alternativa_items.origen_tipo`/`cantidad`/`descripcion_manual` + `reserva_items.proveedor_tarifa_id`). Las 2 preguntas de diseño que quedaban abiertas se cerraron el mismo día (aerolínea = texto libre, sin recordatorio automático por proveedor sin asignar). Detalle completo en el historial de `plan-modulo-cotizaciones-reservas.md` y `TODO.md`. |
