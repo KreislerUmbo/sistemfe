@@ -267,6 +267,17 @@ deben perderse. No es un plan de módulo — para eso está `docs/planning/`.
   un vehículo. La migración ALTER TABLE que la agrega queda para Sesión
   11b, no es retroactiva a Sesión 7 (no hay datos reales en producción
   todavía que se vean afectados).
+- **Confirmado con el usuario 28-jul-2026 — `alternativa_items.origen_tipo`
+  + ítem manual/libre.** Mismo retrofit que `cantidad` de arriba, misma
+  migración (Sesión 11b, sobre `alternativa_items` ya mergeada en Sesión
+  7). Se agrega `origen_tipo` (proveedor\|mayorista\|pasaje_aereo\|manual)
+  como discriminador explícito del origen del ítem, en vez de inferirlo
+  por qué FK nullable está llena. Se agrega `descripcion_manual` para el
+  4to origen — un ítem sin proveedor registrado, precio a mano, sin
+  restricción de rol, sin validación de piso de descuento (no hay
+  `proveedor_tarifa` de la que derivarlo). Ver
+  `plan-modulo-cotizaciones-reservas.md` §3 y §7.1 para el detalle
+  completo.
 
 ## Retrofit confirmado para Sesión 11a — `proveedor_tarifas.tipo_habitacion` — 28-jul-2026
 

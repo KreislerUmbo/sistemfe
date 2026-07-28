@@ -469,10 +469,31 @@ alternativas
 
 alternativa_items
  - alternativa_id
+ - origen_tipo: proveedor | mayorista | pasaje_aereo | manual   (NUEVO
+     28-jul-2026 — RETROFIT sobre tabla ya mergeada en Sesión 7, junto
+     con `cantidad`, misma migración. Antes había que INFERIR el origen
+     del ítem según qué FK nullable estaba llena (proveedor_tarifa_id /
+     opcion_mayorista_id) — frágil apenas se agregó un tercer origen
+     (`cotizacion_pasaje_aereo`, §2.5) y ahora un cuarto (manual, ver
+     abajo). Discriminador explícito, no inferido. Backfill de las filas
+     ya cargadas en tenants de prueba: proveedor_tarifa_id lleno →
+     'proveedor', opcion_mayorista_id lleno → 'mayorista' — seguro
+     porque son solo tenants descartables, sin datos reales todavía)
  - proveedor_tarifa_id      ← NULLABLE (ítems internacionales/manuales no
                                siempre vienen de una tarifa registrada)
  - opcion_mayorista_id      ← nullable, cuando el ítem viene de una opción
                                de mayorista elegida (sección 2.4)
+ - descripcion_manual         (NUEVO 28-jul-2026 — texto libre, SOLO
+     cuando origen_tipo='manual'. Confirmado con el usuario: hace falta
+     un ítem sin proveedor registrado para casos puntuales — ej. un
+     cobro de última hora de un tercero ocasional que no amerita crear
+     un proveedor entero para esa sola vez. Sin restricción de rol: lo
+     puede crear cualquier vendedor, no solo el admin. IMPORTANTE: un
+     ítem manual NO tiene `proveedor_tarifa_id`, así que la validación
+     de piso en vivo (más abajo, "descuento_maximo_pct"/
+     "margen_minimo_pct") no aplica — el precio manual queda a criterio
+     del vendedor sin piso protegido, porque no hay tarifa de proveedor
+     de la que derivar ese piso)
  - modo_precio: por_persona | tarifa_fija
      (hotel = tarifa_fija por habitación; tour = por_persona con precio
      adulto/niño distinto; transporte privado = tarifa_fija con límite
@@ -1311,6 +1332,13 @@ un producto con stock:
     vendedor no arma la cuenta a mano.
   - `por_persona` plano (traslado compartido, restaurante) → mismo
     precio para todos los pasajeros, sin diferenciar edad.
+  - **manual / libre** (NUEVO 28-jul-2026) → no sale de la biblioteca —
+    un botón aparte "+ Ítem manual" al pie de la biblioteca abre un
+    campo de descripción + precio a mano. Sin validación de piso (no
+    hay `proveedor_tarifa` de la que derivarlo). Pensado para casos
+    puntuales sin proveedor registrado, no como atajo habitual — si un
+    mismo ítem manual se repite seguido, es señal de que ese proveedor
+    debería cargarse de verdad en el maestro (Sesión 11a).
 - **Pestañas de alternativas** (hasta 5, sección 3.1) arriba del lienzo,
   cada una con su propio lienzo y su propio total — comparación lado a
   lado, no navegación entre pantallas separadas (mismo patrón que
@@ -1486,3 +1514,4 @@ los recordatorios pendientes de todos los vendedores en una sola vista
 | 25-jul-2026 | Reporte operativo por fecha resuelto (§8): un solo reporte con selector de rango (hoy/semana/personalizado), acciones inline (reasignar guía, marcar check-in — nuevo `reserva_item_pasajero.checkin_realizado`/`checkin_hora`), y versión PDF de solo lectura para repartir al equipo. Se agrega módulo nuevo transversal de recordatorios/notificaciones en-app (§8bis) — resuelve los módulos `aviso_pasaportes_vencer`/`felicitaciones_cumpleanos` que estaban catalogados en `plan-modulo-planes-acceso.md` sin diseñar, más casos nuevos (pago a mayorista próximo con `dias_aviso_pago_proveedor` default 2, cotización estancada con `dias_cotizacion_estancada` default 15, ambos configurables). Recordatorios con snooze (1h/8h/omitir) y flag `forzado` para que el admin marque uno como no descartable. Admin ve todos los recordatorios del equipo, vendedor solo los suyos. |
 | 28-jul-2026 | Sesión de diseño UX del cotizador (Sesión 11, ver hoja de ruta): se descarta reutilizar el wizard de tarjetas de Ventas — se diseña layout de 3 columnas (biblioteca/lienzo día-por-día/precio en vivo) validado contra software real del rubro (Travefy, Ezus, Tourwriter) y probado con un prototipo HTML clickeable fuera del repo (§7.1). Se agrega `alternativa_items.cantidad` (hueco encontrado probando el prototipo: hotel se cobra por noche, transporte privado por vehículo — precio pasa a ser unitario). Se agrega §2.5: `PriceEngineService` como motor de precios único (evita margen duplicado por controller) y tabla nueva `cotizacion_pasaje_aereo` para vender un pasaje aéreo SUELTO (no vía mayorista) — con desglose de `cargos` en JSON (tarifa base + impuestos + TUA + fee de agencia), validado contra normativa MTC 2026 que obliga a las aerolíneas a desglosar estos cargos. Queda pendiente confirmar si `aerolinea` es FK a un tipo de proveedor nuevo o texto libre. |
 | 28-jul-2026 | `proveedor_tarifas.tipo_habitacion` promovida de `diferenciador` (JSON libre) a columna explícita con el mismo enum que ya usa `opciones_hotel_tarifas` — RETROFIT sobre Sesión 5, ya mergeada. Motivo: se vende la habitación, no el hotel; el motor de precios (§2.5) necesita tratar "Hotel" igual sin importar si el ítem viene de un proveedor local o de un paquete/mayorista. §7.1 actualizado para que el ítem Hotel muestre la matriz de habitaciones antes de agregarse al lienzo (el prototipo probado lo había simplificado a una sola línea de precio para testear el layout más rápido). |
+| 28-jul-2026 | Confirmado con el usuario: los servicios/actividades locales SÍ están casi siempre atados a un proveedor registrado (`destino_servicio` → `proveedor_servicios` → `proveedor_tarifas`), salvo casos puntuales — se agrega `alternativa_items.origen_tipo` (proveedor\|mayorista\|pasaje_aereo\|manual) como discriminador EXPLÍCITO en vez de inferir el origen del ítem por qué FK nullable está llena (frágil con 3-4 orígenes posibles). Se agrega el 4to origen, ítems **manual/libre** (`descripcion_manual`, sin proveedor registrado, sin validación de piso de descuento — no hay `proveedor_tarifa` de la que derivarlo), sin restricción de rol. RETROFIT sobre `alternativa_items`, tabla ya mergeada en Sesión 7 — misma migración que agrega `cantidad` (ver entrada anterior), ambas van en Sesión 11b. |
