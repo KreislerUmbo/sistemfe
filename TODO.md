@@ -191,3 +191,30 @@ deben perderse. No es un plan de módulo — para eso está `docs/planning/`.
     mismo criterio ya usado para otras columnas "schema listo, lógica
     después" del vertical (`reserva.motivo_cancelacion` y relacionados,
     Sesión 8a; `reglas_cancelacion`, Sesión 8b).
+
+## Sesión 9c — última FK diferida del vertical, cerrada — 28-jul-2026
+
+- **✅ RESUELTO 28-jul-2026 (Sesión 9c, migración
+  `2026_07_28_150200_add_pasajero_catalogo_foreign_to_reserva_pasajeros_table.php`).**
+  `reserva_pasajeros.pasajero_catalogo_id` (Sesión 8a, sin FK porque
+  `pasajeros_catalogo` — Sesión 9c — no existía todavía) ya tiene FK real,
+  y `ReservaPasajero::pasajeroCatalogo()` actualizado con `belongsTo` real.
+  **Con esto NO queda ninguna FK diferida pendiente en todo el vertical
+  Agencia de Viajes** — barrido completo confirmado por grep sobre
+  `database/migrations/tenant/verticals/agencia-viajes/` (patrón "sin FK
+  todavía"): las únicas 4 coincidencias son la migración original de
+  `opciones_hotel` (Sesión 5, sus 2 FK ya cerradas arriba), su propio
+  comentario de retrofit, y `alternativa_items.opcion_mayorista_id`
+  (Sesión 7a→7b, ya cerrada) — ninguna otra tabla del vertical quedó con
+  una FK sin cerrar.
+- **Hallazgo, no un bug — `configuracion_agencia.meses_margen_vencimiento_documento`
+  YA EXISTÍA desde Sesión 2** (`2026_07_27_160300_create_configuracion_agencia_table.php`,
+  con default 6 y ya en `ConfiguracionAgencia::$fillable`/la fila seed). El
+  prompt de Sesión 9c pedía agregarla vía ALTER TABLE nueva — no se creó
+  esa migración duplicada al confirmar que la columna ya existía completa
+  (mismo nombre, mismo default, misma semántica del plan §6.5). Ver
+  comentario de Sesión 2 en `plan-modulo-cotizaciones-reservas.md` §3.1 (la
+  columna se agregó ahí porque varias secciones del plan la mencionaban
+  sueltas, compiladas en una sola tabla de configuración desde el
+  principio) — no hace falta ninguna acción, la lógica de la alerta sigue
+  pendiente para Sesión 11 tal como estaba previsto.
