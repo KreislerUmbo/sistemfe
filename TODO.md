@@ -119,3 +119,31 @@ deben perderse. No es un plan de módulo — para eso está `docs/planning/`.
   `opciones_hotel` pero CERO `Proveedor` cargados (caso exacto que
   describía el gap, aislado a propósito) queda rechazado; `sandbox`
   (retail) sigue sin ningún error de tabla inexistente.
+
+## Sesión 6/7a — recurrencia SIN resolver del gap de `eliminarSiVacio()` — 28-jul-2026
+
+- **`TenantProvisioningService::tieneDatosVerticalAgenciaViajes()` no
+  conoce ninguna de las tablas agregadas desde Sesión 6 en adelante.**
+  Mismo patrón ya resuelto dos veces (Sesión 3, Sesión 5) — esta vez NO
+  se corrigió en el momento porque cayó fuera del alcance explícito de
+  ambas sesiones (Sesión 6 no dejó nota en este archivo; Sesión 7a lo
+  encontró de pasada al preparar la limpieza del tenant descartable de
+  verificación, sin tocarlo por no ser parte del pedido de esa sesión).
+  Tablas sin cubrir hoy: `paquetes_plantilla`/`tour_itinerario_items`/
+  `paquete_plantilla_items` (Sesión 6), `tipo_cambio_agencia`/
+  `cotizaciones`/`cotizacion_pasajeros`/`alternativas`/`alternativa_items`
+  (Sesión 7a). Todas menos `cotizaciones` cuelgan de una FK NOT NULL a
+  algo ya chequeado (`paquetes_plantilla`→`destinos_atractivos` vía
+  `destino_atractivo_id`; `alternativas`→`cotizaciones`; `cotizacion_pasajeros`/
+  `alternativa_items`→sus padres) — pero `paquetes_plantilla` y
+  `cotizaciones` en sí mismas NO dependen de ninguna tabla ya cubierta
+  (`paquetes_plantilla.destino_atractivo_id` si cuenta, pero conviene
+  chequearlas directo por claridad) y `tipo_cambio_agencia` tampoco
+  depende de nada del vertical. Mismo riesgo ya documentado dos veces:
+  un tenant `agencia_viajes` con cotizaciones/paquetes reales pero sin
+  Company/cliente/producto/venta todavía se considera "vacío" y es
+  borrable de verdad desde el panel superadmin. Pendiente: sumar
+  `PaquetePlantilla::count() > 0`, `TipoCambioAgencia::count() > 0` y
+  `Cotizacion::count() > 0` a `tieneDatosVerticalAgenciaViajes()` (el
+  resto de las tablas nuevas quedan cubiertas transitivamente una vez
+  que esas 3 estén, mismo criterio que `opciones_hotel_tarifas`).
