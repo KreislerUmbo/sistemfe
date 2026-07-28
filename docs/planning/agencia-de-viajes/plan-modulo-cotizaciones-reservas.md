@@ -479,8 +479,22 @@ alternativa_items
      ya cargadas en tenants de prueba: proveedor_tarifa_id lleno →
      'proveedor', opcion_mayorista_id lleno → 'mayorista' — seguro
      porque son solo tenants descartables, sin datos reales todavía)
- - proveedor_tarifa_id      ← NULLABLE (ítems internacionales/manuales no
-                               siempre vienen de una tarifa registrada)
+ - proveedor_tarifa_id      ← NULLABLE. Dos casos, no solo uno: (1) ítems
+                               internacionales/manuales que no vienen de
+                               una tarifa registrada (mayorista/manual,
+                               ver `origen_tipo` arriba); (2) NUEVO
+                               28-jul-2026 — actividades/servicios
+                               LOCALES con `origen_tipo='proveedor'`
+                               cotizados con un precio de REFERENCIA
+                               (de cualquier tarifa vigente para ese
+                               `destino_servicio`, marcado como
+                               referencial) porque todavía no se decidió
+                               qué proveedor específico va a operar —
+                               eso se resuelve después en
+                               `reserva_items.proveedor_tarifa_id` (ver
+                               sección 4), no acá. Caso real confirmado
+                               por el usuario, mismo criterio que ya
+                               existía para guías (§5.3)
  - opcion_mayorista_id      ← nullable, cuando el ítem viene de una opción
                                de mayorista elegida (sección 2.4)
  - descripcion_manual         (NUEVO 28-jul-2026 — texto libre, SOLO
@@ -758,6 +772,22 @@ reserva_items                ← copiados de la alternativa aceptada, pero
                                 sabe la hora exacta todavía)
                               - guia_id  ← nullable, FK a `guias`
                                 (ver sección 5.3)
+                              - proveedor_tarifa_id  ← nullable, FK a
+                                `proveedor_tarifas` (NUEVO 28-jul-2026,
+                                mismo patrón que guia_id de arriba). Se
+                                copia de `alternativa_items.
+                                proveedor_tarifa_id` al aceptar SI la
+                                cotización ya venía con proveedor
+                                elegido; queda NULL si se cotizó con
+                                precio de referencia sin comprometer
+                                proveedor todavía (caso real confirmado
+                                por el usuario: en actividades locales
+                                muchas veces se cotiza y recién se asigna
+                                quién opera cuando se reserva o días
+                                antes de la fecha). Reasignable en
+                                cualquier momento, igual que `guia_id` —
+                                "quién opera" se confirma cerca de la
+                                fecha, no en el momento de cotizar
 
 reserva_item_pasajero        ← tabla puente: qué pasajero específico va
                                 en qué ítem/actividad (control real de
@@ -1515,3 +1545,4 @@ los recordatorios pendientes de todos los vendedores en una sola vista
 | 28-jul-2026 | Sesión de diseño UX del cotizador (Sesión 11, ver hoja de ruta): se descarta reutilizar el wizard de tarjetas de Ventas — se diseña layout de 3 columnas (biblioteca/lienzo día-por-día/precio en vivo) validado contra software real del rubro (Travefy, Ezus, Tourwriter) y probado con un prototipo HTML clickeable fuera del repo (§7.1). Se agrega `alternativa_items.cantidad` (hueco encontrado probando el prototipo: hotel se cobra por noche, transporte privado por vehículo — precio pasa a ser unitario). Se agrega §2.5: `PriceEngineService` como motor de precios único (evita margen duplicado por controller) y tabla nueva `cotizacion_pasaje_aereo` para vender un pasaje aéreo SUELTO (no vía mayorista) — con desglose de `cargos` en JSON (tarifa base + impuestos + TUA + fee de agencia), validado contra normativa MTC 2026 que obliga a las aerolíneas a desglosar estos cargos. Queda pendiente confirmar si `aerolinea` es FK a un tipo de proveedor nuevo o texto libre. |
 | 28-jul-2026 | `proveedor_tarifas.tipo_habitacion` promovida de `diferenciador` (JSON libre) a columna explícita con el mismo enum que ya usa `opciones_hotel_tarifas` — RETROFIT sobre Sesión 5, ya mergeada. Motivo: se vende la habitación, no el hotel; el motor de precios (§2.5) necesita tratar "Hotel" igual sin importar si el ítem viene de un proveedor local o de un paquete/mayorista. §7.1 actualizado para que el ítem Hotel muestre la matriz de habitaciones antes de agregarse al lienzo (el prototipo probado lo había simplificado a una sola línea de precio para testear el layout más rápido). |
 | 28-jul-2026 | Confirmado con el usuario: los servicios/actividades locales SÍ están casi siempre atados a un proveedor registrado (`destino_servicio` → `proveedor_servicios` → `proveedor_tarifas`), salvo casos puntuales — se agrega `alternativa_items.origen_tipo` (proveedor\|mayorista\|pasaje_aereo\|manual) como discriminador EXPLÍCITO en vez de inferir el origen del ítem por qué FK nullable está llena (frágil con 3-4 orígenes posibles). Se agrega el 4to origen, ítems **manual/libre** (`descripcion_manual`, sin proveedor registrado, sin validación de piso de descuento — no hay `proveedor_tarifa` de la que derivarlo), sin restricción de rol. RETROFIT sobre `alternativa_items`, tabla ya mergeada en Sesión 7 — misma migración que agrega `cantidad` (ver entrada anterior), ambas van en Sesión 11b. |
+| 28-jul-2026 | Confirmado con el usuario: en actividades locales muchas veces se cotiza sin saber todavía qué proveedor específico va a operar — se asigna recién al reservar o días antes de la fecha. Se extiende la nulabilidad ya existente de `alternativa_items.proveedor_tarifa_id` para cubrir este caso (precio de referencia, sin comprometer proveedor) y se agrega `reserva_items.proveedor_tarifa_id` (nullable, reasignable) — **mismo patrón que `guia_id`** (§5.3, "se asigna normalmente un día antes"), aplicado ahora también al proveedor del servicio en general, no solo al guía. RETROFIT sobre `reserva_items`, tabla ya mergeada en Sesión 8 — va en Sesión 11c (reserva/pasajeros), no 11b. Queda como idea a definir (no decidido todavía): si el reporte operativo (§8) o los recordatorios (§8bis) deberían alertar sobre reserva_items sin proveedor asignado a medida que se acerca la fecha del servicio. |

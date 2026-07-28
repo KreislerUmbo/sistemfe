@@ -294,3 +294,24 @@ deben perderse. No es un plan de módulo — para eso está `docs/planning/`.
   `proveedor_tarifas`), no una migración suelta aparte.
 - Ver `plan-modulo-cotizaciones-reservas.md` §2.2 y §7.1 para el detalle
   completo de la decisión.
+
+## Retrofit confirmado para Sesión 11c — `reserva_items.proveedor_tarifa_id` reasignable — 28-jul-2026
+
+- **Decidido:** agregar `proveedor_tarifa_id` (nullable, FK a
+  `proveedor_tarifas`) a `reserva_items` — mismo patrón que `guia_id`
+  (§5.3, ya existe desde Sesión 8). Caso real confirmado por el usuario:
+  en actividades locales muchas veces se cotiza sin saber todavía qué
+  proveedor específico va a operar, se asigna recién al reservar o días
+  antes de la fecha del servicio.
+- Se copia de `alternativa_items.proveedor_tarifa_id` al aceptar la
+  alternativa SI ya venía asignado en cotización; queda NULL si se
+  cotizó con precio de referencia. Reasignable después, sin restricción.
+- Es un **retrofit sobre Sesión 8, ya mergeada** — va en Sesión 11c
+  (reserva/pasajeros), no en 11a ni 11b.
+- **Idea sin decidir todavía:** ¿el reporte operativo (§8) o los
+  recordatorios (§8bis) deberían alertar sobre `reserva_items` sin
+  proveedor asignado a medida que se acerca la fecha del servicio? No
+  se agregó ningún campo/tipo de recordatorio nuevo para esto todavía —
+  se confirma cuando se detalle Sesión 11d.
+- Ver `plan-modulo-cotizaciones-reservas.md` §3 y §4 para el detalle
+  completo.
