@@ -39,4 +39,9 @@ class GuiaTarifa extends Model
     {
         return $this->belongsTo(DestinoAtractivo::class, 'destino_id');
     }
+
+    public function paqueteItems()
+    {
+        return $this->hasMany(PaquetePlantillaItem::class, 'guia_tarifa_id');
+    }
 }

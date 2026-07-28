@@ -55,4 +55,9 @@ class ProveedorTarifa extends Model
     {
         return $this->belongsTo(ProveedorServicio::class, 'proveedor_servicio_id');
     }
+
+    public function paqueteItems()
+    {
+        return $this->hasMany(PaquetePlantillaItem::class, 'proveedor_tarifa_id');
+    }
 }
