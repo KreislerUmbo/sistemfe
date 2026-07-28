@@ -26,4 +26,9 @@ class ProveedorServicio extends Model
     {
         return $this->belongsTo(DestinoServicio::class, 'destino_servicio_id');
     }
+
+    public function proveedorTarifas()
+    {
+        return $this->hasMany(ProveedorTarifa::class, 'proveedor_servicio_id');
+    }
 }

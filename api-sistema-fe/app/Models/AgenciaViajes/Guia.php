@@ -21,4 +21,9 @@ class Guia extends Model
     protected $casts = [
         'activo' => 'boolean',
     ];
+
+    public function guiaTarifas()
+    {
+        return $this->hasMany(GuiaTarifa::class, 'guia_id');
+    }
 }

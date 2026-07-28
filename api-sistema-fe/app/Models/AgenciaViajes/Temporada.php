@@ -19,4 +19,9 @@ class Temporada extends Model
         'tipo',
         'giro',
     ];
+
+    public function temporadaOcurrencias()
+    {
+        return $this->hasMany(TemporadaOcurrencia::class, 'temporada_id');
+    }
 }
