@@ -34,6 +34,9 @@ class Product extends Model
         "monto_isc_fijo",
         "contenido_neto_litros", //volumen en litros de la presentación — solo cuando tipo_isc='02' se aplica por litro (ej. cerveza)
         "is_especial_nota",
+        // false = producto sin inventario real (ej. servicios de viaje) — SaleController
+        // todavía decrementa/incrementa stock sin condición, ver 2026_07_28_130000_alter_products_add_controla_stock.php
+        "controla_stock",
         // ── Campos SUNAT — naturaleza tributaria del producto ───────────
         "tipo_bien_servicio",
         "codigo_detraccion",
@@ -48,7 +51,8 @@ class Product extends Model
         'monto_isc_fijo' => 'decimal:4',
         'contenido_neto_litros' => 'decimal:4',
         'is_isc'            => 'boolean',
-        'aplica_percepcion' => 'boolean'
+        'aplica_percepcion' => 'boolean',
+        'controla_stock'    => 'boolean',
     ];
 
 

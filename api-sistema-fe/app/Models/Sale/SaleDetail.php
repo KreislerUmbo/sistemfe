@@ -54,6 +54,12 @@ class SaleDetail extends Model
         // Campos requeridos por Greenter
 
         "description",
+
+        // Detalle real concatenado de qué incluye la línea (ej. "Hotel Río
+        // Cumbaza (2 noches) + Tour a Lamas") — vertical Agencia de Viajes,
+        // Sesión 9a. Distinto de "description" (arriba), que existe desde
+        // el schema original pero está muerta en la práctica.
+        "descripcion_detalle",
     ];
 
     public function setCreatedAtAttribute($value)
