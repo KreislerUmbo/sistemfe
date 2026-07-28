@@ -14,6 +14,7 @@ use App\Models\AgenciaViajes\ProveedorTipoConfig;
 use App\Models\AgenciaViajes\ReglaCancelacion;
 use App\Models\AgenciaViajes\Servicio;
 use App\Models\AgenciaViajes\TipoCambioAgencia;
+use App\Models\AgenciaViajes\TipoRecordatorio;
 use App\Models\Client\Client;
 use App\Models\Company;
 use App\Models\Product\Product;
@@ -365,6 +366,22 @@ class TenantProvisioningService
      *   tipo_cambio_agencia/reglas_cancelacion. pasajero_documentos NO lo necesita:
      *   pasajero_catalogo_id es NOT NULL, cubierta transitivamente una vez que
      *   PasajeroCatalogo se chequea acá.
+     * - reserva_item_pasajero (Sesión 10, columnas checkin_realizado/checkin_hora) no
+     *   cambia nada acá: son columnas nuevas sobre una tabla ya cubierta transitivamente
+     *   desde Sesión 8a (vía reserva_item_id/reserva_pasajero_id, ambas NOT NULL) — un
+     *   ALTER TABLE no agrega ninguna raíz nueva.
+     * - tipos_recordatorio (Sesión 10) SÍ necesita chequeo propio: sin ninguna FK (es el
+     *   catálogo en sí), carga inicial vía TipoRecordatorioSeeder (standalone, mismo
+     *   criterio que ReglaCancelacionSeeder — NO corre en tenants:provision), así que
+     *   cualquier fila acá implica que alguien lo corrió a mano después de provisionar.
+     * - recordatorios (Sesión 10) NO necesita chequeo propio: tipo_id es NOT NULL →
+     *   tipos_recordatorio, ya chequeada acá. entidad_id es intencionalmente polimórfico
+     *   sin FK (no un ancestro a trazar, ver comentario de la migración
+     *   2026_07_28_160200_create_recordatorios_table.php).
+     * - recordatorio_snooze_config (Sesión 10) NO necesita chequeo propio: tipo_id es NOT
+     *   NULL → tipos_recordatorio, misma cobertura que recordatorios (usuario_id NOT NULL
+     *   → users tampoco cuenta, igual que registrado_por en tipo_cambio_agencia — pero acá
+     *   ni hace falta, tipo_id ya alcanza).
      *
      * Debe llamarse DENTRO de $tenant->run() (mismo contrato que el resto de los chequeos
      * de eliminarSiVacio() — usa el connection default resuelto por DatabaseTenancyBootstrapper).
@@ -385,6 +402,7 @@ class TenantProvisioningService
             || TipoCambioAgencia::count() > 0
             || ReglaCancelacion::count() > 0
             || PasajeroCatalogo::count() > 0
+            || TipoRecordatorio::count() > 0
             || $this->configuracionAgenciaFueEditada();
     }
 
