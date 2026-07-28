@@ -93,21 +93,23 @@ deben perderse. No es un plan de módulo — para eso está `docs/planning/`.
   `ALTER TABLE opciones_hotel ADD CONSTRAINT ...` (o
   `Schema::table('opciones_hotel', ...)` con `foreign()`), no dejarlo
   para "después de después".
-- **Recurrencia del mismo gap ya resuelto una vez (Sesión 3):
-  `TenantProvisioningService::eliminarSiVacio()` tampoco conoce las
-  tablas nuevas de esta sesión** (`proveedor_tarifas`, `guia_tarifas`,
+- **✅ RESUELTO 27-jul-2026 (rama `fix/eliminar-si-vacio-opciones-hotel`).**
+  Recurrencia del mismo gap ya resuelto una vez (Sesión 3):
+  `TenantProvisioningService::eliminarSiVacio()` tampoco conocía las
+  tablas nuevas de esta sesión (`proveedor_tarifas`, `guia_tarifas`,
   `opciones_hotel`, `opciones_hotel_tarifas` — `temporada_ocurrencias`
-  es central, no aplica). En la práctica, `proveedor_tarifas`/
-  `guia_tarifas` reales quedan cubiertos indirectamente (su FK exige
-  que ya exista un `Proveedor`/`Guia` real, que sí se chequea), **pero
-  `opciones_hotel` NO** — `proveedor_id` es nullable ahí, así que un
-  tenant podría tener filas reales en `opciones_hotel`/
-  `opciones_hotel_tarifas` sin ningún `Proveedor` real, y seguiría
-  considerándose "vacío". Mismo patrón de riesgo que el gap de Sesión
-  3 (pérdida de datos real vía botón "Eliminar" del panel superadmin),
-  encontrado al construir esta sesión, no corregido acá — mismo
-  criterio que la vez pasada: resolver como su propia mini-sesión
-  corta, no diferir indefinidamente. Cuando se retome, agregar
-  `OpcionHotel::count() > 0` a `tieneDatosVerticalAgenciaViajes()`
-  (`opciones_hotel_tarifas` queda cubierta transitivamente por su FK a
-  `opciones_hotel`).
+  es central, no aplica). `proveedor_tarifas`/`guia_tarifas` quedaban
+  cubiertos indirectamente (su FK exige que ya exista un
+  `Proveedor`/`Guia` real, que sí se chequea), **pero `opciones_hotel`
+  NO** — `proveedor_id` es nullable ahí, así que un tenant podía tener
+  filas reales en `opciones_hotel`/`opciones_hotel_tarifas` sin ningún
+  `Proveedor` real, y seguía considerándose "vacío". Corregido
+  agregando `OpcionHotel::count() > 0` a
+  `tieneDatosVerticalAgenciaViajes()` (`opciones_hotel_tarifas` queda
+  cubierta transitivamente por su FK obligatoria a `opciones_hotel`).
+  Atacado apenas se detectó, mismo criterio que la vez pasada — no
+  diferido. Verificado contra dev real: tenant recién provisionado
+  sigue eliminable; el mismo tipo de tenant con una fila real en
+  `opciones_hotel` pero CERO `Proveedor` cargados (caso exacto que
+  describía el gap, aislado a propósito) queda rechazado; `sandbox`
+  (retail) sigue sin ningún error de tabla inexistente.
