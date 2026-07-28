@@ -2,7 +2,7 @@
 
 > Parte de: `plan-general-vertical-agencia-viajes.md` — Fase 1
 > Estado: en definición (aún se están sumando casos de negocio)
-> Última actualización: 22-jul-2026 (sesión de maduración con dueño de la agencia)
+> Última actualización: 28-jul-2026 (diseño UX del cotizador + motor de precios)
 
 ---
 
@@ -307,6 +307,79 @@ salidas_mayorista   (catálogo — independiente de cualquier cotización)
 **Sigue abierto:** el detalle de gestión de proveedores a fondo (altas,
 bajas, negociación de tarifas) es un módulo aparte, no abordado todavía.
 
+### 2.5 Motor de precios y pasajes aéreos sueltos (NUEVO 28-jul-2026)
+
+**Motor de precios único, no lógica de margen duplicada por controller.**
+Confirmado al diseñar la Sesión 11a: el cálculo de margen (`margen_tipo`/
+`margen_valor`, piso por `descuento_maximo_pct`/`margen_minimo_pct`) no
+debe vivir repetido en cada controller (`ProveedorTarifaController`,
+`OpcionMayoristaController`, y ahora el de pasajes aéreos) — se extrae a
+un servicio único:
+```
+PriceEngineService::calcular(costoBase, cargos[], margenTipo, margenValor, pisos)
+ → { ventaBase, ventaTotal, desglose[], margenAplicado, alertaPiso }
+```
+Un solo lugar decide cómo se calcula el margen y dónde se dispara la
+alerta de piso (§3.1) — evita que el cálculo quede "parecido pero no
+igual" entre tipos de servicio.
+
+**Caso distinto: vender un pasaje aéreo SUELTO (no como parte de un
+paquete internacional con mayorista).** Confirmado 28-jul-2026 probando
+el prototipo del cotizador: esto NO pasa por `opcion_mayorista` (esa
+sección es para paquetes armados con matriz de hotel) ni por
+`proveedor_tarifas` corriente (esa versiona tarifas vigentes por
+temporada, un pasaje aéreo caduca en horas, no en meses). Necesita tabla
+propia:
+
+```
+cotizacion_pasaje_aereo   (1-a-1 con el alternativa_item de tipo pasaje
+                            aéreo — es cotización puntual, no catálogo,
+                            mismo criterio que opcion_mayorista)
+ - alternativa_item_id
+ - aerolinea                  (texto libre por ahora — pendiente de
+                                 decidir si pasa a FK de proveedores con
+                                 tipo "Aerolínea" nuevo, ver más abajo)
+ - itinerario                  (texto libre: tramos ida/vuelta, fechas,
+                                  horas — mismo criterio que vuelo_detalle
+                                  ya usado en paquetes_plantilla/
+                                  opcion_mayorista, cada aerolínea/GDS
+                                  entrega un formato distinto)
+ - moneda: PEN | USD
+ - tarifa_base_adulto / tarifa_base_nino / tarifa_base_infante
+                                (costo, antes de impuestos)
+ - cargos: JSON [{codigo, nombre, monto, tipo: impuesto|tasa_aeropuerto|
+                    fee_agencia}]
+     (flexible a propósito, mismo patrón que proveedor_tarifas.
+     diferenciador. Validado con normativa real: en Perú existen TUUA
+     nacional, TUUA internacional, TUUA de transferencia — todas
+     distintas y cambiantes — y el MTC aprobó regulación en 2026 que
+     obliga a las aerolíneas a desglosar estos cargos al pasajero, así
+     que el campo espeja lo que la propia aerolínea entrega, no lo
+     reinterpreta con una lista fija que se desactualiza)
+ - tua_incluida_en_tarifa: boolean   (a veces viene incluida en el precio
+     mostrado, a veces se cobra aparte — se pregunta explícito, no se
+     asume)
+ - fee_agencia_monto           (lo único que la agencia realmente vende
+     como servicio propio — tarifa + impuestos son traslado de costo de
+     terceros)
+ - tip_afe_igv                  (aplica SOLO a fee_agencia — confirmar
+     con el contador si el pass-through de tarifa+impuestos es ingreso
+     gravable propio de la agencia; el tratamiento real depende además
+     del ORIGEN del vuelo, no del destino — dato de la ruta cotizada,
+     no algo fijo por aerolínea)
+ - fecha_cotizado                (a diferencia de proveedor_tarifas, NO
+     hay vigente_desde/vigente_hasta de largo plazo acá — snapshot de
+     cuándo se consultó, no un rango de vigencia)
+ - costo_total / precio_venta_total   (calculados por PriceEngineService,
+     editables — mismo patrón de edición en vivo que alternativa_items)
+```
+
+**Pendiente de decidir (no bloquea el resto):** si `aerolinea` debería ser
+FK a `proveedores` con un tipo `Aerolínea` nuevo en `proveedor_tipos`
+(sirve para reportar comisión/volumen por aerolínea) o queda como texto
+libre por ahora, más simple. Se confirma antes de escribir la migración
+de esta tabla.
+
 ---
 
 ## 3. Cotización — estructura de alternativas
@@ -392,6 +465,14 @@ alternativa_items
      (hotel = tarifa_fija por habitación; tour = por_persona con precio
      adulto/niño distinto; transporte privado = tarifa_fija con límite
      de capacidad)
+ - cantidad             (NUEVO 28-jul-2026 — integer, default 1. Hueco
+     encontrado probando el prototipo HTML del cotizador: un hotel se
+     cobra POR NOCHE, un transporte privado puede pedirse en más de un
+     vehículo — precio_venta_snapshot/costo_snapshot pasan a ser precio
+     UNITARIO, no total. Total del ítem = precio_venta_snapshot ×
+     cantidad. Solo aplica a modo_precio=tarifa_fija en la práctica —
+     en por_persona la "cantidad" ya está resuelta por pax_incluidos,
+     no se multiplica dos veces)
  - pax_incluidos: qué pasajeros de la cotización aplica este ítem
      (por defecto todos, ajustable — ej. niño no toma un tour opcional)
  - moneda_costo               (heredada del proveedor/opción de origen)
@@ -1164,6 +1245,62 @@ a seguir cuando se diseñe el frontend:
   debe sentirse tan simple como llenar un solo formulario**, no como
   recorrer las 5 pantallas del flujo completo.
 
+### 7.1 Layout del cotizador (NUEVO 28-jul-2026 — validado con prototipo HTML)
+
+**Decisión de diseño:** el cotizador NO reutiliza el wizard de tarjetas
+numeradas de `views/sale/register.vue` (Ventas). Investigado contra
+software real del rubro (Travefy, Ezus, Tourwriter) — todos convergen en
+el mismo patrón de 3 capas, porque cotizar un viaje es exploratorio
+(probar combinaciones, comparar precio) y no una transacción lineal de
+un producto con stock:
+
+```
+┌ Biblioteca ──┐ ┌── Lienzo (día por día) ──────┐ ┌ Precio en vivo ─┐
+│ tarifas del   │ │ pestañas: Alternativa A/B/+  │ │ líneas + total   │
+│ destino,      │ │ clic en biblioteca → agrega  │ │ recalculado en   │
+│ filtradas por │ │ al día activo                │ │ vivo, editable   │
+│ destino_      │ │                              │ │ (descuento %,    │
+│ servicio      │ │                              │ │ piso en rojo)    │
+└───────────────┘ └──────────────────────────────┘ └───────────────────┘
+```
+
+- **Paso 0 (una sola vez por cotización, no por alternativa):** modal
+  corto que crea el header — cliente (buscador + alta rápida, mismo
+  patrón que `ClientFormQuick.vue`), destino, fecha de viaje tentativa
+  (con opción "todavía no tiene fecha exacta"), y pasajeros. Los
+  pasajeros se cargan por EDAD individual (obligatoria, sección 3.1),
+  con botones rápidos "+Adulto/+Niño/+Infante" que sugieren una edad
+  editable — el tipo (adulto/niño/infante) se deriva solo, no se elige
+  a mano.
+- **Toggle Local/Nacional vs. Internacional** encima de la biblioteca:
+  cambia qué se ve en esa columna. Local/Nacional muestra la biblioteca
+  de tarifas pre-cargadas (clic = agregar). Internacional muestra un
+  **comparador de cotizaciones de mayorista** (tarjetas lado a lado, una
+  por mayorista consultado, cada una con su matriz hotel×habitación —
+  sección 2.4) en vez de biblioteca, porque acá no hay tarifa fija que
+  listar: es cotización manual cada vez. Marcar una como "elegida" la
+  inserta en el lienzo como un ítem más — mismo motor de
+  `alternativa_items`, no una estructura paralela (confirma 3.3).
+- **Tres formas de cobrar un ítem, cada una con su feedback visual en el
+  lienzo** (probado en el prototipo, ver 3-ítem):
+  - `tarifa_fija` (hotel, transporte privado) → stepper de `cantidad`
+    (noches/vehículos) junto al precio, recalcula en vivo.
+  - `por_persona` diferenciado (tour, pasaje aéreo) → precio se reparte
+    solo según los pasajeros del header, mostrando el detalle del
+    cálculo bajo el ítem (ej. "3 adultos × S/70 + 1 niño × S/45") — el
+    vendedor no arma la cuenta a mano.
+  - `por_persona` plano (traslado compartido, restaurante) → mismo
+    precio para todos los pasajeros, sin diferenciar edad.
+- **Pestañas de alternativas** (hasta 5, sección 3.1) arriba del lienzo,
+  cada una con su propio lienzo y su propio total — comparación lado a
+  lado, no navegación entre pantallas separadas (mismo patrón que
+  "Proposals" de Travefy).
+- **Prototipo de referencia:** `prototipo-cotizador.html` (compartido
+  fuera del repo, en la conversación de diseño) — clickeable, sin datos
+  reales, usado para validar el flujo con el equipo antes de programar
+  los componentes Vue. Cuando se arranque la Sesión 11b, partir de ese
+  layout ya probado en vez de diseñar desde cero.
+
 ---
 
 ## 8. Reporte operativo por fecha (actualizado 25-jul-2026 — RESUELTO)
@@ -1327,3 +1464,4 @@ los recordatorios pendientes de todos los vendedores en una sola vista
 | 25-jul-2026 | Sesión sobre paquetes locales/nacionales/internacionales, validada con 3 documentos reales de la agencia (Alto Mayo, Cusco, Panamá). Hallazgo principal: el precio no es un monto único — es una matriz por hotel × tipo de habitación (matrimonial/doble/triple/familiar), aplica a las 3 categorías, no solo internacional. Se crea `opciones_hotel`/`opciones_hotel_tarifas` compartida entre `paquetes_plantilla` y `opcion_mayorista`. Se documenta el flujo real de mayoristas (Nuevo Mundo, Falabella, Inter-agencias) — hoy pasa por Excel + Word manual, el sistema busca reemplazar ese paso. Se agrega margen automático por mayorista (`proveedores.margen_default_tipo/valor`, editable por línea). Se agregan tours opcionales (`opcion_mayorista_opcionales`, precio aparte del paquete base) y datos de vuelo (aerolínea, detalle) tanto a `paquetes_plantilla` como a `opcion_mayorista`. Se agrega `paquetes_plantilla.codigo`/`categoria` (local/nacional/internacional), confirmado con el patrón de códigos que ya usa la agencia (PDKM-CZ, PDKM-AM). Se agrega `cotizaciones.codigo` (prefijo libre + año + correlativo por prefijo) como identificador único de cotización. |
 | 25-jul-2026 | Módulo de guías a fondo: confirmado que son freelance (trabajan con varias agencias, no se controla su calendario completo — sin choques de horario por ahora). Se agrega `guia_tarifas` (costo/margen por guía × destino × modalidad dia_local/grupo_multidia, versionado igual que `proveedor_tarifas`, sin piso de descuento por ahora). Resuelve el pendiente dejado en `plan-modulo-tours-catalogo.md` §6 sobre si "Guía de Turismo" en `items_incluidos` necesita tarifa propia — sí la necesita. |
 | 25-jul-2026 | Reporte operativo por fecha resuelto (§8): un solo reporte con selector de rango (hoy/semana/personalizado), acciones inline (reasignar guía, marcar check-in — nuevo `reserva_item_pasajero.checkin_realizado`/`checkin_hora`), y versión PDF de solo lectura para repartir al equipo. Se agrega módulo nuevo transversal de recordatorios/notificaciones en-app (§8bis) — resuelve los módulos `aviso_pasaportes_vencer`/`felicitaciones_cumpleanos` que estaban catalogados en `plan-modulo-planes-acceso.md` sin diseñar, más casos nuevos (pago a mayorista próximo con `dias_aviso_pago_proveedor` default 2, cotización estancada con `dias_cotizacion_estancada` default 15, ambos configurables). Recordatorios con snooze (1h/8h/omitir) y flag `forzado` para que el admin marque uno como no descartable. Admin ve todos los recordatorios del equipo, vendedor solo los suyos. |
+| 28-jul-2026 | Sesión de diseño UX del cotizador (Sesión 11, ver hoja de ruta): se descarta reutilizar el wizard de tarjetas de Ventas — se diseña layout de 3 columnas (biblioteca/lienzo día-por-día/precio en vivo) validado contra software real del rubro (Travefy, Ezus, Tourwriter) y probado con un prototipo HTML clickeable fuera del repo (§7.1). Se agrega `alternativa_items.cantidad` (hueco encontrado probando el prototipo: hotel se cobra por noche, transporte privado por vehículo — precio pasa a ser unitario). Se agrega §2.5: `PriceEngineService` como motor de precios único (evita margen duplicado por controller) y tabla nueva `cotizacion_pasaje_aereo` para vender un pasaje aéreo SUELTO (no vía mayorista) — con desglose de `cargos` en JSON (tarifa base + impuestos + TUA + fee de agencia), validado contra normativa MTC 2026 que obliga a las aerolíneas a desglosar estos cargos. Queda pendiente confirmar si `aerolinea` es FK a un tipo de proveedor nuevo o texto libre. |

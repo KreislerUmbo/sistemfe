@@ -247,3 +247,23 @@ deben perderse. No es un plan de módulo — para eso está `docs/planning/`.
   `recordatorios` desde los 4 disparadores del plan (pago a proveedor
   próximo, cumpleaños, cotización estancada, documento por vencer), y la
   UI de snooze/omitir con la excepción de `forzado`.
+
+## Sesión 11b (Cotizador) — decisión pendiente antes de escribir migraciones — 28-jul-2026
+
+- **`cotizacion_pasaje_aereo.aerolinea`: ¿texto libre o FK a `proveedores`
+  con un tipo `Aerolínea` nuevo en `proveedor_tipos`?** Surgió al diseñar
+  el motor de precios para pasajes aéreos sueltos (ver
+  `plan-modulo-cotizaciones-reservas.md` §2.5). Texto libre es más simple
+  y consistente con `paquetes_plantilla.vuelo_aerolinea`/
+  `opcion_mayorista.vuelo_aerolinea` (ambos ya son texto libre); FK
+  permite reportar comisión/volumen por aerolínea más adelante. No
+  bloquea nada de Sesión 11a — se confirma antes de escribir la migración
+  de `cotizacion_pasaje_aereo` en 11b.
+- **`alternativa_items.cantidad` todavía no existe en ninguna migración
+  corrida** (Sesiones 0-10 son anteriores a este hallazgo). Se agregó al
+  documento de diseño (`plan-modulo-cotizaciones-reservas.md` §3) el
+  28-jul-2026, encontrado probando el prototipo HTML del cotizador — un
+  hotel se cobra por noche, un transporte privado puede pedirse en más de
+  un vehículo. La migración ALTER TABLE que la agrega queda para Sesión
+  11b, no es retroactiva a Sesión 7 (no hay datos reales en producción
+  todavía que se vean afectados).
