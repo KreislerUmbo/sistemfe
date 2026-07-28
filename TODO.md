@@ -218,3 +218,32 @@ deben perderse. No es un plan de módulo — para eso está `docs/planning/`.
   sueltas, compiladas en una sola tabla de configuración desde el
   principio) — no hace falta ninguna acción, la lógica de la alerta sigue
   pendiente para Sesión 11 tal como estaba previsto.
+
+## Sesión 10 — reporte operativo (§8) + recordatorios (§8bis) — 28-jul-2026
+
+- **Hallazgo, no un bug** — `configuracion_agencia.dias_aviso_pago_proveedor`/
+  `dias_cotizacion_estancada` YA EXISTÍAN desde Sesión 2 (mismo caso que
+  `meses_margen_vencimiento_documento` en Sesión 9c), con sus defaults
+  correctos (2 y 15) y ya en `ConfiguracionAgencia::$fillable`. No se creó
+  ninguna migración duplicada para esas 2 columnas.
+- **`tieneDatosVerticalAgenciaViajes()` actualizada** con `TipoRecordatorio::count() > 0`
+  (única raíz nueva sin ancestro cubierto — mismo criterio que
+  `ReglaCancelacion`/`TipoCambioAgencia`, carga inicial vía seeder standalone
+  `TipoRecordatorioSeeder`, NO en `tenants:provision`). `recordatorios`/
+  `recordatorio_snooze_config` quedan cubiertas transitivamente por su FK
+  NOT NULL a `tipos_recordatorio`; las columnas nuevas de
+  `reserva_item_pasajero` (checkin) no agregan ninguna raíz. Ver docstring
+  actualizado de `tieneDatosVerticalAgenciaViajes()` para el detalle.
+- **`recordatorios.entidad_id` es polimórfico SIN FK a propósito** (no una
+  FK diferida más a cerrar en una sesión futura, a diferencia de las 4 que
+  este vertical fue cerrando — ver Sesión 9c arriba, "NO queda ninguna FK
+  diferida pendiente"): `entidad_tipo` puede apuntar a `reserva`,
+  `cotizaciones`, `clients` (core) o `pago_proveedor` según el valor de esa
+  misma columna — ninguna FK real de Postgres puede expresar eso. Se valida
+  en aplicación qué tabla corresponde, Sesión 11.
+- **Pendiente para Sesión 11 (frontend/CRUD)**: pantalla del reporte
+  operativo (tabla filtrable + acciones inline: asignar guía, marcar
+  check-in), su versión PDF de solo lectura, generación automática de
+  `recordatorios` desde los 4 disparadores del plan (pago a proveedor
+  próximo, cumpleaños, cotización estancada, documento por vencer), y la
+  UI de snooze/omitir con la excepción de `forzado`.
