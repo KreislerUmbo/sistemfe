@@ -348,9 +348,10 @@ cotizacion_pasaje_aereo   (1-a-1 con el alternativa_item de tipo pasaje
                             aéreo — es cotización puntual, no catálogo,
                             mismo criterio que opcion_mayorista)
  - alternativa_item_id
- - aerolinea                  (texto libre por ahora — pendiente de
-                                 decidir si pasa a FK de proveedores con
-                                 tipo "Aerolínea" nuevo, ver más abajo)
+ - aerolinea                  (texto libre, DECIDIDO 28-jul-2026 — mismo
+                                 criterio que `vuelo_aerolinea` en
+                                 `opcion_mayorista`/`paquetes_plantilla`,
+                                 ver justificación abajo)
  - itinerario                  (texto libre: tramos ida/vuelta, fechas,
                                   horas — mismo criterio que vuelo_detalle
                                   ya usado en paquetes_plantilla/
@@ -386,11 +387,20 @@ cotizacion_pasaje_aereo   (1-a-1 con el alternativa_item de tipo pasaje
      editables — mismo patrón de edición en vivo que alternativa_items)
 ```
 
-**Pendiente de decidir (no bloquea el resto):** si `aerolinea` debería ser
-FK a `proveedores` con un tipo `Aerolínea` nuevo en `proveedor_tipos`
-(sirve para reportar comisión/volumen por aerolínea) o queda como texto
-libre por ahora, más simple. Se confirma antes de escribir la migración
-de esta tabla.
+**Decidido 28-jul-2026 — `aerolinea` queda como texto libre**, no FK.
+Precedente encontrado en el propio modelo: en `opcion_mayorista` (§2.4)
+el proveedor con FK real es el **mayorista** (`proveedor_id`, tipo
+"mayorista") — la aerolínea (`vuelo_aerolinea`) ya es solo texto
+informativo ahí, mismo criterio en `paquetes_plantilla`. Confirmado con
+el usuario: la agencia no es agencia IATA (sin acreditación directa con
+aerolíneas), así que la aerolínea es un dato del vuelo, no una relación
+comercial que la agencia gestione — no hay nada que reportar por
+aerolínea (comisión, volumen) porque no hay contrato directo. FK habría
+acoplado Sesión 11b a que Sesión 11a esté no solo construida sino
+poblada con un catálogo de aerolíneas antes de poder cotizar un pasaje,
+sin ningún beneficio real a cambio. Si la agencia consigue acreditación
+IATA en el futuro, se promueve a FK igual que se hizo con
+`tipo_habitacion` (§2.2) — no antes de que haga falta.
 
 ---
 
@@ -1545,4 +1555,5 @@ los recordatorios pendientes de todos los vendedores en una sola vista
 | 28-jul-2026 | Sesión de diseño UX del cotizador (Sesión 11, ver hoja de ruta): se descarta reutilizar el wizard de tarjetas de Ventas — se diseña layout de 3 columnas (biblioteca/lienzo día-por-día/precio en vivo) validado contra software real del rubro (Travefy, Ezus, Tourwriter) y probado con un prototipo HTML clickeable fuera del repo (§7.1). Se agrega `alternativa_items.cantidad` (hueco encontrado probando el prototipo: hotel se cobra por noche, transporte privado por vehículo — precio pasa a ser unitario). Se agrega §2.5: `PriceEngineService` como motor de precios único (evita margen duplicado por controller) y tabla nueva `cotizacion_pasaje_aereo` para vender un pasaje aéreo SUELTO (no vía mayorista) — con desglose de `cargos` en JSON (tarifa base + impuestos + TUA + fee de agencia), validado contra normativa MTC 2026 que obliga a las aerolíneas a desglosar estos cargos. Queda pendiente confirmar si `aerolinea` es FK a un tipo de proveedor nuevo o texto libre. |
 | 28-jul-2026 | `proveedor_tarifas.tipo_habitacion` promovida de `diferenciador` (JSON libre) a columna explícita con el mismo enum que ya usa `opciones_hotel_tarifas` — RETROFIT sobre Sesión 5, ya mergeada. Motivo: se vende la habitación, no el hotel; el motor de precios (§2.5) necesita tratar "Hotel" igual sin importar si el ítem viene de un proveedor local o de un paquete/mayorista. §7.1 actualizado para que el ítem Hotel muestre la matriz de habitaciones antes de agregarse al lienzo (el prototipo probado lo había simplificado a una sola línea de precio para testear el layout más rápido). |
 | 28-jul-2026 | Confirmado con el usuario: los servicios/actividades locales SÍ están casi siempre atados a un proveedor registrado (`destino_servicio` → `proveedor_servicios` → `proveedor_tarifas`), salvo casos puntuales — se agrega `alternativa_items.origen_tipo` (proveedor\|mayorista\|pasaje_aereo\|manual) como discriminador EXPLÍCITO en vez de inferir el origen del ítem por qué FK nullable está llena (frágil con 3-4 orígenes posibles). Se agrega el 4to origen, ítems **manual/libre** (`descripcion_manual`, sin proveedor registrado, sin validación de piso de descuento — no hay `proveedor_tarifa` de la que derivarlo), sin restricción de rol. RETROFIT sobre `alternativa_items`, tabla ya mergeada en Sesión 7 — misma migración que agrega `cantidad` (ver entrada anterior), ambas van en Sesión 11b. |
-| 28-jul-2026 | Confirmado con el usuario: en actividades locales muchas veces se cotiza sin saber todavía qué proveedor específico va a operar — se asigna recién al reservar o días antes de la fecha. Se extiende la nulabilidad ya existente de `alternativa_items.proveedor_tarifa_id` para cubrir este caso (precio de referencia, sin comprometer proveedor) y se agrega `reserva_items.proveedor_tarifa_id` (nullable, reasignable) — **mismo patrón que `guia_id`** (§5.3, "se asigna normalmente un día antes"), aplicado ahora también al proveedor del servicio en general, no solo al guía. RETROFIT sobre `reserva_items`, tabla ya mergeada en Sesión 8 — va en Sesión 11c (reserva/pasajeros), no 11b. Queda como idea a definir (no decidido todavía): si el reporte operativo (§8) o los recordatorios (§8bis) deberían alertar sobre reserva_items sin proveedor asignado a medida que se acerca la fecha del servicio. |
+| 28-jul-2026 | Confirmado con el usuario: en actividades locales muchas veces se cotiza sin saber todavía qué proveedor específico va a operar — se asigna recién al reservar o días antes de la fecha. Se extiende la nulabilidad ya existente de `alternativa_items.proveedor_tarifa_id` para cubrir este caso (precio de referencia, sin comprometer proveedor) y se agrega `reserva_items.proveedor_tarifa_id` (nullable, reasignable) — **mismo patrón que `guia_id`** (§5.3, "se asigna normalmente un día antes"), aplicado ahora también al proveedor del servicio en general, no solo al guía. RETROFIT sobre `reserva_items`, tabla ya mergeada en Sesión 8 — va en Sesión 11c (reserva/pasajeros), no 11b. **Decidido:** sin alerta automática por recordatorio (§8bis) para `reserva_items` sin proveedor asignado — queda visible solo en el reporte operativo (§8), no dispara un `tipos_recordatorio` nuevo. |
+| 28-jul-2026 | Cerradas las 2 preguntas que quedaban abiertas de la sesión de diseño anterior. **`cotizacion_pasaje_aereo.aerolinea` queda como texto libre**, no FK — mismo criterio que `vuelo_aerolinea` en `opcion_mayorista`/`paquetes_plantilla` (donde el proveedor con FK real es el mayorista, no la aerolínea). Confirmado con el usuario: la agencia no es agencia IATA, no hay relación comercial directa con aerolíneas que reportar. **Sin alerta automática de recordatorio** para `reserva_items` sin proveedor asignado — queda visible solo en el reporte operativo (§8), no se agrega un 5to `tipos_recordatorio`. Ninguna de las 2 decisiones requirió cambios de estructura, solo cerrar la ambigüedad documentada el 28-jul-2026 anterior. |

@@ -248,17 +248,15 @@ deben perderse. No es un plan de módulo — para eso está `docs/planning/`.
   próximo, cumpleaños, cotización estancada, documento por vencer), y la
   UI de snooze/omitir con la excepción de `forzado`.
 
-## Sesión 11b (Cotizador) — decisión pendiente antes de escribir migraciones — 28-jul-2026
+## Sesión 11b (Cotizador) — retrofits confirmados sobre `alternativa_items` — 28-jul-2026
 
-- **`cotizacion_pasaje_aereo.aerolinea`: ¿texto libre o FK a `proveedores`
-  con un tipo `Aerolínea` nuevo en `proveedor_tipos`?** Surgió al diseñar
-  el motor de precios para pasajes aéreos sueltos (ver
-  `plan-modulo-cotizaciones-reservas.md` §2.5). Texto libre es más simple
-  y consistente con `paquetes_plantilla.vuelo_aerolinea`/
-  `opcion_mayorista.vuelo_aerolinea` (ambos ya son texto libre); FK
-  permite reportar comisión/volumen por aerolínea más adelante. No
-  bloquea nada de Sesión 11a — se confirma antes de escribir la migración
-  de `cotizacion_pasaje_aereo` en 11b.
+- **`cotizacion_pasaje_aereo.aerolinea`: DECIDIDO 28-jul-2026 — texto
+  libre, no FK.** Mismo criterio que `paquetes_plantilla.vuelo_aerolinea`/
+  `opcion_mayorista.vuelo_aerolinea` (ambos ya texto libre, y en
+  `opcion_mayorista` el proveedor con FK real es el mayorista, no la
+  aerolínea). Confirmado con el usuario: la agencia no es agencia IATA,
+  sin relación comercial directa con aerolíneas que reportar. Ver
+  `plan-modulo-cotizaciones-reservas.md` §2.5 para el detalle completo.
 - **`alternativa_items.cantidad` todavía no existe en ninguna migración
   corrida** (Sesiones 0-10 son anteriores a este hallazgo). Se agregó al
   documento de diseño (`plan-modulo-cotizaciones-reservas.md` §3) el
@@ -308,10 +306,9 @@ deben perderse. No es un plan de módulo — para eso está `docs/planning/`.
   cotizó con precio de referencia. Reasignable después, sin restricción.
 - Es un **retrofit sobre Sesión 8, ya mergeada** — va en Sesión 11c
   (reserva/pasajeros), no en 11a ni 11b.
-- **Idea sin decidir todavía:** ¿el reporte operativo (§8) o los
-  recordatorios (§8bis) deberían alertar sobre `reserva_items` sin
-  proveedor asignado a medida que se acerca la fecha del servicio? No
-  se agregó ningún campo/tipo de recordatorio nuevo para esto todavía —
-  se confirma cuando se detalle Sesión 11d.
+- **DECIDIDO 28-jul-2026:** sin alerta automática de recordatorio
+  (§8bis) para `reserva_items` sin proveedor asignado. Queda visible
+  solo en el reporte operativo (§8) — no se agrega un 5to
+  `tipos_recordatorio` para esto.
 - Ver `plan-modulo-cotizaciones-reservas.md` §3 y §4 para el detalle
   completo.
