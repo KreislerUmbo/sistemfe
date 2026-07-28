@@ -152,3 +152,42 @@ deben perderse. No es un plan de módulo — para eso está `docs/planning/`.
   recién provisionado sin ningún dato → sigue eliminable, sin regresión.
   Ver docstring de `tieneDatosVerticalAgenciaViajes()` para el detalle
   completo de la cadena de FK de cada tabla.
+
+## Sesión 9a — `controla_stock` sin conectar a `SaleController` — 28-jul-2026
+
+- **`products.controla_stock` (Sesión 9a, `2026_07_28_130000_alter_products_add_controla_stock.php`)
+  existe en schema pero `SaleController::store()`/`update()` todavía
+  decrementan/incrementan `stock` sin condición** — confirmado por grep,
+  ningún punto de esos dos métodos lee `controla_stock` todavía. Los 5
+  productos genéricos de viaje (`ProductoGenericoViajeSeeder`) van a ir
+  quedando con `stock` cada vez más negativo apenas un tenant
+  `agencia_viajes` empiece a facturar servicios reales contra ellos — es
+  drift numérico silencioso en la columna, no un bug de cálculo (el
+  `decrement()`/`increment()` en sí son correctos, solo no deberían
+  correr para estos productos).
+  - **Matizado, no confirmado el riesgo tal como se planteó**: no bloquea
+    ventas HOY a través del flujo normal (`register.vue`/`edit.vue`) —
+    ambos frontends solo bloquean por stock insuficiente cuando
+    `product.disponiblidad !== 1`
+    (`admin-start-kit/src/views/sale/register.vue:1214`/`1223`, mismo
+    guard en `edit.vue`), y `ProductoGenericoViajeSeeder` sembró los 5
+    productos con `disponiblidad=1` ("Vender sin stock") a propósito, por
+    ser justamente la opción coherente con "sin inventario real". El
+    riesgo real y sí vigente: (1) cualquier flujo que llame a
+    `SaleController::store()`/`update()` directo por API sin pasar por
+    ese chequeo de frontend (ej. la futura generación reserva→Sale, §6.2)
+    no tiene ningún guard, ni de frontend ni de backend; (2) si algún día
+    se agrega una validación de stock del lado del backend (razonable,
+    todavía no existe), estos 5 productos empezarían a bloquear ventas de
+    inmediato por el stock negativo ya acumulado, con causa raíz no obvia
+    para quien lo debuguee entonces; (3) si un admin de tenant edita
+    manualmente uno de los 5 productos y le cambia `disponiblidad` a `2`
+    sin saber por qué estaba en `1`, el bloqueo del punto anterior pasa a
+    ser inmediato incluso sin cambios de backend.
+  - **Pendiente, explícitamente para Sesión 11 (CRUD real)**: conectar
+    `controla_stock=false` a `SaleController::store()`/`update()` para
+    saltar el `decrement()`/`increment()` de stock en esos 2 puntos (y
+    los puntos equivalentes de `update()`, líneas ~1270/~1324/~1338) —
+    mismo criterio ya usado para otras columnas "schema listo, lógica
+    después" del vertical (`reserva.motivo_cancelacion` y relacionados,
+    Sesión 8a; `reglas_cancelacion`, Sesión 8b).
