@@ -10,6 +10,7 @@ use App\Models\AgenciaViajes\Guia;
 use App\Models\AgenciaViajes\OpcionHotel;
 use App\Models\AgenciaViajes\Proveedor;
 use App\Models\AgenciaViajes\ProveedorTipoConfig;
+use App\Models\AgenciaViajes\ReglaCancelacion;
 use App\Models\AgenciaViajes\Servicio;
 use App\Models\AgenciaViajes\TipoCambioAgencia;
 use App\Models\Client\Client;
@@ -323,6 +324,32 @@ class TenantProvisioningService
      *   (registrado_por → users) no cuenta, porque users NUNCA se chequea en
      *   eliminarSiVacio() (todo tenant tiene al menos su admin de provisioning) — es la
      *   única tabla nueva desde Sesión 6 sin ningún ancestro ya cubierto.
+     * - reserva (Sesión 8a) tampoco necesita chequeo propio: alternativa_id es NOT NULL,
+     *   así que cubierta transitivamente por la misma cadena que cotizaciones (arriba) →
+     *   Client::count() > 0. reserva_pasajeros/reserva_items/reserva_item_pasajero/
+     *   reserva_ventas quedan cubiertas transitivamente por su propia FK obligatoria a
+     *   reserva (reserva_ventas también por sale_id NOT NULL → Sale::count() > 0, ya
+     *   chequeado — cualquiera de las dos rutas alcanza).
+     * - reserva_anticipos (Sesión 8b) tampoco necesita chequeo propio: reserva_id es NOT
+     *   NULL, misma cadena que reserva de arriba.
+     * - cronograma_pago_proveedor (Sesión 8b) tampoco necesita chequeo propio pese a tener
+     *   AMBAS FK nullable (proveedor_id/opcion_mayorista_id) — a diferencia de
+     *   opciones_hotel (que sí lo necesitó), acá la regla de negocio "uno de los dos, no
+     *   ambos" (documentada, no CHECK constraint — mismo criterio que opciones_hotel/
+     *   paquete_plantilla_items) garantiza que toda fila real tiene al menos una de las
+     *   dos poblada, y ambos caminos llegan a algo ya cubierto: proveedor_id → Proveedor
+     *   directo; opcion_mayorista_id → OpcionMayorista, cuyo propio proveedor_id es NOT
+     *   NULL → Proveedor igual. Límite conocido y aceptado (no corregido): una fila
+     *   malformada con AMBAS columnas null (viola la regla de negocio, la BD no lo
+     *   impide) evadiría este chequeo — mismo tipo de riesgo residual que el proyecto ya
+     *   acepta en otras reglas "uno de los dos" no modeladas como CHECK constraint.
+     * - reglas_cancelacion (Sesión 8b) SÍ necesita chequeo propio: proveedor_id es
+     *   nullable (la regla general de la agencia, carga inicial vía
+     *   ReglaCancelacionSeeder, siempre tiene proveedor_id=null) y no hay ninguna otra FK
+     *   en la tabla — a diferencia de configuracion_agencia (que se auto-inserta en TODO
+     *   tenant al migrar), este seeder es standalone y NO corre en tenants:provision, así
+     *   que cualquier fila acá (incluida la carga inicial) implica que alguien la corrió
+     *   a mano después de provisionar — configuración real, no un default automático.
      *
      * Debe llamarse DENTRO de $tenant->run() (mismo contrato que el resto de los chequeos
      * de eliminarSiVacio() — usa el connection default resuelto por DatabaseTenancyBootstrapper).
@@ -341,6 +368,7 @@ class TenantProvisioningService
             || ProveedorTipoConfig::count() > 0
             || OpcionHotel::count() > 0
             || TipoCambioAgencia::count() > 0
+            || ReglaCancelacion::count() > 0
             || $this->configuracionAgenciaFueEditada();
     }
 
