@@ -97,8 +97,11 @@ deben perderse. No es un plan de módulo — para eso está `docs/planning/`.
   `2026_07_27_200300_add_paquete_plantilla_foreign_to_opciones_hotel_table.php`)**
   — `paquetes_plantilla` ya existe, FK real cerrada vía retrofit, y
   `OpcionHotel::paquetePlantilla()` actualizado con `belongsTo` real.
-  **`opcion_mayorista_id` sigue pendiente** — la tabla `opcion_mayorista`
-  es Sesión 7, todavía no existe.
+  **`opcion_mayorista_id`: ✅ RESUELTO 28-jul-2026 (Sesión 7b, migración
+  `2026_07_28_100400_add_opcion_mayorista_foreign_to_opciones_hotel_table.php`)**
+  — `opcion_mayorista` ya existe, FK real cerrada vía retrofit, y
+  `OpcionHotel::opcionMayorista()` actualizado con `belongsTo` real. Con
+  esto quedan cerradas las 2 FK diferidas de `opciones_hotel`.
 - **✅ RESUELTO 27-jul-2026 (rama `fix/eliminar-si-vacio-opciones-hotel`).**
   Recurrencia del mismo gap ya resuelto una vez (Sesión 3):
   `TenantProvisioningService::eliminarSiVacio()` tampoco conocía las
