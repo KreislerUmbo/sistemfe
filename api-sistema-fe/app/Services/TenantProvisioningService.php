@@ -9,6 +9,7 @@ use App\Models\AgenciaViajes\DestinoServicio;
 use App\Models\AgenciaViajes\Guia;
 use App\Models\AgenciaViajes\OpcionHotel;
 use App\Models\AgenciaViajes\Proveedor;
+use App\Models\AgenciaViajes\PasajeroCatalogo;
 use App\Models\AgenciaViajes\ProveedorTipoConfig;
 use App\Models\AgenciaViajes\ReglaCancelacion;
 use App\Models\AgenciaViajes\Servicio;
@@ -358,6 +359,12 @@ class TenantProvisioningService
      *   exacto que cronograma_pago_proveedor (arriba): ambas FK nullable, pero la regla
      *   "uno de los dos" garantiza un camino real hasta Proveedor (directo o vía
      *   OpcionMayorista.proveedor_id, NOT NULL). Mismo límite residual aceptado.
+     * - pasajeros_catalogo (Sesión 9c) SÍ necesita chequeo propio: cliente_id es su única
+     *   FK y es nullable (un perfil de pasajero reutilizable no siempre corresponde a un
+     *   Client con cuenta propia) — sin ningún otro ancestro, es una raíz real igual que
+     *   tipo_cambio_agencia/reglas_cancelacion. pasajero_documentos NO lo necesita:
+     *   pasajero_catalogo_id es NOT NULL, cubierta transitivamente una vez que
+     *   PasajeroCatalogo se chequea acá.
      *
      * Debe llamarse DENTRO de $tenant->run() (mismo contrato que el resto de los chequeos
      * de eliminarSiVacio() — usa el connection default resuelto por DatabaseTenancyBootstrapper).
@@ -377,6 +384,7 @@ class TenantProvisioningService
             || OpcionHotel::count() > 0
             || TipoCambioAgencia::count() > 0
             || ReglaCancelacion::count() > 0
+            || PasajeroCatalogo::count() > 0
             || $this->configuracionAgenciaFueEditada();
     }
 
