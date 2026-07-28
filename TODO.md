@@ -82,3 +82,32 @@ deben perderse. No es un plan de módulo — para eso está `docs/planning/`.
   rechazado, editar un solo campo de `configuracion_agencia` sin tocar
   ninguna otra tabla también rechaza (aislado), y `sandbox` (retail) no
   lanza ningún error de tabla inexistente.
+
+## Sesión 5 (Tarifas) — 27-jul-2026
+
+- **`opciones_hotel.opcion_mayorista_id`/`paquete_plantilla_id` sin FK
+  real todavía.** Las tablas `opcion_mayorista` (Sesión 7) y
+  `paquetes_plantilla` (Sesión 6) no existen aún — quedaron como
+  `unsignedBigInteger` nullable, sin `constrained()`. Cuando cada una
+  de esas sesiones aterrice, agregar la FK real vía migración
+  `ALTER TABLE opciones_hotel ADD CONSTRAINT ...` (o
+  `Schema::table('opciones_hotel', ...)` con `foreign()`), no dejarlo
+  para "después de después".
+- **Recurrencia del mismo gap ya resuelto una vez (Sesión 3):
+  `TenantProvisioningService::eliminarSiVacio()` tampoco conoce las
+  tablas nuevas de esta sesión** (`proveedor_tarifas`, `guia_tarifas`,
+  `opciones_hotel`, `opciones_hotel_tarifas` — `temporada_ocurrencias`
+  es central, no aplica). En la práctica, `proveedor_tarifas`/
+  `guia_tarifas` reales quedan cubiertos indirectamente (su FK exige
+  que ya exista un `Proveedor`/`Guia` real, que sí se chequea), **pero
+  `opciones_hotel` NO** — `proveedor_id` es nullable ahí, así que un
+  tenant podría tener filas reales en `opciones_hotel`/
+  `opciones_hotel_tarifas` sin ningún `Proveedor` real, y seguiría
+  considerándose "vacío". Mismo patrón de riesgo que el gap de Sesión
+  3 (pérdida de datos real vía botón "Eliminar" del panel superadmin),
+  encontrado al construir esta sesión, no corregido acá — mismo
+  criterio que la vez pasada: resolver como su propia mini-sesión
+  corta, no diferir indefinidamente. Cuando se retome, agregar
+  `OpcionHotel::count() > 0` a `tieneDatosVerticalAgenciaViajes()`
+  (`opciones_hotel_tarifas` queda cubierta transitivamente por su FK a
+  `opciones_hotel`).
