@@ -11,6 +11,7 @@ use App\Models\AgenciaViajes\OpcionHotel;
 use App\Models\AgenciaViajes\Proveedor;
 use App\Models\AgenciaViajes\ProveedorTipoConfig;
 use App\Models\AgenciaViajes\Servicio;
+use App\Models\AgenciaViajes\TipoCambioAgencia;
 use App\Models\Client\Client;
 use App\Models\Company;
 use App\Models\Product\Product;
@@ -285,7 +286,7 @@ class TenantProvisioningService
     }
 
     /**
-     * Las tablas del vertical agencia_viajes (Sesiones 2-5) solo existen en tenants
+     * Las tablas del vertical agencia_viajes (Sesiones 2-7b) solo existen en tenants
      * giro=agencia_viajes — un tenant retail nunca corrió tenant/verticals/agencia-viajes/,
      * así que consultarlas directo (Modelo::count()) lanzaría "relation does not exist".
      * 'configuracion_agencia' es la primera migración de ese set en tener nombre estable
@@ -294,7 +295,8 @@ class TenantProvisioningService
      * cada tabla nueva que se agregue a futuro.
      *
      * No todas las tablas del vertical necesitan chequeo propio acá — solo las que pueden
-     * tener datos reales SIN depender de otra tabla ya chequeada:
+     * tener datos reales SIN depender (vía FK NOT NULL) de otra tabla ya chequeada, directa
+     * o transitivamente:
      * - proveedor_tarifas/guia_tarifas quedan cubiertas transitivamente por sus FK
      *   obligatorias (NOT NULL) a Proveedor/Guia, que ya se chequean.
      * - opciones_hotel_tarifas queda cubierta transitivamente por su FK obligatoria a
@@ -302,6 +304,25 @@ class TenantProvisioningService
      * - opciones_hotel SÍ necesita chequeo propio: proveedor_id es nullable ahí (una
      *   opción de hotel puede cargarse sin proveedor todavía) — bug real encontrado en
      *   Sesión 5 y corregido acá, mismo patrón que el gap original de Sesión 3.
+     * - paquetes_plantilla (Sesión 6) NO necesita chequeo propio pese a ser noticia nueva:
+     *   destino_atractivo_id es NOT NULL, así que cualquier fila real ya implica un
+     *   DestinoAtractivo real (chequeado acá) — tour_itinerario_items/paquete_plantilla_items
+     *   quedan cubiertas transitivamente por su FK obligatoria a paquetes_plantilla, dos
+     *   niveles arriba de DestinoAtractivo.
+     * - cotizaciones (Sesión 7a) tampoco necesita chequeo propio: cliente_id es NOT NULL,
+     *   así que cualquier cotización real ya implica un Client real — cubierta por
+     *   Client::count() > 0 en eliminarSiVacio() (nivel superior, no acá). cotizacion_pasajeros/
+     *   alternativas/alternativa_items/opcion_mayorista/opcion_mayorista_opcionales/
+     *   salidas_mayorista quedan todas cubiertas transitivamente por esa misma cadena
+     *   (alternativa_id/cotizacion_id/proveedor_id son NOT NULL en cada una — ver sus
+     *   migraciones). Esto corrige una asunción hecha al planificar Sesión 7b (que asumía
+     *   paquetes_plantilla/cotizaciones como "raíces obligadas" sin trazar su propia cadena
+     *   de FK) — verificado leyendo cada migración antes de escribir este chequeo, no
+     *   asumido.
+     * - tipo_cambio_agencia (Sesión 7a) SÍ necesita chequeo propio: su única FK
+     *   (registrado_por → users) no cuenta, porque users NUNCA se chequea en
+     *   eliminarSiVacio() (todo tenant tiene al menos su admin de provisioning) — es la
+     *   única tabla nueva desde Sesión 6 sin ningún ancestro ya cubierto.
      *
      * Debe llamarse DENTRO de $tenant->run() (mismo contrato que el resto de los chequeos
      * de eliminarSiVacio() — usa el connection default resuelto por DatabaseTenancyBootstrapper).
@@ -319,6 +340,7 @@ class TenantProvisioningService
             || Proveedor::count() > 0
             || ProveedorTipoConfig::count() > 0
             || OpcionHotel::count() > 0
+            || TipoCambioAgencia::count() > 0
             || $this->configuracionAgenciaFueEditada();
     }
 
