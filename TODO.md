@@ -123,30 +123,32 @@ deben perderse. No es un plan de módulo — para eso está `docs/planning/`.
   describía el gap, aislado a propósito) queda rechazado; `sandbox`
   (retail) sigue sin ningún error de tabla inexistente.
 
-## Sesión 6/7a — recurrencia SIN resolver del gap de `eliminarSiVacio()` — 28-jul-2026
+## Sesión 6/7a/7b — recurrencia del gap de `eliminarSiVacio()` — 28-jul-2026
 
-- **`TenantProvisioningService::tieneDatosVerticalAgenciaViajes()` no
-  conoce ninguna de las tablas agregadas desde Sesión 6 en adelante.**
-  Mismo patrón ya resuelto dos veces (Sesión 3, Sesión 5) — esta vez NO
-  se corrigió en el momento porque cayó fuera del alcance explícito de
-  ambas sesiones (Sesión 6 no dejó nota en este archivo; Sesión 7a lo
-  encontró de pasada al preparar la limpieza del tenant descartable de
-  verificación, sin tocarlo por no ser parte del pedido de esa sesión).
-  Tablas sin cubrir hoy: `paquetes_plantilla`/`tour_itinerario_items`/
-  `paquete_plantilla_items` (Sesión 6), `tipo_cambio_agencia`/
-  `cotizaciones`/`cotizacion_pasajeros`/`alternativas`/`alternativa_items`
-  (Sesión 7a). Todas menos `cotizaciones` cuelgan de una FK NOT NULL a
-  algo ya chequeado (`paquetes_plantilla`→`destinos_atractivos` vía
-  `destino_atractivo_id`; `alternativas`→`cotizaciones`; `cotizacion_pasajeros`/
-  `alternativa_items`→sus padres) — pero `paquetes_plantilla` y
-  `cotizaciones` en sí mismas NO dependen de ninguna tabla ya cubierta
-  (`paquetes_plantilla.destino_atractivo_id` si cuenta, pero conviene
-  chequearlas directo por claridad) y `tipo_cambio_agencia` tampoco
-  depende de nada del vertical. Mismo riesgo ya documentado dos veces:
-  un tenant `agencia_viajes` con cotizaciones/paquetes reales pero sin
-  Company/cliente/producto/venta todavía se considera "vacío" y es
-  borrable de verdad desde el panel superadmin. Pendiente: sumar
-  `PaquetePlantilla::count() > 0`, `TipoCambioAgencia::count() > 0` y
-  `Cotizacion::count() > 0` a `tieneDatosVerticalAgenciaViajes()` (el
-  resto de las tablas nuevas quedan cubiertas transitivamente una vez
-  que esas 3 estén, mismo criterio que `opciones_hotel_tarifas`).
+- **✅ RESUELTO 28-jul-2026 (Sesión 7b).** `tieneDatosVerticalAgenciaViajes()`
+  no conocía ninguna de las tablas agregadas desde Sesión 6 en adelante —
+  mismo patrón ya resuelto dos veces (Sesión 3, Sesión 5). La nota
+  original de Sesión 7a (abajo, tachada por la corrección) asumía que
+  `paquetes_plantilla` y `cotizaciones` eran "raíces obligadas" sin
+  trazar su propia cadena de FK hacia arriba — al hacerlo en Sesión 7b
+  (necesario para decidir qué chequear de las tablas nuevas de 7b) se
+  encontró que esa asunción estaba mal: **`paquetes_plantilla.destino_atractivo_id`
+  y `cotizaciones.cliente_id` son NOT NULL**, así que cualquier fila real
+  en cualquiera de las dos ya implica una fila real en `DestinoAtractivo`
+  (chequeada en `tieneDatosVerticalAgenciaViajes()`) o en `Client`
+  (chequeada en `eliminarSiVacio()`, un nivel arriba) — quedan cubiertas
+  transitivamente sin chequeo propio. La única tabla nueva sin ningún
+  ancestro ya cubierto resultó ser `tipo_cambio_agencia` (su única FK,
+  `registrado_por`→`users`, no cuenta porque `users` nunca se chequea acá
+  — todo tenant tiene su admin de provisioning). Corregido agregando
+  únicamente `TipoCambioAgencia::count() > 0`. El resto de las tablas
+  nuevas (`cotizacion_pasajeros`, `alternativas`, `alternativa_items`,
+  `opcion_mayorista`, `opcion_mayorista_opcionales`, `salidas_mayorista`,
+  `tour_itinerario_items`, `paquete_plantilla_items`) quedan cubiertas
+  transitivamente por sus propias FK NOT NULL. Verificado con 3 casos
+  reales (tenants descartables): tenant con solo una `Cotizacion` →
+  rechazado (vía `Client::count()`, no vía este fix); tenant con solo un
+  `tipo_cambio_agencia` → rechazado (prueba directa del fix); tenant
+  recién provisionado sin ningún dato → sigue eliminable, sin regresión.
+  Ver docstring de `tieneDatosVerticalAgenciaViajes()` para el detalle
+  completo de la cadena de FK de cada tabla.
