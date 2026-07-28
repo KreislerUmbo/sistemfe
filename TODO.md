@@ -267,3 +267,19 @@ deben perderse. No es un plan de módulo — para eso está `docs/planning/`.
   un vehículo. La migración ALTER TABLE que la agrega queda para Sesión
   11b, no es retroactiva a Sesión 7 (no hay datos reales en producción
   todavía que se vean afectados).
+
+## Retrofit confirmado para Sesión 11a — `proveedor_tarifas.tipo_habitacion` — 28-jul-2026
+
+- **Decidido (no es pregunta abierta como las 2 anteriores):** agregar
+  columna `tipo_habitacion` (matrimonial | doble | triple | familiar,
+  nullable) a `proveedor_tarifas`, mismo enum que ya usa
+  `opciones_hotel_tarifas` (Sesión 5). Hoy vive metida dentro de
+  `diferenciador` (JSON libre) — el motor de precios de 11b necesita
+  tratar "Hotel" igual sin importar si el ítem viene de un proveedor
+  local o de un paquete/mayorista.
+- Es un **retrofit sobre Sesión 5, ya mergeada** — la migración ALTER
+  TABLE + backfill de los datos ya cargados en `diferenciador` va como
+  parte de Sesión 11a (que de todas formas construye el CRUD de
+  `proveedor_tarifas`), no una migración suelta aparte.
+- Ver `plan-modulo-cotizaciones-reservas.md` §2.2 y §7.1 para el detalle
+  completo de la decisión.

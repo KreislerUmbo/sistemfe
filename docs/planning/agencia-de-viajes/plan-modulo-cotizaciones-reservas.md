@@ -69,9 +69,21 @@ proveedor_tarifas
      La moneda es un atributo del proveedor/tarifa, no una regla fija
      "local = soles, internacional = dólares")
  - diferenciador: JSON flexible — varía según tipo de proveedor
-     (tipo de habitación/distancia para hotel, tipo de menú para
-     restaurante, tipo de vehículo para transporte). Flexible a propósito
-     para no alterar el esquema cada vez que aparece un diferenciador nuevo.
+     (tipo de distancia para transporte, tipo de menú para restaurante).
+     Flexible a propósito para no alterar el esquema cada vez que aparece
+     un diferenciador nuevo SIN catálogo fijo.
+ - tipo_habitacion: matrimonial | doble | triple | familiar   (NUEVO
+     28-jul-2026 — RETROFIT sobre tabla ya mergeada en Sesión 5. Antes
+     vivía dentro de `diferenciador` como texto libre; se promueve a
+     columna explícita, nullable, solo aplica cuando el proveedor es
+     tipo Hotel. Motivo: `opciones_hotel_tarifas` (§2.4, paquetes/
+     mayoristas) YA usa este mismo enum como columna real — tener dos
+     formas distintas de guardar "tipo de habitación" según de dónde
+     viene el ítem le impide al motor de precios (§2.5) tratar "Hotel"
+     de forma uniforme sin importar el origen. Requiere su propia
+     migración ALTER TABLE + backfill de lo ya cargado en
+     `diferenciador` desde Sesión 5 — no se hace pasar como parte del
+     diseño original, es un hallazgo posterior)
  - precio_costo
  - margen_tipo: porcentaje | fijo
  - margen_valor
@@ -1284,7 +1296,15 @@ un producto con stock:
 - **Tres formas de cobrar un ítem, cada una con su feedback visual en el
   lienzo** (probado en el prototipo, ver 3-ítem):
   - `tarifa_fija` (hotel, transporte privado) → stepper de `cantidad`
-    (noches/vehículos) junto al precio, recalcula en vivo.
+    (noches/vehículos) junto al precio, recalcula en vivo. **Para Hotel
+    específicamente**: al elegirlo desde la biblioteca se muestra primero
+    la matriz de `tipo_habitacion` (matrimonial/doble/triple/familiar,
+    ver §2.2 y §2.4 — mismo componente matriz para proveedor local y
+    para paquete/mayorista, un solo motor) — el vendedor elige la
+    habitación, RECIÉN ahí se agrega al lienzo con su cantidad de
+    noches. El prototipo probado simplificó esto a una sola línea de
+    precio para testear el layout general más rápido; falta restaurar
+    la matriz al construir 11b de verdad.
   - `por_persona` diferenciado (tour, pasaje aéreo) → precio se reparte
     solo según los pasajeros del header, mostrando el detalle del
     cálculo bajo el ítem (ej. "3 adultos × S/70 + 1 niño × S/45") — el
@@ -1465,3 +1485,4 @@ los recordatorios pendientes de todos los vendedores en una sola vista
 | 25-jul-2026 | Módulo de guías a fondo: confirmado que son freelance (trabajan con varias agencias, no se controla su calendario completo — sin choques de horario por ahora). Se agrega `guia_tarifas` (costo/margen por guía × destino × modalidad dia_local/grupo_multidia, versionado igual que `proveedor_tarifas`, sin piso de descuento por ahora). Resuelve el pendiente dejado en `plan-modulo-tours-catalogo.md` §6 sobre si "Guía de Turismo" en `items_incluidos` necesita tarifa propia — sí la necesita. |
 | 25-jul-2026 | Reporte operativo por fecha resuelto (§8): un solo reporte con selector de rango (hoy/semana/personalizado), acciones inline (reasignar guía, marcar check-in — nuevo `reserva_item_pasajero.checkin_realizado`/`checkin_hora`), y versión PDF de solo lectura para repartir al equipo. Se agrega módulo nuevo transversal de recordatorios/notificaciones en-app (§8bis) — resuelve los módulos `aviso_pasaportes_vencer`/`felicitaciones_cumpleanos` que estaban catalogados en `plan-modulo-planes-acceso.md` sin diseñar, más casos nuevos (pago a mayorista próximo con `dias_aviso_pago_proveedor` default 2, cotización estancada con `dias_cotizacion_estancada` default 15, ambos configurables). Recordatorios con snooze (1h/8h/omitir) y flag `forzado` para que el admin marque uno como no descartable. Admin ve todos los recordatorios del equipo, vendedor solo los suyos. |
 | 28-jul-2026 | Sesión de diseño UX del cotizador (Sesión 11, ver hoja de ruta): se descarta reutilizar el wizard de tarjetas de Ventas — se diseña layout de 3 columnas (biblioteca/lienzo día-por-día/precio en vivo) validado contra software real del rubro (Travefy, Ezus, Tourwriter) y probado con un prototipo HTML clickeable fuera del repo (§7.1). Se agrega `alternativa_items.cantidad` (hueco encontrado probando el prototipo: hotel se cobra por noche, transporte privado por vehículo — precio pasa a ser unitario). Se agrega §2.5: `PriceEngineService` como motor de precios único (evita margen duplicado por controller) y tabla nueva `cotizacion_pasaje_aereo` para vender un pasaje aéreo SUELTO (no vía mayorista) — con desglose de `cargos` en JSON (tarifa base + impuestos + TUA + fee de agencia), validado contra normativa MTC 2026 que obliga a las aerolíneas a desglosar estos cargos. Queda pendiente confirmar si `aerolinea` es FK a un tipo de proveedor nuevo o texto libre. |
+| 28-jul-2026 | `proveedor_tarifas.tipo_habitacion` promovida de `diferenciador` (JSON libre) a columna explícita con el mismo enum que ya usa `opciones_hotel_tarifas` — RETROFIT sobre Sesión 5, ya mergeada. Motivo: se vende la habitación, no el hotel; el motor de precios (§2.5) necesita tratar "Hotel" igual sin importar si el ítem viene de un proveedor local o de un paquete/mayorista. §7.1 actualizado para que el ítem Hotel muestre la matriz de habitaciones antes de agregarse al lienzo (el prototipo probado lo había simplificado a una sola línea de precio para testear el layout más rápido). |
