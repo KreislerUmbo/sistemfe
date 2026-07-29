@@ -74,7 +74,7 @@ export type ProveedorTarifa = {
   modalidad: 'compartido' | 'privado';
   moneda: 'PEN' | 'USD';
   diferenciador?: Record<string, any> | null;
-  tipo_habitacion?: 'matrimonial' | 'doble' | 'triple' | 'familiar' | null;
+  tipo_habitacion?: 'simple' | 'matrimonial' | 'doble' | 'triple' | 'familiar' | null;
   precio_costo: number;
   margen_tipo: 'porcentaje' | 'fijo';
   margen_valor: number;
@@ -315,7 +315,7 @@ export type OpcionHotel = {
 export type OpcionHotelTarifa = {
   id: number;
   opcion_hotel_id: number;
-  tipo_habitacion: 'matrimonial' | 'doble' | 'triple' | 'familiar';
+  tipo_habitacion: 'simple' | 'matrimonial' | 'doble' | 'triple' | 'familiar';
   precio_costo: number;
   precio_venta: number;
 };

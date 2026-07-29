@@ -100,7 +100,7 @@ class OpcionMayoristaController extends Controller
             'categoria_estrellas' => 'nullable|integer|min:1|max:5',
             'proveedor_id' => 'nullable|integer|exists:proveedores,id',
             'tarifas' => 'nullable|array',
-            'tarifas.*.tipo_habitacion' => 'required_with:tarifas|in:matrimonial,doble,triple,familiar',
+            'tarifas.*.tipo_habitacion' => 'required_with:tarifas|in:simple,matrimonial,doble,triple,familiar',
             'tarifas.*.precio_costo' => 'required_with:tarifas|numeric|min:0',
             'tarifas.*.precio_venta' => 'required_with:tarifas|numeric|min:0',
         ]);

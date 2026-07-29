@@ -125,7 +125,7 @@ class ProveedorTarifaController extends Controller
             'modalidad' => 'required|in:compartido,privado',
             'moneda' => 'required|in:PEN,USD',
             'diferenciador' => 'nullable|array',
-            'tipo_habitacion' => 'nullable|in:matrimonial,doble,triple,familiar',
+            'tipo_habitacion' => 'nullable|in:simple,matrimonial,doble,triple,familiar',
             'precio_costo' => 'required|numeric|min:0',
             'margen_tipo' => 'required|in:porcentaje,fijo',
             'margen_valor' => 'required|numeric|min:0',

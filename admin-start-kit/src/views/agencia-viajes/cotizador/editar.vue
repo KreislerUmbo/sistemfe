@@ -126,6 +126,7 @@
                                 <div v-for="(tf, idx) in formHotel.tarifas" :key="idx" class="row g-1 mb-1">
                                     <div class="col-4">
                                         <select class="form-select form-select-sm" v-model="tf.tipo_habitacion">
+                                            <option value="simple">Simple</option>
                                             <option value="matrimonial">Matrimonial</option>
                                             <option value="doble">Doble</option>
                                             <option value="triple">Triple</option>

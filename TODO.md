@@ -571,3 +571,47 @@ deben perderse. No es un plan de módulo — para eso está `docs/planning/`.
   contra `agencia-demo` real: arrancaba con los 5 tipos en
   `habilitado=false`, el toggle de "Hotel" funcionó.
 
+## `tipo_habitacion` sin "Simple" + bug real en asociar servicio↔destino — CERRADO — 29-jul-2026
+
+- Encontrado ayudando al usuario a registrar Hotel Cumbaza (Alto Mayo)
+  con sus tipos de habitación reales.
+- **Fix 1 — enum incompleto**: `tipo_habitacion` (`proveedor_tarifas`/
+  `opciones_hotel_tarifas`) solo aceptaba matrimonial/doble/triple/
+  familiar — sin "simple" (habitación de 1 sola cama/persona). Columna
+  es `string` plano (sin CHECK de Postgres), así que no hizo falta
+  migración — solo agregar `simple` a las validaciones `in:` de
+  `ProveedorTarifaController`/`OpcionMayoristaController`, al union type
+  de `agencia-viajes.ts` (`ProveedorTarifa`/`OpcionHotelTarifa`), y a los
+  `<select>` de `proveedores/detalle.vue` y `cotizador/editar.vue`.
+- **Fix 2 — bug real en "Asociar servicio a destino" (`detalle.vue`)**:
+  el `<select>` de Servicio listaba el catálogo GLOBAL de `Servicio`
+  (`servicioService.listar({})`) y mandaba ese `id` directo como
+  `destino_servicio_id` al asociar — el destino elegido
+  (`nuevoDestinoId`) nunca se usaba para nada. `ProveedorServicioController
+  ::store()` exige un `destino_servicio_id` real (`exists:destino_servicio,id`),
+  así que esto rompía la asociación en la práctica (confirmado: el
+  usuario tenía 0 `destino_servicio`/`proveedor_servicio` reales pese a
+  haber creado proveedor y servicio). Corregido: al elegir el destino,
+  ahora se cargan los `destino_servicio` YA asociados a ESE destino
+  (`destinoAtractivoService.listarServicios()`, endpoint que ya existía
+  y se usaba en `destinos/index.vue` pero nunca se conectó acá) y el
+  `<select>` de Servicio pasa a listar esos, usando el id correcto de la
+  tabla puente.
+- **Aclaración conceptual dada al usuario** (no un bug de código): el
+  catálogo `Servicio` representa una categoría general de oferta
+  ("Alojamiento", "Transporte"), no un tipo de habitación — los tipos de
+  habitación van en `tipo_habitacion` dentro de las tarifas de ESE
+  servicio, no como servicios separados. El usuario había creado un
+  `Servicio` llamado "Habitación Simple"; se renombró a "Alojamiento" a
+  pedido suyo, confirmado antes de tocar el dato real.
+- Verificado con Postgres real contra `agencia-demo`, completando el
+  caso real del usuario (no datos descartables): Hotel "SERVICIOS
+  TURISTICOS CUMBAZA SRL" con servicio "Alojamiento" en destino
+  Tarapoto, y 5 tarifas reales (simple/matrimonial/doble/triple/
+  familiar) con precios de ejemplo — a reemplazar por el usuario con los
+  precios reales desde la UI.
+- Ya sabían los usuarios que el catálogo `Servicio` en sí no necesita
+  código para extenderse (Traslados/Alimentación/Entradas, etc.) — CRUD
+  completo ya existente vía alta rápida inline en `destinos/index.vue`
+  (modal "Servicios asociados" de cada destino), sin ningún enum de por
+  medio. Aclarado al usuario, sin cambios de código.

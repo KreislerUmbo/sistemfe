@@ -62,10 +62,13 @@
                         </div>
                         <div class="col-8 col-md-4">
                             <label class="form-label mb-1 small fw-semibold text-secondary">Servicio</label>
-                            <select class="form-select form-select-sm" v-model="nuevoServicioId">
+                            <select class="form-select form-select-sm" v-model="nuevoServicioId" :disabled="!nuevoDestinoId">
                                 <option :value="null">— Selecciona —</option>
-                                <option v-for="s in servicios" :key="s.id" :value="s.id">{{ s.nombre }}</option>
+                                <option v-for="ds in destinoServicios" :key="ds.id" :value="ds.id">{{ ds.servicio?.nombre }}</option>
                             </select>
+                            <small class="text-muted" v-if="nuevoDestinoId && destinoServicios.length === 0">
+                                Este destino todavía no tiene ningún servicio asociado.
+                            </small>
                         </div>
                         <div class="col-4 col-md-3">
                             <button class="btn btn-primary btn-sm w-100" @click="asociarServicio" :disabled="!nuevoDestinoId || !nuevoServicioId">
@@ -172,6 +175,7 @@
                                 <label class="form-label mb-1 small fw-semibold text-secondary">Tipo de habitación *</label>
                                 <select class="form-select form-select-sm" v-model="formTarifa.tipo_habitacion">
                                     <option :value="null">— Selecciona —</option>
+                                    <option value="simple">Simple</option>
                                     <option value="matrimonial">Matrimonial</option>
                                     <option value="doble">Doble</option>
                                     <option value="triple">Triple</option>
@@ -244,14 +248,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, watch, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import DestinoTreeSelect from '@/components/AgenciaViajes/DestinoTreeSelect.vue';
 import Swal from 'sweetalert2/dist/sweetalert2.js';
 import { proveedorService, proveedorTipoService } from '@/services/admin/proveedorService';
-import { servicioService } from '@/services/admin/servicioService';
-import type { Proveedor, ProveedorTipo, ProveedorServicio, ProveedorTarifa, Servicio } from '@/types/agencia-viajes';
+import { destinoAtractivoService } from '@/services/admin/destinoAtractivoService';
+import type { Proveedor, ProveedorTipo, ProveedorServicio, ProveedorTarifa, DestinoServicio } from '@/types/agencia-viajes';
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
 
@@ -262,12 +266,21 @@ const proveedor = ref<Proveedor | null>(null);
 const proveedorTipos = ref<ProveedorTipo[]>([]);
 const proveedorServicios = ref<ProveedorServicio[]>([]);
 const tarifasPorServicio = ref<Record<number, ProveedorTarifa[]>>({});
-const servicios = ref<Servicio[]>([]);
 
 const tabActiva = ref<'datos' | 'servicios'>('datos');
 
 const nuevoDestinoId = ref<number | null>(null);
 const nuevoServicioId = ref<number | null>(null);
+// Servicios ya asociados al destino elegido (destino_servicio real) — nuevoServicioId
+// termina siendo el id de esta tabla puente, NUNCA el id crudo de Servicio (eso rompía
+// la asociación: ProveedorServicioController::store() valida destino_servicio_id contra
+// la tabla destino_servicio, no contra servicios).
+const destinoServicios = ref<DestinoServicio[]>([]);
+
+watch(nuevoDestinoId, async (destinoId) => {
+    nuevoServicioId.value = null;
+    destinoServicios.value = destinoId ? (await destinoAtractivoService.listarServicios(destinoId)).destino_servicios : [];
+});
 
 const nombreTipo = (tipoId: number) => proveedorTipos.value.find((t) => t.id === tipoId)?.nombre ?? '—';
 const esHotel = computed(() => {
@@ -353,12 +366,8 @@ const guardarTarifa = async () => {
 };
 
 onMounted(async () => {
-    const [tiposRes, serviciosRes] = await Promise.all([
-        proveedorTipoService.listar(),
-        servicioService.listar({}),
-    ]);
+    const tiposRes = await proveedorTipoService.listar();
     proveedorTipos.value = tiposRes.proveedor_tipos;
-    servicios.value = serviciosRes.servicios;
 
     await cargarProveedor();
     await cargarServicios();
