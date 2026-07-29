@@ -100,7 +100,12 @@ class CotizacionController extends Controller
         $cotizacion = Cotizacion::with([
             'cliente',
             'pasajeros',
-            'alternativas.items.proveedorTarifa',
+            // .proveedorServicio.proveedor/.destinoServicio.servicio: sin esto, el
+            // frontend (etiquetaItem() en editar.vue) no tiene forma de mostrar el
+            // nombre del proveedor ni la categoría del servicio de cada ítem — solo
+            // llegaba el proveedor_tarifa "pelado" (sin su cadena de relaciones).
+            'alternativas.items.proveedorTarifa.proveedorServicio.proveedor',
+            'alternativas.items.proveedorTarifa.proveedorServicio.destinoServicio.servicio',
             'alternativas.items.opcionMayorista',
             'alternativas.items.cotizacionPasajeAereo',
         ])->findOrFail($id);

@@ -76,21 +76,21 @@
                         <input type="text" class="form-control form-control-sm mb-2" placeholder="Buscar servicio..."
                             v-model="bibliotecaSearch" @input="onBibliotecaSearch">
                         <div class="d-flex flex-column gap-2" style="max-height:480px;overflow-y:auto;">
-                            <div v-for="t in bibliotecaTarifas" :key="t.id" class="border rounded p-2 small lib-item" style="cursor:pointer"
+                            <div v-for="t in bibliotecaAgrupada" :key="t.id" class="border rounded p-2 small lib-item" style="cursor:pointer"
                                 @click="clicBibliotecaItem(t)">
                                 <div class="d-flex justify-content-between">
                                     <span>
                                         <i class="fas me-1 text-primary" :class="t.tipo_habitacion ? 'fa-bed' : 'fa-concierge-bell'"></i>
                                         {{ t.proveedor_servicio?.proveedor?.razon_social }}
                                     </span>
-                                    <span class="text-muted">{{ t.moneda }} {{ Number(t.precio_venta_adulto).toFixed(0) }}</span>
+                                    <span class="text-muted">{{ t._rangoHabitaciones ? 'desde ' : '' }}{{ t.moneda }} {{ Number(t.precio_venta_adulto).toFixed(0) }}</span>
                                 </div>
                                 <div class="text-muted" style="font-size:11px">
                                     {{ t.proveedor_servicio?.destino_servicio?.servicio?.nombre }}
-                                    <span v-if="t.tipo_habitacion"> · {{ t.tipo_habitacion }}</span>
+                                    <span v-if="t.tipo_habitacion"> · {{ t._rangoHabitaciones ? 'varias habitaciones' : t.tipo_habitacion }}</span>
                                 </div>
                             </div>
-                            <div v-if="bibliotecaTarifas.length === 0" class="text-muted small text-center py-3">Sin tarifas encontradas.</div>
+                            <div v-if="bibliotecaAgrupada.length === 0" class="text-muted small text-center py-3">Sin tarifas encontradas.</div>
                         </div>
                         <small class="text-muted d-block mt-2"><i class="fas fa-hand-pointer me-1"></i>Clic para agregar a la alternativa activa</small>
                     </div>
@@ -352,6 +352,44 @@ const cargarBiblioteca = async () => {
     bibliotecaTarifas.value = res.proveedor_tarifas;
 };
 
+// Agrupa SOLO las tarifas de hotel (con tipo_habitacion) por proveedor_servicio_id —
+// un hotel con 4 tipos de habitación aparecía 4 veces en la biblioteca con el mismo
+// nombre de proveedor. Se queda con la fila de menor precio_venta_adulto como
+// representativa (clicBibliotecaItem ya sabe pedir la matriz completa de ese
+// proveedor_servicio_id, no hace falta tocarla). Tarifas sin tipo_habitacion (tour,
+// transporte, restaurante, etc.) se listan una por una, igual que antes.
+type BibliotecaFila = ProveedorTarifa & { _rangoHabitaciones?: boolean };
+
+const bibliotecaAgrupada = computed<BibliotecaFila[]>(() => {
+    const gruposPorServicio = new Map<number, ProveedorTarifa[]>();
+    for (const t of bibliotecaTarifas.value) {
+        if (!t.tipo_habitacion) continue;
+        const grupo = gruposPorServicio.get(t.proveedor_servicio_id) ?? [];
+        grupo.push(t);
+        gruposPorServicio.set(t.proveedor_servicio_id, grupo);
+    }
+
+    const vistos = new Set<number>();
+    const filas: BibliotecaFila[] = [];
+
+    for (const t of bibliotecaTarifas.value) {
+        if (!t.tipo_habitacion) {
+            filas.push(t);
+            continue;
+        }
+        if (vistos.has(t.proveedor_servicio_id)) continue;
+        vistos.add(t.proveedor_servicio_id);
+
+        const grupo = gruposPorServicio.get(t.proveedor_servicio_id)!;
+        const representativa = grupo.reduce((min, cur) =>
+            Number(cur.precio_venta_adulto) < Number(min.precio_venta_adulto) ? cur : min
+        );
+        filas.push({ ...representativa, _rangoHabitaciones: grupo.length > 1 });
+    }
+
+    return filas;
+});
+
 const onBibliotecaSearch = () => {
     clearTimeout(bibliotecaTimeout);
     bibliotecaTimeout = setTimeout(cargarBiblioteca, 300);
@@ -541,6 +579,12 @@ const etiquetaItem = (item: AlternativaItem) => {
     if (item.origen_tipo === 'manual') return item.descripcion_manual ?? 'Ítem manual';
     if (item.origen_tipo === 'pasaje_aereo') return item.cotizacion_pasaje_aereo?.aerolinea ?? 'Pasaje aéreo';
     if (item.origen_tipo === 'mayorista') return item.opcion_mayorista?.proveedor?.razon_social ?? 'Paquete mayorista';
+    if (item.proveedor_tarifa?.tipo_habitacion) {
+        // Hotel: la categoría genérica del servicio ("Alojamiento") no dice nada útil
+        // acá — mismo formato "Proveedor · tipo_habitación" que ya usa clicBibliotecaItem.
+        const proveedor = item.proveedor_tarifa.proveedor_servicio?.proveedor?.razon_social ?? 'Hotel';
+        return `${proveedor} · ${item.proveedor_tarifa.tipo_habitacion}`;
+    }
     return item.proveedor_tarifa?.proveedor_servicio?.destino_servicio?.servicio?.nombre ?? 'Servicio';
 };
 
