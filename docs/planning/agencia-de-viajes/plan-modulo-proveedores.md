@@ -125,6 +125,20 @@ tipo — siguen operando con normalidad. Ej.: agencia pequeña que no trabaja
 con mayoristas apaga el tipo "Mayorista" sin que eso rompa nada si en el
 futuro sí llega a necesitarlo.
 
+**RETROFIT 29-jul-2026 — CRUD del catálogo central agregado (panel superadmin):**
+hasta esta sesión, `proveedor_tipos` era 100% fijo (solo `ProveedorTipoSeeder`, sin
+ningún endpoint para crear/editar/desactivar tipos nuevos) — `ProveedorTipoConfigController`
+(tenant) solo puede tocar `habilitado`, nunca el catálogo en sí. Se agregó
+`Central\ProveedorTipoController` (`GET/POST/PUT/DELETE central/proveedor-tipos`, guard
+`central`, vista `ProveedorTiposView.vue` en `central-panel`) — mismo criterio de "sin
+borrado real" que `TenantPlanController` (`DELETE` desactiva, no borra la fila, porque
+`proveedor_tipos` no tiene FK real hacia `Proveedor.tipo_id` cross-boundary y no hay forma
+barata de confirmar que ningún tenant lo esté usando). `slug` nunca se acepta del payload —
+el backend lo deriva de `nombre` una sola vez al crear y queda inmutable para siempre,
+porque hay lógica de negocio atada a slugs fijos (ej. `tipo_habitacion` solo se exige si
+`slug='hotel'` en `ProveedorTarifaController`) que se rompería en silencio si el slug
+pudiera cambiar.
+
 ### Vigencia de tarifas en el tiempo — RESUELTO
 Se versiona, nunca se sobrescribe. `proveedor_tarifas` lleva `vigente_desde` /
 `vigente_hasta` (nullable = vigente indefinidamente) para el **registro**

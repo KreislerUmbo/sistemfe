@@ -512,3 +512,45 @@ deben perderse. No es un plan de módulo — para eso está `docs/planning/`.
   `CotizacionController::store()`/`show()` en un tenant descartable: caso
   con ambas fechas, caso sin fecha exacta (las 2 en null), y caso solo
   "desde" sin "hasta" — los 3 persisten y el GET los devuelve completos.
+
+## Panel Superadmin — CRUD de `proveedor_tipos` agregado — 29-jul-2026
+
+- Gap real señalado por el usuario: el catálogo central `proveedor_tipos`
+  (Hotel/Transporte/Mayorista/Guía, vertical Agencia de Viajes) era
+  100% fijo — solo `ProveedorTipoSeeder`, sin ningún CRUD.
+  `ProveedorTipoConfigController` (tenant) solo puede tocar `habilitado`
+  por tenant, nunca crear/editar/desactivar el catálogo en sí.
+- Confirmado explícitamente con el usuario antes de construir: el CRUD
+  vive en el **panel central** (superadmin), catálogo compartido por
+  todas las agencias — no un CRUD por tenant (que hubiera roto el
+  supuesto de "catálogo fijo compartido" del que depende lógica de
+  negocio existente, ej. `tipo_habitacion` solo exigido si
+  `slug='hotel'` en `ProveedorTarifaController`).
+- **Backend**: `Central\ProveedorTipoController` nuevo
+  (`GET/POST/PUT/DELETE central/proveedor-tipos`, guard `central`, mismo
+  patrón que `TenantPlanController`). `slug` nunca viaja en el payload —
+  se deriva de `nombre` con `Str::slug()` una sola vez al crear y queda
+  inmutable para siempre (mismo motivo que arriba: no romper lógica atada
+  a slugs fijos). Sin borrado real: `destroy()` pone `activo=false`, la
+  fila nunca se borra (mismo criterio que `TenantPlanController` —
+  `proveedor_tipos` no tiene FK real hacia `Proveedor.tipo_id`, cross-
+  boundary tenant↔central, no hay forma barata de confirmar que ningún
+  tenant lo esté usando antes de borrar de verdad). Auditado
+  (`proveedor_tipo.created`/`updated`/`deactivated`) igual que el resto
+  del panel central.
+- **Frontend** (`central-panel`): `stores/proveedorTipos.ts` +
+  `views/ProveedorTiposView.vue`, calcados de `stores/plans.ts`/
+  `PlansView.vue` (mismo patrón de formulario inline reusado para alta/
+  edición). Ruta `/tipos-proveedor` + link nuevo en `NavBar.vue`.
+  `vue-tsc --noEmit` sin errores.
+- Verificado contra Postgres real (conexión `central`, el catálogo de
+  producción real — no un tenant descartable, esta tabla es compartida):
+  crear tipo nuevo, nombre duplicado rechazado (422), editar nombre
+  confirma que el slug NO cambia, `destroy()` confirma que la fila sigue
+  existiendo con `activo=false` (no un borrado real), y los 3
+  `audit_logs` generados. Fila de prueba (`id=5`, "Restaurante Test
+  Retrofit") y sus audit logs eliminados al cerrar la verificación — el
+  catálogo real quedó con los mismos 4 tipos de antes
+  (Hotel/Transporte/Mayorista/Guía).
+- Documentado en `plan-modulo-proveedores.md` §2.6.
+

@@ -27,6 +27,7 @@ use App\Http\Controllers\Cash\PaymentMethodController;
 use App\Http\Controllers\Cash\SupplierController;
 use App\Http\Controllers\Central\CentralAuditLogController;
 use App\Http\Controllers\Central\CentralAuthController;
+use App\Http\Controllers\Central\ProveedorTipoController;
 use App\Http\Controllers\Central\TenantAdminController;
 use App\Http\Controllers\Central\TenantBackupController;
 use App\Http\Controllers\Central\TenantPlanController;
@@ -137,6 +138,14 @@ Route::prefix('central')->group(function () {
         Route::post('tenant-plans', [TenantPlanController::class, 'store']);
         Route::put('tenant-plans/{id}', [TenantPlanController::class, 'update']);
         Route::delete('tenant-plans/{id}', [TenantPlanController::class, 'destroy']);
+
+        // Catálogo central `proveedor_tipos` (vertical Agencia de Viajes) — antes solo
+        // sembrado por ProveedorTipoSeeder, sin ningún CRUD real. destroy() desactiva,
+        // no borra (ver ProveedorTipoController).
+        Route::get('proveedor-tipos', [ProveedorTipoController::class, 'index']);
+        Route::post('proveedor-tipos', [ProveedorTipoController::class, 'store']);
+        Route::put('proveedor-tipos/{id}', [ProveedorTipoController::class, 'update']);
+        Route::delete('proveedor-tipos/{id}', [ProveedorTipoController::class, 'destroy']);
 
         // Fase B.2.3 — generación manual de invoice de suscripción.
         Route::post('tenants/{id}/invoices', [TenantSubscriptionController::class, 'generarInvoice']);

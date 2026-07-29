@@ -35,6 +35,11 @@ const router = createRouter({
       name: 'plans',
       component: () => import('@/views/PlansView.vue'),
     },
+    {
+      path: '/tipos-proveedor',
+      name: 'proveedor-tipos',
+      component: () => import('@/views/ProveedorTiposView.vue'),
+    },
   ],
 });
 
