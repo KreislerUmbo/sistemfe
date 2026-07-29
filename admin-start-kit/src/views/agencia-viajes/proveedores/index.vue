@@ -15,6 +15,26 @@
 
         <div class="card border-0 shadow-sm mb-3">
             <div class="card-body">
+                <h6 class="fw-semibold text-secondary small text-uppercase mb-2">Tipos de proveedor habilitados</h6>
+                <p class="text-muted small mb-2">
+                    Solo los tipos habilitados acá aparecen como opción al crear un proveedor nuevo.
+                    No afecta a los proveedores que ya existen de un tipo que deshabilites.
+                </p>
+                <div class="d-flex flex-wrap gap-3">
+                    <div class="form-check form-switch" v-for="tipo in proveedorTipos" :key="tipo.id">
+                        <input class="form-check-input" type="checkbox" role="switch" :id="`tipo-${tipo.id}`"
+                            :checked="tipo.habilitado" :disabled="togglingId === tipo.id" @change="onToggleTipo(tipo)">
+                        <label class="form-check-label small" :for="`tipo-${tipo.id}`">{{ tipo.nombre }}</label>
+                    </div>
+                    <span v-if="proveedorTipos.length === 0" class="text-muted small fst-italic">
+                        No hay tipos de proveedor disponibles todavía.
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <div class="card border-0 shadow-sm mb-3">
+            <div class="card-body">
                 <div class="row g-2 align-items-end">
                     <div class="col-12 col-md-5">
                         <label class="form-label mb-1 small fw-semibold text-secondary">Buscar</label>
@@ -133,8 +153,21 @@ const currentPage = ref<number>(1);
 const totalPages = ref<number>(0);
 const perPageRows = ref<number>(15);
 const loading = ref<boolean>(false);
+const togglingId = ref<number | null>(null);
 
 const nombreTipo = (tipoId: number) => proveedorTipos.value.find((t) => t.id === tipoId)?.nombre ?? '—';
+
+const onToggleTipo = async (tipo: ProveedorTipo) => {
+    togglingId.value = tipo.id;
+    try {
+        const res = await proveedorTipoService.toggle(tipo.id);
+        tipo.habilitado = res.proveedor_tipo.habilitado;
+    } catch (error: any) {
+        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo actualizar el tipo de proveedor', 'error');
+    } finally {
+        togglingId.value = null;
+    }
+};
 
 const list = async () => {
     loading.value = true;

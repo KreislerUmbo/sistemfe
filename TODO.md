@@ -554,3 +554,20 @@ deben perderse. No es un plan de módulo — para eso está `docs/planning/`.
   (Hotel/Transporte/Mayorista/Guía).
 - Documentado en `plan-modulo-proveedores.md` §2.6.
 
+## Toggle de tipos de proveedor sin UI conectada — CERRADO — 29-jul-2026
+
+- Gap real encontrado al probar el flujo completo en `agencia-demo`: el
+  backend (`ProveedorTipoConfigController::toggle()`) y el service de
+  frontend (`proveedorTipoService.toggle()`) ya existían desde Sesión
+  11a, pero ningún componente los llamaba — `views/agencia-viajes/
+  proveedores/index.vue` solo usaba `.listar()` para poblar el filtro.
+  El hint del formulario de Nuevo Proveedor ("habilítalos en
+  Configuración de tipos") apuntaba a esa misma página, que no tenía
+  ningún switch. Como `proveedor_tipos_config` arranca vacía a propósito
+  en cada tenant nuevo, esto dejaba el combo de tipo de proveedor
+  siempre vacío hasta tocar el toggle a mano por API.
+- Agregado un panel de switches en `index.vue` (arriba del buscador),
+  reusando el service ya existente — sin cambios de backend. Verificado
+  contra `agencia-demo` real: arrancaba con los 5 tipos en
+  `habilitado=false`, el toggle de "Hotel" funcionó.
+
