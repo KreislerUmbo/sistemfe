@@ -1,6 +1,18 @@
 <?php
 
 use App\Http\Controllers\Advance\AdvanceController;
+use App\Http\Controllers\AgenciaViajes\ConfiguracionAgenciaController;
+use App\Http\Controllers\AgenciaViajes\DestinoAtractivoController;
+use App\Http\Controllers\AgenciaViajes\DestinoServicioController;
+use App\Http\Controllers\AgenciaViajes\GuiaController;
+use App\Http\Controllers\AgenciaViajes\GuiaTarifaController;
+use App\Http\Controllers\AgenciaViajes\ProveedorController;
+use App\Http\Controllers\AgenciaViajes\ProveedorServicioController;
+use App\Http\Controllers\AgenciaViajes\ProveedorTarifaController;
+use App\Http\Controllers\AgenciaViajes\ProveedorTipoConfigController;
+use App\Http\Controllers\AgenciaViajes\ServicioController;
+use App\Http\Controllers\AgenciaViajes\TemporadaController;
+use App\Http\Controllers\AgenciaViajes\TemporadaOcurrenciaController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\Cash\BranchController;
 use App\Http\Controllers\Cash\CashConceptController;
@@ -335,6 +347,74 @@ Route::group([
 
     // URL firmada temporal para ver/imprimir el PDF del recibo de pago (ver payment-receipts-pdf/{id} más abajo)
     Route::get("payment-receipts-pdf-url/{id}", [PaymentReceiptController::class, 'pdfSignedUrl']);
+
+    // ═══════════════════════════════════════════════════════════════
+    // Vertical Agencia de Viajes — maestros (Sesión 11a). Primera capa API
+    // real del vertical (Sesiones 0-10 fueron solo migraciones/modelos/
+    // seeders). Solo existen tablas reales cuando giro=agencia_viajes —
+    // estas rutas quedan registradas para todo tenant (mismo criterio que
+    // el resto del API), pero un tenant retail nunca las va a poder usar
+    // (ni le van a aparecer en su menú, gateadas por los 5 permisos nuevos).
+    // Permisos dot-notation, mismo patrón que 'cash.*' — defensa en
+    // profundidad a nivel de ruta, no solo gateo de menú en el frontend.
+    // ═══════════════════════════════════════════════════════════════
+    Route::get("proveedor-tipos", [ProveedorTipoConfigController::class, 'index'])
+        ->middleware('permission:agencia.proveedores');
+    Route::post("proveedor-tipos/{id}/toggle", [ProveedorTipoConfigController::class, 'toggle'])
+        ->middleware('permission:agencia.proveedores');
+
+    Route::post("proveedores/{id}", [ProveedorController::class, 'update'])
+        ->middleware('permission:agencia.proveedores');
+    Route::resource("proveedores", ProveedorController::class)
+        ->middleware('permission:agencia.proveedores');
+    Route::get("proveedores/{id}/servicios", [ProveedorServicioController::class, 'index'])
+        ->middleware('permission:agencia.proveedores');
+    Route::post("proveedores/{id}/servicios", [ProveedorServicioController::class, 'store'])
+        ->middleware('permission:agencia.proveedores');
+    Route::delete("proveedores/{id}/servicios/{servicioId}", [ProveedorServicioController::class, 'destroy'])
+        ->middleware('permission:agencia.proveedores');
+    Route::get("proveedor-servicios/{id}/tarifas", [ProveedorTarifaController::class, 'index'])
+        ->middleware('permission:agencia.proveedores');
+    Route::post("proveedor-servicios/{id}/tarifas", [ProveedorTarifaController::class, 'store'])
+        ->middleware('permission:agencia.proveedores');
+    Route::put("proveedor-tarifas/{id}", [ProveedorTarifaController::class, 'update'])
+        ->middleware('permission:agencia.proveedores');
+
+    Route::post("destinos-atractivos/{id}", [DestinoAtractivoController::class, 'update'])
+        ->middleware('permission:agencia.destinos');
+    Route::get("destinos-atractivos", [DestinoAtractivoController::class, 'index'])
+        ->middleware('permission:agencia.destinos');
+    Route::post("destinos-atractivos", [DestinoAtractivoController::class, 'store'])
+        ->middleware('permission:agencia.destinos');
+    Route::delete("destinos-atractivos/{id}", [DestinoAtractivoController::class, 'destroy'])
+        ->middleware('permission:agencia.destinos');
+    Route::get("destinos-atractivos/{id}/servicios", [DestinoServicioController::class, 'index'])
+        ->middleware('permission:agencia.destinos');
+    Route::post("destinos-atractivos/{id}/servicios", [DestinoServicioController::class, 'store'])
+        ->middleware('permission:agencia.destinos');
+    Route::delete("destino-servicio/{id}", [DestinoServicioController::class, 'destroy'])
+        ->middleware('permission:agencia.destinos');
+    Route::resource("servicios", ServicioController::class)
+        ->middleware('permission:agencia.destinos');
+
+    Route::resource("temporadas", TemporadaController::class)
+        ->middleware('permission:agencia.temporadas');
+    Route::get("temporadas/{id}/ocurrencias", [TemporadaOcurrenciaController::class, 'index'])
+        ->middleware('permission:agencia.temporadas');
+    Route::post("temporadas/{id}/ocurrencias", [TemporadaOcurrenciaController::class, 'store'])
+        ->middleware('permission:agencia.temporadas');
+
+    Route::resource("guias", GuiaController::class)
+        ->middleware('permission:agencia.guias');
+    Route::get("guias/{id}/tarifas", [GuiaTarifaController::class, 'index'])
+        ->middleware('permission:agencia.guias');
+    Route::post("guias/{id}/tarifas", [GuiaTarifaController::class, 'store'])
+        ->middleware('permission:agencia.guias');
+
+    Route::get("configuracion-agencia", [ConfiguracionAgenciaController::class, 'show'])
+        ->middleware('permission:agencia.configuracion');
+    Route::put("configuracion-agencia", [ConfiguracionAgenciaController::class, 'update'])
+        ->middleware('permission:agencia.configuracion');
 
     Route::middleware('auth:api')->group(function () {});
 });

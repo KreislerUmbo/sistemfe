@@ -1,0 +1,160 @@
+<?php
+
+namespace App\Http\Controllers\AgenciaViajes;
+
+use App\Http\Controllers\Controller;
+use App\Models\AgenciaViajes\AlternativaItem;
+use App\Models\AgenciaViajes\ProveedorServicio;
+use App\Models\AgenciaViajes\ProveedorTarifa;
+use App\Models\AgenciaViajes\ProveedorTipo;
+use App\Models\AgenciaViajes\Temporada;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Validator;
+
+// plan-modulo-proveedores.md §2.6 / plan-modulo-cotizaciones-reservas.md
+// §2.2, §2.3. Anidada bajo proveedor_servicio, salvo update() que cuelga
+// directo de proveedor-tarifas/{id} (la tarifa ya identifica su propio
+// padre, no hace falta repetir el proveedor_servicio_id en la URL).
+class ProveedorTarifaController extends Controller
+{
+    public function index(string $proveedorServicioId)
+    {
+        $proveedorServicio = ProveedorServicio::findOrFail($proveedorServicioId);
+
+        $tarifas = $proveedorServicio->proveedorTarifas()->orderByDesc('vigente_desde')->get();
+
+        return response()->json(['proveedor_tarifas' => $tarifas]);
+    }
+
+    public function store(Request $request, string $proveedorServicioId)
+    {
+        $proveedorServicio = ProveedorServicio::with('proveedor')->findOrFail($proveedorServicioId);
+
+        $validado = $this->validarPayload($request, $proveedorServicio);
+        if ($validado instanceof JsonResponse) {
+            return $validado;
+        }
+
+        $validado['proveedor_servicio_id'] = $proveedorServicio->id;
+        $tarifa = ProveedorTarifa::create($validado);
+
+        return response()->json([
+            'code' => 200,
+            'message' => 'Tarifa registrada correctamente',
+            'proveedor_tarifa' => $tarifa,
+        ]);
+    }
+
+    // Versionado (§2.2): "nunca se sobrescribe un precio ya usado en una
+    // cotización". Si la tarifa ya aparece en alternativa_items, se cierra
+    // vigente_hasta=hoy sobre la fila actual y se crea una nueva versión con
+    // los datos editados. Si nunca se usó, UPDATE directo — no ensucia el
+    // historial con correcciones de tipeo de una tarifa recién cargada.
+    public function update(Request $request, string $id)
+    {
+        $tarifaActual = ProveedorTarifa::with('proveedorServicio.proveedor')->findOrFail($id);
+
+        $validado = $this->validarPayload($request, $tarifaActual->proveedorServicio);
+        if ($validado instanceof JsonResponse) {
+            return $validado;
+        }
+
+        $tieneUso = AlternativaItem::where('proveedor_tarifa_id', $tarifaActual->id)->exists();
+
+        if ($tieneUso) {
+            $tarifaActual->update(['vigente_hasta' => now()->toDateString()]);
+
+            $validado['proveedor_servicio_id'] = $tarifaActual->proveedor_servicio_id;
+            $validado['vigente_desde'] = $validado['vigente_desde'] ?? now()->toDateString();
+            $nueva = ProveedorTarifa::create($validado);
+
+            return response()->json([
+                'code' => 200,
+                'message' => 'Esta tarifa ya se usó en una cotización — se cerró la versión anterior y se creó una nueva.',
+                'proveedor_tarifa' => $nueva,
+                'version_anterior_id' => $tarifaActual->id,
+            ]);
+        }
+
+        $tarifaActual->update($validado);
+
+        return response()->json([
+            'code' => 200,
+            'message' => 'Tarifa actualizada correctamente',
+            'proveedor_tarifa' => $tarifaActual,
+        ]);
+    }
+
+    private function validarPayload(Request $request, ProveedorServicio $proveedorServicio): array|JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'tipo_tarifa' => 'required|in:corporativa,grupal,publica',
+            'modalidad' => 'required|in:compartido,privado',
+            'moneda' => 'required|in:PEN,USD',
+            'diferenciador' => 'nullable|array',
+            'tipo_habitacion' => 'nullable|in:matrimonial,doble,triple,familiar',
+            'precio_costo' => 'required|numeric|min:0',
+            'margen_tipo' => 'required|in:porcentaje,fijo',
+            'margen_valor' => 'required|numeric|min:0',
+            'descuento_maximo_pct' => 'nullable|numeric|min:0|max:100',
+            'margen_minimo_pct' => 'nullable|numeric|min:0|max:100',
+            'precio_venta_adulto' => 'required|numeric|min:0',
+            'precio_venta_nino' => 'nullable|numeric|min:0',
+            'precio_venta_infante' => 'nullable|numeric|min:0',
+            'edad_min_nino' => 'nullable|integer|min:0',
+            'edad_max_nino' => 'nullable|integer|min:0',
+            'edad_max_infante' => 'nullable|integer|min:0',
+            'temporada_id' => 'nullable|integer',
+            'vigente_desde' => 'required|date',
+            'vigente_hasta' => 'nullable|date|after_or_equal:vigente_desde',
+            'tip_afe_igv' => 'required|string|max:2',
+            'destino_tributario' => 'required|in:amazonia,nacional,extranjero',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
+        }
+
+        $validado = $validator->validated();
+        $esHotel = $this->proveedorEsHotel($proveedorServicio);
+
+        if ($esHotel && empty($validado['tipo_habitacion'])) {
+            return response()->json([
+                'code' => 422,
+                'message' => 'tipo_habitacion es obligatorio para tarifas de proveedores tipo Hotel.',
+            ], 422);
+        }
+
+        if (! $esHotel) {
+            $validado['tipo_habitacion'] = null;
+        }
+
+        if (! empty($validado['temporada_id'])) {
+            $existeTemporada = Temporada::where('id', $validado['temporada_id'])
+                ->where('giro', 'agencia_viajes')
+                ->exists();
+
+            if (! $existeTemporada) {
+                return response()->json(['code' => 422, 'message' => 'La temporada seleccionada no existe.'], 422);
+            }
+        }
+
+        return $validado;
+    }
+
+    // tipo_id en Proveedor referencia proveedor_tipos (central) — sin FK real
+    // cross-DB, se resuelve consultando el catálogo central directo.
+    private function proveedorEsHotel(ProveedorServicio $proveedorServicio): bool
+    {
+        $proveedor = $proveedorServicio->relationLoaded('proveedor')
+            ? $proveedorServicio->proveedor
+            : $proveedorServicio->load('proveedor')->proveedor;
+
+        if (! $proveedor || ! $proveedor->tipo_id) {
+            return false;
+        }
+
+        return ProveedorTipo::where('id', $proveedor->tipo_id)->where('slug', 'hotel')->exists();
+    }
+}
