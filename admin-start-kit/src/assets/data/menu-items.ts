@@ -199,15 +199,23 @@ export const MENU_ITEMS: MenuItemType[] = [
       },
     ],
   },
-  // Vertical Agencia de Viajes — maestros (Sesión 11a). Solo aparece para
-  // usuarios con alguno de los 5 permisos 'agencia.*' — un tenant retail no
-  // los tiene asignados a nadie, así que esta sección nunca les aparece.
+  // Vertical Agencia de Viajes — maestros (Sesión 11a) + cotizador (Sesión
+  // 11b, permiso propio 'agencia.cotizaciones'). Solo aparece para usuarios
+  // con alguno de los 6 permisos 'agencia.*' — un tenant retail no los tiene
+  // asignados a nadie, así que esta sección nunca les aparece.
   {
     key: "agencia_viajes",
     label: "Agencia de Viajes",
     isTitle: false,
     icon: "fas fa-suitcase-rolling",
     children: [
+      {
+        key: "agencia_cotizador",
+        label: "Cotizador",
+        route: { name: "agencia.cotizador.index" },
+        parentKey: "agencia_viajes",
+        permission: 'agencia.cotizaciones',
+      },
       {
         key: "agencia_proveedores",
         label: "Proveedores",

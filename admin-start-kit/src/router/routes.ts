@@ -569,6 +569,38 @@ const comercialRoutes = [
     },
     component: () => import("@/views/agencia-viajes/configuracion/index.vue"),
   },
+  // Cotizador (Sesión 11b) — permiso propio 'agencia.cotizaciones',
+  // distinto de los 5 de 11a (ver TODO.md).
+  {
+    path: "/agencia-viajes/cotizador",
+    name: "agencia.cotizador.index",
+    meta: {
+      title: setTitle("Cotizaciones"),
+      authRequired: true,
+      permission: 'agencia.cotizaciones',
+    },
+    component: () => import("@/views/agencia-viajes/cotizador/index.vue"),
+  },
+  {
+    path: "/agencia-viajes/cotizador/nueva",
+    name: "agencia.cotizador.nueva",
+    meta: {
+      title: setTitle("Nueva Cotización"),
+      authRequired: true,
+      permission: 'agencia.cotizaciones',
+    },
+    component: () => import("@/views/agencia-viajes/cotizador/nueva.vue"),
+  },
+  {
+    path: "/agencia-viajes/cotizador/:id",
+    name: "agencia.cotizador.editar",
+    meta: {
+      title: setTitle("Editar Cotización"),
+      authRequired: true,
+      permission: 'agencia.cotizaciones',
+    },
+    component: () => import("@/views/agencia-viajes/cotizador/editar.vue"),
+  },
 
 ];
 

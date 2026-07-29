@@ -375,4 +375,16 @@ export const PERMISOS = [
             },
         ]
     },
+    {
+        // Cotizador — Sesión 11b. Permiso PROPIO, distinto de los 5 de
+        // arriba (Agencia de Viajes — Maestros): cotizar es una operación
+        // de venta diaria de cualquier vendedor, no gestión de catálogo.
+        'name': 'Agencia de Viajes (Cotizador)',
+        'permisos': [
+            {
+                name: 'Cotizaciones, alternativas e ítems',
+                permiso: 'agencia.cotizaciones',
+            },
+        ]
+    },
 ];

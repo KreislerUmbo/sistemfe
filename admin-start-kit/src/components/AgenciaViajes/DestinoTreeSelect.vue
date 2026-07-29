@@ -51,7 +51,14 @@ const props = withDefaults(defineProps<{
     placeholder: 'Buscar destino/atractivo...',
 });
 
-const emit = defineEmits<{ (e: 'update:modelValue', value: number | null): void }>();
+// update:label — Sesión 11b: cotizaciones.destino es texto libre (no FK),
+// así que el "Paso 0" del cotizador necesita el NOMBRE elegido, no solo el
+// id. Opcional para el resto de callers (guias/detalle.vue,
+// proveedores/detalle.vue) que solo usan el id — no rompe nada existente.
+const emit = defineEmits<{
+    (e: 'update:modelValue', value: number | null): void;
+    (e: 'update:label', value: string): void;
+}>();
 
 type OpcionPlana = { id: number; nombre: string; tipo: Nivel; profundidad: number; etiquetaCompleta: string };
 
@@ -94,6 +101,7 @@ const opcionesFiltradas = computed(() => {
 
 const seleccionar = (opcion: OpcionPlana) => {
     emit('update:modelValue', opcion.id);
+    emit('update:label', opcion.nombre);
     searchText.value = opcion.etiquetaCompleta;
     showSuggestions.value = false;
 };

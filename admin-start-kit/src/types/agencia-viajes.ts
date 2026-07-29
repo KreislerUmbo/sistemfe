@@ -62,12 +62,14 @@ export type ProveedorServicio = {
   proveedor_id: number;
   destino_servicio_id: number;
   destino_servicio?: DestinoServicio;
+  proveedor?: Proveedor;
   proveedor_tarifas?: ProveedorTarifa[];
 };
 
 export type ProveedorTarifa = {
   id: number;
   proveedor_servicio_id: number;
+  proveedor_servicio?: ProveedorServicio;
   tipo_tarifa: 'corporativa' | 'grupal' | 'publica';
   modalidad: 'compartido' | 'privado';
   moneda: 'PEN' | 'USD';
@@ -174,4 +176,155 @@ export type ConfiguracionAgencia = {
 export type ApiMessageResponse = {
   code: number;
   message: string;
+};
+
+// ═══════════════════════════════════════════════════════════════
+// Sesión 11b — cotizador
+// ═══════════════════════════════════════════════════════════════
+
+export type CotizacionPasajero = {
+  id: number;
+  cotizacion_id: number;
+  tipo_pax: 'adulto' | 'nino' | 'infante';
+  edad: number;
+};
+
+export type Cotizacion = {
+  id: number;
+  cliente_id: number;
+  codigo_prefijo: string;
+  codigo: string;
+  destino: string;
+  fecha_viaje_tentativa?: string | null;
+  cliente?: { id: number; full_name: string; n_document?: string };
+  pasajeros?: CotizacionPasajero[];
+  alternativas?: Alternativa[];
+  alternativas_count?: number;
+};
+
+export type Cotizaciones = {
+  total: number;
+  paginate: number;
+  cotizaciones: Cotizacion[];
+};
+
+export type CotizacionResponse = {
+  code: number;
+  message: string;
+  cotizacion: Cotizacion;
+};
+
+export type Alternativa = {
+  id: number;
+  cotizacion_id: number;
+  nombre: string;
+  estado: 'borrador' | 'enviada' | 'aceptada' | 'descartada';
+  moneda_cotizacion: 'PEN' | 'USD';
+  tipo_cambio_aplicado: number;
+  tipo_cambio_origen: 'dia' | 'agencia';
+  fecha_envio?: string | null;
+  fecha_vencimiento?: string | null;
+  descuento_global_pct?: number | null;
+  total: number;
+  items?: AlternativaItem[];
+};
+
+export type AlternativaResponse = {
+  code: number;
+  message: string;
+  alternativa: Alternativa;
+};
+
+export type OrigenItem = 'proveedor' | 'mayorista' | 'pasaje_aereo' | 'manual';
+
+export type AlternativaItem = {
+  id: number;
+  alternativa_id: number;
+  origen_tipo: OrigenItem;
+  proveedor_tarifa_id?: number | null;
+  opcion_mayorista_id?: number | null;
+  descripcion_manual?: string | null;
+  modo_precio: 'por_persona' | 'tarifa_fija';
+  cantidad: number;
+  pax_incluidos?: number[] | null;
+  moneda_costo: 'PEN' | 'USD';
+  costo_snapshot?: number | null;
+  precio_venta_snapshot: number;
+  descuento_pct?: number | null;
+  precio_convertido: number;
+  total: number;
+  total_convertido: number;
+  proveedor_tarifa?: ProveedorTarifa;
+  opcion_mayorista?: OpcionMayorista;
+  cotizacion_pasaje_aereo?: CotizacionPasajeAereo;
+};
+
+export type AlternativaItemResponse = {
+  code: number;
+  message: string;
+  alternativa_item: AlternativaItem;
+  precio_minimo_permitido?: number | null;
+  alerta_piso?: boolean;
+};
+
+export type CotizacionPasajeAereo = {
+  id: number;
+  alternativa_item_id: number;
+  aerolinea: string;
+  itinerario?: string | null;
+  moneda: 'PEN' | 'USD';
+  tarifa_base_adulto: number;
+  tarifa_base_nino?: number | null;
+  tarifa_base_infante?: number | null;
+  cargos: Array<{ codigo?: string; nombre: string; monto: number; tipo?: 'impuesto' | 'tasa_aeropuerto' | 'fee_agencia' }>;
+  tua_incluida_en_tarifa: boolean;
+  fee_agencia_monto: number;
+  tip_afe_igv?: string | null;
+  fecha_cotizado: string;
+  costo_total: number;
+  precio_venta_total: number;
+};
+
+export type OpcionMayorista = {
+  id: number;
+  alternativa_id: number;
+  proveedor_id: number;
+  salida_mayorista_id?: number | null;
+  moneda: 'PEN' | 'USD';
+  incluye?: string | null;
+  notas?: string | null;
+  vuelo_aerolinea?: string | null;
+  vuelo_detalle?: string | null;
+  estado: 'candidata' | 'elegida' | 'descartada';
+  proveedor?: Proveedor;
+  opciones_hotel?: OpcionHotel[];
+  opcionales?: OpcionMayoristaOpcional[];
+};
+
+export type OpcionHotel = {
+  id: number;
+  opcion_mayorista_id?: number | null;
+  paquete_plantilla_id?: number | null;
+  proveedor_id?: number | null;
+  nombre_hotel: string;
+  categoria_estrellas?: number | null;
+  opciones_hotel_tarifas?: OpcionHotelTarifa[];
+};
+
+export type OpcionHotelTarifa = {
+  id: number;
+  opcion_hotel_id: number;
+  tipo_habitacion: 'matrimonial' | 'doble' | 'triple' | 'familiar';
+  precio_costo: number;
+  precio_venta: number;
+};
+
+export type OpcionMayoristaOpcional = {
+  id: number;
+  opcion_mayorista_id: number;
+  nombre: string;
+  precio_por_persona: number;
+  moneda: 'PEN' | 'USD';
+  incluye?: string | null;
+  no_incluye?: string | null;
 };

@@ -54,6 +54,14 @@ export const proveedorService = {
     return response.data
   },
 
+  // Biblioteca del cotizador (Sesión 11b) — tarifas vigentes de TODOS los
+  // proveedores, con búsqueda de texto (ver limitación documentada en el
+  // backend: no filtra por destino, cotizaciones.destino no es FK).
+  async biblioteca(search?: string) {
+    const response = await httpClient.get('/proveedor-tarifas', { params: { search } })
+    return response.data as { proveedor_tarifas: ProveedorTarifa[] }
+  },
+
   // ── Tarifas (proveedor_tarifas) ─────────────────────────────────────
   async listarTarifas(proveedorServicioId: number) {
     const response = await httpClient.get(`/proveedor-servicios/${proveedorServicioId}/tarifas`)
