@@ -312,3 +312,69 @@ deben perderse. No es un plan de módulo — para eso está `docs/planning/`.
   `tipos_recordatorio` para esto.
 - Ver `plan-modulo-cotizaciones-reservas.md` §3 y §4 para el detalle
   completo.
+
+## Sesión 11a — API REST + formularios maestros — CERRADA — 28-jul-2026
+
+- **Primera capa API real del vertical** (Sesiones 0-10 eran solo
+  migraciones/modelos/seeders, confirmado por grep antes de empezar).
+  Namespace `App\Http\Controllers\AgenciaViajes`, 12 controllers: catálogo
+  `ProveedorTipoConfig` (solo lectura + toggle), CRUD completo de
+  `Proveedor`/`ProveedorServicio`/`ProveedorTarifa` (esta última con
+  versionado real — nunca UPDATE directo si la tarifa ya se usó en
+  `alternativa_items`, cierra `vigente_hasta` y crea fila nueva),
+  `DestinoAtractivo` (árbol + guard de `destroy()` contra hijos/
+  `destino_servicio`/`tour_itinerario_items`/`guia_tarifas`, siempre 422
+  explícito, nunca 500), `Servicio`, `DestinoServicio`, `Temporada`/
+  `TemporadaOcurrencia` (central — editar/eliminar afecta a TODO el rubro,
+  no solo el tenant que llama, documentado en el controller), `Guia`/
+  `GuiaTarifa`, `ConfiguracionAgencia` (singleton, GET con defaults del
+  plan como backstop). 5 permisos Spatie nuevos (`agencia.*`, dot-notation
+  igual que `cash.*`) gateando cada grupo de rutas a nivel de ruta (defensa
+  en profundidad, no solo menú) — migración propia en
+  `tenant/verticals/agencia-viajes/` (no `tenant/core/`, a diferencia de
+  los permisos de Caja/Amortizaciones) porque son exclusivos de este giro.
+- **RETROFIT Parte 0 cerrado**: `proveedor_tarifas.tipo_habitacion`
+  agregada como columna real (mismo enum que `opciones_hotel_tarifas`
+  desde Sesión 5), con backfill desde `diferenciador` (JSON) — 0 filas
+  reales afectadas, confirmado antes de correr (no existía ningún CRUD de
+  `proveedor_tarifas` hasta esta sesión). `ProveedorTarifaController`
+  exige `tipo_habitacion` solo cuando el proveedor padre es tipo Hotel
+  (resuelto contra el catálogo central `proveedor_tipos`, slug='hotel'),
+  verificado con un `WHERE tipo_habitacion=...` real contra la columna
+  (no `->>` sobre el JSON).
+- **Frontend**: 8 vistas en `views/agencia-viajes/` (proveedores index/
+  form/detalle con tabs, destinos árbol expandible con alta rápida de
+  servicios inline, temporadas, guías index/detalle, configuración
+  singleton), 6 services TS, componente reutilizable `DestinoTreeSelect.vue`
+  (pensado para que 11b lo reuse en el cotizador, acepta `nivel-min`/
+  `nivel-max`). Router + menú lateral nuevos (sección "Agencia de Viajes"),
+  y los 5 permisos sumados a `types/roles.ts` — agregado desde el día 1
+  esta vez, Caja (Fase 5) había dejado documentado que omitir este paso
+  deja el permiso inasignable desde la UI pese a existir en el backend.
+  `npm run type-check` sin errores nuevos en ningún archivo de esta sesión
+  (los preexistentes en otras vistas no tocadas siguen igual).
+- **Verificado con HTTP real en proceso** (kernel completo — routing +
+  `InitializeTenancyBySubdomain` + `auth:api` + `permission:*` + controller
+  + validación —, sin necesitar hosts file ni servidor corriendo) contra un
+  tenant `agencia_viajes` descartable: 33 checks — los 4 tipos de proveedor
+  habilitados y 1 proveedor de cada uno, árbol de 3 niveles con 2 servicios
+  ligados, proveedor Hotel con 2 tarifas `tipo_habitacion` distintas
+  (confirmado el filtro por columna), temporada con 1 ocurrencia, guía con
+  2 tarifas, `configuracion-agencia` editado y reflejado en el GET
+  siguiente, `DestinoAtractivoController#destroy` rechazando con
+  hijos/servicios (422, nunca 500), y un usuario sin ningún permiso
+  `agencia.*` recibiendo 403 real en `GET proveedores` (confirma que el
+  middleware `permission:` de las rutas nuevas funciona de verdad, no solo
+  que las rutas existen). Los 33/33 pasaron.
+- **`eliminarSiVacio()` — sin cambios de código, confirmado explícito**:
+  todas las tablas nuevas de esta sesión (`ProveedorTarifa` con la columna
+  agregada, más las rutas nuevas sobre `Proveedor`/`ProveedorServicio`/
+  `DestinoAtractivo`/`Servicio`/`DestinoServicio`/`Guia`/`GuiaTarifa`) ya
+  existían desde Sesiones 1-5 y ya estaban cubiertas en
+  `tieneDatosVerticalAgenciaViajes()` — Sesión 11a no agregó tablas nuevas,
+  solo la capa API sobre tablas ya chequeadas (`Temporada`/
+  `TemporadaOcurrencia` son centrales, fuera del alcance de ese método).
+  Verificado con control cruzado real: tenant recién provisionado sigue
+  eliminable; el mismo tenant después de correr el checklist completo de
+  arriba (con datos reales en `Proveedor`/`DestinoAtractivo`/etc.) queda
+  rechazado. Sin regresión.
