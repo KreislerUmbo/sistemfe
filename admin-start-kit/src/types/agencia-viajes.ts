@@ -195,7 +195,8 @@ export type Cotizacion = {
   codigo_prefijo: string;
   codigo: string;
   destino: string;
-  fecha_viaje_tentativa?: string | null;
+  fecha_viaje_desde?: string | null;
+  fecha_viaje_hasta?: string | null;
   cliente?: { id: number; full_name: string; n_document?: string };
   pasajeros?: CotizacionPasajero[];
   alternativas?: Alternativa[];

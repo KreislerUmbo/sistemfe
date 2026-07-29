@@ -30,11 +30,13 @@ class Cotizacion extends Model
         'codigo',
         'cliente_id',
         'destino',
-        'fecha_viaje_tentativa',
+        'fecha_viaje_desde',
+        'fecha_viaje_hasta',
     ];
 
     protected $casts = [
-        'fecha_viaje_tentativa' => 'date',
+        'fecha_viaje_desde' => 'date',
+        'fecha_viaje_hasta' => 'date',
     ];
 
     protected static function booted(): void

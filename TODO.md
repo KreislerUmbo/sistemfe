@@ -481,3 +481,34 @@ deben perderse. No es un plan de módulo — para eso está `docs/planning/`.
   piso individual — el plan (§3.1) sí describe ese comportamiento, pero
   la lista de rutas de esta sesión nunca pidió ese endpoint
   explícitamente. Documentado, no construido.
+
+## RETROFIT — `cotizaciones.fecha_viaje_tentativa` → rango desde/hasta — 29-jul-2026
+
+- Sobre la misma rama `feature/sesion-11b-cotizador` (sin mergear todavía).
+  `fecha_viaje_tentativa` (una sola fecha) no alcanzaba para cotizar con
+  fecha de ida y vuelta ya conocidas — reemplazada por
+  `fecha_viaje_desde`/`fecha_viaje_hasta` (ambas nullable, migración
+  `2026_07_29_090000_replace_fecha_viaje_tentativa_con_rango.php` con
+  backfill de la columna vieja a `fecha_viaje_desde` antes de dropearla).
+  Validación nueva: `fecha_viaje_hasta` exige `after_or_equal:
+  fecha_viaje_desde` cuando ambas vienen cargadas — confirmado en tinker
+  que el caso "hasta sin desde" no rompe la regla (Laravel la trata como
+  ausente, no como fecha inválida).
+- **Confirmado antes de migrar, no asumido**: los 4 tenants reales
+  (`sandbox`/`umbo`/`negocio2`/`umbo-archivado`) todavía no tienen la
+  tabla `cotizaciones` — la rama de Sesión 11b nunca llegó a mergearse,
+  así que no hubo ningún dato real en riesgo por el backfill.
+- `CotizacionController` solo tiene `store()`/`actualizarPasajeros()`
+  para el header (no existe ningún `update()` de
+  `cliente_id`/`destino`/fecha — el prompt de este retrofit lo mencionaba
+  pero no existe en el código real); se actualizó únicamente `store()`.
+  Frontend (`nueva.vue`): 2 inputs `<input type="date">` nativos lado a
+  lado (sin librería de rango), el checkbox "Todavía no tiene fecha
+  exacta" ahora deshabilita ambos.
+- Verificado con Postgres real (`sistemafe_test_migrations`, backfill +
+  migración aplicada sobre una fila de prueba con `fecha_viaje_tentativa`
+  cargada, confirmado `fecha_viaje_desde` poblado y `fecha_viaje_hasta`
+  null tras el `up()`) y contra el flujo HTTP completo de
+  `CotizacionController::store()`/`show()` en un tenant descartable: caso
+  con ambas fechas, caso sin fecha exacta (las 2 en null), y caso solo
+  "desde" sin "hasta" — los 3 persisten y el GET los devuelve completos.

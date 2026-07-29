@@ -53,7 +53,8 @@ class CotizacionController extends Controller
             'cliente_id' => 'required|integer|exists:clients,id',
             'codigo_prefijo' => 'required|string|max:50',
             'destino' => 'required|string|max:250',
-            'fecha_viaje_tentativa' => 'nullable|date',
+            'fecha_viaje_desde' => 'nullable|date',
+            'fecha_viaje_hasta' => 'nullable|date|after_or_equal:fecha_viaje_desde',
             'pasajeros' => 'required|array|min:1',
             'pasajeros.*.edad' => 'required|integer|min:0|max:120',
         ]);
@@ -70,7 +71,8 @@ class CotizacionController extends Controller
                 'cliente_id' => $validado['cliente_id'],
                 'codigo_prefijo' => $validado['codigo_prefijo'],
                 'destino' => $validado['destino'],
-                'fecha_viaje_tentativa' => $validado['fecha_viaje_tentativa'] ?? null,
+                'fecha_viaje_desde' => $validado['fecha_viaje_desde'] ?? null,
+                'fecha_viaje_hasta' => $validado['fecha_viaje_hasta'] ?? null,
             ]);
 
             foreach ($validado['pasajeros'] as $pax) {

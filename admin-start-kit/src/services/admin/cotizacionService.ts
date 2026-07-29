@@ -15,7 +15,8 @@ export const cotizacionService = {
     cliente_id: number
     codigo_prefijo: string
     destino: string
-    fecha_viaje_tentativa?: string | null
+    fecha_viaje_desde?: string | null
+    fecha_viaje_hasta?: string | null
     pasajeros: Array<{ edad: number }>
   }) {
     const response = await httpClient.post('/cotizaciones', data)

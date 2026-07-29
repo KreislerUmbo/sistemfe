@@ -57,9 +57,13 @@
                         <DestinoTreeSelect v-model="destinoId" @update:label="destinoTexto = $event" />
                     </div>
 
-                    <div class="col-12 col-md-4">
-                        <label class="form-label mb-1 small fw-semibold text-secondary">Fecha de viaje tentativa</label>
-                        <input type="date" class="form-control form-control-sm" v-model="fechaViaje" :disabled="sinFechaExacta">
+                    <div class="col-12 col-md-2">
+                        <label class="form-label mb-1 small fw-semibold text-secondary">Fecha desde</label>
+                        <input type="date" class="form-control form-control-sm" v-model="fechaViajeDesde" :disabled="sinFechaExacta">
+                    </div>
+                    <div class="col-12 col-md-2">
+                        <label class="form-label mb-1 small fw-semibold text-secondary">Fecha hasta</label>
+                        <input type="date" class="form-control form-control-sm" v-model="fechaViajeHasta" :disabled="sinFechaExacta">
                     </div>
                     <div class="col-12 col-md-8 d-flex align-items-end">
                         <div class="form-check">
@@ -148,7 +152,8 @@ let clientSearchTimeout: any = null;
 const destinoId = ref<number | null>(null);
 const destinoTexto = ref<string>('');
 
-const fechaViaje = ref<string>('');
+const fechaViajeDesde = ref<string>('');
+const fechaViajeHasta = ref<string>('');
 const sinFechaExacta = ref<boolean>(false);
 
 const pasajeros = ref<Array<{ edad: number }>>([]);
@@ -226,7 +231,8 @@ const crear = async () => {
             cliente_id: clienteSeleccionado.value.id,
             codigo_prefijo: codigoPrefijo.value.trim(),
             destino: destinoTexto.value,
-            fecha_viaje_tentativa: sinFechaExacta.value ? null : (fechaViaje.value || null),
+            fecha_viaje_desde: sinFechaExacta.value ? null : (fechaViajeDesde.value || null),
+            fecha_viaje_hasta: sinFechaExacta.value ? null : (fechaViajeHasta.value || null),
             pasajeros: pasajeros.value,
         });
 
