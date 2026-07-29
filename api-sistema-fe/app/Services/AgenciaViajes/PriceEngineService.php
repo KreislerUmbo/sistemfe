@@ -1,0 +1,113 @@
+<?php
+
+namespace App\Services\AgenciaViajes;
+
+// Motor de precios único del vertical — plan-modulo-cotizaciones-reservas.md
+// §2.5. Servicio de dominio puro (sin Request/Response), para que sea
+// testeable y reusable entre AlternativaItemController (proveedor/
+// pasaje_aereo) y cualquier otro punto que necesite aplicar margen +
+// validar el piso, sin duplicar la fórmula.
+//
+// Revisado antes de escribir esto: ProveedorTarifaController (Sesión 11a)
+// NO calcula margen inline — precio_venta_adulto/nino/infante los ingresa
+// el admin directo al cargar la tarifa de catálogo (son precios de venta
+// ya decididos, no una cotización puntual). Nada que refactorizar ahí.
+class PriceEngineService
+{
+    /**
+     * @param  float  $costoBase  Costo del proveedor/tarifa antes de cargos y margen.
+     * @param  array<int, array{codigo?: string, nombre: string, monto: float, tipo?: string}>  $cargos
+     *         Montos que se suman dólar a dólar tanto al costo como a la venta —
+     *         pass-through de terceros (impuestos, tasas), NUNCA se les aplica margen.
+     * @param  string  $margenTipo  'porcentaje' | 'fijo'
+     * @param  float  $margenValor
+     * @param  float|null  $descuentoMaximoPct  Piso #1 — % máximo que se puede descontar de venta_base.
+     * @param  float|null  $margenMinimoPct  Piso #2 — % mínimo de utilidad sobre costo_base, protegido
+     *         aunque se aplique descuento_maximo_pct.
+     * @return array{
+     *     venta_base: float,
+     *     venta_total: float,
+     *     costo_total: float,
+     *     desglose: array<int, array{concepto: string, monto: float}>,
+     *     margen_aplicado: float,
+     *     precio_minimo_permitido: float|null,
+     *     alerta_piso: bool
+     * }
+     */
+    public function calcular(
+        float $costoBase,
+        array $cargos,
+        string $margenTipo,
+        float $margenValor,
+        ?float $descuentoMaximoPct,
+        ?float $margenMinimoPct
+    ): array {
+        $sumaCargos = array_sum(array_column($cargos, 'monto'));
+
+        $ventaBase = $margenTipo === 'fijo'
+            ? $costoBase + $margenValor
+            : $costoBase * (1 + $margenValor / 100);
+
+        $margenAplicado = $ventaBase - $costoBase;
+        $costoTotal = $costoBase + $sumaCargos;
+        $ventaTotal = $ventaBase + $sumaCargos;
+
+        $precioMinimoPermitido = $this->calcularPrecioMinimoPermitido($costoBase, $ventaBase, $descuentoMaximoPct, $margenMinimoPct);
+
+        $desglose = [['concepto' => 'Costo base', 'monto' => round($costoBase, 2)]];
+        foreach ($cargos as $cargo) {
+            $desglose[] = ['concepto' => $cargo['nombre'], 'monto' => round((float) $cargo['monto'], 2)];
+        }
+        $desglose[] = ['concepto' => 'Margen', 'monto' => round($margenAplicado, 2)];
+
+        return [
+            'venta_base' => round($ventaBase, 2),
+            'venta_total' => round($ventaTotal, 2),
+            'costo_total' => round($costoTotal, 2),
+            'desglose' => $desglose,
+            'margen_aplicado' => round($margenAplicado, 2),
+            'precio_minimo_permitido' => $precioMinimoPermitido !== null ? round($precioMinimoPermitido, 2) : null,
+            'alerta_piso' => $precioMinimoPermitido !== null && $this->cruzaPiso($ventaBase, $precioMinimoPermitido),
+        ];
+    }
+
+    /**
+     * Evalúa el piso contra un precio ya editado (descuento_pct o
+     * precio_convertido) — usado por AlternativaItemController::update()
+     * para la validación en vivo, sin recalcular todo el margen de nuevo.
+     */
+    public function evaluarPiso(float $precioEditado, float $costoBase, float $ventaBase, ?float $descuentoMaximoPct, ?float $margenMinimoPct): array
+    {
+        $precioMinimoPermitido = $this->calcularPrecioMinimoPermitido($costoBase, $ventaBase, $descuentoMaximoPct, $margenMinimoPct);
+
+        return [
+            'precio_minimo_permitido' => $precioMinimoPermitido !== null ? round($precioMinimoPermitido, 2) : null,
+            'alerta_piso' => $precioMinimoPermitido !== null && $this->cruzaPiso($precioEditado, $precioMinimoPermitido),
+        ];
+    }
+
+    // precio_minimo_permitido = el MAYOR entre el piso por margen_minimo_pct
+    // (sobre costo_base) y el piso por descuento_maximo_pct (sobre venta_base)
+    // — plan-modulo-cotizaciones-reservas.md §3.1. null cuando ninguno de los
+    // 2 pisos está configurado (tarifa sin piso protegido).
+    private function calcularPrecioMinimoPermitido(float $costoBase, float $ventaBase, ?float $descuentoMaximoPct, ?float $margenMinimoPct): ?float
+    {
+        $pisos = [];
+
+        if ($margenMinimoPct !== null) {
+            $pisos[] = $costoBase * (1 + $margenMinimoPct / 100);
+        }
+
+        if ($descuentoMaximoPct !== null) {
+            $pisos[] = $ventaBase * (1 - $descuentoMaximoPct / 100);
+        }
+
+        return empty($pisos) ? null : max($pisos);
+    }
+
+    // Tolerancia de centavo para evitar falsos positivos por redondeo decimal.
+    private function cruzaPiso(float $precio, float $precioMinimoPermitido): bool
+    {
+        return $precio < ($precioMinimoPermitido - 0.005);
+    }
+}

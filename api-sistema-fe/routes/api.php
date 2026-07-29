@@ -1,11 +1,15 @@
 <?php
 
 use App\Http\Controllers\Advance\AdvanceController;
+use App\Http\Controllers\AgenciaViajes\AlternativaController;
+use App\Http\Controllers\AgenciaViajes\AlternativaItemController;
 use App\Http\Controllers\AgenciaViajes\ConfiguracionAgenciaController;
+use App\Http\Controllers\AgenciaViajes\CotizacionController;
 use App\Http\Controllers\AgenciaViajes\DestinoAtractivoController;
 use App\Http\Controllers\AgenciaViajes\DestinoServicioController;
 use App\Http\Controllers\AgenciaViajes\GuiaController;
 use App\Http\Controllers\AgenciaViajes\GuiaTarifaController;
+use App\Http\Controllers\AgenciaViajes\OpcionMayoristaController;
 use App\Http\Controllers\AgenciaViajes\ProveedorController;
 use App\Http\Controllers\AgenciaViajes\ProveedorServicioController;
 use App\Http\Controllers\AgenciaViajes\ProveedorTarifaController;
@@ -415,6 +419,58 @@ Route::group([
         ->middleware('permission:agencia.configuracion');
     Route::put("configuracion-agencia", [ConfiguracionAgenciaController::class, 'update'])
         ->middleware('permission:agencia.configuracion');
+
+    // ═══════════════════════════════════════════════════════════════
+    // Vertical Agencia de Viajes — cotizador (Sesión 11b). Permiso propio
+    // 'agencia.cotizaciones', DISTINTO de 'agencia.proveedores' (11a) —
+    // cotizar es una operación de venta diaria (cualquier vendedor), el
+    // catálogo de proveedores es más admin-level. Ver migración
+    // 2026_07_28_180200_add_agencia_cotizaciones_permission.php para el
+    // razonamiento completo.
+    // ═══════════════════════════════════════════════════════════════
+    // Biblioteca del cotizador — antes de "cotizaciones/{id}", no colisiona
+    // (segmentos distintos) pero se agrupa acá por pertenecer al mismo flujo.
+    Route::get("proveedor-tarifas", [ProveedorTarifaController::class, 'biblioteca'])
+        ->middleware('permission:agencia.cotizaciones');
+
+    Route::get("cotizaciones", [CotizacionController::class, 'index'])
+        ->middleware('permission:agencia.cotizaciones');
+    Route::post("cotizaciones", [CotizacionController::class, 'store'])
+        ->middleware('permission:agencia.cotizaciones');
+    Route::get("cotizaciones/{id}", [CotizacionController::class, 'show'])
+        ->middleware('permission:agencia.cotizaciones');
+    Route::put("cotizaciones/{id}/pasajeros", [CotizacionController::class, 'actualizarPasajeros'])
+        ->middleware('permission:agencia.cotizaciones');
+
+    Route::post("cotizaciones/{id}/alternativas", [AlternativaController::class, 'store'])
+        ->middleware('permission:agencia.cotizaciones');
+    Route::put("alternativas/{id}", [AlternativaController::class, 'update'])
+        ->middleware('permission:agencia.cotizaciones');
+    Route::delete("alternativas/{id}", [AlternativaController::class, 'destroy'])
+        ->middleware('permission:agencia.cotizaciones');
+
+    Route::post("alternativas/{id}/items", [AlternativaItemController::class, 'store'])
+        ->middleware('permission:agencia.cotizaciones');
+    // Recalculo en vivo del formulario de pasaje aéreo (PasajeAereoForm.vue),
+    // sin persistir — antes de "alternativa-items/{id}" para que
+    // "items/preview-pasaje-aereo" no colisione con ninguna otra ruta.
+    Route::post("alternativas/{id}/items/preview-pasaje-aereo", [AlternativaItemController::class, 'previewPasajeAereo'])
+        ->middleware('permission:agencia.cotizaciones');
+    Route::put("alternativa-items/{id}", [AlternativaItemController::class, 'update'])
+        ->middleware('permission:agencia.cotizaciones');
+    Route::delete("alternativa-items/{id}", [AlternativaItemController::class, 'destroy'])
+        ->middleware('permission:agencia.cotizaciones');
+
+    Route::get("alternativas/{id}/opciones-mayorista", [OpcionMayoristaController::class, 'index'])
+        ->middleware('permission:agencia.cotizaciones');
+    Route::post("alternativas/{id}/opciones-mayorista", [OpcionMayoristaController::class, 'store'])
+        ->middleware('permission:agencia.cotizaciones');
+    Route::post("opciones-mayorista/{id}/elegir", [OpcionMayoristaController::class, 'elegir'])
+        ->middleware('permission:agencia.cotizaciones');
+    Route::match(['get', 'post'], "opciones-mayorista/{id}/hoteles", [OpcionMayoristaController::class, 'hoteles'])
+        ->middleware('permission:agencia.cotizaciones');
+    Route::match(['get', 'post'], "opciones-mayorista/{id}/opcionales", [OpcionMayoristaController::class, 'opcionales'])
+        ->middleware('permission:agencia.cotizaciones');
 
     Route::middleware('auth:api')->group(function () {});
 });

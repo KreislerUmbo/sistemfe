@@ -27,6 +27,38 @@ class ProveedorTarifaController extends Controller
         return response()->json(['proveedor_tarifas' => $tarifas]);
     }
 
+    // "Biblioteca" del cotizador (Sesión 11b, §7.1) — tarifas vigentes de
+    // TODOS los proveedores, con búsqueda por proveedor/servicio.
+    //
+    // Simplificación conocida, no resuelta en esta sesión: el plan original
+    // decía "filtradas por destino_servicio de la cotización", pero
+    // cotizaciones.destino es texto libre (§3.1, nunca fue FK a
+    // destinos_atractivos) — no hay forma de filtrar por destino a nivel de
+    // query sin cambiar ese schema, fuera de alcance acá. La biblioteca
+    // lista TODO el catálogo activo con búsqueda de texto en su lugar.
+    public function biblioteca(Request $request)
+    {
+        $hoy = now()->toDateString();
+        $search = $request->get('search');
+
+        $query = ProveedorTarifa::with([
+            'proveedorServicio.proveedor',
+            'proveedorServicio.destinoServicio.destinoAtractivo',
+            'proveedorServicio.destinoServicio.servicio',
+        ])
+            ->where('vigente_desde', '<=', $hoy)
+            ->where(fn ($q) => $q->whereNull('vigente_hasta')->orWhere('vigente_hasta', '>=', $hoy));
+
+        if ($search) {
+            $query->where(function ($q) use ($search) {
+                $q->whereHas('proveedorServicio.proveedor', fn ($qq) => $qq->where('razon_social', 'ilike', "%{$search}%")->orWhere('nombre_comercial', 'ilike', "%{$search}%"))
+                    ->orWhereHas('proveedorServicio.destinoServicio.servicio', fn ($qq) => $qq->where('nombre', 'ilike', "%{$search}%"));
+            });
+        }
+
+        return response()->json(['proveedor_tarifas' => $query->orderByDesc('id')->limit(100)->get()]);
+    }
+
     public function store(Request $request, string $proveedorServicioId)
     {
         $proveedorServicio = ProveedorServicio::with('proveedor')->findOrFail($proveedorServicioId);
