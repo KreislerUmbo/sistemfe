@@ -378,3 +378,106 @@ deben perderse. No es un plan de módulo — para eso está `docs/planning/`.
   eliminable; el mismo tenant después de correr el checklist completo de
   arriba (con datos reales en `Proveedor`/`DestinoAtractivo`/etc.) queda
   rechazado. Sin regresión.
+
+## Sesión 11b — Cotizador (motor de precios, pasaje aéreo, comparador de mayoristas) — CERRADA — 28-jul-2026
+
+- **RETROFIT Parte 0 cerrado**: `alternativa_items.origen_tipo`/`cantidad`/
+  `descripcion_manual` agregadas con backfill (mismo patrón de 2 pasos que
+  `tipo_habitacion` en 11a — columna nullable, backfill, luego
+  `NOT NULL` vía `->change()`). Tabla nueva `cotizacion_pasaje_aereo`
+  (1-a-1 con `alternativa_items`, `aerolinea` texto libre sin FK — decisión
+  ya cerrada en la sesión de diseño previa).
+- **`PriceEngineService`** (`app/Services/AgenciaViajes/`, servicio de
+  dominio puro): `calcular()` para margen+cargos+piso, `evaluarPiso()`
+  para la edición en vivo sin recalcular todo. Revisado antes de tocar
+  nada: `ProveedorTarifaController` (11a) NO calculaba margen inline
+  (`precio_venta_adulto`/etc. los ingresa el admin directo al catálogo) —
+  nada que refactorizar ahí, documentado en el propio servicio.
+- **4 controllers nuevos**: `CotizacionController` (header + pasajeros,
+  reusa el `codigo` auto-generado que ya vivía en el modelo `Cotizacion`
+  desde Sesión 7a), `AlternativaController` (máximo 5 por cotización
+  —regla de negocio que Sesión 7a había dejado documentada como pendiente
+  de esta sesión—, aceptar descarta las demás automático, tipo de cambio
+  resuelto o registrado al vuelo si no existe uno previo),
+  `AlternativaItemController` (los 4 `origen_tipo` con su propia forma de
+  snapshot, edición en vivo de `descuento_pct`/`precio_convertido`
+  bidireccional con piso comparado en la MISMA moneda que el precio
+  editado — costo y venta base se convierten antes de comparar, para no
+  mezclar monedas), `OpcionMayoristaController` (comparador, marcar
+  elegida no descarta las demás, matriz de hoteles).
+- **Endpoint adicional no pedido explícitamente pero necesario para
+  cumplir la spec al pie de la letra**: `POST alternativas/{id}/items/
+  preview-pasaje-aereo` — la spec de `PasajeAereoForm.vue` decía "no
+  reimplementes la suma en el frontend, pedísela al backend", pero no
+  existía ningún endpoint de solo-cálculo sin persistir. Se extrajo la
+  validación+cálculo de `crearItemPasajeAereo()` a 2 helpers privados
+  compartidos (`validarPasajeAereo()`/`calcularPasajeAereo()`) para que
+  preview y creación real usen exactamente la misma lógica, sin duplicar.
+- **Endpoint adicional #2, mismo motivo**: `GET proveedor-tarifas`
+  (`ProveedorTarifaController::biblioteca()`) — la "biblioteca" del
+  cotizador (§7.1) necesita listar tarifas de TODOS los proveedores, y
+  11a solo tenía un índice anidado bajo un `proveedor_servicio_id`
+  puntual. **Limitación conocida, documentada en el propio controller**:
+  el plan pedía filtrar por "destino_servicio de la cotización", pero
+  `cotizaciones.destino` es texto libre (§3.1), nunca fue FK a
+  `destinos_atractivos` — no hay forma de filtrar por destino a nivel de
+  query sin cambiar ese schema. La biblioteca lista todo el catálogo
+  vigente con búsqueda de texto en su lugar; cambiar `destino` a FK queda
+  fuera de esta sesión.
+- **Permiso decidido**: `agencia.cotizaciones` (nuevo, NO se reusó
+  `agencia.proveedores`) — cotizar es una operación de venta diaria de
+  cualquier vendedor, el catálogo de proveedores es más admin-level.
+  Migración propia en `tenant/verticals/agencia-viajes/`, agregado a
+  `types/roles.ts` desde el día 1 (mismo criterio que 11a).
+- **2 bugs reales encontrados corriendo la verificación, no por
+  inspección de código**:
+  1. `AlternativaItemController::store()` leía `$request->get('origen_tipo')`
+     — `get()` es el `ParameterBag` de Symfony (query string/route/
+     POST-form), **no lee body JSON crudo**. Cualquier request real con
+     `Content-Type: application/json` (como manda el frontend) habría
+     recibido siempre 422 "origen_tipo inválido" sin importar qué
+     mandara. Corregido a `$request->input('origen_tipo')`. El resto de
+     usos de `->get()` en los controllers de esta sesión SÍ eran
+     correctos (todos leen query string en un `GET`, donde si funciona).
+  2. `alternativa_items.costo_snapshot` es `NOT NULL` desde Sesión 7a —
+     los ítems `manual` y "proveedor sin tarifa asignada todavía"
+     (`proveedor_tarifa_id=null`, §3) no tienen ningún costo real del que
+     derivarlo, y el controller los dejaba en `null`, violando la
+     constraint. Corregido con `0` como sentinel explícito en ambos casos
+     (documentado en el código — mismo espíritu que "sin piso protegido"
+     ya establecido para estos 2 casos: no hay costo de terceros
+     rastreable).
+- **Verificado con 27 checks de HTTP real en proceso** (mismo patrón que
+  11a — kernel completo, sin hosts file) contra un tenant descartable:
+  cotización con 4 pasajeros (3 adultos + 1 niño), Alternativa A con
+  hotel local (matriz, 2 noches, `total=320` confirmado = 160×2), tour
+  por_persona (`total=255` = 3×70 + 1×45), pasaje aéreo con 2 cargos +
+  fee (`total=1300`, verificado el cálculo completo: costo repartido +
+  cargos + fee), ítem manual — **total de la alternativa = 1920.00,
+  coincide exacto con la suma manual esperada**. Alternativa B con
+  comparador de mayorista: bloqueado agregar el ítem antes de marcar
+  "elegida" (422), permitido después. Piso en vivo: descuento 50% sobre
+  una tarifa con piso 10% → `alerta_piso=true`; 5% → `false`; 99% sobre
+  un ítem MANUAL → siempre `false` (sin tarifa, sin piso). Aceptar
+  Alternativa A descartó sola a la B. Tope de 5 alternativas respetado
+  (6ta rechazada).
+- **`eliminarSiVacio()` — sin cambios de código, CONTRADICE la
+  suposición del prompt de esta sesión** (que decía "sí necesita" chequeo
+  propio para `cotizacion_pasaje_aereo` por ser "tabla nueva, raíz
+  propia") — trazando la cadena real: `alternativa_item_id` (NOT NULL) →
+  `alternativa_items.alternativa_id` (NOT NULL) → `alternativas.
+  cotizacion_id` (NOT NULL) → `cotizaciones.cliente_id` (NOT NULL) →
+  `Client::count()`, ya chequeado en `eliminarSiVacio()` desde antes de
+  este vertical existir. No es una raíz nueva, queda cubierta
+  transitivamente — mismo patrón de "asunción de planificación corregida
+  al trazar la cadena real" que ya pasó en Sesión 7b. Confirmado
+  empíricamente, no solo por lectura de código: un tenant con una fila
+  real de `cotizacion_pasaje_aereo` (creada en la verificación de arriba)
+  quedó rechazado por `Client::count()` del nivel superior, no por
+  ningún chequeo nuevo — porque no se agregó ninguno.
+- **Pendiente, explícitamente diferido**: `descuento_global_pct` de
+  `alternativas` se guarda como campo simple (`AlternativaController::
+  update()`), pero NO cascadea a cada `alternativa_item` respetando su
+  piso individual — el plan (§3.1) sí describe ese comportamiento, pero
+  la lista de rutas de esta sesión nunca pidió ese endpoint
+  explícitamente. Documentado, no construido.
