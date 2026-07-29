@@ -346,4 +346,33 @@ export const PERMISOS = [
             },
         ]
     },
+    {
+        // Vertical Agencia de Viajes — maestros (Sesión 11a). Agregado al
+        // catálogo desde el día 1 esta vez — Caja (Fase 5) dejó documentado
+        // que crear el permiso en el backend sin sumarlo acá lo deja
+        // inasignable desde la UI de Roles pese a existir de verdad.
+        'name': 'Agencia de Viajes (Maestros)',
+        'permisos': [
+            {
+                name: 'Proveedores (y sus tarifas)',
+                permiso: 'agencia.proveedores',
+            },
+            {
+                name: 'Destinos y Atractivos',
+                permiso: 'agencia.destinos',
+            },
+            {
+                name: 'Temporadas',
+                permiso: 'agencia.temporadas',
+            },
+            {
+                name: 'Guías Turísticos',
+                permiso: 'agencia.guias',
+            },
+            {
+                name: 'Configuración de la agencia',
+                permiso: 'agencia.configuracion',
+            },
+        ]
+    },
 ];

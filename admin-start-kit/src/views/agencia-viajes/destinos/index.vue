@@ -1,0 +1,324 @@
+<template>
+    <DefaultLayout>
+        <div class="d-flex align-items-center justify-content-between flex-wrap gap-3 mb-3">
+            <div>
+                <h5 class="fw-bold mb-0 text-dark">
+                    <i class="fas fa-map-marked-alt me-2 text-primary"></i>
+                    Destinos y Atractivos
+                </h5>
+                <small class="text-muted">Árbol de zonas, lugares y atractivos</small>
+            </div>
+            <button class="btn btn-primary fw-semibold shadow-sm" @click="abrirFormNuevo(null)">
+                <i class="fas fa-plus me-2"></i>Nueva Zona
+            </button>
+        </div>
+
+        <div class="card border-0 shadow-sm">
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr class="small text-secondary text-uppercase">
+                                <th class="ps-3">Nombre</th>
+                                <th>Tipo</th>
+                                <th class="text-center pe-3">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-if="loading">
+                                <td colspan="3" class="text-center py-5 text-muted">
+                                    <div class="spinner-border spinner-border-sm me-2"></div>Cargando...
+                                </td>
+                            </tr>
+                            <tr v-else-if="filasVisibles.length === 0">
+                                <td colspan="3" class="text-center py-5 text-muted fst-italic">Sin destinos cargados todavía.</td>
+                            </tr>
+                            <tr v-for="fila in filasVisibles" :key="fila.id">
+                                <td class="ps-3">
+                                    <span :style="{ paddingLeft: (fila.profundidad * 22) + 'px' }">
+                                        <i v-if="fila.tieneHijos" class="fas me-1" style="cursor:pointer;width:12px;display:inline-block;"
+                                            :class="expandidos.has(fila.id) ? 'fa-caret-down' : 'fa-caret-right'"
+                                            @click="toggleExpandido(fila.id)"></i>
+                                        <i v-else class="me-1" style="width:12px;display:inline-block;"></i>
+                                        {{ fila.nombre }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="badge bg-light text-dark border">{{ etiquetaTipo(fila.tipo) }}</span>
+                                </td>
+                                <td class="text-center pe-3">
+                                    <button v-if="fila.tipo !== 'atractivo'" class="btn btn-sm btn-outline-success me-1"
+                                        :title="`Agregar ${fila.tipo === 'zona' ? 'lugar' : 'atractivo'}`" @click="abrirFormNuevo(fila.id)">
+                                        <i class="fas fa-plus"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-primary me-1" title="Servicios asociados" @click="abrirServicios(fila)">
+                                        <i class="fas fa-concierge-bell"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-secondary me-1" title="Editar" @click="abrirFormEditar(fila)">
+                                        <i class="fas fa-pen"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-danger" title="Eliminar" @click="eliminar(fila)">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal crear/editar destino -->
+        <div v-if="modalFormAbierto" class="modal d-block" style="background:rgba(0,0,0,.5)" @click.self="modalFormAbierto = false">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h6 class="modal-title">{{ destinoEditando ? 'Editar' : 'Nuevo' }} Destino/Atractivo</h6>
+                        <button class="btn-close" @click="modalFormAbierto = false"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label small fw-semibold text-secondary">Nombre *</label>
+                            <input type="text" class="form-control form-control-sm" v-model="formDestino.nombre">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label small fw-semibold text-secondary">Tipo *</label>
+                            <select class="form-select form-select-sm" v-model="formDestino.tipo">
+                                <option value="zona">Zona</option>
+                                <option value="lugar">Lugar</option>
+                                <option value="atractivo">Atractivo</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label small fw-semibold text-secondary">Descripción</label>
+                            <textarea class="form-control form-control-sm" rows="3" v-model="formDestino.descripcion"></textarea>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn btn-outline-secondary" @click="modalFormAbierto = false">Cancelar</button>
+                        <button class="btn btn-primary" @click="guardarDestino">Guardar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal servicios asociados -->
+        <div v-if="modalServiciosAbierto" class="modal d-block" style="background:rgba(0,0,0,.5)" @click.self="modalServiciosAbierto = false">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h6 class="modal-title">Servicios de "{{ destinoServiciosActivo?.nombre }}"</h6>
+                        <button class="btn-close" @click="modalServiciosAbierto = false"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="input-group input-group-sm mb-2">
+                            <select class="form-select" v-model="servicioNuevoId">
+                                <option :value="null">— Selecciona un servicio —</option>
+                                <option v-for="s in servicios" :key="s.id" :value="s.id">{{ s.nombre }}</option>
+                            </select>
+                            <button class="btn btn-primary" @click="asociarServicio" :disabled="!servicioNuevoId">
+                                <i class="fas fa-plus"></i>
+                            </button>
+                        </div>
+                        <!-- Alta rápida: el catálogo de servicios (Traslado, Hospedaje,
+                             Entrada/Boleto...) no tiene pantalla propia en esta sesión —
+                             se crea acá mismo, donde se necesita, mismo espíritu que
+                             ClientFormQuick/ProductFormQuick del core. -->
+                        <div class="input-group input-group-sm mb-3">
+                            <input type="text" class="form-control" placeholder="¿No está en la lista? Escribe el nombre y créalo..." v-model="servicioNuevoNombre">
+                            <button class="btn btn-outline-success" @click="crearServicioRapido" :disabled="!servicioNuevoNombre.trim()">
+                                <i class="fas fa-plus-circle me-1"></i>Crear
+                            </button>
+                        </div>
+                        <ul class="list-group">
+                            <li v-for="ds in destinoServiciosLista" :key="ds.id" class="list-group-item d-flex justify-content-between align-items-center">
+                                {{ ds.servicio?.nombre }}
+                                <button class="btn btn-sm btn-outline-danger" @click="desasociarServicio(ds.id)">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </li>
+                            <li v-if="destinoServiciosLista.length === 0" class="list-group-item text-muted fst-italic">
+                                Sin servicios asociados.
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </DefaultLayout>
+</template>
+
+<script setup lang="ts">
+import { ref, computed, onMounted } from 'vue';
+import DefaultLayout from '@/layouts/DefaultLayout.vue';
+import Swal from 'sweetalert2/dist/sweetalert2.js';
+import { destinoAtractivoService } from '@/services/admin/destinoAtractivoService';
+import { servicioService } from '@/services/admin/servicioService';
+import type { DestinoAtractivo, DestinoServicio, Servicio } from '@/types/agencia-viajes';
+
+type TVueSwalInstance = typeof Swal & typeof Swal.fire;
+
+type Fila = { id: number; nombre: string; tipo: 'zona' | 'lugar' | 'atractivo'; parentId: number | null; profundidad: number; tieneHijos: boolean };
+
+const arbol = ref<DestinoAtractivo[]>([]);
+const servicios = ref<Servicio[]>([]);
+const loading = ref<boolean>(false);
+const expandidos = ref<Set<number>>(new Set());
+
+const filas = computed<Fila[]>(() => {
+    const resultado: Fila[] = [];
+    const recorrer = (nodos: DestinoAtractivo[], parentId: number | null, profundidad: number) => {
+        for (const nodo of nodos) {
+            resultado.push({
+                id: nodo.id, nombre: nodo.nombre, tipo: nodo.tipo, parentId,
+                profundidad, tieneHijos: !!(nodo.hijos && nodo.hijos.length > 0),
+            });
+            if (nodo.hijos) recorrer(nodo.hijos, nodo.id, profundidad + 1);
+        }
+    };
+    recorrer(arbol.value, null, 0);
+    return resultado;
+});
+
+const filasVisibles = computed(() => {
+    return filas.value.filter((fila) => {
+        if (fila.parentId === null) return true;
+        // Todos los ancestros deben estar expandidos.
+        let actual: Fila | undefined = fila;
+        while (actual && actual.parentId !== null) {
+            if (!expandidos.value.has(actual.parentId)) return false;
+            actual = filas.value.find((f) => f.id === actual!.parentId);
+        }
+        return true;
+    });
+});
+
+const toggleExpandido = (id: number) => {
+    if (expandidos.value.has(id)) expandidos.value.delete(id);
+    else expandidos.value.add(id);
+};
+
+const etiquetaTipo = (tipo: string) => ({ zona: 'Zona', lugar: 'Lugar', atractivo: 'Atractivo' }[tipo] ?? tipo);
+
+const cargarArbol = async () => {
+    loading.value = true;
+    try {
+        const res = await destinoAtractivoService.arbol();
+        arbol.value = res.destinos_atractivos;
+    } finally {
+        loading.value = false;
+    }
+};
+
+// ── Form crear/editar ────────────────────────────────────────────────
+const modalFormAbierto = ref<boolean>(false);
+const destinoEditando = ref<Fila | null>(null);
+const parentIdNuevo = ref<number | null>(null);
+const formDestino = ref<Partial<DestinoAtractivo>>({ nombre: '', tipo: 'zona', descripcion: '' });
+
+const abrirFormNuevo = (parentId: number | null) => {
+    destinoEditando.value = null;
+    parentIdNuevo.value = parentId;
+    const padre = parentId ? filas.value.find((f) => f.id === parentId) : null;
+    const tipoSugerido = padre ? (padre.tipo === 'zona' ? 'lugar' : 'atractivo') : 'zona';
+    formDestino.value = { nombre: '', tipo: tipoSugerido, descripcion: '' };
+    modalFormAbierto.value = true;
+};
+
+const abrirFormEditar = (fila: Fila) => {
+    destinoEditando.value = fila;
+    formDestino.value = { nombre: fila.nombre, tipo: fila.tipo, descripcion: '' };
+    modalFormAbierto.value = true;
+};
+
+const guardarDestino = async () => {
+    if (!formDestino.value.nombre?.trim()) {
+        (Swal as TVueSwalInstance).fire('Error', 'El nombre es obligatorio.', 'error');
+        return;
+    }
+    try {
+        const payload = { ...formDestino.value, parent_id: destinoEditando.value ? undefined : parentIdNuevo.value };
+        const res = destinoEditando.value
+            ? await destinoAtractivoService.actualizar(destinoEditando.value.id, payload)
+            : await destinoAtractivoService.crear(payload);
+
+        modalFormAbierto.value = false;
+        await (Swal as TVueSwalInstance).fire('Listo', res.message, 'success');
+        await cargarArbol();
+    } catch (error: any) {
+        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo guardar', 'error');
+    }
+};
+
+const eliminar = (fila: Fila) => {
+    (Swal as TVueSwalInstance).fire({
+        title: 'Confirmar eliminación', text: `¿Eliminar "${fila.nombre}"?`, icon: 'warning',
+        showCancelButton: true, confirmButtonColor: '#d33', confirmButtonText: 'Sí, eliminar',
+    }).then(async (result: any) => {
+        if (!result.isConfirmed) return;
+        try {
+            const res = await destinoAtractivoService.eliminar(fila.id);
+            (Swal as TVueSwalInstance).fire('Listo', res.message, 'success');
+            await cargarArbol();
+        } catch (error: any) {
+            (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo eliminar', 'error');
+        }
+    });
+};
+
+// ── Servicios asociados ──────────────────────────────────────────────
+const modalServiciosAbierto = ref<boolean>(false);
+const destinoServiciosActivo = ref<Fila | null>(null);
+const destinoServiciosLista = ref<DestinoServicio[]>([]);
+const servicioNuevoId = ref<number | null>(null);
+const servicioNuevoNombre = ref<string>('');
+
+const abrirServicios = async (fila: Fila) => {
+    destinoServiciosActivo.value = fila;
+    servicioNuevoId.value = null;
+    servicioNuevoNombre.value = '';
+    modalServiciosAbierto.value = true;
+    const res = await destinoAtractivoService.listarServicios(fila.id);
+    destinoServiciosLista.value = res.destino_servicios;
+};
+
+const crearServicioRapido = async () => {
+    try {
+        const res = await servicioService.crear({ nombre: servicioNuevoNombre.value.trim() });
+        servicios.value.push(res.servicio);
+        servicioNuevoId.value = res.servicio.id;
+        servicioNuevoNombre.value = '';
+    } catch (error: any) {
+        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo crear el servicio', 'error');
+    }
+};
+
+const asociarServicio = async () => {
+    if (!destinoServiciosActivo.value || !servicioNuevoId.value) return;
+    try {
+        await destinoAtractivoService.asociarServicio(destinoServiciosActivo.value.id, servicioNuevoId.value);
+        const res = await destinoAtractivoService.listarServicios(destinoServiciosActivo.value.id);
+        destinoServiciosLista.value = res.destino_servicios;
+        servicioNuevoId.value = null;
+    } catch (error: any) {
+        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo asociar', 'error');
+    }
+};
+
+const desasociarServicio = async (destinoServicioId: number) => {
+    if (!destinoServiciosActivo.value) return;
+    try {
+        await destinoAtractivoService.desasociarServicio(destinoServicioId);
+        const res = await destinoAtractivoService.listarServicios(destinoServiciosActivo.value.id);
+        destinoServiciosLista.value = res.destino_servicios;
+    } catch (error: any) {
+        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo quitar', 'error');
+    }
+};
+
+onMounted(async () => {
+    await cargarArbol();
+    const res = await servicioService.listar({});
+    servicios.value = res.servicios;
+});
+</script>

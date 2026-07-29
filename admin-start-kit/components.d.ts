@@ -50,6 +50,7 @@ declare module 'vue' {
     CartDrawer: typeof import('./src/components/portal/CartDrawer.vue')['default']
     ChartJs: typeof import('./src/components/ChartJs.vue')['default']
     ClientFormQuick: typeof import('./src/components/Sales/ClientFormQuick.vue')['default']
+    DestinoTreeSelect: typeof import('./src/components/AgenciaViajes/DestinoTreeSelect.vue')['default']
     DropDown: typeof import('./src/components/DropDown.vue')['default']
     FlatPicker: typeof import('./src/components/FlatPicker.vue')['default']
     FooterPortal: typeof import('./src/components/portal/FooterPortal.vue')['default']

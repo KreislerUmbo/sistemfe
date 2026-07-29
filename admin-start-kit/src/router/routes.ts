@@ -478,6 +478,98 @@ const comercialRoutes = [
     component: () => import("@/views/recursos/manual.vue"),
   },
 
+  // Agencia de viajes — maestros (Sesión 11a)
+  {
+    path: "/agencia-viajes/proveedores",
+    name: "agencia.proveedores.index",
+    meta: {
+      title: setTitle("Proveedores"),
+      authRequired: true,
+      permission: 'agencia.proveedores',
+    },
+    component: () => import("@/views/agencia-viajes/proveedores/index.vue"),
+  },
+  {
+    path: "/agencia-viajes/proveedores/nuevo",
+    name: "agencia.proveedores.create",
+    meta: {
+      title: setTitle("Nuevo Proveedor"),
+      authRequired: true,
+      permission: 'agencia.proveedores',
+    },
+    component: () => import("@/views/agencia-viajes/proveedores/form.vue"),
+  },
+  {
+    path: "/agencia-viajes/proveedores/:id/editar",
+    name: "agencia.proveedores.edit",
+    meta: {
+      title: setTitle("Editar Proveedor"),
+      authRequired: true,
+      permission: 'agencia.proveedores',
+    },
+    component: () => import("@/views/agencia-viajes/proveedores/form.vue"),
+  },
+  {
+    path: "/agencia-viajes/proveedores/:id",
+    name: "agencia.proveedores.show",
+    meta: {
+      title: setTitle("Detalle de Proveedor"),
+      authRequired: true,
+      permission: 'agencia.proveedores',
+    },
+    component: () => import("@/views/agencia-viajes/proveedores/detalle.vue"),
+  },
+  {
+    path: "/agencia-viajes/destinos",
+    name: "agencia.destinos.index",
+    meta: {
+      title: setTitle("Destinos y Atractivos"),
+      authRequired: true,
+      permission: 'agencia.destinos',
+    },
+    component: () => import("@/views/agencia-viajes/destinos/index.vue"),
+  },
+  {
+    path: "/agencia-viajes/temporadas",
+    name: "agencia.temporadas.index",
+    meta: {
+      title: setTitle("Temporadas"),
+      authRequired: true,
+      permission: 'agencia.temporadas',
+    },
+    component: () => import("@/views/agencia-viajes/temporadas/index.vue"),
+  },
+  {
+    path: "/agencia-viajes/guias",
+    name: "agencia.guias.index",
+    meta: {
+      title: setTitle("Guías Turísticos"),
+      authRequired: true,
+      permission: 'agencia.guias',
+    },
+    component: () => import("@/views/agencia-viajes/guias/index.vue"),
+  },
+  {
+    path: "/agencia-viajes/guias/:id",
+    name: "agencia.guias.show",
+    meta: {
+      title: setTitle("Tarifas de Guía"),
+      authRequired: true,
+      permission: 'agencia.guias',
+    },
+    component: () => import("@/views/agencia-viajes/guias/detalle.vue"),
+  },
+  {
+    path: "/agencia-viajes/configuracion",
+    name: "agencia.configuracion.index",
+    meta: {
+      title: setTitle("Configuración de la Agencia"),
+      authRequired: true,
+      permission: 'agencia.configuracion',
+    },
+    component: () => import("@/views/agencia-viajes/configuracion/index.vue"),
+  },
+
 ];
 
 

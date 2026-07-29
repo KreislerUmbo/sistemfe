@@ -199,6 +199,52 @@ export const MENU_ITEMS: MenuItemType[] = [
       },
     ],
   },
+  // Vertical Agencia de Viajes — maestros (Sesión 11a). Solo aparece para
+  // usuarios con alguno de los 5 permisos 'agencia.*' — un tenant retail no
+  // los tiene asignados a nadie, así que esta sección nunca les aparece.
+  {
+    key: "agencia_viajes",
+    label: "Agencia de Viajes",
+    isTitle: false,
+    icon: "fas fa-suitcase-rolling",
+    children: [
+      {
+        key: "agencia_proveedores",
+        label: "Proveedores",
+        route: { name: "agencia.proveedores.index" },
+        parentKey: "agencia_viajes",
+        permission: 'agencia.proveedores',
+      },
+      {
+        key: "agencia_destinos",
+        label: "Destinos y Atractivos",
+        route: { name: "agencia.destinos.index" },
+        parentKey: "agencia_viajes",
+        permission: 'agencia.destinos',
+      },
+      {
+        key: "agencia_temporadas",
+        label: "Temporadas",
+        route: { name: "agencia.temporadas.index" },
+        parentKey: "agencia_viajes",
+        permission: 'agencia.temporadas',
+      },
+      {
+        key: "agencia_guias",
+        label: "Guías Turísticos",
+        route: { name: "agencia.guias.index" },
+        parentKey: "agencia_viajes",
+        permission: 'agencia.guias',
+      },
+      {
+        key: "agencia_configuracion",
+        label: "Configuración",
+        route: { name: "agencia.configuracion.index" },
+        parentKey: "agencia_viajes",
+        permission: 'agencia.configuracion',
+      },
+    ],
+  },
   {
     key: "guias",
     label: "Guia de Remisión",
