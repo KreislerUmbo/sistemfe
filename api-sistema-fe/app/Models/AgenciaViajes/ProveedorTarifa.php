@@ -10,6 +10,11 @@ use Illuminate\Database\Eloquent\Model;
 // temporada_id NO lleva relación — cross-boundary a temporadas (central,
 // Sesión 1), sin FK real de Postgres, mismo criterio que
 // Proveedor::tipo_id/Servicio::tipo_proveedor_id.
+//
+// tipo_habitacion: RETROFIT Sesión 11a (ver migración
+// 2026_07_28_170000_add_tipo_habitacion_to_proveedor_tarifas_table.php) —
+// promovida de diferenciador (JSON) a columna real, mismo enum que ya usa
+// OpcionHotelTarifa desde Sesión 5.
 class ProveedorTarifa extends Model
 {
     protected $table = 'proveedor_tarifas';
@@ -20,6 +25,7 @@ class ProveedorTarifa extends Model
         'modalidad',
         'moneda',
         'diferenciador',
+        'tipo_habitacion',
         'precio_costo',
         'margen_tipo',
         'margen_valor',
