@@ -245,6 +245,13 @@ export const MENU_ITEMS: MenuItemType[] = [
         permission: 'agencia.guias',
       },
       {
+        key: "agencia_paquetes",
+        label: "Paquetes / Tours",
+        route: { name: "agencia.paquetes.index" },
+        parentKey: "agencia_viajes",
+        permission: 'agencia.paquetes',
+      },
+      {
         key: "agencia_configuracion",
         label: "Configuración",
         route: { name: "agencia.configuracion.index" },

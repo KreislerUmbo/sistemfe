@@ -370,6 +370,10 @@ export const PERMISOS = [
                 permiso: 'agencia.guias',
             },
             {
+                name: 'Paquetes / Tours de plantilla',
+                permiso: 'agencia.paquetes',
+            },
+            {
                 name: 'Configuración de la agencia',
                 permiso: 'agencia.configuracion',
             },

@@ -329,3 +329,71 @@ export type OpcionMayoristaOpcional = {
   incluye?: string | null;
   no_incluye?: string | null;
 };
+
+// ═══════════════════════════════════════════════════════════════
+// Sesión 11b2 — catálogo de paquetes/tours de plantilla
+// ═══════════════════════════════════════════════════════════════
+
+export type PaquetePlantilla = {
+  id: number;
+  codigo?: string | null;
+  categoria: 'local' | 'nacional' | 'internacional';
+  nombre: string;
+  descripcion?: string | null;
+  fotos?: string[] | null;
+  destino_atractivo_id: number;
+  destino_atractivo?: DestinoAtractivo;
+  duracion_horas: number;
+  hora_salida?: string | null;
+  hora_retorno?: string | null;
+  lugar_recojo?: string | null;
+  no_incluye?: string | null;
+  recomendaciones?: string | null;
+  vuelo_incluido: boolean;
+  vuelo_aerolinea?: string | null;
+  vuelo_detalle?: string | null;
+  precio_venta_final?: number | null;
+  vigencia_desde?: string | null;
+  vigencia_hasta?: string | null;
+  publicado_web: boolean;
+  items?: PaquetePlantillaItem[];
+  paquete_itinerario?: TourItinerarioItem[];
+};
+
+export type PaquetePlantillaItem = {
+  id: number;
+  paquete_plantilla_id: number;
+  proveedor_tarifa_id?: number | null;
+  proveedor_tarifa?: ProveedorTarifa;
+  guia_tarifa_id?: number | null;
+  guia_tarifa?: GuiaTarifa;
+  orden?: number | null;
+};
+
+export type TourItinerarioItem = {
+  id: number;
+  tour_id: number;
+  dia_relativo: number;
+  hora?: string | null;
+  orden?: number | null;
+  destino_atractivo_id?: number | null;
+  destino_atractivo?: DestinoAtractivo;
+  descripcion: string;
+};
+
+export type PaquetesPlantilla = {
+  total: number;
+  paginate: number;
+  paquetes_plantilla: PaquetePlantilla[];
+};
+
+export type PaquetePlantillaResponse = {
+  code: number;
+  message: string;
+  paquete_plantilla: PaquetePlantilla;
+};
+
+export type PaquetePlantillaShowResponse = {
+  paquete_plantilla: PaquetePlantilla;
+  opciones_hotel: OpcionHotel[];
+};

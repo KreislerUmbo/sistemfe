@@ -615,3 +615,62 @@ deben perderse. No es un plan de módulo — para eso está `docs/planning/`.
   completo ya existente vía alta rápida inline en `destinos/index.vue`
   (modal "Servicios asociados" de cada destino), sin ningún enum de por
   medio. Aclarado al usuario, sin cambios de código.
+
+## Sesión 11b2 — Catálogo de Paquetes/Tours de plantilla — 29-jul-2026
+
+- Hueco real de la hoja de ruta cerrado (ver entrada del 29-jul-2026
+  anterior): Sesión 6 solo había construido tablas/modelos de
+  `paquetes_plantilla`, nunca su API/pantalla. Rama
+  `feature/sesion-11b2-paquetes-plantilla`.
+- **Backend**: `PaquetePlantillaController` (header CRUD + matriz de hotel
+  `hoteles()`/`eliminarHotel()`, mismo motor que
+  `OpcionMayoristaController::hoteles()` escopeado a
+  `paquete_plantilla_id` — sin extraer a un service compartido, la
+  validación de "proveedor debe ser tipo Mayorista" de ese sibling no
+  aplica acá). `PaquetePlantillaItemController` resuelve la regla de
+  negocio que la migración de Sesión 6 había dejado explícitamente
+  pendiente ("uno de los dos entre `proveedor_tarifa_id`/`guia_tarifa_id`,
+  nunca ambos ni ninguno", sin CHECK de Postgres, validado a nivel de
+  aplicación). `TourItinerarioItemController` para el itinerario
+  día-por-día. Permiso nuevo `agencia.paquetes` (mismo criterio admin-level
+  que `agencia.proveedores`/`agencia.destinos`, no `agencia.cotizaciones`).
+  `destroy()` hace cascada real (items/itinerario/hoteles+tarifas propios)
+  en transacción — sin guard externo porque nada fuera del propio árbol
+  referencia `paquete_plantilla_id` todavía (11b3 no está construida).
+- **Bug real encontrado y corregido probando el flujo completo en
+  `agencia-demo`, no por lectura de código**: `paquetes_plantilla.codigo`
+  es `unique()` a nivel de Postgres, pero el controller no lo validaba —
+  un código repetido tiraba una excepción de BD sin capturar (500 crudo)
+  en vez de un 422 limpio. Confirmado creando el mismo paquete dos veces
+  vía la UI real. Corregido con `Rule::unique(...)->ignore($id)` en
+  `validarPayload()`, reusado por `store()`/`update()`.
+- **Frontend**: `views/agencia-viajes/paquetes/` (index con filtro
+  categoría, form de alta/edición del header, detalle con 4 tabs — Datos/
+  Itinerario/Incluye/Hoteles). `fotos` (JSON array) queda soportado en el
+  backend pero sin UI de carga — mismo estado que `destinos_atractivos`,
+  que tampoco tiene la subida de fotos conectada en ninguna pantalla
+  existente; no se inventó un patrón nuevo de upload sin precedente en
+  el resto de este vertical.
+  - Tab "Incluye": ítems buscados/agregados por separado según sean de
+    proveedor (biblioteca por texto, mismo patrón que el cotizador — pero
+    a propósito SIN agrupar tarifas de hotel por tipo de habitación, a
+    diferencia de `editar.vue`: acá el admin necesita elegir UNA tarifa
+    específica para el "Incluye" del paquete, no cualquiera del rango) o
+    de guía (selector de guía → selector de sus tarifas).
+- **Verificado dos veces**: contra un tenant descartable real
+  (`test-11b2-paquetes`, vía llamadas directas a los controllers —
+  creación, los 2 casos válidos de ítem + los 2 casos 422 de la regla
+  exactamente-uno, itinerario con y sin destino, hotel con 2 tarifas,
+  `show()` con la cadena completa de eager loads, `index()` con filtro,
+  `update()`, `eliminarHotel()` standalone, `destroy()` con cascada
+  confirmada contando filas antes/después — tenant destruido al cerrar) y
+  con captura de pantalla real (Playwright, login real) contra
+  `agencia-demo`: creación de un paquete completo desde el formulario,
+  las 4 pestañas mostrando datos reales guardados. Migración nueva
+  corrida contra `agencia-demo` con
+  `tenants:migrate --path=.../verticals/agencia-viajes`. Paquete de
+  prueba eliminado al cerrar — `agencia-demo` queda con 0 paquetes.
+- `npm run type-check`/`vue-tsc --noEmit` sin errores nuevos, `php -l`
+  limpio en los 3 controllers + la migración.
+- Pendiente explícito, ya reservado como su propia fila (11b3): conectar
+  esto al cotizador ("Cargar desde plantilla").

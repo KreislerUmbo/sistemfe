@@ -560,6 +560,46 @@ const comercialRoutes = [
     component: () => import("@/views/agencia-viajes/guias/detalle.vue"),
   },
   {
+    path: "/agencia-viajes/paquetes",
+    name: "agencia.paquetes.index",
+    meta: {
+      title: setTitle("Paquetes / Tours"),
+      authRequired: true,
+      permission: 'agencia.paquetes',
+    },
+    component: () => import("@/views/agencia-viajes/paquetes/index.vue"),
+  },
+  {
+    path: "/agencia-viajes/paquetes/nuevo",
+    name: "agencia.paquetes.create",
+    meta: {
+      title: setTitle("Nuevo Paquete/Tour"),
+      authRequired: true,
+      permission: 'agencia.paquetes',
+    },
+    component: () => import("@/views/agencia-viajes/paquetes/form.vue"),
+  },
+  {
+    path: "/agencia-viajes/paquetes/:id/editar",
+    name: "agencia.paquetes.edit",
+    meta: {
+      title: setTitle("Editar Paquete/Tour"),
+      authRequired: true,
+      permission: 'agencia.paquetes',
+    },
+    component: () => import("@/views/agencia-viajes/paquetes/form.vue"),
+  },
+  {
+    path: "/agencia-viajes/paquetes/:id",
+    name: "agencia.paquetes.show",
+    meta: {
+      title: setTitle("Detalle de Paquete/Tour"),
+      authRequired: true,
+      permission: 'agencia.paquetes',
+    },
+    component: () => import("@/views/agencia-viajes/paquetes/detalle.vue"),
+  },
+  {
     path: "/agencia-viajes/configuracion",
     name: "agencia.configuracion.index",
     meta: {

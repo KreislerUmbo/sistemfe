@@ -10,6 +10,8 @@ use App\Http\Controllers\AgenciaViajes\DestinoServicioController;
 use App\Http\Controllers\AgenciaViajes\GuiaController;
 use App\Http\Controllers\AgenciaViajes\GuiaTarifaController;
 use App\Http\Controllers\AgenciaViajes\OpcionMayoristaController;
+use App\Http\Controllers\AgenciaViajes\PaquetePlantillaController;
+use App\Http\Controllers\AgenciaViajes\PaquetePlantillaItemController;
 use App\Http\Controllers\AgenciaViajes\ProveedorController;
 use App\Http\Controllers\AgenciaViajes\ProveedorServicioController;
 use App\Http\Controllers\AgenciaViajes\ProveedorTarifaController;
@@ -17,6 +19,7 @@ use App\Http\Controllers\AgenciaViajes\ProveedorTipoConfigController;
 use App\Http\Controllers\AgenciaViajes\ServicioController;
 use App\Http\Controllers\AgenciaViajes\TemporadaController;
 use App\Http\Controllers\AgenciaViajes\TemporadaOcurrenciaController;
+use App\Http\Controllers\AgenciaViajes\TourItinerarioItemController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\Cash\BranchController;
 use App\Http\Controllers\Cash\CashConceptController;
@@ -428,6 +431,39 @@ Route::group([
         ->middleware('permission:agencia.configuracion');
     Route::put("configuracion-agencia", [ConfiguracionAgenciaController::class, 'update'])
         ->middleware('permission:agencia.configuracion');
+
+    // Sesión 11b2 — catálogo de paquetes/tours de plantilla.
+    Route::get("paquetes-plantilla", [PaquetePlantillaController::class, 'index'])
+        ->middleware('permission:agencia.paquetes');
+    Route::post("paquetes-plantilla", [PaquetePlantillaController::class, 'store'])
+        ->middleware('permission:agencia.paquetes');
+    Route::get("paquetes-plantilla/{id}", [PaquetePlantillaController::class, 'show'])
+        ->middleware('permission:agencia.paquetes');
+    Route::post("paquetes-plantilla/{id}", [PaquetePlantillaController::class, 'update'])
+        ->middleware('permission:agencia.paquetes');
+    Route::delete("paquetes-plantilla/{id}", [PaquetePlantillaController::class, 'destroy'])
+        ->middleware('permission:agencia.paquetes');
+
+    Route::get("paquetes-plantilla/{id}/items", [PaquetePlantillaItemController::class, 'index'])
+        ->middleware('permission:agencia.paquetes');
+    Route::post("paquetes-plantilla/{id}/items", [PaquetePlantillaItemController::class, 'store'])
+        ->middleware('permission:agencia.paquetes');
+    Route::delete("paquete-plantilla-items/{id}", [PaquetePlantillaItemController::class, 'destroy'])
+        ->middleware('permission:agencia.paquetes');
+
+    Route::get("paquetes-plantilla/{id}/itinerario", [TourItinerarioItemController::class, 'index'])
+        ->middleware('permission:agencia.paquetes');
+    Route::post("paquetes-plantilla/{id}/itinerario", [TourItinerarioItemController::class, 'store'])
+        ->middleware('permission:agencia.paquetes');
+    Route::delete("tour-itinerario-items/{id}", [TourItinerarioItemController::class, 'destroy'])
+        ->middleware('permission:agencia.paquetes');
+
+    // Matriz hotel × tipo de habitación (mismo motor que
+    // opciones-mayorista/{id}/hoteles, escopeado a paquete_plantilla_id).
+    Route::match(['get', 'post'], "paquetes-plantilla/{id}/hoteles", [PaquetePlantillaController::class, 'hoteles'])
+        ->middleware('permission:agencia.paquetes');
+    Route::delete("paquete-plantilla-hoteles/{id}", [PaquetePlantillaController::class, 'eliminarHotel'])
+        ->middleware('permission:agencia.paquetes');
 
     // ═══════════════════════════════════════════════════════════════
     // Vertical Agencia de Viajes — cotizador (Sesión 11b). Permiso propio
