@@ -266,7 +266,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import Swal from 'sweetalert2/dist/sweetalert2.js';
 import httpClient from '@/helpers/http-client';
@@ -278,11 +278,13 @@ import { alternativaService } from '@/services/admin/alternativaService';
 import { alternativaItemService } from '@/services/admin/alternativaItemService';
 import { opcionMayoristaService } from '@/services/admin/opcionMayoristaService';
 import { proveedorService, proveedorTipoService } from '@/services/admin/proveedorService';
+import { reservaService } from '@/services/admin/reservaService';
 import type { Cotizacion, Alternativa, AlternativaItem, ProveedorTarifa, OpcionMayorista, Proveedor } from '@/types/agencia-viajes';
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
 
 const route = useRoute();
+const router = useRouter();
 const cotizacionId = Number(route.params.id);
 
 const cotizacion = ref<Cotizacion | null>(null);
@@ -329,10 +331,21 @@ const crearAlternativa = async () => {
     }
 };
 
+// Sesión 11c: aceptar ya no solo cambia el estado (AlternativaController::
+// update()) — dispara la creación real de la Reserva
+// (ReservaController::aceptar()) y redirige a su pantalla de detalle, en
+// vez de quedarse en el cotizador.
 const marcarAceptada = async () => {
     if (!alternativaActiva.value) return;
-    await alternativaService.actualizar(alternativaActiva.value.id, { estado: 'aceptada' });
-    await cargarCotizacion();
+    try {
+        const res = await reservaService.aceptarAlternativa(alternativaActiva.value.id);
+        if (res.alerta_cupo_excedido) {
+            await (Swal as TVueSwalInstance).fire('Cupo excedido', 'La salida de mayorista elegida ya superó su cupo total — la reserva se creó igual, es solo un aviso.', 'warning');
+        }
+        router.push(`/agencia-viajes/reservas/${res.reserva.id}`);
+    } catch (error: any) {
+        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo aceptar la alternativa', 'error');
+    }
 };
 
 const eliminarAlternativa = async () => {

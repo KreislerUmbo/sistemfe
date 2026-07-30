@@ -397,3 +397,103 @@ export type PaquetePlantillaShowResponse = {
   paquete_plantilla: PaquetePlantilla;
   opciones_hotel: OpcionHotel[];
 };
+
+// ═══════════════════════════════════════════════════════════════
+// Sesión 11c — reserva y pasajeros
+// ═══════════════════════════════════════════════════════════════
+
+export type MotivoCancelacion = 'voluntaria' | 'fuerza_mayor' | 'clima' | 'falta_pago_cuotas';
+
+export type ReservaPasajero = {
+  id: number;
+  reserva_id: number;
+  tipo_pax?: 'adulto' | 'nino' | 'infante' | null;
+  nombre?: string | null;
+  documento?: string | null;
+  nacionalidad?: string | null;
+  alimentacion_especial?: string | null;
+  // texto libre (no booleano) — permite decir QUÉ discapacidad, no solo sí/no
+  discapacidad?: string | null;
+  vuelo_aerolinea_ida?: string | null;
+  vuelo_hora_ida?: string | null;
+  vuelo_aerolinea_vuelta?: string | null;
+  vuelo_hora_vuelta?: string | null;
+  pasajero_catalogo_id?: number | null;
+  pasajero_catalogo?: PasajeroCatalogo | null;
+};
+
+export type PasajeroCatalogo = {
+  id: number;
+  cliente_id?: number | null;
+  nombre: string;
+  nacionalidad?: string | null;
+  fecha_nacimiento?: string | null;
+  documentos?: Array<{ id: number; tipo_documento: string; numero_documento: string }>;
+};
+
+export type ReservaItem = {
+  id: number;
+  reserva_id: number;
+  alternativa_item_id: number;
+  fecha?: string | null;
+  hora?: string | null;
+  guia_id?: number | null;
+  proveedor_tarifa_id?: number | null;
+  guia?: Guia | null;
+  proveedor_tarifa?: ProveedorTarifa | null;
+  alternativa_item?: AlternativaItem;
+};
+
+export type ReservaItemPasajero = {
+  id: number;
+  reserva_item_id: number;
+  reserva_pasajero_id: number;
+  reserva_pasajero?: ReservaPasajero;
+  checkin_realizado?: boolean;
+  checkin_hora?: string | null;
+};
+
+export type Reserva = {
+  id: number;
+  alternativa_id: number;
+  mayorista_elegida_id?: number | null;
+  estado_reserva_mayorista?: 'pendiente' | 'confirmada' | null;
+  estado: 'activa' | 'cancelada';
+  fecha_cancelacion?: string | null;
+  motivo_cancelacion?: MotivoCancelacion | null;
+  alternativa?: Alternativa & { cotizacion?: Cotizacion };
+  pasajeros?: ReservaPasajero[];
+  items?: ReservaItem[];
+};
+
+export type ReservaResumenItem = {
+  reserva_item_id: number;
+  nombre: string;
+  precio_venta_snapshot: number;
+  total_convertido: number;
+};
+
+export type ReservaCabecera = {
+  cliente?: { id: number; full_name: string; n_document?: string };
+  destino: string;
+  fecha_viaje_desde?: string | null;
+  fecha_viaje_hasta?: string | null;
+  codigo_cotizacion: string;
+};
+
+export type ReservaDetalleResponse = {
+  code?: number;
+  message?: string;
+  reserva: Reserva;
+  resumen: ReservaResumenItem[];
+  total: number;
+  moneda: 'PEN' | 'USD';
+  cabecera: ReservaCabecera;
+  alerta_cupo_excedido?: boolean;
+};
+
+export type Reservas = {
+  total: number;
+  paginate: number;
+  reservas: Reserva[];
+};

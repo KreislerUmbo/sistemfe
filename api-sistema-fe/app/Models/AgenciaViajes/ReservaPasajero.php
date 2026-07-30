@@ -10,12 +10,19 @@ use Illuminate\Database\Eloquent\Model;
 // belongsTo real — pasajero_catalogo_id cerrado vía retrofit en Sesión 9c
 // (2026_07_28_150200_add_pasajero_catalogo_foreign_to_reserva_pasajeros_table.php),
 // última FK diferida del vertical.
+//
+// tipo_pax/nombre y documento nullable: retrofit Sesión 11c (ver migración
+// 2026_07_30_100000_retrofit_reserva_para_sesion_11c.php) — el shell se
+// crea vacío al aceptar la alternativa (ReservaController::
+// crearReservaDesdeAlternativa()), copiando tipo_pax desde el
+// CotizacionPasajero de origen, y se completa después.
 class ReservaPasajero extends Model
 {
     protected $table = 'reserva_pasajeros';
 
     protected $fillable = [
         'reserva_id',
+        'tipo_pax',
         'nombre',
         'documento',
         'nacionalidad',

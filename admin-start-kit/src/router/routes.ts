@@ -641,6 +641,37 @@ const comercialRoutes = [
     },
     component: () => import("@/views/agencia-viajes/cotizador/editar.vue"),
   },
+  // Reserva y pasajeros (Sesión 11c) — permiso propio 'agencia.reservas'.
+  {
+    path: "/agencia-viajes/reservas",
+    name: "agencia.reservas.index",
+    meta: {
+      title: setTitle("Reservas"),
+      authRequired: true,
+      permission: 'agencia.reservas',
+    },
+    component: () => import("@/views/agencia-viajes/reservas/index.vue"),
+  },
+  {
+    path: "/agencia-viajes/reservas/:id",
+    name: "agencia.reservas.detalle",
+    meta: {
+      title: setTitle("Detalle de Reserva"),
+      authRequired: true,
+      permission: 'agencia.reservas',
+    },
+    component: () => import("@/views/agencia-viajes/reservas/detalle.vue"),
+  },
+  {
+    path: "/agencia-viajes/venta-directa",
+    name: "agencia.ventaDirecta",
+    meta: {
+      title: setTitle("Venta Directa"),
+      authRequired: true,
+      permission: 'agencia.reservas',
+    },
+    component: () => import("@/views/agencia-viajes/venta-directa.vue"),
+  },
 
 ];
 

@@ -16,10 +16,15 @@ use App\Http\Controllers\AgenciaViajes\ProveedorController;
 use App\Http\Controllers\AgenciaViajes\ProveedorServicioController;
 use App\Http\Controllers\AgenciaViajes\ProveedorTarifaController;
 use App\Http\Controllers\AgenciaViajes\ProveedorTipoConfigController;
+use App\Http\Controllers\AgenciaViajes\ReservaController;
+use App\Http\Controllers\AgenciaViajes\ReservaItemController;
+use App\Http\Controllers\AgenciaViajes\ReservaItemPasajeroController;
+use App\Http\Controllers\AgenciaViajes\ReservaPasajeroController;
 use App\Http\Controllers\AgenciaViajes\ServicioController;
 use App\Http\Controllers\AgenciaViajes\TemporadaController;
 use App\Http\Controllers\AgenciaViajes\TemporadaOcurrenciaController;
 use App\Http\Controllers\AgenciaViajes\TourItinerarioItemController;
+use App\Http\Controllers\AgenciaViajes\VentaDirectaController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\Cash\BranchController;
 use App\Http\Controllers\Cash\CashConceptController;
@@ -516,6 +521,42 @@ Route::group([
         ->middleware('permission:agencia.cotizaciones');
     Route::match(['get', 'post'], "opciones-mayorista/{id}/opcionales", [OpcionMayoristaController::class, 'opcionales'])
         ->middleware('permission:agencia.cotizaciones');
+
+    // ═══════════════════════════════════════════════════════════════
+    // Vertical Agencia de Viajes — reserva y pasajeros (Sesión 11c).
+    // Permiso propio 'agencia.reservas', distinto de 'agencia.cotizaciones'
+    // (ver 2026_07_30_100100_add_agencia_reservas_permission.php).
+    // ═══════════════════════════════════════════════════════════════
+    Route::post("alternativas/{id}/aceptar", [ReservaController::class, 'aceptar'])
+        ->middleware('permission:agencia.reservas');
+
+    Route::get("reservas", [ReservaController::class, 'index'])
+        ->middleware('permission:agencia.reservas');
+    Route::get("reservas/{id}", [ReservaController::class, 'show'])
+        ->middleware('permission:agencia.reservas');
+    Route::put("reservas/{id}/cancelar", [ReservaController::class, 'cancelar'])
+        ->middleware('permission:agencia.reservas');
+
+    // Antes de "reserva-pasajeros/{id}" para que "pasajeros-catalogo" no
+    // colisione con ningún segmento dinámico (mismo criterio ya usado con
+    // "proveedor-tarifas" antes de "cotizaciones/{id}").
+    Route::get("pasajeros-catalogo", [ReservaPasajeroController::class, 'buscarCatalogo'])
+        ->middleware('permission:agencia.reservas');
+    Route::put("reserva-pasajeros/{id}", [ReservaPasajeroController::class, 'update'])
+        ->middleware('permission:agencia.reservas');
+
+    Route::put("reserva-items/{id}", [ReservaItemController::class, 'update'])
+        ->middleware('permission:agencia.reservas');
+
+    Route::get("reserva-items/{id}/pasajeros", [ReservaItemPasajeroController::class, 'index'])
+        ->middleware('permission:agencia.reservas');
+    Route::post("reserva-items/{id}/pasajeros", [ReservaItemPasajeroController::class, 'store'])
+        ->middleware('permission:agencia.reservas');
+    Route::delete("reserva-item-pasajero/{id}", [ReservaItemPasajeroController::class, 'destroy'])
+        ->middleware('permission:agencia.reservas');
+
+    Route::post("venta-directa", [VentaDirectaController::class, 'store'])
+        ->middleware('permission:agencia.reservas');
 
     Route::middleware('auth:api')->group(function () {});
 });

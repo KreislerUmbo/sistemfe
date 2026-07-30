@@ -92,12 +92,12 @@ class AlternativaController extends Controller
             $alternativa->update($validado);
 
             // Aceptar una alternativa descarta automáticamente las demás de
-            // la misma cotización — §3.2. NO dispara creación de reserva
-            // todavía, eso es Sesión 11c.
+            // la misma cotización — §3.2. Este PUT ya NO dispara creación de
+            // reserva (Sesión 11c usa POST alternativas/{id}/aceptar,
+            // ReservaController::aceptar(), que reusa descartarOtras() de
+            // acá mismo — no se duplica esta lógica).
             if (($validado['estado'] ?? null) === 'aceptada') {
-                Alternativa::where('cotizacion_id', $alternativa->cotizacion_id)
-                    ->where('id', '!=', $alternativa->id)
-                    ->update(['estado' => 'descartada']);
+                self::descartarOtras($alternativa);
             }
         });
 
@@ -114,6 +114,16 @@ class AlternativaController extends Controller
         $alternativa->delete();
 
         return response()->json(['code' => 200, 'message' => 'Alternativa eliminada correctamente']);
+    }
+
+    // Compartido con ReservaController::aceptar() y VentaDirectaController::store()
+    // (Sesión 11c) — descartar las demás alternativas de la misma cotización
+    // es siempre el mismo movimiento sin importar quién marcó "aceptada".
+    public static function descartarOtras(Alternativa $alternativa): void
+    {
+        Alternativa::where('cotizacion_id', $alternativa->cotizacion_id)
+            ->where('id', '!=', $alternativa->id)
+            ->update(['estado' => 'descartada']);
     }
 
     private function resolverTipoCambio(string $origen, ?float $valorNuevo, Request $request): TipoCambioAgencia|JsonResponse

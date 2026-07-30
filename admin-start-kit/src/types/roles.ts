@@ -391,4 +391,16 @@ export const PERMISOS = [
             },
         ]
     },
+    {
+        // Reserva y pasajeros — Sesión 11c. Permiso PROPIO, distinto de
+        // 'agencia.cotizaciones': es un paso posterior (control operativo de
+        // pasajeros/ítems ya cerrados), no armado de precio.
+        'name': 'Agencia de Viajes (Reservas)',
+        'permisos': [
+            {
+                name: 'Reservas, pasajeros y venta directa',
+                permiso: 'agencia.reservas',
+            },
+        ]
+    },
 ];

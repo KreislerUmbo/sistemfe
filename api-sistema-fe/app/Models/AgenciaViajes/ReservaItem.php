@@ -6,9 +6,14 @@ use Illuminate\Database\Eloquent\Model;
 
 // Copiado de la alternativa aceptada, con fecha/hora concretas —
 // plan-modulo-cotizaciones-reservas.md §4. Tenant (sin CentralConnection).
-// reserva_id/alternativa_item_id/guia_id llevan belongsTo real (FK dentro
-// de la misma DB tenant). Costo/precio se leen vía alternativaItem(), no
-// se duplican columnas acá.
+// reserva_id/alternativa_item_id/guia_id/proveedor_tarifa_id llevan
+// belongsTo real (FK dentro de la misma DB tenant). Costo/precio se leen
+// vía alternativaItem(), no se duplican columnas acá.
+//
+// proveedor_tarifa_id: retrofit Sesión 11c (ver migración
+// 2026_07_30_100000_retrofit_reserva_para_sesion_11c.php) — "quién opera"
+// se confirma cerca de la fecha, reasignable en cualquier momento, igual
+// que guia_id.
 class ReservaItem extends Model
 {
     protected $table = 'reserva_items';
@@ -19,6 +24,7 @@ class ReservaItem extends Model
         'fecha',
         'hora',
         'guia_id',
+        'proveedor_tarifa_id',
     ];
 
     protected $casts = [
@@ -38,6 +44,11 @@ class ReservaItem extends Model
     public function guia()
     {
         return $this->belongsTo(Guia::class, 'guia_id');
+    }
+
+    public function proveedorTarifa()
+    {
+        return $this->belongsTo(ProveedorTarifa::class, 'proveedor_tarifa_id');
     }
 
     public function pasajeros()

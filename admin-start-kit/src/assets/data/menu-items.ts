@@ -217,6 +217,20 @@ export const MENU_ITEMS: MenuItemType[] = [
         permission: 'agencia.cotizaciones',
       },
       {
+        key: "agencia_reservas",
+        label: "Reservas",
+        route: { name: "agencia.reservas.index" },
+        parentKey: "agencia_viajes",
+        permission: 'agencia.reservas',
+      },
+      {
+        key: "agencia_venta_directa",
+        label: "Venta Directa",
+        route: { name: "agencia.ventaDirecta" },
+        parentKey: "agencia_viajes",
+        permission: 'agencia.reservas',
+      },
+      {
         key: "agencia_proveedores",
         label: "Proveedores",
         route: { name: "agencia.proveedores.index" },

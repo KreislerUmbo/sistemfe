@@ -42,4 +42,14 @@ class Alternativa extends Model
     {
         return $this->hasMany(AlternativaItem::class, 'alternativa_id');
     }
+
+    // Sesión 11c — usada al aceptar una alternativa para saber si hay que
+    // mover cupo_ocupado en salidas_mayorista (§4/§4.2). No hay CHECK ni
+    // índice único que garantice como máximo una 'elegida' por
+    // alternativa — la garantía la da OpcionMayoristaController::elegir()
+    // (desmarca la anterior antes de marcar la nueva).
+    public function opcionMayoristaElegida()
+    {
+        return $this->hasOne(OpcionMayorista::class, 'alternativa_id')->where('estado', 'elegida');
+    }
 }
