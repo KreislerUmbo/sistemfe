@@ -674,3 +674,31 @@ deben perderse. No es un plan de módulo — para eso está `docs/planning/`.
   limpio en los 3 controllers + la migración.
 - Pendiente explícito, ya reservado como su propia fila (11b3): conectar
   esto al cotizador ("Cargar desde plantilla").
+
+## Gap real en el diseño de `paquetes_plantilla` — reservado como 11b4 — 29-jul-2026
+
+- Repasando con el usuario, después de cerrar 11b2, la jerarquía original
+  de diseño (atractivo → tour → paquete): un paquete debía poder incluir
+  varios *tours* como sub-ítems reutilizables ("Paquete = Tour A + Tour B
+  + Hotel"). No es construible hoy — `paquete_plantilla_items` solo
+  referencia `proveedor_tarifa_id`/`guia_tarifa_id`, nunca otro
+  `paquete_plantilla_id`. Como "tour" y "paquete" son la misma entidad
+  desde Sesión 6 (`tour_itinerario_items.tour_id` → `paquetes_plantilla.id`),
+  esto significa que un paquete no puede incluir otro paquete/tour.
+- Solución propuesta por el usuario, confirmada como la correcta (mejor
+  que la alternativa que yo había sugerido, self-reference en
+  `paquete_plantilla_items`): separar `tours` en tabla propia +
+  `proveedor_tarifas.tour_id` (nullable). Reutiliza el patrón que ya usa
+  todo el vertical ("lo que se vende siempre es una `proveedor_tarifa`")
+  en vez de inventar recursión de paquetes-dentro-de-paquetes.
+- Reservado como fila **11b4** en `plan-hoja-de-ruta-ejecucion.md`
+  (RETROFIT sobre Sesión 6/11b2 ya mergeadas — sin dependencia dura con
+  11b3). Confirmado antes de anotarla: 0 datos reales en cualquier
+  tenant (`agencia-demo` es el único con la tabla `paquetes_plantilla`,
+  0 filas) — retrofit limpio, sin backfill que proteger.
+- Aclarado de paso (no era un gap, ya estaba cubierto): un tour
+  improvisado para un cliente puntual que nunca se repite no necesita
+  pasar por ningún catálogo — ya lo cubre
+  `alternativa_items.origen_tipo='manual'` desde Sesión 11b.
+- Sin código tocado en esta conversación — solo diseño y documentación
+  (`plan-hoja-de-ruta-ejecucion.md`, esta entrada).
