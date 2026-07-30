@@ -788,3 +788,134 @@ deben perderse. No es un plan de módulo — para eso está `docs/planning/`.
   - Sin código de la sesión 11c tocado todavía — el prompt corregido
     queda listo para cuando se abra la rama
     `feature/sesion-11c-reserva-pasajeros`.
+
+## Sesión 11c — Reserva y pasajeros — CONSTRUIDA, pusheada, pendiente de
+## merge — 30-jul-2026
+
+- Rama `feature/sesion-11c-reserva-pasajeros`, commit `8aea4e8`, pusheada a
+  `origin`. **Fila 11c de `plan-hoja-de-ruta-ejecucion.md` queda `[ ]` a
+  propósito** — se marca `[x]` recién después del merge, mismo criterio ya
+  usado en todas las filas anteriores.
+- **Backend**: retrofit sobre Sesión 8, ya mergeada (`reserva_items.
+  proveedor_tarifa_id` nueva + backfill desde `alternativa_items.
+  proveedor_tarifa_id` vía la FK directa `alternativa_item_id`; `reserva_items.
+  fecha`/`reserva_pasajeros.nombre`/`.documento` pasan a nullable;
+  `reserva_pasajeros.tipo_pax` nueva — todo por SQL crudo, sin
+  `doctrine/dbal`, mismo patrón que `fix_sales_relax_columns.php`).
+  `ReservaController::aceptar()` (`POST alternativas/{id}/aceptar`) cierra el
+  "TODO Sesión 11c" que había quedado en `AlternativaController::update()`
+  desde 11b — reusa `AlternativaController::descartarOtras()` (extraída de
+  ese mismo controller para no duplicar la lógica de descarte) y crea
+  `reserva` + `reserva_pasajeros` (shells con `tipo_pax` copiado desde
+  `cotizacion_pasajeros`, `nombre`/`documento` en `null`) + `reserva_items`
+  (con `proveedor_tarifa_id` copiado desde `alternativa_items` si venía
+  asignado). Maneja `salidas_mayorista.cupo_ocupado` — **mecanismo 100%
+  nuevo, no existía ninguna implementación previa** pese a que el comentario
+  de la migración de `salidas_mayorista` (Sesión 7b) ya lo anticipaba
+  exacto: `increment()`/`decrement()` atómico (evita race condition entre 2
+  reservas aceptándose en simultáneo), `alerta_cupo_excedido: true` como
+  aviso no bloqueante (mismo patrón que `alerta_piso` de
+  `PriceEngineService`) cuando `cupo_ocupado` supera `cupo_total` (tratado
+  como "sin límite" si es `null`). `index()`/`show()`/`cancelar()` completan
+  el CRUD — `cancelar()` libera el cupo en reversa y rechaza con 422 si la
+  reserva ya estaba cancelada. Se agregó `Alternativa::
+  opcionMayoristaElegida()` (relación nueva) para resolver esto sin
+  reimplementar la consulta en cada lugar.
+  - `ReservaPasajeroController`: `update()` + `buscarCatalogo()`
+    (autocompletar desde `pasajeros_catalogo`, Sesión 9c — sin "completo"
+    como columna propia, el frontend lo deriva de `nombre && documento`,
+    mismo criterio que el prototipo).
+  - `ReservaItemController::update()`: a diferencia de
+    `AlternativaController::update()` (que descarta `null` con
+    `array_filter()`), acá un `null` explícito en `guia_id`/
+    `proveedor_tarifa_id`/`fecha`/`hora` SÍ debe persistir — el guía se
+    asigna un día antes, tiene que poder quedar vacío sin bloquear nada más
+    (confirmado con un test que guarda los dos en `null`).
+  - `ReservaItemPasajeroController`: asignación pasajero↔ítem, valida que el
+    `reserva_pasajero_id` pertenezca a la misma `reserva_id` que el ítem
+    antes de crear la fila puente.
+  - `VentaDirectaController::store()` (atajo §4.1): reusa
+    `AlternativaItemController::store()` completo (construyendo un
+    `Request` sintético vía `Request::create()`, método POST para que
+    `input()`/`all()` lean del bag correcto) y
+    `ReservaController::crearReservaDesdeAlternativa()` — cero lógica de
+    precio/creación de reserva reimplementada. Solo soporta `origen_tipo`
+    `proveedor`/`manual`: `mayorista` necesita una `opcion_mayorista`
+    elegida de antemano y `pasaje_aereo` su propio submodelo
+    (`cotizacion_pasaje_aereo`), ninguno de los dos cabe en un atajo de un
+    solo paso — documentado en el propio controller, vender uno de esos
+    sueltos sigue pasando por el flujo completo del cotizador.
+  - Permiso nuevo `agencia.reservas` (propio, no reusa
+    `agencia.cotizaciones` — es un paso posterior de control operativo, no
+    armado de precio).
+- **Frontend**: `reservas/detalle.vue` (layout de 2 columnas del prototipo
+  HTML validado con el usuario antes de programar — tabs Pasajeros/Ítems/
+  Asignación a la izquierda, panel de resumen fijo a la derecha con 2 barras
+  de progreso en vivo), `reservas/index.vue` (listado con filtro de estado),
+  `venta-directa.vue` (formulario corto, reusa el mismo patrón de buscador
+  de cliente con debounce que `cotizador/nueva.vue`). 4 services
+  (`reservaService`, `reservaPasajeroService`, `reservaItemService` —
+  incluye también los 3 endpoints de `reserva-item-pasajero`—,
+  `ventaDirectaService`). `useToast` composable nuevo (SweetAlert2 en modo
+  `toast: true` — confirmado por grep que no existía ningún componente de
+  toast en todo el proyecto, el resto usa `Swal.fire` modal para todo; se
+  envolvió la librería ya instalada en vez de traer una nueva). Router +
+  menú lateral + `types/roles.ts` (permiso `agencia.reservas` sumado desde
+  el día 1, mismo criterio que 11a/11b2 — Caja Fase 5 ya había dejado
+  documentado que omitir este paso lo deja inasignable desde la UI pese a
+  existir en el backend). El botón "Aceptar" de `cotizador/editar.vue`
+  (`marcarAceptada()`) ahora llama `POST alternativas/{id}/aceptar` y
+  redirige a `reservas/detalle.vue` de la reserva recién creada, en vez de
+  quedarse en la pantalla del cotizador.
+- **2 correcciones ya incorporadas al prompt antes de programar** (ver
+  entrada de pre-verificación arriba, 30-jul-2026): `discapacidad` se
+  mantiene como texto libre (no checkbox, aunque el prototipo la mostraba
+  así por simplicidad); los selects de Guía y Proveedor se muestran
+  siempre para todo ítem (`reserva_items` no tiene ninguna columna
+  `necesitaGuia`/`necesitaProveedor` que permita ocultarlos condicionalmente
+  como hacía el prototipo).
+- **Verificado con 35 checks reales** (llamadas directas a los controllers,
+  mismo patrón ya usado en Sesiones 11a/11b/11b2) contra `agencia-demo`
+  dentro de una transacción revertida (`DB::rollBack()` al final, confirmado
+  con conteos antes/después — 0 datos de prueba persistidos): aceptar una
+  alternativa con mayorista elegido ligado a una `salida_mayorista` de cupo
+  2 con 3 pasajeros → `reserva`/3 `reserva_pasajeros` shells (`tipo_pax`
+  correcto)/1 `reserva_item` (`proveedor_tarifa_id` copiado, `fecha`/`hora`
+  en `null`) creados, `cupo_ocupado` sube a 3, `alerta_cupo_excedido=true`;
+  reintentar aceptar la misma alternativa → 422; completar un pasajero
+  (nombre/documento) y confirmar que otro sigue incompleto; asignar guía/
+  fecha/hora a un ítem y después vaciar los 4 campos a `null` sin bloquear;
+  armar y deshacer una asignación pasajero↔ítem, más el guard de "pasajero
+  de otra reserva" (rama SKIP-eada por no haber datos para ese caso
+  puntual, sin afectar el resto); cancelar → `cupo_ocupado` vuelve a 0,
+  `fecha_cancelacion`/`motivo_cancelacion` poblados, reintentar cancelar →
+  422; `index()`/`show()` devuelven lo esperado; venta-directa
+  `origen_tipo=manual` y `=proveedor` arman la cadena completa correcta;
+  venta-directa con payload incompleto → 422 sin dejar cotización huérfana.
+- **Migraciones nuevas corridas contra `agencia-demo` real** (no solo
+  contra una base de test descartable) antes de la verificación funcional —
+  confirmado el schema resultante con `information_schema.columns`.
+- `php -l` limpio en los 5 controllers + la migración nueva. `npm run
+  type-check`: cero errores en cualquier archivo tocado en esta sesión
+  (confirmado filtrando el output y comparando contra el mismo check en
+  `main` — los ~45-62 errores preexistentes están todos en vistas no
+  relacionadas: `portal/*`, `recursos/*`, `sale/*`, `product/*`, etc.).
+- **Incidente real durante la sesión, resuelto sin pérdida de datos**: un
+  `git stash` (para correr el type-check contra el estado de `main` como
+  comparación) dejó los archivos trackeados modificados de esta sesión
+  atrapados en el stash cuando el `stash pop` chocó con
+  `admin-start-kit/components.d.ts` (archivo autogenerado, con una
+  modificación previa a esta sesión sin relación con este trabajo).
+  Recuperado con `git checkout stash@{0} -- <archivo>` uno por uno (sin
+  tocar `components.d.ts`/`admin-start-kit/.env`, ambos ajenos a esta
+  sesión), confirmado con `git diff --stat` contra HEAD que los 25 archivos
+  y sus tamaños de línea coincidían exacto con lo escrito antes del
+  incidente, y `git stash drop` recién después de esa confirmación. Ninguno
+  de los dos archivos ajenos (`.env`, `components.d.ts`) se incluyó en el
+  commit final.
+- **Pendiente para cuando se revise el merge**: nada bloqueante conocido.
+  `AlternativaItemController::store()`/`crearReservaDesdeAlternativa()`
+  quedan con visibilidad `public` (antes privados/no existían) para que
+  `VentaDirectaController` los reuse — sin impacto de seguridad (siguen
+  gateados por el mismo middleware `permission:` a nivel de ruta, no quedan
+  expuestos como endpoint nuevo).
