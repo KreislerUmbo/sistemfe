@@ -702,3 +702,89 @@ deben perderse. No es un plan de módulo — para eso está `docs/planning/`.
   `alternativa_items.origen_tipo='manual'` desde Sesión 11b.
 - Sin código tocado en esta conversación — solo diseño y documentación
   (`plan-hoja-de-ruta-ejecucion.md`, esta entrada).
+
+## Prompt de Sesión 11c pre-verificado contra el schema real — 30-jul-2026
+
+- El usuario preparó un prompt completo para 11c (reserva/pasajeros) en
+  Claude web, más un patch de docs y un prototipo HTML (`prototipo-
+  reserva.html`, layout de 2 columnas: tabs Pasajeros/Ítems/Asignación a
+  la izquierda + resumen fijo a la derecha con 2 barras de progreso).
+  Antes de guardarlo para cuando se ejecute la sesión, se verificó cada
+  asunción contra las migraciones/modelos reales de Sesión 8 — no se
+  tomó nada del prompt a ciegas. 6 correcciones reales encontradas,
+  todas ya cerradas:
+  1. **`cupo_ocupado` no tiene ninguna implementación previa** — el
+     prompt pedía "seguir el mismo patrón" de incremento de cupo al
+     elegir mayorista, pero `OpcionMayoristaController::elegir()` nunca
+     tocó esa columna, es diseño 100% nuevo de 11c. Confirmado además
+     que el comentario de la migración de `salidas_mayorista` (Sesión
+     7b) ya preveía esto exacto ("mantenido por aplicación cuando una
+     opcion_mayorista de una alternativa ACEPTADA se vincula acá —
+     Sesión 8/11 — no bloquea vender de más"). Diseño final: `increment()`/
+     `decrement()` atómico (evita race condition entre 2 reservas
+     aceptándose en simultáneo), `alerta_cupo_excedido: true` como aviso
+     no bloqueante en la respuesta (mismo patrón que `alerta_piso` de
+     `PriceEngineService`). Pendiente al construir: `Alternativa` no
+     tiene relación `opcionMayoristaElegida()` (hay que agregarla o
+     consultar `OpcionMayorista::where('alternativa_id',...)
+     ->where('estado','elegida')` directo), y `cupo_total` es nullable
+     — la comparación debe tratar `null` como "sin límite", no comparar
+     `>` a ciegas.
+  2. **`reserva_items.fecha` es `NOT NULL`** en la migración real (solo
+     `hora` es nullable) — el prompt asumía que ambas podían quedar en
+     `null` al crear la reserva. Se agrega `DROP NOT NULL` de `fecha` a
+     la migración retrofit de PARTE 0 (junto con `proveedor_tarifa_id`).
+  3. **Nombres de columna corregidos**: es `reserva_items.fecha`/`hora`,
+     no `fecha_servicio`/`hora_servicio` como decía el prompt original
+     (esos nombres no existen en la migración real).
+  4. **Sin `doctrine/dbal` instalado** (confirmado: no está en
+     `vendor/`) — la migración retrofit NO puede usar `->change()` de
+     Blueprint. Mismo patrón ya usado en el proyecto
+     (`fix_sales_relax_columns.php`, motivo documentado ahí mismo): SQL
+     crudo, `DB::statement('ALTER TABLE reserva_items ALTER COLUMN
+     fecha DROP NOT NULL')`. La columna `proveedor_tarifa_id` sí puede
+     agregarse con Blueprint normal (no necesita `->change()`).
+  5. **`reserva_pasajeros.nombre`/`.documento` son `NOT NULL`** — mismo
+     problema que el punto 2, pero en esta tabla. El prompt planea crear
+     "shells" vacíos por cada `cotizacion_pasajero` al aceptar — hace
+     falta `DROP NOT NULL` de ambas columnas (misma migración retrofit,
+     mismo motivo de SQL crudo que el punto 4).
+  6. **No existe columna `tipo_pax` en `reserva_pasajeros`** — el
+     prompt decía "tipo_pax copiado" al crear los shells, pero no hay
+     dónde copiarlo. Se agrega en la misma migración retrofit.
+  - Confirmado, sin cambio necesario: `discapacidad` en
+    `reserva_pasajeros` es `text` nullable en el schema real — el
+    prototipo la muestra como checkbox booleano por simplicidad de
+    prueba, pero el form real debe mantenerla como texto libre (permite
+    decir QUÉ discapacidad, no solo sí/no) — no copiar el checkbox
+    literal.
+  - Pendiente de decidir al construir (no bloqueante): el prototipo
+    muestra el select de Guía solo en los ítems que "lo necesitan"
+    (`necesitaGuia` por ítem, dato inventado del prototipo) —
+    `reserva_items` no tiene ninguna columna que distinga eso. Resolución
+    más simple: mostrar siempre los 2 selects (Proveedor y Guía) para
+    todo ítem, nada en el schema impide que cualquier ítem tenga guía.
+  - Confirmado sin problema (el prompt acertó): `AlternativaController::
+    update()` ya maneja `estado='aceptada'` (descarta las demás,
+    comentario dice literal "eso es Sesión 11c"); `reserva_items.
+    alternativa_item_id` existe como FK directa (el backfill de
+    `proveedor_tarifa_id` en la migración retrofit SÍ es posible tal
+    como lo planteaba el prompt); `PasajeroCatalogo`/`PasajeroDocumento`
+    existen igual que los describía; `TenantProvisioningService::
+    tieneDatosVerticalAgenciaViajes()` ya cubre transitivamente todas
+    las tablas de reserva, sin necesitar chequeo propio nuevo; los 4
+    motivos de cancelación del prototipo coinciden exacto con el
+    comentario de `reserva.motivo_cancelacion`.
+  - Confirmado antes de anotar todo esto: 0 filas reales en
+    `reserva_items`/`reserva_pasajeros` en cualquier tenant
+    (`agencia-demo` es el único con las tablas) — retrofit limpio.
+  - El patch de docs que venía junto (confirma que `guia_id` es
+    asignación operativa, no ítem cobrable) tenía el encoding roto
+    (UTF-8 doble-codificado, no aplicaba con `git apply`) — se aplicó a
+    mano con el contenido verificado, commit `fa9fa01`.
+  - `prototipo-reserva.html` guardado fuera del repo (scratchpad de la
+    sesión), mismo criterio ya usado para el prototipo de 11b — no se
+    commitea al repo.
+  - Sin código de la sesión 11c tocado todavía — el prompt corregido
+    queda listo para cuando se abra la rama
+    `feature/sesion-11c-reserva-pasajeros`.
