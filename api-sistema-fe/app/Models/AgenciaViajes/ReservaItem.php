@@ -25,6 +25,7 @@ class ReservaItem extends Model
         'hora',
         'guia_id',
         'proveedor_tarifa_id',
+        'tour_origen_id',
     ];
 
     protected $casts = [
@@ -49,6 +50,13 @@ class ReservaItem extends Model
     public function proveedorTarifa()
     {
         return $this->belongsTo(ProveedorTarifa::class, 'proveedor_tarifa_id');
+    }
+
+    // Sesión 11b4 — mismo propósito que AlternativaItem::tourOrigen(),
+    // copiado al crear la reserva.
+    public function tourOrigen()
+    {
+        return $this->belongsTo(PaquetePlantilla::class, 'tour_origen_id');
     }
 
     public function pasajeros()

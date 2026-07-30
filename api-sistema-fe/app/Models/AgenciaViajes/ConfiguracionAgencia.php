@@ -23,6 +23,7 @@ class ConfiguracionAgencia extends Model
         'meses_margen_vencimiento_documento',
         'dias_aviso_pago_proveedor',
         'dias_cotizacion_estancada',
+        'dias_aviso_vencimiento_cotizacion',
     ];
 
     protected $casts = [

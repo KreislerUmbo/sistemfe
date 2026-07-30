@@ -188,6 +188,10 @@ class ReservaController extends Controller
                 'reserva_id' => $reserva->id,
                 'alternativa_item_id' => $alternativaItem->id,
                 'proveedor_tarifa_id' => $alternativaItem->proveedor_tarifa_id,
+                // Sesión 11b4: propaga de qué tour vino el ítem (si vino de
+                // explotar un paquete_combo) para que la agrupación visual
+                // "Día 1/Día 2" sobreviva también en la reserva.
+                'tour_origen_id' => $alternativaItem->tour_origen_id,
             ]);
         }
 

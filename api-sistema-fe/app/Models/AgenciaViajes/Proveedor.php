@@ -39,11 +39,13 @@ class Proveedor extends Model
         'tipo_id',
         'margen_default_tipo',
         'margen_default_valor',
+        'es_referencial',
     ];
 
     protected $casts = [
         'estado' => 'boolean',
         'margen_default_valor' => 'decimal:2',
+        'es_referencial' => 'boolean',
     ];
 
     public function proveedorServicios()

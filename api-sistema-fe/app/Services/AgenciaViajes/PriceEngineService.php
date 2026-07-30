@@ -110,4 +110,60 @@ class PriceEngineService
     {
         return $precio < ($precioMinimoPermitido - 0.005);
     }
+
+    // ═══════════════════════════════════════════════════════════════
+    // Sesión 11b4 — precio de paquete_combo (plan-modulo-cotizaciones-reservas.md
+    // §3.7, punto 3 del diseño). Dirección inversa a calcular(): acá se parte
+    // de una venta BRUTA ya conocida (suma de los tours incluidos) y se le
+    // resta un descuento, en vez de partir de un costo y sumarle margen.
+    // Resolución de "cuánto cuesta/vende cada tour_simple incluido" vive en
+    // ComboExplosionService (sí toca Eloquent) — este método sigue siendo
+    // matemática pura, sin tocar BD, mismo criterio que el resto de la clase.
+    // ═══════════════════════════════════════════════════════════════
+
+    /**
+     * @param  array<int, array{costo_total: float, venta_total: float}>  $tourTotales
+     * @return array{
+     *     costo_total_combo: float,
+     *     venta_bruta_combo: float,
+     *     venta_neta_combo: float,
+     *     descuento_aplicado: float,
+     *     margen_resultante_pct: float|null
+     * }
+     */
+    public function calcularCombo(array $tourTotales, ?string $descuentoTipo, ?float $descuentoValor): array
+    {
+        $costoTotalCombo = array_sum(array_column($tourTotales, 'costo_total'));
+        $ventaBrutaCombo = array_sum(array_column($tourTotales, 'venta_total'));
+
+        $ventaNetaCombo = $this->aplicarDescuento($ventaBrutaCombo, $descuentoTipo, $descuentoValor);
+        $descuentoAplicado = round($ventaBrutaCombo - $ventaNetaCombo, 2);
+
+        $margenResultantePct = $costoTotalCombo > 0
+            ? round((($ventaNetaCombo - $costoTotalCombo) / $costoTotalCombo) * 100, 2)
+            : null;
+
+        return [
+            'costo_total_combo' => round($costoTotalCombo, 2),
+            'venta_bruta_combo' => round($ventaBrutaCombo, 2),
+            'venta_neta_combo' => round($ventaNetaCombo, 2),
+            'descuento_aplicado' => $descuentoAplicado,
+            'margen_resultante_pct' => $margenResultantePct,
+        ];
+    }
+
+    // 'monto' resta un valor fijo; 'porcentaje' resta sobre venta_bruta. Sin
+    // tipo/valor configurado, no hay descuento (venta_neta = venta_bruta) —
+    // combo sin descuento es un caso válido (el combo puede existir solo para
+    // secuenciar tours, sin rebaja de precio).
+    public function aplicarDescuento(float $ventaBruta, ?string $descuentoTipo, ?float $descuentoValor): float
+    {
+        if ($descuentoTipo === null || $descuentoValor === null) {
+            return round($ventaBruta, 2);
+        }
+
+        $descuento = $descuentoTipo === 'monto' ? $descuentoValor : $ventaBruta * ($descuentoValor / 100);
+
+        return round($ventaBruta - $descuento, 2);
+    }
 }
