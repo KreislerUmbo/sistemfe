@@ -231,10 +231,11 @@ tour_itinerario_items:
 
 ## 6. Pendiente no bloqueante
 
-- El campo `descripcion` de `tour_itinerario_items` en el ejemplo de Alto
-  Mayo (paso "Retorno a Tarapoto") no tiene `destino_atractivo_id`
-  asociado — confirmar que ese campo puede quedar nulo para pasos que son
-  puramente de traslado/cierre, sin atractivo específico.
+- **RESUELTO 29-jul-2026** (Sesión 11b2 — `TourItinerarioItemController`):
+  confirmado con la propia base de datos, no solo teoría —
+  `destino_atractivo_id` nullable funciona sin problema para pasos
+  puramente de traslado/cierre. Verificado con el mismo caso del ejemplo
+  Alto Mayo ("Retorno a Tarapoto", sin atractivo asociado).
 - **RESUELTO 25-jul-2026** (ver `plan-modulo-cotizaciones-reservas.md`
   §5.3): "Guía de Turismo" en `items_incluidos` **sí necesita tarifa
   propia** — se agrega `guia_tarifas` (costo/margen por guía × destino ×
@@ -248,3 +249,4 @@ tour_itinerario_items:
 |---|---|
 | 24-jul-2026 | Primera versión: se resuelve el bloqueante detectado en `plan-modulo-maestros-iniciales.md`. Árbol de destinos de 3 niveles (zona/lugar/atractivo), catálogo `servicios` nuevo, `destino_servicio` como puente que puede apuntar a cualquier nivel. Confirmado que "tour" y `paquetes_plantilla` son la misma entidad. Todo validado con documentos reales de tours de la agencia (Full Day Alto Mayo, Tours Lamas Nativo) en vez de solo teoría. Se actualizan `plan-modulo-cotizaciones-reservas.md` (§3.7, §5.1, §5.2) y `plan-modulo-proveedores.md` (nota sobre destino_servicio) para reflejar esto. |
 | 25-jul-2026 | Se cierra el pendiente sobre "Guía de Turismo" en `items_incluidos`: sí necesita tarifa propia (`guia_tarifas`, ver `plan-modulo-cotizaciones-reservas.md` §5.3), confirmado que varía por destino y modalidad (día local vs. grupo multidía a otra región). |
+| 29-jul-2026 | **Sesión 11b2 — CRUD admin construido** (`feature/sesion-11b2-paquetes-plantilla`): `PaquetePlantillaController`/`PaquetePlantillaItemController`/`TourItinerarioItemController`, pantallas en `admin-start-kit` (`/agencia-viajes/paquetes`). Cierra el hueco real que había quedado en la hoja de ruta desde Sesión 6 (tablas/modelos sin API/pantalla propia). Resuelve a nivel de aplicación la regla "uno de `proveedor_tarifa_id`/`guia_tarifa_id`, nunca ambos ni ninguno" que la migración de Sesión 6 había dejado pendiente. Ver `TODO.md` para el detalle completo, incluido un bug real de `codigo` sin validar `unique()` (500 crudo en vez de 422). Pendiente explícito, ya reservado como fila propia (11b3): conectar esto al cotizador ("Cargar desde plantilla"). |

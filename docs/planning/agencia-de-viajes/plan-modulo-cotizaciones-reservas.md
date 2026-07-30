@@ -744,6 +744,15 @@ deja lista la base para cuando se construya el portal (proyecto aparte,
 próximo año). El portal en sí, y cómo se conecta a la venta real, no se
 diseña en este documento.
 
+**Implementado 29-jul-2026 (Sesión 11b2)** — CRUD admin completo de
+`paquetes_plantilla`/`paquete_plantilla_items`/`tour_itinerario_items` +
+matriz de hotel, ver `plan-modulo-tours-catalogo.md` §7 (historial) y
+`TODO.md` para el detalle. **"Partir de un paquete_plantilla al armar una
+alternativa" (el párrafo de arriba) todavía NO está construido** — es la
+fila 11b3 de `plan-hoja-de-ruta-ejecucion.md`, separada a propósito
+porque no es una copia 1:1 (precio/cantidad/modo_precio se resuelven en
+vivo, e ítems de guía no tienen equivalente en `alternativa_items` hoy).
+
 ---
 
 ## 4. De alternativa aceptada a Reserva
@@ -1560,3 +1569,4 @@ los recordatorios pendientes de todos los vendedores en una sola vista
 | 28-jul-2026 | Confirmado con el usuario: en actividades locales muchas veces se cotiza sin saber todavía qué proveedor específico va a operar — se asigna recién al reservar o días antes de la fecha. Se extiende la nulabilidad ya existente de `alternativa_items.proveedor_tarifa_id` para cubrir este caso (precio de referencia, sin comprometer proveedor) y se agrega `reserva_items.proveedor_tarifa_id` (nullable, reasignable) — **mismo patrón que `guia_id`** (§5.3, "se asigna normalmente un día antes"), aplicado ahora también al proveedor del servicio en general, no solo al guía. RETROFIT sobre `reserva_items`, tabla ya mergeada en Sesión 8 — va en Sesión 11c (reserva/pasajeros), no 11b. **Decidido:** sin alerta automática por recordatorio (§8bis) para `reserva_items` sin proveedor asignado — queda visible solo en el reporte operativo (§8), no dispara un `tipos_recordatorio` nuevo. |
 | 28-jul-2026 | Cerradas las 2 preguntas que quedaban abiertas de la sesión de diseño anterior. **`cotizacion_pasaje_aereo.aerolinea` queda como texto libre**, no FK — mismo criterio que `vuelo_aerolinea` en `opcion_mayorista`/`paquetes_plantilla` (donde el proveedor con FK real es el mayorista, no la aerolínea). Confirmado con el usuario: la agencia no es agencia IATA, no hay relación comercial directa con aerolíneas que reportar. **Sin alerta automática de recordatorio** para `reserva_items` sin proveedor asignado — queda visible solo en el reporte operativo (§8), no se agrega un 5to `tipos_recordatorio`. Ninguna de las 2 decisiones requirió cambios de estructura, solo cerrar la ambigüedad documentada el 28-jul-2026 anterior. |
 | 28/29-jul-2026 | **RETROFIT sobre `cotizaciones` (tabla mergeada en Sesión 7a):** `fecha_viaje_tentativa` (una sola fecha) reemplazada por `fecha_viaje_desde`/`fecha_viaje_hasta` (ambas nullable, con `after_or_equal` cuando ambas están cargadas) — el campo original no alcanzaba para cotizar con fecha de ida y vuelta conocidas. Confirmado antes de migrar: ningún tenant real (sandbox/umbo/negocio2/umbo-archivado) tenía todavía la tabla `cotizaciones` (rama sin mergear), sin datos que backfillear en la práctica — el backfill de la migración queda igual como red de seguridad. |
+| 29-jul-2026 | **Sesión 11b2 — §3.7 implementado**: CRUD admin de paquetes/tours de plantilla construido (`feature/sesion-11b2-paquetes-plantilla`), cierra el hueco que había quedado desde Sesión 6 (tablas/modelos sin API/pantalla). Se agregan a la hoja de ruta las filas 11b2 (esta) y **11b3** (conectar al cotizador — "cargar desde plantilla", todavía sin construir, con las 3 diferencias reales frente a una copia 1:1 ya documentadas ahí). Detalle completo, incluido un bug real (`codigo` sin validar `unique()`, tiraba 500 en vez de 422), en `TODO.md`. |
