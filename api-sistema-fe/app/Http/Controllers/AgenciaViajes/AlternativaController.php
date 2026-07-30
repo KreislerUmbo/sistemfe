@@ -4,7 +4,14 @@ namespace App\Http\Controllers\AgenciaViajes;
 
 use App\Http\Controllers\Controller;
 use App\Models\AgenciaViajes\Alternativa;
+use App\Models\AgenciaViajes\AlternativaItem;
 use App\Models\AgenciaViajes\Cotizacion;
+use App\Models\AgenciaViajes\CotizacionPasajeAereo;
+use App\Models\AgenciaViajes\OpcionHotel;
+use App\Models\AgenciaViajes\OpcionHotelTarifa;
+use App\Models\AgenciaViajes\OpcionMayorista;
+use App\Models\AgenciaViajes\OpcionMayoristaOpcional;
+use App\Models\AgenciaViajes\Reserva;
 use App\Models\AgenciaViajes\TipoCambioAgencia;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -108,10 +115,46 @@ class AlternativaController extends Controller
         ]);
     }
 
+    // Antes de esta sesión, delete() era directo — con ítems/opciones-mayorista
+    // ya cargados, `alternativa_items.alternativa_id`/`opcion_mayorista.
+    // alternativa_id` (ambos `constrained()` sin `onDelete`, RESTRICT en
+    // Postgres) tiraban una violación de FK sin capturar (500 crudo). El
+    // frontend (editar.vue::eliminarAlternativa(), sin try/catch hasta esta
+    // sesión) no mostraba nada — parecía que el botón "no hacía nada". Ahora:
+    // 422 explícito si ya generó una reserva (no se puede perder ese
+    // vínculo); si no, cascada real de todo lo que cuelga de la alternativa
+    // (ítems + su cotizacion_pasaje_aereo, y las opciones de mayorista con
+    // sus opcionales/hoteles/tarifas propias) en una transacción, mismo
+    // patrón que PaquetePlantillaController::destroy().
     public function destroy(string $id)
     {
         $alternativa = Alternativa::findOrFail($id);
-        $alternativa->delete();
+
+        if (Reserva::where('alternativa_id', $alternativa->id)->exists()) {
+            return response()->json([
+                'code' => 422,
+                'message' => 'No se puede eliminar esta alternativa: ya generó una reserva.',
+            ], 422);
+        }
+
+        DB::transaction(function () use ($alternativa) {
+            $itemIds = AlternativaItem::where('alternativa_id', $alternativa->id)->pluck('id');
+            CotizacionPasajeAereo::whereIn('alternativa_item_id', $itemIds)->delete();
+            AlternativaItem::whereIn('id', $itemIds)->delete();
+
+            $opciones = OpcionMayorista::where('alternativa_id', $alternativa->id)->get();
+            foreach ($opciones as $opcion) {
+                OpcionMayoristaOpcional::where('opcion_mayorista_id', $opcion->id)->delete();
+
+                $hotelIds = OpcionHotel::where('opcion_mayorista_id', $opcion->id)->pluck('id');
+                OpcionHotelTarifa::whereIn('opcion_hotel_id', $hotelIds)->delete();
+                OpcionHotel::whereIn('id', $hotelIds)->delete();
+
+                $opcion->delete();
+            }
+
+            $alternativa->delete();
+        });
 
         return response()->json(['code' => 200, 'message' => 'Alternativa eliminada correctamente']);
     }

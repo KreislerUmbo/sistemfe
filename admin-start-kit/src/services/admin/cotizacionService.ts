@@ -25,5 +25,17 @@ export const cotizacionService = {
   async actualizarPasajeros(id: number, pasajeros: Array<Partial<CotizacionPasajero>>) {
     const response = await httpClient.put(`/cotizaciones/${id}/pasajeros`, { pasajeros })
     return response.data
+  },
+  // Corregir cliente/destino/fechas después de creada — antes solo existía
+  // store()/actualizarPasajeros(), sin forma de arreglar un dato mal
+  // tipeado al crear.
+  async actualizar(id: number, data: {
+    cliente_id: number
+    destino: string
+    fecha_viaje_desde?: string | null
+    fecha_viaje_hasta?: string | null
+  }) {
+    const response = await httpClient.put(`/cotizaciones/${id}`, data)
+    return response.data as { code: number; message: string; cotizacion: Cotizacion }
   }
 }

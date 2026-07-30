@@ -919,3 +919,59 @@ deben perderse. No es un plan de módulo — para eso está `docs/planning/`.
   `VentaDirectaController` los reuse — sin impacto de seguridad (siguen
   gateados por el mismo middleware `permission:` a nivel de ruta, no quedan
   expuestos como endpoint nuevo).
+
+## 3 bugs reales encontrados probando 11c en el navegador — CERRADOS —
+## 30-jul-2026
+
+- Directo sobre `main` (sin rama nueva, son fixes puntuales sobre pantallas
+  ya mergeadas — `venta-directa.vue` de 11c y `cotizador/nueva.vue`/
+  `editar.vue` de 11b), señalados por el usuario probando el flujo real.
+- **Buscador de cliente no filtraba nada, ni en `venta-directa.vue` ni en
+  `cotizador/nueva.vue`.** Causa: `ClientController::index()` devuelve el
+  listado envuelto en `ClientCollection` (`{ clients: { data: [...] } }`),
+  pero ambas pantallas leían `res.data.clients` directo (un objeto, no un
+  array) — bug real de 11b (`nueva.vue`), heredado sin querer a
+  `venta-directa.vue` al copiar el mismo patrón en 11c.
+  `sale/register.vue` ya usaba el acceso correcto (`res.data.clients.data`)
+  desde antes; se alineó a eso en las dos pantallas. **Ningún otro archivo
+  del proyecto llama `/clients` directo** (confirmado por grep) — no hay
+  una tercera ocurrencia del mismo bug dando vueltas.
+- **No había forma de corregir cliente/destino/fecha de una cotización ya
+  creada.** Gap ya documentado (ver entrada del retrofit
+  `fecha_viaje_tentativa`, 29-jul-2026): `CotizacionController` solo tenía
+  `store()`/`actualizarPasajeros()` para el header. Cerrado con
+  `CotizacionController::update()` nuevo (`PUT cotizaciones/{id}`) — sin
+  guard de estado (cliente_id/destino/fechas son solo informativos para
+  este vertical, no alimentan ninguna regla de precio/impuesto de
+  `alternativa_items`, así que corregirlos es seguro aunque la cotización
+  ya tenga alternativas o una reserva aceptada). Frontend: ícono de lápiz
+  junto al encabezado de `editar.vue` que abre un mini-form reusando el
+  mismo buscador de cliente con alta rápida (`ClientFormQuick.vue`) ya
+  corregido en el punto anterior.
+- **Eliminar una alternativa con un servicio (ítem) asignado "no hacía
+  nada".** Causa real: `alternativa_items.alternativa_id` (y
+  `opcion_mayorista.alternativa_id`) son `constrained()` sin `onDelete`
+  — RESTRICT en Postgres — así que `AlternativaController::destroy()`
+  (borrado directo, sin chequear nada) tiraba una violación de FK sin
+  capturar (500 crudo), y `editar.vue::eliminarAlternativa()` tampoco tenía
+  `try/catch` — el error quedaba invisible para el usuario. Corregido:
+  - Si la alternativa ya generó una `Reserva` (fue aceptada): 422 explícito
+    ("ya generó una reserva"), nunca se borra — hay un vínculo real que
+    perder.
+  - Si no: cascada real en transacción (ítems + su
+    `cotizacion_pasaje_aereo` si tenían pasaje aéreo suelto, más las
+    opciones de mayorista de esa alternativa con sus opcionales/hoteles/
+    tarifas propias) antes de borrar la alternativa — mismo patrón de
+    cascada ya usado en `PaquetePlantillaController::destroy()`.
+  - Frontend: `eliminarAlternativa()` ahora pide confirmación antes de
+    borrar (avisando si tiene ítems) y muestra cualquier error del backend
+    en vez de fallar en silencio.
+- **Verificado con 10 checks reales contra `agencia-demo`** (llamadas
+  directas a los controllers, transacción revertida, sin dejar datos):
+  `CotizacionController::update()` corrige destino/fechas/cliente y
+  rechaza `fecha_hasta < fecha_desde` con 422; `AlternativaController::
+  destroy()` cascada limpia sobre una alternativa con ítems reales sin
+  reserva (alternativa e ítem confirmados borrados de verdad) y bloqueo
+  422 sobre una alternativa ya aceptada con reserva real (confirmado que
+  sigue existiendo, no se borró). `npm run type-check`: sigue en 45
+  errores preexistentes, ninguno nuevo en los 4 archivos tocados.

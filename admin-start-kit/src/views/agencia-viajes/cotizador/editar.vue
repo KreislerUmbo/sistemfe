@@ -5,12 +5,81 @@
                 <h5 class="fw-bold mb-0"><i class="fas fa-route me-2 text-primary"></i>Cotización {{ cotizacion.codigo }}</h5>
                 <small class="text-muted">
                     {{ cotizacion.cliente?.full_name }} · {{ cotizacion.destino }} ·
+                    {{ formatFecha(cotizacion.fecha_viaje_desde) }} — {{ formatFecha(cotizacion.fecha_viaje_hasta) }} ·
                     {{ resumenPax }}
+                    <i class="fas fa-pen ms-2 text-primary" style="cursor:pointer" title="Corregir cliente/destino/fecha" @click="abrirEdicionCabecera"></i>
                 </small>
             </div>
             <router-link to="/agencia-viajes/cotizador" class="btn btn-outline-secondary btn-sm">
                 <i class="fas fa-arrow-left me-2"></i>Volver
             </router-link>
+        </div>
+
+        <!-- Corregir cliente/destino/fecha (me equivoqué al crear la cotización) -->
+        <div v-if="editandoCabecera" class="card border-0 shadow-sm mb-3">
+            <div class="card-body py-3">
+                <div class="row g-2">
+                    <div class="col-12 col-md-5 position-relative">
+                        <label class="form-label mb-1 small fw-semibold text-secondary">Cliente</label>
+                        <div class="input-group input-group-sm">
+                            <input type="text" class="form-control" v-model="clientSearchText"
+                                placeholder="Buscar por DNI, RUC o nombre..." @input="onClientSearchInput"
+                                @focus="showClientSuggestions = true" @blur="onClientSearchBlur" autocomplete="off">
+                            <button v-if="clienteEditado" class="btn btn-outline-danger" type="button" @click="limpiarClienteEditado">
+                                <i class="fas fa-times"></i>
+                            </button>
+                            <button v-else class="btn btn-success" type="button" @click="showQuickClientModal = true" title="Registrar cliente nuevo">
+                                <i class="fas fa-user-plus"></i>
+                            </button>
+                        </div>
+                        <div v-if="showClientSuggestions && clientSuggestions.length > 0 && !clienteEditado"
+                            class="list-group mt-1 position-absolute"
+                            style="max-height:220px;overflow-y:auto;z-index:1050;width:calc(100% - 2px);box-shadow:0 4px 8px rgba(0,0,0,.1)">
+                            <button type="button" class="list-group-item list-group-item-action" v-for="c in clientSuggestions" :key="c.id"
+                                @mousedown.prevent="seleccionarClienteEditado(c)">
+                                <div class="d-flex justify-content-between">
+                                    <span>{{ c.full_name }}</span>
+                                    <small class="text-muted">{{ c.n_document }}</small>
+                                </div>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-12 col-md-4">
+                        <label class="form-label mb-1 small fw-semibold text-secondary">Destino</label>
+                        <input type="text" class="form-control form-control-sm" v-model="formCabecera.destino">
+                    </div>
+                    <div class="col-6 col-md-3 d-flex align-items-end gap-1">
+                        <button class="btn btn-primary btn-sm w-100" @click="guardarCabecera" :disabled="guardandoCabecera">
+                            <span v-if="guardandoCabecera" class="spinner-border spinner-border-sm"></span>
+                            <span v-else><i class="fas fa-check me-1"></i>Guardar</span>
+                        </button>
+                        <button class="btn btn-outline-secondary btn-sm" @click="editandoCabecera = false"><i class="fas fa-times"></i></button>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <label class="form-label mb-1 small fw-semibold text-secondary">Fecha desde</label>
+                        <input type="date" class="form-control form-control-sm" v-model="formCabecera.fecha_viaje_desde">
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <label class="form-label mb-1 small fw-semibold text-secondary">Fecha hasta</label>
+                        <input type="date" class="form-control form-control-sm" v-model="formCabecera.fecha_viaje_hasta">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="modal fade" tabindex="-1" :class="{ show: showQuickClientModal, 'd-block': showQuickClientModal }"
+            style="background:rgba(0,0,0,.5)" v-if="showQuickClientModal">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h6 class="modal-title">Registrar Cliente Rápido</h6>
+                        <button class="btn-close" @click="showQuickClientModal = false"></button>
+                    </div>
+                    <div class="modal-body">
+                        <ClientFormQuick :initial-data="null" @saved="onClientCreated" @cancel="showQuickClientModal = false" />
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- Pestañas de alternativas -->
@@ -273,6 +342,7 @@ import httpClient from '@/helpers/http-client';
 import HabitacionMatrixPicker from '@/components/AgenciaViajes/HabitacionMatrixPicker.vue';
 import PasajeAereoForm from '@/components/AgenciaViajes/PasajeAereoForm.vue';
 import ItemManualForm from '@/components/AgenciaViajes/ItemManualForm.vue';
+import ClientFormQuick from '@/components/Sales/ClientFormQuick.vue';
 import { cotizacionService } from '@/services/admin/cotizacionService';
 import { alternativaService } from '@/services/admin/alternativaService';
 import { alternativaItemService } from '@/services/admin/alternativaItemService';
@@ -280,6 +350,7 @@ import { opcionMayoristaService } from '@/services/admin/opcionMayoristaService'
 import { proveedorService, proveedorTipoService } from '@/services/admin/proveedorService';
 import { reservaService } from '@/services/admin/reservaService';
 import type { Cotizacion, Alternativa, AlternativaItem, ProveedorTarifa, OpcionMayorista, Proveedor } from '@/types/agencia-viajes';
+import type { Client } from '@/types/clients';
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
 
@@ -301,6 +372,87 @@ const resumenPax = computed(() => {
     pax.forEach((p) => { counts[p.tipo_pax] = (counts[p.tipo_pax] ?? 0) + 1; });
     return Object.entries(counts).map(([t, n]) => `${n} ${t}`).join(', ') || 'sin pasajeros';
 });
+
+const formatFecha = (f?: string | null) => f ? new Date(f + 'T00:00:00').toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' }) : 'sin fecha';
+
+// ── Corregir cliente/destino/fecha (me equivoqué al crear la cotización) ──
+const editandoCabecera = ref(false);
+const formCabecera = ref({ destino: '', fecha_viaje_desde: '' as string | null, fecha_viaje_hasta: '' as string | null });
+const clienteEditado = ref<Client | null>(null);
+const guardandoCabecera = ref(false);
+
+const clientSearchText = ref('');
+const clientSuggestions = ref<Client[]>([]);
+const showClientSuggestions = ref(false);
+const showQuickClientModal = ref(false);
+let clientSearchTimeout: any = null;
+
+const abrirEdicionCabecera = () => {
+    if (!cotizacion.value) return;
+    formCabecera.value = {
+        destino: cotizacion.value.destino,
+        fecha_viaje_desde: cotizacion.value.fecha_viaje_desde ?? '',
+        fecha_viaje_hasta: cotizacion.value.fecha_viaje_hasta ?? '',
+    };
+    clienteEditado.value = cotizacion.value.cliente
+        ? { id: cotizacion.value.cliente.id, full_name: cotizacion.value.cliente.full_name, n_document: cotizacion.value.cliente.n_document } as Client
+        : null;
+    clientSearchText.value = cotizacion.value.cliente?.full_name ?? '';
+    editandoCabecera.value = true;
+};
+
+const onClientSearchInput = () => {
+    clearTimeout(clientSearchTimeout);
+    clientSearchTimeout = setTimeout(buscarClientesEditar, 300);
+};
+
+const buscarClientesEditar = async () => {
+    if (clientSearchText.value.trim().length < 2) { clientSuggestions.value = []; return; }
+    const res = await httpClient.get('/clients', { params: { search: clientSearchText.value } });
+    // ClientController::index() envuelve el listado en ClientCollection
+    // ({ data: [...] }) — clients.data, no clients directo.
+    clientSuggestions.value = res.data.clients?.data ?? [];
+};
+
+const seleccionarClienteEditado = (c: Client) => {
+    clienteEditado.value = c;
+    clientSearchText.value = c.full_name;
+    showClientSuggestions.value = false;
+};
+
+const limpiarClienteEditado = () => {
+    clienteEditado.value = null;
+    clientSearchText.value = '';
+};
+
+const onClientSearchBlur = () => { setTimeout(() => { showClientSuggestions.value = false; }, 150); };
+
+const onClientCreated = (client: Client) => {
+    seleccionarClienteEditado(client);
+    showQuickClientModal.value = false;
+};
+
+const guardarCabecera = async () => {
+    if (!cotizacion.value) return;
+    if (!clienteEditado.value) { (Swal as TVueSwalInstance).fire('Error', 'Seleccioná un cliente.', 'error'); return; }
+    if (!formCabecera.value.destino.trim()) { (Swal as TVueSwalInstance).fire('Error', 'Ingresá un destino.', 'error'); return; }
+
+    guardandoCabecera.value = true;
+    try {
+        await cotizacionService.actualizar(cotizacion.value.id, {
+            cliente_id: clienteEditado.value.id,
+            destino: formCabecera.value.destino.trim(),
+            fecha_viaje_desde: formCabecera.value.fecha_viaje_desde || null,
+            fecha_viaje_hasta: formCabecera.value.fecha_viaje_hasta || null,
+        });
+        editandoCabecera.value = false;
+        await cargarCotizacion();
+    } catch (error: any) {
+        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo actualizar la cotización', 'error');
+    } finally {
+        guardandoCabecera.value = false;
+    }
+};
 
 const cargarCotizacion = async () => {
     const res = await cotizacionService.obtener(cotizacionId);
@@ -348,11 +500,33 @@ const marcarAceptada = async () => {
     }
 };
 
+// Antes de esta sesión no había try/catch acá — si el backend rechazaba el
+// borrado (ya generó una reserva) o si tenía ítems (ahora se cascadea, ver
+// AlternativaController::destroy()), un error sin capturar dejaba el botón
+// "sin hacer nada" a los ojos del usuario. Ahora: confirmación previa
+// (borra ítems junto con la alternativa) + error visible si el backend
+// rechaza el borrado.
 const eliminarAlternativa = async () => {
     if (!alternativaActiva.value) return;
-    await alternativaService.eliminar(alternativaActiva.value.id);
-    alternativaActivaId.value = null;
-    await cargarCotizacion();
+
+    const tieneItems = (alternativaActiva.value.items?.length ?? 0) > 0;
+    const confirmacion = await (Swal as TVueSwalInstance).fire({
+        title: '¿Eliminar esta alternativa?',
+        text: tieneItems ? 'Tiene ítems agregados — se eliminarán junto con la alternativa.' : 'Esta acción no se puede deshacer.',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, eliminar',
+        cancelButtonText: 'Cancelar',
+    });
+    if (!confirmacion.isConfirmed) return;
+
+    try {
+        await alternativaService.eliminar(alternativaActiva.value.id);
+        alternativaActivaId.value = null;
+        await cargarCotizacion();
+    } catch (error: any) {
+        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo eliminar la alternativa', 'error');
+    }
 };
 
 // ── Biblioteca local ──────────────────────────────────────────────────

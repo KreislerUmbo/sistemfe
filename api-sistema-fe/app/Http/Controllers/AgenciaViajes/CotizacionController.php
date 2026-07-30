@@ -113,6 +113,40 @@ class CotizacionController extends Controller
         return response()->json(['cotizacion' => $cotizacion]);
     }
 
+    // Corregir cliente/destino/fechas después de crear la cotización —
+    // gap real señalado por el usuario (store()/actualizarPasajeros() eran
+    // los únicos puntos de escritura del header hasta ahora, ninguno
+    // tocaba estos 4 campos). Sin guard de estado: cliente_id/destino/
+    // fechas son solo informativos para este vertical (no alimentan
+    // ninguna regla de precio/impuesto de alternativa_items), así que
+    // corregirlos no rompe nada aunque la cotización ya tenga
+    // alternativas o incluso una reserva aceptada — mismo criterio de
+    // simplicidad que actualizarPasajeros(), que tampoco bloquea por estado.
+    public function update(Request $request, string $id)
+    {
+        $cotizacion = Cotizacion::findOrFail($id);
+
+        $validator = Validator::make($request->all(), [
+            'cliente_id' => 'required|integer|exists:clients,id',
+            'destino' => 'required|string|max:250',
+            'fecha_viaje_desde' => 'nullable|date',
+            'fecha_viaje_hasta' => 'nullable|date|after_or_equal:fecha_viaje_desde',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
+        }
+
+        $cotizacion->update($validator->validated());
+        $cotizacion->load('cliente');
+
+        return response()->json([
+            'code' => 200,
+            'message' => 'Cotización actualizada correctamente',
+            'cotizacion' => $cotizacion,
+        ]);
+    }
+
     public function actualizarPasajeros(Request $request, string $id)
     {
         $cotizacion = Cotizacion::findOrFail($id);

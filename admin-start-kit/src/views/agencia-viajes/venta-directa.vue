@@ -25,6 +25,9 @@
                             <button v-if="clienteSeleccionado" class="btn btn-outline-danger" type="button" @click="limpiarCliente">
                                 <i class="fas fa-times"></i>
                             </button>
+                            <button v-else class="btn btn-success" type="button" @click="showQuickClientModal = true" title="Registrar cliente nuevo">
+                                <i class="fas fa-user-plus"></i>
+                            </button>
                         </div>
                         <div v-if="showClientSuggestions && clientSuggestions.length > 0 && !clienteSeleccionado"
                             class="list-group mt-1 position-absolute"
@@ -36,6 +39,9 @@
                                     <small class="text-muted">{{ c.n_document }}</small>
                                 </div>
                             </button>
+                        </div>
+                        <div v-if="clienteSeleccionado" class="small text-success mt-1">
+                            <i class="fas fa-circle-check me-1"></i>{{ clienteSeleccionado.full_name }} ({{ clienteSeleccionado.n_document }})
                         </div>
                     </div>
                     <div class="col-12 col-md-6">
@@ -99,6 +105,18 @@
                                 {{ t.tipo_habitacion ? ('· ' + t.tipo_habitacion) : '' }} — {{ t.moneda }} {{ t.precio_venta_adulto }}
                             </option>
                         </select>
+                        <div v-if="tarifaSeleccionada" class="alert alert-success py-2 px-3 mt-2 mb-0 small d-flex justify-content-between align-items-center">
+                            <span>
+                                <i class="fas fa-circle-check me-1"></i>
+                                <strong>Seleccionado:</strong>
+                                {{ tarifaSeleccionada.proveedor_servicio?.proveedor?.razon_social }} ·
+                                {{ tarifaSeleccionada.proveedor_servicio?.destino_servicio?.servicio?.nombre }}
+                                <span v-if="tarifaSeleccionada.tipo_habitacion">· {{ tarifaSeleccionada.tipo_habitacion }}</span>
+                                — {{ tarifaSeleccionada.moneda }} {{ tarifaSeleccionada.precio_venta_adulto }}
+                            </span>
+                            <button type="button" class="btn-close btn-sm" @click="proveedorTarifaId = null"></button>
+                        </div>
+                        <div v-else class="small text-muted mt-1">Ninguna tarifa seleccionada todavía.</div>
                     </div>
                     <div class="col-6">
                         <label class="form-label small text-secondary mb-1">Modo de precio</label>
@@ -140,15 +158,31 @@
                 Crear venta directa
             </button>
         </div>
+
+        <div class="modal fade" tabindex="-1" :class="{ show: showQuickClientModal, 'd-block': showQuickClientModal }"
+            style="background:rgba(0,0,0,.5)" v-if="showQuickClientModal">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h6 class="modal-title">Registrar Cliente Rápido</h6>
+                        <button class="btn-close" @click="showQuickClientModal = false"></button>
+                    </div>
+                    <div class="modal-body">
+                        <ClientFormQuick :initial-data="null" @saved="onClientCreated" @cancel="showQuickClientModal = false" />
+                    </div>
+                </div>
+            </div>
+        </div>
     </DefaultLayout>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import Swal from 'sweetalert2/dist/sweetalert2.js';
 import httpClient from '@/helpers/http-client';
+import ClientFormQuick from '@/components/Sales/ClientFormQuick.vue';
 import { proveedorService } from '@/services/admin/proveedorService';
 import { ventaDirectaService } from '@/services/admin/ventaDirectaService';
 import type { Client } from '@/types/clients';
@@ -162,6 +196,7 @@ const clientSearchText = ref<string>('');
 const clientSuggestions = ref<Client[]>([]);
 const clienteSeleccionado = ref<Client | null>(null);
 const showClientSuggestions = ref<boolean>(false);
+const showQuickClientModal = ref<boolean>(false);
 let clientSearchTimeout: any = null;
 
 const destino = ref<string>('');
@@ -178,6 +213,8 @@ const modoPrecio = ref<'por_persona' | 'tarifa_fija'>('tarifa_fija');
 const cantidad = ref<number>(1);
 let bibliotecaTimeout: any = null;
 
+const tarifaSeleccionada = computed(() => bibliotecaTarifas.value.find((t) => t.id === proveedorTarifaId.value) ?? null);
+
 const descripcionManual = ref('');
 const precioVentaSnapshot = ref<number | null>(null);
 const monedaCosto = ref<'PEN' | 'USD'>('PEN');
@@ -190,7 +227,10 @@ const onClientSearchInput = () => {
 const buscarClientes = async () => {
     if (clientSearchText.value.trim().length < 2) { clientSuggestions.value = []; return; }
     const res = await httpClient.get('/clients', { params: { search: clientSearchText.value } });
-    clientSuggestions.value = res.data.clients ?? [];
+    // ClientController::index() envuelve el listado en ClientCollection
+    // ({ data: [...] }) — clients.data, no clients directo (mismo acceso
+    // que ya usa sale/register.vue).
+    clientSuggestions.value = res.data.clients?.data ?? [];
 };
 
 const seleccionarCliente = (c: Client) => {
@@ -205,6 +245,11 @@ const limpiarCliente = () => {
 };
 
 const onClientSearchBlur = () => { setTimeout(() => { showClientSuggestions.value = false; }, 150); };
+
+const onClientCreated = (client: Client) => {
+    seleccionarCliente(client);
+    showQuickClientModal.value = false;
+};
 
 const onBibliotecaSearch = () => {
     clearTimeout(bibliotecaTimeout);

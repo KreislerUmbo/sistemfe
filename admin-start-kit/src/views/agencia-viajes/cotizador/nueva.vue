@@ -171,7 +171,10 @@ const buscarClientes = async () => {
     }
     try {
         const res = await httpClient.get('/clients', { params: { search: clientSearchText.value } });
-        clientSuggestions.value = res.data.clients ?? [];
+        // ClientController::index() envuelve el listado en ClientCollection
+        // ({ data: [...] }) — clients.data, no clients directo (mismo acceso
+        // que ya usa sale/register.vue).
+        clientSuggestions.value = res.data.clients?.data ?? [];
     } catch (error) {
         console.log(error);
     }

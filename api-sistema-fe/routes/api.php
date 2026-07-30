@@ -489,6 +489,8 @@ Route::group([
         ->middleware('permission:agencia.cotizaciones');
     Route::get("cotizaciones/{id}", [CotizacionController::class, 'show'])
         ->middleware('permission:agencia.cotizaciones');
+    Route::put("cotizaciones/{id}", [CotizacionController::class, 'update'])
+        ->middleware('permission:agencia.cotizaciones');
     Route::put("cotizaciones/{id}/pasajeros", [CotizacionController::class, 'actualizarPasajeros'])
         ->middleware('permission:agencia.cotizaciones');
 
