@@ -13,6 +13,43 @@
             </router-link>
         </div>
 
+        <!-- ═══ Tipo: tour_simple | paquete_combo ═══ -->
+        <div class="card border-0 shadow-sm mb-3">
+            <div class="card-body">
+                <label class="form-label mb-2 small fw-semibold text-secondary">¿Qué estás creando? *</label>
+
+                <div v-if="tipoBloqueado" class="d-flex align-items-center gap-2">
+                    <span class="badge fs-6 py-2 px-3" :class="form.tipo === 'paquete_combo' ? 'bg-primary-subtle text-primary border border-primary-subtle' : 'bg-info-subtle text-info border border-info-subtle'">
+                        <i class="fas me-2" :class="form.tipo === 'paquete_combo' ? 'fa-layer-group' : 'fa-route'"></i>
+                        {{ form.tipo === 'paquete_combo' ? 'Paquete combo' : 'Tour simple' }}
+                    </span>
+                    <small class="text-muted fst-italic">Ya tiene ítems cargados en "Incluye" — para cambiar el tipo, quitalos primero.</small>
+                </div>
+                <div v-else class="row g-3">
+                    <div class="col-12 col-md-6">
+                        <div class="card h-100 tipo-card-select" :class="{ 'border-primary border-2 bg-primary bg-opacity-10': form.tipo === 'tour_simple' }"
+                            style="cursor:pointer" @click="form.tipo = 'tour_simple'">
+                            <div class="card-body text-center py-4">
+                                <i class="fas fa-route fs-2 text-primary mb-2 d-block"></i>
+                                <div class="fw-semibold text-dark">Tour simple</div>
+                                <small class="text-muted">Un tour armado con sus propios atractivos, actividades y servicios</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <div class="card h-100 tipo-card-select" :class="{ 'border-primary border-2 bg-primary bg-opacity-10': form.tipo === 'paquete_combo' }"
+                            style="cursor:pointer" @click="form.tipo = 'paquete_combo'">
+                            <div class="card-body text-center py-4">
+                                <i class="fas fa-layers fs-2 text-primary mb-2 d-block"></i>
+                                <div class="fw-semibold text-dark">Paquete combo</div>
+                                <small class="text-muted">Agrupa 2 o más tours ya armados en un solo paquete vendible</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div class="card border-0 shadow-sm mb-3">
             <div class="card-body">
                 <div class="row g-3">
@@ -44,7 +81,7 @@
                         <label class="form-label mb-1 small fw-semibold text-secondary">Duración (horas) *</label>
                         <input type="number" min="1" class="form-control form-control-sm" v-model.number="form.duracion_horas">
                     </div>
-                    <div class="col-6 col-md-3">
+                    <div class="col-6 col-md-3" v-if="form.tipo !== 'paquete_combo'">
                         <label class="form-label mb-1 small fw-semibold text-secondary">Precio venta (desde)</label>
                         <input type="number" step="0.01" min="0" class="form-control form-control-sm" v-model.number="form.precio_venta_final" placeholder="Se resuelve solo con los hoteles">
                     </div>
@@ -89,6 +126,33 @@
                     <div class="col-12 col-md-8">
                         <label class="form-label mb-1 small fw-semibold text-secondary">Detalle (tramos, fechas, equipaje...)</label>
                         <input type="text" class="form-control form-control-sm" v-model="form.vuelo_detalle">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card border-0 shadow-sm mb-3" v-if="form.tipo === 'paquete_combo'">
+            <div class="card-header bg-white border-bottom py-2">
+                <span class="fw-semibold text-dark small">Descuento y margen mínimo del combo</span>
+            </div>
+            <div class="card-body py-3">
+                <small class="text-muted d-block mb-2">El precio final se calcula solo, sumando los tours incluidos (pestaña "Incluye") — acá solo configurás el descuento y el piso de margen protegido. Vista previa en vivo disponible en la pestaña "Datos" una vez guardado.</small>
+                <div class="row g-3">
+                    <div class="col-12 col-md-4">
+                        <label class="form-label mb-1 small fw-semibold text-secondary">Tipo de descuento</label>
+                        <div class="btn-group btn-group-sm d-flex">
+                            <button type="button" class="btn" :class="form.descuento_tipo === 'porcentaje' ? 'btn-primary' : 'btn-outline-secondary'" @click="form.descuento_tipo = 'porcentaje'">%</button>
+                            <button type="button" class="btn" :class="form.descuento_tipo === 'monto' ? 'btn-primary' : 'btn-outline-secondary'" @click="form.descuento_tipo = 'monto'">S/ fijo</button>
+                            <button type="button" class="btn" :class="!form.descuento_tipo ? 'btn-primary' : 'btn-outline-secondary'" @click="form.descuento_tipo = null; form.descuento_valor = null">Sin descuento</button>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-4" v-if="form.descuento_tipo">
+                        <label class="form-label mb-1 small fw-semibold text-secondary">Valor del descuento</label>
+                        <input type="number" step="0.01" min="0" class="form-control form-control-sm" v-model.number="form.descuento_valor">
+                    </div>
+                    <div class="col-6 col-md-4">
+                        <label class="form-label mb-1 small fw-semibold text-secondary">Margen mínimo protegido (%)</label>
+                        <input type="number" step="0.01" min="0" class="form-control form-control-sm" v-model.number="form.margen_minimo_pct" placeholder="Opcional">
                     </div>
                 </div>
             </div>
@@ -147,6 +211,7 @@ const guardando = ref<boolean>(false);
 const form = ref<Partial<PaquetePlantilla> & { destino_atractivo_id: number | null }>({
     codigo: null,
     categoria: 'local',
+    tipo: 'tour_simple',
     nombre: '',
     descripcion: null,
     destino_atractivo_id: null,
@@ -163,7 +228,17 @@ const form = ref<Partial<PaquetePlantilla> & { destino_atractivo_id: number | nu
     vigencia_desde: null,
     vigencia_hasta: null,
     publicado_web: false,
+    activo: true,
+    descuento_tipo: null,
+    descuento_valor: null,
+    margen_minimo_pct: null,
 });
+
+// Una vez guardado el header CON ítems cargados en "Incluye", el backend
+// bloquea cambiar `tipo` (ver PaquetePlantillaController::update()) — el
+// selector pasa a solo-lectura para que la UI no prometa algo que el
+// server va a rechazar.
+const tipoBloqueado = computed(() => esEdicion.value && (form.value.items?.length ?? 0) > 0);
 
 const cargarPaquete = async () => {
     if (!esEdicion.value) return;
@@ -188,6 +263,9 @@ const guardar = async () => {
         (Swal as TVueSwalInstance).fire('Error', 'La duración en horas es obligatoria.', 'error');
         return;
     }
+    if (form.value.tipo === 'paquete_combo') {
+        form.value.precio_venta_final = null;
+    }
 
     guardando.value = true;
     try {
@@ -208,3 +286,12 @@ onMounted(async () => {
     await cargarPaquete();
 });
 </script>
+
+<style scoped>
+.tipo-card-select {
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+.tipo-card-select:hover {
+    border-color: var(--bs-primary);
+}
+</style>

@@ -5,16 +5,17 @@ import type {
   PaquetePlantillaItem,
   TourItinerarioItem,
   OpcionHotel,
+  PaquetePlantillaShowResponse,
 } from '@/types/agencia-viajes'
 
 export const paquetePlantillaService = {
-  async listar(params: { page?: number; search?: string; categoria?: string } = {}) {
+  async listar(params: { page?: number; search?: string; categoria?: string; tipo?: string; activo?: boolean } = {}) {
     const response = await httpClient.get('/paquetes-plantilla', { params })
     return response.data
   },
   async obtener(id: number) {
     const response = await httpClient.get(`/paquetes-plantilla/${id}`)
-    return response.data as { paquete_plantilla: PaquetePlantilla; opciones_hotel: OpcionHotel[] }
+    return response.data as PaquetePlantillaShowResponse
   },
   async crear(data: FormData | Record<string, any>) {
     const response = await httpClient.post('/paquetes-plantilla', data, {
@@ -38,7 +39,7 @@ export const paquetePlantillaService = {
     const response = await httpClient.get(`/paquetes-plantilla/${paqueteId}/items`)
     return response.data as { paquete_plantilla_items: PaquetePlantillaItem[] }
   },
-  async agregarItem(paqueteId: number, data: { proveedor_tarifa_id?: number; guia_tarifa_id?: number; orden?: number }) {
+  async agregarItem(paqueteId: number, data: { proveedor_tarifa_id?: number; guia_tarifa_id?: number; paquete_plantilla_hijo_id?: number; orden?: number }) {
     const response = await httpClient.post(`/paquetes-plantilla/${paqueteId}/items`, data)
     return response.data
   },

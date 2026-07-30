@@ -151,6 +151,7 @@
                                     <span>
                                         <i class="fas me-1 text-primary" :class="t.tipo_habitacion ? 'fa-bed' : 'fa-concierge-bell'"></i>
                                         {{ t.proveedor_servicio?.proveedor?.razon_social }}
+                                        <span v-if="t.proveedor_servicio?.proveedor?.es_referencial" class="badge bg-secondary-subtle text-secondary border ms-1" style="font-size:10px">Referencial</span>
                                     </span>
                                     <span class="text-muted">{{ t._rangoHabitaciones ? 'desde ' : '' }}{{ t.moneda }} {{ Number(t.precio_venta_adulto).toFixed(0) }}</span>
                                 </div>
