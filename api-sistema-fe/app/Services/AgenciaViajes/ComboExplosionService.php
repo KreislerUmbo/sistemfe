@@ -1,0 +1,201 @@
+<?php
+
+namespace App\Services\AgenciaViajes;
+
+use App\Models\AgenciaViajes\PaquetePlantilla;
+use Illuminate\Support\Collection;
+
+// Resuelve un paquete_combo contra los tours_simple reales que incluye —
+// Sesión 11b4 (plan-modulo-cotizaciones-reservas.md §3.7, puntos 3-5 del
+// diseño nuevo). Tres responsabilidades relacionadas en un solo service para
+// no duplicar la resolución de "ítems de un tour_simple → costo/venta
+// reales":
+//   - totalesTour()/totalesCombo(): cálculo de precio en vivo (usado por
+//     precio_venta_final calculado y por la validación de margen mínimo).
+//   - explotarItems(): para cargar un combo en el cotizador — cada línea de
+//     cada tour incluido, resuelta contra su proveedor_tarifa/guia_tarifa
+//     real, tagueada con tour_origen_id. CRÍTICO: líneas de guía NO se
+//     deduplican entre tours del mismo combo (cada tour puede terminar con
+//     un guía operativo distinto, son líneas independientes por diseño).
+//   - itinerarioDerivado(): concatena el itinerario real de cada tour
+//     incluido con el día_relativo desplazado (offset), sin persistir nada.
+//
+// Autocontenido: no depende de ningún mecanismo de frontend (11b3 —
+// "cargar desde plantilla" en el cotizador — no está construido todavía).
+// "venta" de cada ítem usa el tier adulto (proveedor_tarifa.precio_venta_adulto)
+// como referencia — mismo criterio que paquetes_plantilla.precio_venta_final
+// ya usa como precio "desde" único, sin desglosar por tipo de pax.
+class ComboExplosionService
+{
+    public function __construct(private PriceEngineService $priceEngine)
+    {
+    }
+
+    /**
+     * @return array{costo_total: float, venta_total: float}
+     */
+    public function totalesTour(PaquetePlantilla $tour): array
+    {
+        $costoTotal = 0.0;
+        $ventaTotal = 0.0;
+
+        foreach ($tour->items()->with(['proveedorTarifa', 'guiaTarifa'])->get() as $item) {
+            [$costo, $venta] = $this->resolverCostoVentaItem($item);
+            $costoTotal += $costo;
+            $ventaTotal += $venta;
+        }
+
+        return ['costo_total' => round($costoTotal, 2), 'venta_total' => round($ventaTotal, 2)];
+    }
+
+    /**
+     * @return array{
+     *     costo_total_combo: float,
+     *     venta_bruta_combo: float,
+     *     venta_neta_combo: float,
+     *     descuento_aplicado: float,
+     *     margen_resultante_pct: float|null,
+     *     componentes_inactivos: array<int, array{id: int, nombre: string}>
+     * }
+     */
+    public function totalesCombo(PaquetePlantilla $combo): array
+    {
+        $tours = $this->toursDelCombo($combo);
+
+        // Punto 10 del diseño: un tour_simple desactivado a la fuerza
+        // mientras seguía incluido en este combo se excluye del cálculo de
+        // precio (nunca rompe el total en silencio), pero se reporta acá
+        // para que el frontend muestre la advertencia visible.
+        $tourTotales = $tours->filter(fn (PaquetePlantilla $tour) => $tour->activo)
+            ->map(fn (PaquetePlantilla $tour) => $this->totalesTour($tour))
+            ->all();
+
+        $resultado = $this->priceEngine->calcularCombo($tourTotales, $combo->descuento_tipo, $combo->descuento_valor);
+
+        $resultado['componentes_inactivos'] = $tours->filter(fn (PaquetePlantilla $tour) => ! $tour->activo)
+            ->map(fn (PaquetePlantilla $tour) => ['id' => $tour->id, 'nombre' => $tour->nombre])
+            ->values()
+            ->all();
+
+        return $resultado;
+    }
+
+    // Tours-hijo de un combo, en el orden en que están cargados
+    // (paquete_plantilla_items.orden — reusado con el doble propósito
+    // documentado en la migración de esta sesión).
+    public function toursDelCombo(PaquetePlantilla $combo): Collection
+    {
+        return $combo->items()
+            ->whereNotNull('paquete_plantilla_hijo_id')
+            ->orderBy('orden')
+            ->with('paquetePlantillaHijo')
+            ->get()
+            ->pluck('paquetePlantillaHijo')
+            ->filter()
+            ->values();
+    }
+
+    /**
+     * Cada ítem atómico de cada tour incluido, resuelto contra su tarifa
+     * real, tagueado con de qué tour vino. No persiste nada — arma el array
+     * listo para alimentar AlternativaItem::create() en bucle.
+     *
+     * @return array<int, array{tour_origen_id: int, proveedor_tarifa_id: int|null, guia_tarifa_id: int|null, costo: float, venta: float}>
+     */
+    public function explotarItems(PaquetePlantilla $combo): array
+    {
+        $resultado = [];
+
+        foreach ($this->toursDelCombo($combo) as $tour) {
+            $items = $tour->items()->with(['proveedorTarifa', 'guiaTarifa'])->orderBy('orden')->get();
+
+            foreach ($items as $item) {
+                [$costo, $venta] = $this->resolverCostoVentaItem($item);
+
+                $resultado[] = [
+                    'tour_origen_id' => $tour->id,
+                    'proveedor_tarifa_id' => $item->proveedor_tarifa_id,
+                    'guia_tarifa_id' => $item->guia_tarifa_id,
+                    'costo' => $costo,
+                    'venta' => $venta,
+                ];
+            }
+        }
+
+        return $resultado;
+    }
+
+    /**
+     * Itinerario derivado del combo (punto 5 del diseño): concatena el
+     * itinerario real de cada tour incluido, con dia_relativo desplazado
+     * según el orden de los tours en el combo. Se recalcula cada vez que se
+     * pide (PDF, pantalla de detalle) — no hay tabla nueva ni persistencia.
+     * Fuera de alcance: combos que mezclen tours-hijo con ítems sueltos en
+     * la misma secuencia de días (documentado como pendiente en el diseño
+     * original, no resuelto acá).
+     *
+     * @return array<int, array{dia_relativo: int, hora: string|null, orden: int|null, destino_atractivo_id: int|null, descripcion: string, tour_origen_id: int, tour_origen_nombre: string}>
+     */
+    public function itinerarioDerivado(PaquetePlantilla $combo): array
+    {
+        $itinerario = [];
+        $offsetDia = 0;
+
+        foreach ($this->toursDelCombo($combo) as $tour) {
+            $pasos = $tour->paqueteItinerario()->orderBy('dia_relativo')->orderBy('orden')->get();
+            $maxDiaDelTour = 0;
+
+            foreach ($pasos as $paso) {
+                $itinerario[] = [
+                    'dia_relativo' => $offsetDia + $paso->dia_relativo,
+                    'hora' => $paso->hora,
+                    'orden' => $paso->orden,
+                    'destino_atractivo_id' => $paso->destino_atractivo_id,
+                    'descripcion' => $paso->descripcion,
+                    'tour_origen_id' => $tour->id,
+                    'tour_origen_nombre' => $tour->nombre,
+                ];
+
+                $maxDiaDelTour = max($maxDiaDelTour, $paso->dia_relativo);
+            }
+
+            $offsetDia += $maxDiaDelTour;
+        }
+
+        return $itinerario;
+    }
+
+    /**
+     * @return array{0: float, 1: float} [costo, venta]
+     */
+    private function resolverCostoVentaItem(\App\Models\AgenciaViajes\PaquetePlantillaItem $item): array
+    {
+        if ($item->proveedor_tarifa_id) {
+            return [
+                (float) $item->proveedorTarifa->precio_costo,
+                (float) $item->proveedorTarifa->precio_venta_adulto,
+            ];
+        }
+
+        if ($item->guia_tarifa_id) {
+            $guiaTarifa = $item->guiaTarifa;
+            $calculo = $this->priceEngine->calcular(
+                (float) $guiaTarifa->costo_diario,
+                [],
+                $guiaTarifa->tipo_margen,
+                (float) $guiaTarifa->margen_valor,
+                null,
+                null
+            );
+
+            return [$calculo['costo_total'], $calculo['venta_total']];
+        }
+
+        // Ítem con paquete_plantilla_hijo_id dentro de un tour_simple: no
+        // debería ocurrir nunca (bloqueado por ComboValidationService::
+        // validarProfundidad()), pero si un dato viejo/inconsistente llega
+        // hasta acá, no se sube en silencio — cuenta en 0, no se inventa un
+        // precio.
+        return [0.0, 0.0];
+    }
+}

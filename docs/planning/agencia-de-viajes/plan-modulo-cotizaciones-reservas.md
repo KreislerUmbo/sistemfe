@@ -753,6 +753,89 @@ fila 11b3 de `plan-hoja-de-ruta-ejecucion.md`, separada a propósito
 porque no es una copia 1:1 (precio/cantidad/modo_precio se resuelven en
 vivo, e ítems de guía no tienen equivalente en `alternativa_items` hoy).
 
+**Implementado 30-jul-2026 (Sesión 11b4) — `paquete_combo`, reemplaza el
+diseño original de la fila 11b4 (tabla `tours` separada +
+`proveedor_tarifas.tour_id`, nunca implementado):**
+```
+paquetes_plantilla
+ - tipo: tour_simple | paquete_combo   (NUEVO — default tour_simple,
+                          backfill de todo lo existente hasta esta sesión)
+ - activo: boolean        (NUEVO — borrado lógico, mismo patrón que
+                            guias.activo)
+ - descuento_tipo: porcentaje | monto   (NUEVO — solo aplica si
+                            tipo=paquete_combo)
+ - descuento_valor        (NUEVO)
+ - margen_minimo_pct      (NUEVO — piso de utilidad del combo tras el
+                            descuento, mismo patrón que
+                            proveedor_tarifas.margen_minimo_pct)
+
+paquete_plantilla_items
+ - paquete_plantilla_hijo_id  (NUEVO — FK nullable a paquetes_plantilla,
+                            mutuamente excluyente con proveedor_tarifa_id/
+                            guia_tarifa_id — exactamente uno de los tres.
+                            `orden` NO es columna nueva: se reusa con
+                            doble propósito, orden de aparición en el PDF
+                            Y, para un ítem tour-hijo, qué día del combo
+                            ocupa ese tour)
+
+alternativa_items / reserva_items
+ - tour_origen_id          (NUEVO en ambas — de qué tour_simple vino el
+                            ítem al explotar un paquete_combo. Solo
+                            agrupación visual, no afecta precio ni bloquea
+                            edición posterior)
+
+proveedores / guias
+ - es_referencial: boolean  (NUEVO en ambas — precio de lista de la
+                            agencia cuando todavía no se sabe qué
+                            empresa/persona específica va a operar)
+```
+Profundidad máxima real: `paquete_combo` → `tour_simple` → ítems atómicos
+(un `tour_simple` nunca puede incluir otro tour ni un combo). Precio del
+combo (`costo_total_combo`/`venta_bruta_combo`/`venta_neta_combo`/
+`margen_resultante_pct`) se calcula EN VIVO al leer/listar, nunca se
+guarda como valor stale — ver `ComboExplosionService`/`PriceEngineService`
+(`app-sistema-fe/app/Services/AgenciaViajes/`). Itinerario del combo
+también derivado en vivo (concatena el itinerario real de cada tour
+incluido, con `dia_relativo` desplazado por offset), sin tabla ni columna
+nueva. Explosión de ítems (para cargar un combo en el cotizador) NO
+deduplica líneas de guía entre tours del mismo combo, aunque sea el mismo
+guía en dos tours distintos — son líneas independientes por diseño.
+Desactivar un `tour_simple` usado en un combo activo se bloquea con 422
+explícito (lista los combos afectados); forzado explícito
+(`forzar_desactivacion=true`) lo permite, y el combo excluye su costo/
+venta del cálculo mostrando la lista de `componentes_inactivos` — nunca
+rompe el total en silencio.
+
+**Gaps reales encontrados al implementar esta sesión, documentados aquí
+porque el prompt original de 11b4 asumía mecanismos ya construidos que en
+realidad no existen en el código (confirmado por grep, no por lectura
+superficial):**
+- El punto "reporte operativo" (`reserva_item` pendiente de asignar por
+  proveedor/guía referencial) **no tiene ningún endpoint de backend** —
+  la condición "pendiente de asignar" que ya existía (proveedor_tarifa_id/
+  guia_id NULL) es puramente un `computed` de `reservas/detalle.vue`
+  (frontend), nunca un endpoint de "reporte operativo" real. Esta sesión
+  agrega `es_referencial` a `proveedores`/`guias` (se sirve automático en
+  las relaciones ya cargadas por `ReservaController`), pero extender la
+  condición visual para incluir `es_referencial` queda para cuando se
+  toque el frontend (11b4b).
+- El bloqueo de "marcar un pago a proveedor como realizado contra un
+  proveedor/guía referencial" **no se implementó** — no existe NINGÚN
+  controller/endpoint para `pago_proveedor`/`cronograma_pago_proveedor`
+  todavía (Sesiones 8b/9b dejaron solo schema/modelo, confirmado por
+  grep en `app/Http/Controllers` y `routes/api.php` — cero resultados).
+  Construir ese CRUD completo es alcance de una sesión propia, no un
+  ajuste "que extiende lo de Sesión 9".
+- El recordatorio automático `cotizacion_por_vencer` **solo tiene su mitad
+  de catálogo/config construida** (`configuracion_agencia.
+  dias_aviso_vencimiento_cotizacion` + fila en `tipos_recordatorio`) — la
+  mitad "disparador" (un job/comando que recorra `alternativas.
+  fecha_vencimiento` y cree filas en `recordatorios`) no existe para
+  NINGUNO de los 5 códigos del catálogo, ni siquiera para los 4 que ya
+  estaban marcados `automatico=true` desde Sesión 10. Confirmado por grep:
+  cero controllers/comandos/servicios que creen una fila de
+  `recordatorios` en todo el proyecto.
+
 ---
 
 ## 4. De alternativa aceptada a Reserva
@@ -1571,3 +1654,4 @@ los recordatorios pendientes de todos los vendedores en una sola vista
 | 28/29-jul-2026 | **RETROFIT sobre `cotizaciones` (tabla mergeada en Sesión 7a):** `fecha_viaje_tentativa` (una sola fecha) reemplazada por `fecha_viaje_desde`/`fecha_viaje_hasta` (ambas nullable, con `after_or_equal` cuando ambas están cargadas) — el campo original no alcanzaba para cotizar con fecha de ida y vuelta conocidas. Confirmado antes de migrar: ningún tenant real (sandbox/umbo/negocio2/umbo-archivado) tenía todavía la tabla `cotizaciones` (rama sin mergear), sin datos que backfillear en la práctica — el backfill de la migración queda igual como red de seguridad. |
 | 29-jul-2026 | **Sesión 11b2 — §3.7 implementado**: CRUD admin de paquetes/tours de plantilla construido (`feature/sesion-11b2-paquetes-plantilla`), cierra el hueco que había quedado desde Sesión 6 (tablas/modelos sin API/pantalla). Se agregan a la hoja de ruta las filas 11b2 (esta) y **11b3** (conectar al cotizador — "cargar desde plantilla", todavía sin construir, con las 3 diferencias reales frente a una copia 1:1 ya documentadas ahí). Detalle completo, incluido un bug real (`codigo` sin validar `unique()`, tiraba 500 en vez de 422), en `TODO.md`. |
 | 29-jul-2026 | Confirmado con el usuario, sin cambio de estructura: el costo de un guía va mezclado dentro del precio de otro servicio (el tour que guía) — la asignación (`guia_id` en `reserva_items`, §5.3) es puramente operativa (quién opera, no qué se cobra). NO se agrega un 5to `origen_tipo='guia'` en `alternativa_items`; el guía no es un ítem cobrable con línea propia en el resumen de la reserva. Surgió al revisar un mockup de resumen de reserva que mostraba al guía como línea propia con precio — descartado. |
+| 30-jul-2026 | **Sesión 11b4 — REEMPLAZA el diseño original de esta fila** (tabla `tours` separada + `proveedor_tarifas.tour_id`, nunca implementado). Diseño nuevo: `paquetes_plantilla.tipo` (`tour_simple`\|`paquete_combo`) — un `paquete_combo` agrupa 2+ tours_simple vía `paquete_plantilla_items.paquete_plantilla_hijo_id` (mutuamente excluyente con `proveedor_tarifa_id`/`guia_tarifa_id`, profundidad máxima combo→tour_simple→ítems). Precio/itinerario del combo calculados en vivo (`ComboExplosionService`/`PriceEngineService`), nunca guardados stale. `tour_origen_id` nuevo en `alternativa_items`/`reserva_items` para agrupación visual "Día 1/Día 2". `es_referencial` nuevo en `proveedores`/`guias`. Ver §3.7 arriba para el detalle completo, incluidos 3 gaps reales documentados ahí (reporte operativo, bloqueo de pago a proveedor, disparador de recordatorio automático — los tres referenciaban mecanismos que el prompt de esta sesión asumía ya construidos pero que no existen en el código; confirmado por grep antes de escribir nada, no implementados en esta sesión). 17/17 tests verdes (`tests/Feature/AgenciaViajes/PaqueteComboTest.php`, primer test de todo el vertical Agencia de Viajes) contra Postgres real (`sistemafe_test_migrations`, transacción por test revertida), incluidas las 6 migraciones nuevas verificadas con `migrate`+`rollback`+`migrate` real. Solo backend — frontend es sesión aparte (11b4b). |

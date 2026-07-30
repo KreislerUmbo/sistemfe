@@ -19,6 +19,12 @@ class TipoRecordatorioSeeder extends Seeder
             ['codigo' => 'cumpleanos_cliente', 'nombre' => 'Cumpleaños de cliente', 'automatico' => true],
             ['codigo' => 'cotizacion_estancada', 'nombre' => 'Cotización estancada', 'automatico' => true],
             ['codigo' => 'documento_por_vencer', 'nombre' => 'Documento por vencer', 'automatico' => true],
+            // Sesión 11b4: catálogo agregado junto con configuracion_agencia.dias_aviso_vencimiento_cotizacion.
+            // Sin disparador automático construido todavía (ver migración
+            // 2026_07_30_110500_add_dias_aviso_vencimiento_cotizacion... para el detalle) —
+            // 'automatico=true' documenta la intención de diseño, no una garantía de que
+            // el sistema ya genere esta fila solo.
+            ['codigo' => 'cotizacion_por_vencer', 'nombre' => 'Cotización por vencer', 'automatico' => true],
             ['codigo' => 'personalizado', 'nombre' => 'Personalizado', 'automatico' => false],
         ];
 

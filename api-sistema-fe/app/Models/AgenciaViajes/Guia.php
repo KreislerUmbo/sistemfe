@@ -16,10 +16,12 @@ class Guia extends Model
         'documento',
         'telefono',
         'activo',
+        'es_referencial',
     ];
 
     protected $casts = [
         'activo' => 'boolean',
+        'es_referencial' => 'boolean',
     ];
 
     public function guiaTarifas()

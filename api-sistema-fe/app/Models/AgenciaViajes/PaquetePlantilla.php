@@ -9,13 +9,24 @@ use Illuminate\Database\Eloquent\Model;
 // que "tour", validado con documentos reales de la agencia). Tenant (sin
 // CentralConnection). destino_atractivo_id lleva belongsTo real (FK dentro
 // de la misma DB tenant, Sesión 2).
+//
+// tipo/activo/descuento_tipo/descuento_valor/margen_minimo_pct: Sesión 11b4
+// — distingue 'tour_simple' (lo original) de 'paquete_combo' (agrupa 2+
+// tours_simple vía paqueteItems.paquetePlantillaHijo). Ver
+// ComboValidationService para las reglas de negocio (exclusividad mutua,
+// profundidad máxima 2 niveles, piso de margen) y PriceEngineService para
+// el cálculo de precio en vivo del combo.
 class PaquetePlantilla extends Model
 {
+    public const TIPO_TOUR_SIMPLE = 'tour_simple';
+    public const TIPO_PAQUETE_COMBO = 'paquete_combo';
+
     protected $table = 'paquetes_plantilla';
 
     protected $fillable = [
         'codigo',
         'categoria',
+        'tipo',
         'nombre',
         'descripcion',
         'fotos',
@@ -33,6 +44,10 @@ class PaquetePlantilla extends Model
         'vigencia_desde',
         'vigencia_hasta',
         'publicado_web',
+        'activo',
+        'descuento_tipo',
+        'descuento_valor',
+        'margen_minimo_pct',
     ];
 
     protected $casts = [
@@ -42,6 +57,9 @@ class PaquetePlantilla extends Model
         'vigencia_desde' => 'date',
         'vigencia_hasta' => 'date',
         'publicado_web' => 'boolean',
+        'activo' => 'boolean',
+        'descuento_valor' => 'decimal:2',
+        'margen_minimo_pct' => 'decimal:2',
     ];
 
     public function destinoAtractivo()
@@ -57,5 +75,23 @@ class PaquetePlantilla extends Model
     public function items()
     {
         return $this->hasMany(PaquetePlantillaItem::class, 'paquete_plantilla_id');
+    }
+
+    // Combos que incluyen ESTE paquete como tour-hijo — usado por
+    // ComboValidationService::bloqueosPorDesactivar() para listar qué combos
+    // activos se verían afectados al desactivar un tour_simple.
+    public function itemsComoHijo()
+    {
+        return $this->hasMany(PaquetePlantillaItem::class, 'paquete_plantilla_hijo_id');
+    }
+
+    public function esTourSimple(): bool
+    {
+        return $this->tipo === self::TIPO_TOUR_SIMPLE;
+    }
+
+    public function esPaqueteCombo(): bool
+    {
+        return $this->tipo === self::TIPO_PAQUETE_COMBO;
     }
 }

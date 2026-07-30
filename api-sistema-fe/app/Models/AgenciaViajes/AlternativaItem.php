@@ -33,6 +33,7 @@ class AlternativaItem extends Model
         'origen_tipo',
         'proveedor_tarifa_id',
         'opcion_mayorista_id',
+        'tour_origen_id',
         'descripcion_manual',
         'modo_precio',
         'cantidad',
@@ -68,6 +69,14 @@ class AlternativaItem extends Model
     public function opcionMayorista()
     {
         return $this->belongsTo(OpcionMayorista::class, 'opcion_mayorista_id');
+    }
+
+    // Sesión 11b4 — tour_simple de origen cuando este ítem vino de explotar
+    // un paquete_combo (ComboExplosionService). Null si el ítem es manual o
+    // no vino de un combo.
+    public function tourOrigen()
+    {
+        return $this->belongsTo(PaquetePlantilla::class, 'tour_origen_id');
     }
 
     public function cotizacionPasajeAereo()
