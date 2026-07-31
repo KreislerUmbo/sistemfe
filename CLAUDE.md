@@ -1163,3 +1163,31 @@ entre bases distintas):
   público), particionado por tenant vía `FilesystemTenancyBootstrapper`. El certificado
   demo central compartido (`certificate-demo.pem`, para tenants en `beta` sin certificado
   propio todavía) sigue con `base_path()` directo a propósito, fuera de este disco.
+- **CERRADO (2026-07-30, rama `fix/infra-migracion-verticals-pendientes`, mergeada a
+  `main` en `3fc2c6f`):** `config/tenancy.php` `migration_parameters['--path']` está
+  hardcodeado a `tenant/core/` — así que el comando genérico `php artisan tenants:migrate`
+  (sin `--path` explícito), usado como mantenimiento normal para aplicar migraciones
+  **nuevas** a tenants **ya provisionados**, nunca corría `tenant/verticals/*`, para
+  ningún tenant, sin importar su `giro`. Bug preexistente desde el primer vertical
+  (agencia de viajes, Sesión 2) — se venía compensando con migración manual cada sesión
+  (ver hallazgo real de la Sesión 11b4b en
+  `docs/planning/agencia-de-viajes/plan-hoja-de-ruta-ejecucion.md`) sin que nadie notara
+  que el mecanismo automático estaba roto. Distinto del camino de **provisioning
+  inicial** (`TenantProvisioningService::provision()` → `migrarVertical()`), que sí
+  funciona bien porque arma un `--path` explícito por tenant según su `giro` en el
+  momento de crearlo.
+  **Fix**: comando nuevo `php artisan tenants:migrate-verticales`
+  (`app/Console/Commands/MigrateVerticalesPendientes.php`) — reemplaza a `tenants:migrate`
+  a secas como comando de mantenimiento de acá en adelante (ver checklist en "Cómo
+  trabajar en este proyecto", arriba). Corre `tenant/core/` para todos los tenants, agrupa
+  por `giro`, y corre `tenant/verticals/{giro}/` con `--path` explícito por grupo —
+  reutiliza `TenantProvisioningService::rutaVertical()` (extraído de `migrarVertical()`,
+  antes privado, para no duplicar el mapeo snake_case→kebab-case). Idempotente por diseño.
+  Test de cobertura real (`tests/Feature/MigrateVerticalesPendientesTest.php`): crea 2
+  tenants físicos descartables (uno `agencia_viajes`, uno `retail`), confirma que las
+  tablas de vertical llegan solo al que corresponde. Corrido de verdad contra los tenants
+  reales existentes (`negocio2`/`umbo`/`umbo-archivado`/`sandbox`/`agencia-demo`): puso al
+  día un backlog de `tenant/core/` acumulado en varios de ellos; `agencia-demo` ya estaba
+  al día en `verticals/agencia-viajes/` (venía del workaround manual de la Sesión 11b4b),
+  confirmando el fix sin necesitar backfill adicional ahí. Detalle completo en
+  `docs/planning/arquitectura-multitenant-backend_1.md`.
