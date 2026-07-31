@@ -50,6 +50,39 @@ database/migrations/
   más barato provisionar de más ahora que migrar en caliente después sobre
   una BD de tenant con datos operativos reales ya en producción.
 
+### Bug real (2026-07-30): `tenants:migrate` a secas nunca aplica `verticals/`
+`config/tenancy.php` → `migration_parameters['--path']` está hardcodeado a
+`database_path('migrations/tenant/core')`. Ese `migration_parameters` es lo
+que usa el comando genérico `php artisan tenants:migrate` (sin `--path`
+explícito) cuando se corre como mantenimiento normal, para aplicar
+migraciones **nuevas** a tenants **ya provisionados** — así que ese comando
+nunca corre `tenant/verticals/*`, para ningún tenant, sin importar su
+`giro`. Viene pasando desde el primer vertical (agencia de viajes, Sesión
+2) y se venía compensando con migración manual cada sesión (`migrate
+--path=database/migrations/tenant/verticals/agencia-viajes --realpath`
+contra cada tenant, a mano) sin que nadie notara que el mecanismo
+automático estaba roto — confirmado real en `agencia-demo` al cerrar la
+Sesión 11b4b (ver `plan-hoja-de-ruta-ejecucion.md`).
+
+Es distinto del camino de **provisioning inicial**
+(`TenantProvisioningService::provision()` → `migrarVertical()`), que sí
+funciona bien porque arma un `--path` explícito por tenant según su `giro`
+en el momento de crearlo — el bug es específico al camino de "agregar
+migraciones nuevas a un tenant que ya existe".
+
+**Fix**: comando nuevo `php artisan tenants:migrate-verticales`
+(`app/Console/Commands/MigrateVerticalesPendientes.php`) — reemplaza a
+`tenants:migrate` a secas como comando de mantenimiento de acá en
+adelante. Corre `tenant/core/` para todos los tenants (paso 1, sin
+cambios), agrupa los tenants centrales por `giro`, y por cada grupo con
+carpeta de vertical real (`TenantProvisioningService::rutaVertical()`,
+extraído de `migrarVertical()` para no duplicar el mapeo
+snake_case→kebab-case) corre `tenants:migrate` con `--path` explícito
+sobre ese grupo. Idempotente por diseño (la tabla `migrations` de cada
+tenant ya trackea qué corrió). El comando genérico `tenants:migrate`
+(de `stancl/tenancy`) sigue existiendo sin tocar — solo se deja de
+depender de él para este caso de uso.
+
 ## Estado actual (referencia)
 - El core de facturación electrónica (retail/POS) ya tiene ~76 migraciones
   funcionando, pero **todavía viven juntas sin separar en `core/` vs

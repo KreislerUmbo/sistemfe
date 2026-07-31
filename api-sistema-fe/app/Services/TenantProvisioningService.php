@@ -138,9 +138,37 @@ class TenantProvisioningService
      * tenant recién creado — plan-modulo-infraestructura-multitenant.md §4. tenant/core/
      * ya corrió automáticamente vía el evento TenantCreated (config
      * tenancy.migration_parameters), esto es el segundo paso, condicional. No-op si
-     * $giro viene null (caller HTTP que todavía no lo pasa) o si la carpeta del giro
-     * no existe/está vacía — 'retail' en particular nunca tiene carpeta propia, todo
-     * su contenido ya es core/.
+     * $giro viene null (caller HTTP que todavía no lo pasa) o si rutaVertical() no
+     * encuentra carpeta.
+     */
+    private function migrarVertical(Tenant $tenant, ?string $giro): void
+    {
+        if (empty($giro)) {
+            return;
+        }
+
+        $path = $this->rutaVertical($giro);
+
+        if ($path === null) {
+            return;
+        }
+
+        Artisan::call('tenants:migrate', [
+            '--tenants' => [$tenant->getTenantKey()],
+            '--path' => [$path],
+            '--realpath' => true,
+            '--force' => true,
+        ]);
+    }
+
+    /**
+     * Dado un giro, resuelve el path real de su carpeta de migraciones de vertical, o
+     * null si no aplica (giro sin carpeta propia — 'retail' en particular nunca tiene
+     * una, todo su contenido ya es tenant/core/ — o carpeta vacía). Público: además de
+     * migrarVertical() (provisioning inicial), lo usa
+     * MigrateVerticalesPendientes (comando de mantenimiento, ver TODO.md /
+     * arquitectura-multitenant-backend.md — corrige el bug de
+     * `tenants:migrate` a secas nunca aplicando verticals/ a tenants ya provisionados).
      *
      * str_replace: los valores de `giro` son snake_case (agencia_viajes, ver
      * migración add_giro_tipo_sunat_modo_to_tenants_table), pero las carpetas de
@@ -151,25 +179,16 @@ class TenantProvisioningService
      * vacía — un path que no existe y un path vacío producen el mismo resultado
      * observable: cero migraciones corridas).
      */
-    private function migrarVertical(Tenant $tenant, ?string $giro): void
+    public function rutaVertical(string $giro): ?string
     {
-        if (empty($giro)) {
-            return;
-        }
-
         $carpeta = str_replace('_', '-', $giro);
         $path = database_path("migrations/tenant/verticals/{$carpeta}");
 
         if (! File::isDirectory($path) || count(File::glob("{$path}/*.php")) === 0) {
-            return;
+            return null;
         }
 
-        Artisan::call('tenants:migrate', [
-            '--tenants' => [$tenant->getTenantKey()],
-            '--path' => [$path],
-            '--realpath' => true,
-            '--force' => true,
-        ]);
+        return $path;
     }
 
     /**
