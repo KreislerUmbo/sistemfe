@@ -101,7 +101,7 @@
                     <div class="col-12">
                         <select class="form-select form-select-sm" v-model="proveedorTarifaId" size="6">
                             <option v-for="t in bibliotecaTarifas" :key="t.id" :value="t.id">
-                                {{ t.proveedor_servicio?.proveedor?.razon_social }} · {{ t.proveedor_servicio?.destino_servicio?.servicio?.nombre }}
+                                {{ t.proveedor_servicio?.proveedor?.razon_social }}{{ t.proveedor_servicio?.proveedor?.es_referencial ? ' (Referencial)' : '' }} · {{ t.proveedor_servicio?.destino_servicio?.servicio?.nombre }}
                                 {{ t.tipo_habitacion ? ('· ' + t.tipo_habitacion) : '' }} — {{ t.moneda }} {{ t.precio_venta_adulto }}
                             </option>
                         </select>
@@ -109,7 +109,9 @@
                             <span>
                                 <i class="fas fa-circle-check me-1"></i>
                                 <strong>Seleccionado:</strong>
-                                {{ tarifaSeleccionada.proveedor_servicio?.proveedor?.razon_social }} ·
+                                {{ tarifaSeleccionada.proveedor_servicio?.proveedor?.razon_social }}
+                                <span v-if="tarifaSeleccionada.proveedor_servicio?.proveedor?.es_referencial" class="badge bg-secondary-subtle text-secondary border ms-1" style="font-size:10px">Referencial</span>
+                                ·
                                 {{ tarifaSeleccionada.proveedor_servicio?.destino_servicio?.servicio?.nombre }}
                                 <span v-if="tarifaSeleccionada.tipo_habitacion">· {{ tarifaSeleccionada.tipo_habitacion }}</span>
                                 — {{ tarifaSeleccionada.moneda }} {{ tarifaSeleccionada.precio_venta_adulto }}

@@ -140,7 +140,7 @@
                                     <select class="form-select form-select-sm" v-model="it.proveedor_tarifa_id" @change="guardarItem(it)">
                                         <option :value="null">Sin asignar</option>
                                         <option v-for="t in bibliotecaTarifas" :key="t.id" :value="t.id">
-                                            {{ t.proveedor_servicio?.proveedor?.razon_social ?? ('Tarifa #' + t.id) }}
+                                            {{ t.proveedor_servicio?.proveedor?.razon_social ?? ('Tarifa #' + t.id) }}{{ t.proveedor_servicio?.proveedor?.es_referencial ? ' (Referencial)' : '' }}
                                         </option>
                                     </select>
                                 </div>
@@ -148,7 +148,7 @@
                                     <label class="form-label small text-secondary mb-1">Guía</label>
                                     <select class="form-select form-select-sm" v-model="it.guia_id" @change="guardarItem(it)">
                                         <option :value="null">Sin asignar</option>
-                                        <option v-for="g in guias" :key="g.id" :value="g.id">{{ g.nombre }}</option>
+                                        <option v-for="g in guias" :key="g.id" :value="g.id">{{ g.nombre }}{{ g.es_referencial ? ' (Referencial)' : '' }}</option>
                                     </select>
                                 </div>
                                 <div class="col-md-3">

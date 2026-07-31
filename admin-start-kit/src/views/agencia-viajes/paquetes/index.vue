@@ -21,13 +21,21 @@
                         <input type="text" class="form-control form-control-sm" placeholder="Nombre o código..."
                             v-model="search" @keyup.enter="list">
                     </div>
-                    <div class="col-6 col-md-4">
+                    <div class="col-6 col-md-2">
                         <label class="form-label mb-1 small fw-semibold text-secondary">Categoría</label>
                         <select class="form-select form-select-sm" v-model="categoria" @change="list">
                             <option :value="null">— Todas —</option>
                             <option value="local">Local</option>
                             <option value="nacional">Nacional</option>
                             <option value="internacional">Internacional</option>
+                        </select>
+                    </div>
+                    <div class="col-6 col-md-2">
+                        <label class="form-label mb-1 small fw-semibold text-secondary">Tipo</label>
+                        <select class="form-select form-select-sm" v-model="tipo" @change="list">
+                            <option :value="null">— Todos —</option>
+                            <option value="tour_simple">Tour simple</option>
+                            <option value="paquete_combo">Paquete combo</option>
                         </select>
                     </div>
                     <div class="col-6 col-md-3 d-flex gap-2">
@@ -49,33 +57,47 @@
                         <thead class="table-light">
                             <tr class="small text-secondary text-uppercase">
                                 <th class="ps-3">Nombre</th>
+                                <th>Tipo</th>
                                 <th>Categoría</th>
                                 <th>Destino</th>
-                                <th class="text-end">Precio desde</th>
+                                <th class="text-end">Precio</th>
+                                <th class="text-center">Activo</th>
                                 <th class="text-center">Web</th>
                                 <th class="text-center pe-3">Acciones</th>
                             </tr>
                         </thead>
                         <tbody>
                             <tr v-if="loading">
-                                <td colspan="6" class="text-center py-5 text-muted">
+                                <td colspan="8" class="text-center py-5 text-muted">
                                     <div class="spinner-border spinner-border-sm me-2"></div>Cargando...
                                 </td>
                             </tr>
                             <tr v-else-if="paquetes.length === 0">
-                                <td colspan="6" class="text-center py-5 text-muted fst-italic">
+                                <td colspan="8" class="text-center py-5 text-muted fst-italic">
                                     <i class="fas fa-inbox opacity-50 fs-4 mb-2 d-block"></i>
                                     No se encontraron paquetes/tours.
                                 </td>
                             </tr>
-                            <tr v-for="paquete in paquetes" :key="paquete.id">
+                            <tr v-for="paquete in paquetes" :key="paquete.id" :class="{ 'opacity-50': !paquete.activo }">
                                 <td class="ps-3">
                                     <div class="fw-semibold">{{ paquete.nombre }}</div>
                                     <small class="text-muted" v-if="paquete.codigo">{{ paquete.codigo }}</small>
                                 </td>
+                                <td>
+                                    <span class="badge" :class="paquete.tipo === 'paquete_combo' ? 'bg-primary-subtle text-primary border border-primary-subtle' : 'bg-info-subtle text-info border border-info-subtle'">
+                                        <i class="fas me-1" :class="paquete.tipo === 'paquete_combo' ? 'fa-layers' : 'fa-route'"></i>
+                                        {{ paquete.tipo === 'paquete_combo' ? 'Combo' : 'Tour' }}
+                                    </span>
+                                    <small v-if="paquete.tipo === 'paquete_combo'" class="text-muted d-block">{{ combosTourCount[paquete.id] ?? '…' }} tour(s)</small>
+                                </td>
                                 <td><span class="badge bg-light text-dark border">{{ etiquetaCategoria(paquete.categoria) }}</span></td>
                                 <td>{{ paquete.destino_atractivo?.nombre ?? '—' }}</td>
-                                <td class="text-end">{{ paquete.precio_venta_final != null ? `desde S/ ${Number(paquete.precio_venta_final).toFixed(0)}` : '—' }}</td>
+                                <td class="text-end">{{ precioMostrado(paquete) }}</td>
+                                <td class="text-center">
+                                    <span class="badge" :class="paquete.activo ? 'bg-success-subtle text-success border border-success-subtle' : 'bg-secondary-subtle text-secondary border'">
+                                        {{ paquete.activo ? 'Sí' : 'No' }}
+                                    </span>
+                                </td>
                                 <td class="text-center">
                                     <span class="badge" :class="paquete.publicado_web ? 'bg-success-subtle text-success border border-success-subtle' : 'bg-secondary-subtle text-secondary border'">
                                         {{ paquete.publicado_web ? 'Sí' : 'No' }}
@@ -125,12 +147,38 @@ type TVueSwalInstance = typeof Swal & typeof Swal.fire;
 const paquetes = ref<PaquetePlantilla[]>([]);
 const search = ref<string>('');
 const categoria = ref<string | null>(null);
+const tipo = ref<string | null>(null);
 const currentPage = ref<number>(1);
 const totalPages = ref<number>(0);
 const perPageRows = ref<number>(15);
 const loading = ref<boolean>(false);
 
 const etiquetaCategoria = (c: string) => ({ local: 'Local', nacional: 'Nacional', internacional: 'Internacional' } as Record<string, string>)[c] ?? c;
+
+// precio_venta_final no aplica a paquete_combo (bloqueado en el backend) —
+// para esos, el index() ya devuelve precio_calculado.venta_neta_combo
+// (Sesión 11b4a), calculado en vivo desde los tours incluidos.
+const precioMostrado = (paquete: PaquetePlantilla) => {
+    if (paquete.tipo === 'paquete_combo') {
+        return paquete.precio_calculado ? `S/ ${paquete.precio_calculado.venta_neta_combo.toFixed(0)}` : '—';
+    }
+    return paquete.precio_venta_final != null ? `desde S/ ${Number(paquete.precio_venta_final).toFixed(0)}` : '—';
+};
+
+// Cantidad de tours incluidos por combo — el listado no la trae (frontend-
+// only esta sesión, sin tocar backend), se resuelve con una llamada
+// liviana por combo visible, reusando el endpoint de ítems ya existente.
+const combosTourCount = ref<Record<number, number>>({});
+
+const cargarConteoTours = async () => {
+    const combos = paquetes.value.filter(p => p.tipo === 'paquete_combo');
+    for (const combo of combos) {
+        if (combosTourCount.value[combo.id] !== undefined) continue;
+        paquetePlantillaService.listarItems(combo.id).then(r => {
+            combosTourCount.value[combo.id] = r.paquete_plantilla_items.filter(i => i.paquete_plantilla_hijo_id != null).length;
+        });
+    }
+};
 
 const list = async () => {
     loading.value = true;
@@ -139,10 +187,12 @@ const list = async () => {
             page: currentPage.value,
             search: search.value || undefined,
             categoria: categoria.value || undefined,
+            tipo: tipo.value || undefined,
         });
         paquetes.value = res.paquetes_plantilla;
         totalPages.value = res.total;
         perPageRows.value = res.paginate;
+        await cargarConteoTours();
     } catch (error) {
         console.log(error);
     } finally {
@@ -153,6 +203,7 @@ const list = async () => {
 const reset = () => {
     search.value = '';
     categoria.value = null;
+    tipo.value = null;
     currentPage.value = 1;
     list();
 };

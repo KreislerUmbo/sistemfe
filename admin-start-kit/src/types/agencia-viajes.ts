@@ -33,6 +33,9 @@ export type Proveedor = {
   tipo_id: number;
   margen_default_tipo?: 'porcentaje' | 'fijo' | null;
   margen_default_valor?: number | null;
+  // Sesión 11b4a — precio de lista de la agencia cuando todavía no se sabe
+  // qué empresa específica va a operar el servicio.
+  es_referencial?: boolean;
   proveedor_servicios?: ProveedorServicio[];
   created_at?: string;
 };
@@ -136,6 +139,8 @@ export type Guia = {
   documento: string;
   telefono: string;
   activo: boolean;
+  // Sesión 11b4a — mismo criterio que Proveedor.es_referencial.
+  es_referencial?: boolean;
   guia_tarifas?: GuiaTarifa[];
 };
 
@@ -157,6 +162,11 @@ export type GuiaTarifa = {
   vigente_desde: string;
   vigente_hasta?: string | null;
   destino?: DestinoAtractivo;
+  // Faltaba en el tipo pese a que ya se usaba en detalle.vue desde Sesión
+  // 11b2 (el backend siempre carga esta relación, ver
+  // PaquetePlantillaController::show()) — corregido acá al notar que
+  // Sesión 11b4b multiplicó los usos y el gap dejó de pasar desapercibido.
+  guia?: Guia;
 };
 
 export type ConfiguracionAgencia = {
@@ -244,6 +254,10 @@ export type AlternativaItem = {
   origen_tipo: OrigenItem;
   proveedor_tarifa_id?: number | null;
   opcion_mayorista_id?: number | null;
+  // Sesión 11b4a — de qué tour_simple vino este ítem al explotar un
+  // paquete_combo (agrupación visual, no afecta precio).
+  tour_origen_id?: number | null;
+  tour_origen?: PaquetePlantilla | null;
   descripcion_manual?: string | null;
   modo_precio: 'por_persona' | 'tarifa_fija';
   cantidad: number;
@@ -334,10 +348,16 @@ export type OpcionMayoristaOpcional = {
 // Sesión 11b2 — catálogo de paquetes/tours de plantilla
 // ═══════════════════════════════════════════════════════════════
 
+// Sesión 11b4a — 'tour_simple' es el comportamiento original (Sesión 6);
+// 'paquete_combo' agrupa 2+ tours_simple, ver ComboPrecioCalculado/
+// ComboItinerarioPaso más abajo.
+export type PaquetePlantillaTipo = 'tour_simple' | 'paquete_combo';
+
 export type PaquetePlantilla = {
   id: number;
   codigo?: string | null;
   categoria: 'local' | 'nacional' | 'internacional';
+  tipo: PaquetePlantillaTipo;
   nombre: string;
   descripcion?: string | null;
   fotos?: string[] | null;
@@ -356,8 +376,15 @@ export type PaquetePlantilla = {
   vigencia_desde?: string | null;
   vigencia_hasta?: string | null;
   publicado_web: boolean;
+  activo: boolean;
+  descuento_tipo?: 'porcentaje' | 'monto' | null;
+  descuento_valor?: number | null;
+  margen_minimo_pct?: number | null;
   items?: PaquetePlantillaItem[];
   paquete_itinerario?: TourItinerarioItem[];
+  // Solo presente en index() para tipo=paquete_combo (Sesión 11b4a) — ver
+  // PaquetePlantillaController::index().
+  precio_calculado?: ComboPrecioCalculado;
 };
 
 export type PaquetePlantillaItem = {
@@ -367,7 +394,46 @@ export type PaquetePlantillaItem = {
   proveedor_tarifa?: ProveedorTarifa;
   guia_tarifa_id?: number | null;
   guia_tarifa?: GuiaTarifa;
+  // Sesión 11b4a — tour-hijo dentro de un paquete_combo. Mutuamente
+  // excluyente con proveedor_tarifa_id/guia_tarifa_id.
+  paquete_plantilla_hijo_id?: number | null;
+  paquete_plantilla_hijo?: PaquetePlantilla | null;
   orden?: number | null;
+};
+
+// ═══════════════════════════════════════════════════════════════
+// Sesión 11b4a — paquete_combo: precio/itinerario calculados en vivo
+// ═══════════════════════════════════════════════════════════════
+
+export type ComboPrecioCalculado = {
+  costo_total_combo: number;
+  venta_bruta_combo: number;
+  venta_neta_combo: number;
+  descuento_aplicado: number;
+  margen_resultante_pct: number | null;
+  componentes_inactivos: Array<{ id: number; nombre: string }>;
+};
+
+export type ComboItinerarioPaso = {
+  dia_relativo: number;
+  hora?: string | null;
+  orden?: number | null;
+  destino_atractivo_id?: number | null;
+  descripcion: string;
+  tour_origen_id: number;
+  tour_origen_nombre: string;
+};
+
+export type ComboDatos = {
+  precio_calculado: ComboPrecioCalculado;
+  itinerario_derivado: ComboItinerarioPaso[];
+  tours_incluidos: PaquetePlantilla[];
+};
+
+export type PaquetePlantillaResumen = {
+  id: number;
+  nombre: string;
+  codigo?: string | null;
 };
 
 export type TourItinerarioItem = {
@@ -396,6 +462,8 @@ export type PaquetePlantillaResponse = {
 export type PaquetePlantillaShowResponse = {
   paquete_plantilla: PaquetePlantilla;
   opciones_hotel: OpcionHotel[];
+  // null para tour_simple — solo poblado para paquete_combo (Sesión 11b4a).
+  combo: ComboDatos | null;
 };
 
 // ═══════════════════════════════════════════════════════════════
@@ -439,6 +507,8 @@ export type ReservaItem = {
   hora?: string | null;
   guia_id?: number | null;
   proveedor_tarifa_id?: number | null;
+  tour_origen_id?: number | null;
+  tour_origen?: PaquetePlantilla | null;
   guia?: Guia | null;
   proveedor_tarifa?: ProveedorTarifa | null;
   alternativa_item?: AlternativaItem;
