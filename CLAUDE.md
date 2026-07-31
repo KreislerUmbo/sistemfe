@@ -1062,6 +1062,13 @@ propuesto que quedó obsoleto en cuanto se construyó el módulo real de Adelant
   interrelacionadas y un cambio aislado puede romper otro caso.
 - Antes de tocar `SaleController::update()`, confirmar que cualquier cambio mantenga la
   transacción DB atómica (todo-o-nada) entre venta, detalles y comprobante SUNAT.
+- Al agregar migraciones nuevas en `database/migrations/tenant/` (`core/` o
+  `verticals/*`), correr `php artisan tenants:migrate-verticales` para aplicarlas a los
+  tenants ya provisionados — **NO** usar `tenants:migrate` a secas para esto, ese
+  comando solo cubre `tenant/core/` (ver `config/tenancy.php`
+  `migration_parameters.--path`, hardcodeado) y deja las de `verticals/` sin aplicar en
+  silencio (bug real, arrastrado desde el primer vertical — ver
+  `arquitectura-multitenant-backend_1.md`).
 
 ## Migración a multi-tenancy (stancl/tenancy) — estado al 2026-07-12
 
