@@ -409,6 +409,10 @@ Route::group([
         ->middleware('permission:agencia.destinos');
     Route::delete("destinos-atractivos/{id}", [DestinoAtractivoController::class, 'destroy'])
         ->middleware('permission:agencia.destinos');
+    Route::delete("destinos-atractivos/{id}/fotos", [DestinoAtractivoController::class, 'eliminarFoto'])
+        ->middleware('permission:agencia.destinos');
+    Route::patch("destinos-atractivos/{id}/fotos/orden", [DestinoAtractivoController::class, 'ordenarFotos'])
+        ->middleware('permission:agencia.destinos');
     Route::get("destinos-atractivos/{id}/servicios", [DestinoServicioController::class, 'index'])
         ->middleware('permission:agencia.destinos');
     Route::post("destinos-atractivos/{id}/servicios", [DestinoServicioController::class, 'store'])

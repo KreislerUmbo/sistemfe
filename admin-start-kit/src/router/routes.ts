@@ -530,6 +530,26 @@ const comercialRoutes = [
     component: () => import("@/views/agencia-viajes/destinos/index.vue"),
   },
   {
+    path: "/agencia-viajes/destinos/nuevo",
+    name: "agencia.destinos.create",
+    meta: {
+      title: setTitle("Nuevo Destino/Atractivo"),
+      authRequired: true,
+      permission: 'agencia.destinos',
+    },
+    component: () => import("@/views/agencia-viajes/destinos/form.vue"),
+  },
+  {
+    path: "/agencia-viajes/destinos/:id/editar",
+    name: "agencia.destinos.edit",
+    meta: {
+      title: setTitle("Editar Destino/Atractivo"),
+      authRequired: true,
+      permission: 'agencia.destinos',
+    },
+    component: () => import("@/views/agencia-viajes/destinos/form.vue"),
+  },
+  {
     path: "/agencia-viajes/temporadas",
     name: "agencia.temporadas.index",
     meta: {

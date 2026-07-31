@@ -27,6 +27,14 @@ export const destinoAtractivoService = {
     const response = await httpClient.delete(`/destinos-atractivos/${id}`)
     return response.data
   },
+  async eliminarFoto(id: number, path: string) {
+    const response = await httpClient.delete(`/destinos-atractivos/${id}/fotos`, { data: { path } })
+    return response.data
+  },
+  async ordenarFotos(id: number, fotos: string[]) {
+    const response = await httpClient.patch(`/destinos-atractivos/${id}/fotos/orden`, { fotos })
+    return response.data
+  },
 
   // ── Servicios asociados a un destino (destino_servicio) ─────────────
   async listarServicios(destinoId: number) {
