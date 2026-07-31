@@ -10,12 +10,14 @@ use App\Models\AgenciaViajes\PaquetePlantillaItem;
 use App\Models\AgenciaViajes\TourItinerarioItem;
 use App\Services\AgenciaViajes\ComboExplosionService;
 use App\Services\AgenciaViajes\ComboValidationService;
+use App\Services\AgenciaViajes\FotoUploadService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 // Catálogo de paquetes/tours de plantilla — Sesión 11b2
 // (plan-hoja-de-ruta-ejecucion.md fila 11b2). plan-modulo-cotizaciones-reservas.md
@@ -32,7 +34,8 @@ class PaquetePlantillaController extends Controller
 {
     public function __construct(
         private ComboValidationService $comboValidation,
-        private ComboExplosionService $comboExplosion
+        private ComboExplosionService $comboExplosion,
+        private FotoUploadService $fotoUploadService
     ) {
     }
 
@@ -85,8 +88,15 @@ class PaquetePlantillaController extends Controller
             return $validado;
         }
 
+        $rechazadas = [];
         if ($request->hasFile('fotos')) {
-            $validado['fotos'] = $this->subirFotos($request);
+            try {
+                $resultado = $this->fotoUploadService->procesarLote((array) $request->file('fotos'), 'paquetes-plantilla', 0);
+            } catch (ValidationException $e) {
+                return response()->json(['code' => 422, 'message' => $e->getMessage()], 422);
+            }
+            $validado['fotos'] = $resultado['paths'];
+            $rechazadas = $resultado['rechazadas'];
         }
 
         $paquete = PaquetePlantilla::create($validado);
@@ -95,6 +105,7 @@ class PaquetePlantillaController extends Controller
             'code' => 200,
             'message' => 'Paquete/tour registrado correctamente',
             'paquete_plantilla' => $paquete,
+            'fotos_rechazadas' => $rechazadas,
         ]);
     }
 
@@ -201,8 +212,19 @@ class PaquetePlantillaController extends Controller
             }
         }
 
+        $rechazadas = [];
         if ($request->hasFile('fotos')) {
-            $validado['fotos'] = array_merge($paquete->fotos ?? [], $this->subirFotos($request));
+            try {
+                $resultado = $this->fotoUploadService->procesarLote(
+                    (array) $request->file('fotos'),
+                    'paquetes-plantilla',
+                    count($paquete->fotos ?? [])
+                );
+            } catch (ValidationException $e) {
+                return response()->json(['code' => 422, 'message' => $e->getMessage()], 422);
+            }
+            $validado['fotos'] = array_merge($paquete->fotos ?? [], $resultado['paths']);
+            $rechazadas = $resultado['rechazadas'];
         }
 
         $paquete->update($validado);
@@ -211,6 +233,7 @@ class PaquetePlantillaController extends Controller
             'code' => 200,
             'message' => 'Paquete/tour actualizado correctamente',
             'paquete_plantilla' => $paquete,
+            'fotos_rechazadas' => $rechazadas,
         ]);
     }
 
@@ -307,16 +330,6 @@ class PaquetePlantillaController extends Controller
         return response()->json(['code' => 200, 'message' => 'Hotel quitado del paquete correctamente']);
     }
 
-    private function subirFotos(Request $request): array
-    {
-        $paths = [];
-        foreach ((array) $request->file('fotos') as $foto) {
-            $paths[] = Storage::disk('public')->putFile('paquetes-plantilla', $foto);
-        }
-
-        return $paths;
-    }
-
     private function validarPayload(Request $request, ?int $ignoreId = null): array|JsonResponse
     {
         $validator = Validator::make($request->all(), [
@@ -342,6 +355,12 @@ class PaquetePlantillaController extends Controller
             'activo' => 'nullable|boolean',
             'descuento_tipo' => 'nullable|in:porcentaje,monto',
             'descuento_valor' => 'nullable|numeric|min:0',
+            // Solo valida que sea una imagen válida acá — el límite de 5MB es
+            // responsabilidad de FotoUploadService, que rechaza esa foto en
+            // particular sin bloquear el resto del lote (a diferencia de un
+            // 'max:' acá, que tumbaría la request completa).
+            'fotos' => 'nullable|array',
+            'fotos.*' => 'image',
             'margen_minimo_pct' => 'nullable|numeric|min:0',
         ]);
 

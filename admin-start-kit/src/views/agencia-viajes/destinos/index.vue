@@ -8,9 +8,9 @@
                 </h5>
                 <small class="text-muted">Árbol de zonas, lugares y atractivos</small>
             </div>
-            <button class="btn btn-primary fw-semibold shadow-sm" @click="abrirFormNuevo(null)">
+            <router-link to="/agencia-viajes/destinos/nuevo" class="btn btn-primary fw-semibold shadow-sm">
                 <i class="fas fa-plus me-2"></i>Nueva Zona
-            </button>
+            </router-link>
         </div>
 
         <div class="card border-0 shadow-sm">
@@ -47,16 +47,18 @@
                                     <span class="badge bg-light text-dark border">{{ etiquetaTipo(fila.tipo) }}</span>
                                 </td>
                                 <td class="text-center pe-3">
-                                    <button v-if="fila.tipo !== 'atractivo'" class="btn btn-sm btn-outline-success me-1"
-                                        :title="`Agregar ${fila.tipo === 'zona' ? 'lugar' : 'atractivo'}`" @click="abrirFormNuevo(fila.id)">
+                                    <router-link v-if="fila.tipo !== 'atractivo'" class="btn btn-sm btn-outline-success me-1"
+                                        :title="`Agregar ${fila.tipo === 'zona' ? 'lugar' : 'atractivo'}`"
+                                        :to="`/agencia-viajes/destinos/nuevo?parent_id=${fila.id}`">
                                         <i class="fas fa-plus"></i>
-                                    </button>
+                                    </router-link>
                                     <button class="btn btn-sm btn-outline-primary me-1" title="Servicios asociados" @click="abrirServicios(fila)">
                                         <i class="fas fa-concierge-bell"></i>
                                     </button>
-                                    <button class="btn btn-sm btn-outline-secondary me-1" title="Editar" @click="abrirFormEditar(fila)">
+                                    <router-link class="btn btn-sm btn-outline-secondary me-1" title="Editar"
+                                        :to="`/agencia-viajes/destinos/${fila.id}/editar`">
                                         <i class="fas fa-pen"></i>
-                                    </button>
+                                    </router-link>
                                     <button class="btn btn-sm btn-outline-danger" title="Eliminar" @click="eliminar(fila)">
                                         <i class="fas fa-trash"></i>
                                     </button>
@@ -64,40 +66,6 @@
                             </tr>
                         </tbody>
                     </table>
-                </div>
-            </div>
-        </div>
-
-        <!-- Modal crear/editar destino -->
-        <div v-if="modalFormAbierto" class="modal d-block" style="background:rgba(0,0,0,.5)" @click.self="modalFormAbierto = false">
-            <div class="modal-dialog">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h6 class="modal-title">{{ destinoEditando ? 'Editar' : 'Nuevo' }} Destino/Atractivo</h6>
-                        <button class="btn-close" @click="modalFormAbierto = false"></button>
-                    </div>
-                    <div class="modal-body">
-                        <div class="mb-3">
-                            <label class="form-label small fw-semibold text-secondary">Nombre *</label>
-                            <input type="text" class="form-control form-control-sm" v-model="formDestino.nombre">
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label small fw-semibold text-secondary">Tipo *</label>
-                            <select class="form-select form-select-sm" v-model="formDestino.tipo">
-                                <option value="zona">Zona</option>
-                                <option value="lugar">Lugar</option>
-                                <option value="atractivo">Atractivo</option>
-                            </select>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label small fw-semibold text-secondary">Descripción</label>
-                            <textarea class="form-control form-control-sm" rows="3" v-model="formDestino.descripcion"></textarea>
-                        </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button class="btn btn-outline-secondary" @click="modalFormAbierto = false">Cancelar</button>
-                        <button class="btn btn-primary" @click="guardarDestino">Guardar</button>
-                    </div>
                 </div>
             </div>
         </div>
@@ -207,46 +175,6 @@ const cargarArbol = async () => {
         arbol.value = res.destinos_atractivos;
     } finally {
         loading.value = false;
-    }
-};
-
-// ── Form crear/editar ────────────────────────────────────────────────
-const modalFormAbierto = ref<boolean>(false);
-const destinoEditando = ref<Fila | null>(null);
-const parentIdNuevo = ref<number | null>(null);
-const formDestino = ref<Partial<DestinoAtractivo>>({ nombre: '', tipo: 'zona', descripcion: '' });
-
-const abrirFormNuevo = (parentId: number | null) => {
-    destinoEditando.value = null;
-    parentIdNuevo.value = parentId;
-    const padre = parentId ? filas.value.find((f) => f.id === parentId) : null;
-    const tipoSugerido = padre ? (padre.tipo === 'zona' ? 'lugar' : 'atractivo') : 'zona';
-    formDestino.value = { nombre: '', tipo: tipoSugerido, descripcion: '' };
-    modalFormAbierto.value = true;
-};
-
-const abrirFormEditar = (fila: Fila) => {
-    destinoEditando.value = fila;
-    formDestino.value = { nombre: fila.nombre, tipo: fila.tipo, descripcion: '' };
-    modalFormAbierto.value = true;
-};
-
-const guardarDestino = async () => {
-    if (!formDestino.value.nombre?.trim()) {
-        (Swal as TVueSwalInstance).fire('Error', 'El nombre es obligatorio.', 'error');
-        return;
-    }
-    try {
-        const payload = { ...formDestino.value, parent_id: destinoEditando.value ? undefined : parentIdNuevo.value };
-        const res = destinoEditando.value
-            ? await destinoAtractivoService.actualizar(destinoEditando.value.id, payload)
-            : await destinoAtractivoService.crear(payload);
-
-        modalFormAbierto.value = false;
-        await (Swal as TVueSwalInstance).fire('Listo', res.message, 'success');
-        await cargarArbol();
-    } catch (error: any) {
-        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo guardar', 'error');
     }
 };
 
