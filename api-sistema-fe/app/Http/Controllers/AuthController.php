@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Services\StorageUrl;
 use Spatie\Permission\Models\Role;
 use Validator;
 
@@ -127,7 +128,7 @@ class AuthController extends Controller
             "user" => [
                 "fullname" => auth('api')->user()->name,
                 "email" => auth('api')->user()->email,
-                "avatar" => auth('api')->user()->avatar ? env('APP_URL') . '/storage/' . auth('api')->user()->avatar : null,
+                "avatar" => StorageUrl::resolve(auth('api')->user()->avatar),
                 "role" => [
                     "id" => auth('api')->user()->role->id,
                     "name" => auth('api')->user()->role->name,

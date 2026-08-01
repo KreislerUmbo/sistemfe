@@ -175,16 +175,24 @@ class DestinoAtractivoFotosTest extends TestCase
         $creado = $this->controller->store($request)->getData(true);
 
         $destinoId = $creado['destino_atractivo']['id'];
-        $path = $creado['destino_atractivo']['fotos'][0];
+        // BD sigue guardando el path relativo siempre (StorageUrl::resolve()
+        // solo transforma la respuesta JSON, nunca lo persistido).
+        $pathRelativo = DestinoAtractivo::find($destinoId)->fotos[0];
+        $urlResuelta = $creado['destino_atractivo']['fotos'][0];
 
-        $this->assertTrue(Storage::disk('public')->exists($path));
+        $this->assertTrue(Storage::disk('public')->exists($pathRelativo));
+        $this->assertStringEndsWith('/tenancy/assets/'.$pathRelativo, $urlResuelta);
 
-        $deleteRequest = $this->requestConDatos(['path' => $path]);
+        // El frontend reenvía tal cual lo que recibió de la respuesta (ya
+        // resuelto a URL completa) — eliminarFoto() debe normalizarlo de
+        // vuelta a path relativo (StorageUrl::relativo()) antes de comparar
+        // contra lo guardado en BD.
+        $deleteRequest = $this->requestConDatos(['path' => $urlResuelta]);
         $response = $this->controller->eliminarFoto($deleteRequest, (string) $destinoId);
         $data = $response->getData(true);
 
         $this->assertSame(200, $data['code']);
-        $this->assertFalse(Storage::disk('public')->exists($path));
+        $this->assertFalse(Storage::disk('public')->exists($pathRelativo));
         $this->assertEmpty(DestinoAtractivo::find($destinoId)->fotos);
     }
 

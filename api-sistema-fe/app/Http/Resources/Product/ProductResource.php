@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources\Product;
 
+use App\Services\StorageUrl;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -37,7 +38,7 @@ class ProductResource extends JsonResource
             'is_ivap' => $this->resource->is_ivap,   //'1 no y 2 si',
 
             'is_especial_nota' => $this->resource->is_especial_nota, //'1 es no y 2 si',
-            'imagen' => $this->resource->imagen ? env("APP_URL") . "storage/" . $this->resource->imagen : null,
+            'imagen' => StorageUrl::resolve($this->resource->imagen),
 
             // ── Campos SUNAT ─────────────────────────────────────────
             'tipo_bien_servicio' => $this->resource->tipo_bien_servicio ?? 'BIEN',

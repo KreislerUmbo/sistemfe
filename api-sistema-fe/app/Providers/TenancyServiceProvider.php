@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 use Stancl\JobPipeline\JobPipeline;
 use Stancl\Tenancy\Events;
+use Stancl\Tenancy\Controllers\TenantAssetsController;
 use Stancl\Tenancy\Jobs;
 use Stancl\Tenancy\Listeners;
 use Stancl\Tenancy\Middleware;
@@ -108,6 +109,22 @@ class TenancyServiceProvider extends ServiceProvider
         $this->makeTenancyMiddlewareHighestPriority();
 
         $this->handleTenantResolutionFailures();
+
+        $this->configureTenantAssetsMiddleware();
+    }
+
+    // El proyecto identifica tenants por SUBDOMINIO (ver 'tenant' =>
+    // InitializeTenancyBySubdomain::class en bootstrap/app.php, y la tabla
+    // domains que guarda solo el subdominio, ej. "agencia-demo", no el FQDN
+    // completo) — pero la ruta /tenancy/assets/{path} que el paquete registra
+    // solo si 'routes' => true (config/tenancy.php) trae hardcodeado
+    // InitializeTenancyByDomain (match contra el dominio completo), así que
+    // fallaba con TenantCouldNotBeIdentifiedOnDomainException para CUALQUIER
+    // tenant. Sin este override, tenant_asset() (helper del propio paquete)
+    // es inutilizable en este proyecto.
+    protected function configureTenantAssetsMiddleware()
+    {
+        TenantAssetsController::$tenancyMiddleware = Middleware\InitializeTenancyBySubdomain::class;
     }
 
     /**

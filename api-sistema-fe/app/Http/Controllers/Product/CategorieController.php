@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Product;
 
 use App\Http\Controllers\Controller;
 use App\Models\Product\Categorie;
+use App\Services\StorageUrl;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 
@@ -26,7 +27,7 @@ class CategorieController extends Controller
                 return [
                     'id' => $categorie->id,
                     'title' => $categorie->title,
-                    'imagen' => env('APP_URL') . "storage/" . $categorie->imagen,
+                    'imagen' => StorageUrl::resolve($categorie->imagen),
                     'state' => $categorie->state,
                     'created_at' => $categorie->created_at->format('d-m-Y' .' | '. 'H:i:s'),
                 ];
@@ -62,7 +63,7 @@ class CategorieController extends Controller
                 "categorie" =>   [
                     'id' => $categorie->id,
                     'title' => $categorie->title,
-                    'imagen' => env('APP_URL') . "storage/" . $categorie->imagen,
+                    'imagen' => StorageUrl::resolve($categorie->imagen),
                     'state' => $categorie->state,
                     'created_at' => $categorie->created_at,
                 ]
@@ -112,7 +113,7 @@ class CategorieController extends Controller
                 "categorie" =>   [
                     'id' => $categorie->id,
                     'title' => $categorie->title,
-                    'imagen' => env('APP_URL') . "storage/" . $categorie->imagen,
+                    'imagen' => StorageUrl::resolve($categorie->imagen),
                     'state' => $categorie->state,
                 ]
             ]

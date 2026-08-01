@@ -11,6 +11,7 @@ use App\Models\AgenciaViajes\TourItinerarioItem;
 use App\Services\AgenciaViajes\ComboExplosionService;
 use App\Services\AgenciaViajes\ComboValidationService;
 use App\Services\AgenciaViajes\FotoUploadService;
+use App\Services\StorageUrl;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -70,6 +71,7 @@ class PaquetePlantillaController extends Controller
             if ($paquete->esPaqueteCombo()) {
                 $paquete->setAttribute('precio_calculado', $this->comboExplosion->totalesCombo($paquete));
             }
+            $paquete->setAttribute('fotos', StorageUrl::resolveMuchas($paquete->fotos ?? []));
 
             return $paquete;
         });
@@ -100,6 +102,7 @@ class PaquetePlantillaController extends Controller
         }
 
         $paquete = PaquetePlantilla::create($validado);
+        $paquete->setAttribute('fotos', StorageUrl::resolveMuchas($paquete->fotos ?? []));
 
         return response()->json([
             'code' => 200,
@@ -135,6 +138,8 @@ class PaquetePlantillaController extends Controller
                 'tours_incluidos' => $this->comboExplosion->toursDelCombo($paquete)->values(),
             ];
         }
+
+        $paquete->setAttribute('fotos', StorageUrl::resolveMuchas($paquete->fotos ?? []));
 
         return response()->json([
             'paquete_plantilla' => $paquete,
@@ -228,6 +233,7 @@ class PaquetePlantillaController extends Controller
         }
 
         $paquete->update($validado);
+        $paquete->setAttribute('fotos', StorageUrl::resolveMuchas($paquete->fotos ?? []));
 
         return response()->json([
             'code' => 200,
