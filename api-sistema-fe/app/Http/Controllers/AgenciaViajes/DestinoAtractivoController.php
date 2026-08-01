@@ -8,6 +8,7 @@ use App\Models\AgenciaViajes\DestinoServicio;
 use App\Models\AgenciaViajes\GuiaTarifa;
 use App\Models\AgenciaViajes\TourItinerarioItem;
 use App\Services\AgenciaViajes\FotoUploadService;
+use App\Services\StorageUrl;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -30,6 +31,7 @@ class DestinoAtractivoController extends Controller
             $destinos = DestinoAtractivo::where('tipo', $request->get('tipo'))
                 ->orderBy('nombre')
                 ->get();
+            $destinos->each(fn ($d) => $this->resolverFotos($d));
 
             return response()->json(['destinos_atractivos' => $destinos]);
         }
@@ -40,8 +42,22 @@ class DestinoAtractivoController extends Controller
             ->with(['hijos' => fn ($q) => $q->orderBy('nombre'), 'hijos.hijos' => fn ($q) => $q->orderBy('nombre')])
             ->orderBy('nombre')
             ->get();
+        $arbol->each(fn ($d) => $this->resolverFotos($d));
 
         return response()->json(['destinos_atractivos' => $arbol]);
+    }
+
+    // Resuelve 'fotos' (paths relativos → URLs completas) en memoria, sobre
+    // el modelo que se va a serializar — nunca antes de guardar, para que la
+    // BD siga guardando paths relativos siempre. Recursivo sobre 'hijos' (si
+    // viene eager-cargada) porque index() devuelve el árbol anidado.
+    private function resolverFotos(DestinoAtractivo $destino): void
+    {
+        $destino->setAttribute('fotos', StorageUrl::resolveMuchas($destino->fotos ?? []));
+
+        if ($destino->relationLoaded('hijos')) {
+            $destino->hijos->each(fn ($hijo) => $this->resolverFotos($hijo));
+        }
     }
 
     public function store(Request $request)
@@ -63,6 +79,7 @@ class DestinoAtractivoController extends Controller
         }
 
         $destino = DestinoAtractivo::create($validado);
+        $this->resolverFotos($destino);
 
         return response()->json([
             'code' => 200,
@@ -97,6 +114,7 @@ class DestinoAtractivoController extends Controller
         }
 
         $destino->update($validado);
+        $this->resolverFotos($destino);
 
         return response()->json([
             'code' => 200,
@@ -119,7 +137,10 @@ class DestinoAtractivoController extends Controller
             return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
         }
 
-        $path = $request->get('path');
+        // El frontend puede reenviar tal cual lo que recibió de index()/show()
+        // (ya resuelto a URL completa) — normalizamos a path relativo antes
+        // de comparar contra lo guardado en BD (que siempre es relativo).
+        $path = StorageUrl::relativo($request->get('path'));
         $fotos = $destino->fotos ?? [];
 
         if (! in_array($path, $fotos, true)) {
@@ -135,6 +156,7 @@ class DestinoAtractivoController extends Controller
 
         $destino->fotos = array_values(array_diff($fotos, [$path]));
         $destino->save();
+        $this->resolverFotos($destino);
 
         return response()->json([
             'code' => 200,
@@ -159,7 +181,10 @@ class DestinoAtractivoController extends Controller
             return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
         }
 
-        $nuevoOrden = $request->get('fotos');
+        // Mismo criterio que eliminarFoto(): el frontend puede reenviar las
+        // URLs ya resueltas tal cual las recibió — normalizamos cada una a
+        // path relativo antes de comparar/guardar.
+        $nuevoOrden = array_map(fn ($p) => StorageUrl::relativo($p), $request->get('fotos'));
         $actuales = $destino->fotos ?? [];
 
         $nuevoOrdenamiento = $nuevoOrden;
@@ -176,6 +201,7 @@ class DestinoAtractivoController extends Controller
 
         $destino->fotos = array_values($nuevoOrden);
         $destino->save();
+        $this->resolverFotos($destino);
 
         return response()->json([
             'code' => 200,

@@ -987,6 +987,81 @@ inicial (Paso 0), Fase E cerrada en su alcance actual (2026-07-20/21):**
   bugs reales corregidos en el camino, ej. `Company::$fillable`/permisos de crédito no
   migrados, `CentralUser` sin `Authenticatable`, Carbon 3 `diffInDays()`).
 
+**Completo — URL de API dinámica en dev, multi-tenant simultáneo (2026-07-31, rama
+`feature/frontend-api-url-dinamica-dev`, mergeada a `main` en `399f3c5`):**
+- Fricción de desarrollo real: `VITE_API_BASE_URL` era un valor fijo en
+  `admin-start-kit/.env`, así que solo se podía probar UN tenant a la vez en dev — cambiar
+  de tenant exigía editar `.env` y reiniciar Vite.
+- `admin-start-kit/src/helpers/apiBaseUrl.ts::resolveApiBaseUrl()` (nuevo): en dev calcula
+  la URL de la API en el momento a partir del hostname actual
+  (`protocol//hostname:VITE_API_DEV_PORT/api`, puerto configurable, default 8000); en
+  producción sigue devolviendo `VITE_API_BASE_URL` fijo desde `.env`, sin cambios. Conectado
+  en los dos clientes HTTP existentes (`http-client.ts`/`publicHttpClient.ts` — únicos dos
+  usos de `VITE_API_BASE_URL` confirmados por grep en todo `src/`).
+- **Verificado con evidencia real** (Playwright, dos pestañas simultáneas contra el mismo
+  `npm run dev`, sin reiniciar ni tocar `.env`): pestaña `umbo.sistemafe.test:5173` hizo
+  login real contra `umbo.sistemafe.test:8000` (200, redirigió al dashboard) mientras la
+  pestaña `agencia-demo.sistemafe.test:5173`, abierta al mismo tiempo, pegó contra
+  `agencia-demo.sistemafe.test:8000` (401 con esas credenciales — tenant distinto, resultado
+  distinto, confirma que no se pisan).
+- Mismo commit incluye `chore(frontend): quita el prefijo /rizz_v/ del base path` — la app
+  ahora sirve directo en raíz (`vite.config.ts` `base: "/"`, antes `/rizz_v/`), confirmado
+  sin ninguna referencia hardcodeada al prefijo viejo restante en `src`/`public`.
+
+**Completo — URLs de storage tenant-aware (2026-07-31, rama
+`fix/infra-storage-urls-tenant-aware`, sin mergear todavía):**
+- Bug real confirmado con evidencia (imagen de un producto del tenant "umbo" mostrando URL
+  del tenant "agencia-demo"): `env('APP_URL')` fijo en 6 puntos del backend
+  (`AuthController`/avatar, `Portal/ProductController`/`ProductResource`/`CategorieController`
+  /imagen, `UserResource`/avatar) armaba URLs con el host de doNde sea que `.env` apuntara en
+  ese momento, no el del tenant que pedía. `App\Services\StorageUrl::resolve()`/
+  `resolveMuchas()` (nuevo) centraliza esto — ver regla completa en "Cómo trabajar en este
+  proyecto", arriba.
+- **`SystemCategoryController` deliberadamente excluido** — `SystemCategory` es central
+  (`CentralConnection`, catálogo/marketplace del SaaS), no corresponde resolverlo por tenant.
+- **Hallazgo más profundo, encontrado recién al verificar con navegador real (no solo
+  lectura de código)**: arreglar el host de la URL no bastaba. `public/storage` es un
+  symlink ESTÁTICO que Apache sirve directo (sin pasar por Laravel), siempre apuntando a la
+  carpeta CENTRAL (`storage/app/public`) — nunca a `storage/tenant{slug}/app/public/...`,
+  donde vive de verdad el archivo de cualquier tenant creado después del split a
+  multi-tenancy. Confirmado con evidencia real (403 en Apache real puerto 80, no solo
+  `php artisan serve`): **"umbo" (tenant original, pre-multitenant) "funcionaba" solo
+  porque sus archivos quedaron duplicados a mano en ambas carpetas** — cualquier tenant
+  nuevo (`agencia-demo` confirmado con un caso real, fotos de `destinos_atractivo` id=5) da
+  403 sin importar qué host tenga la URL.
+- Resuelto usando `tenant_asset()` (helper de `stancl/tenancy`, ruta
+  `/tenancy/assets/{path}`) en vez de un endpoint propio — ya estaba habilitado
+  (`asset_helper_tenancy`/`routes` en `true`) pero nunca usado. Necesitó un fix adicional:
+  el paquete registra esa ruta con `InitializeTenancyByDomain` hardcodeado, pero este
+  proyecto identifica tenants por SUBDOMINIO — sin
+  `TenancyServiceProvider::configureTenantAssetsMiddleware()` (nuevo, fuerza
+  `InitializeTenancyBySubdomain`), la ruta tiraba 500
+  (`TenantCouldNotBeIdentifiedOnDomainException`) para cualquier tenant.
+- `destinos_atractivos`/`paquetes_plantilla` (fotos, array): `resolveMuchas()` aplicado en
+  index/store/update/show de ambos controllers. `DestinoAtractivoController::eliminarFoto()`/
+  `ordenarFotos()` necesitaron además `StorageUrl::relativo()` (inverso) — el frontend ahora
+  recibe URLs ya resueltas y las reenvía tal cual al eliminar/reordenar, pero esos dos
+  endpoints comparan contra paths relativos guardados en BD.
+  `destinos/form.vue` perdió su `urlFoto()` local (reconstruía con `VITE_STORAGE_URL` a
+  mano); `portal/Producto.vue` perdió una reconstrucción ya muerta (el backend siempre
+  manda la URL resuelta). `recursos/*.vue` (central, `ManualRecurso`) y `sale/index.vue`
+  (XML/CDR SUNAT) se dejaron sin tocar — usos legítimamente distintos, confirmados uno por
+  uno antes de descartarlos.
+- Borrado `AuthController copy.php` (duplicado muerto, mismo nombre de clase que
+  `AuthController.php`, no autoloadeable, sin referencias).
+- **Verificado con navegador real** (Playwright): producto de `umbo` y fotos de
+  `destinos_atractivo` de `agencia-demo` cargan con `naturalWidth`/`naturalHeight` reales
+  (no ícono roto), cada uno con el host de su propio tenant; aislamiento cruzado confirmado
+  (pedir el archivo de un tenant vía el host de otro da 404). Test nuevo `StorageUrlTest.php`
+  (6 casos, dos hosts simulados en la misma corrida) + `DestinoAtractivoFotosTest.php`
+  actualizado (un caso asumía paths relativos en la respuesta JSON, ahora son URLs
+  resueltas). 92/92 tests verdes en total, sin regresión.
+- **Pendiente, mismo hallazgo pero otra cara, documentado sin resolver**: los archivos de
+  `SystemCategory`/`ManualRecurso` (central) se suben hoy al disco `public` *suffijado por
+  tenant* (`Storage::putFile()` sin disco central dedicado) — quedan aislados en la
+  partición del tenant activo al momento de subir, inconsistente con ser datos centrales que
+  deberían verse igual desde cualquier tenant. Evaluar en sesión dedicada.
+
 **Próximos módulos (en orden de prioridad):**
 
 1. **Representación impresa (PDF) con impresión automática**
@@ -1065,6 +1140,33 @@ propuesto que quedó obsoleto en cuanto se construyó el módulo real de Adelant
   `<router-link>`).
 
 ## Cómo trabajar en este proyecto
+- **Nunca usar `env('APP_URL')` (ni concatenar host+"/storage/"+path a mano) para construir
+  URLs de archivos servidos por tenant (avatar, imagen, foto).** Usar
+  `App\Services\StorageUrl::resolve()`/`resolveMuchas()`, que arma la URL con
+  `tenant_asset()` (helper de `stancl/tenancy`, ruta `/tenancy/assets/{path}`) — refleja
+  siempre el tenant de la petición actual, tanto en el HOST como en el archivo físico que
+  sirve. **Motivo, no solo estilo:** `public/storage` es un symlink ESTÁTICO (Apache lo
+  sirve directo, sin pasar por Laravel) que apunta siempre a la carpeta CENTRAL
+  (`storage/app/public`) — nunca a `storage/tenant{slug}/app/public/...`, que es donde vive
+  de verdad el archivo de cualquier tenant creado después del split a multi-tenancy. `/storage/`
+  directo da **403 para cualquier tenant salvo "umbo"** (el tenant original, con archivos
+  duplicados a mano desde antes del split — por eso ahí "funcionaba", tapando el bug).
+  `tenant_asset()` resuelve bien porque la ruta que genera corre DENTRO de una petición
+  Laravel bootstrapeada, donde `FilesystemTenancyBootstrapper` ya reescribió `storage_path()`
+  al tenant correcto. Requirió un fix adicional en
+  `App\Providers\TenancyServiceProvider::configureTenantAssetsMiddleware()`: el paquete
+  registra esa ruta con `InitializeTenancyByDomain` hardcodeado, pero este proyecto
+  identifica tenants por SUBDOMINIO (`InitializeTenancyBySubdomain`) — sin el override, la
+  ruta tira 500 (`TenantCouldNotBeIdentifiedOnDomainException`) para cualquier tenant.
+  **`SystemCategoryController`/`ManualRecursoController` quedan fuera de esta regla a
+  propósito**: `SystemCategory`/`ManualRecurso` son modelos CENTRALES
+  (`CentralConnection`, catálogo/marketplace del SaaS) — no correspondería resolverlos por
+  tenant. **Pendiente, no resuelto:** sus archivos SÍ se suben hoy al disco `public`
+  suffijado por tenant (`Storage::putFile()` sin disco central dedicado), así que un
+  archivo subido mientras se navega bajo un tenant queda físicamente aislado en la
+  partición de ESE tenant — inconsistente con que el dato sea central y debería verse
+  igual desde cualquier tenant. No es el mismo bug que el de arriba, pero es de la misma
+  familia (storage y tenancy no siempre coinciden) — evaluar en una sesión dedicada.
 - Antes de tocar lógica tributaria (IGV, exoneraciones, `resolverTipAfeIgv()`), revisar
   el flujo completo: producto → destino → tipo de operación, ya que estas reglas están
   interrelacionadas y un cambio aislado puede romper otro caso.

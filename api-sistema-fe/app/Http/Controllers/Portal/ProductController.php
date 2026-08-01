@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Portal;
 
 use App\Http\Controllers\Controller;
 use App\Models\Product\Product;
+use App\Services\StorageUrl;
 use Illuminate\Http\Request;
 
 class ProductController extends Controller
@@ -41,8 +42,7 @@ class ProductController extends Controller
                 'categoria' => $p->categorie->title ?? '',
                 'categoria_id' => $p->categorie_id,
                 'stock' => $p->stock,
-                'imagen' => asset('storage/' . $p->imagen),
-               // 'imagen' => $p->imagen ? env("APP_URL") . "storage/" . $p->imagen : null,
+                'imagen' => StorageUrl::resolve($p->imagen),
                 'descripcion' => $p->description ?? '',
                 'rating' => 4.5,
                 'ratingCount' => rand(10, 200)
@@ -69,7 +69,7 @@ class ProductController extends Controller
             'categoria' => $product->categorie->title ?? '',
             'categoria_id' => $product->categorie_id,
             'stock' => $product->stock,
-            'imagen' => $product->imagen ? env("APP_URL") . "storage/" . $product->imagen : null,
+            'imagen' => StorageUrl::resolve($product->imagen),
             'descripcion' => $product->description ?? '',
             'include_igv' => $product->include_igv,
             'especificaciones' => [

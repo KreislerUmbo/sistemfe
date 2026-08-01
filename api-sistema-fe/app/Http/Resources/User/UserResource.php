@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources\User;
 
+use App\Services\StorageUrl;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -28,7 +29,7 @@ class UserResource extends JsonResource
                 'name' => $this->resource->role->name,
             ],
             'phone' => $this->resource->phone,
-            'avatar' => $this->resource->avatar ? env("APP_URL") . "storage/" . $this->resource->avatar : null,
+            'avatar' => StorageUrl::resolve($this->resource->avatar),
             'type_document' => $this->resource->type_document,
             'n_document' => $this->resource->n_document,
             'gender' => $this->resource->gender,

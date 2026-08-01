@@ -975,3 +975,55 @@ deben perderse. No es un plan de módulo — para eso está `docs/planning/`.
   422 sobre una alternativa ya aceptada con reserva real (confirmado que
   sigue existiendo, no se borró). `npm run type-check`: sigue en 45
   errores preexistentes, ninguno nuevo en los 4 archivos tocados.
+
+## URL de API dinámica en dev + URLs de storage tenant-aware — 31-jul-2026
+
+- Fuera del vertical Agencia de Viajes — infraestructura transversal (frontend dev tooling +
+  bug real de storage multi-tenant), dos ramas separadas.
+- **`feature/frontend-api-url-dinamica-dev` — CERRADA, mergeada a `main` (`399f3c5`)**:
+  `admin-start-kit/src/helpers/apiBaseUrl.ts::resolveApiBaseUrl()` calcula la URL de la API
+  en dev desde el hostname actual (antes: `VITE_API_BASE_URL` fijo en `.env`, solo se podía
+  probar un tenant a la vez sin reiniciar Vite). Verificado con Playwright: pestañas de
+  `umbo` y `agencia-demo` abiertas a la vez contra el mismo `npm run dev`, cada una pegando
+  a su propio backend (`umbo` 200 real, `agencia-demo` 401 con esas credenciales — tenants
+  distintos, sin pisarse). Mismo commit: `chore` quitando el prefijo `/rizz_v/` del base
+  path (`vite.config.ts`, confirmado sin referencias hardcodeadas restantes).
+- **`fix/infra-storage-urls-tenant-aware` — construida y verificada, sin mergear
+  todavía**: bug real confirmado con evidencia (imagen de un producto de "umbo" mostrando
+  URL de "agencia-demo") — 6 puntos del backend armaban URLs con `env('APP_URL')` fijo.
+  `App\Services\StorageUrl::resolve()`/`resolveMuchas()` nuevo, centraliza esto.
+  `SystemCategoryController` (central, `SystemCategory`) deliberadamente excluido — no le
+  corresponde resolución por tenant.
+  - **Hallazgo real más profundo, encontrado recién al verificar con navegador (no por
+    lectura de código)**: arreglar el host de la URL no bastaba. `public/storage` es un
+    symlink ESTÁTICO que Apache sirve directo, sin pasar por Laravel — siempre apunta a la
+    carpeta CENTRAL (`storage/app/public`), nunca a `storage/tenant{slug}/app/public/...`
+    (donde vive de verdad el archivo de cualquier tenant posterior al split). Confirmado con
+    403 real en Apache puerto 80 (no solo `php artisan serve`): "umbo" (tenant original,
+    pre-multitenant) "funcionaba" solo porque sus archivos quedaron duplicados a mano en
+    ambas carpetas — cualquier tenant nuevo (`agencia-demo`, caso real con fotos de un
+    `destino_atractivo`) daba 403 sin importar el host de la URL.
+  - Resuelto con `tenant_asset()` (helper de `stancl/tenancy`, no un endpoint propio —
+    confirmado que ya estaba habilitado en `config/tenancy.php` pero nunca usado). Necesitó
+    un fix adicional real: el paquete registra su ruta con `InitializeTenancyByDomain`
+    hardcodeado, pero este proyecto identifica tenants por SUBDOMINIO — sin
+    `TenancyServiceProvider::configureTenantAssetsMiddleware()` (nuevo), la ruta tiraba 500
+    (`TenantCouldNotBeIdentifiedOnDomainException`) para cualquier tenant, confirmado antes
+    del fix.
+  - `destinos_atractivos`/`paquetes_plantilla` (fotos, array) actualizados en los 4
+    controllers relevantes. `DestinoAtractivoController::eliminarFoto()`/`ordenarFotos()`
+    necesitaron `StorageUrl::relativo()` (inverso) porque el frontend ahora reenvía URLs ya
+    resueltas donde antes mandaba paths relativos crudos.
+  - Borrado `AuthController copy.php` (duplicado muerto, mismo nombre de clase, sin
+    referencias, no autoloadeable).
+  - **Verificado con navegador real (Playwright)**: producto de `umbo` y fotos de
+    `destinos_atractivo` de `agencia-demo` cargan con `naturalWidth`/`naturalHeight` reales
+    (no ícono roto), aislamiento cruzado confirmado (pedir el archivo de un tenant con el
+    host de otro da 404). 92/92 tests backend verdes (`StorageUrlTest.php` nuevo,
+    `DestinoAtractivoFotosTest.php` actualizado, sin otra regresión).
+  - **Pendiente, mismo hallazgo — otra cara, documentado sin resolver**: `SystemCategory`/
+    `ManualRecurso` (central) suben sus archivos hoy al disco `public` *suffijado por
+    tenant* — quedan aislados en la partición del tenant activo al subir, inconsistente con
+    ser datos centrales. No resuelto en esta sesión, evaluar aparte.
+- Ambos hallazgos (el de dev tooling y el de storage) documentados también en `CLAUDE.md`
+  ("Estado actual del proyecto" + regla nueva en "Cómo trabajar en este proyecto").

@@ -275,11 +275,6 @@ const cargarProducto = async () => {
   try {
     const data = await productoService.obtenerPorId(id)
     producto.value = data
-    // Ajustar imagen si es relativa
-    if (producto.value.imagen && !producto.value.imagen.startsWith('http')) {
-      const storageUrl = import.meta.env.VITE_STORAGE_URL || 'http://localhost:8000/storage'
-      producto.value.imagen = `${storageUrl}/${producto.value.imagen}`
-    }
     // Asegurar especificaciones si vienen vacías
     if (!producto.value.especificaciones || producto.value.especificaciones.length === 0) {
       producto.value.especificaciones = [

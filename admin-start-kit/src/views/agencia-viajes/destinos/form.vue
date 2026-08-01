@@ -91,7 +91,7 @@
                     <small class="text-muted d-block mb-2">Fotos guardadas — la primera es la portada</small>
                     <div class="d-flex flex-wrap gap-2">
                         <div v-for="(path, index) in fotosExistentes" :key="path" class="foto-item position-relative" :class="{ 'is-portada': index === 0 }">
-                            <img :src="urlFoto(path)" class="img-thumbnail" style="width:110px;height:110px;object-fit:cover;">
+                            <img :src="path" class="img-thumbnail" style="width:110px;height:110px;object-fit:cover;">
                             <button class="btn btn-danger btn-sm position-absolute top-0 end-0 m-1" title="Eliminar" @click="eliminarFotoExistente(path)">
                                 <i class="fas fa-times"></i>
                             </button>
@@ -230,11 +230,6 @@ const cargarDatosIniciales = async () => {
     } catch (error) {
         console.log(error);
     }
-};
-
-const urlFoto = (path: string): string => {
-    const base = (import.meta.env.VITE_STORAGE_URL as string | undefined) ?? '';
-    return `${base.replace(/\/$/, '')}/storage/${path}`;
 };
 
 const onArchivosSeleccionados = (event: Event) => {
