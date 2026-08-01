@@ -18,6 +18,9 @@
 /public/storage
 /storage/*.key
 /storage/pail
+# storage particionado por tenant (FilesystemTenancyBootstrapper) — runtime,
+# no código fuente. Ver CLAUDE.md "storage/tenant{slug}/app/public/...".
+/storage/tenant*/
 /vendor
 Homestead.json
 Homestead.yaml
