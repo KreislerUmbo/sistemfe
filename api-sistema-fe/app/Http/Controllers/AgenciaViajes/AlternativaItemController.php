@@ -7,9 +7,12 @@ use App\Models\AgenciaViajes\Alternativa;
 use App\Models\AgenciaViajes\AlternativaItem;
 use App\Models\AgenciaViajes\CotizacionPasajeAereo;
 use App\Models\AgenciaViajes\CotizacionPasajero;
+use App\Models\AgenciaViajes\GuiaTarifa;
 use App\Models\AgenciaViajes\OpcionHotelTarifa;
 use App\Models\AgenciaViajes\OpcionMayorista;
+use App\Models\AgenciaViajes\PaquetePlantilla;
 use App\Models\AgenciaViajes\ProveedorTarifa;
+use App\Services\AgenciaViajes\ComboExplosionService;
 use App\Services\AgenciaViajes\PriceEngineService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -23,8 +26,10 @@ use Illuminate\Support\Facades\Validator;
 // descuento_pct/precio_convertido con validación de piso.
 class AlternativaItemController extends Controller
 {
-    public function __construct(private PriceEngineService $priceEngine)
-    {
+    public function __construct(
+        private PriceEngineService $priceEngine,
+        private ComboExplosionService $comboExplosion
+    ) {
     }
 
     public function store(Request $request, string $alternativaId)
@@ -151,6 +156,158 @@ class AlternativaItemController extends Controller
         return response()->json(['code' => 200, 'message' => 'Ítem eliminado correctamente']);
     }
 
+    // Sesión 11b3 (Parte A) — "cargar desde plantilla": explota TODOS los
+    // ítems de un tour_simple/paquete_combo en la alternativa activa,
+    // resueltos en vivo contra su proveedor_tarifa real (nunca copia
+    // precio_venta_final del catálogo como un solo número — mismo criterio
+    // ya usado por clicBibliotecaItem() para un ítem suelto, en bucle).
+    // Reusa ComboExplosionService::explotarTourSimple()/explotarItems() —
+    // mismo motor que ya resuelve el precio "calculado" que el vendedor ve
+    // en el catálogo (paquetes/detalle.vue), así que el total acá siempre
+    // coincide con el que ya vio ahí.
+    public function desdePlantilla(Request $request, string $alternativaId)
+    {
+        $alternativa = Alternativa::findOrFail($alternativaId);
+
+        $validator = Validator::make($request->all(), [
+            'paquete_plantilla_id' => 'required|integer|exists:paquetes_plantilla,id',
+            'dia_referencial' => 'required|integer|min:1',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
+        }
+
+        $validado = $validator->validated();
+        $paquete = PaquetePlantilla::findOrFail($validado['paquete_plantilla_id']);
+
+        $entradas = $paquete->esPaqueteCombo()
+            ? $this->comboExplosion->explotarItems($paquete)
+            : $this->comboExplosion->explotarTourSimple($paquete);
+
+        $itemsCreados = [];
+        $guiasPendientes = [];
+
+        DB::transaction(function () use ($alternativa, $entradas, $validado, &$itemsCreados, &$guiasPendientes) {
+            foreach ($entradas as $entrada) {
+                if ($entrada['proveedor_tarifa_id']) {
+                    $tarifa = ProveedorTarifa::findOrFail($entrada['proveedor_tarifa_id']);
+
+                    $itemsCreados[] = AlternativaItem::create([
+                        'alternativa_id' => $alternativa->id,
+                        'origen_tipo' => AlternativaItem::ORIGEN_PROVEEDOR,
+                        'proveedor_tarifa_id' => $tarifa->id,
+                        'tour_origen_id' => $entrada['tour_origen_id'],
+                        'dia_referencial' => $validado['dia_referencial'],
+                        // tarifa_fija/cantidad=1: el precio que trae la
+                        // explosión ya es el tier adulto plano, sin repartir
+                        // por pax — mismo criterio que el precio "calculado"
+                        // del catálogo (totalesTour()/totalesCombo()). Usar
+                        // por_persona acá multiplicaría de nuevo y el total
+                        // dejaría de coincidir con lo que el vendedor vio en
+                        // el catálogo antes de cargarlo.
+                        'modo_precio' => 'tarifa_fija',
+                        'cantidad' => 1,
+                        'moneda_costo' => $tarifa->moneda,
+                        'costo_snapshot' => $entrada['costo'],
+                        'precio_venta_snapshot' => $entrada['venta'],
+                        'precio_convertido' => $this->convertirMoneda($entrada['venta'], $tarifa->moneda, $alternativa->moneda_cotizacion, (float) $alternativa->tipo_cambio_aplicado),
+                    ]);
+
+                    continue;
+                }
+
+                if ($entrada['guia_tarifa_id']) {
+                    // Sin equivalente en alternativa_items (no hay columna
+                    // guia_tarifa_id) — §3.7: se avisa, no se persiste, no
+                    // bloquea el resto de la carga.
+                    $guiaTarifa = GuiaTarifa::with(['guia', 'destino'])->find($entrada['guia_tarifa_id']);
+                    $tourOrigen = PaquetePlantilla::find($entrada['tour_origen_id']);
+
+                    $guiasPendientes[] = [
+                        'tour_origen_id' => $entrada['tour_origen_id'],
+                        'tour_origen_nombre' => $tourOrigen?->nombre,
+                        'guia_nombre' => $guiaTarifa?->guia?->nombre,
+                        'destino_nombre' => $guiaTarifa?->destino?->nombre,
+                    ];
+                }
+            }
+
+            $this->recalcularTotalAlternativa($alternativa);
+        });
+
+        return response()->json([
+            'code' => 200,
+            'message' => 'Plantilla cargada correctamente',
+            'items_agregados' => $itemsCreados,
+            'guias_pendientes' => $guiasPendientes,
+            'resumen' => [
+                'tours' => $paquete->esPaqueteCombo() ? $this->comboExplosion->toursDelCombo($paquete)->count() : null,
+                'items' => count($itemsCreados),
+            ],
+        ]);
+    }
+
+    // Sesión 11b3 — reasignar el día de un ítem SUELTO (sin tour_origen_id).
+    // Los ítems que pertenecen a un bloque de tour se mueven juntos, ver
+    // moverBloque() — separado de update() (piso/descuento) a propósito: es
+    // otro concern y no debía arriesgar esa validación ya verificada.
+    public function reasignarDia(Request $request, string $id)
+    {
+        $item = AlternativaItem::findOrFail($id);
+
+        $validator = Validator::make($request->all(), [
+            'dia_referencial' => 'required|integer|min:1',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
+        }
+
+        if ($item->tour_origen_id !== null) {
+            return response()->json([
+                'code' => 422,
+                'message' => 'Este ítem pertenece a un bloque de tour — mové todo el bloque desde su encabezado.',
+            ], 422);
+        }
+
+        $item->update(['dia_referencial' => $validator->validated()['dia_referencial']]);
+
+        return response()->json(['code' => 200, 'message' => 'Ítem movido correctamente', 'alternativa_item' => $item->fresh()]);
+    }
+
+    // Reasigna el día de TODOS los ítems de un mismo tour_origen_id juntos —
+    // §7.1, decisión confirmada con el usuario: un bloque de tour se mueve
+    // como unidad, no ítem por ítem.
+    public function moverBloque(Request $request, string $alternativaId)
+    {
+        $alternativa = Alternativa::findOrFail($alternativaId);
+
+        $validator = Validator::make($request->all(), [
+            'tour_origen_id' => 'required|integer',
+            'dia_referencial' => 'required|integer|min:1',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
+        }
+
+        $validado = $validator->validated();
+
+        $actualizados = AlternativaItem::where('alternativa_id', $alternativa->id)
+            ->where('tour_origen_id', $validado['tour_origen_id'])
+            ->update(['dia_referencial' => $validado['dia_referencial']]);
+
+        if ($actualizados === 0) {
+            return response()->json([
+                'code' => 422,
+                'message' => 'No se encontraron ítems de ese tour en esta alternativa.',
+            ], 422);
+        }
+
+        return response()->json(['code' => 200, 'message' => 'Bloque movido correctamente']);
+    }
+
     // ── origen_tipo=proveedor ─────────────────────────────────────────
     private function crearItemProveedor(Request $request, Alternativa $alternativa): JsonResponse
     {
@@ -164,6 +321,8 @@ class AlternativaItemController extends Controller
             'moneda_costo' => 'required_without:proveedor_tarifa_id|nullable|in:PEN,USD',
             'precio_venta_snapshot' => 'required_without:proveedor_tarifa_id|nullable|numeric|min:0',
             'costo_snapshot' => 'nullable|numeric|min:0',
+            // Día activo del lienzo al momento de agregar — Sesión 11b3 (§7.1).
+            'dia_referencial' => 'nullable|integer|min:1',
         ]);
 
         if ($validator->fails()) {
@@ -208,6 +367,7 @@ class AlternativaItemController extends Controller
             'costo_snapshot' => $costoSnapshot,
             'precio_venta_snapshot' => $precioVentaSnapshot,
             'precio_convertido' => $this->convertirMoneda($precioVentaSnapshot, $monedaCosto, $alternativa->moneda_cotizacion, (float) $alternativa->tipo_cambio_aplicado),
+            'dia_referencial' => $validado['dia_referencial'] ?? null,
         ]);
 
         $this->recalcularTotalAlternativa($alternativa);
@@ -223,6 +383,7 @@ class AlternativaItemController extends Controller
             'opcion_hotel_tarifa_id' => 'required|integer|exists:opciones_hotel_tarifas,id',
             'cantidad' => 'nullable|integer|min:1',
             'pax_incluidos' => 'nullable|array',
+            'dia_referencial' => 'nullable|integer|min:1',
         ]);
 
         if ($validator->fails()) {
@@ -255,6 +416,7 @@ class AlternativaItemController extends Controller
             'costo_snapshot' => $tarifaHotel->precio_costo,
             'precio_venta_snapshot' => $tarifaHotel->precio_venta,
             'precio_convertido' => $this->convertirMoneda((float) $tarifaHotel->precio_venta, $opcion->moneda, $alternativa->moneda_cotizacion, (float) $alternativa->tipo_cambio_aplicado),
+            'dia_referencial' => $validado['dia_referencial'] ?? null,
         ]);
 
         $this->recalcularTotalAlternativa($alternativa);
@@ -301,6 +463,7 @@ class AlternativaItemController extends Controller
                 'costo_snapshot' => $resultado['costo_total'],
                 'precio_venta_snapshot' => $resultado['venta_total'],
                 'precio_convertido' => $this->convertirMoneda($resultado['venta_total'], $validado['moneda'], $alternativa->moneda_cotizacion, (float) $alternativa->tipo_cambio_aplicado),
+                'dia_referencial' => $validado['dia_referencial'] ?? null,
             ]);
 
             CotizacionPasajeAereo::create([
@@ -346,6 +509,7 @@ class AlternativaItemController extends Controller
             'fee_agencia_monto' => 'nullable|numeric|min:0',
             'tip_afe_igv' => 'nullable|string|max:2',
             'pax_incluidos' => 'nullable|array',
+            'dia_referencial' => 'nullable|integer|min:1',
         ]);
 
         if ($validator->fails()) {
@@ -387,6 +551,7 @@ class AlternativaItemController extends Controller
             'descripcion_manual' => 'required|string|max:500',
             'precio_venta_snapshot' => 'required|numeric|min:0',
             'moneda_costo' => 'required|in:PEN,USD',
+            'dia_referencial' => 'nullable|integer|min:1',
         ]);
 
         if ($validator->fails()) {
@@ -409,6 +574,7 @@ class AlternativaItemController extends Controller
             'moneda_costo' => $validado['moneda_costo'],
             'precio_venta_snapshot' => $validado['precio_venta_snapshot'],
             'precio_convertido' => $this->convertirMoneda((float) $validado['precio_venta_snapshot'], $validado['moneda_costo'], $alternativa->moneda_cotizacion, (float) $alternativa->tipo_cambio_aplicado),
+            'dia_referencial' => $validado['dia_referencial'] ?? null,
         ]);
 
         $this->recalcularTotalAlternativa($alternativa);

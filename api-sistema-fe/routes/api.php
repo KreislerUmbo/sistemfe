@@ -3,6 +3,7 @@
 use App\Http\Controllers\Advance\AdvanceController;
 use App\Http\Controllers\AgenciaViajes\AlternativaController;
 use App\Http\Controllers\AgenciaViajes\AlternativaItemController;
+use App\Http\Controllers\AgenciaViajes\BibliotecaCotizadorController;
 use App\Http\Controllers\AgenciaViajes\ConfiguracionAgenciaController;
 use App\Http\Controllers\AgenciaViajes\CotizacionController;
 use App\Http\Controllers\AgenciaViajes\DestinoAtractivoController;
@@ -486,6 +487,11 @@ Route::group([
     // (segmentos distintos) pero se agrupa acá por pertenecer al mismo flujo.
     Route::get("proveedor-tarifas", [ProveedorTarifaController::class, 'biblioteca'])
         ->middleware('permission:agencia.cotizaciones');
+    // Sesión 11b3 — biblioteca unificada (tour/paquete/proveedor_tarifa en un
+    // solo endpoint, ver BibliotecaCotizadorController). No reemplaza la ruta
+    // de arriba, que sigue usada por paquetes/detalle.vue.
+    Route::get("biblioteca-cotizador", [BibliotecaCotizadorController::class, 'index'])
+        ->middleware('permission:agencia.cotizaciones');
 
     Route::get("cotizaciones", [CotizacionController::class, 'index'])
         ->middleware('permission:agencia.cotizaciones');
@@ -515,6 +521,16 @@ Route::group([
     Route::put("alternativa-items/{id}", [AlternativaItemController::class, 'update'])
         ->middleware('permission:agencia.cotizaciones');
     Route::delete("alternativa-items/{id}", [AlternativaItemController::class, 'destroy'])
+        ->middleware('permission:agencia.cotizaciones');
+
+    // Sesión 11b3 (Parte A) — cargar un tour_simple/paquete_combo entero en
+    // la alternativa (explota todos sus ítems, ver AlternativaItemController::
+    // desdePlantilla()) + reasignación de día (lienzo día-por-día, §7.1).
+    Route::post("alternativas/{id}/items/desde-plantilla", [AlternativaItemController::class, 'desdePlantilla'])
+        ->middleware('permission:agencia.cotizaciones');
+    Route::put("alternativa-items/{id}/dia", [AlternativaItemController::class, 'reasignarDia'])
+        ->middleware('permission:agencia.cotizaciones');
+    Route::put("alternativas/{id}/items/mover-bloque", [AlternativaItemController::class, 'moverBloque'])
         ->middleware('permission:agencia.cotizaciones');
 
     Route::get("alternativas/{id}/opciones-mayorista", [OpcionMayoristaController::class, 'index'])

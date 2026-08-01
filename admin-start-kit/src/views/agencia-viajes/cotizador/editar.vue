@@ -142,10 +142,18 @@
                 <!-- Biblioteca local -->
                 <div v-if="modo === 'local'" class="card border-0 shadow-sm">
                     <div class="card-body p-2">
-                        <input type="text" class="form-control form-control-sm mb-2" placeholder="Buscar servicio..."
+                        <div class="d-flex flex-wrap gap-1 mb-2">
+                            <span v-for="chip in chipsBiblioteca" :key="chip.tipo + '-' + (chip.proveedorTipoId ?? '')"
+                                class="badge rounded-pill px-2 py-1" style="cursor:pointer;font-weight:500;"
+                                :class="chipActivo(chip) ? 'bg-primary' : 'bg-light text-dark border'"
+                                @click="seleccionarChip(chip)">
+                                {{ chip.nombre }}
+                            </span>
+                        </div>
+                        <input type="text" class="form-control form-control-sm mb-2" placeholder="Buscar..."
                             v-model="bibliotecaSearch" @input="onBibliotecaSearch">
                         <div class="d-flex flex-column gap-2" style="max-height:480px;overflow-y:auto;">
-                            <div v-for="t in bibliotecaAgrupada" :key="t.id" class="border rounded p-2 small lib-item" style="cursor:pointer"
+                            <div v-for="t in bibliotecaProveedorAgrupada" :key="'pt-' + t.id" class="border rounded p-2 small lib-item" style="cursor:pointer"
                                 @click="clicBibliotecaItem(t)">
                                 <div class="d-flex justify-content-between">
                                     <span>
@@ -160,9 +168,24 @@
                                     <span v-if="t.tipo_habitacion"> · {{ t._rangoHabitaciones ? 'varias habitaciones' : t.tipo_habitacion }}</span>
                                 </div>
                             </div>
-                            <div v-if="bibliotecaAgrupada.length === 0" class="text-muted small text-center py-3">Sin tarifas encontradas.</div>
+                            <div v-for="p in bibliotecaToursPaquetes" :key="'tp-' + p.id" class="border rounded p-2 small lib-item" style="cursor:pointer"
+                                @click="clicResultadoPlantilla(p)">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <span>
+                                        <i class="fas me-1 text-primary" :class="p.tipo_resultado === 'paquete' ? 'fa-layers' : 'fa-suitcase-rolling'"></i>
+                                        {{ p.nombre }}
+                                    </span>
+                                    <span class="badge bg-info-subtle text-info border" style="font-size:10px;white-space:nowrap">
+                                        {{ p.resumen_items.tours != null ? `${p.resumen_items.tours} tours · ${p.resumen_items.items} ítems` : `${p.resumen_items.items} ítems` }}
+                                    </span>
+                                </div>
+                                <div class="text-muted" style="font-size:11px">
+                                    {{ etiquetaCategoriaPaquete(p.categoria) }}<span v-if="p.codigo"> · {{ p.codigo }}</span>
+                                </div>
+                            </div>
+                            <div v-if="bibliotecaProveedorAgrupada.length === 0 && bibliotecaToursPaquetes.length === 0" class="text-muted small text-center py-3">Sin resultados.</div>
                         </div>
-                        <small class="text-muted d-block mt-2"><i class="fas fa-hand-pointer me-1"></i>Clic para agregar a la alternativa activa</small>
+                        <small class="text-muted d-block mt-2"><i class="fas fa-hand-pointer me-1"></i>Clic para agregar al día activo</small>
                     </div>
                     <div class="card-footer bg-white border-0 p-2">
                         <button class="btn btn-outline-secondary btn-sm w-100" @click="mostrarFormManual = true"><i class="fas fa-plus me-1"></i>Ítem manual</button>
@@ -232,33 +255,68 @@
 
             <!-- ═══ COLUMNA CENTRO: lienzo ═══ -->
             <div class="col-12 col-lg-6">
+                <!-- Tabs de día — nivel de navegación DISTINTO de las pestañas de
+                     alternativa de arriba (esas son rounded-pill bg-primary; estas
+                     usan bg-secondary para no confundirse visualmente). -->
+                <div class="d-flex align-items-center gap-1 mb-2 flex-wrap">
+                    <span v-for="d in diasCreados" :key="d" class="badge rounded-pill px-3 py-2"
+                        :class="diaActivo === d ? 'bg-secondary' : 'bg-light text-dark border'"
+                        style="cursor:pointer" @click="diaActivo = d">
+                        Día {{ d }}
+                    </span>
+                    <span v-if="itemsSinDia.length" class="badge rounded-pill px-3 py-2"
+                        :class="diaActivo === 0 ? 'bg-secondary' : 'bg-light text-dark border'"
+                        style="cursor:pointer" @click="diaActivo = 0">
+                        Sin día ({{ itemsSinDia.length }})
+                    </span>
+                    <span class="badge rounded-pill px-3 py-2 bg-light text-dark border"
+                        style="cursor:pointer;border-style:dashed" @click="agregarDia">
+                        <i class="fas fa-plus me-1"></i>Día
+                    </span>
+                </div>
+
                 <div class="card border-0 shadow-sm">
                     <div class="card-body">
-                        <div v-if="(alternativaActiva.items?.length ?? 0) === 0" class="drop-hint text-center text-muted py-4 border rounded" style="border-style:dashed">
+                        <div v-if="bloquesDelDiaActivo.length === 0" class="drop-hint text-center text-muted py-4 border rounded" style="border-style:dashed">
                             Agregá un servicio desde la biblioteca de la izquierda
                         </div>
-                        <div v-for="item in alternativaActiva.items" :key="item.id" class="canvas-item border rounded p-2 mb-2 small">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <span>
-                                    <i class="fas me-2 text-primary" :class="iconoItem(item)"></i>
-                                    {{ etiquetaItem(item) }}
-                                    <span v-if="item.cantidad > 1 && item.modo_precio === 'tarifa_fija' && item.origen_tipo !== 'manual'" class="text-muted"> × {{ item.cantidad }}</span>
-                                </span>
-                                <span class="d-flex align-items-center gap-2">
-                                    <strong>{{ alternativaActiva.moneda_cotizacion }} {{ Number(item.total_convertido).toFixed(2) }}</strong>
-                                    <i class="fas fa-times text-danger" style="cursor:pointer" @click="eliminarItem(item)"></i>
-                                </span>
+
+                        <div v-for="bloque in bloquesDelDiaActivo" :key="bloque.tourOrigenId ?? 'sueltos'" class="mb-3">
+                            <div v-if="bloque.tourOrigenId" class="d-flex justify-content-between align-items-center mb-1">
+                                <span class="small fw-semibold text-dark"><i class="fas fa-route me-1 text-primary"></i>{{ bloque.tourNombre ?? 'Tour' }}</span>
+                                <select class="form-select form-select-sm" style="width:auto;font-size:11px" :value="diaActivo" @change="onMoverBloque(bloque, $event)">
+                                    <option v-for="d in diasCreados" :key="d" :value="d">Mover a Día {{ d }}</option>
+                                    <option :value="diaSiguiente">Mover a Día {{ diaSiguiente }} (nuevo)</option>
+                                </select>
                             </div>
-                            <div class="text-muted mt-1" style="font-size:11px" v-if="item.origen_tipo === 'pasaje_aereo' && item.cotizacion_pasaje_aereo">
-                                {{ item.cotizacion_pasaje_aereo.aerolinea }}
+
+                            <div v-for="item in bloque.items" :key="item.id" class="canvas-item border rounded p-2 mb-2 small" :class="{ 'ms-3': bloque.tourOrigenId }">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <span>
+                                        <i class="fas me-2 text-primary" :class="iconoItem(item)"></i>
+                                        {{ etiquetaItem(item) }}
+                                        <span v-if="item.cantidad > 1 && item.modo_precio === 'tarifa_fija' && item.origen_tipo !== 'manual'" class="text-muted"> × {{ item.cantidad }}</span>
+                                    </span>
+                                    <span class="d-flex align-items-center gap-2">
+                                        <strong>{{ alternativaActiva.moneda_cotizacion }} {{ Number(item.total_convertido).toFixed(2) }}</strong>
+                                        <select v-if="!bloque.tourOrigenId" class="form-select form-select-sm" style="width:auto;font-size:11px" :value="item.dia_referencial ?? ''" @change="onReasignarDiaItem(item, $event)">
+                                            <option value="" disabled>Sin día</option>
+                                            <option v-for="d in diasCreados" :key="d" :value="d">Día {{ d }}</option>
+                                        </select>
+                                        <i class="fas fa-times text-danger" style="cursor:pointer" @click="eliminarItem(item)"></i>
+                                    </span>
+                                </div>
+                                <div class="text-muted mt-1" style="font-size:11px" v-if="item.origen_tipo === 'pasaje_aereo' && item.cotizacion_pasaje_aereo">
+                                    {{ item.cotizacion_pasaje_aereo.aerolinea }}
+                                </div>
                             </div>
                         </div>
 
                         <div v-if="mostrarFormManual" class="border rounded p-2 mt-2">
-                            <ItemManualForm :alternativa-id="alternativaActiva.id" @agregado="onItemAgregado" />
+                            <ItemManualForm :alternativa-id="alternativaActiva.id" :dia-activo="diaActivoParaAgregar" @agregado="onItemAgregado" />
                         </div>
                         <div v-if="mostrarFormPasajeAereo" class="border rounded p-2 mt-2">
-                            <PasajeAereoForm :alternativa-id="alternativaActiva.id" @agregado="onItemAgregado" />
+                            <PasajeAereoForm :alternativa-id="alternativaActiva.id" :dia-activo="diaActivoParaAgregar" @agregado="onItemAgregado" />
                         </div>
                         <button class="btn btn-outline-secondary btn-sm mt-2" @click="mostrarFormPasajeAereo = !mostrarFormPasajeAereo">
                             <i class="fas fa-plane me-1"></i>{{ mostrarFormPasajeAereo ? 'Cerrar' : 'Agregar pasaje aéreo suelto' }}
@@ -349,8 +407,9 @@ import { alternativaService } from '@/services/admin/alternativaService';
 import { alternativaItemService } from '@/services/admin/alternativaItemService';
 import { opcionMayoristaService } from '@/services/admin/opcionMayoristaService';
 import { proveedorService, proveedorTipoService } from '@/services/admin/proveedorService';
+import { bibliotecaCotizadorService, type BibliotecaTipo } from '@/services/admin/bibliotecaCotizadorService';
 import { reservaService } from '@/services/admin/reservaService';
-import type { Cotizacion, Alternativa, AlternativaItem, ProveedorTarifa, OpcionMayorista, Proveedor } from '@/types/agencia-viajes';
+import type { Cotizacion, Alternativa, AlternativaItem, ProveedorTarifa, OpcionMayorista, Proveedor, ProveedorTipo, BibliotecaResultado } from '@/types/agencia-viajes';
 import type { Client } from '@/types/clients';
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
@@ -462,6 +521,7 @@ const cargarCotizacion = async () => {
         alternativaActivaId.value = cotizacion.value.alternativas[0].id;
     }
     inicializarEdicionItems();
+    inicializarDias();
 };
 
 const seleccionarAlternativa = (id: number) => {
@@ -530,15 +590,137 @@ const eliminarAlternativa = async () => {
     }
 };
 
-// ── Biblioteca local ──────────────────────────────────────────────────
+// ── Lienzo día-por-día (Sesión 11b3, §7.1) ─────────────────────────────
+// diaActivo=0 es el sentinel "Sin día" (bucket de solo-lectura para ítems
+// creados antes de esta sesión, dia_referencial=null) — NO es un día real,
+// nunca se manda al backend como destino (reasignarDia/desde-plantilla
+// exigen min:1). diaActivoParaAgregar resuelve ese caso a un día real.
+const diaActivo = ref(1);
+const diasCreados = ref<number[]>([1]);
+
+const inicializarDias = () => {
+    const items = alternativaActiva.value?.items ?? [];
+    const maxDia = items.reduce((max, it) => Math.max(max, it.dia_referencial ?? 0), 1);
+    diasCreados.value = Array.from({ length: maxDia }, (_, i) => i + 1);
+    if (!diasCreados.value.includes(diaActivo.value) && diaActivo.value !== 0) {
+        diaActivo.value = diasCreados.value[0] ?? 1;
+    }
+};
+
+const diaSiguiente = computed(() => (diasCreados.value.length ? Math.max(...diasCreados.value) : 0) + 1);
+const diaActivoParaAgregar = computed(() => (diaActivo.value === 0 ? (diasCreados.value[0] ?? 1) : diaActivo.value));
+
+const agregarDia = () => {
+    diasCreados.value.push(diaSiguiente.value);
+    diaActivo.value = diaSiguiente.value;
+};
+
+const itemsSinDia = computed(() => (alternativaActiva.value?.items ?? []).filter((i) => i.dia_referencial == null));
+
+const itemsDelDiaActivo = computed(() => {
+    const items = alternativaActiva.value?.items ?? [];
+    return diaActivo.value === 0
+        ? items.filter((i) => i.dia_referencial == null)
+        : items.filter((i) => i.dia_referencial === diaActivo.value);
+});
+
+// Agrupa por tour_origen_id (Sesión 11b4a) dentro del día activo — mismo
+// patrón visual que paquetes/detalle.vue::itemsPorTourAgrupados. Los ítems
+// sin tour_origen_id ("sueltos") van en un bloque final sin encabezado.
+type BloqueItem = { tourOrigenId: number | null; tourNombre: string | null; items: AlternativaItem[] };
+
+const bloquesDelDiaActivo = computed<BloqueItem[]>(() => {
+    const bloques = new Map<number, BloqueItem>();
+    const sueltos: AlternativaItem[] = [];
+
+    for (const item of itemsDelDiaActivo.value) {
+        if (item.tour_origen_id) {
+            if (!bloques.has(item.tour_origen_id)) {
+                bloques.set(item.tour_origen_id, { tourOrigenId: item.tour_origen_id, tourNombre: item.tour_origen?.nombre ?? null, items: [] });
+            }
+            bloques.get(item.tour_origen_id)!.items.push(item);
+        } else {
+            sueltos.push(item);
+        }
+    }
+
+    const resultado = Array.from(bloques.values());
+    if (sueltos.length) resultado.push({ tourOrigenId: null, tourNombre: null, items: sueltos });
+
+    return resultado;
+});
+
+const onReasignarDiaItem = async (item: AlternativaItem, event: Event) => {
+    const valor = Number((event.target as HTMLSelectElement).value);
+    if (!valor) return;
+    try {
+        await alternativaItemService.reasignarDia(item.id, valor);
+        await cargarCotizacion();
+    } catch (error: any) {
+        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo mover el ítem', 'error');
+    }
+};
+
+const onMoverBloque = async (bloque: BloqueItem, event: Event) => {
+    const valor = Number((event.target as HTMLSelectElement).value);
+    if (!bloque.tourOrigenId || !alternativaActiva.value || !valor || valor === diaActivo.value) return;
+    try {
+        await alternativaItemService.moverBloque(alternativaActiva.value.id, { tour_origen_id: bloque.tourOrigenId, dia_referencial: valor });
+        await cargarCotizacion();
+    } catch (error: any) {
+        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo mover el bloque', 'error');
+    }
+};
+
+// ── Biblioteca unificada (Sesión 11b3, §7.1) — un único endpoint decide
+// contra qué tabla(s) consulta según el chip activo, ver
+// BibliotecaCotizadorController en el backend. "Todos"/"Tour"/"Paquete" son
+// fijos; el resto de chips sale del catálogo real de proveedor_tipos (NO
+// una lista hardcodeada — ese catálogo cambia por tenant/sesión).
+const proveedorTipos = ref<ProveedorTipo[]>([]);
+
+type ChipBiblioteca = { tipo: BibliotecaTipo; proveedorTipoId: number | null; nombre: string };
+
+const chipsBiblioteca = computed<ChipBiblioteca[]>(() => [
+    { tipo: 'todos', proveedorTipoId: null, nombre: 'Todos' },
+    { tipo: 'tour', proveedorTipoId: null, nombre: 'Tour' },
+    { tipo: 'paquete', proveedorTipoId: null, nombre: 'Paquete' },
+    ...proveedorTipos.value.map((t) => ({ tipo: 'proveedor' as BibliotecaTipo, proveedorTipoId: t.id, nombre: t.nombre })),
+]);
+
+const chipActivoState = ref<ChipBiblioteca>({ tipo: 'todos', proveedorTipoId: null, nombre: 'Todos' });
+const chipActivo = (chip: ChipBiblioteca) => chip.tipo === chipActivoState.value.tipo && chip.proveedorTipoId === chipActivoState.value.proveedorTipoId;
+
+const seleccionarChip = (chip: ChipBiblioteca) => {
+    chipActivoState.value = chip;
+    cargarBiblioteca();
+};
+
 const bibliotecaSearch = ref('');
-const bibliotecaTarifas = ref<ProveedorTarifa[]>([]);
+const bibliotecaResultados = ref<BibliotecaResultado[]>([]);
 let bibliotecaTimeout: any = null;
 
 const cargarBiblioteca = async () => {
-    const res = await proveedorService.biblioteca(bibliotecaSearch.value || undefined);
-    bibliotecaTarifas.value = res.proveedor_tarifas;
+    const res = await bibliotecaCotizadorService.buscar({
+        tipo: chipActivoState.value.tipo,
+        proveedor_tipo_id: chipActivoState.value.proveedorTipoId ?? undefined,
+        search: bibliotecaSearch.value || undefined,
+    });
+    bibliotecaResultados.value = res.resultados;
 };
+
+const onBibliotecaSearch = () => {
+    clearTimeout(bibliotecaTimeout);
+    bibliotecaTimeout = setTimeout(cargarBiblioteca, 300);
+};
+
+const etiquetaCategoriaPaquete = (c: string) => ({ local: 'Local', nacional: 'Nacional', internacional: 'Internacional' } as Record<string, string>)[c] ?? c;
+
+const bibliotecaToursPaquetes = computed(() =>
+    bibliotecaResultados.value.filter((r) => r.tipo_resultado === 'tour' || r.tipo_resultado === 'paquete') as Array<
+        Extract<BibliotecaResultado, { tipo_resultado: 'tour' | 'paquete' }>
+    >
+);
 
 // Agrupa SOLO las tarifas de hotel (con tipo_habitacion) por proveedor_servicio_id —
 // un hotel con 4 tipos de habitación aparecía 4 veces en la biblioteca con el mismo
@@ -548,9 +730,11 @@ const cargarBiblioteca = async () => {
 // transporte, restaurante, etc.) se listan una por una, igual que antes.
 type BibliotecaFila = ProveedorTarifa & { _rangoHabitaciones?: boolean };
 
-const bibliotecaAgrupada = computed<BibliotecaFila[]>(() => {
+const bibliotecaProveedorAgrupada = computed<BibliotecaFila[]>(() => {
+    const tarifas = bibliotecaResultados.value.filter((r) => r.tipo_resultado === 'proveedor_tarifa') as ProveedorTarifa[];
+
     const gruposPorServicio = new Map<number, ProveedorTarifa[]>();
-    for (const t of bibliotecaTarifas.value) {
+    for (const t of tarifas) {
         if (!t.tipo_habitacion) continue;
         const grupo = gruposPorServicio.get(t.proveedor_servicio_id) ?? [];
         grupo.push(t);
@@ -560,7 +744,7 @@ const bibliotecaAgrupada = computed<BibliotecaFila[]>(() => {
     const vistos = new Set<number>();
     const filas: BibliotecaFila[] = [];
 
-    for (const t of bibliotecaTarifas.value) {
+    for (const t of tarifas) {
         if (!t.tipo_habitacion) {
             filas.push(t);
             continue;
@@ -578,9 +762,32 @@ const bibliotecaAgrupada = computed<BibliotecaFila[]>(() => {
     return filas;
 });
 
-const onBibliotecaSearch = () => {
-    clearTimeout(bibliotecaTimeout);
-    bibliotecaTimeout = setTimeout(cargarBiblioteca, 300);
+// Click en una tarjeta de tour/paquete — explota TODOS sus ítems en la
+// alternativa activa (AlternativaItemController::desdePlantilla()). Sin
+// modal de confirmación intermedio: el badge de cantidad de ítems, visible
+// ANTES del click en la tarjeta, ya es el requisito explícito de la spec
+// para que el vendedor anticipe cuántas líneas va a inyectar.
+const clicResultadoPlantilla = async (p: Extract<BibliotecaResultado, { tipo_resultado: 'tour' | 'paquete' }>) => {
+    if (!alternativaActiva.value) return;
+    try {
+        const res = await alternativaItemService.cargarDesdePlantilla(alternativaActiva.value.id, {
+            paquete_plantilla_id: p.id,
+            dia_referencial: diaActivoParaAgregar.value,
+        });
+        if (res.guias_pendientes.length) {
+            const lista = res.guias_pendientes
+                .map((g) => `<li>${g.guia_nombre ?? 'Guía'} — ${g.tour_origen_nombre ?? ''}${g.destino_nombre ? ` (${g.destino_nombre})` : ''}</li>`)
+                .join('');
+            await (Swal as TVueSwalInstance).fire({
+                title: 'Ítems de guía no cargados',
+                html: `<p class="text-start mb-1">Sin equivalente automático en la cotización — se asignan recién al reservar:</p><ul class="text-start">${lista}</ul>`,
+                icon: 'info',
+            });
+        }
+        await cargarCotizacion();
+    } catch (error: any) {
+        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo cargar la plantilla', 'error');
+    }
 };
 
 const matrizHotelActiva = ref<{ tarifas: Array<{ id: number; tipo_habitacion: string; precio: number }>; moneda: string; nombreProveedor: string } | null>(null);
@@ -608,6 +815,7 @@ const confirmarModoPrecio = async (modoPrecio: 'tarifa_fija' | 'por_persona') =>
             proveedor_tarifa_id: modoPrecioPendiente.value.id,
             modo_precio: modoPrecio,
             cantidad: 1,
+            dia_referencial: diaActivoParaAgregar.value,
         });
         onItemAgregado(res.alternativa_item);
     } catch (error: any) {
@@ -624,6 +832,7 @@ const agregarItemProveedorHotel = async (proveedorTarifaId: number, cantidad: nu
             proveedor_tarifa_id: proveedorTarifaId,
             modo_precio: 'tarifa_fija',
             cantidad,
+            dia_referencial: diaActivoParaAgregar.value,
         });
         onItemAgregado(res.alternativa_item);
         matrizHotelActiva.value = null;
@@ -698,6 +907,7 @@ const agregarItemMayorista = async (op: OpcionMayorista, opcionHotelTarifaId: nu
             opcion_mayorista_id: op.id,
             opcion_hotel_tarifa_id: opcionHotelTarifaId,
             cantidad,
+            dia_referencial: diaActivoParaAgregar.value,
         });
         onItemAgregado(res.alternativa_item);
     } catch (error: any) {
@@ -777,13 +987,23 @@ const etiquetaItem = (item: AlternativaItem) => {
 };
 
 watch(modo, (m) => { if (m === 'intl') cargarOpcionesMayorista(); });
-watch(alternativaActivaId, () => { inicializarEdicionItems(); if (modo.value === 'intl') cargarOpcionesMayorista(); });
+watch(alternativaActivaId, () => {
+    inicializarEdicionItems();
+    inicializarDias();
+    if (modo.value === 'intl') cargarOpcionesMayorista();
+});
 
 onMounted(async () => {
+    // proveedor_tipos: catálogo real (editable desde el panel superadmin,
+    // NO los 4 valores del seeder original) — alimenta tanto los chips de
+    // la biblioteca (Sesión 11b3) como la búsqueda de proveedores
+    // mayoristas de acá abajo (sin duplicar la llamada).
+    const tipos = await proveedorTipoService.listar();
+    proveedorTipos.value = tipos.proveedor_tipos;
+
     await cargarCotizacion();
     await cargarBiblioteca();
 
-    const tipos = await proveedorTipoService.listar();
     const tipoMayorista = tipos.proveedor_tipos.find((t) => t.slug === 'mayorista');
     if (tipoMayorista) {
         const res = await httpClient.get('/proveedores', { params: { tipo_id: tipoMayorista.id } });

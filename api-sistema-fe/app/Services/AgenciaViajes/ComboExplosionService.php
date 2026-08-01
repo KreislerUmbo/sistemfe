@@ -107,19 +107,42 @@ class ComboExplosionService
         $resultado = [];
 
         foreach ($this->toursDelCombo($combo) as $tour) {
-            $items = $tour->items()->with(['proveedorTarifa', 'guiaTarifa'])->orderBy('orden')->get();
+            $resultado = array_merge($resultado, $this->explotarUnTour($tour));
+        }
 
-            foreach ($items as $item) {
-                [$costo, $venta] = $this->resolverCostoVentaItem($item);
+        return $resultado;
+    }
 
-                $resultado[] = [
-                    'tour_origen_id' => $tour->id,
-                    'proveedor_tarifa_id' => $item->proveedor_tarifa_id,
-                    'guia_tarifa_id' => $item->guia_tarifa_id,
-                    'costo' => $costo,
-                    'venta' => $venta,
-                ];
-            }
+    // Sesión 11b3 — cargar un tour_simple SUELTO (no dentro de un combo) en
+    // el cotizador. Mismo cuerpo que un tour dentro de explotarItems(), acá
+    // expuesto para un tour_simple standalone — tour_origen_id apunta al
+    // propio tour (no a un padre), mismo criterio que ya usa el resto del
+    // vertical para "de dónde vino este ítem".
+    //
+    // @return array<int, array{tour_origen_id: int, proveedor_tarifa_id: int|null, guia_tarifa_id: int|null, costo: float, venta: float}>
+    public function explotarTourSimple(PaquetePlantilla $tour): array
+    {
+        return $this->explotarUnTour($tour);
+    }
+
+    /**
+     * @return array<int, array{tour_origen_id: int, proveedor_tarifa_id: int|null, guia_tarifa_id: int|null, costo: float, venta: float}>
+     */
+    private function explotarUnTour(PaquetePlantilla $tour): array
+    {
+        $resultado = [];
+        $items = $tour->items()->with(['proveedorTarifa', 'guiaTarifa'])->orderBy('orden')->get();
+
+        foreach ($items as $item) {
+            [$costo, $venta] = $this->resolverCostoVentaItem($item);
+
+            $resultado[] = [
+                'tour_origen_id' => $tour->id,
+                'proveedor_tarifa_id' => $item->proveedor_tarifa_id,
+                'guia_tarifa_id' => $item->guia_tarifa_id,
+                'costo' => $costo,
+                'venta' => $venta,
+            ];
         }
 
         return $resultado;

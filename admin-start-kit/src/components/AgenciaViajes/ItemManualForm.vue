@@ -33,7 +33,7 @@
 import { ref } from 'vue';
 import { alternativaItemService } from '@/services/admin/alternativaItemService';
 
-const props = defineProps<{ alternativaId: number }>();
+const props = defineProps<{ alternativaId: number; diaActivo: number }>();
 const emit = defineEmits<{ (e: 'agregado', payload: any): void }>();
 
 const descripcion = ref('');
@@ -46,6 +46,7 @@ const agregar = async () => {
             descripcion_manual: descripcion.value,
             precio_venta_snapshot: precio.value,
             moneda_costo: moneda.value,
+            dia_referencial: props.diaActivo,
         });
         emit('agregado', res.alternativa_item);
         descripcion.value = '';
