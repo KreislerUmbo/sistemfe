@@ -4,4 +4,5 @@
 node_modules/
 .vscode/
 admin-version-full/
+.playwright-mcp/
 .Claude/docs/planning/**/*.docx

@@ -181,14 +181,38 @@ class AlternativaItemController extends Controller
         $validado = $validator->validated();
         $paquete = PaquetePlantilla::findOrFail($validado['paquete_plantilla_id']);
 
-        $entradas = $paquete->esPaqueteCombo()
-            ? $this->comboExplosion->explotarItems($paquete)
-            : $this->comboExplosion->explotarTourSimple($paquete);
+        // Cada entrada trae su propio dia_referencial ya resuelto — para un
+        // tour_simple suelto, el mismo día activo para todos sus ítems
+        // (decisión confirmada: un tour multi-día cae en un solo bloque, no
+        // se distribuye ítem por ítem dentro del tour, ver CLAUDE.md). Para
+        // un paquete_combo, cada tour-hijo ocupa su PROPIO día de inicio —
+        // mismo offset que ComboExplosionService::itinerarioDerivado() ya usa
+        // para el itinerario derivado (tour_itinerario_items.dia_relativo
+        // máximo de cada tour), no un solo día plano para todo el combo.
+        $entradas = [];
+        if ($paquete->esPaqueteCombo()) {
+            $offsetDia = 0;
+            foreach ($this->comboExplosion->toursDelCombo($paquete) as $tourHijo) {
+                $diaDelTour = $validado['dia_referencial'] + $offsetDia;
+
+                foreach ($this->comboExplosion->explotarTourSimple($tourHijo) as $entrada) {
+                    $entrada['dia_referencial'] = $diaDelTour;
+                    $entradas[] = $entrada;
+                }
+
+                $offsetDia += (int) ($tourHijo->paqueteItinerario()->max('dia_relativo') ?? 0);
+            }
+        } else {
+            foreach ($this->comboExplosion->explotarTourSimple($paquete) as $entrada) {
+                $entrada['dia_referencial'] = $validado['dia_referencial'];
+                $entradas[] = $entrada;
+            }
+        }
 
         $itemsCreados = [];
         $guiasPendientes = [];
 
-        DB::transaction(function () use ($alternativa, $entradas, $validado, &$itemsCreados, &$guiasPendientes) {
+        DB::transaction(function () use ($alternativa, $entradas, &$itemsCreados, &$guiasPendientes) {
             foreach ($entradas as $entrada) {
                 if ($entrada['proveedor_tarifa_id']) {
                     $tarifa = ProveedorTarifa::findOrFail($entrada['proveedor_tarifa_id']);
@@ -198,7 +222,7 @@ class AlternativaItemController extends Controller
                         'origen_tipo' => AlternativaItem::ORIGEN_PROVEEDOR,
                         'proveedor_tarifa_id' => $tarifa->id,
                         'tour_origen_id' => $entrada['tour_origen_id'],
-                        'dia_referencial' => $validado['dia_referencial'],
+                        'dia_referencial' => $entrada['dia_referencial'],
                         // tarifa_fija/cantidad=1: el precio que trae la
                         // explosión ya es el tier adulto plano, sin repartir
                         // por pax — mismo criterio que el precio "calculado"
