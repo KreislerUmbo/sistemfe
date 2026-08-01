@@ -7,7 +7,15 @@ import { BootstrapVueNextResolver } from 'bootstrap-vue-next';
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  base: "/rizz_v/",
+  base: "/",
+  server: {
+    host: true,
+    allowedHosts: [
+      'agencia-demo.sistemafe.test',
+      'umbo.sistemafe.test',
+      '.sistemafe.test',   // wildcard: cubre cualquier subdominio nuevo que agregues después, sin tener que volver a tocar este archivo
+    ],
+  },
   plugins: [
     vue(),
     Components({
