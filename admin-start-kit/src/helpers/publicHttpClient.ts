@@ -1,9 +1,10 @@
 import axios from 'axios';
 import router from '@/router';
 import { useClientAuthStore } from '@/stores/clientAuth';
+import { resolveApiBaseUrl } from './apiBaseUrl';
 
 const publicHttpClient = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL, // ej: http://localhost:8000/api
+  baseURL: resolveApiBaseUrl(), // ej: http://localhost:8000/api
   headers: {
     'Content-Type': 'application/json',
     Accept: 'application/json',

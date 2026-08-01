@@ -1,4 +1,5 @@
 import axios from "axios";
+import { resolveApiBaseUrl } from "./apiBaseUrl";
 
 function parseJwt(token: string) {
   try {
@@ -41,7 +42,7 @@ function forceReLogin() {
 }
 
 const instance = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL,
+  baseURL: resolveApiBaseUrl(),
 });
 
 // Lee el token en CADA petición (no una sola vez al cargar el módulo), así

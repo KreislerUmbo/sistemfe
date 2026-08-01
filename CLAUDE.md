@@ -1048,6 +1048,14 @@ propuesto que quedó obsoleto en cuanto se construyó el módulo real de Adelant
 - **Timing del DOM en Vue:** evitar `document.getElementById()` directo en el montaje de
   componentes; usar `ref` de Vue + hooks de ciclo de vida (`onMounted`, etc.) para evitar
   errores de timing.
+- **URL de la API en desarrollo (`admin-start-kit`):** en dev, `httpClient`/
+  `publicHttpClient` calculan la URL de la API en el momento a partir del hostname actual
+  (`src/helpers/apiBaseUrl.ts::resolveApiBaseUrl()`, puerto configurable vía
+  `VITE_API_DEV_PORT`, default 8000) — así se puede tener abierta una pestaña por tenant
+  (`http://umbo.sistemafe.test:5173`, `http://agencia-demo.sistemafe.test:5173`, etc.)
+  simultáneamente contra el mismo `npm run dev`, sin editar `.env` ni reiniciar Vite para
+  cambiar de tenant. En producción sigue usando `VITE_API_BASE_URL` fijo desde `.env`, sin
+  cambios.
 
 ## Notas de arquitectura recientes
 - Sync de ventas en edición: enfoque de tres casos dentro de una transacción DB en
