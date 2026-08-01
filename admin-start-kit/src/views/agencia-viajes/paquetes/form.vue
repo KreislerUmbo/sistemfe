@@ -245,6 +245,15 @@ const cargarPaquete = async () => {
     try {
         const res = await paquetePlantillaService.obtener(paqueteId.value);
         form.value = { ...res.paquete_plantilla };
+        // El backend devuelve hora_salida/hora_retorno tal cual las guarda
+        // Postgres (columna `time`, sin $cast) — "06:00:00", no "06:00".
+        // <input type="time"> espera/valida H:i sin segundos, y si el
+        // usuario no llega a tocar el campo, ese "06:00:00" se reenvía tal
+        // cual y el backend lo rechaza (date_format:H:i). Se normaliza acá,
+        // al cargar, para que coincida siempre con lo que el input y el
+        // backend esperan.
+        if (form.value.hora_salida) form.value.hora_salida = form.value.hora_salida.slice(0, 5);
+        if (form.value.hora_retorno) form.value.hora_retorno = form.value.hora_retorno.slice(0, 5);
     } catch (error) {
         console.log(error);
     }
