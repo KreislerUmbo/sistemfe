@@ -510,6 +510,10 @@ Route::group([
         ->middleware('permission:agencia.cotizaciones');
     Route::delete("alternativas/{id}", [AlternativaController::class, 'destroy'])
         ->middleware('permission:agencia.cotizaciones');
+    // Sesión 11h — clona la alternativa completa (ítems + opciones de
+    // mayorista) en una alternativa nueva de la misma cotización.
+    Route::post("alternativas/{id}/duplicar", [AlternativaController::class, 'duplicar'])
+        ->middleware('permission:agencia.cotizaciones');
 
     Route::post("alternativas/{id}/items", [AlternativaItemController::class, 'store'])
         ->middleware('permission:agencia.cotizaciones');

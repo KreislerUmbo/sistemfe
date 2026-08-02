@@ -19,5 +19,11 @@ export const alternativaService = {
   async eliminar(id: number) {
     const response = await httpClient.delete(`/alternativas/${id}`)
     return response.data
+  },
+  // Sesión 11h — clona la alternativa completa (ítems + opciones de
+  // mayorista) en una alternativa nueva de la misma cotización.
+  async duplicar(id: number) {
+    const response = await httpClient.post(`/alternativas/${id}/duplicar`)
+    return response.data as AlternativaResponse
   }
 }
