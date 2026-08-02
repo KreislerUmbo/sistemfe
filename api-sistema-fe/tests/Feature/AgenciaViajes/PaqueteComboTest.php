@@ -446,6 +446,60 @@ class PaqueteComboTest extends TestCase
     }
 
     // ═══════════════════════════════════════════════════════════════
+    // hora_salida/hora_retorno — regresión del bug real reportado por el
+    // usuario ("The hora salida field must match the format H:i" al editar
+    // un tour). Postgres guarda `time` como "HH:MM:SS"; un fix anterior
+    // (commit dfcdf92, en una rama sin mergear a esta) solo normalizaba en
+    // el punto de carga de form.vue y volvió a romperse. Fix real: el
+    // accessor del modelo siempre devuelve "HH:MM" al leer, y el validador
+    // tolera "HH:MM:SS" de entrada (lo recorta antes de validar) en vez de
+    // rechazarlo — cubre cualquier punto de origen del dato, no solo uno.
+    // ═══════════════════════════════════════════════════════════════
+
+    public function test_hora_salida_y_retorno_se_leen_siempre_normalizadas_a_hi(): void
+    {
+        $destino = DestinoAtractivo::create(['nombre' => 'Alto Mayo', 'tipo' => 'zona']);
+
+        // Simula lo que Postgres realmente devuelve para una columna `time`
+        // (con segundos), sin pasar por el validador del controller.
+        $tour = PaquetePlantilla::create([
+            'categoria' => 'local',
+            'tipo' => PaquetePlantilla::TIPO_TOUR_SIMPLE,
+            'nombre' => 'Alto Mayo Full Day',
+            'destino_atractivo_id' => $destino->id,
+            'duracion_horas' => 8,
+            'hora_salida' => '06:00:00',
+            'hora_retorno' => '18:30:00',
+        ]);
+
+        $this->assertSame('06:00', $tour->hora_salida);
+        $this->assertSame('18:30', $tour->hora_retorno);
+        $this->assertSame('06:00', $tour->fresh()->hora_salida);
+        $this->assertSame('06:00', $tour->toArray()['hora_salida']);
+    }
+
+    public function test_editar_tour_con_hora_salida_recargada_con_segundos_no_falla_422(): void
+    {
+        $altoMayo = $this->crearTourSimple('Alto Mayo Full Day', $this->crearProveedorTarifa(60, 120));
+
+        // Reproduce exactamente el escenario reportado: el formulario carga
+        // el tour (hora_salida ya vendría con segundos si el accessor no
+        // existiera) y lo reenvía tal cual sin que el usuario lo toque.
+        $response = app(PaquetePlantillaController::class)->update(new Request([
+            'categoria' => $altoMayo->categoria,
+            'nombre' => $altoMayo->nombre,
+            'destino_atractivo_id' => $altoMayo->destino_atractivo_id,
+            'duracion_horas' => $altoMayo->duracion_horas,
+            'hora_salida' => '06:00:00',
+            'hora_retorno' => '18:30:00',
+        ]), (string) $altoMayo->id);
+
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertSame('06:00', $altoMayo->fresh()->hora_salida);
+        $this->assertSame('18:30', $altoMayo->fresh()->hora_retorno);
+    }
+
+    // ═══════════════════════════════════════════════════════════════
     // tour_origen_id — wiring de la migración/modelo (sin flujo completo de
     // cotización/reserva, que requeriría una cadena de fixtures mucho más
     // grande — cliente, cotización, alternativa — fuera de alcance de esta
