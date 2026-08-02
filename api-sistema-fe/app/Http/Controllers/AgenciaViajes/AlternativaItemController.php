@@ -79,7 +79,7 @@ class AlternativaItemController extends Controller
         }
 
         $alternativa = $item->alternativa;
-        $precioListaConvertido = $this->convertirMoneda(
+        $precioListaConvertido = $this->priceEngine->convertirMoneda(
             (float) $item->precio_venta_snapshot,
             $item->moneda_costo,
             $alternativa->moneda_cotizacion,
@@ -104,7 +104,7 @@ class AlternativaItemController extends Controller
 
         if ($item->proveedorTarifa) {
             $tarifa = $item->proveedorTarifa;
-            $costoBaseConvertido = $this->convertirMoneda(
+            $costoBaseConvertido = $this->priceEngine->convertirMoneda(
                 (float) $item->costo_snapshot,
                 $item->moneda_costo,
                 $alternativa->moneda_cotizacion,
@@ -235,7 +235,7 @@ class AlternativaItemController extends Controller
                         'moneda_costo' => $tarifa->moneda,
                         'costo_snapshot' => $entrada['costo'],
                         'precio_venta_snapshot' => $entrada['venta'],
-                        'precio_convertido' => $this->convertirMoneda($entrada['venta'], $tarifa->moneda, $alternativa->moneda_cotizacion, (float) $alternativa->tipo_cambio_aplicado),
+                        'precio_convertido' => $this->priceEngine->convertirMoneda($entrada['venta'], $tarifa->moneda, $alternativa->moneda_cotizacion, (float) $alternativa->tipo_cambio_aplicado),
                     ]);
 
                     continue;
@@ -390,7 +390,7 @@ class AlternativaItemController extends Controller
             'moneda_costo' => $monedaCosto,
             'costo_snapshot' => $costoSnapshot,
             'precio_venta_snapshot' => $precioVentaSnapshot,
-            'precio_convertido' => $this->convertirMoneda($precioVentaSnapshot, $monedaCosto, $alternativa->moneda_cotizacion, (float) $alternativa->tipo_cambio_aplicado),
+            'precio_convertido' => $this->priceEngine->convertirMoneda($precioVentaSnapshot, $monedaCosto, $alternativa->moneda_cotizacion, (float) $alternativa->tipo_cambio_aplicado),
             'dia_referencial' => $validado['dia_referencial'] ?? null,
         ]);
 
@@ -439,7 +439,7 @@ class AlternativaItemController extends Controller
             'moneda_costo' => $opcion->moneda,
             'costo_snapshot' => $tarifaHotel->precio_costo,
             'precio_venta_snapshot' => $tarifaHotel->precio_venta,
-            'precio_convertido' => $this->convertirMoneda((float) $tarifaHotel->precio_venta, $opcion->moneda, $alternativa->moneda_cotizacion, (float) $alternativa->tipo_cambio_aplicado),
+            'precio_convertido' => $this->priceEngine->convertirMoneda((float) $tarifaHotel->precio_venta, $opcion->moneda, $alternativa->moneda_cotizacion, (float) $alternativa->tipo_cambio_aplicado),
             'dia_referencial' => $validado['dia_referencial'] ?? null,
         ]);
 
@@ -486,7 +486,7 @@ class AlternativaItemController extends Controller
                 'moneda_costo' => $validado['moneda'],
                 'costo_snapshot' => $resultado['costo_total'],
                 'precio_venta_snapshot' => $resultado['venta_total'],
-                'precio_convertido' => $this->convertirMoneda($resultado['venta_total'], $validado['moneda'], $alternativa->moneda_cotizacion, (float) $alternativa->tipo_cambio_aplicado),
+                'precio_convertido' => $this->priceEngine->convertirMoneda($resultado['venta_total'], $validado['moneda'], $alternativa->moneda_cotizacion, (float) $alternativa->tipo_cambio_aplicado),
                 'dia_referencial' => $validado['dia_referencial'] ?? null,
             ]);
 
@@ -597,7 +597,7 @@ class AlternativaItemController extends Controller
             'costo_snapshot' => 0,
             'moneda_costo' => $validado['moneda_costo'],
             'precio_venta_snapshot' => $validado['precio_venta_snapshot'],
-            'precio_convertido' => $this->convertirMoneda((float) $validado['precio_venta_snapshot'], $validado['moneda_costo'], $alternativa->moneda_cotizacion, (float) $alternativa->tipo_cambio_aplicado),
+            'precio_convertido' => $this->priceEngine->convertirMoneda((float) $validado['precio_venta_snapshot'], $validado['moneda_costo'], $alternativa->moneda_cotizacion, (float) $alternativa->tipo_cambio_aplicado),
             'dia_referencial' => $validado['dia_referencial'] ?? null,
         ]);
 
@@ -627,17 +627,4 @@ class AlternativaItemController extends Controller
         $alternativa->update(['total' => round($total, 2)]);
     }
 
-    // tipo_cambio_agencia.valor = cuántos PEN equivalen a 1 USD (cotización
-    // estándar en Perú, ej. 3.75) — documentado acá porque el plan no fija
-    // la dirección explícita de la fórmula.
-    private function convertirMoneda(float $monto, string $monedaOrigen, string $monedaDestino, float $tipoCambio): float
-    {
-        if ($monedaOrigen === $monedaDestino) {
-            return round($monto, 2);
-        }
-
-        return $monedaOrigen === 'USD' && $monedaDestino === 'PEN'
-            ? round($monto * $tipoCambio, 2)
-            : round($monto / $tipoCambio, 2);
-    }
 }

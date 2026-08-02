@@ -1,18 +1,21 @@
 <template>
     <DefaultLayout>
-        <div v-if="cotizacion" class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
-            <div>
-                <h5 class="fw-bold mb-0"><i class="fas fa-route me-2 text-primary"></i>Cotización {{ cotizacion.codigo }}</h5>
-                <small class="text-muted">
-                    {{ cotizacion.cliente?.full_name }} · {{ cotizacion.destino }} ·
-                    {{ formatFecha(cotizacion.fecha_viaje_desde) }} — {{ formatFecha(cotizacion.fecha_viaje_hasta) }} ·
-                    {{ resumenPax }}
-                    <i class="fas fa-pen ms-2 text-primary" style="cursor:pointer" title="Corregir cliente/destino/fecha" @click="abrirEdicionCabecera"></i>
-                </small>
+        <div v-if="cotizacion" class="mb-3">
+            <div class="d-flex align-items-start justify-content-between flex-wrap gap-2">
+                <div>
+                    <h5 class="fw-bold mb-1"><i class="fas fa-route me-2 text-primary"></i>Cotización {{ cotizacion.codigo }}</h5>
+                    <div class="fw-semibold text-dark mb-2"><i class="fas fa-user me-2 text-muted" style="font-size:12px"></i>{{ cotizacion.cliente?.full_name ?? 'Sin cliente' }}</div>
+                </div>
+                <router-link to="/agencia-viajes/cotizador" class="btn btn-outline-secondary btn-sm">
+                    <i class="fas fa-arrow-left me-2"></i>Volver
+                </router-link>
             </div>
-            <router-link to="/agencia-viajes/cotizador" class="btn btn-outline-secondary btn-sm">
-                <i class="fas fa-arrow-left me-2"></i>Volver
-            </router-link>
+            <div class="d-flex flex-wrap align-items-center gap-2">
+                <span class="badge bg-light text-dark border fw-normal"><i class="fas fa-map-marker-alt me-1 text-primary"></i>{{ cotizacion.destino }}</span>
+                <span class="badge bg-light text-dark border fw-normal"><i class="fas fa-calendar me-1 text-primary"></i>{{ formatFecha(cotizacion.fecha_viaje_desde) }} — {{ formatFecha(cotizacion.fecha_viaje_hasta) }}</span>
+                <span class="badge bg-light text-dark border fw-normal"><i class="fas fa-users me-1 text-primary"></i>{{ resumenPax }}</span>
+                <i class="fas fa-pen text-primary" style="cursor:pointer;font-size:12px" title="Corregir cliente/destino/fecha" @click="abrirEdicionCabecera"></i>
+            </div>
         </div>
 
         <!-- Corregir cliente/destino/fecha (me equivoqué al crear la cotización) -->
@@ -84,12 +87,15 @@
 
         <!-- Pestañas de alternativas -->
         <div class="d-flex align-items-center gap-2 mb-3 flex-wrap" v-if="cotizacion">
-            <span v-for="alt in cotizacion.alternativas" :key="alt.id" class="badge rounded-pill px-3 py-2"
+            <span v-for="alt in cotizacion.alternativas" :key="alt.id" class="alt-pill badge rounded-pill px-3 py-2 d-inline-flex align-items-center gap-2"
                 :class="alt.id === alternativaActivaId ? 'bg-primary' : 'bg-light text-dark border'"
                 style="cursor:pointer" @click="seleccionarAlternativa(alt.id)">
-                {{ alt.nombre }} · {{ alt.moneda_cotizacion }} {{ Number(alt.total).toFixed(0) }}
-                <span v-if="alt.estado === 'aceptada'" class="ms-1"><i class="fas fa-check-circle"></i></span>
-                <span v-else-if="alt.estado === 'descartada'" class="ms-1 opacity-50"><i class="fas fa-times-circle"></i></span>
+                <span>
+                    {{ alt.nombre }} · {{ alt.moneda_cotizacion }} {{ Number(alt.total).toFixed(0) }}
+                    <span v-if="alt.estado === 'aceptada'" class="ms-1"><i class="fas fa-check-circle"></i></span>
+                    <span v-else-if="alt.estado === 'descartada'" class="ms-1 opacity-50"><i class="fas fa-times-circle"></i></span>
+                </span>
+                <i v-if="alt.id === alternativaActivaId" class="fas fa-trash alt-pill-delete" title="Eliminar esta alternativa" @click.stop="eliminarAlternativa"></i>
             </span>
             <span v-if="(cotizacion.alternativas?.length ?? 0) < 5" class="badge rounded-pill px-3 py-2 bg-light text-dark border"
                 style="cursor:pointer;border-style:dashed" @click="mostrarFormAlternativa = true">
@@ -142,13 +148,29 @@
                 <!-- Biblioteca local -->
                 <div v-if="modo === 'local'" class="card border-0 shadow-sm">
                     <div class="card-body p-2">
-                        <div class="d-flex flex-wrap gap-1 mb-2">
-                            <span v-for="chip in chipsBiblioteca" :key="chip.tipo + '-' + (chip.proveedorTipoId ?? '')"
+                        <div class="d-flex flex-wrap align-items-center gap-1 mb-2">
+                            <span v-for="chip in chipsFijos" :key="chip.tipo"
                                 class="badge rounded-pill px-2 py-1" style="cursor:pointer;font-weight:500;"
                                 :class="chipActivo(chip) ? 'bg-primary' : 'bg-light text-dark border'"
                                 @click="seleccionarChip(chip)">
                                 {{ chip.nombre }}
                             </span>
+                            <div class="position-relative">
+                                <span class="badge rounded-pill px-2 py-1" style="cursor:pointer;font-weight:500;"
+                                    :class="chipMasActivo ? 'bg-primary' : 'bg-light text-dark border'"
+                                    @click="mostrarMasChips = !mostrarMasChips">
+                                    {{ chipMasActivo ? chipMasActivo.nombre : 'Más' }} <i class="fas fa-caret-down ms-1"></i>
+                                </span>
+                                <div v-if="mostrarMasChips" class="border rounded shadow-sm bg-white p-1 position-absolute"
+                                    style="z-index:1050;min-width:180px;top:100%;left:0;">
+                                    <div v-for="chip in chipsProveedores" :key="chip.proveedorTipoId ?? chip.nombre"
+                                        class="small py-1 px-2 rounded" style="cursor:pointer"
+                                        :class="chipActivo(chip) ? 'bg-primary text-white' : ''"
+                                        @mousedown.prevent="seleccionarChip(chip); mostrarMasChips = false">
+                                        {{ chip.nombre }}
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                         <input type="text" class="form-control form-control-sm mb-2" placeholder="Buscar..."
                             v-model="bibliotecaSearch" @input="onBibliotecaSearch">
@@ -255,25 +277,21 @@
 
             <!-- ═══ COLUMNA CENTRO: lienzo ═══ -->
             <div class="col-12 col-lg-6">
-                <!-- Tabs de día — nivel de navegación DISTINTO de las pestañas de
-                     alternativa de arriba (esas son rounded-pill bg-primary; estas
-                     usan bg-secondary para no confundirse visualmente). -->
-                <div class="d-flex align-items-center gap-1 mb-2 flex-wrap">
-                    <span v-for="d in diasCreados" :key="d" class="badge rounded-pill px-3 py-2"
-                        :class="diaActivo === d ? 'bg-secondary' : 'bg-light text-dark border'"
-                        style="cursor:pointer" @click="diaActivo = d">
-                        Día {{ d }}
-                    </span>
-                    <span v-if="itemsSinDia.length" class="badge rounded-pill px-3 py-2"
-                        :class="diaActivo === 0 ? 'bg-secondary' : 'bg-light text-dark border'"
-                        style="cursor:pointer" @click="diaActivo = 0">
-                        Sin día ({{ itemsSinDia.length }})
-                    </span>
-                    <span class="badge rounded-pill px-3 py-2 bg-light text-dark border"
-                        style="cursor:pointer;border-style:dashed" @click="agregarDia">
-                        <i class="fas fa-plus me-1"></i>Día
-                    </span>
-                </div>
+                <!-- Tabs de día — nav-tabs subrayadas a propósito, para leerse como
+                     un nivel de navegación DISTINTO de las pestañas de alternativa
+                     de arriba (esas son pills sólidas) y de las de la biblioteca
+                     de la izquierda (esas son pills chip). -->
+                <ul class="nav nav-tabs dia-tabs mb-2">
+                    <li class="nav-item" v-for="d in diasCreados" :key="d">
+                        <a class="nav-link" href="#" :class="{ active: diaActivo === d }" @click.prevent="diaActivo = d">Día {{ d }}</a>
+                    </li>
+                    <li class="nav-item" v-if="itemsSinDia.length">
+                        <a class="nav-link" href="#" :class="{ active: diaActivo === 0 }" @click.prevent="diaActivo = 0">Sin día ({{ itemsSinDia.length }})</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link text-muted" href="#" @click.prevent="agregarDia"><i class="fas fa-plus me-1"></i>Día</a>
+                    </li>
+                </ul>
 
                 <div class="card border-0 shadow-sm">
                     <div class="card-body">
@@ -356,30 +374,51 @@
                         <p class="small fw-semibold text-secondary mb-2">Alternativa {{ alternativaActiva.nombre }}</p>
                         <div class="small mb-2" style="max-height:340px;overflow-y:auto;">
                             <div v-for="item in alternativaActiva.items" :key="item.id" class="mb-2 pb-2 border-bottom">
-                                <div class="d-flex justify-content-between">
-                                    <span class="text-muted text-truncate" style="max-width:110px" :title="etiquetaItem(item)">{{ etiquetaItem(item) }}</span>
-                                    <span>{{ Number(item.total_convertido).toFixed(2) }}</span>
+                                <div class="d-flex justify-content-between gap-2">
+                                    <span class="text-muted" style="word-break:break-word;">{{ etiquetaItem(item) }}</span>
+                                    <span class="text-nowrap">{{ Number(item.total_convertido).toFixed(2) }}</span>
                                 </div>
-                                <div class="d-flex gap-1 align-items-center mt-1" v-if="item.origen_tipo !== 'manual' && item.proveedor_tarifa_id">
-                                    <input type="number" class="form-control form-control-sm" style="max-width:70px" placeholder="Desc %"
-                                        v-model.number="edicionItems[item.id].descuento_pct" @input="onEditarDescuento(item)">
-                                    <input type="number" class="form-control form-control-sm" :class="{ 'border-danger text-danger': alertasPiso[item.id] }"
-                                        v-model.number="edicionItems[item.id].precio_convertido" @input="onEditarPrecio(item)">
+                                <div class="row g-1 mt-1" v-if="item.origen_tipo !== 'manual' && item.proveedor_tarifa_id">
+                                    <div class="col-5">
+                                        <label class="form-label mb-0 text-muted" style="font-size:10px">Desc. %</label>
+                                        <input type="number" class="form-control form-control-sm"
+                                            v-model.number="edicionItems[item.id].descuento_pct" @input="onEditarDescuento(item)">
+                                    </div>
+                                    <div class="col-7">
+                                        <label class="form-label mb-0 text-muted" style="font-size:10px">Precio final</label>
+                                        <input type="number" class="form-control form-control-sm" :class="{ 'border-danger text-danger': alertasPiso[item.id] }"
+                                            v-model.number="edicionItems[item.id].precio_convertido" @input="onEditarPrecio(item)">
+                                    </div>
                                 </div>
                                 <small v-if="alertasPiso[item.id]" class="text-danger"><i class="fas fa-exclamation-triangle me-1"></i>Por debajo del piso permitido</small>
                             </div>
                             <div v-if="(alternativaActiva.items?.length ?? 0) === 0" class="text-muted">Sin ítems todavía</div>
                         </div>
+
+                        <div class="border-top pt-2 mb-2" v-if="(alternativaActiva.items?.length ?? 0) > 0">
+                            <label class="form-label mb-1 small fw-semibold text-secondary">Descuento global %</label>
+                            <div class="d-flex align-items-center gap-1">
+                                <input type="number" min="0" max="100" class="form-control form-control-sm"
+                                    v-model.number="descuentoGlobalLocal" @change="onEditarDescuentoGlobal">
+                                <span class="small text-muted">%</span>
+                            </div>
+                            <small v-if="lineasFueraDePiso.length" class="text-danger d-block mt-1">
+                                <i class="fas fa-exclamation-triangle me-1"></i>{{ lineasFueraDePiso.length }} línea(s) quedaron bajo el piso permitido — revisalas arriba.
+                            </small>
+                        </div>
+
                         <hr>
                         <div class="d-flex justify-content-between align-items-baseline">
                             <span class="small text-secondary">Total</span>
                             <span class="fs-4 fw-semibold">{{ alternativaActiva.moneda_cotizacion }} {{ Number(alternativaActiva.total).toFixed(2) }}</span>
                         </div>
-                        <div class="mt-3 d-flex gap-2">
-                            <button v-if="alternativaActiva.estado !== 'aceptada'" class="btn btn-success btn-sm flex-fill" @click="marcarAceptada">
+                        <div class="mt-3" v-if="alternativaActiva.estado !== 'aceptada'">
+                            <button class="btn btn-success btn-sm w-100" @click="marcarAceptada" :disabled="(alternativaActiva.items?.length ?? 0) === 0">
                                 <i class="fas fa-check me-1"></i>Aceptar
                             </button>
-                            <button class="btn btn-outline-danger btn-sm" @click="eliminarAlternativa"><i class="fas fa-trash"></i></button>
+                            <small v-if="(alternativaActiva.items?.length ?? 0) === 0" class="text-muted d-block text-center mt-1">
+                                Agregá al menos un ítem para poder aceptar
+                            </small>
                         </div>
                     </div>
                 </div>
@@ -681,12 +720,21 @@ const proveedorTipos = ref<ProveedorTipo[]>([]);
 
 type ChipBiblioteca = { tipo: BibliotecaTipo; proveedorTipoId: number | null; nombre: string };
 
-const chipsBiblioteca = computed<ChipBiblioteca[]>(() => [
+// "Todos"/"Tour"/"Paquete" siempre visibles; el resto del catálogo de
+// proveedor_tipos entra en el desplegable "Más ▾" — Parte B, punto (3)
+// confirmado con el usuario (comprimir sin esconder los 3 fijos).
+const chipsFijos = computed<ChipBiblioteca[]>(() => [
     { tipo: 'todos', proveedorTipoId: null, nombre: 'Todos' },
     { tipo: 'tour', proveedorTipoId: null, nombre: 'Tour' },
     { tipo: 'paquete', proveedorTipoId: null, nombre: 'Paquete' },
-    ...proveedorTipos.value.map((t) => ({ tipo: 'proveedor' as BibliotecaTipo, proveedorTipoId: t.id, nombre: t.nombre })),
 ]);
+
+const chipsProveedores = computed<ChipBiblioteca[]>(() =>
+    proveedorTipos.value.map((t) => ({ tipo: 'proveedor' as BibliotecaTipo, proveedorTipoId: t.id, nombre: t.nombre }))
+);
+
+const mostrarMasChips = ref(false);
+const chipMasActivo = computed(() => chipsProveedores.value.find((c) => chipActivo(c)) ?? null);
 
 const chipActivoState = ref<ChipBiblioteca>({ tipo: 'todos', proveedorTipoId: null, nombre: 'Todos' });
 const chipActivo = (chip: ChipBiblioteca) => chip.tipo === chipActivoState.value.tipo && chip.proveedorTipoId === chipActivoState.value.proveedorTipoId;
@@ -939,6 +987,28 @@ const inicializarEdicionItems = () => {
     (alternativaActiva.value?.items ?? []).forEach((item) => {
         edicionItems.value[item.id] = { descuento_pct: Number(item.descuento_pct ?? 0), precio_convertido: Number(item.precio_convertido) };
     });
+    descuentoGlobalLocal.value = Number(alternativaActiva.value?.descuento_global_pct ?? 0);
+    lineasFueraDePiso.value = [];
+};
+
+// ── Descuento global (Parte B, punto 3.1 del plan de dominio) — reparte el
+// % a CADA alternativa_item respetando su piso individual
+// (AlternativaController::aplicarDescuentoGlobal(), mismo PriceEngineService
+// que ya usa la edición por ítem — NUNCA se recalcula acá, el backend
+// siempre manda el resultado final). Antes de esta sesión el campo se
+// guardaba pero no se aplicaba a ningún ítem — gap real cerrado en 11b3.
+const descuentoGlobalLocal = ref(0);
+const lineasFueraDePiso = ref<Array<{ alternativa_item_id: number; precio_minimo_permitido: number | null }>>([]);
+
+const onEditarDescuentoGlobal = async () => {
+    if (!alternativaActiva.value) return;
+    try {
+        const res = await alternativaService.actualizar(alternativaActiva.value.id, { descuento_global_pct: descuentoGlobalLocal.value });
+        lineasFueraDePiso.value = res.lineas_fuera_de_piso ?? [];
+        await cargarCotizacion();
+    } catch (error: any) {
+        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo aplicar el descuento global', 'error');
+    }
 };
 
 const onEditarDescuento = (item: AlternativaItem) => {
@@ -1015,4 +1085,21 @@ onMounted(async () => {
 <style scoped>
 .price-panel { position: sticky; top: 1rem; }
 .lib-item:hover { background: #eef2ff; border-color: #6366f1 !important; }
+
+/* Tacho de la alternativa activa — oculto hasta hover del pill, para no
+   saturar la fila cuando hay varias alternativas (Parte B). */
+.alt-pill-delete { opacity: 0; transition: opacity .15s; }
+.alt-pill:hover .alt-pill-delete { opacity: 1; }
+
+/* Tabs de día — nav-tabs subrayadas a propósito, para distinguirse
+   visualmente de las pills sólidas (alternativas arriba, chips de
+   biblioteca a la izquierda). */
+.dia-tabs .nav-link {
+    padding: 0.35rem 0.75rem;
+    font-size: 0.875rem;
+    color: var(--bs-secondary-color, #6c757d);
+}
+.dia-tabs .nav-link.active {
+    font-weight: 600;
+}
 </style>

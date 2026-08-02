@@ -13,6 +13,7 @@ use App\Models\AgenciaViajes\OpcionMayorista;
 use App\Models\AgenciaViajes\OpcionMayoristaOpcional;
 use App\Models\AgenciaViajes\Reserva;
 use App\Models\AgenciaViajes\TipoCambioAgencia;
+use App\Services\AgenciaViajes\PriceEngineService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -23,6 +24,10 @@ use Illuminate\Support\Facades\Validator;
 class AlternativaController extends Controller
 {
     private const MAX_ALTERNATIVAS_POR_COTIZACION = 5;
+
+    public function __construct(private PriceEngineService $priceEngine)
+    {
+    }
 
     public function store(Request $request, string $cotizacionId)
     {
@@ -90,8 +95,9 @@ class AlternativaController extends Controller
         }
 
         $validado = array_filter($validator->validated(), fn ($v) => $v !== null);
+        $lineasFueraDePiso = [];
 
-        DB::transaction(function () use ($alternativa, $validado) {
+        DB::transaction(function () use ($alternativa, $validado, &$lineasFueraDePiso) {
             if (($validado['estado'] ?? null) === 'enviada' && ! $alternativa->fecha_envio) {
                 $validado['fecha_envio'] = now();
             }
@@ -106,13 +112,85 @@ class AlternativaController extends Controller
             if (($validado['estado'] ?? null) === 'aceptada') {
                 self::descartarOtras($alternativa);
             }
+
+            // §3.1 — "al aplicarse, se reparte a cada alternativa_items
+            // respetando el piso individual de cada uno; si alguna línea no
+            // lo permite, se avisa cuál en vez de bloquear todo en
+            // silencio". Antes de esta sesión el campo se guardaba en la
+            // alternativa pero nunca se aplicaba a ningún ítem — gap real
+            // encontrado al conectar el panel de precio (Parte B, 11b3).
+            if (array_key_exists('descuento_global_pct', $validado)) {
+                $lineasFueraDePiso = $this->aplicarDescuentoGlobal($alternativa, (float) $validado['descuento_global_pct']);
+            }
         });
 
         return response()->json([
             'code' => 200,
             'message' => 'Alternativa actualizada correctamente',
-            'alternativa' => $alternativa->fresh(),
+            'alternativa' => $alternativa->fresh('items'),
+            'lineas_fuera_de_piso' => $lineasFueraDePiso,
         ]);
+    }
+
+    // Reparte descuentoGlobalPct a CADA ítem de la alternativa (mismo % para
+    // todos, sobre su propio precio de lista) — mismo motor matemático que
+    // AlternativaItemController::update() ya usa para un ítem suelto
+    // (PriceEngineService::evaluarPiso()), sin reimplementar la fórmula.
+    // Mismo criterio ya establecido ahí: el piso NUNCA bloquea el guardado,
+    // solo se informa qué líneas lo cruzan — el descuento global se aplica
+    // igual a todas, el vendedor decide si corrige alguna a mano después.
+    // Ítems sin proveedor_tarifa (manual/referencia) no tienen piso que
+    // evaluar, pero SÍ reciben el descuento — "cada alternativa_items" del
+    // plan no distingue por origen_tipo.
+    private function aplicarDescuentoGlobal(Alternativa $alternativa, float $descuentoGlobalPct): array
+    {
+        $lineasFueraDePiso = [];
+
+        foreach ($alternativa->items()->with('proveedorTarifa')->get() as $item) {
+            $precioListaConvertido = $this->priceEngine->convertirMoneda(
+                (float) $item->precio_venta_snapshot,
+                $item->moneda_costo,
+                $alternativa->moneda_cotizacion,
+                (float) $alternativa->tipo_cambio_aplicado
+            );
+
+            $precioConvertido = round($precioListaConvertido * (1 - $descuentoGlobalPct / 100), 2);
+
+            if ($item->proveedorTarifa) {
+                $tarifa = $item->proveedorTarifa;
+                $costoBaseConvertido = $this->priceEngine->convertirMoneda(
+                    (float) $item->costo_snapshot,
+                    $item->moneda_costo,
+                    $alternativa->moneda_cotizacion,
+                    (float) $alternativa->tipo_cambio_aplicado
+                );
+
+                $pisoInfo = $this->priceEngine->evaluarPiso(
+                    precioEditado: $precioConvertido,
+                    costoBase: $costoBaseConvertido,
+                    ventaBase: $precioListaConvertido,
+                    descuentoMaximoPct: $tarifa->descuento_maximo_pct !== null ? (float) $tarifa->descuento_maximo_pct : null,
+                    margenMinimoPct: $tarifa->margen_minimo_pct !== null ? (float) $tarifa->margen_minimo_pct : null,
+                );
+
+                if ($pisoInfo['alerta_piso']) {
+                    $lineasFueraDePiso[] = [
+                        'alternativa_item_id' => $item->id,
+                        'precio_minimo_permitido' => $pisoInfo['precio_minimo_permitido'],
+                    ];
+                }
+            }
+
+            $item->update([
+                'descuento_pct' => $descuentoGlobalPct,
+                'precio_convertido' => $precioConvertido,
+            ]);
+        }
+
+        $total = $alternativa->items()->get()->sum(fn (AlternativaItem $item) => $item->total_convertido);
+        $alternativa->update(['total' => round($total, 2)]);
+
+        return $lineasFueraDePiso;
     }
 
     // Antes de esta sesión, delete() era directo — con ítems/opciones-mayorista

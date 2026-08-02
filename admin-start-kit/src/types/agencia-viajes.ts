@@ -244,6 +244,9 @@ export type AlternativaResponse = {
   code: number;
   message: string;
   alternativa: Alternativa;
+  // Sesión 11b3 — solo poblado cuando el PUT incluyó descuento_global_pct.
+  // Ver AlternativaController::aplicarDescuentoGlobal() en el backend.
+  lineas_fuera_de_piso?: Array<{ alternativa_item_id: number; precio_minimo_permitido: number | null }>;
 };
 
 export type OrigenItem = 'proveedor' | 'mayorista' | 'pasaje_aereo' | 'manual';
