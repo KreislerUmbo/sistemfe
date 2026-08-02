@@ -108,6 +108,9 @@ class CotizacionController extends Controller
             'alternativas.items.proveedorTarifa.proveedorServicio.destinoServicio.servicio',
             'alternativas.items.opcionMayorista',
             'alternativas.items.cotizacionPasajeAereo',
+            // Sesión 11b3 — nombre del tour de origen para el encabezado del
+            // bloque agrupado en el lienzo día-por-día (§7.1).
+            'alternativas.items.tourOrigen',
         ])->findOrFail($id);
 
         return response()->json(['cotizacion' => $cotizacion]);

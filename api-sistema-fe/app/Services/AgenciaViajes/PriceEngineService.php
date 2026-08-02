@@ -166,4 +166,21 @@ class PriceEngineService
 
         return round($ventaBruta - $descuento, 2);
     }
+
+    // tipo_cambio_agencia.valor = cuántos PEN equivalen a 1 USD (cotización
+    // estándar en Perú, ej. 3.75) — documentado acá porque el plan no fija
+    // la dirección explícita de la fórmula. Antes duplicado en
+    // AlternativaItemController — Sesión 11b3 lo movió acá para que
+    // AlternativaController (descuento_global_pct) lo reuse sin repetir la
+    // fórmula de conversión de moneda por segunda vez.
+    public function convertirMoneda(float $monto, string $monedaOrigen, string $monedaDestino, float $tipoCambio): float
+    {
+        if ($monedaOrigen === $monedaDestino) {
+            return round($monto, 2);
+        }
+
+        return $monedaOrigen === 'USD' && $monedaDestino === 'PEN'
+            ? round($monto * $tipoCambio, 2)
+            : round($monto / $tipoCambio, 2);
+    }
 }

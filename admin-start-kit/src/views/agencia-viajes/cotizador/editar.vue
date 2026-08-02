@@ -1,18 +1,21 @@
 <template>
     <DefaultLayout>
-        <div v-if="cotizacion" class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
-            <div>
-                <h5 class="fw-bold mb-0"><i class="fas fa-route me-2 text-primary"></i>Cotización {{ cotizacion.codigo }}</h5>
-                <small class="text-muted">
-                    {{ cotizacion.cliente?.full_name }} · {{ cotizacion.destino }} ·
-                    {{ formatFecha(cotizacion.fecha_viaje_desde) }} — {{ formatFecha(cotizacion.fecha_viaje_hasta) }} ·
-                    {{ resumenPax }}
-                    <i class="fas fa-pen ms-2 text-primary" style="cursor:pointer" title="Corregir cliente/destino/fecha" @click="abrirEdicionCabecera"></i>
-                </small>
+        <div v-if="cotizacion" class="mb-3">
+            <div class="d-flex align-items-start justify-content-between flex-wrap gap-2">
+                <div>
+                    <h5 class="fw-bold mb-1"><i class="fas fa-route me-2 text-primary"></i>Cotización {{ cotizacion.codigo }}</h5>
+                    <div class="fw-semibold text-dark mb-2"><i class="fas fa-user me-2 text-muted" style="font-size:12px"></i>{{ cotizacion.cliente?.full_name ?? 'Sin cliente' }}</div>
+                </div>
+                <router-link to="/agencia-viajes/cotizador" class="btn btn-outline-secondary btn-sm">
+                    <i class="fas fa-arrow-left me-2"></i>Volver
+                </router-link>
             </div>
-            <router-link to="/agencia-viajes/cotizador" class="btn btn-outline-secondary btn-sm">
-                <i class="fas fa-arrow-left me-2"></i>Volver
-            </router-link>
+            <div class="d-flex flex-wrap align-items-center gap-2">
+                <span class="badge bg-light text-dark border fw-normal"><i class="fas fa-map-marker-alt me-1 text-primary"></i>{{ cotizacion.destino }}</span>
+                <span class="badge bg-light text-dark border fw-normal"><i class="fas fa-calendar me-1 text-primary"></i>{{ formatFecha(cotizacion.fecha_viaje_desde) }} — {{ formatFecha(cotizacion.fecha_viaje_hasta) }}</span>
+                <span class="badge bg-light text-dark border fw-normal"><i class="fas fa-users me-1 text-primary"></i>{{ resumenPax }}</span>
+                <i class="fas fa-pen text-primary" style="cursor:pointer;font-size:12px" title="Corregir cliente/destino/fecha" @click="abrirEdicionCabecera"></i>
+            </div>
         </div>
 
         <!-- Corregir cliente/destino/fecha (me equivoqué al crear la cotización) -->
@@ -84,12 +87,15 @@
 
         <!-- Pestañas de alternativas -->
         <div class="d-flex align-items-center gap-2 mb-3 flex-wrap" v-if="cotizacion">
-            <span v-for="alt in cotizacion.alternativas" :key="alt.id" class="badge rounded-pill px-3 py-2"
+            <span v-for="alt in cotizacion.alternativas" :key="alt.id" class="alt-pill badge rounded-pill px-3 py-2 d-inline-flex align-items-center gap-2"
                 :class="alt.id === alternativaActivaId ? 'bg-primary' : 'bg-light text-dark border'"
                 style="cursor:pointer" @click="seleccionarAlternativa(alt.id)">
-                {{ alt.nombre }} · {{ alt.moneda_cotizacion }} {{ Number(alt.total).toFixed(0) }}
-                <span v-if="alt.estado === 'aceptada'" class="ms-1"><i class="fas fa-check-circle"></i></span>
-                <span v-else-if="alt.estado === 'descartada'" class="ms-1 opacity-50"><i class="fas fa-times-circle"></i></span>
+                <span>
+                    {{ alt.nombre }} · {{ alt.moneda_cotizacion }} {{ Number(alt.total).toFixed(0) }}
+                    <span v-if="alt.estado === 'aceptada'" class="ms-1"><i class="fas fa-check-circle"></i></span>
+                    <span v-else-if="alt.estado === 'descartada'" class="ms-1 opacity-50"><i class="fas fa-times-circle"></i></span>
+                </span>
+                <i v-if="alt.id === alternativaActivaId" class="fas fa-trash alt-pill-delete" title="Eliminar esta alternativa" @click.stop="eliminarAlternativa"></i>
             </span>
             <span v-if="(cotizacion.alternativas?.length ?? 0) < 5" class="badge rounded-pill px-3 py-2 bg-light text-dark border"
                 style="cursor:pointer;border-style:dashed" @click="mostrarFormAlternativa = true">
@@ -142,10 +148,34 @@
                 <!-- Biblioteca local -->
                 <div v-if="modo === 'local'" class="card border-0 shadow-sm">
                     <div class="card-body p-2">
-                        <input type="text" class="form-control form-control-sm mb-2" placeholder="Buscar servicio..."
+                        <div class="d-flex flex-wrap align-items-center gap-1 mb-2">
+                            <span v-for="chip in chipsFijos" :key="chip.tipo"
+                                class="badge rounded-pill px-2 py-1" style="cursor:pointer;font-weight:500;"
+                                :class="chipActivo(chip) ? 'bg-primary' : 'bg-light text-dark border'"
+                                @click="seleccionarChip(chip)">
+                                {{ chip.nombre }}
+                            </span>
+                            <div class="position-relative">
+                                <span class="badge rounded-pill px-2 py-1" style="cursor:pointer;font-weight:500;"
+                                    :class="chipMasActivo ? 'bg-primary' : 'bg-light text-dark border'"
+                                    @click="mostrarMasChips = !mostrarMasChips">
+                                    {{ chipMasActivo ? chipMasActivo.nombre : 'Más' }} <i class="fas fa-caret-down ms-1"></i>
+                                </span>
+                                <div v-if="mostrarMasChips" class="border rounded shadow-sm bg-white p-1 position-absolute"
+                                    style="z-index:1050;min-width:180px;top:100%;left:0;">
+                                    <div v-for="chip in chipsProveedores" :key="chip.proveedorTipoId ?? chip.nombre"
+                                        class="small py-1 px-2 rounded" style="cursor:pointer"
+                                        :class="chipActivo(chip) ? 'bg-primary text-white' : ''"
+                                        @mousedown.prevent="seleccionarChip(chip); mostrarMasChips = false">
+                                        {{ chip.nombre }}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <input type="text" class="form-control form-control-sm mb-2" placeholder="Buscar..."
                             v-model="bibliotecaSearch" @input="onBibliotecaSearch">
                         <div class="d-flex flex-column gap-2" style="max-height:480px;overflow-y:auto;">
-                            <div v-for="t in bibliotecaAgrupada" :key="t.id" class="border rounded p-2 small lib-item" style="cursor:pointer"
+                            <div v-for="t in bibliotecaProveedorAgrupada" :key="'pt-' + t.id" class="border rounded p-2 small lib-item" style="cursor:pointer"
                                 @click="clicBibliotecaItem(t)">
                                 <div class="d-flex justify-content-between">
                                     <span>
@@ -160,9 +190,24 @@
                                     <span v-if="t.tipo_habitacion"> · {{ t._rangoHabitaciones ? 'varias habitaciones' : t.tipo_habitacion }}</span>
                                 </div>
                             </div>
-                            <div v-if="bibliotecaAgrupada.length === 0" class="text-muted small text-center py-3">Sin tarifas encontradas.</div>
+                            <div v-for="p in bibliotecaToursPaquetes" :key="'tp-' + p.id" class="border rounded p-2 small lib-item" style="cursor:pointer"
+                                @click="clicResultadoPlantilla(p)">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <span>
+                                        <i class="fas me-1 text-primary" :class="p.tipo_resultado === 'paquete' ? 'fa-layers' : 'fa-suitcase-rolling'"></i>
+                                        {{ p.nombre }}
+                                    </span>
+                                    <span class="badge bg-info-subtle text-info border" style="font-size:10px;white-space:nowrap">
+                                        {{ p.resumen_items.tours != null ? `${p.resumen_items.tours} tours · ${p.resumen_items.items} ítems` : `${p.resumen_items.items} ítems` }}
+                                    </span>
+                                </div>
+                                <div class="text-muted" style="font-size:11px">
+                                    {{ etiquetaCategoriaPaquete(p.categoria) }}<span v-if="p.codigo"> · {{ p.codigo }}</span>
+                                </div>
+                            </div>
+                            <div v-if="bibliotecaProveedorAgrupada.length === 0 && bibliotecaToursPaquetes.length === 0" class="text-muted small text-center py-3">Sin resultados.</div>
                         </div>
-                        <small class="text-muted d-block mt-2"><i class="fas fa-hand-pointer me-1"></i>Clic para agregar a la alternativa activa</small>
+                        <small class="text-muted d-block mt-2"><i class="fas fa-hand-pointer me-1"></i>Clic para agregar al día activo</small>
                     </div>
                     <div class="card-footer bg-white border-0 p-2">
                         <button class="btn btn-outline-secondary btn-sm w-100" @click="mostrarFormManual = true"><i class="fas fa-plus me-1"></i>Ítem manual</button>
@@ -232,33 +277,64 @@
 
             <!-- ═══ COLUMNA CENTRO: lienzo ═══ -->
             <div class="col-12 col-lg-6">
+                <!-- Tabs de día — nav-tabs subrayadas a propósito, para leerse como
+                     un nivel de navegación DISTINTO de las pestañas de alternativa
+                     de arriba (esas son pills sólidas) y de las de la biblioteca
+                     de la izquierda (esas son pills chip). -->
+                <ul class="nav nav-tabs dia-tabs mb-2">
+                    <li class="nav-item" v-for="d in diasCreados" :key="d">
+                        <a class="nav-link" href="#" :class="{ active: diaActivo === d }" @click.prevent="diaActivo = d">Día {{ d }}</a>
+                    </li>
+                    <li class="nav-item" v-if="itemsSinDia.length">
+                        <a class="nav-link" href="#" :class="{ active: diaActivo === 0 }" @click.prevent="diaActivo = 0">Sin día ({{ itemsSinDia.length }})</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link text-muted" href="#" @click.prevent="agregarDia"><i class="fas fa-plus me-1"></i>Día</a>
+                    </li>
+                </ul>
+
                 <div class="card border-0 shadow-sm">
                     <div class="card-body">
-                        <div v-if="(alternativaActiva.items?.length ?? 0) === 0" class="drop-hint text-center text-muted py-4 border rounded" style="border-style:dashed">
+                        <div v-if="bloquesDelDiaActivo.length === 0" class="drop-hint text-center text-muted py-4 border rounded" style="border-style:dashed">
                             Agregá un servicio desde la biblioteca de la izquierda
                         </div>
-                        <div v-for="item in alternativaActiva.items" :key="item.id" class="canvas-item border rounded p-2 mb-2 small">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <span>
-                                    <i class="fas me-2 text-primary" :class="iconoItem(item)"></i>
-                                    {{ etiquetaItem(item) }}
-                                    <span v-if="item.cantidad > 1 && item.modo_precio === 'tarifa_fija' && item.origen_tipo !== 'manual'" class="text-muted"> × {{ item.cantidad }}</span>
-                                </span>
-                                <span class="d-flex align-items-center gap-2">
-                                    <strong>{{ alternativaActiva.moneda_cotizacion }} {{ Number(item.total_convertido).toFixed(2) }}</strong>
-                                    <i class="fas fa-times text-danger" style="cursor:pointer" @click="eliminarItem(item)"></i>
-                                </span>
+
+                        <div v-for="bloque in bloquesDelDiaActivo" :key="bloque.tourOrigenId ?? 'sueltos'" class="mb-3">
+                            <div v-if="bloque.tourOrigenId" class="d-flex justify-content-between align-items-center mb-1">
+                                <span class="small fw-semibold text-dark"><i class="fas fa-route me-1 text-primary"></i>{{ bloque.tourNombre ?? 'Tour' }}</span>
+                                <select class="form-select form-select-sm" style="width:auto;font-size:11px" :value="diaActivo" @change="onMoverBloque(bloque, $event)">
+                                    <option v-for="d in diasCreados" :key="d" :value="d">Mover a Día {{ d }}</option>
+                                    <option :value="diaSiguiente">Mover a Día {{ diaSiguiente }} (nuevo)</option>
+                                </select>
                             </div>
-                            <div class="text-muted mt-1" style="font-size:11px" v-if="item.origen_tipo === 'pasaje_aereo' && item.cotizacion_pasaje_aereo">
-                                {{ item.cotizacion_pasaje_aereo.aerolinea }}
+
+                            <div v-for="item in bloque.items" :key="item.id" class="canvas-item border rounded p-2 mb-2 small" :class="{ 'ms-3': bloque.tourOrigenId }">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <span>
+                                        <i class="fas me-2 text-primary" :class="iconoItem(item)"></i>
+                                        {{ etiquetaItem(item) }}
+                                        <span v-if="item.cantidad > 1 && item.modo_precio === 'tarifa_fija' && item.origen_tipo !== 'manual'" class="text-muted"> × {{ item.cantidad }}</span>
+                                    </span>
+                                    <span class="d-flex align-items-center gap-2">
+                                        <strong>{{ alternativaActiva.moneda_cotizacion }} {{ Number(item.total_convertido).toFixed(2) }}</strong>
+                                        <select v-if="!bloque.tourOrigenId" class="form-select form-select-sm" style="width:auto;font-size:11px" :value="item.dia_referencial ?? ''" @change="onReasignarDiaItem(item, $event)">
+                                            <option value="" disabled>Sin día</option>
+                                            <option v-for="d in diasCreados" :key="d" :value="d">Día {{ d }}</option>
+                                        </select>
+                                        <i class="fas fa-times text-danger" style="cursor:pointer" @click="eliminarItem(item)"></i>
+                                    </span>
+                                </div>
+                                <div class="text-muted mt-1" style="font-size:11px" v-if="item.origen_tipo === 'pasaje_aereo' && item.cotizacion_pasaje_aereo">
+                                    {{ item.cotizacion_pasaje_aereo.aerolinea }}
+                                </div>
                             </div>
                         </div>
 
                         <div v-if="mostrarFormManual" class="border rounded p-2 mt-2">
-                            <ItemManualForm :alternativa-id="alternativaActiva.id" @agregado="onItemAgregado" />
+                            <ItemManualForm :alternativa-id="alternativaActiva.id" :dia-activo="diaActivoParaAgregar" @agregado="onItemAgregado" />
                         </div>
                         <div v-if="mostrarFormPasajeAereo" class="border rounded p-2 mt-2">
-                            <PasajeAereoForm :alternativa-id="alternativaActiva.id" @agregado="onItemAgregado" />
+                            <PasajeAereoForm :alternativa-id="alternativaActiva.id" :dia-activo="diaActivoParaAgregar" @agregado="onItemAgregado" />
                         </div>
                         <button class="btn btn-outline-secondary btn-sm mt-2" @click="mostrarFormPasajeAereo = !mostrarFormPasajeAereo">
                             <i class="fas fa-plane me-1"></i>{{ mostrarFormPasajeAereo ? 'Cerrar' : 'Agregar pasaje aéreo suelto' }}
@@ -298,30 +374,51 @@
                         <p class="small fw-semibold text-secondary mb-2">Alternativa {{ alternativaActiva.nombre }}</p>
                         <div class="small mb-2" style="max-height:340px;overflow-y:auto;">
                             <div v-for="item in alternativaActiva.items" :key="item.id" class="mb-2 pb-2 border-bottom">
-                                <div class="d-flex justify-content-between">
-                                    <span class="text-muted text-truncate" style="max-width:110px" :title="etiquetaItem(item)">{{ etiquetaItem(item) }}</span>
-                                    <span>{{ Number(item.total_convertido).toFixed(2) }}</span>
+                                <div class="d-flex justify-content-between gap-2">
+                                    <span class="text-muted" style="word-break:break-word;">{{ etiquetaItem(item) }}</span>
+                                    <span class="text-nowrap">{{ Number(item.total_convertido).toFixed(2) }}</span>
                                 </div>
-                                <div class="d-flex gap-1 align-items-center mt-1" v-if="item.origen_tipo !== 'manual' && item.proveedor_tarifa_id">
-                                    <input type="number" class="form-control form-control-sm" style="max-width:70px" placeholder="Desc %"
-                                        v-model.number="edicionItems[item.id].descuento_pct" @input="onEditarDescuento(item)">
-                                    <input type="number" class="form-control form-control-sm" :class="{ 'border-danger text-danger': alertasPiso[item.id] }"
-                                        v-model.number="edicionItems[item.id].precio_convertido" @input="onEditarPrecio(item)">
+                                <div class="row g-1 mt-1" v-if="item.origen_tipo !== 'manual' && item.proveedor_tarifa_id">
+                                    <div class="col-5">
+                                        <label class="form-label mb-0 text-muted" style="font-size:10px">Desc. %</label>
+                                        <input type="number" class="form-control form-control-sm"
+                                            v-model.number="edicionItems[item.id].descuento_pct" @input="onEditarDescuento(item)">
+                                    </div>
+                                    <div class="col-7">
+                                        <label class="form-label mb-0 text-muted" style="font-size:10px">Precio final</label>
+                                        <input type="number" class="form-control form-control-sm" :class="{ 'border-danger text-danger': alertasPiso[item.id] }"
+                                            v-model.number="edicionItems[item.id].precio_convertido" @input="onEditarPrecio(item)">
+                                    </div>
                                 </div>
                                 <small v-if="alertasPiso[item.id]" class="text-danger"><i class="fas fa-exclamation-triangle me-1"></i>Por debajo del piso permitido</small>
                             </div>
                             <div v-if="(alternativaActiva.items?.length ?? 0) === 0" class="text-muted">Sin ítems todavía</div>
                         </div>
+
+                        <div class="border-top pt-2 mb-2" v-if="(alternativaActiva.items?.length ?? 0) > 0">
+                            <label class="form-label mb-1 small fw-semibold text-secondary">Descuento global %</label>
+                            <div class="d-flex align-items-center gap-1">
+                                <input type="number" min="0" max="100" class="form-control form-control-sm"
+                                    v-model.number="descuentoGlobalLocal" @change="onEditarDescuentoGlobal">
+                                <span class="small text-muted">%</span>
+                            </div>
+                            <small v-if="lineasFueraDePiso.length" class="text-danger d-block mt-1">
+                                <i class="fas fa-exclamation-triangle me-1"></i>{{ lineasFueraDePiso.length }} línea(s) quedaron bajo el piso permitido — revisalas arriba.
+                            </small>
+                        </div>
+
                         <hr>
                         <div class="d-flex justify-content-between align-items-baseline">
                             <span class="small text-secondary">Total</span>
                             <span class="fs-4 fw-semibold">{{ alternativaActiva.moneda_cotizacion }} {{ Number(alternativaActiva.total).toFixed(2) }}</span>
                         </div>
-                        <div class="mt-3 d-flex gap-2">
-                            <button v-if="alternativaActiva.estado !== 'aceptada'" class="btn btn-success btn-sm flex-fill" @click="marcarAceptada">
+                        <div class="mt-3" v-if="alternativaActiva.estado !== 'aceptada'">
+                            <button class="btn btn-success btn-sm w-100" @click="marcarAceptada" :disabled="(alternativaActiva.items?.length ?? 0) === 0">
                                 <i class="fas fa-check me-1"></i>Aceptar
                             </button>
-                            <button class="btn btn-outline-danger btn-sm" @click="eliminarAlternativa"><i class="fas fa-trash"></i></button>
+                            <small v-if="(alternativaActiva.items?.length ?? 0) === 0" class="text-muted d-block text-center mt-1">
+                                Agregá al menos un ítem para poder aceptar
+                            </small>
                         </div>
                     </div>
                 </div>
@@ -349,8 +446,9 @@ import { alternativaService } from '@/services/admin/alternativaService';
 import { alternativaItemService } from '@/services/admin/alternativaItemService';
 import { opcionMayoristaService } from '@/services/admin/opcionMayoristaService';
 import { proveedorService, proveedorTipoService } from '@/services/admin/proveedorService';
+import { bibliotecaCotizadorService, type BibliotecaTipo } from '@/services/admin/bibliotecaCotizadorService';
 import { reservaService } from '@/services/admin/reservaService';
-import type { Cotizacion, Alternativa, AlternativaItem, ProveedorTarifa, OpcionMayorista, Proveedor } from '@/types/agencia-viajes';
+import type { Cotizacion, Alternativa, AlternativaItem, ProveedorTarifa, OpcionMayorista, Proveedor, ProveedorTipo, BibliotecaResultado } from '@/types/agencia-viajes';
 import type { Client } from '@/types/clients';
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
@@ -462,6 +560,7 @@ const cargarCotizacion = async () => {
         alternativaActivaId.value = cotizacion.value.alternativas[0].id;
     }
     inicializarEdicionItems();
+    inicializarDias();
 };
 
 const seleccionarAlternativa = (id: number) => {
@@ -530,15 +629,146 @@ const eliminarAlternativa = async () => {
     }
 };
 
-// ── Biblioteca local ──────────────────────────────────────────────────
+// ── Lienzo día-por-día (Sesión 11b3, §7.1) ─────────────────────────────
+// diaActivo=0 es el sentinel "Sin día" (bucket de solo-lectura para ítems
+// creados antes de esta sesión, dia_referencial=null) — NO es un día real,
+// nunca se manda al backend como destino (reasignarDia/desde-plantilla
+// exigen min:1). diaActivoParaAgregar resuelve ese caso a un día real.
+const diaActivo = ref(1);
+const diasCreados = ref<number[]>([1]);
+
+const inicializarDias = () => {
+    const items = alternativaActiva.value?.items ?? [];
+    const maxDia = items.reduce((max, it) => Math.max(max, it.dia_referencial ?? 0), 1);
+    diasCreados.value = Array.from({ length: maxDia }, (_, i) => i + 1);
+    if (!diasCreados.value.includes(diaActivo.value) && diaActivo.value !== 0) {
+        diaActivo.value = diasCreados.value[0] ?? 1;
+    }
+};
+
+const diaSiguiente = computed(() => (diasCreados.value.length ? Math.max(...diasCreados.value) : 0) + 1);
+const diaActivoParaAgregar = computed(() => (diaActivo.value === 0 ? (diasCreados.value[0] ?? 1) : diaActivo.value));
+
+const agregarDia = () => {
+    diasCreados.value.push(diaSiguiente.value);
+    diaActivo.value = diaSiguiente.value;
+};
+
+const itemsSinDia = computed(() => (alternativaActiva.value?.items ?? []).filter((i) => i.dia_referencial == null));
+
+const itemsDelDiaActivo = computed(() => {
+    const items = alternativaActiva.value?.items ?? [];
+    return diaActivo.value === 0
+        ? items.filter((i) => i.dia_referencial == null)
+        : items.filter((i) => i.dia_referencial === diaActivo.value);
+});
+
+// Agrupa por tour_origen_id (Sesión 11b4a) dentro del día activo — mismo
+// patrón visual que paquetes/detalle.vue::itemsPorTourAgrupados. Los ítems
+// sin tour_origen_id ("sueltos") van en un bloque final sin encabezado.
+type BloqueItem = { tourOrigenId: number | null; tourNombre: string | null; items: AlternativaItem[] };
+
+const bloquesDelDiaActivo = computed<BloqueItem[]>(() => {
+    const bloques = new Map<number, BloqueItem>();
+    const sueltos: AlternativaItem[] = [];
+
+    for (const item of itemsDelDiaActivo.value) {
+        if (item.tour_origen_id) {
+            if (!bloques.has(item.tour_origen_id)) {
+                bloques.set(item.tour_origen_id, { tourOrigenId: item.tour_origen_id, tourNombre: item.tour_origen?.nombre ?? null, items: [] });
+            }
+            bloques.get(item.tour_origen_id)!.items.push(item);
+        } else {
+            sueltos.push(item);
+        }
+    }
+
+    const resultado = Array.from(bloques.values());
+    if (sueltos.length) resultado.push({ tourOrigenId: null, tourNombre: null, items: sueltos });
+
+    return resultado;
+});
+
+const onReasignarDiaItem = async (item: AlternativaItem, event: Event) => {
+    const valor = Number((event.target as HTMLSelectElement).value);
+    if (!valor) return;
+    try {
+        await alternativaItemService.reasignarDia(item.id, valor);
+        await cargarCotizacion();
+    } catch (error: any) {
+        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo mover el ítem', 'error');
+    }
+};
+
+const onMoverBloque = async (bloque: BloqueItem, event: Event) => {
+    const valor = Number((event.target as HTMLSelectElement).value);
+    if (!bloque.tourOrigenId || !alternativaActiva.value || !valor || valor === diaActivo.value) return;
+    try {
+        await alternativaItemService.moverBloque(alternativaActiva.value.id, { tour_origen_id: bloque.tourOrigenId, dia_referencial: valor });
+        await cargarCotizacion();
+    } catch (error: any) {
+        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo mover el bloque', 'error');
+    }
+};
+
+// ── Biblioteca unificada (Sesión 11b3, §7.1) — un único endpoint decide
+// contra qué tabla(s) consulta según el chip activo, ver
+// BibliotecaCotizadorController en el backend. "Todos"/"Tour"/"Paquete" son
+// fijos; el resto de chips sale del catálogo real de proveedor_tipos (NO
+// una lista hardcodeada — ese catálogo cambia por tenant/sesión).
+const proveedorTipos = ref<ProveedorTipo[]>([]);
+
+type ChipBiblioteca = { tipo: BibliotecaTipo; proveedorTipoId: number | null; nombre: string };
+
+// "Todos"/"Tour"/"Paquete" siempre visibles; el resto del catálogo de
+// proveedor_tipos entra en el desplegable "Más ▾" — Parte B, punto (3)
+// confirmado con el usuario (comprimir sin esconder los 3 fijos).
+const chipsFijos = computed<ChipBiblioteca[]>(() => [
+    { tipo: 'todos', proveedorTipoId: null, nombre: 'Todos' },
+    { tipo: 'tour', proveedorTipoId: null, nombre: 'Tour' },
+    { tipo: 'paquete', proveedorTipoId: null, nombre: 'Paquete' },
+]);
+
+const chipsProveedores = computed<ChipBiblioteca[]>(() =>
+    proveedorTipos.value.map((t) => ({ tipo: 'proveedor' as BibliotecaTipo, proveedorTipoId: t.id, nombre: t.nombre }))
+);
+
+const mostrarMasChips = ref(false);
+const chipMasActivo = computed(() => chipsProveedores.value.find((c) => chipActivo(c)) ?? null);
+
+const chipActivoState = ref<ChipBiblioteca>({ tipo: 'todos', proveedorTipoId: null, nombre: 'Todos' });
+const chipActivo = (chip: ChipBiblioteca) => chip.tipo === chipActivoState.value.tipo && chip.proveedorTipoId === chipActivoState.value.proveedorTipoId;
+
+const seleccionarChip = (chip: ChipBiblioteca) => {
+    chipActivoState.value = chip;
+    cargarBiblioteca();
+};
+
 const bibliotecaSearch = ref('');
-const bibliotecaTarifas = ref<ProveedorTarifa[]>([]);
+const bibliotecaResultados = ref<BibliotecaResultado[]>([]);
 let bibliotecaTimeout: any = null;
 
 const cargarBiblioteca = async () => {
-    const res = await proveedorService.biblioteca(bibliotecaSearch.value || undefined);
-    bibliotecaTarifas.value = res.proveedor_tarifas;
+    const res = await bibliotecaCotizadorService.buscar({
+        tipo: chipActivoState.value.tipo,
+        proveedor_tipo_id: chipActivoState.value.proveedorTipoId ?? undefined,
+        search: bibliotecaSearch.value || undefined,
+    });
+    bibliotecaResultados.value = res.resultados;
 };
+
+const onBibliotecaSearch = () => {
+    clearTimeout(bibliotecaTimeout);
+    bibliotecaTimeout = setTimeout(cargarBiblioteca, 300);
+};
+
+const etiquetaCategoriaPaquete = (c: string) => ({ local: 'Local', nacional: 'Nacional', internacional: 'Internacional' } as Record<string, string>)[c] ?? c;
+
+const bibliotecaToursPaquetes = computed(() =>
+    bibliotecaResultados.value.filter((r) => r.tipo_resultado === 'tour' || r.tipo_resultado === 'paquete') as Array<
+        Extract<BibliotecaResultado, { tipo_resultado: 'tour' | 'paquete' }>
+    >
+);
 
 // Agrupa SOLO las tarifas de hotel (con tipo_habitacion) por proveedor_servicio_id —
 // un hotel con 4 tipos de habitación aparecía 4 veces en la biblioteca con el mismo
@@ -548,9 +778,11 @@ const cargarBiblioteca = async () => {
 // transporte, restaurante, etc.) se listan una por una, igual que antes.
 type BibliotecaFila = ProveedorTarifa & { _rangoHabitaciones?: boolean };
 
-const bibliotecaAgrupada = computed<BibliotecaFila[]>(() => {
+const bibliotecaProveedorAgrupada = computed<BibliotecaFila[]>(() => {
+    const tarifas = bibliotecaResultados.value.filter((r) => r.tipo_resultado === 'proveedor_tarifa') as ProveedorTarifa[];
+
     const gruposPorServicio = new Map<number, ProveedorTarifa[]>();
-    for (const t of bibliotecaTarifas.value) {
+    for (const t of tarifas) {
         if (!t.tipo_habitacion) continue;
         const grupo = gruposPorServicio.get(t.proveedor_servicio_id) ?? [];
         grupo.push(t);
@@ -560,7 +792,7 @@ const bibliotecaAgrupada = computed<BibliotecaFila[]>(() => {
     const vistos = new Set<number>();
     const filas: BibliotecaFila[] = [];
 
-    for (const t of bibliotecaTarifas.value) {
+    for (const t of tarifas) {
         if (!t.tipo_habitacion) {
             filas.push(t);
             continue;
@@ -578,9 +810,32 @@ const bibliotecaAgrupada = computed<BibliotecaFila[]>(() => {
     return filas;
 });
 
-const onBibliotecaSearch = () => {
-    clearTimeout(bibliotecaTimeout);
-    bibliotecaTimeout = setTimeout(cargarBiblioteca, 300);
+// Click en una tarjeta de tour/paquete — explota TODOS sus ítems en la
+// alternativa activa (AlternativaItemController::desdePlantilla()). Sin
+// modal de confirmación intermedio: el badge de cantidad de ítems, visible
+// ANTES del click en la tarjeta, ya es el requisito explícito de la spec
+// para que el vendedor anticipe cuántas líneas va a inyectar.
+const clicResultadoPlantilla = async (p: Extract<BibliotecaResultado, { tipo_resultado: 'tour' | 'paquete' }>) => {
+    if (!alternativaActiva.value) return;
+    try {
+        const res = await alternativaItemService.cargarDesdePlantilla(alternativaActiva.value.id, {
+            paquete_plantilla_id: p.id,
+            dia_referencial: diaActivoParaAgregar.value,
+        });
+        if (res.guias_pendientes.length) {
+            const lista = res.guias_pendientes
+                .map((g) => `<li>${g.guia_nombre ?? 'Guía'} — ${g.tour_origen_nombre ?? ''}${g.destino_nombre ? ` (${g.destino_nombre})` : ''}</li>`)
+                .join('');
+            await (Swal as TVueSwalInstance).fire({
+                title: 'Ítems de guía no cargados',
+                html: `<p class="text-start mb-1">Sin equivalente automático en la cotización — se asignan recién al reservar:</p><ul class="text-start">${lista}</ul>`,
+                icon: 'info',
+            });
+        }
+        await cargarCotizacion();
+    } catch (error: any) {
+        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo cargar la plantilla', 'error');
+    }
 };
 
 const matrizHotelActiva = ref<{ tarifas: Array<{ id: number; tipo_habitacion: string; precio: number }>; moneda: string; nombreProveedor: string } | null>(null);
@@ -608,6 +863,7 @@ const confirmarModoPrecio = async (modoPrecio: 'tarifa_fija' | 'por_persona') =>
             proveedor_tarifa_id: modoPrecioPendiente.value.id,
             modo_precio: modoPrecio,
             cantidad: 1,
+            dia_referencial: diaActivoParaAgregar.value,
         });
         onItemAgregado(res.alternativa_item);
     } catch (error: any) {
@@ -624,6 +880,7 @@ const agregarItemProveedorHotel = async (proveedorTarifaId: number, cantidad: nu
             proveedor_tarifa_id: proveedorTarifaId,
             modo_precio: 'tarifa_fija',
             cantidad,
+            dia_referencial: diaActivoParaAgregar.value,
         });
         onItemAgregado(res.alternativa_item);
         matrizHotelActiva.value = null;
@@ -698,6 +955,7 @@ const agregarItemMayorista = async (op: OpcionMayorista, opcionHotelTarifaId: nu
             opcion_mayorista_id: op.id,
             opcion_hotel_tarifa_id: opcionHotelTarifaId,
             cantidad,
+            dia_referencial: diaActivoParaAgregar.value,
         });
         onItemAgregado(res.alternativa_item);
     } catch (error: any) {
@@ -729,6 +987,28 @@ const inicializarEdicionItems = () => {
     (alternativaActiva.value?.items ?? []).forEach((item) => {
         edicionItems.value[item.id] = { descuento_pct: Number(item.descuento_pct ?? 0), precio_convertido: Number(item.precio_convertido) };
     });
+    descuentoGlobalLocal.value = Number(alternativaActiva.value?.descuento_global_pct ?? 0);
+    lineasFueraDePiso.value = [];
+};
+
+// ── Descuento global (Parte B, punto 3.1 del plan de dominio) — reparte el
+// % a CADA alternativa_item respetando su piso individual
+// (AlternativaController::aplicarDescuentoGlobal(), mismo PriceEngineService
+// que ya usa la edición por ítem — NUNCA se recalcula acá, el backend
+// siempre manda el resultado final). Antes de esta sesión el campo se
+// guardaba pero no se aplicaba a ningún ítem — gap real cerrado en 11b3.
+const descuentoGlobalLocal = ref(0);
+const lineasFueraDePiso = ref<Array<{ alternativa_item_id: number; precio_minimo_permitido: number | null }>>([]);
+
+const onEditarDescuentoGlobal = async () => {
+    if (!alternativaActiva.value) return;
+    try {
+        const res = await alternativaService.actualizar(alternativaActiva.value.id, { descuento_global_pct: descuentoGlobalLocal.value });
+        lineasFueraDePiso.value = res.lineas_fuera_de_piso ?? [];
+        await cargarCotizacion();
+    } catch (error: any) {
+        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo aplicar el descuento global', 'error');
+    }
 };
 
 const onEditarDescuento = (item: AlternativaItem) => {
@@ -777,13 +1057,23 @@ const etiquetaItem = (item: AlternativaItem) => {
 };
 
 watch(modo, (m) => { if (m === 'intl') cargarOpcionesMayorista(); });
-watch(alternativaActivaId, () => { inicializarEdicionItems(); if (modo.value === 'intl') cargarOpcionesMayorista(); });
+watch(alternativaActivaId, () => {
+    inicializarEdicionItems();
+    inicializarDias();
+    if (modo.value === 'intl') cargarOpcionesMayorista();
+});
 
 onMounted(async () => {
+    // proveedor_tipos: catálogo real (editable desde el panel superadmin,
+    // NO los 4 valores del seeder original) — alimenta tanto los chips de
+    // la biblioteca (Sesión 11b3) como la búsqueda de proveedores
+    // mayoristas de acá abajo (sin duplicar la llamada).
+    const tipos = await proveedorTipoService.listar();
+    proveedorTipos.value = tipos.proveedor_tipos;
+
     await cargarCotizacion();
     await cargarBiblioteca();
 
-    const tipos = await proveedorTipoService.listar();
     const tipoMayorista = tipos.proveedor_tipos.find((t) => t.slug === 'mayorista');
     if (tipoMayorista) {
         const res = await httpClient.get('/proveedores', { params: { tipo_id: tipoMayorista.id } });
@@ -795,4 +1085,21 @@ onMounted(async () => {
 <style scoped>
 .price-panel { position: sticky; top: 1rem; }
 .lib-item:hover { background: #eef2ff; border-color: #6366f1 !important; }
+
+/* Tacho de la alternativa activa — oculto hasta hover del pill, para no
+   saturar la fila cuando hay varias alternativas (Parte B). */
+.alt-pill-delete { opacity: 0; transition: opacity .15s; }
+.alt-pill:hover .alt-pill-delete { opacity: 1; }
+
+/* Tabs de día — nav-tabs subrayadas a propósito, para distinguirse
+   visualmente de las pills sólidas (alternativas arriba, chips de
+   biblioteca a la izquierda). */
+.dia-tabs .nav-link {
+    padding: 0.35rem 0.75rem;
+    font-size: 0.875rem;
+    color: var(--bs-secondary-color, #6c757d);
+}
+.dia-tabs .nav-link.active {
+    font-weight: 600;
+}
 </style>

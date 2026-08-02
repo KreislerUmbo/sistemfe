@@ -244,6 +244,9 @@ export type AlternativaResponse = {
   code: number;
   message: string;
   alternativa: Alternativa;
+  // Sesión 11b3 — solo poblado cuando el PUT incluyó descuento_global_pct.
+  // Ver AlternativaController::aplicarDescuentoGlobal() en el backend.
+  lineas_fuera_de_piso?: Array<{ alternativa_item_id: number; precio_minimo_permitido: number | null }>;
 };
 
 export type OrigenItem = 'proveedor' | 'mayorista' | 'pasaje_aereo' | 'manual';
@@ -258,6 +261,9 @@ export type AlternativaItem = {
   // paquete_combo (agrupación visual, no afecta precio).
   tour_origen_id?: number | null;
   tour_origen?: PaquetePlantilla | null;
+  // Sesión 11b3 — día del lienzo (cotización concreta), NO confundir con
+  // TourItinerarioItem.dia_relativo (día dentro de la PLANTILLA del tour).
+  dia_referencial?: number | null;
   descripcion_manual?: string | null;
   modo_precio: 'por_persona' | 'tarifa_fija';
   cantidad: number;
@@ -281,6 +287,26 @@ export type AlternativaItemResponse = {
   precio_minimo_permitido?: number | null;
   alerta_piso?: boolean;
 };
+
+// Sesión 11b3 — respuesta de POST alternativas/{id}/items/desde-plantilla.
+export type DesdePlantillaResponse = {
+  code: number;
+  message: string;
+  items_agregados: AlternativaItem[];
+  guias_pendientes: Array<{
+    tour_origen_id: number;
+    tour_origen_nombre: string | null;
+    guia_nombre: string | null;
+    destino_nombre: string | null;
+  }>;
+  resumen: { tours: number | null; items: number };
+};
+
+// Sesión 11b3 — GET biblioteca-cotizador (BibliotecaCotizadorController).
+// tipo_resultado discrimina qué tarjeta renderizar en editar.vue.
+export type BibliotecaResultado =
+  | (PaquetePlantilla & { tipo_resultado: 'tour' | 'paquete'; resumen_items: { tours: number | null; items: number } })
+  | (ProveedorTarifa & { tipo_resultado: 'proveedor_tarifa' });
 
 export type CotizacionPasajeAereo = {
   id: number;

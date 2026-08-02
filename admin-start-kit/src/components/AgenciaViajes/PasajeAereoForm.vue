@@ -98,7 +98,7 @@
 import { ref, reactive, watch } from 'vue';
 import { alternativaItemService } from '@/services/admin/alternativaItemService';
 
-const props = defineProps<{ alternativaId: number; paxIncluidos?: number[] | null }>();
+const props = defineProps<{ alternativaId: number; paxIncluidos?: number[] | null; diaActivo: number }>();
 const emit = defineEmits<{ (e: 'agregado', payload: any): void }>();
 
 const form = reactive({
@@ -150,6 +150,7 @@ const agregar = async () => {
         const res = await alternativaItemService.agregarPasajeAereo(props.alternativaId, {
             ...form,
             pax_incluidos: props.paxIncluidos ?? null,
+            dia_referencial: props.diaActivo,
         });
         emit('agregado', res.alternativa_item);
     } catch (error: any) {

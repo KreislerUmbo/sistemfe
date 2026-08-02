@@ -3,6 +3,7 @@
 // mismo endpoint de creación — el payload varía, ver
 // AlternativaItemController::store() en el backend.
 import httpClient from '@/helpers/http-client'
+import type { DesdePlantillaResponse } from '@/types/agencia-viajes'
 
 export const alternativaItemService = {
   async agregarProveedor(alternativaId: number, data: Record<string, any>) {
@@ -37,6 +38,25 @@ export const alternativaItemService = {
   },
   async eliminar(id: number) {
     const response = await httpClient.delete(`/alternativa-items/${id}`)
+    return response.data
+  },
+
+  // Sesión 11b3 — "cargar desde plantilla" (tour_simple/paquete_combo
+  // completo, explotado en vivo contra sus tarifas reales, ver
+  // AlternativaItemController::desdePlantilla()).
+  async cargarDesdePlantilla(alternativaId: number, data: { paquete_plantilla_id: number; dia_referencial: number }) {
+    const response = await httpClient.post(`/alternativas/${alternativaId}/items/desde-plantilla`, data)
+    return response.data as DesdePlantillaResponse
+  },
+  // Reasignar día de un ítem SUELTO (sin tour_origen_id) — ver moverBloque()
+  // para ítems que pertenecen a un bloque de tour.
+  async reasignarDia(itemId: number, dia_referencial: number) {
+    const response = await httpClient.put(`/alternativa-items/${itemId}/dia`, { dia_referencial })
+    return response.data
+  },
+  // Mueve TODOS los ítems de un mismo tour_origen_id juntos.
+  async moverBloque(alternativaId: number, data: { tour_origen_id: number; dia_referencial: number }) {
+    const response = await httpClient.put(`/alternativas/${alternativaId}/items/mover-bloque`, data)
     return response.data
   }
 }

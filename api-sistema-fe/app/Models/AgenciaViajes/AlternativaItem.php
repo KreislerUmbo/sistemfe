@@ -34,6 +34,7 @@ class AlternativaItem extends Model
         'proveedor_tarifa_id',
         'opcion_mayorista_id',
         'tour_origen_id',
+        'dia_referencial',
         'descripcion_manual',
         'modo_precio',
         'cantidad',
@@ -48,6 +49,7 @@ class AlternativaItem extends Model
     protected $casts = [
         'pax_incluidos' => 'array',
         'cantidad' => 'integer',
+        'dia_referencial' => 'integer',
         'costo_snapshot' => 'decimal:2',
         'precio_venta_snapshot' => 'decimal:2',
         'descuento_pct' => 'decimal:2',
