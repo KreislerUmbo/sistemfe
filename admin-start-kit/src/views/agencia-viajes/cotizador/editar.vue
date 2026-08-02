@@ -12,7 +12,7 @@
             </div>
             <div class="d-flex flex-wrap align-items-center gap-2">
                 <span class="badge bg-light text-dark border fw-normal"><i class="fas fa-map-marker-alt me-1 text-primary"></i>{{ cotizacion.destino }}</span>
-                <span class="badge bg-light text-dark border fw-normal"><i class="fas fa-calendar me-1 text-primary"></i>{{ formatFecha(cotizacion.fecha_viaje_desde) }} — {{ formatFecha(cotizacion.fecha_viaje_hasta) }}</span>
+                <span class="badge bg-light text-dark border fw-normal"><i class="fas fa-calendar me-1 text-primary"></i>{{ textoFechasViaje }}</span>
                 <span class="badge bg-light text-dark border fw-normal"><i class="fas fa-users me-1 text-primary"></i>{{ resumenPax }}</span>
                 <i class="fas fa-pen text-primary" style="cursor:pointer;font-size:12px" title="Corregir cliente/destino/fecha" @click="abrirEdicionCabecera"></i>
             </div>
@@ -473,6 +473,17 @@ const resumenPax = computed(() => {
 });
 
 const formatFecha = (f?: string | null) => f ? new Date(f + 'T00:00:00').toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' }) : 'sin fecha';
+
+// Antes: cada lado se formateaba por separado ("sin fecha — sin fecha" con
+// ambas vacías, o peor si alguna venía como string vacío en vez de null).
+// Un único mensaje cuando falta cualquiera de las dos fechas es más claro
+// que dos placeholders pegados con un guion.
+const textoFechasViaje = computed(() => {
+    const desde = cotizacion.value?.fecha_viaje_desde;
+    const hasta = cotizacion.value?.fecha_viaje_hasta;
+    if (!desde || !hasta) return 'Fecha por confirmar';
+    return `${formatFecha(desde)} — ${formatFecha(hasta)}`;
+});
 
 // ── Corregir cliente/destino/fecha (me equivoqué al crear la cotización) ──
 const editandoCabecera = ref(false);
