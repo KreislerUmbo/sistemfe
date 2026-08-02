@@ -2,6 +2,7 @@
 
 namespace App\Models\AgenciaViajes;
 
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 
 // "Tour" — plan-modulo-cotizaciones-reservas.md §3.7 +
@@ -61,6 +62,29 @@ class PaquetePlantilla extends Model
         'descuento_valor' => 'decimal:2',
         'margen_minimo_pct' => 'decimal:2',
     ];
+
+    // hora_salida/hora_retorno son columnas `time` de Postgres: Eloquent las
+    // devuelve tal cual las guarda la BD ("06:00:00"), pero el validador de
+    // store()/update() (PaquetePlantillaController::validarPayload) exige
+    // date_format:H:i (sin segundos) — <input type="time"> también trabaja
+    // en H:i. Normalizado acá, a nivel de modelo, para que CUALQUIER lugar
+    // que lea el paquete (form.vue, detalle.vue, el cotizador al cargar una
+    // plantilla, etc.) reciba siempre "HH:MM" sin tener que recordarlo en
+    // cada punto de consumo — un fix anterior (dfcdf92) solo normalizaba en
+    // el punto de carga de form.vue y volvió a romperse en otro flujo.
+    protected function horaSalida(): Attribute
+    {
+        return Attribute::make(
+            get: fn (?string $value) => $value ? substr($value, 0, 5) : $value,
+        );
+    }
+
+    protected function horaRetorno(): Attribute
+    {
+        return Attribute::make(
+            get: fn (?string $value) => $value ? substr($value, 0, 5) : $value,
+        );
+    }
 
     public function destinoAtractivo()
     {

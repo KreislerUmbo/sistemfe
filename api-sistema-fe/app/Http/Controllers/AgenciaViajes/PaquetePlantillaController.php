@@ -338,6 +338,19 @@ class PaquetePlantillaController extends Controller
 
     private function validarPayload(Request $request, ?int $ignoreId = null): array|JsonResponse
     {
+        // Tolerancia de entrada: si llega "HH:MM:SS" (p.ej. un valor de
+        // hora_salida/hora_retorno recargado desde la BD y reenviado sin
+        // pasar por el accessor del modelo — carga de plantilla en el
+        // cotizador, un futuro "duplicar tour", etc.) se recorta a "HH:MM"
+        // ANTES de validar, en vez de rechazar con 422 un formato que el
+        // propio backend produce. date_format:H:i abajo sigue siendo la
+        // única fuente de verdad sobre qué es válido.
+        foreach (['hora_salida', 'hora_retorno'] as $campoHora) {
+            if (is_string($request->input($campoHora)) && preg_match('/^\d{2}:\d{2}:\d{2}$/', $request->input($campoHora))) {
+                $request->merge([$campoHora => substr($request->input($campoHora), 0, 5)]);
+            }
+        }
+
         $validator = Validator::make($request->all(), [
             'codigo' => ['nullable', 'string', 'max:50', Rule::unique('paquetes_plantilla', 'codigo')->ignore($ignoreId)],
             'categoria' => 'required|in:local,nacional,internacional',
