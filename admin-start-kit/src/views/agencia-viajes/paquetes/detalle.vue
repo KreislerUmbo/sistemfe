@@ -227,9 +227,14 @@
                             <div v-for="t in bibliotecaTarifas" :key="t.id" class="border rounded p-2 small lib-item"
                                 :class="{ 'border-primary bg-light': proveedorTarifaSeleccionada?.id === t.id }"
                                 style="cursor:pointer" @click="proveedorTarifaSeleccionada = t">
-                                <strong>{{ t.proveedor_servicio?.proveedor?.razon_social }}</strong>
-                                <span v-if="t.proveedor_servicio?.proveedor?.es_referencial" class="badge bg-secondary-subtle text-secondary border ms-1" style="font-size:10px">Referencial</span>
-                                <span class="text-muted"> — {{ t.proveedor_servicio?.destino_servicio?.servicio?.nombre }}<span v-if="t.tipo_habitacion"> · {{ t.tipo_habitacion }}</span></span>
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <div>
+                                        <strong>{{ t.proveedor_servicio?.proveedor?.razon_social }}</strong>
+                                        <span v-if="t.proveedor_servicio?.proveedor?.es_referencial" class="badge bg-secondary-subtle text-secondary border ms-1" style="font-size:10px">Referencial</span>
+                                        <span class="text-muted"> — {{ t.proveedor_servicio?.destino_servicio?.servicio?.nombre }}<span v-if="t.tipo_habitacion"> · {{ t.tipo_habitacion }}</span></span>
+                                    </div>
+                                    <span class="badge bg-light text-dark border">{{ t.moneda }} {{ Number(t.precio_venta_adulto).toFixed(2) }}</span>
+                                </div>
                             </div>
                             <div v-if="bibliotecaTarifas.length === 0" class="text-muted small text-center py-2">Sin resultados.</div>
                         </div>
@@ -279,12 +284,39 @@
                             <span v-if="item.guia_tarifa.guia?.es_referencial" class="badge bg-secondary-subtle text-secondary border ms-1" style="font-size:10px">Referencial</span>
                             <span class="text-muted"> — {{ item.guia_tarifa.destino?.nombre }}</span>
                         </span>
-                        <i class="fas fa-times text-danger" style="cursor:pointer" @click="quitarItem(item)"></i>
+                        <span class="d-flex align-items-center gap-3">
+                            <span class="badge bg-light text-dark border">{{ monedaItem(item) }} {{ ventaItem(item).toFixed(2) }}</span>
+                            <i class="fas fa-times text-danger" style="cursor:pointer" @click="quitarItem(item)"></i>
+                        </span>
                     </li>
                     <li v-if="items.length === 0" class="list-group-item text-muted fst-italic text-center py-4">
                         Este paquete/tour todavía no tiene ítems incluidos.
                     </li>
                 </ul>
+            </div>
+
+            <div class="card border-0 shadow-sm mt-3" v-if="items.length">
+                <div class="card-header bg-white border-bottom py-2">
+                    <span class="fw-semibold text-dark small"><i class="fas fa-coins text-primary me-1"></i>Totales</span>
+                </div>
+                <div class="card-body">
+                    <div class="row text-center g-3">
+                        <div class="col-4">
+                            <div class="small text-muted mb-1">Costo total</div>
+                            <div class="fs-5 fw-semibold text-dark">S/ {{ totalesIncluye.costoTotal.toFixed(2) }}</div>
+                        </div>
+                        <div class="col-4">
+                            <div class="small text-muted mb-1">Venta total</div>
+                            <div class="fs-5 fw-semibold text-dark">S/ {{ totalesIncluye.ventaTotal.toFixed(2) }}</div>
+                        </div>
+                        <div class="col-4">
+                            <div class="small text-muted mb-1">Margen resultante</div>
+                            <div class="fs-5 fw-bold" :class="totalesIncluye.margenResultantePct >= MARGEN_MINIMO_ACEPTABLE_PCT ? 'text-success' : 'text-danger'">
+                                {{ totalesIncluye.margenResultantePct.toFixed(1) }}%
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -740,6 +772,32 @@ const cargarItems = async () => {
     const res = await paquetePlantillaService.listarItems(paqueteId.value);
     items.value = res.paquete_plantilla_items;
 };
+
+// ── Totales de "Incluye" (tour_simple) — costo/venta/margen, en vivo ──
+const MARGEN_MINIMO_ACEPTABLE_PCT = 20;
+
+const ventaGuiaTarifa = (gt: GuiaTarifa): number =>
+    gt.tipo_margen === 'porcentaje' ? gt.costo_diario * (1 + gt.margen_valor / 100) : gt.costo_diario + gt.margen_valor;
+
+const costoItem = (item: PaquetePlantillaItem): number => {
+    if (item.proveedor_tarifa) return Number(item.proveedor_tarifa.precio_costo);
+    if (item.guia_tarifa) return Number(item.guia_tarifa.costo_diario);
+    return 0;
+};
+const ventaItem = (item: PaquetePlantillaItem): number => {
+    if (item.proveedor_tarifa) return Number(item.proveedor_tarifa.precio_venta_adulto);
+    if (item.guia_tarifa) return ventaGuiaTarifa(item.guia_tarifa);
+    return 0;
+};
+const monedaItem = (item: PaquetePlantillaItem): string =>
+    item.proveedor_tarifa?.moneda ?? item.guia_tarifa?.moneda ?? 'PEN';
+
+const totalesIncluye = computed(() => {
+    const costoTotal = items.value.reduce((acc, item) => acc + costoItem(item), 0);
+    const ventaTotal = items.value.reduce((acc, item) => acc + ventaItem(item), 0);
+    const margenResultantePct = costoTotal > 0 ? ((ventaTotal - costoTotal) / costoTotal) * 100 : 0;
+    return { costoTotal, ventaTotal, margenResultantePct };
+});
 
 const agregarItem = async () => {
     try {

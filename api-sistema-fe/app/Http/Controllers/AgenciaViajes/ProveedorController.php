@@ -132,6 +132,7 @@ class ProveedorController extends Controller
             'linkedin' => 'nullable|string|max:250',
             'observaciones' => 'nullable|string',
             'estado' => 'nullable|boolean',
+            'es_referencial' => 'nullable|boolean',
             'tipo_id' => 'required|integer',
             'margen_default_tipo' => 'nullable|in:porcentaje,fijo',
             'margen_default_valor' => 'nullable|numeric',
