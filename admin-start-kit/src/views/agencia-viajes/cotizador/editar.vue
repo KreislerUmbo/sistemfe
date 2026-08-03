@@ -394,17 +394,17 @@
                             <!-- Biblioteca local -->
                             <template v-if="modo === 'local'">
                                 <div class="d-flex flex-wrap align-items-center gap-1 mb-2">
-                                    <span v-for="chip in chipsFijos" :key="chip.tipo"
+                                    <span v-for="chip in chipsFijos" :key="chip.proveedorTipoId ?? chip.tipo"
                                         class="badge rounded-pill px-2 py-1" style="cursor:pointer;font-weight:500;"
                                         :class="chipActivo(chip) ? 'bg-primary' : 'bg-light text-dark border'"
                                         @click="seleccionarChip(chip)">
-                                        {{ chip.nombre }}
+                                        <i class="fas me-1" :class="chip.icono"></i>{{ chip.nombre }}
                                     </span>
                                     <div class="position-relative">
                                         <span class="badge rounded-pill px-2 py-1" style="cursor:pointer;font-weight:500;"
                                             :class="chipMasActivo ? 'bg-primary' : 'bg-light text-dark border'"
                                             @click="mostrarMasChips = !mostrarMasChips">
-                                            {{ chipMasActivo ? chipMasActivo.nombre : 'Más' }} <i class="fas fa-caret-down ms-1"></i>
+                                            <i class="fas fa-ellipsis-h me-1"></i>{{ chipMasActivo ? chipMasActivo.nombre : 'Más' }} <i class="fas fa-caret-down ms-1"></i>
                                         </span>
                                         <div v-if="mostrarMasChips" class="border rounded shadow-sm bg-white p-1 position-absolute"
                                             style="z-index:1090;min-width:180px;top:100%;left:0;">
@@ -428,7 +428,7 @@
                                             <div class="d-flex justify-content-between">
                                                 <span>
                                                     <i class="fas me-1 text-primary" :class="fila.data.tipo_habitacion ? 'fa-bed' : 'fa-concierge-bell'"></i>
-                                                    {{ fila.data.proveedor_servicio?.proveedor?.razon_social }}
+                                                    {{ fila.data.proveedor_servicio?.proveedor?.nombre_comercial ?? fila.data.proveedor_servicio?.proveedor?.razon_social }}
                                                     <span v-if="fila.data.proveedor_servicio?.proveedor?.es_referencial" class="badge bg-secondary-subtle text-secondary border ms-1" style="font-size:10px">Referencial</span>
                                                 </span>
                                                 <span class="text-muted">{{ fila.data._rangoHabitaciones ? 'desde ' : '' }}{{ fila.data.moneda }} {{ Number(fila.data.precio_venta_adulto).toFixed(0) }}</span>
@@ -470,7 +470,7 @@
                             <div v-else class="d-flex flex-column gap-2">
                                 <div v-for="op in opcionesMayorista" :key="op.id" class="card border p-2 small mayorista-card"
                                     :class="{ 'border-primary border-2': op.estado === 'elegida' }">
-                                    <strong>{{ op.proveedor?.razon_social }}</strong>
+                                    <strong>{{ op.proveedor?.nombre_comercial ?? op.proveedor?.razon_social }}</strong>
                                     <div class="text-muted" v-if="op.vuelo_aerolinea"><i class="fas fa-plane me-1"></i>{{ op.vuelo_aerolinea }}</div>
                                     <div class="text-muted mb-1" v-if="op.incluye">{{ op.incluye }}</div>
                                     <div class="d-flex justify-content-between align-items-center">
@@ -514,7 +514,7 @@
                                 <div v-if="mostrarFormMayorista" class="card border p-2 small">
                                     <select class="form-select form-select-sm mb-1" v-model="formMayorista.proveedor_id">
                                         <option :value="null">— Proveedor mayorista —</option>
-                                        <option v-for="p in proveedoresMayoristas" :key="p.id" :value="p.id">{{ p.razon_social }}</option>
+                                        <option v-for="p in proveedoresMayoristas" :key="p.id" :value="p.id">{{ p.nombre_comercial ?? p.razon_social }}</option>
                                     </select>
                                     <select class="form-select form-select-sm mb-1" v-model="formMayorista.moneda">
                                         <option value="USD">USD</option>
@@ -938,20 +938,37 @@ const eliminarBloque = async (bloque: BloqueItem) => {
 // una lista hardcodeada — ese catálogo cambia por tenant/sesión).
 const proveedorTipos = ref<ProveedorTipo[]>([]);
 
-type ChipBiblioteca = { tipo: BibliotecaTipo; proveedorTipoId: number | null; nombre: string };
+type ChipBiblioteca = { tipo: BibliotecaTipo; proveedorTipoId: number | null; nombre: string; icono: string };
 
-// "Todos"/"Tour"/"Paquete" siempre visibles; el resto del catálogo de
-// proveedor_tipos entra en el desplegable "Más ▾" — Parte B, punto (3)
-// confirmado con el usuario (comprimir sin esconder los 3 fijos).
+// Sesión 11j — orden fijo confirmado con el usuario: Todos/Tours/Paquetes +
+// los 4 proveedor_tipos de mayor uso (identificados por slug, no por id —
+// el id cambia por tenant/catálogo). El resto del catálogo (Guía,
+// Atractivos, Operador Turismo, Agencia Mayorista, y cualquier
+// proveedor_tipo nuevo) sigue cayendo en "Más ▾".
+const SLUGS_CHIPS_FIJOS_PROVEEDOR: Array<{ slug: string; nombre: string; icono: string }> = [
+    { slug: 'alojamiento-hoteles', nombre: 'Alojamiento', icono: 'fa-bed' },
+    { slug: 'transporte', nombre: 'Transporte', icono: 'fa-bus' },
+    { slug: 'alimentacion', nombre: 'Alimentación', icono: 'fa-utensils' },
+    { slug: 'actividades', nombre: 'Actividades', icono: 'fa-hiking' },
+];
+
 const chipsFijos = computed<ChipBiblioteca[]>(() => [
-    { tipo: 'todos', proveedorTipoId: null, nombre: 'Todos' },
-    { tipo: 'tour', proveedorTipoId: null, nombre: 'Tour' },
-    { tipo: 'paquete', proveedorTipoId: null, nombre: 'Paquete' },
+    { tipo: 'todos', proveedorTipoId: null, nombre: 'Todos', icono: 'fa-th' },
+    { tipo: 'tour', proveedorTipoId: null, nombre: 'Tours', icono: 'fa-route' },
+    { tipo: 'paquete', proveedorTipoId: null, nombre: 'Paquetes', icono: 'fa-suitcase-rolling' },
+    ...SLUGS_CHIPS_FIJOS_PROVEEDOR.flatMap((def) => {
+        const tipo = proveedorTipos.value.find((t) => t.slug === def.slug);
+        return tipo ? [{ tipo: 'proveedor' as BibliotecaTipo, proveedorTipoId: tipo.id, nombre: def.nombre, icono: def.icono }] : [];
+    }),
 ]);
 
-const chipsProveedores = computed<ChipBiblioteca[]>(() =>
-    proveedorTipos.value.map((t) => ({ tipo: 'proveedor' as BibliotecaTipo, proveedorTipoId: t.id, nombre: t.nombre }))
-);
+// "Más ▾" — cola larga: todo proveedor_tipo que no tenga ya su chip fijo arriba.
+const chipsProveedores = computed<ChipBiblioteca[]>(() => {
+    const slugsFijos = new Set(SLUGS_CHIPS_FIJOS_PROVEEDOR.map((d) => d.slug));
+    return proveedorTipos.value
+        .filter((t) => !slugsFijos.has(t.slug))
+        .map((t) => ({ tipo: 'proveedor' as BibliotecaTipo, proveedorTipoId: t.id, nombre: t.nombre, icono: 'fa-ellipsis-h' }));
+});
 
 const mostrarMasChips = ref(false);
 const chipMasActivo = computed(() => chipsProveedores.value.find((c) => chipActivo(c)) ?? null);
@@ -1133,7 +1150,7 @@ const clicBibliotecaItem = async (tarifa: ProveedorTarifa) => {
         matrizHotelActiva.value = {
             tarifas: res.proveedor_tarifas.map((t) => ({ id: t.id, tipo_habitacion: t.tipo_habitacion ?? '—', precio: Number(t.precio_venta_adulto) })),
             moneda: tarifa.moneda,
-            nombreProveedor: tarifa.proveedor_servicio?.proveedor?.razon_social ?? '',
+            nombreProveedor: tarifa.proveedor_servicio?.proveedor?.nombre_comercial ?? tarifa.proveedor_servicio?.proveedor?.razon_social ?? '',
         };
         return;
     }
@@ -1484,11 +1501,11 @@ const iconoItem = (item: AlternativaItem) => {
 const etiquetaItem = (item: AlternativaItem) => {
     if (item.origen_tipo === 'manual') return item.descripcion_manual ?? 'Ítem manual';
     if (item.origen_tipo === 'pasaje_aereo') return item.cotizacion_pasaje_aereo?.aerolinea ?? 'Pasaje aéreo';
-    if (item.origen_tipo === 'mayorista') return item.opcion_mayorista?.proveedor?.razon_social ?? 'Paquete mayorista';
+    if (item.origen_tipo === 'mayorista') return item.opcion_mayorista?.proveedor?.nombre_comercial ?? item.opcion_mayorista?.proveedor?.razon_social ?? 'Paquete mayorista';
     if (item.proveedor_tarifa?.tipo_habitacion) {
         // Hotel: la categoría genérica del servicio ("Alojamiento") no dice nada útil
         // acá — mismo formato "Proveedor · tipo_habitación" que ya usa clicBibliotecaItem.
-        const proveedor = item.proveedor_tarifa.proveedor_servicio?.proveedor?.razon_social ?? 'Hotel';
+        const proveedor = item.proveedor_tarifa.proveedor_servicio?.proveedor?.nombre_comercial ?? item.proveedor_tarifa.proveedor_servicio?.proveedor?.razon_social ?? 'Hotel';
         return `${proveedor} · ${item.proveedor_tarifa.tipo_habitacion}`;
     }
     return item.proveedor_tarifa?.proveedor_servicio?.destino_servicio?.servicio?.nombre ?? 'Servicio';
@@ -1603,14 +1620,15 @@ onMounted(async () => {
     font-weight: 600;
 }
 
-/* Drawer de biblioteca (Punto A) — panel deslizable desde abajo. */
+/* Drawer de biblioteca (Punto A) — panel centrado (Sesión 11j: antes era un
+   "bottom sheet" anclado abajo, se veía pegado al borde inferior en desktop). */
 .drawer-overlay {
     position: fixed;
     inset: 0;
     background: rgba(0, 0, 0, .5);
     z-index: 1080;
     display: flex;
-    align-items: flex-end;
+    align-items: center;
     justify-content: center;
 }
 .drawer-panel {
@@ -1618,11 +1636,11 @@ onMounted(async () => {
     width: 100%;
     max-width: 960px;
     max-height: 82vh;
-    border-radius: 12px 12px 0 0;
+    border-radius: 12px;
     display: flex;
     flex-direction: column;
-    animation: drawer-slide-up .2s ease-out;
-    box-shadow: 0 -4px 16px rgba(0, 0, 0, .15);
+    animation: drawer-fade-in .15s ease-out;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, .2);
 }
 .drawer-header {
     padding: .75rem 1rem;
@@ -1633,9 +1651,9 @@ onMounted(async () => {
     padding: .75rem 1rem;
     overflow-y: auto;
 }
-@keyframes drawer-slide-up {
-    from { transform: translateY(100%); }
-    to { transform: translateY(0); }
+@keyframes drawer-fade-in {
+    from { opacity: 0; transform: scale(.97); }
+    to { opacity: 1; transform: scale(1); }
 }
 
 .biblioteca-grid {
