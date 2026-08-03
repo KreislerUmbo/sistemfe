@@ -227,14 +227,43 @@
                                 </div>
 
                                 <div class="d-flex align-items-center flex-wrap gap-2 mt-2">
-                                    <div class="input-group input-group-sm" style="width:auto">
-                                        <span class="input-group-text">{{ alternativaActiva.moneda_cotizacion }}</span>
-                                        <input type="number" step="0.01" class="form-control"
-                                            style="max-width:110px"
-                                            :class="{ 'border-danger text-danger': alertasPiso[item.id] }"
-                                            v-model.number="edicionItems[item.id].precio_convertido" @input="onEditarPrecio(item)">
+                                    <!-- Punto B (Sesión 11i) — un único input, según configuracion_agencia. -->
+                                    <div v-if="configAgencia && !configAgencia.permitir_descuento_item" class="d-flex flex-column">
+                                        <label class="form-label mb-0 text-muted" style="font-size:10px">Precio de venta</label>
+                                        <div class="input-group input-group-sm" style="width:auto">
+                                            <span class="input-group-text">{{ alternativaActiva.moneda_cotizacion }}</span>
+                                            <input type="number" step="0.01" class="form-control"
+                                                style="max-width:110px"
+                                                :class="{ 'border-danger text-danger': alertasPiso[item.id] }"
+                                                v-model.number="edicionItems[item.id].precio_convertido" @input="onEditarPrecio(item)">
+                                        </div>
                                     </div>
-                                    <span v-if="Number(edicionItems[item.id]?.descuento_pct) > 0" class="badge bg-light text-dark border" style="font-size:10px">
+                                    <div v-else-if="configAgencia?.modo_descuento_item === 'monto'" class="d-flex flex-column">
+                                        <label class="form-label mb-0 text-muted" style="font-size:10px">Descuento</label>
+                                        <div class="input-group input-group-sm" style="width:auto">
+                                            <span class="input-group-text">{{ alternativaActiva.moneda_cotizacion }}</span>
+                                            <input type="number" step="0.01" min="0" class="form-control"
+                                                style="max-width:110px"
+                                                :class="{ 'border-danger text-danger': alertasPiso[item.id] }"
+                                                v-model.number="edicionItems[item.id].monto_descuento" @input="onEditarMontoDescuentoItem(item)">
+                                        </div>
+                                    </div>
+                                    <div v-else class="d-flex flex-column">
+                                        <label class="form-label mb-0 text-muted" style="font-size:10px">Descuento</label>
+                                        <div class="input-group input-group-sm" style="width:auto">
+                                            <input type="number" step="0.01" min="0" max="100" class="form-control"
+                                                style="max-width:80px"
+                                                :class="{ 'border-danger text-danger': alertasPiso[item.id] }"
+                                                v-model.number="edicionItems[item.id].descuento_pct" @input="onEditarDescuentoPct(item)">
+                                            <span class="input-group-text">%</span>
+                                        </div>
+                                    </div>
+                                    <!-- Badge de % efectivo — solo tiene sentido cuando el input primario NO
+                                         es el % mismo (sería redundante), y solo si permitir_descuento_item
+                                         (en modo "Precio de venta" el punto B pide explícitamente que no se
+                                         muestre lenguaje de descuento). -->
+                                    <span v-if="configAgencia?.permitir_descuento_item && configAgencia?.modo_descuento_item === 'monto' && Number(edicionItems[item.id]?.descuento_pct) > 0"
+                                        class="badge bg-light text-dark border" style="font-size:10px">
                                         -{{ Number(edicionItems[item.id].descuento_pct).toFixed(0) }}%
                                     </span>
                                     <select v-if="!bloque.tourOrigenId && mostrarTabsDia" class="form-select form-select-sm ms-auto" style="width:auto;font-size:11px" :value="item.dia_referencial ?? ''" @change="onReasignarDiaItem(item, $event)">
@@ -282,12 +311,23 @@
                         </div>
 
                         <div class="border-top pt-2 mb-2" v-if="(alternativaActiva.items?.length ?? 0) > 0">
-                            <label class="form-label mb-1 small fw-semibold text-secondary">Descuento global %</label>
-                            <div class="d-flex align-items-center gap-1">
-                                <input type="number" min="0" max="100" class="form-control form-control-sm"
-                                    v-model.number="descuentoGlobalLocal" @change="onEditarDescuentoGlobal">
-                                <span class="small text-muted">%</span>
-                            </div>
+                            <!-- Punto C (Sesión 11i) — un único input, según configuracion_agencia. -->
+                            <template v-if="configAgencia?.modo_descuento_global === 'monto'">
+                                <label class="form-label mb-1 small fw-semibold text-secondary">Descuento global</label>
+                                <div class="d-flex align-items-center gap-1">
+                                    <span class="small text-muted">{{ alternativaActiva.moneda_cotizacion }}</span>
+                                    <input type="number" min="0" class="form-control form-control-sm"
+                                        v-model.number="descuentoGlobalMontoLocal" @change="onEditarDescuentoGlobalMonto">
+                                </div>
+                            </template>
+                            <template v-else>
+                                <label class="form-label mb-1 small fw-semibold text-secondary">Descuento global %</label>
+                                <div class="d-flex align-items-center gap-1">
+                                    <input type="number" min="0" max="100" class="form-control form-control-sm"
+                                        v-model.number="descuentoGlobalLocal" @change="onEditarDescuentoGlobal">
+                                    <span class="small text-muted">%</span>
+                                </div>
+                            </template>
                             <small v-if="lineasFueraDePiso.length" class="text-danger d-block mt-1">
                                 <i class="fas fa-exclamation-triangle me-1"></i>{{ lineasFueraDePiso.length }} línea(s) quedaron bajo el piso permitido — revisalas en el lienzo.
                             </small>
@@ -529,7 +569,8 @@ import { opcionMayoristaService } from '@/services/admin/opcionMayoristaService'
 import { proveedorService, proveedorTipoService } from '@/services/admin/proveedorService';
 import { bibliotecaCotizadorService, type BibliotecaTipo } from '@/services/admin/bibliotecaCotizadorService';
 import { reservaService } from '@/services/admin/reservaService';
-import type { Cotizacion, Alternativa, AlternativaItem, ProveedorTarifa, OpcionMayorista, Proveedor, ProveedorTipo, BibliotecaResultado } from '@/types/agencia-viajes';
+import { configuracionAgenciaService } from '@/services/admin/configuracionAgenciaService';
+import type { Cotizacion, Alternativa, AlternativaItem, ProveedorTarifa, OpcionMayorista, Proveedor, ProveedorTipo, BibliotecaResultado, ConfiguracionAgencia } from '@/types/agencia-viajes';
 import type { Client } from '@/types/clients';
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
@@ -542,6 +583,12 @@ const toast = useToast();
 const cotizacion = ref<Cotizacion | null>(null);
 const alternativaActivaId = ref<number | null>(null);
 const modo = ref<'local' | 'intl'>('local');
+
+// Sesión 11i — descuento configurable por agencia (Puntos B/C). Se carga
+// una sola vez al montar (singleton por tenant, no cambia mientras el
+// vendedor está cotizando) y gobierna qué input(s) se muestran en el
+// lienzo y en el resumen.
+const configAgencia = ref<ConfiguracionAgencia | null>(null);
 
 const alternativaActiva = computed<Alternativa | null>(() =>
     cotizacion.value?.alternativas?.find((a) => a.id === alternativaActivaId.value) ?? null
@@ -1262,15 +1309,42 @@ const eliminarItem = async (item: AlternativaItem) => {
 };
 
 // ── Edición en vivo (descuento_pct / precio_convertido) ────────────────
-const edicionItems = ref<Record<number, { descuento_pct: number; precio_convertido: number }>>({});
+// Punto B (Sesión 11i) — monto_descuento se agrega SOLO para inicializar/
+// mostrar el input cuando modo_descuento_item='monto' (derivado de
+// precioListaConvertido - precio_convertido, nunca al revés): precio_convertido
+// sigue siendo el único campo real que se manda al backend, igual que antes.
+const edicionItems = ref<Record<number, { descuento_pct: number; precio_convertido: number; monto_descuento: number }>>({});
 const alertasPiso = ref<Record<number, boolean>>({});
 const edicionTimeouts: Record<number, any> = {};
 
+// Mismo PriceEngineService::convertirMoneda() del backend, replicado acá
+// SOLO para poder inicializar/previsualizar en el cliente — precio_convertido
+// que persiste siempre lo calcula y devuelve el servidor, esto nunca es la
+// fuente de verdad.
+const convertirMonedaLocal = (monto: number, monedaOrigen: string, monedaDestino: string, tipoCambio: number) => {
+    if (monedaOrigen === monedaDestino) return Math.round(monto * 100) / 100;
+    return monedaOrigen === 'USD' && monedaDestino === 'PEN'
+        ? Math.round(monto * tipoCambio * 100) / 100
+        : Math.round((monto / tipoCambio) * 100) / 100;
+};
+
+const precioListaConvertidoDe = (item: AlternativaItem) => {
+    if (!alternativaActiva.value) return Number(item.precio_venta_snapshot);
+    return convertirMonedaLocal(Number(item.precio_venta_snapshot), item.moneda_costo, alternativaActiva.value.moneda_cotizacion, Number(alternativaActiva.value.tipo_cambio_aplicado));
+};
+
 const inicializarEdicionItems = () => {
     (alternativaActiva.value?.items ?? []).forEach((item) => {
-        edicionItems.value[item.id] = { descuento_pct: Number(item.descuento_pct ?? 0), precio_convertido: Number(item.precio_convertido) };
+        const precioConvertido = Number(item.precio_convertido);
+        const precioLista = precioListaConvertidoDe(item);
+        edicionItems.value[item.id] = {
+            descuento_pct: Number(item.descuento_pct ?? 0),
+            precio_convertido: precioConvertido,
+            monto_descuento: Math.round((precioLista - precioConvertido) * 100) / 100,
+        };
     });
     descuentoGlobalLocal.value = Number(alternativaActiva.value?.descuento_global_pct ?? 0);
+    descuentoGlobalMontoLocal.value = calcularMontoGlobalEquivalente();
     lineasFueraDePiso.value = [];
 };
 
@@ -1298,7 +1372,20 @@ const totalLocal = computed(() => (alternativaActiva.value?.items ?? []).reduce(
 // siempre manda el resultado final). Antes de esta sesión el campo se
 // guardaba pero no se aplicaba a ningún ítem — gap real cerrado en 11b3.
 const descuentoGlobalLocal = ref(0);
+// Sesión 11i — modo_descuento_global='monto'. No se persiste como monto
+// (ver aplicarDescuentoGlobalMonto() en el backend — se resuelve a un %
+// efectivo y ESE es el que se guarda en alternativas.descuento_global_pct),
+// así que al recargar se reconstruye desde ese % efectivo para que el
+// input muestre algo consistente en vez de volver a 0.
+const descuentoGlobalMontoLocal = ref(0);
 const lineasFueraDePiso = ref<Array<{ alternativa_item_id: number; precio_minimo_permitido: number | null }>>([]);
+
+const calcularMontoGlobalEquivalente = () => {
+    const pct = Number(alternativaActiva.value?.descuento_global_pct ?? 0);
+    if (!pct) return 0;
+    const sumaListaTotal = (alternativaActiva.value?.items ?? []).reduce((sum, item) => sum + precioListaConvertidoDe(item), 0);
+    return Math.round(sumaListaTotal * (pct / 100) * 100) / 100;
+};
 
 const onEditarDescuentoGlobal = async () => {
     if (!alternativaActiva.value) return;
@@ -1311,21 +1398,74 @@ const onEditarDescuentoGlobal = async () => {
     }
 };
 
-// Punto D — debounce de ~400ms: el input ya actualizó edicionItems (y por
-// lo tanto totalLocal) al instante vía v-model, esto solo pospone la
-// llamada real al servidor.
+// Sesión 11i — versión en monto de lo de arriba: mismo endpoint, campo
+// distinto (descuento_global_monto — ver AlternativaController::update()/
+// aplicarDescuentoGlobalMonto(), que reparte proporcionalmente y valida el
+// piso de cada línea exactamente igual que la versión en %).
+const onEditarDescuentoGlobalMonto = async () => {
+    if (!alternativaActiva.value) return;
+    try {
+        const res = await alternativaService.actualizar(alternativaActiva.value.id, { descuento_global_monto: descuentoGlobalMontoLocal.value });
+        lineasFueraDePiso.value = res.lineas_fuera_de_piso ?? [];
+        await cargarCotizacion();
+    } catch (error: any) {
+        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo aplicar el descuento global', 'error');
+    }
+};
+
+// Punto B/D — 3 caminos según configuracion_agencia, todos con el mismo
+// debounce ~400ms y el mismo endpoint (alternativaItemService.actualizar):
+// solo cambia qué campo se manda y cómo se deriva el otro para la vista
+// previa local (edicionItems ya deja precio_convertido actualizado al
+// instante, que es lo único que totalConvertidoLocal() necesita leer).
+
+// permitir_descuento_item=false → "Precio de venta": edición directa,
+// mismo comportamiento que la Sesión 1.
 const onEditarPrecio = (item: AlternativaItem) => {
     clearTimeout(edicionTimeouts[item.id]);
     edicionTimeouts[item.id] = setTimeout(() => enviarEdicion(item.id, { precio_convertido: edicionItems.value[item.id].precio_convertido }), 400);
+};
+
+// permitir_descuento_item=true && modo_descuento_item='porcentaje' — el
+// vendedor edita el % directo, se manda descuento_pct (el backend deriva
+// precio_convertido). Acá se recalcula precio_convertido de una para la
+// vista previa local, con la MISMA fórmula que usa el backend.
+const onEditarDescuentoPct = (item: AlternativaItem) => {
+    const edicion = edicionItems.value[item.id];
+    const precioLista = precioListaConvertidoDe(item);
+    edicion.precio_convertido = Math.round(precioLista * (1 - edicion.descuento_pct / 100) * 100) / 100;
+    edicion.monto_descuento = Math.round((precioLista - edicion.precio_convertido) * 100) / 100;
+
+    clearTimeout(edicionTimeouts[item.id]);
+    edicionTimeouts[item.id] = setTimeout(() => enviarEdicion(item.id, { descuento_pct: edicion.descuento_pct }), 400);
+};
+
+// permitir_descuento_item=true && modo_descuento_item='monto' — el
+// vendedor edita el monto de descuento; precio_convertido se deriva acá
+// (precio de lista - monto) y ES ese el que se manda — el backend deriva
+// descuento_pct% de vuelta solo para guardarlo internamente (nunca se
+// muestra como "%" en este modo, salvo el badge informativo del template).
+const onEditarMontoDescuentoItem = (item: AlternativaItem) => {
+    const edicion = edicionItems.value[item.id];
+    const precioLista = precioListaConvertidoDe(item);
+    edicion.precio_convertido = Math.round((precioLista - edicion.monto_descuento) * 100) / 100;
+    edicion.descuento_pct = precioLista > 0 ? Math.round((1 - edicion.precio_convertido / precioLista) * 10000) / 100 : 0;
+
+    clearTimeout(edicionTimeouts[item.id]);
+    edicionTimeouts[item.id] = setTimeout(() => enviarEdicion(item.id, { precio_convertido: edicion.precio_convertido }), 400);
 };
 
 const enviarEdicion = async (itemId: number, payload: { descuento_pct?: number; precio_convertido?: number }) => {
     try {
         const res = await alternativaItemService.actualizar(itemId, payload);
         alertasPiso.value[itemId] = !!res.alerta_piso;
+        const item = alternativaActiva.value?.items?.find((i) => i.id === itemId);
+        const precioConvertido = Number(res.alternativa_item.precio_convertido);
+        const precioLista = item ? precioListaConvertidoDe(item) : precioConvertido;
         edicionItems.value[itemId] = {
             descuento_pct: Number(res.alternativa_item.descuento_pct ?? 0),
-            precio_convertido: Number(res.alternativa_item.precio_convertido),
+            precio_convertido: precioConvertido,
+            monto_descuento: Math.round((precioLista - precioConvertido) * 100) / 100,
         };
         await cargarCotizacion();
     } catch (error: any) {
@@ -1423,6 +1563,12 @@ onMounted(async () => {
     // mayoristas de acá abajo (sin duplicar la llamada).
     const tipos = await proveedorTipoService.listar();
     proveedorTipos.value = tipos.proveedor_tipos;
+
+    // Antes de cargarCotizacion(): inicializarEdicionItems() (dentro de
+    // cargarCotizacion) necesita configAgencia.value ya resuelto para
+    // derivar monto_descuento por ítem (Punto B).
+    const configRes = await configuracionAgenciaService.obtener();
+    configAgencia.value = configRes.configuracion_agencia;
 
     await cargarCotizacion();
     await cargarBiblioteca();
