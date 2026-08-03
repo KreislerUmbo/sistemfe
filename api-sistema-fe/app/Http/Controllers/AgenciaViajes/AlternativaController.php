@@ -237,6 +237,150 @@ class AlternativaController extends Controller
         return response()->json(['code' => 200, 'message' => 'Alternativa eliminada correctamente']);
     }
 
+    // Sesión 11h — clona la alternativa activa completa (ítems + su
+    // cotizacion_pasaje_aereo si aplica, y el árbol de opciones de
+    // mayorista con hoteles/tarifas/opcionales) en una alternativa NUEVA de
+    // la misma cotización, nombre + " (copia)". Clonar el árbol de
+    // opciones de mayorista (en vez de solo remapear alternativa_items al
+    // original) es a propósito: la idea de "duplicar" es poder editar la
+    // copia libremente sin afectar la alternativa original, y un ítem
+    // origen_tipo=mayorista que siguiera apuntando a la opción del
+    // original rompería esa independencia (el comparador de la copia no la
+    // listaría como propia, ver OpcionMayoristaController::index()).
+    // Mismo límite de 5 alternativas que store() — duplicar no lo esquiva.
+    public function duplicar(string $id)
+    {
+        $original = Alternativa::findOrFail($id);
+
+        if ($original->cotizacion->alternativas()->count() >= self::MAX_ALTERNATIVAS_POR_COTIZACION) {
+            return response()->json([
+                'code' => 422,
+                'message' => 'Esta cotización ya tiene el máximo de ' . self::MAX_ALTERNATIVAS_POR_COTIZACION . ' alternativas permitidas.',
+            ], 422);
+        }
+
+        $nueva = DB::transaction(function () use ($original) {
+            $nueva = Alternativa::create([
+                'cotizacion_id' => $original->cotizacion_id,
+                'nombre' => $original->nombre . ' (copia)',
+                'estado' => 'borrador',
+                'moneda_cotizacion' => $original->moneda_cotizacion,
+                'tipo_cambio_aplicado' => $original->tipo_cambio_aplicado,
+                'tipo_cambio_origen' => $original->tipo_cambio_origen,
+                'descuento_global_pct' => $original->descuento_global_pct,
+                'total' => $original->total,
+            ]);
+
+            // Ítems primero (sin opcion_mayorista_id todavía si vienen de
+            // mayorista — se remapea al final, una vez clonado el árbol de
+            // opciones más abajo).
+            $itemsClonados = [];
+            foreach ($original->items()->get() as $item) {
+                $nuevoItem = AlternativaItem::create([
+                    'alternativa_id' => $nueva->id,
+                    'origen_tipo' => $item->origen_tipo,
+                    'proveedor_tarifa_id' => $item->proveedor_tarifa_id,
+                    'tour_origen_id' => $item->tour_origen_id,
+                    'dia_referencial' => $item->dia_referencial,
+                    'descripcion_manual' => $item->descripcion_manual,
+                    'modo_precio' => $item->modo_precio,
+                    'cantidad' => $item->cantidad,
+                    'pax_incluidos' => $item->pax_incluidos,
+                    'moneda_costo' => $item->moneda_costo,
+                    'costo_snapshot' => $item->costo_snapshot,
+                    'precio_venta_snapshot' => $item->precio_venta_snapshot,
+                    'descuento_pct' => $item->descuento_pct,
+                    'precio_convertido' => $item->precio_convertido,
+                ]);
+                $itemsClonados[$item->id] = $nuevoItem;
+
+                if ($item->origen_tipo === AlternativaItem::ORIGEN_PASAJE_AEREO) {
+                    $pasaje = CotizacionPasajeAereo::where('alternativa_item_id', $item->id)->first();
+                    if ($pasaje) {
+                        CotizacionPasajeAereo::create([
+                            'alternativa_item_id' => $nuevoItem->id,
+                            'aerolinea' => $pasaje->aerolinea,
+                            'itinerario' => $pasaje->itinerario,
+                            'moneda' => $pasaje->moneda,
+                            'tarifa_base_adulto' => $pasaje->tarifa_base_adulto,
+                            'tarifa_base_nino' => $pasaje->tarifa_base_nino,
+                            'tarifa_base_infante' => $pasaje->tarifa_base_infante,
+                            'cargos' => $pasaje->cargos,
+                            'tua_incluida_en_tarifa' => $pasaje->tua_incluida_en_tarifa,
+                            'fee_agencia_monto' => $pasaje->fee_agencia_monto,
+                            'tip_afe_igv' => $pasaje->tip_afe_igv,
+                            'fecha_cotizado' => $pasaje->fecha_cotizado,
+                            'costo_total' => $pasaje->costo_total,
+                            'precio_venta_total' => $pasaje->precio_venta_total,
+                        ]);
+                    }
+                }
+            }
+
+            $opcionesClonadas = [];
+            foreach (OpcionMayorista::where('alternativa_id', $original->id)->get() as $opcion) {
+                $nuevaOpcion = OpcionMayorista::create([
+                    'alternativa_id' => $nueva->id,
+                    'proveedor_id' => $opcion->proveedor_id,
+                    'salida_mayorista_id' => $opcion->salida_mayorista_id,
+                    'moneda' => $opcion->moneda,
+                    'incluye' => $opcion->incluye,
+                    'notas' => $opcion->notas,
+                    'vuelo_aerolinea' => $opcion->vuelo_aerolinea,
+                    'vuelo_detalle' => $opcion->vuelo_detalle,
+                    'estado' => $opcion->estado,
+                ]);
+                $opcionesClonadas[$opcion->id] = $nuevaOpcion->id;
+
+                foreach (OpcionMayoristaOpcional::where('opcion_mayorista_id', $opcion->id)->get() as $opcional) {
+                    OpcionMayoristaOpcional::create([
+                        'opcion_mayorista_id' => $nuevaOpcion->id,
+                        'nombre' => $opcional->nombre,
+                        'precio_por_persona' => $opcional->precio_por_persona,
+                        'moneda' => $opcional->moneda,
+                        'incluye' => $opcional->incluye,
+                        'no_incluye' => $opcional->no_incluye,
+                    ]);
+                }
+
+                foreach (OpcionHotel::where('opcion_mayorista_id', $opcion->id)->get() as $hotel) {
+                    $nuevoHotel = OpcionHotel::create([
+                        'opcion_mayorista_id' => $nuevaOpcion->id,
+                        'paquete_plantilla_id' => $hotel->paquete_plantilla_id,
+                        'proveedor_id' => $hotel->proveedor_id,
+                        'nombre_hotel' => $hotel->nombre_hotel,
+                        'categoria_estrellas' => $hotel->categoria_estrellas,
+                    ]);
+
+                    foreach (OpcionHotelTarifa::where('opcion_hotel_id', $hotel->id)->get() as $tarifa) {
+                        OpcionHotelTarifa::create([
+                            'opcion_hotel_id' => $nuevoHotel->id,
+                            'tipo_habitacion' => $tarifa->tipo_habitacion,
+                            'precio_costo' => $tarifa->precio_costo,
+                            'precio_venta' => $tarifa->precio_venta,
+                        ]);
+                    }
+                }
+            }
+
+            foreach ($original->items()->where('origen_tipo', AlternativaItem::ORIGEN_MAYORISTA)->get() as $itemOriginal) {
+                if (isset($itemsClonados[$itemOriginal->id], $opcionesClonadas[$itemOriginal->opcion_mayorista_id])) {
+                    $itemsClonados[$itemOriginal->id]->update([
+                        'opcion_mayorista_id' => $opcionesClonadas[$itemOriginal->opcion_mayorista_id],
+                    ]);
+                }
+            }
+
+            return $nueva;
+        });
+
+        return response()->json([
+            'code' => 200,
+            'message' => 'Alternativa duplicada correctamente',
+            'alternativa' => $nueva->fresh('items'),
+        ]);
+    }
+
     // Compartido con ReservaController::aceptar() y VentaDirectaController::store()
     // (Sesión 11c) — descartar las demás alternativas de la misma cotización
     // es siempre el mismo movimiento sin importar quién marcó "aceptada".
