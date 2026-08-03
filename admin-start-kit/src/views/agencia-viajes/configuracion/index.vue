@@ -107,6 +107,43 @@
                 </div>
             </div>
 
+            <!-- Sesión 11i — descuento en el cotizador: por ítem del lienzo y
+                 global del resumen, independientes entre sí (ver
+                 cotizador/editar.vue, Punto B/C). -->
+            <div class="card border-0 shadow-sm mb-3">
+                <div class="card-header bg-white border-bottom d-flex align-items-center gap-2 py-2">
+                    <span class="badge bg-primary rounded-pill">5</span>
+                    <span class="fw-semibold text-dark">Descuento en el cotizador</span>
+                </div>
+                <div class="card-body py-3">
+                    <div class="row g-3 align-items-end">
+                        <div class="col-12 col-md-4 d-flex align-items-center">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="permitir-descuento-item" v-model="form.permitir_descuento_item">
+                                <label class="form-check-label small" for="permitir-descuento-item">Permitir descuento por ítem</label>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-4">
+                            <label class="form-label mb-1 small fw-semibold text-secondary">Modo de descuento por ítem</label>
+                            <select class="form-select form-select-sm" v-model="form.modo_descuento_item" :disabled="!form.permitir_descuento_item">
+                                <option value="porcentaje">Porcentaje (%)</option>
+                                <option value="monto">Monto fijo</option>
+                            </select>
+                            <small class="text-muted d-block mt-1" v-if="!form.permitir_descuento_item">
+                                Con esto desactivado, el vendedor edita el precio de venta directo — sin lenguaje de descuento en el lienzo.
+                            </small>
+                        </div>
+                        <div class="col-6 col-md-4">
+                            <label class="form-label mb-1 small fw-semibold text-secondary">Modo de descuento global</label>
+                            <select class="form-select form-select-sm" v-model="form.modo_descuento_global">
+                                <option value="porcentaje">Porcentaje (%)</option>
+                                <option value="monto">Monto fijo</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div class="d-flex justify-content-end mb-4">
                 <button class="btn btn-primary fw-semibold" @click="guardar" :disabled="guardando">
                     <span v-if="guardando" class="spinner-border spinner-border-sm me-2"></span>
@@ -141,6 +178,9 @@ const form = ref<ConfiguracionAgencia>({
     meses_margen_vencimiento_documento: 6,
     dias_aviso_pago_proveedor: 2,
     dias_cotizacion_estancada: 15,
+    permitir_descuento_item: true,
+    modo_descuento_item: 'porcentaje',
+    modo_descuento_global: 'porcentaje',
 });
 
 const cargar = async () => {

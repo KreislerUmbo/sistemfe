@@ -181,6 +181,11 @@ export type ConfiguracionAgencia = {
   meses_margen_vencimiento_documento: number;
   dias_aviso_pago_proveedor: number;
   dias_cotizacion_estancada: number;
+  // Sesión 11i — descuento configurable por agencia (% o monto), por ítem
+  // del lienzo y global del resumen del cotizador.
+  permitir_descuento_item: boolean;
+  modo_descuento_item: 'porcentaje' | 'monto';
+  modo_descuento_global: 'porcentaje' | 'monto';
 };
 
 export type ApiMessageResponse = {

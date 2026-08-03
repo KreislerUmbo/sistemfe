@@ -88,6 +88,12 @@ class AlternativaController extends Controller
             'nombre' => 'nullable|string|max:100',
             'estado' => 'nullable|in:borrador,enviada,aceptada,descartada',
             'descuento_global_pct' => 'nullable|numeric|min:0|max:100',
+            // Sesión 11i — alternativa al de arriba cuando configuracion_agencia.
+            // modo_descuento_global='monto'. El frontend manda uno u otro,
+            // nunca los dos en el mismo request (un solo input visible según
+            // el modo configurado) — no se valida la exclusión mutua acá
+            // porque no hay forma de que ambos lleguen juntos desde la UI.
+            'descuento_global_monto' => 'nullable|numeric|min:0',
         ]);
 
         if ($validator->fails()) {
@@ -101,6 +107,13 @@ class AlternativaController extends Controller
             if (($validado['estado'] ?? null) === 'enviada' && ! $alternativa->fecha_envio) {
                 $validado['fecha_envio'] = now();
             }
+
+            // descuento_global_monto no es columna real de `alternativas` —
+            // se resuelve a un descuento_global_pct efectivo ANTES del
+            // update() genérico, para que la columna real quede consistente
+            // sin importar por cuál input entró el descuento.
+            $montoGlobal = $validado['descuento_global_monto'] ?? null;
+            unset($validado['descuento_global_monto']);
 
             $alternativa->update($validado);
 
@@ -119,7 +132,9 @@ class AlternativaController extends Controller
             // silencio". Antes de esta sesión el campo se guardaba en la
             // alternativa pero nunca se aplicaba a ningún ítem — gap real
             // encontrado al conectar el panel de precio (Parte B, 11b3).
-            if (array_key_exists('descuento_global_pct', $validado)) {
+            if ($montoGlobal !== null) {
+                $lineasFueraDePiso = $this->aplicarDescuentoGlobalMonto($alternativa, (float) $montoGlobal);
+            } elseif (array_key_exists('descuento_global_pct', $validado)) {
                 $lineasFueraDePiso = $this->aplicarDescuentoGlobal($alternativa, (float) $validado['descuento_global_pct']);
             }
         });
@@ -142,55 +157,104 @@ class AlternativaController extends Controller
     // Ítems sin proveedor_tarifa (manual/referencia) no tienen piso que
     // evaluar, pero SÍ reciben el descuento — "cada alternativa_items" del
     // plan no distingue por origen_tipo.
+    //
+    // Sesión 11i — el hallazgo original que pedía envolver este foreach en
+    // una transacción propia ya estaba resuelto desde 11b3: update() (el
+    // único caller) ya envuelve TODO en su propio DB::transaction(), así
+    // que este método nunca corrió sin transacción en el código real. El
+    // DB::transaction() de acá abajo es hardening defensivo (savepoint
+    // anidado, sin costo real) para que el método sea seguro por sí mismo
+    // aunque un caller futuro lo invoque sin transacción propia — no es la
+    // corrección de un bug pendiente.
     private function aplicarDescuentoGlobal(Alternativa $alternativa, float $descuentoGlobalPct): array
     {
-        $lineasFueraDePiso = [];
+        return DB::transaction(function () use ($alternativa, $descuentoGlobalPct) {
+            $lineasFueraDePiso = [];
 
-        foreach ($alternativa->items()->with('proveedorTarifa')->get() as $item) {
-            $precioListaConvertido = $this->priceEngine->convertirMoneda(
-                (float) $item->precio_venta_snapshot,
-                $item->moneda_costo,
-                $alternativa->moneda_cotizacion,
-                (float) $alternativa->tipo_cambio_aplicado
-            );
-
-            $precioConvertido = round($precioListaConvertido * (1 - $descuentoGlobalPct / 100), 2);
-
-            if ($item->proveedorTarifa) {
-                $tarifa = $item->proveedorTarifa;
-                $costoBaseConvertido = $this->priceEngine->convertirMoneda(
-                    (float) $item->costo_snapshot,
+            foreach ($alternativa->items()->with('proveedorTarifa')->get() as $item) {
+                $precioListaConvertido = $this->priceEngine->convertirMoneda(
+                    (float) $item->precio_venta_snapshot,
                     $item->moneda_costo,
                     $alternativa->moneda_cotizacion,
                     (float) $alternativa->tipo_cambio_aplicado
                 );
 
-                $pisoInfo = $this->priceEngine->evaluarPiso(
-                    precioEditado: $precioConvertido,
-                    costoBase: $costoBaseConvertido,
-                    ventaBase: $precioListaConvertido,
-                    descuentoMaximoPct: $tarifa->descuento_maximo_pct !== null ? (float) $tarifa->descuento_maximo_pct : null,
-                    margenMinimoPct: $tarifa->margen_minimo_pct !== null ? (float) $tarifa->margen_minimo_pct : null,
-                );
+                $precioConvertido = round($precioListaConvertido * (1 - $descuentoGlobalPct / 100), 2);
 
-                if ($pisoInfo['alerta_piso']) {
-                    $lineasFueraDePiso[] = [
-                        'alternativa_item_id' => $item->id,
-                        'precio_minimo_permitido' => $pisoInfo['precio_minimo_permitido'],
-                    ];
+                if ($item->proveedorTarifa) {
+                    $tarifa = $item->proveedorTarifa;
+                    $costoBaseConvertido = $this->priceEngine->convertirMoneda(
+                        (float) $item->costo_snapshot,
+                        $item->moneda_costo,
+                        $alternativa->moneda_cotizacion,
+                        (float) $alternativa->tipo_cambio_aplicado
+                    );
+
+                    $pisoInfo = $this->priceEngine->evaluarPiso(
+                        precioEditado: $precioConvertido,
+                        costoBase: $costoBaseConvertido,
+                        ventaBase: $precioListaConvertido,
+                        descuentoMaximoPct: $tarifa->descuento_maximo_pct !== null ? (float) $tarifa->descuento_maximo_pct : null,
+                        margenMinimoPct: $tarifa->margen_minimo_pct !== null ? (float) $tarifa->margen_minimo_pct : null,
+                    );
+
+                    if ($pisoInfo['alerta_piso']) {
+                        $lineasFueraDePiso[] = [
+                            'alternativa_item_id' => $item->id,
+                            'precio_minimo_permitido' => $pisoInfo['precio_minimo_permitido'],
+                        ];
+                    }
                 }
+
+                $item->update([
+                    'descuento_pct' => $descuentoGlobalPct,
+                    'precio_convertido' => $precioConvertido,
+                ]);
             }
 
-            $item->update([
-                'descuento_pct' => $descuentoGlobalPct,
-                'precio_convertido' => $precioConvertido,
-            ]);
-        }
+            $total = $alternativa->items()->get()->sum(fn (AlternativaItem $item) => $item->total_convertido);
+            $alternativa->update(['total' => round($total, 2)]);
 
-        $total = $alternativa->items()->get()->sum(fn (AlternativaItem $item) => $item->total_convertido);
-        $alternativa->update(['total' => round($total, 2)]);
+            return $lineasFueraDePiso;
+        });
+    }
 
-        return $lineasFueraDePiso;
+    // Versión en MONTO de aplicarDescuentoGlobal() — Sesión 11i,
+    // configuracion_agencia.modo_descuento_global='monto'. El plan pide
+    // repartir el monto entre las líneas proporcional al peso de cada una
+    // en el total (línea_i recibe monto * precio_i/precio_total). Eso es
+    // matemáticamente EQUIVALENTE a un único % efectivo para TODA línea
+    // (monto_i/precio_i = monto/precio_total, constante, no depende del
+    // peso individual de cada línea) — así que en vez de reimplementar el
+    // mismo foreach + evaluarPiso() una segunda vez, se resuelve el %
+    // efectivo y se delega en aplicarDescuentoGlobal(), que ya lo hace
+    // (mismo motor, mismo piso, una sola fórmula real en el código).
+    // DB::transaction() propio por el mismo motivo defensivo que el de
+    // arriba — anidado sin costo real sobre el de update()/aplicarDescuentoGlobal().
+    private function aplicarDescuentoGlobalMonto(Alternativa $alternativa, float $montoGlobal): array
+    {
+        return DB::transaction(function () use ($alternativa, $montoGlobal) {
+            $sumaPreciosLista = $alternativa->items()->get()->sum(fn (AlternativaItem $item) => $this->priceEngine->convertirMoneda(
+                (float) $item->precio_venta_snapshot,
+                $item->moneda_costo,
+                $alternativa->moneda_cotizacion,
+                (float) $alternativa->tipo_cambio_aplicado
+            ));
+
+            $pctEfectivo = $sumaPreciosLista > 0 ? round(($montoGlobal / $sumaPreciosLista) * 100, 4) : 0.0;
+
+            // aplicarDescuentoGlobal() actualiza cada ÍTEM y el total de la
+            // alternativa, pero nunca toca alternativas.descuento_global_pct
+            // (esa columna la escribe update() directo desde el payload en
+            // el camino de %) — sin esto, la columna se queda con el valor
+            // viejo aunque todos los ítems ya reflejen el % efectivo nuevo.
+            // update()['total'=>...] al final de aplicarDescuentoGlobal()
+            // hace save() del modelo completo, así que este atributo sucio
+            // se persiste junto con 'total' en el mismo UPDATE.
+            $alternativa->descuento_global_pct = $pctEfectivo;
+
+            return $this->aplicarDescuentoGlobal($alternativa, $pctEfectivo);
+        });
     }
 
     // Antes de esta sesión, delete() era directo — con ítems/opciones-mayorista

@@ -12,7 +12,7 @@ export const alternativaService = {
     const response = await httpClient.post(`/cotizaciones/${cotizacionId}/alternativas`, data)
     return response.data
   },
-  async actualizar(id: number, data: { nombre?: string; estado?: string; descuento_global_pct?: number | null }) {
+  async actualizar(id: number, data: { nombre?: string; estado?: string; descuento_global_pct?: number | null; descuento_global_monto?: number | null }) {
     const response = await httpClient.put(`/alternativas/${id}`, data)
     return response.data as AlternativaResponse
   },
