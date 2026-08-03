@@ -38,6 +38,16 @@
                             No hay tipos habilitados — habilítalos en <router-link to="/agencia-viajes/proveedores">Configuración de tipos</router-link>.
                         </small>
                     </div>
+                    <div class="col-6 col-md-3 d-flex align-items-center">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="proveedor-es-referencial" v-model="form.es_referencial">
+                            <label class="form-check-label small" for="proveedor-es-referencial">
+                                Solo referencial
+                                <i class="fas fa-circle-info ms-1 text-muted"
+                                   title="No emite comprobante fiscal a la agencia — solo para control interno de costos"></i>
+                            </label>
+                        </div>
+                    </div>
                     <div class="col-6 col-md-3">
                         <label class="form-label mb-1 small fw-semibold text-secondary">Tipo de Persona</label>
                         <select class="form-select form-select-sm" v-model="form.tipo_persona">
@@ -183,6 +193,7 @@ const form = ref<Partial<Omit<Proveedor, 'tipo_id'>> & { tipo_id: number | null 
     direccion: null,
     observaciones: null,
     estado: true,
+    es_referencial: false,
     margen_default_tipo: null,
     margen_default_valor: null,
 });

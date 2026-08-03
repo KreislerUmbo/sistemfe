@@ -105,13 +105,14 @@
                                     <th v-if="esHotel">Habitación</th>
                                     <th class="text-end">Costo</th>
                                     <th class="text-end">Venta Adulto</th>
+                                    <th class="text-end">Margen</th>
                                     <th class="text-center">Vigencia</th>
                                     <th class="text-center pe-3">Acción</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <tr v-if="!(tarifasPorServicio[ps.id]?.length)">
-                                    <td :colspan="esHotel ? 7 : 6" class="text-center text-muted py-3 fst-italic">Sin tarifas cargadas.</td>
+                                    <td :colspan="esHotel ? 8 : 7" class="text-center text-muted py-3 fst-italic">Sin tarifas cargadas.</td>
                                 </tr>
                                 <tr v-for="tarifa in tarifasPorServicio[ps.id]" :key="tarifa.id">
                                     <td class="ps-3">{{ tarifa.tipo_tarifa }}</td>
@@ -119,7 +120,11 @@
                                     <td v-if="esHotel">{{ tarifa.tipo_habitacion ?? '—' }}</td>
                                     <td class="text-end">{{ tarifa.moneda }} {{ tarifa.precio_costo }}</td>
                                     <td class="text-end">{{ tarifa.moneda }} {{ tarifa.precio_venta_adulto }}</td>
+                                    <td class="text-end">
+                                        <span class="badge" :class="claseMargen(margenTarifa(tarifa))">{{ margenTarifa(tarifa).toFixed(1) }}%</span>
+                                    </td>
                                     <td class="text-center small">
+                                        <span class="badge d-block mb-1" :class="estadoVigencia(tarifa).clase">{{ estadoVigencia(tarifa).label }}</span>
                                         {{ tarifa.vigente_desde }} — {{ tarifa.vigente_hasta ?? 'indefinido' }}
                                     </td>
                                     <td class="text-center pe-3">
@@ -148,8 +153,16 @@
                         <button class="btn-close" @click="modalTarifaAbierto = false"></button>
                     </div>
                     <div class="modal-body">
-                        <div class="row g-3">
-                            <div class="col-6 col-md-4">
+                        <div class="btn-group mb-3" role="group">
+                            <input type="radio" class="btn-check" name="tab-modal-tarifa" id="tab-modal-comercial" :checked="tabModalTarifa === 'comercial'" @click="tabModalTarifa = 'comercial'" autocomplete="off">
+                            <label class="btn btn-outline-primary btn-sm" for="tab-modal-comercial"><i class="fas fa-tags me-1"></i>Comercial</label>
+                            <input type="radio" class="btn-check" name="tab-modal-tarifa" id="tab-modal-tributario" :checked="tabModalTarifa === 'tributario'" @click="tabModalTarifa = 'tributario'" autocomplete="off">
+                            <label class="btn btn-outline-primary btn-sm" for="tab-modal-tributario"><i class="fas fa-file-invoice me-1"></i>Tributario SUNAT</label>
+                        </div>
+
+                        <!-- ═══ Comercial ═══ -->
+                        <div class="row g-3" v-if="tabModalTarifa === 'comercial'">
+                            <div class="col-6 col-md-3">
                                 <label class="form-label mb-1 small fw-semibold text-secondary">Tipo de tarifa</label>
                                 <select class="form-select form-select-sm" v-model="formTarifa.tipo_tarifa">
                                     <option value="corporativa">Corporativa</option>
@@ -157,21 +170,21 @@
                                     <option value="publica">Pública</option>
                                 </select>
                             </div>
-                            <div class="col-6 col-md-4">
+                            <div class="col-6 col-md-3">
                                 <label class="form-label mb-1 small fw-semibold text-secondary">Modalidad</label>
                                 <select class="form-select form-select-sm" v-model="formTarifa.modalidad">
                                     <option value="compartido">Compartido</option>
                                     <option value="privado">Privado</option>
                                 </select>
                             </div>
-                            <div class="col-6 col-md-4">
+                            <div class="col-6 col-md-3">
                                 <label class="form-label mb-1 small fw-semibold text-secondary">Moneda</label>
                                 <select class="form-select form-select-sm" v-model="formTarifa.moneda">
                                     <option value="PEN">Soles</option>
                                     <option value="USD">Dólares</option>
                                 </select>
                             </div>
-                            <div class="col-6 col-md-4" v-if="esHotel">
+                            <div class="col-6 col-md-3" v-if="esHotel">
                                 <label class="form-label mb-1 small fw-semibold text-secondary">Tipo de habitación *</label>
                                 <select class="form-select form-select-sm" v-model="formTarifa.tipo_habitacion">
                                     <option :value="null">— Selecciona —</option>
@@ -182,9 +195,12 @@
                                     <option value="familiar">Familiar</option>
                                 </select>
                             </div>
+
+                            <div class="col-12"><hr class="my-1"></div>
+
                             <div class="col-6 col-md-4">
                                 <label class="form-label mb-1 small fw-semibold text-secondary">Precio costo</label>
-                                <input type="number" step="0.01" class="form-control form-control-sm" v-model.number="formTarifa.precio_costo">
+                                <input type="number" step="0.01" class="form-control form-control-sm" v-model.number="formTarifa.precio_costo" @input="onEditarPrecioCosto">
                             </div>
                             <div class="col-6 col-md-4">
                                 <label class="form-label mb-1 small fw-semibold text-secondary">Margen tipo</label>
@@ -195,21 +211,56 @@
                             </div>
                             <div class="col-6 col-md-4">
                                 <label class="form-label mb-1 small fw-semibold text-secondary">Margen valor</label>
-                                <input type="number" step="0.01" class="form-control form-control-sm" v-model.number="formTarifa.margen_valor">
+                                <input type="number" step="0.01" class="form-control form-control-sm" v-model.number="formTarifa.margen_valor" @input="recalcularDesdeMargen">
                             </div>
+
+                            <div class="col-12">
+                                <div class="alert py-2 px-3 mb-0 small d-flex align-items-center gap-2" :class="margenModalPct >= MARGEN_MINIMO_ACEPTABLE_PCT ? 'alert-success' : 'alert-danger'">
+                                    <span>Margen resultante:</span>
+                                    <span class="badge" :class="claseMargen(margenModalPct)">{{ margenModalPct.toFixed(1) }}%</span>
+                                </div>
+                            </div>
+
                             <div class="col-6 col-md-4">
                                 <label class="form-label mb-1 small fw-semibold text-secondary">Precio venta adulto</label>
-                                <input type="number" step="0.01" class="form-control form-control-sm" v-model.number="formTarifa.precio_venta_adulto">
+                                <input type="number" step="0.01" class="form-control form-control-sm" v-model.number="formTarifa.precio_venta_adulto" @input="recalcularMargenDesdeAdulto">
                             </div>
                             <div class="col-6 col-md-4">
                                 <label class="form-label mb-1 small fw-semibold text-secondary">Precio venta niño</label>
-                                <input type="number" step="0.01" class="form-control form-control-sm" v-model.number="formTarifa.precio_venta_nino">
+                                <input type="number" step="0.01" class="form-control form-control-sm" v-model.number="formTarifa.precio_venta_nino" @input="tocadoNino = true">
                             </div>
                             <div class="col-6 col-md-4">
                                 <label class="form-label mb-1 small fw-semibold text-secondary">Precio venta infante</label>
-                                <input type="number" step="0.01" class="form-control form-control-sm" v-model.number="formTarifa.precio_venta_infante">
+                                <input type="number" step="0.01" class="form-control form-control-sm" v-model.number="formTarifa.precio_venta_infante" @input="tocadoInfante = true">
                             </div>
+
+                            <div class="col-4">
+                                <label class="form-label mb-1 small fw-semibold text-secondary">Edad mín. niño</label>
+                                <input type="number" min="0" class="form-control form-control-sm" v-model.number="formTarifa.edad_min_nino">
+                            </div>
+                            <div class="col-4">
+                                <label class="form-label mb-1 small fw-semibold text-secondary">Edad máx. niño</label>
+                                <input type="number" min="0" class="form-control form-control-sm" v-model.number="formTarifa.edad_max_nino">
+                            </div>
+                            <div class="col-4">
+                                <label class="form-label mb-1 small fw-semibold text-secondary">Edad máx. infante</label>
+                                <input type="number" min="0" class="form-control form-control-sm" v-model.number="formTarifa.edad_max_infante">
+                            </div>
+
+                            <!-- Solo captura el dato — el cotizador todavía no lo valida/aplica como tope real. -->
                             <div class="col-6 col-md-4">
+                                <label class="form-label mb-1 small fw-semibold text-secondary">Descuento máximo</label>
+                                <div class="input-group input-group-sm">
+                                    <input type="number" min="0" max="100" step="0.01" class="form-control form-control-sm" v-model.number="formTarifa.descuento_maximo_pct">
+                                    <span class="input-group-text">%</span>
+                                </div>
+                                <small class="text-muted">Tope de descuento que puede aplicar el vendedor en el cotizador sin autorización.</small>
+                            </div>
+                        </div>
+
+                        <!-- ═══ Tributario SUNAT ═══ -->
+                        <div class="row g-3" v-if="tabModalTarifa === 'tributario'">
+                            <div class="col-6 col-md-3">
                                 <label class="form-label mb-1 small fw-semibold text-secondary">Destino tributario</label>
                                 <select class="form-select form-select-sm" v-model="formTarifa.destino_tributario">
                                     <option value="nacional">Nacional</option>
@@ -217,7 +268,7 @@
                                     <option value="extranjero">Extranjero</option>
                                 </select>
                             </div>
-                            <div class="col-6 col-md-4">
+                            <div class="col-6 col-md-3">
                                 <label class="form-label mb-1 small fw-semibold text-secondary">Tip. Afectación IGV</label>
                                 <select class="form-select form-select-sm" v-model="formTarifa.tip_afe_igv">
                                     <option value="10">Gravado</option>
@@ -227,11 +278,11 @@
                                     <option value="40">Exportación</option>
                                 </select>
                             </div>
-                            <div class="col-6 col-md-4">
+                            <div class="col-6 col-md-3">
                                 <label class="form-label mb-1 small fw-semibold text-secondary">Vigente desde</label>
                                 <input type="date" class="form-control form-control-sm" v-model="formTarifa.vigente_desde">
                             </div>
-                            <div class="col-6 col-md-4">
+                            <div class="col-6 col-md-3">
                                 <label class="form-label mb-1 small fw-semibold text-secondary">Vigente hasta</label>
                                 <input type="date" class="form-control form-control-sm" v-model="formTarifa.vigente_hasta">
                             </div>
@@ -255,7 +306,8 @@ import DestinoTreeSelect from '@/components/AgenciaViajes/DestinoTreeSelect.vue'
 import Swal from 'sweetalert2/dist/sweetalert2.js';
 import { proveedorService, proveedorTipoService } from '@/services/admin/proveedorService';
 import { destinoAtractivoService } from '@/services/admin/destinoAtractivoService';
-import type { Proveedor, ProveedorTipo, ProveedorServicio, ProveedorTarifa, DestinoServicio } from '@/types/agencia-viajes';
+import { configuracionAgenciaService } from '@/services/admin/configuracionAgenciaService';
+import type { Proveedor, ProveedorTipo, ProveedorServicio, ProveedorTarifa, DestinoServicio, ConfiguracionAgencia } from '@/types/agencia-viajes';
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
 
@@ -266,6 +318,7 @@ const proveedor = ref<Proveedor | null>(null);
 const proveedorTipos = ref<ProveedorTipo[]>([]);
 const proveedorServicios = ref<ProveedorServicio[]>([]);
 const tarifasPorServicio = ref<Record<number, ProveedorTarifa[]>>({});
+const configAgencia = ref<ConfiguracionAgencia | null>(null);
 
 const tabActiva = ref<'datos' | 'servicios'>('datos');
 
@@ -287,6 +340,24 @@ const esHotel = computed(() => {
     const tipo = proveedorTipos.value.find((t) => t.id === proveedor.value?.tipo_id);
     return tipo?.slug === 'hotel';
 });
+
+// ── Margen resultante (modal + tabla) ────────────────────────────────
+const MARGEN_MINIMO_ACEPTABLE_PCT = 20;
+
+const calcularMargenPct = (costo?: number | null, venta?: number | null): number => {
+    const c = Number(costo ?? 0);
+    if (c <= 0) return 0;
+    return ((Number(venta ?? 0) - c) / c) * 100;
+};
+const claseMargen = (pct: number): string => (pct >= MARGEN_MINIMO_ACEPTABLE_PCT ? 'bg-success' : 'bg-danger');
+const margenTarifa = (tarifa: ProveedorTarifa): number => calcularMargenPct(tarifa.precio_costo, tarifa.precio_venta_adulto);
+
+const estadoVigencia = (tarifa: ProveedorTarifa): { label: string; clase: string } => {
+    const hoy = new Date().toISOString().slice(0, 10);
+    if (tarifa.vigente_hasta && tarifa.vigente_hasta < hoy) return { label: 'Vencida', clase: 'bg-secondary' };
+    if (tarifa.vigente_desde > hoy) return { label: 'Programada', clase: 'bg-info' };
+    return { label: 'Vigente hoy', clase: 'bg-success' };
+};
 
 const cargarProveedor = async () => {
     const res = await proveedorService.obtener(proveedorId.value);
@@ -332,18 +403,59 @@ const quitarServicio = (ps: ProveedorServicio) => {
 const modalTarifaAbierto = ref<boolean>(false);
 const tarifaEditando = ref<ProveedorTarifa | null>(null);
 const proveedorServicioActivo = ref<ProveedorServicio | null>(null);
+const tabModalTarifa = ref<'comercial' | 'tributario'>('comercial');
 
 const formTarifa = ref<Partial<ProveedorTarifa>>({});
+
+const margenModalPct = computed(() => calcularMargenPct(formTarifa.value.precio_costo, formTarifa.value.precio_venta_adulto));
+
+// tocadoNino/tocadoInfante: una vez que el usuario edita ese precio a mano,
+// el recálculo automático desde margen_valor deja de pisarlo hasta que se
+// reabra el modal o se edite precio_costo (tarifa base nueva).
+const tocadoNino = ref<boolean>(false);
+const tocadoInfante = ref<boolean>(false);
+
+const recalcularDesdeMargen = () => {
+    if (formTarifa.value.margen_tipo !== 'porcentaje') return;
+    const costo = formTarifa.value.precio_costo;
+    const margen = formTarifa.value.margen_valor;
+    if (costo == null || margen == null) return;
+    const factor = 1 + margen / 100;
+    formTarifa.value.precio_venta_adulto = Number((costo * factor).toFixed(2));
+    if (!tocadoNino.value) formTarifa.value.precio_venta_nino = Number((costo * factor).toFixed(2));
+    if (!tocadoInfante.value) formTarifa.value.precio_venta_infante = Number((costo * factor).toFixed(2));
+};
+
+const recalcularMargenDesdeAdulto = () => {
+    if (formTarifa.value.margen_tipo !== 'porcentaje') return;
+    const costo = formTarifa.value.precio_costo;
+    if (!costo) return;
+    const venta = formTarifa.value.precio_venta_adulto ?? 0;
+    formTarifa.value.margen_valor = Number((((venta - costo) / costo) * 100).toFixed(2));
+};
+
+const onEditarPrecioCosto = () => {
+    tocadoNino.value = false;
+    tocadoInfante.value = false;
+    recalcularDesdeMargen();
+};
 
 const abrirFormTarifa = (ps: ProveedorServicio, tarifa: ProveedorTarifa | null = null) => {
     proveedorServicioActivo.value = ps;
     tarifaEditando.value = tarifa;
+    tabModalTarifa.value = 'comercial';
+    tocadoNino.value = false;
+    tocadoInfante.value = false;
     formTarifa.value = tarifa
         ? { ...tarifa }
         : {
             tipo_tarifa: 'publica', modalidad: 'compartido', moneda: 'PEN', tipo_habitacion: null,
             precio_costo: 0, margen_tipo: 'porcentaje', margen_valor: 0,
             precio_venta_adulto: 0, precio_venta_nino: null, precio_venta_infante: null,
+            edad_min_nino: 0,
+            edad_max_nino: configAgencia.value?.edad_max_nino ?? null,
+            edad_max_infante: configAgencia.value?.edad_max_infante ?? null,
+            descuento_maximo_pct: null,
             destino_tributario: 'nacional', tip_afe_igv: '10',
             vigente_desde: new Date().toISOString().slice(0, 10), vigente_hasta: null,
         };
@@ -368,6 +480,9 @@ const guardarTarifa = async () => {
 onMounted(async () => {
     const tiposRes = await proveedorTipoService.listar();
     proveedorTipos.value = tiposRes.proveedor_tipos;
+
+    const configRes = await configuracionAgenciaService.obtener();
+    configAgencia.value = configRes.configuracion_agencia;
 
     await cargarProveedor();
     await cargarServicios();
