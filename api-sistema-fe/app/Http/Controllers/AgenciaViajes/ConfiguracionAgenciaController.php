@@ -28,6 +28,9 @@ class ConfiguracionAgenciaController extends Controller
         'meses_margen_vencimiento_documento' => 6,
         'dias_aviso_pago_proveedor' => 2,
         'dias_cotizacion_estancada' => 15,
+        'permitir_descuento_item' => true,
+        'modo_descuento_item' => 'porcentaje',
+        'modo_descuento_global' => 'porcentaje',
     ];
 
     public function show()
@@ -53,6 +56,9 @@ class ConfiguracionAgenciaController extends Controller
             'meses_margen_vencimiento_documento' => 'required|integer|min:0',
             'dias_aviso_pago_proveedor' => 'required|integer|min:0',
             'dias_cotizacion_estancada' => 'required|integer|min:1',
+            'permitir_descuento_item' => 'required|boolean',
+            'modo_descuento_item' => 'required|in:porcentaje,monto',
+            'modo_descuento_global' => 'required|in:porcentaje,monto',
         ]);
 
         if ($validator->fails()) {
