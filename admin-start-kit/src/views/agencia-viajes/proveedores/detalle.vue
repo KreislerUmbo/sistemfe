@@ -342,7 +342,10 @@ watch(nuevoDestinoId, async (destinoId) => {
 const nombreTipo = (tipoId: number) => proveedorTipos.value.find((t) => t.id === tipoId)?.nombre ?? '—';
 const esHotel = computed(() => {
     const tipo = proveedorTipos.value.find((t) => t.id === proveedor.value?.tipo_id);
-    return tipo?.slug === 'hotel';
+    // slug='alojamiento-hoteles' es el slug REAL del catálogo proveedor_tipos
+    // (confirmado contra datos reales) — 'hotel' nunca matcheaba nada, mismo
+    // bug corregido en ProveedorTarifaController::proveedorEsHotel() (backend).
+    return tipo?.slug === 'alojamiento-hoteles';
 });
 
 // ── Margen resultante (modal + tabla) ────────────────────────────────

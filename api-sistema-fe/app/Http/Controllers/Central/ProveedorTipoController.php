@@ -17,8 +17,8 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
 //
 // slug NUNCA se acepta del payload — se deriva de `nombre` una sola vez, al crear, y
 // queda inmutable para siempre (ProveedorTarifaController y otros puntos del código
-// tienen lógica de negocio atada a slugs fijos como 'hotel'; permitir que cambie
-// rompería esas reglas en silencio para cualquier tenant que ya lo esté usando).
+// tienen lógica de negocio atada a slugs fijos como 'alojamiento-hoteles'; permitir que
+// cambie rompería esas reglas en silencio para cualquier tenant que ya lo esté usando).
 //
 // Sin borrado real (mismo criterio que TenantPlanController/PaymentMethodController):
 // destroy() desactiva, nunca borra la fila — proveedor_tipos no tiene FK real hacia
