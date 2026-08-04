@@ -509,6 +509,8 @@ Route::group([
         ->middleware('permission:agencia.cotizaciones');
     Route::put("cotizaciones/{id}/pasajeros", [CotizacionController::class, 'actualizarPasajeros'])
         ->middleware('permission:agencia.cotizaciones');
+    Route::delete("cotizaciones/{id}", [CotizacionController::class, 'destroy'])
+        ->middleware('permission:agencia.cotizaciones');
 
     Route::post("cotizaciones/{id}/alternativas", [AlternativaController::class, 'store'])
         ->middleware('permission:agencia.cotizaciones');

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\AgenciaViajes\ConfiguracionAgencia;
 use App\Models\AgenciaViajes\Cotizacion;
 use App\Models\AgenciaViajes\CotizacionPasajero;
+use App\Models\AgenciaViajes\Reserva;
 use App\Models\Client\Client;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -192,6 +193,39 @@ class CotizacionController extends Controller
             'message' => 'Pasajeros actualizados correctamente',
             'cotizacion' => $cotizacion,
         ]);
+    }
+
+    // Borra el header completo (cliente + pasajeros) junto con TODAS sus
+    // alternativas — hasta esta sesión, cada Alternativa individual se
+    // podía borrar (AlternativaController::destroy()) pero el header de la
+    // Cotizacion quedaba huérfano para siempre, sin forma de limpiar una
+    // cotización de prueba o una donde el cliente nunca avanzó. Mismo
+    // guard que AlternativaController::destroy() (una reserva ya generada
+    // no se puede perder), extendido a CUALQUIERA de las alternativas de
+    // la cotización. Reusa AlternativaController::eliminarCascada() por
+    // alternativa (misma cascada real, no reescrita acá) dentro de una
+    // sola transacción que también borra los pasajeros y el header.
+    public function destroy(string $id)
+    {
+        $cotizacion = Cotizacion::with('alternativas')->findOrFail($id);
+
+        $conReserva = Reserva::whereIn('alternativa_id', $cotizacion->alternativas->pluck('id'))->exists();
+        if ($conReserva) {
+            return response()->json([
+                'code' => 422,
+                'message' => 'No se puede eliminar: esta cotización ya generó una reserva.',
+            ], 422);
+        }
+
+        DB::transaction(function () use ($cotizacion) {
+            foreach ($cotizacion->alternativas as $alternativa) {
+                AlternativaController::eliminarCascada($alternativa);
+            }
+            CotizacionPasajero::where('cotizacion_id', $cotizacion->id)->delete();
+            $cotizacion->delete();
+        });
+
+        return response()->json(['code' => 200, 'message' => 'Cotización eliminada correctamente']);
     }
 
     private function derivarTipoPax(int $edad, int $edadMaxInfante, int $edadMaxNino): string

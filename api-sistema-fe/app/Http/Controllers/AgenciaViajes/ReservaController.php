@@ -9,6 +9,7 @@ use App\Models\AgenciaViajes\CotizacionPasajero;
 use App\Models\AgenciaViajes\Reserva;
 use App\Models\AgenciaViajes\ReservaItem;
 use App\Models\AgenciaViajes\ReservaPasajero;
+use App\Models\AgenciaViajes\ReservaVenta;
 use App\Models\AgenciaViajes\SalidaMayorista;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -120,6 +121,16 @@ class ReservaController extends Controller
 
         if ($reserva->estado === 'cancelada') {
             return response()->json(['code' => 422, 'message' => 'La reserva ya está cancelada.'], 422);
+        }
+
+        // Sin esto, se podía cancelar una reserva que ya generó una venta
+        // real facturada (SUNAT) sin ningún aviso — reserva_ventas es la
+        // tabla puente hacia Sale, ver ReservaVenta.
+        if (ReservaVenta::where('reserva_id', $reserva->id)->exists()) {
+            return response()->json([
+                'code' => 422,
+                'message' => 'No se puede cancelar: esta reserva ya tiene una venta/comprobante asociado.',
+            ], 422);
         }
 
         $validator = Validator::make($request->all(), [
