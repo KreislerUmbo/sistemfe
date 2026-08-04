@@ -216,6 +216,6 @@ class ProveedorTarifaController extends Controller
             return false;
         }
 
-        return ProveedorTipo::where('id', $proveedor->tipo_id)->where('slug', 'hotel')->exists();
+        return ProveedorTipo::where('id', $proveedor->tipo_id)->where('slug', 'alojamiento-hoteles')->exists();
     }
 }
