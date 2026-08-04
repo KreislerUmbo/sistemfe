@@ -128,8 +128,11 @@
                                         {{ tarifa.vigente_desde }} — {{ tarifa.vigente_hasta ?? 'indefinido' }}
                                     </td>
                                     <td class="text-center pe-3">
-                                        <button class="btn btn-sm btn-outline-secondary" @click="abrirFormTarifa(ps, tarifa)">
+                                        <button class="btn btn-sm btn-outline-secondary me-1" @click="abrirFormTarifa(ps, tarifa)">
                                             <i class="fas fa-pen"></i>
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-danger" @click="eliminarTarifa(tarifa)">
+                                            <i class="fas fa-trash"></i>
                                         </button>
                                     </td>
                                 </tr>
@@ -475,6 +478,21 @@ const guardarTarifa = async () => {
     } catch (error: any) {
         (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo guardar', 'error');
     }
+};
+
+const eliminarTarifa = (tarifa: ProveedorTarifa) => {
+    (Swal as TVueSwalInstance).fire({
+        title: 'Confirmar', text: '¿Eliminar esta tarifa?', icon: 'warning',
+        showCancelButton: true, confirmButtonText: 'Sí, eliminar',
+    }).then(async (result: any) => {
+        if (!result.isConfirmed) return;
+        try {
+            await proveedorService.eliminarTarifa(tarifa.id);
+            await cargarServicios();
+        } catch (error: any) {
+            (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo eliminar', 'error');
+        }
+    });
 };
 
 onMounted(async () => {

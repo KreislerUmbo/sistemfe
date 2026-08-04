@@ -401,6 +401,8 @@ Route::group([
         ->middleware('permission:agencia.proveedores');
     Route::put("proveedor-tarifas/{id}", [ProveedorTarifaController::class, 'update'])
         ->middleware('permission:agencia.proveedores');
+    Route::delete("proveedor-tarifas/{id}", [ProveedorTarifaController::class, 'destroy'])
+        ->middleware('permission:agencia.proveedores');
 
     Route::post("destinos-atractivos/{id}", [DestinoAtractivoController::class, 'update'])
         ->middleware('permission:agencia.destinos');
