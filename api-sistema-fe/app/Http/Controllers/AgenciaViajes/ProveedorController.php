@@ -22,6 +22,15 @@ class ProveedorController extends Controller
             $query->where('tipo_id', $request->get('tipo_id'));
         }
 
+        // Filtro opcional — default sigue mostrando todos (activos e
+        // inactivos), el listado general de proveedores necesita ver los
+        // inactivos para poder reactivarlos. Solo lo usan callers puntuales
+        // que sí necesitan excluirlos (ej. "usar tarifa registrada" de la
+        // matriz de hoteles, Sesión 11k).
+        if ($request->filled('estado')) {
+            $query->where('estado', $request->boolean('estado'));
+        }
+
         if ($request->filled('search')) {
             $search = $request->get('search');
             $query->where(function ($q) use ($search) {
