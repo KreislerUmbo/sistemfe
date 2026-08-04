@@ -279,26 +279,37 @@ class AlternativaController extends Controller
             ], 422);
         }
 
-        DB::transaction(function () use ($alternativa) {
-            $itemIds = AlternativaItem::where('alternativa_id', $alternativa->id)->pluck('id');
-            CotizacionPasajeAereo::whereIn('alternativa_item_id', $itemIds)->delete();
-            AlternativaItem::whereIn('id', $itemIds)->delete();
-
-            $opciones = OpcionMayorista::where('alternativa_id', $alternativa->id)->get();
-            foreach ($opciones as $opcion) {
-                OpcionMayoristaOpcional::where('opcion_mayorista_id', $opcion->id)->delete();
-
-                $hotelIds = OpcionHotel::where('opcion_mayorista_id', $opcion->id)->pluck('id');
-                OpcionHotelTarifa::whereIn('opcion_hotel_id', $hotelIds)->delete();
-                OpcionHotel::whereIn('id', $hotelIds)->delete();
-
-                $opcion->delete();
-            }
-
-            $alternativa->delete();
-        });
+        DB::transaction(fn () => self::eliminarCascada($alternativa));
 
         return response()->json(['code' => 200, 'message' => 'Alternativa eliminada correctamente']);
+    }
+
+    // Extraída de destroy() para que CotizacionController::destroy() (borra
+    // TODAS las alternativas de una cotización) reuse la MISMA cascada en
+    // vez de reescribirla — un solo lugar con la lista real de qué cuelga
+    // de una alternativa. Sin guard ni transacción propia acá adentro: cada
+    // caller decide su propio criterio de guard (acá, una sola alternativa
+    // con reserva; en CotizacionController, cualquiera de las alternativas
+    // de la cotización con reserva) y envuelve la llamada en su propia
+    // transacción.
+    public static function eliminarCascada(Alternativa $alternativa): void
+    {
+        $itemIds = AlternativaItem::where('alternativa_id', $alternativa->id)->pluck('id');
+        CotizacionPasajeAereo::whereIn('alternativa_item_id', $itemIds)->delete();
+        AlternativaItem::whereIn('id', $itemIds)->delete();
+
+        $opciones = OpcionMayorista::where('alternativa_id', $alternativa->id)->get();
+        foreach ($opciones as $opcion) {
+            OpcionMayoristaOpcional::where('opcion_mayorista_id', $opcion->id)->delete();
+
+            $hotelIds = OpcionHotel::where('opcion_mayorista_id', $opcion->id)->pluck('id');
+            OpcionHotelTarifa::whereIn('opcion_hotel_id', $hotelIds)->delete();
+            OpcionHotel::whereIn('id', $hotelIds)->delete();
+
+            $opcion->delete();
+        }
+
+        $alternativa->delete();
     }
 
     // Sesión 11h — clona la alternativa activa completa (ítems + su

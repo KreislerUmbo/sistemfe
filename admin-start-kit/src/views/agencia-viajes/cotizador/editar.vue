@@ -1460,9 +1460,30 @@ const onPasajeAereoAgregado = async (_item: AlternativaItem) => {
     await cargarCotizacion();
 };
 
+// Antes de esta sesión no había confirmación ni try/catch acá — un ítem
+// cuya alternativa ya generó una reserva (por ejemplo vía Venta Directa)
+// tira 422 desde AlternativaItemController::destroy() (antes era un 500
+// crudo, mismo bug que ya se había corregido una vez en
+// eliminarAlternativa()/AlternativaController::destroy()); sin captura,
+// el botón parecía "no hacer nada".
 const eliminarItem = async (item: AlternativaItem) => {
-    await alternativaItemService.eliminar(item.id);
-    await cargarCotizacion();
+    const confirmacion = await (Swal as TVueSwalInstance).fire({
+        title: '¿Eliminar este ítem?',
+        text: 'Esta acción no se puede deshacer.',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, eliminar',
+        cancelButtonText: 'Cancelar',
+    });
+    if (!confirmacion.isConfirmed) return;
+
+    try {
+        await alternativaItemService.eliminar(item.id);
+        toast.success('Ítem eliminado');
+        await cargarCotizacion();
+    } catch (error: any) {
+        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo eliminar el ítem', 'error');
+    }
 };
 
 // ── Edición en vivo (descuento_pct / precio_convertido) ────────────────

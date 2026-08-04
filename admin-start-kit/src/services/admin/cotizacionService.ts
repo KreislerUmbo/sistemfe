@@ -37,5 +37,9 @@ export const cotizacionService = {
   }) {
     const response = await httpClient.put(`/cotizaciones/${id}`, data)
     return response.data as { code: number; message: string; cotizacion: Cotizacion }
+  },
+  async eliminar(id: number) {
+    const response = await httpClient.delete(`/cotizaciones/${id}`)
+    return response.data as { code: number; message: string }
   }
 }

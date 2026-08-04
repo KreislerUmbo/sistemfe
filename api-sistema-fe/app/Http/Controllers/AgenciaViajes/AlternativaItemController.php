@@ -13,6 +13,7 @@ use App\Models\AgenciaViajes\OpcionHotelTarifa;
 use App\Models\AgenciaViajes\OpcionMayorista;
 use App\Models\AgenciaViajes\PaquetePlantilla;
 use App\Models\AgenciaViajes\ProveedorTarifa;
+use App\Models\AgenciaViajes\ReservaItem;
 use App\Services\AgenciaViajes\ComboExplosionService;
 use App\Services\AgenciaViajes\PriceEngineService;
 use Illuminate\Http\JsonResponse;
@@ -141,10 +142,25 @@ class AlternativaItemController extends Controller
         ]);
     }
 
+    // Mismo bug que ya se encontró y corrigió una vez en
+    // AlternativaController::destroy() (ver comentario ahí): reserva_items.
+    // alternativa_item_id es una FK real sin onDelete (RESTRICT en
+    // Postgres) — sin este guard, borrar un ítem cuya alternativa ya
+    // generó una reserva (por ejemplo vía Venta Directa, que crea
+    // alternativa→reserva→reserva_items en el mismo request) tiraba una
+    // violación de FK sin capturar (500 crudo, "parecía que el botón no
+    // hacía nada").
     public function destroy(string $id)
     {
         $item = AlternativaItem::with('alternativa')->findOrFail($id);
         $alternativa = $item->alternativa;
+
+        if (ReservaItem::where('alternativa_item_id', $item->id)->exists()) {
+            return response()->json([
+                'code' => 422,
+                'message' => 'No se puede eliminar: este servicio ya tiene una reserva generada (por ejemplo, vía Venta Directa). Cancelá la reserva primero si corresponde.',
+            ], 422);
+        }
 
         DB::transaction(function () use ($item) {
             if ($item->origen_tipo === AlternativaItem::ORIGEN_PASAJE_AEREO) {
