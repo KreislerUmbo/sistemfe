@@ -231,9 +231,13 @@
                                     <div>
                                         <strong>{{ t.proveedor_servicio?.proveedor?.razon_social }}</strong>
                                         <span v-if="t.proveedor_servicio?.proveedor?.es_referencial" class="badge bg-secondary-subtle text-secondary border ms-1" style="font-size:10px">Referencial</span>
-                                        <span class="text-muted"> — {{ t.proveedor_servicio?.destino_servicio?.servicio?.nombre }}<span v-if="t.tipo_habitacion"> · {{ t.tipo_habitacion }}</span></span>
+                                        <span class="text-muted"> — {{ descripcionDestinoServicio(t.proveedor_servicio?.destino_servicio) }}<span v-if="t.tipo_habitacion"> · {{ t.tipo_habitacion }}</span></span>
+                                        <span class="badge bg-light text-dark border ms-1" style="font-size:10px">{{ t.tipo_tarifa }} · {{ t.modalidad }}</span>
                                     </div>
-                                    <span class="badge bg-light text-dark border">{{ t.moneda }} {{ Number(t.precio_venta_adulto).toFixed(2) }}</span>
+                                    <div class="text-end">
+                                        <span class="badge bg-light text-dark border d-block">{{ t.moneda }} {{ Number(t.precio_venta_adulto).toFixed(2) }}</span>
+                                        <span class="text-muted" style="font-size:10px">costo {{ t.moneda }} {{ Number(t.precio_costo).toFixed(2) }}</span>
+                                    </div>
                                 </div>
                             </div>
                             <div v-if="bibliotecaTarifas.length === 0" class="text-muted small text-center py-2">Sin resultados.</div>
@@ -276,7 +280,8 @@
                             <i class="fas fa-concierge-bell text-primary me-1"></i>
                             {{ item.proveedor_tarifa.proveedor_servicio?.proveedor?.razon_social }}
                             <span v-if="item.proveedor_tarifa.proveedor_servicio?.proveedor?.es_referencial" class="badge bg-secondary-subtle text-secondary border ms-1" style="font-size:10px">Referencial</span>
-                            <span class="text-muted"> — {{ item.proveedor_tarifa.proveedor_servicio?.destino_servicio?.servicio?.nombre }}<span v-if="item.proveedor_tarifa.tipo_habitacion"> · {{ item.proveedor_tarifa.tipo_habitacion }}</span></span>
+                            <span class="text-muted"> — {{ descripcionDestinoServicio(item.proveedor_tarifa.proveedor_servicio?.destino_servicio) }}<span v-if="item.proveedor_tarifa.tipo_habitacion"> · {{ item.proveedor_tarifa.tipo_habitacion }}</span></span>
+                            <span class="badge bg-light text-dark border ms-1" style="font-size:10px">{{ item.proveedor_tarifa.tipo_tarifa }} · {{ item.proveedor_tarifa.modalidad }}</span>
                         </span>
                         <span v-else-if="item.guia_tarifa">
                             <i class="fas fa-user-tie text-primary me-1"></i>
@@ -285,7 +290,10 @@
                             <span class="text-muted"> — {{ item.guia_tarifa.destino?.nombre }}</span>
                         </span>
                         <span class="d-flex align-items-center gap-3">
-                            <span class="badge bg-light text-dark border">{{ monedaItem(item) }} {{ ventaItem(item).toFixed(2) }}</span>
+                            <span class="text-end">
+                                <span class="badge bg-light text-dark border d-block">{{ monedaItem(item) }} {{ ventaItem(item).toFixed(2) }}</span>
+                                <span class="text-muted" style="font-size:10px">costo {{ monedaItem(item) }} {{ costoItem(item).toFixed(2) }}</span>
+                            </span>
                             <i class="fas fa-times text-danger" style="cursor:pointer" @click="quitarItem(item)"></i>
                         </span>
                     </li>
@@ -311,10 +319,17 @@
                         </div>
                         <div class="col-4">
                             <div class="small text-muted mb-1">Margen resultante</div>
-                            <div class="fs-5 fw-bold" :class="totalesIncluye.margenResultantePct >= MARGEN_MINIMO_ACEPTABLE_PCT ? 'text-success' : 'text-danger'">
+                            <div class="fs-5 fw-bold" :class="totalesIncluye.margenResultantePct >= margenMinimoAceptablePct ? 'text-success' : 'text-danger'">
                                 {{ totalesIncluye.margenResultantePct.toFixed(1) }}%
                             </div>
                         </div>
+                    </div>
+                    <div v-if="diferenciaVentaFinal !== null" class="alert alert-warning small mt-3 mb-0">
+                        <i class="fas fa-triangle-exclamation me-1"></i>
+                        El "Precio venta (desde)" del tour (S/ {{ Number(paquete!.precio_venta_final).toFixed(2) }})
+                        no coincide con la suma de los ítems (S/ {{ totalesIncluye.ventaTotal.toFixed(2) }}).
+                        Diferencia: S/ {{ diferenciaVentaFinal.toFixed(2) }}.
+                        Si es intencional (descuento de paquete), podés ignorar este aviso.
                     </div>
                 </div>
             </div>
@@ -580,10 +595,12 @@ import Swal from 'sweetalert2/dist/sweetalert2.js';
 import { paquetePlantillaService } from '@/services/admin/paquetePlantillaService';
 import { proveedorService, proveedorTipoService } from '@/services/admin/proveedorService';
 import { guiaService } from '@/services/admin/guiaService';
+import { configuracionAgenciaService } from '@/services/admin/configuracionAgenciaService';
 import { formatFecha } from '@/helpers/fecha';
 import type {
     PaquetePlantilla, PaquetePlantillaItem, TourItinerarioItem, OpcionHotel,
     ProveedorTarifa, Proveedor, Guia, GuiaTarifa, ComboDatos, ComboItinerarioPaso, PaquetePlantillaResumen,
+    DestinoServicio, ConfiguracionAgencia,
 } from '@/types/agencia-viajes';
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
@@ -597,6 +614,17 @@ const esCombo = computed(() => paquete.value?.tipo === 'paquete_combo');
 const tabActiva = ref<'datos' | 'itinerario' | 'incluye' | 'hoteles'>('datos');
 
 const etiquetaCategoria = (c: string) => ({ local: 'Local', nacional: 'Nacional', internacional: 'Internacional' } as Record<string, string>)[c] ?? c;
+
+// Fix 1 (pantalla "Incluye") — destino/atractivo antes del nombre del
+// servicio, para diferenciar tarifas del mismo proveedor/servicio genérico
+// que solo se distinguían por precio. `destino_atractivo` puede venir null
+// (no todo servicio está atado a un destino) — en ese caso solo el nombre
+// del servicio, sin romper el render.
+const descripcionDestinoServicio = (ds?: DestinoServicio) => {
+    const destino = ds?.destino_atractivo?.nombre;
+    const servicio = ds?.servicio?.nombre ?? '';
+    return destino ? `${destino} · ${servicio}` : servicio;
+};
 
 const cargarPaquete = async () => {
     const res = await paquetePlantillaService.obtener(paqueteId.value);
@@ -819,7 +847,12 @@ const cargarItems = async () => {
 };
 
 // ── Totales de "Incluye" (tour_simple) — costo/venta/margen, en vivo ──
-const MARGEN_MINIMO_ACEPTABLE_PCT = 20;
+// Fix 3 — margen mínimo aceptable configurable por agencia (antes
+// hardcodeado acá), mismo patrón que proveedores/detalle.vue y
+// cotizador/editar.vue. Fallback de 20 solo mientras la config está en
+// vuelo (no bloquea el render).
+const configAgencia = ref<ConfiguracionAgencia | null>(null);
+const margenMinimoAceptablePct = computed(() => configAgencia.value?.margen_minimo_aceptable_pct ?? 20);
 
 const ventaGuiaTarifa = (gt: GuiaTarifa): number =>
     gt.tipo_margen === 'porcentaje' ? gt.costo_diario * (1 + gt.margen_valor / 100) : gt.costo_diario + gt.margen_valor;
@@ -842,6 +875,15 @@ const totalesIncluye = computed(() => {
     const ventaTotal = items.value.reduce((acc, item) => acc + ventaItem(item), 0);
     const margenResultantePct = costoTotal > 0 ? ((ventaTotal - costoTotal) / costoTotal) * 100 : 0;
     return { costoTotal, ventaTotal, margenResultantePct };
+});
+
+// Fix 4 — advertencia (no bloqueo) cuando el "Precio venta (desde)" manual
+// del tab "Datos" diverge de la suma calculada de ítems del tab "Incluye".
+// Puede ser intencional (descuento de paquete) — solo informa.
+const diferenciaVentaFinal = computed(() => {
+    if (!paquete.value || paquete.value.precio_venta_final == null) return null;
+    const diff = Number(paquete.value.precio_venta_final) - totalesIncluye.value.ventaTotal;
+    return Math.abs(diff) < 0.01 ? null : diff;
 });
 
 const agregarItem = async () => {
@@ -968,6 +1010,10 @@ const quitarHotel = async (hotel: OpcionHotel) => {
 };
 
 onMounted(async () => {
+    // Fix 3 — carga la config de agencia en paralelo, no bloquea la carga
+    // del paquete (el margen mínimo tiene fallback de 20 mientras está en vuelo).
+    configuracionAgenciaService.obtener().then((res) => { configAgencia.value = res.configuracion_agencia; });
+
     await cargarPaquete();
     await cargarItinerario();
     await cargarItems();

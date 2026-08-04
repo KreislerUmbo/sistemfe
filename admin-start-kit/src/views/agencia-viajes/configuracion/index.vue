@@ -59,6 +59,11 @@
                             <label class="form-label mb-1 small fw-semibold text-secondary">Máx. pax por reserva (grupo)</label>
                             <input type="number" class="form-control form-control-sm" v-model.number="form.max_pax_reserva_grupo">
                         </div>
+                        <div class="col-6 col-md-3">
+                            <label class="form-label mb-1 small fw-semibold text-secondary">Margen mínimo aceptable (%)</label>
+                            <input type="number" step="0.01" min="0" class="form-control form-control-sm" v-model.number="form.margen_minimo_aceptable_pct">
+                            <small class="text-muted d-block mt-1">Usado en el tab "Incluye" de un tour para marcar en rojo el margen resultante bajo este umbral.</small>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -181,6 +186,7 @@ const form = ref<ConfiguracionAgencia>({
     permitir_descuento_item: true,
     modo_descuento_item: 'porcentaje',
     modo_descuento_global: 'porcentaje',
+    margen_minimo_aceptable_pct: 20,
 });
 
 const cargar = async () => {

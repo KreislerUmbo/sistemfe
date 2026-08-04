@@ -186,6 +186,9 @@ export type ConfiguracionAgencia = {
   permitir_descuento_item: boolean;
   modo_descuento_item: 'porcentaje' | 'monto';
   modo_descuento_global: 'porcentaje' | 'monto';
+  // Sesión fix/incluye-tour — margen mínimo aceptable (%) del tab "Incluye"
+  // (tour_simple), antes hardcodeado en detalle.vue.
+  margen_minimo_aceptable_pct: number;
 };
 
 export type ApiMessageResponse = {

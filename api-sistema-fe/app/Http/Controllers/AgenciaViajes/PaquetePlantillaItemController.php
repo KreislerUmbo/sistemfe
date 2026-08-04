@@ -30,7 +30,13 @@ class PaquetePlantillaItemController extends Controller
         $paquete = PaquetePlantilla::findOrFail($paqueteId);
 
         $items = $paquete->items()
-            ->with(['proveedorTarifa.proveedorServicio.proveedor', 'guiaTarifa.guia', 'paquetePlantillaHijo'])
+            ->with([
+                'proveedorTarifa.proveedorServicio.proveedor',
+                'proveedorTarifa.proveedorServicio.destinoServicio.destinoAtractivo',
+                'proveedorTarifa.proveedorServicio.destinoServicio.servicio',
+                'guiaTarifa.guia',
+                'paquetePlantillaHijo',
+            ])
             ->orderBy('orden')
             ->get();
 
