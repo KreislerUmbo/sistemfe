@@ -58,7 +58,7 @@
                     <div class="row g-2 align-items-end">
                         <div class="col-12 col-md-5">
                             <label class="form-label mb-1 small fw-semibold text-secondary">Destino / Atractivo</label>
-                            <DestinoTreeSelect v-model="nuevoDestinoId" nivel-min="lugar" />
+                            <DestinoTreeSelect v-model="nuevoDestinoId" nivel-min="zona" />
                         </div>
                         <div class="col-8 col-md-4">
                             <label class="form-label mb-1 small fw-semibold text-secondary">Servicio</label>

@@ -1721,7 +1721,7 @@ onMounted(async () => {
     // nada).
     const tipoHotel = tipos.proveedor_tipos.find((t) => t.slug === 'alojamiento-hoteles');
     if (tipoHotel) {
-        const res = await httpClient.get('/proveedores', { params: { tipo_id: tipoHotel.id } });
+        const res = await httpClient.get('/proveedores', { params: { tipo_id: tipoHotel.id, estado: true } });
         proveedoresHotel.value = res.data.proveedores ?? [];
     }
 });

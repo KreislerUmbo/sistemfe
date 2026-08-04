@@ -127,7 +127,12 @@ const etiquetaTipo = (tipo: Nivel) => {
     return 'Atractivo';
 };
 
-watch(() => props.modelValue, (value) => {
+// Sincroniza el texto visible tanto cuando cambia modelValue como cuando
+// termina de cargar opcionesPlanas (cargarArbol() es asíncrona, corre en
+// onMounted) — al editar, el componente se monta con modelValue ya
+// seteado, así que hace falta cubrir la carrera entre "la prop ya llegó"
+// y "el árbol ya cargó", sin importar cuál de las dos gana.
+function sincronizarSearchText(value: number | null) {
     if (!value) {
         searchText.value = '';
         return;
@@ -136,7 +141,10 @@ watch(() => props.modelValue, (value) => {
     if (opcion) {
         searchText.value = opcion.etiquetaCompleta;
     }
-});
+}
+
+watch(() => props.modelValue, sincronizarSearchText, { immediate: true });
+watch(opcionesPlanas, () => sincronizarSearchText(props.modelValue));
 
 onMounted(() => {
     cargarArbol();

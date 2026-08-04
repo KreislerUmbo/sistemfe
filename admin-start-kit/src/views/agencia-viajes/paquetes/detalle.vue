@@ -969,7 +969,7 @@ onMounted(async () => {
     const tipos = await proveedorTipoService.listar();
     const tipoHotel = tipos.proveedor_tipos.find((t) => t.slug === 'alojamiento-hoteles');
     if (tipoHotel) {
-        const resProveedores = await proveedorService.listar({ tipo_id: tipoHotel.id });
+        const resProveedores = await proveedorService.listar({ tipo_id: tipoHotel.id, estado: true });
         proveedoresHotel.value = resProveedores.proveedores ?? [];
     }
 });
