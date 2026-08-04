@@ -516,11 +516,21 @@
                                             <i class="fas fa-plus me-1"></i>Agregar hotel a esta opción
                                         </button>
                                         <div v-if="mostrarFormHotel === op.id" class="border rounded p-2 mt-2">
+                                            <label class="form-label mb-1 small text-secondary">Nombre del hotel</label>
                                             <input type="text" class="form-control form-control-sm mb-1" placeholder="Nombre del hotel" v-model="formHotel.nombre_hotel">
+                                            <label class="form-label mb-1 small text-secondary">Proveedor</label>
                                             <select class="form-select form-select-sm mb-1" v-model="formHotel.proveedor_id" @change="onCambiarProveedorHotel">
                                                 <option :value="null">Hotel manual/referencial (sin proveedor)</option>
                                                 <option v-for="p in proveedoresHotel" :key="p.id" :value="p.id">{{ p.nombre_comercial ?? p.razon_social }}</option>
                                             </select>
+                                            <!-- Encabezados de columna — cumplen el rol de label para cada
+                                                 fila de tarifas sin repetir el texto en cada una. -->
+                                            <div class="row g-1 mb-1">
+                                                <div class="col-3"><label class="form-label mb-0 small text-secondary">Tipo de habitación</label></div>
+                                                <div class="col-3" v-if="formHotel.proveedor_id"><label class="form-label mb-0 small text-secondary">Tarifa registrada</label></div>
+                                                <div :class="formHotel.proveedor_id ? 'col-3' : 'col-4'"><label class="form-label mb-0 small text-secondary">Costo</label></div>
+                                                <div :class="formHotel.proveedor_id ? 'col-3' : 'col-4'"><label class="form-label mb-0 small text-secondary">Venta</label></div>
+                                            </div>
                                             <div v-for="(tf, idx) in formHotel.tarifas" :key="idx" class="row g-1 mb-1">
                                                 <div class="col-3">
                                                     <select class="form-select form-select-sm" v-model="tf.tipo_habitacion" @change="tf.proveedor_tarifa_id = null">

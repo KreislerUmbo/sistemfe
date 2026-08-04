@@ -458,23 +458,37 @@
                     <span class="fw-semibold text-dark small">Agregar hotel</span>
                 </div>
                 <div class="card-body py-3">
+                    <label class="form-label mb-1 small text-secondary">Nombre del hotel</label>
                     <input type="text" class="form-control form-control-sm mb-2" placeholder="Nombre del hotel" v-model="formHotel.nombre_hotel">
                     <div class="row g-2 mb-2">
                         <div class="col-6 col-md-4">
+                            <label class="form-label mb-1 small text-secondary">Estrellas</label>
                             <input type="number" min="1" max="5" class="form-control form-control-sm" placeholder="Estrellas" v-model.number="formHotel.categoria_estrellas">
                         </div>
                         <div class="col-6 col-md-4">
+                            <label class="form-label mb-1 small text-secondary">Moneda</label>
                             <select class="form-select form-select-sm" v-model="formHotel.moneda">
                                 <option value="PEN">PEN</option>
                                 <option value="USD">USD</option>
                             </select>
                         </div>
                         <div class="col-12 col-md-4">
+                            <label class="form-label mb-1 small text-secondary">Proveedor</label>
                             <select class="form-select form-select-sm" v-model="formHotel.proveedor_id" @change="onCambiarProveedorHotel">
                                 <option :value="null">Hotel manual/referencial (sin proveedor)</option>
                                 <option v-for="p in proveedoresHotel" :key="p.id" :value="p.id">{{ p.nombre_comercial ?? p.razon_social }}</option>
                             </select>
                         </div>
+                    </div>
+                    <!-- Encabezados de columna — cumplen el rol de label para cada fila
+                         de tarifas sin repetir el texto en cada una (mismo criterio que
+                         un <th>, ver misma estructura de columnas que la fila de abajo). -->
+                    <div class="row g-1 mb-1">
+                        <div class="col-3"><label class="form-label mb-0 small text-secondary">Tipo de habitación</label></div>
+                        <div class="col-3" v-if="formHotel.proveedor_id"><label class="form-label mb-0 small text-secondary">Tarifa registrada</label></div>
+                        <div :class="formHotel.proveedor_id ? 'col-2' : 'col-3'"><label class="form-label mb-0 small text-secondary">Costo</label></div>
+                        <div :class="formHotel.proveedor_id ? 'col-2' : 'col-3'"><label class="form-label mb-0 small text-secondary">Venta</label></div>
+                        <div class="col-1"></div>
                     </div>
                     <div v-for="(tf, idx) in formHotel.tarifas" :key="idx" class="row g-1 mb-1 align-items-center">
                         <div class="col-3">
