@@ -20,12 +20,14 @@ class AlternativaItem extends Model
     public const ORIGEN_MAYORISTA = 'mayorista';
     public const ORIGEN_PASAJE_AEREO = 'pasaje_aereo';
     public const ORIGEN_MANUAL = 'manual';
+    public const ORIGEN_HOTEL_PLANTILLA = 'hotel_plantilla';
 
     public const ORIGENES = [
         self::ORIGEN_PROVEEDOR,
         self::ORIGEN_MAYORISTA,
         self::ORIGEN_PASAJE_AEREO,
         self::ORIGEN_MANUAL,
+        self::ORIGEN_HOTEL_PLANTILLA,
     ];
 
     protected $fillable = [
@@ -33,6 +35,8 @@ class AlternativaItem extends Model
         'origen_tipo',
         'proveedor_tarifa_id',
         'opcion_mayorista_id',
+        'opcion_hotel_tarifa_id',
+        'paquete_plantilla_id',
         'tour_origen_id',
         'dia_referencial',
         'descripcion_manual',
@@ -71,6 +75,20 @@ class AlternativaItem extends Model
     public function opcionMayorista()
     {
         return $this->belongsTo(OpcionMayorista::class, 'opcion_mayorista_id');
+    }
+
+    public function opcionHotelTarifa()
+    {
+        return $this->belongsTo(OpcionHotelTarifa::class, 'opcion_hotel_tarifa_id');
+    }
+
+    // Sesión 11k — de qué paquete_plantilla vino este ítem de hotel
+    // (origen_tipo=hotel_plantilla). Distinto de tourOrigen(): tourOrigen
+    // marca el tour_simple dentro de un combo, este marca el paquete/tour
+    // dueño de la matriz de hoteles de la que salió la tarifa elegida.
+    public function paquetePlantillaOrigen()
+    {
+        return $this->belongsTo(PaquetePlantilla::class, 'paquete_plantilla_id');
     }
 
     // Sesión 11b4 — tour_simple de origen cuando este ítem vino de explotar

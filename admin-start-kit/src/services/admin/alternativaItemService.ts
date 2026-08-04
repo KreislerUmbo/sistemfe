@@ -29,6 +29,12 @@ export const alternativaItemService = {
     const response = await httpClient.post(`/alternativas/${alternativaId}/items`, { ...data, origen_tipo: 'manual' })
     return response.data
   },
+  // Sesión 11k — hotel elegido de la matriz de un paquete_plantilla (ver
+  // hoteles_disponibles en la respuesta de cargarDesdePlantilla).
+  async agregarHotelPlantilla(alternativaId: number, data: Record<string, any>) {
+    const response = await httpClient.post(`/alternativas/${alternativaId}/items`, { ...data, origen_tipo: 'hotel_plantilla' })
+    return response.data
+  },
   // Edición en vivo — mandar SOLO uno de los dos (descuento_pct o
   // precio_convertido), el backend devuelve ambos recalculados +
   // alerta_piso/precio_minimo_permitido.

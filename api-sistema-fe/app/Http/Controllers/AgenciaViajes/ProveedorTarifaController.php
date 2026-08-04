@@ -49,7 +49,11 @@ class ProveedorTarifaController extends Controller
             'proveedorServicio.destinoServicio.servicio',
         ])
             ->where('vigente_desde', '<=', $hoy)
-            ->where(fn ($q) => $q->whereNull('vigente_hasta')->orWhere('vigente_hasta', '>=', $hoy));
+            ->where(fn ($q) => $q->whereNull('vigente_hasta')->orWhere('vigente_hasta', '>=', $hoy))
+            // Sesión 11k, Fix 8 — un proveedor dado de baja no debe seguir
+            // ofreciéndose como resultado nuevo en la biblioteca, aunque sus
+            // tarifas sigan vigentes por fecha.
+            ->whereHas('proveedorServicio.proveedor', fn ($q) => $q->where('estado', true));
 
         if ($search) {
             $query->where(function ($q) use ($search) {

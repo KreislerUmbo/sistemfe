@@ -395,6 +395,10 @@ Route::group([
         ->middleware('permission:agencia.proveedores');
     Route::delete("proveedores/{id}/servicios/{servicioId}", [ProveedorServicioController::class, 'destroy'])
         ->middleware('permission:agencia.proveedores');
+    // Sesión 11k, Fix 9 — tarifas Hotel de un proveedor (para "usar tarifa
+    // registrada" al armar la matriz de habitaciones de un opcion_hotel).
+    Route::get("proveedores/{id}/tarifas-hotel", [ProveedorController::class, 'tarifasHotel'])
+        ->middleware('permission:agencia.proveedores');
     Route::get("proveedor-servicios/{id}/tarifas", [ProveedorTarifaController::class, 'index'])
         ->middleware('permission:agencia.proveedores');
     Route::post("proveedor-servicios/{id}/tarifas", [ProveedorTarifaController::class, 'store'])

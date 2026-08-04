@@ -9,6 +9,7 @@ use App\Models\AgenciaViajes\OpcionHotelTarifa;
 use App\Models\AgenciaViajes\OpcionMayorista;
 use App\Models\AgenciaViajes\OpcionMayoristaOpcional;
 use App\Models\AgenciaViajes\Proveedor;
+use App\Models\AgenciaViajes\ProveedorTarifa;
 use App\Models\AgenciaViajes\ProveedorTipo;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -103,6 +104,9 @@ class OpcionMayoristaController extends Controller
             'tarifas.*.tipo_habitacion' => 'required_with:tarifas|in:simple,matrimonial,doble,triple,familiar',
             'tarifas.*.precio_costo' => 'required_with:tarifas|numeric|min:0',
             'tarifas.*.precio_venta' => 'required_with:tarifas|numeric|min:0',
+            // Sesión 11k, Fix 9 — tarifa real de proveedor, opcional (hotel
+            // manual/referencial cuando no viene).
+            'tarifas.*.proveedor_tarifa_id' => 'nullable|integer|exists:proveedor_tarifas,id',
         ]);
 
         if ($validator->fails()) {
@@ -117,9 +121,23 @@ class OpcionMayoristaController extends Controller
                 'nombre_hotel' => $validado['nombre_hotel'],
                 'categoria_estrellas' => $validado['categoria_estrellas'] ?? null,
                 'proveedor_id' => $validado['proveedor_id'] ?? null,
+                // OpcionHotel.moneda es un campo nuevo (Fix 9); para un
+                // hotel de mayorista se sincroniza con la moneda de la
+                // propia opción — crearItemMayorista() sigue usando
+                // $opcion->moneda como fuente real de conversión, esto es
+                // solo para que el dato quede consistente en el registro.
+                'moneda' => $opcion->moneda,
             ]);
 
             foreach ($validado['tarifas'] ?? [] as $tarifa) {
+                if (! empty($tarifa['proveedor_tarifa_id'])) {
+                    $tarifaReal = ProveedorTarifa::find($tarifa['proveedor_tarifa_id']);
+                    if ($tarifaReal) {
+                        $tarifa['precio_costo'] = $tarifaReal->precio_costo;
+                        $tarifa['precio_venta'] = $tarifaReal->precio_venta_adulto;
+                    }
+                }
+
                 OpcionHotelTarifa::create($tarifa + ['opcion_hotel_id' => $hotel->id]);
             }
 

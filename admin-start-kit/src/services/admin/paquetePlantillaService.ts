@@ -71,7 +71,8 @@ export const paquetePlantillaService = {
     nombre_hotel: string
     categoria_estrellas?: number | null
     proveedor_id?: number | null
-    tarifas: Array<{ tipo_habitacion: string; precio_costo: number; precio_venta: number }>
+    moneda?: 'PEN' | 'USD'
+    tarifas: Array<{ tipo_habitacion: string; precio_costo: number; precio_venta: number; proveedor_tarifa_id?: number | null }>
   }) {
     const response = await httpClient.post(`/paquetes-plantilla/${paqueteId}/hoteles`, data)
     return response.data

@@ -8,6 +8,7 @@ use App\Models\AgenciaViajes\AlternativaItem;
 use App\Models\AgenciaViajes\CotizacionPasajeAereo;
 use App\Models\AgenciaViajes\CotizacionPasajero;
 use App\Models\AgenciaViajes\GuiaTarifa;
+use App\Models\AgenciaViajes\OpcionHotel;
 use App\Models\AgenciaViajes\OpcionHotelTarifa;
 use App\Models\AgenciaViajes\OpcionMayorista;
 use App\Models\AgenciaViajes\PaquetePlantilla;
@@ -52,6 +53,7 @@ class AlternativaItemController extends Controller
             AlternativaItem::ORIGEN_MAYORISTA => $this->crearItemMayorista($request, $alternativa),
             AlternativaItem::ORIGEN_PASAJE_AEREO => $this->crearItemPasajeAereo($request, $alternativa),
             AlternativaItem::ORIGEN_MANUAL => $this->crearItemManual($request, $alternativa),
+            AlternativaItem::ORIGEN_HOTEL_PLANTILLA => $this->crearItemHotelPlantilla($request, $alternativa),
         };
     }
 
@@ -209,6 +211,28 @@ class AlternativaItemController extends Controller
             }
         }
 
+        // Sesión 11k — hoteles disponibles del paquete/tour(es) recién
+        // cargado(s), devueltos SIN auto-agregarse (mismo criterio
+        // no-bloqueante que guiasPendientes de abajo): una matriz de hotel
+        // tiene varias tarifas por tipo_habitacion, así que no se puede
+        // auto-explotar como un proveedor_tarifa/guia_tarifa — el vendedor
+        // tiene que elegir la habitación antes de que el ítem tenga precio.
+        $tourIds = $paquete->esPaqueteCombo()
+            ? [$paquete->id, ...$this->comboExplosion->toursDelCombo($paquete)->pluck('id')->all()]
+            : [$paquete->id];
+
+        $hotelesDisponibles = OpcionHotel::whereIn('paquete_plantilla_id', $tourIds)
+            ->with('opcionesHotelTarifas')
+            ->get()
+            ->map(fn (OpcionHotel $hotel) => [
+                'id' => $hotel->id,
+                'paquete_plantilla_id' => $hotel->paquete_plantilla_id,
+                'nombre_hotel' => $hotel->nombre_hotel,
+                'categoria_estrellas' => $hotel->categoria_estrellas,
+                'opciones_hotel_tarifas' => $hotel->opcionesHotelTarifas,
+            ])
+            ->values();
+
         $itemsCreados = [];
         $guiasPendientes = [];
 
@@ -265,6 +289,7 @@ class AlternativaItemController extends Controller
             'message' => 'Plantilla cargada correctamente',
             'items_agregados' => $itemsCreados,
             'guias_pendientes' => $guiasPendientes,
+            'hoteles_disponibles' => $hotelesDisponibles,
             'resumen' => [
                 'tours' => $paquete->esPaqueteCombo() ? $this->comboExplosion->toursDelCombo($paquete)->count() : null,
                 'items' => count($itemsCreados),
@@ -446,6 +471,54 @@ class AlternativaItemController extends Controller
         $this->recalcularTotalAlternativa($alternativa);
 
         return response()->json(['code' => 200, 'message' => 'Ítem de mayorista agregado correctamente', 'alternativa_item' => $item]);
+    }
+
+    // ── origen_tipo=hotel_plantilla (Sesión 11k) ────────────────────────
+    // Mismo patrón que crearItemMayorista(): un hotel de paquete_plantilla
+    // tiene varias tarifas por tipo_habitacion, así que no se auto-explota
+    // al cargar la plantilla (ver desdePlantilla()/hoteles_disponibles) —
+    // el vendedor elige la habitación acá, uno por uno.
+    private function crearItemHotelPlantilla(Request $request, Alternativa $alternativa): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'paquete_plantilla_id' => 'required|integer|exists:paquetes_plantilla,id',
+            'opcion_hotel_tarifa_id' => 'required|integer|exists:opciones_hotel_tarifas,id',
+            'cantidad' => 'nullable|integer|min:1',
+            'tour_origen_id' => 'nullable|integer',
+            'dia_referencial' => 'nullable|integer|min:1',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
+        }
+
+        $validado = $validator->validated();
+
+        $tarifaHotel = OpcionHotelTarifa::with('opcionHotel')->findOrFail($validado['opcion_hotel_tarifa_id']);
+        if ((int) $tarifaHotel->opcionHotel?->paquete_plantilla_id !== (int) $validado['paquete_plantilla_id']) {
+            return response()->json(['code' => 422, 'message' => 'Esa tarifa de habitación no pertenece al paquete indicado.'], 422);
+        }
+
+        $monedaCosto = $tarifaHotel->opcionHotel->moneda;
+
+        $item = AlternativaItem::create([
+            'alternativa_id' => $alternativa->id,
+            'origen_tipo' => AlternativaItem::ORIGEN_HOTEL_PLANTILLA,
+            'opcion_hotel_tarifa_id' => $tarifaHotel->id,
+            'paquete_plantilla_id' => $validado['paquete_plantilla_id'],
+            'tour_origen_id' => $validado['tour_origen_id'] ?? null,
+            'modo_precio' => 'tarifa_fija', // matriz de habitación, siempre por habitación
+            'cantidad' => $validado['cantidad'] ?? 1,
+            'moneda_costo' => $monedaCosto,
+            'costo_snapshot' => $tarifaHotel->precio_costo,
+            'precio_venta_snapshot' => $tarifaHotel->precio_venta,
+            'precio_convertido' => $this->priceEngine->convertirMoneda((float) $tarifaHotel->precio_venta, $monedaCosto, $alternativa->moneda_cotizacion, (float) $alternativa->tipo_cambio_aplicado),
+            'dia_referencial' => $validado['dia_referencial'] ?? null,
+        ]);
+
+        $this->recalcularTotalAlternativa($alternativa);
+
+        return response()->json(['code' => 200, 'message' => 'Ítem de hotel agregado correctamente', 'alternativa_item' => $item]);
     }
 
     // Recalculo en vivo del formulario de pasaje aéreo (PasajeAereoForm.vue)

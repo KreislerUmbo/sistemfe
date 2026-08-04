@@ -191,6 +191,33 @@
                     </div>
                 </div>
 
+                <!-- Sesión 11k — hoteles disponibles del tour/paquete recién cargado,
+                     sin auto-agregarse (una matriz de hotel tiene varias tarifas por
+                     tipo_habitacion, el vendedor elige la habitación acá). -->
+                <div v-if="hotelesPlantillaPendientes.length" class="card border-0 shadow-sm mb-2">
+                    <div class="card-body py-2 px-3 bg-warning-subtle rounded">
+                        <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
+                            <span class="small fw-semibold"><i class="fas fa-hotel me-1 text-warning-emphasis"></i>Este tour/paquete tiene hoteles — elegí la habitación para agregarla al lienzo:</span>
+                            <i class="fas fa-times text-muted flex-shrink-0" style="cursor:pointer" @click="hotelesPlantillaPendientes = []"></i>
+                        </div>
+                        <div v-for="hotel in hotelesPlantillaPendientes" :key="hotel.id" class="card border p-2 small mb-2">
+                            <div class="d-flex justify-content-between align-items-center" style="cursor:pointer" @click="hotelPlantillaActivoId = hotelPlantillaActivoId === hotel.id ? null : hotel.id">
+                                <strong>
+                                    <i class="fas fa-hotel me-1 text-primary"></i>{{ hotel.nombre_hotel }}
+                                    <span v-if="hotel.categoria_estrellas" class="text-warning ms-1">
+                                        <i v-for="n in hotel.categoria_estrellas" :key="n" class="fas fa-star" style="font-size:10px"></i>
+                                    </span>
+                                </strong>
+                                <i class="fas" :class="hotelPlantillaActivoId === hotel.id ? 'fa-chevron-up' : 'fa-chevron-down'" style="font-size:10px"></i>
+                            </div>
+                            <div v-if="hotelPlantillaActivoId === hotel.id" class="mt-2 border-top pt-2">
+                                <HabitacionMatrixPicker :tarifas="tarifasHotelPlantillaPlanas(hotel)" :moneda="hotel.moneda"
+                                    @seleccionar="({ id, cantidad }) => agregarItemHotelPlantilla(hotel, id, cantidad)" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="card border-0 shadow-sm">
                     <div class="card-body">
                         <div v-if="bloquesLienzo.length === 0" class="drop-hint text-center text-muted py-4 border rounded" style="border-style:dashed">
@@ -490,9 +517,13 @@
                                         </button>
                                         <div v-if="mostrarFormHotel === op.id" class="border rounded p-2 mt-2">
                                             <input type="text" class="form-control form-control-sm mb-1" placeholder="Nombre del hotel" v-model="formHotel.nombre_hotel">
+                                            <select class="form-select form-select-sm mb-1" v-model="formHotel.proveedor_id" @change="onCambiarProveedorHotel">
+                                                <option :value="null">Hotel manual/referencial (sin proveedor)</option>
+                                                <option v-for="p in proveedoresHotel" :key="p.id" :value="p.id">{{ p.nombre_comercial ?? p.razon_social }}</option>
+                                            </select>
                                             <div v-for="(tf, idx) in formHotel.tarifas" :key="idx" class="row g-1 mb-1">
-                                                <div class="col-4">
-                                                    <select class="form-select form-select-sm" v-model="tf.tipo_habitacion">
+                                                <div class="col-3">
+                                                    <select class="form-select form-select-sm" v-model="tf.tipo_habitacion" @change="tf.proveedor_tarifa_id = null">
                                                         <option value="simple">Simple</option>
                                                         <option value="matrimonial">Matrimonial</option>
                                                         <option value="doble">Doble</option>
@@ -500,10 +531,20 @@
                                                         <option value="familiar">Familiar</option>
                                                     </select>
                                                 </div>
-                                                <div class="col-4"><input type="number" class="form-control form-control-sm" placeholder="Costo" v-model.number="tf.precio_costo"></div>
-                                                <div class="col-4"><input type="number" class="form-control form-control-sm" placeholder="Venta" v-model.number="tf.precio_venta"></div>
+                                                <div class="col-3" v-if="formHotel.proveedor_id">
+                                                    <select class="form-select form-select-sm" :value="tf.proveedor_tarifa_id ?? ''" @change="onElegirTarifaRegistrada(tf, $event)">
+                                                        <option value="">Manual</option>
+                                                        <option v-for="t in tarifasHotelParaTipo(tf.tipo_habitacion)" :key="t.id" :value="t.id">Registrada ({{ t.precio_venta_adulto }})</option>
+                                                    </select>
+                                                </div>
+                                                <div :class="formHotel.proveedor_id ? 'col-3' : 'col-4'">
+                                                    <input type="number" class="form-control form-control-sm" placeholder="Costo" v-model.number="tf.precio_costo" :readonly="!!tf.proveedor_tarifa_id">
+                                                </div>
+                                                <div :class="formHotel.proveedor_id ? 'col-3' : 'col-4'">
+                                                    <input type="number" class="form-control form-control-sm" placeholder="Venta" v-model.number="tf.precio_venta" :readonly="!!tf.proveedor_tarifa_id">
+                                                </div>
                                             </div>
-                                            <button class="btn btn-sm btn-outline-secondary mb-1" @click="formHotel.tarifas.push({ tipo_habitacion: 'doble', precio_costo: 0, precio_venta: 0 })">+ tipo de habitación</button>
+                                            <button class="btn btn-sm btn-outline-secondary mb-1" @click="formHotel.tarifas.push({ tipo_habitacion: 'doble', precio_costo: 0, precio_venta: 0, proveedor_tarifa_id: null })">+ tipo de habitación</button>
                                             <button class="btn btn-sm btn-primary w-100" @click="guardarHotel(op)">Guardar hotel</button>
                                         </div>
                                     </div>
@@ -571,7 +612,7 @@ import { bibliotecaCotizadorService, type BibliotecaTipo } from '@/services/admi
 import { reservaService } from '@/services/admin/reservaService';
 import { configuracionAgenciaService } from '@/services/admin/configuracionAgenciaService';
 import { formatFecha } from '@/helpers/fecha';
-import type { Cotizacion, Alternativa, AlternativaItem, ProveedorTarifa, OpcionMayorista, Proveedor, ProveedorTipo, BibliotecaResultado, ConfiguracionAgencia } from '@/types/agencia-viajes';
+import type { Cotizacion, Alternativa, AlternativaItem, ProveedorTarifa, OpcionMayorista, OpcionHotel, Proveedor, ProveedorTipo, BibliotecaResultado, ConfiguracionAgencia } from '@/types/agencia-viajes';
 import type { Client } from '@/types/clients';
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
@@ -1068,6 +1109,16 @@ const onClicFilaBiblioteca = (fila: FilaBiblioteca) => {
 // cae entero en el día activo, ver AlternativaItemController::desdePlantilla()).
 const vistaPreviaCombo = ref<Array<{ tourOrigenId: number; dia: number; nombre: string; total: number }> | null>(null);
 
+// Sesión 11k — hoteles del tour/paquete recién cargado, devueltos por
+// desdePlantilla() sin auto-agregarse (ver hoteles_disponibles). diaCarga
+// es el día usado en la carga (para un tour_simple, TODOS sus ítems caen
+// ahí — mismo criterio que ComboExplosionService/desdePlantilla() ya usan,
+// sin offset), snapshoteado porque el vendedor puede cambiar de día activo
+// mientras el banner sigue abierto.
+const hotelesPlantillaPendientes = ref<OpcionHotel[]>([]);
+const hotelPlantillaActivoId = ref<number | null>(null);
+const diaCargaHotelesPendientes = ref<number>(1);
+
 // Click en una tarjeta de tour/paquete — explota TODOS sus ítems en la
 // alternativa activa (AlternativaItemController::desdePlantilla()). Sin
 // modal de confirmación intermedio: el badge de cantidad de ítems, visible
@@ -1095,6 +1146,10 @@ const clicResultadoPlantilla = async (p: Extract<BibliotecaResultado, { tipo_res
 
         const idsTourOrigen = new Set(res.items_agregados.map((i) => i.tour_origen_id).filter((id): id is number => id != null));
 
+        diaCargaHotelesPendientes.value = diaActivoParaAgregar.value;
+        hotelesPlantillaPendientes.value = res.hoteles_disponibles ?? [];
+        hotelPlantillaActivoId.value = null;
+
         await cargarCotizacion();
         drawerBibliotecaAbierto.value = false;
         volverAGridDrawer();
@@ -1102,6 +1157,46 @@ const clicResultadoPlantilla = async (p: Extract<BibliotecaResultado, { tipo_res
         vistaPreviaCombo.value = calcularVistaPreviaCombo(idsTourOrigen);
     } catch (error: any) {
         (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo cargar la plantilla', 'error');
+    }
+};
+
+// Habitación por hotel de plantilla — mismo shape que tarifasHotelPlanas()
+// (mayorista) pero SIN prefijo de nombre_hotel (el header de la tarjeta ya
+// lo muestra).
+const tarifasHotelPlantillaPlanas = (hotel: OpcionHotel) => {
+    return (hotel.opciones_hotel_tarifas ?? []).map((t) => ({ id: t.id, tipo_habitacion: t.tipo_habitacion, precio: Number(t.precio_venta), registrada: !!t.proveedor_tarifa_id }));
+};
+
+// tour_origen_id/día: si el tour dueño de este hotel ya generó algún ítem
+// en el lienzo (explotarTourSimple() siempre tagea tour_origen_id, incluso
+// para un tour_simple suelto), el hotel se une al mismo bloque y hereda su
+// día real — si no (hotel a nivel del combo, sin bloque propio, o un
+// tour_simple que solo tenía el hotel y ningún otro ítem), queda "suelto"
+// en el día en que se cargó la plantilla.
+const tourOrigenParaHotelPlantilla = (hotel: OpcionHotel): number | null => {
+    const perteneceABloque = (alternativaActiva.value?.items ?? []).some((i) => i.tour_origen_id === hotel.paquete_plantilla_id);
+    return perteneceABloque ? (hotel.paquete_plantilla_id ?? null) : null;
+};
+
+const diaParaHotelPlantilla = (hotel: OpcionHotel): number => {
+    const itemDelTour = (alternativaActiva.value?.items ?? []).find((i) => i.tour_origen_id === hotel.paquete_plantilla_id);
+    return itemDelTour?.dia_referencial ?? diaCargaHotelesPendientes.value;
+};
+
+const agregarItemHotelPlantilla = async (hotel: OpcionHotel, opcionHotelTarifaId: number, cantidad: number) => {
+    if (!alternativaActiva.value || !hotel.paquete_plantilla_id) return;
+    try {
+        const res = await alternativaItemService.agregarHotelPlantilla(alternativaActiva.value.id, {
+            paquete_plantilla_id: hotel.paquete_plantilla_id,
+            opcion_hotel_tarifa_id: opcionHotelTarifaId,
+            cantidad,
+            tour_origen_id: tourOrigenParaHotelPlantilla(hotel),
+            dia_referencial: diaParaHotelPlantilla(hotel),
+        });
+        hotelPlantillaActivoId.value = null;
+        await onServicioSueltoAgregado(res.alternativa_item);
+    } catch (error: any) {
+        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo agregar', 'error');
     }
 };
 
@@ -1185,9 +1280,38 @@ const opcionHotelesActivaId = ref<number | null>(null);
 const mostrarFormMayorista = ref(false);
 const mostrarFormHotel = ref<number | null>(null);
 const formMayorista = ref({ proveedor_id: null as number | null, moneda: 'USD' as 'PEN' | 'USD', vuelo_aerolinea: '', incluye: '' });
-const formHotel = ref<{ nombre_hotel: string; tarifas: Array<{ tipo_habitacion: string; precio_costo: number; precio_venta: number }> }>({
-    nombre_hotel: '', tarifas: [{ tipo_habitacion: 'doble', precio_costo: 0, precio_venta: 0 }],
+const formHotel = ref<{
+    nombre_hotel: string; proveedor_id: number | null;
+    tarifas: Array<{ tipo_habitacion: string; precio_costo: number; precio_venta: number; proveedor_tarifa_id?: number | null }>;
+}>({
+    nombre_hotel: '', proveedor_id: null, tarifas: [{ tipo_habitacion: 'doble', precio_costo: 0, precio_venta: 0, proveedor_tarifa_id: null }],
 });
+
+// Sesión 11k, Fix 9 — proveedores tipo Hotel (para "usar tarifa registrada")
+// + sus tarifas Hotel una vez elegido uno. Mismo patrón que detalle.vue.
+const proveedoresHotel = ref<Proveedor[]>([]);
+const tarifasHotelProveedorSeleccionado = ref<ProveedorTarifa[]>([]);
+
+const onCambiarProveedorHotel = async () => {
+    formHotel.value.tarifas.forEach((tf) => { tf.proveedor_tarifa_id = null; });
+    tarifasHotelProveedorSeleccionado.value = formHotel.value.proveedor_id
+        ? (await proveedorService.tarifasHotel(formHotel.value.proveedor_id)).proveedor_tarifas
+        : [];
+};
+
+const tarifasHotelParaTipo = (tipoHabitacion: string) => {
+    return tarifasHotelProveedorSeleccionado.value.filter((t) => t.tipo_habitacion === tipoHabitacion);
+};
+
+const onElegirTarifaRegistrada = (tf: { precio_costo: number; precio_venta: number; proveedor_tarifa_id?: number | null }, event: Event) => {
+    const id = Number((event.target as HTMLSelectElement).value) || null;
+    tf.proveedor_tarifa_id = id;
+    const tarifa = tarifasHotelProveedorSeleccionado.value.find((t) => t.id === id);
+    if (tarifa) {
+        tf.precio_costo = Number(tarifa.precio_costo);
+        tf.precio_venta = Number(tarifa.precio_venta_adulto);
+    }
+};
 
 const cargarOpcionesMayorista = async () => {
     if (!alternativaActiva.value) return;
@@ -1220,7 +1344,8 @@ const guardarHotel = async (op: OpcionMayorista) => {
     try {
         await opcionMayoristaService.crearHotel(op.id, formHotel.value);
         mostrarFormHotel.value = null;
-        formHotel.value = { nombre_hotel: '', tarifas: [{ tipo_habitacion: 'doble', precio_costo: 0, precio_venta: 0 }] };
+        formHotel.value = { nombre_hotel: '', proveedor_id: null, tarifas: [{ tipo_habitacion: 'doble', precio_costo: 0, precio_venta: 0, proveedor_tarifa_id: null }] };
+        tarifasHotelProveedorSeleccionado.value = [];
         await cargarOpcionesMayorista();
     } catch (error: any) {
         (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo guardar', 'error');
@@ -1228,10 +1353,10 @@ const guardarHotel = async (op: OpcionMayorista) => {
 };
 
 const tarifasHotelPlanas = (op: OpcionMayorista) => {
-    const filas: Array<{ id: number; tipo_habitacion: string; precio: number }> = [];
+    const filas: Array<{ id: number; tipo_habitacion: string; precio: number; registrada: boolean }> = [];
     (op.opciones_hotel ?? []).forEach((h) => {
         (h.opciones_hotel_tarifas ?? []).forEach((t) => {
-            filas.push({ id: t.id, tipo_habitacion: `${h.nombre_hotel} · ${t.tipo_habitacion}`, precio: Number(t.precio_venta) });
+            filas.push({ id: t.id, tipo_habitacion: `${h.nombre_hotel} · ${t.tipo_habitacion}`, precio: Number(t.precio_venta), registrada: !!t.proveedor_tarifa_id });
         });
     });
     return filas;
@@ -1482,6 +1607,7 @@ const iconoItem = (item: AlternativaItem) => {
     if (item.origen_tipo === 'pasaje_aereo') return 'fa-plane';
     if (item.origen_tipo === 'mayorista') return 'fa-plane-departure';
     if (item.origen_tipo === 'manual') return 'fa-pen';
+    if (item.origen_tipo === 'hotel_plantilla') return 'fa-bed';
     if (item.proveedor_tarifa?.tipo_habitacion) return 'fa-bed';
     return 'fa-concierge-bell';
 };
@@ -1490,6 +1616,10 @@ const etiquetaItem = (item: AlternativaItem) => {
     if (item.origen_tipo === 'manual') return item.descripcion_manual ?? 'Ítem manual';
     if (item.origen_tipo === 'pasaje_aereo') return item.cotizacion_pasaje_aereo?.aerolinea ?? 'Pasaje aéreo';
     if (item.origen_tipo === 'mayorista') return item.opcion_mayorista?.proveedor?.nombre_comercial ?? item.opcion_mayorista?.proveedor?.razon_social ?? 'Paquete mayorista';
+    if (item.origen_tipo === 'hotel_plantilla') {
+        const nombreHotel = item.opcion_hotel_tarifa?.opcion_hotel?.nombre_hotel ?? 'Hotel';
+        return `${nombreHotel} · ${item.opcion_hotel_tarifa?.tipo_habitacion ?? ''}`;
+    }
     if (item.proveedor_tarifa?.tipo_habitacion) {
         // Hotel: la categoría genérica del servicio ("Alojamiento") no dice nada útil
         // acá — mismo formato "Proveedor · tipo_habitación" que ya usa clicBibliotecaItem.
@@ -1582,6 +1712,17 @@ onMounted(async () => {
     if (tipoMayorista) {
         const res = await httpClient.get('/proveedores', { params: { tipo_id: tipoMayorista.id } });
         proveedoresMayoristas.value = res.data.proveedores ?? [];
+    }
+
+    // Sesión 11k, Fix 9 — proveedores tipo Hotel, para "usar tarifa registrada"
+    // al armar un hotel de opcion_mayorista. slug='alojamiento-hoteles' es
+    // el slug REAL (ver mismo hallazgo documentado en
+    // ProveedorController::tarifasHotel(), backend — 'hotel' no matchea
+    // nada).
+    const tipoHotel = tipos.proveedor_tipos.find((t) => t.slug === 'alojamiento-hoteles');
+    if (tipoHotel) {
+        const res = await httpClient.get('/proveedores', { params: { tipo_id: tipoHotel.id } });
+        proveedoresHotel.value = res.data.proveedores ?? [];
     }
 });
 </script>

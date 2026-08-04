@@ -16,6 +16,7 @@
                 <tr v-for="t in tarifas" :key="t.id" :class="{ 'table-primary': seleccionadaId === t.id }">
                     <td class="text-capitalize">
                         <i class="fas fa-bed me-1 text-primary"></i>{{ t.tipo_habitacion }}
+                        <i v-if="t.registrada" class="fas fa-link text-primary ms-1" style="font-size:10px" title="Tarifa registrada de un proveedor"></i>
                     </td>
                     <td class="text-end">{{ moneda }} {{ t.precio.toFixed(2) }}</td>
                     <td class="text-center" v-if="seleccionadaId === t.id">
@@ -47,7 +48,10 @@
 // componente no sabe de dónde viene.
 import { ref } from 'vue';
 
-type TarifaHabitacion = { id: number; tipo_habitacion: string; precio: number };
+// registrada: Sesión 11k, Fix 9 — true si esta tarifa viene de un
+// proveedor_tarifa real (opcion_hotel_tarifa.proveedor_tarifa_id), no
+// tipeada a mano. Cada caller decide si la marca.
+type TarifaHabitacion = { id: number; tipo_habitacion: string; precio: number; registrada?: boolean };
 
 defineProps<{
     tarifas: TarifaHabitacion[];

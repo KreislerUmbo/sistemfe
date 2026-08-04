@@ -7,6 +7,15 @@ use Illuminate\Database\Eloquent\Model;
 // plan-modulo-cotizaciones-reservas.md §2.4. Tenant (sin CentralConnection).
 // opcion_hotel_id es FK real dentro de la misma DB tenant (misma sesión),
 // así que lleva belongsTo.
+//
+// proveedor_tarifa_id: RETROFIT Sesión 11k, Fix 9 — si está seteado, el
+// hotel ya es un proveedor registrado y esta fila reusa su tarifa real en
+// vez de un precio tipeado a mano (plan-modulo-cotizaciones-reservas.md
+// §3.7). precio_costo/precio_venta siguen persistiéndose igual (snapshot
+// legible si el día de mañana se borra la tarifa real — nullOnDelete ya
+// cubre la FK, pero el número visible no debería desaparecer) — los
+// accessors de abajo solo pisan el valor guardado MIENTRAS la relación
+// siga viva, no reemplazan tenerlo guardado.
 class OpcionHotelTarifa extends Model
 {
     protected $table = 'opciones_hotel_tarifas';
@@ -16,6 +25,7 @@ class OpcionHotelTarifa extends Model
         'tipo_habitacion',
         'precio_costo',
         'precio_venta',
+        'proveedor_tarifa_id',
     ];
 
     protected $casts = [
@@ -26,5 +36,24 @@ class OpcionHotelTarifa extends Model
     public function opcionHotel()
     {
         return $this->belongsTo(OpcionHotel::class, 'opcion_hotel_id');
+    }
+
+    public function proveedorTarifa()
+    {
+        return $this->belongsTo(ProveedorTarifa::class, 'proveedor_tarifa_id');
+    }
+
+    // Precio "en vivo": mientras haya una tarifa real vinculada, el precio
+    // mostrado es el de esa tarifa, no el valor guardado en esta fila —
+    // mismo espíritu que el precio de combo (ComboExplosionService), nunca
+    // se muestra un valor stale si hay una fuente de verdad viva.
+    public function getPrecioCostoAttribute($value)
+    {
+        return $this->proveedorTarifa?->precio_costo ?? $value;
+    }
+
+    public function getPrecioVentaAttribute($value)
+    {
+        return $this->proveedorTarifa?->precio_venta_adulto ?? $value;
     }
 }
