@@ -100,10 +100,26 @@
                         </div>
                         <ul class="list-group">
                             <li v-for="ds in destinoServiciosLista" :key="ds.id" class="list-group-item d-flex justify-content-between align-items-center">
-                                {{ ds.servicio?.nombre }}
-                                <button class="btn btn-sm btn-outline-danger" @click="desasociarServicio(ds.id)">
-                                    <i class="fas fa-times"></i>
-                                </button>
+                                <div v-if="editandoServicioId === ds.servicio?.id" class="input-group input-group-sm">
+                                    <input type="text" class="form-control" v-model="editandoServicioNombre" @keyup.enter="guardarNombreServicio">
+                                    <button class="btn btn-outline-success" @click="guardarNombreServicio" :disabled="!editandoServicioNombre.trim()">
+                                        <i class="fas fa-check"></i>
+                                    </button>
+                                    <button class="btn btn-outline-secondary" @click="cancelarEdicionServicio">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </div>
+                                <template v-else>
+                                    {{ ds.servicio?.nombre }}
+                                    <span>
+                                        <button class="btn btn-sm btn-outline-secondary me-1" @click="iniciarEdicionServicio(ds)">
+                                            <i class="fas fa-pen"></i>
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-danger" @click="desasociarServicio(ds.id)">
+                                            <i class="fas fa-times"></i>
+                                        </button>
+                                    </span>
+                                </template>
                             </li>
                             <li v-if="destinoServiciosLista.length === 0" class="list-group-item text-muted fst-italic">
                                 Sin servicios asociados.
@@ -200,6 +216,8 @@ const destinoServiciosActivo = ref<Fila | null>(null);
 const destinoServiciosLista = ref<DestinoServicio[]>([]);
 const servicioNuevoId = ref<number | null>(null);
 const servicioNuevoNombre = ref<string>('');
+const editandoServicioId = ref<number | null>(null);
+const editandoServicioNombre = ref<string>('');
 
 const abrirServicios = async (fila: Fila) => {
     destinoServiciosActivo.value = fila;
@@ -230,6 +248,35 @@ const asociarServicio = async () => {
         servicioNuevoId.value = null;
     } catch (error: any) {
         (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo asociar', 'error');
+    }
+};
+
+const iniciarEdicionServicio = (ds: DestinoServicio) => {
+    if (!ds.servicio) return;
+    editandoServicioId.value = ds.servicio.id;
+    editandoServicioNombre.value = ds.servicio.nombre;
+};
+
+const cancelarEdicionServicio = () => {
+    editandoServicioId.value = null;
+    editandoServicioNombre.value = '';
+};
+
+// Renombra la fila real del catálogo compartido de servicios (no una
+// copia local) — afecta a todos los destinos/proveedores que ya lo usan.
+const guardarNombreServicio = async () => {
+    if (!editandoServicioId.value || !editandoServicioNombre.value.trim()) return;
+    try {
+        await servicioService.actualizar(editandoServicioId.value, { nombre: editandoServicioNombre.value.trim() });
+        cancelarEdicionServicio();
+        if (destinoServiciosActivo.value) {
+            const res = await destinoAtractivoService.listarServicios(destinoServiciosActivo.value.id);
+            destinoServiciosLista.value = res.destino_servicios;
+        }
+        const serviciosRes = await servicioService.listar({});
+        servicios.value = serviciosRes.servicios;
+    } catch (error: any) {
+        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo actualizar el servicio', 'error');
     }
 };
 

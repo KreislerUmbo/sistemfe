@@ -4,9 +4,11 @@ namespace App\Http\Controllers\AgenciaViajes;
 
 use App\Http\Controllers\Controller;
 use App\Models\AgenciaViajes\AlternativaItem;
+use App\Models\AgenciaViajes\PaquetePlantillaItem;
 use App\Models\AgenciaViajes\ProveedorServicio;
 use App\Models\AgenciaViajes\ProveedorTarifa;
 use App\Models\AgenciaViajes\ProveedorTipo;
+use App\Models\AgenciaViajes\ReservaItem;
 use App\Models\AgenciaViajes\Temporada;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -115,6 +117,33 @@ class ProveedorTarifaController extends Controller
             'code' => 200,
             'message' => 'Tarifa actualizada correctamente',
             'proveedor_tarifa' => $tarifaActual,
+        ]);
+    }
+
+    // Sin soft delete ni columna 'activo' en esta sesión — delete real,
+    // bloqueado si la tarifa ya quedó referenciada (precio congelado) en
+    // algún registro histórico de cotización/reserva/plantilla de tour.
+    public function destroy(string $id)
+    {
+        $tarifa = ProveedorTarifa::findOrFail($id);
+
+        $enCotizaciones = AlternativaItem::where('proveedor_tarifa_id', $tarifa->id)->count();
+        $enReservas = ReservaItem::where('proveedor_tarifa_id', $tarifa->id)->count();
+        $enPlantillas = PaquetePlantillaItem::where('proveedor_tarifa_id', $tarifa->id)->count();
+        $totalUsos = $enCotizaciones + $enReservas + $enPlantillas;
+
+        if ($totalUsos > 0) {
+            return response()->json([
+                'code' => 422,
+                'message' => "No se puede eliminar: esta tarifa está en uso en {$totalUsos} cotización(es)/reserva(s)/plantilla(s) de tour. El precio ya quedó congelado en esos registros (no se ven afectados), pero para retirar esta tarifa del catálogo activo hablalo con Umbo — por ahora no hay forma de desactivarla sin borrar el historial.",
+            ], 422);
+        }
+
+        $tarifa->delete();
+
+        return response()->json([
+            'code' => 200,
+            'message' => 'Tarifa eliminada correctamente',
         ]);
     }
 

@@ -74,5 +74,9 @@ export const proveedorService = {
   async actualizarTarifa(tarifaId: number, data: Partial<ProveedorTarifa>) {
     const response = await httpClient.put(`/proveedor-tarifas/${tarifaId}`, data)
     return response.data
+  },
+  async eliminarTarifa(tarifaId: number) {
+    const response = await httpClient.delete(`/proveedor-tarifas/${tarifaId}`)
+    return response.data
   }
 }
