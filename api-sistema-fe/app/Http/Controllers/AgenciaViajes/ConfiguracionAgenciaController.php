@@ -31,6 +31,7 @@ class ConfiguracionAgenciaController extends Controller
         'permitir_descuento_item' => true,
         'modo_descuento_item' => 'porcentaje',
         'modo_descuento_global' => 'porcentaje',
+        'margen_minimo_aceptable_pct' => 20.00,
     ];
 
     public function show()
@@ -59,6 +60,7 @@ class ConfiguracionAgenciaController extends Controller
             'permitir_descuento_item' => 'required|boolean',
             'modo_descuento_item' => 'required|in:porcentaje,monto',
             'modo_descuento_global' => 'required|in:porcentaje,monto',
+            'margen_minimo_aceptable_pct' => 'required|numeric|min:0',
         ]);
 
         if ($validator->fails()) {

@@ -29,6 +29,7 @@ class ConfiguracionAgencia extends Model
         'permitir_descuento_item',
         'modo_descuento_item',
         'modo_descuento_global',
+        'margen_minimo_aceptable_pct',
     ];
 
     protected $casts = [
