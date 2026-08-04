@@ -570,6 +570,7 @@ import { proveedorService, proveedorTipoService } from '@/services/admin/proveed
 import { bibliotecaCotizadorService, type BibliotecaTipo } from '@/services/admin/bibliotecaCotizadorService';
 import { reservaService } from '@/services/admin/reservaService';
 import { configuracionAgenciaService } from '@/services/admin/configuracionAgenciaService';
+import { formatFecha } from '@/helpers/fecha';
 import type { Cotizacion, Alternativa, AlternativaItem, ProveedorTarifa, OpcionMayorista, Proveedor, ProveedorTipo, BibliotecaResultado, ConfiguracionAgencia } from '@/types/agencia-viajes';
 import type { Client } from '@/types/clients';
 
@@ -603,19 +604,6 @@ const resumenPax = computed(() => {
     pax.forEach((p) => { counts[p.tipo_pax] = (counts[p.tipo_pax] ?? 0) + 1; });
     return Object.entries(counts).map(([t, n]) => `${n} ${t}`).join(', ') || 'sin pasajeros';
 });
-
-// f.slice(0, 10): Cotizacion::$casts trae fecha_viaje_desde/hasta como
-// 'date' (Carbon) — serializado en el JSON como timestamp ISO completo
-// ("2026-08-25T00:00:00.000000Z"), NO como "YYYY-MM-DD" plano. Concatenar
-// 'T00:00:00' directo sobre eso (sin recortar antes) daba
-// "...000000ZT00:00:00", una fecha inválida — la causa real del "Invalid
-// Date — Invalid Date" del header, reproducible con cualquier fecha
-// cargada, no solo cuando falta. Cortar a los primeros 10 caracteres deja
-// un "YYYY-MM-DD" tanto si f ya viene así (input type=date) como si viene
-// con hora/zona — y volver a armar la hora en LOCAL (sin 'Z') evita que
-// una medianoche UTC se corra un día para atrás en zonas horarias detrás
-// de UTC (Perú, UTC-5).
-const formatFecha = (f?: string | null) => f ? new Date(f.slice(0, 10) + 'T00:00:00').toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' }) : 'sin fecha';
 
 // Antes: cada lado se formateaba por separado ("sin fecha — sin fecha" con
 // ambas vacías, o peor si alguna venía como string vacío en vez de null).

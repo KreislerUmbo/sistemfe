@@ -125,7 +125,7 @@
                                     </td>
                                     <td class="text-center small">
                                         <span class="badge d-block mb-1" :class="estadoVigencia(tarifa).clase">{{ estadoVigencia(tarifa).label }}</span>
-                                        {{ tarifa.vigente_desde }} — {{ tarifa.vigente_hasta ?? 'indefinido' }}
+                                        {{ formatFecha(tarifa.vigente_desde) }} — {{ tarifa.vigente_hasta ? formatFecha(tarifa.vigente_hasta) : 'indefinido' }}
                                     </td>
                                     <td class="text-center pe-3">
                                         <button class="btn btn-sm btn-outline-secondary" @click="abrirFormTarifa(ps, tarifa)">
@@ -307,6 +307,7 @@ import Swal from 'sweetalert2/dist/sweetalert2.js';
 import { proveedorService, proveedorTipoService } from '@/services/admin/proveedorService';
 import { destinoAtractivoService } from '@/services/admin/destinoAtractivoService';
 import { configuracionAgenciaService } from '@/services/admin/configuracionAgenciaService';
+import { formatFecha } from '@/helpers/fecha';
 import type { Proveedor, ProveedorTipo, ProveedorServicio, ProveedorTarifa, DestinoServicio, ConfiguracionAgencia } from '@/types/agencia-viajes';
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;

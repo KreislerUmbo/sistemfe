@@ -89,7 +89,7 @@
                                 <td class="ps-3">{{ tarifa.destino?.nombre }}</td>
                                 <td>{{ tarifa.modalidad === 'dia_local' ? 'Día local' : 'Grupo multidía' }}</td>
                                 <td class="text-end">{{ tarifa.moneda }} {{ tarifa.costo_diario }}</td>
-                                <td class="text-center small">{{ tarifa.vigente_desde }} — {{ tarifa.vigente_hasta ?? 'indefinido' }}</td>
+                                <td class="text-center small">{{ formatFecha(tarifa.vigente_desde) }} — {{ tarifa.vigente_hasta ? formatFecha(tarifa.vigente_hasta) : 'indefinido' }}</td>
                             </tr>
                         </tbody>
                     </table>
@@ -106,6 +106,7 @@ import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import DestinoTreeSelect from '@/components/AgenciaViajes/DestinoTreeSelect.vue';
 import Swal from 'sweetalert2/dist/sweetalert2.js';
 import { guiaService } from '@/services/admin/guiaService';
+import { formatFecha } from '@/helpers/fecha';
 import type { Guia, GuiaTarifa } from '@/types/agencia-viajes';
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
