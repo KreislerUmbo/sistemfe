@@ -63,7 +63,7 @@
                     <div class="col-12" v-if="paquete.vuelo_incluido">
                         <strong>Vuelo:</strong> {{ paquete.vuelo_aerolinea ?? '—' }} — {{ paquete.vuelo_detalle ?? '' }}
                     </div>
-                    <div class="col-md-4"><strong>Vigencia:</strong> {{ paquete.vigencia_desde ?? 'sin inicio' }} — {{ paquete.vigencia_hasta ?? 'indefinida' }}</div>
+                    <div class="col-md-4"><strong>Vigencia:</strong> {{ paquete.vigencia_desde ? formatFecha(paquete.vigencia_desde) : 'sin inicio' }} — {{ paquete.vigencia_hasta ? formatFecha(paquete.vigencia_hasta) : 'indefinida' }}</div>
                     <div class="col-md-4"><strong>Publicado web:</strong> {{ paquete.publicado_web ? 'Sí' : 'No' }}</div>
                 </div>
             </div>
@@ -536,6 +536,7 @@ import Swal from 'sweetalert2/dist/sweetalert2.js';
 import { paquetePlantillaService } from '@/services/admin/paquetePlantillaService';
 import { proveedorService } from '@/services/admin/proveedorService';
 import { guiaService } from '@/services/admin/guiaService';
+import { formatFecha } from '@/helpers/fecha';
 import type {
     PaquetePlantilla, PaquetePlantillaItem, TourItinerarioItem, OpcionHotel,
     ProveedorTarifa, Guia, GuiaTarifa, ComboDatos, ComboItinerarioPaso, PaquetePlantillaResumen,

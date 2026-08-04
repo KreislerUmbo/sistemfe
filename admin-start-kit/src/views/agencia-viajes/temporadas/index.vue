@@ -38,7 +38,7 @@
                                 <td>
                                     <span v-if="!temporada.temporada_ocurrencias?.length" class="text-muted small fst-italic">Sin ocurrencias</span>
                                     <span v-for="oc in temporada.temporada_ocurrencias" :key="oc.id" class="badge bg-light text-dark border me-1">
-                                        {{ oc.anio }}: {{ oc.fecha_desde }} — {{ oc.fecha_hasta }}
+                                        {{ oc.anio }}: {{ formatFecha(oc.fecha_desde) }} — {{ formatFecha(oc.fecha_hasta) }}
                                     </span>
                                 </td>
                                 <td class="text-center pe-3">
@@ -127,6 +127,7 @@ import { ref, onMounted } from 'vue';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import Swal from 'sweetalert2/dist/sweetalert2.js';
 import { temporadaService } from '@/services/admin/temporadaService';
+import { formatFecha } from '@/helpers/fecha';
 import type { Temporada, TemporadaOcurrencia } from '@/types/agencia-viajes';
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;

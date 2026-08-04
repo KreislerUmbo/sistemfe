@@ -13,7 +13,7 @@ class ProveedorTipoSeeder extends Seeder
 {
     public function run(): void
     {
-        $nombres = ['Hotel', 'Transporte', 'Mayorista', 'Guía'];
+        $nombres = ['Hotel', 'Transporte', 'Mayorista', 'Guía', 'Operador de turismo', 'Atractivo / Actividad local'];
 
         foreach ($nombres as $nombre) {
             $slug = Str::slug($nombre);

@@ -273,6 +273,7 @@ import { reservaItemService } from '@/services/admin/reservaItemService';
 import { proveedorService } from '@/services/admin/proveedorService';
 import { guiaService } from '@/services/admin/guiaService';
 import { useToast } from '@/composables/useToast';
+import { formatFecha } from '@/helpers/fecha';
 import type {
     Reserva, ReservaPasajero, ReservaItem, ReservaResumenItem, ReservaCabecera,
     PasajeroCatalogo, ProveedorTarifa, Guia, MotivoCancelacion,
@@ -299,10 +300,6 @@ const cargarReserva = async () => {
     cabecera.value = res.cabecera;
 };
 
-// f.slice(0, 10): mismo bug que en cotizador/editar.vue — cabecera.fecha_viaje_*
-// llega como timestamp ISO completo (Cotizacion::$casts 'date'), no como
-// "YYYY-MM-DD" — concatenar 'T00:00:00' sin cortar antes producía "Invalid Date".
-const formatFecha = (f?: string | null) => f ? new Date(f.slice(0, 10) + 'T00:00:00').toLocaleDateString('es-PE', { day: '2-digit', month: 'short' }) : 'sin fecha';
 const iniciales = (nombre?: string | null) => (nombre || '?').split(' ').map((x) => x[0]).slice(0, 2).join('').toUpperCase();
 const etiquetaTipoPax = (t?: string | null) => t === 'adulto' ? 'Adulto' : t === 'nino' ? 'Niño' : t === 'infante' ? 'Infante' : '—';
 
