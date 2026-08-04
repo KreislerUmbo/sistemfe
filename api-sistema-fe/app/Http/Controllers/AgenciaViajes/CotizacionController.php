@@ -104,8 +104,12 @@ class CotizacionController extends Controller
             // frontend (etiquetaItem() en editar.vue) no tiene forma de mostrar el
             // nombre del proveedor ni la categoría del servicio de cada ítem — solo
             // llegaba el proveedor_tarifa "pelado" (sin su cadena de relaciones).
+            // .destinoServicio.destinoAtractivo agregado junto con
+            // descripcionDestinoServicio() en editar.vue — faltaba acá igual que
+            // faltó en PaquetePlantillaItemController::index() (mismo hallazgo).
             'alternativas.items.proveedorTarifa.proveedorServicio.proveedor',
             'alternativas.items.proveedorTarifa.proveedorServicio.destinoServicio.servicio',
+            'alternativas.items.proveedorTarifa.proveedorServicio.destinoServicio.destinoAtractivo',
             'alternativas.items.opcionMayorista',
             // Sesión 11k — nombre del hotel/habitación para etiquetaItem()
             // de un ítem origen_tipo=hotel_plantilla.

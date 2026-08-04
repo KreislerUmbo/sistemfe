@@ -460,9 +460,13 @@
                                                 </span>
                                                 <span class="text-muted">{{ fila.data._rangoHabitaciones ? 'desde ' : '' }}{{ fila.data.moneda }} {{ Number(fila.data.precio_venta_adulto).toFixed(0) }}</span>
                                             </div>
-                                            <div class="text-muted" style="font-size:11px">
+                                            <div class="text-muted" style="font-size:11px" v-if="fila.data.tipo_habitacion">
                                                 {{ fila.data.proveedor_servicio?.destino_servicio?.servicio?.nombre }}
-                                                <span v-if="fila.data.tipo_habitacion"> · {{ fila.data._rangoHabitaciones ? 'varias habitaciones' : fila.data.tipo_habitacion }}</span>
+                                                · {{ fila.data._rangoHabitaciones ? 'varias habitaciones' : fila.data.tipo_habitacion }}
+                                            </div>
+                                            <div class="text-muted" style="font-size:11px" v-else>
+                                                {{ descripcionDestinoServicio(fila.data.proveedor_servicio?.destino_servicio) }}
+                                                <span class="badge bg-light text-dark border ms-1" style="font-size:10px">{{ fila.data.tipo_tarifa }} · {{ fila.data.modalidad }}</span>
                                             </div>
                                         </template>
                                         <template v-else>
@@ -622,7 +626,7 @@ import { bibliotecaCotizadorService, type BibliotecaTipo } from '@/services/admi
 import { reservaService } from '@/services/admin/reservaService';
 import { configuracionAgenciaService } from '@/services/admin/configuracionAgenciaService';
 import { formatFecha } from '@/helpers/fecha';
-import type { Cotizacion, Alternativa, AlternativaItem, ProveedorTarifa, OpcionMayorista, OpcionHotel, Proveedor, ProveedorTipo, BibliotecaResultado, ConfiguracionAgencia } from '@/types/agencia-viajes';
+import type { Cotizacion, Alternativa, AlternativaItem, ProveedorTarifa, OpcionMayorista, OpcionHotel, Proveedor, ProveedorTipo, BibliotecaResultado, ConfiguracionAgencia, DestinoServicio } from '@/types/agencia-viajes';
 import type { Client } from '@/types/clients';
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
@@ -1040,6 +1044,19 @@ const onBibliotecaSearch = () => {
 };
 
 const etiquetaCategoriaPaquete = (c: string) => ({ local: 'Local', nacional: 'Nacional', internacional: 'Internacional' } as Record<string, string>)[c] ?? c;
+
+// Mismo problema y misma solución que paquetes/detalle.vue
+// (descripcionDestinoServicio) — duplicada a propósito acá, no hay
+// composable compartido para algo tan chico (mismo criterio que
+// BibliotecaCotizadorController::buscarProveedorTarifas() ya usa contra
+// ProveedorTarifaController::biblioteca()). destino_atractivo puede venir
+// null (no todo servicio está atado a un destino) — en ese caso solo el
+// nombre del servicio, sin romper el render.
+const descripcionDestinoServicio = (ds?: DestinoServicio) => {
+    const destino = ds?.destino_atractivo?.nombre;
+    const servicio = ds?.servicio?.nombre ?? '';
+    return destino ? `${destino} · ${servicio}` : servicio;
+};
 
 const bibliotecaToursPaquetes = computed(() =>
     bibliotecaResultados.value.filter((r) => r.tipo_resultado === 'tour' || r.tipo_resultado === 'paquete') as Array<
@@ -1636,7 +1653,7 @@ const etiquetaItem = (item: AlternativaItem) => {
         const proveedor = item.proveedor_tarifa.proveedor_servicio?.proveedor?.nombre_comercial ?? item.proveedor_tarifa.proveedor_servicio?.proveedor?.razon_social ?? 'Hotel';
         return `${proveedor} · ${item.proveedor_tarifa.tipo_habitacion}`;
     }
-    return item.proveedor_tarifa?.proveedor_servicio?.destino_servicio?.servicio?.nombre ?? 'Servicio';
+    return descripcionDestinoServicio(item.proveedor_tarifa?.proveedor_servicio?.destino_servicio) || 'Servicio';
 };
 
 // Punto D — desglose de pasajeros bajo cada línea por_persona ("3 adultos ×
