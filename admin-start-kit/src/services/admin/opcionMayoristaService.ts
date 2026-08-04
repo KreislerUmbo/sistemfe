@@ -30,7 +30,7 @@ export const opcionMayoristaService = {
     nombre_hotel: string
     categoria_estrellas?: number
     proveedor_id?: number | null
-    tarifas?: Array<{ tipo_habitacion: string; precio_costo: number; precio_venta: number }>
+    tarifas?: Array<{ tipo_habitacion: string; precio_costo: number; precio_venta: number; proveedor_tarifa_id?: number | null }>
   }) {
     const response = await httpClient.post(`/opciones-mayorista/${opcionMayoristaId}/hoteles`, data)
     return response.data

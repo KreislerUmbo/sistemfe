@@ -20,6 +20,7 @@ class OpcionHotel extends Model
         'proveedor_id',
         'nombre_hotel',
         'categoria_estrellas',
+        'moneda',
     ];
 
     public function proveedor()

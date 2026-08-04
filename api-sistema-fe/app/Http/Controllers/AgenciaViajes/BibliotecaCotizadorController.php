@@ -98,7 +98,9 @@ class BibliotecaCotizadorController extends Controller
             'proveedorServicio.destinoServicio.servicio',
         ])
             ->where('vigente_desde', '<=', $hoy)
-            ->where(fn ($q) => $q->whereNull('vigente_hasta')->orWhere('vigente_hasta', '>=', $hoy));
+            ->where(fn ($q) => $q->whereNull('vigente_hasta')->orWhere('vigente_hasta', '>=', $hoy))
+            // Sesión 11k, Fix 8 — mismo filtro que ProveedorTarifaController::biblioteca().
+            ->whereHas('proveedorServicio.proveedor', fn ($q) => $q->where('estado', true));
 
         if ($proveedorTipoId) {
             $query->whereHas('proveedorServicio.proveedor', fn ($q) => $q->where('tipo_id', $proveedorTipoId));

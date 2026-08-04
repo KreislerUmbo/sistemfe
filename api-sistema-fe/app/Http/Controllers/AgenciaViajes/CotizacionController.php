@@ -107,6 +107,9 @@ class CotizacionController extends Controller
             'alternativas.items.proveedorTarifa.proveedorServicio.proveedor',
             'alternativas.items.proveedorTarifa.proveedorServicio.destinoServicio.servicio',
             'alternativas.items.opcionMayorista',
+            // Sesión 11k — nombre del hotel/habitación para etiquetaItem()
+            // de un ítem origen_tipo=hotel_plantilla.
+            'alternativas.items.opcionHotelTarifa.opcionHotel',
             'alternativas.items.cotizacionPasajeAereo',
             // Sesión 11b3 — nombre del tour de origen para el encabezado del
             // bloque agrupado en el lienzo día-por-día (§7.1).

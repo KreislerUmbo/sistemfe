@@ -254,7 +254,7 @@ export type AlternativaResponse = {
   lineas_fuera_de_piso?: Array<{ alternativa_item_id: number; precio_minimo_permitido: number | null }>;
 };
 
-export type OrigenItem = 'proveedor' | 'mayorista' | 'pasaje_aereo' | 'manual';
+export type OrigenItem = 'proveedor' | 'mayorista' | 'pasaje_aereo' | 'manual' | 'hotel_plantilla';
 
 export type AlternativaItem = {
   id: number;
@@ -262,6 +262,10 @@ export type AlternativaItem = {
   origen_tipo: OrigenItem;
   proveedor_tarifa_id?: number | null;
   opcion_mayorista_id?: number | null;
+  // Sesión 11k — hotel elegido de la matriz de un paquete_plantilla
+  // (origen_tipo=hotel_plantilla), ver crearItemHotelPlantilla().
+  opcion_hotel_tarifa_id?: number | null;
+  paquete_plantilla_id?: number | null;
   // Sesión 11b4a — de qué tour_simple vino este ítem al explotar un
   // paquete_combo (agrupación visual, no afecta precio).
   tour_origen_id?: number | null;
@@ -282,6 +286,7 @@ export type AlternativaItem = {
   total_convertido: number;
   proveedor_tarifa?: ProveedorTarifa;
   opcion_mayorista?: OpcionMayorista;
+  opcion_hotel_tarifa?: OpcionHotelTarifa;
   cotizacion_pasaje_aereo?: CotizacionPasajeAereo;
 };
 
@@ -304,6 +309,10 @@ export type DesdePlantillaResponse = {
     guia_nombre: string | null;
     destino_nombre: string | null;
   }>;
+  // Sesión 11k — hoteles del paquete/tour(es) recién cargado(s), SIN
+  // auto-agregarse (una matriz de hotel tiene varias tarifas por
+  // tipo_habitacion, el vendedor elige la habitación antes de tener precio).
+  hoteles_disponibles: OpcionHotel[];
   resumen: { tours: number | null; items: number };
 };
 
@@ -354,6 +363,9 @@ export type OpcionHotel = {
   proveedor_id?: number | null;
   nombre_hotel: string;
   categoria_estrellas?: number | null;
+  // Sesión 11k, Fix 9 — un hotel cotiza todas sus habitaciones en la misma
+  // moneda.
+  moneda: 'PEN' | 'USD';
   opciones_hotel_tarifas?: OpcionHotelTarifa[];
 };
 
@@ -363,6 +375,14 @@ export type OpcionHotelTarifa = {
   tipo_habitacion: 'simple' | 'matrimonial' | 'doble' | 'triple' | 'familiar';
   precio_costo: number;
   precio_venta: number;
+  // Sesión 11k, Fix 9 — si está seteado, el precio es "en vivo" desde la
+  // tarifa real del proveedor (ver accessor en el backend), no un valor
+  // tipeado a mano.
+  proveedor_tarifa_id?: number | null;
+  // Sesión 11k — solo poblado cuando el backend lo eager-carga (ver
+  // CotizacionController::show()), para mostrar el nombre del hotel de un
+  // ítem origen_tipo=hotel_plantilla en el lienzo.
+  opcion_hotel?: OpcionHotel;
 };
 
 export type OpcionMayoristaOpcional = {

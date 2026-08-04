@@ -7,6 +7,7 @@ use App\Models\AgenciaViajes\OpcionHotel;
 use App\Models\AgenciaViajes\OpcionHotelTarifa;
 use App\Models\AgenciaViajes\PaquetePlantilla;
 use App\Models\AgenciaViajes\PaquetePlantillaItem;
+use App\Models\AgenciaViajes\ProveedorTarifa;
 use App\Models\AgenciaViajes\TourItinerarioItem;
 use App\Services\AgenciaViajes\ComboExplosionService;
 use App\Services\AgenciaViajes\ComboValidationService;
@@ -292,10 +293,14 @@ class PaquetePlantillaController extends Controller
             'nombre_hotel' => 'required|string|max:250',
             'categoria_estrellas' => 'nullable|integer|min:1|max:5',
             'proveedor_id' => 'nullable|integer|exists:proveedores,id',
+            'moneda' => 'nullable|in:PEN,USD',
             'tarifas' => 'nullable|array',
             'tarifas.*.tipo_habitacion' => 'required_with:tarifas|in:simple,matrimonial,doble,triple,familiar',
             'tarifas.*.precio_costo' => 'required_with:tarifas|numeric|min:0',
             'tarifas.*.precio_venta' => 'required_with:tarifas|numeric|min:0',
+            // Sesión 11k, Fix 9 — tarifa real de proveedor, opcional (hotel
+            // manual/referencial cuando no viene).
+            'tarifas.*.proveedor_tarifa_id' => 'nullable|integer|exists:proveedor_tarifas,id',
         ]);
 
         if ($validator->fails()) {
@@ -310,9 +315,22 @@ class PaquetePlantillaController extends Controller
                 'nombre_hotel' => $validado['nombre_hotel'],
                 'categoria_estrellas' => $validado['categoria_estrellas'] ?? null,
                 'proveedor_id' => $validado['proveedor_id'] ?? null,
+                'moneda' => $validado['moneda'] ?? 'PEN',
             ]);
 
             foreach ($validado['tarifas'] ?? [] as $tarifa) {
+                // Snapshot al momento de guardar — el accessor de
+                // OpcionHotelTarifa recalcula "en vivo" mientras la relación
+                // siga viva, pero el valor guardado no debería quedar en
+                // blanco si el día de mañana se borra la tarifa real.
+                if (! empty($tarifa['proveedor_tarifa_id'])) {
+                    $tarifaReal = ProveedorTarifa::find($tarifa['proveedor_tarifa_id']);
+                    if ($tarifaReal) {
+                        $tarifa['precio_costo'] = $tarifaReal->precio_costo;
+                        $tarifa['precio_venta'] = $tarifaReal->precio_venta_adulto;
+                    }
+                }
+
                 OpcionHotelTarifa::create($tarifa + ['opcion_hotel_id' => $hotel->id]);
             }
 

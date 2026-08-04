@@ -54,6 +54,14 @@ export const proveedorService = {
     return response.data
   },
 
+  // Sesión 11k, Fix 9 — tarifas Hotel de un proveedor tipo Hotel, para
+  // ofrecer "usar tarifa registrada" al armar la matriz de habitaciones de
+  // un opcion_hotel (paquetes/detalle.vue y cotizador/editar.vue).
+  async tarifasHotel(proveedorId: number) {
+    const response = await httpClient.get(`/proveedores/${proveedorId}/tarifas-hotel`)
+    return response.data as { proveedor_tarifas: ProveedorTarifa[] }
+  },
+
   // Biblioteca del cotizador (Sesión 11b) — tarifas vigentes de TODOS los
   // proveedores, con búsqueda de texto (ver limitación documentada en el
   // backend: no filtra por destino, cotizaciones.destino no es FK).

@@ -4,6 +4,8 @@ namespace App\Http\Controllers\AgenciaViajes;
 
 use App\Http\Controllers\Controller;
 use App\Models\AgenciaViajes\Proveedor;
+use App\Models\AgenciaViajes\ProveedorTarifa;
+use App\Models\AgenciaViajes\ProveedorTipo;
 use App\Models\AgenciaViajes\ProveedorTipoConfig;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -65,6 +67,36 @@ class ProveedorController extends Controller
         ])->findOrFail($id);
 
         return response()->json(['proveedor' => $proveedor]);
+    }
+
+    // Sesión 11k, Fix 9 — tarifas Hotel de este proveedor (todos sus
+    // proveedor_servicios), para ofrecer "usar tarifa registrada" al armar
+    // la matriz de habitaciones de un opcion_hotel.
+    //
+    // slug='alojamiento-hoteles' (el slug REAL del catálogo proveedor_tipos
+    // en este proyecto, confirmado contra datos reales) — NO 'hotel'.
+    // ProveedorTarifaController::proveedorEsHotel() usa 'hotel', que no
+    // matchea ningún proveedor_tipos real (bug preexistente, encontrado al
+    // verificar este endpoint contra agencia-demo — fuera de alcance de
+    // esta sesión, no corregido acá, solo documentado).
+    public function tarifasHotel(string $id)
+    {
+        $proveedor = Proveedor::findOrFail($id);
+
+        $esHotel = $proveedor->tipo_id
+            && ProveedorTipo::where('id', $proveedor->tipo_id)->where('slug', 'alojamiento-hoteles')->exists();
+
+        if (! $esHotel) {
+            return response()->json(['code' => 422, 'message' => 'Este proveedor no es de tipo Hotel.'], 422);
+        }
+
+        $tarifas = ProveedorTarifa::whereHas('proveedorServicio', fn ($q) => $q->where('proveedor_id', $proveedor->id))
+            ->whereNotNull('tipo_habitacion')
+            ->with('proveedorServicio.destinoServicio.servicio')
+            ->orderBy('tipo_habitacion')
+            ->get();
+
+        return response()->json(['proveedor_tarifas' => $tarifas]);
     }
 
     public function update(Request $request, string $id)
