@@ -57,8 +57,16 @@ export const paquetePlantillaService = {
     const response = await httpClient.post(`/paquetes-plantilla/${paqueteId}/itinerario`, data)
     return response.data
   },
+  async actualizarPasoItinerario(itemId: number, data: Partial<TourItinerarioItem>) {
+    const response = await httpClient.put(`/tour-itinerario-items/${itemId}`, data)
+    return response.data
+  },
   async quitarPasoItinerario(itemId: number) {
     const response = await httpClient.delete(`/tour-itinerario-items/${itemId}`)
+    return response.data
+  },
+  async reordenarItinerario(paqueteId: number, items: { id: number; dia_relativo: number; orden: number }[]) {
+    const response = await httpClient.post(`/paquetes-plantilla/${paqueteId}/itinerario/reordenar`, { items })
     return response.data
   },
 

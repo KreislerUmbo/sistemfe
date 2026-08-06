@@ -471,7 +471,11 @@ Route::group([
         ->middleware('permission:agencia.paquetes');
     Route::post("paquetes-plantilla/{id}/itinerario", [TourItinerarioItemController::class, 'store'])
         ->middleware('permission:agencia.paquetes');
+    Route::put("tour-itinerario-items/{id}", [TourItinerarioItemController::class, 'update'])
+        ->middleware('permission:agencia.paquetes');
     Route::delete("tour-itinerario-items/{id}", [TourItinerarioItemController::class, 'destroy'])
+        ->middleware('permission:agencia.paquetes');
+    Route::post("paquetes-plantilla/{id}/itinerario/reordenar", [TourItinerarioItemController::class, 'reordenar'])
         ->middleware('permission:agencia.paquetes');
 
     // Matriz hotel × tipo de habitación (mismo motor que

@@ -256,7 +256,7 @@ const onClientCreated = (client: Client) => {
 const onBibliotecaSearch = () => {
     clearTimeout(bibliotecaTimeout);
     bibliotecaTimeout = setTimeout(async () => {
-        const res = await proveedorService.biblioteca(bibliotecaSearch.value || undefined);
+        const res = await proveedorService.biblioteca({ search: bibliotecaSearch.value || undefined });
         bibliotecaTarifas.value = res.proveedor_tarifas;
     }, 250);
 };
