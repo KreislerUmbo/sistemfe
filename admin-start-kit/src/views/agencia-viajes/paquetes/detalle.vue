@@ -153,9 +153,11 @@
                             <label class="form-label mb-1 small fw-semibold text-secondary">Destino/Atractivo</label>
                             <DestinoTreeSelect v-model="formPaso.destino_atractivo_id" placeholder="Opcional..." />
                         </div>
-                        <div class="col-12 col-md-3">
+                    </div>
+                    <div class="row g-2 align-items-end mt-1">
+                        <div class="col-12">
                             <label class="form-label mb-1 small fw-semibold text-secondary">Descripción *</label>
-                            <input type="text" class="form-control form-control-sm" v-model="formPaso.descripcion" placeholder="Ej. Visita orquideario">
+                            <textarea rows="2" class="form-control form-control-sm" v-model="formPaso.descripcion" placeholder="Ej. Visita orquideario"></textarea>
                         </div>
                     </div>
                     <button class="btn btn-primary btn-sm mt-2" @click="agregarPaso">
@@ -166,15 +168,51 @@
 
             <div v-for="(pasos, dia) in itinerarioPorDia" :key="dia" class="card border-0 shadow-sm mb-3">
                 <div class="card-header bg-white border-bottom small fw-semibold">Día {{ dia }}</div>
-                <ul class="list-group list-group-flush">
-                    <li v-for="paso in pasos" :key="paso.id" class="list-group-item d-flex justify-content-between align-items-center small">
-                        <span>
-                            <span v-if="paso.hora" class="badge bg-light text-dark border me-2">{{ paso.hora }}</span>
-                            <span v-else-if="paso.orden != null" class="badge bg-light text-dark border me-2">#{{ paso.orden }}</span>
-                            {{ paso.descripcion }}
-                            <span v-if="paso.destino_atractivo" class="text-muted"> — {{ paso.destino_atractivo.nombre }}</span>
-                        </span>
-                        <i class="fas fa-times text-danger" style="cursor:pointer" @click="quitarPaso(paso)"></i>
+                <ul class="list-group list-group-flush" :data-dia="dia" :ref="(el) => setItinerarioDiaRef(Number(dia), el)">
+                    <li v-for="paso in pasos" :key="paso.id" class="list-group-item small" :data-paso-id="paso.id">
+                        <div v-if="pasoEnEdicion?.id !== paso.id" class="d-flex justify-content-between align-items-center">
+                            <span>
+                                <i class="fas fa-grip-vertical grip text-muted me-2" style="cursor:grab"></i>
+                                <span v-if="paso.hora" class="badge bg-light text-dark border me-2">{{ paso.hora }}</span>
+                                <span v-else-if="paso.orden != null" class="badge bg-light text-dark border me-2">#{{ paso.orden }}</span>
+                                {{ paso.descripcion }}
+                                <span v-if="paso.destino_atractivo" class="text-muted"> — {{ paso.destino_atractivo.nombre }}</span>
+                            </span>
+                            <span class="d-flex align-items-center gap-3">
+                                <i class="fas fa-pen text-secondary" style="cursor:pointer" @click="iniciarEdicionPaso(paso)"></i>
+                                <i class="fas fa-trash text-danger" style="cursor:pointer" @click="quitarPaso(paso)"></i>
+                            </span>
+                        </div>
+                        <div v-else class="py-1">
+                            <div class="row g-2 align-items-end">
+                                <div class="col-6 col-md-2">
+                                    <label class="form-label mb-1 small fw-semibold text-secondary">Día</label>
+                                    <input type="number" min="1" class="form-control form-control-sm" v-model.number="pasoEnEdicion.dia_relativo">
+                                </div>
+                                <div class="col-6 col-md-2">
+                                    <label class="form-label mb-1 small fw-semibold text-secondary">Hora</label>
+                                    <input type="time" class="form-control form-control-sm" v-model="pasoEnEdicion.hora">
+                                </div>
+                                <div class="col-6 col-md-2">
+                                    <label class="form-label mb-1 small fw-semibold text-secondary">Orden</label>
+                                    <input type="number" min="0" class="form-control form-control-sm" v-model.number="pasoEnEdicion.orden">
+                                </div>
+                                <div class="col-6 col-md-3">
+                                    <label class="form-label mb-1 small fw-semibold text-secondary">Destino/Atractivo</label>
+                                    <DestinoTreeSelect v-model="pasoEnEdicion.destino_atractivo_id" placeholder="Opcional..." />
+                                </div>
+                            </div>
+                            <div class="row g-2 align-items-end mt-1">
+                                <div class="col-12">
+                                    <label class="form-label mb-1 small fw-semibold text-secondary">Descripción *</label>
+                                    <textarea rows="2" class="form-control form-control-sm" v-model="pasoEnEdicion.descripcion"></textarea>
+                                </div>
+                            </div>
+                            <div class="mt-2 d-flex gap-2">
+                                <button class="btn btn-primary btn-sm" @click="guardarEdicionPaso">Guardar</button>
+                                <button class="btn btn-outline-secondary btn-sm" @click="cancelarEdicionPaso">Cancelar</button>
+                            </div>
+                        </div>
                     </li>
                 </ul>
             </div>
@@ -223,6 +261,23 @@
                     <div v-if="tipoItemNuevo === 'proveedor'">
                         <input type="text" class="form-control form-control-sm mb-2" placeholder="Buscar servicio de proveedor..."
                             v-model="bibliotecaSearch" @input="onBibliotecaSearch">
+                        <div class="row g-2 mb-2">
+                            <div class="col-12 col-md-4">
+                                <DestinoTreeSelect v-model="filtroDestinoId" nivel-max="lugar" placeholder="Zona o destino..." />
+                            </div>
+                            <div class="col-6 col-md-4">
+                                <select class="form-select form-select-sm" v-model="filtroServicioId">
+                                    <option :value="null">Cualquier servicio</option>
+                                    <option v-for="s in serviciosFiltro" :key="s.id" :value="s.id">{{ s.nombre }}</option>
+                                </select>
+                            </div>
+                            <div class="col-6 col-md-4">
+                                <select class="form-select form-select-sm" v-model="filtroProveedorId">
+                                    <option :value="null">Cualquier proveedor</option>
+                                    <option v-for="p in proveedoresFiltro" :key="p.id" :value="p.id">{{ p.nombre_comercial ?? p.razon_social }}</option>
+                                </select>
+                            </div>
+                        </div>
                         <div class="d-flex flex-column gap-1" style="max-height:220px;overflow-y:auto;">
                             <div v-for="t in bibliotecaTarifas" :key="t.id" class="border rounded p-2 small lib-item"
                                 :class="{ 'border-primary bg-light': proveedorTarifaSeleccionada?.id === t.id }"
@@ -273,7 +328,11 @@
                 </div>
             </div>
 
+            <!-- ═══ Resumen (zona separada de la búsqueda) ═══ -->
             <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white border-bottom py-2">
+                    <span class="fw-semibold text-dark small"><i class="fas fa-list-check text-primary me-1"></i>Ítems incluidos</span>
+                </div>
                 <ul class="list-group list-group-flush">
                     <li v-for="item in items" :key="item.id" class="list-group-item d-flex justify-content-between align-items-center small">
                         <span v-if="item.proveedor_tarifa">
@@ -324,6 +383,12 @@
                             </div>
                         </div>
                     </div>
+                    <div v-if="desglosePorCategoria.length" class="row g-2 mt-1 border-top pt-3">
+                        <div class="col-6 col-md-3" v-for="cat in desglosePorCategoria" :key="cat.categoria">
+                            <div class="small text-muted mb-1">{{ cat.categoria }}</div>
+                            <div class="small fw-semibold text-dark">S/ {{ cat.venta.toFixed(2) }} <span class="text-muted fw-normal">(costo {{ cat.costo.toFixed(2) }})</span></div>
+                        </div>
+                    </div>
                     <div v-if="diferenciaVentaFinal !== null" class="alert alert-warning small mt-3 mb-0">
                         <i class="fas fa-triangle-exclamation me-1"></i>
                         El "Precio venta (desde)" del tour (S/ {{ Number(paquete!.precio_venta_final).toFixed(2) }})
@@ -371,6 +436,23 @@
                     <div v-else-if="tipoItemNuevo === 'proveedor'">
                         <input type="text" class="form-control form-control-sm mb-2" placeholder="Buscar servicio de proveedor..."
                             v-model="bibliotecaSearch" @input="onBibliotecaSearch">
+                        <div class="row g-2 mb-2">
+                            <div class="col-12 col-md-4">
+                                <DestinoTreeSelect v-model="filtroDestinoId" nivel-max="lugar" placeholder="Zona o destino..." />
+                            </div>
+                            <div class="col-6 col-md-4">
+                                <select class="form-select form-select-sm" v-model="filtroServicioId">
+                                    <option :value="null">Cualquier servicio</option>
+                                    <option v-for="s in serviciosFiltro" :key="s.id" :value="s.id">{{ s.nombre }}</option>
+                                </select>
+                            </div>
+                            <div class="col-6 col-md-4">
+                                <select class="form-select form-select-sm" v-model="filtroProveedorId">
+                                    <option :value="null">Cualquier proveedor</option>
+                                    <option v-for="p in proveedoresFiltro" :key="p.id" :value="p.id">{{ p.nombre_comercial ?? p.razon_social }}</option>
+                                </select>
+                            </div>
+                        </div>
                         <div class="d-flex flex-column gap-1" style="max-height:220px;overflow-y:auto;">
                             <div v-for="t in bibliotecaTarifas" :key="t.id" class="border rounded p-2 small lib-item"
                                 :class="{ 'border-primary bg-light': proveedorTarifaSeleccionada?.id === t.id }"
@@ -587,7 +669,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, nextTick, watch } from 'vue';
+import Sortable from 'sortablejs';
 import { useRoute } from 'vue-router';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import DestinoTreeSelect from '@/components/AgenciaViajes/DestinoTreeSelect.vue';
@@ -596,11 +679,12 @@ import { paquetePlantillaService } from '@/services/admin/paquetePlantillaServic
 import { proveedorService, proveedorTipoService } from '@/services/admin/proveedorService';
 import { guiaService } from '@/services/admin/guiaService';
 import { configuracionAgenciaService } from '@/services/admin/configuracionAgenciaService';
+import { servicioService } from '@/services/admin/servicioService';
 import { formatFecha } from '@/helpers/fecha';
 import type {
     PaquetePlantilla, PaquetePlantillaItem, TourItinerarioItem, OpcionHotel,
     ProveedorTarifa, Proveedor, Guia, GuiaTarifa, ComboDatos, ComboItinerarioPaso, PaquetePlantillaResumen,
-    DestinoServicio, ConfiguracionAgencia,
+    DestinoServicio, ConfiguracionAgencia, Servicio, ProveedorTipo,
 } from '@/types/agencia-viajes';
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
@@ -752,6 +836,8 @@ const cargarItinerario = async () => {
     if (esCombo.value) return;
     const res = await paquetePlantillaService.listarItinerario(paqueteId.value);
     itinerario.value = res.tour_itinerario_items;
+    await nextTick();
+    inicializarSortableItinerario();
 };
 
 const agregarPaso = async () => {
@@ -769,7 +855,107 @@ const agregarPaso = async () => {
 };
 
 const quitarPaso = async (paso: TourItinerarioItem) => {
+    const result = await (Swal as TVueSwalInstance).fire({
+        title: 'Eliminar paso de itinerario',
+        text: `¿Eliminar "${paso.descripcion}"?`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d33',
+        confirmButtonText: 'Sí, eliminar',
+        cancelButtonText: 'Cancelar',
+    });
+    if (!(result as any).isConfirmed) return;
     await paquetePlantillaService.quitarPasoItinerario(paso.id);
+    await cargarItinerario();
+};
+
+// ── Edición inline de un paso (Sesión 11l v2) ────────────────────────
+const pasoEnEdicion = ref<(Omit<TourItinerarioItem, 'destino_atractivo_id'> & { destino_atractivo_id: number | null }) | null>(null);
+
+const iniciarEdicionPaso = (paso: TourItinerarioItem) => {
+    // El backend devuelve `hora` como HH:MM:SS (columna TIME de Postgres),
+    // pero <input type="time"> sin `step` y el validador H:i del backend
+    // solo aceptan HH:MM — si el usuario guarda sin tocar este campo, el
+    // valor con segundos viaja intacto y el 422 revienta en un campo que
+    // ni siquiera editó. Se normaliza acá, no en agregarPaso (ese arranca
+    // vacío y solo recibe HH:MM directo del input).
+    pasoEnEdicion.value = {
+        ...paso,
+        hora: paso.hora ? paso.hora.substring(0, 5) : null,
+        destino_atractivo_id: paso.destino_atractivo_id ?? null,
+    };
+};
+
+const cancelarEdicionPaso = () => {
+    pasoEnEdicion.value = null;
+};
+
+const guardarEdicionPaso = async () => {
+    if (!pasoEnEdicion.value) return;
+    if (!pasoEnEdicion.value.descripcion.trim()) {
+        (Swal as TVueSwalInstance).fire('Error', 'La descripción del paso es obligatoria.', 'error');
+        return;
+    }
+    try {
+        await paquetePlantillaService.actualizarPasoItinerario(pasoEnEdicion.value.id, {
+            dia_relativo: pasoEnEdicion.value.dia_relativo,
+            hora: pasoEnEdicion.value.hora || null,
+            orden: pasoEnEdicion.value.orden,
+            destino_atractivo_id: pasoEnEdicion.value.destino_atractivo_id,
+            descripcion: pasoEnEdicion.value.descripcion,
+        });
+        pasoEnEdicion.value = null;
+        await cargarItinerario();
+    } catch (error: any) {
+        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo guardar', 'error');
+    }
+};
+
+// ── Drag&drop del itinerario (Sesión 11l v2) — un Sortable por día,
+// mismo `group` para poder arrastrar un paso de un día a otro. Los
+// refs se reconstruyen en cada carga (las claves de itinerarioPorDia
+// cambian si se agrega/quita el último paso de un día), por eso se
+// reinicializan explícitamente después de cada cargarItinerario().
+const itinerarioDiaRefs = ref<Record<number, HTMLElement>>({});
+let itinerarioSortables: Sortable[] = [];
+
+const setItinerarioDiaRef = (dia: number, el: unknown) => {
+    if (el instanceof HTMLElement) {
+        itinerarioDiaRefs.value[dia] = el;
+    } else {
+        delete itinerarioDiaRefs.value[dia];
+    }
+};
+
+const inicializarSortableItinerario = () => {
+    itinerarioSortables.forEach((s) => s.destroy());
+    itinerarioSortables = [];
+    for (const el of Object.values(itinerarioDiaRefs.value)) {
+        itinerarioSortables.push(Sortable.create(el, {
+            group: 'itinerario',
+            handle: '.grip',
+            animation: 150,
+            forceFallback: true,
+            onEnd: onItinerarioDragEnd,
+        }));
+    }
+};
+
+const onItinerarioDragEnd = async (evt: Sortable.SortableEvent) => {
+    const listasAfectadas = new Set([evt.from, evt.to].filter(Boolean) as HTMLElement[]);
+    const itemsActualizados: { id: number; dia_relativo: number; orden: number }[] = [];
+    for (const lista of listasAfectadas) {
+        const dia = Number(lista.dataset.dia);
+        Array.from(lista.children).forEach((li, idx) => {
+            const id = Number((li as HTMLElement).dataset.pasoId);
+            if (id) itemsActualizados.push({ id, dia_relativo: dia, orden: idx });
+        });
+    }
+    try {
+        await paquetePlantillaService.reordenarItinerario(paqueteId.value, itemsActualizados);
+    } catch (error: any) {
+        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo reordenar', 'error');
+    }
     await cargarItinerario();
 };
 
@@ -792,13 +978,28 @@ const bibliotecaTarifas = ref<ProveedorTarifa[]>([]);
 const proveedorTarifaSeleccionada = ref<ProveedorTarifa | null>(null);
 let bibliotecaTimeout: any = null;
 
+// Sesión 11l v2 — filtros de zona/servicio/proveedor de la biblioteca del
+// tab Incluye, combinables entre sí y con bibliotecaSearch.
+const filtroDestinoId = ref<number | null>(null);
+const filtroServicioId = ref<number | null>(null);
+const filtroProveedorId = ref<number | null>(null);
+const serviciosFiltro = ref<Servicio[]>([]);
+const proveedoresFiltro = ref<Proveedor[]>([]);
+
 const onBibliotecaSearch = () => {
     clearTimeout(bibliotecaTimeout);
     bibliotecaTimeout = setTimeout(cargarBiblioteca, 300);
 };
 
+watch([filtroDestinoId, filtroServicioId, filtroProveedorId], onBibliotecaSearch);
+
 const cargarBiblioteca = async () => {
-    const res = await proveedorService.biblioteca(bibliotecaSearch.value || undefined);
+    const res = await proveedorService.biblioteca({
+        search: bibliotecaSearch.value || undefined,
+        destino_atractivo_id: filtroDestinoId.value ?? undefined,
+        servicio_id: filtroServicioId.value ?? undefined,
+        proveedor_id: filtroProveedorId.value ?? undefined,
+    });
     bibliotecaTarifas.value = res.proveedor_tarifas;
 };
 
@@ -875,6 +1076,30 @@ const totalesIncluye = computed(() => {
     const ventaTotal = items.value.reduce((acc, item) => acc + ventaItem(item), 0);
     const margenResultantePct = costoTotal > 0 ? ((ventaTotal - costoTotal) / costoTotal) * 100 : 0;
     return { costoTotal, ventaTotal, margenResultantePct };
+});
+
+// Desglose por categoría (Sesión 11l v2) — mismo catálogo proveedor_tipos
+// ya cargado para "usar tarifa registrada" de hoteles (ver onMounted).
+// Guía no tiene proveedor_tipo (no es un ProveedorServicio), por eso usa
+// una categoría fija en vez de resolverla contra el catálogo.
+const proveedorTipos = ref<ProveedorTipo[]>([]);
+
+const categoriaItem = (item: PaquetePlantillaItem): string => {
+    if (item.guia_tarifa) return 'Guía';
+    const tipoProveedorId = item.proveedor_tarifa?.proveedor_servicio?.destino_servicio?.servicio?.tipo_proveedor_id;
+    const tipo = proveedorTipos.value.find((t) => t.id === tipoProveedorId);
+    return tipo?.nombre ?? 'Otros';
+};
+
+const desglosePorCategoria = computed(() => {
+    const acumulado: Record<string, { categoria: string; costo: number; venta: number }> = {};
+    for (const item of items.value) {
+        const categoria = categoriaItem(item);
+        const fila = (acumulado[categoria] ??= { categoria, costo: 0, venta: 0 });
+        fila.costo += costoItem(item);
+        fila.venta += ventaItem(item);
+    }
+    return Object.values(acumulado);
 });
 
 // Fix 4 — advertencia (no bloqueo) cuando el "Precio venta (desde)" manual
@@ -1014,6 +1239,11 @@ onMounted(async () => {
     // del paquete (el margen mínimo tiene fallback de 20 mientras está en vuelo).
     configuracionAgenciaService.obtener().then((res) => { configAgencia.value = res.configuracion_agencia; });
 
+    // Sesión 11l v2 — catálogos de servicios/proveedores para los filtros
+    // de la biblioteca del tab Incluye, en paralelo (no bloquean la carga).
+    servicioService.listar({}).then((res) => { serviciosFiltro.value = res.servicios ?? []; });
+    proveedorService.listar({ estado: true }).then((res) => { proveedoresFiltro.value = res.proveedores ?? []; });
+
     await cargarPaquete();
     await cargarItinerario();
     await cargarItems();
@@ -1027,6 +1257,7 @@ onMounted(async () => {
     // reales) — 'hotel' no matchea nada (ver mismo hallazgo documentado en
     // ProveedorController::tarifasHotel(), backend).
     const tipos = await proveedorTipoService.listar();
+    proveedorTipos.value = tipos.proveedor_tipos;
     const tipoHotel = tipos.proveedor_tipos.find((t) => t.slug === 'alojamiento-hoteles');
     if (tipoHotel) {
         const resProveedores = await proveedorService.listar({ tipo_id: tipoHotel.id, estado: true });

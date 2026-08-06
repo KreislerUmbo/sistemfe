@@ -62,6 +62,23 @@ class ProveedorTarifaController extends Controller
             });
         }
 
+        // Sesión 11l v2 — filtros de la biblioteca del cotizador (zona/
+        // servicio/proveedor), combinables entre sí y con $search (AND).
+        $query->when($request->get('destino_atractivo_id'), fn ($q, $destinoAtractivoId) => $q->whereHas(
+            'proveedorServicio.destinoServicio',
+            fn ($qq) => $qq->where('destino_atractivo_id', $destinoAtractivoId)
+        ));
+
+        $query->when($request->get('servicio_id'), fn ($q, $servicioId) => $q->whereHas(
+            'proveedorServicio.destinoServicio',
+            fn ($qq) => $qq->where('servicio_id', $servicioId)
+        ));
+
+        $query->when($request->get('proveedor_id'), fn ($q, $proveedorId) => $q->whereHas(
+            'proveedorServicio',
+            fn ($qq) => $qq->where('proveedor_id', $proveedorId)
+        ));
+
         return response()->json(['proveedor_tarifas' => $query->orderByDesc('id')->limit(100)->get()]);
     }
 
