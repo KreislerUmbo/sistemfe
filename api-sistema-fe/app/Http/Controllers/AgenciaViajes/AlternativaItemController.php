@@ -207,9 +207,17 @@ class AlternativaItemController extends Controller
         // mismo offset que ComboExplosionService::itinerarioDerivado() ya usa
         // para el itinerario derivado (tour_itinerario_items.dia_relativo
         // máximo de cada tour), no un solo día plano para todo el combo.
+        // dia_final_combo (Sesión 11m, red de seguridad del cotizador): el
+        // último día que este combo ocupa, contando incluso un tour-hijo sin
+        // itinerario cargado (?? 1 — ocupa igual el día en que arranca,
+        // nunca "desaparece" del rango de días). Sin esto, un tour sin
+        // itinerario/incluye podía dejar un día sin ningún ítem y sin
+        // siquiera una pestaña creada en el cotizador.
         $entradas = [];
+        $diaFinalCombo = $validado['dia_referencial'];
         if ($paquete->esPaqueteCombo()) {
             $offsetDia = 0;
+            $diaFinalCombo = $validado['dia_referencial'] - 1;
             foreach ($this->comboExplosion->toursDelCombo($paquete) as $tourHijo) {
                 $diaDelTour = $validado['dia_referencial'] + $offsetDia;
 
@@ -218,7 +226,9 @@ class AlternativaItemController extends Controller
                     $entradas[] = $entrada;
                 }
 
-                $offsetDia += (int) ($tourHijo->paqueteItinerario()->max('dia_relativo') ?? 0);
+                $diasDelTourActual = (int) ($tourHijo->paqueteItinerario()->max('dia_relativo') ?? 1);
+                $diaFinalCombo = max($diaFinalCombo, $diaDelTour + $diasDelTourActual - 1);
+                $offsetDia += $diasDelTourActual;
             }
         } else {
             foreach ($this->comboExplosion->explotarTourSimple($paquete) as $entrada) {
@@ -306,6 +316,7 @@ class AlternativaItemController extends Controller
             'items_agregados' => $itemsCreados,
             'guias_pendientes' => $guiasPendientes,
             'hoteles_disponibles' => $hotelesDisponibles,
+            'dia_final_combo' => $diaFinalCombo,
             'resumen' => [
                 'tours' => $paquete->esPaqueteCombo() ? $this->comboExplosion->toursDelCombo($paquete)->count() : null,
                 'items' => count($itemsCreados),

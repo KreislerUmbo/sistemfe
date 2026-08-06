@@ -110,6 +110,9 @@
                                     <router-link :to="`/agencia-viajes/paquetes/${paquete.id}/editar`" class="btn btn-sm btn-outline-secondary me-1" title="Editar">
                                         <i class="fas fa-pen"></i>
                                     </router-link>
+                                    <button class="btn btn-sm btn-outline-secondary me-1" @click="duplicar(paquete)" title="Duplicar">
+                                        <i class="fas fa-copy"></i>
+                                    </button>
                                     <button class="btn btn-sm btn-outline-danger" @click="eliminar(paquete)" title="Eliminar">
                                         <i class="fas fa-trash"></i>
                                     </button>
@@ -137,12 +140,15 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
+import { useRouter } from 'vue-router';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import Swal from 'sweetalert2/dist/sweetalert2.js';
 import { paquetePlantillaService } from '@/services/admin/paquetePlantillaService';
 import type { PaquetePlantilla } from '@/types/agencia-viajes';
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
+
+const router = useRouter();
 
 const paquetes = ref<PaquetePlantilla[]>([]);
 const search = ref<string>('');
@@ -224,6 +230,24 @@ const eliminar = (paquete: PaquetePlantilla) => {
             list();
         } catch (error: any) {
             (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo eliminar', 'error');
+        }
+    });
+};
+
+const duplicar = (paquete: PaquetePlantilla) => {
+    (Swal as TVueSwalInstance).fire({
+        title: 'Confirmar duplicación',
+        text: `¿Duplicar "${paquete.nombre}"? Se creará una copia inactiva para que la revises antes de publicarla.`,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, duplicar',
+    }).then(async (result: any) => {
+        if (!result.isConfirmed) return;
+        try {
+            const res = await paquetePlantillaService.duplicar(paquete.id);
+            router.push(`/agencia-viajes/paquetes/${res.paquete_plantilla.id}`);
+        } catch (error: any) {
+            (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo duplicar', 'error');
         }
     });
 };

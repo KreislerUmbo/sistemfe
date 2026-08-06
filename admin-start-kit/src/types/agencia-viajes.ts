@@ -316,6 +316,10 @@ export type DesdePlantillaResponse = {
   // auto-agregarse (una matriz de hotel tiene varias tarifas por
   // tipo_habitacion, el vendedor elige la habitación antes de tener precio).
   hoteles_disponibles: OpcionHotel[];
+  // Sesión 11m — último día que ocupa el paquete/combo cargado, contando
+  // incluso un tour-hijo sin itinerario (ocupa igual el día en que arranca).
+  // Usado en el cotizador para no dejar un día "invisible" sin pestaña.
+  dia_final_combo: number;
   resumen: { tours: number | null; items: number };
 };
 
@@ -466,6 +470,10 @@ export type ComboPrecioCalculado = {
   descuento_aplicado: number;
   margen_resultante_pct: number | null;
   componentes_inactivos: Array<{ id: number; nombre: string }>;
+  // Sesión 11m — tour-hijo activo sin Incluye/Itinerario cargado (suma 0
+  // en silencio en el precio, pero rompe la cotización más adelante).
+  componentes_sin_incluye: Array<{ id: number; nombre: string }>;
+  componentes_sin_itinerario: Array<{ id: number; nombre: string }>;
 };
 
 export type ComboItinerarioPaso = {

@@ -244,6 +244,82 @@ class PaquetePlantillaController extends Controller
         ]);
     }
 
+    // Duplicar tour/paquete completo — Sesión 11m. Copia datos generales +
+    // itinerario + incluye + hoteles. La copia nace inactiva/no publicada y
+    // sin código (obliga a revisión manual antes de que aparezca en
+    // cualquier biblioteca) — mismo criterio que "componente inactivo" ya
+    // usado en el resto del módulo: nunca aparecer seleccionable en
+    // silencio. Para un combo, copia la REFERENCIA a los mismos tours-hijo
+    // (paquete_plantilla_hijo_id), no los clona a ellos también.
+    public function duplicar(string $id)
+    {
+        $original = PaquetePlantilla::findOrFail($id);
+
+        $copia = DB::transaction(function () use ($original) {
+            $datos = $original->only($original->getFillable());
+            $datos['codigo'] = null;
+            $datos['nombre'] = $original->nombre.' (copia)';
+            $datos['activo'] = false;
+            $datos['publicado_web'] = false;
+
+            $copia = PaquetePlantilla::create($datos);
+
+            foreach ($original->paqueteItinerario as $paso) {
+                TourItinerarioItem::create([
+                    'tour_id' => $copia->id,
+                    'dia_relativo' => $paso->dia_relativo,
+                    'hora' => $paso->hora,
+                    'orden' => $paso->orden,
+                    'destino_atractivo_id' => $paso->destino_atractivo_id,
+                    'descripcion' => $paso->descripcion,
+                ]);
+            }
+
+            foreach ($original->items as $item) {
+                PaquetePlantillaItem::create([
+                    'paquete_plantilla_id' => $copia->id,
+                    'proveedor_tarifa_id' => $item->proveedor_tarifa_id,
+                    'guia_tarifa_id' => $item->guia_tarifa_id,
+                    'paquete_plantilla_hijo_id' => $item->paquete_plantilla_hijo_id,
+                    'orden' => $item->orden,
+                ]);
+            }
+
+            $hoteles = OpcionHotel::where('paquete_plantilla_id', $original->id)->with('opcionesHotelTarifas')->get();
+            foreach ($hoteles as $hotel) {
+                $hotelCopia = OpcionHotel::create([
+                    'opcion_mayorista_id' => null,
+                    'paquete_plantilla_id' => $copia->id,
+                    'proveedor_id' => $hotel->proveedor_id,
+                    'nombre_hotel' => $hotel->nombre_hotel,
+                    'categoria_estrellas' => $hotel->categoria_estrellas,
+                    'moneda' => $hotel->moneda,
+                ]);
+
+                foreach ($hotel->opcionesHotelTarifas as $tarifa) {
+                    OpcionHotelTarifa::create([
+                        'opcion_hotel_id' => $hotelCopia->id,
+                        'tipo_habitacion' => $tarifa->tipo_habitacion,
+                        'precio_costo' => $tarifa->getRawOriginal('precio_costo'),
+                        'precio_venta' => $tarifa->getRawOriginal('precio_venta'),
+                        'proveedor_tarifa_id' => $tarifa->proveedor_tarifa_id,
+                    ]);
+                }
+            }
+
+            return $copia;
+        });
+
+        $copia = $copia->fresh();
+        $copia->setAttribute('fotos', StorageUrl::resolveMuchas($copia->fotos ?? []));
+
+        return response()->json([
+            'code' => 200,
+            'message' => 'Tour/paquete duplicado. Revisalo y activalo cuando esté listo.',
+            'paquete_plantilla' => $copia,
+        ]);
+    }
+
     // Sin guard externo: nada fuera de este propio árbol referencia
     // paquete_plantilla_id todavía (11b3 — cargar alternativa desde
     // plantilla — no está construido). Cascada completa de lo que sí es

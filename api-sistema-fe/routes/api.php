@@ -459,6 +459,10 @@ Route::group([
         ->middleware('permission:agencia.paquetes');
     Route::delete("paquetes-plantilla/{id}", [PaquetePlantillaController::class, 'destroy'])
         ->middleware('permission:agencia.paquetes');
+    // Sesión 11m — duplicar tour/paquete completo (datos generales +
+    // itinerario + incluye + hoteles), copia nace inactiva.
+    Route::post("paquetes-plantilla/{id}/duplicar", [PaquetePlantillaController::class, 'duplicar'])
+        ->middleware('permission:agencia.paquetes');
 
     Route::get("paquetes-plantilla/{id}/items", [PaquetePlantillaItemController::class, 'index'])
         ->middleware('permission:agencia.paquetes');

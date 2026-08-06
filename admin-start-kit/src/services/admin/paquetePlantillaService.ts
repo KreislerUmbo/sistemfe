@@ -33,6 +33,10 @@ export const paquetePlantillaService = {
     const response = await httpClient.delete(`/paquetes-plantilla/${id}`)
     return response.data
   },
+  async duplicar(id: number) {
+    const response = await httpClient.post(`/paquetes-plantilla/${id}/duplicar`)
+    return response.data as { code: number; message: string; paquete_plantilla: PaquetePlantilla }
+  },
 
   // ── Items incluidos (proveedor_tarifa o guia_tarifa) ────────────────
   async listarItems(paqueteId: number) {

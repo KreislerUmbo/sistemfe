@@ -220,7 +220,11 @@
 
                 <div class="card border-0 shadow-sm">
                     <div class="card-body">
-                        <div v-if="bloquesLienzo.length === 0" class="drop-hint text-center text-muted py-4 border rounded" style="border-style:dashed">
+                        <div v-if="bloquesLienzo.length === 0 && mostrarTabsDia && diasDesdeCombo.has(diaActivo)" class="drop-hint text-center text-muted py-4 border rounded" style="border-style:dashed">
+                            <i class="fas fa-triangle-exclamation text-warning me-1"></i>
+                            Este día no tiene ítems porque el tour de origen no tiene Incluye cargado — revisá el catálogo.
+                        </div>
+                        <div v-else-if="bloquesLienzo.length === 0" class="drop-hint text-center text-muted py-4 border rounded" style="border-style:dashed">
                             Agregá un servicio con el botón de arriba
                         </div>
 
@@ -852,6 +856,12 @@ const eliminarAlternativa = async () => {
 const diaActivo = ref(1);
 const diasCreados = ref<number[]>([1]);
 
+// Sesión 11m — días que vinieron de un combo cargado desde plantilla
+// (clicResultadoPlantilla), para poder avisar si alguno quedó sin ítems
+// (tour-hijo sin Incluye) en vez de mostrar el mismo "Agregá un servicio"
+// genérico que un día agregado a mano con "+ Agregar otro día".
+const diasDesdeCombo = ref<Set<number>>(new Set());
+
 const inicializarDias = () => {
     const items = alternativaActiva.value?.items ?? [];
     const maxDia = items.reduce((max, it) => Math.max(max, it.dia_referencial ?? 0), 1);
@@ -1155,10 +1165,11 @@ const diaCargaHotelesPendientes = ref<number>(1);
 // ver el resultado (lienzo + vista previa) antes de seguir agregando.
 const clicResultadoPlantilla = async (p: Extract<BibliotecaResultado, { tipo_resultado: 'tour' | 'paquete' }>) => {
     if (!alternativaActiva.value) return;
+    const diaInicioCarga = diaActivoParaAgregar.value;
     try {
         const res = await alternativaItemService.cargarDesdePlantilla(alternativaActiva.value.id, {
             paquete_plantilla_id: p.id,
-            dia_referencial: diaActivoParaAgregar.value,
+            dia_referencial: diaInicioCarga,
         });
         if (res.guias_pendientes.length) {
             const lista = res.guias_pendientes
@@ -1180,6 +1191,16 @@ const clicResultadoPlantilla = async (p: Extract<BibliotecaResultado, { tipo_res
         await cargarCotizacion();
         drawerBibliotecaAbierto.value = false;
         volverAGridDrawer();
+
+        // Sesión 11m — red de seguridad: inicializarDias() (dentro de
+        // cargarCotizacion()) solo ve días con ítems reales — un tour-hijo
+        // sin Incluye no genera ningún ítem y su día quedaría sin pestaña.
+        if (res.dia_final_combo > diasCreados.value.length) {
+            diasCreados.value = Array.from({ length: res.dia_final_combo }, (_, i) => i + 1);
+        }
+        for (let d = diaInicioCarga; d <= res.dia_final_combo; d++) {
+            diasDesdeCombo.value.add(d);
+        }
 
         vistaPreviaCombo.value = calcularVistaPreviaCombo(idsTourOrigen);
     } catch (error: any) {
