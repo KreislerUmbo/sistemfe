@@ -189,6 +189,10 @@ export type ConfiguracionAgencia = {
   // Sesión fix/incluye-tour — margen mínimo aceptable (%) del tab "Incluye"
   // (tour_simple), antes hardcodeado en detalle.vue.
   margen_minimo_aceptable_pct: number;
+  // Sesión 11o — defaults precargados al crear un OpcionHotel nuevo
+  // (cama adicional para niños), editables por hotel después.
+  edad_max_infante_gratis_hotel_default: number;
+  edad_max_nino_cama_adicional_hotel_default: number;
 };
 
 export type ApiMessageResponse = {
@@ -373,6 +377,12 @@ export type OpcionHotel = {
   // Sesión 11k, Fix 9 — un hotel cotiza todas sus habitaciones en la misma
   // moneda.
   moneda: 'PEN' | 'USD';
+  // Sesión 11o — cama adicional para niños: tramo (edad_max_infante_gratis,
+  // edad_max_nino_cama_adicional] activa la opción de cama extra en una
+  // habitación de ESTE hotel. Precargados desde configuracion_agencia al
+  // crear el hotel, editables después.
+  edad_max_infante_gratis: number;
+  edad_max_nino_cama_adicional: number;
   opciones_hotel_tarifas?: OpcionHotelTarifa[];
 };
 
@@ -386,6 +396,9 @@ export type OpcionHotelTarifa = {
   // tarifa real del proveedor (ver accessor en el backend), no un valor
   // tipeado a mano.
   proveedor_tarifa_id?: number | null;
+  // Sesión 11o — nullable: no toda habitación admite cama adicional.
+  precio_costo_cama_adicional?: number | null;
+  precio_venta_cama_adicional?: number | null;
   // Sesión 11k — solo poblado cuando el backend lo eager-carga (ver
   // CotizacionController::show()), para mostrar el nombre del hotel de un
   // ítem origen_tipo=hotel_plantilla en el lienzo.

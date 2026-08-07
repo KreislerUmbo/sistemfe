@@ -30,6 +30,11 @@ class ConfiguracionAgencia extends Model
         'modo_descuento_item',
         'modo_descuento_global',
         'margen_minimo_aceptable_pct',
+        // Sesión 11o — defaults precargados al crear un OpcionHotel nuevo,
+        // editables por hotel después (ver opciones_hotel.edad_max_infante_gratis/
+        // edad_max_nino_cama_adicional).
+        'edad_max_infante_gratis_hotel_default',
+        'edad_max_nino_cama_adicional_hotel_default',
     ];
 
     protected $casts = [

@@ -25,6 +25,15 @@ use Illuminate\Support\Collection;
 // "venta" de cada ítem usa el tier adulto (proveedor_tarifa.precio_venta_adulto)
 // como referencia — mismo criterio que paquetes_plantilla.precio_venta_final
 // ya usa como precio "desde" único, sin desglosar por tipo de pax.
+//
+// Sesión 11o: explotarItems()/explotarTourSimple() (vía explotarUnTour())
+// devuelven ADEMÁS `modalidad` y los precios crudos (precio_costo/
+// precio_venta_adulto/nino/infante) de cada ítem — quien cargue esto en una
+// cotización real (AlternativaItemController::desdePlantilla()) decide ahí
+// si multiplica por pasajero real (modalidad='compartido') o usa la tarifa
+// plana (modalidad='privado'). totalesTour()/totalesCombo() siguen sin
+// cambios: son un precio "desde" de catálogo, no dependen de ninguna
+// cotización real.
 class ComboExplosionService
 {
     public function __construct(private PriceEngineService $priceEngine)
@@ -116,7 +125,7 @@ class ComboExplosionService
      * real, tagueado con de qué tour vino. No persiste nada — arma el array
      * listo para alimentar AlternativaItem::create() en bucle.
      *
-     * @return array<int, array{tour_origen_id: int, proveedor_tarifa_id: int|null, guia_tarifa_id: int|null, costo: float, venta: float}>
+     * @return array<int, array{tour_origen_id: int, proveedor_tarifa_id: int|null, guia_tarifa_id: int|null, modalidad: string|null, costo: float, venta: float, precio_costo: float|null, precio_venta_adulto: float|null, precio_venta_nino: float|null, precio_venta_infante: float|null}>
      */
     public function explotarItems(PaquetePlantilla $combo): array
     {
@@ -135,15 +144,24 @@ class ComboExplosionService
     // propio tour (no a un padre), mismo criterio que ya usa el resto del
     // vertical para "de dónde vino este ítem".
     //
-    // @return array<int, array{tour_origen_id: int, proveedor_tarifa_id: int|null, guia_tarifa_id: int|null, costo: float, venta: float}>
+    // @return array<int, array{tour_origen_id: int, proveedor_tarifa_id: int|null, guia_tarifa_id: int|null, modalidad: string|null, costo: float, venta: float, precio_costo: float|null, precio_venta_adulto: float|null, precio_venta_nino: float|null, precio_venta_infante: float|null}>
     public function explotarTourSimple(PaquetePlantilla $tour): array
     {
         return $this->explotarUnTour($tour);
     }
 
-    /**
-     * @return array<int, array{tour_origen_id: int, proveedor_tarifa_id: int|null, guia_tarifa_id: int|null, costo: float, venta: float}>
-     */
+    // Sesión 11o — devuelve además `modalidad` y los 3 precios crudos de la
+    // tarifa (precio_costo/precio_venta_adulto/nino/infante), sin pre-calcular
+    // un único "venta" — la decisión de cómo multiplicar (tarifa plana adulto
+    // vs. por-pasajero-real según modalidad='compartido') pasa a vivir en
+    // AlternativaItemController::desdePlantilla(), que sí conoce la
+    // cotización real (cuántos adultos/niños/infantes viajan). `costo`/`venta`
+    // se mantienen con el criterio VIEJO (tier adulto plano) solo por
+    // compatibilidad de forma — nada más los sigue leyendo hoy;
+    // totalesTour()/totalesCombo() (precio "desde" del catálogo) usan su
+    // PROPIO resolverCostoVentaItem(), sin cambios, no dependen de este método.
+    //
+    // @return array<int, array{tour_origen_id: int, proveedor_tarifa_id: int|null, guia_tarifa_id: int|null, modalidad: string|null, costo: float, venta: float, precio_costo: float|null, precio_venta_adulto: float|null, precio_venta_nino: float|null, precio_venta_infante: float|null}>
     private function explotarUnTour(PaquetePlantilla $tour): array
     {
         $resultado = [];
@@ -151,13 +169,19 @@ class ComboExplosionService
 
         foreach ($items as $item) {
             [$costo, $venta] = $this->resolverCostoVentaItem($item);
+            $tarifa = $item->proveedor_tarifa_id ? $item->proveedorTarifa : null;
 
             $resultado[] = [
                 'tour_origen_id' => $tour->id,
                 'proveedor_tarifa_id' => $item->proveedor_tarifa_id,
                 'guia_tarifa_id' => $item->guia_tarifa_id,
+                'modalidad' => $tarifa?->modalidad,
                 'costo' => $costo,
                 'venta' => $venta,
+                'precio_costo' => $tarifa ? (float) $tarifa->precio_costo : null,
+                'precio_venta_adulto' => $tarifa ? (float) $tarifa->precio_venta_adulto : null,
+                'precio_venta_nino' => $tarifa ? (float) ($tarifa->precio_venta_nino ?? 0) : null,
+                'precio_venta_infante' => $tarifa ? (float) ($tarifa->precio_venta_infante ?? 0) : null,
             ];
         }
 

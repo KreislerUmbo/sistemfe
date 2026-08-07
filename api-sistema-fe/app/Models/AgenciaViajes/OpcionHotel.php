@@ -21,6 +21,8 @@ class OpcionHotel extends Model
         'nombre_hotel',
         'categoria_estrellas',
         'moneda',
+        'edad_max_infante_gratis',
+        'edad_max_nino_cama_adicional',
     ];
 
     public function proveedor()

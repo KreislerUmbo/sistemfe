@@ -590,6 +590,29 @@
                             </select>
                         </div>
                     </div>
+                    <!-- Sesión 11o — tramo de edad para cama adicional, propio de ESTE
+                         hotel (no toda la agencia). Sin valor = hereda el default de
+                         configuracion_agencia al guardar (ver backend). -->
+                    <div class="row g-2 mb-2">
+                        <div class="col-6 col-md-4">
+                            <label class="form-label mb-1 small text-secondary">
+                                Edad máx. infante gratis
+                                <i class="fas fa-info-circle text-muted" title="Hasta esta edad (inclusive) el pasajero no requiere cama adicional en este hotel."></i>
+                            </label>
+                            <input type="number" min="0" class="form-control form-control-sm"
+                                :placeholder="String(configAgencia?.edad_max_infante_gratis_hotel_default ?? 4)"
+                                v-model.number="formHotel.edad_max_infante_gratis">
+                        </div>
+                        <div class="col-6 col-md-4">
+                            <label class="form-label mb-1 small text-secondary">
+                                Edad máx. cama adicional
+                                <i class="fas fa-info-circle text-muted" title="Hasta esta edad (inclusive) el pasajero puede requerir cama adicional en este hotel."></i>
+                            </label>
+                            <input type="number" min="0" class="form-control form-control-sm"
+                                :placeholder="String(configAgencia?.edad_max_nino_cama_adicional_hotel_default ?? 12)"
+                                v-model.number="formHotel.edad_max_nino_cama_adicional">
+                        </div>
+                    </div>
                     <!-- Encabezados de columna — cumplen el rol de label para cada fila
                          de tarifas sin repetir el texto en cada una (mismo criterio que
                          un <th>, ver misma estructura de columnas que la fila de abajo). -->
@@ -631,8 +654,24 @@
                                 <i class="fas fa-times"></i>
                             </button>
                         </div>
+                        <!-- Sesión 11o — precio de cama adicional, nullable (no toda
+                             habitación la admite). Fila propia para no apretar la fila
+                             principal — mismo criterio visual que el resto del form. -->
+                        <div class="col-11 offset-0 mt-1">
+                            <div class="row g-1 align-items-center">
+                                <div class="col-4"><span class="small text-muted">Cama adicional (opcional):</span></div>
+                                <div class="col-4">
+                                    <input type="number" min="0" class="form-control form-control-sm" placeholder="Costo cama adicional"
+                                        v-model.number="tf.precio_costo_cama_adicional">
+                                </div>
+                                <div class="col-4">
+                                    <input type="number" min="0" class="form-control form-control-sm" placeholder="Venta cama adicional"
+                                        v-model.number="tf.precio_venta_cama_adicional">
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <button class="btn btn-sm btn-outline-secondary mb-2" @click="formHotel.tarifas.push({ tipo_habitacion: 'doble', precio_costo: 0, precio_venta: 0, proveedor_tarifa_id: null })">
+                    <button class="btn btn-sm btn-outline-secondary mb-2" @click="formHotel.tarifas.push({ tipo_habitacion: 'doble', precio_costo: 0, precio_venta: 0, proveedor_tarifa_id: null, precio_costo_cama_adicional: null, precio_venta_cama_adicional: null })">
                         + tipo de habitación
                     </button>
                     <div>
@@ -652,6 +691,12 @@
                     </span>
                     <i class="fas fa-times text-danger" style="cursor:pointer" @click="quitarHotel(hotel)"></i>
                 </div>
+                <div class="px-3 pt-2">
+                    <span class="badge bg-light text-dark border small">
+                        <i class="fas fa-baby me-1"></i>Infante gratis hasta {{ hotel.edad_max_infante_gratis }} años ·
+                        cama adicional hasta {{ hotel.edad_max_nino_cama_adicional }} años
+                    </span>
+                </div>
                 <div class="card-body p-0">
                     <table class="table table-sm mb-0">
                         <thead class="table-light">
@@ -659,6 +704,8 @@
                                 <th class="ps-3">Habitación</th>
                                 <th class="text-end">Costo</th>
                                 <th class="text-end pe-3">Venta</th>
+                                <th class="text-end">+Cama (costo)</th>
+                                <th class="text-end pe-3">+Cama (venta)</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -669,6 +716,8 @@
                                 </td>
                                 <td class="text-end">{{ tarifa.precio_costo }}</td>
                                 <td class="text-end pe-3">{{ tarifa.precio_venta }}</td>
+                                <td class="text-end text-muted">{{ tarifa.precio_costo_cama_adicional ?? '—' }}</td>
+                                <td class="text-end pe-3 text-muted">{{ tarifa.precio_venta_cama_adicional ?? '—' }}</td>
                             </tr>
                         </tbody>
                     </table>
@@ -1212,10 +1261,17 @@ const toggleExpandido = async (tourHijoId: number) => {
 const hoteles = ref<OpcionHotel[]>([]);
 const formHotel = ref<{
     nombre_hotel: string; categoria_estrellas: number | null; proveedor_id: number | null; moneda: 'PEN' | 'USD';
-    tarifas: Array<{ tipo_habitacion: string; precio_costo: number; precio_venta: number; proveedor_tarifa_id?: number | null }>;
+    // Sesión 11o — sin valor = hereda el default de configuracion_agencia al
+    // guardar (ver PaquetePlantillaController::hoteles()).
+    edad_max_infante_gratis: number | null; edad_max_nino_cama_adicional: number | null;
+    tarifas: Array<{
+        tipo_habitacion: string; precio_costo: number; precio_venta: number; proveedor_tarifa_id?: number | null;
+        precio_costo_cama_adicional?: number | null; precio_venta_cama_adicional?: number | null;
+    }>;
 }>({
     nombre_hotel: '', categoria_estrellas: null, proveedor_id: null, moneda: 'PEN',
-    tarifas: [{ tipo_habitacion: 'doble', precio_costo: 0, precio_venta: 0, proveedor_tarifa_id: null }],
+    edad_max_infante_gratis: null, edad_max_nino_cama_adicional: null,
+    tarifas: [{ tipo_habitacion: 'doble', precio_costo: 0, precio_venta: 0, proveedor_tarifa_id: null, precio_costo_cama_adicional: null, precio_venta_cama_adicional: null }],
 });
 
 // Sesión 11k, Fix 9 — proveedores tipo Hotel (para "usar tarifa registrada")
@@ -1253,7 +1309,8 @@ const guardarHotel = async () => {
         await paquetePlantillaService.agregarHotel(paqueteId.value, formHotel.value);
         formHotel.value = {
             nombre_hotel: '', categoria_estrellas: null, proveedor_id: null, moneda: 'PEN',
-            tarifas: [{ tipo_habitacion: 'doble', precio_costo: 0, precio_venta: 0, proveedor_tarifa_id: null }],
+            edad_max_infante_gratis: null, edad_max_nino_cama_adicional: null,
+            tarifas: [{ tipo_habitacion: 'doble', precio_costo: 0, precio_venta: 0, proveedor_tarifa_id: null, precio_costo_cama_adicional: null, precio_venta_cama_adicional: null }],
         };
         tarifasHotelProveedorSeleccionado.value = [];
         await cargarPaquete();

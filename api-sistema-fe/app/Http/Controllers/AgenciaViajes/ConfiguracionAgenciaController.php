@@ -32,6 +32,8 @@ class ConfiguracionAgenciaController extends Controller
         'modo_descuento_item' => 'porcentaje',
         'modo_descuento_global' => 'porcentaje',
         'margen_minimo_aceptable_pct' => 20.00,
+        'edad_max_infante_gratis_hotel_default' => 4,
+        'edad_max_nino_cama_adicional_hotel_default' => 12,
     ];
 
     public function show()
@@ -61,6 +63,8 @@ class ConfiguracionAgenciaController extends Controller
             'modo_descuento_item' => 'required|in:porcentaje,monto',
             'modo_descuento_global' => 'required|in:porcentaje,monto',
             'margen_minimo_aceptable_pct' => 'required|numeric|min:0',
+            'edad_max_infante_gratis_hotel_default' => 'required|integer|min:0|max:255',
+            'edad_max_nino_cama_adicional_hotel_default' => 'required|integer|min:0|max:255',
         ]);
 
         if ($validator->fails()) {
