@@ -4,6 +4,7 @@ namespace App\Http\Controllers\AgenciaViajes;
 
 use App\Http\Controllers\Controller;
 use App\Models\AgenciaViajes\AlternativaItem;
+use App\Models\AgenciaViajes\DestinoAtractivo;
 use App\Models\AgenciaViajes\PaquetePlantillaItem;
 use App\Models\AgenciaViajes\ProveedorServicio;
 use App\Models\AgenciaViajes\ProveedorTarifa;
@@ -64,10 +65,15 @@ class ProveedorTarifaController extends Controller
 
         // Sesión 11l v2 — filtros de la biblioteca del cotizador (zona/
         // servicio/proveedor), combinables entre sí y con $search (AND).
-        $query->when($request->get('destino_atractivo_id'), fn ($q, $destinoAtractivoId) => $q->whereHas(
-            'proveedorServicio.destinoServicio',
-            fn ($qq) => $qq->where('destino_atractivo_id', $destinoAtractivoId)
-        ));
+        //
+        // Fix (rama fix/biblioteca-filtro-zona-jerarquico): match exacto
+        // dejaba sin resultados a un filtro por zona (ej. "Lamas") porque
+        // casi ningún proveedor cuelga directo del nodo padre — ahora
+        // incluye también todos sus descendientes (lugares/atractivos).
+        $query->when($request->get('destino_atractivo_id'), function ($q, $destinoAtractivoId) {
+            $ids = $this->idsConDescendientes((int) $destinoAtractivoId);
+            $q->whereHas('proveedorServicio.destinoServicio', fn ($qq) => $qq->whereIn('destino_atractivo_id', $ids));
+        });
 
         $query->when($request->get('servicio_id'), fn ($q, $servicioId) => $q->whereHas(
             'proveedorServicio.destinoServicio',
@@ -80,6 +86,27 @@ class ProveedorTarifaController extends Controller
         ));
 
         return response()->json(['proveedor_tarifas' => $query->orderByDesc('id')->limit(100)->get()]);
+    }
+
+    // Zona/lugar → todos sus descendientes (BFS nivel por nivel), para que
+    // filtrar por un nodo padre del árbol de destinos_atractivos también
+    // traiga resultados de sus hijos — un atractivo hoja (sin hijos) cae en
+    // el caso base y se comporta igual que el match exacto de antes.
+    private function idsConDescendientes(int $destinoAtractivoId): array
+    {
+        $ids = [$destinoAtractivoId];
+        $nivelActual = [$destinoAtractivoId];
+
+        while (! empty($nivelActual)) {
+            $hijos = DestinoAtractivo::whereIn('parent_id', $nivelActual)->pluck('id')->all();
+            if (empty($hijos)) {
+                break;
+            }
+            $ids = array_merge($ids, $hijos);
+            $nivelActual = $hijos;
+        }
+
+        return $ids;
     }
 
     public function store(Request $request, string $proveedorServicioId)
