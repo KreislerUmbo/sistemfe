@@ -19,6 +19,9 @@
                 <router-link :to="`/agencia-viajes/paquetes/${paquete.id}/editar`" class="btn btn-outline-secondary">
                     <i class="fas fa-pen me-2"></i>Editar
                 </router-link>
+                <button class="btn btn-outline-secondary" @click="duplicar">
+                    <i class="fas fa-copy me-2"></i>Duplicar
+                </button>
                 <router-link to="/agencia-viajes/paquetes" class="btn btn-outline-secondary">
                     <i class="fas fa-arrow-left me-2"></i>Volver
                 </router-link>
@@ -79,6 +82,16 @@
                     <i class="fas fa-triangle-exclamation me-1"></i>
                     {{ combo.precio_calculado.componentes_inactivos.length }} tour(s) incluido(s) están desactivados y no se cuentan en este total:
                     {{ combo.precio_calculado.componentes_inactivos.map(c => c.nombre).join(', ') }}
+                </div>
+                <div v-if="combo.precio_calculado.componentes_sin_incluye.length" class="alert alert-warning small mb-3">
+                    <i class="fas fa-triangle-exclamation me-1"></i>
+                    {{ combo.precio_calculado.componentes_sin_incluye.length }} tour(s) sin costo cargado (Incluye vacío) — no van a sumar precio ni aparecer en las cotizaciones:
+                    {{ combo.precio_calculado.componentes_sin_incluye.map(c => c.nombre).join(', ') }}
+                </div>
+                <div v-if="combo.precio_calculado.componentes_sin_itinerario.length" class="alert alert-warning small mb-3">
+                    <i class="fas fa-triangle-exclamation me-1"></i>
+                    {{ combo.precio_calculado.componentes_sin_itinerario.length }} tour(s) sin itinerario cargado — el día va a aparecer sin descripción en el PDF/cotización:
+                    {{ combo.precio_calculado.componentes_sin_itinerario.map(c => c.nombre).join(', ') }}
                 </div>
 
                 <div class="row text-center g-3 mb-4">
@@ -671,7 +684,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, nextTick, watch } from 'vue';
 import Sortable from 'sortablejs';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import DestinoTreeSelect from '@/components/AgenciaViajes/DestinoTreeSelect.vue';
 import Swal from 'sweetalert2/dist/sweetalert2.js';
@@ -690,6 +703,7 @@ import type {
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
 
 const route = useRoute();
+const router = useRouter();
 const paqueteId = computed(() => Number(route.params.id));
 
 const paquete = ref<PaquetePlantilla | null>(null);
@@ -766,6 +780,25 @@ const desactivar = async (forzar: boolean) => {
         } else {
             (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo desactivar', 'error');
         }
+    }
+};
+
+// ── Duplicar (Sesión 11m) ─────────────────────────────────────────────
+const duplicar = async () => {
+    if (!paquete.value) return;
+    const result = await (Swal as TVueSwalInstance).fire({
+        title: 'Confirmar duplicación',
+        text: `¿Duplicar "${paquete.value.nombre}"? Se creará una copia inactiva para que la revises antes de publicarla.`,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, duplicar',
+    });
+    if (!(result as any).isConfirmed) return;
+    try {
+        const res = await paquetePlantillaService.duplicar(paquete.value.id);
+        router.push(`/agencia-viajes/paquetes/${res.paquete_plantilla.id}`);
+    } catch (error: any) {
+        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo duplicar', 'error');
     }
 };
 

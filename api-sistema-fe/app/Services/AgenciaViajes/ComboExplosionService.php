@@ -77,6 +77,22 @@ class ComboExplosionService
             ->values()
             ->all();
 
+        // Sesión 11m: un tour-hijo ACTIVO sin Incluye/Itinerario cargado no
+        // rompe el cálculo (suma 0), pero rompía cotizaciones en silencio —
+        // avisado acá con el mismo shape que componentes_inactivos. Un tour
+        // ya inactivo no necesita este aviso aparte (ya tiene el suyo).
+        $toursActivos = $tours->filter(fn (PaquetePlantilla $tour) => $tour->activo);
+
+        $resultado['componentes_sin_incluye'] = $toursActivos->filter(fn (PaquetePlantilla $tour) => $tour->items()->count() === 0)
+            ->map(fn (PaquetePlantilla $tour) => ['id' => $tour->id, 'nombre' => $tour->nombre])
+            ->values()
+            ->all();
+
+        $resultado['componentes_sin_itinerario'] = $toursActivos->filter(fn (PaquetePlantilla $tour) => $tour->paqueteItinerario()->count() === 0)
+            ->map(fn (PaquetePlantilla $tour) => ['id' => $tour->id, 'nombre' => $tour->nombre])
+            ->values()
+            ->all();
+
         return $resultado;
     }
 
