@@ -615,9 +615,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';
+import { useLayoutStore } from '@/stores/layout';
 import Swal from 'sweetalert2/dist/sweetalert2.js';
 import httpClient from '@/helpers/http-client';
 import HabitacionMatrixPicker from '@/components/AgenciaViajes/HabitacionMatrixPicker.vue';
@@ -1779,7 +1780,14 @@ watch(alternativaActivaId, () => {
     if (modo.value === 'intl') cargarOpcionesMayorista();
 });
 
+const layoutStore = useLayoutStore();
+
 onMounted(async () => {
+    // Más espacio horizontal para el lienzo del cotizador — se revierte a
+    // 'default' en onUnmounted, no debe quedar colapsado en el resto del
+    // sistema al salir de esta pantalla.
+    layoutStore.setLeftSideBarSize('collapsed');
+
     // proveedor_tipos: catálogo real (editable desde el panel superadmin,
     // NO los 4 valores del seeder original) — alimenta tanto los chips de
     // la biblioteca (Sesión 11b3) como la búsqueda de proveedores
@@ -1812,6 +1820,10 @@ onMounted(async () => {
         const res = await httpClient.get('/proveedores', { params: { tipo_id: tipoHotel.id, estado: true } });
         proveedoresHotel.value = res.data.proveedores ?? [];
     }
+});
+
+onUnmounted(() => {
+    layoutStore.setLeftSideBarSize('default');
 });
 </script>
 
@@ -1851,8 +1863,8 @@ onMounted(async () => {
 .drawer-panel {
     background: #fff;
     width: 100%;
-    max-width: 960px;
-    max-height: 82vh;
+    max-width: 1140px;
+    max-height: 88vh;
     border-radius: 12px;
     display: flex;
     flex-direction: column;
@@ -1880,5 +1892,19 @@ onMounted(async () => {
 }
 @media (max-width: 767px) {
     .biblioteca-grid { grid-template-columns: 1fr; }
+
+    /* Mobile: hoja que sube desde el borde inferior en vez de la caja
+       centrada de desktop (Sesión 11j) — evita espacio muerto arriba/abajo
+       en pantallas angostas. */
+    .drawer-overlay {
+        align-items: flex-end;
+        padding: 0;
+    }
+    .drawer-panel {
+        max-width: 100%;
+        width: 100%;
+        max-height: 92vh;
+        border-radius: 12px 12px 0 0;
+    }
 }
 </style>
