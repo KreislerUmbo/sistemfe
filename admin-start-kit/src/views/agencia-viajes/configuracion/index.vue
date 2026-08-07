@@ -149,6 +149,29 @@
                 </div>
             </div>
 
+            <!-- Sesión 11o — defaults precargados al crear un OpcionHotel
+                 nuevo (cama adicional para niños), editables después por
+                 hotel específico (ver paquetes/detalle.vue, tab Hoteles). -->
+            <div class="card border-0 shadow-sm mb-3">
+                <div class="card-header bg-white border-bottom d-flex align-items-center gap-2 py-2">
+                    <span class="badge bg-primary rounded-pill">6</span>
+                    <span class="fw-semibold text-dark">Hoteles — cama adicional para niños</span>
+                </div>
+                <div class="card-body py-3">
+                    <div class="row g-3">
+                        <div class="col-6 col-md-3">
+                            <label class="form-label mb-1 small fw-semibold text-secondary">Edad máx. infante gratis (default)</label>
+                            <input type="number" min="0" class="form-control form-control-sm" v-model.number="form.edad_max_infante_gratis_hotel_default">
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <label class="form-label mb-1 small fw-semibold text-secondary">Edad máx. cama adicional (default)</label>
+                            <input type="number" min="0" class="form-control form-control-sm" v-model.number="form.edad_max_nino_cama_adicional_hotel_default">
+                        </div>
+                    </div>
+                    <small class="text-muted d-block mt-2">Se precargan al crear un hotel nuevo en un tour/paquete — cada hotel puede editarlos después con su propio criterio.</small>
+                </div>
+            </div>
+
             <div class="d-flex justify-content-end mb-4">
                 <button class="btn btn-primary fw-semibold" @click="guardar" :disabled="guardando">
                     <span v-if="guardando" class="spinner-border spinner-border-sm me-2"></span>
@@ -187,6 +210,8 @@ const form = ref<ConfiguracionAgencia>({
     modo_descuento_item: 'porcentaje',
     modo_descuento_global: 'porcentaje',
     margen_minimo_aceptable_pct: 20,
+    edad_max_infante_gratis_hotel_default: 4,
+    edad_max_nino_cama_adicional_hotel_default: 12,
 });
 
 const cargar = async () => {

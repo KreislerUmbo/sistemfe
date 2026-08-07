@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\AgenciaViajes;
 
 use App\Http\Controllers\Controller;
+use App\Models\AgenciaViajes\ConfiguracionAgencia;
 use App\Models\AgenciaViajes\OpcionHotel;
 use App\Models\AgenciaViajes\OpcionHotelTarifa;
 use App\Models\AgenciaViajes\PaquetePlantilla;
@@ -370,6 +371,11 @@ class PaquetePlantillaController extends Controller
             'categoria_estrellas' => 'nullable|integer|min:1|max:5',
             'proveedor_id' => 'nullable|integer|exists:proveedores,id',
             'moneda' => 'nullable|in:PEN,USD',
+            // Sesión 11o — cama adicional para niños: si no vienen
+            // explícitos, se precargan desde configuracion_agencia (ver
+            // abajo), pero quedan editables por hotel.
+            'edad_max_infante_gratis' => 'nullable|integer|min:0|max:255',
+            'edad_max_nino_cama_adicional' => 'nullable|integer|min:0|max:255',
             'tarifas' => 'nullable|array',
             'tarifas.*.tipo_habitacion' => 'required_with:tarifas|in:simple,matrimonial,doble,triple,familiar',
             'tarifas.*.precio_costo' => 'required_with:tarifas|numeric|min:0',
@@ -377,6 +383,9 @@ class PaquetePlantillaController extends Controller
             // Sesión 11k, Fix 9 — tarifa real de proveedor, opcional (hotel
             // manual/referencial cuando no viene).
             'tarifas.*.proveedor_tarifa_id' => 'nullable|integer|exists:proveedor_tarifas,id',
+            // Sesión 11o — nullable: no toda habitación admite cama extra.
+            'tarifas.*.precio_costo_cama_adicional' => 'nullable|numeric|min:0',
+            'tarifas.*.precio_venta_cama_adicional' => 'nullable|numeric|min:0',
         ]);
 
         if ($validator->fails()) {
@@ -384,14 +393,21 @@ class PaquetePlantillaController extends Controller
         }
 
         $validado = $validator->validated();
+        $configAgencia = ConfiguracionAgencia::first();
 
-        $hotel = DB::transaction(function () use ($paquete, $validado) {
+        $hotel = DB::transaction(function () use ($paquete, $validado, $configAgencia) {
             $hotel = OpcionHotel::create([
                 'paquete_plantilla_id' => $paquete->id,
                 'nombre_hotel' => $validado['nombre_hotel'],
                 'categoria_estrellas' => $validado['categoria_estrellas'] ?? null,
                 'proveedor_id' => $validado['proveedor_id'] ?? null,
                 'moneda' => $validado['moneda'] ?? 'PEN',
+                'edad_max_infante_gratis' => $validado['edad_max_infante_gratis']
+                    ?? $configAgencia?->edad_max_infante_gratis_hotel_default
+                    ?? 4,
+                'edad_max_nino_cama_adicional' => $validado['edad_max_nino_cama_adicional']
+                    ?? $configAgencia?->edad_max_nino_cama_adicional_hotel_default
+                    ?? 12,
             ]);
 
             foreach ($validado['tarifas'] ?? [] as $tarifa) {

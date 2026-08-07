@@ -26,11 +26,15 @@ class OpcionHotelTarifa extends Model
         'precio_costo',
         'precio_venta',
         'proveedor_tarifa_id',
+        'precio_costo_cama_adicional',
+        'precio_venta_cama_adicional',
     ];
 
     protected $casts = [
         'precio_costo' => 'decimal:2',
         'precio_venta' => 'decimal:2',
+        'precio_costo_cama_adicional' => 'decimal:2',
+        'precio_venta_cama_adicional' => 'decimal:2',
     ];
 
     public function opcionHotel()

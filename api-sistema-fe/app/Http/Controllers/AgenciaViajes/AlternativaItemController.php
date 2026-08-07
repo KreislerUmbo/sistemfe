@@ -255,6 +255,11 @@ class AlternativaItemController extends Controller
                 'paquete_plantilla_id' => $hotel->paquete_plantilla_id,
                 'nombre_hotel' => $hotel->nombre_hotel,
                 'categoria_estrellas' => $hotel->categoria_estrellas,
+                // Sesión 11o — sin esto, editar.vue no puede decidir si
+                // muestra el control de cama adicional (necesita el tramo
+                // de edad propio de ESTE hotel).
+                'edad_max_infante_gratis' => $hotel->edad_max_infante_gratis,
+                'edad_max_nino_cama_adicional' => $hotel->edad_max_nino_cama_adicional,
                 'opciones_hotel_tarifas' => $hotel->opcionesHotelTarifas,
             ])
             ->values();
@@ -267,19 +272,51 @@ class AlternativaItemController extends Controller
                 if ($entrada['proveedor_tarifa_id']) {
                     $tarifa = ProveedorTarifa::findOrFail($entrada['proveedor_tarifa_id']);
 
+                    // Sesión 11o: 'compartido' se cobra por pasajero REAL de
+                    // la cotización (no un adulto plano) — mismo cálculo que
+                    // crearItemProveedor() ya usa para modo_precio=
+                    // 'por_persona' (contarPasajerosPorTipo()). 'privado' (o
+                    // sin modalidad, ej. guía suelto que igual cae acá si
+                    // algún día tuviera proveedor_tarifa_id) sigue con
+                    // tarifa_fija/cantidad=1 tal como antes: el precio que
+                    // trae la explosión ya es el tier adulto plano, sin
+                    // repartir por pax — mismo criterio que el precio
+                    // "calculado" del catálogo (totalesTour()/totalesCombo()).
+                    if ($entrada['modalidad'] === 'compartido' && $tarifa->tipo_habitacion === null) {
+                        $conteo = $this->contarPasajerosPorTipo($alternativa->cotizacion_id, null);
+                        $ventaPorPersona = $conteo['adulto'] * ($entrada['precio_venta_adulto'] ?? 0)
+                            + $conteo['nino'] * ($entrada['precio_venta_nino'] ?? 0)
+                            + $conteo['infante'] * ($entrada['precio_venta_infante'] ?? 0);
+                        $costoPorPersona = ($entrada['precio_costo'] ?? 0)
+                            * ($conteo['adulto'] + $conteo['nino'] + $conteo['infante']);
+
+                        $itemsCreados[] = AlternativaItem::create([
+                            'alternativa_id' => $alternativa->id,
+                            'origen_tipo' => AlternativaItem::ORIGEN_PROVEEDOR,
+                            'proveedor_tarifa_id' => $tarifa->id,
+                            'tour_origen_id' => $entrada['tour_origen_id'],
+                            'dia_referencial' => $entrada['dia_referencial'],
+                            'modo_precio' => 'por_persona',
+                            // cantidad NOT NULL en BD (default 1) — sin
+                            // efecto real acá, el accessor total() no
+                            // multiplica para 'por_persona' (mismo criterio
+                            // que crearItemProveedor() ya usa).
+                            'cantidad' => 1,
+                            'moneda_costo' => $tarifa->moneda,
+                            'costo_snapshot' => $costoPorPersona,
+                            'precio_venta_snapshot' => $ventaPorPersona,
+                            'precio_convertido' => $this->priceEngine->convertirMoneda($ventaPorPersona, $tarifa->moneda, $alternativa->moneda_cotizacion, (float) $alternativa->tipo_cambio_aplicado),
+                        ]);
+
+                        continue;
+                    }
+
                     $itemsCreados[] = AlternativaItem::create([
                         'alternativa_id' => $alternativa->id,
                         'origen_tipo' => AlternativaItem::ORIGEN_PROVEEDOR,
                         'proveedor_tarifa_id' => $tarifa->id,
                         'tour_origen_id' => $entrada['tour_origen_id'],
                         'dia_referencial' => $entrada['dia_referencial'],
-                        // tarifa_fija/cantidad=1: el precio que trae la
-                        // explosión ya es el tier adulto plano, sin repartir
-                        // por pax — mismo criterio que el precio "calculado"
-                        // del catálogo (totalesTour()/totalesCombo()). Usar
-                        // por_persona acá multiplicaría de nuevo y el total
-                        // dejaría de coincidir con lo que el vendedor vio en
-                        // el catálogo antes de cargarlo.
                         'modo_precio' => 'tarifa_fija',
                         'cantidad' => 1,
                         'moneda_costo' => $tarifa->moneda,
@@ -513,6 +550,11 @@ class AlternativaItemController extends Controller
             'cantidad' => 'nullable|integer|min:1',
             'tour_origen_id' => 'nullable|integer',
             'dia_referencial' => 'nullable|integer|min:1',
+            'pax_incluidos' => 'nullable|array',
+            'pax_incluidos.*' => 'integer|exists:cotizacion_pasajeros,id',
+            // Sesión 11o — cantidad de camas adicionales necesarias (0 =
+            // ninguna, sin default a favor de cobrar de más).
+            'camas_adicionales_nino' => 'nullable|integer|min:0',
         ]);
 
         if ($validator->fails()) {
@@ -527,6 +569,46 @@ class AlternativaItemController extends Controller
         }
 
         $monedaCosto = $tarifaHotel->opcionHotel->moneda;
+        $camasAdicionales = $validado['camas_adicionales_nino'] ?? 0;
+        $costoSnapshot = (float) $tarifaHotel->precio_costo;
+        $ventaSnapshot = (float) $tarifaHotel->precio_venta;
+
+        if ($camasAdicionales > 0) {
+            $hotel = $tarifaHotel->opcionHotel;
+            $paxIncluidos = $validado['pax_incluidos'] ?? [];
+
+            // edad REAL del pasajero (cotizacion_pasajeros.edad), no
+            // tipo_pax — un pasajero de 10 años puede tener tipo_pax='adulto'
+            // por el umbral general de la agencia y aun así caer dentro del
+            // tramo de cama adicional propio de ESTE hotel.
+            $tienePaxEnTramo = CotizacionPasajero::where('cotizacion_id', $alternativa->cotizacion_id)
+                ->when(
+                    ! empty($paxIncluidos),
+                    fn ($query) => $query->whereIn('id', $paxIncluidos),
+                    fn ($query) => $query->whereRaw('1 = 0')
+                )
+                ->where('edad', '>', $hotel->edad_max_infante_gratis)
+                ->where('edad', '<=', $hotel->edad_max_nino_cama_adicional)
+                ->exists();
+
+            if (! $tienePaxEnTramo) {
+                return response()->json([
+                    'code' => 422,
+                    'message' => 'Cama adicional solo aplica si pax_incluidos tiene al menos un pasajero dentro del tramo de edad de cama adicional de este hotel.',
+                ], 422);
+            }
+
+            if ($tarifaHotel->precio_costo_cama_adicional === null || $tarifaHotel->precio_venta_cama_adicional === null) {
+                return response()->json([
+                    'code' => 422,
+                    'message' => 'Esta habitación no tiene precio de cama adicional configurado.',
+                ], 422);
+            }
+
+            // Parte del costo/precio real de ESTE ítem, no un ítem aparte.
+            $costoSnapshot += $camasAdicionales * (float) $tarifaHotel->precio_costo_cama_adicional;
+            $ventaSnapshot += $camasAdicionales * (float) $tarifaHotel->precio_venta_cama_adicional;
+        }
 
         $item = AlternativaItem::create([
             'alternativa_id' => $alternativa->id,
@@ -536,10 +618,11 @@ class AlternativaItemController extends Controller
             'tour_origen_id' => $validado['tour_origen_id'] ?? null,
             'modo_precio' => 'tarifa_fija', // matriz de habitación, siempre por habitación
             'cantidad' => $validado['cantidad'] ?? 1,
+            'pax_incluidos' => $validado['pax_incluidos'] ?? null,
             'moneda_costo' => $monedaCosto,
-            'costo_snapshot' => $tarifaHotel->precio_costo,
-            'precio_venta_snapshot' => $tarifaHotel->precio_venta,
-            'precio_convertido' => $this->priceEngine->convertirMoneda((float) $tarifaHotel->precio_venta, $monedaCosto, $alternativa->moneda_cotizacion, (float) $alternativa->tipo_cambio_aplicado),
+            'costo_snapshot' => $costoSnapshot,
+            'precio_venta_snapshot' => $ventaSnapshot,
+            'precio_convertido' => $this->priceEngine->convertirMoneda($ventaSnapshot, $monedaCosto, $alternativa->moneda_cotizacion, (float) $alternativa->tipo_cambio_aplicado),
             'dia_referencial' => $validado['dia_referencial'] ?? null,
         ]);
 

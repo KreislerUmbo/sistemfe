@@ -212,7 +212,11 @@
                             </div>
                             <div v-if="hotelPlantillaActivoId === hotel.id" class="mt-2 border-top pt-2">
                                 <HabitacionMatrixPicker :tarifas="tarifasHotelPlantillaPlanas(hotel)" :moneda="hotel.moneda"
-                                    @seleccionar="({ id, cantidad }) => agregarItemHotelPlantilla(hotel, id, cantidad)" />
+                                    :pasajeros="cotizacion?.pasajeros ?? []"
+                                    permitir-cama-adicional
+                                    :edad-max-infante-gratis="hotel.edad_max_infante_gratis"
+                                    :edad-max-nino-cama-adicional="hotel.edad_max_nino_cama_adicional"
+                                    @seleccionar="({ id, cantidad, pax_incluidos, camas_adicionales_nino }) => agregarItemHotelPlantilla(hotel, id, cantidad, pax_incluidos, camas_adicionales_nino)" />
                             </div>
                         </div>
                     </div>
@@ -1212,7 +1216,14 @@ const clicResultadoPlantilla = async (p: Extract<BibliotecaResultado, { tipo_res
 // (mayorista) pero SIN prefijo de nombre_hotel (el header de la tarjeta ya
 // lo muestra).
 const tarifasHotelPlantillaPlanas = (hotel: OpcionHotel) => {
-    return (hotel.opciones_hotel_tarifas ?? []).map((t) => ({ id: t.id, tipo_habitacion: t.tipo_habitacion, precio: Number(t.precio_venta), registrada: !!t.proveedor_tarifa_id }));
+    return (hotel.opciones_hotel_tarifas ?? []).map((t) => ({
+        id: t.id,
+        tipo_habitacion: t.tipo_habitacion,
+        precio: Number(t.precio_venta),
+        registrada: !!t.proveedor_tarifa_id,
+        // Sesión 11o — solo para mostrar "+S/{precio} c/u" en el picker.
+        precioVentaCamaAdicional: t.precio_venta_cama_adicional != null ? Number(t.precio_venta_cama_adicional) : null,
+    }));
 };
 
 // tour_origen_id/día: si el tour dueño de este hotel ya generó algún ítem
@@ -1231,7 +1242,13 @@ const diaParaHotelPlantilla = (hotel: OpcionHotel): number => {
     return itemDelTour?.dia_referencial ?? diaCargaHotelesPendientes.value;
 };
 
-const agregarItemHotelPlantilla = async (hotel: OpcionHotel, opcionHotelTarifaId: number, cantidad: number) => {
+const agregarItemHotelPlantilla = async (
+    hotel: OpcionHotel,
+    opcionHotelTarifaId: number,
+    cantidad: number,
+    paxIncluidos: number[] | null = null,
+    camasAdicionalesNino: number = 0,
+) => {
     if (!alternativaActiva.value || !hotel.paquete_plantilla_id) return;
     try {
         const res = await alternativaItemService.agregarHotelPlantilla(alternativaActiva.value.id, {
@@ -1240,6 +1257,8 @@ const agregarItemHotelPlantilla = async (hotel: OpcionHotel, opcionHotelTarifaId
             cantidad,
             tour_origen_id: tourOrigenParaHotelPlantilla(hotel),
             dia_referencial: diaParaHotelPlantilla(hotel),
+            pax_incluidos: paxIncluidos,
+            camas_adicionales_nino: camasAdicionalesNino,
         });
         hotelPlantillaActivoId.value = null;
         await onServicioSueltoAgregado(res.alternativa_item);
