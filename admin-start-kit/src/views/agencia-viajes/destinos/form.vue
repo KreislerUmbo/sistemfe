@@ -73,7 +73,7 @@
                     </div>
                     <div class="col-12">
                         <label class="form-label mb-1 small fw-semibold text-secondary">Descripción</label>
-                        <textarea class="form-control form-control-sm" rows="3" v-model="form.descripcion"></textarea>
+                        <RichTextEditor v-model="form.descripcion" />
                     </div>
                 </div>
             </div>
@@ -145,6 +145,7 @@ import { useRoute, useRouter } from 'vue-router';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import Swal from 'sweetalert2/dist/sweetalert2.js';
 import DestinoTreeSelect from '@/components/AgenciaViajes/DestinoTreeSelect.vue';
+import RichTextEditor from '@/components/RichTextEditor.vue';
 import { destinoAtractivoService } from '@/services/admin/destinoAtractivoService';
 import type { DestinoAtractivo } from '@/types/agencia-viajes';
 
