@@ -71,7 +71,7 @@
                     </div>
                     <div class="col-12">
                         <label class="form-label mb-1 small fw-semibold text-secondary">Descripción</label>
-                        <textarea class="form-control form-control-sm" rows="2" v-model="form.descripcion"></textarea>
+                        <RichTextEditor v-model="form.descripcion" />
                     </div>
                     <div class="col-12 col-md-6">
                         <label class="form-label mb-1 small fw-semibold text-secondary">Destino / Atractivo principal *</label>
@@ -99,11 +99,11 @@
                     </div>
                     <div class="col-12 col-md-6">
                         <label class="form-label mb-1 small fw-semibold text-secondary">No incluye</label>
-                        <textarea class="form-control form-control-sm" rows="2" v-model="form.no_incluye"></textarea>
+                        <RichTextEditor v-model="form.no_incluye" />
                     </div>
                     <div class="col-12 col-md-6">
                         <label class="form-label mb-1 small fw-semibold text-secondary">Recomendaciones</label>
-                        <textarea class="form-control form-control-sm" rows="2" v-model="form.recomendaciones"></textarea>
+                        <RichTextEditor v-model="form.recomendaciones" />
                     </div>
                 </div>
             </div>
@@ -195,6 +195,7 @@ import { useRoute, useRouter } from 'vue-router';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import Swal from 'sweetalert2/dist/sweetalert2.js';
 import DestinoTreeSelect from '@/components/AgenciaViajes/DestinoTreeSelect.vue';
+import RichTextEditor from '@/components/RichTextEditor.vue';
 import { paquetePlantillaService } from '@/services/admin/paquetePlantillaService';
 import type { PaquetePlantilla } from '@/types/agencia-viajes';
 

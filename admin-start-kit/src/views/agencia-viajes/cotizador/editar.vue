@@ -1,5 +1,10 @@
 <template>
     <DefaultLayout>
+        <div v-if="cargandoPagina" class="text-center py-5">
+            <span class="spinner-border text-primary"></span>
+        </div>
+
+        <template v-else>
         <div v-if="cotizacion" class="mb-3">
             <div class="d-flex align-items-start justify-content-between flex-wrap gap-2">
                 <div>
@@ -95,7 +100,8 @@
                     <span v-if="alt.estado === 'aceptada'" class="ms-1"><i class="fas fa-check-circle"></i></span>
                     <span v-else-if="alt.estado === 'descartada'" class="ms-1 opacity-50"><i class="fas fa-times-circle"></i></span>
                 </span>
-                <i v-if="alt.id === alternativaActivaId" class="fas fa-trash alt-pill-delete" title="Eliminar esta alternativa" @click.stop="eliminarAlternativa"></i>
+                <span v-if="alt.id === alternativaActivaId && eliminandoAlternativa" class="spinner-border spinner-border-sm alt-pill-delete" style="opacity:1"></span>
+                <i v-else-if="alt.id === alternativaActivaId" class="fas fa-trash alt-pill-delete" title="Eliminar esta alternativa" @click.stop="eliminarAlternativa"></i>
             </span>
             <!-- Punto F — siempre visible; deshabilitado con motivo al llegar al tope,
                  en vez de desaparecer sin explicación. -->
@@ -135,7 +141,9 @@
                         <input type="number" step="0.0001" class="form-control form-control-sm" v-model.number="formAlternativa.tipo_cambio_valor">
                     </div>
                     <div class="col-12 col-md-2 d-flex gap-2">
-                        <button class="btn btn-primary btn-sm w-100" @click="crearAlternativa">Crear</button>
+                        <button class="btn btn-primary btn-sm w-100" @click="crearAlternativa" :disabled="creandoAlternativa">
+                            <span v-if="creandoAlternativa" class="spinner-border spinner-border-sm me-1"></span>Crear
+                        </button>
                         <button class="btn btn-outline-secondary btn-sm" @click="mostrarFormAlternativa = false"><i class="fas fa-times"></i></button>
                     </div>
                 </div>
@@ -240,7 +248,8 @@
                                         <option v-for="d in diasCreados" :key="d" :value="d">Mover a Día {{ d }}</option>
                                         <option :value="diaSiguiente">Mover a Día {{ diaSiguiente }} (nuevo)</option>
                                     </select>
-                                    <i class="fas fa-trash text-danger" style="cursor:pointer" title="Eliminar todo el tour" @click="eliminarBloque(bloque)"></i>
+                                    <span v-if="eliminandoBloqueId === bloque.tourOrigenId" class="spinner-border spinner-border-sm text-danger"></span>
+                                    <i v-else class="fas fa-trash text-danger" style="cursor:pointer" title="Eliminar todo el tour" @click="eliminarBloque(bloque)"></i>
                                 </span>
                             </div>
 
@@ -251,7 +260,8 @@
                                         {{ etiquetaItem(item) }}
                                         <span v-if="item.cantidad > 1 && item.modo_precio === 'tarifa_fija' && item.origen_tipo !== 'manual'" class="text-muted"> × {{ item.cantidad }}</span>
                                     </span>
-                                    <i class="fas fa-times text-danger flex-shrink-0" style="cursor:pointer" title="Eliminar" @click="eliminarItem(item)"></i>
+                                    <span v-if="eliminandoItemId === item.id" class="spinner-border spinner-border-sm text-danger flex-shrink-0"></span>
+                                    <i v-else class="fas fa-times text-danger flex-shrink-0" style="cursor:pointer" title="Eliminar" @click="eliminarItem(item)"></i>
                                 </div>
 
                                 <div v-if="desglosePasajerosTexto(item)" class="text-muted mt-1" style="font-size:11px">
@@ -376,8 +386,9 @@
 
                         <div class="mt-3 d-flex flex-column gap-2">
                             <template v-if="alternativaActiva.estado !== 'aceptada'">
-                                <button class="btn btn-success btn-sm w-100" @click="marcarAceptada" :disabled="(alternativaActiva.items?.length ?? 0) === 0">
-                                    <i class="fas fa-check me-1"></i>Aceptado por cliente
+                                <button class="btn btn-success btn-sm w-100" @click="marcarAceptada" :disabled="(alternativaActiva.items?.length ?? 0) === 0 || marcandoAceptada">
+                                    <span v-if="marcandoAceptada" class="spinner-border spinner-border-sm me-1"></span>
+                                    <i v-else class="fas fa-check me-1"></i>Aceptado por cliente
                                 </button>
                                 <small v-if="(alternativaActiva.items?.length ?? 0) === 0" class="text-muted d-block text-center">
                                     Agregá al menos un ítem para poder aceptar
@@ -457,9 +468,13 @@
 
                                 <div class="biblioteca-grid">
                                     <div v-for="fila in filasBibliotecaPagina" :key="fila.kind + '-' + fila.data.id"
-                                        class="border rounded p-2 small lib-item" style="cursor:pointer"
+                                        class="border rounded p-2 small lib-item"
+                                        :style="cargandoFilaBibliotecaId === (fila.kind + '-' + fila.data.id) ? 'cursor:wait;opacity:.6' : 'cursor:pointer'"
                                         @click="onClicFilaBiblioteca(fila)">
-                                        <template v-if="fila.kind === 'proveedor'">
+                                        <div v-if="cargandoFilaBibliotecaId === (fila.kind + '-' + fila.data.id)" class="text-center py-2">
+                                            <span class="spinner-border spinner-border-sm text-primary"></span>
+                                        </div>
+                                        <template v-else-if="fila.kind === 'proveedor'">
                                             <div class="d-flex justify-content-between">
                                                 <span>
                                                     <i class="fas me-1 text-primary" :class="fila.data.tipo_habitacion ? 'fa-bed' : 'fa-concierge-bell'"></i>
@@ -516,7 +531,9 @@
                                         <span class="badge" :class="op.estado === 'elegida' ? 'bg-primary' : 'bg-light text-dark border'">{{ op.estado }}</span>
                                         <div class="d-flex gap-1">
                                             <button class="btn btn-sm btn-outline-primary" @click="verHoteles(op)">Hoteles</button>
-                                            <button v-if="op.estado !== 'elegida'" class="btn btn-sm btn-outline-success" @click="elegirOpcion(op)">Elegir</button>
+                                            <button v-if="op.estado !== 'elegida'" class="btn btn-sm btn-outline-success" @click="elegirOpcion(op)" :disabled="eligiendoOpcionId === op.id">
+                                                <span v-if="eligiendoOpcionId === op.id" class="spinner-border spinner-border-sm"></span><span v-else>Elegir</span>
+                                            </button>
                                         </div>
                                     </div>
                                     <div v-if="opcionHotelesActivaId === op.id" class="mt-2 border-top pt-2">
@@ -567,7 +584,9 @@
                                                 </div>
                                             </div>
                                             <button class="btn btn-sm btn-outline-secondary mb-1" @click="formHotel.tarifas.push({ tipo_habitacion: 'doble', precio_costo: 0, precio_venta: 0, proveedor_tarifa_id: null })">+ tipo de habitación</button>
-                                            <button class="btn btn-sm btn-primary w-100" @click="guardarHotel(op)">Guardar hotel</button>
+                                            <button class="btn btn-sm btn-primary w-100" @click="guardarHotel(op)" :disabled="guardandoHotelMayorista">
+                                                <span v-if="guardandoHotelMayorista" class="spinner-border spinner-border-sm me-1"></span>Guardar hotel
+                                            </button>
                                         </div>
                                     </div>
                                 </div>
@@ -585,7 +604,9 @@
                                     </select>
                                     <input type="text" class="form-control form-control-sm mb-1" placeholder="Vuelo (aerolínea)" v-model="formMayorista.vuelo_aerolinea">
                                     <textarea class="form-control form-control-sm mb-1" rows="2" placeholder="Incluye..." v-model="formMayorista.incluye"></textarea>
-                                    <button class="btn btn-primary btn-sm w-100" @click="guardarOpcionMayorista">Guardar</button>
+                                    <button class="btn btn-primary btn-sm w-100" @click="guardarOpcionMayorista" :disabled="guardandoOpcionMayorista">
+                                        <span v-if="guardandoOpcionMayorista" class="spinner-border spinner-border-sm me-1"></span>Guardar
+                                    </button>
                                 </div>
                             </div>
                         </template>
@@ -599,8 +620,12 @@
                         <template v-else-if="pasoDrawer === 'modoPrecio' && modoPrecioPendiente">
                             <p class="fw-semibold mb-2 small">¿Cómo se cobra "{{ modoPrecioPendiente.nombre }}"?</p>
                             <div class="d-flex gap-2 mb-2">
-                                <button class="btn btn-sm btn-outline-primary flex-fill" @click="confirmarModoPrecio('tarifa_fija')">Tarifa fija (total)</button>
-                                <button class="btn btn-sm btn-outline-primary flex-fill" @click="confirmarModoPrecio('por_persona')">Por persona (adulto/niño/infante)</button>
+                                <button class="btn btn-sm btn-outline-primary flex-fill" @click="confirmarModoPrecio('tarifa_fija')" :disabled="!!confirmandoModoPrecio">
+                                    <span v-if="confirmandoModoPrecio === 'tarifa_fija'" class="spinner-border spinner-border-sm me-1"></span>Tarifa fija (total)
+                                </button>
+                                <button class="btn btn-sm btn-outline-primary flex-fill" @click="confirmarModoPrecio('por_persona')" :disabled="!!confirmandoModoPrecio">
+                                    <span v-if="confirmandoModoPrecio === 'por_persona'" class="spinner-border spinner-border-sm me-1"></span>Por persona (adulto/niño/infante)
+                                </button>
                             </div>
                         </template>
 
@@ -611,6 +636,7 @@
                 </div>
             </div>
         </Teleport>
+        </template>
     </DefaultLayout>
 </template>
 
@@ -644,6 +670,8 @@ const route = useRoute();
 const router = useRouter();
 const cotizacionId = Number(route.params.id);
 const toast = useToast();
+
+const cargandoPagina = ref(true);
 
 const cotizacion = ref<Cotizacion | null>(null);
 const alternativaActivaId = ref<number | null>(null);
@@ -778,7 +806,9 @@ const seleccionarAlternativa = (id: number) => {
 const mostrarFormAlternativa = ref(false);
 const formAlternativa = ref({ nombre: '', moneda_cotizacion: 'PEN' as 'PEN' | 'USD', tipo_cambio_origen: 'dia' as 'dia' | 'agencia', tipo_cambio_valor: null as number | null });
 
+const creandoAlternativa = ref(false);
 const crearAlternativa = async () => {
+    creandoAlternativa.value = true;
     try {
         const res = await alternativaService.crear(cotizacionId, formAlternativa.value);
         mostrarFormAlternativa.value = false;
@@ -786,6 +816,8 @@ const crearAlternativa = async () => {
         alternativaActivaId.value = res.alternativa.id;
     } catch (error: any) {
         (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo crear', 'error');
+    } finally {
+        creandoAlternativa.value = false;
     }
 };
 
@@ -811,8 +843,10 @@ const duplicarAlternativa = async () => {
 // update()) — dispara la creación real de la Reserva
 // (ReservaController::aceptar()) y redirige a su pantalla de detalle, en
 // vez de quedarse en el cotizador.
+const marcandoAceptada = ref(false);
 const marcarAceptada = async () => {
     if (!alternativaActiva.value) return;
+    marcandoAceptada.value = true;
     try {
         const res = await reservaService.aceptarAlternativa(alternativaActiva.value.id);
         if (res.alerta_cupo_excedido) {
@@ -821,6 +855,8 @@ const marcarAceptada = async () => {
         router.push(`/agencia-viajes/reservas/${res.reserva.id}`);
     } catch (error: any) {
         (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo aceptar la alternativa', 'error');
+    } finally {
+        marcandoAceptada.value = false;
     }
 };
 
@@ -830,6 +866,7 @@ const marcarAceptada = async () => {
 // "sin hacer nada" a los ojos del usuario. Ahora: confirmación previa
 // (borra ítems junto con la alternativa) + error visible si el backend
 // rechaza el borrado.
+const eliminandoAlternativa = ref(false);
 const eliminarAlternativa = async () => {
     if (!alternativaActiva.value) return;
 
@@ -844,12 +881,15 @@ const eliminarAlternativa = async () => {
     });
     if (!confirmacion.isConfirmed) return;
 
+    eliminandoAlternativa.value = true;
     try {
         await alternativaService.eliminar(alternativaActiva.value.id);
         alternativaActivaId.value = null;
         await cargarCotizacion();
     } catch (error: any) {
         (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo eliminar la alternativa', 'error');
+    } finally {
+        eliminandoAlternativa.value = false;
     }
 };
 
@@ -966,6 +1006,7 @@ const onMoverBloque = async (bloque: BloqueItem, event: Event) => {
 // endpoint de borrado masivo en el backend — se dispara un DELETE por ítem
 // (mismo criterio ya usado en el resto del proyecto de resolver en el
 // frontend cuando alcanza, ver CLAUDE.md "Frontend-first").
+const eliminandoBloqueId = ref<number | null>(null);
 const eliminarBloque = async (bloque: BloqueItem) => {
     if (!bloque.tourOrigenId) return;
 
@@ -979,12 +1020,14 @@ const eliminarBloque = async (bloque: BloqueItem) => {
     });
     if (!confirmacion.isConfirmed) return;
 
+    eliminandoBloqueId.value = bloque.tourOrigenId;
     try {
         await Promise.all(bloque.items.map((item) => alternativaItemService.eliminar(item.id)));
         toast.success('Tour eliminado');
     } catch (error: any) {
         (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudieron eliminar todos los ítems del bloque', 'error');
     } finally {
+        eliminandoBloqueId.value = null;
         await cargarCotizacion();
     }
 };
@@ -1141,9 +1184,16 @@ const filasBibliotecaPagina = computed(() => {
     return filasBibliotecaUnificadas.value.slice(inicio, inicio + BIBLIOTECA_POR_PAGINA);
 });
 
-const onClicFilaBiblioteca = (fila: FilaBiblioteca) => {
-    if (fila.kind === 'proveedor') clicBibliotecaItem(fila.data);
-    else clicResultadoPlantilla(fila.data);
+const cargandoFilaBibliotecaId = ref<string | null>(null);
+const onClicFilaBiblioteca = async (fila: FilaBiblioteca) => {
+    const clave = `${fila.kind}-${fila.data.id}`;
+    cargandoFilaBibliotecaId.value = clave;
+    try {
+        if (fila.kind === 'proveedor') await clicBibliotecaItem(fila.data);
+        else await clicResultadoPlantilla(fila.data);
+    } finally {
+        cargandoFilaBibliotecaId.value = null;
+    }
 };
 
 // Punto C — franja de vista previa cuando el tour/paquete recién cargado
@@ -1309,8 +1359,10 @@ const clicBibliotecaItem = async (tarifa: ProveedorTarifa) => {
     modoPrecioPendiente.value = { id: tarifa.id, nombre: tarifa.proveedor_servicio?.destino_servicio?.servicio?.nombre ?? 'este ítem' };
 };
 
+const confirmandoModoPrecio = ref<'tarifa_fija' | 'por_persona' | null>(null);
 const confirmarModoPrecio = async (modoPrecio: 'tarifa_fija' | 'por_persona') => {
     if (!modoPrecioPendiente.value || !alternativaActiva.value) return;
+    confirmandoModoPrecio.value = modoPrecio;
     try {
         const res = await alternativaItemService.agregarProveedor(alternativaActiva.value.id, {
             proveedor_tarifa_id: modoPrecioPendiente.value.id,
@@ -1323,6 +1375,7 @@ const confirmarModoPrecio = async (modoPrecio: 'tarifa_fija' | 'por_persona') =>
         (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo agregar', 'error');
     } finally {
         modoPrecioPendiente.value = null;
+        confirmandoModoPrecio.value = null;
     }
 };
 
@@ -1391,13 +1444,23 @@ const verHoteles = (op: OpcionMayorista) => {
     opcionHotelesActivaId.value = opcionHotelesActivaId.value === op.id ? null : op.id;
 };
 
+const eligiendoOpcionId = ref<number | null>(null);
 const elegirOpcion = async (op: OpcionMayorista) => {
-    await opcionMayoristaService.elegir(op.id);
-    await cargarOpcionesMayorista();
+    eligiendoOpcionId.value = op.id;
+    try {
+        await opcionMayoristaService.elegir(op.id);
+        await cargarOpcionesMayorista();
+    } catch (error: any) {
+        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo elegir esta opción', 'error');
+    } finally {
+        eligiendoOpcionId.value = null;
+    }
 };
 
+const guardandoOpcionMayorista = ref(false);
 const guardarOpcionMayorista = async () => {
     if (!alternativaActiva.value || !formMayorista.value.proveedor_id) return;
+    guardandoOpcionMayorista.value = true;
     try {
         await opcionMayoristaService.crear(alternativaActiva.value.id, formMayorista.value as any);
         mostrarFormMayorista.value = false;
@@ -1405,10 +1468,14 @@ const guardarOpcionMayorista = async () => {
         await cargarOpcionesMayorista();
     } catch (error: any) {
         (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo agregar', 'error');
+    } finally {
+        guardandoOpcionMayorista.value = false;
     }
 };
 
+const guardandoHotelMayorista = ref(false);
 const guardarHotel = async (op: OpcionMayorista) => {
+    guardandoHotelMayorista.value = true;
     try {
         await opcionMayoristaService.crearHotel(op.id, formHotel.value);
         mostrarFormHotel.value = null;
@@ -1417,6 +1484,8 @@ const guardarHotel = async (op: OpcionMayorista) => {
         await cargarOpcionesMayorista();
     } catch (error: any) {
         (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo guardar', 'error');
+    } finally {
+        guardandoHotelMayorista.value = false;
     }
 };
 
@@ -1507,6 +1576,7 @@ const onPasajeAereoAgregado = async (_item: AlternativaItem) => {
 // crudo, mismo bug que ya se había corregido una vez en
 // eliminarAlternativa()/AlternativaController::destroy()); sin captura,
 // el botón parecía "no hacer nada".
+const eliminandoItemId = ref<number | null>(null);
 const eliminarItem = async (item: AlternativaItem) => {
     const confirmacion = await (Swal as TVueSwalInstance).fire({
         title: '¿Eliminar este ítem?',
@@ -1518,12 +1588,15 @@ const eliminarItem = async (item: AlternativaItem) => {
     });
     if (!confirmacion.isConfirmed) return;
 
+    eliminandoItemId.value = item.id;
     try {
         await alternativaItemService.eliminar(item.id);
         toast.success('Ítem eliminado');
         await cargarCotizacion();
     } catch (error: any) {
         (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo eliminar el ítem', 'error');
+    } finally {
+        eliminandoItemId.value = null;
     }
 };
 
@@ -1783,42 +1856,48 @@ watch(alternativaActivaId, () => {
 const layoutStore = useLayoutStore();
 
 onMounted(async () => {
-    // Más espacio horizontal para el lienzo del cotizador — se revierte a
-    // 'default' en onUnmounted, no debe quedar colapsado en el resto del
-    // sistema al salir de esta pantalla.
-    layoutStore.setLeftSideBarSize('collapsed');
+    try {
+        // Más espacio horizontal para el lienzo del cotizador — se revierte a
+        // 'default' en onUnmounted, no debe quedar colapsado en el resto del
+        // sistema al salir de esta pantalla.
+        layoutStore.setLeftSideBarSize('collapsed');
 
-    // proveedor_tipos: catálogo real (editable desde el panel superadmin,
-    // NO los 4 valores del seeder original) — alimenta tanto los chips de
-    // la biblioteca (Sesión 11b3) como la búsqueda de proveedores
-    // mayoristas de acá abajo (sin duplicar la llamada).
-    const tipos = await proveedorTipoService.listar();
-    proveedorTipos.value = tipos.proveedor_tipos;
+        // proveedor_tipos: catálogo real (editable desde el panel superadmin,
+        // NO los 4 valores del seeder original) — alimenta tanto los chips de
+        // la biblioteca (Sesión 11b3) como la búsqueda de proveedores
+        // mayoristas de acá abajo (sin duplicar la llamada).
+        const tipos = await proveedorTipoService.listar();
+        proveedorTipos.value = tipos.proveedor_tipos;
 
-    // Antes de cargarCotizacion(): inicializarEdicionItems() (dentro de
-    // cargarCotizacion) necesita configAgencia.value ya resuelto para
-    // derivar monto_descuento por ítem (Punto B).
-    const configRes = await configuracionAgenciaService.obtener();
-    configAgencia.value = configRes.configuracion_agencia;
+        // Antes de cargarCotizacion(): inicializarEdicionItems() (dentro de
+        // cargarCotizacion) necesita configAgencia.value ya resuelto para
+        // derivar monto_descuento por ítem (Punto B).
+        const configRes = await configuracionAgenciaService.obtener();
+        configAgencia.value = configRes.configuracion_agencia;
 
-    await cargarCotizacion();
-    await cargarBiblioteca();
+        await cargarCotizacion();
+        await cargarBiblioteca();
 
-    const tipoMayorista = tipos.proveedor_tipos.find((t) => t.slug === 'mayorista');
-    if (tipoMayorista) {
-        const res = await httpClient.get('/proveedores', { params: { tipo_id: tipoMayorista.id } });
-        proveedoresMayoristas.value = res.data.proveedores ?? [];
-    }
+        const tipoMayorista = tipos.proveedor_tipos.find((t) => t.slug === 'mayorista');
+        if (tipoMayorista) {
+            const res = await httpClient.get('/proveedores', { params: { tipo_id: tipoMayorista.id } });
+            proveedoresMayoristas.value = res.data.proveedores ?? [];
+        }
 
-    // Sesión 11k, Fix 9 — proveedores tipo Hotel, para "usar tarifa registrada"
-    // al armar un hotel de opcion_mayorista. slug='alojamiento-hoteles' es
-    // el slug REAL (ver mismo hallazgo documentado en
-    // ProveedorController::tarifasHotel(), backend — 'hotel' no matchea
-    // nada).
-    const tipoHotel = tipos.proveedor_tipos.find((t) => t.slug === 'alojamiento-hoteles');
-    if (tipoHotel) {
-        const res = await httpClient.get('/proveedores', { params: { tipo_id: tipoHotel.id, estado: true } });
-        proveedoresHotel.value = res.data.proveedores ?? [];
+        // Sesión 11k, Fix 9 — proveedores tipo Hotel, para "usar tarifa registrada"
+        // al armar un hotel de opcion_mayorista. slug='alojamiento-hoteles' es
+        // el slug REAL (ver mismo hallazgo documentado en
+        // ProveedorController::tarifasHotel(), backend — 'hotel' no matchea
+        // nada).
+        const tipoHotel = tipos.proveedor_tipos.find((t) => t.slug === 'alojamiento-hoteles');
+        if (tipoHotel) {
+            const res = await httpClient.get('/proveedores', { params: { tipo_id: tipoHotel.id, estado: true } });
+            proveedoresHotel.value = res.data.proveedores ?? [];
+        }
+    } catch (error: any) {
+        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo cargar la cotización.', 'error');
+    } finally {
+        cargandoPagina.value = false;
     }
 });
 

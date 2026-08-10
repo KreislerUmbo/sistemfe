@@ -27,12 +27,18 @@ declare module 'vue' {
     BFormInput: typeof import('bootstrap-vue-next')['BFormInput']
     BFormRadio: typeof import('bootstrap-vue-next')['BFormRadio']
     BFormSelect: typeof import('bootstrap-vue-next')['BFormSelect']
+    BFormSelectOption: typeof import('bootstrap-vue-next')['BFormSelectOption']
+    BFormTextarea: typeof import('bootstrap-vue-next')['BFormTextarea']
     BInputGroup: typeof import('bootstrap-vue-next')['BInputGroup']
     BInputGroupText: typeof import('bootstrap-vue-next')['BInputGroupText']
     BModal: typeof import('bootstrap-vue-next')['BModal']
     BPagination: typeof import('bootstrap-vue-next')['BPagination']
+    BProgress: typeof import('bootstrap-vue-next')['BProgress']
     BRow: typeof import('bootstrap-vue-next')['BRow']
+    BSpinner: typeof import('bootstrap-vue-next')['BSpinner']
+    BTab: typeof import('bootstrap-vue-next')['BTab']
     BTableSimple: typeof import('bootstrap-vue-next')['BTableSimple']
+    BTabs: typeof import('bootstrap-vue-next')['BTabs']
     BTbody: typeof import('bootstrap-vue-next')['BTbody']
     BTd: typeof import('bootstrap-vue-next')['BTd']
     BTh: typeof import('bootstrap-vue-next')['BTh']
@@ -59,6 +65,7 @@ declare module 'vue' {
     Pagination: typeof import('./src/components/portal/Pagination.vue')['default']
     PasajeAereoForm: typeof import('./src/components/AgenciaViajes/PasajeAereoForm.vue')['default']
     ProductFormQuick: typeof import('./src/components/Sales/ProductFormQuick.vue')['default']
+    RichTextEditor: typeof import('./src/components/RichTextEditor.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
     SeccionCategorias: typeof import('./src/components/portal/SeccionCategorias.vue')['default']
@@ -66,5 +73,8 @@ declare module 'vue' {
     SeccionServicios: typeof import('./src/components/portal/SeccionServicios.vue')['default']
     SeccionSistemasEmpresariales: typeof import('./src/components/portal/SeccionSistemasEmpresariales.vue')['default']
     UIComponentCard: typeof import('./src/components/UIComponentCard.vue')['default']
+  }
+  export interface ComponentCustomProperties {
+    vBToggle: typeof import('bootstrap-vue-next')['vBToggle']
   }
 }

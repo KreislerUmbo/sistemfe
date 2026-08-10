@@ -1,5 +1,10 @@
 <template>
     <DefaultLayout>
+        <div v-if="cargandoPagina" class="text-center py-5">
+            <span class="spinner-border text-primary"></span>
+        </div>
+
+        <template v-else>
         <div v-if="paquete" class="d-flex align-items-center justify-content-between flex-wrap gap-3 mb-4">
             <div>
                 <h5 class="fw-bold mb-0 text-dark">
@@ -13,14 +18,16 @@
                 <small class="text-muted">{{ paquete.codigo ?? 'sin código' }} · {{ etiquetaCategoria(paquete.categoria) }}</small>
             </div>
             <div class="d-flex gap-2">
-                <button class="btn" :class="paquete.activo ? 'btn-outline-danger' : 'btn-outline-success'" @click="toggleActivo">
-                    <i class="fas me-2" :class="paquete.activo ? 'fa-ban' : 'fa-check-circle'"></i>{{ paquete.activo ? 'Desactivar' : 'Activar' }}
+                <button class="btn" :class="paquete.activo ? 'btn-outline-danger' : 'btn-outline-success'" @click="toggleActivo" :disabled="cambiandoEstado">
+                    <span v-if="cambiandoEstado" class="spinner-border spinner-border-sm me-2"></span>
+                    <i v-else class="fas me-2" :class="paquete.activo ? 'fa-ban' : 'fa-check-circle'"></i>{{ paquete.activo ? 'Desactivar' : 'Activar' }}
                 </button>
                 <router-link :to="`/agencia-viajes/paquetes/${paquete.id}/editar`" class="btn btn-outline-secondary">
                     <i class="fas fa-pen me-2"></i>Editar
                 </router-link>
-                <button class="btn btn-outline-secondary" @click="duplicar">
-                    <i class="fas fa-copy me-2"></i>Duplicar
+                <button class="btn btn-outline-secondary" @click="duplicar" :disabled="duplicando">
+                    <span v-if="duplicando" class="spinner-border spinner-border-sm me-2"></span>
+                    <i v-else class="fas fa-copy me-2"></i>Duplicar
                 </button>
                 <router-link to="/agencia-viajes/paquetes" class="btn btn-outline-secondary">
                     <i class="fas fa-arrow-left me-2"></i>Volver
@@ -60,9 +67,14 @@
                     <div class="col-md-4"><strong>Horario:</strong> {{ paquete.hora_salida ?? '—' }} — {{ paquete.hora_retorno ?? '—' }}</div>
                     <div class="col-md-8"><strong>Lugar de recojo:</strong> {{ paquete.lugar_recojo ?? '—' }}</div>
                     <div class="col-md-4" v-if="!esCombo"><strong>Precio desde:</strong> {{ paquete.precio_venta_final != null ? `S/ ${Number(paquete.precio_venta_final).toFixed(2)}` : '—' }}</div>
-                    <div class="col-12" v-if="paquete.descripcion"><strong>Descripción:</strong> {{ paquete.descripcion }}</div>
-                    <div class="col-md-6" v-if="paquete.no_incluye"><strong>No incluye:</strong> {{ paquete.no_incluye }}</div>
-                    <div class="col-md-6" v-if="paquete.recomendaciones"><strong>Recomendaciones:</strong> {{ paquete.recomendaciones }}</div>
+                    <!-- descripcion/no_incluye/recomendaciones vienen en HTML (RichTextEditor,
+                         ver paquetes/form.vue) — v-html a propósito, el contenido solo lo
+                         genera este mismo editor, no llega de terceros. -->
+                    <!-- TODO Sesión 11k: cuando este tab pase a editable in-situ, estos 3
+                         campos deben usar RichTextEditor.vue (no volver a un <textarea>). -->
+                    <div class="col-12" v-if="paquete.descripcion"><strong>Descripción:</strong> <span v-html="paquete.descripcion"></span></div>
+                    <div class="col-md-6" v-if="paquete.no_incluye"><strong>No incluye:</strong> <span v-html="paquete.no_incluye"></span></div>
+                    <div class="col-md-6" v-if="paquete.recomendaciones"><strong>Recomendaciones:</strong> <span v-html="paquete.recomendaciones"></span></div>
                     <div class="col-12" v-if="paquete.vuelo_incluido">
                         <strong>Vuelo:</strong> {{ paquete.vuelo_aerolinea ?? '—' }} — {{ paquete.vuelo_detalle ?? '' }}
                     </div>
@@ -173,8 +185,9 @@
                             <textarea rows="2" class="form-control form-control-sm" v-model="formPaso.descripcion" placeholder="Ej. Visita orquideario"></textarea>
                         </div>
                     </div>
-                    <button class="btn btn-primary btn-sm mt-2" @click="agregarPaso">
-                        <i class="fas fa-plus me-1"></i>Agregar paso
+                    <button class="btn btn-primary btn-sm mt-2" @click="agregarPaso" :disabled="agregandoPaso">
+                        <span v-if="agregandoPaso" class="spinner-border spinner-border-sm me-1"></span>
+                        <i v-else class="fas fa-plus me-1"></i>Agregar paso
                     </button>
                 </div>
             </div>
@@ -193,7 +206,8 @@
                             </span>
                             <span class="d-flex align-items-center gap-3">
                                 <i class="fas fa-pen text-secondary" style="cursor:pointer" @click="iniciarEdicionPaso(paso)"></i>
-                                <i class="fas fa-trash text-danger" style="cursor:pointer" @click="quitarPaso(paso)"></i>
+                                <span v-if="eliminandoPasoId === paso.id" class="spinner-border spinner-border-sm text-danger"></span>
+                                <i v-else class="fas fa-trash text-danger" style="cursor:pointer" @click="quitarPaso(paso)"></i>
                             </span>
                         </div>
                         <div v-else class="py-1">
@@ -222,8 +236,10 @@
                                 </div>
                             </div>
                             <div class="mt-2 d-flex gap-2">
-                                <button class="btn btn-primary btn-sm" @click="guardarEdicionPaso">Guardar</button>
-                                <button class="btn btn-outline-secondary btn-sm" @click="cancelarEdicionPaso">Cancelar</button>
+                                <button class="btn btn-primary btn-sm" @click="guardarEdicionPaso" :disabled="guardandoEdicionPaso">
+                                    <span v-if="guardandoEdicionPaso" class="spinner-border spinner-border-sm me-1"></span>Guardar
+                                </button>
+                                <button class="btn btn-outline-secondary btn-sm" @click="cancelarEdicionPaso" :disabled="guardandoEdicionPaso">Cancelar</button>
                             </div>
                         </div>
                     </li>
@@ -333,8 +349,9 @@
                             <input type="number" min="0" class="form-control form-control-sm" v-model.number="ordenItemNuevo">
                         </div>
                         <div class="col-6 col-md-3">
-                            <button class="btn btn-primary btn-sm w-100" @click="agregarItem" :disabled="!proveedorTarifaSeleccionada && !guiaTarifaSeleccionada">
-                                <i class="fas fa-plus me-1"></i>Agregar
+                            <button class="btn btn-primary btn-sm w-100" @click="agregarItem" :disabled="agregandoItem || (!proveedorTarifaSeleccionada && !guiaTarifaSeleccionada)">
+                                <span v-if="agregandoItem" class="spinner-border spinner-border-sm me-1"></span>
+                                <i v-else class="fas fa-plus me-1"></i>Agregar
                             </button>
                         </div>
                     </div>
@@ -366,7 +383,8 @@
                                 <span class="badge bg-light text-dark border d-block">{{ monedaItem(item) }} {{ ventaItem(item).toFixed(2) }}</span>
                                 <span class="text-muted" style="font-size:10px">costo {{ monedaItem(item) }} {{ costoItem(item).toFixed(2) }}</span>
                             </span>
-                            <i class="fas fa-times text-danger" style="cursor:pointer" @click="quitarItem(item)"></i>
+                            <span v-if="eliminandoItemId === item.id" class="spinner-border spinner-border-sm text-danger"></span>
+                            <i v-else class="fas fa-times text-danger" style="cursor:pointer" @click="quitarItem(item)"></i>
                         </span>
                     </li>
                     <li v-if="items.length === 0" class="list-group-item text-muted fst-italic text-center py-4">
@@ -499,8 +517,9 @@
                             <input type="number" min="0" class="form-control form-control-sm" v-model.number="ordenItemNuevo">
                         </div>
                         <div class="col-6 col-md-3">
-                            <button class="btn btn-primary btn-sm w-100" @click="agregarItem" :disabled="!proveedorTarifaSeleccionada && !guiaTarifaSeleccionada && !tourSeleccionado">
-                                <i class="fas fa-plus me-1"></i>Agregar
+                            <button class="btn btn-primary btn-sm w-100" @click="agregarItem" :disabled="agregandoItem || (!proveedorTarifaSeleccionada && !guiaTarifaSeleccionada && !tourSeleccionado)">
+                                <span v-if="agregandoItem" class="spinner-border spinner-border-sm me-1"></span>
+                                <i v-else class="fas fa-plus me-1"></i>Agregar
                             </button>
                         </div>
                     </div>
@@ -516,7 +535,8 @@
                     </span>
                     <span class="d-flex align-items-center gap-2">
                         <span class="badge bg-light text-dark border">{{ grupo.item.paquete_plantilla_hijo?.precio_venta_final != null ? `S/ ${Number(grupo.item.paquete_plantilla_hijo.precio_venta_final).toFixed(0)}` : '—' }}</span>
-                        <i class="fas fa-times text-danger" style="cursor:pointer" @click.stop="quitarTourHijo(grupo.item)"></i>
+                        <span v-if="eliminandoItemId === grupo.item.id" class="spinner-border spinner-border-sm text-danger"></span>
+                        <i v-else class="fas fa-times text-danger" style="cursor:pointer" @click.stop="quitarTourHijo(grupo.item)"></i>
                     </span>
                 </div>
                 <div v-if="expandidos.has(grupo.item.paquete_plantilla_hijo_id!)" class="card-body py-2">
@@ -551,7 +571,8 @@
                             <i class="fas fa-user-tie text-primary me-1"></i>Guía: {{ item.guia_tarifa.guia?.nombre }}
                             <span v-if="item.guia_tarifa.guia?.es_referencial" class="badge bg-secondary-subtle text-secondary border ms-1" style="font-size:10px">Referencial</span>
                         </span>
-                        <i class="fas fa-times text-danger" style="cursor:pointer" @click="quitarItem(item)"></i>
+                        <span v-if="eliminandoItemId === item.id" class="spinner-border spinner-border-sm text-danger"></span>
+                        <i v-else class="fas fa-times text-danger" style="cursor:pointer" @click="quitarItem(item)"></i>
                     </li>
                 </ul>
             </div>
@@ -675,7 +696,9 @@
                         + tipo de habitación
                     </button>
                     <div>
-                        <button class="btn btn-primary btn-sm" @click="guardarHotel">Guardar hotel</button>
+                        <button class="btn btn-primary btn-sm" @click="guardarHotel" :disabled="guardandoHotel">
+                            <span v-if="guardandoHotel" class="spinner-border spinner-border-sm me-1"></span>Guardar hotel
+                        </button>
                     </div>
                 </div>
             </div>
@@ -689,7 +712,8 @@
                         </span>
                         <span class="text-muted ms-1">({{ hotel.moneda }})</span>
                     </span>
-                    <i class="fas fa-times text-danger" style="cursor:pointer" @click="quitarHotel(hotel)"></i>
+                    <span v-if="eliminandoHotelId === hotel.id" class="spinner-border spinner-border-sm text-danger"></span>
+                    <i v-else class="fas fa-times text-danger" style="cursor:pointer" @click="quitarHotel(hotel)"></i>
                 </div>
                 <div class="px-3 pt-2">
                     <span class="badge bg-light text-dark border small">
@@ -727,6 +751,7 @@
                 Este paquete/tour todavía no tiene hoteles cargados.
             </div>
         </div>
+        </template>
     </DefaultLayout>
 </template>
 
@@ -755,6 +780,7 @@ const route = useRoute();
 const router = useRouter();
 const paqueteId = computed(() => Number(route.params.id));
 
+const cargandoPagina = ref(true);
 const paquete = ref<PaquetePlantilla | null>(null);
 const combo = ref<ComboDatos | null>(null);
 const esCombo = computed(() => paquete.value?.tipo === 'paquete_combo');
@@ -786,18 +812,24 @@ const cargarPaquete = async () => {
 };
 
 // ── Activar/Desactivar (punto 6 del diseño) ──────────────────────────
+const cambiandoEstado = ref(false);
+
 const toggleActivo = async () => {
     if (!paquete.value) return;
-
-    if (paquete.value.activo) {
-        await desactivar(false);
-    } else {
-        try {
-            await paquetePlantillaService.actualizar(paquete.value.id, { ...paquete.value, activo: true });
-            await cargarPaquete();
-        } catch (error: any) {
-            (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo activar', 'error');
+    cambiandoEstado.value = true;
+    try {
+        if (paquete.value.activo) {
+            await desactivar(false);
+        } else {
+            try {
+                await paquetePlantillaService.actualizar(paquete.value.id, { ...paquete.value, activo: true });
+                await cargarPaquete();
+            } catch (error: any) {
+                (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo activar', 'error');
+            }
         }
+    } finally {
+        cambiandoEstado.value = false;
     }
 };
 
@@ -833,6 +865,8 @@ const desactivar = async (forzar: boolean) => {
 };
 
 // ── Duplicar (Sesión 11m) ─────────────────────────────────────────────
+const duplicando = ref(false);
+
 const duplicar = async () => {
     if (!paquete.value) return;
     const result = await (Swal as TVueSwalInstance).fire({
@@ -843,11 +877,14 @@ const duplicar = async () => {
         confirmButtonText: 'Sí, duplicar',
     });
     if (!(result as any).isConfirmed) return;
+    duplicando.value = true;
     try {
         const res = await paquetePlantillaService.duplicar(paquete.value.id);
         router.push(`/agencia-viajes/paquetes/${res.paquete_plantilla.id}`);
     } catch (error: any) {
         (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo duplicar', 'error');
+    } finally {
+        duplicando.value = false;
     }
 };
 
@@ -922,19 +959,26 @@ const cargarItinerario = async () => {
     inicializarSortableItinerario();
 };
 
+const agregandoPaso = ref(false);
+
 const agregarPaso = async () => {
     if (!formPaso.value.descripcion.trim()) {
         (Swal as TVueSwalInstance).fire('Error', 'La descripción del paso es obligatoria.', 'error');
         return;
     }
+    agregandoPaso.value = true;
     try {
         await paquetePlantillaService.agregarPasoItinerario(paqueteId.value, formPaso.value);
         formPaso.value = { dia_relativo: formPaso.value.dia_relativo, hora: null, orden: null, destino_atractivo_id: null, descripcion: '' };
         await cargarItinerario();
     } catch (error: any) {
         (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo agregar', 'error');
+    } finally {
+        agregandoPaso.value = false;
     }
 };
+
+const eliminandoPasoId = ref<number | null>(null);
 
 const quitarPaso = async (paso: TourItinerarioItem) => {
     const result = await (Swal as TVueSwalInstance).fire({
@@ -947,8 +991,13 @@ const quitarPaso = async (paso: TourItinerarioItem) => {
         cancelButtonText: 'Cancelar',
     });
     if (!(result as any).isConfirmed) return;
-    await paquetePlantillaService.quitarPasoItinerario(paso.id);
-    await cargarItinerario();
+    eliminandoPasoId.value = paso.id;
+    try {
+        await paquetePlantillaService.quitarPasoItinerario(paso.id);
+        await cargarItinerario();
+    } finally {
+        eliminandoPasoId.value = null;
+    }
 };
 
 // ── Edición inline de un paso (Sesión 11l v2) ────────────────────────
@@ -972,12 +1021,15 @@ const cancelarEdicionPaso = () => {
     pasoEnEdicion.value = null;
 };
 
+const guardandoEdicionPaso = ref(false);
+
 const guardarEdicionPaso = async () => {
     if (!pasoEnEdicion.value) return;
     if (!pasoEnEdicion.value.descripcion.trim()) {
         (Swal as TVueSwalInstance).fire('Error', 'La descripción del paso es obligatoria.', 'error');
         return;
     }
+    guardandoEdicionPaso.value = true;
     try {
         await paquetePlantillaService.actualizarPasoItinerario(pasoEnEdicion.value.id, {
             dia_relativo: pasoEnEdicion.value.dia_relativo,
@@ -990,6 +1042,8 @@ const guardarEdicionPaso = async () => {
         await cargarItinerario();
     } catch (error: any) {
         (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo guardar', 'error');
+    } finally {
+        guardandoEdicionPaso.value = false;
     }
 };
 
@@ -1193,7 +1247,10 @@ const diferenciaVentaFinal = computed(() => {
     return Math.abs(diff) < 0.01 ? null : diff;
 });
 
+const agregandoItem = ref(false);
+
 const agregarItem = async () => {
+    agregandoItem.value = true;
     try {
         await paquetePlantillaService.agregarItem(paqueteId.value, {
             proveedor_tarifa_id: proveedorTarifaSeleccionada.value?.id ?? undefined,
@@ -1209,13 +1266,22 @@ const agregarItem = async () => {
         await cargarPaquete();
     } catch (error: any) {
         (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo agregar', 'error');
+    } finally {
+        agregandoItem.value = false;
     }
 };
 
+const eliminandoItemId = ref<number | null>(null);
+
 const quitarItem = async (item: PaquetePlantillaItem) => {
-    await paquetePlantillaService.quitarItem(item.id);
-    await cargarItems();
-    await cargarPaquete();
+    eliminandoItemId.value = item.id;
+    try {
+        await paquetePlantillaService.quitarItem(item.id);
+        await cargarItems();
+        await cargarPaquete();
+    } finally {
+        eliminandoItemId.value = null;
+    }
 };
 
 const quitarTourHijo = async (item: PaquetePlantillaItem) => {
@@ -1300,11 +1366,14 @@ const onElegirTarifaRegistrada = (tf: { precio_costo: number; precio_venta: numb
     }
 };
 
+const guardandoHotel = ref(false);
+
 const guardarHotel = async () => {
     if (!formHotel.value.nombre_hotel.trim()) {
         (Swal as TVueSwalInstance).fire('Error', 'El nombre del hotel es obligatorio.', 'error');
         return;
     }
+    guardandoHotel.value = true;
     try {
         await paquetePlantillaService.agregarHotel(paqueteId.value, formHotel.value);
         formHotel.value = {
@@ -1316,42 +1385,57 @@ const guardarHotel = async () => {
         await cargarPaquete();
     } catch (error: any) {
         (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo guardar', 'error');
+    } finally {
+        guardandoHotel.value = false;
     }
 };
 
+const eliminandoHotelId = ref<number | null>(null);
+
 const quitarHotel = async (hotel: OpcionHotel) => {
-    await paquetePlantillaService.quitarHotel(hotel.id);
-    await cargarPaquete();
+    eliminandoHotelId.value = hotel.id;
+    try {
+        await paquetePlantillaService.quitarHotel(hotel.id);
+        await cargarPaquete();
+    } finally {
+        eliminandoHotelId.value = null;
+    }
 };
 
 onMounted(async () => {
-    // Fix 3 — carga la config de agencia en paralelo, no bloquea la carga
-    // del paquete (el margen mínimo tiene fallback de 20 mientras está en vuelo).
-    configuracionAgenciaService.obtener().then((res) => { configAgencia.value = res.configuracion_agencia; });
+    try {
+        // Fix 3 — carga la config de agencia en paralelo, no bloquea la carga
+        // del paquete (el margen mínimo tiene fallback de 20 mientras está en vuelo).
+        configuracionAgenciaService.obtener().then((res) => { configAgencia.value = res.configuracion_agencia; });
 
-    // Sesión 11l v2 — catálogos de servicios/proveedores para los filtros
-    // de la biblioteca del tab Incluye, en paralelo (no bloquean la carga).
-    servicioService.listar({}).then((res) => { serviciosFiltro.value = res.servicios ?? []; });
-    proveedorService.listar({ estado: true }).then((res) => { proveedoresFiltro.value = res.proveedores ?? []; });
+        // Sesión 11l v2 — catálogos de servicios/proveedores para los filtros
+        // de la biblioteca del tab Incluye, en paralelo (no bloquean la carga).
+        servicioService.listar({}).then((res) => { serviciosFiltro.value = res.servicios ?? []; });
+        proveedorService.listar({ estado: true }).then((res) => { proveedoresFiltro.value = res.proveedores ?? []; });
 
-    await cargarPaquete();
-    await cargarItinerario();
-    await cargarItems();
-    await cargarBiblioteca();
+        await cargarPaquete();
+        await cargarItinerario();
+        await cargarItems();
+        await cargarBiblioteca();
 
-    const res = await guiaService.listar({});
-    guias.value = res.guias ?? [];
+        const res = await guiaService.listar({});
+        guias.value = res.guias ?? [];
 
-    // Sesión 11k, Fix 9 — proveedores tipo Hotel, para "usar tarifa registrada".
-    // slug='alojamiento-hoteles' es el slug REAL (confirmado contra datos
-    // reales) — 'hotel' no matchea nada (ver mismo hallazgo documentado en
-    // ProveedorController::tarifasHotel(), backend).
-    const tipos = await proveedorTipoService.listar();
-    proveedorTipos.value = tipos.proveedor_tipos;
-    const tipoHotel = tipos.proveedor_tipos.find((t) => t.slug === 'alojamiento-hoteles');
-    if (tipoHotel) {
-        const resProveedores = await proveedorService.listar({ tipo_id: tipoHotel.id, estado: true });
-        proveedoresHotel.value = resProveedores.proveedores ?? [];
+        // Sesión 11k, Fix 9 — proveedores tipo Hotel, para "usar tarifa registrada".
+        // slug='alojamiento-hoteles' es el slug REAL (confirmado contra datos
+        // reales) — 'hotel' no matchea nada (ver mismo hallazgo documentado en
+        // ProveedorController::tarifasHotel(), backend).
+        const tipos = await proveedorTipoService.listar();
+        proveedorTipos.value = tipos.proveedor_tipos;
+        const tipoHotel = tipos.proveedor_tipos.find((t) => t.slug === 'alojamiento-hoteles');
+        if (tipoHotel) {
+            const resProveedores = await proveedorService.listar({ tipo_id: tipoHotel.id, estado: true });
+            proveedoresHotel.value = resProveedores.proveedores ?? [];
+        }
+    } catch (error: any) {
+        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo cargar el paquete/tour.', 'error');
+    } finally {
+        cargandoPagina.value = false;
     }
 });
 </script>
