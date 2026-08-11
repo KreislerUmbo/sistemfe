@@ -79,6 +79,17 @@ class PaquetePlantillaItemController extends Controller
             return response()->json(['code' => 422, 'message' => $errorProfundidad], 422);
         }
 
+        $errorDuplicado = $this->comboValidation->validarNoDuplicado(
+            $paquete,
+            $validado['proveedor_tarifa_id'] ?? null,
+            $validado['guia_tarifa_id'] ?? null,
+            $validado['paquete_plantilla_hijo_id'] ?? null
+        );
+
+        if ($errorDuplicado !== null) {
+            return response()->json(['code' => 422, 'message' => $errorDuplicado], 422);
+        }
+
         try {
             $item = DB::transaction(function () use ($paquete, $validado) {
                 $item = PaquetePlantillaItem::create($validado + ['paquete_plantilla_id' => $paquete->id]);

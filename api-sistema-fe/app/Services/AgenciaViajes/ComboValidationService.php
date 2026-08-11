@@ -59,6 +59,34 @@ class ComboValidationService
         return null;
     }
 
+    // Bloqueo duro (422) de duplicados dentro del MISMO paquete_plantilla —
+    // Sesión 11n. Sin caso de uso legítimo (a diferencia del margen mínimo,
+    // que es advisory): agregar dos veces la misma proveedor_tarifa_id/
+    // guia_tarifa_id/paquete_plantilla_hijo_id al mismo tour/paquete es
+    // siempre un error de captura. No es global — un mismo proveedor_tarifa
+    // puede repetirse legítimamente entre 2 tours-hijo distintos del mismo
+    // combo, porque items() ya filtra por paquete_plantilla_id.
+    public function validarNoDuplicado(PaquetePlantilla $paquete, ?int $proveedorTarifaId, ?int $guiaTarifaId, ?int $paquetePlantillaHijoId): ?string
+    {
+        $query = $paquete->items();
+
+        if ($proveedorTarifaId !== null) {
+            $query->where('proveedor_tarifa_id', $proveedorTarifaId);
+        } elseif ($guiaTarifaId !== null) {
+            $query->where('guia_tarifa_id', $guiaTarifaId);
+        } elseif ($paquetePlantillaHijoId !== null) {
+            $query->where('paquete_plantilla_hijo_id', $paquetePlantillaHijoId);
+        } else {
+            return null;
+        }
+
+        if ($query->exists()) {
+            return 'Este servicio ya está incluido en este tour/paquete.';
+        }
+
+        return null;
+    }
+
     // Piso de margen del combo tras el descuento — (venta_neta - costo_total)
     // / costo_total no puede ser menor a margen_minimo_pct. null (sin error)
     // si el combo no tiene piso configurado o si costo_total es 0.

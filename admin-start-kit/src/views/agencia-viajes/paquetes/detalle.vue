@@ -309,11 +309,13 @@
                         </div>
                         <div class="d-flex flex-column gap-1" style="max-height:220px;overflow-y:auto;">
                             <div v-for="t in bibliotecaTarifas" :key="t.id" class="border rounded p-2 small lib-item"
-                                :class="{ 'border-primary bg-light': proveedorTarifaSeleccionada?.id === t.id }"
-                                style="cursor:pointer" @click="proveedorTarifaSeleccionada = t">
+                                :class="{ 'border-primary bg-light': proveedorTarifaSeleccionada?.id === t.id, 'opacity-50': idsProveedorTarifaEnItems.has(t.id) }"
+                                :style="idsProveedorTarifaEnItems.has(t.id) ? 'cursor:not-allowed' : 'cursor:pointer'"
+                                @click="!idsProveedorTarifaEnItems.has(t.id) && (proveedorTarifaSeleccionada = t)">
                                 <div class="d-flex justify-content-between align-items-start">
                                     <div>
                                         <strong>{{ t.proveedor_servicio?.proveedor?.razon_social }}</strong>
+                                        <span v-if="idsProveedorTarifaEnItems.has(t.id)" class="badge bg-secondary text-white ms-1" style="font-size:10px">Ya agregado</span>
                                         <span v-if="t.proveedor_servicio?.proveedor?.es_referencial" class="badge bg-secondary-subtle text-secondary border ms-1" style="font-size:10px">Referencial</span>
                                         <span class="text-muted"> — {{ descripcionDestinoServicio(t.proveedor_servicio?.destino_servicio) }}<span v-if="t.tipo_habitacion"> · {{ t.tipo_habitacion }}</span></span>
                                         <span class="badge bg-light text-dark border ms-1" style="font-size:10px">{{ t.tipo_tarifa }} · {{ t.modalidad }}</span>
@@ -335,9 +337,11 @@
                         </select>
                         <div class="d-flex flex-column gap-1" style="max-height:220px;overflow-y:auto;">
                             <div v-for="t in tarifasGuia" :key="t.id" class="border rounded p-2 small lib-item"
-                                :class="{ 'border-primary bg-light': guiaTarifaSeleccionada?.id === t.id }"
-                                style="cursor:pointer" @click="guiaTarifaSeleccionada = t">
+                                :class="{ 'border-primary bg-light': guiaTarifaSeleccionada?.id === t.id, 'opacity-50': idsGuiaTarifaEnItems.has(t.id) }"
+                                :style="idsGuiaTarifaEnItems.has(t.id) ? 'cursor:not-allowed' : 'cursor:pointer'"
+                                @click="!idsGuiaTarifaEnItems.has(t.id) && (guiaTarifaSeleccionada = t)">
                                 {{ t.destino?.nombre }} — {{ t.modalidad === 'dia_local' ? 'Día local' : 'Grupo multidía' }} ({{ t.moneda }} {{ t.costo_diario }})
+                                <span v-if="idsGuiaTarifaEnItems.has(t.id)" class="badge bg-secondary text-white ms-1" style="font-size:10px">Ya agregado</span>
                             </div>
                             <div v-if="guiaSeleccionadaId && tarifasGuia.length === 0" class="text-muted small text-center py-2">Este guía no tiene tarifas cargadas.</div>
                         </div>
@@ -449,11 +453,13 @@
                             v-model="bibliotecaTourSearch" @input="onBibliotecaTourSearch">
                         <div class="d-flex flex-column gap-1" style="max-height:280px;overflow-y:auto;">
                             <div v-for="t in bibliotecaTours" :key="t.id" class="border rounded p-2 small lib-item"
-                                :class="{ 'border-primary bg-light': tourSeleccionado?.id === t.id }"
-                                style="cursor:pointer" @click="tourSeleccionado = t">
+                                :class="{ 'border-primary bg-light': tourSeleccionado?.id === t.id, 'opacity-50': idsTourHijoEnItems.has(t.id) }"
+                                :style="idsTourHijoEnItems.has(t.id) ? 'cursor:not-allowed' : 'cursor:pointer'"
+                                @click="!idsTourHijoEnItems.has(t.id) && (tourSeleccionado = t)">
                                 <div class="d-flex justify-content-between align-items-start">
                                     <div>
                                         <strong>{{ t.nombre }}</strong>
+                                        <span v-if="idsTourHijoEnItems.has(t.id)" class="badge bg-secondary text-white ms-1" style="font-size:10px">Ya agregado</span>
                                         <span v-if="t.codigo" class="text-muted"> · {{ t.codigo }}</span>
                                         <div class="text-muted">{{ etiquetaCategoria(t.categoria) }} · {{ tourItemCounts[t.id] ?? 0 }} ítem(s) incluido(s)</div>
                                     </div>
@@ -486,9 +492,11 @@
                         </div>
                         <div class="d-flex flex-column gap-1" style="max-height:220px;overflow-y:auto;">
                             <div v-for="t in bibliotecaTarifas" :key="t.id" class="border rounded p-2 small lib-item"
-                                :class="{ 'border-primary bg-light': proveedorTarifaSeleccionada?.id === t.id }"
-                                style="cursor:pointer" @click="proveedorTarifaSeleccionada = t">
+                                :class="{ 'border-primary bg-light': proveedorTarifaSeleccionada?.id === t.id, 'opacity-50': idsProveedorTarifaEnItems.has(t.id) }"
+                                :style="idsProveedorTarifaEnItems.has(t.id) ? 'cursor:not-allowed' : 'cursor:pointer'"
+                                @click="!idsProveedorTarifaEnItems.has(t.id) && (proveedorTarifaSeleccionada = t)">
                                 <strong>{{ t.proveedor_servicio?.proveedor?.razon_social }}</strong>
+                                <span v-if="idsProveedorTarifaEnItems.has(t.id)" class="badge bg-secondary text-white ms-1" style="font-size:10px">Ya agregado</span>
                                 <span v-if="t.proveedor_servicio?.proveedor?.es_referencial" class="badge bg-secondary-subtle text-secondary border ms-1" style="font-size:10px">Referencial</span>
                                 <span class="text-muted"> — {{ t.proveedor_servicio?.destino_servicio?.servicio?.nombre }}<span v-if="t.tipo_habitacion"> · {{ t.tipo_habitacion }}</span></span>
                             </div>
@@ -503,9 +511,11 @@
                         </select>
                         <div class="d-flex flex-column gap-1" style="max-height:220px;overflow-y:auto;">
                             <div v-for="t in tarifasGuia" :key="t.id" class="border rounded p-2 small lib-item"
-                                :class="{ 'border-primary bg-light': guiaTarifaSeleccionada?.id === t.id }"
-                                style="cursor:pointer" @click="guiaTarifaSeleccionada = t">
+                                :class="{ 'border-primary bg-light': guiaTarifaSeleccionada?.id === t.id, 'opacity-50': idsGuiaTarifaEnItems.has(t.id) }"
+                                :style="idsGuiaTarifaEnItems.has(t.id) ? 'cursor:not-allowed' : 'cursor:pointer'"
+                                @click="!idsGuiaTarifaEnItems.has(t.id) && (guiaTarifaSeleccionada = t)">
                                 {{ t.destino?.nombre }} — {{ t.modalidad === 'dia_local' ? 'Día local' : 'Grupo multidía' }} ({{ t.moneda }} {{ t.costo_diario }})
+                                <span v-if="idsGuiaTarifaEnItems.has(t.id)" class="badge bg-secondary text-white ms-1" style="font-size:10px">Ya agregado</span>
                             </div>
                             <div v-if="guiaSeleccionadaId && tarifasGuia.length === 0" class="text-muted small text-center py-2">Este guía no tiene tarifas cargadas.</div>
                         </div>
@@ -1182,6 +1192,21 @@ const cargarItems = async () => {
     const res = await paquetePlantillaService.listarItems(paqueteId.value);
     items.value = res.paquete_plantilla_items;
 };
+
+// Sesión 11n — sets de ids ya incluidos en items.value, recalculados
+// automáticamente (computed) cada vez que items cambia (agregar/quitar).
+// Usados para deshabilitar en la biblioteca lo que ya está agregado a
+// ESTE paquete/tour — el backend valida por paquete_plantilla_id, no
+// global, así que esto no debe cruzarse con otros tours/combos.
+const idsProveedorTarifaEnItems = computed(() =>
+    new Set(items.value.map(i => i.proveedor_tarifa_id).filter((id): id is number => id != null))
+);
+const idsGuiaTarifaEnItems = computed(() =>
+    new Set(items.value.map(i => i.guia_tarifa_id).filter((id): id is number => id != null))
+);
+const idsTourHijoEnItems = computed(() =>
+    new Set(items.value.map(i => i.paquete_plantilla_hijo_id).filter((id): id is number => id != null))
+);
 
 // ── Totales de "Incluye" (tour_simple) — costo/venta/margen, en vivo ──
 // Fix 3 — margen mínimo aceptable configurable por agencia (antes
