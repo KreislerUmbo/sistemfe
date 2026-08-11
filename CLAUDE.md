@@ -1062,6 +1062,82 @@ inicial (Paso 0), Fase E cerrada en su alcance actual (2026-07-20/21):**
   partición del tenant activo al momento de subir, inconsistente con ser datos centrales que
   deberían verse igual desde cualquier tenant. Evaluar en sesión dedicada.
 
+**Nota de mantenimiento de este documento (2026-08-11):** entre esta entrada y la
+anterior (URLs de storage tenant-aware, 2026-07-31) se mergearon a `main` unas ~20
+sesiones más del vertical Agencia de Viajes (11h a 11o, más una docena de fixes
+puntuales — drawer, márgenes, borrado de cotización, slug de proveedor, etc.) que
+nunca se documentaron acá ni en `docs/planning/agencia-de-viajes/
+plan-hoja-de-ruta-ejecucion.md` (esa tabla se quedó en la fila 11b4b, 30-jul —
+las sesiones 11h en adelante no tienen fila). Backfill deliberadamente fuera de
+alcance de esta entrada (decisión explícita del usuario, no un olvido) — si se
+retoma, empezar desde el commit `5d9d152` (merge sesión 11b3) en adelante.
+
+**Completo — spinners de carga + editor de texto enriquecido (2026-08-10, rama
+`feature/spinners-y-editor-enriquecido`, mergeada a `main` en `6eaf3c7`):**
+- Spinners: carga inicial (con manejo de error — nunca queda pegado si la carga
+  falla, `cargandoPagina` + `try/catch/finally`) y todos los botones de acción
+  async que no lo tenían todavía, en `paquetes/detalle.vue` (9 acciones: activar/
+  desactivar, duplicar, agregar/editar/quitar paso de itinerario, agregar/quitar
+  ítem, agregar/quitar hotel) y `cotizador/editar.vue` (9 acciones: crear/eliminar
+  alternativa, marcar aceptada, eliminar bloque/ítem, elegir fila de biblioteca,
+  confirmar modo de precio, elegir/guardar opción mayorista, guardar hotel) — mismo
+  patrón `spinner-border` ya establecido en el proyecto (`destinos/index.vue`).
+  Handlers de `@change`/drag-drop y los que viven dentro de componentes hijos
+  compartidos (`HabitacionMatrixPicker.vue`) quedaron fuera a propósito.
+- Editor enriquecido: `RichTextEditor.vue` nuevo (`admin-start-kit/src/components/`,
+  wrapper de `@vueup/vue-quill` — ya estaba instalado, cero uso hasta esta sesión;
+  toolbar acotada a títulos/negrita/cursiva/subrayado/listas) reemplaza los
+  `<textarea>` de `descripcion`/`no_incluye`/`recomendaciones` en `paquetes/form.vue`
+  y `descripcion` en `destinos/form.vue`. Único lugar de solo-lectura que mostraba
+  estos 4 campos (`paquetes/detalle.vue`, tab Datos) pasado a `v-html` — comentario
+  `TODO Sesión 11k` dejado en el código para cuando ese tab pase a editable in-situ.
+  Grep exhaustivo confirmó que no hay otro sitio en el proyecto mostrando estos
+  campos — nada quedó roto en silencio.
+- Verificado con Playwright real (bloqueado al principio por un lock del MCP de
+  Playwright que se liberó solo más tarde en la sesión — nunca hubo que reiniciar
+  nada a mano): spinner de página visible mientras carga, formato del editor
+  (negrita/lista) persistiendo tras recargar tanto en el form como en la vista de
+  detalle. Type-check del proyecto completo en 0 errores nuevos (45 antes y
+  después — los 2 preexistentes, en `paquetes/form.vue` y `cotizador/editar.vue`,
+  confirmados ya rotos en `main` desde antes de esta sesión).
+- **Hallazgo real, no bug de esta sesión — diagnosticado a fondo, sin resolver
+  (mismo hilo de conversación, después del merge)**: abrir un paquete/tour
+  (cualquiera, no solo combos) tarda 2.8-3s en dev. Medido con Network Timing +
+  CDP real, no asumido:
+  - El N+1 conocido de `ComboExplosionService` (`totalesCombo()`/
+    `itinerarioDerivado()`/`toursDelCombo()` no comparten datos entre sí, cada
+    tour incluido dispara ~4 queries propias) es real pero **secundario** — solo
+    ~180ms de diferencia entre un combo de 3 tours y un tour simple.
+  - La causa dominante: `php artisan serve` (servidor built-in de PHP, sin
+    `--workers` en esta versión de Laravel) atiende **una sola request a la
+    vez** — confirmado con 6 requests en paralelo real vs. secuencial dando el
+    mismo tiempo total (~2.6-2.7s), en escalera perfecta de ~400-450ms cada una.
+    `detalle.vue` dispara 6-9 requests casi simultáneas al montar → se encolan.
+    No hace falta resolverlo hoy (dev-only), pero cualquier sesión futura que
+    toque el rendimiento de esta pantalla debe partir de acá, no de la hipótesis
+    del N+1.
+  - `CACHE_STORE=database` (Spatie Permission, 24h) — descartado como causa:
+    medido con query log real (con y sin `Gate::before` de Super-Admin, A/B
+    `database` vs `file`), el costo real es ~0.2-0.3ms por request (Laravel
+    `remember()` no re-consulta si el valor ya está en caché). Sin impacto medible.
+  - Xdebug confirmado apagado (no cargado como extensión). Antivirus sin verificar
+    (permisos insuficientes en esta sesión).
+
+**Completo — cachear el preflight OPTIONS de CORS (2026-08-10/11, rama
+`fix/cors-preflight-cache`, mergeada a `main` en `7bf1810`):** el proyecto nunca
+tuvo `config/cors.php` propio — Laravel 11+ mergeaba en caliente el default del
+framework (`allowed_origins`/`methods`/`headers` en `'*'`, confirmado con
+`config('cors')` antes del cambio, valores idénticos a los que quedaron), pero ese
+default trae `max_age=0`: el navegador nunca cacheaba el preflight y volvía a
+preguntar en cada request real, duplicando los round-trips de red en TODAS las
+pantallas (no solo agencia-viajes). Se publicó el archivo (`php artisan
+config:publish cors`) con los mismos valores efectivos + `max_age=3600` (1h,
+piso de dev — evaluar 86400 en producción más adelante). Verificado con CDP real
+(no con el `page.on('request')` de Playwright, que filtra preflights por diseño):
+con `max_age=0`, 10 preflights tanto en la primera carga como en un F5 posterior;
+con `max_age=3600`, 10 en la primera carga (caché vacía, esperado) y **0** en el
+F5. Sin errores de consola nuevos, 103/103 tests de backend en verde.
+
 **Próximos módulos (en orden de prioridad):**
 
 1. **Representación impresa (PDF) con impresión automática**
