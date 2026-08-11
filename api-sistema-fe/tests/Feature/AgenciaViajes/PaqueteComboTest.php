@@ -282,6 +282,54 @@ class PaqueteComboTest extends TestCase
         ]);
     }
 
+    public function test_item_controller_rechaza_proveedor_tarifa_duplicada_en_el_mismo_tour(): void
+    {
+        $tarifa = $this->crearProveedorTarifa(60, 120);
+        $altoMayo = $this->crearTourSimple('Alto Mayo Full Day', $tarifa);
+        $countAntes = PaquetePlantillaItem::count();
+
+        $request = new Request(['proveedor_tarifa_id' => $tarifa->id, 'orden' => 2]);
+        $response = app(PaquetePlantillaItemController::class)->store($request, (string) $altoMayo->id);
+
+        $this->assertSame(422, $response->getStatusCode());
+        $this->assertStringContainsString('ya está incluido', $response->getData()->message);
+        $this->assertSame($countAntes, PaquetePlantillaItem::count());
+    }
+
+    public function test_item_controller_rechaza_tour_hijo_duplicado_en_el_mismo_combo(): void
+    {
+        $altoMayo = $this->crearTourSimple('Alto Mayo Full Day', $this->crearProveedorTarifa(60, 120));
+        $combo = $this->crearCombo('Paquete Tarapoto 3D/2N', [$altoMayo]);
+
+        $request = new Request(['paquete_plantilla_hijo_id' => $altoMayo->id, 'orden' => 2]);
+        $response = app(PaquetePlantillaItemController::class)->store($request, (string) $combo->id);
+
+        $this->assertSame(422, $response->getStatusCode());
+        $this->assertStringContainsString('ya está incluido', $response->getData()->message);
+    }
+
+    public function test_item_controller_permite_misma_proveedor_tarifa_en_dos_tours_hijo_distintos(): void
+    {
+        // La validación es por paquete_plantilla_id, no global — un mismo
+        // proveedor_tarifa puede repetirse legítimamente entre 2 tours-hijo
+        // distintos del mismo combo.
+        $tarifa = $this->crearProveedorTarifa(60, 120);
+        $altoMayo = $this->crearTourSimple('Alto Mayo Full Day', $tarifa);
+
+        $lagunaAzul = PaquetePlantilla::create([
+            'categoria' => 'local',
+            'tipo' => PaquetePlantilla::TIPO_TOUR_SIMPLE,
+            'nombre' => 'Laguna Azul Full Day',
+            'destino_atractivo_id' => $altoMayo->destino_atractivo_id,
+            'duracion_horas' => 8,
+        ]);
+
+        $request = new Request(['proveedor_tarifa_id' => $tarifa->id, 'orden' => 1]);
+        $response = app(PaquetePlantillaItemController::class)->store($request, (string) $lagunaAzul->id);
+
+        $this->assertSame(200, $response->getStatusCode());
+    }
+
     public function test_item_controller_rechaza_item_que_deja_margen_insuficiente_y_no_persiste_nada(): void
     {
         $altoMayo = $this->crearTourSimple('Alto Mayo Full Day', $this->crearProveedorTarifa(60, 120));
