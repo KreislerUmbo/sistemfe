@@ -115,6 +115,10 @@ class CotizacionController extends Controller
             // Sesión 11k — nombre del hotel/habitación para etiquetaItem()
             // de un ítem origen_tipo=hotel_plantilla.
             'alternativas.items.opcionHotelTarifa.opcionHotel',
+            // Fix guia-como-item-real — nombre del guía/destino para
+            // etiquetaItem() de un ítem origen_tipo=guia.
+            'alternativas.items.guiaTarifa.guia',
+            'alternativas.items.guiaTarifa.destino',
             'alternativas.items.cotizacionPasajeAereo',
             // Sesión 11b3 — nombre del tour de origen para el encabezado del
             // bloque agrupado en el lienzo día-por-día (§7.1).

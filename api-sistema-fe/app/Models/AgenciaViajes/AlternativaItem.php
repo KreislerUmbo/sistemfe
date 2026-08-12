@@ -21,6 +21,7 @@ class AlternativaItem extends Model
     public const ORIGEN_PASAJE_AEREO = 'pasaje_aereo';
     public const ORIGEN_MANUAL = 'manual';
     public const ORIGEN_HOTEL_PLANTILLA = 'hotel_plantilla';
+    public const ORIGEN_GUIA = 'guia';
 
     public const ORIGENES = [
         self::ORIGEN_PROVEEDOR,
@@ -28,6 +29,7 @@ class AlternativaItem extends Model
         self::ORIGEN_PASAJE_AEREO,
         self::ORIGEN_MANUAL,
         self::ORIGEN_HOTEL_PLANTILLA,
+        self::ORIGEN_GUIA,
     ];
 
     protected $fillable = [
@@ -37,6 +39,7 @@ class AlternativaItem extends Model
         'opcion_mayorista_id',
         'opcion_hotel_tarifa_id',
         'paquete_plantilla_id',
+        'guia_tarifa_id',
         'tour_origen_id',
         'dia_referencial',
         'descripcion_manual',
@@ -80,6 +83,15 @@ class AlternativaItem extends Model
     public function opcionHotelTarifa()
     {
         return $this->belongsTo(OpcionHotelTarifa::class, 'opcion_hotel_tarifa_id');
+    }
+
+    // Sesión fix/guia-como-item-real — de qué guia_tarifa vino el costo de
+    // este ítem (origen_tipo=guia). QUÉ guía puntual del catálogo termina
+    // asignado sigue siendo una decisión de reserva (reserva_items.guia_id),
+    // esto solo trae el costo/margen a la cotización.
+    public function guiaTarifa()
+    {
+        return $this->belongsTo(GuiaTarifa::class, 'guia_tarifa_id');
     }
 
     // Sesión 11k — de qué paquete_plantilla vino este ítem de hotel
