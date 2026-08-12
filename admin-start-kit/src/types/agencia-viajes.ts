@@ -291,7 +291,7 @@ export type AlternativaResponse = {
   lineas_fuera_de_piso?: Array<{ alternativa_item_id: number; precio_minimo_permitido: number | null }>;
 };
 
-export type OrigenItem = 'proveedor' | 'mayorista' | 'pasaje_aereo' | 'manual';
+export type OrigenItem = 'proveedor' | 'mayorista' | 'pasaje_aereo' | 'manual' | 'guia';
 
 export type AlternativaItem = {
   id: number;
@@ -299,6 +299,10 @@ export type AlternativaItem = {
   origen_tipo: OrigenItem;
   proveedor_tarifa_id?: number | null;
   opcion_mayorista_id?: number | null;
+  // Fix guia-como-item-real — de qué guia_tarifa vino el costo de este
+  // ítem (origen_tipo=guia), ver crearItemGuia()/desdePlantilla().
+  guia_tarifa_id?: number | null;
+  guia_tarifa?: GuiaTarifa;
   // Sesión 11b4a — de qué tour_simple vino este ítem al explotar un
   // paquete_combo (agrupación visual, no afecta precio).
   tour_origen_id?: number | null;

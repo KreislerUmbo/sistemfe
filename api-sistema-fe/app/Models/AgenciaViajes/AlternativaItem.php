@@ -27,12 +27,14 @@ class AlternativaItem extends Model
     public const ORIGEN_MAYORISTA = 'mayorista';
     public const ORIGEN_PASAJE_AEREO = 'pasaje_aereo';
     public const ORIGEN_MANUAL = 'manual';
+    public const ORIGEN_GUIA = 'guia';
 
     public const ORIGENES = [
         self::ORIGEN_PROVEEDOR,
         self::ORIGEN_MAYORISTA,
         self::ORIGEN_PASAJE_AEREO,
         self::ORIGEN_MANUAL,
+        self::ORIGEN_GUIA,
     ];
 
     protected $fillable = [
@@ -40,6 +42,7 @@ class AlternativaItem extends Model
         'origen_tipo',
         'proveedor_tarifa_id',
         'opcion_mayorista_id',
+        'guia_tarifa_id',
         'tour_origen_id',
         'dia_referencial',
         'descripcion_manual',
@@ -78,6 +81,15 @@ class AlternativaItem extends Model
     public function opcionMayorista()
     {
         return $this->belongsTo(OpcionMayorista::class, 'opcion_mayorista_id');
+    }
+
+    // Sesión fix/guia-como-item-real — de qué guia_tarifa vino el costo de
+    // este ítem (origen_tipo=guia). QUÉ guía puntual del catálogo termina
+    // asignado sigue siendo una decisión de reserva (reserva_items.guia_id),
+    // esto solo trae el costo/margen a la cotización.
+    public function guiaTarifa()
+    {
+        return $this->belongsTo(GuiaTarifa::class, 'guia_tarifa_id');
     }
 
     // Sesión 11b4 — tour_simple de origen cuando este ítem vino de explotar

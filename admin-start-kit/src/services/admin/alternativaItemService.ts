@@ -29,6 +29,12 @@ export const alternativaItemService = {
     const response = await httpClient.post(`/alternativas/${alternativaId}/items`, { ...data, origen_tipo: 'manual' })
     return response.data
   },
+  // Fix guia-como-item-real — guía suelto con costo real (guia_tarifa_id),
+  // ver AlternativaItemController::crearItemGuia().
+  async agregarGuia(alternativaId: number, data: Record<string, any>) {
+    const response = await httpClient.post(`/alternativas/${alternativaId}/items`, { ...data, origen_tipo: 'guia' })
+    return response.data
+  },
   // Edición en vivo — mandar SOLO uno de los dos (descuento_pct o
   // precio_convertido), el backend devuelve ambos recalculados +
   // alerta_piso/precio_minimo_permitido.

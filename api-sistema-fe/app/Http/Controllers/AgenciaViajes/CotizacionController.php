@@ -112,6 +112,10 @@ class CotizacionController extends Controller
             'alternativas.items.proveedorTarifa.proveedorServicio.destinoServicio.servicio',
             'alternativas.items.proveedorTarifa.proveedorServicio.destinoServicio.destinoAtractivo',
             'alternativas.items.opcionMayorista',
+            // Fix guia-como-item-real — nombre del guía/destino para
+            // etiquetaItem() de un ítem origen_tipo=guia.
+            'alternativas.items.guiaTarifa.guia',
+            'alternativas.items.guiaTarifa.destino',
             'alternativas.items.cotizacionPasajeAereo',
             // Sesión 11b3 — nombre del tour de origen para el encabezado del
             // bloque agrupado en el lienzo día-por-día (§7.1).

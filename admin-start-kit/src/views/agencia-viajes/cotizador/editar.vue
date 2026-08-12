@@ -404,6 +404,7 @@
                             <div class="d-flex gap-1 mb-2">
                                 <button class="btn btn-sm flex-fill" :class="modo === 'local' ? 'btn-primary' : 'btn-outline-secondary'" @click="modo = 'local'">Local / Nacional</button>
                                 <button class="btn btn-sm flex-fill" :class="modo === 'intl' ? 'btn-primary' : 'btn-outline-secondary'" @click="modo = 'intl'">Internacional</button>
+                                <button class="btn btn-sm flex-fill" :class="modo === 'guia' ? 'btn-primary' : 'btn-outline-secondary'" @click="modo = 'guia'"><i class="fas fa-user-tie me-1"></i>Guías</button>
                             </div>
 
                             <!-- Biblioteca local -->
@@ -487,6 +488,36 @@
 
                                 <small class="text-muted d-block mt-2"><i class="fas fa-hand-pointer me-1"></i>Clic para agregar al día activo</small>
                                 <button class="btn btn-outline-secondary btn-sm w-100 mt-2" @click="mostrarFormManual = true"><i class="fas fa-plus me-1"></i>Ítem manual</button>
+                            </template>
+
+                            <!-- Buscador de guías (Fix guia-como-item-real) — mismo patrón visual
+                                 que ya usa paquetes/detalle.vue: elegir guía, después su lista de
+                                 tarifas (cada una ya trae su destino/modalidad/costo_diario). -->
+                            <template v-else-if="modo === 'guia'">
+                                <select class="form-select form-select-sm mb-2" v-model="guiaSeleccionadaIdCotizador" @change="cargarTarifasGuiaCotizador">
+                                    <option :value="null">— Elegí un guía —</option>
+                                    <option v-for="g in guiasCotizador" :key="g.id" :value="g.id">{{ g.nombre }}{{ g.es_referencial ? ' (Referencial)' : '' }}</option>
+                                </select>
+                                <div v-if="guiaSeleccionadaIdCotizador" class="d-flex flex-column gap-1 mb-2">
+                                    <div v-for="t in tarifasGuiaCotizador" :key="t.id" class="border rounded p-2 small lib-item"
+                                        :class="{ 'border-primary bg-light': guiaTarifaSeleccionadaCotizador?.id === t.id }"
+                                        style="cursor:pointer"
+                                        @click="guiaTarifaSeleccionadaCotizador = t">
+                                        <div class="d-flex justify-content-between">
+                                            <span><i class="fas fa-user-tie me-1 text-primary"></i>{{ t.destino?.nombre }}</span>
+                                            <span class="text-muted">{{ t.moneda }} {{ Number(t.costo_diario).toFixed(0) }}/día</span>
+                                        </div>
+                                        <div class="text-muted" style="font-size:11px">{{ t.modalidad === 'dia_local' ? 'Día local' : 'Grupo multidía' }}</div>
+                                    </div>
+                                    <div v-if="tarifasGuiaCotizador.length === 0" class="text-muted small text-center py-2">Este guía no tiene tarifas cargadas.</div>
+                                </div>
+                                <div v-if="guiaTarifaSeleccionadaCotizador" class="mb-2">
+                                    <label class="form-label mb-1 small text-secondary">Cantidad de días</label>
+                                    <input type="number" min="1" class="form-control form-control-sm" v-model.number="cantidadDiasGuia">
+                                </div>
+                                <button class="btn btn-primary btn-sm w-100" @click="agregarItemGuiaCotizador" :disabled="!guiaTarifaSeleccionadaCotizador || agregandoGuia">
+                                    <span v-if="agregandoGuia" class="spinner-border spinner-border-sm me-1"></span>Agregar guía
+                                </button>
                             </template>
 
                             <!-- Comparador de mayoristas -->
@@ -634,7 +665,8 @@ import { bibliotecaCotizadorService, type BibliotecaTipo } from '@/services/admi
 import { reservaService } from '@/services/admin/reservaService';
 import { configuracionAgenciaService } from '@/services/admin/configuracionAgenciaService';
 import { formatFecha } from '@/helpers/fecha';
-import type { Cotizacion, Alternativa, AlternativaItem, ProveedorTarifa, OpcionMayorista, Proveedor, ProveedorTipo, BibliotecaResultado, ConfiguracionAgencia, DestinoServicio } from '@/types/agencia-viajes';
+import { guiaService } from '@/services/admin/guiaService';
+import type { Cotizacion, Alternativa, AlternativaItem, ProveedorTarifa, OpcionMayorista, Proveedor, ProveedorTipo, BibliotecaResultado, ConfiguracionAgencia, DestinoServicio, Guia, GuiaTarifa } from '@/types/agencia-viajes';
 import type { Client } from '@/types/clients';
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
@@ -648,7 +680,7 @@ const cargandoPagina = ref(true);
 
 const cotizacion = ref<Cotizacion | null>(null);
 const alternativaActivaId = ref<number | null>(null);
-const modo = ref<'local' | 'intl'>('local');
+const modo = ref<'local' | 'intl' | 'guia'>('local');
 
 // Sesión 11i — descuento configurable por agencia (Puntos B/C). Se carga
 // una sola vez al montar (singleton por tenant, no cambia mientras el
@@ -1194,8 +1226,8 @@ const clicResultadoPlantilla = async (p: Extract<BibliotecaResultado, { tipo_res
                 .map((g) => `<li>${g.guia_nombre ?? 'Guía'} — ${g.tour_origen_nombre ?? ''}${g.destino_nombre ? ` (${g.destino_nombre})` : ''}</li>`)
                 .join('');
             await (Swal as TVueSwalInstance).fire({
-                title: 'Ítems de guía no cargados',
-                html: `<p class="text-start mb-1">Sin equivalente automático en la cotización — se asignan recién al reservar:</p><ul class="text-start">${lista}</ul>`,
+                title: 'Guías pendientes de asignar',
+                html: `<p class="text-start mb-1">El costo ya se sumó al total — falta confirmar cuál guía puntual queda asignado (eso se hace recién al reservar):</p><ul class="text-start">${lista}</ul>`,
                 icon: 'info',
             });
         }
@@ -1443,6 +1475,57 @@ const agregarItemMayorista = async (op: OpcionMayorista, opcionHotelTarifaId: nu
         (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo agregar', 'error');
     }
 };
+
+// ── Guías (Fix guia-como-item-real) ─────────────────────────────────────
+// Mismo patrón ya usado en paquetes/detalle.vue: elegir el guía primero,
+// después su lista de tarifas (una por destino/modalidad) — "filtrado por
+// destino" en la práctica, cada tarifa ya trae su propio destino. No hay
+// endpoint de búsqueda unificada para guías (guiaService no lo tiene, a
+// diferencia de bibliotecaCotizadorService para proveedores/tours), así
+// que esta sección vive aparte del grid de biblioteca, igual que el
+// comparador de mayoristas ya vive aparte (toggle "Local / Nacional" vs
+// "Internacional" — acá se suma un tercer modo, "Guías").
+const guiasCotizador = ref<Guia[]>([]);
+const guiaSeleccionadaIdCotizador = ref<number | null>(null);
+const tarifasGuiaCotizador = ref<GuiaTarifa[]>([]);
+const guiaTarifaSeleccionadaCotizador = ref<GuiaTarifa | null>(null);
+const cantidadDiasGuia = ref(1);
+const agregandoGuia = ref(false);
+
+const cargarGuiasCotizador = async () => {
+    if (guiasCotizador.value.length) return;
+    const res = await guiaService.listar({});
+    guiasCotizador.value = res.guias ?? [];
+};
+
+const cargarTarifasGuiaCotizador = async () => {
+    guiaTarifaSeleccionadaCotizador.value = null;
+    tarifasGuiaCotizador.value = [];
+    if (!guiaSeleccionadaIdCotizador.value) return;
+    const res = await guiaService.obtener(guiaSeleccionadaIdCotizador.value);
+    tarifasGuiaCotizador.value = res.guia.guia_tarifas ?? [];
+};
+
+const agregarItemGuiaCotizador = async () => {
+    if (!alternativaActiva.value || !guiaTarifaSeleccionadaCotizador.value) return;
+    agregandoGuia.value = true;
+    try {
+        const res = await alternativaItemService.agregarGuia(alternativaActiva.value.id, {
+            guia_tarifa_id: guiaTarifaSeleccionadaCotizador.value.id,
+            cantidad: cantidadDiasGuia.value || 1,
+            dia_referencial: diaActivoParaAgregar.value,
+        });
+        guiaTarifaSeleccionadaCotizador.value = null;
+        cantidadDiasGuia.value = 1;
+        await onServicioSueltoAgregado(res.alternativa_item);
+    } catch (error: any) {
+        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo agregar el guía', 'error');
+    } finally {
+        agregandoGuia.value = false;
+    }
+};
+
+watch(modo, (m) => { if (m === 'guia') cargarGuiasCotizador(); });
 
 // ── Drawer de biblioteca (Punto A) ─────────────────────────────────────
 const drawerBibliotecaAbierto = ref(false);
@@ -1699,6 +1782,7 @@ const iconoItem = (item: AlternativaItem) => {
     if (item.origen_tipo === 'pasaje_aereo') return 'fa-plane';
     if (item.origen_tipo === 'mayorista') return 'fa-plane-departure';
     if (item.origen_tipo === 'manual') return 'fa-pen';
+    if (item.origen_tipo === 'guia') return 'fa-user-tie';
     if (item.proveedor_tarifa?.tipo_habitacion) return 'fa-bed';
     return 'fa-concierge-bell';
 };
@@ -1707,6 +1791,10 @@ const etiquetaItem = (item: AlternativaItem) => {
     if (item.origen_tipo === 'manual') return item.descripcion_manual ?? 'Ítem manual';
     if (item.origen_tipo === 'pasaje_aereo') return item.cotizacion_pasaje_aereo?.aerolinea ?? 'Pasaje aéreo';
     if (item.origen_tipo === 'mayorista') return item.opcion_mayorista?.proveedor?.nombre_comercial ?? item.opcion_mayorista?.proveedor?.razon_social ?? 'Paquete mayorista';
+    if (item.origen_tipo === 'guia') {
+        const nombreGuia = item.guia_tarifa?.guia?.nombre ?? 'Guía';
+        return `Guía: ${nombreGuia}${item.guia_tarifa?.destino?.nombre ? ` — ${item.guia_tarifa.destino.nombre}` : ''}`;
+    }
     if (item.proveedor_tarifa?.tipo_habitacion) {
         // Hotel: la categoría genérica del servicio ("Alojamiento") no dice nada útil
         // acá — mismo formato "Proveedor · tipo_habitación" que ya usa clicBibliotecaItem.
