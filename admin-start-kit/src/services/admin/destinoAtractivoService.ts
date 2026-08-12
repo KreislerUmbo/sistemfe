@@ -48,5 +48,9 @@ export const destinoAtractivoService = {
   async desasociarServicio(destinoServicioId: number) {
     const response = await httpClient.delete(`/destino-servicio/${destinoServicioId}`)
     return response.data
+  },
+  async moverServicio(destinoServicioId: number, destino_atractivo_id: number) {
+    const response = await httpClient.patch(`/destino-servicio/${destinoServicioId}/mover`, { destino_atractivo_id })
+    return response.data
   }
 }

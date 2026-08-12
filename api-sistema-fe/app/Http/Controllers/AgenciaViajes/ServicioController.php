@@ -14,14 +14,15 @@ class ServicioController extends Controller
     public function index(Request $request)
     {
         $search = $request->get('search');
+        $perPage = (int) $request->input('per_page', 15);
 
         $servicios = Servicio::when($search, fn ($q) => $q->where('nombre', 'ilike', "%{$search}%"))
             ->orderBy('nombre')
-            ->paginate(15);
+            ->paginate($perPage);
 
         return response()->json([
             'total' => $servicios->total(),
-            'paginate' => 15,
+            'paginate' => $perPage,
             'servicios' => $servicios->items(),
         ]);
     }

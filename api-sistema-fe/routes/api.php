@@ -433,6 +433,8 @@ Route::group([
         ->middleware('permission:agencia.destinos');
     Route::delete("destino-servicio/{id}", [DestinoServicioController::class, 'destroy'])
         ->middleware('permission:agencia.destinos');
+    Route::patch("destino-servicio/{id}/mover", [DestinoServicioController::class, 'mover'])
+        ->middleware('permission:agencia.destinos');
     Route::resource("servicios", ServicioController::class)
         ->middleware('permission:agencia.destinos');
 
