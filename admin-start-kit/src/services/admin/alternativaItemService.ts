@@ -29,12 +29,6 @@ export const alternativaItemService = {
     const response = await httpClient.post(`/alternativas/${alternativaId}/items`, { ...data, origen_tipo: 'manual' })
     return response.data
   },
-  // Sesión 11k — hotel elegido de la matriz de un paquete_plantilla (ver
-  // hoteles_disponibles en la respuesta de cargarDesdePlantilla).
-  async agregarHotelPlantilla(alternativaId: number, data: Record<string, any>) {
-    const response = await httpClient.post(`/alternativas/${alternativaId}/items`, { ...data, origen_tipo: 'hotel_plantilla' })
-    return response.data
-  },
   // Fix guia-como-item-real — guía suelto con costo real (guia_tarifa_id),
   // ver AlternativaItemController::crearItemGuia().
   async agregarGuia(alternativaId: number, data: Record<string, any>) {

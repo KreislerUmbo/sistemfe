@@ -12,6 +12,13 @@ use Illuminate\Database\Eloquent\Model;
 //
 // origen_tipo/cantidad/descripcion_manual: RETROFIT Sesión 11b (ver
 // 2026_07_28_180000_add_origen_tipo_cantidad_descripcion_manual_to_alternativa_items_table.php).
+//
+// origen_tipo='hotel_plantilla' (Sesión 11k) fue eliminado en la
+// consolidación de hoteles: un hotel ya no cuelga de un paquete_plantilla,
+// es una proveedor_tarifa más (origen_tipo=proveedor). Las columnas
+// opcion_hotel_tarifa_id/paquete_plantilla_id de esta tabla siguen
+// existiendo en la BD (fuera de alcance de esa migración) pero quedaron
+// muertas — ningún código las escribe ya.
 class AlternativaItem extends Model
 {
     protected $table = 'alternativa_items';
@@ -20,7 +27,6 @@ class AlternativaItem extends Model
     public const ORIGEN_MAYORISTA = 'mayorista';
     public const ORIGEN_PASAJE_AEREO = 'pasaje_aereo';
     public const ORIGEN_MANUAL = 'manual';
-    public const ORIGEN_HOTEL_PLANTILLA = 'hotel_plantilla';
     public const ORIGEN_GUIA = 'guia';
 
     public const ORIGENES = [
@@ -28,7 +34,6 @@ class AlternativaItem extends Model
         self::ORIGEN_MAYORISTA,
         self::ORIGEN_PASAJE_AEREO,
         self::ORIGEN_MANUAL,
-        self::ORIGEN_HOTEL_PLANTILLA,
         self::ORIGEN_GUIA,
     ];
 
@@ -37,8 +42,6 @@ class AlternativaItem extends Model
         'origen_tipo',
         'proveedor_tarifa_id',
         'opcion_mayorista_id',
-        'opcion_hotel_tarifa_id',
-        'paquete_plantilla_id',
         'guia_tarifa_id',
         'tour_origen_id',
         'dia_referencial',
@@ -80,11 +83,6 @@ class AlternativaItem extends Model
         return $this->belongsTo(OpcionMayorista::class, 'opcion_mayorista_id');
     }
 
-    public function opcionHotelTarifa()
-    {
-        return $this->belongsTo(OpcionHotelTarifa::class, 'opcion_hotel_tarifa_id');
-    }
-
     // Sesión fix/guia-como-item-real — de qué guia_tarifa vino el costo de
     // este ítem (origen_tipo=guia). QUÉ guía puntual del catálogo termina
     // asignado sigue siendo una decisión de reserva (reserva_items.guia_id),
@@ -92,15 +90,6 @@ class AlternativaItem extends Model
     public function guiaTarifa()
     {
         return $this->belongsTo(GuiaTarifa::class, 'guia_tarifa_id');
-    }
-
-    // Sesión 11k — de qué paquete_plantilla vino este ítem de hotel
-    // (origen_tipo=hotel_plantilla). Distinto de tourOrigen(): tourOrigen
-    // marca el tour_simple dentro de un combo, este marca el paquete/tour
-    // dueño de la matriz de hoteles de la que salió la tarifa elegida.
-    public function paquetePlantillaOrigen()
-    {
-        return $this->belongsTo(PaquetePlantilla::class, 'paquete_plantilla_id');
     }
 
     // Sesión 11b4 — tour_simple de origen cuando este ítem vino de explotar

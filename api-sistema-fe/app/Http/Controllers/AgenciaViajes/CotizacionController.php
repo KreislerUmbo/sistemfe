@@ -112,9 +112,6 @@ class CotizacionController extends Controller
             'alternativas.items.proveedorTarifa.proveedorServicio.destinoServicio.servicio',
             'alternativas.items.proveedorTarifa.proveedorServicio.destinoServicio.destinoAtractivo',
             'alternativas.items.opcionMayorista',
-            // Sesión 11k — nombre del hotel/habitación para etiquetaItem()
-            // de un ítem origen_tipo=hotel_plantilla.
-            'alternativas.items.opcionHotelTarifa.opcionHotel',
             // Fix guia-como-item-real — nombre del guía/destino para
             // etiquetaItem() de un ítem origen_tipo=guia.
             'alternativas.items.guiaTarifa.guia',

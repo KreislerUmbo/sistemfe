@@ -43,6 +43,30 @@
                     <div class="col-md-4"><strong>Email:</strong> {{ proveedor.email ?? '—' }}</div>
                     <div class="col-md-8"><strong>Dirección:</strong> {{ proveedor.direccion ?? '—' }}</div>
                     <div class="col-12" v-if="proveedor.observaciones"><strong>Observaciones:</strong> {{ proveedor.observaciones }}</div>
+                    <div class="col-12" v-if="proveedor.descripcion">
+                        <strong>Descripción:</strong>
+                        <div v-html="proveedor.descripcion"></div>
+                    </div>
+                    <div class="col-12" v-if="esHotel && proveedor.alojamiento_detalle">
+                        <strong>Horario:</strong>
+                        Check-in {{ proveedor.alojamiento_detalle.hora_checkin ?? '—' }} · Check-out {{ proveedor.alojamiento_detalle.hora_checkout ?? '—' }}
+                        <span class="badge bg-light text-dark border ms-2">
+                            <i class="fas fa-baby me-1"></i>Infante gratis hasta {{ proveedor.alojamiento_detalle.edad_max_infante_gratis }} años ·
+                            cama adicional hasta {{ proveedor.alojamiento_detalle.edad_max_nino_cama_adicional }} años
+                        </span>
+                    </div>
+                    <div class="col-12" v-if="(proveedor.amenidades?.length ?? 0) > 0">
+                        <strong>Amenidades:</strong>
+                        <span v-for="amenidad in proveedor.amenidades" :key="amenidad.id" class="badge bg-light text-dark border me-1">
+                            <i :class="amenidad.icono" class="me-1 text-primary"></i>{{ amenidad.nombre }}
+                        </span>
+                    </div>
+                    <div class="col-12" v-if="(proveedor.fotos?.length ?? 0) > 0">
+                        <strong>Fotos:</strong>
+                        <div class="d-flex flex-wrap gap-2 mt-1">
+                            <img v-for="foto in proveedor.fotos" :key="foto" :src="foto" class="img-thumbnail" style="width:110px;height:110px;object-fit:cover;">
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -198,6 +222,36 @@
                                     <option value="familiar">Familiar</option>
                                 </select>
                             </div>
+
+                            <template v-if="esHotel">
+                                <div class="col-6 col-md-4">
+                                    <label class="form-label mb-1 small fw-semibold text-secondary">Descripción</label>
+                                    <input type="text" class="form-control form-control-sm" placeholder="Ej. vista al mar, balcón" v-model="formTarifa.descripcion">
+                                </div>
+                                <div class="col-6 col-md-4">
+                                    <label class="form-label mb-1 small fw-semibold text-secondary">Régimen de comida</label>
+                                    <select class="form-select form-select-sm" v-model="formTarifa.regimen_comida">
+                                        <option :value="null">—</option>
+                                        <option value="solo_alojamiento">Solo alojamiento</option>
+                                        <option value="desayuno">Desayuno</option>
+                                        <option value="media_pension">Media pensión</option>
+                                        <option value="pension_completa">Pensión completa</option>
+                                    </select>
+                                </div>
+                                <div class="col-6 col-md-4">
+                                    <label class="form-label mb-1 small fw-semibold text-secondary">Tipo de cama</label>
+                                    <input type="text" class="form-control form-control-sm" placeholder="Ej. king, 2 twin" v-model="formTarifa.tipo_cama">
+                                </div>
+                                <div class="col-6 col-md-4">
+                                    <label class="form-label mb-1 small fw-semibold text-secondary">Costo cama adicional</label>
+                                    <input type="number" min="0" step="0.01" class="form-control form-control-sm" v-model.number="formTarifa.precio_costo_cama_adicional">
+                                </div>
+                                <div class="col-6 col-md-4">
+                                    <label class="form-label mb-1 small fw-semibold text-secondary">Venta cama adicional</label>
+                                    <input type="number" min="0" step="0.01" class="form-control form-control-sm" v-model.number="formTarifa.precio_venta_cama_adicional">
+                                </div>
+                                <small class="text-muted col-12">Cama adicional: dejar en blanco si esta habitación no la admite.</small>
+                            </template>
 
                             <div class="col-12"><hr class="my-1"></div>
 
@@ -457,8 +511,10 @@ const abrirFormTarifa = (ps: ProveedorServicio, tarifa: ProveedorTarifa | null =
         ? { ...tarifa }
         : {
             tipo_tarifa: 'publica', modalidad: 'compartido', moneda: 'PEN', tipo_habitacion: null,
+            descripcion: null, regimen_comida: null, tipo_cama: null,
             precio_costo: 0, margen_tipo: 'porcentaje', margen_valor: 0,
             precio_venta_adulto: 0, precio_venta_nino: null, precio_venta_infante: null,
+            precio_costo_cama_adicional: null, precio_venta_cama_adicional: null,
             edad_min_nino: 0,
             edad_max_nino: configAgencia.value?.edad_max_nino ?? null,
             edad_max_infante: configAgencia.value?.edad_max_infante ?? null,

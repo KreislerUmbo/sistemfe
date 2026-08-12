@@ -3,6 +3,7 @@
 use App\Http\Controllers\Advance\AdvanceController;
 use App\Http\Controllers\AgenciaViajes\AlternativaController;
 use App\Http\Controllers\AgenciaViajes\AlternativaItemController;
+use App\Http\Controllers\AgenciaViajes\AmenidadController;
 use App\Http\Controllers\AgenciaViajes\BibliotecaCotizadorController;
 use App\Http\Controllers\AgenciaViajes\ConfiguracionAgenciaController;
 use App\Http\Controllers\AgenciaViajes\CotizacionController;
@@ -385,6 +386,11 @@ Route::group([
     Route::post("proveedor-tipos/{id}/toggle", [ProveedorTipoConfigController::class, 'toggle'])
         ->middleware('permission:agencia.proveedores');
 
+    // Consolidación de hoteles — catálogo central de amenidades, solo
+    // lectura (mismo criterio que proveedor-tipos).
+    Route::get("amenidades", [AmenidadController::class, 'index'])
+        ->middleware('permission:agencia.proveedores');
+
     Route::post("proveedores/{id}", [ProveedorController::class, 'update'])
         ->middleware('permission:agencia.proveedores');
     Route::resource("proveedores", ProveedorController::class)
@@ -395,8 +401,9 @@ Route::group([
         ->middleware('permission:agencia.proveedores');
     Route::delete("proveedores/{id}/servicios/{servicioId}", [ProveedorServicioController::class, 'destroy'])
         ->middleware('permission:agencia.proveedores');
-    // Sesión 11k, Fix 9 — tarifas Hotel de un proveedor (para "usar tarifa
-    // registrada" al armar la matriz de habitaciones de un opcion_hotel).
+    // Mantenida pese a la consolidación de hoteles — usada por el flujo de
+    // opcion_mayorista ("usar tarifa registrada"), fuera de alcance de esta
+    // sesión, ver comentario en ProveedorController::tarifasHotel().
     Route::get("proveedores/{id}/tarifas-hotel", [ProveedorController::class, 'tarifasHotel'])
         ->middleware('permission:agencia.proveedores');
     Route::get("proveedor-servicios/{id}/tarifas", [ProveedorTarifaController::class, 'index'])
@@ -480,13 +487,6 @@ Route::group([
     Route::delete("tour-itinerario-items/{id}", [TourItinerarioItemController::class, 'destroy'])
         ->middleware('permission:agencia.paquetes');
     Route::post("paquetes-plantilla/{id}/itinerario/reordenar", [TourItinerarioItemController::class, 'reordenar'])
-        ->middleware('permission:agencia.paquetes');
-
-    // Matriz hotel × tipo de habitación (mismo motor que
-    // opciones-mayorista/{id}/hoteles, escopeado a paquete_plantilla_id).
-    Route::match(['get', 'post'], "paquetes-plantilla/{id}/hoteles", [PaquetePlantillaController::class, 'hoteles'])
-        ->middleware('permission:agencia.paquetes');
-    Route::delete("paquete-plantilla-hoteles/{id}", [PaquetePlantillaController::class, 'eliminarHotel'])
         ->middleware('permission:agencia.paquetes');
 
     // ═══════════════════════════════════════════════════════════════
