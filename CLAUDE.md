@@ -1062,15 +1062,21 @@ inicial (Paso 0), Fase E cerrada en su alcance actual (2026-07-20/21):**
   partición del tenant activo al momento de subir, inconsistente con ser datos centrales que
   deberían verse igual desde cualquier tenant. Evaluar en sesión dedicada.
 
-**Nota de mantenimiento de este documento (2026-08-11):** entre esta entrada y la
-anterior (URLs de storage tenant-aware, 2026-07-31) se mergearon a `main` unas ~20
-sesiones más del vertical Agencia de Viajes (11h a 11o, más una docena de fixes
-puntuales — drawer, márgenes, borrado de cotización, slug de proveedor, etc.) que
-nunca se documentaron acá ni en `docs/planning/agencia-de-viajes/
-plan-hoja-de-ruta-ejecucion.md` (esa tabla se quedó en la fila 11b4b, 30-jul —
-las sesiones 11h en adelante no tienen fila). Backfill deliberadamente fuera de
-alcance de esta entrada (decisión explícita del usuario, no un olvido) — si se
-retoma, empezar desde el commit `5d9d152` (merge sesión 11b3) en adelante.
+**Nota de mantenimiento de este documento (2026-08-11, backfill parcial 2026-08-12):**
+entre la entrada de "URLs de storage tenant-aware" (2026-07-31) y la de "cachear el
+preflight OPTIONS" (2026-08-10/11) se habían mergeado a `main` ~20 sesiones más del
+vertical Agencia de Viajes (11h a 11o, más una docena de fixes puntuales — drawer,
+márgenes, borrado de cotización, slug de proveedor, etc.) sin documentar acá ni en
+`docs/planning/agencia-de-viajes/plan-hoja-de-ruta-ejecucion.md`. **Backfill
+comprimido cerrado el 2026-08-12** (a pedido del usuario, antes de borrar varias
+sesiones antiguas de Claude Code): las filas 11h/11i/11j/11k/11l v2/11m/11n/11o/11q
+más los ~14 fixes puntuales quedaron catalogados con detalle comprimido (no al
+nivel narrativo del resto de este documento) en la sección de historial de
+`plan-hoja-de-ruta-ejecucion.md`, entrada del 12-ago-2026 — reconstruido desde
+`git log`, no desde la conversación original de cada sesión. Ninguna de esas ~23
+entradas fue re-verificada contra un tenant real en el backfill. Si hace falta el
+detalle narrativo completo de alguna sesión puntual de esa ventana, no está — solo
+el resumen comprimido.
 
 **Completo — spinners de carga + editor de texto enriquecido (2026-08-10, rama
 `feature/spinners-y-editor-enriquecido`, mergeada a `main` en `6eaf3c7`):**
@@ -1137,6 +1143,68 @@ piso de dev — evaluar 86400 en producción más adelante). Verificado con CDP 
 con `max_age=0`, 10 preflights tanto en la primera carga como en un F5 posterior;
 con `max_age=3600`, 10 en la primera carga (caché vacía, esperado) y **0** en el
 F5. Sin errores de consola nuevos, 103/103 tests de backend en verde.
+
+**Backfill comprimido, sesiones 11h-11o/11q + fixes puntuales del cotizador
+(30-jul a 12-ago-2026) — detalle completo en `docs/planning/agencia-de-viajes/
+plan-hoja-de-ruta-ejecucion.md`, entrada de historial 12-ago-2026:** ~23
+commits/merges a `main` sobre el cotizador y catálogos del vertical Agencia de
+Viajes, documentados solo a nivel comprimido (reconstruido desde `git log`, sin
+re-verificar contra un tenant real). Lo más relevante para sesiones futuras:
+- **`68414a1` — cambio arquitectónico**: hoteles dejan de vivir en tabla propia
+  (`opciones_hotel`/`opciones_hotel_tarifas`, atada a un `paquete_plantilla`
+  puntual) y pasan a ser una `proveedor_tarifa` más — buscable/usable en
+  cualquier cotización, sin tab propia en combo/tour.
+- `0673d17` (Sesión 11o) — precio por pasajero real: servicios
+  `modalidad='compartido'` cargados desde plantilla ahora multiplican por los
+  pasajeros reales de la cotización, no una tarifa plana de 1 adulto.
+- `df7406d` — primer `CotizacionController::destroy()` (antes el header de una
+  cotización quedaba huérfano para siempre, sin forma de limpiarlo).
+- Resto (11h/11i/11j/11k/11l v2/11m/11n + ~11 fixes de UX/slug/timezone/
+  duplicados): ver la tabla y el historial de `plan-hoja-de-ruta-ejecucion.md`.
+
+**Completo — ítem manual flexible + promover a proveedor (Sesión 11q,
+2026-08-12, rama `feature/sesion-11q-item-manual-flexible`, mergeada a `main`
+en `863e6d2`):** `costo_snapshot`/`cantidad` de un `alternativa_item`
+`origen_tipo=manual` dejan de ser sentinels sin efecto — costo ahora es real y
+obligatorio, cantidad multiplica el total igual que el resto de orígenes, y
+`pax_incluidos` se propaga a `reserva_item_pasajero` al aceptar la cotización
+(tabla existía desde Sesión 8a pero nunca se llenaba). Agrega "promover a
+proveedor real" (crea `Proveedor`+`ProveedorServicio`+`ProveedorTarifa` a partir
+de un ítem manual, sin relink retroactivo — la cotización actual no se mueve) y
+edición estructural completa del ítem manual, separada de la edición de precio
+en vivo que ya existía. Un commit de seguimiento (`cf3e987`) corrigió 3
+hallazgos de la verificación en vivo, mismo día.
+
+**Completo — mover/fusionar servicio entre destinos + fix paginación catálogo
+de servicios (2026-08-12, rama `fix/destino-servicio-mover-y-catalogo-servicios`,
+mergeada a `main` en `62f8b69`):** cierra un gap real del módulo "Destinos y
+Atractivos" (Sesión 3, `destino_servicio`) — cuando un servicio se asoció al
+destino equivocado y ya tiene `proveedor_servicios`/tarifas reales enganchados,
+el botón de desasociar queda bloqueado correctamente por integridad, pero no
+había forma de CORREGIR la asociación, solo de borrarla (bloqueada) o dejarla
+mal.
+- `DestinoServicioController::mover()`: reasigna `destino_atractivo_id` sin
+  tocar proveedores/tarifas. Si el destino elegido ya tiene una fila del mismo
+  servicio, bloquea con 422 (nunca crea un duplicado) e incluye
+  `destino_servicio_existente_id` en la respuesta.
+- `DestinoServicioController::fusionar()` (sesión de seguimiento, mismo día):
+  para cuando `mover()` choca con ese duplicado — reasigna los
+  `proveedor_servicios` de la fila origen a la fila destino ya existente y
+  borra la fila origen. Si el mismo proveedor está enganchado a ambas filas a
+  la vez, no fusiona nada y nombra al proveedor conflictivo (nunca un fallback
+  silencioso) — lo resuelve una persona a mano. Frontend: al chocar con el
+  duplicado, ofrece fusionar vía diálogo de confirmación en vez de solo
+  mostrar el error.
+- `destroy()` ahora informa cuántos proveedores bloquean el borrado y sugiere
+  "Mover a otro destino" como alternativa.
+- `ServicioController::index()` acepta `per_page` — antes truncaba siempre a
+  15 en el selector del modal "Servicios de {destino}", escondiendo el resto
+  del catálogo y empujando a crear servicios duplicados por alta rápida.
+- Verificado en vivo con Playwright contra `agencia-demo`, usando usuarios de
+  prueba descartables creados y borrados en la propia sesión — **sin resetear
+  la password de `admin@agencia-demo.test`** (ver
+  [[feedback_no_resetear_passwords_sin_verificar]] en memoria, esa cuenta ya
+  se había reseteado sin verificar dos veces antes en sesiones previas).
 
 **Próximos módulos (en orden de prioridad):**
 
