@@ -311,6 +311,13 @@ export type AlternativaItem = {
   // TourItinerarioItem.dia_relativo (día dentro de la PLANTILLA del tour).
   dia_referencial?: number | null;
   descripcion_manual?: string | null;
+  // Sesión 11q — dato interno, nunca visible al cliente: solo prellena el
+  // nombre al promover este ítem manual a un proveedor real.
+  proveedor_sugerido_manual?: string | null;
+  // Poblado solo si el ítem ya fue promovido (ver
+  // AlternativaItemController::promoverAProveedor()) — informativo, no
+  // relinkea proveedor_tarifa_id ni cambia origen_tipo.
+  proveedor_promovido_id?: number | null;
   modo_precio: 'por_persona' | 'tarifa_fija';
   cantidad: number;
   pax_incluidos?: number[] | null;

@@ -8,6 +8,7 @@ use App\Models\AgenciaViajes\AlternativaItem;
 use App\Models\AgenciaViajes\CotizacionPasajero;
 use App\Models\AgenciaViajes\Reserva;
 use App\Models\AgenciaViajes\ReservaItem;
+use App\Models\AgenciaViajes\ReservaItemPasajero;
 use App\Models\AgenciaViajes\ReservaPasajero;
 use App\Models\AgenciaViajes\ReservaVenta;
 use App\Models\AgenciaViajes\SalidaMayorista;
@@ -184,18 +185,25 @@ class ReservaController extends Controller
             ->orderBy('id')
             ->get();
 
+        // mapaPasajeros: cotizacion_pasajero_id → reserva_pasajero_id, para
+        // poder propagar pax_incluidos (alternativa_items) a
+        // reserva_item_pasajero más abajo — Sesión 11q, esa tabla existía
+        // desde Sesión 8a pero nunca se llenaba.
+        $mapaPasajeros = [];
+
         foreach ($cotizacionPasajeros as $index => $cotizacionPasajero) {
-            ReservaPasajero::create([
+            $reservaPasajero = ReservaPasajero::create([
                 'reserva_id' => $reserva->id,
                 'tipo_pax' => $cotizacionPasajero->tipo_pax,
                 'pasajero_catalogo_id' => $pasajeroCatalogoIds[$index] ?? null,
             ]);
+            $mapaPasajeros[$cotizacionPasajero->id] = $reservaPasajero->id;
         }
 
         $alternativaItems = AlternativaItem::where('alternativa_id', $alternativa->id)->get();
 
         foreach ($alternativaItems as $alternativaItem) {
-            ReservaItem::create([
+            $reservaItem = ReservaItem::create([
                 'reserva_id' => $reserva->id,
                 'alternativa_item_id' => $alternativaItem->id,
                 'proveedor_tarifa_id' => $alternativaItem->proveedor_tarifa_id,
@@ -204,6 +212,19 @@ class ReservaController extends Controller
                 // "Día 1/Día 2" sobreviva también en la reserva.
                 'tour_origen_id' => $alternativaItem->tour_origen_id,
             ]);
+
+            // pax_incluidos null/vacío = aplica a todos, no se crea ninguna
+            // fila (mismo criterio que pax_incluidos en alternativa_items).
+            if (! empty($alternativaItem->pax_incluidos)) {
+                foreach ($alternativaItem->pax_incluidos as $cotizacionPasajeroId) {
+                    if (isset($mapaPasajeros[$cotizacionPasajeroId])) {
+                        ReservaItemPasajero::create([
+                            'reserva_item_id' => $reservaItem->id,
+                            'reserva_pasajero_id' => $mapaPasajeros[$cotizacionPasajeroId],
+                        ]);
+                    }
+                }
+            }
         }
 
         $alertaCupoExcedido = false;

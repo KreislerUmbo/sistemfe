@@ -542,6 +542,12 @@ Route::group([
         ->middleware('permission:agencia.cotizaciones');
     Route::delete("alternativa-items/{id}", [AlternativaItemController::class, 'destroy'])
         ->middleware('permission:agencia.cotizaciones');
+    // Sesión 11q — ítem manual flexible: edición estructural completa
+    // (descripción/proveedor/costo/cantidad/pax) y promoción a proveedor real.
+    Route::put("alternativa-items/{id}/manual", [AlternativaItemController::class, 'actualizarManual'])
+        ->middleware('permission:agencia.cotizaciones');
+    Route::post("alternativa-items/{id}/promover-a-proveedor", [AlternativaItemController::class, 'promoverAProveedor'])
+        ->middleware('permission:agencia.cotizaciones');
 
     // Sesión 11b3 (Parte A) — cargar un tour_simple/paquete_combo entero en
     // la alternativa (explota todos sus ítems, ver AlternativaItemController::
