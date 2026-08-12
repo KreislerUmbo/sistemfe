@@ -435,6 +435,8 @@ Route::group([
         ->middleware('permission:agencia.destinos');
     Route::patch("destino-servicio/{id}/mover", [DestinoServicioController::class, 'mover'])
         ->middleware('permission:agencia.destinos');
+    Route::post("destino-servicio/{id}/fusionar", [DestinoServicioController::class, 'fusionar'])
+        ->middleware('permission:agencia.destinos');
     Route::resource("servicios", ServicioController::class)
         ->middleware('permission:agencia.destinos');
 

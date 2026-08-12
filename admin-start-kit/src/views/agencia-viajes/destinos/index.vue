@@ -333,6 +333,32 @@ const confirmarMoverServicio = async (dsId: number) => {
         const listado = await destinoAtractivoService.listarServicios(destinoServiciosActivo.value.id);
         destinoServiciosLista.value = listado.destino_servicios;
     } catch (error: any) {
+        const destinoServicioExistenteId = error.response?.data?.destino_servicio_existente_id;
+
+        if (destinoServicioExistenteId) {
+            const confirmacion = await (Swal as TVueSwalInstance).fire({
+                title: 'Ya existe en ese destino',
+                text: 'El destino elegido ya tiene este servicio con sus propios proveedores. ¿Fusionar los proveedores de este con los de ese, y eliminar esta asociación duplicada?',
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonText: 'Sí, fusionar',
+                cancelButtonText: 'Cancelar',
+            });
+
+            if (confirmacion.isConfirmed) {
+                try {
+                    const res = await destinoAtractivoService.fusionarServicio(dsId, destinoServicioExistenteId);
+                    cancelarMoverServicio();
+                    (Swal as TVueSwalInstance).fire('Listo', res.message, 'success');
+                    const listado = await destinoAtractivoService.listarServicios(destinoServiciosActivo.value.id);
+                    destinoServiciosLista.value = listado.destino_servicios;
+                } catch (fusionError: any) {
+                    (Swal as TVueSwalInstance).fire('Error', fusionError.response?.data?.message ?? 'No se pudo fusionar', 'error');
+                }
+            }
+            return;
+        }
+
         (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo mover', 'error');
     }
 };
