@@ -320,9 +320,12 @@ const archivosNuevos = ref<ArchivoPendiente[]>([]);
 const totalFotos = computed(() => fotosExistentes.value.length + archivosNuevos.value.length);
 const limiteFotosAlcanzado = computed(() => totalFotos.value >= MAX_FOTOS);
 
+// slug='agencia-mayorista' es el slug REAL del catálogo proveedor_tipos
+// (cambiado a mano en producción, no 'mayorista') — mismo criterio que
+// esAlojamiento() justo abajo.
 const esMayorista = computed(() => {
     const tipo = proveedorTipos.value.find((t) => t.id === form.value.tipo_id);
-    return tipo?.slug === 'mayorista';
+    return tipo?.slug === 'agencia-mayorista';
 });
 
 // slug='alojamiento-hoteles' es el slug REAL del catálogo proveedor_tipos
