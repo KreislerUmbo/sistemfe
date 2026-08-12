@@ -246,7 +246,7 @@
                                             <i class="fas fa-arrow-up-right-from-square me-1"></i>Promover a proveedor
                                         </a>
                                     </template>
-                                    <a href="#" style="font-size:11px" class="text-secondary" @click.prevent="itemManualEnEdicion = item; mostrarFormManual = true">
+                                    <a href="#" style="font-size:11px" class="text-secondary" @click.prevent="abrirEdicionManual(item)">
                                         <i class="fas fa-pencil me-1"></i>Editar
                                     </a>
                                 </div>
@@ -1592,6 +1592,15 @@ const mostrarFormPasajeAereo = ref(false);
 // Sesión 11q — item manual en edición (null = modo alta). ItemManualForm.vue
 // se prellena solo cuando esto viene poblado, ver su watch(itemExistente).
 const itemManualEnEdicion = ref<AlternativaItem | null>(null);
+// Fix post-verificación: el drawer completo vive en un <Teleport> gateado
+// por drawerBibliotecaAbierto (línea ~411) — asignar solo
+// itemManualEnEdicion/mostrarFormManual no lo abría, el link "Editar" no
+// hacía nada visible. Mismo criterio que abrirDrawerBiblioteca().
+const abrirEdicionManual = (item: AlternativaItem) => {
+    itemManualEnEdicion.value = item;
+    mostrarFormManual.value = true;
+    drawerBibliotecaAbierto.value = true;
+};
 // Sesión 11q — "promover a proveedor real" vive en su propio modal, fuera
 // del drawer (no es un paso más de pasoDrawer).
 const itemParaPromover = ref<AlternativaItem | null>(null);

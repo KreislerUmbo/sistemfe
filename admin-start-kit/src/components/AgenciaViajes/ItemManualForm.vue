@@ -59,6 +59,7 @@
 // agregó edición estructural completa (itemExistente) + "promover a
 // proveedor" (ver PromoverProveedorModal.vue, separado de este form).
 import { ref, computed, watch } from 'vue';
+import Swal from 'sweetalert2/dist/sweetalert2.js';
 import { alternativaItemService } from '@/services/admin/alternativaItemService';
 import type { AlternativaItem, CotizacionPasajero } from '@/types/agencia-viajes';
 
@@ -144,8 +145,8 @@ const agregar = async () => {
             emit('agregado', res.alternativa_item);
             resetearCampos();
         }
-    } catch (error) {
-        console.log(error);
+    } catch (error: any) {
+        Swal.fire('Error', error.response?.data?.message ?? 'No se pudo guardar el ítem manual', 'error');
     } finally {
         guardando.value = false;
     }

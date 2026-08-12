@@ -44,7 +44,8 @@
                     <template v-else>
                         <div v-if="resultadosServicio.length" class="border rounded picker-lista">
                             <div v-for="s in resultadosServicio" :key="s.id" class="picker-item small px-2 py-1"
-                                style="cursor:pointer" @click="asociarYElegir(s)">
+                                :class="{ 'opacity-50': asociando }"
+                                style="cursor:pointer" @click="!asociando && asociarYElegir(s)">
                                 <i class="fas fa-plus me-1 text-success"></i>Asociar "{{ s.nombre }}" a este destino
                             </div>
                         </div>
@@ -65,6 +66,7 @@
 // catálogo. Usado por PromoverProveedorModal.vue. Deliberadamente NO crea
 // servicios nuevos (eso es su propio CRUD, fuera de alcance acá).
 import { ref, computed, watch } from 'vue';
+import Swal from 'sweetalert2/dist/sweetalert2.js';
 import { destinoAtractivoService } from '@/services/admin/destinoAtractivoService';
 import { servicioService } from '@/services/admin/servicioService';
 import type { DestinoAtractivo, DestinoServicio, Servicio } from '@/types/agencia-viajes';
@@ -81,6 +83,7 @@ const cargandoServicios = ref(false);
 const queryServicio = ref('');
 const resultadosServicio = ref<Servicio[]>([]);
 const buscandoServicio = ref(false);
+const asociando = ref(false);
 
 // Aplana el árbol (zona → lugar → atractivo) UNA sola vez al montar — los
 // árboles de destino de una agencia son chicos, no hace falta paginar ni
@@ -148,8 +151,15 @@ watch(queryServicio, (q) => {
 
 const asociarYElegir = async (servicio: Servicio) => {
     if (!destinoSeleccionado.value) return;
-    const res = await destinoAtractivoService.asociarServicio(destinoSeleccionado.value.id, servicio.id);
-    emit('seleccionado', res.destino_servicio.id);
+    asociando.value = true;
+    try {
+        const res = await destinoAtractivoService.asociarServicio(destinoSeleccionado.value.id, servicio.id);
+        emit('seleccionado', res.destino_servicio.id);
+    } catch (error: any) {
+        Swal.fire('Error', error.response?.data?.message ?? 'No se pudo asociar el servicio', 'error');
+    } finally {
+        asociando.value = false;
+    }
 };
 </script>
 
