@@ -1958,7 +1958,10 @@ onMounted(async () => {
         await cargarCotizacion();
         await cargarBiblioteca();
 
-        const tipoMayorista = tipos.proveedor_tipos.find((t) => t.slug === 'mayorista');
+        // slug='agencia-mayorista' es el slug REAL del catálogo proveedor_tipos
+        // (cambiado a mano en producción) — NO 'mayorista', mismo criterio que
+        // 'alojamiento-hoteles' un poco más abajo en este archivo.
+        const tipoMayorista = tipos.proveedor_tipos.find((t) => t.slug === 'agencia-mayorista');
         if (tipoMayorista) {
             const res = await httpClient.get('/proveedores', { params: { tipo_id: tipoMayorista.id } });
             proveedoresMayoristas.value = res.data.proveedores ?? [];
