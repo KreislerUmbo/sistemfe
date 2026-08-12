@@ -55,6 +55,7 @@ class AlternativaItemController extends Controller
             AlternativaItem::ORIGEN_PASAJE_AEREO => $this->crearItemPasajeAereo($request, $alternativa),
             AlternativaItem::ORIGEN_MANUAL => $this->crearItemManual($request, $alternativa),
             AlternativaItem::ORIGEN_HOTEL_PLANTILLA => $this->crearItemHotelPlantilla($request, $alternativa),
+            AlternativaItem::ORIGEN_GUIA => $this->crearItemGuia($request, $alternativa),
         };
     }
 
@@ -329,9 +330,15 @@ class AlternativaItemController extends Controller
                 }
 
                 if ($entrada['guia_tarifa_id']) {
-                    // Sin equivalente en alternativa_items (no hay columna
-                    // guia_tarifa_id) — §3.7: se avisa, no se persiste, no
-                    // bloquea el resto de la carga.
+                    // Fix guia-como-item-real: guiasPendientes se mantiene
+                    // igual — sigue siendo el aviso de "falta confirmar cuál
+                    // guía puntual" (esa asignación es a nivel reserva,
+                    // reserva_items.guia_id). Lo nuevo es el AlternativaItem
+                    // real de abajo: costo/venta ya vienen resueltos por
+                    // ComboExplosionService::resolverCostoVentaItem() (mismo
+                    // cálculo que crearItemGuia() usa para un guía suelto),
+                    // así que el costo SÍ entra al total desde que se carga
+                    // el combo, aunque el guía puntual siga sin asignar.
                     $guiaTarifa = GuiaTarifa::with(['guia', 'destino'])->find($entrada['guia_tarifa_id']);
                     $tourOrigen = PaquetePlantilla::find($entrada['tour_origen_id']);
 
@@ -341,6 +348,22 @@ class AlternativaItemController extends Controller
                         'guia_nombre' => $guiaTarifa?->guia?->nombre,
                         'destino_nombre' => $guiaTarifa?->destino?->nombre,
                     ];
+
+                    if ($guiaTarifa) {
+                        $itemsCreados[] = AlternativaItem::create([
+                            'alternativa_id' => $alternativa->id,
+                            'origen_tipo' => AlternativaItem::ORIGEN_GUIA,
+                            'guia_tarifa_id' => $guiaTarifa->id,
+                            'tour_origen_id' => $entrada['tour_origen_id'],
+                            'dia_referencial' => $entrada['dia_referencial'],
+                            'modo_precio' => 'tarifa_fija',
+                            'cantidad' => 1,
+                            'moneda_costo' => $guiaTarifa->moneda,
+                            'costo_snapshot' => $entrada['costo'],
+                            'precio_venta_snapshot' => $entrada['venta'],
+                            'precio_convertido' => $this->priceEngine->convertirMoneda($entrada['venta'], $guiaTarifa->moneda, $alternativa->moneda_cotizacion, (float) $alternativa->tipo_cambio_aplicado),
+                        ]);
+                    }
                 }
             }
 
@@ -629,6 +652,59 @@ class AlternativaItemController extends Controller
         $this->recalcularTotalAlternativa($alternativa);
 
         return response()->json(['code' => 200, 'message' => 'Ítem de hotel agregado correctamente', 'alternativa_item' => $item]);
+    }
+
+    // ── origen_tipo=guia ─────────────────────────────────────────────────
+    // Fix guia-como-item-real: hasta esta sesión un guía nunca generaba un
+    // AlternativaItem real — ni cargado suelto, ni al explotar un combo
+    // (desdePlantilla() solo lo avisaba en guiasPendientes, sin costo). Usa
+    // EXACTAMENTE el mismo cálculo que ComboExplosionService::
+    // resolverCostoVentaItem() ya aplica para guia_tarifa_id — costo_diario
+    // es un monto fijo del día, no se reparte por pasajero, mismo criterio
+    // que transporte privado/hotel (modo_precio='tarifa_fija').
+    private function crearItemGuia(Request $request, Alternativa $alternativa): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'guia_tarifa_id' => 'required|integer|exists:guia_tarifas,id',
+            'cantidad' => 'nullable|integer|min:1',
+            'pax_incluidos' => 'nullable|array',
+            'pax_incluidos.*' => 'integer|exists:cotizacion_pasajeros,id',
+            'dia_referencial' => 'nullable|integer|min:1',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
+        }
+
+        $validado = $validator->validated();
+        $guiaTarifa = GuiaTarifa::findOrFail($validado['guia_tarifa_id']);
+
+        $calculo = $this->priceEngine->calcular(
+            (float) $guiaTarifa->costo_diario,
+            [],
+            $guiaTarifa->tipo_margen,
+            (float) $guiaTarifa->margen_valor,
+            null,
+            null
+        );
+
+        $item = AlternativaItem::create([
+            'alternativa_id' => $alternativa->id,
+            'origen_tipo' => AlternativaItem::ORIGEN_GUIA,
+            'guia_tarifa_id' => $guiaTarifa->id,
+            'modo_precio' => 'tarifa_fija',
+            'cantidad' => $validado['cantidad'] ?? 1,
+            'pax_incluidos' => $validado['pax_incluidos'] ?? null,
+            'moneda_costo' => $guiaTarifa->moneda,
+            'costo_snapshot' => $calculo['costo_total'],
+            'precio_venta_snapshot' => $calculo['venta_total'],
+            'precio_convertido' => $this->priceEngine->convertirMoneda($calculo['venta_total'], $guiaTarifa->moneda, $alternativa->moneda_cotizacion, (float) $alternativa->tipo_cambio_aplicado),
+            'dia_referencial' => $validado['dia_referencial'] ?? null,
+        ]);
+
+        $this->recalcularTotalAlternativa($alternativa);
+
+        return response()->json(['code' => 200, 'message' => 'Ítem de guía agregado correctamente', 'alternativa_item' => $item]);
     }
 
     // Recalculo en vivo del formulario de pasaje aéreo (PasajeAereoForm.vue)
