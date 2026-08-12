@@ -46,6 +46,8 @@ class AlternativaItem extends Model
         'tour_origen_id',
         'dia_referencial',
         'descripcion_manual',
+        'proveedor_sugerido_manual',
+        'proveedor_promovido_id',
         'modo_precio',
         'cantidad',
         'pax_incluidos',
@@ -105,18 +107,25 @@ class AlternativaItem extends Model
         return $this->hasOne(CotizacionPasajeAereo::class, 'alternativa_item_id');
     }
 
-    // Total del ítem (sección 3 del plan): 'manual' nunca multiplica por
-    // cantidad (no es relevante para ese origen). Para el resto, solo
-    // modo_precio='tarifa_fija' multiplica — 'por_persona' ya viene
-    // resuelto en precio_venta_snapshot (repartido entre pax_incluidos al
-    // crearse), multiplicar de nuevo sería duplicar el cálculo.
+    // Sesión 11q — proveedor real creado a partir de este ítem manual (ver
+    // AlternativaItemController::promoverAProveedor()). Puramente
+    // informativo: este ítem sigue siendo 'manual', sin relink a
+    // proveedor_tarifa_id — la cotización actual no se mueve.
+    public function proveedorPromovido()
+    {
+        return $this->belongsTo(Proveedor::class, 'proveedor_promovido_id');
+    }
+
+    // Total del ítem (sección 3 del plan): solo modo_precio='tarifa_fija'
+    // multiplica por cantidad — 'por_persona' ya viene resuelto en
+    // precio_venta_snapshot (repartido entre pax_incluidos al crearse),
+    // multiplicar de nuevo sería duplicar el cálculo. Sesión 11q: 'manual'
+    // dejó de ser una excepción — ahora sigue la misma regla que el resto
+    // (antes siempre ignoraba cantidad, sin efecto real posible porque
+    // cantidad quedaba hardcodeada en 1).
     public function getTotalAttribute(): float
     {
         $precio = (float) $this->precio_venta_snapshot;
-
-        if ($this->origen_tipo === self::ORIGEN_MANUAL) {
-            return $precio;
-        }
 
         if ($this->modo_precio === 'tarifa_fija') {
             return $precio * $this->cantidad;
@@ -133,10 +142,6 @@ class AlternativaItem extends Model
     public function getTotalConvertidoAttribute(): float
     {
         $precio = (float) ($this->precio_convertido ?? $this->precio_venta_snapshot);
-
-        if ($this->origen_tipo === self::ORIGEN_MANUAL) {
-            return $precio;
-        }
 
         if ($this->modo_precio === 'tarifa_fija') {
             return $precio * $this->cantidad;

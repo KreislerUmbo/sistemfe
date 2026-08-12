@@ -7,11 +7,15 @@ use App\Models\AgenciaViajes\Alternativa;
 use App\Models\AgenciaViajes\AlternativaItem;
 use App\Models\AgenciaViajes\CotizacionPasajeAereo;
 use App\Models\AgenciaViajes\CotizacionPasajero;
+use App\Models\AgenciaViajes\DestinoServicio;
 use App\Models\AgenciaViajes\GuiaTarifa;
 use App\Models\AgenciaViajes\OpcionHotelTarifa;
 use App\Models\AgenciaViajes\OpcionMayorista;
 use App\Models\AgenciaViajes\PaquetePlantilla;
+use App\Models\AgenciaViajes\Proveedor;
+use App\Models\AgenciaViajes\ProveedorServicio;
 use App\Models\AgenciaViajes\ProveedorTarifa;
+use App\Models\AgenciaViajes\ProveedorTipoConfig;
 use App\Models\AgenciaViajes\ReservaItem;
 use App\Services\AgenciaViajes\ComboExplosionService;
 use App\Services\AgenciaViajes\PriceEngineService;
@@ -771,12 +775,24 @@ class AlternativaItemController extends Controller
     }
 
     // ── origen_tipo=manual ──────────────────────────────────────────────
+    // Sesión 11q: costo/cantidad/pax_incluidos dejaron de ser sentinels sin
+    // efecto — costo_snapshot ahora es real (obligatorio), cantidad SÍ
+    // multiplica (ver AlternativaItem::getTotalAttribute()), y pax_incluidos
+    // se propaga a reserva_item_pasajero al aceptar (ver ReservaController::
+    // crearReservaDesdeAlternativa()). proveedor_sugerido_manual es dato
+    // interno (nunca visible al cliente), solo para prellenar el nombre al
+    // promover este ítem a un proveedor real (ver promoverAProveedor()).
     private function crearItemManual(Request $request, Alternativa $alternativa): JsonResponse
     {
         $validator = Validator::make($request->all(), [
             'descripcion_manual' => 'required|string|max:500',
+            'proveedor_sugerido_manual' => 'nullable|string|max:250',
+            'costo_snapshot' => 'required|numeric|min:0',
             'precio_venta_snapshot' => 'required|numeric|min:0',
             'moneda_costo' => 'required|in:PEN,USD',
+            'cantidad' => 'required|integer|min:1',
+            'pax_incluidos' => 'nullable|array',
+            'pax_incluidos.*' => 'integer|exists:cotizacion_pasajeros,id',
             'dia_referencial' => 'nullable|integer|min:1',
         ]);
 
@@ -790,13 +806,11 @@ class AlternativaItemController extends Controller
             'alternativa_id' => $alternativa->id,
             'origen_tipo' => AlternativaItem::ORIGEN_MANUAL,
             'descripcion_manual' => $validado['descripcion_manual'],
-            'modo_precio' => 'tarifa_fija', // sin efecto real (el accessor ignora cantidad para 'manual'), solo un valor válido para la columna NOT NULL
-            'cantidad' => 1,
-            // costo_snapshot es NOT NULL desde Sesión 7a — un ítem manual no
-            // tiene proveedor del que derivar costo real, 0 es el sentinel
-            // (mismo espíritu que "sin piso protegido": no hay costo
-            // rastreable de terceros, es 100% precio a criterio del vendedor).
-            'costo_snapshot' => 0,
+            'proveedor_sugerido_manual' => $validado['proveedor_sugerido_manual'] ?? null,
+            'modo_precio' => 'tarifa_fija',
+            'cantidad' => $validado['cantidad'],
+            'pax_incluidos' => $validado['pax_incluidos'] ?? null,
+            'costo_snapshot' => $validado['costo_snapshot'],
             'moneda_costo' => $validado['moneda_costo'],
             'precio_venta_snapshot' => $validado['precio_venta_snapshot'],
             'precio_convertido' => $this->priceEngine->convertirMoneda((float) $validado['precio_venta_snapshot'], $validado['moneda_costo'], $alternativa->moneda_cotizacion, (float) $alternativa->tipo_cambio_aplicado),
@@ -806,6 +820,159 @@ class AlternativaItemController extends Controller
         $this->recalcularTotalAlternativa($alternativa);
 
         return response()->json(['code' => 200, 'message' => 'Ítem manual agregado correctamente', 'alternativa_item' => $item]);
+    }
+
+    // Edición estructural de un ítem manual (descripción/proveedor/costo/
+    // cantidad/pax) — separado de update() (que solo maneja
+    // descuento_pct/precio_convertido para CUALQUIER origen_tipo, ese flujo
+    // de edición inline de precio en el lienzo sigue existiendo tal cual).
+    // Mismo guard que destroy(): si el ítem ya generó una reserva, no se
+    // edita más, hay que cancelar la reserva primero.
+    public function actualizarManual(Request $request, string $id): JsonResponse
+    {
+        $item = AlternativaItem::with('alternativa')->findOrFail($id);
+
+        if ($item->origen_tipo !== AlternativaItem::ORIGEN_MANUAL) {
+            return response()->json(['code' => 422, 'message' => 'Solo se puede editar así un ítem manual.'], 422);
+        }
+
+        if (ReservaItem::where('alternativa_item_id', $item->id)->exists()) {
+            return response()->json([
+                'code' => 422,
+                'message' => 'No se puede editar: este servicio ya tiene una reserva generada. Cancelá la reserva primero si corresponde.',
+            ], 422);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'descripcion_manual' => 'required|string|max:500',
+            'proveedor_sugerido_manual' => 'nullable|string|max:250',
+            'costo_snapshot' => 'required|numeric|min:0',
+            'precio_venta_snapshot' => 'required|numeric|min:0',
+            'moneda_costo' => 'required|in:PEN,USD',
+            'cantidad' => 'required|integer|min:1',
+            'pax_incluidos' => 'nullable|array',
+            'pax_incluidos.*' => 'integer|exists:cotizacion_pasajeros,id',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
+        }
+        $validado = $validator->validated();
+
+        $alternativa = $item->alternativa;
+
+        // Nota: si el ítem ya tiene proveedor_promovido_id (ya fue
+        // promovido), igual se puede editar sin problema — no relinkea ni
+        // toca el proveedor ya creado, son independientes por diseño (mismo
+        // criterio de promoverAProveedor()).
+        $item->update([
+            'descripcion_manual' => $validado['descripcion_manual'],
+            'proveedor_sugerido_manual' => $validado['proveedor_sugerido_manual'] ?? null,
+            'costo_snapshot' => $validado['costo_snapshot'],
+            'moneda_costo' => $validado['moneda_costo'],
+            'precio_venta_snapshot' => $validado['precio_venta_snapshot'],
+            'precio_convertido' => $this->priceEngine->convertirMoneda((float) $validado['precio_venta_snapshot'], $validado['moneda_costo'], $alternativa->moneda_cotizacion, (float) $alternativa->tipo_cambio_aplicado),
+            'cantidad' => $validado['cantidad'],
+            'pax_incluidos' => $validado['pax_incluidos'] ?? null,
+        ]);
+
+        $this->recalcularTotalAlternativa($alternativa);
+
+        return response()->json(['code' => 200, 'message' => 'Ítem manual actualizado correctamente', 'alternativa_item' => $item->fresh()]);
+    }
+
+    // Crea Proveedor + ProveedorServicio + ProveedorTarifa a partir de un
+    // ítem manual — el ítem de ESTA cotización NO se toca (snapshot ya
+    // congelado, mismo criterio que el resto de alternativa_items). Solo
+    // registra proveedor_promovido_id para no promover dos veces y mostrar
+    // "Proveedor creado" en el lienzo. Sin relink retroactivo — decisión
+    // confirmada: el proveedor creado queda disponible para próximas
+    // cotizaciones, esta no se mueve.
+    public function promoverAProveedor(Request $request, string $id): JsonResponse
+    {
+        $item = AlternativaItem::findOrFail($id);
+
+        if ($item->origen_tipo !== AlternativaItem::ORIGEN_MANUAL) {
+            return response()->json(['code' => 422, 'message' => 'Solo se puede promover un ítem manual.'], 422);
+        }
+        if ($item->proveedor_promovido_id) {
+            return response()->json(['code' => 422, 'message' => 'Este ítem ya fue promovido a proveedor.'], 422);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'razon_social' => 'required|string|max:250',
+            'tipo_documento' => 'nullable|in:DNI,RUC',
+            'numero_documento' => 'nullable|string|max:30',
+            'destino_servicio_id' => 'required|integer|exists:destino_servicio,id',
+            'costo' => 'required|numeric|min:0',
+            'precio_venta_adulto' => 'required|numeric|min:0',
+            'modalidad' => 'required|in:compartido,privado',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
+        }
+        $v = $validator->validated();
+
+        $destinoServicio = DestinoServicio::with('servicio')->findOrFail($v['destino_servicio_id']);
+        $tipoId = $destinoServicio->servicio->tipo_proveedor_id;
+
+        if (! $tipoId) {
+            return response()->json([
+                'code' => 422,
+                'message' => 'El servicio elegido no tiene tipo de proveedor configurado — asignalo en el catálogo de Servicios antes de promover.',
+            ], 422);
+        }
+
+        $tipoHabilitado = ProveedorTipoConfig::where('proveedor_tipo_id', $tipoId)->where('habilitado', true)->exists();
+        if (! $tipoHabilitado) {
+            return response()->json([
+                'code' => 422,
+                'message' => 'El tipo de proveedor de ese servicio no está habilitado para este negocio.',
+            ], 422);
+        }
+
+        $margenValor = round($v['precio_venta_adulto'] - $v['costo'], 2);
+
+        [$proveedor, $tarifa] = DB::transaction(function () use ($item, $v, $destinoServicio, $tipoId, $margenValor) {
+            $proveedor = Proveedor::create([
+                'razon_social' => $v['razon_social'],
+                'tipo_documento' => $v['tipo_documento'] ?? null,
+                'numero_documento' => $v['numero_documento'] ?? null,
+                'tipo_id' => $tipoId,
+                'estado' => true,
+            ]);
+
+            $proveedorServicio = ProveedorServicio::create([
+                'proveedor_id' => $proveedor->id,
+                'destino_servicio_id' => $destinoServicio->id,
+            ]);
+
+            $tarifa = ProveedorTarifa::create([
+                'proveedor_servicio_id' => $proveedorServicio->id,
+                'tipo_tarifa' => 'publica',
+                'modalidad' => $v['modalidad'],
+                'moneda' => $item->moneda_costo,
+                'precio_costo' => $v['costo'],
+                'margen_tipo' => 'fijo',
+                'margen_valor' => $margenValor,
+                'precio_venta_adulto' => $v['precio_venta_adulto'],
+                'vigente_desde' => now()->toDateString(),
+                'tip_afe_igv' => '10',
+                'destino_tributario' => 'nacional',
+            ]);
+
+            $item->update(['proveedor_promovido_id' => $proveedor->id]);
+
+            return [$proveedor, $tarifa];
+        });
+
+        return response()->json([
+            'code' => 200,
+            'message' => 'Proveedor creado — esta cotización no cambió, queda disponible para próximas cotizaciones.',
+            'proveedor' => $proveedor,
+            'proveedor_tarifa' => $tarifa,
+        ]);
     }
 
     private function contarPasajerosPorTipo(int $cotizacionId, ?array $paxIncluidosIds): array

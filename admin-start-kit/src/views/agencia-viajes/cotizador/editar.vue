@@ -227,10 +227,28 @@
                                     <span class="canvas-item-nombre">
                                         <i class="fas me-2 text-primary" :class="iconoItem(item)"></i>
                                         {{ etiquetaItem(item) }}
-                                        <span v-if="item.cantidad > 1 && item.modo_precio === 'tarifa_fija' && item.origen_tipo !== 'manual'" class="text-muted"> × {{ item.cantidad }}</span>
+                                        <span v-if="item.cantidad > 1 && item.modo_precio === 'tarifa_fija'" class="text-muted"> × {{ item.cantidad }}</span>
                                     </span>
                                     <span v-if="eliminandoItemId === item.id" class="spinner-border spinner-border-sm text-danger flex-shrink-0"></span>
                                     <i v-else class="fas fa-times text-danger flex-shrink-0" style="cursor:pointer" title="Eliminar" @click="eliminarItem(item)"></i>
+                                </div>
+
+                                <div v-if="item.origen_tipo === 'manual'" class="mt-1 d-flex align-items-center gap-2 flex-wrap">
+                                    <span v-if="item.proveedor_promovido_id" class="badge bg-success-subtle text-success" style="font-size:10px">
+                                        <i class="fas fa-check me-1"></i>Proveedor creado
+                                    </span>
+                                    <template v-else>
+                                        <span class="badge" :class="item.proveedor_sugerido_manual ? 'bg-warning-subtle text-warning-emphasis' : 'bg-danger-subtle text-danger'" style="font-size:10px">
+                                            <i class="fas" :class="item.proveedor_sugerido_manual ? 'fa-pen' : 'fa-triangle-exclamation'"></i>
+                                            Manual · {{ item.proveedor_sugerido_manual || 'sin proveedor asociado' }}
+                                        </span>
+                                        <a href="#" style="font-size:11px" @click.prevent="abrirPromoverProveedor(item)">
+                                            <i class="fas fa-arrow-up-right-from-square me-1"></i>Promover a proveedor
+                                        </a>
+                                    </template>
+                                    <a href="#" style="font-size:11px" class="text-secondary" @click.prevent="abrirEdicionManual(item)">
+                                        <i class="fas fa-pencil me-1"></i>Editar
+                                    </a>
                                 </div>
 
                                 <div v-if="desglosePasajerosTexto(item)" class="text-muted mt-1" style="font-size:11px">
@@ -634,12 +652,17 @@
                         </template>
 
                         <template v-else-if="pasoDrawer === 'manual' && alternativaActiva">
-                            <ItemManualForm :alternativa-id="alternativaActiva.id" :dia-activo="diaActivoParaAgregar" @agregado="onServicioSueltoAgregado" />
+                            <ItemManualForm :alternativa-id="alternativaActiva.id" :dia-activo="diaActivoParaAgregar"
+                                :pasajeros="cotizacion?.pasajeros ?? []" :item-existente="itemManualEnEdicion"
+                                @agregado="onServicioSueltoAgregado" @actualizado="onServicioSueltoActualizado" />
                         </template>
                     </div>
                 </div>
             </div>
         </Teleport>
+
+        <PromoverProveedorModal v-if="itemParaPromover" :item="itemParaPromover"
+            @promovido="onProveedorPromovido" @close="itemParaPromover = null" />
         </template>
     </DefaultLayout>
 </template>
@@ -654,6 +677,7 @@ import httpClient from '@/helpers/http-client';
 import HabitacionMatrixPicker from '@/components/AgenciaViajes/HabitacionMatrixPicker.vue';
 import PasajeAereoForm from '@/components/AgenciaViajes/PasajeAereoForm.vue';
 import ItemManualForm from '@/components/AgenciaViajes/ItemManualForm.vue';
+import PromoverProveedorModal from '@/components/AgenciaViajes/PromoverProveedorModal.vue';
 import ClientFormQuick from '@/components/Sales/ClientFormQuick.vue';
 import { useToast } from '@/composables/useToast';
 import { cotizacionService } from '@/services/admin/cotizacionService';
@@ -1543,6 +1567,7 @@ const volverAGridDrawer = () => {
     matrizHotelActiva.value = null;
     modoPrecioPendiente.value = null;
     mostrarFormManual.value = false;
+    itemManualEnEdicion.value = null;
 };
 
 const pasoDrawer = computed<'grid' | 'matrizHotel' | 'modoPrecio' | 'manual'>(() => {
@@ -1564,6 +1589,29 @@ const tituloDrawer = computed(() => {
 // ── Ítem manual / pasaje aéreo ────────────────────────────────────────
 const mostrarFormManual = ref(false);
 const mostrarFormPasajeAereo = ref(false);
+// Sesión 11q — item manual en edición (null = modo alta). ItemManualForm.vue
+// se prellena solo cuando esto viene poblado, ver su watch(itemExistente).
+const itemManualEnEdicion = ref<AlternativaItem | null>(null);
+// Fix post-verificación: el drawer completo vive en un <Teleport> gateado
+// por drawerBibliotecaAbierto (línea ~411) — asignar solo
+// itemManualEnEdicion/mostrarFormManual no lo abría, el link "Editar" no
+// hacía nada visible. Mismo criterio que abrirDrawerBiblioteca().
+const abrirEdicionManual = (item: AlternativaItem) => {
+    itemManualEnEdicion.value = item;
+    mostrarFormManual.value = true;
+    drawerBibliotecaAbierto.value = true;
+};
+// Sesión 11q — "promover a proveedor real" vive en su propio modal, fuera
+// del drawer (no es un paso más de pasoDrawer).
+const itemParaPromover = ref<AlternativaItem | null>(null);
+const abrirPromoverProveedor = (item: AlternativaItem) => {
+    itemParaPromover.value = item;
+};
+const onProveedorPromovido = async (_res: any) => {
+    itemParaPromover.value = null;
+    toast.success('Proveedor creado correctamente');
+    await cargarCotizacion();
+};
 
 // Cualquier ítem SUELTO agregado desde el drawer (biblioteca, matriz de
 // hotel, modo de precio, manual, mayorista) — el drawer NUNCA se cierra acá
@@ -1572,6 +1620,17 @@ const mostrarFormPasajeAereo = ref(false);
 const onServicioSueltoAgregado = async (_item: AlternativaItem) => {
     volverAGridDrawer();
     toast.success('Servicio agregado');
+    await cargarCotizacion();
+};
+
+// Sesión 11q — edición estructural de un ítem manual (ItemManualForm.vue en
+// modo edición). Mismo patrón que onServicioSueltoAgregado, pero sin volver
+// a "grid" primero (ya estamos en el paso 'manual' del drawer, solo hay que
+// cerrarlo).
+const onServicioSueltoActualizado = async (_item: AlternativaItem) => {
+    mostrarFormManual.value = false;
+    itemManualEnEdicion.value = null;
+    toast.success('Ítem manual actualizado');
     await cargarCotizacion();
 };
 
@@ -1654,14 +1713,14 @@ const inicializarEdicionItems = () => {
 };
 
 // Punto D — mismo multiplicador que AlternativaItem::getTotalConvertidoAttribute()
-// en el backend (manual nunca multiplica, tarifa_fija multiplica por
-// cantidad, por_persona ya viene resuelto): se replica acá SOLO para poder
-// mostrar el total localmente mientras se edita, con el valor todavía sin
-// confirmar por el servidor — nunca se usa para decidir nada, el backend
-// sigue siendo la única fuente de verdad una vez que responde.
+// en el backend (tarifa_fija multiplica por cantidad, por_persona ya viene
+// resuelto): se replica acá SOLO para poder mostrar el total localmente
+// mientras se edita, con el valor todavía sin confirmar por el servidor —
+// nunca se usa para decidir nada, el backend sigue siendo la única fuente de
+// verdad una vez que responde. Sesión 11q: 'manual' dejó de ser una
+// excepción (ver mismo cambio en el backend).
 const totalConvertidoLocal = (item: AlternativaItem) => {
     const precio = edicionItems.value[item.id]?.precio_convertido ?? Number(item.precio_convertido);
-    if (item.origen_tipo === 'manual') return precio;
     if (item.modo_precio === 'tarifa_fija') return precio * item.cantidad;
     return precio;
 };
@@ -1821,6 +1880,14 @@ const contarPasajerosDeItem = (item: AlternativaItem) => {
 };
 
 const desglosePasajerosTexto = (item: AlternativaItem): string | null => {
+    // Sesión 11q — un ítem manual con pax_incluidos parcial no reparte
+    // precio por tipo de pasajero (sigue siendo tarifa_fija), pero sí vale
+    // mostrar a quiénes aplica.
+    if (item.origen_tipo === 'manual' && item.pax_incluidos && item.pax_incluidos.length) {
+        const total = cotizacion.value?.pasajeros?.length ?? 0;
+        return `Aplica a: ${item.pax_incluidos.length} de ${total} pasajeros`;
+    }
+
     if (item.modo_precio !== 'por_persona') return null;
 
     const precios = item.origen_tipo === 'pasaje_aereo' && item.cotizacion_pasaje_aereo

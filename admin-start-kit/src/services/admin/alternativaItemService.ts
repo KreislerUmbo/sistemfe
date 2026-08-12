@@ -64,5 +64,23 @@ export const alternativaItemService = {
   async moverBloque(alternativaId: number, data: { tour_origen_id: number; dia_referencial: number }) {
     const response = await httpClient.put(`/alternativas/${alternativaId}/items/mover-bloque`, data)
     return response.data
+  },
+  // Sesión 11q — edición estructural completa de un ítem manual
+  // (descripción/proveedor/costo/cantidad/pax), separado de actualizar()
+  // (que solo maneja descuento_pct/precio_convertido).
+  async actualizarManual(itemId: number, data: Record<string, any>) {
+    const response = await httpClient.put(`/alternativa-items/${itemId}/manual`, data)
+    return response.data
+  },
+  // Crea Proveedor + ProveedorServicio + ProveedorTarifa a partir de un
+  // ítem manual — la cotización actual NO cambia, ver
+  // AlternativaItemController::promoverAProveedor().
+  async promoverAProveedor(itemId: number, data: {
+    razon_social: string; tipo_documento?: string; numero_documento?: string;
+    destino_servicio_id: number; costo: number; precio_venta_adulto: number;
+    modalidad: 'compartido' | 'privado';
+  }) {
+    const response = await httpClient.post(`/alternativa-items/${itemId}/promover-a-proveedor`, data)
+    return response.data
   }
 }
