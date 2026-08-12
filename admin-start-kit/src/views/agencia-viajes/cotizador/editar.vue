@@ -199,37 +199,6 @@
                     </div>
                 </div>
 
-                <!-- Sesión 11k — hoteles disponibles del tour/paquete recién cargado,
-                     sin auto-agregarse (una matriz de hotel tiene varias tarifas por
-                     tipo_habitacion, el vendedor elige la habitación acá). -->
-                <div v-if="hotelesPlantillaPendientes.length" class="card border-0 shadow-sm mb-2">
-                    <div class="card-body py-2 px-3 bg-warning-subtle rounded">
-                        <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
-                            <span class="small fw-semibold"><i class="fas fa-hotel me-1 text-warning-emphasis"></i>Este tour/paquete tiene hoteles — elegí la habitación para agregarla al lienzo:</span>
-                            <i class="fas fa-times text-muted flex-shrink-0" style="cursor:pointer" @click="hotelesPlantillaPendientes = []"></i>
-                        </div>
-                        <div v-for="hotel in hotelesPlantillaPendientes" :key="hotel.id" class="card border p-2 small mb-2">
-                            <div class="d-flex justify-content-between align-items-center" style="cursor:pointer" @click="hotelPlantillaActivoId = hotelPlantillaActivoId === hotel.id ? null : hotel.id">
-                                <strong>
-                                    <i class="fas fa-hotel me-1 text-primary"></i>{{ hotel.nombre_hotel }}
-                                    <span v-if="hotel.categoria_estrellas" class="text-warning ms-1">
-                                        <i v-for="n in hotel.categoria_estrellas" :key="n" class="fas fa-star" style="font-size:10px"></i>
-                                    </span>
-                                </strong>
-                                <i class="fas" :class="hotelPlantillaActivoId === hotel.id ? 'fa-chevron-up' : 'fa-chevron-down'" style="font-size:10px"></i>
-                            </div>
-                            <div v-if="hotelPlantillaActivoId === hotel.id" class="mt-2 border-top pt-2">
-                                <HabitacionMatrixPicker :tarifas="tarifasHotelPlantillaPlanas(hotel)" :moneda="hotel.moneda"
-                                    :pasajeros="cotizacion?.pasajeros ?? []"
-                                    permitir-cama-adicional
-                                    :edad-max-infante-gratis="hotel.edad_max_infante_gratis"
-                                    :edad-max-nino-cama-adicional="hotel.edad_max_nino_cama_adicional"
-                                    @seleccionar="({ id, cantidad, pax_incluidos, camas_adicionales_nino }) => agregarItemHotelPlantilla(hotel, id, cantidad, pax_incluidos, camas_adicionales_nino)" />
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
                 <div class="card border-0 shadow-sm">
                     <div class="card-body">
                         <div v-if="bloquesLienzo.length === 0 && mostrarTabsDia && diasDesdeCombo.has(diaActivo)" class="drop-hint text-center text-muted py-4 border rounded" style="border-style:dashed">
@@ -614,7 +583,11 @@
                         <template v-else-if="pasoDrawer === 'matrizHotel' && matrizHotelActiva">
                             <p class="small fw-semibold mb-2">{{ matrizHotelActiva.nombreProveedor }}</p>
                             <HabitacionMatrixPicker :tarifas="matrizHotelActiva.tarifas" :moneda="matrizHotelActiva.moneda"
-                                @seleccionar="({ id, cantidad }) => agregarItemProveedorHotel(id, cantidad)" />
+                                :pasajeros="cotizacion?.pasajeros ?? []"
+                                permitir-cama-adicional
+                                :edad-max-infante-gratis="matrizHotelActiva.edadMaxInfanteGratis"
+                                :edad-max-nino-cama-adicional="matrizHotelActiva.edadMaxNinoCamaAdicional"
+                                @seleccionar="({ id, cantidad, pax_incluidos, camas_adicionales_nino }) => agregarItemProveedorHotel(id, cantidad, pax_incluidos, camas_adicionales_nino)" />
                         </template>
 
                         <template v-else-if="pasoDrawer === 'modoPrecio' && modoPrecioPendiente">
@@ -661,7 +634,7 @@ import { bibliotecaCotizadorService, type BibliotecaTipo } from '@/services/admi
 import { reservaService } from '@/services/admin/reservaService';
 import { configuracionAgenciaService } from '@/services/admin/configuracionAgenciaService';
 import { formatFecha } from '@/helpers/fecha';
-import type { Cotizacion, Alternativa, AlternativaItem, ProveedorTarifa, OpcionMayorista, OpcionHotel, Proveedor, ProveedorTipo, BibliotecaResultado, ConfiguracionAgencia, DestinoServicio } from '@/types/agencia-viajes';
+import type { Cotizacion, Alternativa, AlternativaItem, ProveedorTarifa, OpcionMayorista, Proveedor, ProveedorTipo, BibliotecaResultado, ConfiguracionAgencia, DestinoServicio } from '@/types/agencia-viajes';
 import type { Client } from '@/types/clients';
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
@@ -1201,16 +1174,6 @@ const onClicFilaBiblioteca = async (fila: FilaBiblioteca) => {
 // cae entero en el día activo, ver AlternativaItemController::desdePlantilla()).
 const vistaPreviaCombo = ref<Array<{ tourOrigenId: number; dia: number; nombre: string; total: number }> | null>(null);
 
-// Sesión 11k — hoteles del tour/paquete recién cargado, devueltos por
-// desdePlantilla() sin auto-agregarse (ver hoteles_disponibles). diaCarga
-// es el día usado en la carga (para un tour_simple, TODOS sus ítems caen
-// ahí — mismo criterio que ComboExplosionService/desdePlantilla() ya usan,
-// sin offset), snapshoteado porque el vendedor puede cambiar de día activo
-// mientras el banner sigue abierto.
-const hotelesPlantillaPendientes = ref<OpcionHotel[]>([]);
-const hotelPlantillaActivoId = ref<number | null>(null);
-const diaCargaHotelesPendientes = ref<number>(1);
-
 // Click en una tarjeta de tour/paquete — explota TODOS sus ítems en la
 // alternativa activa (AlternativaItemController::desdePlantilla()). Sin
 // modal de confirmación intermedio: el badge de cantidad de ítems, visible
@@ -1239,10 +1202,6 @@ const clicResultadoPlantilla = async (p: Extract<BibliotecaResultado, { tipo_res
 
         const idsTourOrigen = new Set(res.items_agregados.map((i) => i.tour_origen_id).filter((id): id is number => id != null));
 
-        diaCargaHotelesPendientes.value = diaActivoParaAgregar.value;
-        hotelesPlantillaPendientes.value = res.hoteles_disponibles ?? [];
-        hotelPlantillaActivoId.value = null;
-
         await cargarCotizacion();
         drawerBibliotecaAbierto.value = false;
         volverAGridDrawer();
@@ -1260,61 +1219,6 @@ const clicResultadoPlantilla = async (p: Extract<BibliotecaResultado, { tipo_res
         vistaPreviaCombo.value = calcularVistaPreviaCombo(idsTourOrigen);
     } catch (error: any) {
         (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo cargar la plantilla', 'error');
-    }
-};
-
-// Habitación por hotel de plantilla — mismo shape que tarifasHotelPlanas()
-// (mayorista) pero SIN prefijo de nombre_hotel (el header de la tarjeta ya
-// lo muestra).
-const tarifasHotelPlantillaPlanas = (hotel: OpcionHotel) => {
-    return (hotel.opciones_hotel_tarifas ?? []).map((t) => ({
-        id: t.id,
-        tipo_habitacion: t.tipo_habitacion,
-        precio: Number(t.precio_venta),
-        registrada: !!t.proveedor_tarifa_id,
-        // Sesión 11o — solo para mostrar "+S/{precio} c/u" en el picker.
-        precioVentaCamaAdicional: t.precio_venta_cama_adicional != null ? Number(t.precio_venta_cama_adicional) : null,
-    }));
-};
-
-// tour_origen_id/día: si el tour dueño de este hotel ya generó algún ítem
-// en el lienzo (explotarTourSimple() siempre tagea tour_origen_id, incluso
-// para un tour_simple suelto), el hotel se une al mismo bloque y hereda su
-// día real — si no (hotel a nivel del combo, sin bloque propio, o un
-// tour_simple que solo tenía el hotel y ningún otro ítem), queda "suelto"
-// en el día en que se cargó la plantilla.
-const tourOrigenParaHotelPlantilla = (hotel: OpcionHotel): number | null => {
-    const perteneceABloque = (alternativaActiva.value?.items ?? []).some((i) => i.tour_origen_id === hotel.paquete_plantilla_id);
-    return perteneceABloque ? (hotel.paquete_plantilla_id ?? null) : null;
-};
-
-const diaParaHotelPlantilla = (hotel: OpcionHotel): number => {
-    const itemDelTour = (alternativaActiva.value?.items ?? []).find((i) => i.tour_origen_id === hotel.paquete_plantilla_id);
-    return itemDelTour?.dia_referencial ?? diaCargaHotelesPendientes.value;
-};
-
-const agregarItemHotelPlantilla = async (
-    hotel: OpcionHotel,
-    opcionHotelTarifaId: number,
-    cantidad: number,
-    paxIncluidos: number[] | null = null,
-    camasAdicionalesNino: number = 0,
-) => {
-    if (!alternativaActiva.value || !hotel.paquete_plantilla_id) return;
-    try {
-        const res = await alternativaItemService.agregarHotelPlantilla(alternativaActiva.value.id, {
-            paquete_plantilla_id: hotel.paquete_plantilla_id,
-            opcion_hotel_tarifa_id: opcionHotelTarifaId,
-            cantidad,
-            tour_origen_id: tourOrigenParaHotelPlantilla(hotel),
-            dia_referencial: diaParaHotelPlantilla(hotel),
-            pax_incluidos: paxIncluidos,
-            camas_adicionales_nino: camasAdicionalesNino,
-        });
-        hotelPlantillaActivoId.value = null;
-        await onServicioSueltoAgregado(res.alternativa_item);
-    } catch (error: any) {
-        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo agregar', 'error');
     }
 };
 
@@ -1341,17 +1245,36 @@ const calcularVistaPreviaCombo = (idsTourOrigen: Set<number>) => {
     return dias.size > 1 ? [...grupos.values()].sort((a, b) => a.dia - b.dia) : null;
 };
 
-const matrizHotelActiva = ref<{ tarifas: Array<{ id: number; tipo_habitacion: string; precio: number }>; moneda: string; nombreProveedor: string } | null>(null);
+const matrizHotelActiva = ref<{
+    tarifas: Array<{ id: number; tipo_habitacion: string; precio: number; precioVentaCamaAdicional: number | null }>;
+    moneda: string;
+    nombreProveedor: string;
+    edadMaxInfanteGratis?: number;
+    edadMaxNinoCamaAdicional?: number;
+} | null>(null);
 const modoPrecioPendiente = ref<{ id: number; nombre: string } | null>(null);
 
 const clicBibliotecaItem = async (tarifa: ProveedorTarifa) => {
     if (tarifa.tipo_habitacion) {
         // Hotel: matriz completa de habitaciones de ESE proveedor_servicio.
         const res = await proveedorService.listarTarifas(tarifa.proveedor_servicio_id);
+        // Consolidación de hoteles — tramo de edad para cama adicional, ahora
+        // a nivel de proveedor (proveedor_alojamiento_detalle), no del hotel
+        // de un paquete_plantilla (eliminado). Sin la fila configurada, el
+        // picker simplemente no ofrece cama adicional (permitirCamaAdicional
+        // en el componente exige ambos números presentes).
+        const alojamiento = tarifa.proveedor_servicio?.proveedor?.alojamiento_detalle;
         matrizHotelActiva.value = {
-            tarifas: res.proveedor_tarifas.map((t) => ({ id: t.id, tipo_habitacion: t.tipo_habitacion ?? '—', precio: Number(t.precio_venta_adulto) })),
+            tarifas: res.proveedor_tarifas.map((t) => ({
+                id: t.id,
+                tipo_habitacion: t.tipo_habitacion ?? '—',
+                precio: Number(t.precio_venta_adulto),
+                precioVentaCamaAdicional: t.precio_venta_cama_adicional != null ? Number(t.precio_venta_cama_adicional) : null,
+            })),
             moneda: tarifa.moneda,
             nombreProveedor: tarifa.proveedor_servicio?.proveedor?.nombre_comercial ?? tarifa.proveedor_servicio?.proveedor?.razon_social ?? '',
+            edadMaxInfanteGratis: alojamiento?.edad_max_infante_gratis,
+            edadMaxNinoCamaAdicional: alojamiento?.edad_max_nino_cama_adicional,
         };
         return;
     }
@@ -1379,7 +1302,12 @@ const confirmarModoPrecio = async (modoPrecio: 'tarifa_fija' | 'por_persona') =>
     }
 };
 
-const agregarItemProveedorHotel = async (proveedorTarifaId: number, cantidad: number) => {
+const agregarItemProveedorHotel = async (
+    proveedorTarifaId: number,
+    cantidad: number,
+    paxIncluidos: number[] | null = null,
+    camasAdicionalesNino: number = 0,
+) => {
     if (!alternativaActiva.value) return;
     try {
         const res = await alternativaItemService.agregarProveedor(alternativaActiva.value.id, {
@@ -1387,6 +1315,8 @@ const agregarItemProveedorHotel = async (proveedorTarifaId: number, cantidad: nu
             modo_precio: 'tarifa_fija',
             cantidad,
             dia_referencial: diaActivoParaAgregar.value,
+            pax_incluidos: paxIncluidos,
+            camas_adicionales_nino: camasAdicionalesNino,
         });
         await onServicioSueltoAgregado(res.alternativa_item);
     } catch (error: any) {
@@ -1769,7 +1699,6 @@ const iconoItem = (item: AlternativaItem) => {
     if (item.origen_tipo === 'pasaje_aereo') return 'fa-plane';
     if (item.origen_tipo === 'mayorista') return 'fa-plane-departure';
     if (item.origen_tipo === 'manual') return 'fa-pen';
-    if (item.origen_tipo === 'hotel_plantilla') return 'fa-bed';
     if (item.proveedor_tarifa?.tipo_habitacion) return 'fa-bed';
     return 'fa-concierge-bell';
 };
@@ -1778,10 +1707,6 @@ const etiquetaItem = (item: AlternativaItem) => {
     if (item.origen_tipo === 'manual') return item.descripcion_manual ?? 'Ítem manual';
     if (item.origen_tipo === 'pasaje_aereo') return item.cotizacion_pasaje_aereo?.aerolinea ?? 'Pasaje aéreo';
     if (item.origen_tipo === 'mayorista') return item.opcion_mayorista?.proveedor?.nombre_comercial ?? item.opcion_mayorista?.proveedor?.razon_social ?? 'Paquete mayorista';
-    if (item.origen_tipo === 'hotel_plantilla') {
-        const nombreHotel = item.opcion_hotel_tarifa?.opcion_hotel?.nombre_hotel ?? 'Hotel';
-        return `${nombreHotel} · ${item.opcion_hotel_tarifa?.tipo_habitacion ?? ''}`;
-    }
     if (item.proveedor_tarifa?.tipo_habitacion) {
         // Hotel: la categoría genérica del servicio ("Alojamiento") no dice nada útil
         // acá — mismo formato "Proveedor · tipo_habitación" que ya usa clicBibliotecaItem.

@@ -51,11 +51,6 @@
                     <i class="fas fa-list-check me-1"></i>Incluye
                 </a>
             </li>
-            <li class="nav-item">
-                <a class="nav-link" :class="{ active: tabActiva === 'hoteles' }" href="#" @click.prevent="tabActiva = 'hoteles'">
-                    <i class="fas fa-bed me-1"></i>Hoteles
-                </a>
-            </li>
         </ul>
 
         <!-- ═══ TAB: Datos ═══ -->
@@ -591,176 +586,6 @@
                 Este combo todavía no tiene tours ni ítems incluidos.
             </div>
         </div>
-
-        <!-- ═══ TAB: Hoteles ═══ -->
-        <div v-if="tabActiva === 'hoteles'">
-            <div class="card border-0 shadow-sm mb-3">
-                <div class="card-header bg-white border-bottom py-2">
-                    <span class="fw-semibold text-dark small">Agregar hotel</span>
-                </div>
-                <div class="card-body py-3">
-                    <label class="form-label mb-1 small text-secondary">Nombre del hotel</label>
-                    <input type="text" class="form-control form-control-sm mb-2" placeholder="Nombre del hotel" v-model="formHotel.nombre_hotel">
-                    <div class="row g-2 mb-2">
-                        <div class="col-6 col-md-4">
-                            <label class="form-label mb-1 small text-secondary">Estrellas</label>
-                            <input type="number" min="1" max="5" class="form-control form-control-sm" placeholder="Estrellas" v-model.number="formHotel.categoria_estrellas">
-                        </div>
-                        <div class="col-6 col-md-4">
-                            <label class="form-label mb-1 small text-secondary">Moneda</label>
-                            <select class="form-select form-select-sm" v-model="formHotel.moneda">
-                                <option value="PEN">PEN</option>
-                                <option value="USD">USD</option>
-                            </select>
-                        </div>
-                        <div class="col-12 col-md-4">
-                            <label class="form-label mb-1 small text-secondary">Proveedor</label>
-                            <select class="form-select form-select-sm" v-model="formHotel.proveedor_id" @change="onCambiarProveedorHotel">
-                                <option :value="null">Hotel manual/referencial (sin proveedor)</option>
-                                <option v-for="p in proveedoresHotel" :key="p.id" :value="p.id">{{ p.nombre_comercial ?? p.razon_social }}</option>
-                            </select>
-                        </div>
-                    </div>
-                    <!-- Sesión 11o — tramo de edad para cama adicional, propio de ESTE
-                         hotel (no toda la agencia). Sin valor = hereda el default de
-                         configuracion_agencia al guardar (ver backend). -->
-                    <div class="row g-2 mb-2">
-                        <div class="col-6 col-md-4">
-                            <label class="form-label mb-1 small text-secondary">
-                                Edad máx. infante gratis
-                                <i class="fas fa-info-circle text-muted" title="Hasta esta edad (inclusive) el pasajero no requiere cama adicional en este hotel."></i>
-                            </label>
-                            <input type="number" min="0" class="form-control form-control-sm"
-                                :placeholder="String(configAgencia?.edad_max_infante_gratis_hotel_default ?? 4)"
-                                v-model.number="formHotel.edad_max_infante_gratis">
-                        </div>
-                        <div class="col-6 col-md-4">
-                            <label class="form-label mb-1 small text-secondary">
-                                Edad máx. cama adicional
-                                <i class="fas fa-info-circle text-muted" title="Hasta esta edad (inclusive) el pasajero puede requerir cama adicional en este hotel."></i>
-                            </label>
-                            <input type="number" min="0" class="form-control form-control-sm"
-                                :placeholder="String(configAgencia?.edad_max_nino_cama_adicional_hotel_default ?? 12)"
-                                v-model.number="formHotel.edad_max_nino_cama_adicional">
-                        </div>
-                    </div>
-                    <!-- Encabezados de columna — cumplen el rol de label para cada fila
-                         de tarifas sin repetir el texto en cada una (mismo criterio que
-                         un <th>, ver misma estructura de columnas que la fila de abajo). -->
-                    <div class="row g-1 mb-1">
-                        <div class="col-3"><label class="form-label mb-0 small text-secondary">Tipo de habitación</label></div>
-                        <div class="col-3" v-if="formHotel.proveedor_id"><label class="form-label mb-0 small text-secondary">Tarifa registrada</label></div>
-                        <div :class="formHotel.proveedor_id ? 'col-2' : 'col-3'"><label class="form-label mb-0 small text-secondary">Costo</label></div>
-                        <div :class="formHotel.proveedor_id ? 'col-2' : 'col-3'"><label class="form-label mb-0 small text-secondary">Venta</label></div>
-                        <div class="col-1"></div>
-                    </div>
-                    <div v-for="(tf, idx) in formHotel.tarifas" :key="idx" class="row g-1 mb-1 align-items-center">
-                        <div class="col-3">
-                            <select class="form-select form-select-sm" v-model="tf.tipo_habitacion" @change="tf.proveedor_tarifa_id = null">
-                                <option value="simple">Simple</option>
-                                <option value="matrimonial">Matrimonial</option>
-                                <option value="doble">Doble</option>
-                                <option value="triple">Triple</option>
-                                <option value="familiar">Familiar</option>
-                            </select>
-                        </div>
-                        <div class="col-3" v-if="formHotel.proveedor_id">
-                            <select class="form-select form-select-sm" :value="tf.proveedor_tarifa_id ?? ''" @change="onElegirTarifaRegistrada(tf, $event)">
-                                <option value="">Manual</option>
-                                <option v-for="t in tarifasHotelParaTipo(tf.tipo_habitacion)" :key="t.id" :value="t.id">
-                                    Tarifa registrada ({{ t.precio_venta_adulto }})
-                                </option>
-                            </select>
-                        </div>
-                        <div :class="formHotel.proveedor_id ? 'col-2' : 'col-3'">
-                            <input type="number" class="form-control form-control-sm" placeholder="Costo"
-                                v-model.number="tf.precio_costo" :readonly="!!tf.proveedor_tarifa_id">
-                        </div>
-                        <div :class="formHotel.proveedor_id ? 'col-2' : 'col-3'">
-                            <input type="number" class="form-control form-control-sm" placeholder="Venta"
-                                v-model.number="tf.precio_venta" :readonly="!!tf.proveedor_tarifa_id">
-                        </div>
-                        <div class="col-1">
-                            <button class="btn btn-sm btn-outline-danger" @click="formHotel.tarifas.splice(idx, 1)" :disabled="formHotel.tarifas.length === 1">
-                                <i class="fas fa-times"></i>
-                            </button>
-                        </div>
-                        <!-- Sesión 11o — precio de cama adicional, nullable (no toda
-                             habitación la admite). Fila propia para no apretar la fila
-                             principal — mismo criterio visual que el resto del form. -->
-                        <div class="col-11 offset-0 mt-1">
-                            <div class="row g-1 align-items-center">
-                                <div class="col-4"><span class="small text-muted">Cama adicional (opcional):</span></div>
-                                <div class="col-4">
-                                    <input type="number" min="0" class="form-control form-control-sm" placeholder="Costo cama adicional"
-                                        v-model.number="tf.precio_costo_cama_adicional">
-                                </div>
-                                <div class="col-4">
-                                    <input type="number" min="0" class="form-control form-control-sm" placeholder="Venta cama adicional"
-                                        v-model.number="tf.precio_venta_cama_adicional">
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <button class="btn btn-sm btn-outline-secondary mb-2" @click="formHotel.tarifas.push({ tipo_habitacion: 'doble', precio_costo: 0, precio_venta: 0, proveedor_tarifa_id: null, precio_costo_cama_adicional: null, precio_venta_cama_adicional: null })">
-                        + tipo de habitación
-                    </button>
-                    <div>
-                        <button class="btn btn-primary btn-sm" @click="guardarHotel" :disabled="guardandoHotel">
-                            <span v-if="guardandoHotel" class="spinner-border spinner-border-sm me-1"></span>Guardar hotel
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            <div v-for="hotel in hoteles" :key="hotel.id" class="card border-0 shadow-sm mb-3">
-                <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center py-2">
-                    <span class="fw-semibold text-dark small">
-                        <i class="fas fa-hotel me-1 text-primary"></i>{{ hotel.nombre_hotel }}
-                        <span v-if="hotel.categoria_estrellas" class="text-warning ms-1">
-                            <i v-for="n in hotel.categoria_estrellas" :key="n" class="fas fa-star" style="font-size:10px"></i>
-                        </span>
-                        <span class="text-muted ms-1">({{ hotel.moneda }})</span>
-                    </span>
-                    <span v-if="eliminandoHotelId === hotel.id" class="spinner-border spinner-border-sm text-danger"></span>
-                    <i v-else class="fas fa-times text-danger" style="cursor:pointer" @click="quitarHotel(hotel)"></i>
-                </div>
-                <div class="px-3 pt-2">
-                    <span class="badge bg-light text-dark border small">
-                        <i class="fas fa-baby me-1"></i>Infante gratis hasta {{ hotel.edad_max_infante_gratis }} años ·
-                        cama adicional hasta {{ hotel.edad_max_nino_cama_adicional }} años
-                    </span>
-                </div>
-                <div class="card-body p-0">
-                    <table class="table table-sm mb-0">
-                        <thead class="table-light">
-                            <tr class="small text-secondary text-uppercase">
-                                <th class="ps-3">Habitación</th>
-                                <th class="text-end">Costo</th>
-                                <th class="text-end pe-3">Venta</th>
-                                <th class="text-end">+Cama (costo)</th>
-                                <th class="text-end pe-3">+Cama (venta)</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr v-for="tarifa in hotel.opciones_hotel_tarifas" :key="tarifa.id" class="small">
-                                <td class="ps-3 text-capitalize">
-                                    {{ tarifa.tipo_habitacion }}
-                                    <i v-if="tarifa.proveedor_tarifa_id" class="fas fa-link text-primary ms-1" style="font-size:10px" title="Tarifa registrada de un proveedor"></i>
-                                </td>
-                                <td class="text-end">{{ tarifa.precio_costo }}</td>
-                                <td class="text-end pe-3">{{ tarifa.precio_venta }}</td>
-                                <td class="text-end text-muted">{{ tarifa.precio_costo_cama_adicional ?? '—' }}</td>
-                                <td class="text-end pe-3 text-muted">{{ tarifa.precio_venta_cama_adicional ?? '—' }}</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-            <div v-if="hoteles.length === 0" class="text-muted fst-italic text-center py-4">
-                Este paquete/tour todavía no tiene hoteles cargados.
-            </div>
-        </div>
         </template>
     </DefaultLayout>
 </template>
@@ -779,7 +604,7 @@ import { configuracionAgenciaService } from '@/services/admin/configuracionAgenc
 import { servicioService } from '@/services/admin/servicioService';
 import { formatFecha } from '@/helpers/fecha';
 import type {
-    PaquetePlantilla, PaquetePlantillaItem, TourItinerarioItem, OpcionHotel,
+    PaquetePlantilla, PaquetePlantillaItem, TourItinerarioItem,
     ProveedorTarifa, Proveedor, Guia, GuiaTarifa, ComboDatos, ComboItinerarioPaso, PaquetePlantillaResumen,
     DestinoServicio, ConfiguracionAgencia, Servicio, ProveedorTipo,
 } from '@/types/agencia-viajes';
@@ -794,7 +619,7 @@ const cargandoPagina = ref(true);
 const paquete = ref<PaquetePlantilla | null>(null);
 const combo = ref<ComboDatos | null>(null);
 const esCombo = computed(() => paquete.value?.tipo === 'paquete_combo');
-const tabActiva = ref<'datos' | 'itinerario' | 'incluye' | 'hoteles'>('datos');
+const tabActiva = ref<'datos' | 'itinerario' | 'incluye'>('datos');
 
 const etiquetaCategoria = (c: string) => ({ local: 'Local', nacional: 'Nacional', internacional: 'Internacional' } as Record<string, string>)[c] ?? c;
 
@@ -812,7 +637,6 @@ const descripcionDestinoServicio = (ds?: DestinoServicio) => {
 const cargarPaquete = async () => {
     const res = await paquetePlantillaService.obtener(paqueteId.value);
     paquete.value = res.paquete_plantilla;
-    hoteles.value = res.opciones_hotel;
     combo.value = res.combo;
     if (combo.value) {
         descuentoTipoLocal.value = paquete.value.descuento_tipo ?? null;
@@ -1348,85 +1172,6 @@ const toggleExpandido = async (tourHijoId: number) => {
     }
 };
 
-// ── Hoteles ───────────────────────────────────────────────────────────
-const hoteles = ref<OpcionHotel[]>([]);
-const formHotel = ref<{
-    nombre_hotel: string; categoria_estrellas: number | null; proveedor_id: number | null; moneda: 'PEN' | 'USD';
-    // Sesión 11o — sin valor = hereda el default de configuracion_agencia al
-    // guardar (ver PaquetePlantillaController::hoteles()).
-    edad_max_infante_gratis: number | null; edad_max_nino_cama_adicional: number | null;
-    tarifas: Array<{
-        tipo_habitacion: string; precio_costo: number; precio_venta: number; proveedor_tarifa_id?: number | null;
-        precio_costo_cama_adicional?: number | null; precio_venta_cama_adicional?: number | null;
-    }>;
-}>({
-    nombre_hotel: '', categoria_estrellas: null, proveedor_id: null, moneda: 'PEN',
-    edad_max_infante_gratis: null, edad_max_nino_cama_adicional: null,
-    tarifas: [{ tipo_habitacion: 'doble', precio_costo: 0, precio_venta: 0, proveedor_tarifa_id: null, precio_costo_cama_adicional: null, precio_venta_cama_adicional: null }],
-});
-
-// Sesión 11k, Fix 9 — proveedores tipo Hotel (para "usar tarifa registrada")
-// + sus tarifas Hotel una vez elegido uno.
-const proveedoresHotel = ref<Proveedor[]>([]);
-const tarifasHotelProveedorSeleccionado = ref<ProveedorTarifa[]>([]);
-
-const onCambiarProveedorHotel = async () => {
-    formHotel.value.tarifas.forEach((tf) => { tf.proveedor_tarifa_id = null; });
-    tarifasHotelProveedorSeleccionado.value = formHotel.value.proveedor_id
-        ? (await proveedorService.tarifasHotel(formHotel.value.proveedor_id)).proveedor_tarifas
-        : [];
-};
-
-const tarifasHotelParaTipo = (tipoHabitacion: string) => {
-    return tarifasHotelProveedorSeleccionado.value.filter((t) => t.tipo_habitacion === tipoHabitacion);
-};
-
-const onElegirTarifaRegistrada = (tf: { precio_costo: number; precio_venta: number; proveedor_tarifa_id?: number | null }, event: Event) => {
-    const id = Number((event.target as HTMLSelectElement).value) || null;
-    tf.proveedor_tarifa_id = id;
-    const tarifa = tarifasHotelProveedorSeleccionado.value.find((t) => t.id === id);
-    if (tarifa) {
-        tf.precio_costo = Number(tarifa.precio_costo);
-        tf.precio_venta = Number(tarifa.precio_venta_adulto);
-    }
-};
-
-const guardandoHotel = ref(false);
-
-const guardarHotel = async () => {
-    if (!formHotel.value.nombre_hotel.trim()) {
-        (Swal as TVueSwalInstance).fire('Error', 'El nombre del hotel es obligatorio.', 'error');
-        return;
-    }
-    guardandoHotel.value = true;
-    try {
-        await paquetePlantillaService.agregarHotel(paqueteId.value, formHotel.value);
-        formHotel.value = {
-            nombre_hotel: '', categoria_estrellas: null, proveedor_id: null, moneda: 'PEN',
-            edad_max_infante_gratis: null, edad_max_nino_cama_adicional: null,
-            tarifas: [{ tipo_habitacion: 'doble', precio_costo: 0, precio_venta: 0, proveedor_tarifa_id: null, precio_costo_cama_adicional: null, precio_venta_cama_adicional: null }],
-        };
-        tarifasHotelProveedorSeleccionado.value = [];
-        await cargarPaquete();
-    } catch (error: any) {
-        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo guardar', 'error');
-    } finally {
-        guardandoHotel.value = false;
-    }
-};
-
-const eliminandoHotelId = ref<number | null>(null);
-
-const quitarHotel = async (hotel: OpcionHotel) => {
-    eliminandoHotelId.value = hotel.id;
-    try {
-        await paquetePlantillaService.quitarHotel(hotel.id);
-        await cargarPaquete();
-    } finally {
-        eliminandoHotelId.value = null;
-    }
-};
-
 onMounted(async () => {
     try {
         // Fix 3 — carga la config de agencia en paralelo, no bloquea la carga
@@ -1446,17 +1191,8 @@ onMounted(async () => {
         const res = await guiaService.listar({});
         guias.value = res.guias ?? [];
 
-        // Sesión 11k, Fix 9 — proveedores tipo Hotel, para "usar tarifa registrada".
-        // slug='alojamiento-hoteles' es el slug REAL (confirmado contra datos
-        // reales) — 'hotel' no matchea nada (ver mismo hallazgo documentado en
-        // ProveedorController::tarifasHotel(), backend).
         const tipos = await proveedorTipoService.listar();
         proveedorTipos.value = tipos.proveedor_tipos;
-        const tipoHotel = tipos.proveedor_tipos.find((t) => t.slug === 'alojamiento-hoteles');
-        if (tipoHotel) {
-            const resProveedores = await proveedorService.listar({ tipo_id: tipoHotel.id, estado: true });
-            proveedoresHotel.value = resProveedores.proveedores ?? [];
-        }
     } catch (error: any) {
         (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo cargar el paquete/tour.', 'error');
     } finally {

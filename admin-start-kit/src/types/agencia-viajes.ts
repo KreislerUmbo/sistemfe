@@ -14,6 +14,7 @@ export type Proveedor = {
   codigo?: string | null;
   razon_social: string;
   nombre_comercial?: string | null;
+  descripcion?: string | null;
   tipo_persona?: string | null;
   tipo_documento?: string | null;
   numero_documento?: string | null;
@@ -28,6 +29,7 @@ export type Proveedor = {
   tiktok?: string | null;
   linkedin?: string | null;
   logo?: string | null;
+  fotos?: string[] | null;
   observaciones?: string | null;
   estado: boolean;
   tipo_id: number;
@@ -37,7 +39,28 @@ export type Proveedor = {
   // qué empresa específica va a operar el servicio.
   es_referencial?: boolean;
   proveedor_servicios?: ProveedorServicio[];
+  // Consolidación de hoteles — solo poblado si el proveedor es tipo
+  // Alojamiento y tiene la fila creada (ver ProveedorController).
+  alojamiento_detalle?: ProveedorAlojamientoDetalle | null;
+  amenidades?: Amenidad[];
   created_at?: string;
+};
+
+// Consolidación de hoteles — catálogo central, solo lectura desde acá.
+export type Amenidad = {
+  id: number;
+  nombre: string;
+  icono: string;
+  slug: string;
+};
+
+export type ProveedorAlojamientoDetalle = {
+  id: number;
+  proveedor_id: number;
+  hora_checkin?: string | null;
+  hora_checkout?: string | null;
+  edad_max_infante_gratis: number;
+  edad_max_nino_cama_adicional: number;
 };
 
 export type Proveedores = {
@@ -78,6 +101,11 @@ export type ProveedorTarifa = {
   moneda: 'PEN' | 'USD';
   diferenciador?: Record<string, any> | null;
   tipo_habitacion?: 'simple' | 'matrimonial' | 'doble' | 'triple' | 'familiar' | null;
+  // Consolidación de hoteles — solo aplican a tarifas de hotel
+  // (tipo_habitacion no nulo).
+  descripcion?: string | null;
+  regimen_comida?: 'solo_alojamiento' | 'desayuno' | 'media_pension' | 'pension_completa' | null;
+  tipo_cama?: string | null;
   precio_costo: number;
   margen_tipo: 'porcentaje' | 'fijo';
   margen_valor: number;
@@ -86,6 +114,8 @@ export type ProveedorTarifa = {
   precio_venta_adulto: number;
   precio_venta_nino?: number | null;
   precio_venta_infante?: number | null;
+  precio_costo_cama_adicional?: number | null;
+  precio_venta_cama_adicional?: number | null;
   edad_min_nino?: number | null;
   edad_max_nino?: number | null;
   edad_max_infante?: number | null;
@@ -261,7 +291,7 @@ export type AlternativaResponse = {
   lineas_fuera_de_piso?: Array<{ alternativa_item_id: number; precio_minimo_permitido: number | null }>;
 };
 
-export type OrigenItem = 'proveedor' | 'mayorista' | 'pasaje_aereo' | 'manual' | 'hotel_plantilla';
+export type OrigenItem = 'proveedor' | 'mayorista' | 'pasaje_aereo' | 'manual';
 
 export type AlternativaItem = {
   id: number;
@@ -269,10 +299,6 @@ export type AlternativaItem = {
   origen_tipo: OrigenItem;
   proveedor_tarifa_id?: number | null;
   opcion_mayorista_id?: number | null;
-  // Sesión 11k — hotel elegido de la matriz de un paquete_plantilla
-  // (origen_tipo=hotel_plantilla), ver crearItemHotelPlantilla().
-  opcion_hotel_tarifa_id?: number | null;
-  paquete_plantilla_id?: number | null;
   // Sesión 11b4a — de qué tour_simple vino este ítem al explotar un
   // paquete_combo (agrupación visual, no afecta precio).
   tour_origen_id?: number | null;
@@ -293,7 +319,6 @@ export type AlternativaItem = {
   total_convertido: number;
   proveedor_tarifa?: ProveedorTarifa;
   opcion_mayorista?: OpcionMayorista;
-  opcion_hotel_tarifa?: OpcionHotelTarifa;
   cotizacion_pasaje_aereo?: CotizacionPasajeAereo;
 };
 
@@ -316,10 +341,6 @@ export type DesdePlantillaResponse = {
     guia_nombre: string | null;
     destino_nombre: string | null;
   }>;
-  // Sesión 11k — hoteles del paquete/tour(es) recién cargado(s), SIN
-  // auto-agregarse (una matriz de hotel tiene varias tarifas por
-  // tipo_habitacion, el vendedor elige la habitación antes de tener precio).
-  hoteles_disponibles: OpcionHotel[];
   // Sesión 11m — último día que ocupa el paquete/combo cargado, contando
   // incluso un tour-hijo sin itinerario (ocupa igual el día en que arranca).
   // Usado en el cotizador para no dejar un día "invisible" sin pestaña.
@@ -370,7 +391,6 @@ export type OpcionMayorista = {
 export type OpcionHotel = {
   id: number;
   opcion_mayorista_id?: number | null;
-  paquete_plantilla_id?: number | null;
   proveedor_id?: number | null;
   nombre_hotel: string;
   categoria_estrellas?: number | null;
@@ -536,7 +556,6 @@ export type PaquetePlantillaResponse = {
 
 export type PaquetePlantillaShowResponse = {
   paquete_plantilla: PaquetePlantilla;
-  opciones_hotel: OpcionHotel[];
   // null para tour_simple — solo poblado para paquete_combo (Sesión 11b4a).
   combo: ComboDatos | null;
 };

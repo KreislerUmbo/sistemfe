@@ -93,7 +93,11 @@ class BibliotecaCotizadorController extends Controller
         $hoy = now()->toDateString();
 
         $query = ProveedorTarifa::with([
-            'proveedorServicio.proveedor',
+            // alojamientoDetalle — Consolidación de hoteles: el cotizador
+            // necesita el tramo de edad de cama adicional del proveedor
+            // dueño de esta tarifa (ver clicBibliotecaItem()/matrizHotelActiva
+            // en editar.vue), mismo dato que antes vivía en OpcionHotel.
+            'proveedorServicio.proveedor.alojamientoDetalle',
             'proveedorServicio.destinoServicio.destinoAtractivo',
             'proveedorServicio.destinoServicio.servicio',
         ])

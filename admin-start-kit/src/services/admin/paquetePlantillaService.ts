@@ -4,7 +4,6 @@ import type {
   PaquetePlantilla,
   PaquetePlantillaItem,
   TourItinerarioItem,
-  OpcionHotel,
   PaquetePlantillaShowResponse,
 } from '@/types/agencia-viajes'
 
@@ -71,26 +70,6 @@ export const paquetePlantillaService = {
   },
   async reordenarItinerario(paqueteId: number, items: { id: number; dia_relativo: number; orden: number }[]) {
     const response = await httpClient.post(`/paquetes-plantilla/${paqueteId}/itinerario/reordenar`, { items })
-    return response.data
-  },
-
-  // ── Matriz de hotel (opciones_hotel/tarifas) ─────────────────────────
-  async listarHoteles(paqueteId: number) {
-    const response = await httpClient.get(`/paquetes-plantilla/${paqueteId}/hoteles`)
-    return response.data as { opciones_hotel: OpcionHotel[] }
-  },
-  async agregarHotel(paqueteId: number, data: {
-    nombre_hotel: string
-    categoria_estrellas?: number | null
-    proveedor_id?: number | null
-    moneda?: 'PEN' | 'USD'
-    tarifas: Array<{ tipo_habitacion: string; precio_costo: number; precio_venta: number; proveedor_tarifa_id?: number | null }>
-  }) {
-    const response = await httpClient.post(`/paquetes-plantilla/${paqueteId}/hoteles`, data)
-    return response.data
-  },
-  async quitarHotel(hotelId: number) {
-    const response = await httpClient.delete(`/paquete-plantilla-hoteles/${hotelId}`)
     return response.data
   },
 }

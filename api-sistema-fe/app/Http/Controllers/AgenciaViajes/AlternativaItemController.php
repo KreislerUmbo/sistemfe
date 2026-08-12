@@ -8,7 +8,6 @@ use App\Models\AgenciaViajes\AlternativaItem;
 use App\Models\AgenciaViajes\CotizacionPasajeAereo;
 use App\Models\AgenciaViajes\CotizacionPasajero;
 use App\Models\AgenciaViajes\GuiaTarifa;
-use App\Models\AgenciaViajes\OpcionHotel;
 use App\Models\AgenciaViajes\OpcionHotelTarifa;
 use App\Models\AgenciaViajes\OpcionMayorista;
 use App\Models\AgenciaViajes\PaquetePlantilla;
@@ -54,7 +53,6 @@ class AlternativaItemController extends Controller
             AlternativaItem::ORIGEN_MAYORISTA => $this->crearItemMayorista($request, $alternativa),
             AlternativaItem::ORIGEN_PASAJE_AEREO => $this->crearItemPasajeAereo($request, $alternativa),
             AlternativaItem::ORIGEN_MANUAL => $this->crearItemManual($request, $alternativa),
-            AlternativaItem::ORIGEN_HOTEL_PLANTILLA => $this->crearItemHotelPlantilla($request, $alternativa),
         };
     }
 
@@ -237,33 +235,6 @@ class AlternativaItemController extends Controller
             }
         }
 
-        // Sesión 11k — hoteles disponibles del paquete/tour(es) recién
-        // cargado(s), devueltos SIN auto-agregarse (mismo criterio
-        // no-bloqueante que guiasPendientes de abajo): una matriz de hotel
-        // tiene varias tarifas por tipo_habitacion, así que no se puede
-        // auto-explotar como un proveedor_tarifa/guia_tarifa — el vendedor
-        // tiene que elegir la habitación antes de que el ítem tenga precio.
-        $tourIds = $paquete->esPaqueteCombo()
-            ? [$paquete->id, ...$this->comboExplosion->toursDelCombo($paquete)->pluck('id')->all()]
-            : [$paquete->id];
-
-        $hotelesDisponibles = OpcionHotel::whereIn('paquete_plantilla_id', $tourIds)
-            ->with('opcionesHotelTarifas')
-            ->get()
-            ->map(fn (OpcionHotel $hotel) => [
-                'id' => $hotel->id,
-                'paquete_plantilla_id' => $hotel->paquete_plantilla_id,
-                'nombre_hotel' => $hotel->nombre_hotel,
-                'categoria_estrellas' => $hotel->categoria_estrellas,
-                // Sesión 11o — sin esto, editar.vue no puede decidir si
-                // muestra el control de cama adicional (necesita el tramo
-                // de edad propio de ESTE hotel).
-                'edad_max_infante_gratis' => $hotel->edad_max_infante_gratis,
-                'edad_max_nino_cama_adicional' => $hotel->edad_max_nino_cama_adicional,
-                'opciones_hotel_tarifas' => $hotel->opcionesHotelTarifas,
-            ])
-            ->values();
-
         $itemsCreados = [];
         $guiasPendientes = [];
 
@@ -352,7 +323,6 @@ class AlternativaItemController extends Controller
             'message' => 'Plantilla cargada correctamente',
             'items_agregados' => $itemsCreados,
             'guias_pendientes' => $guiasPendientes,
-            'hoteles_disponibles' => $hotelesDisponibles,
             'dia_final_combo' => $diaFinalCombo,
             'resumen' => [
                 'tours' => $paquete->esPaqueteCombo() ? $this->comboExplosion->toursDelCombo($paquete)->count() : null,
@@ -436,6 +406,13 @@ class AlternativaItemController extends Controller
             'costo_snapshot' => 'nullable|numeric|min:0',
             // Día activo del lienzo al momento de agregar — Sesión 11b3 (§7.1).
             'dia_referencial' => 'nullable|integer|min:1',
+            // Consolidación de hoteles — cantidad de camas adicionales
+            // necesarias (0 = ninguna, sin default a favor de cobrar de
+            // más). Solo tiene efecto real con modo_precio='tarifa_fija' y
+            // una tarifa de un proveedor con detalle de alojamiento
+            // configurado (antes vivía solo en el hotel de un
+            // paquete_plantilla, ver crearItemHotelPlantilla(), eliminado).
+            'camas_adicionales_nino' => 'nullable|integer|min:0',
         ]);
 
         if ($validator->fails()) {
@@ -460,6 +437,17 @@ class AlternativaItemController extends Controller
                 // tarifa_fija (hotel por habitación, transporte privado por vehículo):
                 // un solo precio, no diferenciado por tipo de pasajero.
                 $precioVentaSnapshot = (float) $tarifa->precio_venta_adulto;
+
+                $camasAdicionales = $validado['camas_adicionales_nino'] ?? 0;
+                if ($camasAdicionales > 0) {
+                    $resultadoCama = $this->aplicarCamaAdicional($alternativa, $tarifa, $paxIncluidos, $camasAdicionales);
+                    if ($resultadoCama instanceof JsonResponse) {
+                        return $resultadoCama;
+                    }
+
+                    $costoSnapshot += $resultadoCama['costo'];
+                    $precioVentaSnapshot += $resultadoCama['venta'];
+                }
             }
         } else {
             $monedaCosto = $validado['moneda_costo'];
@@ -486,6 +474,55 @@ class AlternativaItemController extends Controller
         $this->recalcularTotalAlternativa($alternativa);
 
         return response()->json(['code' => 200, 'message' => 'Ítem agregado correctamente', 'alternativa_item' => $item]);
+    }
+
+    // Consolidación de hoteles — extraído de lo que antes era
+    // crearItemHotelPlantilla() (Sesión 11o): valida y calcula el costo/venta
+    // extra de N camas adicionales para una tarifa_fija de proveedor. Edad
+    // REAL del pasajero (cotizacion_pasajeros.edad), nunca tipo_pax — un
+    // pasajero de 10 años puede tener tipo_pax='adulto' por el umbral
+    // general de la agencia y aun así caer dentro del tramo de cama
+    // adicional propio de ESTE proveedor. Devuelve el JsonResponse de error
+    // (422) tal cual para que el caller lo retorne sin envolver de nuevo.
+    private function aplicarCamaAdicional(Alternativa $alternativa, ProveedorTarifa $tarifa, ?array $paxIncluidos, int $camasAdicionales): array|JsonResponse
+    {
+        $alojamiento = $tarifa->proveedorServicio?->proveedor?->alojamientoDetalle;
+
+        if (! $alojamiento) {
+            return response()->json([
+                'code' => 422,
+                'message' => 'Este proveedor no tiene configurado el detalle de alojamiento (tramo de edad para cama adicional).',
+            ], 422);
+        }
+
+        $tienePaxEnTramo = CotizacionPasajero::where('cotizacion_id', $alternativa->cotizacion_id)
+            ->when(
+                ! empty($paxIncluidos),
+                fn ($query) => $query->whereIn('id', $paxIncluidos),
+                fn ($query) => $query->whereRaw('1 = 0')
+            )
+            ->where('edad', '>', $alojamiento->edad_max_infante_gratis)
+            ->where('edad', '<=', $alojamiento->edad_max_nino_cama_adicional)
+            ->exists();
+
+        if (! $tienePaxEnTramo) {
+            return response()->json([
+                'code' => 422,
+                'message' => 'Cama adicional solo aplica si pax_incluidos tiene al menos un pasajero dentro del tramo de edad de cama adicional de este proveedor.',
+            ], 422);
+        }
+
+        if ($tarifa->precio_costo_cama_adicional === null || $tarifa->precio_venta_cama_adicional === null) {
+            return response()->json([
+                'code' => 422,
+                'message' => 'Esta tarifa no tiene precio de cama adicional configurado.',
+            ], 422);
+        }
+
+        return [
+            'costo' => $camasAdicionales * (float) $tarifa->precio_costo_cama_adicional,
+            'venta' => $camasAdicionales * (float) $tarifa->precio_venta_cama_adicional,
+        ];
     }
 
     // ── origen_tipo=mayorista ─────────────────────────────────────────
@@ -535,100 +572,6 @@ class AlternativaItemController extends Controller
         $this->recalcularTotalAlternativa($alternativa);
 
         return response()->json(['code' => 200, 'message' => 'Ítem de mayorista agregado correctamente', 'alternativa_item' => $item]);
-    }
-
-    // ── origen_tipo=hotel_plantilla (Sesión 11k) ────────────────────────
-    // Mismo patrón que crearItemMayorista(): un hotel de paquete_plantilla
-    // tiene varias tarifas por tipo_habitacion, así que no se auto-explota
-    // al cargar la plantilla (ver desdePlantilla()/hoteles_disponibles) —
-    // el vendedor elige la habitación acá, uno por uno.
-    private function crearItemHotelPlantilla(Request $request, Alternativa $alternativa): JsonResponse
-    {
-        $validator = Validator::make($request->all(), [
-            'paquete_plantilla_id' => 'required|integer|exists:paquetes_plantilla,id',
-            'opcion_hotel_tarifa_id' => 'required|integer|exists:opciones_hotel_tarifas,id',
-            'cantidad' => 'nullable|integer|min:1',
-            'tour_origen_id' => 'nullable|integer',
-            'dia_referencial' => 'nullable|integer|min:1',
-            'pax_incluidos' => 'nullable|array',
-            'pax_incluidos.*' => 'integer|exists:cotizacion_pasajeros,id',
-            // Sesión 11o — cantidad de camas adicionales necesarias (0 =
-            // ninguna, sin default a favor de cobrar de más).
-            'camas_adicionales_nino' => 'nullable|integer|min:0',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
-        }
-
-        $validado = $validator->validated();
-
-        $tarifaHotel = OpcionHotelTarifa::with('opcionHotel')->findOrFail($validado['opcion_hotel_tarifa_id']);
-        if ((int) $tarifaHotel->opcionHotel?->paquete_plantilla_id !== (int) $validado['paquete_plantilla_id']) {
-            return response()->json(['code' => 422, 'message' => 'Esa tarifa de habitación no pertenece al paquete indicado.'], 422);
-        }
-
-        $monedaCosto = $tarifaHotel->opcionHotel->moneda;
-        $camasAdicionales = $validado['camas_adicionales_nino'] ?? 0;
-        $costoSnapshot = (float) $tarifaHotel->precio_costo;
-        $ventaSnapshot = (float) $tarifaHotel->precio_venta;
-
-        if ($camasAdicionales > 0) {
-            $hotel = $tarifaHotel->opcionHotel;
-            $paxIncluidos = $validado['pax_incluidos'] ?? [];
-
-            // edad REAL del pasajero (cotizacion_pasajeros.edad), no
-            // tipo_pax — un pasajero de 10 años puede tener tipo_pax='adulto'
-            // por el umbral general de la agencia y aun así caer dentro del
-            // tramo de cama adicional propio de ESTE hotel.
-            $tienePaxEnTramo = CotizacionPasajero::where('cotizacion_id', $alternativa->cotizacion_id)
-                ->when(
-                    ! empty($paxIncluidos),
-                    fn ($query) => $query->whereIn('id', $paxIncluidos),
-                    fn ($query) => $query->whereRaw('1 = 0')
-                )
-                ->where('edad', '>', $hotel->edad_max_infante_gratis)
-                ->where('edad', '<=', $hotel->edad_max_nino_cama_adicional)
-                ->exists();
-
-            if (! $tienePaxEnTramo) {
-                return response()->json([
-                    'code' => 422,
-                    'message' => 'Cama adicional solo aplica si pax_incluidos tiene al menos un pasajero dentro del tramo de edad de cama adicional de este hotel.',
-                ], 422);
-            }
-
-            if ($tarifaHotel->precio_costo_cama_adicional === null || $tarifaHotel->precio_venta_cama_adicional === null) {
-                return response()->json([
-                    'code' => 422,
-                    'message' => 'Esta habitación no tiene precio de cama adicional configurado.',
-                ], 422);
-            }
-
-            // Parte del costo/precio real de ESTE ítem, no un ítem aparte.
-            $costoSnapshot += $camasAdicionales * (float) $tarifaHotel->precio_costo_cama_adicional;
-            $ventaSnapshot += $camasAdicionales * (float) $tarifaHotel->precio_venta_cama_adicional;
-        }
-
-        $item = AlternativaItem::create([
-            'alternativa_id' => $alternativa->id,
-            'origen_tipo' => AlternativaItem::ORIGEN_HOTEL_PLANTILLA,
-            'opcion_hotel_tarifa_id' => $tarifaHotel->id,
-            'paquete_plantilla_id' => $validado['paquete_plantilla_id'],
-            'tour_origen_id' => $validado['tour_origen_id'] ?? null,
-            'modo_precio' => 'tarifa_fija', // matriz de habitación, siempre por habitación
-            'cantidad' => $validado['cantidad'] ?? 1,
-            'pax_incluidos' => $validado['pax_incluidos'] ?? null,
-            'moneda_costo' => $monedaCosto,
-            'costo_snapshot' => $costoSnapshot,
-            'precio_venta_snapshot' => $ventaSnapshot,
-            'precio_convertido' => $this->priceEngine->convertirMoneda($ventaSnapshot, $monedaCosto, $alternativa->moneda_cotizacion, (float) $alternativa->tipo_cambio_aplicado),
-            'dia_referencial' => $validado['dia_referencial'] ?? null,
-        ]);
-
-        $this->recalcularTotalAlternativa($alternativa);
-
-        return response()->json(['code' => 200, 'message' => 'Ítem de hotel agregado correctamente', 'alternativa_item' => $item]);
     }
 
     // Recalculo en vivo del formulario de pasaje aéreo (PasajeAereoForm.vue)

@@ -85,6 +85,12 @@ class ProveedorTarifaController extends Controller
             fn ($qq) => $qq->where('proveedor_id', $proveedorId)
         ));
 
+        // Consolidación de hoteles — filtro opcional por tipo de habitación,
+        // para buscar directamente "matrimonial"/"doble"/etc. entre todas
+        // las tarifas de hotel de todos los proveedores, mismo patrón when()
+        // que los demás filtros de acá arriba.
+        $query->when($request->get('tipo_habitacion'), fn ($q, $th) => $q->where('tipo_habitacion', $th));
+
         return response()->json(['proveedor_tarifas' => $query->orderByDesc('id')->limit(100)->get()]);
     }
 
@@ -203,6 +209,11 @@ class ProveedorTarifaController extends Controller
             'moneda' => 'required|in:PEN,USD',
             'diferenciador' => 'nullable|array',
             'tipo_habitacion' => 'nullable|in:simple,matrimonial,doble,triple,familiar',
+            'descripcion' => 'nullable|string|max:250',
+            'regimen_comida' => 'nullable|in:solo_alojamiento,desayuno,media_pension,pension_completa',
+            'tipo_cama' => 'nullable|string|max:100',
+            'precio_costo_cama_adicional' => 'nullable|numeric|min:0',
+            'precio_venta_cama_adicional' => 'nullable|numeric|min:0',
             'precio_costo' => 'required|numeric|min:0',
             'margen_tipo' => 'required|in:porcentaje,fijo',
             'margen_valor' => 'required|numeric|min:0',
@@ -237,6 +248,10 @@ class ProveedorTarifaController extends Controller
 
         if (! $esHotel) {
             $validado['tipo_habitacion'] = null;
+            $validado['regimen_comida'] = null;
+            $validado['tipo_cama'] = null;
+            $validado['precio_costo_cama_adicional'] = null;
+            $validado['precio_venta_cama_adicional'] = null;
         }
 
         if (! empty($validado['temporada_id'])) {

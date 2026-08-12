@@ -54,9 +54,10 @@ export const proveedorService = {
     return response.data
   },
 
-  // Sesión 11k, Fix 9 — tarifas Hotel de un proveedor tipo Hotel, para
-  // ofrecer "usar tarifa registrada" al armar la matriz de habitaciones de
-  // un opcion_hotel (paquetes/detalle.vue y cotizador/editar.vue).
+  // Mantenida pese a la consolidación de hoteles — usada por el flujo de
+  // opcion_mayorista ("usar tarifa registrada" al armar el hotel manual de
+  // una opción de mayorista, editar.vue::onCambiarProveedorHotel()), fuera
+  // de alcance de esta sesión.
   async tarifasHotel(proveedorId: number) {
     const response = await httpClient.get(`/proveedores/${proveedorId}/tarifas-hotel`)
     return response.data as { proveedor_tarifas: ProveedorTarifa[] }
@@ -66,8 +67,10 @@ export const proveedorService = {
   // proveedores, con búsqueda de texto (ver limitación documentada en el
   // backend: no filtra por destino, cotizaciones.destino no es FK).
   // Sesión 11l v2: además del texto libre, admite filtrar por
-  // zona/servicio/proveedor (combinables entre sí).
-  async biblioteca(params: { search?: string; destino_atractivo_id?: number; servicio_id?: number; proveedor_id?: number } = {}) {
+  // zona/servicio/proveedor (combinables entre sí). tipo_habitacion —
+  // consolidación de hoteles — filtra directo por tipo de habitación entre
+  // todas las tarifas de hotel.
+  async biblioteca(params: { search?: string; destino_atractivo_id?: number; servicio_id?: number; proveedor_id?: number; tipo_habitacion?: string } = {}) {
     const response = await httpClient.get('/proveedor-tarifas', { params })
     return response.data as { proveedor_tarifas: ProveedorTarifa[] }
   },

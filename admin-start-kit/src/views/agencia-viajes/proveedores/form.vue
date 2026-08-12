@@ -28,6 +28,10 @@
                         <label class="form-label mb-1 small fw-semibold text-secondary">Nombre Comercial</label>
                         <input type="text" class="form-control form-control-sm" v-model="form.nombre_comercial">
                     </div>
+                    <div class="col-12">
+                        <label class="form-label mb-1 small fw-semibold text-secondary">Descripción</label>
+                        <RichTextEditor v-model="form.descripcion" />
+                    </div>
                     <div class="col-6 col-md-3">
                         <label class="form-label mb-1 small fw-semibold text-secondary">Tipo de Proveedor *</label>
                         <select class="form-select form-select-sm" v-model="form.tipo_id">
@@ -137,9 +141,101 @@
             </div>
         </div>
 
+        <div class="card border-0 shadow-sm mb-3" v-if="esAlojamiento">
+            <div class="card-header bg-white border-bottom d-flex align-items-center gap-2 py-2">
+                <span class="badge bg-primary rounded-pill">3</span>
+                <span class="fw-semibold text-dark">Detalle de Alojamiento</span>
+            </div>
+            <div class="card-body py-3">
+                <div class="row g-3">
+                    <div class="col-6 col-md-3">
+                        <label class="form-label mb-1 small fw-semibold text-secondary">Hora check-in</label>
+                        <input type="time" class="form-control form-control-sm" v-model="formAlojamiento.hora_checkin">
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <label class="form-label mb-1 small fw-semibold text-secondary">Hora check-out</label>
+                        <input type="time" class="form-control form-control-sm" v-model="formAlojamiento.hora_checkout">
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <label class="form-label mb-1 small fw-semibold text-secondary">
+                            Edad máx. infante gratis
+                            <i class="fas fa-info-circle text-muted" title="Hasta esta edad (inclusive) el pasajero no requiere cama adicional."></i>
+                        </label>
+                        <input type="number" min="0" class="form-control form-control-sm"
+                            :placeholder="String(configAgencia?.edad_max_infante_gratis_hotel_default ?? 4)"
+                            v-model.number="formAlojamiento.edad_max_infante_gratis">
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <label class="form-label mb-1 small fw-semibold text-secondary">
+                            Edad máx. cama adicional
+                            <i class="fas fa-info-circle text-muted" title="Hasta esta edad (inclusive) el pasajero puede requerir cama adicional."></i>
+                        </label>
+                        <input type="number" min="0" class="form-control form-control-sm"
+                            :placeholder="String(configAgencia?.edad_max_nino_cama_adicional_hotel_default ?? 12)"
+                            v-model.number="formAlojamiento.edad_max_nino_cama_adicional">
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div class="card border-0 shadow-sm mb-3">
             <div class="card-header bg-white border-bottom d-flex align-items-center gap-2 py-2">
-                <span class="badge bg-primary rounded-pill">{{ esMayorista ? 4 : 3 }}</span>
+                <span class="badge bg-primary rounded-pill">{{ badgeFotos }}</span>
+                <span class="fw-semibold text-dark">Fotos</span>
+                <small class="text-muted ms-auto">{{ totalFotos }}/{{ MAX_FOTOS }} · máx. 5MB por foto</small>
+            </div>
+            <div class="card-body py-3">
+                <div v-if="fotosExistentes.length > 0" class="mb-3">
+                    <small class="text-muted d-block mb-2">Fotos guardadas</small>
+                    <div class="d-flex flex-wrap gap-2">
+                        <img v-for="path in fotosExistentes" :key="path" :src="path" class="img-thumbnail" style="width:100px;height:100px;object-fit:cover;">
+                    </div>
+                </div>
+
+                <div v-if="archivosNuevos.length > 0" class="mb-3">
+                    <small class="text-muted d-block mb-2">Fotos nuevas (se suben al guardar)</small>
+                    <div class="d-flex flex-wrap gap-2">
+                        <div v-for="(item, index) in archivosNuevos" :key="item.previewUrl" class="position-relative">
+                            <img :src="item.previewUrl" class="img-thumbnail" style="width:100px;height:100px;object-fit:cover;">
+                            <button class="btn btn-danger btn-sm position-absolute top-0 end-0 m-1" title="Quitar" @click="quitarPendiente(index)">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <input type="file" class="form-control form-control-sm" accept="image/*" multiple
+                    :disabled="limiteFotosAlcanzado" @change="onArchivosSeleccionados">
+                <small v-if="limiteFotosAlcanzado" class="text-danger d-block mt-1">
+                    Ya alcanzaste el máximo de {{ MAX_FOTOS }} fotos.
+                </small>
+            </div>
+        </div>
+
+        <div class="card border-0 shadow-sm mb-3">
+            <div class="card-header bg-white border-bottom d-flex align-items-center gap-2 py-2">
+                <span class="badge bg-primary rounded-pill">{{ badgeAmenidades }}</span>
+                <span class="fw-semibold text-dark">Amenidades</span>
+            </div>
+            <div class="card-body py-3">
+                <div class="row g-2">
+                    <div class="col-6 col-md-3" v-for="amenidad in amenidades" :key="amenidad.id">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" :id="`amenidad-${amenidad.id}`"
+                                :value="amenidad.id" v-model="form.amenidad_ids">
+                            <label class="form-check-label small" :for="`amenidad-${amenidad.id}`">
+                                <i :class="amenidad.icono" class="me-1 text-primary"></i>{{ amenidad.nombre }}
+                            </label>
+                        </div>
+                    </div>
+                    <div v-if="amenidades.length === 0" class="col-12 text-muted small fst-italic">Sin amenidades en el catálogo.</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card border-0 shadow-sm mb-3">
+            <div class="card-header bg-white border-bottom d-flex align-items-center gap-2 py-2">
+                <span class="badge bg-primary rounded-pill">{{ badgeObservaciones }}</span>
                 <span class="fw-semibold text-dark">Observaciones</span>
             </div>
             <div class="card-body py-3">
@@ -162,11 +258,18 @@
 import { ref, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';
+import RichTextEditor from '@/components/RichTextEditor.vue';
 import Swal from 'sweetalert2/dist/sweetalert2.js';
 import { proveedorService, proveedorTipoService } from '@/services/admin/proveedorService';
-import type { Proveedor, ProveedorTipo } from '@/types/agencia-viajes';
+import { amenidadService } from '@/services/admin/amenidadService';
+import { configuracionAgenciaService } from '@/services/admin/configuracionAgenciaService';
+import type { Proveedor, ProveedorTipo, Amenidad, ConfiguracionAgencia } from '@/types/agencia-viajes';
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
+type ArchivoPendiente = { file: File; previewUrl: string };
+
+const MAX_KB_POR_FOTO = 5120;
+const MAX_FOTOS = 10;
 
 const route = useRoute();
 const router = useRouter();
@@ -176,12 +279,18 @@ const proveedorId = computed(() => Number(route.params.id));
 
 const proveedorTipos = ref<ProveedorTipo[]>([]);
 const proveedorTiposHabilitados = computed(() => proveedorTipos.value.filter((t) => t.habilitado));
+const amenidades = ref<Amenidad[]>([]);
+const configAgencia = ref<ConfiguracionAgencia | null>(null);
 
 const guardando = ref<boolean>(false);
 
-const form = ref<Partial<Omit<Proveedor, 'tipo_id'>> & { tipo_id: number | null }>({
+const form = ref<
+    Partial<Omit<Proveedor, 'tipo_id' | 'fotos' | 'amenidades' | 'alojamiento_detalle'>>
+    & { tipo_id: number | null; amenidad_ids: number[] }
+>({
     razon_social: '',
     nombre_comercial: null,
+    descripcion: null,
     tipo_id: null,
     tipo_persona: null,
     tipo_documento: null,
@@ -196,21 +305,95 @@ const form = ref<Partial<Omit<Proveedor, 'tipo_id'>> & { tipo_id: number | null 
     es_referencial: false,
     margen_default_tipo: null,
     margen_default_valor: null,
+    amenidad_ids: [],
 });
+
+// Consolidación de hoteles — 1:1 con proveedor_alojamiento_detalle, solo se
+// envía si el tipo elegido es Alojamiento (ver esAlojamiento).
+const formAlojamiento = ref<{
+    hora_checkin: string | null; hora_checkout: string | null;
+    edad_max_infante_gratis: number | null; edad_max_nino_cama_adicional: number | null;
+}>({ hora_checkin: null, hora_checkout: null, edad_max_infante_gratis: null, edad_max_nino_cama_adicional: null });
+
+const fotosExistentes = ref<string[]>([]);
+const archivosNuevos = ref<ArchivoPendiente[]>([]);
+const totalFotos = computed(() => fotosExistentes.value.length + archivosNuevos.value.length);
+const limiteFotosAlcanzado = computed(() => totalFotos.value >= MAX_FOTOS);
 
 const esMayorista = computed(() => {
     const tipo = proveedorTipos.value.find((t) => t.id === form.value.tipo_id);
     return tipo?.slug === 'mayorista';
 });
 
+// slug='alojamiento-hoteles' es el slug REAL del catálogo proveedor_tipos
+// (confirmado contra datos reales) — NO 'hotel', mismo criterio ya usado en
+// el resto del vertical (ProveedorTarifaController::proveedorEsHotel(),
+// editar.vue::esHotel).
+const esAlojamiento = computed(() => {
+    const tipo = proveedorTipos.value.find((t) => t.id === form.value.tipo_id);
+    return tipo?.slug === 'alojamiento-hoteles';
+});
+
+// Margen (mayorista) y Alojamiento son mutuamente excluyentes (tipo_id es
+// único) — nunca ocupan el mismo badge "3" a la vez.
+const badgeFotos = computed(() => (esMayorista.value || esAlojamiento.value ? 4 : 3));
+const badgeAmenidades = computed(() => badgeFotos.value + 1);
+const badgeObservaciones = computed(() => badgeAmenidades.value + 1);
+
 const cargarProveedor = async () => {
     if (!esEdicion.value) return;
     try {
         const res = await proveedorService.obtener(proveedorId.value);
-        form.value = { ...res.proveedor };
+        const { fotos, amenidades: amenidadesProveedor, alojamiento_detalle, ...datos } = res.proveedor;
+        form.value = { ...datos, amenidad_ids: (amenidadesProveedor ?? []).map((a) => a.id) };
+        fotosExistentes.value = fotos ?? [];
+        if (alojamiento_detalle) {
+            formAlojamiento.value = {
+                hora_checkin: alojamiento_detalle.hora_checkin ?? null,
+                hora_checkout: alojamiento_detalle.hora_checkout ?? null,
+                edad_max_infante_gratis: alojamiento_detalle.edad_max_infante_gratis,
+                edad_max_nino_cama_adicional: alojamiento_detalle.edad_max_nino_cama_adicional,
+            };
+        }
     } catch (error) {
         console.log(error);
     }
+};
+
+const onArchivosSeleccionados = (event: Event) => {
+    const input = event.target as HTMLInputElement;
+    const archivos = Array.from(input.files ?? []);
+    input.value = '';
+
+    const disponibles = MAX_FOTOS - totalFotos.value;
+    if (disponibles <= 0) {
+        (Swal as TVueSwalInstance).fire('Límite alcanzado', `Ya tienes el máximo de ${MAX_FOTOS} fotos.`, 'warning');
+        return;
+    }
+
+    const rechazadas: string[] = [];
+    let agregadas = 0;
+    for (const archivo of archivos) {
+        if (agregadas >= disponibles) {
+            rechazadas.push(`${archivo.name}: no se agregó — ya alcanzaste el máximo de ${MAX_FOTOS} fotos.`);
+            continue;
+        }
+        if (archivo.size > MAX_KB_POR_FOTO * 1024) {
+            rechazadas.push(`${archivo.name}: supera el máximo de 5MB.`);
+            continue;
+        }
+        archivosNuevos.value.push({ file: archivo, previewUrl: URL.createObjectURL(archivo) });
+        agregadas++;
+    }
+
+    if (rechazadas.length > 0) {
+        (Swal as TVueSwalInstance).fire({ icon: 'warning', title: 'Algunas fotos no se agregaron', html: rechazadas.join('<br>') });
+    }
+};
+
+const quitarPendiente = (index: number) => {
+    URL.revokeObjectURL(archivosNuevos.value[index].previewUrl);
+    archivosNuevos.value.splice(index, 1);
 };
 
 const guardar = async () => {
@@ -225,11 +408,36 @@ const guardar = async () => {
 
     guardando.value = true;
     try {
-        const res = esEdicion.value
-            ? await proveedorService.actualizar(proveedorId.value, form.value)
-            : await proveedorService.crear(form.value);
+        const datosAlojamiento = esAlojamiento.value ? formAlojamiento.value : {};
+        let payload: FormData | Record<string, any>;
 
-        await (Swal as TVueSwalInstance).fire('Listo', res.message, 'success');
+        if (archivosNuevos.value.length > 0) {
+            const fd = new FormData();
+            Object.entries(form.value).forEach(([key, value]) => {
+                if (key === 'amenidad_ids' || value === null || value === undefined) return;
+                fd.append(key, String(value));
+            });
+            form.value.amenidad_ids.forEach((id) => fd.append('amenidad_ids[]', String(id)));
+            Object.entries(datosAlojamiento).forEach(([key, value]) => {
+                if (value === null || value === undefined) return;
+                fd.append(key, String(value));
+            });
+            archivosNuevos.value.forEach((item) => fd.append('fotos[]', item.file));
+            payload = fd;
+        } else {
+            payload = { ...form.value, ...datosAlojamiento };
+        }
+
+        const res = esEdicion.value
+            ? await proveedorService.actualizar(proveedorId.value, payload)
+            : await proveedorService.crear(payload);
+
+        if (res.fotos_rechazadas?.length) {
+            const detalle = res.fotos_rechazadas.map((r: { nombre: string; motivo: string }) => `${r.nombre}: ${r.motivo}`).join('<br>');
+            await (Swal as TVueSwalInstance).fire({ icon: 'warning', title: 'Guardado con observaciones', html: `${res.message}<br><br>Fotos no subidas:<br>${detalle}` });
+        } else {
+            await (Swal as TVueSwalInstance).fire('Listo', res.message, 'success');
+        }
         router.push(`/agencia-viajes/proveedores/${res.proveedor.id}`);
     } catch (error: any) {
         (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo guardar', 'error');
@@ -239,8 +447,15 @@ const guardar = async () => {
 };
 
 onMounted(async () => {
-    const res = await proveedorTipoService.listar();
-    proveedorTipos.value = res.proveedor_tipos;
+    const [tiposRes, amenidadesRes] = await Promise.all([
+        proveedorTipoService.listar(),
+        amenidadService.listar(),
+    ]);
+    proveedorTipos.value = tiposRes.proveedor_tipos;
+    amenidades.value = amenidadesRes.amenidades;
+
+    configuracionAgenciaService.obtener().then((res) => { configAgencia.value = res.configuracion_agencia; });
+
     await cargarProveedor();
 });
 </script>

@@ -3,31 +3,40 @@
 namespace Tests\Feature\AgenciaViajes;
 
 use App\Http\Controllers\AgenciaViajes\AlternativaItemController;
-use App\Http\Controllers\AgenciaViajes\PaquetePlantillaController;
+use App\Http\Controllers\AgenciaViajes\ProveedorController;
 use App\Models\AgenciaViajes\Alternativa;
 use App\Models\AgenciaViajes\ConfiguracionAgencia;
 use App\Models\AgenciaViajes\CotizacionPasajero;
 use App\Models\AgenciaViajes\DestinoAtractivo;
 use App\Models\AgenciaViajes\DestinoServicio;
-use App\Models\AgenciaViajes\OpcionHotel;
-use App\Models\AgenciaViajes\OpcionHotelTarifa;
 use App\Models\AgenciaViajes\PaquetePlantilla;
 use App\Models\AgenciaViajes\PaquetePlantillaItem;
 use App\Models\AgenciaViajes\Proveedor;
+use App\Models\AgenciaViajes\ProveedorAlojamientoDetalle;
 use App\Models\AgenciaViajes\ProveedorServicio;
 use App\Models\AgenciaViajes\ProveedorTarifa;
+use App\Models\AgenciaViajes\ProveedorTipo;
+use App\Models\AgenciaViajes\ProveedorTipoConfig;
 use App\Models\AgenciaViajes\Servicio;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
-// Sesión 11o — 2 piezas relacionadas: (1) modalidad 'compartido' cargada
-// desde plantilla se cobra por pasajero REAL de la cotización (no tarifa
-// plana de 1 adulto, que es lo que pasaba antes — 'privado' no se toca, ya
-// era tarifa fija real); (2) cama adicional para niños en hoteles, según
-// tramo de EDAD real del pasajero (cotizacion_pasajeros.edad), no tipo_pax.
-// Mismo patrón que PaqueteComboTest: Postgres real
-// (sistemafe_test_migrations), transacción por test revertida.
+// Sesión 11o (actualizado en la consolidación de hoteles) — 2 piezas
+// relacionadas: (1) modalidad 'compartido' cargada desde plantilla se cobra
+// por pasajero REAL de la cotización (no tarifa plana de 1 adulto, que es
+// lo que pasaba antes — 'privado' no se toca, ya era tarifa fija real);
+// (2) cama adicional para niños en hoteles, según tramo de EDAD real del
+// pasajero (cotizacion_pasajeros.edad), no tipo_pax — ahora resuelto desde
+// proveedor_alojamiento_detalle/proveedor_tarifas (origen_tipo=proveedor),
+// no desde opciones_hotel/paquete_plantilla (eliminado). Mismo patrón que
+// PaqueteComboTest: Postgres real (sistemafe_test_migrations), transacción
+// por test revertida.
+//
+// Parte 2 SOLO lee (nunca escribe) el catálogo central proveedor_tipos —
+// 'central' apunta a la base real (db_tenant_central), fuera de la
+// transacción de este test. Si el slug 'alojamiento-hoteles' no existe ahí,
+// esos tests se saltan en vez de arriesgar una escritura contra datos reales.
 class PrecioPorPasajeroTest extends TestCase
 {
     protected function setUp(): void
@@ -179,49 +188,65 @@ class PrecioPorPasajeroTest extends TestCase
     }
 
     // ═══════════════════════════════════════════════════════════════
-    // Parte 2 — cama adicional para niños en hoteles
+    // Parte 2 — cama adicional para niños en hoteles (consolidación de
+    // hoteles: ahora es una proveedor_tarifa más, origen_tipo=proveedor,
+    // con el tramo de edad viviendo en proveedor_alojamiento_detalle en vez
+    // de opciones_hotel/paquete_plantilla).
     // ═══════════════════════════════════════════════════════════════
 
-    private function crearHotelConTarifa(?float $costoCamaAdicional = 15, ?float $ventaCamaAdicional = 30): array
-    {
+    private function crearProveedorHotelConTarifa(
+        ?float $costoCamaAdicional = 15,
+        ?float $ventaCamaAdicional = 30,
+        int $edadMaxInfanteGratis = 4,
+        int $edadMaxNinoCamaAdicional = 12,
+    ): ProveedorTarifa {
         $destino = DestinoAtractivo::first() ?? DestinoAtractivo::create(['nombre' => 'Tarapoto', 'tipo' => 'zona']);
-        $tour = PaquetePlantilla::create([
-            'categoria' => 'local', 'tipo' => PaquetePlantilla::TIPO_TOUR_SIMPLE,
-            'nombre' => 'Hospedaje Tarapoto', 'destino_atractivo_id' => $destino->id, 'duracion_horas' => 24,
+        $servicio = Servicio::create(['nombre' => 'Alojamiento']);
+        $destinoServicio = DestinoServicio::create([
+            'destino_atractivo_id' => $destino->id,
+            'servicio_id' => $servicio->id,
+        ]);
+        $proveedor = Proveedor::create(['razon_social' => 'Hotel Test SAC', 'estado' => true]);
+        ProveedorAlojamientoDetalle::create([
+            'proveedor_id' => $proveedor->id,
+            'edad_max_infante_gratis' => $edadMaxInfanteGratis,
+            'edad_max_nino_cama_adicional' => $edadMaxNinoCamaAdicional,
+        ]);
+        $proveedorServicio = ProveedorServicio::create([
+            'proveedor_id' => $proveedor->id,
+            'destino_servicio_id' => $destinoServicio->id,
         ]);
 
-        $hotel = OpcionHotel::create([
-            'paquete_plantilla_id' => $tour->id,
-            'nombre_hotel' => 'Hotel Test',
+        return ProveedorTarifa::create([
+            'proveedor_servicio_id' => $proveedorServicio->id,
+            'tipo_tarifa' => 'publica',
+            'modalidad' => 'privado',
             'moneda' => 'PEN',
-            'edad_max_infante_gratis' => 4,
-            'edad_max_nino_cama_adicional' => 12,
-        ]);
-
-        $tarifaHabitacion = OpcionHotelTarifa::create([
-            'opcion_hotel_id' => $hotel->id,
             'tipo_habitacion' => 'matrimonial',
             'precio_costo' => 100,
-            'precio_venta' => 150,
+            'margen_tipo' => 'porcentaje',
+            'margen_valor' => 50,
+            'precio_venta_adulto' => 150,
             'precio_costo_cama_adicional' => $costoCamaAdicional,
             'precio_venta_cama_adicional' => $ventaCamaAdicional,
+            'vigente_desde' => now()->toDateString(),
+            'tip_afe_igv' => '10',
+            'destino_tributario' => 'nacional',
         ]);
-
-        return [$tour, $hotel, $tarifaHabitacion];
     }
 
     public function test_cama_adicional_se_suma_al_snapshot_cuando_hay_pax_en_tramo(): void
     {
         $alternativa = $this->crearAlternativaConPasajeros();
-        [$tour, $hotel, $tarifaHabitacion] = $this->crearHotelConTarifa();
+        $tarifa = $this->crearProveedorHotelConTarifa();
         // El niño de 8 años (creado en crearAlternativaConPasajeros()) cae en (4, 12].
         $ninoId = CotizacionPasajero::where('cotizacion_id', $alternativa->cotizacion_id)->where('tipo_pax', 'nino')->first()->id;
 
         $response = app(AlternativaItemController::class)->store(
             new Request([
-                'origen_tipo' => 'hotel_plantilla',
-                'paquete_plantilla_id' => $tour->id,
-                'opcion_hotel_tarifa_id' => $tarifaHabitacion->id,
+                'origen_tipo' => 'proveedor',
+                'proveedor_tarifa_id' => $tarifa->id,
+                'modo_precio' => 'tarifa_fija',
                 'pax_incluidos' => [$ninoId],
                 'camas_adicionales_nino' => 1,
             ]),
@@ -238,15 +263,15 @@ class PrecioPorPasajeroTest extends TestCase
     public function test_cama_adicional_rechazada_si_ningun_pax_incluido_esta_en_el_tramo(): void
     {
         $alternativa = $this->crearAlternativaConPasajeros();
-        [$tour, $hotel, $tarifaHabitacion] = $this->crearHotelConTarifa();
+        $tarifa = $this->crearProveedorHotelConTarifa();
         // El infante de 2 años NO cae en (4, 12] — está bajo edad_max_infante_gratis.
         $infanteId = CotizacionPasajero::where('cotizacion_id', $alternativa->cotizacion_id)->where('tipo_pax', 'infante')->first()->id;
 
         $response = app(AlternativaItemController::class)->store(
             new Request([
-                'origen_tipo' => 'hotel_plantilla',
-                'paquete_plantilla_id' => $tour->id,
-                'opcion_hotel_tarifa_id' => $tarifaHabitacion->id,
+                'origen_tipo' => 'proveedor',
+                'proveedor_tarifa_id' => $tarifa->id,
+                'modo_precio' => 'tarifa_fija',
                 'pax_incluidos' => [$infanteId],
                 'camas_adicionales_nino' => 1,
             ]),
@@ -260,13 +285,13 @@ class PrecioPorPasajeroTest extends TestCase
     public function test_cama_adicional_rechazada_sin_pax_incluidos(): void
     {
         $alternativa = $this->crearAlternativaConPasajeros();
-        [$tour, $hotel, $tarifaHabitacion] = $this->crearHotelConTarifa();
+        $tarifa = $this->crearProveedorHotelConTarifa();
 
         $response = app(AlternativaItemController::class)->store(
             new Request([
-                'origen_tipo' => 'hotel_plantilla',
-                'paquete_plantilla_id' => $tour->id,
-                'opcion_hotel_tarifa_id' => $tarifaHabitacion->id,
+                'origen_tipo' => 'proveedor',
+                'proveedor_tarifa_id' => $tarifa->id,
+                'modo_precio' => 'tarifa_fija',
                 'camas_adicionales_nino' => 1,
             ]),
             (string) $alternativa->id
@@ -278,14 +303,50 @@ class PrecioPorPasajeroTest extends TestCase
     public function test_cama_adicional_rechazada_si_la_habitacion_no_tiene_precio_configurado(): void
     {
         $alternativa = $this->crearAlternativaConPasajeros();
-        [$tour, $hotel, $tarifaHabitacion] = $this->crearHotelConTarifa(costoCamaAdicional: null, ventaCamaAdicional: null);
+        $tarifa = $this->crearProveedorHotelConTarifa(costoCamaAdicional: null, ventaCamaAdicional: null);
         $ninoId = CotizacionPasajero::where('cotizacion_id', $alternativa->cotizacion_id)->where('tipo_pax', 'nino')->first()->id;
 
         $response = app(AlternativaItemController::class)->store(
             new Request([
-                'origen_tipo' => 'hotel_plantilla',
-                'paquete_plantilla_id' => $tour->id,
-                'opcion_hotel_tarifa_id' => $tarifaHabitacion->id,
+                'origen_tipo' => 'proveedor',
+                'proveedor_tarifa_id' => $tarifa->id,
+                'modo_precio' => 'tarifa_fija',
+                'pax_incluidos' => [$ninoId],
+                'camas_adicionales_nino' => 1,
+            ]),
+            (string) $alternativa->id
+        );
+
+        $this->assertSame(422, $response->getStatusCode());
+    }
+
+    public function test_cama_adicional_rechazada_si_el_proveedor_no_tiene_detalle_de_alojamiento(): void
+    {
+        // Mismo caso real que motivó la validación: una tarifa con
+        // tipo_habitacion pero cuyo proveedor nunca tuvo la fila de
+        // proveedor_alojamiento_detalle creada (ej. tipo_id cambiado
+        // después, o dato cargado por fuera del flujo normal).
+        $destino = DestinoAtractivo::first() ?? DestinoAtractivo::create(['nombre' => 'Tarapoto', 'tipo' => 'zona']);
+        $servicio = Servicio::create(['nombre' => 'Alojamiento']);
+        $destinoServicio = DestinoServicio::create(['destino_atractivo_id' => $destino->id, 'servicio_id' => $servicio->id]);
+        $proveedor = Proveedor::create(['razon_social' => 'Hotel Sin Detalle SAC', 'estado' => true]);
+        $proveedorServicio = ProveedorServicio::create(['proveedor_id' => $proveedor->id, 'destino_servicio_id' => $destinoServicio->id]);
+        $tarifa = ProveedorTarifa::create([
+            'proveedor_servicio_id' => $proveedorServicio->id,
+            'tipo_tarifa' => 'publica', 'modalidad' => 'privado', 'moneda' => 'PEN',
+            'tipo_habitacion' => 'matrimonial', 'precio_costo' => 100, 'margen_tipo' => 'porcentaje', 'margen_valor' => 50,
+            'precio_venta_adulto' => 150, 'precio_costo_cama_adicional' => 15, 'precio_venta_cama_adicional' => 30,
+            'vigente_desde' => now()->toDateString(), 'tip_afe_igv' => '10', 'destino_tributario' => 'nacional',
+        ]);
+
+        $alternativa = $this->crearAlternativaConPasajeros();
+        $ninoId = CotizacionPasajero::where('cotizacion_id', $alternativa->cotizacion_id)->where('tipo_pax', 'nino')->first()->id;
+
+        $response = app(AlternativaItemController::class)->store(
+            new Request([
+                'origen_tipo' => 'proveedor',
+                'proveedor_tarifa_id' => $tarifa->id,
+                'modo_precio' => 'tarifa_fija',
                 'pax_incluidos' => [$ninoId],
                 'camas_adicionales_nino' => 1,
             ]),
@@ -298,11 +359,11 @@ class PrecioPorPasajeroTest extends TestCase
     // Confirma explícitamente el punto de la spec: usa `edad` REAL, no
     // tipo_pax — un pasajero de 10 años con tipo_pax='adulto' (por el
     // umbral general de la agencia, que corta en 8 en este fixture) igual
-    // activa cama adicional si cae dentro del tramo del HOTEL (4, 12].
+    // activa cama adicional si cae dentro del tramo del PROVEEDOR (4, 12].
     public function test_cama_adicional_usa_edad_real_no_tipo_pax(): void
     {
         $alternativa = $this->crearAlternativaConPasajeros();
-        [$tour, $hotel, $tarifaHabitacion] = $this->crearHotelConTarifa();
+        $tarifa = $this->crearProveedorHotelConTarifa();
 
         $paxId = CotizacionPasajero::create([
             'cotizacion_id' => $alternativa->cotizacion_id,
@@ -312,9 +373,9 @@ class PrecioPorPasajeroTest extends TestCase
 
         $response = app(AlternativaItemController::class)->store(
             new Request([
-                'origen_tipo' => 'hotel_plantilla',
-                'paquete_plantilla_id' => $tour->id,
-                'opcion_hotel_tarifa_id' => $tarifaHabitacion->id,
+                'origen_tipo' => 'proveedor',
+                'proveedor_tarifa_id' => $tarifa->id,
+                'modo_precio' => 'tarifa_fija',
                 'pax_incluidos' => [$paxId],
                 'camas_adicionales_nino' => 1,
             ]),
@@ -324,50 +385,62 @@ class PrecioPorPasajeroTest extends TestCase
         $this->assertSame(200, $response->getStatusCode());
     }
 
-    public function test_hotel_sin_edades_explicitas_hereda_default_de_configuracion_agencia(): void
+    // ═══════════════════════════════════════════════════════════════
+    // Parte 3 — defaults de edad heredados de configuracion_agencia al
+    // crear un proveedor tipo Alojamiento (ProveedorController), sin tocar
+    // el catálogo central real (proveedor_tipos): solo LEE el id real de
+    // 'alojamiento-hoteles' — nunca escribe en 'central'. Si el catálogo no
+    // tiene ese slug en este entorno, se salta en vez de arriesgar una
+    // escritura contra datos reales.
+    // ═══════════════════════════════════════════════════════════════
+
+    private function tipoIdAlojamientoOSkip(): int
     {
+        $tipoId = ProveedorTipo::where('slug', 'alojamiento-hoteles')->value('id');
+
+        if (! $tipoId) {
+            $this->markTestSkipped("Catálogo central sin 'alojamiento-hoteles' en este entorno — no se escribe en central desde un test.");
+        }
+
+        ProveedorTipoConfig::create(['proveedor_tipo_id' => $tipoId, 'habilitado' => true]);
+
+        return $tipoId;
+    }
+
+    public function test_proveedor_sin_edades_explicitas_hereda_default_de_configuracion_agencia(): void
+    {
+        $tipoId = $this->tipoIdAlojamientoOSkip();
+
         ConfiguracionAgencia::first()->update([
             'edad_max_infante_gratis_hotel_default' => 3,
             'edad_max_nino_cama_adicional_hotel_default' => 10,
         ]);
 
-        $tour = PaquetePlantilla::create([
-            'categoria' => 'local', 'tipo' => PaquetePlantilla::TIPO_TOUR_SIMPLE,
-            'nombre' => 'Hospedaje Tarapoto', 'destino_atractivo_id' => DestinoAtractivo::create(['nombre' => 'Tarapoto', 'tipo' => 'zona'])->id,
-            'duracion_horas' => 24,
-        ]);
-
-        $response = app(PaquetePlantillaController::class)->hoteles(
-            Request::create('', 'POST', ['nombre_hotel' => 'Hotel Sin Edades Explícitas']),
-            (string) $tour->id
-        );
+        $response = app(ProveedorController::class)->store(Request::create('', 'POST', [
+            'razon_social' => 'Hotel Sin Edades Explícitas',
+            'tipo_id' => $tipoId,
+        ]));
 
         $this->assertSame(200, $response->getStatusCode());
-        $hotel = $response->getData()->opcion_hotel;
-        $this->assertSame(3, $hotel->edad_max_infante_gratis);
-        $this->assertSame(10, $hotel->edad_max_nino_cama_adicional);
+        $proveedor = $response->getData()->proveedor;
+        $this->assertSame(3, $proveedor->alojamiento_detalle->edad_max_infante_gratis);
+        $this->assertSame(10, $proveedor->alojamiento_detalle->edad_max_nino_cama_adicional);
     }
 
-    public function test_hotel_con_edades_explicitas_no_usa_el_default(): void
+    public function test_proveedor_con_edades_explicitas_no_usa_el_default(): void
     {
-        $tour = PaquetePlantilla::create([
-            'categoria' => 'local', 'tipo' => PaquetePlantilla::TIPO_TOUR_SIMPLE,
-            'nombre' => 'Hospedaje Tarapoto', 'destino_atractivo_id' => DestinoAtractivo::create(['nombre' => 'Tarapoto', 'tipo' => 'zona'])->id,
-            'duracion_horas' => 24,
-        ]);
+        $tipoId = $this->tipoIdAlojamientoOSkip();
 
-        $response = app(PaquetePlantillaController::class)->hoteles(
-            Request::create('', 'POST', [
-                'nombre_hotel' => 'Hotel Con Edades Propias',
-                'edad_max_infante_gratis' => 5,
-                'edad_max_nino_cama_adicional' => 15,
-            ]),
-            (string) $tour->id
-        );
+        $response = app(ProveedorController::class)->store(Request::create('', 'POST', [
+            'razon_social' => 'Hotel Con Edades Propias',
+            'tipo_id' => $tipoId,
+            'edad_max_infante_gratis' => 5,
+            'edad_max_nino_cama_adicional' => 15,
+        ]));
 
         $this->assertSame(200, $response->getStatusCode());
-        $hotel = $response->getData()->opcion_hotel;
-        $this->assertSame(5, $hotel->edad_max_infante_gratis);
-        $this->assertSame(15, $hotel->edad_max_nino_cama_adicional);
+        $proveedor = $response->getData()->proveedor;
+        $this->assertSame(5, $proveedor->alojamiento_detalle->edad_max_infante_gratis);
+        $this->assertSame(15, $proveedor->alojamiento_detalle->edad_max_nino_cama_adicional);
     }
 }

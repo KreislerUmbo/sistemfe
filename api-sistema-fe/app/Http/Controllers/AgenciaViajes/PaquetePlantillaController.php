@@ -3,12 +3,8 @@
 namespace App\Http\Controllers\AgenciaViajes;
 
 use App\Http\Controllers\Controller;
-use App\Models\AgenciaViajes\ConfiguracionAgencia;
-use App\Models\AgenciaViajes\OpcionHotel;
-use App\Models\AgenciaViajes\OpcionHotelTarifa;
 use App\Models\AgenciaViajes\PaquetePlantilla;
 use App\Models\AgenciaViajes\PaquetePlantillaItem;
-use App\Models\AgenciaViajes\ProveedorTarifa;
 use App\Models\AgenciaViajes\TourItinerarioItem;
 use App\Services\AgenciaViajes\ComboExplosionService;
 use App\Services\AgenciaViajes\ComboValidationService;
@@ -125,8 +121,6 @@ class PaquetePlantillaController extends Controller
             'paqueteItinerario.destinoAtractivo',
         ])->findOrFail($id);
 
-        $hoteles = OpcionHotel::where('paquete_plantilla_id', $paquete->id)->with('opcionesHotelTarifas')->get();
-
         // precio_calculado/itinerario_derivado: SIEMPRE en vivo, nunca un
         // valor stale — ver punto 3/5 del diseño de Sesión 11b4. Sin caché:
         // no existía ninguna capa de caché sobre este endpoint antes de esta
@@ -145,7 +139,6 @@ class PaquetePlantillaController extends Controller
 
         return response()->json([
             'paquete_plantilla' => $paquete,
-            'opciones_hotel' => $hoteles,
             'combo' => $datosCombo,
         ]);
     }
@@ -246,7 +239,7 @@ class PaquetePlantillaController extends Controller
     }
 
     // Duplicar tour/paquete completo — Sesión 11m. Copia datos generales +
-    // itinerario + incluye + hoteles. La copia nace inactiva/no publicada y
+    // itinerario + incluye. La copia nace inactiva/no publicada y
     // sin código (obliga a revisión manual antes de que aparezca en
     // cualquier biblioteca) — mismo criterio que "componente inactivo" ya
     // usado en el resto del módulo: nunca aparecer seleccionable en
@@ -286,28 +279,6 @@ class PaquetePlantillaController extends Controller
                 ]);
             }
 
-            $hoteles = OpcionHotel::where('paquete_plantilla_id', $original->id)->with('opcionesHotelTarifas')->get();
-            foreach ($hoteles as $hotel) {
-                $hotelCopia = OpcionHotel::create([
-                    'opcion_mayorista_id' => null,
-                    'paquete_plantilla_id' => $copia->id,
-                    'proveedor_id' => $hotel->proveedor_id,
-                    'nombre_hotel' => $hotel->nombre_hotel,
-                    'categoria_estrellas' => $hotel->categoria_estrellas,
-                    'moneda' => $hotel->moneda,
-                ]);
-
-                foreach ($hotel->opcionesHotelTarifas as $tarifa) {
-                    OpcionHotelTarifa::create([
-                        'opcion_hotel_id' => $hotelCopia->id,
-                        'tipo_habitacion' => $tarifa->tipo_habitacion,
-                        'precio_costo' => $tarifa->getRawOriginal('precio_costo'),
-                        'precio_venta' => $tarifa->getRawOriginal('precio_venta'),
-                        'proveedor_tarifa_id' => $tarifa->proveedor_tarifa_id,
-                    ]);
-                }
-            }
-
             return $copia;
         });
 
@@ -324,7 +295,9 @@ class PaquetePlantillaController extends Controller
     // Sin guard externo: nada fuera de este propio árbol referencia
     // paquete_plantilla_id todavía (11b3 — cargar alternativa desde
     // plantilla — no está construido). Cascada completa de lo que sí es
-    // propio (items/itinerario/matriz de hotel), en transacción.
+    // propio (items/itinerario), en transacción. Ya no incluye hoteles —
+    // un combo/tour dejó de gestionar hoteles propios (consolidación de
+    // hoteles, ver opciones_hotel).
     public function destroy(string $id)
     {
         $paquete = PaquetePlantilla::findOrFail($id);
@@ -332,10 +305,6 @@ class PaquetePlantillaController extends Controller
         DB::transaction(function () use ($paquete) {
             PaquetePlantillaItem::where('paquete_plantilla_id', $paquete->id)->delete();
             TourItinerarioItem::where('tour_id', $paquete->id)->delete();
-
-            $hotelesIds = OpcionHotel::where('paquete_plantilla_id', $paquete->id)->pluck('id');
-            OpcionHotelTarifa::whereIn('opcion_hotel_id', $hotelesIds)->delete();
-            OpcionHotel::whereIn('id', $hotelesIds)->delete();
 
             foreach ($paquete->fotos ?? [] as $foto) {
                 if (Storage::disk('public')->exists($foto)) {
@@ -347,103 +316,6 @@ class PaquetePlantillaController extends Controller
         });
 
         return response()->json(['code' => 200, 'message' => 'Paquete/tour eliminado correctamente']);
-    }
-
-    // Matriz hotel × tipo de habitación — mismo motor que
-    // OpcionMayoristaController::hoteles() (§2.4/§3.7: "un solo motor para
-    // las 3 categorías de paquete"), escopeado a paquete_plantilla_id en
-    // vez de opcion_mayorista_id. Sin extraer a un service compartido: la
-    // validación de "proveedor debe ser tipo Mayorista" de OpcionMayorista
-    // no aplica acá (proveedor_id es opcional y libre), así que el
-    // duplicado es más simple que forzar una abstracción común.
-    public function hoteles(Request $request, string $paqueteId)
-    {
-        $paquete = PaquetePlantilla::findOrFail($paqueteId);
-
-        if ($request->isMethod('get')) {
-            $hoteles = OpcionHotel::where('paquete_plantilla_id', $paquete->id)->with('opcionesHotelTarifas')->get();
-
-            return response()->json(['opciones_hotel' => $hoteles]);
-        }
-
-        $validator = Validator::make($request->all(), [
-            'nombre_hotel' => 'required|string|max:250',
-            'categoria_estrellas' => 'nullable|integer|min:1|max:5',
-            'proveedor_id' => 'nullable|integer|exists:proveedores,id',
-            'moneda' => 'nullable|in:PEN,USD',
-            // Sesión 11o — cama adicional para niños: si no vienen
-            // explícitos, se precargan desde configuracion_agencia (ver
-            // abajo), pero quedan editables por hotel.
-            'edad_max_infante_gratis' => 'nullable|integer|min:0|max:255',
-            'edad_max_nino_cama_adicional' => 'nullable|integer|min:0|max:255',
-            'tarifas' => 'nullable|array',
-            'tarifas.*.tipo_habitacion' => 'required_with:tarifas|in:simple,matrimonial,doble,triple,familiar',
-            'tarifas.*.precio_costo' => 'required_with:tarifas|numeric|min:0',
-            'tarifas.*.precio_venta' => 'required_with:tarifas|numeric|min:0',
-            // Sesión 11k, Fix 9 — tarifa real de proveedor, opcional (hotel
-            // manual/referencial cuando no viene).
-            'tarifas.*.proveedor_tarifa_id' => 'nullable|integer|exists:proveedor_tarifas,id',
-            // Sesión 11o — nullable: no toda habitación admite cama extra.
-            'tarifas.*.precio_costo_cama_adicional' => 'nullable|numeric|min:0',
-            'tarifas.*.precio_venta_cama_adicional' => 'nullable|numeric|min:0',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
-        }
-
-        $validado = $validator->validated();
-        $configAgencia = ConfiguracionAgencia::first();
-
-        $hotel = DB::transaction(function () use ($paquete, $validado, $configAgencia) {
-            $hotel = OpcionHotel::create([
-                'paquete_plantilla_id' => $paquete->id,
-                'nombre_hotel' => $validado['nombre_hotel'],
-                'categoria_estrellas' => $validado['categoria_estrellas'] ?? null,
-                'proveedor_id' => $validado['proveedor_id'] ?? null,
-                'moneda' => $validado['moneda'] ?? 'PEN',
-                'edad_max_infante_gratis' => $validado['edad_max_infante_gratis']
-                    ?? $configAgencia?->edad_max_infante_gratis_hotel_default
-                    ?? 4,
-                'edad_max_nino_cama_adicional' => $validado['edad_max_nino_cama_adicional']
-                    ?? $configAgencia?->edad_max_nino_cama_adicional_hotel_default
-                    ?? 12,
-            ]);
-
-            foreach ($validado['tarifas'] ?? [] as $tarifa) {
-                // Snapshot al momento de guardar — el accessor de
-                // OpcionHotelTarifa recalcula "en vivo" mientras la relación
-                // siga viva, pero el valor guardado no debería quedar en
-                // blanco si el día de mañana se borra la tarifa real.
-                if (! empty($tarifa['proveedor_tarifa_id'])) {
-                    $tarifaReal = ProveedorTarifa::find($tarifa['proveedor_tarifa_id']);
-                    if ($tarifaReal) {
-                        $tarifa['precio_costo'] = $tarifaReal->precio_costo;
-                        $tarifa['precio_venta'] = $tarifaReal->precio_venta_adulto;
-                    }
-                }
-
-                OpcionHotelTarifa::create($tarifa + ['opcion_hotel_id' => $hotel->id]);
-            }
-
-            return $hotel;
-        });
-
-        $hotel->load('opcionesHotelTarifas');
-
-        return response()->json(['code' => 200, 'message' => 'Hotel agregado correctamente', 'opcion_hotel' => $hotel]);
-    }
-
-    public function eliminarHotel(string $id)
-    {
-        $hotel = OpcionHotel::findOrFail($id);
-
-        DB::transaction(function () use ($hotel) {
-            OpcionHotelTarifa::where('opcion_hotel_id', $hotel->id)->delete();
-            $hotel->delete();
-        });
-
-        return response()->json(['code' => 200, 'message' => 'Hotel quitado del paquete correctamente']);
     }
 
     private function validarPayload(Request $request, ?int $ignoreId = null): array|JsonResponse
