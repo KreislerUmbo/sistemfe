@@ -3,7 +3,7 @@ import httpClient from '@/helpers/http-client'
 import type { Servicio } from '@/types/agencia-viajes'
 
 export const servicioService = {
-  async listar(params: { page?: number; search?: string } = {}) {
+  async listar(params: { page?: number; search?: string; per_page?: number } = {}) {
     const response = await httpClient.get('/servicios', { params })
     return response.data
   },

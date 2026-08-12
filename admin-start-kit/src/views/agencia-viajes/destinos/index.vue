@@ -100,18 +100,37 @@
                         </div>
                         <ul class="list-group">
                             <li v-for="ds in destinoServiciosLista" :key="ds.id" class="list-group-item d-flex justify-content-between align-items-center">
-                                <div v-if="editandoServicioId === ds.servicio?.id" class="input-group input-group-sm">
-                                    <input type="text" class="form-control" v-model="editandoServicioNombre" @keyup.enter="guardarNombreServicio">
-                                    <button class="btn btn-outline-success" @click="guardarNombreServicio" :disabled="!editandoServicioNombre.trim()">
+                                <div v-if="editandoServicioId === ds.servicio?.id" class="w-100">
+                                    <small class="text-muted d-block mb-1">
+                                        <i class="fas fa-info-circle me-1"></i>Este cambio de nombre afecta a todos los destinos que usan este servicio.
+                                    </small>
+                                    <div class="input-group input-group-sm">
+                                        <input type="text" class="form-control" v-model="editandoServicioNombre" @keyup.enter="guardarNombreServicio">
+                                        <button class="btn btn-outline-success" @click="guardarNombreServicio" :disabled="!editandoServicioNombre.trim()">
+                                            <i class="fas fa-check"></i>
+                                        </button>
+                                        <button class="btn btn-outline-secondary" @click="cancelarEdicionServicio">
+                                            <i class="fas fa-times"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div v-else-if="moviendoServicioId === ds.id" class="d-flex gap-1 align-items-start w-100">
+                                    <div class="flex-grow-1">
+                                        <DestinoTreeSelect v-model="moviendoDestinoNuevoId" placeholder="Buscar destino..." />
+                                    </div>
+                                    <button class="btn btn-sm btn-outline-success" @click="confirmarMoverServicio(ds.id)" :disabled="!moviendoDestinoNuevoId">
                                         <i class="fas fa-check"></i>
                                     </button>
-                                    <button class="btn btn-outline-secondary" @click="cancelarEdicionServicio">
+                                    <button class="btn btn-sm btn-outline-secondary" @click="cancelarMoverServicio">
                                         <i class="fas fa-times"></i>
                                     </button>
                                 </div>
                                 <template v-else>
                                     {{ ds.servicio?.nombre }}
                                     <span>
+                                        <button class="btn btn-sm btn-outline-primary me-1" title="Mover a otro destino" @click="iniciarMoverServicio(ds.id)">
+                                            <i class="fas fa-arrows-alt"></i>
+                                        </button>
                                         <button class="btn btn-sm btn-outline-secondary me-1" @click="iniciarEdicionServicio(ds)">
                                             <i class="fas fa-pen"></i>
                                         </button>
@@ -135,6 +154,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';
+import DestinoTreeSelect from '@/components/AgenciaViajes/DestinoTreeSelect.vue';
 import Swal from 'sweetalert2/dist/sweetalert2.js';
 import { destinoAtractivoService } from '@/services/admin/destinoAtractivoService';
 import { servicioService } from '@/services/admin/servicioService';
@@ -218,6 +238,8 @@ const servicioNuevoId = ref<number | null>(null);
 const servicioNuevoNombre = ref<string>('');
 const editandoServicioId = ref<number | null>(null);
 const editandoServicioNombre = ref<string>('');
+const moviendoServicioId = ref<number | null>(null);
+const moviendoDestinoNuevoId = ref<number | null>(null);
 
 const abrirServicios = async (fila: Fila) => {
     destinoServiciosActivo.value = fila;
@@ -291,9 +313,59 @@ const desasociarServicio = async (destinoServicioId: number) => {
     }
 };
 
+const iniciarMoverServicio = (dsId: number) => {
+    cancelarEdicionServicio();
+    moviendoServicioId.value = dsId;
+    moviendoDestinoNuevoId.value = null;
+};
+
+const cancelarMoverServicio = () => {
+    moviendoServicioId.value = null;
+    moviendoDestinoNuevoId.value = null;
+};
+
+const confirmarMoverServicio = async (dsId: number) => {
+    if (!moviendoDestinoNuevoId.value || !destinoServiciosActivo.value) return;
+    try {
+        const res = await destinoAtractivoService.moverServicio(dsId, moviendoDestinoNuevoId.value);
+        cancelarMoverServicio();
+        (Swal as TVueSwalInstance).fire('Listo', res.message, 'success');
+        const listado = await destinoAtractivoService.listarServicios(destinoServiciosActivo.value.id);
+        destinoServiciosLista.value = listado.destino_servicios;
+    } catch (error: any) {
+        const destinoServicioExistenteId = error.response?.data?.destino_servicio_existente_id;
+
+        if (destinoServicioExistenteId) {
+            const confirmacion = await (Swal as TVueSwalInstance).fire({
+                title: 'Ya existe en ese destino',
+                text: 'El destino elegido ya tiene este servicio con sus propios proveedores. ¿Fusionar los proveedores de este con los de ese, y eliminar esta asociación duplicada?',
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonText: 'Sí, fusionar',
+                cancelButtonText: 'Cancelar',
+            });
+
+            if (confirmacion.isConfirmed) {
+                try {
+                    const res = await destinoAtractivoService.fusionarServicio(dsId, destinoServicioExistenteId);
+                    cancelarMoverServicio();
+                    (Swal as TVueSwalInstance).fire('Listo', res.message, 'success');
+                    const listado = await destinoAtractivoService.listarServicios(destinoServiciosActivo.value.id);
+                    destinoServiciosLista.value = listado.destino_servicios;
+                } catch (fusionError: any) {
+                    (Swal as TVueSwalInstance).fire('Error', fusionError.response?.data?.message ?? 'No se pudo fusionar', 'error');
+                }
+            }
+            return;
+        }
+
+        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo mover', 'error');
+    }
+};
+
 onMounted(async () => {
     await cargarArbol();
-    const res = await servicioService.listar({});
+    const res = await servicioService.listar({ per_page: 200 });
     servicios.value = res.servicios;
 });
 </script>
