@@ -135,7 +135,7 @@
                         <div class="card-body py-2">
                             <div class="mb-2"><strong>{{ nombreItem(it) }}</strong></div>
                             <div class="row g-2">
-                                <div class="col-md-3">
+                                <div class="col-md-3" v-if="it.alternativa_item?.origen_tipo === 'proveedor'">
                                     <label class="form-label small text-secondary mb-1">Proveedor</label>
                                     <select class="form-select form-select-sm" v-model="it.proveedor_tarifa_id" @change="guardarItem(it)">
                                         <option :value="null">Sin asignar</option>
@@ -144,23 +144,23 @@
                                         </option>
                                     </select>
                                 </div>
-                                <div class="col-md-3">
+                                <div class="col-md-3" v-if="it.alternativa_item?.origen_tipo === 'guia'">
                                     <label class="form-label small text-secondary mb-1">Guía</label>
                                     <select class="form-select form-select-sm" v-model="it.guia_id" @change="guardarItem(it)">
                                         <option :value="null">Sin asignar</option>
                                         <option v-for="g in guias" :key="g.id" :value="g.id">{{ g.nombre }}{{ g.es_referencial ? ' (Referencial)' : '' }}</option>
                                     </select>
                                 </div>
-                                <div class="col-md-3">
+                                <div :class="tieneAsignacionAplicable(it) ? 'col-md-3' : 'col-md-6'">
                                     <label class="form-label small text-secondary mb-1">Fecha del servicio</label>
                                     <input type="date" class="form-control form-control-sm" v-model="it.fecha" @change="guardarItem(it)">
                                 </div>
-                                <div class="col-md-3">
+                                <div :class="tieneAsignacionAplicable(it) ? 'col-md-3' : 'col-md-6'">
                                     <label class="form-label small text-secondary mb-1">Hora</label>
                                     <input type="time" class="form-control form-control-sm" v-model="it.hora" @change="guardarItem(it)">
                                 </div>
                             </div>
-                            <p v-if="!it.proveedor_tarifa_id && !it.guia_id" class="small mt-2 mb-0" style="color:#adb5bd;font-style:italic">
+                            <p v-if="tieneAsignacionAplicable(it) && !it.proveedor_tarifa_id && !it.guia_id" class="small mt-2 mb-0" style="color:#adb5bd;font-style:italic">
                                 <i class="fas fa-triangle-exclamation me-1"></i>Sin asignar todavía — no bloquea el resto de la reserva
                             </p>
                         </div>
@@ -218,7 +218,7 @@
                         </div>
                         <div class="d-flex justify-content-between align-items-center small mb-1">
                             <span><i class="fas fa-clipboard-check me-1 text-muted"></i>Ítems con proveedor/guía</span>
-                            <span class="fw-semibold">{{ itemsAsignados }} / {{ reserva.items?.length ?? 0 }}</span>
+                            <span class="fw-semibold">{{ itemsAsignados }} / {{ itemsAsignables.length }}</span>
                         </div>
                         <div class="progress" style="height:6px">
                             <div class="progress-bar bg-info" :style="{ width: pctItems + '%' }"></div>
@@ -293,6 +293,16 @@ const tab = ref<'pax' | 'items' | 'asignacion'>('pax');
 
 const cargarReserva = async () => {
     const res = await reservaService.obtener(reservaId);
+    // El backend devuelve fecha como timestamp ISO completo (cast 'date' de
+    // Eloquent, mismo patrón ya documentado para fecha_viaje_desde/hasta) —
+    // <input type="date"> exige exactamente YYYY-MM-DD o queda vacío en
+    // pantalla aunque el modelo sí tenga el valor. Antes de esta sesión
+    // 'fecha' siempre nacía null y se tipeaba a mano (nunca disparaba el
+    // problema); ahora que ReservaController la auto-completa, truncar acá
+    // es necesario para que se vea.
+    res.reserva.items?.forEach((it) => {
+        if (it.fecha) it.fecha = it.fecha.substring(0, 10);
+    });
     reserva.value = res.reserva;
     resumen.value = res.resumen;
     total.value = res.total;
@@ -376,11 +386,23 @@ const nombreItem = (it: ReservaItem) => {
     return item.proveedor_tarifa?.proveedor_servicio?.destino_servicio?.servicio?.nombre ?? 'Servicio';
 };
 
-const itemsAsignados = computed(() => (reserva.value?.items ?? []).filter((it) => it.guia_id || it.proveedor_tarifa_id).length);
-const itemsSinAsignar = computed(() => (reserva.value?.items?.length ?? 0) - itemsAsignados.value);
+// Sesión pendiente-11e-groundwork — Proveedor solo aplica a origen_tipo
+// 'proveedor' (servicios normales + hoteles), Guía solo a 'guia' (el
+// guía ya es un ítem real con costo propio, no un campo suelto).
+// Manual/pasaje_aereo/mayorista no tienen ningún campo de asignación
+// operativa hoy — el layout de Fecha/Hora se ajusta cuando no aplica
+// ninguno de los dos.
+const tieneAsignacionAplicable = (it: ReservaItem) =>
+    it.alternativa_item?.origen_tipo === 'proveedor' || it.alternativa_item?.origen_tipo === 'guia';
+
+const itemsAsignables = computed(() => (reserva.value?.items ?? []).filter(tieneAsignacionAplicable));
+const itemsAsignados = computed(() => itemsAsignables.value.filter((it) =>
+    it.alternativa_item?.origen_tipo === 'guia' ? !!it.guia_id : !!it.proveedor_tarifa_id
+).length);
+const itemsSinAsignar = computed(() => itemsAsignables.value.length - itemsAsignados.value);
 const pctItems = computed(() => {
-    const totalItems = reserva.value?.items?.length ?? 0;
-    return totalItems ? Math.round((itemsAsignados.value / totalItems) * 100) : 0;
+    const total = itemsAsignables.value.length;
+    return total ? Math.round((itemsAsignados.value / total) * 100) : 0;
 });
 
 const guardarItem = async (it: ReservaItem) => {

@@ -202,11 +202,22 @@ class ReservaController extends Controller
 
         $alternativaItems = AlternativaItem::where('alternativa_id', $alternativa->id)->get();
 
+        $fechaViajeDesde = $alternativa->cotizacion->fecha_viaje_desde;
+
         foreach ($alternativaItems as $alternativaItem) {
+            // Auto-completa fecha si hay suficiente dato (cotización con fecha +
+            // ítem con día referencial); si falta cualquiera de los dos, queda
+            // en null y se asigna a mano en reservas/detalle.vue como hasta
+            // ahora — nunca asumir "día 1" por defecto.
+            $fechaCalculada = ($fechaViajeDesde && $alternativaItem->dia_referencial)
+                ? $fechaViajeDesde->copy()->addDays($alternativaItem->dia_referencial - 1)
+                : null;
+
             $reservaItem = ReservaItem::create([
                 'reserva_id' => $reserva->id,
                 'alternativa_item_id' => $alternativaItem->id,
                 'proveedor_tarifa_id' => $alternativaItem->proveedor_tarifa_id,
+                'fecha' => $fechaCalculada,
                 // Sesión 11b4: propaga de qué tour vino el ítem (si vino de
                 // explotar un paquete_combo) para que la agrupación visual
                 // "Día 1/Día 2" sobreviva también en la reserva.
