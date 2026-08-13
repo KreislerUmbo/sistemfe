@@ -456,6 +456,156 @@ class AlternativaController extends Controller
         ]);
     }
 
+    // Sesión pdf-cotizacion — PDF comercial de UNA alternativa (nunca mezcla
+    // ítems de otras alternativas de la misma cotización, decisión de diseño
+    // #1 del plan). Groundwork de la sesión anterior (feature/perfil-agencia:
+    // Company.logo_vertical/horizontal, cuentas_bancarias,
+    // configuracion_agencia.condiciones_generales_servicio) es lo que este
+    // método finalmente consume.
+    public function pdf(string $id)
+    {
+        $alternativa = Alternativa::with([
+            'cotizacion.cliente',
+            'items.proveedorTarifa.proveedorServicio.destinoServicio.servicio',
+            'items.proveedorTarifa.proveedorServicio.destinoServicio.destinoAtractivo',
+            'items.proveedorTarifa.proveedorServicio.proveedor',
+            'items.guiaTarifa.guia',
+            'items.cotizacionPasajeAereo',
+            'items.opcionMayorista.proveedor',
+        ])->findOrFail($id);
+
+        $config = \App\Models\AgenciaViajes\ConfiguracionAgencia::first();
+        $empresa = \App\Models\Company::first();
+        $cuentasBancarias = \App\Models\AgenciaViajes\CuentaBancaria::where('activo', true)
+            ->orderBy('orden')->orderBy('id')->get();
+
+        $pasajeros = \App\Models\AgenciaViajes\CotizacionPasajero::where('cotizacion_id', $alternativa->cotizacion_id)->get();
+
+        $itinerario = $this->itinerarioAlternativa($alternativa);
+        $tourUnico = $this->tourUnicoDeAlternativa($alternativa);
+
+        $items = $alternativa->items->map(fn (AlternativaItem $item) => [
+            'nombre' => $this->resolverNombreItemPdf($item),
+            'precio' => (float) $item->total_convertido,
+            'precio_original' => (float) $item->precio_venta_snapshot * (float) $item->cantidad,
+            'descuento_pct' => (float) ($item->descuento_pct ?? 0),
+        ])->values();
+
+        $totalOriginal = $items->sum('precio_original');
+        $total = (float) $alternativa->total;
+        $descuentoMonto = round($totalOriginal - $total, 2);
+
+        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('pdf.agencia-viajes.alternativa', [
+            'alternativa' => $alternativa,
+            'cotizacion' => $alternativa->cotizacion,
+            'cliente' => $alternativa->cotizacion->cliente,
+            'empresa' => $empresa,
+            'logoUrl' => \App\Services\StorageUrl::resolve($empresa?->logo_horizontal),
+            'config' => $config,
+            'cuentasBancarias' => $cuentasBancarias,
+            'pasajeros' => $pasajeros,
+            'itinerario' => $itinerario,
+            'tourUnico' => $tourUnico,
+            'items' => $items,
+            'total' => $total,
+            'totalOriginal' => $totalOriginal,
+            'descuentoMonto' => $descuentoMonto,
+            'hayDescuento' => $descuentoMonto > 0.01,
+        ]);
+
+        $nombreArchivo = 'Cotizacion-' . ($alternativa->cotizacion->codigo ?? $alternativa->cotizacion_id) . '-' . \Illuminate\Support\Str::slug($alternativa->nombre) . '.pdf';
+
+        return $pdf->download($nombreArchivo);
+    }
+
+    // Si TODOS los ítems de la alternativa comparten el mismo tour_origen_id
+    // (caso más común: una alternativa = un tour), devuelve ese
+    // PaquetePlantilla para poder mostrar no_incluye/recomendaciones/
+    // lugar_recojo/horarios. Si hay ítems de varios tours distintos, o
+    // ítems sin tour_origen_id mezclados con ítems que sí lo tienen, NO hay
+    // "el tour" de esta alternativa — devuelve null a propósito, ver
+    // decisión de diseño #4 (no concatenar texto de varios tours).
+    private function tourUnicoDeAlternativa(Alternativa $alternativa): ?\App\Models\AgenciaViajes\PaquetePlantilla
+    {
+        $tourIds = $alternativa->items->pluck('tour_origen_id')->unique();
+
+        if ($tourIds->count() !== 1 || $tourIds->first() === null) {
+            return null;
+        }
+
+        return \App\Models\AgenciaViajes\PaquetePlantilla::find($tourIds->first());
+    }
+
+    // Itinerario narrativo — concatena el paqueteItinerario() de cada tour
+    // DISTINTO presente en los ítems de la alternativa, en el orden en que
+    // aparecen, con offset de día acumulado. Generaliza
+    // ComboExplosionService::itinerarioDerivado() (pensado para un combo
+    // específico) a "los tours que realmente aparecen acá", porque una
+    // alternativa puede mezclar tours sin venir de un combo formal. Devuelve
+    // array vacío si ningún ítem tiene tour_origen_id.
+    private function itinerarioAlternativa(Alternativa $alternativa): array
+    {
+        $tourIds = $alternativa->items->pluck('tour_origen_id')->filter()->unique()->values();
+
+        if ($tourIds->isEmpty()) {
+            return [];
+        }
+
+        $itinerario = [];
+        $offsetDia = 0;
+
+        foreach ($tourIds as $tourId) {
+            $tour = \App\Models\AgenciaViajes\PaquetePlantilla::find($tourId);
+            if (! $tour) {
+                continue;
+            }
+
+            $pasos = $tour->paqueteItinerario()->orderBy('dia_relativo')->orderBy('orden')->get();
+            $maxDiaDelTour = 0;
+
+            foreach ($pasos as $paso) {
+                $itinerario[] = [
+                    'dia' => $offsetDia + $paso->dia_relativo,
+                    'hora' => $paso->hora,
+                    'descripcion' => $paso->descripcion,
+                    'tour_nombre' => $tour->nombre,
+                ];
+                $maxDiaDelTour = max($maxDiaDelTour, $paso->dia_relativo);
+            }
+
+            $offsetDia += $maxDiaDelTour;
+        }
+
+        return $itinerario;
+    }
+
+    // Mismo criterio que ReservaController::resolverNombreItem() —
+    // replicado acá a propósito (mismo patrón ya usado en ese archivo, ver
+    // su comentario) para no crear una dependencia cruzada entre
+    // controllers por una función de 10 líneas.
+    private function resolverNombreItemPdf(AlternativaItem $item): string
+    {
+        if ($item->origen_tipo === AlternativaItem::ORIGEN_MANUAL) {
+            return $item->descripcion_manual ?? 'Ítem manual';
+        }
+        if ($item->origen_tipo === AlternativaItem::ORIGEN_PASAJE_AEREO) {
+            return $item->cotizacionPasajeAereo?->aerolinea ?? 'Pasaje aéreo';
+        }
+        if ($item->origen_tipo === AlternativaItem::ORIGEN_MAYORISTA) {
+            return $item->opcionMayorista?->proveedor?->razon_social ?? 'Paquete mayorista';
+        }
+        if ($item->origen_tipo === AlternativaItem::ORIGEN_GUIA) {
+            return 'Guía de turismo' . ($item->guiaTarifa?->guia?->nombre ? ' — ' . $item->guiaTarifa->guia->nombre : '');
+        }
+        if ($item->proveedorTarifa?->tipo_habitacion) {
+            $proveedor = $item->proveedorTarifa->proveedorServicio?->proveedor?->razon_social ?? 'Hotel';
+
+            return "{$proveedor} · {$item->proveedorTarifa->tipo_habitacion}";
+        }
+
+        return $item->proveedorTarifa?->proveedorServicio?->destinoServicio?->servicio?->nombre ?? 'Servicio';
+    }
+
     // Compartido con ReservaController::aceptar() y VentaDirectaController::store()
     // (Sesión 11c) — descartar las demás alternativas de la misma cotización
     // es siempre el mismo movimiento sin importar quién marcó "aceptada".

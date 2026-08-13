@@ -5,6 +5,7 @@ use App\Http\Controllers\AgenciaViajes\AlternativaController;
 use App\Http\Controllers\AgenciaViajes\AlternativaItemController;
 use App\Http\Controllers\AgenciaViajes\AmenidadController;
 use App\Http\Controllers\AgenciaViajes\BibliotecaCotizadorController;
+use App\Http\Controllers\AgenciaViajes\CondicionesGeneralesController;
 use App\Http\Controllers\AgenciaViajes\ConfiguracionAgenciaController;
 use App\Http\Controllers\AgenciaViajes\CotizacionController;
 use App\Http\Controllers\AgenciaViajes\CuentaBancariaController;
@@ -470,6 +471,11 @@ Route::group([
     Route::delete("cuentas-bancarias/{id}", [CuentaBancariaController::class, 'destroy'])
         ->middleware('permission:agencia.configuracion');
 
+    // Sesión pdf-cotizacion — documento aparte, mismo contenido para toda
+    // cotización del tenant (no depende de ninguna alternativa puntual).
+    Route::get("condiciones-generales/pdf", [CondicionesGeneralesController::class, 'pdf'])
+        ->middleware('permission:agencia.cotizaciones');
+
     // Sesión 11b2 — catálogo de paquetes/tours de plantilla.
     Route::get("paquetes-plantilla", [PaquetePlantillaController::class, 'index'])
         ->middleware('permission:agencia.paquetes');
@@ -544,6 +550,9 @@ Route::group([
     // Sesión 11h — clona la alternativa completa (ítems + opciones de
     // mayorista) en una alternativa nueva de la misma cotización.
     Route::post("alternativas/{id}/duplicar", [AlternativaController::class, 'duplicar'])
+        ->middleware('permission:agencia.cotizaciones');
+    // Sesión pdf-cotizacion — PDF comercial de una alternativa puntual.
+    Route::get("alternativas/{id}/pdf", [AlternativaController::class, 'pdf'])
         ->middleware('permission:agencia.cotizaciones');
 
     Route::post("alternativas/{id}/items", [AlternativaItemController::class, 'store'])

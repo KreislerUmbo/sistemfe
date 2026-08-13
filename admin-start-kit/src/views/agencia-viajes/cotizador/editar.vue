@@ -389,13 +389,18 @@
                             </button>
 
                             <div class="d-flex gap-2">
-                                <button class="btn btn-outline-secondary btn-sm flex-fill" disabled title="Disponible cuando exista el generador de PDF">
-                                    <i class="fas fa-file-pdf me-1"></i>Ver PDF
+                                <button class="btn btn-outline-secondary btn-sm flex-fill" :disabled="descargandoPdf" @click="descargarPdfAlternativa">
+                                    <span v-if="descargandoPdf" class="spinner-border spinner-border-sm me-1"></span>
+                                    <i v-else class="fas fa-file-pdf me-1"></i>Ver PDF
                                 </button>
-                                <button class="btn btn-outline-secondary btn-sm flex-fill" disabled title="Disponible cuando exista el generador de PDF">
+                                <button class="btn btn-outline-secondary btn-sm flex-fill" disabled title="Disponible cuando exista el envío por WhatsApp/email">
                                     <i class="fas fa-paper-plane me-1"></i>Enviar
                                 </button>
                             </div>
+                            <button class="btn btn-link btn-sm w-100 text-secondary" :disabled="descargandoCondiciones" @click="descargarCondicionesGenerales">
+                                <span v-if="descargandoCondiciones" class="spinner-border spinner-border-sm me-1"></span>
+                                <i v-else class="fas fa-file-contract me-1"></i>Descargar condiciones generales
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -865,6 +870,48 @@ const duplicarAlternativa = async () => {
         (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo duplicar la alternativa', 'error');
     } finally {
         duplicando.value = false;
+    }
+};
+
+// Sesión pdf-cotizacion — descarga de los 2 PDFs (ver AlternativaController::
+// pdf()/CondicionesGeneralesController::pdf()): el comercial de la
+// alternativa activa y el de condiciones generales (aparte, mismo contenido
+// para toda cotización del tenant).
+const descargandoPdf = ref(false);
+const descargandoCondiciones = ref(false);
+
+const descargarArchivo = async (url: string, nombreSugerido: string) => {
+    const response = await httpClient.get(url, { responseType: 'blob' });
+    const blobUrl = window.URL.createObjectURL(new Blob([response.data]));
+    const link = document.createElement('a');
+    link.href = blobUrl;
+    link.setAttribute('download', nombreSugerido);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(blobUrl);
+};
+
+const descargarPdfAlternativa = async () => {
+    if (!alternativaActiva.value) return;
+    descargandoPdf.value = true;
+    try {
+        await descargarArchivo(`/alternativas/${alternativaActiva.value.id}/pdf`, `cotizacion-${alternativaActiva.value.nombre}.pdf`);
+    } catch (error: any) {
+        toast.error('No se pudo generar el PDF');
+    } finally {
+        descargandoPdf.value = false;
+    }
+};
+
+const descargarCondicionesGenerales = async () => {
+    descargandoCondiciones.value = true;
+    try {
+        await descargarArchivo('/condiciones-generales/pdf', 'condiciones-generales.pdf');
+    } catch (error: any) {
+        toast.error('No se pudo generar el PDF');
+    } finally {
+        descargandoCondiciones.value = false;
     }
 };
 
