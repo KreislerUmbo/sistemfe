@@ -107,9 +107,6 @@
                                     <router-link :to="`/agencia-viajes/paquetes/${paquete.id}`" class="btn btn-sm btn-outline-primary me-1" title="Ver detalle">
                                         <i class="fas fa-eye"></i>
                                     </router-link>
-                                    <router-link :to="`/agencia-viajes/paquetes/${paquete.id}/editar`" class="btn btn-sm btn-outline-secondary me-1" title="Editar">
-                                        <i class="fas fa-pen"></i>
-                                    </router-link>
                                     <button class="btn btn-sm btn-outline-secondary me-1" @click="duplicar(paquete)" title="Duplicar">
                                         <i class="fas fa-copy"></i>
                                     </button>

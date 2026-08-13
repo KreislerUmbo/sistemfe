@@ -295,7 +295,7 @@ const guardarNombreServicio = async () => {
             const res = await destinoAtractivoService.listarServicios(destinoServiciosActivo.value.id);
             destinoServiciosLista.value = res.destino_servicios;
         }
-        const serviciosRes = await servicioService.listar({});
+        const serviciosRes = await servicioService.listar({ per_page: 200 });
         servicios.value = serviciosRes.servicios;
     } catch (error: any) {
         (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo actualizar el servicio', 'error');
