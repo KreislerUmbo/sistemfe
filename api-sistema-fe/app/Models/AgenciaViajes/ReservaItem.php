@@ -26,6 +26,7 @@ class ReservaItem extends Model
         'guia_id',
         'proveedor_tarifa_id',
         'tour_origen_id',
+        'salida_operativa_id',
     ];
 
     protected $casts = [
@@ -57,6 +58,16 @@ class ReservaItem extends Model
     public function tourOrigen()
     {
         return $this->belongsTo(PaquetePlantilla::class, 'tour_origen_id');
+    }
+
+    // Sesión salida-operativa — a qué salida compartida (tour_origen_id +
+    // fecha) quedó enganchado este ítem. Ver SalidaOperativa para el
+    // diseño completo; solo origen_tipo=proveedor con modalidad=compartido
+    // se engancha automáticamente (ReservaController::engancharSalidaOperativa()),
+    // el resto queda disponible para enganche manual desde el tablero.
+    public function salidaOperativa()
+    {
+        return $this->belongsTo(SalidaOperativa::class, 'salida_operativa_id');
     }
 
     public function pasajeros()

@@ -682,6 +682,32 @@ const comercialRoutes = [
     },
     component: () => import("@/views/agencia-viajes/reservas/detalle.vue"),
   },
+  // Tablero de despacho (feature/salida-operativa) — agrupa reserva_items
+  // de distintas reservas que comparten tour_origen_id + fecha. La ruta
+  // con :id apunta al mismo componente (mismo criterio que el resto del
+  // vertical no separa listado/detalle en pantallas distintas acá — ver
+  // salidas/index.vue): abre directo el modal de detalle de esa salida,
+  // usada por el link "Vía salida operativa" de reservas/detalle.vue.
+  {
+    path: "/agencia-viajes/salidas",
+    name: "agencia.salidas.index",
+    meta: {
+      title: setTitle("Salidas Operativas"),
+      authRequired: true,
+      permission: 'agencia.reservas',
+    },
+    component: () => import("@/views/agencia-viajes/salidas/index.vue"),
+  },
+  {
+    path: "/agencia-viajes/salidas/:id",
+    name: "agencia.salidas.detalle",
+    meta: {
+      title: setTitle("Salida Operativa"),
+      authRequired: true,
+      permission: 'agencia.reservas',
+    },
+    component: () => import("@/views/agencia-viajes/salidas/index.vue"),
+  },
   {
     path: "/agencia-viajes/venta-directa",
     name: "agencia.ventaDirecta",
