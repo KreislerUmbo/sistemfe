@@ -7,6 +7,7 @@ use App\Http\Controllers\AgenciaViajes\AmenidadController;
 use App\Http\Controllers\AgenciaViajes\BibliotecaCotizadorController;
 use App\Http\Controllers\AgenciaViajes\ConfiguracionAgenciaController;
 use App\Http\Controllers\AgenciaViajes\CotizacionController;
+use App\Http\Controllers\AgenciaViajes\CuentaBancariaController;
 use App\Http\Controllers\AgenciaViajes\DestinoAtractivoController;
 use App\Http\Controllers\AgenciaViajes\DestinoServicioController;
 use App\Http\Controllers\AgenciaViajes\GuiaController;
@@ -458,6 +459,15 @@ Route::group([
     Route::get("configuracion-agencia", [ConfiguracionAgenciaController::class, 'show'])
         ->middleware('permission:agencia.configuracion');
     Route::put("configuracion-agencia", [ConfiguracionAgenciaController::class, 'update'])
+        ->middleware('permission:agencia.configuracion');
+
+    Route::get("cuentas-bancarias", [CuentaBancariaController::class, 'index'])
+        ->middleware('permission:agencia.configuracion');
+    Route::post("cuentas-bancarias", [CuentaBancariaController::class, 'store'])
+        ->middleware('permission:agencia.configuracion');
+    Route::put("cuentas-bancarias/{id}", [CuentaBancariaController::class, 'update'])
+        ->middleware('permission:agencia.configuracion');
+    Route::delete("cuentas-bancarias/{id}", [CuentaBancariaController::class, 'destroy'])
         ->middleware('permission:agencia.configuracion');
 
     // Sesión 11b2 — catálogo de paquetes/tours de plantilla.

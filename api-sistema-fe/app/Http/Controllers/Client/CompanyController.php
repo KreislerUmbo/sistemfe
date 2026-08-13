@@ -22,16 +22,33 @@ class CompanyController extends Controller
     public function store(Request $request)
     {
         $company = Company::first();
+
+        $datos = $request->except(['logo_vertical', 'logo_horizontal']);
+
+        if ($request->hasFile('logo_vertical')) {
+            if ($company?->logo_vertical && \Illuminate\Support\Facades\Storage::disk('public')->exists($company->logo_vertical)) {
+                \Illuminate\Support\Facades\Storage::disk('public')->delete($company->logo_vertical);
+            }
+            $datos['logo_vertical'] = \Illuminate\Support\Facades\Storage::disk('public')->putFile('company', $request->file('logo_vertical'));
+        }
+
+        if ($request->hasFile('logo_horizontal')) {
+            if ($company?->logo_horizontal && \Illuminate\Support\Facades\Storage::disk('public')->exists($company->logo_horizontal)) {
+                \Illuminate\Support\Facades\Storage::disk('public')->delete($company->logo_horizontal);
+            }
+            $datos['logo_horizontal'] = \Illuminate\Support\Facades\Storage::disk('public')->putFile('company', $request->file('logo_horizontal'));
+        }
+
         if ($company) {
-            $company->update($request->all());
+            $company->update($datos);
         } else {
-           $company = Company::create($request->all());
+            $company = Company::create($datos);
         }
 
         return response()->json([
             "code" => 200,
             "message" => "Se actualizo la informacion de empresa con éxito",
-            "company" => $company,
+            "company" => CompanyResource::make($company->fresh()),
         ]);
     }
 }

@@ -34,6 +34,7 @@ class ConfiguracionAgenciaController extends Controller
         'margen_minimo_aceptable_pct' => 20.00,
         'edad_max_infante_gratis_hotel_default' => 4,
         'edad_max_nino_cama_adicional_hotel_default' => 12,
+        'condiciones_generales_servicio' => null,
     ];
 
     public function show()
@@ -65,6 +66,7 @@ class ConfiguracionAgenciaController extends Controller
             'margen_minimo_aceptable_pct' => 'required|numeric|min:0',
             'edad_max_infante_gratis_hotel_default' => 'required|integer|min:0|max:255',
             'edad_max_nino_cama_adicional_hotel_default' => 'required|integer|min:0|max:255',
+            'condiciones_generales_servicio' => 'nullable|string',
         ]);
 
         if ($validator->fails()) {
