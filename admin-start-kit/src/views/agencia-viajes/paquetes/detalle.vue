@@ -22,9 +22,6 @@
                     <span v-if="cambiandoEstado" class="spinner-border spinner-border-sm me-2"></span>
                     <i v-else class="fas me-2" :class="paquete.activo ? 'fa-ban' : 'fa-check-circle'"></i>{{ paquete.activo ? 'Desactivar' : 'Activar' }}
                 </button>
-                <router-link :to="`/agencia-viajes/paquetes/${paquete.id}/editar`" class="btn btn-outline-secondary">
-                    <i class="fas fa-pen me-2"></i>Editar
-                </router-link>
                 <button class="btn btn-outline-secondary" @click="duplicar" :disabled="duplicando">
                     <span v-if="duplicando" class="spinner-border spinner-border-sm me-2"></span>
                     <i v-else class="fas fa-copy me-2"></i>Duplicar
@@ -55,18 +52,20 @@
 
         <!-- ═══ TAB: Datos ═══ -->
         <div v-if="tabActiva === 'datos' && paquete" class="card border-0 shadow-sm">
+            <div class="card-header bg-white border-bottom py-2 d-flex justify-content-between align-items-center">
+                <span class="fw-semibold text-dark small"><i class="fas fa-id-card me-1"></i>Datos generales</span>
+                <button v-if="!editandoDatos" class="btn btn-sm btn-outline-secondary" @click="iniciarEdicionDatos">
+                    <i class="fas fa-pen me-1"></i>Editar
+                </button>
+            </div>
             <div class="card-body">
-                <div class="row g-3 small">
+                <!-- Modo lectura -->
+                <div v-if="!editandoDatos" class="row g-3 small">
                     <div class="col-md-4"><strong>Destino:</strong> {{ paquete.destino_atractivo?.nombre ?? '—' }}</div>
                     <div class="col-md-4"><strong>Duración:</strong> {{ paquete.duracion_horas }} h</div>
                     <div class="col-md-4"><strong>Horario:</strong> {{ paquete.hora_salida ?? '—' }} — {{ paquete.hora_retorno ?? '—' }}</div>
                     <div class="col-md-8"><strong>Lugar de recojo:</strong> {{ paquete.lugar_recojo ?? '—' }}</div>
                     <div class="col-md-4" v-if="!esCombo"><strong>Precio desde:</strong> {{ paquete.precio_venta_final != null ? `S/ ${Number(paquete.precio_venta_final).toFixed(2)}` : '—' }}</div>
-                    <!-- descripcion/no_incluye/recomendaciones vienen en HTML (RichTextEditor,
-                         ver paquetes/form.vue) — v-html a propósito, el contenido solo lo
-                         genera este mismo editor, no llega de terceros. -->
-                    <!-- TODO Sesión 11k: cuando este tab pase a editable in-situ, estos 3
-                         campos deben usar RichTextEditor.vue (no volver a un <textarea>). -->
                     <div class="col-12" v-if="paquete.descripcion"><strong>Descripción:</strong> <span v-html="paquete.descripcion"></span></div>
                     <div class="col-md-6" v-if="paquete.no_incluye"><strong>No incluye:</strong> <span v-html="paquete.no_incluye"></span></div>
                     <div class="col-md-6" v-if="paquete.recomendaciones"><strong>Recomendaciones:</strong> <span v-html="paquete.recomendaciones"></span></div>
@@ -75,6 +74,98 @@
                     </div>
                     <div class="col-md-4"><strong>Vigencia:</strong> {{ paquete.vigencia_desde ? formatFecha(paquete.vigencia_desde) : 'sin inicio' }} — {{ paquete.vigencia_hasta ? formatFecha(paquete.vigencia_hasta) : 'indefinida' }}</div>
                     <div class="col-md-4"><strong>Publicado web:</strong> {{ paquete.publicado_web ? 'Sí' : 'No' }}</div>
+                </div>
+
+                <!-- Modo edición -->
+                <div v-else class="row g-3">
+                    <div class="col-12 col-md-3">
+                        <label class="form-label mb-1 small fw-semibold text-secondary">Código</label>
+                        <input type="text" class="form-control form-control-sm" v-model="formDatos.codigo" placeholder="Ej. PDKM-CZ">
+                    </div>
+                    <div class="col-12 col-md-3">
+                        <label class="form-label mb-1 small fw-semibold text-secondary">Categoría *</label>
+                        <select class="form-select form-select-sm" v-model="formDatos.categoria">
+                            <option value="local">Local</option>
+                            <option value="nacional">Nacional</option>
+                            <option value="internacional">Internacional</option>
+                        </select>
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <label class="form-label mb-1 small fw-semibold text-secondary">Nombre *</label>
+                        <input type="text" class="form-control form-control-sm" v-model="formDatos.nombre" placeholder="Ej. Full Day Alto Mayo">
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label mb-1 small fw-semibold text-secondary">Descripción</label>
+                        <RichTextEditor v-model="formDatos.descripcion" />
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <label class="form-label mb-1 small fw-semibold text-secondary">Destino / Atractivo principal *</label>
+                        <DestinoTreeSelect v-model="formDatos.destino_atractivo_id" nivel-max="lugar" />
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <label class="form-label mb-1 small fw-semibold text-secondary">Duración (horas) *</label>
+                        <input type="number" min="1" class="form-control form-control-sm" v-model.number="formDatos.duracion_horas">
+                    </div>
+                    <div class="col-6 col-md-3" v-if="!esCombo">
+                        <label class="form-label mb-1 small fw-semibold text-secondary">Precio venta (desde)</label>
+                        <input type="number" step="0.01" min="0" class="form-control form-control-sm" v-model.number="formDatos.precio_venta_final" placeholder="Se resuelve solo con los hoteles">
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <label class="form-label mb-1 small fw-semibold text-secondary">Hora de salida</label>
+                        <input type="time" class="form-control form-control-sm" v-model="formDatos.hora_salida">
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <label class="form-label mb-1 small fw-semibold text-secondary">Hora de retorno</label>
+                        <input type="time" class="form-control form-control-sm" v-model="formDatos.hora_retorno">
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label mb-1 small fw-semibold text-secondary">Lugar de recojo</label>
+                        <input type="text" class="form-control form-control-sm" v-model="formDatos.lugar_recojo" placeholder="Ej. Hoteles ubicados dentro de la ciudad">
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <label class="form-label mb-1 small fw-semibold text-secondary">No incluye</label>
+                        <RichTextEditor v-model="formDatos.no_incluye" />
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <label class="form-label mb-1 small fw-semibold text-secondary">Recomendaciones</label>
+                        <RichTextEditor v-model="formDatos.recomendaciones" />
+                    </div>
+                    <div class="col-12">
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="checkbox" id="vueloIncluidoDatos" v-model="formDatos.vuelo_incluido">
+                            <label class="form-check-label small" for="vueloIncluidoDatos">Incluye vuelo</label>
+                        </div>
+                        <div v-if="formDatos.vuelo_incluido" class="row g-3">
+                            <div class="col-12 col-md-4">
+                                <label class="form-label mb-1 small fw-semibold text-secondary">Aerolínea</label>
+                                <input type="text" class="form-control form-control-sm" v-model="formDatos.vuelo_aerolinea">
+                            </div>
+                            <div class="col-12 col-md-8">
+                                <label class="form-label mb-1 small fw-semibold text-secondary">Detalle (tramos, fechas, equipaje...)</label>
+                                <input type="text" class="form-control form-control-sm" v-model="formDatos.vuelo_detalle">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <label class="form-label mb-1 small fw-semibold text-secondary">Vigente desde</label>
+                        <input type="date" class="form-control form-control-sm" v-model="formDatos.vigencia_desde">
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <label class="form-label mb-1 small fw-semibold text-secondary">Vigente hasta</label>
+                        <input type="date" class="form-control form-control-sm" v-model="formDatos.vigencia_hasta">
+                    </div>
+                    <div class="col-12 col-md-6 d-flex align-items-center">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="publicadoWebDatos" v-model="formDatos.publicado_web">
+                            <label class="form-check-label small text-muted" for="publicadoWebDatos">Publicado en portal web (sin efecto todavía)</label>
+                        </div>
+                    </div>
+                    <div class="col-12 d-flex justify-content-end gap-2 mt-2">
+                        <button class="btn btn-sm btn-outline-secondary" @click="cancelarEdicionDatos" :disabled="guardandoDatos">Cancelar</button>
+                        <button class="btn btn-sm btn-primary" @click="guardarDatos" :disabled="guardandoDatos">
+                            <span v-if="guardandoDatos" class="spinner-border spinner-border-sm me-1"></span>Guardar cambios
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -596,6 +687,7 @@ import Sortable from 'sortablejs';
 import { useRoute, useRouter } from 'vue-router';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import DestinoTreeSelect from '@/components/AgenciaViajes/DestinoTreeSelect.vue';
+import RichTextEditor from '@/components/RichTextEditor.vue';
 import Swal from 'sweetalert2/dist/sweetalert2.js';
 import { paquetePlantillaService } from '@/services/admin/paquetePlantillaService';
 import { proveedorService, proveedorTipoService } from '@/services/admin/proveedorService';
@@ -620,6 +712,98 @@ const paquete = ref<PaquetePlantilla | null>(null);
 const combo = ref<ComboDatos | null>(null);
 const esCombo = computed(() => paquete.value?.tipo === 'paquete_combo');
 const tabActiva = ref<'datos' | 'itinerario' | 'incluye'>('datos');
+
+// Sesión 11p — edición in-situ del tab "Datos". Mismo criterio que
+// guardarPrecioCombo()/toggleActivo() más abajo en este archivo: en
+// guardarDatos() se manda {...paquete.value, ...formDatos.value} contra
+// el mismo endpoint de actualizar(), nunca un PATCH parcial (el backend
+// exige nombre/categoria/destino_atractivo_id/duracion_horas en cada
+// request). descuento_tipo/descuento_valor/margen_minimo_pct/tipo/activo
+// quedan FUERA a propósito — ver nota de diseño arriba del archivo.
+const editandoDatos = ref(false);
+const guardandoDatos = ref(false);
+const formDatos = ref<{
+    codigo: string | null; categoria: string; nombre: string; descripcion: string | null;
+    destino_atractivo_id: number | null; duracion_horas: number; precio_venta_final: number | null;
+    hora_salida: string | null; hora_retorno: string | null; lugar_recojo: string | null;
+    no_incluye: string | null; recomendaciones: string | null;
+    vuelo_incluido: boolean; vuelo_aerolinea: string | null; vuelo_detalle: string | null;
+    vigencia_desde: string | null; vigencia_hasta: string | null; publicado_web: boolean;
+}>({
+    codigo: null, categoria: 'local', nombre: '', descripcion: null,
+    destino_atractivo_id: null, duracion_horas: 1, precio_venta_final: null,
+    hora_salida: null, hora_retorno: null, lugar_recojo: null,
+    no_incluye: null, recomendaciones: null,
+    vuelo_incluido: false, vuelo_aerolinea: null, vuelo_detalle: null,
+    vigencia_desde: null, vigencia_hasta: null, publicado_web: false,
+});
+
+const iniciarEdicionDatos = () => {
+    if (!paquete.value) return;
+    formDatos.value = {
+        codigo: paquete.value.codigo ?? null,
+        categoria: paquete.value.categoria,
+        nombre: paquete.value.nombre,
+        descripcion: paquete.value.descripcion ?? null,
+        destino_atractivo_id: paquete.value.destino_atractivo_id ?? null,
+        duracion_horas: paquete.value.duracion_horas,
+        precio_venta_final: paquete.value.precio_venta_final ?? null,
+        // Mismo motivo que iniciarEdicionPaso() más abajo: hora_salida/
+        // hora_retorno vienen HH:MM:SS (columna TIME de Postgres), pero
+        // <input type="time">/date_format:H:i del backend solo aceptan
+        // HH:MM — sin truncar acá, guardar sin tocar el horario 422ea.
+        hora_salida: paquete.value.hora_salida ? paquete.value.hora_salida.substring(0, 5) : null,
+        hora_retorno: paquete.value.hora_retorno ? paquete.value.hora_retorno.substring(0, 5) : null,
+        lugar_recojo: paquete.value.lugar_recojo ?? null,
+        no_incluye: paquete.value.no_incluye ?? null,
+        recomendaciones: paquete.value.recomendaciones ?? null,
+        vuelo_incluido: paquete.value.vuelo_incluido ?? false,
+        vuelo_aerolinea: paquete.value.vuelo_aerolinea ?? null,
+        vuelo_detalle: paquete.value.vuelo_detalle ?? null,
+        vigencia_desde: paquete.value.vigencia_desde ?? null,
+        vigencia_hasta: paquete.value.vigencia_hasta ?? null,
+        publicado_web: paquete.value.publicado_web ?? false,
+    };
+    editandoDatos.value = true;
+};
+
+const cancelarEdicionDatos = () => {
+    editandoDatos.value = false;
+};
+
+const guardarDatos = async () => {
+    if (!paquete.value) return;
+    if (!formDatos.value.nombre.trim()) {
+        (Swal as TVueSwalInstance).fire('Error', 'El nombre es obligatorio.', 'error');
+        return;
+    }
+    if (!formDatos.value.destino_atractivo_id) {
+        (Swal as TVueSwalInstance).fire('Error', 'Seleccioná el destino/atractivo principal.', 'error');
+        return;
+    }
+    if (!formDatos.value.duracion_horas || formDatos.value.duracion_horas < 1) {
+        (Swal as TVueSwalInstance).fire('Error', 'La duración en horas es obligatoria.', 'error');
+        return;
+    }
+    if (esCombo.value) {
+        formDatos.value.precio_venta_final = null;
+    }
+
+    guardandoDatos.value = true;
+    try {
+        const res = await paquetePlantillaService.actualizar(paquete.value.id, {
+            ...paquete.value,
+            ...formDatos.value,
+        });
+        await cargarPaquete();
+        editandoDatos.value = false;
+        (Swal as TVueSwalInstance).fire('Listo', res.message, 'success');
+    } catch (error: any) {
+        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo guardar', 'error');
+    } finally {
+        guardandoDatos.value = false;
+    }
+};
 
 const etiquetaCategoria = (c: string) => ({ local: 'Local', nacional: 'Nacional', internacional: 'Internacional' } as Record<string, string>)[c] ?? c;
 
@@ -1180,7 +1364,7 @@ onMounted(async () => {
 
         // Sesión 11l v2 — catálogos de servicios/proveedores para los filtros
         // de la biblioteca del tab Incluye, en paralelo (no bloquean la carga).
-        servicioService.listar({}).then((res) => { serviciosFiltro.value = res.servicios ?? []; });
+        servicioService.listar({ per_page: 200 }).then((res) => { serviciosFiltro.value = res.servicios ?? []; });
         proveedorService.listar({ estado: true }).then((res) => { proveedoresFiltro.value = res.proveedores ?? []; });
 
         await cargarPaquete();
