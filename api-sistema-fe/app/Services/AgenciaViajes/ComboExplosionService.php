@@ -3,6 +3,7 @@
 namespace App\Services\AgenciaViajes;
 
 use App\Models\AgenciaViajes\PaquetePlantilla;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\Collection;
 
 // Resuelve un paquete_combo contra los tours_simple reales que incluye —
@@ -36,6 +37,15 @@ use Illuminate\Support\Collection;
 // cotización real.
 class ComboExplosionService
 {
+    // N+1 fix (sesión pendiente, ver arquitectura-multitenant-backend.md /
+    // plan general): toursDelCombo() se llama por separado desde
+    // totalesCombo(), itinerarioDerivado() Y directo desde el controller
+    // para el MISMO combo en la misma request (ver
+    // PaquetePlantillaController::show()) — sin esto, la query base se repite
+    // 3 veces. Memoizado por combo->id: el service se resuelve una vez por
+    // request (sin binding singleton), así que esto nunca cruza requests.
+    private array $toursDelComboCache = [];
+
     public function __construct(private PriceEngineService $priceEngine)
     {
     }
@@ -48,7 +58,16 @@ class ComboExplosionService
         $costoTotal = 0.0;
         $ventaTotal = 0.0;
 
-        foreach ($tour->items()->with(['proveedorTarifa', 'guiaTarifa'])->get() as $item) {
+        // N+1 fix: si totalesCombo() ya precargó 'items.proveedorTarifa'/
+        // 'items.guiaTarifa' sobre este tour (ver ahí), usa esa colección en
+        // vez de disparar una query nueva — sigue funcionando igual para un
+        // tour_simple suelto (nunca llega acá precargado), que cae al query
+        // normal de siempre.
+        $items = $tour->relationLoaded('items')
+            ? $tour->items
+            : $tour->items()->with(['proveedorTarifa', 'guiaTarifa'])->get();
+
+        foreach ($items as $item) {
             [$costo, $venta] = $this->resolverCostoVentaItem($item);
             $costoTotal += $costo;
             $ventaTotal += $venta;
@@ -71,6 +90,27 @@ class ComboExplosionService
     {
         $tours = $this->toursDelCombo($combo);
 
+        // N+1 fix: precarga items+tarifas+itinerario de TODOS los tours del
+        // combo en un puñado de queries (batched vía whereIn, no una por tour).
+        // El guard relationLoaded() evita recargar si esta MISMA colección
+        // (memoizada arriba) ya viene cargada de una llamada anterior a
+        // totalesCombo()/itinerarioDerivado() para este combo en la misma
+        // request.
+        if ($tours->isNotEmpty() && ! $tours->first()->relationLoaded('items')) {
+            // toursDelCombo() pluckea 'paquetePlantillaHijo' desde una
+            // relación — Eloquent\Collection::pluck() llama a toBase()
+            // adentro a propósito, así que $tours es un Support\Collection
+            // plano (sin load()), no un Eloquent\Collection, pese a
+            // contener Models. Envolver acá no clona nada: son los MISMOS
+            // objetos Model por referencia, así que cargar relaciones sobre
+            // el wrapper también las deja visibles en $tours/el cache.
+            EloquentCollection::make($tours)->load([
+                'items.proveedorTarifa',
+                'items.guiaTarifa',
+                'paqueteItinerario' => fn ($q) => $q->orderBy('dia_relativo')->orderBy('orden'),
+            ]);
+        }
+
         // Punto 10 del diseño: un tour_simple desactivado a la fuerza
         // mientras seguía incluido en este combo se excluye del cálculo de
         // precio (nunca rompe el total en silencio), pero se reporta acá
@@ -92,12 +132,12 @@ class ComboExplosionService
         // ya inactivo no necesita este aviso aparte (ya tiene el suyo).
         $toursActivos = $tours->filter(fn (PaquetePlantilla $tour) => $tour->activo);
 
-        $resultado['componentes_sin_incluye'] = $toursActivos->filter(fn (PaquetePlantilla $tour) => $tour->items()->count() === 0)
+        $resultado['componentes_sin_incluye'] = $toursActivos->filter(fn (PaquetePlantilla $tour) => $tour->items->count() === 0)
             ->map(fn (PaquetePlantilla $tour) => ['id' => $tour->id, 'nombre' => $tour->nombre])
             ->values()
             ->all();
 
-        $resultado['componentes_sin_itinerario'] = $toursActivos->filter(fn (PaquetePlantilla $tour) => $tour->paqueteItinerario()->count() === 0)
+        $resultado['componentes_sin_itinerario'] = $toursActivos->filter(fn (PaquetePlantilla $tour) => $tour->paqueteItinerario->count() === 0)
             ->map(fn (PaquetePlantilla $tour) => ['id' => $tour->id, 'nombre' => $tour->nombre])
             ->values()
             ->all();
@@ -110,7 +150,11 @@ class ComboExplosionService
     // documentado en la migración de esta sesión).
     public function toursDelCombo(PaquetePlantilla $combo): Collection
     {
-        return $combo->items()
+        if (isset($this->toursDelComboCache[$combo->id])) {
+            return $this->toursDelComboCache[$combo->id];
+        }
+
+        $tours = $combo->items()
             ->whereNotNull('paquete_plantilla_hijo_id')
             ->orderBy('orden')
             ->with('paquetePlantillaHijo')
@@ -118,6 +162,8 @@ class ComboExplosionService
             ->pluck('paquetePlantillaHijo')
             ->filter()
             ->values();
+
+        return $this->toursDelComboCache[$combo->id] = $tours;
     }
 
     /**
@@ -204,8 +250,22 @@ class ComboExplosionService
         $itinerario = [];
         $offsetDia = 0;
 
-        foreach ($this->toursDelCombo($combo) as $tour) {
-            $pasos = $tour->paqueteItinerario()->orderBy('dia_relativo')->orderBy('orden')->get();
+        $tours = $this->toursDelCombo($combo);
+
+        // N+1 fix: mismo criterio que totalesCombo() — si esta colección
+        // (memoizada por toursDelCombo()) ya viene con paqueteItinerario
+        // cargado de una llamada anterior en la misma request, lo reusa. El
+        // orderBy queda igual acá y en totalesCombo() a propósito: cualquiera
+        // de las dos que corra primero deja la relación bien ordenada para
+        // la otra.
+        if ($tours->isNotEmpty() && ! $tours->first()->relationLoaded('paqueteItinerario')) {
+            // Mismo motivo que en totalesCombo(): $tours no es un
+            // Eloquent\Collection, envolver para poder usar load().
+            EloquentCollection::make($tours)->load(['paqueteItinerario' => fn ($q) => $q->orderBy('dia_relativo')->orderBy('orden')]);
+        }
+
+        foreach ($tours as $tour) {
+            $pasos = $tour->paqueteItinerario;
             $maxDiaDelTour = 0;
 
             foreach ($pasos as $paso) {
