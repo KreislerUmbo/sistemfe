@@ -22,6 +22,7 @@ use App\Http\Controllers\AgenciaViajes\ReservaController;
 use App\Http\Controllers\AgenciaViajes\ReservaItemController;
 use App\Http\Controllers\AgenciaViajes\ReservaItemPasajeroController;
 use App\Http\Controllers\AgenciaViajes\ReservaPasajeroController;
+use App\Http\Controllers\AgenciaViajes\SalidaOperativaController;
 use App\Http\Controllers\AgenciaViajes\ServicioController;
 use App\Http\Controllers\AgenciaViajes\TemporadaController;
 use App\Http\Controllers\AgenciaViajes\TemporadaOcurrenciaController;
@@ -610,6 +611,21 @@ Route::group([
         ->middleware('permission:agencia.reservas');
 
     Route::post("venta-directa", [VentaDirectaController::class, 'store'])
+        ->middleware('permission:agencia.reservas');
+
+    // Tablero de despacho — agrupa reserva_items de distintas reservas
+    // que comparten tour_origen_id + fecha (ver SalidaOperativa).
+    Route::get("salidas-operativas", [SalidaOperativaController::class, 'index'])
+        ->middleware('permission:agencia.reservas');
+    Route::get("salidas-operativas/{id}", [SalidaOperativaController::class, 'show'])
+        ->middleware('permission:agencia.reservas');
+    Route::put("salidas-operativas/{id}", [SalidaOperativaController::class, 'update'])
+        ->middleware('permission:agencia.reservas');
+    Route::put("salidas-operativas/{id}/cancelar", [SalidaOperativaController::class, 'cancelar'])
+        ->middleware('permission:agencia.reservas');
+    Route::post("salidas-operativas/{id}/adjuntar-item", [SalidaOperativaController::class, 'attachReservaItem'])
+        ->middleware('permission:agencia.reservas');
+    Route::delete("salidas-operativas/{id}/items/{reservaItemId}", [SalidaOperativaController::class, 'detachReservaItem'])
         ->middleware('permission:agencia.reservas');
 
     Route::middleware('auth:api')->group(function () {});

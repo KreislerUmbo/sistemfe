@@ -619,6 +619,34 @@ export type ReservaItem = {
   guia?: Guia | null;
   proveedor_tarifa?: ProveedorTarifa | null;
   alternativa_item?: AlternativaItem;
+  salida_operativa_id?: number | null;
+  salida_operativa?: SalidaOperativa | null;
+};
+
+// feature/salida-operativa — agrupa reserva_items de DISTINTAS reservas
+// que comparten tour_origen_id + fecha (modalidad='compartido'). El guía
+// se asigna una vez acá, no por reserva. El proveedor de transporte NUNCA
+// se centraliza, sigue en reserva_items.proveedor_tarifa_id.
+export type SalidaOperativa = {
+  id: number;
+  tour_origen_id: number | null;
+  tour_nombre?: string | null;
+  fecha: string;
+  hora?: string | null;
+  guia_id: number | null;
+  guia?: Guia | null;
+  cupo_maximo?: number | null;
+  vehiculo_descripcion?: string | null;
+  estado: 'activa' | 'cancelada';
+  notas?: string | null;
+  total_pax?: number;
+  total_reservas?: number;
+  reservas?: Array<{ id: number; codigo: string | null; cliente: string | null; total_pax: number }>;
+};
+
+export type SalidasOperativasResponse = {
+  total: number;
+  salidas: SalidaOperativa[];
 };
 
 export type ReservaItemPasajero = {

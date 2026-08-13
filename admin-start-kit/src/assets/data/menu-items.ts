@@ -224,6 +224,13 @@ export const MENU_ITEMS: MenuItemType[] = [
         permission: 'agencia.reservas',
       },
       {
+        key: "agencia_salidas",
+        label: "Salidas Operativas",
+        route: { name: "agencia.salidas.index" },
+        parentKey: "agencia_viajes",
+        permission: 'agencia.reservas',
+      },
+      {
         key: "agencia_venta_directa",
         label: "Venta Directa",
         route: { name: "agencia.ventaDirecta" },

@@ -177,14 +177,26 @@
                                 </div>
                                 <div class="col-md-3" v-if="it.alternativa_item?.origen_tipo === 'guia'">
                                     <label class="form-label small text-secondary mb-1">Guía</label>
-                                    <select class="form-select form-select-sm" v-model="it.guia_id" @change="guardarItem(it)">
+                                    <div v-if="it.salida_operativa_id" class="small">
+                                        <span :class="it.salida_operativa?.guia ? '' : 'text-muted fst-italic'">{{ it.salida_operativa?.guia?.nombre ?? 'Sin asignar' }}</span>
+                                        <router-link :to="`/agencia-viajes/salidas/${it.salida_operativa_id}`" class="d-block text-decoration-none" style="font-size:11px">
+                                            <i class="fas fa-link me-1"></i>Vía salida operativa
+                                        </router-link>
+                                    </div>
+                                    <select v-else class="form-select form-select-sm" v-model="it.guia_id" @change="guardarItem(it)">
                                         <option :value="null">Sin asignar</option>
                                         <option v-for="g in guias" :key="g.id" :value="g.id">{{ g.nombre }}{{ g.es_referencial ? ' (Referencial)' : '' }}</option>
                                     </select>
                                 </div>
                                 <div :class="tieneAsignacionAplicable(it) ? 'col-md-3' : 'col-md-6'">
                                     <label class="form-label small text-secondary mb-1">Fecha del servicio</label>
-                                    <input type="date" class="form-control form-control-sm" v-model="it.fecha" @change="guardarItem(it)">
+                                    <div v-if="it.salida_operativa_id" class="small">
+                                        <span>{{ formatFecha(it.fecha) }}</span>
+                                        <router-link :to="`/agencia-viajes/salidas/${it.salida_operativa_id}`" class="d-block text-decoration-none" style="font-size:11px">
+                                            <i class="fas fa-link me-1"></i>Vía salida operativa
+                                        </router-link>
+                                    </div>
+                                    <input v-else type="date" class="form-control form-control-sm" v-model="it.fecha" @change="guardarItem(it)">
                                 </div>
                                 <div :class="tieneAsignacionAplicable(it) ? 'col-md-3' : 'col-md-6'">
                                     <label class="form-label small text-secondary mb-1">Hora</label>

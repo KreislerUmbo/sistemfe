@@ -12,6 +12,7 @@ use App\Models\AgenciaViajes\ReservaItemPasajero;
 use App\Models\AgenciaViajes\ReservaPasajero;
 use App\Models\AgenciaViajes\ReservaVenta;
 use App\Models\AgenciaViajes\SalidaMayorista;
+use App\Models\AgenciaViajes\SalidaOperativa;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -33,6 +34,7 @@ class ReservaController extends Controller
         'items.guia',
         'items.proveedorTarifa.proveedorServicio.proveedor',
         'items.pasajeros',
+        'items.salidaOperativa.guia',
     ];
 
     public function index(Request $request)
@@ -249,6 +251,8 @@ class ReservaController extends Controller
             'tour_origen_id' => $alternativaItem->tour_origen_id,
         ]);
 
+        $this->engancharSalidaOperativa($reservaItem, $alternativaItem, $fechaCalculada);
+
         // pax_incluidos null/vacío = aplica a todos, no se crea ninguna
         // fila (mismo criterio que pax_incluidos en alternativa_items).
         if (! empty($alternativaItem->pax_incluidos)) {
@@ -263,6 +267,54 @@ class ReservaController extends Controller
         }
 
         return $reservaItem;
+    }
+
+    // Enganche automático a una salida_operativa compartida — ver diseño
+    // completo en la migración de creación de salidas_operativas. Solo
+    // origen_tipo=proveedor con modalidad=compartido se engancha solo:
+    // proveedor_tarifas.modalidad SÍ tiene semántica compartido/privado
+    // real. guia_tarifas.modalidad ('dia_local'/'grupo_multidia') es un eje
+    // de duración de contrato, sin ninguna señal confiable de si un ítem
+    // de guía puntual es exclusivo de una reserva o compartible con
+    // otras — así que los ítems origen_tipo=guia NUNCA se auto-enganchan
+    // en esta fase, quedan disponibles para engancharse a mano desde el
+    // tablero (SalidaOperativaController::attachReservaItem()). Ítems sin
+    // tour_origen_id tampoco se enganchan nunca (mismo motivo: sin esa
+    // clave no hay forma de agrupar).
+    private function engancharSalidaOperativa(ReservaItem $reservaItem, AlternativaItem $alternativaItem, $fechaCalculada): void
+    {
+        if (! $fechaCalculada || ! $alternativaItem->tour_origen_id) {
+            return;
+        }
+
+        if ($alternativaItem->origen_tipo !== AlternativaItem::ORIGEN_PROVEEDOR) {
+            return;
+        }
+
+        if ($alternativaItem->proveedorTarifa?->modalidad !== 'compartido') {
+            return;
+        }
+
+        try {
+            $salida = SalidaOperativa::firstOrCreate(
+                ['tour_origen_id' => $alternativaItem->tour_origen_id, 'fecha' => $fechaCalculada],
+                ['estado' => 'activa']
+            );
+        } catch (\Illuminate\Database\QueryException $e) {
+            // Condición de carrera: otra request creó la misma salida entre
+            // el find y el create de firstOrCreate() — el índice único
+            // parcial (ver migración) la bloqueó. Recupera la que ya existe
+            // en vez de tragarte el error.
+            $salida = SalidaOperativa::where('tour_origen_id', $alternativaItem->tour_origen_id)
+                ->where('fecha', $fechaCalculada)
+                ->first();
+
+            if (! $salida) {
+                throw $e;
+            }
+        }
+
+        $reservaItem->update(['salida_operativa_id' => $salida->id]);
     }
 
     // Reconstruye cotizacion_pasajero_id → reserva_pasajero_id para una
