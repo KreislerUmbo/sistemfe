@@ -14,6 +14,12 @@ class ProveedorTipo extends Model
 {
     use CentralConnection;
 
+    // Slug real del catálogo central — cambiado a mano en producción,
+    // no es el que generaría Str::slug('Mayorista') por defecto (eso
+    // daría 'mayorista'). Ver ProveedorTipoSeeder y
+    // OpcionMayoristaController::store().
+    public const SLUG_MAYORISTA = 'agencia-mayorista';
+
     protected $table = 'proveedor_tipos';
 
     protected $fillable = [

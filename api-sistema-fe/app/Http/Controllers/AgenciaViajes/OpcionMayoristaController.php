@@ -49,7 +49,7 @@ class OpcionMayoristaController extends Controller
 
         $validado = $validator->validated();
         $proveedor = Proveedor::findOrFail($validado['proveedor_id']);
-        $esMayorista = $proveedor->tipo_id && ProveedorTipo::where('id', $proveedor->tipo_id)->where('slug', 'mayorista')->exists();
+        $esMayorista = $proveedor->tipo_id && ProveedorTipo::where('id', $proveedor->tipo_id)->where('slug', ProveedorTipo::SLUG_MAYORISTA)->exists();
 
         if (! $esMayorista) {
             return response()->json(['code' => 422, 'message' => 'El proveedor seleccionado no es de tipo Mayorista.'], 422);
