@@ -23,5 +23,12 @@ export const reservaService = {
   async cancelar(id: number, motivo_cancelacion: MotivoCancelacion) {
     const response = await httpClient.put(`/reservas/${id}/cancelar`, { motivo_cancelacion })
     return response.data
+  },
+  // Opción C acordada: nunca automático — el staff dispara la
+  // sincronización a demanda para reflejar servicios agregados a la
+  // cotización DESPUÉS de que la reserva ya está activa.
+  async sincronizarItems(id: number) {
+    const response = await httpClient.post(`/reservas/${id}/sincronizar-items`)
+    return response.data as ReservaDetalleResponse & { code: number; message: string }
   }
 }

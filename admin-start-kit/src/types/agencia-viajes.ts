@@ -588,8 +588,10 @@ export type ReservaPasajero = {
   // texto libre (no booleano) — permite decir QUÉ discapacidad, no solo sí/no
   discapacidad?: string | null;
   vuelo_aerolinea_ida?: string | null;
+  vuelo_fecha_ida?: string | null;
   vuelo_hora_ida?: string | null;
   vuelo_aerolinea_vuelta?: string | null;
+  vuelo_fecha_vuelta?: string | null;
   vuelo_hora_vuelta?: string | null;
   pasajero_catalogo_id?: number | null;
   pasajero_catalogo?: PasajeroCatalogo | null;
@@ -665,6 +667,7 @@ export type ReservaDetalleResponse = {
   moneda: 'PEN' | 'USD';
   cabecera: ReservaCabecera;
   alerta_cupo_excedido?: boolean;
+  items_pendientes_sincronizar?: Array<{ id: number; nombre: string }>;
 };
 
 export type Reservas = {

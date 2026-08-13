@@ -588,6 +588,8 @@ Route::group([
         ->middleware('permission:agencia.reservas');
     Route::put("reservas/{id}/cancelar", [ReservaController::class, 'cancelar'])
         ->middleware('permission:agencia.reservas');
+    Route::post("reservas/{id}/sincronizar-items", [ReservaController::class, 'sincronizarItems'])
+        ->middleware('permission:agencia.reservas');
 
     // Antes de "reserva-pasajeros/{id}" para que "pasajeros-catalogo" no
     // colisione con ningún segmento dinámico (mismo criterio ya usado con

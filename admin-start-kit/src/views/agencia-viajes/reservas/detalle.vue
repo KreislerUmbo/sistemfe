@@ -23,6 +23,13 @@
             </div>
         </div>
 
+        <div v-if="reserva && (itemsPendientesSincronizar?.length ?? 0) > 0" class="alert alert-warning d-flex justify-content-between align-items-center mb-3">
+            <span><i class="fas fa-triangle-exclamation me-2"></i>Hay {{ itemsPendientesSincronizar.length }} servicio(s) nuevo(s) en la cotización sin reflejar en esta reserva: {{ itemsPendientesSincronizar.map(i => i.nombre).join(', ') }}.</span>
+            <button class="btn btn-sm btn-warning" :disabled="sincronizando" @click="sincronizarItems">
+                <span v-if="sincronizando" class="spinner-border spinner-border-sm me-1"></span>Sincronizar
+            </button>
+        </div>
+
         <div v-if="reserva" class="row g-3">
             <div class="col-12 col-lg-8">
                 <ul class="nav nav-pills mb-3">
@@ -102,21 +109,32 @@
                                         <label class="form-label small text-secondary mb-1">Discapacidad (detalle)</label>
                                         <input type="text" class="form-control form-control-sm" placeholder="Ninguna" v-model="p.discapacidad">
                                     </div>
-                                    <div class="col-md-3">
+                                    <div class="col-12">
+                                        <small class="text-muted d-block mb-2"><i class="fas fa-plane me-1"></i>Completar solo si el pasajero ya tiene su propio vuelo comprado por su cuenta (no es el pasaje que vende la agencia).</small>
+                                    </div>
+                                    <div class="col-md-4">
                                         <label class="form-label small text-secondary mb-1">Vuelo ida — aerolínea</label>
-                                        <input type="text" class="form-control form-control-sm" v-model="p.vuelo_aerolinea_ida">
+                                        <input type="text" class="form-control form-control-sm" placeholder="Ej. LA2203" v-model="p.vuelo_aerolinea_ida">
                                     </div>
-                                    <div class="col-md-3">
+                                    <div class="col-md-4">
+                                        <label class="form-label small text-secondary mb-1">Vuelo ida — fecha</label>
+                                        <input type="date" class="form-control form-control-sm" v-model="p.vuelo_fecha_ida">
+                                    </div>
+                                    <div class="col-md-4">
                                         <label class="form-label small text-secondary mb-1">Vuelo ida — hora</label>
-                                        <input type="time" class="form-control form-control-sm" v-model="p.vuelo_hora_ida">
+                                        <input type="time" class="form-control form-control-sm" placeholder="18:45" v-model="p.vuelo_hora_ida">
                                     </div>
-                                    <div class="col-md-3">
+                                    <div class="col-md-4">
                                         <label class="form-label small text-secondary mb-1">Vuelo vuelta — aerolínea</label>
-                                        <input type="text" class="form-control form-control-sm" v-model="p.vuelo_aerolinea_vuelta">
+                                        <input type="text" class="form-control form-control-sm" placeholder="Ej. LA2204" v-model="p.vuelo_aerolinea_vuelta">
                                     </div>
-                                    <div class="col-md-3">
+                                    <div class="col-md-4">
+                                        <label class="form-label small text-secondary mb-1">Vuelo vuelta — fecha</label>
+                                        <input type="date" class="form-control form-control-sm" v-model="p.vuelo_fecha_vuelta">
+                                    </div>
+                                    <div class="col-md-4">
                                         <label class="form-label small text-secondary mb-1">Vuelo vuelta — hora</label>
-                                        <input type="time" class="form-control form-control-sm" v-model="p.vuelo_hora_vuelta">
+                                        <input type="time" class="form-control form-control-sm" placeholder="18:45" v-model="p.vuelo_hora_vuelta">
                                     </div>
                                 </div>
                                 <button class="btn btn-primary btn-sm mt-2" :disabled="guardandoPax === p.id" @click="guardarPax(p)">
@@ -134,15 +152,28 @@
                     <div v-for="it in reserva.items" :key="it.id" class="card border-0 shadow-sm">
                         <div class="card-body py-2">
                             <div class="mb-2"><strong>{{ nombreItem(it) }}</strong></div>
+                            <div v-if="destinoItem(it)" class="small text-muted mb-2"><i class="fas fa-map-marker-alt me-1"></i>{{ destinoItem(it) }}</div>
                             <div class="row g-2">
                                 <div class="col-md-3" v-if="it.alternativa_item?.origen_tipo === 'proveedor'">
                                     <label class="form-label small text-secondary mb-1">Proveedor</label>
-                                    <select class="form-select form-select-sm" v-model="it.proveedor_tarifa_id" @change="guardarItem(it)">
-                                        <option :value="null">Sin asignar</option>
-                                        <option v-for="t in bibliotecaTarifas" :key="t.id" :value="t.id">
-                                            {{ t.proveedor_servicio?.proveedor?.razon_social ?? ('Tarifa #' + t.id) }}{{ t.proveedor_servicio?.proveedor?.es_referencial ? ' (Referencial)' : '' }}
-                                        </option>
-                                    </select>
+                                    <div v-if="proveedorBuscando !== it.id" class="d-flex align-items-center justify-content-between border rounded px-2 py-1 bg-white"
+                                        style="cursor:pointer;min-height:31px" @click="proveedorBuscando = it.id; proveedorSearch[it.id] = ''">
+                                        <span class="small" :class="{ 'text-muted fst-italic': !nombreProveedorActual(it) }">{{ nombreProveedorActual(it) ?? 'Sin asignar' }}</span>
+                                        <i class="fas fa-pen text-muted small"></i>
+                                    </div>
+                                    <div v-else class="position-relative">
+                                        <input type="text" class="form-control form-control-sm" placeholder="Buscar proveedor..." v-model="proveedorSearch[it.id]"
+                                            @blur="cerrarBusquedaProveedor(it)" autofocus>
+                                        <div class="list-group position-absolute w-100 shadow-sm" style="z-index:10;max-height:220px;overflow-y:auto">
+                                            <button type="button" class="list-group-item list-group-item-action py-1 small text-muted" @mousedown.prevent="elegirProveedor(it, null)">
+                                                Sin asignar
+                                            </button>
+                                            <button type="button" class="list-group-item list-group-item-action py-1 small" v-for="t in proveedoresFiltrados(it)" :key="t.id" @mousedown.prevent="elegirProveedor(it, t.id)">
+                                                {{ t.proveedor_servicio?.proveedor?.razon_social ?? ('Tarifa #' + t.id) }}{{ t.proveedor_servicio?.proveedor?.es_referencial ? ' (Referencial)' : '' }}
+                                            </button>
+                                            <div v-if="proveedoresFiltrados(it).length === 0" class="list-group-item small text-muted py-1">Sin resultados</div>
+                                        </div>
+                                    </div>
                                 </div>
                                 <div class="col-md-3" v-if="it.alternativa_item?.origen_tipo === 'guia'">
                                     <label class="form-label small text-secondary mb-1">Guía</label>
@@ -288,6 +319,8 @@ const resumen = ref<ReservaResumenItem[]>([]);
 const total = ref<number>(0);
 const moneda = ref<'PEN' | 'USD'>('PEN');
 const cabecera = ref<ReservaCabecera | null>(null);
+const itemsPendientesSincronizar = ref<Array<{ id: number; nombre: string }>>([]);
+const sincronizando = ref(false);
 
 const tab = ref<'pax' | 'items' | 'asignacion'>('pax');
 
@@ -308,6 +341,26 @@ const cargarReserva = async () => {
     total.value = res.total;
     moneda.value = res.moneda;
     cabecera.value = res.cabecera;
+    itemsPendientesSincronizar.value = res.items_pendientes_sincronizar ?? [];
+};
+
+const sincronizarItems = async () => {
+    sincronizando.value = true;
+    try {
+        const res = await reservaService.sincronizarItems(reservaId);
+        res.reserva.items?.forEach((it) => {
+            if (it.fecha) it.fecha = it.fecha.substring(0, 10);
+        });
+        reserva.value = res.reserva;
+        resumen.value = res.resumen;
+        total.value = res.total;
+        itemsPendientesSincronizar.value = res.items_pendientes_sincronizar ?? [];
+        toast.success(res.message);
+    } catch (error: any) {
+        toast.error(error.response?.data?.message ?? 'No se pudo sincronizar');
+    } finally {
+        sincronizando.value = false;
+    }
 };
 
 const iniciales = (nombre?: string | null) => (nombre || '?').split(' ').map((x) => x[0]).slice(0, 2).join('').toUpperCase();
@@ -356,8 +409,8 @@ const guardarPax = async (p: ReservaPasajero) => {
         const res = await reservaPasajeroService.actualizar(p.id, {
             nombre: p.nombre, documento: p.documento, nacionalidad: p.nacionalidad,
             alimentacion_especial: p.alimentacion_especial, discapacidad: p.discapacidad,
-            vuelo_aerolinea_ida: p.vuelo_aerolinea_ida, vuelo_hora_ida: p.vuelo_hora_ida,
-            vuelo_aerolinea_vuelta: p.vuelo_aerolinea_vuelta, vuelo_hora_vuelta: p.vuelo_hora_vuelta,
+            vuelo_aerolinea_ida: p.vuelo_aerolinea_ida, vuelo_fecha_ida: p.vuelo_fecha_ida, vuelo_hora_ida: p.vuelo_hora_ida,
+            vuelo_aerolinea_vuelta: p.vuelo_aerolinea_vuelta, vuelo_fecha_vuelta: p.vuelo_fecha_vuelta, vuelo_hora_vuelta: p.vuelo_hora_vuelta,
             pasajero_catalogo_id: p.pasajero_catalogo_id,
         });
         Object.assign(p, res.reserva_pasajero);
@@ -373,6 +426,37 @@ const guardarPax = async (p: ReservaPasajero) => {
 const bibliotecaTarifas = ref<ProveedorTarifa[]>([]);
 const guias = ref<Guia[]>([]);
 
+const proveedorBuscando = ref<number | null>(null); // id del reserva_item en modo búsqueda
+const proveedorSearch = ref<Record<number, string>>({});
+
+const nombreProveedorActual = (it: ReservaItem) => {
+    const t = bibliotecaTarifas.value.find((x) => x.id === it.proveedor_tarifa_id);
+    return t?.proveedor_servicio?.proveedor?.razon_social ?? null;
+};
+
+const proveedoresFiltrados = (it: ReservaItem) => {
+    const servicioId = it.alternativa_item?.proveedor_tarifa?.proveedor_servicio?.destino_servicio?.servicio_id;
+    const q = (proveedorSearch.value[it.id] ?? '').trim().toLowerCase();
+
+    return bibliotecaTarifas.value
+        .filter((t) => !servicioId || t.proveedor_servicio?.destino_servicio?.servicio_id === servicioId)
+        .filter((t) => !q || (t.proveedor_servicio?.proveedor?.razon_social ?? '').toLowerCase().includes(q))
+        .slice(0, 30);
+};
+
+const elegirProveedor = (it: ReservaItem, proveedorTarifaId: number | null) => {
+    it.proveedor_tarifa_id = proveedorTarifaId;
+    guardarItem(it);
+    proveedorBuscando.value = null;
+};
+
+// @mousedown.prevent en los botones de la lista dispara la selección
+// ANTES de este blur — si el blur cerrara la lista sin el delay, el
+// mousedown nunca llegaría a disparar (el blur gana la carrera).
+const cerrarBusquedaProveedor = (it: ReservaItem) => {
+    setTimeout(() => { if (proveedorBuscando.value === it.id) proveedorBuscando.value = null; }, 200);
+};
+
 const nombreItem = (it: ReservaItem) => {
     const item = it.alternativa_item;
     if (!item) return 'Servicio';
@@ -385,6 +469,8 @@ const nombreItem = (it: ReservaItem) => {
     }
     return item.proveedor_tarifa?.proveedor_servicio?.destino_servicio?.servicio?.nombre ?? 'Servicio';
 };
+
+const destinoItem = (it: ReservaItem) => it.alternativa_item?.proveedor_tarifa?.proveedor_servicio?.destino_servicio?.destino_atractivo?.nombre ?? null;
 
 // Sesión pendiente-11e-groundwork — Proveedor solo aplica a origen_tipo
 // 'proveedor' (servicios normales + hoteles), Guía solo a 'guia' (el
