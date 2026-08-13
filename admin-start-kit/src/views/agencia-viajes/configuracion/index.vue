@@ -172,12 +172,123 @@
                 </div>
             </div>
 
+            <!-- Condiciones generales del servicio — texto propio de la
+                 agencia, se descarga aparte de la parte comercial de una
+                 cotización (groundwork para el PDF de cotización, sesión
+                 futura). -->
+            <div class="card border-0 shadow-sm mb-3">
+                <div class="card-header bg-white border-bottom d-flex align-items-center gap-2 py-2">
+                    <span class="badge bg-primary rounded-pill">7</span>
+                    <span class="fw-semibold text-dark">Condiciones generales del servicio</span>
+                </div>
+                <div class="card-body py-3">
+                    <RichTextEditor v-model="form.condiciones_generales_servicio" placeholder="Escribe las condiciones generales del servicio..." />
+                </div>
+            </div>
+
             <div class="d-flex justify-content-end mb-4">
                 <button class="btn btn-primary fw-semibold" @click="guardar" :disabled="guardando">
                     <span v-if="guardando" class="spinner-border spinner-border-sm me-2"></span>
                     <i v-else class="fas fa-save me-2"></i>
                     Guardar configuración
                 </button>
+            </div>
+
+            <!-- Cuentas bancarias — cada cuenta se guarda/edita/elimina de
+                 forma independiente (no con el botón general de arriba). -->
+            <div class="card border-0 shadow-sm mb-3">
+                <div class="card-header bg-white border-bottom d-flex align-items-center justify-content-between gap-2 py-2">
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="badge bg-primary rounded-pill">8</span>
+                        <span class="fw-semibold text-dark">Cuentas bancarias</span>
+                    </div>
+                    <button class="btn btn-sm btn-outline-primary" @click="abrirFormularioCuenta()">
+                        <i class="fas fa-plus me-1"></i>Agregar cuenta
+                    </button>
+                </div>
+                <div class="card-body py-3">
+                    <div v-if="mostrarFormCuenta" class="border rounded p-3 mb-3 bg-light-subtle">
+                        <div class="row g-2">
+                            <div class="col-6 col-md-3">
+                                <label class="form-label mb-1 small fw-semibold text-secondary">Banco</label>
+                                <input type="text" class="form-control form-control-sm" v-model="formCuenta.banco">
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <label class="form-label mb-1 small fw-semibold text-secondary">Titular</label>
+                                <input type="text" class="form-control form-control-sm" v-model="formCuenta.titular">
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <label class="form-label mb-1 small fw-semibold text-secondary">N° de cuenta</label>
+                                <input type="text" class="form-control form-control-sm" v-model="formCuenta.numero_cuenta">
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <label class="form-label mb-1 small fw-semibold text-secondary">CCI</label>
+                                <input type="text" class="form-control form-control-sm" v-model="formCuenta.cci">
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <label class="form-label mb-1 small fw-semibold text-secondary">Alias</label>
+                                <input type="text" class="form-control form-control-sm" v-model="formCuenta.alias" placeholder="Ej. Yape/Plin">
+                            </div>
+                            <div class="col-6 col-md-3 d-flex align-items-center">
+                                <div class="form-check form-switch mt-3">
+                                    <input class="form-check-input" type="checkbox" id="cuenta-activa" v-model="formCuenta.activo">
+                                    <label class="form-check-label small" for="cuenta-activa">Activo</label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="d-flex justify-content-end gap-2 mt-3">
+                            <button class="btn btn-sm btn-outline-secondary" @click="cerrarFormularioCuenta">Cancelar</button>
+                            <button class="btn btn-sm btn-primary" @click="guardarCuenta" :disabled="guardandoCuenta">
+                                <span v-if="guardandoCuenta" class="spinner-border spinner-border-sm me-1"></span>
+                                {{ cuentaEditandoId ? 'Actualizar' : 'Guardar' }}
+                            </button>
+                        </div>
+                    </div>
+
+                    <div v-if="cargandoCuentas" class="text-center py-3 text-muted">
+                        <div class="spinner-border spinner-border-sm me-2"></div>Cargando...
+                    </div>
+                    <div v-else-if="cuentasBancarias.length === 0" class="text-muted small fst-italic">
+                        Sin cuentas bancarias registradas.
+                    </div>
+                    <div v-else class="table-responsive">
+                        <table class="table table-sm align-middle mb-0">
+                            <thead>
+                                <tr class="text-secondary small">
+                                    <th>Banco</th>
+                                    <th>Titular</th>
+                                    <th>N° cuenta</th>
+                                    <th>CCI</th>
+                                    <th>Alias</th>
+                                    <th class="text-center">Activo</th>
+                                    <th class="text-end">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr v-for="cuenta in cuentasBancarias" :key="cuenta.id">
+                                    <td>{{ cuenta.banco }}</td>
+                                    <td>{{ cuenta.titular }}</td>
+                                    <td>{{ cuenta.numero_cuenta }}</td>
+                                    <td>{{ cuenta.cci || '—' }}</td>
+                                    <td>{{ cuenta.alias || '—' }}</td>
+                                    <td class="text-center">
+                                        <span class="badge" :class="cuenta.activo ? 'bg-success' : 'bg-secondary'">
+                                            {{ cuenta.activo ? 'Sí' : 'No' }}
+                                        </span>
+                                    </td>
+                                    <td class="text-end">
+                                        <button class="btn btn-sm btn-outline-secondary me-1" @click="abrirFormularioCuenta(cuenta)">
+                                            <i class="fas fa-pen"></i>
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-danger" @click="eliminarCuenta(cuenta)">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
         </template>
     </DefaultLayout>
@@ -186,9 +297,11 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';
+import RichTextEditor from '@/components/RichTextEditor.vue';
 import Swal from 'sweetalert2/dist/sweetalert2.js';
 import { configuracionAgenciaService } from '@/services/admin/configuracionAgenciaService';
-import type { ConfiguracionAgencia } from '@/types/agencia-viajes';
+import { cuentaBancariaService } from '@/services/admin/cuentaBancariaService';
+import type { ConfiguracionAgencia, CuentaBancaria } from '@/types/agencia-viajes';
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
 
@@ -212,7 +325,91 @@ const form = ref<ConfiguracionAgencia>({
     margen_minimo_aceptable_pct: 20,
     edad_max_infante_gratis_hotel_default: 4,
     edad_max_nino_cama_adicional_hotel_default: 12,
+    condiciones_generales_servicio: null,
 });
+
+const cuentasBancarias = ref<CuentaBancaria[]>([]);
+const cargandoCuentas = ref<boolean>(true);
+const guardandoCuenta = ref<boolean>(false);
+const mostrarFormCuenta = ref<boolean>(false);
+const cuentaEditandoId = ref<number | null>(null);
+const formCuentaVacio = (): Partial<CuentaBancaria> => ({
+    banco: '',
+    titular: '',
+    numero_cuenta: '',
+    cci: '',
+    alias: '',
+    activo: true,
+});
+const formCuenta = ref<Partial<CuentaBancaria>>(formCuentaVacio());
+
+const cargarCuentas = async () => {
+    cargandoCuentas.value = true;
+    try {
+        const res = await cuentaBancariaService.listar();
+        cuentasBancarias.value = res.cuentas_bancarias;
+    } finally {
+        cargandoCuentas.value = false;
+    }
+};
+
+const abrirFormularioCuenta = (cuenta?: CuentaBancaria) => {
+    if (cuenta) {
+        cuentaEditandoId.value = cuenta.id;
+        formCuenta.value = { ...cuenta };
+    } else {
+        cuentaEditandoId.value = null;
+        formCuenta.value = formCuentaVacio();
+    }
+    mostrarFormCuenta.value = true;
+};
+
+const cerrarFormularioCuenta = () => {
+    mostrarFormCuenta.value = false;
+    cuentaEditandoId.value = null;
+    formCuenta.value = formCuentaVacio();
+};
+
+const guardarCuenta = async () => {
+    if (!formCuenta.value.banco?.trim() || !formCuenta.value.titular?.trim() || !formCuenta.value.numero_cuenta?.trim()) {
+        (Swal as TVueSwalInstance).fire('Error', 'Banco, titular y número de cuenta son obligatorios.', 'error');
+        return;
+    }
+
+    guardandoCuenta.value = true;
+    try {
+        const res = cuentaEditandoId.value
+            ? await cuentaBancariaService.actualizar(cuentaEditandoId.value, formCuenta.value)
+            : await cuentaBancariaService.crear(formCuenta.value);
+        (Swal as TVueSwalInstance).fire('Listo', res.message, 'success');
+        cerrarFormularioCuenta();
+        await cargarCuentas();
+    } catch (error: any) {
+        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo guardar la cuenta', 'error');
+    } finally {
+        guardandoCuenta.value = false;
+    }
+};
+
+const eliminarCuenta = async (cuenta: CuentaBancaria) => {
+    const confirmacion = await (Swal as TVueSwalInstance).fire({
+        title: '¿Eliminar cuenta bancaria?',
+        text: `${cuenta.banco} — ${cuenta.numero_cuenta}`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Eliminar',
+        cancelButtonText: 'Cancelar',
+    });
+    if (!confirmacion.isConfirmed) return;
+
+    try {
+        const res = await cuentaBancariaService.eliminar(cuenta.id);
+        (Swal as TVueSwalInstance).fire('Listo', res.message, 'success');
+        await cargarCuentas();
+    } catch (error: any) {
+        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo eliminar la cuenta', 'error');
+    }
+};
 
 const cargar = async () => {
     cargando.value = true;
@@ -236,5 +433,8 @@ const guardar = async () => {
     }
 };
 
-onMounted(() => cargar());
+onMounted(() => {
+    cargar();
+    cargarCuentas();
+});
 </script>

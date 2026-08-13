@@ -22,6 +22,8 @@ class Company extends Model
         "distrito",
         "provincia",
         "region",
+        "logo_vertical",
+        "logo_horizontal",
         // Módulo Caja — Fase 1 (plan-modulo-caja.md §10). Nunca se habían
         // agregado a $fillable — Company::update() los descartaba en
         // silencio por protección de asignación masiva (bug real, hallado

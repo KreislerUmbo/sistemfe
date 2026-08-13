@@ -223,6 +223,21 @@ export type ConfiguracionAgencia = {
   // (cama adicional para niños), editables por hotel después.
   edad_max_infante_gratis_hotel_default: number;
   edad_max_nino_cama_adicional_hotel_default: number;
+  // Sesión perfil-agencia — condiciones generales del servicio, texto
+  // propio de cada agencia, descargable aparte de la parte comercial de
+  // una cotización.
+  condiciones_generales_servicio?: string | null;
+};
+
+export type CuentaBancaria = {
+  id: number;
+  banco: string;
+  titular: string;
+  numero_cuenta: string;
+  cci?: string | null;
+  alias?: string | null;
+  activo: boolean;
+  orden: number;
 };
 
 export type ApiMessageResponse = {

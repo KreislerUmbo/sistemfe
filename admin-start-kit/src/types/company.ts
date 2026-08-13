@@ -17,7 +17,9 @@ export type Company = {
     provincia:string,
     distrito:string,
     address:string,
-    created_at:string
+    created_at:string,
+    logo_vertical?: string | null,
+    logo_horizontal?: string | null,
 }
 export type CompanyResponse = {
     message:string,

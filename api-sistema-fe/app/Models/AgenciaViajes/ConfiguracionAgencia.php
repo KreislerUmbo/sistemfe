@@ -35,6 +35,10 @@ class ConfiguracionAgencia extends Model
         // edad_max_nino_cama_adicional).
         'edad_max_infante_gratis_hotel_default',
         'edad_max_nino_cama_adicional_hotel_default',
+        // Sesión perfil-agencia — condiciones generales del servicio,
+        // texto propio de cada agencia, descargable aparte de la parte
+        // comercial de una cotización.
+        'condiciones_generales_servicio',
     ];
 
     protected $casts = [

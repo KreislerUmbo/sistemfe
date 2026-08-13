@@ -113,6 +113,24 @@
 
                             </b-col>
 
+                            <b-col lg="6">
+                                <label for="logo_vertical-company" class="col-form-label text-lg-end">Logo vertical: </label>
+                                <input type="file" class="form-control form-control-sm" id="logo_vertical-company"
+                                    accept="image/*" @change="onLogoSeleccionado($event, 'vertical')">
+                                <div v-if="logoVerticalPreview" class="mt-2">
+                                    <img :src="logoVerticalPreview" alt="Logo vertical" style="max-height: 120px; max-width: 100%;" class="border rounded">
+                                </div>
+                            </b-col>
+
+                            <b-col lg="6">
+                                <label for="logo_horizontal-company" class="col-form-label text-lg-end">Logo horizontal: </label>
+                                <input type="file" class="form-control form-control-sm" id="logo_horizontal-company"
+                                    accept="image/*" @change="onLogoSeleccionado($event, 'horizontal')">
+                                <div v-if="logoHorizontalPreview" class="mt-2">
+                                    <img :src="logoHorizontalPreview" alt="Logo horizontal" style="max-height: 80px; max-width: 100%;" class="border rounded">
+                                </div>
+                            </b-col>
+
                             <b-col lg="12" class="mt-3">
                                 <div class="modal-footer">
                                     <b-button type="button" variant="secondary" data-bs-dismiss="modal">
@@ -181,6 +199,25 @@ const distrito_list = ref<any>(null);
 
 const company_selected = ref<Company | undefined>(undefined);
 
+const logoVerticalFile = ref<File | null>(null);
+const logoHorizontalFile = ref<File | null>(null);
+const logoVerticalPreview = ref<string | null>(null);
+const logoHorizontalPreview = ref<string | null>(null);
+
+const onLogoSeleccionado = (event: Event, tipo: 'vertical' | 'horizontal') => {
+    const input = event.target as HTMLInputElement;
+    const archivo = input.files?.[0] ?? null;
+    if (!archivo) return;
+
+    if (tipo === 'vertical') {
+        logoVerticalFile.value = archivo;
+        logoVerticalPreview.value = URL.createObjectURL(archivo);
+    } else {
+        logoHorizontalFile.value = archivo;
+        logoHorizontalPreview.value = URL.createObjectURL(archivo);
+    }
+};
+
 const show = async () => {
     try {
         const res: AxiosResponse<CompanyResponse> = await HttpClient.get("company");
@@ -196,6 +233,8 @@ const show = async () => {
         address.value = company_selected.value?.address ?? '';
         urbanizacion.value = company_selected.value?.urbanizacion ?? '';
         cod_local.value = company_selected.value?.cod_local ?? '';
+        logoVerticalPreview.value = company_selected.value?.logo_vertical ?? null;
+        logoHorizontalPreview.value = company_selected.value?.logo_horizontal ?? null;
 
         ubigeo_region.value = company_selected.value?.ubigeo_region ?? '';
         
@@ -346,7 +385,7 @@ const store = async () => {
         distrito.value = DISTRITO_SELECTED.name;
     }
 
-    let data = {
+    let data: Record<string, any> = {
         razon_social: razon_social.value,
         razon_social_comercial: razon_social_comercial.value,
         email: email.value,
@@ -365,12 +404,33 @@ const store = async () => {
         cod_local: cod_local.value,
     }
 
+    let payload: FormData | Record<string, any> = data;
+    if (logoVerticalFile.value || logoHorizontalFile.value) {
+        const fd = new FormData();
+        Object.entries(data).forEach(([key, value]) => {
+            if (value === null || value === undefined) return;
+            fd.append(key, String(value));
+        });
+        if (logoVerticalFile.value) fd.append('logo_vertical', logoVerticalFile.value);
+        if (logoHorizontalFile.value) fd.append('logo_horizontal', logoHorizontalFile.value);
+        payload = fd;
+    }
+
     try {
 
         const res: AxiosResponse<any> = await HttpClient.post(
             "company",
-            data,
+            payload,
+            payload instanceof FormData ? { headers: { 'Content-Type': 'multipart/form-data' } } : undefined,
         );
+
+        if (res.data.company) {
+            company_selected.value = res.data.company;
+            logoVerticalFile.value = null;
+            logoHorizontalFile.value = null;
+            logoVerticalPreview.value = res.data.company.logo_vertical ?? null;
+            logoHorizontalPreview.value = res.data.company.logo_horizontal ?? null;
+        }
 
         console.log(res);
         if (res.data.message == 403) {

@@ -32,6 +32,8 @@ class CompanyResource extends JsonResource
             "distrito" => $this->resource->distrito,
             "provincia" => $this->resource->provincia,
             "region" => $this->resource->region,
+            "logo_vertical" => \App\Services\StorageUrl::resolve($this->resource->logo_vertical),
+            "logo_horizontal" => \App\Services\StorageUrl::resolve($this->resource->logo_horizontal),
         ];
     }
 }
