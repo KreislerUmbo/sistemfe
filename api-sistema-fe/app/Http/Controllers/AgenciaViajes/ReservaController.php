@@ -27,6 +27,7 @@ class ReservaController extends Controller
         'pasajeros.pasajeroCatalogo',
         'items.alternativaItem.proveedorTarifa.proveedorServicio.proveedor',
         'items.alternativaItem.proveedorTarifa.proveedorServicio.destinoServicio.servicio',
+        'items.alternativaItem.proveedorTarifa.proveedorServicio.destinoServicio.destinoAtractivo',
         'items.alternativaItem.opcionMayorista.proveedor',
         'items.alternativaItem.cotizacionPasajeAereo',
         'items.guia',
@@ -205,37 +206,7 @@ class ReservaController extends Controller
         $fechaViajeDesde = $alternativa->cotizacion->fecha_viaje_desde;
 
         foreach ($alternativaItems as $alternativaItem) {
-            // Auto-completa fecha si hay suficiente dato (cotización con fecha +
-            // ítem con día referencial); si falta cualquiera de los dos, queda
-            // en null y se asigna a mano en reservas/detalle.vue como hasta
-            // ahora — nunca asumir "día 1" por defecto.
-            $fechaCalculada = ($fechaViajeDesde && $alternativaItem->dia_referencial)
-                ? $fechaViajeDesde->copy()->addDays($alternativaItem->dia_referencial - 1)
-                : null;
-
-            $reservaItem = ReservaItem::create([
-                'reserva_id' => $reserva->id,
-                'alternativa_item_id' => $alternativaItem->id,
-                'proveedor_tarifa_id' => $alternativaItem->proveedor_tarifa_id,
-                'fecha' => $fechaCalculada,
-                // Sesión 11b4: propaga de qué tour vino el ítem (si vino de
-                // explotar un paquete_combo) para que la agrupación visual
-                // "Día 1/Día 2" sobreviva también en la reserva.
-                'tour_origen_id' => $alternativaItem->tour_origen_id,
-            ]);
-
-            // pax_incluidos null/vacío = aplica a todos, no se crea ninguna
-            // fila (mismo criterio que pax_incluidos en alternativa_items).
-            if (! empty($alternativaItem->pax_incluidos)) {
-                foreach ($alternativaItem->pax_incluidos as $cotizacionPasajeroId) {
-                    if (isset($mapaPasajeros[$cotizacionPasajeroId])) {
-                        ReservaItemPasajero::create([
-                            'reserva_item_id' => $reservaItem->id,
-                            'reserva_pasajero_id' => $mapaPasajeros[$cotizacionPasajeroId],
-                        ]);
-                    }
-                }
-            }
+            $this->crearReservaItemDesdeAlternativaItem($reserva, $alternativaItem, $fechaViajeDesde, $mapaPasajeros);
         }
 
         $alertaCupoExcedido = false;
@@ -251,6 +222,109 @@ class ReservaController extends Controller
         }
 
         return [$reserva, $alertaCupoExcedido];
+    }
+
+    // Extraído de crearReservaDesdeAlternativa() para reusar en
+    // sincronizarItems() (agregar un servicio a la cotización DESPUÉS de que
+    // la reserva ya está activa nunca se refleja solo — el staff dispara la
+    // sincronización a mano, ver sincronizarItems()).
+    private function crearReservaItemDesdeAlternativaItem(
+        Reserva $reserva,
+        AlternativaItem $alternativaItem,
+        $fechaViajeDesde,
+        array $mapaPasajeros
+    ): ReservaItem {
+        $fechaCalculada = ($fechaViajeDesde && $alternativaItem->dia_referencial)
+            ? $fechaViajeDesde->copy()->addDays($alternativaItem->dia_referencial - 1)
+            : null;
+
+        $reservaItem = ReservaItem::create([
+            'reserva_id' => $reserva->id,
+            'alternativa_item_id' => $alternativaItem->id,
+            'proveedor_tarifa_id' => $alternativaItem->proveedor_tarifa_id,
+            'fecha' => $fechaCalculada,
+            // Sesión 11b4: propaga de qué tour vino el ítem (si vino de
+            // explotar un paquete_combo) para que la agrupación visual
+            // "Día 1/Día 2" sobreviva también en la reserva.
+            'tour_origen_id' => $alternativaItem->tour_origen_id,
+        ]);
+
+        // pax_incluidos null/vacío = aplica a todos, no se crea ninguna
+        // fila (mismo criterio que pax_incluidos en alternativa_items).
+        if (! empty($alternativaItem->pax_incluidos)) {
+            foreach ($alternativaItem->pax_incluidos as $cotizacionPasajeroId) {
+                if (isset($mapaPasajeros[$cotizacionPasajeroId])) {
+                    ReservaItemPasajero::create([
+                        'reserva_item_id' => $reservaItem->id,
+                        'reserva_pasajero_id' => $mapaPasajeros[$cotizacionPasajeroId],
+                    ]);
+                }
+            }
+        }
+
+        return $reservaItem;
+    }
+
+    // Reconstruye cotizacion_pasajero_id → reserva_pasajero_id para una
+    // reserva YA existente (mismo criterio posicional que
+    // crearReservaDesdeAlternativa(): los reserva_pasajeros se crean una
+    // sola vez, en el mismo orden que cotizacion_pasajeros, y no se agregan
+    // ni se borran después — por eso alinear por orden sigue siendo válido
+    // acá).
+    private function reconstruirMapaPasajeros(Reserva $reserva): array
+    {
+        $cotizacionPasajeros = CotizacionPasajero::where('cotizacion_id', $reserva->alternativa->cotizacion_id)
+            ->orderBy('id')
+            ->get();
+        $reservaPasajeros = ReservaPasajero::where('reserva_id', $reserva->id)->orderBy('id')->get()->values();
+
+        $mapa = [];
+        foreach ($cotizacionPasajeros as $index => $cp) {
+            if (isset($reservaPasajeros[$index])) {
+                $mapa[$cp->id] = $reservaPasajeros[$index]->id;
+            }
+        }
+
+        return $mapa;
+    }
+
+    // POST reservas/{id}/sincronizar-items — Opción C acordada: nunca
+    // automático. Crea los reserva_items que falten para alternativa_items
+    // agregados a la cotización DESPUÉS de que la reserva ya estaba activa.
+    public function sincronizarItems(string $id)
+    {
+        $reserva = Reserva::with('alternativa.cotizacion')->findOrFail($id);
+
+        if ($reserva->estado !== 'activa') {
+            return response()->json(['code' => 422, 'message' => 'Solo se puede sincronizar una reserva activa.'], 422);
+        }
+
+        $alternativaItemIdsEnReserva = ReservaItem::where('reserva_id', $reserva->id)->pluck('alternativa_item_id')->all();
+
+        $itemsPendientes = AlternativaItem::where('alternativa_id', $reserva->alternativa_id)
+            ->whereNotIn('id', $alternativaItemIdsEnReserva)
+            ->get();
+
+        if ($itemsPendientes->isEmpty()) {
+            return response()->json(['code' => 422, 'message' => 'No hay ítems pendientes de sincronizar.'], 422);
+        }
+
+        $fechaViajeDesde = $reserva->alternativa->cotizacion->fecha_viaje_desde;
+        $mapaPasajeros = $this->reconstruirMapaPasajeros($reserva);
+
+        DB::transaction(function () use ($itemsPendientes, $reserva, $fechaViajeDesde, $mapaPasajeros) {
+            foreach ($itemsPendientes as $alternativaItem) {
+                $this->crearReservaItemDesdeAlternativaItem($reserva, $alternativaItem, $fechaViajeDesde, $mapaPasajeros);
+            }
+        });
+
+        $cantidad = $itemsPendientes->count();
+        $reserva->load(self::RELACIONES_DETALLE);
+
+        return response()->json(array_merge(
+            ['code' => 200, 'message' => "{$cantidad} ítem(s) sincronizado(s) correctamente."],
+            $this->respuestaDetalle($reserva)
+        ));
     }
 
     // "resumen" para el panel de precio en vivo (§7.1 del prototipo) — el
@@ -271,11 +345,19 @@ class ReservaController extends Controller
 
         $cotizacion = $reserva->alternativa->cotizacion;
 
+        $alternativaItemIdsEnReserva = $reserva->items->pluck('alternativa_item_id')->all();
+        $itemsPendientesSincronizar = AlternativaItem::where('alternativa_id', $reserva->alternativa_id)
+            ->whereNotIn('id', $alternativaItemIdsEnReserva)
+            ->get()
+            ->map(fn (AlternativaItem $i) => ['id' => $i->id, 'nombre' => $this->resolverNombreItem($i)])
+            ->values();
+
         return [
             'reserva' => $reserva,
             'resumen' => $resumen,
             'total' => round($total, 2),
             'moneda' => $reserva->alternativa->moneda_cotizacion,
+            'items_pendientes_sincronizar' => $itemsPendientesSincronizar,
             'cabecera' => [
                 'cliente' => $cotizacion->cliente,
                 'destino' => $cotizacion->destino,

@@ -29,8 +29,10 @@ class ReservaPasajeroController extends Controller
             // prueba, el schema real es text nullable — ver TODO.md).
             'discapacidad' => 'nullable|string',
             'vuelo_aerolinea_ida' => 'nullable|string|max:150',
+            'vuelo_fecha_ida' => 'nullable|date',
             'vuelo_hora_ida' => 'nullable|date_format:H:i',
             'vuelo_aerolinea_vuelta' => 'nullable|string|max:150',
+            'vuelo_fecha_vuelta' => 'nullable|date',
             'vuelo_hora_vuelta' => 'nullable|date_format:H:i',
             'pasajero_catalogo_id' => 'nullable|integer|exists:pasajeros_catalogo,id',
         ]);

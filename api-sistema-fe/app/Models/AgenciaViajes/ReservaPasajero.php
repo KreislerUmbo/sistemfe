@@ -29,8 +29,10 @@ class ReservaPasajero extends Model
         'alimentacion_especial',
         'discapacidad',
         'vuelo_aerolinea_ida',
+        'vuelo_fecha_ida',
         'vuelo_hora_ida',
         'vuelo_aerolinea_vuelta',
+        'vuelo_fecha_vuelta',
         'vuelo_hora_vuelta',
         'pasajero_catalogo_id',
     ];
