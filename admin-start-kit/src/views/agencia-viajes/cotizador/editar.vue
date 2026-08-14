@@ -471,16 +471,16 @@
                             <template v-if="modo === 'local'">
                                 <div class="d-flex flex-wrap align-items-center gap-1 mb-2">
                                     <span v-for="chip in chipsFijos" :key="chip.proveedorTipoId ?? chip.tipo"
-                                        class="badge rounded-pill px-2 py-1" style="cursor:pointer;font-weight:500;"
+                                        class="badge rounded-pill px-3 py-2" style="cursor:pointer;font-weight:500;font-size:0.8rem;"
                                         :class="chipActivo(chip) ? 'bg-primary' : 'bg-light text-dark border'"
                                         @click="seleccionarChip(chip)">
-                                        <i class="fas me-1" :class="chip.icono"></i>{{ chip.nombre }}
+                                        <i class="fas me-1" :class="chip.icono" style="font-size:1rem;"></i>{{ chip.nombre }}
                                     </span>
                                     <div class="position-relative">
-                                        <span class="badge rounded-pill px-2 py-1" style="cursor:pointer;font-weight:500;"
+                                        <span class="badge rounded-pill px-3 py-2" style="cursor:pointer;font-weight:500; font-size:0.8rem;"
                                             :class="chipMasActivo ? 'bg-primary' : 'bg-light text-dark border'"
                                             @click="mostrarMasChips = !mostrarMasChips">
-                                            <i class="fas fa-ellipsis-h me-1"></i>{{ chipMasActivo ? chipMasActivo.nombre : 'Más' }} <i class="fas fa-caret-down ms-1"></i>
+                                            <i class="fas fa-ellipsis-h me-1" style="font-size:1rem;"></i>{{ chipMasActivo ? chipMasActivo.nombre : 'Más' }} <i class="fas fa-caret-down ms-1" ></i>
                                         </span>
                                         <div v-if="mostrarMasChips" class="border rounded shadow-sm bg-white p-1 position-absolute"
                                             style="z-index:1090;min-width:180px;top:100%;left:0;">
@@ -726,10 +726,10 @@ import { cotizacionService } from '@/services/admin/cotizacionService';
 import { alternativaService } from '@/services/admin/alternativaService';
 import { alternativaItemService } from '@/services/admin/alternativaItemService';
 import { opcionMayoristaService } from '@/services/admin/opcionMayoristaService';
-import { proveedorService, proveedorTipoService } from '@/services/admin/proveedorService';
+import { proveedorService } from '@/services/admin/proveedorService';
 import { bibliotecaCotizadorService, type BibliotecaTipo } from '@/services/admin/bibliotecaCotizadorService';
 import { reservaService } from '@/services/admin/reservaService';
-import { configuracionAgenciaService } from '@/services/admin/configuracionAgenciaService';
+import { useAgenciaViajesCatalogosStore } from '@/stores/agenciaViajesCatalogos';
 import { formatFecha } from '@/helpers/fecha';
 import { guiaService } from '@/services/admin/guiaService';
 import type { Cotizacion, Alternativa, AlternativaItem, ProveedorTarifa, OpcionMayorista, Proveedor, ProveedorTipo, BibliotecaResultado, ConfiguracionAgencia, DestinoServicio, Guia, GuiaTarifa } from '@/types/agencia-viajes';
@@ -2124,38 +2124,47 @@ onMounted(async () => {
         // proveedor_tipos: catálogo real (editable desde el panel superadmin,
         // NO los 4 valores del seeder original) — alimenta tanto los chips de
         // la biblioteca (Sesión 11b3) como la búsqueda de proveedores
-        // mayoristas de acá abajo (sin duplicar la llamada).
-        const tipos = await proveedorTipoService.listar();
-        proveedorTipos.value = tipos.proveedor_tipos;
-
-        // Antes de cargarCotizacion(): inicializarEdicionItems() (dentro de
-        // cargarCotizacion) necesita configAgencia.value ya resuelto para
-        // derivar monto_descuento por ítem (Punto B).
-        const configRes = await configuracionAgenciaService.obtener();
-        configAgencia.value = configRes.configuracion_agencia;
-
-        await cargarCotizacion();
-        await cargarBiblioteca();
+        // mayoristas de acá abajo (sin duplicar la llamada). No depende de
+        // configuracion-agencia ni viceversa — en paralelo. Cacheados (TTL
+        // 60s, compartidos con paquetes/detalle.vue — ver
+        // src/stores/agenciaViajesCatalogos.ts) en vez de pedirlos de cero en
+        // cada mount de esta pantalla.
+        const catalogos = useAgenciaViajesCatalogosStore();
+        const [tiposList, config] = await Promise.all([
+            catalogos.obtenerProveedorTipos(),
+            catalogos.obtenerConfigAgencia(),
+        ]);
+        proveedorTipos.value = tiposList;
+        // inicializarEdicionItems() (dentro de cargarCotizacion(), abajo)
+        // necesita configAgencia.value ya resuelto para derivar
+        // monto_descuento por ítem (Punto B) — por eso cargarCotizacion()
+        // recién se dispara después de esta línea, no antes.
+        configAgencia.value = config;
 
         // slug='agencia-mayorista' es el slug REAL del catálogo proveedor_tipos
         // (cambiado a mano en producción) — NO 'mayorista', mismo criterio que
-        // 'alojamiento-hoteles' un poco más abajo en este archivo.
-        const tipoMayorista = tipos.proveedor_tipos.find((t) => t.slug === 'agencia-mayorista');
-        if (tipoMayorista) {
-            const res = await httpClient.get('/proveedores', { params: { tipo_id: tipoMayorista.id } });
-            proveedoresMayoristas.value = res.data.proveedores ?? [];
-        }
+        // 'alojamiento-hoteles' (Sesión 11k, Fix 9 — proveedores tipo Hotel,
+        // para "usar tarifa registrada" al armar un hotel de opcion_mayorista;
+        // ver mismo hallazgo documentado en ProveedorController::tarifasHotel(),
+        // backend — 'hotel' no matchea nada). Ninguna de las 4 llamadas de
+        // abajo depende de las otras — todas en paralelo.
+        const tipoMayorista = tiposList.find((t) => t.slug === 'agencia-mayorista');
+        const tipoHotel = tiposList.find((t) => t.slug === 'alojamiento-hoteles');
 
-        // Sesión 11k, Fix 9 — proveedores tipo Hotel, para "usar tarifa registrada"
-        // al armar un hotel de opcion_mayorista. slug='alojamiento-hoteles' es
-        // el slug REAL (ver mismo hallazgo documentado en
-        // ProveedorController::tarifasHotel(), backend — 'hotel' no matchea
-        // nada).
-        const tipoHotel = tipos.proveedor_tipos.find((t) => t.slug === 'alojamiento-hoteles');
-        if (tipoHotel) {
-            const res = await httpClient.get('/proveedores', { params: { tipo_id: tipoHotel.id, estado: true } });
-            proveedoresHotel.value = res.data.proveedores ?? [];
-        }
+        await Promise.all([
+            cargarCotizacion(),
+            cargarBiblioteca(),
+            tipoMayorista
+                ? httpClient.get('/proveedores', { params: { tipo_id: tipoMayorista.id } }).then((res) => {
+                      proveedoresMayoristas.value = res.data.proveedores ?? [];
+                  })
+                : Promise.resolve(),
+            tipoHotel
+                ? httpClient.get('/proveedores', { params: { tipo_id: tipoHotel.id, estado: true } }).then((res) => {
+                      proveedoresHotel.value = res.data.proveedores ?? [];
+                  })
+                : Promise.resolve(),
+        ]);
     } catch (error: any) {
         (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo cargar la cotización.', 'error');
     } finally {

@@ -361,320 +361,396 @@
             </div>
         </div>
 
-        <!-- ═══ TAB: Incluye (tour_simple) ═══ -->
-        <div v-if="tabActiva === 'incluye' && !esCombo">
-            <div class="card border-0 shadow-sm mb-3">
-                <div class="card-header bg-white border-bottom py-2">
-                    <span class="fw-semibold text-dark small">Agregar ítem incluido</span>
-                </div>
-                <div class="card-body py-3">
-                    <div class="btn-group btn-group-sm mb-2">
-                        <button class="btn" :class="tipoItemNuevo === 'proveedor' ? 'btn-primary' : 'btn-outline-secondary'" @click="tipoItemNuevo = 'proveedor'">Servicio de proveedor</button>
-                        <button class="btn" :class="tipoItemNuevo === 'guia' ? 'btn-primary' : 'btn-outline-secondary'" @click="tipoItemNuevo = 'guia'">Guía de turismo</button>
+        <!-- ═══ TAB: Incluye (unificado tour_simple / paquete_combo) ═══ -->
+        <div v-if="tabActiva === 'incluye'" class="row g-3 av-incluye">
+            <!-- Columna principal -->
+            <div class="col-lg-8">
+                <!-- Panel: agregar ítem -->
+                <div class="card border-0 shadow-sm mb-3 av-add-panel">
+                    <div class="card-header bg-white border-bottom py-2">
+                        <span class="fw-semibold text-dark small"><i class="fas fa-plus-circle text-primary me-1"></i>Agregar a este {{ esCombo ? 'combo' : 'tour' }}</span>
                     </div>
-
-                    <div v-if="tipoItemNuevo === 'proveedor'">
-                        <input type="text" class="form-control form-control-sm mb-2" placeholder="Buscar servicio de proveedor..."
-                            v-model="bibliotecaSearch" @input="onBibliotecaSearch">
-                        <div class="row g-2 mb-2">
-                            <div class="col-12 col-md-4">
-                                <DestinoTreeSelect v-model="filtroDestinoId" nivel-max="lugar" placeholder="Zona o destino..." />
-                            </div>
-                            <div class="col-6 col-md-4">
-                                <select class="form-select form-select-sm" v-model="filtroServicioId">
-                                    <option :value="null">Cualquier servicio</option>
-                                    <option v-for="s in serviciosFiltro" :key="s.id" :value="s.id">{{ s.nombre }}</option>
-                                </select>
-                            </div>
-                            <div class="col-6 col-md-4">
-                                <select class="form-select form-select-sm" v-model="filtroProveedorId">
-                                    <option :value="null">Cualquier proveedor</option>
-                                    <option v-for="p in proveedoresFiltro" :key="p.id" :value="p.id">{{ p.nombre_comercial ?? p.razon_social }}</option>
-                                </select>
-                            </div>
+                    <div class="card-body py-3">
+                        <div class="av-type-tabs mb-3">
+                            <button v-if="esCombo" type="button" class="av-type-tab" :class="{ active: tipoItemNuevo === 'tour' }" @click="tipoItemNuevo = 'tour'; cargarBibliotecaTours()">
+                                <span class="av-type-tab-icon"><i class="fas fa-layer-group"></i></span>Tour completo
+                            </button>
+                            <button type="button" class="av-type-tab" :class="{ active: tipoItemNuevo === 'proveedor' }" @click="tipoItemNuevo = 'proveedor'">
+                                <span class="av-type-tab-icon"><i class="fas fa-concierge-bell"></i></span>Servicio de proveedor
+                            </button>
+                            <button type="button" class="av-type-tab" :class="{ active: tipoItemNuevo === 'guia' }" @click="tipoItemNuevo = 'guia'">
+                                <span class="av-type-tab-icon"><i class="fas fa-user-tie"></i></span>Guía de turismo
+                            </button>
                         </div>
-                        <div class="d-flex flex-column gap-1" style="max-height:220px;overflow-y:auto;">
-                            <div v-for="t in bibliotecaTarifas" :key="t.id" class="border rounded p-2 small lib-item"
-                                :class="{ 'border-primary bg-light': proveedorTarifaSeleccionada?.id === t.id, 'opacity-50': idsProveedorTarifaEnItems.has(t.id) }"
-                                :style="idsProveedorTarifaEnItems.has(t.id) ? 'cursor:not-allowed' : 'cursor:pointer'"
-                                @click="!idsProveedorTarifaEnItems.has(t.id) && (proveedorTarifaSeleccionada = t)">
-                                <div class="d-flex justify-content-between align-items-start">
-                                    <div>
-                                        <strong>{{ t.proveedor_servicio?.proveedor?.razon_social }}</strong>
-                                        <span v-if="idsProveedorTarifaEnItems.has(t.id)" class="badge bg-secondary text-white ms-1" style="font-size:10px">Ya agregado</span>
-                                        <span v-if="t.proveedor_servicio?.proveedor?.es_referencial" class="badge bg-secondary-subtle text-secondary border ms-1" style="font-size:10px">Referencial</span>
-                                        <span class="text-muted"> — {{ descripcionDestinoServicio(t.proveedor_servicio?.destino_servicio) }}<span v-if="t.tipo_habitacion"> · {{ t.tipo_habitacion }}</span></span>
-                                        <span class="badge bg-light text-dark border ms-1" style="font-size:10px">{{ t.tipo_tarifa }} · {{ t.modalidad }}</span>
+
+                        <!-- Buscador: tour completo (solo combo) -->
+                        <div v-if="esCombo && tipoItemNuevo === 'tour'">
+                            <div class="av-search mb-2">
+                                <i class="fas fa-search"></i>
+                                <input type="text" class="form-control form-control-sm" placeholder="Buscar tour por nombre o código..."
+                                    v-model="bibliotecaTourSearch" @input="onBibliotecaTourSearch">
+                            </div>
+                            <div class="mb-2">
+                                <DestinoTreeSelect v-model="filtroDestinoTourId" nivel-max="lugar" placeholder="Filtrar por zona o destino..." />
+                            </div>
+                            <TransitionGroup tag="div" name="av-fade" class="av-lib-grid">
+                                <div v-for="t in bibliotecaTours" :key="'tour-' + t.id" class="av-item-card"
+                                    :class="{ 'is-selected': tourSeleccionado?.id === t.id, 'is-added': idsTourHijoEnItems.has(t.id) }"
+                                    @click="!idsTourHijoEnItems.has(t.id) && (tourSeleccionado = t)">
+                                    <div class="av-item-icon bg-primary-subtle text-primary"><i class="fas fa-layer-group"></i></div>
+                                    <div class="av-item-body">
+                                        <div class="av-item-title">{{ t.nombre }}<span v-if="t.codigo" class="text-muted fw-normal"> · {{ t.codigo }}</span></div>
+                                        <div class="av-item-sub">{{ etiquetaCategoria(t.categoria) }} · {{ t.items_count ?? 0 }} ítem(s)</div>
                                     </div>
-                                    <div class="text-end">
-                                        <span class="badge bg-light text-dark border d-block">{{ t.moneda }} {{ Number(t.precio_venta_adulto).toFixed(2) }}</span>
-                                        <span class="text-muted" style="font-size:10px">costo {{ t.moneda }} {{ Number(t.precio_costo).toFixed(2) }}</span>
+                                    <div class="av-item-side">
+                                        <span class="av-item-price">{{ t.precio_venta_final != null ? `S/ ${Number(t.precio_venta_final).toFixed(0)}` : '—' }}</span>
+                                        <span v-if="idsTourHijoEnItems.has(t.id)" class="av-badge av-badge-added"><i class="fas fa-check"></i>Agregado</span>
+                                        <span v-else-if="tourSeleccionado?.id === t.id" class="av-badge av-badge-selected"><i class="fas fa-circle-check"></i>Elegido</span>
                                     </div>
                                 </div>
+                            </TransitionGroup>
+                            <div v-if="bibliotecaTours.length === 0" class="text-muted small text-center py-3">Sin resultados.</div>
+                            <div v-if="bibliotecaTours.length > 0" class="d-flex justify-content-between align-items-center mt-2">
+                                <span class="small text-muted">Mostrando {{ bibliotecaTours.length }} de {{ bibliotecaToursTotal }}</span>
+                                <button v-if="bibliotecaToursHayMas" type="button" class="btn btn-sm btn-outline-secondary" @click="cargarMasBibliotecaTours" :disabled="bibliotecaToursCargandoMas">
+                                    <span v-if="bibliotecaToursCargandoMas" class="spinner-border spinner-border-sm me-1"></span>Cargar más
+                                </button>
                             </div>
-                            <div v-if="bibliotecaTarifas.length === 0" class="text-muted small text-center py-2">Sin resultados.</div>
+                        </div>
+
+                        <!-- Buscador: servicio de proveedor -->
+                        <div v-else-if="tipoItemNuevo === 'proveedor'">
+                            <div class="av-search mb-2">
+                                <i class="fas fa-search"></i>
+                                <input type="text" class="form-control form-control-sm" placeholder="Buscar servicio de proveedor..."
+                                    v-model="bibliotecaSearch" @input="onBibliotecaSearch">
+                            </div>
+                            <div class="row g-2 mb-2">
+                                <div class="col-12 col-md-4">
+                                    <DestinoTreeSelect v-model="filtroDestinoId" nivel-max="lugar" placeholder="Zona o destino..." />
+                                </div>
+                                <div class="col-6 col-md-4">
+                                    <select class="form-select form-select-sm" v-model="filtroServicioId">
+                                        <option :value="null">Cualquier servicio</option>
+                                        <option v-for="s in serviciosFiltro" :key="s.id" :value="s.id">{{ s.nombre }}</option>
+                                    </select>
+                                </div>
+                                <div class="col-6 col-md-4">
+                                    <select class="form-select form-select-sm" v-model="filtroProveedorId">
+                                        <option :value="null">Cualquier proveedor</option>
+                                        <option v-for="p in proveedoresFiltro" :key="p.id" :value="p.id">{{ p.nombre_comercial ?? p.razon_social }}</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <TransitionGroup tag="div" name="av-fade" class="av-lib-grid">
+                                <div v-for="t in bibliotecaTarifas" :key="'prov-' + t.id" class="av-item-card"
+                                    :class="{ 'is-selected': proveedorTarifaSeleccionada?.id === t.id, 'is-added': idsProveedorTarifaEnItems.has(t.id) }"
+                                    @click="!idsProveedorTarifaEnItems.has(t.id) && (proveedorTarifaSeleccionada = t)">
+                                    <div class="av-item-icon bg-info-subtle text-info"><i class="fas fa-concierge-bell"></i></div>
+                                    <div class="av-item-body">
+                                        <div class="av-item-title">
+                                            {{ t.proveedor_servicio?.proveedor?.razon_social }}
+                                            <span v-if="t.proveedor_servicio?.proveedor?.es_referencial" class="av-badge av-badge-muted">Referencial</span>
+                                        </div>
+                                        <div class="av-item-sub">{{ descripcionDestinoServicio(t.proveedor_servicio?.destino_servicio) }}<span v-if="t.tipo_habitacion"> · {{ t.tipo_habitacion }}</span></div>
+                                        <div class="av-item-tags"><span class="av-badge av-badge-muted">{{ t.tipo_tarifa }} · {{ t.modalidad }}</span></div>
+                                    </div>
+                                    <div class="av-item-side">
+                                        <span class="av-item-price">{{ t.moneda }} {{ Number(t.precio_venta_adulto).toFixed(2) }}</span>
+                                        <span class="av-item-cost">costo {{ t.moneda }} {{ Number(t.precio_costo).toFixed(2) }}</span>
+                                        <span v-if="idsProveedorTarifaEnItems.has(t.id)" class="av-badge av-badge-added"><i class="fas fa-check"></i>Agregado</span>
+                                        <span v-else-if="proveedorTarifaSeleccionada?.id === t.id" class="av-badge av-badge-selected"><i class="fas fa-circle-check"></i>Elegido</span>
+                                    </div>
+                                </div>
+                            </TransitionGroup>
+                            <div v-if="bibliotecaTarifas.length === 0" class="text-muted small text-center py-3">Sin resultados.</div>
+                            <div v-if="bibliotecaTarifas.length > 0" class="d-flex justify-content-between align-items-center mt-2">
+                                <span class="small text-muted">Mostrando {{ bibliotecaTarifas.length }} de {{ bibliotecaTarifasTotal }}</span>
+                                <button v-if="bibliotecaTarifasHayMas" type="button" class="btn btn-sm btn-outline-secondary" @click="cargarMasBiblioteca" :disabled="bibliotecaTarifasCargandoMas">
+                                    <span v-if="bibliotecaTarifasCargandoMas" class="spinner-border spinner-border-sm me-1"></span>Cargar más
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Buscador: guía de turismo -->
+                        <div v-else>
+                            <select class="form-select form-select-sm mb-2" v-model="guiaSeleccionadaId" @change="cargarTarifasGuia">
+                                <option :value="null">— Elegí un guía —</option>
+                                <option v-for="g in guias" :key="g.id" :value="g.id">{{ g.nombre }}{{ g.es_referencial ? ' (Referencial)' : '' }}</option>
+                            </select>
+                            <TransitionGroup tag="div" name="av-fade" class="av-lib-grid">
+                                <div v-for="t in tarifasGuia" :key="'guia-' + t.id" class="av-item-card"
+                                    :class="{ 'is-selected': guiaTarifaSeleccionada?.id === t.id, 'is-added': idsGuiaTarifaEnItems.has(t.id) }"
+                                    @click="!idsGuiaTarifaEnItems.has(t.id) && (guiaTarifaSeleccionada = t)">
+                                    <div class="av-item-icon bg-warning-subtle text-warning"><i class="fas fa-user-tie"></i></div>
+                                    <div class="av-item-body">
+                                        <div class="av-item-title">{{ t.destino?.nombre }}</div>
+                                        <div class="av-item-sub">{{ t.modalidad === 'dia_local' ? 'Día local' : 'Grupo multidía' }}</div>
+                                    </div>
+                                    <div class="av-item-side">
+                                        <span class="av-item-price">{{ t.moneda }} {{ t.costo_diario }}</span>
+                                        <span v-if="idsGuiaTarifaEnItems.has(t.id)" class="av-badge av-badge-added"><i class="fas fa-check"></i>Agregado</span>
+                                        <span v-else-if="guiaTarifaSeleccionada?.id === t.id" class="av-badge av-badge-selected"><i class="fas fa-circle-check"></i>Elegido</span>
+                                    </div>
+                                </div>
+                            </TransitionGroup>
+                            <div v-if="guiaSeleccionadaId && tarifasGuia.length === 0" class="text-muted small text-center py-3">Este guía no tiene tarifas cargadas.</div>
+                        </div>
+
+                        <!-- Barra de selección + confirmación de alta -->
+                        <Transition name="av-fade">
+                            <div v-if="proveedorTarifaSeleccionada || guiaTarifaSeleccionada || tourSeleccionado" class="av-selection-bar mt-3">
+                                <div class="av-selection-info">
+                                    <i class="fas fa-circle-check text-success me-2"></i>
+                                    <span v-if="proveedorTarifaSeleccionada">{{ proveedorTarifaSeleccionada.proveedor_servicio?.proveedor?.razon_social }}</span>
+                                    <span v-else-if="guiaTarifaSeleccionada">Guía — {{ guiaTarifaSeleccionada.destino?.nombre }}</span>
+                                    <span v-else-if="tourSeleccionado">{{ tourSeleccionado.nombre }}</span>
+                                </div>
+                                <div class="d-flex align-items-end gap-2">
+                                    <div class="d-flex flex-column" style="width:84px">
+                                        <label class="mb-0" style="font-size:.65rem;color:#868e96">{{ tipoItemNuevo === 'tour' ? 'Día' : 'Orden' }}</label>
+                                        <input type="number" min="0" class="form-control form-control-sm" v-model.number="ordenItemNuevo">
+                                    </div>
+                                    <button class="btn btn-primary btn-sm" @click="agregarItem" :disabled="agregandoItem">
+                                        <span v-if="agregandoItem" class="spinner-border spinner-border-sm me-1"></span>
+                                        <i v-else class="fas fa-plus me-1"></i>Agregar
+                                    </button>
+                                    <button class="btn btn-outline-secondary btn-sm" title="Cancelar selección"
+                                        @click="proveedorTarifaSeleccionada = null; guiaTarifaSeleccionada = null; tourSeleccionado = null">
+                                        <i class="fas fa-xmark"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </Transition>
+                    </div>
+                </div>
+
+                <!-- Ítems incluidos: tour_simple -->
+                <template v-if="!esCombo">
+                    <div class="card border-0 shadow-sm">
+                        <div class="card-header bg-white border-bottom py-2 d-flex justify-content-between align-items-center">
+                            <span class="fw-semibold text-dark small"><i class="fas fa-list-check text-primary me-1"></i>Ítems incluidos</span>
+                            <span class="badge bg-light text-dark border">{{ items.length }}</span>
+                        </div>
+                        <div class="card-body">
+                            <div v-if="itemsProveedor.length" class="av-group mb-3">
+                                <div class="av-group-title">Servicios de proveedor</div>
+                                <TransitionGroup tag="div" name="av-fade" class="av-included-grid">
+                                    <div v-for="item in itemsProveedor" :key="item.id" class="av-item-card av-item-card--flat">
+                                        <div class="av-item-icon bg-info-subtle text-info"><i class="fas fa-concierge-bell"></i></div>
+                                        <div class="av-item-body">
+                                            <div class="av-item-title">
+                                                {{ item.proveedor_tarifa!.proveedor_servicio?.proveedor?.razon_social }}
+                                                <span v-if="item.proveedor_tarifa!.proveedor_servicio?.proveedor?.es_referencial" class="av-badge av-badge-muted">Referencial</span>
+                                            </div>
+                                            <div class="av-item-sub">{{ descripcionDestinoServicio(item.proveedor_tarifa!.proveedor_servicio?.destino_servicio) }}<span v-if="item.proveedor_tarifa!.tipo_habitacion"> · {{ item.proveedor_tarifa!.tipo_habitacion }}</span></div>
+                                            <div class="av-item-tags"><span class="av-badge av-badge-muted">{{ item.proveedor_tarifa!.tipo_tarifa }} · {{ item.proveedor_tarifa!.modalidad }}</span></div>
+                                        </div>
+                                        <div class="av-item-side">
+                                            <span class="av-item-price">{{ monedaItem(item) }} {{ ventaItem(item).toFixed(2) }}</span>
+                                            <span class="av-item-cost">costo {{ monedaItem(item) }} {{ costoItem(item).toFixed(2) }}</span>
+                                            <button type="button" class="btn btn-sm btn-link text-danger p-0 mt-1" @click="quitarItem(item)" :disabled="eliminandoItemId === item.id">
+                                                <span v-if="eliminandoItemId === item.id" class="spinner-border spinner-border-sm"></span>
+                                                <i v-else class="fas fa-trash-can"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </TransitionGroup>
+                            </div>
+
+                            <div v-if="itemsGuia.length" class="av-group">
+                                <div class="av-group-title">Guías de turismo</div>
+                                <TransitionGroup tag="div" name="av-fade" class="av-included-grid">
+                                    <div v-for="item in itemsGuia" :key="item.id" class="av-item-card av-item-card--flat">
+                                        <div class="av-item-icon bg-warning-subtle text-warning"><i class="fas fa-user-tie"></i></div>
+                                        <div class="av-item-body">
+                                            <div class="av-item-title">
+                                                Guía: {{ item.guia_tarifa!.guia?.nombre }}
+                                                <span v-if="item.guia_tarifa!.guia?.es_referencial" class="av-badge av-badge-muted">Referencial</span>
+                                            </div>
+                                            <div class="av-item-sub">{{ item.guia_tarifa!.destino?.nombre }}</div>
+                                        </div>
+                                        <div class="av-item-side">
+                                            <span class="av-item-price">{{ monedaItem(item) }} {{ ventaItem(item).toFixed(2) }}</span>
+                                            <span class="av-item-cost">costo {{ monedaItem(item) }} {{ costoItem(item).toFixed(2) }}</span>
+                                            <button type="button" class="btn btn-sm btn-link text-danger p-0 mt-1" @click="quitarItem(item)" :disabled="eliminandoItemId === item.id">
+                                                <span v-if="eliminandoItemId === item.id" class="spinner-border spinner-border-sm"></span>
+                                                <i v-else class="fas fa-trash-can"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </TransitionGroup>
+                            </div>
+
+                            <div v-if="items.length === 0" class="text-muted fst-italic text-center py-4">
+                                Este paquete/tour todavía no tiene ítems incluidos.
+                            </div>
+                        </div>
+                    </div>
+                </template>
+
+                <!-- Ítems incluidos: paquete_combo -->
+                <template v-else>
+                    <TransitionGroup tag="div" name="av-fade" class="d-flex flex-column gap-2 mb-2">
+                        <div v-for="grupo in itemsPorTourAgrupados" :key="grupo.item.id" class="card border-0 shadow-sm av-tour-card">
+                            <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center py-2" style="cursor:pointer" @click="toggleExpandido(grupo.item.paquete_plantilla_hijo_id!)">
+                                <span class="fw-semibold text-dark small d-flex align-items-center gap-2">
+                                    <i class="fas fa-chevron-right text-muted av-chevron" :class="{ 'fa-rotate-90': expandidos.has(grupo.item.paquete_plantilla_hijo_id!) }" style="font-size:10px"></i>
+                                    <span class="av-item-icon bg-primary-subtle text-primary" style="width:28px;height:28px;min-width:28px"><i class="fas fa-layer-group" style="font-size:.7rem"></i></span>
+                                    Día {{ grupo.item.orden ?? '—' }}: {{ grupo.item.paquete_plantilla_hijo?.nombre }}
+                                </span>
+                                <span class="d-flex align-items-center gap-2">
+                                    <span class="badge bg-light text-dark border">{{ grupo.item.paquete_plantilla_hijo?.precio_venta_final != null ? `S/ ${Number(grupo.item.paquete_plantilla_hijo.precio_venta_final).toFixed(0)}` : '—' }}</span>
+                                    <button type="button" class="btn btn-sm btn-link text-danger p-0" @click.stop="quitarTourHijo(grupo.item)" :disabled="eliminandoItemId === grupo.item.id">
+                                        <span v-if="eliminandoItemId === grupo.item.id" class="spinner-border spinner-border-sm"></span>
+                                        <i v-else class="fas fa-trash-can"></i>
+                                    </button>
+                                </span>
+                            </div>
+                            <Transition name="av-expand">
+                                <div v-if="expandidos.has(grupo.item.paquete_plantilla_hijo_id!)" class="card-body py-2">
+                                    <div class="text-muted small fst-italic mb-2">Solo lectura — para editar estos ítems, entrá al tour.</div>
+                                    <ul class="list-group list-group-flush">
+                                        <li v-for="sub in (tourSubItemsCache[grupo.item.paquete_plantilla_hijo_id!] ?? [])" :key="sub.id" class="list-group-item small px-0">
+                                            <span v-if="sub.proveedor_tarifa">
+                                                <i class="fas fa-concierge-bell text-primary me-1"></i>{{ sub.proveedor_tarifa.proveedor_servicio?.proveedor?.razon_social }}
+                                            </span>
+                                            <span v-else-if="sub.guia_tarifa">
+                                                <i class="fas fa-user-tie text-primary me-1"></i>Guía: {{ sub.guia_tarifa.guia?.nombre }}
+                                            </span>
+                                        </li>
+                                        <li v-if="(tourSubItemsCache[grupo.item.paquete_plantilla_hijo_id!] ?? []).length === 0" class="list-group-item small px-0 text-muted fst-italic">
+                                            Este tour todavía no tiene ítems cargados.
+                                        </li>
+                                    </ul>
+                                </div>
+                            </Transition>
+                        </div>
+                    </TransitionGroup>
+
+                    <div v-if="itemsSueltos.length" class="card border-0 shadow-sm">
+                        <div class="card-header bg-white border-bottom py-2"><span class="fw-semibold text-dark small">Ítems sueltos</span></div>
+                        <div class="card-body">
+                            <TransitionGroup tag="div" name="av-fade" class="av-included-grid">
+                                <div v-for="item in itemsSueltos" :key="item.id" class="av-item-card av-item-card--flat">
+                                    <div class="av-item-icon" :class="item.proveedor_tarifa ? 'bg-info-subtle text-info' : 'bg-warning-subtle text-warning'">
+                                        <i class="fas" :class="item.proveedor_tarifa ? 'fa-concierge-bell' : 'fa-user-tie'"></i>
+                                    </div>
+                                    <div class="av-item-body">
+                                        <div class="av-item-title" v-if="item.proveedor_tarifa">
+                                            {{ item.proveedor_tarifa.proveedor_servicio?.proveedor?.razon_social }}
+                                            <span v-if="item.proveedor_tarifa.proveedor_servicio?.proveedor?.es_referencial" class="av-badge av-badge-muted">Referencial</span>
+                                        </div>
+                                        <div class="av-item-title" v-else-if="item.guia_tarifa">
+                                            Guía: {{ item.guia_tarifa.guia?.nombre }}
+                                            <span v-if="item.guia_tarifa.guia?.es_referencial" class="av-badge av-badge-muted">Referencial</span>
+                                        </div>
+                                    </div>
+                                    <div class="av-item-side">
+                                        <button type="button" class="btn btn-sm btn-link text-danger p-0" @click="quitarItem(item)" :disabled="eliminandoItemId === item.id">
+                                            <span v-if="eliminandoItemId === item.id" class="spinner-border spinner-border-sm"></span>
+                                            <i v-else class="fas fa-trash-can"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </TransitionGroup>
                         </div>
                     </div>
 
-                    <div v-else>
-                        <select class="form-select form-select-sm mb-2" v-model="guiaSeleccionadaId" @change="cargarTarifasGuia">
-                            <option :value="null">— Elegí un guía —</option>
-                            <option v-for="g in guias" :key="g.id" :value="g.id">{{ g.nombre }}{{ g.es_referencial ? ' (Referencial)' : '' }}</option>
-                        </select>
-                        <div class="d-flex flex-column gap-1" style="max-height:220px;overflow-y:auto;">
-                            <div v-for="t in tarifasGuia" :key="t.id" class="border rounded p-2 small lib-item"
-                                :class="{ 'border-primary bg-light': guiaTarifaSeleccionada?.id === t.id, 'opacity-50': idsGuiaTarifaEnItems.has(t.id) }"
-                                :style="idsGuiaTarifaEnItems.has(t.id) ? 'cursor:not-allowed' : 'cursor:pointer'"
-                                @click="!idsGuiaTarifaEnItems.has(t.id) && (guiaTarifaSeleccionada = t)">
-                                {{ t.destino?.nombre }} — {{ t.modalidad === 'dia_local' ? 'Día local' : 'Grupo multidía' }} ({{ t.moneda }} {{ t.costo_diario }})
-                                <span v-if="idsGuiaTarifaEnItems.has(t.id)" class="badge bg-secondary text-white ms-1" style="font-size:10px">Ya agregado</span>
+                    <div v-if="itemsPorTourAgrupados.length === 0 && itemsSueltos.length === 0" class="text-muted fst-italic text-center py-4">
+                        Este combo todavía no tiene tours ni ítems incluidos.
+                    </div>
+                </template>
+            </div>
+
+            <!-- Columna sticky: resumen de precio -->
+            <div class="col-lg-4">
+                <div class="av-summary-sticky">
+                    <!-- Resumen: tour_simple -->
+                    <div v-if="!esCombo" class="card border-0 shadow-sm">
+                        <div class="card-header bg-white border-bottom py-2">
+                            <span class="fw-semibold text-dark small"><i class="fas fa-coins text-primary me-1"></i>Resumen</span>
+                        </div>
+                        <div class="card-body">
+                            <template v-if="items.length">
+                                <div class="d-flex justify-content-between small mb-2">
+                                    <span class="text-muted">Costo total</span><span class="fw-semibold">S/ {{ totalesIncluye.costoTotal.toFixed(2) }}</span>
+                                </div>
+                                <div class="d-flex justify-content-between small mb-2">
+                                    <span class="text-muted">Venta total</span><span class="fw-semibold">S/ {{ totalesIncluye.ventaTotal.toFixed(2) }}</span>
+                                </div>
+                                <div class="d-flex justify-content-between align-items-center border-top pt-2 mb-2">
+                                    <span class="text-muted small">Margen</span>
+                                    <span class="fs-5 fw-bold" :class="totalesIncluye.margenResultantePct >= margenMinimoAceptablePct ? 'text-success' : 'text-danger'">
+                                        {{ totalesIncluye.margenResultantePct.toFixed(1) }}%
+                                    </span>
+                                </div>
+                                <div v-if="desglosePorCategoria.length" class="border-top pt-2">
+                                    <div class="d-flex justify-content-between small mb-1" v-for="cat in desglosePorCategoria" :key="cat.categoria"
+                                        :class="cat.categoria === 'Sin categoría' ? 'text-warning-emphasis' : 'text-muted'">
+                                        <span>{{ cat.categoria }}</span><span>S/ {{ cat.venta.toFixed(2) }}</span>
+                                    </div>
+                                    <div v-if="hayItemsSinCategoria" class="small text-muted fst-italic mt-1">
+                                        <i class="fas fa-circle-info me-1"></i>Asignale un tipo a tus servicios en
+                                        <router-link to="/agencia-viajes/destinos">Destinos → Servicios asociados</router-link>
+                                        para un desglose más preciso.
+                                    </div>
+                                </div>
+                                <div v-if="diferenciaVentaFinal !== null" class="alert alert-warning small mt-3 mb-0 py-2">
+                                    <i class="fas fa-triangle-exclamation me-1"></i>
+                                    El precio manual (S/ {{ Number(paquete!.precio_venta_final).toFixed(2) }}) no coincide con la suma de ítems.
+                                    Diferencia: S/ {{ diferenciaVentaFinal.toFixed(2) }}.
+                                </div>
+                            </template>
+                            <div v-else class="text-muted small text-center py-3 fst-italic">
+                                Agregá ítems para ver el resumen de costos y margen.
                             </div>
-                            <div v-if="guiaSeleccionadaId && tarifasGuia.length === 0" class="text-muted small text-center py-2">Este guía no tiene tarifas cargadas.</div>
                         </div>
                     </div>
 
-                    <div class="row g-2 align-items-end mt-2">
-                        <div class="col-6 col-md-3">
-                            <label class="form-label mb-1 small fw-semibold text-secondary">Orden</label>
-                            <input type="number" min="0" class="form-control form-control-sm" v-model.number="ordenItemNuevo">
+                    <!-- Resumen: paquete_combo -->
+                    <div v-else class="card border-0 shadow-sm">
+                        <div class="card-header bg-white border-bottom py-2">
+                            <span class="fw-semibold text-dark small"><i class="fas fa-coins text-primary me-1"></i>Precio del combo</span>
                         </div>
-                        <div class="col-6 col-md-3">
-                            <button class="btn btn-primary btn-sm w-100" @click="agregarItem" :disabled="agregandoItem || (!proveedorTarifaSeleccionada && !guiaTarifaSeleccionada)">
-                                <span v-if="agregandoItem" class="spinner-border spinner-border-sm me-1"></span>
-                                <i v-else class="fas fa-plus me-1"></i>Agregar
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between small mb-2">
+                                <span class="text-muted">Costo total</span><span class="fw-semibold">S/ {{ preview.costoTotal.toFixed(2) }}</span>
+                            </div>
+                            <div class="d-flex justify-content-between small mb-2">
+                                <span class="text-muted">Venta bruta</span><span class="fw-semibold">S/ {{ preview.ventaBruta.toFixed(2) }}</span>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center border-top pt-2 mb-1">
+                                <span class="text-muted small">Venta neta</span>
+                                <span class="fs-5 fw-bold text-primary">S/ {{ preview.ventaNeta.toFixed(2) }}</span>
+                            </div>
+                            <div v-if="preview.margenResultante !== null" class="small mb-2">
+                                Margen: <strong :class="margenOk ? 'text-success' : 'text-danger'">{{ preview.margenResultante.toFixed(2) }}%</strong>
+                            </div>
+
+                            <div class="d-flex gap-3 small text-muted border-top pt-2 mb-2">
+                                <span><i class="fas fa-layer-group me-1"></i>{{ itemsPorTourAgrupados.length }} tour(s)</span>
+                                <span v-if="itemsSueltos.length"><i class="fas fa-puzzle-piece me-1"></i>{{ itemsSueltos.length }} suelto(s)</span>
+                            </div>
+
+                            <template v-if="combo">
+                                <div v-if="combo.precio_calculado.componentes_inactivos.length" class="alert alert-warning small py-2 mb-2">
+                                    <i class="fas fa-triangle-exclamation me-1"></i>{{ combo.precio_calculado.componentes_inactivos.length }} tour(s) desactivado(s), fuera del total.
+                                </div>
+                                <div v-if="combo.precio_calculado.componentes_sin_incluye.length" class="alert alert-warning small py-2 mb-2">
+                                    <i class="fas fa-triangle-exclamation me-1"></i>{{ combo.precio_calculado.componentes_sin_incluye.length }} tour(s) sin costo cargado.
+                                </div>
+                                <div v-if="combo.precio_calculado.componentes_sin_itinerario.length" class="alert alert-warning small py-2 mb-2">
+                                    <i class="fas fa-triangle-exclamation me-1"></i>{{ combo.precio_calculado.componentes_sin_itinerario.length }} tour(s) sin itinerario cargado.
+                                </div>
+                            </template>
+
+                            <button class="btn btn-sm btn-outline-primary w-100 mt-1" @click="tabActiva = 'datos'">
+                                Editar descuento y margen <i class="fas fa-arrow-right ms-1"></i>
                             </button>
                         </div>
                     </div>
                 </div>
-            </div>
-
-            <!-- ═══ Resumen (zona separada de la búsqueda) ═══ -->
-            <div class="card border-0 shadow-sm">
-                <div class="card-header bg-white border-bottom py-2">
-                    <span class="fw-semibold text-dark small"><i class="fas fa-list-check text-primary me-1"></i>Ítems incluidos</span>
-                </div>
-                <ul class="list-group list-group-flush">
-                    <li v-for="item in items" :key="item.id" class="list-group-item d-flex justify-content-between align-items-center small">
-                        <span v-if="item.proveedor_tarifa">
-                            <i class="fas fa-concierge-bell text-primary me-1"></i>
-                            {{ item.proveedor_tarifa.proveedor_servicio?.proveedor?.razon_social }}
-                            <span v-if="item.proveedor_tarifa.proveedor_servicio?.proveedor?.es_referencial" class="badge bg-secondary-subtle text-secondary border ms-1" style="font-size:10px">Referencial</span>
-                            <span class="text-muted"> — {{ descripcionDestinoServicio(item.proveedor_tarifa.proveedor_servicio?.destino_servicio) }}<span v-if="item.proveedor_tarifa.tipo_habitacion"> · {{ item.proveedor_tarifa.tipo_habitacion }}</span></span>
-                            <span class="badge bg-light text-dark border ms-1" style="font-size:10px">{{ item.proveedor_tarifa.tipo_tarifa }} · {{ item.proveedor_tarifa.modalidad }}</span>
-                        </span>
-                        <span v-else-if="item.guia_tarifa">
-                            <i class="fas fa-user-tie text-primary me-1"></i>
-                            Guía: {{ item.guia_tarifa.guia?.nombre }}
-                            <span v-if="item.guia_tarifa.guia?.es_referencial" class="badge bg-secondary-subtle text-secondary border ms-1" style="font-size:10px">Referencial</span>
-                            <span class="text-muted"> — {{ item.guia_tarifa.destino?.nombre }}</span>
-                        </span>
-                        <span class="d-flex align-items-center gap-3">
-                            <span class="text-end">
-                                <span class="badge bg-light text-dark border d-block">{{ monedaItem(item) }} {{ ventaItem(item).toFixed(2) }}</span>
-                                <span class="text-muted" style="font-size:10px">costo {{ monedaItem(item) }} {{ costoItem(item).toFixed(2) }}</span>
-                            </span>
-                            <span v-if="eliminandoItemId === item.id" class="spinner-border spinner-border-sm text-danger"></span>
-                            <i v-else class="fas fa-times text-danger" style="cursor:pointer" @click="quitarItem(item)"></i>
-                        </span>
-                    </li>
-                    <li v-if="items.length === 0" class="list-group-item text-muted fst-italic text-center py-4">
-                        Este paquete/tour todavía no tiene ítems incluidos.
-                    </li>
-                </ul>
-            </div>
-
-            <div class="card border-0 shadow-sm mt-3" v-if="items.length">
-                <div class="card-header bg-white border-bottom py-2">
-                    <span class="fw-semibold text-dark small"><i class="fas fa-coins text-primary me-1"></i>Totales</span>
-                </div>
-                <div class="card-body">
-                    <div class="row text-center g-3">
-                        <div class="col-4">
-                            <div class="small text-muted mb-1">Costo total</div>
-                            <div class="fs-5 fw-semibold text-dark">S/ {{ totalesIncluye.costoTotal.toFixed(2) }}</div>
-                        </div>
-                        <div class="col-4">
-                            <div class="small text-muted mb-1">Venta total</div>
-                            <div class="fs-5 fw-semibold text-dark">S/ {{ totalesIncluye.ventaTotal.toFixed(2) }}</div>
-                        </div>
-                        <div class="col-4">
-                            <div class="small text-muted mb-1">Margen resultante</div>
-                            <div class="fs-5 fw-bold" :class="totalesIncluye.margenResultantePct >= margenMinimoAceptablePct ? 'text-success' : 'text-danger'">
-                                {{ totalesIncluye.margenResultantePct.toFixed(1) }}%
-                            </div>
-                        </div>
-                    </div>
-                    <div v-if="desglosePorCategoria.length" class="row g-2 mt-1 border-top pt-3">
-                        <div class="col-6 col-md-3" v-for="cat in desglosePorCategoria" :key="cat.categoria">
-                            <div class="small text-muted mb-1">{{ cat.categoria }}</div>
-                            <div class="small fw-semibold text-dark">S/ {{ cat.venta.toFixed(2) }} <span class="text-muted fw-normal">(costo {{ cat.costo.toFixed(2) }})</span></div>
-                        </div>
-                    </div>
-                    <div v-if="diferenciaVentaFinal !== null" class="alert alert-warning small mt-3 mb-0">
-                        <i class="fas fa-triangle-exclamation me-1"></i>
-                        El "Precio venta (desde)" del tour (S/ {{ Number(paquete!.precio_venta_final).toFixed(2) }})
-                        no coincide con la suma de los ítems (S/ {{ totalesIncluye.ventaTotal.toFixed(2) }}).
-                        Diferencia: S/ {{ diferenciaVentaFinal.toFixed(2) }}.
-                        Si es intencional (descuento de paquete), podés ignorar este aviso.
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- ═══ TAB: Incluye (paquete_combo) ═══ -->
-        <div v-if="tabActiva === 'incluye' && esCombo">
-            <div class="card border-0 shadow-sm mb-3">
-                <div class="card-header bg-white border-bottom py-2">
-                    <span class="fw-semibold text-dark small">Agregar ítem incluido</span>
-                </div>
-                <div class="card-body py-3">
-                    <div class="btn-group btn-group-sm mb-2">
-                        <button class="btn" :class="tipoItemNuevo === 'tour' ? 'btn-primary' : 'btn-outline-secondary'" @click="tipoItemNuevo = 'tour'; cargarBibliotecaTours()">Tour completo</button>
-                        <button class="btn" :class="tipoItemNuevo === 'proveedor' ? 'btn-primary' : 'btn-outline-secondary'" @click="tipoItemNuevo = 'proveedor'">Servicio de proveedor</button>
-                        <button class="btn" :class="tipoItemNuevo === 'guia' ? 'btn-primary' : 'btn-outline-secondary'" @click="tipoItemNuevo = 'guia'">Guía de turismo</button>
-                    </div>
-
-                    <div v-if="tipoItemNuevo === 'tour'">
-                        <input type="text" class="form-control form-control-sm mb-2" placeholder="Buscar tour por nombre o código..."
-                            v-model="bibliotecaTourSearch" @input="onBibliotecaTourSearch">
-                        <div class="d-flex flex-column gap-1" style="max-height:280px;overflow-y:auto;">
-                            <div v-for="t in bibliotecaTours" :key="t.id" class="border rounded p-2 small lib-item"
-                                :class="{ 'border-primary bg-light': tourSeleccionado?.id === t.id, 'opacity-50': idsTourHijoEnItems.has(t.id) }"
-                                :style="idsTourHijoEnItems.has(t.id) ? 'cursor:not-allowed' : 'cursor:pointer'"
-                                @click="!idsTourHijoEnItems.has(t.id) && (tourSeleccionado = t)">
-                                <div class="d-flex justify-content-between align-items-start">
-                                    <div>
-                                        <strong>{{ t.nombre }}</strong>
-                                        <span v-if="idsTourHijoEnItems.has(t.id)" class="badge bg-secondary text-white ms-1" style="font-size:10px">Ya agregado</span>
-                                        <span v-if="t.codigo" class="text-muted"> · {{ t.codigo }}</span>
-                                        <div class="text-muted">{{ etiquetaCategoria(t.categoria) }} · {{ tourItemCounts[t.id] ?? 0 }} ítem(s) incluido(s)</div>
-                                    </div>
-                                    <span class="badge bg-light text-dark border">{{ t.precio_venta_final != null ? `S/ ${Number(t.precio_venta_final).toFixed(0)}` : '—' }}</span>
-                                </div>
-                            </div>
-                            <div v-if="bibliotecaTours.length === 0" class="text-muted small text-center py-2">Sin resultados.</div>
-                        </div>
-                    </div>
-
-                    <div v-else-if="tipoItemNuevo === 'proveedor'">
-                        <input type="text" class="form-control form-control-sm mb-2" placeholder="Buscar servicio de proveedor..."
-                            v-model="bibliotecaSearch" @input="onBibliotecaSearch">
-                        <div class="row g-2 mb-2">
-                            <div class="col-12 col-md-4">
-                                <DestinoTreeSelect v-model="filtroDestinoId" nivel-max="lugar" placeholder="Zona o destino..." />
-                            </div>
-                            <div class="col-6 col-md-4">
-                                <select class="form-select form-select-sm" v-model="filtroServicioId">
-                                    <option :value="null">Cualquier servicio</option>
-                                    <option v-for="s in serviciosFiltro" :key="s.id" :value="s.id">{{ s.nombre }}</option>
-                                </select>
-                            </div>
-                            <div class="col-6 col-md-4">
-                                <select class="form-select form-select-sm" v-model="filtroProveedorId">
-                                    <option :value="null">Cualquier proveedor</option>
-                                    <option v-for="p in proveedoresFiltro" :key="p.id" :value="p.id">{{ p.nombre_comercial ?? p.razon_social }}</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="d-flex flex-column gap-1" style="max-height:220px;overflow-y:auto;">
-                            <div v-for="t in bibliotecaTarifas" :key="t.id" class="border rounded p-2 small lib-item"
-                                :class="{ 'border-primary bg-light': proveedorTarifaSeleccionada?.id === t.id, 'opacity-50': idsProveedorTarifaEnItems.has(t.id) }"
-                                :style="idsProveedorTarifaEnItems.has(t.id) ? 'cursor:not-allowed' : 'cursor:pointer'"
-                                @click="!idsProveedorTarifaEnItems.has(t.id) && (proveedorTarifaSeleccionada = t)">
-                                <strong>{{ t.proveedor_servicio?.proveedor?.razon_social }}</strong>
-                                <span v-if="idsProveedorTarifaEnItems.has(t.id)" class="badge bg-secondary text-white ms-1" style="font-size:10px">Ya agregado</span>
-                                <span v-if="t.proveedor_servicio?.proveedor?.es_referencial" class="badge bg-secondary-subtle text-secondary border ms-1" style="font-size:10px">Referencial</span>
-                                <span class="text-muted"> — {{ t.proveedor_servicio?.destino_servicio?.servicio?.nombre }}<span v-if="t.tipo_habitacion"> · {{ t.tipo_habitacion }}</span></span>
-                            </div>
-                            <div v-if="bibliotecaTarifas.length === 0" class="text-muted small text-center py-2">Sin resultados.</div>
-                        </div>
-                    </div>
-
-                    <div v-else>
-                        <select class="form-select form-select-sm mb-2" v-model="guiaSeleccionadaId" @change="cargarTarifasGuia">
-                            <option :value="null">— Elegí un guía —</option>
-                            <option v-for="g in guias" :key="g.id" :value="g.id">{{ g.nombre }}{{ g.es_referencial ? ' (Referencial)' : '' }}</option>
-                        </select>
-                        <div class="d-flex flex-column gap-1" style="max-height:220px;overflow-y:auto;">
-                            <div v-for="t in tarifasGuia" :key="t.id" class="border rounded p-2 small lib-item"
-                                :class="{ 'border-primary bg-light': guiaTarifaSeleccionada?.id === t.id, 'opacity-50': idsGuiaTarifaEnItems.has(t.id) }"
-                                :style="idsGuiaTarifaEnItems.has(t.id) ? 'cursor:not-allowed' : 'cursor:pointer'"
-                                @click="!idsGuiaTarifaEnItems.has(t.id) && (guiaTarifaSeleccionada = t)">
-                                {{ t.destino?.nombre }} — {{ t.modalidad === 'dia_local' ? 'Día local' : 'Grupo multidía' }} ({{ t.moneda }} {{ t.costo_diario }})
-                                <span v-if="idsGuiaTarifaEnItems.has(t.id)" class="badge bg-secondary text-white ms-1" style="font-size:10px">Ya agregado</span>
-                            </div>
-                            <div v-if="guiaSeleccionadaId && tarifasGuia.length === 0" class="text-muted small text-center py-2">Este guía no tiene tarifas cargadas.</div>
-                        </div>
-                    </div>
-
-                    <div class="row g-2 align-items-end mt-2">
-                        <div class="col-6 col-md-3">
-                            <label class="form-label mb-1 small fw-semibold text-secondary">{{ tipoItemNuevo === 'tour' ? 'Día del combo' : 'Orden' }}</label>
-                            <input type="number" min="0" class="form-control form-control-sm" v-model.number="ordenItemNuevo">
-                        </div>
-                        <div class="col-6 col-md-3">
-                            <button class="btn btn-primary btn-sm w-100" @click="agregarItem" :disabled="agregandoItem || (!proveedorTarifaSeleccionada && !guiaTarifaSeleccionada && !tourSeleccionado)">
-                                <span v-if="agregandoItem" class="spinner-border spinner-border-sm me-1"></span>
-                                <i v-else class="fas fa-plus me-1"></i>Agregar
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Tours incluidos, agrupados en acordeón -->
-            <div v-for="grupo in itemsPorTourAgrupados" :key="grupo.item.id" class="card border-0 shadow-sm mb-2">
-                <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center py-2" style="cursor:pointer" @click="toggleExpandido(grupo.item.paquete_plantilla_hijo_id!)">
-                    <span class="fw-semibold text-dark small">
-                        <i class="fas fa-chevron-right me-2 text-muted" :class="{ 'fa-rotate-90': expandidos.has(grupo.item.paquete_plantilla_hijo_id!) }" style="font-size:10px"></i>
-                        Día {{ grupo.item.orden ?? '—' }}: {{ grupo.item.paquete_plantilla_hijo?.nombre }}
-                    </span>
-                    <span class="d-flex align-items-center gap-2">
-                        <span class="badge bg-light text-dark border">{{ grupo.item.paquete_plantilla_hijo?.precio_venta_final != null ? `S/ ${Number(grupo.item.paquete_plantilla_hijo.precio_venta_final).toFixed(0)}` : '—' }}</span>
-                        <span v-if="eliminandoItemId === grupo.item.id" class="spinner-border spinner-border-sm text-danger"></span>
-                        <i v-else class="fas fa-times text-danger" style="cursor:pointer" @click.stop="quitarTourHijo(grupo.item)"></i>
-                    </span>
-                </div>
-                <div v-if="expandidos.has(grupo.item.paquete_plantilla_hijo_id!)" class="card-body py-2">
-                    <div class="text-muted small fst-italic mb-2">Solo lectura — para editar estos ítems, entrá al tour.</div>
-                    <ul class="list-group list-group-flush">
-                        <li v-for="sub in (tourSubItemsCache[grupo.item.paquete_plantilla_hijo_id!] ?? [])" :key="sub.id" class="list-group-item small px-0">
-                            <span v-if="sub.proveedor_tarifa">
-                                <i class="fas fa-concierge-bell text-primary me-1"></i>{{ sub.proveedor_tarifa.proveedor_servicio?.proveedor?.razon_social }}
-                            </span>
-                            <span v-else-if="sub.guia_tarifa">
-                                <i class="fas fa-user-tie text-primary me-1"></i>Guía: {{ sub.guia_tarifa.guia?.nombre }}
-                            </span>
-                        </li>
-                        <li v-if="(tourSubItemsCache[grupo.item.paquete_plantilla_hijo_id!] ?? []).length === 0" class="list-group-item small px-0 text-muted fst-italic">
-                            Este tour todavía no tiene ítems cargados.
-                        </li>
-                    </ul>
-                </div>
-            </div>
-
-            <!-- Ítems sueltos (proveedor/guía directos sobre el combo) -->
-            <div v-if="itemsSueltos.length" class="card border-0 shadow-sm">
-                <div class="card-header bg-white border-bottom py-2"><span class="fw-semibold text-dark small">Ítems sueltos</span></div>
-                <ul class="list-group list-group-flush">
-                    <li v-for="item in itemsSueltos" :key="item.id" class="list-group-item d-flex justify-content-between align-items-center small">
-                        <span v-if="item.proveedor_tarifa">
-                            <i class="fas fa-concierge-bell text-primary me-1"></i>
-                            {{ item.proveedor_tarifa.proveedor_servicio?.proveedor?.razon_social }}
-                            <span v-if="item.proveedor_tarifa.proveedor_servicio?.proveedor?.es_referencial" class="badge bg-secondary-subtle text-secondary border ms-1" style="font-size:10px">Referencial</span>
-                        </span>
-                        <span v-else-if="item.guia_tarifa">
-                            <i class="fas fa-user-tie text-primary me-1"></i>Guía: {{ item.guia_tarifa.guia?.nombre }}
-                            <span v-if="item.guia_tarifa.guia?.es_referencial" class="badge bg-secondary-subtle text-secondary border ms-1" style="font-size:10px">Referencial</span>
-                        </span>
-                        <span v-if="eliminandoItemId === item.id" class="spinner-border spinner-border-sm text-danger"></span>
-                        <i v-else class="fas fa-times text-danger" style="cursor:pointer" @click="quitarItem(item)"></i>
-                    </li>
-                </ul>
-            </div>
-
-            <div v-if="itemsPorTourAgrupados.length === 0 && itemsSueltos.length === 0" class="text-muted fst-italic text-center py-4">
-                Este combo todavía no tiene tours ni ítems incluidos.
             </div>
         </div>
         </template>
@@ -1140,21 +1216,44 @@ const filtroProveedorId = ref<number | null>(null);
 const serviciosFiltro = ref<Servicio[]>([]);
 const proveedoresFiltro = ref<Proveedor[]>([]);
 
+// Paginación de la biblioteca — antes el backend traía como mucho 100
+// resultados sin avisar que había más. Ahora pagina de verdad: "cargar
+// más" pide la siguiente página y la concatena; cualquier cambio de
+// búsqueda/filtro vuelve a pedir desde la página 1 (reemplaza, no suma).
+const bibliotecaTarifasTotal = ref(0);
+const bibliotecaTarifasPage = ref(1);
+const bibliotecaTarifasHayMas = ref(false);
+const bibliotecaTarifasCargandoMas = ref(false);
+
 const onBibliotecaSearch = () => {
     clearTimeout(bibliotecaTimeout);
-    bibliotecaTimeout = setTimeout(cargarBiblioteca, 300);
+    bibliotecaTimeout = setTimeout(() => cargarBiblioteca(1), 300);
 };
 
 watch([filtroDestinoId, filtroServicioId, filtroProveedorId], onBibliotecaSearch);
 
-const cargarBiblioteca = async () => {
+const cargarBiblioteca = async (pagina = 1) => {
     const res = await proveedorService.biblioteca({
         search: bibliotecaSearch.value || undefined,
         destino_atractivo_id: filtroDestinoId.value ?? undefined,
         servicio_id: filtroServicioId.value ?? undefined,
         proveedor_id: filtroProveedorId.value ?? undefined,
+        page: pagina,
     });
-    bibliotecaTarifas.value = res.proveedor_tarifas;
+    bibliotecaTarifas.value = pagina === 1 ? res.proveedor_tarifas : [...bibliotecaTarifas.value, ...res.proveedor_tarifas];
+    bibliotecaTarifasTotal.value = res.total ?? bibliotecaTarifas.value.length;
+    bibliotecaTarifasPage.value = res.current_page ?? pagina;
+    bibliotecaTarifasHayMas.value = (res.current_page ?? pagina) < (res.last_page ?? pagina);
+};
+
+const cargarMasBiblioteca = async () => {
+    if (bibliotecaTarifasCargandoMas.value || !bibliotecaTarifasHayMas.value) return;
+    bibliotecaTarifasCargandoMas.value = true;
+    try {
+        await cargarBiblioteca(bibliotecaTarifasPage.value + 1);
+    } finally {
+        bibliotecaTarifasCargandoMas.value = false;
+    }
 };
 
 const guias = ref<Guia[]>([]);
@@ -1174,25 +1273,61 @@ const cargarTarifasGuia = async () => {
 const bibliotecaTourSearch = ref('');
 const bibliotecaTours = ref<PaquetePlantilla[]>([]);
 const tourSeleccionado = ref<PaquetePlantilla | null>(null);
-// Cantidad de ítems por tour — el listado GET /paquetes-plantilla no la trae
-// (no se tocó el backend en esta sesión, es frontend-only), se resuelve acá
-// con una llamada liviana por tour visible, reusando el endpoint existente.
-const tourItemCounts = ref<Record<number, number>>({});
+// Filtro por zona/destino — cada tour tiene su propio destino_atractivo_id
+// (ver DestinoAtractivo::idsConDescendientes en el backend), útil cuando el
+// catálogo de tours crece y abarca varias regiones o países a la vez.
+// Ref propia (no comparte filtroDestinoId con el picker de "Servicio de
+// proveedor") para que cambiar de tab no borre el filtro del otro.
+const filtroDestinoTourId = ref<number | null>(null);
+
+// Paginación — el backend de /paquetes-plantilla ya paginaba (15 por
+// página) pero el frontend nunca pedía la página 2 en adelante, así que
+// quedaba pegado a los primeros 15 tours sin importar cuántos hubiera.
+// "Cargar más" pide la siguiente página y concatena, mismo patrón que la
+// biblioteca de proveedores de arriba.
+const bibliotecaToursTotal = ref(0);
+const bibliotecaToursPage = ref(1);
+const bibliotecaToursHayMas = ref(false);
+const bibliotecaToursCargandoMas = ref(false);
 let bibliotecaTourTimeout: any = null;
 
 const onBibliotecaTourSearch = () => {
     clearTimeout(bibliotecaTourTimeout);
-    bibliotecaTourTimeout = setTimeout(cargarBibliotecaTours, 300);
+    bibliotecaTourTimeout = setTimeout(() => cargarBibliotecaTours(1), 300);
 };
 
-const cargarBibliotecaTours = async () => {
-    const res = await paquetePlantillaService.listar({ tipo: 'tour_simple', activo: true, search: bibliotecaTourSearch.value || undefined });
-    bibliotecaTours.value = (res.paquetes_plantilla as PaquetePlantilla[]).filter(t => t.id !== paqueteId.value);
-    for (const t of bibliotecaTours.value) {
-        if (tourItemCounts.value[t.id] !== undefined) continue;
-        paquetePlantillaService.listarItems(t.id).then(r => {
-            tourItemCounts.value[t.id] = r.paquete_plantilla_items.length;
-        });
+watch(filtroDestinoTourId, () => cargarBibliotecaTours(1));
+
+// La cantidad de ítems por tour ahora viene directo en items_count
+// (withCount('items') agregado en PaquetePlantillaController::index()) —
+// antes se pedía con un GET aparte por cada tour visible (N+1), que
+// además hubiera empeorado al agregar paginación acá.
+const cargarBibliotecaTours = async (pagina = 1) => {
+    const res = await paquetePlantillaService.listar({
+        tipo: 'tour_simple', activo: true, search: bibliotecaTourSearch.value || undefined,
+        destino_atractivo_id: filtroDestinoTourId.value ?? undefined,
+        page: pagina,
+    });
+    const crudos = res.paquetes_plantilla as PaquetePlantilla[];
+    const tandaTours = crudos.filter(t => t.id !== paqueteId.value);
+    bibliotecaTours.value = pagina === 1 ? tandaTours : [...bibliotecaTours.value, ...tandaTours];
+    bibliotecaToursTotal.value = res.total ?? bibliotecaTours.value.length;
+    bibliotecaToursPage.value = pagina;
+    // El backend pagina fijo a 15 por página (paginate(15)) y no devuelve
+    // last_page acá — se usa el tamaño CRUDO de la página (antes de
+    // filtrar el propio tour) para decidir si hay más: comparar contra el
+    // total filtrado se desalinea si el tour actual cae justo en una
+    // página intermedia.
+    bibliotecaToursHayMas.value = crudos.length === 15;
+};
+
+const cargarMasBibliotecaTours = async () => {
+    if (bibliotecaToursCargandoMas.value || !bibliotecaToursHayMas.value) return;
+    bibliotecaToursCargandoMas.value = true;
+    try {
+        await cargarBibliotecaTours(bibliotecaToursPage.value + 1);
+    } finally {
+        bibliotecaToursCargandoMas.value = false;
     }
 };
 
@@ -1215,6 +1350,12 @@ const idsGuiaTarifaEnItems = computed(() =>
 const idsTourHijoEnItems = computed(() =>
     new Set(items.value.map(i => i.paquete_plantilla_hijo_id).filter((id): id is number => id != null))
 );
+
+// Rediseño UI "Incluye" — items agrupados por tipo para la vista de
+// tarjetas (tour_simple). Se recalculan solos (computed) cada vez que
+// items.value cambia, igual que los sets de ids de arriba.
+const itemsProveedor = computed(() => items.value.filter(i => i.proveedor_tarifa));
+const itemsGuia = computed(() => items.value.filter(i => i.guia_tarifa));
 
 // ── Totales de "Incluye" (tour_simple) — costo/venta/margen, en vivo ──
 // Fix 3 — margen mínimo aceptable configurable por agencia (antes
@@ -1253,11 +1394,18 @@ const totalesIncluye = computed(() => {
 // una categoría fija en vez de resolverla contra el catálogo.
 const proveedorTipos = ref<ProveedorTipo[]>([]);
 
+// "Sin categoría" (antes "Otros") — la mayoría de los servicios de
+// proveedor todavía no tienen tipo_proveedor_id asignado (recién se
+// agregó el selector para hacerlo en Destinos → Servicios asociados,
+// ver destinos/index.vue), así que ESTE bucket va a concentrar casi
+// todo hasta que se clasifiquen. El nombre es deliberadamente honesto
+// (no es una categoría real, es "falta clasificar") para que no se
+// confunda con Venta total en el resumen.
 const categoriaItem = (item: PaquetePlantillaItem): string => {
     if (item.guia_tarifa) return 'Guía';
     const tipoProveedorId = item.proveedor_tarifa?.proveedor_servicio?.destino_servicio?.servicio?.tipo_proveedor_id;
     const tipo = proveedorTipos.value.find((t) => t.id === tipoProveedorId);
-    return tipo?.nombre ?? 'Otros';
+    return tipo?.nombre ?? 'Sin categoría';
 };
 
 const desglosePorCategoria = computed(() => {
@@ -1270,6 +1418,8 @@ const desglosePorCategoria = computed(() => {
     }
     return Object.values(acumulado);
 });
+
+const hayItemsSinCategoria = computed(() => desglosePorCategoria.value.some((c) => c.categoria === 'Sin categoría'));
 
 // Fix 4 — advertencia (no bloqueo) cuando el "Precio venta (desde)" manual
 // del tab "Datos" diverge de la suma calculada de ítems del tab "Incluye".
@@ -1367,16 +1517,20 @@ onMounted(async () => {
         servicioService.listar({ per_page: 200 }).then((res) => { serviciosFiltro.value = res.servicios ?? []; });
         proveedorService.listar({ estado: true }).then((res) => { proveedoresFiltro.value = res.proveedores ?? []; });
 
+        // cargarPaquete() va primero porque cargarItinerario() decide qué
+        // pedir según esCombo.value (derivado de paquete.value). El resto
+        // de las cargas de esta pantalla son independientes entre sí, así
+        // que se disparan juntas con Promise.all en vez de un await por
+        // línea — mismo resultado, pero un solo "round-trip" de espera en
+        // vez de 4 seguidos.
         await cargarPaquete();
-        await cargarItinerario();
-        await cargarItems();
-        await cargarBiblioteca();
-
-        const res = await guiaService.listar({});
-        guias.value = res.guias ?? [];
-
-        const tipos = await proveedorTipoService.listar();
-        proveedorTipos.value = tipos.proveedor_tipos;
+        await Promise.all([
+            cargarItinerario(),
+            cargarItems(),
+            cargarBiblioteca(),
+            guiaService.listar({}).then((res) => { guias.value = res.guias ?? []; }),
+            proveedorTipoService.listar().then((tipos) => { proveedorTipos.value = tipos.proveedor_tipos; }),
+        ]);
     } catch (error: any) {
         (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo cargar el paquete/tour.', 'error');
     } finally {
@@ -1384,3 +1538,279 @@ onMounted(async () => {
     }
 });
 </script>
+
+<style scoped>
+/* ═══ Rediseño tab "Incluye" — selector de tipo, tarjetas de biblioteca/
+   incluidos, barra de selección y panel sticky de resumen. Nombres con
+   prefijo av- (Agencia de Viajes) para no chocar con clases globales. ═══ */
+
+.av-type-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .5rem;
+}
+
+.av-type-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: .5rem;
+    padding: .45rem .85rem;
+    border: 1px solid #dee2e6;
+    border-radius: .5rem;
+    background: #fff;
+    font-size: .8125rem;
+    font-weight: 600;
+    color: #495057;
+    cursor: pointer;
+    transition: border-color .15s ease, color .15s ease, background-color .15s ease;
+}
+
+.av-type-tab:hover {
+    border-color: var(--bs-primary, #0d6efd);
+    color: var(--bs-primary, #0d6efd);
+}
+
+.av-type-tab.active {
+    background: var(--bs-primary, #0d6efd);
+    border-color: var(--bs-primary, #0d6efd);
+    color: #fff;
+}
+
+.av-type-tab-icon {
+    font-size: .8rem;
+}
+
+.av-search {
+    position: relative;
+}
+
+.av-search > i {
+    position: absolute;
+    left: .7rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #adb5bd;
+    font-size: .75rem;
+    pointer-events: none;
+}
+
+.av-search .form-control {
+    padding-left: 1.9rem;
+}
+
+.av-lib-grid,
+.av-included-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(255px, 1fr));
+    gap: .6rem;
+    padding: 2px;
+}
+
+.av-lib-grid {
+    max-height: 320px;
+    overflow-y: auto;
+}
+
+.av-item-card {
+    position: relative;
+    display: flex;
+    align-items: flex-start;
+    gap: .6rem;
+    border: 1px solid #e9ecef;
+    border-radius: .6rem;
+    padding: .6rem .7rem;
+    background: #fff;
+    cursor: pointer;
+    transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease, opacity .12s ease;
+}
+
+.av-item-card:hover:not(.is-added) {
+    border-color: var(--bs-primary, #0d6efd);
+    box-shadow: 0 2px 10px rgba(13, 110, 253, .12);
+    transform: translateY(-1px);
+}
+
+.av-item-card.is-selected {
+    border-color: var(--bs-primary, #0d6efd);
+    background: #f5f9ff;
+    box-shadow: 0 0 0 2px rgba(13, 110, 253, .15) inset;
+}
+
+.av-item-card.is-added {
+    opacity: .55;
+    cursor: not-allowed;
+}
+
+.av-item-card--flat {
+    cursor: default;
+}
+
+.av-item-card--flat:hover {
+    transform: none;
+    box-shadow: none;
+    border-color: #e9ecef;
+}
+
+.av-item-icon {
+    width: 34px;
+    height: 34px;
+    min-width: 34px;
+    border-radius: .5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: .85rem;
+}
+
+.av-item-body {
+    flex: 1;
+    min-width: 0;
+}
+
+.av-item-title {
+    font-size: .8125rem;
+    font-weight: 600;
+    color: #212529;
+    line-height: 1.3;
+}
+
+.av-item-sub {
+    font-size: .72rem;
+    color: #6c757d;
+    margin-top: 1px;
+}
+
+.av-item-tags {
+    margin-top: .3rem;
+}
+
+.av-item-side {
+    text-align: right;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: .25rem;
+    min-width: 72px;
+}
+
+.av-item-price {
+    font-size: .78rem;
+    font-weight: 700;
+    color: #212529;
+    white-space: nowrap;
+}
+
+.av-item-cost {
+    font-size: .66rem;
+    color: #adb5bd;
+    white-space: nowrap;
+}
+
+.av-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: .25rem;
+    font-size: .62rem;
+    font-weight: 700;
+    padding: .15rem .4rem;
+    border-radius: 1rem;
+    white-space: nowrap;
+}
+
+.av-badge-added {
+    background: #e9ecef;
+    color: #6c757d;
+}
+
+.av-badge-selected {
+    background: #d1e7ff;
+    color: #0d6efd;
+}
+
+.av-badge-muted {
+    background: #f1f3f5;
+    color: #868e96;
+    font-weight: 600;
+    margin-left: .25rem;
+}
+
+.av-selection-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: .75rem;
+    flex-wrap: wrap;
+    background: #f5f9ff;
+    border: 1px solid #d1e7ff;
+    border-radius: .6rem;
+    padding: .6rem .8rem;
+}
+
+.av-selection-info {
+    font-size: .8125rem;
+    font-weight: 600;
+    color: #212529;
+}
+
+.av-group-title {
+    font-size: .7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: #868e96;
+    margin-bottom: .5rem;
+}
+
+.av-tour-card .av-chevron {
+    transition: transform .15s ease;
+}
+
+/* Panel de resumen — sticky en pantallas grandes, en flujo normal en
+   mobile (evita solaparse con el contenido en pantallas angostas). */
+.av-summary-sticky {
+    position: sticky;
+    top: 1rem;
+}
+
+@media (max-width: 991.98px) {
+    .av-summary-sticky {
+        position: static;
+    }
+}
+
+/* Transiciones — feedback visual al agregar/quitar ítems (punto 3 del
+   rediseño). av-fade cubre tarjetas de biblioteca e ítems incluidos;
+   av-expand cubre el acordeón de tours del combo. */
+.av-fade-enter-active,
+.av-fade-leave-active {
+    transition: opacity .2s ease, transform .2s ease;
+}
+
+.av-fade-enter-from {
+    opacity: 0;
+    transform: translateY(-6px) scale(.98);
+}
+
+.av-fade-leave-to {
+    opacity: 0;
+    transform: translateX(12px) scale(.98);
+}
+
+.av-fade-leave-active {
+    position: absolute;
+}
+
+.av-fade-move {
+    transition: transform .2s ease;
+}
+
+.av-expand-enter-active,
+.av-expand-leave-active {
+    transition: opacity .18s ease;
+}
+
+.av-expand-enter-from,
+.av-expand-leave-to {
+    opacity: 0;
+}
+</style>

@@ -79,21 +79,35 @@
                         <button class="btn-close" @click="modalServiciosAbierto = false"></button>
                     </div>
                     <div class="modal-body">
-                        <div class="input-group input-group-sm mb-2">
-                            <select class="form-select" v-model="servicioNuevoId">
-                                <option :value="null">— Selecciona un servicio —</option>
-                                <option v-for="s in servicios" :key="s.id" :value="s.id">{{ s.nombre }}</option>
-                            </select>
-                            <button class="btn btn-primary" @click="asociarServicio" :disabled="!servicioNuevoId">
-                                <i class="fas fa-plus"></i>
-                            </button>
+                        <div class="mb-2">
+                            <input type="text" class="form-control form-control-sm" v-model="servicioBusqueda"
+                                placeholder="Buscar un servicio del catálogo para asociar...">
+                            <div v-if="servicioBusqueda.trim().length >= 2" class="list-group mt-1" style="max-height:160px; overflow-y:auto;">
+                                <div v-if="buscandoServicio" class="text-center py-2"><span class="spinner-border spinner-border-sm"></span></div>
+                                <div v-else-if="servicioResultados.length === 0" class="list-group-item text-muted small fst-italic">Sin resultados.</div>
+                                <template v-else>
+                                    <button v-for="s in servicioResultados" :key="s.id" type="button"
+                                        class="list-group-item list-group-item-action small py-1"
+                                        :disabled="asociandoServicio" @click="asociarServicioExistente(s)">
+                                        <i class="fas fa-plus me-1 text-success"></i>{{ s.nombre }}
+                                    </button>
+                                </template>
+                            </div>
                         </div>
                         <!-- Alta rápida: el catálogo de servicios (Traslado, Hospedaje,
                              Entrada/Boleto...) no tiene pantalla propia en esta sesión —
                              se crea acá mismo, donde se necesita, mismo espíritu que
-                             ClientFormQuick/ProductFormQuick del core. -->
+                             ClientFormQuick/ProductFormQuick del core. El selector de
+                             "Tipo de proveedor" es opcional — de acá sale el
+                             tipo_proveedor_id que alimenta el desglose por categoría
+                             de paquetes/detalle.vue (antes no había forma de asignarlo
+                             desde ningún lado, todo caía en "Sin categoría"). -->
                         <div class="input-group input-group-sm mb-3">
                             <input type="text" class="form-control" placeholder="¿No está en la lista? Escribe el nombre y créalo..." v-model="servicioNuevoNombre">
+                            <select class="form-select" style="max-width:150px" v-model="tipoProveedorNuevoId" title="Tipo de proveedor (opcional)">
+                                <option :value="null">Sin categoría</option>
+                                <option v-for="t in proveedorTipos" :key="t.id" :value="t.id">{{ t.nombre }}</option>
+                            </select>
                             <button class="btn btn-outline-success" @click="crearServicioRapido" :disabled="!servicioNuevoNombre.trim()">
                                 <i class="fas fa-plus-circle me-1"></i>Crear
                             </button>
@@ -106,6 +120,10 @@
                                     </small>
                                     <div class="input-group input-group-sm">
                                         <input type="text" class="form-control" v-model="editandoServicioNombre" @keyup.enter="guardarNombreServicio">
+                                        <select class="form-select" style="max-width:150px" v-model="editandoTipoProveedorId" title="Tipo de proveedor (opcional)">
+                                            <option :value="null">Sin categoría</option>
+                                            <option v-for="t in proveedorTipos" :key="t.id" :value="t.id">{{ t.nombre }}</option>
+                                        </select>
                                         <button class="btn btn-outline-success" @click="guardarNombreServicio" :disabled="!editandoServicioNombre.trim()">
                                             <i class="fas fa-check"></i>
                                         </button>
@@ -127,6 +145,8 @@
                                 </div>
                                 <template v-else>
                                     {{ ds.servicio?.nombre }}
+                                    <span v-if="nombreTipoServicio(ds)" class="badge bg-light text-dark border ms-1" style="font-size:10px">{{ nombreTipoServicio(ds) }}</span>
+                                    <span v-else class="badge bg-warning-subtle text-warning border ms-1" style="font-size:10px">Sin categoría</span>
                                     <span>
                                         <button class="btn btn-sm btn-outline-primary me-1" title="Mover a otro destino" @click="iniciarMoverServicio(ds.id)">
                                             <i class="fas fa-arrows-alt"></i>
@@ -152,20 +172,20 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import DestinoTreeSelect from '@/components/AgenciaViajes/DestinoTreeSelect.vue';
 import Swal from 'sweetalert2/dist/sweetalert2.js';
 import { destinoAtractivoService } from '@/services/admin/destinoAtractivoService';
 import { servicioService } from '@/services/admin/servicioService';
-import type { DestinoAtractivo, DestinoServicio, Servicio } from '@/types/agencia-viajes';
+import { proveedorTipoService } from '@/services/admin/proveedorService';
+import type { DestinoAtractivo, DestinoServicio, Servicio, ProveedorTipo } from '@/types/agencia-viajes';
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
 
 type Fila = { id: number; nombre: string; tipo: 'zona' | 'lugar' | 'atractivo'; parentId: number | null; profundidad: number; tieneHijos: boolean };
 
 const arbol = ref<DestinoAtractivo[]>([]);
-const servicios = ref<Servicio[]>([]);
 const loading = ref<boolean>(false);
 const expandidos = ref<Set<number>>(new Set());
 
@@ -234,42 +254,98 @@ const eliminar = (fila: Fila) => {
 const modalServiciosAbierto = ref<boolean>(false);
 const destinoServiciosActivo = ref<Fila | null>(null);
 const destinoServiciosLista = ref<DestinoServicio[]>([]);
-const servicioNuevoId = ref<number | null>(null);
 const servicioNuevoNombre = ref<string>('');
+
+// Búsqueda de servicios existentes para asociar (Sesión pagina/detalle.vue) —
+// antes precargaba TODO el catálogo (per_page:200) en un <select>; con el
+// catálogo creciendo eso se vuelve lento e inmanejable. Ahora busca en el
+// backend con debounce, mismo patrón que DestinoServicioPicker.vue.
+const servicioBusqueda = ref<string>('');
+const servicioResultados = ref<Servicio[]>([]);
+const buscandoServicio = ref<boolean>(false);
+const asociandoServicio = ref<boolean>(false);
+let servicioBusquedaTimeout: ReturnType<typeof setTimeout> | undefined;
 const editandoServicioId = ref<number | null>(null);
 const editandoServicioNombre = ref<string>('');
 const moviendoServicioId = ref<number | null>(null);
 const moviendoDestinoNuevoId = ref<number | null>(null);
 
+// Tipo de proveedor (Hotel/Transporte/Mayorista/...) — catálogo central,
+// opcional. Antes no había forma de asignarlo a un servicio desde ningún
+// lado del frontend, así que el desglose por categoría de
+// paquetes/detalle.vue caía siempre en "Sin categoría". Se agrega acá,
+// donde ya se crean/editan los servicios.
+const proveedorTipos = ref<ProveedorTipo[]>([]);
+const tipoProveedorNuevoId = ref<number | null>(null);
+const editandoTipoProveedorId = ref<number | null>(null);
+
+const nombreTipoServicio = (ds: DestinoServicio): string | null => {
+    const tipoId = ds.servicio?.tipo_proveedor_id;
+    if (!tipoId) return null;
+    return proveedorTipos.value.find((t) => t.id === tipoId)?.nombre ?? null;
+};
+
 const abrirServicios = async (fila: Fila) => {
     destinoServiciosActivo.value = fila;
-    servicioNuevoId.value = null;
+    servicioBusqueda.value = '';
+    servicioResultados.value = [];
     servicioNuevoNombre.value = '';
     modalServiciosAbierto.value = true;
     const res = await destinoAtractivoService.listarServicios(fila.id);
     destinoServiciosLista.value = res.destino_servicios;
 };
 
+// Crea el servicio y lo asocia al destino en un solo paso — ya no hace
+// falta el select+botón "asociar" que existía antes (búsqueda reemplaza
+// la mitad de ese flujo, esto reemplaza la otra mitad).
 const crearServicioRapido = async () => {
+    if (!destinoServiciosActivo.value) return;
     try {
-        const res = await servicioService.crear({ nombre: servicioNuevoNombre.value.trim() });
-        servicios.value.push(res.servicio);
-        servicioNuevoId.value = res.servicio.id;
+        const res = await servicioService.crear({
+            nombre: servicioNuevoNombre.value.trim(),
+            tipo_proveedor_id: tipoProveedorNuevoId.value,
+        });
+        await destinoAtractivoService.asociarServicio(destinoServiciosActivo.value.id, res.servicio.id);
+        const listado = await destinoAtractivoService.listarServicios(destinoServiciosActivo.value.id);
+        destinoServiciosLista.value = listado.destino_servicios;
         servicioNuevoNombre.value = '';
+        tipoProveedorNuevoId.value = null;
     } catch (error: any) {
         (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo crear el servicio', 'error');
     }
 };
 
-const asociarServicio = async () => {
-    if (!destinoServiciosActivo.value || !servicioNuevoId.value) return;
+// Ya asociados quedan fuera de los resultados — no tiene sentido ofrecer
+// asociar de nuevo algo que ya está en la lista de abajo.
+watch(servicioBusqueda, (q) => {
+    clearTimeout(servicioBusquedaTimeout);
+    servicioResultados.value = [];
+    if (q.trim().length < 2) return;
+    servicioBusquedaTimeout = setTimeout(async () => {
+        buscandoServicio.value = true;
+        try {
+            const res = await servicioService.listar({ search: q.trim() });
+            const idsAsociados = new Set(destinoServiciosLista.value.map((ds) => ds.servicio?.id));
+            servicioResultados.value = (res.servicios ?? []).filter((s: Servicio) => !idsAsociados.has(s.id));
+        } finally {
+            buscandoServicio.value = false;
+        }
+    }, 300);
+});
+
+const asociarServicioExistente = async (servicio: Servicio) => {
+    if (!destinoServiciosActivo.value || asociandoServicio.value) return;
+    asociandoServicio.value = true;
     try {
-        await destinoAtractivoService.asociarServicio(destinoServiciosActivo.value.id, servicioNuevoId.value);
+        await destinoAtractivoService.asociarServicio(destinoServiciosActivo.value.id, servicio.id);
         const res = await destinoAtractivoService.listarServicios(destinoServiciosActivo.value.id);
         destinoServiciosLista.value = res.destino_servicios;
-        servicioNuevoId.value = null;
+        servicioBusqueda.value = '';
+        servicioResultados.value = [];
     } catch (error: any) {
         (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo asociar', 'error');
+    } finally {
+        asociandoServicio.value = false;
     }
 };
 
@@ -277,26 +353,31 @@ const iniciarEdicionServicio = (ds: DestinoServicio) => {
     if (!ds.servicio) return;
     editandoServicioId.value = ds.servicio.id;
     editandoServicioNombre.value = ds.servicio.nombre;
+    editandoTipoProveedorId.value = ds.servicio.tipo_proveedor_id ?? null;
 };
 
 const cancelarEdicionServicio = () => {
     editandoServicioId.value = null;
     editandoServicioNombre.value = '';
+    editandoTipoProveedorId.value = null;
 };
 
 // Renombra la fila real del catálogo compartido de servicios (no una
 // copia local) — afecta a todos los destinos/proveedores que ya lo usan.
+// Lo mismo para el tipo de proveedor: se guarda en el servicio, no en
+// esta asociación puntual con el destino.
 const guardarNombreServicio = async () => {
     if (!editandoServicioId.value || !editandoServicioNombre.value.trim()) return;
     try {
-        await servicioService.actualizar(editandoServicioId.value, { nombre: editandoServicioNombre.value.trim() });
+        await servicioService.actualizar(editandoServicioId.value, {
+            nombre: editandoServicioNombre.value.trim(),
+            tipo_proveedor_id: editandoTipoProveedorId.value,
+        });
         cancelarEdicionServicio();
         if (destinoServiciosActivo.value) {
             const res = await destinoAtractivoService.listarServicios(destinoServiciosActivo.value.id);
             destinoServiciosLista.value = res.destino_servicios;
         }
-        const serviciosRes = await servicioService.listar({ per_page: 200 });
-        servicios.value = serviciosRes.servicios;
     } catch (error: any) {
         (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo actualizar el servicio', 'error');
     }
@@ -364,8 +445,14 @@ const confirmarMoverServicio = async (dsId: number) => {
 };
 
 onMounted(async () => {
-    await cargarArbol();
-    const res = await servicioService.listar({ per_page: 200 });
-    servicios.value = res.servicios;
+    // 2 cargas independientes entre sí (árbol de destinos, catálogo de tipos
+    // de proveedor) — en paralelo, mismo criterio que paquetes/detalle.vue.
+    // El catálogo de servicios ya NO se precarga entero acá — con el
+    // catálogo creciendo eso era cada vez más lento; ahora se busca bajo
+    // demanda dentro del modal (ver watch(servicioBusqueda, ...)).
+    await Promise.all([
+        cargarArbol(),
+        proveedorTipoService.listar().then((res) => { proveedorTipos.value = res.proveedor_tipos; }),
+    ]);
 });
 </script>

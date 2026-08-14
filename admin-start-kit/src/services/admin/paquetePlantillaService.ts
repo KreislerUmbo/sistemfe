@@ -8,7 +8,7 @@ import type {
 } from '@/types/agencia-viajes'
 
 export const paquetePlantillaService = {
-  async listar(params: { page?: number; search?: string; categoria?: string; tipo?: string; activo?: boolean } = {}) {
+  async listar(params: { page?: number; search?: string; categoria?: string; tipo?: string; activo?: boolean; destino_atractivo_id?: number } = {}) {
     const response = await httpClient.get('/paquetes-plantilla', { params })
     return response.data
   },

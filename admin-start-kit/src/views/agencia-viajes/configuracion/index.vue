@@ -301,6 +301,7 @@ import RichTextEditor from '@/components/RichTextEditor.vue';
 import Swal from 'sweetalert2/dist/sweetalert2.js';
 import { configuracionAgenciaService } from '@/services/admin/configuracionAgenciaService';
 import { cuentaBancariaService } from '@/services/admin/cuentaBancariaService';
+import { useAgenciaViajesCatalogosStore } from '@/stores/agenciaViajesCatalogos';
 import type { ConfiguracionAgencia, CuentaBancaria } from '@/types/agencia-viajes';
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
@@ -425,6 +426,10 @@ const guardar = async () => {
     guardando.value = true;
     try {
         const res = await configuracionAgenciaService.actualizar(form.value);
+        // Sin esto, paquetes/detalle.vue y cotizador/editar.vue seguirían
+        // sirviendo el margen_minimo/etc. viejo desde el cache compartido
+        // (TTL 60s) hasta que expire solo — ver agenciaViajesCatalogos.ts.
+        useAgenciaViajesCatalogosStore().invalidarConfigAgencia();
         (Swal as TVueSwalInstance).fire('Listo', res.message, 'success');
     } catch (error: any) {
         (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo guardar', 'error');

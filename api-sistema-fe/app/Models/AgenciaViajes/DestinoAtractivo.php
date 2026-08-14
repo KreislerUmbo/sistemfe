@@ -33,4 +33,28 @@ class DestinoAtractivo extends Model
     {
         return $this->hasMany(self::class, 'parent_id');
     }
+
+    // Zona/lugar → todos sus descendientes (BFS nivel por nivel), para que
+    // filtrar por un nodo padre del árbol también traiga resultados de sus
+    // hijos — un atractivo hoja (sin hijos) cae en el caso base y se
+    // comporta igual que un match exacto. Centralizado acá (antes vivía
+    // duplicado como método privado en ProveedorTarifaController) para que
+    // cualquier filtro por destino en el vertical (biblioteca de
+    // proveedores, biblioteca de tours) use la misma lógica.
+    public static function idsConDescendientes(int $destinoAtractivoId): array
+    {
+        $ids = [$destinoAtractivoId];
+        $nivelActual = [$destinoAtractivoId];
+
+        while (! empty($nivelActual)) {
+            $hijos = self::whereIn('parent_id', $nivelActual)->pluck('id')->all();
+            if (empty($hijos)) {
+                break;
+            }
+            $ids = array_merge($ids, $hijos);
+            $nivelActual = $hijos;
+        }
+
+        return $ids;
+    }
 }

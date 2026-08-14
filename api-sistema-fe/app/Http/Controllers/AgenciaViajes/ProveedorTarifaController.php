@@ -71,7 +71,7 @@ class ProveedorTarifaController extends Controller
         // casi ningún proveedor cuelga directo del nodo padre — ahora
         // incluye también todos sus descendientes (lugares/atractivos).
         $query->when($request->get('destino_atractivo_id'), function ($q, $destinoAtractivoId) {
-            $ids = $this->idsConDescendientes((int) $destinoAtractivoId);
+            $ids = DestinoAtractivo::idsConDescendientes((int) $destinoAtractivoId);
             $q->whereHas('proveedorServicio.destinoServicio', fn ($qq) => $qq->whereIn('destino_atractivo_id', $ids));
         });
 
@@ -91,28 +91,23 @@ class ProveedorTarifaController extends Controller
         // que los demás filtros de acá arriba.
         $query->when($request->get('tipo_habitacion'), fn ($q, $th) => $q->where('tipo_habitacion', $th));
 
-        return response()->json(['proveedor_tarifas' => $query->orderByDesc('id')->limit(100)->get()]);
-    }
+        // Antes: ->limit(100)->get() — sin total ni forma de pedir más, así
+        // que pasado el resultado 100 el usuario perdía resultados en
+        // silencio, sin ningún aviso. paquetes/detalle.vue (picker de
+        // "Servicio de proveedor" en Incluye) es el único consumidor de
+        // este endpoint (confirmado por grep en el frontend) — paginación
+        // real acá no afecta a ninguna otra pantalla.
+        $perPage = min((int) $request->input('per_page', 30), 100);
 
-    // Zona/lugar → todos sus descendientes (BFS nivel por nivel), para que
-    // filtrar por un nodo padre del árbol de destinos_atractivos también
-    // traiga resultados de sus hijos — un atractivo hoja (sin hijos) cae en
-    // el caso base y se comporta igual que el match exacto de antes.
-    private function idsConDescendientes(int $destinoAtractivoId): array
-    {
-        $ids = [$destinoAtractivoId];
-        $nivelActual = [$destinoAtractivoId];
+        $paginado = $query->orderByDesc('id')->paginate($perPage);
 
-        while (! empty($nivelActual)) {
-            $hijos = DestinoAtractivo::whereIn('parent_id', $nivelActual)->pluck('id')->all();
-            if (empty($hijos)) {
-                break;
-            }
-            $ids = array_merge($ids, $hijos);
-            $nivelActual = $hijos;
-        }
-
-        return $ids;
+        return response()->json([
+            'proveedor_tarifas' => $paginado->items(),
+            'total' => $paginado->total(),
+            'per_page' => $perPage,
+            'current_page' => $paginado->currentPage(),
+            'last_page' => $paginado->lastPage(),
+        ]);
     }
 
     public function store(Request $request, string $proveedorServicioId)

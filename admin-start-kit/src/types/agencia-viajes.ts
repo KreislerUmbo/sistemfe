@@ -502,6 +502,10 @@ export type PaquetePlantilla = {
   // Solo presente en index() para tipo=paquete_combo (Sesión 11b4a) — ver
   // PaquetePlantillaController::index().
   precio_calculado?: ComboPrecioCalculado;
+  // withCount('items') en PaquetePlantillaController::index() — solo viene
+  // en el listado, evita un GET aparte por tour para saber cuántos ítems
+  // tiene (ver bibliotecaTours en paquetes/detalle.vue).
+  items_count?: number;
 };
 
 export type PaquetePlantillaItem = {

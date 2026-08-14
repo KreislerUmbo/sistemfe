@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\AgenciaViajes;
 
 use App\Http\Controllers\Controller;
+use App\Models\AgenciaViajes\DestinoAtractivo;
 use App\Models\AgenciaViajes\PaquetePlantilla;
 use App\Models\AgenciaViajes\PaquetePlantillaItem;
 use App\Models\AgenciaViajes\TourItinerarioItem;
@@ -58,7 +59,22 @@ class PaquetePlantillaController extends Controller
             });
         }
 
-        $paquetes = $query->with('destinoAtractivo')->orderByDesc('id')->paginate(15);
+        // Filtro por zona/destino — el catálogo de tours puede abarcar
+        // varias regiones o incluso países a la vez, así que además de
+        // texto libre hace falta poder acotar por destino. Incluye
+        // descendientes del nodo elegido (ver DestinoAtractivo::idsConDescendientes),
+        // mismo criterio que el filtro de zona de la biblioteca de
+        // proveedores (ProveedorTarifaController::biblioteca()).
+        $query->when($request->get('destino_atractivo_id'), function ($q, $destinoAtractivoId) {
+            $ids = DestinoAtractivo::idsConDescendientes((int) $destinoAtractivoId);
+            $q->whereIn('destino_atractivo_id', $ids);
+        });
+
+        // withCount('items') — antes el frontend (paquetes/detalle.vue,
+        // biblioteca de tours para armar combos) pedía esto tour por tour
+        // con una llamada HTTP aparte por cada fila visible (N+1). Viene
+        // gratis en la misma consulta como `items_count`.
+        $paquetes = $query->with('destinoAtractivo')->withCount('items')->orderByDesc('id')->paginate(15);
 
         // precio_calculado: SOLO para paquete_combo — su precio no tiene
         // sentido como valor guardado (depende en vivo de los tours

@@ -70,9 +70,11 @@ export const proveedorService = {
   // zona/servicio/proveedor (combinables entre sí). tipo_habitacion —
   // consolidación de hoteles — filtra directo por tipo de habitación entre
   // todas las tarifas de hotel.
-  async biblioteca(params: { search?: string; destino_atractivo_id?: number; servicio_id?: number; proveedor_id?: number; tipo_habitacion?: string } = {}) {
+  // Paginado real desde el backend (antes: limit(100) fijo, sin total ni
+  // forma de pedir más — resultados 101+ se perdían en silencio).
+  async biblioteca(params: { search?: string; destino_atractivo_id?: number; servicio_id?: number; proveedor_id?: number; tipo_habitacion?: string; page?: number; per_page?: number } = {}) {
     const response = await httpClient.get('/proveedor-tarifas', { params })
-    return response.data as { proveedor_tarifas: ProveedorTarifa[] }
+    return response.data as { proveedor_tarifas: ProveedorTarifa[]; total: number; per_page: number; current_page: number; last_page: number }
   },
 
   // ── Tarifas (proveedor_tarifas) ─────────────────────────────────────

@@ -361,9 +361,9 @@ import { useRoute } from 'vue-router';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import DestinoTreeSelect from '@/components/AgenciaViajes/DestinoTreeSelect.vue';
 import Swal from 'sweetalert2/dist/sweetalert2.js';
-import { proveedorService, proveedorTipoService } from '@/services/admin/proveedorService';
+import { proveedorService } from '@/services/admin/proveedorService';
 import { destinoAtractivoService } from '@/services/admin/destinoAtractivoService';
-import { configuracionAgenciaService } from '@/services/admin/configuracionAgenciaService';
+import { useAgenciaViajesCatalogosStore } from '@/stores/agenciaViajesCatalogos';
 import { formatFecha } from '@/helpers/fecha';
 import type { Proveedor, ProveedorTipo, ProveedorServicio, ProveedorTarifa, DestinoServicio, ConfiguracionAgencia } from '@/types/agencia-viajes';
 
@@ -428,10 +428,16 @@ const cargarProveedor = async () => {
 const cargarServicios = async () => {
     const res = await proveedorService.listarServicios(proveedorId.value);
     proveedorServicios.value = res.proveedor_servicios;
-    for (const ps of proveedorServicios.value) {
-        const tarifasRes = await proveedorService.listarTarifas(ps.id);
-        tarifasPorServicio.value[ps.id] = tarifasRes.proveedor_tarifas;
-    }
+    // Antes pedía las tarifas de cada servicio una por una (await dentro del
+    // for) — un proveedor con 8-10 servicios asociados disparaba 8-10
+    // requests secuenciales antes de poder ver/editar ningún precio. Ninguna
+    // depende de las otras, así que van todas en paralelo.
+    const tarifasPorPs = await Promise.all(
+        proveedorServicios.value.map((ps) => proveedorService.listarTarifas(ps.id))
+    );
+    proveedorServicios.value.forEach((ps, i) => {
+        tarifasPorServicio.value[ps.id] = tarifasPorPs[i].proveedor_tarifas;
+    });
 };
 
 const asociarServicio = async () => {
@@ -556,13 +562,17 @@ const eliminarTarifa = (tarifa: ProveedorTarifa) => {
 };
 
 onMounted(async () => {
-    const tiposRes = await proveedorTipoService.listar();
-    proveedorTipos.value = tiposRes.proveedor_tipos;
-
-    const configRes = await configuracionAgenciaService.obtener();
-    configAgencia.value = configRes.configuracion_agencia;
-
-    await cargarProveedor();
-    await cargarServicios();
+    // Las 4 son independientes entre sí — en paralelo. proveedor-tipos y
+    // configuracion-agencia salen del cache compartido (TTL 60s, ver
+    // src/stores/agenciaViajesCatalogos.ts) en vez de pedirse de cero.
+    const catalogos = useAgenciaViajesCatalogosStore();
+    const [tipos, config] = await Promise.all([
+        catalogos.obtenerProveedorTipos(),
+        catalogos.obtenerConfigAgencia(),
+        cargarProveedor(),
+        cargarServicios(),
+    ]);
+    proveedorTipos.value = tipos;
+    configAgencia.value = config;
 });
 </script>
