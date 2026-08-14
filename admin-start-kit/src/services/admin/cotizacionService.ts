@@ -22,9 +22,19 @@ export const cotizacionService = {
     const response = await httpClient.post('/cotizaciones', data)
     return response.data
   },
-  async actualizarPasajeros(id: number, pasajeros: Array<Partial<CotizacionPasajero>>) {
+  // id presente → edita ese pasajero puntual; sin id → lo crea. El
+  // backend hace diff por id (no borra-y-recrea todo), y devuelve cuántos
+  // ítems 'por_persona' recalculó solo vs. cuáles quedaron pendientes de
+  // revisar a mano — ver CotizacionController::actualizarPasajeros().
+  async actualizarPasajeros(id: number, pasajeros: Array<Pick<CotizacionPasajero, 'edad'> & Partial<Pick<CotizacionPasajero, 'id'>>>) {
     const response = await httpClient.put(`/cotizaciones/${id}/pasajeros`, { pasajeros })
-    return response.data
+    return response.data as {
+      code: number
+      message: string
+      cotizacion: Cotizacion
+      items_recalculados: number
+      items_para_revisar: Array<{ alternativa_item_id: number; alternativa_id: number; alternativa_nombre: string; motivo: string }>
+    }
   },
   // Corregir cliente/destino/fechas después de creada — antes solo existía
   // store()/actualizarPasajeros(), sin forma de arreglar un dato mal

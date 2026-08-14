@@ -20,6 +20,42 @@
                 <span class="badge bg-light text-dark border fw-normal"><i class="fas fa-calendar me-1 text-primary"></i>{{ textoFechasViaje }}</span>
                 <span class="badge bg-light text-dark border fw-normal"><i class="fas fa-users me-1 text-primary"></i>{{ resumenPax }}</span>
                 <i class="fas fa-pen text-primary" style="cursor:pointer;font-size:12px" title="Corregir cliente/destino/fecha" @click="abrirEdicionCabecera"></i>
+                <i v-if="!hayAlternativaAceptada" class="fas fa-user-edit text-primary" style="cursor:pointer;font-size:12px" title="Agregar o quitar pasajeros" @click="abrirEdicionPasajeros"></i>
+                <i v-else class="fas fa-user-lock text-muted" style="font-size:12px" title="Esta cotización ya tiene una alternativa aceptada (con reserva generada) — los pasajeros ya no se pueden modificar desde acá."></i>
+            </div>
+        </div>
+
+        <!-- Agregar/quitar pasajeros — gap real: el endpoint existía en el
+             backend desde Sesión 7a pero nunca tuvo control en pantalla.
+             Bloqueado (ícono de arriba deshabilitado) si ya hay una
+             alternativa aceptada, ver hayAlternativaAceptada. -->
+        <div v-if="editandoPasajeros" class="card border-0 shadow-sm mb-3">
+            <div class="card-body py-3">
+                <div class="d-flex gap-2 mb-3">
+                    <button class="btn btn-sm btn-outline-primary" @click="agregarPaxEdicion(30)"><i class="fas fa-plus me-1"></i>Adulto</button>
+                    <button class="btn btn-sm btn-outline-primary" @click="agregarPaxEdicion(8)"><i class="fas fa-plus me-1"></i>Niño</button>
+                    <button class="btn btn-sm btn-outline-primary" @click="agregarPaxEdicion(1)"><i class="fas fa-plus me-1"></i>Infante</button>
+                </div>
+                <div v-if="formPasajeros.length === 0" class="text-muted small fst-italic mb-2">Agregá al menos un pasajero.</div>
+                <div class="d-flex flex-column gap-2 mb-3">
+                    <div v-for="(pax, idx) in formPasajeros" :key="pax.id ?? `nuevo-${idx}`" class="d-flex align-items-center gap-2 border rounded p-2 small">
+                        <span class="badge" :class="tipoPorEdadEdicion(pax.edad).clase" style="min-width:70px">{{ tipoPorEdadEdicion(pax.edad).label }}</span>
+                        <label class="text-muted mb-0">Edad</label>
+                        <input type="number" class="form-control form-control-sm" style="max-width:80px" v-model.number="pax.edad" min="0" max="120">
+                        <span v-if="!pax.id" class="badge bg-info-subtle text-info">nuevo</span>
+                        <i class="fas fa-times text-danger ms-auto" style="cursor:pointer" @click="formPasajeros.splice(idx, 1)"></i>
+                    </div>
+                </div>
+                <div class="alert alert-warning py-2 px-3 small mb-3">
+                    <i class="fas fa-triangle-exclamation me-1"></i>Si esta cotización ya tiene ítems cargados que se cobran "por persona", al guardar sus precios se recalculan automáticamente con la nueva cantidad de pasajeros — los que no se puedan recalcular solos (ej. pasajes aéreos, paquetes de mayorista) quedan avisados para revisar el precio a mano.
+                </div>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-primary btn-sm" @click="guardarPasajeros" :disabled="guardandoPasajeros || formPasajeros.length === 0">
+                        <span v-if="guardandoPasajeros" class="spinner-border spinner-border-sm me-1"></span>
+                        <span v-else><i class="fas fa-check me-1"></i>Guardar</span>
+                    </button>
+                    <button class="btn btn-outline-secondary btn-sm" @click="editandoPasajeros = false">Cancelar</button>
+                </div>
             </div>
         </div>
 
@@ -100,6 +136,7 @@
                     <span v-if="alt.estado === 'aceptada'" class="ms-1"><i class="fas fa-check-circle"></i></span>
                     <span v-else-if="alt.estado === 'descartada'" class="ms-1 opacity-50"><i class="fas fa-times-circle"></i></span>
                 </span>
+                <i v-if="alt.id === alternativaActivaId" class="fas fa-pen alt-pill-edit" title="Renombrar esta alternativa" @click.stop="renombrarAlternativa(alt)"></i>
                 <span v-if="alt.id === alternativaActivaId && eliminandoAlternativa" class="spinner-border spinner-border-sm alt-pill-delete" style="opacity:1"></span>
                 <i v-else-if="alt.id === alternativaActivaId" class="fas fa-trash alt-pill-delete" title="Eliminar esta alternativa" @click.stop="eliminarAlternativa"></i>
             </span>
@@ -756,10 +793,17 @@ let clientSearchTimeout: any = null;
 
 const abrirEdicionCabecera = () => {
     if (!cotizacion.value) return;
+    // El backend devuelve fecha_viaje_desde/hasta como timestamp ISO
+    // completo ('2026-08-20T00:00:00.000000Z', ver comentario de
+    // formatFecha() en helpers/fecha.ts) — un <input type="date"> solo
+    // acepta 'YYYY-MM-DD' exacto, así que sin este slice el campo queda
+    // en blanco al reabrir el panel aunque la fecha sí esté guardada
+    // (bug real reportado por el usuario: "las fechas se guardan pero no
+    // se muestran").
     formCabecera.value = {
         destino: cotizacion.value.destino,
-        fecha_viaje_desde: cotizacion.value.fecha_viaje_desde ?? '',
-        fecha_viaje_hasta: cotizacion.value.fecha_viaje_hasta ?? '',
+        fecha_viaje_desde: cotizacion.value.fecha_viaje_desde ? cotizacion.value.fecha_viaje_desde.slice(0, 10) : '',
+        fecha_viaje_hasta: cotizacion.value.fecha_viaje_hasta ? cotizacion.value.fecha_viaje_hasta.slice(0, 10) : '',
     };
     clienteEditado.value = cotizacion.value.cliente
         ? { id: cotizacion.value.cliente.id, full_name: cotizacion.value.cliente.full_name, n_document: cotizacion.value.cliente.n_document } as Client
@@ -821,6 +865,67 @@ const guardarCabecera = async () => {
     }
 };
 
+// ── Agregar/quitar pasajeros ─────────────────────────────────────────
+// Gap real señalado por el usuario (14-ago-2026): cotizacionService.
+// actualizarPasajeros() y su endpoint (PUT cotizaciones/{id}/pasajeros)
+// existían desde Sesión 7a pero nunca se conectaron a ninguna pantalla —
+// no había forma de aumentar/quitar pasajeros de una cotización ya
+// creada. El backend ahora bloquea el guardado si ya hay una alternativa
+// aceptada (reserva real generada) — hayAlternativaAceptada refleja el
+// mismo candado acá para no dejar el ícono habilitado sin sentido.
+const hayAlternativaAceptada = computed(() => (cotizacion.value?.alternativas ?? []).some((a) => a.estado === 'aceptada'));
+
+const editandoPasajeros = ref(false);
+const formPasajeros = ref<Array<{ id?: number; edad: number }>>([]);
+const guardandoPasajeros = ref(false);
+
+const tipoPorEdadEdicion = (edad: number) => {
+    if (edad <= 2) return { label: 'Infante', clase: 'bg-info-subtle text-info' };
+    if (edad <= 12) return { label: 'Niño', clase: 'bg-warning-subtle text-warning' };
+    return { label: 'Adulto', clase: 'bg-success-subtle text-success' };
+};
+
+const abrirEdicionPasajeros = () => {
+    if (!cotizacion.value) return;
+    formPasajeros.value = (cotizacion.value.pasajeros ?? []).map((p) => ({ id: p.id, edad: p.edad }));
+    editandoPasajeros.value = true;
+};
+
+const agregarPaxEdicion = (edadSugerida: number) => {
+    formPasajeros.value.push({ edad: edadSugerida });
+};
+
+const guardarPasajeros = async () => {
+    if (!cotizacion.value || formPasajeros.value.length === 0) return;
+
+    guardandoPasajeros.value = true;
+    try {
+        const res = await cotizacionService.actualizarPasajeros(cotizacion.value.id, formPasajeros.value);
+        editandoPasajeros.value = false;
+        await cargarCotizacion();
+
+        const recalculados: number = res.items_recalculados ?? 0;
+        const paraRevisar: Array<{ alternativa_nombre: string; motivo: string }> = res.items_para_revisar ?? [];
+
+        if (paraRevisar.length > 0) {
+            const listaHtml = paraRevisar.map((it) => `<li>${it.alternativa_nombre}: ${it.motivo}</li>`).join('');
+            (Swal as TVueSwalInstance).fire({
+                icon: 'warning',
+                title: 'Pasajeros actualizados',
+                html: `${recalculados} ítem(s) recalculado(s) automáticamente.<br><br><b>${paraRevisar.length} ítem(s) necesitan revisión manual de precio:</b><ul class="text-start small mb-0">${listaHtml}</ul>`,
+            });
+        } else if (recalculados > 0) {
+            toast.success(`Pasajeros actualizados — ${recalculados} ítem(s) recalculado(s) automáticamente.`);
+        } else {
+            toast.success('Pasajeros actualizados correctamente.');
+        }
+    } catch (error: any) {
+        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo actualizar los pasajeros', 'error');
+    } finally {
+        guardandoPasajeros.value = false;
+    }
+};
+
 const cargarCotizacion = async () => {
     const res = await cotizacionService.obtener(cotizacionId);
     cotizacion.value = res.cotizacion;
@@ -852,6 +957,33 @@ const crearAlternativa = async () => {
         (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo crear', 'error');
     } finally {
         creandoAlternativa.value = false;
+    }
+};
+
+// Gap real señalado por el usuario (14-ago-2026): el input "Nombre" solo
+// existía en el form de CREAR una alternativa — una vez creada, no había
+// forma de corregirle el nombre. El backend ya aceptaba 'nombre' en
+// PUT alternativas/{id} desde siempre (AlternativaController::update()),
+// solo faltaba el control en pantalla.
+const renombrarAlternativa = async (alt: Alternativa) => {
+    const { value: nuevoNombre } = await (Swal as TVueSwalInstance).fire({
+        title: 'Renombrar alternativa',
+        input: 'text',
+        inputValue: alt.nombre,
+        inputValidator: (value: string) => (!value || !value.trim() ? 'Ingresá un nombre.' : undefined),
+        showCancelButton: true,
+        confirmButtonText: 'Guardar',
+        cancelButtonText: 'Cancelar',
+    });
+
+    if (!nuevoNombre || !nuevoNombre.trim() || nuevoNombre.trim() === alt.nombre) return;
+
+    try {
+        await alternativaService.actualizar(alt.id, { nombre: nuevoNombre.trim() });
+        await cargarCotizacion();
+        toast.success('Alternativa renombrada');
+    } catch (error: any) {
+        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo renombrar la alternativa', 'error');
     }
 };
 
@@ -2045,6 +2177,11 @@ onUnmounted(() => {
    saturar la fila cuando hay varias alternativas (Parte B). */
 .alt-pill-delete { opacity: 0; transition: opacity .15s; }
 .alt-pill:hover .alt-pill-delete { opacity: 1; }
+
+/* Lápiz de renombrar — mismo criterio de visibilidad que el tacho de
+   arriba, separados con un poco de margen para no quedar pegados. */
+.alt-pill-edit { opacity: 0; transition: opacity .15s; margin-left: 2px; }
+.alt-pill:hover .alt-pill-edit { opacity: 1; }
 
 /* Tabs de día — nav-tabs subrayadas a propósito, para distinguirse
    visualmente de las pills sólidas (alternativas arriba, chips de
