@@ -294,7 +294,7 @@ class CotizacionController extends Controller
                 $paxLimpio = array_values(array_diff($paxIncluidos, $idsEliminados));
 
                 if ($paxLimpio !== $paxIncluidos) {
-                    $item->update(['pax_incluidos' => $paxLimpio ?: null]);
+                    $item->update(['pax_incluidos' => $paxLimpio]);
                 }
             });
     }
