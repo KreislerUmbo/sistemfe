@@ -6,3 +6,17 @@ node_modules/
 admin-version-full/
 .playwright-mcp/
 .Claude/docs/planning/**/*.docx
+
+# Env de frontend — específico por entorno, nunca compartido vía git
+admin-start-kit/.env
+central-panel/.env
+
+# Datos runtime por tenant (facturas, CDRs, certificados SUNAT) — nunca versionar
+api-sistema-fe/storage/tenant*/
+
+# Env de frontend — específico por entorno, nunca compartido vía git
+admin-start-kit/.env
+central-panel/.env
+
+# Datos runtime por tenant (facturas, CDRs, certificados SUNAT) — nunca versionar
+api-sistema-fe/storage/tenant*/

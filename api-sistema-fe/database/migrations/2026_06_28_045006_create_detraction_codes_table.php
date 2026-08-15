@@ -21,17 +21,10 @@ return new class extends Migration
 
         // Columna en productos para asignar código de detracción
         // Agregar a la migración de products o con alter:
-        Schema::table('products', function (Blueprint $table) {
-            $table->string('detraction_code', 3)->nullable()->after('percentage_isc');
-            // FK opcional — descomenta si quieres integridad referencial:
-            // $table->foreign('detraction_code')->references('code')->on('detraction_codes');
-        });
+             
     }
     public function down(): void
     {
-        Schema::table('products', function (Blueprint $table) {
-            $table->dropColumn('detraction_code');
-        });
-        Schema::dropIfExists('detraction_codes');
+
     }
 };
