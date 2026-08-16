@@ -2,12 +2,20 @@
 // (Fase D, Paso 2 — plan-panel-superadmin.md tiene el detalle completo endpoint por
 // endpoint). No inventar campos nuevos acá sin volver a confirmar contra el backend.
 
+// Mismos 2 valores que TenantProvisioningService::GIROS_VALIDOS (backend) — sin
+// endpoint de catálogo dedicado, se mantiene sincronizado a mano (mismo criterio ya
+// aceptado en otros selectores fijos de este panel, ej. tabs de TenantDetailView).
+export type Giro = 'retail' | 'agencia_viajes';
+
 // GET tenants/{id} — metadata del Tenant (central), NO es lo mismo que Company.
 export interface TenantOverview {
   id: string;
   ruc: string;
   razon_social: string;
   razon_social_comercial: string;
+  giro: Giro;
+  tipo: string;
+  sunat_modo: string;
   status: string;
   fecha_archivado: string | null;
   fecha_alta: string;

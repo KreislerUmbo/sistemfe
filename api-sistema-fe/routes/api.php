@@ -122,6 +122,14 @@ Route::prefix('central')->group(function () {
         Route::post('tenants', [TenantAdminController::class, 'store']);
         Route::get('tenants/{id}', [TenantAdminController::class, 'show']);
 
+        // Edición de un tenant ya creado (razón social/giro) — antes solo por
+        // SQL/tinker. Cambiar `giro` dispara migrarVertical() del lado del servicio.
+        Route::put('tenants/{id}', [TenantAdminController::class, 'update']);
+
+        // Restablecer el password del admin (rol Super-Admin) del tenant — antes solo
+        // por tinker. Acción separada de la edición general de arriba a propósito.
+        Route::post('tenants/{id}/reset-admin-password', [TenantAdminController::class, 'resetAdminPassword']);
+
         // "Archivado, no borrado" (§11.2) — bloquea login/API, conserva base/storage.
         // Wrappers HTTP delgados sobre TenantProvisioningService, misma lógica que los
         // comandos CLI tenants:archive/tenants:restore.

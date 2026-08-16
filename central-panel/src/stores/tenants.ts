@@ -3,6 +3,7 @@ import { reactive, ref } from 'vue';
 import httpClient from '@/services/httpClient';
 import type {
   BackupsPage,
+  Giro,
   Invoice,
   RestorePreview,
   RestoreRecord,
@@ -27,6 +28,9 @@ export interface Tenant {
   ruc: string;
   razon_social: string;
   razon_social_comercial: string;
+  giro: Giro;
+  tipo: string;
+  sunat_modo: string;
   status: string;
   fecha_archivado: string | null;
   fecha_alta: string;
@@ -34,7 +38,8 @@ export interface Tenant {
 }
 
 // Payload de POST central/tenants — mismos campos que valida
-// TenantAdminController::store() (todos required, admin_password min:8).
+// TenantAdminController::store() (todos required, admin_password min:8, giro
+// agregado en esta sesión — antes el panel creaba tenants sin poder elegirlo).
 export interface CreateTenantPayload {
   ruc: string;
   razon_social: string;
@@ -43,6 +48,15 @@ export interface CreateTenantPayload {
   admin_name: string;
   admin_email: string;
   admin_password: string;
+  giro: Giro;
+}
+
+// Payload de PUT central/tenants/{id} — todos opcionales, TenantAdminController::
+// update() solo aplica los que llegaron ('sometimes' en el backend).
+export interface UpdateTenantPayload {
+  razon_social?: string;
+  razon_social_comercial?: string;
+  giro?: Giro;
 }
 
 export const useTenantsStore = defineStore('tenants', () => {
@@ -154,6 +168,60 @@ export const useTenantsStore = defineStore('tenants', () => {
       return false;
     } finally {
       deleting.value = false;
+    }
+  };
+
+  // Edición de un tenant ya creado (razón social/giro) — antes solo por SQL/tinker,
+  // ver docs/planning/panel-superadmin/gap-editar-tenant-giro-password.md. Devuelve el
+  // Tenant actualizado (mismo patrón que suspendTenant/reactivateTenant) — el caller
+  // (TenantDetailView) lo usa para refrescar el encabezado sin re-pedir el overview.
+  const updating = ref(false);
+  const updateError = ref<string | null>(null);
+
+  const updateTenant = async (
+    id: string,
+    payload: UpdateTenantPayload,
+  ): Promise<TenantOverview | null> => {
+    updating.value = true;
+    updateError.value = null;
+
+    try {
+      const { data } = await httpClient.put(`central/tenants/${id}`, payload);
+      return data.tenant as TenantOverview;
+    } catch (e: any) {
+      updateError.value = e.response?.data?.message ?? 'No se pudo actualizar el tenant.';
+      return null;
+    } finally {
+      updating.value = false;
+    }
+  };
+
+  // Restablecer el password del admin (rol Super-Admin) del tenant — antes solo por
+  // tinker. admin_email solo hace falta si el tenant tiene más de un Super-Admin (el
+  // backend responde 422 con la lista de candidatos en ese caso).
+  const resettingPassword = ref(false);
+  const resetPasswordError = ref<string | null>(null);
+
+  const resetAdminPassword = async (
+    id: string,
+    newPassword: string,
+    adminEmail?: string,
+  ): Promise<boolean> => {
+    resettingPassword.value = true;
+    resetPasswordError.value = null;
+
+    try {
+      await httpClient.post(`central/tenants/${id}/reset-admin-password`, {
+        new_password: newPassword,
+        admin_email: adminEmail || undefined,
+      });
+      return true;
+    } catch (e: any) {
+      resetPasswordError.value =
+        e.response?.data?.message ?? 'No se pudo restablecer el password del admin.';
+      return false;
+    } finally {
+      resettingPassword.value = false;
     }
   };
 
@@ -570,6 +638,12 @@ export const useTenantsStore = defineStore('tenants', () => {
     deleting,
     deleteError,
     deleteTenant,
+    updating,
+    updateError,
+    updateTenant,
+    resettingPassword,
+    resetPasswordError,
+    resetAdminPassword,
 
     subscription,
     fetchSubscription,

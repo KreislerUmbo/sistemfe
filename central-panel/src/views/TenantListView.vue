@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue';
 import { useTenantsStore } from '@/stores/tenants';
-import type { CreateTenantPayload } from '@/stores/tenants';
+import type { Giro } from '@/types/tenant-detail';
 
 const store = useTenantsStore();
 
@@ -22,6 +22,17 @@ function statusBadgeClass(status: string): string {
   }
 }
 
+function giroLabel(giro: string): string {
+  switch (giro) {
+    case 'agencia_viajes':
+      return 'Agencia de viajes';
+    case 'retail':
+      return 'Retail';
+    default:
+      return giro;
+  }
+}
+
 function formatFecha(fecha: string | null): string {
   if (!fecha) return '—';
   return new Date(fecha).toLocaleDateString('es-PE', {
@@ -35,7 +46,7 @@ function formatFecha(fecha: string | null): string {
 // SubscriptionTab.vue), sin modal de Bootstrap con JS imperativo.
 const showCreateForm = ref(false);
 
-const emptyForm: CreateTenantPayload = {
+const emptyForm = {
   ruc: '',
   razon_social: '',
   razon_social_comercial: '',
@@ -43,9 +54,13 @@ const emptyForm: CreateTenantPayload = {
   admin_name: '',
   admin_email: '',
   admin_password: '',
+  // Sin default preseleccionado a propósito — fuerza a elegir el giro
+  // explícitamente en vez de dejar que quede en 'retail' por descuido (ver
+  // docs/planning/panel-superadmin/sesion-giro-selector-panel.md).
+  giro: '' as Giro | '',
 };
 
-const form = reactive<CreateTenantPayload>({ ...emptyForm });
+const form = reactive({ ...emptyForm });
 
 function resetForm() {
   Object.assign(form, emptyForm);
@@ -64,7 +79,8 @@ function generatePassword() {
 }
 
 async function onCreateSubmit() {
-  const ok = await store.createTenant({ ...form });
+  if (!form.giro) return;
+  const ok = await store.createTenant({ ...form, giro: form.giro });
   if (ok) {
     showCreateForm.value = false;
     resetForm();
@@ -163,6 +179,18 @@ async function onConfirmDelete(id: string) {
             <input v-model="form.razon_social_comercial" type="text" class="form-control" required />
           </div>
           <div class="col-md-6">
+            <label class="form-label">Giro *</label>
+            <select v-model="form.giro" class="form-select" required>
+              <option value="" disabled>Elegir giro…</option>
+              <option value="retail">Retail</option>
+              <option value="agencia_viajes">Agencia de viajes</option>
+            </select>
+            <div class="form-text">
+              Determina qué migraciones de vertical corre el tenant — se puede corregir
+              después desde el detalle del tenant si hace falta.
+            </div>
+          </div>
+          <div class="col-md-6">
             <label class="form-label">Nombre del admin *</label>
             <input v-model="form.admin_name" type="text" class="form-control" required />
           </div>
@@ -227,6 +255,7 @@ async function onConfirmDelete(id: string) {
           <tr>
             <th scope="col">Tenant</th>
             <th scope="col">RUC</th>
+            <th scope="col">Giro</th>
             <th scope="col">Dominio(s)</th>
             <th scope="col">Estado</th>
             <th scope="col">Fecha de alta</th>
@@ -251,6 +280,7 @@ async function onConfirmDelete(id: string) {
                 <div class="text-muted small">{{ tenant.id }}</div>
               </td>
               <td>{{ tenant.ruc }}</td>
+              <td>{{ giroLabel(tenant.giro) }}</td>
               <td>
                 <span v-if="tenant.domains.length === 0" class="text-muted fst-italic">sin dominio</span>
                 <span v-else>{{ tenant.domains.join(', ') }}</span>
@@ -291,7 +321,7 @@ async function onConfirmDelete(id: string) {
               </td>
             </tr>
             <tr v-if="confirmingDeleteId === tenant.id">
-              <td colspan="6">
+              <td colspan="7">
                 <div class="alert alert-danger d-flex justify-content-between align-items-center mb-0">
                   <div>
                     <strong>¿Eliminar "{{ tenant.id }}" definitivamente?</strong>

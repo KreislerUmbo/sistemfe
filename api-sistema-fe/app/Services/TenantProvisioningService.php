@@ -37,6 +37,13 @@ use Stancl\Tenancy\Database\Models\Domain;
 // lógica — nunca duplicada. El Command pasa a ser un wrapper delgado sobre este servicio.
 class TenantProvisioningService
 {
+    // Único punto de verdad de los giros soportados — antes vivía duplicado como
+    // private const en ProvisionTenant.php (CLI); TenantAdminController::store()/
+    // update() (panel HTTP) lo referencian desde acá para no volver a duplicarlo.
+    // Mismos valores documentados en el comentario de la columna
+    // (2026_07_27_090000_add_giro_tipo_sunat_modo_to_tenants_table.php).
+    public const GIROS_VALIDOS = ['retail', 'agencia_viajes'];
+
     private ?string $lastGeneratedPassword = null;
 
     /**
@@ -131,6 +138,56 @@ class TenantProvisioningService
     public function getLastGeneratedPassword(): ?string
     {
         return $this->lastGeneratedPassword;
+    }
+
+    /**
+     * Edición de un tenant ya creado (panel superadmin) — hasta esta sesión no existía
+     * ninguna vía para esto salvo SQL/tinker directo (ver
+     * docs/planning/panel-superadmin/gap-editar-tenant-giro-password.md). $data acepta
+     * cualquier subconjunto de razon_social/razon_social_comercial/giro — el caller
+     * (TenantAdminController::update()) decide qué campos llegaron con
+     * `Request::validate('sometimes|...')`, acá solo se aplican los presentes.
+     *
+     * `domain` queda fuera a propósito (ver el documento de arriba) — cambiar el
+     * dominio de un tenant ya provisionado toca el registro de stancl/tenancy y es un
+     * caso más delicado que un ALTER de columna simple.
+     *
+     * Cuando `giro` cambia, dispara migrarVertical() igual que provision() — sin esto,
+     * el tenant quedaría con la columna correcta pero sin las tablas de su vertical
+     * real (estado inconsistente peor que no tener el fix). Idempotente: si el tenant
+     * ya tenía esas migraciones corridas (ej. volver a poner el mismo giro), Laravel no
+     * las vuelve a aplicar.
+     */
+    public function actualizar(Tenant $tenant, array $data): Tenant
+    {
+        if (array_key_exists('razon_social', $data)) {
+            $tenant->razon_social = $data['razon_social'];
+        }
+
+        if (array_key_exists('razon_social_comercial', $data)) {
+            $tenant->razon_social_comercial = $data['razon_social_comercial'];
+        }
+
+        $giroCambio = false;
+
+        if (array_key_exists('giro', $data) && $data['giro'] !== $tenant->giro) {
+            if (! in_array($data['giro'], self::GIROS_VALIDOS, true)) {
+                throw new TenantProvisioningException(
+                    "giro inválido: '{$data['giro']}'. Valores válidos: " . implode(', ', self::GIROS_VALIDOS) . '.'
+                );
+            }
+
+            $tenant->giro = $data['giro'];
+            $giroCambio = true;
+        }
+
+        $tenant->save();
+
+        if ($giroCambio) {
+            $this->migrarVertical($tenant, $tenant->giro);
+        }
+
+        return $tenant->fresh();
     }
 
     /**
