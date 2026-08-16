@@ -1449,3 +1449,71 @@ ningún rol de infraestructura; contiene únicamente los datos históricos del n
 pregunta original sigue abierta: ¿esos datos se migran a un tenant `es_base=true`, o quedan
 archivados tal cual? Ver `plan-panel-superadmin.md`, Fase B.0.5, para el detalle completo de la
 migración.
+
+## Gap cerrado (2026-08-15) — gestión completa de un tenant desde el panel: giro, edición, reset de password del admin
+
+Origen: `docs/planning/panel-superadmin/sesion-giro-selector-panel.md` (brief, ver también
+`PEGAR-EN-CLAUDE-CODE-giro-selector.md.md`, contenido casi idéntico). El pedido original era
+solo "selector de giro al crear" — se amplió el mismo día porque el usuario confirmó que todo
+el ciclo de vida de un tenant debe manejarse desde el panel, sin CLI/SSH/tinker manual. Motivo
+concreto: `market.umbosystem.com` se creó desde el formulario del panel (confirmado por el
+usuario), candidato altamente probable a `giro='retail'` por default de migración sin importar
+el negocio real — sin este fix no había forma de verlo ni corregirlo desde la UI.
+
+**Tres piezas, las tres cerradas:**
+1. **Selector de `giro` al crear** — `TenantAdminController::store()` ahora valida
+   `giro` (`required`, `Rule::in(TenantProvisioningService::GIROS_VALIDOS)`, constante
+   nueva y pública — antes vivía duplicada como `private const` en `ProvisionTenant.php`,
+   el Command CLI ahora la referencia desde el servicio). `TenantListView.vue`: `<select>`
+   sin opción preseleccionada (fuerza elección explícita, a pedido del brief — evita crear
+   otro tenant `retail` por descuido) + columna "Giro" nueva en la tabla del listado.
+2. **Editar un tenant ya creado** — antes no existía ninguna vía salvo SQL/tinker.
+   `TenantProvisioningService::actualizar()` nuevo (razón social/comercial/giro, todos
+   opcionales) — si `giro` cambia, dispara `migrarVertical()` (el mismo método privado que
+   ya usa `provision()`, sin duplicar lógica) para que las tablas del vertical nuevo
+   aparezcan retroactivamente; idempotente por diseño (Laravel trackea qué migración ya
+   corrió por tenant). `TenantAdminController::update()` nuevo (`PUT central/tenants/{id}`,
+   validación `sometimes` por campo, 422 explícito si no llega ningún campo). `domain` queda
+   fuera a propósito (toca el registro de `stancl/tenancy`, caso más delicado, brief lo
+   excluyó explícitamente). Frontend: modo edición inline en `TenantDetailView.vue` (botón
+   "Editar" en el header) — si el giro elegido difiere del actual, exige un checkbox de
+   confirmación explícita antes de habilitar "Guardar cambios" (advierte que la migración
+   retroactiva puede tardar y no es reversible con un click, a pedido del brief).
+3. **Restablecer el password del admin de un tenant** — antes solo por tinker/SQL directo.
+   `TenantAdminController::resetAdminPassword()` nuevo (`POST
+   tenants/{id}/reset-admin-password`), entra al tenant vía `$tenant->run()`, busca el
+   usuario con rol `Super-Admin` (opcionalmente filtrado por `admin_email` si hay más de
+   uno — 422 explícito listando los candidatos en vez de adivinar), asigna el password en
+   texto plano (`User::$casts` ya tiene `password` como `'hashed'`, no hace falta
+   `bcrypt()`/`Hash::make()` a mano) y audita la acción (`tenant.admin_password_reset`).
+   Frontend: sección separada del formulario de edición a propósito (acción más sensible,
+   más fácil de auditar sola), con el mismo botón "Generar" ya usado en el alta de tenant.
+- **Bug real encontrado y corregido al verificar `resetAdminPassword()` contra un tenant
+  descartable (no solo por lectura de código)**: `User::role('Super-Admin')` (scope de
+  Spatie `HasRoles`) revienta con "Non-static method App\Models\User::role() cannot be
+  called statically" — `User` ya declara un método de instancia propio `role()` (relación
+  legacy hacia `role_id` singular, ver la nota de Fase D/E sobre `respondWithToken()` más
+  arriba en este documento) que colisiona con el nombre del scope de Spatie. Corregido con
+  `User::whereHas('roles', fn ($q) => $q->where('name', 'Super-Admin'))` — la relación
+  plural `roles()` no está sobreescrita. Sin este fix, el endpoint habría fallado el 100%
+  de las veces con un 500.
+- `serialize()` ganó `giro`, `tipo` y `sunat_modo` (ninguno de los tres se exponía antes —
+  ni el listado ni el detalle de un tenant los podían mostrar).
+- **Verificado en 2 niveles, contra tenants descartables creados y destruidos en la misma
+  sesión (nunca contra `sandbox`/`umbo`/`negocio2`/`agencia-demo` reales, salvo un `GET`
+  de solo lectura sobre `umbo` para confirmar que `tipo`/`sunat_modo` aparecen bien)**:
+  (1) a nivel de servicio vía tinker (`TenantProvisioningService::actualizar()` cambiando
+  `retail`→`agencia_viajes` confirmado con `Schema::hasTable('configuracion_agencia')`
+  antes/después; reset de password confirmado con `Hash::check()` real; idempotencia de
+  una segunda llamada con el mismo giro; `eliminarSiVacio()` sin dejar rastro) — este
+  primer intento reveló el bug de `User::role()` de arriba; (2) a nivel HTTP real
+  (`php artisan serve` + curl, login central real con las credenciales de `.env`): los 7
+  casos del checklist del brief (`store()` sin/con giro inválido/válido, `update()` con
+  campo válido/sin campos, `reset-admin-password` válido/con email inexistente) dieron
+  exactamente el código HTTP esperado, tenant descartable eliminado al final sin dejar
+  rastro. `vue-tsc -b` limpio en `central-panel/` en todo momento.
+- **Pendiente, explícitamente fuera de este fix (§ "Pendiente aparte" del brief)**:
+  corregir el `giro` real de `market.umbosystem.com` — ahora que el mecanismo existe, el
+  camino correcto es entrar a su detalle en el panel y usarlo ahí, no SQL manual. Requiere
+  primero confirmar cuál es su giro real y pedir aprobación explícita antes de tocarlo,
+  como cualquier tenant con datos reales.

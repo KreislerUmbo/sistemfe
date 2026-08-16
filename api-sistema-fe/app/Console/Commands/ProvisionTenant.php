@@ -21,11 +21,12 @@ class ProvisionTenant extends Command
 
     protected $description = 'Provisiona un tenant nuevo: Tenant + Domain + roles/permisos + usuario admin. No crea companies (paso aparte).';
 
-    // Mismos valores documentados en el comentario de la columna
-    // (2026_07_27_090000_add_giro_tipo_sunat_modo_to_tenants_table.php). sunat_modo no
-    // tiene flag acá a propósito (plan-modulo-infraestructura-multitenant.md §4) — se
-    // resuelve solo por el default de la migración ('pruebas').
-    private const GIROS_VALIDOS = ['retail', 'agencia_viajes'];
+    // GIROS_VALIDOS centralizado en TenantProvisioningService::GIROS_VALIDOS (antes
+    // duplicado acá) — así el panel HTTP (TenantAdminController::store()/update())
+    // valida contra la misma lista sin tener que mantener dos copias en sync.
+    // sunat_modo no tiene flag acá a propósito
+    // (plan-modulo-infraestructura-multitenant.md §4) — se resuelve solo por el
+    // default de la migración ('pruebas').
     private const TIPOS_VALIDOS = ['real', 'demo'];
 
     public function handle(): int
@@ -57,8 +58,8 @@ class ProvisionTenant extends Command
             }
         }
 
-        if (! in_array($giro, self::GIROS_VALIDOS, true)) {
-            $this->error("--giro inválido: '{$giro}'. Valores válidos: " . implode(', ', self::GIROS_VALIDOS) . '.');
+        if (! in_array($giro, TenantProvisioningService::GIROS_VALIDOS, true)) {
+            $this->error("--giro inválido: '{$giro}'. Valores válidos: " . implode(', ', TenantProvisioningService::GIROS_VALIDOS) . '.');
 
             return self::FAILURE;
         }
