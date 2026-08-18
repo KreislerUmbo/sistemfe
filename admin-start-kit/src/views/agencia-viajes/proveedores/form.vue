@@ -20,17 +20,30 @@
             </div>
             <div class="card-body py-3">
                 <div class="row g-3">
-                    <div class="col-12 col-md-5">
-                        <label class="form-label mb-1 small fw-semibold text-secondary">Razón Social *</label>
-                        <input type="text" class="form-control form-control-sm" v-model="form.razon_social">
+                    <div class="col-6 col-md-3">
+                        <label class="form-label mb-1 small fw-semibold text-secondary">Tipo de Documento</label>
+                        <select class="form-select form-select-sm" v-model="form.tipo_documento">
+                            <option :value="null">—</option>
+                            <option value="DNI">DNI</option>
+                            <option value="RUC">RUC</option>
+                            <option value="CE">Carné Extranjería</option>
+                            <option value="PASAPORTE">Pasaporte</option>
+                        </select>
                     </div>
-                    <div class="col-12 col-md-4">
-                        <label class="form-label mb-1 small fw-semibold text-secondary">Nombre Comercial</label>
-                        <input type="text" class="form-control form-control-sm" v-model="form.nombre_comercial">
-                    </div>
-                    <div class="col-12">
-                        <label class="form-label mb-1 small fw-semibold text-secondary">Descripción</label>
-                        <RichTextEditor v-model="form.descripcion" />
+                     <div class="col-6 col-md-3">
+                        <label class="form-label mb-1 small fw-semibold text-secondary">N° Documento</label>
+                        <div class="input-group input-group-sm">
+                            <input type="text" class="form-control form-control-sm" v-model="form.numero_documento">
+                            <button class="btn btn-outline-primary" type="button" title="Buscar en RENIEC/SUNAT"
+                                :disabled="!form.numero_documento || buscandoDocumento || !['DNI', 'RUC'].includes(form.tipo_documento ?? '')"
+                                @click="buscarDocumento">
+                                <span v-if="buscandoDocumento" class="spinner-border spinner-border-sm"></span>
+                                <i v-else class="fas fa-search"></i>
+                            </button>
+                        </div>
+                        <small class="text-muted" v-if="form.tipo_documento && !['DNI', 'RUC'].includes(form.tipo_documento)">
+                            La búsqueda automática solo está disponible para DNI/RUC — completa los datos a mano.
+                        </small>
                     </div>
                     <div class="col-6 col-md-3">
                         <label class="form-label mb-1 small fw-semibold text-secondary">Tipo de Proveedor *</label>
@@ -52,6 +65,16 @@
                             </label>
                         </div>
                     </div>
+
+                    <div class="col-12 col-md-5">
+                        <label class="form-label mb-1 small fw-semibold text-secondary">Razón Social *</label>
+                        <input type="text" class="form-control form-control-sm" v-model="form.razon_social">
+                    </div>
+                    <div class="col-12 col-md-4">
+                        <label class="form-label mb-1 small fw-semibold text-secondary">Nombre Comercial</label>
+                        <input type="text" class="form-control form-control-sm" v-model="form.nombre_comercial">
+                    </div>
+
                     <div class="col-6 col-md-3">
                         <label class="form-label mb-1 small fw-semibold text-secondary">Tipo de Persona</label>
                         <select class="form-select form-select-sm" v-model="form.tipo_persona">
@@ -60,20 +83,16 @@
                             <option value="juridica">Jurídica</option>
                         </select>
                     </div>
-                    <div class="col-6 col-md-3">
-                        <label class="form-label mb-1 small fw-semibold text-secondary">Tipo de Documento</label>
-                        <select class="form-select form-select-sm" v-model="form.tipo_documento">
-                            <option :value="null">—</option>
-                            <option value="DNI">DNI</option>
-                            <option value="RUC">RUC</option>
-                            <option value="CE">Carné Extranjería</option>
-                            <option value="PASAPORTE">Pasaporte</option>
-                        </select>
+                    
+                    <div class="col-12">
+                        <label class="form-label mb-1 small fw-semibold text-secondary">Descripción</label>
+                        <RichTextEditor v-model="form.descripcion" />
                     </div>
-                    <div class="col-6 col-md-3">
-                        <label class="form-label mb-1 small fw-semibold text-secondary">N° Documento</label>
-                        <input type="text" class="form-control form-control-sm" v-model="form.numero_documento">
-                    </div>
+
+
+
+
+
                     <div class="col-6 col-md-3 d-flex align-items-end">
                         <div class="btn-group w-100" role="group">
                             <input type="radio" class="btn-check" name="estado-c" id="estado-activo" :checked="form.estado === true" @click="form.estado = true" autocomplete="off">
@@ -260,6 +279,7 @@ import { useRoute, useRouter } from 'vue-router';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import RichTextEditor from '@/components/RichTextEditor.vue';
 import Swal from 'sweetalert2/dist/sweetalert2.js';
+import httpClient from '@/helpers/http-client';
 import { proveedorService, proveedorTipoService } from '@/services/admin/proveedorService';
 import { amenidadService } from '@/services/admin/amenidadService';
 import { configuracionAgenciaService } from '@/services/admin/configuracionAgenciaService';
@@ -397,6 +417,37 @@ const onArchivosSeleccionados = (event: Event) => {
 const quitarPendiente = (index: number) => {
     URL.revokeObjectURL(archivosNuevos.value[index].previewUrl);
     archivosNuevos.value.splice(index, 1);
+};
+
+// ── Búsqueda online DNI/RUC (RENIEC/SUNAT vía apisperu) — opcional, nunca bloquea el guardado ──
+const buscandoDocumento = ref(false);
+const buscarDocumento = async () => {
+    if (!form.value.numero_documento || !form.value.tipo_documento) return;
+    const tipo = form.value.tipo_documento.toLowerCase();
+    if (!['dni', 'ruc'].includes(tipo)) return;
+
+    buscandoDocumento.value = true;
+    try {
+        const res = await httpClient.get(`/search-document/${tipo}/${form.value.numero_documento}`);
+        if (res.data.success === false) {
+            (Swal as TVueSwalInstance).fire('Sin resultados', 'No se encontró información para ese documento.', 'warning');
+            return;
+        }
+        if (tipo === 'dni') {
+            const nombres = `${res.data.nombres ?? ''} ${res.data.apellidoPaterno ?? ''} ${res.data.apellidoMaterno ?? ''}`.trim();
+            form.value.razon_social = nombres || form.value.razon_social;
+            form.value.tipo_persona = 'natural';
+        } else {
+            form.value.razon_social = res.data.razonSocial || form.value.razon_social;
+            form.value.nombre_comercial = res.data.nombreComercial || form.value.nombre_comercial;
+            form.value.direccion = res.data.direccion || form.value.direccion;
+            form.value.tipo_persona = 'juridica';
+        }
+    } catch (error) {
+        (Swal as TVueSwalInstance).fire('Error', 'No se pudo consultar el documento.', 'error');
+    } finally {
+        buscandoDocumento.value = false;
+    }
 };
 
 const guardar = async () => {

@@ -222,11 +222,11 @@ Route::group([
     Route::resource("suppliers", SupplierController::class);
     Route::resource("cash-concepts", CashConceptController::class);
 
-    // Módulo Caja — Fase 5. Solo listado (?active=1) — el CRUD completo de
-    // sedes/cajas sigue pendiente, esto solo puebla los filtros de
-    // history.vue (corrección: antes se derivaban de las sesiones cargadas,
-    // dejaba sedes/cajas sin sesiones invisibles en el filtro).
-    Route::get("branches", [BranchController::class, 'index']);
+    // Módulo Caja — Fase 5 (?active=1 puebla los filtros de history.vue) +
+    // CRUD real de sucursales (2026-08-17, ver BranchController). cash-registers
+    // sigue solo listado — su CRUD completo queda pendiente (fuera de alcance
+    // de este cambio, ver CLAUDE.md).
+    Route::resource("branches", BranchController::class);
     Route::get("cash-registers", [CashRegisterController::class, 'index']);
 
     // Módulo de series de comprobantes. tipos-comprobante es solo lectura
