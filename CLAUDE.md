@@ -1522,6 +1522,68 @@ intactos):
   de pasajeros, pool de ítems sin asignar, buscador de cliente). No se
   confirmó ningún POST en esta verificación tampoco.
 
+**Completo — Facturación externa por tenant + por reserva (Sesión 11w,
+2026-08-20, rama `feature/sesion-11w-facturacion-externa-tenant`, sin
+commitear todavía):** cierra el gap de modelo de negocio para tenants que
+usan el sistema solo para cotizar/reservar/operar pero facturan con su
+propio sistema SUNAT aparte (u otro proveedor) — sin construir el motor
+completo de módulos/planes de `plan-modulo-planes-acceso.md` (fuera de
+alcance, confirmado explícitamente en el brief).
+- `tenants.facturacion_habilitada` (central, nullable, sin default) +
+  `reserva.facturacion_externa`/`referencia_externa`/
+  `fecha_facturacion_externa` (tenant, vertical agencia-viajes). El flag
+  del tenant gatea en doble capa (frontend oculta el botón, backend
+  rechaza con 403 — `tenant('facturacion_habilitada')`, null-safe, NULL
+  tratado igual que false) tanto `ReservaFacturacionController::
+  prepararFactura()` como `store()`. El override por reserva es
+  editable solo mientras la reserva no tenga ninguna `ReservaVenta`
+  (422 si ya tiene una), reversible libremente hasta ese momento, e
+  independiente del flag del tenant (funciona igual en los dos casos,
+  cubre tanto el "solo operativo" normal como una excepción puntual
+  sobre un tenant con facturación habilitada).
+- **Apagar el flag del tenant nunca afecta nada histórico** — confirmado
+  por diseño (ningún otro controller del proyecto lee
+  `facturacion_habilitada`, verificado por grep) y con un E2E real contra
+  `agencia-demo`: se creó una venta contado real (S/177, cliente
+  KREISLER), se apagó el flag, y se confirmó navegando de verdad que
+  Ventas (`/sale/list`), Cuentas por Cobrar y el buscador de Notas de
+  Crédito siguen 100% accesibles — el "sin resultados" de NC fue la
+  regla de negocio preexistente ("solo ventas ya aceptadas por SUNAT"),
+  no un bloqueo nuevo. Venta, pagos, movimientos de caja y la caja
+  descartable creada para la prueba (`agencia-demo` no tenía ninguna
+  todavía) se revirtieron al terminar — el flag quedó reestablecido en
+  `true` (decisión del usuario, ver abajo).
+- **Backfill real ejecutado con el criterio de 3 grupos acordado
+  (§1 del brief), con un gap real encontrado y corregido antes de
+  correrlo**: la primera versión de
+  `tenants:backfill-facturacion-habilitada` (ya existía al abrir esta
+  sesión, junto con buena parte del resto de la implementación) solo
+  cubría 2 de los 3 grupos — dejaba en NULL a cualquier tenant sin
+  `Sale`, sin importar su giro, en vez de defaultear a `true` los
+  `giro != agencia_viajes` sin historial (ej. `negocio2`, retail nuevo).
+  Corregido (comando + su test, que afirmaba el comportamiento viejo)
+  antes de correr nada real. Dry-run real contra los 5 tenants de
+  producción: `umbo`/`sandbox`/`umbo-archivado` → `true` (Sale real),
+  `negocio2` → `true` (retail sin historial), `agencia-demo` → caso
+  ambiguo real (único `agencia_viajes`, sin ningún `Sale` — los de
+  sesiones de verificación previas quedaron todos revertidos) — resuelto
+  con el usuario vía `AskUserQuestion`: `true`, paquete completo (es el
+  tenant de pruebas del módulo de facturación de reservas). Aplicado con
+  `--apply` + el caso de `agencia-demo` seteado a mano vía el mismo
+  endpoint auditado (`TenantAdminController::updateFacturacionHabilitada()`,
+  entrada real en `central_audit_logs`).
+- Wizard de creación de tenant (`central-panel`) y vista de detalle
+  (toggle + confirmación con aviso "no afecta comprobantes ya emitidos")
+  ya estaban implementados al abrir la sesión — verificados, no
+  modificados.
+- 174 tests backend en verde (16 nuevos de este módulo — 5 de
+  `ReservaFacturacionExternaTest`, 3 de `store()`/`preparar-factura`
+  gateados en `ReservaFacturacionTest`, 5 de `TenantAdminController`, 3 de
+  backfill —, cero regresiones). Type-check `admin-start-kit`: 45 errores
+  preexistentes, mismo baseline, cero nuevos. Type-check `central-panel`
+  (`vue-tsc -b`, sin script `type-check` propio en `package.json`): 0
+  errores.
+
 **Próximos módulos (en orden de prioridad):**
 
 1. **Representación impresa (PDF) con impresión automática**

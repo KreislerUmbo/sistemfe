@@ -58,6 +58,11 @@ const emptyForm = {
   // explícitamente en vez de dejar que quede en 'retail' por descuido (ver
   // docs/planning/panel-superadmin/sesion-giro-selector-panel.md).
   giro: '' as Giro | '',
+  // Facturación externa por tenant (PEGAR-EN-CLAUDE-CODE-facturacion-externa-
+  // tenant.md) — mismo criterio que giro: sin default, selector obligatorio.
+  // Tri-state en string porque un <select> nativo no sostiene bien un
+  // boolean/null real.
+  facturacion_habilitada: '' as '' | 'true' | 'false',
 };
 
 const form = reactive({ ...emptyForm });
@@ -79,8 +84,12 @@ function generatePassword() {
 }
 
 async function onCreateSubmit() {
-  if (!form.giro) return;
-  const ok = await store.createTenant({ ...form, giro: form.giro });
+  if (!form.giro || form.facturacion_habilitada === '') return;
+  const ok = await store.createTenant({
+    ...form,
+    giro: form.giro,
+    facturacion_habilitada: form.facturacion_habilitada === 'true',
+  });
   if (ok) {
     showCreateForm.value = false;
     resetForm();
@@ -188,6 +197,18 @@ async function onConfirmDelete(id: string) {
             <div class="form-text">
               Determina qué migraciones de vertical corre el tenant — se puede corregir
               después desde el detalle del tenant si hace falta.
+            </div>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Facturación en la plataforma *</label>
+            <select v-model="form.facturacion_habilitada" class="form-select" required>
+              <option value="" disabled>Elegir…</option>
+              <option value="true">Sí — factura en esta plataforma</option>
+              <option value="false">No — factura afuera (solo operativo)</option>
+            </select>
+            <div class="form-text">
+              Editable después desde el detalle del tenant. Apagarlo nunca afecta
+              comprobantes ya emitidos.
             </div>
           </div>
           <div class="col-md-6">

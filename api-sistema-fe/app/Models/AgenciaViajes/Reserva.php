@@ -34,6 +34,14 @@ use Illuminate\Database\Eloquent\Model;
 // fecha_cancelacion/motivo_cancelacion). Reprogramar más de una vez pisa
 // estos 4 campos con el estado anterior a la última reprogramación, no el
 // original de creación.
+//
+// facturacion_externa/referencia_externa/fecha_facturacion_externa
+// (PEGAR-EN-CLAUDE-CODE-facturacion-externa-tenant.md, 2026-08-20): override
+// por reserva, independiente de tenants.facturacion_habilitada (central) —
+// el vendedor puede marcar/desmarcar libremente mientras la reserva no tenga
+// ninguna fila en reserva_ventas (ver ReservaController::
+// actualizarFacturacionExterna()). Anotación pura, sin validar nada contra
+// ningún sistema externo, sin historial (se limpia al desmarcar).
 class Reserva extends Model
 {
     protected $table = 'reserva';
@@ -53,6 +61,9 @@ class Reserva extends Model
         'motivo_cancelacion',
         'porcentaje_reembolso_aplicado',
         'monto_reembolso',
+        'facturacion_externa',
+        'referencia_externa',
+        'fecha_facturacion_externa',
     ];
 
     protected $casts = [
@@ -64,6 +75,8 @@ class Reserva extends Model
         'fecha_cancelacion' => 'datetime',
         'porcentaje_reembolso_aplicado' => 'decimal:2',
         'monto_reembolso' => 'decimal:2',
+        'facturacion_externa' => 'boolean',
+        'fecha_facturacion_externa' => 'date',
     ];
 
     public function alternativa()

@@ -62,6 +62,11 @@ class TenantAdminController extends Controller
             // la migración ('retail') sin importar el negocio real. Ver
             // docs/planning/panel-superadmin/gap-editar-tenant-giro-password.md.
             'giro' => ['required', 'string', Rule::in(TenantProvisioningService::GIROS_VALIDOS)],
+            // Facturación externa por tenant (PEGAR-EN-CLAUDE-CODE-facturacion-externa-
+            // tenant.md §1): 'required' acá a propósito, sin default — selector
+            // obligatorio en el wizard, nunca se asume. Nullable solo para tenants
+            // existentes (backfill vía tenants:backfill-facturacion-habilitada).
+            'facturacion_habilitada' => 'required|boolean',
         ]);
 
         try {
@@ -75,6 +80,7 @@ class TenantAdminController extends Controller
             'domain' => $data['domain'],
             'admin_email' => $data['admin_email'],
             'giro' => $data['giro'],
+            'facturacion_habilitada' => $data['facturacion_habilitada'],
         ]);
 
         return response()->json([
@@ -188,6 +194,35 @@ class TenantAdminController extends Controller
         return response()->json(['message' => "Password actualizado para {$resultado['email']}."]);
     }
 
+    // Cambia facturacion_habilitada de un tenant ya creado — acción separada de
+    // update() a propósito (mismo criterio que resetAdminPassword): decisión de
+    // modelo de negocio del tenant, más fácil de auditar/filtrar en
+    // central_audit_logs como su propia acción que mezclada con ediciones de
+    // razón social/giro. Apagar el flag NO borra ni oculta nada histórico —
+    // Sale/SaleDetail/CxC/NC ya emitidos siguen 100% accesibles, ese acceso no
+    // depende de esta columna (PEGAR-EN-CLAUDE-CODE-facturacion-externa-tenant.md §3.1).
+    public function updateFacturacionHabilitada(Request $request, string $id)
+    {
+        $tenant = $this->resolveTenant($id);
+
+        $data = $request->validate([
+            'facturacion_habilitada' => 'required|boolean',
+        ]);
+
+        $valorAnterior = $tenant->facturacion_habilitada;
+
+        $tenant = $this->provisioningService->actualizar($tenant, [
+            'facturacion_habilitada' => $data['facturacion_habilitada'],
+        ]);
+
+        $this->auditLogger->log('tenant.facturacion_habilitada_updated', Tenant::class, $tenant->id, [
+            'valor_anterior' => $valorAnterior,
+            'valor_nuevo' => $data['facturacion_habilitada'],
+        ]);
+
+        return response()->json(['tenant' => $this->serialize($tenant->fresh('domains'))]);
+    }
+
     // "Archivado, no borrado" (§11.2) — bloquea login/API, conserva base y storage
     // intactos (retención legal SUNAT). Wrapper delgado sobre
     // TenantProvisioningService::archivar(), misma lógica que `tenants:archive` (CLI).
@@ -264,6 +299,7 @@ class TenantAdminController extends Controller
             'giro' => $tenant->giro,
             'tipo' => $tenant->tipo,
             'sunat_modo' => $tenant->sunat_modo,
+            'facturacion_habilitada' => $tenant->facturacion_habilitada,
             'status' => $tenant->status,
             'fecha_archivado' => $tenant->fecha_archivado,
             'fecha_alta' => $tenant->created_at,

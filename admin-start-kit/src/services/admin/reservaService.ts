@@ -1,6 +1,6 @@
 // src/services/admin/reservaService.ts — Sesión 11c (reserva y pasajeros)
 import httpClient from '@/helpers/http-client'
-import type { ReservaDetalleResponse, Reservas, MotivoCancelacion } from '@/types/agencia-viajes'
+import type { ReservaDetalleResponse, Reservas, MotivoCancelacion, Reserva } from '@/types/agencia-viajes'
 
 export const reservaService = {
   async listar(params: { page?: number; search?: string; estado?: 'activa' | 'cancelada' } = {}) {
@@ -46,5 +46,16 @@ export const reservaService = {
       // este segundo caso quedaba invisible en la respuesta.
       items_no_tocados: Array<{ reserva_item_id: number; nombre: string; fecha: string | null; motivo: 'manual' | 'sin_dia_referencial' }>
     }
+  },
+  // Facturación externa por tenant + por reserva (PEGAR-EN-CLAUDE-CODE-
+  // facturacion-externa-tenant.md, 2026-08-20) — solo editable mientras la
+  // reserva no tenga ninguna venta asociada (422 si ya la tiene, ver
+  // facturacion_externa_editable en ReservaDetalleResponse).
+  async actualizarFacturacionExterna(
+    id: number,
+    payload: { facturacion_externa: boolean; referencia_externa?: string | null; fecha_facturacion_externa?: string | null }
+  ) {
+    const response = await httpClient.put(`/reservas/${id}/facturacion-externa`, payload)
+    return response.data as { code: number; message: string; reserva: Reserva }
   }
 }

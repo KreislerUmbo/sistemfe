@@ -711,6 +711,14 @@ export type Reserva = {
   fecha_viaje_hasta?: string | null;
   fecha_cancelacion?: string | null;
   motivo_cancelacion?: MotivoCancelacion | null;
+  // Facturación externa por tenant + por reserva (PEGAR-EN-CLAUDE-CODE-
+  // facturacion-externa-tenant.md, 2026-08-20): override por reserva,
+  // independiente del flag del tenant — editable solo mientras la reserva
+  // no tenga ninguna venta asociada (ver facturacion_externa_editable en
+  // ReservaDetalleResponse).
+  facturacion_externa?: boolean;
+  referencia_externa?: string | null;
+  fecha_facturacion_externa?: string | null;
   alternativa?: Alternativa & { cotizacion?: Cotizacion };
   pasajeros?: ReservaPasajero[];
   items?: ReservaItem[];
@@ -755,6 +763,13 @@ export type ReservaDetalleResponse = {
   // ya cubiertos por ALGUNA ReservaVenta — usado para el badge
   // "Facturación completa" vs. "Falta facturar a N pasajeros".
   pasajeros_facturados_ids?: number[];
+  // Facturación externa por tenant (PEGAR-EN-CLAUDE-CODE-facturacion-externa-
+  // tenant.md): flag del TENANT (no de la reserva) — controla si se ofrecen
+  // los botones "Facturar"/"Facturación especial". El backend igual bloquea
+  // con 403 si se intenta directo.
+  facturacion_habilitada_tenant?: boolean;
+  // Editable solo mientras la reserva no tenga ninguna ReservaVenta.
+  facturacion_externa_editable?: boolean;
 };
 
 export type Reservas = {

@@ -540,6 +540,49 @@ class ReservaController extends Controller
         ));
     }
 
+    // PUT reservas/{id}/facturacion-externa — override por reserva,
+    // independiente de tenants.facturacion_habilitada. Editable SOLO
+    // mientras la reserva no tenga ninguna fila en reserva_ventas (ver
+    // Reserva::ventas()) — 422 si ya tiene un Sale, reversible libremente
+    // hasta ese momento (PEGAR-EN-CLAUDE-CODE-facturacion-externa-tenant.md
+    // §3.2).
+    public function actualizarFacturacionExterna(Request $request, string $id)
+    {
+        $reserva = Reserva::findOrFail($id);
+
+        if ($reserva->ventas()->exists()) {
+            return response()->json([
+                'code' => 422,
+                'message' => 'No se puede editar facturación externa: esta reserva ya tiene una venta/comprobante asociado en la plataforma.',
+            ], 422);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'facturacion_externa' => 'required|boolean',
+            'referencia_externa' => 'nullable|string|max:255',
+            'fecha_facturacion_externa' => 'nullable|date',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
+        }
+
+        $validado = $validator->validated();
+        $facturacionExterna = $validado['facturacion_externa'];
+
+        // Al desmarcar, se limpian referencia/fecha también — es anotación
+        // de estado actual, no un historial; "se equivocó, cambió de
+        // opinión" debe dejar la reserva en un estado limpio, no con datos
+        // viejos colgando.
+        $reserva->update([
+            'facturacion_externa' => $facturacionExterna,
+            'referencia_externa' => $facturacionExterna ? ($validado['referencia_externa'] ?? null) : null,
+            'fecha_facturacion_externa' => $facturacionExterna ? ($validado['fecha_facturacion_externa'] ?? null) : null,
+        ]);
+
+        return response()->json(['code' => 200, 'message' => 'Actualizado correctamente', 'reserva' => $reserva->fresh()]);
+    }
+
     // "resumen" para el panel de precio en vivo (§7.1 del prototipo) — el
     // frontend no recalcula nada, solo pinta nombre + total_convertido +
     // el TOTAL ya cerrado.
@@ -598,6 +641,16 @@ class ReservaController extends Controller
             'items_pendientes_sincronizar' => $itemsPendientesSincronizar,
             'items_facturados_ids' => $itemsFacturadosIds,
             'pasajeros_facturados_ids' => $pasajerosFacturadosIds,
+            // Facturación externa por tenant (PEGAR-EN-CLAUDE-CODE-
+            // facturacion-externa-tenant.md): el frontend necesita el flag
+            // del tenant acá para decidir si ofrece "Facturar"/"Facturación
+            // especial" sin una segunda llamada — el backend igual bloquea
+            // con 403 si se intenta directo (ReservaFacturacionController).
+            // facturacion_externa_editable = sin ninguna ReservaVenta
+            // todavía ($reserva->ventas ya está resuelto arriba, sin query
+            // extra).
+            'facturacion_habilitada_tenant' => (bool) tenant('facturacion_habilitada'),
+            'facturacion_externa_editable' => $reserva->ventas->isEmpty(),
             'cabecera' => [
                 'cliente' => $cotizacion->cliente,
                 'destino' => $cotizacion->destino,

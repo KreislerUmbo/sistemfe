@@ -16,6 +16,11 @@ export interface TenantOverview {
   giro: Giro;
   tipo: string;
   sunat_modo: string;
+  // Facturación externa por tenant (PEGAR-EN-CLAUDE-CODE-facturacion-externa-
+  // tenant.md) — true = factura en esta plataforma, false = "solo operativo"
+  // (factura afuera), null = sin decidir todavía (tratado como falsy por el
+  // backend). Editable en cualquier momento vía updateFacturacionHabilitada().
+  facturacion_habilitada: boolean | null;
   status: string;
   fecha_archivado: string | null;
   fecha_alta: string;

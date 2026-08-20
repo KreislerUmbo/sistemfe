@@ -131,6 +131,12 @@ Route::prefix('central')->group(function () {
         // por tinker. Acción separada de la edición general de arriba a propósito.
         Route::post('tenants/{id}/reset-admin-password', [TenantAdminController::class, 'resetAdminPassword']);
 
+        // Facturación externa por tenant (PEGAR-EN-CLAUDE-CODE-facturacion-externa-
+        // tenant.md §1) — endpoint dedicado, separado de update() a propósito (misma
+        // razón que reset-admin-password): decisión de modelo de negocio, propia
+        // acción de auditoría en central_audit_logs.
+        Route::put('tenants/{id}/facturacion-habilitada', [TenantAdminController::class, 'updateFacturacionHabilitada']);
+
         // "Archivado, no borrado" (§11.2) — bloquea login/API, conserva base/storage.
         // Wrappers HTTP delgados sobre TenantProvisioningService, misma lógica que los
         // comandos CLI tenants:archive/tenants:restore.
@@ -621,6 +627,10 @@ Route::group([
         ->middleware('permission:agencia.reservas');
     // Fase 2 del fix Cotización↔Reserva (2026-08-19).
     Route::post("reservas/{id}/reprogramar", [ReservaController::class, 'reprogramar'])
+        ->middleware('permission:agencia.reservas');
+    // Facturación externa por tenant + por reserva (PEGAR-EN-CLAUDE-CODE-
+    // facturacion-externa-tenant.md, 2026-08-20).
+    Route::put("reservas/{id}/facturacion-externa", [ReservaController::class, 'actualizarFacturacionExterna'])
         ->middleware('permission:agencia.reservas');
     // Fase A del plan "Proceso de reserva: facturación + 3 fixes" (2026-08-19).
     // Guardia tributario (2026-08-20, complemento a 11u): preparar-factura

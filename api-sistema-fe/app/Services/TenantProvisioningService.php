@@ -52,8 +52,10 @@ class TenantProvisioningService
      * admin_email, admin_password (opcional — si se omite, se genera uno random,
      * recuperable después con getLastGeneratedPassword()), giro/tipo (opcionales — si
      * se omiten, no se setean explícito y quedan en el default de la migración:
-     * giro=retail, tipo=real. El caller HTTP (TenantAdminController) todavía no los
-     * pasa — cambio 100% aditivo, no le cambia el comportamiento).
+     * giro=retail, tipo=real). facturacion_habilitada (opcional a este nivel — sin
+     * default de migración, columna nullable sin decidir; el caller HTTP
+     * (TenantAdminController::store()) es quien la exige 'required' en la validación,
+     * el Command CLI puede seguir omitiéndola).
      */
     public function provision(array $data): Tenant
     {
@@ -66,6 +68,7 @@ class TenantProvisioningService
         $adminPassword = $data['admin_password'] ?? null;
         $giro = $data['giro'] ?? null;
         $tipo = $data['tipo'] ?? null;
+        $facturacionHabilitada = $data['facturacion_habilitada'] ?? null;
 
         $this->validarDatos($ruc, $domain);
 
@@ -99,6 +102,9 @@ class TenantProvisioningService
             }
             if ($tipo !== null) {
                 $tenantAttributes['tipo'] = $tipo;
+            }
+            if ($facturacionHabilitada !== null) {
+                $tenantAttributes['facturacion_habilitada'] = $facturacionHabilitada;
             }
 
             $tenant = Tenant::create($tenantAttributes);
@@ -179,6 +185,10 @@ class TenantProvisioningService
 
         if (array_key_exists('razon_social_comercial', $data)) {
             $tenant->razon_social_comercial = $data['razon_social_comercial'];
+        }
+
+        if (array_key_exists('facturacion_habilitada', $data)) {
+            $tenant->facturacion_habilitada = $data['facturacion_habilitada'];
         }
 
         $giroCambio = false;

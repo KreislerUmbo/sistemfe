@@ -15,6 +15,9 @@ use Stancl\Tenancy\Database\Models\Tenant as BaseTenant;
  * @property string $giro             'retail' | 'agencia_viajes' | futuros verticales — columna real (ver getCustomColumns()).
  * @property string $tipo             'real' | 'demo' — columna real.
  * @property string $sunat_modo       'pruebas' | 'produccion' — columna real.
+ * @property bool|null $facturacion_habilitada  true = factura en esta plataforma (ReservaFacturacionController
+ *   habilitado); false = "solo operativo" (factura afuera); NULL = sin decidir, tratado como falsy por el
+ *   gate — columna real (ver getCustomColumns()).
  */
 class Tenant extends BaseTenant implements TenantWithDatabase
 {
@@ -22,6 +25,11 @@ class Tenant extends BaseTenant implements TenantWithDatabase
 
     protected $casts = [
         'fecha_archivado' => 'datetime',
+        // Sin este cast, un boolean 'false' de Postgres puede volver del
+        // driver como el string 'f' — que en PHP es truthy. El gate
+        // `if (! tenant('facturacion_habilitada'))` (ReservaFacturacionController/
+        // ReservaController) depende de este cast para funcionar bien.
+        'facturacion_habilitada' => 'boolean',
     ];
 
     /**
@@ -49,6 +57,6 @@ class Tenant extends BaseTenant implements TenantWithDatabase
      */
     public static function getCustomColumns(): array
     {
-        return array_merge(parent::getCustomColumns(), ['status', 'fecha_archivado', 'giro', 'tipo', 'sunat_modo']);
+        return array_merge(parent::getCustomColumns(), ['status', 'fecha_archivado', 'giro', 'tipo', 'sunat_modo', 'facturacion_habilitada']);
     }
 }

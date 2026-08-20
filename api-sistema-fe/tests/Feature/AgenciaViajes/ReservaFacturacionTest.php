@@ -63,13 +63,40 @@ class ReservaFacturacionTest extends TestCase
             'created_at' => now(), 'updated_at' => now(),
         ]);
         DB::statement("SELECT setval(pg_get_serial_sequence('roles','id'), (SELECT MAX(id) FROM roles))");
+
+        // Facturación externa por tenant (PEGAR-EN-CLAUDE-CODE-facturacion-
+        // externa-tenant.md) — default true para no romper los ~18 tests
+        // existentes de este archivo (todos asumían implícitamente que
+        // facturar estaba habilitado). Los tests nuevos del guard llaman
+        // setUpTenantFixture(false)/(null) explícitamente.
+        $this->setUpTenantFixture(true);
     }
 
     protected function tearDown(): void
     {
+        app(\Stancl\Tenancy\Tenancy::class)->tenant = null;
         DB::rollBack();
         DB::connection('central')->rollBack();
         parent::tearDown();
+    }
+
+    // Los tests de este archivo llaman a los controllers directamente
+    // (nunca vía HTTP + middleware `tenant`), así que stancl/tenancy nunca
+    // se inicializa por su cuenta. Para poder gatear
+    // ReservaFacturacionController con tenant('facturacion_habilitada') sin
+    // disparar Tenancy::initialize() (que correría DatabaseTenancyBootstrapper
+    // e intentaría cambiar de conexión física, rompiendo el fixture de
+    // Postgres de este test), se asigna el tenant directamente sobre la
+    // property de Tenancy — el binding de Contracts\Tenant::class (ver
+    // vendor/stancl/tenancy/src/TenancyServiceProvider.php) lo resuelve
+    // dinámicamente desde ahí en cada llamada a tenant().
+    private function setUpTenantFixture(?bool $facturacionHabilitada): void
+    {
+        $tenant = new \App\Models\Tenant();
+        $tenant->id = 'test-tenant-' . uniqid();
+        $tenant->facturacion_habilitada = $facturacionHabilitada;
+
+        app(\Stancl\Tenancy\Tenancy::class)->tenant = $tenant;
     }
 
     private function usuarioConPermisos(int $branchId, array $permisos): User
@@ -654,6 +681,72 @@ class ReservaFacturacionTest extends TestCase
         $body = $response->getData(true);
         $this->assertSame(200, $body['code'], json_encode($body));
         $this->assertSame(1, Sale::count());
+    }
+
+    public function test_preparar_factura_lanza_403_si_tenant_no_tiene_facturacion_habilitada(): void
+    {
+        [$branch, ] = $this->branchConSerie('01', 'F001');
+        $this->usuarioConPermisos($branch->id, ['emitir_factura']);
+        $this->setUpTenantFixture(false);
+
+        $f = $this->crearReservaConPasajerosEItems();
+
+        try {
+            app(ReservaFacturacionController::class)->prepararFactura(new Request([
+                'pasajero_ids' => [$f['p3']->id],
+            ]), (string) $f['reserva']->id);
+            $this->fail('Se esperaba HttpException 403, no se lanzó ninguna.');
+        } catch (HttpException $e) {
+            $this->assertSame(403, $e->getStatusCode());
+        }
+    }
+
+    public function test_store_lanza_403_si_tenant_no_tiene_facturacion_habilitada(): void
+    {
+        [$branch, ] = $this->branchConSerie('01', 'F001');
+        $this->usuarioConPermisos($branch->id, ['emitir_factura']);
+        $this->setUpTenantFixture(false);
+
+        $f = $this->crearReservaConPasajerosEItems();
+        $cliente = Client::factory()->create();
+
+        try {
+            app(ReservaFacturacionController::class)->store(new Request([
+                'pasajero_ids' => [$f['p3']->id],
+                'client_id' => $cliente->id,
+                'tipo_comprobante_codigo' => '01',
+            ]), (string) $f['reserva']->id);
+            $this->fail('Se esperaba HttpException 403, no se lanzó ninguna.');
+        } catch (HttpException $e) {
+            $this->assertSame(403, $e->getStatusCode());
+        }
+
+        $this->assertSame(0, Sale::count());
+    }
+
+    // NULL (tenant sin decidir todavía, ver backfill) debe tratarse igual
+    // de falsy que false — no un tercer estado permisivo.
+    public function test_store_lanza_403_si_facturacion_habilitada_es_null(): void
+    {
+        [$branch, ] = $this->branchConSerie('01', 'F001');
+        $this->usuarioConPermisos($branch->id, ['emitir_factura']);
+        $this->setUpTenantFixture(null);
+
+        $f = $this->crearReservaConPasajerosEItems();
+        $cliente = Client::factory()->create();
+
+        try {
+            app(ReservaFacturacionController::class)->store(new Request([
+                'pasajero_ids' => [$f['p3']->id],
+                'client_id' => $cliente->id,
+                'tipo_comprobante_codigo' => '01',
+            ]), (string) $f['reserva']->id);
+            $this->fail('Se esperaba HttpException 403, no se lanzó ninguna.');
+        } catch (HttpException $e) {
+            $this->assertSame(403, $e->getStatusCode());
+        }
+
+        $this->assertSame(0, Sale::count());
     }
 
     private function crearReservaConMezclaTributaria(): array

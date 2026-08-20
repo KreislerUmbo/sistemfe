@@ -134,6 +134,41 @@ async function onSaveResetPassword() {
   }
 }
 
+// Facturación externa por tenant (PEGAR-EN-CLAUDE-CODE-facturacion-externa-
+// tenant.md §4) — card separada de "Editar" a propósito, mismo criterio que
+// "Restablecer password del admin": decisión de modelo de negocio sensible,
+// más fácil de auditar sola (propia acción en central_audit_logs).
+const showFacturacionHabilitadaForm = ref(false);
+const facturacionHabilitadaForm = ref<'true' | 'false'>('true');
+
+function openFacturacionHabilitadaForm() {
+  if (!overview.value) return;
+  facturacionHabilitadaForm.value = overview.value.facturacion_habilitada ? 'true' : 'false';
+  store.facturacionHabilitadaError = null;
+  showFacturacionHabilitadaForm.value = true;
+}
+
+function cancelFacturacionHabilitadaForm() {
+  showFacturacionHabilitadaForm.value = false;
+  store.facturacionHabilitadaError = null;
+}
+
+async function onSaveFacturacionHabilitada() {
+  const tenant = await store.updateFacturacionHabilitada(
+    tenantId,
+    facturacionHabilitadaForm.value === 'true',
+  );
+  if (tenant) {
+    overview.value = tenant;
+    showFacturacionHabilitadaForm.value = false;
+  }
+}
+
+function facturacionHabilitadaLabel(v: boolean | null | undefined): string {
+  if (v === null || v === undefined) return 'Sin definir';
+  return v ? 'Sí' : 'No';
+}
+
 const tabs = [
   { key: 'company', label: 'Company' },
   { key: 'subscription', label: 'Suscripción' },
@@ -189,15 +224,53 @@ const domainsText = computed(() =>
             {{ overview.id }} — RUC {{ overview.ruc }} — giro: {{ overview.giro }} —
             dominio(s): {{ domainsText }}
           </p>
+          <p class="text-muted mb-0 small">
+            Factura en la plataforma: <strong>{{ facturacionHabilitadaLabel(overview.facturacion_habilitada) }}</strong>
+          </p>
         </div>
         <div class="d-flex align-items-start gap-2">
           <span class="badge" :class="statusBadgeClass(overview.status)">{{ overview.status }}</span>
           <button type="button" class="btn btn-outline-secondary btn-sm" @click="openEditForm">
             Editar
           </button>
+          <button type="button" class="btn btn-outline-info btn-sm" @click="openFacturacionHabilitadaForm">
+            Cambiar facturación
+          </button>
           <button type="button" class="btn btn-outline-warning btn-sm" @click="openResetPasswordForm">
             Restablecer password del admin
           </button>
+        </div>
+      </div>
+
+      <!-- Facturación externa por tenant — separada, propia auditoría -->
+      <div v-if="showFacturacionHabilitadaForm" class="card mb-3 border-info">
+        <div class="card-body">
+          <h2 class="h6">Facturación en la plataforma</h2>
+          <p class="text-muted small">
+            Controla si este tenant puede facturar reservas dentro de esta plataforma
+            ("Facturar" en reservas). Este cambio <strong>no afecta comprobantes, cuentas
+            por cobrar ni notas de crédito ya emitidos</strong> — esos siguen accesibles
+            sin cambios.
+          </p>
+          <form class="row g-3" @submit.prevent="onSaveFacturacionHabilitada">
+            <div class="col-md-6">
+              <select v-model="facturacionHabilitadaForm" class="form-select">
+                <option value="true">Sí — factura en esta plataforma</option>
+                <option value="false">No — factura afuera (solo operativo)</option>
+              </select>
+            </div>
+            <div class="col-12">
+              <div v-if="store.facturacionHabilitadaError" class="alert alert-danger py-2">
+                {{ store.facturacionHabilitadaError }}
+              </div>
+              <button type="submit" class="btn btn-info" :disabled="store.updatingFacturacionHabilitada">
+                {{ store.updatingFacturacionHabilitada ? 'Guardando…' : 'Confirmar cambio' }}
+              </button>
+              <button type="button" class="btn btn-outline-secondary ms-2" @click="cancelFacturacionHabilitadaForm">
+                Cancelar
+              </button>
+            </div>
+          </form>
         </div>
       </div>
 

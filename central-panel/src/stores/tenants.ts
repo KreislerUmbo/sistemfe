@@ -31,6 +31,9 @@ export interface Tenant {
   giro: Giro;
   tipo: string;
   sunat_modo: string;
+  // Facturación externa por tenant (PEGAR-EN-CLAUDE-CODE-facturacion-externa-
+  // tenant.md) — ver TenantOverview en tenant-detail.ts para el detalle.
+  facturacion_habilitada: boolean | null;
   status: string;
   fecha_archivado: string | null;
   fecha_alta: string;
@@ -40,6 +43,8 @@ export interface Tenant {
 // Payload de POST central/tenants — mismos campos que valida
 // TenantAdminController::store() (todos required, admin_password min:8, giro
 // agregado en esta sesión — antes el panel creaba tenants sin poder elegirlo).
+// facturacion_habilitada agregada en la sesión de facturación externa —
+// required, sin default, mismo criterio que giro.
 export interface CreateTenantPayload {
   ruc: string;
   razon_social: string;
@@ -49,6 +54,7 @@ export interface CreateTenantPayload {
   admin_email: string;
   admin_password: string;
   giro: Giro;
+  facturacion_habilitada: boolean;
 }
 
 // Payload de PUT central/tenants/{id} — todos opcionales, TenantAdminController::
@@ -222,6 +228,35 @@ export const useTenantsStore = defineStore('tenants', () => {
       return false;
     } finally {
       resettingPassword.value = false;
+    }
+  };
+
+  // Facturación externa por tenant — endpoint dedicado (PUT central/tenants/{id}/
+  // facturacion-habilitada), separado de updateTenant() a propósito, mismo criterio
+  // que resetAdminPassword: acción de modelo de negocio, propia auditoría en
+  // central_audit_logs. Devuelve el Tenant actualizado (mismo patrón que
+  // updateTenant/suspendTenant) para refrescar el overview sin re-pedirlo.
+  const updatingFacturacionHabilitada = ref(false);
+  const facturacionHabilitadaError = ref<string | null>(null);
+
+  const updateFacturacionHabilitada = async (
+    id: string,
+    value: boolean,
+  ): Promise<TenantOverview | null> => {
+    updatingFacturacionHabilitada.value = true;
+    facturacionHabilitadaError.value = null;
+
+    try {
+      const { data } = await httpClient.put(`central/tenants/${id}/facturacion-habilitada`, {
+        facturacion_habilitada: value,
+      });
+      return data.tenant as TenantOverview;
+    } catch (e: any) {
+      facturacionHabilitadaError.value =
+        e.response?.data?.message ?? 'No se pudo actualizar la facturación habilitada.';
+      return null;
+    } finally {
+      updatingFacturacionHabilitada.value = false;
     }
   };
 
@@ -644,6 +679,10 @@ export const useTenantsStore = defineStore('tenants', () => {
     resettingPassword,
     resetPasswordError,
     resetAdminPassword,
+
+    updatingFacturacionHabilitada,
+    facturacionHabilitadaError,
+    updateFacturacionHabilitada,
 
     subscription,
     fetchSubscription,

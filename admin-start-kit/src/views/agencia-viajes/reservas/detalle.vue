@@ -20,11 +20,14 @@
                 <router-link to="/agencia-viajes/reservas" class="btn btn-outline-secondary btn-sm">
                     <i class="fas fa-arrow-left me-1"></i>Volver
                 </router-link>
-                <button v-if="reserva.estado === 'activa' && pasajerosPendientesFacturar.length > 0" class="btn btn-primary btn-sm" @click="abrirModalFacturarSimple">
+                <button v-if="mostrarBotonesFacturar" class="btn btn-primary btn-sm" @click="abrirModalFacturarSimple">
                     <i class="fas fa-file-invoice me-1"></i>Facturar
                 </button>
-                <button v-if="reserva.estado === 'activa' && pasajerosPendientesFacturar.length > 0" class="btn btn-outline-primary btn-sm" @click="abrirModalFacturarEspecial">
+                <button v-if="mostrarBotonesFacturar" class="btn btn-outline-primary btn-sm" @click="abrirModalFacturarEspecial">
                     <i class="fas fa-layer-group me-1"></i>Facturación especial
+                </button>
+                <button v-if="mostrarMarcarFacturacionExterna" class="btn btn-outline-secondary btn-sm" @click="abrirModalFacturacionExterna">
+                    <i class="fas fa-external-link-alt me-1"></i>Marcar facturación externa
                 </button>
                 <button v-if="reserva.estado === 'activa'" class="btn btn-outline-primary btn-sm" @click="abrirModalReprogramar">
                     <i class="fas fa-calendar-days me-1"></i>Reprogramar viaje
@@ -33,6 +36,17 @@
                     <i class="fas fa-ban me-1"></i>Cancelar reserva
                 </button>
             </div>
+        </div>
+
+        <div v-if="reserva?.facturacion_externa" class="alert alert-secondary d-flex justify-content-between align-items-center mb-3 py-2">
+            <span>
+                <i class="fas fa-external-link-alt me-2"></i>Esta reserva se factura afuera de la plataforma.
+                <template v-if="reserva.referencia_externa"> Referencia: {{ reserva.referencia_externa }}.</template>
+                <template v-if="reserva.fecha_facturacion_externa"> Fecha: {{ formatFecha(reserva.fecha_facturacion_externa) }}.</template>
+            </span>
+            <button v-if="facturacionExternaEditable" class="btn btn-sm btn-outline-secondary" @click="abrirModalFacturacionExterna">
+                Editar
+            </button>
         </div>
 
         <div v-if="reserva && (itemsPendientesSincronizar?.length ?? 0) > 0" class="alert alert-warning d-flex justify-content-between align-items-center mb-3">
@@ -572,6 +586,42 @@
                 </div>
             </div>
         </div>
+
+        <!-- Facturación externa por tenant + por reserva -->
+        <div class="modal fade" tabindex="-1" :class="{ show: mostrarModalFacturacionExterna, 'd-block': mostrarModalFacturacionExterna }"
+            style="background:rgba(0,0,0,.5)" v-if="mostrarModalFacturacionExterna">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h6 class="modal-title fw-bold">Facturación externa</h6>
+                        <button class="btn-close" @click="mostrarModalFacturacionExterna = false"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p class="small text-muted">
+                            Esta reserva se factura fuera de la plataforma — esto es solo una anotación de
+                            referencia, no valida nada contra ningún sistema externo.
+                        </p>
+                        <div class="mb-2">
+                            <label class="form-label small">Referencia externa (opcional)</label>
+                            <input v-model="formFacturacionExterna.referencia_externa" type="text" class="form-control form-control-sm">
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label small">Fecha de facturación externa (opcional)</label>
+                            <input v-model="formFacturacionExterna.fecha_facturacion_externa" type="date" class="form-control form-control-sm">
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button v-if="reserva?.facturacion_externa" class="btn btn-outline-danger btn-sm" :disabled="guardandoFacturacionExterna" @click="guardarFacturacionExterna(false)">
+                            Desmarcar
+                        </button>
+                        <button class="btn btn-outline-secondary btn-sm" @click="mostrarModalFacturacionExterna = false">Cerrar</button>
+                        <button class="btn btn-primary btn-sm" :disabled="guardandoFacturacionExterna" @click="guardarFacturacionExterna(true)">
+                            <span v-if="guardandoFacturacionExterna" class="spinner-border spinner-border-sm me-1"></span>Guardar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
     </DefaultLayout>
 </template>
 
@@ -611,12 +661,37 @@ const itemsFacturadosIds = ref<number[]>([]);
 // comprobante, no se vuelve a ofrecer una vez facturado.
 const pasajerosFacturadosIds = ref<number[]>([]);
 
+// Facturación externa por tenant + por reserva (PEGAR-EN-CLAUDE-CODE-
+// facturacion-externa-tenant.md, 2026-08-20): flag del TENANT (controla si
+// se ofrecen los botones Facturar) y si la reserva todavía puede editar su
+// propio facturacion_externa (sin ninguna venta asociada).
+const facturacionHabilitadaTenant = ref(false);
+const facturacionExternaEditable = ref(false);
+
 const tab = ref<'pax' | 'items' | 'asignacion'>('pax');
 
 // Pasajeros que todavía no fueron cubiertos por ningún comprobante —
 // candidatos a incluir en la próxima pasada de facturación.
 const pasajerosPendientesFacturar = computed(() =>
     (reserva.value?.pasajeros ?? []).filter((p) => !pasajerosFacturadosIds.value.includes(p.id))
+);
+
+// Las 3 condiciones del brief (§3.3), cada una independiente — sin lógica
+// especial por caso: Facturar solo si el tenant tiene el flag Y no está
+// marcada como externa; "Marcar facturación externa" siempre que no esté
+// marcada y sea editable (cubre tanto tenant=false como la excepción con
+// tenant=true); el banner de datos externos se muestra solo cuando
+// facturacion_externa=true (ver template).
+const mostrarBotonesFacturar = computed(() =>
+    reserva.value?.estado === 'activa'
+    && !reserva.value?.facturacion_externa
+    && facturacionHabilitadaTenant.value
+    && pasajerosPendientesFacturar.value.length > 0
+);
+const mostrarMarcarFacturacionExterna = computed(() =>
+    reserva.value?.estado === 'activa'
+    && !reserva.value?.facturacion_externa
+    && facturacionExternaEditable.value
 );
 
 const cargarReserva = async () => {
@@ -639,6 +714,8 @@ const cargarReserva = async () => {
     itemsPendientesSincronizar.value = res.items_pendientes_sincronizar ?? [];
     itemsFacturadosIds.value = res.items_facturados_ids ?? [];
     pasajerosFacturadosIds.value = res.pasajeros_facturados_ids ?? [];
+    facturacionHabilitadaTenant.value = res.facturacion_habilitada_tenant ?? false;
+    facturacionExternaEditable.value = res.facturacion_externa_editable ?? false;
 };
 
 const sincronizarItems = async () => {
@@ -1135,6 +1212,43 @@ const confirmarFacturacionSimple = async () => {
         toast.error(error.response?.data?.message ?? 'No se pudo facturar la reserva');
     } finally {
         facturando.value = false;
+    }
+};
+
+// ── Facturación externa por tenant + por reserva (2026-08-20) — marcar/
+// desmarcar/editar la anotación de "esta reserva se factura afuera de la
+// plataforma". Editable solo mientras facturacionExternaEditable (sin
+// ninguna venta asociada, ver ReservaController::actualizarFacturacionExterna()).
+const mostrarModalFacturacionExterna = ref(false);
+const guardandoFacturacionExterna = ref(false);
+const formFacturacionExterna = ref<{ referencia_externa: string; fecha_facturacion_externa: string }>({
+    referencia_externa: '',
+    fecha_facturacion_externa: '',
+});
+
+const abrirModalFacturacionExterna = () => {
+    formFacturacionExterna.value = {
+        referencia_externa: reserva.value?.referencia_externa ?? '',
+        fecha_facturacion_externa: reserva.value?.fecha_facturacion_externa?.substring(0, 10) ?? '',
+    };
+    mostrarModalFacturacionExterna.value = true;
+};
+
+const guardarFacturacionExterna = async (marcar: boolean) => {
+    guardandoFacturacionExterna.value = true;
+    try {
+        const res = await reservaService.actualizarFacturacionExterna(reservaId, {
+            facturacion_externa: marcar,
+            referencia_externa: marcar ? (formFacturacionExterna.value.referencia_externa || null) : null,
+            fecha_facturacion_externa: marcar ? (formFacturacionExterna.value.fecha_facturacion_externa || null) : null,
+        });
+        toast.success(res.message);
+        mostrarModalFacturacionExterna.value = false;
+        await cargarReserva();
+    } catch (error: any) {
+        toast.error(error.response?.data?.message ?? 'No se pudo actualizar la facturación externa');
+    } finally {
+        guardandoFacturacionExterna.value = false;
     }
 };
 

@@ -97,6 +97,16 @@ class ReservaFacturacionController extends Controller
         . 'distinto (ej. exonerado Amazonía + gravado nacional). No se puede facturar en un solo '
         . 'comprobante todavía — requiere revisión manual con el contador antes de emitir.';
 
+    // Facturación externa por tenant (PEGAR-EN-CLAUDE-CODE-facturacion-externa-
+    // tenant.md §3.1) — doble capa: el frontend ya oculta el botón "Facturar"
+    // cuando tenants.facturacion_habilitada es falsy, pero este endpoint nunca
+    // confía en que el frontend filtró bien. tenant('facturacion_habilitada') es
+    // null-safe (vendor/stancl/tenancy/src/helpers.php) — sin tenancy
+    // inicializada resuelve null, tratado igual que false (deny-by-default).
+    private const MENSAJE_FACTURACION_NO_HABILITADA = 'Este tenant no tiene habilitada la facturación '
+        . 'electrónica en la plataforma (modelo "solo operativo"). Contactá a soporte/tu superadmin si '
+        . 'necesitás activarla.';
+
     public function __construct(private SerieComprobanteService $serieComprobanteService)
     {
     }
@@ -112,6 +122,10 @@ class ReservaFacturacionController extends Controller
 
         if ($reserva->estado !== 'activa') {
             return response()->json(['code' => 422, 'message' => 'Solo se puede facturar una reserva activa.'], 422);
+        }
+
+        if (! tenant('facturacion_habilitada')) {
+            throw new HttpException(403, self::MENSAJE_FACTURACION_NO_HABILITADA);
         }
 
         $validator = Validator::make($request->all(), [
@@ -178,6 +192,10 @@ class ReservaFacturacionController extends Controller
 
         if ($reserva->estado !== 'activa') {
             return response()->json(['code' => 422, 'message' => 'Solo se puede facturar una reserva activa.'], 422);
+        }
+
+        if (! tenant('facturacion_habilitada')) {
+            throw new HttpException(403, self::MENSAJE_FACTURACION_NO_HABILITADA);
         }
 
         $validator = Validator::make($request->all(), [
