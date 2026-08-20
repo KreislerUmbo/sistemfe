@@ -75,9 +75,14 @@
                             <div v-if="formPaxAbierto === p.id" class="mt-3 border-top pt-3">
                                 <div class="row g-2 mb-2 position-relative">
                                     <div class="col-md-6">
-                                        <label class="form-label small text-secondary mb-1">Buscar pasajero ya cargado</label>
-                                        <input type="text" class="form-control form-control-sm" placeholder="Buscar por DNI o nombre..."
-                                            v-model="catalogoSearch[p.id]" @input="onBuscarCatalogo(p.id)" autocomplete="off">
+                                        <label class="form-label small text-secondary mb-1">Buscar pasajero (DNI o nombre)</label>
+                                        <div class="input-group input-group-sm">
+                                            <input type="text" class="form-control form-control-sm" placeholder="Buscar por DNI o nombre..."
+                                                v-model="catalogoSearch[p.id]" @input="onBuscarCatalogo(p.id)" autocomplete="off">
+                                            <span v-if="buscandoDni === p.id" class="input-group-text bg-white">
+                                                <span class="spinner-border spinner-border-sm text-primary"></span>
+                                            </span>
+                                        </div>
                                         <div v-if="(catalogoResultados[p.id]?.length ?? 0) > 0"
                                             class="list-group position-absolute w-100 shadow-sm" style="z-index:10;max-width:60%">
                                             <button type="button" class="list-group-item list-group-item-action py-2 text-start"
@@ -86,6 +91,7 @@
                                                 <div class="small text-muted">{{ c.documentos?.[0]?.numero_documento ?? 'sin documento' }}</div>
                                             </button>
                                         </div>
+                                        <small class="text-muted">Si escribís un DNI de 8 dígitos y no está en el sistema, se busca solo en RENIEC.</small>
                                     </div>
                                 </div>
                                 <div class="row g-2">
@@ -310,6 +316,7 @@
 import { ref, computed, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';
+import httpClient from '@/helpers/http-client';
 import { reservaService } from '@/services/admin/reservaService';
 import { reservaPasajeroService } from '@/services/admin/reservaPasajeroService';
 import { reservaItemService } from '@/services/admin/reservaItemService';
@@ -392,15 +399,28 @@ const toggleFormPax = (id: number) => { formPaxAbierto.value = formPaxAbierto.va
 
 const catalogoSearch = ref<Record<number, string>>({});
 const catalogoResultados = ref<Record<number, PasajeroCatalogo[]>>({});
+const buscandoDni = ref<number | null>(null); // id del pax en búsqueda RENIEC (spinner del campo unificado)
+const ultimoDniAutoBuscado = ref<Record<number, string>>({}); // evita repetir la misma consulta RENIEC en cada tecla
 let catalogoTimeout: any = null;
 
+// Un solo campo de búsqueda flexible (DNI o nombre, mismo criterio que el
+// usuario pidió: "muchas veces no recuerdo el DNI pero sí el nombre o
+// viceversa"). Primero filtra el catálogo interno; si no hay match Y el
+// texto es un DNI completo (8 dígitos), cae en cascada a RENIEC sin botón
+// ni modal — no se puede buscar por nombre en RENIEC, solo por documento.
 const onBuscarCatalogo = (paxId: number) => {
     clearTimeout(catalogoTimeout);
-    const texto = catalogoSearch.value[paxId] ?? '';
-    if (texto.trim().length < 2) { catalogoResultados.value[paxId] = []; return; }
+    const texto = (catalogoSearch.value[paxId] ?? '').trim();
+    if (texto.length < 2) { catalogoResultados.value[paxId] = []; return; }
     catalogoTimeout = setTimeout(async () => {
         const res = await reservaPasajeroService.buscarCatalogo(texto);
         catalogoResultados.value[paxId] = res.pasajeros_catalogo;
+
+        const esDniCompleto = /^\d{8}$/.test(texto);
+        if (res.pasajeros_catalogo.length === 0 && esDniCompleto && ultimoDniAutoBuscado.value[paxId] !== texto) {
+            ultimoDniAutoBuscado.value[paxId] = texto;
+            await buscarDniEnReniec(paxId, texto);
+        }
     }, 250); // debounce, mismo criterio que el buscador de cliente en Ventas
 };
 
@@ -412,6 +432,34 @@ const autocompletarDesdeCatalogo = (p: ReservaPasajero, c: PasajeroCatalogo) => 
     catalogoResultados.value[p.id] = [];
     catalogoSearch.value[p.id] = '';
     toast.success(`Datos de ${c.nombre} autocompletados desde su perfil`);
+};
+
+// ── Fallback automático a RENIEC (vía apisperu) cuando el DNI no está en el catálogo interno ──
+const buscarDniEnReniec = async (paxId: number, dni: string) => {
+    const p = reserva.value?.pasajeros?.find((x) => x.id === paxId);
+    if (!p) return;
+    buscandoDni.value = paxId;
+    try {
+        const res = await httpClient.get(`/search-document/dni/${dni}`);
+        const nombres = res.data.success === false
+            ? ''
+            : `${res.data.nombres ?? ''} ${res.data.apellidoPaterno ?? ''} ${res.data.apellidoMaterno ?? ''}`.trim();
+        if (nombres) {
+            p.nombre = nombres;
+            p.documento = dni;
+            catalogoSearch.value[paxId] = '';
+            catalogoResultados.value[paxId] = [];
+            toast.success(`${nombres} encontrado en RENIEC y autocompletado`);
+        } else {
+            // DNI válido (8 dígitos) pero sin datos en RENIEC — no es un error del
+            // sistema, avisa para que se complete a mano en vez de quedar en silencio.
+            toast.warning(`DNI ${dni} no encontrado en RENIEC — completa el nombre manualmente`);
+        }
+    } catch (error) {
+        // fallo de red/API — sí silencioso, es una consulta automática de fondo mientras el usuario escribe
+    } finally {
+        buscandoDni.value = null;
+    }
 };
 
 const guardandoPax = ref<number | null>(null);

@@ -32,10 +32,13 @@
                             <input type="text" class="form-control" v-model="clientSearchText"
                                 placeholder="Buscar por DNI, RUC o nombre..." @input="onClientSearchInput"
                                 @focus="showClientSuggestions = true" @blur="onClientSearchBlur" autocomplete="off">
+                            <button v-if="clienteSeleccionado" class="btn btn-outline-primary" type="button" title="Editar datos del cliente" @click="abrirEdicionCliente">
+                                <i class="fas fa-pen"></i>
+                            </button>
                             <button v-if="clienteSeleccionado" class="btn btn-outline-danger" type="button" @click="limpiarCliente">
                                 <i class="fas fa-times"></i>
                             </button>
-                            <button class="btn btn-success" type="button" @click="showQuickClientModal = true">
+                            <button class="btn btn-success" type="button" @click="abrirNuevoCliente">
                                 <i class="fas fa-user-plus"></i>
                             </button>
                         </div>
@@ -112,11 +115,13 @@
             <div class="modal-dialog modal-lg">
                 <div class="modal-content">
                     <div class="modal-header">
-                        <h6 class="modal-title">Registrar Cliente Rápido</h6>
+                        <h6 class="modal-title">{{ modoEdicionCliente ? 'Editar Cliente' : 'Registrar Cliente Rápido' }}</h6>
                         <button class="btn-close" @click="showQuickClientModal = false"></button>
                     </div>
                     <div class="modal-body">
-                        <ClientFormQuick :initial-data="null" @saved="onClientCreated" @cancel="showQuickClientModal = false" />
+                        <ClientFormQuick :initial-data="modoEdicionCliente ? clienteSeleccionado : null"
+                            :cliente-id="modoEdicionCliente ? clienteSeleccionado?.id ?? null : null"
+                            @saved="onClientCreated" @cancel="showQuickClientModal = false" />
                     </div>
                 </div>
             </div>
@@ -147,6 +152,7 @@ const clientSuggestions = ref<Client[]>([]);
 const clienteSeleccionado = ref<Client | null>(null);
 const showClientSuggestions = ref<boolean>(false);
 const showQuickClientModal = ref<boolean>(false);
+const modoEdicionCliente = ref<boolean>(false);
 let clientSearchTimeout: any = null;
 
 const destinoId = ref<number | null>(null);
@@ -189,6 +195,17 @@ const seleccionarCliente = (c: Client) => {
 const limpiarCliente = () => {
     clienteSeleccionado.value = null;
     clientSearchText.value = '';
+};
+
+const abrirNuevoCliente = () => {
+    modoEdicionCliente.value = false;
+    showQuickClientModal.value = true;
+};
+
+const abrirEdicionCliente = () => {
+    if (!clienteSeleccionado.value) return;
+    modoEdicionCliente.value = true;
+    showQuickClientModal.value = true;
 };
 
 const onClientSearchBlur = () => {

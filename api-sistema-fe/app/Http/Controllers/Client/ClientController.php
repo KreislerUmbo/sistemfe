@@ -125,7 +125,10 @@ class ClientController extends Controller
 
     public function show(string $id)
     {
-        // como va ser con modal no se necesita
+        return response()->json([
+            'code'   => 200,
+            'client' => ClientResource::make(Client::findOrFail($id)),
+        ]);
     }
 
     // ── Actualizar cliente ───────────────────────────────────────────

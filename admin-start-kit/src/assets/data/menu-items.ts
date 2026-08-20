@@ -316,6 +316,16 @@ export const MENU_ITEMS: MenuItemType[] = [
         parentKey: "configurat",
         permission: 'company',
       },
+      // CRUD real agregado 2026-08-17 — antes no había forma de crear
+      // sucursales, bloqueaba emitir cualquier comprobante (serie_comprobantes
+      // exige branch_id).
+      {
+        key: "branches",
+        label: "Sucursales",
+        route: { name: "branches.index" },
+        parentKey: "configurat",
+        permission: 'list_branch',
+      },
       // Módulo Caja — Fase 0 (plan-modulo-caja.md §3).
       {
         key: "payment_methods",
