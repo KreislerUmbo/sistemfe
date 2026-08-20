@@ -17,6 +17,12 @@
                 <router-link to="/agencia-viajes/reservas" class="btn btn-outline-secondary btn-sm">
                     <i class="fas fa-arrow-left me-1"></i>Volver
                 </router-link>
+                <button v-if="reserva.estado === 'activa' && itemsFacturables.length > 0" class="btn btn-primary btn-sm" @click="abrirModalFacturar">
+                    <i class="fas fa-file-invoice me-1"></i>Facturar
+                </button>
+                <button v-if="reserva.estado === 'activa'" class="btn btn-outline-primary btn-sm" @click="abrirModalReprogramar">
+                    <i class="fas fa-calendar-days me-1"></i>Reprogramar viaje
+                </button>
                 <button v-if="reserva.estado === 'activa'" class="btn btn-outline-danger btn-sm" @click="mostrarModalCancelar = true">
                     <i class="fas fa-ban me-1"></i>Cancelar reserva
                 </button>
@@ -28,6 +34,19 @@
             <button class="btn btn-sm btn-warning" :disabled="sincronizando" @click="sincronizarItems">
                 <span v-if="sincronizando" class="spinner-border spinner-border-sm me-1"></span>Sincronizar
             </button>
+        </div>
+
+        <div v-if="itemsNoTocadosReprogramacion.length > 0" class="alert alert-warning d-flex justify-content-between align-items-start mb-3">
+            <span>
+                <i class="fas fa-triangle-exclamation me-2"></i>
+                Reserva reprogramada. {{ itemsNoTocadosReprogramacion.length }} ítem(s) quedaron con su fecha
+                de antes — revísalos y corrígelos a mano si hace falta:
+                <span v-for="(it, idx) in itemsNoTocadosReprogramacion" :key="it.reserva_item_id">
+                    {{ it.nombre }} ({{ formatFecha(it.fecha) }},
+                    {{ it.motivo === 'manual' ? 'editado a mano antes' : 'sin datos para recalcular solo' }})<span v-if="idx < itemsNoTocadosReprogramacion.length - 1">, </span>
+                </span>.
+            </span>
+            <button class="btn-close" @click="itemsNoTocadosReprogramacion = []"></button>
         </div>
 
         <div v-if="reserva" class="row g-3">
@@ -157,7 +176,15 @@
                 <div v-if="tab === 'items'" class="d-flex flex-column gap-2">
                     <div v-for="it in reserva.items" :key="it.id" class="card border-0 shadow-sm">
                         <div class="card-body py-2">
-                            <div class="mb-2"><strong>{{ nombreItem(it) }}</strong></div>
+                            <div class="mb-2">
+                                <strong>{{ nombreItem(it) }}</strong>
+                                <span v-if="it.fecha_origen === 'manual'" class="badge bg-light text-dark border ms-2" title="Esta fecha fue editada a mano — una reprogramación de la reserva no la mueve sola">
+                                    <i class="fas fa-hand me-1"></i>Fecha manual
+                                </span>
+                                <span v-if="itemsFacturadosIds.includes(it.id)" class="badge bg-success-subtle text-success border ms-2">
+                                    <i class="fas fa-file-invoice me-1"></i>Facturado
+                                </span>
+                            </div>
                             <div v-if="destinoItem(it)" class="small text-muted mb-2"><i class="fas fa-map-marker-alt me-1"></i>{{ destinoItem(it) }}</div>
                             <div class="row g-2">
                                 <div class="col-md-3" v-if="it.alternativa_item?.origen_tipo === 'proveedor'">
@@ -176,6 +203,7 @@
                                             </button>
                                             <button type="button" class="list-group-item list-group-item-action py-1 small" v-for="t in proveedoresFiltrados(it)" :key="t.id" @mousedown.prevent="elegirProveedor(it, t.id)">
                                                 {{ t.proveedor_servicio?.proveedor?.razon_social ?? ('Tarifa #' + t.id) }}{{ t.proveedor_servicio?.proveedor?.es_referencial ? ' (Referencial)' : '' }}
+                                                <span class="text-muted">— {{ t.tipo_tarifa }} · {{ t.modalidad }} · {{ t.moneda }} {{ Number(t.precio_venta_adulto).toFixed(0) }}</span>
                                             </button>
                                             <div v-if="proveedoresFiltrados(it).length === 0" class="list-group-item small text-muted py-1">Sin resultados</div>
                                         </div>
@@ -245,7 +273,7 @@
 
                         <div class="d-flex flex-column gap-2 small mb-3">
                             <div v-for="r in resumen" :key="r.reserva_item_id" class="d-flex justify-content-between">
-                                <span>{{ r.nombre }}</span>
+                                <span>{{ r.nombre }}<span v-if="r.fecha" class="text-muted"> — {{ formatFecha(r.fecha) }}</span></span>
                                 <span class="fw-semibold">{{ moneda }} {{ Number(r.total_convertido).toFixed(2) }}</span>
                             </div>
                         </div>
@@ -309,15 +337,125 @@
                 </div>
             </div>
         </div>
+
+        <!-- Modal reprogramar (Fase 2 del fix Cotización↔Reserva, 2026-08-19) -->
+        <div class="modal fade" tabindex="-1" :class="{ show: mostrarModalReprogramar, 'd-block': mostrarModalReprogramar }"
+            style="background:rgba(0,0,0,.5)" v-if="mostrarModalReprogramar">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h6 class="modal-title fw-bold">Reprogramar viaje</h6>
+                        <button class="btn-close" @click="mostrarModalReprogramar = false"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="row g-2 mb-2">
+                            <div class="col-6">
+                                <label class="form-label small fw-semibold text-secondary">Fecha desde</label>
+                                <input type="date" class="form-control form-control-sm" v-model="reprogramarForm.fecha_viaje_desde">
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label small fw-semibold text-secondary">Fecha hasta</label>
+                                <input type="date" class="form-control form-control-sm" v-model="reprogramarForm.fecha_viaje_hasta">
+                            </div>
+                        </div>
+                        <label class="form-label small fw-semibold text-secondary">Motivo</label>
+                        <textarea class="form-control form-control-sm" rows="2" v-model="reprogramarForm.motivo" placeholder="Ej. Cliente pidió correr el viaje 15 días por motivos laborales"></textarea>
+                        <p class="small text-muted mt-2 mb-0">
+                            <i class="fas fa-info-circle me-1"></i>Los ítems con fecha editada a mano
+                            (<span class="badge bg-light text-dark border">Fecha manual</span>) no se mueven —
+                            hay que revisarlos aparte. La cotización original no se toca.
+                        </p>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn btn-outline-secondary btn-sm" @click="mostrarModalReprogramar = false">Volver</button>
+                        <button class="btn btn-primary btn-sm" :disabled="reprogramando || !reprogramarForm.fecha_viaje_desde || !reprogramarForm.motivo"
+                            @click="confirmarReprogramacion">
+                            <span v-if="reprogramando" class="spinner-border spinner-border-sm me-1"></span>Confirmar reprogramación
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal facturar (Fase A del plan "Proceso de reserva: facturación + 3 fixes", 2026-08-19) -->
+        <div class="modal fade" tabindex="-1" :class="{ show: mostrarModalFacturar, 'd-block': mostrarModalFacturar }"
+            style="background:rgba(0,0,0,.5)" v-if="mostrarModalFacturar">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h6 class="modal-title fw-bold">Facturar reserva</h6>
+                        <button class="btn-close" @click="mostrarModalFacturar = false"></button>
+                    </div>
+                    <div class="modal-body">
+                        <label class="form-label small fw-semibold text-secondary">Ítems a facturar</label>
+                        <div class="d-flex flex-column gap-1 mb-3" style="max-height:220px;overflow-y:auto">
+                            <label v-for="it in itemsFacturables" :key="it.id" class="small d-flex justify-content-between align-items-center border rounded px-2 py-1" style="cursor:pointer">
+                                <span>
+                                    <input type="checkbox" class="form-check-input me-2" v-model="facturarForm.reserva_item_ids" :value="it.id">
+                                    {{ nombreItem(it) }} <span class="text-muted" v-if="it.fecha">— {{ formatFecha(it.fecha) }}</span>
+                                </span>
+                                <span class="fw-semibold">{{ moneda }} {{ Number(it.alternativa_item?.total_convertido ?? 0).toFixed(2) }}</span>
+                            </label>
+                        </div>
+
+                        <!-- Guardia tributario: la reserva mezcla tratamientos distintos, no se
+                             puede emitir un solo comprobante — se avisa acá y se oculta el resto
+                             del formulario, para que no quede duda de que hay que resolverlo con
+                             contabilidad antes de seguir. -->
+                        <div v-if="previewFactura?.bloqueado_tributario" class="alert alert-danger mb-0">
+                            <i class="fas fa-triangle-exclamation me-2"></i>
+                            <strong>No se puede facturar así todavía.</strong>
+                            <p class="mb-0 mt-1">{{ previewFactura.motivo }}</p>
+                        </div>
+
+                        <template v-else>
+                            <div class="row g-2 mb-2">
+                                <div class="col-6">
+                                    <label class="form-label small fw-semibold text-secondary">Tipo de comprobante</label>
+                                    <select class="form-select form-select-sm" v-model="facturarForm.tipo_comprobante_codigo">
+                                        <option value="01">Factura</option>
+                                        <option value="03">Boleta</option>
+                                    </select>
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label small fw-semibold text-secondary">Cliente</label>
+                                    <input type="text" class="form-control form-control-sm" disabled :value="cabecera?.cliente?.full_name ?? 'Cliente de la cotización'">
+                                </div>
+                            </div>
+                            <div v-if="cargandoPreviewFactura" class="small text-muted mb-2">
+                                <span class="spinner-border spinner-border-sm me-1"></span>Calculando total...
+                            </div>
+                            <div v-else-if="previewFactura" class="alert alert-light border d-flex justify-content-between align-items-center py-2 mb-2">
+                                <span class="small text-secondary">Total a facturar</span>
+                                <span class="fw-bold">{{ moneda }} {{ Number(previewFactura.total ?? 0).toFixed(2) }}</span>
+                            </div>
+                            <p class="small text-muted mb-0">
+                                <i class="fas fa-info-circle me-1"></i>La venta se crea pendiente de cobro. Cobrarla y
+                                enviarla a SUNAT se hace después, desde la pantalla normal de ventas.
+                            </p>
+                        </template>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn btn-outline-secondary btn-sm" @click="mostrarModalFacturar = false">Volver</button>
+                        <button v-if="!previewFactura?.bloqueado_tributario" class="btn btn-primary btn-sm"
+                            :disabled="facturando || cargandoPreviewFactura || facturarForm.reserva_item_ids.length === 0"
+                            @click="confirmarFacturacion">
+                            <span v-if="facturando" class="spinner-border spinner-border-sm me-1"></span>Facturar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
     </DefaultLayout>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import httpClient from '@/helpers/http-client';
 import { reservaService } from '@/services/admin/reservaService';
+import { reservaFacturacionService, type PrepararFacturaResponse } from '@/services/admin/reservaFacturacionService';
 import { reservaPasajeroService } from '@/services/admin/reservaPasajeroService';
 import { reservaItemService } from '@/services/admin/reservaItemService';
 import { proveedorService } from '@/services/admin/proveedorService';
@@ -340,8 +478,14 @@ const moneda = ref<'PEN' | 'USD'>('PEN');
 const cabecera = ref<ReservaCabecera | null>(null);
 const itemsPendientesSincronizar = ref<Array<{ id: number; nombre: string }>>([]);
 const sincronizando = ref(false);
+const itemsNoTocadosReprogramacion = ref<Array<{ reserva_item_id: number; nombre: string; fecha: string | null; motivo: 'manual' | 'sin_dia_referencial' }>>([]);
+const itemsFacturadosIds = ref<number[]>([]);
 
 const tab = ref<'pax' | 'items' | 'asignacion'>('pax');
+
+// Fase A — facturación de reservas: ítems que todavía no están cubiertos
+// por ninguna venta, candidatos a facturar.
+const itemsFacturables = computed(() => (reserva.value?.items ?? []).filter((it) => !itemsFacturadosIds.value.includes(it.id)));
 
 const cargarReserva = async () => {
     const res = await reservaService.obtener(reservaId);
@@ -361,6 +505,7 @@ const cargarReserva = async () => {
     moneda.value = res.moneda;
     cabecera.value = res.cabecera;
     itemsPendientesSincronizar.value = res.items_pendientes_sincronizar ?? [];
+    itemsFacturadosIds.value = res.items_facturados_ids ?? [];
 };
 
 const sincronizarItems = async () => {
@@ -610,6 +755,123 @@ const confirmarCancelacion = async () => {
         toast.error(error.response?.data?.message ?? 'No se pudo cancelar la reserva');
     } finally {
         cancelando.value = false;
+    }
+};
+
+// ── Reprogramar (Fase 2 del fix Cotización↔Reserva, 2026-08-19) ────────
+const mostrarModalReprogramar = ref(false);
+const reprogramando = ref(false);
+const reprogramarForm = ref<{ fecha_viaje_desde: string; fecha_viaje_hasta: string; motivo: string }>({
+    fecha_viaje_desde: '', fecha_viaje_hasta: '', motivo: '',
+});
+
+const abrirModalReprogramar = () => {
+    reprogramarForm.value = {
+        fecha_viaje_desde: cabecera.value?.fecha_viaje_desde ? cabecera.value.fecha_viaje_desde.slice(0, 10) : '',
+        fecha_viaje_hasta: cabecera.value?.fecha_viaje_hasta ? cabecera.value.fecha_viaje_hasta.slice(0, 10) : '',
+        motivo: '',
+    };
+    mostrarModalReprogramar.value = true;
+};
+
+const confirmarReprogramacion = async () => {
+    if (!reserva.value) return;
+    reprogramando.value = true;
+    try {
+        const res = await reservaService.reprogramar(reserva.value.id, {
+            fecha_viaje_desde: reprogramarForm.value.fecha_viaje_desde,
+            fecha_viaje_hasta: reprogramarForm.value.fecha_viaje_hasta || null,
+            motivo: reprogramarForm.value.motivo,
+        });
+        res.reserva.items?.forEach((it) => {
+            if (it.fecha) it.fecha = it.fecha.substring(0, 10);
+        });
+        reserva.value = res.reserva;
+        resumen.value = res.resumen;
+        total.value = res.total;
+        cabecera.value = res.cabecera;
+        itemsNoTocadosReprogramacion.value = res.items_no_tocados ?? [];
+        mostrarModalReprogramar.value = false;
+        toast.success(res.message);
+    } catch (error: any) {
+        toast.error(error.response?.data?.message ?? 'No se pudo reprogramar la reserva');
+    } finally {
+        reprogramando.value = false;
+    }
+};
+
+// ── Facturar (Fase A del plan "Proceso de reserva: facturación + 3 fixes", 2026-08-19) ──
+const mostrarModalFacturar = ref(false);
+const facturando = ref(false);
+const facturarForm = ref<{ reserva_item_ids: number[]; tipo_comprobante_codigo: '01' | '03' }>({
+    reserva_item_ids: [], tipo_comprobante_codigo: '01',
+});
+
+// Guardia tributario (2026-08-20): antes de dejar confirmar, se consulta
+// GET preparar-factura con los ítems marcados. Si la reserva mezcla
+// tratamientos tributarios distintos (ej. exonerado Amazonía + gravado
+// nacional), no se puede emitir un solo comprobante — se avisa acá, ANTES
+// de que el usuario llene todo el formulario, y se oculta el botón
+// Facturar. El guardia real (el que de verdad protege) vive en el backend
+// (POST facturar también lo revisa) — esto es solo para que el usuario no
+// pierda tiempo ni se lleve una sorpresa al confirmar.
+const previewFactura = ref<PrepararFacturaResponse | null>(null);
+const cargandoPreviewFactura = ref(false);
+
+const refrescarPreviewFactura = async () => {
+    if (!reserva.value || facturarForm.value.reserva_item_ids.length === 0) {
+        previewFactura.value = null;
+        return;
+    }
+    cargandoPreviewFactura.value = true;
+    try {
+        previewFactura.value = await reservaFacturacionService.prepararFactura(
+            reserva.value.id,
+            facturarForm.value.reserva_item_ids
+        );
+    } catch (error: any) {
+        toast.error(error.response?.data?.message ?? 'No se pudo calcular la vista previa de la factura');
+        previewFactura.value = null;
+    } finally {
+        cargandoPreviewFactura.value = false;
+    }
+};
+
+watch(() => [...facturarForm.value.reserva_item_ids], () => {
+    if (mostrarModalFacturar.value) refrescarPreviewFactura();
+});
+
+const abrirModalFacturar = () => {
+    facturarForm.value = {
+        reserva_item_ids: itemsFacturables.value.map((it) => it.id),
+        tipo_comprobante_codigo: '01',
+    };
+    previewFactura.value = null;
+    mostrarModalFacturar.value = true;
+    refrescarPreviewFactura();
+};
+
+const confirmarFacturacion = async () => {
+    if (!reserva.value) return;
+    facturando.value = true;
+    try {
+        const res = await reservaFacturacionService.facturar(reserva.value.id, {
+            reserva_item_ids: facturarForm.value.reserva_item_ids,
+            tipo_comprobante_codigo: facturarForm.value.tipo_comprobante_codigo,
+        });
+        mostrarModalFacturar.value = false;
+        toast.success(res.message);
+        // Refresca la reserva completa (marca los ítems como facturados,
+        // actualiza items_facturados_ids) — la venta creada se gestiona
+        // desde su propia pantalla (cobrar, enviar a SUNAT), no acá.
+        await cargarReserva();
+    } catch (error: any) {
+        // El guardia tributario también puede rechazar acá (422,
+        // bloqueado_tributario) si el preview no llegó a correr a tiempo
+        // — mismo mensaje, nunca deja crear la venta a medias.
+        toast.error(error.response?.data?.message ?? 'No se pudo facturar la reserva');
+    } finally {
+        facturando.value = false;
     }
 };
 

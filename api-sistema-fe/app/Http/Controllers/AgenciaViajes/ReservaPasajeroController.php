@@ -5,8 +5,12 @@ namespace App\Http\Controllers\AgenciaViajes;
 use App\Http\Controllers\Controller;
 use App\Models\AgenciaViajes\PasajeroCatalogo;
 use App\Models\AgenciaViajes\PasajeroDocumento;
+use App\Models\AgenciaViajes\ReservaItemPasajero;
 use App\Models\AgenciaViajes\ReservaPasajero;
+use App\Models\AgenciaViajes\ReservaVenta;
+use App\Models\AgenciaViajes\SalidaMayorista;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 
 // Datos completos de un pasajero de reserva — plan-modulo-cotizaciones-reservas.md
@@ -132,5 +136,53 @@ class ReservaPasajeroController extends Controller
             ->get();
 
         return response()->json(['pasajeros_catalogo' => $pasajeros]);
+    }
+
+    // DELETE reserva-pasajeros/{id} — Fase D del plan "Proceso de reserva:
+    // facturación + 3 fixes" (2026-08-19). Cubre el caso "un pasajero se
+    // baja del viaje" después de aceptada la reserva.
+    public function destroy(string $id)
+    {
+        $pasajero = ReservaPasajero::with('reserva')->findOrFail($id);
+        $reserva = $pasajero->reserva;
+
+        if ($reserva->estado !== 'activa') {
+            return response()->json(['code' => 422, 'message' => 'Solo se puede quitar un pasajero de una reserva activa.'], 422);
+        }
+
+        if ($reserva->pasajeros()->count() <= 1) {
+            return response()->json(['code' => 422, 'message' => 'No se puede quitar: es el último pasajero de la reserva.'], 422);
+        }
+
+        // Mismo criterio conservador que ReservaItemController::destroy():
+        // si la reserva ya generó alguna venta, corregir la composición de
+        // pasajeros queda para la fase futura de "editar una reserva ya
+        // facturada" — acá no se toca en silencio.
+        if (ReservaVenta::where('reserva_id', $reserva->id)->exists()) {
+            return response()->json([
+                'code' => 422,
+                'message' => 'No se puede quitar: esta reserva ya tiene una venta/comprobante asociado.',
+            ], 422);
+        }
+
+        DB::transaction(function () use ($pasajero, $reserva) {
+            // reserva_item_pasajero.reserva_pasajero_id es FK sin
+            // cascadeOnDelete() — hay que limpiarla a mano antes de poder
+            // borrar el pasajero.
+            ReservaItemPasajero::where('reserva_pasajero_id', $pasajero->id)->delete();
+            $pasajero->delete();
+
+            // Mismo movimiento de cupo que ReservaController::cancelar(),
+            // en reversa por 1 pasajero — cupo_ocupado se contó por
+            // cantidad de pasajeros al aceptar, no queda "huérfano" un
+            // cupo que ya no corresponde a nadie.
+            $alternativa = $reserva->alternativa;
+            $opcionElegida = $alternativa?->opcionMayoristaElegida;
+            if ($opcionElegida && $opcionElegida->salida_mayorista_id) {
+                SalidaMayorista::where('id', $opcionElegida->salida_mayorista_id)->decrement('cupo_ocupado');
+            }
+        });
+
+        return response()->json(['code' => 200, 'message' => 'Pasajero quitado de la reserva correctamente.']);
     }
 }
