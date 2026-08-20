@@ -128,10 +128,12 @@ class PriceEngineService
      *     venta_bruta_combo: float,
      *     venta_neta_combo: float,
      *     descuento_aplicado: float,
-     *     margen_resultante_pct: float|null
+     *     margen_resultante_pct: float|null,
+     *     ajuste_redondeo: float|null,
+     *     venta_final_combo: float
      * }
      */
-    public function calcularCombo(array $tourTotales, ?string $descuentoTipo, ?float $descuentoValor): array
+    public function calcularCombo(array $tourTotales, ?string $descuentoTipo, ?float $descuentoValor, ?float $ajusteRedondeo = null): array
     {
         $costoTotalCombo = array_sum(array_column($tourTotales, 'costo_total'));
         $ventaBrutaCombo = array_sum(array_column($tourTotales, 'venta_total'));
@@ -139,9 +141,22 @@ class PriceEngineService
         $ventaNetaCombo = $this->aplicarDescuento($ventaBrutaCombo, $descuentoTipo, $descuentoValor);
         $descuentoAplicado = round($ventaBrutaCombo - $ventaNetaCombo, 2);
 
+        // margen_resultante_pct sigue midiéndose SOLO sobre venta_neta_combo,
+        // sin el ajuste — es la rentabilidad real del combo (piso de margen,
+        // ComboValidationService::validarMargenMinimo()); el ajuste de
+        // redondeo (abajo) es cosmético sobre el número final que ve el
+        // cliente, no una decisión de rentabilidad (fix ajuste de redondeo,
+        // 2026-08-18, decisión de negocio confirmada — ver brief).
         $margenResultantePct = $costoTotalCombo > 0
             ? round((($ventaNetaCombo - $costoTotalCombo) / $costoTotalCombo) * 100, 2)
             : null;
+
+        // venta_final_combo: el número que realmente se cobra/se suma en una
+        // cotización real (AlternativaItemController::desdePlantilla()) —
+        // venta_neta_combo + ajuste_redondeo, aplicado DESPUÉS del
+        // descuento. null = sin ajuste, venta_final_combo == venta_neta_combo
+        // (comportamiento idéntico al de antes de este fix).
+        $ventaFinalCombo = $ajusteRedondeo !== null ? round($ventaNetaCombo + $ajusteRedondeo, 2) : round($ventaNetaCombo, 2);
 
         return [
             'costo_total_combo' => round($costoTotalCombo, 2),
@@ -149,6 +164,8 @@ class PriceEngineService
             'venta_neta_combo' => round($ventaNetaCombo, 2),
             'descuento_aplicado' => $descuentoAplicado,
             'margen_resultante_pct' => $margenResultantePct,
+            'ajuste_redondeo' => $ajusteRedondeo,
+            'venta_final_combo' => $ventaFinalCombo,
         ];
     }
 

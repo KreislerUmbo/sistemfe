@@ -233,6 +233,20 @@ class AlternativaItemController extends Controller
                 $diaFinalCombo = max($diaFinalCombo, $diaDelTour + $diasDelTourActual - 1);
                 $offsetDia += $diasDelTourActual;
             }
+
+            // Fix ítems sueltos del combo (2026-08-18): un hotel/guía
+            // agregado DIRECTO al combo (sin envolverlo en un tour-hijo) se
+            // perdía por completo acá — este bucle antes solo miraba
+            // toursDelCombo(). Ocupan el día de inicio del combo (no tienen
+            // tour propio del que derivar un día/offset).
+            foreach ($this->comboExplosion->explotarItemsSueltos($paquete) as $entrada) {
+                $entrada['dia_referencial'] = $validado['dia_referencial'];
+                $entradas[] = $entrada;
+            }
+
+            // Un combo compuesto solo por ítems sueltos (sin ningún
+            // tour-hijo) igual ocupa al menos su propio día de inicio.
+            $diaFinalCombo = max($diaFinalCombo, $validado['dia_referencial']);
         } else {
             foreach ($this->comboExplosion->explotarTourSimple($paquete) as $entrada) {
                 $entrada['dia_referencial'] = $validado['dia_referencial'];
@@ -240,10 +254,29 @@ class AlternativaItemController extends Controller
             }
         }
 
+        // Fix ajuste de redondeo (2026-08-18): la suma real de ítems casi
+        // nunca da un número redondo (ej. S/93.66) pero el negocio quiere
+        // cobrar S/100 — ajuste_redondeo (positivo o negativo) es la única
+        // palanca hoy para eso, y sin esto SOLO afectaba el catálogo
+        // (totalesTour()/totalesCombo()), nunca la cotización real del
+        // cliente, que seguía sumando el número no redondo (mismo síntoma
+        // ya diagnosticado para precio_venta_final antes de este fix). Se
+        // refleja como UN AlternativaItem manual adicional, auditable (no un
+        // número mágico) — mismo patrón que "ítem manual flexible" (Sesión
+        // 11q), costo=0 porque es un ajuste de precio de venta, no un
+        // servicio nuevo con costo de proveedor. Solo el ajuste_redondeo del
+        // paquete de nivel superior (el que se está cargando) aplica — el de
+        // un tour-hijo dentro de un combo NO se propaga acá: cada
+        // paquete_plantilla corrige su PROPIO total final, no el de su
+        // contenedor (mismo criterio que totalesCombo() usa para
+        // costo_total_combo/venta_bruta_combo, que tampoco lo aplican por
+        // tour-hijo, ver ComboExplosionService::totalesTour()).
+        $ajusteRedondeo = $paquete->ajuste_redondeo !== null ? (float) $paquete->ajuste_redondeo : null;
+
         $itemsCreados = [];
         $guiasPendientes = [];
 
-        DB::transaction(function () use ($alternativa, $entradas, &$itemsCreados, &$guiasPendientes) {
+        DB::transaction(function () use ($alternativa, $entradas, $ajusteRedondeo, $validado, &$itemsCreados, &$guiasPendientes) {
             foreach ($entradas as $entrada) {
                 if ($entrada['proveedor_tarifa_id']) {
                     $tarifa = ProveedorTarifa::findOrFail($entrada['proveedor_tarifa_id']);
@@ -342,6 +375,21 @@ class AlternativaItemController extends Controller
                 }
             }
 
+            if ($ajusteRedondeo !== null && $ajusteRedondeo != 0.0) {
+                $itemsCreados[] = AlternativaItem::create([
+                    'alternativa_id' => $alternativa->id,
+                    'origen_tipo' => AlternativaItem::ORIGEN_MANUAL,
+                    'descripcion_manual' => 'Ajuste de redondeo',
+                    'dia_referencial' => $validado['dia_referencial'],
+                    'modo_precio' => 'tarifa_fija',
+                    'cantidad' => 1,
+                    'moneda_costo' => $alternativa->moneda_cotizacion,
+                    'costo_snapshot' => 0,
+                    'precio_venta_snapshot' => $ajusteRedondeo,
+                    'precio_convertido' => $this->priceEngine->convertirMoneda($ajusteRedondeo, $alternativa->moneda_cotizacion, $alternativa->moneda_cotizacion, (float) $alternativa->tipo_cambio_aplicado),
+                ]);
+            }
+
             $this->recalcularTotalAlternativa($alternativa);
         });
 
@@ -364,7 +412,7 @@ class AlternativaItemController extends Controller
     // otro concern y no debía arriesgar esa validación ya verificada.
     public function reasignarDia(Request $request, string $id)
     {
-        $item = AlternativaItem::findOrFail($id);
+        $item = AlternativaItem::with('alternativa')->findOrFail($id);
 
         $validator = Validator::make($request->all(), [
             'dia_referencial' => 'required|integer|min:1',
@@ -372,6 +420,20 @@ class AlternativaItemController extends Controller
 
         if ($validator->fails()) {
             return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
+        }
+
+        // Fase 2 del fix Cotización↔Reserva (2026-08-19): una alternativa
+        // 'aceptada' ya generó una reserva a partir de un snapshot de
+        // dia_referencial — mover el día acá después desincroniza en
+        // silencio esa reserva ya congelada (el mismo síntoma de fondo que
+        // motivó todo este fix, ver plan-hoja-de-ruta-ejecucion.md fila
+        // 11r/11s). El punto de corrección correcto para una reserva ya
+        // aceptada es ReservaController::reprogramar(), no este endpoint.
+        if ($item->alternativa->estado === 'aceptada') {
+            return response()->json([
+                'code' => 422,
+                'message' => 'Esta alternativa ya fue aceptada y generó una reserva — usa reprogramar sobre la reserva en vez de mover ítems acá.',
+            ], 422);
         }
 
         if ($item->tour_origen_id !== null) {
@@ -400,6 +462,15 @@ class AlternativaItemController extends Controller
 
         if ($validator->fails()) {
             return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
+        }
+
+        // Fase 2 del fix Cotización↔Reserva (2026-08-19) — mismo guard que
+        // reasignarDia(), ver comentario ahí.
+        if ($alternativa->estado === 'aceptada') {
+            return response()->json([
+                'code' => 422,
+                'message' => 'Esta alternativa ya fue aceptada y generó una reserva — usa reprogramar sobre la reserva en vez de mover ítems acá.',
+            ], 422);
         }
 
         $validado = $validator->validated();

@@ -497,6 +497,12 @@ export type PaquetePlantilla = {
   descuento_tipo?: 'porcentaje' | 'monto' | null;
   descuento_valor?: number | null;
   margen_minimo_pct?: number | null;
+  // Fix ajuste de redondeo (2026-08-18) — positivo o negativo (a diferencia
+  // de descuento_valor, que solo resta), aplica a AMBOS tipos. null = sin
+  // ajuste. Ver ComboPrecioCalculado.venta_final_combo para paquete_combo;
+  // para tour_simple se aplica client-side sobre totalesIncluye (sin
+  // endpoint de "precio_calculado" propio, mismo criterio ya existente).
+  ajuste_redondeo?: number | null;
   items?: PaquetePlantillaItem[];
   paquete_itinerario?: TourItinerarioItem[];
   // Solo presente en index() para tipo=paquete_combo (Sesión 11b4a) — ver
@@ -532,6 +538,14 @@ export type ComboPrecioCalculado = {
   venta_neta_combo: number;
   descuento_aplicado: number;
   margen_resultante_pct: number | null;
+  // Fix ajuste de redondeo (2026-08-18) — venta_final_combo es el número
+  // que realmente se cobra/se suma en una cotización real
+  // (desdePlantilla()): venta_neta_combo + ajuste_redondeo, aplicado
+  // DESPUÉS del descuento. margen_resultante_pct arriba sigue midiéndose
+  // SOLO sobre venta_neta_combo, sin este ajuste (decisión de negocio: es
+  // cosmético, no una decisión de rentabilidad).
+  ajuste_redondeo: number | null;
+  venta_final_combo: number;
   componentes_inactivos: Array<{ id: number; nombre: string }>;
   // Sesión 11m — tour-hijo activo sin Incluye/Itinerario cargado (suma 0
   // en silencio en el precio, pero rompe la cotización más adelante).
@@ -630,6 +644,10 @@ export type ReservaItem = {
   reserva_id: number;
   alternativa_item_id: number;
   fecha?: string | null;
+  // Fase 1 del fix Cotización↔Reserva (2026-08-18): 'auto' = calculada por
+  // la fórmula (reserva.fecha_viaje_desde + dia_referencial); 'manual' =
+  // editada a mano en esta pantalla.
+  fecha_origen?: 'auto' | 'manual';
   hora?: string | null;
   guia_id?: number | null;
   proveedor_tarifa_id?: number | null;
@@ -683,6 +701,14 @@ export type Reserva = {
   mayorista_elegida_id?: number | null;
   estado_reserva_mayorista?: 'pendiente' | 'confirmada' | null;
   estado: 'activa' | 'cancelada';
+  // Fase 1 del fix Cotización↔Reserva (2026-08-18): fecha propia de la
+  // reserva, copiada de la cotización una sola vez al aceptar la
+  // alternativa — NO es un espejo en vivo de `alternativa.cotizacion`
+  // (esa sigue siendo la propuesta comercial, editable libremente). Usar
+  // siempre estos dos campos (o `ReservaCabecera`) para mostrar "la fecha
+  // de la reserva", nunca `alternativa.cotizacion.fecha_viaje_desde/hasta`.
+  fecha_viaje_desde?: string | null;
+  fecha_viaje_hasta?: string | null;
   fecha_cancelacion?: string | null;
   motivo_cancelacion?: MotivoCancelacion | null;
   alternativa?: Alternativa & { cotizacion?: Cotizacion };
@@ -700,6 +726,10 @@ export type ReservaResumenItem = {
 export type ReservaCabecera = {
   cliente?: { id: number; full_name: string; n_document?: string };
   destino: string;
+  // Fase 1 del fix Cotización↔Reserva (2026-08-18): ya NO es un espejo de
+  // Cotizacion.fecha_viaje_desde/hasta — son las fechas propias de la
+  // reserva (Reserva.fecha_viaje_desde/hasta), congeladas al aceptar.
+  // cliente/destino/codigo_cotizacion sí siguen siendo de la cotización.
   fecha_viaje_desde?: string | null;
   fecha_viaje_hasta?: string | null;
   codigo_cotizacion: string;
