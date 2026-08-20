@@ -1,12 +1,21 @@
 # Sub-plan — Módulo Planes y Control de Acceso por Módulo (feature gating)
 
-> Parte de: `plan-general-vertical-agencia-viajes.md` — Módulo 11
-> Estado: modelo reconciliado con `plan-panel-superadmin.md` (sistema
-> ya construido, Fases 0-E cerradas) el 23-jul-2026. Gran parte de 3.1
-> y 3.1.a ya estaba implementada bajo otros nombres — se descartó el
+> Módulo 11 (el documento raíz que lo indexaba,
+> `plan-general-vertical-agencia-viajes.md`, ya se archivó — ver
+> `historial-archivo.md`).
+> Estado: modelo reconciliado con el Panel Superadmin (ya construido,
+> ver `panel-superadmin/plan-panel-superadmin.md` — stub corto, detalle
+> completo en su `historial-archivo.md`) el 23-jul-2026. Gran parte de
+> 3.1 y 3.1.a ya estaba implementada bajo otros nombres — se descartó el
 > diseño propio y se documentó cómo reutilizar lo existente. Tabla
 > `planes` fusionada con `tenant_plans` (ya existente). Todos los gaps
-> de la sección 3 (3.1 a 3.6) resueltos.
+> de la sección 3 (3.1 a 3.6) **resueltos a nivel de diseño** — no
+> confundir con "construido": 3.1.c (mecanismo de tenant demo/real) y
+> 3.4/3.5 (feature-gating de módulos en sí) quedaron marcados
+> explícitamente como "trabajo genuinamente nuevo, sin conflicto" (ver
+> abajo) — **no verificado en esta ronda de limpieza de documentación
+> (20-ago-2026) si ya se construyeron o siguen pendientes**, confirmar
+> antes de asumir cualquiera de los dos estados.
 > Nota: el mecanismo de tenant demo/real (3.1.c) sigue siendo genérico
 > para toda la plataforma y es trabajo nuevo real, sin conflicto con lo
 > ya construido — ver referencia cruzada en

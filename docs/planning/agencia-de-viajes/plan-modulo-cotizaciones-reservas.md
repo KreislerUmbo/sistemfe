@@ -1,8 +1,20 @@
 # Sub-plan — Módulo Cotizaciones / Alternativas / Reservas / Itinerarios
 
-> Parte de: `plan-general-vertical-agencia-viajes.md` — Fase 1
-> Estado: en definición (aún se están sumando casos de negocio)
-> Última actualización: 20-ago-2026 (fila 11u cerrada — ya existe forma de facturar una reserva, alcance mínimo viable; queda pendiente aplicar el parche de guardia tributario mixto — ver §9 y `plan-hoja-de-ruta-ejecucion.md` fila 11u)
+> Parte de la Fase 1 del vertical Agencia de Viajes (el documento raíz,
+> `plan-general-vertical-agencia-viajes.md`, ya se archivó — ver
+> `historial-archivo.md`).
+> Estado: **modelo de datos y motor de cotización/reserva/facturación
+> completos y en producción** (Sesiones 0-11v, ver
+> `plan-hoja-de-ruta-ejecucion.md`). Este documento sigue activo porque
+> las filas todavía abiertas (11e/11f/11g/11d — reporte operativo,
+> recordatorios, pago a proveedor) referencian sus secciones §4.6, §8,
+> §8bis directamente.
+> Última actualización: 20-ago-2026 — filas 11u (facturación de reserva)
+> y 11v (facturación múltiple por grupo de pasajeros) cerradas,
+> commiteadas y pusheadas a `origin/main` (`2f3ce7f`). El guardia
+> tributario mixto (§9) que esta misma entrada dejó pendiente el mismo
+> día **ya está resuelto** — ver §9 más abajo, no queda nada abierto de
+> esa pieza puntual.
 
 ---
 

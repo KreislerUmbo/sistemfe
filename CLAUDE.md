@@ -763,8 +763,10 @@ repositorio/carpeta separado (no incluido en este workspace).
   vez de un catálogo real de usuarios (ver Fase 5).
 
 **Completo — Módulo de series de comprobantes, con Nota de Venta interna (2026-07-19):**
-Diseño completo en `plan-modulo-series-comprobantes.md` (raíz del repo, incluye esquema de
-tablas, decisiones de diseño y los incidentes reales encontrados en el camino).
+Diseño completo archivado en `docs/planning/retail-facturacion-core/historial-archivo.md`
+(el documento original, `plan-modulo-series-comprobantes.md`, se archivó el 20-ago-2026 —
+todo su alcance está cerrado; los pendientes reales que dejó documentados están reproducidos
+en el propio historial-archivo.md).
 - Resuelve de raíz el bug de concurrencia real de `reservarCorrelativo()` (serie nueva sin
   fila previa → dos requests podían calcular ambos `correlativo=1`): ahora existe
   `serie_comprobantes` (tenant, por sucursal), con fila semilla `correlativo_actual=0` creada
@@ -983,7 +985,9 @@ inicial (Paso 0), Fase E cerrada en su alcance actual (2026-07-20/21):**
   - **Pendiente, sin decidir**: ¿el endpoint `test-emission` se vuelve gate obligatorio antes
     de permitir `modo=produccion`, o sigue siendo solo informativo/opcional? Requiere decisión
     de negocio, no solo técnica.
-- Ver `plan-panel-superadmin.md` para el detalle completo fase por fase (incluye hallazgos y
+- Ver `docs/planning/panel-superadmin/historial-archivo.md` para el detalle completo fase por
+  fase (`plan-panel-superadmin.md`, el documento original, se archivó el 20-ago-2026 — quedó
+  como stub corto con solo los pendientes reales; incluye hallazgos y
   bugs reales corregidos en el camino, ej. `Company::$fillable`/permisos de crédito no
   migrados, `CentralUser` sin `Authenticatable`, Carbon 3 `diffInDays()`).
 

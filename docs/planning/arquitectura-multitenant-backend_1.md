@@ -96,11 +96,64 @@ depender de él para este caso de uso.
   4. Actualizar `tenants:provision` para que reciba el vertical y corra el
      `--path` correspondiente
 
-## Panel superadmin (en construcción, proyecto aparte)
-Existe un plan (`plan-panel-superadmin.md`) para una UI central de gestión
-de tenants (creación, `Company`, `SunatConfig`, backups, suscripciones).
-El wizard de creación de tenant ahí es el lugar natural para agregar el
-selector de "giro/vertical" una vez exista.
+## Panel superadmin (proyecto aparte, mayormente construido)
+UI central de gestión de tenants (creación, `Company`, `SunatConfig`,
+backups, suscripciones) — Fases 0/A/B/B.0.5/B.2/C/D/E cerradas en su
+alcance actual al 20-ago-2026 (ver `CLAUDE.md` para el detalle y
+`panel-superadmin/historial-archivo.md` para el diseño original, ya
+archivado — `plan-panel-superadmin.md` quedó como stub corto). El
+wizard de creación de tenant ya tiene el selector de "giro/vertical"
+(cerrado 15/16-ago-2026).
+
+- **Por qué el superadmin ve todos los módulos de todos los giros:** no es
+  un rol con más permisos dentro de un tenant. El superadmin opera a nivel
+  central, fuera del contexto de cualquier tenant específico — su menú sale
+  de recorrer el catálogo maestro `modulos` (base central) sin filtrar por
+  `giro` ni por `plan_id` de ningún tenant en particular, porque no está
+  operando dentro de uno. Ver sección siguiente para el contraste con cómo
+  se arma el menú de un usuario normal.
+
+## Menú lateral y control de acceso (3 capas: giro + plan + roles)
+Qué ve un usuario normal en el menú lateral (dentro de su tenant) no se
+resuelve en un solo nivel — es la intersección de tres capas, cada una ya
+decidida en otra parte de la arquitectura:
+
+1. **`giro`/`vertical` del tenant (fija, se decide al aprovisionar).**
+   Determina qué tablas/módulos EXISTEN físicamente para ese tenant (ver
+   "Patrón core + módulos verticales" arriba). Un tenant con giro
+   `agencia_viajes` no tiene en su base de datos las tablas de boticas,
+   hoteles o ecommerce — no están ocultas, no existen. Por esto un usuario
+   de ese tenant nunca puede ver esos módulos en el menú: el backend no
+   tiene de dónde traerlos. Esta capa es la que explica la diferencia
+   frente al superadmin (que sí recorre el catálogo completo, sin este
+   filtro).
+2. **Plan y control de acceso por módulo (módulo 11 del vertical agencia
+   de viajes, capa ortogonal al giro — ver
+   `agencia-de-viajes/plan-modulo-planes-acceso.md`).** Dentro de los
+   módulos que el giro habilita que existan, el plan contratado
+   (económico/estándar/pro) + `tenant_modulo_overrides` deciden cuáles
+   están habilitados para usarse, de forma dinámica y sin migraciones.
+   Resuelto por middleware con caché por tenant.
+3. **Roles y permisos del usuario dentro del tenant (Spatie Permission,
+   namespacing por tenant).** Dentro de lo que el giro permite que exista
+   y el plan permite que se use, el rol asignado a cada usuario (ej.
+   "Vendedor de agencia", "Administrador de agencia", "Contador") decide
+   qué se le muestra a él en particular — esta es la capa que resuelve
+   casos como "este usuario solo debe ver ventas y notas de crédito,
+   además de agencia". Como Spatie Permission ya está namespaced por
+   tenant, un rol "Vendedor" del tenant A es un registro distinto al
+   "Vendedor" del tenant B; no hay cruce entre tenants.
+
+**Cómo se arma el menú en la práctica:** no debería salir de un archivo de
+configuración estático en el frontend. El backend expone un endpoint (ej.
+`/me/menu`) que calcula la intersección de las tres capas — módulos que el
+giro habilita ∩ módulos que el plan/overrides habilitan ∩ módulos/acciones
+que los permisos del usuario autorizan — y el frontend (plantilla Rizz)
+solo pinta lo que ese endpoint devuelve.
+
+Pendiente de definir cuando se implemente: catálogo exacto de roles base
+por vertical (ej. para agencia de viajes: Vendedor, Administrador de
+agencia, Contador) y su mapeo a permisos Spatie por módulo/acción.
 
 ## Principio general a mantener
 - Nunca fallback silencioso en lógica fiscal/tributaria — eso aplica solo

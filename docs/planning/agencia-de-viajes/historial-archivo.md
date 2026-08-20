@@ -1,5 +1,24 @@
 # Historial archivado — Vertical Agencia de Viajes (25-jul a 12-ago-2026)
 
+> **20-ago-2026 — segunda tanda de archivado, distinta de la de abajo:**
+> se movieron acá 4 documentos de diseño fundacional ya cerrados
+> (`plan-general-vertical-agencia-viajes.md`, `plan-modulo-proveedores.md`,
+> `plan-modulo-tours-catalogo.md`, `plan-modulo-maestros-iniciales.md`) y
+> los 4 briefs `PEGAR-EN-CLAUDE-CODE-*.md` de sesiones ya cerradas y
+> mergeadas (fix de fechas 11r/11s, guardia tributario y facturación
+> múltiple 11u/11v) — sus archivos originales fueron **borrados**, no solo
+> resumidos, porque su contenido ya está capturado (más comprimido) en
+> `plan-hoja-de-ruta-ejecucion.md` §3 y en `CLAUDE.md`. Ver la tabla nueva
+> al final de este documento. Los que siguen activos hoy:
+> `plan-hoja-de-ruta-ejecucion.md` (punto de entrada), 
+> `plan-modulo-cotizaciones-reservas.md` (todavía referenciado por filas
+> abiertas 11e/11f/11g/11d), `plan-modulo-codigos-numeracion.md` (módulo
+> 12, todavía sin construir), `plan-modulo-planes-acceso.md` (tiene
+> trabajo real marcado como pendiente, no cerrado del todo — ver su propio
+> texto, sección "Recomendación"), `sincronizacion.md`, y los 2 briefs
+> todavía sin ejecutar (`PEGAR-EN-CLAUDE-CODE-temporada-plantilla.md`,
+> `PEGAR-EN-CLAUDE-CODE-facturacion-externa-tenant.md`).
+>
 > Archivo creado el 18-ago-2026 al recortar `plan-hoja-de-ruta-ejecucion.md`
 > (ver esa entrada de historial en ese mismo documento). Contiene el
 > historial detallado completo de la sección 3 ("Historial de
@@ -39,3 +58,72 @@
 | 30-jul-2026 | **Bug de infraestructura cerrado y MERGEADO A MAIN (no ligado a ninguna fila de la hoja de ruta — preexistente desde el primer vertical), rama `fix/infra-migracion-verticals-pendientes` (commit `134ded5`, merge `3fc2c6f`).** El hallazgo real de 11b4b (`tenants:migrate` NO cubre `tenant/verticals/`, ver esa fila) se rastreó hasta su causa raíz: `config/tenancy.php` `migration_parameters['--path']` hardcodeado a `tenant/core/` — así que el comando genérico `tenants:migrate` (sin `--path`), usado como mantenimiento normal para aplicar migraciones nuevas a tenants ya provisionados, nunca corre `verticals/*`, para ningún tenant. Corregido con un comando nuevo, `tenants:migrate-verticales` (`app/Console/Commands/MigrateVerticalesPendientes.php`), que reemplaza a `tenants:migrate` a secas para este caso de uso de acá en adelante: corre `tenant/core/` para todos, agrupa tenants por `giro` y corre `tenant/verticals/{giro}/` con `--path` explícito por grupo (reutiliza `TenantProvisioningService::rutaVertical()`, extraído del `migrarVertical()` de provisioning para no duplicar el mapeo snake_case→kebab-case). Corrido de verdad contra los tenants reales existentes (`negocio2`/`umbo`/`umbo-archivado`/`sandbox`/`agencia-demo`) — puso al día un backlog de `tenant/core/` acumulado en varios de ellos; `agencia-demo` ya estaba al día en `verticals/agencia-viajes/` (venía del workaround manual de 11b4b), confirmando que el fix es correcto sin necesitar backfill adicional ahí. Test de cobertura real (`tests/Feature/MigrateVerticalesPendientesTest.php`, 2 tenants físicos descartables). Detalle completo en `arquitectura-multitenant-backend_1.md`. |
 | 30-jul-2026 | **Fila 11b4b cerrada (frontend), rama `feature/sesion-11b4b-tours-paquetes-combo-frontend`.** Extiende `paquetes/form.vue`/`detalle.vue`/`index.vue` (Sesión 11b2) en vez de crear pantallas nuevas. `npm run type-check`: 44 errores tras el cambio vs. 45 en la base `main` (el único error de `agencia-viajes` que sobrevive es preexistente y ajeno a esta sesión) — de hecho bajó en 1 porque se corrigió de paso un campo faltante en el tipo `GuiaTarifa` (`guia?: Guia`, ya usado en producción desde Sesión 11b2 sin declarar en TS). **Verificado de punta a punta con Playwright real contra el tenant `agencia-demo`** (no solo lectura de código): crear 2 tours simples con ítems reales, crear un `paquete_combo`, agregarlos vía el toggle "Tour completo" con día 1/día 2, acordeón agrupado con lazy-load de sub-ítems, itinerario derivado con el offset de día correcto (Alto Mayo día 1 → Laguna Azul día 2, el escenario exacto que pidió el usuario), tarjeta de precio con preview 100% en el cliente confirmado sin ningún POST de por medio (costo 180/venta 240 → 10% descuento → 216 instantáneo), guardado real (200), bloqueo de desactivación con modal listando combos afectados, "Desactivar de todos modos" excluyendo el tour del cálculo y mostrando `componentes_inactivos` (90/120/120, ya sin el tour desactivado), y el listado con badge Combo/Tour + conteo de tours + precio en vivo. 0 errores de consola/red en toda la corrida. **Hallazgo real, no de esta sesión**: `agencia-demo` no tenía corridas las 6 migraciones nuevas de 11b4a (`tenants:migrate` NO cubre `tenant/verticals/`, solo `tenant/core/` — confirmado en `config/tenancy.php`) — primer intento de crear un tour dio 500 real (`Undefined column "tipo"`) hasta correr `migrate --path=database/migrations/tenant/verticals/agencia-viajes --realpath` manualmente contra ese tenant. Mismo patrón ya conocido ("umbo se atrasa en migraciones vs sandbox"), ahora confirmado también para tenants del vertical Agencia de Viajes — cualquier sesión futura que agregue migraciones a este vertical debe correr este paso a mano contra cada tenant real antes de probar. Datos de prueba (tours/combo E2E) borrados al cerrar, tenant `agencia-demo` queda con el mismo único paquete de prueba que ya tenía antes de esta sesión (`Full Day Alto Mayo`, id=3). |
 | 12-ago-2026 | **Backfill comprimido de todo lo mergeado a `main` entre 11b4b (30-jul) y hoy (12-ago) — 76 commits / ~26 merges que nunca habían llegado a este documento (el hueco que la propia `CLAUDE.md` ya señalaba como diferido a propósito desde el 11-ago).** Reconstruido desde `git log` (mensajes de commit, no la conversación original de cada sesión) a pedido explícito del usuario, que iba a borrar varias sesiones antiguas de Claude Code — nivel de detalle menor al resto de este documento, ver nota al pie de cada fila nueva de §1. Filas nuevas agregadas a §1: **11h/11i/11j/11k/11l v2/11m/11n/11o/11q** (detalle en sus propias filas). Además, ~14 commits de fixes/UX puntuales sobre el vertical que no encajan como fila propia de la hoja de ruta (mismo criterio que otras entradas de este historial que documentan trabajo fuera de tabla): `09dae53` (form de `destinos_atractivos` — límites de fotos, EXIF, redimensionado), `cbc0b6e` (fix `hora_salida`/`hora_retorno` con segundos rompía el guardado), `c15890d` (UX catálogo proveedores/tarifas: toggle `es_referencial`, tabs Comercial/Tributario SUNAT, cálculo bidireccional costo↔margen↔precio, precios visibles en Incluye de tour_simple), `fa67c55` (`ProveedorTarifaController::destroy()` con guard 422 si está referenciada + edición inline del nombre de servicio en el modal de destinos), `691e89f` (tipos de proveedor "Operador de turismo"/"Atractivo y Actividad local" + `helpers/fecha.ts` centralizado, reemplaza 2 implementaciones duplicadas del fix de timezone), `d249a1b` (fix slug `proveedorEsHotel()`), `3ad31a8` (padre vacío al editar destino + nivel-mínimo en proveedores + estado en tarifa registrada), `598fc43` (labels reales en "Agregar hotel"), `82e5a63` (visibilidad de destino/costo + margen configurable en Incluye), `9623b91` (destino/tipo_tarifa visible en biblioteca y lienzo), `df7406d` (`CotizacionController::destroy()` nuevo con el mismo guard 422 de `AlternativaController::destroy()`, reusando `eliminarCascada()`; `ReservaController::cancelar()` bloquea si ya hay `ReservaVenta`), `e245b4c` (filtro por zona de la biblioteca ahora incluye descendientes del árbol), `ba2d0b0` (cotizador con sidebar colapsado/drawer más grande/bottom-sheet en mobile), `56f44f7` (guía suma costo real a la cotización), `68414a1` (**cambio arquitectónico, no un fix menor**: consolida hoteles como una `proveedor_tarifa` más — antes vivían en tabla propia `opciones_hotel`/`opciones_hotel_tarifas` atada a un `paquete_plantilla` puntual, ahora son buscables/usables libremente en cualquier cotización, sin tab propia en combo/tour). `399f3c5`/`f06ba60`/`6eaf3c7`/`7bf1810`/`3fc2c6f` (URL de API dinámica en dev, storage tenant-aware, spinners+editor, CORS preflight, `tenants:migrate-verticales`) NO se repiten acá — ya estaban documentados en detalle en `CLAUDE.md`. **Pendiente, explícitamente fuera de este backfill**: ninguna de estas ~23 entradas fue re-verificada contra un tenant real en esta sesión — el backfill es documental, no una re-auditoría de que el código siga funcionando. Ver también la rama `fix/destino-servicio-mover-y-catalogo-servicios` (commits `83a914c`/`e423ea7`, merge `62f8b69`, mismo día) — no es fila de esta tabla (extiende Sesión 3, `destino_servicio`/`servicios`, no el cotizador) pero está documentada en detalle en `CLAUDE.md`: endpoint `mover()`/`fusionar()` para corregir una asociación destino↔servicio mal hecha sin perder los `proveedor_servicios`/tarifas ya enganchados, y fix de paginación del catálogo de servicios (antes truncaba siempre a 15 en el selector del modal). |
+
+---
+
+## Documentos de diseño fundacional archivados (20-ago-2026)
+
+Los 4 documentos siguientes fueron **borrados** (no solo resumidos) el
+20-ago-2026, porque describían el diseño de datos original del vertical
+— todo ya construido, y ya superado como referencia por
+`plan-hoja-de-ruta-ejecucion.md` (qué se construyó realmente, con
+commits) y `CLAUDE.md` (narrativa completa). Resumen de cada uno:
+
+- **`plan-general-vertical-agencia-viajes.md`** (275 líneas): documento
+  raíz del vertical — objetivo, 4 fases a alto nivel, mapa de módulos
+  (1-11). Cumplió su propósito como índice inicial; `plan-hoja-de-ruta-
+  ejecucion.md` es el índice real desde que arrancó la ejecución
+  (25-jul-2026) y lo reemplaza por completo.
+- **`plan-modulo-proveedores.md`** (413 líneas): diseño de catálogo de
+  proveedores, tarifas, temporadas, costo/margen/piso de descuento.
+  Cerrado el 24-jul-2026 ("completo a nivel de modelo de datos"),
+  construido en Sesiones 1/3/4/5/11a. Único gap real que quedó vivo,
+  documentado ahí y **todavía sin corregir**: `esHotel`
+  (`proveedores/detalle.vue`) filtra por slug `'hotel'`, pero el catálogo
+  real usa `'alojamiento'` — la columna "Tipo de habitación" nunca
+  aparece. Mismo patrón que el gap ya conocido `'mayorista'`/
+  `'agencia-mayorista'` (ver memoria de proyecto
+  `project_agencia_viajes_vertical_progreso.md`) — sugerido resolver
+  ambos juntos en una sesión dedicada a slugs.
+- **`plan-modulo-tours-catalogo.md`** (253 líneas): árbol de destinos de
+  3 niveles (zona/lugar/atractivo), catálogo `servicios`, confirmación de
+  que "tour" = `paquetes_plantilla`. Cerrado el 24/25-jul-2026, todos sus
+  pendientes marcados RESUELTO, construido en Sesión 2 + 11a/11b2.
+- **`plan-modulo-maestros-iniciales.md`** (171 líneas): árbol de
+  dependencias de datos maestros — qué se carga primero. Cerrado, el
+  bloqueante que documentaba (orden `destino_servicio`) se resolvió el
+  24-jul-2026. **2 pendientes puntuales menores que quedaron sin
+  resolver, nunca se retomaron en ninguna sesión posterior** (confirmar
+  antes de asumir que siguen abiertos, puede haber cambiado sin quedar
+  documentado): (1) si `temporada_ocurrencias` se genera automáticamente
+  cada año para temporadas fijas o si el admin la crea a mano siempre
+  (para temporadas móviles como Semana Santa tiene que ser manual sí o
+  sí); (2) `configuracion_agencia` no tiene una sola pantalla CRUD
+  consolidada — sus campos aparecen sueltos en distintas partes del
+  sistema en vez de juntos en un solo lugar.
+
+## Briefs de sesiones cerradas y mergeadas, archivados (20-ago-2026)
+
+Los 4 archivos `PEGAR-EN-CLAUDE-CODE-*.md` siguientes fueron
+**borrados** — cada uno era el brief de "pegar en una sesión nueva" para
+una fila ya cerrada, mergeada y (en el caso de 11u/11v) ya pusheada a
+`origin/main`. Su narrativa completa (hallazgos, decisiones, "Estado
+real al cierre") ya está capturada en `plan-hoja-de-ruta-ejecucion.md`
+§3 (entradas de fecha 18/19/20-ago-2026) y en `CLAUDE.md` — no hay
+pérdida de información, solo se dejó de tener el mismo contenido
+duplicado en un tercer lugar.
+
+- `PEGAR-EN-CLAUDE-CODE-fix-fechas-fase1-diagnostico-snapshot.md` (304
+  líneas) — fila 11r, cerrada 18-ago-2026.
+- `PEGAR-EN-CLAUDE-CODE-fix-fechas-fase2-reprogramacion.md` (177 líneas)
+  — fila 11s, cerrada 19-ago-2026.
+- `PEGAR-EN-CLAUDE-CODE-facturar-reserva-guardia-tributario.md` (113
+  líneas) — complemento de la fila 11u, cerrada 20-ago-2026.
+- `PEGAR-EN-CLAUDE-CODE-facturar-reserva-grupo-multiples-pagadores.md`
+  (254 líneas) — fila 11v, cerrada 20-ago-2026.
+
+Todas las 5 (11r/11s/11u+guardia/11v) están mergeadas en `main` y
+pusheadas a `origin/main` (commits `9f1ced5`/`1f908d9` vía los merges de
+`feature/sesion-11r-11s-11u-facturacion-guardia`/
+`feature/sesion-11v-facturacion-grupo`, ver `plan-hoja-de-ruta-
+ejecucion.md` §1 y §2 para el detalle de ramas).

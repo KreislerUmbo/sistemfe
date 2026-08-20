@@ -1,19 +1,21 @@
 # Hoja de Ruta de Ejecución — Vertical Agencia de Viajes en Claude Code
 
 > Este documento NO diseña nada nuevo — es la traducción del árbol de
-> dependencias (`plan-modulo-maestros-iniciales.md` §3) a **sesiones
-> concretas de Claude Code**, con checklist de avance.
+> dependencias original (ver `historial-archivo.md`, el sub-plan de
+> maestros iniciales que lo documentaba ya se archivó — todo el árbol
+> quedó construido hace semanas) a **sesiones concretas de Claude Code**,
+> con checklist de avance.
 > Vive en el repositorio de código (`docs/planning/`), no solo en Drive —
 > es el documento que Claude Code lee al empezar cada sesión.
-> Última actualización: 20-ago-2026 — fila 11u (facturación de reserva +
-> guardia tributario + fix colateral de `reprogramar()`) commiteada
-> (`9f1ced5`, rama `fix/cotizador-pasajeros-fechas-nombre-alternativa`).
-> Se agrega y cierra la fila **11v** (facturación múltiple por grupo de
-> pasajeros/varios pagadores) en el working tree, **sin commitear
-> todavía** — ver nota en §1. Ver también `historial-archivo.md` para el
-> historial detallado de sesiones cerradas y `sincronizacion.md` para el
-> protocolo de por qué este archivo puede desactualizarse frente al repo
-> y cómo resincronizarlo.
+> Última actualización: 20-ago-2026 — filas **11u y 11v ya están
+> commiteadas Y pusheadas a `origin/main`** (merges secuenciales de 5
+> ramas, ver §2; commit final `2f3ce7f`). Los briefs
+> `PEGAR-EN-CLAUDE-CODE-*.md` de 11r/11s/11u-guardia/11v ya se archivaron
+> (borrados, contenido capturado acá en §3 y en `CLAUDE.md`) — si buscás
+> alguno de esos archivos y no aparece, es esperado. Ver también
+> `historial-archivo.md` para el historial detallado de sesiones cerradas
+> y `sincronizacion.md` para el protocolo de por qué este archivo puede
+> desactualizarse frente al repo y cómo resincronizarlo.
 
 ---
 
@@ -25,14 +27,16 @@
 2. Al terminar una sesión (con su commit hecho), marca la casilla `[x]`
    y anota la fecha/commit en la columna "Estado".
 3. Nunca saltes una fila sin marcar la anterior — cada nivel depende del
-   que tiene arriba (ver `plan-modulo-maestros-iniciales.md` §3 para el
-   detalle de por qué).
+   que tiene arriba (el árbol de dependencias original que explicaba esto
+   ya está archivado, todas esas dependencias ya están construidas — ver
+   `historial-archivo.md` si necesitás el detalle histórico de por qué).
 4. Al abrir cada chat de Claude Code, dile la ruta exacta del documento y
    la sección — no le copies el documento completo. Ejemplo de primer
-   mensaje de sesión:
-   > "Vamos a construir la Sesión 3 de docs/planning/plan-hoja-de-ruta-ejecucion.md.
-   > Lee esa fila, y de docs/planning/plan-modulo-tours-catalogo.md lee
-   > solo la sección 4."
+   mensaje de sesión (documento de ejemplo, hoy la referencia real para
+   filas abiertas es `plan-modulo-cotizaciones-reservas.md`):
+   > "Vamos a construir la Sesión 11e de docs/planning/plan-hoja-de-ruta-ejecucion.md.
+   > Lee esa fila, y de docs/planning/plan-modulo-cotizaciones-reservas.md
+   > lee solo la sección 8."
 5. Para el historial completo de sesiones ya cerradas (detalle de qué se
    construyó, hallazgos, verificaciones), ver `historial-archivo.md` —
    no hace falta leerlo para trabajar, solo para auditoría o memoria
@@ -73,8 +77,8 @@
 | 11c | Frontend — Aceptación de alternativa → Reserva y pasajeros | Pantallas de reserva, datos de pasajero, asignación pasajero↔servicio | `plan-modulo-cotizaciones-reservas.md` §4, §6.5, §7 | [x] 30-jul-2026 — `131b898` |
 | 11r | Fix fechas Cotización↔Reserva — Fase 1 (diagnóstico + snapshot, sin reprogramar) | Comando de diagnóstico SQL de reservas existentes (consistente/ambigua/divergente/sin_fecha/requiere_revision_operativa) antes de migrar, `reserva.fecha_viaje_desde/hasta` propias (deja de leer `cotizacion` en vivo), `reserva_items.fecha_origen` (auto/manual), regla explícita documentada sobre qué campo leer | `agencia-de-viajes/PEGAR-EN-CLAUDE-CODE-fix-fechas-fase1-diagnostico-snapshot.md` | [x] 18-ago-2026 — commit/rama pendiente de confirmar (ver historial) |
 | 11s | Fix fechas Cotización↔Reserva — Fase 2 (reprogramación) | Endpoint `POST reservas/{id}/reprogramar` con recálculo selectivo + re-enganche a `SalidaOperativa`/cupo, columnas de auditoría simple, bloqueo de `reasignarDia()`/`moverBloque()` sobre alternativa `aceptada`. **Depende de 11r mergeada y del diagnóstico revisado por el usuario** — no empezar antes | `agencia-de-viajes/PEGAR-EN-CLAUDE-CODE-fix-fechas-fase2-reprogramacion.md` | [x] 19-ago-2026 — commit/rama pendiente de confirmar (ver historial) |
-| 11u | Facturación de reserva — crear el Sale desde una reserva | `GET reservas/{id}/preparar-factura` + `POST reservas/{id}/facturar`, agrupación de `reserva_items` por categoría (hotel/transporte/tour/vuelo/otros), creación real de `reserva_ventas` + `sale_detail_items`, botón "Facturar" en `reservas/detalle.vue`. Alcance mínimo viable: un solo responsable de pago, un solo `Sale`, sin aplicar anticipos automáticamente, bloquea (no implementa) el caso de reserva ya facturada. **+ guardia tributario (2026-08-20, complemento):** bloquea con 422/preview si el subgrupo a facturar mezcla `destino_tributario` (ej. amazonia + nacional) — ver `PEGAR-EN-CLAUDE-CODE-facturar-reserva-guardia-tributario.md` | `agencia-de-viajes/PEGAR-EN-CLAUDE-CODE-facturar-reserva-guardia-tributario.md` | [x] 20-ago-2026 — commit `9f1ced5` (ver §3) |
-| 11v | Facturación múltiple por grupo de pasajeros (varios pagadores) | N `reserva_ventas`/`Sale` por reserva, cada uno con su propio `client_id` (obligatorio, ya no fijo a `cotizacion.cliente_id`) y `texto_personalizado` opcional, cubriendo un subconjunto de pasajeros elegido por el vendedor. Guard de doble-facturación pasa a granularidad de ítem/pasajero (no reserva completa). Selección explícita de ítems "sin asignar" (decisión tomada tras confirmar que `reserva_item_pasajero` casi no tiene datos reales — ver §7 del brief). Guardia tributario reevaluado por subgrupo | `agencia-de-viajes/PEGAR-EN-CLAUDE-CODE-facturar-reserva-grupo-multiples-pagadores.md` | [x] 20-ago-2026 — sin commitear todavía (ver nota en §3) |
+| 11u | Facturación de reserva — crear el Sale desde una reserva | `GET reservas/{id}/preparar-factura` + `POST reservas/{id}/facturar`, agrupación de `reserva_items` por categoría (hotel/transporte/tour/vuelo/otros), creación real de `reserva_ventas` + `sale_detail_items`, botón "Facturar" en `reservas/detalle.vue`. Alcance mínimo viable: un solo responsable de pago, un solo `Sale`, sin aplicar anticipos automáticamente, bloquea (no implementa) el caso de reserva ya facturada. **+ guardia tributario (2026-08-20, complemento):** bloquea con 422/preview si el subgrupo a facturar mezcla `destino_tributario` (ej. amazonia + nacional) | `historial-archivo.md` (brief original archivado — ver también `CLAUDE.md`) | [x] 20-ago-2026 — commit `9f1ced5`, mergeado y pusheado a `origin/main` (`2f3ce7f`) |
+| 11v | Facturación múltiple por grupo de pasajeros (varios pagadores) | N `reserva_ventas`/`Sale` por reserva, cada uno con su propio `client_id` (obligatorio, ya no fijo a `cotizacion.cliente_id`) y `texto_personalizado` opcional, cubriendo un subconjunto de pasajeros elegido por el vendedor. Guard de doble-facturación pasa a granularidad de ítem/pasajero (no reserva completa). Selección explícita de ítems "sin asignar" (decisión tomada tras confirmar que `reserva_item_pasajero` casi no tiene datos reales). Guardia tributario reevaluado por subgrupo. Botón "Facturar" (simple, todos los pendientes) separado de "Facturación especial" (selección manual) | `historial-archivo.md` (brief original archivado — ver también `CLAUDE.md`) | [x] 20-ago-2026 — commit `1f908d9`, mergeado y pusheado a `origin/main` (`2f3ce7f`) |
 | 11e | Reporte operativo — backend real | Endpoint que resuelve la vista de `reserva_items` con filtros (fecha, pendiente de asignar — incluyendo `es_referencial`), reemplaza lógica hoy embebida en `reservas/detalle.vue` | `plan-modulo-cotizaciones-reservas.md` §8 | [ ] |
 | 11f | Motor de generación de recordatorios | Job/Command que recorre `tipos_recordatorio` y genera filas en `recordatorios` según cada disparador | `plan-modulo-cotizaciones-reservas.md` §8bis | [ ] |
 | 11g | Controllers/rutas de pago a proveedor | API REST para `pago_proveedor`/`cronograma_pago_proveedor` | `plan-modulo-cotizaciones-reservas.md` §4.6 | [ ] |
@@ -86,31 +90,18 @@ commits pequeños dentro de la misma rama, ver sección 2). No mezcles dos
 filas en un mismo chat aunque parezcan rápidas — el costo de contexto
 acumulado sale más caro que abrir un chat nuevo.
 
-**Próximo paso real:** 11r, 11s y 11u ya están cerradas Y commiteadas
-(`9f1ced5`, 18/19/20-ago-2026) — el fix de fechas Cotización↔Reserva y la
-facturación de reserva (con su guardia tributario) quedan terminados.
-**11v (facturación múltiple por grupo de pasajeros) se agrega y cierra el
-mismo 20-ago-2026, en el working tree, sin commitear todavía** (ver nota
-abajo). Después de 11v quedan sin marcar: 11e, 11f, 11g, 11d (reporte
-operativo + recordatorios + pago a proveedor) y 11t (bug colateral de
+**Próximo paso real:** 11r, 11s, 11u y 11v ya están cerradas, commiteadas,
+**mergeadas a `main` Y pusheadas a `origin/main`** (18/19/20-ago-2026,
+commit final `2f3ce7f` tras reconciliar con un merge previo de otra
+sesión en background que ya había subido parte de este mismo trabajo —
+ver §2 para el detalle de las 5 ramas y el orden de merge). El fix de
+fechas Cotización↔Reserva y la facturación de reserva completa (simple +
+especial, con su guardia tributario) quedan terminados y en el remoto.
+Después de 11v quedan sin marcar: 11e, 11f, 11g, 11d (reporte operativo +
+recordatorios + pago a proveedor) y 11t (bug colateral de
 `VentaDirectaController`, sin brief propio todavía). Sin bloqueantes
 conocidos entre 11e/11f/11g/11d/11t — el orden entre ellas queda a
 criterio del usuario.
-
-**Nota sobre 11v — commit pendiente:** el trabajo de esta fila (N Sales
-por reserva, guard a granularidad de pasajero/ítem, selección explícita
-de ítems sin asignar, buscador de cliente, texto personalizado, modal
-iterativo) vive en el working tree del repo, verificado con 174 tests
-backend en verde (13 nuevos en `ReservaFacturacionTest`) y una
-comprobación real contra `agencia-demo` (reserva DKM-2026-001, la misma
-que ya tenía mezcla tributaria real — confirmó el guard de subgrupo
-funcionando, más un bug real de UX encontrado y corregido en el camino:
-`preparar-factura` devolvía 422 apenas se abría el modal en vez de un
-preview vacío), pero **no se ha creado ningún commit todavía** — sigue
-como cambios sin confirmar (`git status`). Antes de dar la fila por
-cerrada en el sentido de la sección 2 de este documento (una sesión = un
-commit/rama, merge a `main`), hace falta que el usuario decida cómo
-committear este trabajo.
 
 ---
 
@@ -123,6 +114,23 @@ committear este trabajo.
   arriba.
 - El mensaje de commit referencia la sesión y el documento fuente, ej.:
   `feat(sesion-1): catálogo central proveedor_tipos y temporadas (plan-modulo-proveedores.md §2.6)`
+  (ese documento específico ya está archivado, ver `historial-archivo.md`
+  — el formato del mensaje sigue siendo el ejemplo válido).
+- **20-ago-2026 — caso real de reconciliación con una rama ya avanzada:**
+  11r/11s/11u/11v se construyeron sobre una sola rama larga
+  (`fix/cotizador-pasajeros-fechas-nombre-alternativa`). Al cerrar, se
+  partió esa rama en 5 branches nombradas por sesión
+  (`feature/sesion-panel-superadmin-giro-tenant`,
+  `feature/sesion-clientes-sucursales`,
+  `feature/sesion-combo-redondeo`,
+  `feature/sesion-11r-11s-11u-facturacion-guardia`,
+  `feature/sesion-11v-facturacion-grupo`) y se mergearon a `main` en
+  orden, de la más vieja a la más nueva — cada merge resultó limpio (0
+  archivos con conflicto real) porque estaban apiladas. Al pushear, se
+  encontró que otra sesión de Claude Code (en background) ya había
+  mergeado y pusheado parte de ese mismo contenido a `origin/main` por su
+  cuenta — reconciliado con un merge más (diff vacío, contenido
+  idéntico) antes del push final. Ver commit `2f3ce7f`.
 
 ## 3. Últimas actualizaciones (resumen)
 
