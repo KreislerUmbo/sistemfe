@@ -66,6 +66,7 @@
                     <div class="col-md-4"><strong>Horario:</strong> {{ paquete.hora_salida ?? '—' }} — {{ paquete.hora_retorno ?? '—' }}</div>
                     <div class="col-md-8"><strong>Lugar de recojo:</strong> {{ paquete.lugar_recojo ?? '—' }}</div>
                     <div class="col-md-4" v-if="!esCombo"><strong>Precio desde:</strong> {{ paquete.precio_venta_final != null ? `S/ ${Number(paquete.precio_venta_final).toFixed(2)}` : '—' }}</div>
+                    <div class="col-md-4"><strong>Ajuste de redondeo:</strong> {{ paquete.ajuste_redondeo != null ? `${Number(paquete.ajuste_redondeo) >= 0 ? '+' : ''}S/ ${Number(paquete.ajuste_redondeo).toFixed(2)}` : '—' }}</div>
                     <div class="col-12" v-if="paquete.descripcion"><strong>Descripción:</strong> <span v-html="paquete.descripcion"></span></div>
                     <div class="col-md-6" v-if="paquete.no_incluye"><strong>No incluye:</strong> <span v-html="paquete.no_incluye"></span></div>
                     <div class="col-md-6" v-if="paquete.recomendaciones"><strong>Recomendaciones:</strong> <span v-html="paquete.recomendaciones"></span></div>
@@ -109,6 +110,11 @@
                     <div class="col-6 col-md-3" v-if="!esCombo">
                         <label class="form-label mb-1 small fw-semibold text-secondary">Precio venta (desde)</label>
                         <input type="number" step="0.01" min="0" class="form-control form-control-sm" v-model.number="formDatos.precio_venta_final" placeholder="Se resuelve solo con los hoteles">
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <label class="form-label mb-1 small fw-semibold text-secondary">Ajuste de redondeo (S/)</label>
+                        <input type="number" step="0.01" class="form-control form-control-sm" v-model.number="formDatos.ajuste_redondeo" placeholder="Ej. 6.34 para redondear hacia arriba">
+                        <div class="form-text small">Corrige la suma de ítems al total real que se cobra. Positivo o negativo. Se refleja como línea aparte en la cotización.</div>
                     </div>
                     <div class="col-6 col-md-3">
                         <label class="form-label mb-1 small fw-semibold text-secondary">Hora de salida</label>
@@ -205,6 +211,25 @@
                         <div class="small text-muted mb-1">Venta neta</div>
                         <div class="fs-2 fw-bold text-primary">S/ {{ preview.ventaNeta.toFixed(2) }}</div>
                     </div>
+                </div>
+
+                <!-- Ajuste de redondeo (Datos tab) — línea aparte del total
+                     "venta neta" de arriba, para que el vendedor entienda que
+                     son dos números distintos: venta neta es la rentabilidad
+                     real (post-descuento), total final es lo que realmente
+                     se cobra/se suma en la cotización. -->
+                <div v-if="preview.ajusteRedondeo !== null" class="d-flex justify-content-between align-items-center border-top pt-3 mb-3">
+                    <span class="text-muted small">
+                        Ajuste de redondeo
+                        <span class="text-muted fst-italic">(editable en el tab Datos)</span>
+                    </span>
+                    <span class="fw-semibold" :class="preview.ajusteRedondeo >= 0 ? 'text-success' : 'text-danger'">
+                        {{ preview.ajusteRedondeo >= 0 ? '+' : '' }}S/ {{ preview.ajusteRedondeo.toFixed(2) }}
+                    </span>
+                </div>
+                <div v-if="preview.ajusteRedondeo !== null" class="d-flex justify-content-between align-items-center mb-4">
+                    <span class="fw-semibold text-dark">Total final (lo que se cobra)</span>
+                    <span class="fs-3 fw-bold text-primary">S/ {{ preview.ventaFinal.toFixed(2) }}</span>
                 </div>
 
                 <div class="row g-3 align-items-end">
@@ -637,17 +662,26 @@
                                         <i class="fas" :class="item.proveedor_tarifa ? 'fa-concierge-bell' : 'fa-user-tie'"></i>
                                     </div>
                                     <div class="av-item-body">
-                                        <div class="av-item-title" v-if="item.proveedor_tarifa">
-                                            {{ item.proveedor_tarifa.proveedor_servicio?.proveedor?.razon_social }}
-                                            <span v-if="item.proveedor_tarifa.proveedor_servicio?.proveedor?.es_referencial" class="av-badge av-badge-muted">Referencial</span>
-                                        </div>
-                                        <div class="av-item-title" v-else-if="item.guia_tarifa">
-                                            Guía: {{ item.guia_tarifa.guia?.nombre }}
-                                            <span v-if="item.guia_tarifa.guia?.es_referencial" class="av-badge av-badge-muted">Referencial</span>
-                                        </div>
+                                        <template v-if="item.proveedor_tarifa">
+                                            <div class="av-item-title">
+                                                {{ item.proveedor_tarifa.proveedor_servicio?.proveedor?.razon_social }}
+                                                <span v-if="item.proveedor_tarifa.proveedor_servicio?.proveedor?.es_referencial" class="av-badge av-badge-muted">Referencial</span>
+                                            </div>
+                                            <div class="av-item-sub">{{ descripcionDestinoServicio(item.proveedor_tarifa.proveedor_servicio?.destino_servicio) }}<span v-if="item.proveedor_tarifa.tipo_habitacion"> · {{ item.proveedor_tarifa.tipo_habitacion }}</span></div>
+                                            <div class="av-item-tags"><span class="av-badge av-badge-muted">{{ item.proveedor_tarifa.tipo_tarifa }} · {{ item.proveedor_tarifa.modalidad }}</span></div>
+                                        </template>
+                                        <template v-else-if="item.guia_tarifa">
+                                            <div class="av-item-title">
+                                                Guía: {{ item.guia_tarifa.guia?.nombre }}
+                                                <span v-if="item.guia_tarifa.guia?.es_referencial" class="av-badge av-badge-muted">Referencial</span>
+                                            </div>
+                                            <div class="av-item-sub">{{ item.guia_tarifa.destino?.nombre }}</div>
+                                        </template>
                                     </div>
                                     <div class="av-item-side">
-                                        <button type="button" class="btn btn-sm btn-link text-danger p-0" @click="quitarItem(item)" :disabled="eliminandoItemId === item.id">
+                                        <span class="av-item-price">{{ monedaItem(item) }} {{ ventaItem(item).toFixed(2) }}</span>
+                                        <span class="av-item-cost">costo {{ monedaItem(item) }} {{ costoItem(item).toFixed(2) }}</span>
+                                        <button type="button" class="btn btn-sm btn-link text-danger p-0 mt-1" @click="quitarItem(item)" :disabled="eliminandoItemId === item.id">
                                             <span v-if="eliminandoItemId === item.id" class="spinner-border spinner-border-sm"></span>
                                             <i v-else class="fas fa-trash-can"></i>
                                         </button>
@@ -679,6 +713,15 @@
                                 <div class="d-flex justify-content-between small mb-2">
                                     <span class="text-muted">Venta total</span><span class="fw-semibold">S/ {{ totalesIncluye.ventaTotal.toFixed(2) }}</span>
                                 </div>
+                                <div v-if="totalesIncluye.ajusteRedondeo !== null" class="d-flex justify-content-between small mb-2">
+                                    <span class="text-muted">Ajuste de redondeo <span class="fst-italic">(tab Datos)</span></span>
+                                    <span class="fw-semibold" :class="totalesIncluye.ajusteRedondeo >= 0 ? 'text-success' : 'text-danger'">
+                                        {{ totalesIncluye.ajusteRedondeo >= 0 ? '+' : '' }}S/ {{ totalesIncluye.ajusteRedondeo.toFixed(2) }}
+                                    </span>
+                                </div>
+                                <div v-if="totalesIncluye.ajusteRedondeo !== null" class="d-flex justify-content-between align-items-center small mb-2">
+                                    <span class="text-muted fw-semibold">Total final (lo que se cobra)</span><span class="fw-bold text-primary">S/ {{ totalesIncluye.ventaFinal.toFixed(2) }}</span>
+                                </div>
                                 <div class="d-flex justify-content-between align-items-center border-top pt-2 mb-2">
                                     <span class="text-muted small">Margen</span>
                                     <span class="fs-5 fw-bold" :class="totalesIncluye.margenResultantePct >= margenMinimoAceptablePct ? 'text-success' : 'text-danger'">
@@ -698,8 +741,9 @@
                                 </div>
                                 <div v-if="diferenciaVentaFinal !== null" class="alert alert-warning small mt-3 mb-0 py-2">
                                     <i class="fas fa-triangle-exclamation me-1"></i>
-                                    El precio manual (S/ {{ Number(paquete!.precio_venta_final).toFixed(2) }}) no coincide con la suma de ítems.
-                                    Diferencia: S/ {{ diferenciaVentaFinal.toFixed(2) }}.
+                                    El "Precio venta (desde)" de catálogo (S/ {{ Number(paquete!.precio_venta_final).toFixed(2) }}) no coincide con la
+                                    suma de ítems (diferencia: S/ {{ diferenciaVentaFinal.toFixed(2) }}). Es solo informativo — no afecta el total real
+                                    de la cotización. Si querés cobrar un número redondo, usá "Ajuste de redondeo" en el tab Datos.
                                 </div>
                             </template>
                             <div v-else class="text-muted small text-center py-3 fst-italic">
@@ -723,6 +767,16 @@
                             <div class="d-flex justify-content-between align-items-center border-top pt-2 mb-1">
                                 <span class="text-muted small">Venta neta</span>
                                 <span class="fs-5 fw-bold text-primary">S/ {{ preview.ventaNeta.toFixed(2) }}</span>
+                            </div>
+                            <div v-if="preview.ajusteRedondeo !== null" class="d-flex justify-content-between small mb-1">
+                                <span class="text-muted">Ajuste de redondeo</span>
+                                <span class="fw-semibold" :class="preview.ajusteRedondeo >= 0 ? 'text-success' : 'text-danger'">
+                                    {{ preview.ajusteRedondeo >= 0 ? '+' : '' }}S/ {{ preview.ajusteRedondeo.toFixed(2) }}
+                                </span>
+                            </div>
+                            <div v-if="preview.ajusteRedondeo !== null" class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="text-muted small fw-semibold">Total final</span>
+                                <span class="fs-5 fw-bold text-primary">S/ {{ preview.ventaFinal.toFixed(2) }}</span>
                             </div>
                             <div v-if="preview.margenResultante !== null" class="small mb-2">
                                 Margen: <strong :class="margenOk ? 'text-success' : 'text-danger'">{{ preview.margenResultante.toFixed(2) }}%</strong>
@@ -801,6 +855,7 @@ const guardandoDatos = ref(false);
 const formDatos = ref<{
     codigo: string | null; categoria: string; nombre: string; descripcion: string | null;
     destino_atractivo_id: number | null; duracion_horas: number; precio_venta_final: number | null;
+    ajuste_redondeo: number | null;
     hora_salida: string | null; hora_retorno: string | null; lugar_recojo: string | null;
     no_incluye: string | null; recomendaciones: string | null;
     vuelo_incluido: boolean; vuelo_aerolinea: string | null; vuelo_detalle: string | null;
@@ -808,6 +863,7 @@ const formDatos = ref<{
 }>({
     codigo: null, categoria: 'local', nombre: '', descripcion: null,
     destino_atractivo_id: null, duracion_horas: 1, precio_venta_final: null,
+    ajuste_redondeo: null,
     hora_salida: null, hora_retorno: null, lugar_recojo: null,
     no_incluye: null, recomendaciones: null,
     vuelo_incluido: false, vuelo_aerolinea: null, vuelo_detalle: null,
@@ -824,6 +880,7 @@ const iniciarEdicionDatos = () => {
         destino_atractivo_id: paquete.value.destino_atractivo_id ?? null,
         duracion_horas: paquete.value.duracion_horas,
         precio_venta_final: paquete.value.precio_venta_final ?? null,
+        ajuste_redondeo: paquete.value.ajuste_redondeo ?? null,
         // Mismo motivo que iniciarEdicionPaso() más abajo: hora_salida/
         // hora_retorno vienen HH:MM:SS (columna TIME de Postgres), pero
         // <input type="time">/date_format:H:i del backend solo aceptan
@@ -1003,9 +1060,22 @@ const preview = computed(() => {
         ventaNeta = Math.round((ventaBruta - descuento) * 100) / 100;
     }
 
+    // margenResultante sigue midiéndose SOLO sobre ventaNeta, sin el ajuste
+    // de redondeo — mismo criterio que PriceEngineService::calcularCombo()
+    // (backend): el ajuste es cosmético sobre el total final, no una
+    // decisión de rentabilidad.
     const margenResultante = costoTotal > 0 ? Math.round(((ventaNeta - costoTotal) / costoTotal) * 100 * 100) / 100 : null;
 
-    return { costoTotal, ventaBruta, ventaNeta, margenResultante };
+    // Fix ajuste de redondeo (2026-08-18): se edita en el tab Datos
+    // (formDatos.ajuste_redondeo/guardarDatos()), NO en este formulario —
+    // por eso se lee directo de paquete.value (ya guardado), a diferencia de
+    // descuentoTipoLocal/descuentoValorLocal (editables en vivo acá mismo,
+    // sin guardar todavía).
+    const ajusteRedondeoRaw = paquete.value?.ajuste_redondeo;
+    const ajusteRedondeo = ajusteRedondeoRaw != null ? Number(ajusteRedondeoRaw) : null;
+    const ventaFinal = ajusteRedondeo !== null ? Math.round((ventaNeta + ajusteRedondeo) * 100) / 100 : ventaNeta;
+
+    return { costoTotal, ventaBruta, ventaNeta, margenResultante, ajusteRedondeo, ventaFinal };
 });
 
 const margenOk = computed(() => {
@@ -1384,8 +1454,19 @@ const monedaItem = (item: PaquetePlantillaItem): string =>
 const totalesIncluye = computed(() => {
     const costoTotal = items.value.reduce((acc, item) => acc + costoItem(item), 0);
     const ventaTotal = items.value.reduce((acc, item) => acc + ventaItem(item), 0);
+    // margenResultantePct sigue midiéndose SOLO sobre ventaTotal (sin el
+    // ajuste), mismo criterio que la sección paquete_combo/preview — es
+    // cosmético sobre el total final, no una decisión de rentabilidad.
     const margenResultantePct = costoTotal > 0 ? ((ventaTotal - costoTotal) / costoTotal) * 100 : 0;
-    return { costoTotal, ventaTotal, margenResultantePct };
+
+    // Fix ajuste de redondeo (2026-08-18) — se edita en el tab Datos
+    // (formDatos.ajuste_redondeo), no acá; se lee directo de paquete.value
+    // ya guardado, mismo criterio que preview.ajusteRedondeo (sección combo).
+    const ajusteRedondeoRaw = paquete.value?.ajuste_redondeo;
+    const ajusteRedondeo = ajusteRedondeoRaw != null ? Number(ajusteRedondeoRaw) : null;
+    const ventaFinal = ajusteRedondeo !== null ? Math.round((ventaTotal + ajusteRedondeo) * 100) / 100 : ventaTotal;
+
+    return { costoTotal, ventaTotal, margenResultantePct, ajusteRedondeo, ventaFinal };
 });
 
 // Desglose por categoría (Sesión 11l v2) — mismo catálogo proveedor_tipos
