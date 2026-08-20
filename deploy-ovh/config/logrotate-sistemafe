@@ -1,0 +1,27 @@
+# /etc/logrotate.d/sistemafe
+# Evita que los logs crezcan sin límite y llenen el disco.
+
+/var/www/html/sistemfe/api-sistema-fe/storage/logs/*.log {
+    daily
+    missingok
+    rotate 14
+    compress
+    delaycompress
+    notifempty
+    create 0664 umbo www-data
+    sharedscripts
+}
+
+/var/log/nginx/sistemfe.*.log {
+    daily
+    missingok
+    rotate 14
+    compress
+    delaycompress
+    notifempty
+    create 0640 www-data adm
+    sharedscripts
+    postrotate
+        [ -f /run/nginx.pid ] && kill -USR1 $(cat /run/nginx.pid)
+    endscript
+}

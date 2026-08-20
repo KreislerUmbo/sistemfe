@@ -1,0 +1,24 @@
+# /etc/sudoers.d/umbo-deploy
+# Ya tienes sudo completo como 'umbo', así que esto no es indispensable —
+# pero sin él, cada ./deploy.sh te va a pedir tu password de sudo a mitad
+# del script (para el reload de php-fpm y el restart de supervisor). Esto
+# le da a 'umbo' permiso SIN password solo para esos comandos puntuales,
+# para que deploy.sh pueda correr de punta a punta sin interrupciones.
+#
+# Instalar con:
+#   sudo visudo -f /etc/sudoers.d/umbo-deploy
+# (visudo valida la sintaxis antes de guardar; nunca edites sudoers a mano
+# con un editor normal, un error de sintaxis puede dejarte sin sudo)
+#
+# NOTA (post-despliegue real): la versión anterior de este archivo tenía
+#   umbo ALL=(root) NOPASSWD: /usr/bin/supervisorctl restart sistemafe-worker:*
+# y eso rompe el parser de sudoers — el ":" dentro del argumento del comando
+# no va escapado y sudoers lo interpreta como si fuera el inicio de una
+# especificación de host ("expected host name"). El fix real (aplicado en
+# el servidor vía visudo) es no fijar el argumento completo con ":" — se le
+# da permiso NOPASSWD a supervisorctl sin restringir el subcomando/argumento
+# exacto, que es lo que queda abajo.
+
+umbo ALL=(root) NOPASSWD: /usr/bin/systemctl reload php8.5-fpm
+umbo ALL=(root) NOPASSWD: /usr/bin/systemctl restart php8.5-fpm
+umbo ALL=(root) NOPASSWD: /usr/bin/supervisorctl

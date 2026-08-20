@@ -1,0 +1,17 @@
+# Crontab del usuario 'umbo' — instalar con: crontab -e (como umbo, tu usuario habitual)
+#
+# IMPORTANTE: la línea de backup de abajo apunta a
+# /var/backups/sistemafe/scripts/backup-postgres.sh — esa ruta NO existe
+# sola, hay que copiar el script ahí ANTES de instalar este crontab
+# (si no, el cron de las 3 AM falla todas las noches en silencio):
+#
+#   sudo mkdir -p /var/backups/sistemafe/scripts
+#   sudo cp ~/deploy-ovh/scripts/backup-postgres.sh /var/backups/sistemafe/scripts/
+#   sudo chmod +x /var/backups/sistemafe/scripts/backup-postgres.sh
+
+# Scheduler de Laravel (necesario para jobs programados: recordatorios,
+# limpieza, reportes, lo que uses vía app/Console/Kernel.php o routes/console.php)
+* * * * * cd /var/www/html/sistemfe/api-sistema-fe && php artisan schedule:run >> /dev/null 2>&1
+
+# Backup de PostgreSQL todas las noches a las 3:00 AM (hora Lima)
+0 3 * * * /var/backups/sistemafe/scripts/backup-postgres.sh >> /var/log/backup-postgres.log 2>&1
