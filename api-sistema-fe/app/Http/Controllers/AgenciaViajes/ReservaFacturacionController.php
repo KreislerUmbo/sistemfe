@@ -25,60 +25,51 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
 // (reserva_ventas/sale_detail_items existían como schema desde Sesión
 // 8a/9b, sin ningún controller que las usara).
 //
-// Alcance de ESTA fase (decisiones confirmadas con el usuario, ver el plan
-// completo en el historial de la sesión — no reabrir sin decisión nueva):
-// - Solo "Camino 2" del plan (documento adicional/primera factura). El
-//   "Camino 1" (reemplazar con Nota de Crédito cuando ya existe una venta
-//   previa de la reserva) es la fase de "editar una reserva ya facturada",
-//   fuera de acá.
-// - La venta nace PENDIENTE de cobro (state_payment=1, debt=total,
-//   paid_out=0) — cobrar es responsabilidad del flujo normal ya existente
-//   (Cuentas por Cobrar / editar venta), esta fase no toca Caja.
-// - Solo contado (type_payment=1, condicion_pago='contado') — crédito/
-//   cuotas queda para una fase futura aparte.
-// - Líneas agrupadas por categoría (máx. 5: hotel/transporte/tour/vuelo/
-//   otros), no 1 línea por reserva_item — cada línea usa uno de los 5
-//   productos placeholder de ProductoGenericoViajeSeeder (Sesión 9a).
-// - No aplica ReservaAnticipo/Advance automáticamente.
-// - Reglas tributarias: cada línea usa el tip_afe_igv_default del producto
-//   placeholder (uniforme '10' gravado) — no se deriva el tipo de
-//   afectación real por proveedor/destino/exportación. destino='nacional'
-//   fijo. Simplificación conocida y documentada, pendiente de confirmar
-//   con el contador (mismo criterio ya usado por AdvanceController para su
-//   propio producto especial de adelantos).
-// - Envío a SUNAT sin cambios — sigue siendo manual, vía
-//   FacturacionElectronicaController::enviarSunat() ya existente.
-//
-// Patrón seguido de cerca: AdvanceController::store() — es el único otro
-// lugar del proyecto que arma un Sale/SaleDetail a mano fuera del
-// formulario normal de POS (mismo motivo: sale_details.product_id es
-// NOT NULL con FK real, no existe forma de vender una línea sin producto
-// de catálogo real detrás).
-//
 // Guardia tributario (2026-08-20, complemento a la fase A —
-// PEGAR-EN-CLAUDE-CODE-facturar-reserva-guardia-tributario.md): la
-// simplificación de arriba (IGV 18% fijo, destino='nacional' fijo para
-// TODA la venta) es segura mientras los reserva_items facturados juntos
-// tengan el mismo tratamiento tributario real. Si se mezclan (ej. un tour
-// exonerado Amazonía con un traslado nacional gravado), la cabecera de un
-// único Sale no puede reflejar ambos a la vez — riesgo real de emitir un
-// comprobante SUNAT con la exoneración mal calculada. Este guardia NO
-// resuelve la mezcla (eso es motor multi-Sale, trabajo mayor, fuera de
-// esta sesión) — solo la detecta y bloquea con 422, tanto en el preview
-// (prepararFactura) como en el POST real (store), sin confiar en que el
-// frontend ya filtró.
+// PEGAR-EN-CLAUDE-CODE-facturar-reserva-guardia-tributario.md): un único
+// Sale no puede reflejar dos tratamientos tributarios distintos a la vez
+// — se detecta y bloquea la mezcla (nunca se resuelve automáticamente).
 //
-// Limitación conocida del dato disponible hoy: `destino_tributario` solo
-// vive en `proveedor_tarifas` (origen_tipo=proveedor). Los otros 4
-// orígenes de un alternativa_item (mayorista, pasaje_aereo, manual, guia)
-// no tienen ningún campo tributario propio en el modelo actual — se
-// tratan como 'nacional' para este guardia (mismo valor que ya usa la
-// cabecera del Sale hoy, así que no cambia el comportamiento existente
-// para el caso 100% homogéneo/sin proveedor con destino distinto). Si
-// alguno de esos orígenes se mezcla con un proveedor 'amazonia' real, el
-// guardia bloquea igual (conservador, no deja pasar la mezcla en
-// silencio). Resolver esos 4 orígenes con un dato tributario propio queda
-// para cuando se aborde el motor multi-Sale completo.
+// Facturación múltiple por grupo de pasajeros (2026-08-20, mismo día,
+// PEGAR-EN-CLAUDE-CODE-facturacion-multiple-pasajeros.md): la Fase A
+// original asumía un solo responsable de pago por reserva completa — un
+// único Sale, cliente fijo a cotizacion.cliente_id, guard de "reserva ya
+// facturada" a nivel de RESERVA completa. Eso no soporta el caso real de
+// grupos (20 pasajeros, cada uno pide su propio comprobante a su nombre o
+// a una empresa distinta). Ahora: N Sales por reserva, cada uno cubriendo
+// un subconjunto de pasajeros elegido por el vendedor, con su propio
+// client_id (obligatorio, sin default) y texto_personalizado opcional.
+//
+// Diseño de selección de ítems para un subconjunto de pasajeros (decidido
+// con el usuario tras confirmar con datos reales que la mayoría de
+// reserva_items HOY no tienen ninguna fila en reserva_item_pasajero — 11
+// de 37 en todo el tenant agencia-demo, 8 de 8 en la reserva de prueba
+// usada para el guardia tributario; construir el guard asumiendo
+// vinculación completa habría dejado la función inutilizable con datos
+// reales):
+// - Ítem CON pasajeros vinculados (reserva_item_pasajero): se auto-incluye
+//   en la facturación de un subconjunto SOLO si TODOS sus pasajeros
+//   vinculados están dentro del subconjunto seleccionado — nunca se
+//   fragmenta un ítem compartido entre dos Sales distintos. Si falta
+//   alguno, el ítem queda fuera de este pase y se informa por qué
+//   (items_pendientes_por_pasajero_faltante).
+// - Ítem SIN ningún pasajero vinculado (el caso más común hoy: ajustes,
+//   ítems manuales, la mayoría del catálogo real): NO se auto-incluye por
+//   selección de pasajero — se ofrece aparte como
+//   items_sin_asignar_disponibles y el vendedor lo agrega explícitamente
+//   vía reserva_item_ids_manual si corresponde a este Sale. Evita que la
+//   función quede vacía para la mayoría de reservas reales (que no usan
+//   la pestaña "Asignación pasajero↔ítem"), sin inventar una atribución
+//   automática que nadie pidió.
+// - Fuera de alcance, documentado, no resuelto: reparto de un ítem
+//   tarifa_fija compartido (ej. habitación doble) entre pasajeros que
+//   terminan en Sales DISTINTOS — no existe ningún mecanismo en el
+//   proyecto que sepa cuánto le toca a cada uno (confirmado por
+//   investigación de código antes de programar esta sesión, no asumido).
+//   Si eso pasa, el ítem queda permanentemente sin poder facturarse por
+//   este flujo hasta resolución manual (reasignar en la pestaña de
+//   asignación, o facturarlo como ítem sin asignar a criterio del
+//   vendedor). No se improvisó ninguna fórmula de reparto.
 class ReservaFacturacionController extends Controller
 {
     // SKU de los 5 productos placeholder sembrados por
@@ -110,67 +101,41 @@ class ReservaFacturacionController extends Controller
     {
     }
 
-    // GET reservas/{id}/preparar-factura — preview de solo lectura, no
-    // persiste nada. Pensado para que el frontend muestre el desglose (o
-    // el bloqueo tributario) ANTES de que el usuario llene el modal de
-    // confirmación, no como reemplazo del guardia real de store().
+    // GET reservas/{id}/preparar-factura?pasajero_ids[]=5&pasajero_ids[]=6
+    // &reserva_item_ids_manual[]=49 — preview de solo lectura, no persiste
+    // nada. Pensado para que el frontend muestre el desglose (o el
+    // bloqueo tributario) ANTES de que el usuario confirme, no como
+    // reemplazo del guardia real de store().
     public function prepararFactura(Request $request, string $id)
     {
-        $reserva = Reserva::with(['alternativa.cotizacion'])->findOrFail($id);
+        $reserva = Reserva::with(['alternativa.cotizacion', 'pasajeros', 'ventas'])->findOrFail($id);
 
         if ($reserva->estado !== 'activa') {
             return response()->json(['code' => 422, 'message' => 'Solo se puede facturar una reserva activa.'], 422);
         }
 
         $validator = Validator::make($request->all(), [
-            'reserva_item_ids' => 'nullable|array|min:1',
-            'reserva_item_ids.*' => 'integer|exists:reserva_items,id',
+            'pasajero_ids' => 'required|array|min:1',
+            'pasajero_ids.*' => 'integer|exists:reserva_pasajeros,id',
+            'reserva_item_ids_manual' => 'nullable|array',
+            'reserva_item_ids_manual.*' => 'integer|exists:reserva_items,id',
         ]);
 
         if ($validator->fails()) {
             return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
         }
 
-        $idsSolicitados = $validator->validated()['reserva_item_ids'] ?? null;
-        $idsYaFacturados = $this->itemsYaFacturadosIds($reserva);
+        $validado = $validator->validated();
 
-        if ($idsSolicitados === null) {
-            // Sin selección explícita: todos los ítems de la reserva que
-            // todavía no fueron facturados en ninguna otra venta — mismo
-            // criterio que `itemsFacturables` en el frontend.
-            $idsSolicitados = ReservaItem::where('reserva_id', $reserva->id)
-                ->whereNotIn('id', $idsYaFacturados)
-                ->pluck('id')
-                ->all();
+        $resolucion = $this->resolverSeleccion($reserva, $validado['pasajero_ids'], $validado['reserva_item_ids_manual'] ?? []);
+        if ($resolucion instanceof \Illuminate\Http\JsonResponse) {
+            return $resolucion;
         }
-
-        if (empty($idsSolicitados)) {
-            return response()->json(['code' => 422, 'message' => 'No hay ítems para facturar.'], 422);
-        }
-
-        $items = ReservaItem::with(['proveedorTarifa', 'alternativaItem.proveedorTarifa.proveedorServicio.destinoServicio.servicio'])
-            ->whereIn('id', $idsSolicitados)
-            ->get();
-
-        $idsAjenos = collect($idsSolicitados)->diff($items->pluck('id'))->values();
-        if ($idsAjenos->isNotEmpty() || $items->pluck('reserva_id')->unique()->all() !== [$reserva->id]) {
-            return response()->json([
-                'code' => 422,
-                'message' => 'Todos los reserva_item_ids deben pertenecer a esta reserva.',
-            ], 422);
-        }
-
-        $idsRepetidos = collect($idsSolicitados)->intersect($idsYaFacturados)->values();
-        if ($idsRepetidos->isNotEmpty()) {
-            return response()->json([
-                'code' => 422,
-                'message' => 'Los siguientes ítems ya fueron facturados en otra venta de esta reserva: ' . $idsRepetidos->implode(', '),
-            ], 422);
-        }
+        ['items' => $items, 'contexto' => $contexto] = $resolucion;
 
         $bloqueo = $this->detectarMezclaTributaria($items);
         if ($bloqueo !== null) {
-            return response()->json(array_merge(['code' => 200], $bloqueo));
+            return response()->json(array_merge(['code' => 200], $bloqueo, $contexto));
         }
 
         $gruposPorCategoria = $this->agruparPorCategoria($items);
@@ -190,7 +155,7 @@ class ReservaFacturacionController extends Controller
         [$lineas, $subtotalTotal, $igvTotal] = $this->construirLineas($gruposPorCategoria, $productosPlaceholder);
         $total = round($subtotalTotal + $igvTotal, 2);
 
-        return response()->json([
+        return response()->json(array_merge([
             'code' => 200,
             'bloqueado_tributario' => false,
             'grupos_propuestos' => collect($lineas)->map(fn (array $linea) => [
@@ -203,23 +168,26 @@ class ReservaFacturacionController extends Controller
             'subtotal' => $subtotalTotal,
             'igv' => $igvTotal,
             'total' => $total,
-        ]);
+        ], $contexto));
     }
 
     // POST reservas/{id}/facturar
     public function store(Request $request, string $id)
     {
-        $reserva = Reserva::with(['alternativa.cotizacion'])->findOrFail($id);
+        $reserva = Reserva::with(['alternativa.cotizacion', 'pasajeros', 'ventas'])->findOrFail($id);
 
         if ($reserva->estado !== 'activa') {
             return response()->json(['code' => 422, 'message' => 'Solo se puede facturar una reserva activa.'], 422);
         }
 
         $validator = Validator::make($request->all(), [
-            'reserva_item_ids' => 'required|array|min:1',
-            'reserva_item_ids.*' => 'integer|exists:reserva_items,id',
-            'client_id' => 'nullable|integer|exists:clients,id',
+            'pasajero_ids' => 'required|array|min:1',
+            'pasajero_ids.*' => 'integer|exists:reserva_pasajeros,id',
+            'reserva_item_ids_manual' => 'nullable|array',
+            'reserva_item_ids_manual.*' => 'integer|exists:reserva_items,id',
+            'client_id' => 'required|integer|exists:clients,id',
             'tipo_comprobante_codigo' => 'required|string|in:01,03',
+            'texto_personalizado' => 'nullable|string|max:2000',
         ]);
 
         if ($validator->fails()) {
@@ -228,36 +196,21 @@ class ReservaFacturacionController extends Controller
 
         $validado = $validator->validated();
 
-        $items = ReservaItem::with([
-            'proveedorTarifa',
-            'alternativaItem.proveedorTarifa.proveedorServicio.destinoServicio.servicio',
-        ])->whereIn('id', $validado['reserva_item_ids'])->get();
+        $resolucion = $this->resolverSeleccion($reserva, $validado['pasajero_ids'], $validado['reserva_item_ids_manual'] ?? []);
+        if ($resolucion instanceof \Illuminate\Http\JsonResponse) {
+            return $resolucion;
+        }
+        ['items' => $items] = $resolucion;
 
-        $idsAjenos = collect($validado['reserva_item_ids'])->diff($items->pluck('id'))->values();
-        if ($idsAjenos->isNotEmpty() || $items->pluck('reserva_id')->unique()->all() !== [$reserva->id]) {
+        if ($items->isEmpty()) {
             return response()->json([
                 'code' => 422,
-                'message' => 'Todos los reserva_item_ids deben pertenecer a esta reserva.',
+                'message' => 'No hay ningún ítem para facturar con esta selección de pasajeros — revisa si faltan '
+                    . 'ítems "sin asignar" por elegir a mano, o si algún ítem compartido necesita incluir también '
+                    . 'a los pasajeros que lo comparten.',
             ], 422);
         }
 
-        // Guard anti-doble-facturación: ningún ítem pedido puede estar ya
-        // cubierto por una ReservaVenta existente de esta reserva. Nunca un
-        // fallback silencioso — 422 explícito listando cuáles ya están
-        // facturados, para que el vendedor sepa exactamente qué falta.
-        $idsYaFacturados = $this->itemsYaFacturadosIds($reserva);
-
-        $idsRepetidos = collect($validado['reserva_item_ids'])->intersect($idsYaFacturados)->values();
-        if ($idsRepetidos->isNotEmpty()) {
-            return response()->json([
-                'code' => 422,
-                'message' => 'Los siguientes ítems ya fueron facturados en otra venta de esta reserva: ' . $idsRepetidos->implode(', '),
-            ], 422);
-        }
-
-        // Guardia tributario — 422 explícito, nunca confía en que el
-        // frontend ya lo filtró vía prepararFactura(). Antes de reservar
-        // correlativo o abrir la transacción.
         $bloqueo = $this->detectarMezclaTributaria($items);
         if ($bloqueo !== null) {
             return response()->json(array_merge(['code' => 422, 'message' => $bloqueo['motivo']], $bloqueo), 422);
@@ -269,7 +222,7 @@ class ReservaFacturacionController extends Controller
             throw new HttpException(403, "No tienes permiso para emitir este tipo de comprobante ('{$permisoRequerido}').");
         }
 
-        $cliente = Client::findOrFail($validado['client_id'] ?? $reserva->alternativa->cotizacion->cliente_id);
+        $cliente = Client::findOrFail($validado['client_id']);
         $moneda = $reserva->alternativa->moneda_cotizacion;
 
         $serieResuelta = $this->serieComprobanteService->resolverParaUsuario(
@@ -292,6 +245,9 @@ class ReservaFacturacionController extends Controller
             }
         }
 
+        $textoPersonalizado = $validado['texto_personalizado'] ?? null;
+        $pasajeroIdsSolicitados = $validado['pasajero_ids'];
+
         try {
             [$venta, $lineas] = DB::transaction(function () use (
                 $reserva,
@@ -301,9 +257,10 @@ class ReservaFacturacionController extends Controller
                 $moneda,
                 $serieResuelta,
                 $usuario,
-                $validado
+                $textoPersonalizado,
+                $pasajeroIdsSolicitados
             ) {
-                [$lineas, $subtotalTotal, $igvTotal] = $this->construirLineas($gruposPorCategoria, $productosPlaceholder);
+                [$lineas, $subtotalTotal, $igvTotal] = $this->construirLineas($gruposPorCategoria, $productosPlaceholder, $textoPersonalizado);
                 $total = round($subtotalTotal + $igvTotal, 2);
 
                 $venta = Sale::create([
@@ -396,11 +353,17 @@ class ReservaFacturacionController extends Controller
                     }
                 }
 
+                // reserva_pasajero_ids: el subconjunto que el vendedor
+                // ELIGIÓ facturar en este Sale — ya NO todos los pasajeros
+                // de la reserva (eso asumía la Fase A original, un solo
+                // responsable de pago). Un pasajero queda "facturado" en
+                // cuanto aparece acá, sin importar si le tocaban ítems sin
+                // asignar que terminaron yendo a otro Sale.
                 ReservaVenta::create([
                     'reserva_id' => $reserva->id,
                     'sale_id' => $venta->id,
                     'reserva_item_ids' => $reservaItemIdsFacturados,
-                    'reserva_pasajero_ids' => $reserva->pasajeros()->pluck('id')->all(),
+                    'reserva_pasajero_ids' => $pasajeroIdsSolicitados,
                 ]);
 
                 return [$venta, $lineas];
@@ -417,17 +380,160 @@ class ReservaFacturacionController extends Controller
             'sale_id' => $venta->id,
             'serie' => $venta->serie,
             'lineas' => count($lineas),
+            'pasajeros_facturados' => count($pasajeroIdsSolicitados),
         ]);
+    }
+
+    // Resuelve, valida y arma el conjunto final de reserva_items a
+    // facturar a partir de pasajero_ids + reserva_item_ids_manual —
+    // compartido por prepararFactura() (preview) y store() (real). Sobre
+    // error devuelve un JsonResponse 422 listo para retornar tal cual;
+    // sobre éxito devuelve ['items' => Collection<ReservaItem> (con
+    // relaciones cargadas para agrupar/calcular), 'contexto' => array
+    // (campos informativos para la respuesta del preview)].
+    private function resolverSeleccion(Reserva $reserva, array $pasajeroIdsSolicitados, array $idsManualSolicitados)
+    {
+        $pasajerosAjenos = collect($pasajeroIdsSolicitados)->diff($reserva->pasajeros->pluck('id'))->values();
+        if ($pasajerosAjenos->isNotEmpty()) {
+            return response()->json([
+                'code' => 422,
+                'message' => 'Todos los pasajero_ids deben pertenecer a esta reserva.',
+            ], 422);
+        }
+
+        $pasajerosYaFacturados = $this->pasajerosYaFacturadosIds($reserva);
+        $pasajerosRepetidos = collect($pasajeroIdsSolicitados)->intersect($pasajerosYaFacturados)->values();
+        if ($pasajerosRepetidos->isNotEmpty()) {
+            return response()->json([
+                'code' => 422,
+                'message' => 'Los siguientes pasajeros ya fueron facturados en otra venta de esta reserva: ' . $pasajerosRepetidos->implode(', '),
+            ], 422);
+        }
+
+        $idsItemsYaFacturados = $this->itemsYaFacturadosIds($reserva);
+
+        $todosLosItems = ReservaItem::with([
+            'pasajeros',
+            'proveedorTarifa',
+            'alternativaItem.proveedorTarifa.proveedorServicio.destinoServicio.servicio',
+        ])->where('reserva_id', $reserva->id)->whereNotIn('id', $idsItemsYaFacturados)->get();
+
+        $itemsAuto = collect();
+        $pendientesPorFaltante = [];
+        $itemsSinAsignar = collect();
+
+        foreach ($todosLosItems as $item) {
+            $pasajerosVinculados = $item->pasajeros->pluck('id');
+
+            if ($pasajerosVinculados->isEmpty()) {
+                $itemsSinAsignar->push($item);
+                continue;
+            }
+
+            $faltantes = $pasajerosVinculados->diff($pasajeroIdsSolicitados)->values();
+            if ($faltantes->isEmpty()) {
+                $itemsAuto->push($item);
+                continue;
+            }
+
+            // Parcialmente cubierto: hay overlap real con la selección
+            // actual, pero falta al menos un pasajero vinculado — se
+            // informa el motivo en vez de incluirlo a medias (nunca se
+            // fragmenta un ítem compartido entre Sales distintos).
+            if ($pasajerosVinculados->intersect($pasajeroIdsSolicitados)->isNotEmpty()) {
+                $pendientesPorFaltante[] = [
+                    'reserva_item_id' => $item->id,
+                    'nombre' => ReservaController::resolverNombreItem($item->alternativaItem),
+                    'pasajeros_faltantes' => $faltantes->all(),
+                ];
+            }
+        }
+
+        $idsManualValidos = $itemsSinAsignar->pluck('id');
+        $idsManualAjenos = collect($idsManualSolicitados)->diff($idsManualValidos)->values();
+        if ($idsManualAjenos->isNotEmpty()) {
+            return response()->json([
+                'code' => 422,
+                'message' => 'Los siguientes reserva_item_ids no están disponibles como "ítem sin asignar" de esta '
+                    . 'reserva (ya facturados, con pasajero vinculado, o no pertenecen a la reserva): '
+                    . $idsManualAjenos->implode(', '),
+            ], 422);
+        }
+
+        $itemsManual = $itemsSinAsignar->whereIn('id', $idsManualSolicitados)->values();
+        // Sin guard de "vacío" acá a propósito: prepararFactura() (preview)
+        // necesita poder devolver 200 con 0 ítems (ej. recién se seleccionó
+        // un pasajero sin nada auto-incluido todavía, antes de que el
+        // vendedor marque algo del pool "sin asignar") — bloquear acá haría
+        // que el preview fallara apenas se abre el modal. store() sí
+        // bloquea explícitamente con 422 antes de intentar crear un Sale
+        // vacío, ver más abajo.
+        $itemsFinal = $itemsAuto->concat($itemsManual)->unique('id')->values();
+
+        $pasajerosPendientes = $reserva->pasajeros->pluck('id')
+            ->diff($pasajerosYaFacturados)
+            ->diff($pasajeroIdsSolicitados)
+            ->values();
+
+        // Nota: incluye TODOS los ítems sin asignar (ya facturados excluidos
+        // arriba), sin importar si ya están marcados en
+        // reserva_item_ids_manual — así el checkbox del frontend puede
+        // reflejar su estado actual sin que el ítem desaparezca de la
+        // lista al tildarlo (mismo criterio ya usado por
+        // items_pendientes_por_pasajero_faltante, que tampoco depende de
+        // la selección).
+        $contexto = [
+            'pasajeros_incluidos' => $pasajeroIdsSolicitados,
+            'pasajeros_pendientes' => $pasajerosPendientes,
+            'items_pendientes_por_pasajero_faltante' => $pendientesPorFaltante,
+            'items_sin_asignar_disponibles' => $itemsSinAsignar->map(fn (ReservaItem $it) => [
+                'reserva_item_id' => $it->id,
+                'nombre' => ReservaController::resolverNombreItem($it->alternativaItem),
+                'total' => (float) $it->alternativaItem->total_convertido,
+            ])->values(),
+        ];
+
+        // Sugerencia de cliente (no vinculante): si se seleccionó un solo
+        // pasajero y ese pasajero ya tiene perfil de cliente propio
+        // (pasajero_catalogo.cliente_id, §6.5 del plan), se lo ofrece
+        // como punto de partida — el vendedor puede elegir cualquier otro
+        // cliente igual, esto solo evita re-escribir un buscador si el
+        // pasajero ya es cliente conocido.
+        if (count($pasajeroIdsSolicitados) === 1) {
+            $pasajero = $reserva->pasajeros->firstWhere('id', $pasajeroIdsSolicitados[0]);
+            $clienteSugerido = $pasajero?->pasajeroCatalogo?->cliente;
+            if ($clienteSugerido) {
+                $contexto['cliente_sugerido'] = [
+                    'id' => $clienteSugerido->id,
+                    'full_name' => $clienteSugerido->full_name,
+                    'n_document' => $clienteSugerido->n_document,
+                ];
+            }
+        }
+
+        return ['items' => $itemsFinal, 'contexto' => $contexto];
     }
 
     // Ningún reserva_item pedido puede estar ya cubierto por una
     // ReservaVenta existente de esta reserva — compartido por
-    // prepararFactura() y store().
+    // resolverSeleccion() y usado también dentro de ella.
     private function itemsYaFacturadosIds(Reserva $reserva): Collection
     {
-        return ReservaVenta::where('reserva_id', $reserva->id)
-            ->get()
+        return $reserva->ventas
             ->flatMap(fn (ReservaVenta $rv) => $rv->reserva_item_ids ?? [])
+            ->unique()
+            ->values();
+    }
+
+    // Un pasajero ya facturado (apareció en el reserva_pasajero_ids de
+    // ALGUNA ReservaVenta previa) no puede volver a seleccionarse — cada
+    // pasajero pertenece a un único Sale por diseño (un responsable de
+    // pago, un comprobante). Ver docblock de la clase para el trade-off
+    // de ítems compartidos que esto implica.
+    private function pasajerosYaFacturadosIds(Reserva $reserva): Collection
+    {
+        return $reserva->ventas
+            ->flatMap(fn (ReservaVenta $rv) => $rv->reserva_pasajero_ids ?? [])
             ->unique()
             ->values();
     }
@@ -451,7 +557,10 @@ class ReservaFacturacionController extends Controller
     // destino_tributario efectivo (caso normal, la mayoría de las
     // reservas reales); si no, la estructura de bloqueo lista para la
     // respuesta HTTP (sin el wrapper code/message, cada caller decide
-    // status).
+    // status). Se evalúa siempre sobre el subconjunto final a facturar en
+    // ESTE Sale — dos pasajeros distintos pueden terminar en Sales con
+    // distinto destino_tributario cada uno, mientras cada Sale individual
+    // sea homogéneo.
     private function detectarMezclaTributaria(Collection $items): ?array
     {
         $destinos = $items->map(fn (ReservaItem $it) => $this->resolverDestinoTributario($it))->unique()->values();
@@ -487,8 +596,11 @@ class ReservaFacturacionController extends Controller
     // Cálculo puro (sin tocar BD) de las líneas del comprobante a partir
     // de los grupos ya armados — compartido por el preview de solo lectura
     // (prepararFactura) y la creación real (store, dentro de su
-    // transacción). Devuelve [lineas, subtotalTotal, igvTotal].
-    private function construirLineas(array $gruposPorCategoria, Collection $productosPlaceholder): array
+    // transacción). $textoPersonalizado, si viene, reemplaza la
+    // descripcion_detalle autogenerada en TODAS las líneas de este Sale
+    // (confirmado con el usuario: un texto por Sale completo, no por
+    // línea individual). Devuelve [lineas, subtotalTotal, igvTotal].
+    private function construirLineas(array $gruposPorCategoria, Collection $productosPlaceholder, ?string $textoPersonalizado = null): array
     {
         $porcentajeIgv = 18.0;
         $subtotalTotal = 0;
@@ -502,7 +614,7 @@ class ReservaFacturacionController extends Controller
             $subtotalLinea = round($precioFinalLinea / (1 + $porcentajeIgv / 100), 2);
             $igvLinea = round($precioFinalLinea - $subtotalLinea, 2);
 
-            $descripcionDetalle = $grupo->map(fn (ReservaItem $it) => sprintf(
+            $descripcionDetalle = $textoPersonalizado ?? $grupo->map(fn (ReservaItem $it) => sprintf(
                 '%s (%s)',
                 ReservaController::resolverNombreItem($it->alternativaItem),
                 $it->fecha?->toDateString() ?? 'sin fecha'
