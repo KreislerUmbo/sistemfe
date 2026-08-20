@@ -2,13 +2,26 @@
   <AuthLayout>
     <b-col lg="4" class="mx-auto">
       <b-card no-body>
+
+       <!-- Mostrar mensaje de error general -->
+        <b-alert v-if="error" variant="danger" dismissible @dismissed="error = ''">
+          {{ error }}
+        </b-alert>
+
         <b-card-body class="p-0 bg-black auth-header-box rounded-top">
           <div class="text-center p-3">
             <router-link to="/" class="logo logo-admin">
-              <img :src="logoSm" height="50" alt="logo" class="auth-logo" />
+              <!-- Logo dinámico con fallback -->
+              <img 
+                :src="logoUrl || logoSm" 
+                height="50" 
+                alt="logo" 
+                class="auth-logo" 
+                @error="handleLogoError"
+              />
             </router-link>
             <h4 class="mt-3 mb-1 fw-semibold text-white fs-18">
-              SISTEMA DE FACTURACIÓN ONLINE
+              BIENVENIDO A TU PLATAFORMA DE ADMINISTRACIÓN
             </h4>
             <p class="text-muted fw-medium mb-0">
               Inicie sesión para continuar:
@@ -85,7 +98,7 @@
   </AuthLayout>
 </template>
 <script setup lang="ts">
-import { ref, reactive, computed } from "vue";
+import { ref, reactive, computed, onMounted } from "vue";
 
 import logoSm from "@/assets/images/logo-sm.png";
 import { required, email } from "@vuelidate/validators";
@@ -101,9 +114,34 @@ import type { ResponseAuthLogin } from "@/types/auth";
 import router from "@/router";
 
 const credentials = reactive({
-  email: "umbosac@gmail.com",
-  password: "12345678",
+  email: "",
+  password: "",
 });
+
+// Configurar logo dinámicamente
+const logoUrl = ref("");
+const error = ref("");
+
+// Cargar configuración
+onMounted(async () => {
+  try {
+    // Si tienes un endpoint para configuración
+    // const response = await HttpClient.get("config/app");
+    // logoUrl.value = response.data.logo_url;
+    
+    // O usar variables de entorno
+    logoUrl.value = import.meta.env.VITE_APP_LOGO_URL || "";
+  } catch (e) {
+    console.error("Error cargando configuración:", e);
+  }
+});
+
+// Manejar error de carga de imagen
+const handleLogoError = (e: Event) => {
+  const img = e.target as HTMLImageElement;
+  img.src = logoSm; // Usar fallback
+};
+
 
 const vuelidateRules = computed(() => ({
   email: { required, email },
@@ -116,7 +154,7 @@ const useAuth = useAuthStore();
 const route = useRoute();
 const query = route.query;
 
-const error = ref("");
+
 
 const handleLogin = async () => {
   const result = await v.value.$validate();
@@ -150,4 +188,8 @@ const redirectUser = () => {
  // return router.push("/");
  window.location.reload();
 };
+
+
+
+
 </script>
