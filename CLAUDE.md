@@ -1206,6 +1206,185 @@ mal.
   [[feedback_no_resetear_passwords_sin_verificar]] en memoria, esa cuenta ya
   se había reseteado sin verificar dos veces antes en sesiones previas).
 
+**Completo — Facturación de reservas + 3 fixes del proceso de reserva
+(2026-08-19/20):** review pedido por el usuario del proceso de reserva
+completo encontró 1 gap grande no documentado y 2 bugs de UI reales, más
+un cuarto punto (quitar ítems/pasajeros) — implementados en ese orden
+(1→2→3→4), con plan formal (`EnterPlanMode`) para el punto 1 por su
+tamaño y por tocar código fiscal-adyacente.
+- **Fase A — generar una venta real desde una reserva.** Hasta ahora,
+  `reserva_ventas`/`sale_detail_items` (tablas puente diseñadas desde
+  Sesión 8a/9b, `plan-modulo-cotizaciones-reservas.md` §4.3/§4.4) existían
+  como schema sin ningún controller que las usara — `ReservaVenta` solo se
+  leía como guard en `cancelar()`, y `VentaDirectaController` (pese al
+  nombre) nunca creaba un `Sale` real. Una agencia no tenía forma de
+  facturar un viaje a través del sistema. Cerrado con
+  `ReservaFacturacionController::store()`
+  (`POST reservas/{id}/facturar`), que arma un `Sale`/`SaleDetail[]`/
+  `SaleDetailItem[]`/`ReservaVenta` reales dentro de una transacción,
+  siguiendo de cerca el único otro precedente del proyecto de armar un
+  `Sale` a mano fuera del formulario normal
+  (`AdvanceController::store()` — `sale_details.product_id` es `NOT NULL`
+  con FK real, no existe forma de vender una línea sin producto de
+  catálogo detrás).
+  - **Alcance de esta fase, decisiones confirmadas explícitamente con el
+    usuario antes de programar** (`AskUserQuestion`, 3 preguntas): la
+    venta nace **pendiente de cobro** (`state_payment=1`, `debt=total`,
+    `paid_out=0`, `saldo_pendiente=total` — cobrar es el flujo normal ya
+    existente, Cuentas por Cobrar/editar venta; esta fase no toca Caja en
+    absoluto); **solo contado**, crédito/cuotas queda para una fase
+    futura aparte (mismo patrón de fases separadas que el fix de fechas
+    Cotización↔Reserva); **líneas agrupadas por categoría** (máx. 5:
+    hotel/transporte/tour/vuelo/otros, no 1 línea por `reserva_item`) —
+    reusa los 5 productos placeholder ya sembrados por
+    `ProductoGenericoViajeSeeder` (Sesión 9a, existía desde hace semanas
+    sin conectar a nada, **no estaba sembrado en `agencia-demo`**, se
+    corrió recién en esta sesión). Solo "Camino 2" del plan (documento
+    adicional/primera factura) — "Camino 1" (reemplazar con Nota de
+    Crédito cuando ya existe una venta previa de la reserva) es la fase
+    futura de "editar una reserva ya facturada", fuera de acá.
+  - **Clasificación por categoría**: heurística best-effort (documentada
+    como tal, no una regla de negocio exacta) — `tipo_habitacion`
+    presente → HOTEL; `origen_tipo=pasaje_aereo` → VUELO; nombre del
+    servicio contiene "transporte"/"traslado" → TRANSPORTE; contiene
+    "tour" → TOUR; cualquier otro caso (entradas, comidas, guía, manual,
+    mayorista) → OTROS-TURISTICOS (catch-all). Reusa
+    `ReservaController::resolverNombreItem()` (cambiado de `private` a
+    `public static` para poder reusarlo) para armar
+    `sale_details.descripcion_detalle` de cada línea agrupada.
+  - **Reglas tributarias — simplificación conocida, documentada, no
+    resuelta**: cada línea usa el `tip_afe_igv_default` del producto
+    placeholder (uniforme `'10'` gravado, IGV 18% fijo) — no se deriva el
+    tipo de afectación real por proveedor/destino/exportación (ni
+    `AlternativaItem` ni `ReservaItem` tienen un snapshot de eso, solo
+    `proveedor_tarifa.tip_afe_igv/destino_tributario` en vivo). `Sale.
+    destino='nacional'` fijo. Mismo criterio y misma pregunta pendiente
+    que ya dejó documentada `AdvanceController` para su propio producto
+    especial ("pendiente de confirmar con contador").
+  - **Guard anti-doble-facturación**: ningún `reserva_item_id` pedido
+    puede estar ya cubierto por el `reserva_item_ids` (json) de una
+    `ReservaVenta` existente de la misma reserva — 422 explícito
+    listando cuáles, nunca fallback silencioso. Verificado con datos
+    reales (ver abajo).
+  - Envío a SUNAT sin cambios — sigue siendo manual, vía
+    `FacturacionElectronicaController::enviarSunat()` ya existente; esta
+    fase nunca toca Greenter.
+  - Frontend: botón "Facturar" (solo si hay ítems sin facturar) + modal
+    de selección de ítems/tipo de comprobante en `reservas/detalle.vue`;
+    badge "Facturado" en los ítems ya cubiertos.
+- **Fase B — resumen legible**: `respuestaDetalle()` agrega `fecha` a
+  cada fila de `resumen` — sin esto, dos ítems del mismo servicio en días
+  distintos (ej. "Entrada / Ticket de ingreso" día 1 y día 2) se veían
+  como filas idénticas sin ninguna forma de distinguirlas (reproducido
+  con datos reales de la reserva #12: 3 servicios repetidos, precios
+  distintos, cero pista de a qué día correspondía cada uno).
+- **Fase C — proveedores duplicados en el buscador**: el selector de
+  proveedor de `reservas/detalle.vue` mostraba el mismo proveedor
+  repetido sin distinguir entre sus tarifas (reproducido con datos
+  reales: "SERVICIOS TURISTICOS CUMBAZA SRL" 5 veces, mismo servicio, sin
+  indicar tipo de tarifa/modalidad/precio). El cotizador
+  (`cotizador/editar.vue:527`) ya resolvía exactamente este problema con
+  un badge `tipo_tarifa · modalidad` — nunca se había aplicado a esta
+  pantalla; ahora sí, más el precio.
+- **Fase D — quitar ítems/pasajeros de una reserva ya aceptada**:
+  `sincronizar-items` solo podía agregar, nunca quitar. Nuevo
+  `DELETE reserva-items/{id}` (bloquea si la reserva no está activa o si
+  el ítem ya fue facturado — reusa el mismo guard de la Fase A) y
+  `DELETE reserva-pasajeros/{id}` (bloquea además si es el último
+  pasajero, o si la reserva ya tiene alguna venta asociada — mismo
+  criterio conservador, corregir una reserva ya facturada es la fase
+  futura de "Camino 1"). Ambos limpian a mano las filas de
+  `reserva_item_pasajero` antes de borrar (esa FK no tiene
+  `cascadeOnDelete()`). Quitar un pasajero también revierte 1 unidad de
+  `SalidaMayorista.cupo_ocupado` si la reserva tiene mayorista elegido —
+  mismo movimiento que `cancelar()`, en reversa.
+- **Verificación**: 27 tests nuevos (166/166 en verde total —
+  `ReservaFacturacionTest` 6 casos incluida la agrupación real por
+  categoría con montos verificados; `ReservaQuitarItemsPasajerosTest` 7
+  casos). Type-check de frontend sin regresiones (45 errores
+  preexistentes, mismo baseline). **Verificado end-to-end contra datos
+  reales de `agencia-demo`** (no solo tests): facturó la reserva #18
+  real (`dkm-2026-001`, 3 ítems, S/ 100 total) — Sale/SaleDetail(s)/
+  SaleDetailItem/ReservaVenta reales creados con montos exactos (2 líneas
+  agrupadas: Transporte S/45, Otros-Turísticos S/55 = Desayuno+Entrada),
+  reintento de facturar el mismo ítem confirmado con 422 real. Todo el
+  rastro de la verificación (venta, líneas, `ReservaVenta`,
+  `branch_id` temporal del usuario de prueba) revertido al terminar —
+  `agencia-demo` queda en el mismo estado que antes de la sesión.
+
+**Completo — Guardia tributario en facturación de reserva + fix de
+visibilidad en reprogramar (2026-08-20, mismo día que lo de arriba, sin
+commitear todavía):** complemento pedido explícitamente por el usuario a
+la Fase A de facturación de reservas, más una revisión general de gaps
+que podían dar problemas en producción.
+- **Guardia tributario** (`ReservaFacturacionController`): la
+  simplificación conocida de la Fase A (IGV 18% fijo, `destino='nacional'`
+  fijo para TODA la venta) es segura solo si los `reserva_items`
+  facturados juntos comparten tratamiento tributario real. Si se mezclan
+  (ej. un tour exonerado Amazonía con un traslado nacional gravado), un
+  único `Sale` no puede reflejar ambos — riesgo real de comprobante SUNAT
+  con la exoneración mal calculada. Nuevo `GET reservas/{id}/
+  preparar-factura` (preview de solo lectura, el brief original de Fase A
+  lo pedía y nunca se construyó — el frontend llamaba directo a
+  `POST facturar`) + el guardia real duplicado en `POST facturar` (422
+  server-side, nunca confía en que el frontend ya filtró). Fuente de
+  verdad: `reserva_item.proveedor_tarifa_id` **propio** (retrofit Sesión
+  11c, "quién opera", reasignable cerca de la fecha), no el de
+  `alternativa_item` (propuesta comercial original, puede estar
+  desactualizada) — se siembra igual al crear el ítem, así que no cambia
+  nada para el caso sin reasignación.
+  - **Limitación real del modelo de datos, documentada, no resuelta**:
+    `destino_tributario` solo vive en `proveedor_tarifas`
+    (`origen_tipo=proveedor`). Los otros 4 orígenes de un
+    `alternativa_item` (mayorista, pasaje_aereo, manual, guia) no tienen
+    ningún campo tributario propio hoy — se tratan como `'nacional'` para
+    el guardia (mismo valor que ya usa la cabecera del Sale, no cambia el
+    comportamiento del caso homogéneo). Si alguno de esos 4 orígenes se
+    mezcla con un proveedor `'amazonia'` real, el guardia bloquea igual
+    (conservador, nunca deja pasar la mezcla en silencio). Resolver esos 4
+    orígenes con un dato tributario propio queda para cuando se aborde el
+    motor multi-`Sale` completo (emitir varios `Sale`, uno por
+    `destino_tributario`, en vez de bloquear) — explícitamente fuera de
+    alcance de este guardia, es trabajo bastante mayor.
+  - Frontend (`reservas/detalle.vue`): al abrir el modal "Facturar" (y en
+    cada cambio de selección de ítems, reactivo) se llama a
+    `preparar-factura` — si `bloqueado_tributario`, se oculta todo el
+    formulario y el botón "Facturar", mostrando solo el mensaje en un
+    alert rojo; si no, se muestra un total en vivo antes de confirmar.
+  - **Verificado con datos reales de `agencia-demo`, sin persistir nada**
+    (solo `GET`, nunca se llamó `POST facturar`): la reserva real #19
+    (`DKM-2026-001`) resultó tener una mezcla tributaria real entre sus 7
+    ítems — el modal mostró el bloqueo con el mensaje exacto; al destildar
+    el ítem que rompía la homogeneidad (un hotel), el bloqueo se levantó
+    al instante y apareció el total en vivo (`PEN 325.00`) con el botón
+    habilitado. Confirma que el guardia protege datos reales del tenant,
+    no solo el fixture del test nuevo (`ReservaFacturacionTest`, 2 casos:
+    mezcla bloqueada en `store()` y en `prepararFactura()`, preview sin
+    mezcla devuelve desglose correcto).
+- **Fix de visibilidad en `reprogramar()`** (fila 11s, hallazgo de la
+  misma revisión de gaps, no relacionado al guardia tributario): un
+  `reserva_item` sin `alternativa_item.dia_referencial` no tiene insumo
+  para recalcular su fecha en automático — pero antes de este fix quedaba
+  con su fecha VIEJA **sin aparecer en `items_no_tocados`**, indistinguible
+  para el vendedor de "sí se movió" (el banner decía "Reserva reprogramada
+  correctamente" sin ninguna señal de que ese servicio específico seguía
+  en la fecha de antes). Corregido: se lista igual que los `'manual'`, con
+  `motivo: 'sin_dia_referencial'` propio; el banner del frontend ahora
+  muestra el motivo real de cada ítem en vez de asumir siempre "editado a
+  mano". Test nuevo (`ReservaReprogramarTest`, +1 caso).
+- **Verificación total**: 8 tests nuevos, 100 tests AgenciaViajes en verde
+  (cero regresiones); type-check frontend en 45 errores preexistentes
+  (mismo baseline, cero nuevos).
+- **Pendiente, no resuelto en esta sesión**: el resto de gaps encontrados
+  en la misma revisión de riesgo práctico (bloqueos inconsistentes entre
+  `ReservaItemController::destroy()`/`ReservaPasajeroController::destroy()`,
+  ausencia de guard "mínimo 1 ítem" al quitar el último ítem de una
+  reserva, condición de carrera sin `lockForUpdate()` entre el check de
+  "ya facturado" y el borrado real en ambos `destroy()`, `SalidaOperativa`
+  huérfana tras quitar su último ítem enganchado) — documentados en la
+  revisión pero no corregidos, quedan para una sesión futura dedicada a
+  `ReservaItemController`/`ReservaPasajeroController`.
+
 **Próximos módulos (en orden de prioridad):**
 
 1. **Representación impresa (PDF) con impresión automática**
@@ -1311,6 +1490,52 @@ propuesto que quedó obsoleto en cuanto se construyó el módulo real de Adelant
   partición de ESE tenant — inconsistente con que el dato sea central y debería verse
   igual desde cualquier tenant. No es el mismo bug que el de arriba, pero es de la misma
   familia (storage y tenancy no siempre coinciden) — evaluar en una sesión dedicada.
+- **Agencia de Viajes — fecha de una `Reserva`:** leer siempre de
+  `reserva.fecha_viaje_desde`/`fecha_viaje_hasta` (columnas propias, Fase 1 del fix
+  Cotización↔Reserva, 2026-08-18) — **nunca** de
+  `reserva.alternativa.cotizacion.fecha_viaje_desde`/`fecha_viaje_hasta`. **Motivo:**
+  `Cotizacion.fecha_viaje_desde/hasta` sigue siendo editable sin ningún guard incluso
+  después de que la cotización ya generó una reserva
+  (`CotizacionController::update()`, a propósito) — antes de esta fase,
+  `reserva_items.fecha` se calculaba en vivo contra ese valor, así que cualquier
+  corrección posterior de la cotización desincronizaba en silencio la fecha operativa
+  ya congelada de la reserva (confirmado con datos reales de prueba en `agencia-demo`:
+  reservas con ítems calculados contra 3-4 fechas base distintas entre sí). La relación
+  `alternativa.cotizacion` se sigue cargando y su fecha sigue viajando en el JSON
+  completo de `ReservaController::show()` — es intencional (refleja la propuesta
+  comercial vigente), no un bug; el punto es no leerla como si fuera la fecha de la
+  reserva. `reserva_items.fecha_origen` (`'auto'`/`'manual'`) distingue una fecha
+  calculada por la fórmula de una editada a mano
+  (`ReservaItemController::update()`) — ningún recálculo automático futuro debe pisar
+  un ítem `'manual'` sin decisión explícita. Diagnóstico de datos existentes:
+  `php artisan agencia-viajes:diagnosticar-fechas-reserva` (solo lectura). Ver
+  `docs/planning/agencia-de-viajes/plan-modulo-cotizaciones-reservas.md` y el brief
+  "Fix fechas Cotización↔Reserva, FASE 1". **Fase 2 CERRADA (2026-08-19):**
+  `POST reservas/{id}/reprogramar` (`ReservaController::reprogramar()`) mueve
+  `reserva.fecha_viaje_desde/hasta` y recalcula `reserva_items.fecha` SOLO para los
+  ítems `fecha_origen='auto'` — los `'manual'` quedan intactos y vuelven en
+  `items_no_tocados` de la respuesta. Re-engancha `SalidaOperativa` de los ítems
+  recalculados que cambiaron de fecha (desengancha de la vieja — nunca se borra, puede
+  seguir compartida por otra reserva — y reintenta `engancharSalidaOperativa()` con las
+  mismas reglas que al aceptar). **No toca `SalidaMayorista.cupo_ocupado`**: confirmado
+  leyendo el código antes de escribir la Fase 2 (no asumido del brief) que ese contador
+  es por RESERVA completa (`reserva.mayorista_elegida_id`, fijado una única vez al
+  aceptar/cancelar, atado a una salida de catálogo con fecha propia), nunca por
+  `reserva_item` — no existe ningún camino donde recalcular `reserva_items.fecha` deba
+  mover ese cupo. Columnas de auditoría simple en `reserva`
+  (`fecha_viaje_desde_original`/`fecha_viaje_hasta_original`/`fecha_reprogramacion`/
+  `motivo_reprogramacion`) — mismo trade-off que `fecha_cancelacion`/
+  `motivo_cancelacion`: solo la reprogramación más reciente queda visible, no un
+  historial completo. `reasignarDia()`/`moverBloque()`
+  (`AlternativaItemController.php`) ahora rechazan con 422 explícito si
+  `alternativa.estado === 'aceptada'` ("usa reprogramar sobre la reserva en vez de mover
+  ítems acá"). Frontend: botón "Reprogramar viaje" + modal en `reservas/detalle.vue`,
+  badge "Fecha manual" en los ítems con `fecha_origen='manual'`. Verificado con 8 tests
+  nuevos (`ReservaReprogramarTest`, `AlternativaItemBloqueaMoverSiAceptadaTest`) y
+  contra datos reales de `agencia-demo` (reserva #12: reprogramada de 2026-08-27 a
+  2026-11-01, ítems auto movidos, un ítem marcado manual a mano quedó intacto y listado,
+  guard de `reasignarDia()` confirmado con 422 real — datos revertidos a su estado
+  original después de verificar).
 - Antes de tocar lógica tributaria (IGV, exoneraciones, `resolverTipAfeIgv()`), revisar
   el flujo completo: producto → destino → tipo de operación, ya que estas reglas están
   interrelacionadas y un cambio aislado puede romper otro caso.

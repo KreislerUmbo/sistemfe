@@ -16,6 +16,12 @@ use Tests\TestCase;
 // solo cuando ambos datos existen (los dos son nullable en el modelo real).
 // Mismo patrón que GuiaComoItemRealTest: Postgres real
 // (sistemafe_test_migrations), transacción por test revertida.
+//
+// Fase 1 del fix Cotización↔Reserva (2026-08-18): agregados los tests de
+// reserva.fecha_viaje_desde/hasta (copiadas UNA SOLA VEZ al crear la
+// reserva) y el de regresión que prueba el bug de fondo que motivó esta
+// fase — editar la cotización DESPUÉS de aceptada ya no mueve nada de la
+// reserva ya creada.
 class ReservaFechaAutoCompletadaTest extends TestCase
 {
     protected function setUp(): void
@@ -40,7 +46,7 @@ class ReservaFechaAutoCompletadaTest extends TestCase
         parent::tearDown();
     }
 
-    private function crearAlternativa(?string $fechaViajeDesde): Alternativa
+    private function crearAlternativa(?string $fechaViajeDesde, ?string $fechaViajeHasta = null): Alternativa
     {
         $clienteId = DB::table('clients')->insertGetId([
             'type_document' => 'DNI', 'n_document' => '87654321', 'full_name' => 'Cliente Test Fecha',
@@ -48,7 +54,7 @@ class ReservaFechaAutoCompletadaTest extends TestCase
         ]);
         $cotizacionId = DB::table('cotizaciones')->insertGetId([
             'codigo_prefijo' => 'TEST', 'codigo' => 'TEST-2026-0099', 'cliente_id' => $clienteId,
-            'destino' => 'Tarapoto', 'fecha_viaje_desde' => $fechaViajeDesde,
+            'destino' => 'Tarapoto', 'fecha_viaje_desde' => $fechaViajeDesde, 'fecha_viaje_hasta' => $fechaViajeHasta,
             'created_at' => now(), 'updated_at' => now(),
         ]);
 
@@ -125,5 +131,49 @@ class ReservaFechaAutoCompletadaTest extends TestCase
 
         $reservaItem = ReservaItem::where('alternativa_item_id', $item->id)->first();
         $this->assertNull($reservaItem->hora);
+    }
+
+    public function test_reserva_copia_fecha_viaje_desde_y_hasta_de_la_cotizacion_al_crearse(): void
+    {
+        $alternativa = $this->crearAlternativa('2026-09-01', '2026-09-05');
+        $this->crearItem($alternativa, 'manual', 1);
+
+        [$reserva] = app(ReservaController::class)->crearReservaDesdeAlternativa($alternativa->fresh());
+
+        $this->assertSame('2026-09-01', $reserva->fresh()->fecha_viaje_desde->toDateString());
+        $this->assertSame('2026-09-05', $reserva->fresh()->fecha_viaje_hasta->toDateString());
+    }
+
+    public function test_reserva_item_nace_con_fecha_origen_auto(): void
+    {
+        $alternativa = $this->crearAlternativa('2026-09-01');
+        $item = $this->crearItem($alternativa, 'manual', 1);
+
+        app(ReservaController::class)->crearReservaDesdeAlternativa($alternativa->fresh());
+
+        $reservaItem = ReservaItem::where('alternativa_item_id', $item->id)->first();
+        $this->assertSame(ReservaItem::FECHA_ORIGEN_AUTO, $reservaItem->fecha_origen);
+    }
+
+    // Test de regresión — el caso concreto que motivó la Fase 1: editar la
+    // cotización DESPUÉS de que ya generó una reserva no debe mover nada de
+    // la reserva ya creada. Antes de este fix, reserva.fecha_viaje_desde ni
+    // siquiera existía — cualquier lectura de "la fecha de la reserva" caía
+    // en vivo sobre cotizacion.fecha_viaje_desde y quedaba contaminada por
+    // esta misma edición.
+    public function test_editar_cotizacion_despues_de_aceptada_no_mueve_la_fecha_de_la_reserva_ya_creada(): void
+    {
+        $alternativa = $this->crearAlternativa('2026-09-01');
+        $item = $this->crearItem($alternativa, 'manual', 1);
+
+        [$reserva] = app(ReservaController::class)->crearReservaDesdeAlternativa($alternativa->fresh());
+        $reservaItemOriginal = ReservaItem::where('alternativa_item_id', $item->id)->first();
+
+        // El bug de fondo: esto SIEMPRE fue posible, sin ningún guard (ver
+        // CotizacionController::update()) — a propósito, sigue siéndolo.
+        DB::table('cotizaciones')->where('id', $alternativa->cotizacion_id)->update(['fecha_viaje_desde' => '2026-12-25']);
+
+        $this->assertSame('2026-09-01', $reserva->fresh()->fecha_viaje_desde->toDateString());
+        $this->assertSame('2026-09-01', $reservaItemOriginal->fresh()->fecha->toDateString());
     }
 }

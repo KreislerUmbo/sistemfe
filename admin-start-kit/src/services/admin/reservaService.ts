@@ -30,5 +30,21 @@ export const reservaService = {
   async sincronizarItems(id: number) {
     const response = await httpClient.post(`/reservas/${id}/sincronizar-items`)
     return response.data as ReservaDetalleResponse & { code: number; message: string }
+  },
+  // Fase 2 del fix Cotización↔Reserva (2026-08-19) — mueve
+  // fecha_viaje_desde/hasta de la reserva y recalcula solo los
+  // reserva_items con fecha_origen='auto'; los 'manual' quedan intactos y
+  // vuelven en items_no_tocados.
+  async reprogramar(id: number, payload: { fecha_viaje_desde: string; fecha_viaje_hasta?: string | null; motivo: string }) {
+    const response = await httpClient.post(`/reservas/${id}/reprogramar`, payload)
+    return response.data as ReservaDetalleResponse & {
+      code: number
+      message: string
+      // motivo: 'manual' (fecha editada a mano antes de reprogramar) |
+      // 'sin_dia_referencial' (no hay insumo para recalcularla en
+      // automático) — guardia de visibilidad agregado 2026-08-20, antes
+      // este segundo caso quedaba invisible en la respuesta.
+      items_no_tocados: Array<{ reserva_item_id: number; nombre: string; fecha: string | null; motivo: 'manual' | 'sin_dia_referencial' }>
+    }
   }
 }

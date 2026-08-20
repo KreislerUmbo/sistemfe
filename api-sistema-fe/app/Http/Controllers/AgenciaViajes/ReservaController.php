@@ -21,6 +21,17 @@ use Illuminate\Support\Facades\Validator;
 // §4. aceptar() reemplaza el "TODO Sesión 11c" que dejó
 // AlternativaController::update() (Sesión 11b) — reusa
 // AlternativaController::descartarOtras() en vez de duplicar esa lógica.
+//
+// REGLA FIJA (Fase 1 del fix Cotización↔Reserva, 2026-08-18): la fecha de
+// una reserva se lee siempre de reserva.fecha_viaje_desde/hasta — NUNCA de
+// reserva.alternativa.cotizacion.fecha_viaje_desde/hasta. La relación
+// 'alternativa.cotizacion' de RELACIONES_DETALLE sigue cargada abajo (se
+// necesita para cliente/destino/código) y su fecha_viaje_desde/hasta SÍ
+// viaja en el JSON de show() como parte de esa relación completa — eso es
+// esperado, es la propuesta comercial vigente, no el compromiso operativo
+// de esta reserva. Quien necesite la fecha de la reserva usa el campo
+// directo de Reserva o el bloque 'cabecera' de respuestaDetalle(), nunca
+// ese camino anidado. Ver docblock de Reserva::class.
 class ReservaController extends Controller
 {
     private const RELACIONES_DETALLE = [
@@ -177,11 +188,17 @@ class ReservaController extends Controller
     {
         $opcionElegida = $alternativa->opcionMayoristaElegida;
 
+        // Fase 1 del fix Cotización↔Reserva (2026-08-18): fecha_viaje_desde/
+        // hasta se copian de la cotización UNA SOLA VEZ, acá — de ahí en
+        // adelante esta reserva ya no depende de que nadie vuelva a editar
+        // (o no) la cotización. Ver docblock de Reserva::class.
         $reserva = Reserva::create([
             'alternativa_id' => $alternativa->id,
             'mayorista_elegida_id' => $opcionElegida?->id,
             'estado_reserva_mayorista' => $opcionElegida ? 'pendiente' : null,
             'estado' => 'activa',
+            'fecha_viaje_desde' => $alternativa->cotizacion->fecha_viaje_desde,
+            'fecha_viaje_hasta' => $alternativa->cotizacion->fecha_viaje_hasta,
         ]);
 
         $cotizacionPasajeros = CotizacionPasajero::where('cotizacion_id', $alternativa->cotizacion_id)
@@ -205,7 +222,9 @@ class ReservaController extends Controller
 
         $alternativaItems = AlternativaItem::where('alternativa_id', $alternativa->id)->get();
 
-        $fechaViajeDesde = $alternativa->cotizacion->fecha_viaje_desde;
+        // Base del cálculo = la propia reserva recién creada (ya congelada),
+        // NUNCA la cotización en vivo — ver comentario arriba.
+        $fechaViajeDesde = $reserva->fecha_viaje_desde;
 
         foreach ($alternativaItems as $alternativaItem) {
             $this->crearReservaItemDesdeAlternativaItem($reserva, $alternativaItem, $fechaViajeDesde, $mapaPasajeros);
@@ -245,6 +264,12 @@ class ReservaController extends Controller
             'alternativa_item_id' => $alternativaItem->id,
             'proveedor_tarifa_id' => $alternativaItem->proveedor_tarifa_id,
             'fecha' => $fechaCalculada,
+            // Fase 1 del fix Cotización↔Reserva — este método es el único
+            // punto de creación de reserva_items (aceptar y sincronizar),
+            // así que todo lo que nace acá es 'auto' por definición. Un
+            // ítem solo pasa a 'manual' después, vía
+            // ReservaItemController::update().
+            'fecha_origen' => ReservaItem::FECHA_ORIGEN_AUTO,
             // Sesión 11b4: propaga de qué tour vino el ítem (si vino de
             // explotar un paquete_combo) para que la agrupación visual
             // "Día 1/Día 2" sobreviva también en la reserva.
@@ -345,7 +370,7 @@ class ReservaController extends Controller
     // agregados a la cotización DESPUÉS de que la reserva ya estaba activa.
     public function sincronizarItems(string $id)
     {
-        $reserva = Reserva::with('alternativa.cotizacion')->findOrFail($id);
+        $reserva = Reserva::findOrFail($id);
 
         if ($reserva->estado !== 'activa') {
             return response()->json(['code' => 422, 'message' => 'Solo se puede sincronizar una reserva activa.'], 422);
@@ -361,7 +386,15 @@ class ReservaController extends Controller
             return response()->json(['code' => 422, 'message' => 'No hay ítems pendientes de sincronizar.'], 422);
         }
 
-        $fechaViajeDesde = $reserva->alternativa->cotizacion->fecha_viaje_desde;
+        // Fase 1 del fix Cotización↔Reserva: base propia de la reserva, NO
+        // la cotización en vivo — así los ítems que se sincronizan ahora
+        // calculan contra la misma fecha base que los ítems que ya existían
+        // desde que se aceptó la alternativa, sin importar si la cotización
+        // cambió de fecha en el medio. Sigue significando exactamente lo
+        // mismo que antes ("incorporar a la reserva los ítems nuevos de la
+        // alternativa"), nunca "recalcular toda la reserva" — los
+        // reserva_items que ya existían no se tocan acá.
+        $fechaViajeDesde = $reserva->fecha_viaje_desde;
         $mapaPasajeros = $this->reconstruirMapaPasajeros($reserva);
 
         DB::transaction(function () use ($itemsPendientes, $reserva, $fechaViajeDesde, $mapaPasajeros) {
@@ -379,6 +412,134 @@ class ReservaController extends Controller
         ));
     }
 
+    // POST reservas/{id}/reprogramar — Fase 2 del fix Cotización↔Reserva
+    // (2026-08-19). Evento de negocio explícito, distinto de una simple
+    // corrección de campo: mueve fecha_viaje_desde/hasta de una reserva YA
+    // aceptada y recalcula reserva_items.fecha SOLO para los ítems
+    // fecha_origen='auto' (ver ReservaItem::FECHA_ORIGEN_*), preservando
+    // intactos los editados a mano. Nunca toca cotizacion.fecha_viaje_desde/
+    // hasta — la cotización sigue siendo el registro de la propuesta
+    // original/vigente, sin propagación automática (fuera de alcance,
+    // decisión explícita del brief).
+    public function reprogramar(Request $request, string $id)
+    {
+        $reserva = Reserva::findOrFail($id);
+
+        if ($reserva->estado !== 'activa') {
+            return response()->json(['code' => 422, 'message' => 'Solo se puede reprogramar una reserva activa.'], 422);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'fecha_viaje_desde' => 'required|date',
+            'fecha_viaje_hasta' => 'nullable|date|after_or_equal:fecha_viaje_desde',
+            'motivo' => 'required|string|max:500',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
+        }
+
+        $validado = $validator->validated();
+
+        $itemsNoTocados = DB::transaction(function () use ($reserva, $validado) {
+            // Conserva el estado ANTERIOR a esta reprogramación (auditoría
+            // simple, no historial completo — mismo trade-off ya aceptado
+            // por fecha_cancelacion/motivo_cancelacion, ver docblock de
+            // Reserva::class). Si ya hubo una reprogramación previa, esto
+            // pisa el "_original" con la fecha tal como quedó tras la
+            // última, no la fecha real de creación.
+            $reserva->update([
+                'fecha_viaje_desde_original' => $reserva->fecha_viaje_desde,
+                'fecha_viaje_hasta_original' => $reserva->fecha_viaje_hasta,
+                'fecha_viaje_desde' => $validado['fecha_viaje_desde'],
+                'fecha_viaje_hasta' => $validado['fecha_viaje_hasta'] ?? null,
+                'fecha_reprogramacion' => now(),
+                'motivo_reprogramacion' => $validado['motivo'],
+            ]);
+            $reserva->refresh();
+
+            $itemsNoTocados = [];
+
+            $items = ReservaItem::with('alternativaItem')->where('reserva_id', $reserva->id)->get();
+
+            foreach ($items as $item) {
+                if ($item->fecha_origen === ReservaItem::FECHA_ORIGEN_MANUAL) {
+                    $itemsNoTocados[] = [
+                        'reserva_item_id' => $item->id,
+                        'nombre' => self::resolverNombreItem($item->alternativaItem),
+                        'fecha' => $item->fecha?->toDateString(),
+                        'motivo' => 'manual',
+                    ];
+                    continue;
+                }
+
+                $diaReferencial = $item->alternativaItem?->dia_referencial;
+                if ($diaReferencial === null) {
+                    // Mismo criterio que crearReservaItemDesdeAlternativaItem():
+                    // sin dia_referencial no hay insumo para recalcular. No
+                    // es 'manual', pero tampoco hay nada que mover.
+                    //
+                    // 2026-08-20: antes se saltaba en silencio (sin listar
+                    // en items_no_tocados) — riesgo real de que el ítem
+                    // quedara con la fecha VIEJA después de "reprogramar
+                    // correctamente" sin ninguna señal en la respuesta.
+                    // Ahora se lista igual que los 'manual', con motivo
+                    // propio, para que el vendedor sepa que este servicio
+                    // necesita revisión manual de fecha.
+                    $itemsNoTocados[] = [
+                        'reserva_item_id' => $item->id,
+                        'nombre' => self::resolverNombreItem($item->alternativaItem),
+                        'fecha' => $item->fecha?->toDateString(),
+                        'motivo' => 'sin_dia_referencial',
+                    ];
+                    continue;
+                }
+
+                $fechaNueva = $reserva->fecha_viaje_desde->copy()->addDays($diaReferencial - 1);
+
+                if ($item->fecha && $item->fecha->toDateString() === $fechaNueva->toDateString()) {
+                    continue; // sin cambio real, no reenganchar nada de más
+                }
+
+                $item->update(['fecha' => $fechaNueva]);
+
+                // Re-enganche a SalidaOperativa: agrupa por
+                // (tour_origen_id, fecha) — un ítem que cambió de fecha ya
+                // no pertenece a la salida vieja. Se desengancha primero
+                // (la SalidaOperativa vieja NUNCA se borra acá, puede
+                // seguir compartida por otras reservas) y
+                // engancharSalidaOperativa() decide si corresponde una
+                // nueva (o crearla), mismas reglas que al aceptar.
+                //
+                // NO se toca SalidaMayorista.cupo_ocupado acá — confirmado
+                // leyendo crearReservaDesdeAlternativa()/cancelar() antes
+                // de escribir esto (no asumido del brief): ese contador es
+                // por RESERVA completa (reserva.mayorista_elegida_id,
+                // fijado una única vez al aceptar/cancelar, atado a una
+                // salida de catálogo con fecha propia), nunca por
+                // reserva_item — no existe ningún camino donde recalcular
+                // reserva_items.fecha deba mover ese cupo.
+                if ($item->salida_operativa_id) {
+                    $item->update(['salida_operativa_id' => null]);
+                }
+                $this->engancharSalidaOperativa($item, $item->alternativaItem, $fechaNueva);
+            }
+
+            return $itemsNoTocados;
+        });
+
+        $reserva->load(self::RELACIONES_DETALLE);
+
+        return response()->json(array_merge(
+            [
+                'code' => 200,
+                'message' => 'Reserva reprogramada correctamente',
+                'items_no_tocados' => $itemsNoTocados,
+            ],
+            $this->respuestaDetalle($reserva)
+        ));
+    }
+
     // "resumen" para el panel de precio en vivo (§7.1 del prototipo) — el
     // frontend no recalcula nada, solo pinta nombre + total_convertido +
     // el TOTAL ya cerrado.
@@ -387,7 +548,13 @@ class ReservaController extends Controller
         $resumen = $reserva->items->map(function (ReservaItem $item) {
             return [
                 'reserva_item_id' => $item->id,
-                'nombre' => $this->resolverNombreItem($item->alternativaItem),
+                'nombre' => self::resolverNombreItem($item->alternativaItem),
+                // Sesión facturación-de-reservas, punto 2 del review de
+                // proceso: sin esto, dos ítems del mismo servicio en días
+                // distintos (ej. "Entrada / Ticket de ingreso" el día 1 y
+                // el día 2) se veían como filas idénticas en el panel de
+                // resumen, sin ninguna forma de distinguirlas.
+                'fecha' => $item->fecha?->toDateString(),
                 'precio_venta_snapshot' => $item->alternativaItem->precio_venta_snapshot,
                 'total_convertido' => $item->alternativaItem->total_convertido,
             ];
@@ -401,7 +568,16 @@ class ReservaController extends Controller
         $itemsPendientesSincronizar = AlternativaItem::where('alternativa_id', $reserva->alternativa_id)
             ->whereNotIn('id', $alternativaItemIdsEnReserva)
             ->get()
-            ->map(fn (AlternativaItem $i) => ['id' => $i->id, 'nombre' => $this->resolverNombreItem($i)])
+            ->map(fn (AlternativaItem $i) => ['id' => $i->id, 'nombre' => self::resolverNombreItem($i)])
+            ->values();
+
+        // Fase A — facturación de reservas: qué reserva_items ya están
+        // cubiertos por alguna ReservaVenta, para que el frontend no
+        // vuelva a ofrecerlos al facturar (el backend igual lo bloquea con
+        // 422, esto es solo para que la UI no invite a un error evitable).
+        $itemsFacturadosIds = $reserva->ventas
+            ->flatMap(fn (ReservaVenta $rv) => $rv->reserva_item_ids ?? [])
+            ->unique()
             ->values();
 
         return [
@@ -410,11 +586,18 @@ class ReservaController extends Controller
             'total' => round($total, 2),
             'moneda' => $reserva->alternativa->moneda_cotizacion,
             'items_pendientes_sincronizar' => $itemsPendientesSincronizar,
+            'items_facturados_ids' => $itemsFacturadosIds,
             'cabecera' => [
                 'cliente' => $cotizacion->cliente,
                 'destino' => $cotizacion->destino,
-                'fecha_viaje_desde' => $cotizacion->fecha_viaje_desde,
-                'fecha_viaje_hasta' => $cotizacion->fecha_viaje_hasta,
+                // Fase 1 del fix Cotización↔Reserva: la fecha de la
+                // cabecera de una reserva es la de la RESERVA (congelada al
+                // aceptar), no la de la cotización en vivo — ver docblock
+                // de Reserva::class. cliente/destino/codigo SÍ siguen
+                // siendo de la cotización, eso no cambió (son puramente
+                // informativos, sin ningún cálculo operativo detrás).
+                'fecha_viaje_desde' => $reserva->fecha_viaje_desde,
+                'fecha_viaje_hasta' => $reserva->fecha_viaje_hasta,
                 'codigo_cotizacion' => $cotizacion->codigo,
             ],
         ];
@@ -423,7 +606,10 @@ class ReservaController extends Controller
     // Mismo criterio que etiquetaItem() en cotizador/editar.vue (Sesión
     // 11b) — replicado acá para que el resumen de la reserva no dependa de
     // que el frontend recalcule con la cadena completa de relaciones.
-    private function resolverNombreItem(AlternativaItem $item): string
+    // public static (no private): reusado también por
+    // ReservaFacturacionController para armar descripcion_detalle de cada
+    // línea de venta agrupada.
+    public static function resolverNombreItem(AlternativaItem $item): string
     {
         if ($item->origen_tipo === AlternativaItem::ORIGEN_MANUAL) {
             return $item->descripcion_manual ?? 'Ítem manual';

@@ -14,6 +14,16 @@ use Illuminate\Database\Eloquent\Model;
 // 2026_07_30_100000_retrofit_reserva_para_sesion_11c.php) — "quién opera"
 // se confirma cerca de la fecha, reasignable en cualquier momento, igual
 // que guia_id.
+//
+// fecha_origen ('auto'|'manual', Fase 1 del fix Cotización↔Reserva,
+// 2026-08-18): 'auto' = fecha calculada por la fórmula
+// (reserva.fecha_viaje_desde + dia_referencial - 1, ver
+// ReservaController::crearReservaItemDesdeAlternativaItem()); 'manual' =
+// un operador la editó a mano (ReservaItemController::update()). Ningún
+// recálculo automático futuro (Fase 2, reprogramación) debe tocar un
+// ítem 'manual' sin decisión explícita — es la única forma de distinguir
+// después "esto se puede recalcular sin miedo" de "esto lo corrigió
+// alguien a propósito".
 class ReservaItem extends Model
 {
     protected $table = 'reserva_items';
@@ -22,6 +32,7 @@ class ReservaItem extends Model
         'reserva_id',
         'alternativa_item_id',
         'fecha',
+        'fecha_origen',
         'hora',
         'guia_id',
         'proveedor_tarifa_id',
@@ -32,6 +43,9 @@ class ReservaItem extends Model
     protected $casts = [
         'fecha' => 'date',
     ];
+
+    public const FECHA_ORIGEN_AUTO = 'auto';
+    public const FECHA_ORIGEN_MANUAL = 'manual';
 
     public function reserva()
     {

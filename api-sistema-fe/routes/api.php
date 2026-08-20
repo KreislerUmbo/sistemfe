@@ -21,6 +21,7 @@ use App\Http\Controllers\AgenciaViajes\ProveedorServicioController;
 use App\Http\Controllers\AgenciaViajes\ProveedorTarifaController;
 use App\Http\Controllers\AgenciaViajes\ProveedorTipoConfigController;
 use App\Http\Controllers\AgenciaViajes\ReservaController;
+use App\Http\Controllers\AgenciaViajes\ReservaFacturacionController;
 use App\Http\Controllers\AgenciaViajes\ReservaItemController;
 use App\Http\Controllers\AgenciaViajes\ReservaItemPasajeroController;
 use App\Http\Controllers\AgenciaViajes\ReservaPasajeroController;
@@ -618,6 +619,18 @@ Route::group([
         ->middleware('permission:agencia.reservas');
     Route::post("reservas/{id}/sincronizar-items", [ReservaController::class, 'sincronizarItems'])
         ->middleware('permission:agencia.reservas');
+    // Fase 2 del fix Cotización↔Reserva (2026-08-19).
+    Route::post("reservas/{id}/reprogramar", [ReservaController::class, 'reprogramar'])
+        ->middleware('permission:agencia.reservas');
+    // Fase A del plan "Proceso de reserva: facturación + 3 fixes" (2026-08-19).
+    // Guardia tributario (2026-08-20, complemento a 11u): preparar-factura
+    // ANTES de facturar, para que el frontend pueda avisar antes de que el
+    // usuario llene el modal — el guardia real (bloqueo) vive igual en
+    // POST facturar, server-side, sin confiar en este preview.
+    Route::get("reservas/{id}/preparar-factura", [ReservaFacturacionController::class, 'prepararFactura'])
+        ->middleware('permission:agencia.reservas');
+    Route::post("reservas/{id}/facturar", [ReservaFacturacionController::class, 'store'])
+        ->middleware('permission:agencia.reservas');
 
     // Antes de "reserva-pasajeros/{id}" para que "pasajeros-catalogo" no
     // colisione con ningún segmento dinámico (mismo criterio ya usado con
@@ -626,8 +639,13 @@ Route::group([
         ->middleware('permission:agencia.reservas');
     Route::put("reserva-pasajeros/{id}", [ReservaPasajeroController::class, 'update'])
         ->middleware('permission:agencia.reservas');
+    // Fase D del plan "Proceso de reserva: facturación + 3 fixes" (2026-08-19).
+    Route::delete("reserva-pasajeros/{id}", [ReservaPasajeroController::class, 'destroy'])
+        ->middleware('permission:agencia.reservas');
 
     Route::put("reserva-items/{id}", [ReservaItemController::class, 'update'])
+        ->middleware('permission:agencia.reservas');
+    Route::delete("reserva-items/{id}", [ReservaItemController::class, 'destroy'])
         ->middleware('permission:agencia.reservas');
 
     Route::get("reserva-items/{id}/pasajeros", [ReservaItemPasajeroController::class, 'index'])

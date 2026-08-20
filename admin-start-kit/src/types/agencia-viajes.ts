@@ -719,6 +719,9 @@ export type Reserva = {
 export type ReservaResumenItem = {
   reserva_item_id: number;
   nombre: string;
+  // Fecha del servicio (día del itinerario) — sin esto, dos ítems del
+  // mismo servicio en días distintos se ven como filas idénticas.
+  fecha?: string | null;
   precio_venta_snapshot: number;
   total_convertido: number;
 };
@@ -745,6 +748,9 @@ export type ReservaDetalleResponse = {
   cabecera: ReservaCabecera;
   alerta_cupo_excedido?: boolean;
   items_pendientes_sincronizar?: Array<{ id: number; nombre: string }>;
+  // Fase A — facturación de reservas: reserva_item_ids ya cubiertos por
+  // alguna venta, para no volver a ofrecerlos al facturar.
+  items_facturados_ids?: number[];
 };
 
 export type Reservas = {
