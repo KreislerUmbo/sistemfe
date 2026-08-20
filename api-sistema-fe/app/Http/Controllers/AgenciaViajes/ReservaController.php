@@ -16,6 +16,7 @@ use App\Models\AgenciaViajes\SalidaOperativa;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 
 // De alternativa aceptada a Reserva — plan-modulo-cotizaciones-reservas.md
 // §4. aceptar() reemplaza el "TODO Sesión 11c" que dejó
@@ -550,6 +551,10 @@ class ReservaController extends Controller
     {
         $reserva = Reserva::findOrFail($id);
 
+        if ($reserva->estado !== 'activa') {
+            return response()->json(['code' => 422, 'message' => 'Solo se puede editar facturación externa de una reserva activa.'], 422);
+        }
+
         if ($reserva->ventas()->exists()) {
             return response()->json([
                 'code' => 422,
@@ -570,15 +575,31 @@ class ReservaController extends Controller
         $validado = $validator->validated();
         $facturacionExterna = $validado['facturacion_externa'];
 
-        // Al desmarcar, se limpian referencia/fecha también — es anotación
-        // de estado actual, no un historial; "se equivocó, cambió de
-        // opinión" debe dejar la reserva en un estado limpio, no con datos
-        // viejos colgando.
-        $reserva->update([
-            'facturacion_externa' => $facturacionExterna,
-            'referencia_externa' => $facturacionExterna ? ($validado['referencia_externa'] ?? null) : null,
-            'fecha_facturacion_externa' => $facturacionExterna ? ($validado['fecha_facturacion_externa'] ?? null) : null,
-        ]);
+        // Transacción + lock: cierra la ventana de carrera con
+        // ReservaFacturacionController::store() sobre la misma reserva — el
+        // check de "sin venta asociada" de arriba corrió antes del lock, así
+        // que sin esto un POST facturar concurrente podría colarse entre ese
+        // check y este update.
+        DB::transaction(function () use ($reserva, $facturacionExterna, $validado) {
+            $reservaLocked = Reserva::where('id', $reserva->id)->lockForUpdate()->firstOrFail();
+
+            if ($reservaLocked->ventas()->exists()) {
+                throw new HttpException(
+                    422,
+                    'No se puede editar facturación externa: esta reserva ya tiene una venta/comprobante asociado en la plataforma.'
+                );
+            }
+
+            // Al desmarcar, se limpian referencia/fecha también — es
+            // anotación de estado actual, no un historial; "se equivocó,
+            // cambió de opinión" debe dejar la reserva en un estado limpio,
+            // no con datos viejos colgando.
+            $reservaLocked->update([
+                'facturacion_externa' => $facturacionExterna,
+                'referencia_externa' => $facturacionExterna ? ($validado['referencia_externa'] ?? null) : null,
+                'fecha_facturacion_externa' => $facturacionExterna ? ($validado['fecha_facturacion_externa'] ?? null) : null,
+            ]);
+        });
 
         return response()->json(['code' => 200, 'message' => 'Actualizado correctamente', 'reserva' => $reserva->fresh()]);
     }

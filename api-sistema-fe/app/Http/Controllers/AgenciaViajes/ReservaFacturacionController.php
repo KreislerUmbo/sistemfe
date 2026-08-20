@@ -107,6 +107,15 @@ class ReservaFacturacionController extends Controller
         . 'electrónica en la plataforma (modelo "solo operativo"). Contactá a soporte/tu superadmin si '
         . 'necesitás activarla.';
 
+    // reserva.facturacion_externa (§3.2) es el override por-reserva: si está
+    // marcada, esta reserva ya se facturó fuera de la plataforma y no debe
+    // poder generar un comprobante interno real por encima — mismo criterio
+    // de "el backend nunca confía en que el frontend ocultó el botón" que ya
+    // aplica al flag del tenant arriba.
+    private const MENSAJE_FACTURACION_EXTERNA = 'Esta reserva está marcada como facturada externamente '
+        . '(fuera de la plataforma). Si fue un error, desmárcala primero desde el detalle de la reserva '
+        . 'antes de facturar acá.';
+
     public function __construct(private SerieComprobanteService $serieComprobanteService)
     {
     }
@@ -126,6 +135,10 @@ class ReservaFacturacionController extends Controller
 
         if (! tenant('facturacion_habilitada')) {
             throw new HttpException(403, self::MENSAJE_FACTURACION_NO_HABILITADA);
+        }
+
+        if ($reserva->facturacion_externa) {
+            throw new HttpException(403, self::MENSAJE_FACTURACION_EXTERNA);
         }
 
         $validator = Validator::make($request->all(), [
@@ -196,6 +209,10 @@ class ReservaFacturacionController extends Controller
 
         if (! tenant('facturacion_habilitada')) {
             throw new HttpException(403, self::MENSAJE_FACTURACION_NO_HABILITADA);
+        }
+
+        if ($reserva->facturacion_externa) {
+            throw new HttpException(403, self::MENSAJE_FACTURACION_EXTERNA);
         }
 
         $validator = Validator::make($request->all(), [
@@ -278,6 +295,17 @@ class ReservaFacturacionController extends Controller
                 $textoPersonalizado,
                 $pasajeroIdsSolicitados
             ) {
+                // Re-chequeo bajo lock: cierra la ventana de carrera con
+                // ReservaController::actualizarFacturacionExterna() sobre la
+                // misma reserva — el check de arriba corrió antes de abrir
+                // la transacción, así que sin esto un PUT
+                // facturacion-externa concurrente podría colarse entre ese
+                // check y la creación real del Sale.
+                $reservaLocked = Reserva::where('id', $reserva->id)->lockForUpdate()->firstOrFail();
+                if ($reservaLocked->facturacion_externa) {
+                    throw new HttpException(403, self::MENSAJE_FACTURACION_EXTERNA);
+                }
+
                 [$lineas, $subtotalTotal, $igvTotal] = $this->construirLineas($gruposPorCategoria, $productosPlaceholder, $textoPersonalizado);
                 $total = round($subtotalTotal + $igvTotal, 2);
 

@@ -749,6 +749,53 @@ class ReservaFacturacionTest extends TestCase
         $this->assertSame(0, Sale::count());
     }
 
+    // Guard agregado tras code-review del 2026-08-20: store()/prepararFactura()
+    // validaban tenants.facturacion_habilitada pero no reserva.facturacion_externa
+    // — una reserva marcada como ya facturada afuera podía facturarse de nuevo
+    // adentro con un POST directo, generando un comprobante SUNAT duplicado.
+    public function test_store_lanza_403_si_reserva_tiene_facturacion_externa(): void
+    {
+        [$branch, ] = $this->branchConSerie('01', 'F001');
+        $this->usuarioConPermisos($branch->id, ['emitir_factura']);
+        $this->setUpTenantFixture(true);
+
+        $f = $this->crearReservaConPasajerosEItems();
+        $f['reserva']->update(['facturacion_externa' => true]);
+        $cliente = Client::factory()->create();
+
+        try {
+            app(ReservaFacturacionController::class)->store(new Request([
+                'pasajero_ids' => [$f['p3']->id],
+                'client_id' => $cliente->id,
+                'tipo_comprobante_codigo' => '01',
+            ]), (string) $f['reserva']->id);
+            $this->fail('Se esperaba HttpException 403, no se lanzó ninguna.');
+        } catch (HttpException $e) {
+            $this->assertSame(403, $e->getStatusCode());
+        }
+
+        $this->assertSame(0, Sale::count());
+    }
+
+    public function test_preparar_factura_lanza_403_si_reserva_tiene_facturacion_externa(): void
+    {
+        [$branch, ] = $this->branchConSerie('01', 'F001');
+        $this->usuarioConPermisos($branch->id, ['emitir_factura']);
+        $this->setUpTenantFixture(true);
+
+        $f = $this->crearReservaConPasajerosEItems();
+        $f['reserva']->update(['facturacion_externa' => true]);
+
+        try {
+            app(ReservaFacturacionController::class)->prepararFactura(new Request([
+                'pasajero_ids' => [$f['p3']->id],
+            ]), (string) $f['reserva']->id);
+            $this->fail('Se esperaba HttpException 403, no se lanzó ninguna.');
+        } catch (HttpException $e) {
+            $this->assertSame(403, $e->getStatusCode());
+        }
+    }
+
     private function crearReservaConMezclaTributaria(): array
     {
         $clienteId = DB::table('clients')->insertGetId([

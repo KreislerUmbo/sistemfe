@@ -169,6 +169,23 @@ class ReservaFacturacionExternaTest extends TestCase
         $this->assertTrue($reserva->refresh()->facturacion_externa);
     }
 
+    // Guard agregado tras code-review del 2026-08-20: solo el check de "sin
+    // venta asociada" estaba, no el de estado — a diferencia de reprogramar()
+    // y el resto de endpoints que mutan una reserva, una cancelada podía
+    // seguir editando su override de facturación externa.
+    public function test_rechaza_con_422_si_reserva_no_esta_activa(): void
+    {
+        $reserva = $this->crearReserva();
+        $reserva->update(['estado' => 'cancelada']);
+
+        $response = app(ReservaController::class)->actualizarFacturacionExterna(new Request([
+            'facturacion_externa' => true,
+        ]), (string) $reserva->id);
+
+        $this->assertSame(422, $response->getStatusCode());
+        $this->assertFalse((bool) $reserva->refresh()->facturacion_externa);
+    }
+
     // Confirma la independencia explícita del brief §3.2: el override por
     // reserva funciona igual sin importar el flag del tenant.
     public function test_funciona_igual_sin_importar_facturacion_habilitada_del_tenant(): void
