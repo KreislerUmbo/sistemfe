@@ -24,6 +24,15 @@ cd "$BACKEND"
 echo ">> [1/10] Modo mantenimiento ON"
 php artisan down --retry=15 || true
 
+# Salvaguarda: si cualquier paso de acá en adelante falla (set -euo pipefail
+# corta el script ahí mismo — composer sin red, git pull con conflicto,
+# migración rota, etc.), el paso [10/10] normal de "artisan up" nunca se
+# alcanza y el sitio queda colgado en mantenimiento hasta que alguien lo
+# note y lo saque a mano. Este trap corre "artisan up" pase lo que pase al
+# salir del script (éxito o error) — correrlo dos veces (acá + el paso
+# normal de más abajo) es inofensivo, artisan up es idempotente.
+trap 'cd "$BACKEND" && php artisan up 2>/dev/null || true' EXIT
+
 cd "$APP_ROOT"
 echo ">> [2/10] git pull ($BRANCH)"
 git fetch origin
