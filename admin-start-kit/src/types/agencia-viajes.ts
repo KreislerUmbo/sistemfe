@@ -751,6 +751,10 @@ export type ReservaDetalleResponse = {
   // Fase A — facturación de reservas: reserva_item_ids ya cubiertos por
   // alguna venta, para no volver a ofrecerlos al facturar.
   items_facturados_ids?: number[];
+  // Facturación múltiple por grupo de pasajeros (2026-08-20): pasajero_ids
+  // ya cubiertos por ALGUNA ReservaVenta — usado para el badge
+  // "Facturación completa" vs. "Falta facturar a N pasajeros".
+  pasajeros_facturados_ids?: number[];
 };
 
 export type Reservas = {

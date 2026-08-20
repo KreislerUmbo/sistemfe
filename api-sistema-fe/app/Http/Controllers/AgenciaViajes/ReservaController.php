@@ -580,6 +580,16 @@ class ReservaController extends Controller
             ->unique()
             ->values();
 
+        // Facturación múltiple por grupo de pasajeros (2026-08-20): cada
+        // pasajero queda "facturado" en cuanto aparece en el
+        // reserva_pasajero_ids de ALGUNA ReservaVenta — usado por el
+        // frontend para el badge "Facturación completa" vs. "Falta
+        // facturar a N pasajeros" sin tener que abrir el modal.
+        $pasajerosFacturadosIds = $reserva->ventas
+            ->flatMap(fn (ReservaVenta $rv) => $rv->reserva_pasajero_ids ?? [])
+            ->unique()
+            ->values();
+
         return [
             'reserva' => $reserva,
             'resumen' => $resumen,
@@ -587,6 +597,7 @@ class ReservaController extends Controller
             'moneda' => $reserva->alternativa->moneda_cotizacion,
             'items_pendientes_sincronizar' => $itemsPendientesSincronizar,
             'items_facturados_ids' => $itemsFacturadosIds,
+            'pasajeros_facturados_ids' => $pasajerosFacturadosIds,
             'cabecera' => [
                 'cliente' => $cotizacion->cliente,
                 'destino' => $cotizacion->destino,

@@ -1385,6 +1385,139 @@ que podían dar problemas en producción.
   revisión pero no corregidos, quedan para una sesión futura dedicada a
   `ReservaItemController`/`ReservaPasajeroController`.
 
+**Completo — Facturación múltiple por grupo de pasajeros / varios
+pagadores (2026-08-20, mismo día que el guardia tributario, sin
+commitear todavía):** la Fase A original asumía un solo responsable de
+pago por reserva completa — un único `Sale`, `client_id` fijo a
+`cotizacion.cliente_id`, guard de "reserva ya facturada" a nivel de
+RESERVA completa. Gap real y frecuente en grupos: de 20 pasajeros, unos
+piden boleta a su nombre, otros factura a su empresa, otros a una
+empresa distinta, cada uno con su propio texto de sustentación — antes
+de esta sesión, facturar al primer pasajero bloqueaba facturar al resto.
+- **`ReservaFacturacionController` ahora soporta N `reserva_ventas`/
+  `Sale` por reserva**, cada uno cubriendo un subconjunto de
+  `pasajero_ids` elegido por el vendedor, con su propio `client_id`
+  (ahora **obligatorio**, sin default) y `texto_personalizado` opcional
+  que reemplaza el `descripcion_detalle` autogenerado en todas las líneas
+  de ese Sale. Guard de doble-facturación pasado a granularidad de
+  pasajero (un pasajero ya cubierto por alguna `reserva_venta` no puede
+  volver a seleccionarse) e ítem (mismo criterio que antes, ahora por
+  subconjunto).
+- **Hallazgo crítico durante la investigación previa a programar**
+  (exigida explícitamente por el brief, no asumida): el mecanismo de
+  selección propuesto originalmente — derivar automáticamente qué
+  `reserva_item_ids` le tocan a los pasajeros seleccionados vía la tabla
+  puente `reserva_item_pasajero` — resultó inviable con datos reales.
+  Confirmado contra `agencia-demo`: esa tabla tiene **0 filas en el 100%
+  de los ítems** de la reserva usada para probar el guardia tributario
+  (8/8) y solo 26 de 37 en todo el tenant — la pestaña "Asignación
+  pasajero↔ítem" casi no se usa en la práctica. Seguir el diseño literal
+  habría dejado la función inutilizable para la mayoría de reservas
+  reales de hoy.
+  - **Decisión de diseño tomada con el usuario** (`AskUserQuestion`,
+    3 opciones) antes de escribir código: selección **explícita** de
+    ítems sin asignar. Un ítem CON pasajeros vinculados se auto-incluye
+    en un Sale solo si TODOS sus vinculados están dentro de la selección
+    actual (nunca se fragmenta un ítem compartido — ej. habitación doble
+    — entre dos Sales distintos; si falta alguno, queda informado en
+    `items_pendientes_por_pasajero_faltante`). Un ítem SIN ningún
+    pasajero vinculado (el caso más común hoy) se ofrece aparte
+    (`items_sin_asignar_disponibles`) y el vendedor lo agrega a mano vía
+    `reserva_item_ids_manual` si corresponde a ese Sale.
+  - **Límite conocido, documentado, no resuelto** (confirmado por
+    investigación de código antes de programar, no asumido): el reparto
+    de un ítem `tarifa_fija` compartido (ej. habitación doble) entre
+    pasajeros que terminan en Sales **distintos** no tiene ningún
+    mecanismo en el proyecto — ni por tipo de pasajero ni por individuo.
+    Si eso pasa, el ítem queda permanentemente sin poder facturarse por
+    este flujo hasta resolución manual (reasignar en la pestaña de
+    asignación, o facturarlo como ítem sin asignar a criterio del
+    vendedor). Fuera de alcance confirmado con el usuario, no improvisado.
+- **Bug real encontrado y corregido probando en vivo contra
+  `agencia-demo`** (no en tests): `GET preparar-factura` devolvía 422
+  ("no hay ítems para esta selección") apenas se abría el modal, para
+  cualquier reserva sin ítems auto-vinculados — es decir, para casi
+  cualquier reserva real. Corregido: el guard de "selección vacía" es
+  ahora exclusivo de `store()` (ahí sí no tiene sentido crear un Sale sin
+  líneas); el preview siempre devuelve 200, con 0 líneas si corresponde,
+  para que el vendedor pueda elegir del pool sin asignar sin ver un error
+  apenas abre el modal.
+- **Frontend** (`reservas/detalle.vue`): modal rediseñado — checkboxes de
+  pasajeros pendientes de facturar (ya no ítems sueltos), pool de ítems
+  sin asignar seleccionable a mano, aviso de ítems compartidos pendientes
+  por pasajero faltante, buscador de cliente (mismo endpoint
+  `clients?search=` que usa el formulario de Ventas, simplificado — solo
+  busca y elige, no crea cliente nuevo), campo de texto personalizado,
+  total en vivo. **Flujo iterativo**: tras facturar un sub-grupo, si
+  quedan pasajeros pendientes el modal se resetea y sigue abierto listo
+  para la siguiente pasada, sin cerrar/reabrir; si no queda ninguno, se
+  cierra solo. Badge "Facturación completa"/"Falta facturar a N
+  pasajero(s)" en el header, calculado desde `pasajeros_facturados_ids`
+  nuevo en `respuestaDetalle()`.
+- **Verificación**: 13 tests nuevos en `ReservaFacturacionTest` (174
+  tests backend en verde en total, cero regresiones) — incluye el caso de
+  punta a punta exacto del brief: 3 pasajeros, 3 `Sale` distintos (boleta
+  a un pasajero, factura a 2 empresas distintas), cada uno con su propio
+  `texto_personalizado`, sin ítems duplicados entre ellas; ítem compartido
+  facturado junto vs. pendiente por pasajero faltante; ítems sin asignar;
+  doble-facturación de pasajero ya cubierto; guardia tributario evaluado
+  por subgrupo (no por reserva completa, dos pasajeros distintos pueden
+  terminar en Sales con distinto `destino_tributario` cada uno). Type-check
+  frontend en 45 errores preexistentes (mismo baseline, cero nuevos).
+  **Verificado con Playwright real contra `agencia-demo`** (reserva #19,
+  `DKM-2026-001` — la misma que ya tenía mezcla tributaria real de la
+  sesión anterior): badge "Falta facturar a 2 pasajero(s)" correcto,
+  modal mostró los 2 pasajeros pendientes + el pool completo de 7 ítems
+  sin asignar (ninguno tenía vinculación real, confirmando el hallazgo de
+  arriba), total se recalculó en vivo al tildar un ítem (PEN 0.00 → PEN
+  90.00), buscador de cliente encontró y permitió elegir al cliente real
+  de la cotización, botón "Facturar este grupo" se habilitó recién con
+  cliente elegido. **No se confirmó el POST** — toda la verificación fue
+  de solo lectura (`GET preparar-factura`), para no dejar una venta real
+  persistida en `agencia-demo` sin que el usuario lo pidiera
+  explícitamente.
+
+**Completo — Split en dos botones de facturación: "Facturar" (simple) vs.
+"Facturación especial" (avanzado) (2026-08-20, mismo día, sin commitear
+todavía):** decisión explícita del usuario justo después de construir lo
+de arriba — el modal único con selección de pasajeros/ítems/cliente/texto
+es demasiado para el caso de todos los días (un solo responsable, cubre
+toda la reserva). Se separa en dos entradas de frontend, **mismo backend
+sin ningún cambio** (`preparar-factura`/`facturar`, ambos endpoints
+intactos):
+- **"Facturar" (botón primario, simple)**: sin selección manual — arma el
+  payload solo, con TODOS los pasajeros pendientes y TODO el pool de
+  ítems sin asignar (2 llamadas a `preparar-factura`: la primera
+  descubre qué ítems sin asignar hay, la segunda arma el total real
+  incluyéndolos), cliente = `cabecera.cliente` de la cotización (sin
+  buscador, sin poder cambiarlo), sin campo de texto personalizado. Si el
+  guardia tributario bloquea (la reserva completa mezcla tratamientos),
+  muestra el mensaje y sugiere explícitamente usar "Facturación
+  especial" — no se puede resolver la mezcla desde acá, es la salida
+  intencional hacia el flujo avanzado.
+- **"Facturación especial" (botón secundario)**: exactamente el flujo
+  construido arriba, renombrado (`mostrarModalFacturar` →
+  `mostrarModalFacturarEspecial`, `abrirModalFacturar` →
+  `abrirModalFacturarEspecial`, `confirmarFacturacion` →
+  `confirmarFacturacionEspecial`, `facturarForm` → `facturarEspecialForm`,
+  `previewFactura` → `previewFacturaEspecial`,
+  `cargandoPreviewFactura` → `cargandoPreviewFacturaEspecial`) — sin
+  cambios de comportamiento, solo de nombre, para distinguirlo del flujo
+  simple nuevo. Sigue siendo el lugar donde se agreguen casos complejos
+  futuros (§4.3 reserva ya facturada, crédito/cuotas, etc.).
+- Ambos botones se muestran juntos mientras haya pasajeros pendientes de
+  facturar — no son excluyentes, el vendedor elige cuál usar según el
+  caso.
+- **Verificado con Playwright real contra `agencia-demo`** (misma reserva
+  #19 con mezcla tributaria real): "Facturar" simple detectó la mezcla
+  correctamente (arma el conjunto completo = ambos pasajeros + todos los
+  ítems, que sí mezcla) y mostró el mensaje de bloqueo con la sugerencia
+  de usar "Facturación especial", sin ningún error de consola; "Facturación
+  especial" se probó de nuevo después del rename y funciona idéntico a
+  antes (título del modal actualizado a "Facturación especial", checkboxes
+  de pasajeros, pool de ítems sin asignar, buscador de cliente). No se
+  confirmó ningún POST en esta verificación tampoco.
+
 **Próximos módulos (en orden de prioridad):**
 
 1. **Representación impresa (PDF) con impresión automática**

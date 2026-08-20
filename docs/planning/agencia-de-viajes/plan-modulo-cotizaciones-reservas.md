@@ -2,7 +2,7 @@
 
 > Parte de: `plan-general-vertical-agencia-viajes.md` — Fase 1
 > Estado: en definición (aún se están sumando casos de negocio)
-> Última actualización: 20-ago-2026 (gap crítico encontrado: no existe forma de facturar una reserva — ver §9 y `plan-hoja-de-ruta-ejecucion.md` fila 11u)
+> Última actualización: 20-ago-2026 (fila 11u cerrada — ya existe forma de facturar una reserva, alcance mínimo viable; queda pendiente aplicar el parche de guardia tributario mixto — ver §9 y `plan-hoja-de-ruta-ejecucion.md` fila 11u)
 
 ---
 
@@ -1042,9 +1042,29 @@ inventar nada nuevo:
   existe en el core). Un pasajero atrasado en su pago no afecta el
   cronograma de los demás.
 
-**Estado real 20-ago-2026:** la fila 11u solo cubre el caso "un solo
-responsable". El caso de varios pagadores queda para una sesión futura,
-sin número asignado todavía.
+**[RESUELTO 20-ago-2026, working tree sin commitear]** El caso de varios
+pagadores — confirmado con el usuario como caso **frecuente en grupos
+reales**, no un edge case (ej. grupo de 20 a Cusco: 5 boleta, 10 factura
+a una empresa, 3 a otra, cada uno con su propio texto de sustentación) —
+quedó cerrado en la fila **11v** de `plan-hoja-de-ruta-ejecucion.md`,
+brief en `PEGAR-EN-CLAUDE-CODE-facturar-reserva-grupo-multiples-pagadores.md`
+(ver su §7 "Estado real al cierre" para el detalle completo).
+
+**Corrección real sobre el supuesto de este documento**: la premisa "el
+precio por pasajero ya se resuelve a nivel individual, no hace falta
+repartir nada" resultó **falsa para el mecanismo de selección propuesto
+más abajo** (derivar `reserva_item_ids` puramente desde
+`reserva_item_pasajero`) — con datos reales de `agencia-demo`, esa tabla
+tiene 0 filas en el 100% de los ítems de la reserva de prueba (8/8) y
+solo 26/37 en todo el tenant. La pestaña "Asignación pasajero↔ítem" casi
+no se usa. Resuelto con selección explícita: un ítem sin ningún pasajero
+vinculado se ofrece aparte (`items_sin_asignar_disponibles`) para que el
+vendedor lo agregue a mano por Sale, en vez de asumir una vinculación que
+no existe en la práctica. El reparto de un ítem `tarifa_fija` compartido
+(ej. habitación doble) entre pasajeros que terminan en Sales DISTINTOS
+sigue sin ningún mecanismo — confirmado, no resuelto, documentado como
+límite conocido (queda permanentemente pendiente de facturar por este
+flujo hasta resolución manual).
 
 ### 4.5 Anticipos antes de que exista el Sale final
 El módulo `Advance` del core está atado al **cliente**, no a una reserva
@@ -1658,42 +1678,41 @@ los recordatorios pendientes de todos los vendedores en una sola vista
 
 - **[RESUELTO 20-ago-2026 — era el hallazgo más grave]** No existía
   ningún camino para facturar una reserva (§6.2/§4.3 documentados pero
-  nunca implementados). Ver `plan-hoja-de-ruta-ejecucion.md` fila 11u
-  (alcance mínimo viable, brief en
-  `PEGAR-EN-CLAUDE-CODE-facturar-reserva.md`) y las notas agregadas en
-  §4.1, §4.3, §4.4, §4.5, §6, §6.2 de este documento. El alcance mínimo
-  deja abiertos, para sesiones futuras sin número asignado todavía: los
-  2 caminos de §4.3 (reserva ya facturada + servicio nuevo), varios
-  pagadores (§4.4), y aplicar `reserva_anticipos` automáticamente al
-  facturar (§4.5).
+  nunca implementados). Cerrado en `plan-hoja-de-ruta-ejecucion.md` fila
+  11u (`ReservaFacturacionController::store()`, `POST
+  reservas/{id}/facturar`, alcance mínimo viable: pendiente de cobro,
+  solo contado, líneas agrupadas por categoría, guard anti-doble-
+  facturación — 166 tests en verde, verificado con datos reales contra
+  `agencia-demo`). **Actualizado 20-ago-2026 (mismo día, trabajo
+  posterior, sin commitear todavía)**: el guardia tributario (ver punto
+  siguiente) y varios pagadores (§4.4) quedaron cerrados — ver
+  `CLAUDE.md` y `plan-hoja-de-ruta-ejecucion.md` filas 11u/11v. Sigue
+  abierto, para sesiones futuras sin número asignado todavía: los 2
+  caminos de §4.3 (reserva ya facturada + servicio nuevo), aplicar
+  `reserva_anticipos` automáticamente al facturar (§4.5), crédito/cuotas
+  para una venta generada desde reserva, y el reparto de un ítem
+  compartido entre pasajeros que terminan en Sales distintos (documentado
+  como límite conocido en §4.4, sin ningún mecanismo hoy).
+- **[RESUELTO 20-ago-2026, working tree sin commitear]** Guardia contra
+  reservas que mezclan `destino_tributario` distinto entre sus ítems
+  (riesgo real de comprobante SUNAT con exoneración mal calculada) —
+  brief en `PEGAR-EN-CLAUDE-CODE-facturar-reserva-guardia-tributario.md`,
+  aplicado: `GET preparar-factura` + `POST facturar` bloquean con
+  422/preview si el subgrupo a facturar mezcla tratamientos, verificado
+  contra una reserva real de `agencia-demo` que efectivamente mezclaba.
+  Ver `CLAUDE.md` "Guardia tributario en facturación de reserva".
 - **Gestión de proveedores a fondo** (altas, bajas, negociación de
   tarifas) — confirmado como módulo aparte, aún no abordado en detalle.
 - Falta detallar los formularios CRUD predecesores (proveedores, tarifas,
   tipo de cambio) antes de tocar el flujo de cotización propiamente.
-- **[GUARDIA AGREGADO 20-ago-2026, sin resolver de fondo]** Tratamiento
-  tributario mixto dentro de una misma reserva/venta: `Sale.destino` y
-  `Sale.es_exportacion` son un solo valor para TODA la venta (no por
-  línea), mientras que `tip_afe_igv`/`destino_tributario` sí son por
-  proveedor_tarifa/línea. Si una reserva combina, por ejemplo, un hotel
-  exonerado Amazonía con un traslado nacional gravado, un único `Sale` no
-  puede reflejar ambos a la vez — riesgo real de comprobante SUNAT con la
-  exoneración mal calculada. **No se construyó el motor multi-`Sale`**
-  (la resolución real y completa: emitir varios `Sale`, uno por
-  `destino_tributario`) — eso sigue siendo trabajo mayor, sin número de
-  sesión asignado. Lo que SÍ se agregó (`ReservaFacturacionController`,
-  ver `CLAUDE.md` "Guardia tributario en facturación de reserva"): un
-  guardia que **detecta y bloquea** la mezcla con 422 (server-side, en
-  `POST facturar`) y con un preview (`GET preparar-factura`) para que el
-  vendedor lo vea antes de llenar el formulario — nunca deja pasar la
-  mezcla en silencio, pero tampoco la resuelve; el vendedor tiene que
-  facturar los grupos compatibles por separado a mano (o dejar el caso
-  para revisión con contabilidad). **Limitación de datos documentada**:
-  `destino_tributario` solo existe en `proveedor_tarifas` — los orígenes
-  mayorista/pasaje_aereo/manual/guia no tienen ese campo propio hoy, se
-  tratan como `'nacional'` en el guardia (mismo valor ya usado por la
-  cabecera del Sale). Verificado con datos reales: la reserva `agencia-demo`
-  #19 (`DKM-2026-001`) mezclaba tratamientos de verdad y el guardia lo
-  bloqueó correctamente.
+- **Tratamiento tributario mixto dentro de una misma reserva/venta**:
+  `Sale.destino` y `Sale.es_exportacion` son un solo valor para TODA la
+  venta (no por línea), mientras que `tip_afe_igv` sí es por línea. Si una
+  reserva combina, por ejemplo, un hotel exonerado Amazonía con un vuelo
+  de exportación, la leyenda de exoneración del PDF podría salir
+  incompleta. Falta decidir: ¿se permite mezclar tratamientos distintos en
+  una misma reserva (aceptando esa limitación visual), o se fuerza a
+  generar `Sale` separados cuando eso pasa?
 - **Autorización de menores de edad** (documento de viaje sin padres) —
   sin definir si entra al modelo de `pasajero_documentos` o queda fuera.
 - **Depósito no reembolsable**: cómo se marca en una reserva puntual, sin
