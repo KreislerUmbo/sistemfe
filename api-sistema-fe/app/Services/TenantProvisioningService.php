@@ -15,6 +15,7 @@ use App\Models\AgenciaViajes\ReglaCancelacion;
 use App\Models\AgenciaViajes\Servicio;
 use App\Models\AgenciaViajes\TipoCambioAgencia;
 use App\Models\AgenciaViajes\TipoRecordatorio;
+use App\Models\Cash\Branch;
 use App\Models\Client\Client;
 use App\Models\Company;
 use App\Models\Product\Product;
@@ -115,6 +116,18 @@ class TenantProvisioningService
                 // después por el dueño.
                 (new PaymentMethodSeeder())->run();
                 (new CashConceptSeeder())->run();
+
+                // Sucursal principal, código fijo '0000' (convención del negocio,
+                // 2026-08-17) — sin esto ningún tenant nuevo podía crear una serie
+                // de comprobantes (serie_comprobantes.branch_id es NOT NULL), así
+                // que emitir cualquier boleta/factura quedaba bloqueado desde el
+                // primer día. No usa firstOrCreate: provision() solo corre una vez
+                // por tenant, nunca hay riesgo de duplicar esta fila acá.
+                Branch::create([
+                    'name' => 'Sucursal Principal',
+                    'code' => '0000',
+                    'is_active' => true,
+                ]);
 
                 $role = Role::where('name', 'Super-Admin')->where('guard_name', 'api')->first();
 

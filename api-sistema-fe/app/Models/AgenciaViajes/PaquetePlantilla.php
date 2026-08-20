@@ -49,6 +49,7 @@ class PaquetePlantilla extends Model
         'descuento_tipo',
         'descuento_valor',
         'margen_minimo_pct',
+        'ajuste_redondeo',
     ];
 
     protected $casts = [
@@ -61,6 +62,7 @@ class PaquetePlantilla extends Model
         'activo' => 'boolean',
         'descuento_valor' => 'decimal:2',
         'margen_minimo_pct' => 'decimal:2',
+        'ajuste_redondeo' => 'decimal:2',
     ];
 
     // hora_salida/hora_retorno son columnas `time` de Postgres: Eloquent las

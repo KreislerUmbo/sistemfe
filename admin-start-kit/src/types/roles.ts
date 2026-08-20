@@ -188,6 +188,29 @@ export const PERMISOS = [
         ]
     },
     {
+        // CRUD real agregado 2026-08-17 (antes solo listado, sin permisos
+        // propios) — mismo criterio que Métodos de Pago (catálogo simple).
+        'name': 'Sucursales',
+        'permisos': [
+            {
+                name: 'Registrar',
+                permiso: 'register_branch',
+            },
+            {
+                name: 'Listado',
+                permiso: 'list_branch',
+            },
+            {
+                name: 'Editar',
+                permiso: 'edit_branch',
+            },
+            {
+                name: 'Eliminar',
+                permiso: 'delete_branch',
+            },
+        ]
+    },
+    {
         // Módulo Caja — Fase 0 (plan-modulo-caja.md §3).
         'name': 'Métodos de Pago',
         'permisos': [

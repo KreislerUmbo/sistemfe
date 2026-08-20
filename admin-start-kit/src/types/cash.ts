@@ -61,3 +61,25 @@ export type CashConceptResponse = {
     message: string;
     cash_concept?: CashConcept;
 };
+
+// CRUD real agregado 2026-08-17 — antes solo existía index() (Fase 5).
+export type Branch = {
+    id: number;
+    name: string;
+    code: string | null;
+    address: string | null;
+    is_active: boolean;
+    created_at: string;
+};
+
+export type Branches = {
+    total: number;
+    paginate: number;
+    branches: Branch[];
+};
+
+export type BranchResponse = {
+    code: number;
+    message: string;
+    branch?: Branch;
+};

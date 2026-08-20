@@ -119,7 +119,34 @@ class ComboExplosionService
             ->map(fn (PaquetePlantilla $tour) => $this->totalesTour($tour))
             ->all();
 
-        $resultado = $this->priceEngine->calcularCombo($tourTotales, $combo->descuento_tipo, $combo->descuento_valor);
+        // Fix ítems sueltos del combo (2026-08-18): un ítem agregado directo
+        // al combo (proveedor_tarifa_id/guia_tarifa_id sobre el propio
+        // paquete_plantilla_items, sin envolverlo en un tour-hijo) quedaba
+        // completamente fuera de este cálculo — toursDelCombo() solo mira
+        // paquete_plantilla_hijo_id. ProveedorTarifa/GuiaTarifa no tienen
+        // columna 'activo' propia (confirmado, no hay equivalente al guard
+        // de componentes_inactivos de arriba) — no hay nada que excluir acá,
+        // solo sumar.
+        $itemsSueltos = $this->itemsSueltosDelCombo($combo);
+        if ($itemsSueltos->isNotEmpty()) {
+            $costoSueltos = 0.0;
+            $ventaSueltos = 0.0;
+
+            foreach ($itemsSueltos as $item) {
+                [$costo, $venta] = $this->resolverCostoVentaItem($item);
+                $costoSueltos += $costo;
+                $ventaSueltos += $venta;
+            }
+
+            $tourTotales[] = ['costo_total' => round($costoSueltos, 2), 'venta_total' => round($ventaSueltos, 2)];
+        }
+
+        $resultado = $this->priceEngine->calcularCombo(
+            $tourTotales,
+            $combo->descuento_tipo,
+            $combo->descuento_valor,
+            $combo->ajuste_redondeo !== null ? (float) $combo->ajuste_redondeo : null
+        );
 
         $resultado['componentes_inactivos'] = $tours->filter(fn (PaquetePlantilla $tour) => ! $tour->activo)
             ->map(fn (PaquetePlantilla $tour) => ['id' => $tour->id, 'nombre' => $tour->nombre])
@@ -166,12 +193,29 @@ class ComboExplosionService
         return $this->toursDelComboCache[$combo->id] = $tours;
     }
 
+    // Ítems agregados DIRECTO a un paquete_combo (proveedor_tarifa_id/
+    // guia_tarifa_id sobre el propio combo, sin envolverlos en un tour-hijo)
+    // — el frontend ya los llama "ítems sueltos" (paquetes/detalle.vue,
+    // computed itemsSueltos). Antes del fix de 2026-08-18 nada del backend
+    // los leía aparte de la pantalla de detalle: ni totalesCombo() ni
+    // explotarItems()/desdePlantilla() los tocaban.
+    public function itemsSueltosDelCombo(PaquetePlantilla $combo): EloquentCollection
+    {
+        return $combo->items()
+            ->whereNull('paquete_plantilla_hijo_id')
+            ->with(['proveedorTarifa', 'guiaTarifa'])
+            ->orderBy('orden')
+            ->get();
+    }
+
     /**
-     * Cada ítem atómico de cada tour incluido, resuelto contra su tarifa
-     * real, tagueado con de qué tour vino. No persiste nada — arma el array
-     * listo para alimentar AlternativaItem::create() en bucle.
+     * Cada ítem atómico de cada tour incluido MÁS los ítems sueltos del
+     * propio combo, resuelto contra su tarifa real, tagueado con de qué
+     * tour vino (null si es un ítem suelto del combo, no de un tour-hijo).
+     * No persiste nada — arma el array listo para alimentar
+     * AlternativaItem::create() en bucle.
      *
-     * @return array<int, array{tour_origen_id: int, proveedor_tarifa_id: int|null, guia_tarifa_id: int|null, modalidad: string|null, costo: float, venta: float, precio_costo: float|null, precio_venta_adulto: float|null, precio_venta_nino: float|null, precio_venta_infante: float|null}>
+     * @return array<int, array{tour_origen_id: int|null, proveedor_tarifa_id: int|null, guia_tarifa_id: int|null, modalidad: string|null, costo: float, venta: float, precio_costo: float|null, precio_venta_adulto: float|null, precio_venta_nino: float|null, precio_venta_infante: float|null}>
      */
     public function explotarItems(PaquetePlantilla $combo): array
     {
@@ -181,7 +225,20 @@ class ComboExplosionService
             $resultado = array_merge($resultado, $this->explotarUnTour($tour));
         }
 
-        return $resultado;
+        return array_merge($resultado, $this->explotarItemsSueltos($combo));
+    }
+
+    // Mismos ítems que itemsSueltosDelCombo(), ya resueltos contra su
+    // tarifa real (costo/venta) — tour_origen_id siempre null (no
+    // pertenecen a ningún tour-hijo). Separado de explotarItems() para que
+    // AlternativaItemController::desdePlantilla() pueda pedir SOLO estos sin
+    // recorrer toursDelCombo()/explotarUnTour() de nuevo (ya los procesa en
+    // su propio bucle, con offset de día por tour).
+    //
+    // @return array<int, array{tour_origen_id: null, proveedor_tarifa_id: int|null, guia_tarifa_id: int|null, modalidad: string|null, costo: float, venta: float, precio_costo: float|null, precio_venta_adulto: float|null, precio_venta_nino: float|null, precio_venta_infante: float|null}>
+    public function explotarItemsSueltos(PaquetePlantilla $combo): array
+    {
+        return $this->explotarColeccionItems($this->itemsSueltosDelCombo($combo), null);
     }
 
     // Sesión 11b3 — cargar un tour_simple SUELTO (no dentro de un combo) en
@@ -196,6 +253,14 @@ class ComboExplosionService
         return $this->explotarUnTour($tour);
     }
 
+    // @return array<int, array{tour_origen_id: int, proveedor_tarifa_id: int|null, guia_tarifa_id: int|null, modalidad: string|null, costo: float, venta: float, precio_costo: float|null, precio_venta_adulto: float|null, precio_venta_nino: float|null, precio_venta_infante: float|null}>
+    private function explotarUnTour(PaquetePlantilla $tour): array
+    {
+        $items = $tour->items()->with(['proveedorTarifa', 'guiaTarifa'])->orderBy('orden')->get();
+
+        return $this->explotarColeccionItems($items, $tour->id);
+    }
+
     // Sesión 11o — devuelve además `modalidad` y los 3 precios crudos de la
     // tarifa (precio_costo/precio_venta_adulto/nino/infante), sin pre-calcular
     // un único "venta" — la decisión de cómo multiplicar (tarifa plana adulto
@@ -207,18 +272,21 @@ class ComboExplosionService
     // totalesTour()/totalesCombo() (precio "desde" del catálogo) usan su
     // PROPIO resolverCostoVentaItem(), sin cambios, no dependen de este método.
     //
-    // @return array<int, array{tour_origen_id: int, proveedor_tarifa_id: int|null, guia_tarifa_id: int|null, modalidad: string|null, costo: float, venta: float, precio_costo: float|null, precio_venta_adulto: float|null, precio_venta_nino: float|null, precio_venta_infante: float|null}>
-    private function explotarUnTour(PaquetePlantilla $tour): array
+    // Extraído de explotarUnTour() (fix ítems sueltos, 2026-08-18) para
+    // reusar la misma resolución de línea con los ítems sueltos de un combo
+    // — que no pertenecen a ningún tour, por eso $tourOrigenId es nullable acá.
+    //
+    // @return array<int, array{tour_origen_id: int|null, proveedor_tarifa_id: int|null, guia_tarifa_id: int|null, modalidad: string|null, costo: float, venta: float, precio_costo: float|null, precio_venta_adulto: float|null, precio_venta_nino: float|null, precio_venta_infante: float|null}>
+    private function explotarColeccionItems(iterable $items, ?int $tourOrigenId): array
     {
         $resultado = [];
-        $items = $tour->items()->with(['proveedorTarifa', 'guiaTarifa'])->orderBy('orden')->get();
 
         foreach ($items as $item) {
             [$costo, $venta] = $this->resolverCostoVentaItem($item);
             $tarifa = $item->proveedor_tarifa_id ? $item->proveedorTarifa : null;
 
             $resultado[] = [
-                'tour_origen_id' => $tour->id,
+                'tour_origen_id' => $tourOrigenId,
                 'proveedor_tarifa_id' => $item->proveedor_tarifa_id,
                 'guia_tarifa_id' => $item->guia_tarifa_id,
                 'modalidad' => $tarifa?->modalidad,

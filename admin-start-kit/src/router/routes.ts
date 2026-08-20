@@ -208,6 +208,17 @@ const comercialRoutes = [
     },
     component: () => import("@/views/categories/index.vue"),
   },
+  // Módulo Caja — Fase 1 (modelo) / CRUD real 2026-08-17 (antes solo listado).
+  {
+    path: "/branches",
+    name: "branches.index",
+    meta: {
+      title: setTitle("Sucursales"),
+      authRequired: true,
+      permission: 'list_branch',
+    },
+    component: () => import("@/views/cash/branches.vue"),
+  },
   // Módulo Caja — Fase 0 (plan-modulo-caja.md §3).
   {
     path: "/payment-methods",

@@ -379,6 +379,13 @@ class PaquetePlantillaController extends Controller
             'fotos' => 'nullable|array',
             'fotos.*' => 'image',
             'margen_minimo_pct' => 'nullable|numeric|min:0',
+            // Fix ajuste de redondeo (2026-08-18): SIN min:0 a propósito —
+            // a diferencia de descuento_valor (solo resta), este campo
+            // acepta negativos también, aunque el caso de uso principal sea
+            // redondear hacia arriba. Aplica a AMBOS tipos (tour_simple y
+            // paquete_combo) — mismo campo, mismo mecanismo, sin el bloqueo
+            // 422 que sí existe para precio_venta_final en combo (ver abajo).
+            'ajuste_redondeo' => 'nullable|numeric',
         ]);
 
         if ($validator->fails()) {
