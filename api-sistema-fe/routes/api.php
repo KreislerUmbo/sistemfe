@@ -87,8 +87,10 @@ Route::group([
     'prefix' => 'auth',
     'middleware' => ['tenant', 'tenant.active', 'tenant.subscription', 'tenant.token'],
 ], function ($router) {
-    Route::post('/register', [AuthController::class, 'register'])->name('register');
-    Route::post('/login', [AuthController::class, 'login'])->name('login');
+    // throttle:6,1 = máx. 6 intentos por minuto por IP+ruta (Laravel RateLimiter por
+    // defecto) — antes no había ningún límite, quedaba abierto a fuerza bruta.
+    Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:6,1')->name('register');
+    Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:6,1')->name('login');
     Route::post('/me', [AuthController::class, 'me'])->middleware('auth:api')->name('me');
 });
 
@@ -116,7 +118,9 @@ Route::group([
 // logueados). Sin 'tenant'/'tenant.active': el panel vive fuera de la resolución de
 // tenancy por diseño.
 Route::prefix('central')->group(function () {
-    Route::post('auth/login', [CentralAuthController::class, 'login']);
+    // throttle:6,1 = máx. 6 intentos por minuto por IP — mismo criterio que el login
+    // de tenant (arriba) y el del portal (abajo), sin límite previo.
+    Route::post('auth/login', [CentralAuthController::class, 'login'])->middleware('throttle:6,1');
 
     Route::middleware(['auth:central', 'central.token'])->group(function () {
         Route::get('tenants', [TenantAdminController::class, 'index']);
@@ -735,8 +739,8 @@ Route::prefix('portal')->middleware(['tenant', 'tenant.active', 'tenant.subscrip
         ->middleware('auth:client'); //esta ruta es para mostrar los detalles de un pedido con autenticacion
 
 
-    Route::post('/register', [PortalAuthController::class, 'register']); //esta ruta es para el registro del cliente por formulario clientRegister
-    Route::post('/login', [PortalAuthController::class, 'login']);
+    Route::post('/register', [PortalAuthController::class, 'register'])->middleware('throttle:6,1'); //esta ruta es para el registro del cliente por formulario clientRegister
+    Route::post('/login', [PortalAuthController::class, 'login'])->middleware('throttle:6,1');
     Route::get('/me', [PortalAuthController::class, 'me']);
     // Route::post('/logout', [PortalAuthController::class, 'logout']);
 
