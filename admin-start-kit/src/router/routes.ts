@@ -219,6 +219,16 @@ const comercialRoutes = [
     },
     component: () => import("@/views/cash/branches.vue"),
   },
+  {
+    path: "/cash-registers",
+    name: "cash-registers.index",
+    meta: {
+      title: setTitle("Cajas"),
+      authRequired: true,
+      permission: 'list_cash_register',
+    },
+    component: () => import("@/views/cash/cash-registers.vue"),
+  },
   // Módulo Caja — Fase 0 (plan-modulo-caja.md §3).
   {
     path: "/payment-methods",

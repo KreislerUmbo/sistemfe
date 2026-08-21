@@ -230,11 +230,13 @@ Route::group([
     Route::resource("cash-concepts", CashConceptController::class);
 
     // Módulo Caja — Fase 5 (?active=1 puebla los filtros de history.vue) +
-    // CRUD real de sucursales (2026-08-17, ver BranchController). cash-registers
-    // sigue solo listado — su CRUD completo queda pendiente (fuera de alcance
-    // de este cambio, ver CLAUDE.md).
+    // CRUD real de sucursales (2026-08-17, ver BranchController). CRUD real
+    // de cajas (2026-08-20, ver CashRegisterController) — cierra el gap
+    // documentado en CLAUDE.md: sin esto no había forma de crear la primera
+    // caja de un tenant real, "Turno Activo" solo mostraba "No hay cajas
+    // disponibles" sin ningún botón para arreglarlo.
     Route::resource("branches", BranchController::class);
-    Route::get("cash-registers", [CashRegisterController::class, 'index']);
+    Route::resource("cash-registers", CashRegisterController::class);
 
     // Módulo de series de comprobantes. tipos-comprobante es solo lectura
     // (catálogo seed-only, sin CRUD) — mismo patrón ?active=1 que branches/

@@ -326,6 +326,15 @@ export const MENU_ITEMS: MenuItemType[] = [
         parentKey: "configurat",
         permission: 'list_branch',
       },
+      // CRUD real agregado 2026-08-20 — antes solo existía index() (Fase
+      // 5), sin ningún botón para crear la primera caja de un tenant real.
+      {
+        key: "cash_registers",
+        label: "Cajas",
+        route: { name: "cash-registers.index" },
+        parentKey: "configurat",
+        permission: 'list_cash_register',
+      },
       // Módulo Caja — Fase 0 (plan-modulo-caja.md §3).
       {
         key: "payment_methods",

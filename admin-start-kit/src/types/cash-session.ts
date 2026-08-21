@@ -23,6 +23,20 @@ export type CashRegister = {
     default_opening_amount: string | number;
 };
 
+// CRUD real agregado 2026-08-20 — antes solo existía index() (Fase 5),
+// mismo gap que ya se había cerrado para Branch el 2026-08-17.
+export type CashRegisters = {
+    total: number;
+    paginate: number;
+    cash_registers: CashRegister[];
+};
+
+export type CashRegisterResponse = {
+    code: number;
+    message: string;
+    cash_register?: CashRegister;
+};
+
 export type SessionUser = {
     id: number;
     name: string;
