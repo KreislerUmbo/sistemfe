@@ -7,12 +7,24 @@
                     Nuevo adelanto
                 </h5>
                 <small class="text-muted">
-                    Registra un pago anticipado de cliente — genera su propio comprobante SUNAT.
+                    Registra un pago anticipado de cliente.
                 </small>
             </div>
             <router-link :to="{ name: 'advances.index' }" class="btn btn-outline-secondary btn-sm">
                 <i class="fas fa-arrow-left me-1"></i> Volver
             </router-link>
+        </div>
+
+        <!-- Tier 3 (2026-08-24): antes no se explicaba en ningún lado que
+             esto son DOS pasos — el usuario se enteraba recién al llegar al
+             detalle y ver el botón "Enviar comprobante a SUNAT". -->
+        <div class="alert alert-info d-flex align-items-start gap-2 mb-3">
+            <i class="fas fa-circle-info mt-1"></i>
+            <div>
+                Este formulario solo registra el dinero recibido — el comprobante SUNAT se genera,
+                pero <strong>no se envía todavía</strong>. El envío es un segundo paso manual, desde
+                el detalle del adelanto una vez guardado acá.
+            </div>
         </div>
 
         <div class="card border-0 shadow-sm">
@@ -39,9 +51,18 @@
                             </div>
                         </button>
                     </div>
-                    <small v-if="clientSelected" class="text-muted">
-                        {{ clientSelected.cod_tipo_doc_sunat === '6' ? 'RUC → se emitirá Factura' : 'Se emitirá Boleta' }}
-                    </small>
+                    <!-- Ficha breve del cliente elegido — antes quedaba reducido
+                         a una línea de texto chica, sin verse como una decisión
+                         real (a quién se le va a emitir, con qué documento). -->
+                    <div v-if="clientSelected" class="border rounded px-2 py-2 mt-1 d-flex justify-content-between align-items-center small">
+                        <span>
+                            <strong>{{ clientSelected.full_name }}</strong>
+                            <span class="text-muted"> — {{ clientSelected.n_document }}</span>
+                        </span>
+                        <span class="badge" :class="clientSelected.cod_tipo_doc_sunat === '6' ? 'bg-primary' : 'bg-secondary'">
+                            {{ clientSelected.cod_tipo_doc_sunat === '6' ? 'RUC → Factura' : 'DNI → Boleta' }}
+                        </span>
+                    </div>
                 </div>
 
                 <!-- Monto / Moneda / Medio de pago -->
@@ -60,9 +81,20 @@
                     <div class="col-6 col-md-4">
                         <label class="form-label fw-semibold">Medio de pago</label>
                         <select class="form-select" v-model="paymentMethod">
+                            <option value="" disabled>Selecciona...</option>
                             <option v-for="pm in paymentMethods" :key="pm.id" :value="pm.code">{{ pm.name }}</option>
                         </select>
                     </div>
+                </div>
+
+                <!-- Referencia de pago — solo tiene sentido para medios no
+                     efectivo (N° operación, últimos dígitos, banco). Antes no
+                     había dónde ponerlo, así que no quedaba nada para
+                     conciliar contra el estado de cuenta real. -->
+                <div class="mb-3" v-if="paymentMethod && paymentMethod !== 'EFECTIVO'">
+                    <label class="form-label fw-semibold">Referencia de pago</label>
+                    <input type="text" class="form-control" v-model="paymentReference"
+                        placeholder="Ej: N° de operación, banco, últimos 4 dígitos de tarjeta...">
                 </div>
 
                 <!-- Tier 1 (2026-08-24): antes salía gravado 18% siempre, sin
@@ -79,8 +111,9 @@
                 </div>
 
                 <div class="mb-3">
-                    <label class="form-label fw-semibold">Notas (opcional)</label>
-                    <textarea class="form-control" rows="2" v-model="notes"></textarea>
+                    <label class="form-label fw-semibold">Referencia / Propósito (opcional)</label>
+                    <textarea class="form-control" rows="2" v-model="notes"
+                        placeholder="Ej: adelanto para pedido #123, paquete a Cusco de julio..."></textarea>
                 </div>
 
                 <button type="button" class="btn btn-primary" :disabled="!puedeCrear || loading" @click="crear">
@@ -118,7 +151,11 @@ const currency = ref<string>("PEN");
 // Plin) — ahora consume el mismo catálogo que register.vue desde Fase 0
 // (payment-methods?active=1), mismos code exactos que payment_methods.
 const paymentMethods = ref<PaymentMethod[]>([]);
+// Tier 3 (2026-08-24): sin preselección — antes se auto-elegía el primer
+// método activo en silencio, así que si el cajero no lo cambiaba a tiempo
+// podía quedar registrado un pago por un medio que no fue el real.
 const paymentMethod = ref<string>("");
+const paymentReference = ref<string>("");
 // Tier 1 (2026-08-24): gravado por default — mismo comportamiento de hoy
 // si el usuario no lo toca.
 const tipAfeIgv = ref<"10" | "20" | "30">("10");
@@ -129,9 +166,6 @@ const loadPaymentMethods = async () => {
     try {
         const res: AxiosResponse<PaymentMethods> = await httpClient.get("payment-methods?active=1");
         paymentMethods.value = res.data.payment_methods;
-        if (!paymentMethod.value && paymentMethods.value.length > 0) {
-            paymentMethod.value = paymentMethods.value[0].code;
-        }
     } catch (error) {
         console.error(error);
     }
@@ -180,6 +214,7 @@ const crear = async () => {
             amount: amount.value,
             currency: currency.value,
             payment_method: paymentMethod.value,
+            payment_reference: paymentMethod.value !== "EFECTIVO" ? (paymentReference.value || null) : null,
             tip_afe_igv: tipAfeIgv.value,
             notes: notes.value || null,
         });

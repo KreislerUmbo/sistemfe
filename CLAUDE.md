@@ -1584,6 +1584,90 @@ alcance, confirmado explícitamente en el brief).
   (`vue-tsc -b`, sin script `type-check` propio en `package.json`): 0
   errores.
 
+**Completo — Módulo Adelantos: gaps de integridad, conexión con Reservas, selector fiscal
+y corrección post-SUNAT (2026-08-24, rama `fix/reservas-facturacion-gaps-criticos`, 2
+commits, sin PR creado todavía):** auditoría propia (más una segunda pasada, disparada por
+una pregunta real del usuario sobre cómo corrigen otros sistemas una venta final que aplicó
+varios adelantos de distinta clasificación tributaria) sobre el módulo Adelantos
+(`AdvanceController`, construido 2026-07-11/12 — ver
+[[project_advances_module]] en memoria). Cuatro tandas, todas verificadas contra Postgres
+real (`sistemafe_test_migrations`), sin tocar `sandbox`/`umbo`:
+- **Tier 1 — integridad**: `AdvanceApplicationService` nuevo (`app/Services/`, extrae el
+  loop de aplicación de adelantos que vivía inline en `SaleController::store()` — mismo
+  criterio "un solo punto de verdad" que `CashCorrectionService`/`CreditSummaryCalculator`)
+  agrega validación de moneda al aplicar, bloqueo de aplicar a una cotización
+  (`state_sale=2`), rechazo de `advance_id` duplicado en el mismo payload, y
+  `lockForUpdate()` real en `refund()` (antes sin lock — condición de carrera real).
+  `SaleController::update()`/`destroy()` ahora bloquean (422/405) si la venta tiene
+  adelantos ya aplicados — antes solo se chequeaba para el caso crédito. Middleware
+  `permission:list_advance`/`register_advance`/`refund_advance` agregado a las rutas de
+  Adelantos (antes sin gate real), dejando a propósito sin permiso
+  `clients/{id}/advances` (consumida por el checkout de venta, no debe gatearse aparte).
+  `Sale::scopeFilterMultiple()` excluye `type='advance'` — antes el comprobante propio de
+  cada adelanto aparecía mezclado en el listado general de Ventas.
+- **Tier 0 — conexión con Agencia de Viajes (antes inexistente)**: la tabla puente
+  `reserva_anticipos` existía desde antes (schema) pero sin ningún controller —
+  un anticipo cobrado sobre una reserva nunca se descontaba al facturarla, y no había forma
+  de cobrarlo desde la pantalla de la reserva. `ReservaAnticipoController` nuevo
+  (`POST reservas/{id}/anticipos`, `DELETE reserva-anticipos/{id}`, ambos
+  `permission:agencia.reservas`) + botón "Cobrar anticipo" y tarjeta "Anticipos recibidos"
+  en `reservas/detalle.vue`. `ReservaFacturacionController::store()`/`prepararFactura()`
+  ahora netean los anticipos disponibles contra el total a facturar (selección manual desde
+  el modal de "Facturación especial", o automática greedy en el flujo simple).
+  **Bug real encontrado en pruebas, corregido antes de cerrar**: el filtro de anticipos
+  disponibles solo exigía pertenecer a la reserva, sin exigir que el `client_id` del
+  anticipo coincidiera con el cliente al que se factura — con "Facturación múltiple"
+  (varios pasajeros/clientes sobre la misma reserva, Sesión 11v) esto habría permitido
+  aplicar el anticipo de un cliente a la factura de otro. Corregido filtrando
+  `advance.client_id === $cliente->id` antes de ofrecer el anticipo.
+- **Tier 1 — selector de tratamiento tributario (cierra el hallazgo que había quedado
+  "pendiente de confirmar con contador" desde la construcción original)**:
+  `AdvanceController::store()` forzaba gravado 18% siempre (`tip_afe_igv_default` del
+  producto placeholder `ADELANTO-001`, ignorando si el cliente era de Amazonía). Ahora
+  exige `tip_afe_igv` (`10`/`20`/`30`, Catálogo 07 SUNAT) explícito en el payload —
+  `mto_oper_gravadas`/`exoneradas`/`inafectas` y `SaleDetail.tip_afe_igv` se derivan de la
+  elección real, no del producto. Selector nuevo en `advances/create.vue` (default
+  gravado, mismo comportamiento de antes si no se toca).
+- **Tier 2 — corrección post-SUNAT de un adelanto mal clasificado**: confirmado leyendo
+  `GreenterService::getInvoice()` antes de diseñar que el bloque `PrepaidPayment` del XML
+  (`tipoDocRel`/`nroDocRel`/`total`) nunca lleva la clasificación tributaria del adelanto —
+  así que corregirla es independiente de cualquier venta que ya lo haya aplicado. Mecanismo
+  elegido (confirmado con el usuario, descartada la alternativa de "reclasificar sin
+  anular" por necesitar una calculadora nueva sin validar y un motivo SUNAT ambiguo):
+  `POST advances/{id}/corregir` anula el comprobante viejo con NC motivo `01` (Anulación de
+  la operación — `permite_total=true`/`permite_parcial=false`, ajuste exacto al caso) y
+  reemite uno nuevo con el tratamiento correcto, preservando el MISMO `Advance.id`
+  (`sale_id` se reasigna al nuevo comprobante; `corrected_from_sale_id`/
+  `correction_reason`/`corrected_at`/`corrected_by` quedan de auditoría de la corrección
+  más reciente — mismo trade-off ya aceptado en el proyecto para
+  `Reserva.fecha_cancelacion`/`fecha_reprogramacion`, no un historial completo). Alcance
+  deliberadamente angosto: solo corrige tratamiento tributario, nunca cliente/monto/medio
+  de pago — esos son ancla de `AdvanceApplication`s ya existentes o hechos históricos que
+  ni siquiera aparecen en el XML del adelanto. `crearComprobanteAdelanto()` extraído de
+  `store()` para reusarse sin volver a cobrar la plata (la corrección no toca Caja).
+  Botón "Corregir tratamiento tributario" + banner de trazabilidad en `advances/show.vue`.
+- **Tier 3 — rediseño UX de las 3 pantallas** (`create.vue`/`index.vue`/`show.vue`):
+  explicación visible del flujo de 2 pasos (crear comprobante → enviar a SUNAT, ya
+  existente pero no explicado en pantalla), tarjeta de cliente más completa, medio de pago
+  sin preselección silenciosa, campo de referencia de pago para medios distintos a
+  efectivo, filtros/búsqueda (cliente, estado, rango de fechas) en el listado, columna
+  "Estado SUNAT" separada del estado de aplicación del adelanto, motivo de rechazo SUNAT
+  persistente en pantalla (antes solo vivía en un `Swal` transitorio, se perdía al
+  refrescar).
+- **Gap operativo real encontrado en vivo en `agencia-demo` al probar "Facturación
+  especial"** (no relacionado al código de esta sesión): faltaba una migración de permisos
+  pendiente de aplicar al tenant y el usuario de prueba no tenía sucursal asignada —
+  resuelto en el momento, con aprobación explícita antes de correr nada contra el tenant
+  real.
+- **226/226 tests backend en verde** (`AdvanceIntegridadTest`, `AdvanceCorreccionTest`,
+  `ReservaAnticipoTest` nuevos), type-check frontend en baseline (45 preexistentes, cero
+  nuevos). **Pendiente, no hecho en esta sesión**: validación real contra SUNAT Beta de un
+  comprobante de adelanto exonerado/inafecto y de una corrección vía NC motivo 01 —
+  requiere credenciales/certificado de un tenant real. Retail (fuera de Agencia de Viajes)
+  sigue sin un mecanismo estructurado de "adelanto → venta futura" como
+  `reserva_anticipos` — descartado de alcance en esta sesión, no confirmado explícitamente
+  con el usuario si hace falta.
+
 **Próximos módulos (en orden de prioridad):**
 
 1. **Representación impresa (PDF) con impresión automática**

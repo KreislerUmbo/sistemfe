@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Http\Controllers\Advance\AdvanceController;
 use App\Http\Controllers\Sale\SaleController;
 use App\Models\Advance\Advance;
 use App\Models\Advance\AdvanceApplication;
@@ -499,5 +500,53 @@ class AdvanceIntegridadTest extends TestCase
 
         $this->assertContains($ventaNormal->id, $ids);
         $this->assertNotContains($ventaAdelanto->id, $ids);
+    }
+
+    // ── Tier 3: filtros del listado (antes sin ninguno) ──────────────────
+    public function test_index_filtra_por_busqueda_de_cliente(): void
+    {
+        $clienteA = Client::factory()->create(['full_name' => 'Empresa Alfa SAC']);
+        $clienteB = Client::factory()->create(['full_name' => 'Comercial Beta EIRL']);
+        $advanceA = $this->crearAdelantoDisponible($clienteA, 50.00);
+        $this->crearAdelantoDisponible($clienteB, 50.00);
+
+        $response = app(AdvanceController::class)->index(new Request(['search' => 'Alfa']));
+        $body = json_decode($response->getContent(), true);
+
+        $this->assertSame(1, $body['total']);
+        $this->assertSame($advanceA->id, $body['advances'][0]['id']);
+    }
+
+    public function test_index_filtra_por_estado(): void
+    {
+        $cliente = Client::factory()->create();
+        $advancePendiente = $this->crearAdelantoDisponible($cliente, 50.00);
+        $advanceAplicado = $this->crearAdelantoDisponible($cliente, 50.00);
+        $advanceAplicado->update(['applied_amount' => 50.00, 'status' => 'applied']);
+
+        $response = app(AdvanceController::class)->index(new Request(['status' => 'applied']));
+        $body = json_decode($response->getContent(), true);
+
+        $this->assertSame(1, $body['total']);
+        $this->assertSame($advanceAplicado->id, $body['advances'][0]['id']);
+        $this->assertNotSame($advancePendiente->id, $body['advances'][0]['id']);
+    }
+
+    public function test_index_filtra_por_rango_de_fecha(): void
+    {
+        $cliente = Client::factory()->create();
+        $advanceViejo = $this->crearAdelantoDisponible($cliente, 50.00);
+        // Advance::setCreatedAtAttribute() siempre pisa con Carbon::now() —
+        // update() normal no sirve para backdatear, hay que ir directo a la
+        // tabla.
+        DB::table('advances')->where('id', $advanceViejo->id)->update(['created_at' => now()->subDays(10)]);
+        $advanceReciente = $this->crearAdelantoDisponible($cliente, 50.00);
+
+        $response = app(AdvanceController::class)->index(new Request(['fecha_desde' => now()->subDay()->toDateString()]));
+        $body = json_decode($response->getContent(), true);
+
+        $ids = array_column($body['advances'], 'id');
+        $this->assertContains($advanceReciente->id, $ids);
+        $this->assertNotContains($advanceViejo->id, $ids);
     }
 }

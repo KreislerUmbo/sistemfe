@@ -13,6 +13,38 @@
             </router-link>
         </div>
 
+        <!-- Tier 3 (2026-08-24): antes sin ningún filtro — con más de ~25
+             adelantos activos era imposible encontrar uno puntual. -->
+        <div class="card border-0 shadow-sm mb-3">
+            <div class="card-body py-2">
+                <div class="row g-2 align-items-end">
+                    <div class="col-12 col-md-4">
+                        <label class="form-label small mb-1">Buscar cliente</label>
+                        <input type="text" class="form-control form-control-sm" v-model="filtroBusqueda"
+                            placeholder="Nombre o documento..." @input="onFiltroInput">
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <label class="form-label small mb-1">Estado</label>
+                        <select class="form-select form-select-sm" v-model="filtroEstado" @change="aplicarFiltros">
+                            <option value="">Todos</option>
+                            <option v-for="(label, key) in statusLabels" :key="key" :value="key">{{ label }}</option>
+                        </select>
+                    </div>
+                    <div class="col-6 col-md-2">
+                        <label class="form-label small mb-1">Desde</label>
+                        <input type="date" class="form-control form-control-sm" v-model="filtroFechaDesde" @change="aplicarFiltros">
+                    </div>
+                    <div class="col-6 col-md-2">
+                        <label class="form-label small mb-1">Hasta</label>
+                        <input type="date" class="form-control form-control-sm" v-model="filtroFechaHasta" @change="aplicarFiltros">
+                    </div>
+                    <div class="col-6 col-md-1">
+                        <button type="button" class="btn btn-outline-secondary btn-sm w-100" @click="limpiarFiltros">Limpiar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div class="card border-0 shadow-sm">
             <div class="table-responsive">
                 <table class="table table-hover mb-0 align-middle">
@@ -24,18 +56,19 @@
                             <th class="text-end">Aplicado</th>
                             <th class="text-end">Reembolsado</th>
                             <th class="text-end">Disponible</th>
-                            <th>Estado</th>
+                            <th>Estado aplicación</th>
+                            <th>Estado SUNAT</th>
                             <th class="text-center">Acciones</th>
                         </tr>
                     </thead>
                     <tbody>
                         <tr v-if="loading">
-                            <td colspan="8" class="text-center py-4">
+                            <td colspan="9" class="text-center py-4">
                                 <span class="spinner-border text-primary"></span>
                             </td>
                         </tr>
                         <tr v-else-if="advances.length === 0">
-                            <td colspan="8" class="text-center text-muted py-4">Sin adelantos registrados.</td>
+                            <td colspan="9" class="text-center text-muted py-4">Sin adelantos registrados.</td>
                         </tr>
                         <tr v-for="a in advances" :key="a.id">
                             <td>{{ a.client?.full_name }}</td>
@@ -50,6 +83,9 @@
                             <td class="text-end fw-semibold">{{ moneda(a) }} {{ disponible(a).toFixed(2) }}</td>
                             <td>
                                 <span class="badge" :class="badgeClass(a.status)">{{ statusLabel(a.status) }}</span>
+                            </td>
+                            <td>
+                                <span class="badge" :class="badgeSunatClass(a)">{{ labelSunat(a) }}</span>
                             </td>
                             <td class="text-center">
                                 <router-link :to="{ name: 'advances.show', params: { id: a.id } }"
@@ -85,11 +121,42 @@ const loading = ref(false);
 const currentPage = ref(1);
 const totalRows = ref(0);
 
+// Tier 3 (2026-08-24): filtros — antes el listado no tenía ninguno.
+const filtroBusqueda = ref("");
+const filtroEstado = ref("");
+const filtroFechaDesde = ref("");
+const filtroFechaHasta = ref("");
+let filtroBusquedaTimeout: ReturnType<typeof setTimeout> | undefined;
+
+function onFiltroInput() {
+    clearTimeout(filtroBusquedaTimeout);
+    filtroBusquedaTimeout = setTimeout(() => aplicarFiltros(), 300);
+}
+
+function aplicarFiltros() {
+    currentPage.value = 1;
+    cargar();
+}
+
+function limpiarFiltros() {
+    filtroBusqueda.value = "";
+    filtroEstado.value = "";
+    filtroFechaDesde.value = "";
+    filtroFechaHasta.value = "";
+    aplicarFiltros();
+}
+
 async function cargar() {
     loading.value = true;
     try {
         const { data }: { data: Advances } = await httpClient.get("advances", {
-            params: { page: currentPage.value },
+            params: {
+                page: currentPage.value,
+                search: filtroBusqueda.value || undefined,
+                status: filtroEstado.value || undefined,
+                fecha_desde: filtroFechaDesde.value || undefined,
+                fecha_hasta: filtroFechaHasta.value || undefined,
+            },
         });
         advances.value = data.advances;
         totalRows.value = data.total;
@@ -131,6 +198,20 @@ function badgeClass(s: AdvanceStatus): string {
         case "partially_refunded": return "bg-info text-dark";
         default: return "bg-warning text-dark";
     }
+}
+
+// Tier 3 (2026-08-24): "Estado" ya significaba "aplicado/reembolsado" —
+// mezclaba eso con si el comprobante se envió a SUNAT, dos cosas
+// independientes. Columna separada, misma fuente que advances/show.vue.
+function labelSunat(a: Advance): string {
+    if (a.sale?.xml) return "Aceptado";
+    if (a.sale?.sunat_error_message) return "Rechazado";
+    return "Sin enviar";
+}
+function badgeSunatClass(a: Advance): string {
+    if (a.sale?.xml) return "bg-success";
+    if (a.sale?.sunat_error_message) return "bg-danger";
+    return "bg-warning text-dark";
 }
 
 watch(currentPage, () => cargar());

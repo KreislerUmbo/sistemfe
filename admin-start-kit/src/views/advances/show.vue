@@ -32,10 +32,15 @@
                                 <span class="badge ms-1" :class="badgeClass(advance.status)">
                                     {{ statusLabel(advance.status) }}
                                 </span>
+                                <!-- Tier 3 (2026-08-24): estado SUNAT persistente, separado
+                                     del estado de aplicación — antes un rechazo solo se veía
+                                     un instante en un popup, sin quedar nada visible acá. -->
+                                <span class="badge ms-1" :class="badgeSunatClass">{{ labelSunat }}</span>
                             </h6>
-                            <small class="text-muted">
+                            <small class="text-muted d-block">
                                 Monto: {{ moneda }} {{ Number(advance.amount).toFixed(2) }}
                                 · Medio de pago: {{ advance.payment_method }}
+                                <template v-if="referenciaPago"> · Ref: {{ referenciaPago }}</template>
                             </small>
                         </div>
                         <div class="d-flex gap-2">
@@ -59,6 +64,12 @@
                         <i class="fas fa-exclamation-triangle me-1"></i>
                         El adelanto no puede aplicarse a una venta ni reembolsarse hasta que este
                         comprobante sea enviado y aceptado por SUNAT.
+                    </div>
+                    <!-- Tier 3 (2026-08-24): antes un rechazo de SUNAT solo se veía en
+                         un Swal que desaparecía — sin quedar registrado en pantalla. -->
+                    <div v-if="advance.sale?.sunat_error_message" class="alert alert-danger mt-3 mb-0 py-2 px-3 small">
+                        <i class="fas fa-circle-xmark me-1"></i>
+                        <strong>Rechazado por SUNAT:</strong> {{ advance.sale.sunat_error_message }}
                     </div>
                     <!-- Tier 2 (2026-08-24): trazabilidad de la corrección más
                          reciente — el comprobante anterior queda anulado (NC
@@ -280,6 +291,20 @@ const loadingCorregir = ref(false);
 const puedeCorregir = computed(() => motivoCorreccion.value.trim().length >= 10);
 
 const moneda = computed(() => (advance.value?.currency === "USD" ? "US$" : "S/"));
+
+// Tier 3 (2026-08-24): estado SUNAT persistente + referencia de pago —
+// mismo criterio que advances/index.vue.
+const labelSunat = computed(() => {
+    if (advance.value?.sale?.xml) return "Aceptado";
+    if (advance.value?.sale?.sunat_error_message) return "Rechazado";
+    return "Sin enviar";
+});
+const badgeSunatClass = computed(() => {
+    if (advance.value?.sale?.xml) return "bg-success";
+    if (advance.value?.sale?.sunat_error_message) return "bg-danger";
+    return "bg-warning text-dark";
+});
+const referenciaPago = computed(() => advance.value?.sale?.sale_payments?.[0]?.comments || null);
 
 const disponible = computed(() => {
     if (!advance.value) return 0;

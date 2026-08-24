@@ -67,6 +67,7 @@ export type SalePayment = {
     method_payment: string,
     amount: number,
     date_payment: string,
+    comments?: string | null,
 }
 export type Sale = {
     id: string,

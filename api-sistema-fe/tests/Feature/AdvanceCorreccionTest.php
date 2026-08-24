@@ -297,4 +297,30 @@ class AdvanceCorreccionTest extends TestCase
         $this->assertSame(1, $adelanto->applications()->count());
         $this->assertSame($ventaDestino->id, $adelanto->applications()->first()->sale_id, 'la aplicación sigue apuntando a la venta destino original, no a la corregida');
     }
+
+    // ── Tier 3: referencia de pago (SalePayment.comments) ────────────────
+    public function test_store_guarda_referencia_de_pago_para_medios_no_efectivo(): void
+    {
+        PaymentMethod::firstOrCreate(
+            ['code' => 'TRANSFERENCIA'],
+            ['name' => 'Transferencia', 'is_active' => true, 'sort_order' => 2, 'affects_cash_count' => false]
+        );
+
+        $branch = $this->branchConSerieFactura();
+        $this->usuarioConSesionCaja($branch->id);
+        $cliente = Client::factory()->empresa()->create();
+
+        $response = app(AdvanceController::class)->store(new Request([
+            'client_id' => $cliente->id,
+            'amount' => 118.00,
+            'currency' => 'PEN',
+            'payment_method' => 'TRANSFERENCIA',
+            'payment_reference' => 'BCP op. 000123456',
+            'tip_afe_igv' => '10',
+        ]));
+        $body = $response->getData(true);
+
+        $pago = \App\Models\Sale\SalePayment::where('sale_id', $body['sale_id'])->first();
+        $this->assertSame('BCP op. 000123456', $pago->comments);
+    }
 }

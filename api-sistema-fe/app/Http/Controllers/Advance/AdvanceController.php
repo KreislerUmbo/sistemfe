@@ -71,11 +71,33 @@ class AdvanceController extends Controller
     }
 
     // ── Listado de adelantos ──────────────────────────────────────────
-    public function index()
+    // Tier 3 (2026-08-24): antes sin ningún filtro — con más de ~25
+    // adelantos activos era imposible encontrar uno puntual.
+    public function index(Request $request)
     {
-        $adelantos = Advance::with(['client', 'sale'])
-            ->orderBy('id', 'desc')
-            ->paginate(25);
+        $query = Advance::with(['client', 'sale']);
+
+        if ($request->filled('search')) {
+            $busqueda = $request->search;
+            $query->whereHas('client', function ($q) use ($busqueda) {
+                $q->where('full_name', 'ilike', "%{$busqueda}%")
+                    ->orWhere('n_document', 'ilike', "%{$busqueda}%");
+            });
+        }
+
+        if ($request->filled('status')) {
+            $query->where('status', $request->status);
+        }
+
+        if ($request->filled('fecha_desde')) {
+            $query->whereDate('created_at', '>=', $request->fecha_desde);
+        }
+
+        if ($request->filled('fecha_hasta')) {
+            $query->whereDate('created_at', '<=', $request->fecha_hasta);
+        }
+
+        $adelantos = $query->orderBy('id', 'desc')->paginate(25);
 
         return response()->json([
             "total"     => $adelantos->total(),
@@ -87,7 +109,7 @@ class AdvanceController extends Controller
     // ── Detalle de un adelanto ─────────────────────────────────────────
     public function show(string $id)
     {
-        $adelanto = Advance::with(['client', 'sale', 'applications.sale', 'refunds.note', 'correctedFromSale'])
+        $adelanto = Advance::with(['client', 'sale.sale_payments', 'applications.sale', 'refunds.note', 'correctedFromSale'])
             ->findOrFail($id);
 
         return response()->json(["advance" => $adelanto]);
@@ -139,6 +161,11 @@ class AdvanceController extends Controller
             // Catálogo 07 SUNAT: '10' gravado, '20' exonerado, '30' inafecto.
             'tip_afe_igv'    => 'required|string|in:10,20,30',
             'notes'          => 'nullable|string',
+            // Tier 3 (2026-08-24): referencia de pago (N° operación, banco,
+            // últimos dígitos) — para medios no efectivo, sin esto no
+            // quedaba ningún dato para conciliar contra el estado de cuenta
+            // real del banco/Yape/Plin.
+            'payment_reference' => 'nullable|string|max:255',
         ]);
 
         // Módulo Caja — Fase 6 (mismo patrón de guard que SaleController::
@@ -183,6 +210,7 @@ class AdvanceController extends Controller
                 "method_payment" => $request->payment_method,
                 "amount"         => $amount,
                 "date_payment"   => now()->toDateString(),
+                "comments"       => $request->payment_reference,
             ]);
 
             $adelanto = Advance::create([
