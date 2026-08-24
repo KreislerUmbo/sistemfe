@@ -6,6 +6,7 @@ use App\Http\Controllers\AgenciaViajes\ReservaController;
 use App\Http\Controllers\AgenciaViajes\ReservaItemController;
 use App\Models\AgenciaViajes\Alternativa;
 use App\Models\AgenciaViajes\AlternativaItem;
+use App\Models\AgenciaViajes\Reserva;
 use App\Models\AgenciaViajes\ReservaItem;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -119,5 +120,39 @@ class ReservaItemFechaOrigenTest extends TestCase
         $fresh = $reservaItem->fresh();
         $this->assertSame(ReservaItem::FECHA_ORIGEN_AUTO, $fresh->fecha_origen);
         $this->assertSame('08:30', substr($fresh->hora, 0, 5));
+    }
+
+    // Regresión real (2026-08-24): detalle.vue::guardarItem() manda SIEMPRE
+    // los 4 campos juntos (guia_id/proveedor_tarifa_id/fecha/hora), sin
+    // importar cuál cambió el usuario — el array_key_exists('fecha', ...)
+    // original marcaba 'manual' en CADA edición de proveedor/guía/hora,
+    // aunque la fecha nunca hubiera cambiado. Ahora se compara el valor
+    // nuevo contra el valor ya persistido antes de marcar manual.
+    public function test_editar_proveedor_reenviando_la_misma_fecha_no_marca_manual(): void
+    {
+        $reservaItem = $this->crearReservaItemAuto();
+        $fechaActual = $reservaItem->fecha->toDateString();
+
+        app(ReservaItemController::class)->update(
+            new Request(['guia_id' => null, 'proveedor_tarifa_id' => null, 'fecha' => $fechaActual, 'hora' => '09:00']),
+            (string) $reservaItem->id
+        );
+
+        $this->assertSame(ReservaItem::FECHA_ORIGEN_AUTO, $reservaItem->fresh()->fecha_origen);
+        $this->assertSame($fechaActual, $reservaItem->fresh()->fecha->toDateString());
+    }
+
+    public function test_rechaza_editar_item_de_reserva_no_activa(): void
+    {
+        $reservaItem = $this->crearReservaItemAuto();
+        Reserva::where('id', $reservaItem->reserva_id)->update(['estado' => 'cancelada']);
+
+        $response = app(ReservaItemController::class)->update(
+            new Request(['hora' => '10:00']),
+            (string) $reservaItem->id
+        );
+
+        $this->assertSame(422, $response->getStatusCode());
+        $this->assertNotSame('10:00', substr($reservaItem->fresh()->hora ?? '', 0, 5));
     }
 }

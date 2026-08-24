@@ -4,6 +4,8 @@ namespace Tests\Feature\AgenciaViajes;
 
 use App\Http\Controllers\AgenciaViajes\ReservaController;
 use App\Http\Controllers\AgenciaViajes\ReservaFacturacionController;
+use App\Http\Controllers\Greenter\GreenterService;
+use App\Http\Controllers\Sale\NotaElectronicaController;
 use App\Models\AgenciaViajes\Alternativa;
 use App\Models\AgenciaViajes\AlternativaItem;
 use App\Models\AgenciaViajes\Reserva;
@@ -13,12 +15,20 @@ use App\Models\AgenciaViajes\ReservaVenta;
 use App\Models\AgenciaViajes\SaleDetailItem;
 use App\Models\Cash\Branch;
 use App\Models\Client\Client;
+use App\Models\Company;
+use App\Models\Sale\Note;
 use App\Models\Sale\Sale;
 use App\Models\Sale\SerieComprobante;
 use App\Models\User;
+use Greenter\Factory\FeFactory;
+use Greenter\Model\DocumentInterface;
+use Greenter\Model\Response\BaseResult;
+use Greenter\Model\Sale\Note as GreenterNote;
+use Greenter\See;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
@@ -375,7 +385,7 @@ class ReservaFacturacionTest extends TestCase
         $this->usuarioConPermisos($branch->id, ['emitir_factura']);
 
         $f = $this->crearReservaConPasajerosEItems();
-        $cliente = Client::factory()->create();
+        $cliente = Client::factory()->empresa()->create();
 
         $response = app(ReservaFacturacionController::class)->store(new Request([
             'pasajero_ids' => [$f['p1']->id, $f['p2']->id],
@@ -480,7 +490,7 @@ class ReservaFacturacionTest extends TestCase
         $this->usuarioConPermisos($branch->id, ['emitir_factura']);
 
         $f = $this->crearReservaConPasajerosEItems();
-        $cliente = Client::factory()->create();
+        $cliente = Client::factory()->empresa()->create();
 
         // Sin reserva_item_ids_manual: el ítem sin asignar NO se cuela.
         $preview = app(ReservaFacturacionController::class)->prepararFactura(new Request([
@@ -530,7 +540,7 @@ class ReservaFacturacionTest extends TestCase
         $this->usuarioConPermisos($branch->id, ['emitir_factura']);
 
         $f = $this->crearReservaConPasajerosEItems();
-        $cliente = Client::factory()->create();
+        $cliente = Client::factory()->empresa()->create();
 
         app(ReservaFacturacionController::class)->store(new Request([
             'pasajero_ids' => [$f['p3']->id],
@@ -549,6 +559,134 @@ class ReservaFacturacionTest extends TestCase
         $this->assertSame(422, $response->getStatusCode());
         $this->assertStringContainsString((string) $f['p3']->id, $body['message']);
         $this->assertSame(1, Sale::count(), 'no debe crear nada a medias');
+    }
+
+    // Escenario real reportado por el usuario probando manualmente contra
+    // agencia-demo (2026-08-24): facturar una reserva y después anular esa
+    // venta (Nota de Crédito total, motivo NC01) dejaba la reserva
+    // marcada como facturada para siempre — pasajerosYaFacturadosIds()/
+    // itemsYaFacturadosIds() seguían contando la ReservaVenta como
+    // vigente, sin ningún camino de recuperación por la API (pasajero_ids
+    // exige min:1 y rechaza cualquier pasajero ya facturado). Cerrado
+    // conectando NotaElectronicaController::enviarNotaSunat() — al aceptar
+    // una NC total, borra la ReservaVenta cuyo sale_id es el de la venta
+    // anulada.
+    public function test_anular_venta_por_nota_credito_total_libera_la_reserva_para_refacturar(): void
+    {
+        [$branch, ] = $this->branchConSerie('01', 'F001');
+        $usuario = $this->usuarioConPermisos($branch->id, ['emitir_factura']);
+
+        $f = $this->crearReservaConPasajerosEItems();
+        $cliente = Client::factory()->empresa()->create();
+
+        $response = app(ReservaFacturacionController::class)->store(new Request([
+            'pasajero_ids' => [$f['p3']->id],
+            'client_id' => $cliente->id,
+            'tipo_comprobante_codigo' => '01',
+        ]), (string) $f['reserva']->id);
+        $body = $response->getData(true);
+        $this->assertSame(200, $body['code'], json_encode($body));
+        $ventaId = $body['sale_id'];
+
+        $this->assertNotNull(ReservaVenta::where('sale_id', $ventaId)->first(), 'precondición: la ReservaVenta existe');
+
+        // Refacturar el mismo pasajero ANTES de anular: sigue bloqueado
+        // (comportamiento ya cubierto por test_rechaza_refacturar_pasajero_ya_facturado,
+        // repetido acá solo como control antes/después).
+        $intentoAntes = app(ReservaFacturacionController::class)->store(new Request([
+            'pasajero_ids' => [$f['p3']->id],
+            'client_id' => $cliente->id,
+            'tipo_comprobante_codigo' => '01',
+        ]), (string) $f['reserva']->id);
+        $this->assertSame(422, $intentoAntes->getStatusCode());
+
+        // ── Anular la venta con una NC total (07, tipo_afectacion='total') ──
+        Storage::fake('public');
+        Company::create([
+            'razon_social' => 'Empresa de Prueba SAC',
+            'razon_social_comercial' => 'Empresa de Prueba',
+            'n_document' => '20123456789',
+        ]);
+
+        $nota = Note::create([
+            'sale_id' => $ventaId,
+            'tipo_doc' => '07',
+            'tipo_doc_afectado' => '01',
+            'serie_afectada' => 'F001',
+            'correlativo_afectado' => 1,
+            'serie' => 'FC01',
+            'cod_motivo' => '01',
+            'des_motivo' => 'Anulación de la operación',
+            'tipo_afectacion' => 'total',
+            'client_id' => $cliente->id,
+            'cod_tipo_doc_cliente' => $cliente->cod_tipo_doc_sunat,
+            'currency' => 'PEN',
+            'status' => 'pendiente',
+            'reponer_stock' => false,
+            'user_id' => $usuario->id,
+        ]);
+
+        $this->app->instance(GreenterService::class, $this->greenterServiceQueAceptaNota());
+
+        $responseNota = app(NotaElectronicaController::class)->enviarNotaSunat(new Request(['note_id' => $nota->id]));
+        $dataNota = $responseNota->getData(true);
+        $this->assertSame('aceptado', $dataNota['note']['status'], json_encode($dataNota));
+
+        // ── La ReservaVenta original desapareció ──
+        $this->assertNull(ReservaVenta::where('sale_id', $ventaId)->first(), 'la ReservaVenta debe liberarse tras la NC total aceptada');
+
+        // ── Y ahora sí se puede refacturar el mismo pasajero ──
+        $intentoDespues = app(ReservaFacturacionController::class)->store(new Request([
+            'pasajero_ids' => [$f['p3']->id],
+            'client_id' => $cliente->id,
+            'tipo_comprobante_codigo' => '01',
+        ]), (string) $f['reserva']->id);
+        $bodyDespues = $intentoDespues->getData(true);
+        $this->assertSame(200, $bodyDespues['code'], json_encode($bodyDespues));
+        $this->assertSame(2, Sale::count(), 'la venta anulada + la nueva');
+    }
+
+    // Mismo criterio que EnviarSunatCdrFailureTest::greenterServiceQueFallaAlProcesar():
+    // getSee()/getNote()/procesarRespuestaSunat() completamente controlados
+    // — cero red real, cero certificado real. getFactory() además mockeado
+    // (a diferencia de esa clase) porque este test SÍ necesita llegar a la
+    // rama de éxito (status='aceptado'), que llama
+    // $see->getFactory()->getLastXml() para armar el XML final — cualquier
+    // XML bien formado alcanza, extraerHashDigest() devuelve null en
+    // silencio si no encuentra el nodo DigestValue.
+    private function greenterServiceQueAceptaNota(): GreenterService
+    {
+        return new class extends GreenterService {
+            public function getSee(): See
+            {
+                return new class extends See {
+                    public function send(DocumentInterface $document): ?BaseResult
+                    {
+                        return null;
+                    }
+
+                    public function getFactory(): FeFactory
+                    {
+                        return new class extends FeFactory {
+                            public function getLastXml(): ?string
+                            {
+                                return '<root/>';
+                            }
+                        };
+                    }
+                };
+            }
+
+            public function getNote(array $datos_nota, $empresa, $nota): GreenterNote
+            {
+                return new GreenterNote();
+            }
+
+            public function procesarRespuestaSunat($resultado): array
+            {
+                return ['cdrZip' => 'fake-cdr-contenido-de-prueba'];
+            }
+        };
     }
 
     public function test_rechaza_pasajero_que_no_pertenece_a_la_reserva(): void
@@ -667,13 +805,14 @@ class ReservaFacturacionTest extends TestCase
         $this->usuarioConPermisos($branch->id, ['emitir_factura']);
 
         [$reserva, $itemAmazonia, $itemNacional, $pasajeroA, $pasajeroB] = $this->crearReservaConMezclaTributaria();
-        $cliente = Client::factory()->create();
+        $cliente = Client::factory()->empresa()->create();
 
-        // Facturar solo a pasajeroA (su ítem 'amazonia' solo) — no hay
-        // mezcla dentro de ESTE Sale, debe pasar sin problema aunque la
-        // reserva completa sí mezcle tratamientos entre sus pasajeros.
+        // Facturar solo a pasajeroB (su ítem 'nacional' solo) — no hay
+        // mezcla ni tratamiento no-nacional dentro de ESTE Sale, debe
+        // pasar sin problema aunque la reserva completa mezcle
+        // tratamientos entre sus pasajeros.
         $response = app(ReservaFacturacionController::class)->store(new Request([
-            'pasajero_ids' => [$pasajeroA->id],
+            'pasajero_ids' => [$pasajeroB->id],
             'client_id' => $cliente->id,
             'tipo_comprobante_codigo' => '01',
         ]), (string) $reserva->id);
@@ -681,6 +820,22 @@ class ReservaFacturacionTest extends TestCase
         $body = $response->getData(true);
         $this->assertSame(200, $body['code'], json_encode($body));
         $this->assertSame(1, Sale::count());
+
+        // pasajeroA (su ítem 'amazonia' solo) sigue bloqueado — no por
+        // mezcla (es homogéneo dentro de este subgrupo), sino por el
+        // guard "tratamiento no nacional pausado" (fix tributario
+        // 2026-08-24, ver detectarMezclaTributaria()): confirma que el
+        // guardia evalúa el SUBGRUPO elegido, no la reserva completa —
+        // pasajeroB pasa, pasajeroA de la misma reserva no.
+        $responseA = app(ReservaFacturacionController::class)->store(new Request([
+            'pasajero_ids' => [$pasajeroA->id],
+            'client_id' => $cliente->id,
+            'tipo_comprobante_codigo' => '01',
+        ]), (string) $reserva->id);
+        $bodyA = $responseA->getData(true);
+        $this->assertSame(422, $responseA->getStatusCode());
+        $this->assertTrue($bodyA['bloqueado_tributario']);
+        $this->assertSame(1, Sale::count(), 'el intento bloqueado no debe crear nada');
     }
 
     public function test_preparar_factura_lanza_403_si_tenant_no_tiene_facturacion_habilitada(): void

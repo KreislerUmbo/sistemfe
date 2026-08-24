@@ -7,6 +7,7 @@ use App\Http\Controllers\Greenter\GreenterService;
 use App\Http\Resources\Product\ProductCollection;
 use App\Models\Advance\Advance;
 use App\Models\Advance\AdvanceRefund;
+use App\Models\AgenciaViajes\ReservaVenta;
 use App\Models\Company;
 use App\Models\Product\Product;
 use App\Models\Sale\Note;
@@ -398,6 +399,22 @@ class NotaElectronicaController extends Controller
                         Product::where('id', $detalle->product_id)->increment('stock', $detalle->quantity);
                     }
                 }
+            }
+
+            // ── Reserva de Agencia de Viajes: liberar el ReservaVenta
+            // original (hallazgo de auditoría 2026-08-24) ── una NC total
+            // (07, tipo_afectacion='total') anula por completo la venta
+            // original. Si esa venta nació de facturar una reserva
+            // (ReservaFacturacionController::store()), su ReservaVenta debe
+            // desaparecer acá — si no, pasajerosYaFacturadosIds()/
+            // itemsYaFacturadosIds() siguen contando esa venta como
+            // vigente para siempre y la reserva queda bloqueada para
+            // volver a facturar esos pasajeros/ítems, sin ningún camino de
+            // recuperación por la API (no hay ningún ReservaVenta::update()/
+            // delete() en el resto del proyecto salvo este y
+            // SaleController::destroy()).
+            if ($nota->tipo_doc === '07' && $nota->tipo_afectacion === 'total') {
+                ReservaVenta::where('sale_id', $nota->sale_id)->delete();
             }
 
             // ── Si esta nota es el reembolso de un adelanto ────────────

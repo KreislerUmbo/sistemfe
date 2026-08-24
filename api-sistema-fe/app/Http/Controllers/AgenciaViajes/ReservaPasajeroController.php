@@ -22,7 +22,11 @@ class ReservaPasajeroController extends Controller
 {
     public function update(Request $request, string $id)
     {
-        $pasajero = ReservaPasajero::findOrFail($id);
+        $pasajero = ReservaPasajero::with('reserva')->findOrFail($id);
+
+        if ($pasajero->reserva->estado !== 'activa') {
+            return response()->json(['code' => 422, 'message' => 'Solo se puede editar un pasajero de una reserva activa.'], 422);
+        }
 
         $validator = Validator::make($request->all(), [
             'nombre' => 'nullable|string|max:250',

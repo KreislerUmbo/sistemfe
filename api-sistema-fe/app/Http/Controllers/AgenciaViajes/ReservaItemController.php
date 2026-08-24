@@ -18,7 +18,21 @@ class ReservaItemController extends Controller
 {
     public function update(Request $request, string $id)
     {
-        $item = ReservaItem::findOrFail($id);
+        $item = ReservaItem::with('reserva')->findOrFail($id);
+        $reserva = $item->reserva;
+
+        if ($reserva->estado !== 'activa') {
+            return response()->json(['code' => 422, 'message' => 'Solo se puede editar un ítem de una reserva activa.'], 422);
+        }
+
+        $yaFacturado = ReservaVenta::where('reserva_id', $reserva->id)
+            ->get()
+            ->flatMap(fn (ReservaVenta $rv) => $rv->reserva_item_ids ?? [])
+            ->contains($item->id);
+
+        if ($yaFacturado) {
+            return response()->json(['code' => 422, 'message' => 'No se puede editar: este ítem ya fue facturado en una venta de esta reserva.'], 422);
+        }
 
         $validator = Validator::make($request->all(), [
             'guia_id' => 'nullable|integer|exists:guias,id',
@@ -46,7 +60,8 @@ class ReservaItemController extends Controller
         // recálculo automático futuro (Fase 2, reprogramación) nunca la
         // pise sin decisión explícita. array_key_exists(), no isset(): un
         // 'fecha' => null explícito también cuenta como edición manual.
-        if (array_key_exists('fecha', $validado)) {
+        $fechaActual = $item->fecha?->toDateString();
+        if (array_key_exists('fecha', $validado) && $validado['fecha'] !== $fechaActual) {
             $validado['fecha_origen'] = ReservaItem::FECHA_ORIGEN_MANUAL;
         }
 

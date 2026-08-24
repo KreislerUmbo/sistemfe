@@ -18,12 +18,12 @@
                 <div class="row g-2">
                     <div class="col-12 col-md-8">
                         <div class="input-group input-group-sm">
-                            <input type="text" class="form-control" placeholder="Buscar por código, destino, cliente o documento..." v-model="search" @keyup.enter="list">
-                            <button class="btn btn-primary" @click="list"><i class="fas fa-search"></i></button>
+                            <input type="text" class="form-control" placeholder="Buscar por código, destino, cliente o documento..." v-model="search" @keyup.enter="buscar">
+                            <button class="btn btn-primary" @click="buscar"><i class="fas fa-search"></i></button>
                         </div>
                     </div>
                     <div class="col-12 col-md-4">
-                        <select class="form-select form-select-sm" v-model="estado" @change="list">
+                        <select class="form-select form-select-sm" v-model="estado" @change="buscar">
                             <option value="">Todos los estados</option>
                             <option value="activa">Activa</option>
                             <option value="cancelada">Cancelada</option>
@@ -71,13 +71,24 @@
                         </tbody>
                     </table>
                 </div>
+                <div v-if="totalPages > 1" class="d-flex align-items-center justify-content-between p-3 border-top">
+                    <small class="text-muted">Página {{ page }} de {{ totalPages }}</small>
+                    <div class="btn-group btn-group-sm">
+                        <button class="btn btn-outline-secondary" :disabled="page <= 1 || loading" @click="irAPagina(page - 1)">
+                            <i class="fas fa-chevron-left"></i> Anterior
+                        </button>
+                        <button class="btn btn-outline-secondary" :disabled="page >= totalPages || loading" @click="irAPagina(page + 1)">
+                            Siguiente <i class="fas fa-chevron-right"></i>
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
     </DefaultLayout>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import { reservaService } from '@/services/admin/reservaService';
 import type { Reserva } from '@/types/agencia-viajes';
@@ -86,17 +97,42 @@ const reservas = ref<Reserva[]>([]);
 const search = ref<string>('');
 const estado = ref<'' | 'activa' | 'cancelada'>('');
 const total = ref<number>(0);
+const paginate = ref<number>(15);
+const page = ref<number>(1);
 const loading = ref<boolean>(false);
+
+// Backend pagina de a 15 (ReservaController::index()) pero no devolvía
+// last_page/current_page — total + tamaño de página fijo alcanza para
+// calcular la cantidad de páginas sin tocar el backend.
+const totalPages = computed(() => Math.max(1, Math.ceil(total.value / paginate.value)));
 
 const list = async () => {
     loading.value = true;
     try {
-        const res = await reservaService.listar({ search: search.value || undefined, estado: (estado.value || undefined) as any });
+        const res = await reservaService.listar({
+            page: page.value,
+            search: search.value || undefined,
+            estado: (estado.value || undefined) as any,
+        });
         reservas.value = res.reservas;
         total.value = res.total;
+        paginate.value = res.paginate;
     } finally {
         loading.value = false;
     }
+};
+
+// Un cambio de búsqueda/filtro vuelve siempre a la página 1 — quedarse en
+// una página que puede no existir más para el nuevo filtro sería confuso.
+const buscar = () => {
+    page.value = 1;
+    list();
+};
+
+const irAPagina = (nuevaPagina: number) => {
+    if (nuevaPagina < 1 || nuevaPagina > totalPages.value) return;
+    page.value = nuevaPagina;
+    list();
 };
 
 onMounted(() => list());

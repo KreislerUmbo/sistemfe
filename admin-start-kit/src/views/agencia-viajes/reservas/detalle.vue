@@ -8,7 +8,10 @@
                         {{ reserva.estado === 'activa' ? 'Activa' : 'Cancelada' }}
                     </span>
                     <span v-if="reserva.estado === 'activa' && (reserva.pasajeros?.length ?? 0) > 0" class="badge ms-2" :class="pasajerosPendientesFacturar.length === 0 ? 'bg-success' : 'bg-warning text-dark'">
-                        {{ pasajerosPendientesFacturar.length === 0 ? 'Facturación completa' : `Falta facturar a ${pasajerosPendientesFacturar.length} pasajero(s)` }}
+                        Pasajeros: {{ (reserva.pasajeros?.length ?? 0) - pasajerosPendientesFacturar.length }}/{{ reserva.pasajeros?.length ?? 0 }} facturados
+                    </span>
+                    <span v-if="reserva.estado === 'activa'" class="badge ms-2" :class="itemsPendientesDeFacturarCount === 0 ? 'bg-success' : 'bg-warning text-dark'">
+                        {{ itemsPendientesDeFacturarCount === 0 ? 'Ítems: todos facturados' : `Ítems: ${itemsPendientesDeFacturarCount} pendiente(s)` }}
                     </span>
                 </h5>
                 <small class="text-muted">
@@ -157,7 +160,11 @@
                                 </span>
                             </div>
 
-                            <div v-if="formPaxAbierto === p.id" class="mt-3 border-top pt-3">
+                            <!-- fieldset :disabled — deshabilita nativamente todos los inputs/
+                                 botones anidados cuando la reserva no está activa, sin tener
+                                 que atar :disabled campo por campo (mismo criterio que el
+                                 backend, ver ReservaPasajeroController::update()). -->
+                            <fieldset v-if="formPaxAbierto === p.id" class="mt-3 border-top pt-3" :disabled="reserva.estado !== 'activa'">
                                 <div class="row g-2 mb-2 position-relative">
                                     <div class="col-md-6">
                                         <label class="form-label small text-secondary mb-1">Buscar pasajero (DNI o nombre)</label>
@@ -232,7 +239,7 @@
                                     <span v-if="guardandoPax === p.id" class="spinner-border spinner-border-sm me-1"></span>
                                     <i v-else class="fas fa-check me-1"></i>Guardar
                                 </button>
-                            </div>
+                            </fieldset>
                         </div>
                     </div>
                     <div v-if="(reserva.pasajeros?.length ?? 0) === 0" class="text-muted text-center py-4">Sin pasajeros.</div>
@@ -252,11 +259,16 @@
                                 </span>
                             </div>
                             <div v-if="destinoItem(it)" class="small text-muted mb-2"><i class="fas fa-map-marker-alt me-1"></i>{{ destinoItem(it) }}</div>
-                            <div class="row g-2">
+                            <!-- fieldset :disabled — mismo criterio que el tab de pasajeros:
+                                 con la reserva no activa, nada de esto es editable (backend
+                                 ya lo rechaza, ver ReservaItemController::update()). El
+                                 buscador de proveedor no es un <select> nativo, se guarda
+                                 aparte con reserva.estado === 'activa' en su propio @click. -->
+                            <fieldset class="row g-2" :disabled="reserva.estado !== 'activa'">
                                 <div class="col-md-3" v-if="it.alternativa_item?.origen_tipo === 'proveedor'">
                                     <label class="form-label small text-secondary mb-1">Proveedor</label>
                                     <div v-if="proveedorBuscando !== it.id" class="d-flex align-items-center justify-content-between border rounded px-2 py-1 bg-white"
-                                        style="cursor:pointer;min-height:31px" @click="proveedorBuscando = it.id; proveedorSearch[it.id] = ''">
+                                        style="cursor:pointer;min-height:31px" @click="abrirBusquedaProveedor(it)">
                                         <span class="small" :class="{ 'text-muted fst-italic': !nombreProveedorActual(it) }">{{ nombreProveedorActual(it) ?? 'Sin asignar' }}</span>
                                         <i class="fas fa-pen text-muted small"></i>
                                     </div>
@@ -302,7 +314,7 @@
                                     <label class="form-label small text-secondary mb-1">Hora</label>
                                     <input type="time" class="form-control form-control-sm" v-model="it.hora" @change="guardarItem(it)">
                                 </div>
-                            </div>
+                            </fieldset>
                             <p v-if="tieneAsignacionAplicable(it) && !it.proveedor_tarifa_id && !it.guia_id" class="small mt-2 mb-0" style="color:#adb5bd;font-style:italic">
                                 <i class="fas fa-triangle-exclamation me-1"></i>Sin asignar todavía — no bloquea el resto de la reserva
                             </p>
@@ -316,12 +328,12 @@
                     <div v-for="it in reserva.items" :key="it.id" class="card border-0 shadow-sm">
                         <div class="card-body py-2">
                             <p class="fw-semibold mb-2">{{ nombreItem(it) }}</p>
-                            <div class="d-flex flex-wrap gap-3">
+                            <fieldset class="d-flex flex-wrap gap-3" :disabled="reserva.estado !== 'activa'">
                                 <label v-for="p in reserva.pasajeros" :key="p.id" class="small d-flex align-items-center gap-1" style="cursor:pointer">
                                     <input type="checkbox" :checked="estaAsignado(it.id, p.id)" @change="toggleAsignacion(it, p)">
                                     {{ p.nombre || ('Pasajero ' + p.id) }} <span class="text-muted">({{ etiquetaTipoPax(p.tipo_pax) }})</span>
                                 </label>
-                            </div>
+                            </fieldset>
                         </div>
                     </div>
                     <div v-if="(reserva.items?.length ?? 0) === 0" class="text-muted text-center py-4">Sin ítems.</div>
@@ -539,9 +551,10 @@
                                     <div class="col-6">
                                         <label class="form-label small fw-semibold text-secondary">Tipo de comprobante</label>
                                         <select class="form-select form-select-sm" v-model="facturarEspecialForm.tipo_comprobante_codigo">
-                                            <option value="01">Factura</option>
+                                            <option value="01" :disabled="!clienteEspecialTieneRuc">Factura</option>
                                             <option value="03">Boleta</option>
                                         </select>
+                                        <small v-if="!clienteEspecialTieneRuc" class="text-muted">El cliente elegido no tiene RUC — solo puede recibir boleta.</small>
                                     </div>
                                     <div class="col-6">
                                         <label class="form-label small fw-semibold text-secondary">Total de este comprobante</label>
@@ -627,7 +640,13 @@
 
                             <template v-else>
                                 <p class="small text-muted mb-2">
-                                    Se factura de una vez a {{ pasajerosPendientesFacturar.length }} pasajero(s) pendiente(s), a nombre de
+                                    <template v-if="pasajerosPendientesFacturar.length > 0">
+                                        Se factura de una vez a {{ pasajerosPendientesFacturar.length }} pasajero(s) pendiente(s)
+                                    </template>
+                                    <template v-else>
+                                        Se facturan {{ itemsPendientesDeFacturarCount }} ítem(s) sueltos pendientes (todos los pasajeros ya fueron facturados)
+                                    </template>
+                                    , a nombre de
                                     <strong>{{ cabecera?.cliente?.full_name ?? 'el cliente de la cotización' }}</strong>.
                                     ¿Necesitas dividirlo en varios comprobantes o cambiar el cliente? Usa <strong>Facturación especial</strong>.
                                 </p>
@@ -635,9 +654,10 @@
                                     <div class="col-6">
                                         <label class="form-label small fw-semibold text-secondary">Tipo de comprobante</label>
                                         <select class="form-select form-select-sm" v-model="facturarSimpleForm.tipo_comprobante_codigo">
-                                            <option value="01">Factura</option>
+                                            <option value="01" :disabled="!clienteSimpleTieneRuc">Factura</option>
                                             <option value="03">Boleta</option>
                                         </select>
+                                        <small v-if="!clienteSimpleTieneRuc" class="text-muted">Este cliente no tiene RUC — solo puede recibir boleta.</small>
                                     </div>
                                     <div class="col-6">
                                         <label class="form-label small fw-semibold text-secondary">Total a facturar</label>
@@ -804,6 +824,12 @@ const totalAnticiposDisponibles = ref(0);
 
 const tab = ref<'pax' | 'items' | 'asignacion'>('pax');
 
+// Cuántos reserva_items reales todavía no están cubiertos por ninguna
+// venta — hallazgo 2026-08-24: antes "Facturación completa" solo miraba
+// pasajeros, así que un ítem compartido o "sin asignar" podía quedar
+// pendiente para siempre con el badge en verde y ambos botones ocultos.
+const itemsPendientesDeFacturarCount = ref(0);
+
 // Pasajeros que todavía no fueron cubiertos por ningún comprobante —
 // candidatos a incluir en la próxima pasada de facturación.
 const pasajerosPendientesFacturar = computed(() =>
@@ -815,12 +841,14 @@ const pasajerosPendientesFacturar = computed(() =>
 // marcada como externa; "Marcar facturación externa" siempre que no esté
 // marcada y sea editable (cubre tanto tenant=false como la excepción con
 // tenant=true); el banner de datos externos se muestra solo cuando
-// facturacion_externa=true (ver template).
+// facturacion_externa=true (ver template). El botón sigue disponible
+// mientras queden PASAJEROS o ÍTEMS pendientes — antes solo miraba
+// pasajeros, dejando ítems sueltos sin ningún camino para facturarlos.
 const mostrarBotonesFacturar = computed(() =>
     reserva.value?.estado === 'activa'
     && !reserva.value?.facturacion_externa
     && facturacionHabilitadaTenant.value
-    && pasajerosPendientesFacturar.value.length > 0
+    && (pasajerosPendientesFacturar.value.length > 0 || itemsPendientesDeFacturarCount.value > 0)
 );
 const mostrarMarcarFacturacionExterna = computed(() =>
     reserva.value?.estado === 'activa'
@@ -848,6 +876,7 @@ const cargarReserva = async () => {
     itemsPendientesSincronizar.value = res.items_pendientes_sincronizar ?? [];
     itemsFacturadosIds.value = res.items_facturados_ids ?? [];
     pasajerosFacturadosIds.value = res.pasajeros_facturados_ids ?? [];
+    itemsPendientesDeFacturarCount.value = res.items_pendientes_de_facturar_count ?? 0;
     facturacionHabilitadaTenant.value = res.facturacion_habilitada_tenant ?? false;
     facturacionExternaEditable.value = res.facturacion_externa_editable ?? false;
     anticipos.value = res.anticipos ?? [];
@@ -994,6 +1023,15 @@ const proveedoresFiltrados = (it: ReservaItem) => {
         .filter((t) => !servicioId || t.proveedor_servicio?.destino_servicio?.servicio_id === servicioId)
         .filter((t) => !q || (t.proveedor_servicio?.proveedor?.razon_social ?? '').toLowerCase().includes(q))
         .slice(0, 30);
+};
+
+// Reserva no activa: mismo guard que el backend (ReservaItemController::
+// update()) — el buscador de proveedor no es un <select> nativo, así que
+// no queda cubierto por el <fieldset :disabled> del resto del bloque.
+const abrirBusquedaProveedor = (it: ReservaItem) => {
+    if (reserva.value?.estado !== 'activa') return;
+    proveedorBuscando.value = it.id;
+    proveedorSearch.value[it.id] = '';
 };
 
 const elegirProveedor = (it: ReservaItem, proveedorTarifaId: number | null) => {
@@ -1230,7 +1268,7 @@ watch(() => [...facturarEspecialForm.value.pasajero_ids, ...facturarEspecialForm
 // `clients?search=`) — simplificado: solo busca y elige entre clientes ya
 // existentes, no crea uno nuevo (si no existe, se crea desde la pantalla
 // de Clientes primero). ──
-type ClienteBusqueda = { id: number; full_name: string; n_document: string };
+type ClienteBusqueda = { id: number; full_name: string; n_document: string; cod_tipo_doc_sunat?: string };
 const clienteSeleccionado = ref<ClienteBusqueda | null>(null);
 const busquedaCliente = ref('');
 const resultadosCliente = ref<ClienteBusqueda[]>([]);
@@ -1258,6 +1296,17 @@ const seleccionarCliente = (c: ClienteBusqueda) => {
     resultadosCliente.value = [];
     busquedaCliente.value = '';
 };
+
+// Factura ('01') exige RUC (cod_tipo_doc_sunat='6', Catálogo 06 SUNAT) —
+// el backend ya lo valida y rechaza con 422 (2026-08-24), esto solo evita
+// que el vendedor llegue a intentarlo. Corre cada vez que cambia el
+// cliente elegido, no solo al abrir el modal.
+const clienteEspecialTieneRuc = computed(() => clienteSeleccionado.value?.cod_tipo_doc_sunat === '6');
+watch(clienteSeleccionado, (cliente) => {
+    if (cliente && cliente.cod_tipo_doc_sunat !== '6' && facturarEspecialForm.value.tipo_comprobante_codigo === '01') {
+        facturarEspecialForm.value.tipo_comprobante_codigo = '03';
+    }
+});
 
 const abrirModalFacturarEspecial = () => {
     facturarEspecialForm.value = {
@@ -1330,14 +1379,32 @@ const cargandoFacturarSimple = ref(false);
 const previewFacturaSimple = ref<PrepararFacturaResponse | null>(null);
 const facturarSimpleForm = ref<{ tipo_comprobante_codigo: '01' | '03' }>({ tipo_comprobante_codigo: '01' });
 
+// Cuando ya no queda ningún pasajero pendiente pero sí ítems sueltos sin
+// cubrir (ver itemsPendientesDeFacturarCount), el backend acepta
+// re-enviar pasajero_ids ya facturados SOLO para arrastrar esos ítems
+// (resolverSeleccion() los ignora para armar líneas, los usa nada más
+// para no violar el "pasajero_ids requerido, mínimo 1") — sin esto, un
+// ítem compartido/sin asignar que quedó huérfano después de facturar a
+// todos los pasajeros nunca tendría forma de facturarse.
+const pasajeroIdsParaFacturarSimple = () => {
+    const pendientes = pasajerosPendientesFacturar.value.map((p) => p.id);
+    if (pendientes.length > 0) return pendientes;
+    return (reserva.value?.pasajeros ?? []).map((p) => p.id);
+};
+
+// Mismo criterio que clienteEspecialTieneRuc: "Facturar simple" usa
+// siempre el cliente fijo de la cotización, sin buscador — si no tiene
+// RUC, arranca directo en boleta.
+const clienteSimpleTieneRuc = computed(() => cabecera.value?.cliente?.cod_tipo_doc_sunat === '6');
+
 const abrirModalFacturarSimple = async () => {
     if (!reserva.value) return;
     previewFacturaSimple.value = null;
-    facturarSimpleForm.value = { tipo_comprobante_codigo: '01' };
+    facturarSimpleForm.value = { tipo_comprobante_codigo: clienteSimpleTieneRuc.value ? '01' : '03' };
     mostrarModalFacturarSimple.value = true;
     cargandoFacturarSimple.value = true;
     try {
-        const pasajeroIds = pasajerosPendientesFacturar.value.map((p) => p.id);
+        const pasajeroIds = pasajeroIdsParaFacturarSimple();
         // Primer preview: descubre qué ítems sin asignar hay disponibles.
         const primerPreview = await reservaFacturacionService.prepararFactura(reserva.value.id, pasajeroIds, []);
         const idsSinAsignar = (primerPreview.items_sin_asignar_disponibles ?? []).map((it) => it.reserva_item_id);
@@ -1360,7 +1427,7 @@ const confirmarFacturacionSimple = async () => {
     if (!reserva.value || !cabecera.value?.cliente?.id) return;
     facturando.value = true;
     try {
-        const pasajeroIds = pasajerosPendientesFacturar.value.map((p) => p.id);
+        const pasajeroIds = pasajeroIdsParaFacturarSimple();
         const idsSinAsignar = (previewFacturaSimple.value?.items_sin_asignar_disponibles ?? []).map((it) => it.reserva_item_id);
         const res = await reservaFacturacionService.facturar(reserva.value.id, {
             pasajero_ids: pasajeroIds,

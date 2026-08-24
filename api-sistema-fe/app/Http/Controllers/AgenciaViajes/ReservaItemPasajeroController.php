@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\AgenciaViajes\ReservaItem;
 use App\Models\AgenciaViajes\ReservaItemPasajero;
 use App\Models\AgenciaViajes\ReservaPasajero;
+use App\Models\AgenciaViajes\ReservaVenta;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
@@ -16,7 +17,15 @@ class ReservaItemPasajeroController extends Controller
 {
     public function index(string $reservaItemId)
     {
-        $item = ReservaItem::findOrFail($reservaItemId);
+        $item = ReservaItem::with('reserva')->findOrFail($reservaItemId);
+
+        if ($item->reserva->estado !== 'activa') {
+            return response()->json(['code' => 422, 'message' => 'Solo se pueden asignar pasajeros en una reserva activa.'], 422);
+        }
+
+        if ($this->itemYaFacturado($item)) {
+            return response()->json(['code' => 422, 'message' => 'No se puede cambiar la asignación: este ítem ya fue facturado.'], 422);
+        }
 
         $asignaciones = ReservaItemPasajero::where('reserva_item_id', $item->id)
             ->with('reservaPasajero')
@@ -61,9 +70,26 @@ class ReservaItemPasajeroController extends Controller
 
     public function destroy(string $id)
     {
-        $asignacion = ReservaItemPasajero::findOrFail($id);
+        $asignacion = ReservaItemPasajero::with('reservaItem.reserva')->findOrFail($id);
+        $item = $asignacion->reservaItem;
+
+        if ($item->reserva->estado !== 'activa') {
+            return response()->json(['code' => 422, 'message' => 'Solo se pueden cambiar asignaciones en una reserva activa.'], 422);
+        }
+
+        if ($this->itemYaFacturado($item)) {
+            return response()->json(['code' => 422, 'message' => 'No se puede cambiar la asignación: este ítem ya fue facturado.'], 422);
+        }
         $asignacion->delete();
 
         return response()->json(['code' => 200, 'message' => 'Asignación eliminada correctamente']);
+    }
+
+    private function itemYaFacturado(ReservaItem $item): bool
+    {
+        return ReservaVenta::where('reserva_id', $item->reserva_id)
+            ->get()
+            ->flatMap(fn (ReservaVenta $rv) => $rv->reserva_item_ids ?? [])
+            ->contains($item->id);
     }
 }
