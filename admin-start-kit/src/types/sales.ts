@@ -140,6 +140,7 @@ export type Sale = {
     monto_detraccion?: number,
     monto_percepcion?: number,
     mto_oper_exoneradas?: number,
+    mto_oper_inafectas?: number,
     codigo_detraccion: string
     porcentaje_detraccion: number,
     is_locked?: boolean;

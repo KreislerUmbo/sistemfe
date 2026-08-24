@@ -38,22 +38,36 @@
                                 · Medio de pago: {{ advance.payment_method }}
                             </small>
                         </div>
-                        <div>
+                        <div class="d-flex gap-2">
                             <button v-if="!advance.sale?.xml" type="button" class="btn btn-sm btn-primary"
                                 :disabled="enviandoSunat" @click="enviarComprobanteSunat">
                                 <span v-if="enviandoSunat" class="spinner-border spinner-border-sm me-1"></span>
                                 Enviar comprobante a SUNAT
                             </button>
-                            <button v-else type="button" class="btn btn-sm btn-outline-secondary"
-                                @click="imprimirComprobante(advance.sale_id)">
-                                <i class="fas fa-print me-1"></i> Imprimir
-                            </button>
+                            <template v-else>
+                                <button type="button" class="btn btn-sm btn-outline-secondary"
+                                    @click="imprimirComprobante(advance.sale_id)">
+                                    <i class="fas fa-print me-1"></i> Imprimir
+                                </button>
+                                <button type="button" class="btn btn-sm btn-outline-warning" @click="abrirModalCorregir">
+                                    <i class="fas fa-pen me-1"></i> Corregir tratamiento tributario
+                                </button>
+                            </template>
                         </div>
                     </div>
                     <div v-if="!advance.sale?.xml" class="alert alert-warning mt-3 mb-0 py-2 px-3 small">
                         <i class="fas fa-exclamation-triangle me-1"></i>
                         El adelanto no puede aplicarse a una venta ni reembolsarse hasta que este
                         comprobante sea enviado y aceptado por SUNAT.
+                    </div>
+                    <!-- Tier 2 (2026-08-24): trazabilidad de la corrección más
+                         reciente — el comprobante anterior queda anulado (NC
+                         motivo 01), no borrado, sigue accesible acá. -->
+                    <div v-if="advance.corrected_from_sale_id" class="alert alert-secondary mt-3 mb-0 py-2 px-3 small">
+                        <i class="fas fa-circle-info me-1"></i>
+                        Este adelanto fue corregido el {{ formatFecha(advance.corrected_at) }}.
+                        Comprobante anterior (anulado): {{ advance.correctedFromSale?.n_operacion ?? advance.correctedFromSale?.serie }}.
+                        <template v-if="advance.correction_reason"> Motivo: {{ advance.correction_reason }}.</template>
                     </div>
                 </div>
             </div>
@@ -192,6 +206,44 @@
                     </small>
                 </div>
             </div>
+
+            <!-- ═══════════ Corregir tratamiento tributario (Tier 2, 2026-08-24) ═══════════
+                 Anula el comprobante (NC motivo 01) y reemite con el tratamiento correcto —
+                 mismo Advance, no toca lo ya aplicado a ventas. -->
+            <div v-if="mostrarFormCorregir" class="card border-0 shadow-sm mt-3">
+                <div class="card-body">
+                    <h6 class="fw-semibold mb-3"><i class="fas fa-pen me-1 text-warning"></i>Corregir tratamiento tributario</h6>
+                    <p class="small text-muted">
+                        Anula el comprobante actual con una Nota de Crédito (motivo 01 — Anulación de la
+                        operación) y emite uno nuevo con el tratamiento correcto. El comprobante anterior
+                        queda anulado, no se borra. Ambos documentos deben enviarse a SUNAT por separado
+                        después de confirmar acá.
+                    </p>
+                    <div class="row g-3 align-items-end">
+                        <div class="col-12 col-md-4">
+                            <label class="form-label small fw-semibold">Tratamiento correcto</label>
+                            <select class="form-select" v-model="tipAfeIgvCorreccion">
+                                <option value="10">Gravado (IGV 18%)</option>
+                                <option value="20">Exonerado</option>
+                                <option value="30">Inafecto</option>
+                            </select>
+                        </div>
+                        <div class="col-12 col-md-8">
+                            <label class="form-label small fw-semibold">Motivo de la corrección</label>
+                            <input type="text" class="form-control" v-model="motivoCorreccion"
+                                placeholder="Ej: el contador observó que debía salir exonerado por Ley 27037">
+                        </div>
+                    </div>
+                    <div class="d-flex justify-content-end gap-2 mt-3">
+                        <button type="button" class="btn btn-outline-secondary btn-sm" @click="mostrarFormCorregir = false">Cancelar</button>
+                        <button type="button" class="btn btn-warning btn-sm" :disabled="!puedeCorregir || loadingCorregir"
+                            @click="confirmarCorregir">
+                            <span v-if="loadingCorregir" class="spinner-border spinner-border-sm me-1"></span>
+                            Confirmar corrección
+                        </button>
+                    </div>
+                </div>
+            </div>
         </template>
     </DefaultLayout>
 </template>
@@ -204,6 +256,7 @@ import Swal from "sweetalert2/dist/sweetalert2.js";
 import httpClient from "@/helpers/http-client";
 import type { Advance, AdvanceRefundRecord, AdvanceStatus } from "@/types/advances";
 import { imprimirComprobante, imprimirNota } from "@/composables/usePrintComprobante";
+import { formatFecha } from "@/helpers/fecha";
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
 
@@ -218,6 +271,13 @@ const enviandoNota = ref<number | null>(null);
 const montoReembolso = ref<number>(0);
 const motivoReembolso = ref<string>("");
 const loadingReembolso = ref(false);
+
+// Tier 2 (2026-08-24): corregir tratamiento tributario (anula NC motivo 01 + reemite).
+const mostrarFormCorregir = ref(false);
+const tipAfeIgvCorreccion = ref<"10" | "20" | "30">("10");
+const motivoCorreccion = ref("");
+const loadingCorregir = ref(false);
+const puedeCorregir = computed(() => motivoCorreccion.value.trim().length >= 10);
 
 const moneda = computed(() => (advance.value?.currency === "USD" ? "US$" : "S/"));
 
@@ -368,6 +428,60 @@ async function reembolsar() {
         }
     } finally {
         loadingReembolso.value = false;
+    }
+}
+
+// Tier 2 (2026-08-24) — corregir tratamiento tributario.
+function abrirModalCorregir() {
+    // Precarga con la clasificación actual del comprobante (derivada de los
+    // montos ya calculados por el backend, no hay un campo tip_afe_igv
+    // directo en el Advance) — el usuario solo la cambia si corresponde.
+    const sale = advance.value?.sale;
+    if (sale && Number(sale.mto_oper_exoneradas) > 0) tipAfeIgvCorreccion.value = "20";
+    else if (sale && Number(sale.mto_oper_inafectas) > 0) tipAfeIgvCorreccion.value = "30";
+    else tipAfeIgvCorreccion.value = "10";
+    motivoCorreccion.value = "";
+    mostrarFormCorregir.value = true;
+}
+
+function confirmarCorregir() {
+    (Swal as TVueSwalInstance).fire({
+        title: "¿Corregir este adelanto?",
+        text: "Se anulará el comprobante actual (Nota de Crédito motivo 01) y se emitirá uno nuevo " +
+            "con el tratamiento elegido. Ambos deberán enviarse a SUNAT después.",
+        icon: "warning",
+        showCancelButton: true,
+        confirmButtonColor: "#d97706",
+        cancelButtonColor: "#6b7280",
+        confirmButtonText: "Sí, corregir",
+        cancelButtonText: "Cancelar",
+    }).then((result: any) => {
+        if (result.isConfirmed) {
+            corregir();
+        }
+    });
+}
+
+async function corregir() {
+    if (!advance.value) return;
+    loadingCorregir.value = true;
+    try {
+        const { data } = await httpClient.post(`advances/${advance.value.id}/corregir`, {
+            tip_afe_igv: tipAfeIgvCorreccion.value,
+            motivo_correccion: motivoCorreccion.value,
+        });
+
+        (Swal as TVueSwalInstance).fire("¡Listo!", data.message, "success");
+        mostrarFormCorregir.value = false;
+        await cargar();
+    } catch (e: any) {
+        (Swal as TVueSwalInstance).fire(
+            "Error",
+            e.response?.data?.message ?? "No se pudo corregir el adelanto.",
+            "error"
+        );
+    } finally {
+        loadingCorregir.value = false;
     }
 }
 

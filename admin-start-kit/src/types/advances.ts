@@ -42,6 +42,12 @@ export type Advance = {
     sale?: Sale;
     applications?: AdvanceApplication[];
     refunds?: AdvanceRefundRecord[];
+    // Tier 2 (2026-08-24): auditoría simple de la corrección más reciente
+    // (NC motivo 01 + reemisión) — ver AdvanceController::corregir().
+    corrected_from_sale_id?: number | null;
+    correction_reason?: string | null;
+    corrected_at?: string | null;
+    correctedFromSale?: Sale | null;
 };
 
 export type Advances = {

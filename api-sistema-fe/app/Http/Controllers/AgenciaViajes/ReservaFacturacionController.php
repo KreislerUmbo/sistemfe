@@ -5,6 +5,7 @@ namespace App\Http\Controllers\AgenciaViajes;
 use App\Http\Controllers\Controller;
 use App\Models\AgenciaViajes\AlternativaItem;
 use App\Models\AgenciaViajes\Reserva;
+use App\Models\AgenciaViajes\ReservaAnticipo;
 use App\Models\AgenciaViajes\ReservaItem;
 use App\Models\AgenciaViajes\ReservaVenta;
 use App\Models\AgenciaViajes\SaleDetailItem;
@@ -12,6 +13,7 @@ use App\Models\Client\Client;
 use App\Models\Product\Product;
 use App\Models\Sale\Sale;
 use App\Models\Sale\SaleDetail;
+use App\Services\AdvanceApplicationService;
 use App\Services\SerieComprobanteService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -97,6 +99,10 @@ class ReservaFacturacionController extends Controller
         . 'distinto (ej. exonerado Amazonía + gravado nacional). No se puede facturar en un solo '
         . 'comprobante todavía — requiere revisión manual con el contador antes de emitir.';
 
+    private const MENSAJE_TRATAMIENTO_TRIBUTARIO_NO_NACIONAL = 'Esta reserva incluye servicios con tratamiento tributario '
+        . 'Amazonía/exonerado. La facturación de estos casos está pausada hasta definir el cálculo correcto '
+        . 'con el contador — contacta a soporte.';
+
     // Facturación externa por tenant (PEGAR-EN-CLAUDE-CODE-facturacion-externa-
     // tenant.md §3.1) — doble capa: el frontend ya oculta el botón "Facturar"
     // cuando tenants.facturacion_habilitada es falsy, pero este endpoint nunca
@@ -116,8 +122,10 @@ class ReservaFacturacionController extends Controller
         . '(fuera de la plataforma). Si fue un error, desmárcala primero desde el detalle de la reserva '
         . 'antes de facturar acá.';
 
-    public function __construct(private SerieComprobanteService $serieComprobanteService)
-    {
+    public function __construct(
+        private SerieComprobanteService $serieComprobanteService,
+        private AdvanceApplicationService $advanceApplicationService
+    ) {
     }
 
     // GET reservas/{id}/preparar-factura?pasajero_ids[]=5&pasajero_ids[]=6
@@ -160,6 +168,12 @@ class ReservaFacturacionController extends Controller
         }
         ['items' => $items, 'contexto' => $contexto] = $resolucion;
 
+        // Preview de solo lectura: se mantiene siempre 200, con
+        // bloqueado_tributario en el body — nunca una excepción. El
+        // frontend depende de este contrato para mostrar el motivo dentro
+        // del propio modal (ver detalle.vue) en vez de un toast genérico.
+        // store() sí lanza HttpException para el mismo bloqueo (abajo),
+        // porque ahí SÍ es un intento real de escritura que debe abortar.
         $bloqueo = $this->detectarMezclaTributaria($items);
         if ($bloqueo !== null) {
             return response()->json(array_merge(['code' => 200], $bloqueo, $contexto));
@@ -182,6 +196,19 @@ class ReservaFacturacionController extends Controller
         [$lineas, $subtotalTotal, $igvTotal] = $this->construirLineas($gruposPorCategoria, $productosPlaceholder);
         $total = round($subtotalTotal + $igvTotal, 2);
 
+        // Tier 0 — conexión Adelantos↔Reservas: solo lectura, para que el
+        // frontend pueda pintar el picker de "Facturación especial" antes
+        // de confirmar. No aplica nada.
+        $anticiposDisponibles = $reserva->anticipos()->with('advance')->get()
+            ->map(fn (ReservaAnticipo $ra) => [
+                'id' => $ra->id,
+                'advance_id' => $ra->advance_id,
+                'disponible' => $ra->advance->availableBalance(),
+                'moneda' => $ra->advance->currency,
+            ])
+            ->filter(fn (array $a) => $a['disponible'] > 0)
+            ->values();
+
         return response()->json(array_merge([
             'code' => 200,
             'bloqueado_tributario' => false,
@@ -192,6 +219,7 @@ class ReservaFacturacionController extends Controller
                 'igv' => $linea['igv'],
                 'total' => $linea['precio_final'],
             ])->values(),
+            'anticipos_disponibles' => $anticiposDisponibles,
             'subtotal' => $subtotalTotal,
             'igv' => $igvTotal,
             'total' => $total,
@@ -223,6 +251,14 @@ class ReservaFacturacionController extends Controller
             'client_id' => 'required|integer|exists:clients,id',
             'tipo_comprobante_codigo' => 'required|string|in:01,03',
             'texto_personalizado' => 'nullable|string|max:2000',
+            // Tier 0 — conexión Adelantos↔Reservas: vacío = "Facturar"
+            // simple (el backend auto-aplica el 100% de los anticipos
+            // disponibles de la reserva); poblado = "Facturación especial"
+            // (el vendedor eligió a mano cuáles y cuánto, mismo shape que
+            // SaleController::store() ya acepta).
+            'advance_applications' => 'nullable|array',
+            'advance_applications.*.advance_id' => 'required_with:advance_applications|integer',
+            'advance_applications.*.amount' => 'required_with:advance_applications|numeric|min:0.01',
         ]);
 
         if ($validator->fails()) {
@@ -258,6 +294,9 @@ class ReservaFacturacionController extends Controller
         }
 
         $cliente = Client::findOrFail($validado['client_id']);
+        if ($validado['tipo_comprobante_codigo'] === '01' && (string) $cliente->cod_tipo_doc_sunat !== '6') {
+            throw new HttpException(422, 'No se puede emitir Factura a un cliente sin RUC. Selecciona Boleta o cambia el cliente.');
+        }
         $moneda = $reserva->alternativa->moneda_cotizacion;
 
         $serieResuelta = $this->serieComprobanteService->resolverParaUsuario(
@@ -282,6 +321,8 @@ class ReservaFacturacionController extends Controller
 
         $textoPersonalizado = $validado['texto_personalizado'] ?? null;
         $pasajeroIdsSolicitados = $validado['pasajero_ids'];
+        $idsManualSolicitados = $validado['reserva_item_ids_manual'] ?? [];
+        $aplicacionesAdelantoSolicitadas = $validado['advance_applications'] ?? [];
 
         try {
             [$venta, $lineas] = DB::transaction(function () use (
@@ -291,9 +332,11 @@ class ReservaFacturacionController extends Controller
                 $cliente,
                 $moneda,
                 $serieResuelta,
+                $aplicacionesAdelantoSolicitadas,
                 $usuario,
                 $textoPersonalizado,
-                $pasajeroIdsSolicitados
+                $pasajeroIdsSolicitados,
+                $idsManualSolicitados
             ) {
                 // Re-chequeo bajo lock: cierra la ventana de carrera con
                 // ReservaController::actualizarFacturacionExterna() sobre la
@@ -301,12 +344,42 @@ class ReservaFacturacionController extends Controller
                 // la transacción, así que sin esto un PUT
                 // facturacion-externa concurrente podría colarse entre ese
                 // check y la creación real del Sale.
-                $reservaLocked = Reserva::where('id', $reserva->id)->lockForUpdate()->firstOrFail();
+                $reservaLocked = Reserva::with(['alternativa.cotizacion', 'pasajeros.pasajeroCatalogo.cliente', 'ventas'])
+                    ->where('id', $reserva->id)
+                    ->lockForUpdate()
+                    ->firstOrFail();
                 if ($reservaLocked->facturacion_externa) {
                     throw new HttpException(403, self::MENSAJE_FACTURACION_EXTERNA);
                 }
 
-                [$lineas, $subtotalTotal, $igvTotal] = $this->construirLineas($gruposPorCategoria, $productosPlaceholder, $textoPersonalizado);
+                $resolucionBajoLock = $this->resolverSeleccion(
+                    $reservaLocked,
+                    $pasajeroIdsSolicitados,
+                    $idsManualSolicitados
+                );
+                if ($resolucionBajoLock instanceof \Illuminate\Http\JsonResponse) {
+                    throw new HttpException(422, $resolucionBajoLock->getData(true)['message']);
+                }
+
+                ['items' => $itemsBajoLock] = $resolucionBajoLock;
+                if ($itemsBajoLock->isEmpty()) {
+                    throw new HttpException(422, 'No hay ningún ítem disponible para facturar con esta selección.');
+                }
+
+                $bloqueoBajoLock = $this->detectarMezclaTributaria($itemsBajoLock);
+                if ($bloqueoBajoLock !== null) {
+                    throw new HttpException(422, $bloqueoBajoLock['motivo']);
+                }
+
+                $gruposPorCategoriaBajoLock = $this->agruparPorCategoria($itemsBajoLock);
+                foreach ($gruposPorCategoriaBajoLock as $categoria => $grupo) {
+                    $sku = self::SKU_POR_CATEGORIA[$categoria];
+                    if (! $productosPlaceholder->has($sku)) {
+                        throw new HttpException(500, "No se encontró el producto especial de servicios de viaje '{$sku}'. Revisa que ProductoGenericoViajeSeeder se haya corrido en este tenant.");
+                    }
+                }
+
+                [$lineas, $subtotalTotal, $igvTotal] = $this->construirLineas($gruposPorCategoriaBajoLock, $productosPlaceholder, $textoPersonalizado);
                 $total = round($subtotalTotal + $igvTotal, 2);
 
                 $venta = Sale::create([
@@ -399,6 +472,96 @@ class ReservaFacturacionController extends Controller
                     }
                 }
 
+                // ── Aplicar anticipos de la reserva (Tier 0, conexión
+                // Adelantos↔Reservas, hallazgo de auditoría 2026-08-21) ──
+                // Sin selección manual ("Facturar" simple): auto-aplica los
+                // anticipos disponibles de la reserva hasta cubrir el total
+                // de ESTA sub-factura, sin pasarse — un anticipo puede
+                // quedar parcialmente consumido, el resto sigue disponible
+                // para una sub-factura futura de la misma reserva. Con
+                // selección manual ("Facturación especial"): un anticipo es
+                // de la reserva completa, no de un pasajero puntual — no se
+                // reparte automáticamente entre sub-facturas sin adivinar
+                // (mismo criterio ya usado con ítems compartidos), el
+                // vendedor elige a mano cuáles y cuánto.
+                // Un anticipo solo puede aplicarse a una sub-factura del
+                // MISMO cliente que lo pagó (AdvanceApplicationService ya
+                // lo exige — un adelanto no cruza clientes, ver Tier 1 de
+                // Adelantos). Con "Facturación múltiple por grupo de
+                // pasajeros" el $cliente de esta sub-factura puede ser
+                // distinto del cliente de la cotización (empresa A/empresa
+                // B/el propio pasajero) — filtrar acá por client_id evita
+                // ofrecer/auto-aplicar un anticipo que de todos modos el
+                // servicio rechazaría, con un error más claro.
+                $anticiposDelCliente = $reserva->anticipos()->with('advance')
+                    ->get()
+                    ->filter(fn (ReservaAnticipo $ra) => (int) $ra->advance->client_id === (int) $cliente->id)
+                    ->values();
+
+                if (!empty($aplicacionesAdelantoSolicitadas)) {
+                    $advanceIdsPermitidos = $anticiposDelCliente->pluck('advance_id')->all();
+
+                    $sumaSolicitada = 0;
+                    foreach ($aplicacionesAdelantoSolicitadas as $aplicacion) {
+                        if (!in_array($aplicacion['advance_id'], $advanceIdsPermitidos, true)) {
+                            throw new HttpException(
+                                422,
+                                "El adelanto #{$aplicacion['advance_id']} no está asociado a esta reserva " .
+                                "para el cliente de esta factura (#{$cliente->id})."
+                            );
+                        }
+                        $sumaSolicitada += (float) $aplicacion['amount'];
+                    }
+
+                    if (round($sumaSolicitada, 2) > round($total, 2)) {
+                        throw new HttpException(
+                            422,
+                            "La suma de anticipos aplicados (S/ " . number_format($sumaSolicitada, 2) . ") " .
+                            "supera el total de esta factura (S/ " . number_format($total, 2) . ")."
+                        );
+                    }
+
+                    $aplicacionesAdelanto = $aplicacionesAdelantoSolicitadas;
+                } else {
+                    $restante = $total;
+                    $aplicacionesAdelanto = [];
+
+                    foreach ($anticiposDelCliente as $reservaAnticipo) {
+                        if ($restante <= 0) {
+                            break;
+                        }
+
+                        $disponible = $reservaAnticipo->advance->availableBalance();
+                        if ($disponible <= 0) {
+                            continue;
+                        }
+
+                        $monto = round(min($disponible, $restante), 2);
+                        $aplicacionesAdelanto[] = ['advance_id' => $reservaAnticipo->advance_id, 'amount' => $monto];
+                        $restante = round($restante - $monto, 2);
+                    }
+                }
+
+                $totalAplicadoAdelantos = $this->advanceApplicationService->aplicar($venta, $aplicacionesAdelanto);
+
+                if ($totalAplicadoAdelantos > 0) {
+                    // Mismo criterio que SaleController::store(): solo el
+                    // total/monto a pagar se reduce, no mto_oper_gravadas/
+                    // igv/valor_venta (deben reflejar el valor íntegro del
+                    // servicio) — enviarSunat() recalcula esto de forma
+                    // independiente desde sale_details al emitir.
+                    $nuevoTotal = round($venta->total - $totalAplicadoAdelantos, 2);
+
+                    $venta->update([
+                        'total' => $nuevoTotal,
+                        'mto_imp_venta' => round($venta->mto_imp_venta - $totalAplicadoAdelantos, 2),
+                        'debt' => $nuevoTotal,
+                        'paid_out' => $totalAplicadoAdelantos,
+                        'saldo_pendiente' => $nuevoTotal,
+                        'state_payment' => $nuevoTotal <= 0 ? 3 : 1,
+                    ]);
+                }
+
                 // reserva_pasajero_ids: el subconjunto que el vendedor
                 // ELIGIÓ facturar en este Sale — ya NO todos los pasajeros
                 // de la reserva (eso asumía la Fase A original, un solo
@@ -449,12 +612,6 @@ class ReservaFacturacionController extends Controller
 
         $pasajerosYaFacturados = $this->pasajerosYaFacturadosIds($reserva);
         $pasajerosRepetidos = collect($pasajeroIdsSolicitados)->intersect($pasajerosYaFacturados)->values();
-        if ($pasajerosRepetidos->isNotEmpty()) {
-            return response()->json([
-                'code' => 422,
-                'message' => 'Los siguientes pasajeros ya fueron facturados en otra venta de esta reserva: ' . $pasajerosRepetidos->implode(', '),
-            ], 422);
-        }
 
         $idsItemsYaFacturados = $this->itemsYaFacturadosIds($reserva);
 
@@ -507,6 +664,15 @@ class ReservaFacturacionController extends Controller
         }
 
         $itemsManual = $itemsSinAsignar->whereIn('id', $idsManualSolicitados)->values();
+        if ($pasajerosRepetidos->isNotEmpty()) {
+            $todosLosPasajerosYaFacturados = $pasajerosRepetidos->count() === count($pasajeroIdsSolicitados);
+            if (! $todosLosPasajerosYaFacturados || $itemsManual->isEmpty()) {
+                return response()->json([
+                    'code' => 422,
+                    'message' => 'Los siguientes pasajeros ya fueron facturados en otra venta de esta reserva: ' . $pasajerosRepetidos->implode(', '),
+                ], 422);
+            }
+        }
         // Sin guard de "vacío" acá a propósito: prepararFactura() (preview)
         // necesita poder devolver 200 con 0 ítems (ej. recién se seleccionó
         // un pasajero sin nada auto-incluido todavía, antes de que el
@@ -514,7 +680,9 @@ class ReservaFacturacionController extends Controller
         // que el preview fallara apenas se abre el modal. store() sí
         // bloquea explícitamente con 422 antes de intentar crear un Sale
         // vacío, ver más abajo.
-        $itemsFinal = $itemsAuto->concat($itemsManual)->unique('id')->values();
+        $itemsFinal = $pasajerosRepetidos->isNotEmpty()
+            ? $itemsManual
+            : $itemsAuto->concat($itemsManual)->unique('id')->values();
 
         $pasajerosPendientes = $reserva->pasajeros->pluck('id')
             ->diff($pasajerosYaFacturados)
@@ -611,15 +779,23 @@ class ReservaFacturacionController extends Controller
     {
         $destinos = $items->map(fn (ReservaItem $it) => $this->resolverDestinoTributario($it))->unique()->values();
 
-        if ($destinos->count() <= 1) {
-            return null;
+        if ($destinos->count() > 1) {
+            return [
+                'bloqueado_tributario' => true,
+                'motivo' => self::MENSAJE_MEZCLA_TRIBUTARIA,
+                'destinos_tributarios_detectados' => $destinos->all(),
+            ];
         }
 
-        return [
-            'bloqueado_tributario' => true,
-            'motivo' => self::MENSAJE_MEZCLA_TRIBUTARIA,
-            'destinos_tributarios_detectados' => $destinos->all(),
-        ];
+        if ($destinos->contains(fn (string $destino) => $destino !== self::DESTINO_TRIBUTARIO_DEFAULT)) {
+            return [
+                'bloqueado_tributario' => true,
+                'motivo' => self::MENSAJE_TRATAMIENTO_TRIBUTARIO_NO_NACIONAL,
+                'destinos_tributarios_detectados' => $destinos->all(),
+            ];
+        }
+
+        return null;
     }
 
     // Agrupa reserva_items por categoría (HOTEL/TRANSPORTE/TOUR/VUELO/

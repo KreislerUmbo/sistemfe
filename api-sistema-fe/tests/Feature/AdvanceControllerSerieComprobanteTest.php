@@ -129,6 +129,7 @@ class AdvanceControllerSerieComprobanteTest extends TestCase
             'amount' => $amount,
             'currency' => 'PEN',
             'payment_method' => 'EFECTIVO',
+            'tip_afe_igv' => '10',
         ]);
 
         $controller = app(AdvanceController::class);

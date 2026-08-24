@@ -372,6 +372,13 @@ class Sale extends Model
         $fecha_inicio,
         $fecha_fin
     ) {
+        // El comprobante de un adelanto (type='advance') no es una venta
+        // normal — se ve desde su propia pantalla (módulo Adelantos). Sin
+        // este filtro contaminaba el listado general con la línea de
+        // producto ficticio "Adelanto a cuenta - venta futura" (hallazgo de
+        // auditoría del módulo, 2026-08-21).
+        $query->where('type', '!=', 'advance');
+
         // Filtrar por nombre del producto en los detalles
         if ($buscar_producto) {
             $query->whereHas("sale_details", function ($q) use ($buscar_producto) {

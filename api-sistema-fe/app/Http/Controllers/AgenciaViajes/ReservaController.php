@@ -7,6 +7,7 @@ use App\Models\AgenciaViajes\Alternativa;
 use App\Models\AgenciaViajes\AlternativaItem;
 use App\Models\AgenciaViajes\CotizacionPasajero;
 use App\Models\AgenciaViajes\Reserva;
+use App\Models\AgenciaViajes\ReservaAnticipo;
 use App\Models\AgenciaViajes\ReservaItem;
 use App\Models\AgenciaViajes\ReservaItemPasajero;
 use App\Models\AgenciaViajes\ReservaPasajero;
@@ -47,6 +48,7 @@ class ReservaController extends Controller
         'items.proveedorTarifa.proveedorServicio.proveedor',
         'items.pasajeros',
         'items.salidaOperativa.guia',
+        'anticipos.advance.sale',
     ];
 
     public function index(Request $request)
@@ -644,6 +646,11 @@ class ReservaController extends Controller
             ->unique()
             ->values();
 
+        $itemsPendientesDeFacturarCount = $reserva->items
+            ->pluck('id')
+            ->diff($itemsFacturadosIds)
+            ->count();
+
         // Facturación múltiple por grupo de pasajeros (2026-08-20): cada
         // pasajero queda "facturado" en cuanto aparece en el
         // reserva_pasajero_ids de ALGUNA ReservaVenta — usado por el
@@ -654,6 +661,22 @@ class ReservaController extends Controller
             ->unique()
             ->values();
 
+        // Tier 0 — conexión Adelantos↔Reservas (hallazgo de auditoría del
+        // módulo Adelantos, 2026-08-21): anticipos que el cliente ya pagó
+        // hacia esta reserva, con el estado SUNAT de su propio comprobante
+        // (no el de la venta que eventualmente los consuma).
+        $anticipos = $reserva->anticipos->map(function (ReservaAnticipo $ra) {
+            return [
+                'id' => $ra->id,
+                'advance_id' => $ra->advance_id,
+                'monto' => (float) $ra->monto_asignado,
+                'disponible' => $ra->advance->availableBalance(),
+                'moneda' => $ra->advance->currency,
+                'fecha_asignacion' => $ra->fecha_asignacion?->toDateString(),
+                'comprobante_enviado' => (bool) $ra->advance->sale?->n_operacion,
+            ];
+        })->values();
+
         return [
             'reserva' => $reserva,
             'resumen' => $resumen,
@@ -661,7 +684,10 @@ class ReservaController extends Controller
             'moneda' => $reserva->alternativa->moneda_cotizacion,
             'items_pendientes_sincronizar' => $itemsPendientesSincronizar,
             'items_facturados_ids' => $itemsFacturadosIds,
+            'items_pendientes_de_facturar_count' => $itemsPendientesDeFacturarCount,
             'pasajeros_facturados_ids' => $pasajerosFacturadosIds,
+            'anticipos' => $anticipos,
+            'total_anticipos_disponibles' => round($anticipos->sum('disponible'), 2),
             // Facturación externa por tenant (PEGAR-EN-CLAUDE-CODE-
             // facturacion-externa-tenant.md): el frontend necesita el flag
             // del tenant acá para decidir si ofrece "Facturar"/"Facturación

@@ -2,9 +2,15 @@
 // database/migrations/2026_07_11_100000_create_advances_table.php
 //
 // Adelanto (anticipo) de cliente. sale_id apunta a la venta con
-// type='advance' que es, a la vez, el comprobante SUNAT del adelanto
-// (tipo de operación 0104, Catálogo 51 — ver GreenterService::getInvoice()).
-// El adelanto SIEMPRE nace con su propio comprobante: la obligación del
+// type='advance' que es, a la vez, el comprobante SUNAT del adelanto —
+// tipo de operación '0101' (venta interna estándar), NO '0104'. El
+// Catálogo 51 vigente no tiene código para anticipos ('0104' era de una
+// guía SUNAT desactualizada, comprobado con un rechazo real — ver
+// FacturacionElectronicaController.php, sección "tipo_operacion",
+// investigado y corregido 2026-07-12). La "anticipo-idad" del documento se
+// representa en la venta FINAL que lo consume, vía PrepaidPayment (ver
+// GreenterService::getInvoice()). El adelanto SIEMPRE nace con su propio
+// comprobante: la obligación del
 // IGV nace al percibir el pago (art. 5.1 R.S. 007-99/SUNAT), así que
 // sale_id no es nullable.
 //

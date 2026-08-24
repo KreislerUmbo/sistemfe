@@ -239,6 +239,10 @@
                         <div v-else-if="availableAdvances.length === 0" class="text-muted small">
                             Este cliente no tiene adelantos disponibles.
                         </div>
+                        <div v-else-if="adelantosDisponiblesFiltrados.length === 0" class="text-muted small">
+                            Este cliente tiene adelantos, pero en otra moneda — solo se pueden aplicar
+                            adelantos en la misma moneda de esta venta ({{ currency === 'USD' ? 'US$' : 'S/' }}).
+                        </div>
                         <table v-else class="table table-sm table-bordered align-middle mb-1">
                             <thead class="table-light">
                                 <tr>
@@ -249,7 +253,7 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr v-for="a in availableAdvances" :key="a.id">
+                                <tr v-for="a in adelantosDisponiblesFiltrados" :key="a.id">
                                     <td>
                                         <input type="checkbox" v-model="a.seleccionado" @change="onAdvanceToggle(a)">
                                     </td>
@@ -1562,6 +1566,30 @@ const cargarAdelantosDisponibles = async (clientId: number | string) => {
 const onAdvanceToggle = (a: AdvanceCheckoutItem) => {
     a.monto_aplicado = a.seleccionado ? a.available_balance : 0;
 };
+
+// ── Filtro por moneda: un adelanto solo se puede aplicar a una venta de
+// su misma moneda (mismo guard que SaleController::store(), backend) —
+// acá se filtran del picker directamente, en vez de solo deshabilitarlos,
+// porque antes se podía tildar un adelanto USD sobre una venta PEN y
+// totalAdelantosAplicados() restaba una moneda de otra como si fueran la
+// misma unidad, mostrando un total falso (hallazgo de auditoría del
+// módulo, 2026-08-21).
+const adelantosDisponiblesFiltrados = computed(() =>
+    availableAdvances.value.filter(a => a.currency === currency.value)
+);
+
+// Si la moneda de la venta cambia después de tildar un adelanto, ese
+// adelanto deja de verse en el picker (filtro de arriba) pero sin este
+// watch su selección quedaba "viva" por debajo — totalAdelantosAplicados()
+// y el payload final lo seguían incluyendo aunque ya no fuera visible.
+watch(currency, (nuevaMoneda) => {
+    availableAdvances.value.forEach(a => {
+        if (a.currency !== nuevaMoneda && a.seleccionado) {
+            a.seleccionado = false;
+            a.monto_aplicado = 0;
+        }
+    });
+});
 
 const totalAdelantosAplicados = (): number => {
     return availableAdvances.value

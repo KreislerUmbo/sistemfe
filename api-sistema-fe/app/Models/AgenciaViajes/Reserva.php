@@ -103,4 +103,12 @@ class Reserva extends Model
     {
         return $this->hasMany(ReservaVenta::class, 'reserva_id');
     }
+
+    // Adelantos (Advance, core) etiquetados contra esta reserva — tabla
+    // reserva_anticipos, existía desde Sesión 8b sin ningún controller que
+    // la usara (hallazgo de auditoría del módulo Adelantos, 2026-08-21).
+    public function anticipos()
+    {
+        return $this->hasMany(ReservaAnticipo::class, 'reserva_id');
+    }
 }

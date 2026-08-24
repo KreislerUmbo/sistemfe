@@ -20,6 +20,7 @@ use App\Http\Controllers\AgenciaViajes\ProveedorController;
 use App\Http\Controllers\AgenciaViajes\ProveedorServicioController;
 use App\Http\Controllers\AgenciaViajes\ProveedorTarifaController;
 use App\Http\Controllers\AgenciaViajes\ProveedorTipoConfigController;
+use App\Http\Controllers\AgenciaViajes\ReservaAnticipoController;
 use App\Http\Controllers\AgenciaViajes\ReservaController;
 use App\Http\Controllers\AgenciaViajes\ReservaFacturacionController;
 use App\Http\Controllers\AgenciaViajes\ReservaItemController;
@@ -347,12 +348,36 @@ Route::group([
     Route::post("notas/preview", [NotaElectronicaController::class, 'preview']);
     Route::post("notas/enviar-sunat", [NotaElectronicaController::class, 'enviarNotaSunat']);
 
-    // adelantos (anticipos de cliente)
+    // adelantos (anticipos de cliente) — permission: explícito a nivel de
+    // ruta, mismo criterio que Caja/Amortizaciones (defensa en profundidad,
+    // no solo gateo de menú/router en el frontend — hallazgo de auditoría
+    // del módulo, 2026-08-21). Los 3 nombres coinciden con
+    // router/routes.ts y menu-items.ts del frontend.
+    //
+    // clients/{id}/advances (availableForClient) queda SIN permission: a
+    // propósito: la usa el checkout de sale/register.vue para poblar el
+    // picker de "adelantos disponibles" al aplicar un anticipo — no es
+    // parte de las pantallas del módulo Adelantos (esas sí están detrás de
+    // list_advance en el frontend), y sales/* en sí no tiene ningún
+    // permission: a nivel de ruta todavía (ver nota en CLAUDE.md). Gatearla
+    // habría bloqueado aplicar un adelanto al vender para cualquier
+    // cajero sin list_advance asignado, sin que nada en el frontend lo
+    // anticipara.
     Route::get("clients/{id}/advances", [AdvanceController::class, 'availableForClient']);
-    Route::get("advances", [AdvanceController::class, 'index']);
-    Route::get("advances/{id}", [AdvanceController::class, 'show']);
-    Route::post("advances", [AdvanceController::class, 'store']);
-    Route::post("advances/{id}/refund", [AdvanceController::class, 'refund']);
+    Route::get("advances", [AdvanceController::class, 'index'])
+        ->middleware('permission:list_advance');
+    Route::get("advances/{id}", [AdvanceController::class, 'show'])
+        ->middleware('permission:list_advance');
+    Route::post("advances", [AdvanceController::class, 'store'])
+        ->middleware('permission:register_advance');
+    Route::post("advances/{id}/refund", [AdvanceController::class, 'refund'])
+        ->middleware('permission:refund_advance');
+    // Tier 2 (hallazgo de auditoría, 2026-08-21): corrige el tratamiento
+    // tributario de un adelanto ya aceptado (anula NC motivo 01 + reemite)
+    // — reusa register_advance, es una variante de "registrar", no un
+    // permiso nuevo.
+    Route::post("advances/{id}/corregir", [AdvanceController::class, 'corregir'])
+        ->middleware('permission:register_advance');
 
     // cronograma de cuotas (Módulo Amortizaciones — Fase 3, solo cuotas_fijas)
     Route::post("sales/{sale}/installments/preview", [CreditInstallmentController::class, 'preview']);
@@ -646,6 +671,14 @@ Route::group([
     Route::get("reservas/{id}/preparar-factura", [ReservaFacturacionController::class, 'prepararFactura'])
         ->middleware('permission:agencia.reservas');
     Route::post("reservas/{id}/facturar", [ReservaFacturacionController::class, 'store'])
+        ->middleware('permission:agencia.reservas');
+
+    // Conexión Adelantos↔Reservas (Tier 0, hallazgo de auditoría del
+    // módulo Adelantos, 2026-08-21) — reserva_anticipos existía desde
+    // Sesión 8b sin ningún controller que la usara.
+    Route::post("reservas/{id}/anticipos", [ReservaAnticipoController::class, 'store'])
+        ->middleware('permission:agencia.reservas');
+    Route::delete("reserva-anticipos/{id}", [ReservaAnticipoController::class, 'destroy'])
         ->middleware('permission:agencia.reservas');
 
     // Antes de "reserva-pasajeros/{id}" para que "pasajeros-catalogo" no

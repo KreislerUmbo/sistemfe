@@ -20,6 +20,10 @@ export type FacturarReservaPayload = {
   tipo_comprobante_codigo: '01' | '03'
   client_id: number
   texto_personalizado?: string | null
+  // Tier 0 — conexión Adelantos↔Reservas: vacío/omitido = auto-aplica el
+  // 100% de los anticipos disponibles de la reserva (para ESTE cliente);
+  // poblado = el vendedor eligió a mano cuáles y cuánto.
+  advance_applications?: Array<{ advance_id: number; amount: number }>
 }
 
 export type FacturarReservaResponse = {
@@ -41,6 +45,17 @@ export type ItemSinAsignarDisponible = {
   reserva_item_id: number
   nombre: string
   total: number
+}
+
+// Tier 0 — conexión Adelantos↔Reservas: TODOS los anticipos de la reserva
+// con saldo disponible, sin filtrar por cliente (prepararFactura() no
+// recibe client_id todavía) — store() sí valida que el advance_id elegido
+// pertenezca al mismo cliente de la factura, rechazando con 422 si no.
+export type AnticipoDisponiblePreview = {
+  id: number
+  advance_id: number
+  disponible: number
+  moneda: 'PEN' | 'USD'
 }
 
 // Guardia tributario (2026-08-20): si el subconjunto a facturar mezcla
@@ -70,6 +85,7 @@ export type PrepararFacturaResponse = {
   items_pendientes_por_pasajero_faltante: ItemPendientePorPasajeroFaltante[]
   items_sin_asignar_disponibles: ItemSinAsignarDisponible[]
   cliente_sugerido?: { id: number; full_name: string; n_document: string }
+  anticipos_disponibles?: AnticipoDisponiblePreview[]
 }
 
 export const reservaFacturacionService = {

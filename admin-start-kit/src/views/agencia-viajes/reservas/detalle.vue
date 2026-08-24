@@ -29,6 +29,9 @@
                 <button v-if="mostrarMarcarFacturacionExterna" class="btn btn-outline-secondary btn-sm" @click="abrirModalFacturacionExterna">
                     <i class="fas fa-external-link-alt me-1"></i>Marcar facturación externa
                 </button>
+                <button v-if="reserva.estado === 'activa'" class="btn btn-outline-success btn-sm" @click="abrirModalAnticipo">
+                    <i class="fas fa-hand-holding-usd me-1"></i>Cobrar anticipo
+                </button>
                 <button v-if="reserva.estado === 'activa'" class="btn btn-outline-primary btn-sm" @click="abrirModalReprogramar">
                     <i class="fas fa-calendar-days me-1"></i>Reprogramar viaje
                 </button>
@@ -67,6 +70,49 @@
                 </span>.
             </span>
             <button class="btn-close" @click="itemsNoTocadosReprogramacion = []"></button>
+        </div>
+
+        <!-- Anticipos recibidos (Tier 0 — conexión Adelantos↔Reservas,
+             2026-08-21): visible solo si el cliente ya pagó algo hacia esta
+             reserva. El comprobante propio de cada anticipo se maneja desde
+             el módulo de Adelantos; acá solo se ve el resumen y se puede
+             desasociar mientras no se haya aplicado a ninguna venta. -->
+        <div v-if="anticipos.length > 0" class="card border-0 shadow-sm mb-3">
+            <div class="card-body py-2">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="fw-semibold mb-0"><i class="fas fa-hand-holding-usd me-1 text-success"></i>Anticipos recibidos</h6>
+                    <span class="small text-muted">Disponible para aplicar: {{ moneda }} {{ totalAnticiposDisponibles.toFixed(2) }}</span>
+                </div>
+                <table class="table table-sm mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Fecha</th>
+                            <th class="text-end">Monto</th>
+                            <th class="text-end">Disponible</th>
+                            <th>Estado SUNAT</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="a in anticipos" :key="a.id">
+                            <td>{{ formatFecha(a.fecha_asignacion) }}</td>
+                            <td class="text-end">{{ moneda }} {{ a.monto.toFixed(2) }}</td>
+                            <td class="text-end">{{ moneda }} {{ a.disponible.toFixed(2) }}</td>
+                            <td>
+                                <span class="badge" :class="a.comprobante_enviado ? 'bg-success' : 'bg-warning text-dark'">
+                                    {{ a.comprobante_enviado ? 'Enviado a SUNAT' : 'Registrado, sin enviar' }}
+                                </span>
+                            </td>
+                            <td class="text-end">
+                                <button v-if="a.disponible === a.monto" type="button" class="btn btn-sm btn-link text-danger p-0"
+                                    title="Quitar de esta reserva" @click="quitarAnticipo(a)">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
 
         <div v-if="reserva" class="row g-3">
@@ -449,6 +495,36 @@
                                 </div>
                             </div>
 
+                            <!-- Anticipos disponibles (Tier 0 — conexión Adelantos↔Reservas):
+                                 un anticipo es de la reserva completa, no de un pasajero puntual —
+                                 no se reparte solo entre sub-facturas, el vendedor elige a mano. -->
+                            <div v-if="!previewFacturaEspecial.bloqueado_tributario && (previewFacturaEspecial.anticipos_disponibles?.length ?? 0) > 0" class="mb-2">
+                                <label class="form-label small fw-semibold text-secondary">Aplicar anticipos ya cobrados a este comprobante</label>
+                                <table class="table table-sm table-bordered align-middle mb-0">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th style="width:36px;"></th>
+                                            <th>Anticipo</th>
+                                            <th class="text-end" style="width:120px;">Disponible</th>
+                                            <th style="width:130px;">Monto a aplicar</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr v-for="a in anticiposEspecialSeleccionables" :key="a.id">
+                                            <td>
+                                                <input type="checkbox" v-model="a.seleccionado" @change="onAnticipoEspecialToggle(a)">
+                                            </td>
+                                            <td>Anticipo #{{ a.advance_id }}</td>
+                                            <td class="text-end">{{ a.moneda === 'USD' ? 'US$' : 'S/' }} {{ a.disponible.toFixed(2) }}</td>
+                                            <td>
+                                                <input type="number" class="form-control form-control-sm" min="0" :max="a.disponible" step="0.01"
+                                                    v-model.number="a.monto_aplicado" :disabled="!a.seleccionado">
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+
                             <!-- Guardia tributario: este subgrupo mezcla tratamientos distintos,
                                  no se puede emitir un solo comprobante — se avisa acá y se oculta
                                  el resto del formulario. -->
@@ -622,6 +698,57 @@
                 </div>
             </div>
         </div>
+
+        <!-- Cobrar anticipo (Tier 0 — conexión Adelantos↔Reservas, 2026-08-21) —
+             cliente fijo (el de la cotización), moneda fija (la de la
+             reserva), no editables acá: evita de raíz el guard de moneda
+             distinta que ya blinda la aplicación de adelantos. -->
+        <div class="modal fade" tabindex="-1" :class="{ show: mostrarModalAnticipo, 'd-block': mostrarModalAnticipo }"
+            style="background:rgba(0,0,0,.5)" v-if="mostrarModalAnticipo">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h6 class="modal-title fw-bold">Cobrar anticipo</h6>
+                        <button class="btn-close" @click="mostrarModalAnticipo = false"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p class="small text-muted">
+                            Genera su propio comprobante SUNAT a nombre de {{ cabecera?.cliente?.full_name }}
+                            ({{ moneda }}) — enviarlo a SUNAT se hace después, desde el módulo de Adelantos.
+                        </p>
+                        <div class="mb-2">
+                            <label class="form-label small fw-semibold">Monto recibido</label>
+                            <input type="number" class="form-control form-control-sm" min="0.01" step="0.01" v-model.number="formAnticipo.monto">
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label small fw-semibold">Medio de pago</label>
+                            <select class="form-select form-select-sm" v-model="formAnticipo.medio_pago">
+                                <option v-for="pm in paymentMethods" :key="pm.id" :value="pm.code">{{ pm.name }}</option>
+                            </select>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label small fw-semibold">Tratamiento tributario</label>
+                            <select class="form-select form-select-sm" v-model="formAnticipo.tip_afe_igv">
+                                <option value="10">Gravado (IGV 18%)</option>
+                                <option value="20">Exonerado</option>
+                                <option value="30">Inafecto</option>
+                            </select>
+                        </div>
+                        <div class="mb-0">
+                            <label class="form-label small fw-semibold">Notas (opcional)</label>
+                            <textarea class="form-control form-control-sm" rows="2" v-model="formAnticipo.notas"></textarea>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn btn-outline-secondary btn-sm" @click="mostrarModalAnticipo = false">Cerrar</button>
+                        <button class="btn btn-primary btn-sm" :disabled="guardandoAnticipo || formAnticipo.monto <= 0 || !formAnticipo.medio_pago"
+                            @click="guardarAnticipo">
+                            <span v-if="guardandoAnticipo" class="spinner-border spinner-border-sm me-1"></span>Registrar anticipo
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
     </DefaultLayout>
 </template>
 
@@ -631,7 +758,8 @@ import { useRoute } from 'vue-router';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import httpClient from '@/helpers/http-client';
 import { reservaService } from '@/services/admin/reservaService';
-import { reservaFacturacionService, type PrepararFacturaResponse } from '@/services/admin/reservaFacturacionService';
+import { reservaFacturacionService, type PrepararFacturaResponse, type AnticipoDisponiblePreview } from '@/services/admin/reservaFacturacionService';
+import { reservaAnticipoService } from '@/services/admin/reservaAnticipoService';
 import { reservaPasajeroService } from '@/services/admin/reservaPasajeroService';
 import { reservaItemService } from '@/services/admin/reservaItemService';
 import { proveedorService } from '@/services/admin/proveedorService';
@@ -640,8 +768,9 @@ import { useToast } from '@/composables/useToast';
 import { formatFecha } from '@/helpers/fecha';
 import type {
     Reserva, ReservaPasajero, ReservaItem, ReservaResumenItem, ReservaCabecera,
-    PasajeroCatalogo, ProveedorTarifa, Guia, MotivoCancelacion,
+    PasajeroCatalogo, ProveedorTarifa, Guia, MotivoCancelacion, AnticipoReserva,
 } from '@/types/agencia-viajes';
+import type { PaymentMethod, PaymentMethods } from '@/types/cash';
 
 const route = useRoute();
 const reservaId = Number(route.params.id);
@@ -667,6 +796,11 @@ const pasajerosFacturadosIds = ref<number[]>([]);
 // propio facturacion_externa (sin ninguna venta asociada).
 const facturacionHabilitadaTenant = ref(false);
 const facturacionExternaEditable = ref(false);
+
+// Tier 0 — conexión Adelantos↔Reservas (hallazgo de auditoría del módulo
+// Adelantos, 2026-08-21): anticipos ya pagados hacia esta reserva.
+const anticipos = ref<AnticipoReserva[]>([]);
+const totalAnticiposDisponibles = ref(0);
 
 const tab = ref<'pax' | 'items' | 'asignacion'>('pax');
 
@@ -716,6 +850,8 @@ const cargarReserva = async () => {
     pasajerosFacturadosIds.value = res.pasajeros_facturados_ids ?? [];
     facturacionHabilitadaTenant.value = res.facturacion_habilitada_tenant ?? false;
     facturacionExternaEditable.value = res.facturacion_externa_editable ?? false;
+    anticipos.value = res.anticipos ?? [];
+    totalAnticiposDisponibles.value = res.total_anticipos_disponibles ?? 0;
 };
 
 const sincronizarItems = async () => {
@@ -1039,6 +1175,19 @@ const facturarEspecialForm = ref<{
 const previewFacturaEspecial = ref<PrepararFacturaResponse | null>(null);
 const cargandoPreviewFacturaEspecial = ref(false);
 
+// Tier 0 — conexión Adelantos↔Reservas: picker de anticipos disponibles
+// para esta sub-factura, mismo patrón (checkbox + monto editable) que ya
+// usa sale/register.vue para aplicar adelantos en el checkout normal. Un
+// anticipo es de la reserva completa, no de un pasajero puntual — no se
+// reparte automáticamente entre sub-facturas sin adivinar (mismo criterio
+// ya usado con ítems compartidos), el vendedor elige a mano.
+type AnticipoCheckoutItem = AnticipoDisponiblePreview & { seleccionado: boolean; monto_aplicado: number };
+const anticiposEspecialSeleccionables = ref<AnticipoCheckoutItem[]>([]);
+
+const onAnticipoEspecialToggle = (a: AnticipoCheckoutItem) => {
+    a.monto_aplicado = a.seleccionado ? a.disponible : 0;
+};
+
 const refrescarPreviewFacturaEspecial = async () => {
     if (!reserva.value || facturarEspecialForm.value.pasajero_ids.length === 0) {
         previewFacturaEspecial.value = null;
@@ -1051,6 +1200,13 @@ const refrescarPreviewFacturaEspecial = async () => {
             facturarEspecialForm.value.pasajero_ids,
             facturarEspecialForm.value.reserva_item_ids_manual
         );
+        // Reconstruye el picker preservando lo ya tildado por advance_id —
+        // el preview se re-dispara con cada cambio de pasajeros/ítems.
+        const previas = new Map(anticiposEspecialSeleccionables.value.map((a) => [a.advance_id, a]));
+        anticiposEspecialSeleccionables.value = (previewFacturaEspecial.value?.anticipos_disponibles ?? []).map((a) => {
+            const previa = previas.get(a.advance_id);
+            return { ...a, seleccionado: previa?.seleccionado ?? false, monto_aplicado: previa?.monto_aplicado ?? 0 };
+        });
         // Sugerencia de cliente (no vinculante): si el backend detectó que
         // el único pasajero seleccionado ya tiene perfil de cliente
         // propio, se lo ofrece como punto de partida — el vendedor puede
@@ -1111,6 +1267,7 @@ const abrirModalFacturarEspecial = () => {
         texto_personalizado: '',
     };
     previewFacturaEspecial.value = null;
+    anticiposEspecialSeleccionables.value = [];
     clienteSeleccionado.value = null;
     busquedaCliente.value = '';
     resultadosCliente.value = [];
@@ -1122,12 +1279,17 @@ const confirmarFacturacionEspecial = async () => {
     if (!reserva.value || !clienteSeleccionado.value) return;
     facturando.value = true;
     try {
+        const anticiposAplicados = anticiposEspecialSeleccionables.value
+            .filter((a) => a.seleccionado && a.monto_aplicado > 0)
+            .map((a) => ({ advance_id: a.advance_id, amount: a.monto_aplicado }));
+
         const res = await reservaFacturacionService.facturar(reserva.value.id, {
             pasajero_ids: facturarEspecialForm.value.pasajero_ids,
             reserva_item_ids_manual: facturarEspecialForm.value.reserva_item_ids_manual,
             tipo_comprobante_codigo: facturarEspecialForm.value.tipo_comprobante_codigo,
             client_id: clienteSeleccionado.value.id,
             texto_personalizado: facturarEspecialForm.value.texto_personalizado || null,
+            advance_applications: anticiposAplicados.length > 0 ? anticiposAplicados : undefined,
         });
         toast.success(res.message);
         // Refresca la reserva completa (marca pasajeros/ítems como
@@ -1143,6 +1305,7 @@ const confirmarFacturacionEspecial = async () => {
                 pasajero_ids: [], reserva_item_ids_manual: [], tipo_comprobante_codigo: '01', texto_personalizado: '',
             };
             previewFacturaEspecial.value = null;
+            anticiposEspecialSeleccionables.value = [];
             clienteSeleccionado.value = null;
         } else {
             mostrarModalFacturarEspecial.value = false;
@@ -1215,6 +1378,62 @@ const confirmarFacturacionSimple = async () => {
     }
 };
 
+// ── Cobrar anticipo (Tier 0 — conexión Adelantos↔Reservas, 2026-08-21) ──
+// Punto de entrada elegido con el usuario: cobrar desde la propia pantalla
+// de la reserva (no desde el módulo genérico de Adelantos con etiquetado
+// posterior) — reduce el riesgo de anticipos huérfanos sin asignar.
+const mostrarModalAnticipo = ref(false);
+const guardandoAnticipo = ref(false);
+const paymentMethods = ref<PaymentMethod[]>([]);
+const formAnticipo = ref<{ monto: number; medio_pago: string; tip_afe_igv: '10' | '20' | '30'; notas: string }>({
+    monto: 0, medio_pago: '', tip_afe_igv: '10', notas: '',
+});
+
+const cargarPaymentMethods = async () => {
+    try {
+        const res: { data: PaymentMethods } = await httpClient.get('payment-methods?active=1');
+        paymentMethods.value = res.data.payment_methods;
+    } catch {
+        // Silencioso — un fallo acá no debe bloquear la carga de la reserva.
+    }
+};
+
+const abrirModalAnticipo = () => {
+    formAnticipo.value = { monto: 0, medio_pago: paymentMethods.value[0]?.code ?? '', tip_afe_igv: '10', notas: '' };
+    mostrarModalAnticipo.value = true;
+};
+
+const guardarAnticipo = async () => {
+    if (!reserva.value) return;
+    guardandoAnticipo.value = true;
+    try {
+        const res = await reservaAnticipoService.crear(reserva.value.id, {
+            monto: formAnticipo.value.monto,
+            medio_pago: formAnticipo.value.medio_pago,
+            tip_afe_igv: formAnticipo.value.tip_afe_igv,
+            notas: formAnticipo.value.notas || null,
+        });
+        toast.success(res.message);
+        mostrarModalAnticipo.value = false;
+        await cargarReserva();
+    } catch (error: any) {
+        toast.error(error.response?.data?.message ?? 'No se pudo registrar el anticipo');
+    } finally {
+        guardandoAnticipo.value = false;
+    }
+};
+
+const quitarAnticipo = async (anticipo: AnticipoReserva) => {
+    if (!confirm('¿Quitar este anticipo de la reserva? El dinero no se toca, solo deja de estar asociado a este viaje.')) return;
+    try {
+        const res = await reservaAnticipoService.eliminar(anticipo.id);
+        toast.success(res.message);
+        await cargarReserva();
+    } catch (error: any) {
+        toast.error(error.response?.data?.message ?? 'No se pudo quitar el anticipo');
+    }
+};
+
 // ── Facturación externa por tenant + por reserva (2026-08-20) — marcar/
 // desmarcar/editar la anotación de "esta reserva se factura afuera de la
 // plataforma". Editable solo mientras facturacionExternaEditable (sin
@@ -1254,7 +1473,11 @@ const guardarFacturacionExterna = async (marcar: boolean) => {
 
 onMounted(async () => {
     await cargarReserva();
-    const [bib, gs] = await Promise.all([proveedorService.biblioteca(), guiaService.listar({ page: 1 })]);
+    const [bib, gs] = await Promise.all([
+        proveedorService.biblioteca(),
+        guiaService.listar({ page: 1 }),
+        cargarPaymentMethods(),
+    ]);
     bibliotecaTarifas.value = bib.proveedor_tarifas;
     guias.value = gs.guias ?? [];
 });

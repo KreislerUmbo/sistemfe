@@ -26,6 +26,12 @@ class Advance extends Model
         "status",          // pending | partially_applied | applied | partially_refunded | refunded
         "payment_method",
         "notes",
+        // Tier 2 — auditoría simple de la corrección más reciente (ver
+        // AdvanceController::corregir()). Nunca editados a mano fuera de ahí.
+        "corrected_from_sale_id",
+        "correction_reason",
+        "corrected_at",
+        "corrected_by",
     ];
 
     // ── Timestamps en zona Lima (mismo patrón que Sale/Note) ────────────
@@ -60,6 +66,13 @@ class Advance extends Model
     public function refunds()
     {
         return $this->hasMany(AdvanceRefund::class, "advance_id");
+    }
+
+    // Tier 2 — comprobante anterior a la corrección más reciente (anulado
+    // vía NC motivo 01), para trazabilidad en el detalle.
+    public function correctedFromSale()
+    {
+        return $this->belongsTo(Sale::class, "corrected_from_sale_id");
     }
 
     // ── Saldo disponible — nunca una columna, siempre calculado ─────────

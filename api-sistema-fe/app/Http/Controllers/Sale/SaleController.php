@@ -7,8 +7,6 @@ use App\Http\Resources\Client\ClientCollection;
 use App\Http\Resources\Product\ProductCollection;
 use App\Http\Resources\Sale\SaleCollection;
 use App\Http\Resources\Sale\SaleResource;
-use App\Models\Advance\Advance;
-use App\Models\Advance\AdvanceApplication;
 use App\Models\Cash\CashMovement;
 use App\Models\Cash\CashSession;
 use App\Models\Cash\PaymentMethod;
@@ -23,6 +21,7 @@ use App\Models\Sale\SaleDetail;
 use App\Models\Sale\SalePayment;
 use App\Models\Sale\SerieComprobante;
 use App\Models\Sale\TipoComprobante;
+use App\Services\AdvanceApplicationService;
 use App\Services\CashCorrectionService;
 use App\Services\QrCodeService;
 use App\Services\SerieComprobanteService;
@@ -36,7 +35,8 @@ class SaleController extends Controller
 {
     public function __construct(
         private CashCorrectionService $cashCorrection,
-        private SerieComprobanteService $serieComprobanteService
+        private SerieComprobanteService $serieComprobanteService,
+        private AdvanceApplicationService $advanceApplicationService
     ) {
     }
 
@@ -254,11 +254,26 @@ class SaleController extends Controller
             return;
         }
 
+        // Una cotización no es una venta confirmada — no debe poder reservar/
+        // consumir el saldo de un adelanto real de cliente (hallazgo de
+        // auditoría del módulo, 2026-08-21).
+        if ((int) $request->state_sale === 2) {
+            throw new HttpException(422, "No se puede aplicar un adelanto a una cotización, solo a una venta confirmada.");
+        }
+
         $suma = 0;
+        $ids_vistos = [];
         foreach ($aplicaciones as $aplicacion) {
             if (!isset($aplicacion['advance_id'], $aplicacion['amount']) || (float) $aplicacion['amount'] <= 0) {
                 throw new HttpException(422, "Cada adelanto aplicado requiere advance_id y amount > 0.");
             }
+
+            $advance_id = $aplicacion['advance_id'];
+            if (in_array($advance_id, $ids_vistos, true)) {
+                throw new HttpException(422, "El adelanto #{$advance_id} aparece más de una vez en la misma venta.");
+            }
+            $ids_vistos[] = $advance_id;
+
             $suma += (float) $aplicacion['amount'];
         }
 
@@ -877,59 +892,13 @@ class SaleController extends Controller
             }
 
             // ── Aplicar adelanto(s) del cliente (si los hay) ───────────
-            // lockForUpdate() evita que dos ventas concurrentes lean el
-            // mismo saldo disponible y ambas lo den por bueno (mismo
-            // patrón que reservarCorrelativo()). La suma ya se validó
-            // contra el total en validarAdelantosPayload(); acá se valida
-            // lo que requiere BD: pertenencia al cliente, que el adelanto
-            // ya haya sido enviado a SUNAT (su n_operacion existe — sin
-            // eso no hay serie-número válido para PrepaidPayment), y saldo
-            // disponible real bajo lock.
-            $total_aplicado_adelantos = 0;
-
-            foreach ($aplicaciones_adelanto as $aplicacion) {
-                $adelanto = Advance::where('id', $aplicacion['advance_id'])
-                    ->lockForUpdate()
-                    ->first();
-
-                if (!$adelanto) {
-                    throw new HttpException(422, "El adelanto #{$aplicacion['advance_id']} no existe.");
-                }
-
-                if ((int) $adelanto->client_id !== (int) $venta->client_id) {
-                    throw new HttpException(422, "El adelanto #{$adelanto->id} no pertenece a este cliente.");
-                }
-
-                if (!$adelanto->sale || !$adelanto->sale->n_operacion) {
-                    throw new HttpException(
-                        422,
-                        "El adelanto #{$adelanto->id} aún no fue enviado a SUNAT — no se puede aplicar todavía."
-                    );
-                }
-
-                $monto_solicitado = round((float) $aplicacion['amount'], 2);
-                $saldo_disponible = $adelanto->availableBalance();
-
-                if ($monto_solicitado > $saldo_disponible) {
-                    throw new HttpException(
-                        422,
-                        "El adelanto #{$adelanto->id} no tiene saldo suficiente " .
-                        "(disponible: S/ " . number_format($saldo_disponible, 2) . ")."
-                    );
-                }
-
-                AdvanceApplication::create([
-                    "advance_id"     => $adelanto->id,
-                    "sale_id"        => $venta->id,
-                    "amount_applied" => $monto_solicitado,
-                ]);
-
-                $adelanto->applied_amount = round((float) $adelanto->applied_amount + $monto_solicitado, 2);
-                $adelanto->refreshStatus();
-                $adelanto->save();
-
-                $total_aplicado_adelantos += $monto_solicitado;
-            }
+            // La suma ya se validó contra el total en
+            // validarAdelantosPayload(); AdvanceApplicationService valida
+            // lo que requiere BD (pertenencia/moneda/n_operacion/saldo bajo
+            // lockForUpdate()) — extraído del bloque que vivía acá para
+            // reusarlo también desde ReservaFacturacionController::store()
+            // (Tier 0, conexión Adelantos↔Reservas).
+            $total_aplicado_adelantos = $this->advanceApplicationService->aplicar($venta, $aplicaciones_adelanto);
 
             // Total/mto_imp_venta netos del anticipo — solo el total a pagar
             // se reduce, no mto_oper_gravadas/igv/valor_venta (esos deben
@@ -1104,27 +1073,40 @@ public function update(Request $request, string $id)
         }
     }
 
+    // ── Blindaje: venta con adelanto aplicado, sin importar type_payment ──
+    // Antes este chequeo solo corría dentro del bloque "sigue siendo
+    // crédito" de abajo — una venta CONTADO con un adelanto ya aplicado
+    // (AdvanceApplication real, plata ya comprometida) quedaba libre para
+    // cambiar cliente/moneda/productos/total sin ningún candado. Corre
+    // siempre, antes de abrir transacción, mismo criterio que el resto de
+    // los guards de este método (hallazgo de auditoría del módulo,
+    // 2026-08-21).
+    if ($venta->advance_applications()->exists()) {
+        throw new HttpException(
+            422,
+            "La venta #{$venta->id} ya tiene un adelanto aplicado — no se puede editar cliente, " .
+            "moneda, productos ni el pago inicial desde aquí. Para corregir, anula la aplicación " .
+            "primero desde el módulo de Adelantos."
+        );
+    }
+
     // ── Blindaje edición de venta a crédito con seguimiento real ──
     // Si la venta sigue siendo crédito, solo se permite editar
     // productos/pago inicial mientras NO haya plata ya comprometida por
-    // fuera de esta pantalla (cuota cobrada vía Amortizaciones, o un
-    // adelanto formal del módulo Adelantos aplicado a esta venta) — esos
-    // dos ya tienen su propio flujo de anulación/auditoría, no se tocan
-    // desde un PATCH de venta. El pago inicial (sale_payments) SÍ se
-    // sincroniza más abajo — es un error de tipeo típico (monto/método
-    // equivocado al crear la venta), corregible libremente si nada de lo
-    // anterior existe todavía.
+    // fuera de esta pantalla (cuota cobrada vía Amortizaciones). El
+    // adelanto ya se descartó arriba, incondicional. El pago inicial
+    // (sale_payments) SÍ se sincroniza más abajo — es un error de tipeo
+    // típico (monto/método equivocado al crear la venta), corregible
+    // libremente si nada de lo anterior existe todavía.
     if ((int) $request->type_payment === 2) {
-        $tieneCobrosFormales = $venta->paymentApplications()->where('estado', 'activo')->exists()
-            || $venta->advance_applications()->exists();
+        $tieneCobrosFormales = $venta->paymentApplications()->where('estado', 'activo')->exists();
 
         if ($tieneCobrosFormales) {
             throw new HttpException(
                 422,
-                "La venta #{$venta->id} ya tiene cuotas cobradas y/o un adelanto aplicado — " .
-                "no se puede editar productos ni el pago inicial desde aquí. Para corregir un " .
-                "cobro real, anúlalo primero desde Cuentas por Cobrar (cuota/pago) o el módulo " .
-                "de Adelantos."
+                "La venta #{$venta->id} ya tiene cuotas cobradas — no se puede editar productos " .
+                "ni el pago inicial desde aquí. Para corregir un cobro real, anúlalo primero " .
+                "desde Cuentas por Cobrar."
             );
         }
 
@@ -1427,7 +1409,27 @@ public function update(Request $request, string $id)
             ]);
         }
 
-        $venta->delete();
+        // Protección: no se puede eliminar una venta con adelanto aplicado.
+        // $venta->delete() es un soft delete (Sale usa SoftDeletes) — nunca
+        // dispara el onDelete('restrict') que advance_applications declara
+        // sobre sales.id, así que sin este guard el adelanto quedaba con
+        // applied_amount consumido por una venta que desapareció del
+        // listado, sin ningún rastro (hallazgo de auditoría del módulo,
+        // 2026-08-21). No existe todavía un flujo de "anular aplicación de
+        // adelanto" — hasta que exista, la única salida es no permitir
+        // borrar la venta.
+        if ($venta->advance_applications()->exists()) {
+            return response()->json([
+                "code"    => 405,
+                "message" => "No se puede eliminar una venta con un adelanto aplicado. Anula la " .
+                             "aplicación del adelanto primero desde el módulo de Adelantos.",
+            ]);
+        }
+
+        DB::transaction(function () use ($venta) {
+            \App\Models\AgenciaViajes\ReservaVenta::where('sale_id', $venta->id)->delete();
+            $venta->delete();
+        });
 
         return response()->json([
             "code"    => 200,

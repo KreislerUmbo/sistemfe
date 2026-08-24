@@ -65,6 +65,19 @@
                     </div>
                 </div>
 
+                <!-- Tier 1 (2026-08-24): antes salía gravado 18% siempre, sin
+                     mostrarlo — un adelanto de cliente Amazonía o de un
+                     servicio exonerado no tenía forma de salir bien
+                     clasificado. -->
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Tratamiento tributario</label>
+                    <select class="form-select" v-model="tipAfeIgv">
+                        <option value="10">Gravado (IGV 18%)</option>
+                        <option value="20">Exonerado</option>
+                        <option value="30">Inafecto</option>
+                    </select>
+                </div>
+
                 <div class="mb-3">
                     <label class="form-label fw-semibold">Notas (opcional)</label>
                     <textarea class="form-control" rows="2" v-model="notes"></textarea>
@@ -106,6 +119,9 @@ const currency = ref<string>("PEN");
 // (payment-methods?active=1), mismos code exactos que payment_methods.
 const paymentMethods = ref<PaymentMethod[]>([]);
 const paymentMethod = ref<string>("");
+// Tier 1 (2026-08-24): gravado por default — mismo comportamiento de hoy
+// si el usuario no lo toca.
+const tipAfeIgv = ref<"10" | "20" | "30">("10");
 const notes = ref<string>("");
 const loading = ref(false);
 
@@ -164,6 +180,7 @@ const crear = async () => {
             amount: amount.value,
             currency: currency.value,
             payment_method: paymentMethod.value,
+            tip_afe_igv: tipAfeIgv.value,
             notes: notes.value || null,
         });
 

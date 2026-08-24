@@ -734,8 +734,23 @@ export type ReservaResumenItem = {
   total_convertido: number;
 };
 
+// Tier 0 — conexión Adelantos↔Reservas (hallazgo de auditoría del módulo
+// Adelantos, 2026-08-21): anticipos ya pagados hacia esta reserva.
+export type AnticipoReserva = {
+  id: number;
+  advance_id: number;
+  monto: number;
+  disponible: number;
+  moneda: 'PEN' | 'USD';
+  fecha_asignacion: string | null;
+  comprobante_enviado: boolean;
+};
+
 export type ReservaCabecera = {
-  cliente?: { id: number; full_name: string; n_document?: string };
+  // cod_tipo_doc_sunat (Catálogo 06 SUNAT: '6' = RUC) — el backend ya
+  // serializa el Client completo, este campo solo lo hace visible al
+  // tipado para poder deshabilitar "Factura" cuando el cliente no tiene RUC.
+  cliente?: { id: number; full_name: string; n_document?: string; cod_tipo_doc_sunat?: string };
   destino: string;
   // Fase 1 del fix Cotización↔Reserva (2026-08-18): ya NO es un espejo de
   // Cotizacion.fecha_viaje_desde/hasta — son las fechas propias de la
@@ -763,6 +778,11 @@ export type ReservaDetalleResponse = {
   // ya cubiertos por ALGUNA ReservaVenta — usado para el badge
   // "Facturación completa" vs. "Falta facturar a N pasajeros".
   pasajeros_facturados_ids?: number[];
+  // Cuántos reserva_items reales de la reserva NO están cubiertos todavía
+  // por ninguna ReservaVenta (hallazgo 2026-08-24: "Facturación completa"
+  // solo miraba pasajeros — un ítem compartido o "sin asignar" podía
+  // quedar pendiente para siempre con el badge en verde).
+  items_pendientes_de_facturar_count?: number;
   // Facturación externa por tenant (PEGAR-EN-CLAUDE-CODE-facturacion-externa-
   // tenant.md): flag del TENANT (no de la reserva) — controla si se ofrecen
   // los botones "Facturar"/"Facturación especial". El backend igual bloquea
@@ -770,6 +790,9 @@ export type ReservaDetalleResponse = {
   facturacion_habilitada_tenant?: boolean;
   // Editable solo mientras la reserva no tenga ninguna ReservaVenta.
   facturacion_externa_editable?: boolean;
+  // Tier 0 — conexión Adelantos↔Reservas.
+  anticipos?: AnticipoReserva[];
+  total_anticipos_disponibles?: number;
 };
 
 export type Reservas = {
