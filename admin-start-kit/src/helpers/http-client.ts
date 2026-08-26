@@ -60,10 +60,19 @@ instance.interceptors.request.use((config) => {
   return config;
 });
 
+// Un 401 de /auth/login o /auth/register es el resultado NORMAL de credenciales
+// inválidas (login.vue ya lo maneja y muestra el mensaje al usuario) — no una sesión
+// vencida. Antes esto disparaba forceReLogin() igual, que hace un
+// window.location.href duro: la página se recargaba entera ANTES de que el usuario
+// llegara a ver el mensaje de error de su propio intento de login fallido, dando la
+// falsa impresión de que el sistema "no hacía nada" o "no mostraba ningún error".
+const ES_RUTA_DE_LOGIN = /(^|\/)auth\/(login|register)(\?|$)/;
+
 instance.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    const esIntentoDeLogin = ES_RUTA_DE_LOGIN.test(error.config?.url ?? "");
+    if (error.response?.status === 401 && !esIntentoDeLogin) {
       forceReLogin();
     }
     return Promise.reject(error);

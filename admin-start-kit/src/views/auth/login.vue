@@ -38,13 +38,28 @@
             </p>
           </div>
 
-          <b-alert v-if="error" variant="danger" class="d-block" dismissible @dismissed="error = ''">
+          <!-- model-value="true" es obligatorio acá: BAlert (bootstrap-vue-next) tiene su
+          propio estado interno de visibilidad (defineModel<boolean>({ default: false })),
+          separado del v-if que lo envuelve. Sin esto, el componente monta (v-if lo permite)
+          pero se renderiza vacío por dentro siempre — bug real confirmado con Playwright,
+          nunca mostró ningún mensaje de error desde que existe esta pantalla. El cierre
+          (dismissible) sigue funcionando igual: @dismissed pone error/lockedUntil en su
+          valor "vacío", lo que desmonta el alert entero vía el v-if externo. -->
+          <b-alert
+            v-if="error"
+            :model-value="true"
+            variant="danger"
+            class="d-block"
+            dismissible
+            @dismissed="error = ''"
+          >
             {{ error }}
           </b-alert>
 
-          <b-alert v-if="lockedUntil" variant="warning" class="d-block">
+          <b-alert v-if="lockedUntil" :model-value="true" variant="warning" class="d-block">
             <i class="fas fa-triangle-exclamation me-1"></i>
-            Demasiados intentos fallidos. Vuelve a intentarlo en {{ secondsLeft }}s.
+            Demasiados intentos fallidos con estas credenciales. Espera {{ secondsLeft }}s e
+            inténtalo de nuevo, o verifica que el correo y la contraseña sean correctos.
           </b-alert>
 
           <b-form novalidate @submit.prevent="handleLogin">
@@ -254,7 +269,11 @@ const handleLogin = async () => {
     }
 
     if (intentosFallidos.value >= MAX_INTENTOS) {
-      error.value = "";
+      // No se limpia error.value acá a propósito: antes se borraba el motivo real
+      // (ej. "Correo o contraseña incorrectos") justo cuando arrancaba el bloqueo,
+      // dejando en pantalla solo el aviso de "demasiados intentos" sin decir POR QUÉ
+      // — confuso para un usuario que no sabía si el sistema estaba roto o si de
+      // verdad tenía mal la contraseña. Ahora se ven los dos mensajes juntos.
       iniciarBloqueo();
     }
   } finally {
