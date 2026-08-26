@@ -243,7 +243,6 @@ class SaleControllerSerieComprobanteTest extends TestCase
             'currency' => 'PEN',
             'is_exportacion' => 0,
             'destino' => 'nacional',
-            'state_sale' => 1,
             'type_payment' => 2, // crédito
             'subtotal' => 100.00,
             'igv' => 18.00,

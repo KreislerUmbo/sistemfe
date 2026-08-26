@@ -396,7 +396,6 @@ class ReservaFacturacionController extends Controller
                     'currency' => $moneda,
                     'is_exportacion' => 0,
                     'destino' => 'nacional',
-                    'state_sale' => 1,
                     'type_payment' => 1,
                     'condicion_pago' => 'contado',
                     'subtotal' => $subtotalTotal,

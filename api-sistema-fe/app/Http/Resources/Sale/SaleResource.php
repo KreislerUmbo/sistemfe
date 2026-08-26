@@ -153,7 +153,6 @@ class SaleResource extends JsonResource
             'amount_anticipo'        => (float) ($this->resource->amount_anticipo ?? 0),
 
             // ── Estado ────────────────────────────────────────────
-            'state_sale'    => $this->resource->state_sale,
             'state_payment' => $this->resource->state_payment,
             'type_payment'  => $this->resource->type_payment,
             'debt'          => (float) ($this->resource->debt ?? 0),

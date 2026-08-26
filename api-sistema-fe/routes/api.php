@@ -51,6 +51,8 @@ use App\Http\Controllers\Central\TenantSubscriptionController;
 use App\Http\Controllers\Central\TenantSunatController;
 use App\Http\Controllers\Client\ClientController;
 use App\Http\Controllers\Client\CompanyController;
+use App\Http\Controllers\CommercialQuote\CommercialQuoteAnticipoController;
+use App\Http\Controllers\CommercialQuote\CommercialQuoteController;
 use App\Http\Controllers\Credit\CreditInstallmentController;
 use App\Http\Controllers\Credit\CreditPaymentController;
 use App\Http\Controllers\Credit\CreditReceivablesController;
@@ -420,6 +422,35 @@ Route::group([
     // URL firmada temporal para ver/imprimir el PDF del recibo de pago (ver payment-receipts-pdf/{id} más abajo)
     Route::get("payment-receipts-pdf-url/{id}", [PaymentReceiptController::class, 'pdfSignedUrl']);
 
+    // Cotizaciones Comerciales — módulo nuevo, sin efecto fiscal ni de
+    // stock (reemplaza a sales.state_sale, retirado). Los 4 nombres de
+    // permiso coinciden con router/routes.ts y menu-items.ts del frontend.
+    Route::get("commercial-quotes", [CommercialQuoteController::class, 'index'])
+        ->middleware('permission:list_commercial_quote');
+    Route::post("commercial-quotes", [CommercialQuoteController::class, 'store'])
+        ->middleware('permission:register_commercial_quote');
+    Route::get("commercial-quotes/{id}", [CommercialQuoteController::class, 'show'])
+        ->middleware('permission:list_commercial_quote');
+    Route::put("commercial-quotes/{id}", [CommercialQuoteController::class, 'update'])
+        ->middleware('permission:edit_commercial_quote');
+    Route::get("commercial-quotes/{id}/for-sale", [CommercialQuoteController::class, 'paraVenta'])
+        ->middleware('permission:convert_commercial_quote');
+    Route::post("commercial-quotes/{id}/mark-converted", [CommercialQuoteController::class, 'marcarConvertida'])
+        ->middleware('permission:convert_commercial_quote');
+
+    // Anticipos — cobrar un adelanto para arrancar el trabajo de una
+    // cotización, antes de que exista la venta final. Mismo patrón que
+    // reservas/{id}/anticipos (Agencia de Viajes). Reusa edit_commercial_quote
+    // (etiquetar un anticipo es una forma de editar el estado de la
+    // cotización) en vez de un permiso nuevo dedicado.
+    Route::post("commercial-quotes/{id}/anticipos", [CommercialQuoteAnticipoController::class, 'store'])
+        ->middleware('permission:edit_commercial_quote');
+    Route::delete("commercial-quote-anticipos/{id}", [CommercialQuoteAnticipoController::class, 'destroy'])
+        ->middleware('permission:edit_commercial_quote');
+
+    // URL firmada temporal para ver/imprimir el PDF de la cotización comercial (ver commercial-quotes-pdf/{id} más abajo)
+    Route::get("commercial-quotes-pdf-url/{id}", [CommercialQuoteController::class, 'pdfSignedUrl']);
+
     // ═══════════════════════════════════════════════════════════════
     // Vertical Agencia de Viajes — maestros (Sesión 11a). Primera capa API
     // real del vertical (Sesiones 0-10 fueron solo migraciones/modelos/
@@ -738,6 +769,11 @@ Route::get("notas-pdf/{id}", [NotaController::class, 'pdf'])
 // Requiere URL firmada (ver PaymentReceiptController::pdfSignedUrl, arriba, dentro del grupo auth:api)
 Route::get("payment-receipts-pdf/{id}", [PaymentReceiptController::class, 'pdf'])
     ->name('payment-receipts.pdf')
+    ->middleware(['tenant', 'tenant.active', 'tenant.token', 'signed']);
+
+// Requiere URL firmada (ver CommercialQuoteController::pdfSignedUrl, arriba, dentro del grupo auth:api)
+Route::get("commercial-quotes-pdf/{id}", [CommercialQuoteController::class, 'pdf'])
+    ->name('commercial-quotes.pdf')
     ->middleware(['tenant', 'tenant.active', 'tenant.token', 'signed']);
 
 // Requiere URL firmada (ver CashSessionController::pdfSignedUrl, arriba, dentro del grupo auth:api)

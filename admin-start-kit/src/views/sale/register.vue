@@ -8,21 +8,9 @@
             <div>
                 <h5 class="fw-bold mb-0 text-dark">
                     <i class="fas fa-cash-register me-2 text-primary"></i>
-                    Nueva {{ state_sale == 1 ? 'Venta' : 'Cotización' }}
+                    Nueva Venta
                 </h5>
                 <small class="text-muted">Completa los pasos — los totales se actualizan en tiempo real</small>
-            </div>
-            <div class="btn-group shadow-sm" role="group">
-                <input type="radio" class="btn-check" name="state_sale" id="btn-venta" value="1"
-                    :checked="state_sale == 1" @click="state_sale = 1" autocomplete="off">
-                <label class="btn btn-outline-primary px-4 fw-semibold" for="btn-venta">
-                    <i class="fas fa-cart-plus me-2"></i>Venta
-                </label>
-                <input type="radio" class="btn-check" name="state_sale" id="btn-cotizacion" value="2"
-                    :checked="state_sale == 2" @click="state_sale = 2" autocomplete="off">
-                <label class="btn btn-outline-primary px-4 fw-semibold" for="btn-cotizacion">
-                    <i class="fas fa-file-alt me-2"></i>Cotización
-                </label>
             </div>
         </div>
 
@@ -377,7 +365,7 @@
         <div class="card border-0 shadow-sm mb-3">
             <div class="card-header bg-white border-bottom d-flex align-items-center gap-2 py-2">
                 <span class="badge bg-warning text-dark rounded-pill">3</span>
-                <span class="fw-semibold text-dark">Detalle de {{ state_sale == 1 ? 'Venta' : 'Cotización' }}</span>
+                <span class="fw-semibold text-dark">Detalle de Venta</span>
             </div>
             <div class="card-body p-0">
                 <div class="table-responsive">
@@ -745,11 +733,11 @@
                     <div class="col-12 col-md-3 d-flex flex-column gap-2 pt-md-4">
                         <button type="button" class="btn btn-success fw-bold py-2 shadow-sm" @click="store()">
                             <i class="fas fa-check-circle me-2"></i>
-                            Guardar {{ state_sale == 1 ? 'Venta' : 'Cotización' }}
+                            Guardar Venta
                         </button>
                         <button type="button" class="btn btn-outline-secondary fw-semibold py-2"
                             @click="$router.push({ name: 'sale.list' })">
-                            <i class="fas fa-undo me-2"></i>Listar {{ state_sale == 1 ? 'Ventas' : 'Cotizacións' }}
+                            <i class="fas fa-undo me-2"></i>Listar Ventas
                         </button>
                     </div>
                 </div>
@@ -787,7 +775,7 @@
                 </div>
                 <button type="button" class="btn btn-success fw-bold px-4 shadow-sm sv-bottom-save" @click="store()">
                     <i class="fas fa-check-circle me-2"></i>
-                    <span class="d-none d-sm-inline">Guardar </span>{{ state_sale == 1 ? 'Venta' : 'Cotización' }}
+                    <span class="d-none d-sm-inline">Guardar </span>Venta
                 </button>
             </div>
         </div>
@@ -814,6 +802,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue';
+import { useRoute } from 'vue-router';
 import type { AxiosResponse } from 'axios';
 import httpClient from '@/helpers/http-client';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';
@@ -835,6 +824,14 @@ import type { TipoComprobante } from '@/types/series-comprobante';
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
 
 const authStore = useAuthStore();
+const route = useRoute();
+
+// ── Prellenado desde una Cotización Comercial (?from_quote=<id>) ────
+// Módulo "Cotizaciones Comerciales": el botón "Convertir en venta" del
+// detalle de la cotización navega acá con este query param. Nunca se crea
+// el Sale desde el backend de cotizaciones — toda la lógica fiscal/stock
+// sigue viviendo solo acá, la cotización solo aporta datos base.
+const commercial_quote_id_origen = ref<string | null>(null);
 
 // Mapa tipo_comprobante_codigo → permiso Spatie que habilita emitirlo desde
 // este formulario — mismo mapa que SaleController::PERMISOS_EMISION en el
@@ -874,7 +871,6 @@ const showQuickProductModal = ref<boolean>(false);
 const quickProductData = ref<any>(null);
 
 // ── Configuración de la transacción ──────────────────────────────
-const state_sale = ref<number>(1);     // 1=venta, 2=cotización
 const is_exportacion = ref<number>(0);
 const n_transaction = ref<string>('');
 const today = ref<string>('');
@@ -1696,7 +1692,7 @@ const store = async () => {
 
     // Requiere al menos un pago solo si NO es crédito — una venta a
     // crédito puede financiarse 100% vía cronograma sin pago inicial.
-    if (state_sale.value === 1 && sale_payments.value.length === 0 && totalConAdelanto > 0 && type_payment.value != 2) {
+    if (sale_payments.value.length === 0 && totalConAdelanto > 0 && type_payment.value != 2) {
         (Swal as TVueSwalInstance).fire({ icon: 'error', title: 'Error', text: 'Agrega al menos un pago para la venta.' }); return;
     }
     if (condicion_especial.value === '2' && !codigo_detraccion_sel.value) {
@@ -1736,10 +1732,8 @@ const store = async () => {
 
     // Estado de pago derivado automáticamente (considera lo ya cubierto por adelantos)
     let estado_pago = 1; // pendiente
-    if (state_sale.value === 1) {
-        if (total_payments.value >= totalConAdelanto) estado_pago = 3;      // pagado completo
-        else if (total_payments.value > 0 || totalAdelantos > 0) estado_pago = 2;      // pago parcial
-    }
+    if (total_payments.value >= totalConAdelanto) estado_pago = 3;      // pagado completo
+    else if (total_payments.value > 0 || totalAdelantos > 0) estado_pago = 2;      // pago parcial
 
     // Mapear condicion_especial → retencion_igv (campo de la BD)
     const retencion_igv_bd = condicion_especial.value === 'anticipo' ? 0
@@ -1765,7 +1759,6 @@ const store = async () => {
         currency: currency.value,         // 'PEN' o 'USD' (código ISO)
         is_exportacion: is_exportacion.value,
         destino: destino.value,          // 'amazonia' o 'nacional'
-        state_sale: state_sale.value,
         type_payment: type_payment.value,
 
         // Regímenes especiales
@@ -1853,6 +1846,20 @@ const store = async () => {
         if (resp.data.code === 200) {
             await (Swal as TVueSwalInstance).fire('¡Listo!', resp.data.message, 'success');
             if (resp.data.sale_id) {
+                // Cierra el flujo "Convertir en venta" de Cotizaciones
+                // Comerciales — la venta ya se guardó bien, así que un
+                // fallo acá (red, etc.) solo se loguea, nunca bloquea al
+                // vendedor: decisión consciente, documentada en
+                // CommercialQuoteController::marcarConvertida().
+                if (commercial_quote_id_origen.value) {
+                    try {
+                        await httpClient.post(`commercial-quotes/${commercial_quote_id_origen.value}/mark-converted`, {
+                            sale_id: resp.data.sale_id,
+                        });
+                    } catch (markError) {
+                        console.error('No se pudo marcar la cotización comercial como convertida', markError);
+                    }
+                }
                 const formatoDefault = useAuthStore().getUser()?.formato_impresion_default ?? 'a4';
                 await imprimirComprobante(resp.data.sale_id, formatoDefault);
             }
@@ -1865,6 +1872,7 @@ const store = async () => {
 
 // ── Limpiar formulario ─────────────────────────────────────────────
 const resetData = () => {
+    commercial_quote_id_origen.value = null;
     client_selected.value = undefined;
     clientSearchText.value = '';
     clientSuggestions.value = [];
@@ -1897,7 +1905,6 @@ const resetData = () => {
     destino.value = 'amazonia';
     default_quantity.value = 1;
     default_price.value = 0;
-    state_sale.value = 1;
     type_payment.value = 1;
     method_payment.value = 'EFECTIVO';
     amount.value = 0;
@@ -2079,10 +2086,64 @@ watch(currency_iso, (nuevo) => {
     currency_symbol.value = nuevo === 'USD' ? '$' : 'S/.';
 });
 
-onMounted(() => {
-    config();
-    loadPaymentMethods();
-    cargarTiposYSucursales();
+// Trae cliente/ítems de una Cotización Comercial (GET .../for-sale, solo
+// lectura) y prellena el formulario reusando selectClient()/
+// selectAndAddProduct() ya existentes — así el cálculo de IGV/stock/
+// afectación tributaria sigue siendo exactamente el mismo que el de
+// cualquier venta normal, sin duplicar nada. Corre DESPUÉS de config()
+// (necesita parametros_tributarios ya cargados para getPrecioBaseSinIgv()).
+const prellenarDesdeCotizacion = async (quoteId: string) => {
+    try {
+        const { data } = await httpClient.get(`commercial-quotes/${quoteId}/for-sale`);
+
+        if (data.client) {
+            // Cliente completo (no el resumen parcial que trae for-sale) —
+            // selectClient() necesita campos que ese resumen no incluye
+            // (cod_tipo_doc_sunat, es_amazonia, etc.).
+            const { data: clienteCompleto } = await httpClient.get(`clients/${data.client.id}`);
+            selectClient(clienteCompleto.client);
+        } else if (data.client_name_free) {
+            (Swal as TVueSwalInstance).fire({
+                icon: 'info',
+                title: 'Cliente de la cotización',
+                text: `${data.client_name_free}${data.client_phone_free ? ' — ' + data.client_phone_free : ''}. Selecciona o crea el cliente para esta venta.`,
+            });
+        }
+
+        const itemsSinProducto: string[] = [];
+        for (const item of data.items) {
+            if (item.product_id) {
+                const { data: productoCompleto } = await httpClient.get(`products/${item.product_id}`);
+                default_price.value = item.unit_price;
+                default_quantity.value = item.quantity;
+                selectAndAddProduct(productoCompleto.product);
+            } else {
+                itemsSinProducto.push(item.description);
+            }
+        }
+
+        if (itemsSinProducto.length > 0) {
+            (Swal as TVueSwalInstance).fire({
+                icon: 'warning',
+                title: 'Ítems sin producto asociado',
+                html: 'Estos ítems de la cotización deben agregarse manualmente:<br>'
+                    + itemsSinProducto.map((d) => `• ${d}`).join('<br>'),
+            });
+        }
+
+        commercial_quote_id_origen.value = quoteId;
+    } catch (e: any) {
+        (Swal as TVueSwalInstance).fire('Error', e.response?.data?.message ?? 'No se pudo cargar la cotización comercial.', 'error');
+    }
+};
+
+onMounted(async () => {
+    await Promise.all([config(), loadPaymentMethods(), cargarTiposYSucursales()]);
+
+    const fromQuote = route.query.from_quote;
+    if (typeof fromQuote === 'string' && fromQuote) {
+        await prellenarDesdeCotizacion(fromQuote);
+    }
 });
 </script>
 

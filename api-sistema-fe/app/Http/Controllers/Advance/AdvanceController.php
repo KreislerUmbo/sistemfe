@@ -292,7 +292,6 @@ class AdvanceController extends Controller
             "currency"             => $currency,
             "is_exportacion"       => 0,
             "destino"              => $destino,
-            "state_sale"           => 1, // venta (no cotización)
             "type_payment"         => 1, // contado — el adelanto siempre se cobra al recibirse
             "subtotal"             => $subtotal,
             "igv"                  => $igv,

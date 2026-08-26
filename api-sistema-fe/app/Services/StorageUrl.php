@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use Illuminate\Support\Facades\Storage;
+
 // Arma URLs de archivos servidos por tenant (avatar, imagen, foto) usando el
 // helper tenant_asset() del propio paquete stancl/tenancy (ruta
 // /tenancy/assets/{path}, ver
@@ -34,6 +36,26 @@ class StorageUrl
     public static function resolveMuchas(array $paths): array
     {
         return array_map(fn ($p) => self::resolve($p), $paths);
+    }
+
+    // Para incrustar una imagen dentro de un PDF (DomPDF) — NUNCA usar
+    // resolve() para esto. DomPDF trae 'enable_remote' => false por
+    // default (vendor/barryvdh/laravel-dompdf/config/dompdf.php, sin
+    // override en este proyecto), así que la URL HTTP que arma
+    // tenant_asset() nunca cargaría dentro del PDF renderizado — no hay
+    // ningún PDF en el proyecto que la haya probado con éxito. Se
+    // incrusta la imagen como data URI (base64), leída del disco 'public'
+    // ya reescrito al tenant correcto por FilesystemTenancyBootstrapper —
+    // evita también el chroot de DomPDF (limitado a base_path()).
+    public static function resolveParaPdf(?string $path): ?string
+    {
+        if (! $path || ! Storage::disk('public')->exists($path)) {
+            return null;
+        }
+
+        $mime = Storage::disk('public')->mimeType($path) ?: 'image/png';
+
+        return 'data:' . $mime . ';base64,' . base64_encode(Storage::disk('public')->get($path));
     }
 
     // Inverso de resolve(): recupera el path relativo (el que vive en BD) a

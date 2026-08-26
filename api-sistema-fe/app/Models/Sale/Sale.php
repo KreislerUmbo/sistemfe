@@ -109,7 +109,6 @@ class Sale extends Model
 
         // ── Forma de pago y estado ────────────────────────────────────
         "type_payment",   // 1=contado, 2=crédito
-        "state_sale",     // 1=venta, 2=cotización
         "state_payment",  // 1=pendiente, 2=pago parcial, 3=pagado completo
         "debt",           // saldo pendiente de pago
         "paid_out",       // monto ya pagado
@@ -367,7 +366,6 @@ class Sale extends Model
         $categorie_id,
         $buscar_id_venta,
         $buscar_cliente,
-        $estado_venta,
         $tipo_pago,
         $fecha_inicio,
         $fecha_fin
@@ -408,10 +406,6 @@ class Sale extends Model
                     ["%{$buscar_cliente}%"]
                 );
             });
-        }
-
-        if ($estado_venta) {
-            $query->where("state_sale", $estado_venta);
         }
 
         if ($tipo_pago) {

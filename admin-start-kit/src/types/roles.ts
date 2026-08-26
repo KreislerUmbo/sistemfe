@@ -346,6 +346,29 @@ export const PERMISOS = [
         ]
     },
     {
+        // Módulo nuevo "Cotizaciones Comerciales" — presupuestos sin efecto
+        // fiscal ni de stock, reemplaza a sales.state_sale (retirado).
+        'name': 'Cotizaciones Comerciales',
+        'permisos': [
+            {
+                name: 'Listar cotizaciones',
+                permiso: 'list_commercial_quote',
+            },
+            {
+                name: 'Registrar cotización',
+                permiso: 'register_commercial_quote',
+            },
+            {
+                name: 'Editar cotización',
+                permiso: 'edit_commercial_quote',
+            },
+            {
+                name: 'Convertir en venta',
+                permiso: 'convert_commercial_quote',
+            },
+        ]
+    },
+    {
         // Módulo de series de comprobantes — CRUD de catálogo, mismo criterio
         // que Métodos de Pago (sin permiso de eliminar: no hay borrado real,
         // solo desactivar).

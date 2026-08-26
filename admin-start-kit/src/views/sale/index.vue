@@ -126,22 +126,6 @@
                             placeholder="Nombre, DNI, RUC..." @keyup.enter="list">
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label small fw-semibold">Tipo</label>
-                        <div class="btn-group w-100" role="group">
-                            <input type="radio" class="btn-check" name="state_sale_f" id="sf-todos" value="0"
-                                :checked="state_sale == 0" @click="state_sale = 0">
-                            <label class="btn btn-outline-secondary btn-sm" for="sf-todos">Todos</label>
-                            <input type="radio" class="btn-check" name="state_sale_f" id="sf-venta" value="1"
-                                :checked="state_sale == 1" @click="state_sale = 1">
-                            <label class="btn btn-outline-primary btn-sm" for="sf-venta"><i
-                                    class="fas fa-cart-plus me-1"></i>Venta</label>
-                            <input type="radio" class="btn-check" name="state_sale_f" id="sf-cotizacion" value="2"
-                                :checked="state_sale == 2" @click="state_sale = 2">
-                            <label class="btn btn-outline-info btn-sm" for="sf-cotizacion"><i
-                                    class="fas fa-file-alt me-1"></i>Cotización</label>
-                        </div>
-                    </div>
-                    <div class="col-md-6">
                         <label class="form-label small fw-semibold">Tipo de Pago</label>
                         <div class="btn-group w-100" role="group">
                             <input type="radio" class="btn-check" name="type_payment_f" id="pf-todos" value="0"
@@ -179,7 +163,6 @@
                                 <th class="ps-3">#</th>
                                 <th>Cliente</th>
                                 <th>Comprobante</th>
-                                <th class="text-center">Tipo</th>
                                 <th class="text-center">Pago</th>
                                 <th class="text-center">Estado</th>
                                 <th class="text-end">IGV</th>
@@ -192,14 +175,14 @@
                         <tbody>
                             <!-- Cargando -->
                             <tr v-if="loading">
-                                <td colspan="11" class="text-center py-5 text-muted">
+                                <td colspan="10" class="text-center py-5 text-muted">
                                     <div class="spinner-border spinner-border-sm me-2"></div>
                                     Cargando ventas...
                                 </td>
                             </tr>
                             <!-- Sin datos -->
                             <tr v-else-if="sale_list.length === 0">
-                                <td colspan="11" class="text-center py-5 text-muted fst-italic">
+                                <td colspan="10" class="text-center py-5 text-muted fst-italic">
                                     <i class="fas fa-inbox opacity-50 fs-4 mb-2 d-block"></i>
                                     No se encontraron ventas con los filtros seleccionados.
                                 </td>
@@ -229,16 +212,6 @@
                                             {{ cond.label }}
                                         </span>
                                     </div>
-                                </td>
-
-                                <!-- Tipo -->
-                                <td class="text-center">
-                                    <span class="badge"
-                                        :class="sale.state_sale == 1 ? 'bg-success-subtle text-success border border-success-subtle' : 'bg-info-subtle text-info border border-info-subtle'">
-                                        <i class="fas me-1"
-                                            :class="sale.state_sale == 1 ? 'fa-cart-plus' : 'fa-file-alt'"></i>
-                                        {{ sale.state_sale == 1 ? 'Venta' : 'Cotización' }}
-                                    </span>
                                 </td>
 
                                 <!-- Pago -->
@@ -285,7 +258,7 @@
                                              !sale.correlativo, lo que dejaba sin forma de reintentar una
                                              venta cuyo correlativo ya se quemó en un envío rechazado
                                              (xml/cdr null pero correlativo seteado). -->
-                                        <button v-if="!(sale.xml && sale.cdr) && sale.state_sale == 1" type="button"
+                                        <button v-if="!(sale.xml && sale.cdr)" type="button"
                                             class="btn btn-sm btn-outline-primary py-0 px-2" @click="enviarSunat(sale)"
                                             :disabled="loadingSunat === sale.id"
                                             :title="sale.correlativo ? 'Reintentar envío a SUNAT' : 'Enviar a SUNAT'">
@@ -322,9 +295,6 @@
                                                 {{ sale.notes.length }}
                                             </span>
                                         </button>
-
-                                        <!-- Cotización no tiene acciones SUNAT -->
-                                        <span v-if="sale.state_sale == 2" class="text-muted small">N/A</span>
 
                                         <!-- Estado simplificado — antes se mostraba "Aceptado" con solo
                                              sale.correlativo, que queda seteado incluso cuando SUNAT
@@ -429,7 +399,6 @@ const search_product = ref<string>("");
 const categorie_id = ref<string>("");
 const search = ref<string>("");          // N° de venta (búsqueda rápida)
 const search_client = ref<string>("");
-const state_sale = ref<number>(0);       // 0=todos, 1=venta, 2=cotización
 const type_payment = ref<number>(0);     // 0=todos, 1=contado, 2=crédito
 const start_date = ref<string>("");
 const end_date = ref<string>("");
@@ -444,7 +413,6 @@ const filterCount = computed(() => {
     if (search_product.value) count++;
     if (categorie_id.value) count++;
     if (search_client.value) count++;
-    if (state_sale.value !== 0) count++;
     if (type_payment.value !== 0) count++;
     if (start_date.value || end_date.value) count++;
     return count;
@@ -458,8 +426,6 @@ const filterChips = computed(() => {
         if (cat) chips.push(`Categoría: ${cat.title}`);
     }
     if (search_client.value) chips.push(`Cliente: ${search_client.value}`);
-    if (state_sale.value === 1) chips.push('Tipo: Venta');
-    else if (state_sale.value === 2) chips.push('Tipo: Cotización');
     if (type_payment.value === 1) chips.push('Pago: Contado');
     else if (type_payment.value === 2) chips.push('Pago: Crédito');
     if (start_date.value || end_date.value) {
@@ -545,7 +511,6 @@ const list = async () => {
                 search_product: search_product.value ?? '',
                 categorie_id: categorie_id.value ?? '',
                 search_client: search_client.value ?? '',
-                state_sale: state_sale.value ?? '',
                 type_payment: type_payment.value ?? '',
                 start_date: start_date.value ?? '',
                 end_date: end_date.value ?? '',
@@ -577,7 +542,6 @@ const reset = () => {
     search_product.value = "";
     categorie_id.value = "";
     search_client.value = "";
-    state_sale.value = 0;
     type_payment.value = 0;
     start_date.value = "";
     end_date.value = "";
@@ -595,8 +559,6 @@ const removeChip = (idx: number) => {
     if (chip.includes('Producto')) search_product.value = '';
     else if (chip.includes('Categoría')) categorie_id.value = '';
     else if (chip.includes('Cliente')) search_client.value = '';
-    else if (chip.includes('Tipo: Venta')) state_sale.value = 0;
-    else if (chip.includes('Tipo: Cotización')) state_sale.value = 0;
     else if (chip.includes('Pago: Contado')) type_payment.value = 0;
     else if (chip.includes('Pago: Crédito')) type_payment.value = 0;
     else if (chip.includes('Fecha')) {
@@ -796,7 +758,7 @@ onMounted(() => {
 watch(currentPage, () => list());
 
 // Re-buscar al cambiar filtros de radio automáticamente
-watch([state_sale, type_payment], () => {
+watch([type_payment], () => {
     currentPage.value = 1;
     list();
 });

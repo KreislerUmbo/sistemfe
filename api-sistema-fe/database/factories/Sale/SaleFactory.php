@@ -42,7 +42,6 @@ class SaleFactory extends Factory
             'igv' => $igv,
             'total' => $total,
             'type_payment' => 1, // contado
-            'state_sale' => 1,   // venta (no cotización)
             'state_payment' => 3, // pagado completo
             'debt' => 0,
             'paid_out' => $total,

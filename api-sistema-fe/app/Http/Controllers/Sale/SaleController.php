@@ -25,6 +25,7 @@ use App\Services\AdvanceApplicationService;
 use App\Services\CashCorrectionService;
 use App\Services\QrCodeService;
 use App\Services\SerieComprobanteService;
+use App\Services\StorageUrl;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -252,13 +253,6 @@ class SaleController extends Controller
 
         if (empty($aplicaciones)) {
             return;
-        }
-
-        // Una cotización no es una venta confirmada — no debe poder reservar/
-        // consumir el saldo de un adelanto real de cliente (hallazgo de
-        // auditoría del módulo, 2026-08-21).
-        if ((int) $request->state_sale === 2) {
-            throw new HttpException(422, "No se puede aplicar un adelanto a una cotización, solo a una venta confirmada.");
         }
 
         $suma = 0;
@@ -600,7 +594,6 @@ class SaleController extends Controller
         $categorie_id     = $request->categorie_id;
         $buscar_id_venta  = $request->search;
         $buscar_cliente   = $request->search_client;
-        $estado_venta     = $request->state_sale;
         $tipo_pago        = $request->type_payment;
         $fecha_inicio     = $request->start_date;
         $fecha_fin        = $request->end_date;
@@ -610,7 +603,6 @@ class SaleController extends Controller
             $categorie_id,
             $buscar_id_venta,
             $buscar_cliente,
-            $estado_venta,
             $tipo_pago,
             $fecha_inicio,
             $fecha_fin
@@ -703,8 +695,11 @@ class SaleController extends Controller
         $empresa = Company::first();
         $qr      = app(QrCodeService::class)->generarQrComprobante($venta);
         $vista   = $formato === 'ticket80mm' ? 'pdf.ticket80mm' : 'pdf.a4';
+        // Logo por tenant — vertical para el ticket angosto, horizontal para A4
+        // (ver StorageUrl::resolveParaPdf(), nunca resolve() dentro de un PDF).
+        $logo    = StorageUrl::resolveParaPdf($formato === 'ticket80mm' ? $empresa?->logo_vertical : $empresa?->logo_horizontal);
 
-        $pdf = Pdf::loadView($vista, compact('venta', 'empresa', 'qr'));
+        $pdf = Pdf::loadView($vista, compact('venta', 'empresa', 'qr', 'logo'));
 
         if ($formato === 'ticket80mm') {
             // Ancho fijo 80mm (≈226.77pt). Dompdf no soporta alto "auto" real,
@@ -803,7 +798,6 @@ class SaleController extends Controller
                 "currency"        => $request->currency,      // 'PEN' o 'USD'
                 "is_exportacion"  => $request->is_exportacion,
                 "destino"         => $request->destino,       // 'amazonia' o 'nacional'
-                "state_sale"      => $request->state_sale,    // 1=venta, 2=cotización
                 "type_payment"    => $request->type_payment,  // 1=contado, 2=crédito
 
                 // Totales calculados en el frontend
@@ -1159,7 +1153,6 @@ public function update(Request $request, string $id)
             "currency"       => $request->currency,
             "is_exportacion" => $request->is_exportacion,
             "destino"        => $request->destino,
-            "state_sale"     => $request->state_sale,
             "type_payment"   => $request->type_payment,
             // condicion_pago derivado arriba, antes de la transacción —
             // update() no crea/edita cronograma (Fase 8, alcance cerrado).

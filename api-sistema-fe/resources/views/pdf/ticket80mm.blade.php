@@ -87,6 +87,12 @@
 
 <body>
 
+    @if (!empty($logo))
+        <div class="center" style="margin-bottom:4px;">
+            <img src="{{ $logo }}" style="max-width:150px; max-height:60px;">
+        </div>
+    @endif
+
     <div class="center">
         <div class="titulo">{{ $empresa->razon_social_comercial ?? $empresa->razon_social }}</div>
         <div>RUC: {{ $empresa->n_document }}</div>
@@ -97,9 +103,7 @@
     <div class="linea"></div>
 
     <div class="center bold">
-        @if ($venta->state_sale != 1)
-            COTIZACIÓN
-        @elseif (str_starts_with($venta->serie, 'F'))
+        @if (str_starts_with($venta->serie, 'F'))
             FACTURA ELECTRÓNICA
         @else
             BOLETA DE VENTA ELECTRÓNICA

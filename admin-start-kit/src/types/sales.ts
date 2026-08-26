@@ -99,7 +99,6 @@ export type Sale = {
     total_general: number,
     // 
     igv: number,
-    state_sale: number,
     state_payment: number,
     state_entrega: number,
     type_payment: number,

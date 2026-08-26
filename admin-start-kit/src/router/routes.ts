@@ -469,6 +469,46 @@ const comercialRoutes = [
     component: () => import("@/views/credit/client-detail.vue"),
   },
   {
+    path: "/commercial-quotes",
+    name: "commercial-quotes.index",
+    meta: {
+      title: setTitle("Cotizaciones Comerciales"),
+      authRequired: true,
+      permission: 'list_commercial_quote',
+    },
+    component: () => import("@/views/commercial-quotes/index.vue"),
+  },
+  {
+    path: "/commercial-quotes/create",
+    name: "commercial-quotes.create",
+    meta: {
+      title: setTitle("Nueva Cotización"),
+      authRequired: true,
+      permission: 'register_commercial_quote',
+    },
+    component: () => import("@/views/commercial-quotes/create-edit.vue"),
+  },
+  {
+    path: "/commercial-quotes/edit/:id",
+    name: "commercial-quotes.edit",
+    meta: {
+      title: setTitle("Editar Cotización"),
+      authRequired: true,
+      permission: 'edit_commercial_quote',
+    },
+    component: () => import("@/views/commercial-quotes/create-edit.vue"),
+  },
+  {
+    path: "/commercial-quotes/:id",
+    name: "commercial-quotes.show",
+    meta: {
+      title: setTitle("Detalle de Cotización"),
+      authRequired: true,
+      permission: 'list_commercial_quote',
+    },
+    component: () => import("@/views/commercial-quotes/detail.vue"),
+  },
+  {
     path: "/recursos/index",
     name: "recursos.index",
     meta: {

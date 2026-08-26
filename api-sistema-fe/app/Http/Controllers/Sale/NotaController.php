@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Company;
 use App\Models\Sale\Note;
 use App\Services\QrCodeService;
+use App\Services\StorageUrl;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\URL;
@@ -33,8 +34,9 @@ class NotaController extends Controller
         $empresa = Company::first();
         $qr      = app(QrCodeService::class)->generarQrNota($nota);
         $vista   = $formato === 'ticket80mm' ? 'pdf.nota_ticket80mm' : 'pdf.nota_a4';
+        $logo    = StorageUrl::resolveParaPdf($formato === 'ticket80mm' ? $empresa?->logo_vertical : $empresa?->logo_horizontal);
 
-        $pdf = Pdf::loadView($vista, compact('nota', 'empresa', 'qr'));
+        $pdf = Pdf::loadView($vista, compact('nota', 'empresa', 'qr', 'logo'));
 
         if ($formato === 'ticket80mm') {
             // Ancho fijo 80mm (≈226.77pt). Dompdf no soporta alto "auto" real,

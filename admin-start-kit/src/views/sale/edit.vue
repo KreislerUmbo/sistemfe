@@ -8,21 +8,9 @@
             <div>
                 <h5 class="fw-bold mb-0 text-dark">
                     <i class="fas fa-cash-register me-2 text-primary"></i>
-                    Editar {{ state_sale == 1 ? 'Venta' : 'Cotización' }}
+                    Editar Venta
                 </h5>
                 <small class="text-muted">Completa los pasos — los totales se actualizan en tiempo real</small>
-            </div>
-            <div class="btn-group shadow-sm" role="group">
-                <input type="radio" class="btn-check" name="state_sale" id="btn-venta" value="1"
-                    :checked="state_sale == 1" @click="state_sale = 1" autocomplete="off">
-                <label class="btn btn-outline-primary px-4 fw-semibold" for="btn-venta">
-                    <i class="fas fa-cart-plus me-2"></i>Venta
-                </label>
-                <input type="radio" class="btn-check" name="state_sale" id="btn-cotizacion" value="2"
-                    :checked="state_sale == 2" @click="state_sale = 2" autocomplete="off">
-                <label class="btn btn-outline-primary px-4 fw-semibold" for="btn-cotizacion">
-                    <i class="fas fa-file-alt me-2"></i>Cotización
-                </label>
             </div>
         </div>
 
@@ -346,7 +334,7 @@
         <div class="card border-0 shadow-sm mb-3">
             <div class="card-header bg-white border-bottom d-flex align-items-center gap-2 py-2">
                 <span class="badge bg-warning text-dark rounded-pill">3</span>
-                <span class="fw-semibold text-dark">Detalle de {{ state_sale == 1 ? 'Venta' : 'Cotización' }}</span>
+                <span class="fw-semibold text-dark">Detalle de Venta</span>
             </div>
             <div class="card-body p-0">
                 <div class="table-responsive">
@@ -726,11 +714,11 @@
                     <div class="col-12 col-md-3 d-flex flex-column gap-2 pt-md-4">
                         <button type="button" class="btn btn-success fw-bold py-2 shadow-sm" @click="store()">
                             <i class="fas fa-check-circle me-2"></i>
-                            Guardar {{ state_sale == 1 ? 'Venta' : 'Cotización' }}
+                            Guardar Venta
                         </button>
                         <button type="button" class="btn btn-outline-secondary fw-semibold py-2"
                             @click="$router.push({ name: 'sale.list' })">
-                            <i class="fas fa-undo me-2"></i>Listar {{ state_sale == 1 ? 'Ventas' : 'Cotizacións' }}
+                            <i class="fas fa-undo me-2"></i>Listar Ventas
                         </button>
                     </div>
                 </div>
@@ -768,7 +756,7 @@
                 </div>
                 <button type="button" class="btn btn-success fw-bold px-4 shadow-sm sv-bottom-save" @click="store()">
                     <i class="fas fa-check-circle me-2"></i>
-                    <span class="d-none d-sm-inline">Guardar </span>{{ state_sale == 1 ? 'Venta' : 'Cotización' }}
+                    <span class="d-none d-sm-inline">Guardar </span>Venta
                 </button>
             </div>
         </div>
@@ -862,7 +850,6 @@ const showQuickProductModal = ref<boolean>(false);
 const quickProductData = ref<any>(null);
 
 // ── Datos de la transacción ────────────────────────────────────────
-const state_sale = ref<number>(1);
 const is_exportacion = ref<number>(0);
 const n_transaction = ref<string>('');
 const today = ref<string>('');
@@ -1656,7 +1643,7 @@ const store = async () => {
     if (sale_details.value.length === 0) {
         (Swal as TVueSwalInstance).fire({ icon: 'error', title: 'Error', text: 'Agrega al menos un producto.' }); return;
     }
-    if (state_sale.value === 1 && sale_payments.value.length === 0 && getTotalSales() > 0) {
+    if (sale_payments.value.length === 0 && getTotalSales() > 0) {
         (Swal as TVueSwalInstance).fire({ icon: 'error', title: 'Error', text: 'Agrega al menos un pago para la venta.' }); return;
     }
     // Re-validar acá (no solo en addPayment()): el total pudo bajar después
@@ -1704,10 +1691,8 @@ const store = async () => {
 
     // Estado de pago derivado automáticamente
     let estado_pago = 1; // pendiente
-    if (state_sale.value === 1) {
-        if (total_payments.value === getTotalSales()) estado_pago = 3;      // pagado completo
-        else if (total_payments.value > 0) estado_pago = 2;      // pago parcial
-    }
+    if (total_payments.value === getTotalSales()) estado_pago = 3;      // pagado completo
+    else if (total_payments.value > 0) estado_pago = 2;      // pago parcial
 
     // Mapear condicion_especial → retencion_igv (campo de la BD)
     const retencion_igv_bd = condicion_especial.value === 'anticipo' ? 0
@@ -1733,7 +1718,6 @@ const store = async () => {
         currency: currency.value,         // 'PEN' o 'USD' (código ISO)
         is_exportacion: is_exportacion.value,
         destino: destino.value,          // 'amazonia' o 'nacional'
-        state_sale: state_sale.value,
         type_payment: type_payment.value,
 
         // Regímenes especiales
@@ -1842,7 +1826,6 @@ console.log(res);
         if (!sale) return;
 
         // Asignar datos
-        state_sale.value = sale.state_sale;
         n_transaction.value = sale.n_transaction;
         today.value = sale.created_at_format || sale.date || '';
         currency.value = sale.currency || 'PEN';

@@ -169,6 +169,13 @@ export const MENU_ITEMS: MenuItemType[] = [
         parentKey: "sales",
         permission: 'list_sale',
       },
+      {
+        key: "commercial_quotes",
+        label: "Cotizaciones Comerciales",
+        route: { name: "commercial-quotes.index" },
+        parentKey: "sales",
+        permission: 'list_commercial_quote',
+      },
     ],
   },
   // Módulo Caja — Fase 2 (turno activo) + Fase 5 (historial/dashboard,

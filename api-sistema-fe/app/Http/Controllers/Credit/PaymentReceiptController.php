@@ -7,6 +7,7 @@ use App\Models\Client\Client;
 use App\Models\Company;
 use App\Models\Credit\PaymentReceipt;
 use App\Models\Sale\SalePayment;
+use App\Services\StorageUrl;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\URL;
@@ -208,8 +209,9 @@ class PaymentReceiptController extends Controller
 
         $empresa = Company::first();
         $vista = $formato === 'ticket80mm' ? 'pdf.recibo_pago_ticket80mm' : 'pdf.recibo_pago_a4';
+        $logo = StorageUrl::resolveParaPdf($formato === 'ticket80mm' ? $empresa?->logo_vertical : $empresa?->logo_horizontal);
 
-        $pdf = Pdf::loadView($vista, compact('receipt', 'empresa'));
+        $pdf = Pdf::loadView($vista, compact('receipt', 'empresa', 'logo'));
 
         if ($formato === 'ticket80mm') {
             $alto_estimado = 420 + ($receipt->applications->count() * 30);

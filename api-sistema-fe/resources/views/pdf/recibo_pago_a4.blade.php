@@ -213,8 +213,8 @@
         <table style="width:100%;">
             <tr>
                 <td style="width:170px; vertical-align:top;">
-                    @if (!empty($empresa->logo))
-                        <img src="{{ $empresa->logo }}" style="max-width:170px; max-height:70px;">
+                    @if (!empty($logo))
+                        <img src="{{ $logo }}" style="max-width:170px; max-height:70px;">
                     @else
                         <div class="logo-box">LOGO</div>
                     @endif

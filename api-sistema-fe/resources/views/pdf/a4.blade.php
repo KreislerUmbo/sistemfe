@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="utf-8">
-    <title>{{ $venta->state_sale == 1 ? 'Comprobante' : 'Cotización' }} N° {{ $venta->id }}</title>
+    <title>Comprobante N° {{ $venta->id }}</title>
     <style>
         @page {
             margin: 15mm 12mm;
@@ -235,8 +235,8 @@
         <table  style="width:100%;">
             <tr>
                 <td style="width:170px; vertical-align:top;">
-                    @if (!empty($empresa->logo))
-                        <img src="{{ $empresa->logo }}" style="max-width:170px; max-height:70px;">
+                    @if (!empty($logo))
+                        <img src="{{ $logo }}" style="max-width:170px; max-height:70px;">
                     @else
                         <div class="logo-box">LOGO</div>
                     @endif
@@ -255,9 +255,7 @@
                             <td>
                                 <div class="ruc">RUC {{ $empresa->n_document }}</div>
                                 <div class="tipo">
-                                    @if ($venta->state_sale != 1)
-                                        COTIZACIÓN
-                                    @elseif (str_starts_with($venta->serie, 'F'))
+                                    @if (str_starts_with($venta->serie, 'F'))
                                         FACTURA ELECTRÓNICA
                                     @else
                                         BOLETA DE VENTA ELECTRÓNICA
@@ -533,9 +531,7 @@
             <tr>
                 <td class="footer-legal">
                     <div>Representación impresa de
-                        @if ($venta->state_sale != 1)
-                            la COTIZACIÓN.
-                        @elseif (str_starts_with($venta->serie, 'F'))
+                        @if (str_starts_with($venta->serie, 'F'))
                             la FACTURA ELECTRÓNICA.
                         @else
                             la BOLETA DE VENTA ELECTRÓNICA.

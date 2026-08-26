@@ -158,7 +158,7 @@ class AdvanceIntegridadTest extends TestCase
 
     // Payload de store() base — venta NV contado, cubierta 100% por un
     // adelanto (payments=[] no exige caja abierta). $overrides pisa
-    // cualquier campo (ej. state_sale, advance_applications).
+    // cualquier campo (ej. advance_applications).
     private function payloadVentaNv(Client $cliente, Product $producto, Categorie $categoria, array $overrides = []): array
     {
         $base = [
@@ -171,7 +171,6 @@ class AdvanceIntegridadTest extends TestCase
             'currency' => 'PEN',
             'is_exportacion' => 0,
             'destino' => 'nacional',
-            'state_sale' => 1,
             'type_payment' => 1, // contado
             'subtotal' => 100.00,
             'igv' => 18.00,
@@ -232,32 +231,6 @@ class AdvanceIntegridadTest extends TestCase
         // Rollback atómico: la venta nunca quedó persistida.
         $this->assertSame($ventasAntes, Sale::count());
         $this->assertSame(0.0, (float) $adelantoUsd->fresh()->applied_amount);
-    }
-
-    // ── Fix #2: adelanto sobre cotización ────────────────────────────────
-    public function test_store_rechaza_adelanto_aplicado_a_cotizacion(): void
-    {
-        [$branch, ] = $this->branchConSerieNv();
-        $this->usuarioConPermiso($branch->id, 'emitir_nota_venta');
-
-        $cliente = Client::factory()->create();
-        [$categoria, $producto] = $this->productoTest();
-        $adelanto = $this->crearAdelantoDisponible($cliente, 200.00, 'PEN');
-
-        $request = new Request($this->payloadVentaNv($cliente, $producto, $categoria, [
-            'state_sale' => 2, // cotización
-            'advance_applications' => [['advance_id' => $adelanto->id, 'amount' => 118.00]],
-        ]));
-
-        try {
-            app(SaleController::class)->store($request);
-            $this->fail('Se esperaba HttpException 422, no se lanzó ninguna.');
-        } catch (HttpException $e) {
-            $this->assertSame(422, $e->getStatusCode());
-            $this->assertStringContainsString('cotización', $e->getMessage());
-        }
-
-        $this->assertSame(0.0, (float) $adelanto->fresh()->applied_amount);
     }
 
     // ── Fix #3: mismo advance_id repetido en el payload ──────────────────
