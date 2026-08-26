@@ -13,7 +13,6 @@ export const cotizacionService = {
   },
   async crear(data: {
     cliente_id: number
-    codigo_prefijo: string
     destino: string
     fecha_viaje_desde?: string | null
     fecha_viaje_hasta?: string | null

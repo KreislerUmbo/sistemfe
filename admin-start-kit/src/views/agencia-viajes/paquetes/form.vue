@@ -55,7 +55,7 @@
                 <div class="row g-3">
                     <div class="col-12 col-md-3">
                         <label class="form-label mb-1 small fw-semibold text-secondary">Código</label>
-                        <input type="text" class="form-control form-control-sm" v-model="form.codigo" placeholder="Ej. PDKM-CZ">
+                        <input type="text" class="form-control form-control-sm" :value="form.codigo || 'Se genera al guardar'" readonly disabled>
                     </div>
                     <div class="col-12 col-md-3">
                         <label class="form-label mb-1 small fw-semibold text-secondary">Categoría *</label>

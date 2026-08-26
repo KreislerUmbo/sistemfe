@@ -5,9 +5,11 @@ namespace App\Http\Controllers\AgenciaViajes;
 use App\Http\Controllers\Controller;
 use App\Models\AgenciaViajes\Alternativa;
 use App\Models\AgenciaViajes\ConfiguracionAgencia;
+use App\Models\AgenciaViajes\ConfiguracionCodigo;
 use App\Models\AgenciaViajes\Cotizacion;
 use App\Models\AgenciaViajes\CotizacionPasajero;
 use App\Models\AgenciaViajes\ProveedorTarifa;
+use App\Services\AgenciaViajes\CodigoGeneradorService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -54,9 +56,13 @@ class VentaDirectaController extends Controller
 
         try {
             [$reserva, $alertaCupoExcedido, $alternativa] = DB::transaction(function () use ($validado, $edadMaxInfante, $edadMaxNino) {
+                $codigo = app(CodigoGeneradorService::class)->generar('venta_directa');
+                $prefijo = ConfiguracionCodigo::where('tipo', 'venta_directa')->value('prefijo');
+
                 $cotizacion = Cotizacion::create([
                     'cliente_id' => $validado['cliente_id'],
-                    'codigo_prefijo' => 'VD', // Venta Directa — mismo mecanismo de correlativo que las cotizaciones normales
+                    'codigo_prefijo' => $prefijo,
+                    'codigo' => $codigo,
                     'destino' => $validado['destino'],
                     'fecha_viaje_desde' => $validado['fecha_servicio'] ?? null,
                     'fecha_viaje_hasta' => $validado['fecha_servicio'] ?? null,

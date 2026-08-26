@@ -20,13 +20,7 @@
             </div>
             <div class="card-body py-3">
                 <div class="row g-3">
-                    <div class="col-12 col-md-3">
-                        <label class="form-label mb-1 small fw-semibold text-secondary">Prefijo de código</label>
-                        <input type="text" class="form-control form-control-sm" v-model="codigoPrefijo" placeholder="Ej. PDKM-CZ">
-                        <small class="text-muted">Código final: {{ codigoPrefijo || 'PREFIJO' }}-{{ anioActual }}-###</small>
-                    </div>
-
-                    <div class="col-12 col-md-5 position-relative">
+                    <div class="col-12 col-md-6 position-relative">
                         <label class="form-label mb-1 small fw-semibold text-secondary">Cliente</label>
                         <div class="input-group input-group-sm">
                             <input type="text" class="form-control" v-model="clientSearchText"
@@ -144,9 +138,6 @@ type TVueSwalInstance = typeof Swal & typeof Swal.fire;
 
 const router = useRouter();
 
-const codigoPrefijo = ref<string>('');
-const anioActual = new Date().getFullYear();
-
 const clientSearchText = ref<string>('');
 const clientSuggestions = ref<Client[]>([]);
 const clienteSeleccionado = ref<Client | null>(null);
@@ -232,10 +223,6 @@ const crear = async () => {
         (Swal as TVueSwalInstance).fire('Error', 'Seleccioná un cliente.', 'error');
         return;
     }
-    if (!codigoPrefijo.value.trim()) {
-        (Swal as TVueSwalInstance).fire('Error', 'Ingresá un prefijo de código.', 'error');
-        return;
-    }
     if (!destinoTexto.value.trim()) {
         (Swal as TVueSwalInstance).fire('Error', 'Seleccioná un destino.', 'error');
         return;
@@ -249,7 +236,6 @@ const crear = async () => {
     try {
         const res = await cotizacionService.crear({
             cliente_id: clienteSeleccionado.value.id,
-            codigo_prefijo: codigoPrefijo.value.trim(),
             destino: destinoTexto.value,
             fecha_viaje_desde: sinFechaExacta.value ? null : (fechaViajeDesde.value || null),
             fecha_viaje_hasta: sinFechaExacta.value ? null : (fechaViajeHasta.value || null),

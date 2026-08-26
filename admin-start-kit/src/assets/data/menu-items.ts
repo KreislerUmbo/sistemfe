@@ -293,6 +293,13 @@ export const MENU_ITEMS: MenuItemType[] = [
         parentKey: "agencia_viajes",
         permission: 'agencia.configuracion',
       },
+      {
+        key: "agencia_configuracion_codigos",
+        label: "Códigos y numeración",
+        route: { name: "agencia.configuracion.codigos" },
+        parentKey: "agencia_viajes",
+        permission: 'agencia.configuracion',
+      },
     ],
   },
   {

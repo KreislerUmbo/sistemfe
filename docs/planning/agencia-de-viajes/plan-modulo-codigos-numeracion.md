@@ -4,11 +4,15 @@
 > módulos, `plan-general-vertical-agencia-viajes.md`, ya se archivó —
 > ver `historial-archivo.md`).
 > Referencia de arquitectura base: `arquitectura-multitenant-backend_1.md`
-> **Estado: diseño revisado y aprobado (26-ago-2026, ver §11/§12),
-> todavía sin construir** — no tiene fila propia todavía en
-> `plan-hoja-de-ruta-ejecucion.md` (que hoy solo llega hasta 11v +
-> 11e/11f/11g/11d/11t). Si se retoma este módulo, agregarle una fila ahí
-> primero.
+> **Estado: CONSTRUIDO (26-ago-2026, rama
+> `feature/modulo-12-codigos-numeracion`, fila 12 de
+> `plan-hoja-de-ruta-ejecucion.md`)** — diseño revisado y aprobado el mismo
+> día (§11/§12), implementado completo en la misma sesión: backend
+> (`CodigoGeneradorService`, `ConfiguracionCodigosController`,
+> migraciones), frontend (`configuracion/codigos.vue` con vista previa en
+> vivo, prefijo manual quitado de `cotizador/nueva.vue`), 20 tests nuevos
+> en verde, verificado contra datos reales de `agencia-demo` (revertido,
+> nada quedó persistido). Sin commitear/pushear a `origin/main` todavía.
 
 ---
 

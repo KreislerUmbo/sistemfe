@@ -7,6 +7,7 @@ use App\Models\AgenciaViajes\DestinoAtractivo;
 use App\Models\AgenciaViajes\PaquetePlantilla;
 use App\Models\AgenciaViajes\PaquetePlantillaItem;
 use App\Models\AgenciaViajes\TourItinerarioItem;
+use App\Services\AgenciaViajes\CodigoGeneradorService;
 use App\Services\AgenciaViajes\ComboExplosionService;
 use App\Services\AgenciaViajes\ComboValidationService;
 use App\Services\AgenciaViajes\FotoUploadService;
@@ -35,7 +36,8 @@ class PaquetePlantillaController extends Controller
     public function __construct(
         private ComboValidationService $comboValidation,
         private ComboExplosionService $comboExplosion,
-        private FotoUploadService $fotoUploadService
+        private FotoUploadService $fotoUploadService,
+        private CodigoGeneradorService $codigoGenerador,
     ) {
     }
 
@@ -114,6 +116,16 @@ class PaquetePlantillaController extends Controller
             $validado['fotos'] = $resultado['paths'];
             $rechazadas = $resultado['rechazadas'];
         }
+
+        // Módulo 12 (plan-modulo-codigos-numeracion.md, revisión 26-ago-2026
+        // §11): el código deja de ser texto libre del vendedor, se genera
+        // acá según tipo — tour_simple/paquete_combo son la MISMA tabla
+        // (mismo criterio que el resto del vertical, ver docblock de
+        // PaquetePlantilla::class), así que cada tipo pide su propio
+        // contador ('tour' o 'paquete') en configuracion_codigos.
+        $validado['codigo'] = $this->codigoGenerador->generar(
+            ($validado['tipo'] ?? PaquetePlantilla::TIPO_TOUR_SIMPLE) === PaquetePlantilla::TIPO_PAQUETE_COMBO ? 'paquete' : 'tour'
+        );
 
         $paquete = PaquetePlantilla::create($validado);
         $paquete->setAttribute('fotos', StorageUrl::resolveMuchas($paquete->fotos ?? []));
@@ -255,19 +267,25 @@ class PaquetePlantillaController extends Controller
     }
 
     // Duplicar tour/paquete completo — Sesión 11m. Copia datos generales +
-    // itinerario + incluye. La copia nace inactiva/no publicada y
-    // sin código (obliga a revisión manual antes de que aparezca en
-    // cualquier biblioteca) — mismo criterio que "componente inactivo" ya
-    // usado en el resto del módulo: nunca aparecer seleccionable en
-    // silencio. Para un combo, copia la REFERENCIA a los mismos tours-hijo
-    // (paquete_plantilla_hijo_id), no los clona a ellos también.
+    // itinerario + incluye. La copia nace inactiva/no publicada (obliga a
+    // revisión manual antes de que aparezca en cualquier biblioteca) —
+    // mismo criterio que "componente inactivo" ya usado en el resto del
+    // módulo: nunca aparecer seleccionable en silencio. El gate real es
+    // activo/publicado_web, no el código — Módulo 12 (revisión 26-ago-2026)
+    // hace que TODO paquete tenga código desde que se crea, incluida la
+    // copia (antes quedaba en null a propósito porque el código era texto
+    // libre; ahora se genera igual que en store()). Para un combo, copia la
+    // REFERENCIA a los mismos tours-hijo (paquete_plantilla_hijo_id), no los
+    // clona a ellos también.
     public function duplicar(string $id)
     {
         $original = PaquetePlantilla::findOrFail($id);
 
         $copia = DB::transaction(function () use ($original) {
             $datos = $original->only($original->getFillable());
-            $datos['codigo'] = null;
+            $datos['codigo'] = $this->codigoGenerador->generar(
+                $original->esPaqueteCombo() ? 'paquete' : 'tour'
+            );
             $datos['nombre'] = $original->nombre.' (copia)';
             $datos['activo'] = false;
             $datos['publicado_web'] = false;

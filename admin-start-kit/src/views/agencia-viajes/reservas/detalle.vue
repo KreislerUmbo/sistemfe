@@ -3,7 +3,7 @@
         <div v-if="reserva && cabecera" class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
             <div>
                 <h5 class="fw-bold mb-0">
-                    <i class="fas fa-suitcase-rolling me-2 text-primary"></i>Reserva {{ cabecera.codigo_cotizacion }}
+                    <i class="fas fa-suitcase-rolling me-2 text-primary"></i>Reserva {{ cabecera.codigo }}
                     <span class="badge ms-2" :class="reserva.estado === 'activa' ? 'bg-success' : 'bg-danger'">
                         {{ reserva.estado === 'activa' ? 'Activa' : 'Cancelada' }}
                     </span>

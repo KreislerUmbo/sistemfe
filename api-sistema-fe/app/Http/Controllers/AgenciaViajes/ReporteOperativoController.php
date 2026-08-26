@@ -370,7 +370,10 @@ class ReporteOperativoController extends Controller
             // tiene equivalente simple acá (el buscador de proveedor_tarifa por
             // destino es propio de detalle.vue) — el reporte enlaza a la reserva.
             'origen_tipo' => $alternativaItem?->origen_tipo,
-            'codigo_reserva' => $item->reserva->alternativa?->cotizacion?->codigo,
+            // Módulo 12 (códigos y numeración, revisión 26-ago-2026):
+            // código propio de la reserva, con fallback al de la cotización
+            // para reservas creadas antes de activar el módulo.
+            'codigo_reserva' => $item->reserva->codigo ?? $item->reserva->alternativa?->cotizacion?->codigo,
             'pasajero' => [
                 'id' => $pasajero->id,
                 'nombre' => $pasajero->nombre,
