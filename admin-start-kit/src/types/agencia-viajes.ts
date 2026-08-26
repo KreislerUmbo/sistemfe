@@ -800,3 +800,60 @@ export type Reservas = {
   paginate: number;
   reservas: Reserva[];
 };
+
+// Sesión 11d — GET /reporte-operativo (backend real de Sesión 11e). Una fila por
+// pasajero × reserva_item, ya agregada por fecha en el backend.
+export type ReporteOperativoFila = {
+  reserva_id: number;
+  reserva_item_id: number;
+  checkin_realizado: boolean;
+  checkin_hora: string | null;
+  codigo_reserva?: string | null;
+  pasajero: {
+    id: number;
+    nombre?: string | null;
+    documento?: string | null;
+    tipo_pax?: string | null;
+    alimentacion_especial?: string | null;
+    discapacidad?: string | null;
+  };
+  vuelo_ida: { aerolinea: string; fecha: string | null; hora: string | null } | null;
+  vuelo_vuelta: { aerolinea: string; fecha: string | null; hora: string | null } | null;
+  origen_tipo?: OrigenItem | null;
+  servicio?: string | null;
+  servicio_id?: number | null;
+  destino?: string | null;
+  // Nombre del proveedor asignado a CUALQUIER ítem origen_tipo='proveedor' (no solo
+  // hoteles, a diferencia de `hotel` abajo) — necesario para reasignar inline.
+  proveedor?: string | null;
+  hotel?: string | null;
+  fecha: string | null;
+  hora: string | null;
+  guia: { id: number; nombre: string; es_referencial: boolean } | null;
+  sin_guia: boolean;
+  vinculo_especifico: boolean;
+  // Si está seteado, el guía mostrado arriba viene de la Salida Operativa (compartida
+  // con otras reservas) — el reporte NO debe permitir editarlo directamente acá, mismo
+  // criterio que reservas/detalle.vue.
+  salida_operativa_id?: number | null;
+  salida_vehiculo?: string | null;
+};
+
+export type ReporteOperativoResponse = {
+  code: number;
+  fecha_desde: string;
+  fecha_hasta: string;
+  total_items: number;
+  total_sin_guia: number;
+  filas: ReporteOperativoFila[];
+};
+
+// Sesión 11d (mejoras) — GET /reporte-operativo/filtros. Catálogo de opciones para los
+// 4 selects nuevos, acotado al rango de fecha vigente (no un catálogo global).
+export type ReporteOperativoFiltrosDisponibles = {
+  code: number;
+  destinos: { id: number; nombre: string }[];
+  servicios: { id: number; nombre: string }[];
+  tours: { id: number; nombre: string; codigo: string | null }[];
+  hoteles: { id: number; nombre: string }[];
+};
