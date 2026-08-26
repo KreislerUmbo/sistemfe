@@ -21,6 +21,7 @@ use App\Http\Controllers\AgenciaViajes\ProveedorServicioController;
 use App\Http\Controllers\AgenciaViajes\ProveedorTarifaController;
 use App\Http\Controllers\AgenciaViajes\ProveedorTipoConfigController;
 use App\Http\Controllers\AgenciaViajes\ReservaAnticipoController;
+use App\Http\Controllers\AgenciaViajes\ReporteOperativoController;
 use App\Http\Controllers\AgenciaViajes\ReservaController;
 use App\Http\Controllers\AgenciaViajes\ReservaFacturacionController;
 use App\Http\Controllers\AgenciaViajes\ReservaItemController;
@@ -682,6 +683,9 @@ Route::group([
     Route::get("reservas", [ReservaController::class, 'index'])
         ->middleware('permission:agencia.reservas');
     Route::get("reservas/{id}", [ReservaController::class, 'show'])
+        ->middleware('permission:agencia.reservas');
+    // Sesión 11e — reporte operativo por fecha (plan-modulo-cotizaciones-reservas.md §8).
+    Route::get("reporte-operativo", [ReporteOperativoController::class, 'index'])
         ->middleware('permission:agencia.reservas');
     Route::put("reservas/{id}/cancelar", [ReservaController::class, 'cancelar'])
         ->middleware('permission:agencia.reservas');

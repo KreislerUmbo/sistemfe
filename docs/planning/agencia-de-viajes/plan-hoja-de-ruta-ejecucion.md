@@ -79,7 +79,7 @@
 | 11s | Fix fechas Cotización↔Reserva — Fase 2 (reprogramación) | Endpoint `POST reservas/{id}/reprogramar` con recálculo selectivo + re-enganche a `SalidaOperativa`/cupo, columnas de auditoría simple, bloqueo de `reasignarDia()`/`moverBloque()` sobre alternativa `aceptada`. **Depende de 11r mergeada y del diagnóstico revisado por el usuario** — no empezar antes | `agencia-de-viajes/PEGAR-EN-CLAUDE-CODE-fix-fechas-fase2-reprogramacion.md` | [x] 19-ago-2026 — commit/rama pendiente de confirmar (ver historial) |
 | 11u | Facturación de reserva — crear el Sale desde una reserva | `GET reservas/{id}/preparar-factura` + `POST reservas/{id}/facturar`, agrupación de `reserva_items` por categoría (hotel/transporte/tour/vuelo/otros), creación real de `reserva_ventas` + `sale_detail_items`, botón "Facturar" en `reservas/detalle.vue`. Alcance mínimo viable: un solo responsable de pago, un solo `Sale`, sin aplicar anticipos automáticamente, bloquea (no implementa) el caso de reserva ya facturada. **+ guardia tributario (2026-08-20, complemento):** bloquea con 422/preview si el subgrupo a facturar mezcla `destino_tributario` (ej. amazonia + nacional) | `historial-archivo.md` (brief original archivado — ver también `CLAUDE.md`) | [x] 20-ago-2026 — commit `9f1ced5`, mergeado y pusheado a `origin/main` (`2f3ce7f`) |
 | 11v | Facturación múltiple por grupo de pasajeros (varios pagadores) | N `reserva_ventas`/`Sale` por reserva, cada uno con su propio `client_id` (obligatorio, ya no fijo a `cotizacion.cliente_id`) y `texto_personalizado` opcional, cubriendo un subconjunto de pasajeros elegido por el vendedor. Guard de doble-facturación pasa a granularidad de ítem/pasajero (no reserva completa). Selección explícita de ítems "sin asignar" (decisión tomada tras confirmar que `reserva_item_pasajero` casi no tiene datos reales). Guardia tributario reevaluado por subgrupo. Botón "Facturar" (simple, todos los pendientes) separado de "Facturación especial" (selección manual) | `historial-archivo.md` (brief original archivado — ver también `CLAUDE.md`) | [x] 20-ago-2026 — commit `1f908d9`, mergeado y pusheado a `origin/main` (`2f3ce7f`) |
-| 11e | Reporte operativo — backend real | Endpoint que resuelve la vista de `reserva_items` con filtros (fecha, pendiente de asignar — incluyendo `es_referencial`), reemplaza lógica hoy embebida en `reservas/detalle.vue` | `plan-modulo-cotizaciones-reservas.md` §8 | [ ] |
+| 11e | Reporte operativo — backend real | Endpoint que resuelve la vista de `reserva_items` con filtros (fecha, pendiente de asignar — incluyendo `es_referencial`), reemplaza lógica hoy embebida en `reservas/detalle.vue` | `plan-modulo-cotizaciones-reservas.md` §8 | [x] 25-ago-2026 — rama `feature/sesion-11e-reporte-operativo-backend` |
 | 11f | Motor de generación de recordatorios | Job/Command que recorre `tipos_recordatorio` y genera filas en `recordatorios` según cada disparador | `plan-modulo-cotizaciones-reservas.md` §8bis | [ ] |
 | 11g | Controllers/rutas de pago a proveedor | API REST para `pago_proveedor`/`cronograma_pago_proveedor` | `plan-modulo-cotizaciones-reservas.md` §4.6 | [ ] |
 | 11d | Frontend — Reporte operativo + recordatorios (pantallas) | Vista del reporte por fecha con acciones inline, PDF, campana de recordatorios | `plan-modulo-cotizaciones-reservas.md` §8, §8bis, §7 | [ ] |
@@ -97,11 +97,26 @@ sesión en background que ya había subido parte de este mismo trabajo —
 ver §2 para el detalle de las 5 ramas y el orden de merge). El fix de
 fechas Cotización↔Reserva y la facturación de reserva completa (simple +
 especial, con su guardia tributario) quedan terminados y en el remoto.
-Después de 11v quedan sin marcar: 11e, 11f, 11g, 11d (reporte operativo +
-recordatorios + pago a proveedor) y 11t (bug colateral de
+**11e cerrada (25-ago-2026):** `ReporteOperativoController::index()`
+(`GET reporte-operativo`) — reporte agregado por rango de fecha, no por
+reserva individual. Desviación real del spec confirmada con el usuario:
+§8 asumía `reserva_item_pasajero` siempre poblado; con datos reales de
+`agencia-demo` (verificado en vivo, sin persistir nada) esa tabla está
+poblada de forma parcial e inconsistente — el reporte usa el vínculo
+específico cuando existe y cae a "aplica a todos los pasajeros de la
+reserva" cuando no. `sin_guia` reusa el mismo criterio ya establecido en
+`detalle.vue::tieneAsignacionAplicable()` (solo `origen_tipo`
+`proveedor`/`guia`), tratando un guía/proveedor `es_referencial=true`
+como pendiente igual. 7 tests nuevos, 135/135 en verde en toda la suite
+AgenciaViajes. Alcance deliberadamente angosto: solo el GET — check-in
+por pasajero y reasignación de guía quedan para 11d (frontend), que ya
+depende de esta sesión.
+
+Quedan sin marcar: 11f, 11g, 11d (recordatorios, pago a proveedor,
+pantallas del reporte operativo) y 11t (bug colateral de
 `VentaDirectaController`, sin brief propio todavía). Sin bloqueantes
-conocidos entre 11e/11f/11g/11d/11t — el orden entre ellas queda a
-criterio del usuario.
+conocidos entre 11f/11g/11d/11t — el orden entre ellas queda a criterio
+del usuario (11d puede arrancar ya que 11e está cerrada).
 
 ---
 
