@@ -12,6 +12,15 @@ repositorio/carpeta separado (no incluido en este workspace).
 
 ## Estado actual del proyecto (avance)
 
+> **Nota de mantenimiento (25-ago-2026):** esta sección se comprimió — cada módulo cerrado
+> quedó con un resumen corto + un pointer al documento que tiene el detalle completo
+> (fase por fase, bugs reales encontrados, evidencia de verificación). Nada se perdió: el
+> detalle sigue existiendo en `docs/planning/*/historial-archivo.md`, en los planes de
+> módulo activos (`plan-modulo-amortizaciones.md`/`plan-modulo-caja.md`/
+> `plan-hoja-de-ruta-ejecucion.md`), o en memoria de proyecto (`[[nombre]]`). Antes de
+> asumir que un pendiente ya no aplica, seguir el pointer y confirmar contra el documento
+> vigente, no solo contra este resumen.
+
 **Completado (CRUD):**
 - Roles y permisos
 - Usuarios
@@ -19,1654 +28,186 @@ repositorio/carpeta separado (no incluido en este workspace).
 - Productos
 - Clientes
 
-**Completado — Ventas: matriz de pruebas tributarias (2026-07-19):**
-- Registrar, actualizar y envío a SUNAT: implementado.
-- **Matriz de pruebas tributarias (Bloques A-E) resuelta y automatizada.** La matriz
-  original (documento de trabajo, nunca llegó a persistirse como archivo — vivió solo en
-  la conversación de esa sesión) quedó cerrada caso por caso, con hallazgos reales
-  corregidos en el camino, no solo confirmada por lectura de código:
-  - **Bloque A — `resolverTipAfeIgv()`**: extraída de su duplicado en
-    `register.vue`/`edit.vue` a `admin-start-kit/src/utils/resolverTipAfeIgv.ts` (función
-    pura, sin cambio de comportamiento) para poder testearla — no existía ningún runner
-    de test en el frontend hasta esta sesión (se instaló `vitest`). 15/15 casos verdes
-    (`resolverTipAfeIgv.test.ts`). La matriz original tenía mal el modelo de variables
-    para este código: `destino_venta` solo tiene 2 valores reales
-    (`'amazonia'`/`'nacional'` — "exterior" no existe como destino, es el flag
-    `is_exportacion` aparte, independiente), y no existe `naturaleza_producto =
-    'exonerado_amazonia'` como atributo de producto — la exoneración Amazonía es 100%
-    dinámica por destino de venta, aplicada a cualquier producto no exonerado ya a nivel
-    de producto. El caso A2 de la matriz original estaba directamente mal (decía que un
-    producto gravado no cambia por destino — sí cambia: pasa a exonerado con destino
-    Amazonía). IVAP (arroz pilado, código '17') agregado — la matriz original no lo
-    contemplaba como categoría propia.
-  - **Bloque B — `validarRegimenEspecial()`**: 14/14 casos verdes (B1-B14,
-    `tests/Unit/ValidarRegimenEspecialTest.php`, invocado por reflexión — el método no
-    toca BD). La preocupación original de la matriz (exoneración Ley 27037 vs Apéndice I
-    con distinta sujeción a detracción según Anexo 2/subpartida) no aplica al código
-    real: el guard es un chequeo ciego sobre montos agregados de la venta
-    (`mto_oper_exoneradas`/`inafectas`/`is_exportacion`), sin distinción por origen de la
-    exoneración — si hace falta esa distinción es una pregunta de negocio para el
-    contador, no algo bloqueado en código hoy.
-  - **Bloque C — carrito con códigos SPOT mixtos**: resuelto como no-aplicable.
-    `codigo_detraccion` es un campo único a nivel de venta completa (un solo `<select>`,
-    `condicion_especial == '2'`), no por línea de producto — el escenario que la matriz
-    describía (conflicto de códigos SPOT entre ítems del mismo carrito) no es construible
-    en el modelo de datos actual.
-  - **Bloque D — FormaPago SUNAT (contado/crédito)**: 5/5 casos verdes (D1-D4 + D4b,
-    `tests/Feature/GreenterServiceFormaPagoTest.php`, contra Postgres real). Confirmado
-    que el guard 422 de `GreenterService::cuotasActivasParaCredito()` (Fase 8.0 de
-    Amortizaciones) sigue vigente — nunca cae en silencio a `FormaPagoContado()`.
-  - **Bloque E — condición especial simultánea**: resuelto como no-aplicable.
-    `condicion_especial` es un único `<select>` excluyente
-    (`0`/`anticipo`/`exportacion`/`1`/`2`/`3`) — la UI actual estructuralmente no permite
-    elegir dos condiciones especiales a la vez.
-- **Bugs reales encontrados y corregidos al validar el flujo completo de envío** (fuera
-  del alcance original de la matriz, aparecieron al construir el entorno de prueba contra
-  Postgres real):
-  - `database/migrations/tenant/2026_07_14_090000_alter_products_add_codigo_detraccion.php`
-    duplicaba una columna que la migración central
-    `2026_07_13_090500_fix_detraction_codes_rebuild_schema.php` ya agregaba un día antes
-    — invisible en producción porque central y tenant nunca corren juntas contra la misma
-    base física, pero rompía cualquier intento de correr ambos conjuntos de migraciones
-    sobre una sola base de test. Corregido con `Schema::hasColumn()` guard, sin tocar la
-    migración central (esa pregunta —si el bloque `Schema::table('products', ...)`
-    debería vivir ahí— queda abierta, ver pendientes).
-  - `GreenterService::procesarRespuestaSunat()` vivía fuera del `try/catch` de
-    `enviarSunat()` (`FacturacionElectronicaController.php`) — un fallo ahí (storage al
-    guardar el CDR, respuesta SUNAT con forma inesperada) quemaba el correlativo ya
-    reservado sin dejar ningún `sunat_error_message`, a diferencia de todos los demás
-    fallos posteriores a `reservarCorrelativo()`. Corregido con un segundo `try/catch`
-    aditivo que deja `sunat_error_message = "CDR recibido pero no procesado: ..."` — sin
-    tocar el `try/catch` original ni el camino de éxito. Test de regresión:
-    `tests/Feature/EnviarSunatCdrFailureTest.php` (2 casos, incluye uno de control que
-    confirma que el `try/catch` original sigue sin el prefijo nuevo).
-  - `reservarCorrelativo()` (lock atómico de correlativos SUNAT) verificado con 4 tests
-    (`tests/Feature/ReservarCorrelativoTest.php`): reservas secuenciales consecutivas, el
-    "hueco esperado" cuando algo falla después de reservar (confirmado como diseño
-    aceptado, no bug — el correlativo ya commiteó en su propia transacción antes de que
-    el resto del flujo corra), y una prueba real de bloqueo entre dos conexiones Postgres
-    distintas (`lock_timeout` corto en vez de una carrera cronometrada — sin
-    infraestructura de procesos/fork).
-- **Infraestructura de testing nueva, reusable para el resto del proyecto**: base
-  Postgres dedicada `sistemafe_test_migrations` (recreada limpia con las 76 migraciones
-  reales — 16 central + 60 tenant — corriendo sin exclusiones salvo las 3 migraciones de
-  stancl/tenancy que hardcodean la conexión `central`); `vitest` instalado en
-  `admin-start-kit` (antes no existía ningún runner de test en el frontend). Todos los
-  tests corren en transacción-por-test revertida en `tearDown()`, excepto el test de lock
-  entre conexiones (necesita un commit real momentáneo + limpieza manual garantizada,
-  documentado en el propio archivo). Nunca se tocó `sv_facturacion` ni ningún tenant real.
-- **Pendiente, reportado y explícitamente diferido — no resuelto en esta sesión**:
-  - Comunicación de baja SUNAT: sin ninguna conexión al flujo de correlativos huérfanos.
-    Greenter ya la soporta a nivel de librería (`vendor/greenter/core/.../Voided/`),
-    nunca se conectó a nada del proyecto.
-  - La migración central `fix_detraction_codes_rebuild_schema.php` sigue alterando
-    `products` — tabla que el propio mapa central/tenant del proyecto documenta como de
-    tenant, no central. Funciona hoy solo porque `sv_facturacion` conserva una tabla
-    `products` heredada de antes del split. Pregunta arquitectónica abierta, no una
-    migración rota.
-  - Producto real en `umbo` (id=37, "ANTIVIRUS ESET INTERNET SECURITY NOD32") con
-    `tip_afe_igv_default='20'` (exonerado) — vendido 6 veces así, sin relación evidente
-    con Ley 27037 ni Apéndice I/II. Posible error de carga de catálogo, a confirmar con
-    el contador — no es un bug de código.
-  - Riesgo de diseño en `reservarCorrelativo()` (documentado, no corregido): con una
-    `serie` sin ninguna venta previa, `lockForUpdate()` no tiene fila que bloquear — dos
-    requests concurrentes para la primera venta de una serie nueva podrían ambos calcular
-    `correlativo = 1`.
+**Completado — Ventas: matriz de pruebas tributarias (cerrado 2026-07-19):**
+Registrar/actualizar/enviar a SUNAT implementado. Matriz de pruebas tributarias
+(Bloques A-E) resuelta y automatizada: `resolverTipAfeIgv()` extraída y testeada
+(15/15 — la matriz original tenía mal el modelo de variables, `destino_venta` solo
+tiene 2 valores reales); `validarRegimenEspecial()` 14/14; FormaPago contado/crédito
+5/5 contra Postgres real; Bloques C/E resueltos como no-aplicables al modelo de datos
+actual. 3 bugs reales de infraestructura de envío SUNAT corregidos en el camino.
+Primera infraestructura de testing real del proyecto (`sistemafe_test_migrations`,
+`vitest` en frontend).
+Detalle completo: `docs/planning/retail-facturacion-core/historial-archivo.md`.
+**Pendiente real:** comunicación de baja SUNAT sin conectar a ningún flujo; producto
+real en `umbo` (id=37) con `tip_afe_igv_default` sospechoso, a confirmar con el
+contador; migración central que sigue alterando `products` (tabla de tenant),
+pregunta arquitectónica abierta.
 
-**Completado — Notas de Crédito/Débito (2026-07-14/15):**
-- Módulo construido de punta a punta: emisión, envío a SUNAT, PDF (A4/ticket 80mm), listado
-  con filtros, reposición de stock atada a aceptación real de SUNAT (no a la creación).
-- **Los 13 motivos del catálogo SUNAT (09 NC / 10 ND) están habilitados y cada uno validado
-  con un comprobante real aceptado por SUNAT BETA** (`note_motivos.disponible_flujo_simple`
-  controla qué motivos se muestran en el formulario — arrancó en 6/13, terminó en 13/13):
-  - Total (clon 1:1 de la venta, sin recálculo de montos): NC01, NC02, NC03, NC06, NC10.
-    NC03/NC10 forzados a total-only (`permite_parcial=false`) — una corrección de texto u
-    "otros conceptos" no debe mover montos.
-  - Parcial modo cantidad (devolución física, prorratea todos los montos por cantidad):
-    NC07 — el único que reduce `quantity`.
-  - Parcial modo monto (ajusta valor de una línea SIN devolver unidades — mantiene
-    `quantity` original, pero recalcula `price_base`/`price_final` a partir del monto):
-    NC05, NC09, ND02. SUNAT exige, sin excepción, que
-    `LineExtensionAmount == precio_unitario × cantidad` — ni un `AllowanceCharge`
-    documentando la diferencia lo evita (error 3271/3272, confirmado en dos rondas de
-    pruebas reales). NC08 comparte el mismo código pero **no se probó en vivo todavía** —
-    confirmar contra SUNAT antes de usarlo en un caso de negocio real. ICBPER/ISC
-    intencionalmente en 0 en modo monto (no hay devolución física de unidades) — confirmado
-    contra SUNAT BETA con un producto real con ICBPER.
-  - Descuento global (clona toda la venta + aplica un único descuento prorrateado, sin tabla
-    de ítems): NC04. Requirió persistir `notes.discount_global` (no vive en ninguna línea) y
-    conectarlo en `GreenterService::getNote()`.
-  - Concepto libre (sin línea de venta asociada, producto `is_especial_nota=1`): ND01, ND03.
-- Dos entradas al formulario (`nota-create.vue`, sin duplicar componente), mismo filtro de
-  motivos compartido: desde la fila de una venta (`/sale/nota/:id`) y desde un botón
-  "Nueva Nota Crédito/Débito" en `/nota/list` con búsqueda de venta previa por cliente/
-  DNI-RUC/serie-correlativo (`GET notas/buscar-venta`).
-- **Bugs reales corregidos en el camino** (todos descubiertos recién al probar contra SUNAT
-  BETA real, no por revisión de código):
-  - `TotalesComprobanteCalculator::calcular()` no reducía el IGV al aplicar un descuento
-    global — la base gravada bajaba pero el IGV declarado quedaba igual. Afecta también a
-    ventas normales con `sales.discount_global`, no solo a notas.
-  - El mismo método leía `$d->subtotal` como propiedad de objeto dentro del cálculo de IGV
-    con descuento — funciona con `sale_details` (Eloquent models) pero no con notas totales
-    clonadas (arrays planos), dejando el IGV en 0 en silencio. Corregido con `data_get()`.
-  - El tope de "cantidad disponible para acreditar" sumaba cantidad de *todas* las NC
-    aceptadas sobre una línea, incluyendo motivos de valor (04/05/08/09) que mantienen la
-    cantidad original — bloqueaba notas legítimas después de una nota de valor sobre la
-    misma línea. Corregido excluyendo esos motivos del conteo.
-- **Pendiente:** ajuste automático de `debt`/`paid_out`/`state_payment` en `sales` cuando se
-  acepta una NC/ND (NC reduce deuda con piso en 0, ND la aumenta, proporcional en notas
-  parciales) — decisión pendiente de confirmar: automatizar solo para ventas sin
-  retención/detracción/percepción (`retencion_igv = 0`), el resto no es trivial de calcular
-  sin criterio del contador. Tabla `client_credit_movements` (saldo a favor del cliente
-  cuando una NC supera lo que la venta debía, incluyendo el caso "ya estaba pagada") —
-  diseño acordado (columnas, estados `pendiente`/`aplicado_a_venta`/`reembolsado_*`), sin
-  construir.
+**Completado — Notas de Crédito/Débito (cerrado 2026-07-14/15):**
+Módulo completo: emisión, envío a SUNAT, PDF (A4/ticket 80mm), listado con filtros,
+reposición de stock atada a aceptación real de SUNAT. Los 13 motivos del catálogo
+SUNAT (09 NC/10 ND) habilitados y validados contra SUNAT BETA real. 3 bugs reales
+corregidos (IGV no se reducía con descuento global, `$d->subtotal` como objeto rompía
+notas clonadas, tope de cantidad acreditable contaba mal los motivos de valor).
+Detalle completo: `docs/planning/retail-facturacion-core/historial-archivo.md`.
+**Pendiente real:** ajuste automático de `debt`/`paid_out`/`state_payment` al aceptar
+una NC/ND; tabla `client_credit_movements` (saldo a favor del cliente) diseñada, sin
+construir.
 
-**Completo — Módulo de Amortizaciones / ventas a crédito (2026-07-15 a 2026-07-16):**
-- Diseño completo en `plan-modulo-amortizaciones.md` (raíz del repo). **Fases 1-9 de 9
-  completas y aprobadas — módulo cerrado**: migraciones, modelos/factories, cronograma de cuotas
-  (`CreditInstallmentController`), pagos con algoritmo FIFO
-  (`CreditPaymentController`/`CreditPaymentAllocator`), anulaciones de cuota/pago,
-  devolución con retención parcial (§3.12), reemplazo de comprobante con traspaso de pagos
-  (§3.13), y mora on-the-fly (`MoraCalculator`, conectada al flujo de pagos).
-  **Fase 7 completa (2026-07-15)**: estado de cuenta consolidado —
-  `GET /clients/{client}/credit-summary` (`CreditPaymentController::creditSummary()`) más
-  las dos vistas de §3.11/§4 que no tenían controlador propio todavía, resueltas en la misma
-  sesión: `GET /credit-sales` (vista B, listado plano) y `GET /clients/credit-summary-list`
-  (vista A, agrupado por cliente), ambas en `CreditReceivablesController` nuevo. Cálculo por
-  venta (saldo, mora on-the-fly, cuotas vencidas, próxima cuota, estado `al_dia`/
-  `por_vencer`/`vencida`) centralizado en `CreditSummaryCalculator` (servicio nuevo,
-  compartido por los 3 endpoints — mismo criterio del plan de "no duplicar el cálculo, solo
-  presentarlo distinto"). Mismo filtro base que el resto del módulo: `saldo_pendiente > 0`
-  sin exigir `condicion_pago='credito'` (incluye deuda informal `contado` vía
-  `debt`/`paid_out`). **Umbral de `por_vencer` fijado en 7 días — asunción mía, no
-  confirmada con el usuario**, el plan menciona el estado pero nunca fija el número
-  (`CreditSummaryCalculator::DIAS_POR_VENCER`, fácil de mover a config de `companies` si el
-  negocio quiere otro valor). `clients/credit-summary-list` registrada ANTES de
-  `Route::resource("clients", ...)` en `routes/api.php` para no chocar con `clients/{client}`
-  (mismo patrón ya usado con `sales/config`). Verificado con datos reales del tenant `umbo`
-  dentro de una transacción revertida (`DB::rollBack()`), no hay filas de prueba persistidas.
-- **Fase 8 completa (2026-07-16)** — gap cerrado: `SaleController::store()`/`update()`
-  ahora sí marcan una venta como "a crédito". `type_payment==2` (selector ya existente en
-  `register.vue`, sin control paralelo nuevo) es el único hecho de origen — el backend
-  deriva `condicion_pago` de ahí, nunca lo acepta como campo separado del payload.
-  `store()` valida (`validarConfiguracionCredito()`) y persiste `credit_type='cuotas_fijas'`
-  (único valor soportado esta fase — `'libre'` rechazado con 422, se sigue creando solo a
-  mano), el cronograma (`installments`, suma exacta en centavos contra `saldo_pendiente =
-  $request->debt`, ya neto de adelantos/pagos iniciales) y mora opcional, todo en la misma
-  transacción. `update()` NO crea/edita cronogramas (eso sigue siendo exclusivo de
-  `CreditInstallmentController`, Fase 3) — solo sincroniza `condicion_pago` y bloquea
-  cambiar `type_payment` 2→1 si ya hay `installments`/`payment_applications` reales (evita
-  huerfanarlos). Nuevo endpoint `POST installments/schedule-preview`
-  (`CreditInstallmentController::previewSchedule()`) genera el cronograma sugerido sin
-  necesitar una venta ya persistida — reusa `InstallmentScheduleCalculator` (Fase 3) en vez
-  de reimplementar el redondeo a centavos en TypeScript. `register.vue`: nueva tarjeta
-  "Configuración de Crédito" (num_cuotas/periodicidad/cronograma editable/mora), y se quitó
-  el input "Fecha de Pago" por pago (ya no alimentaba nada real, ver Fase 8.0 abajo).
-  Verificado en 3 rondas: matriz de casos vía controladores reales contra `sandbox`
-  (rollback), y de punta a punta con un browser real (Playwright) creando una venta a
-  crédito completa a través de la UI — confirmado en BD y contra
-  `GreenterService::getInvoice()`.
-- **Fase 8.0 completa (2026-07-16) — fix bloqueante, hallado y cerrado ANTES de la Fase 8
-  principal**: `GreenterService::getInvoice()` armaba el `FormaPagoCredito`/`Cuota[]` del
-  XML SUNAT desde `sale_payments` (mecanismo previo, sin relación con `installments`), con
-  fallback silencioso a `FormaPagoContado()` cuando no aplicaba. Confirmado contra datos
-  reales de `umbo` (no teórico): la única venta `type_payment=2` real en dev (id=16,
-  `F001-00000024`) **ya fue enviada y ACEPTADA por SUNAT como `FormaPagoContado()`** siendo
-  en realidad una venta a crédito interna — no se corrige retroactivamente (XML ya
-  aceptado). Ahora: `type_payment==2` con `installments` activas arma `FormaPagoCredito`
-  desde ahí; `type_payment==2` sin `installments` activas (incluye legado) bloquea con 422
-  explícito, nunca cae en silencio a contado — rama vieja de `sale_payments` eliminada (0
-  filas reales dependían de ella). Guard duplicado en
-  `FacturacionElectronicaController::enviarSunat()`, ANTES de `reservarCorrelativo()`, para
-  no quemar un correlativo SUNAT real en una venta que de todos modos iba a fallar más abajo
-  (mismo bug que ya había dejado un correlativo huérfano en el pasado, comentario existente
-  en el código junto al try/catch de `getInvoice()`).
-- **Fase 9 completa (2026-07-16) — cierre del módulo, solo frontend, cero cambios de
-  backend** (todos los endpoints consumidos ya existían y estaban verificados desde Fases
-  4/7): dos pantallas nuevas en `admin-start-kit` — `src/views/credit/index.vue` (Cuentas
-  por Cobrar, toggle vista A "por cliente"/vista B "por venta", filtros, paginación) y
-  `src/views/credit/client-detail.vue` (estado de cuenta de un cliente + formulario de pago
-  general/específico con preview editable del reparto FIFO, mismo patrón de tabla editable
-  que el cronograma de Fase 8). Ruta nueva `/cuentas-por-cobrar` + entrada de menú bajo
-  "Ventas", sin permiso Spatie nuevo (reusa `list_sale` — ninguno de los endpoints
-  consumidos exige permiso especial). **Desviaciones del plan original acordadas
-  explícitamente** (§6 punto 9 no las preveía con este detalle): no existe página de
-  ficha/edición de cliente en el admin (los clientes se editan por modal) — la "pestaña
-  Créditos" del plan se reemplaza por una página de detalle propia
-  (`credit_receivables.client`), reachable desde el listado; sin historial de recibos de
-  pago (no existe endpoint de listado de `payment_receipts`, solo preview/store/anular/
-  refund/replace — queda pendiente para cuando se aborde el PDF del recibo, §3.10, tampoco
-  construido); sin UI de anular cuota/pago/refund/replace (operaciones de supervisor, se
-  siguen operando por API directa). Verificado de punta a punta con browser real
-  (Playwright) contra `sandbox`: listar cartera, entrar al detalle de un cliente, cobrar un
-  pago parcial contra una venta específica, confirmar que el estado de cuenta se actualiza
-  (deuda_total bajó exactamente el monto cobrado).
-- **Ya corregido** (drift real encontrado y arreglado, no solo documentado):
-  `SalePaymentController::store()`/`destroy()` (el flujo legado de "pago parcial de venta
-  contado") ahora espeja `saldo_pendiente` simétricamente con `debt`/`paid_out`, y bloquea
-  con 422 si la venta es `condicion_pago='credito'` (esas se cobran solo por el módulo
-  nuevo). Antes de esta corrección hubo 4 ventas reales en dev con `debt > 0` pero
-  `saldo_pendiente = 0` — backfilleadas manualmente (SQL revisado antes de correr).
-- **Decisión de negocio explícita (no reabrir)**: dentro de un pago, el monto cubre
-  **capital primero, mora después** (no la recomendación por defecto que se había sugerido,
-  que era mora-primero). Consecuencia aceptada: si un pago salda el capital completo de una
-  cuota de un tirón sin cubrir toda la mora de ese momento, esa mora queda perdonada para
-  siempre (mora nunca se persiste como saldo aparte, es cálculo on-the-fly puro) — decisión
-  tomada y cerrada el 2026-07-15, no es un bug pendiente.
-- Permisos Spatie nuevos (`anular-cuota-credito`, `anular-pago-credito`,
-  `liquidar-devolucion-credito`, `reemplazar-comprobante-credito`): creados pero sin asignar
-  a ningún rol operativo por defecto (mismo criterio que Adelantos) — pendiente asignarlos
-  desde la UI de Roles cuando se decida quién los tiene.
-- **Historial de recibos de pago + PDF del recibo — CERRADO (2026-07-18)**: cierra el
-  pendiente que había dejado la Fase 9 (ver arriba). `PaymentReceiptController` nuevo
-  (`GET /clients/{client}/payment-receipts`, listado paginado real) + PDF interno en A4/
-  ticket 80mm (`GET /payment-receipts-pdf-url/{id}` + `/payment-receipts-pdf/{id}`, mismo
-  patrón de URL firmada que ventas/notas, **sin QR fiscal** — no es comprobante SUNAT).
-  Bloque nuevo en `client-detail.vue`. Verificado contra recibos reales del tenant `umbo`
-  (`REC-00001`/`REC-00002`), ambos formatos renderizan sin error.
-- **Editar venta a crédito antes de enviar a SUNAT (corregir pago inicial / productos) —
-  CERRADO (2026-07-18)**: `SaleController::update()` ignoraba en silencio `payments` y nunca
-  tocaba `installments`/`saldo_pendiente` al editar — un pago inicial mal tipeado (monto o
-  método equivocado) quedaba sin forma de corregirse. Ahora: si la venta a crédito **no**
-  tiene cuotas cobradas ni un adelanto aplicado, se puede editar libremente productos y pago
-  inicial, exigiendo regenerar el cronograma completo en el mismo guardado (mismo
-  `validarConfiguracionCredito()` de `store()`, reutilizado). Si **ya** tiene cobros
-  formales (`payment_applications` activas o `advance_applications`), la edición se bloquea
-  con 422 — hay que anular esos cobros primero por sus propios flujos (Cuentas por Cobrar /
-  Adelantos), no se tocan desde un PATCH de venta. `edit.vue` ganó la misma tarjeta
-  "Configuración de Crédito" que ya tenía `register.vue`. Verificado con 2 simulaciones
-  reales contra `umbo` en transacciones revertidas (corrección de pago inicial exitosa;
-  bloqueo confirmado con una cuota ya cobrada).
-- **UI para anular un recibo de pago + permisos de crédito configurables desde Roles —
-  CERRADO (2026-07-18)**: cierra el gap que dejaba bloqueada la edición de una venta a
-  crédito con cobros formales (punto anterior) sin ninguna forma de destrabarla desde la
-  UI. Botón "Anular pago" nuevo en el historial de recibos de `client-detail.vue` (Cuentas
-  por Cobrar), gateado por el permiso Spatie `anular-pago-credito` ya existente
-  (`authStore.isPermitedRoute(...)`, primer uso de este método DENTRO de un botón de vista
-  — antes solo se usaba a nivel de ruta/menú), con motivo de anulación obligatorio (mínimo
-  5 caracteres, mismo mínimo que ya exigía el backend) capturado en un `Swal.fire` con
-  textarea + `preConfirm`. Llama al endpoint `POST payment-receipts/{id}/anular` que ya
-  existía (`CreditPaymentController::anular()`, Fase 5A) — cero cambios de backend
-  necesarios para esta parte.
-  **Hallazgo bloqueante encontrado en el camino**: los 4 permisos del módulo de crédito
-  (`anular-cuota-credito`, `anular-pago-credito`, `liquidar-devolucion-credito`,
-  `reemplazar-comprobante-credito`) **nunca se habían migrado al tenant `umbo`** — viven en
-  `database/migrations/tenant/`, pensadas para `tenants:migrate`, pero esa migración
-  específica había quedado pendiente (`sandbox` sí las tenía). En la práctica, esto
-  significa que los endpoints `anular()`/`refund()`/`replace()` del módulo de crédito
-  probablemente venían fallando en `umbo` para cualquier usuario no-Super-Admin desde que
-  se crearon (2026-07-15) — no era solo un problema de UI. Corregido corriendo
-  `php artisan tenants:migrate --tenants=umbo` (3 migraciones pendientes, confirmado que no
-  había ninguna otra pendiente), con aprobación explícita antes de correr contra la base
-  real.
-  **Segundo gap encontrado**: aunque los permisos ya existían en el backend desde
-  2026-07-15, nunca se habían agregado al catálogo hardcodeado de permisos del frontend
-  (`admin-start-kit/src/types/roles.ts`, constante `PERMISOS`) — no eran asignables a
-  ningún rol desde la pantalla de Roles y Permisos pese a existir. Se agregó un módulo
-  nuevo "Créditos (Amortizaciones)" con los 4 permisos, mismo patrón que los módulos
-  existentes (Roles, Usuarios, Productos, etc.) — se renderiza automáticamente, no requirió
-  tocar `roles/index.vue`. Verificado con una simulación completa en una transacción
-  revertida contra `umbo`: aplicar pago → confirmar bloqueo de edición → anular pago →
-  confirmar que `saldo_pendiente` vuelve al valor original y que la edición de la venta se
-  destraba.
-- **`sales.state_payment` desincronizado del módulo de Amortizaciones — CERRADO
-  (2026-07-18)**: el listado de ventas (`sale/index.vue`) pinta "Pendiente"/"Parcial"/
-  "Pagado" leyendo `state_payment` directo — pero `CreditPaymentController` (Amortizaciones)
-  siempre mantuvo `saldo_pendiente` al día sin nunca tocar `state_payment`, a diferencia del
-  flujo legado de contado (`SalePaymentController`), que sí lo actualiza al cobrar/revertir.
-  Consecuencia real detectada por el usuario: una venta a crédito ya cobrada 100% (con
-  recibo activo en Cuentas por Cobrar) seguía apareciendo "Pendiente" en el listado de
-  ventas. Decisión de negocio confirmada: `state_payment` representa estado **actual**, no
-  un snapshot histórico — para reportes de "deuda a la fecha X" hace falta otra cosa
-  (sumar `payment_applications`/`sale_payments` por `fecha_pago`), no este campo. Fix:
-  `CreditPaymentController::actualizarStatePayment()` (helper nuevo, mismo criterio 1/2/3
-  que `SalePaymentController`, pero basado en `saldo_pendiente` — este módulo no mantiene
-  `debt`/`paid_out` al día más allá de la creación), conectado en los 4 puntos donde el
-  módulo toca `saldo_pendiente`: `store()`, `anular()`, `refund()`, `replace()`. Verificado
-  el ciclo completo (pendiente→parcial→pagado→parcial→pendiente) en una transacción
-  revertida contra `umbo`. **Backfill real ejecutado** (3 ventas encontradas con el dato
-  viejo, con aprobación explícita antes de correr el UPDATE): `#25`/`#29`
-  (`F001-00000025`/`F001-00000028`, saldo 0 pero `state_payment=1`) → `state_payment=3`;
-  `#27` (`F001-00000027`, con pagos parciales activos pero `state_payment=1`) →
-  `state_payment=2`.
+**Completo — Módulo de Amortizaciones / ventas a crédito (Fases 1-9 de 9, 2026-07-15
+a 2026-07-21):**
+Cronograma de cuotas, pagos con algoritmo FIFO, anulaciones, devolución con retención
+parcial, reemplazo de comprobante con traspaso de pagos, mora on-the-fly. Cerrado con
+historial de recibos + PDF, edición de venta a crédito pre-SUNAT, UI de anular pago +
+permisos configurables desde Roles, y fix de `sales.state_payment` desincronizado del
+módulo (una venta a crédito ya cobrada 100% seguía apareciendo "Pendiente" en Ventas).
+Detalle completo, fase por fase: `docs/planning/retail-facturacion-core/
+plan-modulo-amortizaciones.md` (documento activo, no archivado — sigue siendo
+referencia técnica viva).
+**Pendiente real, documentado sin resolver:** `sales.debt`/`paid_out` quedan
+congelados al cobrar vía Cuentas por Cobrar (`CreditPaymentController` nunca los
+toca) — sin bug visible hoy (ninguna pantalla los lee), pero cualquier reporte futuro
+que los use como "saldo actual" leerá un dato viejo. `credit_type='libre'` sigue sin
+soportarse (solo `cuotas_fijas`); UI de anular cuota/refund/replace sigue siendo solo
+por API directa.
 
-- **`sales.debt`/`paid_out` como snapshot congelado, no saldo actual — documentado, sin
-  resolver (2026-07-21)**: mismo patrón de fondo que el bug de `state_payment` de arriba,
-  pero un nivel más abajo. `CreditPaymentController` (Cuentas por Cobrar) mantiene
-  `saldo_pendiente` al día en cada cobro/anulación/reembolso, pero **nunca toca `debt`ni
-  `paid_out`** — esos dos solo los actualiza el flujo legado (`SaleController::store()`/
-  `update()` al crear/editar, `SalePaymentController` al agregar/quitar un pago desde
-  "Editar venta"). Consecuencia real: una venta pagada 100% vía Cuentas por Cobrar después
-  de su creación se queda con `debt`/`paid_out` mostrando el saldo **inicial** para
-  siempre — confirmado con la venta #16 (`F001-00000024`): `debt=800` permanente aunque
-  esos 800 se cobraron de verdad después (2 recibos reales, `REC-00001`+`REC-00002`,
-  verificados contra `payment_applications`).
-  - **Gap relacionado, cerrado en la misma sesión**: `SaleController::store()`/`update()`
-    fijaban `saldo_pendiente=0` para toda venta `condicion_pago='contado'` sin importar el
-    `debt` real del pago inicial — rompía el filtro de Cuentas por Cobrar
-    (`saldo_pendiente > 0`, diseñado a propósito para incluir deuda informal contado, ver
-    `CreditSummaryCalculator`). Corregido: ambos métodos ahora guardan
-    `saldo_pendiente = $request->debt` sin condicionar a `condicion_pago`. Caso real que
-    destapó esto: venta #37 (`F001-00000030`, total 700, pago inicial 300, `debt=400`) no
-    aparecía en Cuentas por Cobrar pese a la deuda real.
-  - **Backfill real ejecutado, con un error propio corregido en el camino**: el primer
-    escaneo (`condicion_pago='contado' AND debt>0 AND saldo_pendiente=0`) encontró 2 ventas
-    (#16 y #37) y se les puso `saldo_pendiente = debt` a ambas — pero para la #16 eso estaba
-    MAL: su `saldo_pendiente=0` ya era correcto (pagada de verdad vía recibos, ver arriba),
-    no el bug. Detectado al unificar el historial de pagos (punto siguiente) y ver los
-    recibos reales aplicados contra ella; revertido (`saldo_pendiente` de la #16 vuelto a
-    0) antes de dar el caso por cerrado. La #37 sí era el bug real (cero
-    `payment_applications` contra ella) y quedó con `saldo_pendiente=400`, correcto.
-  - **Historial de pagos de cliente, unificado (`PaymentReceiptController::index()` +
-    `client-detail.vue`)**: el pago inicial de una venta (contado o adelanto de crédito) se
-    guarda como `sale_payment` simple y nunca generó un `PaymentReceipt` — el historial de
-    la ficha del cliente en Cuentas por Cobrar mostraba "sin recibos" para un cliente que sí
-    había pagado algo. Ahora el endpoint combina ambas fuentes (`sale_payments` +
-    `payment_receipts`) en una sola lista ordenada por fecha, marcada con `origen: 'recibo'`
-    o `'pago_venta'` — el frontend oculta anular/PDF para los `pago_venta` (no son recibos
-    reales, no tienen esas acciones). Paginación en memoria (mismo patrón que
-    `CreditReceivablesController::paginar()`) porque ahora la fuente son dos tablas.
-  - **Pendiente, explícitamente diferido por el usuario ("documenta, ya veremos más
-    adelante")**: decidir qué hacer con `debt`/`paid_out` de fondo. Ninguna pantalla del
-    frontend los muestra hoy (confirmado por grep — cero usos de `.debt` en
-    `admin-start-kit/src`), así que no hay bug visible en producción, pero cualquier reporte
-    o consulta futura que los use ingenuamente como "saldo actual" va a leer un dato
-    congelado desde la creación/última edición de la venta. Camino sugerido si se retoma:
-    migrar `SalePaymentController` para que también mantenga `saldo_pendiente` (dejar un
-    solo campo vivo) antes de evaluar si `debt`/`paid_out` se pueden deprecar del todo —
-    eliminarlos hoy rompería `SalePaymentController::store()`/`destroy()`, que los lee y
-    escribe activamente.
+**Completo — Módulo de Caja, Fases 0-6 de 7 (2026-07-18/19):**
+Catálogos base (`payment_methods`/`suppliers`/`cash_concepts`), apertura/cierre con
+lock + índice único parcial de Postgres, integración con ventas (guard de sesión
+abierta + `cash_movement` tipo `correction` en vez de editar/borrar — "ningún
+movimiento de dinero debe ser silencioso"), movimientos manuales con aprobación
+condicional, reportes (PDF/Excel/dashboard), integración con Adelantos y
+Amortizaciones (`CashCorrectionService` compartido, patrón de corrección unificado).
+Detalle completo, fase por fase: `docs/planning/retail-facturacion-core/
+plan-modulo-caja.md` (documento activo — checklist de activación de Fase 7 en su
+sección propia).
+**Pendiente real:** Fase 7 (multi-caja simultánea), sin fecha, espera que el negocio
+abra una segunda caja real. Deuda técnica sin bloquear ninguna fase: CRUD completo de
+`branches`/`cash_registers` (hoy solo listado de solo lectura); bug de
+`AuthController::respondWithToken()` (permisos asignados directamente a un usuario no
+llegan al frontend — Super-Admin no afectado, ver `project_auth_permissions_bug` en
+memoria); filtro de cajero en `history.vue` derivado de sesiones cargadas, no de un
+catálogo real de usuarios.
 
-**En progreso — Módulo de Caja (2026-07-18):**
-- Diseño completo en `plan-modulo-caja.md` (raíz del repo), principio rector: "ningún
-  movimiento de dinero debe ser silencioso". **Fases 0-6 de las 7 propuestas completas y
-  verificadas contra `sandbox`** (nunca contra `umbo`/dev real) — solo queda Fase 7
-  (multi-caja simultánea), en espera de que el negocio abra efectivamente una segunda caja
-  real (checklist de activación completo en `plan-modulo-caja.md`, sección Fase 7).
-- **Fase 0 — Catálogos base (`payment_methods`, `suppliers`, `cash_concepts`)**: CRUD
-  completo de los 3. Guard en `SaleController::validarPagosPayload()` que valida cada
-  `method_payment` recibido (incluso en pago mixto) contra `payment_methods.is_active`, sin
-  aceptar el string a ciegas — rechaza el payload COMPLETO ante un método inválido, antes de
-  abrir transacción (nada se persiste). `register.vue`/`edit.vue` migrados de `<option>`
-  hardcodeado a `GET payment-methods?active=1`. Seed exacto (carácter por carácter) de los 5
-  valores ya usados en producción: EFECTIVO, TRANSFERENCIA, YAPE, PLIN, TARJETA DE CREDITO.
-  **Drift detectado y documentado, no corregido (fuera de alcance)**: `advances.payment_method`
-  (Adelantos) usa valores distintos (`TARJETA` en vez de `TARJETA DE CREDITO`, Yape/Plin
-  fusionados) — anotado en plan §6 (Fase 6 de caja) para resolver cuando Adelantos se
-  conecte a este catálogo. Verificado con 7 ventas reales enviadas a SUNAT BETA contra
-  `sandbox` (5 métodos individuales + 1 pago mixto + 1 método inventado rechazado con 422
-  sin persistir nada) — las 6 válidas con `xml`/`cdr` poblados, comprobante idéntico al de
-  antes del cambio.
-- **Fase 1 — Modelo de datos base**: `branches` (no existía, se creó), `cash_registers`,
-  `cash_sessions` (con índice único parcial de Postgres — una sola sesión `open` por caja,
-  `CREATE UNIQUE INDEX ... WHERE status='open'`, verificado en `pg_indexes` tras correr la
-  migración), `cash_movements` (polimórfico manual `reference_type`/`reference_id`, sin
-  `morphs()` de Eloquent — no hay precedente de `morphTo`/`morphMany` en el proyecto y las
-  referencias apuntan a modelos con convención propia, `sales` ya existente),
-  `cash_session_totals`, `cash_session_denominations`. Config de caja
-  (`blind_close_default`, `allow_multiple_registers_per_branch`, `difference_tolerance`,
-  `require_expense_concept`, `require_expense_approval`, `max_expense_without_approval`)
-  agregada a `companies` (mecanismo de config por tenant ya existente, mismo patrón que los
-  defaults de mora de Amortizaciones) en vez de crear una tabla `cash_settings` nueva.
-- **Fase 2 — Apertura y cierre de caja**: `CashSessionController::status()/open()/close()`.
-  `open()` usa `lockForUpdate()` sobre la caja + captura `UniqueConstraintViolationException`
-  como backstop del índice único parcial (nunca deja escapar un 500 por doble apertura
-  concurrente). Genera automáticamente 1 `cash_movement` tipo `opening_fund` (EFECTIVO,
-  `direction=in`) por apertura. `close()` acepta `cash_session_id` opcional — si coincide
-  con la sesión propia del usuario se trata como el flujo normal; si pertenece a otro
-  cajero, exige el permiso `cash.close_others_session` (403 explícito, no 422, si falta).
-  `blind_close` se resuelve de verdad (valor propio de la caja si no es `null`, si no hereda
-  `companies.blind_close_default`) — expuesto como `blind_close_resolved` en la respuesta.
-  - **Gap real encontrado a mitad de Fase 2, corregido antes de escribir el controller**: el
-    plan original (Fase 0, §3) ya anticipaba `payment_methods.affects_cash_count` para saber
-    qué métodos cuentan como efectivo físico en el arqueo — pero el prompt de Fase 1
-    (redactado por el usuario) lo omitió. Se agregó vía migración propia (sin tocar la
-    migración de Fase 0 ya corrida), con el backfill en `PaymentMethodSeeder` (no un
-    `UPDATE` suelto) — EFECTIVO=true, los otros 4 explícitamente false.
-  - **Segundo gap encontrado durante la implementación**: `expected_cash` solo se
-    calculaba/persistía dentro de `close()` — el modo "no ciego" necesita mostrarlo ANTES de
-    confirmar, y no había forma de previsualizarlo. Se extrajo `computeExpectedCash()`
-    compartida y se agregó `expected_cash_live` (no persistido) a la respuesta de `status`,
-    que de paso ya cubre el "corte X en vivo" del plan sin pantalla aparte.
-  - **Tercer gap**: 3 usos de `Company::first()->campo` sin null-safe — un tenant recién
-    provisionado sin fila en `companies` todavía (paso separado de `tenants:provision`, ver
-    `ProvisionTenant.php`) habría producido un 500 no controlado. Corregido con `?->` en los
-    3 puntos.
-  - Los 5 puntos de verificación (apertura con ajuste de fondo, doble apertura bloqueada,
-    `blind_close` ciego/no-ciego confirmado en ambas direcciones, tolerancia de diferencia
-    con/sin motivo, cierre por terceros con/sin permiso) verificados con evidencia real (API
-    directa, 2 usuarios reales) contra `sandbox` — no solo lectura de código.
-  - **Estado de prueba que quedó en `sandbox`** (no revertido, mismo criterio que los datos
-    de prueba de Fase 0): usuario `cajero.test@sandbox.local` (id=20, rol `Cajero`) con
-    permiso `cash.close_others_session` asignado **directamente al usuario** (no al rol —
-    ese permiso es de supervisor/emergencia, no algo que un cajero normal deba tener sobre
-    sus compañeros; no existe todavía un rol Admin/Supervisor genérico en el proyecto). Rol
-    `Cajero` real solo tiene `cash.open_session`. `branch #1 "Sede Principal"` +
-    `cash_register #1 "Caja 1"` (`default_opening_amount=100`) creados vía comando puntual
-    `cash:seed-sandbox-demo` (no es parte de `tenants:provision`).
-- **Fase 3 — Integración con ventas (2026-07-18)**: conecta `SaleController::store()`/
-  `update()` con Caja. Cambio 100% aditivo — no tocó `validarRegimenEspecial()`,
-  `validarConfiguracionCredito()`, el formato de `sales.payment_method`/`sale_payments`, ni
-  el envío a SUNAT, tal como exigía el prompt de esta fase por ser código fiscal sensible.
-  - **Guard en `store()`** (`resolverSesionCajaAbierta()`): dispara si `payments[]` trae al
-    menos un monto > 0 — no mira `type_payment` directamente, así que el pago inicial de una
-    venta a crédito (`type_payment==2` con `payments` no vacío) también exige caja abierta,
-    mientras que una venta 100% a crédito sin pago inicial (`payments` vacío) nunca la exige
-    (regla de integridad #3 del plan: el financiamiento no genera `cash_movement` al momento
-    de la venta). Sin excepción está el resultado de investigar primero, no de asumir:
-    `sales` no tiene columna `channel` ni nada equivalente — el portal e-commerce no pasa
-    por `SaleController` en absoluto, usa `Order`/`OrderController` (tabla `orders`)
-    completamente separado, confirmado por grep. El guard aplica a **todo** `store()`/
-    `update()` sin condición de canal porque no hay otro canal llegando ahí hoy.
-    (`plan-modulo-caja.md` §7 asume `sales.channel = ecommerce` — dato viejo del diseño
-    original que no corresponde al código real, pendiente de corregir en el plan.)
-  - **Generación automática**: por cada pago inmediato se crea un `cash_movement` tipo
-    `sale_payment` (soporta pago mixto — una fila por método), dentro de la misma
-    transacción que la venta — nunca queda una venta persistida sin su movimiento.
-  - **Sincronización en `update()` — la parte delicada de esta fase**: confirmado en el
-    código real que los pagos de una venta SÍ son editables desde `update()`
-    (`SalePayment::where(...)->delete()` + recreación total, sin condición, cada vez que se
-    edita una venta pre-SUNAT) — esto choca directo con la regla de integridad #1 de Caja
-    ("un `cash_movement` nunca se edita ni se borra a nivel de dato"). Resuelto exactamente
-    como pide esa regla: si los pagos cambian, se generan `cash_movement` tipo `correction`
-    (monto igual, dirección invertida, `corrected_movement_id` → el original) más un
-    `sale_payment` nuevo con el dato correcto — el original nunca cambia su contenido, solo
-    queda anotado (`corrected_by`/`corrected_at`). Si la sesión donde vive el movimiento
-    original sigue `open`, la corrección es libre; si ya `closed` (el arqueo de ese día ya
-    se hizo), exige el permiso `cash.close_others_session` (403 si no lo tiene) — mismo
-    criterio que el cierre de sesión por terceros de Fase 2, tal como especifica la regla #1
-    del plan ("requiere permiso de supervisor", no una prohibición absoluta). La corrección
-    y/o los pagos nuevos siempre se registran en la sesión abierta ACTUAL de quien edita,
-    nunca en la sesión vieja aunque siga abierta y sea la misma — mismo criterio que la
-    regla #2 del plan para reembolsos de NC, extendido por consistencia.
-  - **Gap real evitado antes de escribir código**: el `catch()` de `update()` es un solo
-    `catch(\Throwable)` que no distingue `HttpException` de un error real — cualquier 422/403
-    lanzado dentro de la transacción se hubiera convertido en un 500 silencioso al hacer
-    rollback. Se resolvió con un split validación/ejecución: `prepararSincronizacionCaja()`
-    corre ANTES de `DB::beginTransaction()` (toda decisión, incluido el chequeo de permiso,
-    puede lanzar `HttpException` ahí con seguridad) y `aplicarSincronizacionCaja()` corre
-    DENTRO de la transacción solo para ejecutar el plan ya decidido, sin volver a validar.
-  - **Nota de Crédito (Paso 5 del prompt, exploratorio)**: confirmado que el módulo de NC no
-    genera ningún reembolso de dinero real todavía — lo único que toca plata hoy es
-    `AdvanceRefund` (módulo Adelantos, separado), que solo actualiza
-    `advances.refunded_amount` como bookkeeping. Nada que enganchar en esta fase; la regla
-    de integridad #6 (reembolso de NC usa el `payment_method_id` original de la venta, se
-    ata a la sesión abierta actual) queda anotada para cuando NC↔Caja se conecte de verdad.
-  - **6 puntos de verificación** (los 5 originales del checklist + un 6to agregado por el
-    usuario específicamente para el caso nuevo de corrección sobre sesión cerrada)
-    verificados con evidencia real (API directa + consultas a BD) contra `sandbox`: venta
-    contado sin caja → 422 sin fila creada; venta contado con caja y pago mixto → venta +
-    2 `cash_movements` exactos; venta 100% crédito sin caja → se crea, 0 `cash_movements`;
-    crédito con pago inicial sin caja → 422; control cruzado sesión-vs-venta (el monto
-    migra de sesión al corregirse, sin perderse ni duplicarse); `update()` sobre sesión
-    cerrada sin permiso → 403, con permiso (Super-Admin) → 200 con `correction` + nuevo
-    `sale_payment` generados correctamente y el contenido del movimiento original intacto
-    (confirmado leyendo la fila después de la corrección). De paso, un intento de cierre con
-    el monto equivocado confirmó que `affects_cash_count` sigue filtrando bien incluso
-    dentro de una corrección (YAPE no cuenta para el arqueo físico, la diferencia reportada
-    coincidió exactamente con lo esperado).
-  - **Estado de prueba que quedó en `sandbox`**: usuario nuevo `cajero2.test@sandbox.local`
-    (id=21, rol `Cajero`, sin `cash.close_others_session` — para poder probar el caso "sin
-    permiso" sin tocar el permiso de `cajero.test`). Ventas reales #29 (contado, pago mixto,
-    editada) y #30 (100% crédito) quedaron persistidas. Todas las sesiones de prueba se
-    cerraron correctamente al final — `sandbox` queda con 0 sesiones abiertas.
-- **Fase 4 — Movimientos manuales (2026-07-19)**: ingresos/egresos manuales de caja
-  (comisiones, cobro de deudas, pagos a proveedores, caja chica), reutilizando explícitamente
-  el patrón de corrección de Fase 3 (`type: correction`, `corrected_movement_id`,
-  `corrected_by`/`corrected_at` — regla de integridad #1), no un mecanismo nuevo.
-  - **Refactor previo, pedido explícitamente por el usuario antes de escribir código nuevo**:
-    `computeExpectedCash()` vivía como método privado de `CashSessionController` (Fase 2) —
-    se extrajo a `app/Services/ExpectedCashCalculator.php` (mismo criterio que
-    `CreditSummaryCalculator`: "un solo punto de verdad, no dos que empiecen iguales").
-    `CashSessionController::close()`/`serializeSession()` ahora llaman al service, el método
-    privado viejo se eliminó por completo. De paso se le agregó `where('status','confirmed')`
-    — la versión original no filtraba por status porque `pending_approval`/`rejected` no
-    existían todavía en la práctica.
-  - **`CashMovementController` nuevo** (decisión explícita: controller propio, no meter todo
-    en `CashSessionController` — mismo criterio de un-controller-por-recurso que el resto del
-    módulo). `store()`: exige sesión abierta propia, `concept_id` activo con `direction`
-    coincidente con `type` (422 si no), `description` obligatoria, contraparte con snapshot
-    real (`counterparty_id` presente → el nombre/documento SIEMPRE se resuelve de
-    `Client`/`Supplier` real, ignorando lo que haya llegado en
-    `counterparty_name`/`counterparty_document` del payload — evita que sea un campo de texto
-    libre disfrazado). Aprobación condicional (`companies.require_expense_approval` +
-    `max_expense_without_approval`) solo para egresos, vía `status: pending_approval` —
-    la validación de "no negativo" (regla #4) se salta al crear un pendiente y se re-ejercita
-    recién al aprobar.
-  - **Adjunto real, no placeholder**: confirmado por grep que el proyecto ya tiene un patrón
-    de subida de archivos repetido en 5 controladores (`Storage::disk('public')->putFile(...)`)
-    — se reutilizó igual para `attachment_path`, no se dejó deshabilitado.
-  - **Buscador de contraparte**: mismo patrón ya existente de `NotaElectronicaController::
-    buscarVenta()` (debounce + `ILIKE` + `limit(15)`), replicado como
-    `GET cash/counterparty-search` contra `clients`/`suppliers` según `type`.
-  - **Editar/eliminar reusa el patrón de Fase 3, adaptado**: `prepararCorreccion()` (antes de
-    abrir transacción, puede lanzar 403/422 con seguridad) + `registrarCorreccion()` (dentro
-    de la transacción, solo ejecuta). Restringido a `manual_income`/`manual_expense` — un
-    intento de corregir `sale_payment`, `opening_fund` o un `correction` ya existente devuelve
-    422 explícito. Sobre sesión cerrada exige `cash.close_others_session` (mismo permiso
-    reutilizado, sin crear uno nuevo), igual criterio que Fase 3.
-  - **Validación de "no negativo" generalizada** (`validarNoNegativo()`, un solo helper): la
-    misma función cubre `store()` (efecto de un movimiento nuevo), `approve()` (efecto del
-    movimiento pendiente al confirmarse), `update()` (efecto combinado: reversión del
-    original + el movimiento nuevo) y `destroy()` (efecto de la reversión sola) — simulando
-    el proyectado ANTES de persistir nada, en vez de cuatro validaciones distintas.
-  - **Bug real encontrado y corregido en el camino, no relacionado con el código de esta
-    fase pero descubierto al probarla**: `Company::$fillable` nunca había incluido los 6
-    campos de configuración de Caja agregados en Fase 1 (`require_expense_approval`,
-    `max_expense_without_approval`, `blind_close_default`, etc.) — `Company::update()` los
-    descartaba en silencio por protección de asignación masiva de Eloquent (sin excepción,
-    sin log). Nadie lo había notado porque hasta Fase 4 esos campos solo se habían LEÍDO,
-    nunca escrito vía el modelo. Confirmado con `var_dump()` antes (`false`/`NULL`) y después
-    (`true`/`"100.00"`) del fix. Corregido agregando los 6 nombres a `$fillable` — ningún
-    otro mecanismo. La primera corrida del checklist de 8 puntos falló en los puntos 4/5
-    exactamente por este bug (eso fue lo que lo delató); se descartó por completo y se
-    re-ejecutaron los 8 puntos desde cero después del fix, confirmado por `var_dump` que la
-    configuración real ya persistía — ningún resultado reportado como válido mezcla datos
-    de antes/después del fix.
-  - **Permiso nuevo** `cash.approve_expenses` (mismo criterio dot-notation que el resto de
-    Caja), sin asignar a ningún rol por defecto — se asignó directamente al usuario de prueba
-    `cajero.test@sandbox.local`, junto con `cash.close_others_session` que ya tenía.
-  - **8 puntos de verificación** confirmados con evidencia real (API + BD) contra `sandbox`:
-    contraparte cliente real (snapshot correcto, ignoró datos falsos enviados a propósito en
-    el payload) y proveedor no catalogado (`counterparty_id=null`, texto tal cual);
-    `concept_id` con `direction` no coincidente → 422; egreso sobre el umbral → queda
-    `pending_approval` sin tocar `expected_cash_live`; aprobarlo lo confirma y recién ahí
-    impacta el cálculo; editar con sesión abierta corrige sin tocar el original; eliminar
-    sobre sesión cerrada sin permiso → 403, con permiso → corrección en la sesión abierta
-    ACTUAL del que corrige (confirmado en BD: el original nunca cambió su contenido, solo
-    quedó anotado `corrected_by`); egreso directo y egreso pendiente que dejarían el efectivo
-    en negativo → 422 en ambos casos (creación y aprobación, respectivamente).
-- **Fase 5 — Reportes (2026-07-19)**: historial de sesiones con filtros y paginación
-  (`CashSessionController::index()`), detalle de solo lectura (`show()`), dashboard admin
-  con alerta de sesión abierta >24h (`dashboard()`), PDF de cierre (individual, soporta
-  sesión cerrada real o vista previa de una abierta vía `expected_cash_live`; y rango
-  consolidado, máx. 31 días con 422 explícito si se excede) y export Excel de movimientos —
-  primera vez que el proyecto usa una librería de Excel real
-  (`maatwebsite/laravel-excel`/`phpoffice/phpspreadsheet`, requirió habilitar la extensión
-  `ext-zip` de PHP —deshabilitada por defecto en este XAMPP— y reiniciar Apache antes de
-  poder instalarla).
-  - **`CashVisibilityResolver`** (servicio nuevo): sin `cash.view_all`, el filtro
-    `opened_by` que pida un usuario por otro cajero se **ignora en silencio** (nunca 403 —
-    es un listado, no un recurso puntual) y se fuerza su propio user_id; con el permiso, se
-    respeta lo pedido. Usado en `index()`/`pdfRangeSignedUrl()`/`CashMovementController::
-    export()`. `dashboard()` deliberadamente NO lo usa — está gateado binario por
-    `permission:cash.view_all` a nivel de ruta (tienes el permiso o ni entras), distinto a
-    un listado filtrable parcial.
-  - **Bug real encontrado y corregido, ajeno al código nuevo de esta fase**:
-    `CashSessionController::serializeSession()` (existente desde Fase 2) armaba
-    `totals_by_payment_method` agrupando TODOS los `cash_movements` de la sesión sin
-    filtrar `status='confirmed'` — a diferencia de `ExpectedCashCalculator`, que sí lo hace
-    desde Fase 4. Rastreado el impacto hacia atrás explícitamente (mismo criterio que
-    cualquier fix sobre código ya verificado): sin impacto en los checklists de Fases 2/3
-    (los estados `pending_approval`/`rejected` no existían todavía en el sistema en esos
-    momentos); posible impacto de solo *visualización* — nunca de datos persistidos ni de
-    `expected_cash`, que siempre calculó bien — en el punto del checklist de Fase 4 que
-    verificaba que un egreso `pending_approval` no tocara el efectivo esperado (esa
-    aserción sigue siendo correcta; no hay evidencia de que se haya inspeccionado
-    específicamente `totals_by_payment_method` en ese momento).
-  - **Corrección sobre una decisión propia tomada y revertida en la misma fase**: el plan
-    original para los filtros de sede/caja de `history.vue` era derivarlos de las sesiones
-    ya cargadas en pantalla (sin endpoint nuevo) — el usuario señaló que esto dejaría
-    sedes/cajas sin sesiones invisibles en el filtro ("no encuentro mi sede"), así que se
-    corrigió antes de cerrar la fase: `BranchController`/`CashRegisterController::index()`
-    nuevos (solo listado `?active=1`, mismo patrón que `PaymentMethodController` — no es el
-    CRUD completo, que sigue pendiente), con rutas `GET branches`/`GET cash-registers`. El
-    filtro de *cajero* sí quedó derivado de las sesiones cargadas (alcance más acotado,
-    aceptado explícitamente) — ver pendientes abajo.
-  - **`stores/auth.ts::isPermitedRoute()`** extendido para aceptar `"a|b"` (OR de permisos,
-    mismo criterio que el middleware `permission:` de Spatie en el backend) — necesario
-    para que el historial sea alcanzable tanto por `cash.open_session` como por
-    `cash.view_all`. Verificado con 17 casos aislados en un script Node reproduciendo la
-    función exacta (parseo OR, permiso simple sin pipe sigue igual, `'all'` sigue
-    universal, Super-Admin sigue bypasseando todo, strings vacíos/mal formados —
-    `""`/`"undefined"`/pipes dobles o en los extremos— no abren ninguna brecha) — sin
-    regresión, y confirmado por grep que ningún `permission:` anterior a esta fase usaba
-    `|` (sin colisión de semántica con rutas viejas).
-  - **Hallazgo real y significativo, fuera de alcance de Caja, encontrado al preparar el
-    checklist de esta fase**: `AuthController::respondWithToken()` (el login) arma
-    `permissions` desde `auth('api')->user()->role->permissions` — la relación **legacy**
-    `role_id` (singular), no `getAllPermissions()` de Spatie (que mezcla permisos del rol +
-    asignados directamente al usuario). El backend (middleware `permission:` de Spatie,
-    todo `$user->can(...)`) sí usa `getAllPermissions()` correctamente — la seguridad del
-    servidor nunca estuvo comprometida — pero el **frontend** (`isPermitedRoute()`, menú,
-    guard de rutas) nunca ve un permiso asignado directamente a un usuario, patrón que este
-    proyecto usa repetidamente (los 4 permisos de crédito, `cash.close_others_session`,
-    `cash.approve_expenses`). Confirmado con evidencia real (login de `cajero.test` vía API
-    real devolviendo `"permissions": []` de más). **Decisión explícita: documentar, no
-    corregir en esta sesión** — el fix es chico (`getAllPermissions()->pluck('name')` en
-    vez de `$role->permissions->pluck('name')`) pero su blast radius es el login de
-    absolutamente todos los usuarios de todos los tenants. Anotado en
-    `plan-modulo-caja.md` §12. **Separado, artefacto de datos ya corregido** (no es bug de
-    código): `cajero.test`/`cajero2.test` en `sandbox` tenían `users.role_id = 1`
-    ("Super-Admin") en vez de 5 ("Cajero", su rol Spatie real) — causado por haberse creado
-    vía tinker en una fase anterior sin pasar por `UserController::store()` (que sí
-    sincroniza `role_id` con el rol real). Verificado que usuarios reales de `umbo`
-    (`umbosac@gmail.com`, `pinedo@gmail.com`, creados por el flujo normal) sí tienen
-    `role_id` correctamente sincronizado — no es un problema del código de
-    `UserController`, exclusivo de estos 2 fixtures. Corregido con `UPDATE` directo.
-  - Menú "Caja" convertido de ítem único a padre con 2 hijos: "Turno Activo"
-    (`cash.open_session` → `cash.session`) y "Historial y Reportes" (`cash.view_all` →
-    `cash.dashboard`) — no son excluyentes, un usuario con ambos ve las dos entradas.
-  - **7 puntos de verificación** confirmados con evidencia real (API + BD + PDF real
-    extraído con `pdftotext` + Excel real parseado con `PhpSpreadsheet`) contra `sandbox`,
-    usando 3 usuarios de prueba reales (`cajero.test`/`cajero2.test`/`supervisor.test`, este
-    último nuevo, rol propio `Supervisor Caja (test)` con solo `cash.view_all` atado al ROL
-    — no al usuario, precisamente para poder probar el frontend pese al bug de
-    `respondWithToken()` de arriba): filtro `opened_by` ajeno ignorado sin 403 (verificado
-    por conteo exacto: 6 sesiones propias, ninguna ajena); `cash.view_all` ve las 12
-    sesiones totales y el filtro por cajero sí se respeta cuando lo pide; PDF de rango >31
-    días → 422 con mensaje exacto; PDF dentro del límite generado y su total (S/ 90.00)
-    coincidiendo exacto con la suma directa en BD; Excel exportado con las mismas 6 filas
-    exactas (mismos IDs) que los `cash_movements` reales de esas sesiones; dashboard marcó
-    correctamente `is_stale=TRUE`/`elapsed_hours≈25` en una sesión forjada a +25h
-    (`opened_at` restaurado a su valor real antes de cerrarla vía API normal — `sandbox`
-    quedó en 0 sesiones abiertas); acceso a `cash/dashboard` (200) vs `cash/status` (403)
-    para el usuario solo-`view_all` confirma a nivel de ruta la bifurcación del menú.
-  - `composer audit`: 41 advisories en el árbol completo de dependencias, pero **ninguno**
-    en los 8 paquetes nuevos que trajo `maatwebsite/excel`
-    (`maatwebsite/excel`, `phpoffice/phpspreadsheet`, `maennchen/zipstream-php`,
-    `markbaker/complex`, `markbaker/matrix`, `ezyang/htmlpurifier`, `composer/pcre`,
-    `composer/semver`) — el resto son dependencias preexistentes del proyecto, no auditadas
-    a fondo (fuera de alcance de esta fase, a pedido explícito).
+**Completo — Módulo de series de comprobantes, con Nota de Venta interna (cerrado
+2026-07-19):**
+Resuelve de raíz el bug de concurrencia de `reservarCorrelativo()` con series nuevas
+(`serie_comprobantes` con fila semilla `correlativo_actual=0` + `lockForUpdate()` real
+sobre esa fila, no `MAX(sales.correlativo)`). Nota de Venta interna: documento no
+fiscal y terminal, nunca pasa por `enviarSunat()`, reserva su correlativo de inmediato
+en `store()`. Permisos de emisión por tipo de documento, validados en backend, nunca
+solo confiados al frontend. `AdvanceController` conectado al mecanismo nuevo el mismo
+día (antes generaba su propia serie con un string hardcodeado).
+Detalle completo: `docs/planning/retail-facturacion-core/historial-archivo.md`.
+**Pendiente real:** completar el Catálogo 01 SUNAT del código 15 en adelante; migrar
+NC/ND (07/08) del mecanismo viejo (`note_series`) a este módulo; CRUD completo de
+`branches`; reporte SUNAT/PLE (usar siempre `Sale::scopeSoloDocumentosFiscales()`
+cuando se construya, nunca inferir por prefijo de `serie`).
 
-- **Fase 6 — Integración con Adelantos y Amortizaciones (2026-07-19)**: conecta dos flujos
-  de cobro que hasta esta fase no generaban ningún movimiento de caja. Paso previo
-  obligatorio (confirmación de estado real, no asumido): ambos módulos ya existían y
-  estaban maduros — `AdvanceController::store()` (adelantos) crea `Sale`/`SaleDetail`/
-  `SalePayment`/`Advance` directo, sin pasar por `SaleController`, así que bypaseaba el
-  guard de Caja por completo; `CreditPaymentController::store()` (cobro de cuotas) arma
-  **un solo `PaymentReceipt` por llamada que puede aplicar a múltiples cuotas/ventas a la
-  vez** (un `medio_pago` + un `monto_total`, no 1 pago = 1 cuota) — detalle real que el
-  pseudocódigo original del plan no contemplaba, encontrado leyendo el código antes de
-  escribir nada.
-  - **`advances/create.vue`** migrado de `<option>` hardcodeado a `GET
-    payment-methods?active=1` (mismo patrón que `register.vue` desde Fase 0) — resuelve la
-    inconsistencia ya documentada en Fase 0 (`TARJETA`→`TARJETA DE CREDITO`, Yape/Plin ya
-    no fusionados, Plin como opción independiente). Verificado antes de tocar nada: **0
-    registros históricos afectados** — los 3 adelantos reales del tenant `umbo` ya usaban
-    `EFECTIVO` (valor no roto) — fix puramente hacia adelante, sin ninguna migración/
-    normalización de datos existentes.
-  - **`AdvanceController::store()`**: guard de sesión abierta incondicional (un adelanto
-    siempre se cobra al recibirse, a diferencia de una venta) + validación de
-    `payment_method` contra `payment_methods.is_active`, ambos **antes** de
-    `DB::beginTransaction()` — necesario porque el `catch(\Throwable)` de este método
-    convierte cualquier excepción en un 500 genérico si se lanza dentro de la transacción.
-    Genera `cash_movement` tipo `advance_received`. Confirmado (lectura de código, no
-    asumido) que aplicar un adelanto ya recibido a una venta futura
-    (`SaleController::store()`, líneas del bloque `AdvanceApplication::create()`) **no**
-    genera ningún movimiento nuevo — ya era así antes de tocar nada, coherente con el plan.
-  - **`CreditPaymentController::store()`**: mismo guard incondicional. Decisión de diseño
-    explícita (recomendada y confirmada por el usuario): **un solo `cash_movement` tipo
-    `installment_payment` por `PaymentReceipt` completo**, no uno por cuota/aplicación —
-    `amount = monto_total` del recibo entero (incluye lo que quedó como
-    `saldo_a_favor`/`monto_no_aplicado`, porque ese dinero también entró físicamente a la
-    caja), `reference_type='payment_receipt'`.
-  - **`CreditPaymentController::anular()`** conectado a Caja — generaba reversión de
-    `saldo_pendiente`/estado de cuotas/`saldo_a_favor` pero no tocaba caja.
-  - **`CashCorrectionService` extraído** (`app/Services/`, nuevo — mismo criterio que
-    `ExpectedCashCalculator` en Fase 5, "un solo punto de verdad"): al conectar
-    `anular()`, se encontró el mismo patrón de corrección ("generar `correction` que
-    revierte un movimiento + gate `cash.close_others_session` si la sesión cerró")
-    replicado 3 veces (`SaleController::aplicarSincronizacionCaja()` Fase 3,
-    `CashMovementController::registrarCorreccion()` Fase 4, y la implementación recién
-    escrita en `CreditPaymentController`). **Convención unificada, decisión explícita**: la
-    fila de corrección usa `reference_type='cash_movement'`/`reference_id=<id del
-    original>` (apunta a QUÉ anula, no al recurso de negocio que lo originó — ese recurso
-    sigue siendo recuperable navegando desde el original, que sí conserva su propio
-    `reference_type`/`reference_id` de negocio) — 2 de 3 implementaciones ya lo hacían así;
-    se ajustó `SaleController` (antes usaba `reference_type='sale'`/`venta.id` en sus
-    correcciones). **Impacto rastreado hacia atrás antes de dar la extracción por
-    cerrada** (mismo criterio que el fix de `totals_by_payment_method`): el checklist de 6
-    puntos de Fase 3 no afirma nada sobre ese campo (solo conteos, montos que migran de
-    sesión, y "contenido del original intacto") — sin regresión. Cambio aditivo sin riesgo:
-    las correcciones de `SaleController` ahora también llevan `description`/`concept_id`
-    (antes quedaban `null`, sin setear).
-  - **`CreditPaymentController::refund()` (§3.12, liquidación de devolución de venta
-    anulada por NC) queda explícitamente fuera de alcance de esta fase** — decisión del
-    usuario, con evidencia concreta de por qué: es el mismo límite NC↔Caja ya anotado como
-    pendiente en Fase 3 (regla de integridad #6). `medio_devolucion` es texto libre sin
-    ningún cruce contra el/los método(s) de pago real(es) de la venta (que puede ser mixto,
-    de varios `payment_receipts` con `medio_pago` distintos), y el propio código documenta
-    que ese campo captura un hecho **ya ocurrido** — el dinero pudo haber salido por un
-    canal que nunca tocó la caja física (ej. transferencia bancaria directa). Documentado
-    en `plan-modulo-caja.md` §12.
-  - **6 puntos de verificación + 1 adicional**, todos con evidencia real contra `sandbox`:
-    adelanto sin sesión → 422 (0 `advances` creados, confirmado); adelanto con sesión →
-    creado + `cash_movement` exacto (`advance_received`, EFECTIVO, `in`, 50.00); aplicar el
-    adelanto a una venta nueva → `cash_movements` sin cambio (36→36 exacto) aunque
-    `AdvanceApplication`/`applied_amount`/`status` sí se actualizaron (requirió setear
-    `n_operacion` de prueba en la venta del propio adelanto para destrabar la precondición
-    SUNAT — sin enviar nada real a SUNAT, solo para no bloquear la prueba de Caja); cuota
-    sin sesión → 422 (recibo existente confirmado de fecha muy anterior, 2026-07-15, sin
-    incremento); cuota con sesión → recibo `REC-00002` + `cash_movement` exacto
-    (`installment_payment`, 3.33); adelantos con YAPE/PLIN/TARJETA DE CREDITO → 3
-    `payment_method_id` distintos (no fusionados), y el valor viejo roto `"TARJETA"` ahora
-    se **rechaza** con 422; `anular()` del recibo → fila de corrección con
-    `reference_type='cash_movement'`/`reference_id=<original>` (confirmado que el original
-    mantiene su propio `reference_type='payment_receipt'` sin cambios — la distinción entre
-    ambos quedó explícita) — requirió otorgar `anular-pago-credito` a `cajero.test`
-    (permiso de Amortizaciones que no tenía, no relacionado a Caja). `sandbox` cerrado con 0
-    sesiones abiertas.
-  - Estado de prueba que quedó en `sandbox`: `cajero.test` con `anular-pago-credito` sumado
-    a sus permisos previos; 4 `advances`, 2 `payment_receipts` (uno anulado); ventas #31,
-    #33-36 (adelantos + 1 venta real aplicando un adelanto).
+**Panel Superadmin (gestión central de tenants) — todas las fases cerradas en su
+alcance actual (Fases 0/A/B/B.0.5/B.2/C/D/E, 2026-07-20/21):**
+Provisioning (`tenants:provision` + `TenantAdminController`), `Company`/`SunatConfig`
++ certificado por tenant, backups con restauración de fricción intencional (preview →
+backup de seguridad obligatorio → restore in-place, nunca `DROP DATABASE`), panel Vue
+propio (`central-panel/`) con listado/detalle/audit logs/alta de tenant/
+archivar-restaurar/eliminar, y verificación de emisión (`test-emission`) que valida
+Company/SunatConfig/certificado sin quemar ningún correlativo SUNAT real antes de
+habilitar producción.
+Detalle completo, fase por fase: `docs/planning/panel-superadmin/historial-archivo.md`
+y `docs/planning/panel-superadmin/plan-panel-superadmin.md` (stub con los pendientes
+reales).
+**Pendiente real:** decisión de negocio sobre si `test-emission` se vuelve gate
+obligatorio antes de `modo=produccion`, o sigue informativo; confirmar/corregir el
+`giro` real de `market.umbosystem.com`; mismatch no bloqueante de manejo de errores en
+2 vistas (`sale/index.vue`/`advances/show.vue`) que leen el shape anidado de error
+distinto al esperado en fallos de red de `enviarSunat()`.
 
-- **Pendiente (Fase 7 del plan — multi-caja simultánea)**: sin fecha de activación, espera
-  a que el negocio abra efectivamente una segunda caja simultánea en alguna sede —
-  checklist completo de qué hacer al activarla en `plan-modulo-caja.md`, sección Fase 7
-  (no requiere migraciones nuevas, el diseño ya lo soporta desde Fase 1). Deuda técnica
-  relacionada, sin bloquear ninguna fase: CRUD administrable completo de
-  `branches`/`cash_registers` (hoy solo existe listado de solo lectura, Fase 5); bug de
-  `AuthController::respondWithToken()` (permisos directos de usuario no llegan al
-  frontend, ver Fase 5); filtro de cajero en `history.vue` derivado de sesiones cargadas en
-  vez de un catálogo real de usuarios (ver Fase 5).
+**Completo — URL de API dinámica en dev + URLs de storage tenant-aware (2026-07-31):**
+Dev permite tener abierta una pestaña por tenant simultáneamente sin editar `.env` ni
+reiniciar Vite (`resolveApiBaseUrl()`, calcula la URL desde el hostname actual). Bug
+real de storage multi-tenant corregido: `public/storage` es un symlink ESTÁTICO que
+Apache sirve directo, siempre apuntando a la carpeta CENTRAL — cualquier tenant nuevo
+daba 403 en sus fotos/avatares sin importar el host de la URL ("umbo" "funcionaba"
+solo por archivos duplicados a mano desde antes del split). Resuelto con
+`tenant_asset()` + `StorageUrl::resolve()`/`resolveMuchas()` — ver regla completa en
+"Cómo trabajar en este proyecto", abajo.
+Detalle completo: `docs/planning/historial-archivo.md`.
+**Pendiente real:** `SystemCategory`/`ManualRecurso` (modelos centrales) siguen
+subiendo sus archivos al disco particionado por tenant, inconsistente con ser datos
+centrales que deberían verse igual desde cualquier tenant.
 
-**Completo — Módulo de series de comprobantes, con Nota de Venta interna (2026-07-19):**
-Diseño completo archivado en `docs/planning/retail-facturacion-core/historial-archivo.md`
-(el documento original, `plan-modulo-series-comprobantes.md`, se archivó el 20-ago-2026 —
-todo su alcance está cerrado; los pendientes reales que dejó documentados están reproducidos
-en el propio historial-archivo.md).
-- Resuelve de raíz el bug de concurrencia real de `reservarCorrelativo()` (serie nueva sin
-  fila previa → dos requests podían calcular ambos `correlativo=1`): ahora existe
-  `serie_comprobantes` (tenant, por sucursal), con fila semilla `correlativo_actual=0` creada
-  explícitamente ANTES de que exista cualquier venta, y el `lockForUpdate()` bloquea esa fila,
-  no `MAX(sales.correlativo)`. Ventas creadas ANTES de este módulo (sin
-  `serie_comprobante_id`, sin backfill) caen a un fallback que preserva el mecanismo viejo
-  intacto — nunca se tocaron datos existentes.
-- **Catálogo `tipos_comprobante`** (central, mismo criterio que `note_motivos`/
-  `detraction_codes`/`tax_configs` — catálogo legal idéntico para todos los tenants):
-  Catálogo 01 SUNAT sembrado SOLO del 00 al 14 (los códigos confirmados explícitamente) más
-  `NV` (nota de venta, interno). **Pendiente, no adivinado a propósito**: completar el
-  Catálogo 01 real del 15 en adelante (espectáculos públicos, retenciones, etc.) — se dejó
-  fuera por no tener certeza carácter por carácter de una tabla de referencia legal.
-  `activo_greenter=true` solo en `01`/`03`/`07`/`08` (únicos `setTipoDoc()` reales en
-  `GreenterService`, confirmado por grep). Invariante `activo_greenter → es_documento_sunat`
-  forzada con un CHECK real de Postgres, no solo el seeder.
-- **Nota de venta**: tipo de documento interno y terminal (no se convierte en factura/boleta
-  después) para productos/servicios sin sustento de compra — mueve stock/kardex y participa
-  del circuito de crédito igual que cualquier venta, pero **nunca** pasa por `enviarSunat()`
-  (guard por `es_documento_sunat`, no por `activo_greenter` — son campos distintos con
-  distinto propósito). Como nunca tiene un paso de "envío" posterior, reserva su correlativo
-  **de inmediato** en `SaleController::store()` (a diferencia de factura/boleta, que lo
-  siguen reservando recién en `enviarSunat()`, sin cambios — evita quemar un correlativo
-  SUNAT real en un borrador nunca enviado). Nunca setea `n_operacion` (exclusivo del envío
-  SUNAT real).
-- **Sucursal por usuario, no por venta**: `users.branch_id` (fijo, editable desde el form de
-  usuarios ya existente) determina qué series ve `register.vue`/`edit.vue`, salvo que el
-  usuario tenga el permiso nuevo `can_switch_branch` (independiente de rol, mismo criterio que
-  `cash.close_others_session` — para un cajero de confianza que cubre más de una sucursal). Con
-  una sola sucursal hoy, este mecanismo no se nota en la práctica.
-- **Permisos de emisión por tipo de documento** (`emitir_factura`/`emitir_boleta`/
-  `emitir_nota_venta`, sin entrada para `07`/`08` — esos se emiten desde
-  `NotaElectronicaController`, flujo separado que este módulo no toca): filtran qué opciones
-  ve cada usuario en el selector de tipo de documento Y se validan de nuevo en
-  `SaleController::store()` (422 si no coincide) — nunca se confía solo en que el frontend
-  filtre correctamente.
-- **Editar el tipo de documento de una venta ya creada** (`SaleController::update()`,
-  decisión explícita del usuario tras encontrar que `update()` nunca se había conectado al
-  mecanismo nuevo): permitido con las mismas reglas que `store()` **mientras la venta no
-  tenga un correlativo reservado** (`correlativo === null` — mismo momento exacto para
-  fiscales, recién en `enviarSunat()`, y para NV, inmediato en `store()`). Con correlativo ya
-  reservado, cambiar de tipo se bloquea con 422 explícito; el frontend refleja el mismo
-  candado (`:disabled` en el selector) usando `tipo_comprobante_codigo`/`correlativo`, ambos
-  agregados a `SaleResource`.
-- **Bug real encontrado y corregido antes de que causara daño** (mismo patrón que el gap de
-  `Company::$fillable` en Caja Fase 4): `Sale::$fillable` nunca incluyó
-  `tipo_comprobante_codigo`/`serie_comprobante_id` — de haberse dejado así, `Sale::create()`/
-  `update()` los habría descartado en silencio por protección de asignación masiva. Detectado
-  releyendo el modelo antes de escribir los tests, no por un test que fallara.
-- **CRUD de series** (`SerieComprobanteController`/`TipoComprobanteController`, sin gate de
-  permiso a nivel de ruta — mismo criterio, si acaso imperfecto, ya establecido por
-  `payment-methods`/`branches`): no permite editar `branch_id`/`tipo_comprobante_codigo`/
-  `moneda`/`serie` una vez que la serie tiene `correlativo_actual > 0` (rompería
-  trazabilidad) — solo activar/desactivar. Sin borrado real, mismo patrón que
-  `PaymentMethodController`. Frontend en `views/series-comprobante/index.vue`, mismo estilo
-  Bootstrap5/Rizz que el resto de catálogos de Caja.
-- **Reportes/PLE**: no existe todavía ningún reporte SUNAT/PLE construido en el sistema — se
-  dejó la regla estable para cuando se construya, como scope real y reusable
-  (`Sale::scopeSoloDocumentosFiscales()`), no solo un comentario. Nota de venta SÍ debe
-  seguir incluida en cierre de caja/kardex/listado interno — el scope es exclusivo para el
-  futuro reporte fiscal.
-- **Scope fuera de esta sesión, confirmado explícitamente con el usuario**: NC/ND (`07`/`08`)
-  siguen usando el mecanismo viejo de `note_series`/`SerieNotaResolver` — que ya anticipaba
-  en su propio comentario ("el usuario va a construir más adelante un módulo de series
-  personalizables") que este módulo nuevo terminaría reemplazándolo. No se tocó en esta
-  sesión; `tipos_comprobante` ya tiene `07`/`08` sembrados con `activo_greenter=true` para
-  cuando se aborde esa migración.
-- **Verificado con Postgres real** (`sistemafe_test_migrations`, nunca contra `sv_facturacion`/
-  `sandbox`/`umbo`): las 7 migraciones nuevas corridas, verificado rollback limpio de cada una
-  y vuelto a aplicar; 48 tests (29 nuevos de este módulo + 19 preexistentes, cero
-  regresiones) — catálogo + invariante CHECK, `SerieComprobanteService` (resolución,
-  reserva secuencial, unique constraint, lock real entre dos conexiones Postgres sobre una
-  serie NV), y `SaleController::store()` de punta a punta (permiso/sucursal, venta NV a
-  crédito con stock descontado + cronograma generado + correlativo inmediato + cero
-  `n_operacion`). `npm run type-check` sin errores nuevos en ningún archivo tocado.
-- **Gap real encontrado y cerrado el mismo día**: `AdvanceController::store()` (comprobante
-  propio de un adelanto — no la venta futura que lo consume) creaba su `Sale` completamente
-  al margen de este módulo, derivando `serie` con el mismo string hardcodeado de antes
-  (`cod_tipo_doc_sunat === '6' ? 'F001' : 'B001'`) y sin tocar `tipo_comprobante_codigo`/
-  `serie_comprobante_id` — confirmado por grep que `Sale::create()` solo se llama en dos
-  lugares de todo el proyecto (`SaleController.php` y `AdvanceController.php`), así que no
-  era un caso histórico: **todo adelanto nuevo** habría seguido cayendo en el fallback legado
-  (mismo bug de concurrencia que este módulo existe para cerrar) indefinidamente.
-  - Cerrado extrayendo la parte de resolución realmente compartida (sucursal +
-    catálogo + serie activa) a `SerieComprobanteService::resolverParaUsuario()` — el permiso
-    de emisión queda a cargo de cada llamador porque su semántica es distinta:
-    `SaleController` valida el tipo que el usuario ELIGE en un `<select>`; `AdvanceController`
-    no agrega ningún permiso nuevo (decisión explícita de alcance) porque el tipo se DERIVA
-    del cliente, exactamente igual que antes (`cod_tipo_doc_sunat === '6'` → factura, si no →
-    boleta — misma condición, verificada carácter por carácter, solo cambia de producir un
-    string de serie hardcodeado a resolver contra el catálogo real).
-  - Guard explícito y defensivo en `AdvanceController::resolverSerieComprobanteAdelanto()`:
-    un adelanto nunca puede resolver a un tipo no fiscal (`es_documento_sunat=false`) — el
-    IGV ya nació al recibirse el pago. Estructuralmente inalcanzable hoy (la derivación solo
-    produce `'01'`/`'03'`), pero protege contra un cambio futuro que lo permita por
-    accidente.
-  - **Bug real del propio refactor, encontrado por el test antes de mergear**: el nuevo
-    camino de `FacturacionElectronicaController::reservarCorrelativo()` (cuando
-    `serie_comprobante_id` está poblado) devolvía el correlativo ya incrementado en
-    `serie_comprobantes.correlativo_actual` pero nunca lo escribía de vuelta en
-    `sales.correlativo` — a diferencia del camino legado, que sí lo hacía. Como
-    `enviarSunat()` nunca vuelve a tocar `correlativo` en su propio `$venta->update()` de
-    éxito (confía en que `reservarCorrelativo()` ya lo dejó puesto — diseño original), esto
-    habría dejado `sales.correlativo` en `NULL` para siempre en cualquier venta fiscal real
-    enviada a SUNAT bajo el mecanismo nuevo, con `n_operacion` bien seteado (ese sí se arma
-    desde la variable local, no desde la columna) — una corrupción silenciosa de datos que
-    ningún flujo manual habría notado de inmediato. Corregido antes de tocar ningún tenant
-    real: el test de adelanto (`test_correlativo_del_adelanto_se_reserva_via_servicio_nuevo_no_fallback`)
-    lo detectó en la primera corrida.
-  - 4 tests nuevos (`AdvanceControllerSerieComprobanteTest`): adelanto RUC → factura con
-    `serie_comprobante_id` poblado y `correlativo` null (fiscal, diferido); adelanto no-RUC →
-    boleta; `reservarCorrelativo()` real sobre la venta del adelanto confirma que usa el
-    mecanismo nuevo (no el fallback); lock real de dos conexiones sobre la serie que usaría
-    un adelanto, mismo patrón que los otros dos lock tests del módulo. 52/52 tests verdes en
-    total, test DB confirmada limpia (0 filas) al final.
+**Completo — spinners de carga, editor de texto enriquecido y cache de preflight CORS
+(2026-08-10/11):**
+Spinners en toda acción async de `paquetes/detalle.vue`/`cotizador/editar.vue` que no
+los tenía. `RichTextEditor.vue` (Quill) reemplaza `<textarea>` en descripciones de
+paquetes/destinos. `config/cors.php` publicado con `max_age=3600` — antes el
+navegador repetía el preflight OPTIONS en cada request real, duplicando round-trips
+en TODAS las pantallas.
+Detalle completo: `docs/planning/historial-archivo.md`.
+**Hallazgo de rendimiento en dev, diagnosticado y no resuelto (no bloquea nada,
+dev-only):** abrir un paquete/tour tarda 2.8-3s — causa dominante es `php artisan
+serve` sin workers atendiendo una sola request a la vez, no el N+1 conocido de
+`ComboExplosionService` (secundario, ~180ms).
 
-**Panel Superadmin (gestión central de tenants) — Fases 0/A/B/C completas, Fase D con scaffold
-inicial (Paso 0), Fase E cerrada en su alcance actual (2026-07-20/21):**
-- Diseño completo en `plan-panel-superadmin.md` (raíz del repo) — panel separado del panel de
-  cada tenant (`admin-start-kit`), guard `central` propio, conexión `central`
-  (`db_tenant_central`) consolidada en Fase B.0.5 junto con `tenants`/`domains`/catálogos
-  SUNAT (`sv_facturacion` ya no cumple ningún rol de infraestructura, solo conserva datos
-  históricos del negocio original pre-multitenant).
-- **Fase 0/A**: provisioning (`tenants:provision` CLI + `TenantAdminController` HTTP, ambos
-  sobre `TenantProvisioningService` compartido) crea Tenant/Domain/roles/usuario admin.
-  **`Company`/`SunatConfig` quedan como 2 pasos manuales aparte a propósito** (Fase B.3), sin
-  ningún checklist que los fuerce — origen del hallazgo de Fase E, Paso 0 (ver abajo).
-- **Fase B.1/B.2/B.3**: `Company`/`SunatConfig`+certificado por tenant
-  (`TenantSunatController`). **B.2 (Suscripciones y pagos)**: B.2.1-B.2.5 completas
-  (migraciones, middleware de suspensión, invoices mensuales, pipeline de mora
-  `tenants:check-overdue-payments`, gestión manual de pagos/vouchers); B.2.6 pospuesta
-  (depende de una pantalla de detalle de tenant que no existe todavía, ver Fase D).
-- **Fase C (Backups) — CERRADA**: backup manual + automático (`pg_dump -Fc`), restauración
-  con fricción intencional (preview con token expirable → backup de seguridad obligatorio →
-  restore in-place, nunca `DROP DATABASE`), verificación de integridad automática
-  (`pg_restore --list`) + bajo demanda. Atomicidad probada contra Postgres real (fallo SQL a
-  mitad de restore, `kill -9` del proceso).
-- **Fase D (UI del panel) — Pasos 0-5 cerrados 2026-07-21**: proyecto Vue propio en
-  `central-panel/` (hermano de `api-sistema-fe/`/`admin-start-kit/`, sin reusar el template
-  Rizz) — Vite+Vue3+TS, Bootstrap 5 vanilla, Vue Router, Pinia, Axios, cero imports cruzados
-  con `admin-start-kit`. Login real (`POST central/auth/login`), listado real de tenants
-  (`GET central/tenants`), y **vista de detalle completa** (6 tabs: Company/Suscripción/
-  Backups/SunatConfig/Certificado/Test-emission). Hallazgo que simplificó el diseño inicial:
-  `Route::prefix('central')` (routes/api.php) no lleva middleware `tenant`, así que el
-  hostname usado para llegar a `/api/central/*` es irrelevante para `stancl/tenancy` — no
-  hizo falta ningún hostname dedicado ni cambio de `config/cors.php` (default
-  `allowed_origins: ['*']`). **Hallazgo real del listado (Paso 1)**: existen 4 tenants, no
-  2 — `sandbox`/`umbo` (los ya conocidos) más `negocio2` (activo) y `umbo-archivado`
-  (archivado, remanente de la migración de Umbo). **2 gaps de backend cerrados al construir
-  la vista de detalle (Paso 2)**, ambos aditivos/solo-lectura: `GET tenants/{id}/company`
-  (no existía, solo el `POST` upsert) y eager-load de `vouchers` en
-  `TenantSubscriptionController::show()` (la relación existía en el modelo, nunca se
-  cargaba) — el segundo verificado con un ciclo de escritura completo (subir + verificar un
-  voucher real) contra `sandbox`, que de paso quedó con un invoice real marcado `pagado`.
-  **Paso 3 (vista global de Audit Logs)**: `CentralAuditLogController` nuevo (antes no
-  existía ningún endpoint de auditoría) + `views/AuditLogsView.vue` con filtros por
-  tenant/acción — 25 acciones reales confirmadas por grep de
-  `$this->auditLogger->log(` en toda la app (más de las que ya se conocían). Filtro de
-  tenant resuelto en el frontend (`auditable_type=App\Models\Tenant`+`auditable_id`, sin
-  parámetro nuevo de backend) — limitación conocida: no cubre logs de sub-recursos
-  (backup/invoice/restore/subscription), que no tienen `tenant_id` propio en
-  `central_audit_logs`. **Paso 4 (alta de tenant por UI)**: gap señalado por el usuario —
-  `POST central/tenants` existía desde Fase A pero nunca tuvo formulario (los 4 tenants
-  reales de hoy se crearon todos por CLI/tinker). Cero cambios de backend; formulario
-  inline en `TenantListView.vue`, verificado creando y destruyendo un tenant descartable
-  real (`total` de `GET tenants` pasó de 4→5→4). **Paso 5**: a pedido del usuario, probado
-  de punta a punta por primera vez el flujo completo crear→Company→SunatConfig→
-  certificado→test-emission (10 llamadas encadenadas sobre el mismo tenant, incluido un
-  `.pfx` autofirmado real y el gate de producción) — y agregados botones
-  Archivar/Restaurar (wrappean los comandos CLI `tenants:archive`/`tenants:restore`,
-  nunca tocan la base física — política "archivado, no borrado" por retención legal
-  SUNAT) + Eliminar, deliberadamente estrecho (solo si el tenant nunca tuvo Company/
-  SunatConfig/clientes/productos/ventas). **Bug real encontrado probando el propio
-  método**: todo tenant nuevo trae 1 producto placeholder sembrado por migración
-  (`ADELANTO-001`, módulo Adelantos) — sin excluirlo por SKU, el chequeo de "vacío"
-  bloqueaba el borrado de cualquier tenant, siempre. Fase D queda cerrada en su alcance
-  actual; falta decidir si `test-emission` se vuelve gate obligatorio (pregunta abierta de
-  Fase E).
-- **Fase E (verificación de emisión antes de habilitar producción) — cerrada en su alcance
-  actual, Pasos 0/1/2 (2026-07-20/21)**:
-  - **Paso 0 (auditoría)**: confirmó con evidencia real (no hipotética) que los 2 únicos
-    tenants existentes hoy (`sandbox` y `umbo` — el negocio real) emiten con el certificado
-    demo público de Greenter (`certificado_path=null` en ambos). Encontró además que
-    `FacturacionElectronicaController::enviarSunat()` quemaba un correlativo real de SUNAT
-    aunque faltara `Company` o `SunatConfig` activo, y que el catch que envolvía ese flujo
-    siempre devolvía HTTP 200 aunque el error fuera un 422 real (getSee()), ocultándolo del
-    código de estado real de la respuesta.
-  - **Paso 1**: `Company`/`SunatConfig`+certificado ahora se validan ANTES de
-    `reservarCorrelativo()` (antes: se quemaba el correlativo igual). El código HTTP real
-    (422/500 según corresponda) ahora llega hasta la respuesta. El gate de
-    `modo=produccion` sin certificado propio ya existía en
-    `GreenterService::resolveCertificado()` sin cambios de código — solo dejó de quedar
-    atrapado en el catch que lo convertía en 200.
-  - **Paso 2**: `POST tenants/{id}/test-emission` (panel central, botón informativo) —
-    confirma Company/SunatConfig/certificado sin reservar ningún correlativo ni tocar SUNAT,
-    auditado siempre (éxito y fallo) en `central_audit_logs`. Conectividad de red real contra
-    el WSDL de SUNAT (punto 4 del diseño original) investigada y descartada a propósito:
-    Greenter expone una consulta real (`ConsultCdrService::getStatus()`), pero la librería
-    solo trae la URL de ese servicio para producción (sin equivalente beta, el único modo
-    real hoy) y una mala interpretación de su respuesta arriesgaba un falso positivo/negativo
-    en una herramienta que un superadmin usaría como fuente de verdad — documentado como
-    límite conocido, no implementado.
-  - **Hallazgo downstream señalado, no corregido (no bloqueante)**: 2 vistas del frontend
-    POS/admin (`sale/index.vue`, `advances/show.vue`) leen el mensaje de error plano
-    (`error.response.data.message`) en su `catch` — funciona bien para los 3 guards nuevos,
-    pero el catch de `getInvoice()`/`$see->send()` ahora puede traer un código no-200 con el
-    mensaje anidado (`response.error.message`), perdiendo el detalle específico solo para ese
-    caso puntual (fallos de red/construcción del comprobante, no el rechazo normal de SUNAT
-    por regla de negocio, que sigue devolviendo 200 sin cambios). Pendiente para una sesión
-    futura.
-  - 34/34 tests verdes (`EnviarSunatValidacionPreCorrelativoTest`,
-    `VerificarListoParaEmitirTest`, más los preexistentes de la misma cadena sin regresión),
-    más verificación end-to-end real vía `tinker` contra un tenant descartable provisionado y
-    destruido en la misma sesión (`central_audit_logs` confirmado con las 4 filas exactas,
-    sin rastro sintético permanente).
-  - **Pendiente, sin decidir**: ¿el endpoint `test-emission` se vuelve gate obligatorio antes
-    de permitir `modo=produccion`, o sigue siendo solo informativo/opcional? Requiere decisión
-    de negocio, no solo técnica.
-- Ver `docs/planning/panel-superadmin/historial-archivo.md` para el detalle completo fase por
-  fase (`plan-panel-superadmin.md`, el documento original, se archivó el 20-ago-2026 — quedó
-  como stub corto con solo los pendientes reales; incluye hallazgos y
-  bugs reales corregidos en el camino, ej. `Company::$fillable`/permisos de crédito no
-  migrados, `CentralUser` sin `Authenticatable`, Carbon 3 `diffInDays()`).
+**Backfill comprimido + ítem manual flexible + mover/fusionar servicio entre destinos
+(30-jul a 12-ago-2026):**
+~23 commits del vertical Agencia de Viajes (cambio arquitectónico de hoteles a
+`proveedor_tarifa`, precio por pasajero real, primer `CotizacionController::destroy()`,
+ítem manual con costo/cantidad reales + "promover a proveedor", corrección de
+asociación destino↔servicio mal hecha sin perder tarifas ya enganchadas).
+Detalle completo: `docs/planning/agencia-de-viajes/historial-archivo.md` y
+`plan-hoja-de-ruta-ejecucion.md` §3.
 
-**Completo — URL de API dinámica en dev, multi-tenant simultáneo (2026-07-31, rama
-`feature/frontend-api-url-dinamica-dev`, mergeada a `main` en `399f3c5`):**
-- Fricción de desarrollo real: `VITE_API_BASE_URL` era un valor fijo en
-  `admin-start-kit/.env`, así que solo se podía probar UN tenant a la vez en dev — cambiar
-  de tenant exigía editar `.env` y reiniciar Vite.
-- `admin-start-kit/src/helpers/apiBaseUrl.ts::resolveApiBaseUrl()` (nuevo): en dev calcula
-  la URL de la API en el momento a partir del hostname actual
-  (`protocol//hostname:VITE_API_DEV_PORT/api`, puerto configurable, default 8000); en
-  producción sigue devolviendo `VITE_API_BASE_URL` fijo desde `.env`, sin cambios. Conectado
-  en los dos clientes HTTP existentes (`http-client.ts`/`publicHttpClient.ts` — únicos dos
-  usos de `VITE_API_BASE_URL` confirmados por grep en todo `src/`).
-- **Verificado con evidencia real** (Playwright, dos pestañas simultáneas contra el mismo
-  `npm run dev`, sin reiniciar ni tocar `.env`): pestaña `umbo.sistemafe.test:5173` hizo
-  login real contra `umbo.sistemafe.test:8000` (200, redirigió al dashboard) mientras la
-  pestaña `agencia-demo.sistemafe.test:5173`, abierta al mismo tiempo, pegó contra
-  `agencia-demo.sistemafe.test:8000` (401 con esas credenciales — tenant distinto, resultado
-  distinto, confirma que no se pisan).
-- Mismo commit incluye `chore(frontend): quita el prefijo /rizz_v/ del base path` — la app
-  ahora sirve directo en raíz (`vite.config.ts` `base: "/"`, antes `/rizz_v/`), confirmado
-  sin ninguna referencia hardcodeada al prefijo viejo restante en `src`/`public`.
+**Completo — Facturación de reservas, de punta a punta (filas 11u/11v/11w de la hoja
+de ruta de Agencia de Viajes, 2026-08-19/20):**
+Cierra el gap de que una reserva aceptada no tenía forma de generar una venta real:
+`ReservaFacturacionController::store()` arma Sale/SaleDetail/SaleDetailItem/
+ReservaVenta reales (líneas agrupadas por categoría, solo contado, guard
+anti-doble-facturación por ítem/pasajero). Guardia tributario (`GET reservas/{id}/
+preparar-factura` + validación real en `store()`) bloquea facturar ítems con
+tratamiento tributario mezclado en un mismo comprobante. Facturación múltiple: N
+`Sale` por reserva, uno por subgrupo de pasajeros/cliente. Split en dos botones,
+"Facturar" (simple) vs. "Facturación especial" (selección manual, mismo backend).
+Facturación externa por tenant (11w): `tenants.facturacion_habilitada` +
+`reserva.facturacion_externa` para tenants que facturan con otro sistema aparte.
+Quitar ítems/pasajeros de una reserva ya aceptada (bloqueado si ya facturado).
+Detalle completo, fase por fase: `docs/planning/agencia-de-viajes/
+plan-hoja-de-ruta-ejecucion.md` §3 (entradas 19/20-ago-2026) y
+`docs/planning/agencia-de-viajes/historial-archivo.md`.
+**Pendientes reales, documentados sin resolver:** reglas tributarias de la venta
+generada son una simplificación conocida (IGV 18%/`destino='nacional'` fijo por
+producto placeholder, no por proveedor/destino real de cada ítem); reparto de un ítem
+`tarifa_fija` compartido entre pasajeros que terminan en Sales distintos no tiene
+ningún mecanismo; bloqueos inconsistentes entre `ReservaItemController`/
+`ReservaPasajeroController::destroy()`, sin guard "mínimo 1 ítem", condición de
+carrera sin `lockForUpdate()`, `SalidaOperativa` huérfana tras quitar su último ítem —
+todo documentado, queda para una sesión futura dedicada a esos dos controllers.
 
-**Completo — URLs de storage tenant-aware (2026-07-31, rama
-`fix/infra-storage-urls-tenant-aware`, sin mergear todavía):**
-- Bug real confirmado con evidencia (imagen de un producto del tenant "umbo" mostrando URL
-  del tenant "agencia-demo"): `env('APP_URL')` fijo en 6 puntos del backend
-  (`AuthController`/avatar, `Portal/ProductController`/`ProductResource`/`CategorieController`
-  /imagen, `UserResource`/avatar) armaba URLs con el host de doNde sea que `.env` apuntara en
-  ese momento, no el del tenant que pedía. `App\Services\StorageUrl::resolve()`/
-  `resolveMuchas()` (nuevo) centraliza esto — ver regla completa en "Cómo trabajar en este
-  proyecto", arriba.
-- **`SystemCategoryController` deliberadamente excluido** — `SystemCategory` es central
-  (`CentralConnection`, catálogo/marketplace del SaaS), no corresponde resolverlo por tenant.
-- **Hallazgo más profundo, encontrado recién al verificar con navegador real (no solo
-  lectura de código)**: arreglar el host de la URL no bastaba. `public/storage` es un
-  symlink ESTÁTICO que Apache sirve directo (sin pasar por Laravel), siempre apuntando a la
-  carpeta CENTRAL (`storage/app/public`) — nunca a `storage/tenant{slug}/app/public/...`,
-  donde vive de verdad el archivo de cualquier tenant creado después del split a
-  multi-tenancy. Confirmado con evidencia real (403 en Apache real puerto 80, no solo
-  `php artisan serve`): **"umbo" (tenant original, pre-multitenant) "funcionaba" solo
-  porque sus archivos quedaron duplicados a mano en ambas carpetas** — cualquier tenant
-  nuevo (`agencia-demo` confirmado con un caso real, fotos de `destinos_atractivo` id=5) da
-  403 sin importar qué host tenga la URL.
-- Resuelto usando `tenant_asset()` (helper de `stancl/tenancy`, ruta
-  `/tenancy/assets/{path}`) en vez de un endpoint propio — ya estaba habilitado
-  (`asset_helper_tenancy`/`routes` en `true`) pero nunca usado. Necesitó un fix adicional:
-  el paquete registra esa ruta con `InitializeTenancyByDomain` hardcodeado, pero este
-  proyecto identifica tenants por SUBDOMINIO — sin
-  `TenancyServiceProvider::configureTenantAssetsMiddleware()` (nuevo, fuerza
-  `InitializeTenancyBySubdomain`), la ruta tiraba 500
-  (`TenantCouldNotBeIdentifiedOnDomainException`) para cualquier tenant.
-- `destinos_atractivos`/`paquetes_plantilla` (fotos, array): `resolveMuchas()` aplicado en
-  index/store/update/show de ambos controllers. `DestinoAtractivoController::eliminarFoto()`/
-  `ordenarFotos()` necesitaron además `StorageUrl::relativo()` (inverso) — el frontend ahora
-  recibe URLs ya resueltas y las reenvía tal cual al eliminar/reordenar, pero esos dos
-  endpoints comparan contra paths relativos guardados en BD.
-  `destinos/form.vue` perdió su `urlFoto()` local (reconstruía con `VITE_STORAGE_URL` a
-  mano); `portal/Producto.vue` perdió una reconstrucción ya muerta (el backend siempre
-  manda la URL resuelta). `recursos/*.vue` (central, `ManualRecurso`) y `sale/index.vue`
-  (XML/CDR SUNAT) se dejaron sin tocar — usos legítimamente distintos, confirmados uno por
-  uno antes de descartarlos.
-- Borrado `AuthController copy.php` (duplicado muerto, mismo nombre de clase que
-  `AuthController.php`, no autoloadeable, sin referencias).
-- **Verificado con navegador real** (Playwright): producto de `umbo` y fotos de
-  `destinos_atractivo` de `agencia-demo` cargan con `naturalWidth`/`naturalHeight` reales
-  (no ícono roto), cada uno con el host de su propio tenant; aislamiento cruzado confirmado
-  (pedir el archivo de un tenant vía el host de otro da 404). Test nuevo `StorageUrlTest.php`
-  (6 casos, dos hosts simulados en la misma corrida) + `DestinoAtractivoFotosTest.php`
-  actualizado (un caso asumía paths relativos en la respuesta JSON, ahora son URLs
-  resueltas). 92/92 tests verdes en total, sin regresión.
-- **Pendiente, mismo hallazgo pero otra cara, documentado sin resolver**: los archivos de
-  `SystemCategory`/`ManualRecurso` (central) se suben hoy al disco `public` *suffijado por
-  tenant* (`Storage::putFile()` sin disco central dedicado) — quedan aislados en la
-  partición del tenant activo al momento de subir, inconsistente con ser datos centrales que
-  deberían verse igual desde cualquier tenant. Evaluar en sesión dedicada.
+**Completo — Módulo Adelantos: gaps de integridad, conexión con Reservas, selector
+fiscal y corrección post-SUNAT (2026-08-24):**
+Auditoría propia sobre el módulo construido 2026-07-11/12 — Tier 0 conecta
+`reserva_anticipos` (schema puente inerte desde antes) con un controller real y con
+`ReservaFacturacionController`; Tier 1 agrega integridad (moneda, locks, permisos) y
+un selector de tratamiento tributario que ya no fuerza gravado 18% siempre (resuelve
+el hallazgo Amazonía que había quedado pendiente desde la construcción original);
+Tier 2 agrega corrección post-SUNAT vía NC motivo 01, preservando el mismo
+`Advance.id`; Tier 3 rediseña las 3 pantallas. 226/226 tests backend en verde.
+Detalle completo: `docs/planning/retail-facturacion-core/historial-archivo.md` y
+`project_advances_module` en memoria de proyecto (mecánica SUNAT no obvia del bloque
+`PrepaidPayment`).
+**Pendiente real:** validar contra SUNAT Beta un comprobante de adelanto exonerado/
+inafecto y una corrección real vía NC motivo 01 (requiere credenciales de tenant
+real). Retail (fuera de Agencia de Viajes) sigue sin un mecanismo estructurado de
+"adelanto → venta futura" como `reserva_anticipos` — descartado de alcance, no
+reconfirmado con el usuario si hace falta.
 
-**Nota de mantenimiento de este documento (2026-08-11, backfill parcial 2026-08-12):**
-entre la entrada de "URLs de storage tenant-aware" (2026-07-31) y la de "cachear el
-preflight OPTIONS" (2026-08-10/11) se habían mergeado a `main` ~20 sesiones más del
-vertical Agencia de Viajes (11h a 11o, más una docena de fixes puntuales — drawer,
-márgenes, borrado de cotización, slug de proveedor, etc.) sin documentar acá ni en
-`docs/planning/agencia-de-viajes/plan-hoja-de-ruta-ejecucion.md`. **Backfill
-comprimido cerrado el 2026-08-12** (a pedido del usuario, antes de borrar varias
-sesiones antiguas de Claude Code): las filas 11h/11i/11j/11k/11l v2/11m/11n/11o/11q
-más los ~14 fixes puntuales quedaron catalogados con detalle comprimido (no al
-nivel narrativo del resto de este documento) en la sección de historial de
-`plan-hoja-de-ruta-ejecucion.md`, entrada del 12-ago-2026 — reconstruido desde
-`git log`, no desde la conversación original de cada sesión. Ninguna de esas ~23
-entradas fue re-verificada contra un tenant real en el backfill. Si hace falta el
-detalle narrativo completo de alguna sesión puntual de esa ventana, no está — solo
-el resumen comprimido.
-
-**Completo — spinners de carga + editor de texto enriquecido (2026-08-10, rama
-`feature/spinners-y-editor-enriquecido`, mergeada a `main` en `6eaf3c7`):**
-- Spinners: carga inicial (con manejo de error — nunca queda pegado si la carga
-  falla, `cargandoPagina` + `try/catch/finally`) y todos los botones de acción
-  async que no lo tenían todavía, en `paquetes/detalle.vue` (9 acciones: activar/
-  desactivar, duplicar, agregar/editar/quitar paso de itinerario, agregar/quitar
-  ítem, agregar/quitar hotel) y `cotizador/editar.vue` (9 acciones: crear/eliminar
-  alternativa, marcar aceptada, eliminar bloque/ítem, elegir fila de biblioteca,
-  confirmar modo de precio, elegir/guardar opción mayorista, guardar hotel) — mismo
-  patrón `spinner-border` ya establecido en el proyecto (`destinos/index.vue`).
-  Handlers de `@change`/drag-drop y los que viven dentro de componentes hijos
-  compartidos (`HabitacionMatrixPicker.vue`) quedaron fuera a propósito.
-- Editor enriquecido: `RichTextEditor.vue` nuevo (`admin-start-kit/src/components/`,
-  wrapper de `@vueup/vue-quill` — ya estaba instalado, cero uso hasta esta sesión;
-  toolbar acotada a títulos/negrita/cursiva/subrayado/listas) reemplaza los
-  `<textarea>` de `descripcion`/`no_incluye`/`recomendaciones` en `paquetes/form.vue`
-  y `descripcion` en `destinos/form.vue`. Único lugar de solo-lectura que mostraba
-  estos 4 campos (`paquetes/detalle.vue`, tab Datos) pasado a `v-html` — comentario
-  `TODO Sesión 11k` dejado en el código para cuando ese tab pase a editable in-situ.
-  Grep exhaustivo confirmó que no hay otro sitio en el proyecto mostrando estos
-  campos — nada quedó roto en silencio.
-- Verificado con Playwright real (bloqueado al principio por un lock del MCP de
-  Playwright que se liberó solo más tarde en la sesión — nunca hubo que reiniciar
-  nada a mano): spinner de página visible mientras carga, formato del editor
-  (negrita/lista) persistiendo tras recargar tanto en el form como en la vista de
-  detalle. Type-check del proyecto completo en 0 errores nuevos (45 antes y
-  después — los 2 preexistentes, en `paquetes/form.vue` y `cotizador/editar.vue`,
-  confirmados ya rotos en `main` desde antes de esta sesión).
-- **Hallazgo real, no bug de esta sesión — diagnosticado a fondo, sin resolver
-  (mismo hilo de conversación, después del merge)**: abrir un paquete/tour
-  (cualquiera, no solo combos) tarda 2.8-3s en dev. Medido con Network Timing +
-  CDP real, no asumido:
-  - El N+1 conocido de `ComboExplosionService` (`totalesCombo()`/
-    `itinerarioDerivado()`/`toursDelCombo()` no comparten datos entre sí, cada
-    tour incluido dispara ~4 queries propias) es real pero **secundario** — solo
-    ~180ms de diferencia entre un combo de 3 tours y un tour simple.
-  - La causa dominante: `php artisan serve` (servidor built-in de PHP, sin
-    `--workers` en esta versión de Laravel) atiende **una sola request a la
-    vez** — confirmado con 6 requests en paralelo real vs. secuencial dando el
-    mismo tiempo total (~2.6-2.7s), en escalera perfecta de ~400-450ms cada una.
-    `detalle.vue` dispara 6-9 requests casi simultáneas al montar → se encolan.
-    No hace falta resolverlo hoy (dev-only), pero cualquier sesión futura que
-    toque el rendimiento de esta pantalla debe partir de acá, no de la hipótesis
-    del N+1.
-  - `CACHE_STORE=database` (Spatie Permission, 24h) — descartado como causa:
-    medido con query log real (con y sin `Gate::before` de Super-Admin, A/B
-    `database` vs `file`), el costo real es ~0.2-0.3ms por request (Laravel
-    `remember()` no re-consulta si el valor ya está en caché). Sin impacto medible.
-  - Xdebug confirmado apagado (no cargado como extensión). Antivirus sin verificar
-    (permisos insuficientes en esta sesión).
-
-**Completo — cachear el preflight OPTIONS de CORS (2026-08-10/11, rama
-`fix/cors-preflight-cache`, mergeada a `main` en `7bf1810`):** el proyecto nunca
-tuvo `config/cors.php` propio — Laravel 11+ mergeaba en caliente el default del
-framework (`allowed_origins`/`methods`/`headers` en `'*'`, confirmado con
-`config('cors')` antes del cambio, valores idénticos a los que quedaron), pero ese
-default trae `max_age=0`: el navegador nunca cacheaba el preflight y volvía a
-preguntar en cada request real, duplicando los round-trips de red en TODAS las
-pantallas (no solo agencia-viajes). Se publicó el archivo (`php artisan
-config:publish cors`) con los mismos valores efectivos + `max_age=3600` (1h,
-piso de dev — evaluar 86400 en producción más adelante). Verificado con CDP real
-(no con el `page.on('request')` de Playwright, que filtra preflights por diseño):
-con `max_age=0`, 10 preflights tanto en la primera carga como en un F5 posterior;
-con `max_age=3600`, 10 en la primera carga (caché vacía, esperado) y **0** en el
-F5. Sin errores de consola nuevos, 103/103 tests de backend en verde.
-
-**Backfill comprimido, sesiones 11h-11o/11q + fixes puntuales del cotizador
-(30-jul a 12-ago-2026) — detalle completo en `docs/planning/agencia-de-viajes/
-plan-hoja-de-ruta-ejecucion.md`, entrada de historial 12-ago-2026:** ~23
-commits/merges a `main` sobre el cotizador y catálogos del vertical Agencia de
-Viajes, documentados solo a nivel comprimido (reconstruido desde `git log`, sin
-re-verificar contra un tenant real). Lo más relevante para sesiones futuras:
-- **`68414a1` — cambio arquitectónico**: hoteles dejan de vivir en tabla propia
-  (`opciones_hotel`/`opciones_hotel_tarifas`, atada a un `paquete_plantilla`
-  puntual) y pasan a ser una `proveedor_tarifa` más — buscable/usable en
-  cualquier cotización, sin tab propia en combo/tour.
-- `0673d17` (Sesión 11o) — precio por pasajero real: servicios
-  `modalidad='compartido'` cargados desde plantilla ahora multiplican por los
-  pasajeros reales de la cotización, no una tarifa plana de 1 adulto.
-- `df7406d` — primer `CotizacionController::destroy()` (antes el header de una
-  cotización quedaba huérfano para siempre, sin forma de limpiarlo).
-- Resto (11h/11i/11j/11k/11l v2/11m/11n + ~11 fixes de UX/slug/timezone/
-  duplicados): ver la tabla y el historial de `plan-hoja-de-ruta-ejecucion.md`.
-
-**Completo — ítem manual flexible + promover a proveedor (Sesión 11q,
-2026-08-12, rama `feature/sesion-11q-item-manual-flexible`, mergeada a `main`
-en `863e6d2`):** `costo_snapshot`/`cantidad` de un `alternativa_item`
-`origen_tipo=manual` dejan de ser sentinels sin efecto — costo ahora es real y
-obligatorio, cantidad multiplica el total igual que el resto de orígenes, y
-`pax_incluidos` se propaga a `reserva_item_pasajero` al aceptar la cotización
-(tabla existía desde Sesión 8a pero nunca se llenaba). Agrega "promover a
-proveedor real" (crea `Proveedor`+`ProveedorServicio`+`ProveedorTarifa` a partir
-de un ítem manual, sin relink retroactivo — la cotización actual no se mueve) y
-edición estructural completa del ítem manual, separada de la edición de precio
-en vivo que ya existía. Un commit de seguimiento (`cf3e987`) corrigió 3
-hallazgos de la verificación en vivo, mismo día.
-
-**Completo — mover/fusionar servicio entre destinos + fix paginación catálogo
-de servicios (2026-08-12, rama `fix/destino-servicio-mover-y-catalogo-servicios`,
-mergeada a `main` en `62f8b69`):** cierra un gap real del módulo "Destinos y
-Atractivos" (Sesión 3, `destino_servicio`) — cuando un servicio se asoció al
-destino equivocado y ya tiene `proveedor_servicios`/tarifas reales enganchados,
-el botón de desasociar queda bloqueado correctamente por integridad, pero no
-había forma de CORREGIR la asociación, solo de borrarla (bloqueada) o dejarla
-mal.
-- `DestinoServicioController::mover()`: reasigna `destino_atractivo_id` sin
-  tocar proveedores/tarifas. Si el destino elegido ya tiene una fila del mismo
-  servicio, bloquea con 422 (nunca crea un duplicado) e incluye
-  `destino_servicio_existente_id` en la respuesta.
-- `DestinoServicioController::fusionar()` (sesión de seguimiento, mismo día):
-  para cuando `mover()` choca con ese duplicado — reasigna los
-  `proveedor_servicios` de la fila origen a la fila destino ya existente y
-  borra la fila origen. Si el mismo proveedor está enganchado a ambas filas a
-  la vez, no fusiona nada y nombra al proveedor conflictivo (nunca un fallback
-  silencioso) — lo resuelve una persona a mano. Frontend: al chocar con el
-  duplicado, ofrece fusionar vía diálogo de confirmación en vez de solo
-  mostrar el error.
-- `destroy()` ahora informa cuántos proveedores bloquean el borrado y sugiere
-  "Mover a otro destino" como alternativa.
-- `ServicioController::index()` acepta `per_page` — antes truncaba siempre a
-  15 en el selector del modal "Servicios de {destino}", escondiendo el resto
-  del catálogo y empujando a crear servicios duplicados por alta rápida.
-- Verificado en vivo con Playwright contra `agencia-demo`, usando usuarios de
-  prueba descartables creados y borrados en la propia sesión — **sin resetear
-  la password de `admin@agencia-demo.test`** (ver
-  [[feedback_no_resetear_passwords_sin_verificar]] en memoria, esa cuenta ya
-  se había reseteado sin verificar dos veces antes en sesiones previas).
-
-**Completo — Facturación de reservas + 3 fixes del proceso de reserva
-(2026-08-19/20):** review pedido por el usuario del proceso de reserva
-completo encontró 1 gap grande no documentado y 2 bugs de UI reales, más
-un cuarto punto (quitar ítems/pasajeros) — implementados en ese orden
-(1→2→3→4), con plan formal (`EnterPlanMode`) para el punto 1 por su
-tamaño y por tocar código fiscal-adyacente.
-- **Fase A — generar una venta real desde una reserva.** Hasta ahora,
-  `reserva_ventas`/`sale_detail_items` (tablas puente diseñadas desde
-  Sesión 8a/9b, `plan-modulo-cotizaciones-reservas.md` §4.3/§4.4) existían
-  como schema sin ningún controller que las usara — `ReservaVenta` solo se
-  leía como guard en `cancelar()`, y `VentaDirectaController` (pese al
-  nombre) nunca creaba un `Sale` real. Una agencia no tenía forma de
-  facturar un viaje a través del sistema. Cerrado con
-  `ReservaFacturacionController::store()`
-  (`POST reservas/{id}/facturar`), que arma un `Sale`/`SaleDetail[]`/
-  `SaleDetailItem[]`/`ReservaVenta` reales dentro de una transacción,
-  siguiendo de cerca el único otro precedente del proyecto de armar un
-  `Sale` a mano fuera del formulario normal
-  (`AdvanceController::store()` — `sale_details.product_id` es `NOT NULL`
-  con FK real, no existe forma de vender una línea sin producto de
-  catálogo detrás).
-  - **Alcance de esta fase, decisiones confirmadas explícitamente con el
-    usuario antes de programar** (`AskUserQuestion`, 3 preguntas): la
-    venta nace **pendiente de cobro** (`state_payment=1`, `debt=total`,
-    `paid_out=0`, `saldo_pendiente=total` — cobrar es el flujo normal ya
-    existente, Cuentas por Cobrar/editar venta; esta fase no toca Caja en
-    absoluto); **solo contado**, crédito/cuotas queda para una fase
-    futura aparte (mismo patrón de fases separadas que el fix de fechas
-    Cotización↔Reserva); **líneas agrupadas por categoría** (máx. 5:
-    hotel/transporte/tour/vuelo/otros, no 1 línea por `reserva_item`) —
-    reusa los 5 productos placeholder ya sembrados por
-    `ProductoGenericoViajeSeeder` (Sesión 9a, existía desde hace semanas
-    sin conectar a nada, **no estaba sembrado en `agencia-demo`**, se
-    corrió recién en esta sesión). Solo "Camino 2" del plan (documento
-    adicional/primera factura) — "Camino 1" (reemplazar con Nota de
-    Crédito cuando ya existe una venta previa de la reserva) es la fase
-    futura de "editar una reserva ya facturada", fuera de acá.
-  - **Clasificación por categoría**: heurística best-effort (documentada
-    como tal, no una regla de negocio exacta) — `tipo_habitacion`
-    presente → HOTEL; `origen_tipo=pasaje_aereo` → VUELO; nombre del
-    servicio contiene "transporte"/"traslado" → TRANSPORTE; contiene
-    "tour" → TOUR; cualquier otro caso (entradas, comidas, guía, manual,
-    mayorista) → OTROS-TURISTICOS (catch-all). Reusa
-    `ReservaController::resolverNombreItem()` (cambiado de `private` a
-    `public static` para poder reusarlo) para armar
-    `sale_details.descripcion_detalle` de cada línea agrupada.
-  - **Reglas tributarias — simplificación conocida, documentada, no
-    resuelta**: cada línea usa el `tip_afe_igv_default` del producto
-    placeholder (uniforme `'10'` gravado, IGV 18% fijo) — no se deriva el
-    tipo de afectación real por proveedor/destino/exportación (ni
-    `AlternativaItem` ni `ReservaItem` tienen un snapshot de eso, solo
-    `proveedor_tarifa.tip_afe_igv/destino_tributario` en vivo). `Sale.
-    destino='nacional'` fijo. Mismo criterio y misma pregunta pendiente
-    que ya dejó documentada `AdvanceController` para su propio producto
-    especial ("pendiente de confirmar con contador").
-  - **Guard anti-doble-facturación**: ningún `reserva_item_id` pedido
-    puede estar ya cubierto por el `reserva_item_ids` (json) de una
-    `ReservaVenta` existente de la misma reserva — 422 explícito
-    listando cuáles, nunca fallback silencioso. Verificado con datos
-    reales (ver abajo).
-  - Envío a SUNAT sin cambios — sigue siendo manual, vía
-    `FacturacionElectronicaController::enviarSunat()` ya existente; esta
-    fase nunca toca Greenter.
-  - Frontend: botón "Facturar" (solo si hay ítems sin facturar) + modal
-    de selección de ítems/tipo de comprobante en `reservas/detalle.vue`;
-    badge "Facturado" en los ítems ya cubiertos.
-- **Fase B — resumen legible**: `respuestaDetalle()` agrega `fecha` a
-  cada fila de `resumen` — sin esto, dos ítems del mismo servicio en días
-  distintos (ej. "Entrada / Ticket de ingreso" día 1 y día 2) se veían
-  como filas idénticas sin ninguna forma de distinguirlas (reproducido
-  con datos reales de la reserva #12: 3 servicios repetidos, precios
-  distintos, cero pista de a qué día correspondía cada uno).
-- **Fase C — proveedores duplicados en el buscador**: el selector de
-  proveedor de `reservas/detalle.vue` mostraba el mismo proveedor
-  repetido sin distinguir entre sus tarifas (reproducido con datos
-  reales: "SERVICIOS TURISTICOS CUMBAZA SRL" 5 veces, mismo servicio, sin
-  indicar tipo de tarifa/modalidad/precio). El cotizador
-  (`cotizador/editar.vue:527`) ya resolvía exactamente este problema con
-  un badge `tipo_tarifa · modalidad` — nunca se había aplicado a esta
-  pantalla; ahora sí, más el precio.
-- **Fase D — quitar ítems/pasajeros de una reserva ya aceptada**:
-  `sincronizar-items` solo podía agregar, nunca quitar. Nuevo
-  `DELETE reserva-items/{id}` (bloquea si la reserva no está activa o si
-  el ítem ya fue facturado — reusa el mismo guard de la Fase A) y
-  `DELETE reserva-pasajeros/{id}` (bloquea además si es el último
-  pasajero, o si la reserva ya tiene alguna venta asociada — mismo
-  criterio conservador, corregir una reserva ya facturada es la fase
-  futura de "Camino 1"). Ambos limpian a mano las filas de
-  `reserva_item_pasajero` antes de borrar (esa FK no tiene
-  `cascadeOnDelete()`). Quitar un pasajero también revierte 1 unidad de
-  `SalidaMayorista.cupo_ocupado` si la reserva tiene mayorista elegido —
-  mismo movimiento que `cancelar()`, en reversa.
-- **Verificación**: 27 tests nuevos (166/166 en verde total —
-  `ReservaFacturacionTest` 6 casos incluida la agrupación real por
-  categoría con montos verificados; `ReservaQuitarItemsPasajerosTest` 7
-  casos). Type-check de frontend sin regresiones (45 errores
-  preexistentes, mismo baseline). **Verificado end-to-end contra datos
-  reales de `agencia-demo`** (no solo tests): facturó la reserva #18
-  real (`dkm-2026-001`, 3 ítems, S/ 100 total) — Sale/SaleDetail(s)/
-  SaleDetailItem/ReservaVenta reales creados con montos exactos (2 líneas
-  agrupadas: Transporte S/45, Otros-Turísticos S/55 = Desayuno+Entrada),
-  reintento de facturar el mismo ítem confirmado con 422 real. Todo el
-  rastro de la verificación (venta, líneas, `ReservaVenta`,
-  `branch_id` temporal del usuario de prueba) revertido al terminar —
-  `agencia-demo` queda en el mismo estado que antes de la sesión.
-
-**Completo — Guardia tributario en facturación de reserva + fix de
-visibilidad en reprogramar (2026-08-20, mismo día que lo de arriba, sin
-commitear todavía):** complemento pedido explícitamente por el usuario a
-la Fase A de facturación de reservas, más una revisión general de gaps
-que podían dar problemas en producción.
-- **Guardia tributario** (`ReservaFacturacionController`): la
-  simplificación conocida de la Fase A (IGV 18% fijo, `destino='nacional'`
-  fijo para TODA la venta) es segura solo si los `reserva_items`
-  facturados juntos comparten tratamiento tributario real. Si se mezclan
-  (ej. un tour exonerado Amazonía con un traslado nacional gravado), un
-  único `Sale` no puede reflejar ambos — riesgo real de comprobante SUNAT
-  con la exoneración mal calculada. Nuevo `GET reservas/{id}/
-  preparar-factura` (preview de solo lectura, el brief original de Fase A
-  lo pedía y nunca se construyó — el frontend llamaba directo a
-  `POST facturar`) + el guardia real duplicado en `POST facturar` (422
-  server-side, nunca confía en que el frontend ya filtró). Fuente de
-  verdad: `reserva_item.proveedor_tarifa_id` **propio** (retrofit Sesión
-  11c, "quién opera", reasignable cerca de la fecha), no el de
-  `alternativa_item` (propuesta comercial original, puede estar
-  desactualizada) — se siembra igual al crear el ítem, así que no cambia
-  nada para el caso sin reasignación.
-  - **Limitación real del modelo de datos, documentada, no resuelta**:
-    `destino_tributario` solo vive en `proveedor_tarifas`
-    (`origen_tipo=proveedor`). Los otros 4 orígenes de un
-    `alternativa_item` (mayorista, pasaje_aereo, manual, guia) no tienen
-    ningún campo tributario propio hoy — se tratan como `'nacional'` para
-    el guardia (mismo valor que ya usa la cabecera del Sale, no cambia el
-    comportamiento del caso homogéneo). Si alguno de esos 4 orígenes se
-    mezcla con un proveedor `'amazonia'` real, el guardia bloquea igual
-    (conservador, nunca deja pasar la mezcla en silencio). Resolver esos 4
-    orígenes con un dato tributario propio queda para cuando se aborde el
-    motor multi-`Sale` completo (emitir varios `Sale`, uno por
-    `destino_tributario`, en vez de bloquear) — explícitamente fuera de
-    alcance de este guardia, es trabajo bastante mayor.
-  - Frontend (`reservas/detalle.vue`): al abrir el modal "Facturar" (y en
-    cada cambio de selección de ítems, reactivo) se llama a
-    `preparar-factura` — si `bloqueado_tributario`, se oculta todo el
-    formulario y el botón "Facturar", mostrando solo el mensaje en un
-    alert rojo; si no, se muestra un total en vivo antes de confirmar.
-  - **Verificado con datos reales de `agencia-demo`, sin persistir nada**
-    (solo `GET`, nunca se llamó `POST facturar`): la reserva real #19
-    (`DKM-2026-001`) resultó tener una mezcla tributaria real entre sus 7
-    ítems — el modal mostró el bloqueo con el mensaje exacto; al destildar
-    el ítem que rompía la homogeneidad (un hotel), el bloqueo se levantó
-    al instante y apareció el total en vivo (`PEN 325.00`) con el botón
-    habilitado. Confirma que el guardia protege datos reales del tenant,
-    no solo el fixture del test nuevo (`ReservaFacturacionTest`, 2 casos:
-    mezcla bloqueada en `store()` y en `prepararFactura()`, preview sin
-    mezcla devuelve desglose correcto).
-- **Fix de visibilidad en `reprogramar()`** (fila 11s, hallazgo de la
-  misma revisión de gaps, no relacionado al guardia tributario): un
-  `reserva_item` sin `alternativa_item.dia_referencial` no tiene insumo
-  para recalcular su fecha en automático — pero antes de este fix quedaba
-  con su fecha VIEJA **sin aparecer en `items_no_tocados`**, indistinguible
-  para el vendedor de "sí se movió" (el banner decía "Reserva reprogramada
-  correctamente" sin ninguna señal de que ese servicio específico seguía
-  en la fecha de antes). Corregido: se lista igual que los `'manual'`, con
-  `motivo: 'sin_dia_referencial'` propio; el banner del frontend ahora
-  muestra el motivo real de cada ítem en vez de asumir siempre "editado a
-  mano". Test nuevo (`ReservaReprogramarTest`, +1 caso).
-- **Verificación total**: 8 tests nuevos, 100 tests AgenciaViajes en verde
-  (cero regresiones); type-check frontend en 45 errores preexistentes
-  (mismo baseline, cero nuevos).
-- **Pendiente, no resuelto en esta sesión**: el resto de gaps encontrados
-  en la misma revisión de riesgo práctico (bloqueos inconsistentes entre
-  `ReservaItemController::destroy()`/`ReservaPasajeroController::destroy()`,
-  ausencia de guard "mínimo 1 ítem" al quitar el último ítem de una
-  reserva, condición de carrera sin `lockForUpdate()` entre el check de
-  "ya facturado" y el borrado real en ambos `destroy()`, `SalidaOperativa`
-  huérfana tras quitar su último ítem enganchado) — documentados en la
-  revisión pero no corregidos, quedan para una sesión futura dedicada a
-  `ReservaItemController`/`ReservaPasajeroController`.
-
-**Completo — Facturación múltiple por grupo de pasajeros / varios
-pagadores (2026-08-20, mismo día que el guardia tributario, sin
-commitear todavía):** la Fase A original asumía un solo responsable de
-pago por reserva completa — un único `Sale`, `client_id` fijo a
-`cotizacion.cliente_id`, guard de "reserva ya facturada" a nivel de
-RESERVA completa. Gap real y frecuente en grupos: de 20 pasajeros, unos
-piden boleta a su nombre, otros factura a su empresa, otros a una
-empresa distinta, cada uno con su propio texto de sustentación — antes
-de esta sesión, facturar al primer pasajero bloqueaba facturar al resto.
-- **`ReservaFacturacionController` ahora soporta N `reserva_ventas`/
-  `Sale` por reserva**, cada uno cubriendo un subconjunto de
-  `pasajero_ids` elegido por el vendedor, con su propio `client_id`
-  (ahora **obligatorio**, sin default) y `texto_personalizado` opcional
-  que reemplaza el `descripcion_detalle` autogenerado en todas las líneas
-  de ese Sale. Guard de doble-facturación pasado a granularidad de
-  pasajero (un pasajero ya cubierto por alguna `reserva_venta` no puede
-  volver a seleccionarse) e ítem (mismo criterio que antes, ahora por
-  subconjunto).
-- **Hallazgo crítico durante la investigación previa a programar**
-  (exigida explícitamente por el brief, no asumida): el mecanismo de
-  selección propuesto originalmente — derivar automáticamente qué
-  `reserva_item_ids` le tocan a los pasajeros seleccionados vía la tabla
-  puente `reserva_item_pasajero` — resultó inviable con datos reales.
-  Confirmado contra `agencia-demo`: esa tabla tiene **0 filas en el 100%
-  de los ítems** de la reserva usada para probar el guardia tributario
-  (8/8) y solo 26 de 37 en todo el tenant — la pestaña "Asignación
-  pasajero↔ítem" casi no se usa en la práctica. Seguir el diseño literal
-  habría dejado la función inutilizable para la mayoría de reservas
-  reales de hoy.
-  - **Decisión de diseño tomada con el usuario** (`AskUserQuestion`,
-    3 opciones) antes de escribir código: selección **explícita** de
-    ítems sin asignar. Un ítem CON pasajeros vinculados se auto-incluye
-    en un Sale solo si TODOS sus vinculados están dentro de la selección
-    actual (nunca se fragmenta un ítem compartido — ej. habitación doble
-    — entre dos Sales distintos; si falta alguno, queda informado en
-    `items_pendientes_por_pasajero_faltante`). Un ítem SIN ningún
-    pasajero vinculado (el caso más común hoy) se ofrece aparte
-    (`items_sin_asignar_disponibles`) y el vendedor lo agrega a mano vía
-    `reserva_item_ids_manual` si corresponde a ese Sale.
-  - **Límite conocido, documentado, no resuelto** (confirmado por
-    investigación de código antes de programar, no asumido): el reparto
-    de un ítem `tarifa_fija` compartido (ej. habitación doble) entre
-    pasajeros que terminan en Sales **distintos** no tiene ningún
-    mecanismo en el proyecto — ni por tipo de pasajero ni por individuo.
-    Si eso pasa, el ítem queda permanentemente sin poder facturarse por
-    este flujo hasta resolución manual (reasignar en la pestaña de
-    asignación, o facturarlo como ítem sin asignar a criterio del
-    vendedor). Fuera de alcance confirmado con el usuario, no improvisado.
-- **Bug real encontrado y corregido probando en vivo contra
-  `agencia-demo`** (no en tests): `GET preparar-factura` devolvía 422
-  ("no hay ítems para esta selección") apenas se abría el modal, para
-  cualquier reserva sin ítems auto-vinculados — es decir, para casi
-  cualquier reserva real. Corregido: el guard de "selección vacía" es
-  ahora exclusivo de `store()` (ahí sí no tiene sentido crear un Sale sin
-  líneas); el preview siempre devuelve 200, con 0 líneas si corresponde,
-  para que el vendedor pueda elegir del pool sin asignar sin ver un error
-  apenas abre el modal.
-- **Frontend** (`reservas/detalle.vue`): modal rediseñado — checkboxes de
-  pasajeros pendientes de facturar (ya no ítems sueltos), pool de ítems
-  sin asignar seleccionable a mano, aviso de ítems compartidos pendientes
-  por pasajero faltante, buscador de cliente (mismo endpoint
-  `clients?search=` que usa el formulario de Ventas, simplificado — solo
-  busca y elige, no crea cliente nuevo), campo de texto personalizado,
-  total en vivo. **Flujo iterativo**: tras facturar un sub-grupo, si
-  quedan pasajeros pendientes el modal se resetea y sigue abierto listo
-  para la siguiente pasada, sin cerrar/reabrir; si no queda ninguno, se
-  cierra solo. Badge "Facturación completa"/"Falta facturar a N
-  pasajero(s)" en el header, calculado desde `pasajeros_facturados_ids`
-  nuevo en `respuestaDetalle()`.
-- **Verificación**: 13 tests nuevos en `ReservaFacturacionTest` (174
-  tests backend en verde en total, cero regresiones) — incluye el caso de
-  punta a punta exacto del brief: 3 pasajeros, 3 `Sale` distintos (boleta
-  a un pasajero, factura a 2 empresas distintas), cada uno con su propio
-  `texto_personalizado`, sin ítems duplicados entre ellas; ítem compartido
-  facturado junto vs. pendiente por pasajero faltante; ítems sin asignar;
-  doble-facturación de pasajero ya cubierto; guardia tributario evaluado
-  por subgrupo (no por reserva completa, dos pasajeros distintos pueden
-  terminar en Sales con distinto `destino_tributario` cada uno). Type-check
-  frontend en 45 errores preexistentes (mismo baseline, cero nuevos).
-  **Verificado con Playwright real contra `agencia-demo`** (reserva #19,
-  `DKM-2026-001` — la misma que ya tenía mezcla tributaria real de la
-  sesión anterior): badge "Falta facturar a 2 pasajero(s)" correcto,
-  modal mostró los 2 pasajeros pendientes + el pool completo de 7 ítems
-  sin asignar (ninguno tenía vinculación real, confirmando el hallazgo de
-  arriba), total se recalculó en vivo al tildar un ítem (PEN 0.00 → PEN
-  90.00), buscador de cliente encontró y permitió elegir al cliente real
-  de la cotización, botón "Facturar este grupo" se habilitó recién con
-  cliente elegido. **No se confirmó el POST** — toda la verificación fue
-  de solo lectura (`GET preparar-factura`), para no dejar una venta real
-  persistida en `agencia-demo` sin que el usuario lo pidiera
-  explícitamente.
-
-**Completo — Split en dos botones de facturación: "Facturar" (simple) vs.
-"Facturación especial" (avanzado) (2026-08-20, mismo día, sin commitear
-todavía):** decisión explícita del usuario justo después de construir lo
-de arriba — el modal único con selección de pasajeros/ítems/cliente/texto
-es demasiado para el caso de todos los días (un solo responsable, cubre
-toda la reserva). Se separa en dos entradas de frontend, **mismo backend
-sin ningún cambio** (`preparar-factura`/`facturar`, ambos endpoints
-intactos):
-- **"Facturar" (botón primario, simple)**: sin selección manual — arma el
-  payload solo, con TODOS los pasajeros pendientes y TODO el pool de
-  ítems sin asignar (2 llamadas a `preparar-factura`: la primera
-  descubre qué ítems sin asignar hay, la segunda arma el total real
-  incluyéndolos), cliente = `cabecera.cliente` de la cotización (sin
-  buscador, sin poder cambiarlo), sin campo de texto personalizado. Si el
-  guardia tributario bloquea (la reserva completa mezcla tratamientos),
-  muestra el mensaje y sugiere explícitamente usar "Facturación
-  especial" — no se puede resolver la mezcla desde acá, es la salida
-  intencional hacia el flujo avanzado.
-- **"Facturación especial" (botón secundario)**: exactamente el flujo
-  construido arriba, renombrado (`mostrarModalFacturar` →
-  `mostrarModalFacturarEspecial`, `abrirModalFacturar` →
-  `abrirModalFacturarEspecial`, `confirmarFacturacion` →
-  `confirmarFacturacionEspecial`, `facturarForm` → `facturarEspecialForm`,
-  `previewFactura` → `previewFacturaEspecial`,
-  `cargandoPreviewFactura` → `cargandoPreviewFacturaEspecial`) — sin
-  cambios de comportamiento, solo de nombre, para distinguirlo del flujo
-  simple nuevo. Sigue siendo el lugar donde se agreguen casos complejos
-  futuros (§4.3 reserva ya facturada, crédito/cuotas, etc.).
-- Ambos botones se muestran juntos mientras haya pasajeros pendientes de
-  facturar — no son excluyentes, el vendedor elige cuál usar según el
-  caso.
-- **Verificado con Playwright real contra `agencia-demo`** (misma reserva
-  #19 con mezcla tributaria real): "Facturar" simple detectó la mezcla
-  correctamente (arma el conjunto completo = ambos pasajeros + todos los
-  ítems, que sí mezcla) y mostró el mensaje de bloqueo con la sugerencia
-  de usar "Facturación especial", sin ningún error de consola; "Facturación
-  especial" se probó de nuevo después del rename y funciona idéntico a
-  antes (título del modal actualizado a "Facturación especial", checkboxes
-  de pasajeros, pool de ítems sin asignar, buscador de cliente). No se
-  confirmó ningún POST en esta verificación tampoco.
-
-**Completo — Facturación externa por tenant + por reserva (Sesión 11w,
-2026-08-20, rama `feature/sesion-11w-facturacion-externa-tenant`, sin
-commitear todavía):** cierra el gap de modelo de negocio para tenants que
-usan el sistema solo para cotizar/reservar/operar pero facturan con su
-propio sistema SUNAT aparte (u otro proveedor) — sin construir el motor
-completo de módulos/planes de `plan-modulo-planes-acceso.md` (fuera de
-alcance, confirmado explícitamente en el brief).
-- `tenants.facturacion_habilitada` (central, nullable, sin default) +
-  `reserva.facturacion_externa`/`referencia_externa`/
-  `fecha_facturacion_externa` (tenant, vertical agencia-viajes). El flag
-  del tenant gatea en doble capa (frontend oculta el botón, backend
-  rechaza con 403 — `tenant('facturacion_habilitada')`, null-safe, NULL
-  tratado igual que false) tanto `ReservaFacturacionController::
-  prepararFactura()` como `store()`. El override por reserva es
-  editable solo mientras la reserva no tenga ninguna `ReservaVenta`
-  (422 si ya tiene una), reversible libremente hasta ese momento, e
-  independiente del flag del tenant (funciona igual en los dos casos,
-  cubre tanto el "solo operativo" normal como una excepción puntual
-  sobre un tenant con facturación habilitada).
-- **Apagar el flag del tenant nunca afecta nada histórico** — confirmado
-  por diseño (ningún otro controller del proyecto lee
-  `facturacion_habilitada`, verificado por grep) y con un E2E real contra
-  `agencia-demo`: se creó una venta contado real (S/177, cliente
-  KREISLER), se apagó el flag, y se confirmó navegando de verdad que
-  Ventas (`/sale/list`), Cuentas por Cobrar y el buscador de Notas de
-  Crédito siguen 100% accesibles — el "sin resultados" de NC fue la
-  regla de negocio preexistente ("solo ventas ya aceptadas por SUNAT"),
-  no un bloqueo nuevo. Venta, pagos, movimientos de caja y la caja
-  descartable creada para la prueba (`agencia-demo` no tenía ninguna
-  todavía) se revirtieron al terminar — el flag quedó reestablecido en
-  `true` (decisión del usuario, ver abajo).
-- **Backfill real ejecutado con el criterio de 3 grupos acordado
-  (§1 del brief), con un gap real encontrado y corregido antes de
-  correrlo**: la primera versión de
-  `tenants:backfill-facturacion-habilitada` (ya existía al abrir esta
-  sesión, junto con buena parte del resto de la implementación) solo
-  cubría 2 de los 3 grupos — dejaba en NULL a cualquier tenant sin
-  `Sale`, sin importar su giro, en vez de defaultear a `true` los
-  `giro != agencia_viajes` sin historial (ej. `negocio2`, retail nuevo).
-  Corregido (comando + su test, que afirmaba el comportamiento viejo)
-  antes de correr nada real. Dry-run real contra los 5 tenants de
-  producción: `umbo`/`sandbox`/`umbo-archivado` → `true` (Sale real),
-  `negocio2` → `true` (retail sin historial), `agencia-demo` → caso
-  ambiguo real (único `agencia_viajes`, sin ningún `Sale` — los de
-  sesiones de verificación previas quedaron todos revertidos) — resuelto
-  con el usuario vía `AskUserQuestion`: `true`, paquete completo (es el
-  tenant de pruebas del módulo de facturación de reservas). Aplicado con
-  `--apply` + el caso de `agencia-demo` seteado a mano vía el mismo
-  endpoint auditado (`TenantAdminController::updateFacturacionHabilitada()`,
-  entrada real en `central_audit_logs`).
-- Wizard de creación de tenant (`central-panel`) y vista de detalle
-  (toggle + confirmación con aviso "no afecta comprobantes ya emitidos")
-  ya estaban implementados al abrir la sesión — verificados, no
-  modificados.
-- 174 tests backend en verde (16 nuevos de este módulo — 5 de
-  `ReservaFacturacionExternaTest`, 3 de `store()`/`preparar-factura`
-  gateados en `ReservaFacturacionTest`, 5 de `TenantAdminController`, 3 de
-  backfill —, cero regresiones). Type-check `admin-start-kit`: 45 errores
-  preexistentes, mismo baseline, cero nuevos. Type-check `central-panel`
-  (`vue-tsc -b`, sin script `type-check` propio en `package.json`): 0
-  errores.
-
-**Completo — Módulo Adelantos: gaps de integridad, conexión con Reservas, selector fiscal
-y corrección post-SUNAT (2026-08-24, rama `fix/reservas-facturacion-gaps-criticos`, 2
-commits, sin PR creado todavía):** auditoría propia (más una segunda pasada, disparada por
-una pregunta real del usuario sobre cómo corrigen otros sistemas una venta final que aplicó
-varios adelantos de distinta clasificación tributaria) sobre el módulo Adelantos
-(`AdvanceController`, construido 2026-07-11/12 — ver
-[[project_advances_module]] en memoria). Cuatro tandas, todas verificadas contra Postgres
-real (`sistemafe_test_migrations`), sin tocar `sandbox`/`umbo`:
-- **Tier 1 — integridad**: `AdvanceApplicationService` nuevo (`app/Services/`, extrae el
-  loop de aplicación de adelantos que vivía inline en `SaleController::store()` — mismo
-  criterio "un solo punto de verdad" que `CashCorrectionService`/`CreditSummaryCalculator`)
-  agrega validación de moneda al aplicar, bloqueo de aplicar a una cotización
-  (`state_sale=2`), rechazo de `advance_id` duplicado en el mismo payload, y
-  `lockForUpdate()` real en `refund()` (antes sin lock — condición de carrera real).
-  `SaleController::update()`/`destroy()` ahora bloquean (422/405) si la venta tiene
-  adelantos ya aplicados — antes solo se chequeaba para el caso crédito. Middleware
-  `permission:list_advance`/`register_advance`/`refund_advance` agregado a las rutas de
-  Adelantos (antes sin gate real), dejando a propósito sin permiso
-  `clients/{id}/advances` (consumida por el checkout de venta, no debe gatearse aparte).
-  `Sale::scopeFilterMultiple()` excluye `type='advance'` — antes el comprobante propio de
-  cada adelanto aparecía mezclado en el listado general de Ventas.
-- **Tier 0 — conexión con Agencia de Viajes (antes inexistente)**: la tabla puente
-  `reserva_anticipos` existía desde antes (schema) pero sin ningún controller —
-  un anticipo cobrado sobre una reserva nunca se descontaba al facturarla, y no había forma
-  de cobrarlo desde la pantalla de la reserva. `ReservaAnticipoController` nuevo
-  (`POST reservas/{id}/anticipos`, `DELETE reserva-anticipos/{id}`, ambos
-  `permission:agencia.reservas`) + botón "Cobrar anticipo" y tarjeta "Anticipos recibidos"
-  en `reservas/detalle.vue`. `ReservaFacturacionController::store()`/`prepararFactura()`
-  ahora netean los anticipos disponibles contra el total a facturar (selección manual desde
-  el modal de "Facturación especial", o automática greedy en el flujo simple).
-  **Bug real encontrado en pruebas, corregido antes de cerrar**: el filtro de anticipos
-  disponibles solo exigía pertenecer a la reserva, sin exigir que el `client_id` del
-  anticipo coincidiera con el cliente al que se factura — con "Facturación múltiple"
-  (varios pasajeros/clientes sobre la misma reserva, Sesión 11v) esto habría permitido
-  aplicar el anticipo de un cliente a la factura de otro. Corregido filtrando
-  `advance.client_id === $cliente->id` antes de ofrecer el anticipo.
-- **Tier 1 — selector de tratamiento tributario (cierra el hallazgo que había quedado
-  "pendiente de confirmar con contador" desde la construcción original)**:
-  `AdvanceController::store()` forzaba gravado 18% siempre (`tip_afe_igv_default` del
-  producto placeholder `ADELANTO-001`, ignorando si el cliente era de Amazonía). Ahora
-  exige `tip_afe_igv` (`10`/`20`/`30`, Catálogo 07 SUNAT) explícito en el payload —
-  `mto_oper_gravadas`/`exoneradas`/`inafectas` y `SaleDetail.tip_afe_igv` se derivan de la
-  elección real, no del producto. Selector nuevo en `advances/create.vue` (default
-  gravado, mismo comportamiento de antes si no se toca).
-- **Tier 2 — corrección post-SUNAT de un adelanto mal clasificado**: confirmado leyendo
-  `GreenterService::getInvoice()` antes de diseñar que el bloque `PrepaidPayment` del XML
-  (`tipoDocRel`/`nroDocRel`/`total`) nunca lleva la clasificación tributaria del adelanto —
-  así que corregirla es independiente de cualquier venta que ya lo haya aplicado. Mecanismo
-  elegido (confirmado con el usuario, descartada la alternativa de "reclasificar sin
-  anular" por necesitar una calculadora nueva sin validar y un motivo SUNAT ambiguo):
-  `POST advances/{id}/corregir` anula el comprobante viejo con NC motivo `01` (Anulación de
-  la operación — `permite_total=true`/`permite_parcial=false`, ajuste exacto al caso) y
-  reemite uno nuevo con el tratamiento correcto, preservando el MISMO `Advance.id`
-  (`sale_id` se reasigna al nuevo comprobante; `corrected_from_sale_id`/
-  `correction_reason`/`corrected_at`/`corrected_by` quedan de auditoría de la corrección
-  más reciente — mismo trade-off ya aceptado en el proyecto para
-  `Reserva.fecha_cancelacion`/`fecha_reprogramacion`, no un historial completo). Alcance
-  deliberadamente angosto: solo corrige tratamiento tributario, nunca cliente/monto/medio
-  de pago — esos son ancla de `AdvanceApplication`s ya existentes o hechos históricos que
-  ni siquiera aparecen en el XML del adelanto. `crearComprobanteAdelanto()` extraído de
-  `store()` para reusarse sin volver a cobrar la plata (la corrección no toca Caja).
-  Botón "Corregir tratamiento tributario" + banner de trazabilidad en `advances/show.vue`.
-- **Tier 3 — rediseño UX de las 3 pantallas** (`create.vue`/`index.vue`/`show.vue`):
-  explicación visible del flujo de 2 pasos (crear comprobante → enviar a SUNAT, ya
-  existente pero no explicado en pantalla), tarjeta de cliente más completa, medio de pago
-  sin preselección silenciosa, campo de referencia de pago para medios distintos a
-  efectivo, filtros/búsqueda (cliente, estado, rango de fechas) en el listado, columna
-  "Estado SUNAT" separada del estado de aplicación del adelanto, motivo de rechazo SUNAT
-  persistente en pantalla (antes solo vivía en un `Swal` transitorio, se perdía al
-  refrescar).
-- **Gap operativo real encontrado en vivo en `agencia-demo` al probar "Facturación
-  especial"** (no relacionado al código de esta sesión): faltaba una migración de permisos
-  pendiente de aplicar al tenant y el usuario de prueba no tenía sucursal asignada —
-  resuelto en el momento, con aprobación explícita antes de correr nada contra el tenant
-  real.
-- **226/226 tests backend en verde** (`AdvanceIntegridadTest`, `AdvanceCorreccionTest`,
-  `ReservaAnticipoTest` nuevos), type-check frontend en baseline (45 preexistentes, cero
-  nuevos). **Pendiente, no hecho en esta sesión**: validación real contra SUNAT Beta de un
-  comprobante de adelanto exonerado/inafecto y de una corrección vía NC motivo 01 —
-  requiere credenciales/certificado de un tenant real. Retail (fuera de Agencia de Viajes)
-  sigue sin un mecanismo estructurado de "adelanto → venta futura" como
-  `reserva_anticipos` — descartado de alcance en esta sesión, no confirmado explícitamente
-  con el usuario si hace falta.
+**Completo — Cotizaciones Comerciales, módulo nuevo (2026-08-25):**
+Retira `state_sale` de `Sale` (la cotización comercial dejó de vivir como un estado de
+venta) y construye `commercial_quotes`/`commercial_quote_items`/
+`commercial_quote_anticipos` como módulo propio, con PDF A4 dedicado. Verificado en
+los 5 tenants de producción.
+Detalle completo: `docs/planning/retail-facturacion-core/historial-archivo.md` y
+`project_cotizaciones_comerciales_modulo` en memoria de proyecto.
 
 **Próximos módulos (en orden de prioridad):**
 

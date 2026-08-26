@@ -40,8 +40,7 @@ reservas, todo construido y en producción.
 | `plan-modulo-planes-acceso.md` | Feature gating por plan contratado (económico/estándar/pro) + add-ons. Mayormente reconciliado con lo ya construido en Panel Superadmin, pero **tiene trabajo real marcado como pendiente** (mecanismo de tenant demo/real, feature-gating de módulos) — ver su propia sección "Recomendación" antes de asumir que está cerrado. |
 | `sincronizacion.md` | Protocolo de por qué `plan-hoja-de-ruta-ejecucion.md` puede desactualizarse frente al repo real y cómo resincronizarlo |
 | `PEGAR-EN-CLAUDE-CODE-temporada-plantilla.md` | Brief sin ejecutar — auditoría/fix de resolución de tarifa por temporada al cargar una cotización desde `paquete_plantilla` |
-| `PEGAR-EN-CLAUDE-CODE-facturacion-externa-tenant.md` | Brief sin ejecutar — facturación externa por tenant + por reserva (modelo de negocio del tenant, distinto de la lógica de facturación de 11u/11v) |
-| `historial-archivo.md` | Todo lo demás: las ~20 sesiones ya cerradas con detalle completo, y 8 documentos de diseño fundacional + briefs de sesiones cerradas que se borraron por redundantes (proveedores, tours-catálogo, maestros-iniciales, guardia tributario, fix de fechas, facturación múltiple) |
+| `historial-archivo.md` | Todo lo demás: las ~20 sesiones ya cerradas con detalle completo, 8 documentos de diseño fundacional + briefs de sesiones cerradas que se borraron por redundantes (proveedores, tours-catálogo, maestros-iniciales, guardia tributario, fix de fechas, facturación múltiple), e ítem manual/mover-fusionar servicio/split de facturación/facturación externa por tenant (11w — brief `PEGAR-EN-CLAUDE-CODE-facturacion-externa-tenant.md` ya ejecutado y mergeado, borrado el 25-ago-2026) |
 
 **Pendiente real de este vertical:** filas 11e/11f/11g/11d (reporte
 operativo + recordatorios + pago a proveedor, backend y frontend) y 11t

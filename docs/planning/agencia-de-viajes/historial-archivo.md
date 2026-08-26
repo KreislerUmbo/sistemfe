@@ -127,3 +127,56 @@ pusheadas a `origin/main` (commits `9f1ced5`/`1f908d9` vía los merges de
 `feature/sesion-11r-11s-11u-facturacion-guardia`/
 `feature/sesion-11v-facturacion-grupo`, ver `plan-hoja-de-ruta-
 ejecucion.md` §1 y §2 para el detalle de ramas).
+
+## Ítem manual flexible + mover/fusionar servicio + split de facturación +
+## facturación externa por tenant (11w) — 12/20-ago-2026, agregado 25-ago-2026
+
+Cuatro piezas que quedaron documentadas solo en `CLAUDE.md`, sin fila propia en
+`plan-hoja-de-ruta-ejecucion.md` — movidas acá al comprimir ese documento (25-ago-2026),
+sin pérdida de información:
+
+- **Ítem manual flexible + promover a proveedor** (Sesión 11q, 2026-08-12, commit
+  `863e6d2`): `costo_snapshot`/`cantidad` de un `alternativa_item` `origen_tipo=manual`
+  dejan de ser sentinels sin efecto — costo real y obligatorio, cantidad multiplica el
+  total, `pax_incluidos` se propaga a `reserva_item_pasajero` al aceptar (tabla existía
+  desde Sesión 8a sin llenarse nunca). Agrega "promover a proveedor real" (crea
+  Proveedor+ProveedorServicio+ProveedorTarifa desde un ítem manual, sin relink
+  retroactivo) y edición estructural separada de la edición de precio en vivo.
+- **Mover/fusionar servicio entre destinos + fix paginación catálogo** (2026-08-12, commit
+  `62f8b69`): cierra el gap de "servicio asociado al destino equivocado, ya con
+  proveedores enganchados" — antes solo se podía borrar (bloqueado) o dejar mal.
+  `DestinoServicioController::mover()` reasigna sin tocar proveedores/tarifas (422 si el
+  destino ya tiene el mismo servicio); `fusionar()` (mismo día) resuelve ese choque
+  reasignando los `proveedor_servicios` de la fila origen a la destino y borrando la
+  origen (nunca fusiona si el mismo proveedor está en ambas — lo resuelve una persona a
+  mano). `ServicioController::index()` gana `per_page` (antes truncaba siempre a 15).
+- **Split en dos botones de facturación** (2026-08-20, mismo día que 11v, sin rama propia
+  — construido sobre `feature/sesion-11v-facturacion-grupo`): el modal único de
+  Facturación múltiple (selección de pasajeros/ítems/cliente/texto) resultó demasiado para
+  el caso de todos los días (un solo responsable, cubre toda la reserva). Se separa en
+  **"Facturar"** (simple — sin selección manual, arma el payload solo con todos los
+  pasajeros pendientes y el pool de ítems sin asignar, cliente = `cabecera.cliente` de la
+  cotización, sin texto personalizado; si el guardia tributario bloquea, sugiere
+  explícitamente "Facturación especial") y **"Facturación especial"** (el flujo avanzado
+  ya construido, renombrado — mismo backend sin ningún cambio). Ambos botones conviven
+  mientras haya pasajeros pendientes de facturar. Verificado con Playwright real contra
+  `agencia-demo` (reserva #19, la misma con mezcla tributaria real de 11u) — sin confirmar
+  ningún POST.
+- **Facturación externa por tenant + por reserva** (Sesión 11w, 2026-08-20, rama
+  `feature/sesion-11w-facturacion-externa-tenant`): para tenants que cotizan/reservan/
+  operan en el sistema pero facturan con su propio SUNAT/proveedor aparte — sin construir
+  el motor completo de `plan-modulo-planes-acceso.md` (confirmado fuera de alcance).
+  `tenants.facturacion_habilitada` (central, nullable) gatea en doble capa (frontend +
+  403 backend) `ReservaFacturacionController::prepararFactura()`/`store()`; el override
+  `reserva.facturacion_externa`/`referencia_externa`/`fecha_facturacion_externa` es
+  editable solo mientras la reserva no tenga ninguna `ReservaVenta`, independiente del
+  flag del tenant. Apagar el flag del tenant nunca afecta nada histórico (confirmado por
+  diseño y con un E2E real: Ventas/Cuentas por Cobrar/NC siguen 100% accesibles). Backfill
+  real ejecutado con criterio de 3 grupos (tenants con `Sale` real → `true`; `giro` !=
+  agencia_viajes sin historial → `true`; agencia_viajes sin historial → decidido caso por
+  caso, `agencia-demo` → `true`). 174 tests backend en verde, cero regresiones.
+  **3 gaps de seguridad encontrados y corregidos en code-review antes del deploy** (commit
+  `7e9ccf3`): faltaba validar `reserva.facturacion_externa` en `store()`/`prepararFactura()`
+  (permitía re-facturar adentro una reserva ya marcada facturada afuera);
+  `actualizarFacturacionExterna()` no exigía `estado==='activa'`; ninguno de los dos
+  compartía lock (ventana de carrera angosta) — ambos ahora usan `lockForUpdate()`.
