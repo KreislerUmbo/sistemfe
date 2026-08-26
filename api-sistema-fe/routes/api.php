@@ -687,6 +687,14 @@ Route::group([
     // Sesión 11e — reporte operativo por fecha (plan-modulo-cotizaciones-reservas.md §8).
     Route::get("reporte-operativo", [ReporteOperativoController::class, 'index'])
         ->middleware('permission:agencia.reservas');
+    // Sesión 11d — PDF (URL firmada, ver "reporte-operativo-pdf" fuera del grupo
+    // auth:api) y Excel (descarga directa, mismo criterio que cash/movements/export).
+    Route::get("reporte-operativo/pdf-url", [ReporteOperativoController::class, 'pdfSignedUrl'])
+        ->middleware('permission:agencia.reservas');
+    Route::get("reporte-operativo/export", [ReporteOperativoController::class, 'export'])
+        ->middleware('permission:agencia.reservas');
+    Route::get("reporte-operativo/filtros", [ReporteOperativoController::class, 'filtrosDisponibles'])
+        ->middleware('permission:agencia.reservas');
     Route::put("reservas/{id}/cancelar", [ReservaController::class, 'cancelar'])
         ->middleware('permission:agencia.reservas');
     Route::post("reservas/{id}/sincronizar-items", [ReservaController::class, 'sincronizarItems'])
@@ -738,6 +746,12 @@ Route::group([
         ->middleware('permission:agencia.reservas');
     Route::delete("reserva-item-pasajero/{id}", [ReservaItemPasajeroController::class, 'destroy'])
         ->middleware('permission:agencia.reservas');
+    // Sesión 11d — check-in del reporte operativo. Distinto de store()/destroy() de
+    // arriba (esos son la asignación pasajero↔ítem propiamente dicha): acá el vínculo
+    // puede no existir todavía y se crea recién al marcar (firstOrCreate en el
+    // controller), porque la mayoría de reserva_items no tiene vinculo_especifico.
+    Route::post("reserva-items/{id}/pasajeros/{pasajeroId}/checkin", [ReservaItemPasajeroController::class, 'checkin'])
+        ->middleware('permission:agencia.reservas');
 
     Route::post("venta-directa", [VentaDirectaController::class, 'store'])
         ->middleware('permission:agencia.reservas');
@@ -788,6 +802,11 @@ Route::get("cash-sessions-pdf/{id}", [CashSessionController::class, 'pdf'])
 // Requiere URL firmada (ver CashSessionController::pdfRangeSignedUrl, arriba, dentro del grupo auth:api)
 Route::get("cash-sessions-pdf-range", [CashSessionController::class, 'pdfRange'])
     ->name('cash-sessions.pdf-range')
+    ->middleware(['tenant', 'tenant.active', 'tenant.token', 'signed']);
+
+// Requiere URL firmada (ver ReporteOperativoController::pdfSignedUrl, arriba, dentro del grupo auth:api)
+Route::get("reporte-operativo-pdf", [ReporteOperativoController::class, 'pdf'])
+    ->name('reporte-operativo.pdf')
     ->middleware(['tenant', 'tenant.active', 'tenant.token', 'signed']);
 
 

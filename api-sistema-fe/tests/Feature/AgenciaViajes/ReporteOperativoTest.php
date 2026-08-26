@@ -222,6 +222,28 @@ class ReporteOperativoTest extends TestCase
         $this->assertNull($filas[0]['vuelo_vuelta']);
     }
 
+    // Mejora post-11d — reasignación de proveedor inline: el reporte necesita el
+    // nombre del proveedor asignado a CUALQUIER ítem origen_tipo='proveedor' (antes
+    // solo se exponía para hoteles vía 'hotel'), y servicio_id para poder filtrar los
+    // candidatos igual que reservas/detalle.vue.
+    public function test_expone_proveedor_asignado_y_servicio_id_para_items_de_proveedor(): void
+    {
+        $f = $this->crearReservaConItems();
+
+        $body = app(ReporteOperativoController::class)->index(new Request([
+            'fecha_desde' => '2026-09-01', 'fecha_hasta' => '2026-09-01',
+        ]))->getData(true);
+
+        $filaProveedor = collect($body['filas'])->firstWhere('reserva_item_id', $f['riProveedorAsignado']->id);
+        $this->assertSame('Operador Real SAC', $filaProveedor['proveedor']);
+        $this->assertNotNull($filaProveedor['servicio_id']);
+
+        // origen_tipo='guia'/'manual' no tienen proveedor_tarifa — el campo debe ser null,
+        // no romper ni inventar un valor.
+        $filaGuia = collect($body['filas'])->firstWhere('reserva_item_id', $f['riGuia']->id);
+        $this->assertNull($filaGuia['proveedor']);
+    }
+
     public function test_reserva_cancelada_queda_excluida(): void
     {
         $f = $this->crearReservaConItems();

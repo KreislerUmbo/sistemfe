@@ -68,6 +68,71 @@ class ReservaItemPasajeroController extends Controller
         ]);
     }
 
+    // Check-in del reporte operativo (Sesión 11d, plan-modulo-cotizaciones-reservas.md
+    // §8) — a diferencia de store()/destroy() (asignación pasajero↔ítem propiamente
+    // dicha), acá el vínculo puede no existir todavía: la mayoría de reserva_items no
+    // tiene vinculo_especifico (cae a "aplica a todos los pasajeros" en el reporte),
+    // así que marcar check-in ahí crea el vínculo puntual recién en este momento.
+    // Sin bloqueo por itemYaFacturado(): el check-in es operativo, no toca nada
+    // financiero.
+    public function checkin(Request $request, string $reservaItemId, string $pasajeroId)
+    {
+        $item = ReservaItem::with(['reserva', 'pasajeros'])->findOrFail($reservaItemId);
+
+        if ($item->reserva->estado !== 'activa') {
+            return response()->json(['code' => 422, 'message' => 'Solo se puede marcar check-in en una reserva activa.'], 422);
+        }
+
+        $pasajero = ReservaPasajero::findOrFail($pasajeroId);
+        if ($pasajero->reserva_id !== $item->reserva_id) {
+            return response()->json([
+                'code' => 422,
+                'message' => 'Ese pasajero no pertenece a la misma reserva que el ítem.',
+            ], 422);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'checkin_realizado' => 'required|boolean',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
+        }
+
+        $checkinRealizado = $validator->validated()['checkin_realizado'];
+
+        // Si el ítem todavía NO tiene ningún vínculo específico, resolverPasajerosDelItem()
+        // (ReporteOperativoController) lo trata como "aplica a TODOS los pasajeros de la
+        // reserva" (tour grupal). Crear acá el vínculo de un solo pasajero lo "promovería"
+        // en silencio a vínculo específico, excluyendo al resto la próxima vez que se
+        // cargue el reporte. Para preservar "aplica a todos" en la práctica, la primera vez
+        // que se marca check-in sobre un ítem así se materializan los vínculos de TODOS los
+        // pasajeros de la reserva (sin marcar check-in en los demás).
+        if ($item->pasajeros->isEmpty()) {
+            foreach ($item->reserva->pasajeros as $otroPasajero) {
+                ReservaItemPasajero::firstOrCreate([
+                    'reserva_item_id' => $item->id,
+                    'reserva_pasajero_id' => $otroPasajero->id,
+                ]);
+            }
+        }
+
+        $asignacion = ReservaItemPasajero::firstOrCreate([
+            'reserva_item_id' => $item->id,
+            'reserva_pasajero_id' => $pasajero->id,
+        ]);
+        $asignacion->update([
+            'checkin_realizado' => $checkinRealizado,
+            'checkin_hora' => $checkinRealizado ? now() : null,
+        ]);
+
+        return response()->json([
+            'code' => 200,
+            'message' => 'Check-in actualizado correctamente',
+            'reserva_item_pasajero' => $asignacion,
+        ]);
+    }
+
     public function destroy(string $id)
     {
         $asignacion = ReservaItemPasajero::with('reservaItem.reserva')->findOrFail($id);

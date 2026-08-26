@@ -15,6 +15,13 @@ class ReservaItemPasajero extends Model
     protected $fillable = [
         'reserva_item_id',
         'reserva_pasajero_id',
+        'checkin_realizado',
+        'checkin_hora',
+    ];
+
+    protected $casts = [
+        'checkin_realizado' => 'boolean',
+        'checkin_hora' => 'datetime',
     ];
 
     public function reservaItem()

@@ -743,6 +743,17 @@ const comercialRoutes = [
     },
     component: () => import("@/views/agencia-viajes/reservas/detalle.vue"),
   },
+  // Reporte operativo por fecha (Sesión 11d — pantalla; backend de Sesión 11e).
+  {
+    path: "/agencia-viajes/reporte-operativo",
+    name: "agencia.reporteOperativo.index",
+    meta: {
+      title: setTitle("Reporte Operativo"),
+      authRequired: true,
+      permission: 'agencia.reservas',
+    },
+    component: () => import("@/views/agencia-viajes/reporte-operativo/index.vue"),
+  },
   // Tablero de despacho (feature/salida-operativa) — agrupa reserva_items
   // de distintas reservas que comparten tour_origen_id + fecha. La ruta
   // con :id apunta al mismo componente (mismo criterio que el resto del

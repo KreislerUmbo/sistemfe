@@ -231,6 +231,13 @@ export const MENU_ITEMS: MenuItemType[] = [
         permission: 'agencia.reservas',
       },
       {
+        key: "agencia_reporte_operativo",
+        label: "Reporte Operativo",
+        route: { name: "agencia.reporteOperativo.index" },
+        parentKey: "agencia_viajes",
+        permission: 'agencia.reservas',
+      },
+      {
         key: "agencia_salidas",
         label: "Salidas Operativas",
         route: { name: "agencia.salidas.index" },
