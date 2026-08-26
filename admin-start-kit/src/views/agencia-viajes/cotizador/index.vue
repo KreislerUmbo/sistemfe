@@ -31,21 +31,28 @@
                                 <th class="ps-3">Código</th>
                                 <th>Cliente</th>
                                 <th>Destino</th>
+                                <th>Fechas del viaje</th>
                                 <th class="text-center">Alternativas</th>
                                 <th class="text-center pe-3">Acciones</th>
                             </tr>
                         </thead>
                         <tbody>
                             <tr v-if="loading">
-                                <td colspan="5" class="text-center py-5 text-muted"><div class="spinner-border spinner-border-sm me-2"></div>Cargando...</td>
+                                <td colspan="6" class="text-center py-5 text-muted"><div class="spinner-border spinner-border-sm me-2"></div>Cargando...</td>
                             </tr>
                             <tr v-else-if="cotizaciones.length === 0">
-                                <td colspan="5" class="text-center py-5 text-muted fst-italic">Sin cotizaciones registradas.</td>
+                                <td colspan="6" class="text-center py-5 text-muted fst-italic">Sin cotizaciones registradas.</td>
                             </tr>
                             <tr v-for="cotizacion in cotizaciones" :key="cotizacion.id">
                                 <td class="ps-3 fw-semibold">{{ cotizacion.codigo }}</td>
                                 <td>{{ cotizacion.cliente?.full_name }}</td>
                                 <td>{{ cotizacion.destino }}</td>
+                                <td class="small">
+                                    <span v-if="cotizacion.fecha_viaje_desde">
+                                        {{ formatFecha(cotizacion.fecha_viaje_desde) }} — {{ formatFecha(cotizacion.fecha_viaje_hasta) }}
+                                    </span>
+                                    <span v-else class="text-muted fst-italic">Sin definir</span>
+                                </td>
                                 <td class="text-center">{{ cotizacion.alternativas_count ?? 0 }}</td>
                                 <td class="text-center pe-3">
                                     <router-link :to="`/agencia-viajes/cotizador/${cotizacion.id}`" class="btn btn-sm btn-outline-primary">
@@ -70,6 +77,7 @@ import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import Swal from 'sweetalert2/dist/sweetalert2.js';
 import { cotizacionService } from '@/services/admin/cotizacionService';
 import type { Cotizacion } from '@/types/agencia-viajes';
+import { formatFecha } from '@/helpers/fecha';
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
 

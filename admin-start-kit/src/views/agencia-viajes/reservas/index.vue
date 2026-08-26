@@ -42,21 +42,28 @@
                                 <th class="ps-3">Cotización</th>
                                 <th>Cliente</th>
                                 <th>Destino</th>
+                                <th>Fechas del viaje</th>
                                 <th class="text-center">Estado</th>
                                 <th class="text-center pe-3">Acciones</th>
                             </tr>
                         </thead>
                         <tbody>
                             <tr v-if="loading">
-                                <td colspan="5" class="text-center py-5 text-muted"><div class="spinner-border spinner-border-sm me-2"></div>Cargando...</td>
+                                <td colspan="6" class="text-center py-5 text-muted"><div class="spinner-border spinner-border-sm me-2"></div>Cargando...</td>
                             </tr>
                             <tr v-else-if="reservas.length === 0">
-                                <td colspan="5" class="text-center py-5 text-muted fst-italic">Sin reservas registradas.</td>
+                                <td colspan="6" class="text-center py-5 text-muted fst-italic">Sin reservas registradas.</td>
                             </tr>
                             <tr v-for="reserva in reservas" :key="reserva.id">
                                 <td class="ps-3 fw-semibold">{{ reserva.alternativa?.cotizacion?.codigo }}</td>
                                 <td>{{ reserva.alternativa?.cotizacion?.cliente?.full_name }}</td>
                                 <td>{{ reserva.alternativa?.cotizacion?.destino }}</td>
+                                <td class="small">
+                                    <span v-if="reserva.fecha_viaje_desde">
+                                        {{ formatFecha(reserva.fecha_viaje_desde) }} — {{ formatFecha(reserva.fecha_viaje_hasta) }}
+                                    </span>
+                                    <span v-else class="text-muted fst-italic">Sin definir</span>
+                                </td>
                                 <td class="text-center">
                                     <span class="badge" :class="reserva.estado === 'activa' ? 'bg-success' : 'bg-danger'">
                                         {{ reserva.estado === 'activa' ? 'Activa' : 'Cancelada' }}
@@ -92,6 +99,7 @@ import { ref, computed, onMounted } from 'vue';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import { reservaService } from '@/services/admin/reservaService';
 import type { Reserva } from '@/types/agencia-viajes';
+import { formatFecha } from '@/helpers/fecha';
 
 const reservas = ref<Reserva[]>([]);
 const search = ref<string>('');
