@@ -55,7 +55,7 @@
                                     <b-badge variant="danger" v-if="categorie.state == 2">Inactivo</b-badge>
                                 </b-td>
                                 <b-td>
-                                    {{ categorie.created_at }}
+                                    {{ formatFechaHora(categorie.created_at) }}
                                 </b-td>
                                 <b-td class="text-end">
                                     <a href="#" @click="editCategory(categorie)"><i
@@ -132,6 +132,7 @@ import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import httpClient from '@/helpers/http-client';
 import type { AxiosResponse } from 'axios';
 import { ref, onMounted, watch } from 'vue';
+import { formatFechaHora } from '@/helpers/fecha';
 
 import Swal from "sweetalert2/dist/sweetalert2.js";
 import type { Categorie, CategorieResponse, Categories } from '@/types/categories';

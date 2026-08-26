@@ -96,7 +96,7 @@
                                 </thead>
                                 <tbody>
                                     <tr v-for="a in cotizacion.anticipos" :key="a.id">
-                                        <td>{{ a.fecha_asignacion ?? '-' }}</td>
+                                        <td>{{ formatFecha(a.fecha_asignacion) }}</td>
                                         <td class="text-end">{{ moneda }} {{ Number(a.monto_asignado).toFixed(2) }}</td>
                                         <td class="text-end">{{ moneda }} {{ Number(a.disponible).toFixed(2) }}</td>
                                         <td>
@@ -123,7 +123,7 @@
                         <router-link :to="{ name: 'sale.edit', params: { id: cotizacion.converted_sale_id } }">
                             #{{ cotizacion.converted_sale_id }}
                         </router-link>
-                        el {{ cotizacion.converted_at }}.
+                        el {{ formatFechaHora(cotizacion.converted_at) }}.
                     </div>
 
                     <div class="table-responsive">
@@ -229,6 +229,7 @@ import { computed, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import Swal from "sweetalert2/dist/sweetalert2.js";
 import httpClient from "@/helpers/http-client";
+import { formatFecha, formatFechaHora } from "@/helpers/fecha";
 import type { CommercialQuoteAnticipo, CommercialQuoteDetalle, CommercialQuoteStatus } from "@/types/commercial-quotes";
 import type { PaymentMethod, PaymentMethods } from "@/types/cash";
 

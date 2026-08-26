@@ -57,7 +57,7 @@
               <p class="card-text text-muted small">{{ truncate(recurso.descripcion, 80) }}</p>
               <div class="d-flex justify-content-between align-items-center">
                 <span class="badge bg-secondary">{{ recurso.categoria || 'General' }}</span>
-                <span class="text-muted small">{{ formatDate(recurso.created_at) }}</span>
+                <span class="text-muted small">{{ formatFechaHora(recurso.created_at) }}</span>
               </div>
             </b-card-body>
           </b-card>
@@ -100,7 +100,7 @@
         <div class="d-flex gap-2">
           <span class="badge bg-secondary">{{ recursoSeleccionado.categoria || 'General' }}</span>
           <span class="badge" :class="tipoBadge(recursoSeleccionado.tipo)">{{ recursoSeleccionado.tipo }}</span>
-          <span class="text-muted small">{{ formatDate(recursoSeleccionado.created_at) }}</span>
+          <span class="text-muted small">{{ formatFechaHora(recursoSeleccionado.created_at) }}</span>
         </div>
       </div>
     </b-modal>
@@ -111,6 +111,7 @@
 import DefaultLayout from '@/layouts/DefaultLayout.vue'
 import { ref, onMounted } from 'vue'
 import { recursoService } from '@/services/admin/recursoService'
+import { formatFechaHora } from '@/helpers/fecha'
 
 const recursos = ref([])
 const categorias = ref<string[]>([])
@@ -132,7 +133,6 @@ const urlStorage = (path: string) => {
 }
 
 const truncate = (text: string, len: number) => text?.length > len ? text.slice(0, len) + '…' : text
-const formatDate = (date: string) => new Date(date).toLocaleDateString('es-PE')
 const embedUrl = (url: string) => {
   if (url.includes('youtube.com/watch')) {
     const videoId = url.split('v=')[1]?.split('&')[0]

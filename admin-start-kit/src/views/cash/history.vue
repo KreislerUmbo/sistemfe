@@ -99,8 +99,8 @@
                             <td colspan="10" class="text-center text-muted py-4">Sin sesiones en el rango/filtros seleccionados.</td>
                         </tr>
                         <tr v-for="s in sessions" :key="s.id" style="cursor:pointer" @click="abrirDetalle(s.id)">
-                            <td>{{ s.opened_at }}</td>
-                            <td>{{ s.closed_at ?? '—' }}</td>
+                            <td>{{ formatFechaHora(s.opened_at) }}</td>
+                            <td>{{ s.closed_at ? formatFechaHora(s.closed_at) : '—' }}</td>
                             <td>{{ s.cash_register.branch?.name ?? '-' }}</td>
                             <td>{{ s.cash_register.name }}</td>
                             <td>{{ s.opened_by_user.name }}</td>
@@ -134,8 +134,8 @@
                 </h6>
                 <small class="text-muted d-block mb-3">
                     Cajero: {{ detalle.opened_by_user.name }} —
-                    Apertura: {{ detalle.opened_at }} —
-                    Cierre: {{ detalle.closed_at ?? 'en curso' }}
+                    Apertura: {{ formatFechaHora(detalle.opened_at) }} —
+                    Cierre: {{ detalle.closed_at ? formatFechaHora(detalle.closed_at) : 'en curso' }}
                 </small>
 
                 <table class="table table-sm table-borderless mb-3">
@@ -214,6 +214,7 @@
 import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import httpClient from '@/helpers/http-client';
 import { ref, computed, watch, onMounted } from 'vue';
+import { formatFechaHora } from '@/helpers/fecha';
 import Swal from 'sweetalert2/dist/sweetalert2.js';
 import { useAuthStore } from '@/stores/auth';
 import type {

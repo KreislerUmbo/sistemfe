@@ -161,6 +161,7 @@ import { ref, computed, onMounted } from 'vue'
 import Swal from 'sweetalert2'
 import publicHttpClient from '@/helpers/publicHttpClient'
 import { useClientAuthStore } from '@/stores/clientAuth'
+import { formatFechaHora } from '@/helpers/fecha'
 
 
 const clientAuth = useClientAuthStore()
@@ -185,13 +186,7 @@ const inicial = computed(() => {
     return form.value.name.substring(0, 1).toUpperCase()
 })
 
-const fechaRegistro = computed(() => {
-    if (!clientAuth.client?.created_at) return ''
-
-    return new Date(
-        clientAuth.client.created_at
-    ).toLocaleDateString('es-PE')
-})
+const fechaRegistro = computed(() => formatFechaHora(clientAuth.client?.created_at))
 const cargarPerfil = async () => {
     loading.value = true
 

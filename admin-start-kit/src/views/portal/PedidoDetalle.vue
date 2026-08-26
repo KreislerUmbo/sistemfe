@@ -11,7 +11,7 @@
       <div v-else>
         <div class="row mb-4">
           <div class="col-md-6">
-            <p><strong>Fecha:</strong> {{ new Date(pedido.created_at).toLocaleDateString() }}</p>
+            <p><strong>Fecha:</strong> {{ formatFechaHora(pedido.created_at) }}</p>
             <p><strong>Estado:</strong> <span class="badge" :class="estadoClass(pedido.estado)">{{ pedido.estado }}</span></p>
             <p><strong>Método de pago:</strong> {{ pedido.metodo_pago }}</p>
             <p><strong>Comprobante:</strong> {{ pedido.comprobante_tipo }}</p>
@@ -50,6 +50,7 @@
 import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useClientAuthStore } from '@/stores/clientAuth'
+import { formatFechaHora } from '@/helpers/fecha'
 
 const route = useRoute()
 const clientAuth = useClientAuthStore()

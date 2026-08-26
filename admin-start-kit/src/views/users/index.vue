@@ -67,7 +67,7 @@
                                     <b-badge variant="danger" v-if="user.state == 2">Inactivo</b-badge>
                                 </b-td>
                                 <b-td>
-                                    {{ user.created_at }}
+                                    {{ formatFechaHora(user.created_at) }}
                                 </b-td>
                                 <b-td class="text-end">
                                     <a href="#" @click="editUser(user)"><i
@@ -226,6 +226,7 @@ import type { AxiosResponse } from 'axios';
 import type { RoleUser, User, UserResponse, Users } from '@/types/users';
 import type { Branch } from '@/types/cash-session';
 import { onMounted, ref, watch } from 'vue';
+import { formatFechaHora } from '@/helpers/fecha';
 
 import Swal from "sweetalert2/dist/sweetalert2.js";
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;

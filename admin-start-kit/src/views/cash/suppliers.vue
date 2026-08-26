@@ -49,7 +49,7 @@
                                     <b-badge variant="primary" v-if="item.is_active">Activo</b-badge>
                                     <b-badge variant="danger" v-else>Inactivo</b-badge>
                                 </b-td>
-                                <b-td>{{ item.created_at }}</b-td>
+                                <b-td>{{ formatFechaHora(item.created_at) }}</b-td>
                                 <b-td class="text-end">
                                     <a href="#" @click="editItem(item)"><i
                                             class="las la-pen text-secondary fs-22"></i></a>{{ " " }}
@@ -106,6 +106,7 @@ import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import httpClient from '@/helpers/http-client';
 import type { AxiosResponse } from 'axios';
 import { ref, onMounted, watch } from 'vue';
+import { formatFechaHora } from '@/helpers/fecha';
 
 import Swal from "sweetalert2/dist/sweetalert2.js";
 import type { Supplier, Suppliers, SupplierResponse } from '@/types/cash';

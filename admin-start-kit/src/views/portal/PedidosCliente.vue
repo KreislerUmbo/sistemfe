@@ -18,7 +18,7 @@
             <div>
               <strong>ORDEN N°-000{{ pedido.id }}</strong>
               <span class="badge ms-2" :class="estadoBadge(pedido.estado)">{{ pedido.estado }}</span>
-              <div class="small text-muted">{{ formatDate(pedido.created_at) }}</div>
+              <div class="small text-muted">{{ formatFechaHora(pedido.created_at) }}</div>
             </div>
             <div class="text-end">
               <div class="fw-bold text-danger">S/ {{ Number(pedido.total).toFixed(2) }}</div>
@@ -73,6 +73,7 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useClientAuthStore } from '@/stores/clientAuth'
 import publicHttpClient from '@/helpers/publicHttpClient'
+import { formatFechaHora } from '@/helpers/fecha'
 
 interface PedidoItem {
   id: number
@@ -122,10 +123,6 @@ const cambiarPagina = (page: number) => {
 const DescargarComprobante = (id: number) => {
   //router.push(`/micuenta/pedidos/${id}`)
   window.open(`/api/sales-pdf/${id}`, '_blank')
-}
-
-const formatDate = (date: string) => {
-  return new Date(date).toLocaleDateString('es-PE')
 }
 
 const estadoBadge = (estado: string) : string => {

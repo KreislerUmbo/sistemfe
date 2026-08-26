@@ -76,7 +76,7 @@
                                 </span>
                             </td>
                             <td>{{ r.opened_by_user?.name ?? '—' }}</td>
-                            <td>{{ r.opened_at ?? '—' }}</td>
+                            <td>{{ r.opened_at ? formatFechaHora(r.opened_at) : '—' }}</td>
                             <td class="text-end">{{ r.elapsed_hours !== null ? `${r.elapsed_hours} h` : '—' }}</td>
                         </tr>
                     </tbody>
@@ -90,6 +90,7 @@
 import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import httpClient from '@/helpers/http-client';
 import { ref, onMounted } from 'vue';
+import { formatFechaHora } from '@/helpers/fecha';
 import Swal from 'sweetalert2/dist/sweetalert2.js';
 import type { CashDashboardResponse } from '@/types/cash-session';
 

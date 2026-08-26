@@ -56,7 +56,7 @@
                             </b-card-title>
                             <small class="text-muted d-block">
                                 Cajero: {{ session.opened_by_user.name }} —
-                                Apertura: {{ session.opened_at }} —
+                                Apertura: {{ formatFechaHora(session.opened_at) }} —
                                 Fondo inicial: S/ {{ Number(session.opening_amount).toFixed(2) }}
                                 <span v-if="session.opening_amount_adjusted" class="badge bg-warning text-dark ms-1">
                                     fondo ajustado
@@ -120,7 +120,7 @@
                                         <b-badge v-else-if="m.status === 'rejected'" variant="danger">Rechazado</b-badge>
                                         <b-badge v-else variant="success">Confirmado</b-badge>
                                     </b-td>
-                                    <b-td>{{ m.created_at }}</b-td>
+                                    <b-td>{{ formatFechaHora(m.created_at) }}</b-td>
                                     <b-td>
                                         <div class="d-flex gap-1">
                                             <template v-if="puedeCorregir(m)">
@@ -332,6 +332,7 @@ import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import httpClient from '@/helpers/http-client';
 import type { AxiosResponse } from 'axios';
 import { ref, computed, onMounted } from 'vue';
+import { formatFechaHora } from '@/helpers/fecha';
 
 import Swal from 'sweetalert2/dist/sweetalert2.js';
 import { useAuthStore } from '@/stores/auth';

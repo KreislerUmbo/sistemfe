@@ -81,7 +81,7 @@
                                         {{ client.state == 1 ? 'Activo' : 'Inactivo' }}
                                     </span>
                                 </b-td>
-                                <b-td class="small text-muted">{{ client.created_at }}</b-td>
+                                <b-td class="small text-muted">{{ formatFechaHora(client.created_at) }}</b-td>
                                 <b-td class="text-end">
                                     <b-button type="button" variant="outline-warning" size="sm" class="me-1"
                                         @click="editClient(client)">
@@ -371,6 +371,7 @@ import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import httpClient from '@/helpers/http-client';
 import type { AxiosResponse } from 'axios';
 import { ref, onMounted, watch, computed, nextTick } from 'vue';
+import { formatFechaHora } from '@/helpers/fecha';
 import Swal from "sweetalert2/dist/sweetalert2.js";
 import type { Client, ClientResponse, Clients, UbigeoClient } from '@/types/clients';
 import REGIONES from './json/regiones.json';

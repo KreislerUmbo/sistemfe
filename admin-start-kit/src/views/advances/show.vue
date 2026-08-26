@@ -76,7 +76,7 @@
                          motivo 01), no borrado, sigue accesible acá. -->
                     <div v-if="advance.corrected_from_sale_id" class="alert alert-secondary mt-3 mb-0 py-2 px-3 small">
                         <i class="fas fa-circle-info me-1"></i>
-                        Este adelanto fue corregido el {{ formatFecha(advance.corrected_at) }}.
+                        Este adelanto fue corregido el {{ formatFechaHora(advance.corrected_at) }}.
                         Comprobante anterior (anulado): {{ advance.correctedFromSale?.n_operacion ?? advance.correctedFromSale?.serie }}.
                         <template v-if="advance.correction_reason"> Motivo: {{ advance.correction_reason }}.</template>
                     </div>
@@ -267,7 +267,7 @@ import Swal from "sweetalert2/dist/sweetalert2.js";
 import httpClient from "@/helpers/http-client";
 import type { Advance, AdvanceRefundRecord, AdvanceStatus } from "@/types/advances";
 import { imprimirComprobante, imprimirNota } from "@/composables/usePrintComprobante";
-import { formatFecha } from "@/helpers/fecha";
+import { formatFechaHora } from "@/helpers/fecha";
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
 

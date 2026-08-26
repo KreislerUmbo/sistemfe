@@ -4,6 +4,7 @@ import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import { PERMISOS, type Role, type RolePermiso, type Roles, type RolesResponse } from '@/types/roles';
 import type { AxiosResponse } from 'axios';
 import { onMounted, ref, watch } from 'vue';
+import { formatFechaHora } from '@/helpers/fecha';
 
 import Swal from "sweetalert2/dist/sweetalert2.js";
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
@@ -271,7 +272,7 @@ onMounted(() => {
                                         </ul>
                                     </b-td>
                                     <b-td>
-                                        {{ role.created_at }}
+                                        {{ formatFechaHora(role.created_at) }}
                                     </b-td>
                                     <b-td class="text-end" v-if="role.id != '1'">
                                         <a href="#" @click="editRole(role)"><i
