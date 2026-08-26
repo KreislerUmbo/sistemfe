@@ -4,10 +4,11 @@
 > módulos, `plan-general-vertical-agencia-viajes.md`, ya se archivó —
 > ver `historial-archivo.md`).
 > Referencia de arquitectura base: `arquitectura-multitenant-backend_1.md`
-> **Estado: diseñado, todavía sin construir** — no tiene fila propia
-> todavía en `plan-hoja-de-ruta-ejecucion.md` (que hoy solo llega hasta
-> 11v + 11e/11f/11g/11d/11t). Si se retoma este módulo, agregarle una
-> fila ahí primero.
+> **Estado: diseño revisado y aprobado (26-ago-2026, ver §11/§12),
+> todavía sin construir** — no tiene fila propia todavía en
+> `plan-hoja-de-ruta-ejecucion.md` (que hoy solo llega hasta 11v +
+> 11e/11f/11g/11d/11t). Si se retoma este módulo, agregarle una fila ahí
+> primero.
 
 ---
 
@@ -260,16 +261,79 @@ del próximo código en tiempo real para los cuatro tipos.
 
 - ¿`formato_periodo` (`MMAA`) necesita ser configurable desde ya para
   cotización, o se deja como constante hasta que una agencia real pida
-  otro orden (ej. `AAMM`)?
+  otro orden (ej. `AAMM`)? **Sigue abierto** (no se tocó en la revisión del
+  26-ago-2026, ver §12).
 - El diseño de reserva como documento derivado queda propuesto y con buena
   lógica, pero se termina de validar contra el modelo de datos real de
-  `reserva` cuando se retome el módulo de Cotizaciones/Reservas (ese
-  módulo sigue en maduración — confirmar ahí que el campo
-  `reservas_generadas` encaja bien con el resto de la tabla `cotizaciones`
-  y que no hay otro caso de negocio que rompa el supuesto de "una reserva
-  deriva de una sola cotización").
+  `reserva` cuando se retome el módulo de Cotizaciones/Reservas.
+  **Validado en la revisión del 26-ago-2026** (§12): `reservas_generadas`
+  encaja sin choques en la tabla `reserva` (Sesión 8a) tal como existe hoy.
 
-## 11. Historial
+## 11. Revisión de diseño (26-ago-2026) — 3 gaps cerrados con el usuario
+
+Antes de esta revisión el documento no contemplaba: Venta Directa (que ya
+vive en producción con el mismo mecanismo de código que Cotización, pero
+por fuera del alcance de "los cuatro tipos"), el corte de formato con
+datos reales existentes, y qué pantallas de reserva debían pasar a leer el
+código nuevo. Confirmado contra el código real (`agencia-demo`, único
+tenant con datos: 6 cotizaciones con 6 prefijos distintos e
+inconsistentes — `kur`/`dkm`/`PDF-TEST`/`CDKM`/`VD`/`DKM` — evidencia de
+que el campo de prefijo libre actual ya produce el desorden que este
+módulo busca resolver). Ningún tenant real de producción (no-demo) opera
+hoy con `giro='agencia_viajes'`, así que el riesgo de "romper numeración
+real de un cliente" en el corte es bajo.
+
+**Decisiones confirmadas con el usuario:**
+
+1. **Venta Directa se agrega como quinto tipo** en `configuracion_codigos`
+   (`tipo = 'venta_directa'`), con su propio prefijo sugerido y correlativo
+   propio en `codigo_secuencias` — mismo mecanismo que tour/paquete/
+   cotización, no queda fuera del módulo. Letra sugerida a definir en
+   implementación (no colisiona con T/P/C/R — candidata natural: `V`).
+   `VentaDirectaController::store()` (línea con el comentario
+   `codigo_prefijo => 'VD'`) deja de hardcodear el prefijo y pasa a
+   resolverlo igual que los demás tipos.
+2. **Se adopta el formato nuevo del plan sin excepción** —
+   `{prefijo}-{periodo MMAA}-{correlativo 7 dígitos}` reemplaza al formato
+   actual (`{prefijo}-{año}-{correlativo 3 dígitos}`) desde el día del
+   corte. Los códigos ya emitidos con el formato viejo quedan inmutables
+   (regla §8, sin cambios) — conviven ambos formatos en el histórico, solo
+   los nuevos usan el formato v3.
+3. **Las pantallas que hoy muestran el código de la cotización en contexto
+   de reserva pasan a mostrar el código propio de la reserva** una vez
+   exista. Inventario confirmado por grep (26-ago-2026, antes de
+   implementar debe re-confirmarse que sigue vigente):
+   `admin-start-kit/src/views/agencia-viajes/reservas/index.vue` (línea con
+   `reserva.alternativa?.cotizacion?.codigo`), `cotizador/index.vue`,
+   `cotizador/editar.vue`, y `resources/views/pdf/agencia-viajes/
+   alternativa.blade.php`. Las cuatro deben pasar a leer `reserva.codigo`
+   en los contextos donde ya exista una reserva generada (una cotización
+   sin reserva aceptada todavía sigue mostrando su propio código, no hay
+   nada que derivar todavía).
+
+**Trabajo de implementación que este cambio de alcance agrega, no
+mencionado en la v3 original:**
+- Quitar el input manual "Prefijo de código" de `cotizador/nueva.vue`
+  (línea ~25) y la validación `codigo_prefijo => required` de
+  `CotizacionController::store()` — el prefijo deja de ser un dato que
+  tipea el usuario por documento, sale de `sigla_comercial` + tipo.
+- Agregar `sigla_comercial` a `ConfiguracionAgencia` (tabla
+  `configuracion_agencia`, singleton por tenant — ya existe, es un campo
+  más, no una tabla nueva).
+- Backfill: las 6 reservas ya existentes en `agencia-demo` sin código
+  propio quedan sin código retroactivo (regla de "sin empalme", igual que
+  tour/paquete/cotización) — no se les asigna uno al activar el módulo.
+
+## 12. Estado tras la revisión
+
+**Diseño aprobado, con los 3 gaps de §11 ya resueltos.** Sigue sin
+existir ninguna fila propia en `plan-hoja-de-ruta-ejecucion.md` — falta
+agregarla antes de empezar a construir. Único punto realmente abierto:
+`formato_periodo` configurable vs. constante (§10, primer punto) — no
+bloquea el inicio de la implementación, se puede decidir en el momento de
+construir la pantalla de configuración.
+
+## 13. Historial
 
 | Fecha | Cambio |
 |---|---|
@@ -279,3 +343,4 @@ del próximo código en tiempo real para los cuatro tipos.
 | 14-ago-2026 | Confirmado con el usuario: sigla de agencia única y compartida entre los tres tipos, vive en los datos generales de la empresa; solo cambia la letra inicial por tipo (T/P/C). |
 | 14-ago-2026 | v3: se agrega **reserva** como cuarto tipo, diseñado como documento derivado de cotización — reusa periodo+correlativo de la cotización padre, cambia solo la letra (C→R), sin contador propio. Se agrega el caso a futuro de más de una reserva por cotización, resuelto con sufijo numérico corrido (`-2`, `-3`...) basado en un contador `cotizaciones.reservas_generadas`, sin necesidad de tocar el diseño base. Pendiente de validar contra el modelo de datos real cuando se retome el módulo de Cotizaciones/Reservas. |
 | 15-ago-2026 | Diseñado originalmente en un Proyecto de Claude aparte del repo; llevado al repo real (`docs/planning/agencia-de-viajes/`) en esta fecha, sin cambios de contenido respecto a la v3. |
+| 26-ago-2026 | Revisión de diseño contra el código real (§11/§12): 3 gaps cerrados con el usuario (Venta Directa como quinto tipo, formato nuevo sin excepción, pantallas de reserva pasan a leer el código propio). Diseño aprobado — falta agregarle fila en `plan-hoja-de-ruta-ejecucion.md` para empezar a construir. |
