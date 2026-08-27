@@ -12,7 +12,7 @@
 > migraciones), frontend (`configuracion/codigos.vue` con vista previa en
 > vivo, prefijo manual quitado de `cotizador/nueva.vue`), 20 tests nuevos
 > en verde, verificado contra datos reales de `agencia-demo` (revertido,
-> nada quedó persistido). Sin commitear/pushear a `origin/main` todavía.
+> nada quedó persistido). Mergeado a `origin/main` el 27-ago-2026.
 
 ---
 
