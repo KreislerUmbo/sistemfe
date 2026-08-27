@@ -138,7 +138,7 @@
                                 <tr v-if="!(tarifasPorServicio[ps.id]?.length)">
                                     <td :colspan="esHotel ? 8 : 7" class="text-center text-muted py-3 fst-italic">Sin tarifas cargadas.</td>
                                 </tr>
-                                <tr v-for="tarifa in tarifasPorServicio[ps.id]" :key="tarifa.id">
+                                <tr v-for="tarifa in tarifasPorServicio[ps.id]" :key="tarifa.id" :class="{ 'opacity-50': !tarifa.activo }">
                                     <td class="ps-3">{{ tarifa.tipo_tarifa }}</td>
                                     <td>{{ tarifa.modalidad }}</td>
                                     <td v-if="esHotel">{{ tarifa.tipo_habitacion ?? '—' }}</td>
@@ -148,12 +148,19 @@
                                         <span class="badge" :class="claseMargen(margenTarifa(tarifa))">{{ margenTarifa(tarifa).toFixed(1) }}%</span>
                                     </td>
                                     <td class="text-center small">
+                                        <span class="badge d-block mb-1" :class="tarifa.activo ? 'bg-success' : 'bg-secondary'">{{ tarifa.activo ? 'Activa' : 'Inactiva' }}</span>
                                         <span class="badge d-block mb-1" :class="estadoVigencia(tarifa).clase">{{ estadoVigencia(tarifa).label }}</span>
                                         {{ formatFecha(tarifa.vigente_desde) }} — {{ tarifa.vigente_hasta ? formatFecha(tarifa.vigente_hasta) : 'indefinido' }}
                                     </td>
                                     <td class="text-center pe-3">
                                         <button class="btn btn-sm btn-outline-secondary me-1" @click="abrirFormTarifa(ps, tarifa)">
                                             <i class="fas fa-pen"></i>
+                                        </button>
+                                        <button v-if="tarifa.activo" class="btn btn-sm btn-outline-warning me-1" title="Retirar del catálogo activo (no borra el historial)" @click="desactivarTarifa(tarifa)">
+                                            <i class="fas fa-power-off"></i>
+                                        </button>
+                                        <button v-else class="btn btn-sm btn-outline-success me-1" title="Reactivar" @click="activarTarifa(tarifa)">
+                                            <i class="fas fa-rotate-left"></i>
                                         </button>
                                         <button class="btn btn-sm btn-outline-danger" @click="eliminarTarifa(tarifa)">
                                             <i class="fas fa-trash"></i>
@@ -556,9 +563,42 @@ const eliminarTarifa = (tarifa: ProveedorTarifa) => {
             await proveedorService.eliminarTarifa(tarifa.id);
             await cargarServicios();
         } catch (error: any) {
-            (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo eliminar', 'error');
+            // Bloqueado porque ya está en uso (backend, 422) — ofrecer
+            // desactivar en su lugar en vez de dejar un error sin salida.
+            const mensaje = error.response?.data?.message ?? 'No se pudo eliminar';
+            if (error.response?.status === 422) {
+                const confirmar = await (Swal as TVueSwalInstance).fire({
+                    title: 'No se puede eliminar', text: mensaje, icon: 'warning',
+                    showCancelButton: true, confirmButtonText: 'Desactivar en su lugar',
+                });
+                if (confirmar.isConfirmed) await desactivarTarifa(tarifa);
+                return;
+            }
+            (Swal as TVueSwalInstance).fire('Error', mensaje, 'error');
         }
     });
+};
+
+// 26-ago-2026 — retiro/reactivación del catálogo activo, sin tocar
+// historial (a diferencia de eliminarTarifa()). Sin confirmación extra:
+// nunca rompe nada (el mismo criterio que aplica a un combo con "componente
+// inactivo" no aplica acá, una tarifa desactivada no bloquea nada más).
+const desactivarTarifa = async (tarifa: ProveedorTarifa) => {
+    try {
+        await proveedorService.desactivarTarifa(tarifa.id);
+        await cargarServicios();
+    } catch (error: any) {
+        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo desactivar', 'error');
+    }
+};
+
+const activarTarifa = async (tarifa: ProveedorTarifa) => {
+    try {
+        await proveedorService.activarTarifa(tarifa.id);
+        await cargarServicios();
+    } catch (error: any) {
+        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo reactivar', 'error');
+    }
 };
 
 onMounted(async () => {

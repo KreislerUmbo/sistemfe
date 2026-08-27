@@ -49,6 +49,11 @@ class ProveedorTarifaController extends Controller
             'proveedorServicio.destinoServicio.destinoAtractivo',
             'proveedorServicio.destinoServicio.servicio',
         ])
+            // Retiro del catálogo activo (26-ago-2026) — una tarifa
+            // desactivada a mano no debe ofrecerse para cotizaciones/
+            // paquetes nuevos, aunque su rango de vigente_desde/hasta
+            // siga siendo válido por fecha.
+            ->where('activo', true)
             ->where('vigente_desde', '<=', $hoy)
             ->where(fn ($q) => $q->whereNull('vigente_hasta')->orWhere('vigente_hasta', '>=', $hoy))
             // Sesión 11k, Fix 8 — un proveedor dado de baja no debe seguir
@@ -120,6 +125,13 @@ class ProveedorTarifaController extends Controller
         }
 
         $validado['proveedor_servicio_id'] = $proveedorServicio->id;
+        // Explícito, no confiar en el default de BD: Model::create() no
+        // refresca el modelo en memoria después del insert, así que sin
+        // esto el JSON de respuesta devolvía "activo": null (el atributo ni
+        // siquiera existe en memoria) en vez de true — no se notaba en la
+        // UI porque el frontend recarga la lista completa después de
+        // guardar, pero es un dato incorrecto igual.
+        $validado['activo'] = true;
         $tarifa = ProveedorTarifa::create($validado);
 
         return response()->json([
@@ -150,6 +162,12 @@ class ProveedorTarifaController extends Controller
 
             $validado['proveedor_servicio_id'] = $tarifaActual->proveedor_servicio_id;
             $validado['vigente_desde'] = $validado['vigente_desde'] ?? now()->toDateString();
+            // La nueva versión hereda el estado activo/inactivo de la que
+            // reemplaza — editar el precio de una tarifa desactivada no
+            // debe reactivarla en silencio, eso requiere un activar()
+            // explícito. Mismo motivo que en store(): sin esto quedaría
+            // null en vez de heredar el valor real.
+            $validado['activo'] = $tarifaActual->activo;
             $nueva = ProveedorTarifa::create($validado);
 
             return response()->json([
@@ -169,9 +187,11 @@ class ProveedorTarifaController extends Controller
         ]);
     }
 
-    // Sin soft delete ni columna 'activo' en esta sesión — delete real,
-    // bloqueado si la tarifa ya quedó referenciada (precio congelado) en
-    // algún registro histórico de cotización/reserva/plantilla de tour.
+    // Delete real, bloqueado si la tarifa ya quedó referenciada (precio
+    // congelado) en algún registro histórico de cotización/reserva/
+    // plantilla de tour — para ese caso existe desactivar()/activar()
+    // (26-ago-2026), que retira del catálogo activo sin tocar el
+    // historial.
     public function destroy(string $id)
     {
         $tarifa = ProveedorTarifa::findOrFail($id);
@@ -184,7 +204,7 @@ class ProveedorTarifaController extends Controller
         if ($totalUsos > 0) {
             return response()->json([
                 'code' => 422,
-                'message' => "No se puede eliminar: esta tarifa está en uso en {$totalUsos} cotización(es)/reserva(s)/plantilla(s) de tour. El precio ya quedó congelado en esos registros (no se ven afectados), pero para retirar esta tarifa del catálogo activo hablalo con Umbo — por ahora no hay forma de desactivarla sin borrar el historial.",
+                'message' => "No se puede eliminar: esta tarifa está en uso en {$totalUsos} cotización(es)/reserva(s)/plantilla(s) de tour. El precio ya quedó congelado en esos registros (no se ven afectados) — para retirarla del catálogo activo sin borrar el historial, desactivala en su lugar.",
             ], 422);
         }
 
@@ -193,6 +213,38 @@ class ProveedorTarifaController extends Controller
         return response()->json([
             'code' => 200,
             'message' => 'Tarifa eliminada correctamente',
+        ]);
+    }
+
+    // Retira la tarifa del catálogo activo (26-ago-2026) — deja de
+    // ofrecerse en biblioteca() y no se puede elegir para ítems nuevos
+    // (AlternativaItemController::store()), pero no toca ningún registro
+    // histórico: el precio ya congelado en cotizaciones/reservas/plantillas
+    // de tour que ya la usaron no se ve afectado. Sin guard de uso — a
+    // diferencia de borrar, desactivar nunca rompe nada, así que no hace
+    // falta la confirmación extra que sí tiene PaquetePlantillaController
+    // para 'componente inactivo' de un combo.
+    public function desactivar(string $id)
+    {
+        $tarifa = ProveedorTarifa::findOrFail($id);
+        $tarifa->update(['activo' => false]);
+
+        return response()->json([
+            'code' => 200,
+            'message' => 'Tarifa desactivada — ya no aparece para cotizaciones/paquetes nuevos.',
+            'proveedor_tarifa' => $tarifa,
+        ]);
+    }
+
+    public function activar(string $id)
+    {
+        $tarifa = ProveedorTarifa::findOrFail($id);
+        $tarifa->update(['activo' => true]);
+
+        return response()->json([
+            'code' => 200,
+            'message' => 'Tarifa reactivada — vuelve a estar disponible para cotizaciones/paquetes nuevos.',
+            'proveedor_tarifa' => $tarifa,
         ]);
     }
 

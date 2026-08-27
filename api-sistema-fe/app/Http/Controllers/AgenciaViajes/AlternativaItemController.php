@@ -522,6 +522,19 @@ class AlternativaItemController extends Controller
         $cantidad = $validado['cantidad'] ?? 1;
         $paxIncluidos = $validado['pax_incluidos'] ?? null;
 
+        // 26-ago-2026: biblioteca() ya excluye tarifas desactivadas de la
+        // búsqueda, pero esto es lo que de verdad decide si un ítem nuevo
+        // se puede crear — sin este check, un proveedor_tarifa_id ya
+        // desactivado (ej. de una pestaña vieja) igual se podía usar. No
+        // aplica a ítems ya existentes (el precio ya está congelado, no se
+        // re-valida al editar cantidad/pax_incluidos de un ítem viejo).
+        if ($tarifa && ! $tarifa->activo) {
+            return response()->json([
+                'code' => 422,
+                'message' => 'Esta tarifa fue retirada del catálogo activo — no se puede usar en un ítem nuevo.',
+            ], 422);
+        }
+
         if ($tarifa) {
             $monedaCosto = $tarifa->moneda;
             $costoSnapshot = (float) $tarifa->precio_costo;
