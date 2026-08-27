@@ -14,7 +14,7 @@ export const proveedorTipoService = {
 }
 
 export const proveedorService = {
-  async listar(params: { page?: number; search?: string; tipo_id?: number; estado?: boolean } = {}) {
+  async listar(params: { page?: number; search?: string; tipo_id?: number; estado?: boolean; destino_atractivo_id?: number } = {}) {
     const response = await httpClient.get('/proveedores', { params })
     return response.data
   },
