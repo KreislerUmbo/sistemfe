@@ -501,6 +501,28 @@
                                 <input type="text" class="form-control form-control-sm mb-2" placeholder="Buscar..."
                                     v-model="bibliotecaSearch" @input="onBibliotecaSearch">
 
+                                <!-- 27-ago-2026 — mismos filtros combinables que ya tenía
+                                     la biblioteca de paquetes/detalle.vue. servicio/proveedor
+                                     solo aplican a tarifas de proveedor (el backend excluye
+                                     tours/paquetes del resultado si cualquiera está activo). -->
+                                <div class="row g-2 mb-2">
+                                    <div class="col-12 col-md-4">
+                                        <DestinoTreeSelect v-model="filtroDestinoId" nivel-max="lugar" placeholder="Zona o destino..." />
+                                    </div>
+                                    <div class="col-6 col-md-4">
+                                        <select class="form-select form-select-sm" v-model="filtroServicioId">
+                                            <option :value="null">Cualquier servicio</option>
+                                            <option v-for="s in serviciosFiltro" :key="s.id" :value="s.id">{{ s.nombre }}</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-6 col-md-4">
+                                        <select class="form-select form-select-sm" v-model="filtroProveedorId">
+                                            <option :value="null">Cualquier proveedor</option>
+                                            <option v-for="p in proveedoresFiltro" :key="p.id" :value="p.id">{{ p.nombre_comercial ?? p.razon_social }}</option>
+                                        </select>
+                                    </div>
+                                </div>
+
                                 <div class="biblioteca-grid">
                                     <div v-for="fila in filasBibliotecaPagina" :key="fila.kind + '-' + fila.data.id"
                                         class="border rounded p-2 small lib-item"
@@ -725,6 +747,7 @@ import HabitacionMatrixPicker from '@/components/AgenciaViajes/HabitacionMatrixP
 import PasajeAereoForm from '@/components/AgenciaViajes/PasajeAereoForm.vue';
 import ItemManualForm from '@/components/AgenciaViajes/ItemManualForm.vue';
 import PromoverProveedorModal from '@/components/AgenciaViajes/PromoverProveedorModal.vue';
+import DestinoTreeSelect from '@/components/AgenciaViajes/DestinoTreeSelect.vue';
 import ClientFormQuick from '@/components/Sales/ClientFormQuick.vue';
 import { useToast } from '@/composables/useToast';
 import { cotizacionService } from '@/services/admin/cotizacionService';
@@ -732,12 +755,13 @@ import { alternativaService } from '@/services/admin/alternativaService';
 import { alternativaItemService } from '@/services/admin/alternativaItemService';
 import { opcionMayoristaService } from '@/services/admin/opcionMayoristaService';
 import { proveedorService } from '@/services/admin/proveedorService';
+import { servicioService } from '@/services/admin/servicioService';
 import { bibliotecaCotizadorService, type BibliotecaTipo } from '@/services/admin/bibliotecaCotizadorService';
 import { reservaService } from '@/services/admin/reservaService';
 import { useAgenciaViajesCatalogosStore } from '@/stores/agenciaViajesCatalogos';
 import { formatFecha } from '@/helpers/fecha';
 import { guiaService } from '@/services/admin/guiaService';
-import type { Cotizacion, Alternativa, AlternativaItem, ProveedorTarifa, OpcionMayorista, Proveedor, ProveedorTipo, BibliotecaResultado, ConfiguracionAgencia, DestinoServicio, Guia, GuiaTarifa } from '@/types/agencia-viajes';
+import type { Cotizacion, Alternativa, AlternativaItem, ProveedorTarifa, OpcionMayorista, Proveedor, ProveedorTipo, BibliotecaResultado, ConfiguracionAgencia, DestinoServicio, Guia, GuiaTarifa, Servicio } from '@/types/agencia-viajes';
 import type { Client } from '@/types/clients';
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
@@ -1311,11 +1335,24 @@ const bibliotecaSearch = ref('');
 const bibliotecaResultados = ref<BibliotecaResultado[]>([]);
 let bibliotecaTimeout: any = null;
 
+// 27-ago-2026 — mismos filtros combinables que ya tenía la biblioteca de
+// paquetes/detalle.vue (destino/servicio/proveedor), antes solo disponibles
+// ahí. servicio_id/proveedor_id excluyen tours/paquetes del resultado (no
+// aplican a ese tipo, ver BibliotecaCotizadorController en el backend).
+const filtroDestinoId = ref<number | null>(null);
+const filtroServicioId = ref<number | null>(null);
+const filtroProveedorId = ref<number | null>(null);
+const serviciosFiltro = ref<Servicio[]>([]);
+const proveedoresFiltro = ref<Proveedor[]>([]);
+
 const cargarBiblioteca = async () => {
     const res = await bibliotecaCotizadorService.buscar({
         tipo: chipActivoState.value.tipo,
         proveedor_tipo_id: chipActivoState.value.proveedorTipoId ?? undefined,
         search: bibliotecaSearch.value || undefined,
+        destino_atractivo_id: filtroDestinoId.value ?? undefined,
+        servicio_id: filtroServicioId.value ?? undefined,
+        proveedor_id: filtroProveedorId.value ?? undefined,
     });
     bibliotecaResultados.value = res.resultados;
     bibliotecaPaginaActual.value = 1;
@@ -1325,6 +1362,8 @@ const onBibliotecaSearch = () => {
     clearTimeout(bibliotecaTimeout);
     bibliotecaTimeout = setTimeout(cargarBiblioteca, 300);
 };
+
+watch([filtroDestinoId, filtroServicioId, filtroProveedorId], onBibliotecaSearch);
 
 const etiquetaCategoriaPaquete = (c: string) => ({ local: 'Local', nacional: 'Nacional', internacional: 'Internacional' } as Record<string, string>)[c] ?? c;
 
@@ -2137,6 +2176,12 @@ onMounted(async () => {
         // 'default' en onUnmounted, no debe quedar colapsado en el resto del
         // sistema al salir de esta pantalla.
         layoutStore.setLeftSideBarSize('collapsed');
+
+        // 27-ago-2026 — catálogos de servicios/proveedores para los filtros
+        // nuevos de la biblioteca (destino/servicio/proveedor), en paralelo
+        // (no bloquean la carga) — mismo patrón que paquetes/detalle.vue.
+        servicioService.listar({ per_page: 200 }).then((res) => { serviciosFiltro.value = res.servicios ?? []; });
+        proveedorService.listar({ estado: true }).then((res) => { proveedoresFiltro.value = res.proveedores ?? []; });
 
         // proveedor_tipos: catálogo real (editable desde el panel superadmin,
         // NO los 4 valores del seeder original) — alimenta tanto los chips de
