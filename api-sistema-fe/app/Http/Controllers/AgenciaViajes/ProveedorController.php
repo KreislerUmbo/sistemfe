@@ -5,6 +5,7 @@ namespace App\Http\Controllers\AgenciaViajes;
 use App\Http\Controllers\Controller;
 use App\Models\AgenciaViajes\Amenidad;
 use App\Models\AgenciaViajes\ConfiguracionAgencia;
+use App\Models\AgenciaViajes\DestinoAtractivo;
 use App\Models\AgenciaViajes\Proveedor;
 use App\Models\AgenciaViajes\ProveedorAlojamientoDetalle;
 use App\Models\AgenciaViajes\ProveedorTarifa;
@@ -47,6 +48,17 @@ class ProveedorController extends Controller
                 $q->where('razon_social', 'ilike', "%{$search}%")
                     ->orWhere('nombre_comercial', 'ilike', "%{$search}%");
             });
+        }
+
+        // 27-ago-2026 — un proveedor no tiene destino propio (puede operar
+        // en varios, uno por cada proveedor_servicio), así que se filtra
+        // por "tiene al menos un servicio en este destino o sus
+        // descendientes". Mismo patrón (idsConDescendientes + whereHas)
+        // que ya usa BibliotecaCotizadorController/
+        // ProveedorTarifaController::biblioteca() para el mismo problema.
+        if ($request->filled('destino_atractivo_id')) {
+            $ids = DestinoAtractivo::idsConDescendientes((int) $request->get('destino_atractivo_id'));
+            $query->whereHas('proveedorServicios.destinoServicio', fn ($q) => $q->whereIn('destino_atractivo_id', $ids));
         }
 
         $proveedores = $query->orderBy('razon_social')->paginate(15);

@@ -36,19 +36,23 @@
         <div class="card border-0 shadow-sm mb-3">
             <div class="card-body">
                 <div class="row g-2 align-items-end">
-                    <div class="col-12 col-md-5">
+                    <div class="col-12 col-md-4">
                         <label class="form-label mb-1 small fw-semibold text-secondary">Buscar</label>
                         <input type="text" class="form-control form-control-sm" placeholder="Razón social o nombre comercial..."
                             v-model="search" @keyup.enter="list">
                     </div>
-                    <div class="col-6 col-md-4">
+                    <div class="col-12 col-md-4">
+                        <label class="form-label mb-1 small fw-semibold text-secondary">Destino</label>
+                        <DestinoTreeSelect v-model="destinoAtractivoId" placeholder="Buscar zona/lugar/atractivo..." />
+                    </div>
+                    <div class="col-6 col-md-2">
                         <label class="form-label mb-1 small fw-semibold text-secondary">Tipo</label>
                         <select class="form-select form-select-sm" v-model="tipoId" @change="list">
                             <option :value="null">— Todos —</option>
                             <option v-for="tipo in proveedorTipos" :key="tipo.id" :value="tipo.id">{{ tipo.nombre }}</option>
                         </select>
                     </div>
-                    <div class="col-6 col-md-3 d-flex gap-2">
+                    <div class="col-6 col-md-2 d-flex gap-2">
                         <button class="btn btn-primary btn-sm w-100" @click="list">
                             <i class="fas fa-search me-1"></i>Buscar
                         </button>
@@ -137,8 +141,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, watch } from 'vue';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';
+import DestinoTreeSelect from '@/components/AgenciaViajes/DestinoTreeSelect.vue';
 import Swal from 'sweetalert2/dist/sweetalert2.js';
 import { proveedorService, proveedorTipoService } from '@/services/admin/proveedorService';
 import type { Proveedor, ProveedorTipo } from '@/types/agencia-viajes';
@@ -149,6 +154,10 @@ const proveedores = ref<Proveedor[]>([]);
 const proveedorTipos = ref<ProveedorTipo[]>([]);
 const search = ref<string>('');
 const tipoId = ref<number | null>(null);
+// Un proveedor no tiene destino propio (puede operar en varios, uno por
+// cada proveedor_servicio) — filtra "tiene al menos un servicio en este
+// destino o sus descendientes" (backend, ProveedorController::index()).
+const destinoAtractivoId = ref<number | null>(null);
 const currentPage = ref<number>(1);
 const totalPages = ref<number>(0);
 const perPageRows = ref<number>(15);
@@ -176,6 +185,7 @@ const list = async () => {
             page: currentPage.value,
             search: search.value || undefined,
             tipo_id: tipoId.value || undefined,
+            destino_atractivo_id: destinoAtractivoId.value || undefined,
         });
         proveedores.value = res.proveedores;
         totalPages.value = res.total;
@@ -190,9 +200,18 @@ const list = async () => {
 const reset = () => {
     search.value = '';
     tipoId.value = null;
+    destinoAtractivoId.value = null;
     currentPage.value = 1;
     list();
 };
+
+// DestinoTreeSelect no emite un "@change" propio (solo update:modelValue)
+// — a diferencia del <select> de Tipo, se busca apenas se elige/limpia un
+// destino, sin esperar al botón "Buscar".
+watch(destinoAtractivoId, () => {
+    currentPage.value = 1;
+    list();
+});
 
 const eliminar = (proveedor: Proveedor) => {
     (Swal as TVueSwalInstance).fire({
