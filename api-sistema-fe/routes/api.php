@@ -495,6 +495,12 @@ Route::group([
         ->middleware('permission:agencia.proveedores');
     Route::delete("proveedor-tarifas/{id}", [ProveedorTarifaController::class, 'destroy'])
         ->middleware('permission:agencia.proveedores');
+    // 26-ago-2026 — retiro del catálogo activo sin borrar historial, ver
+    // ProveedorTarifaController::desactivar()/activar().
+    Route::patch("proveedor-tarifas/{id}/desactivar", [ProveedorTarifaController::class, 'desactivar'])
+        ->middleware('permission:agencia.proveedores');
+    Route::patch("proveedor-tarifas/{id}/activar", [ProveedorTarifaController::class, 'activar'])
+        ->middleware('permission:agencia.proveedores');
 
     Route::post("destinos-atractivos/{id}", [DestinoAtractivoController::class, 'update'])
         ->middleware('permission:agencia.destinos');

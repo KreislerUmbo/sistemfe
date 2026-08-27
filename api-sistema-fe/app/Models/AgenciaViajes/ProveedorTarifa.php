@@ -20,6 +20,12 @@ class ProveedorTarifa extends Model
     protected $table = 'proveedor_tarifas';
 
     protected $fillable = [
+        // Retiro del catálogo activo (26-ago-2026) — reversible, separado
+        // a propósito de vigente_desde/vigente_hasta (ver comentario de la
+        // migración add_activo_to_proveedor_tarifas_table). No filtra
+        // index() (la pantalla de gestión del proveedor muestra todo, con
+        // badge), solo biblioteca() y la validación al crear un ítem nuevo.
+        'activo',
         'proveedor_servicio_id',
         'tipo_tarifa',
         'modalidad',
@@ -50,6 +56,7 @@ class ProveedorTarifa extends Model
     ];
 
     protected $casts = [
+        'activo' => 'boolean',
         'diferenciador' => 'array',
         'precio_costo' => 'decimal:2',
         'margen_valor' => 'decimal:2',

@@ -94,6 +94,11 @@ export type ProveedorServicio = {
 
 export type ProveedorTarifa = {
   id: number;
+  // Retiro del catálogo activo (26-ago-2026) — reversible, separado de
+  // vigente_desde/vigente_hasta a propósito (ver backend). Filtra
+  // biblioteca() y la validación al crear un ítem nuevo; la pantalla de
+  // gestión del proveedor sigue mostrando todo, con badge.
+  activo: boolean;
   proveedor_servicio_id: number;
   proveedor_servicio?: ProveedorServicio;
   tipo_tarifa: 'corporativa' | 'grupal' | 'publica';

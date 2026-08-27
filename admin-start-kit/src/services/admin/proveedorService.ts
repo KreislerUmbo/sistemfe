@@ -93,5 +93,14 @@ export const proveedorService = {
   async eliminarTarifa(tarifaId: number) {
     const response = await httpClient.delete(`/proveedor-tarifas/${tarifaId}`)
     return response.data
+  },
+  // 26-ago-2026 — retiro del catálogo activo sin borrar historial.
+  async desactivarTarifa(tarifaId: number) {
+    const response = await httpClient.patch(`/proveedor-tarifas/${tarifaId}/desactivar`)
+    return response.data
+  },
+  async activarTarifa(tarifaId: number) {
+    const response = await httpClient.patch(`/proveedor-tarifas/${tarifaId}/activar`)
+    return response.data
   }
 }
