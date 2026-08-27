@@ -8,7 +8,18 @@ import type { BibliotecaResultado } from '@/types/agencia-viajes'
 export type BibliotecaTipo = 'todos' | 'tour' | 'paquete' | 'proveedor'
 
 export const bibliotecaCotizadorService = {
-  async buscar(params: { tipo: BibliotecaTipo; proveedor_tipo_id?: number | null; search?: string }) {
+  // 27-ago-2026 — destino/servicio/proveedor, mismos filtros combinables
+  // que ya tenía proveedorService.biblioteca() (usado por paquetes/
+  // detalle.vue). servicio_id/proveedor_id excluyen tours/paquetes del
+  // resultado (no aplican a ese tipo, ver backend).
+  async buscar(params: {
+    tipo: BibliotecaTipo
+    proveedor_tipo_id?: number | null
+    search?: string
+    destino_atractivo_id?: number | null
+    servicio_id?: number | null
+    proveedor_id?: number | null
+  }) {
     const response = await httpClient.get('/biblioteca-cotizador', { params })
     return response.data as { resultados: BibliotecaResultado[] }
   }
