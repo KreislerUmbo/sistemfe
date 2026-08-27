@@ -55,7 +55,7 @@
                                 <td colspan="6" class="text-center py-5 text-muted fst-italic">Sin reservas registradas.</td>
                             </tr>
                             <tr v-for="reserva in reservas" :key="reserva.id">
-                                <td class="ps-3 fw-semibold">{{ reserva.alternativa?.cotizacion?.codigo }}</td>
+                                <td class="ps-3 fw-semibold">{{ reserva.codigo ?? reserva.alternativa?.cotizacion?.codigo }}</td>
                                 <td>{{ reserva.alternativa?.cotizacion?.cliente?.full_name }}</td>
                                 <td>{{ reserva.alternativa?.cotizacion?.destino }}</td>
                                 <td class="small">

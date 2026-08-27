@@ -13,9 +13,33 @@
         </div>
 
         <template v-else>
+            <!-- Módulo 12 (códigos y numeración) — sigla única de la agencia,
+                 leída por Configuración > Códigos y numeración para sugerir el
+                 prefijo de cada tipo de documento (T/P/C/R/V + sigla). -->
             <div class="card border-0 shadow-sm mb-3">
                 <div class="card-header bg-white border-bottom d-flex align-items-center gap-2 py-2">
                     <span class="badge bg-primary rounded-pill">1</span>
+                    <span class="fw-semibold text-dark">Datos comerciales</span>
+                </div>
+                <div class="card-body py-3">
+                    <div class="row g-3 align-items-end">
+                        <div class="col-6 col-md-3">
+                            <label class="form-label mb-1 small fw-semibold text-secondary">Sigla comercial</label>
+                            <input type="text" class="form-control form-control-sm" v-model="form.sigla_comercial" placeholder="Ej. DKM" maxlength="20">
+                        </div>
+                        <div class="col-12 col-md-9">
+                            <router-link :to="{ name: 'agencia.configuracion.codigos' }" class="btn btn-sm btn-outline-primary">
+                                <i class="fas fa-hashtag me-1"></i>Configurar códigos y numeración
+                            </router-link>
+                        </div>
+                    </div>
+                    <small class="text-muted d-block mt-2">Usada para sugerir el prefijo de tour/paquete/cotización/reserva/venta directa (ej. "DKM" → "TDKM", "PDKM"...).</small>
+                </div>
+            </div>
+
+            <div class="card border-0 shadow-sm mb-3">
+                <div class="card-header bg-white border-bottom d-flex align-items-center gap-2 py-2">
+                    <span class="badge bg-primary rounded-pill">2</span>
                     <span class="fw-semibold text-dark">Clasificación de pasajeros</span>
                 </div>
                 <div class="card-body py-3">
@@ -38,7 +62,7 @@
 
             <div class="card border-0 shadow-sm mb-3">
                 <div class="card-header bg-white border-bottom d-flex align-items-center gap-2 py-2">
-                    <span class="badge bg-primary rounded-pill">2</span>
+                    <span class="badge bg-primary rounded-pill">3</span>
                     <span class="fw-semibold text-dark">Cotizaciones y cupos</span>
                 </div>
                 <div class="card-body py-3">
@@ -70,7 +94,7 @@
 
             <div class="card border-0 shadow-sm mb-3">
                 <div class="card-header bg-white border-bottom d-flex align-items-center gap-2 py-2">
-                    <span class="badge bg-primary rounded-pill">3</span>
+                    <span class="badge bg-primary rounded-pill">4</span>
                     <span class="fw-semibold text-dark">Recordatorios</span>
                 </div>
                 <div class="card-body py-3">
@@ -89,7 +113,7 @@
 
             <div class="card border-0 shadow-sm mb-3">
                 <div class="card-header bg-white border-bottom d-flex align-items-center gap-2 py-2">
-                    <span class="badge bg-primary rounded-pill">4</span>
+                    <span class="badge bg-primary rounded-pill">5</span>
                     <span class="fw-semibold text-dark">Descuentos en el PDF</span>
                 </div>
                 <div class="card-body py-3">
@@ -117,7 +141,7 @@
                  cotizador/editar.vue, Punto B/C). -->
             <div class="card border-0 shadow-sm mb-3">
                 <div class="card-header bg-white border-bottom d-flex align-items-center gap-2 py-2">
-                    <span class="badge bg-primary rounded-pill">5</span>
+                    <span class="badge bg-primary rounded-pill">6</span>
                     <span class="fw-semibold text-dark">Descuento en el cotizador</span>
                 </div>
                 <div class="card-body py-3">
@@ -154,7 +178,7 @@
                  hotel específico (ver paquetes/detalle.vue, tab Hoteles). -->
             <div class="card border-0 shadow-sm mb-3">
                 <div class="card-header bg-white border-bottom d-flex align-items-center gap-2 py-2">
-                    <span class="badge bg-primary rounded-pill">6</span>
+                    <span class="badge bg-primary rounded-pill">7</span>
                     <span class="fw-semibold text-dark">Hoteles — cama adicional para niños</span>
                 </div>
                 <div class="card-body py-3">
@@ -178,7 +202,7 @@
                  futura). -->
             <div class="card border-0 shadow-sm mb-3">
                 <div class="card-header bg-white border-bottom d-flex align-items-center gap-2 py-2">
-                    <span class="badge bg-primary rounded-pill">7</span>
+                    <span class="badge bg-primary rounded-pill">8</span>
                     <span class="fw-semibold text-dark">Condiciones generales del servicio</span>
                 </div>
                 <div class="card-body py-3">
@@ -199,7 +223,7 @@
             <div class="card border-0 shadow-sm mb-3">
                 <div class="card-header bg-white border-bottom d-flex align-items-center justify-content-between gap-2 py-2">
                     <div class="d-flex align-items-center gap-2">
-                        <span class="badge bg-primary rounded-pill">8</span>
+                        <span class="badge bg-primary rounded-pill">9</span>
                         <span class="fw-semibold text-dark">Cuentas bancarias</span>
                     </div>
                     <button class="btn btn-sm btn-outline-primary" @click="abrirFormularioCuenta()">
@@ -309,6 +333,7 @@ type TVueSwalInstance = typeof Swal & typeof Swal.fire;
 const cargando = ref<boolean>(true);
 const guardando = ref<boolean>(false);
 const form = ref<ConfiguracionAgencia>({
+    sigla_comercial: null,
     edad_max_infante: 2,
     edad_max_nino: 12,
     formato_descuento_pdf: 'solo_final',

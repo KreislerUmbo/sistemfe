@@ -7,6 +7,7 @@ use App\Http\Controllers\AgenciaViajes\AmenidadController;
 use App\Http\Controllers\AgenciaViajes\BibliotecaCotizadorController;
 use App\Http\Controllers\AgenciaViajes\CondicionesGeneralesController;
 use App\Http\Controllers\AgenciaViajes\ConfiguracionAgenciaController;
+use App\Http\Controllers\AgenciaViajes\ConfiguracionCodigosController;
 use App\Http\Controllers\AgenciaViajes\CotizacionController;
 use App\Http\Controllers\AgenciaViajes\CuentaBancariaController;
 use App\Http\Controllers\AgenciaViajes\DestinoAtractivoController;
@@ -544,6 +545,16 @@ Route::group([
     Route::get("configuracion-agencia", [ConfiguracionAgenciaController::class, 'show'])
         ->middleware('permission:agencia.configuracion');
     Route::put("configuracion-agencia", [ConfiguracionAgenciaController::class, 'update'])
+        ->middleware('permission:agencia.configuracion');
+
+    // Módulo 12 — plan-modulo-codigos-numeracion.md. Reusa el permiso
+    // 'agencia.configuracion' (mismo área de configuración comercial que
+    // Configuración de Agencia, sin permiso nuevo dedicado).
+    Route::get("configuracion-codigos", [ConfiguracionCodigosController::class, 'index'])
+        ->middleware('permission:agencia.configuracion');
+    Route::put("configuracion-codigos/{tipo}", [ConfiguracionCodigosController::class, 'update'])
+        ->middleware('permission:agencia.configuracion');
+    Route::get("configuracion-codigos/{tipo}/previsualizar", [ConfiguracionCodigosController::class, 'previsualizar'])
         ->middleware('permission:agencia.configuracion');
 
     Route::get("cuentas-bancarias", [CuentaBancariaController::class, 'index'])

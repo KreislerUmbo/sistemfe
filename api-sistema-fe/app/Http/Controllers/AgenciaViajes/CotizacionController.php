@@ -9,7 +9,9 @@ use App\Models\AgenciaViajes\ConfiguracionAgencia;
 use App\Models\AgenciaViajes\Cotizacion;
 use App\Models\AgenciaViajes\CotizacionPasajero;
 use App\Models\AgenciaViajes\Reserva;
+use App\Models\AgenciaViajes\ConfiguracionCodigo;
 use App\Models\Client\Client;
+use App\Services\AgenciaViajes\CodigoGeneradorService;
 use App\Services\AgenciaViajes\PriceEngineService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -22,8 +24,10 @@ use Illuminate\Support\Facades\Validator;
 // caller envuelve en transacción — por eso store() abre una).
 class CotizacionController extends Controller
 {
-    public function __construct(private PriceEngineService $priceEngine)
-    {
+    public function __construct(
+        private PriceEngineService $priceEngine,
+        private CodigoGeneradorService $codigoGenerador,
+    ) {
     }
 
     public function index(Request $request)
@@ -59,7 +63,6 @@ class CotizacionController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'cliente_id' => 'required|integer|exists:clients,id',
-            'codigo_prefijo' => 'required|string|max:50',
             'destino' => 'required|string|max:250',
             'fecha_viaje_desde' => 'nullable|date',
             'fecha_viaje_hasta' => 'nullable|date|after_or_equal:fecha_viaje_desde',
@@ -75,9 +78,13 @@ class CotizacionController extends Controller
         [$edadMaxInfante, $edadMaxNino] = $this->umbralesEdad();
 
         $cotizacion = DB::transaction(function () use ($validado, $edadMaxInfante, $edadMaxNino) {
+            $codigo = $this->codigoGenerador->generar('cotizacion');
+            $prefijo = ConfiguracionCodigo::where('tipo', 'cotizacion')->value('prefijo');
+
             $cotizacion = Cotizacion::create([
                 'cliente_id' => $validado['cliente_id'],
-                'codigo_prefijo' => $validado['codigo_prefijo'],
+                'codigo_prefijo' => $prefijo,
+                'codigo' => $codigo,
                 'destino' => $validado['destino'],
                 'fecha_viaje_desde' => $validado['fecha_viaje_desde'] ?? null,
                 'fecha_viaje_hasta' => $validado['fecha_viaje_hasta'] ?? null,

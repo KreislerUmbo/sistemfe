@@ -47,6 +47,12 @@ class Reserva extends Model
     protected $table = 'reserva';
 
     protected $fillable = [
+        // Módulo 12 (plan-modulo-codigos-numeracion.md §4.2) — derivado del
+        // código de la cotización padre, ver
+        // App\Services\AgenciaViajes\CodigoGeneradorService::generarParaReserva().
+        // Nullable: reservas creadas antes de activar el módulo se quedan
+        // sin código retroactivo.
+        'codigo',
         'alternativa_id',
         'mayorista_elegida_id',
         'estado_reserva_mayorista',

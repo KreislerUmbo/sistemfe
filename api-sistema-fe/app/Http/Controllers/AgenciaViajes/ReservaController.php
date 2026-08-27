@@ -14,6 +14,7 @@ use App\Models\AgenciaViajes\ReservaPasajero;
 use App\Models\AgenciaViajes\ReservaVenta;
 use App\Models\AgenciaViajes\SalidaMayorista;
 use App\Models\AgenciaViajes\SalidaOperativa;
+use App\Services\AgenciaViajes\CodigoGeneradorService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -61,12 +62,18 @@ class ReservaController extends Controller
 
         if ($request->filled('search')) {
             $search = $request->get('search');
-            $query->whereHas('alternativa.cotizacion', function ($q) use ($search) {
-                $q->where('codigo', 'ilike', "%{$search}%")
-                    ->orWhere('destino', 'ilike', "%{$search}%")
-                    ->orWhereHas('cliente', function ($qq) use ($search) {
-                        $qq->where('full_name', 'ilike', "%{$search}%")
-                            ->orWhere('n_document', 'ilike', "%{$search}%");
+            $query->where(function ($outer) use ($search) {
+                // Módulo 12: reserva ya tiene su propio código (RDKM-...),
+                // pero reservas creadas antes del módulo siguen sin uno —
+                // busca en ambos, nunca solo en el de la cotización padre.
+                $outer->where('codigo', 'ilike', "%{$search}%")
+                    ->orWhereHas('alternativa.cotizacion', function ($q) use ($search) {
+                        $q->where('codigo', 'ilike', "%{$search}%")
+                            ->orWhere('destino', 'ilike', "%{$search}%")
+                            ->orWhereHas('cliente', function ($qq) use ($search) {
+                                $qq->where('full_name', 'ilike', "%{$search}%")
+                                    ->orWhere('n_document', 'ilike', "%{$search}%");
+                            });
                     });
             });
         }
@@ -195,7 +202,14 @@ class ReservaController extends Controller
         // hasta se copian de la cotización UNA SOLA VEZ, acá — de ahí en
         // adelante esta reserva ya no depende de que nadie vuelva a editar
         // (o no) la cotización. Ver docblock de Reserva::class.
+        // Módulo 12 (plan-modulo-codigos-numeracion.md §4.2): reserva no
+        // tiene numeración propia, deriva el código de la cotización padre
+        // (prefijo R + resto del código de la cotización, sufijo si es la
+        // 2da+ reserva de esa misma cotización).
+        $codigo = app(CodigoGeneradorService::class)->generarParaReserva($alternativa->cotizacion);
+
         $reserva = Reserva::create([
+            'codigo' => $codigo,
             'alternativa_id' => $alternativa->id,
             'mayorista_elegida_id' => $opcionElegida?->id,
             'estado_reserva_mayorista' => $opcionElegida ? 'pendiente' : null,
@@ -704,12 +718,17 @@ class ReservaController extends Controller
                 // Fase 1 del fix Cotización↔Reserva: la fecha de la
                 // cabecera de una reserva es la de la RESERVA (congelada al
                 // aceptar), no la de la cotización en vivo — ver docblock
-                // de Reserva::class. cliente/destino/codigo SÍ siguen
-                // siendo de la cotización, eso no cambió (son puramente
-                // informativos, sin ningún cálculo operativo detrás).
+                // de Reserva::class. cliente/destino SÍ siguen siendo de la
+                // cotización, eso no cambió (son puramente informativos,
+                // sin ningún cálculo operativo detrás).
                 'fecha_viaje_desde' => $reserva->fecha_viaje_desde,
                 'fecha_viaje_hasta' => $reserva->fecha_viaje_hasta,
                 'codigo_cotizacion' => $cotizacion->codigo,
+                // Módulo 12 (códigos y numeración, revisión 26-ago-2026):
+                // código propio de la reserva. Fallback al de la cotización
+                // para reservas creadas antes de activar el módulo (sin
+                // código retroactivo, ver migración de reserva.codigo).
+                'codigo' => $reserva->codigo ?? $cotizacion->codigo,
             ],
         ];
     }

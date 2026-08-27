@@ -9,18 +9,21 @@ use Illuminate\Database\Eloquent\Model;
 // (sin CentralConnection). cliente_id lleva belongsTo real a clients (core,
 // App\Models\Client\Client), no un cliente propio del vertical.
 //
-// codigo: calculado {codigo_prefijo}-{año}-{correlativo}, correlativo propio
-// POR PREFIJO (reinicia también por año, ver generarCodigo() abajo — el
-// propio formato del código ya lo hace natural: la búsqueda del último
-// correlativo filtra por "{prefijo}-{año}-%"). Resuelto acá, en el modelo,
-// vía el evento creating() — NO es una columna generada de Postgres.
+// codigo/codigo_prefijo (Módulo 12, plan-modulo-codigos-numeracion.md,
+// revisión 26-ago-2026 §11): hasta esta revisión se generaban acá mismo, vía
+// un evento creating() que adivinaba el tipo ('cotizacion' vs 'venta_directa')
+// a partir del string literal de codigo_prefijo ('VD'). Eso se retiró: ahora
+// cada caller (CotizacionController::store()/VentaDirectaController::store())
+// pide su código explícitamente a
+// App\Services\AgenciaViajes\CodigoGeneradorService::generar('cotizacion'|
+// 'venta_directa') ANTES de Cotizacion::create(), sin ambigüedad y sin
+// necesitar una columna nueva para distinguir el origen. codigo_prefijo se
+// sigue guardando (viene de ConfiguracionCodigo::prefijo en el momento de
+// generar) porque CodigoGeneradorService::generarParaReserva() lo usa para
+// extraer el resto del código al derivar el de la reserva (Str::after()).
 //
-// Mismo patrón de concurrencia que
-// CreditPaymentController::siguienteNumeroRecibo()/
-// FacturacionElectronicaController::reservarCorrelativo(): lockForUpdate()
-// + MAX()+1. Igual que esos dos casos, el lock solo es real si el llamador
-// (controller del CRUD real, Sesión 11) envuelve la creación en una
-// transacción — sin eso, el lockForUpdate() no tiene nada que bloquear.
+// reservas_generadas: contador acotado por cotización (§6.4), incrementado
+// por generarParaReserva() — primera reserva sin sufijo, 2da+ con "-2","-3"...
 class Cotizacion extends Model
 {
     protected $table = 'cotizaciones';
@@ -28,6 +31,7 @@ class Cotizacion extends Model
     protected $fillable = [
         'codigo_prefijo',
         'codigo',
+        'reservas_generadas',
         'cliente_id',
         'destino',
         'fecha_viaje_desde',
@@ -38,35 +42,6 @@ class Cotizacion extends Model
         'fecha_viaje_desde' => 'date',
         'fecha_viaje_hasta' => 'date',
     ];
-
-    protected static function booted(): void
-    {
-        static::creating(function (Cotizacion $cotizacion) {
-            if (empty($cotizacion->codigo) && ! empty($cotizacion->codigo_prefijo)) {
-                $cotizacion->codigo = static::generarCodigo($cotizacion->codigo_prefijo);
-            }
-        });
-    }
-
-    public static function generarCodigo(string $prefijo): string
-    {
-        $anio = now()->year;
-        $patron = "{$prefijo}-{$anio}-%";
-
-        $ultimo = static::where('codigo_prefijo', $prefijo)
-            ->where('codigo', 'like', $patron)
-            ->lockForUpdate()
-            ->orderByDesc('id')
-            ->first();
-
-        $siguiente = 1;
-        if ($ultimo) {
-            $partes = explode('-', $ultimo->codigo);
-            $siguiente = ((int) end($partes)) + 1;
-        }
-
-        return sprintf('%s-%d-%03d', $prefijo, $anio, $siguiente);
-    }
 
     public function cliente()
     {

@@ -17,6 +17,7 @@ use Illuminate\Support\Facades\Validator;
 class ConfiguracionAgenciaController extends Controller
 {
     private const DEFAULTS = [
+        'sigla_comercial' => null,
         'edad_max_infante' => 2,
         'edad_max_nino' => 12,
         'formato_descuento_pdf' => 'solo_final',
@@ -49,6 +50,7 @@ class ConfiguracionAgenciaController extends Controller
     public function update(Request $request)
     {
         $validator = Validator::make($request->all(), [
+            'sigla_comercial' => 'nullable|string|max:20',
             'edad_max_infante' => 'required|integer|min:0',
             'edad_max_nino' => 'required|integer|min:0',
             'formato_descuento_pdf' => 'required|in:solo_final,tachado,separado',

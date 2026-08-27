@@ -12,6 +12,10 @@ class ConfiguracionAgencia extends Model
     protected $table = 'configuracion_agencia';
 
     protected $fillable = [
+        // Módulo 12 (plan-modulo-codigos-numeracion.md §6.1) — sigla única
+        // de la agencia, leída por ConfiguracionCodigo para sugerir el
+        // prefijo de cada tipo de documento (T/P/C/R/V + sigla).
+        'sigla_comercial',
         'edad_max_infante',
         'edad_max_nino',
         'formato_descuento_pdf',

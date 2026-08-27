@@ -690,6 +690,16 @@ const comercialRoutes = [
     },
     component: () => import("@/views/agencia-viajes/configuracion/index.vue"),
   },
+  {
+    path: "/agencia-viajes/configuracion/codigos",
+    name: "agencia.configuracion.codigos",
+    meta: {
+      title: setTitle("Códigos y numeración"),
+      authRequired: true,
+      permission: 'agencia.configuracion',
+    },
+    component: () => import("@/views/agencia-viajes/configuracion/codigos.vue"),
+  },
   // Cotizador (Sesión 11b) — permiso propio 'agencia.cotizaciones',
   // distinto de los 5 de 11a (ver TODO.md).
   {

@@ -205,6 +205,10 @@ export type GuiaTarifa = {
 };
 
 export type ConfiguracionAgencia = {
+  // Módulo 12 (códigos y numeración) — sigla única de la agencia (ej.
+  // "DKM"), usada para sugerir el prefijo de tour/paquete/cotización/
+  // reserva/venta_directa. Nullable: puede no estar configurada todavía.
+  sigla_comercial?: string | null;
   edad_max_infante: number;
   edad_max_nino: number;
   formato_descuento_pdf: 'solo_final' | 'tachado' | 'separado';
@@ -232,6 +236,21 @@ export type ConfiguracionAgencia = {
   // propio de cada agencia, descargable aparte de la parte comercial de
   // una cotización.
   condiciones_generales_servicio?: string | null;
+};
+
+// Módulo 12 — plan-modulo-codigos-numeracion.md §6.2. Una fila por tipo de
+// documento (tour/paquete/cotizacion/reserva/venta_directa).
+export type ConfiguracionCodigo = {
+  id: number;
+  tipo: 'tour' | 'paquete' | 'cotizacion' | 'reserva' | 'venta_directa';
+  prefijo: string;
+  deriva_de: string | null; // 'cotizacion' para reserva, null para el resto
+  formato_periodo: string;
+  separador: string;
+  incluye_periodo: boolean;
+  longitud_correlativo: number;
+  reinicio_correlativo: 'nunca' | 'mensual' | 'anual';
+  activo: boolean;
 };
 
 export type CuentaBancaria = {
@@ -702,6 +721,11 @@ export type ReservaItemPasajero = {
 
 export type Reserva = {
   id: number;
+  // Módulo 12 (códigos y numeración) — derivado del código de la
+  // cotización padre. Nullable: reservas creadas antes del módulo se
+  // quedan sin código retroactivo (fallback a alternativa.cotizacion.codigo
+  // en las pantallas que lo muestran).
+  codigo?: string | null;
   alternativa_id: number;
   mayorista_elegida_id?: number | null;
   estado_reserva_mayorista?: 'pendiente' | 'confirmada' | null;
@@ -764,6 +788,10 @@ export type ReservaCabecera = {
   fecha_viaje_desde?: string | null;
   fecha_viaje_hasta?: string | null;
   codigo_cotizacion: string;
+  // Módulo 12 — código propio de la reserva (con fallback al de la
+  // cotización si la reserva es previa al módulo). Usar este, no
+  // codigo_cotizacion, para mostrar "la reserva N".
+  codigo: string;
 };
 
 export type ReservaDetalleResponse = {
