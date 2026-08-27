@@ -11,6 +11,15 @@
             </small>
         </div>
 
+        <div v-if="!cargando && !siglaComercial" class="alert alert-warning d-flex align-items-center gap-2 py-2">
+            <i class="fas fa-triangle-exclamation"></i>
+            <span>
+                Todavía no configuraste una sigla comercial —
+                <router-link :to="{ name: 'agencia.configuracion.index' }">configurala acá</router-link>
+                para que cada tipo te sugiera su prefijo automáticamente. Mientras tanto podés seguir editando el prefijo de cada uno a mano.
+            </span>
+        </div>
+
         <div v-if="cargando" class="text-center py-5 text-muted">
             <div class="spinner-border spinner-border-sm me-2"></div>Cargando...
         </div>
@@ -28,6 +37,10 @@
                         <div class="col-6 col-md-3">
                             <label class="form-label mb-1 small fw-semibold text-secondary">Prefijo</label>
                             <input type="text" class="form-control form-control-sm" v-model="fila.prefijo" maxlength="20">
+                            <small v-if="sugeridoPrefijo(fila) && sugeridoPrefijo(fila) !== fila.prefijo" class="text-muted">
+                                Sugerido: <strong>{{ sugeridoPrefijo(fila) }}</strong>
+                                <button type="button" class="btn btn-link btn-sm p-0 ms-1 align-baseline" @click="fila.prefijo = sugeridoPrefijo(fila)!">usar</button>
+                            </small>
                         </div>
                         <div class="col-6 col-md-2">
                             <label class="form-label mb-1 small fw-semibold text-secondary">Separador</label>
@@ -82,6 +95,7 @@ import { onMounted, reactive, ref, watch } from 'vue';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import Swal from 'sweetalert2/dist/sweetalert2.js';
 import { configuracionCodigosService } from '@/services/admin/configuracionCodigosService';
+import { configuracionAgenciaService } from '@/services/admin/configuracionAgenciaService';
 import type { ConfiguracionCodigo } from '@/types/agencia-viajes';
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
@@ -99,16 +113,39 @@ const ETIQUETAS: Record<string, string> = {
 };
 const etiquetaTipo = (tipo: string) => ETIQUETAS[tipo] ?? tipo;
 
+// Letra por tipo — mismo mapeo que la fila semilla de la migración
+// (create_configuracion_codigos_table). Solo vive acá para armar la
+// SUGERENCIA en el frontend; el prefijo real que se usa al generar un
+// código siempre es el que está guardado en configuracion_codigos.prefijo.
+const LETRA_TIPO: Record<string, string> = {
+    tour: 'T', paquete: 'P', cotizacion: 'C', reserva: 'R', venta_directa: 'V',
+};
+
 const cargando = ref<boolean>(true);
 const guardando = ref<string | null>(null);
 const filas = reactive<ConfiguracionCodigo[]>([]);
 const previews = reactive<Record<string, string>>({});
 const timeouts: Record<string, ReturnType<typeof setTimeout>> = {};
+const siglaComercial = ref<string>('');
+
+// Sugerencia = letra del tipo + sigla comercial (plan-modulo-codigos-numeracion.md
+// §3) — nunca se aplica sola, solo se ofrece con el botón "usar" para no
+// pisar un prefijo que el usuario ya haya editado a mano.
+const sugeridoPrefijo = (fila: ConfiguracionCodigo): string | null => {
+    if (!siglaComercial.value) return null;
+    const letra = LETRA_TIPO[fila.tipo];
+    return letra ? `${letra}${siglaComercial.value}` : null;
+};
 
 const cargar = async () => {
     cargando.value = true;
     try {
-        const { configuracion_codigos } = await configuracionCodigosService.obtener();
+        const [{ configuracion_codigos }, { configuracion_agencia }] = await Promise.all([
+            configuracionCodigosService.obtener(),
+            configuracionAgenciaService.obtener(),
+        ]);
+        siglaComercial.value = configuracion_agencia.sigla_comercial ?? '';
+
         const porTipo = new Map(configuracion_codigos.map((f) => [f.tipo, f]));
         filas.splice(0, filas.length, ...ORDEN_TIPOS.map((tipo) => porTipo.get(tipo)).filter((f): f is ConfiguracionCodigo => !!f));
 
