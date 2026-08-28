@@ -14,6 +14,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\URL;
+use Illuminate\Support\Str;
 use Maatwebsite\Excel\Facades\Excel;
 
 // Sesión 11e (plan-hoja-de-ruta-ejecucion.md) — plan-modulo-cotizaciones-reservas.md §8.
@@ -77,10 +78,14 @@ class ReporteOperativoController extends Controller
         $reporte = $this->obtenerFilas($request);
         $empresa = Company::first();
 
-        $filasPorFecha = collect($reporte['filas'])->groupBy('fecha');
+        $dias = $this->armarVistaAgrupada(
+            $reporte['filas'],
+            Carbon::parse($reporte['fecha_desde']),
+            Carbon::parse($reporte['fecha_hasta'])
+        );
 
         $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('pdf.agencia-viajes.reporte-operativo', [
-            'filasPorFecha' => $filasPorFecha,
+            'dias' => $dias,
             'fechaDesde' => $reporte['fecha_desde'],
             'fechaHasta' => $reporte['fecha_hasta'],
             'empresa' => $empresa,
@@ -107,11 +112,22 @@ class ReporteOperativoController extends Controller
     // resuelve directo, sin el problema de "quién generó" que sí afecta a pdf().
     public function export(Request $request)
     {
+        // Mismo motivo que pdf(): APP_LOCALE='en' (config/app.php) haría que los
+        // encabezados de día de la hoja "Vista operativa" salieran en inglés.
+        Carbon::setLocale('es');
+
         $reporte = $this->obtenerFilas($request);
+
+        $dias = $this->armarVistaAgrupada(
+            $reporte['filas'],
+            Carbon::parse($reporte['fecha_desde']),
+            Carbon::parse($reporte['fecha_hasta'])
+        );
 
         return Excel::download(
             new ReporteOperativoExport(
                 collect($reporte['filas']),
+                $dias,
                 $reporte['fecha_desde'],
                 $reporte['fecha_hasta'],
                 auth('api')->user()->name,
@@ -200,6 +216,20 @@ class ReporteOperativoController extends Controller
     {
         return ReservaItem::whereBetween('fecha', [$fechaDesde->toDateString(), $fechaHasta->toDateString()])
             ->whereHas('reserva', fn ($q) => $q->where('estado', '!=', 'cancelada'))
+            // Pedido explícito del usuario (rediseño-reporte-operativo): "Ajuste de
+            // redondeo" es un AlternativaItem manual puramente de PRECIO (costo=0,
+            // sin destino/guía/proveedor real — ver AlternativaItemController::
+            // store(), línea ~378) que se genera automáticamente cuando el paquete
+            // tiene ajuste_redondeo configurado. No es un servicio operativo real,
+            // así que no pertenece al Reporte Operativo (ni pantalla en vivo, ni
+            // PDF, ni Excel) — sí debe seguir viéndose en Reservas/cotización, donde
+            // es información de precio legítima. Filtrado acá en la query base
+            // porque la comparten obtenerFilas() (index/pdf/export) y
+            // filtrosDisponibles() (catálogo de filtros) — así tampoco aparece como
+            // opción de filtro.
+            ->whereDoesntHave('alternativaItem', fn ($q) => $q
+                ->where('origen_tipo', AlternativaItem::ORIGEN_MANUAL)
+                ->where('descripcion_manual', 'Ajuste de redondeo'))
             ->with([
                 'reserva.pasajeros',
                 'reserva.alternativa.cotizacion',
@@ -345,6 +375,20 @@ class ReporteOperativoController extends Controller
         return $item->salida_operativa_id ? $item->salidaOperativa?->guia : $item->guia;
     }
 
+    // Pedido explícito del usuario (rediseño-reporte-operativo): mostrar el nombre
+    // COMERCIAL del proveedor en vez de la razón social — es el nombre por el que
+    // el equipo de campo reconoce el lugar. nombre_comercial es más nuevo que
+    // razon_social (no todos los proveedores lo tienen cargado todavía), así que
+    // cae a razon_social cuando está vacío en vez de mostrar un dato en blanco.
+    private function nombreProveedor(?\App\Models\AgenciaViajes\Proveedor $proveedor): ?string
+    {
+        if (! $proveedor) {
+            return null;
+        }
+
+        return $proveedor->nombre_comercial ?: $proveedor->razon_social;
+    }
+
     /**
      * @return \Illuminate\Support\Collection<int, ReservaPasajero>
      */
@@ -423,15 +467,25 @@ class ReporteOperativoController extends Controller
             ] : null,
             'servicio' => $alternativaItem ? ReservaController::resolverNombreItem($alternativaItem) : 'Servicio',
             'servicio_id' => $destinoServicio?->servicio_id,
+            // Categoría amplia del servicio (ej. "Transporte", "Entrada"), a
+            // diferencia de 'servicio' de arriba que es el nombre completo
+            // del ítem — usada para sub-agrupar "Servicios sueltos" en la
+            // vista jerárquica de armarVistaAgrupada().
+            'servicio_nombre' => $destinoServicio?->servicio?->nombre,
+            // tourOrigen ya viene eager-loaded desde queryItemsDelRango()
+            // (relación propia de ReservaItem, no de alternativaItem) —
+            // usado para agrupar por Tour en la vista jerárquica.
+            'tour_origen_id' => $item->tour_origen_id,
+            'tour_origen_nombre' => $item->tourOrigen?->nombre,
             'destino' => $destinoServicio?->destinoAtractivo?->nombre,
             // Sesión 11d (mejora post-11d) — nombre del proveedor asignado a CUALQUIER
             // ítem origen_tipo='proveedor' (antes solo se exponía para hoteles vía
             // 'hotel'). El reporte necesita mostrarlo para poder reasignarlo inline —
             // mismo criterio que ReservaItemController::update() ya permite, solo que
             // el reporte no tenía forma de mostrar "a quién" hasta ahora.
-            'proveedor' => $proveedorTarifa?->proveedorServicio?->proveedor?->razon_social,
+            'proveedor' => $this->nombreProveedor($proveedorTarifa?->proveedorServicio?->proveedor),
             'hotel' => $proveedorTarifa?->tipo_habitacion
-                ? ($proveedorTarifa->proveedorServicio?->proveedor?->razon_social ?? 'Hotel')
+                ? ($this->nombreProveedor($proveedorTarifa->proveedorServicio?->proveedor) ?? 'Hotel')
                 : null,
             'fecha' => optional($item->fecha)->toDateString(),
             'hora' => $item->hora,
@@ -448,5 +502,333 @@ class ReporteOperativoController extends Controller
             'salida_operativa_id' => $item->salida_operativa_id,
             'salida_vehiculo' => $item->salida_operativa_id ? $item->salidaOperativa?->vehiculo_descripcion : null,
         ];
+    }
+
+    // Sesión rediseño-reporte-operativo — capa nueva usada SOLO por pdf()/export(),
+    // nunca por index() (esa sigue devolviendo la lista plana tal cual, para no
+    // romper el contrato que ya consume reporte-operativo/index.vue). Reestructura
+    // $filas (fecha → grupo → pasajero → sus filas) para el layout jerárquico que
+    // pidió el usuario: Día → Tour (o "Servicios sueltos · categoría") → Pasajero
+    // con sus datos combinados → cada servicio como sub-fila.
+    //
+    // @param array<int, array> $filas del mismo shape que devuelve obtenerFilas()['filas']
+    // @return array<int, array{fecha: string, grupos: array}>
+    private function armarVistaAgrupada(array $filas, Carbon $fechaDesde, Carbon $fechaHasta): array
+    {
+        $hotelDelDia = $this->hotelDelDiaPorPasajero($filas);
+        $filasExtendidas = $this->extenderConFilasDeVuelo($filas, $fechaDesde, $fechaHasta);
+
+        $porFecha = [];
+
+        foreach ($filasExtendidas as $fila) {
+            $fecha = $fila['fecha'];
+            $pasajeroId = $fila['pasajero']['id'];
+            [$grupoKey, $grupoNombre, $esTour] = $this->resolverGrupo($fila);
+
+            if (! isset($porFecha[$fecha])) {
+                $porFecha[$fecha] = ['fecha' => $fecha, 'grupos' => []];
+            }
+
+            if (! isset($porFecha[$fecha]['grupos'][$grupoKey])) {
+                $porFecha[$fecha]['grupos'][$grupoKey] = [
+                    'nombre' => $grupoNombre,
+                    'es_tour' => $esTour,
+                    'guia' => null,
+                    'vehiculo' => null,
+                    // Candidatos internos para resolverGuiaDeGrupo() más abajo —
+                    // se descartan antes de devolver la estructura final.
+                    '_guia_via_salida' => null,
+                    '_vehiculo_via_salida' => null,
+                    '_guia_directo' => null,
+                    'pasajeros' => [],
+                ];
+            }
+
+            $grupo = &$porFecha[$fecha]['grupos'][$grupoKey];
+
+            // Guía del GRUPO (solo Tours): preferimos la de una Salida Operativa
+            // compartida (dato confirmado/compartido entre reservas) y solo si
+            // ninguna existe caemos al guia_id asignado directo al ítem — mismo
+            // fallback que ya usa resolverGuiaEfectivo() por ítem individual, para
+            // no "perder" una asignación real solo porque no pasó por el tablero
+            // de despacho.
+            if ($esTour && $fila['guia']) {
+                if (! empty($fila['salida_operativa_id']) && $grupo['_guia_via_salida'] === null) {
+                    $grupo['_guia_via_salida'] = $fila['guia'];
+                    $grupo['_vehiculo_via_salida'] = $fila['salida_vehiculo'];
+                } elseif ($grupo['_guia_directo'] === null) {
+                    $grupo['_guia_directo'] = $fila['guia'];
+                }
+            }
+
+            if (! isset($grupo['pasajeros'][$pasajeroId])) {
+                $nombre = trim((string) ($fila['pasajero']['nombre'] ?? ''));
+
+                $grupo['pasajeros'][$pasajeroId] = [
+                    'pasajero' => $fila['pasajero'] + [
+                        'hotel_del_dia' => $grupoKey === self::GRUPO_ALOJAMIENTO
+                            ? null
+                            : ($hotelDelDia[$fecha . '_' . $pasajeroId]['texto'] ?? null),
+                        // Bloque combinado en blanco (celdas de rowspan/merge sin
+                        // ningún texto) es mucho más confuso en el layout jerárquico
+                        // que en la tabla plana de antes — el pasajero "shell" sin
+                        // nombre completado (ReservaPasajero con nombre/documento
+                        // vacío, ver docblock del modelo) ya existía antes, pero acá
+                        // se nota mucho más. Fallback visible con el número de
+                        // reserva para que quede claro qué completar en Reservas.
+                        'nombre_display' => $nombre !== '' ? $nombre : "Pasajero sin datos (reserva #{$fila['reserva_id']})",
+                    ],
+                    'filas' => [],
+                ];
+            }
+
+            $grupo['pasajeros'][$pasajeroId]['filas'][] = [
+                'hora' => $fila['hora'],
+                'servicio' => $fila['servicio'],
+                'destino' => $fila['destino'],
+                // Guía por fila solo tiene sentido en "Servicios sueltos" (sin
+                // escolta de grupo) — en un Tour ya se muestra una vez en el
+                // encabezado del grupo, mostrarla también por fila sería
+                // redundante.
+                'guia' => $esTour ? null : $fila['guia'],
+                'sin_guia' => $esTour ? false : $fila['sin_guia'],
+                'checkin' => $fila['checkin_realizado'],
+                'reserva_id' => $fila['reserva_id'],
+            ];
+
+            unset($grupo);
+        }
+
+        $this->suprimirAlojamientoDuplicado($porFecha, $hotelDelDia);
+
+        ksort($porFecha);
+
+        foreach ($porFecha as &$dia) {
+            foreach ($dia['grupos'] as &$grupo) {
+                if ($grupo['es_tour']) {
+                    $grupo['guia'] = $grupo['_guia_via_salida'] ?? $grupo['_guia_directo'];
+                    $grupo['vehiculo'] = $grupo['_guia_via_salida'] !== null ? $grupo['_vehiculo_via_salida'] : null;
+                }
+                unset($grupo['_guia_via_salida'], $grupo['_vehiculo_via_salida'], $grupo['_guia_directo']);
+
+                usort($grupo['pasajeros'], fn (array $a, array $b) => strcmp(
+                    $a['pasajero']['nombre'] ?? '',
+                    $b['pasajero']['nombre'] ?? ''
+                ));
+
+                foreach ($grupo['pasajeros'] as &$pax) {
+                    usort($pax['filas'], fn (array $a, array $b) => strcmp($a['hora'] ?? '', $b['hora'] ?? ''));
+                }
+                unset($pax);
+            }
+            unset($grupo);
+            $dia['grupos'] = array_values($dia['grupos']);
+        }
+        unset($dia);
+
+        return array_values($porFecha);
+    }
+
+    // Pedido explícito del usuario, sesión rediseño-reporte-operativo: la fila de
+    // "Servicios sueltos · Alojamiento" y la columna "Hotel" (contexto, dentro de
+    // otros grupos) mostraban EXACTAMENTE la misma reserva de hotel dos veces —
+    // no son 2 hechos distintos, es 1 solo hecho visto desde 2 ángulos. Acá se
+    // quita la fila de "Servicios sueltos · Alojamiento" para un pasajero+día
+    // SOLO cuando ese mismo pasajero ya aparece en algún OTRO grupo ese mismo
+    // día (donde la columna Hotel ya lo muestra) — si el hospedaje es lo ÚNICO
+    // que tiene ese día (día de llegada/descanso/checkout, sin ningún tour), la
+    // fila se queda: es la única forma de que ese hospedaje aparezca en el
+    // reporte, suprimirla ahí SÍ escondería información real.
+    //
+    // Guard de seguridad: si un pasajero tiene más de UNA reserva de hotel
+    // distinta ese mismo día (dato ambiguo — hotelDelDiaPorPasajero() solo
+    // captura una), NO se suprime ninguna de sus filas de Alojamiento. Preferible
+    // mostrar una fila "de más" (la duplicada de la que sí se ve en Hotel) que
+    // arriesgarse a borrar en silencio una reserva real que la columna Hotel
+    // nunca llegó a reflejar.
+    private function suprimirAlojamientoDuplicado(array &$porFecha, array $hotelDelDia): void
+    {
+        foreach ($porFecha as $fecha => &$dia) {
+            if (! isset($dia['grupos'][self::GRUPO_ALOJAMIENTO])) {
+                continue;
+            }
+
+            $pasajerosEnOtroGrupo = [];
+            foreach ($dia['grupos'] as $grupoKey => $grupo) {
+                if ($grupoKey === self::GRUPO_ALOJAMIENTO) {
+                    continue;
+                }
+                foreach (array_keys($grupo['pasajeros']) as $pasajeroId) {
+                    $pasajerosEnOtroGrupo[$pasajeroId] = true;
+                }
+            }
+
+            foreach (array_keys($dia['grupos'][self::GRUPO_ALOJAMIENTO]['pasajeros']) as $pasajeroId) {
+                $reservasHotelEseDia = count($hotelDelDia[$fecha . '_' . $pasajeroId]['reserva_item_ids'] ?? []);
+
+                if (isset($pasajerosEnOtroGrupo[$pasajeroId]) && $reservasHotelEseDia <= 1) {
+                    unset($dia['grupos'][self::GRUPO_ALOJAMIENTO]['pasajeros'][$pasajeroId]);
+                }
+            }
+
+            if (empty($dia['grupos'][self::GRUPO_ALOJAMIENTO]['pasajeros'])) {
+                unset($dia['grupos'][self::GRUPO_ALOJAMIENTO]);
+            }
+        }
+        unset($dia);
+    }
+
+    // fecha+pasajero → info de la reserva de hotel de ese pasajero ese día
+    // ('texto' para mostrar en la columna Hotel de otros grupos —
+    // reutiliza $fila['servicio'], que para un ítem de hospedaje YA incluye el
+    // tipo de habitación ("Cumbaza Hotel y Convenciones · triple"), así no se
+    // pierde ese dato al suprimir la fila duplicada de Alojamiento;
+    // 'reserva_item_ids' para el guard de suprimirAlojamientoDuplicado()) —
+    // sacado de CUALQUIER fila de ese pasajero/fecha cuyo ítem sea de hospedaje,
+    // independiente del grupo al que pertenezca esa fila puntual.
+    private function hotelDelDiaPorPasajero(array $filas): array
+    {
+        $mapa = [];
+        foreach ($filas as $fila) {
+            if (! $fila['hotel']) {
+                continue;
+            }
+
+            $key = $fila['fecha'] . '_' . $fila['pasajero']['id'];
+            $mapa[$key] ??= ['texto' => $fila['servicio'], 'reserva_item_ids' => []];
+            $mapa[$key]['reserva_item_ids'][$fila['reserva_item_id']] = true;
+        }
+
+        return $mapa;
+    }
+
+    // Vuelo deja de vivir en columnas y pasa a ser una fila de servicio más
+    // ("Vuelo ida"/"Vuelta", propio o (agencia)), ubicada en la fecha REAL del
+    // vuelo — no en la fecha del reserva_item que la trae. Reutiliza los datos ya
+    // resueltos en cada $fila (vuelo_ida/vuelo_vuelta = propio del pasajero;
+    // vuelo_agencia_ida/vuelta = vendido por la agencia, solo en la fila del ítem
+    // pasaje_aereo) sin ninguna query nueva.
+    //
+    // El ítem pasaje_aereo en sí (origen_tipo=ORIGEN_PASAJE_AEREO) se EXCLUYE de
+    // las filas normales: su única función pasa a ser aportar los datos de la
+    // fila sintética de vuelo (agencia) — mostrarlo también como fila normal
+    // duplicaría la información.
+    private function extenderConFilasDeVuelo(array $filas, Carbon $fechaDesde, Carbon $fechaHasta): array
+    {
+        $filasNormales = array_values(array_filter(
+            $filas,
+            fn (array $f) => $f['origen_tipo'] !== AlternativaItem::ORIGEN_PASAJE_AEREO
+        ));
+
+        $filasVuelo = [];
+
+        foreach ($filas as $fila) {
+            if ($fila['origen_tipo'] !== AlternativaItem::ORIGEN_PASAJE_AEREO) {
+                continue;
+            }
+            if ($fila['vuelo_agencia_ida']) {
+                $filasVuelo[] = $this->filaSinteticaVuelo($fila, 'Vuelo ida (agencia)', $fila['vuelo_agencia_ida'], $fila['checkin_realizado']);
+            }
+            if ($fila['vuelo_agencia_vuelta']) {
+                $filasVuelo[] = $this->filaSinteticaVuelo($fila, 'Vuelo vuelta (agencia)', $fila['vuelo_agencia_vuelta'], $fila['checkin_realizado']);
+            }
+        }
+
+        // Vuelo propio del pasajero: es informativo del PASAJERO, no de un
+        // reserva_item — mismo dato repetido en todas sus filas, se toma de
+        // cualquiera de ellas una sola vez por pasajero (sin checkin, no hay
+        // ítem real detrás).
+        $pasajerosVistos = [];
+        foreach ($filas as $fila) {
+            $pasajeroId = $fila['pasajero']['id'];
+            if (isset($pasajerosVistos[$pasajeroId])) {
+                continue;
+            }
+            $pasajerosVistos[$pasajeroId] = true;
+
+            if ($fila['vuelo_ida']) {
+                $filasVuelo[] = $this->filaSinteticaVuelo($fila, 'Vuelo ida', $fila['vuelo_ida'], null);
+            }
+            if ($fila['vuelo_vuelta']) {
+                $filasVuelo[] = $this->filaSinteticaVuelo($fila, 'Vuelo vuelta', $fila['vuelo_vuelta'], null);
+            }
+        }
+
+        $fechaDesdeSoloFecha = $fechaDesde->copy()->startOfDay();
+        $fechaHastaSoloFecha = $fechaHasta->copy()->startOfDay();
+
+        $filasVuelo = array_filter($filasVuelo, function (array $f) use ($fechaDesdeSoloFecha, $fechaHastaSoloFecha) {
+            if (! $f['fecha']) {
+                return false;
+            }
+
+            return Carbon::parse($f['fecha'])->startOfDay()->between($fechaDesdeSoloFecha, $fechaHastaSoloFecha);
+        });
+
+        return array_merge($filasNormales, array_values($filasVuelo));
+    }
+
+    private function filaSinteticaVuelo(array $filaOrigen, string $servicio, array $vuelo, ?bool $checkin): array
+    {
+        $numero = $vuelo['numero'] ?? null;
+        $destino = $numero ? "{$vuelo['aerolinea']} · N° {$numero}" : ($vuelo['aerolinea'] ?? '');
+
+        return [
+            'fecha' => $vuelo['fecha'] ?? null,
+            'hora' => $vuelo['hora'] ?? null,
+            'servicio' => $servicio,
+            'destino' => $destino,
+            'hotel' => null,
+            'servicio_nombre' => null,
+            'origen_tipo' => 'vuelo',
+            'tour_origen_id' => null,
+            'tour_origen_nombre' => null,
+            'salida_operativa_id' => null,
+            'salida_vehiculo' => null,
+            'guia' => null,
+            'sin_guia' => false,
+            'checkin_realizado' => $checkin,
+            'pasajero' => $filaOrigen['pasajero'],
+            'reserva_id' => $filaOrigen['reserva_id'],
+        ];
+    }
+
+    // Clave del grupo "Servicios sueltos · Alojamiento" — referenciada también en
+    // armarVistaAgrupada() para suprimir la columna "Hotel" (contexto) justo en
+    // este grupo: ahí la fila YA ES la reserva de hotel (columna "Servicio"), así
+    // que repetir el nombre en "Hotel" es 100% redundante en esa fila puntual —
+    // en el resto de grupos (Tours, otros "Servicios sueltos") sigue siendo dato
+    // nuevo y se mantiene.
+    private const GRUPO_ALOJAMIENTO = 'sueltos_alojamiento';
+
+    // A qué grupo pertenece una fila: Tour (por tour_origen_id) o "Servicios
+    // sueltos · {categoría}" — devuelve [clave_unica, nombre_visible, es_tour].
+    private function resolverGrupo(array $fila): array
+    {
+        if ($fila['origen_tipo'] === 'vuelo') {
+            return ['sueltos_vuelo', 'Servicios sueltos · Vuelo', false];
+        }
+
+        if (! empty($fila['tour_origen_id'])) {
+            return ['tour_' . $fila['tour_origen_id'], $fila['tour_origen_nombre'] ?? 'Tour', true];
+        }
+
+        if ($fila['hotel']) {
+            return [self::GRUPO_ALOJAMIENTO, 'Servicios sueltos · Alojamiento', false];
+        }
+
+        $categoria = $fila['servicio_nombre'] ?: $this->categoriaOrigenTipo($fila['origen_tipo']);
+
+        return ['sueltos_' . Str::slug($categoria), 'Servicios sueltos · ' . $categoria, false];
+    }
+
+    private function categoriaOrigenTipo(?string $origenTipo): string
+    {
+        return match ($origenTipo) {
+            AlternativaItem::ORIGEN_MANUAL => 'Ítem manual',
+            AlternativaItem::ORIGEN_MAYORISTA => 'Paquete mayorista',
+            AlternativaItem::ORIGEN_GUIA => 'Guía',
+            default => 'Otros servicios',
+        };
     }
 }

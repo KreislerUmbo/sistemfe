@@ -4,21 +4,22 @@ namespace App\Exports;
 
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
-use Maatwebsite\Excel\Concerns\FromArray;
+use Maatwebsite\Excel\Concerns\WithMultipleSheets;
 use Maatwebsite\Excel\Concerns\WithProperties;
-use Maatwebsite\Excel\Concerns\WithStyles;
-use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
-// Sesión 11d — pedido nuevo del usuario, no estaba en plan-modulo-cotizaciones-
-// reservas.md §8 (que solo pedía PDF). FromArray en vez de FromCollection+WithHeadings
-// (esquema original de esta clase): una hoja de cálculo no tiene "encabezado de página"
-// como un PDF, así que la convención "quién generó y cuándo" se resuelve con 3 filas
-// visibles antes de la tabla — mismo criterio que reportes reales de agencia, no solo
-// WithProperties (que Excel muestra en "Propiedades del archivo", casi nadie lo mira).
-class ReporteOperativoExport implements FromArray, WithProperties, WithStyles
+// Sesión rediseño-reporte-operativo — orquestador de 2 hojas: "Vista operativa"
+// (jerárquica, celdas combinadas — para imprimir/repartir, ver
+// ReporteOperativoVistaOperativaSheet) y "Datos" (la tabla plana original de
+// esta clase, sin merges, con Autofiltro — para quien necesite trabajar los
+// datos, ver ReporteOperativoDatosSheet). Celdas combinadas rompen Ordenar/
+// Filtrar en Excel (rango de tamaño desigual → error al ordenar; Autofiltro
+// deja bloques "huérfanos" al ocultar la fila donde vive el valor combinado),
+// por eso ninguna hoja intenta ser las dos cosas a la vez.
+class ReporteOperativoExport implements WithMultipleSheets, WithProperties
 {
     public function __construct(
         private Collection $filas,
+        private array $dias,
         private string $fechaDesde,
         private string $fechaHasta,
         private string $generadoPor,
@@ -26,93 +27,23 @@ class ReporteOperativoExport implements FromArray, WithProperties, WithStyles
     ) {
     }
 
-    public function array(): array
-    {
-        $filasCabecera = [
-            ['REPORTE OPERATIVO'],
-            ['Del ' . Carbon::parse($this->fechaDesde)->format('d/m/Y') . ' al ' . Carbon::parse($this->fechaHasta)->format('d/m/Y')],
-            ['Generado por: ' . $this->generadoPor . ' · ' . $this->generadoEn->format('d/m/Y H:i')],
-            // [null], no []: una fila realmente vacía (sin celdas) se colapsa en
-            // silencio al exportar (confirmado inspeccionando el .xlsx generado — sin
-            // esto, "encabezados()" terminaba en la fila 4, no la 5, y styles()
-            // le ponía negrita a la fila equivocada).
-            [null],
-            $this->encabezados(),
-        ];
-
-        $filasDatos = $this->filas->map(fn ($fila) => $this->mapaFila($fila))->all();
-
-        return array_merge($filasCabecera, $filasDatos);
-    }
-
-    private function encabezados(): array
+    public function sheets(): array
     {
         return [
-            'Fecha',
-            'Hora',
-            'Pasajero',
-            'Documento',
-            'Tipo pax',
-            'Servicio',
-            'Destino',
-            'Hotel',
-            'Guía',
-            'Sin guía',
-            'Tipo de asignación',
-            'Alimentación especial',
-            'Discapacidad',
-            'Vuelo ida (propio) - aerolínea',
-            'Vuelo ida (propio) - fecha',
-            'Vuelo ida (propio) - hora',
-            'Vuelo vuelta (propio) - aerolínea',
-            'Vuelo vuelta (propio) - fecha',
-            'Vuelo vuelta (propio) - hora',
-            // Vuelo vendido por la agencia (auditoría de UX/funcionalidad
-            // 2026-08-27) — solo poblado en la fila del pasaje aéreo
-            // cotizado, nunca se mezcla con las columnas "(propio)" de arriba.
-            'Vuelo ida (agencia) - número',
-            'Vuelo ida (agencia) - aerolínea',
-            'Vuelo ida (agencia) - fecha',
-            'Vuelo ida (agencia) - hora',
-            'Vuelo vuelta (agencia) - número',
-            'Vuelo vuelta (agencia) - aerolínea',
-            'Vuelo vuelta (agencia) - fecha',
-            'Vuelo vuelta (agencia) - hora',
-            'Check-in',
-        ];
-    }
-
-    private function mapaFila(array $fila): array
-    {
-        return [
-            $fila['fecha'],
-            $fila['hora'],
-            $fila['pasajero']['nombre'],
-            $fila['pasajero']['documento'],
-            $fila['pasajero']['tipo_pax'],
-            $fila['servicio'],
-            $fila['destino'],
-            $fila['hotel'],
-            $fila['guia']['nombre'] ?? '',
-            $fila['sin_guia'] ? 'Sí' : 'No',
-            $fila['origen_tipo'] ?? '',
-            $fila['pasajero']['alimentacion_especial'],
-            $fila['pasajero']['discapacidad'],
-            $fila['vuelo_ida']['aerolinea'] ?? '',
-            $fila['vuelo_ida']['fecha'] ?? '',
-            $fila['vuelo_ida']['hora'] ?? '',
-            $fila['vuelo_vuelta']['aerolinea'] ?? '',
-            $fila['vuelo_vuelta']['fecha'] ?? '',
-            $fila['vuelo_vuelta']['hora'] ?? '',
-            $fila['vuelo_agencia_ida']['numero'] ?? '',
-            $fila['vuelo_agencia_ida']['aerolinea'] ?? '',
-            $fila['vuelo_agencia_ida']['fecha'] ?? '',
-            $fila['vuelo_agencia_ida']['hora'] ?? '',
-            $fila['vuelo_agencia_vuelta']['numero'] ?? '',
-            $fila['vuelo_agencia_vuelta']['aerolinea'] ?? '',
-            $fila['vuelo_agencia_vuelta']['fecha'] ?? '',
-            $fila['vuelo_agencia_vuelta']['hora'] ?? '',
-            $fila['checkin_realizado'] ? 'Sí' : 'No',
+            new ReporteOperativoVistaOperativaSheet(
+                $this->dias,
+                $this->fechaDesde,
+                $this->fechaHasta,
+                $this->generadoPor,
+                $this->generadoEn
+            ),
+            new ReporteOperativoDatosSheet(
+                $this->filas,
+                $this->fechaDesde,
+                $this->fechaHasta,
+                $this->generadoPor,
+                $this->generadoEn
+            ),
         ];
     }
 
@@ -123,14 +54,6 @@ class ReporteOperativoExport implements FromArray, WithProperties, WithStyles
             'title' => 'Reporte Operativo del ' . Carbon::parse($this->fechaDesde)->format('d/m/Y')
                 . ' al ' . Carbon::parse($this->fechaHasta)->format('d/m/Y'),
             'created' => $this->generadoEn->timestamp,
-        ];
-    }
-
-    public function styles(Worksheet $sheet)
-    {
-        return [
-            1 => ['font' => ['bold' => true, 'size' => 13]],
-            5 => ['font' => ['bold' => true]],
         ];
     }
 }

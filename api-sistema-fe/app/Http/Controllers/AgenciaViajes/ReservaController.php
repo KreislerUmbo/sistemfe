@@ -757,10 +757,18 @@ class ReservaController extends Controller
             return $item->cotizacionPasajeAereo?->aerolinea ?? 'Pasaje aéreo';
         }
         if ($item->origen_tipo === AlternativaItem::ORIGEN_MAYORISTA) {
-            return $item->opcionMayorista?->proveedor?->razon_social ?? 'Paquete mayorista';
+            $proveedor = $item->opcionMayorista?->proveedor;
+
+            return ($proveedor?->nombre_comercial ?: $proveedor?->razon_social) ?? 'Paquete mayorista';
         }
         if ($item->proveedorTarifa?->tipo_habitacion) {
-            $proveedor = $item->proveedorTarifa->proveedorServicio?->proveedor?->razon_social ?? 'Hotel';
+            // nombre_comercial antes que razon_social — mismo criterio que ya usa
+            // etiquetaItem() en cotizador/editar.vue (frontend); esta función
+            // (resolverNombreItem, backend) se había quedado atrás mostrando solo
+            // razón social, lo que generaba el mismo proveedor con 2 nombres
+            // distintos según la pantalla (rediseño-reporte-operativo).
+            $proveedorModel = $item->proveedorTarifa->proveedorServicio?->proveedor;
+            $proveedor = ($proveedorModel?->nombre_comercial ?: $proveedorModel?->razon_social) ?? 'Hotel';
 
             return "{$proveedor} · {$item->proveedorTarifa->tipo_habitacion}";
         }
