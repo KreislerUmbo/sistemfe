@@ -219,6 +219,10 @@ class ReporteOperativoController extends Controller
                 // mostrar/permitir un guía duplicado y desincronizado del real.
                 'salidaOperativa.guia',
                 'pasajeros',
+                // Vuelo vendido por la AGENCIA (corrección 2026-08-27, tabla
+                // propia — ver docblock de ReservaItemVueloPasajero, sin
+                // relación con 'pasajeros' de arriba).
+                'vueloPasajeros',
             ]);
     }
 
@@ -382,6 +386,10 @@ class ReporteOperativoController extends Controller
                 'alimentacion_especial' => $pasajero->alimentacion_especial,
                 'discapacidad' => $pasajero->discapacidad,
             ],
+            // Vuelo por CUENTA PROPIA del pasajero (informativo, sin relación
+            // con ningún reserva_item real — se pega igual a cualquier fila
+            // de este pasajero, sea hotel/tour/lo que sea, mismo criterio de
+            // siempre). Distinto de vuelo_agencia_ida/vuelta más abajo.
             'vuelo_ida' => $pasajero->vuelo_aerolinea_ida ? [
                 'aerolinea' => $pasajero->vuelo_aerolinea_ida,
                 'fecha' => optional($pasajero->vuelo_fecha_ida)->toDateString(),
@@ -391,6 +399,27 @@ class ReporteOperativoController extends Controller
                 'aerolinea' => $pasajero->vuelo_aerolinea_vuelta,
                 'fecha' => optional($pasajero->vuelo_fecha_vuelta)->toDateString(),
                 'hora' => $pasajero->vuelo_hora_vuelta,
+            ] : null,
+            // Vuelo vendido por la AGENCIA — tabla propia
+            // (ReservaItemVueloPasajero, corrección 2026-08-27 tras un bug
+            // real: compartir fila con reserva_item_pasajero hacía que el
+            // checkbox de Asignación pudiera borrar el vuelo ya cargado).
+            // Solo se llena en la fila del ítem que efectivamente ES el
+            // pasaje aéreo cotizado, nunca se mezcla con vuelo_ida/vuelta de
+            // arriba. $item->vueloPasajeros ya viene eager-loaded desde
+            // queryItemsDelRango(), sin query nueva acá.
+            'vuelo_agencia_ida' => ($vueloAgencia = $item->vueloPasajeros->firstWhere('reserva_pasajero_id', $pasajero->id))
+                && $vueloAgencia->vuelo_numero_ida ? [
+                'numero' => $vueloAgencia->vuelo_numero_ida,
+                'aerolinea' => $vueloAgencia->vuelo_aerolinea_confirmada ?? $alternativaItem?->cotizacionPasajeAereo?->aerolinea,
+                'fecha' => $vueloAgencia->vuelo_fecha_ida,
+                'hora' => $vueloAgencia->vuelo_hora_ida,
+            ] : null,
+            'vuelo_agencia_vuelta' => $vueloAgencia && $vueloAgencia->vuelo_numero_vuelta ? [
+                'numero' => $vueloAgencia->vuelo_numero_vuelta,
+                'aerolinea' => $vueloAgencia->vuelo_aerolinea_confirmada ?? $alternativaItem?->cotizacionPasajeAereo?->aerolinea,
+                'fecha' => $vueloAgencia->vuelo_fecha_vuelta,
+                'hora' => $vueloAgencia->vuelo_hora_vuelta,
             ] : null,
             'servicio' => $alternativaItem ? ReservaController::resolverNombreItem($alternativaItem) : 'Servicio',
             'servicio_id' => $destinoServicio?->servicio_id,

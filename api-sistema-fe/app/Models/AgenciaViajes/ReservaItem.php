@@ -88,4 +88,12 @@ class ReservaItem extends Model
     {
         return $this->belongsToMany(ReservaPasajero::class, 'reserva_item_pasajero', 'reserva_item_id', 'reserva_pasajero_id');
     }
+
+    // Vuelo vendido por la AGENCIA, por pasajero (corrección 2026-08-27 —
+    // ver docblock de ReservaItemVueloPasajero) — tabla propia, sin
+    // relación con pasajeros()/reserva_item_pasajero de arriba.
+    public function vueloPasajeros()
+    {
+        return $this->hasMany(ReservaItemVueloPasajero::class, 'reserva_item_id');
+    }
 }

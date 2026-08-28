@@ -5,6 +5,7 @@ namespace App\Http\Controllers\AgenciaViajes;
 use App\Http\Controllers\Controller;
 use App\Models\AgenciaViajes\PasajeroCatalogo;
 use App\Models\AgenciaViajes\PasajeroDocumento;
+use App\Models\AgenciaViajes\Reserva;
 use App\Models\AgenciaViajes\ReservaItemPasajero;
 use App\Models\AgenciaViajes\ReservaPasajero;
 use App\Models\AgenciaViajes\ReservaVenta;
@@ -12,6 +13,7 @@ use App\Models\AgenciaViajes\SalidaMayorista;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 
 // Datos completos de un pasajero de reserva — plan-modulo-cotizaciones-reservas.md
 // §4/§6.5. nombre/documento nullable desde el retrofit de Sesión 11c (el
@@ -145,6 +147,14 @@ class ReservaPasajeroController extends Controller
     // DELETE reserva-pasajeros/{id} — Fase D del plan "Proceso de reserva:
     // facturación + 3 fixes" (2026-08-19). Cubre el caso "un pasajero se
     // baja del viaje" después de aceptada la reserva.
+    //
+    // Auditoría de UX/funcionalidad del módulo (2026-08-27): igual que
+    // ReservaItemController::destroy(), este endpoint nunca tuvo botón en
+    // el frontend (reservaPasajeroService.ts no tenía eliminar()). De paso
+    // se le agrega lockForUpdate() sobre la reserva — ya tenía el guard de
+    // "mínimo 1", pero no cerraba la ventana de carrera con una
+    // facturación concurrente (mismo lock que ya usa
+    // ReservaFacturacionController::store()).
     public function destroy(string $id)
     {
         $pasajero = ReservaPasajero::with('reserva')->findOrFail($id);
@@ -169,23 +179,40 @@ class ReservaPasajeroController extends Controller
             ], 422);
         }
 
-        DB::transaction(function () use ($pasajero, $reserva) {
-            // reserva_item_pasajero.reserva_pasajero_id es FK sin
-            // cascadeOnDelete() — hay que limpiarla a mano antes de poder
-            // borrar el pasajero.
-            ReservaItemPasajero::where('reserva_pasajero_id', $pasajero->id)->delete();
-            $pasajero->delete();
+        try {
+            DB::transaction(function () use ($pasajero, $reserva) {
+                // Re-chequeo bajo lock: mismo criterio que
+                // ReservaFacturacionController::store() /
+                // ReservaController::actualizarFacturacionExterna().
+                $reservaLocked = Reserva::where('id', $reserva->id)->lockForUpdate()->firstOrFail();
 
-            // Mismo movimiento de cupo que ReservaController::cancelar(),
-            // en reversa por 1 pasajero — cupo_ocupado se contó por
-            // cantidad de pasajeros al aceptar, no queda "huérfano" un
-            // cupo que ya no corresponde a nadie.
-            $alternativa = $reserva->alternativa;
-            $opcionElegida = $alternativa?->opcionMayoristaElegida;
-            if ($opcionElegida && $opcionElegida->salida_mayorista_id) {
-                SalidaMayorista::where('id', $opcionElegida->salida_mayorista_id)->decrement('cupo_ocupado');
-            }
-        });
+                if ($reservaLocked->pasajeros()->count() <= 1) {
+                    throw new HttpException(422, 'No se puede quitar: es el último pasajero de la reserva.');
+                }
+
+                if (ReservaVenta::where('reserva_id', $reservaLocked->id)->exists()) {
+                    throw new HttpException(422, 'No se puede quitar: esta reserva ya tiene una venta/comprobante asociado.');
+                }
+
+                // reserva_item_pasajero.reserva_pasajero_id es FK sin
+                // cascadeOnDelete() — hay que limpiarla a mano antes de
+                // poder borrar el pasajero.
+                ReservaItemPasajero::where('reserva_pasajero_id', $pasajero->id)->delete();
+                $pasajero->delete();
+
+                // Mismo movimiento de cupo que ReservaController::cancelar(),
+                // en reversa por 1 pasajero — cupo_ocupado se contó por
+                // cantidad de pasajeros al aceptar, no queda "huérfano" un
+                // cupo que ya no corresponde a nadie.
+                $alternativa = $reservaLocked->alternativa;
+                $opcionElegida = $alternativa?->opcionMayoristaElegida;
+                if ($opcionElegida && $opcionElegida->salida_mayorista_id) {
+                    SalidaMayorista::where('id', $opcionElegida->salida_mayorista_id)->decrement('cupo_ocupado');
+                }
+            });
+        } catch (HttpException $e) {
+            return response()->json(['code' => $e->getStatusCode(), 'message' => $e->getMessage()], $e->getStatusCode());
+        }
 
         return response()->json(['code' => 200, 'message' => 'Pasajero quitado de la reserva correctamente.']);
     }

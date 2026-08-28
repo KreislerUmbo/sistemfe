@@ -48,7 +48,9 @@ class ReservaController extends Controller
         'items.guia',
         'items.proveedorTarifa.proveedorServicio.proveedor',
         'items.pasajeros',
+        'items.vueloPasajeros',
         'items.salidaOperativa.guia',
+        'items.tourOrigen',
         'anticipos.advance.sale',
     ];
 
@@ -637,6 +639,13 @@ class ReservaController extends Controller
                 'fecha' => $item->fecha?->toDateString(),
                 'precio_venta_snapshot' => $item->alternativaItem->precio_venta_snapshot,
                 'total_convertido' => $item->alternativaItem->total_convertido,
+                // Auditoría de UX del módulo (2026-08-27): el resumen salía
+                // en el orden de carga de la relación, sin agrupar por
+                // tour/día como ya hace el cotizador (mismo tour_origen_id
+                // que ya viaja en el ítem desde Sesión 11b4) — el frontend
+                // arma los bloques, esto solo expone el dato.
+                'tour_origen_id' => $item->tour_origen_id,
+                'tour_origen_nombre' => $item->tourOrigen?->nombre,
             ];
         })->values();
 

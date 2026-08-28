@@ -113,6 +113,19 @@ class ReservaQuitarItemsPasajerosTest extends TestCase
         $this->assertSame(0, ReservaItemPasajero::where('reserva_item_id', $reservaItem1->id)->count());
     }
 
+    public function test_quitar_item_rechaza_si_es_el_ultimo(): void
+    {
+        [$reserva, $reservaItem1, $reservaItem2] = $this->crearReservaConDosPasajerosYDosItems();
+
+        app(ReservaItemController::class)->destroy((string) $reservaItem1->id);
+        $this->assertSame(1, $reserva->items()->count());
+
+        $response = app(ReservaItemController::class)->destroy((string) $reservaItem2->id);
+
+        $this->assertSame(422, $response->getStatusCode());
+        $this->assertTrue(ReservaItem::where('id', $reservaItem2->id)->exists());
+    }
+
     public function test_quitar_item_rechaza_si_reserva_no_activa(): void
     {
         [$reserva, $reservaItem1] = $this->crearReservaConDosPasajerosYDosItems();

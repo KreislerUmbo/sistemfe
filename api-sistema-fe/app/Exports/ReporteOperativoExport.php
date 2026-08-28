@@ -61,12 +61,23 @@ class ReporteOperativoExport implements FromArray, WithProperties, WithStyles
             'Tipo de asignación',
             'Alimentación especial',
             'Discapacidad',
-            'Vuelo ida - aerolínea',
-            'Vuelo ida - fecha',
-            'Vuelo ida - hora',
-            'Vuelo vuelta - aerolínea',
-            'Vuelo vuelta - fecha',
-            'Vuelo vuelta - hora',
+            'Vuelo ida (propio) - aerolínea',
+            'Vuelo ida (propio) - fecha',
+            'Vuelo ida (propio) - hora',
+            'Vuelo vuelta (propio) - aerolínea',
+            'Vuelo vuelta (propio) - fecha',
+            'Vuelo vuelta (propio) - hora',
+            // Vuelo vendido por la agencia (auditoría de UX/funcionalidad
+            // 2026-08-27) — solo poblado en la fila del pasaje aéreo
+            // cotizado, nunca se mezcla con las columnas "(propio)" de arriba.
+            'Vuelo ida (agencia) - número',
+            'Vuelo ida (agencia) - aerolínea',
+            'Vuelo ida (agencia) - fecha',
+            'Vuelo ida (agencia) - hora',
+            'Vuelo vuelta (agencia) - número',
+            'Vuelo vuelta (agencia) - aerolínea',
+            'Vuelo vuelta (agencia) - fecha',
+            'Vuelo vuelta (agencia) - hora',
             'Check-in',
         ];
     }
@@ -93,6 +104,14 @@ class ReporteOperativoExport implements FromArray, WithProperties, WithStyles
             $fila['vuelo_vuelta']['aerolinea'] ?? '',
             $fila['vuelo_vuelta']['fecha'] ?? '',
             $fila['vuelo_vuelta']['hora'] ?? '',
+            $fila['vuelo_agencia_ida']['numero'] ?? '',
+            $fila['vuelo_agencia_ida']['aerolinea'] ?? '',
+            $fila['vuelo_agencia_ida']['fecha'] ?? '',
+            $fila['vuelo_agencia_ida']['hora'] ?? '',
+            $fila['vuelo_agencia_vuelta']['numero'] ?? '',
+            $fila['vuelo_agencia_vuelta']['aerolinea'] ?? '',
+            $fila['vuelo_agencia_vuelta']['fecha'] ?? '',
+            $fila['vuelo_agencia_vuelta']['hora'] ?? '',
             $fila['checkin_realizado'] ? 'Sí' : 'No',
         ];
     }

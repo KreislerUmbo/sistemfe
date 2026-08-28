@@ -682,6 +682,25 @@ export type ReservaItem = {
   alternativa_item?: AlternativaItem;
   salida_operativa_id?: number | null;
   salida_operativa?: SalidaOperativa | null;
+  // Vuelo vendido por la AGENCIA, por pasajero (corrección 2026-08-27 —
+  // tabla propia ReservaItemVueloPasajero, sin relación con el checkbox
+  // del tab Asignación pasajero↔ítem — ver docblock del modelo en el
+  // backend para el bug real que motivó separarla). Aplica a TODOS los
+  // pasajeros de la reserva por igual, no depende de ningún vínculo.
+  vuelo_pasajeros?: ReservaItemVueloPasajero[];
+};
+
+export type ReservaItemVueloPasajero = {
+  id: number;
+  reserva_item_id: number;
+  reserva_pasajero_id: number;
+  vuelo_numero_ida?: string | null;
+  vuelo_fecha_ida?: string | null;
+  vuelo_hora_ida?: string | null;
+  vuelo_numero_vuelta?: string | null;
+  vuelo_fecha_vuelta?: string | null;
+  vuelo_hora_vuelta?: string | null;
+  vuelo_aerolinea_confirmada?: string | null;
 };
 
 // feature/salida-operativa — agrupa reserva_items de DISTINTAS reservas
@@ -761,6 +780,10 @@ export type ReservaResumenItem = {
   fecha?: string | null;
   precio_venta_snapshot: number;
   total_convertido: number;
+  // Auditoría de UX 2026-08-27 — agrupar el resumen por tour, igual patrón
+  // visual que el cotizador. null cuando el ítem no viene de un tour.
+  tour_origen_id?: number | null;
+  tour_origen_nombre?: string | null;
 };
 
 // Tier 0 — conexión Adelantos↔Reservas (hallazgo de auditoría del módulo
@@ -850,8 +873,17 @@ export type ReporteOperativoFila = {
     alimentacion_especial?: string | null;
     discapacidad?: string | null;
   };
+  // Vuelo por CUENTA PROPIA del pasajero (informativo, se pega a cualquier
+  // fila de este pasajero sin relación con el ítem — no cambia con esta
+  // auditoría).
   vuelo_ida: { aerolinea: string; fecha: string | null; hora: string | null } | null;
   vuelo_vuelta: { aerolinea: string; fecha: string | null; hora: string | null } | null;
+  // Vuelo vendido por la AGENCIA (auditoría de UX/funcionalidad 2026-08-27)
+  // — solo viene poblado en la fila del ítem que ES el pasaje aéreo
+  // cotizado (origen_tipo='pasaje_aereo'), nunca se mezcla con vuelo_ida/
+  // vuelta de arriba.
+  vuelo_agencia_ida?: { numero: string; aerolinea: string | null; fecha: string | null; hora: string | null } | null;
+  vuelo_agencia_vuelta?: { numero: string; aerolinea: string | null; fecha: string | null; hora: string | null } | null;
   origen_tipo?: OrigenItem | null;
   servicio?: string | null;
   servicio_id?: number | null;
