@@ -101,8 +101,8 @@
                     <table class="table table-hover align-middle mb-0">
                         <thead class="table-light">
                             <tr class="small text-secondary text-uppercase">
-                                <th class="ps-3">Hora</th>
-                                <th>Pasajero</th>
+                                <th class="ps-3">Pasajero</th>
+                                <th>Hora</th>
                                 <th>Servicio</th>
                                 <th>Destino</th>
                                 <th>Hotel</th>
@@ -116,91 +116,93 @@
                             </tr>
                         </thead>
                         <tbody>
-                            <tr v-for="fila in grupo.filas" :key="fila.reserva_item_id + '-' + fila.pasajero.id">
-                                <td class="ps-3">{{ fila.hora }}</td>
-                                <td>
-                                    <router-link :to="`/agencia-viajes/reservas/${fila.reserva_id}`" class="text-decoration-none">
-                                        {{ fila.pasajero.nombre || ('Pasajero ' + fila.pasajero.id) }}
-                                    </router-link>
-                                    <div v-if="fila.codigo_reserva" class="small text-muted">{{ fila.codigo_reserva }}</div>
-                                </td>
-                                <td>{{ fila.servicio }}</td>
-                                <td>{{ fila.destino }}</td>
-                                <td>{{ fila.hotel ?? '—' }}</td>
-                                <td style="min-width:220px">
-                                    <!-- Caso guía enganchado a una Salida Operativa: el guía real es el de la
-                                         salida (compartido con otras reservas) — solo lectura + link, mismo
-                                         criterio que reservas/detalle.vue. Editarlo acá crearía un guía
-                                         duplicado y desincronizado del de la salida. -->
-                                    <div v-if="fila.origen_tipo === 'guia' && fila.salida_operativa_id" class="small">
-                                        <span :class="fila.guia ? '' : 'text-muted fst-italic'">{{ fila.guia?.nombre ?? 'Sin asignar' }}</span>
-                                        <div v-if="fila.salida_vehiculo" class="text-muted" style="font-size:11px">{{ fila.salida_vehiculo }}</div>
-                                        <router-link :to="`/agencia-viajes/salidas/${fila.salida_operativa_id}`" class="d-block text-decoration-none" style="font-size:11px">
-                                            <i class="fas fa-link me-1"></i>Vía salida operativa
+                            <template v-for="cluster in grupo.pasajeros" :key="cluster.pasajero.id">
+                                <tr v-for="(fila, i) in cluster.filas" :key="fila.reserva_item_id + '-' + fila.pasajero.id">
+                                    <td v-if="i === 0" class="ps-3" :rowspan="cluster.filas.length">
+                                        <router-link :to="`/agencia-viajes/reservas/${fila.reserva_id}`" class="text-decoration-none">
+                                            {{ fila.pasajero.nombre || ('Pasajero ' + fila.pasajero.id) }}
                                         </router-link>
-                                    </div>
-                                    <!-- Caso guía (origen_tipo='guia') sin salida — poco frecuente en la práctica. -->
-                                    <select v-else-if="fila.origen_tipo === 'guia'" class="form-select form-select-sm"
-                                        :value="fila.guia?.id ?? ''"
-                                        @change="guardarGuia(fila, valorSelect($event))">
-                                        <option value="">Sin asignar</option>
-                                        <option v-for="g in guias" :key="g.id" :value="g.id">
-                                            {{ g.nombre }}{{ g.es_referencial ? ' (Referencial)' : '' }}
-                                        </option>
-                                    </select>
-                                    <!-- Caso proveedor (origen_tipo='proveedor') — el caso real más común. Mismo
-                                         buscador inline que reservas/detalle.vue, no un <select> nativo porque la
-                                         biblioteca de tarifas puede ser larga. -->
-                                    <template v-else-if="fila.origen_tipo === 'proveedor'">
-                                        <div v-if="proveedorBuscando !== fila.reserva_item_id"
-                                            class="d-flex align-items-center justify-content-between border rounded px-2 py-1 bg-white"
-                                            style="cursor:pointer;min-height:31px" @click="abrirBusquedaProveedor(fila)">
-                                            <span class="small" :class="{ 'text-warning fw-semibold': !fila.proveedor }">{{ fila.proveedor ?? 'Sin asignar' }}</span>
-                                            <i class="fas fa-pen text-muted small"></i>
+                                        <div v-if="fila.codigo_reserva" class="small text-muted">{{ fila.codigo_reserva }}</div>
+                                    </td>
+                                    <td>{{ fila.hora }}</td>
+                                    <td>{{ fila.servicio }}</td>
+                                    <td>{{ fila.destino }}</td>
+                                    <td>{{ fila.hotel ?? '—' }}</td>
+                                    <td style="min-width:220px">
+                                        <!-- Caso guía enganchado a una Salida Operativa: el guía real es el de la
+                                             salida (compartido con otras reservas) — solo lectura + link, mismo
+                                             criterio que reservas/detalle.vue. Editarlo acá crearía un guía
+                                             duplicado y desincronizado del de la salida. -->
+                                        <div v-if="fila.origen_tipo === 'guia' && fila.salida_operativa_id" class="small">
+                                            <span :class="fila.guia ? '' : 'text-muted fst-italic'">{{ fila.guia?.nombre ?? 'Sin asignar' }}</span>
+                                            <div v-if="fila.salida_vehiculo" class="text-muted" style="font-size:11px">{{ fila.salida_vehiculo }}</div>
+                                            <router-link :to="`/agencia-viajes/salidas/${fila.salida_operativa_id}`" class="d-block text-decoration-none" style="font-size:11px">
+                                                <i class="fas fa-link me-1"></i>Vía salida operativa
+                                            </router-link>
                                         </div>
-                                        <div v-else class="position-relative">
-                                            <input type="text" class="form-control form-control-sm" placeholder="Buscar proveedor..."
-                                                v-model="proveedorSearch[fila.reserva_item_id]"
-                                                @blur="cerrarBusquedaProveedor(fila.reserva_item_id)" autofocus>
-                                            <div class="list-group position-absolute w-100 shadow-sm" style="z-index:10;max-height:220px;overflow-y:auto">
-                                                <button type="button" class="list-group-item list-group-item-action py-1 small text-muted" @mousedown.prevent="elegirProveedor(fila, null)">
-                                                    Sin asignar
-                                                </button>
-                                                <button type="button" class="list-group-item list-group-item-action py-1 small" v-for="t in proveedoresFiltrados(fila)" :key="t.id" @mousedown.prevent="elegirProveedor(fila, t.id)">
-                                                    {{ t.proveedor_servicio?.proveedor?.razon_social ?? ('Tarifa #' + t.id) }}{{ t.proveedor_servicio?.proveedor?.es_referencial ? ' (Referencial)' : '' }}
-                                                    <span class="text-muted">— {{ t.tipo_tarifa }} · {{ t.modalidad }} · {{ t.moneda }} {{ Number(t.precio_venta_adulto).toFixed(0) }}</span>
-                                                </button>
-                                                <div v-if="proveedoresFiltrados(fila).length === 0" class="list-group-item small text-muted py-1">Sin resultados</div>
+                                        <!-- Caso guía (origen_tipo='guia') sin salida — poco frecuente en la práctica. -->
+                                        <select v-else-if="fila.origen_tipo === 'guia'" class="form-select form-select-sm"
+                                            :value="fila.guia?.id ?? ''"
+                                            @change="guardarGuia(fila, valorSelect($event))">
+                                            <option value="">Sin asignar</option>
+                                            <option v-for="g in guias" :key="g.id" :value="g.id">
+                                                {{ g.nombre }}{{ g.es_referencial ? ' (Referencial)' : '' }}
+                                            </option>
+                                        </select>
+                                        <!-- Caso proveedor (origen_tipo='proveedor') — el caso real más común. Mismo
+                                             buscador inline que reservas/detalle.vue, no un <select> nativo porque la
+                                             biblioteca de tarifas puede ser larga. -->
+                                        <template v-else-if="fila.origen_tipo === 'proveedor'">
+                                            <div v-if="proveedorBuscando !== fila.reserva_item_id"
+                                                class="d-flex align-items-center justify-content-between border rounded px-2 py-1 bg-white"
+                                                style="cursor:pointer;min-height:31px" @click="abrirBusquedaProveedor(fila)">
+                                                <span class="small" :class="{ 'text-warning fw-semibold': !fila.proveedor }">{{ fila.proveedor ?? 'Sin asignar' }}</span>
+                                                <i class="fas fa-pen text-muted small"></i>
                                             </div>
-                                        </div>
-                                    </template>
-                                    <span v-else class="text-muted small">—</span>
-                                </td>
-                                <td class="small">
-                                    {{ fila.pasajero.alimentacion_especial || '—' }}
-                                    <div v-if="fila.pasajero.discapacidad" class="text-warning">{{ fila.pasajero.discapacidad }}</div>
-                                </td>
-                                <td class="small">
-                                    <span v-if="fila.vuelo_ida">{{ fila.vuelo_ida.aerolinea }}<br>{{ fila.vuelo_ida.fecha }} {{ fila.vuelo_ida.hora }}</span>
-                                    <span v-else class="text-muted">—</span>
-                                </td>
-                                <td class="small">
-                                    <span v-if="fila.vuelo_vuelta">{{ fila.vuelo_vuelta.aerolinea }}<br>{{ fila.vuelo_vuelta.fecha }} {{ fila.vuelo_vuelta.hora }}</span>
-                                    <span v-else class="text-muted">—</span>
-                                </td>
-                                <td class="small">
-                                    <span v-if="fila.vuelo_agencia_ida">{{ fila.vuelo_agencia_ida.numero }} · {{ fila.vuelo_agencia_ida.aerolinea }}<br>{{ fila.vuelo_agencia_ida.fecha }} {{ fila.vuelo_agencia_ida.hora }}</span>
-                                    <span v-else class="text-muted">—</span>
-                                </td>
-                                <td class="small">
-                                    <span v-if="fila.vuelo_agencia_vuelta">{{ fila.vuelo_agencia_vuelta.numero }} · {{ fila.vuelo_agencia_vuelta.aerolinea }}<br>{{ fila.vuelo_agencia_vuelta.fecha }} {{ fila.vuelo_agencia_vuelta.hora }}</span>
-                                    <span v-else class="text-muted">—</span>
-                                </td>
-                                <td class="text-center pe-3">
-                                    <input type="checkbox" class="form-check-input" :checked="fila.checkin_realizado"
-                                        @change="toggleCheckin(fila, valorCheckbox($event))">
-                                </td>
-                            </tr>
+                                            <div v-else class="position-relative">
+                                                <input type="text" class="form-control form-control-sm" placeholder="Buscar proveedor..."
+                                                    v-model="proveedorSearch[fila.reserva_item_id]"
+                                                    @blur="cerrarBusquedaProveedor(fila.reserva_item_id)" autofocus>
+                                                <div class="list-group position-absolute w-100 shadow-sm" style="z-index:10;max-height:220px;overflow-y:auto">
+                                                    <button type="button" class="list-group-item list-group-item-action py-1 small text-muted" @mousedown.prevent="elegirProveedor(fila, null)">
+                                                        Sin asignar
+                                                    </button>
+                                                    <button type="button" class="list-group-item list-group-item-action py-1 small" v-for="t in proveedoresFiltrados(fila)" :key="t.id" @mousedown.prevent="elegirProveedor(fila, t.id)">
+                                                        {{ t.proveedor_servicio?.proveedor?.nombre_comercial || t.proveedor_servicio?.proveedor?.razon_social || ('Tarifa #' + t.id) }}{{ t.proveedor_servicio?.proveedor?.es_referencial ? ' (Referencial)' : '' }}
+                                                        <span class="text-muted">— {{ t.tipo_tarifa }} · {{ t.modalidad }} · {{ t.moneda }} {{ Number(t.precio_venta_adulto).toFixed(0) }}</span>
+                                                    </button>
+                                                    <div v-if="proveedoresFiltrados(fila).length === 0" class="list-group-item small text-muted py-1">Sin resultados</div>
+                                                </div>
+                                            </div>
+                                        </template>
+                                        <span v-else class="text-muted small">—</span>
+                                    </td>
+                                    <td v-if="i === 0" :rowspan="cluster.filas.length" class="small">
+                                        {{ fila.pasajero.alimentacion_especial || '—' }}
+                                        <div v-if="fila.pasajero.discapacidad" class="text-warning">{{ fila.pasajero.discapacidad }}</div>
+                                    </td>
+                                    <td v-if="i === 0" :rowspan="cluster.filas.length" class="small">
+                                        <span v-if="fila.vuelo_ida">{{ fila.vuelo_ida.aerolinea }}<br>{{ fila.vuelo_ida.fecha }} {{ fila.vuelo_ida.hora }}</span>
+                                        <span v-else class="text-muted">—</span>
+                                    </td>
+                                    <td v-if="i === 0" :rowspan="cluster.filas.length" class="small">
+                                        <span v-if="fila.vuelo_vuelta">{{ fila.vuelo_vuelta.aerolinea }}<br>{{ fila.vuelo_vuelta.fecha }} {{ fila.vuelo_vuelta.hora }}</span>
+                                        <span v-else class="text-muted">—</span>
+                                    </td>
+                                    <td class="small">
+                                        <span v-if="fila.vuelo_agencia_ida">{{ fila.vuelo_agencia_ida.numero }} · {{ fila.vuelo_agencia_ida.aerolinea }}<br>{{ fila.vuelo_agencia_ida.fecha }} {{ fila.vuelo_agencia_ida.hora }}</span>
+                                        <span v-else class="text-muted">—</span>
+                                    </td>
+                                    <td class="small">
+                                        <span v-if="fila.vuelo_agencia_vuelta">{{ fila.vuelo_agencia_vuelta.numero }} · {{ fila.vuelo_agencia_vuelta.aerolinea }}<br>{{ fila.vuelo_agencia_vuelta.fecha }} {{ fila.vuelo_agencia_vuelta.hora }}</span>
+                                        <span v-else class="text-muted">—</span>
+                                    </td>
+                                    <td class="text-center pe-3">
+                                        <input type="checkbox" class="form-check-input" :checked="fila.checkin_realizado"
+                                            @change="toggleCheckin(fila, valorCheckbox($event))">
+                                    </td>
+                                </tr>
+                            </template>
                         </tbody>
                     </table>
                 </div>
@@ -294,17 +296,46 @@ const checkinsCompletados = computed(() => filas.value.filter((f) => f.checkin_r
 
 // Un solo reporte con selector de rango (plan-modulo-cotizaciones-reservas.md §8) —
 // no dos pantallas separadas para uso diario vs. planificación.
+//
+// Pedido del usuario tras ver el reporte en vivo desordenado: antes la tabla era
+// plana ordenada solo por hora, así que las filas de un mismo pasajero (sus
+// distintos servicios ese día) quedaban intercaladas con las de otros pasajeros.
+// Se agrupa un nivel más: fecha → pasajero (con sus filas juntas, ordenadas por
+// hora) — mismo criterio de agrupación que ya se usa en el PDF/Excel
+// (armarVistaAgrupada() en el backend), pero sin la capa de Tour/"Servicios
+// sueltos": esta pantalla sigue siendo la vista de trabajo diaria con los 4
+// filtros de dimensión, no el documento para repartir en campo.
+type PasajeroCluster = { pasajero: ReporteOperativoFila['pasajero']; filas: ReporteOperativoFila[] };
+
 const filasPorFecha = computed(() => {
-    const grupos: { fecha: string; filas: ReporteOperativoFila[] }[] = [];
-    const indice = new Map<string, number>();
+    const grupos: { fecha: string; pasajeros: PasajeroCluster[] }[] = [];
+    const indiceFecha = new Map<string, number>();
+    const indicePasajeroPorFecha = new Map<string, Map<number, number>>();
+
     for (const fila of filas.value) {
-        const key = fila.fecha ?? 'sin-fecha';
-        if (!indice.has(key)) {
-            indice.set(key, grupos.length);
-            grupos.push({ fecha: key, filas: [] });
+        const keyFecha = fila.fecha ?? 'sin-fecha';
+        if (!indiceFecha.has(keyFecha)) {
+            indiceFecha.set(keyFecha, grupos.length);
+            grupos.push({ fecha: keyFecha, pasajeros: [] });
+            indicePasajeroPorFecha.set(keyFecha, new Map());
         }
-        grupos[indice.get(key)!].filas.push(fila);
+        const grupo = grupos[indiceFecha.get(keyFecha)!];
+        const indicePasajero = indicePasajeroPorFecha.get(keyFecha)!;
+
+        if (!indicePasajero.has(fila.pasajero.id)) {
+            indicePasajero.set(fila.pasajero.id, grupo.pasajeros.length);
+            grupo.pasajeros.push({ pasajero: fila.pasajero, filas: [] });
+        }
+        grupo.pasajeros[indicePasajero.get(fila.pasajero.id)!].filas.push(fila);
     }
+
+    for (const grupo of grupos) {
+        grupo.pasajeros.sort((a, b) => (a.pasajero.nombre ?? '').localeCompare(b.pasajero.nombre ?? ''));
+        for (const cluster of grupo.pasajeros) {
+            cluster.filas.sort((a, b) => (a.hora ?? '').localeCompare(b.hora ?? ''));
+        }
+    }
+
     return grupos;
 });
 
@@ -379,11 +410,20 @@ const valorSelect = (event: Event): number | null => {
 };
 
 // ── Reasignar proveedor inline (origen_tipo='proveedor') ────────────────────
+// La búsqueda matchea por nombre comercial O razón social (el usuario puede
+// conocer al proveedor por cualquiera de los dos) — la lista de resultados
+// solo MUESTRA nombre comercial (con fallback a razón social), mismo criterio
+// que ya se usa en el resto del reporte.
 const proveedoresFiltrados = (fila: ReporteOperativoFila) => {
     const q = (proveedorSearch.value[fila.reserva_item_id] ?? '').trim().toLowerCase();
     return bibliotecaTarifas.value
         .filter((t) => !fila.servicio_id || t.proveedor_servicio?.destino_servicio?.servicio_id === fila.servicio_id)
-        .filter((t) => !q || (t.proveedor_servicio?.proveedor?.razon_social ?? '').toLowerCase().includes(q))
+        .filter((t) => {
+            if (!q) return true;
+            const proveedor = t.proveedor_servicio?.proveedor;
+            return (proveedor?.nombre_comercial ?? '').toLowerCase().includes(q)
+                || (proveedor?.razon_social ?? '').toLowerCase().includes(q);
+        })
         .slice(0, 30);
 };
 
