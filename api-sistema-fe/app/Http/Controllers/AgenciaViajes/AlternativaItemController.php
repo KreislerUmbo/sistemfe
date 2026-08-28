@@ -756,6 +756,68 @@ class AlternativaItemController extends Controller
         return response()->json(['code' => 200, 'resultado' => $resultado]);
     }
 
+    // PUT alternativa-items/{id}/pasaje-aereo — edición estructural completa
+    // de un pasaje aéreo suelto (auditoría del módulo Reservas/Cotizador,
+    // 2026-08-27: antes de esto no existía NINGUNA forma de ver/corregir el
+    // detalle de un pasaje aéreo ya cargado, solo borrar y recrear desde
+    // cero). Calcado de actualizarManual() — mismo guard de "no editar si ya
+    // generó una reserva", y reusa validarPasajeAereo()/calcularPasajeAereo()
+    // (las MISMAS que usa el alta y el preview) para que nunca haya una
+    // segunda fórmula que se pueda desincronizar de la primera.
+    public function actualizarPasajeAereo(Request $request, string $id): JsonResponse
+    {
+        $item = AlternativaItem::with(['alternativa', 'cotizacionPasajeAereo'])->findOrFail($id);
+
+        if ($item->origen_tipo !== AlternativaItem::ORIGEN_PASAJE_AEREO) {
+            return response()->json(['code' => 422, 'message' => 'Solo se puede editar así un pasaje aéreo suelto.'], 422);
+        }
+
+        if (ReservaItem::where('alternativa_item_id', $item->id)->exists()) {
+            return response()->json([
+                'code' => 422,
+                'message' => 'No se puede editar: este servicio ya tiene una reserva generada. Cancelá la reserva primero si corresponde.',
+            ], 422);
+        }
+
+        $validado = $this->validarPasajeAereo($request);
+        if ($validado instanceof JsonResponse) {
+            return $validado;
+        }
+
+        $alternativa = $item->alternativa;
+        $resultado = $this->calcularPasajeAereo($alternativa, $validado);
+
+        DB::transaction(function () use ($item, $alternativa, $validado, $resultado) {
+            $item->update([
+                'pax_incluidos' => $validado['pax_incluidos'] ?? null,
+                'moneda_costo' => $validado['moneda'],
+                'costo_snapshot' => $resultado['costo_total'],
+                'precio_venta_snapshot' => $resultado['venta_total'],
+                'precio_convertido' => $this->priceEngine->convertirMoneda($resultado['venta_total'], $validado['moneda'], $alternativa->moneda_cotizacion, (float) $alternativa->tipo_cambio_aplicado),
+            ]);
+
+            $item->cotizacionPasajeAereo->update([
+                'aerolinea' => $validado['aerolinea'],
+                'itinerario' => $validado['itinerario'] ?? null,
+                'moneda' => $validado['moneda'],
+                'tarifa_base_adulto' => $validado['tarifa_base_adulto'],
+                'tarifa_base_nino' => $validado['tarifa_base_nino'] ?? null,
+                'tarifa_base_infante' => $validado['tarifa_base_infante'] ?? null,
+                'cargos' => $validado['cargos'] ?? [],
+                'tua_incluida_en_tarifa' => $validado['tua_incluida_en_tarifa'] ?? false,
+                'fee_agencia_monto' => $validado['fee_agencia_monto'] ?? 0,
+                'tip_afe_igv' => $validado['tip_afe_igv'] ?? null,
+                'costo_total' => $resultado['costo_total'],
+                'precio_venta_total' => $resultado['venta_total'],
+            ]);
+        });
+
+        $this->recalcularTotalAlternativa($alternativa);
+        $item->load('cotizacionPasajeAereo');
+
+        return response()->json(['code' => 200, 'message' => 'Pasaje aéreo actualizado correctamente', 'alternativa_item' => $item->fresh(['cotizacionPasajeAereo'])]);
+    }
+
     // ── origen_tipo=pasaje_aereo ────────────────────────────────────────
     private function crearItemPasajeAereo(Request $request, Alternativa $alternativa): JsonResponse
     {
@@ -823,6 +885,7 @@ class AlternativaItemController extends Controller
             'fee_agencia_monto' => 'nullable|numeric|min:0',
             'tip_afe_igv' => 'nullable|string|max:2',
             'pax_incluidos' => 'nullable|array',
+            'pax_incluidos.*' => 'integer|exists:cotizacion_pasajeros,id',
             'dia_referencial' => 'nullable|integer|min:1',
         ]);
 

@@ -19,6 +19,19 @@
             </div>
         </div>
 
+        <!-- ¿A quiénes aplica? — antes este form siempre mandaba pax_incluidos
+             null (todos los pasajeros de la cotización, sin excepción), sin
+             ninguna forma de excluir a alguien. Mismo patrón que ya usa
+             ItemManualForm.vue: si quedan TODOS tildados se manda null
+             (semánticamente "todos"), si es un subconjunto se manda la lista. -->
+        <div v-if="pasajeros && pasajeros.length" class="mb-2">
+            <span class="small text-secondary d-block mb-1">¿A quiénes aplica?</span>
+            <div class="form-check form-check-inline small" v-for="p in pasajeros" :key="p.id">
+                <input class="form-check-input" type="checkbox" :id="`pasaje-aereo-pax-${p.id}`" :value="p.id" v-model="paxSeleccionados">
+                <label class="form-check-label" :for="`pasaje-aereo-pax-${p.id}`">{{ p.tipo_pax }} ({{ p.edad }} años)</label>
+            </div>
+        </div>
+
         <div class="row g-2 mb-2">
             <div class="col-4">
                 <label class="form-label mb-1 small fw-semibold text-secondary">Tarifa base adulto</label>
@@ -84,8 +97,9 @@
             </div>
         </div>
 
-        <button class="btn btn-primary btn-sm w-100" @click="agregar" :disabled="!form.aerolinea || !form.tarifa_base_adulto">
-            <i class="fas fa-plus me-1"></i>Agregar pasaje aéreo
+        <button class="btn btn-primary btn-sm w-100" @click="agregar" :disabled="!form.aerolinea || !form.tarifa_base_adulto || guardando">
+            <span v-if="guardando" class="spinner-border spinner-border-sm me-1"></span>
+            <i v-else class="fas fa-plus me-1"></i>{{ props.itemExistente ? 'Guardar cambios' : 'Agregar pasaje aéreo' }}
         </button>
     </div>
 </template>
@@ -95,11 +109,28 @@
 // §2.5. El total NUNCA se calcula acá — se le pide al backend
 // (previewPasajeAereo, mismo PriceEngineService que la creación real) cada
 // vez que cambia un campo relevante, con debounce.
-import { ref, reactive, watch } from 'vue';
+//
+// Auditoría del módulo Reservas/Cotizador (2026-08-27): agrega el selector
+// de pasajeros (antes SIEMPRE mandaba pax_incluidos null, sin forma de
+// excluir a alguien — hallazgo real sobre la cotización CDKM-0826-0000002,
+// que tenía 2 niños y no había forma de cobrar el vuelo solo para 1) y
+// edición estructural completa (itemExistente, mismo patrón que
+// ItemManualForm.vue) — antes solo existía el alta.
+import { ref, reactive, computed, watch } from 'vue';
+import Swal from 'sweetalert2/dist/sweetalert2.js';
 import { alternativaItemService } from '@/services/admin/alternativaItemService';
+import type { AlternativaItem, CotizacionPasajero } from '@/types/agencia-viajes';
 
-const props = defineProps<{ alternativaId: number; paxIncluidos?: number[] | null; diaActivo: number }>();
-const emit = defineEmits<{ (e: 'agregado', payload: any): void }>();
+const props = defineProps<{
+    alternativaId: number;
+    diaActivo: number;
+    pasajeros?: CotizacionPasajero[];
+    itemExistente?: AlternativaItem | null;
+}>();
+const emit = defineEmits<{
+    (e: 'agregado', payload: any): void;
+    (e: 'actualizado', payload: any): void;
+}>();
 
 const form = reactive({
     aerolinea: '',
@@ -112,6 +143,8 @@ const form = reactive({
     tua_incluida_en_tarifa: false,
     fee_agencia_monto: 0,
 });
+const paxSeleccionados = ref<number[]>([]);
+const guardando = ref(false);
 
 const preview = ref<{ costo_total: number; venta_total: number } | null>(null);
 const calculando = ref(false);
@@ -125,12 +158,53 @@ const quitarCargo = (idx: number) => {
     form.cargos.splice(idx, 1);
 };
 
+// Mismo criterio que ItemManualForm.vue: todos tildados = null (semántica
+// "aplica a todos", no una lista redundante que además desincroniza si
+// después se agrega un pasajero nuevo a la cotización).
+const paxIncluidosParaEnviar = () => {
+    const total = props.pasajeros?.length ?? 0;
+    return paxSeleccionados.value.length && paxSeleccionados.value.length < total ? paxSeleccionados.value : null;
+};
+
+const resetearCampos = () => {
+    const item = props.itemExistente;
+    const cpa = item?.cotizacion_pasaje_aereo;
+
+    if (item && cpa) {
+        form.aerolinea = cpa.aerolinea;
+        form.itinerario = cpa.itinerario ?? '';
+        form.moneda = cpa.moneda;
+        form.tarifa_base_adulto = Number(cpa.tarifa_base_adulto);
+        form.tarifa_base_nino = Number(cpa.tarifa_base_nino ?? 0);
+        form.tarifa_base_infante = Number(cpa.tarifa_base_infante ?? 0);
+        form.cargos = (cpa.cargos ?? []).map((c) => ({ nombre: c.nombre, monto: Number(c.monto), tipo: c.tipo ?? 'impuesto' }));
+        form.tua_incluida_en_tarifa = cpa.tua_incluida_en_tarifa;
+        form.fee_agencia_monto = Number(cpa.fee_agencia_monto);
+        paxSeleccionados.value = item.pax_incluidos && item.pax_incluidos.length
+            ? [...item.pax_incluidos]
+            : (props.pasajeros ?? []).map((p) => p.id);
+    } else {
+        form.aerolinea = '';
+        form.itinerario = '';
+        form.moneda = 'PEN';
+        form.tarifa_base_adulto = 0;
+        form.tarifa_base_nino = 0;
+        form.tarifa_base_infante = 0;
+        form.cargos = [];
+        form.tua_incluida_en_tarifa = false;
+        form.fee_agencia_monto = 0;
+        paxSeleccionados.value = (props.pasajeros ?? []).map((p) => p.id);
+    }
+};
+
+watch(() => props.itemExistente, resetearCampos, { immediate: true });
+
 const recalcular = async () => {
     calculando.value = true;
     try {
         const res = await alternativaItemService.previewPasajeAereo(props.alternativaId, {
             ...form,
-            pax_incluidos: props.paxIncluidos ?? null,
+            pax_incluidos: paxIncluidosParaEnviar(),
         });
         preview.value = res.resultado;
     } catch (error) {
@@ -140,21 +214,32 @@ const recalcular = async () => {
     }
 };
 
-watch(form, () => {
+watch([form, paxSeleccionados], () => {
     clearTimeout(debounceTimeout);
     debounceTimeout = setTimeout(recalcular, 400);
 }, { deep: true });
 
 const agregar = async () => {
+    guardando.value = true;
     try {
-        const res = await alternativaItemService.agregarPasajeAereo(props.alternativaId, {
+        const payload = {
             ...form,
-            pax_incluidos: props.paxIncluidos ?? null,
+            pax_incluidos: paxIncluidosParaEnviar(),
             dia_referencial: props.diaActivo,
-        });
-        emit('agregado', res.alternativa_item);
+        };
+
+        if (props.itemExistente) {
+            const res = await alternativaItemService.actualizarPasajeAereo(props.itemExistente.id, payload);
+            emit('actualizado', res.alternativa_item);
+        } else {
+            const res = await alternativaItemService.agregarPasajeAereo(props.alternativaId, payload);
+            emit('agregado', res.alternativa_item);
+            resetearCampos();
+        }
     } catch (error: any) {
-        console.log(error);
+        Swal.fire('Error', error.response?.data?.message ?? 'No se pudo guardar el pasaje aéreo', 'error');
+    } finally {
+        guardando.value = false;
     }
 };
 </script>

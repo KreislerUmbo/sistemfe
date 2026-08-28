@@ -72,6 +72,14 @@ export const alternativaItemService = {
     const response = await httpClient.put(`/alternativa-items/${itemId}/manual`, data)
     return response.data
   },
+  // Auditoría del módulo Reservas/Cotizador (2026-08-27) — edición
+  // estructural completa de un pasaje aéreo suelto (antes solo existía el
+  // alta, sin forma de corregir tarifas/pax_incluidos/aerolínea después).
+  // Mismo criterio que actualizarManual().
+  async actualizarPasajeAereo(itemId: number, data: Record<string, any>) {
+    const response = await httpClient.put(`/alternativa-items/${itemId}/pasaje-aereo`, data)
+    return response.data
+  },
   // Crea Proveedor + ProveedorServicio + ProveedorTarifa a partir de un
   // ítem manual — la cotización actual NO cambia, ver
   // AlternativaItemController::promoverAProveedor().

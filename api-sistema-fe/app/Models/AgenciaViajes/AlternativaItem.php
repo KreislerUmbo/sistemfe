@@ -107,6 +107,17 @@ class AlternativaItem extends Model
         return $this->hasOne(CotizacionPasajeAereo::class, 'alternativa_item_id');
     }
 
+    // Auditoría del módulo Reservas/Cotizador (2026-08-27) — antes de esto
+    // el frontend no tenía forma de saber si un ítem ya generó una reserva
+    // (el guard existe hace tiempo en destroy()/actualizarManual()/
+    // actualizarPasajeAereo(), pero solo se veía como error DESPUÉS de
+    // intentar la acción). hasOne: crearReservaItemDesdeAlternativaItem()
+    // solo crea un ReservaItem por AlternativaItem, nunca más de uno.
+    public function reservaItem()
+    {
+        return $this->hasOne(ReservaItem::class, 'alternativa_item_id');
+    }
+
     // Sesión 11q — proveedor real creado a partir de este ítem manual (ver
     // AlternativaItemController::promoverAProveedor()). Puramente
     // informativo: este ítem sigue siendo 'manual', sin relink a
