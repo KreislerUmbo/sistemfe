@@ -3,12 +3,14 @@
 namespace App\Http\Controllers\AgenciaViajes;
 
 use App\Http\Controllers\Controller;
+use App\Models\AgenciaViajes\Reserva;
 use App\Models\AgenciaViajes\ReservaItem;
 use App\Models\AgenciaViajes\ReservaItemPasajero;
 use App\Models\AgenciaViajes\ReservaVenta;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 
 // Ítem de reserva copiado de la alternativa aceptada —
 // plan-modulo-cotizaciones-reservas.md §4. Costo/precio se leen vía
@@ -79,6 +81,17 @@ class ReservaItemController extends Controller
     // solo podía AGREGAR servicios a una reserva ya aceptada — si un
     // cliente cancelaba una excursión puntual, no había forma soportada de
     // quitarla, solo cancelar la reserva completa.
+    //
+    // Auditoría de UX/funcionalidad del módulo (2026-08-27): este endpoint
+    // existía desde Fase D pero nunca tuvo botón en el frontend que lo
+    // llamara (reservaItemService.ts no tenía eliminar()) — quedó conectado
+    // recién ahora. De paso se pareja con dos cosas que
+    // ReservaPasajeroController::destroy() ya tenía y este no: guard de
+    // "mínimo 1" (acá "mínimo 1 ítem", ninguna reserva debería quedar sin
+    // ningún ítem) y lockForUpdate() sobre la reserva para cerrar la
+    // ventana de carrera con una facturación concurrente
+    // (ReservaFacturacionController::store() sí toma ese lock, este destroy
+    // no lo tomaba).
     public function destroy(string $id)
     {
         $item = ReservaItem::with('reserva')->findOrFail($id);
@@ -86,6 +99,13 @@ class ReservaItemController extends Controller
 
         if ($reserva->estado !== 'activa') {
             return response()->json(['code' => 422, 'message' => 'Solo se puede quitar un ítem de una reserva activa.'], 422);
+        }
+
+        if ($reserva->items()->count() <= 1) {
+            return response()->json([
+                'code' => 422,
+                'message' => 'No se puede quitar: es el último ítem de la reserva.',
+            ], 422);
         }
 
         // Mismo guard que ReservaFacturacionController — un ítem ya
@@ -104,13 +124,40 @@ class ReservaItemController extends Controller
             ], 422);
         }
 
-        DB::transaction(function () use ($item) {
-            // reserva_item_pasajero.reserva_item_id es FK sin
-            // cascadeOnDelete() — hay que limpiarla a mano antes de poder
-            // borrar el ítem.
-            ReservaItemPasajero::where('reserva_item_id', $item->id)->delete();
-            $item->delete();
-        });
+        try {
+            DB::transaction(function () use ($item, $reserva) {
+                // Re-chequeo bajo lock: mismo criterio que
+                // ReservaFacturacionController::store() /
+                // ReservaController::actualizarFacturacionExterna() — los
+                // checks de arriba corrieron antes de abrir la transacción,
+                // así que sin este lock una facturación concurrente podría
+                // colarse entre esos checks y el delete real.
+                Reserva::where('id', $reserva->id)->lockForUpdate()->firstOrFail();
+
+                $itemLocked = ReservaItem::findOrFail($item->id);
+
+                if ($itemLocked->reserva()->first()->items()->count() <= 1) {
+                    throw new HttpException(422, 'No se puede quitar: es el último ítem de la reserva.');
+                }
+
+                $yaFacturadoBajoLock = ReservaVenta::where('reserva_id', $reserva->id)
+                    ->get()
+                    ->flatMap(fn (ReservaVenta $rv) => $rv->reserva_item_ids ?? [])
+                    ->contains($itemLocked->id);
+
+                if ($yaFacturadoBajoLock) {
+                    throw new HttpException(422, 'No se puede quitar: este ítem ya fue facturado en una venta de esta reserva.');
+                }
+
+                // reserva_item_pasajero.reserva_item_id es FK sin
+                // cascadeOnDelete() — hay que limpiarla a mano antes de
+                // poder borrar el ítem.
+                ReservaItemPasajero::where('reserva_item_id', $itemLocked->id)->delete();
+                $itemLocked->delete();
+            });
+        } catch (HttpException $e) {
+            return response()->json(['code' => $e->getStatusCode(), 'message' => $e->getMessage()], $e->getStatusCode());
+        }
 
         return response()->json(['code' => 200, 'message' => 'Ítem quitado de la reserva correctamente.']);
     }

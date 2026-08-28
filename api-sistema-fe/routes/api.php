@@ -769,6 +769,12 @@ Route::group([
     // controller), porque la mayoría de reserva_items no tiene vinculo_especifico.
     Route::post("reserva-items/{id}/pasajeros/{pasajeroId}/checkin", [ReservaItemPasajeroController::class, 'checkin'])
         ->middleware('permission:agencia.reservas');
+    // Auditoría de UX/funcionalidad del módulo (2026-08-27) — vuelo
+    // vendido por la AGENCIA (distinto de reserva_pasajeros.vuelo_*, que
+    // es el vuelo por cuenta propia del pasajero). Mismo shape de ruta y
+    // mismo criterio de materialización que checkin() arriba.
+    Route::put("reserva-items/{id}/pasajeros/{pasajeroId}/vuelo", [ReservaItemPasajeroController::class, 'actualizarVuelo'])
+        ->middleware('permission:agencia.reservas');
 
     Route::post("venta-directa", [VentaDirectaController::class, 'store'])
         ->middleware('permission:agencia.reservas');

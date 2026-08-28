@@ -210,14 +210,24 @@
                             <td>
                                 @if ($fila['vuelo_ida'])
                                     {{ $fila['vuelo_ida']['aerolinea'] }}<br>{{ $fila['vuelo_ida']['fecha'] }} {{ $fila['vuelo_ida']['hora'] }}
-                                @else
+                                @endif
+                                @if ($fila['vuelo_agencia_ida'] ?? null)
+                                    @if ($fila['vuelo_ida'])<br>@endif
+                                    <span style="color:#1d4ed8;">(Agencia) {{ $fila['vuelo_agencia_ida']['numero'] }} · {{ $fila['vuelo_agencia_ida']['aerolinea'] }}<br>{{ $fila['vuelo_agencia_ida']['fecha'] }} {{ $fila['vuelo_agencia_ida']['hora'] }}</span>
+                                @endif
+                                @if (!$fila['vuelo_ida'] && !($fila['vuelo_agencia_ida'] ?? null))
                                     -
                                 @endif
                             </td>
                             <td>
                                 @if ($fila['vuelo_vuelta'])
                                     {{ $fila['vuelo_vuelta']['aerolinea'] }}<br>{{ $fila['vuelo_vuelta']['fecha'] }} {{ $fila['vuelo_vuelta']['hora'] }}
-                                @else
+                                @endif
+                                @if ($fila['vuelo_agencia_vuelta'] ?? null)
+                                    @if ($fila['vuelo_vuelta'])<br>@endif
+                                    <span style="color:#1d4ed8;">(Agencia) {{ $fila['vuelo_agencia_vuelta']['numero'] }} · {{ $fila['vuelo_agencia_vuelta']['aerolinea'] }}<br>{{ $fila['vuelo_agencia_vuelta']['fecha'] }} {{ $fila['vuelo_agencia_vuelta']['hora'] }}</span>
+                                @endif
+                                @if (!$fila['vuelo_vuelta'] && !($fila['vuelo_agencia_vuelta'] ?? null))
                                     -
                                 @endif
                             </td>

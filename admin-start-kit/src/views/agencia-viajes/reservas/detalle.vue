@@ -23,6 +23,10 @@
                 <router-link to="/agencia-viajes/reservas" class="btn btn-outline-secondary btn-sm">
                     <i class="fas fa-arrow-left me-1"></i>Volver
                 </router-link>
+                <router-link v-if="reserva.alternativa?.cotizacion_id" :to="`/agencia-viajes/cotizador/${reserva.alternativa.cotizacion_id}`"
+                    class="btn btn-outline-secondary btn-sm">
+                    <i class="fas fa-file-lines me-1"></i>Ver cotización
+                </router-link>
                 <button v-if="mostrarBotonesFacturar" class="btn btn-primary btn-sm" @click="abrirModalFacturarSimple">
                     <i class="fas fa-file-invoice me-1"></i>Facturar
                 </button>
@@ -155,8 +159,16 @@
                                         <span v-if="!p.nombre" class="text-muted fst-italic">Sin datos todavía</span>
                                     </span>
                                 </span>
-                                <span class="badge" :class="esPasajeroCompleto(p) ? 'bg-success' : 'bg-warning text-dark'">
-                                    {{ esPasajeroCompleto(p) ? 'Completo' : 'Incompleto' }}
+                                <span class="d-flex align-items-center gap-2">
+                                    <span class="badge" :class="esPasajeroCompleto(p) ? 'bg-success' : 'bg-warning text-dark'">
+                                        {{ esPasajeroCompleto(p) ? 'Completo' : 'Incompleto' }}
+                                    </span>
+                                    <button v-if="reserva.estado === 'activa' && (reserva.pasajeros?.length ?? 0) > 1" type="button"
+                                        class="btn btn-sm btn-link text-danger p-0" title="Quitar este pasajero de la reserva"
+                                        :disabled="eliminandoPasajeroId === p.id" @click.stop="quitarPasajero(p)">
+                                        <span v-if="eliminandoPasajeroId === p.id" class="spinner-border spinner-border-sm"></span>
+                                        <i v-else class="fas fa-trash-can"></i>
+                                    </button>
                                 </span>
                             </div>
 
@@ -235,6 +247,55 @@
                                         <input type="time" class="form-control form-control-sm" placeholder="18:45" v-model="p.vuelo_hora_vuelta">
                                     </div>
                                 </div>
+
+                                <!-- Vuelo con la AGENCIA — distinto del bloque de arriba (por cuenta
+                                     propia). Un bloque por cada pasaje aéreo real de la reserva,
+                                     siempre visible para todos los pasajeros (no depende del checkbox
+                                     del tab Asignación — ver corrección 2026-08-27 en el backend). -->
+                                <div v-if="itemsVueloAgencia.length > 0" class="border-top pt-3 mt-3">
+                                    <small class="text-muted d-block mb-2"><i class="fas fa-plane-departure me-1"></i>Vuelo(s) vendido(s) por la agencia.</small>
+                                    <div v-for="it in itemsVueloAgencia" :key="it.id" class="mb-3">
+                                        <p class="small fw-semibold mb-2">
+                                            {{ nombreItem(it) }}
+                                            <span v-if="itemsFacturadosIds.includes(it.id)" class="badge bg-success-subtle text-success border ms-2">Facturado</span>
+                                        </p>
+                                        <div class="row g-2">
+                                            <div class="col-md-4">
+                                                <label class="form-label small text-secondary mb-1">Aerolínea confirmada</label>
+                                                <input type="text" class="form-control form-control-sm" :placeholder="aerolineaCotizada(it) ?? 'Sin definir'" v-model="vueloAgenciaForm(it, p).vuelo_aerolinea_confirmada">
+                                            </div>
+                                            <div class="col-md-4">
+                                                <label class="form-label small text-secondary mb-1">Vuelo ida — número</label>
+                                                <input type="text" class="form-control form-control-sm" placeholder="Ej. LA2050" v-model="vueloAgenciaForm(it, p).vuelo_numero_ida">
+                                            </div>
+                                            <div class="col-md-2">
+                                                <label class="form-label small text-secondary mb-1">Ida — fecha</label>
+                                                <input type="date" class="form-control form-control-sm" v-model="vueloAgenciaForm(it, p).vuelo_fecha_ida">
+                                            </div>
+                                            <div class="col-md-2">
+                                                <label class="form-label small text-secondary mb-1">Ida — hora</label>
+                                                <input type="time" class="form-control form-control-sm" v-model="vueloAgenciaForm(it, p).vuelo_hora_ida">
+                                            </div>
+                                            <div class="col-md-4">
+                                                <label class="form-label small text-secondary mb-1">Vuelo vuelta — número</label>
+                                                <input type="text" class="form-control form-control-sm" placeholder="Ej. LA2051" v-model="vueloAgenciaForm(it, p).vuelo_numero_vuelta">
+                                            </div>
+                                            <div class="col-md-2">
+                                                <label class="form-label small text-secondary mb-1">Vuelta — fecha</label>
+                                                <input type="date" class="form-control form-control-sm" v-model="vueloAgenciaForm(it, p).vuelo_fecha_vuelta">
+                                            </div>
+                                            <div class="col-md-2">
+                                                <label class="form-label small text-secondary mb-1">Vuelta — hora</label>
+                                                <input type="time" class="form-control form-control-sm" v-model="vueloAgenciaForm(it, p).vuelo_hora_vuelta">
+                                            </div>
+                                        </div>
+                                        <button class="btn btn-outline-primary btn-sm mt-2" :disabled="guardandoVueloAgenciaKey === claveVuelo(it, p)" @click="guardarVueloAgencia(it, p)">
+                                            <span v-if="guardandoVueloAgenciaKey === claveVuelo(it, p)" class="spinner-border spinner-border-sm me-1"></span>
+                                            <i v-else class="fas fa-check me-1"></i>Guardar vuelo
+                                        </button>
+                                    </div>
+                                </div>
+
                                 <button class="btn btn-primary btn-sm mt-2" :disabled="guardandoPax === p.id" @click="guardarPax(p)">
                                     <span v-if="guardandoPax === p.id" class="spinner-border spinner-border-sm me-1"></span>
                                     <i v-else class="fas fa-check me-1"></i>Guardar
@@ -249,16 +310,33 @@
                 <div v-if="tab === 'items'" class="d-flex flex-column gap-2">
                     <div v-for="it in reserva.items" :key="it.id" class="card border-0 shadow-sm">
                         <div class="card-body py-2">
-                            <div class="mb-2">
-                                <strong>{{ nombreItem(it) }}</strong>
-                                <span v-if="it.fecha_origen === 'manual'" class="badge bg-light text-dark border ms-2" title="Esta fecha fue editada a mano — una reprogramación de la reserva no la mueve sola">
-                                    <i class="fas fa-hand me-1"></i>Fecha manual
-                                </span>
-                                <span v-if="itemsFacturadosIds.includes(it.id)" class="badge bg-success-subtle text-success border ms-2">
-                                    <i class="fas fa-file-invoice me-1"></i>Facturado
-                                </span>
+                            <div class="mb-2 d-flex justify-content-between align-items-start">
+                                <div>
+                                    <strong>{{ nombreItem(it) }}</strong>
+                                    <span v-if="it.fecha_origen === 'manual'" class="badge bg-light text-dark border ms-2" title="Esta fecha fue editada a mano — una reprogramación de la reserva no la mueve sola">
+                                        <i class="fas fa-hand me-1"></i>Fecha manual
+                                    </span>
+                                    <span v-if="itemsFacturadosIds.includes(it.id)" class="badge bg-success-subtle text-success border ms-2">
+                                        <i class="fas fa-file-invoice me-1"></i>Facturado
+                                    </span>
+                                </div>
+                                <button v-if="reserva.estado === 'activa' && !itemsFacturadosIds.includes(it.id)" type="button"
+                                    class="btn btn-sm btn-link text-danger p-0" title="Quitar este servicio de la reserva"
+                                    :disabled="eliminandoItemId === it.id" @click="quitarItem(it)">
+                                    <span v-if="eliminandoItemId === it.id" class="spinner-border spinner-border-sm"></span>
+                                    <i v-else class="fas fa-trash-can"></i>
+                                </button>
                             </div>
                             <div v-if="destinoItem(it)" class="small text-muted mb-2"><i class="fas fa-map-marker-alt me-1"></i>{{ destinoItem(it) }}</div>
+                            <!-- Vuelo vendido por la agencia: solo lectura acá, se edita por
+                                 pasajero en el tab Pasajeros (decidido con el usuario — es la
+                                 pregunta que se hace el vendedor por persona, no por ítem). -->
+                            <div v-if="it.alternativa_item?.origen_tipo === 'pasaje_aereo'" class="small mb-2">
+                                <span class="badge" :class="resumenVueloAgencia(it).total > 0 && resumenVueloAgencia(it).confirmados === resumenVueloAgencia(it).total ? 'bg-success-subtle text-success border' : 'bg-warning-subtle text-warning-emphasis border'">
+                                    <i class="fas fa-plane-departure me-1"></i>{{ resumenVueloAgencia(it).confirmados }}/{{ resumenVueloAgencia(it).total }} pasajeros con vuelo confirmado
+                                </span>
+                                <span class="text-muted ms-1">— editar desde el tab Pasajeros</span>
+                            </div>
                             <!-- fieldset :disabled — mismo criterio que el tab de pasajeros:
                                  con la reserva no activa, nada de esto es editable (backend
                                  ya lo rechaza, ver ReservaItemController::update()). El
@@ -280,7 +358,7 @@
                                                 Sin asignar
                                             </button>
                                             <button type="button" class="list-group-item list-group-item-action py-1 small" v-for="t in proveedoresFiltrados(it)" :key="t.id" @mousedown.prevent="elegirProveedor(it, t.id)">
-                                                {{ t.proveedor_servicio?.proveedor?.razon_social ?? ('Tarifa #' + t.id) }}{{ t.proveedor_servicio?.proveedor?.es_referencial ? ' (Referencial)' : '' }}
+                                                {{ t.proveedor_servicio?.proveedor?.nombre_comercial || t.proveedor_servicio?.proveedor?.razon_social || ('Tarifa #' + t.id) }}{{ t.proveedor_servicio?.proveedor?.es_referencial ? ' (Referencial)' : '' }}
                                                 <span class="text-muted">— {{ t.tipo_tarifa }} · {{ t.modalidad }} · {{ t.moneda }} {{ Number(t.precio_venta_adulto).toFixed(0) }}</span>
                                             </button>
                                             <div v-if="proveedoresFiltrados(it).length === 0" class="list-group-item small text-muted py-1">Sin resultados</div>
@@ -327,10 +405,26 @@
                 <div v-if="tab === 'asignacion'" class="d-flex flex-column gap-3">
                     <div v-for="it in reserva.items" :key="it.id" class="card border-0 shadow-sm">
                         <div class="card-body py-2">
-                            <p class="fw-semibold mb-2">{{ nombreItem(it) }}</p>
-                            <fieldset class="d-flex flex-wrap gap-3" :disabled="reserva.estado !== 'activa'">
+                            <div class="d-flex justify-content-between align-items-start mb-1">
+                                <div>
+                                    <p class="fw-semibold mb-0">{{ nombreItem(it) }}</p>
+                                    <div v-if="destinoItem(it)" class="small text-muted"><i class="fas fa-map-marker-alt me-1"></i>{{ destinoItem(it) }}</div>
+                                </div>
+                                <!-- "Marcar/desmarcar todos" — con reservas grupales grandes (10+
+                                     pasajeros) tildar uno por uno era tedioso, hallazgo de la
+                                     auditoría de UX del módulo. Sin endpoint masivo en el backend,
+                                     se resuelve en el frontend con un Promise.all (mismo criterio ya
+                                     usado en cotizador/editar.vue::eliminarBloque()). -->
+                                <button v-if="reserva.estado === 'activa' && (reserva.pasajeros?.length ?? 0) > 1" type="button"
+                                    class="btn btn-sm btn-link p-0" :disabled="asignacionMasivaEnProceso.has(it.id)"
+                                    @click="toggleAsignacionMasiva(it)">
+                                    <span v-if="asignacionMasivaEnProceso.has(it.id)" class="spinner-border spinner-border-sm me-1"></span>
+                                    {{ todosAsignados(it) ? 'Desmarcar todos' : 'Marcar todos' }}
+                                </button>
+                            </div>
+                            <fieldset class="d-flex flex-wrap gap-3" :disabled="reserva.estado !== 'activa' || asignacionMasivaEnProceso.has(it.id)">
                                 <label v-for="p in reserva.pasajeros" :key="p.id" class="small d-flex align-items-center gap-1" style="cursor:pointer">
-                                    <input type="checkbox" :checked="estaAsignado(it.id, p.id)" @change="toggleAsignacion(it, p)">
+                                    <input type="checkbox" :checked="estaAsignado(it.id, p.id)" :disabled="asignacionEnProceso.has(claveAsignacion(it, p))" @change="toggleAsignacion(it, p)">
                                     {{ p.nombre || ('Pasajero ' + p.id) }} <span class="text-muted">({{ etiquetaTipoPax(p.tipo_pax) }})</span>
                                 </label>
                             </fieldset>
@@ -349,10 +443,17 @@
                             {{ formatFecha(cabecera?.fecha_viaje_desde) }} — {{ formatFecha(cabecera?.fecha_viaje_hasta) }}
                         </p>
 
-                        <div class="d-flex flex-column gap-2 small mb-3">
-                            <div v-for="r in resumen" :key="r.reserva_item_id" class="d-flex justify-content-between">
-                                <span>{{ r.nombre }}<span v-if="r.fecha" class="text-muted"> — {{ formatFecha(r.fecha) }}</span></span>
-                                <span class="fw-semibold">{{ moneda }} {{ Number(r.total_convertido).toFixed(2) }}</span>
+                        <div class="d-flex flex-column gap-3 mb-3">
+                            <div v-for="bloque in resumenAgrupado" :key="bloque.tourOrigenId ?? 'sueltos'">
+                                <p v-if="bloque.tourNombre" class="small fw-semibold text-secondary mb-1">
+                                    <i class="fas fa-route me-1"></i>{{ bloque.tourNombre }}
+                                </p>
+                                <div class="d-flex flex-column gap-2 small">
+                                    <div v-for="r in bloque.items" :key="r.reserva_item_id" class="d-flex justify-content-between">
+                                        <span>{{ r.nombre }}<span v-if="r.fecha" class="text-muted"> — {{ formatFecha(r.fecha) }}</span></span>
+                                        <span class="fw-semibold">{{ moneda }} {{ Number(r.total_convertido).toFixed(2) }}</span>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
@@ -407,6 +508,12 @@
                             <option value="falta_pago_cuotas">Falta de pago de cuotas</option>
                         </select>
                         <p class="small text-muted mt-2 mb-0"><i class="fas fa-info-circle me-1"></i>El cálculo de reembolso no entra en esta pantalla todavía.</p>
+                        <div v-if="totalAnticiposDisponibles > 0" class="alert alert-warning small mt-2 mb-0 py-2">
+                            <i class="fas fa-triangle-exclamation me-1"></i>
+                            Esta reserva tiene <strong>{{ moneda }} {{ totalAnticiposDisponibles.toFixed(2) }}</strong> en
+                            anticipos cobrados sin aplicar a ninguna venta. Si cancelás igual, quedarán disponibles en el
+                            módulo de Adelantos — revisá si corresponde reembolsarlos.
+                        </div>
                     </div>
                     <div class="modal-footer">
                         <button class="btn btn-outline-secondary btn-sm" @click="mostrarModalCancelar = false">Volver</button>
@@ -773,7 +880,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue';
+import { ref, reactive, computed, onMounted, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import httpClient from '@/helpers/http-client';
@@ -781,9 +888,10 @@ import { reservaService } from '@/services/admin/reservaService';
 import { reservaFacturacionService, type PrepararFacturaResponse, type AnticipoDisponiblePreview } from '@/services/admin/reservaFacturacionService';
 import { reservaAnticipoService } from '@/services/admin/reservaAnticipoService';
 import { reservaPasajeroService } from '@/services/admin/reservaPasajeroService';
-import { reservaItemService } from '@/services/admin/reservaItemService';
+import { reservaItemService, type ActualizarVueloPayload } from '@/services/admin/reservaItemService';
 import { proveedorService } from '@/services/admin/proveedorService';
 import { guiaService } from '@/services/admin/guiaService';
+import Swal from 'sweetalert2/dist/sweetalert2.js';
 import { useToast } from '@/composables/useToast';
 import { formatFecha } from '@/helpers/fecha';
 import type {
@@ -792,12 +900,50 @@ import type {
 } from '@/types/agencia-viajes';
 import type { PaymentMethod, PaymentMethods } from '@/types/cash';
 
+type TVueSwalInstance = typeof Swal & typeof Swal.fire;
+
 const route = useRoute();
 const reservaId = Number(route.params.id);
 const toast = useToast();
 
 const reserva = ref<Reserva | null>(null);
 const resumen = ref<ReservaResumenItem[]>([]);
+
+// Auditoría de UX 2026-08-27 — el resumen salía en el orden de carga de la
+// relación, no agrupado por tour/día como ya hace el cotizador. Agrupa por
+// tour_origen_id (mismo criterio visual que cotizador/editar.vue), ordena
+// cada bloque por fecha, y los bloques entre sí por su fecha más temprana
+// — así el panel se lee cronológicamente aunque los ítems no hayan llegado
+// en ese orden desde el backend. Los ítems sin tour_origen_id (manuales,
+// pasajes sueltos, etc.) quedan en un único bloque final sin encabezado.
+type ResumenBloque = { tourOrigenId: number | null; tourNombre: string | null; items: ReservaResumenItem[] };
+const resumenAgrupado = computed<ResumenBloque[]>(() => {
+    const bloques = new Map<number, ResumenBloque>();
+    const sueltos: ReservaResumenItem[] = [];
+
+    for (const r of resumen.value) {
+        if (r.tour_origen_id) {
+            if (!bloques.has(r.tour_origen_id)) {
+                bloques.set(r.tour_origen_id, { tourOrigenId: r.tour_origen_id, tourNombre: r.tour_origen_nombre ?? null, items: [] });
+            }
+            bloques.get(r.tour_origen_id)!.items.push(r);
+        } else {
+            sueltos.push(r);
+        }
+    }
+
+    const porFecha = (a: ReservaResumenItem, b: ReservaResumenItem) => (a.fecha ?? '').localeCompare(b.fecha ?? '');
+
+    const gruposConTour = Array.from(bloques.values())
+        .map((b) => ({ ...b, items: [...b.items].sort(porFecha) }))
+        .sort((a, b) => porFecha(a.items[0], b.items[0]));
+
+    sueltos.sort(porFecha);
+    const grupoSuelto: ResumenBloque[] = sueltos.length > 0 ? [{ tourOrigenId: null, tourNombre: null, items: sueltos }] : [];
+
+    return [...gruposConTour, ...grupoSuelto];
+});
+
 const total = ref<number>(0);
 const moneda = ref<'PEN' | 'USD'>('PEN');
 const cabecera = ref<ReservaCabecera | null>(null);
@@ -865,6 +1011,10 @@ const cargarReserva = async () => {
     // 'fecha' siempre nacía null y se tipeaba a mano (nunca disparaba el
     // problema); ahora que ReservaController la auto-completa, truncar acá
     // es necesario para que se vea.
+    // vuelo_pasajeros (vuelo de agencia) NO necesita el mismo truncado: su
+    // modelo (ReservaItemVueloPasajero) a propósito no tiene cast 'date' en
+    // vuelo_fecha_ida/vuelta (mismo criterio que ReservaPasajero.vuelo_fecha_
+    // ida/vuelta), así que ya llega como 'YYYY-MM-DD' plano desde Postgres.
     res.reserva.items?.forEach((it) => {
         if (it.fecha) it.fecha = it.fecha.substring(0, 10);
     });
@@ -1003,6 +1153,61 @@ const guardarPax = async (p: ReservaPasajero) => {
     }
 };
 
+// ── Vuelo con la agencia ────────────────────────────────────────────
+// Distinto del bloque de arriba (vuelo por cuenta propia, campo directo de
+// ReservaPasajero) — este vive en su propia tabla (ReservaItemVueloPasajero,
+// corrección 2026-08-27 tras un bug real: la primera versión lo guardaba en
+// reserva_item_pasajero, la MISMA fila que edita el checkbox del tab
+// Asignación — desmarcar un pasajero ahí borraba el vuelo ya cargado). Se
+// aplica a TODOS los pasajeros de la reserva por igual, sin depender de
+// ningún checkbox/vínculo. Se muestra en el tab Pasajeros (no en Ítems, que
+// solo da un resumen de solo lectura) porque es la pregunta que se hace el
+// vendedor por persona, no por servicio — decidido con el usuario.
+const itemsVueloAgencia = computed(() =>
+    (reserva.value?.items ?? []).filter((it) => it.alternativa_item?.origen_tipo === 'pasaje_aereo')
+);
+
+const aerolineaCotizada = (it: ReservaItem) => it.alternativa_item?.cotizacion_pasaje_aereo?.aerolinea ?? null;
+
+const claveVuelo = (it: ReservaItem, p: ReservaPasajero) => `${it.id}_${p.id}`;
+const vueloAgenciaForms = reactive<Record<string, ActualizarVueloPayload>>({});
+
+// Lazy: se inicializa una sola vez por (ítem, pasajero) desde la fila ya
+// cargada en la reserva (o vacío si todavía no se guardó nada) — no se
+// reinicializa en cada render, así v-model no pierde lo que el usuario
+// está tipeando.
+const vueloAgenciaForm = (it: ReservaItem, p: ReservaPasajero): ActualizarVueloPayload => {
+    const key = claveVuelo(it, p);
+    if (!vueloAgenciaForms[key]) {
+        const existente = it.vuelo_pasajeros?.find((vp) => vp.reserva_pasajero_id === p.id);
+        vueloAgenciaForms[key] = {
+            vuelo_numero_ida: existente?.vuelo_numero_ida ?? null,
+            vuelo_fecha_ida: existente?.vuelo_fecha_ida ?? null,
+            vuelo_hora_ida: existente?.vuelo_hora_ida ?? null,
+            vuelo_numero_vuelta: existente?.vuelo_numero_vuelta ?? null,
+            vuelo_fecha_vuelta: existente?.vuelo_fecha_vuelta ?? null,
+            vuelo_hora_vuelta: existente?.vuelo_hora_vuelta ?? null,
+            vuelo_aerolinea_confirmada: existente?.vuelo_aerolinea_confirmada ?? null,
+        };
+    }
+    return vueloAgenciaForms[key];
+};
+
+const guardandoVueloAgenciaKey = ref<string | null>(null);
+const guardarVueloAgencia = async (it: ReservaItem, p: ReservaPasajero) => {
+    const key = claveVuelo(it, p);
+    guardandoVueloAgenciaKey.value = key;
+    try {
+        await reservaItemService.actualizarVuelo(it.id, p.id, vueloAgenciaForm(it, p));
+        toast.success('Vuelo actualizado');
+        await cargarReserva();
+    } catch (error: any) {
+        toast.error(error.response?.data?.message ?? 'No se pudo actualizar el vuelo');
+    } finally {
+        guardandoVueloAgenciaKey.value = null;
+    }
+};
+
 // ── Ítems ────────────────────────────────────────────────────────────
 const bibliotecaTarifas = ref<ProveedorTarifa[]>([]);
 const guias = ref<Guia[]>([]);
@@ -1010,9 +1215,16 @@ const guias = ref<Guia[]>([]);
 const proveedorBuscando = ref<number | null>(null); // id del reserva_item en modo búsqueda
 const proveedorSearch = ref<Record<number, string>>({});
 
+// Auditoría de UX 2026-08-27: nombre_comercial ya viaja en el JSON
+// (Proveedor lo tiene desde su creación), pero acá solo se mostraba/
+// buscaba por razon_social — en la práctica al negocio se lo conoce por su
+// nombre comercial, no por la razón social. nombre_comercial es prioridad
+// si existe, con fallback a razon_social (mismo criterio que ya usa
+// ProveedorTarifaController::index() para su propio buscador server-side).
 const nombreProveedorActual = (it: ReservaItem) => {
     const t = bibliotecaTarifas.value.find((x) => x.id === it.proveedor_tarifa_id);
-    return t?.proveedor_servicio?.proveedor?.razon_social ?? null;
+    const p = t?.proveedor_servicio?.proveedor;
+    return p ? (p.nombre_comercial || p.razon_social) : null;
 };
 
 const proveedoresFiltrados = (it: ReservaItem) => {
@@ -1021,7 +1233,11 @@ const proveedoresFiltrados = (it: ReservaItem) => {
 
     return bibliotecaTarifas.value
         .filter((t) => !servicioId || t.proveedor_servicio?.destino_servicio?.servicio_id === servicioId)
-        .filter((t) => !q || (t.proveedor_servicio?.proveedor?.razon_social ?? '').toLowerCase().includes(q))
+        .filter((t) => {
+            if (!q) return true;
+            const p = t.proveedor_servicio?.proveedor;
+            return (p?.razon_social ?? '').toLowerCase().includes(q) || (p?.nombre_comercial ?? '').toLowerCase().includes(q);
+        })
         .slice(0, 30);
 };
 
@@ -1047,20 +1263,40 @@ const cerrarBusquedaProveedor = (it: ReservaItem) => {
     setTimeout(() => { if (proveedorBuscando.value === it.id) proveedorBuscando.value = null; }, 200);
 };
 
+// nombre_comercial con fallback a razon_social — mismo criterio que
+// nombreProveedorActual()/proveedoresFiltrados() arriba. Solo para esta
+// pantalla (tab Ítems/Asignación); el nombre que sale en el comprobante
+// SUNAT sigue siendo razón social vía ReservaController::resolverNombreItem()
+// en el backend, sin tocar — ahí sí importa la identidad fiscal, acá es
+// solo para que el vendedor reconozca al negocio más rápido.
 const nombreItem = (it: ReservaItem) => {
     const item = it.alternativa_item;
     if (!item) return 'Servicio';
     if (item.origen_tipo === 'manual') return item.descripcion_manual ?? 'Ítem manual';
     if (item.origen_tipo === 'pasaje_aereo') return item.cotizacion_pasaje_aereo?.aerolinea ?? 'Pasaje aéreo';
-    if (item.origen_tipo === 'mayorista') return item.opcion_mayorista?.proveedor?.razon_social ?? 'Paquete mayorista';
+    if (item.origen_tipo === 'mayorista') {
+        const p = item.opcion_mayorista?.proveedor;
+        return (p ? (p.nombre_comercial || p.razon_social) : null) ?? 'Paquete mayorista';
+    }
     if (item.proveedor_tarifa?.tipo_habitacion) {
-        const proveedor = item.proveedor_tarifa.proveedor_servicio?.proveedor?.razon_social ?? 'Hotel';
+        const p = item.proveedor_tarifa.proveedor_servicio?.proveedor;
+        const proveedor = (p ? (p.nombre_comercial || p.razon_social) : null) ?? 'Hotel';
         return `${proveedor} · ${item.proveedor_tarifa.tipo_habitacion}`;
     }
     return item.proveedor_tarifa?.proveedor_servicio?.destino_servicio?.servicio?.nombre ?? 'Servicio';
 };
 
 const destinoItem = (it: ReservaItem) => it.alternativa_item?.proveedor_tarifa?.proveedor_servicio?.destino_servicio?.destino_atractivo?.nombre ?? null;
+
+// Resumen de solo lectura para el tab Ítems (auditoría de UX/funcionalidad
+// 2026-08-27) — la edición real del vuelo de agencia vive en el tab
+// Pasajeros (ver itemsVueloAgencia() más abajo), acá solo se cuenta cuántos
+// de los pasajeros aplicables ya tienen al menos un número de vuelo cargado.
+const resumenVueloAgencia = (it: ReservaItem) => {
+    const total = reserva.value?.pasajeros?.length ?? 0;
+    const confirmados = (it.vuelo_pasajeros ?? []).filter((vp) => vp.vuelo_numero_ida || vp.vuelo_numero_vuelta).length;
+    return { confirmados, total };
+};
 
 // Sesión pendiente-11e-groundwork — Proveedor solo aplica a origen_tipo
 // 'proveedor' (servicios normales + hoteles), Guía solo a 'guia' (el
@@ -1095,6 +1331,61 @@ const guardarItem = async (it: ReservaItem) => {
     }
 };
 
+// Quitar ítem/pasajero (Fase D del backend, conectado recién en la
+// auditoría 2026-08-27 — DELETE reserva-items/{id} y
+// DELETE reserva-pasajeros/{id} existían sin ningún botón en el frontend).
+// Recarga la reserva completa tras borrar: a diferencia de guardarItem()
+// (edición local sin recarga), quitar un ítem/pasajero mueve totales,
+// pendientes de facturar y el resumen entero — mismo criterio de recarga
+// completa que ya usa sincronizarItems().
+const eliminandoItemId = ref<number | null>(null);
+const quitarItem = async (it: ReservaItem) => {
+    const confirmacion = await (Swal as TVueSwalInstance).fire({
+        title: `¿Quitar "${nombreItem(it)}" de la reserva?`,
+        text: 'Esta acción no se puede deshacer.',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, quitar',
+        cancelButtonText: 'Cancelar',
+    });
+    if (!confirmacion.isConfirmed) return;
+
+    eliminandoItemId.value = it.id;
+    try {
+        await reservaItemService.eliminar(it.id);
+        toast.success('Ítem quitado de la reserva');
+        await cargarReserva();
+    } catch (error: any) {
+        toast.error(error.response?.data?.message ?? 'No se pudo quitar el ítem');
+    } finally {
+        eliminandoItemId.value = null;
+    }
+};
+
+const eliminandoPasajeroId = ref<number | null>(null);
+const quitarPasajero = async (p: ReservaPasajero) => {
+    const confirmacion = await (Swal as TVueSwalInstance).fire({
+        title: `¿Quitar a ${p.nombre || 'este pasajero'} de la reserva?`,
+        text: 'Esta acción no se puede deshacer.',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, quitar',
+        cancelButtonText: 'Cancelar',
+    });
+    if (!confirmacion.isConfirmed) return;
+
+    eliminandoPasajeroId.value = p.id;
+    try {
+        await reservaPasajeroService.eliminar(p.id);
+        toast.success('Pasajero quitado de la reserva');
+        await cargarReserva();
+    } catch (error: any) {
+        toast.error(error.response?.data?.message ?? 'No se pudo quitar el pasajero');
+    } finally {
+        eliminandoPasajeroId.value = null;
+    }
+};
+
 // ── Asignación pasajero↔ítem ────────────────────────────────────────
 const asignacionesPorItem = ref<Record<number, Array<{ id: number; reserva_pasajero_id: number }>>>({});
 
@@ -1108,7 +1399,22 @@ const cambiarAAsignacion = async () => {
 
 const estaAsignado = (itemId: number, pasajeroId: number) => (asignacionesPorItem.value[itemId] ?? []).some((a) => a.reserva_pasajero_id === pasajeroId);
 
+// Bug real encontrado en pruebas (2026-08-27): sin este guard, un segundo
+// toggle sobre el MISMO checkbox antes de que el primero termine (doble
+// clic, o clic mientras la request anterior sigue en vuelo) lee el mismo
+// asignacionesPorItem desactualizado, intenta el mismo DELETE dos veces, y
+// el segundo revienta 404 ("No query results ... ReservaItemPasajero N")
+// porque el primero ya la borró. asignacionEnProceso bloquea el checkbox
+// mientras su propia request está pendiente — un Set reactivo (Vue 3 lo
+// trackea nativo dentro de un ref()).
+const asignacionEnProceso = ref<Set<string>>(new Set());
+const claveAsignacion = (it: ReservaItem, p: ReservaPasajero) => `${it.id}_${p.id}`;
+
 const toggleAsignacion = async (it: ReservaItem, p: ReservaPasajero) => {
+    const key = claveAsignacion(it, p);
+    if (asignacionEnProceso.value.has(key)) return;
+    asignacionEnProceso.value.add(key);
+
     const asignacion = (asignacionesPorItem.value[it.id] ?? []).find((a) => a.reserva_pasajero_id === p.id);
     try {
         if (asignacion) {
@@ -1116,10 +1422,56 @@ const toggleAsignacion = async (it: ReservaItem, p: ReservaPasajero) => {
         } else {
             await reservaItemService.asignarPasajero(it.id, p.id);
         }
+    } catch (error: any) {
+        // 404 acá significa "ya estaba en el estado que querías" (otro
+        // toggle/pestaña ya lo resolvió) — no es un error real para el
+        // usuario, se resincroniza abajo igual. Cualquier otro código sí se
+        // avisa.
+        if (error.response?.status !== 404) {
+            toast.error(error.response?.data?.message ?? 'No se pudo actualizar la asignación');
+        }
+    } finally {
+        try {
+            const res = await reservaItemService.listarPasajerosAsignados(it.id);
+            asignacionesPorItem.value[it.id] = res.reserva_item_pasajeros.map((a) => ({ id: a.id, reserva_pasajero_id: a.reserva_pasajero_id }));
+        } finally {
+            asignacionEnProceso.value.delete(key);
+        }
+    }
+};
+
+// "Marcar/desmarcar todos" — hallazgo de la auditoría de UX: con una reserva
+// grupal grande (10+ pasajeros) tildar uno por uno era tedioso. Sin
+// endpoint masivo en el backend, se resuelve acá con un Promise.all sobre
+// los mismos store()/destroy() que ya usa toggleAsignacion() — mientras
+// corre, se deshabilita todo el fieldset del ítem (incluidos los checkboxes
+// individuales) para no pisarse con asignacionEnProceso.
+const todosAsignados = (it: ReservaItem) => (reserva.value?.pasajeros ?? []).every((p) => estaAsignado(it.id, p.id));
+
+const asignacionMasivaEnProceso = ref<Set<number>>(new Set());
+const toggleAsignacionMasiva = async (it: ReservaItem) => {
+    if (asignacionMasivaEnProceso.value.has(it.id)) return;
+    asignacionMasivaEnProceso.value.add(it.id);
+
+    const marcarTodos = !todosAsignados(it);
+    const pasajeros = reserva.value?.pasajeros ?? [];
+
+    try {
+        await Promise.all(pasajeros.map(async (p) => {
+            const yaAsignado = estaAsignado(it.id, p.id);
+            if (marcarTodos && !yaAsignado) {
+                await reservaItemService.asignarPasajero(it.id, p.id);
+            } else if (!marcarTodos && yaAsignado) {
+                const asignacion = (asignacionesPorItem.value[it.id] ?? []).find((a) => a.reserva_pasajero_id === p.id);
+                if (asignacion) await reservaItemService.quitarPasajero(asignacion.id);
+            }
+        }));
+    } catch (error: any) {
+        toast.error(error.response?.data?.message ?? 'No se pudo actualizar la asignación de todos los pasajeros');
+    } finally {
         const res = await reservaItemService.listarPasajerosAsignados(it.id);
         asignacionesPorItem.value[it.id] = res.reserva_item_pasajeros.map((a) => ({ id: a.id, reserva_pasajero_id: a.reserva_pasajero_id }));
-    } catch (error: any) {
-        toast.error(error.response?.data?.message ?? 'No se pudo actualizar la asignación');
+        asignacionMasivaEnProceso.value.delete(it.id);
     }
 };
 
