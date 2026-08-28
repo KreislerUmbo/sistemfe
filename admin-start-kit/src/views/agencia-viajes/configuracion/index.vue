@@ -210,6 +210,40 @@
                 </div>
             </div>
 
+            <!-- Análisis de impuestos (28-ago-2026) — default para prellenar el
+                 tratamiento tributario al crear un ítem sin proveedor_tarifa
+                 propia (manual/mayorista/guia/pasaje_aereo). Pensado para
+                 agencias en Amazonía (caso común exonerado), sin dejar de
+                 permitir el caso ocasional fuera de la región — el default
+                 solo prellena, cada ítem lo puede cambiar antes de guardar. -->
+            <div class="card border-0 shadow-sm mb-3">
+                <div class="card-header bg-white border-bottom d-flex align-items-center gap-2 py-2">
+                    <span class="badge bg-primary rounded-pill">9</span>
+                    <span class="fw-semibold text-dark">Tratamiento tributario por defecto</span>
+                </div>
+                <div class="card-body py-3">
+                    <div class="row g-3">
+                        <div class="col-6 col-md-3">
+                            <label class="form-label mb-1 small fw-semibold text-secondary">Tratamiento</label>
+                            <select class="form-select form-select-sm" v-model="form.tip_afe_igv_default">
+                                <option value="10">Gravado</option>
+                                <option value="20">Exonerado</option>
+                                <option value="30">Inafecto</option>
+                            </select>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <label class="form-label mb-1 small fw-semibold text-secondary">Destino</label>
+                            <select class="form-select form-select-sm" v-model="form.destino_tributario_default">
+                                <option value="amazonia">Amazonía</option>
+                                <option value="nacional">Nacional</option>
+                                <option value="extranjero">Extranjero</option>
+                            </select>
+                        </div>
+                    </div>
+                    <small class="text-muted d-block mt-2">Se usa para prellenar ítems manuales, de mayorista, de guía y pasaje aéreo al crearlos — cada ítem lo puede cambiar antes de guardar. Los servicios con tarifa de proveedor registrada siguen tomando su propio tratamiento tributario, ya obligatorio al cargar la tarifa.</small>
+                </div>
+            </div>
+
             <div class="d-flex justify-content-end mb-4">
                 <button class="btn btn-primary fw-semibold" @click="guardar" :disabled="guardando">
                     <span v-if="guardando" class="spinner-border spinner-border-sm me-2"></span>
@@ -223,7 +257,7 @@
             <div class="card border-0 shadow-sm mb-3">
                 <div class="card-header bg-white border-bottom d-flex align-items-center justify-content-between gap-2 py-2">
                     <div class="d-flex align-items-center gap-2">
-                        <span class="badge bg-primary rounded-pill">9</span>
+                        <span class="badge bg-primary rounded-pill">10</span>
                         <span class="fw-semibold text-dark">Cuentas bancarias</span>
                     </div>
                     <button class="btn btn-sm btn-outline-primary" @click="abrirFormularioCuenta()">
@@ -352,6 +386,8 @@ const form = ref<ConfiguracionAgencia>({
     edad_max_infante_gratis_hotel_default: 4,
     edad_max_nino_cama_adicional_hotel_default: 12,
     condiciones_generales_servicio: null,
+    tip_afe_igv_default: '10',
+    destino_tributario_default: 'nacional',
 });
 
 const cuentasBancarias = ref<CuentaBancaria[]>([]);

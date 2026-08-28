@@ -42,6 +42,43 @@
                 </select>
             </div>
         </div>
+        <div class="row g-2 mb-2">
+            <div class="col-6">
+                <label class="form-label mb-1 small fw-semibold text-secondary">Tratamiento tributario</label>
+                <select class="form-select form-select-sm" v-model="tipAfeIgv">
+                    <option value="10">Gravado</option>
+                    <option value="20">Exonerado</option>
+                    <option value="30">Inafecto</option>
+                </select>
+            </div>
+            <div class="col-6">
+                <label class="form-label mb-1 small fw-semibold text-secondary">Destino</label>
+                <select class="form-select form-select-sm" v-model="destinoTributario">
+                    <option value="amazonia">Amazonía</option>
+                    <option value="nacional">Nacional</option>
+                    <option value="extranjero">Extranjero</option>
+                </select>
+            </div>
+        </div>
+        <!-- Análisis de impuestos (28-ago-2026) — el precio de arriba sigue
+             siendo el precio FINAL que paga el cliente (no cambia al elegir
+             el tratamiento). Esto es solo el desglose para que se vea el
+             efecto, con la misma fórmula que usa la facturación. -->
+        <div v-if="precio" class="card bg-light border-0 p-2 mb-2 small">
+            <div class="d-flex justify-content-between">
+                <span class="text-muted">Base</span>
+                <span>{{ moneda }} {{ desglose.base.toFixed(2) }}</span>
+            </div>
+            <div class="d-flex justify-content-between">
+                <span class="text-muted">IGV ({{ desglose.porcentaje }}%)</span>
+                <span>{{ moneda }} {{ desglose.igv.toFixed(2) }}</span>
+            </div>
+            <div class="d-flex justify-content-between fw-semibold border-top mt-1 pt-1">
+                <span>Total al cliente</span>
+                <span>{{ moneda }} {{ (precio ?? 0).toFixed(2) }}</span>
+            </div>
+        </div>
+
         <small class="text-muted d-block mb-2">
             <i class="fas fa-info-circle me-1"></i>Sin validación de piso — no hay tarifa de proveedor de la que derivarlo.
         </small>
@@ -61,13 +98,18 @@
 import { ref, computed, watch } from 'vue';
 import Swal from 'sweetalert2/dist/sweetalert2.js';
 import { alternativaItemService } from '@/services/admin/alternativaItemService';
-import type { AlternativaItem, CotizacionPasajero } from '@/types/agencia-viajes';
+import { desglosarPrecioFinal } from '@/utils/desglosarPrecioFinal';
+import type { AlternativaItem, CotizacionPasajero, TipAfeIgv, DestinoTributario } from '@/types/agencia-viajes';
 
 const props = defineProps<{
     alternativaId: number;
     diaActivo: number;
     pasajeros?: CotizacionPasajero[];
     itemExistente?: AlternativaItem | null;
+    // Análisis de impuestos (28-ago-2026) — default de configuracion_agencia,
+    // solo para prellenar; el vendedor lo puede cambiar antes de guardar.
+    tipAfeIgvDefault?: TipAfeIgv;
+    destinoTributarioDefault?: DestinoTributario;
 }>();
 const emit = defineEmits<{
     (e: 'agregado', payload: any): void;
@@ -82,6 +124,8 @@ const moneda = ref<'PEN' | 'USD'>('PEN');
 const cantidad = ref<number>(1);
 const paxSeleccionados = ref<number[]>([]);
 const guardando = ref(false);
+const tipAfeIgv = ref<TipAfeIgv>('10');
+const destinoTributario = ref<DestinoTributario>('nacional');
 
 // Sesión 11q — cantidad se autocompleta con la cantidad de pax tildados,
 // tanto al armar un ítem nuevo como al editar uno existente; el vendedor
@@ -106,6 +150,8 @@ const resetearCampos = () => {
             ? [...item.pax_incluidos]
             : (props.pasajeros ?? []).map((p) => p.id);
         cantidad.value = item.cantidad; // pisa lo que el watcher de arriba ya calculó
+        tipAfeIgv.value = item.tip_afe_igv ?? props.tipAfeIgvDefault ?? '10';
+        destinoTributario.value = item.destino_tributario ?? props.destinoTributarioDefault ?? 'nacional';
     } else {
         descripcion.value = '';
         proveedorSugerido.value = '';
@@ -114,12 +160,16 @@ const resetearCampos = () => {
         moneda.value = 'PEN';
         paxSeleccionados.value = (props.pasajeros ?? []).map((p) => p.id);
         cantidad.value = paxSeleccionados.value.length || 1;
+        tipAfeIgv.value = props.tipAfeIgvDefault ?? '10';
+        destinoTributario.value = props.destinoTributarioDefault ?? 'nacional';
     }
 };
 
 watch(() => props.itemExistente, resetearCampos, { immediate: true });
 
 const puedeGuardar = computed(() => !!descripcion.value.trim() && costo.value !== null && !!precio.value && cantidad.value > 0);
+
+const desglose = computed(() => desglosarPrecioFinal(precio.value ?? 0, tipAfeIgv.value));
 
 const agregar = async () => {
     if (!puedeGuardar.value) return;
@@ -135,6 +185,8 @@ const agregar = async () => {
             cantidad: cantidad.value,
             pax_incluidos: paxSeleccionados.value.length && paxSeleccionados.value.length < totalPax ? paxSeleccionados.value : null,
             dia_referencial: props.diaActivo,
+            tip_afe_igv: tipAfeIgv.value,
+            destino_tributario: destinoTributario.value,
         };
 
         if (props.itemExistente) {

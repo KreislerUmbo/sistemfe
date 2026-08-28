@@ -43,10 +43,31 @@ class ConfiguracionAgencia extends Model
         // texto propio de cada agencia, descargable aparte de la parte
         // comercial de una cotización.
         'condiciones_generales_servicio',
+        // Análisis de impuestos (28-ago-2026) — default para prellenar el
+        // tratamiento tributario de ítems sin proveedor_tarifa propia
+        // (manual/mayorista/guia/pasaje_aereo). Ver
+        // AlternativaItemController::resolverTratamientoTributarioDefault().
+        'tip_afe_igv_default',
+        'destino_tributario_default',
     ];
 
     protected $casts = [
         'mostrar_descuento_como_linea' => 'boolean',
         'permitir_descuento_item' => 'boolean',
     ];
+
+    // Único punto de lectura del default de agencia — reutilizado por los
+    // 4 orígenes de AlternativaItem sin proveedor_tarifa propia. Devuelve
+    // el default legado ('10'/'nacional') si el tenant nunca guardó
+    // configuracion_agencia (no debería pasar, es singleton, pero evita un
+    // null-pointer en tenants de prueba sin seed).
+    public static function tratamientoTributarioDefault(): array
+    {
+        $config = static::first();
+
+        return [
+            'tip_afe_igv' => $config->tip_afe_igv_default ?? '10',
+            'destino_tributario' => $config->destino_tributario_default ?? 'nacional',
+        ];
+    }
 }

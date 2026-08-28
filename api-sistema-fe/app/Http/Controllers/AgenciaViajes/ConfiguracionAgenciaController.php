@@ -36,6 +36,8 @@ class ConfiguracionAgenciaController extends Controller
         'edad_max_infante_gratis_hotel_default' => 4,
         'edad_max_nino_cama_adicional_hotel_default' => 12,
         'condiciones_generales_servicio' => null,
+        'tip_afe_igv_default' => '10',
+        'destino_tributario_default' => 'nacional',
     ];
 
     public function show()
@@ -69,6 +71,8 @@ class ConfiguracionAgenciaController extends Controller
             'edad_max_infante_gratis_hotel_default' => 'required|integer|min:0|max:255',
             'edad_max_nino_cama_adicional_hotel_default' => 'required|integer|min:0|max:255',
             'condiciones_generales_servicio' => 'nullable|string',
+            'tip_afe_igv_default' => 'required|string|in:10,20,30',
+            'destino_tributario_default' => 'required|string|in:amazonia,nacional,extranjero',
         ]);
 
         if ($validator->fails()) {

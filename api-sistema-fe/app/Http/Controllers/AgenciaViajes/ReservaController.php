@@ -293,6 +293,13 @@ class ReservaController extends Controller
             // explotar un paquete_combo) para que la agrupación visual
             // "Día 1/Día 2" sobreviva también en la reserva.
             'tour_origen_id' => $alternativaItem->tour_origen_id,
+            // Análisis de impuestos (28-ago-2026): propaga el tratamiento
+            // tributario ya resuelto en la cotización — es lo único que
+            // ReservaFacturacionController puede usar sin volver a navegar
+            // proveedorTarifa (necesario para los orígenes manual/
+            // mayorista/guia/pasaje_aereo, que no tienen proveedor_tarifa).
+            'tip_afe_igv' => $alternativaItem->tip_afe_igv,
+            'destino_tributario' => $alternativaItem->destino_tributario,
         ]);
 
         $this->engancharSalidaOperativa($reservaItem, $alternativaItem, $fechaCalculada);

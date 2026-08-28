@@ -182,8 +182,8 @@ class ReservaFacturacionController extends Controller
         $gruposPorCategoria = $this->agruparPorCategoria($items);
 
         $productosPlaceholder = Product::whereIn('sku', array_values(self::SKU_POR_CATEGORIA))->get()->keyBy('sku');
-        foreach ($gruposPorCategoria as $categoria => $grupo) {
-            $sku = self::SKU_POR_CATEGORIA[$categoria];
+        foreach ($gruposPorCategoria as $grupo) {
+            $sku = self::SKU_POR_CATEGORIA[$grupo['categoria']];
             if (! $productosPlaceholder->has($sku)) {
                 throw new HttpException(
                     500,
@@ -308,8 +308,8 @@ class ReservaFacturacionController extends Controller
         $gruposPorCategoria = $this->agruparPorCategoria($items);
 
         $productosPlaceholder = Product::whereIn('sku', array_values(self::SKU_POR_CATEGORIA))->get()->keyBy('sku');
-        foreach ($gruposPorCategoria as $categoria => $grupo) {
-            $sku = self::SKU_POR_CATEGORIA[$categoria];
+        foreach ($gruposPorCategoria as $grupo) {
+            $sku = self::SKU_POR_CATEGORIA[$grupo['categoria']];
             if (! $productosPlaceholder->has($sku)) {
                 throw new HttpException(
                     500,
@@ -372,8 +372,8 @@ class ReservaFacturacionController extends Controller
                 }
 
                 $gruposPorCategoriaBajoLock = $this->agruparPorCategoria($itemsBajoLock);
-                foreach ($gruposPorCategoriaBajoLock as $categoria => $grupo) {
-                    $sku = self::SKU_POR_CATEGORIA[$categoria];
+                foreach ($gruposPorCategoriaBajoLock as $grupo) {
+                    $sku = self::SKU_POR_CATEGORIA[$grupo['categoria']];
                     if (! $productosPlaceholder->has($sku)) {
                         throw new HttpException(500, "No se encontró el producto especial de servicios de viaje '{$sku}'. Revisa que ProductoGenericoViajeSeeder se haya corrido en este tenant.");
                     }
@@ -381,6 +381,30 @@ class ReservaFacturacionController extends Controller
 
                 [$lineas, $subtotalTotal, $igvTotal] = $this->construirLineas($gruposPorCategoriaBajoLock, $productosPlaceholder, $textoPersonalizado);
                 $total = round($subtotalTotal + $igvTotal, 2);
+
+                // Análisis de impuestos (28-ago-2026) — antes venía todo
+                // hardcodeado a gravadas=subtotalTotal/exoneradas=0/
+                // inafectas=0 y destino='nacional' literal. detectarMezclaTributaria()
+                // ya garantiza que todos los itemsBajoLock comparten el
+                // mismo destino_tributario, así que alcanza con resolverlo
+                // de cualquiera de ellos (hoy siempre 'nacional', porque es
+                // lo único que pasa el guardia — ver clase, pendiente
+                // Amazonía/extranjero). tip_afe_igv SÍ puede variar por
+                // línea (ej. Apéndice II) aunque el destino sea homogéneo.
+                $montoGravadas = 0.0;
+                $montoExoneradas = 0.0;
+                $montoInafectas = 0.0;
+                foreach ($lineas as $linea) {
+                    match ($linea['tip_afe_igv']) {
+                        '20' => $montoExoneradas += $linea['subtotal'],
+                        '30' => $montoInafectas += $linea['subtotal'],
+                        default => $montoGravadas += $linea['subtotal'],
+                    };
+                }
+
+                $destinoTributarioVenta = $itemsBajoLock->isNotEmpty()
+                    ? $this->resolverDestinoTributario($itemsBajoLock->first())
+                    : self::DESTINO_TRIBUTARIO_DEFAULT;
 
                 $venta = Sale::create([
                     'type' => 'sale',
@@ -394,8 +418,8 @@ class ReservaFacturacionController extends Controller
                     'type_client' => $cliente->type_client,
                     'cod_tipo_doc_cliente' => $cliente->cod_tipo_doc_sunat,
                     'currency' => $moneda,
-                    'is_exportacion' => 0,
-                    'destino' => 'nacional',
+                    'is_exportacion' => $destinoTributarioVenta === 'extranjero' ? 1 : 0,
+                    'destino' => $destinoTributarioVenta === 'amazonia' ? 'amazonia' : 'nacional',
                     'type_payment' => 1,
                     'condicion_pago' => 'contado',
                     'subtotal' => $subtotalTotal,
@@ -403,9 +427,9 @@ class ReservaFacturacionController extends Controller
                     'total' => $total,
                     'discount' => 0,
                     'discount_global' => 0,
-                    'mto_oper_gravadas' => $subtotalTotal,
-                    'mto_oper_exoneradas' => 0,
-                    'mto_oper_inafectas' => 0,
+                    'mto_oper_gravadas' => round($montoGravadas, 2),
+                    'mto_oper_exoneradas' => round($montoExoneradas, 2),
+                    'mto_oper_inafectas' => round($montoInafectas, 2),
                     'mto_oper_exportacion' => 0,
                     'mto_oper_gratuitas' => 0,
                     'isc_total' => 0,
@@ -450,7 +474,7 @@ class ReservaFacturacionController extends Controller
                         'mto_base_igv' => $linea['subtotal'],
                         'porcentaje_igv' => $linea['porcentaje_igv'],
                         'igv' => $linea['igv'],
-                        'tip_afe_igv' => (string) $producto->tip_afe_igv_default,
+                        'tip_afe_igv' => $linea['tip_afe_igv'],
                         'total_impuestos' => $linea['igv'],
                         'description' => $producto->title,
                         'descripcion_detalle' => $linea['descripcion_detalle'],
@@ -618,6 +642,10 @@ class ReservaFacturacionController extends Controller
             'pasajeros',
             'proveedorTarifa',
             'alternativaItem.proveedorTarifa.proveedorServicio.destinoServicio.servicio',
+            // Análisis de impuestos (28-ago-2026) — resolverTipAfeIgvItem()
+            // necesita esto para el caso pasaje_aereo (única fuente más
+            // específica que el campo genérico de alternativa_items).
+            'alternativaItem.cotizacionPasajeAereo',
         ])->where('reserva_id', $reserva->id)->whereNotIn('id', $idsItemsYaFacturados)->get();
 
         $itemsAuto = collect();
@@ -758,12 +786,42 @@ class ReservaFacturacionController extends Controller
     // crear el reserva_item y se actualiza si se reasigna el proveedor —
     // ver ReservaController::crearReservaItemDesdeAlternativaItem().
     //
-    // Devuelve 'nacional' cuando no hay proveedor_tarifa (orígenes
-    // mayorista/pasaje_aereo/manual/guia, ninguno de los 4 tiene un campo
-    // tributario propio hoy) — ver nota de la clase sobre esta limitación.
+    // Análisis de impuestos (28-ago-2026): destino_tributario/tip_afe_igv
+    // ahora también viven como columna propia de reserva_item (copiada de
+    // alternativa_item al crear la reserva — ver ReservaController::
+    // crearReservaItemDesdeAlternativaItem()), cubriendo los 4 orígenes que
+    // antes no tenían de dónde leerlo (mayorista/pasaje_aereo/manual/guia).
+    // proveedorTarifa queda como fallback de compatibilidad para
+    // reserva_items creados ANTES de este fix (columna null) — nunca se
+    // retrofitea data histórica, ver plan de impuestos.
     private function resolverDestinoTributario(ReservaItem $item): string
     {
-        return $item->proveedorTarifa?->destino_tributario ?? self::DESTINO_TRIBUTARIO_DEFAULT;
+        return $item->destino_tributario
+            ?? $item->proveedorTarifa?->destino_tributario
+            ?? self::DESTINO_TRIBUTARIO_DEFAULT;
+    }
+
+    // Mismo criterio de cascada que resolverDestinoTributario(), un nivel
+    // más fino (tip_afe_igv puede variar dentro de un mismo destino
+    // homogéneo — ej. dos ítems 'nacional' donde uno está exonerado por
+    // Apéndice II sin relación con Amazonía). pasaje_aereo es la única
+    // excepción: cotizacion_pasaje_aereo.tip_afe_igv (solo sobre
+    // fee_agencia_monto, ver docblock de CotizacionPasajeAereo) es más
+    // específico que el campo genérico de alternativa_items y tiene
+    // prioridad cuando está presente. '10' es el mismo fallback legado de
+    // siempre para reserva_items de antes de este fix sin ningún dato.
+    private function resolverTipAfeIgvItem(ReservaItem $item): string
+    {
+        $alternativaItem = $item->alternativaItem;
+
+        if ($alternativaItem?->origen_tipo === AlternativaItem::ORIGEN_PASAJE_AEREO
+            && $alternativaItem->cotizacionPasajeAereo?->tip_afe_igv !== null) {
+            return $alternativaItem->cotizacionPasajeAereo->tip_afe_igv;
+        }
+
+        return $item->tip_afe_igv
+            ?? $item->proveedorTarifa?->tip_afe_igv
+            ?? '10';
     }
 
     // Guardia tributario: null si todos los ítems comparten el mismo
@@ -801,17 +859,49 @@ class ReservaFacturacionController extends Controller
     // OTROS vía clasificarCategoria()), preservando ese orden para que las
     // líneas del comprobante/preview salgan estables — no en el orden
     // arbitrario en que llegaron los ids. Descarta categorías vacías.
+    //
+    // Análisis de impuestos (28-ago-2026): dentro de cada categoría,
+    // sub-agrupa además por tip_afe_igv real (resolverTipAfeIgvItem()) —
+    // dos ítems de la misma categoría pueden tener tratamiento tributario
+    // distinto (ej. dos hoteles nacionales, uno exonerado por Apéndice II)
+    // y fusionarlos en una sola línea de SaleDetail perdería esa
+    // diferencia. detectarMezclaTributaria() ya garantiza que el DESTINO es
+    // homogéneo en todo el Sale — esto es un nivel más fino, dentro de ese
+    // mismo destino. Devuelve una lista plana (ya no un array keyed por
+    // categoría — puede haber más de un grupo por categoría ahora), cada
+    // elemento con 'categoria'/'tip_afe_igv'/'items'.
     private function agruparPorCategoria(Collection $items): array
     {
-        $grupos = [];
+        $porCategoria = [];
         foreach (array_keys(self::SKU_POR_CATEGORIA) as $categoria) {
-            $grupos[$categoria] = collect();
+            $porCategoria[$categoria] = collect();
         }
         foreach ($items as $item) {
-            $grupos[$this->clasificarCategoria($item)]->push($item);
+            $porCategoria[$this->clasificarCategoria($item)]->push($item);
         }
 
-        return array_filter($grupos, fn (Collection $grupo) => $grupo->isNotEmpty());
+        $grupos = [];
+        foreach ($porCategoria as $categoria => $itemsCategoria) {
+            if ($itemsCategoria->isEmpty()) {
+                continue;
+            }
+
+            foreach ($itemsCategoria->groupBy(fn (ReservaItem $it) => $this->resolverTipAfeIgvItem($it)) as $tipAfeIgv => $itemsGrupo) {
+                // (string) explícito: PHP castea claves de array que parecen
+                // enteros decimales ('10'/'20'/'30') a int — groupBy() usa un
+                // array por debajo, así que $tipAfeIgv llega acá como int(10),
+                // no string('10'), y rompería el === estricto de más abajo
+                // (construirLineas()) y el match() de store(). Bug real
+                // encontrado por el test de regresión de este mismo fix.
+                $grupos[] = [
+                    'categoria' => $categoria,
+                    'tip_afe_igv' => (string) $tipAfeIgv,
+                    'items' => $itemsGrupo->values(),
+                ];
+            }
+        }
+
+        return $grupos;
     }
 
     // Cálculo puro (sin tocar BD) de las líneas del comprobante a partir
@@ -823,19 +913,26 @@ class ReservaFacturacionController extends Controller
     // línea individual). Devuelve [lineas, subtotalTotal, igvTotal].
     private function construirLineas(array $gruposPorCategoria, Collection $productosPlaceholder, ?string $textoPersonalizado = null): array
     {
-        $porcentajeIgv = 18.0;
         $subtotalTotal = 0;
         $igvTotal = 0;
         $lineas = [];
 
-        foreach ($gruposPorCategoria as $categoria => $grupo) {
+        foreach ($gruposPorCategoria as $grupo) {
+            $categoria = $grupo['categoria'];
+            $tipAfeIgv = $grupo['tip_afe_igv'];
+            $items = $grupo['items'];
             $producto = $productosPlaceholder->get(self::SKU_POR_CATEGORIA[$categoria]);
 
-            $precioFinalLinea = round($grupo->sum(fn (ReservaItem $it) => (float) $it->alternativaItem->total_convertido), 2);
+            // '10' gravado → 18%; '20' exonerado/'30' inafecto → 0%. Ya no
+            // se lee tip_afe_igv_default del producto placeholder (análisis
+            // de impuestos, 28-ago-2026) — el valor real viene del ítem.
+            $porcentajeIgv = $tipAfeIgv === '10' ? 18.0 : 0.0;
+
+            $precioFinalLinea = round($items->sum(fn (ReservaItem $it) => (float) $it->alternativaItem->total_convertido), 2);
             $subtotalLinea = round($precioFinalLinea / (1 + $porcentajeIgv / 100), 2);
             $igvLinea = round($precioFinalLinea - $subtotalLinea, 2);
 
-            $descripcionDetalle = $textoPersonalizado ?? $grupo->map(fn (ReservaItem $it) => sprintf(
+            $descripcionDetalle = $textoPersonalizado ?? $items->map(fn (ReservaItem $it) => sprintf(
                 '%s (%s)',
                 ReservaController::resolverNombreItem($it->alternativaItem),
                 $it->fecha?->toDateString() ?? 'sin fecha'
@@ -847,7 +944,8 @@ class ReservaFacturacionController extends Controller
             $lineas[] = [
                 'categoria' => $categoria,
                 'producto' => $producto,
-                'grupo' => $grupo,
+                'grupo' => $items,
+                'tip_afe_igv' => $tipAfeIgv,
                 'subtotal' => $subtotalLinea,
                 'igv' => $igvLinea,
                 'precio_final' => $precioFinalLinea,

@@ -18,6 +18,7 @@ use App\Models\Client\Client;
 use App\Models\Company;
 use App\Models\Sale\Note;
 use App\Models\Sale\Sale;
+use App\Models\Sale\SaleDetail;
 use App\Models\Sale\SerieComprobante;
 use App\Models\User;
 use Greenter\Factory\FeFactory;
@@ -949,6 +950,161 @@ class ReservaFacturacionTest extends TestCase
         } catch (HttpException $e) {
             $this->assertSame(403, $e->getStatusCode());
         }
+    }
+
+    // Análisis de impuestos (28-ago-2026) — regresión del Caso 2 del
+    // análisis: 2 ítems de la MISMA categoría y MISMO destino_tributario
+    // ('nacional', pasa el guardia sin problema) pero distinto tip_afe_igv
+    // (uno gravado por Apéndice II, no relacionado con Amazonía). Antes de
+    // este fix se fusionaban en una sola línea de SaleDetail con 18% fijo
+    // para todo — el exonerado terminaba pagando IGV igual, sin que
+    // ninguna guardia lo detectara (detectarMezclaTributaria() solo mira
+    // destino_tributario, nunca tip_afe_igv).
+    public function test_factura_dos_tratamientos_tributarios_distintos_en_la_misma_categoria_y_destino(): void
+    {
+        [$branch, ] = $this->branchConSerie('01', 'F001');
+        $this->usuarioConPermisos($branch->id, ['emitir_factura']);
+
+        [$reserva, $itemGravado, $itemExonerado, $pasajeroA, $pasajeroB] = $this->crearReservaConTratamientoTributarioMixtoMismoDestino();
+        $cliente = Client::factory()->empresa()->create();
+
+        $response = app(ReservaFacturacionController::class)->store(new Request([
+            'pasajero_ids' => [$pasajeroA->id, $pasajeroB->id],
+            'client_id' => $cliente->id,
+            'tipo_comprobante_codigo' => '01',
+        ]), (string) $reserva->id);
+
+        $body = $response->getData(true);
+        $this->assertSame(200, $body['code'], json_encode($body));
+
+        $venta = Sale::find($body['sale_id']);
+        // Ambos ítems son 'nacional' — no dispara el guardia de mezcla, y
+        // hoy es lo único que puede llegar a facturarse (ver clase).
+        $this->assertSame('nacional', $venta->destino);
+        $this->assertSame(0, $venta->is_exportacion);
+
+        $detalles = SaleDetail::where('sale_id', $venta->id)->orderBy('id')->get();
+        // 2 líneas, no 1 — misma categoría (OTROS) pero tip_afe_igv distinto
+        // no se puede fusionar sin perder el tratamiento correcto de cada una.
+        $this->assertCount(2, $detalles);
+
+        $gravado = $detalles->firstWhere('tip_afe_igv', '10');
+        $exonerado = $detalles->firstWhere('tip_afe_igv', '20');
+        $this->assertNotNull($gravado, 'debe existir una línea gravada');
+        $this->assertNotNull($exonerado, 'debe existir una línea exonerada');
+
+        $this->assertSame(18.0, (float) $gravado->porcentaje_igv);
+        $this->assertSame(40.0, (float) $gravado->price_final);
+        $subtotalEsperadoGravado = round(40 / 1.18, 2);
+        $this->assertEqualsWithDelta($subtotalEsperadoGravado, (float) $gravado->subtotal, 0.01);
+        $this->assertEqualsWithDelta(round(40 - $subtotalEsperadoGravado, 2), (float) $gravado->igv, 0.01);
+
+        $this->assertSame(0.0, (float) $exonerado->porcentaje_igv);
+        $this->assertSame(60.0, (float) $exonerado->price_final);
+        $this->assertSame(60.0, (float) $exonerado->subtotal);
+        $this->assertSame(0.0, (float) $exonerado->igv);
+
+        // Sale-level: ya no todo va a mto_oper_gravadas — se reparte según
+        // el tratamiento real de cada línea.
+        $this->assertEqualsWithDelta($subtotalEsperadoGravado, (float) $venta->mto_oper_gravadas, 0.01);
+        $this->assertSame(60.0, (float) $venta->mto_oper_exoneradas);
+        $this->assertSame(0.0, (float) $venta->mto_oper_inafectas);
+    }
+
+    private function crearReservaConTratamientoTributarioMixtoMismoDestino(): array
+    {
+        $clienteId = DB::table('clients')->insertGetId([
+            'type_document' => 'DNI', 'n_document' => '99887766', 'full_name' => 'Cliente Test Mixto Mismo Destino',
+            'type_client' => 1, 'cod_tipo_doc_sunat' => '1',
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $cotizacionId = DB::table('cotizaciones')->insertGetId([
+            'codigo_prefijo' => 'TEST', 'codigo' => 'TEST-2026-0700-' . uniqid(), 'cliente_id' => $clienteId,
+            'destino' => 'Lima', 'fecha_viaje_desde' => '2026-09-01',
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        $alternativa = Alternativa::create([
+            'cotizacion_id' => $cotizacionId, 'nombre' => 'Alternativa 1', 'estado' => 'borrador',
+            'moneda_cotizacion' => 'PEN', 'tipo_cambio_aplicado' => 1, 'tipo_cambio_origen' => 'dia',
+        ]);
+
+        $cpA = DB::table('cotizacion_pasajeros')->insertGetId([
+            'cotizacion_id' => $cotizacionId, 'tipo_pax' => 'adulto', 'edad' => 30,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $cpB = DB::table('cotizacion_pasajeros')->insertGetId([
+            'cotizacion_id' => $cotizacionId, 'tipo_pax' => 'adulto', 'edad' => 31,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        $destinoAtractivoId = DB::table('destinos_atractivos')->insertGetId([
+            'nombre' => 'Lima', 'tipo' => 'lugar', 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        // Nombre que no matchea 'transporte'/'traslado'/'tour' en
+        // clasificarCategoria() — ambos ítems caen en 'OTROS', a propósito
+        // (necesito la MISMA categoría para probar la sub-agrupación por
+        // tip_afe_igv, no la clasificación en sí).
+        $servicioId = DB::table('servicios')->insertGetId([
+            'nombre' => 'Entrada a museo', 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $destinoServicioId = DB::table('destino_servicio')->insertGetId([
+            'destino_atractivo_id' => $destinoAtractivoId, 'servicio_id' => $servicioId,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $proveedorId = DB::table('proveedores')->insertGetId([
+            'razon_social' => 'Operador Test Mixto SAC', 'estado' => true, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $proveedorServicioId = DB::table('proveedor_servicios')->insertGetId([
+            'proveedor_id' => $proveedorId, 'destino_servicio_id' => $destinoServicioId,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        // Ambas 'nacional' — el guardia de mezcla (destino_tributario) no
+        // se dispara. La diferencia está en tip_afe_igv, no en destino.
+        $tarifaGravadaId = DB::table('proveedor_tarifas')->insertGetId([
+            'proveedor_servicio_id' => $proveedorServicioId,
+            'tipo_tarifa' => 'publica', 'modalidad' => 'compartido', 'moneda' => 'PEN',
+            'precio_costo' => 20, 'margen_tipo' => 'fijo', 'margen_valor' => 20,
+            'precio_venta_adulto' => 40,
+            'vigente_desde' => '2026-01-01', 'tip_afe_igv' => '10', 'destino_tributario' => 'nacional',
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $tarifaExoneradaId = DB::table('proveedor_tarifas')->insertGetId([
+            'proveedor_servicio_id' => $proveedorServicioId,
+            'tipo_tarifa' => 'publica', 'modalidad' => 'compartido', 'moneda' => 'PEN',
+            'precio_costo' => 40, 'margen_tipo' => 'fijo', 'margen_valor' => 20,
+            'precio_venta_adulto' => 60,
+            'vigente_desde' => '2026-01-01', 'tip_afe_igv' => '20', 'destino_tributario' => 'nacional',
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        $itemGravado = AlternativaItem::create([
+            'alternativa_id' => $alternativa->id, 'origen_tipo' => 'proveedor',
+            'proveedor_tarifa_id' => $tarifaGravadaId, 'dia_referencial' => 1, 'pax_incluidos' => [$cpA],
+            'modo_precio' => 'tarifa_fija', 'cantidad' => 1, 'moneda_costo' => 'PEN',
+            'costo_snapshot' => 20, 'precio_venta_snapshot' => 40, 'precio_convertido' => 40,
+            'tip_afe_igv' => '10', 'destino_tributario' => 'nacional',
+        ]);
+        $itemExonerado = AlternativaItem::create([
+            'alternativa_id' => $alternativa->id, 'origen_tipo' => 'proveedor',
+            'proveedor_tarifa_id' => $tarifaExoneradaId, 'dia_referencial' => 1, 'pax_incluidos' => [$cpB],
+            'modo_precio' => 'tarifa_fija', 'cantidad' => 1, 'moneda_costo' => 'PEN',
+            'costo_snapshot' => 40, 'precio_venta_snapshot' => 60, 'precio_convertido' => 60,
+            'tip_afe_igv' => '20', 'destino_tributario' => 'nacional',
+        ]);
+
+        [$reserva] = app(ReservaController::class)->crearReservaDesdeAlternativa($alternativa->fresh());
+
+        $pasajeros = ReservaPasajero::where('reserva_id', $reserva->id)->orderBy('id')->get();
+
+        return [
+            $reserva,
+            ReservaItem::where('alternativa_item_id', $itemGravado->id)->first(),
+            ReservaItem::where('alternativa_item_id', $itemExonerado->id)->first(),
+            $pasajeros[0],
+            $pasajeros[1],
+        ];
     }
 
     private function crearReservaConMezclaTributaria(): array

@@ -85,6 +85,25 @@
             </div>
         </div>
 
+        <div class="row g-2 mb-2">
+            <div class="col-6">
+                <label class="form-label mb-1 small fw-semibold text-secondary">Tratamiento tributario (fee de agencia)</label>
+                <select class="form-select form-select-sm" v-model="form.tip_afe_igv">
+                    <option value="10">Gravado</option>
+                    <option value="20">Exonerado</option>
+                    <option value="30">Inafecto</option>
+                </select>
+            </div>
+            <div class="col-6">
+                <label class="form-label mb-1 small fw-semibold text-secondary">Destino</label>
+                <select class="form-select form-select-sm" v-model="form.destino_tributario">
+                    <option value="amazonia">Amazonía</option>
+                    <option value="nacional">Nacional</option>
+                    <option value="extranjero">Extranjero</option>
+                </select>
+            </div>
+        </div>
+
         <div class="card bg-light border-0 p-2 mb-2">
             <div class="d-flex justify-content-between small">
                 <span class="text-muted">Costo total</span>
@@ -94,6 +113,20 @@
             <div class="d-flex justify-content-between">
                 <span class="text-muted small">Precio de venta</span>
                 <strong>{{ form.moneda }} {{ (preview?.venta_total ?? 0).toFixed(2) }}</strong>
+            </div>
+            <!-- Análisis de impuestos (28-ago-2026) — el precio de venta de
+                 arriba sigue siendo el precio FINAL (no cambia al elegir el
+                 tratamiento); esto solo desglosa base/IGV, misma fórmula que
+                 la facturación. -->
+            <div v-if="preview" class="border-top mt-1 pt-1 small">
+                <div class="d-flex justify-content-between">
+                    <span class="text-muted">Base</span>
+                    <span>{{ form.moneda }} {{ desglose.base.toFixed(2) }}</span>
+                </div>
+                <div class="d-flex justify-content-between">
+                    <span class="text-muted">IGV ({{ desglose.porcentaje }}%)</span>
+                    <span>{{ form.moneda }} {{ desglose.igv.toFixed(2) }}</span>
+                </div>
             </div>
         </div>
 
@@ -119,13 +152,18 @@
 import { ref, reactive, computed, watch } from 'vue';
 import Swal from 'sweetalert2/dist/sweetalert2.js';
 import { alternativaItemService } from '@/services/admin/alternativaItemService';
-import type { AlternativaItem, CotizacionPasajero } from '@/types/agencia-viajes';
+import { desglosarPrecioFinal } from '@/utils/desglosarPrecioFinal';
+import type { AlternativaItem, CotizacionPasajero, TipAfeIgv, DestinoTributario } from '@/types/agencia-viajes';
 
 const props = defineProps<{
     alternativaId: number;
     diaActivo: number;
     pasajeros?: CotizacionPasajero[];
     itemExistente?: AlternativaItem | null;
+    // Análisis de impuestos (28-ago-2026) — default de configuracion_agencia,
+    // solo para prellenar; editable antes de guardar.
+    tipAfeIgvDefault?: TipAfeIgv;
+    destinoTributarioDefault?: DestinoTributario;
 }>();
 const emit = defineEmits<{
     (e: 'agregado', payload: any): void;
@@ -142,12 +180,15 @@ const form = reactive({
     cargos: [] as Array<{ nombre: string; monto: number; tipo: string }>,
     tua_incluida_en_tarifa: false,
     fee_agencia_monto: 0,
+    tip_afe_igv: '10' as TipAfeIgv,
+    destino_tributario: 'nacional' as DestinoTributario,
 });
 const paxSeleccionados = ref<number[]>([]);
 const guardando = ref(false);
 
 const preview = ref<{ costo_total: number; venta_total: number } | null>(null);
 const calculando = ref(false);
+const desglose = computed(() => desglosarPrecioFinal(preview.value?.venta_total ?? 0, form.tip_afe_igv));
 let debounceTimeout: any = null;
 
 const agregarCargo = () => {
@@ -180,6 +221,8 @@ const resetearCampos = () => {
         form.cargos = (cpa.cargos ?? []).map((c) => ({ nombre: c.nombre, monto: Number(c.monto), tipo: c.tipo ?? 'impuesto' }));
         form.tua_incluida_en_tarifa = cpa.tua_incluida_en_tarifa;
         form.fee_agencia_monto = Number(cpa.fee_agencia_monto);
+        form.tip_afe_igv = (cpa.tip_afe_igv as TipAfeIgv | null) ?? props.tipAfeIgvDefault ?? '10';
+        form.destino_tributario = item.destino_tributario ?? props.destinoTributarioDefault ?? 'nacional';
         paxSeleccionados.value = item.pax_incluidos && item.pax_incluidos.length
             ? [...item.pax_incluidos]
             : (props.pasajeros ?? []).map((p) => p.id);
@@ -193,6 +236,8 @@ const resetearCampos = () => {
         form.cargos = [];
         form.tua_incluida_en_tarifa = false;
         form.fee_agencia_monto = 0;
+        form.tip_afe_igv = props.tipAfeIgvDefault ?? '10';
+        form.destino_tributario = props.destinoTributarioDefault ?? 'nacional';
         paxSeleccionados.value = (props.pasajeros ?? []).map((p) => p.id);
     }
 };

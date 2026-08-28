@@ -56,6 +56,8 @@ class AlternativaItem extends Model
         'precio_venta_snapshot',
         'descuento_pct',
         'precio_convertido',
+        'tip_afe_igv',
+        'destino_tributario',
     ];
 
     protected $casts = [

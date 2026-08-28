@@ -236,7 +236,16 @@ export type ConfiguracionAgencia = {
   // propio de cada agencia, descargable aparte de la parte comercial de
   // una cotización.
   condiciones_generales_servicio?: string | null;
+  // Análisis de impuestos (28-ago-2026) — default para prellenar el
+  // tratamiento tributario de ítems sin proveedor_tarifa propia
+  // (manual/mayorista/guia/pasaje_aereo). Catálogo 07 SUNAT: '10' gravado,
+  // '20' exonerado, '30' inafecto.
+  tip_afe_igv_default: '10' | '20' | '30';
+  destino_tributario_default: 'amazonia' | 'nacional' | 'extranjero';
 };
+
+export type TipAfeIgv = '10' | '20' | '30';
+export type DestinoTributario = 'amazonia' | 'nacional' | 'extranjero';
 
 // Módulo 12 — plan-modulo-codigos-numeracion.md §6.2. Una fila por tipo de
 // documento (tour/paquete/cotizacion/reserva/venta_directa).
@@ -367,6 +376,12 @@ export type AlternativaItem = {
   precio_convertido: number;
   total: number;
   total_convertido: number;
+  // Análisis de impuestos (28-ago-2026) — copiado de la proveedor_tarifa
+  // cuando existe, o resuelto contra el default de configuracion_agencia
+  // al crear el ítem (manual/mayorista/guia/pasaje_aereo). Ver
+  // AlternativaItemController::resolverTratamientoTributario().
+  tip_afe_igv?: TipAfeIgv | null;
+  destino_tributario?: DestinoTributario | null;
   proveedor_tarifa?: ProveedorTarifa;
   opcion_mayorista?: OpcionMayorista;
   cotizacion_pasaje_aereo?: CotizacionPasajeAereo;

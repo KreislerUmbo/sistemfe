@@ -210,6 +210,8 @@
                 <div v-if="mostrarFormPasajeAereo" class="border rounded p-2 mb-2">
                     <PasajeAereoForm :alternativa-id="alternativaActiva.id" :dia-activo="diaActivoParaAgregar"
                         :pasajeros="cotizacion?.pasajeros ?? []" :item-existente="itemPasajeAereoEnEdicion"
+                        :tip-afe-igv-default="configAgencia?.tip_afe_igv_default"
+                        :destino-tributario-default="configAgencia?.destino_tributario_default"
                         @agregado="onPasajeAereoAgregado" @actualizado="onPasajeAereoActualizado" />
                 </div>
 
@@ -276,6 +278,14 @@
                                     <span v-if="eliminandoItemId === item.id" class="spinner-border spinner-border-sm text-danger flex-shrink-0"></span>
                                     <i v-else class="fas fa-times text-danger flex-shrink-0" style="cursor:pointer" title="Eliminar" @click="eliminarItem(item)"></i>
                                 </div>
+
+                                <!-- Análisis de impuestos (28-ago-2026) — badge de tratamiento
+                                     tributario resuelto, visible antes de facturar (no solo al
+                                     enterarse en el momento de facturar la reserva). -->
+                                <span v-if="badgeTratamientoTributario(item)" class="badge mt-1"
+                                    :class="badgeTratamientoTributario(item)!.clase" style="font-size:10px">
+                                    {{ badgeTratamientoTributario(item)!.texto }}
+                                </span>
 
                                 <div v-if="item.origen_tipo === 'manual'" class="mt-1 d-flex align-items-center gap-2 flex-wrap">
                                     <span v-if="item.proveedor_promovido_id" class="badge bg-success-subtle text-success" style="font-size:10px">
@@ -380,14 +390,22 @@
                                     </div>
                                     <div v-if="gruposExpandido.has(grupo.tourOrigenId)" class="ms-3 mt-1">
                                         <div v-for="item in grupo.items" :key="item.id" class="d-flex justify-content-between gap-2 text-muted" style="font-size:11px">
-                                            <span style="word-break:break-word">{{ etiquetaItem(item) }}</span>
+                                            <span style="word-break:break-word">
+                                                {{ etiquetaItem(item) }}
+                                                <span v-if="badgeTratamientoTributario(item)" class="badge ms-1"
+                                                    :class="badgeTratamientoTributario(item)!.clase" style="font-size:9px">{{ badgeTratamientoTributario(item)!.texto }}</span>
+                                            </span>
                                             <span class="text-nowrap">{{ totalConvertidoLocal(item).toFixed(2) }}</span>
                                         </div>
                                     </div>
                                 </template>
                                 <template v-else>
                                     <div v-for="item in grupo.items" :key="item.id" class="d-flex justify-content-between gap-2 mb-1">
-                                        <span class="text-muted" style="word-break:break-word;">{{ etiquetaItem(item) }}</span>
+                                        <span class="text-muted" style="word-break:break-word;">
+                                            {{ etiquetaItem(item) }}
+                                            <span v-if="badgeTratamientoTributario(item)" class="badge ms-1"
+                                                :class="badgeTratamientoTributario(item)!.clase" style="font-size:9px">{{ badgeTratamientoTributario(item)!.texto }}</span>
+                                        </span>
                                         <span class="text-nowrap">{{ totalConvertidoLocal(item).toFixed(2) }}</span>
                                     </div>
                                 </template>
@@ -613,6 +631,24 @@
                                     <label class="form-label mb-1 small text-secondary">Cantidad de días</label>
                                     <input type="number" min="1" class="form-control form-control-sm" v-model.number="cantidadDiasGuia">
                                 </div>
+                                <div v-if="guiaTarifaSeleccionadaCotizador" class="row g-2 mb-2">
+                                    <div class="col-6">
+                                        <label class="form-label mb-1 small text-secondary">Tratamiento tributario</label>
+                                        <select class="form-select form-select-sm" v-model="tipAfeIgvGuia">
+                                            <option value="10">Gravado</option>
+                                            <option value="20">Exonerado</option>
+                                            <option value="30">Inafecto</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="form-label mb-1 small text-secondary">Destino</label>
+                                        <select class="form-select form-select-sm" v-model="destinoTributarioGuia">
+                                            <option value="amazonia">Amazonía</option>
+                                            <option value="nacional">Nacional</option>
+                                            <option value="extranjero">Extranjero</option>
+                                        </select>
+                                    </div>
+                                </div>
                                 <button class="btn btn-primary btn-sm w-100" @click="agregarItemGuiaCotizador" :disabled="!guiaTarifaSeleccionadaCotizador || agregandoGuia">
                                     <span v-if="agregandoGuia" class="spinner-border spinner-border-sm me-1"></span>Agregar guía
                                 </button>
@@ -734,6 +770,8 @@
                         <template v-else-if="pasoDrawer === 'manual' && alternativaActiva">
                             <ItemManualForm :alternativa-id="alternativaActiva.id" :dia-activo="diaActivoParaAgregar"
                                 :pasajeros="cotizacion?.pasajeros ?? []" :item-existente="itemManualEnEdicion"
+                                :tip-afe-igv-default="configAgencia?.tip_afe_igv_default"
+                                :destino-tributario-default="configAgencia?.destino_tributario_default"
                                 @agregado="onServicioSueltoAgregado" @actualizado="onServicioSueltoActualizado" />
                         </template>
                     </div>
@@ -772,7 +810,7 @@ import { reservaService } from '@/services/admin/reservaService';
 import { useAgenciaViajesCatalogosStore } from '@/stores/agenciaViajesCatalogos';
 import { formatFecha } from '@/helpers/fecha';
 import { guiaService } from '@/services/admin/guiaService';
-import type { Cotizacion, Alternativa, AlternativaItem, ProveedorTarifa, OpcionMayorista, Proveedor, ProveedorTipo, BibliotecaResultado, ConfiguracionAgencia, DestinoServicio, Guia, GuiaTarifa, Servicio } from '@/types/agencia-viajes';
+import type { Cotizacion, Alternativa, AlternativaItem, ProveedorTarifa, OpcionMayorista, Proveedor, ProveedorTipo, BibliotecaResultado, ConfiguracionAgencia, DestinoServicio, Guia, GuiaTarifa, Servicio, TipAfeIgv, DestinoTributario } from '@/types/agencia-viajes';
 import type { Client } from '@/types/clients';
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
@@ -1761,6 +1799,16 @@ const tarifasGuiaCotizador = ref<GuiaTarifa[]>([]);
 const guiaTarifaSeleccionadaCotizador = ref<GuiaTarifa | null>(null);
 const cantidadDiasGuia = ref(1);
 const agregandoGuia = ref(false);
+// Análisis de impuestos (28-ago-2026) — prellenado con el default de la
+// agencia apenas está disponible; editable antes de agregar el ítem.
+const tipAfeIgvGuia = ref<TipAfeIgv>('10');
+const destinoTributarioGuia = ref<DestinoTributario>('nacional');
+watch(configAgencia, (c) => {
+    if (c) {
+        tipAfeIgvGuia.value = c.tip_afe_igv_default;
+        destinoTributarioGuia.value = c.destino_tributario_default;
+    }
+}, { immediate: true });
 
 const cargarGuiasCotizador = async () => {
     if (guiasCotizador.value.length) return;
@@ -1784,6 +1832,8 @@ const agregarItemGuiaCotizador = async () => {
             guia_tarifa_id: guiaTarifaSeleccionadaCotizador.value.id,
             cantidad: cantidadDiasGuia.value || 1,
             dia_referencial: diaActivoParaAgregar.value,
+            tip_afe_igv: tipAfeIgvGuia.value,
+            destino_tributario: destinoTributarioGuia.value,
         });
         guiaTarifaSeleccionadaCotizador.value = null;
         cantidadDiasGuia.value = 1;
@@ -2152,6 +2202,30 @@ const contarPasajerosDeItem = (item: AlternativaItem) => {
     const conteo: Record<'adulto' | 'nino' | 'infante', number> = { adulto: 0, nino: 0, infante: 0 };
     filtrados.forEach((p) => { conteo[p.tipo_pax] += 1; });
     return conteo;
+};
+
+// Análisis de impuestos (28-ago-2026) — visibilidad del tratamiento
+// tributario ya resuelto en el ítem, para que no sea sorpresa recién al
+// facturar la reserva (ver ReservaFacturacionController::
+// resolverTipAfeIgvItem()/resolverDestinoTributario() en el backend, misma
+// cascada). null si el ítem todavía no tiene nada capturado (dato de antes
+// de este fix).
+const badgeTratamientoTributario = (item: AlternativaItem): { texto: string; clase: string } | null => {
+    if (!item.tip_afe_igv) return null;
+
+    const etiquetaTipo: Record<string, { texto: string; clase: string }> = {
+        '10': { texto: 'Gravado', clase: 'bg-secondary-subtle text-secondary' },
+        '20': { texto: 'Exonerado', clase: 'bg-success-subtle text-success' },
+        '30': { texto: 'Inafecto', clase: 'bg-info-subtle text-info' },
+    };
+    const base = etiquetaTipo[item.tip_afe_igv] ?? { texto: item.tip_afe_igv, clase: 'bg-light text-dark' };
+
+    if (item.destino_tributario && item.destino_tributario !== 'nacional') {
+        const etiquetaDestino = item.destino_tributario === 'amazonia' ? 'Amazonía' : 'Extranjero';
+        return { texto: `${base.texto} · ${etiquetaDestino}`, clase: base.clase };
+    }
+
+    return base;
 };
 
 const desglosePasajerosTexto = (item: AlternativaItem): string | null => {

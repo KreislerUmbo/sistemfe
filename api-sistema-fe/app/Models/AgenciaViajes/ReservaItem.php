@@ -38,6 +38,8 @@ class ReservaItem extends Model
         'proveedor_tarifa_id',
         'tour_origen_id',
         'salida_operativa_id',
+        'tip_afe_igv',
+        'destino_tributario',
     ];
 
     protected $casts = [

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\AgenciaViajes;
 use App\Http\Controllers\Controller;
 use App\Models\AgenciaViajes\Alternativa;
 use App\Models\AgenciaViajes\AlternativaItem;
+use App\Models\AgenciaViajes\ConfiguracionAgencia;
 use App\Models\AgenciaViajes\CotizacionPasajeAereo;
 use App\Models\AgenciaViajes\CotizacionPasajero;
 use App\Models\AgenciaViajes\DestinoServicio;
@@ -502,6 +503,11 @@ class AlternativaItemController extends Controller
             'moneda_costo' => 'required_without:proveedor_tarifa_id|nullable|in:PEN,USD',
             'precio_venta_snapshot' => 'required_without:proveedor_tarifa_id|nullable|numeric|min:0',
             'costo_snapshot' => 'nullable|numeric|min:0',
+            // Solo tiene efecto si NO hay proveedor_tarifa_id — con tarifa
+            // real, el tratamiento tributario SIEMPRE viene de ella (ver
+            // resolverTratamientoTributario() más abajo).
+            'tip_afe_igv' => 'nullable|string|in:10,20,30',
+            'destino_tributario' => 'nullable|string|in:amazonia,nacional,extranjero',
             // Día activo del lienzo al momento de agregar — Sesión 11b3 (§7.1).
             'dia_referencial' => 'nullable|integer|min:1',
             // Consolidación de hoteles — cantidad de camas adicionales
@@ -568,6 +574,10 @@ class AlternativaItemController extends Controller
             $precioVentaSnapshot = (float) $validado['precio_venta_snapshot'];
         }
 
+        $tratamientoTributario = $tarifa
+            ? $this->resolverTratamientoTributario($tarifa->tip_afe_igv, $tarifa->destino_tributario)
+            : $this->resolverTratamientoTributario($validado['tip_afe_igv'] ?? null, $validado['destino_tributario'] ?? null);
+
         $item = AlternativaItem::create([
             'alternativa_id' => $alternativa->id,
             'origen_tipo' => AlternativaItem::ORIGEN_PROVEEDOR,
@@ -580,6 +590,8 @@ class AlternativaItemController extends Controller
             'precio_venta_snapshot' => $precioVentaSnapshot,
             'precio_convertido' => $this->priceEngine->convertirMoneda($precioVentaSnapshot, $monedaCosto, $alternativa->moneda_cotizacion, (float) $alternativa->tipo_cambio_aplicado),
             'dia_referencial' => $validado['dia_referencial'] ?? null,
+            'tip_afe_igv' => $tratamientoTributario['tip_afe_igv'],
+            'destino_tributario' => $tratamientoTributario['destino_tributario'],
         ]);
 
         $this->recalcularTotalAlternativa($alternativa);
@@ -645,6 +657,8 @@ class AlternativaItemController extends Controller
             'cantidad' => 'nullable|integer|min:1',
             'pax_incluidos' => 'nullable|array',
             'dia_referencial' => 'nullable|integer|min:1',
+            'tip_afe_igv' => 'nullable|string|in:10,20,30',
+            'destino_tributario' => 'nullable|string|in:amazonia,nacional,extranjero',
         ]);
 
         if ($validator->fails()) {
@@ -666,6 +680,8 @@ class AlternativaItemController extends Controller
             return response()->json(['code' => 422, 'message' => 'Esa tarifa de habitación no pertenece a la opción de mayorista indicada.'], 422);
         }
 
+        $tratamientoTributario = $this->resolverTratamientoTributario($validado['tip_afe_igv'] ?? null, $validado['destino_tributario'] ?? null);
+
         $item = AlternativaItem::create([
             'alternativa_id' => $alternativa->id,
             'origen_tipo' => AlternativaItem::ORIGEN_MAYORISTA,
@@ -678,6 +694,8 @@ class AlternativaItemController extends Controller
             'precio_venta_snapshot' => $tarifaHotel->precio_venta,
             'precio_convertido' => $this->priceEngine->convertirMoneda((float) $tarifaHotel->precio_venta, $opcion->moneda, $alternativa->moneda_cotizacion, (float) $alternativa->tipo_cambio_aplicado),
             'dia_referencial' => $validado['dia_referencial'] ?? null,
+            'tip_afe_igv' => $tratamientoTributario['tip_afe_igv'],
+            'destino_tributario' => $tratamientoTributario['destino_tributario'],
         ]);
 
         $this->recalcularTotalAlternativa($alternativa);
@@ -701,6 +719,8 @@ class AlternativaItemController extends Controller
             'pax_incluidos' => 'nullable|array',
             'pax_incluidos.*' => 'integer|exists:cotizacion_pasajeros,id',
             'dia_referencial' => 'nullable|integer|min:1',
+            'tip_afe_igv' => 'nullable|string|in:10,20,30',
+            'destino_tributario' => 'nullable|string|in:amazonia,nacional,extranjero',
         ]);
 
         if ($validator->fails()) {
@@ -719,6 +739,8 @@ class AlternativaItemController extends Controller
             null
         );
 
+        $tratamientoTributario = $this->resolverTratamientoTributario($validado['tip_afe_igv'] ?? null, $validado['destino_tributario'] ?? null);
+
         $item = AlternativaItem::create([
             'alternativa_id' => $alternativa->id,
             'origen_tipo' => AlternativaItem::ORIGEN_GUIA,
@@ -731,6 +753,8 @@ class AlternativaItemController extends Controller
             'precio_venta_snapshot' => $calculo['venta_total'],
             'precio_convertido' => $this->priceEngine->convertirMoneda($calculo['venta_total'], $guiaTarifa->moneda, $alternativa->moneda_cotizacion, (float) $alternativa->tipo_cambio_aplicado),
             'dia_referencial' => $validado['dia_referencial'] ?? null,
+            'tip_afe_igv' => $tratamientoTributario['tip_afe_igv'],
+            'destino_tributario' => $tratamientoTributario['destino_tributario'],
         ]);
 
         $this->recalcularTotalAlternativa($alternativa);
@@ -786,14 +810,21 @@ class AlternativaItemController extends Controller
 
         $alternativa = $item->alternativa;
         $resultado = $this->calcularPasajeAereo($alternativa, $validado);
+        // Si no manda valor nuevo, conserva el que ya tenía el ítem (mismo
+        // criterio que actualizarManual() — el default de agencia solo
+        // aplica al crear, no se recalcula al editar).
+        $tipAfeIgv = $validado['tip_afe_igv'] ?? $item->tip_afe_igv;
+        $destinoTributario = $validado['destino_tributario'] ?? $item->destino_tributario;
 
-        DB::transaction(function () use ($item, $alternativa, $validado, $resultado) {
+        DB::transaction(function () use ($item, $alternativa, $validado, $resultado, $tipAfeIgv, $destinoTributario) {
             $item->update([
                 'pax_incluidos' => $validado['pax_incluidos'] ?? null,
                 'moneda_costo' => $validado['moneda'],
                 'costo_snapshot' => $resultado['costo_total'],
                 'precio_venta_snapshot' => $resultado['venta_total'],
                 'precio_convertido' => $this->priceEngine->convertirMoneda($resultado['venta_total'], $validado['moneda'], $alternativa->moneda_cotizacion, (float) $alternativa->tipo_cambio_aplicado),
+                'tip_afe_igv' => $tipAfeIgv,
+                'destino_tributario' => $destinoTributario,
             ]);
 
             $item->cotizacionPasajeAereo->update([
@@ -827,8 +858,9 @@ class AlternativaItemController extends Controller
         }
 
         $resultado = $this->calcularPasajeAereo($alternativa, $validado);
+        $tratamientoTributario = $this->resolverTratamientoTributario($validado['tip_afe_igv'] ?? null, $validado['destino_tributario'] ?? null);
 
-        $item = DB::transaction(function () use ($alternativa, $validado, $resultado) {
+        $item = DB::transaction(function () use ($alternativa, $validado, $resultado, $tratamientoTributario) {
             $item = AlternativaItem::create([
                 'alternativa_id' => $alternativa->id,
                 'origen_tipo' => AlternativaItem::ORIGEN_PASAJE_AEREO,
@@ -840,6 +872,8 @@ class AlternativaItemController extends Controller
                 'precio_venta_snapshot' => $resultado['venta_total'],
                 'precio_convertido' => $this->priceEngine->convertirMoneda($resultado['venta_total'], $validado['moneda'], $alternativa->moneda_cotizacion, (float) $alternativa->tipo_cambio_aplicado),
                 'dia_referencial' => $validado['dia_referencial'] ?? null,
+                'tip_afe_igv' => $tratamientoTributario['tip_afe_igv'],
+                'destino_tributario' => $tratamientoTributario['destino_tributario'],
             ]);
 
             CotizacionPasajeAereo::create([
@@ -883,7 +917,13 @@ class AlternativaItemController extends Controller
             'cargos.*.tipo' => 'nullable|in:impuesto,tasa_aeropuerto,fee_agencia',
             'tua_incluida_en_tarifa' => 'nullable|boolean',
             'fee_agencia_monto' => 'nullable|numeric|min:0',
+            // Este campo queda EXCLUSIVAMENTE sobre fee_agencia_monto
+            // (cotizacion_pasaje_aereo.tip_afe_igv, ver docblock del
+            // modelo) — no se toca. 'destino_tributario' es nuevo, a nivel
+            // de alternativa_items (junto con una copia genérica de
+            // tip_afe_igv), ver resolverTratamientoTributario().
             'tip_afe_igv' => 'nullable|string|max:2',
+            'destino_tributario' => 'nullable|string|in:amazonia,nacional,extranjero',
             'pax_incluidos' => 'nullable|array',
             'pax_incluidos.*' => 'integer|exists:cotizacion_pasajeros,id',
             'dia_referencial' => 'nullable|integer|min:1',
@@ -941,6 +981,8 @@ class AlternativaItemController extends Controller
             'pax_incluidos' => 'nullable|array',
             'pax_incluidos.*' => 'integer|exists:cotizacion_pasajeros,id',
             'dia_referencial' => 'nullable|integer|min:1',
+            'tip_afe_igv' => 'nullable|string|in:10,20,30',
+            'destino_tributario' => 'nullable|string|in:amazonia,nacional,extranjero',
         ]);
 
         if ($validator->fails()) {
@@ -948,6 +990,7 @@ class AlternativaItemController extends Controller
         }
 
         $validado = $validator->validated();
+        $tratamientoTributario = $this->resolverTratamientoTributario($validado['tip_afe_igv'] ?? null, $validado['destino_tributario'] ?? null);
 
         $item = AlternativaItem::create([
             'alternativa_id' => $alternativa->id,
@@ -962,6 +1005,8 @@ class AlternativaItemController extends Controller
             'precio_venta_snapshot' => $validado['precio_venta_snapshot'],
             'precio_convertido' => $this->priceEngine->convertirMoneda((float) $validado['precio_venta_snapshot'], $validado['moneda_costo'], $alternativa->moneda_cotizacion, (float) $alternativa->tipo_cambio_aplicado),
             'dia_referencial' => $validado['dia_referencial'] ?? null,
+            'tip_afe_igv' => $tratamientoTributario['tip_afe_igv'],
+            'destino_tributario' => $tratamientoTributario['destino_tributario'],
         ]);
 
         $this->recalcularTotalAlternativa($alternativa);
@@ -999,6 +1044,8 @@ class AlternativaItemController extends Controller
             'cantidad' => 'required|integer|min:1',
             'pax_incluidos' => 'nullable|array',
             'pax_incluidos.*' => 'integer|exists:cotizacion_pasajeros,id',
+            'tip_afe_igv' => 'nullable|string|in:10,20,30',
+            'destino_tributario' => 'nullable|string|in:amazonia,nacional,extranjero',
         ]);
 
         if ($validator->fails()) {
@@ -1011,7 +1058,9 @@ class AlternativaItemController extends Controller
         // Nota: si el ítem ya tiene proveedor_promovido_id (ya fue
         // promovido), igual se puede editar sin problema — no relinkea ni
         // toca el proveedor ya creado, son independientes por diseño (mismo
-        // criterio de promoverAProveedor()).
+        // criterio de promoverAProveedor()). Tratamiento tributario: si no
+        // se manda, se conserva el que ya tenía el ítem (no se recalcula el
+        // default de agencia acá — solo aplica al crear).
         $item->update([
             'descripcion_manual' => $validado['descripcion_manual'],
             'proveedor_sugerido_manual' => $validado['proveedor_sugerido_manual'] ?? null,
@@ -1021,6 +1070,8 @@ class AlternativaItemController extends Controller
             'precio_convertido' => $this->priceEngine->convertirMoneda((float) $validado['precio_venta_snapshot'], $validado['moneda_costo'], $alternativa->moneda_cotizacion, (float) $alternativa->tipo_cambio_aplicado),
             'cantidad' => $validado['cantidad'],
             'pax_incluidos' => $validado['pax_incluidos'] ?? null,
+            'tip_afe_igv' => $validado['tip_afe_igv'] ?? $item->tip_afe_igv,
+            'destino_tributario' => $validado['destino_tributario'] ?? $item->destino_tributario,
         ]);
 
         $this->recalcularTotalAlternativa($alternativa);
@@ -1080,8 +1131,13 @@ class AlternativaItemController extends Controller
         }
 
         $margenValor = round($v['precio_venta_adulto'] - $v['costo'], 2);
+        // Ya no se hardcodea '10'/'nacional' — usa lo que el ítem manual ya
+        // tiene capturado (crearItemManual()/actualizarManual()), con
+        // fallback al default de agencia solo si el ítem es de antes de
+        // este fix y nunca lo tuvo.
+        $tratamientoTributario = $this->resolverTratamientoTributario($item->tip_afe_igv, $item->destino_tributario);
 
-        [$proveedor, $tarifa] = DB::transaction(function () use ($item, $v, $destinoServicio, $tipoId, $margenValor) {
+        [$proveedor, $tarifa] = DB::transaction(function () use ($item, $v, $destinoServicio, $tipoId, $margenValor, $tratamientoTributario) {
             $proveedor = Proveedor::create([
                 'razon_social' => $v['razon_social'],
                 'tipo_documento' => $v['tipo_documento'] ?? null,
@@ -1105,8 +1161,8 @@ class AlternativaItemController extends Controller
                 'margen_valor' => $margenValor,
                 'precio_venta_adulto' => $v['precio_venta_adulto'],
                 'vigente_desde' => now()->toDateString(),
-                'tip_afe_igv' => '10',
-                'destino_tributario' => 'nacional',
+                'tip_afe_igv' => $tratamientoTributario['tip_afe_igv'],
+                'destino_tributario' => $tratamientoTributario['destino_tributario'],
             ]);
 
             $item->update(['proveedor_promovido_id' => $proveedor->id]);
@@ -1120,6 +1176,27 @@ class AlternativaItemController extends Controller
             'proveedor' => $proveedor,
             'proveedor_tarifa' => $tarifa,
         ]);
+    }
+
+    // Análisis de impuestos (28-ago-2026) — resuelve el tratamiento
+    // tributario final de un ítem sin proveedor_tarifa propia (mayorista/
+    // guia/pasaje_aereo/manual, y el caso "proveedor sin tarifa" de precio
+    // de referencia): usa lo que mandó el usuario si vino completo, y
+    // rellena con el default de la agencia (configuracion_agencia) solo lo
+    // que falte. Snapshot en creación — el default de agencia NO se
+    // recalcula después si cambia (mismo criterio que costo_snapshot).
+    private function resolverTratamientoTributario(?string $tipAfeIgv, ?string $destinoTributario): array
+    {
+        if ($tipAfeIgv !== null && $destinoTributario !== null) {
+            return ['tip_afe_igv' => $tipAfeIgv, 'destino_tributario' => $destinoTributario];
+        }
+
+        $default = ConfiguracionAgencia::tratamientoTributarioDefault();
+
+        return [
+            'tip_afe_igv' => $tipAfeIgv ?? $default['tip_afe_igv'],
+            'destino_tributario' => $destinoTributario ?? $default['destino_tributario'],
+        ];
     }
 
     private function contarPasajerosPorTipo(int $cotizacionId, ?array $paxIncluidosIds): array
