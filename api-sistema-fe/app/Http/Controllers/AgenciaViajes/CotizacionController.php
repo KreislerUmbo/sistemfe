@@ -134,6 +134,11 @@ class CotizacionController extends Controller
             // Sesión 11b3 — nombre del tour de origen para el encabezado del
             // bloque agrupado en el lienzo día-por-día (§7.1).
             'alternativas.items.tourOrigen',
+            // Auditoría del módulo Reservas/Cotizador (2026-08-27) — el
+            // frontend necesita saber SIN intentar la acción si un ítem ya
+            // generó una reserva (bloquea editar/eliminar). Antes el único
+            // aviso era el 422 recién al intentar guardar.
+            'alternativas.items.reservaItem',
         ])->findOrFail($id);
 
         return response()->json(['cotizacion' => $cotizacion]);

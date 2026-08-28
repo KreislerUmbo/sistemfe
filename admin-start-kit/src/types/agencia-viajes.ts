@@ -370,6 +370,12 @@ export type AlternativaItem = {
   proveedor_tarifa?: ProveedorTarifa;
   opcion_mayorista?: OpcionMayorista;
   cotizacion_pasaje_aereo?: CotizacionPasajeAereo;
+  // Auditoría del módulo Reservas/Cotizador (2026-08-27) — presente (no
+  // null) si este ítem ya generó una reserva. El backend bloquea editar/
+  // eliminar en ese caso (destroy()/actualizarManual()/
+  // actualizarPasajeAereo()); esto le permite al frontend avisarlo ANTES
+  // de que el vendedor intente la acción y se encuentre con un 422.
+  reserva_item?: { id: number } | null;
 };
 
 export type AlternativaItemResponse = {

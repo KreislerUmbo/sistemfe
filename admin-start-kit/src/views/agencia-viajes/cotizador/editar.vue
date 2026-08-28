@@ -202,13 +202,15 @@
                     <button v-if="!mostrarTabsDia" class="btn btn-link btn-sm text-decoration-none" @click="agregarDia">
                         <i class="fas fa-calendar-plus me-1"></i>Agregar otro día
                     </button>
-                    <button class="btn btn-outline-secondary btn-sm ms-auto" @click="mostrarFormPasajeAereo = !mostrarFormPasajeAereo">
+                    <button class="btn btn-outline-secondary btn-sm ms-auto" @click="toggleFormPasajeAereo">
                         <i class="fas fa-plane me-1"></i>{{ mostrarFormPasajeAereo ? 'Cerrar' : 'Pasaje aéreo suelto' }}
                     </button>
                 </div>
 
                 <div v-if="mostrarFormPasajeAereo" class="border rounded p-2 mb-2">
-                    <PasajeAereoForm :alternativa-id="alternativaActiva.id" :dia-activo="diaActivoParaAgregar" @agregado="onPasajeAereoAgregado" />
+                    <PasajeAereoForm :alternativa-id="alternativaActiva.id" :dia-activo="diaActivoParaAgregar"
+                        :pasajeros="cotizacion?.pasajeros ?? []" :item-existente="itemPasajeAereoEnEdicion"
+                        @agregado="onPasajeAereoAgregado" @actualizado="onPasajeAereoActualizado" />
                 </div>
 
                 <!-- Tabs de día — condicionales (Punto B): solo aparecen cuando ya
@@ -288,16 +290,25 @@
                                             <i class="fas fa-arrow-up-right-from-square me-1"></i>Promover a proveedor
                                         </a>
                                     </template>
-                                    <a href="#" style="font-size:11px" class="text-secondary" @click.prevent="abrirEdicionManual(item)">
+                                    <a v-if="!item.reserva_item" href="#" style="font-size:11px" class="text-secondary" @click.prevent="abrirEdicionManual(item)">
                                         <i class="fas fa-pencil me-1"></i>Editar
                                     </a>
+                                    <span v-else class="text-muted fst-italic" style="font-size:11px" title="Cancelá la reserva primero si necesitás corregirlo">
+                                        <i class="fas fa-lock me-1"></i>No editable — ya tiene una reserva generada
+                                    </span>
                                 </div>
 
                                 <div v-if="desglosePasajerosTexto(item)" class="text-muted mt-1" style="font-size:11px">
                                     <i class="fas fa-users me-1"></i>{{ desglosePasajerosTexto(item) }}
                                 </div>
-                                <div class="text-muted mt-1" style="font-size:11px" v-if="item.origen_tipo === 'pasaje_aereo' && item.cotizacion_pasaje_aereo">
-                                    {{ item.cotizacion_pasaje_aereo.aerolinea }}
+                                <div class="text-muted mt-1 d-flex align-items-center gap-2" style="font-size:11px" v-if="item.origen_tipo === 'pasaje_aereo' && item.cotizacion_pasaje_aereo">
+                                    <span>{{ item.cotizacion_pasaje_aereo.aerolinea }}</span>
+                                    <a v-if="!item.reserva_item" href="#" class="text-secondary" @click.prevent="abrirEdicionPasajeAereo(item)">
+                                        <i class="fas fa-pencil me-1"></i>Editar
+                                    </a>
+                                    <span v-else class="fst-italic" title="Cancelá la reserva primero si necesitás corregirlo">
+                                        <i class="fas fa-lock me-1"></i>No editable — ya tiene una reserva generada
+                                    </span>
                                 </div>
 
                                 <div class="d-flex align-items-center flex-wrap gap-2 mt-2">
@@ -1824,6 +1835,10 @@ const tituloDrawer = computed(() => {
 // ── Ítem manual / pasaje aéreo ────────────────────────────────────────
 const mostrarFormManual = ref(false);
 const mostrarFormPasajeAereo = ref(false);
+// Auditoría del módulo Reservas/Cotizador (2026-08-27) — edición
+// estructural de un pasaje aéreo suelto, mismo patrón que
+// itemManualEnEdicion (null = modo alta).
+const itemPasajeAereoEnEdicion = ref<AlternativaItem | null>(null);
 // Sesión 11q — item manual en edición (null = modo alta). ItemManualForm.vue
 // se prellena solo cuando esto viene poblado, ver su watch(itemExistente).
 const itemManualEnEdicion = ref<AlternativaItem | null>(null);
@@ -1874,6 +1889,31 @@ const onServicioSueltoActualizado = async (_item: AlternativaItem) => {
 const onPasajeAereoAgregado = async (_item: AlternativaItem) => {
     mostrarFormPasajeAereo.value = false;
     toast.success('Pasaje aéreo agregado');
+    await cargarCotizacion();
+};
+
+// Auditoría del módulo Reservas/Cotizador (2026-08-27) — antes de esto no
+// existía NINGUNA forma de ver/corregir un pasaje aéreo ya cargado, solo
+// borrar y recrear. A diferencia del ítem manual, este form vive fuera del
+// drawer (no hay Teleport que gatear), así que alcanza con abrir el toggle.
+const abrirEdicionPasajeAereo = (item: AlternativaItem) => {
+    itemPasajeAereoEnEdicion.value = item;
+    mostrarFormPasajeAereo.value = true;
+};
+
+// El botón "Cerrar"/"Pasaje aéreo suelto" también debe limpiar el modo
+// edición — sin esto, cerrar mientras se editaba un ítem y volver a abrir
+// para AGREGAR uno nuevo reabriría el form todavía prellenado con el
+// anterior.
+const toggleFormPasajeAereo = () => {
+    mostrarFormPasajeAereo.value = !mostrarFormPasajeAereo.value;
+    if (!mostrarFormPasajeAereo.value) itemPasajeAereoEnEdicion.value = null;
+};
+
+const onPasajeAereoActualizado = async (_item: AlternativaItem) => {
+    mostrarFormPasajeAereo.value = false;
+    itemPasajeAereoEnEdicion.value = null;
+    toast.success('Pasaje aéreo actualizado');
     await cargarCotizacion();
 };
 

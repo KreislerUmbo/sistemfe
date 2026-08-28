@@ -665,6 +665,12 @@ Route::group([
     // (descripción/proveedor/costo/cantidad/pax) y promoción a proveedor real.
     Route::put("alternativa-items/{id}/manual", [AlternativaItemController::class, 'actualizarManual'])
         ->middleware('permission:agencia.cotizaciones');
+    // Auditoría del módulo Reservas/Cotizador (2026-08-27) — edición
+    // estructural completa de un pasaje aéreo suelto, mismo criterio que
+    // actualizarManual() arriba (antes de esto no existía ninguna forma de
+    // corregir un pasaje aéreo ya cargado, solo borrar y recrear).
+    Route::put("alternativa-items/{id}/pasaje-aereo", [AlternativaItemController::class, 'actualizarPasajeAereo'])
+        ->middleware('permission:agencia.cotizaciones');
     Route::post("alternativa-items/{id}/promover-a-proveedor", [AlternativaItemController::class, 'promoverAProveedor'])
         ->middleware('permission:agencia.cotizaciones');
 
