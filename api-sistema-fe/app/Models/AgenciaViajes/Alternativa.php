@@ -38,9 +38,15 @@ class Alternativa extends Model
         return $this->belongsTo(Cotizacion::class, 'cotizacion_id');
     }
 
+    // orderBy('id') explícito: sin esto, Postgres no garantiza el orden de
+    // fila sin ORDER BY, y un UPDATE (ej. editar precio) puede reubicar
+    // físicamente la fila — el ítem "saltaba" de posición en el lienzo del
+    // cotizador justo después de guardar su precio (bug real reportado por
+    // el usuario 2026-08-28). No hay columna de orden propia — 'id' refleja
+    // el orden de alta, que es el criterio que ya espera el lienzo.
     public function items()
     {
-        return $this->hasMany(AlternativaItem::class, 'alternativa_id');
+        return $this->hasMany(AlternativaItem::class, 'alternativa_id')->orderBy('id');
     }
 
     // Sesión 11c — usada al aceptar una alternativa para saber si hay que

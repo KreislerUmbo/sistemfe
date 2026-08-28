@@ -14,14 +14,17 @@ class ProveedorTipoSeeder extends Seeder
     public function run(): void
     {
         // Mapa nombre → slug. Por defecto se deriva con Str::slug(), salvo
-        // "Mayorista", cuyo slug real en producción es ProveedorTipo::SLUG_MAYORISTA
-        // (cambiado a mano, no coincide con Str::slug('Mayorista')) — sin este
-        // override el updateOrCreate de abajo no encuentra la fila real y crea
-        // una duplicada con el slug viejo.
+        // "Mayorista"/"Hotel", cuyo slug real en producción es
+        // ProveedorTipo::SLUG_MAYORISTA/SLUG_ALOJAMIENTO (cambiados a mano,
+        // no coinciden con Str::slug()) — sin este override el
+        // updateOrCreate de abajo no encuentra la fila real y crea una
+        // duplicada con el slug viejo (bug real: así quedó "Hotel" hasta
+        // 2026-08-28, ver comentario en ProveedorTipo::SLUG_ALOJAMIENTO).
         $nombres = ['Hotel', 'Transporte', 'Mayorista', 'Guía', 'Operador de turismo', 'Atractivo / Actividad local'];
+        $overrides = ['Mayorista' => ProveedorTipo::SLUG_MAYORISTA, 'Hotel' => ProveedorTipo::SLUG_ALOJAMIENTO];
 
         foreach ($nombres as $nombre) {
-            $slug = $nombre === 'Mayorista' ? ProveedorTipo::SLUG_MAYORISTA : Str::slug($nombre);
+            $slug = $overrides[$nombre] ?? Str::slug($nombre);
 
             ProveedorTipo::updateOrCreate(
                 ['slug' => $slug],
