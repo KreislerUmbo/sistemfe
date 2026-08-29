@@ -341,7 +341,9 @@
                                 @if ($paso['hora'])
                                     <strong>{{ substr($paso['hora'], 0, 5) }}</strong> —
                                 @endif
-                                {{ $paso['descripcion'] }}
+                                {{-- Rich text (Quill) desde 2026-08-28 — antes era texto plano,
+                                     por eso acá se renderiza crudo en vez de escaparse. --}}
+                                {!! $paso['descripcion'] !!}
                             </div>
                         @endforeach
                     </div>

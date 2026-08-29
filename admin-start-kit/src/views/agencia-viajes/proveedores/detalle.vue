@@ -64,7 +64,7 @@
                     <div class="col-12" v-if="(proveedor.fotos?.length ?? 0) > 0">
                         <strong>Fotos:</strong>
                         <div class="d-flex flex-wrap gap-2 mt-1">
-                            <img v-for="foto in proveedor.fotos" :key="foto" :src="foto" class="img-thumbnail" style="width:110px;height:110px;object-fit:cover;">
+                            <img v-for="(foto, i) in proveedor.fotos" :key="foto" :src="foto" class="img-thumbnail" style="width:110px;height:110px;object-fit:cover;cursor:zoom-in;" @click="verFotoGrande(proveedor.fotos ?? [], i)">
                         </div>
                     </div>
                 </div>
@@ -447,6 +447,42 @@ const cargarServicios = async () => {
     });
 };
 
+const verFotoGrande = (fotos: string[], indexInicial: number) => {
+    let index = indexInicial;
+    const mostrar = (i: number) => {
+        const img = document.getElementById('swal-foto-grande') as HTMLImageElement | null;
+        if (img) img.src = fotos[i];
+        const contador = document.getElementById('swal-foto-contador');
+        if (contador) contador.textContent = `${i + 1} / ${fotos.length}`;
+    };
+    const onKeydown = (e: KeyboardEvent) => {
+        if (e.key === 'ArrowLeft') { index = (index - 1 + fotos.length) % fotos.length; mostrar(index); }
+        if (e.key === 'ArrowRight') { index = (index + 1) % fotos.length; mostrar(index); }
+    };
+
+    (Swal as TVueSwalInstance).fire({
+        html: `
+            <div style="position:relative;display:flex;align-items:center;justify-content:center;">
+                ${fotos.length > 1 ? '<button id="swal-foto-prev" type="button" style="position:absolute;left:0;background:rgba(0,0,0,0.5);color:#fff;border:none;border-radius:50%;width:40px;height:40px;font-size:18px;cursor:pointer;">‹</button>' : ''}
+                <img id="swal-foto-grande" src="${fotos[index]}" style="max-width:100%;max-height:75vh;border-radius:4px;">
+                ${fotos.length > 1 ? '<button id="swal-foto-next" type="button" style="position:absolute;right:0;background:rgba(0,0,0,0.5);color:#fff;border:none;border-radius:50%;width:40px;height:40px;font-size:18px;cursor:pointer;">›</button>' : ''}
+            </div>
+            ${fotos.length > 1 ? `<div id="swal-foto-contador" style="color:#fff;margin-top:0.5rem;font-size:13px;">${index + 1} / ${fotos.length}</div>` : ''}
+        `,
+        showConfirmButton: false,
+        showCloseButton: true,
+        width: 'auto',
+        padding: '0.5rem',
+        background: 'transparent',
+        didOpen: () => {
+            document.getElementById('swal-foto-prev')?.addEventListener('click', () => { index = (index - 1 + fotos.length) % fotos.length; mostrar(index); });
+            document.getElementById('swal-foto-next')?.addEventListener('click', () => { index = (index + 1) % fotos.length; mostrar(index); });
+            document.addEventListener('keydown', onKeydown);
+        },
+        willClose: () => document.removeEventListener('keydown', onKeydown),
+    });
+};
+
 const asociarServicio = async () => {
     try {
         await proveedorService.asociarServicio(proveedorId.value, nuevoServicioId.value!);
@@ -532,7 +568,16 @@ const abrirFormTarifa = (ps: ProveedorServicio, tarifa: ProveedorTarifa | null =
             edad_max_nino: configAgencia.value?.edad_max_nino ?? null,
             edad_max_infante: configAgencia.value?.edad_max_infante ?? null,
             descuento_maximo_pct: null,
-            destino_tributario: 'nacional', tip_afe_igv: '10',
+            // Prellenado desde el tratamiento tributario por defecto de la
+            // agencia (configuracion_agencia) — antes hardcodeaba
+            // 'nacional'/'10' (Gravado) sin importar la config, así que en
+            // tenants de zona Amazonía (todo exonerado) quedaba mal si el
+            // usuario se olvidaba de tocar la pestaña "Tributario SUNAT" al
+            // dar de alta un servicio nuevo. Sigue siendo editable acá
+            // mismo para el caso puntual de un servicio con tratamiento
+            // distinto al default.
+            destino_tributario: configAgencia.value?.destino_tributario_default ?? 'nacional',
+            tip_afe_igv: configAgencia.value?.tip_afe_igv_default ?? '10',
             vigente_desde: new Date().toISOString().slice(0, 10), vigente_hasta: null,
         };
     modalTarifaAbierto.value = true;

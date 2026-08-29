@@ -283,7 +283,7 @@
               </router-link>
               <div class="dropdown-divider mb-0"></div>
               <!-- to="/auth/login" -->
-              <a class="dropdown-item text-danger" @click="removeSession()">
+              <a class="dropdown-item text-danger" @click="useAuth.removeSession()">
                 <i class="las la-power-off fs-18 me-1 align-text-bottom"></i>
                 Logout
               </a>
@@ -339,14 +339,10 @@ const resize = () => {
 
 const useAuth = useAuthStore();
 
-const removeSession = () => {
-  // user.value = null;
-  localStorage.removeItem("token");
-  localStorage.removeItem("user");
-  setTimeout(() => {
-    window.location.reload();
-  }, 25);
-}
+// La versión local de removeSession() que estaba acá (solo borraba
+// localStorage + reload()) quedó reemplazada por useAuth.removeSession()
+// del store — esa además invalida el token en el servidor (blacklist JWT)
+// y redirige a login en vez de recargar la página actual.
 
 import usFlag from "@/assets/images/flags/us_flag.jpg";
 import spainFlag from "@/assets/images/flags/spain_flag.jpg";

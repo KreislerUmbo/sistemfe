@@ -3,6 +3,7 @@ import router from "@/router";
 // import { useSessionStorage } from "@vueuse/core";
 import type { User } from "@/types/auth";
 import { ref } from "vue";
+import httpClient from "@/helpers/http-client";
 
 export const useAuthStore = defineStore("auth_store", () => {
   const user = ref(localStorage.getItem("user") ? JSON.parse(localStorage.getItem("user") || '') : null);//useSessionStorage<string | null>("RIZZ_VUE_USER", null);
@@ -14,6 +15,17 @@ export const useAuthStore = defineStore("auth_store", () => {
   };
 
   const removeSession = () => {
+    // Invalida el token en el servidor (blacklist JWT) antes de borrarlo
+    // del navegador — best-effort, no bloquea el logout local si falla o
+    // tarda. Header explícito (no confiar en el interceptor de
+    // http-client.ts, que lee localStorage en el momento en que la
+    // petición efectivamente sale — para entonces ya podría estar borrado
+    // por las líneas de abajo).
+    const token = localStorage.getItem("token");
+    if (token) {
+      httpClient.post("auth/logout", {}, { headers: { Authorization: `Bearer ${token}` } }).catch(() => {});
+    }
+
     user.value = null;
     localStorage.removeItem("token");
     localStorage.removeItem("user");

@@ -207,7 +207,7 @@
                 <div v-if="fotosExistentes.length > 0" class="mb-3">
                     <small class="text-muted d-block mb-2">Fotos guardadas</small>
                     <div class="d-flex flex-wrap gap-2">
-                        <img v-for="path in fotosExistentes" :key="path" :src="path" class="img-thumbnail" style="width:100px;height:100px;object-fit:cover;">
+                        <img v-for="(path, i) in fotosExistentes" :key="path" :src="path" class="img-thumbnail" style="width:100px;height:100px;object-fit:cover;cursor:zoom-in;" @click="verFotoGrande(fotosExistentes, i)">
                     </div>
                 </div>
 
@@ -215,7 +215,7 @@
                     <small class="text-muted d-block mb-2">Fotos nuevas (se suben al guardar)</small>
                     <div class="d-flex flex-wrap gap-2">
                         <div v-for="(item, index) in archivosNuevos" :key="item.previewUrl" class="position-relative">
-                            <img :src="item.previewUrl" class="img-thumbnail" style="width:100px;height:100px;object-fit:cover;">
+                            <img :src="item.previewUrl" class="img-thumbnail" style="width:100px;height:100px;object-fit:cover;cursor:zoom-in;" @click="verFotoGrande(archivosNuevos.map((a) => a.previewUrl), index)">
                             <button class="btn btn-danger btn-sm position-absolute top-0 end-0 m-1" title="Quitar" @click="quitarPendiente(index)">
                                 <i class="fas fa-times"></i>
                             </button>
@@ -419,6 +419,42 @@ const quitarPendiente = (index: number) => {
     archivosNuevos.value.splice(index, 1);
 };
 
+const verFotoGrande = (fotos: string[], indexInicial: number) => {
+    let index = indexInicial;
+    const mostrar = (i: number) => {
+        const img = document.getElementById('swal-foto-grande') as HTMLImageElement | null;
+        if (img) img.src = fotos[i];
+        const contador = document.getElementById('swal-foto-contador');
+        if (contador) contador.textContent = `${i + 1} / ${fotos.length}`;
+    };
+    const onKeydown = (e: KeyboardEvent) => {
+        if (e.key === 'ArrowLeft') { index = (index - 1 + fotos.length) % fotos.length; mostrar(index); }
+        if (e.key === 'ArrowRight') { index = (index + 1) % fotos.length; mostrar(index); }
+    };
+
+    (Swal as TVueSwalInstance).fire({
+        html: `
+            <div style="position:relative;display:flex;align-items:center;justify-content:center;">
+                ${fotos.length > 1 ? '<button id="swal-foto-prev" type="button" style="position:absolute;left:0;background:rgba(0,0,0,0.5);color:#fff;border:none;border-radius:50%;width:40px;height:40px;font-size:18px;cursor:pointer;">‹</button>' : ''}
+                <img id="swal-foto-grande" src="${fotos[index]}" style="max-width:100%;max-height:75vh;border-radius:4px;">
+                ${fotos.length > 1 ? '<button id="swal-foto-next" type="button" style="position:absolute;right:0;background:rgba(0,0,0,0.5);color:#fff;border:none;border-radius:50%;width:40px;height:40px;font-size:18px;cursor:pointer;">›</button>' : ''}
+            </div>
+            ${fotos.length > 1 ? `<div id="swal-foto-contador" style="color:#fff;margin-top:0.5rem;font-size:13px;">${index + 1} / ${fotos.length}</div>` : ''}
+        `,
+        showConfirmButton: false,
+        showCloseButton: true,
+        width: 'auto',
+        padding: '0.5rem',
+        background: 'transparent',
+        didOpen: () => {
+            document.getElementById('swal-foto-prev')?.addEventListener('click', () => { index = (index - 1 + fotos.length) % fotos.length; mostrar(index); });
+            document.getElementById('swal-foto-next')?.addEventListener('click', () => { index = (index + 1) % fotos.length; mostrar(index); });
+            document.addEventListener('keydown', onKeydown);
+        },
+        willClose: () => document.removeEventListener('keydown', onKeydown),
+    });
+};
+
 // ── Búsqueda online DNI/RUC (RENIEC/SUNAT vía apisperu) — opcional, nunca bloquea el guardado ──
 const buscandoDocumento = ref(false);
 const buscarDocumento = async () => {
@@ -469,7 +505,14 @@ const guardar = async () => {
             const fd = new FormData();
             Object.entries(form.value).forEach(([key, value]) => {
                 if (key === 'amenidad_ids' || value === null || value === undefined) return;
-                fd.append(key, String(value));
+                // String(true)/String(false) da "true"/"false" — la regla
+                // 'boolean' de Laravel compara estricto contra
+                // [true, false, 0, 1, '0', '1'] y esas strings no matchean
+                // ("The estado field must be true or false"), bug real
+                // reportado por el usuario 2026-08-28 al subir una foto
+                // nueva (único momento en que este payload viaja como
+                // FormData en vez de JSON).
+                fd.append(key, typeof value === 'boolean' ? (value ? '1' : '0') : String(value));
             });
             form.value.amenidad_ids.forEach((id) => fd.append('amenidad_ids[]', String(id)));
             Object.entries(datosAlojamiento).forEach(([key, value]) => {

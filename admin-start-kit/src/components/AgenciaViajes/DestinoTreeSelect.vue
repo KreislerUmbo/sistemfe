@@ -55,12 +55,20 @@ const props = withDefaults(defineProps<{
 // así que el "Paso 0" del cotizador necesita el NOMBRE elegido, no solo el
 // id. Opcional para el resto de callers (guias/detalle.vue,
 // proveedores/detalle.vue) que solo usan el id — no rompe nada existente.
+// update:atractivo — agregado para el prellenado de la descripción del
+// itinerario de paquetes (paquetes/detalle.vue) con la descripción propia
+// del destino/atractivo elegido, sin otro fetch: el árbol ya trae
+// descripcion/fotos completos desde DestinoAtractivoController::index().
 const emit = defineEmits<{
     (e: 'update:modelValue', value: number | null): void;
     (e: 'update:label', value: string): void;
+    (e: 'update:atractivo', value: { descripcion: string | null; fotos: string[] | null } | null): void;
 }>();
 
-type OpcionPlana = { id: number; nombre: string; tipo: Nivel; profundidad: number; etiquetaCompleta: string };
+type OpcionPlana = {
+    id: number; nombre: string; tipo: Nivel; profundidad: number; etiquetaCompleta: string;
+    descripcion: string | null; fotos: string[] | null;
+};
 
 const arbol = ref<DestinoAtractivo[]>([]);
 const opcionesPlanas = ref<OpcionPlana[]>([]);
@@ -71,7 +79,10 @@ const aplanar = (nodos: DestinoAtractivo[], profundidad = 0, prefijo = ''): Opci
     let resultado: OpcionPlana[] = [];
     for (const nodo of nodos) {
         const etiquetaCompleta = prefijo ? `${prefijo} > ${nodo.nombre}` : nodo.nombre;
-        resultado.push({ id: nodo.id, nombre: nodo.nombre, tipo: nodo.tipo, profundidad, etiquetaCompleta });
+        resultado.push({
+            id: nodo.id, nombre: nodo.nombre, tipo: nodo.tipo, profundidad, etiquetaCompleta,
+            descripcion: nodo.descripcion ?? null, fotos: nodo.fotos ?? null,
+        });
         if (nodo.hijos && nodo.hijos.length > 0) {
             resultado = resultado.concat(aplanar(nodo.hijos, profundidad + 1, etiquetaCompleta));
         }
@@ -102,6 +113,7 @@ const opcionesFiltradas = computed(() => {
 const seleccionar = (opcion: OpcionPlana) => {
     emit('update:modelValue', opcion.id);
     emit('update:label', opcion.nombre);
+    emit('update:atractivo', { descripcion: opcion.descripcion, fotos: opcion.fotos });
     searchText.value = opcion.etiquetaCompleta;
     showSuggestions.value = false;
 };

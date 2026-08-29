@@ -45,7 +45,7 @@
             </li>
             <li class="nav-item">
                 <a class="nav-link" :class="{ active: tabActiva === 'incluye' }" href="#" @click.prevent="tabActiva = 'incluye'">
-                    <i class="fas fa-list-check me-1"></i>Incluye
+                    <i class="fas fa-list-check me-1"></i>Agregar Costos
                 </a>
             </li>
         </ul>
@@ -287,13 +287,13 @@
                         </div>
                         <div class="col-6 col-md-3">
                             <label class="form-label mb-1 small fw-semibold text-secondary">Destino/Atractivo</label>
-                            <DestinoTreeSelect v-model="formPaso.destino_atractivo_id" placeholder="Opcional..." />
+                            <DestinoTreeSelect v-model="formPaso.destino_atractivo_id" placeholder="Opcional..." @update:atractivo="onAtractivoElegidoNuevoPaso" />
                         </div>
                     </div>
                     <div class="row g-2 align-items-end mt-1">
                         <div class="col-12">
                             <label class="form-label mb-1 small fw-semibold text-secondary">Descripción *</label>
-                            <textarea rows="2" class="form-control form-control-sm" v-model="formPaso.descripcion" placeholder="Ej. Visita orquideario"></textarea>
+                            <RichTextEditor v-model="formPaso.descripcion" placeholder="Ej. Visita orquideario" />
                         </div>
                     </div>
                     <button class="btn btn-primary btn-sm mt-2" @click="agregarPaso" :disabled="agregandoPaso">
@@ -312,7 +312,7 @@
                                 <i class="fas fa-grip-vertical grip text-muted me-2" style="cursor:grab"></i>
                                 <span v-if="paso.hora" class="badge bg-light text-dark border me-2">{{ paso.hora }}</span>
                                 <span v-else-if="paso.orden != null" class="badge bg-light text-dark border me-2">#{{ paso.orden }}</span>
-                                {{ paso.descripcion }}
+                                <span v-html="paso.descripcion"></span>
                                 <span v-if="paso.destino_atractivo" class="text-muted"> — {{ paso.destino_atractivo.nombre }}</span>
                             </span>
                             <span class="d-flex align-items-center gap-3">
@@ -337,13 +337,13 @@
                                 </div>
                                 <div class="col-6 col-md-3">
                                     <label class="form-label mb-1 small fw-semibold text-secondary">Destino/Atractivo</label>
-                                    <DestinoTreeSelect v-model="pasoEnEdicion.destino_atractivo_id" placeholder="Opcional..." />
+                                    <DestinoTreeSelect v-model="pasoEnEdicion.destino_atractivo_id" placeholder="Opcional..." @update:atractivo="onAtractivoElegidoEdicionPaso" />
                                 </div>
                             </div>
                             <div class="row g-2 align-items-end mt-1">
                                 <div class="col-12">
                                     <label class="form-label mb-1 small fw-semibold text-secondary">Descripción *</label>
-                                    <textarea rows="2" class="form-control form-control-sm" v-model="pasoEnEdicion.descripcion"></textarea>
+                                    <RichTextEditor v-model="pasoEnEdicion.descripcion" />
                                 </div>
                             </div>
                             <div class="mt-2 d-flex gap-2">
@@ -377,7 +377,7 @@
                     <li v-for="(paso, idx) in pasos" :key="idx" class="list-group-item small">
                         <span v-if="paso.hora" class="badge bg-light text-dark border me-2">{{ paso.hora }}</span>
                         <span v-else-if="paso.orden != null" class="badge bg-light text-dark border me-2">#{{ paso.orden }}</span>
-                        {{ paso.descripcion }}
+                        <span v-html="paso.descripcion"></span>
                     </li>
                 </ul>
             </div>
@@ -1107,6 +1107,27 @@ const formPaso = ref<{ dia_relativo: number; hora: string | null; orden: number 
     dia_relativo: 1, hora: null, orden: null, destino_atractivo_id: null, descripcion: '',
 });
 
+// El editor rich text (Quill) nunca deja el v-model en '' cuando está
+// "vacío" a la vista — emite '<p><br></p>'. Un .trim() directo sobre eso
+// nunca detecta vacío, así que el guard "descripción obligatoria" quedaría
+// roto en silencio. Se despoja el HTML antes de chequear longitud.
+const descripcionPasoVacia = (html: string) => html.replace(/<[^>]*>/g, '').trim().length === 0;
+
+// Prellena la descripción del paso con la del destino/atractivo elegido —
+// SOLO si el paso todavía no tiene descripción propia (nunca pisa lo que
+// el usuario ya escribió). Mismo criterio ya usado para el tratamiento
+// tributario por defecto en tarifas de proveedor.
+const onAtractivoElegidoNuevoPaso = (atractivo: { descripcion: string | null; fotos: string[] | null } | null) => {
+    if (atractivo?.descripcion && descripcionPasoVacia(formPaso.value.descripcion)) {
+        formPaso.value.descripcion = atractivo.descripcion;
+    }
+};
+const onAtractivoElegidoEdicionPaso = (atractivo: { descripcion: string | null; fotos: string[] | null } | null) => {
+    if (atractivo?.descripcion && pasoEnEdicion.value && descripcionPasoVacia(pasoEnEdicion.value.descripcion)) {
+        pasoEnEdicion.value.descripcion = atractivo.descripcion;
+    }
+};
+
 const itinerarioPorDia = computed(() => {
     const grupos: Record<number, TourItinerarioItem[]> = {};
     for (const paso of itinerario.value) {
@@ -1126,7 +1147,7 @@ const cargarItinerario = async () => {
 const agregandoPaso = ref(false);
 
 const agregarPaso = async () => {
-    if (!formPaso.value.descripcion.trim()) {
+    if (descripcionPasoVacia(formPaso.value.descripcion)) {
         (Swal as TVueSwalInstance).fire('Error', 'La descripción del paso es obligatoria.', 'error');
         return;
     }
@@ -1189,7 +1210,7 @@ const guardandoEdicionPaso = ref(false);
 
 const guardarEdicionPaso = async () => {
     if (!pasoEnEdicion.value) return;
-    if (!pasoEnEdicion.value.descripcion.trim()) {
+    if (descripcionPasoVacia(pasoEnEdicion.value.descripcion)) {
         (Swal as TVueSwalInstance).fire('Error', 'La descripción del paso es obligatoria.', 'error');
         return;
     }

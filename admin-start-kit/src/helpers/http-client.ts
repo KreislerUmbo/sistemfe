@@ -25,12 +25,22 @@ function parseJwt(token: string) {
 }
 
 function isTokenExpired(token: string) {
-  const decodedToken = parseJwt(token);
-  if (!decodedToken || !decodedToken.exp) {
+  const expMs = getTokenExpMs(token);
+  if (expMs === null) {
     return true; // Token inválido o sin fecha de expiración
   }
-  const currentTime = Math.floor(Date.now() / 1000); // Tiempo actual en segundos
-  return decodedToken.exp < currentTime; // Retorna true si el token ha expirado
+  return expMs < Date.now();
+}
+
+// Exportado para sessionExpiryWatcher.ts (aviso "tu sesión está por
+// expirar" con opción de renovar) — mismo decode que ya usaba
+// isTokenExpired acá adentro, evita reimplementar el parseo de JWT.
+export function getTokenExpMs(token: string): number | null {
+  const decodedToken = parseJwt(token);
+  if (!decodedToken || !decodedToken.exp) {
+    return null;
+  }
+  return decodedToken.exp * 1000;
 }
 
 function forceReLogin() {

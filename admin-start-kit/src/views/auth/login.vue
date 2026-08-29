@@ -152,6 +152,7 @@ import { useVuelidate } from "@vuelidate/core";
 
 import HttpClient from "@/helpers/http-client";
 import { useAuthStore } from "@/stores/auth";
+import { iniciarVigilanciaSesion } from "@/helpers/sessionExpiryWatcher";
 
 import type { AxiosResponse } from "axios";
 import type { ResponseAuthLogin } from "@/types/auth";
@@ -247,6 +248,7 @@ const handleLogin = async () => {
         ...res.data.user,
         token: res.data.access_token,
       });
+      iniciarVigilanciaSesion();
 
       if (rememberMe.value) {
         localStorage.setItem(REMEMBER_KEY, credentials.email);

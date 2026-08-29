@@ -97,6 +97,16 @@ Route::group([
     Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:6,1')->name('register');
     Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:6,1')->name('login');
     Route::post('/me', [AuthController::class, 'me'])->middleware('auth:api')->name('me');
+    // Renovación silenciosa de sesión (aviso "por expirar" en el frontend,
+    // http-client.ts) — el método ya existía en AuthController pero nunca
+    // había quedado enrutado. auth:api exige token todavía válido: se llama
+    // ANTES de que expire (temporizador en el frontend), no después.
+    Route::post('/refresh', [AuthController::class, 'refresh'])->middleware('auth:api')->name('refresh');
+    // Mismo caso que /refresh: el método ya existía (auth('api')->logout(),
+    // invalida/blacklistea el token) pero nunca había quedado enrutado —
+    // "cerrar sesión" en el frontend solo borraba el token del navegador,
+    // el JWT seguía siendo válido en el servidor hasta que vencía solo.
+    Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth:api')->name('logout');
 });
 
 // Rutas 100% CENTRALES — sin tenant/tenant.token. Deben responder sin necesidad de
