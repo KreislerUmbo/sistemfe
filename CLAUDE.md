@@ -209,6 +209,138 @@ los 5 tenants de producción.
 Detalle completo: `docs/planning/retail-facturacion-core/historial-archivo.md` y
 `project_cotizaciones_comerciales_modulo` en memoria de proyecto.
 
+**Completo — Agencia de Viajes, módulo 12: códigos y numeración configurable por
+tenant (2026-08-26):**
+Reemplaza el mecanismo ad-hoc anterior (prefijo tipeado a mano por el usuario en cada
+cotización, código de venta directa hardcodeado `'VD'`, paquete/tour con texto libre
+sin generar, reserva sin código propio) por generación atómica configurable: sigla
+única de agencia + letra por tipo de documento (T/P/C/R/V), contador con lock real
+(mismo patrón que `SerieComprobanteService`) — `CodigoGeneradorService`
+(`generar()`/`generarParaReserva()`/`previsualizar()`, esta última sin persistir, para
+la vista previa en vivo). Reserva deriva su código de la cotización padre sin
+necesitar columnas nuevas. Frontend: pantalla `configuracion/codigos.vue`, sigla
+nueva en Configuración de Agencia, prefijo manual quitado de `cotizador/nueva.vue`,
+código de paquete/tour pasa a generarse. Diseño revisado y aprobado el mismo día (3
+gaps cerrados con el usuario), implementado completo en la misma sesión. 20 tests
+nuevos (incluye lock real con 2 conexiones Postgres), 170/170 en el vertical, 288/288
+en toda la suite backend.
+Detalle completo: `docs/planning/agencia-de-viajes/plan-modulo-codigos-numeracion.md`
+(fila 12 de `plan-hoja-de-ruta-ejecucion.md`).
+**Pendiente real:** correr `tenants:migrate-verticales` contra cualquier tenant
+nuevo con `giro='agencia_viajes'` que se provisione (hoy solo `agencia-demo` tiene
+el vertical). Bug real encontrado y corregido el mismo día (commit `05e9d55`):
+`sigla_comercial` se guardaba en Configuración de Agencia pero nada la leía — el
+prefijo sugerido en "Códigos y numeración" quedó desconectado de ella al escribir
+la pantalla; corregido con un hint "Sugerido: TDKM" + botón "usar" por fila.
+
+**Completo — Agencia de Viajes, fila 11d: pantalla del Reporte Operativo
+(2026-08-26):**
+Tabla filtrable por fecha (con accesos rápidos Hoy/Esta semana) y por
+destino/tour/hotel/servicio (catálogo de opciones acotado al rango de fecha
+vigente, no un catálogo global), agrupada visualmente por día, con 2 acciones
+inline: marcar check-in de un pasajero y reasignar guía/proveedor sin salir de la
+pantalla. Alcance recortado a propósito (confirmado con el usuario): la campana de
+recordatorios queda fuera — depende de la fila 11f (motor automático), que no tiene
+backend construido todavía. Ampliado en 2 rondas de mejoras pedidas por el usuario
+más allá del spec original (`plan-modulo-cotizaciones-reservas.md` §8, que solo
+pedía PDF):
+- Exportación a Excel (con cabecera propia — título/rango/generado por, no solo la
+  tabla) además del PDF; marca "generado por + fecha/hora" repetida en cada página
+  del PDF (técnica `position:fixed` de DomPDF); nombre de archivo de descarga
+  estandarizado (`reporte_operativo_del_DD-MM-YYYY_al_DD-MM-YYYY`). Bug real
+  corregido en el camino: el logo nunca cargaba en el PDF —
+  `StorageUrl::resolve()` no funciona dentro de un PDF (DomPDF trae
+  `enable_remote=false`), corregido a `StorageUrl::resolveParaPdf()`, el mismo
+  patrón que ya usan `SaleController`/`NotaController`/`PaymentReceiptController`.
+  `AlternativaController` (PDF de cotización) tenía el mismo bug latente —
+  **corregido 29-ago-2026**, ver sección propia más abajo.
+- Reasignación de proveedor inline (el caso real más común con datos de
+  `agencia-demo` — a diferencia del select de guía, que casi no se usa en la
+  práctica) con el mismo buscador ya establecido en `reservas/detalle.vue`.
+- **Fix real de duplicidad de guía con Salida Operativa**, hallazgo del usuario: un
+  ítem `origen_tipo='guia'` enganchado a una Salida Operativa (tablero de despacho)
+  tiene su guía real ahí — compartido entre varias reservas, junto con la placa del
+  vehículo y la capacidad. El reporte no lo consideraba: podía mostrar "sin
+  asignar" con un guía real ya puesto en la salida, o dejar "corregirlo" desde el
+  reporte creando un segundo guía desincronizado del de la salida.
+  `reservas/detalle.vue` ya resolvía esto (solo lectura + link a la salida cuando
+  el ítem está enganchado) — el reporte quedó igualado a ese mismo criterio.
+Verificado en vivo con Playwright contra `agencia-demo` en cada ronda (filtros,
+logo, marca de generación, nombres de archivo, reasignación de proveedor, el bug de
+Salida Operativa reproducido y corregido) sin dejar mutaciones sin revertir. 151
+tests backend en verde en el vertical (incluye 3 tests nuevos que reproducen el bug
+de Salida Operativa antes del fix).
+Detalle completo: `plan-hoja-de-ruta-ejecucion.md` fila 11d (párrafo "11d cerrada").
+**Pendiente real:** filtro de texto libre (buscar por pasajero/código de reserva),
+persistencia de filtros al navegar a una reserva y volver, check-in masivo por
+servicio, acceso rápido "Mañana", y un tooltip explicando el propósito del check-in
+— identificados en una ronda de análisis UX pedida por el usuario, priorización
+pendiente de confirmar.
+
+**Completo — Agencia de Viajes, sesión de ajustes cortos y mejoras
+(29-ago-2026, commits `6613b78`..`07169a3`):**
+Serie de mejoras chicas pedidas en vivo por el usuario, sin brief propio —
+detalle completo en cada commit (`git log`), resumen acá:
+- **Lienzo del cotizador — bug de orden real:** `Alternativa::items()` sin
+  `orderBy` dejaba el orden de fila a criterio de Postgres, que lo puede
+  reubicar físicamente tras un `UPDATE` (editar precio) — el ítem
+  "saltaba" de posición. Fix de una línea (`orderBy('id')`).
+- **Slug de proveedor_tipos desalineado en prod:** "Hotel" quedaba con
+  `slug='hotel'` (lo que genera el seeder) en vez de `'alojamiento-hoteles'`
+  (el real, editado a mano en dev) — ocultaba en producción todo el bloque
+  de UI hotelero (check-in/checkout, tipo de habitación) pese a que el
+  código sí estaba desplegado correctamente. Mismo patrón de bug ya
+  conocido para `SLUG_MAYORISTA`, nunca replicado a Hotel. Ver
+  `project_proveedor_tipos_slug_desalineado_prod` en memoria.
+- **`ReservaItemPasajeroController::store()`** no tenía los guards de
+  reserva activa / ítem ya facturado que `index()`/`destroy()` de la
+  misma clase ya aplicaban — se podía asignar un pasajero nuevo a un
+  ítem con comprobante SUNAT ya emitido.
+- **Modal de tarifa de proveedor** ya no se cierra al hacer clic (o
+  arrastrar una selección de texto) fuera del cuadro — antes perdía todo
+  lo tipeado. Cards de "Agregar a este tour/combo": el tipo de servicio
+  pasa a tener el realce visual (antes lo tenía "pública/privada", dato
+  secundario); tipo de habitación (alojamiento) suma su propio badge.
+  Ítems incluidos (tour simple y combo) homogenizados en formato de fila
+  uniforme en las 4 listas, con título/subtítulo/categoría/costo/venta —
+  para alojamiento el título es "Proveedor · tipo de habitación" en vez
+  del nombre de servicio genérico "Alojamiento" (se repetiría igual en
+  todos los hoteles).
+- **Sesión (JWT):** aviso "por expirar" 2 min antes del vencimiento con
+  opción de renovar en silencio (`auth/refresh`, el método ya existía en
+  `AuthController` pero nunca había quedado enrutado); `auth/logout`
+  también quedó enrutado — cerrar sesión ahora invalida el token en el
+  servidor, antes solo lo borraba del navegador.
+- **Paridad tarifas de guía con proveedor:** `GuiaTarifaController` no
+  tenía `update()`/`destroy()` a propósito desde la Sesión 5 — se agrega
+  `activo` + `desactivar()`/`activar()` reversible, `destroy()` bloqueado
+  si está en uso (`alternativa_items`/`paquete_plantilla_items`, `update()`
+  con versionado igual que `proveedor_tarifas`. Frontend:
+  `guias/detalle.vue` gana columna de acciones.
+- **Configuración de Agencia** pasa a acordeón (antes 9 secciones + cuentas
+  bancarias siempre expandidas, pantalla muy larga).
+- **Destinos:** buscador con filtro de texto + tipo + "sin servicios
+  asociados" (`withCount` en los 3 niveles del árbol).
+- **Catálogo de servicios** (diagnóstico UX/técnico propio, puntos 1-4 de
+  5 — el 5°, pantalla propia de catálogo para fusionar duplicados viejos,
+  queda diferido, ver `project_destinos_catalogo_servicios_pendiente` en
+  memoria): `ServicioController` rechaza nombres duplicados
+  (case-insensitive + trim — causa real de que la mayoría cayera en "Sin
+  categoría"); buscador unificado en el modal de destinos (antes
+  buscar/crear eran 2 cajas separadas); aviso reforzado de que "editar" un
+  servicio renombra el catálogo global, no solo la asociación con ese
+  destino; paginación real ("Cargar más") en el buscador.
+- **Fix logo roto en el PDF de cotización** (`AlternativaController`) —
+  quedaba pendiente a propósito desde el cierre de 11d (ver arriba), mismo
+  patrón `resolveParaPdf()` ya usado en otros 5 controllers.
+- **Capitalización de nombres/títulos, solo hacia adelante:** destinos,
+  servicios, `Proveedor.nombre_comercial` (nunca `razon_social`, dato
+  fiscal), guías, tours/paquetes, alternativas, aerolínea de pasaje aéreo
+  suelto — nunca reescribe lo ya guardado, clientes queda completamente
+  fuera. `TextoFormatoService::capitalizarNombrePropio()`, conectado en
+  los 7 puntos de escritura reales.
+18 tests nuevos, 359/359 en toda la suite backend al cierre.
+
 **Próximos módulos (en orden de prioridad):**
 
 1. **Representación impresa (PDF) con impresión automática**

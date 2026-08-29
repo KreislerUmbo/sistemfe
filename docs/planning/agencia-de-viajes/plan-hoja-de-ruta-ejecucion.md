@@ -7,15 +7,20 @@
 > con checklist de avance.
 > Vive en el repositorio de código (`docs/planning/`), no solo en Drive —
 > es el documento que Claude Code lee al empezar cada sesión.
-> Última actualización: 20-ago-2026 — filas **11u y 11v ya están
-> commiteadas Y pusheadas a `origin/main`** (merges secuenciales de 5
-> ramas, ver §2; commit final `2f3ce7f`). Los briefs
-> `PEGAR-EN-CLAUDE-CODE-*.md` de 11r/11s/11u-guardia/11v ya se archivaron
-> (borrados, contenido capturado acá en §3 y en `CLAUDE.md`) — si buscás
-> alguno de esos archivos y no aparece, es esperado. Ver también
-> `historial-archivo.md` para el historial detallado de sesiones cerradas
-> y `sincronizacion.md` para el protocolo de por qué este archivo puede
-> desactualizarse frente al repo y cómo resincronizarlo.
+> Última actualización: 29-ago-2026 — filas **11e, 11d y 12 (módulo de
+> códigos/numeración) ya están cerradas, commiteadas Y mergeadas a
+> `main`** (11d: commit `c956697`, merge `d763e7b`; 12: rama
+> `feature/modulo-12-codigos-numeracion`, ver `plan-modulo-codigos-
+> numeracion.md`). Quedan abiertas 11f/11g/11t — ver §"Próximo paso real"
+> más abajo. El 29-ago-2026 hubo además una sesión larga de ajustes cortos
+> sin fila propia (paridad de tarifas de guía, filtros de destinos,
+> catálogo de servicios, sesión JWT, capitalización de nombres — ver
+> entrada del changelog más abajo y `CLAUDE.md` para el detalle completo)
+> — no mueve el checklist de sesiones, es mantenimiento/mejoras pedidas en
+> vivo. Ver también `historial-archivo.md` para el historial detallado de
+> sesiones cerradas y `sincronizacion.md` para el protocolo de por qué
+> este archivo puede desactualizarse frente al repo y cómo
+> resincronizarlo.
 
 ---
 
@@ -82,7 +87,7 @@
 | 11e | Reporte operativo — backend real | Endpoint que resuelve la vista de `reserva_items` con filtros (fecha, pendiente de asignar — incluyendo `es_referencial`), reemplaza lógica hoy embebida en `reservas/detalle.vue` | `plan-modulo-cotizaciones-reservas.md` §8 | [x] 25-ago-2026 — rama `feature/sesion-11e-reporte-operativo-backend` |
 | 11f | Motor de generación de recordatorios | Job/Command que recorre `tipos_recordatorio` y genera filas en `recordatorios` según cada disparador | `plan-modulo-cotizaciones-reservas.md` §8bis | [ ] |
 | 11g | Controllers/rutas de pago a proveedor | API REST para `pago_proveedor`/`cronograma_pago_proveedor` | `plan-modulo-cotizaciones-reservas.md` §4.6 | [ ] |
-| 11d | Frontend — Reporte operativo + recordatorios (pantallas) | Vista del reporte por fecha con acciones inline, PDF, campana de recordatorios | `plan-modulo-cotizaciones-reservas.md` §8, §8bis, §7 | [ ] |
+| 11d | Frontend — Reporte operativo (pantalla) | Vista del reporte por fecha con acciones inline (check-in, reasignar guía/proveedor), export PDF/Excel | `plan-modulo-cotizaciones-reservas.md` §8, §7 | [x] 26-ago-2026 — rama `feature/sesion-11d-reporte-operativo-pantalla`, commit `c956697`, mergeada a `main` en `d763e7b` |
 | 11t | Bug — `VentaDirectaController::store()` pierde `costo_snapshot` en ítems manuales | Hallazgo colateral de la sesión 11r (no relacionado a fechas): al reenviar el payload a `crearItemManual()` para `origen_tipo='manual'`, `costo_snapshot` no llega — bug de reenvío entre validadores. Documentado en el test correspondiente de 11r, no corregido (fuera de alcance de ese brief) | Sin brief propio todavía — diagnosticar el reenvío exacto entre `VentaDirectaController::store()` y `AlternativaItemController::crearItemManual()` (o el método real, confirmar nombre) antes de escribir uno | [ ] |
 | 12 | Módulo 12 — Códigos y numeración (tour/paquete/cotización/reserva/venta directa) | `configuracion_codigos`/`codigo_secuencias`/`sigla_comercial`/`reserva.codigo`/`cotizaciones.reservas_generadas`, `CodigoGeneradorService` (mismo patrón de lock que `SerieComprobanteService`), `ConfiguracionCodigosController`, pantalla `configuracion/codigos.vue` con vista previa en vivo, quita el prefijo manual de `cotizador/nueva.vue` | `plan-modulo-codigos-numeracion.md` completo (diseño aprobado 26-ago-2026 §11/§12) | [x] 26-ago-2026 — rama `feature/modulo-12-codigos-numeracion` |
 
@@ -113,11 +118,42 @@ AgenciaViajes. Alcance deliberadamente angosto: solo el GET — check-in
 por pasajero y reasignación de guía quedan para 11d (frontend), que ya
 depende de esta sesión.
 
-Quedan sin marcar: 11f, 11g, 11d (recordatorios, pago a proveedor,
-pantallas del reporte operativo) y 11t (bug colateral de
-`VentaDirectaController`, sin brief propio todavía). Sin bloqueantes
-conocidos entre 11f/11g/11d/11t — el orden entre ellas queda a criterio
-del usuario (11d puede arrancar ya que 11e está cerrada).
+**11d cerrada (26-ago-2026):** pantalla del reporte operativo
+(`reporte-operativo/index.vue`) — tabla filtrable por fecha con acciones
+inline (check-in de pasajero, reasignar guía/proveedor sin salir de la
+pantalla), agrupada por fecha. Alcance recortado a propósito, confirmado
+con el usuario vía `AskUserQuestion`: la campana de recordatorios queda
+fuera (11f, motor automático, no tiene backend construido todavía).
+Ampliado más allá del spec original en 2 rondas de mejoras pedidas por el
+usuario: (1) filtros por destino/tour/hotel/servicio, exportación a Excel
+(no estaba en `plan-modulo-cotizaciones-reservas.md` §8, que solo pedía
+PDF), marca "generado por + fecha/hora" en cada página del PDF, nombre de
+archivo de descarga estandarizado, y fix de un bug real heredado
+(`StorageUrl::resolve()` nunca carga un logo dentro de un PDF — DomPDF
+trae `enable_remote=false`; corregido a `resolveParaPdf()`, mismo patrón
+que ya usan `SaleController`/`NotaController` — `AlternativaController`
+tenía el mismo bug latente, **corregido 29-ago-2026**, ver más abajo);
+(2) reasignación
+de proveedor inline (el caso real más común, a diferencia del select de
+guía que casi no se usa en la práctica con datos reales de
+`agencia-demo`) y **fix de duplicidad de guía con Salida Operativa**
+(hallazgo del usuario: un ítem `origen_tipo='guia'` enganchado a una
+Salida Operativa tiene su guía real ahí, compartido entre reservas — el
+reporte no lo consideraba y podía mostrar/dejar editar un `guia_id` del
+ítem desincronizado del de la salida; corregido para leer y bloquear la
+edición igual que `reservas/detalle.vue` ya lo hacía). 151 tests backend
+en verde en el vertical. Detalle completo en `CLAUDE.md`.
+
+**Módulo 12 cerrado (26-ago-2026):** códigos y numeración configurable
+por tenant (tour/paquete/cotización/reserva/venta directa) —
+`CodigoGeneradorService` con lock real, reemplaza el prefijo manual y el
+código 'VD' hardcodeado. Ver `plan-modulo-codigos-numeracion.md` (estado
+completo en su propia cabecera) y `CLAUDE.md`.
+
+Quedan sin marcar: 11f (motor de recordatorios), 11g (controllers de pago
+a proveedor) y 11t (bug colateral de `VentaDirectaController`, sin brief
+propio todavía). Sin bloqueantes conocidos entre ellas — el orden queda a
+criterio del usuario.
 
 ---
 
@@ -152,19 +188,23 @@ del usuario (11d puede arrancar ya que 11e está cerrada).
 
 > Historial completo (25-jul a 12-ago-2026, todas las sesiones 0 a 11q)
 > archivado en `historial-archivo.md`. Resumen: las 18 sesiones
-> originales del vertical están construidas y mergeadas salvo 11e/11f/
-> 11g/11d (reporte operativo, recordatorios y pago a proveedor — backend
-> y frontend). El fix de fechas (11r/11s) y el bug colateral 11t se
-> agregaron después. El 20-ago-2026 se cierra 11u (facturación de
-> reserva + guardia tributario, commit `9f1ced5`) y, el mismo día, 11v
-> (facturación múltiple por grupo de pasajeros, sin commitear todavía) —
-> hoy sí existe forma de facturar una reserva completa Y de facturar por
-> separado a cada pasajero/grupo con su propio cliente, con protección
-> contra emitir un comprobante SUNAT con tratamiento tributario
-> mezclado.
+> originales del vertical están construidas y mergeadas. El fix de
+> fechas (11r/11s) y el bug colateral 11t se agregaron después. El
+> 20-ago-2026 se cierra 11u (facturación de reserva + guardia
+> tributario, commit `9f1ced5`) y, el mismo día, 11v (facturación
+> múltiple por grupo de pasajeros) — hoy existe forma de facturar una
+> reserva completa Y de facturar por separado a cada pasajero/grupo con
+> su propio cliente, con protección contra emitir un comprobante SUNAT
+> con tratamiento tributario mezclado. El 25-ago-2026 se cierra 11e
+> (backend del reporte operativo) y el 26-ago-2026 se cierran 11d
+> (pantalla del reporte operativo, con mejoras propias) y el módulo 12
+> (códigos/numeración) — **solo 11f/11g/11t quedan abiertas.**
 
 | Fecha | Cambio |
 |---|---|
+| 29-ago-2026 | **Sesión larga de ajustes cortos, sin fila propia en el checklist** — no mueve 11f/11g/11t. Resumen (detalle completo en `CLAUDE.md` y en cada commit, `6613b78`..`07169a3`): fix de orden real en el lienzo del cotizador (`Alternativa::items()` sin `orderBy`); slug de `proveedor_tipos` desalineado entre dev y producción (ocultaba UI hotelera pese a deploy correcto); guard faltante en `ReservaItemPasajeroController::store()` (permitía asignar pasajero a ítem ya facturado); modal de tarifa de proveedor ya no se cierra por accidente; ítems incluidos homogenizados en formato de fila con realce de categoría; sesión JWT con aviso de expiración + renovación silenciosa + logout que invalida el token en el servidor; paridad completa de tarifas de guía con proveedor (editar/eliminar/desactivar); Configuración de Agencia pasa a acordeón; buscador con filtros en Destinos; catálogo de servicios con validación de duplicados + buscador unificado + paginación (diagnóstico UX/técnico propio, puntos 1-4 de 5); fix del logo roto en el PDF de cotización (quedaba pendiente a propósito desde el cierre de 11d); capitalización de nombres/títulos en 7 campos, solo hacia adelante, nunca `razon_social` ni clientes. 18 tests nuevos, 359/359 en toda la suite backend al cierre. |
+| 26-ago-2026 (b) | **Módulo 12 cerrado** — códigos y numeración configurable por tenant (tour/paquete/cotización/reserva/venta directa), `CodigoGeneradorService` con lock real (mismo patrón que `SerieComprobanteService`). Diseño revisado y aprobado el mismo día (3 gaps cerrados con el usuario: Venta Directa como quinto tipo, formato nuevo sin excepción, pantallas de reserva leen su propio código), implementado completo en la misma sesión. 20 tests nuevos, 170/170 en el vertical, 288/288 en toda la suite backend. Detalle completo en `plan-modulo-codigos-numeracion.md` (cabecera con el estado) y `CLAUDE.md`. |
+| 26-ago-2026 (a) | **Fila 11d cerrada** — pantalla del reporte operativo, con 2 rondas de mejoras pedidas por el usuario más allá del spec original (filtros por destino/tour/hotel/servicio, export a Excel, marca de generación en el PDF, fix de logo roto en PDF) y un fix real de duplicidad de guía con Salida Operativa (hallazgo del usuario: un ítem enganchado a una salida mostraba/dejaba editar un `guia_id` propio desincronizado del guía real compartido — corregido para leer y bloquear igual que `reservas/detalle.vue`). Campana de recordatorios descartada del alcance a propósito (depende de 11f, sin backend). 151 tests backend en verde. Ver párrafo "11d cerrada" en §1 y `CLAUDE.md` para el detalle completo. |
 | 20-ago-2026 (c) | **Fila 11v cerrada en el working tree (sin commitear — ver nota en §1).** Facturación múltiple por grupo de pasajeros: `ReservaFacturacionController` gana N `reserva_ventas`/`Sale` por reserva, cada uno con `client_id` obligatorio (ya no fijo a `cotizacion.cliente_id`) y `texto_personalizado` opcional, cubriendo un subconjunto de `pasajero_ids` elegido por el vendedor. Guard de doble-facturación pasado a granularidad de ítem/pasajero (antes bloqueaba la reserva completa apenas tenía cualquier venta). **Hallazgo crítico durante la investigación previa a programar** (pedida explícitamente por el brief, no asumida): el mecanismo de selección propuesto originalmente (derivar `reserva_item_ids` puramente desde `reserva_item_pasajero`) resultó inviable con datos reales — esa tabla tiene 0 filas en el 100% de los ítems de la reserva de prueba (8/8) y 26/37 en todo el tenant `agencia-demo`. Decisión tomada con el usuario vía `AskUserQuestion`: selección explícita de ítems sin asignar (`items_sin_asignar_disponibles`, el vendedor los marca a mano por Sale) en vez de exigir asignación completa o auto-atribuir al primer Sale. Ítems CON pasajeros vinculados solo se auto-incluyen si TODOS sus vinculados están en la selección actual (nunca se fragmenta un ítem compartido, ej. habitación doble, entre dos Sales). Reparto de un ítem `tarifa_fija` compartido entre pasajeros que terminan en Sales DISTINTOS: confirmado que no existe ningún mecanismo — documentado como límite conocido, no resuelto (queda pendiente de facturar por este flujo hasta resolución manual). **Bug real encontrado y corregido probando en vivo contra `agencia-demo`** (no en tests): `prepararFactura()` devolvía 422 apenas se abría el modal para cualquier reserva sin ítems auto-vinculados (el caso más común con datos reales) — corregido, el guard de "selección vacía" quedó exclusivo de `store()`. Frontend: modal rediseñado (selección de pasajeros pendientes, pool de ítems sin asignar, buscador de cliente reusando `clients?search=` de Ventas, texto personalizado, flujo iterativo que sigue abierto para el resto del grupo tras cada Sale), badge "Facturación completa"/"Falta facturar a N pasajero(s)" en el header. **Verificación**: 13 tests nuevos (`ReservaFacturacionTest`, incluye el caso de punta a punta de 3 pasajeros en 3 Sales con boleta+factura×2 y textos propios) — 174 tests backend en verde, cero regresiones; type-check frontend en 45 errores preexistentes (mismo baseline). Verificado con Playwright real contra `agencia-demo` (reserva #19, la misma con mezcla tributaria real) sin llegar a confirmar el POST — toda la verificación fue de solo lectura, `agencia-demo` queda sin ninguna venta nueva persistida. Brief completo con su "Estado real al cierre" en `PEGAR-EN-CLAUDE-CODE-facturar-reserva-grupo-multiples-pagadores.md`. |
 | 20-ago-2026 (b) | **Fila 11u cerrada — commit `9f1ced5`.** La base (Fases A-D de facturación de reserva) ya estaba construida al empezar esta entrada; se agrega el **guardia tributario** pedido por el usuario como complemento crítico (`PEGAR-EN-CLAUDE-CODE-facturar-reserva-guardia-tributario.md`): `ReservaFacturacionController` gana `GET reservas/{id}/preparar-factura` (preview de solo lectura, no existía — el brief original lo pedía y nunca se construyó) + el guardia real en `POST facturar` (422 server-side, nunca confía en el frontend). **Limitación real del modelo de datos, no asumida**: `destino_tributario` solo vive en `proveedor_tarifas` (`origen_tipo=proveedor`) — los otros 4 orígenes de ítem (mayorista/pasaje_aereo/manual/guia) no tienen ningún campo tributario propio hoy, se tratan como `'nacional'` para el guardia (mismo valor que ya usa la cabecera del Sale, documentado en el controller). Fuente de verdad usada: `reserva_item.proveedor_tarifa_id` propio (reasignable, "quién opera") en vez del de `alternativa_item` (propuesta comercial original, puede estar desactualizada). **Revisión adicional pedida por el usuario ("qué gaps nos pueden dar problemas en la práctica")** encontró un segundo bug real en `ReservaController::reprogramar()` (Fase 2, fila 11s): un `reserva_item` sin `dia_referencial` quedaba con su fecha VIEJA tras reprogramar, sin aparecer en `items_no_tocados` — indistinguible para el vendedor de "sí se movió". Corregido: ahora se lista igual que los `'manual'`, con `motivo: 'sin_dia_referencial'` propio; banner del frontend actualizado para mostrar el motivo real en vez de asumir siempre "editado a mano". **Verificación**: 8 tests nuevos (`ReservaFacturacionTest` +2 mezcla tributaria/preview sin mezcla, `ReservaReprogramarTest` +1 dia_referencial null) — 100 tests AgenciaViajes en verde en total, cero regresiones; type-check frontend en 45 errores (mismo baseline). **Verificado con datos reales de `agencia-demo` vía Playwright, sin persistir nada** (solo GET, nunca se llamó `POST facturar`): reserva #19 (`DKM-2026-001`) resultó tener una mezcla tributaria REAL entre sus 7 ítems — el modal mostró el bloqueo con el mensaje exacto y ocultó el botón "Facturar"; al destildar el ítem de hotel (el que rompía la homogeneidad), el bloqueo se levantó al instante (watch reactivo) y apareció el total en vivo (`PEN 325.00`) con el botón habilitado — confirma que el guardia no es solo teórico, ya está protegiendo datos reales del tenant. |
 | 20-ago-2026 (a) | **Se agrega la fila 11u — gap encontrado en revisión crítica del código construido (no solo lectura del plan): `reserva_ventas` y `sale_detail_items` existen como tablas/modelos desde la Sesión 9, pero ningún controller las usa.** `ReservaVenta` solo aparece como guard de bloqueo en `ReservaController::cancelar()`; `SaleDetailItem` no lo referencia nada más que su propio modelo; `SaleController` no tiene noción de `reserva_id`; `VentaDirectaController` nunca crea un `Sale` real pese al nombre. En la práctica, hoy se puede cotizar/aceptar/gestionar una reserva completa pero no hay ningún botón ni endpoint que emita el comprobante SUNAT — se hace por fuera del sistema. Se decide con el usuario: alcance mínimo viable (un solo responsable, un solo `Sale`, sin aplicar anticipos automáticamente, bloquea en vez de implementar el caso de reserva ya facturada — §4.3/§4.4 completos quedan para sesiones futuras) y prioridad **antes** que 11e/11f/11g/11d/11t. Brief completo en `PEGAR-EN-CLAUDE-CODE-facturar-reserva.md`. La advertencia ⚠️ original de la fila 9 (Sesión 9) se actualiza — solo mencionaba el hueco de `pago_proveedor`/`cronograma_pago_proveedor` (11g), no este. |
