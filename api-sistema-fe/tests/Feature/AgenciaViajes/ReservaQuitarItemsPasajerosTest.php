@@ -4,6 +4,7 @@ namespace Tests\Feature\AgenciaViajes;
 
 use App\Http\Controllers\AgenciaViajes\ReservaController;
 use App\Http\Controllers\AgenciaViajes\ReservaItemController;
+use App\Http\Controllers\AgenciaViajes\ReservaItemPasajeroController;
 use App\Http\Controllers\AgenciaViajes\ReservaPasajeroController;
 use App\Models\AgenciaViajes\Alternativa;
 use App\Models\AgenciaViajes\AlternativaItem;
@@ -12,6 +13,7 @@ use App\Models\AgenciaViajes\ReservaItem;
 use App\Models\AgenciaViajes\ReservaItemPasajero;
 use App\Models\AgenciaViajes\ReservaPasajero;
 use App\Models\AgenciaViajes\ReservaVenta;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
@@ -203,5 +205,64 @@ class ReservaQuitarItemsPasajerosTest extends TestCase
 
         $this->assertSame(422, $response->getStatusCode());
         $this->assertTrue(ReservaPasajero::where('id', $pasajero1->id)->exists());
+    }
+
+    // ── reserva-item-pasajeros (asignación, store()) ────────────────────
+    // Bug real encontrado 2026-08-28: store() no tenía ninguno de los 2
+    // guards que index()/destroy() de la misma clase ya tenían — se podía
+    // asignar un pasajero nuevo a un ítem ya facturado, o en una reserva
+    // no activa, desincronizando en silencio "quién estaba incluido" en
+    // un comprobante SUNAT ya emitido.
+
+    public function test_asignar_pasajero_exitoso_crea_asignacion(): void
+    {
+        [, $reservaItem1, , , $pasajero2] = $this->crearReservaConDosPasajerosYDosItems();
+
+        $response = app(ReservaItemPasajeroController::class)
+            ->store(new Request(['reserva_pasajero_id' => $pasajero2->id]), (string) $reservaItem1->id);
+
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertTrue(
+            ReservaItemPasajero::where('reserva_item_id', $reservaItem1->id)
+                ->where('reserva_pasajero_id', $pasajero2->id)
+                ->exists()
+        );
+    }
+
+    public function test_asignar_pasajero_rechaza_si_reserva_no_activa(): void
+    {
+        [$reserva, $reservaItem1, , , $pasajero2] = $this->crearReservaConDosPasajerosYDosItems();
+        $reserva->update(['estado' => 'cancelada']);
+
+        $response = app(ReservaItemPasajeroController::class)
+            ->store(new Request(['reserva_pasajero_id' => $pasajero2->id]), (string) $reservaItem1->id);
+
+        $this->assertSame(422, $response->getStatusCode());
+        $this->assertFalse(
+            ReservaItemPasajero::where('reserva_item_id', $reservaItem1->id)
+                ->where('reserva_pasajero_id', $pasajero2->id)
+                ->exists()
+        );
+    }
+
+    public function test_asignar_pasajero_rechaza_si_item_ya_facturado(): void
+    {
+        [$reserva, $reservaItem1, , , $pasajero2] = $this->crearReservaConDosPasajerosYDosItems();
+
+        ReservaVenta::create([
+            'reserva_id' => $reserva->id, 'sale_id' => \App\Models\Sale\Sale::factory()->create()->id,
+            'reserva_item_ids' => [$reservaItem1->id], 'reserva_pasajero_ids' => [],
+        ]);
+
+        $response = app(ReservaItemPasajeroController::class)
+            ->store(new Request(['reserva_pasajero_id' => $pasajero2->id]), (string) $reservaItem1->id);
+
+        $this->assertSame(422, $response->getStatusCode());
+        $this->assertStringContainsString('facturado', $response->getData(true)['message']);
+        $this->assertFalse(
+            ReservaItemPasajero::where('reserva_item_id', $reservaItem1->id)
+                ->where('reserva_pasajero_id', $pasajero2->id)
+                ->exists()
+        );
     }
 }

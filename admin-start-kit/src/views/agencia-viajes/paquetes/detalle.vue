@@ -474,7 +474,7 @@
                                     <div class="av-item-icon bg-info-subtle text-info"><i class="fas fa-concierge-bell"></i></div>
                                     <div class="av-item-body">
                                         <div class="av-item-title">
-                                            {{ t.proveedor_servicio?.proveedor?.razon_social }}
+                                            {{ t.proveedor_servicio?.proveedor?.nombre_comercial ?? t.proveedor_servicio?.proveedor?.razon_social }}
                                             <span v-if="t.proveedor_servicio?.proveedor?.es_referencial" class="av-badge av-badge-muted">Referencial</span>
                                         </div>
                                         <div class="av-item-sub">{{ descripcionDestinoServicio(t.proveedor_servicio?.destino_servicio) }}<span v-if="t.tipo_habitacion"> · {{ t.tipo_habitacion }}</span></div>
@@ -527,7 +527,7 @@
                             <div v-if="proveedorTarifaSeleccionada || guiaTarifaSeleccionada || tourSeleccionado" class="av-selection-bar mt-3">
                                 <div class="av-selection-info">
                                     <i class="fas fa-circle-check text-success me-2"></i>
-                                    <span v-if="proveedorTarifaSeleccionada">{{ proveedorTarifaSeleccionada.proveedor_servicio?.proveedor?.razon_social }}</span>
+                                    <span v-if="proveedorTarifaSeleccionada">{{ proveedorTarifaSeleccionada.proveedor_servicio?.proveedor?.nombre_comercial ?? proveedorTarifaSeleccionada.proveedor_servicio?.proveedor?.razon_social }}</span>
                                     <span v-else-if="guiaTarifaSeleccionada">Guía — {{ guiaTarifaSeleccionada.destino?.nombre }}</span>
                                     <span v-else-if="tourSeleccionado">{{ tourSeleccionado.nombre }}</span>
                                 </div>
@@ -565,7 +565,7 @@
                                         <div class="av-item-icon bg-info-subtle text-info"><i class="fas fa-concierge-bell"></i></div>
                                         <div class="av-item-body">
                                             <div class="av-item-title">
-                                                {{ item.proveedor_tarifa!.proveedor_servicio?.proveedor?.razon_social }}
+                                                {{ item.proveedor_tarifa!.proveedor_servicio?.proveedor?.nombre_comercial ?? item.proveedor_tarifa!.proveedor_servicio?.proveedor?.razon_social }}
                                                 <span v-if="item.proveedor_tarifa!.proveedor_servicio?.proveedor?.es_referencial" class="av-badge av-badge-muted">Referencial</span>
                                             </div>
                                             <div class="av-item-sub">{{ descripcionDestinoServicio(item.proveedor_tarifa!.proveedor_servicio?.destino_servicio) }}<span v-if="item.proveedor_tarifa!.tipo_habitacion"> · {{ item.proveedor_tarifa!.tipo_habitacion }}</span></div>
@@ -638,7 +638,7 @@
                                     <ul class="list-group list-group-flush">
                                         <li v-for="sub in (tourSubItemsCache[grupo.item.paquete_plantilla_hijo_id!] ?? [])" :key="sub.id" class="list-group-item small px-0">
                                             <span v-if="sub.proveedor_tarifa">
-                                                <i class="fas fa-concierge-bell text-primary me-1"></i>{{ sub.proveedor_tarifa.proveedor_servicio?.proveedor?.razon_social }}
+                                                <i class="fas fa-concierge-bell text-primary me-1"></i>{{ sub.proveedor_tarifa.proveedor_servicio?.proveedor?.nombre_comercial ?? sub.proveedor_tarifa.proveedor_servicio?.proveedor?.razon_social }}
                                             </span>
                                             <span v-else-if="sub.guia_tarifa">
                                                 <i class="fas fa-user-tie text-primary me-1"></i>Guía: {{ sub.guia_tarifa.guia?.nombre }}
@@ -664,7 +664,7 @@
                                     <div class="av-item-body">
                                         <template v-if="item.proveedor_tarifa">
                                             <div class="av-item-title">
-                                                {{ item.proveedor_tarifa.proveedor_servicio?.proveedor?.razon_social }}
+                                                {{ item.proveedor_tarifa.proveedor_servicio?.proveedor?.nombre_comercial ?? item.proveedor_tarifa.proveedor_servicio?.proveedor?.razon_social }}
                                                 <span v-if="item.proveedor_tarifa.proveedor_servicio?.proveedor?.es_referencial" class="av-badge av-badge-muted">Referencial</span>
                                             </div>
                                             <div class="av-item-sub">{{ descripcionDestinoServicio(item.proveedor_tarifa.proveedor_servicio?.destino_servicio) }}<span v-if="item.proveedor_tarifa.tipo_habitacion"> · {{ item.proveedor_tarifa.tipo_habitacion }}</span></div>

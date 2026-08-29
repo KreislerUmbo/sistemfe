@@ -38,7 +38,20 @@ class ReservaItemPasajeroController extends Controller
 
     public function store(Request $request, string $reservaItemId)
     {
-        $item = ReservaItem::findOrFail($reservaItemId);
+        $item = ReservaItem::with('reserva')->findOrFail($reservaItemId);
+
+        // Mismo guard que index()/destroy() — faltaba acá (bug real
+        // encontrado 2026-08-28): sin esto se podía asignar un pasajero
+        // nuevo a un ítem ya facturado o de una reserva no activa,
+        // desincronizando en silencio "quién estaba incluido" en un
+        // comprobante SUNAT ya emitido.
+        if ($item->reserva->estado !== 'activa') {
+            return response()->json(['code' => 422, 'message' => 'Solo se pueden asignar pasajeros en una reserva activa.'], 422);
+        }
+
+        if ($this->itemYaFacturado($item)) {
+            return response()->json(['code' => 422, 'message' => 'No se puede cambiar la asignación: este ítem ya fue facturado.'], 422);
+        }
 
         $validator = Validator::make($request->all(), [
             'reserva_pasajero_id' => 'required|integer|exists:reserva_pasajeros,id',
