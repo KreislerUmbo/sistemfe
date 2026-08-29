@@ -17,6 +17,21 @@ class CompanyController extends Controller
             "company" => $company ? CompanyResource::make($company) : null,
         ]);
     }
+
+    // Endpoint público (sin auth:api, mismo criterio que /auth/login — ver
+    // EnsureTokenBelongsToTenant) para el logo del tenant en pantallas sin
+    // sesión (login) o compartidas por toda la app (sidebar). Expone solo
+    // lo mínimo (nombre comercial + URLs de logo), nunca RUC/dirección/
+    // teléfono como sí hace CompanyResource para el panel autenticado.
+    public function branding()
+    {
+        $company = Company::first();
+        return response()->json([
+            "razon_social_comercial" => $company?->razon_social_comercial,
+            "logo_vertical" => $company?->logo_vertical ? \App\Services\StorageUrl::resolve($company->logo_vertical) : null,
+            "logo_horizontal" => $company?->logo_horizontal ? \App\Services\StorageUrl::resolve($company->logo_horizontal) : null,
+        ]);
+    }
 //
 
     public function store(Request $request)

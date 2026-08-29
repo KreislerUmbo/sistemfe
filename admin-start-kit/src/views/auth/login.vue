@@ -153,6 +153,7 @@ import { useVuelidate } from "@vuelidate/core";
 import HttpClient from "@/helpers/http-client";
 import { useAuthStore } from "@/stores/auth";
 import { iniciarVigilanciaSesion } from "@/helpers/sessionExpiryWatcher";
+import { fetchBranding } from "@/helpers/branding";
 
 import type { AxiosResponse } from "axios";
 import type { ResponseAuthLogin } from "@/types/auth";
@@ -182,8 +183,15 @@ const secondsLeft = ref(0);
 let lockInterval: ReturnType<typeof setInterval> | undefined;
 
 onMounted(async () => {
+  // Logo vertical (angosto/cuadrado) del negocio — encaja en el círculo
+  // blanco de 96x96 (.brand-logo-badge). /branding es público (no exige
+  // sesión, ver EnsureTokenBelongsToTenant) porque esta pantalla corre
+  // antes del login. VITE_APP_LOGO_URL queda como fallback si el tenant
+  // no subió un logo propio (Configuraciones > Empresa); si tampoco hay
+  // eso, @error en el <img> cae al logo genérico local.
   try {
-    logoUrl.value = import.meta.env.VITE_APP_LOGO_URL || "";
+    const branding = await fetchBranding();
+    logoUrl.value = branding?.logo_vertical || import.meta.env.VITE_APP_LOGO_URL || "";
   } catch (e) {
     // Falla silenciosa: si no hay logo configurado, se usa el fallback local.
   }

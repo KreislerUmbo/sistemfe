@@ -109,6 +109,15 @@ Route::group([
     Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth:api')->name('logout');
 });
 
+// Logo/nombre comercial del tenant para pantallas sin sesión (login) y para el
+// sidebar — mismo grupo de middleware que /auth/login (resuelve el tenant por
+// subdominio, EnsureTokenBelongsToTenant deja pasar si no hay token). Público
+// a propósito: solo expone branding, nunca datos fiscales (ver branding() en
+// CompanyController).
+Route::get('branding', [CompanyController::class, 'branding'])
+    ->middleware(['tenant', 'tenant.active', 'tenant.subscription', 'tenant.token'])
+    ->name('branding');
+
 // Rutas 100% CENTRALES — sin tenant/tenant.token. Deben responder sin necesidad de
 // que ningún tenant/subdominio se haya resuelto (catálogo comercial del marketplace,
 // compartido por todos los negocios).

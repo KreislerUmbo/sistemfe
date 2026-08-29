@@ -20,12 +20,24 @@
     height: var(--#{$prefix}topbar-height);
     transition: 0.3s;
 
+    // Oculto por default: cuando el sidebar está expandido solo debe verse
+    // logo-lg (horizontal) — logo-sm (ícono) vuelve a aparecer únicamente
+    // en el estado colapsado (ver bloque más abajo). Mostrar los dos juntos
+    // duplica el ícono cuando el logo horizontal del tenant ya lo trae
+    // incluido (caso real: logo con ícono + wordmark en una sola imagen).
     .logo-sm {
-      height: 38px;
+      display: none;
+      height: 40px;
+      width: 40px;
+      object-fit: contain;
     }
     .logo-lg {
       transition: 0.3s;
       margin-left: 4px;
+      max-height: 40px;
+      max-width: 120px;
+      width: auto;
+      object-fit: contain;
     }
   }
 
@@ -190,6 +202,10 @@ html[data-bs-theme="dark"] {
 
         .logo {
           display: flex;
+
+          .logo-sm {
+            display: inline-block;
+          }
 
           .logo-lg {
             width: 0;
