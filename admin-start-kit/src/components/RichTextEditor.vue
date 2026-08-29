@@ -1,6 +1,7 @@
 <template>
     <div class="rich-text-editor">
         <QuillEditor
+            ref="quillRef"
             :content="modelValue ?? ''"
             content-type="html"
             theme="snow"
@@ -17,9 +18,10 @@
 // a propósito (negrita, cursiva, listas, títulos básicos) — sin imágenes ni
 // video, no hay endpoint de subida de archivos para contenido embebido en
 // este editor todavía.
+import { ref, watch } from 'vue';
 import { QuillEditor } from '@vueup/vue-quill';
 
-withDefaults(defineProps<{
+const props = withDefaults(defineProps<{
     modelValue?: string | null;
     placeholder?: string;
 }>(), {
@@ -40,6 +42,19 @@ const toolbar = [
 const onUpdate = (html: string) => {
     emit('update:modelValue', html);
 };
+
+// @vueup/vue-quill ignora el prop `content` cuando el valor nuevo es falsy
+// (su watcher interno corta con `!newContent` antes de limpiar el editor),
+// así que resetear modelValue a '' desde afuera (ej. después de guardar un
+// formulario que reusa este editor) nunca se reflejaba visualmente — el
+// texto tipeado quedaba pegado en pantalla aunque el modelo ya estuviera
+// vacío. Se fuerza la limpieza acá con el método expuesto setHTML().
+const quillRef = ref<InstanceType<typeof QuillEditor> | null>(null);
+watch(() => props.modelValue, (value) => {
+    if (!value) {
+        quillRef.value?.setHTML('');
+    }
+});
 </script>
 
 <style scoped>
