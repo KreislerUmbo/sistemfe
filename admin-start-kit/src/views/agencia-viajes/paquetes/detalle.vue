@@ -51,83 +51,99 @@
         </ul>
 
         <!-- ═══ TAB: Datos ═══ -->
-        <div v-if="tabActiva === 'datos' && paquete" class="card border-0 shadow-sm">
-            <div class="card-header bg-white border-bottom py-2 d-flex justify-content-between align-items-center">
-                <span class="fw-semibold text-dark small"><i class="fas fa-id-card me-1"></i>Datos generales</span>
-                <button v-if="!editandoDatos" class="btn btn-sm btn-outline-secondary" @click="iniciarEdicionDatos">
-                    <i class="fas fa-pen me-1"></i>Editar
-                </button>
-            </div>
-            <div class="card-body">
-                <!-- Modo lectura -->
-                <div v-if="!editandoDatos" class="row g-3 small">
-                    <div class="col-md-4"><strong>Destino:</strong> {{ paquete.destino_atractivo?.nombre ?? '—' }}</div>
-                    <div class="col-md-4"><strong>Duración:</strong> {{ paquete.duracion_horas }} h</div>
-                    <div class="col-md-4"><strong>Horario:</strong> {{ paquete.hora_salida ?? '—' }} — {{ paquete.hora_retorno ?? '—' }}</div>
-                    <div class="col-md-8"><strong>Lugar de recojo:</strong> {{ paquete.lugar_recojo ?? '—' }}</div>
-                    <div class="col-md-4" v-if="!esCombo"><strong>Precio desde:</strong> {{ paquete.precio_venta_final != null ? `S/ ${Number(paquete.precio_venta_final).toFixed(2)}` : '—' }}</div>
-                    <div class="col-md-4"><strong>Ajuste de redondeo:</strong> {{ paquete.ajuste_redondeo != null ? `${Number(paquete.ajuste_redondeo) >= 0 ? '+' : ''}S/ ${Number(paquete.ajuste_redondeo).toFixed(2)}` : '—' }}</div>
-                    <div class="col-12" v-if="paquete.descripcion"><strong>Descripción:</strong> <span v-html="paquete.descripcion"></span></div>
-                    <div class="col-md-6" v-if="paquete.no_incluye"><strong>No incluye:</strong> <span v-html="paquete.no_incluye"></span></div>
-                    <div class="col-md-6" v-if="paquete.recomendaciones"><strong>Recomendaciones:</strong> <span v-html="paquete.recomendaciones"></span></div>
-                    <div class="col-12" v-if="paquete.vuelo_incluido">
-                        <strong>Vuelo:</strong> {{ paquete.vuelo_aerolinea ?? '—' }} — {{ paquete.vuelo_detalle ?? '' }}
-                    </div>
-                    <div class="col-md-4"><strong>Vigencia:</strong> {{ paquete.vigencia_desde ? formatFecha(paquete.vigencia_desde) : 'sin inicio' }} — {{ paquete.vigencia_hasta ? formatFecha(paquete.vigencia_hasta) : 'indefinida' }}</div>
-                    <div class="col-md-4"><strong>Publicado web:</strong> {{ paquete.publicado_web ? 'Sí' : 'No' }}</div>
-                </div>
+        <b-card v-if="tabActiva === 'datos' && paquete" class="shadow-sm">
+            <b-card-header>
+                <b-row class="align-items-center">
+                    <b-col>
+                        <b-card-title class="mb-1"><i class="fas fa-id-card text-primary me-1"></i>Datos generales</b-card-title>
+                        <p class="text-muted fs-13 mb-0">Información comercial y operativa del {{ esCombo ? 'paquete' : 'tour' }}.</p>
+                    </b-col>
+                    <b-col cols="auto" v-if="!editandoDatos">
+                        <b-button variant="outline-primary" size="sm" @click="iniciarEdicionDatos">
+                            <i class="fas fa-pen me-1"></i>Editar
+                        </b-button>
+                    </b-col>
+                </b-row>
+            </b-card-header>
+            <b-card-body class="pt-0">
+                <!-- Modo lectura: patrón de detalle de Rizz, sin CSS adicional. -->
+                <b-row v-if="!editandoDatos" class="g-3">
+                    <b-col cols="12">
+                        <div class="d-flex flex-wrap align-items-center gap-2 border-bottom pb-3">
+                            <span class="badge bg-light text-dark border">{{ paquete.codigo ?? 'Sin código' }}</span>
+                            <span class="badge bg-primary-subtle text-primary border border-primary-subtle">{{ etiquetaCategoria(paquete.categoria) }}</span>
+                            <span v-if="paquete.publicado_web" class="badge bg-success-subtle text-success border border-success-subtle"><i class="fas fa-globe me-1"></i>Publicado</span>
+                            <span v-if="paquete.vuelo_incluido" class="badge bg-info-subtle text-info border border-info-subtle"><i class="fas fa-plane me-1"></i>Incluye vuelo</span>
+                        </div>
+                    </b-col>
+                    <b-col md="4"><p class="text-muted mb-1 fs-13"><i class="fas fa-location-dot me-1"></i>Destino</p><p class="mb-0 fw-semibold">{{ paquete.destino_atractivo?.nombre ?? '—' }}</p></b-col>
+                    <b-col md="4"><p class="text-muted mb-1 fs-13"><i class="fas fa-clock me-1"></i>Duración</p><p class="mb-0 fw-semibold">{{ paquete.duracion_horas }} h</p></b-col>
+                    <b-col md="4"><p class="text-muted mb-1 fs-13"><i class="fas fa-route me-1"></i>Horario</p><p class="mb-0 fw-semibold">{{ paquete.hora_salida ?? '—' }} — {{ paquete.hora_retorno ?? '—' }}</p></b-col>
+                    <b-col md="8"><p class="text-muted mb-1 fs-13"><i class="fas fa-map-pin me-1"></i>Lugar de recojo</p><p class="mb-0 fw-semibold">{{ paquete.lugar_recojo ?? '—' }}</p></b-col>
+                    <b-col md="4"><p class="text-muted mb-1 fs-13"><i class="fas fa-calendar me-1"></i>Vigencia</p><p class="mb-0 fw-semibold">{{ paquete.vigencia_desde ? formatFecha(paquete.vigencia_desde) : 'Sin inicio' }} — {{ paquete.vigencia_hasta ? formatFecha(paquete.vigencia_hasta) : 'Indefinida' }}</p></b-col>
+                    <b-col md="4" v-if="!esCombo"><p class="text-muted mb-1 fs-13"><i class="fas fa-tag me-1"></i>Precio de catálogo desde</p><p class="mb-0 fw-semibold text-primary">{{ paquete.precio_venta_final != null ? `S/ ${Number(paquete.precio_venta_final).toFixed(2)}` : '—' }}</p></b-col>
+                    <b-col md="4"><p class="text-muted mb-1 fs-13"><i class="fas fa-calculator me-1"></i>Ajuste de redondeo</p><p class="mb-0 fw-semibold">{{ paquete.ajuste_redondeo != null ? `${Number(paquete.ajuste_redondeo) >= 0 ? '+' : ''}S/ ${Number(paquete.ajuste_redondeo).toFixed(2)}` : '—' }}</p></b-col>
+                    <b-col cols="12" v-if="paquete.descripcion"><div class="border-top pt-3"><p class="text-muted mb-1 fs-13">Descripción comercial</p><div class="small" v-html="paquete.descripcion"></div></div></b-col>
+                    <b-col md="6" v-if="paquete.no_incluye"><div class="border-top pt-3"><p class="text-muted mb-1 fs-13">No incluye</p><div class="small" v-html="paquete.no_incluye"></div></div></b-col>
+                    <b-col md="6" v-if="paquete.recomendaciones"><div class="border-top pt-3"><p class="text-muted mb-1 fs-13">Recomendaciones</p><div class="small" v-html="paquete.recomendaciones"></div></div></b-col>
+                    <b-col cols="12" v-if="paquete.vuelo_incluido"><div class="border-top pt-3"><p class="text-muted mb-1 fs-13">Información del vuelo</p><p class="mb-0"><strong>{{ paquete.vuelo_aerolinea ?? '—' }}</strong><span v-if="paquete.vuelo_detalle"> · {{ paquete.vuelo_detalle }}</span></p></div></b-col>
+                </b-row>
 
-                <!-- Modo edición -->
-                <div v-else class="row g-3">
+                <!-- Modo edición: controles nativos BootstrapVue/Rizz. -->
+                <b-form v-else @submit.prevent="guardarDatos">
+                <b-row class="g-3">
+                    <b-col cols="12"><h6 class="mb-0">Identificación</h6><p class="text-muted fs-13 mb-0">Nombre, categoría y descripción que se muestran al vender.</p></b-col>
                     <div class="col-12 col-md-3">
                         <label class="form-label mb-1 small fw-semibold text-secondary">Código</label>
-                        <input type="text" class="form-control form-control-sm" v-model="formDatos.codigo" placeholder="Ej. PDKM-CZ">
+                        <b-form-input size="sm" v-model="formDatos.codigo" placeholder="Ej. PDKM-CZ" />
                     </div>
                     <div class="col-12 col-md-3">
                         <label class="form-label mb-1 small fw-semibold text-secondary">Categoría *</label>
-                        <select class="form-select form-select-sm" v-model="formDatos.categoria">
+                        <b-form-select size="sm" v-model="formDatos.categoria">
                             <option value="local">Local</option>
                             <option value="nacional">Nacional</option>
                             <option value="internacional">Internacional</option>
-                        </select>
+                        </b-form-select>
                     </div>
                     <div class="col-12 col-md-6">
                         <label class="form-label mb-1 small fw-semibold text-secondary">Nombre *</label>
-                        <input type="text" class="form-control form-control-sm" v-model="formDatos.nombre" placeholder="Ej. Full Day Alto Mayo">
+                        <b-form-input size="sm" v-model="formDatos.nombre" placeholder="Ej. Full Day Alto Mayo" />
                     </div>
                     <div class="col-12">
                         <label class="form-label mb-1 small fw-semibold text-secondary">Descripción</label>
                         <RichTextEditor v-model="formDatos.descripcion" />
                     </div>
+                    <b-col cols="12"><hr class="my-1"><h6 class="mb-0">Operación y precio</h6><p class="text-muted fs-13 mb-0">Configuración para organizar y cotizar el tour.</p></b-col>
                     <div class="col-12 col-md-6">
                         <label class="form-label mb-1 small fw-semibold text-secondary">Destino / Atractivo principal *</label>
                         <DestinoTreeSelect v-model="formDatos.destino_atractivo_id" nivel-max="lugar" />
                     </div>
                     <div class="col-6 col-md-3">
                         <label class="form-label mb-1 small fw-semibold text-secondary">Duración (horas) *</label>
-                        <input type="number" min="1" class="form-control form-control-sm" v-model.number="formDatos.duracion_horas">
+                        <b-form-input type="number" min="1" size="sm" v-model.number="formDatos.duracion_horas" />
                     </div>
                     <div class="col-6 col-md-3" v-if="!esCombo">
                         <label class="form-label mb-1 small fw-semibold text-secondary">Precio venta (desde)</label>
-                        <input type="number" step="0.01" min="0" class="form-control form-control-sm" v-model.number="formDatos.precio_venta_final" placeholder="Se resuelve solo con los hoteles">
+                        <b-form-input type="number" step="0.01" min="0" size="sm" v-model.number="formDatos.precio_venta_final" placeholder="Se resuelve solo con los hoteles" />
                     </div>
                     <div class="col-6 col-md-3">
                         <label class="form-label mb-1 small fw-semibold text-secondary">Ajuste de redondeo (S/)</label>
-                        <input type="number" step="0.01" class="form-control form-control-sm" v-model.number="formDatos.ajuste_redondeo" placeholder="Ej. 6.34 para redondear hacia arriba">
+                        <b-form-input type="number" step="0.01" size="sm" v-model.number="formDatos.ajuste_redondeo" placeholder="Ej. 6.34 para redondear hacia arriba" />
                         <div class="form-text small">Corrige la suma de ítems al total real que se cobra. Positivo o negativo. Se refleja como línea aparte en la cotización.</div>
                     </div>
                     <div class="col-6 col-md-3">
                         <label class="form-label mb-1 small fw-semibold text-secondary">Hora de salida</label>
-                        <input type="time" class="form-control form-control-sm" v-model="formDatos.hora_salida">
+                        <b-form-input type="time" size="sm" v-model="formDatos.hora_salida" />
                     </div>
                     <div class="col-6 col-md-3">
                         <label class="form-label mb-1 small fw-semibold text-secondary">Hora de retorno</label>
-                        <input type="time" class="form-control form-control-sm" v-model="formDatos.hora_retorno">
+                        <b-form-input type="time" size="sm" v-model="formDatos.hora_retorno" />
                     </div>
                     <div class="col-12">
                         <label class="form-label mb-1 small fw-semibold text-secondary">Lugar de recojo</label>
-                        <input type="text" class="form-control form-control-sm" v-model="formDatos.lugar_recojo" placeholder="Ej. Hoteles ubicados dentro de la ciudad">
+                        <b-form-input size="sm" v-model="formDatos.lugar_recojo" placeholder="Ej. Hoteles ubicados dentro de la ciudad" />
                     </div>
+                    <b-col cols="12"><hr class="my-1"><h6 class="mb-0">Contenido y publicación</h6><p class="text-muted fs-13 mb-0">Información adicional para el pasajero y el portal.</p></b-col>
                     <div class="col-12 col-md-6">
                         <label class="form-label mb-1 small fw-semibold text-secondary">No incluye</label>
                         <RichTextEditor v-model="formDatos.no_incluye" />
@@ -137,44 +153,39 @@
                         <RichTextEditor v-model="formDatos.recomendaciones" />
                     </div>
                     <div class="col-12">
-                        <div class="form-check mb-2">
-                            <input class="form-check-input" type="checkbox" id="vueloIncluidoDatos" v-model="formDatos.vuelo_incluido">
-                            <label class="form-check-label small" for="vueloIncluidoDatos">Incluye vuelo</label>
-                        </div>
+                        <b-form-checkbox id="vueloIncluidoDatos" v-model="formDatos.vuelo_incluido">Incluye vuelo</b-form-checkbox>
                         <div v-if="formDatos.vuelo_incluido" class="row g-3">
                             <div class="col-12 col-md-4">
                                 <label class="form-label mb-1 small fw-semibold text-secondary">Aerolínea</label>
-                                <input type="text" class="form-control form-control-sm" v-model="formDatos.vuelo_aerolinea">
+                                <b-form-input size="sm" v-model="formDatos.vuelo_aerolinea" />
                             </div>
                             <div class="col-12 col-md-8">
                                 <label class="form-label mb-1 small fw-semibold text-secondary">Detalle (tramos, fechas, equipaje...)</label>
-                                <input type="text" class="form-control form-control-sm" v-model="formDatos.vuelo_detalle">
+                                <b-form-input size="sm" v-model="formDatos.vuelo_detalle" />
                             </div>
                         </div>
                     </div>
                     <div class="col-6 col-md-3">
                         <label class="form-label mb-1 small fw-semibold text-secondary">Vigente desde</label>
-                        <input type="date" class="form-control form-control-sm" v-model="formDatos.vigencia_desde">
+                        <b-form-input type="date" size="sm" v-model="formDatos.vigencia_desde" />
                     </div>
                     <div class="col-6 col-md-3">
                         <label class="form-label mb-1 small fw-semibold text-secondary">Vigente hasta</label>
-                        <input type="date" class="form-control form-control-sm" v-model="formDatos.vigencia_hasta">
+                        <b-form-input type="date" size="sm" v-model="formDatos.vigencia_hasta" />
                     </div>
                     <div class="col-12 col-md-6 d-flex align-items-center">
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="publicadoWebDatos" v-model="formDatos.publicado_web">
-                            <label class="form-check-label small text-muted" for="publicadoWebDatos">Publicado en portal web (sin efecto todavía)</label>
-                        </div>
+                        <b-form-checkbox id="publicadoWebDatos" v-model="formDatos.publicado_web">Publicado en portal web <span class="text-muted">(sin efecto todavía)</span></b-form-checkbox>
                     </div>
                     <div class="col-12 d-flex justify-content-end gap-2 mt-2">
-                        <button class="btn btn-sm btn-outline-secondary" @click="cancelarEdicionDatos" :disabled="guardandoDatos">Cancelar</button>
-                        <button class="btn btn-sm btn-primary" @click="guardarDatos" :disabled="guardandoDatos">
+                        <b-button variant="outline-secondary" size="sm" type="button" @click="cancelarEdicionDatos" :disabled="guardandoDatos">Cancelar</b-button>
+                        <b-button variant="primary" size="sm" type="submit" :disabled="guardandoDatos">
                             <span v-if="guardandoDatos" class="spinner-border spinner-border-sm me-1"></span>Guardar cambios
-                        </button>
+                        </b-button>
                     </div>
-                </div>
-            </div>
-        </div>
+                </b-row>
+                </b-form>
+            </b-card-body>
+        </b-card>
 
         <!-- ═══ Precio del combo (solo paquete_combo) ═══ -->
         <div v-if="tabActiva === 'datos' && esCombo && combo" class="card border-0 shadow-sm mt-3">
@@ -477,8 +488,13 @@
                                             {{ t.proveedor_servicio?.proveedor?.nombre_comercial ?? t.proveedor_servicio?.proveedor?.razon_social }}
                                             <span v-if="t.proveedor_servicio?.proveedor?.es_referencial" class="av-badge av-badge-muted">Referencial</span>
                                         </div>
-                                        <div class="av-item-sub">{{ descripcionDestinoServicio(t.proveedor_servicio?.destino_servicio) }}<span v-if="t.tipo_habitacion"> · {{ t.tipo_habitacion }}</span></div>
-                                        <div class="av-item-tags"><span class="av-badge av-badge-muted">{{ t.tipo_tarifa }} · {{ t.modalidad }}</span></div>
+                                        <div class="av-item-sub">
+                                            <span v-if="t.proveedor_servicio?.destino_servicio?.destino_atractivo?.nombre">{{ t.proveedor_servicio.destino_servicio.destino_atractivo.nombre }} · </span>{{ t.tipo_tarifa }} · {{ t.modalidad }}
+                                        </div>
+                                        <div class="av-item-tags">
+                                            <span v-if="t.proveedor_servicio?.destino_servicio?.servicio?.nombre" class="av-badge av-badge-servicio">{{ t.proveedor_servicio.destino_servicio.servicio.nombre }}</span>
+                                            <span v-if="t.tipo_habitacion" class="av-badge av-badge-habitacion">{{ t.tipo_habitacion }}</span>
+                                        </div>
                                     </div>
                                     <div class="av-item-side">
                                         <span class="av-item-price">{{ t.moneda }} {{ Number(t.precio_venta_adulto).toFixed(2) }}</span>
@@ -560,50 +576,59 @@
                         <div class="card-body">
                             <div v-if="itemsProveedor.length" class="av-group mb-3">
                                 <div class="av-group-title">Servicios de proveedor</div>
-                                <TransitionGroup tag="div" name="av-fade" class="av-included-grid">
-                                    <div v-for="item in itemsProveedor" :key="item.id" class="av-item-card av-item-card--flat">
-                                        <div class="av-item-icon bg-info-subtle text-info"><i class="fas fa-concierge-bell"></i></div>
-                                        <div class="av-item-body">
-                                            <div class="av-item-title">
-                                                {{ item.proveedor_tarifa!.proveedor_servicio?.proveedor?.nombre_comercial ?? item.proveedor_tarifa!.proveedor_servicio?.proveedor?.razon_social }}
-                                                <span v-if="item.proveedor_tarifa!.proveedor_servicio?.proveedor?.es_referencial" class="av-badge av-badge-muted">Referencial</span>
+                                <TransitionGroup tag="ul" name="av-fade" class="list-group list-group-flush">
+                                    <li v-for="item in itemsProveedor" :key="item.id" class="list-group-item small px-0 d-flex justify-content-between align-items-center gap-2">
+                                        <div class="d-flex align-items-start gap-2" style="min-width:0">
+                                            <i class="fas fa-concierge-bell text-info mt-1"></i>
+                                            <div style="min-width:0">
+                                                <div class="av-item-title">
+                                                    {{ tituloItemIncluido(item) }}
+                                                    <span v-if="item.proveedor_tarifa!.proveedor_servicio?.proveedor?.es_referencial" class="av-badge av-badge-muted">Referencial</span>
+                                                </div>
+                                                <div class="av-item-sub">{{ subtituloItemIncluido(item) }}</div>
                                             </div>
-                                            <div class="av-item-sub">{{ descripcionDestinoServicio(item.proveedor_tarifa!.proveedor_servicio?.destino_servicio) }}<span v-if="item.proveedor_tarifa!.tipo_habitacion"> · {{ item.proveedor_tarifa!.tipo_habitacion }}</span></div>
-                                            <div class="av-item-tags"><span class="av-badge av-badge-muted">{{ item.proveedor_tarifa!.tipo_tarifa }} · {{ item.proveedor_tarifa!.modalidad }}</span></div>
                                         </div>
-                                        <div class="av-item-side">
-                                            <span class="av-item-price">{{ monedaItem(item) }} {{ ventaItem(item).toFixed(2) }}</span>
-                                            <span class="av-item-cost">costo {{ monedaItem(item) }} {{ costoItem(item).toFixed(2) }}</span>
-                                            <button type="button" class="btn btn-sm btn-link text-danger p-0 mt-1" @click="quitarItem(item)" :disabled="eliminandoItemId === item.id">
+                                        <div class="d-flex align-items-center gap-2 flex-shrink-0">
+                                            <span class="av-badge av-badge-servicio">{{ categoriaItem(item) }}</span>
+                                            <div class="text-end" style="min-width:64px">
+                                                <div class="av-item-price">{{ monedaItem(item) }} {{ ventaItem(item).toFixed(2) }}</div>
+                                                <div class="av-item-cost">costo {{ monedaItem(item) }} {{ costoItem(item).toFixed(2) }}</div>
+                                            </div>
+                                            <button type="button" class="btn btn-sm btn-link text-danger p-0" @click="quitarItem(item)" :disabled="eliminandoItemId === item.id">
                                                 <span v-if="eliminandoItemId === item.id" class="spinner-border spinner-border-sm"></span>
                                                 <i v-else class="fas fa-trash-can"></i>
                                             </button>
                                         </div>
-                                    </div>
+                                    </li>
                                 </TransitionGroup>
                             </div>
 
                             <div v-if="itemsGuia.length" class="av-group">
                                 <div class="av-group-title">Guías de turismo</div>
-                                <TransitionGroup tag="div" name="av-fade" class="av-included-grid">
-                                    <div v-for="item in itemsGuia" :key="item.id" class="av-item-card av-item-card--flat">
-                                        <div class="av-item-icon bg-warning-subtle text-warning"><i class="fas fa-user-tie"></i></div>
-                                        <div class="av-item-body">
-                                            <div class="av-item-title">
-                                                Guía: {{ item.guia_tarifa!.guia?.nombre }}
-                                                <span v-if="item.guia_tarifa!.guia?.es_referencial" class="av-badge av-badge-muted">Referencial</span>
+                                <TransitionGroup tag="ul" name="av-fade" class="list-group list-group-flush">
+                                    <li v-for="item in itemsGuia" :key="item.id" class="list-group-item small px-0 d-flex justify-content-between align-items-center gap-2">
+                                        <div class="d-flex align-items-start gap-2" style="min-width:0">
+                                            <i class="fas fa-user-tie text-warning mt-1"></i>
+                                            <div style="min-width:0">
+                                                <div class="av-item-title">
+                                                    {{ tituloItemIncluido(item) }}
+                                                    <span v-if="item.guia_tarifa!.guia?.es_referencial" class="av-badge av-badge-muted">Referencial</span>
+                                                </div>
+                                                <div class="av-item-sub">{{ subtituloItemIncluido(item) }}</div>
                                             </div>
-                                            <div class="av-item-sub">{{ item.guia_tarifa!.destino?.nombre }}</div>
                                         </div>
-                                        <div class="av-item-side">
-                                            <span class="av-item-price">{{ monedaItem(item) }} {{ ventaItem(item).toFixed(2) }}</span>
-                                            <span class="av-item-cost">costo {{ monedaItem(item) }} {{ costoItem(item).toFixed(2) }}</span>
-                                            <button type="button" class="btn btn-sm btn-link text-danger p-0 mt-1" @click="quitarItem(item)" :disabled="eliminandoItemId === item.id">
+                                        <div class="d-flex align-items-center gap-2 flex-shrink-0">
+                                            <span class="av-badge av-badge-servicio">{{ categoriaItem(item) }}</span>
+                                            <div class="text-end" style="min-width:64px">
+                                                <div class="av-item-price">{{ monedaItem(item) }} {{ ventaItem(item).toFixed(2) }}</div>
+                                                <div class="av-item-cost">costo {{ monedaItem(item) }} {{ costoItem(item).toFixed(2) }}</div>
+                                            </div>
+                                            <button type="button" class="btn btn-sm btn-link text-danger p-0" @click="quitarItem(item)" :disabled="eliminandoItemId === item.id">
                                                 <span v-if="eliminandoItemId === item.id" class="spinner-border spinner-border-sm"></span>
                                                 <i v-else class="fas fa-trash-can"></i>
                                             </button>
                                         </div>
-                                    </div>
+                                    </li>
                                 </TransitionGroup>
                             </div>
 
@@ -636,13 +661,22 @@
                                 <div v-if="expandidos.has(grupo.item.paquete_plantilla_hijo_id!)" class="card-body py-2">
                                     <div class="text-muted small fst-italic mb-2">Solo lectura — para editar estos ítems, entrá al tour.</div>
                                     <ul class="list-group list-group-flush">
-                                        <li v-for="sub in (tourSubItemsCache[grupo.item.paquete_plantilla_hijo_id!] ?? [])" :key="sub.id" class="list-group-item small px-0">
-                                            <span v-if="sub.proveedor_tarifa">
-                                                <i class="fas fa-concierge-bell text-primary me-1"></i>{{ sub.proveedor_tarifa.proveedor_servicio?.proveedor?.nombre_comercial ?? sub.proveedor_tarifa.proveedor_servicio?.proveedor?.razon_social }}
-                                            </span>
-                                            <span v-else-if="sub.guia_tarifa">
-                                                <i class="fas fa-user-tie text-primary me-1"></i>Guía: {{ sub.guia_tarifa.guia?.nombre }}
-                                            </span>
+                                        <li v-for="sub in (tourSubItemsCache[grupo.item.paquete_plantilla_hijo_id!] ?? [])" :key="sub.id"
+                                            class="list-group-item small px-0 d-flex justify-content-between align-items-center gap-2">
+                                            <div class="d-flex align-items-start gap-2" style="min-width:0">
+                                                <i class="fas mt-1" :class="sub.proveedor_tarifa ? 'fa-concierge-bell text-info' : 'fa-user-tie text-warning'"></i>
+                                                <div style="min-width:0">
+                                                    <div class="av-item-title">{{ tituloItemIncluido(sub) }}</div>
+                                                    <div class="av-item-sub">{{ subtituloItemIncluido(sub) }}</div>
+                                                </div>
+                                            </div>
+                                            <div class="d-flex align-items-center gap-2 flex-shrink-0">
+                                                <span class="av-badge av-badge-servicio">{{ categoriaItem(sub) }}</span>
+                                                <div class="text-end" style="min-width:64px">
+                                                    <div class="av-item-price">{{ monedaItem(sub) }} {{ ventaItem(sub).toFixed(2) }}</div>
+                                                    <div class="av-item-cost">costo {{ monedaItem(sub) }} {{ costoItem(sub).toFixed(2) }}</div>
+                                                </div>
+                                            </div>
                                         </li>
                                         <li v-if="(tourSubItemsCache[grupo.item.paquete_plantilla_hijo_id!] ?? []).length === 0" class="list-group-item small px-0 text-muted fst-italic">
                                             Este tour todavía no tiene ítems cargados.
@@ -656,37 +690,30 @@
                     <div v-if="itemsSueltos.length" class="card border-0 shadow-sm">
                         <div class="card-header bg-white border-bottom py-2"><span class="fw-semibold text-dark small">Ítems sueltos</span></div>
                         <div class="card-body">
-                            <TransitionGroup tag="div" name="av-fade" class="av-included-grid">
-                                <div v-for="item in itemsSueltos" :key="item.id" class="av-item-card av-item-card--flat">
-                                    <div class="av-item-icon" :class="item.proveedor_tarifa ? 'bg-info-subtle text-info' : 'bg-warning-subtle text-warning'">
-                                        <i class="fas" :class="item.proveedor_tarifa ? 'fa-concierge-bell' : 'fa-user-tie'"></i>
-                                    </div>
-                                    <div class="av-item-body">
-                                        <template v-if="item.proveedor_tarifa">
+                            <TransitionGroup tag="ul" name="av-fade" class="list-group list-group-flush">
+                                <li v-for="item in itemsSueltos" :key="item.id" class="list-group-item small px-0 d-flex justify-content-between align-items-center gap-2">
+                                    <div class="d-flex align-items-start gap-2" style="min-width:0">
+                                        <i class="fas mt-1" :class="item.proveedor_tarifa ? 'fa-concierge-bell text-info' : 'fa-user-tie text-warning'"></i>
+                                        <div style="min-width:0">
                                             <div class="av-item-title">
-                                                {{ item.proveedor_tarifa.proveedor_servicio?.proveedor?.nombre_comercial ?? item.proveedor_tarifa.proveedor_servicio?.proveedor?.razon_social }}
-                                                <span v-if="item.proveedor_tarifa.proveedor_servicio?.proveedor?.es_referencial" class="av-badge av-badge-muted">Referencial</span>
+                                                {{ tituloItemIncluido(item) }}
+                                                <span v-if="(item.proveedor_tarifa?.proveedor_servicio?.proveedor?.es_referencial || item.guia_tarifa?.guia?.es_referencial)" class="av-badge av-badge-muted">Referencial</span>
                                             </div>
-                                            <div class="av-item-sub">{{ descripcionDestinoServicio(item.proveedor_tarifa.proveedor_servicio?.destino_servicio) }}<span v-if="item.proveedor_tarifa.tipo_habitacion"> · {{ item.proveedor_tarifa.tipo_habitacion }}</span></div>
-                                            <div class="av-item-tags"><span class="av-badge av-badge-muted">{{ item.proveedor_tarifa.tipo_tarifa }} · {{ item.proveedor_tarifa.modalidad }}</span></div>
-                                        </template>
-                                        <template v-else-if="item.guia_tarifa">
-                                            <div class="av-item-title">
-                                                Guía: {{ item.guia_tarifa.guia?.nombre }}
-                                                <span v-if="item.guia_tarifa.guia?.es_referencial" class="av-badge av-badge-muted">Referencial</span>
-                                            </div>
-                                            <div class="av-item-sub">{{ item.guia_tarifa.destino?.nombre }}</div>
-                                        </template>
+                                            <div class="av-item-sub">{{ subtituloItemIncluido(item) }}</div>
+                                        </div>
                                     </div>
-                                    <div class="av-item-side">
-                                        <span class="av-item-price">{{ monedaItem(item) }} {{ ventaItem(item).toFixed(2) }}</span>
-                                        <span class="av-item-cost">costo {{ monedaItem(item) }} {{ costoItem(item).toFixed(2) }}</span>
-                                        <button type="button" class="btn btn-sm btn-link text-danger p-0 mt-1" @click="quitarItem(item)" :disabled="eliminandoItemId === item.id">
+                                    <div class="d-flex align-items-center gap-2 flex-shrink-0">
+                                        <span class="av-badge av-badge-servicio">{{ categoriaItem(item) }}</span>
+                                        <div class="text-end" style="min-width:64px">
+                                            <div class="av-item-price">{{ monedaItem(item) }} {{ ventaItem(item).toFixed(2) }}</div>
+                                            <div class="av-item-cost">costo {{ monedaItem(item) }} {{ costoItem(item).toFixed(2) }}</div>
+                                        </div>
+                                        <button type="button" class="btn btn-sm btn-link text-danger p-0" @click="quitarItem(item)" :disabled="eliminandoItemId === item.id">
                                             <span v-if="eliminandoItemId === item.id" class="spinner-border spinner-border-sm"></span>
                                             <i v-else class="fas fa-trash-can"></i>
                                         </button>
                                     </div>
-                                </div>
+                                </li>
                             </TransitionGroup>
                         </div>
                     </div>
@@ -828,7 +855,7 @@ import { formatFecha } from '@/helpers/fecha';
 import type {
     PaquetePlantilla, PaquetePlantillaItem, TourItinerarioItem,
     ProveedorTarifa, Proveedor, Guia, GuiaTarifa, ComboDatos, ComboItinerarioPaso, PaquetePlantillaResumen,
-    DestinoServicio, ConfiguracionAgencia, Servicio, ProveedorTipo,
+    ConfiguracionAgencia, Servicio, ProveedorTipo,
 } from '@/types/agencia-viajes';
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
@@ -940,16 +967,6 @@ const guardarDatos = async () => {
 
 const etiquetaCategoria = (c: string) => ({ local: 'Local', nacional: 'Nacional', internacional: 'Internacional' } as Record<string, string>)[c] ?? c;
 
-// Fix 1 (pantalla "Incluye") — destino/atractivo antes del nombre del
-// servicio, para diferenciar tarifas del mismo proveedor/servicio genérico
-// que solo se distinguían por precio. `destino_atractivo` puede venir null
-// (no todo servicio está atado a un destino) — en ese caso solo el nombre
-// del servicio, sin romper el render.
-const descripcionDestinoServicio = (ds?: DestinoServicio) => {
-    const destino = ds?.destino_atractivo?.nombre;
-    const servicio = ds?.servicio?.nombre ?? '';
-    return destino ? `${destino} · ${servicio}` : servicio;
-};
 
 const cargarPaquete = async () => {
     const res = await paquetePlantillaService.obtener(paqueteId.value);
@@ -1510,6 +1527,41 @@ const categoriaItem = (item: PaquetePlantillaItem): string => {
     return tipo?.nombre ?? 'Sin categoría';
 };
 
+// Título/subtítulo uniforme para un ítem incluido — usado en las 4 listas
+// de la vista (servicios de proveedor, guías, sub-ítems de un tour dentro
+// de un combo, ítems sueltos de combo), pedido del usuario 2026-08-29
+// para homogenizar. Mismo criterio que ya usa cotizador/editar.vue::
+// etiquetaItem() para alojamiento: en nuestros datos reales
+// servicio.nombre de un hotel es casi siempre el mismo texto genérico
+// ("Alojamiento") — todas las filas de hoteles se verían iguales de
+// título si usáramos el servicio ahí. El dato que realmente distingue una
+// fila de otra es el proveedor + tipo de habitación, así que va en el
+// título; para el resto de servicios (donde servicio.nombre SÍ es
+// específico — "City tour", "Traslado ida y vuelta") el título es el
+// nombre del servicio, no el proveedor.
+const tituloItemIncluido = (item: PaquetePlantillaItem): string => {
+    if (item.guia_tarifa) return `Guía: ${item.guia_tarifa.guia?.nombre ?? '—'}`;
+    if (item.proveedor_tarifa?.tipo_habitacion) {
+        const proveedor = item.proveedor_tarifa.proveedor_servicio?.proveedor?.nombre_comercial
+            ?? item.proveedor_tarifa.proveedor_servicio?.proveedor?.razon_social ?? 'Hotel';
+        return `${proveedor} · ${item.proveedor_tarifa.tipo_habitacion}`;
+    }
+    return item.proveedor_tarifa?.proveedor_servicio?.destino_servicio?.servicio?.nombre ?? 'Servicio';
+};
+
+const subtituloItemIncluido = (item: PaquetePlantillaItem): string => {
+    if (item.guia_tarifa) return item.guia_tarifa.destino?.nombre ?? '';
+    const tarifa = item.proveedor_tarifa;
+    if (!tarifa) return '';
+    const destino = tarifa.proveedor_servicio?.destino_servicio?.destino_atractivo?.nombre;
+    // Si el título ya lleva el proveedor (caso hotel), acá no se repite.
+    const proveedor = tarifa.tipo_habitacion
+        ? null
+        : (tarifa.proveedor_servicio?.proveedor?.nombre_comercial ?? tarifa.proveedor_servicio?.proveedor?.razon_social);
+    const partes = [proveedor, destino, `${tarifa.tipo_tarifa} · ${tarifa.modalidad}`].filter((p): p is string => !!p);
+    return partes.join(' · ');
+};
+
 const desglosePorCategoria = computed(() => {
     const acumulado: Record<string, { categoria: string; costo: number; venta: number }> = {};
     for (const item of items.value) {
@@ -1743,16 +1795,6 @@ onMounted(async () => {
     cursor: not-allowed;
 }
 
-.av-item-card--flat {
-    cursor: default;
-}
-
-.av-item-card--flat:hover {
-    transform: none;
-    box-shadow: none;
-    border-color: #e9ecef;
-}
-
 .av-item-icon {
     width: 34px;
     height: 34px;
@@ -1834,6 +1876,27 @@ onMounted(async () => {
     color: #868e96;
     font-weight: 600;
     margin-left: .25rem;
+}
+
+/* Realce del tipo de servicio en "Agregar a este tour" (pedido del
+   usuario 2026-08-28: antes el realce estaba en tipo_tarifa/modalidad
+   "pública/privada", que es un dato secundario — el tipo de servicio es
+   lo que ayuda a identificar el card de un vistazo). Mismo azul que ya
+   usa el ícono del card (bg-info-subtle text-info), para que quede
+   coherente. */
+.av-badge-servicio {
+    background: #cff4fc;
+    color: #055160;
+    font-weight: 700;
+}
+
+/* Tipo de habitación (solo alojamientos) — color distinto al de
+   av-badge-servicio para que se distingan cuando aparecen juntos
+   ("Alojamiento" + "doble"), mismo criterio de "realce" pedido. */
+.av-badge-habitacion {
+    background: #e2d9f3;
+    color: #4b2e83;
+    font-weight: 700;
 }
 
 .av-selection-bar {

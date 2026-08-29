@@ -179,7 +179,11 @@
         </div>
 
         <!-- Modal simple de tarifa (crear/editar) -->
-        <div v-if="modalTarifaAbierto" class="modal d-block" style="background:rgba(0,0,0,.5)" @click.self="modalTarifaAbierto = false">
+        <!-- Sin @click.self de cierre a propósito: un drag de selección de
+             texto que termina fuera del modal-content dispara "click" sobre
+             el backdrop y lo cerraba solo, perdiendo todo lo tipeado — se
+             cierra solo con "Cancelar" o la "×" del header. -->
+        <div v-if="modalTarifaAbierto" class="modal d-block" style="background:rgba(0,0,0,.5)">
             <div class="modal-dialog modal-lg">
                 <div class="modal-content">
                     <div class="modal-header">
