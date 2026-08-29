@@ -945,7 +945,11 @@ class AlternativaItemController extends Controller
             return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
         }
 
-        return $validator->validated();
+        $validado = $validator->validated();
+        // 29-ago-2026 — capitalización tipo título, solo hacia adelante.
+        $validado['aerolinea'] = \App\Services\TextoFormatoService::capitalizarNombrePropio($validado['aerolinea']);
+
+        return $validado;
     }
 
     private function calcularPasajeAereo(Alternativa $alternativa, array $validado): array

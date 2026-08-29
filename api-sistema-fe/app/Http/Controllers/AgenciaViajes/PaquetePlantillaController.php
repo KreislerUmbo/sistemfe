@@ -411,6 +411,8 @@ class PaquetePlantillaController extends Controller
         }
 
         $validado = $validator->validated();
+        // 29-ago-2026 — capitalización tipo título, solo hacia adelante.
+        $validado['nombre'] = \App\Services\TextoFormatoService::capitalizarNombrePropio($validado['nombre']);
 
         // precio_venta_final no aplica a paquete_combo — se calcula en vivo
         // desde los tours incluidos + descuento (punto 3 del diseño de

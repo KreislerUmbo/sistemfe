@@ -9,6 +9,7 @@ use App\Models\AgenciaViajes\GuiaTarifa;
 use App\Models\AgenciaViajes\TourItinerarioItem;
 use App\Services\AgenciaViajes\FotoUploadService;
 use App\Services\StorageUrl;
+use App\Services\TextoFormatoService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -279,6 +280,11 @@ class DestinoAtractivoController extends Controller
             return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
         }
 
-        return $validator->validated();
+        $validado = $validator->validated();
+        // 29-ago-2026 — capitalización tipo título en español, solo hacia
+        // adelante (nunca reescribe lo ya guardado). Ver TextoFormatoService.
+        $validado['nombre'] = TextoFormatoService::capitalizarNombrePropio($validado['nombre']);
+
+        return $validado;
     }
 }

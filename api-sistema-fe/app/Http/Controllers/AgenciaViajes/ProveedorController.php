@@ -13,6 +13,7 @@ use App\Models\AgenciaViajes\ProveedorTipo;
 use App\Models\AgenciaViajes\ProveedorTipoConfig;
 use App\Services\AgenciaViajes\FotoUploadService;
 use App\Services\StorageUrl;
+use App\Services\TextoFormatoService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -382,6 +383,15 @@ class ProveedorController extends Controller
                     'message' => 'Una o más amenidades seleccionadas no existen.',
                 ], 422);
             }
+        }
+
+        // 29-ago-2026 — capitalización tipo título, solo nombre_comercial
+        // (nunca razon_social, dato fiscal). array_key_exists porque es
+        // nullable: si la request no manda la clave, validated() tampoco
+        // la trae, y no hay que inventarla acá (evitaría vaciar el campo
+        // sin que el frontend lo haya tocado).
+        if (array_key_exists('nombre_comercial', $validado)) {
+            $validado['nombre_comercial'] = TextoFormatoService::capitalizarNombrePropio($validado['nombre_comercial']);
         }
 
         return $validado;

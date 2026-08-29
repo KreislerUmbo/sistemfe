@@ -5,6 +5,7 @@ namespace App\Http\Controllers\AgenciaViajes;
 use App\Http\Controllers\Controller;
 use App\Models\AgenciaViajes\DestinoServicio;
 use App\Models\AgenciaViajes\Servicio;
+use App\Services\TextoFormatoService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
@@ -39,7 +40,10 @@ class ServicioController extends Controller
         }
 
         $validado = $validator->validated();
-        $validado['nombre'] = trim($validado['nombre']);
+        // 29-ago-2026 — capitalizarNombrePropio() ya hace trim() adentro,
+        // reemplaza el trim() suelto que había acá. El chequeo de
+        // duplicados de abajo compara contra este valor ya normalizado.
+        $validado['nombre'] = TextoFormatoService::capitalizarNombrePropio($validado['nombre']);
 
         // 29-ago-2026 — diagnóstico UX/técnico del flujo de servicios en
         // Destinos: sin esto, "Traslado"/"traslado"/"Traslado " (espacio)
@@ -85,7 +89,10 @@ class ServicioController extends Controller
         }
 
         $validado = $validator->validated();
-        $validado['nombre'] = trim($validado['nombre']);
+        // 29-ago-2026 — capitalizarNombrePropio() ya hace trim() adentro,
+        // reemplaza el trim() suelto que había acá. El chequeo de
+        // duplicados de abajo compara contra este valor ya normalizado.
+        $validado['nombre'] = TextoFormatoService::capitalizarNombrePropio($validado['nombre']);
 
         if ($this->existeNombreDuplicado($validado['nombre'], $servicio->id)) {
             return response()->json([

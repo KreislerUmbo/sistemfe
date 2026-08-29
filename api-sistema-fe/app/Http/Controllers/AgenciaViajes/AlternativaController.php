@@ -65,7 +65,10 @@ class AlternativaController extends Controller
 
         $alternativa = Alternativa::create([
             'cotizacion_id' => $cotizacion->id,
-            'nombre' => $validado['nombre'] ?: "Alternativa {$letra}",
+            // 29-ago-2026 — capitalización tipo título solo cuando el
+            // usuario tipeó algo; el fallback autogenerado ya está bien
+            // formado, no hace falta pasarlo por la función.
+            'nombre' => $validado['nombre'] ? \App\Services\TextoFormatoService::capitalizarNombrePropio($validado['nombre']) : "Alternativa {$letra}",
             'estado' => 'borrador',
             'moneda_cotizacion' => $validado['moneda_cotizacion'],
             'tipo_cambio_aplicado' => $tipoCambio->valor,
@@ -101,6 +104,11 @@ class AlternativaController extends Controller
         }
 
         $validado = array_filter($validator->validated(), fn ($v) => $v !== null);
+        // 29-ago-2026 — capitalización tipo título solo si vino en el
+        // payload (array_filter ya sacó los null, así que isset alcanza).
+        if (isset($validado['nombre'])) {
+            $validado['nombre'] = \App\Services\TextoFormatoService::capitalizarNombrePropio($validado['nombre']);
+        }
         $lineasFueraDePiso = [];
 
         DB::transaction(function () use ($alternativa, $validado, &$lineasFueraDePiso) {

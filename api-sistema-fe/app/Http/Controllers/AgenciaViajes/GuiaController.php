@@ -111,6 +111,10 @@ class GuiaController extends Controller
             return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
         }
 
-        return $validator->validated();
+        $validado = $validator->validated();
+        // 29-ago-2026 — capitalización tipo título, solo hacia adelante.
+        $validado['nombre'] = \App\Services\TextoFormatoService::capitalizarNombrePropio($validado['nombre']);
+
+        return $validado;
     }
 }
