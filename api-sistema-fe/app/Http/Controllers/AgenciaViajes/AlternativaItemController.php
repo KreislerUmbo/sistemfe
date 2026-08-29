@@ -730,6 +730,18 @@ class AlternativaItemController extends Controller
         $validado = $validator->validated();
         $guiaTarifa = GuiaTarifa::findOrFail($validado['guia_tarifa_id']);
 
+        // 29-ago-2026, mismo criterio que crearItemProveedor(): el picker
+        // de GuiaController::show() ya excluye tarifas desactivadas, pero
+        // esto es lo que de verdad decide si un ítem nuevo se puede crear
+        // — sin este check, un guia_tarifa_id ya desactivado (ej. de una
+        // pestaña vieja) igual se podía usar.
+        if (! $guiaTarifa->activo) {
+            return response()->json([
+                'code' => 422,
+                'message' => 'Esta tarifa fue retirada del catálogo activo — no se puede usar en un ítem nuevo.',
+            ], 422);
+        }
+
         $calculo = $this->priceEngine->calcular(
             (float) $guiaTarifa->costo_diario,
             [],

@@ -38,7 +38,26 @@ class ServicioController extends Controller
             return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
         }
 
-        $servicio = Servicio::create($validator->validated());
+        $validado = $validator->validated();
+        $validado['nombre'] = trim($validado['nombre']);
+
+        // 29-ago-2026 — diagnóstico UX/técnico del flujo de servicios en
+        // Destinos: sin esto, "Traslado"/"traslado"/"Traslado " (espacio)
+        // se creaban como 3 filas distintas del mismo catálogo compartido
+        // — la causa real detrás de que la mayoría de servicios terminen
+        // en "Sin categoría" (desglose de paquetes/detalle.vue). Bloqueo
+        // duro solo en coincidencia EXACTA (case-insensitive, trim) — un
+        // parecido pero distinto ("Traslado ida y vuelta") sigue
+        // permitido, para eso está la sugerencia visual del buscador
+        // unificado en el frontend, no un bloqueo acá.
+        if ($this->existeNombreDuplicado($validado['nombre'])) {
+            return response()->json([
+                'code' => 422,
+                'message' => "Ya existe un servicio llamado \"{$validado['nombre']}\" en el catálogo — usá ese en vez de crear uno nuevo.",
+            ], 422);
+        }
+
+        $servicio = Servicio::create($validado);
 
         return response()->json([
             'code' => 200,
@@ -65,13 +84,30 @@ class ServicioController extends Controller
             return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
         }
 
-        $servicio->update($validator->validated());
+        $validado = $validator->validated();
+        $validado['nombre'] = trim($validado['nombre']);
+
+        if ($this->existeNombreDuplicado($validado['nombre'], $servicio->id)) {
+            return response()->json([
+                'code' => 422,
+                'message' => "Ya existe otro servicio llamado \"{$validado['nombre']}\" en el catálogo.",
+            ], 422);
+        }
+
+        $servicio->update($validado);
 
         return response()->json([
             'code' => 200,
             'message' => 'Servicio actualizado correctamente',
             'servicio' => $servicio,
         ]);
+    }
+
+    private function existeNombreDuplicado(string $nombre, ?int $exceptoId = null): bool
+    {
+        return Servicio::whereRaw('LOWER(nombre) = ?', [mb_strtolower($nombre)])
+            ->when($exceptoId, fn ($q) => $q->where('id', '!=', $exceptoId))
+            ->exists();
     }
 
     public function destroy(string $id)

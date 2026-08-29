@@ -38,8 +38,15 @@ class DestinoAtractivoController extends Controller
 
         // Sin filtro: árbol completo anidado (solo 3 niveles posibles, alcanza
         // con 2 niveles de eager load de hijos a partir de cualquier raíz).
+        // withCount('destinoServicios') en los 3 niveles (29-ago-2026) —
+        // alimenta el filtro "sin servicios asociados" del frontend, sin
+        // pedir cada destino uno por uno.
         $arbol = DestinoAtractivo::whereNull('parent_id')
-            ->with(['hijos' => fn ($q) => $q->orderBy('nombre'), 'hijos.hijos' => fn ($q) => $q->orderBy('nombre')])
+            ->withCount('destinoServicios')
+            ->with([
+                'hijos' => fn ($q) => $q->orderBy('nombre')->withCount('destinoServicios'),
+                'hijos.hijos' => fn ($q) => $q->orderBy('nombre')->withCount('destinoServicios'),
+            ])
             ->orderBy('nombre')
             ->get();
         $arbol->each(fn ($d) => $this->resolverFotos($d));

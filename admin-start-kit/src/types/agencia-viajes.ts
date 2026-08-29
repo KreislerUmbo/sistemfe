@@ -139,6 +139,9 @@ export type DestinoAtractivo = {
   descripcion?: string | null;
   fotos?: string[] | null;
   hijos?: DestinoAtractivo[];
+  // 29-ago-2026 — withCount('destinoServicios') en DestinoAtractivoController::
+  // index(), alimenta el filtro "sin servicios asociados" de destinos/index.vue.
+  destino_servicios_count?: number;
 };
 
 export type Servicio = {
@@ -196,6 +199,9 @@ export type GuiaTarifa = {
   moneda: 'PEN' | 'USD';
   vigente_desde: string;
   vigente_hasta?: string | null;
+  // 29-ago-2026 — retiro del catálogo activo sin borrar historial, mismo
+  // patrón que ProveedorTarifa.activo.
+  activo?: boolean;
   destino?: DestinoAtractivo;
   // Faltaba en el tipo pese a que ya se usaba en detalle.vue desde Sesión
   // 11b2 (el backend siempre carga esta relación, ver

@@ -500,7 +500,14 @@ class AlternativaController extends Controller
             'cotizacion' => $alternativa->cotizacion,
             'cliente' => $alternativa->cotizacion->cliente,
             'empresa' => $empresa,
-            'logoUrl' => \App\Services\StorageUrl::resolve($empresa?->logo_horizontal),
+            // resolveParaPdf(), no resolve() — DomPDF corre con
+            // enable_remote=false, así que la URL de resolve() (pensada
+            // para el navegador) nunca carga como imagen embebida acá
+            // dentro. Mismo bug ya corregido en SaleController/NotaController/
+            // PaymentReceiptController/CommercialQuoteController/
+            // ReporteOperativoController — quedaba pendiente acá a propósito
+            // (29-ago-2026).
+            'logoUrl' => \App\Services\StorageUrl::resolveParaPdf($empresa?->logo_horizontal),
             'config' => $config,
             'cuentasBancarias' => $cuentasBancarias,
             'pasajeros' => $pasajeros,

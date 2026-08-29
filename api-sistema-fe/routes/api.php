@@ -551,6 +551,17 @@ Route::group([
         ->middleware('permission:agencia.guias');
     Route::post("guias/{id}/tarifas", [GuiaTarifaController::class, 'store'])
         ->middleware('permission:agencia.guias');
+    Route::put("guia-tarifas/{id}", [GuiaTarifaController::class, 'update'])
+        ->middleware('permission:agencia.guias');
+    Route::delete("guia-tarifas/{id}", [GuiaTarifaController::class, 'destroy'])
+        ->middleware('permission:agencia.guias');
+    // 29-ago-2026 — retiro del catálogo activo sin borrar historial, mismo
+    // patrón que proveedor-tarifas (ver GuiaTarifaController::desactivar()/
+    // activar()).
+    Route::patch("guia-tarifas/{id}/desactivar", [GuiaTarifaController::class, 'desactivar'])
+        ->middleware('permission:agencia.guias');
+    Route::patch("guia-tarifas/{id}/activar", [GuiaTarifaController::class, 'activar'])
+        ->middleware('permission:agencia.guias');
 
     Route::get("configuracion-agencia", [ConfiguracionAgenciaController::class, 'show'])
         ->middleware('permission:agencia.configuracion');

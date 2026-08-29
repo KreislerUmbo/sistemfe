@@ -13,6 +13,38 @@
             </router-link>
         </div>
 
+        <div class="card border-0 shadow-sm mb-3">
+            <div class="card-body py-2">
+                <div class="row g-2 align-items-center">
+                    <div class="col-12 col-md-5">
+                        <div class="input-group input-group-sm">
+                            <span class="input-group-text bg-white"><i class="fas fa-search text-muted"></i></span>
+                            <input type="text" class="form-control" placeholder="Buscar por nombre..." v-model="busqueda">
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <select class="form-select form-select-sm" v-model="filtroTipo">
+                            <option value="">Todos los tipos</option>
+                            <option value="zona">Zona</option>
+                            <option value="lugar">Lugar</option>
+                            <option value="atractivo">Atractivo</option>
+                        </select>
+                    </div>
+                    <div class="col-6 col-md-3 d-flex align-items-center">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="filtro-sin-servicios" v-model="filtroSinServicios">
+                            <label class="form-check-label small" for="filtro-sin-servicios">Sin servicios asociados</label>
+                        </div>
+                    </div>
+                    <div class="col-md-1 text-end">
+                        <button v-if="hayFiltroActivo" class="btn btn-sm btn-outline-secondary" title="Limpiar filtros" @click="limpiarFiltros">
+                            <i class="fas fa-xmark"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div class="card border-0 shadow-sm">
             <div class="card-body p-0">
                 <div class="table-responsive">
@@ -31,13 +63,15 @@
                                 </td>
                             </tr>
                             <tr v-else-if="filasVisibles.length === 0">
-                                <td colspan="3" class="text-center py-5 text-muted fst-italic">Sin destinos cargados todavía.</td>
+                                <td colspan="3" class="text-center py-5 text-muted fst-italic">
+                                    {{ hayFiltroActivo ? 'Sin resultados para este filtro.' : 'Sin destinos cargados todavía.' }}
+                                </td>
                             </tr>
                             <tr v-for="fila in filasVisibles" :key="fila.id">
                                 <td class="ps-3">
                                     <span :style="{ paddingLeft: (fila.profundidad * 22) + 'px' }">
                                         <i v-if="fila.tieneHijos" class="fas me-1" style="cursor:pointer;width:12px;display:inline-block;"
-                                            :class="expandidos.has(fila.id) ? 'fa-caret-down' : 'fa-caret-right'"
+                                            :class="(hayFiltroActivo || expandidos.has(fila.id)) ? 'fa-caret-down' : 'fa-caret-right'"
                                             @click="toggleExpandido(fila.id)"></i>
                                         <i v-else class="me-1" style="width:12px;display:inline-block;"></i>
                                         {{ fila.nombre }}
@@ -79,45 +113,64 @@
                         <button class="btn-close" @click="modalServiciosAbierto = false"></button>
                     </div>
                     <div class="modal-body">
-                        <div class="mb-2">
+                        <!-- Buscador unificado (29-ago-2026, diagnóstico UX): antes
+                             "buscar existente" y "crear nuevo" eran 2 cajas separadas
+                             — un solo combobox ahora: escribís, ves los que ya existen
+                             para asociar directo, y "Crear '‹texto›'" siempre aparece
+                             al final para el caso de que no exista todavía. -->
+                        <div class="mb-3">
                             <input type="text" class="form-control form-control-sm" v-model="servicioBusqueda"
-                                placeholder="Buscar un servicio del catálogo para asociar...">
-                            <div v-if="servicioBusqueda.trim().length >= 2" class="list-group mt-1" style="max-height:160px; overflow-y:auto;">
+                                placeholder="Buscar o crear un servicio (mín. 2 letras)...">
+                            <div v-if="servicioBusqueda.trim().length >= 2 && !mostrarFormNuevoServicio" class="list-group mt-1" style="max-height:200px; overflow-y:auto;">
                                 <div v-if="buscandoServicio" class="text-center py-2"><span class="spinner-border spinner-border-sm"></span></div>
-                                <div v-else-if="servicioResultados.length === 0" class="list-group-item text-muted small fst-italic">Sin resultados.</div>
                                 <template v-else>
+                                    <div v-if="servicioResultados.length === 0" class="list-group-item text-muted small fst-italic">Sin resultados — puede que no exista todavía.</div>
                                     <button v-for="s in servicioResultados" :key="s.id" type="button"
                                         class="list-group-item list-group-item-action small py-1"
                                         :disabled="asociandoServicio" @click="asociarServicioExistente(s)">
                                         <i class="fas fa-plus me-1 text-success"></i>{{ s.nombre }}
                                     </button>
+                                    <button v-if="servicioBusquedaHayMas" type="button" class="list-group-item list-group-item-action small py-1 text-center text-muted"
+                                        :disabled="cargandoMasServicios" @click="cargarMasServicios">
+                                        <span v-if="cargandoMasServicios" class="spinner-border spinner-border-sm"></span>
+                                        <span v-else>Cargar más...</span>
+                                    </button>
+                                    <button type="button" class="list-group-item list-group-item-action small py-1 text-primary fw-semibold"
+                                        @click="iniciarCreacionServicio">
+                                        <i class="fas fa-plus-circle me-1"></i>Crear "{{ servicioBusqueda.trim() }}" como nuevo servicio
+                                    </button>
                                 </template>
                             </div>
                         </div>
-                        <!-- Alta rápida: el catálogo de servicios (Traslado, Hospedaje,
-                             Entrada/Boleto...) no tiene pantalla propia en esta sesión —
-                             se crea acá mismo, donde se necesita, mismo espíritu que
-                             ClientFormQuick/ProductFormQuick del core. El selector de
-                             "Tipo de proveedor" es opcional — de acá sale el
-                             tipo_proveedor_id que alimenta el desglose por categoría
-                             de paquetes/detalle.vue (antes no había forma de asignarlo
+
+                        <!-- Confirmación de alta — solo visible al elegir "Crear" de
+                             arriba (antes vivía siempre visible como una 2da caja
+                             aparte). tipo_proveedor sigue siendo opcional acá: de acá
+                             sale lo que alimenta el desglose por categoría de
+                             paquetes/detalle.vue (antes no había forma de asignarlo
                              desde ningún lado, todo caía en "Sin categoría"). -->
-                        <div class="input-group input-group-sm mb-3">
-                            <input type="text" class="form-control" placeholder="¿No está en la lista? Escribe el nombre y créalo..." v-model="servicioNuevoNombre">
-                            <select class="form-select" style="max-width:150px" v-model="tipoProveedorNuevoId" title="Tipo de proveedor (opcional)">
-                                <option :value="null">Sin categoría</option>
-                                <option v-for="t in proveedorTipos" :key="t.id" :value="t.id">{{ t.nombre }}</option>
-                            </select>
-                            <button class="btn btn-outline-success" @click="crearServicioRapido" :disabled="!servicioNuevoNombre.trim()">
-                                <i class="fas fa-plus-circle me-1"></i>Crear
-                            </button>
+                        <div v-if="mostrarFormNuevoServicio" class="border rounded p-2 mb-3 bg-light-subtle">
+                            <div class="input-group input-group-sm">
+                                <input type="text" class="form-control" placeholder="Nombre del servicio" v-model="servicioNuevoNombre">
+                                <select class="form-select" style="max-width:150px" v-model="tipoProveedorNuevoId" title="Tipo de proveedor (opcional)">
+                                    <option :value="null">Sin categoría</option>
+                                    <option v-for="t in proveedorTipos" :key="t.id" :value="t.id">{{ t.nombre }}</option>
+                                </select>
+                                <button class="btn btn-outline-success" @click="crearServicioRapido" :disabled="!servicioNuevoNombre.trim()">
+                                    <i class="fas fa-check"></i>
+                                </button>
+                                <button class="btn btn-outline-secondary" @click="cancelarCreacionServicio">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
                         </div>
                         <ul class="list-group">
                             <li v-for="ds in destinoServiciosLista" :key="ds.id" class="list-group-item d-flex justify-content-between align-items-center">
                                 <div v-if="editandoServicioId === ds.servicio?.id" class="w-100">
-                                    <small class="text-muted d-block mb-1">
-                                        <i class="fas fa-info-circle me-1"></i>Este cambio de nombre afecta a todos los destinos que usan este servicio.
-                                    </small>
+                                    <div class="alert alert-warning py-1 px-2 mb-2 small">
+                                        <i class="fas fa-triangle-exclamation me-1"></i>
+                                        Esto renombra el servicio en <strong>todo el catálogo</strong> — afecta a todos los demás destinos que ya lo usan, no solo a este.
+                                    </div>
                                     <div class="input-group input-group-sm">
                                         <input type="text" class="form-control" v-model="editandoServicioNombre" @keyup.enter="guardarNombreServicio">
                                         <select class="form-select" style="max-width:150px" v-model="editandoTipoProveedorId" title="Tipo de proveedor (opcional)">
@@ -151,7 +204,7 @@
                                         <button class="btn btn-sm btn-outline-primary me-1" title="Mover a otro destino" @click="iniciarMoverServicio(ds.id)">
                                             <i class="fas fa-arrows-alt"></i>
                                         </button>
-                                        <button class="btn btn-sm btn-outline-secondary me-1" @click="iniciarEdicionServicio(ds)">
+                                        <button class="btn btn-sm btn-outline-secondary me-1" title="Renombrar en todo el catálogo (afecta a otros destinos)" @click="iniciarEdicionServicio(ds)">
                                             <i class="fas fa-pen"></i>
                                         </button>
                                         <button class="btn btn-sm btn-outline-danger" @click="desasociarServicio(ds.id)">
@@ -183,11 +236,22 @@ import type { DestinoAtractivo, DestinoServicio, Servicio, ProveedorTipo } from 
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
 
-type Fila = { id: number; nombre: string; tipo: 'zona' | 'lugar' | 'atractivo'; parentId: number | null; profundidad: number; tieneHijos: boolean };
+type Fila = {
+    id: number; nombre: string; tipo: 'zona' | 'lugar' | 'atractivo'; parentId: number | null;
+    profundidad: number; tieneHijos: boolean; serviciosCount: number;
+};
 
 const arbol = ref<DestinoAtractivo[]>([]);
 const loading = ref<boolean>(false);
 const expandidos = ref<Set<number>>(new Set());
+
+// Buscador con filtros (29-ago-2026) — el árbol entero ya vive en memoria
+// (arbol.value, sin paginación), así que filtrar es puro cálculo en el
+// frontend, sin pedir nada nuevo al backend salvo el conteo de servicios
+// (withCount ya viene en la respuesta de arbol()).
+const busqueda = ref<string>('');
+const filtroTipo = ref<'' | 'zona' | 'lugar' | 'atractivo'>('');
+const filtroSinServicios = ref<boolean>(false);
 
 const filas = computed<Fila[]>(() => {
     const resultado: Fila[] = [];
@@ -196,6 +260,7 @@ const filas = computed<Fila[]>(() => {
             resultado.push({
                 id: nodo.id, nombre: nodo.nombre, tipo: nodo.tipo, parentId,
                 profundidad, tieneHijos: !!(nodo.hijos && nodo.hijos.length > 0),
+                serviciosCount: nodo.destino_servicios_count ?? 0,
             });
             if (nodo.hijos) recorrer(nodo.hijos, nodo.id, profundidad + 1);
         }
@@ -204,18 +269,49 @@ const filas = computed<Fila[]>(() => {
     return resultado;
 });
 
+const hayFiltroActivo = computed(() => busqueda.value.trim().length > 0 || filtroTipo.value !== '' || filtroSinServicios.value);
+
+const filaCoincide = (fila: Fila): boolean => {
+    if (busqueda.value.trim() && !fila.nombre.toLowerCase().includes(busqueda.value.trim().toLowerCase())) return false;
+    if (filtroTipo.value && fila.tipo !== filtroTipo.value) return false;
+    if (filtroSinServicios.value && fila.serviciosCount > 0) return false;
+    return true;
+};
+
+// Con filtro activo: se muestran las filas que coinciden MÁS toda la
+// cadena de ancestros hasta la raíz (para no perder el contexto de en qué
+// zona/lugar está cada resultado) — auto-expandido, ignora
+// expandidos.value mientras el filtro esté activo.
 const filasVisibles = computed(() => {
-    return filas.value.filter((fila) => {
-        if (fila.parentId === null) return true;
-        // Todos los ancestros deben estar expandidos.
+    if (!hayFiltroActivo.value) {
+        return filas.value.filter((fila) => {
+            if (fila.parentId === null) return true;
+            let actual: Fila | undefined = fila;
+            while (actual && actual.parentId !== null) {
+                if (!expandidos.value.has(actual.parentId)) return false;
+                actual = filas.value.find((f) => f.id === actual!.parentId);
+            }
+            return true;
+        });
+    }
+
+    const idsVisibles = new Set<number>();
+    for (const fila of filas.value) {
+        if (!filaCoincide(fila)) continue;
         let actual: Fila | undefined = fila;
-        while (actual && actual.parentId !== null) {
-            if (!expandidos.value.has(actual.parentId)) return false;
-            actual = filas.value.find((f) => f.id === actual!.parentId);
+        while (actual) {
+            idsVisibles.add(actual.id);
+            actual = actual.parentId === null ? undefined : filas.value.find((f) => f.id === actual!.parentId);
         }
-        return true;
-    });
+    }
+    return filas.value.filter((fila) => idsVisibles.has(fila.id));
 });
+
+const limpiarFiltros = () => {
+    busqueda.value = '';
+    filtroTipo.value = '';
+    filtroSinServicios.value = false;
+};
 
 const toggleExpandido = (id: number) => {
     if (expandidos.value.has(id)) expandidos.value.delete(id);
@@ -265,6 +361,26 @@ const servicioResultados = ref<Servicio[]>([]);
 const buscandoServicio = ref<boolean>(false);
 const asociandoServicio = ref<boolean>(false);
 let servicioBusquedaTimeout: ReturnType<typeof setTimeout> | undefined;
+
+// Paginación del buscador (29-ago-2026, diagnóstico UX) — antes traía
+// máximo 15 (default del backend) y los ya asociados se filtraban DESPUÉS
+// en el frontend, sin forma de pedir más: un servicio real podía quedar
+// afuera sin que hubiera manera de verlo. servicioBusquedaCrudos cuenta lo
+// recibido del backend (antes de filtrar los ya asociados) para saber si
+// "hay más" — servicioResultados.length no sirve para eso porque ya está
+// filtrado.
+const SERVICIOS_POR_PAGINA = 15;
+const servicioBusquedaPagina = ref<number>(1);
+const servicioBusquedaTotal = ref<number>(0);
+const servicioBusquedaCrudos = ref<number>(0);
+const cargandoMasServicios = ref<boolean>(false);
+const servicioBusquedaHayMas = computed(() => servicioBusquedaCrudos.value < servicioBusquedaTotal.value);
+
+// Alta rápida — antes vivía siempre visible como una 2da caja aparte del
+// buscador; ahora solo aparece al elegir "Crear" desde los resultados del
+// buscador unificado (ver iniciarCreacionServicio()).
+const mostrarFormNuevoServicio = ref<boolean>(false);
+
 const editandoServicioId = ref<number | null>(null);
 const editandoServicioNombre = ref<string>('');
 const moviendoServicioId = ref<number | null>(null);
@@ -290,14 +406,25 @@ const abrirServicios = async (fila: Fila) => {
     servicioBusqueda.value = '';
     servicioResultados.value = [];
     servicioNuevoNombre.value = '';
+    mostrarFormNuevoServicio.value = false;
     modalServiciosAbierto.value = true;
     const res = await destinoAtractivoService.listarServicios(fila.id);
     destinoServiciosLista.value = res.destino_servicios;
 };
 
-// Crea el servicio y lo asocia al destino en un solo paso — ya no hace
-// falta el select+botón "asociar" que existía antes (búsqueda reemplaza
-// la mitad de ese flujo, esto reemplaza la otra mitad).
+const iniciarCreacionServicio = () => {
+    servicioNuevoNombre.value = servicioBusqueda.value.trim();
+    tipoProveedorNuevoId.value = null;
+    mostrarFormNuevoServicio.value = true;
+};
+
+const cancelarCreacionServicio = () => {
+    mostrarFormNuevoServicio.value = false;
+    servicioNuevoNombre.value = '';
+    tipoProveedorNuevoId.value = null;
+};
+
+// Crea el servicio y lo asocia al destino en un solo paso.
 const crearServicioRapido = async () => {
     if (!destinoServiciosActivo.value) return;
     try {
@@ -308,10 +435,32 @@ const crearServicioRapido = async () => {
         await destinoAtractivoService.asociarServicio(destinoServiciosActivo.value.id, res.servicio.id);
         const listado = await destinoAtractivoService.listarServicios(destinoServiciosActivo.value.id);
         destinoServiciosLista.value = listado.destino_servicios;
-        servicioNuevoNombre.value = '';
-        tipoProveedorNuevoId.value = null;
+        cancelarCreacionServicio();
+        servicioBusqueda.value = '';
     } catch (error: any) {
+        // 422 real más probable ahora: nombre duplicado (ServicioController::
+        // existeNombreDuplicado(), 29-ago-2026) — se muestra tal cual, ya
+        // trae sugerencia de usar el existente en el mensaje del backend.
         (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo crear el servicio', 'error');
+    }
+};
+
+const buscarServicios = async (pagina: number) => {
+    const res = await servicioService.listar({ search: servicioBusqueda.value.trim(), page: pagina, per_page: SERVICIOS_POR_PAGINA });
+    servicioBusquedaTotal.value = res.total ?? 0;
+    servicioBusquedaCrudos.value += (res.servicios ?? []).length;
+    servicioBusquedaPagina.value = pagina;
+    const idsAsociados = new Set(destinoServiciosLista.value.map((ds) => ds.servicio?.id));
+    const nuevos = (res.servicios ?? []).filter((s: Servicio) => !idsAsociados.has(s.id));
+    servicioResultados.value = pagina === 1 ? nuevos : [...servicioResultados.value, ...nuevos];
+};
+
+const cargarMasServicios = async () => {
+    cargandoMasServicios.value = true;
+    try {
+        await buscarServicios(servicioBusquedaPagina.value + 1);
+    } finally {
+        cargandoMasServicios.value = false;
     }
 };
 
@@ -320,13 +469,14 @@ const crearServicioRapido = async () => {
 watch(servicioBusqueda, (q) => {
     clearTimeout(servicioBusquedaTimeout);
     servicioResultados.value = [];
+    servicioBusquedaTotal.value = 0;
+    servicioBusquedaCrudos.value = 0;
+    mostrarFormNuevoServicio.value = false;
     if (q.trim().length < 2) return;
     servicioBusquedaTimeout = setTimeout(async () => {
         buscandoServicio.value = true;
         try {
-            const res = await servicioService.listar({ search: q.trim() });
-            const idsAsociados = new Set(destinoServiciosLista.value.map((ds) => ds.servicio?.id));
-            servicioResultados.value = (res.servicios ?? []).filter((s: Servicio) => !idsAsociados.has(s.id));
+            await buscarServicios(1);
         } finally {
             buscandoServicio.value = false;
         }

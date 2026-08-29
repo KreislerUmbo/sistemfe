@@ -32,5 +32,23 @@ export const guiaService = {
   async crearTarifa(guiaId: number, data: Record<string, any>) {
     const response = await httpClient.post(`/guias/${guiaId}/tarifas`, data)
     return response.data
+  },
+  // 29-ago-2026 — mismo patrón que proveedorService (update/eliminar +
+  // desactivar/activar como retiro reversible del catálogo activo).
+  async actualizarTarifa(tarifaId: number, data: Record<string, any>) {
+    const response = await httpClient.put(`/guia-tarifas/${tarifaId}`, data)
+    return response.data
+  },
+  async eliminarTarifa(tarifaId: number) {
+    const response = await httpClient.delete(`/guia-tarifas/${tarifaId}`)
+    return response.data
+  },
+  async desactivarTarifa(tarifaId: number) {
+    const response = await httpClient.patch(`/guia-tarifas/${tarifaId}/desactivar`)
+    return response.data
+  },
+  async activarTarifa(tarifaId: number) {
+    const response = await httpClient.patch(`/guia-tarifas/${tarifaId}/activar`)
+    return response.data
   }
 }

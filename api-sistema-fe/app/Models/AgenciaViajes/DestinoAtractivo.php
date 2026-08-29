@@ -34,6 +34,14 @@ class DestinoAtractivo extends Model
         return $this->hasMany(self::class, 'parent_id');
     }
 
+    // Usado con withCount() en DestinoAtractivoController::index() para el
+    // filtro "sin servicios asociados" (29-ago-2026) — encontrar destinos
+    // que quedaron a medio configurar sin tener que abrir cada uno.
+    public function destinoServicios()
+    {
+        return $this->hasMany(DestinoServicio::class, 'destino_atractivo_id');
+    }
+
     // Zona/lugar → todos sus descendientes (BFS nivel por nivel), para que
     // filtrar por un nodo padre del árbol también traiga resultados de sus
     // hijos — un atractivo hoja (sin hijos) cae en el caso base y se
