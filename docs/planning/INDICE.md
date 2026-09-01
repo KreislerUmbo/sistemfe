@@ -34,7 +34,17 @@ reservas, todo construido y en producción.
 
 | Documento | Qué cubre |
 |---|---|
-| `plan-hoja-de-ruta-ejecucion.md` | **Punto de entrada real para trabajar en este vertical.** Las 20 sesiones de construcción en orden, con checklist de avance, convención de ramas/commits, e historial resumido. Consultar siempre antes de abrir una sesión nueva — la primera fila con `[ ]` sin marcar es la próxima a construir (hoy: 11f, motor de recordatorios). |
+| `plan-hoja-de-ruta-ejecucion.md` | **Punto de entrada real para trabajar en este vertical.** Todas las sesiones de construcción en orden (0 a 12h, M1-M5, más C1), con checklist de avance, convención de ramas/commits, e historial resumido. Consultar siempre antes de abrir una sesión nueva. |
+| `auditoria-arquitectonica-agencia-viajes.md` | **Auditoría profunda del modelo de mayoristas/multi-destino (Línea 2, 01-sep-2026)** — §7 `alternativa_destinos`, §9/§9.1/§9.2/§9.3 mayoristas/`contenido_tour`/reasignación en vivo/leak del PDF, §13 moneda (confirma que sigue a nivel de `Alternativa`, no de destino), §23 brechas, §24 mantenibilidad/escalabilidad. Documento de referencia — no se ejecuta directo, se traduce en `plan-ejecucion-multidestino-mayoristas.md`. |
+| `plan-ejecucion-multidestino-mayoristas.md` | Traduce la auditoría a sesiones concretas 12a-12h (`alternativa_destinos`, reubicación de `OpcionMayorista`, `contenido_tour`, reasignación de mayorista en vivo). 12a listo para ejecutar ya, 12b-12g se redactan al llegar cada una, 12h ya tiene brief. |
+| `plan-refactor-mayoristas-tramos.md` | **CERRADO 01-sep-2026 — superado por `alternativa_destinos`.** Diagnóstico original (caso real Cusco→Tarapoto+México) que disparó todo el trabajo de mayoristas/multi-destino. Queda como registro histórico — no se sigue diseñando ahí. Único pendiente huérfano que dejó sin resolver en ningún otro lado: **C3** (margen automático por mayorista sin conectar — `Proveedor.margen_default_tipo/valor` nunca se usa al cargar tarifa de hotel), sin brief propio todavía. |
+| `plan-matriz-hoteles-cotizador.md` | **Diseño CERRADO (29-ago-2026).** Matriz de opciones de hotel dentro de una Alternativa (agrupador `grupo_opcion_id`, hotel ad-hoc sin depender de Proveedor registrado). Se traduce en `plan-ejecucion-matriz-hoteles-cotizador.md` — este documento ya no se edita salvo caso nuevo que obligue a revisar una decisión cerrada. |
+| `plan-ejecucion-matriz-hoteles-cotizador.md` | Sesiones concretas M1-M5 del diseño de arriba. M1 (núcleo: agrupador + guard + precio en vivo) listo para ejecutar ya, sin dependencias. M2-M5 se redactan al llegar cada una. |
+| `plan-fix-moneda-cotizador.md` | Bug real confirmado (tipo de cambio 1:1 aceptado sin validar, pérdida silenciosa de ~USD 143 reproducida en vivo). **Estaba pausado esperando confirmar si el análisis de multi-destino lo afectaba — ya resuelto: la auditoría (§13) confirma que la moneda sigue a nivel de `Alternativa`, no de destino, así que este plan queda desbloqueado y puede ejecutarse.** 5 puntos, orden acordado 5→2→3→1→4, sin brief de sesión todavía. |
+| `PEGAR-EN-CLAUDE-CODE-fix-leak-mayorista-pdf.md` | Brief listo — fix C1 (el PDF comercial imprimía la razón social legal del mayorista al cliente). Chico, autocontenido, sin dependencias — se puede ejecutar en cualquier momento. |
+| `PEGAR-EN-CLAUDE-CODE-fase0-gaps-mayoristas-multidestino.md` | Brief listo — sesión 12a. |
+| `PEGAR-EN-CLAUDE-CODE-matriz-hoteles-m1-nucleo.md` | Brief listo — sesión M1. |
+| `PEGAR-EN-CLAUDE-CODE-reasignar-mayorista-vivo.md` | Brief listo — sesión 12h. |
 | `plan-modulo-cotizaciones-reservas.md` | Cotizaciones, alternativas, reservas, itinerarios, facturación (simple y múltiple por grupo de pasajeros), integración con el core de ventas. Todavía activo — las filas abiertas (11f/11g) referencian sus secciones §4.6/§8bis directamente. |
 | `plan-modulo-codigos-numeracion.md` | Módulo 12 — prefijo editable por agencia + correlativo configurable para tours/paquetes/cotizaciones/reservas. **Construido y mergeado (26-ago-2026)** — fila 12 de `plan-hoja-de-ruta-ejecucion.md`. |
 | `plan-modulo-planes-acceso.md` | Feature gating por plan contratado (económico/estándar/pro) + add-ons. Mayormente reconciliado con lo ya construido en Panel Superadmin, pero **tiene trabajo real marcado como pendiente** (mecanismo de tenant demo/real, feature-gating de módulos) — ver su propia sección "Recomendación" antes de asumir que está cerrado. |
@@ -42,13 +52,24 @@ reservas, todo construido y en producción.
 | `PEGAR-EN-CLAUDE-CODE-temporada-plantilla.md` | Brief sin ejecutar — auditoría/fix de resolución de tarifa por temporada al cargar una cotización desde `paquete_plantilla` |
 | `historial-archivo.md` | Todo lo demás: las ~20 sesiones ya cerradas con detalle completo, 8 documentos de diseño fundacional + briefs de sesiones cerradas que se borraron por redundantes (proveedores, tours-catálogo, maestros-iniciales, guardia tributario, fix de fechas, facturación múltiple), e ítem manual/mover-fusionar servicio/split de facturación/facturación externa por tenant (11w — brief `PEGAR-EN-CLAUDE-CODE-facturacion-externa-tenant.md` ya ejecutado y mergeado, borrado el 25-ago-2026) |
 
-**Pendiente real de este vertical (actualizado 26-ago-2026):** el reporte
-operativo (11e backend + 11d pantalla) y el módulo 12 (códigos/
-numeración) ya están cerrados y mergeados. Quedan filas 11f (motor de
-recordatorios), 11g (controllers de pago a proveedor) y 11t (bug
-colateral de `VentaDirectaController`, sin brief propio todavía) — ver
-`plan-hoja-de-ruta-ejecucion.md` §1 para el detalle exacto de cada una.
-Sin bloqueantes entre ellas, el orden queda a criterio del usuario.
+**Pendiente real de este vertical (actualizado 01-sep-2026).** Dos líneas
+de trabajo activas en paralelo, sin bloqueantes entre ellas — el usuario
+puede intercalarlas según prioridad de negocio:
+
+- **Frente histórico (sin cambios desde 26-ago):** 11f (motor de
+  recordatorios), 11g (controllers de pago a proveedor), 11t (bug
+  colateral de `VentaDirectaController`, sin brief propio todavía).
+- **Frente nuevo (multi-destino/mayoristas, abierto 31-ago/01-sep):**
+  12a (Fase 0, listo), M1 (núcleo matriz hoteles, listo), C1 (fix leak
+  PDF, listo) — estas 3 son independientes entre sí y pueden ejecutarse
+  ya, en cualquier orden. Después de 12a vienen 12b-12g en cadena; después
+  de M1 vienen M2/M3 en paralelo y luego M4/M5; 12h y el fix de moneda
+  (`plan-fix-moneda-cotizador.md`, ahora desbloqueado) son independientes
+  y se pueden intercalar en cualquier momento. Único pendiente sin brief
+  ni sesión asignada todavía: **C3** (margen automático por mayorista).
+
+Ver `plan-hoja-de-ruta-ejecucion.md` §1 para el detalle exacto de cada
+fila y sus dependencias.
 
 ## 📁 Retail - Facturación Core
 
@@ -105,6 +126,7 @@ vertical, aplica a todos los giros.
 
 | Fecha | Cambio |
 |---|---|
+| 01-sep-2026 | **Se agrega el frente nuevo de Agencia de Viajes** (multi-destino/mayoristas + matriz de hoteles + fixes puntuales), que venía corriendo en dos líneas paralelas sin cruzarse con este índice: `auditoria-arquitectonica-agencia-viajes.md` + `plan-ejecucion-multidestino-mayoristas.md` (Línea 2, sesiones 12a-12h) y `plan-refactor-mayoristas-tramos.md` + `plan-matriz-hoteles-cotizador.md`/`plan-ejecucion-matriz-hoteles-cotizador.md` (Línea 1, sesiones M1-M5). Ambas líneas ya se habían reconciliado solas (misma conclusión: `alternativa_destinos`, no `alternativa_tramos`) pero no estaban reflejadas acá. Se corrige también una referencia de archivo repetida en varios documentos (`auditoria-arquitectonica-profunda-sintesis.md`, nombre que no existe en este repo → `auditoria-arquitectonica-agencia-viajes.md`, el real). `plan-fix-moneda-cotizador.md` queda desbloqueado (la duda que lo pausaba ya se resolvió en la auditoría §13). Único pendiente sin dueño: C3 (margen automático por mayorista). |
 | 29-ago-2026 | Sesión larga de ajustes cortos en Agencia de Viajes, sin fila propia en la hoja de ruta (no mueve 11f/11g/11t) — paridad de tarifas de guía, filtros de destinos, catálogo de servicios, sesión JWT, capitalización de nombres, fix de logo en PDF de cotización. Detalle completo en `plan-hoja-de-ruta-ejecucion.md` (changelog) y `CLAUDE.md`. |
 | 26-ago-2026 | Actualización de estado (no reescritura): fila del módulo 12 corregida (estaba "diseñado, sin construir" — ya está construido y mergeado, fila 12 propia en la hoja de ruta), pendiente real del vertical Agencia de Viajes recortado a 11f/11g/11t (11e/11d y el módulo 12 ya cerrados). |
 | 20-ago-2026 | **v3 — reescritura completa + primera ronda de archivado real.** Se archivan/borran 15 documentos (~7500 líneas): en Agencia de Viajes, 4 planes de diseño fundacional ya cerrados y 4 briefs de sesiones ya mergeadas/pusheadas (11r/11s/11u-guardia/11v); en Retail, `plan-modulo-series-comprobantes.md` (cerrado) y `plan-multitenant-umbo.md` (duplicado descartado); en Panel Superadmin, `plan-panel-superadmin.md` (1518→34 líneas, queda como stub con los pendientes reales) más 3 documentos sueltos sobre el selector de giro ya consolidados; en la raíz, la guía de despliegue OVH (ya ejecutada) y el plan de infraestructura de Sesión 0 (cerrado). Cada carpeta con archivado ahora tiene su propio `historial-archivo.md`. Se aplican también los 2 bloques pendientes de `panel-superadmin/PEGAR-EN-REPO.md` (fila de `plan-modulo-codigos-numeracion.md` acá, sección "Menú lateral y control de acceso" en `arquitectura-multitenant-backend_1.md`) antes de archivar ese documento junto con los demás. |

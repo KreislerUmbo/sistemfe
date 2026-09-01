@@ -109,6 +109,21 @@ class AlternativaController extends Controller
         if (isset($validado['nombre'])) {
             $validado['nombre'] = \App\Services\TextoFormatoService::capitalizarNombrePropio($validado['nombre']);
         }
+
+        // Sesión 12a (Fase 0, auditoría §3.2) — único camino documentado
+        // donde el total de una alternativa ya aceptada (con su reserva ya
+        // creada) podía cambiar en vivo sin que nadie lo note. Mismo
+        // patrón/mensaje ya usado en AlternativaItemController::reasignarDia()/
+        // moverBloque() para el mismo escenario ("alternativa aceptada, no
+        // tocar acá").
+        if ($alternativa->estado === 'aceptada'
+            && (array_key_exists('descuento_global_pct', $validado) || array_key_exists('descuento_global_monto', $validado))) {
+            return response()->json([
+                'code' => 422,
+                'message' => 'Esta alternativa ya fue aceptada y generó una reserva — el descuento global ya no se puede modificar desde acá.',
+            ], 422);
+        }
+
         $lineasFueraDePiso = [];
 
         DB::transaction(function () use ($alternativa, $validado, &$lineasFueraDePiso) {
