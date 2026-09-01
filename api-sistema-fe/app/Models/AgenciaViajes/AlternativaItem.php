@@ -39,6 +39,7 @@ class AlternativaItem extends Model
 
     protected $fillable = [
         'alternativa_id',
+        'alternativa_destino_id',
         'origen_tipo',
         'proveedor_tarifa_id',
         'opcion_mayorista_id',
@@ -75,6 +76,17 @@ class AlternativaItem extends Model
     public function alternativa()
     {
         return $this->belongsTo(Alternativa::class, 'alternativa_id');
+    }
+
+    // Sesión 12c — nullable a propósito: hoy solo los ítems ya existentes
+    // al migrar (backfill) y los clonados por AlternativaController::
+    // duplicar() lo tienen resuelto. Los 9 puntos de creación individual
+    // de ítems (AlternativaItemController/ComboExplosionService) todavía
+    // no lo setean — eso queda para 12f, que es donde recién se empieza a
+    // leer este dato (subtotal por destino).
+    public function alternativaDestino()
+    {
+        return $this->belongsTo(AlternativaDestino::class, 'alternativa_destino_id');
     }
 
     public function proveedorTarifa()

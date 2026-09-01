@@ -35,4 +35,29 @@ class AlternativaDestino extends Model
     {
         return $this->belongsTo(DestinoAtractivo::class, 'destino_atractivo_id');
     }
+
+    // Sesión 12c — mismo criterio que Alternativa::items(): orderBy('id')
+    // explícito, no confiar en el orden físico de Postgres.
+    public function items()
+    {
+        return $this->hasMany(AlternativaItem::class, 'alternativa_destino_id')->orderBy('id');
+    }
+
+    // Sesión 12c — extraído de la migración de backfill de 12b
+    // (2026_09_01_100100_backfill_alternativa_destinos.php, que NO se
+    // reescribe por ser historia ya aplicada) para que AlternativaController::
+    // store() resuelva el destino de una alternativa nueva con el mismo
+    // criterio exacto que usó el backfill histórico — case-insensitive +
+    // trim contra destinos_atractivos.nombre, null si no hay match (nunca
+    // un error, es el caso esperado para destinos fuera de catálogo).
+    public static function resolverDestinoAtractivoId(?string $destinoTexto): ?int
+    {
+        if ($destinoTexto === null || trim($destinoTexto) === '') {
+            return null;
+        }
+
+        return DestinoAtractivo::whereRaw('LOWER(TRIM(nombre)) = LOWER(TRIM(?))', [$destinoTexto])
+            ->orderBy('id')
+            ->value('id');
+    }
 }

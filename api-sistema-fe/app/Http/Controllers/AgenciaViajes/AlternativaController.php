@@ -4,6 +4,7 @@ namespace App\Http\Controllers\AgenciaViajes;
 
 use App\Http\Controllers\Controller;
 use App\Models\AgenciaViajes\Alternativa;
+use App\Models\AgenciaViajes\AlternativaDestino;
 use App\Models\AgenciaViajes\AlternativaItem;
 use App\Models\AgenciaViajes\Cotizacion;
 use App\Models\AgenciaViajes\CotizacionPasajeAereo;
@@ -63,18 +64,36 @@ class AlternativaController extends Controller
 
         $letra = chr(65 + $cotizacion->alternativas()->count()); // A, B, C...
 
-        $alternativa = Alternativa::create([
-            'cotizacion_id' => $cotizacion->id,
-            // 29-ago-2026 — capitalización tipo título solo cuando el
-            // usuario tipeó algo; el fallback autogenerado ya está bien
-            // formado, no hace falta pasarlo por la función.
-            'nombre' => $validado['nombre'] ? \App\Services\TextoFormatoService::capitalizarNombrePropio($validado['nombre']) : "Alternativa {$letra}",
-            'estado' => 'borrador',
-            'moneda_cotizacion' => $validado['moneda_cotizacion'],
-            'tipo_cambio_aplicado' => $tipoCambio->valor,
-            'tipo_cambio_origen' => $validado['tipo_cambio_origen'],
-            'total' => 0,
-        ]);
+        $alternativa = DB::transaction(function () use ($cotizacion, $validado, $tipoCambio, $letra) {
+            $alternativa = Alternativa::create([
+                'cotizacion_id' => $cotizacion->id,
+                // 29-ago-2026 — capitalización tipo título solo cuando el
+                // usuario tipeó algo; el fallback autogenerado ya está bien
+                // formado, no hace falta pasarlo por la función.
+                'nombre' => $validado['nombre'] ? \App\Services\TextoFormatoService::capitalizarNombrePropio($validado['nombre']) : "Alternativa {$letra}",
+                'estado' => 'borrador',
+                'moneda_cotizacion' => $validado['moneda_cotizacion'],
+                'tipo_cambio_aplicado' => $tipoCambio->valor,
+                'tipo_cambio_origen' => $validado['tipo_cambio_origen'],
+                'total' => 0,
+            ]);
+
+            // Sesión 12c (auditoria-arquitectonica-agencia-viajes.md §7/FASE
+            // 2) — toda alternativa nace con exactamente 1 destino, igual
+            // que el backfill de 12b dejó a las históricas. Sin esto, una
+            // alternativa creada de acá en adelante quedaría con 0 filas en
+            // alternativa_destinos, rompiendo esa garantía.
+            AlternativaDestino::create([
+                'alternativa_id' => $alternativa->id,
+                'destino_atractivo_id' => AlternativaDestino::resolverDestinoAtractivoId($cotizacion->destino),
+                'destino_texto' => $cotizacion->destino,
+                'orden' => 1,
+                'fecha_inicio' => $cotizacion->fecha_viaje_desde,
+                'fecha_fin' => $cotizacion->fecha_viaje_hasta,
+            ]);
+
+            return $alternativa;
+        });
 
         return response()->json([
             'code' => 200,
@@ -369,6 +388,24 @@ class AlternativaController extends Controller
                 'total' => $original->total,
             ]);
 
+            // Sesión 12c — clonar alternativa_destinos ANTES que los ítems
+            // (que pueden referenciarlos): cada destino de la copia es una
+            // fila propia, nunca comparte id con el original (misma razón
+            // que las opciones de mayorista se clonan abajo en vez de
+            // remapear al original).
+            $destinosClonados = [];
+            foreach ($original->destinos as $destino) {
+                $nuevoDestino = AlternativaDestino::create([
+                    'alternativa_id' => $nueva->id,
+                    'destino_atractivo_id' => $destino->destino_atractivo_id,
+                    'destino_texto' => $destino->destino_texto,
+                    'orden' => $destino->orden,
+                    'fecha_inicio' => $destino->fecha_inicio,
+                    'fecha_fin' => $destino->fecha_fin,
+                ]);
+                $destinosClonados[$destino->id] = $nuevoDestino->id;
+            }
+
             // Ítems primero (sin opcion_mayorista_id todavía si vienen de
             // mayorista — se remapea al final, una vez clonado el árbol de
             // opciones más abajo).
@@ -376,6 +413,9 @@ class AlternativaController extends Controller
             foreach ($original->items()->get() as $item) {
                 $nuevoItem = AlternativaItem::create([
                     'alternativa_id' => $nueva->id,
+                    'alternativa_destino_id' => $item->alternativa_destino_id !== null
+                        ? ($destinosClonados[$item->alternativa_destino_id] ?? null)
+                        : null,
                     'origen_tipo' => $item->origen_tipo,
                     'proveedor_tarifa_id' => $item->proveedor_tarifa_id,
                     'tour_origen_id' => $item->tour_origen_id,
