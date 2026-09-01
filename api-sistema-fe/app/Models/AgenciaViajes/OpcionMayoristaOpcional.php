@@ -19,14 +19,24 @@ class OpcionMayoristaOpcional extends Model
         'moneda',
         'incluye',
         'no_incluye',
+        'contenido_tour_id',
+        'contenido_tour_descripcion_snapshot',
+        'contenido_tour_fotos_snapshot',
     ];
 
     protected $casts = [
         'precio_por_persona' => 'decimal:2',
+        'contenido_tour_fotos_snapshot' => 'array',
     ];
 
     public function opcionMayorista()
     {
         return $this->belongsTo(OpcionMayorista::class, 'opcion_mayorista_id');
+    }
+
+    // Sesión 12e — mismo criterio que OpcionMayorista::contenidoTour().
+    public function contenidoTour()
+    {
+        return $this->belongsTo(ContenidoTour::class, 'contenido_tour_id');
     }
 }

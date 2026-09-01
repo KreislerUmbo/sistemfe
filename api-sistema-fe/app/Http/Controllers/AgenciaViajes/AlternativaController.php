@@ -470,6 +470,13 @@ class AlternativaController extends Controller
                     'vuelo_aerolinea' => $opcion->vuelo_aerolinea,
                     'vuelo_detalle' => $opcion->vuelo_detalle,
                     'estado' => $opcion->estado,
+                    // Sesión 12e — el vínculo a contenido_tour (y su
+                    // snapshot ya congelado) se lleva tal cual a la copia,
+                    // sin remapear: ContenidoTour es un catálogo
+                    // compartido, no pertenece a ninguna alternativa.
+                    'contenido_tour_id' => $opcion->contenido_tour_id,
+                    'contenido_tour_descripcion_snapshot' => $opcion->contenido_tour_descripcion_snapshot,
+                    'contenido_tour_fotos_snapshot' => $opcion->contenido_tour_fotos_snapshot,
                 ]);
                 $opcionesClonadas[$opcion->id] = $nuevaOpcion->id;
 
@@ -481,6 +488,9 @@ class AlternativaController extends Controller
                         'moneda' => $opcional->moneda,
                         'incluye' => $opcional->incluye,
                         'no_incluye' => $opcional->no_incluye,
+                        'contenido_tour_id' => $opcional->contenido_tour_id,
+                        'contenido_tour_descripcion_snapshot' => $opcional->contenido_tour_descripcion_snapshot,
+                        'contenido_tour_fotos_snapshot' => $opcional->contenido_tour_fotos_snapshot,
                     ]);
                 }
 

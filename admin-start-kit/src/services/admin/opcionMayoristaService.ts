@@ -14,6 +14,7 @@ export const opcionMayoristaService = {
     notas?: string
     vuelo_aerolinea?: string
     vuelo_detalle?: string
+    contenido_tour_id?: number | null
   }) {
     const response = await httpClient.post(`/alternativas/${alternativaId}/opciones-mayorista`, data)
     return response.data

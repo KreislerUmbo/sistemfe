@@ -8,6 +8,7 @@ use App\Http\Controllers\AgenciaViajes\BibliotecaCotizadorController;
 use App\Http\Controllers\AgenciaViajes\CondicionesGeneralesController;
 use App\Http\Controllers\AgenciaViajes\ConfiguracionAgenciaController;
 use App\Http\Controllers\AgenciaViajes\ConfiguracionCodigosController;
+use App\Http\Controllers\AgenciaViajes\ContenidoTourController;
 use App\Http\Controllers\AgenciaViajes\CotizacionController;
 use App\Http\Controllers\AgenciaViajes\CuentaBancariaController;
 use App\Http\Controllers\AgenciaViajes\DestinoAtractivoController;
@@ -723,6 +724,13 @@ Route::group([
     Route::match(['get', 'post'], "opciones-mayorista/{id}/hoteles", [OpcionMayoristaController::class, 'hoteles'])
         ->middleware('permission:agencia.cotizaciones');
     Route::match(['get', 'post'], "opciones-mayorista/{id}/opcionales", [OpcionMayoristaController::class, 'opcionales'])
+        ->middleware('permission:agencia.cotizaciones');
+
+    // Sesión 12e — biblioteca de contenido reutilizable (§9.1 de la
+    // auditoría). Solo búsqueda/creación, ver ContenidoTourController.
+    Route::get("contenido-tour", [ContenidoTourController::class, 'index'])
+        ->middleware('permission:agencia.cotizaciones');
+    Route::post("contenido-tour", [ContenidoTourController::class, 'store'])
         ->middleware('permission:agencia.cotizaciones');
 
     // ═══════════════════════════════════════════════════════════════

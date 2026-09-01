@@ -737,6 +737,28 @@
                                         <option value="PEN">PEN</option>
                                     </select>
                                     <input type="text" class="form-control form-control-sm mb-1" placeholder="Vuelo (aerolínea)" v-model="formMayorista.vuelo_aerolinea">
+
+                                    <!-- Sesión 12e — buscador de contenido reutilizable, "buscar antes de
+                                         crear" para no ensuciar la biblioteca con duplicados (§23.1.9). -->
+                                    <div class="position-relative mb-1">
+                                        <input type="text" class="form-control form-control-sm" placeholder="Buscar contenido reutilizable (ej. 'City Tour Panamá')..."
+                                            v-model="contenidoTourSearch" @input="onContenidoTourSearchInput">
+                                        <div v-if="contenidoTourResultados.length" class="list-group position-absolute w-100" style="z-index: 10;">
+                                            <button v-for="c in contenidoTourResultados" :key="c.id" type="button"
+                                                class="list-group-item list-group-item-action py-1 small" @click="seleccionarContenidoTour(c)">
+                                                {{ c.nombre }}
+                                            </button>
+                                        </div>
+                                        <div v-if="contenidoTourSeleccionado" class="small text-success mt-1">
+                                            <i class="fas fa-check-circle me-1"></i>Vinculado a "{{ contenidoTourSeleccionado.nombre }}"
+                                        </div>
+                                        <button v-else-if="contenidoTourSearch.trim() && !contenidoTourResultados.length"
+                                            type="button" class="btn btn-link btn-sm p-0 mt-1" @click="crearContenidoTourDesdeTexto" :disabled="creandoContenidoTour">
+                                            <span v-if="creandoContenidoTour" class="spinner-border spinner-border-sm me-1"></span>
+                                            + Guardar "{{ contenidoTourSearch }}" como contenido reutilizable
+                                        </button>
+                                    </div>
+
                                     <textarea class="form-control form-control-sm mb-1" rows="2" placeholder="Incluye..." v-model="formMayorista.incluye"></textarea>
                                     <button class="btn btn-primary btn-sm w-100" @click="guardarOpcionMayorista" :disabled="guardandoOpcionMayorista">
                                         <span v-if="guardandoOpcionMayorista" class="spinner-border spinner-border-sm me-1"></span>Guardar
@@ -803,6 +825,7 @@ import { cotizacionService } from '@/services/admin/cotizacionService';
 import { alternativaService } from '@/services/admin/alternativaService';
 import { alternativaItemService } from '@/services/admin/alternativaItemService';
 import { opcionMayoristaService } from '@/services/admin/opcionMayoristaService';
+import { contenidoTourService } from '@/services/admin/contenidoTourService';
 import { proveedorService } from '@/services/admin/proveedorService';
 import { servicioService } from '@/services/admin/servicioService';
 import { bibliotecaCotizadorService, type BibliotecaTipo } from '@/services/admin/bibliotecaCotizadorService';
@@ -810,7 +833,7 @@ import { reservaService } from '@/services/admin/reservaService';
 import { useAgenciaViajesCatalogosStore } from '@/stores/agenciaViajesCatalogos';
 import { formatFecha } from '@/helpers/fecha';
 import { guiaService } from '@/services/admin/guiaService';
-import type { Cotizacion, Alternativa, AlternativaItem, ProveedorTarifa, OpcionMayorista, Proveedor, ProveedorTipo, BibliotecaResultado, ConfiguracionAgencia, DestinoServicio, Guia, GuiaTarifa, Servicio, TipAfeIgv, DestinoTributario } from '@/types/agencia-viajes';
+import type { Cotizacion, Alternativa, AlternativaItem, ProveedorTarifa, OpcionMayorista, Proveedor, ProveedorTipo, BibliotecaResultado, ConfiguracionAgencia, DestinoServicio, Guia, GuiaTarifa, Servicio, TipAfeIgv, DestinoTributario, ContenidoTour } from '@/types/agencia-viajes';
 import type { Client } from '@/types/clients';
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
@@ -1670,7 +1693,67 @@ const proveedoresMayoristas = ref<Proveedor[]>([]);
 const opcionHotelesActivaId = ref<number | null>(null);
 const mostrarFormMayorista = ref(false);
 const mostrarFormHotel = ref<number | null>(null);
-const formMayorista = ref({ proveedor_id: null as number | null, moneda: 'USD' as 'PEN' | 'USD', vuelo_aerolinea: '', incluye: '' });
+const formMayorista = ref({ proveedor_id: null as number | null, moneda: 'USD' as 'PEN' | 'USD', vuelo_aerolinea: '', incluye: '', contenido_tour_id: null as number | null });
+
+// Sesión 12e — buscador de contenido_tour ("buscar antes de crear",
+// mitiga duplicados en la biblioteca — auditoria-arquitectonica-agencia-
+// viajes.md §23.1.9). Mismo patrón de debounce que bibliotecaSearch más
+// abajo. Sin filtro de destino todavía (el destino activo de la
+// alternativa no se expone de forma confiable acá — eso llega en 12f).
+const contenidoTourSearch = ref('');
+const contenidoTourResultados = ref<ContenidoTour[]>([]);
+const contenidoTourSeleccionado = ref<ContenidoTour | null>(null);
+let contenidoTourTimeout: any = null;
+
+const buscarContenidoTour = async () => {
+    if (!contenidoTourSearch.value.trim()) {
+        contenidoTourResultados.value = [];
+        return;
+    }
+    contenidoTourResultados.value = await contenidoTourService.buscar({ categoria: 'incluido', q: contenidoTourSearch.value });
+};
+
+const onContenidoTourSearchInput = () => {
+    contenidoTourSeleccionado.value = null;
+    formMayorista.value.contenido_tour_id = null;
+    clearTimeout(contenidoTourTimeout);
+    contenidoTourTimeout = setTimeout(buscarContenidoTour, 300);
+};
+
+const seleccionarContenidoTour = (contenido: ContenidoTour) => {
+    contenidoTourSeleccionado.value = contenido;
+    formMayorista.value.contenido_tour_id = contenido.id;
+    contenidoTourResultados.value = [];
+    contenidoTourSearch.value = contenido.nombre;
+    // No pisar texto que el vendedor ya escribió a mano.
+    if (!formMayorista.value.incluye.trim()) {
+        formMayorista.value.incluye = contenido.incluye ?? contenido.descripcion ?? '';
+    }
+};
+
+const creandoContenidoTour = ref(false);
+const crearContenidoTourDesdeTexto = async () => {
+    if (!contenidoTourSearch.value.trim()) return;
+    creandoContenidoTour.value = true;
+    try {
+        const contenido = await contenidoTourService.crear({
+            nombre: contenidoTourSearch.value.trim(),
+            categoria: 'incluido',
+            incluye: formMayorista.value.incluye || undefined,
+        });
+        seleccionarContenidoTour(contenido);
+    } catch (error: any) {
+        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo guardar el contenido', 'error');
+    } finally {
+        creandoContenidoTour.value = false;
+    }
+};
+
+const resetContenidoTourBuscador = () => {
+    contenidoTourSearch.value = '';
+    contenidoTourResultados.value = [];
+    contenidoTourSeleccionado.value = null;
+};
 const formHotel = ref<{
     nombre_hotel: string; proveedor_id: number | null;
     tarifas: Array<{ tipo_habitacion: string; precio_costo: number; precio_venta: number; proveedor_tarifa_id?: number | null }>;
@@ -1734,7 +1817,8 @@ const guardarOpcionMayorista = async () => {
     try {
         await opcionMayoristaService.crear(alternativaActiva.value.id, formMayorista.value as any);
         mostrarFormMayorista.value = false;
-        formMayorista.value = { proveedor_id: null, moneda: 'USD', vuelo_aerolinea: '', incluye: '' };
+        formMayorista.value = { proveedor_id: null, moneda: 'USD', vuelo_aerolinea: '', incluye: '', contenido_tour_id: null };
+        resetContenidoTourBuscador();
         await cargarOpcionesMayorista();
     } catch (error: any) {
         (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo agregar', 'error');

@@ -23,6 +23,13 @@ class OpcionMayorista extends Model
         'vuelo_aerolinea',
         'vuelo_detalle',
         'estado',
+        'contenido_tour_id',
+        'contenido_tour_descripcion_snapshot',
+        'contenido_tour_fotos_snapshot',
+    ];
+
+    protected $casts = [
+        'contenido_tour_fotos_snapshot' => 'array',
     ];
 
     public function alternativa()
@@ -63,5 +70,13 @@ class OpcionMayorista extends Model
     public function alternativaItems()
     {
         return $this->hasMany(AlternativaItem::class, 'opcion_mayorista_id');
+    }
+
+    // Sesión 12e — nullable a propósito, mismo criterio de adopción
+    // gradual que el resto de contenido_tour: descripcion/fotos snapshot
+    // (no lee ContenidoTour en vivo, ver comentario del modelo).
+    public function contenidoTour()
+    {
+        return $this->belongsTo(ContenidoTour::class, 'contenido_tour_id');
     }
 }

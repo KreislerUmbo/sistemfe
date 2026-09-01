@@ -4,6 +4,7 @@ namespace App\Http\Controllers\AgenciaViajes;
 
 use App\Http\Controllers\Controller;
 use App\Models\AgenciaViajes\Alternativa;
+use App\Models\AgenciaViajes\ContenidoTour;
 use App\Models\AgenciaViajes\OpcionHotel;
 use App\Models\AgenciaViajes\OpcionHotelTarifa;
 use App\Models\AgenciaViajes\OpcionMayorista;
@@ -41,6 +42,9 @@ class OpcionMayoristaController extends Controller
             'notas' => 'nullable|string',
             'vuelo_aerolinea' => 'nullable|string|max:150',
             'vuelo_detalle' => 'nullable|string',
+            // Sesión 12e — vínculo opcional a la biblioteca de contenido
+            // reutilizable (§9.1 de la auditoría).
+            'contenido_tour_id' => 'nullable|integer|exists:contenido_tour,id',
         ]);
 
         if ($validator->fails()) {
@@ -55,6 +59,9 @@ class OpcionMayoristaController extends Controller
             return response()->json(['code' => 422, 'message' => 'El proveedor seleccionado no es de tipo Mayorista.'], 422);
         }
 
+        $contenidoTourId = $validado['contenido_tour_id'] ?? null;
+        unset($validado['contenido_tour_id']);
+
         // Sesión 12d — alternativa_destino_id se resuelve del mismo
         // $alternativa (destino único de esta alternativa, orderBy
         // orden/id — hoy siempre exactamente 1, ver 12b/12c), nunca por
@@ -63,6 +70,7 @@ class OpcionMayoristaController extends Controller
         $opcion = OpcionMayorista::create($validado + [
             'alternativa_id' => $alternativa->id,
             'alternativa_destino_id' => $alternativa->destinos()->value('id'),
+            ...$this->resolverSnapshotContenidoTour($contenidoTourId),
             'estado' => 'candidata',
         ]);
 
@@ -170,14 +178,45 @@ class OpcionMayoristaController extends Controller
             'moneda' => 'required|in:PEN,USD',
             'incluye' => 'nullable|string',
             'no_incluye' => 'nullable|string',
+            'contenido_tour_id' => 'nullable|integer|exists:contenido_tour,id',
         ]);
 
         if ($validator->fails()) {
             return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
         }
 
-        $opcional = OpcionMayoristaOpcional::create($validator->validated() + ['opcion_mayorista_id' => $opcion->id]);
+        $validado = $validator->validated();
+        $contenidoTourId = $validado['contenido_tour_id'] ?? null;
+        unset($validado['contenido_tour_id']);
+
+        $opcional = OpcionMayoristaOpcional::create($validado + [
+            'opcion_mayorista_id' => $opcion->id,
+            ...$this->resolverSnapshotContenidoTour($contenidoTourId),
+        ]);
 
         return response()->json(['code' => 200, 'message' => 'Opcional agregado correctamente', 'opcion_mayorista_opcional' => $opcional]);
+    }
+
+    // Sesión 12e — compartido por store()/opcionales(): resuelve el
+    // ContenidoTour (si vino contenido_tour_id) y copia descripcion/fotos
+    // a las columnas snapshot. Un solo punto de escritura para no
+    // desincronizar contenido_tour_id vs. el snapshot guardado.
+    private function resolverSnapshotContenidoTour(?int $contenidoTourId): array
+    {
+        if ($contenidoTourId === null) {
+            return [
+                'contenido_tour_id' => null,
+                'contenido_tour_descripcion_snapshot' => null,
+                'contenido_tour_fotos_snapshot' => null,
+            ];
+        }
+
+        $contenidoTour = ContenidoTour::findOrFail($contenidoTourId);
+
+        return [
+            'contenido_tour_id' => $contenidoTour->id,
+            'contenido_tour_descripcion_snapshot' => $contenidoTour->descripcion,
+            'contenido_tour_fotos_snapshot' => $contenidoTour->fotos,
+        ];
     }
 }

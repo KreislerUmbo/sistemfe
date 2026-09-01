@@ -460,6 +460,9 @@ export type OpcionMayorista = {
   vuelo_aerolinea?: string | null;
   vuelo_detalle?: string | null;
   estado: 'candidata' | 'elegida' | 'descartada';
+  // Sesión 12e — contenido reutilizable, ver ContenidoTour más abajo.
+  contenido_tour_id?: number | null;
+  contenido_tour_descripcion_snapshot?: string | null;
   proveedor?: Proveedor;
   opciones_hotel?: OpcionHotel[];
   opcionales?: OpcionMayoristaOpcional[];
@@ -510,6 +513,27 @@ export type OpcionMayoristaOpcional = {
   moneda: 'PEN' | 'USD';
   incluye?: string | null;
   no_incluye?: string | null;
+  contenido_tour_id?: number | null;
+  contenido_tour_descripcion_snapshot?: string | null;
+};
+
+// Sesión 12e — biblioteca de contenido reutilizable (descripción/fotos),
+// desacoplado del precio del mayorista (auditoria-arquitectonica-agencia-
+// viajes.md §9.1). OpcionMayorista/OpcionMayoristaOpcional guardan un
+// SNAPSHOT de descripcion/fotos al vincular — este tipo es solo el
+// catálogo/buscador, nunca lo que termina persistido en la cotización.
+export type ContenidoTourCategoria = 'incluido' | 'opcional' | 'excursion';
+
+export type ContenidoTour = {
+  id: number;
+  destino_atractivo_id?: number | null;
+  categoria: ContenidoTourCategoria;
+  nombre: string;
+  descripcion?: string | null;
+  incluye?: string | null;
+  no_incluye?: string | null;
+  fotos?: string[] | null;
+  activo: boolean;
 };
 
 // ═══════════════════════════════════════════════════════════════
