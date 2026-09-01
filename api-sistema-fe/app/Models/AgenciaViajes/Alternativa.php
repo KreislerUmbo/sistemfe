@@ -58,4 +58,14 @@ class Alternativa extends Model
     {
         return $this->hasOne(OpcionMayorista::class, 'alternativa_id')->where('estado', 'elegida');
     }
+
+    // Sesión 12b — mismo motivo que items(): orderBy('orden') explícito,
+    // no confiar en el orden físico de Postgres para "Tarapoto → México →
+    // Cancún...". AlternativaItem/OpcionMayorista todavía no cuelgan de
+    // acá (12c/12d) — hoy siempre hay exactamente 1 fila por alternativa
+    // (backfill de esta misma sesión).
+    public function destinos()
+    {
+        return $this->hasMany(AlternativaDestino::class, 'alternativa_id')->orderBy('orden')->orderBy('id');
+    }
 }
