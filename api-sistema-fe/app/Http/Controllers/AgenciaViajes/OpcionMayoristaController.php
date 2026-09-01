@@ -55,8 +55,14 @@ class OpcionMayoristaController extends Controller
             return response()->json(['code' => 422, 'message' => 'El proveedor seleccionado no es de tipo Mayorista.'], 422);
         }
 
+        // Sesión 12d — alternativa_destino_id se resuelve del mismo
+        // $alternativa (destino único de esta alternativa, orderBy
+        // orden/id — hoy siempre exactamente 1, ver 12b/12c), nunca por
+        // separado de alternativa_id, para no desincronizarlos (§20 de la
+        // auditoría).
         $opcion = OpcionMayorista::create($validado + [
             'alternativa_id' => $alternativa->id,
+            'alternativa_destino_id' => $alternativa->destinos()->value('id'),
             'estado' => 'candidata',
         ]);
 

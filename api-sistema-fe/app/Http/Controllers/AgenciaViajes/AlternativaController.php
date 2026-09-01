@@ -459,6 +459,9 @@ class AlternativaController extends Controller
             foreach (OpcionMayorista::where('alternativa_id', $original->id)->get() as $opcion) {
                 $nuevaOpcion = OpcionMayorista::create([
                     'alternativa_id' => $nueva->id,
+                    'alternativa_destino_id' => $opcion->alternativa_destino_id !== null
+                        ? ($destinosClonados[$opcion->alternativa_destino_id] ?? null)
+                        : null,
                     'proveedor_id' => $opcion->proveedor_id,
                     'salida_mayorista_id' => $opcion->salida_mayorista_id,
                     'moneda' => $opcion->moneda,
