@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Advance\AdvanceController;
 use App\Http\Controllers\AgenciaViajes\AlternativaController;
+use App\Http\Controllers\AgenciaViajes\AlternativaDestinoController;
 use App\Http\Controllers\AgenciaViajes\AlternativaItemController;
 use App\Http\Controllers\AgenciaViajes\AmenidadController;
 use App\Http\Controllers\AgenciaViajes\BibliotecaCotizadorController;
@@ -731,6 +732,13 @@ Route::group([
     Route::get("contenido-tour", [ContenidoTourController::class, 'index'])
         ->middleware('permission:agencia.cotizaciones');
     Route::post("contenido-tour", [ContenidoTourController::class, 'store'])
+        ->middleware('permission:agencia.cotizaciones');
+
+    // Sesión 12f-1 — backend para la UI multi-destino (§7.1). Solo index/
+    // store, lo que necesita el botón "+ Agregar destino" de 12f-2.
+    Route::get("alternativas/{id}/destinos", [AlternativaDestinoController::class, 'index'])
+        ->middleware('permission:agencia.cotizaciones');
+    Route::post("alternativas/{id}/destinos", [AlternativaDestinoController::class, 'store'])
         ->middleware('permission:agencia.cotizaciones');
 
     // ═══════════════════════════════════════════════════════════════

@@ -24,6 +24,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
 
 // El corazón de la Sesión 11b — plan-modulo-cotizaciones-reservas.md §3.
 // store() se ramifica en 4 según origen_tipo (proveedor/mayorista/
@@ -36,6 +37,23 @@ class AlternativaItemController extends Controller
         private PriceEngineService $priceEngine,
         private ComboExplosionService $comboExplosion
     ) {
+    }
+
+    // Sesión 12f-1 — un solo punto de escritura para resolver
+    // alternativa_destino_id en los 9 puntos de creación de este archivo
+    // (mismo riesgo de desincronización que la auditoría marca en §20).
+    // Sin UI de selección de destino todavía (eso es 12f-2), $explicito
+    // siempre llega null por ahora — el fallback (primer destino de la
+    // alternativa, orderBy orden/id) es el comportamiento correcto hoy
+    // (sigue habiendo 1 destino real por alternativa en la práctica).
+    private function reglaAlternativaDestinoId(Alternativa $alternativa)
+    {
+        return Rule::exists('alternativa_destinos', 'id')->where('alternativa_id', $alternativa->id);
+    }
+
+    private function resolverAlternativaDestinoId(Alternativa $alternativa, ?int $explicito): ?int
+    {
+        return $explicito ?? $alternativa->destinos()->value('id');
     }
 
     public function store(Request $request, string $alternativaId)
@@ -194,6 +212,7 @@ class AlternativaItemController extends Controller
         $validator = Validator::make($request->all(), [
             'paquete_plantilla_id' => 'required|integer|exists:paquetes_plantilla,id',
             'dia_referencial' => 'required|integer|min:1',
+            'alternativa_destino_id' => ['nullable', 'integer', $this->reglaAlternativaDestinoId($alternativa)],
         ]);
 
         if ($validator->fails()) {
@@ -202,6 +221,9 @@ class AlternativaItemController extends Controller
 
         $validado = $validator->validated();
         $paquete = PaquetePlantilla::findOrFail($validado['paquete_plantilla_id']);
+        // Resuelto UNA sola vez por request — todos los ítems de una misma
+        // carga de plantilla van al mismo destino (§0/§3 del brief 12f-1).
+        $alternativaDestinoId = $this->resolverAlternativaDestinoId($alternativa, $validado['alternativa_destino_id'] ?? null);
 
         // Cada entrada trae su propio dia_referencial ya resuelto — para un
         // tour_simple suelto, el mismo día activo para todos sus ítems
@@ -277,7 +299,7 @@ class AlternativaItemController extends Controller
         $itemsCreados = [];
         $guiasPendientes = [];
 
-        DB::transaction(function () use ($alternativa, $entradas, $ajusteRedondeo, $validado, &$itemsCreados, &$guiasPendientes) {
+        DB::transaction(function () use ($alternativa, $entradas, $ajusteRedondeo, $validado, $alternativaDestinoId, &$itemsCreados, &$guiasPendientes) {
             foreach ($entradas as $entrada) {
                 if ($entrada['proveedor_tarifa_id']) {
                     $tarifa = ProveedorTarifa::findOrFail($entrada['proveedor_tarifa_id']);
@@ -302,6 +324,7 @@ class AlternativaItemController extends Controller
 
                         $itemsCreados[] = AlternativaItem::create([
                             'alternativa_id' => $alternativa->id,
+                            'alternativa_destino_id' => $alternativaDestinoId,
                             'origen_tipo' => AlternativaItem::ORIGEN_PROVEEDOR,
                             'proveedor_tarifa_id' => $tarifa->id,
                             'tour_origen_id' => $entrada['tour_origen_id'],
@@ -323,6 +346,7 @@ class AlternativaItemController extends Controller
 
                     $itemsCreados[] = AlternativaItem::create([
                         'alternativa_id' => $alternativa->id,
+                        'alternativa_destino_id' => $alternativaDestinoId,
                         'origen_tipo' => AlternativaItem::ORIGEN_PROVEEDOR,
                         'proveedor_tarifa_id' => $tarifa->id,
                         'tour_origen_id' => $entrada['tour_origen_id'],
@@ -361,6 +385,7 @@ class AlternativaItemController extends Controller
                     if ($guiaTarifa) {
                         $itemsCreados[] = AlternativaItem::create([
                             'alternativa_id' => $alternativa->id,
+                            'alternativa_destino_id' => $alternativaDestinoId,
                             'origen_tipo' => AlternativaItem::ORIGEN_GUIA,
                             'guia_tarifa_id' => $guiaTarifa->id,
                             'tour_origen_id' => $entrada['tour_origen_id'],
@@ -379,6 +404,7 @@ class AlternativaItemController extends Controller
             if ($ajusteRedondeo !== null && $ajusteRedondeo != 0.0) {
                 $itemsCreados[] = AlternativaItem::create([
                     'alternativa_id' => $alternativa->id,
+                    'alternativa_destino_id' => $alternativaDestinoId,
                     'origen_tipo' => AlternativaItem::ORIGEN_MANUAL,
                     'descripcion_manual' => 'Ajuste de redondeo',
                     'dia_referencial' => $validado['dia_referencial'],
@@ -517,6 +543,7 @@ class AlternativaItemController extends Controller
             // configurado (antes vivía solo en el hotel de un
             // paquete_plantilla, ver crearItemHotelPlantilla(), eliminado).
             'camas_adicionales_nino' => 'nullable|integer|min:0',
+            'alternativa_destino_id' => ['nullable', 'integer', $this->reglaAlternativaDestinoId($alternativa)],
         ]);
 
         if ($validator->fails()) {
@@ -580,6 +607,7 @@ class AlternativaItemController extends Controller
 
         $item = AlternativaItem::create([
             'alternativa_id' => $alternativa->id,
+            'alternativa_destino_id' => $this->resolverAlternativaDestinoId($alternativa, $validado['alternativa_destino_id'] ?? null),
             'origen_tipo' => AlternativaItem::ORIGEN_PROVEEDOR,
             'proveedor_tarifa_id' => $tarifa?->id,
             'modo_precio' => $validado['modo_precio'],
@@ -659,6 +687,7 @@ class AlternativaItemController extends Controller
             'dia_referencial' => 'nullable|integer|min:1',
             'tip_afe_igv' => 'nullable|string|in:10,20,30',
             'destino_tributario' => 'nullable|string|in:amazonia,nacional,extranjero',
+            'alternativa_destino_id' => ['nullable', 'integer', $this->reglaAlternativaDestinoId($alternativa)],
         ]);
 
         if ($validator->fails()) {
@@ -684,6 +713,7 @@ class AlternativaItemController extends Controller
 
         $item = AlternativaItem::create([
             'alternativa_id' => $alternativa->id,
+            'alternativa_destino_id' => $this->resolverAlternativaDestinoId($alternativa, $validado['alternativa_destino_id'] ?? null),
             'origen_tipo' => AlternativaItem::ORIGEN_MAYORISTA,
             'opcion_mayorista_id' => $opcion->id,
             'modo_precio' => 'tarifa_fija', // paquete internacional, siempre por habitación
@@ -721,6 +751,7 @@ class AlternativaItemController extends Controller
             'dia_referencial' => 'nullable|integer|min:1',
             'tip_afe_igv' => 'nullable|string|in:10,20,30',
             'destino_tributario' => 'nullable|string|in:amazonia,nacional,extranjero',
+            'alternativa_destino_id' => ['nullable', 'integer', $this->reglaAlternativaDestinoId($alternativa)],
         ]);
 
         if ($validator->fails()) {
@@ -755,6 +786,7 @@ class AlternativaItemController extends Controller
 
         $item = AlternativaItem::create([
             'alternativa_id' => $alternativa->id,
+            'alternativa_destino_id' => $this->resolverAlternativaDestinoId($alternativa, $validado['alternativa_destino_id'] ?? null),
             'origen_tipo' => AlternativaItem::ORIGEN_GUIA,
             'guia_tarifa_id' => $guiaTarifa->id,
             'modo_precio' => 'tarifa_fija',
@@ -782,7 +814,7 @@ class AlternativaItemController extends Controller
     {
         $alternativa = Alternativa::findOrFail($alternativaId);
 
-        $validado = $this->validarPasajeAereo($request);
+        $validado = $this->validarPasajeAereo($request, $alternativa);
         if ($validado instanceof JsonResponse) {
             return $validado;
         }
@@ -815,12 +847,11 @@ class AlternativaItemController extends Controller
             ], 422);
         }
 
-        $validado = $this->validarPasajeAereo($request);
+        $alternativa = $item->alternativa;
+        $validado = $this->validarPasajeAereo($request, $alternativa);
         if ($validado instanceof JsonResponse) {
             return $validado;
         }
-
-        $alternativa = $item->alternativa;
         $resultado = $this->calcularPasajeAereo($alternativa, $validado);
         // Si no manda valor nuevo, conserva el que ya tenía el ítem (mismo
         // criterio que actualizarManual() — el default de agencia solo
@@ -864,7 +895,7 @@ class AlternativaItemController extends Controller
     // ── origen_tipo=pasaje_aereo ────────────────────────────────────────
     private function crearItemPasajeAereo(Request $request, Alternativa $alternativa): JsonResponse
     {
-        $validado = $this->validarPasajeAereo($request);
+        $validado = $this->validarPasajeAereo($request, $alternativa);
         if ($validado instanceof JsonResponse) {
             return $validado;
         }
@@ -875,6 +906,7 @@ class AlternativaItemController extends Controller
         $item = DB::transaction(function () use ($alternativa, $validado, $resultado, $tratamientoTributario) {
             $item = AlternativaItem::create([
                 'alternativa_id' => $alternativa->id,
+                'alternativa_destino_id' => $this->resolverAlternativaDestinoId($alternativa, $validado['alternativa_destino_id'] ?? null),
                 'origen_tipo' => AlternativaItem::ORIGEN_PASAJE_AEREO,
                 'modo_precio' => 'por_persona', // el reparto adulto/niño/infante ya está resuelto en venta_total
                 'cantidad' => 1,
@@ -914,7 +946,7 @@ class AlternativaItemController extends Controller
         return response()->json(['code' => 200, 'message' => 'Pasaje aéreo agregado correctamente', 'alternativa_item' => $item]);
     }
 
-    private function validarPasajeAereo(Request $request): array|JsonResponse
+    private function validarPasajeAereo(Request $request, Alternativa $alternativa): array|JsonResponse
     {
         $validator = Validator::make($request->all(), [
             'aerolinea' => 'required|string|max:150',
@@ -939,6 +971,10 @@ class AlternativaItemController extends Controller
             'pax_incluidos' => 'nullable|array',
             'pax_incluidos.*' => 'integer|exists:cotizacion_pasajeros,id',
             'dia_referencial' => 'nullable|integer|min:1',
+            // Sesión 12f-1 — solo tiene efecto real en la creación
+            // (crearItemPasajeAereo()); actualizarPasajeAereo() no lo lee,
+            // el destino de un ítem ya existente no se mueve por acá.
+            'alternativa_destino_id' => ['nullable', 'integer', $this->reglaAlternativaDestinoId($alternativa)],
         ]);
 
         if ($validator->fails()) {
@@ -999,6 +1035,7 @@ class AlternativaItemController extends Controller
             'dia_referencial' => 'nullable|integer|min:1',
             'tip_afe_igv' => 'nullable|string|in:10,20,30',
             'destino_tributario' => 'nullable|string|in:amazonia,nacional,extranjero',
+            'alternativa_destino_id' => ['nullable', 'integer', $this->reglaAlternativaDestinoId($alternativa)],
         ]);
 
         if ($validator->fails()) {
@@ -1010,6 +1047,7 @@ class AlternativaItemController extends Controller
 
         $item = AlternativaItem::create([
             'alternativa_id' => $alternativa->id,
+            'alternativa_destino_id' => $this->resolverAlternativaDestinoId($alternativa, $validado['alternativa_destino_id'] ?? null),
             'origen_tipo' => AlternativaItem::ORIGEN_MANUAL,
             'descripcion_manual' => $validado['descripcion_manual'],
             'proveedor_sugerido_manual' => $validado['proveedor_sugerido_manual'] ?? null,

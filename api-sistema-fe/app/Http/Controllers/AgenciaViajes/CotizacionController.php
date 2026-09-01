@@ -139,6 +139,10 @@ class CotizacionController extends Controller
             // generó una reserva (bloquea editar/eliminar). Antes el único
             // aviso era el 422 recién al intentar guardar.
             'alternativas.items.reservaItem',
+            // Sesión 12f-1 — el frontend todavía no lee esto (llega en
+            // 12f-2), pero tiene que estar disponible para esa sesión sin
+            // volver a tocar este endpoint.
+            'alternativas.destinos.destinoAtractivo',
         ])->findOrFail($id);
 
         return response()->json(['cotizacion' => $cotizacion]);
