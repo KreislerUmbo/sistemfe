@@ -334,6 +334,22 @@ export type Alternativa = {
   descuento_global_pct?: number | null;
   total: number;
   items?: AlternativaItem[];
+  // Sesión 12b/12f-1 — siempre al menos 1 (backfill + store()/duplicar()
+  // ya garantizan esto), ordenado por orden/id desde el backend.
+  destinos?: AlternativaDestino[];
+};
+
+// Sesión 12b — registro liviano por destino de un viaje (§7.1 de la
+// auditoría). destino_atractivo_id nullable — ver
+// project_agencia_viajes_multidestino_mayoristas_roadmap en memoria.
+export type AlternativaDestino = {
+  id: number;
+  alternativa_id: number;
+  destino_atractivo_id?: number | null;
+  destino_texto: string;
+  orden: number;
+  fecha_inicio?: string | null;
+  fecha_fin?: string | null;
 };
 
 export type AlternativaResponse = {
@@ -350,6 +366,9 @@ export type OrigenItem = 'proveedor' | 'mayorista' | 'pasaje_aereo' | 'manual' |
 export type AlternativaItem = {
   id: number;
   alternativa_id: number;
+  // Sesión 12c/12f-1 — nullable: solo los ítems creados desde 12c en
+  // adelante (o clonados por duplicar()) lo tienen resuelto.
+  alternativa_destino_id?: number | null;
   origen_tipo: OrigenItem;
   proveedor_tarifa_id?: number | null;
   opcion_mayorista_id?: number | null;
@@ -460,6 +479,8 @@ export type OpcionMayorista = {
   vuelo_aerolinea?: string | null;
   vuelo_detalle?: string | null;
   estado: 'candidata' | 'elegida' | 'descartada';
+  // Sesión 12d/12f-2 — nullable, ver AlternativaItem.alternativa_destino_id.
+  alternativa_destino_id?: number | null;
   // Sesión 12e — contenido reutilizable, ver ContenidoTour más abajo.
   contenido_tour_id?: number | null;
   contenido_tour_descripcion_snapshot?: string | null;

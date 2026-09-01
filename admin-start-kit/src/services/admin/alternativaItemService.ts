@@ -50,7 +50,7 @@ export const alternativaItemService = {
   // Sesión 11b3 — "cargar desde plantilla" (tour_simple/paquete_combo
   // completo, explotado en vivo contra sus tarifas reales, ver
   // AlternativaItemController::desdePlantilla()).
-  async cargarDesdePlantilla(alternativaId: number, data: { paquete_plantilla_id: number; dia_referencial: number }) {
+  async cargarDesdePlantilla(alternativaId: number, data: { paquete_plantilla_id: number; dia_referencial: number; alternativa_destino_id?: number | null }) {
     const response = await httpClient.post(`/alternativas/${alternativaId}/items/desde-plantilla`, data)
     return response.data as DesdePlantillaResponse
   },

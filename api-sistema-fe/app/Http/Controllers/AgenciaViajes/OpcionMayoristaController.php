@@ -15,6 +15,7 @@ use App\Models\AgenciaViajes\ProveedorTipo;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
 
 // Comparador de mayoristas — plan-modulo-cotizaciones-reservas.md §2.4.
 class OpcionMayoristaController extends Controller
@@ -45,6 +46,12 @@ class OpcionMayoristaController extends Controller
             // Sesión 12e — vínculo opcional a la biblioteca de contenido
             // reutilizable (§9.1 de la auditoría).
             'contenido_tour_id' => 'nullable|integer|exists:contenido_tour,id',
+            // Sesión 12f-2 — con 2+ destinos, el chip activo del cotizador
+            // manda cuál. Gap real encontrado planificando esa sesión: este
+            // endpoint (a diferencia de los 9 de AlternativaItemController,
+            // ya corregidos en 12f-1) todavía forzaba SIEMPRE el primer
+            // destino de la alternativa, ignorando cualquier valor explícito.
+            'alternativa_destino_id' => ['nullable', 'integer', Rule::exists('alternativa_destinos', 'id')->where('alternativa_id', $alternativa->id)],
         ]);
 
         if ($validator->fails()) {
@@ -61,15 +68,16 @@ class OpcionMayoristaController extends Controller
 
         $contenidoTourId = $validado['contenido_tour_id'] ?? null;
         unset($validado['contenido_tour_id']);
+        $alternativaDestinoId = $validado['alternativa_destino_id'] ?? null;
+        unset($validado['alternativa_destino_id']);
 
-        // Sesión 12d — alternativa_destino_id se resuelve del mismo
-        // $alternativa (destino único de esta alternativa, orderBy
-        // orden/id — hoy siempre exactamente 1, ver 12b/12c), nunca por
-        // separado de alternativa_id, para no desincronizarlos (§20 de la
-        // auditoría).
+        // Sesión 12d/12f-2 — alternativa_destino_id explícito si viene (y
+        // pertenece a esta alternativa, ya validado arriba), si no el
+        // primer destino por defecto — nunca por separado de
+        // alternativa_id, para no desincronizarlos (§20 de la auditoría).
         $opcion = OpcionMayorista::create($validado + [
             'alternativa_id' => $alternativa->id,
-            'alternativa_destino_id' => $alternativa->destinos()->value('id'),
+            'alternativa_destino_id' => $alternativaDestinoId ?? $alternativa->destinos()->value('id'),
             ...$this->resolverSnapshotContenidoTour($contenidoTourId),
             'estado' => 'candidata',
         ]);

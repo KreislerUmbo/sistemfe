@@ -104,6 +104,9 @@ import type { AlternativaItem, CotizacionPasajero, TipAfeIgv, DestinoTributario 
 const props = defineProps<{
     alternativaId: number;
     diaActivo: number;
+    // Sesión 12f-2 — chip de destino activo del cotizador; solo tiene
+    // efecto al crear (no al editar, ver payload de agregar() más abajo).
+    alternativaDestinoId?: number | null;
     pasajeros?: CotizacionPasajero[];
     itemExistente?: AlternativaItem | null;
     // Análisis de impuestos (28-ago-2026) — default de configuracion_agencia,
@@ -193,7 +196,7 @@ const agregar = async () => {
             const res = await alternativaItemService.actualizarManual(props.itemExistente.id, payload);
             emit('actualizado', res.alternativa_item);
         } else {
-            const res = await alternativaItemService.agregarManual(props.alternativaId, payload);
+            const res = await alternativaItemService.agregarManual(props.alternativaId, { ...payload, alternativa_destino_id: props.alternativaDestinoId ?? null });
             emit('agregado', res.alternativa_item);
             resetearCampos();
         }

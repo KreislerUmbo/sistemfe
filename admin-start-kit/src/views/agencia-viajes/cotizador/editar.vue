@@ -192,6 +192,56 @@
             </div>
         </div>
 
+        <!-- Sesión 12f-2, §7.1 punto 1 — chips de destino, un nivel arriba de
+             las pestañas de día. Ocultos con 1 solo destino (Punto B, mismo
+             criterio que mostrarTabsDia) — el "+ Agregar destino" queda
+             visible igual, es el único camino para pasar a 2. -->
+        <div v-if="alternativaActiva" class="d-flex align-items-center gap-2 mb-2 flex-wrap">
+            <template v-if="mostrarChipsDestino">
+                <button v-for="d in alternativaDestinos" :key="d.id" class="btn btn-sm"
+                    :class="destinoActivoId === d.id ? 'btn-primary' : 'btn-outline-secondary'"
+                    @click="destinoActivoId = d.id">
+                    <i class="fas fa-map-marker-alt me-1"></i>{{ d.destino_texto }}
+                </button>
+            </template>
+            <button class="btn btn-link btn-sm text-decoration-none" @click="abrirFormDestino">
+                <i class="fas fa-plus me-1"></i>Agregar destino
+            </button>
+            <template v-if="mostrarChipsDestino">
+                <button class="btn btn-link btn-sm text-decoration-none" @click="abrirFormEditarDestinoActivo">
+                    <i class="fas fa-pen me-1"></i>Editar
+                </button>
+                <button class="btn btn-link btn-sm text-decoration-none text-danger" @click="eliminarDestinoActivo">
+                    <i class="fas fa-trash me-1"></i>Eliminar "{{ alternativaDestinos.find(d => d.id === destinoActivoId)?.destino_texto }}"
+                </button>
+            </template>
+        </div>
+
+        <div v-if="mostrarFormDestino" class="card border-0 shadow-sm mb-2">
+            <div class="card-body py-2">
+                <div class="row g-2 align-items-end">
+                    <div class="col-12 col-md-4">
+                        <label class="form-label mb-1 small fw-semibold text-secondary">Destino</label>
+                        <DestinoTreeSelect v-model="nuevoDestinoAtractivoId" @update:label="nuevoDestinoTexto = $event" />
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <label class="form-label mb-1 small fw-semibold text-secondary">Fecha desde</label>
+                        <input type="date" class="form-control form-control-sm" v-model="nuevoDestinoFechaInicio">
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <label class="form-label mb-1 small fw-semibold text-secondary">Fecha hasta</label>
+                        <input type="date" class="form-control form-control-sm" v-model="nuevoDestinoFechaFin">
+                    </div>
+                    <div class="col-12 col-md-2 d-flex gap-2">
+                        <button class="btn btn-primary btn-sm w-100" @click="guardarNuevoDestino" :disabled="guardandoDestino || !nuevoDestinoTexto.trim()">
+                            <span v-if="guardandoDestino" class="spinner-border spinner-border-sm me-1"></span>{{ destinoEnEdicionId ? 'Guardar' : 'Agregar' }}
+                        </button>
+                        <button class="btn btn-outline-secondary btn-sm" @click="mostrarFormDestino = false"><i class="fas fa-times"></i></button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div class="row g-3" v-if="alternativaActiva">
             <!-- ═══ LIENZO ═══ -->
             <div class="col-12 col-lg-8">
@@ -209,6 +259,7 @@
 
                 <div v-if="mostrarFormPasajeAereo" class="border rounded p-2 mb-2">
                     <PasajeAereoForm :alternativa-id="alternativaActiva.id" :dia-activo="diaActivoParaAgregar"
+                        :alternativa-destino-id="destinoActivoId"
                         :pasajeros="cotizacion?.pasajeros ?? []" :item-existente="itemPasajeAereoEnEdicion"
                         :tip-afe-igv-default="configAgencia?.tip_afe_igv_default"
                         :destino-tributario-default="configAgencia?.destino_tributario_default"
@@ -379,37 +430,87 @@
                     <div class="card-body">
                         <p class="small fw-semibold text-secondary mb-2">Alternativa {{ alternativaActiva.nombre }}</p>
                         <div class="small mb-2" style="max-height:380px;overflow-y:auto;">
-                            <div v-for="grupo in gruposPrecioPanel" :key="grupo.tourOrigenId ?? 'sueltos'" class="mb-2 pb-2 border-bottom">
-                                <template v-if="grupo.tourOrigenId">
-                                    <div class="d-flex justify-content-between align-items-center" style="cursor:pointer" @click="toggleGrupoExpandido(grupo.tourOrigenId)">
-                                        <span class="fw-semibold"><i class="fas fa-route me-1 text-primary"></i>{{ grupo.tourNombre ?? 'Tour' }}</span>
+                            <!-- Sesión 12f-2, §7.1 punto 4 — con 2+ destinos, un nivel extra
+                                 colapsable por destino ENVUELVE el mismo desglose por tour de
+                                 siempre (mismo markup, ahora reusado con :key de destino). Con
+                                 1 solo destino, sigue el flujo de siempre sin este nivel. -->
+                            <template v-if="mostrarChipsDestino">
+                                <div v-for="bloqueDestino in gruposPrecioPorDestino" :key="bloqueDestino.destinoId ?? 'sin-destino'" class="mb-2 pb-2 border-bottom">
+                                    <div class="d-flex justify-content-between align-items-center" style="cursor:pointer" @click="toggleDestinoExpandido(bloqueDestino.destinoId)">
+                                        <span class="fw-semibold"><i class="fas fa-map-marker-alt me-1 text-primary"></i>{{ bloqueDestino.destinoTexto }}</span>
                                         <span class="d-flex align-items-center gap-1">
-                                            <span class="text-nowrap">{{ subtotalGrupo(grupo.items).toFixed(2) }}</span>
-                                            <i class="fas" :class="gruposExpandido.has(grupo.tourOrigenId) ? 'fa-chevron-up' : 'fa-chevron-down'" style="font-size:10px"></i>
+                                            <span class="text-nowrap">{{ bloqueDestino.subtotal.toFixed(2) }}</span>
+                                            <i class="fas" :class="destinosExpandido.has(bloqueDestino.destinoId) ? 'fa-chevron-up' : 'fa-chevron-down'" style="font-size:10px"></i>
                                         </span>
                                     </div>
-                                    <div v-if="gruposExpandido.has(grupo.tourOrigenId)" class="ms-3 mt-1">
-                                        <div v-for="item in grupo.items" :key="item.id" class="d-flex justify-content-between gap-2 text-muted" style="font-size:11px">
-                                            <span style="word-break:break-word">
+                                    <div v-if="destinosExpandido.has(bloqueDestino.destinoId)" class="ms-2 mt-1">
+                                        <div v-for="grupo in bloqueDestino.grupos" :key="grupo.tourOrigenId ?? 'sueltos'" class="mb-2 pb-1">
+                                            <template v-if="grupo.tourOrigenId">
+                                                <div class="d-flex justify-content-between align-items-center" style="cursor:pointer" @click="toggleGrupoExpandido(grupo.tourOrigenId)">
+                                                    <span class="fw-semibold"><i class="fas fa-route me-1 text-primary"></i>{{ grupo.tourNombre ?? 'Tour' }}</span>
+                                                    <span class="d-flex align-items-center gap-1">
+                                                        <span class="text-nowrap">{{ subtotalGrupo(grupo.items).toFixed(2) }}</span>
+                                                        <i class="fas" :class="gruposExpandido.has(grupo.tourOrigenId) ? 'fa-chevron-up' : 'fa-chevron-down'" style="font-size:10px"></i>
+                                                    </span>
+                                                </div>
+                                                <div v-if="gruposExpandido.has(grupo.tourOrigenId)" class="ms-3 mt-1">
+                                                    <div v-for="item in grupo.items" :key="item.id" class="d-flex justify-content-between gap-2 text-muted" style="font-size:11px">
+                                                        <span style="word-break:break-word">
+                                                            {{ etiquetaItem(item) }}
+                                                            <span v-if="badgeTratamientoTributario(item)" class="badge ms-1"
+                                                                :class="badgeTratamientoTributario(item)!.clase" style="font-size:9px">{{ badgeTratamientoTributario(item)!.texto }}</span>
+                                                        </span>
+                                                        <span class="text-nowrap">{{ totalConvertidoLocal(item).toFixed(2) }}</span>
+                                                    </div>
+                                                </div>
+                                            </template>
+                                            <template v-else>
+                                                <div v-for="item in grupo.items" :key="item.id" class="d-flex justify-content-between gap-2 mb-1">
+                                                    <span class="text-muted" style="word-break:break-word;font-size:11px">
+                                                        {{ etiquetaItem(item) }}
+                                                        <span v-if="badgeTratamientoTributario(item)" class="badge ms-1"
+                                                            :class="badgeTratamientoTributario(item)!.clase" style="font-size:9px">{{ badgeTratamientoTributario(item)!.texto }}</span>
+                                                    </span>
+                                                    <span class="text-nowrap">{{ totalConvertidoLocal(item).toFixed(2) }}</span>
+                                                </div>
+                                            </template>
+                                        </div>
+                                    </div>
+                                </div>
+                            </template>
+                            <template v-else>
+                                <div v-for="grupo in gruposPrecioPanel" :key="grupo.tourOrigenId ?? 'sueltos'" class="mb-2 pb-2 border-bottom">
+                                    <template v-if="grupo.tourOrigenId">
+                                        <div class="d-flex justify-content-between align-items-center" style="cursor:pointer" @click="toggleGrupoExpandido(grupo.tourOrigenId)">
+                                            <span class="fw-semibold"><i class="fas fa-route me-1 text-primary"></i>{{ grupo.tourNombre ?? 'Tour' }}</span>
+                                            <span class="d-flex align-items-center gap-1">
+                                                <span class="text-nowrap">{{ subtotalGrupo(grupo.items).toFixed(2) }}</span>
+                                                <i class="fas" :class="gruposExpandido.has(grupo.tourOrigenId) ? 'fa-chevron-up' : 'fa-chevron-down'" style="font-size:10px"></i>
+                                            </span>
+                                        </div>
+                                        <div v-if="gruposExpandido.has(grupo.tourOrigenId)" class="ms-3 mt-1">
+                                            <div v-for="item in grupo.items" :key="item.id" class="d-flex justify-content-between gap-2 text-muted" style="font-size:11px">
+                                                <span style="word-break:break-word">
+                                                    {{ etiquetaItem(item) }}
+                                                    <span v-if="badgeTratamientoTributario(item)" class="badge ms-1"
+                                                        :class="badgeTratamientoTributario(item)!.clase" style="font-size:9px">{{ badgeTratamientoTributario(item)!.texto }}</span>
+                                                </span>
+                                                <span class="text-nowrap">{{ totalConvertidoLocal(item).toFixed(2) }}</span>
+                                            </div>
+                                        </div>
+                                    </template>
+                                    <template v-else>
+                                        <div v-for="item in grupo.items" :key="item.id" class="d-flex justify-content-between gap-2 mb-1">
+                                            <span class="text-muted" style="word-break:break-word;">
                                                 {{ etiquetaItem(item) }}
                                                 <span v-if="badgeTratamientoTributario(item)" class="badge ms-1"
                                                     :class="badgeTratamientoTributario(item)!.clase" style="font-size:9px">{{ badgeTratamientoTributario(item)!.texto }}</span>
                                             </span>
                                             <span class="text-nowrap">{{ totalConvertidoLocal(item).toFixed(2) }}</span>
                                         </div>
-                                    </div>
-                                </template>
-                                <template v-else>
-                                    <div v-for="item in grupo.items" :key="item.id" class="d-flex justify-content-between gap-2 mb-1">
-                                        <span class="text-muted" style="word-break:break-word;">
-                                            {{ etiquetaItem(item) }}
-                                            <span v-if="badgeTratamientoTributario(item)" class="badge ms-1"
-                                                :class="badgeTratamientoTributario(item)!.clase" style="font-size:9px">{{ badgeTratamientoTributario(item)!.texto }}</span>
-                                        </span>
-                                        <span class="text-nowrap">{{ totalConvertidoLocal(item).toFixed(2) }}</span>
-                                    </div>
-                                </template>
-                            </div>
+                                    </template>
+                                </div>
+                            </template>
                             <div v-if="(alternativaActiva.items?.length ?? 0) === 0" class="text-muted">Sin ítems todavía</div>
                         </div>
 
@@ -791,6 +892,7 @@
 
                         <template v-else-if="pasoDrawer === 'manual' && alternativaActiva">
                             <ItemManualForm :alternativa-id="alternativaActiva.id" :dia-activo="diaActivoParaAgregar"
+                                :alternativa-destino-id="destinoActivoId"
                                 :pasajeros="cotizacion?.pasajeros ?? []" :item-existente="itemManualEnEdicion"
                                 :tip-afe-igv-default="configAgencia?.tip_afe_igv_default"
                                 :destino-tributario-default="configAgencia?.destino_tributario_default"
@@ -826,6 +928,7 @@ import { alternativaService } from '@/services/admin/alternativaService';
 import { alternativaItemService } from '@/services/admin/alternativaItemService';
 import { opcionMayoristaService } from '@/services/admin/opcionMayoristaService';
 import { contenidoTourService } from '@/services/admin/contenidoTourService';
+import { alternativaDestinoService } from '@/services/admin/alternativaDestinoService';
 import { proveedorService } from '@/services/admin/proveedorService';
 import { servicioService } from '@/services/admin/servicioService';
 import { bibliotecaCotizadorService, type BibliotecaTipo } from '@/services/admin/bibliotecaCotizadorService';
@@ -1046,6 +1149,7 @@ const cargarCotizacion = async () => {
         alternativaActivaId.value = cotizacion.value.alternativas[0].id;
     }
     inicializarEdicionItems();
+    resolverDestinoActivo();
     inicializarDias();
 };
 
@@ -1214,6 +1318,116 @@ const eliminarAlternativa = async () => {
     }
 };
 
+// ── Chips de destino (Sesión 12f-2, §7.1 punto 1) ──────────────────────
+// Siempre al menos 1 destino por alternativa (garantía de 12b/12c). Con
+// 1 solo destino (el caso de casi todos los datos reales hoy) los chips
+// no se muestran y ningún computed de acá abajo cambia de comportamiento
+// — mismo criterio que mostrarTabsDia ya usa para "sin ruido visual
+// quando no hace falta".
+const alternativaDestinos = computed(() => alternativaActiva.value?.destinos ?? []);
+const destinoActivoId = ref<number | null>(null);
+const mostrarChipsDestino = computed(() => alternativaDestinos.value.length > 1);
+
+// Llamada explícita (NO un watch) desde cargarCotizacion()/el watch de
+// alternativaActivaId — inicializarDias() lee itemsDelDestinoActivo justo
+// después, y un watch propio de alternativaDestinos no alcanza a correr a
+// tiempo en el mismo tick (flush diferido de Vue). Si el destino activo
+// dejó de existir en la lista (alternativa recién cargada, o el destino
+// activo se acaba de borrar), cae al primero.
+const resolverDestinoActivo = () => {
+    const destinos = alternativaDestinos.value;
+    if (!destinos.some((d) => d.id === destinoActivoId.value)) {
+        destinoActivoId.value = destinos[0]?.id ?? null;
+    }
+};
+
+// Un ítem con alternativa_destino_id=null (stragglers de antes de 12c/
+// 12f-1, cada vez más raros) se trata como perteneciente al PRIMER
+// destino — nunca se oculta un ítem real por no tener el campo resuelto.
+const itemsDelDestinoActivo = computed(() => {
+    const items = alternativaActiva.value?.items ?? [];
+    if (!mostrarChipsDestino.value) return items;
+    const primerDestinoId = alternativaDestinos.value[0]?.id ?? null;
+    return items.filter((i) => (i.alternativa_destino_id ?? primerDestinoId) === destinoActivoId.value);
+});
+
+const guardandoDestino = ref(false);
+const mostrarFormDestino = ref(false);
+// null = creando uno nuevo; con id = editando ese destino existente
+// (§3.1 del brief: "el chip activo permite renombrar/editar fechas").
+const destinoEnEdicionId = ref<number | null>(null);
+const nuevoDestinoAtractivoId = ref<number | null>(null);
+const nuevoDestinoTexto = ref('');
+const nuevoDestinoFechaInicio = ref('');
+const nuevoDestinoFechaFin = ref('');
+
+const abrirFormDestino = () => {
+    destinoEnEdicionId.value = null;
+    // Sugerencia editable (§7.1 punto 1: "autocalcula: fin del anterior +
+    // 1, editable") — nunca bloquea si el vendedor la cambia.
+    const ultimo = alternativaDestinos.value[alternativaDestinos.value.length - 1];
+    if (ultimo?.fecha_fin) {
+        const siguiente = new Date(ultimo.fecha_fin);
+        siguiente.setDate(siguiente.getDate() + 1);
+        nuevoDestinoFechaInicio.value = siguiente.toISOString().slice(0, 10);
+    } else {
+        nuevoDestinoFechaInicio.value = '';
+    }
+    nuevoDestinoAtractivoId.value = null;
+    nuevoDestinoTexto.value = '';
+    nuevoDestinoFechaFin.value = '';
+    mostrarFormDestino.value = true;
+};
+
+const abrirFormEditarDestinoActivo = () => {
+    const destino = alternativaDestinos.value.find((d) => d.id === destinoActivoId.value);
+    if (!destino) return;
+    destinoEnEdicionId.value = destino.id;
+    nuevoDestinoAtractivoId.value = destino.destino_atractivo_id ?? null;
+    nuevoDestinoTexto.value = destino.destino_texto;
+    nuevoDestinoFechaInicio.value = destino.fecha_inicio ?? '';
+    nuevoDestinoFechaFin.value = destino.fecha_fin ?? '';
+    mostrarFormDestino.value = true;
+};
+
+const guardarNuevoDestino = async () => {
+    if (!alternativaActiva.value || !nuevoDestinoTexto.value.trim()) return;
+    guardandoDestino.value = true;
+    try {
+        const payload = {
+            destino_atractivo_id: nuevoDestinoAtractivoId.value,
+            destino_texto: nuevoDestinoTexto.value.trim(),
+            fecha_inicio: nuevoDestinoFechaInicio.value || null,
+            fecha_fin: nuevoDestinoFechaFin.value || null,
+        };
+        const destino = destinoEnEdicionId.value
+            ? await alternativaDestinoService.actualizar(alternativaActiva.value.id, destinoEnEdicionId.value, payload)
+            : await alternativaDestinoService.crear(alternativaActiva.value.id, payload);
+        mostrarFormDestino.value = false;
+        await cargarCotizacion();
+        destinoActivoId.value = destino.id;
+    } catch (error: any) {
+        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo guardar el destino', 'error');
+    } finally {
+        guardandoDestino.value = false;
+    }
+};
+
+const eliminarDestinoActivo = async () => {
+    if (!alternativaActiva.value || destinoActivoId.value === null) return;
+    const confirmado = await Swal.fire({
+        title: '¿Eliminar este destino?', text: 'Esta acción no se puede deshacer.',
+        icon: 'warning', showCancelButton: true, confirmButtonText: 'Sí, eliminar', cancelButtonText: 'Cancelar',
+    });
+    if (!confirmado.isConfirmed) return;
+    try {
+        await alternativaDestinoService.eliminar(alternativaActiva.value.id, destinoActivoId.value);
+        await cargarCotizacion();
+    } catch (error: any) {
+        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo eliminar el destino', 'error');
+    }
+};
+
 // ── Lienzo día-por-día (Sesión 11b3/11h, §7.1) ─────────────────────────
 // diaActivo=0 es el sentinel "Sin día" (bucket de solo-lectura para ítems
 // creados antes de esta sesión, dia_referencial=null) — NO es un día real,
@@ -1229,7 +1443,10 @@ const diasCreados = ref<number[]>([1]);
 const diasDesdeCombo = ref<Set<number>>(new Set());
 
 const inicializarDias = () => {
-    const items = alternativaActiva.value?.items ?? [];
+    // Sesión 12f-2 — scopeado al destino activo (itemsDelDestinoActivo,
+    // no alternativaActiva.value.items): dia_referencial se reinicia por
+    // destino (decisión ya cerrada desde el inicio del bloque 12a-12h).
+    const items = itemsDelDestinoActivo.value;
     const maxDia = items.reduce((max, it) => Math.max(max, it.dia_referencial ?? 0), 1);
     diasCreados.value = Array.from({ length: maxDia }, (_, i) => i + 1);
     if (!diasCreados.value.includes(diaActivo.value) && diaActivo.value !== 0) {
@@ -1252,14 +1469,14 @@ const agregarDia = () => {
     diaActivo.value = nuevoDia;
 };
 
-const itemsSinDia = computed(() => (alternativaActiva.value?.items ?? []).filter((i) => i.dia_referencial == null));
+const itemsSinDia = computed(() => itemsDelDestinoActivo.value.filter((i) => i.dia_referencial == null));
 
 // Punto B — con un solo día real y sin ítems legado "sin día", las pestañas
 // no aportan nada (todo cae en el mismo bucket) y se ocultan del todo.
 const mostrarTabsDia = computed(() => diasCreados.value.length > 1 || itemsSinDia.value.length > 0);
 
 const itemsDelDiaActivo = computed(() => {
-    const items = alternativaActiva.value?.items ?? [];
+    const items = itemsDelDestinoActivo.value;
     return diaActivo.value === 0
         ? items.filter((i) => i.dia_referencial == null)
         : items.filter((i) => i.dia_referencial === diaActivo.value);
@@ -1268,7 +1485,7 @@ const itemsDelDiaActivo = computed(() => {
 // Sin pestañas (modo simple), el lienzo muestra TODOS los ítems de la
 // alternativa de una — no tiene sentido filtrar por día cuando no hay
 // navegación de día visible.
-const itemsVisiblesLienzo = computed(() => (mostrarTabsDia.value ? itemsDelDiaActivo.value : (alternativaActiva.value?.items ?? [])));
+const itemsVisiblesLienzo = computed(() => (mostrarTabsDia.value ? itemsDelDiaActivo.value : itemsDelDestinoActivo.value));
 
 // Agrupa por tour_origen_id (Sesión 11b4a) — mismo patrón visual que
 // paquetes/detalle.vue::itemsPorTourAgrupados. Los ítems sin tour_origen_id
@@ -1299,7 +1516,29 @@ const agruparPorTour = (items: AlternativaItem[]): BloqueItem[] => {
 };
 
 const bloquesLienzo = computed<BloqueItem[]>(() => agruparPorTour(itemsVisiblesLienzo.value));
+// Sin chips (1 destino), el panel de precio sigue mostrando TODOS los
+// ítems de la alternativa agrupados por tour, sin el nivel extra — cero
+// cambio visual respecto a antes de 12f-2.
 const gruposPrecioPanel = computed<BloqueItem[]>(() => agruparPorTour(alternativaActiva.value?.items ?? []));
+
+// Sesión 12f-2, §7.1 punto 4 — "subtotal colapsable por destino, además
+// del total general". Solo se usa (en el template) cuando
+// mostrarChipsDestino es true; con 1 destino gruposPrecioPanel de arriba
+// sigue siendo lo que se renderiza. El total general (totalLocal) NO
+// cambia de cálculo en ningún caso — sigue sumando TODOS los ítems.
+type BloqueDestino = { destinoId: number; destinoTexto: string; subtotal: number; grupos: BloqueItem[] };
+const gruposPrecioPorDestino = computed<BloqueDestino[]>(() => {
+    const primerDestinoId = alternativaDestinos.value[0]?.id ?? null;
+    return alternativaDestinos.value.map((destino) => {
+        const items = (alternativaActiva.value?.items ?? []).filter((i) => (i.alternativa_destino_id ?? primerDestinoId) === destino.id);
+        return {
+            destinoId: destino.id,
+            destinoTexto: destino.destino_texto,
+            subtotal: items.reduce((sum, it) => sum + totalConvertidoLocal(it), 0),
+            grupos: agruparPorTour(items),
+        };
+    });
+});
 
 const onReasignarDiaItem = async (item: AlternativaItem, event: Event) => {
     const valor = Number((event.target as HTMLSelectElement).value);
@@ -1551,6 +1790,7 @@ const clicResultadoPlantilla = async (p: Extract<BibliotecaResultado, { tipo_res
         const res = await alternativaItemService.cargarDesdePlantilla(alternativaActiva.value.id, {
             paquete_plantilla_id: p.id,
             dia_referencial: diaInicioCarga,
+            alternativa_destino_id: destinoActivoId.value,
         });
         if (res.guias_pendientes.length) {
             const lista = res.guias_pendientes
@@ -1655,6 +1895,7 @@ const confirmarModoPrecio = async (modoPrecio: 'tarifa_fija' | 'por_persona') =>
             modo_precio: modoPrecio,
             cantidad: 1,
             dia_referencial: diaActivoParaAgregar.value,
+            alternativa_destino_id: destinoActivoId.value,
         });
         await onServicioSueltoAgregado(res.alternativa_item);
     } catch (error: any) {
@@ -1680,6 +1921,7 @@ const agregarItemProveedorHotel = async (
             dia_referencial: diaActivoParaAgregar.value,
             pax_incluidos: paxIncluidos,
             camas_adicionales_nino: camasAdicionalesNino,
+            alternativa_destino_id: destinoActivoId.value,
         });
         await onServicioSueltoAgregado(res.alternativa_item);
     } catch (error: any) {
@@ -1790,7 +2032,13 @@ const onElegirTarifaRegistrada = (tf: { precio_costo: number; precio_venta: numb
 const cargarOpcionesMayorista = async () => {
     if (!alternativaActiva.value) return;
     const res = await opcionMayoristaService.listar(alternativaActiva.value.id);
-    opcionesMayorista.value = res.opciones_mayorista;
+    // Sesión 12f-2, §7.1 punto 3 — el comparador actúa sobre el destino
+    // activo, no toda la alternativa. Filtro client-side (sin endpoint
+    // nuevo): alternativa_destino_id ya viene en cada opción desde 12d.
+    const primerDestinoId = alternativaDestinos.value[0]?.id ?? null;
+    opcionesMayorista.value = mostrarChipsDestino.value
+        ? res.opciones_mayorista.filter((op: OpcionMayorista) => (op.alternativa_destino_id ?? primerDestinoId) === destinoActivoId.value)
+        : res.opciones_mayorista;
 };
 
 const verHoteles = (op: OpcionMayorista) => {
@@ -1815,7 +2063,7 @@ const guardarOpcionMayorista = async () => {
     if (!alternativaActiva.value || !formMayorista.value.proveedor_id) return;
     guardandoOpcionMayorista.value = true;
     try {
-        await opcionMayoristaService.crear(alternativaActiva.value.id, formMayorista.value as any);
+        await opcionMayoristaService.crear(alternativaActiva.value.id, { ...formMayorista.value, alternativa_destino_id: destinoActivoId.value } as any);
         mostrarFormMayorista.value = false;
         formMayorista.value = { proveedor_id: null, moneda: 'USD', vuelo_aerolinea: '', incluye: '', contenido_tour_id: null };
         resetContenidoTourBuscador();
@@ -1861,6 +2109,7 @@ const agregarItemMayorista = async (op: OpcionMayorista, opcionHotelTarifaId: nu
             opcion_hotel_tarifa_id: opcionHotelTarifaId,
             cantidad,
             dia_referencial: diaActivoParaAgregar.value,
+            alternativa_destino_id: destinoActivoId.value,
         });
         await onServicioSueltoAgregado(res.alternativa_item);
     } catch (error: any) {
@@ -1918,6 +2167,7 @@ const agregarItemGuiaCotizador = async () => {
             dia_referencial: diaActivoParaAgregar.value,
             tip_afe_igv: tipAfeIgvGuia.value,
             destino_tributario: destinoTributarioGuia.value,
+            alternativa_destino_id: destinoActivoId.value,
         });
         guiaTarifaSeleccionadaCotizador.value = null;
         cantidadDiasGuia.value = 1;
@@ -2356,9 +2606,26 @@ const toggleGrupoExpandido = (tourOrigenId: number) => {
     else gruposExpandido.value.add(tourOrigenId);
 };
 
+// Sesión 12f-2 — mismo patrón, un nivel arriba (colapsable por destino,
+// §7.1 punto 4). Todos expandidos por defecto la primera vez que se ve
+// cada uno (el vendedor colapsa los que no le interesan).
+const destinosExpandido = ref<Set<number>>(new Set());
+const toggleDestinoExpandido = (destinoId: number) => {
+    if (destinosExpandido.value.has(destinoId)) destinosExpandido.value.delete(destinoId);
+    else destinosExpandido.value.add(destinoId);
+};
+watch(alternativaDestinos, (destinos) => {
+    for (const d of destinos) destinosExpandido.value.add(d.id);
+}, { immediate: true });
+
 watch(modo, (m) => { if (m === 'intl') cargarOpcionesMayorista(); });
+// Sesión 12f-2 — cambiar de chip re-filtra el comparador (§7.1 punto 3),
+// sin re-pedirlo al backend (opcionesMayorista ya trae TODAS las opciones
+// de la alternativa, el filtro es client-side dentro de cargarOpcionesMayorista()).
+watch(destinoActivoId, () => { if (modo.value === 'intl') cargarOpcionesMayorista(); });
 watch(alternativaActivaId, () => {
     inicializarEdicionItems();
+    resolverDestinoActivo();
     inicializarDias();
     vistaPreviaCombo.value = null;
     drawerBibliotecaAbierto.value = false;

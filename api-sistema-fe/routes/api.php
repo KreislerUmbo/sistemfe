@@ -740,6 +740,11 @@ Route::group([
         ->middleware('permission:agencia.cotizaciones');
     Route::post("alternativas/{id}/destinos", [AlternativaDestinoController::class, 'store'])
         ->middleware('permission:agencia.cotizaciones');
+    // Sesión 12f-2 — editar/borrar un chip de destino.
+    Route::put("alternativas/{alternativaId}/destinos/{id}", [AlternativaDestinoController::class, 'update'])
+        ->middleware('permission:agencia.cotizaciones');
+    Route::delete("alternativas/{alternativaId}/destinos/{id}", [AlternativaDestinoController::class, 'destroy'])
+        ->middleware('permission:agencia.cotizaciones');
 
     // ═══════════════════════════════════════════════════════════════
     // Vertical Agencia de Viajes — reserva y pasajeros (Sesión 11c).
