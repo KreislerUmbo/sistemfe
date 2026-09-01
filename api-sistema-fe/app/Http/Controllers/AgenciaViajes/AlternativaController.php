@@ -542,6 +542,7 @@ class AlternativaController extends Controller
     {
         $alternativa = Alternativa::with([
             'cotizacion.cliente',
+            'destinos.destinoAtractivo',
             'items.proveedorTarifa.proveedorServicio.destinoServicio.servicio',
             'items.proveedorTarifa.proveedorServicio.destinoServicio.destinoAtractivo',
             'items.proveedorTarifa.proveedorServicio.proveedor',
@@ -558,16 +559,17 @@ class AlternativaController extends Controller
         $pasajeros = \App\Models\AgenciaViajes\CotizacionPasajero::where('cotizacion_id', $alternativa->cotizacion_id)->get();
 
         $itinerario = $this->itinerarioAlternativa($alternativa);
+        $incluyePorDestino = $this->incluyePorDestino($alternativa);
         $tourUnico = $this->tourUnicoDeAlternativa($alternativa);
 
-        $items = $alternativa->items->map(fn (AlternativaItem $item) => [
-            'nombre' => $this->resolverNombreItemPdf($item),
-            'precio' => (float) $item->total_convertido,
-            'precio_original' => (float) $item->precio_venta_snapshot * (float) $item->cantidad,
-            'descuento_pct' => (float) ($item->descuento_pct ?? 0),
-        ])->values();
-
-        $totalOriginal = $items->sum('precio_original');
+        // Sesión 12f-3 — el PDF comercial deja de mostrar precio por ítem
+        // (decisión del usuario, ver brief 12f3 §0.3): estos totales siguen
+        // calculándose igual que antes, solo que ya no viaja un $items con
+        // precio por fila a la vista — la tabla de "Precio" quedó reducida
+        // al bloque de totales.
+        $totalOriginal = $alternativa->items->sum(
+            fn (AlternativaItem $item) => (float) $item->precio_venta_snapshot * (float) $item->cantidad
+        );
         $total = (float) $alternativa->total;
         $descuentoMonto = round($totalOriginal - $total, 2);
 
@@ -588,8 +590,8 @@ class AlternativaController extends Controller
             'cuentasBancarias' => $cuentasBancarias,
             'pasajeros' => $pasajeros,
             'itinerario' => $itinerario,
+            'incluyePorDestino' => $incluyePorDestino,
             'tourUnico' => $tourUnico,
-            'items' => $items,
             'total' => $total,
             'totalOriginal' => $totalOriginal,
             'descuentoMonto' => $descuentoMonto,
@@ -619,47 +621,120 @@ class AlternativaController extends Controller
         return \App\Models\AgenciaViajes\PaquetePlantilla::find($tourIds->first());
     }
 
-    // Itinerario narrativo — concatena el paqueteItinerario() de cada tour
-    // DISTINTO presente en los ítems de la alternativa, en el orden en que
-    // aparecen, con offset de día acumulado. Generaliza
-    // ComboExplosionService::itinerarioDerivado() (pensado para un combo
-    // específico) a "los tours que realmente aparecen acá", porque una
-    // alternativa puede mezclar tours sin venir de un combo formal. Devuelve
-    // array vacío si ningún ítem tiene tour_origen_id.
-    private function itinerarioAlternativa(Alternativa $alternativa): array
+    // Sesión 12f-3 — agrupa los AlternativaItem de la alternativa por
+    // destino real (alternativa_destino_id), tratando null como
+    // perteneciente al PRIMER destino (mismo fallback que
+    // itemsDelDestinoActivo en editar.vue, 12f-2, por los ítems legacy que
+    // 12c dejó sin alternativa_destino_id resuelto). Compartido por
+    // itinerarioAlternativa()/incluyePorDestino() para no duplicar el
+    // criterio de fallback en dos lados. $alternativa->destinos siempre
+    // trae al menos 1 fila (garantía de 12b/12c/12f-2, destroy() bloquea
+    // borrar el último) — no hay caso real de array vacío acá.
+    private function itemsPorDestino(Alternativa $alternativa): array
     {
-        $tourIds = $alternativa->items->pluck('tour_origen_id')->filter()->unique()->values();
+        $destinos = $alternativa->destinos;
 
-        if ($tourIds->isEmpty()) {
+        if ($destinos->isEmpty()) {
             return [];
         }
 
-        $itinerario = [];
-        $offsetDia = 0;
+        $primerDestinoId = $destinos->first()->id;
 
-        foreach ($tourIds as $tourId) {
-            $tour = \App\Models\AgenciaViajes\PaquetePlantilla::find($tourId);
-            if (! $tour) {
+        return $destinos->map(fn (AlternativaDestino $destino) => [
+            'destino' => $destino,
+            'items' => $alternativa->items->filter(
+                fn (AlternativaItem $item) => ($item->alternativa_destino_id ?? $primerDestinoId) === $destino->id
+            )->values(),
+        ])->values()->all();
+    }
+
+    // Itinerario narrativo — concatena el paqueteItinerario() de cada tour
+    // DISTINTO presente en los ítems de CADA destino, en el orden en que
+    // aparecen, con offset de día que se reinicia al entrar a un destino
+    // nuevo (mismo criterio que dia_referencial en el cotizador desde
+    // 12f-2). Generaliza ComboExplosionService::itinerarioDerivado()
+    // (pensado para un combo específico) a "los tours que realmente
+    // aparecen acá", porque una alternativa puede mezclar tours sin venir
+    // de un combo formal. Devuelve un array de BLOQUES (uno por destino
+    // con al menos un paso), no un array plano de pasos — 12f-3, antes era
+    // plano y asumía un solo destino.
+    private function itinerarioAlternativa(Alternativa $alternativa): array
+    {
+        $bloques = [];
+
+        foreach ($this->itemsPorDestino($alternativa) as $grupo) {
+            $destino = $grupo['destino'];
+            $tourIds = $grupo['items']->pluck('tour_origen_id')->filter()->unique()->values();
+
+            if ($tourIds->isEmpty()) {
                 continue;
             }
 
-            $pasos = $tour->paqueteItinerario()->orderBy('dia_relativo')->orderBy('orden')->get();
-            $maxDiaDelTour = 0;
+            $pasos = [];
+            $offsetDia = 0;
 
-            foreach ($pasos as $paso) {
-                $itinerario[] = [
-                    'dia' => $offsetDia + $paso->dia_relativo,
-                    'hora' => $paso->hora,
-                    'descripcion' => $paso->descripcion,
-                    'tour_nombre' => $tour->nombre,
-                ];
-                $maxDiaDelTour = max($maxDiaDelTour, $paso->dia_relativo);
+            foreach ($tourIds as $tourId) {
+                $tour = \App\Models\AgenciaViajes\PaquetePlantilla::find($tourId);
+                if (! $tour) {
+                    continue;
+                }
+
+                $pasosDelTour = $tour->paqueteItinerario()->orderBy('dia_relativo')->orderBy('orden')->get();
+                $maxDiaDelTour = 0;
+
+                foreach ($pasosDelTour as $paso) {
+                    $pasos[] = [
+                        'dia' => $offsetDia + $paso->dia_relativo,
+                        'hora' => $paso->hora,
+                        'descripcion' => $paso->descripcion,
+                        'tour_nombre' => $tour->nombre,
+                    ];
+                    $maxDiaDelTour = max($maxDiaDelTour, $paso->dia_relativo);
+                }
+
+                $offsetDia += $maxDiaDelTour;
             }
 
-            $offsetDia += $maxDiaDelTour;
+            if (empty($pasos)) {
+                continue;
+            }
+
+            $bloques[] = [
+                'destino_id' => $destino->id,
+                'destino_nombre' => $destino->destinoAtractivo?->nombre ?? $destino->destino_texto ?? 'Destino',
+                'fecha_inicio' => $destino->fecha_inicio,
+                'fecha_fin' => $destino->fecha_fin,
+                'pasos' => $pasos,
+            ];
         }
 
-        return $itinerario;
+        return $bloques;
+    }
+
+    // Sesión 12f-3 — "Incluye" (lista de nombres, sin precio) agrupada por
+    // destino con el mismo criterio que itinerarioAlternativa(). Un bloque
+    // por destino con al menos 1 ítem.
+    private function incluyePorDestino(Alternativa $alternativa): array
+    {
+        $bloques = [];
+
+        foreach ($this->itemsPorDestino($alternativa) as $grupo) {
+            if ($grupo['items']->isEmpty()) {
+                continue;
+            }
+
+            $destino = $grupo['destino'];
+
+            $bloques[] = [
+                'destino_id' => $destino->id,
+                'destino_nombre' => $destino->destinoAtractivo?->nombre ?? $destino->destino_texto ?? 'Destino',
+                'fecha_inicio' => $destino->fecha_inicio,
+                'fecha_fin' => $destino->fecha_fin,
+                'nombres' => $grupo['items']->map(fn (AlternativaItem $item) => $this->resolverNombreItemPdf($item))->values(),
+            ];
+        }
+
+        return $bloques;
     }
 
     // Mismo criterio que ReservaController::resolverNombreItem() —

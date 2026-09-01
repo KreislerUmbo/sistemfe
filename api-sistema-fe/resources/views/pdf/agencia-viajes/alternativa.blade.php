@@ -136,47 +136,21 @@
             margin-bottom: 3px;
         }
 
-        /* ── Tabla de precio ────────────────────────────────────── */
-        .items {
-            width: 100%;
-            margin-top: 8px;
-        }
-
-        .items th {
-            background: #e6e6e6;
-            border: 1px solid #999999;
-            font-size: 11px;
+        /* ── Bloques de destino (itinerario/incluye, 12f-3) ───────── */
+        .destino-bloque-titulo {
             font-weight: bold;
-            padding: 8px 6px;
-            text-align: left;
+            font-size: 12px;
+            margin: 10px 0 4px;
         }
 
-        .items td {
-            border-left: 1px solid #999999;
-            border-right: 1px solid #999999;
-            border-top: 1px solid #eeeeee;
+        .destino-bloque-titulo:first-child {
+            margin-top: 0;
+        }
+
+        .destino-bloque-fechas {
+            font-weight: normal;
             font-size: 11px;
-            padding: 6px;
-        }
-
-        .items tfoot td {
-            border-bottom: 1px solid #999999;
-        }
-
-        .right {
-            text-align: right;
-        }
-
-        .precio-tachado {
-            text-decoration: line-through;
-            color: #999999;
-            margin-right: 6px;
-        }
-
-        .descuento-nota {
-            font-size: 10px;
-            color: #b45309;
-            margin-left: 4px;
+            color: #444444;
         }
 
         /* ── Totales ────────────────────────────────────────────── */
@@ -330,35 +304,68 @@
         </table>
 
         {{-- ══════════════════ ITINERARIO ══════════════════ --}}
+        {{-- 12f-3 — $itinerario es un array de BLOQUES (uno por destino con
+             al menos 1 paso). Con 1 solo bloque no se imprime encabezado de
+             destino, mismo look que antes de multi-destino. --}}
         @if (count($itinerario) > 0)
             <div class="seccion">
                 <div class="seccion-titulo">Itinerario</div>
-                @foreach (collect($itinerario)->groupBy('dia') as $dia => $pasosDelDia)
-                    <div class="dia-item">
-                        <div class="dia-label">Día {{ $dia }}</div>
-                        @foreach ($pasosDelDia as $paso)
-                            <div class="paso">
-                                @if ($paso['hora'])
-                                    <strong>{{ substr($paso['hora'], 0, 5) }}</strong> —
-                                @endif
-                                {{-- Rich text (Quill) desde 2026-08-28 — antes era texto plano,
-                                     por eso acá se renderiza crudo en vez de escaparse. --}}
-                                {!! $paso['descripcion'] !!}
-                            </div>
-                        @endforeach
-                    </div>
+                @foreach ($itinerario as $bloque)
+                    @if (count($itinerario) > 1)
+                        <div class="destino-bloque-titulo">
+                            {{ $bloque['destino_nombre'] }}
+                            @if ($bloque['fecha_inicio'] || $bloque['fecha_fin'])
+                                <span class="destino-bloque-fechas">
+                                    ({{ $bloque['fecha_inicio']?->format('d/m/Y') ?? '?' }}
+                                    —
+                                    {{ $bloque['fecha_fin']?->format('d/m/Y') ?? '?' }})
+                                </span>
+                            @endif
+                        </div>
+                    @endif
+                    @foreach (collect($bloque['pasos'])->groupBy('dia') as $dia => $pasosDelDia)
+                        <div class="dia-item">
+                            <div class="dia-label">Día {{ $dia }}</div>
+                            @foreach ($pasosDelDia as $paso)
+                                <div class="paso">
+                                    @if ($paso['hora'])
+                                        <strong>{{ substr($paso['hora'], 0, 5) }}</strong> —
+                                    @endif
+                                    {{-- Rich text (Quill) desde 2026-08-28 — antes era texto plano,
+                                         por eso acá se renderiza crudo en vez de escaparse. --}}
+                                    {!! $paso['descripcion'] !!}
+                                </div>
+                            @endforeach
+                        </div>
+                    @endforeach
                 @endforeach
             </div>
         @endif
 
         {{-- ══════════════════ INCLUYE ══════════════════ --}}
+        {{-- 12f-3 — $incluyePorDestino es un array de bloques (uno por
+             destino con al menos 1 ítem), mismo criterio que Itinerario. --}}
         <div class="seccion">
             <div class="seccion-titulo">Incluye</div>
-            <ul class="lista-simple">
-                @foreach ($items as $item)
-                    <li>{{ $item['nombre'] }}</li>
-                @endforeach
-            </ul>
+            @foreach ($incluyePorDestino as $bloque)
+                @if (count($incluyePorDestino) > 1)
+                    <div class="destino-bloque-titulo">
+                        {{ $bloque['destino_nombre'] }}
+                        @if ($bloque['fecha_inicio'] || $bloque['fecha_fin'])
+                            <span class="destino-bloque-fechas">
+                                ({{ $bloque['fecha_inicio']?->format('d/m/Y') ?? '?' }}
+                                —
+                                {{ $bloque['fecha_fin']?->format('d/m/Y') ?? '?' }})
+                            </span>
+                        @endif
+                    </div>
+                @endif
+                <ul class="lista-simple">
+                    @foreach ($bloque['nombres'] as $nombre)
+                        <li>{{ $nombre }}</li>
+                    @endforeach
+                </ul>
+            @endforeach
         </div>
 
         {{-- ══════════════════ NO INCLUYE / RECOMENDACIONES / LUGAR DE RECOJO / HORARIOS ══════════════════ --}}
@@ -402,38 +409,14 @@
             @endif
         @endif
 
-        {{-- ══════════════════ TABLA DE PRECIO ══════════════════ --}}
+        {{-- ══════════════════ PRECIO ══════════════════ --}}
+        {{-- 12f-3 — deja de mostrarse precio por ítem individual (decisión
+             del usuario, brief 12f3 §0.3); queda solo el bloque de
+             totales. `formato_descuento_pdf` ya no se lee acá — era una
+             configuración pensada para decorar el precio por fila, que ya
+             no existe en esta vista. --}}
         <div class="seccion">
             <div class="seccion-titulo">Precio</div>
-            <table class="items">
-                <colgroup>
-                    <col>
-                    <col style="width:150px;">
-                </colgroup>
-                <thead>
-                    <tr>
-                        <th>Descripción</th>
-                        <th class="right">Precio</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach ($items as $item)
-                        <tr>
-                            <td>{{ $item['nombre'] }}</td>
-                            <td class="right">
-                                @if ($config?->formato_descuento_pdf === 'tachado' && $hayDescuento && $item['descuento_pct'] > 0)
-                                    <span class="precio-tachado">{{ $alternativa->moneda_cotizacion }} {{ number_format($item['precio_original'], 2) }}</span>
-                                @endif
-                                {{ $alternativa->moneda_cotizacion }} {{ number_format($item['precio'], 2) }}
-                                @if ($config?->formato_descuento_pdf === 'separado' && $hayDescuento && $item['descuento_pct'] > 0)
-                                    <span class="descuento-nota">(-{{ rtrim(rtrim(number_format($item['descuento_pct'], 2), '0'), '.') }}%)</span>
-                                @endif
-                            </td>
-                        </tr>
-                    @endforeach
-                </tbody>
-            </table>
-
             <table class="totales">
                 @if ($config?->mostrar_descuento_como_linea && $hayDescuento)
                     <tr>
