@@ -213,7 +213,31 @@ class AlternativaController extends Controller
         return DB::transaction(function () use ($alternativa, $descuentoGlobalPct) {
             $lineasFueraDePiso = [];
 
-            foreach ($alternativa->items()->with('proveedorTarifa')->get() as $item) {
+            $items = $alternativa->items()->with('proveedorTarifa')->get();
+            ['sinGrupo' => $sinGrupo, 'grupos' => $grupos] = AlternativaItem::agruparPorGrupoOpcion($items);
+
+            // Sesión M1 (Ronda 2/P6) — solo reciben el descuento global los
+            // ítems sin grupo de siempre, más la fila opcion_elegida=true
+            // de cada grupo YA resuelto. El resto de cada grupo (un grupo
+            // entero abierto, o las filas no elegidas de uno resuelto)
+            // siempre queda a precio de lista, sin descuento — no hay una
+            // sola línea válida sobre la que aplicar % hasta que el
+            // vendedor resuelva cuál eligió el pasajero.
+            $itemsConDescuento = $sinGrupo;
+            $itemsSinDescuento = collect();
+
+            foreach ($grupos as $grupo) {
+                $elegida = $grupo['items']->firstWhere('opcion_elegida', true);
+
+                if ($elegida) {
+                    $itemsConDescuento->push($elegida);
+                    $itemsSinDescuento = $itemsSinDescuento->merge($grupo['items']->reject(fn (AlternativaItem $i) => $i->is($elegida)));
+                } else {
+                    $itemsSinDescuento = $itemsSinDescuento->merge($grupo['items']);
+                }
+            }
+
+            foreach ($itemsConDescuento as $item) {
                 $precioListaConvertido = $this->priceEngine->convertirMoneda(
                     (float) $item->precio_venta_snapshot,
                     $item->moneda_costo,
@@ -254,8 +278,28 @@ class AlternativaController extends Controller
                 ]);
             }
 
-            $total = $alternativa->items()->get()->sum(fn (AlternativaItem $item) => $item->total_convertido);
-            $alternativa->update(['total' => round($total, 2)]);
+            // Sesión M1 — se fuerzan a precio de lista, sin %, cada vez que
+            // se reaplica el descuento global — así calcularTotalEfectivo()
+            // puede confiar en que total_convertido de un ítem de grupo
+            // excluido SIEMPRE es su precio de lista convertido, sin tener
+            // que reconvertir moneda de nuevo para el mínimo de un grupo
+            // abierto.
+            foreach ($itemsSinDescuento as $item) {
+                $precioListaConvertido = $this->priceEngine->convertirMoneda(
+                    (float) $item->precio_venta_snapshot,
+                    $item->moneda_costo,
+                    $alternativa->moneda_cotizacion,
+                    (float) $alternativa->tipo_cambio_aplicado
+                );
+
+                $item->update([
+                    'descuento_pct' => 0,
+                    'precio_convertido' => round($precioListaConvertido, 2),
+                ]);
+            }
+
+            $total = AlternativaItem::calcularTotalEfectivo($alternativa->items()->get())['total'];
+            $alternativa->update(['total' => $total]);
 
             return $lineasFueraDePiso;
         });
@@ -276,12 +320,29 @@ class AlternativaController extends Controller
     private function aplicarDescuentoGlobalMonto(Alternativa $alternativa, float $montoGlobal): array
     {
         return DB::transaction(function () use ($alternativa, $montoGlobal) {
-            $sumaPreciosLista = $alternativa->items()->get()->sum(fn (AlternativaItem $item) => $this->priceEngine->convertirMoneda(
+            $precioListaConvertidoDe = fn (AlternativaItem $item) => $this->priceEngine->convertirMoneda(
                 (float) $item->precio_venta_snapshot,
                 $item->moneda_costo,
                 $alternativa->moneda_cotizacion,
                 (float) $alternativa->tipo_cambio_aplicado
-            ));
+            );
+
+            // Sesión M1 — mismo criterio de agrupación que
+            // aplicarDescuentoGlobal(): un grupo resuelto cuenta solo su
+            // elegida, uno abierto cuenta su mínimo una sola vez — sin
+            // esto, sumaPreciosLista (y por lo tanto el % efectivo
+            // calculado a partir de un monto) sumaría de más contando
+            // TODAS las opciones descartadas del grupo.
+            ['sinGrupo' => $sinGrupo, 'grupos' => $grupos] = AlternativaItem::agruparPorGrupoOpcion($alternativa->items()->get());
+
+            $sumaPreciosLista = $sinGrupo->sum($precioListaConvertidoDe);
+
+            foreach ($grupos as $grupo) {
+                $elegida = $grupo['items']->firstWhere('opcion_elegida', true);
+                $sumaPreciosLista += $elegida
+                    ? $precioListaConvertidoDe($elegida)
+                    : $grupo['items']->map($precioListaConvertidoDe)->min();
+            }
 
             $pctEfectivo = $sumaPreciosLista > 0 ? round(($montoGlobal / $sumaPreciosLista) * 100, 4) : 0.0;
 

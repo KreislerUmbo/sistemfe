@@ -1268,10 +1268,14 @@ class AlternativaItemController extends Controller
         ];
     }
 
+    // Sesión M1 — calcularTotalEfectivo() respeta grupos de opciones de
+    // hotel (solo la elegida de un grupo resuelto suma; el mínimo de un
+    // grupo abierto suma una sola vez, ver AlternativaItem::
+    // calcularTotalEfectivo()). Sin grupos, se comporta idéntico a antes.
     private function recalcularTotalAlternativa(Alternativa $alternativa): void
     {
-        $total = $alternativa->items()->get()->sum(fn (AlternativaItem $item) => $item->total_convertido);
-        $alternativa->update(['total' => round($total, 2)]);
+        $total = AlternativaItem::calcularTotalEfectivo($alternativa->items()->get())['total'];
+        $alternativa->update(['total' => $total]);
     }
 
 }

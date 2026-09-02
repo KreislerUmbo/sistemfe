@@ -2,6 +2,7 @@
 
 namespace App\Models\AgenciaViajes;
 
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 
 // Alternativa de cotización (combinación completa de paquete) —
@@ -32,6 +33,23 @@ class Alternativa extends Model
         'descuento_global_pct' => 'decimal:2',
         'total' => 'decimal:2',
     ];
+
+    // Sesión M1 (matriz de opciones de hotel) — true si algún grupo de
+    // opciones (alternativa_items.grupo_opcion_id) todavía no tiene
+    // ninguna fila opcion_elegida=true. El frontend (M4) lo usa para
+    // mostrar "desde $X" en vez de un total cerrado — requiere items()
+    // cargado (lazy-load si no vino eager, mismo costo que cualquier
+    // accessor que navega una relación; en la práctica esta atributo solo
+    // se serializa donde ya se carga la alternativa completa con sus
+    // ítems, no en listados livianos como CotizacionController::index()).
+    protected function tieneGruposSinResolver(): Attribute
+    {
+        return Attribute::make(
+            get: fn () => AlternativaItem::calcularTotalEfectivo($this->items)['tiene_grupos_sin_resolver'],
+        );
+    }
+
+    protected $appends = ['tiene_grupos_sin_resolver'];
 
     public function cotizacion()
     {

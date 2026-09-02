@@ -129,6 +129,33 @@ class ReservaController extends Controller
             ], 422);
         }
 
+        // Sesión M1 (matriz de opciones de hotel, Ronda 2/P4) — no se
+        // puede aceptar con algún grupo de opciones (alternativa_items.
+        // grupo_opcion_id) sin resolver. "Resuelto" = EXACTAMENTE 1 fila
+        // opcion_elegida=true; 0 (nadie marcó) y 2+ (dato corrupto — no
+        // debería poder pasar si el resto del sistema respeta la regla,
+        // pero si pasa no se asume cuál es la correcta) bloquean igual.
+        // M1 no tiene todavía un nombre de grupo propio (eso es M4/UI) —
+        // "grupo #N" es el fallback que ya preveía el brief.
+        $gruposSinResolver = [];
+        $numeroDeGrupo = 0;
+
+        foreach (AlternativaItem::agruparPorGrupoOpcion($alternativa->items()->get())['grupos'] as $grupo) {
+            $numeroDeGrupo++;
+
+            if ($grupo['items']->where('opcion_elegida', true)->count() !== 1) {
+                $gruposSinResolver[] = "grupo #{$numeroDeGrupo}";
+            }
+        }
+
+        if (! empty($gruposSinResolver)) {
+            return response()->json([
+                'code' => 422,
+                'message' => 'Hay ' . count($gruposSinResolver) . ' grupo(s) de opciones de hotel sin resolver ('
+                    . implode(', ', $gruposSinResolver) . '). Marcá la opción elegida por el cliente antes de aceptar.',
+            ], 422);
+        }
+
         // Opcional: el vendedor ya sabe quién es cada pasajero al aceptar —
         // lista alineada por orden (id asc) con cotizacion_pasajeros, cada
         // posición nullable.
