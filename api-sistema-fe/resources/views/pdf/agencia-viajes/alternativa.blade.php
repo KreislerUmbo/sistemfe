@@ -153,6 +153,52 @@
             color: #444444;
         }
 
+        /* ── Opciones de hoteles (Sesión M5, matriz hotel × habitación) ──── */
+        .hoteles-tabla {
+            width: 100%;
+            margin-bottom: 12px;
+        }
+
+        .hoteles-tabla th {
+            font-size: 10px;
+            text-align: left;
+            border: 1px solid #999999;
+            padding: 4px 6px;
+            background: #f2f2f2;
+            text-transform: uppercase;
+        }
+
+        .hoteles-tabla th.precio-col {
+            text-align: right;
+        }
+
+        .hoteles-tabla td {
+            font-size: 11px;
+            border: 1px solid #999999;
+            padding: 4px 6px;
+        }
+
+        .hoteles-tabla td.precio-col {
+            text-align: right;
+        }
+
+        .hoteles-tabla td.sin-precio {
+            text-align: center;
+            color: #999999;
+        }
+
+        .hoteles-tabla tr.fila-elegida td {
+            font-weight: bold;
+            background: #f7f7f7;
+        }
+
+        .hoteles-elegida-nota {
+            font-size: 10px;
+            color: #444444;
+            font-weight: normal;
+            text-transform: none;
+        }
+
         /* ── Totales ────────────────────────────────────────────── */
         .totales {
             width: 280px;
@@ -408,6 +454,50 @@
                 </div>
             @endif
         @endif
+
+        {{-- ══════════════════ OPCIONES DE HOTELES (Sesión M5) ══════════════════ --}}
+        {{-- Sección propia, después de itinerario/incluye — mismo formato que
+             los 3 documentos reales que originaron el plan (docs/auxiliares/):
+             tabla matriz hotel × tipo de habitación, un bloque por grupo
+             (plan-matriz-hoteles-cotizador.md P10). Un grupo TODAVÍA abierto
+             (nadie eligió) se muestra igual que en esos documentos — es
+             justamente el estado en que se les envía al cliente para que
+             decida. Un grupo ya resuelto resalta la fila elegida (mejora
+             sobre el formato original, esos documentos nunca se reenviaban
+             después de la decisión). --}}
+        @foreach ($opcionesHoteles as $grupoHotel)
+            <div class="seccion">
+                <div class="seccion-titulo">
+                    Opciones de hoteles
+                    @if ($grupoHotel['resuelto'])
+                        <span class="hoteles-elegida-nota">— opción confirmada resaltada</span>
+                    @endif
+                </div>
+                <table class="hoteles-tabla">
+                    <tr>
+                        <th>Hotel</th>
+                        @foreach ($grupoHotel['tipos_habitacion'] as $tipo)
+                            <th class="precio-col">{{ ucfirst($tipo) }}</th>
+                        @endforeach
+                    </tr>
+                    @foreach ($grupoHotel['filas'] as $fila)
+                        <tr class="{{ $fila['elegida'] ? 'fila-elegida' : '' }}">
+                            {{-- '✓' (U+2713) no renderiza con la fuente que usa DomPDF acá
+                                 — sale como "?" (confirmado generando el PDF real contra
+                                 agencia-demo). Texto plano en vez de un glifo unicode. --}}
+                            <td>{{ $fila['hotel'] }}{{ $fila['elegida'] ? ' (elegida)' : '' }}</td>
+                            @foreach ($grupoHotel['tipos_habitacion'] as $tipo)
+                                @if (isset($fila['precios'][$tipo]))
+                                    <td class="precio-col">{{ $alternativa->moneda_cotizacion }} {{ number_format($fila['precios'][$tipo], 2) }}</td>
+                                @else
+                                    <td class="sin-precio">—</td>
+                                @endif
+                            @endforeach
+                        </tr>
+                    @endforeach
+                </table>
+            </div>
+        @endforeach
 
         {{-- ══════════════════ PRECIO ══════════════════ --}}
         {{-- 12f-3 — deja de mostrarse precio por ítem individual (decisión

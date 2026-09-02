@@ -638,6 +638,7 @@ class AlternativaController extends Controller
         $itinerario = $this->itinerarioAlternativa($alternativa);
         $incluyePorDestino = $this->incluyePorDestino($alternativa);
         $tourUnico = $this->tourUnicoDeAlternativa($alternativa);
+        $opcionesHoteles = $this->opcionesHoteles($alternativa);
 
         // Sesión 12f-3 — el PDF comercial deja de mostrar precio por ítem
         // (decisión del usuario, ver brief 12f3 §0.3): estos totales siguen
@@ -669,6 +670,7 @@ class AlternativaController extends Controller
             'itinerario' => $itinerario,
             'incluyePorDestino' => $incluyePorDestino,
             'tourUnico' => $tourUnico,
+            'opcionesHoteles' => $opcionesHoteles,
             'total' => $total,
             'totalOriginal' => $totalOriginal,
             'descuentoMonto' => $descuentoMonto,
@@ -807,7 +809,19 @@ class AlternativaController extends Controller
         $bloques = [];
 
         foreach ($this->itemsPorDestino($alternativa) as $grupo) {
-            if ($grupo['items']->isEmpty()) {
+            // Sesión M5 — encontrado renderizando el PDF real contra
+            // agencia-demo: un ítem con grupo_opcion_id (matriz de
+            // hoteles) ya aparece completo en su propia sección
+            // "Opciones de hoteles" (tabla hotel × tipo de habitación,
+            // ver opcionesHoteles() más abajo) — listarlo TAMBIÉN acá,
+            // una línea por cada combinación hotel/habitación del grupo
+            // (5 líneas en la verificación real), duplicaba la misma
+            // información dos veces en el mismo documento. Los ítems
+            // SIN grupo (el 100% de "Incluye" antes de este plan) siguen
+            // exactamente igual.
+            $itemsSinGrupoDeHotel = $grupo['items']->whereNull('grupo_opcion_id');
+
+            if ($itemsSinGrupoDeHotel->isEmpty()) {
                 continue;
             }
 
@@ -818,7 +832,7 @@ class AlternativaController extends Controller
                 'destino_nombre' => $destino->destinoAtractivo?->nombre ?? $destino->destino_texto ?? 'Destino',
                 'fecha_inicio' => $destino->fecha_inicio,
                 'fecha_fin' => $destino->fecha_fin,
-                'nombres' => $grupo['items']
+                'nombres' => $itemsSinGrupoDeHotel
                     ->map(fn (AlternativaItem $item) => ReservaController::resolverNombreItem($item, null, 'cliente'))
                     ->unique()
                     ->values(),
@@ -826,6 +840,75 @@ class AlternativaController extends Controller
         }
 
         return $bloques;
+    }
+
+    // Sesión M5 — sección "Opciones de hoteles" del PDF (plan-matriz-hoteles-
+    // cotizador.md P10): un grupo de alternativa_items con grupo_opcion_id
+    // se dibuja como tabla matriz (fila=hotel, columna=tipo de habitación),
+    // igual formato que los 3 documentos reales que originaron este plan
+    // (docs/auxiliares/). Reusa el resolver de nombre centralizado de M2
+    // (ReservaController::resolverNombreItem(), audiencia 'cliente' — nunca
+    // revela mayorista/proveedor, solo el hotel) en vez de reimplementar de
+    // dónde sale el nombre del hotel: para cualquier ítem de Hotel esa
+    // función SIEMPRE devuelve "{hotel} · {tipo_habitacion}" (confirmado
+    // leyendo sus 2 ramas de hotel antes de escribir esto) — separar por
+    // " · " alcanza, no hace falta duplicar la lógica de qué relación mirar
+    // según origen_tipo/proveedor_tarifa_id/opcion_hotel_tarifa_id.
+    private const ORDEN_TIPO_HABITACION = ['simple', 'matrimonial', 'doble', 'triple', 'familiar'];
+
+    private function opcionesHoteles(Alternativa $alternativa): array
+    {
+        $grupos = AlternativaItem::agruparPorGrupoOpcion($alternativa->items)['grupos'];
+
+        return $grupos->map(function (array $grupo) {
+            $filasPorHotel = [];
+            $tiposPresentes = [];
+
+            foreach ($grupo['items'] as $item) {
+                $nombreCompleto = ReservaController::resolverNombreItem($item, null, 'cliente');
+                $partes = explode(' · ', $nombreCompleto, 2);
+
+                // Un grupo de opciones es exclusivo de Hotel (P2 del
+                // diseño) — cualquier ítem que no resuelva al formato
+                // "hotel · tipo_habitacion" es un dato inesperado, se
+                // omite de la tabla en vez de romper el PDF con un
+                // índice inexistente.
+                if (count($partes) !== 2) {
+                    continue;
+                }
+
+                [$hotel, $tipoHabitacion] = $partes;
+                $tiposPresentes[$tipoHabitacion] = true;
+
+                $filasPorHotel[$hotel] ??= ['hotel' => $hotel, 'precios' => [], 'elegida' => false];
+                $filasPorHotel[$hotel]['precios'][$tipoHabitacion] = (float) $item->precio_convertido;
+                if ($item->opcion_elegida) {
+                    $filasPorHotel[$hotel]['elegida'] = true;
+                }
+            }
+
+            // ?: en vez de comparar contra `false` explícito hubiera sido un
+            // bug real acá: array_search() devuelve 0 (índice legítimo) para
+            // 'simple', el primer elemento del catálogo — 0 es falsy en PHP,
+            // así que ?: 99 lo hubiera tratado como "no encontrado" y
+            // mandado 'simple' al final en vez de primero (encontrado por
+            // el test de esta sesión antes de mergear).
+            $tiposHabitacion = collect(array_keys($tiposPresentes))
+                ->sortBy(function (string $t) {
+                    $posicion = array_search($t, self::ORDEN_TIPO_HABITACION, true);
+
+                    return $posicion !== false ? $posicion : 99;
+                })
+                ->values()
+                ->all();
+
+            return [
+                'grupo_opcion_id' => $grupo['grupo_opcion_id'],
+                'tipos_habitacion' => $tiposHabitacion,
+                'filas' => array_values($filasPorHotel),
+                'resuelto' => collect($filasPorHotel)->contains('elegida', true),
+            ];
+        })->filter(fn (array $g) => count($g['filas']) > 0)->values()->all();
     }
 
     // Compartido con ReservaController::aceptar() y VentaDirectaController::store()
