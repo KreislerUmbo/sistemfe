@@ -42,6 +42,9 @@
                 <button v-if="reserva.estado === 'activa'" class="btn btn-outline-primary btn-sm" @click="abrirModalReprogramar">
                     <i class="fas fa-calendar-days me-1"></i>Reprogramar viaje
                 </button>
+                <button v-if="mostrarBotonReasignarMayorista" class="btn btn-outline-primary btn-sm" @click="abrirModalReasignarMayorista">
+                    <i class="fas fa-right-left me-1"></i>Reasignar mayorista
+                </button>
                 <button v-if="reserva.estado === 'activa'" class="btn btn-outline-danger btn-sm" @click="mostrarModalCancelar = true">
                     <i class="fas fa-ban me-1"></i>Cancelar reserva
                 </button>
@@ -319,6 +322,10 @@
                                     <span v-if="itemsFacturadosIds.includes(it.id)" class="badge bg-success-subtle text-success border ms-2">
                                         <i class="fas fa-file-invoice me-1"></i>Facturado
                                     </span>
+                                    <span v-if="(it.veces_reasignado_mayorista ?? 0) > 0" class="badge bg-info-subtle text-info-emphasis border ms-2"
+                                        :title="it.motivo_reasignacion_mayorista ?? ''">
+                                        <i class="fas fa-right-left me-1"></i>Mayorista reasignado {{ it.veces_reasignado_mayorista }}x
+                                    </span>
                                 </div>
                                 <button v-if="reserva.estado === 'activa' && !itemsFacturadosIds.includes(it.id)" type="button"
                                     class="btn btn-sm btn-link text-danger p-0" title="Quitar este servicio de la reserva"
@@ -556,6 +563,89 @@
                         <button class="btn btn-primary btn-sm" :disabled="reprogramando || !reprogramarForm.fecha_viaje_desde || !reprogramarForm.motivo"
                             @click="confirmarReprogramacion">
                             <span v-if="reprogramando" class="spinner-border spinner-border-sm me-1"></span>Confirmar reprogramación
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal reasignar mayorista (Sesión 12h, auditoria-arquitectonica-
+             agencia-viajes.md §9.2) — mismo componente/estilo que
+             "Reprogramar viaje". NUNCA ajusta precio_venta_snapshot del
+             cliente, solo referencia de quién opera el destino. -->
+        <div class="modal fade" tabindex="-1" :class="{ show: mostrarModalReasignarMayorista, 'd-block': mostrarModalReasignarMayorista }"
+            style="background:rgba(0,0,0,.5)" v-if="mostrarModalReasignarMayorista">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h6 class="modal-title fw-bold">Reasignar mayorista</h6>
+                        <button class="btn-close" @click="mostrarModalReasignarMayorista = false"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div v-if="mayoristasActualesDistintos.length > 1" class="mb-3">
+                            <label class="form-label small fw-semibold text-secondary">Mayorista a reasignar</label>
+                            <select class="form-select form-select-sm" v-model.number="reasignarForm.opcion_mayorista_actual_id" @change="onCambiarMayoristaActual">
+                                <option v-for="m in mayoristasActualesDistintos" :key="m.id" :value="m.id">{{ m.nombre }} ({{ m.itemsCount }} ítem{{ m.itemsCount === 1 ? '' : 's' }})</option>
+                            </select>
+                        </div>
+
+                        <div class="card bg-light border-0 p-2 mb-3 small">
+                            <span class="text-muted">Mayorista actual</span>
+                            <strong>{{ mayoristaActualNombre }}</strong>
+                        </div>
+
+                        <label class="form-label small fw-semibold text-secondary">Ítems afectados</label>
+                        <div class="d-flex flex-column gap-1 mb-3">
+                            <label v-for="it in itemsDelMayoristaActual" :key="it.id" class="small d-flex align-items-center border rounded px-2 py-1" style="cursor:pointer">
+                                <input type="checkbox" class="form-check-input me-2" v-model="reasignarForm.reserva_item_ids" :value="it.id">
+                                {{ nombreItem(it) }}
+                            </label>
+                        </div>
+
+                        <label class="form-label small fw-semibold text-secondary">Nueva opción de mayorista</label>
+                        <select class="form-select form-select-sm mb-2" v-model.number="reasignarForm.nueva_opcion_mayorista_id" @change="reasignarForm.nueva_opcion_hotel_tarifa_id = null">
+                            <option :value="null" disabled>Elegí una opción...</option>
+                            <option v-for="op in opcionesMayoristaCandidatas" :key="op.id" :value="op.id">
+                                {{ op.proveedor?.nombre_comercial || op.proveedor?.razon_social }} ({{ op.estado }})
+                            </option>
+                        </select>
+                        <p v-if="!cargandoOpcionesMayorista && opcionesMayoristaCandidatas.length === 0" class="small text-muted">
+                            No hay otra opción de mayorista candidata en este destino todavía — agregala desde la cotización antes de reasignar.
+                        </p>
+
+                        <template v-if="reasignarForm.nueva_opcion_mayorista_id">
+                            <label class="form-label small fw-semibold text-secondary">Tarifa de habitación <span class="text-muted fw-normal">(opcional — solo para ver la diferencia de costo)</span></label>
+                            <select class="form-select form-select-sm mb-3" v-model.number="reasignarForm.nueva_opcion_hotel_tarifa_id">
+                                <option :value="null">Sin especificar</option>
+                                <option v-for="t in tarifasDeLaNuevaOpcion" :key="t.id" :value="t.id">
+                                    {{ t.opcion_hotel_nombre }} · {{ t.tipo_habitacion }} — {{ mayoristaActualMoneda }} {{ Number(t.precio_costo).toFixed(2) }}
+                                </option>
+                            </select>
+                        </template>
+
+                        <label class="form-label small fw-semibold text-secondary">Motivo</label>
+                        <textarea class="form-control form-control-sm" rows="2" v-model="reasignarForm.motivo" placeholder="Ej. Mayorista A no confirmó cupo para las fechas del viaje"></textarea>
+
+                        <div class="card border-0 p-2 mt-3 small" :class="diferenciaCostoPreview.clase">
+                            <div class="d-flex justify-content-between">
+                                <span>Costo anterior</span>
+                                <span>{{ mayoristaActualMoneda }} {{ diferenciaCostoPreview.costoAnterior.toFixed(2) }}</span>
+                            </div>
+                            <div class="d-flex justify-content-between">
+                                <span>Costo nuevo</span>
+                                <span>{{ diferenciaCostoPreview.costoNuevo !== null ? `${mayoristaActualMoneda} ${diferenciaCostoPreview.costoNuevo.toFixed(2)}` : 'Elegí una tarifa para verlo' }}</span>
+                            </div>
+                            <p class="mb-0 mt-1" style="font-size:11px">
+                                <i class="fas fa-info-circle me-1"></i>El precio que ve el cliente NO cambia automáticamente. Si el negocio decide ajustarlo, es una acción manual aparte desde Facturación.
+                            </p>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn btn-outline-secondary btn-sm" @click="mostrarModalReasignarMayorista = false">Volver</button>
+                        <button class="btn btn-primary btn-sm"
+                            :disabled="reasignandoMayorista || !reasignarForm.nueva_opcion_mayorista_id || !reasignarForm.motivo || reasignarForm.reserva_item_ids.length === 0"
+                            @click="confirmarReasignarMayorista">
+                            <span v-if="reasignandoMayorista" class="spinner-border spinner-border-sm me-1"></span>Confirmar reasignación
                         </button>
                     </div>
                 </div>
@@ -891,12 +981,13 @@ import { reservaPasajeroService } from '@/services/admin/reservaPasajeroService'
 import { reservaItemService, type ActualizarVueloPayload } from '@/services/admin/reservaItemService';
 import { proveedorService } from '@/services/admin/proveedorService';
 import { guiaService } from '@/services/admin/guiaService';
+import { opcionMayoristaService } from '@/services/admin/opcionMayoristaService';
 import Swal from 'sweetalert2/dist/sweetalert2.js';
 import { useToast } from '@/composables/useToast';
 import { formatFecha } from '@/helpers/fecha';
 import type {
     Reserva, ReservaPasajero, ReservaItem, ReservaResumenItem, ReservaCabecera,
-    PasajeroCatalogo, ProveedorTarifa, Guia, MotivoCancelacion, AnticipoReserva,
+    PasajeroCatalogo, ProveedorTarifa, Guia, MotivoCancelacion, AnticipoReserva, OpcionMayorista,
 } from '@/types/agencia-viajes';
 import type { PaymentMethod, PaymentMethods } from '@/types/cash';
 
@@ -1275,7 +1366,11 @@ const nombreItem = (it: ReservaItem) => {
     if (item.origen_tipo === 'manual') return item.descripcion_manual ?? 'Ítem manual';
     if (item.origen_tipo === 'pasaje_aereo') return item.cotizacion_pasaje_aereo?.aerolinea ?? 'Pasaje aéreo';
     if (item.origen_tipo === 'mayorista') {
-        const p = item.opcion_mayorista?.proveedor;
+        // Sesión 12h — it.opcion_mayorista es quién opera REALMENTE hoy
+        // (puede diferir del original de la alternativa si ya se
+        // reasignó); fallback al de la alternativa para reservas creadas
+        // antes de 12h (columna nueva, sin backfill retroactivo).
+        const p = it.opcion_mayorista?.proveedor ?? item.opcion_mayorista?.proveedor;
         return (p ? (p.nombre_comercial || p.razon_social) : null) ?? 'Paquete mayorista';
     }
     if (item.proveedor_tarifa?.tipo_habitacion) {
@@ -1534,6 +1629,132 @@ const confirmarReprogramacion = async () => {
         toast.error(error.response?.data?.message ?? 'No se pudo reprogramar la reserva');
     } finally {
         reprogramando.value = false;
+    }
+};
+
+// ── Reasignar mayorista (Sesión 12h, auditoria-arquitectonica-agencia-
+// viajes.md §9.2) — si el mayorista elegido no puede honrar precio/cupo
+// después de aceptada la reserva. NUNCA toca precio_venta_snapshot del
+// cliente, ver docblock del backend (ReservaController::reasignarMayorista()).
+const mostrarModalReasignarMayorista = ref(false);
+const reasignandoMayorista = ref(false);
+const cargandoOpcionesMayorista = ref(false);
+const opcionesMayoristaTodas = ref<OpcionMayorista[]>([]);
+const reasignarForm = ref<{
+    opcion_mayorista_actual_id: number | null;
+    reserva_item_ids: number[];
+    nueva_opcion_mayorista_id: number | null;
+    nueva_opcion_hotel_tarifa_id: number | null;
+    motivo: string;
+}>({ opcion_mayorista_actual_id: null, reserva_item_ids: [], nueva_opcion_mayorista_id: null, nueva_opcion_hotel_tarifa_id: null, motivo: '' });
+
+// Ítems origen_tipo=mayorista con un mayorista real asignado, excluyendo
+// los ya facturados (el backend los rechaza igual — mejor no ofrecerlos
+// en el checklist que dejar que el submit falle).
+const itemsConMayoristaActivos = computed(() =>
+    (reserva.value?.items ?? []).filter((it) => it.opcion_mayorista_id && !itemsFacturadosIds.value.includes(it.id))
+);
+
+const mostrarBotonReasignarMayorista = computed(() => reserva.value?.estado === 'activa' && itemsConMayoristaActivos.value.length > 0);
+
+// Casi siempre hay un único mayorista actual en toda la reserva — el
+// select de arriba del modal solo se muestra si de verdad hay más de uno
+// (ej. 2 destinos internacionales del mismo viaje con mayoristas
+// distintos).
+const mayoristasActualesDistintos = computed(() => {
+    const grupos = new Map<number, { id: number; nombre: string; itemsCount: number }>();
+    for (const it of itemsConMayoristaActivos.value) {
+        const id = it.opcion_mayorista_id as number;
+        if (!grupos.has(id)) {
+            const p = it.opcion_mayorista?.proveedor;
+            grupos.set(id, { id, nombre: (p ? (p.nombre_comercial || p.razon_social) : null) ?? 'Paquete mayorista', itemsCount: 0 });
+        }
+        grupos.get(id)!.itemsCount++;
+    }
+    return Array.from(grupos.values());
+});
+
+const itemsDelMayoristaActual = computed(() =>
+    itemsConMayoristaActivos.value.filter((it) => it.opcion_mayorista_id === reasignarForm.value.opcion_mayorista_actual_id)
+);
+
+const opcionActualObj = computed(() => itemsDelMayoristaActual.value[0]?.opcion_mayorista ?? null);
+const mayoristaActualNombre = computed(() => mayoristasActualesDistintos.value.find((m) => m.id === reasignarForm.value.opcion_mayorista_actual_id)?.nombre ?? '—');
+const mayoristaActualMoneda = computed(() => opcionActualObj.value?.moneda ?? 'USD');
+
+const opcionesMayoristaCandidatas = computed(() =>
+    opcionesMayoristaTodas.value.filter((op) =>
+        op.id !== reasignarForm.value.opcion_mayorista_actual_id &&
+        op.alternativa_destino_id === opcionActualObj.value?.alternativa_destino_id
+    )
+);
+
+const tarifasDeLaNuevaOpcion = computed(() => {
+    const opcion = opcionesMayoristaTodas.value.find((op) => op.id === reasignarForm.value.nueva_opcion_mayorista_id);
+    return (opcion?.opciones_hotel ?? []).flatMap((hotel) =>
+        (hotel.opciones_hotel_tarifas ?? []).map((t) => ({ ...t, opcion_hotel_nombre: hotel.nombre_hotel }))
+    );
+});
+
+const diferenciaCostoPreview = computed(() => {
+    const items = itemsDelMayoristaActual.value.filter((it) => reasignarForm.value.reserva_item_ids.includes(it.id));
+    const costoAnterior = items.reduce((sum, it) => sum + Number(it.alternativa_item?.costo_snapshot ?? 0), 0);
+    const tarifa = tarifasDeLaNuevaOpcion.value.find((t) => t.id === reasignarForm.value.nueva_opcion_hotel_tarifa_id);
+    const costoNuevo = tarifa ? Number(tarifa.precio_costo) * items.length : null;
+    let clase = '';
+    if (costoNuevo !== null) clase = costoNuevo > costoAnterior ? 'bg-danger-subtle' : costoNuevo < costoAnterior ? 'bg-success-subtle' : 'bg-light';
+    return { costoAnterior, costoNuevo, clase };
+});
+
+const onCambiarMayoristaActual = () => {
+    reasignarForm.value.reserva_item_ids = itemsDelMayoristaActual.value.map((it) => it.id);
+    reasignarForm.value.nueva_opcion_mayorista_id = null;
+    reasignarForm.value.nueva_opcion_hotel_tarifa_id = null;
+};
+
+const abrirModalReasignarMayorista = async () => {
+    if (!reserva.value?.alternativa_id) return;
+    reasignarForm.value = {
+        opcion_mayorista_actual_id: mayoristasActualesDistintos.value[0]?.id ?? null,
+        reserva_item_ids: [], nueva_opcion_mayorista_id: null, nueva_opcion_hotel_tarifa_id: null, motivo: '',
+    };
+    onCambiarMayoristaActual();
+    mostrarModalReasignarMayorista.value = true;
+
+    cargandoOpcionesMayorista.value = true;
+    try {
+        const res = await opcionMayoristaService.listar(reserva.value.alternativa_id);
+        opcionesMayoristaTodas.value = res.opciones_mayorista ?? [];
+    } catch {
+        toast.error('No se pudieron cargar las opciones de mayorista disponibles');
+    } finally {
+        cargandoOpcionesMayorista.value = false;
+    }
+};
+
+const confirmarReasignarMayorista = async () => {
+    if (!reserva.value || !reasignarForm.value.nueva_opcion_mayorista_id) return;
+    reasignandoMayorista.value = true;
+    try {
+        const res = await reservaService.reasignarMayorista(reserva.value.id, {
+            reserva_item_ids: reasignarForm.value.reserva_item_ids,
+            nueva_opcion_mayorista_id: reasignarForm.value.nueva_opcion_mayorista_id,
+            nueva_opcion_hotel_tarifa_id: reasignarForm.value.nueva_opcion_hotel_tarifa_id,
+            motivo: reasignarForm.value.motivo,
+        });
+        reserva.value = res.reserva;
+        resumen.value = res.resumen;
+        total.value = res.total;
+        cabecera.value = res.cabecera;
+        mostrarModalReasignarMayorista.value = false;
+        const diffTexto = res.costo_nuevo !== null
+            ? ` Costo: ${mayoristaActualMoneda.value} ${res.costo_anterior.toFixed(2)} → ${mayoristaActualMoneda.value} ${res.costo_nuevo.toFixed(2)}.`
+            : '';
+        toast.success(res.message + diffTexto);
+    } catch (error: any) {
+        toast.error(error.response?.data?.message ?? 'No se pudo reasignar el mayorista');
+    } finally {
+        reasignandoMayorista.value = false;
     }
 };
 

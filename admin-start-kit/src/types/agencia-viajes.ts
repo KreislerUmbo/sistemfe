@@ -760,6 +760,19 @@ export type ReservaItem = {
   // backend para el bug real que motivó separarla). Aplica a TODOS los
   // pasajeros de la reserva por igual, no depende de ningún vínculo.
   vuelo_pasajeros?: ReservaItemVueloPasajero[];
+  // Sesión 12h — mayorista que REALMENTE opera este ítem hoy (puede
+  // diferir de alternativa_item?.opcion_mayorista si ya se reasignó vía
+  // POST reservas/{id}/reasignar-mayorista). null en ítems que no son
+  // origen_tipo=mayorista, y también en reservas creadas antes de 12h
+  // (columna nueva, sin backfill retroactivo).
+  opcion_mayorista_id?: number | null;
+  opcion_mayorista?: OpcionMayorista | null;
+  // El mayorista original, poblado solo desde la PRIMERA reasignación en
+  // adelante (nunca se pisa después) — ver docblock del backend.
+  opcion_mayorista_original_id?: number | null;
+  motivo_reasignacion_mayorista?: string | null;
+  fecha_reasignacion_mayorista?: string | null;
+  veces_reasignado_mayorista?: number;
 };
 
 export type ReservaItemVueloPasajero = {

@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\AgenciaViajes\Alternativa;
 use App\Models\AgenciaViajes\AlternativaItem;
 use App\Models\AgenciaViajes\CotizacionPasajero;
+use App\Models\AgenciaViajes\OpcionHotelTarifa;
+use App\Models\AgenciaViajes\OpcionMayorista;
 use App\Models\AgenciaViajes\Reserva;
 use App\Models\AgenciaViajes\ReservaAnticipo;
 use App\Models\AgenciaViajes\ReservaItem;
@@ -18,6 +20,7 @@ use App\Services\AgenciaViajes\CodigoGeneradorService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
 // De alternativa aceptada a Reserva — plan-modulo-cotizaciones-reservas.md
@@ -45,6 +48,10 @@ class ReservaController extends Controller
         'items.alternativaItem.proveedorTarifa.proveedorServicio.destinoServicio.destinoAtractivo',
         'items.alternativaItem.opcionMayorista.proveedor',
         'items.alternativaItem.cotizacionPasajeAereo',
+        // Sesión 12h — mayorista que REALMENTE opera este ítem hoy (puede
+        // diferir de items.alternativaItem.opcionMayorista si ya se
+        // reasignó). Ver ReservaItem::opcionMayorista().
+        'items.opcionMayorista.proveedor',
         'items.guia',
         'items.proveedorTarifa.proveedorServicio.proveedor',
         'items.pasajeros',
@@ -282,6 +289,11 @@ class ReservaController extends Controller
             'reserva_id' => $reserva->id,
             'alternativa_item_id' => $alternativaItem->id,
             'proveedor_tarifa_id' => $alternativaItem->proveedor_tarifa_id,
+            // Sesión 12h — quién opera el destino internacional de este
+            // ítem, copiado 1:1 igual que proveedor_tarifa_id. Reasignable
+            // después SOLO vía reasignarMayorista() (nunca update()
+            // genérico), ver docblock de ReservaItem::opcionMayorista().
+            'opcion_mayorista_id' => $alternativaItem->opcion_mayorista_id,
             'fecha' => $fechaCalculada,
             // Fase 1 del fix Cotización↔Reserva — este método es el único
             // punto de creación de reserva_items (aceptar y sincronizar),
@@ -492,7 +504,7 @@ class ReservaController extends Controller
                 if ($item->fecha_origen === ReservaItem::FECHA_ORIGEN_MANUAL) {
                     $itemsNoTocados[] = [
                         'reserva_item_id' => $item->id,
-                        'nombre' => self::resolverNombreItem($item->alternativaItem),
+                        'nombre' => self::resolverNombreItem($item->alternativaItem, $item),
                         'fecha' => $item->fecha?->toDateString(),
                         'motivo' => 'manual',
                     ];
@@ -514,7 +526,7 @@ class ReservaController extends Controller
                     // necesita revisión manual de fecha.
                     $itemsNoTocados[] = [
                         'reserva_item_id' => $item->id,
-                        'nombre' => self::resolverNombreItem($item->alternativaItem),
+                        'nombre' => self::resolverNombreItem($item->alternativaItem, $item),
                         'fecha' => $item->fecha?->toDateString(),
                         'motivo' => 'sin_dia_referencial',
                     ];
@@ -561,6 +573,116 @@ class ReservaController extends Controller
                 'code' => 200,
                 'message' => 'Reserva reprogramada correctamente',
                 'items_no_tocados' => $itemsNoTocados,
+            ],
+            $this->respuestaDetalle($reserva)
+        ));
+    }
+
+    // POST reservas/{id}/reasignar-mayorista — Sesión 12h
+    // (auditoria-arquitectonica-agencia-viajes.md §9.2,
+    // PEGAR-EN-CLAUDE-CODE-reasignar-mayorista-vivo.md). Mismo patrón
+    // estructural que reprogramar() (validación, transacción, respuesta
+    // con RELACIONES_DETALLE). Si el mayorista elegido no puede honrar
+    // precio/cupo después de aceptada la reserva, esto es lo único que
+    // cambia — NUNCA toca precio_venta_snapshot (ni del ítem ni de la
+    // reserva): ajustar lo que paga el cliente es una acción manual aparte
+    // desde Facturación, fuera de este método bajo cualquier condición.
+    public function reasignarMayorista(Request $request, string $id)
+    {
+        $reserva = Reserva::findOrFail($id);
+
+        if ($reserva->estado !== 'activa') {
+            return response()->json(['code' => 422, 'message' => 'Solo se puede reasignar mayorista en una reserva activa.'], 422);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'reserva_item_ids' => 'required|array|min:1',
+            'reserva_item_ids.*' => ['integer', Rule::exists('reserva_items', 'id')->where('reserva_id', $reserva->id)],
+            'nueva_opcion_mayorista_id' => 'required|integer|exists:opcion_mayorista,id',
+            // Opcional — el costo de una OpcionMayorista vive en
+            // OpcionHotelTarifa (puede haber varias habitaciones por
+            // mayorista, gap ya documentado como M2 "trazabilidad hacia la
+            // reserva"), así que sin esto no hay forma de calcular
+            // costo_nuevo de la respuesta. Si no llega, costo_nuevo vuelve
+            // null y el vendedor compara a ojo en el modal.
+            'nueva_opcion_hotel_tarifa_id' => 'nullable|integer|exists:opciones_hotel_tarifas,id',
+            'motivo' => 'required|string|max:500',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
+        }
+
+        $validado = $validator->validated();
+
+        $items = ReservaItem::with('alternativaItem')->whereIn('id', $validado['reserva_item_ids'])->get();
+
+        // Mismo guard que ReservaItemController::update()/destroy() — un
+        // ítem ya cubierto por una venta real no se toca en silencio acá,
+        // ni siquiera para algo que no afecta el precio (corregir una
+        // reserva ya facturada es la Fase futura de "Camino 1", fuera de
+        // alcance).
+        $itemIdsFacturados = ReservaVenta::where('reserva_id', $reserva->id)->get()
+            ->flatMap(fn (ReservaVenta $rv) => $rv->reserva_item_ids ?? []);
+        if ($items->pluck('id')->intersect($itemIdsFacturados)->isNotEmpty()) {
+            return response()->json(['code' => 422, 'message' => 'No se puede reasignar: uno o más ítems ya fueron facturados en una venta de esta reserva.'], 422);
+        }
+
+        $opcionMayoristaActualIds = $items->pluck('opcion_mayorista_id')->unique();
+        if ($opcionMayoristaActualIds->count() > 1) {
+            return response()->json(['code' => 422, 'message' => 'Los ítems seleccionados no comparten el mismo mayorista actual — no se puede reasignar un lote mezclado.'], 422);
+        }
+
+        $opcionMayoristaActualId = $opcionMayoristaActualIds->first();
+        if (! $opcionMayoristaActualId) {
+            return response()->json(['code' => 422, 'message' => 'Ninguno de los ítems seleccionados tiene un mayorista asignado.'], 422);
+        }
+
+        $opcionActual = OpcionMayorista::findOrFail($opcionMayoristaActualId);
+        $opcionNueva = OpcionMayorista::findOrFail($validado['nueva_opcion_mayorista_id']);
+
+        if ($opcionNueva->alternativa_destino_id !== $opcionActual->alternativa_destino_id) {
+            return response()->json(['code' => 422, 'message' => 'La nueva opción de mayorista debe pertenecer al mismo destino que la actual.'], 422);
+        }
+
+        $tarifaNueva = null;
+        if (! empty($validado['nueva_opcion_hotel_tarifa_id'])) {
+            $tarifaNueva = OpcionHotelTarifa::with('opcionHotel')->find($validado['nueva_opcion_hotel_tarifa_id']);
+            if (! $tarifaNueva || $tarifaNueva->opcionHotel?->opcion_mayorista_id !== $opcionNueva->id) {
+                return response()->json(['code' => 422, 'message' => 'Esa tarifa de habitación no pertenece a la nueva opción de mayorista indicada.'], 422);
+            }
+        }
+
+        DB::transaction(function () use ($items, $validado, $opcionNueva) {
+            foreach ($items as $item) {
+                $item->update([
+                    // Se escribe UNA sola vez — si ya viene de una
+                    // reasignación previa, conserva el mayorista original
+                    // real, no el último antes de esta reasignación.
+                    'opcion_mayorista_original_id' => $item->opcion_mayorista_original_id ?? $item->opcion_mayorista_id,
+                    'opcion_mayorista_id' => $opcionNueva->id,
+                    'motivo_reasignacion_mayorista' => $validado['motivo'],
+                    'fecha_reasignacion_mayorista' => now(),
+                    'veces_reasignado_mayorista' => $item->veces_reasignado_mayorista + 1,
+                ]);
+            }
+        });
+
+        // Diferencia de costo — de presentación, no se persiste como
+        // campo (§2 del brief). costo_anterior sale del costo_snapshot ya
+        // congelado en cada AlternativaItem (siempre disponible);
+        // costo_nuevo solo si vino nueva_opcion_hotel_tarifa_id.
+        $costoAnterior = round((float) $items->sum(fn (ReservaItem $item) => (float) ($item->alternativaItem?->costo_snapshot ?? 0)), 2);
+        $costoNuevo = $tarifaNueva ? round((float) $tarifaNueva->precio_costo * $items->count(), 2) : null;
+
+        $reserva->load(self::RELACIONES_DETALLE);
+
+        return response()->json(array_merge(
+            [
+                'code' => 200,
+                'message' => 'Mayorista reasignado correctamente',
+                'costo_anterior' => $costoAnterior,
+                'costo_nuevo' => $costoNuevo,
             ],
             $this->respuestaDetalle($reserva)
         ));
@@ -637,7 +759,7 @@ class ReservaController extends Controller
         $resumen = $reserva->items->map(function (ReservaItem $item) {
             return [
                 'reserva_item_id' => $item->id,
-                'nombre' => self::resolverNombreItem($item->alternativaItem),
+                'nombre' => self::resolverNombreItem($item->alternativaItem, $item),
                 // Sesión facturación-de-reservas, punto 2 del review de
                 // proceso: sin esto, dos ítems del mismo servicio en días
                 // distintos (ej. "Entrada / Ticket de ingreso" el día 1 y
@@ -755,7 +877,16 @@ class ReservaController extends Controller
     // public static (no private): reusado también por
     // ReservaFacturacionController para armar descripcion_detalle de cada
     // línea de venta agrupada.
-    public static function resolverNombreItem(AlternativaItem $item): string
+    //
+    // $reservaItem (Sesión 12h, opcional): si se pasa y tiene
+    // opcion_mayorista_id propio (ya reasignado vía reasignarMayorista()),
+    // se usa ESE mayorista en vez del original de la cotización —
+    // cualquier vista a nivel RESERVA (resumen, items_no_tocados) debe
+    // reflejar quién opera hoy, no quién cotizó originalmente. Las vistas
+    // a nivel ALTERNATIVA/cotización (sin ReservaItem en contexto, ej. el
+    // preview de sincronizarItems()) siguen leyendo solo del ítem — ahí no
+    // hay ninguna reasignación posible todavía.
+    public static function resolverNombreItem(AlternativaItem $item, ?ReservaItem $reservaItem = null): string
     {
         if ($item->origen_tipo === AlternativaItem::ORIGEN_MANUAL) {
             return $item->descripcion_manual ?? 'Ítem manual';
@@ -764,7 +895,7 @@ class ReservaController extends Controller
             return $item->cotizacionPasajeAereo?->aerolinea ?? 'Pasaje aéreo';
         }
         if ($item->origen_tipo === AlternativaItem::ORIGEN_MAYORISTA) {
-            $proveedor = $item->opcionMayorista?->proveedor;
+            $proveedor = ($reservaItem?->opcion_mayorista_id ? $reservaItem->opcionMayorista : $item->opcionMayorista)?->proveedor;
 
             return ($proveedor?->nombre_comercial ?: $proveedor?->razon_social) ?? 'Paquete mayorista';
         }

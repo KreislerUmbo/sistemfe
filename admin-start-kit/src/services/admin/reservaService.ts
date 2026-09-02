@@ -47,6 +47,25 @@ export const reservaService = {
       items_no_tocados: Array<{ reserva_item_id: number; nombre: string; fecha: string | null; motivo: 'manual' | 'sin_dia_referencial' }>
     }
   },
+  // Sesión 12h — reasignación en vivo de OpcionMayorista en ReservaItem
+  // (auditoria-arquitectonica-agencia-viajes.md §9.2). nueva_opcion_hotel_tarifa_id
+  // es opcional — solo se usa para calcular costo_anterior/costo_nuevo de
+  // la respuesta (presentación, nunca se persiste); sin ella costo_nuevo
+  // vuelve null. NUNCA toca precio_venta_snapshot del cliente.
+  async reasignarMayorista(id: number, payload: {
+    reserva_item_ids: number[]
+    nueva_opcion_mayorista_id: number
+    nueva_opcion_hotel_tarifa_id?: number | null
+    motivo: string
+  }) {
+    const response = await httpClient.post(`/reservas/${id}/reasignar-mayorista`, payload)
+    return response.data as ReservaDetalleResponse & {
+      code: number
+      message: string
+      costo_anterior: number
+      costo_nuevo: number | null
+    }
+  },
   // Facturación externa por tenant + por reserva (PEGAR-EN-CLAUDE-CODE-
   // facturacion-externa-tenant.md, 2026-08-20) — solo editable mientras la
   // reserva no tenga ninguna venta asociada (422 si ya la tiene, ver

@@ -776,6 +776,9 @@ Route::group([
     // Fase 2 del fix Cotización↔Reserva (2026-08-19).
     Route::post("reservas/{id}/reprogramar", [ReservaController::class, 'reprogramar'])
         ->middleware('permission:agencia.reservas');
+    // Sesión 12h — reasignación en vivo de OpcionMayorista en ReservaItem.
+    Route::post("reservas/{id}/reasignar-mayorista", [ReservaController::class, 'reasignarMayorista'])
+        ->middleware('permission:agencia.reservas');
     // Facturación externa por tenant + por reserva (PEGAR-EN-CLAUDE-CODE-
     // facturacion-externa-tenant.md, 2026-08-20).
     Route::put("reservas/{id}/facturacion-externa", [ReservaController::class, 'actualizarFacturacionExterna'])

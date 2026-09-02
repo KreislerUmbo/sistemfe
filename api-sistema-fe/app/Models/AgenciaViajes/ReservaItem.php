@@ -40,10 +40,16 @@ class ReservaItem extends Model
         'salida_operativa_id',
         'tip_afe_igv',
         'destino_tributario',
+        'opcion_mayorista_id',
+        'opcion_mayorista_original_id',
+        'motivo_reasignacion_mayorista',
+        'fecha_reasignacion_mayorista',
+        'veces_reasignado_mayorista',
     ];
 
     protected $casts = [
         'fecha' => 'date',
+        'fecha_reasignacion_mayorista' => 'datetime',
     ];
 
     public const FECHA_ORIGEN_AUTO = 'auto';
@@ -67,6 +73,25 @@ class ReservaItem extends Model
     public function proveedorTarifa()
     {
         return $this->belongsTo(ProveedorTarifa::class, 'proveedor_tarifa_id');
+    }
+
+    // Sesión 12h — quién opera realmente el destino internacional de este
+    // ítem. Se copia de alternativaItem()->opcion_mayorista_id al aceptar
+    // la reserva, y se reescribe SOLO vía
+    // ReservaController::reasignarMayorista() después (nunca por update()
+    // genérico del modelo).
+    public function opcionMayorista()
+    {
+        return $this->belongsTo(OpcionMayorista::class, 'opcion_mayorista_id');
+    }
+
+    // El mayorista con el que se aceptó la reserva originalmente — se
+    // escribe una única vez, en la PRIMERA reasignación (nunca se pisa en
+    // reasignaciones siguientes), mismo trade-off de auditoría simple que
+    // Reserva::fecha_viaje_desde_original.
+    public function opcionMayoristaOriginal()
+    {
+        return $this->belongsTo(OpcionMayorista::class, 'opcion_mayorista_original_id');
     }
 
     // Sesión 11b4 — mismo propósito que AlternativaItem::tourOrigen(),
