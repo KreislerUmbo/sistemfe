@@ -414,6 +414,12 @@ export type AlternativaItem = {
   // el backend. Gap real cerrado: crearItemMayorista() nunca lo escribía.
   opcion_hotel_tarifa_id?: number | null;
   opcion_hotel_tarifa?: OpcionHotelTarifa | null;
+  // Sesión M1 — matriz de hoteles: N ítems comparten un mismo
+  // grupo_opcion_id (generado por el frontend al crear el grupo), y
+  // exactamente uno tiene opcion_elegida=true una vez resuelto. Ver
+  // Alternativa::tieneGruposSinResolver() / AlternativaItem::agruparPorGrupoOpcion().
+  grupo_opcion_id?: string | null;
+  opcion_elegida?: boolean;
   cotizacion_pasaje_aereo?: CotizacionPasajeAereo;
   // Auditoría del módulo Reservas/Cotizador (2026-08-27) — presente (no
   // null) si este ítem ya generó una reserva. El backend bloquea editar/

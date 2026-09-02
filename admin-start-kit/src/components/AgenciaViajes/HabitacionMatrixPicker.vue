@@ -1,25 +1,42 @@
 <template>
     <div class="habitacion-matrix">
+        <!-- Sesión M4 — atajo para ofrecer varias opciones de hotel como
+             grupo (el cliente elige después, ver Alternativa::tieneGruposSinResolver()
+             y AlternativaItemController::elegirOpcionGrupo()). Opt-in: si
+             nadie lo toca, el picker se comporta exactamente igual que antes. -->
+        <div class="d-flex justify-content-end mb-1" v-if="tarifas.length > 1">
+            <button v-if="!modoGrupo" class="btn btn-sm btn-link text-decoration-none" type="button" @click="activarModoGrupo">
+                <i class="fas fa-layer-group me-1"></i>Comparar varias opciones
+            </button>
+            <button v-else class="btn btn-sm btn-link text-decoration-none text-secondary" type="button" @click="cancelarModoGrupo">
+                Cancelar comparación
+            </button>
+        </div>
+
         <table class="table table-sm table-hover mb-0">
             <thead class="table-light">
                 <tr class="small text-secondary text-uppercase">
+                    <th v-if="modoGrupo" style="width:36px"></th>
                     <th>Habitación</th>
                     <th class="text-end">Precio</th>
-                    <th class="text-center" style="width:150px" v-if="seleccionadaId">Noches</th>
+                    <th class="text-center" style="width:150px" v-if="seleccionadaId && !modoGrupo">Noches</th>
                     <th class="text-end" style="width:100px"></th>
                 </tr>
             </thead>
             <tbody>
                 <tr v-if="tarifas.length === 0">
-                    <td colspan="4" class="text-center text-muted fst-italic py-3">Sin tarifas de habitación cargadas.</td>
+                    <td :colspan="modoGrupo ? 5 : 4" class="text-center text-muted fst-italic py-3">Sin tarifas de habitación cargadas.</td>
                 </tr>
-                <tr v-for="t in tarifas" :key="t.id" :class="{ 'table-primary': seleccionadaId === t.id }">
+                <tr v-for="t in tarifas" :key="t.id" :class="{ 'table-primary': seleccionadaId === t.id || idsGrupo.includes(t.id) }">
+                    <td v-if="modoGrupo">
+                        <input class="form-check-input" type="checkbox" :value="t.id" v-model="idsGrupo">
+                    </td>
                     <td class="text-capitalize">
                         <i class="fas fa-bed me-1 text-primary"></i>{{ t.tipo_habitacion }}
                         <i v-if="t.registrada" class="fas fa-link text-primary ms-1" style="font-size:10px" title="Tarifa registrada de un proveedor"></i>
                     </td>
                     <td class="text-end">{{ moneda }} {{ t.precio.toFixed(2) }}</td>
-                    <td class="text-center" v-if="seleccionadaId === t.id">
+                    <td class="text-center" v-if="seleccionadaId === t.id && !modoGrupo">
                         <div class="input-group input-group-sm">
                             <button class="btn btn-outline-secondary" type="button" @click="cantidad = Math.max(1, cantidad - 1)">-</button>
                             <input type="text" class="form-control text-center" :value="cantidad" readonly>
@@ -27,16 +44,25 @@
                         </div>
                     </td>
                     <td class="text-end">
-                        <button v-if="seleccionadaId !== t.id" class="btn btn-sm btn-outline-primary" @click="elegir(t.id)">
-                            Elegir
-                        </button>
-                        <button v-else class="btn btn-sm btn-primary" @click="confirmar(t.id)">
-                            <i class="fas fa-check me-1"></i>Agregar
-                        </button>
+                        <template v-if="!modoGrupo">
+                            <button v-if="seleccionadaId !== t.id" class="btn btn-sm btn-outline-primary" @click="elegir(t.id)">
+                                Elegir
+                            </button>
+                            <button v-else class="btn btn-sm btn-primary" @click="confirmar(t.id)">
+                                <i class="fas fa-check me-1"></i>Agregar
+                            </button>
+                        </template>
                     </td>
                 </tr>
             </tbody>
         </table>
+
+        <div v-if="modoGrupo" class="d-flex justify-content-end align-items-center gap-2 pt-2 px-2">
+            <span class="small text-secondary">{{ idsGrupo.length }} opción(es) seleccionada(s)</span>
+            <button class="btn btn-sm btn-primary" type="button" :disabled="idsGrupo.length < 2" @click="confirmarGrupo">
+                <i class="fas fa-check me-1"></i>Agregar {{ idsGrupo.length }} opciones como grupo
+            </button>
+        </div>
 
         <!-- Sesión 11o — pax_incluidos + cama adicional, solo cuando el
              caller pasa `pasajeros` (hoy: solo el flujo hotel_plantilla del
@@ -99,12 +125,18 @@ const props = defineProps<{
 
 const emit = defineEmits<{
     (e: 'seleccionar', payload: { id: number; cantidad: number; pax_incluidos: number[] | null; camas_adicionales_nino: number }): void;
+    // Sesión M4 — "ids" en el orden en que el usuario las marcó; el caller
+    // decide el grupo_opcion_id (uno solo, compartido por las N opciones).
+    (e: 'agregarGrupo', payload: { ids: number[] }): void;
 }>();
 
 const seleccionadaId = ref<number | null>(null);
 const cantidad = ref<number>(1);
 const paxSeleccionados = ref<number[]>([]);
 const camasAdicionales = ref<number>(0);
+
+const modoGrupo = ref<boolean>(false);
+const idsGrupo = ref<number[]>([]);
 
 // Edad REAL del pasajero (no tipo_pax) — un pasajero de 10 años con
 // tipo_pax='adulto' (umbral general de la agencia) igual puede caer en el
@@ -139,5 +171,22 @@ const confirmar = (id: number) => {
     cantidad.value = 1;
     paxSeleccionados.value = [];
     camasAdicionales.value = 0;
+};
+
+const activarModoGrupo = () => {
+    seleccionadaId.value = null;
+    modoGrupo.value = true;
+    idsGrupo.value = [];
+};
+
+const cancelarModoGrupo = () => {
+    modoGrupo.value = false;
+    idsGrupo.value = [];
+};
+
+const confirmarGrupo = () => {
+    if (idsGrupo.value.length < 2) return;
+    emit('agregarGrupo', { ids: [...idsGrupo.value] });
+    cancelarModoGrupo();
 };
 </script>

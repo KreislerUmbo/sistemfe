@@ -164,6 +164,55 @@ class AlternativaItemController extends Controller
         ]);
     }
 
+    // PUT alternativa-items/{id}/elegir-grupo — Sesión M4 (Ronda 2/P6, P9).
+    // Resuelve un grupo de opciones de hotel de M1: marca ESTA fila como
+    // opcion_elegida=true, desmarca las demás del mismo grupo_opcion_id
+    // (mismo patrón de exclusividad que OpcionMayoristaController::elegir()).
+    // El vendedor puede cambiar de elegida después llamando de nuevo a este
+    // mismo endpoint sobre otra fila del grupo.
+    public function elegirOpcionGrupo(string $id)
+    {
+        $item = AlternativaItem::with('alternativa')->findOrFail($id);
+        $alternativa = $item->alternativa;
+
+        if ($alternativa->estado === 'aceptada') {
+            return response()->json([
+                'code' => 422,
+                'message' => 'Esta alternativa ya fue aceptada y generó una reserva — el grupo ya no se puede modificar desde acá.',
+            ], 422);
+        }
+
+        if (! $item->grupo_opcion_id) {
+            return response()->json(['code' => 422, 'message' => 'Este ítem no pertenece a ningún grupo de opciones.'], 422);
+        }
+
+        DB::transaction(function () use ($item, $alternativa) {
+            AlternativaItem::where('alternativa_id', $alternativa->id)
+                ->where('grupo_opcion_id', $item->grupo_opcion_id)
+                ->update(['opcion_elegida' => false]);
+
+            $item->update(['opcion_elegida' => true]);
+
+            // Reaplica el descuento global vigente sobre la fila recién
+            // elegida — sin esto, quedaría a precio de lista hasta que el
+            // vendedor vuelva a tocar el campo de descuento a mano (mismo
+            // motor que AlternativaController::update(), ya idempotente:
+            // confirmado en Sesión M1 que reaplicar el mismo % mueve el
+            // descuento a la nueva elegida sin quedar pegado a la anterior).
+            if ($alternativa->descuento_global_pct !== null && (float) $alternativa->descuento_global_pct > 0) {
+                app(AlternativaController::class)->aplicarDescuentoGlobal($alternativa, (float) $alternativa->descuento_global_pct);
+            } else {
+                $this->recalcularTotalAlternativa($alternativa);
+            }
+        });
+
+        return response()->json([
+            'code' => 200,
+            'message' => 'Opción marcada como elegida correctamente',
+            'alternativa' => $alternativa->fresh('items'),
+        ]);
+    }
+
     // Mismo bug que ya se encontró y corrigió una vez en
     // AlternativaController::destroy() (ver comentario ahí): reserva_items.
     // alternativa_item_id es una FK real sin onDelete (RESTRICT en
@@ -551,6 +600,14 @@ class AlternativaItemController extends Controller
             // paquete_plantilla, ver crearItemHotelPlantilla(), eliminado).
             'camas_adicionales_nino' => 'nullable|integer|min:0',
             'alternativa_destino_id' => ['nullable', 'integer', $this->reglaAlternativaDestinoId($alternativa)],
+            // Sesión M4 — el picker (HabitacionMatrixPicker.vue) genera el
+            // UUID una sola vez cliente-side y lo manda igual en cada
+            // llamada de "Agregar N opciones como grupo" (M1: agrupador
+            // liviano, sin tabla propia — ver AlternativaItem::
+            // agruparPorGrupoOpcion()). Todas las filas de un grupo nuevo
+            // nacen sin elegir — resolverlo es una acción aparte
+            // (elegirOpcionGrupo() más abajo).
+            'grupo_opcion_id' => 'nullable|uuid',
         ]);
 
         if ($validator->fails()) {
@@ -630,6 +687,7 @@ class AlternativaItemController extends Controller
             'origen_tipo' => AlternativaItem::ORIGEN_PROVEEDOR,
             'proveedor_tarifa_id' => $tarifa?->id,
             'opcion_hotel_tarifa_id' => $opcionHotelTarifa?->id,
+            'grupo_opcion_id' => $validado['grupo_opcion_id'] ?? null,
             // Un hotel ad-hoc siempre es por habitación, sin importar qué
             // vino en el request — mismo criterio hardcodeado que
             // crearItemMayorista() para su equivalente internacional.
@@ -711,6 +769,8 @@ class AlternativaItemController extends Controller
             'tip_afe_igv' => 'nullable|string|in:10,20,30',
             'destino_tributario' => 'nullable|string|in:amazonia,nacional,extranjero',
             'alternativa_destino_id' => ['nullable', 'integer', $this->reglaAlternativaDestinoId($alternativa)],
+            // Sesión M4 — ver mismo campo en crearItemProveedor().
+            'grupo_opcion_id' => 'nullable|uuid',
         ]);
 
         if ($validator->fails()) {
@@ -745,6 +805,7 @@ class AlternativaItemController extends Controller
             // la reserva/reporte operativo/PDF nunca puede resolver QUÉ
             // fila de la matriz de habitación fijó este precio.
             'opcion_hotel_tarifa_id' => $tarifaHotel->id,
+            'grupo_opcion_id' => $validado['grupo_opcion_id'] ?? null,
             'modo_precio' => 'tarifa_fija', // paquete internacional, siempre por habitación
             'cantidad' => $validado['cantidad'] ?? 1,
             'pax_incluidos' => $validado['pax_incluidos'] ?? null,

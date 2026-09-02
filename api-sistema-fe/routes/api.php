@@ -694,6 +694,9 @@ Route::group([
         ->middleware('permission:agencia.cotizaciones');
     Route::delete("alternativa-items/{id}", [AlternativaItemController::class, 'destroy'])
         ->middleware('permission:agencia.cotizaciones');
+    // Sesión M4 — resuelve un grupo de opciones de hotel (M1).
+    Route::put("alternativa-items/{id}/elegir-grupo", [AlternativaItemController::class, 'elegirOpcionGrupo'])
+        ->middleware('permission:agencia.cotizaciones');
     // Sesión 11q — ítem manual flexible: edición estructural completa
     // (descripción/proveedor/costo/cantidad/pax) y promoción a proveedor real.
     Route::put("alternativa-items/{id}/manual", [AlternativaItemController::class, 'actualizarManual'])

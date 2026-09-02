@@ -90,5 +90,12 @@ export const alternativaItemService = {
   }) {
     const response = await httpClient.post(`/alternativa-items/${itemId}/promover-a-proveedor`, data)
     return response.data
+  },
+  // Sesión M4 — marca esta fila como la elegida dentro de su
+  // grupo_opcion_id (desmarca las demás), ver
+  // AlternativaItemController::elegirOpcionGrupo().
+  async elegirGrupo(itemId: number) {
+    const response = await httpClient.put(`/alternativa-items/${itemId}/elegir-grupo`)
+    return response.data
   }
 }

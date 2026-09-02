@@ -126,6 +126,15 @@ class CotizacionController extends Controller
             'alternativas.items.proveedorTarifa.proveedorServicio.destinoServicio.servicio',
             'alternativas.items.proveedorTarifa.proveedorServicio.destinoServicio.destinoAtractivo',
             'alternativas.items.opcionMayorista',
+            // Sesión M2/M4 — hotel de la matriz (mayorista o ad-hoc LOCAL,
+            // ver OpcionHotelController::store()), sin ProveedorTarifa
+            // real. Gap real encontrado en verificación en vivo de M4: sin
+            // esto, etiquetaItem() del cotizador caía a su fallback
+            // genérico "Servicio" para cualquier ítem enganchado por
+            // opcion_hotel_tarifa_id — ya estaba en el eager-load del PDF
+            // (AlternativaController::pdf()) pero no en este endpoint, que
+            // es el que carga la pantalla del cotizador en sí.
+            'alternativas.items.opcionHotelTarifa.opcionHotel',
             // Fix guia-como-item-real — nombre del guía/destino para
             // etiquetaItem() de un ítem origen_tipo=guia.
             'alternativas.items.guiaTarifa.guia',

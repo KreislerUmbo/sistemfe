@@ -319,39 +319,66 @@
                                 </span>
                             </div>
 
-                            <div v-for="item in bloque.items" :key="item.id" class="canvas-item border rounded p-2 mb-2 small" :class="{ 'ms-3': bloque.tourOrigenId }">
+                            <template v-for="fila in filasDelBloque(bloque.items)" :key="fila.esGrupo ? fila.grupoId : fila.item.id">
+                            <!-- Sesión M4 — grupo "comparar varias opciones": una tarjeta
+                                 compacta con las N opciones y el botón de resolución, en
+                                 vez de N tarjetas de ítem sueltas (ver filasDelBloque()). -->
+                            <div v-if="fila.esGrupo" class="canvas-item border rounded p-2 mb-2 small" :class="{ 'ms-3': bloque.tourOrigenId, 'border-warning': !fila.items.some((i) => i.opcion_elegida) }">
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <span class="fw-semibold"><i class="fas fa-layer-group me-2 text-primary"></i>{{ fila.items.length }} opciones de hotel</span>
+                                    <span v-if="!fila.items.some((i) => i.opcion_elegida)" class="badge bg-warning-subtle text-warning-emphasis" style="font-size:10px">
+                                        <i class="fas fa-triangle-exclamation me-1"></i>Sin resolver
+                                    </span>
+                                </div>
+                                <div v-for="it in fila.items" :key="it.id" class="d-flex justify-content-between align-items-center py-1 border-top" :class="{ 'opacity-50': !it.opcion_elegida }">
+                                    <span>
+                                        <i class="fas fa-bed me-1 text-primary"></i>{{ etiquetaItem(it) }}
+                                        <span class="text-muted"> — {{ alternativaActiva.moneda_cotizacion }} {{ Number(it.precio_convertido).toFixed(2) }}</span>
+                                    </span>
+                                    <span class="d-flex align-items-center gap-2">
+                                        <span v-if="it.opcion_elegida" class="badge bg-success-subtle text-success" style="font-size:10px"><i class="fas fa-check me-1"></i>Elegida</span>
+                                        <button v-else class="btn btn-sm btn-outline-primary py-0" style="font-size:11px" @click="elegirGrupoDesdeLienzo(it)" :disabled="eligiendoGrupoItemId === it.id">
+                                            <span v-if="eligiendoGrupoItemId === it.id" class="spinner-border spinner-border-sm"></span><span v-else>Marcar como elegida</span>
+                                        </button>
+                                        <span v-if="eliminandoItemId === it.id" class="spinner-border spinner-border-sm text-danger"></span>
+                                        <i v-else class="fas fa-times text-danger" style="cursor:pointer" title="Eliminar" @click="eliminarItem(it)"></i>
+                                    </span>
+                                </div>
+                            </div>
+
+                            <div v-else class="canvas-item border rounded p-2 mb-2 small" :class="{ 'ms-3': bloque.tourOrigenId }">
                                 <div class="d-flex justify-content-between align-items-start gap-2">
                                     <span class="canvas-item-nombre">
-                                        <i class="fas me-2 text-primary" :class="iconoItem(item)"></i>
-                                        {{ etiquetaItem(item) }}
-                                        <span v-if="item.cantidad > 1 && item.modo_precio === 'tarifa_fija'" class="text-muted"> × {{ item.cantidad }}</span>
+                                        <i class="fas me-2 text-primary" :class="iconoItem(fila.item)"></i>
+                                        {{ etiquetaItem(fila.item) }}
+                                        <span v-if="fila.item.cantidad > 1 && fila.item.modo_precio === 'tarifa_fija'" class="text-muted"> × {{ fila.item.cantidad }}</span>
                                     </span>
-                                    <span v-if="eliminandoItemId === item.id" class="spinner-border spinner-border-sm text-danger flex-shrink-0"></span>
-                                    <i v-else class="fas fa-times text-danger flex-shrink-0" style="cursor:pointer" title="Eliminar" @click="eliminarItem(item)"></i>
+                                    <span v-if="eliminandoItemId === fila.item.id" class="spinner-border spinner-border-sm text-danger flex-shrink-0"></span>
+                                    <i v-else class="fas fa-times text-danger flex-shrink-0" style="cursor:pointer" title="Eliminar" @click="eliminarItem(fila.item)"></i>
                                 </div>
 
                                 <!-- Análisis de impuestos (28-ago-2026) — badge de tratamiento
                                      tributario resuelto, visible antes de facturar (no solo al
                                      enterarse en el momento de facturar la reserva). -->
-                                <span v-if="badgeTratamientoTributario(item)" class="badge mt-1"
-                                    :class="badgeTratamientoTributario(item)!.clase" style="font-size:10px">
-                                    {{ badgeTratamientoTributario(item)!.texto }}
+                                <span v-if="badgeTratamientoTributario(fila.item)" class="badge mt-1"
+                                    :class="badgeTratamientoTributario(fila.item)!.clase" style="font-size:10px">
+                                    {{ badgeTratamientoTributario(fila.item)!.texto }}
                                 </span>
 
-                                <div v-if="item.origen_tipo === 'manual'" class="mt-1 d-flex align-items-center gap-2 flex-wrap">
-                                    <span v-if="item.proveedor_promovido_id" class="badge bg-success-subtle text-success" style="font-size:10px">
+                                <div v-if="fila.item.origen_tipo === 'manual'" class="mt-1 d-flex align-items-center gap-2 flex-wrap">
+                                    <span v-if="fila.item.proveedor_promovido_id" class="badge bg-success-subtle text-success" style="font-size:10px">
                                         <i class="fas fa-check me-1"></i>Proveedor creado
                                     </span>
                                     <template v-else>
-                                        <span class="badge" :class="item.proveedor_sugerido_manual ? 'bg-warning-subtle text-warning-emphasis' : 'bg-danger-subtle text-danger'" style="font-size:10px">
-                                            <i class="fas" :class="item.proveedor_sugerido_manual ? 'fa-pen' : 'fa-triangle-exclamation'"></i>
-                                            Manual · {{ item.proveedor_sugerido_manual || 'sin proveedor asociado' }}
+                                        <span class="badge" :class="fila.item.proveedor_sugerido_manual ? 'bg-warning-subtle text-warning-emphasis' : 'bg-danger-subtle text-danger'" style="font-size:10px">
+                                            <i class="fas" :class="fila.item.proveedor_sugerido_manual ? 'fa-pen' : 'fa-triangle-exclamation'"></i>
+                                            Manual · {{ fila.item.proveedor_sugerido_manual || 'sin proveedor asociado' }}
                                         </span>
-                                        <a href="#" style="font-size:11px" @click.prevent="abrirPromoverProveedor(item)">
+                                        <a href="#" style="font-size:11px" @click.prevent="abrirPromoverProveedor(fila.item)">
                                             <i class="fas fa-arrow-up-right-from-square me-1"></i>Promover a proveedor
                                         </a>
                                     </template>
-                                    <a v-if="!item.reserva_item" href="#" style="font-size:11px" class="text-secondary" @click.prevent="abrirEdicionManual(item)">
+                                    <a v-if="!fila.item.reserva_item" href="#" style="font-size:11px" class="text-secondary" @click.prevent="abrirEdicionManual(fila.item)">
                                         <i class="fas fa-pencil me-1"></i>Editar
                                     </a>
                                     <span v-else class="text-muted fst-italic" style="font-size:11px" title="Cancelá la reserva primero si necesitás corregirlo">
@@ -359,12 +386,12 @@
                                     </span>
                                 </div>
 
-                                <div v-if="desglosePasajerosTexto(item)" class="text-muted mt-1" style="font-size:11px">
-                                    <i class="fas fa-users me-1"></i>{{ desglosePasajerosTexto(item) }}
+                                <div v-if="desglosePasajerosTexto(fila.item)" class="text-muted mt-1" style="font-size:11px">
+                                    <i class="fas fa-users me-1"></i>{{ desglosePasajerosTexto(fila.item) }}
                                 </div>
-                                <div class="text-muted mt-1 d-flex align-items-center gap-2" style="font-size:11px" v-if="item.origen_tipo === 'pasaje_aereo' && item.cotizacion_pasaje_aereo">
-                                    <span>{{ item.cotizacion_pasaje_aereo.aerolinea }}</span>
-                                    <a v-if="!item.reserva_item" href="#" class="text-secondary" @click.prevent="abrirEdicionPasajeAereo(item)">
+                                <div class="text-muted mt-1 d-flex align-items-center gap-2" style="font-size:11px" v-if="fila.item.origen_tipo === 'pasaje_aereo' && fila.item.cotizacion_pasaje_aereo">
+                                    <span>{{ fila.item.cotizacion_pasaje_aereo.aerolinea }}</span>
+                                    <a v-if="!fila.item.reserva_item" href="#" class="text-secondary" @click.prevent="abrirEdicionPasajeAereo(fila.item)">
                                         <i class="fas fa-pencil me-1"></i>Editar
                                     </a>
                                     <span v-else class="fst-italic" title="Cancelá la reserva primero si necesitás corregirlo">
@@ -380,8 +407,8 @@
                                             <span class="input-group-text">{{ alternativaActiva.moneda_cotizacion }}</span>
                                             <input type="number" step="0.01" class="form-control"
                                                 style="max-width:110px"
-                                                :class="{ 'border-danger text-danger': alertasPiso[item.id] }"
-                                                v-model.number="edicionItems[item.id].precio_convertido" @input="onEditarPrecio(item)">
+                                                :class="{ 'border-danger text-danger': alertasPiso[fila.item.id] }"
+                                                v-model.number="edicionItems[fila.item.id].precio_convertido" @input="onEditarPrecio(fila.item)">
                                         </div>
                                     </div>
                                     <div v-else-if="configAgencia?.modo_descuento_item === 'monto'" class="d-flex flex-column">
@@ -390,8 +417,8 @@
                                             <span class="input-group-text">{{ alternativaActiva.moneda_cotizacion }}</span>
                                             <input type="number" step="0.01" min="0" class="form-control"
                                                 style="max-width:110px"
-                                                :class="{ 'border-danger text-danger': alertasPiso[item.id] }"
-                                                v-model.number="edicionItems[item.id].monto_descuento" @input="onEditarMontoDescuentoItem(item)">
+                                                :class="{ 'border-danger text-danger': alertasPiso[fila.item.id] }"
+                                                v-model.number="edicionItems[fila.item.id].monto_descuento" @input="onEditarMontoDescuentoItem(fila.item)">
                                         </div>
                                     </div>
                                     <div v-else class="d-flex flex-column">
@@ -399,8 +426,8 @@
                                         <div class="input-group input-group-sm" style="width:auto">
                                             <input type="number" step="0.01" min="0" max="100" class="form-control"
                                                 style="max-width:80px"
-                                                :class="{ 'border-danger text-danger': alertasPiso[item.id] }"
-                                                v-model.number="edicionItems[item.id].descuento_pct" @input="onEditarDescuentoPct(item)">
+                                                :class="{ 'border-danger text-danger': alertasPiso[fila.item.id] }"
+                                                v-model.number="edicionItems[fila.item.id].descuento_pct" @input="onEditarDescuentoPct(fila.item)">
                                             <span class="input-group-text">%</span>
                                         </div>
                                     </div>
@@ -408,17 +435,18 @@
                                          es el % mismo (sería redundante), y solo si permitir_descuento_item
                                          (en modo "Precio de venta" el punto B pide explícitamente que no se
                                          muestre lenguaje de descuento). -->
-                                    <span v-if="configAgencia?.permitir_descuento_item && configAgencia?.modo_descuento_item === 'monto' && Number(edicionItems[item.id]?.descuento_pct) > 0"
+                                    <span v-if="configAgencia?.permitir_descuento_item && configAgencia?.modo_descuento_item === 'monto' && Number(edicionItems[fila.item.id]?.descuento_pct) > 0"
                                         class="badge bg-light text-dark border" style="font-size:10px">
-                                        -{{ Number(edicionItems[item.id].descuento_pct).toFixed(0) }}%
+                                        -{{ Number(edicionItems[fila.item.id].descuento_pct).toFixed(0) }}%
                                     </span>
-                                    <select v-if="!bloque.tourOrigenId && mostrarTabsDia" class="form-select form-select-sm ms-auto" style="width:auto;font-size:11px" :value="item.dia_referencial ?? ''" @change="onReasignarDiaItem(item, $event)">
+                                    <select v-if="!bloque.tourOrigenId && mostrarTabsDia" class="form-select form-select-sm ms-auto" style="width:auto;font-size:11px" :value="fila.item.dia_referencial ?? ''" @change="onReasignarDiaItem(fila.item, $event)">
                                         <option value="" disabled>Sin día</option>
                                         <option v-for="d in diasCreados" :key="d" :value="d">Día {{ d }}</option>
                                     </select>
                                 </div>
-                                <small v-if="alertasPiso[item.id]" class="text-danger d-block mt-1"><i class="fas fa-exclamation-triangle me-1"></i>Por debajo del piso permitido</small>
+                                <small v-if="alertasPiso[fila.item.id]" class="text-danger d-block mt-1"><i class="fas fa-exclamation-triangle me-1"></i>Por debajo del piso permitido</small>
                             </div>
+                            </template>
                         </div>
                     </div>
                 </div>
@@ -705,6 +733,64 @@
 
                                 <small class="text-muted d-block mt-2"><i class="fas fa-hand-pointer me-1"></i>Clic para agregar al día activo</small>
                                 <button class="btn btn-outline-secondary btn-sm w-100 mt-2" @click="mostrarFormManual = true"><i class="fas fa-plus me-1"></i>Ítem manual</button>
+
+                                <!-- Sesión M3/M4 — hotel ad-hoc LOCAL (sin proveedor registrado),
+                                     espejo del "Agregar hotel a esta opción" que ya existía solo
+                                     para el flujo mayorista/Internacional. -->
+                                <button class="btn btn-outline-secondary btn-sm w-100 mt-1" @click="mostrarFormHotelLocal = !mostrarFormHotelLocal">
+                                    <i class="fas fa-bed me-1"></i>+ Agregar hotel no registrado
+                                </button>
+                                <div v-if="mostrarFormHotelLocal" class="border rounded p-2 mt-2">
+                                    <label class="form-label mb-1 small text-secondary">Nombre del hotel</label>
+                                    <input type="text" class="form-control form-control-sm mb-1" placeholder="Nombre del hotel" v-model="formHotelLocal.nombre_hotel">
+                                    <label class="form-label mb-1 small text-secondary">Moneda</label>
+                                    <select class="form-select form-select-sm mb-1" v-model="formHotelLocal.moneda">
+                                        <option value="PEN">PEN</option>
+                                        <option value="USD">USD</option>
+                                    </select>
+                                    <div class="row g-1 mb-1">
+                                        <div class="col-3"><label class="form-label mb-0 small text-secondary">Habitación</label></div>
+                                        <div class="col-2"><label class="form-label mb-0 small text-secondary">Costo</label></div>
+                                        <div class="col-2"><label class="form-label mb-0 small text-secondary">Venta</label></div>
+                                        <div class="col-3"><label class="form-label mb-0 small text-secondary">Tributario</label></div>
+                                        <div class="col-2"><label class="form-label mb-0 small text-secondary">Destino</label></div>
+                                    </div>
+                                    <div v-for="(tf, idx) in formHotelLocal.tarifas" :key="idx" class="row g-1 mb-1">
+                                        <div class="col-3">
+                                            <select class="form-select form-select-sm" v-model="tf.tipo_habitacion">
+                                                <option value="simple">Simple</option>
+                                                <option value="matrimonial">Matrimonial</option>
+                                                <option value="doble">Doble</option>
+                                                <option value="triple">Triple</option>
+                                                <option value="familiar">Familiar</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-2">
+                                            <input type="number" class="form-control form-control-sm" placeholder="Costo" v-model.number="tf.precio_costo">
+                                        </div>
+                                        <div class="col-2">
+                                            <input type="number" class="form-control form-control-sm" placeholder="Venta" v-model.number="tf.precio_venta">
+                                        </div>
+                                        <div class="col-3">
+                                            <select class="form-select form-select-sm" v-model="tf.tip_afe_igv">
+                                                <option value="10">Gravado</option>
+                                                <option value="20">Exonerado</option>
+                                                <option value="30">Inafecto</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-2">
+                                            <select class="form-select form-select-sm" v-model="tf.destino_tributario">
+                                                <option value="amazonia">Amazonía</option>
+                                                <option value="nacional">Nacional</option>
+                                                <option value="extranjero">Extranjero</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <button class="btn btn-sm btn-outline-secondary mb-1" @click="formHotelLocal.tarifas.push({ tipo_habitacion: 'doble', precio_costo: 0, precio_venta: 0, tip_afe_igv: '10', destino_tributario: 'nacional' })">+ tipo de habitación</button>
+                                    <button class="btn btn-sm btn-primary w-100" @click="guardarHotelLocal" :disabled="guardandoHotelLocal">
+                                        <span v-if="guardandoHotelLocal" class="spinner-border spinner-border-sm me-1"></span>Guardar hotel
+                                    </button>
+                                </div>
                             </template>
 
                             <!-- Buscador de guías (Fix guia-como-item-real) — mismo patrón visual
@@ -774,7 +860,8 @@
                                     <div v-if="opcionHotelesActivaId === op.id" class="mt-2 border-top pt-2">
                                         <HabitacionMatrixPicker v-if="op.estado === 'elegida'"
                                             :tarifas="tarifasHotelPlanas(op)" :moneda="op.moneda"
-                                            @seleccionar="({ id, cantidad }) => agregarItemMayorista(op, id, cantidad)" />
+                                            @seleccionar="({ id, cantidad }) => agregarItemMayorista(op, id, cantidad)"
+                                            @agregar-grupo="({ ids }) => agregarGrupoMayorista(op, ids)" />
                                         <div v-else class="text-muted small fst-italic">Marcá esta opción como elegida para poder agregar una habitación.</div>
                                         <button class="btn btn-sm btn-outline-secondary w-100 mt-2" @click="mostrarFormHotel = op.id">
                                             <i class="fas fa-plus me-1"></i>Agregar hotel a esta opción
@@ -880,7 +967,8 @@
                                 permitir-cama-adicional
                                 :edad-max-infante-gratis="matrizHotelActiva.edadMaxInfanteGratis"
                                 :edad-max-nino-cama-adicional="matrizHotelActiva.edadMaxNinoCamaAdicional"
-                                @seleccionar="({ id, cantidad, pax_incluidos, camas_adicionales_nino }) => agregarItemProveedorHotel(id, cantidad, pax_incluidos, camas_adicionales_nino)" />
+                                @seleccionar="({ id, cantidad, pax_incluidos, camas_adicionales_nino }) => matrizHotelActiva!.adhoc ? agregarItemHotelAdhocLocal(id, cantidad, pax_incluidos, camas_adicionales_nino) : agregarItemProveedorHotel(id, cantidad, pax_incluidos, camas_adicionales_nino)"
+                                @agregar-grupo="({ ids }) => matrizHotelActiva!.adhoc ? agregarGrupoHotelAdhocLocal(ids) : agregarGrupoProveedorHotel(ids)" />
                         </template>
 
                         <template v-else-if="pasoDrawer === 'modoPrecio' && modoPrecioPendiente">
@@ -932,6 +1020,7 @@ import { cotizacionService } from '@/services/admin/cotizacionService';
 import { alternativaService } from '@/services/admin/alternativaService';
 import { alternativaItemService } from '@/services/admin/alternativaItemService';
 import { opcionMayoristaService } from '@/services/admin/opcionMayoristaService';
+import { opcionHotelService } from '@/services/admin/opcionHotelService';
 import { contenidoTourService } from '@/services/admin/contenidoTourService';
 import { alternativaDestinoService } from '@/services/admin/alternativaDestinoService';
 import { proveedorService } from '@/services/admin/proveedorService';
@@ -941,7 +1030,7 @@ import { reservaService } from '@/services/admin/reservaService';
 import { useAgenciaViajesCatalogosStore } from '@/stores/agenciaViajesCatalogos';
 import { formatFecha } from '@/helpers/fecha';
 import { guiaService } from '@/services/admin/guiaService';
-import type { Cotizacion, Alternativa, AlternativaItem, ProveedorTarifa, OpcionMayorista, Proveedor, ProveedorTipo, BibliotecaResultado, ConfiguracionAgencia, DestinoServicio, Guia, GuiaTarifa, Servicio, TipAfeIgv, DestinoTributario, ContenidoTour } from '@/types/agencia-viajes';
+import type { Cotizacion, Alternativa, AlternativaItem, ProveedorTarifa, OpcionMayorista, OpcionHotelTarifa, Proveedor, ProveedorTipo, BibliotecaResultado, ConfiguracionAgencia, DestinoServicio, Guia, GuiaTarifa, Servicio, TipAfeIgv, DestinoTributario, ContenidoTour } from '@/types/agencia-viajes';
 import type { Client } from '@/types/clients';
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
@@ -1520,6 +1609,45 @@ const agruparPorTour = (items: AlternativaItem[]): BloqueItem[] => {
     return resultado;
 };
 
+// Sesión M4 — dentro de un bloque, N ítems consecutivos que comparten
+// grupo_opcion_id se renderizan como UNA tarjeta ("comparar varias
+// opciones") en vez de N tarjetas de ítem sueltas. Asume adyacencia (los
+// ítems de un mismo grupo se crean en un solo lote y quedan con ids
+// consecutivos, ver el fix de orden real de AlternativaItem::items() —
+// un grupo separado por otro ítem en medio es un caso no contemplado,
+// documentado como pendiente).
+type FilaLienzo =
+    | { esGrupo: false; item: AlternativaItem }
+    | { esGrupo: true; grupoId: string; items: AlternativaItem[] };
+
+const filasDelBloque = (items: AlternativaItem[]): FilaLienzo[] => {
+    const filas: FilaLienzo[] = [];
+    for (const item of items) {
+        const ultima = filas[filas.length - 1];
+        if (item.grupo_opcion_id && ultima?.esGrupo && ultima.grupoId === item.grupo_opcion_id) {
+            ultima.items.push(item);
+        } else if (item.grupo_opcion_id) {
+            filas.push({ esGrupo: true, grupoId: item.grupo_opcion_id, items: [item] });
+        } else {
+            filas.push({ esGrupo: false, item });
+        }
+    }
+    return filas;
+};
+
+const eligiendoGrupoItemId = ref<number | null>(null);
+const elegirGrupoDesdeLienzo = async (item: AlternativaItem) => {
+    eligiendoGrupoItemId.value = item.id;
+    try {
+        await alternativaItemService.elegirGrupo(item.id);
+        await cargarCotizacion();
+    } catch (error: any) {
+        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo marcar la opción elegida', 'error');
+    } finally {
+        eligiendoGrupoItemId.value = null;
+    }
+};
+
 const bloquesLienzo = computed<BloqueItem[]>(() => agruparPorTour(itemsVisiblesLienzo.value));
 // Sin chips (1 destino), el panel de precio sigue mostrando TODOS los
 // ítems de la alternativa agrupados por tour, sin el nivel extra — cero
@@ -1859,6 +1987,13 @@ const matrizHotelActiva = ref<{
     nombreProveedor: string;
     edadMaxInfanteGratis?: number;
     edadMaxNinoCamaAdicional?: number;
+    // Sesión M4 — true cuando estas tarifas vienen de un OpcionHotel ad-hoc
+    // (botón "+ Agregar hotel no registrado" de la pestaña Local, ver
+    // guardarHotelLocal()) en vez de un proveedor_tarifa real — el picker
+    // es el mismo componente/UI, solo cambia a qué función se manda el
+    // seleccionar/agregar-grupo (agregarItemHotelAdhocLocal() en vez de
+    // agregarItemProveedorHotel()).
+    adhoc?: boolean;
 } | null>(null);
 const modoPrecioPendiente = ref<{ id: number; nombre: string } | null>(null);
 
@@ -1931,6 +2066,134 @@ const agregarItemProveedorHotel = async (
         await onServicioSueltoAgregado(res.alternativa_item);
     } catch (error: any) {
         (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo agregar', 'error');
+    }
+};
+
+// Sesión M4/M3 — "+ Agregar hotel no registrado" (pestaña Local): crea un
+// OpcionHotel ad-hoc standalone (sin opcion_mayorista_id, ver
+// OpcionHotelController::store()) y abre el mismo picker de matriz que ya
+// usan los hoteles registrados — agregarItemHotelAdhocLocal()/
+// agregarGrupoHotelAdhocLocal() son sus equivalentes, distinguidos en el
+// template por matrizHotelActiva.adhoc.
+const mostrarFormHotelLocal = ref(false);
+const formHotelLocal = ref<{
+    nombre_hotel: string; moneda: 'PEN' | 'USD';
+    tarifas: Array<{ tipo_habitacion: string; precio_costo: number; precio_venta: number; tip_afe_igv: string; destino_tributario: string }>;
+}>({
+    nombre_hotel: '', moneda: 'PEN',
+    tarifas: [{ tipo_habitacion: 'doble', precio_costo: 0, precio_venta: 0, tip_afe_igv: '10', destino_tributario: 'nacional' }],
+});
+const guardandoHotelLocal = ref(false);
+
+const guardarHotelLocal = async () => {
+    guardandoHotelLocal.value = true;
+    try {
+        const res = await opcionHotelService.crear(formHotelLocal.value);
+        mostrarFormHotelLocal.value = false;
+        matrizHotelActiva.value = {
+            tarifas: (res.opcion_hotel.opciones_hotel_tarifas ?? []).map((t: OpcionHotelTarifa) => ({
+                id: t.id, tipo_habitacion: t.tipo_habitacion, precio: Number(t.precio_venta), precioVentaCamaAdicional: null,
+            })),
+            moneda: res.opcion_hotel.moneda,
+            nombreProveedor: res.opcion_hotel.nombre_hotel,
+            adhoc: true,
+        };
+        formHotelLocal.value = {
+            nombre_hotel: '', moneda: 'PEN',
+            tarifas: [{ tipo_habitacion: 'doble', precio_costo: 0, precio_venta: 0, tip_afe_igv: '10', destino_tributario: 'nacional' }],
+        };
+    } catch (error: any) {
+        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo guardar el hotel', 'error');
+    } finally {
+        guardandoHotelLocal.value = false;
+    }
+};
+
+const agregarItemHotelAdhocLocal = async (
+    opcionHotelTarifaId: number,
+    cantidad: number,
+    paxIncluidos: number[] | null = null,
+    camasAdicionalesNino: number = 0,
+) => {
+    if (!alternativaActiva.value) return;
+    try {
+        const res = await alternativaItemService.agregarProveedor(alternativaActiva.value.id, {
+            opcion_hotel_tarifa_id: opcionHotelTarifaId,
+            modo_precio: 'tarifa_fija',
+            cantidad,
+            dia_referencial: diaActivoParaAgregar.value,
+            pax_incluidos: paxIncluidos,
+            camas_adicionales_nino: camasAdicionalesNino,
+            alternativa_destino_id: destinoActivoId.value,
+        });
+        await onServicioSueltoAgregado(res.alternativa_item);
+    } catch (error: any) {
+        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo agregar', 'error');
+    }
+};
+
+// Sesión M4 — crypto.randomUUID() exige "secure context" (HTTPS o
+// localhost); en dev el tenant se navega por http://*.sistemafe.test, un
+// origen no-seguro, donde el navegador ni siquiera expone la función
+// (bug real encontrado en verificación en vivo contra agencia-demo, no
+// solo un caso raro de navegador viejo). El id es solo un agrupador
+// liviano client-side (§M1: sin tabla propia) — no necesita ser
+// criptográficamente fuerte, así que un fallback con Math.random() alcanza.
+const generarUuidGrupo = (): string => {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+        const r = (Math.random() * 16) | 0;
+        const v = c === 'x' ? r : (r & 0x3) | 0x8;
+        return v.toString(16);
+    });
+};
+
+const agregarGrupoHotelAdhocLocal = async (ids: number[]) => {
+    if (!alternativaActiva.value) return;
+    const grupoOpcionId = generarUuidGrupo();
+    try {
+        let ultimoItem: AlternativaItem | null = null;
+        for (const opcionHotelTarifaId of ids) {
+            const res = await alternativaItemService.agregarProveedor(alternativaActiva.value.id, {
+                opcion_hotel_tarifa_id: opcionHotelTarifaId,
+                modo_precio: 'tarifa_fija',
+                cantidad: 1,
+                dia_referencial: diaActivoParaAgregar.value,
+                alternativa_destino_id: destinoActivoId.value,
+                grupo_opcion_id: grupoOpcionId,
+            });
+            ultimoItem = res.alternativa_item;
+        }
+        if (ultimoItem) await onServicioSueltoAgregado(ultimoItem);
+    } catch (error: any) {
+        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo agregar el grupo', 'error');
+    }
+};
+
+// Sesión M4 — "comparar varias opciones": crea N ítems (uno por tarifa
+// elegida en el picker) compartiendo un mismo grupo_opcion_id generado acá.
+// Ninguno nace opcion_elegida=true — el vendedor resuelve el grupo después
+// desde el lienzo (ver elegirGrupoDesdeLienzo()), y ReservaController::aceptar()
+// bloquea con 422 mientras quede algún grupo sin resolver.
+const agregarGrupoProveedorHotel = async (ids: number[]) => {
+    if (!alternativaActiva.value) return;
+    const grupoOpcionId = generarUuidGrupo();
+    try {
+        let ultimoItem: AlternativaItem | null = null;
+        for (const proveedorTarifaId of ids) {
+            const res = await alternativaItemService.agregarProveedor(alternativaActiva.value.id, {
+                proveedor_tarifa_id: proveedorTarifaId,
+                modo_precio: 'tarifa_fija',
+                cantidad: 1,
+                dia_referencial: diaActivoParaAgregar.value,
+                alternativa_destino_id: destinoActivoId.value,
+                grupo_opcion_id: grupoOpcionId,
+            });
+            ultimoItem = res.alternativa_item;
+        }
+        if (ultimoItem) await onServicioSueltoAgregado(ultimoItem);
+    } catch (error: any) {
+        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo agregar el grupo', 'error');
     }
 };
 
@@ -2122,6 +2385,30 @@ const agregarItemMayorista = async (op: OpcionMayorista, opcionHotelTarifaId: nu
         await onServicioSueltoAgregado(res.alternativa_item);
     } catch (error: any) {
         (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo agregar', 'error');
+    }
+};
+
+// Sesión M4 — mismo atajo que agregarGrupoProveedorHotel(), para el flujo
+// mayorista (Internacional).
+const agregarGrupoMayorista = async (op: OpcionMayorista, opcionHotelTarifaIds: number[]) => {
+    if (!alternativaActiva.value) return;
+    const grupoOpcionId = generarUuidGrupo();
+    try {
+        let ultimoItem: AlternativaItem | null = null;
+        for (const opcionHotelTarifaId of opcionHotelTarifaIds) {
+            const res = await alternativaItemService.agregarMayorista(alternativaActiva.value.id, {
+                opcion_mayorista_id: op.id,
+                opcion_hotel_tarifa_id: opcionHotelTarifaId,
+                cantidad: 1,
+                dia_referencial: diaActivoParaAgregar.value,
+                alternativa_destino_id: destinoActivoId.value,
+                grupo_opcion_id: grupoOpcionId,
+            });
+            ultimoItem = res.alternativa_item;
+        }
+        if (ultimoItem) await onServicioSueltoAgregado(ultimoItem);
+    } catch (error: any) {
+        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo agregar el grupo', 'error');
     }
 };
 
@@ -2392,9 +2679,40 @@ const totalConvertidoLocal = (item: AlternativaItem) => {
     return precio;
 };
 
-const subtotalGrupo = (items: AlternativaItem[]) => items.reduce((sum, item) => sum + totalConvertidoLocal(item), 0);
+// Sesión M4 — bug real encontrado en verificación en vivo: cualquier suma
+// de "total_convertido en bruto" sobre una lista de ítems (escrita antes
+// de M1) no conocía grupo_opcion_id/opcion_elegida y sumaba TODAS las
+// filas de un grupo como si fueran ítems sueltos — mostraba PEN 280
+// (120+160) en vez de PEN 120 apenas se resolvía un grupo de 2 opciones,
+// mientras el backend (AlternativaItem::calcularTotalEfectivo(), misma
+// regla acá) ya tenía el total correcto guardado. Mismo criterio que el
+// backend: fuera de grupo suma normal; dentro de un grupo RESUELTO solo
+// cuenta la elegida; ABIERTO (sin elegida) cuenta el mínimo de la lista,
+// igual que hace `Alternativa.tieneGruposSinResolver()`. Un solo helper
+// compartido por subtotalGrupo() (subtotal por tour/bloque en el panel) y
+// totalLocal() (total general) para no repetir la regla dos veces.
+const totalEfectivoLocal = (items: AlternativaItem[]): number => {
+    const sinGrupo = items.filter((item) => !item.grupo_opcion_id);
+    const grupos = new Map<string, AlternativaItem[]>();
+    for (const item of items) {
+        if (!item.grupo_opcion_id) continue;
+        if (!grupos.has(item.grupo_opcion_id)) grupos.set(item.grupo_opcion_id, []);
+        grupos.get(item.grupo_opcion_id)!.push(item);
+    }
 
-const totalLocal = computed(() => (alternativaActiva.value?.items ?? []).reduce((sum, item) => sum + totalConvertidoLocal(item), 0));
+    let total = sinGrupo.reduce((sum, item) => sum + totalConvertidoLocal(item), 0);
+    for (const itemsDelGrupo of grupos.values()) {
+        const elegida = itemsDelGrupo.find((item) => item.opcion_elegida);
+        total += elegida
+            ? totalConvertidoLocal(elegida)
+            : Math.min(...itemsDelGrupo.map((item) => totalConvertidoLocal(item)));
+    }
+    return total;
+};
+
+const subtotalGrupo = (items: AlternativaItem[]) => totalEfectivoLocal(items);
+
+const totalLocal = computed(() => totalEfectivoLocal(alternativaActiva.value?.items ?? []));
 
 // ── Descuento global (Parte B, punto 3.1 del plan de dominio) — reparte el
 // % a CADA alternativa_item respetando su piso individual
@@ -2509,7 +2827,7 @@ const iconoItem = (item: AlternativaItem) => {
     if (item.origen_tipo === 'mayorista') return 'fa-plane-departure';
     if (item.origen_tipo === 'manual') return 'fa-pen';
     if (item.origen_tipo === 'guia') return 'fa-user-tie';
-    if (item.proveedor_tarifa?.tipo_habitacion) return 'fa-bed';
+    if (item.proveedor_tarifa?.tipo_habitacion || item.opcion_hotel_tarifa) return 'fa-bed';
     return 'fa-concierge-bell';
 };
 
@@ -2526,6 +2844,13 @@ const etiquetaItem = (item: AlternativaItem) => {
         // acá — mismo formato "Proveedor · tipo_habitación" que ya usa clicBibliotecaItem.
         const proveedor = item.proveedor_tarifa.proveedor_servicio?.proveedor?.nombre_comercial ?? item.proveedor_tarifa.proveedor_servicio?.proveedor?.razon_social ?? 'Hotel';
         return `${proveedor} · ${item.proveedor_tarifa.tipo_habitacion}`;
+    }
+    // Sesión M2/M4 — hotel de la matriz de un OpcionMayorista (o, desde M3,
+    // un hotel ad-hoc del flujo Local), sin ProveedorTarifa real. Mismo
+    // criterio ya usado en reservas/detalle.vue::nombreItem().
+    if (item.opcion_hotel_tarifa) {
+        const nombreHotel = item.opcion_hotel_tarifa.opcion_hotel?.nombre_hotel ?? 'Hotel';
+        return `${nombreHotel} · ${item.opcion_hotel_tarifa.tipo_habitacion}`;
     }
     return descripcionDestinoServicio(item.proveedor_tarifa?.proveedor_servicio?.destino_servicio) || 'Servicio';
 };

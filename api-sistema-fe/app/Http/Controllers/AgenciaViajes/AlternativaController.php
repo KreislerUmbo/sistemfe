@@ -208,7 +208,12 @@ class AlternativaController extends Controller
     // anidado, sin costo real) para que el método sea seguro por sí mismo
     // aunque un caller futuro lo invoque sin transacción propia — no es la
     // corrección de un bug pendiente.
-    private function aplicarDescuentoGlobal(Alternativa $alternativa, float $descuentoGlobalPct): array
+    // Sesión M4 — público (no private) para que AlternativaItemController::
+    // elegirOpcionGrupo() pueda reaplicar el descuento global vigente sobre
+    // la fila recién elegida, en vez de dejarla a precio de lista hasta que
+    // el vendedor vuelva a tocar el campo de descuento. Mismo patrón de
+    // reuso cross-controller que ReservaController::resolverNombreItem().
+    public function aplicarDescuentoGlobal(Alternativa $alternativa, float $descuentoGlobalPct): array
     {
         return DB::transaction(function () use ($alternativa, $descuentoGlobalPct) {
             $lineasFueraDePiso = [];
@@ -400,6 +405,13 @@ class AlternativaController extends Controller
         $itemIds = AlternativaItem::where('alternativa_id', $alternativa->id)->pluck('id');
         CotizacionPasajeAereo::whereIn('alternativa_item_id', $itemIds)->delete();
         AlternativaItem::whereIn('id', $itemIds)->delete();
+
+        // Sesión 12f-2 (multidestino) — bug real encontrado en verificación
+        // en vivo de M4: alternativa_destinos nunca se borraba acá, así que
+        // cualquier alternativa que hubiera llegado a tener un destino
+        // (aunque fuera el único/por defecto) dejaba una FK huérfana que
+        // rompía destroy() con un 500 (alternativa_destinos_alternativa_id_foreign).
+        AlternativaDestino::where('alternativa_id', $alternativa->id)->delete();
 
         $opciones = OpcionMayorista::where('alternativa_id', $alternativa->id)->get();
         foreach ($opciones as $opcion) {
