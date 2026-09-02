@@ -838,6 +838,11 @@
                                         <option value="PEN">PEN</option>
                                     </select>
                                     <input type="text" class="form-control form-control-sm mb-1" placeholder="Vuelo (aerolínea)" v-model="formMayorista.vuelo_aerolinea">
+                                    <!-- Fix C1 (02-sep-2026) — lo único que resolverNombreItemPdf() puede
+                                         imprimir en el PDF comercial para esta opción; el nombre del
+                                         mayorista/proveedor nunca llega a ese documento. -->
+                                    <input type="text" class="form-control form-control-sm mb-1" placeholder="Descripción para el cliente (ej. Paquete Panamá 6D/5N)"
+                                        v-model="formMayorista.descripcion_publica">
 
                                     <!-- Sesión 12e — buscador de contenido reutilizable, "buscar antes de
                                          crear" para no ensuciar la biblioteca con duplicados (§23.1.9). -->
@@ -1935,7 +1940,10 @@ const proveedoresMayoristas = ref<Proveedor[]>([]);
 const opcionHotelesActivaId = ref<number | null>(null);
 const mostrarFormMayorista = ref(false);
 const mostrarFormHotel = ref<number | null>(null);
-const formMayorista = ref({ proveedor_id: null as number | null, moneda: 'USD' as 'PEN' | 'USD', vuelo_aerolinea: '', incluye: '', contenido_tour_id: null as number | null });
+const formMayorista = ref({
+    proveedor_id: null as number | null, moneda: 'USD' as 'PEN' | 'USD', vuelo_aerolinea: '', incluye: '',
+    contenido_tour_id: null as number | null, descripcion_publica: '',
+});
 
 // Sesión 12e — buscador de contenido_tour ("buscar antes de crear",
 // mitiga duplicados en la biblioteca — auditoria-arquitectonica-agencia-
@@ -2065,7 +2073,7 @@ const guardarOpcionMayorista = async () => {
     try {
         await opcionMayoristaService.crear(alternativaActiva.value.id, { ...formMayorista.value, alternativa_destino_id: destinoActivoId.value } as any);
         mostrarFormMayorista.value = false;
-        formMayorista.value = { proveedor_id: null, moneda: 'USD', vuelo_aerolinea: '', incluye: '', contenido_tour_id: null };
+        formMayorista.value = { proveedor_id: null, moneda: 'USD', vuelo_aerolinea: '', incluye: '', contenido_tour_id: null, descripcion_publica: '' };
         resetContenidoTourBuscador();
         await cargarOpcionesMayorista();
     } catch (error: any) {

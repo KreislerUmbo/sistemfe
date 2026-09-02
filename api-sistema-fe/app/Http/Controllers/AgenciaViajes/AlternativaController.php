@@ -825,7 +825,13 @@ class AlternativaController extends Controller
             return $item->cotizacionPasajeAereo?->aerolinea ?? 'Pasaje aéreo';
         }
         if ($item->origen_tipo === AlternativaItem::ORIGEN_MAYORISTA) {
-            return $item->opcionMayorista?->proveedor?->razon_social ?? 'Paquete mayorista';
+            // Fix C1 (02-sep-2026) — SIN ningún camino hacia el Proveedor
+            // real bajo ninguna condición: este es el documento que recibe
+            // el cliente, no puede revelar la razón social/nombre
+            // comercial (dato fiscal SUNAT) del mayorista. Si el vendedor
+            // no cargó descripcion_publica, cae al genérico — nunca a
+            // nombre_comercial "por las dudas".
+            return $item->opcionMayorista?->descripcion_publica ?? 'Paquete mayorista';
         }
         if ($item->origen_tipo === AlternativaItem::ORIGEN_GUIA) {
             return 'Guía de turismo' . ($item->guiaTarifa?->guia?->nombre ? ' — ' . $item->guiaTarifa->guia->nombre : '');

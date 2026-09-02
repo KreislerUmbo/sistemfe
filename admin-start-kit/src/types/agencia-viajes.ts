@@ -475,6 +475,9 @@ export type OpcionMayorista = {
   salida_mayorista_id?: number | null;
   moneda: 'PEN' | 'USD';
   incluye?: string | null;
+  // Fix C1 (02-sep-2026) — único texto que el PDF comercial puede
+  // mostrar para esta opción; ver docblock del modelo en el backend.
+  descripcion_publica?: string | null;
   notas?: string | null;
   vuelo_aerolinea?: string | null;
   vuelo_detalle?: string | null;

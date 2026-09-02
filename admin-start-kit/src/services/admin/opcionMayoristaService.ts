@@ -16,6 +16,9 @@ export const opcionMayoristaService = {
     vuelo_detalle?: string
     contenido_tour_id?: number | null
     alternativa_destino_id?: number | null
+    // Fix C1 (02-sep-2026) — único texto que el PDF comercial puede
+    // mostrar para esta opción; el nombre del mayorista nunca llega ahí.
+    descripcion_publica?: string
   }) {
     const response = await httpClient.post(`/alternativas/${alternativaId}/opciones-mayorista`, data)
     return response.data

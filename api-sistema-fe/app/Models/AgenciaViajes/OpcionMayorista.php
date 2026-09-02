@@ -8,6 +8,15 @@ use Illuminate\Database\Eloquent\Model;
 // plan-modulo-cotizaciones-reservas.md §2.4. Tenant (sin CentralConnection).
 // alternativa_id/proveedor_id/salida_mayorista_id llevan belongsTo real (FK
 // dentro de la misma DB tenant).
+//
+// descripcion_publica (fix C1, 02-sep-2026): el ÚNICO texto que
+// AlternativaController::resolverNombreItemPdf() puede imprimir en el PDF
+// comercial para un ítem origen_tipo=mayorista — nunca cae a
+// proveedor->razon_social/nombre_comercial (dato fiscal SUNAT del
+// mayorista, no debe llegar al cliente). Sin ella, el PDF muestra el
+// genérico "Paquete mayorista". ReservaController::resolverNombreItem()
+// (uso interno, reporte operativo) NO usa este campo — ahí el fallback a
+// datos del proveedor real es correcto y deseado.
 class OpcionMayorista extends Model
 {
     protected $table = 'opcion_mayorista';
@@ -19,6 +28,7 @@ class OpcionMayorista extends Model
         'salida_mayorista_id',
         'moneda',
         'incluye',
+        'descripcion_publica',
         'notas',
         'vuelo_aerolinea',
         'vuelo_detalle',

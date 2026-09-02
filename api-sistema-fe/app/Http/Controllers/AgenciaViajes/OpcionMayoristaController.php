@@ -40,6 +40,10 @@ class OpcionMayoristaController extends Controller
             'salida_mayorista_id' => 'nullable|integer|exists:salidas_mayorista,id',
             'moneda' => 'required|in:PEN,USD',
             'incluye' => 'nullable|string',
+            // Fix C1 (02-sep-2026) — único texto que
+            // AlternativaController::resolverNombreItemPdf() puede
+            // imprimir en el PDF comercial para esta opción.
+            'descripcion_publica' => 'nullable|string|max:255',
             'notas' => 'nullable|string',
             'vuelo_aerolinea' => 'nullable|string|max:150',
             'vuelo_detalle' => 'nullable|string',
