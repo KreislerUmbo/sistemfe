@@ -16,6 +16,7 @@ use App\Http\Controllers\AgenciaViajes\DestinoAtractivoController;
 use App\Http\Controllers\AgenciaViajes\DestinoServicioController;
 use App\Http\Controllers\AgenciaViajes\GuiaController;
 use App\Http\Controllers\AgenciaViajes\GuiaTarifaController;
+use App\Http\Controllers\AgenciaViajes\OpcionHotelController;
 use App\Http\Controllers\AgenciaViajes\OpcionMayoristaController;
 use App\Http\Controllers\AgenciaViajes\PaquetePlantillaController;
 use App\Http\Controllers\AgenciaViajes\PaquetePlantillaItemController;
@@ -725,6 +726,12 @@ Route::group([
     Route::match(['get', 'post'], "opciones-mayorista/{id}/hoteles", [OpcionMayoristaController::class, 'hoteles'])
         ->middleware('permission:agencia.cotizaciones');
     Route::match(['get', 'post'], "opciones-mayorista/{id}/opcionales", [OpcionMayoristaController::class, 'opcionales'])
+        ->middleware('permission:agencia.cotizaciones');
+
+    // Sesión M3 — hotel ad-hoc LOCAL, standalone (sin opcion_mayorista_id).
+    Route::post("opciones-hotel", [OpcionHotelController::class, 'store'])
+        ->middleware('permission:agencia.cotizaciones');
+    Route::post("opciones-hotel/{id}/promover", [OpcionHotelController::class, 'promover'])
         ->middleware('permission:agencia.cotizaciones');
 
     // Sesión 12e — biblioteca de contenido reutilizable (§9.1 de la

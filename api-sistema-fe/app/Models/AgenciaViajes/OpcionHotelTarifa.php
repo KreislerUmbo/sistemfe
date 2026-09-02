@@ -28,6 +28,12 @@ class OpcionHotelTarifa extends Model
         'proveedor_tarifa_id',
         'precio_costo_cama_adicional',
         'precio_venta_cama_adicional',
+        // Sesión M3 (Ronda 6/P16) — nullable, resuelto contra el default de
+        // agencia al crear si no viene explícito (ver
+        // OpcionHotelController::store()). Copiado en snapshot al
+        // materializar un AlternativaItem, mismo criterio que costo_snapshot.
+        'tip_afe_igv',
+        'destino_tributario',
     ];
 
     protected $casts = [

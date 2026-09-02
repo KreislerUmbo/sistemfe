@@ -19,6 +19,10 @@ class OpcionHotel extends Model
     protected $fillable = [
         'opcion_mayorista_id',
         'proveedor_id',
+        // Sesión M3 (Ronda 4/P12) — informativo, guard contra promover el
+        // mismo hotel ad-hoc dos veces. No relinkea nada retroactivamente
+        // (mismo criterio que alternativa_items.proveedor_promovido_id).
+        'proveedor_promovido_id',
         'nombre_hotel',
         'categoria_estrellas',
         'moneda',
@@ -29,6 +33,11 @@ class OpcionHotel extends Model
     public function proveedor()
     {
         return $this->belongsTo(Proveedor::class, 'proveedor_id');
+    }
+
+    public function proveedorPromovido()
+    {
+        return $this->belongsTo(Proveedor::class, 'proveedor_promovido_id');
     }
 
     public function opcionMayorista()

@@ -521,13 +521,20 @@ class AlternativaItemController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'proveedor_tarifa_id' => 'nullable|integer|exists:proveedor_tarifas,id',
+            // Sesión M3 — hotel ad-hoc LOCAL (matriz de habitación sin
+            // ProveedorTarifa real, ver OpcionHotelController::store()).
+            // Mutuamente excluyente con proveedor_tarifa_id, mismo
+            // criterio de "3 vías" que ya extiende moneda_costo/
+            // precio_venta_snapshot más abajo.
+            'opcion_hotel_tarifa_id' => 'nullable|integer|exists:opciones_hotel_tarifas,id',
             'modo_precio' => 'required|in:por_persona,tarifa_fija',
             'cantidad' => 'nullable|integer|min:1',
             'pax_incluidos' => 'nullable|array',
             'pax_incluidos.*' => 'integer|exists:cotizacion_pasajeros,id',
-            // Solo si NO hay proveedor_tarifa_id — precio de referencia (§3, caso 2)
-            'moneda_costo' => 'required_without:proveedor_tarifa_id|nullable|in:PEN,USD',
-            'precio_venta_snapshot' => 'required_without:proveedor_tarifa_id|nullable|numeric|min:0',
+            // Solo si NO hay proveedor_tarifa_id NI opcion_hotel_tarifa_id —
+            // precio de referencia (§3, caso 2).
+            'moneda_costo' => 'required_without_all:proveedor_tarifa_id,opcion_hotel_tarifa_id|nullable|in:PEN,USD',
+            'precio_venta_snapshot' => 'required_without_all:proveedor_tarifa_id,opcion_hotel_tarifa_id|nullable|numeric|min:0',
             'costo_snapshot' => 'nullable|numeric|min:0',
             // Solo tiene efecto si NO hay proveedor_tarifa_id — con tarifa
             // real, el tratamiento tributario SIEMPRE viene de ella (ver
@@ -552,6 +559,7 @@ class AlternativaItemController extends Controller
 
         $validado = $validator->validated();
         $tarifa = ! empty($validado['proveedor_tarifa_id']) ? ProveedorTarifa::findOrFail($validado['proveedor_tarifa_id']) : null;
+        $opcionHotelTarifa = ! empty($validado['opcion_hotel_tarifa_id']) ? OpcionHotelTarifa::findOrFail($validado['opcion_hotel_tarifa_id']) : null;
         $cantidad = $validado['cantidad'] ?? 1;
         $paxIncluidos = $validado['pax_incluidos'] ?? null;
 
@@ -593,6 +601,15 @@ class AlternativaItemController extends Controller
                     $precioVentaSnapshot += $resultadoCama['venta'];
                 }
             }
+        } elseif ($opcionHotelTarifa) {
+            // Sesión M3 — hotel ad-hoc LOCAL, mismo criterio de snapshot
+            // que AlternativaItemController::crearItemMayorista() para el
+            // camino internacional: siempre por habitación, sin cama
+            // adicional (esa mecánica depende de proveedorServicio->
+            // proveedor->alojamientoDetalle, que un hotel ad-hoc no tiene).
+            $monedaCosto = $opcionHotelTarifa->opcionHotel?->moneda ?? 'PEN';
+            $costoSnapshot = (float) $opcionHotelTarifa->precio_costo;
+            $precioVentaSnapshot = (float) $opcionHotelTarifa->precio_venta;
         } else {
             $monedaCosto = $validado['moneda_costo'];
             // costo_snapshot es NOT NULL — sin tarifa real de la que
@@ -601,16 +618,22 @@ class AlternativaItemController extends Controller
             $precioVentaSnapshot = (float) $validado['precio_venta_snapshot'];
         }
 
-        $tratamientoTributario = $tarifa
-            ? $this->resolverTratamientoTributario($tarifa->tip_afe_igv, $tarifa->destino_tributario)
-            : $this->resolverTratamientoTributario($validado['tip_afe_igv'] ?? null, $validado['destino_tributario'] ?? null);
+        $tratamientoTributario = match (true) {
+            (bool) $tarifa => $this->resolverTratamientoTributario($tarifa->tip_afe_igv, $tarifa->destino_tributario),
+            (bool) $opcionHotelTarifa => $this->resolverTratamientoTributario($opcionHotelTarifa->tip_afe_igv, $opcionHotelTarifa->destino_tributario),
+            default => $this->resolverTratamientoTributario($validado['tip_afe_igv'] ?? null, $validado['destino_tributario'] ?? null),
+        };
 
         $item = AlternativaItem::create([
             'alternativa_id' => $alternativa->id,
             'alternativa_destino_id' => $this->resolverAlternativaDestinoId($alternativa, $validado['alternativa_destino_id'] ?? null),
             'origen_tipo' => AlternativaItem::ORIGEN_PROVEEDOR,
             'proveedor_tarifa_id' => $tarifa?->id,
-            'modo_precio' => $validado['modo_precio'],
+            'opcion_hotel_tarifa_id' => $opcionHotelTarifa?->id,
+            // Un hotel ad-hoc siempre es por habitación, sin importar qué
+            // vino en el request — mismo criterio hardcodeado que
+            // crearItemMayorista() para su equivalente internacional.
+            'modo_precio' => $opcionHotelTarifa ? 'tarifa_fija' : $validado['modo_precio'],
             'cantidad' => $cantidad,
             'pax_incluidos' => $paxIncluidos,
             'moneda_costo' => $monedaCosto,
