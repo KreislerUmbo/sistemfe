@@ -2,7 +2,6 @@
 
 namespace Tests\Feature\AgenciaViajes;
 
-use App\Http\Controllers\AgenciaViajes\AlternativaController;
 use App\Http\Controllers\AgenciaViajes\ReservaController;
 use App\Models\AgenciaViajes\Alternativa;
 use App\Models\AgenciaViajes\AlternativaItem;
@@ -13,13 +12,12 @@ use Tests\TestCase;
 
 // Fix C1 — PEGAR-EN-CLAUDE-CODE-fix-leak-mayorista-pdf.md,
 // auditoria-arquitectonica-agencia-viajes.md §9.3.
-// resolverNombreItemPdf() (AlternativaController) es el ÚNICO punto que
-// alimenta nombres al PDF comercial (confirmado: ningún otro lugar del
-// blade referencia proveedor/opcionMayorista directo) — se invoca vía
-// reflexión, mismo patrón ya usado por Sesion12f3PdfPorDestinoTest para
-// el mismo método. Mismo patrón de infraestructura que el resto de la
-// suite: Postgres real (sistemafe_test_migrations), transacción por test
-// revertida.
+//
+// Actualizado en Sesión M2: AlternativaController::resolverNombreItemPdf()
+// se eliminó al centralizar — ahora AlternativaController::pdf() llama
+// directo a ReservaController::resolverNombreItem($item, null, 'cliente'),
+// el ÚNICO resolver de nombre del vertical (confirmado: ningún otro
+// lugar del blade referencia proveedor/opcionMayorista directo).
 class FixC1LeakMayoristaPdfTest extends TestCase
 {
     protected function setUp(): void
@@ -46,11 +44,7 @@ class FixC1LeakMayoristaPdfTest extends TestCase
 
     private function invocarResolverNombreItemPdf(AlternativaItem $item): string
     {
-        $controller = app(AlternativaController::class);
-        $method = new \ReflectionMethod(AlternativaController::class, 'resolverNombreItemPdf');
-        $method->setAccessible(true);
-
-        return $method->invoke($controller, $item->fresh(['opcionMayorista.proveedor']));
+        return ReservaController::resolverNombreItem($item->fresh(['opcionMayorista.proveedor']), null, 'cliente');
     }
 
     private function crearAlternativaConItemMayorista(?string $descripcionPublica): array

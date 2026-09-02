@@ -1373,10 +1373,24 @@ const nombreItem = (it: ReservaItem) => {
         const p = it.opcion_mayorista?.proveedor ?? item.opcion_mayorista?.proveedor;
         return (p ? (p.nombre_comercial || p.razon_social) : null) ?? 'Paquete mayorista';
     }
+    // Sesión M2 — mismo bug que ResourceController::resolverNombreItem()
+    // tenía en el backend antes de centralizarse: esta pantalla nunca
+    // tuvo rama para origen_tipo=guia, caía al genérico 'Servicio'.
+    if (item.origen_tipo === 'guia') {
+        return 'Guía de turismo' + (item.guia_tarifa?.guia?.nombre ? ` — ${item.guia_tarifa.guia.nombre}` : '');
+    }
     if (item.proveedor_tarifa?.tipo_habitacion) {
         const p = item.proveedor_tarifa.proveedor_servicio?.proveedor;
         const proveedor = (p ? (p.nombre_comercial || p.razon_social) : null) ?? 'Hotel';
         return `${proveedor} · ${item.proveedor_tarifa.tipo_habitacion}`;
+    }
+    // Sesión M2 — hotel de la matriz de un OpcionMayorista, sin
+    // ProveedorTarifa real (ver AlternativaItem::opcionHotelTarifa() en
+    // el backend). it.opcion_hotel_tarifa primero (reserva-level), igual
+    // criterio que opcion_mayorista arriba.
+    const opcionHotelTarifa = it.opcion_hotel_tarifa ?? item.opcion_hotel_tarifa;
+    if (opcionHotelTarifa) {
+        return `${opcionHotelTarifa.opcion_hotel?.nombre_hotel ?? 'Hotel'} · ${opcionHotelTarifa.tipo_habitacion}`;
     }
     return item.proveedor_tarifa?.proveedor_servicio?.destino_servicio?.servicio?.nombre ?? 'Servicio';
 };

@@ -36,6 +36,7 @@ class ReservaItem extends Model
         'hora',
         'guia_id',
         'proveedor_tarifa_id',
+        'opcion_hotel_tarifa_id',
         'tour_origen_id',
         'salida_operativa_id',
         'tip_afe_igv',
@@ -73,6 +74,15 @@ class ReservaItem extends Model
     public function proveedorTarifa()
     {
         return $this->belongsTo(ProveedorTarifa::class, 'proveedor_tarifa_id');
+    }
+
+    // Sesión M2 — copiado de alternativaItem()->opcion_hotel_tarifa_id al
+    // aceptar la reserva (mismo patrón que proveedor_tarifa_id), para no
+    // perder QUÉ fila de la matriz hotel×habitación se eligió cuando el
+    // ítem no tiene ProveedorTarifa real (origen_tipo=mayorista).
+    public function opcionHotelTarifa()
+    {
+        return $this->belongsTo(OpcionHotelTarifa::class, 'opcion_hotel_tarifa_id');
     }
 
     // Sesión 12h — quién opera realmente el destino internacional de este

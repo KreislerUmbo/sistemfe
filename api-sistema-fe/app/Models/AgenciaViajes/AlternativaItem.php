@@ -15,10 +15,16 @@ use Illuminate\Database\Eloquent\Model;
 //
 // origen_tipo='hotel_plantilla' (Sesión 11k) fue eliminado en la
 // consolidación de hoteles: un hotel ya no cuelga de un paquete_plantilla,
-// es una proveedor_tarifa más (origen_tipo=proveedor). Las columnas
-// opcion_hotel_tarifa_id/paquete_plantilla_id de esta tabla siguen
-// existiendo en la BD (fuera de alcance de esa migración) pero quedaron
-// muertas — ningún código las escribe ya.
+// es una proveedor_tarifa más (origen_tipo=proveedor). paquete_plantilla_id
+// sigue existiendo en la BD pero quedó muerta — ningún código la escribe.
+//
+// opcion_hotel_tarifa_id (Sesión M2, 02-sep-2026): REVIVIDA — dejó de
+// estar muerta. Se usa para ítems origen_tipo=mayorista cuyo precio viene
+// de la matriz hotel×habitación de un OpcionMayorista
+// (opciones_hotel/opciones_hotel_tarifas), no de un ProveedorTarifa real
+// — ver AlternativaItemController::crearItemMayorista(). Antes de esta
+// sesión la columna existía pero ningún código la escribía (gap real,
+// confirmado por 2 auditorías independientes antes de M1/M2).
 class AlternativaItem extends Model
 {
     protected $table = 'alternativa_items';
@@ -43,6 +49,7 @@ class AlternativaItem extends Model
         'origen_tipo',
         'proveedor_tarifa_id',
         'opcion_mayorista_id',
+        'opcion_hotel_tarifa_id',
         'grupo_opcion_id',
         'opcion_elegida',
         'guia_tarifa_id',
@@ -100,6 +107,16 @@ class AlternativaItem extends Model
     public function opcionMayorista()
     {
         return $this->belongsTo(OpcionMayorista::class, 'opcion_mayorista_id');
+    }
+
+    // Sesión M2 — la fila concreta de la matriz hotel×habitación
+    // (opciones_hotel_tarifas) que fijó costo_snapshot/precio_venta_snapshot
+    // de este ítem, para origen_tipo=mayorista sin ProveedorTarifa real.
+    // Ver ReservaController::resolverNombreItem() (fallback de nombre) y
+    // ReservaItem::opcionHotelTarifa() (mismo dato, copiado a la reserva).
+    public function opcionHotelTarifa()
+    {
+        return $this->belongsTo(OpcionHotelTarifa::class, 'opcion_hotel_tarifa_id');
     }
 
     // Sesión fix/guia-como-item-real — de qué guia_tarifa vino el costo de

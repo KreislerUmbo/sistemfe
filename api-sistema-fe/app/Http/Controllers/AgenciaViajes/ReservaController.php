@@ -48,6 +48,11 @@ class ReservaController extends Controller
         'items.alternativaItem.proveedorTarifa.proveedorServicio.destinoServicio.destinoAtractivo',
         'items.alternativaItem.opcionMayorista.proveedor',
         'items.alternativaItem.cotizacionPasajeAereo',
+        // Sesión M2 — igual criterio que opcionMayorista de acá abajo:
+        // reserva_item primero (por si se reasignó), alternativa_item
+        // como origen, ambos usados por resolverNombreItem().
+        'items.alternativaItem.opcionHotelTarifa.opcionHotel',
+        'items.opcionHotelTarifa.opcionHotel',
         // Sesión 12h — mayorista que REALMENTE opera este ítem hoy (puede
         // diferir de items.alternativaItem.opcionMayorista si ya se
         // reasignó). Ver ReservaItem::opcionMayorista().
@@ -226,6 +231,15 @@ class ReservaController extends Controller
         return response()->json(['code' => 200, 'message' => 'Reserva cancelada correctamente', 'reserva' => $reserva->fresh()]);
     }
 
+    // Sesión M2 — descarta las filas de AlternativaItem que son opciones
+    // RECHAZADAS de un grupo de M1 (grupo_opcion_id no nulo,
+    // opcion_elegida=false). Compartido por crearReservaDesdeAlternativa()
+    // y sincronizarItems() para no duplicar el criterio en dos lugares.
+    private static function filtrarItemsParaReserva(\Illuminate\Support\Collection $items): \Illuminate\Support\Collection
+    {
+        return $items->filter(fn (AlternativaItem $item) => $item->grupo_opcion_id === null || $item->opcion_elegida)->values();
+    }
+
     // Compartido con VentaDirectaController::store() — arma
     // reserva/reserva_pasajeros/reserva_items desde una alternativa YA
     // marcada 'aceptada' (el caller decide cuándo/cómo llegó a ese estado).
@@ -273,7 +287,15 @@ class ReservaController extends Controller
             $mapaPasajeros[$cotizacionPasajero->id] = $reservaPasajero->id;
         }
 
-        $alternativaItems = AlternativaItem::where('alternativa_id', $alternativa->id)->get();
+        // Sesión M1/M2 — un ítem que quedó como opción DESCARTADA de un
+        // grupo de opciones de hotel (grupo_opcion_id no nulo,
+        // opcion_elegida=false) nunca tuvo reserva — el guard de
+        // aceptar() (M1) ya exige que el grupo esté resuelto, así que acá
+        // solo se filtra la fila que perdió. Sin este filtro se creaba un
+        // ReservaItem también para las opciones rechazadas.
+        $alternativaItems = self::filtrarItemsParaReserva(
+            AlternativaItem::where('alternativa_id', $alternativa->id)->get()
+        );
 
         // Base del cálculo = la propia reserva recién creada (ya congelada),
         // NUNCA la cotización en vivo — ver comentario arriba.
@@ -316,6 +338,10 @@ class ReservaController extends Controller
             'reserva_id' => $reserva->id,
             'alternativa_item_id' => $alternativaItem->id,
             'proveedor_tarifa_id' => $alternativaItem->proveedor_tarifa_id,
+            // Sesión M2 — misma copia 1:1 que proveedor_tarifa_id, para no
+            // perder qué fila de la matriz hotel×habitación fijó el precio
+            // cuando el ítem no tiene ProveedorTarifa real.
+            'opcion_hotel_tarifa_id' => $alternativaItem->opcion_hotel_tarifa_id,
             // Sesión 12h — quién opera el destino internacional de este
             // ítem, copiado 1:1 igual que proveedor_tarifa_id. Reasignable
             // después SOLO vía reasignarMayorista() (nunca update()
@@ -443,9 +469,16 @@ class ReservaController extends Controller
 
         $alternativaItemIdsEnReserva = ReservaItem::where('reserva_id', $reserva->id)->pluck('alternativa_item_id')->all();
 
-        $itemsPendientes = AlternativaItem::where('alternativa_id', $reserva->alternativa_id)
-            ->whereNotIn('id', $alternativaItemIdsEnReserva)
-            ->get();
+        // Mismo filtro de grupos que crearReservaDesdeAlternativa() (M2)
+        // — en la práctica no debería haber grupos sin resolver acá (la
+        // alternativa queda congelada al aceptar, mismo criterio que el
+        // resto del sistema), pero se aplica igual por si un grupo quedó
+        // resuelto DESPUÉS de aceptar y nunca se sincronizó.
+        $itemsPendientes = self::filtrarItemsParaReserva(
+            AlternativaItem::where('alternativa_id', $reserva->alternativa_id)
+                ->whereNotIn('id', $alternativaItemIdsEnReserva)
+                ->get()
+        );
 
         if ($itemsPendientes->isEmpty()) {
             return response()->json(['code' => 422, 'message' => 'No hay ítems pendientes de sincronizar.'], 422);
@@ -902,18 +935,30 @@ class ReservaController extends Controller
     // 11b) — replicado acá para que el resumen de la reserva no dependa de
     // que el frontend recalcule con la cadena completa de relaciones.
     // public static (no private): reusado también por
-    // ReservaFacturacionController para armar descripcion_detalle de cada
-    // línea de venta agrupada.
+    // ReservaFacturacionController/ReporteOperativoController, y desde
+    // Sesión M2 también por AlternativaController::pdf() — ÚNICO resolver
+    // de nombre de todo el vertical, ver Ronda 5/P14 de
+    // plan-matriz-hoteles-cotizador.md (antes estaba triplicado: PHP acá,
+    // TS en reservas/detalle.vue, y una copia divergente en
+    // AlternativaController::resolverNombreItemPdf(), eliminada en M2).
     //
     // $reservaItem (Sesión 12h, opcional): si se pasa y tiene
-    // opcion_mayorista_id propio (ya reasignado vía reasignarMayorista()),
-    // se usa ESE mayorista en vez del original de la cotización —
-    // cualquier vista a nivel RESERVA (resumen, items_no_tocados) debe
-    // reflejar quién opera hoy, no quién cotizó originalmente. Las vistas
-    // a nivel ALTERNATIVA/cotización (sin ReservaItem en contexto, ej. el
-    // preview de sincronizarItems()) siguen leyendo solo del ítem — ahí no
-    // hay ninguna reasignación posible todavía.
-    public static function resolverNombreItem(AlternativaItem $item, ?ReservaItem $reservaItem = null): string
+    // opcion_mayorista_id/opcion_hotel_tarifa_id propio (ya reasignado vía
+    // reasignarMayorista()), se usa ESE dato en vez del original de la
+    // cotización — cualquier vista a nivel RESERVA (resumen,
+    // items_no_tocados) debe reflejar quién opera hoy, no quién cotizó
+    // originalmente. Las vistas a nivel ALTERNATIVA/cotización (sin
+    // ReservaItem en contexto, ej. el PDF o el preview de
+    // sincronizarItems()) siguen leyendo solo del ítem — ahí no hay
+    // ninguna reasignación posible todavía.
+    //
+    // $audiencia (Sesión M2, fix C1): 'interno' (default, no rompe ningún
+    // caller existente) muestra el proveedor/mayorista real — reporte
+    // operativo, facturación, reserva. 'cliente' es SOLO para el PDF
+    // comercial — nunca revela razón social/nombre comercial del
+    // mayorista, cae a descripcion_publica o al genérico "Paquete
+    // mayorista" (fix C1, no reintroducir el leak).
+    public static function resolverNombreItem(AlternativaItem $item, ?ReservaItem $reservaItem = null, string $audiencia = 'interno'): string
     {
         if ($item->origen_tipo === AlternativaItem::ORIGEN_MANUAL) {
             return $item->descripcion_manual ?? 'Ítem manual';
@@ -922,9 +967,23 @@ class ReservaController extends Controller
             return $item->cotizacionPasajeAereo?->aerolinea ?? 'Pasaje aéreo';
         }
         if ($item->origen_tipo === AlternativaItem::ORIGEN_MAYORISTA) {
-            $proveedor = ($reservaItem?->opcion_mayorista_id ? $reservaItem->opcionMayorista : $item->opcionMayorista)?->proveedor;
+            $opcionMayorista = $reservaItem?->opcion_mayorista_id ? $reservaItem->opcionMayorista : $item->opcionMayorista;
+
+            if ($audiencia === 'cliente') {
+                return $opcionMayorista?->descripcion_publica ?? 'Paquete mayorista';
+            }
+
+            $proveedor = $opcionMayorista?->proveedor;
 
             return ($proveedor?->nombre_comercial ?: $proveedor?->razon_social) ?? 'Paquete mayorista';
+        }
+        // Sesión M2 — incorporada desde resolverNombreItemPdf() al
+        // centralizar: resolverNombreItem() nunca había tenido esta rama,
+        // así que un ítem de guía en el reporte operativo/facturación caía
+        // al genérico 'Servicio', perdiendo el nombre del guía (bug real,
+        // encontrado al comparar ambos resolvers antes de fusionarlos).
+        if ($item->origen_tipo === AlternativaItem::ORIGEN_GUIA) {
+            return 'Guía de turismo' . ($item->guiaTarifa?->guia?->nombre ? ' — ' . $item->guiaTarifa->guia->nombre : '');
         }
         if ($item->proveedorTarifa?->tipo_habitacion) {
             // nombre_comercial antes que razon_social — mismo criterio que ya usa
@@ -936,6 +995,18 @@ class ReservaController extends Controller
             $proveedor = ($proveedorModel?->nombre_comercial ?: $proveedorModel?->razon_social) ?? 'Hotel';
 
             return "{$proveedor} · {$item->proveedorTarifa->tipo_habitacion}";
+        }
+
+        // Sesión M2 — hotel de la matriz de un OpcionMayorista, sin
+        // ProveedorTarifa real (ver AlternativaItem::opcionHotelTarifa()).
+        // Sin esto, un hotel elegido de esta forma degradaba en silencio
+        // al genérico 'Servicio' en cualquier vista que no fuera el
+        // cotizador (Ronda 5/P13-P14, gap real confirmado).
+        $opcionHotelTarifa = $reservaItem?->opcion_hotel_tarifa_id ? $reservaItem->opcionHotelTarifa : $item->opcionHotelTarifa;
+        if ($opcionHotelTarifa) {
+            $nombreHotel = $opcionHotelTarifa->opcionHotel?->nombre_hotel ?? 'Hotel';
+
+            return "{$nombreHotel} · {$opcionHotelTarifa->tipo_habitacion}";
         }
 
         return $item->proveedorTarifa?->proveedorServicio?->destinoServicio?->servicio?->nombre ?? 'Servicio';

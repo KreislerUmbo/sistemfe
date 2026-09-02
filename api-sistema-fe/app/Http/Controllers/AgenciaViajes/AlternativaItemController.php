@@ -716,6 +716,12 @@ class AlternativaItemController extends Controller
             'alternativa_destino_id' => $this->resolverAlternativaDestinoId($alternativa, $validado['alternativa_destino_id'] ?? null),
             'origen_tipo' => AlternativaItem::ORIGEN_MAYORISTA,
             'opcion_mayorista_id' => $opcion->id,
+            // Sesión M2 — gap real heredado: esta columna existía desde
+            // antes pero ningún código la escribía (confirmado por 2
+            // auditorías independientes). Sin esto, la trazabilidad hacia
+            // la reserva/reporte operativo/PDF nunca puede resolver QUÉ
+            // fila de la matriz de habitación fijó este precio.
+            'opcion_hotel_tarifa_id' => $tarifaHotel->id,
             'modo_precio' => 'tarifa_fija', // paquete internacional, siempre por habitación
             'cantidad' => $validado['cantidad'] ?? 1,
             'pax_incluidos' => $validado['pax_incluidos'] ?? null,

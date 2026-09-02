@@ -409,6 +409,11 @@ export type AlternativaItem = {
   destino_tributario?: DestinoTributario | null;
   proveedor_tarifa?: ProveedorTarifa;
   opcion_mayorista?: OpcionMayorista;
+  // Sesión M2 — hotel de la matriz de un OpcionMayorista (sin
+  // ProveedorTarifa real), ver AlternativaItem::opcionHotelTarifa() en
+  // el backend. Gap real cerrado: crearItemMayorista() nunca lo escribía.
+  opcion_hotel_tarifa_id?: number | null;
+  opcion_hotel_tarifa?: OpcionHotelTarifa | null;
   cotizacion_pasaje_aereo?: CotizacionPasajeAereo;
   // Auditoría del módulo Reservas/Cotizador (2026-08-27) — presente (no
   // null) si este ítem ya generó una reserva. El backend bloquea editar/
@@ -750,6 +755,10 @@ export type ReservaItem = {
   hora?: string | null;
   guia_id?: number | null;
   proveedor_tarifa_id?: number | null;
+  // Sesión M2 — copiado 1:1 de alternativa_item.opcion_hotel_tarifa_id al
+  // aceptar la reserva, mismo patrón que proveedor_tarifa_id.
+  opcion_hotel_tarifa_id?: number | null;
+  opcion_hotel_tarifa?: OpcionHotelTarifa | null;
   tour_origen_id?: number | null;
   tour_origen?: PaquetePlantilla | null;
   guia?: Guia | null;

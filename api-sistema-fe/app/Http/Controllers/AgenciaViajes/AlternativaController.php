@@ -610,6 +610,10 @@ class AlternativaController extends Controller
             'items.guiaTarifa.guia',
             'items.cotizacionPasajeAereo',
             'items.opcionMayorista.proveedor',
+            // Sesión M2 — resolverNombreItem() con audiencia 'cliente'
+            // también intenta el hotel de la matriz de un OpcionMayorista
+            // (sin ProveedorTarifa real) antes de caer al genérico.
+            'items.opcionHotelTarifa.opcionHotel',
         ])->findOrFail($id);
 
         $config = \App\Models\AgenciaViajes\ConfiguracionAgencia::first();
@@ -803,46 +807,13 @@ class AlternativaController extends Controller
                 'fecha_inicio' => $destino->fecha_inicio,
                 'fecha_fin' => $destino->fecha_fin,
                 'nombres' => $grupo['items']
-                    ->map(fn (AlternativaItem $item) => $this->resolverNombreItemPdf($item))
+                    ->map(fn (AlternativaItem $item) => ReservaController::resolverNombreItem($item, null, 'cliente'))
                     ->unique()
                     ->values(),
             ];
         }
 
         return $bloques;
-    }
-
-    // Mismo criterio que ReservaController::resolverNombreItem() —
-    // replicado acá a propósito (mismo patrón ya usado en ese archivo, ver
-    // su comentario) para no crear una dependencia cruzada entre
-    // controllers por una función de 10 líneas.
-    private function resolverNombreItemPdf(AlternativaItem $item): string
-    {
-        if ($item->origen_tipo === AlternativaItem::ORIGEN_MANUAL) {
-            return $item->descripcion_manual ?? 'Ítem manual';
-        }
-        if ($item->origen_tipo === AlternativaItem::ORIGEN_PASAJE_AEREO) {
-            return $item->cotizacionPasajeAereo?->aerolinea ?? 'Pasaje aéreo';
-        }
-        if ($item->origen_tipo === AlternativaItem::ORIGEN_MAYORISTA) {
-            // Fix C1 (02-sep-2026) — SIN ningún camino hacia el Proveedor
-            // real bajo ninguna condición: este es el documento que recibe
-            // el cliente, no puede revelar la razón social/nombre
-            // comercial (dato fiscal SUNAT) del mayorista. Si el vendedor
-            // no cargó descripcion_publica, cae al genérico — nunca a
-            // nombre_comercial "por las dudas".
-            return $item->opcionMayorista?->descripcion_publica ?? 'Paquete mayorista';
-        }
-        if ($item->origen_tipo === AlternativaItem::ORIGEN_GUIA) {
-            return 'Guía de turismo' . ($item->guiaTarifa?->guia?->nombre ? ' — ' . $item->guiaTarifa->guia->nombre : '');
-        }
-        if ($item->proveedorTarifa?->tipo_habitacion) {
-            $proveedor = $item->proveedorTarifa->proveedorServicio?->proveedor?->razon_social ?? 'Hotel';
-
-            return "{$proveedor} · {$item->proveedorTarifa->tipo_habitacion}";
-        }
-
-        return $item->proveedorTarifa?->proveedorServicio?->destinoServicio?->servicio?->nombre ?? 'Servicio';
     }
 
     // Compartido con ReservaController::aceptar() y VentaDirectaController::store()
