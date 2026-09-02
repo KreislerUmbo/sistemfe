@@ -193,6 +193,28 @@ class Sesion12f3PdfPorDestinoTest extends TestCase
         $this->assertArrayNotHasKey('precio', $bloques[0]);
     }
 
+    // Hallazgo real 01-sep-2026 (revisión posterior contra agencia-demo):
+    // un combo multi-día genera un ítem por tour del día — si 2+ tours
+    // incluyen el mismo servicio genérico ("Transporte / Traslado Ida y
+    // Vuelta"), salía repetido varias veces seguidas en "Incluye". Decisión
+    // confirmada con el usuario: una sola línea, sin contador.
+    public function test_incluye_por_destino_deduplica_nombres_repetidos(): void
+    {
+        $alternativa = $this->crearAlternativa();
+        $destino = AlternativaDestino::create(['alternativa_id' => $alternativa->id, 'destino_texto' => 'Tarapoto', 'orden' => 1]);
+
+        $this->crearItem($alternativa, $destino->id, null, 'Transporte / Traslado Ida y Vuelta');
+        $this->crearItem($alternativa, $destino->id, null, 'Desayuno');
+        $this->crearItem($alternativa, $destino->id, null, 'Transporte / Traslado Ida y Vuelta');
+        $this->crearItem($alternativa, $destino->id, null, 'Desayuno');
+        $this->crearItem($alternativa, $destino->id, null, 'Transporte / Traslado Ida y Vuelta');
+
+        $bloques = $this->invocar('incluyePorDestino', $alternativa);
+
+        $this->assertCount(1, $bloques);
+        $this->assertSame(['Transporte / Traslado Ida y Vuelta', 'Desayuno'], $bloques[0]['nombres']->all());
+    }
+
     public function test_incluye_por_destino_con_un_solo_destino_devuelve_un_bloque(): void
     {
         $alternativa = $this->crearAlternativa();

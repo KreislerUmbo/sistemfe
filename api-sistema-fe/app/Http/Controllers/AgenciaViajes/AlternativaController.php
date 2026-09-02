@@ -714,6 +714,17 @@ class AlternativaController extends Controller
     // Sesión 12f-3 — "Incluye" (lista de nombres, sin precio) agrupada por
     // destino con el mismo criterio que itinerarioAlternativa(). Un bloque
     // por destino con al menos 1 ítem.
+    //
+    // Hallazgo real 01-sep-2026 (revisión posterior a 12f-3, contra datos
+    // reales de agencia-demo): un combo multi-día genera un AlternativaItem
+    // POR CADA TOUR del día (ej. "Transporte / Traslado Ida y Vuelta" en el
+    // tour del día 1, otra vez en el del día 2, otra vez en el del día 3) —
+    // nombre() ya deduplicaba el itinerario (agrupa por tour_origen_id
+    // único), pero "Incluye" mapeaba 1:1 cada ítem, así que el mismo texto
+    // salía repetido varias veces seguidas en el PDF. Se deduplica acá por
+    // nombre — decisión confirmada con el usuario: una sola línea, sin
+    // contador "(3x)" (el itinerario de arriba ya cuenta la historia
+    // completa día por día; "Incluye" es un checklist, no un log).
     private function incluyePorDestino(Alternativa $alternativa): array
     {
         $bloques = [];
@@ -730,7 +741,10 @@ class AlternativaController extends Controller
                 'destino_nombre' => $destino->destinoAtractivo?->nombre ?? $destino->destino_texto ?? 'Destino',
                 'fecha_inicio' => $destino->fecha_inicio,
                 'fecha_fin' => $destino->fecha_fin,
-                'nombres' => $grupo['items']->map(fn (AlternativaItem $item) => $this->resolverNombreItemPdf($item))->values(),
+                'nombres' => $grupo['items']
+                    ->map(fn (AlternativaItem $item) => $this->resolverNombreItemPdf($item))
+                    ->unique()
+                    ->values(),
             ];
         }
 

@@ -144,16 +144,15 @@
                     </h2>
                     <div id="accDescuentosPdf" class="accordion-collapse collapse" data-bs-parent="#accConfigAgencia">
                         <div class="accordion-body">
+                            <!-- Sesión 12f-3 (01-sep-2026) — el PDF de cotización dejó de
+                                 mostrar precio por ítem, así que el select "Formato"
+                                 (solo_final/tachado/separado, pensado para decorar esa fila)
+                                 quedó sin ningún efecto visible y se quitó de acá — decisión
+                                 confirmada con el usuario para no dejar un control que
+                                 aparenta hacer algo y no hace nada. El campo sigue existiendo
+                                 en ConfiguracionAgencia (sin editor en esta pantalla). -->
                             <div class="row g-3 align-items-end">
-                                <div class="col-6 col-md-4">
-                                    <label class="form-label mb-1 small fw-semibold text-secondary">Formato</label>
-                                    <select class="form-select form-select-sm" v-model="form.formato_descuento_pdf">
-                                        <option value="solo_final">Solo precio final</option>
-                                        <option value="tachado">Precio tachado + final</option>
-                                        <option value="separado">Final + % aparte</option>
-                                    </select>
-                                </div>
-                                <div class="col-6 col-md-4 d-flex align-items-center">
+                                <div class="col-12 col-md-6">
                                     <div class="form-check form-switch">
                                         <input class="form-check-input" type="checkbox" id="mostrar-descuento-linea" v-model="form.mostrar_descuento_como_linea">
                                         <label class="form-check-label small" for="mostrar-descuento-linea">Mostrar descuento como línea aparte</label>
