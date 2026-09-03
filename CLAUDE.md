@@ -356,7 +356,7 @@ mayorista, sección "Opcionales" conectada a un backend que ya existía sin ning
 es el paquete completo por persona) — dice "Adultos" con la cantidad real de la cotización;
 formulario de mayorista extraído a `OpcionMayoristaForm.vue` para editar inline dentro de cada
 card. Detalle completo: `docs/planning/agencia-de-viajes/plan-hoja-de-ruta-ejecucion.md` fila
-UX1. Commit `b0f6395`, **sin pushear todavía**.
+UX1. Commit `b0f6395`, mergeado y pusheado a `origin/main` (`c9ea33b`).
 **Pendiente real, diagnosticado y diferido a propósito** (decisión explícita del usuario en
 cada caso, no un olvido): alta inline de un destino inexistente en `DestinoTreeSelect.vue`
 (plan diseñado, no aprobado — antes de eso el usuario pidió auditar si el mismo problema
