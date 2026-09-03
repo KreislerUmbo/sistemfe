@@ -126,6 +126,10 @@
             margin-left: 12px;
         }
 
+        .dia-item .paso .paso-atractivo {
+            font-weight: bold;
+        }
+
         ul.lista-simple {
             margin: 0;
             padding-left: 18px;
@@ -371,11 +375,38 @@
                     @endif
                     @foreach (collect($bloque['pasos'])->groupBy('dia') as $dia => $pasosDelDia)
                         <div class="dia-item">
-                            <div class="dia-label">Día {{ $dia }}</div>
+                            {{-- Feedback del usuario sobre el PDF real: faltaba el
+                                 nombre del tour como título del día — mismo patrón
+                                 que los 3 documentos reales que originaron la
+                                 sección de hoteles ("DÍA 02: FULL DAY ALTO MAYO"),
+                                 antes solo decía "Día 2". Un mismo bloque de "día"
+                                 pertenece siempre a un único tour (offset secuencial
+                                 de itinerarioAlternativa()), así que el nombre del
+                                 primer paso alcanza para todo el grupo. --}}
+                            <div class="dia-label">
+                                Día {{ $dia }}
+                                @if ($pasosDelDia->first()['tour_nombre'] ?? null)
+                                    : {{ $pasosDelDia->first()['tour_nombre'] }}
+                                @endif
+                            </div>
                             @foreach ($pasosDelDia as $paso)
                                 <div class="paso">
                                     @if ($paso['hora'])
-                                        <strong>{{ substr($paso['hora'], 0, 5) }}</strong> —
+                                        <strong>{{ substr($paso['hora'], 0, 5) }}</strong>
+                                    @endif
+                                    {{-- Feedback del usuario: el nombre del atractivo
+                                         ('destino_atractivo_id', ej. "Tio Yacu", "Baños
+                                         Termales") es un dato estructurado aparte de la
+                                         descripción en texto libre — confirmado contra
+                                         datos reales de agencia-demo, casi nunca se
+                                         repite tal cual dentro de la prosa. Sin esto el
+                                         PDF nunca lo mostraba pese a que el vendedor ya
+                                         lo carga al armar el tour en el catálogo. --}}
+                                    @if ($paso['atractivo_nombre'] ?? null)
+                                        <span class="paso-atractivo">{{ $paso['atractivo_nombre'] }}</span>
+                                    @endif
+                                    @if ($paso['hora'] || ($paso['atractivo_nombre'] ?? null))
+                                        —
                                     @endif
                                     {{-- Rich text (Quill) desde 2026-08-28 — antes era texto plano,
                                          por eso acá se renderiza crudo en vez de escaparse. --}}

@@ -758,7 +758,17 @@ class AlternativaController extends Controller
                     continue;
                 }
 
-                $pasosDelTour = $tour->paqueteItinerario()->orderBy('dia_relativo')->orderBy('orden')->get();
+                // Hallazgo real (feedback del usuario sobre el PDF ya en
+                // producción): 'destino_atractivo_id' es un campo
+                // ESTRUCTURADO por paso ("Tio Yacu", "Baños Termales",
+                // "Orquideario"...), independiente de la 'descripcion' en
+                // texto libre — confirmado contra datos reales de
+                // agencia-demo, el nombre del atractivo casi nunca se
+                // repite tal cual dentro de la prosa de 'descripcion'. Sin
+                // el eager-load y sin pasarlo a la vista, el PDF nunca lo
+                // mostraba pese a que el dato ya está cargado por el
+                // vendedor al armar el tour en el catálogo.
+                $pasosDelTour = $tour->paqueteItinerario()->with('destinoAtractivo')->orderBy('dia_relativo')->orderBy('orden')->get();
                 $maxDiaDelTour = 0;
 
                 foreach ($pasosDelTour as $paso) {
@@ -767,6 +777,7 @@ class AlternativaController extends Controller
                         'hora' => $paso->hora,
                         'descripcion' => $paso->descripcion,
                         'tour_nombre' => $tour->nombre,
+                        'atractivo_nombre' => $paso->destinoAtractivo?->nombre,
                     ];
                     $maxDiaDelTour = max($maxDiaDelTour, $paso->dia_relativo);
                 }

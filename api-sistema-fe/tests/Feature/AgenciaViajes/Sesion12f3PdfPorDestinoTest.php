@@ -226,4 +226,41 @@ class Sesion12f3PdfPorDestinoTest extends TestCase
         $this->assertCount(1, $bloques);
         $this->assertSame(['Ítem único'], $bloques[0]['nombres']->all());
     }
+
+    // Feedback del usuario sobre el PDF real ya en producción: faltaba el
+    // nombre del tour (título del día) y el nombre del atractivo de cada
+    // paso — ambos datos ya existen en tour_itinerario_items
+    // (PaquetePlantilla.nombre / TourItinerarioItem.destino_atractivo_id),
+    // pero itinerarioAlternativa() nunca los pasaba a la vista. Confirmado
+    // contra datos reales de agencia-demo (php artisan tinker) que
+    // destino_atractivo_id es un campo aparte de la descripción en texto
+    // libre, no redundante con ella.
+    public function test_itinerario_incluye_nombre_de_tour_y_de_atractivo_por_paso(): void
+    {
+        $alternativa = $this->crearAlternativa();
+        $destino = AlternativaDestino::create(['alternativa_id' => $alternativa->id, 'destino_texto' => 'Tarapoto', 'orden' => 1]);
+        $atractivo = DestinoAtractivo::create(['nombre' => 'Tio Yacu', 'tipo' => 'lugar']);
+
+        $tour = PaquetePlantilla::create([
+            'codigo' => 'TOUR-' . random_int(10000, 99999), 'categoria' => 'aventura', 'tipo' => PaquetePlantilla::TIPO_TOUR_SIMPLE,
+            'nombre' => 'Full Day Alto Mayo', 'destino_atractivo_id' => $atractivo->id, 'duracion_horas' => 8, 'activo' => true,
+        ]);
+        TourItinerarioItem::create([
+            'tour_id' => $tour->id, 'dia_relativo' => 1, 'orden' => 1,
+            'destino_atractivo_id' => $atractivo->id, 'descripcion' => 'La naciente se nutre de corrientes subterráneas',
+        ]);
+        // Paso sin atractivo asociado (ej. recojo del hotel) — no debe romper.
+        TourItinerarioItem::create([
+            'tour_id' => $tour->id, 'dia_relativo' => 1, 'orden' => 0, 'descripcion' => 'Recojo del hotel',
+        ]);
+
+        $this->crearItem($alternativa, $destino->id, $tour->id, 'Full Day Alto Mayo');
+
+        $bloques = $this->invocar('itinerarioAlternativa', $alternativa);
+
+        $pasos = collect($bloques[0]['pasos']);
+        $this->assertTrue($pasos->every(fn (array $p) => $p['tour_nombre'] === 'Full Day Alto Mayo'));
+        $this->assertSame('Tio Yacu', $pasos->firstWhere('descripcion', 'La naciente se nutre de corrientes subterráneas')['atractivo_nombre']);
+        $this->assertNull($pasos->firstWhere('descripcion', 'Recojo del hotel')['atractivo_nombre']);
+    }
 }
