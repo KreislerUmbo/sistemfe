@@ -341,6 +341,34 @@ detalle completo en cada commit (`git log`), resumen acá:
   los 7 puntos de escritura reales.
 18 tests nuevos, 359/359 en toda la suite backend al cierre.
 
+**Completo — Agencia de Viajes, diagnóstico + 4 rondas de UX/UI del cotizador (fila UX1,
+03-sep-2026):**
+Sin brief previo — surgió de una revisión de UX pedida en vivo sobre `editar.vue`, no de un
+ítem ya planeado. Consistencia de color con regla fija por significado de acción (`success`
+sólido reservado solo a "Aceptado por cliente"), drawer de biblioteca migrado de CSS custom a
+`.modal` nativo de Bootstrap, jerarquía visual Alternativa→Destino→Día (chips como
+`badge rounded-pill`, editar/eliminar oculto hasta hover, bloque de tour agrupado con
+borde+fondo). Comparador de mayoristas gana funcionalidad que no existía: editar una opción ya
+creada, descartar/reactivar (`estado='descartada'` ya estaba en el schema desde el diseño
+original pero ningún endpoint lo escribía), ver hoteles ya cargados antes de elegir el
+mayorista, sección "Opcionales" conectada a un backend que ya existía sin ninguna pantalla.
+`HabitacionMatrixPicker.vue` ya no dice "Noches"/default 1 en el flujo mayorista (el precio ahí
+es el paquete completo por persona) — dice "Adultos" con la cantidad real de la cotización;
+formulario de mayorista extraído a `OpcionMayoristaForm.vue` para editar inline dentro de cada
+card. Detalle completo: `docs/planning/agencia-de-viajes/plan-hoja-de-ruta-ejecucion.md` fila
+UX1. Commit `b0f6395`, **sin pushear todavía**.
+**Pendiente real, diagnosticado y diferido a propósito** (decisión explícita del usuario en
+cada caso, no un olvido): alta inline de un destino inexistente en `DestinoTreeSelect.vue`
+(plan diseñado, no aprobado — antes de eso el usuario pidió auditar si el mismo problema
+aplica a otros catálogos, ver hallazgos en el propio hilo de la sesión); alta inline de
+Proveedor mayorista/hotel (descartado, "se agregan por su propia pantalla de Proveedores");
+`reserva_items.guia_id` no hereda el `guia_tarifa_id` ya cotizado (nace siempre `NULL`) — el
+usuario confirmó que sí hay un caso de negocio real (reservas privadas, sin Salida Operativa
+compartida) pero pidió no tocarlo todavía, ver `project_guia_tres_capas_reserva_privada` en
+memoria de proyecto; duplicación visual "Alto Mayo" en cabecera vs. chip de destino, y
+sincronización del panel de precio con el ítem en edición del lienzo, ambos mencionados sin
+plan armado.
+
 **Próximos módulos (en orden de prioridad):**
 
 1. **Representación impresa (PDF) con impresión automática**
