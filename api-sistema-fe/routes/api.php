@@ -726,6 +726,12 @@ Route::group([
         ->middleware('permission:agencia.cotizaciones');
     Route::post("opciones-mayorista/{id}/elegir", [OpcionMayoristaController::class, 'elegir'])
         ->middleware('permission:agencia.cotizaciones');
+    Route::put("opciones-mayorista/{id}", [OpcionMayoristaController::class, 'update'])
+        ->middleware('permission:agencia.cotizaciones');
+    Route::post("opciones-mayorista/{id}/descartar", [OpcionMayoristaController::class, 'descartar'])
+        ->middleware('permission:agencia.cotizaciones');
+    Route::post("opciones-mayorista/{id}/reactivar", [OpcionMayoristaController::class, 'reactivar'])
+        ->middleware('permission:agencia.cotizaciones');
     Route::match(['get', 'post'], "opciones-mayorista/{id}/hoteles", [OpcionMayoristaController::class, 'hoteles'])
         ->middleware('permission:agencia.cotizaciones');
     Route::match(['get', 'post'], "opciones-mayorista/{id}/opcionales", [OpcionMayoristaController::class, 'opcionales'])

@@ -27,6 +27,26 @@ export const opcionMayoristaService = {
     const response = await httpClient.post(`/opciones-mayorista/${id}/elegir`)
     return response.data
   },
+  async actualizar(id: number, data: {
+    proveedor_id: number
+    moneda: 'PEN' | 'USD'
+    incluye?: string
+    descripcion_publica?: string
+    notas?: string
+    vuelo_aerolinea?: string
+    vuelo_detalle?: string
+  }) {
+    const response = await httpClient.put(`/opciones-mayorista/${id}`, data)
+    return response.data
+  },
+  async descartar(id: number) {
+    const response = await httpClient.post(`/opciones-mayorista/${id}/descartar`)
+    return response.data
+  },
+  async reactivar(id: number) {
+    const response = await httpClient.post(`/opciones-mayorista/${id}/reactivar`)
+    return response.data
+  },
   async listarHoteles(opcionMayoristaId: number) {
     const response = await httpClient.get(`/opciones-mayorista/${opcionMayoristaId}/hoteles`)
     return response.data

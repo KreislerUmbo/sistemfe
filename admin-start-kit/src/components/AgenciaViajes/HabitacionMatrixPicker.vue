@@ -19,7 +19,7 @@
                     <th v-if="modoGrupo" style="width:36px"></th>
                     <th>Habitación</th>
                     <th class="text-end">Precio</th>
-                    <th class="text-center" style="width:150px" v-if="seleccionadaId && !modoGrupo">Noches</th>
+                    <th class="text-center" style="width:150px" v-if="seleccionadaId && !modoGrupo">{{ cantidadLabel || 'Noches' }}</th>
                     <th class="text-end" style="width:100px"></th>
                 </tr>
             </thead>
@@ -45,10 +45,11 @@
                     </td>
                     <td class="text-end">
                         <template v-if="!modoGrupo">
-                            <button v-if="seleccionadaId !== t.id" class="btn btn-sm btn-outline-primary" @click="elegir(t.id)">
+                            <button v-if="seleccionadaId !== t.id" class="btn btn-sm btn-outline-success" @click="elegir(t.id)">
                                 Elegir
                             </button>
-                            <button v-else class="btn btn-sm btn-primary" @click="confirmar(t.id)">
+                            <button v-else class="btn btn-sm btn-primary" @click="confirmar(t.id)"
+                                :disabled="deshabilitarConfirmar" :title="deshabilitarConfirmar ? motivoDeshabilitado : ''">
                                 <i class="fas fa-check me-1"></i>Agregar
                             </button>
                         </template>
@@ -59,7 +60,8 @@
 
         <div v-if="modoGrupo" class="d-flex justify-content-end align-items-center gap-2 pt-2 px-2">
             <span class="small text-secondary">{{ idsGrupo.length }} opción(es) seleccionada(s)</span>
-            <button class="btn btn-sm btn-primary" type="button" :disabled="idsGrupo.length < 2" @click="confirmarGrupo">
+            <button class="btn btn-sm btn-primary" type="button" :disabled="idsGrupo.length < 2 || deshabilitarConfirmar"
+                :title="deshabilitarConfirmar ? motivoDeshabilitado : ''" @click="confirmarGrupo">
                 <i class="fas fa-check me-1"></i>Agregar {{ idsGrupo.length }} opciones como grupo
             </button>
         </div>
@@ -121,6 +123,17 @@ const props = defineProps<{
     permitirCamaAdicional?: boolean;
     edadMaxInfanteGratis?: number;
     edadMaxNinoCamaAdicional?: number;
+    // Cantidad "Adultos" en mayorista (el precio ya es el paquete completo
+    // por persona) vs. "Noches" por defecto en hotel local (tarifa por
+    // noche real) — cada caller decide, el componente no sabe de dónde
+    // viene el precio.
+    cantidadLabel?: string;
+    cantidadDefault?: number;
+    // El caller mayorista deshabilita confirmar mientras la OpcionMayorista
+    // no esté 'elegida' (el backend ya lo bloquea con 422 — esto solo evita
+    // que el usuario llegue al error después de clickear).
+    deshabilitarConfirmar?: boolean;
+    motivoDeshabilitado?: string;
 }>();
 
 const emit = defineEmits<{
@@ -131,7 +144,7 @@ const emit = defineEmits<{
 }>();
 
 const seleccionadaId = ref<number | null>(null);
-const cantidad = ref<number>(1);
+const cantidad = ref<number>(props.cantidadDefault ?? 1);
 const paxSeleccionados = ref<number[]>([]);
 const camasAdicionales = ref<number>(0);
 
@@ -155,7 +168,7 @@ const precioVentaCamaAdicionalSeleccionada = computed(() => {
 
 const elegir = (id: number) => {
     seleccionadaId.value = id;
-    cantidad.value = 1;
+    cantidad.value = props.cantidadDefault ?? 1;
     paxSeleccionados.value = [];
     camasAdicionales.value = 0;
 };
@@ -168,7 +181,7 @@ const confirmar = (id: number) => {
         camas_adicionales_nino: camasAdicionales.value,
     });
     seleccionadaId.value = null;
-    cantidad.value = 1;
+    cantidad.value = props.cantidadDefault ?? 1;
     paxSeleccionados.value = [];
     camasAdicionales.value = 0;
 };

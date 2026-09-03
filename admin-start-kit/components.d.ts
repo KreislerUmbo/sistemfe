@@ -67,6 +67,7 @@ declare module 'vue' {
     MenuItemLink: typeof import('./src/components/AppMenu/MenuItemLink.vue')['default']
     MenuItemWithChildren: typeof import('./src/components/AppMenu/MenuItemWithChildren.vue')['default']
     NavbarPortal: typeof import('./src/components/portal/NavbarPortal.vue')['default']
+    OpcionMayoristaForm: typeof import('./src/components/AgenciaViajes/OpcionMayoristaForm.vue')['default']
     Pagination: typeof import('./src/components/portal/Pagination.vue')['default']
     PasajeAereoForm: typeof import('./src/components/AgenciaViajes/PasajeAereoForm.vue')['default']
     ProductFormQuick: typeof import('./src/components/Sales/ProductFormQuick.vue')['default']

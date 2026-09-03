@@ -75,7 +75,7 @@
                             <button v-if="clienteEditado" class="btn btn-outline-danger" type="button" @click="limpiarClienteEditado">
                                 <i class="fas fa-times"></i>
                             </button>
-                            <button v-else class="btn btn-success" type="button" @click="abrirNuevoCliente" title="Registrar cliente nuevo">
+                            <button v-else class="btn btn-outline-primary" type="button" @click="abrirNuevoCliente" title="Registrar cliente nuevo">
                                 <i class="fas fa-user-plus"></i>
                             </button>
                         </div>
@@ -196,25 +196,22 @@
              las pestañas de día. Ocultos con 1 solo destino (Punto B, mismo
              criterio que mostrarTabsDia) — el "+ Agregar destino" queda
              visible igual, es el único camino para pasar a 2. -->
-        <div v-if="alternativaActiva" class="d-flex align-items-center gap-2 mb-2 flex-wrap">
+        <div v-if="alternativaActiva" class="d-flex align-items-center gap-2 mb-2 flex-wrap ms-2">
+            <i v-if="mostrarChipsDestino" class="fas fa-angle-right text-muted" style="font-size:11px"></i>
             <template v-if="mostrarChipsDestino">
-                <button v-for="d in alternativaDestinos" :key="d.id" class="btn btn-sm"
-                    :class="destinoActivoId === d.id ? 'btn-primary' : 'btn-outline-secondary'"
-                    @click="destinoActivoId = d.id">
-                    <i class="fas fa-map-marker-alt me-1"></i>{{ d.destino_texto }}
-                </button>
+                <span v-for="d in alternativaDestinos" :key="d.id" class="destino-chip badge rounded-pill px-2 py-1 d-inline-flex align-items-center gap-2"
+                    :class="destinoActivoId === d.id ? 'bg-primary' : 'bg-light text-dark border'"
+                    style="cursor:pointer" @click="destinoActivoId = d.id">
+                    <span style="font-size:12px"><i class="fas fa-map-marker-alt me-1"></i>{{ d.destino_texto }}</span>
+                    <template v-if="destinoActivoId === d.id">
+                        <i class="fas fa-pen destino-chip-action" title="Editar este destino" @click.stop="abrirFormEditarDestinoActivo"></i>
+                        <i class="fas fa-trash destino-chip-action" title="Eliminar este destino" @click.stop="eliminarDestinoActivo"></i>
+                    </template>
+                </span>
             </template>
-            <button class="btn btn-link btn-sm text-decoration-none" @click="abrirFormDestino">
+            <span class="badge rounded-pill px-2 py-1 bg-light text-dark border" style="cursor:pointer;border-style:dashed" @click="abrirFormDestino">
                 <i class="fas fa-plus me-1"></i>Agregar destino
-            </button>
-            <template v-if="mostrarChipsDestino">
-                <button class="btn btn-link btn-sm text-decoration-none" @click="abrirFormEditarDestinoActivo">
-                    <i class="fas fa-pen me-1"></i>Editar
-                </button>
-                <button class="btn btn-link btn-sm text-decoration-none text-danger" @click="eliminarDestinoActivo">
-                    <i class="fas fa-trash me-1"></i>Eliminar "{{ alternativaDestinos.find(d => d.id === destinoActivoId)?.destino_texto }}"
-                </button>
-            </template>
+            </span>
         </div>
 
         <div v-if="mostrarFormDestino" class="card border-0 shadow-sm mb-2">
@@ -269,7 +266,7 @@
                 <!-- Tabs de día — condicionales (Punto B): solo aparecen cuando ya
                      existe un segundo día real, o hay ítems legado "Sin día". Con un
                      solo día, el lienzo es una lista simple sin navegación de más. -->
-                <ul v-if="mostrarTabsDia" class="nav nav-tabs dia-tabs mb-2">
+                <ul v-if="mostrarTabsDia" class="nav nav-tabs mb-2">
                     <li class="nav-item" v-for="d in diasCreados" :key="d">
                         <a class="nav-link" href="#" :class="{ active: diaActivo === d }" @click.prevent="diaActivo = d">Día {{ d }}</a>
                     </li>
@@ -306,7 +303,8 @@
                             Agregá un servicio con el botón de arriba
                         </div>
 
-                        <div v-for="bloque in bloquesLienzo" :key="bloque.tourOrigenId ?? 'sueltos'" class="mb-3">
+                        <div v-for="bloque in bloquesLienzo" :key="bloque.tourOrigenId ?? 'sueltos'" class="mb-3"
+                            :class="{ 'border-start border-3 border-primary bg-light-subtle rounded-2 p-2': bloque.tourOrigenId }">
                             <div v-if="bloque.tourOrigenId" class="d-flex justify-content-between align-items-center mb-1">
                                 <span class="small fw-semibold text-dark"><i class="fas fa-route me-1 text-primary"></i>{{ bloque.tourNombre ?? 'Tour' }}</span>
                                 <span class="d-flex align-items-center gap-2">
@@ -323,7 +321,7 @@
                             <!-- Sesión M4 — grupo "comparar varias opciones": una tarjeta
                                  compacta con las N opciones y el botón de resolución, en
                                  vez de N tarjetas de ítem sueltas (ver filasDelBloque()). -->
-                            <div v-if="fila.esGrupo" class="canvas-item border rounded p-2 mb-2 small" :class="{ 'ms-3': bloque.tourOrigenId, 'border-warning': !fila.items.some((i) => i.opcion_elegida) }">
+                            <div v-if="fila.esGrupo" class="canvas-item border rounded p-2 mb-2 small" :class="{ 'border-warning': !fila.items.some((i) => i.opcion_elegida) }">
                                 <div class="d-flex justify-content-between align-items-center mb-1">
                                     <span class="fw-semibold"><i class="fas fa-layer-group me-2 text-primary"></i>{{ fila.items.length }} opciones de hotel</span>
                                     <span v-if="!fila.items.some((i) => i.opcion_elegida)" class="badge bg-warning-subtle text-warning-emphasis" style="font-size:10px">
@@ -337,7 +335,7 @@
                                     </span>
                                     <span class="d-flex align-items-center gap-2">
                                         <span v-if="it.opcion_elegida" class="badge bg-success-subtle text-success" style="font-size:10px"><i class="fas fa-check me-1"></i>Elegida</span>
-                                        <button v-else class="btn btn-sm btn-outline-primary py-0" style="font-size:11px" @click="elegirGrupoDesdeLienzo(it)" :disabled="eligiendoGrupoItemId === it.id">
+                                        <button v-else class="btn btn-sm btn-outline-success py-0" style="font-size:11px" @click="elegirGrupoDesdeLienzo(it)" :disabled="eligiendoGrupoItemId === it.id">
                                             <span v-if="eligiendoGrupoItemId === it.id" class="spinner-border spinner-border-sm"></span><span v-else>Marcar como elegida</span>
                                         </button>
                                         <span v-if="eliminandoItemId === it.id" class="spinner-border spinner-border-sm text-danger"></span>
@@ -346,7 +344,7 @@
                                 </div>
                             </div>
 
-                            <div v-else class="canvas-item border rounded p-2 mb-2 small" :class="{ 'ms-3': bloque.tourOrigenId }">
+                            <div v-else class="canvas-item border rounded p-2 mb-2 small">
                                 <div class="d-flex justify-content-between align-items-start gap-2">
                                     <span class="canvas-item-nombre">
                                         <i class="fas me-2 text-primary" :class="iconoItem(fila.item)"></i>
@@ -597,7 +595,7 @@
                                     <i class="fas fa-paper-plane me-1"></i>Enviar
                                 </button>
                             </div>
-                            <button class="btn btn-link btn-sm w-100 text-secondary" :disabled="descargandoCondiciones" @click="descargarCondicionesGenerales">
+                            <button class="btn btn-outline-secondary btn-sm w-100" :disabled="descargandoCondiciones" @click="descargarCondicionesGenerales">
                                 <span v-if="descargandoCondiciones" class="spinner-border spinner-border-sm me-1"></span>
                                 <i v-else class="fas fa-file-contract me-1"></i>Descargar condiciones generales
                             </button>
@@ -613,21 +611,25 @@
 
         <!-- ═══ DRAWER — biblioteca / comparador de mayoristas (Punto A) ═══ -->
         <Teleport to="body">
-            <div v-if="drawerBibliotecaAbierto" class="drawer-overlay" @click.self="cerrarDrawerBiblioteca">
-                <div class="drawer-panel">
-                    <div class="drawer-header d-flex justify-content-between align-items-center">
-                        <div class="d-flex align-items-center gap-2">
-                            <i v-if="pasoDrawer !== 'grid'" class="fas fa-arrow-left" style="cursor:pointer" title="Volver" @click="volverAGridDrawer"></i>
-                            <strong>{{ tituloDrawer }}</strong>
+            <div v-if="drawerBibliotecaAbierto" class="modal fade show d-block" tabindex="-1" style="background:rgba(0,0,0,.5)" @click.self="cerrarDrawerBiblioteca">
+                <div class="modal-dialog modal-dialog-centered modal-xl">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <div class="d-flex align-items-center gap-2">
+                                <i v-if="pasoDrawer !== 'grid'" class="fas fa-arrow-left" style="cursor:pointer" title="Volver" @click="volverAGridDrawer"></i>
+                                <strong class="modal-title">{{ tituloDrawer }}</strong>
+                            </div>
+                            <button type="button" class="btn-close" @click="cerrarDrawerBiblioteca" aria-label="Cerrar"></button>
                         </div>
-                        <i class="fas fa-times" style="cursor:pointer" @click="cerrarDrawerBiblioteca"></i>
-                    </div>
-                    <div class="drawer-body">
+                        <div class="modal-body" style="max-height:80vh; overflow-y:auto">
                         <template v-if="pasoDrawer === 'grid'">
-                            <div class="d-flex gap-1 mb-2">
-                                <button class="btn btn-sm flex-fill" :class="modo === 'local' ? 'btn-primary' : 'btn-outline-secondary'" @click="modo = 'local'">Local / Nacional</button>
-                                <button class="btn btn-sm flex-fill" :class="modo === 'intl' ? 'btn-primary' : 'btn-outline-secondary'" @click="modo = 'intl'">Internacional</button>
-                                <button class="btn btn-sm flex-fill" :class="modo === 'guia' ? 'btn-primary' : 'btn-outline-secondary'" @click="modo = 'guia'"><i class="fas fa-user-tie me-1"></i>Guías</button>
+                            <div class="btn-group w-100 mb-2" role="group" aria-label="Tipo de biblioteca">
+                                <input type="radio" class="btn-check" name="modoBiblioteca" id="modoLocal" autocomplete="off" :checked="modo === 'local'" @change="modo = 'local'">
+                                <label class="btn btn-outline-primary btn-sm" for="modoLocal">Local / Nacional</label>
+                                <input type="radio" class="btn-check" name="modoBiblioteca" id="modoIntl" autocomplete="off" :checked="modo === 'intl'" @change="modo = 'intl'">
+                                <label class="btn btn-outline-primary btn-sm" for="modoIntl">Internacional</label>
+                                <input type="radio" class="btn-check" name="modoBiblioteca" id="modoGuia" autocomplete="off" :checked="modo === 'guia'" @change="modo = 'guia'">
+                                <label class="btn btn-outline-primary btn-sm" for="modoGuia"><i class="fas fa-user-tie me-1"></i>Guías</label>
                             </div>
 
                             <!-- Biblioteca local -->
@@ -732,13 +734,13 @@
                                 </nav>
 
                                 <small class="text-muted d-block mt-2"><i class="fas fa-hand-pointer me-1"></i>Clic para agregar al día activo</small>
-                                <button class="btn btn-outline-secondary btn-sm w-100 mt-2" @click="mostrarFormManual = true"><i class="fas fa-plus me-1"></i>Ítem manual</button>
+                                <button class="btn btn-outline-secondary btn-sm w-100 mt-2" @click="mostrarFormManual = true"><i class="fas fa-plus me-1"></i>Servicio sin catálogo</button>
 
                                 <!-- Sesión M3/M4 — hotel ad-hoc LOCAL (sin proveedor registrado),
                                      espejo del "Agregar hotel a esta opción" que ya existía solo
                                      para el flujo mayorista/Internacional. -->
                                 <button class="btn btn-outline-secondary btn-sm w-100 mt-1" @click="mostrarFormHotelLocal = !mostrarFormHotelLocal">
-                                    <i class="fas fa-bed me-1"></i>+ Agregar hotel no registrado
+                                    <i class="fas fa-bed me-1"></i>Hotel sin catálogo
                                 </button>
                                 <div v-if="mostrarFormHotelLocal" class="border rounded p-2 mt-2">
                                     <label class="form-label mb-1 small text-secondary">Nombre del hotel</label>
@@ -844,25 +846,49 @@
                             <!-- Comparador de mayoristas -->
                             <div v-else class="d-flex flex-column gap-2">
                                 <div v-for="op in opcionesMayorista" :key="op.id" class="card border p-2 small mayorista-card"
-                                    :class="{ 'border-primary border-2': op.estado === 'elegida' }">
-                                    <strong>{{ op.proveedor?.nombre_comercial ?? op.proveedor?.razon_social }}</strong>
+                                    :class="{ 'border-success border-2': op.estado === 'elegida', 'opacity-50': op.estado === 'descartada' }">
+                                    <div class="d-flex justify-content-between align-items-start">
+                                        <strong>{{ op.proveedor?.nombre_comercial ?? op.proveedor?.razon_social }}</strong>
+                                        <i class="fas fa-pen text-muted" style="cursor:pointer;font-size:11px" title="Editar esta opción" @click="abrirFormEditarOpcionMayorista(op)"></i>
+                                    </div>
                                     <div class="text-muted" v-if="op.vuelo_aerolinea"><i class="fas fa-plane me-1"></i>{{ op.vuelo_aerolinea }}</div>
                                     <div class="text-muted mb-1" v-if="op.incluye">{{ op.incluye }}</div>
                                     <div class="d-flex justify-content-between align-items-center">
-                                        <span class="badge" :class="op.estado === 'elegida' ? 'bg-primary' : 'bg-light text-dark border'">{{ op.estado }}</span>
-                                        <div class="d-flex gap-1">
+                                        <span class="badge" :class="{
+                                            'bg-success-subtle text-success': op.estado === 'elegida',
+                                            'bg-warning-subtle text-warning-emphasis': op.estado === 'candidata',
+                                            'bg-light text-muted': op.estado === 'descartada',
+                                        }">{{ op.estado === 'candidata' ? 'Pendiente' : op.estado === 'elegida' ? 'Elegida' : 'Descartada' }}</span>
+                                        <div class="d-flex gap-1" v-if="op.estado !== 'descartada'">
                                             <button class="btn btn-sm btn-outline-primary" @click="verHoteles(op)">Hoteles</button>
+                                            <button class="btn btn-sm btn-outline-secondary" @click="verOpcionales(op)">
+                                                Opcionales<span v-if="op.opcionales?.length" class="badge bg-light text-dark border ms-1">{{ op.opcionales.length }}</span>
+                                            </button>
                                             <button v-if="op.estado !== 'elegida'" class="btn btn-sm btn-outline-success" @click="elegirOpcion(op)" :disabled="eligiendoOpcionId === op.id">
-                                                <span v-if="eligiendoOpcionId === op.id" class="spinner-border spinner-border-sm"></span><span v-else>Elegir</span>
+                                                <span v-if="eligiendoOpcionId === op.id" class="spinner-border spinner-border-sm"></span><span v-else>Elegir mayorista</span>
+                                            </button>
+                                            <button class="btn btn-sm btn-outline-secondary" @click="descartarOpcion(op)" :disabled="descartandoOpcionId === op.id" title="Descartar esta opción">
+                                                <span v-if="descartandoOpcionId === op.id" class="spinner-border spinner-border-sm"></span><i v-else class="fas fa-ban"></i>
                                             </button>
                                         </div>
+                                        <button v-else class="btn btn-sm btn-outline-secondary" @click="reactivarOpcion(op)" :disabled="reactivandoOpcionId === op.id">
+                                            <span v-if="reactivandoOpcionId === op.id" class="spinner-border spinner-border-sm"></span><span v-else>Reactivar</span>
+                                        </button>
                                     </div>
+                                    <OpcionMayoristaForm v-if="opcionMayoristaEnEdicionId === op.id"
+                                        :alternativa-id="alternativaActiva!.id" :destino-activo-id="destinoActivoId"
+                                        :opcion-existente="op" :proveedores-mayoristas="proveedoresMayoristas"
+                                        class="mt-2 border-top pt-2"
+                                        @actualizado="onOpcionMayoristaGuardada" @cancelar="opcionMayoristaEnEdicionId = null" />
                                     <div v-if="opcionHotelesActivaId === op.id" class="mt-2 border-top pt-2">
-                                        <HabitacionMatrixPicker v-if="op.estado === 'elegida'"
+                                        <div v-if="op.estado !== 'elegida'" class="text-muted small fst-italic mb-1">Marcá esta opción como elegida para poder confirmar una habitación (podés seguir cargando hoteles mientras tanto).</div>
+                                        <HabitacionMatrixPicker
                                             :tarifas="tarifasHotelPlanas(op)" :moneda="op.moneda"
+                                            cantidad-label="Adultos" :cantidad-default="cantidadAdultosCotizacion"
+                                            :deshabilitar-confirmar="op.estado !== 'elegida'"
+                                            motivo-deshabilitado="Marcá esta opción como elegida para poder confirmar una habitación"
                                             @seleccionar="({ id, cantidad }) => agregarItemMayorista(op, id, cantidad)"
                                             @agregar-grupo="({ ids }) => agregarGrupoMayorista(op, ids)" />
-                                        <div v-else class="text-muted small fst-italic">Marcá esta opción como elegida para poder agregar una habitación.</div>
                                         <button class="btn btn-sm btn-outline-secondary w-100 mt-2" @click="mostrarFormHotel = op.id">
                                             <i class="fas fa-plus me-1"></i>Agregar hotel a esta opción
                                         </button>
@@ -874,6 +900,7 @@
                                                 <option :value="null">Hotel manual/referencial (sin proveedor)</option>
                                                 <option v-for="p in proveedoresHotel" :key="p.id" :value="p.id">{{ p.nombre_comercial ?? p.razon_social }}</option>
                                             </select>
+                                            <p class="text-muted fst-italic mb-1" style="font-size:11px">El costo/venta de cada tipo de habitación es el total del paquete para esa persona (aéreo + tours + hotel según este mayorista), no solo el hospedaje.</p>
                                             <!-- Encabezados de columna — cumplen el rol de label para cada
                                                  fila de tarifas sin repetir el texto en cada una. -->
                                             <div class="row g-1 mb-1">
@@ -911,52 +938,46 @@
                                             </button>
                                         </div>
                                     </div>
-                                </div>
-                                <button class="btn btn-outline-primary btn-sm w-100" @click="mostrarFormMayorista = true">
-                                    <i class="fas fa-plus me-1"></i>Agregar cotización de mayorista
-                                </button>
-                                <div v-if="mostrarFormMayorista" class="card border p-2 small">
-                                    <select class="form-select form-select-sm mb-1" v-model="formMayorista.proveedor_id">
-                                        <option :value="null">— Proveedor mayorista —</option>
-                                        <option v-for="p in proveedoresMayoristas" :key="p.id" :value="p.id">{{ p.nombre_comercial ?? p.razon_social }}</option>
-                                    </select>
-                                    <select class="form-select form-select-sm mb-1" v-model="formMayorista.moneda">
-                                        <option value="USD">USD</option>
-                                        <option value="PEN">PEN</option>
-                                    </select>
-                                    <input type="text" class="form-control form-control-sm mb-1" placeholder="Vuelo (aerolínea)" v-model="formMayorista.vuelo_aerolinea">
-                                    <!-- Fix C1 (02-sep-2026) — lo único que resolverNombreItemPdf() puede
-                                         imprimir en el PDF comercial para esta opción; el nombre del
-                                         mayorista/proveedor nunca llega a ese documento. -->
-                                    <input type="text" class="form-control form-control-sm mb-1" placeholder="Descripción para el cliente (ej. Paquete Panamá 6D/5N)"
-                                        v-model="formMayorista.descripcion_publica">
-
-                                    <!-- Sesión 12e — buscador de contenido reutilizable, "buscar antes de
-                                         crear" para no ensuciar la biblioteca con duplicados (§23.1.9). -->
-                                    <div class="position-relative mb-1">
-                                        <input type="text" class="form-control form-control-sm" placeholder="Buscar contenido reutilizable (ej. 'City Tour Panamá')..."
-                                            v-model="contenidoTourSearch" @input="onContenidoTourSearchInput">
-                                        <div v-if="contenidoTourResultados.length" class="list-group position-absolute w-100" style="z-index: 10;">
-                                            <button v-for="c in contenidoTourResultados" :key="c.id" type="button"
-                                                class="list-group-item list-group-item-action py-1 small" @click="seleccionarContenidoTour(c)">
-                                                {{ c.nombre }}
+                                    <div v-if="mostrarOpcionalesId === op.id" class="mt-2 border-top pt-2">
+                                        <div v-if="!op.opcionales?.length" class="text-muted small fst-italic mb-2">Sin opcionales cargados todavía — nunca se suman al total, son actividades que el cliente puede agregar aparte.</div>
+                                        <div v-for="opl in op.opcionales" :key="opl.id" class="d-flex justify-content-between align-items-start border rounded p-2 mb-1">
+                                            <div>
+                                                <strong>{{ opl.nombre }}</strong>
+                                                <div v-if="opl.incluye" class="text-muted" style="font-size:11px">{{ opl.incluye }}</div>
+                                            </div>
+                                            <span class="text-nowrap">{{ opl.moneda }} {{ Number(opl.precio_por_persona).toFixed(2) }} /pax</span>
+                                        </div>
+                                        <button class="btn btn-sm btn-outline-secondary w-100 mt-1" @click="mostrarFormOpcional = op.id">
+                                            <i class="fas fa-plus me-1"></i>Agregar opcional
+                                        </button>
+                                        <div v-if="mostrarFormOpcional === op.id" class="border rounded p-2 mt-2">
+                                            <input type="text" class="form-control form-control-sm mb-1" placeholder="Nombre (ej. Isla de Taboga - Full Day)" v-model="formOpcional.nombre">
+                                            <div class="row g-1 mb-1">
+                                                <div class="col-8">
+                                                    <input type="number" step="0.01" class="form-control form-control-sm" placeholder="Precio por persona" v-model.number="formOpcional.precio_por_persona">
+                                                </div>
+                                                <div class="col-4">
+                                                    <select class="form-select form-select-sm" v-model="formOpcional.moneda">
+                                                        <option value="USD">USD</option>
+                                                        <option value="PEN">PEN</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                            <textarea class="form-control form-control-sm mb-1" rows="2" placeholder="Incluye..." v-model="formOpcional.incluye"></textarea>
+                                            <textarea class="form-control form-control-sm mb-1" rows="2" placeholder="No incluye..." v-model="formOpcional.no_incluye"></textarea>
+                                            <button class="btn btn-sm btn-primary w-100" @click="guardarOpcional(op)" :disabled="guardandoOpcional">
+                                                <span v-if="guardandoOpcional" class="spinner-border spinner-border-sm me-1"></span>Guardar
                                             </button>
                                         </div>
-                                        <div v-if="contenidoTourSeleccionado" class="small text-success mt-1">
-                                            <i class="fas fa-check-circle me-1"></i>Vinculado a "{{ contenidoTourSeleccionado.nombre }}"
-                                        </div>
-                                        <button v-else-if="contenidoTourSearch.trim() && !contenidoTourResultados.length"
-                                            type="button" class="btn btn-link btn-sm p-0 mt-1" @click="crearContenidoTourDesdeTexto" :disabled="creandoContenidoTour">
-                                            <span v-if="creandoContenidoTour" class="spinner-border spinner-border-sm me-1"></span>
-                                            + Guardar "{{ contenidoTourSearch }}" como contenido reutilizable
-                                        </button>
                                     </div>
-
-                                    <textarea class="form-control form-control-sm mb-1" rows="2" placeholder="Incluye..." v-model="formMayorista.incluye"></textarea>
-                                    <button class="btn btn-primary btn-sm w-100" @click="guardarOpcionMayorista" :disabled="guardandoOpcionMayorista">
-                                        <span v-if="guardandoOpcionMayorista" class="spinner-border spinner-border-sm me-1"></span>Guardar
-                                    </button>
                                 </div>
+                                <button class="btn btn-outline-primary btn-sm w-100" @click="mostrarFormMayorista = true; opcionMayoristaEnEdicionId = null">
+                                    <i class="fas fa-plus me-1"></i>Agregar cotización de mayorista
+                                </button>
+                                <OpcionMayoristaForm v-if="mostrarFormMayorista"
+                                    :alternativa-id="alternativaActiva!.id" :destino-activo-id="destinoActivoId"
+                                    :opcion-existente="null" :proveedores-mayoristas="proveedoresMayoristas"
+                                    @agregado="onOpcionMayoristaGuardada" @cancelar="mostrarFormMayorista = false" />
                             </div>
                         </template>
 
@@ -991,6 +1012,7 @@
                                 :destino-tributario-default="configAgencia?.destino_tributario_default"
                                 @agregado="onServicioSueltoAgregado" @actualizado="onServicioSueltoActualizado" />
                         </template>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1010,6 +1032,7 @@ import { useLayoutStore } from '@/stores/layout';
 import Swal from 'sweetalert2/dist/sweetalert2.js';
 import httpClient from '@/helpers/http-client';
 import HabitacionMatrixPicker from '@/components/AgenciaViajes/HabitacionMatrixPicker.vue';
+import OpcionMayoristaForm from '@/components/AgenciaViajes/OpcionMayoristaForm.vue';
 import PasajeAereoForm from '@/components/AgenciaViajes/PasajeAereoForm.vue';
 import ItemManualForm from '@/components/AgenciaViajes/ItemManualForm.vue';
 import PromoverProveedorModal from '@/components/AgenciaViajes/PromoverProveedorModal.vue';
@@ -1021,7 +1044,6 @@ import { alternativaService } from '@/services/admin/alternativaService';
 import { alternativaItemService } from '@/services/admin/alternativaItemService';
 import { opcionMayoristaService } from '@/services/admin/opcionMayoristaService';
 import { opcionHotelService } from '@/services/admin/opcionHotelService';
-import { contenidoTourService } from '@/services/admin/contenidoTourService';
 import { alternativaDestinoService } from '@/services/admin/alternativaDestinoService';
 import { proveedorService } from '@/services/admin/proveedorService';
 import { servicioService } from '@/services/admin/servicioService';
@@ -1030,7 +1052,7 @@ import { reservaService } from '@/services/admin/reservaService';
 import { useAgenciaViajesCatalogosStore } from '@/stores/agenciaViajesCatalogos';
 import { formatFecha } from '@/helpers/fecha';
 import { guiaService } from '@/services/admin/guiaService';
-import type { Cotizacion, Alternativa, AlternativaItem, ProveedorTarifa, OpcionMayorista, OpcionHotelTarifa, Proveedor, ProveedorTipo, BibliotecaResultado, ConfiguracionAgencia, DestinoServicio, Guia, GuiaTarifa, Servicio, TipAfeIgv, DestinoTributario, ContenidoTour } from '@/types/agencia-viajes';
+import type { Cotizacion, Alternativa, AlternativaItem, ProveedorTarifa, OpcionMayorista, OpcionHotelTarifa, Proveedor, ProveedorTipo, BibliotecaResultado, ConfiguracionAgencia, DestinoServicio, Guia, GuiaTarifa, Servicio, TipAfeIgv, DestinoTributario } from '@/types/agencia-viajes';
 import type { Client } from '@/types/clients';
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
@@ -1064,6 +1086,16 @@ const resumenPax = computed(() => {
     const counts: Record<string, number> = {};
     pax.forEach((p) => { counts[p.tipo_pax] = (counts[p.tipo_pax] ?? 0) + 1; });
     return Object.entries(counts).map(([t, n]) => `${n} ${t}`).join(', ') || 'sin pasajeros';
+});
+
+// Punto 1 (ronda mayoristas) — el precio de cada tipo de habitación de una
+// OpcionMayorista ya es el total del paquete por persona (aéreo + tours +
+// hotel, no solo hospedaje), así que la cantidad por defecto debe ser la
+// cantidad de pasajeros ADULTOS de la cotización, no 1 (que tenía sentido
+// como "noches" en el flujo de hotel local, no acá).
+const cantidadAdultosCotizacion = computed(() => {
+    const n = (cotizacion.value?.pasajeros ?? []).filter((p) => p.tipo_pax === 'adulto').length;
+    return n > 0 ? n : 1;
 });
 
 // Antes: cada lado se formateaba por separado ("sin fecha — sin fecha" con
@@ -2202,71 +2234,14 @@ const opcionesMayorista = ref<OpcionMayorista[]>([]);
 const proveedoresMayoristas = ref<Proveedor[]>([]);
 const opcionHotelesActivaId = ref<number | null>(null);
 const mostrarFormMayorista = ref(false);
+const opcionMayoristaEnEdicionId = ref<number | null>(null);
 const mostrarFormHotel = ref<number | null>(null);
-const formMayorista = ref({
-    proveedor_id: null as number | null, moneda: 'USD' as 'PEN' | 'USD', vuelo_aerolinea: '', incluye: '',
-    contenido_tour_id: null as number | null, descripcion_publica: '',
+const mostrarOpcionalesId = ref<number | null>(null);
+const mostrarFormOpcional = ref<number | null>(null);
+const formOpcional = ref({
+    nombre: '', precio_por_persona: 0, moneda: 'USD' as 'PEN' | 'USD', incluye: '', no_incluye: '',
 });
 
-// Sesión 12e — buscador de contenido_tour ("buscar antes de crear",
-// mitiga duplicados en la biblioteca — auditoria-arquitectonica-agencia-
-// viajes.md §23.1.9). Mismo patrón de debounce que bibliotecaSearch más
-// abajo. Sin filtro de destino todavía (el destino activo de la
-// alternativa no se expone de forma confiable acá — eso llega en 12f).
-const contenidoTourSearch = ref('');
-const contenidoTourResultados = ref<ContenidoTour[]>([]);
-const contenidoTourSeleccionado = ref<ContenidoTour | null>(null);
-let contenidoTourTimeout: any = null;
-
-const buscarContenidoTour = async () => {
-    if (!contenidoTourSearch.value.trim()) {
-        contenidoTourResultados.value = [];
-        return;
-    }
-    contenidoTourResultados.value = await contenidoTourService.buscar({ categoria: 'incluido', q: contenidoTourSearch.value });
-};
-
-const onContenidoTourSearchInput = () => {
-    contenidoTourSeleccionado.value = null;
-    formMayorista.value.contenido_tour_id = null;
-    clearTimeout(contenidoTourTimeout);
-    contenidoTourTimeout = setTimeout(buscarContenidoTour, 300);
-};
-
-const seleccionarContenidoTour = (contenido: ContenidoTour) => {
-    contenidoTourSeleccionado.value = contenido;
-    formMayorista.value.contenido_tour_id = contenido.id;
-    contenidoTourResultados.value = [];
-    contenidoTourSearch.value = contenido.nombre;
-    // No pisar texto que el vendedor ya escribió a mano.
-    if (!formMayorista.value.incluye.trim()) {
-        formMayorista.value.incluye = contenido.incluye ?? contenido.descripcion ?? '';
-    }
-};
-
-const creandoContenidoTour = ref(false);
-const crearContenidoTourDesdeTexto = async () => {
-    if (!contenidoTourSearch.value.trim()) return;
-    creandoContenidoTour.value = true;
-    try {
-        const contenido = await contenidoTourService.crear({
-            nombre: contenidoTourSearch.value.trim(),
-            categoria: 'incluido',
-            incluye: formMayorista.value.incluye || undefined,
-        });
-        seleccionarContenidoTour(contenido);
-    } catch (error: any) {
-        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo guardar el contenido', 'error');
-    } finally {
-        creandoContenidoTour.value = false;
-    }
-};
-
-const resetContenidoTourBuscador = () => {
-    contenidoTourSearch.value = '';
-    contenidoTourResultados.value = [];
-    contenidoTourSeleccionado.value = null;
-};
 const formHotel = ref<{
     nombre_hotel: string; proveedor_id: number | null;
     tarifas: Array<{ tipo_habitacion: string; precio_costo: number; precio_venta: number; proveedor_tarifa_id?: number | null }>;
@@ -2316,6 +2291,10 @@ const verHoteles = (op: OpcionMayorista) => {
     opcionHotelesActivaId.value = opcionHotelesActivaId.value === op.id ? null : op.id;
 };
 
+const verOpcionales = (op: OpcionMayorista) => {
+    mostrarOpcionalesId.value = mostrarOpcionalesId.value === op.id ? null : op.id;
+};
+
 const eligiendoOpcionId = ref<number | null>(null);
 const elegirOpcion = async (op: OpcionMayorista) => {
     eligiendoOpcionId.value = op.id;
@@ -2329,20 +2308,58 @@ const elegirOpcion = async (op: OpcionMayorista) => {
     }
 };
 
-const guardandoOpcionMayorista = ref(false);
-const guardarOpcionMayorista = async () => {
-    if (!alternativaActiva.value || !formMayorista.value.proveedor_id) return;
-    guardandoOpcionMayorista.value = true;
+const descartandoOpcionId = ref<number | null>(null);
+const descartarOpcion = async (op: OpcionMayorista) => {
+    descartandoOpcionId.value = op.id;
     try {
-        await opcionMayoristaService.crear(alternativaActiva.value.id, { ...formMayorista.value, alternativa_destino_id: destinoActivoId.value } as any);
-        mostrarFormMayorista.value = false;
-        formMayorista.value = { proveedor_id: null, moneda: 'USD', vuelo_aerolinea: '', incluye: '', contenido_tour_id: null, descripcion_publica: '' };
-        resetContenidoTourBuscador();
+        await opcionMayoristaService.descartar(op.id);
         await cargarOpcionesMayorista();
     } catch (error: any) {
-        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo agregar', 'error');
+        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo descartar esta opción', 'error');
     } finally {
-        guardandoOpcionMayorista.value = false;
+        descartandoOpcionId.value = null;
+    }
+};
+
+const reactivandoOpcionId = ref<number | null>(null);
+const reactivarOpcion = async (op: OpcionMayorista) => {
+    reactivandoOpcionId.value = op.id;
+    try {
+        await opcionMayoristaService.reactivar(op.id);
+        await cargarOpcionesMayorista();
+    } catch (error: any) {
+        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo reactivar esta opción', 'error');
+    } finally {
+        reactivandoOpcionId.value = null;
+    }
+};
+
+const abrirFormEditarOpcionMayorista = (op: OpcionMayorista) => {
+    opcionMayoristaEnEdicionId.value = op.id;
+    mostrarFormMayorista.value = false;
+};
+
+// Compartido por OpcionMayoristaForm inline (edición) y el de "agregar
+// nueva" al final de la lista — cierra el que esté abierto y refresca.
+const onOpcionMayoristaGuardada = async () => {
+    mostrarFormMayorista.value = false;
+    opcionMayoristaEnEdicionId.value = null;
+    await cargarOpcionesMayorista();
+};
+
+const guardandoOpcional = ref(false);
+const guardarOpcional = async (op: OpcionMayorista) => {
+    if (!formOpcional.value.nombre.trim()) return;
+    guardandoOpcional.value = true;
+    try {
+        await opcionMayoristaService.crearOpcional(op.id, { ...formOpcional.value });
+        mostrarFormOpcional.value = null;
+        formOpcional.value = { nombre: '', precio_por_persona: 0, moneda: 'USD', incluye: '', no_incluye: '' };
+        await cargarOpcionesMayorista();
+    } catch (error: any) {
+        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo agregar el opcional', 'error');
+    } finally {
+        guardandoOpcional.value = false;
     }
 };
 
@@ -2506,7 +2523,7 @@ const tituloDrawer = computed(() => {
     switch (pasoDrawer.value) {
         case 'matrizHotel': return 'Elegí la habitación';
         case 'modoPrecio': return 'Cómo se cobra';
-        case 'manual': return 'Ítem manual';
+        case 'manual': return 'Agregar servicio sin catálogo';
         default: return 'Agregar servicio';
     }
 });
@@ -2832,7 +2849,7 @@ const iconoItem = (item: AlternativaItem) => {
 };
 
 const etiquetaItem = (item: AlternativaItem) => {
-    if (item.origen_tipo === 'manual') return item.descripcion_manual ?? 'Ítem manual';
+    if (item.origen_tipo === 'manual') return item.descripcion_manual ?? 'Servicio sin catálogo';
     if (item.origen_tipo === 'pasaje_aereo') return item.cotizacion_pasaje_aereo?.aerolinea ?? 'Pasaje aéreo';
     if (item.origen_tipo === 'mayorista') return item.opcion_mayorista?.proveedor?.nombre_comercial ?? item.opcion_mayorista?.proveedor?.razon_social ?? 'Paquete mayorista';
     if (item.origen_tipo === 'guia') {
@@ -3052,53 +3069,10 @@ onUnmounted(() => {
 .alt-pill-edit { opacity: 0; transition: opacity .15s; margin-left: 2px; }
 .alt-pill:hover .alt-pill-edit { opacity: 1; }
 
-/* Tabs de día — nav-tabs subrayadas a propósito, para distinguirse
-   visualmente de las pills sólidas (alternativas arriba, chips de
-   biblioteca en el drawer). */
-.dia-tabs .nav-link {
-    padding: 0.35rem 0.75rem;
-    font-size: 0.875rem;
-    color: var(--bs-secondary-color, #6c757d);
-}
-.dia-tabs .nav-link.active {
-    font-weight: 600;
-}
-
-/* Drawer de biblioteca (Punto A) — panel centrado (Sesión 11j: antes era un
-   "bottom sheet" anclado abajo, se veía pegado al borde inferior en desktop). */
-.drawer-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, .5);
-    z-index: 1080;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-.drawer-panel {
-    background: #fff;
-    width: 100%;
-    max-width: 1140px;
-    max-height: 88vh;
-    border-radius: 12px;
-    display: flex;
-    flex-direction: column;
-    animation: drawer-fade-in .15s ease-out;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, .2);
-}
-.drawer-header {
-    padding: .75rem 1rem;
-    border-bottom: 1px solid #eee;
-    flex-shrink: 0;
-}
-.drawer-body {
-    padding: .75rem 1rem;
-    overflow-y: auto;
-}
-@keyframes drawer-fade-in {
-    from { opacity: 0; transform: scale(.97); }
-    to { opacity: 1; transform: scale(1); }
-}
+/* Íconos de editar/eliminar del chip de destino activo — mismo patrón de
+   hover-reveal que .alt-pill-edit/.alt-pill-delete arriba. */
+.destino-chip-action { opacity: 0; transition: opacity .15s; }
+.destino-chip:hover .destino-chip-action { opacity: 1; }
 
 .biblioteca-grid {
     display: grid;
@@ -3107,19 +3081,5 @@ onUnmounted(() => {
 }
 @media (max-width: 767px) {
     .biblioteca-grid { grid-template-columns: 1fr; }
-
-    /* Mobile: hoja que sube desde el borde inferior en vez de la caja
-       centrada de desktop (Sesión 11j) — evita espacio muerto arriba/abajo
-       en pantallas angostas. */
-    .drawer-overlay {
-        align-items: flex-end;
-        padding: 0;
-    }
-    .drawer-panel {
-        max-width: 100%;
-        width: 100%;
-        max-height: 92vh;
-        border-radius: 12px 12px 0 0;
-    }
 }
 </style>

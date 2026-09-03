@@ -32,7 +32,7 @@
                             <button v-if="clienteSeleccionado" class="btn btn-outline-danger" type="button" @click="limpiarCliente">
                                 <i class="fas fa-times"></i>
                             </button>
-                            <button class="btn btn-success" type="button" @click="abrirNuevoCliente">
+                            <button class="btn btn-outline-primary" type="button" @click="abrirNuevoCliente">
                                 <i class="fas fa-user-plus"></i>
                             </button>
                         </div>

@@ -109,6 +109,64 @@ class OpcionMayoristaController extends Controller
         return response()->json(['code' => 200, 'message' => 'Opción marcada como elegida', 'opcion_mayorista' => $opcion->fresh()]);
     }
 
+    // Corregir metadata de una opción ya creada (proveedor/moneda/incluye/
+    // vuelo/notas/descripción pública). No toca alternativa_id/
+    // alternativa_destino_id/estado. Update directo sin versionado: a
+    // diferencia de ProveedorTarifaController, estos campos son metadata
+    // descriptiva — el precio real ya vive congelado por ítem en
+    // opciones_hotel_tarifas, editar acá no lo toca.
+    public function update(Request $request, string $id)
+    {
+        $opcion = OpcionMayorista::findOrFail($id);
+
+        $validator = Validator::make($request->all(), [
+            'proveedor_id' => 'required|integer|exists:proveedores,id',
+            'moneda' => 'required|in:PEN,USD',
+            'incluye' => 'nullable|string',
+            'descripcion_publica' => 'nullable|string|max:255',
+            'notas' => 'nullable|string',
+            'vuelo_aerolinea' => 'nullable|string|max:150',
+            'vuelo_detalle' => 'nullable|string',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
+        }
+
+        $validado = $validator->validated();
+        $proveedor = Proveedor::findOrFail($validado['proveedor_id']);
+        $esMayorista = $proveedor->tipo_id && ProveedorTipo::where('id', $proveedor->tipo_id)->where('slug', ProveedorTipo::SLUG_MAYORISTA)->exists();
+
+        if (! $esMayorista) {
+            return response()->json(['code' => 422, 'message' => 'El proveedor seleccionado no es de tipo Mayorista.'], 422);
+        }
+
+        $opcion->update($validado);
+
+        return response()->json(['code' => 200, 'message' => 'Opción actualizada correctamente', 'opcion_mayorista' => $opcion->fresh()]);
+    }
+
+    // Sacarla de la comparación sin borrar nada (reversible vía
+    // reactivar()) — mismo espíritu que ProveedorTarifaController::
+    // desactivar()/activar(), pero sobre el estado que opcion_mayorista ya
+    // tenía previsto en su schema desde el diseño original ('descartada'
+    // nunca se escribía hasta ahora).
+    public function descartar(string $id)
+    {
+        $opcion = OpcionMayorista::findOrFail($id);
+        $opcion->update(['estado' => 'descartada']);
+
+        return response()->json(['code' => 200, 'message' => 'Opción descartada', 'opcion_mayorista' => $opcion->fresh()]);
+    }
+
+    public function reactivar(string $id)
+    {
+        $opcion = OpcionMayorista::findOrFail($id);
+        $opcion->update(['estado' => 'candidata']);
+
+        return response()->json(['code' => 200, 'message' => 'Opción reactivada', 'opcion_mayorista' => $opcion->fresh()]);
+    }
+
     // Matriz hotel × tipo de habitación — mismo motor que paquetes_plantilla
     // (§2.4). El payload puede traer 'tarifas' anidado para crear el hotel
     // + su matriz de precios en un solo request.
