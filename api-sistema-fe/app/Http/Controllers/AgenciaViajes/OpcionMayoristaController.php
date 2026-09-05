@@ -4,14 +4,17 @@ namespace App\Http\Controllers\AgenciaViajes;
 
 use App\Http\Controllers\Controller;
 use App\Models\AgenciaViajes\Alternativa;
+use App\Models\AgenciaViajes\AlternativaItem;
 use App\Models\AgenciaViajes\ContenidoTour;
 use App\Models\AgenciaViajes\OpcionHotel;
 use App\Models\AgenciaViajes\OpcionHotelTarifa;
 use App\Models\AgenciaViajes\OpcionMayorista;
 use App\Models\AgenciaViajes\OpcionMayoristaOpcional;
+use App\Models\AgenciaViajes\OpcionMayoristaTour;
 use App\Models\AgenciaViajes\Proveedor;
 use App\Models\AgenciaViajes\ProveedorTarifa;
 use App\Models\AgenciaViajes\ProveedorTipo;
+use App\Models\AgenciaViajes\ReservaItem;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -25,7 +28,7 @@ class OpcionMayoristaController extends Controller
         $alternativa = Alternativa::findOrFail($alternativaId);
 
         $opciones = OpcionMayorista::where('alternativa_id', $alternativa->id)
-            ->with(['proveedor', 'opcionesHotel.opcionesHotelTarifas', 'opcionales'])
+            ->with(['proveedor', 'opcionesHotel.opcionesHotelTarifas', 'opcionales', 'tours.paquetePlantilla'])
             ->get();
 
         return response()->json(['opciones_mayorista' => $opciones]);
@@ -40,6 +43,10 @@ class OpcionMayoristaController extends Controller
             'salida_mayorista_id' => 'nullable|integer|exists:salidas_mayorista,id',
             'moneda' => 'required|in:PEN,USD',
             'incluye' => 'nullable|string',
+            // Simulación Panamá (04-sep-2026) — "No incluye" del paquete
+            // base, mismo campo que ya existía para cada tour opcional
+            // (opcion_mayorista_opcional.no_incluye).
+            'no_incluye' => 'nullable|string',
             // Fix C1 (02-sep-2026) — único texto que
             // AlternativaController::resolverNombreItemPdf() puede
             // imprimir en el PDF comercial para esta opción.
@@ -123,6 +130,7 @@ class OpcionMayoristaController extends Controller
             'proveedor_id' => 'required|integer|exists:proveedores,id',
             'moneda' => 'required|in:PEN,USD',
             'incluye' => 'nullable|string',
+            'no_incluye' => 'nullable|string',
             'descripcion_publica' => 'nullable|string|max:255',
             'notas' => 'nullable|string',
             'vuelo_aerolinea' => 'nullable|string|max:150',
@@ -165,6 +173,56 @@ class OpcionMayoristaController extends Controller
         $opcion->update(['estado' => 'candidata']);
 
         return response()->json(['code' => 200, 'message' => 'Opción reactivada', 'opcion_mayorista' => $opcion->fresh()]);
+    }
+
+    // DELETE opciones-mayorista/{id} — borrado real del bloque completo,
+    // distinto de descartar() (que solo lo oculta). Mismos dos guards ya
+    // establecidos en el vertical: alternativa ya aceptada (mismo mensaje
+    // que AlternativaItemController::elegirOpcionGrupo()) y reserva ya
+    // generada sobre algún ítem de esta opción (mismo criterio que
+    // AlternativaItemController::destroy()). En transacción: borra los
+    // AlternativaItem de esta opción, sus OpcionHotelTarifa/OpcionHotel,
+    // OpcionMayoristaOpcional, y los vínculos OpcionMayoristaTour (nunca el
+    // PaquetePlantilla real, mismo criterio que quitarTour()) — y por
+    // último la OpcionMayorista.
+    public function eliminar(string $id)
+    {
+        $opcion = OpcionMayorista::with('alternativa')->findOrFail($id);
+        $alternativa = $opcion->alternativa;
+
+        if ($alternativa->estado === 'aceptada') {
+            return response()->json([
+                'code' => 422,
+                'message' => 'Esta alternativa ya fue aceptada y generó una reserva — esta opción ya no se puede eliminar desde acá.',
+            ], 422);
+        }
+
+        $itemIds = AlternativaItem::where('opcion_mayorista_id', $opcion->id)->pluck('id');
+
+        if (ReservaItem::whereIn('alternativa_item_id', $itemIds)->exists()) {
+            return response()->json([
+                'code' => 422,
+                'message' => 'No se puede eliminar: uno o más ítems de esta opción ya tienen una reserva generada. Cancelá la reserva primero si corresponde.',
+            ], 422);
+        }
+
+        DB::transaction(function () use ($opcion, $itemIds) {
+            AlternativaItem::whereIn('id', $itemIds)->delete();
+
+            $hotelIds = OpcionHotel::where('opcion_mayorista_id', $opcion->id)->pluck('id');
+            OpcionHotelTarifa::whereIn('opcion_hotel_id', $hotelIds)->delete();
+            OpcionHotel::whereIn('id', $hotelIds)->delete();
+
+            OpcionMayoristaOpcional::where('opcion_mayorista_id', $opcion->id)->delete();
+            OpcionMayoristaTour::where('opcion_mayorista_id', $opcion->id)->delete();
+
+            $opcion->delete();
+        });
+
+        $total = AlternativaItem::calcularTotalEfectivo($alternativa->items()->get())['total'];
+        $alternativa->update(['total' => $total]);
+
+        return response()->json(['code' => 200, 'message' => 'Opción de mayorista eliminada correctamente']);
     }
 
     // Matriz hotel × tipo de habitación — mismo motor que paquetes_plantilla
@@ -265,6 +323,106 @@ class OpcionMayoristaController extends Controller
         ]);
 
         return response()->json(['code' => 200, 'message' => 'Opcional agregado correctamente', 'opcion_mayorista_opcional' => $opcional]);
+    }
+
+    // PUT opcion-mayorista-opcionales/{id} — corregir un tour opcional ya
+    // cargado. Sin guard de reserva: los opcionales nunca se convierten en
+    // AlternativaItem (hueco real ya documentado en memoria de proyecto,
+    // fuera de este cambio) — no hay nada "congelado" que proteger todavía.
+    public function actualizarOpcional(Request $request, string $id)
+    {
+        $opcional = OpcionMayoristaOpcional::findOrFail($id);
+
+        $validator = Validator::make($request->all(), [
+            'nombre' => 'required|string|max:250',
+            'precio_por_persona' => 'required|numeric|min:0',
+            'moneda' => 'required|in:PEN,USD',
+            'incluye' => 'nullable|string',
+            'no_incluye' => 'nullable|string',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
+        }
+
+        $opcional->update($validator->validated());
+
+        return response()->json(['code' => 200, 'message' => 'Opcional actualizado correctamente', 'opcion_mayorista_opcional' => $opcional->fresh()]);
+    }
+
+    public function eliminarOpcional(string $id)
+    {
+        $opcional = OpcionMayoristaOpcional::findOrFail($id);
+        $opcional->delete();
+
+        return response()->json(['code' => 200, 'message' => 'Opcional eliminado correctamente']);
+    }
+
+    // Tours incluidos con itinerario real — distinto de `incluye` (texto plano):
+    // vincula un PaquetePlantilla ya creado (con sus propios pasos de
+    // itinerario, armado por el mini-form del frontend vía los endpoints que ya
+    // existen de Paquetes/Tours, sin backend nuevo para esa parte) a esta
+    // opción de mayorista. 'orden' es el "Día" que ve el vendedor — lo lee
+    // AlternativaController::itinerarioAlternativa() para encadenar el offset
+    // de días de la sección "Itinerario" del PDF, igual que ya hace con los
+    // tours de un combo Local/Nacional.
+    public function tours(Request $request, string $id)
+    {
+        $opcion = OpcionMayorista::findOrFail($id);
+
+        if ($request->isMethod('get')) {
+            return response()->json([
+                'opcion_mayorista_tours' => OpcionMayoristaTour::where('opcion_mayorista_id', $opcion->id)
+                    ->with('paquetePlantilla')->orderBy('orden')->get(),
+            ]);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'paquete_plantilla_id' => 'required|integer|exists:paquetes_plantilla,id',
+            'orden' => 'required|integer|min:1',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
+        }
+
+        $tour = OpcionMayoristaTour::create($validator->validated() + ['opcion_mayorista_id' => $opcion->id]);
+        $tour->load('paquetePlantilla');
+
+        return response()->json(['code' => 200, 'message' => 'Tour vinculado correctamente', 'opcion_mayorista_tour' => $tour]);
+    }
+
+    // Borra solo el vínculo — el PaquetePlantilla real queda intacto (sin
+    // buscador de "tour ya existente" todavía, ver plan; podría reusarse a
+    // mano después desde Paquetes/Tours).
+    public function quitarTour(string $id)
+    {
+        $tour = OpcionMayoristaTour::findOrFail($id);
+        $tour->delete();
+
+        return response()->json(['code' => 200, 'message' => 'Tour desvinculado correctamente']);
+    }
+
+    // PUT opcion-mayorista-tours/{id} — solo el "Día" (orden) del vínculo.
+    // El contenido real del tour (nombre/descripción/duración/destino/fotos)
+    // se edita aparte, vía paquetePlantillaService.actualizar() — ya existe,
+    // no hace falta backend nuevo para eso.
+    public function actualizarOrdenTour(Request $request, string $id)
+    {
+        $tour = OpcionMayoristaTour::findOrFail($id);
+
+        $validator = Validator::make($request->all(), [
+            'orden' => 'required|integer|min:1',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
+        }
+
+        $tour->update($validator->validated());
+        $tour->load('paquetePlantilla');
+
+        return response()->json(['code' => 200, 'message' => 'Día actualizado correctamente', 'opcion_mayorista_tour' => $tour]);
     }
 
     // Sesión 12e — compartido por store()/opcionales(): resuelve el

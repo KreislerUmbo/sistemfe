@@ -28,6 +28,7 @@ class OpcionMayorista extends Model
         'salida_mayorista_id',
         'moneda',
         'incluye',
+        'no_incluye',
         'descripcion_publica',
         'notas',
         'vuelo_aerolinea',
@@ -75,6 +76,17 @@ class OpcionMayorista extends Model
     public function opcionesHotel()
     {
         return $this->hasMany(OpcionHotel::class, 'opcion_mayorista_id');
+    }
+
+    // Tours incluidos con itinerario real (PaquetePlantilla), ver
+    // OpcionMayoristaTour — distinto de `incluye` (texto plano, sin días/horas).
+    // orderBy('orden') acá (mismo criterio que Alternativa::items()->orderBy('id')):
+    // 'orden' es el "Día" que ve el vendedor, así que cualquier lugar que cargue
+    // esta relación (listado del drawer, itinerarioAlternativa() del PDF) la ve
+    // ya en la secuencia correcta, sin repetir el orderBy en cada caller.
+    public function tours()
+    {
+        return $this->hasMany(OpcionMayoristaTour::class, 'opcion_mayorista_id')->orderBy('orden');
     }
 
     public function alternativaItems()

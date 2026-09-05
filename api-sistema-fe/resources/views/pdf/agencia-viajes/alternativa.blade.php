@@ -130,6 +130,18 @@
             font-weight: bold;
         }
 
+        /* ── Fotos de tour en el itinerario (Simulación Panamá, 04-sep-2026) ── */
+        .itinerario-fotos {
+            margin: 4px 0 6px;
+        }
+
+        .itinerario-fotos img {
+            max-width: 140px;
+            max-height: 100px;
+            margin-right: 6px;
+            border: 1px solid #cccccc;
+        }
+
         ul.lista-simple {
             margin: 0;
             padding-left: 18px;
@@ -201,6 +213,30 @@
             color: #444444;
             font-weight: normal;
             text-transform: none;
+        }
+
+        /* ── Tours opcionales (Simulación Panamá, 04-sep-2026) ─────── */
+        .opcional-item {
+            border: 1px solid #cccccc;
+            border-radius: 3px;
+            padding: 6px 8px;
+            margin-bottom: 6px;
+        }
+
+        .opcional-nombre {
+            font-weight: bold;
+            font-size: 12px;
+        }
+
+        .opcional-precio {
+            font-weight: normal;
+            float: right;
+        }
+
+        .opcional-detalle {
+            font-size: 11px;
+            color: #333333;
+            margin-top: 3px;
         }
 
         /* ── Totales ────────────────────────────────────────────── */
@@ -353,6 +389,26 @@
             </tr>
         </table>
 
+        {{-- ══════════════════ VUELO (Simulación Panamá, 04-sep-2026) ══════════════════ --}}
+        {{-- Datos de vuelo de la opción de mayorista elegida
+             (opcion_mayorista.vuelo_aerolinea/vuelo_detalle) — capturados
+             en el drawer del cotizador desde Sesión 7b pero nunca
+             impresos hasta ahora; el PDF solo se había probado contra
+             paquetes Local/Nacional (sin vuelo propio). --}}
+        @if (count($mayoristasVuelo) > 0)
+            <div class="seccion">
+                <div class="seccion-titulo">Vuelo</div>
+                @foreach ($mayoristasVuelo as $vuelo)
+                    <div class="seccion-html">
+                        <strong>{{ $vuelo['aerolinea'] }}</strong>
+                        @if (!empty($vuelo['detalle']))
+                            <br>{!! nl2br(e($vuelo['detalle'])) !!}
+                        @endif
+                    </div>
+                @endforeach
+            </div>
+        @endif
+
         {{-- ══════════════════ ITINERARIO ══════════════════ --}}
         {{-- 12f-3 — $itinerario es un array de BLOQUES (uno por destino con
              al menos 1 paso). Con 1 solo bloque no se imprime encabezado de
@@ -389,6 +445,16 @@
                                     : {{ $pasosDelDia->first()['tour_nombre'] }}
                                 @endif
                             </div>
+                            {{-- Simulación Panamá (04-sep-2026) — fotos del tour
+                                 (PaquetePlantilla.fotos), una vez por día igual que
+                                 tour_nombre arriba, no una vez por paso. --}}
+                            @if (!empty($pasosDelDia->first()['tour_fotos'] ?? null))
+                                <div class="itinerario-fotos">
+                                    @foreach ($pasosDelDia->first()['tour_fotos'] as $foto)
+                                        <img src="{{ $foto }}">
+                                    @endforeach
+                                </div>
+                            @endif
                             @foreach ($pasosDelDia as $paso)
                                 <div class="paso">
                                     @if ($paso['hora'])
@@ -422,37 +488,64 @@
         {{-- ══════════════════ INCLUYE ══════════════════ --}}
         {{-- 12f-3 — $incluyePorDestino es un array de bloques (uno por
              destino con al menos 1 ítem), mismo criterio que Itinerario. --}}
-        <div class="seccion">
-            <div class="seccion-titulo">Incluye</div>
-            @foreach ($incluyePorDestino as $bloque)
-                @if (count($incluyePorDestino) > 1)
-                    <div class="destino-bloque-titulo">
-                        {{ $bloque['destino_nombre'] }}
-                        @if ($bloque['fecha_inicio'] || $bloque['fecha_fin'])
-                            <span class="destino-bloque-fechas">
-                                ({{ $bloque['fecha_inicio']?->format('d/m/Y') ?? '?' }}
-                                —
-                                {{ $bloque['fecha_fin']?->format('d/m/Y') ?? '?' }})
-                            </span>
-                        @endif
-                    </div>
+        @if (count($incluyePorDestino) > 0 || count($mayoristasIncluye) > 0)
+            <div class="seccion">
+                <div class="seccion-titulo">Incluye</div>
+                @foreach ($incluyePorDestino as $bloque)
+                    @if (count($incluyePorDestino) > 1)
+                        <div class="destino-bloque-titulo">
+                            {{ $bloque['destino_nombre'] }}
+                            @if ($bloque['fecha_inicio'] || $bloque['fecha_fin'])
+                                <span class="destino-bloque-fechas">
+                                    ({{ $bloque['fecha_inicio']?->format('d/m/Y') ?? '?' }}
+                                    —
+                                    {{ $bloque['fecha_fin']?->format('d/m/Y') ?? '?' }})
+                                </span>
+                            @endif
+                        </div>
+                    @endif
+                    <ul class="lista-simple">
+                        @foreach ($bloque['nombres'] as $nombre)
+                            <li>{{ $nombre }}</li>
+                        @endforeach
+                    </ul>
+                @endforeach
+                {{-- Simulación Panamá (04-sep-2026) — "Paquete Incluye" de
+                     la opción de mayorista elegida (opcion_mayorista.incluye,
+                     texto libre explotado por línea), nunca antes impreso. --}}
+                @if (count($mayoristasIncluye) > 0)
+                    <ul class="lista-simple">
+                        @foreach ($mayoristasIncluye as $linea)
+                            <li>{{ $linea }}</li>
+                        @endforeach
+                    </ul>
                 @endif
-                <ul class="lista-simple">
-                    @foreach ($bloque['nombres'] as $nombre)
-                        <li>{{ $nombre }}</li>
-                    @endforeach
-                </ul>
-            @endforeach
-        </div>
+            </div>
+        @endif
 
         {{-- ══════════════════ NO INCLUYE / RECOMENDACIONES / LUGAR DE RECOJO / HORARIOS ══════════════════ --}}
-        @if ($tourUnico)
-            @if (!empty($tourUnico->no_incluye))
-                <div class="seccion">
-                    <div class="seccion-titulo">No incluye</div>
+        {{-- Simulación Panamá (04-sep-2026) — antes solo disparaba con
+             $tourUnico (paquete Local/Nacional basado en un único
+             PaquetePlantilla); un paquete de mayorista nunca tiene
+             tour_origen_id, así que esta sección nunca corría pese a que
+             el vendedor sí puede cargar "No incluye" del paquete base
+             (opcion_mayorista.no_incluye, campo nuevo). --}}
+        @if (!empty($tourUnico?->no_incluye) || count($mayoristasNoIncluye) > 0)
+            <div class="seccion">
+                <div class="seccion-titulo">No incluye</div>
+                @if (!empty($tourUnico?->no_incluye))
                     <div class="seccion-html">{!! $tourUnico->no_incluye !!}</div>
-                </div>
-            @endif
+                @endif
+                @if (count($mayoristasNoIncluye) > 0)
+                    <ul class="lista-simple">
+                        @foreach ($mayoristasNoIncluye as $linea)
+                            <li>{{ $linea }}</li>
+                        @endforeach
+                    </ul>
+                @endif
+            </div>
+        @endif
+        @if ($tourUnico)
             @if (!empty($tourUnico->recomendaciones))
                 <div class="seccion">
                     <div class="seccion-titulo">Recomendaciones</div>
@@ -529,6 +622,32 @@
                 </table>
             </div>
         @endforeach
+
+        {{-- ══════════════════ TOURS OPCIONALES (Simulación Panamá, 04-sep-2026) ══════════════════ --}}
+        {{-- OpcionMayoristaOpcional (nombre/precio_por_persona/incluye/
+             no_incluye) — el modelo y el panel del drawer ya existían
+             (sesión 29-ago-2026), pero el PDF nunca los listaba. Nunca se
+             suman al total (mismo criterio del drawer: "actividades que el
+             cliente puede agregar aparte"). --}}
+        @if (count($mayoristasOpcionales) > 0)
+            <div class="seccion">
+                <div class="seccion-titulo">Tours opcionales</div>
+                @foreach ($mayoristasOpcionales as $opcional)
+                    <div class="opcional-item">
+                        <div class="opcional-nombre">
+                            {{ $opcional->nombre }}
+                            <span class="opcional-precio">{{ $opcional->moneda }} {{ number_format($opcional->precio_por_persona, 2) }} /pax</span>
+                        </div>
+                        @if (!empty($opcional->incluye))
+                            <div class="opcional-detalle"><strong>Incluye:</strong> {{ $opcional->incluye }}</div>
+                        @endif
+                        @if (!empty($opcional->no_incluye))
+                            <div class="opcional-detalle"><strong>No incluye:</strong> {{ $opcional->no_incluye }}</div>
+                        @endif
+                    </div>
+                @endforeach
+            </div>
+        @endif
 
         {{-- ══════════════════ PRECIO ══════════════════ --}}
         {{-- 12f-3 — deja de mostrarse precio por ítem individual (decisión

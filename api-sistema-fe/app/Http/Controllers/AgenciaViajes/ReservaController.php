@@ -966,16 +966,34 @@ class ReservaController extends Controller
         if ($item->origen_tipo === AlternativaItem::ORIGEN_PASAJE_AEREO) {
             return $item->cotizacionPasajeAereo?->aerolinea ?? 'Pasaje aéreo';
         }
+        // Simulación Panamá (04-sep-2026) — bug real encontrado generando el
+        // PDF real de la matriz de hoteles (Sesión M5): un ítem
+        // origen_tipo=mayorista con opcion_hotel_tarifa_id (viene de la
+        // matriz de hoteles) SÍ debe resolver a "hotel · tipo_habitacion"
+        // (rama de abajo) — el nombre del HOTEL es justo lo que la tabla
+        // "Opciones de hoteles" necesita mostrarle al cliente, a diferencia
+        // del mayorista/proveedor real que Fix C1 (02-sep-2026) sí debía
+        // ocultar. Fix C1 agregó el atajo audiencia='cliente' → descripcion_
+        // publica DENTRO de esta rama sin ese distingo, así que interceptaba
+        // también los ítems de matriz de hoteles antes de que llegaran a la
+        // rama de opcionHotelTarifa de más abajo — opcionesHoteles() del PDF
+        // quedaba con la tabla vacía en silencio (ninguna fila resolvía al
+        // formato "hotel · tipo", el guard de count($partes) !== 2 las
+        // descartaba a todas).
         if ($item->origen_tipo === AlternativaItem::ORIGEN_MAYORISTA) {
-            $opcionMayorista = $reservaItem?->opcion_mayorista_id ? $reservaItem->opcionMayorista : $item->opcionMayorista;
+            $opcionHotelTarifaDeEsteItem = $reservaItem?->opcion_hotel_tarifa_id ? $reservaItem->opcionHotelTarifa : $item->opcionHotelTarifa;
 
-            if ($audiencia === 'cliente') {
-                return $opcionMayorista?->descripcion_publica ?? 'Paquete mayorista';
+            if (! $opcionHotelTarifaDeEsteItem) {
+                $opcionMayorista = $reservaItem?->opcion_mayorista_id ? $reservaItem->opcionMayorista : $item->opcionMayorista;
+
+                if ($audiencia === 'cliente') {
+                    return $opcionMayorista?->descripcion_publica ?? 'Paquete mayorista';
+                }
+
+                $proveedor = $opcionMayorista?->proveedor;
+
+                return ($proveedor?->nombre_comercial ?: $proveedor?->razon_social) ?? 'Paquete mayorista';
             }
-
-            $proveedor = $opcionMayorista?->proveedor;
-
-            return ($proveedor?->nombre_comercial ?: $proveedor?->razon_social) ?? 'Paquete mayorista';
         }
         // Sesión M2 — incorporada desde resolverNombreItemPdf() al
         // centralizar: resolverNombreItem() nunca había tenido esta rama,

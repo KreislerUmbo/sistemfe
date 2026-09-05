@@ -97,5 +97,13 @@ export const alternativaItemService = {
   async elegirGrupo(itemId: number) {
     const response = await httpClient.put(`/alternativa-items/${itemId}/elegir-grupo`)
     return response.data
+  },
+  // Sesión UX2 (04-sep-2026) — borra TODAS las filas de un mismo
+  // grupo_opcion_id de una sola vez (evita borrar fila por fila un bloque
+  // "N opciones de hotel" duplicado), ver
+  // AlternativaItemController::eliminarGrupo().
+  async eliminarGrupo(grupoOpcionId: string) {
+    const response = await httpClient.delete(`/alternativa-items/grupo/${grupoOpcionId}`)
+    return response.data
   }
 }

@@ -694,6 +694,11 @@ Route::group([
         ->middleware('permission:agencia.cotizaciones');
     Route::delete("alternativa-items/{id}", [AlternativaItemController::class, 'destroy'])
         ->middleware('permission:agencia.cotizaciones');
+    // Sesión UX2 — borra TODAS las filas de un grupo_opcion_id de una sola
+    // vez (antes de "alternativa-items/{id}" para que "grupo/{grupoOpcionId}"
+    // no colisione con la ruta de arriba, mismo criterio que preview-pasaje-aereo).
+    Route::delete("alternativa-items/grupo/{grupoOpcionId}", [AlternativaItemController::class, 'eliminarGrupo'])
+        ->middleware('permission:agencia.cotizaciones');
     // Sesión M4 — resuelve un grupo de opciones de hotel (M1).
     Route::put("alternativa-items/{id}/elegir-grupo", [AlternativaItemController::class, 'elegirOpcionGrupo'])
         ->middleware('permission:agencia.cotizaciones');
@@ -736,9 +741,31 @@ Route::group([
         ->middleware('permission:agencia.cotizaciones');
     Route::match(['get', 'post'], "opciones-mayorista/{id}/opcionales", [OpcionMayoristaController::class, 'opcionales'])
         ->middleware('permission:agencia.cotizaciones');
+    Route::match(['get', 'post'], "opciones-mayorista/{id}/tours", [OpcionMayoristaController::class, 'tours'])
+        ->middleware('permission:agencia.cotizaciones');
+    Route::delete("opcion-mayorista-tours/{id}", [OpcionMayoristaController::class, 'quitarTour'])
+        ->middleware('permission:agencia.cotizaciones');
+    Route::put("opcion-mayorista-tours/{id}", [OpcionMayoristaController::class, 'actualizarOrdenTour'])
+        ->middleware('permission:agencia.cotizaciones');
+    Route::delete("opciones-mayorista/{id}", [OpcionMayoristaController::class, 'eliminar'])
+        ->middleware('permission:agencia.cotizaciones');
+    Route::put("opcion-mayorista-opcionales/{id}", [OpcionMayoristaController::class, 'actualizarOpcional'])
+        ->middleware('permission:agencia.cotizaciones');
+    Route::delete("opcion-mayorista-opcionales/{id}", [OpcionMayoristaController::class, 'eliminarOpcional'])
+        ->middleware('permission:agencia.cotizaciones');
 
     // Sesión M3 — hotel ad-hoc LOCAL, standalone (sin opcion_mayorista_id).
     Route::post("opciones-hotel", [OpcionHotelController::class, 'store'])
+        ->middleware('permission:agencia.cotizaciones');
+    Route::put("opciones-hotel/{id}", [OpcionHotelController::class, 'update'])
+        ->middleware('permission:agencia.cotizaciones');
+    Route::delete("opciones-hotel/{id}", [OpcionHotelController::class, 'destroy'])
+        ->middleware('permission:agencia.cotizaciones');
+    Route::post("opciones-hotel/{id}/tarifas", [OpcionHotelController::class, 'agregarTarifa'])
+        ->middleware('permission:agencia.cotizaciones');
+    Route::put("opcion-hotel-tarifas/{id}", [OpcionHotelController::class, 'actualizarTarifa'])
+        ->middleware('permission:agencia.cotizaciones');
+    Route::delete("opcion-hotel-tarifas/{id}", [OpcionHotelController::class, 'eliminarTarifa'])
         ->middleware('permission:agencia.cotizaciones');
     Route::post("opciones-hotel/{id}/promover", [OpcionHotelController::class, 'promover'])
         ->middleware('permission:agencia.cotizaciones');

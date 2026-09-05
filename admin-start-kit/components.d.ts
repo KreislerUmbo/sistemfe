@@ -79,6 +79,7 @@ declare module 'vue' {
     SeccionProductos: typeof import('./src/components/portal/SeccionProductos.vue')['default']
     SeccionServicios: typeof import('./src/components/portal/SeccionServicios.vue')['default']
     SeccionSistemasEmpresariales: typeof import('./src/components/portal/SeccionSistemasEmpresariales.vue')['default']
+    TourIncluidoForm: typeof import('./src/components/AgenciaViajes/TourIncluidoForm.vue')['default']
     UIComponentCard: typeof import('./src/components/UIComponentCard.vue')['default']
   }
   export interface ComponentCustomProperties {

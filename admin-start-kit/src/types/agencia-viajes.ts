@@ -486,6 +486,9 @@ export type OpcionMayorista = {
   salida_mayorista_id?: number | null;
   moneda: 'PEN' | 'USD';
   incluye?: string | null;
+  // Simulación Panamá (04-sep-2026) — "No incluye" del paquete base,
+  // mismo campo que ya existía por cada tour opcional.
+  no_incluye?: string | null;
   // Fix C1 (02-sep-2026) — único texto que el PDF comercial puede
   // mostrar para esta opción; ver docblock del modelo en el backend.
   descripcion_publica?: string | null;
@@ -501,6 +504,7 @@ export type OpcionMayorista = {
   proveedor?: Proveedor;
   opciones_hotel?: OpcionHotel[];
   opcionales?: OpcionMayoristaOpcional[];
+  tours?: OpcionMayoristaTour[];
 };
 
 export type OpcionHotel = {
@@ -550,6 +554,17 @@ export type OpcionMayoristaOpcional = {
   no_incluye?: string | null;
   contenido_tour_id?: number | null;
   contenido_tour_descripcion_snapshot?: string | null;
+};
+
+// Simulación Panamá (04-sep-2026) — tour incluido con itinerario real
+// (PaquetePlantilla + TourItinerarioItem), distinto de `incluye` (texto
+// plano sin días/horas). `orden` es el "Día" que ve el vendedor.
+export type OpcionMayoristaTour = {
+  id: number;
+  opcion_mayorista_id: number;
+  paquete_plantilla_id: number;
+  orden: number;
+  paquete_plantilla?: PaquetePlantilla;
 };
 
 // Sesión 12e — biblioteca de contenido reutilizable (descripción/fotos),

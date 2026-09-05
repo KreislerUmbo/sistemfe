@@ -245,6 +245,51 @@ class AlternativaItemController extends Controller
         return response()->json(['code' => 200, 'message' => 'Ítem eliminado correctamente']);
     }
 
+    // Sesión UX2 (04-sep-2026) — hallazgo del usuario: nada impedía repetir
+    // "Comparar varias opciones" con el mismo set de hoteles, dejando varios
+    // bloques "N opciones de hotel" idénticos en el lienzo, y borrarlos fila
+    // por fila (con destroy() de arriba, uno por uno) no era intuitivo. Borra
+    // TODAS las filas de un mismo grupo_opcion_id de una sola vez — mismo
+    // guard de reserva que destroy(), evaluado sobre el grupo completo antes
+    // de borrar cualquier fila (todo o nada).
+    public function eliminarGrupo(string $grupoOpcionId)
+    {
+        $items = AlternativaItem::with('alternativa')->where('grupo_opcion_id', $grupoOpcionId)->get();
+
+        if ($items->isEmpty()) {
+            return response()->json(['code' => 404, 'message' => 'Grupo no encontrado.'], 404);
+        }
+
+        $alternativa = $items->first()->alternativa;
+
+        if ($alternativa->estado === 'aceptada') {
+            return response()->json([
+                'code' => 422,
+                'message' => 'Esta alternativa ya fue aceptada y generó una reserva — el grupo ya no se puede modificar desde acá.',
+            ], 422);
+        }
+
+        if (ReservaItem::whereIn('alternativa_item_id', $items->pluck('id'))->exists()) {
+            return response()->json([
+                'code' => 422,
+                'message' => 'No se puede eliminar: alguna de estas opciones ya tiene una reserva generada (por ejemplo, vía Venta Directa). Cancelá la reserva primero si corresponde.',
+            ], 422);
+        }
+
+        DB::transaction(function () use ($items) {
+            foreach ($items as $item) {
+                if ($item->origen_tipo === AlternativaItem::ORIGEN_PASAJE_AEREO) {
+                    CotizacionPasajeAereo::where('alternativa_item_id', $item->id)->delete();
+                }
+                $item->delete();
+            }
+        });
+
+        $this->recalcularTotalAlternativa($alternativa);
+
+        return response()->json(['code' => 200, 'message' => 'Grupo eliminado correctamente']);
+    }
+
     // Sesión 11b3 (Parte A) — "cargar desde plantilla": explota TODOS los
     // ítems de un tour_simple/paquete_combo en la alternativa activa,
     // resueltos en vivo contra su proveedor_tarifa real (nunca copia

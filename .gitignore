@@ -6,6 +6,7 @@ node_modules/
 admin-version-full/
 .playwright-mcp/
 .Claude/docs/planning/**/*.docx
+docs/auxiliares/*.docx
 
 # Env de frontend — específico por entorno, nunca compartido vía git
 admin-start-kit/.env

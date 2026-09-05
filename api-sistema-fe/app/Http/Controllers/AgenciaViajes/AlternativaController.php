@@ -622,6 +622,12 @@ class AlternativaController extends Controller
             'items.guiaTarifa.guia',
             'items.cotizacionPasajeAereo',
             'items.opcionMayorista.proveedor',
+            // Simulación Panamá (04-sep-2026) — Incluye/No incluye/Vuelo/
+            // Tours opcionales del mayorista elegido, ver
+            // mayoristasReferenciados().
+            'items.opcionMayorista.opcionales',
+            // Tours incluidos con itinerario real, ver itinerarioAlternativa().
+            'items.opcionMayorista.tours.paquetePlantilla',
             // Sesión M2 — resolverNombreItem() con audiencia 'cliente'
             // también intenta el hotel de la matriz de un OpcionMayorista
             // (sin ProveedorTarifa real) antes de caer al genérico.
@@ -639,6 +645,24 @@ class AlternativaController extends Controller
         $incluyePorDestino = $this->incluyePorDestino($alternativa);
         $tourUnico = $this->tourUnicoDeAlternativa($alternativa);
         $opcionesHoteles = $this->opcionesHoteles($alternativa);
+
+        // Simulación Panamá (04-sep-2026) — Incluye/No incluye/Vuelo/Tours
+        // opcionales de la(s) opción(es) de mayorista realmente elegidas en
+        // esta alternativa (ver mayoristasReferenciados()).
+        $mayoristas = $this->mayoristasReferenciados($alternativa);
+        $mayoristasIncluye = $mayoristas
+            ->flatMap(fn ($m) => preg_split('/\r?\n/', trim((string) $m->incluye)))
+            ->filter(fn ($linea) => trim($linea) !== '')
+            ->values();
+        $mayoristasNoIncluye = $mayoristas
+            ->flatMap(fn ($m) => preg_split('/\r?\n/', trim((string) $m->no_incluye)))
+            ->filter(fn ($linea) => trim($linea) !== '')
+            ->values();
+        $mayoristasVuelo = $mayoristas
+            ->filter(fn ($m) => filled($m->vuelo_aerolinea))
+            ->map(fn ($m) => ['aerolinea' => $m->vuelo_aerolinea, 'detalle' => $m->vuelo_detalle])
+            ->values();
+        $mayoristasOpcionales = $mayoristas->flatMap(fn ($m) => $m->opcionales)->values();
 
         // Sesión 12f-3 — el PDF comercial deja de mostrar precio por ítem
         // (decisión del usuario, ver brief 12f3 §0.3): estos totales siguen
@@ -671,6 +695,10 @@ class AlternativaController extends Controller
             'incluyePorDestino' => $incluyePorDestino,
             'tourUnico' => $tourUnico,
             'opcionesHoteles' => $opcionesHoteles,
+            'mayoristasIncluye' => $mayoristasIncluye,
+            'mayoristasNoIncluye' => $mayoristasNoIncluye,
+            'mayoristasVuelo' => $mayoristasVuelo,
+            'mayoristasOpcionales' => $mayoristasOpcionales,
             'total' => $total,
             'totalOriginal' => $totalOriginal,
             'descuentoMonto' => $descuentoMonto,
@@ -698,6 +726,23 @@ class AlternativaController extends Controller
         }
 
         return \App\Models\AgenciaViajes\PaquetePlantilla::find($tourIds->first());
+    }
+
+    // Simulación Panamá (04-sep-2026) — OpcionMayorista distintas
+    // referenciadas por los ítems de la alternativa (vía
+    // AlternativaItem::opcionMayorista(), ya eager-cargada con
+    // ->opcionales en pdf()). Los ítems de un grupo de hotel (Sesión M5)
+    // solo se pueden agregar cuando la opción ya está 'elegida' (guard ya
+    // existente en el frontend/backend) — todo lo que aparezca acá es por
+    // definición la opción elegida, no hace falta filtrar por estado de
+    // nuevo.
+    private function mayoristasReferenciados(Alternativa $alternativa): \Illuminate\Support\Collection
+    {
+        return $alternativa->items
+            ->map(fn (AlternativaItem $item) => $item->opcionMayorista)
+            ->filter()
+            ->unique('id')
+            ->values();
     }
 
     // Sesión 12f-3 — agrupa los AlternativaItem de la alternativa por
@@ -745,6 +790,20 @@ class AlternativaController extends Controller
             $destino = $grupo['destino'];
             $tourIds = $grupo['items']->pluck('tour_origen_id')->filter()->unique()->values();
 
+            // Tours incluidos de un paquete de mayorista (OpcionMayoristaTour,
+            // 04-sep-2026) — misma fuente de itinerario que un tour_origen_id
+            // de Local/Nacional, solo que llega vía la opción de mayorista en
+            // vez de directo del ítem. Se agregan DESPUÉS de los de
+            // tour_origen_id (dedup), respetando 'orden' (el "Día" que ve el
+            // vendedor) para la secuencia dentro de cada mayorista.
+            $mayoristasDelGrupo = $grupo['items']->map(fn (AlternativaItem $item) => $item->opcionMayorista)->filter()->unique('id');
+            foreach ($mayoristasDelGrupo as $opcionMayorista) {
+                $tourIds = $tourIds->concat(
+                    $opcionMayorista->tours()->orderBy('orden')->pluck('paquete_plantilla_id')
+                );
+            }
+            $tourIds = $tourIds->unique()->values();
+
             if ($tourIds->isEmpty()) {
                 continue;
             }
@@ -771,12 +830,21 @@ class AlternativaController extends Controller
                 $pasosDelTour = $tour->paqueteItinerario()->with('destinoAtractivo')->orderBy('dia_relativo')->orderBy('orden')->get();
                 $maxDiaDelTour = 0;
 
+                // Simulación Panamá (04-sep-2026) — fotos del tour, mismo
+                // patrón que 'tour_nombre': se repiten por paso (el blade solo
+                // las imprime una vez, en el primer paso del día) para no
+                // duplicar la lógica de "una vez por tour" en la vista.
+                // resolveParaPdf() (no resolve()) porque DomPDF corre con
+                // enable_remote=false, igual que el logo.
+                $fotosDelTour = array_map(fn (string $path) => \App\Services\StorageUrl::resolveParaPdf($path), $tour->fotos ?? []);
+
                 foreach ($pasosDelTour as $paso) {
                     $pasos[] = [
                         'dia' => $offsetDia + $paso->dia_relativo,
                         'hora' => $paso->hora,
                         'descripcion' => $paso->descripcion,
                         'tour_nombre' => $tour->nombre,
+                        'tour_fotos' => $fotosDelTour,
                         'atractivo_nombre' => $paso->destinoAtractivo?->nombre,
                     ];
                     $maxDiaDelTour = max($maxDiaDelTour, $paso->dia_relativo);

@@ -323,9 +323,16 @@
                                  vez de N tarjetas de ítem sueltas (ver filasDelBloque()). -->
                             <div v-if="fila.esGrupo" class="canvas-item border rounded p-2 mb-2 small" :class="{ 'border-warning': !fila.items.some((i) => i.opcion_elegida) }">
                                 <div class="d-flex justify-content-between align-items-center mb-1">
-                                    <span class="fw-semibold"><i class="fas fa-layer-group me-2 text-primary"></i>{{ fila.items.length }} opciones de hotel</span>
-                                    <span v-if="!fila.items.some((i) => i.opcion_elegida)" class="badge bg-warning-subtle text-warning-emphasis" style="font-size:10px">
-                                        <i class="fas fa-triangle-exclamation me-1"></i>Sin resolver
+                                    <span class="fw-semibold">
+                                        <i class="fas fa-layer-group me-2 text-primary"></i>{{ fila.items.length }} opciones de hotel
+                                        <span v-if="nombreMayoristaDeGrupo(fila.items)" class="text-muted fw-normal"> — {{ nombreMayoristaDeGrupo(fila.items) }}</span>
+                                    </span>
+                                    <span class="d-flex align-items-center gap-2">
+                                        <span v-if="!fila.items.some((i) => i.opcion_elegida)" class="badge bg-warning-subtle text-warning-emphasis" style="font-size:10px">
+                                            <i class="fas fa-triangle-exclamation me-1"></i>Sin resolver
+                                        </span>
+                                        <span v-if="eliminandoGrupoId === fila.grupoId" class="spinner-border spinner-border-sm text-danger"></span>
+                                        <i v-else class="fas fa-trash text-danger" style="cursor:pointer;font-size:11px" title="Eliminar todo este bloque" @click="eliminarGrupoLienzo(fila)"></i>
                                     </span>
                                 </div>
                                 <div v-for="it in fila.items" :key="it.id" class="d-flex justify-content-between align-items-center py-1 border-top" :class="{ 'opacity-50': !it.opcion_elegida }">
@@ -491,9 +498,10 @@
                                                 </div>
                                             </template>
                                             <template v-else>
-                                                <div v-for="item in grupo.items" :key="item.id" class="d-flex justify-content-between gap-2 mb-1">
+                                                <div v-for="item in filasResumen(grupo.items)" :key="item.id" class="d-flex justify-content-between gap-2 mb-1">
                                                     <span class="text-muted" style="word-break:break-word;font-size:11px">
                                                         {{ etiquetaItem(item) }}
+                                                        <span v-if="item.grupo_opcion_id && !item.opcion_elegida" class="text-muted" style="font-size:10px">(desde, sin resolver)</span>
                                                         <span v-if="badgeTratamientoTributario(item)" class="badge ms-1"
                                                             :class="badgeTratamientoTributario(item)!.clase" style="font-size:9px">{{ badgeTratamientoTributario(item)!.texto }}</span>
                                                     </span>
@@ -526,9 +534,10 @@
                                         </div>
                                     </template>
                                     <template v-else>
-                                        <div v-for="item in grupo.items" :key="item.id" class="d-flex justify-content-between gap-2 mb-1">
+                                        <div v-for="item in filasResumen(grupo.items)" :key="item.id" class="d-flex justify-content-between gap-2 mb-1">
                                             <span class="text-muted" style="word-break:break-word;">
                                                 {{ etiquetaItem(item) }}
+                                                <span v-if="item.grupo_opcion_id && !item.opcion_elegida" class="text-muted" style="font-size:10px">(desde, sin resolver)</span>
                                                 <span v-if="badgeTratamientoTributario(item)" class="badge ms-1"
                                                     :class="badgeTratamientoTributario(item)!.clase" style="font-size:9px">{{ badgeTratamientoTributario(item)!.texto }}</span>
                                             </span>
@@ -849,7 +858,11 @@
                                     :class="{ 'border-success border-2': op.estado === 'elegida', 'opacity-50': op.estado === 'descartada' }">
                                     <div class="d-flex justify-content-between align-items-start">
                                         <strong>{{ op.proveedor?.nombre_comercial ?? op.proveedor?.razon_social }}</strong>
-                                        <i class="fas fa-pen text-muted" style="cursor:pointer;font-size:11px" title="Editar esta opción" @click="abrirFormEditarOpcionMayorista(op)"></i>
+                                        <div class="d-flex gap-2">
+                                            <i class="fas fa-pen text-muted" style="cursor:pointer;font-size:11px" title="Editar esta opción" @click="abrirFormEditarOpcionMayorista(op)"></i>
+                                            <i v-if="eliminandoOpcionMayoristaId !== op.id" class="fas fa-trash text-muted" style="cursor:pointer;font-size:11px" title="Eliminar esta opción (borra hoteles/opcionales/tours vinculados)" @click="eliminarOpcionMayorista(op)"></i>
+                                            <span v-else class="spinner-border spinner-border-sm" style="width:11px;height:11px"></span>
+                                        </div>
                                     </div>
                                     <div class="text-muted" v-if="op.vuelo_aerolinea"><i class="fas fa-plane me-1"></i>{{ op.vuelo_aerolinea }}</div>
                                     <div class="text-muted mb-1" v-if="op.incluye">{{ op.incluye }}</div>
@@ -863,6 +876,9 @@
                                             <button class="btn btn-sm btn-outline-primary" @click="verHoteles(op)">Hoteles</button>
                                             <button class="btn btn-sm btn-outline-secondary" @click="verOpcionales(op)">
                                                 Opcionales<span v-if="op.opcionales?.length" class="badge bg-light text-dark border ms-1">{{ op.opcionales.length }}</span>
+                                            </button>
+                                            <button class="btn btn-sm btn-outline-secondary" @click="verTours(op)">
+                                                Tours<span v-if="op.tours?.length" class="badge bg-light text-dark border ms-1">{{ op.tours.length }}</span>
                                             </button>
                                             <button v-if="op.estado !== 'elegida'" class="btn btn-sm btn-outline-success" @click="elegirOpcion(op)" :disabled="eligiendoOpcionId === op.id">
                                                 <span v-if="eligiendoOpcionId === op.id" class="spinner-border spinner-border-sm"></span><span v-else>Elegir mayorista</span>
@@ -882,14 +898,35 @@
                                         @actualizado="onOpcionMayoristaGuardada" @cancelar="opcionMayoristaEnEdicionId = null" />
                                     <div v-if="opcionHotelesActivaId === op.id" class="mt-2 border-top pt-2">
                                         <div v-if="op.estado !== 'elegida'" class="text-muted small fst-italic mb-1">Marcá esta opción como elegida para poder confirmar una habitación (podés seguir cargando hoteles mientras tanto).</div>
+                                        <!-- 04-sep-2026 — una sola vez arriba de todo, en vez de metida
+                                             solo en el form de "crear hotel nuevo" (ahí el usuario la veía
+                                             al crear, pero no al editar/agregar un tipo de habitación desde
+                                             la tabla — el mismo error de duplicación/inconsistencia que ya
+                                             se corrigió una vez con la lista de hoteles repetida). Cubre los
+                                             3 lugares donde aparecen Costo/Venta acá abajo: ver precios,
+                                             editar una tarifa, agregar una tarifa nueva a un hotel ya
+                                             cargado, y el form de crear hotel. -->
+                                        <p class="text-muted fst-italic mb-2" style="font-size:11px">El costo/venta de cada tipo de habitación es el total del paquete por persona (aéreo + tours + hotel según este mayorista), no solo el hospedaje.</p>
+                                        <!-- 04-sep-2026 — vista unificada (hallazgo del usuario: la tabla de
+                                             "elegir" y la lista de gestión de abajo mostraban los mismos
+                                             hoteles dos veces, en dos formatos). permitir-gestion-hoteles
+                                             agrupa las filas por hotel con edición/borrado inline, en el
+                                             mismo lugar donde ya se elige la habitación. -->
                                         <HabitacionMatrixPicker
                                             :tarifas="tarifasHotelPlanas(op)" :moneda="op.moneda"
                                             cantidad-label="Adultos" :cantidad-default="cantidadAdultosCotizacion"
                                             :deshabilitar-confirmar="op.estado !== 'elegida'"
                                             motivo-deshabilitado="Marcá esta opción como elegida para poder confirmar una habitación"
+                                            permitir-gestion-hoteles
                                             @seleccionar="({ id, cantidad }) => agregarItemMayorista(op, id, cantidad)"
-                                            @agregar-grupo="({ ids }) => agregarGrupoMayorista(op, ids)" />
-                                        <button class="btn btn-sm btn-outline-secondary w-100 mt-2" @click="mostrarFormHotel = op.id">
+                                            @agregar-grupo="({ ids }) => agregarGrupoMayorista(op, ids)"
+                                            @guardar-hotel="onGuardarHotelMatrix"
+                                            @eliminar-hotel="onEliminarHotelMatrix"
+                                            @guardar-tarifa="onGuardarTarifaMatrix"
+                                            @eliminar-tarifa="onEliminarTarifaMatrix"
+                                            @agregar-tarifa="onAgregarTarifaMatrix" />
+
+                                        <button class="btn btn-sm btn-outline-secondary w-100 mt-2" @click="mostrarFormHotel = mostrarFormHotel === op.id ? null : op.id">
                                             <i class="fas fa-plus me-1"></i>Agregar hotel a esta opción
                                         </button>
                                         <div v-if="mostrarFormHotel === op.id" class="border rounded p-2 mt-2">
@@ -900,14 +937,15 @@
                                                 <option :value="null">Hotel manual/referencial (sin proveedor)</option>
                                                 <option v-for="p in proveedoresHotel" :key="p.id" :value="p.id">{{ p.nombre_comercial ?? p.razon_social }}</option>
                                             </select>
-                                            <p class="text-muted fst-italic mb-1" style="font-size:11px">El costo/venta de cada tipo de habitación es el total del paquete para esa persona (aéreo + tours + hotel según este mayorista), no solo el hospedaje.</p>
+                                            <!-- Nota de costo/venta ya no va acá — quedó una sola vez arriba
+                                                 de toda la tabla (04-sep-2026), cubre también este form. -->
                                             <!-- Encabezados de columna — cumplen el rol de label para cada
                                                  fila de tarifas sin repetir el texto en cada una. -->
                                             <div class="row g-1 mb-1">
                                                 <div class="col-3"><label class="form-label mb-0 small text-secondary">Tipo de habitación</label></div>
                                                 <div class="col-3" v-if="formHotel.proveedor_id"><label class="form-label mb-0 small text-secondary">Tarifa registrada</label></div>
-                                                <div :class="formHotel.proveedor_id ? 'col-3' : 'col-4'"><label class="form-label mb-0 small text-secondary">Costo</label></div>
-                                                <div :class="formHotel.proveedor_id ? 'col-3' : 'col-4'"><label class="form-label mb-0 small text-secondary">Venta</label></div>
+                                                <div :class="formHotel.proveedor_id ? 'col-3' : 'col-4'"><label class="form-label mb-0 small text-secondary">Costo total paquete</label></div>
+                                                <div :class="formHotel.proveedor_id ? 'col-3' : 'col-4'"><label class="form-label mb-0 small text-secondary">Venta total paquete</label></div>
                                             </div>
                                             <div v-for="(tf, idx) in formHotel.tarifas" :key="idx" class="row g-1 mb-1">
                                                 <div class="col-3">
@@ -940,14 +978,40 @@
                                     </div>
                                     <div v-if="mostrarOpcionalesId === op.id" class="mt-2 border-top pt-2">
                                         <div v-if="!op.opcionales?.length" class="text-muted small fst-italic mb-2">Sin opcionales cargados todavía — nunca se suman al total, son actividades que el cliente puede agregar aparte.</div>
-                                        <div v-for="opl in op.opcionales" :key="opl.id" class="d-flex justify-content-between align-items-start border rounded p-2 mb-1">
-                                            <div>
-                                                <strong>{{ opl.nombre }}</strong>
-                                                <div v-if="opl.incluye" class="text-muted" style="font-size:11px">{{ opl.incluye }}</div>
+                                        <div v-for="opl in op.opcionales" :key="opl.id" class="border rounded p-2 mb-1">
+                                            <div class="d-flex justify-content-between align-items-start">
+                                                <div>
+                                                    <strong>{{ opl.nombre }}</strong>
+                                                    <div v-if="opl.incluye" class="text-muted" style="font-size:11px">{{ opl.incluye }}</div>
+                                                </div>
+                                                <div class="d-flex align-items-start gap-2 text-nowrap">
+                                                    <span>{{ opl.moneda }} {{ Number(opl.precio_por_persona).toFixed(2) }} /pax</span>
+                                                    <i class="fas fa-pen text-muted" style="cursor:pointer;font-size:11px" title="Editar" @click="abrirEdicionOpcional(opl)"></i>
+                                                    <i v-if="eliminandoOpcionalId !== opl.id" class="fas fa-trash text-muted" style="cursor:pointer;font-size:11px" title="Eliminar" @click="eliminarOpcionalCargado(opl)"></i>
+                                                    <span v-else class="spinner-border spinner-border-sm" style="width:11px;height:11px"></span>
+                                                </div>
                                             </div>
-                                            <span class="text-nowrap">{{ opl.moneda }} {{ Number(opl.precio_por_persona).toFixed(2) }} /pax</span>
+                                            <div v-if="opcionalEnEdicionId === opl.id" class="mt-1 border-top pt-1">
+                                                <input type="text" class="form-control form-control-sm mb-1" placeholder="Nombre" v-model="formEdicionOpcional.nombre">
+                                                <div class="row g-1 mb-1">
+                                                    <div class="col-8">
+                                                        <input type="number" step="0.01" class="form-control form-control-sm" placeholder="Precio por persona" v-model.number="formEdicionOpcional.precio_por_persona">
+                                                    </div>
+                                                    <div class="col-4">
+                                                        <select class="form-select form-select-sm" v-model="formEdicionOpcional.moneda">
+                                                            <option value="USD">USD</option>
+                                                            <option value="PEN">PEN</option>
+                                                        </select>
+                                                    </div>
+                                                </div>
+                                                <textarea class="form-control form-control-sm mb-1" rows="2" placeholder="Incluye..." v-model="formEdicionOpcional.incluye"></textarea>
+                                                <textarea class="form-control form-control-sm mb-1" rows="2" placeholder="No incluye..." v-model="formEdicionOpcional.no_incluye"></textarea>
+                                                <button class="btn btn-sm btn-primary w-100" @click="guardarEdicionOpcional(opl)" :disabled="guardandoEdicionOpcional">
+                                                    <span v-if="guardandoEdicionOpcional" class="spinner-border spinner-border-sm me-1"></span>Guardar
+                                                </button>
+                                            </div>
                                         </div>
-                                        <button class="btn btn-sm btn-outline-secondary w-100 mt-1" @click="mostrarFormOpcional = op.id">
+                                        <button class="btn btn-sm btn-outline-secondary w-100 mt-1" @click="mostrarFormOpcional = mostrarFormOpcional === op.id ? null : op.id">
                                             <i class="fas fa-plus me-1"></i>Agregar opcional
                                         </button>
                                         <div v-if="mostrarFormOpcional === op.id" class="border rounded p-2 mt-2">
@@ -970,8 +1034,32 @@
                                             </button>
                                         </div>
                                     </div>
+                                    <!-- Simulación Panamá (04-sep-2026) — tours incluidos con itinerario
+                                         real, distinto de "Incluye" (texto plano). Alimenta la sección
+                                         "Itinerario" del PDF (AlternativaController::itinerarioAlternativa()). -->
+                                    <div v-if="mostrarToursId === op.id" class="mt-2 border-top pt-2">
+                                        <div v-if="!op.tours?.length" class="text-muted small fst-italic mb-2">Sin tours incluidos todavía — con itinerario real, salen en la sección "Itinerario" del PDF.</div>
+                                        <div v-for="t in op.tours" :key="t.id" class="d-flex justify-content-between align-items-center border rounded p-2 mb-1">
+                                            <span><span class="badge bg-light text-dark border me-1">Día {{ t.orden }}</span>{{ t.paquete_plantilla?.nombre }}</span>
+                                            <div class="d-flex gap-2">
+                                                <i class="fas fa-pen text-muted" style="cursor:pointer;font-size:11px" title="Editar este tour" @click="abrirEdicionTour(t)"></i>
+                                                <i class="fas fa-times text-muted" style="cursor:pointer" title="Quitar este tour" @click="quitarTourIncluido(t, op)"></i>
+                                            </div>
+                                        </div>
+                                        <TourIncluidoForm v-if="op.tours?.some((t) => t.id === tourEnEdicionId)"
+                                            :opcion-mayorista-id="op.id" :destino-atractivo-id="destinoAtractivoIdActivo"
+                                            :dia-sugerido="0" :tour-existente="op.tours?.find((t) => t.id === tourEnEdicionId) ?? null" class="mt-2 mb-2"
+                                            @actualizado="onTourIncluidoActualizado" @cancelar="tourEnEdicionId = null" />
+                                        <button class="btn btn-sm btn-outline-secondary w-100 mt-1" @click="mostrarFormTourIncluido = mostrarFormTourIncluido === op.id ? null : op.id; tourEnEdicionId = null">
+                                            <i class="fas fa-plus me-1"></i>Agregar tour nuevo
+                                        </button>
+                                        <TourIncluidoForm v-if="mostrarFormTourIncluido === op.id"
+                                            :opcion-mayorista-id="op.id" :destino-atractivo-id="destinoAtractivoIdActivo"
+                                            :dia-sugerido="(op.tours?.length ?? 0) + 1" class="mt-2"
+                                            @agregado="(t) => onTourIncluidoAgregado(op, t)" @cancelar="mostrarFormTourIncluido = null" />
+                                    </div>
                                 </div>
-                                <button class="btn btn-outline-primary btn-sm w-100" @click="mostrarFormMayorista = true; opcionMayoristaEnEdicionId = null">
+                                <button class="btn btn-outline-primary btn-sm w-100" @click="mostrarFormMayorista = !mostrarFormMayorista; opcionMayoristaEnEdicionId = null">
                                     <i class="fas fa-plus me-1"></i>Agregar cotización de mayorista
                                 </button>
                                 <OpcionMayoristaForm v-if="mostrarFormMayorista"
@@ -1033,6 +1121,7 @@ import Swal from 'sweetalert2/dist/sweetalert2.js';
 import httpClient from '@/helpers/http-client';
 import HabitacionMatrixPicker from '@/components/AgenciaViajes/HabitacionMatrixPicker.vue';
 import OpcionMayoristaForm from '@/components/AgenciaViajes/OpcionMayoristaForm.vue';
+import TourIncluidoForm from '@/components/AgenciaViajes/TourIncluidoForm.vue';
 import PasajeAereoForm from '@/components/AgenciaViajes/PasajeAereoForm.vue';
 import ItemManualForm from '@/components/AgenciaViajes/ItemManualForm.vue';
 import PromoverProveedorModal from '@/components/AgenciaViajes/PromoverProveedorModal.vue';
@@ -1052,7 +1141,7 @@ import { reservaService } from '@/services/admin/reservaService';
 import { useAgenciaViajesCatalogosStore } from '@/stores/agenciaViajesCatalogos';
 import { formatFecha } from '@/helpers/fecha';
 import { guiaService } from '@/services/admin/guiaService';
-import type { Cotizacion, Alternativa, AlternativaItem, ProveedorTarifa, OpcionMayorista, OpcionHotelTarifa, Proveedor, ProveedorTipo, BibliotecaResultado, ConfiguracionAgencia, DestinoServicio, Guia, GuiaTarifa, Servicio, TipAfeIgv, DestinoTributario } from '@/types/agencia-viajes';
+import type { Cotizacion, Alternativa, AlternativaItem, ProveedorTarifa, OpcionMayorista, OpcionMayoristaTour, OpcionMayoristaOpcional, OpcionHotelTarifa, Proveedor, ProveedorTipo, BibliotecaResultado, ConfiguracionAgencia, DestinoServicio, Guia, GuiaTarifa, Servicio, TipAfeIgv, DestinoTributario } from '@/types/agencia-viajes';
 import type { Client } from '@/types/clients';
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
@@ -1453,6 +1542,15 @@ const eliminarAlternativa = async () => {
 const alternativaDestinos = computed(() => alternativaActiva.value?.destinos ?? []);
 const destinoActivoId = ref<number | null>(null);
 const mostrarChipsDestino = computed(() => alternativaDestinos.value.length > 1);
+
+// Simulación Panamá (04-sep-2026) — destinoActivoId de arriba es el id de la
+// FILA alternativa_destinos (lo que OpcionMayoristaForm necesita para
+// alternativa_destino_id). TourIncluidoForm en cambio necesita el
+// destino_atractivo_id REAL (para el árbol de DestinoTreeSelect) — son dos
+// IDs de dos tablas distintas que comparten nombre casual "destino".
+const destinoAtractivoIdActivo = computed(() => {
+    return alternativaDestinos.value.find((d) => d.id === destinoActivoId.value)?.destino_atractivo_id ?? null;
+});
 
 // Llamada explícita (NO un watch) desde cargarCotizacion()/el watch de
 // alternativaActivaId — inicializarDias() lee itemsDelDestinoActivo justo
@@ -2241,6 +2339,9 @@ const mostrarFormOpcional = ref<number | null>(null);
 const formOpcional = ref({
     nombre: '', precio_por_persona: 0, moneda: 'USD' as 'PEN' | 'USD', incluye: '', no_incluye: '',
 });
+// Simulación Panamá (04-sep-2026) — tours incluidos con itinerario real.
+const mostrarToursId = ref<number | null>(null);
+const mostrarFormTourIncluido = ref<number | null>(null);
 
 const formHotel = ref<{
     nombre_hotel: string; proveedor_id: number | null;
@@ -2293,6 +2394,178 @@ const verHoteles = (op: OpcionMayorista) => {
 
 const verOpcionales = (op: OpcionMayorista) => {
     mostrarOpcionalesId.value = mostrarOpcionalesId.value === op.id ? null : op.id;
+};
+
+// Simulación Panamá (04-sep-2026) — tours incluidos con itinerario real.
+const verTours = (op: OpcionMayorista) => {
+    mostrarToursId.value = mostrarToursId.value === op.id ? null : op.id;
+};
+
+const onTourIncluidoAgregado = async (op: OpcionMayorista, _tour: OpcionMayoristaTour) => {
+    mostrarFormTourIncluido.value = null;
+    await cargarOpcionesMayorista();
+};
+
+const quitarTourIncluido = async (tour: OpcionMayoristaTour, op: OpcionMayorista) => {
+    try {
+        await opcionMayoristaService.quitarTour(tour.id);
+        await cargarOpcionesMayorista();
+    } catch (error: any) {
+        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo quitar el tour', 'error');
+    }
+};
+
+// Modo edición de un tour incluido (04-sep-2026) — mismo TourIncluidoForm
+// de alta, con :tour-existente puesto. abrirEdicionTour() cierra el form de
+// alta si estaba abierto (y viceversa, ver template) para no mostrar los
+// dos a la vez.
+const tourEnEdicionId = ref<number | null>(null);
+const abrirEdicionTour = (tour: OpcionMayoristaTour) => {
+    mostrarFormTourIncluido.value = null;
+    tourEnEdicionId.value = tour.id;
+};
+const onTourIncluidoActualizado = async (_tour: OpcionMayoristaTour) => {
+    tourEnEdicionId.value = null;
+    await cargarOpcionesMayorista();
+};
+
+// ── Eliminar bloque completo de una opción de mayorista (04-sep-2026) ───
+// Distinto de descartarOpcion() (solo oculta) — borrado real, con el mismo
+// aviso fuerte que ya usa eliminarAlternativa() cuando hay ítems en juego.
+// El backend ya bloquea con 422 si algún ítem de esta opción tiene una
+// reserva generada, o si la alternativa ya fue aceptada — ambos casos se
+// muestran tal cual llegan del backend.
+const eliminandoOpcionMayoristaId = ref<number | null>(null);
+const eliminarOpcionMayorista = async (op: OpcionMayorista) => {
+    const confirmacion = await (Swal as TVueSwalInstance).fire({
+        title: '¿Eliminar esta opción de mayorista?',
+        text: 'Se eliminan también sus hoteles, opcionales y tours vinculados (el contenido real de los tours no se borra, solo el vínculo), y cualquier ítem ya agregado al lienzo desde esta opción. Esta acción no se puede deshacer.',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, eliminar',
+        cancelButtonText: 'Cancelar',
+    });
+    if (!confirmacion.isConfirmed) return;
+
+    eliminandoOpcionMayoristaId.value = op.id;
+    try {
+        await opcionMayoristaService.eliminar(op.id);
+        toast.success('Opción de mayorista eliminada');
+        await Promise.all([cargarCotizacion(), cargarOpcionesMayorista()]);
+    } catch (error: any) {
+        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo eliminar la opción', 'error');
+    } finally {
+        eliminandoOpcionMayoristaId.value = null;
+    }
+};
+
+// ── Editar/eliminar hoteles y sus tarifas ya cargados ────────────────────
+// 04-sep-2026 — vive inline en HabitacionMatrixPicker (permitir-gestion-
+// hoteles) desde el hallazgo de duplicación del usuario: la tabla de
+// "elegir" y una lista de gestión aparte mostraban los mismos hoteles dos
+// veces. El picker ya junta los datos de cada mini-form y emite el
+// payload — estos handlers solo llaman al servicio real y refrescan.
+const onGuardarHotelMatrix = async (payload: { id: number; nombre_hotel: string }) => {
+    try {
+        await opcionMayoristaService.actualizarHotel(payload.id, { nombre_hotel: payload.nombre_hotel });
+        await cargarOpcionesMayorista();
+    } catch (error: any) {
+        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo actualizar el hotel', 'error');
+    }
+};
+
+const onEliminarHotelMatrix = async (hotelId: number) => {
+    const confirmacion = await (Swal as TVueSwalInstance).fire({
+        title: '¿Eliminar este hotel?', text: 'Se eliminan también todos sus tipos de habitación cargados. Esta acción no se puede deshacer.',
+        icon: 'warning', showCancelButton: true, confirmButtonText: 'Sí, eliminar', cancelButtonText: 'Cancelar',
+    });
+    if (!confirmacion.isConfirmed) return;
+
+    try {
+        await opcionMayoristaService.eliminarHotel(hotelId);
+        toast.success('Hotel eliminado');
+        await Promise.all([cargarCotizacion(), cargarOpcionesMayorista()]);
+    } catch (error: any) {
+        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo eliminar el hotel', 'error');
+    }
+};
+
+const onGuardarTarifaMatrix = async (payload: { id: number; tipo_habitacion: string; precio_costo: number; precio_venta: number }) => {
+    try {
+        await opcionMayoristaService.actualizarTarifaHotel(payload.id, payload);
+        await cargarOpcionesMayorista();
+    } catch (error: any) {
+        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo actualizar la tarifa', 'error');
+    }
+};
+
+const onEliminarTarifaMatrix = async (tarifaId: number) => {
+    const confirmacion = await (Swal as TVueSwalInstance).fire({
+        title: '¿Eliminar este tipo de habitación?', text: 'Esta acción no se puede deshacer.',
+        icon: 'warning', showCancelButton: true, confirmButtonText: 'Sí, eliminar', cancelButtonText: 'Cancelar',
+    });
+    if (!confirmacion.isConfirmed) return;
+
+    try {
+        await opcionMayoristaService.eliminarTarifaHotel(tarifaId);
+        toast.success('Tipo de habitación eliminado');
+        await Promise.all([cargarCotizacion(), cargarOpcionesMayorista()]);
+    } catch (error: any) {
+        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo eliminar', 'error');
+    }
+};
+
+const onAgregarTarifaMatrix = async (payload: { hotelId: number; tipo_habitacion: string; precio_costo: number; precio_venta: number }) => {
+    try {
+        await opcionMayoristaService.agregarTarifaHotel(payload.hotelId, payload);
+        await cargarOpcionesMayorista();
+    } catch (error: any) {
+        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo agregar el tipo de habitación', 'error');
+    }
+};
+
+// ── Editar/eliminar tours opcionales ya cargados ─────────────────────────
+const opcionalEnEdicionId = ref<number | null>(null);
+const formEdicionOpcional = ref({ nombre: '', precio_por_persona: 0, moneda: 'USD' as 'PEN' | 'USD', incluye: '', no_incluye: '' });
+const abrirEdicionOpcional = (opl: OpcionMayoristaOpcional) => {
+    opcionalEnEdicionId.value = opcionalEnEdicionId.value === opl.id ? null : opl.id;
+    formEdicionOpcional.value = {
+        nombre: opl.nombre, precio_por_persona: Number(opl.precio_por_persona), moneda: opl.moneda,
+        incluye: opl.incluye ?? '', no_incluye: opl.no_incluye ?? '',
+    };
+};
+const guardandoEdicionOpcional = ref(false);
+const guardarEdicionOpcional = async (opl: OpcionMayoristaOpcional) => {
+    guardandoEdicionOpcional.value = true;
+    try {
+        await opcionMayoristaService.actualizarOpcional(opl.id, formEdicionOpcional.value);
+        opcionalEnEdicionId.value = null;
+        await cargarOpcionesMayorista();
+    } catch (error: any) {
+        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo actualizar el opcional', 'error');
+    } finally {
+        guardandoEdicionOpcional.value = false;
+    }
+};
+
+const eliminandoOpcionalId = ref<number | null>(null);
+const eliminarOpcionalCargado = async (opl: OpcionMayoristaOpcional) => {
+    const confirmacion = await (Swal as TVueSwalInstance).fire({
+        title: '¿Eliminar este opcional?', text: 'Esta acción no se puede deshacer.',
+        icon: 'warning', showCancelButton: true, confirmButtonText: 'Sí, eliminar', cancelButtonText: 'Cancelar',
+    });
+    if (!confirmacion.isConfirmed) return;
+
+    eliminandoOpcionalId.value = opl.id;
+    try {
+        await opcionMayoristaService.eliminarOpcional(opl.id);
+        toast.success('Opcional eliminado');
+        await cargarOpcionesMayorista();
+    } catch (error: any) {
+        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo eliminar el opcional', 'error');
+    } finally {
+        eliminandoOpcionalId.value = null;
+    }
 };
 
 const eligiendoOpcionId = ref<number | null>(null);
@@ -2379,11 +2652,19 @@ const guardarHotel = async (op: OpcionMayorista) => {
     }
 };
 
+// hotelId/hotelNombre/precioCosto (04-sep-2026) — para la vista agrupada
+// del picker (permitir-gestion-hoteles): la cabecera de cada grupo ya
+// muestra el nombre del hotel, así que acá tipo_habitacion queda SOLO el
+// tipo de habitación (antes traía "{hotel} · {tipo}" repetido, redundante
+// con la nueva cabecera).
 const tarifasHotelPlanas = (op: OpcionMayorista) => {
-    const filas: Array<{ id: number; tipo_habitacion: string; precio: number; registrada: boolean }> = [];
+    const filas: Array<{ id: number; tipo_habitacion: string; precio: number; registrada: boolean; hotelId: number; hotelNombre: string; precioCosto: number }> = [];
     (op.opciones_hotel ?? []).forEach((h) => {
         (h.opciones_hotel_tarifas ?? []).forEach((t) => {
-            filas.push({ id: t.id, tipo_habitacion: `${h.nombre_hotel} · ${t.tipo_habitacion}`, precio: Number(t.precio_venta), registrada: !!t.proveedor_tarifa_id });
+            filas.push({
+                id: t.id, tipo_habitacion: t.tipo_habitacion, precio: Number(t.precio_venta), registrada: !!t.proveedor_tarifa_id,
+                hotelId: h.id, hotelNombre: h.nombre_hotel, precioCosto: Number(t.precio_costo),
+            });
         });
     });
     return filas;
@@ -2407,6 +2688,17 @@ const agregarItemMayorista = async (op: OpcionMayorista, opcionHotelTarifaId: nu
 
 // Sesión M4 — mismo atajo que agregarGrupoProveedorHotel(), para el flujo
 // mayorista (Internacional).
+// Bug real encontrado por el usuario (04-sep-2026, simulación Panamá): acá
+// "cantidad: 1" quedaba hardcodeado sin importar cuántos adultos viajan —
+// el "Adultos" que sí se ve y se usa en agregarItemMayorista() (flujo
+// "Elegir" una sola habitación) nunca llegaba a este flujo de comparación
+// en grupo, así que el Total de un grupo agregado acá salía por la mitad
+// (o menos) del precio real. precio_venta ya es "por persona", así que
+// multiplicar por el total de adultos de la cotización da el total
+// correcto para comparar varios hoteles pensados para TODO el grupo de
+// viajeros — repartir el grupo en habitaciones de distinta capacidad
+// (ej. 4 personas → 1 matrimonial + 1 simple) sigue sin tener herramienta
+// propia, eso queda fuera de este fix.
 const agregarGrupoMayorista = async (op: OpcionMayorista, opcionHotelTarifaIds: number[]) => {
     if (!alternativaActiva.value) return;
     const grupoOpcionId = generarUuidGrupo();
@@ -2416,7 +2708,7 @@ const agregarGrupoMayorista = async (op: OpcionMayorista, opcionHotelTarifaIds: 
             const res = await alternativaItemService.agregarMayorista(alternativaActiva.value.id, {
                 opcion_mayorista_id: op.id,
                 opcion_hotel_tarifa_id: opcionHotelTarifaId,
-                cantidad: 1,
+                cantidad: cantidadAdultosCotizacion.value,
                 dia_referencial: diaActivoParaAgregar.value,
                 alternativa_destino_id: destinoActivoId.value,
                 grupo_opcion_id: grupoOpcionId,
@@ -2643,6 +2935,35 @@ const eliminarItem = async (item: AlternativaItem) => {
     }
 };
 
+// Sesión UX2 (04-sep-2026) — hallazgo del usuario: nada impedía crear varios
+// bloques "N opciones de hotel" idénticos (repetir "Comparar varias
+// opciones" con el mismo set), y borrarlos fila por fila con eliminarItem()
+// de arriba no era intuitivo. Mismo patrón de confirmación/try-catch, pero
+// contra el endpoint que borra el grupo_opcion_id completo de una sola vez.
+const eliminandoGrupoId = ref<string | null>(null);
+const eliminarGrupoLienzo = async (fila: { grupoId: string; items: AlternativaItem[] }) => {
+    const confirmacion = await (Swal as TVueSwalInstance).fire({
+        title: '¿Eliminar todo este bloque?',
+        text: `Se van a eliminar las ${fila.items.length} opciones de hotel de este grupo. Esta acción no se puede deshacer.`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, eliminar todo',
+        cancelButtonText: 'Cancelar',
+    });
+    if (!confirmacion.isConfirmed) return;
+
+    eliminandoGrupoId.value = fila.grupoId;
+    try {
+        await alternativaItemService.eliminarGrupo(fila.grupoId);
+        toast.success('Grupo eliminado');
+        await cargarCotizacion();
+    } catch (error: any) {
+        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo eliminar el grupo', 'error');
+    } finally {
+        eliminandoGrupoId.value = null;
+    }
+};
+
 // ── Edición en vivo (descuento_pct / precio_convertido) ────────────────
 // Punto B (Sesión 11i) — monto_descuento se agrega SOLO para inicializar/
 // mostrar el input cuando modo_descuento_item='monto' (derivado de
@@ -2728,6 +3049,32 @@ const totalEfectivoLocal = (items: AlternativaItem[]): number => {
 };
 
 const subtotalGrupo = (items: AlternativaItem[]) => totalEfectivoLocal(items);
+
+// Hallazgo del usuario (04-sep-2026): totalEfectivoLocal()/subtotalGrupo()
+// de arriba ya calculaban bien el NÚMERO (elegida, o el mínimo del grupo
+// mientras no se resuelva) — pero la lista de líneas del resumen (debajo
+// del subtotal) seguía iterando TODOS los ítems sueltos tal cual, sin
+// aplicar el mismo criterio: un grupo de 3 opciones de hotel salía como 3
+// líneas idénticas ("Paquete mayorista", repetido), sin poder saber cuál
+// de las 3 pesaba en el total. Mismo criterio que totalEfectivoLocal(): 1
+// sola línea por grupo (la elegida, o la de menor precio si sigue abierto).
+const filasResumen = (items: AlternativaItem[]): AlternativaItem[] => {
+    const sueltos = items.filter((item) => !item.grupo_opcion_id);
+    const grupos = new Map<string, AlternativaItem[]>();
+    for (const item of items) {
+        if (!item.grupo_opcion_id) continue;
+        if (!grupos.has(item.grupo_opcion_id)) grupos.set(item.grupo_opcion_id, []);
+        grupos.get(item.grupo_opcion_id)!.push(item);
+    }
+
+    const representantes = Array.from(grupos.values()).map((itemsDelGrupo) => {
+        const elegida = itemsDelGrupo.find((item) => item.opcion_elegida);
+        if (elegida) return elegida;
+        return itemsDelGrupo.reduce((min, item) => (totalConvertidoLocal(item) < totalConvertidoLocal(min) ? item : min));
+    });
+
+    return [...sueltos, ...representantes];
+};
 
 const totalLocal = computed(() => totalEfectivoLocal(alternativaActiva.value?.items ?? []));
 
@@ -2848,10 +3195,29 @@ const iconoItem = (item: AlternativaItem) => {
     return 'fa-concierge-bell';
 };
 
+// Hallazgo del usuario (04-sep-2026): el grupo de comparación de hoteles
+// en el lienzo solo decía "3 opciones de hotel" — el vendedor no podía ver
+// a qué mayorista corresponde sin abrir el drawer. Todos los ítems de un
+// mismo grupo comparten opcion_mayorista_id, así que con el primero alcanza.
+const nombreMayoristaDeGrupo = (items: AlternativaItem[]): string | null => {
+    const op = items[0]?.opcion_mayorista;
+    return op?.proveedor?.nombre_comercial ?? op?.proveedor?.razon_social ?? null;
+};
+
 const etiquetaItem = (item: AlternativaItem) => {
     if (item.origen_tipo === 'manual') return item.descripcion_manual ?? 'Servicio sin catálogo';
     if (item.origen_tipo === 'pasaje_aereo') return item.cotizacion_pasaje_aereo?.aerolinea ?? 'Pasaje aéreo';
-    if (item.origen_tipo === 'mayorista') return item.opcion_mayorista?.proveedor?.nombre_comercial ?? item.opcion_mayorista?.proveedor?.razon_social ?? 'Paquete mayorista';
+    // Hallazgo del usuario (04-sep-2026): esta función es una copia en el
+    // frontend del mismo resolver que se corrigió hoy en el backend
+    // (ReservaController::resolverNombreItem()) — tenía el mismo bug:
+    // origen_tipo=mayorista con opcion_hotel_tarifa (viene de la matriz de
+    // hoteles) caía acá y mostraba "Paquete mayorista" en vez de
+    // "hotel · tipo_habitación", tanto en el lienzo como en el resumen.
+    // Ahora solo cae acá cuando NO es un ítem de la matriz de hoteles
+    // (paquete "tarifa fija" sin habitación propia).
+    if (item.origen_tipo === 'mayorista' && !item.opcion_hotel_tarifa) {
+        return item.opcion_mayorista?.proveedor?.nombre_comercial ?? item.opcion_mayorista?.proveedor?.razon_social ?? 'Paquete mayorista';
+    }
     if (item.origen_tipo === 'guia') {
         const nombreGuia = item.guia_tarifa?.guia?.nombre ?? 'Guía';
         return `Guía: ${nombreGuia}${item.guia_tarifa?.destino?.nombre ? ` — ${item.guia_tarifa.destino.nombre}` : ''}`;

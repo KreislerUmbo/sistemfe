@@ -125,7 +125,13 @@ class CotizacionController extends Controller
             'alternativas.items.proveedorTarifa.proveedorServicio.proveedor',
             'alternativas.items.proveedorTarifa.proveedorServicio.destinoServicio.servicio',
             'alternativas.items.proveedorTarifa.proveedorServicio.destinoServicio.destinoAtractivo',
-            'alternativas.items.opcionMayorista',
+            // .proveedor (04-sep-2026): sin esto, etiquetaItem() del cotizador
+            // no tiene forma de mostrar a qué mayorista pertenece un ítem
+            // "tarifa fija" (paquete completo sin habitación propia) ni el
+            // lienzo puede mostrar el nombre del mayorista en la cabecera de
+            // un grupo de hoteles — caía siempre al fallback genérico
+            // "Paquete mayorista".
+            'alternativas.items.opcionMayorista.proveedor',
             // Sesión M2/M4 — hotel de la matriz (mayorista o ad-hoc LOCAL,
             // ver OpcionHotelController::store()), sin ProveedorTarifa
             // real. Gap real encontrado en verificación en vivo de M4: sin

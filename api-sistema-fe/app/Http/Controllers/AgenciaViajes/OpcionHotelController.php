@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\AgenciaViajes;
 
 use App\Http\Controllers\Controller;
+use App\Models\AgenciaViajes\AlternativaItem;
 use App\Models\AgenciaViajes\ConfiguracionAgencia;
 use App\Models\AgenciaViajes\DestinoServicio;
 use App\Models\AgenciaViajes\OpcionHotel;
@@ -11,6 +12,7 @@ use App\Models\AgenciaViajes\Proveedor;
 use App\Models\AgenciaViajes\ProveedorServicio;
 use App\Models\AgenciaViajes\ProveedorTarifa;
 use App\Models\AgenciaViajes\ProveedorTipoConfig;
+use App\Models\AgenciaViajes\ReservaItem;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -83,6 +85,159 @@ class OpcionHotelController extends Controller
         $hotel->load('opcionesHotelTarifas');
 
         return response()->json(['code' => 200, 'message' => 'Hotel agregado correctamente', 'opcion_hotel' => $hotel]);
+    }
+
+    // PUT opciones-hotel/{id} — corregir metadata del hotel (nombre/
+    // categoría/proveedor). Update directo sin versionado, mismo criterio
+    // que OpcionMayoristaController::update() — el precio real ya vive
+    // congelado por ítem en cada AlternativaItem ya agregado, esto no lo
+    // toca.
+    public function update(Request $request, string $id)
+    {
+        $hotel = OpcionHotel::findOrFail($id);
+
+        $validator = Validator::make($request->all(), [
+            'nombre_hotel' => 'required|string|max:250',
+            'categoria_estrellas' => 'nullable|integer|min:1|max:5',
+            'proveedor_id' => 'nullable|integer|exists:proveedores,id',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
+        }
+
+        $hotel->update($validator->validated());
+        $hotel->load('opcionesHotelTarifas');
+
+        return response()->json(['code' => 200, 'message' => 'Hotel actualizado correctamente', 'opcion_hotel' => $hotel]);
+    }
+
+    // DELETE opciones-hotel/{id} — mismo guard que AlternativaItemController::
+    // destroy(): bloquea si alguna tarifa de este hotel ya está referenciada
+    // por un AlternativaItem con una reserva real generada (Venta Directa
+    // puede crear alternativa→reserva en el mismo request, no hace falta
+    // esperar a "aceptar" la cotización completa). Cascada a sus tarifas y a
+    // los AlternativaItem sueltos que las usaban (sin reserva).
+    public function destroy(string $id)
+    {
+        $hotel = OpcionHotel::with('opcionesHotelTarifas')->findOrFail($id);
+        $tarifaIds = $hotel->opcionesHotelTarifas->pluck('id');
+
+        if (self::tieneReservaGenerada($tarifaIds)) {
+            return response()->json([
+                'code' => 422,
+                'message' => 'No se puede eliminar: este hotel ya tiene una reserva generada sobre alguna de sus tarifas. Cancelá la reserva primero si corresponde.',
+            ], 422);
+        }
+
+        $alternativaIds = AlternativaItem::whereIn('opcion_hotel_tarifa_id', $tarifaIds)->pluck('alternativa_id')->unique();
+
+        DB::transaction(function () use ($hotel, $tarifaIds) {
+            AlternativaItem::whereIn('opcion_hotel_tarifa_id', $tarifaIds)->delete();
+            OpcionHotelTarifa::whereIn('id', $tarifaIds)->delete();
+            $hotel->delete();
+        });
+
+        self::recalcularAlternativas($alternativaIds);
+
+        return response()->json(['code' => 200, 'message' => 'Hotel eliminado correctamente']);
+    }
+
+    // POST opciones-hotel/{id}/tarifas — agregar un tipo de habitación nuevo
+    // a un hotel ya creado (antes solo se podía al crear el hotel por
+    // primera vez, en store()).
+    public function agregarTarifa(Request $request, string $id)
+    {
+        $hotel = OpcionHotel::findOrFail($id);
+
+        $validator = Validator::make($request->all(), [
+            'tipo_habitacion' => 'required|in:simple,matrimonial,doble,triple,familiar',
+            'precio_costo' => 'required|numeric|min:0',
+            'precio_venta' => 'required|numeric|min:0',
+            'proveedor_tarifa_id' => 'nullable|integer|exists:proveedor_tarifas,id',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
+        }
+
+        $tarifa = OpcionHotelTarifa::create($validator->validated() + ['opcion_hotel_id' => $hotel->id]);
+
+        return response()->json(['code' => 200, 'message' => 'Tarifa agregada correctamente', 'opcion_hotel_tarifa' => $tarifa]);
+    }
+
+    // PUT opcion-hotel-tarifas/{id} — corregir un tipo de habitación ya
+    // cargado. Update directo sin versionado (mismo criterio de arriba).
+    public function actualizarTarifa(Request $request, string $id)
+    {
+        $tarifa = OpcionHotelTarifa::findOrFail($id);
+
+        $validator = Validator::make($request->all(), [
+            'tipo_habitacion' => 'required|in:simple,matrimonial,doble,triple,familiar',
+            'precio_costo' => 'required|numeric|min:0',
+            'precio_venta' => 'required|numeric|min:0',
+            'proveedor_tarifa_id' => 'nullable|integer|exists:proveedor_tarifas,id',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
+        }
+
+        $tarifa->update($validator->validated());
+
+        return response()->json(['code' => 200, 'message' => 'Tarifa actualizada correctamente', 'opcion_hotel_tarifa' => $tarifa->fresh()]);
+    }
+
+    // DELETE opcion-hotel-tarifas/{id} — mismo guard de reserva que destroy() del hotel.
+    public function eliminarTarifa(string $id)
+    {
+        $tarifa = OpcionHotelTarifa::findOrFail($id);
+
+        if (self::tieneReservaGenerada(collect([$tarifa->id]))) {
+            return response()->json([
+                'code' => 422,
+                'message' => 'No se puede eliminar: esta tarifa ya tiene una reserva generada. Cancelá la reserva primero si corresponde.',
+            ], 422);
+        }
+
+        $alternativaIds = AlternativaItem::where('opcion_hotel_tarifa_id', $tarifa->id)->pluck('alternativa_id')->unique();
+
+        DB::transaction(function () use ($tarifa) {
+            AlternativaItem::where('opcion_hotel_tarifa_id', $tarifa->id)->delete();
+            $tarifa->delete();
+        });
+
+        self::recalcularAlternativas($alternativaIds);
+
+        return response()->json(['code' => 200, 'message' => 'Tarifa eliminada correctamente']);
+    }
+
+    // Compartido por destroy()/eliminarTarifa() — mismo guard que ya usa
+    // AlternativaItemController::destroy() para un ítem suelto: bloquea si
+    // el ítem ya generó una reserva real (Venta Directa puede crear
+    // alternativa→reserva→reserva_items en el mismo request, no solo al
+    // aceptar la cotización completa).
+    private static function tieneReservaGenerada(\Illuminate\Support\Collection $tarifaIds): bool
+    {
+        $itemIds = AlternativaItem::whereIn('opcion_hotel_tarifa_id', $tarifaIds)->pluck('id');
+
+        return ReservaItem::whereIn('alternativa_item_id', $itemIds)->exists();
+    }
+
+    // Compartido por destroy()/eliminarTarifa() — un hotel/tarifa ad-hoc
+    // local no tiene FK propia hacia una alternativa (a propósito, ver
+    // docblock de la clase), así que se recalculan todas las alternativas
+    // realmente afectadas (normalmente una sola) en vez de asumir cuál.
+    private static function recalcularAlternativas(\Illuminate\Support\Collection $alternativaIds): void
+    {
+        foreach ($alternativaIds as $alternativaId) {
+            $alternativa = \App\Models\AgenciaViajes\Alternativa::find($alternativaId);
+            if (! $alternativa) {
+                continue;
+            }
+            $total = AlternativaItem::calcularTotalEfectivo($alternativa->items()->get())['total'];
+            $alternativa->update(['total' => $total]);
+        }
     }
 
     // POST opciones-hotel/{id}/promover — Ronda 4/P12. Promueve TODA la

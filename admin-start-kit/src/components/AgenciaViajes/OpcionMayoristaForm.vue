@@ -1,6 +1,6 @@
 <template>
     <div class="card border p-2 small">
-        <select class="form-select form-select-sm mb-1" v-model="form.proveedor_id">
+        <select ref="selectProveedorRef" class="form-select form-select-sm mb-1" v-model="form.proveedor_id">
             <option :value="null">— Proveedor mayorista —</option>
             <option v-for="p in proveedoresMayoristas" :key="p.id" :value="p.id">{{ p.nombre_comercial ?? p.razon_social }}</option>
         </select>
@@ -9,6 +9,13 @@
             <option value="PEN">PEN</option>
         </select>
         <input type="text" class="form-control form-control-sm mb-1" placeholder="Vuelo (aerolínea)" v-model="form.vuelo_aerolinea">
+        <!-- Simulación Panamá (04-sep-2026) — itinerario del vuelo (fechas/
+             horarios/equipaje permitido), impreso en el PDF junto a la
+             aerolínea de arriba (AlternativaController::pdf(), sección
+             "Vuelo"). Antes se capturaba (columna ya existía) pero no había
+             ningún input para cargarlo. -->
+        <textarea class="form-control form-control-sm mb-1" rows="2" placeholder="Detalle del vuelo (fechas, horarios, equipaje...)"
+            v-model="form.vuelo_detalle"></textarea>
         <!-- Fix C1 (02-sep-2026) — lo único que resolverNombreItemPdf() puede
              imprimir en el PDF comercial para esta opción; el nombre del
              mayorista/proveedor nunca llega a ese documento. -->
@@ -37,6 +44,11 @@
         </div>
 
         <textarea class="form-control form-control-sm mb-1" rows="2" placeholder="Incluye..." v-model="form.incluye"></textarea>
+        <!-- Simulación Panamá (04-sep-2026) — "No incluye" del paquete base
+             (columna nueva, opcion_mayorista.no_incluye); ya existía este
+             mismo campo por cada tour opcional (ver formOpcional en
+             editar.vue), pero faltaba acá para el paquete completo. -->
+        <textarea class="form-control form-control-sm mb-1" rows="2" placeholder="No incluye..." v-model="form.no_incluye"></textarea>
         <div class="d-flex gap-2">
             <button class="btn btn-primary btn-sm w-100" @click="guardar" :disabled="guardando">
                 <span v-if="guardando" class="spinner-border spinner-border-sm me-1"></span>{{ opcionExistente ? 'Guardar' : 'Agregar' }}
@@ -53,7 +65,7 @@
 // crear) sin duplicar el markup del buscador de contenido reutilizable.
 // Mismo molde que PasajeAereoForm.vue/ItemManualForm.vue: opcionExistente
 // nullable + watch inmediato para poblar/limpiar, emit agregado/actualizado.
-import { ref, watch } from 'vue';
+import { ref, watch, nextTick } from 'vue';
 import Swal from 'sweetalert2/dist/sweetalert2.js';
 import { opcionMayoristaService } from '@/services/admin/opcionMayoristaService';
 import { contenidoTourService } from '@/services/admin/contenidoTourService';
@@ -74,7 +86,7 @@ const emit = defineEmits<{
 }>();
 
 const form = ref({
-    proveedor_id: null as number | null, moneda: 'USD' as 'PEN' | 'USD', vuelo_aerolinea: '', incluye: '',
+    proveedor_id: null as number | null, moneda: 'USD' as 'PEN' | 'USD', vuelo_aerolinea: '', vuelo_detalle: '', incluye: '', no_incluye: '',
     contenido_tour_id: null as number | null, descripcion_publica: '',
 });
 
@@ -142,19 +154,29 @@ const resetearCampos = () => {
     const op = props.opcionExistente;
     if (op) {
         form.value = {
-            proveedor_id: op.proveedor_id, moneda: op.moneda, vuelo_aerolinea: op.vuelo_aerolinea ?? '',
-            incluye: op.incluye ?? '', contenido_tour_id: null, descripcion_publica: op.descripcion_publica ?? '',
+            proveedor_id: op.proveedor_id, moneda: op.moneda, vuelo_aerolinea: op.vuelo_aerolinea ?? '', vuelo_detalle: op.vuelo_detalle ?? '',
+            incluye: op.incluye ?? '', no_incluye: op.no_incluye ?? '', contenido_tour_id: null, descripcion_publica: op.descripcion_publica ?? '',
         };
     } else {
-        form.value = { proveedor_id: null, moneda: 'USD', vuelo_aerolinea: '', incluye: '', contenido_tour_id: null, descripcion_publica: '' };
+        form.value = { proveedor_id: null, moneda: 'USD', vuelo_aerolinea: '', vuelo_detalle: '', incluye: '', no_incluye: '', contenido_tour_id: null, descripcion_publica: '' };
     }
     resetContenidoTourBuscador();
 };
 watch(() => props.opcionExistente, resetearCampos, { immediate: true });
 
+// Hallazgo real del usuario (04-sep-2026): antes acá había un simple
+// `return` sin ningún aviso — el botón "Agregar" parecía "pegado" (ni
+// spinner, ni mensaje) si el vendedor completaba todo el formulario menos
+// el proveedor mayorista, que es el único campo realmente obligatorio acá.
+const selectProveedorRef = ref<HTMLSelectElement | null>(null);
 const guardando = ref(false);
 const guardar = async () => {
-    if (!form.value.proveedor_id) return;
+    if (!form.value.proveedor_id) {
+        await (Swal as TVueSwalInstance).fire('Falta el proveedor mayorista', 'Elegí a qué mayorista corresponde esta cotización antes de guardar.', 'warning');
+        await nextTick();
+        selectProveedorRef.value?.focus();
+        return;
+    }
     guardando.value = true;
     try {
         if (props.opcionExistente) {
