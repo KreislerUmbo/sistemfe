@@ -12,9 +12,14 @@ use App\Models\AgenciaViajes\OpcionHotel;
 use App\Models\AgenciaViajes\OpcionHotelTarifa;
 use App\Models\AgenciaViajes\OpcionMayorista;
 use App\Models\AgenciaViajes\OpcionMayoristaOpcional;
+use App\Models\AgenciaViajes\AfiliacionTurismo;
+use App\Models\AgenciaViajes\ConfiguracionAgenciaPdf;
+use App\Models\AgenciaViajes\PaquetePlantilla;
 use App\Models\AgenciaViajes\Reserva;
 use App\Models\AgenciaViajes\TipoCambioAgencia;
+use App\Services\AgenciaViajes\ImagenRecorteService;
 use App\Services\AgenciaViajes\PriceEngineService;
+use App\Services\StorageUrl;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -26,8 +31,10 @@ class AlternativaController extends Controller
 {
     private const MAX_ALTERNATIVAS_POR_COTIZACION = 5;
 
-    public function __construct(private PriceEngineService $priceEngine)
-    {
+    public function __construct(
+        private PriceEngineService $priceEngine,
+        private ImagenRecorteService $imagenRecorte,
+    ) {
     }
 
     public function store(Request $request, string $cotizacionId)
@@ -675,6 +682,18 @@ class AlternativaController extends Controller
         $total = (float) $alternativa->total;
         $descuentoMonto = round($totalOriginal - $total, 2);
 
+        // Mejora del PDF de cotización (plan-mejora-pdf-cotizacion-cliente.md)
+        // — marca por agencia, fotos de portada/galería/hoteles, cinta de
+        // categoría. Todo con defaults de sistema si el tenant no configuró
+        // nada (§6 del plan): ConfiguracionAgenciaPdf::actual() nunca
+        // devuelve null.
+        $configPdf = ConfiguracionAgenciaPdf::actual();
+        $categoria = $this->resolverCategoriaAlternativa($alternativa);
+        $colorCategoria = $this->colorPorCategoria($categoria, $configPdf);
+        $afiliaciones = $this->afiliacionesParaMostrar($configPdf);
+        [$fotoPortadaPrincipal, $fotosPortadaSecundarias, $fotosGaleria] = $this->fotosTourParaPdf($alternativa, $configPdf);
+        $hotelesInfo = $this->hotelesInfoParaPdf($opcionesHoteles);
+
         $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('pdf.agencia-viajes.alternativa', [
             'alternativa' => $alternativa,
             'cotizacion' => $alternativa->cotizacion,
@@ -689,6 +708,16 @@ class AlternativaController extends Controller
             // (29-ago-2026).
             'logoUrl' => \App\Services\StorageUrl::resolveParaPdf($empresa?->logo_horizontal),
             'config' => $config,
+            'configPdf' => $configPdf,
+            'headerCustomUrl' => StorageUrl::resolveParaPdf($configPdf->imagen_header_custom),
+            'footerCustomUrl' => StorageUrl::resolveParaPdf($configPdf->imagen_footer_custom),
+            'afiliaciones' => $afiliaciones,
+            'categoria' => $categoria,
+            'colorCategoria' => $colorCategoria,
+            'fotoPortadaPrincipal' => $fotoPortadaPrincipal,
+            'fotosPortadaSecundarias' => $fotosPortadaSecundarias,
+            'fotosGaleria' => $fotosGaleria,
+            'hotelesInfo' => $hotelesInfo,
             'cuentasBancarias' => $cuentasBancarias,
             'pasajeros' => $pasajeros,
             'itinerario' => $itinerario,
@@ -959,7 +988,7 @@ class AlternativaController extends Controller
                 [$hotel, $tipoHabitacion] = $partes;
                 $tiposPresentes[$tipoHabitacion] = true;
 
-                $filasPorHotel[$hotel] ??= ['hotel' => $hotel, 'precios' => [], 'elegida' => false];
+                $filasPorHotel[$hotel] ??= ['hotel' => $hotel, 'precios' => [], 'elegida' => false, 'opcion_hotel_id' => $item->opcionHotelTarifa?->opcion_hotel_id];
                 $filasPorHotel[$hotel]['precios'][$tipoHabitacion] = (float) $item->precio_convertido;
                 if ($item->opcion_elegida) {
                     $filasPorHotel[$hotel]['elegida'] = true;
@@ -988,6 +1017,154 @@ class AlternativaController extends Controller
                 'resuelto' => collect($filasPorHotel)->contains('elegida', true),
             ];
         })->filter(fn (array $g) => count($g['filas']) > 0)->values()->all();
+    }
+
+    // Mejora del PDF de cotización (plan-mejora-pdf-cotizacion-cliente.md
+    // §7) — la cinta de categoría usa la "más alta" presente en la
+    // alternativa: internacional > nacional > local. Un ítem de mayorista
+    // (opcion_mayorista_id) es SIEMPRE internacional por definición del
+    // negocio (OpcionHotel::class docblock: "opcion_mayorista exclusivo de
+    // paquetes internacionales con fecha fija") — no tiene
+    // paquetes_plantilla.categoria propia porque no nace de un tour del
+    // catálogo. Un ítem con tour_origen_id hereda la categoría de ESE tour.
+    // Cualquier otro origen (manual/guía/pasaje aéreo/hotel local ad-hoc)
+    // no tiene una señal de categoría propia — cae a 'nacional' (el color
+    // intermedio por defecto), simplificación deliberada: no hay hoy un
+    // campo de categoría a nivel de esos orígenes, y bloquear la cinta
+    // hasta que alguien lo agregue sería peor que un default razonable.
+    private function resolverCategoriaAlternativa(Alternativa $alternativa): string
+    {
+        $tourIds = $alternativa->items->pluck('tour_origen_id')->filter()->unique();
+        $categoriasDeTours = $tourIds->isEmpty()
+            ? collect()
+            : PaquetePlantilla::whereIn('id', $tourIds)->pluck('categoria');
+
+        $categorias = $alternativa->items->map(
+            fn (AlternativaItem $item) => $item->opcion_mayorista_id ? 'internacional' : null
+        )->filter()->merge($categoriasDeTours);
+
+        foreach (['internacional', 'nacional', 'local'] as $prioridad) {
+            if ($categorias->contains($prioridad)) {
+                return $prioridad;
+            }
+        }
+
+        return 'nacional';
+    }
+
+    private function colorPorCategoria(string $categoria, ConfiguracionAgenciaPdf $configPdf): string
+    {
+        return match ($categoria) {
+            'internacional' => $configPdf->color_categoria_internacional,
+            'local' => $configPdf->color_categoria_local,
+            default => $configPdf->color_categoria_nacional,
+        };
+    }
+
+    // plan §4.3 — solo arma la franja si mostrar_afiliaciones=true Y la
+    // agencia marcó al menos una. AfiliacionTurismo vive en la base
+    // central (CentralConnection) — un solo whereIn() para resolver todas
+    // las marcadas, sin N+1.
+    private function afiliacionesParaMostrar(ConfiguracionAgenciaPdf $configPdf): \Illuminate\Support\Collection
+    {
+        if (! $configPdf->mostrar_afiliaciones || ! $configPdf->exists) {
+            return collect();
+        }
+
+        $marcadas = $configPdf->afiliaciones()->get();
+        if ($marcadas->isEmpty()) {
+            return collect();
+        }
+
+        $catalogo = AfiliacionTurismo::whereIn('id', $marcadas->pluck('afiliacion_id'))->get()->keyBy('id');
+
+        return $marcadas->map(function ($m) use ($catalogo) {
+            $afiliacion = $catalogo->get($m->afiliacion_id);
+
+            return $afiliacion ? [
+                'nombre' => $afiliacion->nombre,
+                'logo' => StorageUrl::resolveParaPdf($afiliacion->logo_path),
+            ] : null;
+        })->filter()->values();
+    }
+
+    // plan §4.5 — portada (1 principal + hasta 2 secundarias) + galería de
+    // itinerario (hasta 4), ambas desde el PRIMER tour con tour_origen_id
+    // que aparece en la alternativa (mismo criterio que "el tour de esta
+    // cotización" para portada visual — una alternativa multi-tour de
+    // todas formas necesita UN solo set de fotos de portada, no uno por
+    // tour). Recorte 4:3 centrado vía ImagenRecorteService, nunca el
+    // original (evita el estiramiento que dompdf produciría con
+    // object-fit, que no soporta).
+    private function fotosTourParaPdf(Alternativa $alternativa, ConfiguracionAgenciaPdf $configPdf): array
+    {
+        if (! $configPdf->mostrar_fotos_tour) {
+            return [null, [], []];
+        }
+
+        $tourId = $alternativa->items->pluck('tour_origen_id')->filter()->first();
+        $tour = $tourId ? PaquetePlantilla::find($tourId) : null;
+
+        if (! $tour || ! $tour->foto_portada) {
+            return [null, [], []];
+        }
+
+        $destacadas = $tour->fotos_destacadas_pdf ?? [];
+        $secundarias = array_values(array_diff($destacadas, [$tour->foto_portada]));
+
+        return [
+            $this->imagenRecorte->recortar4x3ParaPdf($tour->foto_portada),
+            $this->imagenRecorte->recortarVariasParaPdf(array_slice($secundarias, 0, 2)),
+            $this->imagenRecorte->recortarVariasParaPdf(array_slice($destacadas, 0, 4)),
+        ];
+    }
+
+    // plan §4.5 — sección "Fotos referenciales de los hoteles": por cada
+    // hotel YA listado en la tabla de precios (opcionesHoteles(), que ahora
+    // lleva 'opcion_hotel_id' por fila), su tira fachada+habitación(es) +
+    // check-in/check-out si el hotel está ligado a un Proveedor real con
+    // ProveedorAlojamientoDetalle cargado. Un hotel sin ninguna foto no
+    // entra al mapa — el blade omite su bloque por completo (plan: "nunca
+    // se deja un casillero en blanco").
+    private function hotelesInfoParaPdf(array $opcionesHoteles): array
+    {
+        $idsHotel = collect($opcionesHoteles)
+            ->flatMap(fn (array $grupo) => collect($grupo['filas'])->pluck('opcion_hotel_id'))
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($idsHotel->isEmpty()) {
+            return [];
+        }
+
+        $hoteles = OpcionHotel::with('proveedor.alojamientoDetalle')->whereIn('id', $idsHotel)->get();
+
+        $info = [];
+        foreach ($hoteles as $hotel) {
+            $fotos = collect($hotel->fotos ?? []);
+            $fachada = $fotos->firstWhere('tipo_foto', 'fachada');
+            $habitaciones = $fotos->where('tipo_foto', 'habitacion')->take(2);
+
+            $tira = collect([$fachada])->filter()->concat($habitaciones)
+                ->map(fn (array $f) => $this->imagenRecorte->recortar4x3ParaPdf($f['path']))
+                ->filter()
+                ->values();
+
+            if ($tira->isEmpty()) {
+                continue;
+            }
+
+            $detalle = $hotel->proveedor?->alojamientoDetalle;
+
+            $info[$hotel->id] = [
+                'fotos' => $tira->all(),
+                'check_in' => $detalle?->hora_checkin,
+                'check_out' => $detalle?->hora_checkout,
+            ];
+        }
+
+        return $info;
     }
 
     // Compartido con ReservaController::aceptar() y VentaDirectaController::store()

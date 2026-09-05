@@ -293,6 +293,102 @@
             text-align: center;
             color: #444444;
         }
+
+        /* ── Mejora del PDF de cotización (plan-mejora-pdf-cotizacion-cliente.md) ── */
+        .cinta-categoria {
+            color: #ffffff;
+            font-weight: bold;
+            font-size: 11px;
+            text-transform: uppercase;
+            text-align: center;
+            padding: 4px 0;
+            margin: 10px 0;
+            letter-spacing: 1px;
+        }
+
+        .afiliaciones-franja {
+            margin-top: 8px;
+            padding-top: 6px;
+            border-top: 1px solid #cccccc;
+            font-size: 9px;
+            color: #666666;
+            text-align: center;
+        }
+
+        .afiliaciones-franja img {
+            max-height: 24px;
+            margin: 0 6px;
+            vertical-align: middle;
+        }
+
+        .portada-bloque {
+            margin: 12px 0;
+        }
+
+        .portada-principal img {
+            width: 100%;
+            max-height: 260px;
+            object-fit: cover;
+            border-radius: 3px;
+        }
+
+        .portada-secundarias {
+            width: 120px;
+        }
+
+        .portada-secundarias img {
+            width: 120px;
+            height: 88px;
+            object-fit: cover;
+            border-radius: 3px;
+            margin-bottom: 6px;
+            display: block;
+        }
+
+        .galeria-itinerario {
+            margin: 10px 0;
+        }
+
+        .galeria-itinerario img {
+            width: 23%;
+            margin-right: 2%;
+            border-radius: 3px;
+        }
+
+        /* ── Fotos referenciales de los hoteles (plan §4.5) ────────── */
+        .hotel-fotos-bloque {
+            margin-bottom: 10px;
+        }
+
+        .hotel-fotos-nombre {
+            font-weight: bold;
+            font-size: 12px;
+            margin-bottom: 4px;
+        }
+
+        .hotel-fotos-tira img {
+            width: 31%;
+            margin-right: 2%;
+            border-radius: 3px;
+        }
+
+        .hotel-fotos-datos {
+            font-size: 10px;
+            color: #444444;
+            margin-top: 3px;
+        }
+
+        .footer-marca {
+            margin-top: 14px;
+            text-align: center;
+            font-size: 10px;
+            color: #666666;
+        }
+
+        .footer-marca .eslogan {
+            font-style: italic;
+            margin-bottom: 2px;
+        }
     </style>
 </head>
 
@@ -300,27 +396,58 @@
     <div class="documento">
 
         {{-- ══════════════════ HEADER ══════════════════ --}}
-        <table style="width:100%;" class="header-wrap">
-            <tr>
-                <td style="width:170px; vertical-align:top;">
-                    @if (!empty($logoUrl))
-                        <img src="{{ $logoUrl }}" style="max-width:170px; max-height:70px;">
-                    @else
-                        <div class="logo-box">LOGO</div>
-                    @endif
-                </td>
-                <td style="vertical-align:top; padding:0 16px;">
-                    <div class="empresa-nombre">{{ $empresa->razon_social_comercial ?? $empresa->razon_social ?? '' }}</div>
-                    <div class="empresa-datos">
-                        RUC: {{ $empresa->n_document ?? '-' }}<br>
-                        Teléfono: {{ $empresa->phone ?? '-' }} &nbsp;·&nbsp; Email: {{ $empresa->email ?? '-' }}
-                    </div>
-                </td>
-            </tr>
-        </table>
+        {{-- Override total (plan §4.2): si la agencia cargó su propio
+             membrete diseñado (ej. DKM Xplore), se usa tal cual a ancho
+             completo y se ignoran logo/colores/contacto de abajo para esta
+             zona. Sin override, se genera desde Company + configPdf. --}}
+        @if (!empty($headerCustomUrl))
+            <img src="{{ $headerCustomUrl }}" style="width:100%;">
+        @else
+            <table style="width:100%;" class="header-wrap">
+                <tr>
+                    <td style="width:170px; vertical-align:top;">
+                        @if (!empty($logoUrl))
+                            <img src="{{ $logoUrl }}" style="max-width:170px; max-height:70px;">
+                        @else
+                            <div class="logo-box">LOGO</div>
+                        @endif
+                    </td>
+                    <td style="vertical-align:top; padding:0 16px;">
+                        <div class="empresa-nombre" style="color: {{ $configPdf->color_primario }};">{{ $empresa->razon_social_comercial ?? $empresa->razon_social ?? '' }}</div>
+                        <div class="empresa-datos">
+                            RUC: {{ $empresa->n_document ?? '-' }}<br>
+                            Teléfono: {{ $empresa->phone ?? '-' }} &nbsp;·&nbsp; Email: {{ $empresa->email ?? '-' }}
+                        </div>
+                        @if (!empty($configPdf->eslogan))
+                            <div class="empresa-datos" style="font-style: italic; color: {{ $configPdf->color_secundario }};">{{ $configPdf->eslogan }}</div>
+                        @endif
+                    </td>
+                </tr>
+            </table>
+            {{-- Franja de afiliaciones (Mincetur/Apavit/PromPerú) — solo si
+                 mostrar_afiliaciones=true Y la agencia marcó al menos una
+                 (AlternativaController::afiliacionesParaMostrar()). Un
+                 catálogo sin logo_path cargado cae al nombre en texto. --}}
+            @if (count($afiliaciones) > 0)
+                <div class="afiliaciones-franja">
+                    @foreach ($afiliaciones as $afiliacion)
+                        @if (!empty($afiliacion['logo']))
+                            <img src="{{ $afiliacion['logo'] }}">
+                        @else
+                            <strong>{{ $afiliacion['nombre'] }}</strong>
+                        @endif
+                    @endforeach
+                </div>
+            @endif
+        @endif
 
         <div class="titulo-doc">Cotización {{ $cotizacion->codigo }}</div>
         <div class="subtitulo-doc">{{ $alternativa->nombre }}</div>
+
+        {{-- Cinta de categoría — Local/Nacional/Internacional, color propio
+             por agencia (configPdf). Categoría mixta usa la más alta
+             presente (plan §7): internacional > nacional > local. --}}
+        <div class="cinta-categoria" style="background-color: {{ $colorCategoria }};">{{ ucfirst($categoria) }}</div>
 
         {{-- ══════════════════ CLIENTE / FECHAS ══════════════════ --}}
         @php
@@ -388,6 +515,30 @@
                 </td>
             </tr>
         </table>
+
+        {{-- ══════════════════ PORTADA DEL TOUR (plan §4.5) ══════════════════ --}}
+        {{-- 1 foto principal a ancho completo + hasta 2 secundarias
+             apiladas, del PRIMER tour con fotos de la alternativa. Se omite
+             el bloque completo si mostrar_fotos_tour=false o si el tour no
+             tiene ninguna foto marcada como portada — nunca deja un
+             espacio vacío (plan: "el resto de las fotos cargadas queda
+             disponible en el sistema pero no se usa automáticamente"). --}}
+        @if (!empty($fotoPortadaPrincipal))
+            <table style="width:100%;" class="portada-bloque">
+                <tr>
+                    <td style="width:75%; vertical-align:top;" class="portada-principal">
+                        <img src="{{ $fotoPortadaPrincipal }}">
+                    </td>
+                    @if (count($fotosPortadaSecundarias) > 0)
+                        <td style="width:25%; vertical-align:top; padding-left:8px;" class="portada-secundarias">
+                            @foreach ($fotosPortadaSecundarias as $foto)
+                                <img src="{{ $foto }}">
+                            @endforeach
+                        </td>
+                    @endif
+                </tr>
+            </table>
+        @endif
 
         {{-- ══════════════════ VUELO (Simulación Panamá, 04-sep-2026) ══════════════════ --}}
         {{-- Datos de vuelo de la opción de mayorista elegida
@@ -481,6 +632,19 @@
                             @endforeach
                         </div>
                     @endforeach
+                @endforeach
+            </div>
+        @endif
+
+        {{-- ══════════════════ GALERÍA DE ITINERARIO (plan §4.5) ══════════════════ --}}
+        {{-- Bloque APARTE después de los días, en fila de hasta 4 — no
+             intercalada foto-por-día (plan: "un día con poco texto y foto
+             alta queda desbalanceado si se mezclan"). Mismas fotos
+             destacadas del tour que la portada, puede repetir alguna. --}}
+        @if (count($fotosGaleria) > 0)
+            <div class="seccion galeria-itinerario">
+                @foreach ($fotosGaleria as $foto)
+                    <img src="{{ $foto }}">
                 @endforeach
             </div>
         @endif
@@ -620,6 +784,42 @@
                         </tr>
                     @endforeach
                 </table>
+
+                {{-- Mejora del PDF de cotización (plan §4.5) — sección nueva
+                     "Fotos referenciales de los hoteles", después de la
+                     tabla de precios (que sigue compacta, sin fotos, para
+                     comparar de un vistazo). Mismo patrón que los 3
+                     documentos reales de la agencia (nombre + tira de fotos
+                     + check-in/check-out). Un hotel sin fotos cargadas
+                     (hotelesInfo no trae su id) no imprime bloque — nunca
+                     un casillero en blanco ni 3 fotos estiradas a partir de
+                     una sola. --}}
+                @php
+                    $filasConFotos = collect($grupoHotel['filas'])->filter(
+                        fn ($fila) => isset($fila['opcion_hotel_id']) && isset($hotelesInfo[$fila['opcion_hotel_id']])
+                    );
+                @endphp
+                @if ($filasConFotos->isNotEmpty())
+                    <div class="seccion-titulo" style="margin-top:10px;">Fotos referenciales de los hoteles</div>
+                    @foreach ($filasConFotos as $fila)
+                        @php $info = $hotelesInfo[$fila['opcion_hotel_id']]; @endphp
+                        <div class="hotel-fotos-bloque">
+                            <div class="hotel-fotos-nombre">{{ $fila['hotel'] }}</div>
+                            <div class="hotel-fotos-tira">
+                                @foreach ($info['fotos'] as $foto)
+                                    <img src="{{ $foto }}">
+                                @endforeach
+                            </div>
+                            @if ($info['check_in'] || $info['check_out'])
+                                <div class="hotel-fotos-datos">
+                                    @if ($info['check_in'])Check-in: {{ substr($info['check_in'], 0, 5) }}@endif
+                                    @if ($info['check_in'] && $info['check_out']) &nbsp;·&nbsp; @endif
+                                    @if ($info['check_out'])Check-out: {{ substr($info['check_out'], 0, 5) }}@endif
+                                </div>
+                            @endif
+                        </div>
+                    @endforeach
+                @endif
             </div>
         @endforeach
 
@@ -700,6 +900,19 @@
         <div class="footer-legal">
             Consultá las condiciones generales del servicio en el documento adjunto.
         </div>
+
+        {{-- Override total (plan §4.2): mismo criterio que el header — si
+             hay footer_custom cargado, se usa tal cual y se ignoran
+             eslogan/redes de abajo. --}}
+        @if (!empty($footerCustomUrl))
+            <img src="{{ $footerCustomUrl }}" style="width:100%; margin-top:10px;">
+        @elseif (!empty($configPdf->redes_sociales))
+            <div class="footer-marca">
+                @foreach ($configPdf->redes_sociales as $red)
+                    {{ ucfirst($red['red']) }}: {{ $red['usuario'] }}{{ !$loop->last ? ' &nbsp;·&nbsp; ' : '' }}
+                @endforeach
+            </div>
+        @endif
 
     </div>
 </body>
