@@ -53,15 +53,29 @@
                                     <input type="text" class="form-control form-control-sm" v-model="formHotel.nombre_hotel" @keyup.enter="guardarHotelInterno(fila.hotelId)">
                                     <button class="btn btn-sm btn-primary text-nowrap" @click="guardarHotelInterno(fila.hotelId)">OK</button>
                                 </div>
-                                <!-- Pedido del usuario (05-sep-2026): hasta 3 fotos por hotel. -->
+                                <!-- Pedido del usuario (05-sep-2026): hasta 3 fotos por hotel
+                                     (1 fachada + 2 habitación desde la mejora del PDF de
+                                     cotización — el PDF arma la tira fachada-primero,
+                                     habitación-después). -->
                                 <div v-if="fila.hotelFotos.length" class="d-flex flex-wrap gap-1 mb-1">
-                                    <div v-for="path in fila.hotelFotos" :key="path" class="position-relative">
-                                        <img :src="path" style="width:44px;height:44px;object-fit:cover;border:1px solid #ccc;border-radius:3px;">
-                                        <i class="fas fa-times-circle text-danger position-absolute" style="top:-6px;right:-6px;cursor:pointer;background:#fff;border-radius:50%" title="Eliminar foto" @click="$emit('eliminarFotoHotel', { hotelId: fila.hotelId, path })"></i>
+                                    <div v-for="foto in fila.hotelFotos" :key="foto.path" class="position-relative">
+                                        <img :src="foto.url" style="width:44px;height:44px;object-fit:cover;border:1px solid #ccc;border-radius:3px;">
+                                        <span class="badge bg-dark position-absolute" style="bottom:-4px;left:0;right:0;font-size:8px;">{{ foto.tipo_foto === 'fachada' ? 'Fachada' : 'Hab.' }}</span>
+                                        <i class="fas fa-times-circle text-danger position-absolute" style="top:-6px;right:-6px;cursor:pointer;background:#fff;border-radius:50%" title="Eliminar foto" @click="$emit('eliminarFotoHotel', { hotelId: fila.hotelId, path: foto.url })"></i>
                                     </div>
                                 </div>
-                                <input type="file" accept="image/*" multiple class="form-control form-control-sm" style="font-size:11px"
-                                    :disabled="fila.hotelFotos.length >= 3" @change="onFotosHotelSeleccionadas($event, fila.hotelId, fila.hotelFotos.length)">
+                                <div class="d-flex gap-1">
+                                    <label class="form-label mb-0 small text-secondary" style="font-size:10px;">
+                                        Fachada
+                                        <input type="file" accept="image/*" class="form-control form-control-sm" style="font-size:11px"
+                                            :disabled="conteoFotosPorTipo(fila.hotelFotos, 'fachada') >= 1" @change="onFotosHotelSeleccionadas($event, fila.hotelId, 'fachada')">
+                                    </label>
+                                    <label class="form-label mb-0 small text-secondary" style="font-size:10px;">
+                                        Habitación
+                                        <input type="file" accept="image/*" class="form-control form-control-sm" style="font-size:11px"
+                                            :disabled="conteoFotosPorTipo(fila.hotelFotos, 'habitacion') >= 2" @change="onFotosHotelSeleccionadas($event, fila.hotelId, 'habitacion')">
+                                    </label>
+                                </div>
                             </template>
                             <strong v-else>{{ fila.hotelNombre }}</strong>
                         </td>
@@ -214,10 +228,11 @@ type TarifaHabitacion = {
     hotelId?: number;
     hotelNombre?: string;
     precioCosto?: number;
-    // 05-sep-2026 — máx. 3 por hotel, ya resueltas a URL completa por el
-    // backend (StorageUrl::resolveMuchas()). Igual que hotelId/hotelNombre,
+    // 05-sep-2026 — máx. 3 por hotel (1 fachada + 2 habitación, mejora del
+    // PDF de cotización), ya resueltas por el backend
+    // (OpcionHotelController::resolverFotos()). Igual que hotelId/hotelNombre,
     // se repite en cada fila del mismo hotel; el header solo lee la primera.
-    hotelFotos?: string[];
+    hotelFotos?: Array<{ path: string; tipo_foto: 'fachada' | 'habitacion'; url: string }>;
     // 05-sep-2026 — null/undefined = hotel ad-hoc (candidato a "Promover a
     // proveedor"); con valor = ya es un proveedor real, no se vuelve a promover.
     hotelProveedorId?: number | null;
@@ -266,8 +281,10 @@ const emit = defineEmits<{
     (e: 'eliminarHotel', hotelId: number): void;
     // 05-sep-2026 — inmediatos (no batcheados con guardarHotel): el archivo
     // se sube o la foto se borra apenas el vendedor actúa, mismo criterio
-    // que destinos/form.vue.
-    (e: 'agregarFotosHotel', payload: { hotelId: number; archivos: File[] }): void;
+    // que destinos/form.vue. Una foto por vez con su tipo (mejora del PDF
+    // de cotización, plan-mejora-pdf-cotizacion-cliente.md §4.5): el
+    // backend ahora distingue fachada (máx. 1) de habitación (máx. 2).
+    (e: 'agregarFotosHotel', payload: { hotelId: number; archivo: File; tipoFoto: 'fachada' | 'habitacion' }): void;
     (e: 'eliminarFotoHotel', payload: { hotelId: number; path: string }): void;
     (e: 'promoverHotel', payload: { hotelId: number; hotelNombre: string }): void;
     (e: 'guardarTarifa', payload: { id: number; tipo_habitacion: string; precio_costo: number; precio_venta: number }): void;
@@ -334,7 +351,7 @@ const esGrupoImpar = (hotelId: number) => (indiceHotelPorId.value[hotelId] ?? 0)
 // permitirGestionHoteles=true. Sin ese prop, es un pass-through 1:1 a
 // `tarifas` (comportamiento idéntico al de antes de este cambio).
 type FilaTabla =
-    | { tipo: 'header'; key: string; hotelId: number; hotelNombre: string; hotelFotos: string[]; hotelProveedorId: number | null }
+    | { tipo: 'header'; key: string; hotelId: number; hotelNombre: string; hotelFotos: Array<{ path: string; tipo_foto: 'fachada' | 'habitacion'; url: string }>; hotelProveedorId: number | null }
     | { tipo: 'tarifa'; key: string; data: TarifaHabitacion }
     | { tipo: 'agregar'; key: string; hotelId: number };
 
@@ -359,16 +376,19 @@ const filasParaRenderizar = computed<FilaTabla[]>(() => {
     return filas;
 });
 
-// 05-sep-2026 — fotos por hotel, hasta 3. Immediate (no hay "guardar" que
-// las agrupe): se sube apenas se elige el archivo.
-const onFotosHotelSeleccionadas = (event: Event, hotelId: number, existentes: number) => {
+// 05-sep-2026 — fotos por hotel, hasta 3 (1 fachada + 2 habitación desde la
+// mejora del PDF de cotización). Immediate (no hay "guardar" que las
+// agrupe): se sube apenas se elige el archivo, una por vez con su tipo —
+// el backend ya rechaza si el tipo elegido llegó a su máximo.
+const conteoFotosPorTipo = (fotos: Array<{ tipo_foto: 'fachada' | 'habitacion' }>, tipo: 'fachada' | 'habitacion') =>
+    fotos.filter((f) => f.tipo_foto === tipo).length;
+
+const onFotosHotelSeleccionadas = (event: Event, hotelId: number, tipoFoto: 'fachada' | 'habitacion') => {
     const input = event.target as HTMLInputElement;
-    const archivos = Array.from(input.files ?? []);
+    const archivo = input.files?.[0];
     input.value = '';
-    if (!archivos.length) return;
-    const disponibles = 3 - existentes;
-    if (disponibles <= 0) return;
-    emit('agregarFotosHotel', { hotelId, archivos: archivos.slice(0, disponibles) });
+    if (!archivo) return;
+    emit('agregarFotosHotel', { hotelId, archivo, tipoFoto });
 };
 
 // Edad REAL del pasajero (no tipo_pax) — un pasajero de 10 años con

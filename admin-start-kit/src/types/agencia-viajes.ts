@@ -522,8 +522,10 @@ export type OpcionHotel = {
   // crear el hotel, editables después.
   edad_max_infante_gratis: number;
   edad_max_nino_cama_adicional: number;
-  // 05-sep-2026 — máx. 3, ver OpcionHotelController::agregarFotos().
-  fotos?: string[] | null;
+  // 05-sep-2026 — máx. 3 (1 fachada + 2 habitación desde la mejora del PDF
+  // de cotización, ver plan-mejora-pdf-cotizacion-cliente.md §4.5), ya
+  // resueltas por OpcionHotelController::resolverFotos().
+  fotos?: Array<{ path: string; tipo_foto: 'fachada' | 'habitacion'; url: string }> | null;
   opciones_hotel_tarifas?: OpcionHotelTarifa[];
 };
 
@@ -605,6 +607,10 @@ export type PaquetePlantilla = {
   nombre: string;
   descripcion?: string | null;
   fotos?: string[] | null;
+  // Mejora del PDF de cotización (plan-mejora-pdf-cotizacion-cliente.md
+  // §4.5) — referencian paths ya existentes en `fotos`.
+  foto_portada?: string | null;
+  fotos_destacadas_pdf?: string[] | null;
   destino_atractivo_id: number;
   destino_atractivo?: DestinoAtractivo;
   duracion_horas: number;

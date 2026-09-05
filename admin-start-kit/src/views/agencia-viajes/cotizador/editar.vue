@@ -993,11 +993,17 @@
                                             </div>
                                             <button class="btn btn-sm btn-outline-secondary mb-1" @click="formHotel.tarifas.push({ tipo_habitacion: 'doble', precio_costo: 0, precio_venta: 0, proveedor_tarifa_id: null })">+ tipo de habitación</button>
 
-                                            <!-- Pedido del usuario (05-sep-2026): hasta 3 fotos por hotel. -->
-                                            <label class="form-label mb-1 small text-secondary d-block">Fotos (opcional, máx. 3)</label>
+                                            <!-- Pedido del usuario (05-sep-2026): hasta 3 fotos por hotel
+                                                 (1 fachada + 2 habitación desde la mejora del PDF de
+                                                 cotización — el PDF necesita distinguirlas). -->
+                                            <label class="form-label mb-1 small text-secondary d-block">Fotos (opcional, máx. 1 fachada + 2 habitación)</label>
                                             <div v-if="fotosHotelNuevo.length" class="d-flex flex-wrap gap-1 mb-1">
                                                 <div v-for="(foto, idx) in fotosHotelNuevo" :key="idx" class="position-relative">
                                                     <img :src="foto.previewUrl" style="width:50px;height:50px;object-fit:cover;border:1px solid #ccc;border-radius:3px;">
+                                                    <select class="form-select form-select-sm position-absolute" style="bottom:-4px;left:0;right:0;font-size:8px;padding:0;height:14px;" v-model="foto.tipoFoto">
+                                                        <option value="fachada">Fachada</option>
+                                                        <option value="habitacion">Hab.</option>
+                                                    </select>
                                                     <i class="fas fa-times-circle text-danger position-absolute" style="top:-6px;right:-6px;cursor:pointer;background:#fff;border-radius:50%" title="Quitar" @click="quitarFotoHotelNuevo(idx)"></i>
                                                 </div>
                                             </div>
@@ -2397,7 +2403,10 @@ const formHotel = ref<{
 // creado todavía no tiene id mientras se completa este form, así que las
 // fotos se guardan como Files pendientes y se suben DESPUÉS de crearHotel()
 // (ver guardarHotel()), contra el mismo endpoint que usa la edición.
-const fotosHotelNuevo = ref<Array<{ file: File; previewUrl: string }>>([]);
+// tipoFoto default 'habitacion' — el vendedor lo corrige con el select
+// inline si la foto es de fachada (mejora del PDF de cotización, máx. 1
+// fachada + 2 habitación, mismo tope que valida el backend al subir).
+const fotosHotelNuevo = ref<Array<{ file: File; previewUrl: string; tipoFoto: 'fachada' | 'habitacion' }>>([]);
 const onFotosHotelNuevoSeleccionadas = (event: Event) => {
     const input = event.target as HTMLInputElement;
     const archivos = Array.from(input.files ?? []);
@@ -2407,7 +2416,7 @@ const onFotosHotelNuevoSeleccionadas = (event: Event) => {
         (Swal as TVueSwalInstance).fire('Límite alcanzado', 'Ya tenés el máximo de 3 fotos por hotel.', 'warning');
         return;
     }
-    archivos.slice(0, disponibles).forEach((file) => fotosHotelNuevo.value.push({ file, previewUrl: URL.createObjectURL(file) }));
+    archivos.slice(0, disponibles).forEach((file) => fotosHotelNuevo.value.push({ file, previewUrl: URL.createObjectURL(file), tipoFoto: 'habitacion' }));
 };
 const quitarFotoHotelNuevo = (idx: number) => {
     URL.revokeObjectURL(fotosHotelNuevo.value[idx].previewUrl);
@@ -2556,17 +2565,14 @@ const onEliminarHotelMatrix = async (hotelId: number) => {
 
 // 05-sep-2026 — hasta 3 fotos por hotel, pedido del usuario. Inmediatos
 // (sin "guardar" que las agrupe), mismo criterio que eliminarFotoExistente()
-// de destinos/form.vue.
-const onAgregarFotosHotelMatrix = async (payload: { hotelId: number; archivos: File[] }) => {
+// de destinos/form.vue. Una por vez con su tipo desde la mejora del PDF de
+// cotización (plan-mejora-pdf-cotizacion-cliente.md §4.5).
+const onAgregarFotosHotelMatrix = async (payload: { hotelId: number; archivo: File; tipoFoto: 'fachada' | 'habitacion' }) => {
     try {
-        const res = await opcionMayoristaService.agregarFotosHotel(payload.hotelId, payload.archivos);
-        if (res.fotos_rechazadas?.length) {
-            const detalle = res.fotos_rechazadas.map((r: { nombre: string; motivo: string }) => `${r.nombre}: ${r.motivo}`).join('<br>');
-            await (Swal as TVueSwalInstance).fire({ icon: 'warning', title: 'Algunas fotos no se agregaron', html: detalle });
-        }
+        await opcionMayoristaService.agregarFotoHotel(payload.hotelId, payload.archivo, payload.tipoFoto);
         await cargarOpcionesMayorista();
     } catch (error: any) {
-        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo agregar la(s) foto(s)', 'error');
+        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo agregar la foto', 'error');
     }
 };
 
@@ -2745,8 +2751,12 @@ const guardarHotel = async (op: OpcionMayorista) => {
     guardandoHotelMayorista.value = true;
     try {
         const res = await opcionMayoristaService.crearHotel(op.id, formHotel.value);
-        if (fotosHotelNuevo.value.length) {
-            await opcionMayoristaService.agregarFotosHotel(res.opcion_hotel.id, fotosHotelNuevo.value.map((f) => f.file));
+        // Secuencial (no Promise.all): el backend valida el tope por tipo
+        // (1 fachada/2 habitación) contra lo YA guardado en cada request —
+        // en paralelo, dos fotos de fachada podrían leer "0 fachadas
+        // existentes" al mismo tiempo y las dos pasarían el guard.
+        for (const foto of fotosHotelNuevo.value) {
+            await opcionMayoristaService.agregarFotoHotel(res.opcion_hotel.id, foto.file, foto.tipoFoto);
         }
         mostrarFormHotel.value = null;
         formHotel.value = { nombre_hotel: '', proveedor_id: null, tarifas: [{ tipo_habitacion: 'doble', precio_costo: 0, precio_venta: 0, proveedor_tarifa_id: null }] };
@@ -2767,7 +2777,7 @@ const guardarHotel = async (op: OpcionMayorista) => {
 // tipo de habitación (antes traía "{hotel} · {tipo}" repetido, redundante
 // con la nueva cabecera).
 const tarifasHotelPlanas = (op: OpcionMayorista) => {
-    const filas: Array<{ id: number; tipo_habitacion: string; precio: number; registrada: boolean; hotelId: number; hotelNombre: string; precioCosto: number; hotelFotos: string[]; hotelProveedorId: number | null }> = [];
+    const filas: Array<{ id: number; tipo_habitacion: string; precio: number; registrada: boolean; hotelId: number; hotelNombre: string; precioCosto: number; hotelFotos: Array<{ path: string; tipo_foto: 'fachada' | 'habitacion'; url: string }>; hotelProveedorId: number | null }> = [];
     (op.opciones_hotel ?? []).forEach((h) => {
         (h.opciones_hotel_tarifas ?? []).forEach((t) => {
             filas.push({

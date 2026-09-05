@@ -57,10 +57,26 @@
              de grilla + botón de borrado que ya usa destinos/form.vue
              (sin "portada": acá las fotos no tienen un orden con significado,
              AlternativaController::itinerarioAlternativa() las imprime todas). -->
-        <div v-if="esEdicion && fotosExistentes.length" class="d-flex flex-wrap gap-1 mb-2">
+        <div v-if="esEdicion && fotosExistentes.length" class="d-flex flex-wrap gap-1 mb-1">
             <div v-for="path in fotosExistentes" :key="path" class="position-relative">
                 <img :src="path" style="width:50px;height:50px;object-fit:cover;border:1px solid #ccc;border-radius:3px;cursor:zoom-in;" @click="verFotoGrande(fotosExistentes, fotosExistentes.indexOf(path))">
                 <i class="fas fa-times-circle text-danger position-absolute" style="top:-6px;right:-6px;cursor:pointer;background:#fff;border-radius:50%" title="Eliminar foto" @click="eliminarFotoExistente(path)"></i>
+            </div>
+        </div>
+        <!-- Mejora del PDF de cotización (05-sep-2026) — portada (una sola,
+             sale a ancho completo antes del itinerario) + destacadas (hasta
+             4, galería después del itinerario). Solo referencian fotos ya
+             cargadas arriba, no suben archivos nuevos. -->
+        <div v-if="esEdicion && fotosExistentes.length" class="mb-2">
+            <label class="form-label mb-1 small text-secondary d-block">Portada y destacadas para el PDF</label>
+            <div v-for="path in fotosExistentes" :key="'pdf-' + path" class="d-flex align-items-center gap-2 mb-1" style="font-size:11px;">
+                <img :src="path" style="width:28px;height:28px;object-fit:cover;border:1px solid #ccc;border-radius:3px;">
+                <label class="form-check-label mb-0"><input type="radio" class="form-check-input me-1" name="fotoPortada" :checked="fotoPortada === path" @change="fotoPortada = path; guardarFotosPdf()">Portada</label>
+                <label class="form-check-label mb-0">
+                    <input type="checkbox" class="form-check-input me-1" :checked="fotosDestacadas.includes(path)"
+                        :disabled="!fotosDestacadas.includes(path) && fotosDestacadas.length >= 4"
+                        @change="toggleFotoDestacada(path)">Destacada
+                </label>
             </div>
         </div>
         <label class="form-label mb-1 small text-secondary">{{ esEdicion ? 'Agregar más fotos (opcional)' : 'Fotos (opcional)' }}</label>
@@ -149,6 +165,12 @@ const form = ref({
 const pasoItinerarioId = ref<number | null>(null);
 
 const fotosExistentes = ref<string[]>([]);
+// Mejora del PDF de cotización (05-sep-2026) — ver plan-mejora-pdf-cotizacion-cliente.md
+// §4.5. paqueteIdActual guarda el id real (no siempre disponible como prop
+// suelta) para poder llamar a actualizarFotosPdf() desde los handlers.
+const fotoPortada = ref<string | null>(null);
+const fotosDestacadas = ref<string[]>([]);
+const paqueteIdActual = ref<number | null>(null);
 
 const resetearCampos = async () => {
     const t = props.tourExistente;
@@ -159,6 +181,9 @@ const resetearCampos = async () => {
             duracion_horas: pp.duracion_horas, dia: t.orden,
         };
         fotosExistentes.value = pp.fotos ?? [];
+        fotoPortada.value = pp.foto_portada ?? null;
+        fotosDestacadas.value = pp.fotos_destacadas_pdf ?? [];
+        paqueteIdActual.value = pp.id;
         pasoItinerarioId.value = null;
         try {
             const res = await paquetePlantillaService.listarItinerario(pp.id);
@@ -173,6 +198,9 @@ const resetearCampos = async () => {
             duracion_horas: 8, dia: props.diaSugerido,
         };
         fotosExistentes.value = [];
+        fotoPortada.value = null;
+        fotosDestacadas.value = [];
+        paqueteIdActual.value = null;
         pasoItinerarioId.value = null;
     }
 };
@@ -188,10 +216,38 @@ const eliminarFotoExistente = (path: string) => {
         try {
             await paquetePlantillaService.eliminarFoto(props.tourExistente.paquete_plantilla_id, path);
             fotosExistentes.value = fotosExistentes.value.filter((p) => p !== path);
+            if (fotoPortada.value === path) fotoPortada.value = null;
+            fotosDestacadas.value = fotosDestacadas.value.filter((p) => p !== path);
         } catch (error: any) {
             (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo eliminar la foto', 'error');
         }
     });
+};
+
+// Mejora del PDF de cotización (05-sep-2026) — inmediato (sin "guardar" que
+// las agrupe), mismo criterio que las fotos en sí: portada/destacada se
+// persiste apenas el vendedor la marca, plan-mejora-pdf-cotizacion-cliente.md
+// §4.5.
+const guardarFotosPdf = async () => {
+    if (!paqueteIdActual.value) return;
+    try {
+        await paquetePlantillaService.actualizarFotosPdf(paqueteIdActual.value, {
+            foto_portada: fotoPortada.value,
+            fotos_destacadas_pdf: fotosDestacadas.value,
+        });
+    } catch (error: any) {
+        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo actualizar la portada/destacadas', 'error');
+    }
+};
+
+const toggleFotoDestacada = (path: string) => {
+    if (fotosDestacadas.value.includes(path)) {
+        fotosDestacadas.value = fotosDestacadas.value.filter((p) => p !== path);
+    } else {
+        if (fotosDestacadas.value.length >= 4) return;
+        fotosDestacadas.value = [...fotosDestacadas.value, path];
+    }
+    guardarFotosPdf();
 };
 
 // Mismo lightbox con teclado (flechas)/contador que destinos/form.vue —

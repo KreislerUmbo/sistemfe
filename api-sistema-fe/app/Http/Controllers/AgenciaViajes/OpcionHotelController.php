@@ -91,7 +91,7 @@ class OpcionHotelController extends Controller
         });
 
         $hotel->load('opcionesHotelTarifas');
-        $hotel->setAttribute('fotos', StorageUrl::resolveMuchas($hotel->fotos ?? []));
+        $hotel->setAttribute('fotos', self::resolverFotos($hotel->fotos ?? []));
 
         return response()->json(['code' => 200, 'message' => 'Hotel agregado correctamente', 'opcion_hotel' => $hotel]);
     }
@@ -117,53 +117,66 @@ class OpcionHotelController extends Controller
 
         $hotel->update($validator->validated());
         $hotel->load('opcionesHotelTarifas');
-        $hotel->setAttribute('fotos', StorageUrl::resolveMuchas($hotel->fotos ?? []));
+        $hotel->setAttribute('fotos', self::resolverFotos($hotel->fotos ?? []));
 
         return response()->json(['code' => 200, 'message' => 'Hotel actualizado correctamente', 'opcion_hotel' => $hotel]);
     }
 
+    private const MAX_FOTOS_FACHADA = 1;
+    private const MAX_FOTOS_HABITACION = 2;
+
     // POST opciones-hotel/{id}/fotos — pedido del usuario (05-sep-2026): hasta
     // 3 fotos por hotel al agregarlo/editarlo en el comparador de mayoristas.
-    // Tope propio (3) chequeado ANTES de llamar a FotoUploadService::
+    // Ajuste (mejora del PDF de cotización, plan-mejora-pdf-cotizacion-cliente.md
+    // §4.5): el PDF necesita distinguir fachada de habitación (fachada primero
+    // en la tira, máx. 1; habitación después, máx. 2) — por eso cada foto se
+    // sube de a una con su tipo explícito, en vez del lote sin tipo original.
+    // Tope propio (por tipo) chequeado ANTES de llamar a FotoUploadService::
     // procesarLote() (su propio tope de MAX_FOTOS_TOTAL=10 es compartido con
     // destinos/paquetes — acá el límite real es más chico, a propósito).
     public function agregarFotos(Request $request, string $id)
     {
         $hotel = OpcionHotel::findOrFail($id);
-        $existentes = $hotel->fotos ?? [];
+        $existentes = self::normalizarFotos($hotel->fotos ?? []);
 
         $validator = Validator::make($request->all(), [
-            'fotos' => 'required|array',
-            'fotos.*' => 'image|max:'.FotoUploadService::MAX_KB_POR_FOTO,
+            'foto' => 'required|image|max:'.FotoUploadService::MAX_KB_POR_FOTO,
+            'tipo_foto' => 'required|in:fachada,habitacion',
         ]);
         if ($validator->fails()) {
             return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
         }
 
-        $nuevas = (array) $request->file('fotos');
-        if (count($existentes) + count($nuevas) > 3) {
+        $tipoFoto = $request->get('tipo_foto');
+        $conteoPorTipo = collect($existentes)->countBy('tipo_foto');
+        $maxPorTipo = $tipoFoto === 'fachada' ? self::MAX_FOTOS_FACHADA : self::MAX_FOTOS_HABITACION;
+
+        if (($conteoPorTipo[$tipoFoto] ?? 0) >= $maxPorTipo) {
             return response()->json([
                 'code' => 422,
-                'message' => 'Este hotel ya tiene '.count($existentes).' foto(s) y se están intentando agregar '
-                    .count($nuevas).' más, superando el máximo de 3 fotos por hotel.',
+                'message' => "Este hotel ya tiene el máximo de {$maxPorTipo} foto(s) de tipo \"{$tipoFoto}\".",
             ], 422);
         }
 
         try {
-            $resultado = $this->fotoUploadService->procesarLote($nuevas, 'opciones-hotel', count($existentes));
+            $resultado = $this->fotoUploadService->procesarLote([$request->file('foto')], 'opciones-hotel', count($existentes));
         } catch (ValidationException $e) {
             return response()->json(['code' => 422, 'message' => $e->getMessage()], 422);
         }
 
-        $hotel->fotos = array_merge($existentes, $resultado['paths']);
+        if (empty($resultado['paths'])) {
+            return response()->json(['code' => 422, 'message' => $resultado['rechazadas'][0]['motivo'] ?? 'No se pudo procesar la foto.'], 422);
+        }
+
+        $existentes[] = ['path' => $resultado['paths'][0], 'tipo_foto' => $tipoFoto];
+        $hotel->fotos = $existentes;
         $hotel->save();
-        $hotel->setAttribute('fotos', StorageUrl::resolveMuchas($hotel->fotos ?? []));
+        $hotel->setAttribute('fotos', self::resolverFotos($hotel->fotos ?? []));
 
         return response()->json([
             'code' => 200,
-            'message' => 'Foto(s) agregada(s) correctamente',
+            'message' => 'Foto agregada correctamente',
             'opcion_hotel' => $hotel,
-            'fotos_rechazadas' => $resultado['rechazadas'],
         ]);
     }
 
@@ -182,9 +195,9 @@ class OpcionHotelController extends Controller
         }
 
         $path = StorageUrl::relativo($request->get('path'));
-        $fotos = $hotel->fotos ?? [];
+        $fotos = self::normalizarFotos($hotel->fotos ?? []);
 
-        if (! in_array($path, $fotos, true)) {
+        if (! collect($fotos)->contains('path', $path)) {
             return response()->json(['code' => 422, 'message' => 'La foto indicada no pertenece a este hotel.'], 422);
         }
 
@@ -192,11 +205,31 @@ class OpcionHotelController extends Controller
             Storage::disk('public')->delete($path);
         }
 
-        $hotel->fotos = array_values(array_diff($fotos, [$path]));
+        $hotel->fotos = collect($fotos)->reject(fn (array $f) => $f['path'] === $path)->values()->all();
         $hotel->save();
-        $hotel->setAttribute('fotos', StorageUrl::resolveMuchas($hotel->fotos ?? []));
+        $hotel->setAttribute('fotos', self::resolverFotos($hotel->fotos ?? []));
 
         return response()->json(['code' => 200, 'message' => 'Foto eliminada correctamente', 'opcion_hotel' => $hotel]);
+    }
+
+    // Defensivo — normaliza entradas viejas (string suelto, de antes de la
+    // migración de datos 2026_09_05_100400) a la forma {path, tipo_foto}.
+    // La migración ya debería haber convertido todo lo real, esto es
+    // belt-and-suspenders para no romper si algo quedó sin migrar.
+    private static function normalizarFotos(array $fotos): array
+    {
+        return array_map(
+            fn ($f) => is_array($f) ? $f : ['path' => $f, 'tipo_foto' => 'habitacion'],
+            $fotos
+        );
+    }
+
+    private static function resolverFotos(array $fotos): array
+    {
+        return array_map(
+            fn (array $f) => ['path' => $f['path'], 'tipo_foto' => $f['tipo_foto'] ?? 'habitacion', 'url' => StorageUrl::resolve($f['path'])],
+            self::normalizarFotos($fotos)
+        );
     }
 
     // DELETE opciones-hotel/{id} — mismo guard que AlternativaItemController::

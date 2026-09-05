@@ -31,6 +31,11 @@ class PaquetePlantilla extends Model
         'nombre',
         'descripcion',
         'fotos',
+        // Mejora del PDF de cotización (plan-mejora-pdf-cotizacion-cliente.md
+        // §4.5) — referencian paths ya existentes en `fotos`, ver
+        // PaquetePlantillaController::actualizarFotosPdf().
+        'foto_portada',
+        'fotos_destacadas_pdf',
         'destino_atractivo_id',
         'duracion_horas',
         'hora_salida',
@@ -54,6 +59,7 @@ class PaquetePlantilla extends Model
 
     protected $casts = [
         'fotos' => 'array',
+        'fotos_destacadas_pdf' => 'array',
         'vuelo_incluido' => 'boolean',
         'precio_venta_final' => 'decimal:2',
         'vigencia_desde' => 'date',

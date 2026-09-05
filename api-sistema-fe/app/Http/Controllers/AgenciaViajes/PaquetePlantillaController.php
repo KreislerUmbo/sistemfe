@@ -164,6 +164,8 @@ class PaquetePlantillaController extends Controller
         }
 
         $paquete->setAttribute('fotos', StorageUrl::resolveMuchas($paquete->fotos ?? []));
+        $paquete->setAttribute('foto_portada', StorageUrl::resolve($paquete->foto_portada));
+        $paquete->setAttribute('fotos_destacadas_pdf', StorageUrl::resolveMuchas($paquete->fotos_destacadas_pdf ?? []));
 
         return response()->json([
             'paquete_plantilla' => $paquete,
@@ -297,10 +299,66 @@ class PaquetePlantillaController extends Controller
         }
 
         $paquete->fotos = array_values(array_diff($fotos, [$path]));
+        // Mejora del PDF de cotización — si la foto borrada era la portada o
+        // una destacada, se destraba la referencia acá (evita que
+        // foto_portada/fotos_destacadas_pdf queden apuntando a un path que
+        // ya no existe en `fotos`).
+        if ($paquete->foto_portada === $path) {
+            $paquete->foto_portada = null;
+        }
+        $paquete->fotos_destacadas_pdf = array_values(array_diff($paquete->fotos_destacadas_pdf ?? [], [$path]));
         $paquete->save();
         $paquete->setAttribute('fotos', StorageUrl::resolveMuchas($paquete->fotos ?? []));
+        $paquete->setAttribute('foto_portada', StorageUrl::resolve($paquete->foto_portada));
+        $paquete->setAttribute('fotos_destacadas_pdf', StorageUrl::resolveMuchas($paquete->fotos_destacadas_pdf ?? []));
 
         return response()->json(['code' => 200, 'message' => 'Foto eliminada correctamente', 'paquete_plantilla' => $paquete]);
+    }
+
+    // PUT paquetes-plantilla/{id}/fotos-pdf — mejora del PDF de cotización
+    // (plan-mejora-pdf-cotizacion-cliente.md §4.5): marca cuál de las fotos
+    // YA cargadas es la portada (una sola) y cuáles son las destacadas para
+    // la galería del itinerario (hasta 4). No sube archivos nuevos — ambos
+    // campos solo referencian paths que ya viven en `fotos` (Paso 0.1 del
+    // brief de ejecución: `fotos` es un array plano consumido por 5
+    // pantallas del frontend, así que la selección vive en columnas
+    // aparte en vez de mutar esa forma).
+    public function actualizarFotosPdf(Request $request, string $id)
+    {
+        $paquete = PaquetePlantilla::findOrFail($id);
+        $fotosExistentes = $paquete->fotos ?? [];
+
+        $validator = Validator::make($request->all(), [
+            'foto_portada' => 'nullable|string',
+            'fotos_destacadas_pdf' => 'nullable|array|max:4',
+            'fotos_destacadas_pdf.*' => 'string',
+        ]);
+        if ($validator->fails()) {
+            return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
+        }
+
+        $v = $validator->validated();
+        $fotoPortada = isset($v['foto_portada']) ? StorageUrl::relativo($v['foto_portada']) : null;
+        $fotosDestacadas = array_map(fn (string $p) => StorageUrl::relativo($p), $v['fotos_destacadas_pdf'] ?? []);
+
+        if ($fotoPortada !== null && ! in_array($fotoPortada, $fotosExistentes, true)) {
+            return response()->json(['code' => 422, 'message' => 'La foto de portada elegida no pertenece a este paquete/tour.'], 422);
+        }
+        $noPertenecen = array_diff($fotosDestacadas, $fotosExistentes);
+        if (! empty($noPertenecen)) {
+            return response()->json(['code' => 422, 'message' => 'Una o más fotos destacadas elegidas no pertenecen a este paquete/tour.'], 422);
+        }
+
+        $paquete->update([
+            'foto_portada' => $fotoPortada,
+            'fotos_destacadas_pdf' => array_values($fotosDestacadas),
+        ]);
+
+        $paquete->setAttribute('fotos', StorageUrl::resolveMuchas($paquete->fotos ?? []));
+        $paquete->setAttribute('foto_portada', StorageUrl::resolve($paquete->foto_portada));
+        $paquete->setAttribute('fotos_destacadas_pdf', StorageUrl::resolveMuchas($paquete->fotos_destacadas_pdf ?? []));
+
+        return response()->json(['code' => 200, 'message' => 'Fotos del PDF actualizadas correctamente', 'paquete_plantilla' => $paquete]);
     }
 
     // Duplicar tour/paquete completo — Sesión 11m. Copia datos generales +
