@@ -8,6 +8,7 @@ use App\Http\Controllers\AgenciaViajes\AmenidadController;
 use App\Http\Controllers\AgenciaViajes\BibliotecaCotizadorController;
 use App\Http\Controllers\AgenciaViajes\CondicionesGeneralesController;
 use App\Http\Controllers\AgenciaViajes\ConfiguracionAgenciaController;
+use App\Http\Controllers\AgenciaViajes\ConfiguracionAgenciaPdfController;
 use App\Http\Controllers\AgenciaViajes\ConfiguracionCodigosController;
 use App\Http\Controllers\AgenciaViajes\ContenidoTourController;
 use App\Http\Controllers\AgenciaViajes\CotizacionController;
@@ -580,6 +581,22 @@ Route::group([
     Route::put("configuracion-agencia", [ConfiguracionAgenciaController::class, 'update'])
         ->middleware('permission:agencia.configuracion');
 
+    // Mejora del PDF de cotización — pestaña "Marca del PDF"
+    // (plan-mejora-pdf-cotizacion-cliente.md §4.4). Reusa 'agencia.configuracion',
+    // mismo criterio que configuracion-codigos/cuentas-bancarias.
+    Route::get("configuracion-agencia-pdf", [ConfiguracionAgenciaPdfController::class, 'show'])
+        ->middleware('permission:agencia.configuracion');
+    Route::put("configuracion-agencia-pdf", [ConfiguracionAgenciaPdfController::class, 'update'])
+        ->middleware('permission:agencia.configuracion');
+    Route::post("configuracion-agencia-pdf/header", [ConfiguracionAgenciaPdfController::class, 'subirHeader'])
+        ->middleware('permission:agencia.configuracion');
+    Route::delete("configuracion-agencia-pdf/header", [ConfiguracionAgenciaPdfController::class, 'eliminarHeader'])
+        ->middleware('permission:agencia.configuracion');
+    Route::post("configuracion-agencia-pdf/footer", [ConfiguracionAgenciaPdfController::class, 'subirFooter'])
+        ->middleware('permission:agencia.configuracion');
+    Route::delete("configuracion-agencia-pdf/footer", [ConfiguracionAgenciaPdfController::class, 'eliminarFooter'])
+        ->middleware('permission:agencia.configuracion');
+
     // Módulo 12 — plan-modulo-codigos-numeracion.md. Reusa el permiso
     // 'agencia.configuracion' (mismo área de configuración comercial que
     // Configuración de Agencia, sin permiso nuevo dedicado).
@@ -614,6 +631,10 @@ Route::group([
     Route::post("paquetes-plantilla/{id}", [PaquetePlantillaController::class, 'update'])
         ->middleware('permission:agencia.paquetes');
     Route::delete("paquetes-plantilla/{id}/fotos", [PaquetePlantillaController::class, 'eliminarFoto'])
+        ->middleware('permission:agencia.paquetes');
+    // Mejora del PDF de cotización — portada + destacadas para la galería
+    // del itinerario (plan-mejora-pdf-cotizacion-cliente.md §4.5).
+    Route::put("paquetes-plantilla/{id}/fotos-pdf", [PaquetePlantillaController::class, 'actualizarFotosPdf'])
         ->middleware('permission:agencia.paquetes');
     Route::delete("paquetes-plantilla/{id}", [PaquetePlantillaController::class, 'destroy'])
         ->middleware('permission:agencia.paquetes');

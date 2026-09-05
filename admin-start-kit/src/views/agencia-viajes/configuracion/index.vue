@@ -398,17 +398,157 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Mejora del PDF de cotización (plan-mejora-pdf-cotizacion-cliente.md
+                 §4.4) — recurso propio (configuracion_agencia_pdf), acordeón
+                 aparte de accConfigAgencia con su propio botón de guardar,
+                 mismo criterio que Cuentas bancarias arriba. -->
+            <div class="accordion mb-4" id="accMarcaPdf">
+                <div class="accordion-item">
+                    <h2 class="accordion-header">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#accMarcaPdfBody">
+                            <span class="badge bg-primary rounded-pill me-2">11</span>
+                            <span class="fw-semibold text-dark">Marca del PDF de cotización</span>
+                        </button>
+                    </h2>
+                    <div id="accMarcaPdfBody" class="accordion-collapse collapse" data-bs-parent="#accMarcaPdf">
+                        <div class="accordion-body">
+                            <div v-if="cargandoPdf" class="text-center py-4 text-muted">
+                                <div class="spinner-border spinner-border-sm me-2"></div>Cargando...
+                            </div>
+                            <div v-else class="row g-4">
+                                <div class="col-lg-7">
+                                    <label class="form-label mb-1 small fw-semibold text-secondary d-block">Colores</label>
+                                    <div class="row g-2 mb-3">
+                                        <div class="col-6 col-md-4">
+                                            <small class="text-muted d-block">Primario</small>
+                                            <input type="color" class="form-control form-control-sm form-control-color w-100" v-model="formPdf.color_primario">
+                                        </div>
+                                        <div class="col-6 col-md-4">
+                                            <small class="text-muted d-block">Secundario</small>
+                                            <input type="color" class="form-control form-control-sm form-control-color w-100" v-model="formPdf.color_secundario">
+                                        </div>
+                                        <div class="col-4">
+                                            <small class="text-muted d-block">Cinta Local</small>
+                                            <input type="color" class="form-control form-control-sm form-control-color w-100" v-model="formPdf.color_categoria_local">
+                                        </div>
+                                        <div class="col-4">
+                                            <small class="text-muted d-block">Cinta Nacional</small>
+                                            <input type="color" class="form-control form-control-sm form-control-color w-100" v-model="formPdf.color_categoria_nacional">
+                                        </div>
+                                        <div class="col-4">
+                                            <small class="text-muted d-block">Cinta Internacional</small>
+                                            <input type="color" class="form-control form-control-sm form-control-color w-100" v-model="formPdf.color_categoria_internacional">
+                                        </div>
+                                    </div>
+
+                                    <label class="form-label mb-1 small fw-semibold text-secondary">Eslogan (opcional)</label>
+                                    <input type="text" class="form-control form-control-sm mb-3" placeholder="¡Que comience la aventura!" v-model="formPdf.eslogan">
+
+                                    <label class="form-label mb-1 small fw-semibold text-secondary d-block">Redes sociales (opcional)</label>
+                                    <div v-for="(red, idx) in formPdf.redes_sociales" :key="idx" class="d-flex gap-2 mb-1">
+                                        <select class="form-select form-select-sm" style="max-width:130px" v-model="red.red">
+                                            <option value="facebook">Facebook</option>
+                                            <option value="instagram">Instagram</option>
+                                            <option value="tiktok">TikTok</option>
+                                        </select>
+                                        <input type="text" class="form-control form-control-sm" placeholder="@usuario" v-model="red.usuario">
+                                        <button class="btn btn-sm btn-outline-danger" @click="formPdf.redes_sociales?.splice(idx, 1)"><i class="fas fa-trash"></i></button>
+                                    </div>
+                                    <button class="btn btn-sm btn-outline-secondary mb-3" @click="agregarRedSocial">
+                                        <i class="fas fa-plus me-1"></i>Agregar red social
+                                    </button>
+
+                                    <div class="form-check mb-2">
+                                        <input class="form-check-input" type="checkbox" id="mostrarFotosTour" v-model="formPdf.mostrar_fotos_tour">
+                                        <label class="form-check-label small" for="mostrarFotosTour">Mostrar fotos del tour (portada + galería) en el PDF</label>
+                                    </div>
+
+                                    <div class="form-check mb-2">
+                                        <input class="form-check-input" type="checkbox" id="mostrarAfiliaciones" v-model="formPdf.mostrar_afiliaciones">
+                                        <label class="form-check-label small" for="mostrarAfiliaciones">Mostrar franja de afiliaciones de turismo</label>
+                                    </div>
+
+                                    <div v-if="formPdf.mostrar_afiliaciones" class="border rounded p-2 mb-3">
+                                        <div v-for="afiliacion in afiliacionesCatalogo" :key="afiliacion.id" class="d-flex align-items-center gap-2 mb-1">
+                                            <div class="form-check mb-0" style="min-width:150px;">
+                                                <input class="form-check-input" type="checkbox" :id="'af-' + afiliacion.id" v-model="afiliacion.marcada">
+                                                <label class="form-check-label small" :for="'af-' + afiliacion.id">{{ afiliacion.nombre }}</label>
+                                            </div>
+                                            <input v-if="afiliacion.marcada" type="text" class="form-control form-control-sm" placeholder="N° de registro (opcional)" v-model="afiliacion.numero_registro">
+                                        </div>
+                                        <small v-if="afiliacionesCatalogo.length === 0" class="text-muted">No hay afiliaciones en el catálogo todavía.</small>
+                                    </div>
+
+                                    <label class="form-label mb-1 small fw-semibold text-secondary d-block">Membrete propio (opcional — reemplaza el header/footer generado arriba)</label>
+                                    <div class="row g-2">
+                                        <div class="col-6">
+                                            <small class="text-muted d-block mb-1">Header</small>
+                                            <img v-if="formPdf.imagen_header_custom_url" :src="formPdf.imagen_header_custom_url" class="img-fluid border rounded mb-1" style="max-height:60px;">
+                                            <div class="d-flex gap-1">
+                                                <input type="file" accept="image/*" class="form-control form-control-sm" @change="onSubirHeader">
+                                                <button v-if="formPdf.imagen_header_custom_url" class="btn btn-sm btn-outline-danger" @click="onEliminarHeader"><i class="fas fa-trash"></i></button>
+                                            </div>
+                                        </div>
+                                        <div class="col-6">
+                                            <small class="text-muted d-block mb-1">Footer</small>
+                                            <img v-if="formPdf.imagen_footer_custom_url" :src="formPdf.imagen_footer_custom_url" class="img-fluid border rounded mb-1" style="max-height:60px;">
+                                            <div class="d-flex gap-1">
+                                                <input type="file" accept="image/*" class="form-control form-control-sm" @change="onSubirFooter">
+                                                <button v-if="formPdf.imagen_footer_custom_url" class="btn btn-sm btn-outline-danger" @click="onEliminarFooter"><i class="fas fa-trash"></i></button>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="d-flex justify-content-end mt-3">
+                                        <button class="btn btn-primary btn-sm fw-semibold" @click="guardarPdf" :disabled="guardandoPdf">
+                                            <span v-if="guardandoPdf" class="spinner-border spinner-border-sm me-2"></span>
+                                            <i v-else class="fas fa-save me-2"></i>Guardar marca del PDF
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- Vista previa — no es el PDF real renderizado (dompdf no
+                                     corre en el navegador), un preview HTML equivalente con
+                                     los mismos colores/eslogan alcanza para que el vendedor
+                                     vea el efecto antes de guardar (plan §4.4). -->
+                                <div class="col-lg-5">
+                                    <label class="form-label mb-1 small fw-semibold text-secondary d-block">Vista previa</label>
+                                    <div class="border rounded p-3" style="background:#fafafa;">
+                                        <div class="d-flex justify-content-between align-items-start mb-2">
+                                            <div>
+                                                <div class="fw-bold" :style="{ color: formPdf.color_primario || '#1f2937' }">NOMBRE DE LA AGENCIA</div>
+                                                <small class="text-muted d-block">RUC: 20123456789</small>
+                                                <small v-if="formPdf.eslogan" class="fst-italic d-block" :style="{ color: formPdf.color_secundario || '#4b5563' }">{{ formPdf.eslogan }}</small>
+                                            </div>
+                                        </div>
+                                        <div v-if="formPdf.mostrar_afiliaciones && afiliacionesMarcadas.length" class="text-center border-top pt-1 mb-2">
+                                            <small class="text-muted">{{ afiliacionesMarcadas.map((a) => a.nombre).join(' · ') }}</small>
+                                        </div>
+                                        <div class="fw-bold small">COTIZACIÓN PDF-2026-001</div>
+                                        <small class="text-muted d-block mb-2">Ejemplo de cotización</small>
+                                        <div class="text-center text-white fw-bold small py-1 mb-2 text-uppercase" :style="{ backgroundColor: formPdf.color_categoria_local || '#2563eb' }">Local</div>
+                                        <div class="text-center text-white fw-bold small py-1 mb-2 text-uppercase" :style="{ backgroundColor: formPdf.color_categoria_nacional || '#1f2937' }">Nacional</div>
+                                        <div class="text-center text-white fw-bold small py-1 text-uppercase" :style="{ backgroundColor: formPdf.color_categoria_internacional || '#7c3aed' }">Internacional</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </template>
     </DefaultLayout>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import RichTextEditor from '@/components/RichTextEditor.vue';
 import Swal from 'sweetalert2/dist/sweetalert2.js';
 import { configuracionAgenciaService } from '@/services/admin/configuracionAgenciaService';
 import { cuentaBancariaService } from '@/services/admin/cuentaBancariaService';
+import { configuracionAgenciaPdfService, type ConfiguracionAgenciaPdf, type AfiliacionTurismoOpcion } from '@/services/admin/configuracionAgenciaPdfService';
 import { useAgenciaViajesCatalogosStore } from '@/stores/agenciaViajesCatalogos';
 import type { ConfiguracionAgencia, CuentaBancaria } from '@/types/agencia-viajes';
 
@@ -549,8 +689,91 @@ const guardar = async () => {
     }
 };
 
+// Mejora del PDF de cotización (plan-mejora-pdf-cotizacion-cliente.md §4.4)
+// — recurso propio, guardado independiente del botón general de arriba.
+const cargandoPdf = ref<boolean>(true);
+const guardandoPdf = ref<boolean>(false);
+const formPdf = ref<ConfiguracionAgenciaPdf>({
+    color_primario: '#1f2937',
+    color_secundario: '#4b5563',
+    color_categoria_local: '#2563eb',
+    color_categoria_nacional: '#1f2937',
+    color_categoria_internacional: '#7c3aed',
+    eslogan: null,
+    redes_sociales: [],
+    mostrar_fotos_tour: true,
+    mostrar_afiliaciones: false,
+});
+const afiliacionesCatalogo = ref<AfiliacionTurismoOpcion[]>([]);
+const afiliacionesMarcadas = computed(() => afiliacionesCatalogo.value.filter((a) => a.marcada));
+
+const cargarPdf = async () => {
+    cargandoPdf.value = true;
+    try {
+        const res = await configuracionAgenciaPdfService.obtener();
+        formPdf.value = { ...res.configuracion_agencia_pdf, redes_sociales: res.configuracion_agencia_pdf.redes_sociales ?? [] };
+        afiliacionesCatalogo.value = res.afiliaciones;
+    } finally {
+        cargandoPdf.value = false;
+    }
+};
+
+const agregarRedSocial = () => {
+    formPdf.value.redes_sociales = [...(formPdf.value.redes_sociales ?? []), { red: 'facebook', usuario: '' }];
+};
+
+const guardarPdf = async () => {
+    guardandoPdf.value = true;
+    try {
+        const res = await configuracionAgenciaPdfService.actualizar({
+            ...formPdf.value,
+            afiliaciones: afiliacionesMarcadas.value.map((a) => ({ afiliacion_id: a.id, numero_registro: a.numero_registro })),
+        });
+        (Swal as TVueSwalInstance).fire('Listo', res.message, 'success');
+    } catch (error: any) {
+        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo guardar', 'error');
+    } finally {
+        guardandoPdf.value = false;
+    }
+};
+
+// Header/footer custom — inmediatos (sin agrupar con guardarPdf), mismo
+// criterio que cualquier otra foto del vertical: se sube apenas se elige
+// el archivo.
+const onSubirHeader = async (event: Event) => {
+    const archivo = (event.target as HTMLInputElement).files?.[0];
+    (event.target as HTMLInputElement).value = '';
+    if (!archivo) return;
+    try {
+        const res = await configuracionAgenciaPdfService.subirHeader(archivo);
+        formPdf.value.imagen_header_custom_url = res.url;
+    } catch (error: any) {
+        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo subir la imagen', 'error');
+    }
+};
+const onEliminarHeader = async () => {
+    await configuracionAgenciaPdfService.eliminarHeader();
+    formPdf.value.imagen_header_custom_url = null;
+};
+const onSubirFooter = async (event: Event) => {
+    const archivo = (event.target as HTMLInputElement).files?.[0];
+    (event.target as HTMLInputElement).value = '';
+    if (!archivo) return;
+    try {
+        const res = await configuracionAgenciaPdfService.subirFooter(archivo);
+        formPdf.value.imagen_footer_custom_url = res.url;
+    } catch (error: any) {
+        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo subir la imagen', 'error');
+    }
+};
+const onEliminarFooter = async () => {
+    await configuracionAgenciaPdfService.eliminarFooter();
+    formPdf.value.imagen_footer_custom_url = null;
+};
+
 onMounted(() => {
     cargar();
     cargarCuentas();
+    cargarPdf();
 });
 </script>
