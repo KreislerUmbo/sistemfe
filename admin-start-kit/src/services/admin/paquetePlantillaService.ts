@@ -36,6 +36,11 @@ export const paquetePlantillaService = {
     const response = await httpClient.post(`/paquetes-plantilla/${id}/duplicar`)
     return response.data as { code: number; message: string; paquete_plantilla: PaquetePlantilla }
   },
+  // 05-sep-2026 — mismo patrón que destinoAtractivoService.eliminarFoto().
+  async eliminarFoto(id: number, path: string) {
+    const response = await httpClient.delete(`/paquetes-plantilla/${id}/fotos`, { data: { path } })
+    return response.data
+  },
 
   // ── Items incluidos (proveedor_tarifa o guia_tarifa) ────────────────
   async listarItems(paqueteId: number) {

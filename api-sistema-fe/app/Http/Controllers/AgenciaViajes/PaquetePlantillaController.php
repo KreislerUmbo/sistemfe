@@ -266,6 +266,43 @@ class PaquetePlantillaController extends Controller
         ]);
     }
 
+    // Hallazgo del usuario (05-sep-2026): editar un tour incluido (mismo
+    // PaquetePlantilla que arma TourIncluidoForm.vue) solo dejaba AGREGAR
+    // fotos nuevas, nunca ver/borrar las ya guardadas — mismo patrón que
+    // DestinoAtractivoController::eliminarFoto(), replicado acá tal cual
+    // (mismo criterio de normalizar a path relativo antes de comparar).
+    public function eliminarFoto(Request $request, string $id)
+    {
+        $paquete = PaquetePlantilla::findOrFail($id);
+
+        $validator = Validator::make($request->all(), [
+            'path' => 'required|string',
+        ]);
+        if ($validator->fails()) {
+            return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
+        }
+
+        $path = StorageUrl::relativo($request->get('path'));
+        $fotos = $paquete->fotos ?? [];
+
+        if (! in_array($path, $fotos, true)) {
+            return response()->json([
+                'code' => 422,
+                'message' => 'La foto indicada no pertenece a este paquete/tour.',
+            ], 422);
+        }
+
+        if (Storage::disk('public')->exists($path)) {
+            Storage::disk('public')->delete($path);
+        }
+
+        $paquete->fotos = array_values(array_diff($fotos, [$path]));
+        $paquete->save();
+        $paquete->setAttribute('fotos', StorageUrl::resolveMuchas($paquete->fotos ?? []));
+
+        return response()->json(['code' => 200, 'message' => 'Foto eliminada correctamente', 'paquete_plantilla' => $paquete]);
+    }
+
     // Duplicar tour/paquete completo — Sesión 11m. Copia datos generales +
     // itinerario + incluye. La copia nace inactiva/no publicada (obliga a
     // revisión manual antes de que aparezca en cualquier biblioteca) —

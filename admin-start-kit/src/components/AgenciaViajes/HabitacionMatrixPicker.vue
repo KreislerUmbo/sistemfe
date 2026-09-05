@@ -35,25 +35,50 @@
                          duplicaba los mismos hoteles/tarifas en un formato aparte
                          (hallazgo del usuario). Sin este prop, esta rama nunca corre —
                          Local/Nacional ve exactamente la misma tabla plana de siempre. -->
-                    <tr v-if="fila.tipo === 'header'" class="table-light">
+                    <!-- Segunda vuelta del mismo hallazgo (05-sep-2026): lo que hacía
+                         falta no era un resaltado transitorio solo mientras se edita el
+                         nombre — era una marca PERMANENTE de "estas filas son de este
+                         hotel", visible también al editar/agregar un tipo de habitación
+                         (que no toca la fila de encabezado). border-top marca el arranque
+                         de cada bloque; el fondo alterna entre hoteles consecutivos
+                         (mismo criterio que un zebra-striping, pero por GRUPO en vez de
+                         por fila) — guardado detrás de permitirGestionHoteles, Local/
+                         Nacional nunca ve esto. -->
+                    <tr v-if="fila.tipo === 'header'" class="table-light border-top border-2 border-secondary-subtle" :class="[esGrupoImpar(fila.hotelId) ? 'grupo-hotel-alterno' : '', { 'border-start border-3 border-primary bg-light-subtle': hotelEnEdicionId === fila.hotelId }]">
                         <td v-if="modoGrupo"></td>
                         <td colspan="2">
                             <template v-if="hotelEnEdicionId === fila.hotelId">
-                                <div class="d-flex gap-1">
+                                <small class="text-primary fw-semibold d-block mb-1"><i class="fas fa-pen me-1"></i>Editando: {{ fila.hotelNombre }}</small>
+                                <div class="d-flex gap-1 mb-1">
                                     <input type="text" class="form-control form-control-sm" v-model="formHotel.nombre_hotel" @keyup.enter="guardarHotelInterno(fila.hotelId)">
                                     <button class="btn btn-sm btn-primary text-nowrap" @click="guardarHotelInterno(fila.hotelId)">OK</button>
                                 </div>
+                                <!-- Pedido del usuario (05-sep-2026): hasta 3 fotos por hotel. -->
+                                <div v-if="fila.hotelFotos.length" class="d-flex flex-wrap gap-1 mb-1">
+                                    <div v-for="path in fila.hotelFotos" :key="path" class="position-relative">
+                                        <img :src="path" style="width:44px;height:44px;object-fit:cover;border:1px solid #ccc;border-radius:3px;">
+                                        <i class="fas fa-times-circle text-danger position-absolute" style="top:-6px;right:-6px;cursor:pointer;background:#fff;border-radius:50%" title="Eliminar foto" @click="$emit('eliminarFotoHotel', { hotelId: fila.hotelId, path })"></i>
+                                    </div>
+                                </div>
+                                <input type="file" accept="image/*" multiple class="form-control form-control-sm" style="font-size:11px"
+                                    :disabled="fila.hotelFotos.length >= 3" @change="onFotosHotelSeleccionadas($event, fila.hotelId, fila.hotelFotos.length)">
                             </template>
                             <strong v-else>{{ fila.hotelNombre }}</strong>
                         </td>
                         <td v-if="seleccionadaId && !modoGrupo"></td>
                         <td class="text-end">
                             <i v-if="hotelEnEdicionId !== fila.hotelId" class="fas fa-pen text-muted me-2" style="cursor:pointer;font-size:11px" title="Editar nombre del hotel" @click="abrirEdicionHotelInterna(fila.hotelId, fila.hotelNombre)"></i>
+                            <!-- 05-sep-2026 — conecta OpcionHotelController::promover() (ya
+                                 existía en el backend, nunca se le había puesto un botón):
+                                 solo tiene sentido para un hotel ad-hoc (sin proveedor_id
+                                 todavía) — uno ya ligado a un proveedor real no necesita
+                                 "promoverse" de nuevo. -->
+                            <i v-if="!fila.hotelProveedorId" class="fas fa-arrow-up-right-from-square text-muted me-2" style="cursor:pointer;font-size:11px" title="Promover a proveedor (para reusarlo en la próxima cotización)" @click="$emit('promoverHotel', { hotelId: fila.hotelId, hotelNombre: fila.hotelNombre })"></i>
                             <i class="fas fa-trash text-muted" style="cursor:pointer;font-size:11px" title="Eliminar hotel" @click="$emit('eliminarHotel', fila.hotelId)"></i>
                         </td>
                     </tr>
 
-                    <tr v-else-if="fila.tipo === 'tarifa'" :class="{ 'table-primary': seleccionadaId === fila.data.id || idsGrupo.includes(fila.data.id) }">
+                    <tr v-else-if="fila.tipo === 'tarifa'" :class="[permitirGestionHoteles && esGrupoImpar(fila.data.hotelId ?? 0) ? 'grupo-hotel-alterno' : '', { 'table-primary': seleccionadaId === fila.data.id || idsGrupo.includes(fila.data.id) }]">
                         <td v-if="modoGrupo">
                             <input class="form-check-input" type="checkbox" :value="fila.data.id" v-model="idsGrupo">
                         </td>
@@ -109,7 +134,7 @@
                     </tr>
 
                     <!-- "+ tipo de habitación" al cierre de cada grupo de hotel. -->
-                    <tr v-else-if="fila.tipo === 'agregar'">
+                    <tr v-else-if="fila.tipo === 'agregar'" :class="esGrupoImpar(fila.hotelId) ? 'grupo-hotel-alterno' : ''">
                         <td v-if="modoGrupo"></td>
                         <td colspan="3">
                             <button v-if="hotelConFormNuevaTarifa !== fila.hotelId" class="btn btn-sm btn-link p-0" @click="hotelConFormNuevaTarifa = fila.hotelId">+ tipo de habitación</button>
@@ -189,6 +214,13 @@ type TarifaHabitacion = {
     hotelId?: number;
     hotelNombre?: string;
     precioCosto?: number;
+    // 05-sep-2026 — máx. 3 por hotel, ya resueltas a URL completa por el
+    // backend (StorageUrl::resolveMuchas()). Igual que hotelId/hotelNombre,
+    // se repite en cada fila del mismo hotel; el header solo lee la primera.
+    hotelFotos?: string[];
+    // 05-sep-2026 — null/undefined = hotel ad-hoc (candidato a "Promover a
+    // proveedor"); con valor = ya es un proveedor real, no se vuelve a promover.
+    hotelProveedorId?: number | null;
 };
 
 type PasajeroPickable = { id: number; tipo_pax: string; edad: number };
@@ -232,6 +264,12 @@ const emit = defineEmits<{
     // seleccionar()/agregarGrupo() de arriba.
     (e: 'guardarHotel', payload: { id: number; nombre_hotel: string }): void;
     (e: 'eliminarHotel', hotelId: number): void;
+    // 05-sep-2026 — inmediatos (no batcheados con guardarHotel): el archivo
+    // se sube o la foto se borra apenas el vendedor actúa, mismo criterio
+    // que destinos/form.vue.
+    (e: 'agregarFotosHotel', payload: { hotelId: number; archivos: File[] }): void;
+    (e: 'eliminarFotoHotel', payload: { hotelId: number; path: string }): void;
+    (e: 'promoverHotel', payload: { hotelId: number; hotelNombre: string }): void;
     (e: 'guardarTarifa', payload: { id: number; tipo_habitacion: string; precio_costo: number; precio_venta: number }): void;
     (e: 'eliminarTarifa', tarifaId: number): void;
     (e: 'agregarTarifa', payload: { hotelId: number; tipo_habitacion: string; precio_costo: number; precio_venta: number }): void;
@@ -276,12 +314,27 @@ const guardarNuevaTarifaInterna = (hotelId: number) => {
     formNuevaTarifa.value = { tipo_habitacion: 'doble', precio_costo: 0, precio_venta: 0 };
 };
 
+// Marca permanente de "de qué hotel es esta fila" (05-sep-2026, segunda
+// vuelta del hallazgo del usuario) — índice de aparición de cada hotel
+// (0,1,2...) para alternar el fondo de su bloque completo (header + tarifas
+// + "agregar"), independiente de si está en edición o no.
+const indiceHotelPorId = computed<Record<number, number>>(() => {
+    const mapa: Record<number, number> = {};
+    let siguiente = 0;
+    for (const t of props.tarifas) {
+        const hid = t.hotelId ?? 0;
+        if (!(hid in mapa)) mapa[hid] = siguiente++;
+    }
+    return mapa;
+});
+const esGrupoImpar = (hotelId: number) => (indiceHotelPorId.value[hotelId] ?? 0) % 2 === 1;
+
 // Aplana tarifas -> filas de tabla, intercalando una fila "header" por cada
 // hotel nuevo y una fila "agregar" al cierre de su grupo — solo cuando
 // permitirGestionHoteles=true. Sin ese prop, es un pass-through 1:1 a
 // `tarifas` (comportamiento idéntico al de antes de este cambio).
 type FilaTabla =
-    | { tipo: 'header'; key: string; hotelId: number; hotelNombre: string }
+    | { tipo: 'header'; key: string; hotelId: number; hotelNombre: string; hotelFotos: string[]; hotelProveedorId: number | null }
     | { tipo: 'tarifa'; key: string; data: TarifaHabitacion }
     | { tipo: 'agregar'; key: string; hotelId: number };
 
@@ -296,7 +349,7 @@ const filasParaRenderizar = computed<FilaTabla[]>(() => {
         const hid = t.hotelId ?? 0;
         if (hid !== hotelActual) {
             if (hotelActual !== null) filas.push({ tipo: 'agregar', key: 'a' + hotelActual, hotelId: hotelActual });
-            filas.push({ tipo: 'header', key: 'h' + hid, hotelId: hid, hotelNombre: t.hotelNombre ?? '' });
+            filas.push({ tipo: 'header', key: 'h' + hid, hotelId: hid, hotelNombre: t.hotelNombre ?? '', hotelFotos: t.hotelFotos ?? [], hotelProveedorId: t.hotelProveedorId ?? null });
             hotelActual = hid;
         }
         filas.push({ tipo: 'tarifa', key: 't' + t.id, data: t });
@@ -305,6 +358,18 @@ const filasParaRenderizar = computed<FilaTabla[]>(() => {
 
     return filas;
 });
+
+// 05-sep-2026 — fotos por hotel, hasta 3. Immediate (no hay "guardar" que
+// las agrupe): se sube apenas se elige el archivo.
+const onFotosHotelSeleccionadas = (event: Event, hotelId: number, existentes: number) => {
+    const input = event.target as HTMLInputElement;
+    const archivos = Array.from(input.files ?? []);
+    input.value = '';
+    if (!archivos.length) return;
+    const disponibles = 3 - existentes;
+    if (disponibles <= 0) return;
+    emit('agregarFotosHotel', { hotelId, archivos: archivos.slice(0, disponibles) });
+};
 
 // Edad REAL del pasajero (no tipo_pax) — un pasajero de 10 años con
 // tipo_pax='adulto' (umbral general de la agencia) igual puede caer en el
@@ -358,3 +423,14 @@ const confirmarGrupo = () => {
     cancelarModoGrupo();
 };
 </script>
+
+<style scoped>
+/* 05-sep-2026 — banda de fondo por bloque de hotel (header + sus tipos de
+   habitación + "agregar"), alternada entre hoteles consecutivos. Deliberadamente
+   sutil (no un color por hotel) — el objetivo es solo poder seguir de un
+   vistazo dónde termina un hotel y empieza el siguiente. */
+.grupo-hotel-alterno {
+    --bs-table-bg: #f1f3f5;
+    background-color: #f1f3f5;
+}
+</style>

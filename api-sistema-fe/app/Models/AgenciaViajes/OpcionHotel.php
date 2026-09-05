@@ -28,6 +28,14 @@ class OpcionHotel extends Model
         'moneda',
         'edad_max_infante_gratis',
         'edad_max_nino_cama_adicional',
+        // 05-sep-2026 — máx. 3, ver OpcionHotelController::agregarFotos()/
+        // eliminarFoto() (mismo patrón que destinos_atractivos/paquetes_plantilla,
+        // límite propio en vez del genérico de FotoUploadService).
+        'fotos',
+    ];
+
+    protected $casts = [
+        'fotos' => 'array',
     ];
 
     public function proveedor()

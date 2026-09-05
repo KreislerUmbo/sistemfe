@@ -522,6 +522,8 @@ export type OpcionHotel = {
   // crear el hotel, editables después.
   edad_max_infante_gratis: number;
   edad_max_nino_cama_adicional: number;
+  // 05-sep-2026 — máx. 3, ver OpcionHotelController::agregarFotos().
+  fotos?: string[] | null;
   opciones_hotel_tarifas?: OpcionHotelTarifa[];
 };
 

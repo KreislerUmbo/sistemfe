@@ -13,9 +13,13 @@ use App\Models\AgenciaViajes\ProveedorServicio;
 use App\Models\AgenciaViajes\ProveedorTarifa;
 use App\Models\AgenciaViajes\ProveedorTipoConfig;
 use App\Models\AgenciaViajes\ReservaItem;
+use App\Services\AgenciaViajes\FotoUploadService;
+use App\Services\StorageUrl;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\ValidationException;
 
 // Sesión M3 — hotel ad-hoc LOCAL, sin depender de un proveedor
 // registrado (plan-matriz-hoteles-cotizador.md Ronda 4/P11-P12).
@@ -25,6 +29,10 @@ use Illuminate\Support\Facades\Validator;
 // schema, no hizo falta migración para permitirlo).
 class OpcionHotelController extends Controller
 {
+    public function __construct(private FotoUploadService $fotoUploadService)
+    {
+    }
+
     // POST opciones-hotel — alta de un hotel ad-hoc + su matriz de
     // precios por tipo de habitación, tipeado a mano desde la pestaña
     // Local del cotizador (consumido por
@@ -83,6 +91,7 @@ class OpcionHotelController extends Controller
         });
 
         $hotel->load('opcionesHotelTarifas');
+        $hotel->setAttribute('fotos', StorageUrl::resolveMuchas($hotel->fotos ?? []));
 
         return response()->json(['code' => 200, 'message' => 'Hotel agregado correctamente', 'opcion_hotel' => $hotel]);
     }
@@ -108,8 +117,86 @@ class OpcionHotelController extends Controller
 
         $hotel->update($validator->validated());
         $hotel->load('opcionesHotelTarifas');
+        $hotel->setAttribute('fotos', StorageUrl::resolveMuchas($hotel->fotos ?? []));
 
         return response()->json(['code' => 200, 'message' => 'Hotel actualizado correctamente', 'opcion_hotel' => $hotel]);
+    }
+
+    // POST opciones-hotel/{id}/fotos — pedido del usuario (05-sep-2026): hasta
+    // 3 fotos por hotel al agregarlo/editarlo en el comparador de mayoristas.
+    // Tope propio (3) chequeado ANTES de llamar a FotoUploadService::
+    // procesarLote() (su propio tope de MAX_FOTOS_TOTAL=10 es compartido con
+    // destinos/paquetes — acá el límite real es más chico, a propósito).
+    public function agregarFotos(Request $request, string $id)
+    {
+        $hotel = OpcionHotel::findOrFail($id);
+        $existentes = $hotel->fotos ?? [];
+
+        $validator = Validator::make($request->all(), [
+            'fotos' => 'required|array',
+            'fotos.*' => 'image|max:'.FotoUploadService::MAX_KB_POR_FOTO,
+        ]);
+        if ($validator->fails()) {
+            return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
+        }
+
+        $nuevas = (array) $request->file('fotos');
+        if (count($existentes) + count($nuevas) > 3) {
+            return response()->json([
+                'code' => 422,
+                'message' => 'Este hotel ya tiene '.count($existentes).' foto(s) y se están intentando agregar '
+                    .count($nuevas).' más, superando el máximo de 3 fotos por hotel.',
+            ], 422);
+        }
+
+        try {
+            $resultado = $this->fotoUploadService->procesarLote($nuevas, 'opciones-hotel', count($existentes));
+        } catch (ValidationException $e) {
+            return response()->json(['code' => 422, 'message' => $e->getMessage()], 422);
+        }
+
+        $hotel->fotos = array_merge($existentes, $resultado['paths']);
+        $hotel->save();
+        $hotel->setAttribute('fotos', StorageUrl::resolveMuchas($hotel->fotos ?? []));
+
+        return response()->json([
+            'code' => 200,
+            'message' => 'Foto(s) agregada(s) correctamente',
+            'opcion_hotel' => $hotel,
+            'fotos_rechazadas' => $resultado['rechazadas'],
+        ]);
+    }
+
+    // DELETE opciones-hotel/{id}/fotos — mismo patrón que
+    // DestinoAtractivoController::eliminarFoto()/PaquetePlantillaController::
+    // eliminarFoto().
+    public function eliminarFoto(Request $request, string $id)
+    {
+        $hotel = OpcionHotel::findOrFail($id);
+
+        $validator = Validator::make($request->all(), [
+            'path' => 'required|string',
+        ]);
+        if ($validator->fails()) {
+            return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
+        }
+
+        $path = StorageUrl::relativo($request->get('path'));
+        $fotos = $hotel->fotos ?? [];
+
+        if (! in_array($path, $fotos, true)) {
+            return response()->json(['code' => 422, 'message' => 'La foto indicada no pertenece a este hotel.'], 422);
+        }
+
+        if (Storage::disk('public')->exists($path)) {
+            Storage::disk('public')->delete($path);
+        }
+
+        $hotel->fotos = array_values(array_diff($fotos, [$path]));
+        $hotel->save();
+        $hotel->setAttribute('fotos', StorageUrl::resolveMuchas($hotel->fotos ?? []));
+
+        return response()->json(['code' => 200, 'message' => 'Foto eliminada correctamente', 'opcion_hotel' => $hotel]);
     }
 
     // DELETE opciones-hotel/{id} — mismo guard que AlternativaItemController::

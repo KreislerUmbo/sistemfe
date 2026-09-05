@@ -15,6 +15,7 @@ use App\Models\AgenciaViajes\Proveedor;
 use App\Models\AgenciaViajes\ProveedorTarifa;
 use App\Models\AgenciaViajes\ProveedorTipo;
 use App\Models\AgenciaViajes\ReservaItem;
+use App\Services\StorageUrl;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -30,6 +31,25 @@ class OpcionMayoristaController extends Controller
         $opciones = OpcionMayorista::where('alternativa_id', $alternativa->id)
             ->with(['proveedor', 'opcionesHotel.opcionesHotelTarifas', 'opcionales', 'tours.paquetePlantilla'])
             ->get();
+
+        // 05-sep-2026 — fotos por hotel (máx. 3), mismo criterio de
+        // resolver a URL completa antes de mandar al frontend que
+        // PaquetePlantillaController/DestinoAtractivoController.
+        $opciones->each(fn (OpcionMayorista $op) => $op->opcionesHotel->each(
+            fn (OpcionHotel $h) => $h->setAttribute('fotos', StorageUrl::resolveMuchas($h->fotos ?? []))
+        ));
+
+        // Hallazgo del usuario (05-sep-2026): las fotos de un tour incluido
+        // (PaquetePlantilla, ver TourIncluidoForm.vue) SÍ se resuelven en
+        // PaquetePlantillaController (index/show/store/update), pero acá
+        // llegan anidadas vía tours.paquetePlantilla sin pasar por ninguno
+        // de esos métodos — sin este resolve, el frontend recibía el path
+        // relativo crudo ("paquetes-plantilla/foto_x.jpg") y el navegador lo
+        // resolvía como URL relativa a la página actual, rompiendo la
+        // miniatura al editar el tour.
+        $opciones->each(fn (OpcionMayorista $op) => $op->tours->each(
+            fn (OpcionMayoristaTour $t) => $t->paquetePlantilla?->setAttribute('fotos', StorageUrl::resolveMuchas($t->paquetePlantilla->fotos ?? []))
+        ));
 
         return response()->json(['opciones_mayorista' => $opciones]);
     }
@@ -234,6 +254,7 @@ class OpcionMayoristaController extends Controller
 
         if ($request->isMethod('get')) {
             $hoteles = OpcionHotel::where('opcion_mayorista_id', $opcion->id)->with('opcionesHotelTarifas')->get();
+            $hoteles->each(fn (OpcionHotel $h) => $h->setAttribute('fotos', StorageUrl::resolveMuchas($h->fotos ?? [])));
 
             return response()->json(['opciones_hotel' => $hoteles]);
         }
@@ -287,6 +308,7 @@ class OpcionMayoristaController extends Controller
         });
 
         $hotel->load('opcionesHotelTarifas');
+        $hotel->setAttribute('fotos', StorageUrl::resolveMuchas($hotel->fotos ?? []));
 
         return response()->json(['code' => 200, 'message' => 'Hotel agregado correctamente', 'opcion_hotel' => $hotel]);
     }
@@ -371,10 +393,11 @@ class OpcionMayoristaController extends Controller
         $opcion = OpcionMayorista::findOrFail($id);
 
         if ($request->isMethod('get')) {
-            return response()->json([
-                'opcion_mayorista_tours' => OpcionMayoristaTour::where('opcion_mayorista_id', $opcion->id)
-                    ->with('paquetePlantilla')->orderBy('orden')->get(),
-            ]);
+            $tours = OpcionMayoristaTour::where('opcion_mayorista_id', $opcion->id)
+                ->with('paquetePlantilla')->orderBy('orden')->get();
+            $tours->each(fn (OpcionMayoristaTour $t) => $t->paquetePlantilla?->setAttribute('fotos', StorageUrl::resolveMuchas($t->paquetePlantilla->fotos ?? [])));
+
+            return response()->json(['opcion_mayorista_tours' => $tours]);
         }
 
         $validator = Validator::make($request->all(), [
@@ -388,13 +411,14 @@ class OpcionMayoristaController extends Controller
 
         $tour = OpcionMayoristaTour::create($validator->validated() + ['opcion_mayorista_id' => $opcion->id]);
         $tour->load('paquetePlantilla');
+        $tour->paquetePlantilla?->setAttribute('fotos', StorageUrl::resolveMuchas($tour->paquetePlantilla->fotos ?? []));
 
         return response()->json(['code' => 200, 'message' => 'Tour vinculado correctamente', 'opcion_mayorista_tour' => $tour]);
     }
 
     // Borra solo el vínculo — el PaquetePlantilla real queda intacto (sin
-    // buscador de "tour ya existente" todavía, ver plan; podría reusarse a
-    // mano después desde Paquetes/Tours).
+    // borrarse), reusable después desde el buscador "tour ya existente" de
+    // TourIncluidoForm.vue (05-sep-2026) o a mano desde Paquetes/Tours.
     public function quitarTour(string $id)
     {
         $tour = OpcionMayoristaTour::findOrFail($id);
@@ -421,6 +445,7 @@ class OpcionMayoristaController extends Controller
 
         $tour->update($validator->validated());
         $tour->load('paquetePlantilla');
+        $tour->paquetePlantilla?->setAttribute('fotos', StorageUrl::resolveMuchas($tour->paquetePlantilla->fotos ?? []));
 
         return response()->json(['code' => 200, 'message' => 'Día actualizado correctamente', 'opcion_mayorista_tour' => $tour]);
     }

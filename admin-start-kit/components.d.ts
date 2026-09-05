@@ -71,6 +71,7 @@ declare module 'vue' {
     Pagination: typeof import('./src/components/portal/Pagination.vue')['default']
     PasajeAereoForm: typeof import('./src/components/AgenciaViajes/PasajeAereoForm.vue')['default']
     ProductFormQuick: typeof import('./src/components/Sales/ProductFormQuick.vue')['default']
+    PromoverHotelProveedorModal: typeof import('./src/components/AgenciaViajes/PromoverHotelProveedorModal.vue')['default']
     PromoverProveedorModal: typeof import('./src/components/AgenciaViajes/PromoverProveedorModal.vue')['default']
     RichTextEditor: typeof import('./src/components/RichTextEditor.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']

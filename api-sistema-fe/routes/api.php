@@ -613,6 +613,8 @@ Route::group([
         ->middleware('permission:agencia.paquetes');
     Route::post("paquetes-plantilla/{id}", [PaquetePlantillaController::class, 'update'])
         ->middleware('permission:agencia.paquetes');
+    Route::delete("paquetes-plantilla/{id}/fotos", [PaquetePlantillaController::class, 'eliminarFoto'])
+        ->middleware('permission:agencia.paquetes');
     Route::delete("paquetes-plantilla/{id}", [PaquetePlantillaController::class, 'destroy'])
         ->middleware('permission:agencia.paquetes');
     // Sesión 11m — duplicar tour/paquete completo (datos generales +
@@ -768,6 +770,11 @@ Route::group([
     Route::delete("opcion-hotel-tarifas/{id}", [OpcionHotelController::class, 'eliminarTarifa'])
         ->middleware('permission:agencia.cotizaciones');
     Route::post("opciones-hotel/{id}/promover", [OpcionHotelController::class, 'promover'])
+        ->middleware('permission:agencia.cotizaciones');
+    // 05-sep-2026 — hasta 3 fotos por hotel (Internacional/mayorista).
+    Route::post("opciones-hotel/{id}/fotos", [OpcionHotelController::class, 'agregarFotos'])
+        ->middleware('permission:agencia.cotizaciones');
+    Route::delete("opciones-hotel/{id}/fotos", [OpcionHotelController::class, 'eliminarFoto'])
         ->middleware('permission:agencia.cotizaciones');
 
     // Sesión 12e — biblioteca de contenido reutilizable (§9.1 de la

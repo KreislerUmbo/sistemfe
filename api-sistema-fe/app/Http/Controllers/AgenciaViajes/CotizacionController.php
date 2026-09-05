@@ -132,6 +132,14 @@ class CotizacionController extends Controller
             // un grupo de hoteles — caía siempre al fallback genérico
             // "Paquete mayorista".
             'alternativas.items.opcionMayorista.proveedor',
+            // Pedido del usuario (05-sep-2026): el itinerario incluido
+            // (OpcionMayoristaTour, con su "Día") solo se cargaba en la
+            // pestaña "Tours" del drawer (GET opciones-mayorista/{id}/tours,
+            // perezoso) — el lienzo, que se ve siempre sin abrir el drawer,
+            // no tenía forma de mostrarlo. Mismo criterio que .proveedor de
+            // arriba: sin esto, el vendedor solo veía el itinerario
+            // incluido si entraba a buscarlo a propósito.
+            'alternativas.items.opcionMayorista.tours.paquetePlantilla',
             // Sesión M2/M4 — hotel de la matriz (mayorista o ad-hoc LOCAL,
             // ver OpcionHotelController::store()), sin ProveedorTarifa
             // real. Gap real encontrado en verificación en vivo de M4: sin

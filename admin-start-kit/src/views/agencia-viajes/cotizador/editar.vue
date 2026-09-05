@@ -349,6 +349,16 @@
                                         <i v-else class="fas fa-times text-danger" style="cursor:pointer" title="Eliminar" @click="eliminarItem(it)"></i>
                                     </span>
                                 </div>
+                                <!-- Pedido del usuario (05-sep-2026): el itinerario incluido
+                                     (OpcionMayoristaTour, con su "Día") solo se veía si el
+                                     vendedor entraba a la pestaña "Tours" del drawer — acá
+                                     queda visible siempre, sin precio (ya está prorrateado en
+                                     el paquete, no es un ítem propio). -->
+                                <div v-if="toursDeGrupo(fila.items).length" class="border-top pt-1 mt-1">
+                                    <div v-for="t in toursDeGrupo(fila.items)" :key="t.id" class="text-muted" style="font-size:11px">
+                                        <i class="fas fa-route me-1 text-primary"></i>Día {{ t.orden }} · {{ t.paquete_plantilla?.nombre }}
+                                    </div>
+                                </div>
                             </div>
 
                             <div v-else class="canvas-item border rounded p-2 mb-2 small">
@@ -369,6 +379,14 @@
                                     :class="badgeTratamientoTributario(fila.item)!.clase" style="font-size:10px">
                                     {{ badgeTratamientoTributario(fila.item)!.texto }}
                                 </span>
+
+                                <!-- Mismo itinerario incluido que el bloque de grupo de arriba,
+                                     para un ítem de mayorista SUELTO (sin comparador de hoteles). -->
+                                <div v-if="fila.item.origen_tipo === 'mayorista' && toursDeGrupo([fila.item]).length" class="border-top pt-1 mt-1">
+                                    <div v-for="t in toursDeGrupo([fila.item])" :key="t.id" class="text-muted" style="font-size:11px">
+                                        <i class="fas fa-route me-1 text-primary"></i>Día {{ t.orden }} · {{ t.paquete_plantilla?.nombre }}
+                                    </div>
+                                </div>
 
                                 <div v-if="fila.item.origen_tipo === 'manual'" class="mt-1 d-flex align-items-center gap-2 flex-wrap">
                                     <span v-if="fila.item.proveedor_promovido_id" class="badge bg-success-subtle text-success" style="font-size:10px">
@@ -922,6 +940,9 @@
                                             @agregar-grupo="({ ids }) => agregarGrupoMayorista(op, ids)"
                                             @guardar-hotel="onGuardarHotelMatrix"
                                             @eliminar-hotel="onEliminarHotelMatrix"
+                                            @agregar-fotos-hotel="onAgregarFotosHotelMatrix"
+                                            @eliminar-foto-hotel="onEliminarFotoHotelMatrix"
+                                            @promover-hotel="onPromoverHotelMatrix"
                                             @guardar-tarifa="onGuardarTarifaMatrix"
                                             @eliminar-tarifa="onEliminarTarifaMatrix"
                                             @agregar-tarifa="onAgregarTarifaMatrix" />
@@ -971,6 +992,17 @@
                                                 </div>
                                             </div>
                                             <button class="btn btn-sm btn-outline-secondary mb-1" @click="formHotel.tarifas.push({ tipo_habitacion: 'doble', precio_costo: 0, precio_venta: 0, proveedor_tarifa_id: null })">+ tipo de habitación</button>
+
+                                            <!-- Pedido del usuario (05-sep-2026): hasta 3 fotos por hotel. -->
+                                            <label class="form-label mb-1 small text-secondary d-block">Fotos (opcional, máx. 3)</label>
+                                            <div v-if="fotosHotelNuevo.length" class="d-flex flex-wrap gap-1 mb-1">
+                                                <div v-for="(foto, idx) in fotosHotelNuevo" :key="idx" class="position-relative">
+                                                    <img :src="foto.previewUrl" style="width:50px;height:50px;object-fit:cover;border:1px solid #ccc;border-radius:3px;">
+                                                    <i class="fas fa-times-circle text-danger position-absolute" style="top:-6px;right:-6px;cursor:pointer;background:#fff;border-radius:50%" title="Quitar" @click="quitarFotoHotelNuevo(idx)"></i>
+                                                </div>
+                                            </div>
+                                            <input type="file" accept="image/*" multiple class="form-control form-control-sm mb-1" :disabled="fotosHotelNuevo.length >= 3" @change="onFotosHotelNuevoSeleccionadas">
+
                                             <button class="btn btn-sm btn-primary w-100" @click="guardarHotel(op)" :disabled="guardandoHotelMayorista">
                                                 <span v-if="guardandoHotelMayorista" class="spinner-border spinner-border-sm me-1"></span>Guardar hotel
                                             </button>
@@ -1108,6 +1140,16 @@
 
         <PromoverProveedorModal v-if="itemParaPromover" :item="itemParaPromover"
             @promovido="onProveedorPromovido" @close="itemParaPromover = null" />
+
+        <!-- Teleport (a diferencia de PromoverProveedorModal de arriba): este
+             modal se abre DESDE DENTRO del drawer de biblioteca (Teleport to
+             body más arriba), que se queda abierto detrás — sin este Teleport
+             quedaba por debajo del overlay del drawer en el DOM y sus clics
+             se interceptaban (hallazgo real, reproducido en vivo 05-sep-2026). -->
+        <Teleport to="body">
+            <PromoverHotelProveedorModal v-if="hotelParaPromover" :hotel="hotelParaPromover"
+                @promovido="onHotelPromovido" @close="hotelParaPromover = null" />
+        </Teleport>
         </template>
     </DefaultLayout>
 </template>
@@ -1125,6 +1167,7 @@ import TourIncluidoForm from '@/components/AgenciaViajes/TourIncluidoForm.vue';
 import PasajeAereoForm from '@/components/AgenciaViajes/PasajeAereoForm.vue';
 import ItemManualForm from '@/components/AgenciaViajes/ItemManualForm.vue';
 import PromoverProveedorModal from '@/components/AgenciaViajes/PromoverProveedorModal.vue';
+import PromoverHotelProveedorModal from '@/components/AgenciaViajes/PromoverHotelProveedorModal.vue';
 import DestinoTreeSelect from '@/components/AgenciaViajes/DestinoTreeSelect.vue';
 import ClientFormQuick from '@/components/Sales/ClientFormQuick.vue';
 import { useToast } from '@/composables/useToast';
@@ -2350,6 +2393,27 @@ const formHotel = ref<{
     nombre_hotel: '', proveedor_id: null, tarifas: [{ tipo_habitacion: 'doble', precio_costo: 0, precio_venta: 0, proveedor_tarifa_id: null }],
 });
 
+// 05-sep-2026 — hasta 3 fotos por hotel, pedido del usuario. El hotel recién
+// creado todavía no tiene id mientras se completa este form, así que las
+// fotos se guardan como Files pendientes y se suben DESPUÉS de crearHotel()
+// (ver guardarHotel()), contra el mismo endpoint que usa la edición.
+const fotosHotelNuevo = ref<Array<{ file: File; previewUrl: string }>>([]);
+const onFotosHotelNuevoSeleccionadas = (event: Event) => {
+    const input = event.target as HTMLInputElement;
+    const archivos = Array.from(input.files ?? []);
+    input.value = '';
+    const disponibles = 3 - fotosHotelNuevo.value.length;
+    if (disponibles <= 0) {
+        (Swal as TVueSwalInstance).fire('Límite alcanzado', 'Ya tenés el máximo de 3 fotos por hotel.', 'warning');
+        return;
+    }
+    archivos.slice(0, disponibles).forEach((file) => fotosHotelNuevo.value.push({ file, previewUrl: URL.createObjectURL(file) }));
+};
+const quitarFotoHotelNuevo = (idx: number) => {
+    URL.revokeObjectURL(fotosHotelNuevo.value[idx].previewUrl);
+    fotosHotelNuevo.value.splice(idx, 1);
+};
+
 // Sesión 11k, Fix 9 — proveedores tipo Hotel (para "usar tarifa registrada")
 // + sus tarifas Hotel una vez elegido uno. Mismo patrón que detalle.vue.
 const proveedoresHotel = ref<Proveedor[]>([]);
@@ -2488,6 +2552,46 @@ const onEliminarHotelMatrix = async (hotelId: number) => {
     } catch (error: any) {
         (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo eliminar el hotel', 'error');
     }
+};
+
+// 05-sep-2026 — hasta 3 fotos por hotel, pedido del usuario. Inmediatos
+// (sin "guardar" que las agrupe), mismo criterio que eliminarFotoExistente()
+// de destinos/form.vue.
+const onAgregarFotosHotelMatrix = async (payload: { hotelId: number; archivos: File[] }) => {
+    try {
+        const res = await opcionMayoristaService.agregarFotosHotel(payload.hotelId, payload.archivos);
+        if (res.fotos_rechazadas?.length) {
+            const detalle = res.fotos_rechazadas.map((r: { nombre: string; motivo: string }) => `${r.nombre}: ${r.motivo}`).join('<br>');
+            await (Swal as TVueSwalInstance).fire({ icon: 'warning', title: 'Algunas fotos no se agregaron', html: detalle });
+        }
+        await cargarOpcionesMayorista();
+    } catch (error: any) {
+        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo agregar la(s) foto(s)', 'error');
+    }
+};
+
+const onEliminarFotoHotelMatrix = async (payload: { hotelId: number; path: string }) => {
+    try {
+        await opcionMayoristaService.eliminarFotoHotel(payload.hotelId, payload.path);
+        await cargarOpcionesMayorista();
+    } catch (error: any) {
+        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo eliminar la foto', 'error');
+    }
+};
+
+// 05-sep-2026 — conecta OpcionHotelController::promover(), construido junto
+// con el resto del CRUD de hoteles pero nunca enganchado a ningún botón
+// (hallazgo del usuario). Mismo patrón que itemParaPromover/
+// abrirPromoverProveedor de arriba (ítems manuales) — modal propio, fuera
+// del drawer.
+const hotelParaPromover = ref<{ id: number; nombre_hotel: string } | null>(null);
+const onPromoverHotelMatrix = (payload: { hotelId: number; hotelNombre: string }) => {
+    hotelParaPromover.value = { id: payload.hotelId, nombre_hotel: payload.hotelNombre };
+};
+const onHotelPromovido = async (_res: any) => {
+    hotelParaPromover.value = null;
+    toast.success('Proveedor creado correctamente');
+    await cargarOpcionesMayorista();
 };
 
 const onGuardarTarifaMatrix = async (payload: { id: number; tipo_habitacion: string; precio_costo: number; precio_venta: number }) => {
@@ -2640,9 +2744,14 @@ const guardandoHotelMayorista = ref(false);
 const guardarHotel = async (op: OpcionMayorista) => {
     guardandoHotelMayorista.value = true;
     try {
-        await opcionMayoristaService.crearHotel(op.id, formHotel.value);
+        const res = await opcionMayoristaService.crearHotel(op.id, formHotel.value);
+        if (fotosHotelNuevo.value.length) {
+            await opcionMayoristaService.agregarFotosHotel(res.opcion_hotel.id, fotosHotelNuevo.value.map((f) => f.file));
+        }
         mostrarFormHotel.value = null;
         formHotel.value = { nombre_hotel: '', proveedor_id: null, tarifas: [{ tipo_habitacion: 'doble', precio_costo: 0, precio_venta: 0, proveedor_tarifa_id: null }] };
+        fotosHotelNuevo.value.forEach((f) => URL.revokeObjectURL(f.previewUrl));
+        fotosHotelNuevo.value = [];
         tarifasHotelProveedorSeleccionado.value = [];
         await cargarOpcionesMayorista();
     } catch (error: any) {
@@ -2658,12 +2767,13 @@ const guardarHotel = async (op: OpcionMayorista) => {
 // tipo de habitación (antes traía "{hotel} · {tipo}" repetido, redundante
 // con la nueva cabecera).
 const tarifasHotelPlanas = (op: OpcionMayorista) => {
-    const filas: Array<{ id: number; tipo_habitacion: string; precio: number; registrada: boolean; hotelId: number; hotelNombre: string; precioCosto: number }> = [];
+    const filas: Array<{ id: number; tipo_habitacion: string; precio: number; registrada: boolean; hotelId: number; hotelNombre: string; precioCosto: number; hotelFotos: string[]; hotelProveedorId: number | null }> = [];
     (op.opciones_hotel ?? []).forEach((h) => {
         (h.opciones_hotel_tarifas ?? []).forEach((t) => {
             filas.push({
                 id: t.id, tipo_habitacion: t.tipo_habitacion, precio: Number(t.precio_venta), registrada: !!t.proveedor_tarifa_id,
-                hotelId: h.id, hotelNombre: h.nombre_hotel, precioCosto: Number(t.precio_costo),
+                hotelId: h.id, hotelNombre: h.nombre_hotel, precioCosto: Number(t.precio_costo), hotelFotos: h.fotos ?? [],
+                hotelProveedorId: h.proveedor_id ?? null,
             });
         });
     });
@@ -3202,6 +3312,15 @@ const iconoItem = (item: AlternativaItem) => {
 const nombreMayoristaDeGrupo = (items: AlternativaItem[]): string | null => {
     const op = items[0]?.opcion_mayorista;
     return op?.proveedor?.nombre_comercial ?? op?.proveedor?.razon_social ?? null;
+};
+
+// Pedido del usuario (05-sep-2026) — itinerario incluido del mayorista de
+// este ítem/grupo, para mostrarlo en el lienzo sin precio (ya está
+// prorrateado en el paquete). Mismo `items[0]?.opcion_mayorista` que
+// nombreMayoristaDeGrupo() de arriba — todos los ítems de un mismo grupo
+// comparten la misma OpcionMayorista, así que alcanza con el primero.
+const toursDeGrupo = (items: AlternativaItem[]): OpcionMayoristaTour[] => {
+    return items[0]?.opcion_mayorista?.tours ?? [];
 };
 
 const etiquetaItem = (item: AlternativaItem) => {
