@@ -23,6 +23,7 @@ use App\Services\StorageUrl;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 
 // Alternativa de cotización — plan-modulo-cotizaciones-reservas.md §3.1/§3.2.
@@ -694,6 +695,17 @@ class AlternativaController extends Controller
         [$fotoPortadaPrincipal, $fotosPortadaSecundarias, $fotosGaleria] = $this->fotosTourParaPdf($alternativa, $configPdf);
         $hotelesInfo = $this->hotelesInfoParaPdf($opcionesHoteles);
 
+        // Hallazgo del usuario (06-sep-2026, comparando contra el mockup
+        // aprobado): el header/footer custom (membrete real de la agencia)
+        // se imprimía como contenido normal — subía/bajaba con el flujo de
+        // la página en vez de quedar fijo arriba/abajo como una hoja
+        // membretada real. Fix: position:fixed dentro del margen de @page
+        // (misma técnica ya usada en reporte-operativo.blade.php,
+        // ".marca-generacion") — el alto reservado se calcula acá porque
+        // la imagen la sube la agencia con la proporción que quiera.
+        $alturaHeaderMm = $this->alturaHeaderMm($configPdf, $afiliaciones);
+        $alturaFooterMm = $this->alturaFooterMm($configPdf);
+
         $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('pdf.agencia-viajes.alternativa', [
             'alternativa' => $alternativa,
             'cotizacion' => $alternativa->cotizacion,
@@ -711,6 +723,8 @@ class AlternativaController extends Controller
             'configPdf' => $configPdf,
             'headerCustomUrl' => StorageUrl::resolveParaPdf($configPdf->imagen_header_custom),
             'footerCustomUrl' => StorageUrl::resolveParaPdf($configPdf->imagen_footer_custom),
+            'alturaHeaderMm' => $alturaHeaderMm,
+            'alturaFooterMm' => $alturaFooterMm,
             'afiliaciones' => $afiliaciones,
             'categoria' => $categoria,
             'colorCategoria' => $colorCategoria,
@@ -1086,6 +1100,74 @@ class AlternativaController extends Controller
                 'logo' => StorageUrl::resolveParaPdf($afiliacion->logo_path),
             ] : null;
         })->filter()->values();
+    }
+
+    // Hallazgo del usuario (06-sep-2026) — hoja membretada real: el
+    // header/footer debe quedar FIJO arriba/abajo de CADA página, no
+    // subir/bajar con el contenido. dompdf soporta esto con
+    // position:fixed dentro del margen reservado por @page (mismo truco
+    // ya usado en reporte-operativo.blade.php) — pero el margen de @page
+    // es un valor fijo en el CSS, así que hay que calcular acá cuánto
+    // alto reservar según lo que realmente se va a imprimir arriba/abajo.
+    //
+    // Con imagen custom: la agencia sube su membrete con la proporción
+    // que quiera (ver los 2 casos reales de DKM Xplore) — se mide el
+    // archivo real y se calcula qué alto le corresponde al ancho
+    // completo de la hoja A4 (el membrete hace bleed hasta el borde
+    // físico, ver ANCHO_PAGINA_A4_MM en alturaBandaCompletaMm()).
+    //
+    // Sin imagen custom: el header/footer generado desde
+    // ConfiguracionAgenciaPdf tiene un alto predecible (logo + 2 líneas
+    // de contacto, +eslogan, +franja de afiliaciones) — reserva fija por
+    // bloque presente, no medida en píxeles porque no hay ninguna imagen
+    // que medir.
+    private const ANCHO_PAGINA_A4_MM = 210.0;
+
+    private function alturaHeaderMm(ConfiguracionAgenciaPdf $configPdf, \Illuminate\Support\Collection $afiliaciones): float
+    {
+        if ($configPdf->imagen_header_custom) {
+            return $this->alturaBandaCompletaMm($configPdf->imagen_header_custom);
+        }
+
+        $altura = 28.0; // logo + nombre comercial + RUC/teléfono/email
+        if (! empty($configPdf->eslogan)) {
+            $altura += 4.0;
+        }
+        if ($afiliaciones->isNotEmpty()) {
+            $altura += 10.0;
+        }
+
+        return $altura;
+    }
+
+    private function alturaFooterMm(ConfiguracionAgenciaPdf $configPdf): float
+    {
+        if ($configPdf->imagen_footer_custom) {
+            // +14mm: el aviso de condiciones generales (footer-legal) va
+            // SIEMPRE arriba del membrete custom, es contenido legal, no
+            // branding — el override total del plan §4.2 solo reemplaza
+            // eslogan/redes, no este aviso.
+            return $this->alturaBandaCompletaMm($configPdf->imagen_footer_custom) + 14.0;
+        }
+
+        return empty($configPdf->redes_sociales) ? 16.0 : 22.0;
+    }
+
+    private function alturaBandaCompletaMm(string $path): float
+    {
+        if (! Storage::disk('public')->exists($path)) {
+            return 20.0;
+        }
+
+        // getimagesize() alcanza acá — solo hace falta el ancho/alto real
+        // del archivo, no manipular la imagen (eso ya lo hace
+        // ImagenRecorteService para las fotos de tour/hotel).
+        $medidas = @getimagesize(Storage::disk('public')->path($path));
+        if (! $medidas || $medidas[0] <= 0) {
+            return 20.0;
+        }
+
+        return round(self::ANCHO_PAGINA_A4_MM * ($medidas[1] / $medidas[0]), 1);
     }
 
     // plan §4.5 — portada (1 principal + hasta 2 secundarias) + galería de
