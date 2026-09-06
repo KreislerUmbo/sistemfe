@@ -91,7 +91,7 @@ class OpcionHotelController extends Controller
         });
 
         $hotel->load('opcionesHotelTarifas');
-        $hotel->setAttribute('fotos', self::resolverFotos($hotel->fotos ?? []));
+        $hotel->setAttribute('fotos', OpcionHotel::fotosResueltas($hotel->fotos ?? []));
 
         return response()->json(['code' => 200, 'message' => 'Hotel agregado correctamente', 'opcion_hotel' => $hotel]);
     }
@@ -117,7 +117,7 @@ class OpcionHotelController extends Controller
 
         $hotel->update($validator->validated());
         $hotel->load('opcionesHotelTarifas');
-        $hotel->setAttribute('fotos', self::resolverFotos($hotel->fotos ?? []));
+        $hotel->setAttribute('fotos', OpcionHotel::fotosResueltas($hotel->fotos ?? []));
 
         return response()->json(['code' => 200, 'message' => 'Hotel actualizado correctamente', 'opcion_hotel' => $hotel]);
     }
@@ -137,7 +137,7 @@ class OpcionHotelController extends Controller
     public function agregarFotos(Request $request, string $id)
     {
         $hotel = OpcionHotel::findOrFail($id);
-        $existentes = self::normalizarFotos($hotel->fotos ?? []);
+        $existentes = OpcionHotel::normalizarFotos($hotel->fotos ?? []);
 
         $validator = Validator::make($request->all(), [
             'foto' => 'required|image|max:'.FotoUploadService::MAX_KB_POR_FOTO,
@@ -171,7 +171,7 @@ class OpcionHotelController extends Controller
         $existentes[] = ['path' => $resultado['paths'][0], 'tipo_foto' => $tipoFoto];
         $hotel->fotos = $existentes;
         $hotel->save();
-        $hotel->setAttribute('fotos', self::resolverFotos($hotel->fotos ?? []));
+        $hotel->setAttribute('fotos', OpcionHotel::fotosResueltas($hotel->fotos ?? []));
 
         return response()->json([
             'code' => 200,
@@ -195,7 +195,7 @@ class OpcionHotelController extends Controller
         }
 
         $path = StorageUrl::relativo($request->get('path'));
-        $fotos = self::normalizarFotos($hotel->fotos ?? []);
+        $fotos = OpcionHotel::normalizarFotos($hotel->fotos ?? []);
 
         if (! collect($fotos)->contains('path', $path)) {
             return response()->json(['code' => 422, 'message' => 'La foto indicada no pertenece a este hotel.'], 422);
@@ -207,29 +207,9 @@ class OpcionHotelController extends Controller
 
         $hotel->fotos = collect($fotos)->reject(fn (array $f) => $f['path'] === $path)->values()->all();
         $hotel->save();
-        $hotel->setAttribute('fotos', self::resolverFotos($hotel->fotos ?? []));
+        $hotel->setAttribute('fotos', OpcionHotel::fotosResueltas($hotel->fotos ?? []));
 
         return response()->json(['code' => 200, 'message' => 'Foto eliminada correctamente', 'opcion_hotel' => $hotel]);
-    }
-
-    // Defensivo — normaliza entradas viejas (string suelto, de antes de la
-    // migración de datos 2026_09_05_100400) a la forma {path, tipo_foto}.
-    // La migración ya debería haber convertido todo lo real, esto es
-    // belt-and-suspenders para no romper si algo quedó sin migrar.
-    private static function normalizarFotos(array $fotos): array
-    {
-        return array_map(
-            fn ($f) => is_array($f) ? $f : ['path' => $f, 'tipo_foto' => 'habitacion'],
-            $fotos
-        );
-    }
-
-    private static function resolverFotos(array $fotos): array
-    {
-        return array_map(
-            fn (array $f) => ['path' => $f['path'], 'tipo_foto' => $f['tipo_foto'] ?? 'habitacion', 'url' => StorageUrl::resolve($f['path'])],
-            self::normalizarFotos($fotos)
-        );
     }
 
     // DELETE opciones-hotel/{id} — mismo guard que AlternativaItemController::
