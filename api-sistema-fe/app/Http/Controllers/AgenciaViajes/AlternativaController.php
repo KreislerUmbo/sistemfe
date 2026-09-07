@@ -659,20 +659,34 @@ class AlternativaController extends Controller
         // opcionales de la(s) opción(es) de mayorista realmente elegidas en
         // esta alternativa (ver mayoristasReferenciados()).
         $mayoristas = $this->mayoristasReferenciados($alternativa);
-        // TextoFormatoService::sanitizarHtmlParaPdf() — bug real 06-sep-2026,
+        // TextoFormatoService::textoLibreParaPdf() — bug real 06-sep-2026,
         // viñetas de Wingdings/Symbol pegadas desde Word (Zona de Uso
         // Privado de Unicode) salían como "?" en el PDF.
+        //
+        // Editor de texto enriquecido (07-sep-2026, pedido del usuario): estos
+        // 3 campos (incluye/no_incluye/vuelo_detalle) pasan de <textarea>
+        // plano a RichTextEditor (Quill) en el frontend — ya no es
+        // necesariamente texto con saltos de línea literales, puede ser
+        // HTML (<p>/<ul><li>/<strong>). textoLibreParaPdf() cubre ambos
+        // casos: si detecta HTML real lo renderiza tal cual (Quill ya trae
+        // su propia estructura); si es texto plano (dato cargado ANTES de
+        // este cambio) reconstruye el <ul><li> — sin esto, texto plano con
+        // "\n" literales perdía sus viñetas al renderizarse crudo (bug real
+        // encontrado generando el PDF de una cotización ya existente).
         $mayoristasIncluye = $mayoristas
-            ->flatMap(fn ($m) => preg_split('/\r?\n/', trim(TextoFormatoService::sanitizarHtmlParaPdf((string) $m->incluye))))
-            ->filter(fn ($linea) => trim($linea) !== '')
+            ->map(fn ($m) => TextoFormatoService::textoLibreParaPdf($m->incluye))
+            ->filter(fn ($html) => $html !== '')
             ->values();
         $mayoristasNoIncluye = $mayoristas
-            ->flatMap(fn ($m) => preg_split('/\r?\n/', trim(TextoFormatoService::sanitizarHtmlParaPdf((string) $m->no_incluye))))
-            ->filter(fn ($linea) => trim($linea) !== '')
+            ->map(fn ($m) => TextoFormatoService::textoLibreParaPdf($m->no_incluye))
+            ->filter(fn ($html) => $html !== '')
             ->values();
         $mayoristasVuelo = $mayoristas
             ->filter(fn ($m) => filled($m->vuelo_aerolinea))
-            ->map(fn ($m) => ['aerolinea' => $m->vuelo_aerolinea, 'detalle' => $m->vuelo_detalle])
+            ->map(fn ($m) => [
+                'aerolinea' => $m->vuelo_aerolinea,
+                'detalle' => TextoFormatoService::textoLibreParaPdf($m->vuelo_detalle),
+            ])
             ->values();
         $mayoristasOpcionales = $mayoristas->flatMap(fn ($m) => $m->opcionales)->values();
 
@@ -904,7 +918,12 @@ class AlternativaController extends Controller
                 // servicio que portada/galería/hoteles) elimina la
                 // ambigüedad de tamaño — el blade además fija width/height
                 // explícitos en el <img>, dompdf ya no tiene que adivinar.
-                $fotosDelTour = $this->imagenRecorte->recortarVariasParaPdf($tour->fotos ?? []);
+                //
+                // Máximo 3 fotos (pedido del usuario, 07-sep-2026) — mismo
+                // criterio que la tira de hoteles (fachada + 1-2 de
+                // habitación); un tour con muchas fotos cargadas no debe
+                // generar un PDF de tamaño impredecible.
+                $fotosDelTour = $this->imagenRecorte->recortarVariasParaPdf(array_slice($tour->fotos ?? [], 0, 3));
 
                 foreach ($pasosDelTour as $paso) {
                     $pasos[] = [

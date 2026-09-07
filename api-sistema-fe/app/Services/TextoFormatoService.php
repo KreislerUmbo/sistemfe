@@ -119,4 +119,45 @@ class TextoFormatoService
 
         return $html;
     }
+
+    // Editor de texto enriquecido (07-sep-2026, pedido del usuario): campos
+    // como "Incluye"/"No incluye"/detalle de vuelo pasan de <textarea>
+    // plano a RichTextEditor (Quill) — el dato ahora puede ser HTML real
+    // (<p>/<ul><li>/<strong>) en vez de texto plano con "\n" literales.
+    //
+    // Bug real encontrado generando el PDF de una cotización YA EXISTENTE
+    // (creada antes de este cambio): su texto es 100% plano, sin ninguna
+    // etiqueta HTML. Renderizarlo crudo con nl2br() sí respeta los saltos
+    // de línea, pero pierde las viñetas — antes salían gratis porque cada
+    // línea se envolvía en un <li> (list-style por defecto), ahora es solo
+    // texto con <br>. Esta función decide el criterio según el contenido:
+    // - Sin ninguna etiqueta HTML (dato viejo, texto plano) → reconstruye
+    //   el <ul><li> de antes, una viñeta por línea no vacía.
+    // - Con etiquetas HTML (dato nuevo, de Quill) → se renderiza tal cual
+    //   (ya trae su propia estructura de párrafos/listas), solo con
+    //   nl2br() por si acaso quedara algún "\n" suelto entre etiquetas.
+    public static function textoLibreParaPdf(?string $html): string
+    {
+        $html = self::sanitizarHtmlParaPdf($html) ?? '';
+
+        if (trim(strip_tags($html)) === '') {
+            return '';
+        }
+
+        if (strip_tags($html) === $html) {
+            $lineas = collect(preg_split('/\r?\n/', trim($html)))
+                ->map(fn ($linea) => trim($linea))
+                ->filter(fn ($linea) => $linea !== '');
+
+            if ($lineas->isEmpty()) {
+                return '';
+            }
+
+            return '<ul class="lista-simple">'
+                .$lineas->map(fn ($linea) => '<li>'.e($linea).'</li>')->implode('')
+                .'</ul>';
+        }
+
+        return nl2br($html);
+    }
 }

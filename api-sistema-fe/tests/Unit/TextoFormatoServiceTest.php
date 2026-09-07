@@ -100,4 +100,77 @@ class TextoFormatoServiceTest extends TestCase
     {
         $this->assertNull(TextoFormatoService::sanitizarHtmlParaPdf(null));
     }
+
+    // ── textoLibreParaPdf() — editor de texto enriquecido, 07-sep-2026 ──
+
+    public function test_texto_plano_legacy_reconstruye_lista_con_vinetas(): void
+    {
+        // Dato cargado ANTES del editor de texto enriquecido — sin
+        // ninguna etiqueta HTML, solo "\n" literales. Bug real: sin este
+        // fallback, renderizar crudo con nl2br() perdía las viñetas que
+        // antes daba gratis el <li> con list-style por defecto.
+        $textoPlano = "Transporte turístico.\nGuía turístico bilingüe.\nAlmuerzo buffet.";
+
+        $resultado = TextoFormatoService::textoLibreParaPdf($textoPlano);
+
+        $this->assertSame(
+            '<ul class="lista-simple"><li>Transporte turístico.</li><li>Guía turístico bilingüe.</li><li>Almuerzo buffet.</li></ul>',
+            $resultado
+        );
+    }
+
+    public function test_texto_plano_con_lineas_vacias_las_descarta(): void
+    {
+        $textoPlano = "Primera línea.\n\n\nSegunda línea.\n";
+
+        $resultado = TextoFormatoService::textoLibreParaPdf($textoPlano);
+
+        $this->assertSame(
+            '<ul class="lista-simple"><li>Primera línea.</li><li>Segunda línea.</li></ul>',
+            $resultado
+        );
+    }
+
+    public function test_html_de_quill_se_renderiza_tal_cual(): void
+    {
+        // Dato nuevo (RichTextEditor/Quill) — ya trae su propia estructura,
+        // no debe envolverse en un <ul><li> adicional.
+        $htmlQuill = '<p>Incluye <strong>desayuno</strong> todos los días.</p><ul><li>Wifi gratis</li></ul>';
+
+        $resultado = TextoFormatoService::textoLibreParaPdf($htmlQuill);
+
+        $this->assertSame($htmlQuill, $resultado);
+    }
+
+    public function test_html_de_quill_con_salto_de_linea_suelto_aplica_nl2br(): void
+    {
+        $htmlConSalto = "<p>Línea 1</p>\n<p>Línea 2</p>";
+
+        $resultado = TextoFormatoService::textoLibreParaPdf($htmlConSalto);
+
+        $this->assertStringContainsString('<br', $resultado);
+    }
+
+    public function test_texto_vacio_devuelve_string_vacio_en_texto_libre(): void
+    {
+        $this->assertSame('', TextoFormatoService::textoLibreParaPdf(''));
+        $this->assertSame('', TextoFormatoService::textoLibreParaPdf('   '));
+        $this->assertSame('', TextoFormatoService::textoLibreParaPdf(null));
+    }
+
+    public function test_quill_vacio_a_la_vista_devuelve_string_vacio(): void
+    {
+        // Quill nunca deja el contenido en '' cuando está "vacío" a la
+        // vista — emite '<p><br></p>'.
+        $this->assertSame('', TextoFormatoService::textoLibreParaPdf('<p><br></p>'));
+    }
+
+    public function test_texto_libre_sanitiza_vineta_de_wingdings(): void
+    {
+        $conViñetaWingdings = "\u{F0FC} Transporte turístico.";
+
+        $resultado = TextoFormatoService::textoLibreParaPdf($conViñetaWingdings);
+
+        $this->assertStringContainsString('• Transporte turístico.', $resultado);
+    }
 }

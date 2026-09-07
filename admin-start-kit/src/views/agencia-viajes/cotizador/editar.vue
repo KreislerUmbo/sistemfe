@@ -1042,8 +1042,12 @@
                                                         </select>
                                                     </div>
                                                 </div>
-                                                <textarea class="form-control form-control-sm mb-1" rows="2" placeholder="Incluye..." v-model="formEdicionOpcional.incluye"></textarea>
-                                                <textarea class="form-control form-control-sm mb-1" rows="2" placeholder="No incluye..." v-model="formEdicionOpcional.no_incluye"></textarea>
+                                                <div class="mb-1">
+                                                    <RichTextEditor v-model="formEdicionOpcional.incluye" placeholder="Incluye..." />
+                                                </div>
+                                                <div class="mb-1">
+                                                    <RichTextEditor v-model="formEdicionOpcional.no_incluye" placeholder="No incluye..." />
+                                                </div>
                                                 <button class="btn btn-sm btn-primary w-100" @click="guardarEdicionOpcional(opl)" :disabled="guardandoEdicionOpcional">
                                                     <span v-if="guardandoEdicionOpcional" class="spinner-border spinner-border-sm me-1"></span>Guardar
                                                 </button>
@@ -1065,8 +1069,12 @@
                                                     </select>
                                                 </div>
                                             </div>
-                                            <textarea class="form-control form-control-sm mb-1" rows="2" placeholder="Incluye..." v-model="formOpcional.incluye"></textarea>
-                                            <textarea class="form-control form-control-sm mb-1" rows="2" placeholder="No incluye..." v-model="formOpcional.no_incluye"></textarea>
+                                            <div class="mb-1">
+                                                <RichTextEditor v-model="formOpcional.incluye" placeholder="Incluye..." />
+                                            </div>
+                                            <div class="mb-1">
+                                                <RichTextEditor v-model="formOpcional.no_incluye" placeholder="No incluye..." />
+                                            </div>
                                             <button class="btn btn-sm btn-primary w-100" @click="guardarOpcional(op)" :disabled="guardandoOpcional">
                                                 <span v-if="guardandoOpcional" class="spinner-border spinner-border-sm me-1"></span>Guardar
                                             </button>
@@ -1167,6 +1175,7 @@ import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import { useLayoutStore } from '@/stores/layout';
 import Swal from 'sweetalert2/dist/sweetalert2.js';
 import httpClient from '@/helpers/http-client';
+import RichTextEditor from '@/components/RichTextEditor.vue';
 import HabitacionMatrixPicker from '@/components/AgenciaViajes/HabitacionMatrixPicker.vue';
 import OpcionMayoristaForm from '@/components/AgenciaViajes/OpcionMayoristaForm.vue';
 import TourIncluidoForm from '@/components/AgenciaViajes/TourIncluidoForm.vue';

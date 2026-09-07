@@ -14,8 +14,9 @@
              aerolínea de arriba (AlternativaController::pdf(), sección
              "Vuelo"). Antes se capturaba (columna ya existía) pero no había
              ningún input para cargarlo. -->
-        <textarea class="form-control form-control-sm mb-1" rows="2" placeholder="Detalle del vuelo (fechas, horarios, equipaje...)"
-            v-model="form.vuelo_detalle"></textarea>
+        <div class="mb-1">
+            <RichTextEditor v-model="form.vuelo_detalle" placeholder="Detalle del vuelo (fechas, horarios, equipaje...)" />
+        </div>
         <!-- Fix C1 (02-sep-2026) — lo único que resolverNombreItemPdf() puede
              imprimir en el PDF comercial para esta opción; el nombre del
              mayorista/proveedor nunca llega a ese documento. -->
@@ -43,12 +44,16 @@
             </button>
         </div>
 
-        <textarea class="form-control form-control-sm mb-1" rows="2" placeholder="Incluye..." v-model="form.incluye"></textarea>
+        <div class="mb-1">
+            <RichTextEditor v-model="form.incluye" placeholder="Incluye..." />
+        </div>
         <!-- Simulación Panamá (04-sep-2026) — "No incluye" del paquete base
              (columna nueva, opcion_mayorista.no_incluye); ya existía este
              mismo campo por cada tour opcional (ver formOpcional en
              editar.vue), pero faltaba acá para el paquete completo. -->
-        <textarea class="form-control form-control-sm mb-1" rows="2" placeholder="No incluye..." v-model="form.no_incluye"></textarea>
+        <div class="mb-1">
+            <RichTextEditor v-model="form.no_incluye" placeholder="No incluye..." />
+        </div>
         <div class="d-flex gap-2">
             <button class="btn btn-primary btn-sm w-100" @click="guardar" :disabled="guardando">
                 <span v-if="guardando" class="spinner-border spinner-border-sm me-1"></span>{{ opcionExistente ? 'Guardar' : 'Agregar' }}
@@ -67,6 +72,7 @@
 // nullable + watch inmediato para poblar/limpiar, emit agregado/actualizado.
 import { ref, watch, nextTick } from 'vue';
 import Swal from 'sweetalert2/dist/sweetalert2.js';
+import RichTextEditor from '@/components/RichTextEditor.vue';
 import { opcionMayoristaService } from '@/services/admin/opcionMayoristaService';
 import { contenidoTourService } from '@/services/admin/contenidoTourService';
 import type { OpcionMayorista, Proveedor, ContenidoTour } from '@/types/agencia-viajes';
@@ -126,8 +132,11 @@ const seleccionarContenidoTour = (contenido: ContenidoTour) => {
     form.value.contenido_tour_id = contenido.id;
     contenidoTourResultados.value = [];
     contenidoTourSearch.value = contenido.nombre;
-    // No pisar texto que el vendedor ya escribió a mano.
-    if (!form.value.incluye.trim()) {
+    // No pisar texto que el vendedor ya escribió a mano. Editor de texto
+    // enriquecido (07-sep-2026) — Quill nunca deja esto en '' cuando está
+    // "vacío" a la vista (emite '<p><br></p>'), un .trim() directo nunca
+    // detectaría vacío; se despoja el HTML antes de chequear.
+    if (form.value.incluye.replace(/<[^>]*>/g, '').trim().length === 0) {
         form.value.incluye = contenido.incluye ?? contenido.descripcion ?? '';
     }
 };

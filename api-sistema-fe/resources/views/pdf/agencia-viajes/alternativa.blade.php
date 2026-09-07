@@ -331,29 +331,39 @@
             margin-top: 3px;
         }
 
-        /* ── Totales ────────────────────────────────────────────── */
-        .totales {
-            width: 280px;
-            margin-left: auto;
-            margin-top: 10px;
-            font-size: 12px;
+        /* ── Precio destacado (rediseño 07-sep-2026, imagen de referencia
+           del usuario) — reemplaza la tabla simple ".totales" que había
+           acá antes. ────────────────────────────────────────────── */
+        .precio-destacado {
+            border: 1.5px solid {{ $configPdf->color_primario ?? '#1f2937' }};
+            border-radius: 10px;
+            padding: 12px 16px;
+            margin-top: 8px;
+            background-color: #fafafa;
         }
 
-        .totales td {
-            padding: 2px 0;
+        .precio-destacado-titulo {
+            font-family: 'Poppins-SemiBold', 'Poppins', sans-serif;
+            font-weight: bold;
+            font-size: 13px;
+            color: #222222;
         }
 
-        .totales .valor {
-            text-align: right;
-            width: 110px;
+        .precio-destacado-nota {
+            font-size: 10px;
+            color: #777777;
+            margin-top: 2px;
         }
 
-        .totales .total-final td {
+        .precio-destacado-monto {
             font-family: 'Poppins-SemiBold', 'Poppins', sans-serif;
             font-weight: bold;
             font-size: 14px;
-            border-top: 1px solid #111111;
-            padding-top: 5px;
+            color: {{ $configPdf->color_primario ?? '#1f2937' }};
+        }
+
+        .precio-destacado-monto-num {
+            font-size: 22px;
         }
 
         /* ── Cuentas bancarias ──────────────────────────────────── */
@@ -600,6 +610,17 @@
         @php
             $conteoPax = $pasajeros->groupBy('tipo_pax')->map->count();
             $etiquetasPax = ['adulto' => 'Adulto(s)', 'nino' => 'Niño(s)', 'infante' => 'Infante(s)'];
+            // Resumen para la caja de precio destacada (pedido del usuario,
+            // 07-sep-2026) — "3 ADULTOS + 1 NIÑO", mayúsculas y pluralizado
+            // por cantidad. Reusa $conteoPax en vez de recalcular el
+            // agrupamiento (ambas variables viven en el mismo scope del
+            // blade compilado).
+            $etiquetasPaxMayus = ['adulto' => ['ADULTO', 'ADULTOS'], 'nino' => ['NIÑO', 'NIÑOS'], 'infante' => ['INFANTE', 'INFANTES']];
+            $resumenPaxMayus = $conteoPax->map(function ($cantidad, $tipo) use ($etiquetasPaxMayus) {
+                [$singular, $plural] = $etiquetasPaxMayus[$tipo] ?? [strtoupper($tipo), strtoupper($tipo).'S'];
+
+                return $cantidad.' '.($cantidad == 1 ? $singular : $plural);
+            })->implode(' + ');
         @endphp
         <table style="width:100%; margin-top:14px;">
             <tr>
@@ -699,13 +720,111 @@
                 @foreach ($mayoristasVuelo as $vuelo)
                     <div class="seccion-html">
                         <strong>{{ $vuelo['aerolinea'] }}</strong>
+                        {{-- Editor de texto enriquecido (07-sep-2026) — 'detalle'
+                             ya llega sanitizado como HTML (Quill), no texto
+                             plano con saltos de línea; nl2br(e()) rompería el
+                             HTML (mostraría las etiquetas escapadas). --}}
                         @if (!empty($vuelo['detalle']))
-                            <br>{!! nl2br(e($vuelo['detalle'])) !!}
+                            <br>{!! $vuelo['detalle'] !!}
                         @endif
                     </div>
                 @endforeach
             </div>
         @endif
+
+        {{-- ══════════════════ OPCIONES DE HOTELES (Sesión M5) ══════════════════ --}}
+        {{-- Pedido del usuario (07-sep-2026): movida de después de Itinerario/
+             Incluye a acá, entre Vuelo e Itinerario — el cliente ve primero
+             qué hotel está eligiendo/pagando antes del detalle día a día.
+             Mismo formato que los 3 documentos reales que originaron el plan
+             (docs/auxiliares/): tabla matriz hotel × tipo de habitación, un
+             bloque por grupo (plan-matriz-hoteles-cotizador.md P10). Un grupo
+             TODAVÍA abierto (nadie eligió) se muestra igual que en esos
+             documentos — es justamente el estado en que se les envía al
+             cliente para que decida. Un grupo ya resuelto resalta la fila
+             elegida (mejora sobre el formato original, esos documentos nunca
+             se reenviaban después de la decisión). --}}
+        @foreach ($opcionesHoteles as $grupoHotel)
+            <div class="seccion">
+                <div class="seccion-titulo">
+                    Opciones de hoteles
+                    <span class="hoteles-elegida-nota">— tarifa por persona</span>
+                    @if ($grupoHotel['resuelto'])
+                        <span class="hoteles-elegida-nota">— opción confirmada resaltada</span>
+                    @endif
+                </div>
+                <table class="hoteles-tabla">
+                    <tr style="background-color: {{ $configPdf->color_primario ?? '#1f2937' }};">
+                        <th>Hotel</th>
+                        @foreach ($grupoHotel['tipos_habitacion'] as $tipo)
+                            <th class="precio-col">{{ ucfirst($tipo) }}</th>
+                        @endforeach
+                    </tr>
+                    @foreach ($grupoHotel['filas'] as $fila)
+                        <tr class="{{ $fila['elegida'] ? 'fila-elegida' : (!$loop->even ? '' : 'fila-par') }}">
+                            {{-- '✓' (U+2713) no renderiza con la fuente que usa DomPDF acá
+                                 — sale como "?" (confirmado generando el PDF real contra
+                                 agencia-demo). Texto plano en vez de un glifo unicode. --}}
+                            <td>{{ $fila['hotel'] }}{{ $fila['elegida'] ? ' (elegida)' : '' }}</td>
+                            @foreach ($grupoHotel['tipos_habitacion'] as $tipo)
+                                @if (isset($fila['precios'][$tipo]))
+                                    <td class="precio-col">{{ $alternativa->moneda_cotizacion }} {{ number_format($fila['precios'][$tipo], 2) }}</td>
+                                @else
+                                    <td class="sin-precio">—</td>
+                                @endif
+                            @endforeach
+                        </tr>
+                    @endforeach
+                </table>
+
+                {{-- Mejora del PDF de cotización (plan §4.5) — sección nueva
+                     "Fotos referenciales de los hoteles", después de la
+                     tabla de precios (que sigue compacta, sin fotos, para
+                     comparar de un vistazo). Mismo patrón que los 3
+                     documentos reales de la agencia (nombre + tira de fotos
+                     + check-in/check-out). Un hotel sin fotos cargadas
+                     (hotelesInfo no trae su id) no imprime bloque — nunca
+                     un casillero en blanco ni 3 fotos estiradas a partir de
+                     una sola. --}}
+                @php
+                    $filasConFotos = collect($grupoHotel['filas'])->filter(
+                        fn ($fila) => isset($fila['opcion_hotel_id']) && isset($hotelesInfo[$fila['opcion_hotel_id']])
+                    );
+                @endphp
+                @if ($filasConFotos->isNotEmpty())
+                    {{-- Bug real (07-sep-2026): al pasar a Poppins (ocupa un
+                         poco más de alto por línea que Arial), esta sección
+                         terminaba pisando la última fila de la tabla de
+                         precios cuando ambas no entraban juntas en lo que
+                         quedaba de página — page-break-inside:avoid en la
+                         tabla y en este bloque no alcanzó a resolverlo de
+                         forma confiable (dompdf calculando mal cuánto
+                         espacio quedaba). page-break-before:always es más
+                         tosco (puede dejar un resto de página en blanco
+                         arriba) pero garantiza que nunca más se solape con
+                         la tabla. --}}
+                    <div class="seccion-titulo" style="margin-top:10px; page-break-before: always;">Fotos referenciales de los hoteles</div>
+                    @foreach ($filasConFotos as $fila)
+                        @php $info = $hotelesInfo[$fila['opcion_hotel_id']]; @endphp
+                        <div class="hotel-fotos-bloque">
+                            <div class="hotel-fotos-nombre">{{ $fila['hotel'] }}</div>
+                            <div class="hotel-fotos-tira">
+                                @foreach ($info['fotos'] as $foto)
+                                    <img src="{{ $foto }}" width="640" height="480">
+                                @endforeach
+                            </div>
+                            @if ($info['check_in'] || $info['check_out'])
+                                <div class="hotel-fotos-datos">
+                                    @if ($info['check_in'])Check-in: {{ substr($info['check_in'], 0, 5) }}@endif
+                                    @if ($info['check_in'] && $info['check_out']) &nbsp;·&nbsp; @endif
+                                    @if ($info['check_out'])Check-out: {{ substr($info['check_out'], 0, 5) }}@endif
+                                </div>
+                            @endif
+                        </div>
+                    @endforeach
+                @endif
+            </div>
+        @endforeach
 
         {{-- ══════════════════ ITINERARIO ══════════════════ --}}
         {{-- 12f-3 — $itinerario es un array de BLOQUES (uno por destino con
@@ -821,16 +940,16 @@
                         @endforeach
                     </ul>
                 @endforeach
-                {{-- Simulación Panamá (04-sep-2026) — "Paquete Incluye" de
-                     la opción de mayorista elegida (opcion_mayorista.incluye,
-                     texto libre explotado por línea), nunca antes impreso. --}}
-                @if (count($mayoristasIncluye) > 0)
-                    <ul class="lista-simple">
-                        @foreach ($mayoristasIncluye as $linea)
-                            <li>{{ $linea }}</li>
-                        @endforeach
-                    </ul>
-                @endif
+                {{-- Simulación Panamá (04-sep-2026) — "Paquete Incluye" de la
+                     opción de mayorista elegida (opcion_mayorista.incluye).
+                     Editor de texto enriquecido (07-sep-2026): pasa de texto
+                     plano partido por línea a HTML de Quill ya sanitizado —
+                     se renderiza crudo, un bloque por mayorista (mismo patrón
+                     que $tourUnico->no_incluye más abajo), en vez de forzar
+                     cada línea dentro de un <li> del listado de destinos. --}}
+                @foreach ($mayoristasIncluye as $html)
+                    <div class="seccion-html">{!! $html !!}</div>
+                @endforeach
             </div>
         @endif
 
@@ -847,13 +966,11 @@
                 @if (!empty($tourUnico?->no_incluye))
                     <div class="seccion-html">{!! \App\Services\TextoFormatoService::sanitizarHtmlParaPdf($tourUnico->no_incluye) !!}</div>
                 @endif
-                @if (count($mayoristasNoIncluye) > 0)
-                    <ul class="lista-simple">
-                        @foreach ($mayoristasNoIncluye as $linea)
-                            <li>{{ $linea }}</li>
-                        @endforeach
-                    </ul>
-                @endif
+                {{-- Mismo criterio que "Incluye" arriba (07-sep-2026) — HTML
+                     de Quill sanitizado, renderizado crudo por mayorista. --}}
+                @foreach ($mayoristasNoIncluye as $html)
+                    <div class="seccion-html">{!! $html !!}</div>
+                @endforeach
             </div>
         @endif
         @if ($tourUnico)
@@ -890,97 +1007,6 @@
             @endif
         @endif
 
-        {{-- ══════════════════ OPCIONES DE HOTELES (Sesión M5) ══════════════════ --}}
-        {{-- Sección propia, después de itinerario/incluye — mismo formato que
-             los 3 documentos reales que originaron el plan (docs/auxiliares/):
-             tabla matriz hotel × tipo de habitación, un bloque por grupo
-             (plan-matriz-hoteles-cotizador.md P10). Un grupo TODAVÍA abierto
-             (nadie eligió) se muestra igual que en esos documentos — es
-             justamente el estado en que se les envía al cliente para que
-             decida. Un grupo ya resuelto resalta la fila elegida (mejora
-             sobre el formato original, esos documentos nunca se reenviaban
-             después de la decisión). --}}
-        @foreach ($opcionesHoteles as $grupoHotel)
-            <div class="seccion">
-                <div class="seccion-titulo">
-                    Opciones de hoteles
-                    @if ($grupoHotel['resuelto'])
-                        <span class="hoteles-elegida-nota">— opción confirmada resaltada</span>
-                    @endif
-                </div>
-                <table class="hoteles-tabla">
-                    <tr style="background-color: {{ $configPdf->color_primario ?? '#1f2937' }};">
-                        <th>Hotel</th>
-                        @foreach ($grupoHotel['tipos_habitacion'] as $tipo)
-                            <th class="precio-col">{{ ucfirst($tipo) }}</th>
-                        @endforeach
-                    </tr>
-                    @foreach ($grupoHotel['filas'] as $fila)
-                        <tr class="{{ $fila['elegida'] ? 'fila-elegida' : (!$loop->even ? '' : 'fila-par') }}">
-                            {{-- '✓' (U+2713) no renderiza con la fuente que usa DomPDF acá
-                                 — sale como "?" (confirmado generando el PDF real contra
-                                 agencia-demo). Texto plano en vez de un glifo unicode. --}}
-                            <td>{{ $fila['hotel'] }}{{ $fila['elegida'] ? ' (elegida)' : '' }}</td>
-                            @foreach ($grupoHotel['tipos_habitacion'] as $tipo)
-                                @if (isset($fila['precios'][$tipo]))
-                                    <td class="precio-col">{{ $alternativa->moneda_cotizacion }} {{ number_format($fila['precios'][$tipo], 2) }}</td>
-                                @else
-                                    <td class="sin-precio">—</td>
-                                @endif
-                            @endforeach
-                        </tr>
-                    @endforeach
-                </table>
-
-                {{-- Mejora del PDF de cotización (plan §4.5) — sección nueva
-                     "Fotos referenciales de los hoteles", después de la
-                     tabla de precios (que sigue compacta, sin fotos, para
-                     comparar de un vistazo). Mismo patrón que los 3
-                     documentos reales de la agencia (nombre + tira de fotos
-                     + check-in/check-out). Un hotel sin fotos cargadas
-                     (hotelesInfo no trae su id) no imprime bloque — nunca
-                     un casillero en blanco ni 3 fotos estiradas a partir de
-                     una sola. --}}
-                @php
-                    $filasConFotos = collect($grupoHotel['filas'])->filter(
-                        fn ($fila) => isset($fila['opcion_hotel_id']) && isset($hotelesInfo[$fila['opcion_hotel_id']])
-                    );
-                @endphp
-                @if ($filasConFotos->isNotEmpty())
-                    {{-- Bug real (07-sep-2026): al pasar a Poppins (ocupa un
-                         poco más de alto por línea que Arial), esta sección
-                         terminaba pisando la última fila de la tabla de
-                         precios cuando ambas no entraban juntas en lo que
-                         quedaba de página — page-break-inside:avoid en la
-                         tabla y en este bloque no alcanzó a resolverlo de
-                         forma confiable (dompdf calculando mal cuánto
-                         espacio quedaba). page-break-before:always es más
-                         tosco (puede dejar un resto de página en blanco
-                         arriba) pero garantiza que nunca más se solape con
-                         la tabla. --}}
-                    <div class="seccion-titulo" style="margin-top:10px; page-break-before: always;">Fotos referenciales de los hoteles</div>
-                    @foreach ($filasConFotos as $fila)
-                        @php $info = $hotelesInfo[$fila['opcion_hotel_id']]; @endphp
-                        <div class="hotel-fotos-bloque">
-                            <div class="hotel-fotos-nombre">{{ $fila['hotel'] }}</div>
-                            <div class="hotel-fotos-tira">
-                                @foreach ($info['fotos'] as $foto)
-                                    <img src="{{ $foto }}" width="640" height="480">
-                                @endforeach
-                            </div>
-                            @if ($info['check_in'] || $info['check_out'])
-                                <div class="hotel-fotos-datos">
-                                    @if ($info['check_in'])Check-in: {{ substr($info['check_in'], 0, 5) }}@endif
-                                    @if ($info['check_in'] && $info['check_out']) &nbsp;·&nbsp; @endif
-                                    @if ($info['check_out'])Check-out: {{ substr($info['check_out'], 0, 5) }}@endif
-                                </div>
-                            @endif
-                        </div>
-                    @endforeach
-                @endif
-            </div>
-        @endforeach
-
         {{-- ══════════════════ TOURS OPCIONALES (Simulación Panamá, 04-sep-2026) ══════════════════ --}}
         {{-- OpcionMayoristaOpcional (nombre/precio_por_persona/incluye/
              no_incluye) — el modelo y el panel del drawer ya existían
@@ -996,11 +1022,17 @@
                             {{ $opcional->nombre }}
                             <span class="opcional-precio">{{ $opcional->moneda }} {{ number_format($opcional->precio_por_persona, 2) }} /pax</span>
                         </div>
+                        {{-- Editor de texto enriquecido (07-sep-2026) — incluye/
+                             no_incluye pasan de texto plano a HTML de Quill.
+                             textoLibreParaPdf() cubre ambos casos (ver
+                             comentario en AlternativaController::pdf()):
+                             HTML real de Quill se renderiza tal cual, texto
+                             plano legacy reconstruye el <ul><li> de antes. --}}
                         @if (!empty($opcional->incluye))
-                            <div class="opcional-detalle"><strong>Incluye:</strong> {{ $opcional->incluye }}</div>
+                            <div class="opcional-detalle"><strong>Incluye:</strong> {!! \App\Services\TextoFormatoService::textoLibreParaPdf($opcional->incluye) !!}</div>
                         @endif
                         @if (!empty($opcional->no_incluye))
-                            <div class="opcional-detalle"><strong>No incluye:</strong> {{ $opcional->no_incluye }}</div>
+                            <div class="opcional-detalle"><strong>No incluye:</strong> {!! \App\Services\TextoFormatoService::textoLibreParaPdf($opcional->no_incluye) !!}</div>
                         @endif
                     </div>
                 @endforeach
@@ -1012,21 +1044,41 @@
              del usuario, brief 12f3 §0.3); queda solo el bloque de
              totales. `formato_descuento_pdf` ya no se lee acá — era una
              configuración pensada para decorar el precio por fila, que ya
-             no existe en esta vista. --}}
+             no existe en esta vista.
+
+             Rediseño (07-sep-2026, pedido del usuario con imagen de
+             referencia) — caja destacada en vez de tabla simple, con el
+             resumen de pasajeros y el monto en grande. Se queda en esta
+             misma posición (justo antes de "Datos de pago", al final del
+             documento) a propósito — es la respuesta directa a "¿cuánto
+             pago?" justo antes de "¿cómo pago?", mismo criterio que
+             cualquier factura/boleta real. Se descartó además mostrarla
+             DUPLICADA arriba (junto a "Opciones de hoteles"): una sola
+             caja destacada evita inconsistencia visual y trabajo doble. --}}
         <div class="seccion">
             <div class="seccion-titulo">Precio</div>
-            <table class="totales">
-                @if ($config?->mostrar_descuento_como_linea && $hayDescuento)
+            <div class="precio-destacado">
+                <table style="width:100%;">
                     <tr>
-                        <td>Descuento aplicado</td>
-                        <td class="valor">- {{ $alternativa->moneda_cotizacion }} {{ number_format($descuentoMonto, 2) }}</td>
+                        <td style="vertical-align:middle;">
+                            <div class="precio-destacado-titulo">TOTAL {{ $resumenPaxMayus }}</div>
+                            @if ($hayDescuento)
+                                <div class="precio-destacado-nota">
+                                    @if ($config?->mostrar_descuento_como_linea)
+                                        Incluye descuento aplicado: -{{ $alternativa->moneda_cotizacion }} {{ number_format($descuentoMonto, 2) }}
+                                    @else
+                                        Incluye descuento de temporada aplicado
+                                    @endif
+                                </div>
+                            @endif
+                        </td>
+                        <td style="vertical-align:middle; text-align:right; width:170px;">
+                            <span class="precio-destacado-monto">{{ $alternativa->moneda_cotizacion }}</span>
+                            <span class="precio-destacado-monto precio-destacado-monto-num">{{ number_format($total, 2) }}</span>
+                        </td>
                     </tr>
-                @endif
-                <tr class="total-final">
-                    <td>Total</td>
-                    <td class="valor">{{ $alternativa->moneda_cotizacion }} {{ number_format($total, 2) }}</td>
-                </tr>
-            </table>
+                </table>
+            </div>
         </div>
 
         {{-- ══════════════════ DATOS DE PAGO ══════════════════ --}}

@@ -35,9 +35,10 @@
         <template v-if="esEdicion || !tourExistenteSeleccionado">
         <input type="text" class="form-control form-control-sm mb-1" placeholder="Nombre (ej. City Tour + Canal de Panamá)"
             v-model="form.nombre">
-        <textarea class="form-control form-control-sm mb-1" rows="4"
-            placeholder="Descripción (narrativa del tour — es lo que se imprime en la sección Itinerario del PDF)"
-            v-model="form.descripcion"></textarea>
+        <div class="mb-1">
+            <RichTextEditor v-model="form.descripcion"
+                placeholder="Descripción (narrativa del tour — es lo que se imprime en la sección Itinerario del PDF)" />
+        </div>
         <div class="row g-1 mb-1">
             <div class="col-8">
                 <label class="form-label mb-0 small text-secondary">Destino/atractivo</label>
@@ -86,7 +87,7 @@
                 style="width:50px;height:50px;object-fit:cover;border:1px solid #ccc;border-radius:3px;cursor:zoom-in;" @click="verFotoGrande(fotosSeleccionadas.map((f) => f.previewUrl), idx)">
         </div>
         <div class="d-flex gap-2">
-            <button class="btn btn-primary btn-sm w-100" @click="guardar" :disabled="guardando || !form.nombre.trim() || !form.descripcion.trim() || !form.destino_atractivo_id">
+            <button class="btn btn-primary btn-sm w-100" @click="guardar" :disabled="guardando || !form.nombre.trim() || descripcionVacia || !form.destino_atractivo_id">
                 <span v-if="guardando" class="spinner-border spinner-border-sm me-1"></span>{{ esEdicion ? 'Guardar' : 'Crear tour' }}
             </button>
             <button class="btn btn-outline-secondary btn-sm" @click="$emit('cancelar')"><i class="fas fa-times"></i></button>
@@ -131,6 +132,7 @@
 import { ref, computed, watch } from 'vue';
 import Swal from 'sweetalert2/dist/sweetalert2.js';
 import DestinoTreeSelect from '@/components/AgenciaViajes/DestinoTreeSelect.vue';
+import RichTextEditor from '@/components/RichTextEditor.vue';
 import { paquetePlantillaService } from '@/services/admin/paquetePlantillaService';
 import { opcionMayoristaService } from '@/services/admin/opcionMayoristaService';
 import type { OpcionMayoristaTour, PaquetePlantilla, TourItinerarioItem } from '@/types/agencia-viajes';
@@ -158,6 +160,11 @@ const form = ref({
     nombre: '', descripcion: '', destino_atractivo_id: props.destinoAtractivoId as number | null,
     duracion_horas: 8, dia: props.diaSugerido,
 });
+
+// Editor de texto enriquecido (07-sep-2026) — Quill nunca deja el v-model
+// en '' cuando está "vacío" a la vista, emite '<p><br></p>'. Mismo guard
+// que paquetes/detalle.vue::descripcionPasoVacia().
+const descripcionVacia = computed(() => form.value.descripcion.replace(/<[^>]*>/g, '').trim().length === 0);
 
 // Solo se resuelve en modo edición — el paso de itinerario real que hay
 // que actualizar (no crear uno nuevo). Un tour armado por este mini-form
