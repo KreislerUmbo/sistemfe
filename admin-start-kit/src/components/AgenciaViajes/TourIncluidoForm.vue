@@ -35,9 +35,10 @@
         <template v-if="esEdicion || !tourExistenteSeleccionado">
         <input type="text" class="form-control form-control-sm mb-1" placeholder="Nombre (ej. City Tour + Canal de Panamá)"
             v-model="form.nombre">
-        <textarea class="form-control form-control-sm mb-1" rows="4"
-            placeholder="Descripción (narrativa del tour — es lo que se imprime en la sección Itinerario del PDF)"
-            v-model="form.descripcion"></textarea>
+        <div class="mb-1">
+            <RichTextEditor v-model="form.descripcion"
+                placeholder="Descripción (narrativa del tour — es lo que se imprime en la sección Itinerario del PDF)" />
+        </div>
         <div class="row g-1 mb-1">
             <div class="col-8">
                 <label class="form-label mb-0 small text-secondary">Destino/atractivo</label>
@@ -57,10 +58,31 @@
              de grilla + botón de borrado que ya usa destinos/form.vue
              (sin "portada": acá las fotos no tienen un orden con significado,
              AlternativaController::itinerarioAlternativa() las imprime todas). -->
-        <div v-if="esEdicion && fotosExistentes.length" class="d-flex flex-wrap gap-1 mb-2">
+        <div v-if="esEdicion && fotosExistentes.length" class="d-flex flex-wrap gap-1 mb-1">
             <div v-for="path in fotosExistentes" :key="path" class="position-relative">
                 <img :src="path" style="width:50px;height:50px;object-fit:cover;border:1px solid #ccc;border-radius:3px;cursor:zoom-in;" @click="verFotoGrande(fotosExistentes, fotosExistentes.indexOf(path))">
                 <i class="fas fa-times-circle text-danger position-absolute" style="top:-6px;right:-6px;cursor:pointer;background:#fff;border-radius:50%" title="Eliminar foto" @click="eliminarFotoExistente(path)"></i>
+            </div>
+        </div>
+        <!-- Mejora del PDF de cotización (05-sep-2026) — portada (una sola,
+             sale a ancho completo antes del itinerario) + destacadas.
+             Solo referencian fotos ya cargadas arriba, no suben archivos
+             nuevos.
+             Tope bajado de 4 a 2 (07-sep-2026): la "Galería de itinerario"
+             que usaba hasta 4 destacadas se quitó del PDF (repetía las
+             mismas fotos que ya salían en portada y por día) — hoy las
+             destacadas solo alimentan las 2 fotos secundarias de la
+             portada, marcar una 3ª o 4ª no tenía ningún efecto visible. -->
+        <div v-if="esEdicion && fotosExistentes.length" class="mb-2">
+            <label class="form-label mb-1 small text-secondary d-block">Portada y destacadas para el PDF</label>
+            <div v-for="path in fotosExistentes" :key="'pdf-' + path" class="d-flex align-items-center gap-2 mb-1" style="font-size:11px;">
+                <img :src="path" style="width:28px;height:28px;object-fit:cover;border:1px solid #ccc;border-radius:3px;">
+                <label class="form-check-label mb-0"><input type="radio" class="form-check-input me-1" name="fotoPortada" :checked="fotoPortada === path" @change="fotoPortada = path; guardarFotosPdf()">Portada</label>
+                <label class="form-check-label mb-0">
+                    <input type="checkbox" class="form-check-input me-1" :checked="fotosDestacadas.includes(path)"
+                        :disabled="!fotosDestacadas.includes(path) && fotosDestacadas.length >= 2"
+                        @change="toggleFotoDestacada(path)">Destacada
+                </label>
             </div>
         </div>
         <label class="form-label mb-1 small text-secondary">{{ esEdicion ? 'Agregar más fotos (opcional)' : 'Fotos (opcional)' }}</label>
@@ -70,7 +92,7 @@
                 style="width:50px;height:50px;object-fit:cover;border:1px solid #ccc;border-radius:3px;cursor:zoom-in;" @click="verFotoGrande(fotosSeleccionadas.map((f) => f.previewUrl), idx)">
         </div>
         <div class="d-flex gap-2">
-            <button class="btn btn-primary btn-sm w-100" @click="guardar" :disabled="guardando || !form.nombre.trim() || !form.descripcion.trim() || !form.destino_atractivo_id">
+            <button class="btn btn-primary btn-sm w-100" @click="guardar" :disabled="guardando || !form.nombre.trim() || descripcionVacia || !form.destino_atractivo_id">
                 <span v-if="guardando" class="spinner-border spinner-border-sm me-1"></span>{{ esEdicion ? 'Guardar' : 'Crear tour' }}
             </button>
             <button class="btn btn-outline-secondary btn-sm" @click="$emit('cancelar')"><i class="fas fa-times"></i></button>
@@ -115,6 +137,7 @@
 import { ref, computed, watch } from 'vue';
 import Swal from 'sweetalert2/dist/sweetalert2.js';
 import DestinoTreeSelect from '@/components/AgenciaViajes/DestinoTreeSelect.vue';
+import RichTextEditor from '@/components/RichTextEditor.vue';
 import { paquetePlantillaService } from '@/services/admin/paquetePlantillaService';
 import { opcionMayoristaService } from '@/services/admin/opcionMayoristaService';
 import type { OpcionMayoristaTour, PaquetePlantilla, TourItinerarioItem } from '@/types/agencia-viajes';
@@ -143,12 +166,23 @@ const form = ref({
     duracion_horas: 8, dia: props.diaSugerido,
 });
 
+// Editor de texto enriquecido (07-sep-2026) — Quill nunca deja el v-model
+// en '' cuando está "vacío" a la vista, emite '<p><br></p>'. Mismo guard
+// que paquetes/detalle.vue::descripcionPasoVacia().
+const descripcionVacia = computed(() => form.value.descripcion.replace(/<[^>]*>/g, '').trim().length === 0);
+
 // Solo se resuelve en modo edición — el paso de itinerario real que hay
 // que actualizar (no crear uno nuevo). Un tour armado por este mini-form
 // siempre tiene exactamente 1 paso (dia_relativo=1), ver guardar() de alta.
 const pasoItinerarioId = ref<number | null>(null);
 
 const fotosExistentes = ref<string[]>([]);
+// Mejora del PDF de cotización (05-sep-2026) — ver plan-mejora-pdf-cotizacion-cliente.md
+// §4.5. paqueteIdActual guarda el id real (no siempre disponible como prop
+// suelta) para poder llamar a actualizarFotosPdf() desde los handlers.
+const fotoPortada = ref<string | null>(null);
+const fotosDestacadas = ref<string[]>([]);
+const paqueteIdActual = ref<number | null>(null);
 
 const resetearCampos = async () => {
     const t = props.tourExistente;
@@ -159,6 +193,9 @@ const resetearCampos = async () => {
             duracion_horas: pp.duracion_horas, dia: t.orden,
         };
         fotosExistentes.value = pp.fotos ?? [];
+        fotoPortada.value = pp.foto_portada ?? null;
+        fotosDestacadas.value = pp.fotos_destacadas_pdf ?? [];
+        paqueteIdActual.value = pp.id;
         pasoItinerarioId.value = null;
         try {
             const res = await paquetePlantillaService.listarItinerario(pp.id);
@@ -173,6 +210,9 @@ const resetearCampos = async () => {
             duracion_horas: 8, dia: props.diaSugerido,
         };
         fotosExistentes.value = [];
+        fotoPortada.value = null;
+        fotosDestacadas.value = [];
+        paqueteIdActual.value = null;
         pasoItinerarioId.value = null;
     }
 };
@@ -188,10 +228,38 @@ const eliminarFotoExistente = (path: string) => {
         try {
             await paquetePlantillaService.eliminarFoto(props.tourExistente.paquete_plantilla_id, path);
             fotosExistentes.value = fotosExistentes.value.filter((p) => p !== path);
+            if (fotoPortada.value === path) fotoPortada.value = null;
+            fotosDestacadas.value = fotosDestacadas.value.filter((p) => p !== path);
         } catch (error: any) {
             (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo eliminar la foto', 'error');
         }
     });
+};
+
+// Mejora del PDF de cotización (05-sep-2026) — inmediato (sin "guardar" que
+// las agrupe), mismo criterio que las fotos en sí: portada/destacada se
+// persiste apenas el vendedor la marca, plan-mejora-pdf-cotizacion-cliente.md
+// §4.5.
+const guardarFotosPdf = async () => {
+    if (!paqueteIdActual.value) return;
+    try {
+        await paquetePlantillaService.actualizarFotosPdf(paqueteIdActual.value, {
+            foto_portada: fotoPortada.value,
+            fotos_destacadas_pdf: fotosDestacadas.value,
+        });
+    } catch (error: any) {
+        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo actualizar la portada/destacadas', 'error');
+    }
+};
+
+const toggleFotoDestacada = (path: string) => {
+    if (fotosDestacadas.value.includes(path)) {
+        fotosDestacadas.value = fotosDestacadas.value.filter((p) => p !== path);
+    } else {
+        if (fotosDestacadas.value.length >= 2) return;
+        fotosDestacadas.value = [...fotosDestacadas.value, path];
+    }
+    guardarFotosPdf();
 };
 
 // Mismo lightbox con teclado (flechas)/contador que destinos/form.vue —

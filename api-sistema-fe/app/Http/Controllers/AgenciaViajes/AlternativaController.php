@@ -12,12 +12,19 @@ use App\Models\AgenciaViajes\OpcionHotel;
 use App\Models\AgenciaViajes\OpcionHotelTarifa;
 use App\Models\AgenciaViajes\OpcionMayorista;
 use App\Models\AgenciaViajes\OpcionMayoristaOpcional;
+use App\Models\AgenciaViajes\AfiliacionTurismo;
+use App\Models\AgenciaViajes\ConfiguracionAgenciaPdf;
+use App\Models\AgenciaViajes\PaquetePlantilla;
 use App\Models\AgenciaViajes\Reserva;
 use App\Models\AgenciaViajes\TipoCambioAgencia;
+use App\Services\AgenciaViajes\ImagenRecorteService;
 use App\Services\AgenciaViajes\PriceEngineService;
+use App\Services\StorageUrl;
+use App\Services\TextoFormatoService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 
 // Alternativa de cotización — plan-modulo-cotizaciones-reservas.md §3.1/§3.2.
@@ -26,8 +33,10 @@ class AlternativaController extends Controller
 {
     private const MAX_ALTERNATIVAS_POR_COTIZACION = 5;
 
-    public function __construct(private PriceEngineService $priceEngine)
-    {
+    public function __construct(
+        private PriceEngineService $priceEngine,
+        private ImagenRecorteService $imagenRecorte,
+    ) {
     }
 
     public function store(Request $request, string $cotizacionId)
@@ -129,6 +138,25 @@ class AlternativaController extends Controller
             $validado['nombre'] = \App\Services\TextoFormatoService::capitalizarNombrePropio($validado['nombre']);
         }
 
+        // Bug real (07-sep-2026, auditoría de mantenibilidad 05-sep-2026):
+        // este PUT genérico aceptaba estado=aceptada y lo aplicaba (incluso
+        // descartando las demás alternativas de la cotización, ver
+        // descartarOtras() más abajo) SIN pasar por ReservaController::
+        // aceptar() — el único lugar que realmente crea la Reserva. El
+        // propio comentario de este método ya lo admitía ("Este PUT ya NO
+        // dispara creación de reserva") sin bloquearlo — cualquier
+        // consumidor que reuse este endpoint genérico en vez del POST
+        // .../aceptar (un script, Postman, un copy-paste futuro) deja una
+        // alternativa "aceptada" fantasma, sin Reserva asociada. El
+        // frontend actual (marcarAceptada() en editar.vue) ya usa el
+        // endpoint correcto — bloquear acá no le cambia nada.
+        if (($validado['estado'] ?? null) === 'aceptada') {
+            return response()->json([
+                'code' => 422,
+                'message' => 'Para aceptar una alternativa usá POST alternativas/{id}/aceptar — este endpoint no crea la reserva asociada.',
+            ], 422);
+        }
+
         // Sesión 12a (Fase 0, auditoría §3.2) — único camino documentado
         // donde el total de una alternativa ya aceptada (con su reserva ya
         // creada) podía cambiar en vivo sin que nadie lo note. Mismo
@@ -159,14 +187,12 @@ class AlternativaController extends Controller
 
             $alternativa->update($validado);
 
-            // Aceptar una alternativa descarta automáticamente las demás de
-            // la misma cotización — §3.2. Este PUT ya NO dispara creación de
-            // reserva (Sesión 11c usa POST alternativas/{id}/aceptar,
-            // ReservaController::aceptar(), que reusa descartarOtras() de
-            // acá mismo — no se duplica esta lógica).
-            if (($validado['estado'] ?? null) === 'aceptada') {
-                self::descartarOtras($alternativa);
-            }
+            // Bug real (07-sep-2026) — esta rama nunca podía dispararse: el
+            // 422 de arriba ya bloquea estado=aceptada antes de llegar
+            // acá. La dejaba muerta (nunca ejecutaba descartarOtras() vía
+            // este PUT) — se quita. descartarOtras() sigue viva, la sigue
+            // usando ReservaController::aceptar() (POST .../aceptar), el
+            // único lugar que de verdad crea la Reserva.
 
             // §3.1 — "al aplicarse, se reparte a cada alternativa_items
             // respetando el piso individual de cada uno; si alguna línea no
@@ -479,9 +505,68 @@ class AlternativaController extends Controller
                 $destinosClonados[$destino->id] = $nuevoDestino->id;
             }
 
-            // Ítems primero (sin opcion_mayorista_id todavía si vienen de
-            // mayorista — se remapea al final, una vez clonado el árbol de
-            // opciones más abajo).
+            // Bug real (07-sep-2026, auditoría de mantenibilidad 05-sep-2026):
+            // OpcionHotel "ad-hoc" (Local/Nacional, "Hotel sin catálogo" —
+            // nace SIN opcion_mayorista_id, ver agregarGrupoHotelAdhocLocal()
+            // en editar.vue) nunca se clonaba en absoluto — la copia de una
+            // alternativa con un hotel así cargado dejaba sus ítems sin
+            // opcion_hotel_tarifa_id (o, peor, compartiendo la fila del
+            // ORIGINAL entre las 2 alternativas). $tarifasHotelClonadas es
+            // UN SOLO mapa para los dos orígenes posibles de hotel — acá se
+            // arranca con el ad-hoc (tiene que estar listo ANTES de crear
+            // los ítems, igual que $destinosClonados arriba); el de
+            // mayorista se agrega más abajo, después de clonar
+            // OpcionMayorista, y el remap final de los ítems corre una sola
+            // vez al final para ambos casos.
+            $tarifasHotelClonadas = [];
+            $idsTarifaHotelAdhoc = $original->items()
+                ->whereNotNull('opcion_hotel_tarifa_id')
+                ->whereNull('opcion_mayorista_id')
+                ->pluck('opcion_hotel_tarifa_id')
+                ->unique();
+            $idsHotelAdhoc = OpcionHotelTarifa::whereIn('id', $idsTarifaHotelAdhoc)->pluck('opcion_hotel_id')->unique();
+            foreach (OpcionHotel::whereIn('id', $idsHotelAdhoc)->whereNull('opcion_mayorista_id')->get() as $hotelAdhoc) {
+                $nuevoHotelAdhoc = OpcionHotel::create([
+                    'proveedor_id' => $hotelAdhoc->proveedor_id,
+                    'proveedor_promovido_id' => $hotelAdhoc->proveedor_promovido_id,
+                    'nombre_hotel' => $hotelAdhoc->nombre_hotel,
+                    'categoria_estrellas' => $hotelAdhoc->categoria_estrellas,
+                    'moneda' => $hotelAdhoc->moneda,
+                    'edad_max_infante_gratis' => $hotelAdhoc->edad_max_infante_gratis,
+                    'edad_max_nino_cama_adicional' => $hotelAdhoc->edad_max_nino_cama_adicional,
+                    'fotos' => $hotelAdhoc->fotos,
+                ]);
+
+                foreach (OpcionHotelTarifa::where('opcion_hotel_id', $hotelAdhoc->id)->get() as $tarifa) {
+                    $nuevaTarifa = OpcionHotelTarifa::create([
+                        'opcion_hotel_id' => $nuevoHotelAdhoc->id,
+                        'tipo_habitacion' => $tarifa->tipo_habitacion,
+                        'precio_costo' => $tarifa->precio_costo,
+                        'precio_venta' => $tarifa->precio_venta,
+                        'proveedor_tarifa_id' => $tarifa->proveedor_tarifa_id,
+                        'precio_costo_cama_adicional' => $tarifa->precio_costo_cama_adicional,
+                        'precio_venta_cama_adicional' => $tarifa->precio_venta_cama_adicional,
+                        'tip_afe_igv' => $tarifa->tip_afe_igv,
+                        'destino_tributario' => $tarifa->destino_tributario,
+                    ]);
+                    $tarifasHotelClonadas[$tarifa->id] = $nuevaTarifa->id;
+                }
+            }
+
+            // Ítems (opcion_mayorista_id y opcion_hotel_tarifa_id de hotel de
+            // MAYORISTA todavía no — se remapean al final, una vez clonado
+            // el árbol de opciones más abajo; el de hotel AD-HOC ya se
+            // resuelve acá porque su mapa ya está completo).
+            //
+            // Bug real (07-sep-2026, auditoría de mantenibilidad
+            // 05-sep-2026): grupo_opcion_id/opcion_elegida/guia_tarifa_id/
+            // tip_afe_igv/destino_tributario nunca se copiaban — una
+            // alternativa duplicada con un comparador de hoteles armado
+            // perdía el agrupamiento COMPLETO (los hoteles comparados
+            // quedaban como ítems sueltos sin relación entre sí), un ítem
+            // de guía quedaba sin guía real asociada, y el tratamiento
+            // tributario resuelto (incluida la exoneración Amazonía) se
+            // perdía en silencio cayendo al default del tenant.
             $itemsClonados = [];
             foreach ($original->items()->get() as $item) {
                 $nuevoItem = AlternativaItem::create([
@@ -491,9 +576,17 @@ class AlternativaController extends Controller
                         : null,
                     'origen_tipo' => $item->origen_tipo,
                     'proveedor_tarifa_id' => $item->proveedor_tarifa_id,
+                    'opcion_hotel_tarifa_id' => $item->opcion_hotel_tarifa_id !== null
+                        ? ($tarifasHotelClonadas[$item->opcion_hotel_tarifa_id] ?? null)
+                        : null,
+                    'grupo_opcion_id' => $item->grupo_opcion_id,
+                    'opcion_elegida' => $item->opcion_elegida,
+                    'guia_tarifa_id' => $item->guia_tarifa_id,
                     'tour_origen_id' => $item->tour_origen_id,
                     'dia_referencial' => $item->dia_referencial,
                     'descripcion_manual' => $item->descripcion_manual,
+                    'proveedor_sugerido_manual' => $item->proveedor_sugerido_manual,
+                    'proveedor_promovido_id' => $item->proveedor_promovido_id,
                     'modo_precio' => $item->modo_precio,
                     'cantidad' => $item->cantidad,
                     'pax_incluidos' => $item->pax_incluidos,
@@ -502,6 +595,8 @@ class AlternativaController extends Controller
                     'precio_venta_snapshot' => $item->precio_venta_snapshot,
                     'descuento_pct' => $item->descuento_pct,
                     'precio_convertido' => $item->precio_convertido,
+                    'tip_afe_igv' => $item->tip_afe_igv,
+                    'destino_tributario' => $item->destino_tributario,
                 ]);
                 $itemsClonados[$item->id] = $nuevoItem;
 
@@ -529,6 +624,7 @@ class AlternativaController extends Controller
             }
 
             $opcionesClonadas = [];
+            $opcionalesClonados = [];
             foreach (OpcionMayorista::where('alternativa_id', $original->id)->get() as $opcion) {
                 $nuevaOpcion = OpcionMayorista::create([
                     'alternativa_id' => $nueva->id,
@@ -554,7 +650,7 @@ class AlternativaController extends Controller
                 $opcionesClonadas[$opcion->id] = $nuevaOpcion->id;
 
                 foreach (OpcionMayoristaOpcional::where('opcion_mayorista_id', $opcion->id)->get() as $opcional) {
-                    OpcionMayoristaOpcional::create([
+                    $nuevoOpcional = OpcionMayoristaOpcional::create([
                         'opcion_mayorista_id' => $nuevaOpcion->id,
                         'nombre' => $opcional->nombre,
                         'precio_por_persona' => $opcional->precio_por_persona,
@@ -565,33 +661,84 @@ class AlternativaController extends Controller
                         'contenido_tour_descripcion_snapshot' => $opcional->contenido_tour_descripcion_snapshot,
                         'contenido_tour_fotos_snapshot' => $opcional->contenido_tour_fotos_snapshot,
                     ]);
+                    // 07-sep-2026 — mismo criterio que $tarifasHotelClonadas:
+                    // un ítem real agregado desde este opcional (ver
+                    // AlternativaItemController::crearItemMayorista()) debe
+                    // remapear a la copia, no seguir apuntando al opcional
+                    // del original.
+                    $opcionalesClonados[$opcional->id] = $nuevoOpcional->id;
                 }
 
+                // paquete_plantilla_id se quitó de la tabla (migración
+                // 2026_08_11_090500_drop_paquete_plantilla_id_from_opciones_hotel_table.php,
+                // ver docblock del modelo) — ya no está en $fillable, así
+                // que mandarlo acá no hacía nada (Eloquent lo descarta en
+                // silencio). Resto de campos completados (07-sep-2026,
+                // mismo hallazgo que arriba): faltaban moneda/edades/fotos
+                // del hotel, y proveedor_tarifa_id/camas
+                // adicionales/tratamiento tributario de cada tarifa — una
+                // alternativa duplicada perdía las fotos del hotel y
+                // desvinculaba sus tarifas de la tarifa real del proveedor
+                // (getPrecioVentaAttribute() deja de seguir el precio en
+                // vivo sin proveedor_tarifa_id).
                 foreach (OpcionHotel::where('opcion_mayorista_id', $opcion->id)->get() as $hotel) {
                     $nuevoHotel = OpcionHotel::create([
                         'opcion_mayorista_id' => $nuevaOpcion->id,
-                        'paquete_plantilla_id' => $hotel->paquete_plantilla_id,
                         'proveedor_id' => $hotel->proveedor_id,
+                        'proveedor_promovido_id' => $hotel->proveedor_promovido_id,
                         'nombre_hotel' => $hotel->nombre_hotel,
                         'categoria_estrellas' => $hotel->categoria_estrellas,
+                        'moneda' => $hotel->moneda,
+                        'edad_max_infante_gratis' => $hotel->edad_max_infante_gratis,
+                        'edad_max_nino_cama_adicional' => $hotel->edad_max_nino_cama_adicional,
+                        'fotos' => $hotel->fotos,
                     ]);
 
                     foreach (OpcionHotelTarifa::where('opcion_hotel_id', $hotel->id)->get() as $tarifa) {
-                        OpcionHotelTarifa::create([
+                        $nuevaTarifa = OpcionHotelTarifa::create([
                             'opcion_hotel_id' => $nuevoHotel->id,
                             'tipo_habitacion' => $tarifa->tipo_habitacion,
                             'precio_costo' => $tarifa->precio_costo,
                             'precio_venta' => $tarifa->precio_venta,
+                            'proveedor_tarifa_id' => $tarifa->proveedor_tarifa_id,
+                            'precio_costo_cama_adicional' => $tarifa->precio_costo_cama_adicional,
+                            'precio_venta_cama_adicional' => $tarifa->precio_venta_cama_adicional,
+                            'tip_afe_igv' => $tarifa->tip_afe_igv,
+                            'destino_tributario' => $tarifa->destino_tributario,
                         ]);
+                        $tarifasHotelClonadas[$tarifa->id] = $nuevaTarifa->id;
                     }
                 }
             }
 
-            foreach ($original->items()->where('origen_tipo', AlternativaItem::ORIGEN_MAYORISTA)->get() as $itemOriginal) {
-                if (isset($itemsClonados[$itemOriginal->id], $opcionesClonadas[$itemOriginal->opcion_mayorista_id])) {
-                    $itemsClonados[$itemOriginal->id]->update([
-                        'opcion_mayorista_id' => $opcionesClonadas[$itemOriginal->opcion_mayorista_id],
-                    ]);
+            // Remap final: opcion_mayorista_id (ya existía) +
+            // opcion_hotel_tarifa_id de un hotel de MAYORISTA (07-sep-2026 —
+            // recién quedó armado el mapa arriba, después de los ítems). El
+            // de hotel AD-HOC ya se resolvió al crear el ítem más arriba,
+            // este remap no lo vuelve a tocar (el item original de un hotel
+            // ad-hoc nunca tiene opcion_mayorista_id, así que solo entra acá
+            // por el segundo `if`, y como su id YA está en el mapa desde
+            // antes de crear los ítems, el valor que resulta es el mismo —
+            // no hay riesgo de pisarlo con otra cosa).
+            foreach ($original->items()->get() as $itemOriginal) {
+                if (! isset($itemsClonados[$itemOriginal->id])) {
+                    continue;
+                }
+
+                $cambios = [];
+                if ($itemOriginal->opcion_mayorista_id !== null && isset($opcionesClonadas[$itemOriginal->opcion_mayorista_id])) {
+                    $cambios['opcion_mayorista_id'] = $opcionesClonadas[$itemOriginal->opcion_mayorista_id];
+                }
+                if ($itemOriginal->opcion_hotel_tarifa_id !== null && isset($tarifasHotelClonadas[$itemOriginal->opcion_hotel_tarifa_id])) {
+                    $cambios['opcion_hotel_tarifa_id'] = $tarifasHotelClonadas[$itemOriginal->opcion_hotel_tarifa_id];
+                }
+                // 07-sep-2026 — mismo criterio, para un ítem que materializa
+                // un OpcionMayoristaOpcional elegido (ver crearItemMayorista()).
+                if ($itemOriginal->opcion_mayorista_opcional_id !== null && isset($opcionalesClonados[$itemOriginal->opcion_mayorista_opcional_id])) {
+                    $cambios['opcion_mayorista_opcional_id'] = $opcionalesClonados[$itemOriginal->opcion_mayorista_opcional_id];
+                }
+                if ($cambios !== []) {
+                    $itemsClonados[$itemOriginal->id]->update($cambios);
                 }
             }
 
@@ -632,6 +779,10 @@ class AlternativaController extends Controller
             // también intenta el hotel de la matriz de un OpcionMayorista
             // (sin ProveedorTarifa real) antes de caer al genérico.
             'items.opcionHotelTarifa.opcionHotel',
+            // 07-sep-2026 — mismo criterio, para un ítem que materializa un
+            // OpcionMayoristaOpcional elegido de verdad (ver
+            // ReservaController::resolverNombreItem()).
+            'items.opcionMayoristaOpcional',
         ])->findOrFail($id);
 
         $config = \App\Models\AgenciaViajes\ConfiguracionAgencia::first();
@@ -650,19 +801,36 @@ class AlternativaController extends Controller
         // opcionales de la(s) opción(es) de mayorista realmente elegidas en
         // esta alternativa (ver mayoristasReferenciados()).
         $mayoristas = $this->mayoristasReferenciados($alternativa);
+        // TextoFormatoService::textoLibreParaPdf() — bug real 06-sep-2026,
+        // viñetas de Wingdings/Symbol pegadas desde Word (Zona de Uso
+        // Privado de Unicode) salían como "?" en el PDF.
+        //
+        // Editor de texto enriquecido (07-sep-2026, pedido del usuario): estos
+        // 3 campos (incluye/no_incluye/vuelo_detalle) pasan de <textarea>
+        // plano a RichTextEditor (Quill) en el frontend — ya no es
+        // necesariamente texto con saltos de línea literales, puede ser
+        // HTML (<p>/<ul><li>/<strong>). textoLibreParaPdf() cubre ambos
+        // casos: si detecta HTML real lo renderiza tal cual (Quill ya trae
+        // su propia estructura); si es texto plano (dato cargado ANTES de
+        // este cambio) reconstruye el <ul><li> — sin esto, texto plano con
+        // "\n" literales perdía sus viñetas al renderizarse crudo (bug real
+        // encontrado generando el PDF de una cotización ya existente).
         $mayoristasIncluye = $mayoristas
-            ->flatMap(fn ($m) => preg_split('/\r?\n/', trim((string) $m->incluye)))
-            ->filter(fn ($linea) => trim($linea) !== '')
+            ->map(fn ($m) => TextoFormatoService::textoLibreParaPdf($m->incluye))
+            ->filter(fn ($html) => $html !== '')
             ->values();
         $mayoristasNoIncluye = $mayoristas
-            ->flatMap(fn ($m) => preg_split('/\r?\n/', trim((string) $m->no_incluye)))
-            ->filter(fn ($linea) => trim($linea) !== '')
+            ->map(fn ($m) => TextoFormatoService::textoLibreParaPdf($m->no_incluye))
+            ->filter(fn ($html) => $html !== '')
             ->values();
         $mayoristasVuelo = $mayoristas
             ->filter(fn ($m) => filled($m->vuelo_aerolinea))
-            ->map(fn ($m) => ['aerolinea' => $m->vuelo_aerolinea, 'detalle' => $m->vuelo_detalle])
+            ->map(fn ($m) => [
+                'aerolinea' => $m->vuelo_aerolinea,
+                'detalle' => TextoFormatoService::textoLibreParaPdf($m->vuelo_detalle),
+            ])
             ->values();
-        $mayoristasOpcionales = $mayoristas->flatMap(fn ($m) => $m->opcionales)->values();
+        $mayoristasOpcionales = $this->mayoristasOpcionalesPendientes($alternativa, $mayoristas);
 
         // Sesión 12f-3 — el PDF comercial deja de mostrar precio por ítem
         // (decisión del usuario, ver brief 12f3 §0.3): estos totales siguen
@@ -675,7 +843,42 @@ class AlternativaController extends Controller
         $total = (float) $alternativa->total;
         $descuentoMonto = round($totalOriginal - $total, 2);
 
-        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('pdf.agencia-viajes.alternativa', [
+        // Mejora del PDF de cotización (plan-mejora-pdf-cotizacion-cliente.md)
+        // — marca por agencia, fotos de portada/galería/hoteles, cinta de
+        // categoría. Todo con defaults de sistema si el tenant no configuró
+        // nada (§6 del plan): ConfiguracionAgenciaPdf::actual() nunca
+        // devuelve null.
+        $configPdf = ConfiguracionAgenciaPdf::actual();
+        $categoria = $this->resolverCategoriaAlternativa($alternativa);
+        $colorCategoria = $this->colorPorCategoria($categoria, $configPdf);
+        $afiliaciones = $this->afiliacionesParaMostrar($configPdf);
+        [$fotoPortadaPrincipal, $fotosPortadaSecundarias] = $this->fotosTourParaPdf($alternativa, $configPdf);
+        $hotelesInfo = $this->hotelesInfoParaPdf($opcionesHoteles);
+
+        // Hallazgo del usuario (06-sep-2026, comparando contra el mockup
+        // aprobado): el header/footer custom (membrete real de la agencia)
+        // se imprimía como contenido normal — subía/bajaba con el flujo de
+        // la página en vez de quedar fijo arriba/abajo como una hoja
+        // membretada real. Fix: position:fixed dentro del margen de @page
+        // (misma técnica ya usada en reporte-operativo.blade.php,
+        // ".marca-generacion") — el alto reservado se calcula acá porque
+        // la imagen la sube la agencia con la proporción que quiera.
+        $alturaHeaderMm = $this->alturaHeaderMm($configPdf, $afiliaciones);
+        $alturaFooterMm = $this->alturaFooterMm($configPdf);
+
+        // Pedido del usuario (06-sep-2026) — Poppins en vez de Arial. Se
+        // registra ANTES de loadView(), no después: confirmado con el PDF
+        // real (grep de "Poppins"/"Helvetica" dentro de los bytes del
+        // archivo) que registrarlo después de loadView() no tenía efecto —
+        // dompdf ya resuelve font-family contra las fuentes conocidas
+        // durante el parseo del CSS (loadHtml(), disparado por loadView()),
+        // no en el render() posterior. Hay que resolver una instancia
+        // propia de PDF (no vía loadView() del facade, que crea la suya)
+        // para poder tocar getDomPDF() antes de cargarle el HTML.
+        $pdf = app('dompdf.wrapper');
+        \App\Services\PdfFontService::registrarPoppins($pdf->getDomPDF());
+
+        $pdf = $pdf->loadView('pdf.agencia-viajes.alternativa', [
             'alternativa' => $alternativa,
             'cotizacion' => $alternativa->cotizacion,
             'cliente' => $alternativa->cotizacion->cliente,
@@ -689,6 +892,17 @@ class AlternativaController extends Controller
             // (29-ago-2026).
             'logoUrl' => \App\Services\StorageUrl::resolveParaPdf($empresa?->logo_horizontal),
             'config' => $config,
+            'configPdf' => $configPdf,
+            'headerCustomUrl' => StorageUrl::resolveParaPdf($configPdf->imagen_header_custom),
+            'footerCustomUrl' => StorageUrl::resolveParaPdf($configPdf->imagen_footer_custom),
+            'alturaHeaderMm' => $alturaHeaderMm,
+            'alturaFooterMm' => $alturaFooterMm,
+            'afiliaciones' => $afiliaciones,
+            'categoria' => $categoria,
+            'colorCategoria' => $colorCategoria,
+            'fotoPortadaPrincipal' => $fotoPortadaPrincipal,
+            'fotosPortadaSecundarias' => $fotosPortadaSecundarias,
+            'hotelesInfo' => $hotelesInfo,
             'cuentasBancarias' => $cuentasBancarias,
             'pasajeros' => $pasajeros,
             'itinerario' => $itinerario,
@@ -742,6 +956,23 @@ class AlternativaController extends Controller
             ->map(fn (AlternativaItem $item) => $item->opcionMayorista)
             ->filter()
             ->unique('id')
+            ->values();
+    }
+
+    // 07-sep-2026 — un opcional ya agregado de verdad al lienzo (sección
+    // "Opcionales" del cotizador, ver AlternativaItemController::
+    // crearItemMayorista()) deja de ser "algo que el cliente puede agregar
+    // aparte": ya está cobrado, sumado al total de "Precio". Si siguiera
+    // listado acá igual que los demás, el PDF le diría al cliente que
+    // puede agregarlo por separado cuando en realidad ya lo está pagando
+    // — confuso y potencialmente un doble mensaje sobre el mismo cargo.
+    // Se excluye de esta lista informativa.
+    private function mayoristasOpcionalesPendientes(Alternativa $alternativa, \Illuminate\Support\Collection $mayoristas): \Illuminate\Support\Collection
+    {
+        $opcionalesYaAgregados = $alternativa->items->pluck('opcion_mayorista_opcional_id')->filter()->unique();
+
+        return $mayoristas->flatMap(fn ($m) => $m->opcionales)
+            ->reject(fn ($opcional) => $opcionalesYaAgregados->contains($opcional->id))
             ->values();
     }
 
@@ -834,15 +1065,29 @@ class AlternativaController extends Controller
                 // patrón que 'tour_nombre': se repiten por paso (el blade solo
                 // las imprime una vez, en el primer paso del día) para no
                 // duplicar la lógica de "una vez por tour" en la vista.
-                // resolveParaPdf() (no resolve()) porque DomPDF corre con
-                // enable_remote=false, igual que el logo.
-                $fotosDelTour = array_map(fn (string $path) => \App\Services\StorageUrl::resolveParaPdf($path), $tour->fotos ?? []);
+                //
+                // Hallazgo del usuario (06-sep-2026): estas fotos se pasaban
+                // como el ORIGINAL sin recortar (solo resolveParaPdf(), sin
+                // ImagenRecorteService) — dompdf no conocía el tamaño real
+                // hasta decodificar la imagen, y con fotos de celular de
+                // proporción/resolución arbitraria terminaba pisando el
+                // título del día siguiente ("el título de los tours es
+                // montado por las imágenes"). Recorte 4:3 fijo (mismo
+                // servicio que portada/galería/hoteles) elimina la
+                // ambigüedad de tamaño — el blade además fija width/height
+                // explícitos en el <img>, dompdf ya no tiene que adivinar.
+                //
+                // Máximo 3 fotos (pedido del usuario, 07-sep-2026) — mismo
+                // criterio que la tira de hoteles (fachada + 1-2 de
+                // habitación); un tour con muchas fotos cargadas no debe
+                // generar un PDF de tamaño impredecible.
+                $fotosDelTour = $this->imagenRecorte->recortarVariasParaPdf(array_slice($tour->fotos ?? [], 0, 3));
 
                 foreach ($pasosDelTour as $paso) {
                     $pasos[] = [
                         'dia' => $offsetDia + $paso->dia_relativo,
                         'hora' => $paso->hora,
-                        'descripcion' => $paso->descripcion,
+                        'descripcion' => TextoFormatoService::sanitizarHtmlParaPdf($paso->descripcion),
                         'tour_nombre' => $tour->nombre,
                         'tour_fotos' => $fotosDelTour,
                         'atractivo_nombre' => $paso->destinoAtractivo?->nombre,
@@ -959,7 +1204,7 @@ class AlternativaController extends Controller
                 [$hotel, $tipoHabitacion] = $partes;
                 $tiposPresentes[$tipoHabitacion] = true;
 
-                $filasPorHotel[$hotel] ??= ['hotel' => $hotel, 'precios' => [], 'elegida' => false];
+                $filasPorHotel[$hotel] ??= ['hotel' => $hotel, 'precios' => [], 'elegida' => false, 'opcion_hotel_id' => $item->opcionHotelTarifa?->opcion_hotel_id];
                 $filasPorHotel[$hotel]['precios'][$tipoHabitacion] = (float) $item->precio_convertido;
                 if ($item->opcion_elegida) {
                     $filasPorHotel[$hotel]['elegida'] = true;
@@ -988,6 +1233,257 @@ class AlternativaController extends Controller
                 'resuelto' => collect($filasPorHotel)->contains('elegida', true),
             ];
         })->filter(fn (array $g) => count($g['filas']) > 0)->values()->all();
+    }
+
+    // Mejora del PDF de cotización (plan-mejora-pdf-cotizacion-cliente.md
+    // §7) — la cinta de categoría usa la "más alta" presente en la
+    // alternativa: internacional > nacional > local. Un ítem de mayorista
+    // (opcion_mayorista_id) es SIEMPRE internacional por definición del
+    // negocio (OpcionHotel::class docblock: "opcion_mayorista exclusivo de
+    // paquetes internacionales con fecha fija") — no tiene
+    // paquetes_plantilla.categoria propia porque no nace de un tour del
+    // catálogo. Un ítem con tour_origen_id hereda la categoría de ESE tour.
+    // Cualquier otro origen (manual/guía/pasaje aéreo/hotel local ad-hoc)
+    // no tiene una señal de categoría propia — cae a 'nacional' (el color
+    // intermedio por defecto), simplificación deliberada: no hay hoy un
+    // campo de categoría a nivel de esos orígenes, y bloquear la cinta
+    // hasta que alguien lo agregue sería peor que un default razonable.
+    private function resolverCategoriaAlternativa(Alternativa $alternativa): string
+    {
+        $tourIds = $alternativa->items->pluck('tour_origen_id')->filter()->unique();
+        $categoriasDeTours = $tourIds->isEmpty()
+            ? collect()
+            : PaquetePlantilla::whereIn('id', $tourIds)->pluck('categoria');
+
+        $categorias = $alternativa->items->map(
+            fn (AlternativaItem $item) => $item->opcion_mayorista_id ? 'internacional' : null
+        )->filter()->merge($categoriasDeTours);
+
+        foreach (['internacional', 'nacional', 'local'] as $prioridad) {
+            if ($categorias->contains($prioridad)) {
+                return $prioridad;
+            }
+        }
+
+        return 'nacional';
+    }
+
+    private function colorPorCategoria(string $categoria, ConfiguracionAgenciaPdf $configPdf): string
+    {
+        return match ($categoria) {
+            'internacional' => $configPdf->color_categoria_internacional,
+            'local' => $configPdf->color_categoria_local,
+            default => $configPdf->color_categoria_nacional,
+        };
+    }
+
+    // plan §4.3 — solo arma la franja si mostrar_afiliaciones=true Y la
+    // agencia marcó al menos una. AfiliacionTurismo vive en la base
+    // central (CentralConnection) — un solo whereIn() para resolver todas
+    // las marcadas, sin N+1.
+    private function afiliacionesParaMostrar(ConfiguracionAgenciaPdf $configPdf): \Illuminate\Support\Collection
+    {
+        if (! $configPdf->mostrar_afiliaciones || ! $configPdf->exists) {
+            return collect();
+        }
+
+        $marcadas = $configPdf->afiliaciones()->get();
+        if ($marcadas->isEmpty()) {
+            return collect();
+        }
+
+        $catalogo = AfiliacionTurismo::whereIn('id', $marcadas->pluck('afiliacion_id'))->get()->keyBy('id');
+
+        return $marcadas->map(function ($m) use ($catalogo) {
+            $afiliacion = $catalogo->get($m->afiliacion_id);
+
+            return $afiliacion ? [
+                'nombre' => $afiliacion->nombre,
+                'logo' => StorageUrl::resolveParaPdf($afiliacion->logo_path),
+            ] : null;
+        })->filter()->values();
+    }
+
+    // Hallazgo del usuario (06-sep-2026) — hoja membretada real: el
+    // header/footer debe quedar FIJO arriba/abajo de CADA página, no
+    // subir/bajar con el contenido. dompdf soporta esto con
+    // position:fixed dentro del margen reservado por @page (mismo truco
+    // ya usado en reporte-operativo.blade.php) — pero el margen de @page
+    // es un valor fijo en el CSS, así que hay que calcular acá cuánto
+    // alto reservar según lo que realmente se va a imprimir arriba/abajo.
+    //
+    // Con imagen custom: la agencia sube su membrete con la proporción
+    // que quiera (ver los 2 casos reales de DKM Xplore) — se mide el
+    // archivo real y se calcula qué alto le corresponde al ancho
+    // completo de la hoja A4 (el membrete hace bleed hasta el borde
+    // físico, ver ANCHO_PAGINA_A4_MM en alturaBandaCompletaMm()).
+    //
+    // Sin imagen custom: el header/footer generado desde
+    // ConfiguracionAgenciaPdf tiene un alto predecible (logo + 2 líneas
+    // de contacto, +eslogan, +franja de afiliaciones) — reserva fija por
+    // bloque presente, no medida en píxeles porque no hay ninguna imagen
+    // que medir.
+    private const ANCHO_PAGINA_A4_MM = 210.0;
+
+    private function alturaHeaderMm(ConfiguracionAgenciaPdf $configPdf, \Illuminate\Support\Collection $afiliaciones): float
+    {
+        if ($configPdf->imagen_header_custom) {
+            return $this->alturaBandaCompletaMm($configPdf->imagen_header_custom);
+        }
+
+        $altura = 28.0; // logo + nombre comercial + RUC/teléfono/email
+        if (! empty($configPdf->eslogan)) {
+            $altura += 4.0;
+        }
+        if ($afiliaciones->isNotEmpty()) {
+            $altura += 10.0;
+        }
+
+        return $altura;
+    }
+
+    private function alturaFooterMm(ConfiguracionAgenciaPdf $configPdf): float
+    {
+        if ($configPdf->imagen_footer_custom) {
+            // +14mm: el aviso de condiciones generales (footer-legal) va
+            // SIEMPRE arriba del membrete custom, es contenido legal, no
+            // branding — el override total del plan §4.2 solo reemplaza
+            // eslogan/redes, no este aviso.
+            return $this->alturaBandaCompletaMm($configPdf->imagen_footer_custom) + 14.0;
+        }
+
+        return empty($configPdf->redes_sociales) ? 16.0 : 22.0;
+    }
+
+    private function alturaBandaCompletaMm(string $path): float
+    {
+        if (! Storage::disk('public')->exists($path)) {
+            return 20.0;
+        }
+
+        // getimagesize() alcanza acá — solo hace falta el ancho/alto real
+        // del archivo, no manipular la imagen (eso ya lo hace
+        // ImagenRecorteService para las fotos de tour/hotel).
+        $medidas = @getimagesize(Storage::disk('public')->path($path));
+        if (! $medidas || $medidas[0] <= 0) {
+            return 20.0;
+        }
+
+        return round(self::ANCHO_PAGINA_A4_MM * ($medidas[1] / $medidas[0]), 1);
+    }
+
+    // plan §4.5 — portada (1 principal + hasta 2 secundarias) + galería de
+    // itinerario (hasta 4), ambas desde el PRIMER tour CON FOTOS de la
+    // alternativa (una alternativa multi-tour de todas formas necesita UN
+    // solo set de fotos de portada, no uno por tour). Recorte 4:3 centrado
+    // vía ImagenRecorteService, nunca el original (evita el estiramiento
+    // que dompdf produciría con object-fit, que no soporta).
+    //
+    // Bug real (07-sep-2026, pedido del usuario "que aparezca en todo
+    // caso"): esta función solo miraba alternativa_items.tour_origen_id
+    // (Local/Nacional) — nunca revisaba los tours enganchados por
+    // mayorista (Internacional, OpcionMayoristaTour), que es el 100% del
+    // uso real de este tenant. Ahora arma la MISMA secuencia de tours que
+    // ya usa itinerarioAlternativa() (tour_origen_id directo + tours de
+    // mayorista por 'orden') y busca el PRIMERO que sí tenga foto_portada
+    // marcada — no simplemente el primero de la lista: confirmado con
+    // datos reales que "Día 1: Arribo a Cusco" no tenía portada marcada,
+    // pero "Día 2: Tour Valle Sagrado..." sí — quedarse con el primero a
+    // secas (como hacía antes) habría seguido sin mostrar nada.
+    private function fotosTourParaPdf(Alternativa $alternativa, ConfiguracionAgenciaPdf $configPdf): array
+    {
+        if (! $configPdf->mostrar_fotos_tour) {
+            return [null, []];
+        }
+
+        $tourIds = $alternativa->items->pluck('tour_origen_id')->filter()->values();
+
+        foreach ($this->mayoristasReferenciados($alternativa) as $opcionMayorista) {
+            $tourIds = $tourIds->concat(
+                $opcionMayorista->tours()->orderBy('orden')->pluck('paquete_plantilla_id')
+            );
+        }
+
+        $tour = $tourIds->unique()->values()
+            ->map(fn ($tourId) => PaquetePlantilla::find($tourId))
+            ->first(fn ($tour) => $tour && $tour->foto_portada);
+
+        if (! $tour) {
+            return [null, []];
+        }
+
+        // array_unique() (07-sep-2026, bug real encontrado con datos reales):
+        // fotos_destacadas_pdf tenía la MISMA foto repetida dos veces (el
+        // vendedor pudo haberla marcado "destacada" dos veces desde el
+        // panel) — sin esto, las 2 secundarias de la portada podían
+        // terminar mostrando la foto repetida en vez de dos fotos
+        // distintas, según el orden del array.
+        $destacadas = array_values(array_unique($tour->fotos_destacadas_pdf ?? []));
+        $secundarias = array_values(array_diff($destacadas, [$tour->foto_portada]));
+
+        // Pedido del usuario (07-sep-2026, con captura real: "veo más
+        // imágenes duplicadas más abajo"): antes acá también se armaba una
+        // sección "Galería de itinerario" con hasta 4 fotos destacadas,
+        // aparte de la portada — pero esas MISMAS fotos ya se repetían en
+        // las fotos por día del itinerario (fotosDelTour, agregado
+        // 04-sep-2026, DESPUÉS de que se diseñara esta galería) y en la
+        // propia portada. Con tours de pocas fotos (el caso real que
+        // expuso el bug tenía solo 3 en total), la misma foto terminaba
+        // saliendo 2-3 veces en el documento. Se quita la galería por
+        // completo — portada + fotos por día ya cubren lo que la galería
+        // pretendía mostrar, sin agregar nada nuevo.
+        return [
+            $this->imagenRecorte->recortar4x3ParaPdf($tour->foto_portada),
+            $this->imagenRecorte->recortarVariasParaPdf(array_slice($secundarias, 0, 2)),
+        ];
+    }
+
+    // plan §4.5 — sección "Fotos referenciales de los hoteles": por cada
+    // hotel YA listado en la tabla de precios (opcionesHoteles(), que ahora
+    // lleva 'opcion_hotel_id' por fila), su tira fachada+habitación(es) +
+    // check-in/check-out si el hotel está ligado a un Proveedor real con
+    // ProveedorAlojamientoDetalle cargado. Un hotel sin ninguna foto no
+    // entra al mapa — el blade omite su bloque por completo (plan: "nunca
+    // se deja un casillero en blanco").
+    private function hotelesInfoParaPdf(array $opcionesHoteles): array
+    {
+        $idsHotel = collect($opcionesHoteles)
+            ->flatMap(fn (array $grupo) => collect($grupo['filas'])->pluck('opcion_hotel_id'))
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($idsHotel->isEmpty()) {
+            return [];
+        }
+
+        $hoteles = OpcionHotel::with('proveedor.alojamientoDetalle')->whereIn('id', $idsHotel)->get();
+
+        $info = [];
+        foreach ($hoteles as $hotel) {
+            $fotos = collect($hotel->fotos ?? []);
+            $fachada = $fotos->firstWhere('tipo_foto', 'fachada');
+            $habitaciones = $fotos->where('tipo_foto', 'habitacion')->take(2);
+
+            $tira = collect([$fachada])->filter()->concat($habitaciones)
+                ->map(fn (array $f) => $this->imagenRecorte->recortar4x3ParaPdf($f['path']))
+                ->filter()
+                ->values();
+
+            if ($tira->isEmpty()) {
+                continue;
+            }
+
+            $detalle = $hotel->proveedor?->alojamientoDetalle;
+
+            $info[$hotel->id] = [
+                'fotos' => $tira->all(),
+                'check_in' => $detalle?->hora_checkin,
+                'check_out' => $detalle?->hora_checkout,
+            ];
+        }
+
+        return $info;
     }
 
     // Compartido con ReservaController::aceptar() y VentaDirectaController::store()

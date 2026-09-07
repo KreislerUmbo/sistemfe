@@ -883,7 +883,7 @@
                                         </div>
                                     </div>
                                     <div class="text-muted" v-if="op.vuelo_aerolinea"><i class="fas fa-plane me-1"></i>{{ op.vuelo_aerolinea }}</div>
-                                    <div class="text-muted mb-1" v-if="op.incluye">{{ op.incluye }}</div>
+                                    <div class="text-muted mb-1" v-if="op.incluye">{{ textoPlano(op.incluye) }}</div>
                                     <div class="d-flex justify-content-between align-items-center">
                                         <span class="badge" :class="{
                                             'bg-success-subtle text-success': op.estado === 'elegida',
@@ -993,11 +993,17 @@
                                             </div>
                                             <button class="btn btn-sm btn-outline-secondary mb-1" @click="formHotel.tarifas.push({ tipo_habitacion: 'doble', precio_costo: 0, precio_venta: 0, proveedor_tarifa_id: null })">+ tipo de habitación</button>
 
-                                            <!-- Pedido del usuario (05-sep-2026): hasta 3 fotos por hotel. -->
-                                            <label class="form-label mb-1 small text-secondary d-block">Fotos (opcional, máx. 3)</label>
+                                            <!-- Pedido del usuario (05-sep-2026): hasta 3 fotos por hotel
+                                                 (1 fachada + 2 habitación desde la mejora del PDF de
+                                                 cotización — el PDF necesita distinguirlas). -->
+                                            <label class="form-label mb-1 small text-secondary d-block">Fotos (opcional, máx. 1 fachada + 2 habitación)</label>
                                             <div v-if="fotosHotelNuevo.length" class="d-flex flex-wrap gap-1 mb-1">
                                                 <div v-for="(foto, idx) in fotosHotelNuevo" :key="idx" class="position-relative">
                                                     <img :src="foto.previewUrl" style="width:50px;height:50px;object-fit:cover;border:1px solid #ccc;border-radius:3px;">
+                                                    <select class="form-select form-select-sm position-absolute" style="bottom:-4px;left:0;right:0;font-size:8px;padding:0;height:14px;" v-model="foto.tipoFoto">
+                                                        <option value="fachada">Fachada</option>
+                                                        <option value="habitacion">Hab.</option>
+                                                    </select>
                                                     <i class="fas fa-times-circle text-danger position-absolute" style="top:-6px;right:-6px;cursor:pointer;background:#fff;border-radius:50%" title="Quitar" @click="quitarFotoHotelNuevo(idx)"></i>
                                                 </div>
                                             </div>
@@ -1009,12 +1015,12 @@
                                         </div>
                                     </div>
                                     <div v-if="mostrarOpcionalesId === op.id" class="mt-2 border-top pt-2">
-                                        <div v-if="!op.opcionales?.length" class="text-muted small fst-italic mb-2">Sin opcionales cargados todavía — nunca se suman al total, son actividades que el cliente puede agregar aparte.</div>
+                                        <div v-if="!op.opcionales?.length" class="text-muted small fst-italic mb-2">Sin opcionales cargados todavía — son actividades que el cliente puede agregar aparte; "Agregar al lienzo" recién los suma al total.</div>
                                         <div v-for="opl in op.opcionales" :key="opl.id" class="border rounded p-2 mb-1">
                                             <div class="d-flex justify-content-between align-items-start">
                                                 <div>
                                                     <strong>{{ opl.nombre }}</strong>
-                                                    <div v-if="opl.incluye" class="text-muted" style="font-size:11px">{{ opl.incluye }}</div>
+                                                    <div v-if="opl.incluye" class="text-muted" style="font-size:11px">{{ textoPlano(opl.incluye) }}</div>
                                                 </div>
                                                 <div class="d-flex align-items-start gap-2 text-nowrap">
                                                     <span>{{ opl.moneda }} {{ Number(opl.precio_por_persona).toFixed(2) }} /pax</span>
@@ -1023,6 +1029,17 @@
                                                     <span v-else class="spinner-border spinner-border-sm" style="width:11px;height:11px"></span>
                                                 </div>
                                             </div>
+                                            <!-- Hueco real cerrado (07-sep-2026): hasta ahora un opcional
+                                                 solo era info de referencia en el PDF, sin forma de que el
+                                                 cliente lo elija de verdad y sume al total. Mismo criterio
+                                                 "por persona" que ya usa el hotel de la matriz mayorista. -->
+                                            <button class="btn btn-sm btn-outline-success w-100 mt-1"
+                                                :disabled="agregandoOpcionalAlLienzoId === opl.id || op.estado !== 'elegida'"
+                                                :title="op.estado !== 'elegida' ? 'Marcá esta opción como elegida para poder agregar sus opcionales' : ''"
+                                                @click="agregarOpcionalAlLienzo(op, opl)">
+                                                <span v-if="agregandoOpcionalAlLienzoId === opl.id" class="spinner-border spinner-border-sm me-1"></span>
+                                                <i v-else class="fas fa-plus me-1"></i>Agregar al lienzo
+                                            </button>
                                             <div v-if="opcionalEnEdicionId === opl.id" class="mt-1 border-top pt-1">
                                                 <input type="text" class="form-control form-control-sm mb-1" placeholder="Nombre" v-model="formEdicionOpcional.nombre">
                                                 <div class="row g-1 mb-1">
@@ -1036,8 +1053,12 @@
                                                         </select>
                                                     </div>
                                                 </div>
-                                                <textarea class="form-control form-control-sm mb-1" rows="2" placeholder="Incluye..." v-model="formEdicionOpcional.incluye"></textarea>
-                                                <textarea class="form-control form-control-sm mb-1" rows="2" placeholder="No incluye..." v-model="formEdicionOpcional.no_incluye"></textarea>
+                                                <div class="mb-1">
+                                                    <RichTextEditor v-model="formEdicionOpcional.incluye" placeholder="Incluye..." />
+                                                </div>
+                                                <div class="mb-1">
+                                                    <RichTextEditor v-model="formEdicionOpcional.no_incluye" placeholder="No incluye..." />
+                                                </div>
                                                 <button class="btn btn-sm btn-primary w-100" @click="guardarEdicionOpcional(opl)" :disabled="guardandoEdicionOpcional">
                                                     <span v-if="guardandoEdicionOpcional" class="spinner-border spinner-border-sm me-1"></span>Guardar
                                                 </button>
@@ -1059,8 +1080,12 @@
                                                     </select>
                                                 </div>
                                             </div>
-                                            <textarea class="form-control form-control-sm mb-1" rows="2" placeholder="Incluye..." v-model="formOpcional.incluye"></textarea>
-                                            <textarea class="form-control form-control-sm mb-1" rows="2" placeholder="No incluye..." v-model="formOpcional.no_incluye"></textarea>
+                                            <div class="mb-1">
+                                                <RichTextEditor v-model="formOpcional.incluye" placeholder="Incluye..." />
+                                            </div>
+                                            <div class="mb-1">
+                                                <RichTextEditor v-model="formOpcional.no_incluye" placeholder="No incluye..." />
+                                            </div>
                                             <button class="btn btn-sm btn-primary w-100" @click="guardarOpcional(op)" :disabled="guardandoOpcional">
                                                 <span v-if="guardandoOpcional" class="spinner-border spinner-border-sm me-1"></span>Guardar
                                             </button>
@@ -1106,10 +1131,11 @@
                             <HabitacionMatrixPicker :tarifas="matrizHotelActiva.tarifas" :moneda="matrizHotelActiva.moneda"
                                 :pasajeros="cotizacion?.pasajeros ?? []"
                                 permitir-cama-adicional
+                                mostrar-cantidad-en-grupo
                                 :edad-max-infante-gratis="matrizHotelActiva.edadMaxInfanteGratis"
                                 :edad-max-nino-cama-adicional="matrizHotelActiva.edadMaxNinoCamaAdicional"
                                 @seleccionar="({ id, cantidad, pax_incluidos, camas_adicionales_nino }) => matrizHotelActiva!.adhoc ? agregarItemHotelAdhocLocal(id, cantidad, pax_incluidos, camas_adicionales_nino) : agregarItemProveedorHotel(id, cantidad, pax_incluidos, camas_adicionales_nino)"
-                                @agregar-grupo="({ ids }) => matrizHotelActiva!.adhoc ? agregarGrupoHotelAdhocLocal(ids) : agregarGrupoProveedorHotel(ids)" />
+                                @agregar-grupo="({ ids, cantidad }) => matrizHotelActiva!.adhoc ? agregarGrupoHotelAdhocLocal(ids, cantidad) : agregarGrupoProveedorHotel(ids, cantidad)" />
                         </template>
 
                         <template v-else-if="pasoDrawer === 'modoPrecio' && modoPrecioPendiente">
@@ -1161,6 +1187,7 @@ import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import { useLayoutStore } from '@/stores/layout';
 import Swal from 'sweetalert2/dist/sweetalert2.js';
 import httpClient from '@/helpers/http-client';
+import RichTextEditor from '@/components/RichTextEditor.vue';
 import HabitacionMatrixPicker from '@/components/AgenciaViajes/HabitacionMatrixPicker.vue';
 import OpcionMayoristaForm from '@/components/AgenciaViajes/OpcionMayoristaForm.vue';
 import TourIncluidoForm from '@/components/AgenciaViajes/TourIncluidoForm.vue';
@@ -1188,6 +1215,18 @@ import type { Cotizacion, Alternativa, AlternativaItem, ProveedorTarifa, OpcionM
 import type { Client } from '@/types/clients';
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
+
+// Vista previa como texto plano (07-sep-2026) — bug real reportado por el
+// usuario: incluye/vuelo_detalle ahora puede ser HTML real
+// (RichTextEditor/Quill, ver OpcionMayoristaForm.vue), pero las tarjetas
+// resumen de abajo (comparador de mayoristas, lista de opcionales) usan
+// interpolación {{ }} que escapa HTML — mostraban las etiquetas crudas
+// como texto literal ("<ul><li>..."). Son vistas previas compactas dentro
+// de una tarjeta chica, no el editor completo — mejor texto plano limpio
+// que renderizar la lista real (bullets reales ahí se verían enormes).
+// Reemplaza cada etiqueta por un espacio (no vacío) para no pegar
+// palabras de líneas/ítems distintos entre sí, luego colapsa espacios.
+const textoPlano = (html: string) => html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
 
 const route = useRoute();
 const router = useRouter();
@@ -1527,8 +1566,26 @@ const descargarCondicionesGenerales = async () => {
 // (ReservaController::aceptar()) y redirige a su pantalla de detalle, en
 // vez de quedarse en el cotizador.
 const marcandoAceptada = ref(false);
+// Confirmación agregada (07-sep-2026, incidente real reportado por el
+// usuario): un click sin querer en "Aceptado por cliente" generaba la
+// reserva de inmediato, sin ningún paso intermedio para frenarlo — a
+// diferencia de eliminarAlternativa()/eliminarOpcionalCargado() y el
+// resto de acciones destructivas/irreversibles del cotizador, que sí
+// confirman antes. Aceptar es igual de irreversible (crea una Reserva
+// real, descarta las demás alternativas) — mismo criterio.
 const marcarAceptada = async () => {
     if (!alternativaActiva.value) return;
+
+    const confirmacion = await (Swal as TVueSwalInstance).fire({
+        title: '¿Aceptar esta alternativa?',
+        text: 'Se genera una reserva y se descartan las demás alternativas de esta cotización — no se puede deshacer.',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, aceptar',
+        cancelButtonText: 'Cancelar',
+    });
+    if (!confirmacion.isConfirmed) return;
+
     marcandoAceptada.value = true;
     try {
         const res = await reservaService.aceptarAlternativa(alternativaActiva.value.id);
@@ -1940,7 +1997,11 @@ const chipsProveedores = computed<ChipBiblioteca[]>(() => {
 const mostrarMasChips = ref(false);
 const chipMasActivo = computed(() => chipsProveedores.value.find((c) => chipActivo(c)) ?? null);
 
-const chipActivoState = ref<ChipBiblioteca>({ tipo: 'todos', proveedorTipoId: null, nombre: 'Todos' });
+// icono agregado (07-sep-2026, auditoría de mantenibilidad 05-sep-2026) —
+// faltaba pese a ser requerido por ChipBiblioteca (tipo mal declarado, sin
+// efecto en runtime ya que nada lee icono desde este ref, pero rompía el
+// type-check). Mismo valor que el chip "todos" real de chipsFijos arriba.
+const chipActivoState = ref<ChipBiblioteca>({ tipo: 'todos', proveedorTipoId: null, nombre: 'Todos', icono: 'fa-th' });
 const chipActivo = (chip: ChipBiblioteca) => chip.tipo === chipActivoState.value.tipo && chip.proveedorTipoId === chipActivoState.value.proveedorTipoId;
 
 const seleccionarChip = (chip: ChipBiblioteca) => {
@@ -2321,7 +2382,13 @@ const generarUuidGrupo = (): string => {
     });
 };
 
-const agregarGrupoHotelAdhocLocal = async (ids: number[]) => {
+// Bug real (07-sep-2026): "cantidad" quedaba hardcodeada en 1 sin importar
+// las noches reales que el vendedor eligiera — el total de la alternativa
+// salía mal (mismo bug que agregarGrupoMayorista() ya había corregido el
+// 04-sep-2026 para "Adultos", nunca aplicado acá). HabitacionMatrixPicker
+// ahora expone un stepper "Noches" en modo grupo (mostrar-cantidad-en-grupo)
+// y lo manda en el emit — se usa ese valor real en vez de 1.
+const agregarGrupoHotelAdhocLocal = async (ids: number[], cantidad: number) => {
     if (!alternativaActiva.value) return;
     const grupoOpcionId = generarUuidGrupo();
     try {
@@ -2330,7 +2397,7 @@ const agregarGrupoHotelAdhocLocal = async (ids: number[]) => {
             const res = await alternativaItemService.agregarProveedor(alternativaActiva.value.id, {
                 opcion_hotel_tarifa_id: opcionHotelTarifaId,
                 modo_precio: 'tarifa_fija',
-                cantidad: 1,
+                cantidad,
                 dia_referencial: diaActivoParaAgregar.value,
                 alternativa_destino_id: destinoActivoId.value,
                 grupo_opcion_id: grupoOpcionId,
@@ -2348,7 +2415,9 @@ const agregarGrupoHotelAdhocLocal = async (ids: number[]) => {
 // Ninguno nace opcion_elegida=true — el vendedor resuelve el grupo después
 // desde el lienzo (ver elegirGrupoDesdeLienzo()), y ReservaController::aceptar()
 // bloquea con 422 mientras quede algún grupo sin resolver.
-const agregarGrupoProveedorHotel = async (ids: number[]) => {
+// "cantidad" real (07-sep-2026) — mismo bug/fix que agregarGrupoHotelAdhocLocal()
+// de arriba, ver ese comentario.
+const agregarGrupoProveedorHotel = async (ids: number[], cantidad: number) => {
     if (!alternativaActiva.value) return;
     const grupoOpcionId = generarUuidGrupo();
     try {
@@ -2357,7 +2426,7 @@ const agregarGrupoProveedorHotel = async (ids: number[]) => {
             const res = await alternativaItemService.agregarProveedor(alternativaActiva.value.id, {
                 proveedor_tarifa_id: proveedorTarifaId,
                 modo_precio: 'tarifa_fija',
-                cantidad: 1,
+                cantidad,
                 dia_referencial: diaActivoParaAgregar.value,
                 alternativa_destino_id: destinoActivoId.value,
                 grupo_opcion_id: grupoOpcionId,
@@ -2397,7 +2466,10 @@ const formHotel = ref<{
 // creado todavía no tiene id mientras se completa este form, así que las
 // fotos se guardan como Files pendientes y se suben DESPUÉS de crearHotel()
 // (ver guardarHotel()), contra el mismo endpoint que usa la edición.
-const fotosHotelNuevo = ref<Array<{ file: File; previewUrl: string }>>([]);
+// tipoFoto default 'habitacion' — el vendedor lo corrige con el select
+// inline si la foto es de fachada (mejora del PDF de cotización, máx. 1
+// fachada + 2 habitación, mismo tope que valida el backend al subir).
+const fotosHotelNuevo = ref<Array<{ file: File; previewUrl: string; tipoFoto: 'fachada' | 'habitacion' }>>([]);
 const onFotosHotelNuevoSeleccionadas = (event: Event) => {
     const input = event.target as HTMLInputElement;
     const archivos = Array.from(input.files ?? []);
@@ -2407,7 +2479,7 @@ const onFotosHotelNuevoSeleccionadas = (event: Event) => {
         (Swal as TVueSwalInstance).fire('Límite alcanzado', 'Ya tenés el máximo de 3 fotos por hotel.', 'warning');
         return;
     }
-    archivos.slice(0, disponibles).forEach((file) => fotosHotelNuevo.value.push({ file, previewUrl: URL.createObjectURL(file) }));
+    archivos.slice(0, disponibles).forEach((file) => fotosHotelNuevo.value.push({ file, previewUrl: URL.createObjectURL(file), tipoFoto: 'habitacion' }));
 };
 const quitarFotoHotelNuevo = (idx: number) => {
     URL.revokeObjectURL(fotosHotelNuevo.value[idx].previewUrl);
@@ -2556,17 +2628,14 @@ const onEliminarHotelMatrix = async (hotelId: number) => {
 
 // 05-sep-2026 — hasta 3 fotos por hotel, pedido del usuario. Inmediatos
 // (sin "guardar" que las agrupe), mismo criterio que eliminarFotoExistente()
-// de destinos/form.vue.
-const onAgregarFotosHotelMatrix = async (payload: { hotelId: number; archivos: File[] }) => {
+// de destinos/form.vue. Una por vez con su tipo desde la mejora del PDF de
+// cotización (plan-mejora-pdf-cotizacion-cliente.md §4.5).
+const onAgregarFotosHotelMatrix = async (payload: { hotelId: number; archivo: File; tipoFoto: 'fachada' | 'habitacion' }) => {
     try {
-        const res = await opcionMayoristaService.agregarFotosHotel(payload.hotelId, payload.archivos);
-        if (res.fotos_rechazadas?.length) {
-            const detalle = res.fotos_rechazadas.map((r: { nombre: string; motivo: string }) => `${r.nombre}: ${r.motivo}`).join('<br>');
-            await (Swal as TVueSwalInstance).fire({ icon: 'warning', title: 'Algunas fotos no se agregaron', html: detalle });
-        }
+        await opcionMayoristaService.agregarFotoHotel(payload.hotelId, payload.archivo, payload.tipoFoto);
         await cargarOpcionesMayorista();
     } catch (error: any) {
-        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo agregar la(s) foto(s)', 'error');
+        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo agregar la foto', 'error');
     }
 };
 
@@ -2745,8 +2814,12 @@ const guardarHotel = async (op: OpcionMayorista) => {
     guardandoHotelMayorista.value = true;
     try {
         const res = await opcionMayoristaService.crearHotel(op.id, formHotel.value);
-        if (fotosHotelNuevo.value.length) {
-            await opcionMayoristaService.agregarFotosHotel(res.opcion_hotel.id, fotosHotelNuevo.value.map((f) => f.file));
+        // Secuencial (no Promise.all): el backend valida el tope por tipo
+        // (1 fachada/2 habitación) contra lo YA guardado en cada request —
+        // en paralelo, dos fotos de fachada podrían leer "0 fachadas
+        // existentes" al mismo tiempo y las dos pasarían el guard.
+        for (const foto of fotosHotelNuevo.value) {
+            await opcionMayoristaService.agregarFotoHotel(res.opcion_hotel.id, foto.file, foto.tipoFoto);
         }
         mostrarFormHotel.value = null;
         formHotel.value = { nombre_hotel: '', proveedor_id: null, tarifas: [{ tipo_habitacion: 'doble', precio_costo: 0, precio_venta: 0, proveedor_tarifa_id: null }] };
@@ -2767,7 +2840,7 @@ const guardarHotel = async (op: OpcionMayorista) => {
 // tipo de habitación (antes traía "{hotel} · {tipo}" repetido, redundante
 // con la nueva cabecera).
 const tarifasHotelPlanas = (op: OpcionMayorista) => {
-    const filas: Array<{ id: number; tipo_habitacion: string; precio: number; registrada: boolean; hotelId: number; hotelNombre: string; precioCosto: number; hotelFotos: string[]; hotelProveedorId: number | null }> = [];
+    const filas: Array<{ id: number; tipo_habitacion: string; precio: number; registrada: boolean; hotelId: number; hotelNombre: string; precioCosto: number; hotelFotos: Array<{ path: string; tipo_foto: 'fachada' | 'habitacion'; url: string }>; hotelProveedorId: number | null }> = [];
     (op.opciones_hotel ?? []).forEach((h) => {
         (h.opciones_hotel_tarifas ?? []).forEach((t) => {
             filas.push({
@@ -2793,6 +2866,34 @@ const agregarItemMayorista = async (op: OpcionMayorista, opcionHotelTarifaId: nu
         await onServicioSueltoAgregado(res.alternativa_item);
     } catch (error: any) {
         (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo agregar', 'error');
+    }
+};
+
+// Hueco real documentado desde 04-sep-2026 (opcionales de mayorista):
+// hasta ahora un OpcionMayoristaOpcional (San Blas, Taboga, Colón...) solo
+// existía como info de referencia en el PDF — sin forma de que el cliente
+// lo elija de verdad y sume al total. Mismo endpoint que agregarItemMayorista()
+// (crearItemMayorista() en el backend ahora acepta opcion_mayorista_opcional_id
+// como fuente de precio alternativa a opcion_hotel_tarifa_id), misma
+// cantidad "por persona" que ya usa el hotel de la matriz mayorista.
+const agregandoOpcionalAlLienzoId = ref<number | null>(null);
+const agregarOpcionalAlLienzo = async (op: OpcionMayorista, opl: OpcionMayoristaOpcional) => {
+    if (!alternativaActiva.value) return;
+    agregandoOpcionalAlLienzoId.value = opl.id;
+    try {
+        const res = await alternativaItemService.agregarMayorista(alternativaActiva.value.id, {
+            opcion_mayorista_id: op.id,
+            opcion_mayorista_opcional_id: opl.id,
+            cantidad: cantidadAdultosCotizacion.value,
+            dia_referencial: diaActivoParaAgregar.value,
+            alternativa_destino_id: destinoActivoId.value,
+        });
+        await onServicioSueltoAgregado(res.alternativa_item);
+        toast.success(`"${opl.nombre}" agregado al lienzo`);
+    } catch (error: any) {
+        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo agregar el opcional', 'error');
+    } finally {
+        agregandoOpcionalAlLienzoId.value = null;
     }
 };
 
@@ -3334,6 +3435,14 @@ const etiquetaItem = (item: AlternativaItem) => {
     // "hotel · tipo_habitación", tanto en el lienzo como en el resumen.
     // Ahora solo cae acá cuando NO es un ítem de la matriz de hoteles
     // (paquete "tarifa fija" sin habitación propia).
+    // 07-sep-2026 — un opcional elegido (San Blas, Taboga, Colón...)
+    // agregado de verdad al lienzo: nombre propio, no el genérico "Paquete
+    // mayorista"/proveedor de la rama de abajo (mismo criterio que ya
+    // aplica opcion_hotel_tarifa arriba). Tiene que ir ANTES del `if` de
+    // opcion_hotel_tarifa — un opcional nunca tiene tarifa de habitación.
+    if (item.origen_tipo === 'mayorista' && item.opcion_mayorista_opcional) {
+        return item.opcion_mayorista_opcional.nombre;
+    }
     if (item.origen_tipo === 'mayorista' && !item.opcion_hotel_tarifa) {
         return item.opcion_mayorista?.proveedor?.nombre_comercial ?? item.opcion_mayorista?.proveedor?.razon_social ?? 'Paquete mayorista';
     }

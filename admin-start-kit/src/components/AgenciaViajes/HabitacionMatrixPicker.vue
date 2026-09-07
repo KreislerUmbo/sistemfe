@@ -53,15 +53,29 @@
                                     <input type="text" class="form-control form-control-sm" v-model="formHotel.nombre_hotel" @keyup.enter="guardarHotelInterno(fila.hotelId)">
                                     <button class="btn btn-sm btn-primary text-nowrap" @click="guardarHotelInterno(fila.hotelId)">OK</button>
                                 </div>
-                                <!-- Pedido del usuario (05-sep-2026): hasta 3 fotos por hotel. -->
+                                <!-- Pedido del usuario (05-sep-2026): hasta 3 fotos por hotel
+                                     (1 fachada + 2 habitación desde la mejora del PDF de
+                                     cotización — el PDF arma la tira fachada-primero,
+                                     habitación-después). -->
                                 <div v-if="fila.hotelFotos.length" class="d-flex flex-wrap gap-1 mb-1">
-                                    <div v-for="path in fila.hotelFotos" :key="path" class="position-relative">
-                                        <img :src="path" style="width:44px;height:44px;object-fit:cover;border:1px solid #ccc;border-radius:3px;">
-                                        <i class="fas fa-times-circle text-danger position-absolute" style="top:-6px;right:-6px;cursor:pointer;background:#fff;border-radius:50%" title="Eliminar foto" @click="$emit('eliminarFotoHotel', { hotelId: fila.hotelId, path })"></i>
+                                    <div v-for="foto in fila.hotelFotos" :key="foto.path" class="position-relative">
+                                        <img :src="foto.url" style="width:44px;height:44px;object-fit:cover;border:1px solid #ccc;border-radius:3px;">
+                                        <span class="badge bg-dark position-absolute" style="bottom:-4px;left:0;right:0;font-size:8px;">{{ foto.tipo_foto === 'fachada' ? 'Fachada' : 'Hab.' }}</span>
+                                        <i class="fas fa-times-circle text-danger position-absolute" style="top:-6px;right:-6px;cursor:pointer;background:#fff;border-radius:50%" title="Eliminar foto" @click="$emit('eliminarFotoHotel', { hotelId: fila.hotelId, path: foto.url })"></i>
                                     </div>
                                 </div>
-                                <input type="file" accept="image/*" multiple class="form-control form-control-sm" style="font-size:11px"
-                                    :disabled="fila.hotelFotos.length >= 3" @change="onFotosHotelSeleccionadas($event, fila.hotelId, fila.hotelFotos.length)">
+                                <div class="d-flex gap-1">
+                                    <label class="form-label mb-0 small text-secondary" style="font-size:10px;">
+                                        Fachada
+                                        <input type="file" accept="image/*" class="form-control form-control-sm" style="font-size:11px"
+                                            :disabled="conteoFotosPorTipo(fila.hotelFotos, 'fachada') >= 1" @change="onFotosHotelSeleccionadas($event, fila.hotelId, 'fachada')">
+                                    </label>
+                                    <label class="form-label mb-0 small text-secondary" style="font-size:10px;">
+                                        Habitación
+                                        <input type="file" accept="image/*" class="form-control form-control-sm" style="font-size:11px"
+                                            :disabled="conteoFotosPorTipo(fila.hotelFotos, 'habitacion') >= 2" @change="onFotosHotelSeleccionadas($event, fila.hotelId, 'habitacion')">
+                                    </label>
+                                </div>
                             </template>
                             <strong v-else>{{ fila.hotelNombre }}</strong>
                         </td>
@@ -157,6 +171,17 @@
         </table>
 
         <div v-if="modoGrupo" class="d-flex justify-content-end align-items-center gap-2 pt-2 px-2">
+            <!-- Bug real (07-sep-2026) — ver comentario de mostrarCantidadEnGrupo
+                 arriba: sin esto, el caller Local/Nacional mandaba cantidad=1
+                 hardcodeado sin importar las noches reales. -->
+            <template v-if="mostrarCantidadEnGrupo">
+                <span class="small text-secondary">{{ cantidadLabel || 'Noches' }}</span>
+                <div class="input-group input-group-sm" style="width:110px">
+                    <button class="btn btn-outline-secondary" type="button" @click="cantidad = Math.max(1, cantidad - 1)">-</button>
+                    <input type="text" class="form-control text-center" :value="cantidad" readonly>
+                    <button class="btn btn-outline-secondary" type="button" @click="cantidad++">+</button>
+                </div>
+            </template>
             <span class="small text-secondary">{{ idsGrupo.length }} opción(es) seleccionada(s)</span>
             <button class="btn btn-sm btn-primary" type="button" :disabled="idsGrupo.length < 2 || deshabilitarConfirmar"
                 :title="deshabilitarConfirmar ? motivoDeshabilitado : ''" @click="confirmarGrupo">
@@ -214,10 +239,11 @@ type TarifaHabitacion = {
     hotelId?: number;
     hotelNombre?: string;
     precioCosto?: number;
-    // 05-sep-2026 — máx. 3 por hotel, ya resueltas a URL completa por el
-    // backend (StorageUrl::resolveMuchas()). Igual que hotelId/hotelNombre,
+    // 05-sep-2026 — máx. 3 por hotel (1 fachada + 2 habitación, mejora del
+    // PDF de cotización), ya resueltas por el backend
+    // (OpcionHotelController::resolverFotos()). Igual que hotelId/hotelNombre,
     // se repite en cada fila del mismo hotel; el header solo lee la primera.
-    hotelFotos?: string[];
+    hotelFotos?: Array<{ path: string; tipo_foto: 'fachada' | 'habitacion'; url: string }>;
     // 05-sep-2026 — null/undefined = hotel ad-hoc (candidato a "Promover a
     // proveedor"); con valor = ya es un proveedor real, no se vuelve a promover.
     hotelProveedorId?: number | null;
@@ -251,13 +277,26 @@ const props = defineProps<{
     // veces). Apagado por defecto — Local/Nacional no lo manda, así que
     // sigue viendo la tabla plana de siempre, sin ningún cambio.
     permitirGestionHoteles?: boolean;
+    // Bug real (07-sep-2026): "Comparar varias opciones" (modoGrupo) nunca
+    // pedía cantidad — el caller Local/Nacional mandaba "1" hardcodeado sin
+    // importar las noches reales (el total de la alternativa salía mal
+    // apenas alguien usara el comparador para Local). El caller mayorista
+    // en cambio YA resuelve bien su cantidad ("Adultos") desde otro lado
+    // (cantidadAdultosCotizacion, un valor único y confiable a nivel de
+    // toda la cotización) — mostrarle acá un stepper editable duplicaría
+    // ese dato y podría desincronizarlo. Opt-in explícito: solo Local
+    // activa este stepper, mayorista sigue exactamente igual que antes.
+    mostrarCantidadEnGrupo?: boolean;
 }>();
 
 const emit = defineEmits<{
     (e: 'seleccionar', payload: { id: number; cantidad: number; pax_incluidos: number[] | null; camas_adicionales_nino: number }): void;
     // Sesión M4 — "ids" en el orden en que el usuario las marcó; el caller
     // decide el grupo_opcion_id (uno solo, compartido por las N opciones).
-    (e: 'agregarGrupo', payload: { ids: number[] }): void;
+    // "cantidad" (07-sep-2026): solo tiene un valor real cuando
+    // mostrarCantidadEnGrupo=true (Local) — mayorista sigue ignorándolo y
+    // usando su propio cantidadAdultosCotizacion, ver comentario arriba.
+    (e: 'agregarGrupo', payload: { ids: number[]; cantidad: number }): void;
     // Simulación Panamá (04-sep-2026) — el picker solo junta los datos del
     // formulario inline y emite; el caller (editar.vue) sigue siendo dueño
     // de llamar al servicio real y refrescar, mismo criterio que ya usan
@@ -266,8 +305,10 @@ const emit = defineEmits<{
     (e: 'eliminarHotel', hotelId: number): void;
     // 05-sep-2026 — inmediatos (no batcheados con guardarHotel): el archivo
     // se sube o la foto se borra apenas el vendedor actúa, mismo criterio
-    // que destinos/form.vue.
-    (e: 'agregarFotosHotel', payload: { hotelId: number; archivos: File[] }): void;
+    // que destinos/form.vue. Una foto por vez con su tipo (mejora del PDF
+    // de cotización, plan-mejora-pdf-cotizacion-cliente.md §4.5): el
+    // backend ahora distingue fachada (máx. 1) de habitación (máx. 2).
+    (e: 'agregarFotosHotel', payload: { hotelId: number; archivo: File; tipoFoto: 'fachada' | 'habitacion' }): void;
     (e: 'eliminarFotoHotel', payload: { hotelId: number; path: string }): void;
     (e: 'promoverHotel', payload: { hotelId: number; hotelNombre: string }): void;
     (e: 'guardarTarifa', payload: { id: number; tipo_habitacion: string; precio_costo: number; precio_venta: number }): void;
@@ -334,7 +375,7 @@ const esGrupoImpar = (hotelId: number) => (indiceHotelPorId.value[hotelId] ?? 0)
 // permitirGestionHoteles=true. Sin ese prop, es un pass-through 1:1 a
 // `tarifas` (comportamiento idéntico al de antes de este cambio).
 type FilaTabla =
-    | { tipo: 'header'; key: string; hotelId: number; hotelNombre: string; hotelFotos: string[]; hotelProveedorId: number | null }
+    | { tipo: 'header'; key: string; hotelId: number; hotelNombre: string; hotelFotos: Array<{ path: string; tipo_foto: 'fachada' | 'habitacion'; url: string }>; hotelProveedorId: number | null }
     | { tipo: 'tarifa'; key: string; data: TarifaHabitacion }
     | { tipo: 'agregar'; key: string; hotelId: number };
 
@@ -359,16 +400,19 @@ const filasParaRenderizar = computed<FilaTabla[]>(() => {
     return filas;
 });
 
-// 05-sep-2026 — fotos por hotel, hasta 3. Immediate (no hay "guardar" que
-// las agrupe): se sube apenas se elige el archivo.
-const onFotosHotelSeleccionadas = (event: Event, hotelId: number, existentes: number) => {
+// 05-sep-2026 — fotos por hotel, hasta 3 (1 fachada + 2 habitación desde la
+// mejora del PDF de cotización). Immediate (no hay "guardar" que las
+// agrupe): se sube apenas se elige el archivo, una por vez con su tipo —
+// el backend ya rechaza si el tipo elegido llegó a su máximo.
+const conteoFotosPorTipo = (fotos: Array<{ tipo_foto: 'fachada' | 'habitacion' }>, tipo: 'fachada' | 'habitacion') =>
+    fotos.filter((f) => f.tipo_foto === tipo).length;
+
+const onFotosHotelSeleccionadas = (event: Event, hotelId: number, tipoFoto: 'fachada' | 'habitacion') => {
     const input = event.target as HTMLInputElement;
-    const archivos = Array.from(input.files ?? []);
+    const archivo = input.files?.[0];
     input.value = '';
-    if (!archivos.length) return;
-    const disponibles = 3 - existentes;
-    if (disponibles <= 0) return;
-    emit('agregarFotosHotel', { hotelId, archivos: archivos.slice(0, disponibles) });
+    if (!archivo) return;
+    emit('agregarFotosHotel', { hotelId, archivo, tipoFoto });
 };
 
 // Edad REAL del pasajero (no tipo_pax) — un pasajero de 10 años con
@@ -410,16 +454,18 @@ const activarModoGrupo = () => {
     seleccionadaId.value = null;
     modoGrupo.value = true;
     idsGrupo.value = [];
+    cantidad.value = props.cantidadDefault ?? 1;
 };
 
 const cancelarModoGrupo = () => {
     modoGrupo.value = false;
     idsGrupo.value = [];
+    cantidad.value = props.cantidadDefault ?? 1;
 };
 
 const confirmarGrupo = () => {
     if (idsGrupo.value.length < 2) return;
-    emit('agregarGrupo', { ids: [...idsGrupo.value] });
+    emit('agregarGrupo', { ids: [...idsGrupo.value], cantidad: cantidad.value });
     cancelarModoGrupo();
 };
 </script>

@@ -414,6 +414,12 @@ export type AlternativaItem = {
   // el backend. Gap real cerrado: crearItemMayorista() nunca lo escribía.
   opcion_hotel_tarifa_id?: number | null;
   opcion_hotel_tarifa?: OpcionHotelTarifa | null;
+  // 07-sep-2026 — qué OpcionMayoristaOpcional (San Blas, Taboga, Colón...)
+  // materializa este ítem, cuando el cliente eligió agregarlo de verdad al
+  // lienzo (antes solo existía como info de referencia en el PDF). Ver
+  // AlternativaItem::opcionMayoristaOpcional() en el backend.
+  opcion_mayorista_opcional_id?: number | null;
+  opcion_mayorista_opcional?: OpcionMayoristaOpcional | null;
   // Sesión M1 — matriz de hoteles: N ítems comparten un mismo
   // grupo_opcion_id (generado por el frontend al crear el grupo), y
   // exactamente uno tiene opcion_elegida=true una vez resuelto. Ver
@@ -522,8 +528,10 @@ export type OpcionHotel = {
   // crear el hotel, editables después.
   edad_max_infante_gratis: number;
   edad_max_nino_cama_adicional: number;
-  // 05-sep-2026 — máx. 3, ver OpcionHotelController::agregarFotos().
-  fotos?: string[] | null;
+  // 05-sep-2026 — máx. 3 (1 fachada + 2 habitación desde la mejora del PDF
+  // de cotización, ver plan-mejora-pdf-cotizacion-cliente.md §4.5), ya
+  // resueltas por OpcionHotelController::resolverFotos().
+  fotos?: Array<{ path: string; tipo_foto: 'fachada' | 'habitacion'; url: string }> | null;
   opciones_hotel_tarifas?: OpcionHotelTarifa[];
 };
 
@@ -605,6 +613,10 @@ export type PaquetePlantilla = {
   nombre: string;
   descripcion?: string | null;
   fotos?: string[] | null;
+  // Mejora del PDF de cotización (plan-mejora-pdf-cotizacion-cliente.md
+  // §4.5) — referencian paths ya existentes en `fotos`.
+  foto_portada?: string | null;
+  fotos_destacadas_pdf?: string[] | null;
   destino_atractivo_id: number;
   destino_atractivo?: DestinoAtractivo;
   duracion_horas: number;

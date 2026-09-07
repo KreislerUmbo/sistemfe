@@ -41,6 +41,13 @@ export const paquetePlantillaService = {
     const response = await httpClient.delete(`/paquetes-plantilla/${id}/fotos`, { data: { path } })
     return response.data
   },
+  // Mejora del PDF de cotización (plan-mejora-pdf-cotizacion-cliente.md
+  // §4.5) — portada (una sola) + destacadas para la galería del itinerario
+  // (hasta 4), ambas referencian paths ya existentes en `fotos`.
+  async actualizarFotosPdf(id: number, data: { foto_portada: string | null; fotos_destacadas_pdf: string[] }) {
+    const response = await httpClient.put(`/paquetes-plantilla/${id}/fotos-pdf`, data)
+    return response.data
+  },
 
   // ── Items incluidos (proveedor_tarifa o guia_tarifa) ────────────────
   async listarItems(paqueteId: number) {

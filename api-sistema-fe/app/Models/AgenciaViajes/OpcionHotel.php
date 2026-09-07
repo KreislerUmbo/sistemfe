@@ -2,6 +2,7 @@
 
 namespace App\Models\AgenciaViajes;
 
+use App\Services\StorageUrl;
 use Illuminate\Database\Eloquent\Model;
 
 // plan-modulo-cotizaciones-reservas.md §2.4. Tenant (sin CentralConnection).
@@ -56,5 +57,37 @@ class OpcionHotel extends Model
     public function opcionesHotelTarifas()
     {
         return $this->hasMany(OpcionHotelTarifa::class, 'opcion_hotel_id');
+    }
+
+    // Bug real (05-sep-2026, reportado por el usuario probando "Agregar
+    // imágenes" en el comparador de mayoristas): `fotos` cambió de forma
+    // (string[] -> {path, tipo_foto}[], mejora del PDF de cotización,
+    // plan-mejora-pdf-cotizacion-cliente.md §4.5) pero OpcionMayoristaController
+    // (flujo Internacional/mayorista) seguía llamando
+    // StorageUrl::resolveMuchas($hotel->fotos) directo, que espera
+    // string[] — "Argument #1 ($path) must be of type ?string, array
+    // given". Extraído acá (antes vivía duplicado en
+    // OpcionHotelController) para que cualquier controller que resuelva
+    // fotos de un OpcionHotel use la MISMA normalización, sin poder
+    // repetir el bug en un tercer lugar.
+    //
+    // normalizarFotos() es defensivo — una entrada vieja (string suelto,
+    // de antes de la migración de datos 2026_09_05_100400) no debe
+    // romper el resolve, aunque la migración ya debería haber convertido
+    // todo lo real.
+    public static function normalizarFotos(array $fotos): array
+    {
+        return array_map(
+            fn ($f) => is_array($f) ? $f : ['path' => $f, 'tipo_foto' => 'habitacion'],
+            $fotos
+        );
+    }
+
+    public static function fotosResueltas(array $fotos): array
+    {
+        return array_map(
+            fn (array $f) => ['path' => $f['path'], 'tipo_foto' => $f['tipo_foto'] ?? 'habitacion', 'url' => StorageUrl::resolve($f['path'])],
+            self::normalizarFotos($fotos)
+        );
     }
 }

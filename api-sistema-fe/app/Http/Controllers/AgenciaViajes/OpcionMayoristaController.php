@@ -36,7 +36,7 @@ class OpcionMayoristaController extends Controller
         // resolver a URL completa antes de mandar al frontend que
         // PaquetePlantillaController/DestinoAtractivoController.
         $opciones->each(fn (OpcionMayorista $op) => $op->opcionesHotel->each(
-            fn (OpcionHotel $h) => $h->setAttribute('fotos', StorageUrl::resolveMuchas($h->fotos ?? []))
+            fn (OpcionHotel $h) => $h->setAttribute('fotos', OpcionHotel::fotosResueltas($h->fotos ?? []))
         ));
 
         // Hallazgo del usuario (05-sep-2026): las fotos de un tour incluido
@@ -254,7 +254,7 @@ class OpcionMayoristaController extends Controller
 
         if ($request->isMethod('get')) {
             $hoteles = OpcionHotel::where('opcion_mayorista_id', $opcion->id)->with('opcionesHotelTarifas')->get();
-            $hoteles->each(fn (OpcionHotel $h) => $h->setAttribute('fotos', StorageUrl::resolveMuchas($h->fotos ?? [])));
+            $hoteles->each(fn (OpcionHotel $h) => $h->setAttribute('fotos', OpcionHotel::fotosResueltas($h->fotos ?? [])));
 
             return response()->json(['opciones_hotel' => $hoteles]);
         }
@@ -308,7 +308,7 @@ class OpcionMayoristaController extends Controller
         });
 
         $hotel->load('opcionesHotelTarifas');
-        $hotel->setAttribute('fotos', StorageUrl::resolveMuchas($hotel->fotos ?? []));
+        $hotel->setAttribute('fotos', OpcionHotel::fotosResueltas($hotel->fotos ?? []));
 
         return response()->json(['code' => 200, 'message' => 'Hotel agregado correctamente', 'opcion_hotel' => $hotel]);
     }

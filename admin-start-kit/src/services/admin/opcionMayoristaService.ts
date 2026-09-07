@@ -92,10 +92,13 @@ export const opcionMayoristaService = {
     const response = await httpClient.delete(`/opcion-hotel-tarifas/${tarifaId}`)
     return response.data
   },
-  // 05-sep-2026 — hasta 3 fotos por hotel (Internacional/mayorista).
-  async agregarFotosHotel(hotelId: number, archivos: File[]) {
+  // 05-sep-2026 — hasta 3 fotos por hotel (Internacional/mayorista): 1
+  // fachada + 2 habitación desde la mejora del PDF de cotización (el PDF
+  // necesita distinguirlas) — una foto por request, con su tipo.
+  async agregarFotoHotel(hotelId: number, archivo: File, tipoFoto: 'fachada' | 'habitacion') {
     const fd = new FormData()
-    archivos.forEach((archivo) => fd.append('fotos[]', archivo))
+    fd.append('foto', archivo)
+    fd.append('tipo_foto', tipoFoto)
     const response = await httpClient.post(`/opciones-hotel/${hotelId}/fotos`, fd, { headers: { 'Content-Type': 'multipart/form-data' } })
     return response.data
   },

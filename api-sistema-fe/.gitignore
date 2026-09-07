@@ -21,6 +21,14 @@
 # storage particionado por tenant (FilesystemTenancyBootstrapper) — runtime,
 # no código fuente. Ver CLAUDE.md "storage/tenant{slug}/app/public/...".
 /storage/tenant*/
+# Cache de fuentes de dompdf (PdfFontService::registrarPoppins(), 06-sep-2026)
+# — registerFont() genera acá copias .ttf/.ufm + installed-fonts.json con
+# rutas absolutas de ESTA máquina; se regenera solo en cada entorno la
+# primera vez que se genera un PDF, no es código fuente. Las fuentes
+# ORIGINALES (storage/fonts/poppins/*.ttf) sí se versionan, esto solo
+# excluye lo que dompdf escribe directo en la raíz de storage/fonts/.
+/storage/fonts/*
+!/storage/fonts/poppins/
 /vendor
 Homestead.json
 Homestead.yaml

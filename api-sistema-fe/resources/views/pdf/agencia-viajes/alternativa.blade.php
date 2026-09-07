@@ -6,15 +6,61 @@
     <title>Cotización {{ $cotizacion->codigo }} - {{ $alternativa->nombre }}</title>
     <style>
         @page {
-            margin: 15mm 12mm;
+            /* Hallazgo del usuario (06-sep-2026) — el margen top/bottom
+               reserva exactamente el alto del header/footer FIJO (ver
+               AlternativaController::alturaHeaderMm()/alturaFooterMm()),
+               para que el contenido normal nunca se superponga con la
+               banda fija. */
+            margin: {{ $alturaHeaderMm }}mm 12mm {{ $alturaFooterMm }}mm 12mm;
+        }
+
+        /* ── Header/footer FIJOS (hoja membretada real) ────────────
+           position:fixed dentro del margen de @page se repite en CADA
+           página en DomPDF (misma técnica ya usada en
+           reporte-operativo.blade.php, ".marca-generacion"). Offset
+           lateral negativo = bleed hasta el borde físico de la hoja,
+           igual que el membrete real de la agencia (sin franja blanca
+           a los costados). */
+        .header-fijo {
+            position: fixed;
+            top: -{{ $alturaHeaderMm }}mm;
+            left: -12mm;
+            right: -12mm;
+        }
+
+        .footer-fijo {
+            position: fixed;
+            bottom: -{{ $alturaFooterMm }}mm;
+            left: -12mm;
+            right: -12mm;
+        }
+
+        .header-fijo img,
+        .footer-fijo img {
+            width: 100%;
+            display: block;
+        }
+
+        .header-fijo .header-generado,
+        .footer-fijo .footer-generado {
+            padding: 0 12mm;
         }
 
         * {
             box-sizing: border-box;
         }
 
+        /* Pedido del usuario (06-sep-2026) — Poppins, misma fuente que ya
+           usan en Word. Registrada en PdfFontService::registrarPoppins()
+           (archivos reales de Google Fonts, no un <link> de CDN — dompdf
+           corre con enable_remote=false, un @import nunca cargaría). Poppins
+           normal/bold cubren <strong>/<b> automáticamente (dompdf resuelve
+           font-weight:bold contra el peso 'bold' ya registrado de esta
+           misma familia); Poppins-Medium/Poppins-SemiBold son familias
+           aparte para los títulos (ver más abajo), no pesos numéricos de
+           'Poppins' — el matching de dompdf para 500/600 no es confiable. */
         body {
-            font-family: Arial, Helvetica, sans-serif;
+            font-family: 'Poppins', Arial, Helvetica, sans-serif;
             font-size: 12px;
             color: #111111;
             margin: 0;
@@ -46,6 +92,7 @@
         }
 
         .empresa-nombre {
+            font-family: 'Poppins-SemiBold', 'Poppins', sans-serif;
             font-weight: bold;
             font-size: 14px;
             text-transform: uppercase;
@@ -57,6 +104,7 @@
         }
 
         .titulo-doc {
+            font-family: 'Poppins-SemiBold', 'Poppins', sans-serif;
             font-size: 17px;
             font-weight: bold;
             text-transform: uppercase;
@@ -78,6 +126,7 @@
         }
 
         .info-box .titulo {
+            font-family: 'Poppins-SemiBold', 'Poppins', sans-serif;
             font-weight: bold;
             margin-bottom: 6px;
             text-transform: uppercase;
@@ -95,6 +144,7 @@
         }
 
         .seccion-titulo {
+            font-family: 'Poppins-SemiBold', 'Poppins', sans-serif;
             font-weight: bold;
             font-size: 13px;
             text-transform: uppercase;
@@ -117,8 +167,11 @@
         }
 
         .dia-item .dia-label {
+            font-family: 'Poppins-Medium', 'Poppins', sans-serif;
             font-weight: bold;
             font-size: 12px;
+            line-height: 16px;
+            margin-bottom: 6px;
         }
 
         .dia-item .paso {
@@ -130,16 +183,53 @@
             font-weight: bold;
         }
 
-        /* ── Fotos de tour en el itinerario (Simulación Panamá, 04-sep-2026) ── */
+        /* ── Fotos de tour en el itinerario (Simulación Panamá, 04-sep-2026) ──
+           Hallazgo del usuario (06-sep-2026): antes max-width/max-height sin
+           recorte — fotos de proporción arbitraria (celular) sin que dompdf
+           supiera el tamaño real hasta decodificarlas, terminaban pisando el
+           título del día siguiente. Ahora recorte 4:3 fijo repartido en
+           fila a ancho de página, no amontonado a la izquierda.
+
+           Bug real #2 (07-sep-2026), encontrado DESPUÉS del recorte 4:3:
+           el título del día seguía pisado por las fotos pese a que ninguno
+           de los dos elementos, medido por separado (bordes de depuración
+           rojo/azul), tenía una caja mal calculada — el problema es que
+           dompdf posiciona el bloque de fotos empezando a mitad de la
+           línea del título anterior en vez de después. margin-top grande
+           (24px, no un valor cosmético — confirmado con el render real que
+           valores chicos como 6px no alcanzan) como buffer. */
         .itinerario-fotos {
-            margin: 4px 0 6px;
+            /* 36px (no 24px) — pedido del usuario (07-sep-2026): al
+               agrandar las fotos de 23% a 31% de ancho (mismo ancho que
+               .hotel-fotos-tira, para repartir bien las 3 fotos sin hueco
+               vacío), también crecieron de alto (mismo 4:3, más ancho =
+               más alto) — 24px ya no alcanzaba para separar el título del
+               día de la fila de fotos, volvió a solaparse (mismo bug de
+               fondo que .hotel-fotos-tira, ver ese comentario — acá
+               empíricamente hizo falta el mismo valor que allá). */
+            margin: 36px 0 8px;
         }
 
         .itinerario-fotos img {
-            max-width: 140px;
-            max-height: 100px;
-            margin-right: 6px;
-            border: 1px solid #cccccc;
+            /* 31% (no 23%) — pedido del usuario (07-sep-2026): al bajar el
+               tope de fotos por tour de 4 a 3 (ver fotosDelTour en el
+               controller), el 23% pensado para 4-por-fila dejaba un hueco
+               vacío al final de la fila. 31% es el mismo ancho que ya usa
+               .hotel-fotos-tira img para su propia tira de 3 fotos —
+               reparte las 3 a todo el ancho, igual de proporcionado. */
+            width: 31%;
+            /* Bug real (07-sep-2026): el <img> lleva width="640"
+               height="480" fijos en el HTML (dompdf necesita conocer las
+               dimensiones ANTES de layout, ver comentario arriba) — sin
+               height:auto acá, dompdf escala el ancho al % del
+               contenedor pero deja el alto pegado en los 480px
+               absolutos del atributo HTML, deformando la foto (angosta
+               y estirada) y montando el texto siguiente con esa altura
+               de más. height:auto fuerza que el alto se recalcule en
+               proporción al ancho ya escalado. */
+            height: auto;
+            margin-right: 2%;
+            border-radius: 3px;
         }
 
         ul.lista-simple {
@@ -169,19 +259,27 @@
             color: #444444;
         }
 
-        /* ── Opciones de hoteles (Sesión M5, matriz hotel × habitación) ──── */
+        /* ── Opciones de hoteles (Sesión M5, matriz hotel × habitación) ────
+           Rediseño 06-sep-2026 (hallazgo del usuario, guiado por el
+           mockup): header en el color primario de la agencia en vez de gris
+           genérico, sin grilla completa (solo separador inferior por fila),
+           zebra striping vía clase server-side (fila-par) — nth-child no es
+           lo bastante confiable en dompdf como para apostar el diseño a
+           eso. Sin border-radius en la tabla: dompdf no recorta bien las
+           esquinas de una <table>, más seguro dejarla en ángulo recto. */
         .hoteles-tabla {
             width: 100%;
             margin-bottom: 12px;
         }
 
         .hoteles-tabla th {
+            font-family: 'Poppins-SemiBold', 'Poppins', sans-serif;
             font-size: 10px;
             text-align: left;
-            border: 1px solid #999999;
-            padding: 4px 6px;
-            background: #f2f2f2;
+            padding: 7px 10px;
+            color: #ffffff;
             text-transform: uppercase;
+            letter-spacing: .5px;
         }
 
         .hoteles-tabla th.precio-col {
@@ -190,12 +288,17 @@
 
         .hoteles-tabla td {
             font-size: 11px;
-            border: 1px solid #999999;
-            padding: 4px 6px;
+            padding: 7px 10px;
+            border-bottom: 1px solid #e5e5e5;
+        }
+
+        .hoteles-tabla tr.fila-par td {
+            background: #f7f7f7;
         }
 
         .hoteles-tabla td.precio-col {
             text-align: right;
+            font-family: 'Poppins-Medium', 'Poppins', sans-serif;
         }
 
         .hoteles-tabla td.sin-precio {
@@ -204,8 +307,9 @@
         }
 
         .hoteles-tabla tr.fila-elegida td {
+            font-family: 'Poppins-SemiBold', 'Poppins', sans-serif;
             font-weight: bold;
-            background: #f7f7f7;
+            background: #eef4ff;
         }
 
         .hoteles-elegida-nota {
@@ -224,6 +328,7 @@
         }
 
         .opcional-nombre {
+            font-family: 'Poppins-Medium', 'Poppins', sans-serif;
             font-weight: bold;
             font-size: 12px;
         }
@@ -239,28 +344,39 @@
             margin-top: 3px;
         }
 
-        /* ── Totales ────────────────────────────────────────────── */
-        .totales {
-            width: 280px;
-            margin-left: auto;
-            margin-top: 10px;
-            font-size: 12px;
+        /* ── Precio destacado (rediseño 07-sep-2026, imagen de referencia
+           del usuario) — reemplaza la tabla simple ".totales" que había
+           acá antes. ────────────────────────────────────────────── */
+        .precio-destacado {
+            border: 1.5px solid {{ $configPdf->color_primario ?? '#1f2937' }};
+            border-radius: 10px;
+            padding: 12px 16px;
+            margin-top: 8px;
+            background-color: #fafafa;
         }
 
-        .totales td {
-            padding: 2px 0;
+        .precio-destacado-titulo {
+            font-family: 'Poppins-SemiBold', 'Poppins', sans-serif;
+            font-weight: bold;
+            font-size: 13px;
+            color: #222222;
         }
 
-        .totales .valor {
-            text-align: right;
-            width: 110px;
+        .precio-destacado-nota {
+            font-size: 10px;
+            color: #777777;
+            margin-top: 2px;
         }
 
-        .totales .total-final td {
+        .precio-destacado-monto {
+            font-family: 'Poppins-SemiBold', 'Poppins', sans-serif;
             font-weight: bold;
             font-size: 14px;
-            border-top: 1px solid #111111;
-            padding-top: 5px;
+            color: {{ $configPdf->color_primario ?? '#1f2937' }};
+        }
+
+        .precio-destacado-monto-num {
+            font-size: 22px;
         }
 
         /* ── Cuentas bancarias ──────────────────────────────────── */
@@ -270,6 +386,7 @@
         }
 
         .pagos-table th {
+            font-family: 'Poppins-SemiBold', 'Poppins', sans-serif;
             font-size: 10px;
             text-align: left;
             border-bottom: 1px solid #999999;
@@ -293,39 +410,234 @@
             text-align: center;
             color: #444444;
         }
+
+        /* ── Mejora del PDF de cotización (plan-mejora-pdf-cotizacion-cliente.md) ──
+           Rediseño 06-sep-2026 (hallazgo del usuario, guiado por el mockup
+           aprobado): pastilla redondeada a la derecha en vez de barra
+           rectangular a todo el ancho — mismo dato, más profesional. */
+        .cinta-categoria-wrap {
+            text-align: right;
+            margin: 6px 0 4px;
+        }
+
+        .cinta-categoria {
+            display: inline-block;
+            color: #ffffff;
+            font-family: 'Poppins-SemiBold', 'Poppins', sans-serif;
+            font-weight: bold;
+            font-size: 10px;
+            text-transform: uppercase;
+            padding: 5px 18px;
+            border-radius: 99px;
+            letter-spacing: 1px;
+        }
+
+        .afiliaciones-franja {
+            margin-top: 8px;
+            padding-top: 6px;
+            border-top: 1px solid #cccccc;
+            font-size: 9px;
+            color: #666666;
+            text-align: center;
+        }
+
+        .afiliaciones-franja img {
+            max-height: 24px;
+            margin: 0 6px;
+            vertical-align: middle;
+        }
+
+        .portada-bloque {
+            margin: 12px 0;
+        }
+
+        .portada-principal img {
+            /* Bug real (07-sep-2026): object-fit no existe en dompdf (se
+               ignora en silencio) y max-height competía con el
+               height="480" fijo del atributo HTML del <img> (ver
+               ImagenRecorteService — la foto ya llega recortada 4:3
+               exacta) — el resultado era una foto angosta y estirada
+               verticalmente. Como el recorte ya garantiza 4:3, no hace
+               falta cortar de nuevo acá: height fija + width:auto basta
+               para que dompdf escale proporcional (mismo mecanismo que
+               .itinerario-fotos img, con width fija + height:auto — acá
+               es al revés porque lo que hace falta cuadrar es el ALTO,
+               no el ancho, ver comentario abajo).
+               340px — pedido del usuario (07-sep-2026, con captura real):
+               antes la principal iba a 100% de ancho (bastante más alta
+               que las 2 secundarias apiladas), dejando un hueco vacío
+               debajo de la columna de secundarias. Con las 3 fotos ya
+               recortadas 4:3 por ImagenRecorteService, fijar el ALTO acá
+               y también el de las secundarias (340px = 2×166px + 8px de
+               separación) hace que ambas columnas terminen exactamente
+               a la misma altura. */
+            height: 340px;
+            width: auto;
+            border-radius: 3px;
+        }
+
+        .portada-secundarias img {
+            height: 166px;
+            width: auto;
+            border-radius: 3px;
+            margin-bottom: 8px;
+            display: block;
+        }
+
+        .portada-secundarias img:last-child {
+            margin-bottom: 0;
+        }
+
+        /* Con una sola foto secundaria (no 2), ocupa toda la altura de la
+           principal en vez de quedar a la mitad con un hueco vacío
+           debajo. */
+        .portada-secundarias img.portada-secundaria-unica {
+            height: 340px;
+        }
+
+        /* ── Fotos referenciales de los hoteles (plan §4.5) ────────── */
+        .hotel-fotos-bloque {
+            margin-bottom: 10px;
+            /* Mismo criterio que .hoteles-tabla tr — el nombre del hotel
+               nunca debe quedar solo al pie de una página, separado de su
+               propia tira de fotos. */
+            page-break-inside: avoid;
+        }
+
+        .hotel-fotos-nombre {
+            font-family: 'Poppins-Medium', 'Poppins', sans-serif;
+            font-weight: bold;
+            font-size: 12px;
+            margin-bottom: 4px;
+        }
+
+        .hotel-fotos-tira {
+            /* Mismo bug real que .dia-label/.itinerario-fotos
+               (07-sep-2026, ver ese comentario): un texto en fuente
+               custom (Poppins-Medium) seguido inmediatamente de una
+               fila de fotos — dompdf pinta la fila de fotos solapando
+               la línea de texto anterior, aunque la caja de cada uno
+               por separado mide bien. El margen va en el CONTENEDOR de
+               las fotos, no en el margin-bottom del texto de arriba
+               (confiar en que colapsen entre hermanos no alcanzó acá).
+               36px, no un valor cosmético — confirmado con el render
+               real que 24px (el que sí alcanzó para .itinerario-fotos)
+               NO fue suficiente en este bloque específico. */
+            margin-top: 36px;
+        }
+
+        .hotel-fotos-tira img {
+            width: 31%;
+            /* Mismo bug/fix que .itinerario-fotos img (07-sep-2026) —
+               ver ese comentario. */
+            height: auto;
+            margin-right: 2%;
+            border-radius: 3px;
+        }
+
+        .hotel-fotos-datos {
+            font-size: 10px;
+            color: #444444;
+            margin-top: 3px;
+        }
+
+        .footer-marca {
+            margin-top: 14px;
+            text-align: center;
+            font-size: 10px;
+            color: #666666;
+        }
+
+        .footer-marca .eslogan {
+            font-style: italic;
+            margin-bottom: 2px;
+        }
     </style>
 </head>
 
 <body>
-    <div class="documento">
-
-        {{-- ══════════════════ HEADER ══════════════════ --}}
-        <table style="width:100%;" class="header-wrap">
-            <tr>
-                <td style="width:170px; vertical-align:top;">
-                    @if (!empty($logoUrl))
-                        <img src="{{ $logoUrl }}" style="max-width:170px; max-height:70px;">
-                    @else
-                        <div class="logo-box">LOGO</div>
-                    @endif
-                </td>
-                <td style="vertical-align:top; padding:0 16px;">
-                    <div class="empresa-nombre">{{ $empresa->razon_social_comercial ?? $empresa->razon_social ?? '' }}</div>
-                    <div class="empresa-datos">
-                        RUC: {{ $empresa->n_document ?? '-' }}<br>
-                        Teléfono: {{ $empresa->phone ?? '-' }} &nbsp;·&nbsp; Email: {{ $empresa->email ?? '-' }}
+    {{-- ══════════════════ HEADER FIJO ══════════════════ --}}
+    {{-- Hallazgo del usuario (06-sep-2026): antes vivía DENTRO de
+         .documento como contenido normal — subía/bajaba con el flujo en
+         vez de quedar fijo como una hoja membretada real. Ahora es
+         hermano de .documento, con position:fixed (ver CSS arriba), y se
+         repite en cada página automáticamente (motor de DomPDF). --}}
+    <div class="header-fijo">
+        {{-- Override total (plan §4.2): si la agencia cargó su propio
+             membrete diseñado (ej. DKM Xplore), se usa tal cual a ancho
+             completo y se ignoran logo/colores/contacto de abajo para esta
+             zona. Sin override, se genera desde Company + configPdf. --}}
+        @if (!empty($headerCustomUrl))
+            <img src="{{ $headerCustomUrl }}">
+        @else
+            <div class="header-generado">
+                <table style="width:100%;" class="header-wrap">
+                    <tr>
+                        <td style="width:170px; vertical-align:top;">
+                            @if (!empty($logoUrl))
+                                <img src="{{ $logoUrl }}" style="max-width:170px; max-height:70px;">
+                            @else
+                                <div class="logo-box">LOGO</div>
+                            @endif
+                        </td>
+                        <td style="vertical-align:top; padding:0 16px;">
+                            <div class="empresa-nombre" style="color: {{ $configPdf->color_primario }};">{{ $empresa->razon_social_comercial ?? $empresa->razon_social ?? '' }}</div>
+                            <div class="empresa-datos">
+                                RUC: {{ $empresa->n_document ?? '-' }}<br>
+                                Teléfono: {{ $empresa->phone ?? '-' }} &nbsp;·&nbsp; Email: {{ $empresa->email ?? '-' }}
+                            </div>
+                            @if (!empty($configPdf->eslogan))
+                                <div class="empresa-datos" style="font-style: italic; color: {{ $configPdf->color_secundario }};">{{ $configPdf->eslogan }}</div>
+                            @endif
+                        </td>
+                    </tr>
+                </table>
+                {{-- Franja de afiliaciones (Mincetur/Apavit/PromPerú) — solo si
+                     mostrar_afiliaciones=true Y la agencia marcó al menos una
+                     (AlternativaController::afiliacionesParaMostrar()). Un
+                     catálogo sin logo_path cargado cae al nombre en texto. --}}
+                @if (count($afiliaciones) > 0)
+                    <div class="afiliaciones-franja">
+                        @foreach ($afiliaciones as $afiliacion)
+                            @if (!empty($afiliacion['logo']))
+                                <img src="{{ $afiliacion['logo'] }}">
+                            @else
+                                <strong>{{ $afiliacion['nombre'] }}</strong>
+                            @endif
+                        @endforeach
                     </div>
-                </td>
-            </tr>
-        </table>
+                @endif
+            </div>
+        @endif
+    </div>
+
+    <div class="documento">
 
         <div class="titulo-doc">Cotización {{ $cotizacion->codigo }}</div>
         <div class="subtitulo-doc">{{ $alternativa->nombre }}</div>
+
+        {{-- Cinta de categoría — Local/Nacional/Internacional, color propio
+             por agencia (configPdf). Categoría mixta usa la más alta
+             presente (plan §7): internacional > nacional > local. --}}
+        <div class="cinta-categoria-wrap">
+            <span class="cinta-categoria" style="background-color: {{ $colorCategoria }};">{{ ucfirst($categoria) }}</span>
+        </div>
 
         {{-- ══════════════════ CLIENTE / FECHAS ══════════════════ --}}
         @php
             $conteoPax = $pasajeros->groupBy('tipo_pax')->map->count();
             $etiquetasPax = ['adulto' => 'Adulto(s)', 'nino' => 'Niño(s)', 'infante' => 'Infante(s)'];
+            // Resumen para la caja de precio destacada (pedido del usuario,
+            // 07-sep-2026) — "3 ADULTOS + 1 NIÑO", mayúsculas y pluralizado
+            // por cantidad. Reusa $conteoPax en vez de recalcular el
+            // agrupamiento (ambas variables viven en el mismo scope del
+            // blade compilado).
+            $etiquetasPaxMayus = ['adulto' => ['ADULTO', 'ADULTOS'], 'nino' => ['NIÑO', 'NIÑOS'], 'infante' => ['INFANTE', 'INFANTES']];
+            $resumenPaxMayus = $conteoPax->map(function ($cantidad, $tipo) use ($etiquetasPaxMayus) {
+                [$singular, $plural] = $etiquetasPaxMayus[$tipo] ?? [strtoupper($tipo), strtoupper($tipo).'S'];
+
+                return $cantidad.' '.($cantidad == 1 ? $singular : $plural);
+            })->implode(' + ');
         @endphp
         <table style="width:100%; margin-top:14px;">
             <tr>
@@ -389,6 +701,31 @@
             </tr>
         </table>
 
+        {{-- ══════════════════ PORTADA DEL TOUR (plan §4.5) ══════════════════ --}}
+        {{-- 1 foto principal a ancho completo + hasta 2 secundarias
+             apiladas, del PRIMER tour con fotos de la alternativa. Se omite
+             el bloque completo si mostrar_fotos_tour=false o si el tour no
+             tiene ninguna foto marcada como portada — nunca deja un
+             espacio vacío (plan: "el resto de las fotos cargadas queda
+             disponible en el sistema pero no se usa automáticamente"). --}}
+        @if (!empty($fotoPortadaPrincipal))
+            <table style="width:100%;" class="portada-bloque">
+                <tr>
+                    <td style="vertical-align:top;" class="portada-principal">
+                        <img src="{{ $fotoPortadaPrincipal }}" width="640" height="480">
+                    </td>
+                    @if (count($fotosPortadaSecundarias) > 0)
+                        <td style="vertical-align:top; padding-left:10px;" class="portada-secundarias">
+                            @foreach ($fotosPortadaSecundarias as $foto)
+                                <img src="{{ $foto }}" width="640" height="480"
+                                    @if (count($fotosPortadaSecundarias) === 1) class="portada-secundaria-unica" @endif>
+                            @endforeach
+                        </td>
+                    @endif
+                </tr>
+            </table>
+        @endif
+
         {{-- ══════════════════ VUELO (Simulación Panamá, 04-sep-2026) ══════════════════ --}}
         {{-- Datos de vuelo de la opción de mayorista elegida
              (opcion_mayorista.vuelo_aerolinea/vuelo_detalle) — capturados
@@ -401,13 +738,111 @@
                 @foreach ($mayoristasVuelo as $vuelo)
                     <div class="seccion-html">
                         <strong>{{ $vuelo['aerolinea'] }}</strong>
+                        {{-- Editor de texto enriquecido (07-sep-2026) — 'detalle'
+                             ya llega sanitizado como HTML (Quill), no texto
+                             plano con saltos de línea; nl2br(e()) rompería el
+                             HTML (mostraría las etiquetas escapadas). --}}
                         @if (!empty($vuelo['detalle']))
-                            <br>{!! nl2br(e($vuelo['detalle'])) !!}
+                            <br>{!! $vuelo['detalle'] !!}
                         @endif
                     </div>
                 @endforeach
             </div>
         @endif
+
+        {{-- ══════════════════ OPCIONES DE HOTELES (Sesión M5) ══════════════════ --}}
+        {{-- Pedido del usuario (07-sep-2026): movida de después de Itinerario/
+             Incluye a acá, entre Vuelo e Itinerario — el cliente ve primero
+             qué hotel está eligiendo/pagando antes del detalle día a día.
+             Mismo formato que los 3 documentos reales que originaron el plan
+             (docs/auxiliares/): tabla matriz hotel × tipo de habitación, un
+             bloque por grupo (plan-matriz-hoteles-cotizador.md P10). Un grupo
+             TODAVÍA abierto (nadie eligió) se muestra igual que en esos
+             documentos — es justamente el estado en que se les envía al
+             cliente para que decida. Un grupo ya resuelto resalta la fila
+             elegida (mejora sobre el formato original, esos documentos nunca
+             se reenviaban después de la decisión). --}}
+        @foreach ($opcionesHoteles as $grupoHotel)
+            <div class="seccion">
+                <div class="seccion-titulo">
+                    Opciones de hoteles
+                    <span class="hoteles-elegida-nota">— tarifa por persona</span>
+                    @if ($grupoHotel['resuelto'])
+                        <span class="hoteles-elegida-nota">— opción confirmada resaltada</span>
+                    @endif
+                </div>
+                <table class="hoteles-tabla">
+                    <tr style="background-color: {{ $configPdf->color_primario ?? '#1f2937' }};">
+                        <th>Hotel</th>
+                        @foreach ($grupoHotel['tipos_habitacion'] as $tipo)
+                            <th class="precio-col">{{ ucfirst($tipo) }}</th>
+                        @endforeach
+                    </tr>
+                    @foreach ($grupoHotel['filas'] as $fila)
+                        <tr class="{{ $fila['elegida'] ? 'fila-elegida' : (!$loop->even ? '' : 'fila-par') }}">
+                            {{-- '✓' (U+2713) no renderiza con la fuente que usa DomPDF acá
+                                 — sale como "?" (confirmado generando el PDF real contra
+                                 agencia-demo). Texto plano en vez de un glifo unicode. --}}
+                            <td>{{ $fila['hotel'] }}{{ $fila['elegida'] ? ' (elegida)' : '' }}</td>
+                            @foreach ($grupoHotel['tipos_habitacion'] as $tipo)
+                                @if (isset($fila['precios'][$tipo]))
+                                    <td class="precio-col">{{ $alternativa->moneda_cotizacion }} {{ number_format($fila['precios'][$tipo], 2) }}</td>
+                                @else
+                                    <td class="sin-precio">—</td>
+                                @endif
+                            @endforeach
+                        </tr>
+                    @endforeach
+                </table>
+
+                {{-- Mejora del PDF de cotización (plan §4.5) — sección nueva
+                     "Fotos referenciales de los hoteles", después de la
+                     tabla de precios (que sigue compacta, sin fotos, para
+                     comparar de un vistazo). Mismo patrón que los 3
+                     documentos reales de la agencia (nombre + tira de fotos
+                     + check-in/check-out). Un hotel sin fotos cargadas
+                     (hotelesInfo no trae su id) no imprime bloque — nunca
+                     un casillero en blanco ni 3 fotos estiradas a partir de
+                     una sola. --}}
+                @php
+                    $filasConFotos = collect($grupoHotel['filas'])->filter(
+                        fn ($fila) => isset($fila['opcion_hotel_id']) && isset($hotelesInfo[$fila['opcion_hotel_id']])
+                    );
+                @endphp
+                @if ($filasConFotos->isNotEmpty())
+                    {{-- Bug real (07-sep-2026): al pasar a Poppins (ocupa un
+                         poco más de alto por línea que Arial), esta sección
+                         terminaba pisando la última fila de la tabla de
+                         precios cuando ambas no entraban juntas en lo que
+                         quedaba de página — page-break-inside:avoid en la
+                         tabla y en este bloque no alcanzó a resolverlo de
+                         forma confiable (dompdf calculando mal cuánto
+                         espacio quedaba). page-break-before:always es más
+                         tosco (puede dejar un resto de página en blanco
+                         arriba) pero garantiza que nunca más se solape con
+                         la tabla. --}}
+                    <div class="seccion-titulo" style="margin-top:10px; page-break-before: always;">Fotos referenciales de los hoteles</div>
+                    @foreach ($filasConFotos as $fila)
+                        @php $info = $hotelesInfo[$fila['opcion_hotel_id']]; @endphp
+                        <div class="hotel-fotos-bloque">
+                            <div class="hotel-fotos-nombre">{{ $fila['hotel'] }}</div>
+                            <div class="hotel-fotos-tira">
+                                @foreach ($info['fotos'] as $foto)
+                                    <img src="{{ $foto }}" width="640" height="480">
+                                @endforeach
+                            </div>
+                            @if ($info['check_in'] || $info['check_out'])
+                                <div class="hotel-fotos-datos">
+                                    @if ($info['check_in'])Check-in: {{ substr($info['check_in'], 0, 5) }}@endif
+                                    @if ($info['check_in'] && $info['check_out']) &nbsp;·&nbsp; @endif
+                                    @if ($info['check_out'])Check-out: {{ substr($info['check_out'], 0, 5) }}@endif
+                                </div>
+                            @endif
+                        </div>
+                    @endforeach
+                @endif
+            </div>
+        @endforeach
 
         {{-- ══════════════════ ITINERARIO ══════════════════ --}}
         {{-- 12f-3 — $itinerario es un array de BLOQUES (uno por destino con
@@ -451,7 +886,7 @@
                             @if (!empty($pasosDelDia->first()['tour_fotos'] ?? null))
                                 <div class="itinerario-fotos">
                                     @foreach ($pasosDelDia->first()['tour_fotos'] as $foto)
-                                        <img src="{{ $foto }}">
+                                        <img src="{{ $foto }}" width="640" height="480">
                                     @endforeach
                                 </div>
                             @endif
@@ -510,16 +945,16 @@
                         @endforeach
                     </ul>
                 @endforeach
-                {{-- Simulación Panamá (04-sep-2026) — "Paquete Incluye" de
-                     la opción de mayorista elegida (opcion_mayorista.incluye,
-                     texto libre explotado por línea), nunca antes impreso. --}}
-                @if (count($mayoristasIncluye) > 0)
-                    <ul class="lista-simple">
-                        @foreach ($mayoristasIncluye as $linea)
-                            <li>{{ $linea }}</li>
-                        @endforeach
-                    </ul>
-                @endif
+                {{-- Simulación Panamá (04-sep-2026) — "Paquete Incluye" de la
+                     opción de mayorista elegida (opcion_mayorista.incluye).
+                     Editor de texto enriquecido (07-sep-2026): pasa de texto
+                     plano partido por línea a HTML de Quill ya sanitizado —
+                     se renderiza crudo, un bloque por mayorista (mismo patrón
+                     que $tourUnico->no_incluye más abajo), en vez de forzar
+                     cada línea dentro de un <li> del listado de destinos. --}}
+                @foreach ($mayoristasIncluye as $html)
+                    <div class="seccion-html">{!! $html !!}</div>
+                @endforeach
             </div>
         @endif
 
@@ -534,22 +969,20 @@
             <div class="seccion">
                 <div class="seccion-titulo">No incluye</div>
                 @if (!empty($tourUnico?->no_incluye))
-                    <div class="seccion-html">{!! $tourUnico->no_incluye !!}</div>
+                    <div class="seccion-html">{!! \App\Services\TextoFormatoService::sanitizarHtmlParaPdf($tourUnico->no_incluye) !!}</div>
                 @endif
-                @if (count($mayoristasNoIncluye) > 0)
-                    <ul class="lista-simple">
-                        @foreach ($mayoristasNoIncluye as $linea)
-                            <li>{{ $linea }}</li>
-                        @endforeach
-                    </ul>
-                @endif
+                {{-- Mismo criterio que "Incluye" arriba (07-sep-2026) — HTML
+                     de Quill sanitizado, renderizado crudo por mayorista. --}}
+                @foreach ($mayoristasNoIncluye as $html)
+                    <div class="seccion-html">{!! $html !!}</div>
+                @endforeach
             </div>
         @endif
         @if ($tourUnico)
             @if (!empty($tourUnico->recomendaciones))
                 <div class="seccion">
                     <div class="seccion-titulo">Recomendaciones</div>
-                    <div class="seccion-html">{!! $tourUnico->recomendaciones !!}</div>
+                    <div class="seccion-html">{!! \App\Services\TextoFormatoService::sanitizarHtmlParaPdf($tourUnico->recomendaciones) !!}</div>
                 </div>
             @endif
             @if (!empty($tourUnico->lugar_recojo) || !empty($tourUnico->hora_salida) || !empty($tourUnico->hora_retorno))
@@ -579,50 +1012,6 @@
             @endif
         @endif
 
-        {{-- ══════════════════ OPCIONES DE HOTELES (Sesión M5) ══════════════════ --}}
-        {{-- Sección propia, después de itinerario/incluye — mismo formato que
-             los 3 documentos reales que originaron el plan (docs/auxiliares/):
-             tabla matriz hotel × tipo de habitación, un bloque por grupo
-             (plan-matriz-hoteles-cotizador.md P10). Un grupo TODAVÍA abierto
-             (nadie eligió) se muestra igual que en esos documentos — es
-             justamente el estado en que se les envía al cliente para que
-             decida. Un grupo ya resuelto resalta la fila elegida (mejora
-             sobre el formato original, esos documentos nunca se reenviaban
-             después de la decisión). --}}
-        @foreach ($opcionesHoteles as $grupoHotel)
-            <div class="seccion">
-                <div class="seccion-titulo">
-                    Opciones de hoteles
-                    @if ($grupoHotel['resuelto'])
-                        <span class="hoteles-elegida-nota">— opción confirmada resaltada</span>
-                    @endif
-                </div>
-                <table class="hoteles-tabla">
-                    <tr>
-                        <th>Hotel</th>
-                        @foreach ($grupoHotel['tipos_habitacion'] as $tipo)
-                            <th class="precio-col">{{ ucfirst($tipo) }}</th>
-                        @endforeach
-                    </tr>
-                    @foreach ($grupoHotel['filas'] as $fila)
-                        <tr class="{{ $fila['elegida'] ? 'fila-elegida' : '' }}">
-                            {{-- '✓' (U+2713) no renderiza con la fuente que usa DomPDF acá
-                                 — sale como "?" (confirmado generando el PDF real contra
-                                 agencia-demo). Texto plano en vez de un glifo unicode. --}}
-                            <td>{{ $fila['hotel'] }}{{ $fila['elegida'] ? ' (elegida)' : '' }}</td>
-                            @foreach ($grupoHotel['tipos_habitacion'] as $tipo)
-                                @if (isset($fila['precios'][$tipo]))
-                                    <td class="precio-col">{{ $alternativa->moneda_cotizacion }} {{ number_format($fila['precios'][$tipo], 2) }}</td>
-                                @else
-                                    <td class="sin-precio">—</td>
-                                @endif
-                            @endforeach
-                        </tr>
-                    @endforeach
-                </table>
-            </div>
-        @endforeach
-
         {{-- ══════════════════ TOURS OPCIONALES (Simulación Panamá, 04-sep-2026) ══════════════════ --}}
         {{-- OpcionMayoristaOpcional (nombre/precio_por_persona/incluye/
              no_incluye) — el modelo y el panel del drawer ya existían
@@ -638,11 +1027,17 @@
                             {{ $opcional->nombre }}
                             <span class="opcional-precio">{{ $opcional->moneda }} {{ number_format($opcional->precio_por_persona, 2) }} /pax</span>
                         </div>
+                        {{-- Editor de texto enriquecido (07-sep-2026) — incluye/
+                             no_incluye pasan de texto plano a HTML de Quill.
+                             textoLibreParaPdf() cubre ambos casos (ver
+                             comentario en AlternativaController::pdf()):
+                             HTML real de Quill se renderiza tal cual, texto
+                             plano legacy reconstruye el <ul><li> de antes. --}}
                         @if (!empty($opcional->incluye))
-                            <div class="opcional-detalle"><strong>Incluye:</strong> {{ $opcional->incluye }}</div>
+                            <div class="opcional-detalle"><strong>Incluye:</strong> {!! \App\Services\TextoFormatoService::textoLibreParaPdf($opcional->incluye) !!}</div>
                         @endif
                         @if (!empty($opcional->no_incluye))
-                            <div class="opcional-detalle"><strong>No incluye:</strong> {{ $opcional->no_incluye }}</div>
+                            <div class="opcional-detalle"><strong>No incluye:</strong> {!! \App\Services\TextoFormatoService::textoLibreParaPdf($opcional->no_incluye) !!}</div>
                         @endif
                     </div>
                 @endforeach
@@ -654,21 +1049,41 @@
              del usuario, brief 12f3 §0.3); queda solo el bloque de
              totales. `formato_descuento_pdf` ya no se lee acá — era una
              configuración pensada para decorar el precio por fila, que ya
-             no existe en esta vista. --}}
+             no existe en esta vista.
+
+             Rediseño (07-sep-2026, pedido del usuario con imagen de
+             referencia) — caja destacada en vez de tabla simple, con el
+             resumen de pasajeros y el monto en grande. Se queda en esta
+             misma posición (justo antes de "Datos de pago", al final del
+             documento) a propósito — es la respuesta directa a "¿cuánto
+             pago?" justo antes de "¿cómo pago?", mismo criterio que
+             cualquier factura/boleta real. Se descartó además mostrarla
+             DUPLICADA arriba (junto a "Opciones de hoteles"): una sola
+             caja destacada evita inconsistencia visual y trabajo doble. --}}
         <div class="seccion">
             <div class="seccion-titulo">Precio</div>
-            <table class="totales">
-                @if ($config?->mostrar_descuento_como_linea && $hayDescuento)
+            <div class="precio-destacado">
+                <table style="width:100%;">
                     <tr>
-                        <td>Descuento aplicado</td>
-                        <td class="valor">- {{ $alternativa->moneda_cotizacion }} {{ number_format($descuentoMonto, 2) }}</td>
+                        <td style="vertical-align:middle;">
+                            <div class="precio-destacado-titulo">TOTAL {{ $resumenPaxMayus }}</div>
+                            @if ($hayDescuento)
+                                <div class="precio-destacado-nota">
+                                    @if ($config?->mostrar_descuento_como_linea)
+                                        Incluye descuento aplicado: -{{ $alternativa->moneda_cotizacion }} {{ number_format($descuentoMonto, 2) }}
+                                    @else
+                                        Incluye descuento de temporada aplicado
+                                    @endif
+                                </div>
+                            @endif
+                        </td>
+                        <td style="vertical-align:middle; text-align:right; width:170px;">
+                            <span class="precio-destacado-monto">{{ $alternativa->moneda_cotizacion }}</span>
+                            <span class="precio-destacado-monto precio-destacado-monto-num">{{ number_format($total, 2) }}</span>
+                        </td>
                     </tr>
-                @endif
-                <tr class="total-final">
-                    <td>Total</td>
-                    <td class="valor">{{ $alternativa->moneda_cotizacion }} {{ number_format($total, 2) }}</td>
-                </tr>
-            </table>
+                </table>
+            </div>
         </div>
 
         {{-- ══════════════════ DATOS DE PAGO ══════════════════ --}}
@@ -696,11 +1111,35 @@
             </div>
         @endif
 
-        {{-- ══════════════════ FOOTER ══════════════════ --}}
-        <div class="footer-legal">
-            Consultá las condiciones generales del servicio en el documento adjunto.
+    </div>
+
+    {{-- ══════════════════ FOOTER FIJO ══════════════════ --}}
+    {{-- Hallazgo del usuario (06-sep-2026): mismo problema y mismo fix que
+         el header — position:fixed, hermano de .documento, se repite en
+         cada página. El aviso de condiciones generales queda SIEMPRE
+         visible (no es branding, es legal) con el padding normal de
+         12mm; el membrete custom o las redes sociales van debajo. --}}
+    <div class="footer-fijo">
+        <div class="footer-generado">
+            <div class="footer-legal">
+                Consultá las condiciones generales del servicio en el documento adjunto.
+            </div>
         </div>
 
+        {{-- Override total (plan §4.2): mismo criterio que el header — si
+             hay footer_custom cargado, se usa tal cual (bleed) y se
+             ignoran las redes sociales de abajo. --}}
+        @if (!empty($footerCustomUrl))
+            <img src="{{ $footerCustomUrl }}" style="margin-top:4px;">
+        @elseif (!empty($configPdf->redes_sociales))
+            <div class="footer-generado">
+                <div class="footer-marca">
+                    @foreach ($configPdf->redes_sociales as $red)
+                        {{ ucfirst($red['red']) }}: {{ $red['usuario'] }}{{ !$loop->last ? ' &nbsp;·&nbsp; ' : '' }}
+                    @endforeach
+                </div>
+            </div>
+        @endif
     </div>
 </body>
 
