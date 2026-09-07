@@ -171,6 +171,17 @@
         </table>
 
         <div v-if="modoGrupo" class="d-flex justify-content-end align-items-center gap-2 pt-2 px-2">
+            <!-- Bug real (07-sep-2026) — ver comentario de mostrarCantidadEnGrupo
+                 arriba: sin esto, el caller Local/Nacional mandaba cantidad=1
+                 hardcodeado sin importar las noches reales. -->
+            <template v-if="mostrarCantidadEnGrupo">
+                <span class="small text-secondary">{{ cantidadLabel || 'Noches' }}</span>
+                <div class="input-group input-group-sm" style="width:110px">
+                    <button class="btn btn-outline-secondary" type="button" @click="cantidad = Math.max(1, cantidad - 1)">-</button>
+                    <input type="text" class="form-control text-center" :value="cantidad" readonly>
+                    <button class="btn btn-outline-secondary" type="button" @click="cantidad++">+</button>
+                </div>
+            </template>
             <span class="small text-secondary">{{ idsGrupo.length }} opción(es) seleccionada(s)</span>
             <button class="btn btn-sm btn-primary" type="button" :disabled="idsGrupo.length < 2 || deshabilitarConfirmar"
                 :title="deshabilitarConfirmar ? motivoDeshabilitado : ''" @click="confirmarGrupo">
@@ -266,13 +277,26 @@ const props = defineProps<{
     // veces). Apagado por defecto — Local/Nacional no lo manda, así que
     // sigue viendo la tabla plana de siempre, sin ningún cambio.
     permitirGestionHoteles?: boolean;
+    // Bug real (07-sep-2026): "Comparar varias opciones" (modoGrupo) nunca
+    // pedía cantidad — el caller Local/Nacional mandaba "1" hardcodeado sin
+    // importar las noches reales (el total de la alternativa salía mal
+    // apenas alguien usara el comparador para Local). El caller mayorista
+    // en cambio YA resuelve bien su cantidad ("Adultos") desde otro lado
+    // (cantidadAdultosCotizacion, un valor único y confiable a nivel de
+    // toda la cotización) — mostrarle acá un stepper editable duplicaría
+    // ese dato y podría desincronizarlo. Opt-in explícito: solo Local
+    // activa este stepper, mayorista sigue exactamente igual que antes.
+    mostrarCantidadEnGrupo?: boolean;
 }>();
 
 const emit = defineEmits<{
     (e: 'seleccionar', payload: { id: number; cantidad: number; pax_incluidos: number[] | null; camas_adicionales_nino: number }): void;
     // Sesión M4 — "ids" en el orden en que el usuario las marcó; el caller
     // decide el grupo_opcion_id (uno solo, compartido por las N opciones).
-    (e: 'agregarGrupo', payload: { ids: number[] }): void;
+    // "cantidad" (07-sep-2026): solo tiene un valor real cuando
+    // mostrarCantidadEnGrupo=true (Local) — mayorista sigue ignorándolo y
+    // usando su propio cantidadAdultosCotizacion, ver comentario arriba.
+    (e: 'agregarGrupo', payload: { ids: number[]; cantidad: number }): void;
     // Simulación Panamá (04-sep-2026) — el picker solo junta los datos del
     // formulario inline y emite; el caller (editar.vue) sigue siendo dueño
     // de llamar al servicio real y refrescar, mismo criterio que ya usan
@@ -430,16 +454,18 @@ const activarModoGrupo = () => {
     seleccionadaId.value = null;
     modoGrupo.value = true;
     idsGrupo.value = [];
+    cantidad.value = props.cantidadDefault ?? 1;
 };
 
 const cancelarModoGrupo = () => {
     modoGrupo.value = false;
     idsGrupo.value = [];
+    cantidad.value = props.cantidadDefault ?? 1;
 };
 
 const confirmarGrupo = () => {
     if (idsGrupo.value.length < 2) return;
-    emit('agregarGrupo', { ids: [...idsGrupo.value] });
+    emit('agregarGrupo', { ids: [...idsGrupo.value], cantidad: cantidad.value });
     cancelarModoGrupo();
 };
 </script>

@@ -1120,10 +1120,11 @@
                             <HabitacionMatrixPicker :tarifas="matrizHotelActiva.tarifas" :moneda="matrizHotelActiva.moneda"
                                 :pasajeros="cotizacion?.pasajeros ?? []"
                                 permitir-cama-adicional
+                                mostrar-cantidad-en-grupo
                                 :edad-max-infante-gratis="matrizHotelActiva.edadMaxInfanteGratis"
                                 :edad-max-nino-cama-adicional="matrizHotelActiva.edadMaxNinoCamaAdicional"
                                 @seleccionar="({ id, cantidad, pax_incluidos, camas_adicionales_nino }) => matrizHotelActiva!.adhoc ? agregarItemHotelAdhocLocal(id, cantidad, pax_incluidos, camas_adicionales_nino) : agregarItemProveedorHotel(id, cantidad, pax_incluidos, camas_adicionales_nino)"
-                                @agregar-grupo="({ ids }) => matrizHotelActiva!.adhoc ? agregarGrupoHotelAdhocLocal(ids) : agregarGrupoProveedorHotel(ids)" />
+                                @agregar-grupo="({ ids, cantidad }) => matrizHotelActiva!.adhoc ? agregarGrupoHotelAdhocLocal(ids, cantidad) : agregarGrupoProveedorHotel(ids, cantidad)" />
                         </template>
 
                         <template v-else-if="pasoDrawer === 'modoPrecio' && modoPrecioPendiente">
@@ -1967,7 +1968,11 @@ const chipsProveedores = computed<ChipBiblioteca[]>(() => {
 const mostrarMasChips = ref(false);
 const chipMasActivo = computed(() => chipsProveedores.value.find((c) => chipActivo(c)) ?? null);
 
-const chipActivoState = ref<ChipBiblioteca>({ tipo: 'todos', proveedorTipoId: null, nombre: 'Todos' });
+// icono agregado (07-sep-2026, auditoría de mantenibilidad 05-sep-2026) —
+// faltaba pese a ser requerido por ChipBiblioteca (tipo mal declarado, sin
+// efecto en runtime ya que nada lee icono desde este ref, pero rompía el
+// type-check). Mismo valor que el chip "todos" real de chipsFijos arriba.
+const chipActivoState = ref<ChipBiblioteca>({ tipo: 'todos', proveedorTipoId: null, nombre: 'Todos', icono: 'fa-th' });
 const chipActivo = (chip: ChipBiblioteca) => chip.tipo === chipActivoState.value.tipo && chip.proveedorTipoId === chipActivoState.value.proveedorTipoId;
 
 const seleccionarChip = (chip: ChipBiblioteca) => {
@@ -2348,7 +2353,13 @@ const generarUuidGrupo = (): string => {
     });
 };
 
-const agregarGrupoHotelAdhocLocal = async (ids: number[]) => {
+// Bug real (07-sep-2026): "cantidad" quedaba hardcodeada en 1 sin importar
+// las noches reales que el vendedor eligiera — el total de la alternativa
+// salía mal (mismo bug que agregarGrupoMayorista() ya había corregido el
+// 04-sep-2026 para "Adultos", nunca aplicado acá). HabitacionMatrixPicker
+// ahora expone un stepper "Noches" en modo grupo (mostrar-cantidad-en-grupo)
+// y lo manda en el emit — se usa ese valor real en vez de 1.
+const agregarGrupoHotelAdhocLocal = async (ids: number[], cantidad: number) => {
     if (!alternativaActiva.value) return;
     const grupoOpcionId = generarUuidGrupo();
     try {
@@ -2357,7 +2368,7 @@ const agregarGrupoHotelAdhocLocal = async (ids: number[]) => {
             const res = await alternativaItemService.agregarProveedor(alternativaActiva.value.id, {
                 opcion_hotel_tarifa_id: opcionHotelTarifaId,
                 modo_precio: 'tarifa_fija',
-                cantidad: 1,
+                cantidad,
                 dia_referencial: diaActivoParaAgregar.value,
                 alternativa_destino_id: destinoActivoId.value,
                 grupo_opcion_id: grupoOpcionId,
@@ -2375,7 +2386,9 @@ const agregarGrupoHotelAdhocLocal = async (ids: number[]) => {
 // Ninguno nace opcion_elegida=true — el vendedor resuelve el grupo después
 // desde el lienzo (ver elegirGrupoDesdeLienzo()), y ReservaController::aceptar()
 // bloquea con 422 mientras quede algún grupo sin resolver.
-const agregarGrupoProveedorHotel = async (ids: number[]) => {
+// "cantidad" real (07-sep-2026) — mismo bug/fix que agregarGrupoHotelAdhocLocal()
+// de arriba, ver ese comentario.
+const agregarGrupoProveedorHotel = async (ids: number[], cantidad: number) => {
     if (!alternativaActiva.value) return;
     const grupoOpcionId = generarUuidGrupo();
     try {
@@ -2384,7 +2397,7 @@ const agregarGrupoProveedorHotel = async (ids: number[]) => {
             const res = await alternativaItemService.agregarProveedor(alternativaActiva.value.id, {
                 proveedor_tarifa_id: proveedorTarifaId,
                 modo_precio: 'tarifa_fija',
-                cantidad: 1,
+                cantidad,
                 dia_referencial: diaActivoParaAgregar.value,
                 alternativa_destino_id: destinoActivoId.value,
                 grupo_opcion_id: grupoOpcionId,
