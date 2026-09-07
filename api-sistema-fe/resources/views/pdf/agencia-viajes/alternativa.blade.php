@@ -50,8 +50,17 @@
             box-sizing: border-box;
         }
 
+        /* Pedido del usuario (06-sep-2026) — Poppins, misma fuente que ya
+           usan en Word. Registrada en PdfFontService::registrarPoppins()
+           (archivos reales de Google Fonts, no un <link> de CDN — dompdf
+           corre con enable_remote=false, un @import nunca cargaría). Poppins
+           normal/bold cubren <strong>/<b> automáticamente (dompdf resuelve
+           font-weight:bold contra el peso 'bold' ya registrado de esta
+           misma familia); Poppins-Medium/Poppins-SemiBold son familias
+           aparte para los títulos (ver más abajo), no pesos numéricos de
+           'Poppins' — el matching de dompdf para 500/600 no es confiable. */
         body {
-            font-family: Arial, Helvetica, sans-serif;
+            font-family: 'Poppins', Arial, Helvetica, sans-serif;
             font-size: 12px;
             color: #111111;
             margin: 0;
@@ -83,6 +92,7 @@
         }
 
         .empresa-nombre {
+            font-family: 'Poppins-SemiBold', 'Poppins', sans-serif;
             font-weight: bold;
             font-size: 14px;
             text-transform: uppercase;
@@ -94,6 +104,7 @@
         }
 
         .titulo-doc {
+            font-family: 'Poppins-SemiBold', 'Poppins', sans-serif;
             font-size: 17px;
             font-weight: bold;
             text-transform: uppercase;
@@ -115,6 +126,7 @@
         }
 
         .info-box .titulo {
+            font-family: 'Poppins-SemiBold', 'Poppins', sans-serif;
             font-weight: bold;
             margin-bottom: 6px;
             text-transform: uppercase;
@@ -132,6 +144,7 @@
         }
 
         .seccion-titulo {
+            font-family: 'Poppins-SemiBold', 'Poppins', sans-serif;
             font-weight: bold;
             font-size: 13px;
             text-transform: uppercase;
@@ -154,6 +167,7 @@
         }
 
         .dia-item .dia-label {
+            font-family: 'Poppins-Medium', 'Poppins', sans-serif;
             font-weight: bold;
             font-size: 12px;
         }
@@ -167,16 +181,21 @@
             font-weight: bold;
         }
 
-        /* ── Fotos de tour en el itinerario (Simulación Panamá, 04-sep-2026) ── */
+        /* ── Fotos de tour en el itinerario (Simulación Panamá, 04-sep-2026) ──
+           Hallazgo del usuario (06-sep-2026): antes max-width/max-height sin
+           recorte — fotos de proporción arbitraria (celular) sin que dompdf
+           supiera el tamaño real hasta decodificarlas, terminaban pisando el
+           título del día siguiente. Ahora recorte 4:3 fijo (mismo criterio
+           que .galeria-itinerario) repartido en fila a ancho de página, no
+           amontonado a la izquierda. */
         .itinerario-fotos {
-            margin: 4px 0 6px;
+            margin: 6px 0 8px;
         }
 
         .itinerario-fotos img {
-            max-width: 140px;
-            max-height: 100px;
-            margin-right: 6px;
-            border: 1px solid #cccccc;
+            width: 23%;
+            margin-right: 2%;
+            border-radius: 3px;
         }
 
         ul.lista-simple {
@@ -206,19 +225,27 @@
             color: #444444;
         }
 
-        /* ── Opciones de hoteles (Sesión M5, matriz hotel × habitación) ──── */
+        /* ── Opciones de hoteles (Sesión M5, matriz hotel × habitación) ────
+           Rediseño 06-sep-2026 (hallazgo del usuario, guiado por el
+           mockup): header en el color primario de la agencia en vez de gris
+           genérico, sin grilla completa (solo separador inferior por fila),
+           zebra striping vía clase server-side (fila-par) — nth-child no es
+           lo bastante confiable en dompdf como para apostar el diseño a
+           eso. Sin border-radius en la tabla: dompdf no recorta bien las
+           esquinas de una <table>, más seguro dejarla en ángulo recto. */
         .hoteles-tabla {
             width: 100%;
             margin-bottom: 12px;
         }
 
         .hoteles-tabla th {
+            font-family: 'Poppins-SemiBold', 'Poppins', sans-serif;
             font-size: 10px;
             text-align: left;
-            border: 1px solid #999999;
-            padding: 4px 6px;
-            background: #f2f2f2;
+            padding: 7px 10px;
+            color: #ffffff;
             text-transform: uppercase;
+            letter-spacing: .5px;
         }
 
         .hoteles-tabla th.precio-col {
@@ -227,12 +254,17 @@
 
         .hoteles-tabla td {
             font-size: 11px;
-            border: 1px solid #999999;
-            padding: 4px 6px;
+            padding: 7px 10px;
+            border-bottom: 1px solid #e5e5e5;
+        }
+
+        .hoteles-tabla tr.fila-par td {
+            background: #f7f7f7;
         }
 
         .hoteles-tabla td.precio-col {
             text-align: right;
+            font-family: 'Poppins-Medium', 'Poppins', sans-serif;
         }
 
         .hoteles-tabla td.sin-precio {
@@ -241,8 +273,9 @@
         }
 
         .hoteles-tabla tr.fila-elegida td {
+            font-family: 'Poppins-SemiBold', 'Poppins', sans-serif;
             font-weight: bold;
-            background: #f7f7f7;
+            background: #eef4ff;
         }
 
         .hoteles-elegida-nota {
@@ -261,6 +294,7 @@
         }
 
         .opcional-nombre {
+            font-family: 'Poppins-Medium', 'Poppins', sans-serif;
             font-weight: bold;
             font-size: 12px;
         }
@@ -294,6 +328,7 @@
         }
 
         .totales .total-final td {
+            font-family: 'Poppins-SemiBold', 'Poppins', sans-serif;
             font-weight: bold;
             font-size: 14px;
             border-top: 1px solid #111111;
@@ -307,6 +342,7 @@
         }
 
         .pagos-table th {
+            font-family: 'Poppins-SemiBold', 'Poppins', sans-serif;
             font-size: 10px;
             text-align: left;
             border-bottom: 1px solid #999999;
@@ -331,15 +367,24 @@
             color: #444444;
         }
 
-        /* ── Mejora del PDF de cotización (plan-mejora-pdf-cotizacion-cliente.md) ── */
+        /* ── Mejora del PDF de cotización (plan-mejora-pdf-cotizacion-cliente.md) ──
+           Rediseño 06-sep-2026 (hallazgo del usuario, guiado por el mockup
+           aprobado): pastilla redondeada a la derecha en vez de barra
+           rectangular a todo el ancho — mismo dato, más profesional. */
+        .cinta-categoria-wrap {
+            text-align: right;
+            margin: 6px 0 4px;
+        }
+
         .cinta-categoria {
+            display: inline-block;
             color: #ffffff;
+            font-family: 'Poppins-SemiBold', 'Poppins', sans-serif;
             font-weight: bold;
-            font-size: 11px;
+            font-size: 10px;
             text-transform: uppercase;
-            text-align: center;
-            padding: 4px 0;
-            margin: 10px 0;
+            padding: 5px 18px;
+            border-radius: 99px;
             letter-spacing: 1px;
         }
 
@@ -398,6 +443,7 @@
         }
 
         .hotel-fotos-nombre {
+            font-family: 'Poppins-Medium', 'Poppins', sans-serif;
             font-weight: bold;
             font-size: 12px;
             margin-bottom: 4px;
@@ -493,7 +539,9 @@
         {{-- Cinta de categoría — Local/Nacional/Internacional, color propio
              por agencia (configPdf). Categoría mixta usa la más alta
              presente (plan §7): internacional > nacional > local. --}}
-        <div class="cinta-categoria" style="background-color: {{ $colorCategoria }};">{{ ucfirst($categoria) }}</div>
+        <div class="cinta-categoria-wrap">
+            <span class="cinta-categoria" style="background-color: {{ $colorCategoria }};">{{ ucfirst($categoria) }}</span>
+        </div>
 
         {{-- ══════════════════ CLIENTE / FECHAS ══════════════════ --}}
         @php
@@ -573,12 +621,12 @@
             <table style="width:100%;" class="portada-bloque">
                 <tr>
                     <td style="width:75%; vertical-align:top;" class="portada-principal">
-                        <img src="{{ $fotoPortadaPrincipal }}">
+                        <img src="{{ $fotoPortadaPrincipal }}" width="640" height="480">
                     </td>
                     @if (count($fotosPortadaSecundarias) > 0)
                         <td style="width:25%; vertical-align:top; padding-left:8px;" class="portada-secundarias">
                             @foreach ($fotosPortadaSecundarias as $foto)
-                                <img src="{{ $foto }}">
+                                <img src="{{ $foto }}" width="640" height="480">
                             @endforeach
                         </td>
                     @endif
@@ -648,7 +696,7 @@
                             @if (!empty($pasosDelDia->first()['tour_fotos'] ?? null))
                                 <div class="itinerario-fotos">
                                     @foreach ($pasosDelDia->first()['tour_fotos'] as $foto)
-                                        <img src="{{ $foto }}">
+                                        <img src="{{ $foto }}" width="640" height="480">
                                     @endforeach
                                 </div>
                             @endif
@@ -690,7 +738,7 @@
         @if (count($fotosGaleria) > 0)
             <div class="seccion galeria-itinerario">
                 @foreach ($fotosGaleria as $foto)
-                    <img src="{{ $foto }}">
+                    <img src="{{ $foto }}" width="640" height="480">
                 @endforeach
             </div>
         @endif
@@ -744,7 +792,7 @@
             <div class="seccion">
                 <div class="seccion-titulo">No incluye</div>
                 @if (!empty($tourUnico?->no_incluye))
-                    <div class="seccion-html">{!! $tourUnico->no_incluye !!}</div>
+                    <div class="seccion-html">{!! \App\Services\TextoFormatoService::sanitizarHtmlParaPdf($tourUnico->no_incluye) !!}</div>
                 @endif
                 @if (count($mayoristasNoIncluye) > 0)
                     <ul class="lista-simple">
@@ -759,7 +807,7 @@
             @if (!empty($tourUnico->recomendaciones))
                 <div class="seccion">
                     <div class="seccion-titulo">Recomendaciones</div>
-                    <div class="seccion-html">{!! $tourUnico->recomendaciones !!}</div>
+                    <div class="seccion-html">{!! \App\Services\TextoFormatoService::sanitizarHtmlParaPdf($tourUnico->recomendaciones) !!}</div>
                 </div>
             @endif
             @if (!empty($tourUnico->lugar_recojo) || !empty($tourUnico->hora_salida) || !empty($tourUnico->hora_retorno))
@@ -808,14 +856,14 @@
                     @endif
                 </div>
                 <table class="hoteles-tabla">
-                    <tr>
+                    <tr style="background-color: {{ $configPdf->color_primario ?? '#1f2937' }};">
                         <th>Hotel</th>
                         @foreach ($grupoHotel['tipos_habitacion'] as $tipo)
                             <th class="precio-col">{{ ucfirst($tipo) }}</th>
                         @endforeach
                     </tr>
                     @foreach ($grupoHotel['filas'] as $fila)
-                        <tr class="{{ $fila['elegida'] ? 'fila-elegida' : '' }}">
+                        <tr class="{{ $fila['elegida'] ? 'fila-elegida' : (!$loop->even ? '' : 'fila-par') }}">
                             {{-- '✓' (U+2713) no renderiza con la fuente que usa DomPDF acá
                                  — sale como "?" (confirmado generando el PDF real contra
                                  agencia-demo). Texto plano en vez de un glifo unicode. --}}
@@ -853,7 +901,7 @@
                             <div class="hotel-fotos-nombre">{{ $fila['hotel'] }}</div>
                             <div class="hotel-fotos-tira">
                                 @foreach ($info['fotos'] as $foto)
-                                    <img src="{{ $foto }}">
+                                    <img src="{{ $foto }}" width="640" height="480">
                                 @endforeach
                             </div>
                             @if ($info['check_in'] || $info['check_out'])

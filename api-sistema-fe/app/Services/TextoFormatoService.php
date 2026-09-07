@@ -77,4 +77,46 @@ class TextoFormatoService
 
         return implode(' ', $resultado);
     }
+
+    // Bug real (06-sep-2026, reportado por el usuario en el PDF de
+    // cotización): texto pegado en el editor rico (Quill) desde Word con
+    // viñetas de Wingdings/Symbol sale como "?" en el PDF —
+    // "¿QUÉ INCLUYE? ? Transporte turístico. ? Guía turístico...".
+    // Confirmado con un dump de bytes reales: el carácter roto es
+    // U+F0FC, dentro del rango "Zona de Uso Privado" (U+E000-U+F8FF) de
+    // Unicode. No es un bug de fuente/motor de PDF — es un carácter que
+    // SOLO tiene significado visual dentro de la fuente Wingtings/Symbol
+    // de origen (nunca copiada al pegar); NINGUNA fuente, ni Poppins, va
+    // a tener un glifo real para ese código. Se reemplaza por un bullet
+    // real (•) porque en la práctica el 100% de los casos reales vistos
+    // son viñetas de lista pegadas desde Word, nunca símbolos con otro
+    // significado.
+    //
+    // Se aplica SOLO al renderizar el PDF (acá), nunca reescribe el HTML
+    // ya guardado en la base — no hay forma de recuperar qué carácter
+    // "quiso" ser el original más allá de asumir que es una viñeta, así
+    // que tocar el dato guardado sería una corrección irreversible sobre
+    // una suposición.
+    public static function sanitizarHtmlParaPdf(?string $html): ?string
+    {
+        if ($html === null) {
+            return null;
+        }
+
+        // Viñetas de Wingdings/Symbol (Zona de Uso Privado) → bullet real.
+        $html = preg_replace('/[\x{E000}-\x{F8FF}]/u', '•', $html);
+
+        // Emojis reales tipeados a mano (ej. "🏔️ Ubicación", encontrado
+        // 06-sep-2026 en la misma sesión que el bug de Wingdings, caso
+        // DISTINTO: acá el carácter SÍ es un emoji real y válido, solo que
+        // ninguna fuente de texto (ni Poppins) tiene un glifo para dibujarlo
+        // — dompdf no soporta fuentes de emoji a color. Cada emoji suele
+        // ser 2 codepoints (el pictograma + un selector de variación
+        // U+FE0F que fuerza presentación emoji), por eso salía como "??"
+        // en vez de un solo "?". Se quitan (vacío, no bullet — no son
+        // viñetas de lista, son decoración a mitad de frase).
+        $html = preg_replace('/[\x{1F000}-\x{1FFFF}\x{2600}-\x{27BF}\x{FE0F}\x{200D}]/u', '', $html);
+
+        return $html;
+    }
 }

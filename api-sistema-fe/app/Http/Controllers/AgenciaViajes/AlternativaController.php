@@ -20,6 +20,7 @@ use App\Models\AgenciaViajes\TipoCambioAgencia;
 use App\Services\AgenciaViajes\ImagenRecorteService;
 use App\Services\AgenciaViajes\PriceEngineService;
 use App\Services\StorageUrl;
+use App\Services\TextoFormatoService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -658,12 +659,15 @@ class AlternativaController extends Controller
         // opcionales de la(s) opción(es) de mayorista realmente elegidas en
         // esta alternativa (ver mayoristasReferenciados()).
         $mayoristas = $this->mayoristasReferenciados($alternativa);
+        // TextoFormatoService::sanitizarHtmlParaPdf() — bug real 06-sep-2026,
+        // viñetas de Wingdings/Symbol pegadas desde Word (Zona de Uso
+        // Privado de Unicode) salían como "?" en el PDF.
         $mayoristasIncluye = $mayoristas
-            ->flatMap(fn ($m) => preg_split('/\r?\n/', trim((string) $m->incluye)))
+            ->flatMap(fn ($m) => preg_split('/\r?\n/', trim(TextoFormatoService::sanitizarHtmlParaPdf((string) $m->incluye))))
             ->filter(fn ($linea) => trim($linea) !== '')
             ->values();
         $mayoristasNoIncluye = $mayoristas
-            ->flatMap(fn ($m) => preg_split('/\r?\n/', trim((string) $m->no_incluye)))
+            ->flatMap(fn ($m) => preg_split('/\r?\n/', trim(TextoFormatoService::sanitizarHtmlParaPdf((string) $m->no_incluye))))
             ->filter(fn ($linea) => trim($linea) !== '')
             ->values();
         $mayoristasVuelo = $mayoristas
@@ -747,6 +751,12 @@ class AlternativaController extends Controller
             'descuentoMonto' => $descuentoMonto,
             'hayDescuento' => $descuentoMonto > 0.01,
         ]);
+
+        // Pedido del usuario (06-sep-2026) — Poppins en vez de Arial, misma
+        // fuente que ya usan en Word. Se registra DESPUÉS de loadView()
+        // pero ANTES de download(): dompdf recién resuelve fuentes durante
+        // render() (disparado por download()), en el medio alcanza.
+        \App\Services\PdfFontService::registrarPoppins($pdf->getDomPDF());
 
         $nombreArchivo = 'Cotizacion-' . ($alternativa->cotizacion->codigo ?? $alternativa->cotizacion_id) . '-' . \Illuminate\Support\Str::slug($alternativa->nombre) . '.pdf';
 
@@ -877,15 +887,24 @@ class AlternativaController extends Controller
                 // patrón que 'tour_nombre': se repiten por paso (el blade solo
                 // las imprime una vez, en el primer paso del día) para no
                 // duplicar la lógica de "una vez por tour" en la vista.
-                // resolveParaPdf() (no resolve()) porque DomPDF corre con
-                // enable_remote=false, igual que el logo.
-                $fotosDelTour = array_map(fn (string $path) => \App\Services\StorageUrl::resolveParaPdf($path), $tour->fotos ?? []);
+                //
+                // Hallazgo del usuario (06-sep-2026): estas fotos se pasaban
+                // como el ORIGINAL sin recortar (solo resolveParaPdf(), sin
+                // ImagenRecorteService) — dompdf no conocía el tamaño real
+                // hasta decodificar la imagen, y con fotos de celular de
+                // proporción/resolución arbitraria terminaba pisando el
+                // título del día siguiente ("el título de los tours es
+                // montado por las imágenes"). Recorte 4:3 fijo (mismo
+                // servicio que portada/galería/hoteles) elimina la
+                // ambigüedad de tamaño — el blade además fija width/height
+                // explícitos en el <img>, dompdf ya no tiene que adivinar.
+                $fotosDelTour = $this->imagenRecorte->recortarVariasParaPdf($tour->fotos ?? []);
 
                 foreach ($pasosDelTour as $paso) {
                     $pasos[] = [
                         'dia' => $offsetDia + $paso->dia_relativo,
                         'hora' => $paso->hora,
-                        'descripcion' => $paso->descripcion,
+                        'descripcion' => TextoFormatoService::sanitizarHtmlParaPdf($paso->descripcion),
                         'tour_nombre' => $tour->nombre,
                         'tour_fotos' => $fotosDelTour,
                         'atractivo_nombre' => $paso->destinoAtractivo?->nombre,

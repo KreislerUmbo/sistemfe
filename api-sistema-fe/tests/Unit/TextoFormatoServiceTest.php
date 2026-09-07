@@ -59,4 +59,45 @@ class TextoFormatoServiceTest extends TestCase
     {
         $this->assertSame('Rioja', TextoFormatoService::capitalizarNombrePropio('RIOJA'));
     }
+
+    // ── sanitizarHtmlParaPdf() — bug real 06-sep-2026 en el PDF de cotización ──
+
+    public function test_sanitiza_vineta_de_wingdings_pegada_desde_word(): void
+    {
+        // U+F0FC real, encontrado con un dump de bytes contra el
+        // contenido real de un tour de agencia-demo — "?? Transporte
+        // turístico." en el PDF venía de exactamente este carácter.
+        $conViñetaWingdings = "¿QUÉ INCLUYE?\n\u{F0FC}\tTransporte turístico.";
+
+        $resultado = TextoFormatoService::sanitizarHtmlParaPdf($conViñetaWingdings);
+
+        $this->assertStringContainsString('•', $resultado);
+        $this->assertStringContainsString('Transporte turístico', $resultado);
+        $this->assertStringNotContainsString("\u{F0FC}", $resultado);
+    }
+
+    public function test_quita_emoji_real_que_ninguna_fuente_de_texto_puede_dibujar(): void
+    {
+        // 🏔️ = U+1F3D4 (pictograma) + U+FE0F (selector de variación) — 2
+        // codepoints, por eso salía como "??" (uno por codepoint) en vez
+        // de un solo "?". No es viñeta, se quita entero (no se reemplaza
+        // por bullet).
+        $conEmoji = "empezar el recorrido. \u{1F3D4}\u{FE0F} Ubicación";
+
+        $resultado = TextoFormatoService::sanitizarHtmlParaPdf($conEmoji);
+
+        $this->assertSame('empezar el recorrido.  Ubicación', $resultado);
+    }
+
+    public function test_no_toca_texto_normal_con_acentos_y_puntuacion(): void
+    {
+        $textoNormal = '¿Qué incluye? Traslado ida y vuelta — 2 noches en Cusco.';
+
+        $this->assertSame($textoNormal, TextoFormatoService::sanitizarHtmlParaPdf($textoNormal));
+    }
+
+    public function test_null_devuelve_null_en_sanitizar(): void
+    {
+        $this->assertNull(TextoFormatoService::sanitizarHtmlParaPdf(null));
+    }
 }
