@@ -138,6 +138,25 @@ class AlternativaController extends Controller
             $validado['nombre'] = \App\Services\TextoFormatoService::capitalizarNombrePropio($validado['nombre']);
         }
 
+        // Bug real (07-sep-2026, auditoría de mantenibilidad 05-sep-2026):
+        // este PUT genérico aceptaba estado=aceptada y lo aplicaba (incluso
+        // descartando las demás alternativas de la cotización, ver
+        // descartarOtras() más abajo) SIN pasar por ReservaController::
+        // aceptar() — el único lugar que realmente crea la Reserva. El
+        // propio comentario de este método ya lo admitía ("Este PUT ya NO
+        // dispara creación de reserva") sin bloquearlo — cualquier
+        // consumidor que reuse este endpoint genérico en vez del POST
+        // .../aceptar (un script, Postman, un copy-paste futuro) deja una
+        // alternativa "aceptada" fantasma, sin Reserva asociada. El
+        // frontend actual (marcarAceptada() en editar.vue) ya usa el
+        // endpoint correcto — bloquear acá no le cambia nada.
+        if (($validado['estado'] ?? null) === 'aceptada') {
+            return response()->json([
+                'code' => 422,
+                'message' => 'Para aceptar una alternativa usá POST alternativas/{id}/aceptar — este endpoint no crea la reserva asociada.',
+            ], 422);
+        }
+
         // Sesión 12a (Fase 0, auditoría §3.2) — único camino documentado
         // donde el total de una alternativa ya aceptada (con su reserva ya
         // creada) podía cambiar en vivo sin que nadie lo note. Mismo
@@ -168,14 +187,12 @@ class AlternativaController extends Controller
 
             $alternativa->update($validado);
 
-            // Aceptar una alternativa descarta automáticamente las demás de
-            // la misma cotización — §3.2. Este PUT ya NO dispara creación de
-            // reserva (Sesión 11c usa POST alternativas/{id}/aceptar,
-            // ReservaController::aceptar(), que reusa descartarOtras() de
-            // acá mismo — no se duplica esta lógica).
-            if (($validado['estado'] ?? null) === 'aceptada') {
-                self::descartarOtras($alternativa);
-            }
+            // Bug real (07-sep-2026) — esta rama nunca podía dispararse: el
+            // 422 de arriba ya bloquea estado=aceptada antes de llegar
+            // acá. La dejaba muerta (nunca ejecutaba descartarOtras() vía
+            // este PUT) — se quita. descartarOtras() sigue viva, la sigue
+            // usando ReservaController::aceptar() (POST .../aceptar), el
+            // único lugar que de verdad crea la Reserva.
 
             // §3.1 — "al aplicarse, se reparte a cada alternativa_items
             // respetando el piso individual de cada uno; si alguna línea no
@@ -488,9 +505,68 @@ class AlternativaController extends Controller
                 $destinosClonados[$destino->id] = $nuevoDestino->id;
             }
 
-            // Ítems primero (sin opcion_mayorista_id todavía si vienen de
-            // mayorista — se remapea al final, una vez clonado el árbol de
-            // opciones más abajo).
+            // Bug real (07-sep-2026, auditoría de mantenibilidad 05-sep-2026):
+            // OpcionHotel "ad-hoc" (Local/Nacional, "Hotel sin catálogo" —
+            // nace SIN opcion_mayorista_id, ver agregarGrupoHotelAdhocLocal()
+            // en editar.vue) nunca se clonaba en absoluto — la copia de una
+            // alternativa con un hotel así cargado dejaba sus ítems sin
+            // opcion_hotel_tarifa_id (o, peor, compartiendo la fila del
+            // ORIGINAL entre las 2 alternativas). $tarifasHotelClonadas es
+            // UN SOLO mapa para los dos orígenes posibles de hotel — acá se
+            // arranca con el ad-hoc (tiene que estar listo ANTES de crear
+            // los ítems, igual que $destinosClonados arriba); el de
+            // mayorista se agrega más abajo, después de clonar
+            // OpcionMayorista, y el remap final de los ítems corre una sola
+            // vez al final para ambos casos.
+            $tarifasHotelClonadas = [];
+            $idsTarifaHotelAdhoc = $original->items()
+                ->whereNotNull('opcion_hotel_tarifa_id')
+                ->whereNull('opcion_mayorista_id')
+                ->pluck('opcion_hotel_tarifa_id')
+                ->unique();
+            $idsHotelAdhoc = OpcionHotelTarifa::whereIn('id', $idsTarifaHotelAdhoc)->pluck('opcion_hotel_id')->unique();
+            foreach (OpcionHotel::whereIn('id', $idsHotelAdhoc)->whereNull('opcion_mayorista_id')->get() as $hotelAdhoc) {
+                $nuevoHotelAdhoc = OpcionHotel::create([
+                    'proveedor_id' => $hotelAdhoc->proveedor_id,
+                    'proveedor_promovido_id' => $hotelAdhoc->proveedor_promovido_id,
+                    'nombre_hotel' => $hotelAdhoc->nombre_hotel,
+                    'categoria_estrellas' => $hotelAdhoc->categoria_estrellas,
+                    'moneda' => $hotelAdhoc->moneda,
+                    'edad_max_infante_gratis' => $hotelAdhoc->edad_max_infante_gratis,
+                    'edad_max_nino_cama_adicional' => $hotelAdhoc->edad_max_nino_cama_adicional,
+                    'fotos' => $hotelAdhoc->fotos,
+                ]);
+
+                foreach (OpcionHotelTarifa::where('opcion_hotel_id', $hotelAdhoc->id)->get() as $tarifa) {
+                    $nuevaTarifa = OpcionHotelTarifa::create([
+                        'opcion_hotel_id' => $nuevoHotelAdhoc->id,
+                        'tipo_habitacion' => $tarifa->tipo_habitacion,
+                        'precio_costo' => $tarifa->precio_costo,
+                        'precio_venta' => $tarifa->precio_venta,
+                        'proveedor_tarifa_id' => $tarifa->proveedor_tarifa_id,
+                        'precio_costo_cama_adicional' => $tarifa->precio_costo_cama_adicional,
+                        'precio_venta_cama_adicional' => $tarifa->precio_venta_cama_adicional,
+                        'tip_afe_igv' => $tarifa->tip_afe_igv,
+                        'destino_tributario' => $tarifa->destino_tributario,
+                    ]);
+                    $tarifasHotelClonadas[$tarifa->id] = $nuevaTarifa->id;
+                }
+            }
+
+            // Ítems (opcion_mayorista_id y opcion_hotel_tarifa_id de hotel de
+            // MAYORISTA todavía no — se remapean al final, una vez clonado
+            // el árbol de opciones más abajo; el de hotel AD-HOC ya se
+            // resuelve acá porque su mapa ya está completo).
+            //
+            // Bug real (07-sep-2026, auditoría de mantenibilidad
+            // 05-sep-2026): grupo_opcion_id/opcion_elegida/guia_tarifa_id/
+            // tip_afe_igv/destino_tributario nunca se copiaban — una
+            // alternativa duplicada con un comparador de hoteles armado
+            // perdía el agrupamiento COMPLETO (los hoteles comparados
+            // quedaban como ítems sueltos sin relación entre sí), un ítem
+            // de guía quedaba sin guía real asociada, y el tratamiento
+            // tributario resuelto (incluida la exoneración Amazonía) se
+            // perdía en silencio cayendo al default del tenant.
             $itemsClonados = [];
             foreach ($original->items()->get() as $item) {
                 $nuevoItem = AlternativaItem::create([
@@ -500,9 +576,17 @@ class AlternativaController extends Controller
                         : null,
                     'origen_tipo' => $item->origen_tipo,
                     'proveedor_tarifa_id' => $item->proveedor_tarifa_id,
+                    'opcion_hotel_tarifa_id' => $item->opcion_hotel_tarifa_id !== null
+                        ? ($tarifasHotelClonadas[$item->opcion_hotel_tarifa_id] ?? null)
+                        : null,
+                    'grupo_opcion_id' => $item->grupo_opcion_id,
+                    'opcion_elegida' => $item->opcion_elegida,
+                    'guia_tarifa_id' => $item->guia_tarifa_id,
                     'tour_origen_id' => $item->tour_origen_id,
                     'dia_referencial' => $item->dia_referencial,
                     'descripcion_manual' => $item->descripcion_manual,
+                    'proveedor_sugerido_manual' => $item->proveedor_sugerido_manual,
+                    'proveedor_promovido_id' => $item->proveedor_promovido_id,
                     'modo_precio' => $item->modo_precio,
                     'cantidad' => $item->cantidad,
                     'pax_incluidos' => $item->pax_incluidos,
@@ -511,6 +595,8 @@ class AlternativaController extends Controller
                     'precio_venta_snapshot' => $item->precio_venta_snapshot,
                     'descuento_pct' => $item->descuento_pct,
                     'precio_convertido' => $item->precio_convertido,
+                    'tip_afe_igv' => $item->tip_afe_igv,
+                    'destino_tributario' => $item->destino_tributario,
                 ]);
                 $itemsClonados[$item->id] = $nuevoItem;
 
@@ -576,31 +662,71 @@ class AlternativaController extends Controller
                     ]);
                 }
 
+                // paquete_plantilla_id se quitó de la tabla (migración
+                // 2026_08_11_090500_drop_paquete_plantilla_id_from_opciones_hotel_table.php,
+                // ver docblock del modelo) — ya no está en $fillable, así
+                // que mandarlo acá no hacía nada (Eloquent lo descarta en
+                // silencio). Resto de campos completados (07-sep-2026,
+                // mismo hallazgo que arriba): faltaban moneda/edades/fotos
+                // del hotel, y proveedor_tarifa_id/camas
+                // adicionales/tratamiento tributario de cada tarifa — una
+                // alternativa duplicada perdía las fotos del hotel y
+                // desvinculaba sus tarifas de la tarifa real del proveedor
+                // (getPrecioVentaAttribute() deja de seguir el precio en
+                // vivo sin proveedor_tarifa_id).
                 foreach (OpcionHotel::where('opcion_mayorista_id', $opcion->id)->get() as $hotel) {
                     $nuevoHotel = OpcionHotel::create([
                         'opcion_mayorista_id' => $nuevaOpcion->id,
-                        'paquete_plantilla_id' => $hotel->paquete_plantilla_id,
                         'proveedor_id' => $hotel->proveedor_id,
+                        'proveedor_promovido_id' => $hotel->proveedor_promovido_id,
                         'nombre_hotel' => $hotel->nombre_hotel,
                         'categoria_estrellas' => $hotel->categoria_estrellas,
+                        'moneda' => $hotel->moneda,
+                        'edad_max_infante_gratis' => $hotel->edad_max_infante_gratis,
+                        'edad_max_nino_cama_adicional' => $hotel->edad_max_nino_cama_adicional,
+                        'fotos' => $hotel->fotos,
                     ]);
 
                     foreach (OpcionHotelTarifa::where('opcion_hotel_id', $hotel->id)->get() as $tarifa) {
-                        OpcionHotelTarifa::create([
+                        $nuevaTarifa = OpcionHotelTarifa::create([
                             'opcion_hotel_id' => $nuevoHotel->id,
                             'tipo_habitacion' => $tarifa->tipo_habitacion,
                             'precio_costo' => $tarifa->precio_costo,
                             'precio_venta' => $tarifa->precio_venta,
+                            'proveedor_tarifa_id' => $tarifa->proveedor_tarifa_id,
+                            'precio_costo_cama_adicional' => $tarifa->precio_costo_cama_adicional,
+                            'precio_venta_cama_adicional' => $tarifa->precio_venta_cama_adicional,
+                            'tip_afe_igv' => $tarifa->tip_afe_igv,
+                            'destino_tributario' => $tarifa->destino_tributario,
                         ]);
+                        $tarifasHotelClonadas[$tarifa->id] = $nuevaTarifa->id;
                     }
                 }
             }
 
-            foreach ($original->items()->where('origen_tipo', AlternativaItem::ORIGEN_MAYORISTA)->get() as $itemOriginal) {
-                if (isset($itemsClonados[$itemOriginal->id], $opcionesClonadas[$itemOriginal->opcion_mayorista_id])) {
-                    $itemsClonados[$itemOriginal->id]->update([
-                        'opcion_mayorista_id' => $opcionesClonadas[$itemOriginal->opcion_mayorista_id],
-                    ]);
+            // Remap final: opcion_mayorista_id (ya existía) +
+            // opcion_hotel_tarifa_id de un hotel de MAYORISTA (07-sep-2026 —
+            // recién quedó armado el mapa arriba, después de los ítems). El
+            // de hotel AD-HOC ya se resolvió al crear el ítem más arriba,
+            // este remap no lo vuelve a tocar (el item original de un hotel
+            // ad-hoc nunca tiene opcion_mayorista_id, así que solo entra acá
+            // por el segundo `if`, y como su id YA está en el mapa desde
+            // antes de crear los ítems, el valor que resulta es el mismo —
+            // no hay riesgo de pisarlo con otra cosa).
+            foreach ($original->items()->get() as $itemOriginal) {
+                if (! isset($itemsClonados[$itemOriginal->id])) {
+                    continue;
+                }
+
+                $cambios = [];
+                if ($itemOriginal->opcion_mayorista_id !== null && isset($opcionesClonadas[$itemOriginal->opcion_mayorista_id])) {
+                    $cambios['opcion_mayorista_id'] = $opcionesClonadas[$itemOriginal->opcion_mayorista_id];
+                }
+                if ($itemOriginal->opcion_hotel_tarifa_id !== null && isset($tarifasHotelClonadas[$itemOriginal->opcion_hotel_tarifa_id])) {
+                    $cambios['opcion_hotel_tarifa_id'] = $tarifasHotelClonadas[$itemOriginal->opcion_hotel_tarifa_id];
+                }
+                if ($cambios !== []) {
+                    $itemsClonados[$itemOriginal->id]->update($cambios);
                 }
             }
 

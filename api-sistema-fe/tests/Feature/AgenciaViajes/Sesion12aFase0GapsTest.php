@@ -120,6 +120,25 @@ class Sesion12aFase0GapsTest extends TestCase
         $this->assertSame('Nuevo Nombre', $alternativa->fresh()->nombre);
     }
 
+    // Auditoría de mantenibilidad (05-sep-2026) — gap confirmado y cerrado
+    // 07-sep-2026: este PUT genérico aceptaba estado=aceptada y lo aplicaba
+    // (incluida descartarOtras()) sin pasar por ReservaController::aceptar(),
+    // el único lugar que de verdad crea la Reserva — dejaba una alternativa
+    // "aceptada" sin reserva asociada, un fantasma silencioso.
+    public function test_update_rechaza_estado_aceptada_sin_pasar_por_el_endpoint_de_aceptar(): void
+    {
+        $alternativa = $this->crearAlternativa('borrador');
+
+        $response = app(AlternativaController::class)->update(
+            new Request(['estado' => 'aceptada']),
+            (string) $alternativa->id
+        );
+
+        $this->assertSame(422, $response->getStatusCode());
+        $this->assertStringContainsString('aceptar', $response->getData(true)['message']);
+        $this->assertSame('borrador', $alternativa->fresh()->estado, 'no quedó "aceptada" sin reserva asociada');
+    }
+
     // §2 — índice único parcial: solo una OpcionMayorista 'elegida' por alternativa.
 
     public function test_indice_unico_rechaza_dos_opciones_elegidas_para_la_misma_alternativa(): void
