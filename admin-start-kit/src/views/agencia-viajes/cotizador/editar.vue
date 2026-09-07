@@ -883,7 +883,7 @@
                                         </div>
                                     </div>
                                     <div class="text-muted" v-if="op.vuelo_aerolinea"><i class="fas fa-plane me-1"></i>{{ op.vuelo_aerolinea }}</div>
-                                    <div class="text-muted mb-1" v-if="op.incluye">{{ op.incluye }}</div>
+                                    <div class="text-muted mb-1" v-if="op.incluye">{{ textoPlano(op.incluye) }}</div>
                                     <div class="d-flex justify-content-between align-items-center">
                                         <span class="badge" :class="{
                                             'bg-success-subtle text-success': op.estado === 'elegida',
@@ -1020,7 +1020,7 @@
                                             <div class="d-flex justify-content-between align-items-start">
                                                 <div>
                                                     <strong>{{ opl.nombre }}</strong>
-                                                    <div v-if="opl.incluye" class="text-muted" style="font-size:11px">{{ opl.incluye }}</div>
+                                                    <div v-if="opl.incluye" class="text-muted" style="font-size:11px">{{ textoPlano(opl.incluye) }}</div>
                                                 </div>
                                                 <div class="d-flex align-items-start gap-2 text-nowrap">
                                                     <span>{{ opl.moneda }} {{ Number(opl.precio_por_persona).toFixed(2) }} /pax</span>
@@ -1203,6 +1203,18 @@ import type { Cotizacion, Alternativa, AlternativaItem, ProveedorTarifa, OpcionM
 import type { Client } from '@/types/clients';
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
+
+// Vista previa como texto plano (07-sep-2026) — bug real reportado por el
+// usuario: incluye/vuelo_detalle ahora puede ser HTML real
+// (RichTextEditor/Quill, ver OpcionMayoristaForm.vue), pero las tarjetas
+// resumen de abajo (comparador de mayoristas, lista de opcionales) usan
+// interpolación {{ }} que escapa HTML — mostraban las etiquetas crudas
+// como texto literal ("<ul><li>..."). Son vistas previas compactas dentro
+// de una tarjeta chica, no el editor completo — mejor texto plano limpio
+// que renderizar la lista real (bullets reales ahí se verían enormes).
+// Reemplaza cada etiqueta por un espacio (no vacío) para no pegar
+// palabras de líneas/ítems distintos entre sí, luego colapsa espacios.
+const textoPlano = (html: string) => html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
 
 const route = useRoute();
 const router = useRouter();

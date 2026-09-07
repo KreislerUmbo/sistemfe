@@ -200,7 +200,15 @@
            (24px, no un valor cosmético — confirmado con el render real que
            valores chicos como 6px no alcanzan) como buffer. */
         .itinerario-fotos {
-            margin: 24px 0 8px;
+            /* 36px (no 24px) — pedido del usuario (07-sep-2026): al
+               agrandar las fotos de 23% a 31% de ancho (mismo ancho que
+               .hotel-fotos-tira, para repartir bien las 3 fotos sin hueco
+               vacío), también crecieron de alto (mismo 4:3, más ancho =
+               más alto) — 24px ya no alcanzaba para separar el título del
+               día de la fila de fotos, volvió a solaparse (mismo bug de
+               fondo que .hotel-fotos-tira, ver ese comentario — acá
+               empíricamente hizo falta el mismo valor que allá). */
+            margin: 36px 0 8px;
         }
 
         .itinerario-fotos img {
