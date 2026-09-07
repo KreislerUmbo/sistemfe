@@ -459,24 +459,41 @@
                ImagenRecorteService — la foto ya llega recortada 4:3
                exacta) — el resultado era una foto angosta y estirada
                verticalmente. Como el recorte ya garantiza 4:3, no hace
-               falta cortar de nuevo acá: width:100% + height:auto basta
-               para que dompdf escale proporcional. */
-            width: 100%;
-            height: auto;
+               falta cortar de nuevo acá: height fija + width:auto basta
+               para que dompdf escale proporcional (mismo mecanismo que
+               .itinerario-fotos img, con width fija + height:auto — acá
+               es al revés porque lo que hace falta cuadrar es el ALTO,
+               no el ancho, ver comentario abajo).
+               340px — pedido del usuario (07-sep-2026, con captura real):
+               antes la principal iba a 100% de ancho (bastante más alta
+               que las 2 secundarias apiladas), dejando un hueco vacío
+               debajo de la columna de secundarias. Con las 3 fotos ya
+               recortadas 4:3 por ImagenRecorteService, fijar el ALTO acá
+               y también el de las secundarias (340px = 2×166px + 8px de
+               separación) hace que ambas columnas terminen exactamente
+               a la misma altura. */
+            height: 340px;
+            width: auto;
             border-radius: 3px;
-        }
-
-        .portada-secundarias {
-            width: 120px;
         }
 
         .portada-secundarias img {
-            width: 120px;
-            height: 88px;
-            object-fit: cover;
+            height: 166px;
+            width: auto;
             border-radius: 3px;
-            margin-bottom: 6px;
+            margin-bottom: 8px;
             display: block;
+        }
+
+        .portada-secundarias img:last-child {
+            margin-bottom: 0;
+        }
+
+        /* Con una sola foto secundaria (no 2), ocupa toda la altura de la
+           principal en vez de quedar a la mitad con un hueco vacío
+           debajo. */
+        .portada-secundarias img.portada-secundaria-unica {
+            height: 340px;
         }
 
         .galeria-itinerario {
@@ -708,13 +725,14 @@
         @if (!empty($fotoPortadaPrincipal))
             <table style="width:100%;" class="portada-bloque">
                 <tr>
-                    <td style="width:75%; vertical-align:top;" class="portada-principal">
+                    <td style="vertical-align:top;" class="portada-principal">
                         <img src="{{ $fotoPortadaPrincipal }}" width="640" height="480">
                     </td>
                     @if (count($fotosPortadaSecundarias) > 0)
-                        <td style="width:25%; vertical-align:top; padding-left:8px;" class="portada-secundarias">
+                        <td style="vertical-align:top; padding-left:10px;" class="portada-secundarias">
                             @foreach ($fotosPortadaSecundarias as $foto)
-                                <img src="{{ $foto }}" width="640" height="480">
+                                <img src="{{ $foto }}" width="640" height="480"
+                                    @if (count($fotosPortadaSecundarias) === 1) class="portada-secundaria-unica" @endif>
                             @endforeach
                         </td>
                     @endif
