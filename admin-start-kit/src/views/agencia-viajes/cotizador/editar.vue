@@ -1566,8 +1566,26 @@ const descargarCondicionesGenerales = async () => {
 // (ReservaController::aceptar()) y redirige a su pantalla de detalle, en
 // vez de quedarse en el cotizador.
 const marcandoAceptada = ref(false);
+// Confirmación agregada (07-sep-2026, incidente real reportado por el
+// usuario): un click sin querer en "Aceptado por cliente" generaba la
+// reserva de inmediato, sin ningún paso intermedio para frenarlo — a
+// diferencia de eliminarAlternativa()/eliminarOpcionalCargado() y el
+// resto de acciones destructivas/irreversibles del cotizador, que sí
+// confirman antes. Aceptar es igual de irreversible (crea una Reserva
+// real, descarta las demás alternativas) — mismo criterio.
 const marcarAceptada = async () => {
     if (!alternativaActiva.value) return;
+
+    const confirmacion = await (Swal as TVueSwalInstance).fire({
+        title: '¿Aceptar esta alternativa?',
+        text: 'Se genera una reserva y se descartan las demás alternativas de esta cotización — no se puede deshacer.',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, aceptar',
+        cancelButtonText: 'Cancelar',
+    });
+    if (!confirmacion.isConfirmed) return;
+
     marcandoAceptada.value = true;
     try {
         const res = await reservaService.aceptarAlternativa(alternativaActiva.value.id);
