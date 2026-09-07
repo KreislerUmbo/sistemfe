@@ -1215,23 +1215,42 @@ class AlternativaController extends Controller
     }
 
     // plan §4.5 — portada (1 principal + hasta 2 secundarias) + galería de
-    // itinerario (hasta 4), ambas desde el PRIMER tour con tour_origen_id
-    // que aparece en la alternativa (mismo criterio que "el tour de esta
-    // cotización" para portada visual — una alternativa multi-tour de
-    // todas formas necesita UN solo set de fotos de portada, no uno por
-    // tour). Recorte 4:3 centrado vía ImagenRecorteService, nunca el
-    // original (evita el estiramiento que dompdf produciría con
-    // object-fit, que no soporta).
+    // itinerario (hasta 4), ambas desde el PRIMER tour CON FOTOS de la
+    // alternativa (una alternativa multi-tour de todas formas necesita UN
+    // solo set de fotos de portada, no uno por tour). Recorte 4:3 centrado
+    // vía ImagenRecorteService, nunca el original (evita el estiramiento
+    // que dompdf produciría con object-fit, que no soporta).
+    //
+    // Bug real (07-sep-2026, pedido del usuario "que aparezca en todo
+    // caso"): esta función solo miraba alternativa_items.tour_origen_id
+    // (Local/Nacional) — nunca revisaba los tours enganchados por
+    // mayorista (Internacional, OpcionMayoristaTour), que es el 100% del
+    // uso real de este tenant. Ahora arma la MISMA secuencia de tours que
+    // ya usa itinerarioAlternativa() (tour_origen_id directo + tours de
+    // mayorista por 'orden') y busca el PRIMERO que sí tenga foto_portada
+    // marcada — no simplemente el primero de la lista: confirmado con
+    // datos reales que "Día 1: Arribo a Cusco" no tenía portada marcada,
+    // pero "Día 2: Tour Valle Sagrado..." sí — quedarse con el primero a
+    // secas (como hacía antes) habría seguido sin mostrar nada.
     private function fotosTourParaPdf(Alternativa $alternativa, ConfiguracionAgenciaPdf $configPdf): array
     {
         if (! $configPdf->mostrar_fotos_tour) {
             return [null, [], []];
         }
 
-        $tourId = $alternativa->items->pluck('tour_origen_id')->filter()->first();
-        $tour = $tourId ? PaquetePlantilla::find($tourId) : null;
+        $tourIds = $alternativa->items->pluck('tour_origen_id')->filter()->values();
 
-        if (! $tour || ! $tour->foto_portada) {
+        foreach ($this->mayoristasReferenciados($alternativa) as $opcionMayorista) {
+            $tourIds = $tourIds->concat(
+                $opcionMayorista->tours()->orderBy('orden')->pluck('paquete_plantilla_id')
+            );
+        }
+
+        $tour = $tourIds->unique()->values()
+            ->map(fn ($tourId) => PaquetePlantilla::find($tourId))
+            ->first(fn ($tour) => $tour && $tour->foto_portada);
+
+        if (! $tour) {
             return [null, [], []];
         }
 
