@@ -125,17 +125,29 @@ class TextoFormatoService
     // plano a RichTextEditor (Quill) — el dato ahora puede ser HTML real
     // (<p>/<ul><li>/<strong>) en vez de texto plano con "\n" literales.
     //
-    // Bug real encontrado generando el PDF de una cotización YA EXISTENTE
-    // (creada antes de este cambio): su texto es 100% plano, sin ninguna
-    // etiqueta HTML. Renderizarlo crudo con nl2br() sí respeta los saltos
-    // de línea, pero pierde las viñetas — antes salían gratis porque cada
-    // línea se envolvía en un <li> (list-style por defecto), ahora es solo
-    // texto con <br>. Esta función decide el criterio según el contenido:
+    // Bug real #1 encontrado generando el PDF de una cotización YA
+    // EXISTENTE (creada antes de este cambio): su texto es 100% plano,
+    // sin ninguna etiqueta HTML. Renderizarlo crudo con nl2br() sí
+    // respeta los saltos de línea, pero pierde las viñetas — antes
+    // salían gratis porque cada línea se envolvía en un <li> (list-style
+    // por defecto), ahora es solo texto con <br>. Esta función decide el
+    // criterio según el contenido:
     // - Sin ninguna etiqueta HTML (dato viejo, texto plano) → reconstruye
     //   el <ul><li> de antes, una viñeta por línea no vacía.
     // - Con etiquetas HTML (dato nuevo, de Quill) → se renderiza tal cual
-    //   (ya trae su propia estructura de párrafos/listas), solo con
-    //   nl2br() por si acaso quedara algún "\n" suelto entre etiquetas.
+    //   (ya trae su propia estructura de párrafos/listas).
+    //
+    // Bug real #2 (07-sep-2026, reportado por el usuario: "los incluye
+    // tienen viñetas que aparecen duplicado"): pegar contenido bulleted
+    // desde Word DENTRO de Quill deja restos de "\n" literales sueltos
+    // JUSTO ANTES del cierre de cada <li> (confirmado con datos reales:
+    // "<li>Traslados de entrada y salida.\n</li>") — residuo del clipboard
+    // de Word que el sanitizador de pegado de Quill no limpia del todo.
+    // nl2br() (el primer intento acá) convertía ese "\n" inofensivo en un
+    // <br> real, dejando una línea en blanco debajo de CADA viñeta — se
+    // percibía como una viñeta duplicada. Un navegador normal (o dompdf)
+    // ya colapsa un "\n" suelto como cualquier espacio en blanco de HTML
+    // — no hace falta (ni conviene) forzarlo a línea visible.
     public static function textoLibreParaPdf(?string $html): string
     {
         $html = self::sanitizarHtmlParaPdf($html) ?? '';
@@ -157,6 +169,23 @@ class TextoFormatoService
                 .$lineas->map(fn ($linea) => '<li>'.e($linea).'</li>')->implode('')
                 .'</ul>';
         }
+
+        // Dos casos reales bien distintos para un "\n" suelto dentro de
+        // HTML, y NO se pueden tratar igual (confirmado con datos reales
+        // de agencia-demo):
+        // 1. "\n" pegado al borde de una etiqueta (ej. restos de pegado
+        //    de Word dentro de un <li> ya armado: "...salida.\n</li>") —
+        //    es puro relleno, sin significado — se descarta entero, ni
+        //    espacio ni <br>.
+        // 2. "\n" en medio de texto visible, SIN ninguna otra etiqueta
+        //    que ya separe las líneas (ej. una lista de vuelos vieja que
+        //    quedó envuelta en un solo <p> al abrirla por primera vez en
+        //    Quill, sin que el vendedor haya tocado nada) — ahí SÍ es el
+        //    único indicio de salto de línea que queda; volverlo espacio
+        //    (como haría un navegador) pegaría todo el texto en un solo
+        //    párrafo corrido, perdiendo la estructura.
+        $html = preg_replace('/\s*\r?\n\s*(?=<\/)/', '', $html);
+        $html = preg_replace('/(?<=>)\s*\r?\n\s*/', '', $html);
 
         return nl2br($html);
     }

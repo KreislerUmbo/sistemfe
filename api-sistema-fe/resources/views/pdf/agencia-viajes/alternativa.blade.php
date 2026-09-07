@@ -204,11 +204,17 @@
         }
 
         .itinerario-fotos img {
-            width: 23%;
+            /* 31% (no 23%) — pedido del usuario (07-sep-2026): al bajar el
+               tope de fotos por tour de 4 a 3 (ver fotosDelTour en el
+               controller), el 23% pensado para 4-por-fila dejaba un hueco
+               vacío al final de la fila. 31% es el mismo ancho que ya usa
+               .hotel-fotos-tira img para su propia tira de 3 fotos —
+               reparte las 3 a todo el ancho, igual de proporcionado. */
+            width: 31%;
             /* Bug real (07-sep-2026): el <img> lleva width="640"
                height="480" fijos en el HTML (dompdf necesita conocer las
                dimensiones ANTES de layout, ver comentario arriba) — sin
-               height:auto acá, dompdf escala el ancho al 23% del
+               height:auto acá, dompdf escala el ancho al % del
                contenedor pero deja el alto pegado en los 480px
                absolutos del atributo HTML, deformando la foto (angosta
                y estirada) y montando el texto siguiente con esa altura

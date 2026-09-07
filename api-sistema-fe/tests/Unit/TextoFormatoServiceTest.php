@@ -142,13 +142,41 @@ class TextoFormatoServiceTest extends TestCase
         $this->assertSame($htmlQuill, $resultado);
     }
 
-    public function test_html_de_quill_con_salto_de_linea_suelto_aplica_nl2br(): void
+    public function test_html_de_quill_con_salto_de_linea_pegado_al_cierre_de_etiqueta_se_descarta(): void
     {
-        $htmlConSalto = "<p>Línea 1</p>\n<p>Línea 2</p>";
+        // Bug real 07-sep-2026 ("las viñetas aparecen duplicado"): pegar
+        // contenido de Word en Quill deja "\n" sueltos justo antes del
+        // cierre de un <li> ya armado (ver dato real
+        // "<li>Traslados de entrada y salida.\n</li>") — nl2br() los
+        // convertía en un <br> visible, dejando una línea en blanco
+        // debajo de cada viñeta. Pegado a un borde de etiqueta = puro
+        // relleno, se descarta entero (ni espacio ni <br>).
+        $htmlConSalto = "<ul><li>Traslados de entrada y salida.\n</li></ul>";
+
+        $resultado = TextoFormatoService::textoLibreParaPdf($htmlConSalto);
+
+        $this->assertStringNotContainsString('<br', $resultado);
+        $this->assertSame('<ul><li>Traslados de entrada y salida.</li></ul>', $resultado);
+    }
+
+    public function test_html_de_quill_con_salto_de_linea_en_medio_de_texto_se_preserva_como_br(): void
+    {
+        // Caso real distinto (07-sep-2026): un detalle de vuelo cargado
+        // como texto plano ANTES del editor de texto enriquecido, abierto
+        // por primera vez en Quill sin que el vendedor tocara nada, queda
+        // envuelto en un único <p> — los "\n" entre cada línea de vuelo
+        // NO tocan ningún borde de etiqueta, son el único indicio de
+        // salto de línea que queda. Acá SÍ debe verse como <br> real —
+        // tratarlo igual que el caso de arriba pegaría todos los vuelos
+        // en un solo párrafo corrido (regresión real, encontrada
+        // generando el PDF con este mismo dato).
+        $htmlConSalto = "<p>21 Agosto TPPLIM Sale 10.40\n21 Agosto LIMCUZ Sale 13.45</p>";
 
         $resultado = TextoFormatoService::textoLibreParaPdf($htmlConSalto);
 
         $this->assertStringContainsString('<br', $resultado);
+        $this->assertStringContainsString('21 Agosto TPPLIM Sale 10.40', $resultado);
+        $this->assertStringContainsString('21 Agosto LIMCUZ Sale 13.45', $resultado);
     }
 
     public function test_texto_vacio_devuelve_string_vacio_en_texto_libre(): void
