@@ -65,9 +65,14 @@
             </div>
         </div>
         <!-- Mejora del PDF de cotización (05-sep-2026) — portada (una sola,
-             sale a ancho completo antes del itinerario) + destacadas (hasta
-             4, galería después del itinerario). Solo referencian fotos ya
-             cargadas arriba, no suben archivos nuevos. -->
+             sale a ancho completo antes del itinerario) + destacadas.
+             Solo referencian fotos ya cargadas arriba, no suben archivos
+             nuevos.
+             Tope bajado de 4 a 2 (07-sep-2026): la "Galería de itinerario"
+             que usaba hasta 4 destacadas se quitó del PDF (repetía las
+             mismas fotos que ya salían en portada y por día) — hoy las
+             destacadas solo alimentan las 2 fotos secundarias de la
+             portada, marcar una 3ª o 4ª no tenía ningún efecto visible. -->
         <div v-if="esEdicion && fotosExistentes.length" class="mb-2">
             <label class="form-label mb-1 small text-secondary d-block">Portada y destacadas para el PDF</label>
             <div v-for="path in fotosExistentes" :key="'pdf-' + path" class="d-flex align-items-center gap-2 mb-1" style="font-size:11px;">
@@ -75,7 +80,7 @@
                 <label class="form-check-label mb-0"><input type="radio" class="form-check-input me-1" name="fotoPortada" :checked="fotoPortada === path" @change="fotoPortada = path; guardarFotosPdf()">Portada</label>
                 <label class="form-check-label mb-0">
                     <input type="checkbox" class="form-check-input me-1" :checked="fotosDestacadas.includes(path)"
-                        :disabled="!fotosDestacadas.includes(path) && fotosDestacadas.length >= 4"
+                        :disabled="!fotosDestacadas.includes(path) && fotosDestacadas.length >= 2"
                         @change="toggleFotoDestacada(path)">Destacada
                 </label>
             </div>
@@ -251,7 +256,7 @@ const toggleFotoDestacada = (path: string) => {
     if (fotosDestacadas.value.includes(path)) {
         fotosDestacadas.value = fotosDestacadas.value.filter((p) => p !== path);
     } else {
-        if (fotosDestacadas.value.length >= 4) return;
+        if (fotosDestacadas.value.length >= 2) return;
         fotosDestacadas.value = [...fotosDestacadas.value, path];
     }
     guardarFotosPdf();

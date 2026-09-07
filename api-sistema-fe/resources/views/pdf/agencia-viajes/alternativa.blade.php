@@ -187,9 +187,8 @@
            Hallazgo del usuario (06-sep-2026): antes max-width/max-height sin
            recorte — fotos de proporción arbitraria (celular) sin que dompdf
            supiera el tamaño real hasta decodificarlas, terminaban pisando el
-           título del día siguiente. Ahora recorte 4:3 fijo (mismo criterio
-           que .galeria-itinerario) repartido en fila a ancho de página, no
-           amontonado a la izquierda.
+           título del día siguiente. Ahora recorte 4:3 fijo repartido en
+           fila a ancho de página, no amontonado a la izquierda.
 
            Bug real #2 (07-sep-2026), encontrado DESPUÉS del recorte 4:3:
            el título del día seguía pisado por las fotos pese a que ninguno
@@ -494,19 +493,6 @@
            debajo. */
         .portada-secundarias img.portada-secundaria-unica {
             height: 340px;
-        }
-
-        .galeria-itinerario {
-            margin: 10px 0;
-        }
-
-        .galeria-itinerario img {
-            width: 23%;
-            /* Mismo bug/fix que .itinerario-fotos img (07-sep-2026) —
-               ver ese comentario. */
-            height: auto;
-            margin-right: 2%;
-            border-radius: 3px;
         }
 
         /* ── Fotos referenciales de los hoteles (plan §4.5) ────────── */
@@ -930,19 +916,6 @@
                             @endforeach
                         </div>
                     @endforeach
-                @endforeach
-            </div>
-        @endif
-
-        {{-- ══════════════════ GALERÍA DE ITINERARIO (plan §4.5) ══════════════════ --}}
-        {{-- Bloque APARTE después de los días, en fila de hasta 4 — no
-             intercalada foto-por-día (plan: "un día con poco texto y foto
-             alta queda desbalanceado si se mezclan"). Mismas fotos
-             destacadas del tour que la portada, puede repetir alguna. --}}
-        @if (count($fotosGaleria) > 0)
-            <div class="seccion galeria-itinerario">
-                @foreach ($fotosGaleria as $foto)
-                    <img src="{{ $foto }}" width="640" height="480">
                 @endforeach
             </div>
         @endif

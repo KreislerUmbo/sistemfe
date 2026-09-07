@@ -710,7 +710,7 @@ class AlternativaController extends Controller
         $categoria = $this->resolverCategoriaAlternativa($alternativa);
         $colorCategoria = $this->colorPorCategoria($categoria, $configPdf);
         $afiliaciones = $this->afiliacionesParaMostrar($configPdf);
-        [$fotoPortadaPrincipal, $fotosPortadaSecundarias, $fotosGaleria] = $this->fotosTourParaPdf($alternativa, $configPdf);
+        [$fotoPortadaPrincipal, $fotosPortadaSecundarias] = $this->fotosTourParaPdf($alternativa, $configPdf);
         $hotelesInfo = $this->hotelesInfoParaPdf($opcionesHoteles);
 
         // Hallazgo del usuario (06-sep-2026, comparando contra el mockup
@@ -760,7 +760,6 @@ class AlternativaController extends Controller
             'colorCategoria' => $colorCategoria,
             'fotoPortadaPrincipal' => $fotoPortadaPrincipal,
             'fotosPortadaSecundarias' => $fotosPortadaSecundarias,
-            'fotosGaleria' => $fotosGaleria,
             'hotelesInfo' => $hotelesInfo,
             'cuentasBancarias' => $cuentasBancarias,
             'pasajeros' => $pasajeros,
@@ -1235,7 +1234,7 @@ class AlternativaController extends Controller
     private function fotosTourParaPdf(Alternativa $alternativa, ConfiguracionAgenciaPdf $configPdf): array
     {
         if (! $configPdf->mostrar_fotos_tour) {
-            return [null, [], []];
+            return [null, []];
         }
 
         $tourIds = $alternativa->items->pluck('tour_origen_id')->filter()->values();
@@ -1251,16 +1250,32 @@ class AlternativaController extends Controller
             ->first(fn ($tour) => $tour && $tour->foto_portada);
 
         if (! $tour) {
-            return [null, [], []];
+            return [null, []];
         }
 
-        $destacadas = $tour->fotos_destacadas_pdf ?? [];
+        // array_unique() (07-sep-2026, bug real encontrado con datos reales):
+        // fotos_destacadas_pdf tenía la MISMA foto repetida dos veces (el
+        // vendedor pudo haberla marcado "destacada" dos veces desde el
+        // panel) — sin esto, las 2 secundarias de la portada podían
+        // terminar mostrando la foto repetida en vez de dos fotos
+        // distintas, según el orden del array.
+        $destacadas = array_values(array_unique($tour->fotos_destacadas_pdf ?? []));
         $secundarias = array_values(array_diff($destacadas, [$tour->foto_portada]));
 
+        // Pedido del usuario (07-sep-2026, con captura real: "veo más
+        // imágenes duplicadas más abajo"): antes acá también se armaba una
+        // sección "Galería de itinerario" con hasta 4 fotos destacadas,
+        // aparte de la portada — pero esas MISMAS fotos ya se repetían en
+        // las fotos por día del itinerario (fotosDelTour, agregado
+        // 04-sep-2026, DESPUÉS de que se diseñara esta galería) y en la
+        // propia portada. Con tours de pocas fotos (el caso real que
+        // expuso el bug tenía solo 3 en total), la misma foto terminaba
+        // saliendo 2-3 veces en el documento. Se quita la galería por
+        // completo — portada + fotos por día ya cubren lo que la galería
+        // pretendía mostrar, sin agregar nada nuevo.
         return [
             $this->imagenRecorte->recortar4x3ParaPdf($tour->foto_portada),
             $this->imagenRecorte->recortarVariasParaPdf(array_slice($secundarias, 0, 2)),
-            $this->imagenRecorte->recortarVariasParaPdf(array_slice($destacadas, 0, 4)),
         ];
     }
 
