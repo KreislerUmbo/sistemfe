@@ -28,15 +28,31 @@ class PdfFontService
         ['family' => 'Poppins-SemiBold', 'weight' => 'normal', 'style' => 'normal', 'archivo' => 'Poppins-SemiBold.ttf'],
     ];
 
-    // Se llama sobre el Dompdf real (Pdf::loadView(...)->getDomPDF()) DESPUÉS
-    // de loadView() pero ANTES de download()/stream() — dompdf recién
-    // resuelve fuentes durante render() (disparado por download()), así que
-    // registrar acá en el medio alcanza. registerFont() cachea el resultado
-    // en storage/fonts (mismo directorio que font_dir/font_cache de
-    // config/dompdf.php) — solo convierte el .ttf la primera vez.
+    // Bug real (07-sep-2026, reportado por el usuario — el PDF seguía
+    // saliendo en Helvetica pese a la fuente ya registrada y probada en
+    // aislado): storage_path() está REESCRITO por tenant
+    // (FilesystemTenancyBootstrapper, ver CLAUDE.md) — dentro de una
+    // request con tenant activo (el caso real, todo PDF se genera con un
+    // tenant resuelto) resuelve a storage/tenant{slug}/fonts/poppins/...,
+    // que no existe, así que is_file() fallaba en silencio y ningún peso
+    // se registraba nunca. Confirmado con
+    // storage_path('fonts/poppins/Poppins-Regular.ttf') dentro de
+    // $tenant->run() → resolvió literal a
+    // ".../storage/tenantagencia-demo/fonts/poppins/...".
+    // Poppins es un recurso COMPARTIDO (no un dato de negocio de un
+    // tenant) — mismo criterio que certificate-demo.pem (CLAUDE.md,
+    // Fase B.2): se referencia con base_path(), que NUNCA se reescribe
+    // por tenant, en vez de storage_path().
+    //
+    // Se llama sobre el Dompdf real (Pdf::loadView(...)->getDomPDF()) ANTES
+    // de loadView(): dompdf resuelve font-family contra las fuentes
+    // conocidas durante el parseo del CSS (loadHtml(), disparado por
+    // loadView()), no en el render() posterior — confirmado con el PDF
+    // real (grep de "Poppins" dentro de los bytes del archivo) que
+    // registrar después de loadView() no tenía efecto.
     public static function registrarPoppins(Dompdf $dompdf): void
     {
-        $directorio = storage_path('fonts/poppins');
+        $directorio = base_path('storage/fonts/poppins');
 
         foreach (self::FUENTES as $fuente) {
             $ruta = $directorio.DIRECTORY_SEPARATOR.$fuente['archivo'];

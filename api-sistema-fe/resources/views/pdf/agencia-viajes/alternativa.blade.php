@@ -440,13 +440,17 @@
         /* ── Fotos referenciales de los hoteles (plan §4.5) ────────── */
         .hotel-fotos-bloque {
             margin-bottom: 10px;
+            /* Mismo criterio que .hoteles-tabla tr — el nombre del hotel
+               nunca debe quedar solo al pie de una página, separado de su
+               propia tira de fotos. */
+            page-break-inside: avoid;
         }
 
         .hotel-fotos-nombre {
             font-family: 'Poppins-Medium', 'Poppins', sans-serif;
             font-weight: bold;
             font-size: 12px;
-            margin-bottom: 4px;
+            margin-bottom: 8px;
         }
 
         .hotel-fotos-tira img {
@@ -894,7 +898,18 @@
                     );
                 @endphp
                 @if ($filasConFotos->isNotEmpty())
-                    <div class="seccion-titulo" style="margin-top:10px;">Fotos referenciales de los hoteles</div>
+                    {{-- Bug real (07-sep-2026): al pasar a Poppins (ocupa un
+                         poco más de alto por línea que Arial), esta sección
+                         terminaba pisando la última fila de la tabla de
+                         precios cuando ambas no entraban juntas en lo que
+                         quedaba de página — page-break-inside:avoid en la
+                         tabla y en este bloque no alcanzó a resolverlo de
+                         forma confiable (dompdf calculando mal cuánto
+                         espacio quedaba). page-break-before:always es más
+                         tosco (puede dejar un resto de página en blanco
+                         arriba) pero garantiza que nunca más se solape con
+                         la tabla. --}}
+                    <div class="seccion-titulo" style="margin-top:10px; page-break-before: always;">Fotos referenciales de los hoteles</div>
                     @foreach ($filasConFotos as $fila)
                         @php $info = $hotelesInfo[$fila['opcion_hotel_id']]; @endphp
                         <div class="hotel-fotos-bloque">

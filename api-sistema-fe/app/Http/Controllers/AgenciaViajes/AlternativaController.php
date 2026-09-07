@@ -710,7 +710,19 @@ class AlternativaController extends Controller
         $alturaHeaderMm = $this->alturaHeaderMm($configPdf, $afiliaciones);
         $alturaFooterMm = $this->alturaFooterMm($configPdf);
 
-        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('pdf.agencia-viajes.alternativa', [
+        // Pedido del usuario (06-sep-2026) — Poppins en vez de Arial. Se
+        // registra ANTES de loadView(), no después: confirmado con el PDF
+        // real (grep de "Poppins"/"Helvetica" dentro de los bytes del
+        // archivo) que registrarlo después de loadView() no tenía efecto —
+        // dompdf ya resuelve font-family contra las fuentes conocidas
+        // durante el parseo del CSS (loadHtml(), disparado por loadView()),
+        // no en el render() posterior. Hay que resolver una instancia
+        // propia de PDF (no vía loadView() del facade, que crea la suya)
+        // para poder tocar getDomPDF() antes de cargarle el HTML.
+        $pdf = app('dompdf.wrapper');
+        \App\Services\PdfFontService::registrarPoppins($pdf->getDomPDF());
+
+        $pdf = $pdf->loadView('pdf.agencia-viajes.alternativa', [
             'alternativa' => $alternativa,
             'cotizacion' => $alternativa->cotizacion,
             'cliente' => $alternativa->cotizacion->cliente,
@@ -751,12 +763,6 @@ class AlternativaController extends Controller
             'descuentoMonto' => $descuentoMonto,
             'hayDescuento' => $descuentoMonto > 0.01,
         ]);
-
-        // Pedido del usuario (06-sep-2026) — Poppins en vez de Arial, misma
-        // fuente que ya usan en Word. Se registra DESPUÉS de loadView()
-        // pero ANTES de download(): dompdf recién resuelve fuentes durante
-        // render() (disparado por download()), en el medio alcanza.
-        \App\Services\PdfFontService::registrarPoppins($pdf->getDomPDF());
 
         $nombreArchivo = 'Cotizacion-' . ($alternativa->cotizacion->codigo ?? $alternativa->cotizacion_id) . '-' . \Illuminate\Support\Str::slug($alternativa->nombre) . '.pdf';
 
