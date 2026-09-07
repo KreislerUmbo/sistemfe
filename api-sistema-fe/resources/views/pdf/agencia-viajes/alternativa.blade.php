@@ -170,6 +170,8 @@
             font-family: 'Poppins-Medium', 'Poppins', sans-serif;
             font-weight: bold;
             font-size: 12px;
+            line-height: 16px;
+            margin-bottom: 6px;
         }
 
         .dia-item .paso {
@@ -187,13 +189,32 @@
            supiera el tamaño real hasta decodificarlas, terminaban pisando el
            título del día siguiente. Ahora recorte 4:3 fijo (mismo criterio
            que .galeria-itinerario) repartido en fila a ancho de página, no
-           amontonado a la izquierda. */
+           amontonado a la izquierda.
+
+           Bug real #2 (07-sep-2026), encontrado DESPUÉS del recorte 4:3:
+           el título del día seguía pisado por las fotos pese a que ninguno
+           de los dos elementos, medido por separado (bordes de depuración
+           rojo/azul), tenía una caja mal calculada — el problema es que
+           dompdf posiciona el bloque de fotos empezando a mitad de la
+           línea del título anterior en vez de después. margin-top grande
+           (24px, no un valor cosmético — confirmado con el render real que
+           valores chicos como 6px no alcanzan) como buffer. */
         .itinerario-fotos {
-            margin: 6px 0 8px;
+            margin: 24px 0 8px;
         }
 
         .itinerario-fotos img {
             width: 23%;
+            /* Bug real (07-sep-2026): el <img> lleva width="640"
+               height="480" fijos en el HTML (dompdf necesita conocer las
+               dimensiones ANTES de layout, ver comentario arriba) — sin
+               height:auto acá, dompdf escala el ancho al 23% del
+               contenedor pero deja el alto pegado en los 480px
+               absolutos del atributo HTML, deformando la foto (angosta
+               y estirada) y montando el texto siguiente con esa altura
+               de más. height:auto fuerza que el alto se recalcule en
+               proporción al ancho ya escalado. */
+            height: auto;
             margin-right: 2%;
             border-radius: 3px;
         }
@@ -408,9 +429,16 @@
         }
 
         .portada-principal img {
+            /* Bug real (07-sep-2026): object-fit no existe en dompdf (se
+               ignora en silencio) y max-height competía con el
+               height="480" fijo del atributo HTML del <img> (ver
+               ImagenRecorteService — la foto ya llega recortada 4:3
+               exacta) — el resultado era una foto angosta y estirada
+               verticalmente. Como el recorte ya garantiza 4:3, no hace
+               falta cortar de nuevo acá: width:100% + height:auto basta
+               para que dompdf escale proporcional. */
             width: 100%;
-            max-height: 260px;
-            object-fit: cover;
+            height: auto;
             border-radius: 3px;
         }
 
@@ -433,6 +461,9 @@
 
         .galeria-itinerario img {
             width: 23%;
+            /* Mismo bug/fix que .itinerario-fotos img (07-sep-2026) —
+               ver ese comentario. */
+            height: auto;
             margin-right: 2%;
             border-radius: 3px;
         }
@@ -450,11 +481,29 @@
             font-family: 'Poppins-Medium', 'Poppins', sans-serif;
             font-weight: bold;
             font-size: 12px;
-            margin-bottom: 8px;
+            margin-bottom: 4px;
+        }
+
+        .hotel-fotos-tira {
+            /* Mismo bug real que .dia-label/.itinerario-fotos
+               (07-sep-2026, ver ese comentario): un texto en fuente
+               custom (Poppins-Medium) seguido inmediatamente de una
+               fila de fotos — dompdf pinta la fila de fotos solapando
+               la línea de texto anterior, aunque la caja de cada uno
+               por separado mide bien. El margen va en el CONTENEDOR de
+               las fotos, no en el margin-bottom del texto de arriba
+               (confiar en que colapsen entre hermanos no alcanzó acá).
+               36px, no un valor cosmético — confirmado con el render
+               real que 24px (el que sí alcanzó para .itinerario-fotos)
+               NO fue suficiente en este bloque específico. */
+            margin-top: 36px;
         }
 
         .hotel-fotos-tira img {
             width: 31%;
+            /* Mismo bug/fix que .itinerario-fotos img (07-sep-2026) —
+               ver ese comentario. */
+            height: auto;
             margin-right: 2%;
             border-radius: 3px;
         }
