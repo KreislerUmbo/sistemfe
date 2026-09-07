@@ -624,6 +624,7 @@ class AlternativaController extends Controller
             }
 
             $opcionesClonadas = [];
+            $opcionalesClonados = [];
             foreach (OpcionMayorista::where('alternativa_id', $original->id)->get() as $opcion) {
                 $nuevaOpcion = OpcionMayorista::create([
                     'alternativa_id' => $nueva->id,
@@ -649,7 +650,7 @@ class AlternativaController extends Controller
                 $opcionesClonadas[$opcion->id] = $nuevaOpcion->id;
 
                 foreach (OpcionMayoristaOpcional::where('opcion_mayorista_id', $opcion->id)->get() as $opcional) {
-                    OpcionMayoristaOpcional::create([
+                    $nuevoOpcional = OpcionMayoristaOpcional::create([
                         'opcion_mayorista_id' => $nuevaOpcion->id,
                         'nombre' => $opcional->nombre,
                         'precio_por_persona' => $opcional->precio_por_persona,
@@ -660,6 +661,12 @@ class AlternativaController extends Controller
                         'contenido_tour_descripcion_snapshot' => $opcional->contenido_tour_descripcion_snapshot,
                         'contenido_tour_fotos_snapshot' => $opcional->contenido_tour_fotos_snapshot,
                     ]);
+                    // 07-sep-2026 — mismo criterio que $tarifasHotelClonadas:
+                    // un ítem real agregado desde este opcional (ver
+                    // AlternativaItemController::crearItemMayorista()) debe
+                    // remapear a la copia, no seguir apuntando al opcional
+                    // del original.
+                    $opcionalesClonados[$opcional->id] = $nuevoOpcional->id;
                 }
 
                 // paquete_plantilla_id se quitó de la tabla (migración
@@ -725,6 +732,11 @@ class AlternativaController extends Controller
                 if ($itemOriginal->opcion_hotel_tarifa_id !== null && isset($tarifasHotelClonadas[$itemOriginal->opcion_hotel_tarifa_id])) {
                     $cambios['opcion_hotel_tarifa_id'] = $tarifasHotelClonadas[$itemOriginal->opcion_hotel_tarifa_id];
                 }
+                // 07-sep-2026 — mismo criterio, para un ítem que materializa
+                // un OpcionMayoristaOpcional elegido (ver crearItemMayorista()).
+                if ($itemOriginal->opcion_mayorista_opcional_id !== null && isset($opcionalesClonados[$itemOriginal->opcion_mayorista_opcional_id])) {
+                    $cambios['opcion_mayorista_opcional_id'] = $opcionalesClonados[$itemOriginal->opcion_mayorista_opcional_id];
+                }
                 if ($cambios !== []) {
                     $itemsClonados[$itemOriginal->id]->update($cambios);
                 }
@@ -767,6 +779,10 @@ class AlternativaController extends Controller
             // también intenta el hotel de la matriz de un OpcionMayorista
             // (sin ProveedorTarifa real) antes de caer al genérico.
             'items.opcionHotelTarifa.opcionHotel',
+            // 07-sep-2026 — mismo criterio, para un ítem que materializa un
+            // OpcionMayoristaOpcional elegido de verdad (ver
+            // ReservaController::resolverNombreItem()).
+            'items.opcionMayoristaOpcional',
         ])->findOrFail($id);
 
         $config = \App\Models\AgenciaViajes\ConfiguracionAgencia::first();
@@ -814,7 +830,7 @@ class AlternativaController extends Controller
                 'detalle' => TextoFormatoService::textoLibreParaPdf($m->vuelo_detalle),
             ])
             ->values();
-        $mayoristasOpcionales = $mayoristas->flatMap(fn ($m) => $m->opcionales)->values();
+        $mayoristasOpcionales = $this->mayoristasOpcionalesPendientes($alternativa, $mayoristas);
 
         // Sesión 12f-3 — el PDF comercial deja de mostrar precio por ítem
         // (decisión del usuario, ver brief 12f3 §0.3): estos totales siguen
@@ -940,6 +956,23 @@ class AlternativaController extends Controller
             ->map(fn (AlternativaItem $item) => $item->opcionMayorista)
             ->filter()
             ->unique('id')
+            ->values();
+    }
+
+    // 07-sep-2026 — un opcional ya agregado de verdad al lienzo (sección
+    // "Opcionales" del cotizador, ver AlternativaItemController::
+    // crearItemMayorista()) deja de ser "algo que el cliente puede agregar
+    // aparte": ya está cobrado, sumado al total de "Precio". Si siguiera
+    // listado acá igual que los demás, el PDF le diría al cliente que
+    // puede agregarlo por separado cuando en realidad ya lo está pagando
+    // — confuso y potencialmente un doble mensaje sobre el mismo cargo.
+    // Se excluye de esta lista informativa.
+    private function mayoristasOpcionalesPendientes(Alternativa $alternativa, \Illuminate\Support\Collection $mayoristas): \Illuminate\Support\Collection
+    {
+        $opcionalesYaAgregados = $alternativa->items->pluck('opcion_mayorista_opcional_id')->filter()->unique();
+
+        return $mayoristas->flatMap(fn ($m) => $m->opcionales)
+            ->reject(fn ($opcional) => $opcionalesYaAgregados->contains($opcional->id))
             ->values();
     }
 

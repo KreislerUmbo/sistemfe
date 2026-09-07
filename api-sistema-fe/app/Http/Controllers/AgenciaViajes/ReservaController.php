@@ -53,6 +53,10 @@ class ReservaController extends Controller
         // como origen, ambos usados por resolverNombreItem().
         'items.alternativaItem.opcionHotelTarifa.opcionHotel',
         'items.opcionHotelTarifa.opcionHotel',
+        // 07-sep-2026 — mismo criterio, para un ítem que materializa un
+        // OpcionMayoristaOpcional elegido de verdad (ver
+        // resolverNombreItem() más abajo en este archivo).
+        'items.alternativaItem.opcionMayoristaOpcional',
         // Sesión 12h — mayorista que REALMENTE opera este ítem hoy (puede
         // diferir de items.alternativaItem.opcionMayorista si ya se
         // reasignó). Ver ReservaItem::opcionMayorista().
@@ -981,6 +985,21 @@ class ReservaController extends Controller
         // formato "hotel · tipo", el guard de count($partes) !== 2 las
         // descartaba a todas).
         if ($item->origen_tipo === AlternativaItem::ORIGEN_MAYORISTA) {
+            // 07-sep-2026 — un opcional elegido (San Blas, Taboga, Colón...)
+            // agregado de verdad al lienzo: nombre propio, no el genérico
+            // "Paquete mayorista"/proveedor de la rama de abajo. Sin
+            // equivalente en reserva_items todavía (a diferencia de
+            // opcion_hotel_tarifa_id, que sí tiene su propia columna
+            // espejo desde 2026-09-02) — a propósito, fuera de alcance de
+            // esta sesión: mientras no exista, siempre cae a la referencia
+            // del AlternativaItem original, que sigue siendo correcta salvo
+            // que alguien edite el opcional DESPUÉS de aceptada la reserva
+            // (mismo tipo de gap que ya tenían otros campos antes de
+            // ganar su columna espejo).
+            if ($item->opcion_mayorista_opcional_id) {
+                return $item->opcionMayoristaOpcional?->nombre ?? 'Tour opcional';
+            }
+
             $opcionHotelTarifaDeEsteItem = $reservaItem?->opcion_hotel_tarifa_id ? $reservaItem->opcionHotelTarifa : $item->opcionHotelTarifa;
 
             if (! $opcionHotelTarifaDeEsteItem) {

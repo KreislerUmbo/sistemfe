@@ -12,6 +12,7 @@ use App\Models\AgenciaViajes\DestinoServicio;
 use App\Models\AgenciaViajes\GuiaTarifa;
 use App\Models\AgenciaViajes\OpcionHotelTarifa;
 use App\Models\AgenciaViajes\OpcionMayorista;
+use App\Models\AgenciaViajes\OpcionMayoristaOpcional;
 use App\Models\AgenciaViajes\PaquetePlantilla;
 use App\Models\AgenciaViajes\Proveedor;
 use App\Models\AgenciaViajes\ProveedorServicio;
@@ -803,11 +804,21 @@ class AlternativaItemController extends Controller
     }
 
     // ── origen_tipo=mayorista ─────────────────────────────────────────
+    // 07-sep-2026 — acepta EXACTAMENTE una de dos fuentes de precio:
+    // opcion_hotel_tarifa_id (matriz de habitación, comportamiento de
+    // siempre) u opcion_mayorista_opcional_id (un tour opcional —San Blas,
+    // Taboga, Colón— que el cliente eligió agregar de verdad al lienzo,
+    // hueco real documentado desde 04-sep-2026: hasta ahora un opcional
+    // solo existía como info de referencia en el PDF, sin sumar nunca al
+    // total). Ambas comparten toda la validación de la OpcionMayorista
+    // (pertenece a esta alternativa, está 'elegida') y el tratamiento
+    // tributario — solo difiere de dónde sale costo_snapshot/precio_venta_snapshot.
     private function crearItemMayorista(Request $request, Alternativa $alternativa): JsonResponse
     {
         $validator = Validator::make($request->all(), [
             'opcion_mayorista_id' => 'required|integer|exists:opcion_mayorista,id',
-            'opcion_hotel_tarifa_id' => 'required|integer|exists:opciones_hotel_tarifas,id',
+            'opcion_hotel_tarifa_id' => 'required_without:opcion_mayorista_opcional_id|nullable|integer|exists:opciones_hotel_tarifas,id',
+            'opcion_mayorista_opcional_id' => 'required_without:opcion_hotel_tarifa_id|nullable|integer|exists:opcion_mayorista_opcionales,id',
             'cantidad' => 'nullable|integer|min:1',
             'pax_incluidos' => 'nullable|array',
             'dia_referencial' => 'nullable|integer|min:1',
@@ -832,12 +843,30 @@ class AlternativaItemController extends Controller
             return response()->json(['code' => 422, 'message' => 'Marcá la opción de mayorista como elegida antes de agregarla al ítem.'], 422);
         }
 
-        $tarifaHotel = OpcionHotelTarifa::with('opcionHotel')->findOrFail($validado['opcion_hotel_tarifa_id']);
-        if ($tarifaHotel->opcionHotel?->opcion_mayorista_id !== $opcion->id) {
-            return response()->json(['code' => 422, 'message' => 'Esa tarifa de habitación no pertenece a la opción de mayorista indicada.'], 422);
+        $tarifaHotel = null;
+        $opcional = null;
+
+        if (isset($validado['opcion_hotel_tarifa_id'])) {
+            $tarifaHotel = OpcionHotelTarifa::with('opcionHotel')->findOrFail($validado['opcion_hotel_tarifa_id']);
+            if ($tarifaHotel->opcionHotel?->opcion_mayorista_id !== $opcion->id) {
+                return response()->json(['code' => 422, 'message' => 'Esa tarifa de habitación no pertenece a la opción de mayorista indicada.'], 422);
+            }
+        } else {
+            $opcional = OpcionMayoristaOpcional::findOrFail($validado['opcion_mayorista_opcional_id']);
+            if ($opcional->opcion_mayorista_id !== $opcion->id) {
+                return response()->json(['code' => 422, 'message' => 'Ese opcional no pertenece a la opción de mayorista indicada.'], 422);
+            }
         }
 
         $tratamientoTributario = $this->resolverTratamientoTributario($validado['tip_afe_igv'] ?? null, $validado['destino_tributario'] ?? null);
+
+        // Un opcional (OpcionMayoristaOpcional) no tiene columna de costo —
+        // solo el precio que se le cobra al cliente (nunca se cargó margen
+        // para estos, a diferencia de hoteles/proveedores). costo_snapshot
+        // en 0 es honesto (no inventa un costo que nadie registró), no un
+        // valor "de relleno".
+        $precioVenta = $tarifaHotel?->precio_venta ?? $opcional->precio_por_persona;
+        $costo = $tarifaHotel?->precio_costo ?? 0;
 
         $item = AlternativaItem::create([
             'alternativa_id' => $alternativa->id,
@@ -849,15 +878,16 @@ class AlternativaItemController extends Controller
             // auditorías independientes). Sin esto, la trazabilidad hacia
             // la reserva/reporte operativo/PDF nunca puede resolver QUÉ
             // fila de la matriz de habitación fijó este precio.
-            'opcion_hotel_tarifa_id' => $tarifaHotel->id,
+            'opcion_hotel_tarifa_id' => $tarifaHotel?->id,
+            'opcion_mayorista_opcional_id' => $opcional?->id,
             'grupo_opcion_id' => $validado['grupo_opcion_id'] ?? null,
             'modo_precio' => 'tarifa_fija', // paquete internacional, siempre por habitación
             'cantidad' => $validado['cantidad'] ?? 1,
             'pax_incluidos' => $validado['pax_incluidos'] ?? null,
-            'moneda_costo' => $opcion->moneda,
-            'costo_snapshot' => $tarifaHotel->precio_costo,
-            'precio_venta_snapshot' => $tarifaHotel->precio_venta,
-            'precio_convertido' => $this->priceEngine->convertirMoneda((float) $tarifaHotel->precio_venta, $opcion->moneda, $alternativa->moneda_cotizacion, (float) $alternativa->tipo_cambio_aplicado),
+            'moneda_costo' => $opcional?->moneda ?? $opcion->moneda,
+            'costo_snapshot' => $costo,
+            'precio_venta_snapshot' => $precioVenta,
+            'precio_convertido' => $this->priceEngine->convertirMoneda((float) $precioVenta, $opcional?->moneda ?? $opcion->moneda, $alternativa->moneda_cotizacion, (float) $alternativa->tipo_cambio_aplicado),
             'dia_referencial' => $validado['dia_referencial'] ?? null,
             'tip_afe_igv' => $tratamientoTributario['tip_afe_igv'],
             'destino_tributario' => $tratamientoTributario['destino_tributario'],

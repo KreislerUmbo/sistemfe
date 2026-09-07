@@ -50,6 +50,11 @@ class AlternativaItem extends Model
         'proveedor_tarifa_id',
         'opcion_mayorista_id',
         'opcion_hotel_tarifa_id',
+        // Hueco real documentado desde 04-sep-2026 — un OpcionMayoristaOpcional
+        // (San Blas, Taboga, Colón...) solo existía como info de referencia
+        // en el PDF, sin forma de trazar que un ítem real "es" ese opcional
+        // elegido por el cliente. Mismo criterio que opcion_hotel_tarifa_id.
+        'opcion_mayorista_opcional_id',
         'grupo_opcion_id',
         'opcion_elegida',
         'guia_tarifa_id',
@@ -117,6 +122,14 @@ class AlternativaItem extends Model
     public function opcionHotelTarifa()
     {
         return $this->belongsTo(OpcionHotelTarifa::class, 'opcion_hotel_tarifa_id');
+    }
+
+    // 07-sep-2026 — qué OpcionMayoristaOpcional (San Blas, Taboga, Colón...)
+    // materializa este ítem, cuando el cliente eligió agregarlo al lienzo
+    // (ver ReservaController::resolverNombreItem()).
+    public function opcionMayoristaOpcional()
+    {
+        return $this->belongsTo(OpcionMayoristaOpcional::class, 'opcion_mayorista_opcional_id');
     }
 
     // Sesión fix/guia-como-item-real — de qué guia_tarifa vino el costo de

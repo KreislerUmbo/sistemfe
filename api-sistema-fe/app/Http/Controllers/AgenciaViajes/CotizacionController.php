@@ -149,6 +149,12 @@ class CotizacionController extends Controller
             // (AlternativaController::pdf()) pero no en este endpoint, que
             // es el que carga la pantalla del cotizador en sí.
             'alternativas.items.opcionHotelTarifa.opcionHotel',
+            // 07-sep-2026 — mismo criterio que la línea de arriba, para un
+            // ítem que materializa un OpcionMayoristaOpcional elegido (San
+            // Blas, Taboga, Colón...): sin esto, etiquetaItem() del
+            // cotizador caería al fallback genérico "Paquete mayorista" en
+            // vez de mostrar el nombre real del opcional.
+            'alternativas.items.opcionMayoristaOpcional',
             // Fix guia-como-item-real — nombre del guía/destino para
             // etiquetaItem() de un ítem origen_tipo=guia.
             'alternativas.items.guiaTarifa.guia',

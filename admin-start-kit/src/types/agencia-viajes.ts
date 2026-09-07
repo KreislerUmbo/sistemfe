@@ -414,6 +414,12 @@ export type AlternativaItem = {
   // el backend. Gap real cerrado: crearItemMayorista() nunca lo escribía.
   opcion_hotel_tarifa_id?: number | null;
   opcion_hotel_tarifa?: OpcionHotelTarifa | null;
+  // 07-sep-2026 — qué OpcionMayoristaOpcional (San Blas, Taboga, Colón...)
+  // materializa este ítem, cuando el cliente eligió agregarlo de verdad al
+  // lienzo (antes solo existía como info de referencia en el PDF). Ver
+  // AlternativaItem::opcionMayoristaOpcional() en el backend.
+  opcion_mayorista_opcional_id?: number | null;
+  opcion_mayorista_opcional?: OpcionMayoristaOpcional | null;
   // Sesión M1 — matriz de hoteles: N ítems comparten un mismo
   // grupo_opcion_id (generado por el frontend al crear el grupo), y
   // exactamente uno tiene opcion_elegida=true una vez resuelto. Ver

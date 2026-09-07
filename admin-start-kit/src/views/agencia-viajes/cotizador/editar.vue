@@ -1015,7 +1015,7 @@
                                         </div>
                                     </div>
                                     <div v-if="mostrarOpcionalesId === op.id" class="mt-2 border-top pt-2">
-                                        <div v-if="!op.opcionales?.length" class="text-muted small fst-italic mb-2">Sin opcionales cargados todavía — nunca se suman al total, son actividades que el cliente puede agregar aparte.</div>
+                                        <div v-if="!op.opcionales?.length" class="text-muted small fst-italic mb-2">Sin opcionales cargados todavía — son actividades que el cliente puede agregar aparte; "Agregar al lienzo" recién los suma al total.</div>
                                         <div v-for="opl in op.opcionales" :key="opl.id" class="border rounded p-2 mb-1">
                                             <div class="d-flex justify-content-between align-items-start">
                                                 <div>
@@ -1029,6 +1029,17 @@
                                                     <span v-else class="spinner-border spinner-border-sm" style="width:11px;height:11px"></span>
                                                 </div>
                                             </div>
+                                            <!-- Hueco real cerrado (07-sep-2026): hasta ahora un opcional
+                                                 solo era info de referencia en el PDF, sin forma de que el
+                                                 cliente lo elija de verdad y sume al total. Mismo criterio
+                                                 "por persona" que ya usa el hotel de la matriz mayorista. -->
+                                            <button class="btn btn-sm btn-outline-success w-100 mt-1"
+                                                :disabled="agregandoOpcionalAlLienzoId === opl.id || op.estado !== 'elegida'"
+                                                :title="op.estado !== 'elegida' ? 'Marcá esta opción como elegida para poder agregar sus opcionales' : ''"
+                                                @click="agregarOpcionalAlLienzo(op, opl)">
+                                                <span v-if="agregandoOpcionalAlLienzoId === opl.id" class="spinner-border spinner-border-sm me-1"></span>
+                                                <i v-else class="fas fa-plus me-1"></i>Agregar al lienzo
+                                            </button>
                                             <div v-if="opcionalEnEdicionId === opl.id" class="mt-1 border-top pt-1">
                                                 <input type="text" class="form-control form-control-sm mb-1" placeholder="Nombre" v-model="formEdicionOpcional.nombre">
                                                 <div class="row g-1 mb-1">
@@ -2840,6 +2851,34 @@ const agregarItemMayorista = async (op: OpcionMayorista, opcionHotelTarifaId: nu
     }
 };
 
+// Hueco real documentado desde 04-sep-2026 (opcionales de mayorista):
+// hasta ahora un OpcionMayoristaOpcional (San Blas, Taboga, Colón...) solo
+// existía como info de referencia en el PDF — sin forma de que el cliente
+// lo elija de verdad y sume al total. Mismo endpoint que agregarItemMayorista()
+// (crearItemMayorista() en el backend ahora acepta opcion_mayorista_opcional_id
+// como fuente de precio alternativa a opcion_hotel_tarifa_id), misma
+// cantidad "por persona" que ya usa el hotel de la matriz mayorista.
+const agregandoOpcionalAlLienzoId = ref<number | null>(null);
+const agregarOpcionalAlLienzo = async (op: OpcionMayorista, opl: OpcionMayoristaOpcional) => {
+    if (!alternativaActiva.value) return;
+    agregandoOpcionalAlLienzoId.value = opl.id;
+    try {
+        const res = await alternativaItemService.agregarMayorista(alternativaActiva.value.id, {
+            opcion_mayorista_id: op.id,
+            opcion_mayorista_opcional_id: opl.id,
+            cantidad: cantidadAdultosCotizacion.value,
+            dia_referencial: diaActivoParaAgregar.value,
+            alternativa_destino_id: destinoActivoId.value,
+        });
+        await onServicioSueltoAgregado(res.alternativa_item);
+        toast.success(`"${opl.nombre}" agregado al lienzo`);
+    } catch (error: any) {
+        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo agregar el opcional', 'error');
+    } finally {
+        agregandoOpcionalAlLienzoId.value = null;
+    }
+};
+
 // Sesión M4 — mismo atajo que agregarGrupoProveedorHotel(), para el flujo
 // mayorista (Internacional).
 // Bug real encontrado por el usuario (04-sep-2026, simulación Panamá): acá
@@ -3378,6 +3417,14 @@ const etiquetaItem = (item: AlternativaItem) => {
     // "hotel · tipo_habitación", tanto en el lienzo como en el resumen.
     // Ahora solo cae acá cuando NO es un ítem de la matriz de hoteles
     // (paquete "tarifa fija" sin habitación propia).
+    // 07-sep-2026 — un opcional elegido (San Blas, Taboga, Colón...)
+    // agregado de verdad al lienzo: nombre propio, no el genérico "Paquete
+    // mayorista"/proveedor de la rama de abajo (mismo criterio que ya
+    // aplica opcion_hotel_tarifa arriba). Tiene que ir ANTES del `if` de
+    // opcion_hotel_tarifa — un opcional nunca tiene tarifa de habitación.
+    if (item.origen_tipo === 'mayorista' && item.opcion_mayorista_opcional) {
+        return item.opcion_mayorista_opcional.nombre;
+    }
     if (item.origen_tipo === 'mayorista' && !item.opcion_hotel_tarifa) {
         return item.opcion_mayorista?.proveedor?.nombre_comercial ?? item.opcion_mayorista?.proveedor?.razon_social ?? 'Paquete mayorista';
     }
