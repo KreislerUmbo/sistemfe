@@ -48,6 +48,7 @@ declare module 'vue' {
     BTh: typeof import('bootstrap-vue-next')['BTh']
     BThead: typeof import('bootstrap-vue-next')['BThead']
     BTr: typeof import('bootstrap-vue-next')['BTr']
+    CalculadoraTipoCambioModal: typeof import('./src/components/AgenciaViajes/CalculadoraTipoCambioModal.vue')['default']
     CartDrawer: typeof import('./src/components/portal/CartDrawer.vue')['default']
     ChartJs: typeof import('./src/components/ChartJs.vue')['default']
     ClientFormQuick: typeof import('./src/components/Sales/ClientFormQuick.vue')['default']

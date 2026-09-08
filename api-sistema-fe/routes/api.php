@@ -36,6 +36,7 @@ use App\Http\Controllers\AgenciaViajes\SalidaOperativaController;
 use App\Http\Controllers\AgenciaViajes\ServicioController;
 use App\Http\Controllers\AgenciaViajes\TemporadaController;
 use App\Http\Controllers\AgenciaViajes\TemporadaOcurrenciaController;
+use App\Http\Controllers\AgenciaViajes\TipoCambioAgenciaController;
 use App\Http\Controllers\AgenciaViajes\TourItinerarioItemController;
 use App\Http\Controllers\AgenciaViajes\VentaDirectaController;
 use App\Http\Controllers\AuthController;
@@ -775,6 +776,13 @@ Route::group([
     Route::put("opcion-mayorista-opcionales/{id}", [OpcionMayoristaController::class, 'actualizarOpcional'])
         ->middleware('permission:agencia.cotizaciones');
     Route::delete("opcion-mayorista-opcionales/{id}", [OpcionMayoristaController::class, 'eliminarOpcional'])
+        ->middleware('permission:agencia.cotizaciones');
+
+    // Calculadora de conversión de moneda (07-sep-2026) — independiente de
+    // cualquier Alternativa, ver TipoCambioAgenciaController.
+    Route::get("tipo-cambio-agencia/actual", [TipoCambioAgenciaController::class, 'actual'])
+        ->middleware('permission:agencia.cotizaciones');
+    Route::post("tipo-cambio-agencia", [TipoCambioAgenciaController::class, 'store'])
         ->middleware('permission:agencia.cotizaciones');
 
     // Sesión M3 — hotel ad-hoc LOCAL, standalone (sin opcion_mayorista_id).

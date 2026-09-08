@@ -131,6 +131,10 @@
             </div>
         </div>
 
+        <CalculadoraTipoCambioModal v-if="mostrarCalculadoraTipoCambio && alternativaActiva"
+            :moneda-cotizacion="alternativaActiva.moneda_cotizacion" :total-alternativa="totalLocal"
+            @close="mostrarCalculadoraTipoCambio = false" />
+
         <!-- Pestañas de alternativas -->
         <div class="d-flex align-items-center gap-2 mb-3 flex-wrap" v-if="cotizacion">
             <span v-for="alt in cotizacion.alternativas" :key="alt.id" class="alt-pill badge rounded-pill px-3 py-2 d-inline-flex align-items-center gap-2"
@@ -592,7 +596,10 @@
 
                         <hr>
                         <div class="d-flex justify-content-between align-items-baseline">
-                            <span class="small text-secondary">Total</span>
+                            <span class="small text-secondary">
+                                Total
+                                <i class="fas fa-calculator ms-1 text-primary" style="cursor:pointer" title="Calcular en la otra moneda" @click="mostrarCalculadoraTipoCambio = true"></i>
+                            </span>
                             <span class="fs-4 fw-semibold">{{ alternativaActiva.moneda_cotizacion }} {{ totalLocal.toFixed(2) }}</span>
                         </div>
 
@@ -1196,6 +1203,7 @@ import ItemManualForm from '@/components/AgenciaViajes/ItemManualForm.vue';
 import PromoverProveedorModal from '@/components/AgenciaViajes/PromoverProveedorModal.vue';
 import PromoverHotelProveedorModal from '@/components/AgenciaViajes/PromoverHotelProveedorModal.vue';
 import DestinoTreeSelect from '@/components/AgenciaViajes/DestinoTreeSelect.vue';
+import CalculadoraTipoCambioModal from '@/components/AgenciaViajes/CalculadoraTipoCambioModal.vue';
 import ClientFormQuick from '@/components/Sales/ClientFormQuick.vue';
 import { useToast } from '@/composables/useToast';
 import { cotizacionService } from '@/services/admin/cotizacionService';
@@ -1290,6 +1298,7 @@ const clientSearchText = ref('');
 const clientSuggestions = ref<Client[]>([]);
 const showClientSuggestions = ref(false);
 const showQuickClientModal = ref(false);
+const mostrarCalculadoraTipoCambio = ref(false);
 const modoEdicionCliente = ref(false);
 let clientSearchTimeout: any = null;
 
