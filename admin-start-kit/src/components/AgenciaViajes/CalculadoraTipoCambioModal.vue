@@ -20,7 +20,7 @@
                     <div class="mb-2">
                         <label class="form-label mb-1 small fw-semibold text-secondary">Tipo de cambio a usar</label>
                         <div class="input-group input-group-sm">
-                            <span class="input-group-text">{{ monedaCotizacion === 'USD' ? 'PEN por USD' : 'USD por PEN' }}</span>
+                            <span class="input-group-text">PEN por USD</span>
                             <input type="number" step="0.0001" min="0.0001" class="form-control" v-model.number="tipoCambio">
                         </div>
                         <small v-if="cargandoActual" class="text-muted">Cargando último tipo de cambio registrado…</small>
@@ -39,7 +39,7 @@
                         <span class="fs-4 fw-semibold text-primary">{{ monedaDestino }} {{ resultado.toFixed(2) }}</span>
                     </div>
                     <small class="text-muted d-block">
-                        {{ monedaCotizacion }} {{ totalAlternativa.toFixed(2) }} × {{ tipoCambio || 0 }} = {{ monedaDestino }} {{ resultado.toFixed(2) }}
+                        {{ monedaCotizacion }} {{ totalAlternativa.toFixed(2) }} {{ monedaCotizacion === 'USD' ? '×' : '÷' }} {{ tipoCambio || 0 }} = {{ monedaDestino }} {{ resultado.toFixed(2) }}
                         · calculado hoy {{ fechaHoy }}
                     </small>
                 </div>
@@ -80,7 +80,15 @@ const origenUltimoRegistrado = ref<string>('');
 const monedaDestino = computed(() => (props.monedaCotizacion === 'USD' ? 'PEN' : 'USD'));
 const fechaHoy = new Date().toLocaleDateString('es-PE');
 
-const resultado = computed(() => props.totalAlternativa * (tipoCambio.value || 0));
+// tipoCambio siempre es "PEN por 1 USD" (mismo criterio que
+// PriceEngineService::convertirMoneda()) — de USD a PEN se multiplica, de
+// PEN a USD se divide. Nunca invertir el valor mostrado/guardado según la
+// dirección, solo la operación.
+const resultado = computed(() => {
+    const tc = tipoCambio.value || 0;
+    if (!tc) return 0;
+    return props.monedaCotizacion === 'USD' ? props.totalAlternativa * tc : props.totalAlternativa / tc;
+});
 
 onMounted(async () => {
     try {
