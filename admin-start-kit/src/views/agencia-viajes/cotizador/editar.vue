@@ -596,11 +596,13 @@
 
                         <hr>
                         <div class="d-flex justify-content-between align-items-baseline">
-                            <span class="small text-secondary">
-                                Total
-                                <i class="fas fa-calculator ms-1 text-primary" style="cursor:pointer" title="Calcular en la otra moneda" @click="mostrarCalculadoraTipoCambio = true"></i>
-                            </span>
+                            <span class="small text-secondary">Total {{ resumenPaxTotal }}</span>
                             <span class="fs-4 fw-semibold">{{ alternativaActiva.moneda_cotizacion }} {{ totalLocal.toFixed(2) }}</span>
+                        </div>
+                        <div class="text-end">
+                            <a href="#" class="small" @click.prevent="mostrarCalculadoraTipoCambio = true">
+                                Convertir a {{ alternativaActiva.moneda_cotizacion === 'USD' ? 'soles' : 'dólares' }}
+                            </a>
                         </div>
 
                         <div class="mt-3 d-flex flex-column gap-2">
@@ -1265,6 +1267,27 @@ const resumenPax = computed(() => {
     const counts: Record<string, number> = {};
     pax.forEach((p) => { counts[p.tipo_pax] = (counts[p.tipo_pax] ?? 0) + 1; });
     return Object.entries(counts).map(([t, n]) => `${n} ${t}`).join(', ') || 'sin pasajeros';
+});
+
+// Pedido del usuario (07-sep-2026) — el Total del panel no dejaba claro
+// para cuántas personas ya estaba calculado ese monto. Mismo criterio de
+// texto que "TOTAL {N ADULTOS}" del PDF (alternativa.blade.php), pero en
+// minúscula/entre paréntesis porque acá es un subtítulo, no el título de
+// una caja destacada.
+const etiquetasPaxResumen: Record<string, [string, string]> = {
+    adulto: ['adulto', 'adultos'],
+    nino: ['niño', 'niños'],
+    infante: ['infante', 'infantes'],
+};
+const resumenPaxTotal = computed(() => {
+    const pax = cotizacion.value?.pasajeros ?? [];
+    const counts: Record<string, number> = {};
+    pax.forEach((p) => { counts[p.tipo_pax] = (counts[p.tipo_pax] ?? 0) + 1; });
+    const partes = Object.entries(counts).map(([tipo, n]) => {
+        const [singular, plural] = etiquetasPaxResumen[tipo] ?? [tipo, `${tipo}s`];
+        return `${n} ${n === 1 ? singular : plural}`;
+    });
+    return partes.length ? `(${partes.join(' + ')})` : '';
 });
 
 // Punto 1 (ronda mayoristas) — el precio de cada tipo de habitación de una
