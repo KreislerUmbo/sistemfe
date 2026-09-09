@@ -56,6 +56,16 @@ class Alternativa extends Model
         return $this->belongsTo(Cotizacion::class, 'cotizacion_id');
     }
 
+    // 09-sep-2026 — no existía ninguna relación directa hacia Reserva
+    // (siempre se consultaba con Reserva::where('alternativa_id', ...)
+    // desde el lado de Reserva). Se agrega para poder eager-cargar
+    // 'alternativas.reserva' desde Cotizacion::estadoResumen() sin N+1 en
+    // el listado.
+    public function reserva()
+    {
+        return $this->hasOne(Reserva::class, 'alternativa_id');
+    }
+
     // orderBy('id') explícito: sin esto, Postgres no garantiza el orden de
     // fila sin ORDER BY, y un UPDATE (ej. editar precio) puede reubicar
     // físicamente la fila — el ítem "saltaba" de posición en el lienzo del

@@ -32,16 +32,17 @@
                                 <th>Cliente</th>
                                 <th>Destino</th>
                                 <th>Fechas del viaje</th>
+                                <th class="text-center">Estado</th>
                                 <th class="text-center">Alternativas</th>
                                 <th class="text-center pe-3">Acciones</th>
                             </tr>
                         </thead>
                         <tbody>
                             <tr v-if="loading">
-                                <td colspan="6" class="text-center py-5 text-muted"><div class="spinner-border spinner-border-sm me-2"></div>Cargando...</td>
+                                <td colspan="7" class="text-center py-5 text-muted"><div class="spinner-border spinner-border-sm me-2"></div>Cargando...</td>
                             </tr>
                             <tr v-else-if="cotizaciones.length === 0">
-                                <td colspan="6" class="text-center py-5 text-muted fst-italic">Sin cotizaciones registradas.</td>
+                                <td colspan="7" class="text-center py-5 text-muted fst-italic">Sin cotizaciones registradas.</td>
                             </tr>
                             <tr v-for="cotizacion in cotizaciones" :key="cotizacion.id">
                                 <td class="ps-3 fw-semibold">{{ cotizacion.codigo }}</td>
@@ -52,6 +53,11 @@
                                         {{ formatFecha(cotizacion.fecha_viaje_desde) }} — {{ formatFecha(cotizacion.fecha_viaje_hasta) }}
                                     </span>
                                     <span v-else class="text-muted fst-italic">Sin definir</span>
+                                </td>
+                                <td class="text-center">
+                                    <span class="badge rounded-pill" :class="badgeEstado(cotizacion.estado_resumen).clase">
+                                        {{ badgeEstado(cotizacion.estado_resumen).texto }}
+                                    </span>
                                 </td>
                                 <td class="text-center">{{ cotizacion.alternativas_count ?? 0 }}</td>
                                 <td class="text-center pe-3">
@@ -80,6 +86,20 @@ import type { Cotizacion } from '@/types/agencia-viajes';
 import { formatFecha } from '@/helpers/fecha';
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
+
+// Taxonomía de estados del listado (09-sep-2026) — estado_resumen es un
+// campo CALCULADO por Cotizacion::estadoResumen() en el backend, no una
+// columna real (Cotizacion no tiene 'estado' propio).
+const badgeEstado = (estado?: Cotizacion['estado_resumen']) => {
+    switch (estado) {
+        case 'reservada': return { texto: 'Reservada', clase: 'bg-success' };
+        case 'anulada': return { texto: 'Anulada', clase: 'bg-danger' };
+        case 'vencida': return { texto: 'Vencida', clase: 'bg-warning text-dark' };
+        case 'enviada': return { texto: 'Enviada', clase: 'bg-info text-dark' };
+        case 'descartada': return { texto: 'Descartada', clase: 'bg-dark' };
+        default: return { texto: 'Borrador', clase: 'bg-secondary' };
+    }
+};
 
 const cotizaciones = ref<Cotizacion[]>([]);
 const search = ref<string>('');

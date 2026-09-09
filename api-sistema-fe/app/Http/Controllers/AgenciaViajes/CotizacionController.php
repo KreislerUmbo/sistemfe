@@ -32,7 +32,11 @@ class CotizacionController extends Controller
 
     public function index(Request $request)
     {
-        $query = Cotizacion::with('cliente')->withCount('alternativas');
+        // 'alternativas.reserva' — necesario para Cotizacion::estadoResumen()
+        // (09-sep-2026, taxonomía de estados del listado: reservada/anulada/
+        // vencida/enviada/borrador/descartada). Sin este eager-load,
+        // estadoResumen() dispararía un lazy-load por fila (N+1).
+        $query = Cotizacion::with(['cliente', 'alternativas.reserva'])->withCount('alternativas');
 
         if ($request->filled('search')) {
             $search = $request->get('search');
@@ -44,13 +48,23 @@ class CotizacionController extends Controller
 
         // Cotizacion no tiene columna 'estado' propia (vive en cada
         // alternativa) — ?estado= filtra cotizaciones que tengan AL MENOS
-        // una alternativa en ese estado, no un estado propio del header.
+        // una alternativa en ese estado literal de Alternativa
+        // ('borrador'/'enviada'/'aceptada'/'descartada'), DISTINTO del
+        // estado_resumen calculado que devuelve cada fila más abajo (ese es
+        // un resumen de negocio — ej. 'reservada'/'anulada' — no un valor
+        // real de ninguna columna, no se puede filtrar igual con whereHas).
         if ($request->filled('estado')) {
             $estado = $request->get('estado');
             $query->whereHas('alternativas', fn ($q) => $q->where('estado', $estado));
         }
 
         $cotizaciones = $query->orderByDesc('id')->paginate(15);
+
+        $cotizaciones->getCollection()->transform(function (Cotizacion $c) {
+            $c->estado_resumen = $c->estadoResumen();
+
+            return $c;
+        });
 
         return response()->json([
             'total' => $cotizaciones->total(),

@@ -307,6 +307,11 @@ export type Cotizacion = {
   pasajeros?: CotizacionPasajero[];
   alternativas?: Alternativa[];
   alternativas_count?: number;
+  // 09-sep-2026 — resumen calculado (Cotizacion::estadoResumen() en el
+  // backend), no una columna real: Cotizacion no tiene 'estado' propio,
+  // vive en cada Alternativa + la Reserva una vez aceptada. Solo viene en
+  // CotizacionController::index(); no asumir que otros endpoints lo traen.
+  estado_resumen?: 'borrador' | 'enviada' | 'vencida' | 'reservada' | 'anulada' | 'descartada';
 };
 
 export type Cotizaciones = {
