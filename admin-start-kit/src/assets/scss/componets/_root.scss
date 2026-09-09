@@ -57,20 +57,28 @@ html[data-bs-theme="dark"] {
   --#{$prefix}menu-label-color: #{$menu-label-color-dark};
 }
 
-// Fix (07-sep-2026, hallazgo real del usuario en varias pantallas de
+// Fix (07/09-sep-2026, hallazgo real del usuario en varias pantallas de
 // Agencia de Viajes) — arriba, --bs-dark/--bs-body-color/etc. se remapean
 // A PROPÓSITO a colores CLAROS en tema oscuro, para que el texto normal
 // (.text-dark, texto sin clase, etc.) se lea bien contra el fondo OSCURO
-// del resto de la app. Pero varios componentes usan .bg-white de forma
-// literal (no themed) para una caja que SIEMPRE debe verse blanca — un
+// del resto de la app. Pero varios componentes usan un fondo CLARO
+// literal (no themed) para una caja que SIEMPRE debe verse clara — un
 // header de "paso" en un formulario (proveedores/form.vue, paquetes/
-// form.vue), o un campo de asignación en línea (reservas/detalle.vue,
-// reporte-operativo, salidas). Con el remapeo de arriba, el texto de esas
-// cajas queda claro-sobre-blanco = invisible. Las variables CSS heredan a
-// los hijos, así que resetear el set completo acá adentro corrige
+// form.vue), un campo de asignación en línea (reservas/detalle.vue,
+// reporte-operativo, salidas), o el hover de una tarjeta de la biblioteca
+// del cotizador (.lib-item:hover en cotizador/editar.vue, mismo bug
+// reproducido en vivo con Playwright: el texto se lee bien hasta que se
+// pasa el mouse encima). Con el remapeo de arriba, el texto de esas cajas
+// queda claro-sobre-claro = invisible. Las variables CSS heredan a los
+// hijos, así que resetear el set completo acá adentro corrige
 // .text-dark/.text-secondary/.text-muted/texto sin clase de una sola vez,
-// sin tocar cada template uno por uno.
-html[data-bs-theme="dark"] .bg-white {
+// sin tocar cada template uno por uno. .lib-item vive en un <style
+// scoped> de un componente, pero una regla en una hoja GLOBAL como esta
+// igual la alcanza por nombre de clase (el scoping de Vue solo protege
+// las reglas escritas adentro de ESE <style scoped>, no bloquea que algo
+// de afuera la seleccione).
+html[data-bs-theme="dark"] .bg-white,
+html[data-bs-theme="dark"] .lib-item:hover {
   --#{$prefix}body-color: #{$body-color};
   --#{$prefix}body-color-rgb: #{to-rgb($body-color)};
   --#{$prefix}emphasis-color: #{$body-emphasis-color};

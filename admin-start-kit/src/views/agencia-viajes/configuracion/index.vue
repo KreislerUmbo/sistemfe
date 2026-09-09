@@ -514,7 +514,7 @@
                                      vea el efecto antes de guardar (plan §4.4). -->
                                 <div class="col-lg-5">
                                     <label class="form-label mb-1 small fw-semibold text-secondary d-block">Vista previa</label>
-                                    <div class="border rounded p-3" style="background:#fafafa;">
+                                    <div class="border rounded p-3 bg-white" style="background:#fafafa;">
                                         <div class="d-flex justify-content-between align-items-start mb-2">
                                             <div>
                                                 <div class="fw-bold" :style="{ color: formPdf.color_primario || '#1f2937' }">NOMBRE DE LA AGENCIA</div>

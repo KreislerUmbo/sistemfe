@@ -736,10 +736,3 @@ onMounted(() => {
 });
 
 </script>
-
-<style scoped>
-/* Opcional: pequeños ajustes de estilo */
-.bg-light {
-  background-color: #f8f9fa !important;
-}
-</style>

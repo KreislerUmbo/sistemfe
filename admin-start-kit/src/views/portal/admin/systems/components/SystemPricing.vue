@@ -254,10 +254,3 @@ if (!props.plans || props.plans.length === 0) {
   updatePlans();
 }
 </script>
-
-<style scoped>
-/* Estilos opcionales para mejorar la visualización */
-.bg-light {
-  background-color: #f8f9fa !important;
-}
-</style>

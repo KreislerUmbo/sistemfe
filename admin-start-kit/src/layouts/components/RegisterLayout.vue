@@ -39,4 +39,18 @@ export default {
   color: var(--text-color, #141414);
   backdrop-filter: blur(5px);
 }
+
+/* Fix (09-sep-2026) — el <h4> de acá adentro quedaba invisible en tema
+   oscuro: Bootstrap le pone su propia regla explícita de color
+   (h1..h6 { color: var(--bs-heading-color) }), que en tema oscuro esta
+   app remapea A PROPÓSITO a un color casi blanco (para leerse bien
+   contra el fondo oscuro del resto de la app) — eso GANA por sobre el
+   color heredado de .form-header de arriba (una declaración explícita
+   siempre le gana a una heredada, sin importar la especificidad). Como
+   .form-header SIEMPRE es un fondo claro literal (no themed), el título
+   necesita su propio color explícito para no depender de esa variable.
+*/
+.form-header h4 {
+  color: var(--text-color, #141414);
+}
 </style>
