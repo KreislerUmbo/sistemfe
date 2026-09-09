@@ -10,6 +10,7 @@ use App\Models\Sale\Sale;
 use App\Models\Sale\SerieComprobante;
 use App\Models\Sale\TipoComprobante;
 use App\Services\SerieComprobanteService;
+use App\Services\TipoCambio\TipoCambioSunatResolver;
 use App\Services\TotalesComprobanteCalculator;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -26,7 +27,8 @@ class FacturacionElectronicaController extends Controller
     public function __construct(
         GreenterService $greenter_service,
         TotalesComprobanteCalculator $totales_calculator,
-        SerieComprobanteService $serie_comprobante_service
+        SerieComprobanteService $serie_comprobante_service,
+        private TipoCambioSunatResolver $tipoCambioSunatResolver,
     ) {
         $this->greenter_service          = $greenter_service;
         $this->totales_calculator        = $totales_calculator;
@@ -292,6 +294,18 @@ class FacturacionElectronicaController extends Controller
         // El frontend guarda 'PEN' o 'USD' directamente
         $datos_comprobante['tipo_moneda'] = $venta->currency ?? 'PEN';
 
+        // ── Snapshot del tipo de cambio SUNAT/SBS (solo ventas en USD) ──
+        // Greenter no tiene ningún campo para esto en el Invoice — el XML
+        // de una factura en USD no lleva tipo de cambio, SUNAT lo exige
+        // recién en el Registro de Ventas/PLE (todavía no existe en este
+        // proyecto). Se guarda igual como snapshot para cuando ese reporte
+        // se construya. Decisión del usuario (09-sep-2026): NUNCA bloquea
+        // el envío — si no hay dato disponible queda null.
+        $tipoCambioSunatAplicado = null;
+        if ($datos_comprobante['tipo_moneda'] === 'USD') {
+            $tipoCambioSunatAplicado = $this->tipoCambioSunatResolver->resolverParaFecha(now())?->venta;
+        }
+
         // ── Enviar a SUNAT usando Greenter ────────────────────────────
         // Envuelto en try/catch: antes, si Greenter lanzaba una excepción
         // de validación (ej. un campo requerido nulo) ANTES de llegar a
@@ -306,9 +320,10 @@ class FacturacionElectronicaController extends Controller
             $result  = $see->send($invoice);
         } catch (\Throwable $e) {
             $venta->update([
-                'sunat_error_code'    => null,
-                'sunat_error_message' => $e->getMessage(),
-                'sunat_sent_at'       => now(),
+                'sunat_error_code'            => null,
+                'sunat_error_message'         => $e->getMessage(),
+                'sunat_sent_at'               => now(),
+                'tipo_cambio_sunat_aplicado'  => $tipoCambioSunatAplicado,
             ]);
 
             // Código de estado real: si es un HttpException (ej. el guard
@@ -335,9 +350,10 @@ class FacturacionElectronicaController extends Controller
             $mensaje = "CDR recibido pero no procesado: {$e->getMessage()}";
 
             $venta->update([
-                'sunat_error_code'    => null,
-                'sunat_error_message' => $mensaje,
-                'sunat_sent_at'       => now(),
+                'sunat_error_code'            => null,
+                'sunat_error_message'         => $mensaje,
+                'sunat_sent_at'               => now(),
+                'tipo_cambio_sunat_aplicado'  => $tipoCambioSunatAplicado,
             ]);
 
             return response()->json([
@@ -374,11 +390,12 @@ Storage::disk('public')->put('debug_xml.xml', $xml);
             // y las rutas del XML/CDR. El correlativo ya quedó reservado en
             // reservarCorrelativo(), no se vuelve a tocar aquí.
             $venta->update([
-                "n_operacion"         => $datos_comprobante['serie'] . "-" . str_pad($correlativo, 8, '0', STR_PAD_LEFT),
-                "cdr"                 => $respuesta['cdrZip'],
-                "xml"                 => $ruta_publica_xml,
-                "hash_cpe"            => $hash_cpe,
-                "sunat_sent_at"       => now(),
+                "n_operacion"                 => $datos_comprobante['serie'] . "-" . str_pad($correlativo, 8, '0', STR_PAD_LEFT),
+                "cdr"                         => $respuesta['cdrZip'],
+                "xml"                         => $ruta_publica_xml,
+                "hash_cpe"                    => $hash_cpe,
+                "sunat_sent_at"               => now(),
+                "tipo_cambio_sunat_aplicado"  => $tipoCambioSunatAplicado,
                 // Limpiar el error de un intento previo fallido — si no,
                 // un reenvío exitoso deja sunat_error_code/message con el
                 // valor del rechazo anterior aunque xml/cdr ya estén bien.
@@ -396,9 +413,10 @@ Storage::disk('public')->put('debug_xml.xml', $xml);
         // Antes se perdía (solo se devolvía en el response transitorio) —
         // ver migración alter_sales_add_sunat_rejection_fields.
         $venta->update([
-            'sunat_error_code'    => $respuesta['error']['code'] ?? null,
-            'sunat_error_message' => $respuesta['error']['message'] ?? null,
-            'sunat_sent_at'       => now(),
+            'sunat_error_code'            => $respuesta['error']['code'] ?? null,
+            'sunat_error_message'         => $respuesta['error']['message'] ?? null,
+            'sunat_sent_at'               => now(),
+            'tipo_cambio_sunat_aplicado'  => $tipoCambioSunatAplicado,
         ]);
 
         return response()->json([

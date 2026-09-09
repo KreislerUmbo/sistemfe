@@ -45,7 +45,7 @@
                 </div>
                 <div class="modal-footer">
                     <button class="btn btn-sm btn-secondary" @click="$emit('close')">Cerrar</button>
-                    <button class="btn btn-sm btn-outline-primary" :disabled="!tipoCambio || guardando" @click="guardarTipoCambio">
+                    <button class="btn btn-sm btn-outline-primary" :disabled="!tipoCambio || guardando" @click="guardarTipoCambio()">
                         <span v-if="guardando" class="spinner-border spinner-border-sm me-1"></span>
                         <i v-else class="fas fa-save me-1"></i>Guardar este tipo de cambio
                     </button>
@@ -106,13 +106,31 @@ onMounted(async () => {
     }
 });
 
-const guardarTipoCambio = async () => {
+const guardarTipoCambio = async (confirmado = false) => {
     if (!tipoCambio.value) return;
     guardando.value = true;
     try {
-        await tipoCambioAgenciaService.guardar({ valor: tipoCambio.value, origen: 'agencia' });
+        await tipoCambioAgenciaService.guardar({ valor: tipoCambio.value, origen: 'agencia', confirmado });
         Swal.fire({ icon: 'success', title: 'Tipo de cambio guardado', timer: 1500, showConfirmButton: false });
     } catch (error: any) {
+        // El backend pide un segundo paso consciente cuando el valor cae
+        // fuera del rango de sanidad (2.0-6.0 USD/PEN) — no bloquea, solo
+        // exige confirmar explícitamente que no es un error de tipeo.
+        if (error.response?.status === 422 && error.response?.data?.requiere_confirmacion) {
+            guardando.value = false;
+            const confirmacion = await Swal.fire({
+                icon: 'warning',
+                title: 'Valor fuera de lo esperado',
+                text: error.response.data.message,
+                showCancelButton: true,
+                confirmButtonText: 'Guardar igual',
+                cancelButtonText: 'Corregir',
+            });
+            if (confirmacion.isConfirmed) {
+                await guardarTipoCambio(true);
+            }
+            return;
+        }
         Swal.fire('Error', error.response?.data?.message ?? 'No se pudo guardar el tipo de cambio', 'error');
     } finally {
         guardando.value = false;

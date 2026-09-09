@@ -35,4 +35,17 @@ return [
         ],
     ],
 
+    // Tipo de cambio SUNAT/SBS (TipoCambioSunatSyncService) — Decolecta es la
+    // fuente primaria, requiere token Bearer (confirmado en vivo: sin token
+    // devuelve 401, no es realmente opcional pese a lo que sugiere su propia
+    // documentación). e-api.net.pe es el fallback, sin autenticación.
+    'decolecta' => [
+        'url' => env('DECOLECTA_API_URL', 'https://api.decolecta.com'),
+        'token' => env('DECOLECTA_API_TOKEN'),
+    ],
+
+    'e_api' => [
+        'url' => env('E_API_URL', 'https://free.e-api.net.pe'),
+    ],
+
 ];

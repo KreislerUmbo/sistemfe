@@ -17,6 +17,7 @@ use App\Models\Sale\Sale;
 use App\Models\Sale\SaleDetail;
 use App\Services\NoteDetailAmountCalculator;
 use App\Services\SerieNotaResolver;
+use App\Services\TipoCambio\TipoCambioSunatResolver;
 use App\Services\TotalesComprobanteCalculator;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -63,7 +64,8 @@ class NotaElectronicaController extends Controller
         GreenterService $greenter_service,
         TotalesComprobanteCalculator $totales_calculator,
         NoteDetailAmountCalculator $note_detail_calculator,
-        SerieNotaResolver $serie_resolver
+        SerieNotaResolver $serie_resolver,
+        private TipoCambioSunatResolver $tipoCambioSunatResolver,
     ) {
         $this->greenter_service        = $greenter_service;
         $this->totales_calculator      = $totales_calculator;
@@ -313,6 +315,17 @@ class NotaElectronicaController extends Controller
     {
         $nota = Note::with(['note_details.product', 'client'])->findOrFail($request->note_id);
 
+        // ── Snapshot del tipo de cambio SUNAT/SBS (solo notas en USD) ──
+        // Mismo criterio que FacturacionElectronicaController::enviarSunat()
+        // — Greenter no tiene campo para esto, se guarda igual como
+        // snapshot para el futuro Registro de Ventas/PLE. Nunca bloquea el
+        // envío (decisión del usuario, 09-sep-2026): si no hay dato
+        // disponible queda null.
+        $tipoCambioSunatAplicado = null;
+        if (($nota->currency ?? 'PEN') === 'USD') {
+            $tipoCambioSunatAplicado = $this->tipoCambioSunatResolver->resolverParaFecha(now())?->venta;
+        }
+
         // Una nota ya resuelta (aceptada o rechazada) no se reintenta sobre
         // la misma fila — hay que crear una nota nueva. Evita pisar un
         // correlativo ya quemado sin dejar rastro.
@@ -333,10 +346,11 @@ class NotaElectronicaController extends Controller
             $correlativo = $this->validarYReservarCorrelativoNota($nota);
         } catch (Throwable $e) {
             $nota->update([
-                'status'                => 'rechazado',
-                'sunat_error_message'   => $e->getMessage(),
-                'sunat_sent_at'         => now(),
-                'sunat_sent_by_user_id' => auth('api')->id(),
+                'status'                      => 'rechazado',
+                'sunat_error_message'         => $e->getMessage(),
+                'sunat_sent_at'               => now(),
+                'sunat_sent_by_user_id'       => auth('api')->id(),
+                'tipo_cambio_sunat_aplicado'  => $tipoCambioSunatAplicado,
             ]);
 
             return response()->json([
@@ -381,13 +395,14 @@ class NotaElectronicaController extends Controller
             $hash_cpe = $this->greenter_service->extraerHashDigest($xml);
 
             $nota->update([
-                'n_operacion'           => $nota->serie . '-' . str_pad((string) $correlativo, 8, '0', STR_PAD_LEFT),
-                'cdr'                   => $respuesta['cdrZip'],
-                'xml'                   => $ruta_publica_xml,
-                'hash_cpe'              => $hash_cpe,
-                'status'                => 'aceptado',
-                'sunat_sent_at'         => now(),
-                'sunat_sent_by_user_id' => auth('api')->id(),
+                'n_operacion'                 => $nota->serie . '-' . str_pad((string) $correlativo, 8, '0', STR_PAD_LEFT),
+                'cdr'                         => $respuesta['cdrZip'],
+                'xml'                         => $ruta_publica_xml,
+                'hash_cpe'                    => $hash_cpe,
+                'status'                      => 'aceptado',
+                'sunat_sent_at'               => now(),
+                'sunat_sent_by_user_id'       => auth('api')->id(),
+                'tipo_cambio_sunat_aplicado'  => $tipoCambioSunatAplicado,
             ]);
 
             // ── Reposición de stock — solo tras aceptación real de SUNAT ──
@@ -440,11 +455,12 @@ class NotaElectronicaController extends Controller
 
         // ── Si SUNAT rechazó ──────────────────────────────────────────────
         $nota->update([
-            'status'                => 'rechazado',
-            'sunat_error_code'      => $respuesta['error']['code'] ?? null,
-            'sunat_error_message'   => $respuesta['error']['message'] ?? null,
-            'sunat_sent_at'         => now(),
-            'sunat_sent_by_user_id' => auth('api')->id(),
+            'status'                      => 'rechazado',
+            'sunat_error_code'            => $respuesta['error']['code'] ?? null,
+            'sunat_error_message'         => $respuesta['error']['message'] ?? null,
+            'sunat_sent_at'               => now(),
+            'sunat_sent_by_user_id'       => auth('api')->id(),
+            'tipo_cambio_sunat_aplicado'  => $tipoCambioSunatAplicado,
         ]);
 
         return response()->json(['response' => $respuesta]);

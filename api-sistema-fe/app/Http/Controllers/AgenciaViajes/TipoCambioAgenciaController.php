@@ -4,6 +4,8 @@ namespace App\Http\Controllers\AgenciaViajes;
 
 use App\Http\Controllers\Controller;
 use App\Models\AgenciaViajes\TipoCambioAgencia;
+use App\Services\TipoCambio\TipoCambioSanityService;
+use App\Services\TipoCambio\TipoCambioSunatResolver;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
@@ -23,6 +25,12 @@ use Illuminate\Support\Facades\Validator;
 // con "null" y el frontend lo maneja como "sin registrar todavía").
 class TipoCambioAgenciaController extends Controller
 {
+    public function __construct(
+        private TipoCambioSanityService $sanity,
+        private TipoCambioSunatResolver $tipoCambioSunatResolver,
+    ) {
+    }
+
     public function actual()
     {
         // Última fila de CUALQUIER origen ('dia' o 'agencia') — el
@@ -33,15 +41,32 @@ class TipoCambioAgenciaController extends Controller
         return response()->json(['code' => 200, 'tipo_cambio_agencia' => $ultimo]);
     }
 
+    // Fase 5 (opcional) del plan de Tipo de Cambio SUNAT — solo lectura,
+    // nunca escribe en tipo_cambio_agencia. Sugerencia para prellenar el
+    // campo "tipo de cambio del día" al crear una alternativa; el usuario
+    // sigue confirmando el valor que realmente se guarda (resolverTipoCambio()
+    // en AlternativaController, sin cambios).
+    public function sugerenciaSunat()
+    {
+        $sugerido = $this->tipoCambioSunatResolver->resolverParaFecha(now());
+
+        return response()->json([
+            'code' => 200,
+            'sugerencia' => $sugerido ? [
+                'valor' => $sugerido->venta,
+                'fecha' => $sugerido->fecha->toDateString(),
+            ] : null,
+        ]);
+    }
+
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            // Sin tope superior a propósito: forzar un rango de sanidad es
-            // el punto 4 (todavía pendiente) del plan de moneda del
-            // cotizador — acá solo se bloquea lo que nunca puede ser un
-            // tipo de cambio real (cero o negativo).
             'valor' => 'required|numeric|min:0.01',
             'origen' => 'required|string|in:dia,agencia',
+            // Segundo paso consciente cuando el valor cae fuera del rango
+            // de sanidad (2.0-6.0 USD/PEN) — ver TipoCambioSanityService.
+            'confirmado' => 'nullable|boolean',
         ]);
 
         if ($validator->fails()) {
@@ -49,6 +74,14 @@ class TipoCambioAgenciaController extends Controller
         }
 
         $validado = $validator->validated();
+
+        if (! $this->sanity->esRazonable((float) $validado['valor']) && ! ($validado['confirmado'] ?? false)) {
+            return response()->json([
+                'code' => 422,
+                'message' => "El valor {$validado['valor']} está fuera del rango esperado para USD/PEN (" . TipoCambioSanityService::RANGO_MINIMO . '-' . TipoCambioSanityService::RANGO_MAXIMO . '). Si es correcto, reenviá con confirmado=true.',
+                'requiere_confirmacion' => true,
+            ], 422);
+        }
 
         $tipoCambio = TipoCambioAgencia::create([
             'fecha' => now()->toDateString(),

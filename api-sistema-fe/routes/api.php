@@ -785,6 +785,12 @@ Route::group([
     Route::post("tipo-cambio-agencia", [TipoCambioAgenciaController::class, 'store'])
         ->middleware('permission:agencia.cotizaciones');
 
+    // Fase 5 (opcional) del plan de Tipo de Cambio SUNAT — solo lectura,
+    // sugerencia para prellenar "tipo de cambio del día" al crear una
+    // alternativa. Nunca escribe en tipo_cambio_agencia.
+    Route::get("tipo-cambio-agencia/sugerencia-sunat", [TipoCambioAgenciaController::class, 'sugerenciaSunat'])
+        ->middleware('permission:agencia.cotizaciones');
+
     // Sesión M3 — hotel ad-hoc LOCAL, standalone (sin opcion_mayorista_id).
     Route::post("opciones-hotel", [OpcionHotelController::class, 'store'])
         ->middleware('permission:agencia.cotizaciones');

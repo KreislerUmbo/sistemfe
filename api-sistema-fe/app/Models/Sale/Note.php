@@ -83,6 +83,12 @@ class Note extends Model
         "sunat_error_message",
         "sunat_sent_at",
 
+        // Snapshot del tipo de cambio SUNAT/SBS (venta) vigente al momento
+        // de enviar a SUNAT, cuando currency='USD' — nunca se recalcula
+        // después. No bloquea el envío si no hay dato disponible (queda
+        // null); ver App\Services\TipoCambio\TipoCambioSunatResolver.
+        "tipo_cambio_sunat_aplicado",
+
         // ── Facturación electrónica ────────────────────────────────────────
         "xml",
         "cdr",

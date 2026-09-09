@@ -8,6 +8,7 @@ export const alternativaService = {
     moneda_cotizacion: 'PEN' | 'USD'
     tipo_cambio_origen: 'dia' | 'agencia'
     tipo_cambio_valor?: number | null
+    tipo_cambio_confirmado?: boolean
   }) {
     const response = await httpClient.post(`/cotizaciones/${cotizacionId}/alternativas`, data)
     return response.data

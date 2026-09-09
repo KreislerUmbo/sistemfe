@@ -185,9 +185,12 @@
                     <div class="col-6 col-md-2">
                         <label class="form-label mb-1 small fw-semibold text-secondary">Valor nuevo (opcional)</label>
                         <input type="number" step="0.0001" class="form-control form-control-sm" v-model.number="formAlternativa.tipo_cambio_valor">
+                        <small v-if="sugerenciaTipoCambioSunat && formAlternativa.tipo_cambio_origen === 'dia'" class="text-muted d-block">
+                            Sugerido SUNAT ({{ sugerenciaTipoCambioSunat.fecha }}): {{ sugerenciaTipoCambioSunat.valor }}
+                        </small>
                     </div>
                     <div class="col-12 col-md-2 d-flex gap-2">
-                        <button class="btn btn-primary btn-sm w-100" @click="crearAlternativa" :disabled="creandoAlternativa">
+                        <button class="btn btn-primary btn-sm w-100" @click="crearAlternativa()" :disabled="creandoAlternativa">
                             <span v-if="creandoAlternativa" class="spinner-border spinner-border-sm me-1"></span>Crear
                         </button>
                         <button class="btn btn-outline-secondary btn-sm" @click="mostrarFormAlternativa = false"><i class="fas fa-times"></i></button>
@@ -1221,6 +1224,7 @@ import { reservaService } from '@/services/admin/reservaService';
 import { useAgenciaViajesCatalogosStore } from '@/stores/agenciaViajesCatalogos';
 import { formatFecha } from '@/helpers/fecha';
 import { guiaService } from '@/services/admin/guiaService';
+import { tipoCambioAgenciaService } from '@/services/admin/tipoCambioAgenciaService';
 import type { Cotizacion, Alternativa, AlternativaItem, ProveedorTarifa, OpcionMayorista, OpcionMayoristaTour, OpcionMayoristaOpcional, OpcionHotelTarifa, Proveedor, ProveedorTipo, BibliotecaResultado, ConfiguracionAgencia, DestinoServicio, Guia, GuiaTarifa, Servicio, TipAfeIgv, DestinoTributario } from '@/types/agencia-viajes';
 import type { Client } from '@/types/clients';
 
@@ -1491,15 +1495,57 @@ const seleccionarAlternativa = (id: number) => {
 const mostrarFormAlternativa = ref(false);
 const formAlternativa = ref({ nombre: '', moneda_cotizacion: 'PEN' as 'PEN' | 'USD', tipo_cambio_origen: 'dia' as 'dia' | 'agencia', tipo_cambio_valor: null as number | null });
 
+// Fase 5 (opcional) del plan de Tipo de Cambio SUNAT — prellena "Valor
+// nuevo" con la sugerencia SUNAT/SBS solo cuando el origen es "Del día" y
+// el usuario no tipeó nada todavía. Nunca sobreescribe un valor ya
+// tipeado a mano, y el campo sigue siendo editable después de prellenado.
+const sugerenciaTipoCambioSunat = ref<{ valor: number; fecha: string } | null>(null);
+watch(mostrarFormAlternativa, async (abierto) => {
+    if (!abierto) return;
+    try {
+        const res = await tipoCambioAgenciaService.obtenerSugerenciaSunat();
+        sugerenciaTipoCambioSunat.value = res.sugerencia ? { valor: Number(res.sugerencia.valor), fecha: res.sugerencia.fecha } : null;
+        if (sugerenciaTipoCambioSunat.value && formAlternativa.value.tipo_cambio_origen === 'dia' && !formAlternativa.value.tipo_cambio_valor) {
+            formAlternativa.value.tipo_cambio_valor = sugerenciaTipoCambioSunat.value.valor;
+        }
+    } catch {
+        // sin bloquear el form — el usuario igual puede tipear el valor a mano
+        sugerenciaTipoCambioSunat.value = null;
+    }
+});
+watch(() => formAlternativa.value.tipo_cambio_origen, (origen) => {
+    if (origen === 'dia' && sugerenciaTipoCambioSunat.value && !formAlternativa.value.tipo_cambio_valor) {
+        formAlternativa.value.tipo_cambio_valor = sugerenciaTipoCambioSunat.value.valor;
+    }
+});
+
 const creandoAlternativa = ref(false);
-const crearAlternativa = async () => {
+const crearAlternativa = async (confirmado = false) => {
     creandoAlternativa.value = true;
     try {
-        const res = await alternativaService.crear(cotizacionId, formAlternativa.value);
+        const res = await alternativaService.crear(cotizacionId, { ...formAlternativa.value, tipo_cambio_confirmado: confirmado });
         mostrarFormAlternativa.value = false;
         await cargarCotizacion();
         alternativaActivaId.value = res.alternativa.id;
     } catch (error: any) {
+        // El backend pide un segundo paso consciente cuando
+        // tipo_cambio_valor cae fuera del rango de sanidad (2.0-6.0
+        // USD/PEN) — no bloquea, solo exige confirmar que no es un tipeo.
+        if (error.response?.status === 422 && error.response?.data?.requiere_confirmacion) {
+            creandoAlternativa.value = false;
+            const confirmacion = await (Swal as TVueSwalInstance).fire({
+                icon: 'warning',
+                title: 'Tipo de cambio fuera de lo esperado',
+                text: error.response.data.message,
+                showCancelButton: true,
+                confirmButtonText: 'Crear igual',
+                cancelButtonText: 'Corregir',
+            });
+            if (confirmacion.isConfirmed) {
+                await crearAlternativa(true);
+            }
+            return;
+        }
         (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo crear', 'error');
     } finally {
         creandoAlternativa.value = false;

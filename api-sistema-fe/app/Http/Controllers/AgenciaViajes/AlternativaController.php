@@ -16,6 +16,7 @@ use App\Models\AgenciaViajes\Reserva;
 use App\Models\AgenciaViajes\TipoCambioAgencia;
 use App\Services\AgenciaViajes\AlternativaPdfService;
 use App\Services\AgenciaViajes\PriceEngineService;
+use App\Services\TipoCambio\TipoCambioSanityService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -30,6 +31,7 @@ class AlternativaController extends Controller
     public function __construct(
         private PriceEngineService $priceEngine,
         private AlternativaPdfService $alternativaPdfService,
+        private TipoCambioSanityService $tipoCambioSanity,
     ) {
     }
 
@@ -45,6 +47,9 @@ class AlternativaController extends Controller
             // este valor (§3.4, "opción de digitar uno nuevo si no está
             // registrado todavía") en vez de reusar el último ya existente.
             'tipo_cambio_valor' => 'nullable|numeric|min:0',
+            // Segundo paso consciente si tipo_cambio_valor cae fuera del
+            // rango de sanidad (2.0-6.0 USD/PEN) — ver TipoCambioSanityService.
+            'tipo_cambio_confirmado' => 'nullable|boolean',
         ]);
 
         if ($validator->fails()) {
@@ -60,7 +65,7 @@ class AlternativaController extends Controller
 
         $validado = $validator->validated();
 
-        $tipoCambio = $this->resolverTipoCambio($validado['tipo_cambio_origen'], $validado['tipo_cambio_valor'] ?? null, $request);
+        $tipoCambio = $this->resolverTipoCambio($validado['tipo_cambio_origen'], $validado['tipo_cambio_valor'] ?? null, $request, $validado['tipo_cambio_confirmado'] ?? false);
         if ($tipoCambio instanceof JsonResponse) {
             return $tipoCambio;
         }
@@ -767,9 +772,17 @@ class AlternativaController extends Controller
             ->update(['estado' => 'descartada']);
     }
 
-    private function resolverTipoCambio(string $origen, ?float $valorNuevo, Request $request): TipoCambioAgencia|JsonResponse
+    private function resolverTipoCambio(string $origen, ?float $valorNuevo, Request $request, bool $confirmado = false): TipoCambioAgencia|JsonResponse
     {
         if ($valorNuevo !== null) {
+            if (! $this->tipoCambioSanity->esRazonable($valorNuevo) && ! $confirmado) {
+                return response()->json([
+                    'code' => 422,
+                    'message' => "El valor {$valorNuevo} está fuera del rango esperado para USD/PEN (" . TipoCambioSanityService::RANGO_MINIMO . '-' . TipoCambioSanityService::RANGO_MAXIMO . '). Si es correcto, reenviá con tipo_cambio_confirmado=true.',
+                    'requiere_confirmacion' => true,
+                ], 422);
+            }
+
             return TipoCambioAgencia::create([
                 'fecha' => now()->toDateString(),
                 'origen' => $origen,

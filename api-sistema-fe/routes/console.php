@@ -27,3 +27,13 @@ Schedule::command('tenants:check-overdue-payments')->daily();
 // varios tenants puede tardar). Idempotente por diseño (un backup automático por tenant
 // por día, ver TenantBackupService::generarAutomaticoParaTodos()).
 Schedule::command('tenants:run-automatic-backups')->dailyAt('02:00');
+
+// Plan — Integración API Tipo de Cambio SUNAT, Fase 3. El tipo de cambio
+// SBS/SUNAT es el cierre del día hábil anterior — cambia una sola vez al
+// día, no tiene sentido consultarlo más seguido. 05:00 (antes de que
+// arranque operación) para no competir con las 3 tareas de arriba.
+// Idempotente por diseño (TipoCambioSunatSyncService::sincronizar() usa
+// updateOrCreate por fecha) — tolera reintentos y corridas dobles el mismo
+// día. Tabla central (db_tenant_central), un solo dato para todo el
+// sistema — no depende de qué tenant dispare el cron.
+Schedule::command('tipo-cambio:sincronizar-sunat')->dailyAt('05:00');

@@ -129,6 +129,12 @@ class Sale extends Model
         "sunat_error_message",
         "sunat_sent_at",
 
+        // Snapshot del tipo de cambio SUNAT/SBS (venta) vigente al momento
+        // de enviar a SUNAT, cuando currency='USD' — nunca se recalcula
+        // después. No bloquea el envío si no hay dato disponible (queda
+        // null); ver App\Services\TipoCambio\TipoCambioSunatResolver.
+        "tipo_cambio_sunat_aplicado",
+
         // ── Módulo Amortizaciones (ver plan-modulo-amortizaciones.md §2.1) ──
         "condicion_pago",     // 'contado' | 'credito'
         "credit_type",        // 'cuotas_fijas' | 'libre', solo si condicion_pago='credito'
