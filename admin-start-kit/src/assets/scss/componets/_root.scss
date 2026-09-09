@@ -57,6 +57,37 @@ html[data-bs-theme="dark"] {
   --#{$prefix}menu-label-color: #{$menu-label-color-dark};
 }
 
+// Fix (07-sep-2026, hallazgo real del usuario en varias pantallas de
+// Agencia de Viajes) — arriba, --bs-dark/--bs-body-color/etc. se remapean
+// A PROPÓSITO a colores CLAROS en tema oscuro, para que el texto normal
+// (.text-dark, texto sin clase, etc.) se lea bien contra el fondo OSCURO
+// del resto de la app. Pero varios componentes usan .bg-white de forma
+// literal (no themed) para una caja que SIEMPRE debe verse blanca — un
+// header de "paso" en un formulario (proveedores/form.vue, paquetes/
+// form.vue), o un campo de asignación en línea (reservas/detalle.vue,
+// reporte-operativo, salidas). Con el remapeo de arriba, el texto de esas
+// cajas queda claro-sobre-blanco = invisible. Las variables CSS heredan a
+// los hijos, así que resetear el set completo acá adentro corrige
+// .text-dark/.text-secondary/.text-muted/texto sin clase de una sola vez,
+// sin tocar cada template uno por uno.
+html[data-bs-theme="dark"] .bg-white {
+  --#{$prefix}body-color: #{$body-color};
+  --#{$prefix}body-color-rgb: #{to-rgb($body-color)};
+  --#{$prefix}emphasis-color: #{$body-emphasis-color};
+  --#{$prefix}emphasis-color-rgb: #{to-rgb($body-emphasis-color)};
+  --#{$prefix}secondary-color: #{$body-secondary-color};
+  --#{$prefix}secondary-color-rgb: #{to-rgb($body-secondary-color)};
+  --#{$prefix}tertiary-color: #{$body-tertiary-color};
+  --#{$prefix}tertiary-color-rgb: #{to-rgb($body-tertiary-color)};
+  --#{$prefix}heading-color: #{$headings-color};
+  --#{$prefix}secondary: #{$secondary};
+  --#{$prefix}secondary-rgb: #{to-rgb($secondary)};
+  --#{$prefix}dark: #{$dark};
+  --#{$prefix}dark-rgb: #{to-rgb($dark)};
+  --#{$prefix}light: #{$light};
+  --#{$prefix}light-rgb: #{to-rgb($light)};
+}
+
 html[data-startbar="dark"] {
   --#{$prefix}startbar-bg: #{$startbar-bg-dark};
   --#{$prefix}startbar-e-border-color: #{$startbar-e-border-color-dark};
