@@ -2,24 +2,25 @@
 
 namespace Tests\Feature\AgenciaViajes;
 
-use App\Http\Controllers\AgenciaViajes\AlternativaController;
 use App\Models\AgenciaViajes\Alternativa;
 use App\Models\AgenciaViajes\AlternativaDestino;
 use App\Models\AgenciaViajes\AlternativaItem;
 use App\Models\AgenciaViajes\DestinoAtractivo;
 use App\Models\AgenciaViajes\PaquetePlantilla;
 use App\Models\AgenciaViajes\TourItinerarioItem;
+use App\Services\AgenciaViajes\AlternativaPdfService;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 // Sesión 12f-3 — brief PEGAR-EN-CLAUDE-CODE-12f3-pdf-por-destino.md.
 // itinerarioAlternativa()/incluyePorDestino()/itemsPorDestino() son
-// métodos privados de AlternativaController — se invocan vía reflexión,
-// mismo patrón que otros tests de lógica extraída de controllers en esta
-// suite (ValidarRegimenEspecialTest). No se ejercita pdf() completo (DomPDF)
-// porque ningún otro test de la suite lo hace — la lógica de agrupación es
-// lo que importa probar, el render de blade se verifica a mano contra
-// agencia-demo.
+// métodos privados de AlternativaPdfService (extraído de AlternativaController
+// el 09-sep-2026, ver project_agencia_viajes_auditoria_mantenibilidad_2026-09-05)
+// — se invocan vía reflexión, mismo patrón que otros tests de lógica
+// extraída de controllers en esta suite (ValidarRegimenEspecialTest). No
+// se ejercita generar() completo (DomPDF) porque ningún otro test de la
+// suite lo hace — la lógica de agrupación es lo que importa probar, el
+// render de blade se verifica a mano contra agencia-demo.
 class Sesion12f3PdfPorDestinoTest extends TestCase
 {
     protected function setUp(): void
@@ -46,11 +47,11 @@ class Sesion12f3PdfPorDestinoTest extends TestCase
 
     private function invocar(string $metodo, Alternativa $alternativa): array
     {
-        $controller = app(AlternativaController::class);
-        $method = new \ReflectionMethod(AlternativaController::class, $metodo);
+        $service = app(AlternativaPdfService::class);
+        $method = new \ReflectionMethod(AlternativaPdfService::class, $metodo);
         $method->setAccessible(true);
 
-        return $method->invoke($controller, $alternativa->fresh(['destinos.destinoAtractivo', 'items']));
+        return $method->invoke($service, $alternativa->fresh(['destinos.destinoAtractivo', 'items']));
     }
 
     private function crearAlternativa(): Alternativa

@@ -2,19 +2,20 @@
 
 namespace Tests\Feature\AgenciaViajes;
 
-use App\Http\Controllers\AgenciaViajes\AlternativaController;
 use App\Models\AgenciaViajes\Alternativa;
 use App\Models\AgenciaViajes\AlternativaDestino;
 use App\Models\AgenciaViajes\AlternativaItem;
+use App\Services\AgenciaViajes\AlternativaPdfService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
 // Sesión M5 — plan-ejecucion-matriz-hoteles-cotizador.md fila M5.
-// AlternativaController::opcionesHoteles() es privado — se invoca vía
-// reflexión, mismo patrón que Sesion12f3PdfPorDestinoTest para
-// itinerarioAlternativa()/incluyePorDestino() (no se ejercita pdf()
-// completo/DomPDF, ningún otro test de la suite lo hace).
+// AlternativaPdfService::opcionesHoteles() (extraído de AlternativaController
+// el 09-sep-2026) es privado — se invoca vía reflexión, mismo patrón que
+// Sesion12f3PdfPorDestinoTest para itinerarioAlternativa()/incluyePorDestino()
+// (no se ejercita generar() completo/DomPDF, ningún otro test de la suite
+// lo hace).
 class SesionM5OpcionesHotelesPdfTest extends TestCase
 {
     protected function setUp(): void
@@ -41,20 +42,20 @@ class SesionM5OpcionesHotelesPdfTest extends TestCase
 
     private function invocar(Alternativa $alternativa): array
     {
-        $controller = app(AlternativaController::class);
-        $method = new \ReflectionMethod(AlternativaController::class, 'opcionesHoteles');
+        $service = app(AlternativaPdfService::class);
+        $method = new \ReflectionMethod(AlternativaPdfService::class, 'opcionesHoteles');
         $method->setAccessible(true);
 
-        return $method->invoke($controller, $alternativa->fresh(['items']));
+        return $method->invoke($service, $alternativa->fresh(['items']));
     }
 
     private function invocarIncluye(Alternativa $alternativa): array
     {
-        $controller = app(AlternativaController::class);
-        $method = new \ReflectionMethod(AlternativaController::class, 'incluyePorDestino');
+        $service = app(AlternativaPdfService::class);
+        $method = new \ReflectionMethod(AlternativaPdfService::class, 'incluyePorDestino');
         $method->setAccessible(true);
 
-        return $method->invoke($controller, $alternativa->fresh(['destinos.destinoAtractivo', 'items']));
+        return $method->invoke($service, $alternativa->fresh(['destinos.destinoAtractivo', 'items']));
     }
 
     private function crearAlternativa(): Alternativa

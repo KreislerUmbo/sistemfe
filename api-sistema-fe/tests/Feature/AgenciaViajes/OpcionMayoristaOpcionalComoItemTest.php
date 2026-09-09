@@ -167,14 +167,14 @@ class OpcionMayoristaOpcionalComoItemTest extends TestCase
             'opcion_mayorista_opcional_id' => $opcionalAgregado->id,
         ]), (string) $alternativa->id);
 
-        $controller = app(AlternativaController::class);
-        $reflMayoristas = new \ReflectionMethod($controller, 'mayoristasReferenciados');
+        $pdfService = app(\App\Services\AgenciaViajes\AlternativaPdfService::class);
+        $reflMayoristas = new \ReflectionMethod($pdfService, 'mayoristasReferenciados');
         $reflMayoristas->setAccessible(true);
-        $mayoristas = $reflMayoristas->invoke($controller, $alternativa->fresh('items'));
+        $mayoristas = $reflMayoristas->invoke($pdfService, $alternativa->fresh('items'));
 
-        $reflPendientes = new \ReflectionMethod($controller, 'mayoristasOpcionalesPendientes');
+        $reflPendientes = new \ReflectionMethod($pdfService, 'mayoristasOpcionalesPendientes');
         $reflPendientes->setAccessible(true);
-        $pendientes = $reflPendientes->invoke($controller, $alternativa->fresh('items'), $mayoristas);
+        $pendientes = $reflPendientes->invoke($pdfService, $alternativa->fresh('items'), $mayoristas);
 
         $this->assertTrue($pendientes->contains('id', $opcionalPendiente->id));
         $this->assertFalse($pendientes->contains('id', $opcionalAgregado->id), 'ya está cobrado en el total — no debe seguir apareciendo como "puede agregar aparte"');
