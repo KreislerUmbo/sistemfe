@@ -465,6 +465,33 @@ tener usuarios con IDs bajos que coincidan con `sv_facturacion`. No es un proble
 tapa) — es arquitectura de tenancy, mismo tipo de gap que el ya documentado en
 `arquitectura-multitenant-backend_1.md`. Requiere sesión propia.
 
+**✅ Paso 2 (Bucket B, modo "sombra") IMPLEMENTADO Y ACTIVO (10-sep-2026, Fase 0c —
+`docs/planning/claude/shadow-mode-bucket-b-fase0c.md` tiene el diseño completo, el mapeo de
+las 31 rutas a permiso, y la verificación con tráfico real).** `ShadowPermissionMiddleware`
+(alias `shadow.permission`) aplicado a las 31 rutas de Bucket B — nunca bloquea, solo registra
+en `permission_shadow_logs` (tabla nueva, migrada a los 5 tenants) cuando el usuario
+autenticado no tiene el permiso que la ruta exigiría si se gateara de verdad. 8 de los 13
+permisos del mapeo son nuevos (no existían antes de esta fase, ej. `enviar_sunat`,
+`registrar-pago-credito`, `registrar-cronograma-credito`, `editar-cuota-credito`,
+`register_sale_detail`/`edit_sale_detail`/`delete_sale_detail`,
+`register_sale_payment`/`edit_sale_payment`/`delete_sale_payment`) — deliberadamente sin
+agregar todavía a `PermissionsDemoSeeder`/`roles.ts` (no hay gate real que los necesite
+asignables desde la UI hasta la Parte 3). 64 tests nuevos, suite completa 705/711 verde (6
+fallos pre-existentes de `TipoCambioSunat*`, no relacionados). Verificado con tráfico real
+contra `sandbox`/`umbo`/`agencia-demo` (JWT vía tinker para usuarios reales — Cajero Test 2,
+Jose Ricardo/Contador, Admin-General —, nunca reseteo de password): la respuesta HTTP nunca
+cambió (nunca 403), no se creó ningún dato real, y el log distinguió correctamente "tiene
+permiso" de "no tiene permiso" en los 3 tenants. Filas de verificación truncadas después de
+confirmar — el modo sombra arranca la ventana de observación real en 0 filas desde
+2026-09-10.
+
+**⚠️ Pendiente, requiere tiempo real antes de continuar — NO ejecutado en esta sesión a
+propósito:** Parte 2 (backfill dirigido por los logs reales de `umbo`/`agencia-demo`, tras un
+período de uso representativo — no solo unas horas) y Parte 3 (gate real con flag de
+rollback). Ambas necesitan autorización explícita antes de tocar `umbo`/`agencia-demo` — ver
+`shadow-mode-bucket-b-fase0c.md` para cómo consultar `permission_shadow_logs` cuando llegue el
+momento.
+
 ### 9.2 Feature-gating por plan (módulos) tiene el mismo problema, no solo el menú
 
 `plan-modulo-planes-acceso.md` ya define la regla "sin upsell" (backend nunca lista módulos

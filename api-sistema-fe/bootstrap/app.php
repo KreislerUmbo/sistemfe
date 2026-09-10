@@ -16,6 +16,10 @@ return Application::configure(basePath: dirname(__DIR__))
             'role' => \Spatie\Permission\Middleware\RoleMiddleware::class,
             'permission' => \Spatie\Permission\Middleware\PermissionMiddleware::class,
             'role_or_permission' => \Spatie\Permission\Middleware\RoleOrPermissionMiddleware::class,
+            // Fase 0c (plan-modulo-menus-y-roles.md §9.1, modo "sombra") — nunca
+            // bloquea, solo registra en permission_shadow_logs. Ver
+            // ShadowPermissionMiddleware.
+            'shadow.permission' => \App\Http\Middleware\ShadowPermissionMiddleware::class,
             // Multi-tenancy — wireados en routes/api.php, orden: tenant → tenant.active
             // → tenant.subscription → tenant.token → auth:*.
             'tenant' => \Stancl\Tenancy\Middleware\InitializeTenancyBySubdomain::class,
