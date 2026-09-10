@@ -332,6 +332,15 @@ distingue de Administrador según lo confirmado en §3.2):
   apagado desde siempre (activado, confirmado que no había ningún otro listener dormido).
 - Brief: `claude/PEGAR-EN-CLAUDE-CODE-fase1a-nucleo-menu-dinamico.md`.
 
+**⚠️ Hallazgo real de revisión posterior, no corregido en Fase 1a — rama aparte
+(`fix/menu-cache-invalida-al-cambiar-giro`, `4b8c65d`, PUSHEADA SIN MERGEAR):**
+`TenantProvisioningService::actualizar()` (Panel Superadmin, "editar tenant", ya en
+producción) puede cambiar `tenant.giro` sin invalidar nunca el caché de `MenuResolver` —
+un usuario que ya pidió `/me/menu` antes del cambio seguiría viendo el árbol del giro
+VIEJO hasta 24h. Sin impacto hoy (nada consume el endpoint todavía). Fix de una línea
+(`$tenant->run(fn () => app(MenuResolver::class)->invalidarTenantActivo())` dentro del
+`if ($giroCambio)`), con 2 tests contra tenant físico descartable.
+
 **Fase 1b — Catálogo real de roles/permisos de agencia de viajes + scope de fila —
 DESBLOQUEADA, sin arrancar**
 - Catálogo de 5 roles/permisos de §3.2, seeder + investigación previa contra `agencia-demo`
