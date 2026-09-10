@@ -119,7 +119,15 @@ return [
      *
      * To enable, set to true, and then create listeners to watch these events.
      */
-    'events_enabled' => false,
+    // Fase 1a (plan-modulo-menus-y-roles.md §4.3/§9.6/§9.7) — estaba en false
+    // (default de Spatie, confirmado antes de tocarlo) y nunca se había
+    // habilitado en este proyecto, así que estos 4 eventos nunca dispararon.
+    // El plan diseña la invalidación de caché de MenuResolver + el logging de
+    // role_audit_logs sobre justo estos eventos — activarlo es puramente
+    // aditivo (Spatie los trae listos para esto, no cambia ningún
+    // comportamiento existente de permisos/roles en sí, solo empieza a
+    // despachar el evento). Ver App\Listeners\RolePermissionChangedListener.
+    'events_enabled' => true,
 
     /*
      * Teams Feature.
