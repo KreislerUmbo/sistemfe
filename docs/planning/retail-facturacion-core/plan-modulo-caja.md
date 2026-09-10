@@ -596,6 +596,18 @@ retomar `cash_registers.type = mobile` — ver sección 7.)*
   `UserController::store()`) SÍ tienen `role_id` sincronizado correctamente — el desajuste
   era exclusivo de estos 2 fixtures creados por tinker en una fase anterior, no un problema
   del código de `UserController`. Corregido con un `UPDATE` directo sobre esos 2 usuarios.
+  **✅ Cerrado (10-sep-2026, Fase 0 de `docs/planning/claude/plan-modulo-menus-y-roles.md`):**
+  `respondWithToken()` cambiado a `auth('api')->user()->getAllPermissions()->pluck('name')`
+  (mismo shape de array de strings que el frontend ya consumía, sin cambios en
+  `isPermitedRoute()`). Grep completo del backend confirmó que ningún otro controller repite
+  el patrón `->role->permissions` para resolver permisos de un usuario (las únicas otras
+  ocurrencias, en `RoleController`, listan los permisos DE UN ROL para su pantalla de edición
+  — uso correcto, no el bug). Verificado con 2 tests Feature nuevos contra Postgres real
+  (`AuthControllerPermissionsTest`, `sistemafe_test_migrations`): un permiso asignado directo
+  al usuario (sin rol) ahora sí llega en el array de login; un usuario sin permisos directos
+  sigue trayendo exactamente los mismos permisos que antes (regresión). Suite completa
+  corrida (563 passed / 7 failed — los 7 fallos son de `TipoCambioSunat*`, confirmados
+  pre-existentes y no relacionados: fallan igual con el fix revertido).
 - **`CreditPaymentController::refund()` (§3.12, liquidación de devolución de venta anulada
   por NC) sigue sin conectar a Caja — decisión explícita, 2026-07-19, al cerrar Fase 6 de
   Caja.** Es exactamente el límite NC↔Caja ya anotado como pendiente en Fase 3 (regla de

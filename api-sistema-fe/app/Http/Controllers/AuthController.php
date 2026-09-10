@@ -118,8 +118,11 @@ class AuthController extends Controller
      */
     protected function respondWithToken($token)
     {
-        $role = auth('api')->user()->role;
-        $permissions = $role->permissions->pluck('name');
+        // getAllPermissions() mezcla los permisos del rol con los asignados
+        // directo al usuario — ->role->permissions (legacy) solo traía los
+        // del rol, así que un permiso directo nunca llegaba al frontend
+        // (bug confirmado Módulo Caja Fase 5, 19-jul-2026).
+        $permissions = auth('api')->user()->getAllPermissions()->pluck('name');
 
         return response()->json([
             'access_token' => $token,
