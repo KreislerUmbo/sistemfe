@@ -299,6 +299,100 @@ distingue de Administrador según lo confirmado en §3.2):
   escribe en esta fase, con la matriz de §3.2/§3.3 como fixture, para que cualquier fase
   posterior que toque roles/permisos corra este test antes de mergear.
 
+**✅ Fase 1a (núcleo backend, sin datos de negocio) CERRADA (10-sep-2026) — el resto de
+Fase 1 (seeder real de roles/permisos `agencia_viajes`, `EscopablePorVendedor`+Policies,
+§9.8) queda como Fase 1b, brief aparte, porque siembra datos reales de negocio y merece
+su propia revisión de riesgo (mismo criterio que Fase 0b/0c).** Migración `menu_items`
+(conexión `central`) + modelo `MenuItem` (parent/hijos, scope `activos()`) +
+`MenuItemsSeeder` (46 ítems, migrados 1:1 desde el inventario real de
+`auditoria-menu-admin-start-kit.md` §2 — sin sembrar todavía contra el `db_tenant_central`
+real, ver más abajo). `MenuResolver::paraUsuario()` con los pasos 1/3/4/5 de §4.1
+implementados — **el paso 2 (filtro por `modulos_efectivos($tenant)`) NO está
+implementado**: confirmado con grep antes de escribir el código que ni
+`modulos_efectivos()`, ni `tenant_modulo_overrides`, ni un modelo `Modulo` existen
+todavía (`plan-modulo-planes-acceso.md` §3.4/3.5 los marca como "trabajo genuinamente
+nuevo, sin conflicto", no como construido) — `menu_items.modulo_id` queda en el schema
+(nullable, sin FK real) para cuando ese módulo exista, con el punto exacto de extensión
+comentado en el código. `GET /me/menu` responde `{menu: [{codigo,label,icono,ruta,
+hijos}]}`, sin exponer `permiso_requerido`/`modulo_id`/`giro`.
+
+**Caché (§4.3) + invalidación (§9.6/§9.7), un hallazgo real en cada capa:**
+1. `config('permission.events_enabled')` (Spatie) estaba en `false` — nunca se había
+   habilitado en este proyecto, así que `PermissionAttached`/`PermissionDetached`/
+   `RoleAttached`/`RoleDetached` (los 4 eventos que §4.3 da por sentado) nunca
+   dispararon. Activado (`config/permission.php`) — cambio puramente aditivo, Spatie
+   trae estos eventos listos para esto.
+2. `App\Listeners\RolePermissionChangedListener` (un solo listener para los 4 eventos,
+   auto-descubierto por Laravel — sin `Event::listen()` manual, ver punto 3) hace las
+   dos cosas que pide §9.6/§9.7 en el mismo lugar: escribe `role_audit_logs` (conexión
+   tenant, mismo patrón que `AuditLogger` central) y llama
+   `PermissionRegistrar::forgetCachedPermissions()` + invalida el caché de
+   `MenuResolver` (por usuario si el target es un User, por tenant completo si es un
+   Role — más simple y robusto que enumerar usuarios del rol uno por uno).
+   `MenuResolver::invalidarTenantActivo()` no usa `Cache::tags()` (CACHE_STORE=database
+   no las soporta) — borra por prefijo directo contra la tabla `cache`, que
+   `DatabaseTenancyBootstrapper` ya aísla por tenant, así que el borrado nunca puede
+   alcanzar a otro tenant.
+3. **Bug real encontrado en verificación en vivo contra `sandbox`, no por ningún test**:
+   los 4 métodos del listener (cada uno con un único parámetro tipado como la clase del
+   evento) matchean exactamente la convención de auto-discovery de eventos de Laravel —
+   registrarlos TAMBIÉN a mano en `AppServiceProvider::boot()` los duplicaba (2
+   listeners por evento, confirmado con `php artisan event:list`), generando 2 filas de
+   `role_audit_logs` por cada attach/detach real. Corregido sacando el registro manual
+   (queda 1 listener por evento). Test de regresión agregado
+   (`RolePermissionChangedListenerTest::test_un_solo_cambio_genera_exactamente_una_fila_de_auditoria`)
+   — el resto de los tests de esta fase usaban `assertDatabaseHas()`, que no valida
+   cantidad y no lo habría atrapado.
+
+**`roles:sync-permisos-nuevos` (§9.4)** — construido y testeado con un catálogo de
+prueba (`Tests\Fixtures\CatalogoDePruebaRoles`, implementando el contrato nuevo
+`App\Contracts\RolesCatalogProvider`), sin uso real todavía — el catálogo real de
+`agencia_viajes` lo siembra Fase 1b. Nunca usa `syncPermissions()` (pisaría
+personalizaciones manuales), nunca crea un rol que el tenant no tenga sembrado.
+Verificado con 2 tenants físicos descartables (mismo patrón que
+`MigrateVerticalesPendientesTest`).
+
+**§9.3 (`Gate::before` para Super-Admin) ya estaba resuelto desde antes de esta fase**
+(`AppServiceProvider`, confirmado al leer el archivo — no es trabajo nuevo de Fase 1a).
+
+**31 tests nuevos** (`MenuResolverTest` 7, `MenuControllerTest` 2 —incluye un
+end-to-end real contra un tenant físico descartable—, `RolePermissionChangedListenerTest`
+7, `SyncPermisosNuevosCommandTest` 2, más los que ya sumaba la suite), **suite completa
+659/665 verde** (6 fallos pre-existentes de `TipoCambioSunat*`, confirmados no
+relacionados, iguales a los de Fase 0b/0c).
+
+**Desplegado y verificado en vivo (10-sep-2026):** migración `role_audit_logs`
+aplicada a los 5 tenants (`sandbox` primero, verificado, después `umbo`/`agencia-demo`/
+`negocio2`/`umbo-archivado`); migración `menu_items` aplicada al `db_tenant_central`
+real (tabla vacía, sin efecto observable — nada la consume todavía en producción).
+Listener verificado con un permiso descartable dado/quitado a un usuario real de
+`sandbox`/`umbo`/`agencia-demo` cada uno: permisos del usuario sin ningún cambio neto,
+exactamente 1 fila de auditoría por operación (no 2, tras el fix del bug de
+auto-discovery), filas de prueba truncadas después de confirmar. `GET /me/menu`
+probado en vivo contra `sandbox` con el catálogo todavía vacío: responde
+`{"menu":[]}` limpio, sin error.
+
+**⚠️ Pendiente, no ejecutado a propósito — requiere tu autorización explícita:**
+`MenuItemsSeeder` (los 46 ítems) NO se corrió contra el `db_tenant_central` real. A
+diferencia de `role_audit_logs` (aislado por tenant, cero riesgo cruzado), `menu_items`
+es una tabla ÚNICA compartida por los 5 tenants reales a la vez — no existe forma de
+"probarlo primero solo contra sandbox" para el dato en sí (sí se pudo para el
+comportamiento del listener, que es código, no dato). Sembrarlo no tendría ningún efecto
+observable hoy (nada consume `/me/menu` todavía, Fase 2 no construida), pero el brief es
+explícito en pedir autorización antes de correr cualquier seeder de esta fase — comando
+listo: `php artisan db:seed --class="Database\Seeders\MenuItemsSeeder" --database=central`.
+
+**Decisiones que quedaron fuera de esta fase, documentadas en el propio seeder:**
+"Guía de Remisión" (2 ítems del menú viejo) no se migró — su ruta real apunta a
+`dashboards.ecommerce`, bug ya documentado en la auditoría de Fase 0, perpetuar un
+destino roto en la infraestructura nueva es peor que dejarlo afuera. `cash.history`
+(ruta real sin ítem de menú hoy) tampoco se sembró — su gate real es
+`cash.open_session|cash.view_all` (OR), y `menu_items.permiso_requerido` es un solo
+string, no soporta esa combinación — mismo gap que ya señalaba la auditoría.
+
+**Rama `feat/menu-dinamico-fase1a-nucleo` PUSHEADA, SIN MERGEAR** — esperando tu
+revisión del diff real (ver reglas del proyecto, no me mergeo solo).
+
 **Fase 2 — Frontend: consumo dinámico**
 - Sidebar hidratado desde `/me/menu`.
 - Guard de rutas usando el mismo set de permisos ya corregido en Fase 0.

@@ -265,6 +265,13 @@ Route::group([
 ], function ($router) {
 
     // Protected routes go here
+
+    // Fase 1a (plan-modulo-menus-y-roles.md §4.2) — menú dinámico, sin
+    // permission: propio: cualquier usuario autenticado del tenant puede
+    // pedir SU árbol (MenuResolver ya filtra internamente por lo que ese
+    // usuario puede ver — no hace falta gatear el endpoint en sí).
+    Route::get('me/menu', [\App\Http\Controllers\MenuController::class, 'miMenu']);
+
     //
     // permission:X en store/update/destroy de acá para abajo — Fase 0b
     // (plan-modulo-menus-y-roles.md §9.1, Bucket A): estas rutas solo tenían
