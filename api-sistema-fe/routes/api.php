@@ -129,16 +129,33 @@ Route::get('branding', [CompanyController::class, 'branding'])
 Route::group([
     'middleware' => ['auth:api'],
 ], function ($router) {
-    Route::resource('system_categories', SystemCategoryController::class);
-    Route::post("system_categories/{id}", [SystemCategoryController::class, 'update']);
+    // permission:X — Fase 0b (plan-modulo-menus-y-roles.md §9.1, Bucket A):
+    // "ADMIN PORTAL" (catálogo del marketplace, compartido por todos los
+    // tenants) — antes solo auth:api. Investigación de Fase 0b confirmó que
+    // ninguno de estos permisos existía sembrado en ningún tenant real
+    // (sandbox/umbo/negocio2) — creados nuevos vía
+    // permisos:backfill-gate-bucket-a, sin asignar a ningún rol (solo
+    // Super-Admin los usa hoy, bypasea vía Gate::before).
+    Route::resource('system_categories', SystemCategoryController::class)
+        ->middlewareFor('store', 'permission:register_categorie_system')
+        ->middlewareFor('update', 'permission:edit_categorie_system')
+        ->middlewareFor('destroy', 'permission:delete_categorie_system');
+    Route::post("system_categories/{id}", [SystemCategoryController::class, 'update'])
+        ->middleware('permission:edit_categorie_system');
 
     Route::get("systems/config", [SystemController::class, 'config']);
-    Route::resource('systems', SystemController::class);
+    Route::resource('systems', SystemController::class)
+        ->middlewareFor('store', 'permission:register_system')
+        ->middlewareFor('update', 'permission:edit_system')
+        ->middlewareFor('destroy', 'permission:delete_system');
 
     // Contenido de ayuda del marketplace (tutoriales: cómo registrar producto, venta,
     // etc.) — catálogo de la plataforma, no dato de negocio de un tenant. Antes vivía
     // mal cableado contra ProductController/products (ver plan §1c.3e/§1c.3f).
-    Route::resource('recursos', ManualRecursoController::class);
+    Route::resource('recursos', ManualRecursoController::class)
+        ->middlewareFor('store', 'permission:register_recurso')
+        ->middlewareFor('update', 'permission:edit_recurso')
+        ->middlewareFor('destroy', 'permission:delete_recurso');
 });
 
 // Panel superadmin (plan-panel-superadmin.md, Fase A) — guard 'central', completamente
@@ -248,19 +265,48 @@ Route::group([
 ], function ($router) {
 
     // Protected routes go here
-    Route::resource("roles", RoleController::class);
+    //
+    // permission:X en store/update/destroy de acá para abajo — Fase 0b
+    // (plan-modulo-menus-y-roles.md §9.1, Bucket A): estas rutas solo tenían
+    // auth:api, sin ningún gate de Spatie (cualquier usuario autenticado del
+    // tenant, sin importar su rol, podía llamarlas directo). Bucket A =
+    // acciones administrativas raras/catastróficas que en la práctica solo
+    // Administrador/Super-Admin llama — ver
+    // docs/planning/claude/gate-bucket-a-fase0b.md para la clasificación
+    // completa (Bucket A vs. B) y qué usuarios reales se confirmó que NO se
+    // bloquean con este cambio. Super-Admin bypasea todo esto vía
+    // Gate::before() (AppServiceProvider) — confirmado leyendo
+    // PermissionMiddleware::handle(), usa $user->canAny() que sí pasa por el
+    // Gate de Laravel.
+    Route::resource("roles", RoleController::class)
+        ->middlewareFor('store', 'permission:register_role')
+        ->middlewareFor('update', 'permission:edit_role')
+        ->middlewareFor('destroy', 'permission:delete_role');
 
-    Route::post("users/{id}", [UserController::class, 'update']); //como no funciona el resource para el metodo update con PUT lo hago asi, ya que el frontend envia por POST el fromData porque tiene imagenes
-    Route::resource("users", UserController::class);
+    Route::post("users/{id}", [UserController::class, 'update']) //como no funciona el resource para el metodo update con PUT lo hago asi, ya que el frontend envia por POST el fromData porque tiene imagenes
+        ->middleware('permission:edit_user');
+    Route::resource("users", UserController::class)
+        ->middlewareFor('store', 'permission:register_user')
+        ->middlewareFor('update', 'permission:edit_user')
+        ->middlewareFor('destroy', 'permission:delete_user');
 
     //categories
     Route::post("categories/{id}", [CategorieController::class, 'update']);
     Route::resource("categories", CategorieController::class);
 
     // Módulo Caja — Fase 0 (plan-modulo-caja.md §3): catálogos base.
-    Route::resource("payment-methods", PaymentMethodController::class);
-    Route::resource("suppliers", SupplierController::class);
-    Route::resource("cash-concepts", CashConceptController::class);
+    Route::resource("payment-methods", PaymentMethodController::class)
+        ->middlewareFor('store', 'permission:register_payment_method')
+        ->middlewareFor('update', 'permission:edit_payment_method')
+        ->middlewareFor('destroy', 'permission:delete_payment_method');
+    Route::resource("suppliers", SupplierController::class)
+        ->middlewareFor('store', 'permission:register_supplier')
+        ->middlewareFor('update', 'permission:edit_supplier')
+        ->middlewareFor('destroy', 'permission:delete_supplier');
+    Route::resource("cash-concepts", CashConceptController::class)
+        ->middlewareFor('store', 'permission:register_cash_concept')
+        ->middlewareFor('update', 'permission:edit_cash_concept')
+        ->middlewareFor('destroy', 'permission:delete_cash_concept');
 
     // Módulo Caja — Fase 5 (?active=1 puebla los filtros de history.vue) +
     // CRUD real de sucursales (2026-08-17, ver BranchController). CRUD real
@@ -268,14 +314,23 @@ Route::group([
     // documentado en CLAUDE.md: sin esto no había forma de crear la primera
     // caja de un tenant real, "Turno Activo" solo mostraba "No hay cajas
     // disponibles" sin ningún botón para arreglarlo.
-    Route::resource("branches", BranchController::class);
-    Route::resource("cash-registers", CashRegisterController::class);
+    Route::resource("branches", BranchController::class)
+        ->middlewareFor('store', 'permission:register_branch')
+        ->middlewareFor('update', 'permission:edit_branch')
+        ->middlewareFor('destroy', 'permission:delete_branch');
+    Route::resource("cash-registers", CashRegisterController::class)
+        ->middlewareFor('store', 'permission:register_cash_register')
+        ->middlewareFor('update', 'permission:edit_cash_register')
+        ->middlewareFor('destroy', 'permission:delete_cash_register');
 
     // Módulo de series de comprobantes. tipos-comprobante es solo lectura
     // (catálogo seed-only, sin CRUD) — mismo patrón ?active=1 que branches/
     // payment-methods para poblar selectores.
     Route::get("tipos-comprobante", [TipoComprobanteController::class, 'index']);
-    Route::resource("series-comprobante", SerieComprobanteController::class);
+    Route::resource("series-comprobante", SerieComprobanteController::class)
+        ->middlewareFor('store', 'permission:register_serie_comprobante')
+        ->middlewareFor('update', 'permission:edit_serie_comprobante')
+        ->middlewareFor('destroy', 'permission:delete_serie_comprobante');
 
     // Módulo Caja — Fase 2 (plan-modulo-caja.md §6, §9): apertura/cierre de
     // sesión. Las 3 rutas exigen cash.open_session a nivel de ruta (defensa
@@ -332,7 +387,13 @@ Route::group([
         ->middleware('permission:cash.open_session|cash.view_all');
 
     //company
-    Route::resource("company", CompanyController::class);
+    // permission:company — Fase 0b (Bucket A): identidad fiscal del tenant
+    // (RUC/razón social/logo), un destroy() accidental rompería toda emisión
+    // SUNAT futura. El permiso 'company' ya era referenciado por el menú del
+    // frontend (menu-items.ts) pero nunca existió como Permission real en
+    // ningún tenant — creado por permisos:backfill-gate-bucket-a.
+    Route::resource("company", CompanyController::class)
+        ->middlewareFor(['store', 'update', 'destroy'], 'permission:company');
 
     //product
     Route::get("products/config", [ProductController::class, 'config']); //para traer las categorias
