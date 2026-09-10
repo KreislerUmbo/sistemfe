@@ -415,15 +415,37 @@ supuesto): 23 permisos `register_X`/`edit_X`/`delete_X` ya existían sembrados p
 comando nuevo `permisos:backfill-gate-bucket-a {tenant}` (idempotente,
 `Permission::firstOrCreate`, nunca toca `role_has_permissions` — a propósito, para no repetir
 el riesgo real encontrado de que `PermissionsDemoSeeder::syncPermissions()` resetearía los
-permisos ya customizados a mano de `Contador` en `umbo`). Ningún rol de negocio real necesitó
-ninguno de estos permisos (confirmado por tenant: en los 3 tenants reales, el único que hoy
-llama estas rutas es el propio Super-Admin, que bypasea todo vía `Gate::before()`) — 0
-usuarios reales bloqueados. 77 tests nuevos (`GateBucketARoutesTest`, doble capa: ruta↔permiso
-+ middleware real con/sin permiso), suite completa 641/647 verde (6 fallos pre-existentes de
-`TipoCambioSunat*`, confirmados no relacionados). Verificado en vivo contra `sandbox` con
-tokens JWT reales: Cajero bloqueado con 403 en 4 rutas de Bucket A distintas (incluida
-`delete_serie_comprobante`, el permiso nuevo); Super-Admin pasa el gate en las mismas rutas
-(422/404, nunca 403).
+permisos ya customizados a mano de `Contador` en `umbo`). En `sandbox`/`umbo`/`negocio2`
+ningún rol de negocio real necesitó ninguno de estos permisos — el único que hoy llama estas
+rutas es el propio Super-Admin, que bypasea todo vía `Gate::before()`. 77 tests nuevos
+(`GateBucketARoutesTest`, doble capa: ruta↔permiso + middleware real con/sin permiso), suite
+completa 641/647 verde (6 fallos pre-existentes de `TipoCambioSunat*`, confirmados no
+relacionados). Verificado en vivo contra `sandbox` con tokens JWT reales: Cajero bloqueado con
+403 en 4 rutas de Bucket A distintas (incluida `delete_serie_comprobante`, el permiso nuevo);
+Super-Admin pasa el gate en las mismas rutas (422/404, nunca 403).
+
+**⚠️ Regresión real encontrada en revisión pre-merge (10-sep-2026, corregida antes de
+mergear) — `sandbox`/`umbo`/`negocio2` NO fueron representativos de todos los tenants
+reales.** `agencia-demo` (marcado `tipo='demo'` en `tenants`, pero en uso real de negocio —
+ver nota abajo) sí tenía un rol real en uso, `Admin-General` (usuario real
+`admin@gmail.com`), con 14 de los permisos de Bucket A ya asignados — pero le faltaban
+`register_branch`/`edit_branch`/`delete_branch` y
+`register_supplier`/`edit_supplier`/`delete_supplier` (permisos que YA EXISTÍAN antes de esta
+fase, no de los 11 nuevos). Mergear el gate sin corregir esto le habría roto a
+`admin@gmail.com` una capacidad real que usa hoy sin gate (crear/editar/eliminar sucursales y
+proveedores). Corregido en `permisos:backfill-gate-bucket-a` — otorga esos 6 permisos a
+`Admin-General`, con un chequeo explícito `if ($tenantId === 'agencia-demo')` para no
+tocar ningún otro tenant. Verificado con diff de `role_has_permissions` antes/después
+(85→91 filas en `agencia-demo`, las 6 agregadas son exactamente las de `Admin-General`,
+ningún otro rol tocado). **Nota aparte, no resuelta acá:** el campo `tenants.tipo` de
+`agencia-demo` dice `'demo'` mientras que `sandbox`/`negocio2` dicen `'real'` — lo opuesto de
+cómo se usan en la práctica (todo el desarrollo de Agencia de Viajes se verifica contra
+`agencia-demo` como tenant de negocio real). Vale la pena corregir ese campo en una sesión
+aparte para que futuras auditorías no repitan el mismo supuesto equivocado.
+
+**✅ MERGEADO a `main`** (`ee008a2`, `beec5c3..ee008a2`) — rama
+`fix/gate-permisos-bucket-a-rutas-criticas` (commits `938b606` + `cfec262`), autorizado
+explícitamente después de ver el diff completo y la evidencia de verificación.
 
 **⚠️ Hallazgo nuevo, fuera de alcance de Fase 0b, no corregido — prioridad alta:** verificando
 en vivo `POST /api/systems` se descubrió que el grupo "100% CENTRALES" (`systems`/
