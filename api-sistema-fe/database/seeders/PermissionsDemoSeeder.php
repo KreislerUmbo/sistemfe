@@ -26,6 +26,19 @@ class PermissionsDemoSeeder extends Seeder
         'register_guia_remision', 'list_guia_remision',
         'nota_electronica', 'list_nota_electronica',
         'register_advance', 'list_advance', 'refund_advance',
+
+        // Fase 0b (plan-modulo-menus-y-roles.md §9.1, Bucket A) — permisos
+        // nuevos que hacían falta para gatear rutas administrativas que hoy
+        // solo tenían auth:api. No se agregan a ningún rol de ROLES abajo a
+        // propósito: la investigación de Fase 0b confirmó que ningún rol de
+        // negocio real (en sandbox/umbo/negocio2) los necesita hoy — solo
+        // Super-Admin los usa, y Super-Admin bypasea el gate vía
+        // Gate::before() en AppServiceProvider.
+        'delete_serie_comprobante',
+        'company',
+        'register_system', 'edit_system', 'delete_system',
+        'register_categorie_system', 'edit_categorie_system', 'delete_categorie_system',
+        'register_recurso', 'edit_recurso', 'delete_recurso',
     ];
 
     /**
