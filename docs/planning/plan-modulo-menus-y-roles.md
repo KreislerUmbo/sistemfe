@@ -6,7 +6,9 @@
 > (3 capas: giro + plan + roles)". Ese documento define el QUÉ (el modelo conceptual de 3
 > capas ya está decidido y no se toca acá); este documento define el CÓMO — el modelo de datos
 > concreto, el catálogo de roles/permisos, y el plan de ejecución.
-> Estado: diseño inicial, sin ejecutar.
+> Estado: diseño cerrado, en ejecución — Fase 0, Fase 0b y Fase 1a ya mergeadas a `main`;
+> Fase 0c Parte 1 (modo sombra de Bucket B) activa contra `umbo` y `agencia-demo`, sin mergear;
+> Fase 1b (catálogo real de roles/permisos + scope de fila) desbloqueada, sin arrancar.
 > Última actualización: 10-sep-2026
 
 ---
@@ -51,11 +53,12 @@ falta alrededor para que sea real.
 
 ### 3.1 `menu_items` (nueva, conexión `central`, catálogo compartido por giro — no por tenant)
 
-Vive junto a `modulos` en la base central, con el mismo criterio: es catálogo de plataforma,
-editado por el equipo de desarrollo (o desde un futuro CRUD en central-panel), no algo que
-cada tenant reconfigura por sí mismo. Separada de `modulos` a propósito — no todo ítem de
-menú es un módulo facturable/gateable (ej. "Mi Perfil", "Configuración" son siempre visibles
-si el rol lo permite, sin pasar por feature-gating de plan):
+**Implementado (Fase 1a, 10-sep-2026)** — ver §7. Vive junto a `modulos` en la base central,
+con el mismo criterio: es catálogo de plataforma, editado por el equipo de desarrollo (o desde
+un futuro CRUD en central-panel), no algo que cada tenant reconfigura por sí mismo. Separada
+de `modulos` a propósito — no todo ítem de menú es un módulo facturable/gateable (ej. "Mi
+Perfil", "Configuración" son siempre visibles si el rol lo permite, sin pasar por
+feature-gating de plan):
 
 ```
 menu_items
@@ -86,6 +89,17 @@ menu_items
 embebida en un botón, no necesariamente otro `menu_item` — el árbol de `menu_items` modela
 navegación, no cada permiso de acción existente).
 
+**Estado real sembrado (Fase 1a)**: 46 ítems migrados 1:1 desde el menú hardcodeado viejo
+(`menu-items.ts`), con jerarquía real (grupos "Caja" y "Configuraciones" nuevos, antes eran
+labels planos con "›"). Los únicos ítems con `permiso_requerido = NULL` son los 7 headers de
+grupo (`admin_portal`, `access`, `comercial`, `caja`, `agencia`, `configuraciones`,
+`recursos_cliente` — por diseño, un grupo sin ningún hijo visible se poda solo, ver §4.1 paso
+5, así que el header no necesita su propio permiso) más `dashboard` (siempre visible a
+propósito, igual que en el menú viejo). **Ningún ítem quedó esperando el catálogo de
+Fase 1b** — los 12 ítems del grupo "Agencia de Viajes" ya usan los permisos `agencia.*`
+(`agencia.cotizaciones`, `agencia.reservas`, etc.) que ya existían sembrados en `agencia-demo`
+desde antes de este plan, reutilizados tal cual.
+
 ### 3.2 Catálogo de roles y permisos por giro — qué falta sembrar
 
 `plan-modulo-planes-acceso.md` (sección 2) y `arquitectura-multitenant-backend.md` coinciden
@@ -102,8 +116,8 @@ por uno específico por giro).
 existentes en Caja, `cash.open_session`/`cash.view_all`/`cash.close_others_session`/
 `cash.approve_expenses`, sin inventar una convención nueva).
 
-**Catálogo inicial — giro `agencia_viajes`** (a validar contigo antes de sembrar en real,
-esto es punto de partida técnico, no decisión de negocio cerrada):
+**Catálogo inicial — giro `agencia_viajes`** (a implementar en Fase 1b, brief ya listo:
+`claude/PEGAR-EN-CLAUDE-CODE-fase1b-roles-permisos-agencia-viajes.md`):
 
 **Confirmado contigo (10-sep-2026): "Gerente" y "Administrador de agencia" son el mismo rol**
 (dos nombres posibles para el mismo puesto, no dos roles distintos). El catálogo real de
@@ -169,27 +183,29 @@ actualizada). `Vendedor` es el único rol sin `ver_todas` — el único con scop
 **Giro `retail` (el core original, ya construido)**: no tiene todavía un catálogo de roles
 formalizado del mismo modo — usa el `role_id` legacy mencionado en el bug de arriba. Migrar
 retail al mismo modelo (roles Spatie reales, seeder propio) es parte del alcance de este plan,
-no un giro aparte a diseñar después — ver Fase 2 en §7.
+no un giro aparte a diseñar después — ver Fase 3 en §7.
 
 ## 4. Backend
 
-### 4.1 `MenuResolver` (servicio nuevo, único punto de verdad)
+### 4.1 `MenuResolver` (servicio nuevo, único punto de verdad) — **Implementado (Fase 1a)**
 
 ```
 MenuResolver::paraUsuario(User $user, Tenant $tenant): array
 ```
 
 1. Trae `menu_items` donde `giro IS NULL OR giro = $tenant->giro`, `activo = true`.
-2. Filtra los que tienen `modulo_id` contra `modulos_efectivos($tenant)` — reutiliza
-   exactamente el servicio ya diseñado en `plan-modulo-planes-acceso.md` §2 (plan +
-   overrides), sin reimplementar esa regla acá.
+2. Filtra los que tienen `modulo_id` contra `modulos_efectivos($tenant)` — **hallazgo real de
+   Fase 1a: este servicio de feature-gating no existe todavía en el código** (confirmado con
+   grep). Este paso queda sin implementar a propósito, documentado como punto de extensión —
+   hoy ningún `menu_item` depende de `modulo_id` para filtrarse, así que no bloquea nada, pero
+   hay que resolverlo cuando `plan-modulo-planes-acceso.md` construya ese servicio.
 3. Filtra por permiso: `permiso_requerido IS NULL OR $user->can($permiso_requerido)` — usa
    `getAllPermissions()`/`can()` de Spatie, nunca la relación legacy (cierra el bug de §1).
 4. Arma el árbol por `parent_id`/`orden`.
 5. Poda grupos vacíos: un `tipo='grupo'` sin ningún hijo visible después de los filtros 1-3
    no se incluye en la respuesta (evita headers de sección vacíos en el sidebar).
 
-### 4.2 Endpoint
+### 4.2 Endpoint — **Implementado (Fase 1a)**
 
 ```
 GET /me/menu   (auth:api, dentro del contexto de tenant ya resuelto)
@@ -197,20 +213,30 @@ GET /me/menu   (auth:api, dentro del contexto de tenant ya resuelto)
 
 Respuesta: árbol de nodos `{codigo, label, icono, ruta, hijos: [...]}` — sin exponer
 `permiso_requerido`/`modulo_id`/`giro` al frontend, son detalles de resolución del backend.
+Verificado en vivo contra `sandbox` con un usuario real (Cajero Test 2): resolvió exactamente
+los ítems que sus permisos reales permiten.
 
-### 4.3 Caché
+### 4.3 Caché — **Implementado (Fase 1a)**
 
 `MenuResolver` se cachea por `tenant_id` + `user_id` (no solo por rol — Spatie permite
 permisos directos al usuario además del rol, que es justo el caso que el bug de §1 pisaba;
-cachear solo por rol repetiría el mismo error en otra capa). Invalidación explícita, sin
-depender de TTL como única defensa:
+cachear solo por rol repetiría el mismo error en otra capa). Invalidación explícita vía
+`RolePermissionChangedListener`, un único listener para los 4 eventos reales de Spatie
+Permission (`Spatie\Permission\Events\*`) que:
 
-- Al cambiar roles/permisos de un usuario (Spatie dispara evento `Spatie\Permission\Events\*`
-  — enganchar un listener que limpia `menu:{tenant_id}:{user_id}`).
-- Al cambiar `tenant_modulo_overrides` o el plan del tenant (afecta a TODOS los usuarios de
-  ese tenant — limpiar todo el namespace `menu:{tenant_id}:*`).
-- Al desplegar un cambio de catálogo `menu_items` (raro, evento de desarrollo — limpiar
-  global, todos los tenants).
+- Limpia el caché de menú del usuario/tenant afectado.
+- Encadena `PermissionRegistrar::forgetCachedPermissions()` en el mismo punto (cierra §9.7).
+- Escribe `role_audit_logs` (cierra §9.6).
+
+**Hallazgo real de Fase 1a**: `config('permission.events_enabled')` de Spatie estaba en
+`false` desde siempre en este proyecto — esos 4 eventos nunca habían disparado en producción,
+en ningún tenant. Se activó como parte de este cambio (confirmado con grep estático completo
++ `php artisan event:list` en runtime que `RolePermissionChangedListener` es el ÚNICO listener
+real de esos eventos — no había ningún otro listener dormido de una sesión anterior ni de
+ningún paquete de terceros). Bug real encontrado y corregido en el camino: los 4 métodos del
+listener matcheaban también la convención de auto-discovery de eventos de Laravel, así que
+registrarlos a mano además los duplicaba (2 filas de auditoría por cambio real) — corregido,
+con un test que cuenta filas explícitamente (no alcanza con `assertDatabaseHas`).
 
 ## 5. Gestión de roles y permisos — nuevo módulo dentro de `admin-start-kit`
 
@@ -259,7 +285,7 @@ distingue de Administrador según lo confirmado en §3.2):
 > Numeración de sesión real a asignar recién al momento de ejecutar, verificando contra
 > `git log` de `main` como manda `ways-of-working.md` — acá solo el orden lógico.
 
-**Fase 0 — Prerequisito + auditoría (bloquea todo lo demás)**
+**Fase 0 — Prerequisito + auditoría (bloquea todo lo demás) — CERRADA (10-sep-2026)**
 - Fix del bug de `AuthController::respondWithToken()` (`role->permissions` →
   `getAllPermissions()`). Bug ya documentado, blast radius = login de todos los tenants, así
   que se hace con cuidado y test de regresión antes de tocar nada de menú.
@@ -271,136 +297,48 @@ distingue de Administrador según lo confirmado en §3.2):
   huecos reales, no se corrigen todos en esta fase, pero quedan documentados con prioridad
   para no seguir descubriéndolos de casualidad.
 
-**Fase 1 — Backend: modelo + resolver**
-- Migración `menu_items` (central).
-- `MenuResolver` + caché + invalidación (Spatie events, evento de cambio de plan/override).
-- Endpoint `GET /me/menu`.
-- Seeder de `menu_items` para `agencia_viajes`, basado en el inventario de Fase 0.
-- Seeder de roles/permisos `agencia_viajes` (tabla de §3.2, a confirmar contigo antes de
-  sembrar en `sandbox`), incluidos los permisos `*.ver_todas` de §3.3.
-- Trait/Global Scope `EscopablePorVendedor` sobre `Cotizacion`/`Reserva` + Policies
-  (`CotizacionPolicy`, `ReservaPolicy`) para el scope de fila decidido en §3.3.
-- **[§9.3]** `Gate::before` para `Super-Admin` en `AuthServiceProvider` — acceso total sin
-  depender de que el seeder liste cada permiso uno por uno; se agrega en esta fase, antes de
-  sembrar el resto de roles, para que el patrón quede establecido desde el primer commit.
-- **[§9.4]** Comando `roles:sync-permisos-nuevos` (análogo a `tenants:migrate-verticales`) —
-  agrega a los roles base de tenants YA existentes cualquier permiso nuevo del catálogo que
-  todavía no tengan, sin pisar personalizaciones manuales (§5). Se construye en esta fase
-  aunque su primer uso real sea recién cuando se agregue el próximo permiso nuevo — más caro
-  armarlo reactivamente después del primer incidente que dejarlo listo ahora.
-- **[§9.6]** `role_audit_logs` (conexión tenant, mismo patrón que `AuditLogger` central) —
-  registra quién cambió qué permiso de qué rol/usuario y cuándo, desde el primer día del
-  módulo de §5 (Fase 2), no agregado después de que falte hacer una investigación real.
-- **[§9.7]** Confirmar y encadenar la invalidación de `PermissionRegistrar::
-  forgetCachedPermissions()` (caché interno de Spatie) en el MISMO listener que ya limpia el
-  caché de `MenuResolver` (§4.3) — un solo punto de invalidación para los dos cachés, nunca
-  dos mecanismos separados que puedan desincronizarse.
-- **[§9.8]** Test de matriz de permisos (rol × recurso × scope) contra rutas reales — se
-  escribe en esta fase, con la matriz de §3.2/§3.3 como fixture, para que cualquier fase
-  posterior que toque roles/permisos corra este test antes de mergear.
+**Fase 0b — Gate de permisos, Bucket A (§9.1 paso 1) — CERRADA y MERGEADA (10-sep-2026,
+`main` en `2881c63`)**
+- 38 rutas administrativas gateadas con `permission:` real (roles, users, branches,
+  cash-registers, payment-methods, suppliers, cash-concepts, series-comprobante, systems,
+  system_categories, recursos).
+- 11 permisos nuevos creados; fix puntual de una regresión real encontrada antes de mergear
+  (rol `Admin-General` de `agencia-demo` sin 6 permisos que ya usaba) y hallazgo nuevo fuera
+  de alcance (JWT de `systems`/`system_categories`/`recursos` autenticando contra la base
+  central equivocada) — detalle completo, verificación en vivo y evidencia real de ambos en
+  `docs/planning/claude/gate-bucket-a-fase0b.md` (ver también §9.1 paso 1 más abajo).
+- Brief: `agencia-de-viajes/PEGAR-EN-CLAUDE-CODE-fase0b-gate-rutas-criticas.md`.
 
-**✅ Fase 1a (núcleo backend, sin datos de negocio) CERRADA (10-sep-2026) — el resto de
-Fase 1 (seeder real de roles/permisos `agencia_viajes`, `EscopablePorVendedor`+Policies,
-§9.8) queda como Fase 1b, brief aparte, porque siembra datos reales de negocio y merece
-su propia revisión de riesgo (mismo criterio que Fase 0b/0c).** Migración `menu_items`
-(conexión `central`) + modelo `MenuItem` (parent/hijos, scope `activos()`) +
-`MenuItemsSeeder` (46 ítems, migrados 1:1 desde el inventario real de
-`auditoria-menu-admin-start-kit.md` §2 — sin sembrar todavía contra el `db_tenant_central`
-real, ver más abajo). `MenuResolver::paraUsuario()` con los pasos 1/3/4/5 de §4.1
-implementados — **el paso 2 (filtro por `modulos_efectivos($tenant)`) NO está
-implementado**: confirmado con grep antes de escribir el código que ni
-`modulos_efectivos()`, ni `tenant_modulo_overrides`, ni un modelo `Modulo` existen
-todavía (`plan-modulo-planes-acceso.md` §3.4/3.5 los marca como "trabajo genuinamente
-nuevo, sin conflicto", no como construido) — `menu_items.modulo_id` queda en el schema
-(nullable, sin FK real) para cuando ese módulo exista, con el punto exacto de extensión
-comentado en el código. `GET /me/menu` responde `{menu: [{codigo,label,icono,ruta,
-hijos}]}`, sin exponer `permiso_requerido`/`modulo_id`/`giro`.
+**Fase 0c — Modo sombra + gate real, Bucket B (§9.1 pasos 2-4) — EN CURSO**
+- Parte 1 (modo sombra) implementada y activa ahora mismo contra `umbo` y `agencia-demo`,
+  sin mergear (rama `feat/shadow-mode-bucket-b-rutas-operativas`, `506a02b`). Observando en
+  silencio — sin bloquear ninguna ruta todavía.
+- Parte 2 (backfill dirigido por logs) y Parte 3 (gate real con flag de rollback): pendientes,
+  a la espera de que la ventana de observación real sea representativa.
+- Detalle: `docs/planning/claude/shadow-mode-bucket-b-fase0c.md` (el brief de esta fase se
+  pegó directo en el chat, no quedó guardado como archivo propio — a diferencia de 0b/1a/1b).
 
-**Caché (§4.3) + invalidación (§9.6/§9.7), un hallazgo real en cada capa:**
-1. `config('permission.events_enabled')` (Spatie) estaba en `false` — nunca se había
-   habilitado en este proyecto, así que `PermissionAttached`/`PermissionDetached`/
-   `RoleAttached`/`RoleDetached` (los 4 eventos que §4.3 da por sentado) nunca
-   dispararon. Activado (`config/permission.php`) — cambio puramente aditivo, Spatie
-   trae estos eventos listos para esto.
-2. `App\Listeners\RolePermissionChangedListener` (un solo listener para los 4 eventos,
-   auto-descubierto por Laravel — sin `Event::listen()` manual, ver punto 3) hace las
-   dos cosas que pide §9.6/§9.7 en el mismo lugar: escribe `role_audit_logs` (conexión
-   tenant, mismo patrón que `AuditLogger` central) y llama
-   `PermissionRegistrar::forgetCachedPermissions()` + invalida el caché de
-   `MenuResolver` (por usuario si el target es un User, por tenant completo si es un
-   Role — más simple y robusto que enumerar usuarios del rol uno por uno).
-   `MenuResolver::invalidarTenantActivo()` no usa `Cache::tags()` (CACHE_STORE=database
-   no las soporta) — borra por prefijo directo contra la tabla `cache`, que
-   `DatabaseTenancyBootstrapper` ya aísla por tenant, así que el borrado nunca puede
-   alcanzar a otro tenant.
-3. **Bug real encontrado en verificación en vivo contra `sandbox`, no por ningún test**:
-   los 4 métodos del listener (cada uno con un único parámetro tipado como la clase del
-   evento) matchean exactamente la convención de auto-discovery de eventos de Laravel —
-   registrarlos TAMBIÉN a mano en `AppServiceProvider::boot()` los duplicaba (2
-   listeners por evento, confirmado con `php artisan event:list`), generando 2 filas de
-   `role_audit_logs` por cada attach/detach real. Corregido sacando el registro manual
-   (queda 1 listener por evento). Test de regresión agregado
-   (`RolePermissionChangedListenerTest::test_un_solo_cambio_genera_exactamente_una_fila_de_auditoria`)
-   — el resto de los tests de esta fase usaban `assertDatabaseHas()`, que no valida
-   cantidad y no lo habría atrapado.
+**Fase 1a — Backend: núcleo del menú dinámico — CERRADA y MERGEADA (10-sep-2026, `main` en
+`7994636` + `86dfe5b`)**
+- Migración `menu_items` (central) + modelo + seeder (46 ítems reales, ya corrido contra la
+  central real).
+- `MenuResolver` + endpoint `GET /me/menu` + caché.
+- `RolePermissionChangedListener` — invalidación de caché de menú + caché de Spatie +
+  `role_audit_logs`, los 3 en un solo punto (cierra §9.6 y §9.7).
+- `roles:sync-permisos-nuevos` construido y testeado, sin uso real todavía (espera el
+  catálogo de Fase 1b).
+- Dos hallazgos reales documentados arriba (§4.1, §4.3): `modulos_efectivos()` no existe
+  todavía (punto de extensión pendiente, no bloqueante), y `events_enabled` de Spatie estaba
+  apagado desde siempre (activado, confirmado que no había ningún otro listener dormido).
+- Brief: `claude/PEGAR-EN-CLAUDE-CODE-fase1a-nucleo-menu-dinamico.md`.
 
-**`roles:sync-permisos-nuevos` (§9.4)** — construido y testeado con un catálogo de
-prueba (`Tests\Fixtures\CatalogoDePruebaRoles`, implementando el contrato nuevo
-`App\Contracts\RolesCatalogProvider`), sin uso real todavía — el catálogo real de
-`agencia_viajes` lo siembra Fase 1b. Nunca usa `syncPermissions()` (pisaría
-personalizaciones manuales), nunca crea un rol que el tenant no tenga sembrado.
-Verificado con 2 tenants físicos descartables (mismo patrón que
-`MigrateVerticalesPendientesTest`).
-
-**§9.3 (`Gate::before` para Super-Admin) ya estaba resuelto desde antes de esta fase**
-(`AppServiceProvider`, confirmado al leer el archivo — no es trabajo nuevo de Fase 1a).
-
-**31 tests nuevos** (`MenuResolverTest` 7, `MenuControllerTest` 2 —incluye un
-end-to-end real contra un tenant físico descartable—, `RolePermissionChangedListenerTest`
-7, `SyncPermisosNuevosCommandTest` 2, más los que ya sumaba la suite), **suite completa
-659/665 verde** (6 fallos pre-existentes de `TipoCambioSunat*`, confirmados no
-relacionados, iguales a los de Fase 0b/0c).
-
-**Desplegado y verificado en vivo (10-sep-2026):** migración `role_audit_logs`
-aplicada a los 5 tenants (`sandbox` primero, verificado, después `umbo`/`agencia-demo`/
-`negocio2`/`umbo-archivado`); migración `menu_items` aplicada al `db_tenant_central`
-real (tabla vacía, sin efecto observable — nada la consume todavía en producción).
-Listener verificado con un permiso descartable dado/quitado a un usuario real de
-`sandbox`/`umbo`/`agencia-demo` cada uno: permisos del usuario sin ningún cambio neto,
-exactamente 1 fila de auditoría por operación (no 2, tras el fix del bug de
-auto-discovery), filas de prueba truncadas después de confirmar. `GET /me/menu`
-probado en vivo contra `sandbox` con el catálogo todavía vacío: responde
-`{"menu":[]}` limpio, sin error.
-
-**✅ `MenuItemsSeeder` corrido contra el `db_tenant_central` real (10-sep-2026),
-autorizado explícitamente después de un grep completo (backend + `vendor/`, más
-`php artisan event:list`) que confirmó que `RolePermissionChangedListener` es el único
-listener real de los 4 eventos de Spatie — en `origin/main`, antes de esta fase, la
-única referencia a esos eventos era el comentario del propio `config/permission.php` de
-Spatie (`events_enabled=false` desde siempre), ningún listener dormido.** 46 ítems
-confirmados en la base real. Verificado en vivo contra `sandbox` con un usuario real
-(Cajero Test 2): `GET /me/menu` resuelve exactamente 3 ítems de primer nivel
-(`dashboard`, `comercial` con 2 de 9 hijos, `caja` con 1 de 2 hijos) — coincide exacto
-con sus permisos reales (`register_sale`/`list_sale`/`edit_sale`/`delete_sale`/
-`cash.open_session`).
-
-**Hallazgo real post-seed, corregido antes de dar esto por cerrado:** las llamadas de
-verificación a `/me/menu` hechas ANTES de sembrar (catálogo vacío) quedaron cacheadas
-24h para esos usuarios/tenants puntuales — sin efecto real (nada consume el endpoint
-todavía), pero se limpió el caché de menú (`MenuResolver::invalidarTenantActivo()`) en
-los 5 tenants reales para no dejar ninguna entrada obsoleta de esta sesión de
-verificación.
-
-**Decisiones que quedaron fuera de esta fase, documentadas en el propio seeder:**
-"Guía de Remisión" (2 ítems del menú viejo) no se migró — su ruta real apunta a
-`dashboards.ecommerce`, bug ya documentado en la auditoría de Fase 0, perpetuar un
-destino roto en la infraestructura nueva es peor que dejarlo afuera. `cash.history`
-(ruta real sin ítem de menú hoy) tampoco se sembró — su gate real es
-`cash.open_session|cash.view_all` (OR), y `menu_items.permiso_requerido` es un solo
-string, no soporta esa combinación — mismo gap que ya señalaba la auditoría.
-
-**✅ MERGEADO a `main`** (`7994636`, merge de `feat/menu-dinamico-fase1a-nucleo`),
-autorizado explícitamente después del grep de eventos huérfanos.
+**Fase 1b — Catálogo real de roles/permisos de agencia de viajes + scope de fila —
+DESBLOQUEADA, sin arrancar**
+- Catálogo de 5 roles/permisos de §3.2, seeder + investigación previa contra `agencia-demo`
+  (mismo criterio de Fase 0b: tabla de rol real → rol nuevo antes de aplicar nada).
+- `EscopablePorVendedor` + Policies sobre `Cotizacion`/`Reserva` (§3.3).
+- Test de matriz de permisos (§9.8).
+- Brief: `claude/PEGAR-EN-CLAUDE-CODE-fase1b-roles-permisos-agencia-viajes.md`.
 
 **Fase 2 — Frontend: consumo dinámico**
 - Sidebar hidratado desde `/me/menu`.
@@ -413,7 +351,7 @@ autorizado explícitamente después del grep de eventos huérfanos.
 **Fase 3 — Retail al mismo modelo**
 - Reemplazar el `role_id` legacy de retail por roles Spatie reales + seeder propio, para que
   el mismo `MenuResolver` sirva sin ramas especiales por giro.
-- Correr `roles:sync-permisos-nuevos` (§9.4, ya construido en Fase 1) sobre los tenants retail
+- Correr `roles:sync-permisos-nuevos` (ya construido en Fase 1a) sobre los tenants retail
   existentes en vez de sembrar sus roles a mano — mismo mecanismo, primer uso real.
 
 **Fase 4 — Giros futuros**
@@ -424,8 +362,9 @@ autorizado explícitamente después del grep de eventos huérfanos.
 **Transversal, sin fase fija — feature-gating y datos de plan (§9.2)**
 - Cada endpoint de un módulo gateable por plan debe validar `modulos_efectivos($tenant)`
   server-side (no solo ocultarlo en el menú) — auditoría análoga a la de §9.1, pero contra
-  `plan-modulo-planes-acceso.md` en vez de contra permisos Spatie. Candidato natural: mismo
-  momento que la auditoría de rutas de Fase 0, o una sesión aparte dedicada solo a esto.
+  `plan-modulo-planes-acceso.md` en vez de contra permisos Spatie. Este servicio no existe
+  todavía (confirmado en Fase 1a) — su construcción es prerequisito tanto de esto como del
+  paso 2 pendiente de `MenuResolver` (§4.1).
 - Decisión de negocio pendiente, a resolver antes de que un tenant real baje de plan por
   primera vez: qué pasa con datos ya creados bajo un módulo que el nuevo plan ya no incluye
   (¿solo lectura, siguen en reportes, se ocultan?). No bloquea nada de este plan hoy, pero
@@ -436,7 +375,7 @@ autorizado explícitamente después del grep de eventos huérfanos.
   anotado en memoria del proyecto desde antes de este documento, se repite acá para que quede
   en un solo lugar con el resto de la checklist de seguridad.
 
-## 8. Riesgos y decisiones abiertas (a confirmar antes de ejecutar Fase 1)
+## 8. Riesgos y decisiones abiertas (a confirmar antes de ejecutar Fase 1b)
 
 **Ya resueltos (10-sep-2026), se dejan documentados para no volver a preguntarlos:**
 - Catálogo de 5 roles cerrado: `Super-Admin`, `Administrador de agencia` (= Gerente),
@@ -449,9 +388,9 @@ autorizado explícitamente después del grep de eventos huérfanos.
 
 **Siguen abiertos:**
 
-1. **Alcance del fix de Fase 0**: toca el login de TODOS los tenants (retail incluido, no solo
-   agencia de viajes) — mismo criterio de cautela que ya aplica el proyecto a cualquier cambio
-   de blast radius amplio.
+1. **Servicio `modulos_efectivos($tenant)`** (feature-gating por plan) no existe todavía en el
+   código — confirmado con grep en Fase 1a. Bloquea el paso 2 de `MenuResolver` (§4.1) y la
+   auditoría transversal de §9.2. No bloquea Fase 1b.
 2. **Migración de retail (Fase 3)** puede ser más grande de lo que parece si hay lógica que
    hoy depende directamente de `role_id` en más lugares de los que el bug ya documentado
    señala — requiere grep completo antes de tocar nada, mismo criterio que el resto del
@@ -493,80 +432,59 @@ recién en Fase 3) — sus usuarios reales de producción (`sandbox`, `umbo`, `n
 no tener NINGÚN permiso Spatie asignado hoy. Agregar middleware `permission:` a esas 69 rutas
 sin antes confirmar que cada usuario real ya tiene el permiso Spatie correspondiente
 bloquearía de golpe a usuarios reales de tenants reales — cambiaría un agujero de seguridad
-real por una interrupción de servicio real, ambos evitables. **Antes de cerrar este hueco
-hace falta, en este orden**: (1) auditar qué permisos Spatie tiene hoy cada usuario real de
-cada tenant en producción (no asumir que `PermissionsDemoSeeder` alcanzó a todos); (2)
-backfillear los permisos que falten para que el comportamiento actual no cambie el día que se
-agregue el gate; (3) recién entonces agregar `permission:`/`can:` a las 69 rutas, tenant por
-tenant o en un solo deploy con el backfill ya confirmado. Esto probablemente adelanta partes
-de la Fase 3 (roles reales de retail) antes de lo planeado — a decidir contigo si este hueco
-se prioriza por delante del propio menú dinámico (Fase 1/2), dado que es una vulnerabilidad
-real activa hoy, no un riesgo futuro.
+real por una interrupción de servicio real, ambos evitables.
 
-**✅ Paso 1 (Bucket A) CERRADO (10-sep-2026, Fase 0b —
-`docs/planning/claude/gate-bucket-a-fase0b.md` tiene la clasificación completa de las 69
-rutas en Bucket A/B con motivo, y la tabla de qué permiso usa cada una).** Gateadas 38 de
-las 69 rutas — las administrativas/catastróficas (roles, users, company, branches,
-cash-registers, payment-methods, suppliers, cash-concepts, series-comprobante, systems,
-system_categories, recursos). Quedan sin tocar a propósito las 31 de Bucket B (uso operativo
-diario: categories, products, clients, sales, sale_details, sale_payments, enviarSunat,
-notas, installments — Vendedor/Cajero/Contador las necesitan, ver §9.1 modo "sombra" antes de
-gatearlas). Investigación real contra `sandbox`/`umbo`/`negocio2` (Postgres directo, no
-supuesto): 23 permisos `register_X`/`edit_X`/`delete_X` ya existían sembrados para 8 de los
-12 recursos, sin usarse en ninguna ruta — reutilizados tal cual. 11 permisos nuevos creados
-(`delete_serie_comprobante`, `company`, y 3 c/u de `system`/`categorie_system`/`recurso`) vía
-comando nuevo `permisos:backfill-gate-bucket-a {tenant}` (idempotente,
-`Permission::firstOrCreate`, nunca toca `role_has_permissions` — a propósito, para no repetir
-el riesgo real encontrado de que `PermissionsDemoSeeder::syncPermissions()` resetearía los
-permisos ya customizados a mano de `Contador` en `umbo`). En `sandbox`/`umbo`/`negocio2`
-ningún rol de negocio real necesitó ninguno de estos permisos — el único que hoy llama estas
-rutas es el propio Super-Admin, que bypasea todo vía `Gate::before()`. 77 tests nuevos
-(`GateBucketARoutesTest`, doble capa: ruta↔permiso + middleware real con/sin permiso), suite
-completa 641/647 verde (6 fallos pre-existentes de `TipoCambioSunat*`, confirmados no
-relacionados). Verificado en vivo contra `sandbox` con tokens JWT reales: Cajero bloqueado con
-403 en 4 rutas de Bucket A distintas (incluida `delete_serie_comprobante`, el permiso nuevo);
-Super-Admin pasa el gate en las mismas rutas (422/404, nunca 403).
+**Estrategia de rollout confirmada (10-sep-2026) — en 5 pasos, pensada para cerrar el hueco
+sin arriesgar romper producción:**
 
-**⚠️ Regresión real encontrada en revisión pre-merge (10-sep-2026, corregida antes de
-mergear) — `sandbox`/`umbo`/`negocio2` NO fueron representativos de todos los tenants
-reales.** `agencia-demo` (marcado `tipo='demo'` en `tenants`, pero en uso real de negocio —
-ver nota abajo) sí tenía un rol real en uso, `Admin-General` (usuario real
-`admin@gmail.com`), con 14 de los permisos de Bucket A ya asignados — pero le faltaban
-`register_branch`/`edit_branch`/`delete_branch` y
-`register_supplier`/`edit_supplier`/`delete_supplier` (permisos que YA EXISTÍAN antes de esta
-fase, no de los 11 nuevos). Mergear el gate sin corregir esto le habría roto a
-`admin@gmail.com` una capacidad real que usa hoy sin gate (crear/editar/eliminar sucursales y
-proveedores). Corregido en `permisos:backfill-gate-bucket-a` — otorga esos 6 permisos a
-`Admin-General`, con un chequeo explícito `if ($tenantId === 'agencia-demo')` para no
-tocar ningún otro tenant. Verificado con diff de `role_has_permissions` antes/después
-(85→91 filas en `agencia-demo`, las 6 agregadas son exactamente las de `Admin-General`,
-ningún otro rol tocado). **Nota aparte, no resuelta acá:** el campo `tenants.tipo` de
-`agencia-demo` dice `'demo'` mientras que `sandbox`/`negocio2` dicen `'real'` — lo opuesto de
-cómo se usan en la práctica (todo el desarrollo de Agencia de Viajes se verifica contra
-`agencia-demo` como tenant de negocio real). Vale la pena corregir ese campo en una sesión
-aparte para que futuras auditorías no repitan el mismo supuesto equivocado.
+1. **Bucketear las 69 rutas por riesgo real de romper algo, no tratarlas como un solo bloque.**
+   ✅ **Cerrado (Fase 0b, 10-sep-2026).**
+   - *Bucket A — acciones administrativas raras/catastróficas* (borrar rol, borrar usuario,
+     tocar `SunatConfig`, etc.): 38 rutas, gateadas y mergeadas en Fase 0b. 11 permisos nuevos
+     creados vía `permisos:backfill-gate-bucket-a` (idempotente, nunca toca
+     `role_has_permissions` directamente — evita el riesgo real ya encontrado de que
+     `PermissionsDemoSeeder::syncPermissions()` resetearía permisos customizados a mano, ej.
+     `Contador` en `umbo`). 77 tests nuevos (`GateBucketARoutesTest`), suite completa 641/647
+     verde. Verificado en vivo contra `sandbox` con JWT reales (Cajero bloqueado 403 en 4
+     rutas; Super-Admin pasa el gate vía `Gate::before()`). **Regresión real encontrada y
+     corregida antes de mergear**: `agencia-demo` (rol real `Admin-General`,
+     `admin@gmail.com`) le faltaban 6 permisos que ya usaba (`register_branch`/`edit_branch`/
+     `delete_branch`/`register_supplier`/`edit_supplier`/`delete_supplier`) — mergear sin
+     corregir esto le habría roto una capacidad real. **Hallazgo nuevo, fuera de alcance,
+     prioridad alta, no corregido acá**: el grupo "100% CENTRALES" (`systems`/
+     `system_categories`/`recursos`) autentica el JWT contra la conexión Postgres DEFAULT
+     (`sv_facturacion`) en vez de contra la base del tenant real — confirmado con evidencia
+     real (un token de "Sandbox Admin" autenticó como "Kreisler", coincidencia pura de ID).
+     Detalle completo de ambos hallazgos, con toda la evidencia de verificación, en
+     `docs/planning/claude/gate-bucket-a-fase0b.md`.
+   - *Bucket B — acciones operativas cotidianas* (crear venta, listar clientes, abrir caja):
+     31 rutas, en proceso vía Fase 0c (pasos 2-4 abajo).
+2. **Modo "shadow" antes de bloquear, solo para el Bucket B**: un middleware liviano que
+   registra (log, no bloquea) cada vez que un usuario real habría fallado el chequeo de
+   permiso — corrido contra tráfico real de producción unos días. Esto da evidencia real de
+   quién se rompería, en vez de una auditoría a ciegas de qué permisos "deberían" tener.
+   ✅ **Implementado y activo (Fase 0c Parte 1, 10-sep-2026)** — `ShadowPermissionMiddleware`
+   corriendo ahora mismo contra `umbo` y `agencia-demo`, sin mergear todavía (rama
+   `feat/shadow-mode-bucket-b-rutas-operativas`, `506a02b`). Detalle del mapeo de permisos y
+   diseño en `docs/planning/claude/shadow-mode-bucket-b-fase0c.md`. Observando en silencio —
+   la lectura de logs (paso 3) espera a que la ventana de observación sea representativa.
+3. **Backfill dirigido por esos logs** (no por suposición): a cada usuario real que el modo
+   shadow marcó como "habría fallado", asignarle el permiso que le falta — vía rol si aplica a
+   todo su rol, o directo al usuario (§5) si es un caso puntual. **Pendiente** — a la espera
+   de una ventana de observación real (Fase 0c Parte 2).
+4. **Activar el gate real con flag de rollback inmediato** — un valor de config
+   (`platform_settings` o `.env`) que permite desactivar el enforcement al instante, sin
+   nuevo deploy, si algo se rompe igual. Probar primero contra `sandbox` (tenant de pruebas
+   dedicado), después contra tenants reales. **Pendiente** (Fase 0c Parte 3), requiere mi
+   autorización explícita antes de activarse contra `umbo`/`agencia-demo`.
+5. **El test de matriz de permisos de §9.8** se adelanta para correr ANTES de este rollout,
+   no después — sirve como red de seguridad en CI mientras se van gateando rutas bucket por
+   bucket.
 
-**✅ MERGEADO a `main`** (`ee008a2`, `beec5c3..ee008a2`) — rama
-`fix/gate-permisos-bucket-a-rutas-criticas` (commits `938b606` + `cfec262`), autorizado
-explícitamente después de ver el diff completo y la evidencia de verificación.
-
-**⚠️ Hallazgo nuevo, fuera de alcance de Fase 0b, no corregido — prioridad alta:** verificando
-en vivo `POST /api/systems` se descubrió que el grupo "100% CENTRALES" (`systems`/
-`system_categories`/`recursos`, `routes/api.php` línea ~129) NO lleva
-`InitializeTenancyBySubdomain` — el JWT se autentica contra la conexión Postgres DEFAULT
-(`sv_facturacion`, la base pre-multitenant), no contra la base del tenant real. Confirmado con
-evidencia real: un token de "Sandbox Admin" (`tenantsandbox.users.id=1`) autenticó exitosamente
-como "Kreisler" (`sv_facturacion.users.id=1`, `umbosac@gmail.com`) — una persona completamente
-distinta, coincidencia pura de ID numérico — y pasó el gate solo porque ese Kreisler también
-tiene rol Super-Admin en `sv_facturacion`. Un usuario de tenant sin ID coincidente en
-`sv_facturacion` (ej. Cajero Test, id=20) recibe 401 en vez de autenticar mal — así que hoy el
-daño está acotado a "algunos usuarios ven 401 sin motivo" en vez de confusión de identidad
-activa, pero el mecanismo de fondo (autenticar JWT de tenant contra la base equivocada) es real
-y podría exponer datos/acciones de un usuario a nombre de otro si algún tenant nuevo llega a
-tener usuarios con IDs bajos que coincidan con `sv_facturacion`. No es un problema de permisos
-(mi gate de Bucket A corre DESPUÉS de `auth:api` en el pipeline, así que no lo causa ni lo
-tapa) — es arquitectura de tenancy, mismo tipo de gap que el ya documentado en
-`arquitectura-multitenant-backend_1.md`. Requiere sesión propia.
+Esto adelanta partes de la Fase 3 (roles reales de retail) antes de lo planeado — a decidir
+contigo si este hueco se prioriza por delante del propio menú dinámico (Fase 1/2), dado que
+es una vulnerabilidad real activa hoy, no un riesgo futuro. El Bucket A, al menos, no tiene
+motivo para esperar a Fase 1.
 
 ### 9.2 Feature-gating por plan (módulos) tiene el mismo problema, no solo el menú
 
@@ -574,6 +492,8 @@ tapa) — es arquitectura de tenancy, mismo tipo de gap que el ya documentado en
 no habilitados, ni en menú ni por endpoint directo) — pero esa regla necesita el mismo tipo de
 verificación que 9.1: cada endpoint de un módulo gateable debe validar
 `modulos_efectivos($tenant)` server-side, no confiar en que el frontend no mostró el botón.
+**Confirmado en Fase 1a: este servicio no existe todavía en el código** (grep completo) — es
+prerequisito de esta auditoría transversal y del paso 2 pendiente de `MenuResolver` (§4.1).
 Falta decidir además **qué pasa con datos ya creados cuando un tenant baja de plan** (ej.
 tenía "cotizaciones con mayoristas" habilitado, generó cotizaciones reales con esa
 funcionalidad, y después la pierde por downgrade) — ¿quedan de solo lectura, se siguen
@@ -582,28 +502,34 @@ puede romper reportes/históricos sin que nadie lo note hasta que un cliente rec
 
 ### 9.3 `Super-Admin` no debería depender de que el seeder esté completo
 
+**Cerrado (Fase 0b, 10-sep-2026).** Se implementó `Gate::before()` en `AuthServiceProvider` —
+las 3 cuentas `Super-Admin` reales (una por tenant) bypasean el gate por completo, sin pasar
+por la tabla de permisos. Se deja el texto original abajo como referencia del razonamiento:
+
 Hoy el diseño (§3.2) asume que `Super-Admin` tiene "todos los permisos" porque el seeder se
 los asigna uno por uno. Si más adelante se agrega un permiso nuevo (nuevo módulo, nueva
 acción) y alguien olvida agregarlo también al seeder de `Super-Admin`, el rol técnico queda
 con un hueco silencioso — exactamente el tipo de "fallback silencioso" que el proyecto ya
-evita en lo fiscal. **Recomendación**: `Super-Admin` no debería pasar por la tabla de permisos
-en absoluto — un `Gate::before(fn($user) => $user->hasRole('Super-Admin') ? true : null)`
-en `AuthServiceProvider` lo deja con acceso total siempre, sin importar qué permisos existan
-hoy o se agreguen después, y sin necesitar mantenimiento del seeder para ese rol específico.
+evita en lo fiscal. **Recomendación (ya aplicada)**: `Super-Admin` no pasa por la tabla de
+permisos en absoluto — un `Gate::before(fn($user) => $user->hasRole('Super-Admin') ? true :
+null)` en `AuthServiceProvider` lo deja con acceso total siempre, sin importar qué permisos
+existan hoy o se agreguen después, y sin necesitar mantenimiento del seeder para ese rol
+específico.
 
 ### 9.4 Sincronización de permisos nuevos a tenants YA existentes
+
+**Comando construido (Fase 1a, 10-sep-2026)** — `roles:sync-permisos-nuevos`, testeado, sin
+uso real todavía (espera el catálogo real de Fase 1b, que será su primer uso). Se deja el
+texto original como referencia:
 
 Mismo patrón exacto que el bug ya documentado de `tenants:migrate` (nunca corría
 `verticals/*` para tenants ya provisionados, solo para los nuevos vía `provision()`) puede
 repetirse acá: si se agrega un permiso/módulo nuevo al catálogo, los tenants que ya existen
 NO lo reciben automáticamente en sus roles — solo los tenants nuevos, vía el seeder de
-provisioning. Falta un comando de mantenimiento (`roles:sync-permisos-nuevos`, análogo a
-`tenants:migrate-verticales`) que agregue permisos nuevos a los roles base de cada tenant
-existente, sin pisar las personalizaciones que un `Administrador` ya haya hecho a mano
-(§5) — requiere distinguir "permiso nuevo del catálogo, nunca visto por este tenant" de
-"el tenant lo desactivó a propósito", lo cual implica versionar el catálogo de algún modo
-(ej. tabla `permisos_catalogo` con fecha de alta, y un registro de qué tenant ya sincronizó
-hasta qué versión).
+provisioning. El comando agrega permisos nuevos a los roles base de cada tenant existente,
+sin pisar las personalizaciones que un `Administrador` ya haya hecho a mano (§5) —
+requiere distinguir "permiso nuevo del catálogo, nunca visto por este tenant" de "el tenant lo
+desactivó a propósito", lo cual implica versionar el catálogo de algún modo.
 
 ### 9.5 Anti-lockout — proteger contra que un tenant quede sin ningún Administrador
 
@@ -619,35 +545,28 @@ mismo espíritu que ya usa el proyecto para no poder eliminar `Super-Admin`:
 
 ### 9.6 Auditoría de cambios de roles/permisos — no existe hoy, a nivel de tenant
 
-`central_audit_logs` (panel superadmin) audita acciones a nivel de plataforma, pero **no hay
-ningún registro de quién cambió qué permiso de qué rol dentro de un tenant**. Dado que el
-módulo de §5 le da a `Administrador` la capacidad de otorgar permisos libremente (incluido a
-usuarios puntuales, más allá de su rol — una superficie de escalamiento de privilegios real
-si la cuenta de un Administrador se ve comprometida), conviene un log propio por tenant
-(`role_audit_logs`, o reusar el mismo patrón de `AuditLogger` ya existente en el proyecto
-central, adaptado a conexión tenant) que registre: quién, qué rol/usuario, qué permiso, cuándo.
-Sin esto, un cambio de permisos indebido (accidental o malicioso) no deja rastro para
-investigar después.
+**Cerrado (Fase 1a, 10-sep-2026).** `role_audit_logs` implementado, escrito por
+`RolePermissionChangedListener` en el mismo punto que invalida los cachés (§4.3) — registra
+quién cambió qué permiso de qué rol/usuario y cuándo, para cualquier tenant, desde ya (no
+espera al módulo de UI de §5, que solo lo va a consumir/mostrar más adelante).
 
 ### 9.7 Caché de permisos de Spatie — invalidación inmediata, no solo el caché del menú
 
-§4.3 ya diseña la invalidación del caché de `MenuResolver`, pero Spatie Permission tiene SU
-PROPIO caché interno (independiente del nuestro) que decide qué devuelve `can()`/
-`hasPermissionTo()` en cada request real — si ese caché no se limpia en el mismo instante en
-que se edita un rol/permiso desde el módulo de §5, un usuario puede seguir teniendo acceso
-real (no solo de menú) a algo que ya le quitaron, hasta que el caché expire. Confirmar que
-`PermissionRegistrar::forgetCachedPermissions()` (o el mecanismo real de la versión de Spatie
-instalada) se dispara en el mismo punto que ya se diseñó para limpiar el caché del menú — son
-dos cachés distintos que deben invalidarse juntos, no uno sin el otro.
+**Cerrado (Fase 1a, 10-sep-2026).** `PermissionRegistrar::forgetCachedPermissions()` se
+dispara en el mismo listener (`RolePermissionChangedListener`) que limpia el caché del menú —
+un solo punto de invalidación para los dos cachés, confirmado con test. Nota real: esto
+requirió activar `config('permission.events_enabled')` de Spatie, que estaba apagado desde
+siempre en este proyecto (ver §4.3) — se confirmó con grep + `event:list` que no había ningún
+otro listener dormido que este cambio pudiera despertar inesperadamente.
 
 ### 9.8 Test de matriz de permisos (regresión automática)
 
 Con 5 roles × N recursos × 2 niveles de scope (propio/todas) + feature-gating por plan, la
-combinatoria es demasiado grande para verificar a mano cada vez que se agrega algo. Recomendado
-para Fase 1/2: un test parametrizado que recorra la matriz completa rol×acción esperada
-(allow/deny) contra las rutas reales — así un cambio futuro que rompa un permiso existente se
-detecta en CI, no en producción con un cliente real reportando que ve algo que no debería (o
-al revés, que no puede hacer algo que sí debería).
+combinatoria es demasiado grande para verificar a mano cada vez que se agrega algo. Se
+construye en Fase 1b (brief ya listo): un test parametrizado que recorra la matriz completa
+rol×acción esperada (allow/deny) contra las rutas reales — así un cambio futuro que rompa un
+permiso existente se detecta en CI, no en producción con un cliente real reportando que ve
+algo que no debería (o al revés, que no puede hacer algo que sí debería).
 
 ### 9.9 Pendiente ya conocido, solo recordado acá
 
