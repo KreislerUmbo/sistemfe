@@ -372,15 +372,24 @@ auto-discovery), filas de prueba truncadas después de confirmar. `GET /me/menu`
 probado en vivo contra `sandbox` con el catálogo todavía vacío: responde
 `{"menu":[]}` limpio, sin error.
 
-**⚠️ Pendiente, no ejecutado a propósito — requiere tu autorización explícita:**
-`MenuItemsSeeder` (los 46 ítems) NO se corrió contra el `db_tenant_central` real. A
-diferencia de `role_audit_logs` (aislado por tenant, cero riesgo cruzado), `menu_items`
-es una tabla ÚNICA compartida por los 5 tenants reales a la vez — no existe forma de
-"probarlo primero solo contra sandbox" para el dato en sí (sí se pudo para el
-comportamiento del listener, que es código, no dato). Sembrarlo no tendría ningún efecto
-observable hoy (nada consume `/me/menu` todavía, Fase 2 no construida), pero el brief es
-explícito en pedir autorización antes de correr cualquier seeder de esta fase — comando
-listo: `php artisan db:seed --class="Database\Seeders\MenuItemsSeeder" --database=central`.
+**✅ `MenuItemsSeeder` corrido contra el `db_tenant_central` real (10-sep-2026),
+autorizado explícitamente después de un grep completo (backend + `vendor/`, más
+`php artisan event:list`) que confirmó que `RolePermissionChangedListener` es el único
+listener real de los 4 eventos de Spatie — en `origin/main`, antes de esta fase, la
+única referencia a esos eventos era el comentario del propio `config/permission.php` de
+Spatie (`events_enabled=false` desde siempre), ningún listener dormido.** 46 ítems
+confirmados en la base real. Verificado en vivo contra `sandbox` con un usuario real
+(Cajero Test 2): `GET /me/menu` resuelve exactamente 3 ítems de primer nivel
+(`dashboard`, `comercial` con 2 de 9 hijos, `caja` con 1 de 2 hijos) — coincide exacto
+con sus permisos reales (`register_sale`/`list_sale`/`edit_sale`/`delete_sale`/
+`cash.open_session`).
+
+**Hallazgo real post-seed, corregido antes de dar esto por cerrado:** las llamadas de
+verificación a `/me/menu` hechas ANTES de sembrar (catálogo vacío) quedaron cacheadas
+24h para esos usuarios/tenants puntuales — sin efecto real (nada consume el endpoint
+todavía), pero se limpió el caché de menú (`MenuResolver::invalidarTenantActivo()`) en
+los 5 tenants reales para no dejar ninguna entrada obsoleta de esta sesión de
+verificación.
 
 **Decisiones que quedaron fuera de esta fase, documentadas en el propio seeder:**
 "Guía de Remisión" (2 ítems del menú viejo) no se migró — su ruta real apunta a
@@ -390,8 +399,8 @@ destino roto en la infraestructura nueva es peor que dejarlo afuera. `cash.histo
 `cash.open_session|cash.view_all` (OR), y `menu_items.permiso_requerido` es un solo
 string, no soporta esa combinación — mismo gap que ya señalaba la auditoría.
 
-**Rama `feat/menu-dinamico-fase1a-nucleo` PUSHEADA, SIN MERGEAR** — esperando tu
-revisión del diff real (ver reglas del proyecto, no me mergeo solo).
+**✅ MERGEADO a `main`** (`7994636`, merge de `feat/menu-dinamico-fase1a-nucleo`),
+autorizado explícitamente después del grep de eventos huérfanos.
 
 **Fase 2 — Frontend: consumo dinámico**
 - Sidebar hidratado desde `/me/menu`.
