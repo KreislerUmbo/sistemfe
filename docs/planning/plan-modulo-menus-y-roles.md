@@ -6,9 +6,12 @@
 > (3 capas: giro + plan + roles)". Ese documento define el QUÉ (el modelo conceptual de 3
 > capas ya está decidido y no se toca acá); este documento define el CÓMO — el modelo de datos
 > concreto, el catálogo de roles/permisos, y el plan de ejecución.
-> Estado: diseño cerrado, en ejecución — Fase 0, Fase 0b y Fase 1a ya mergeadas a `main`;
-> Fase 0c Parte 1 (modo sombra de Bucket B) activa contra `umbo` y `agencia-demo`, sin mergear;
-> Fase 1b (catálogo real de roles/permisos + scope de fila) desbloqueada, sin arrancar.
+> Estado: diseño cerrado, en ejecución — Fase 0, Fase 0b, Fase 1a y Fase 1b (catálogo real
+> de roles/permisos + scope de fila, incluida la Parte 5 ya aplicada contra `agencia-demo`)
+> ya mergeadas a `main`, junto con el fix de invalidación de caché de menú por cambio de
+> giro. Fase 0c Parte 1 (modo sombra de Bucket B) activa contra `umbo` y `agencia-demo`, sin
+> mergear — Partes 2/3 esperan una ventana real de observación. Fase 2 (frontend) es la
+> próxima desbloqueada, sin arrancar.
 > Última actualización: 10-sep-2026
 
 ---
@@ -332,18 +335,18 @@ distingue de Administrador según lo confirmado en §3.2):
   apagado desde siempre (activado, confirmado que no había ningún otro listener dormido).
 - Brief: `claude/PEGAR-EN-CLAUDE-CODE-fase1a-nucleo-menu-dinamico.md`.
 
-**⚠️ Hallazgo real de revisión posterior, no corregido en Fase 1a — rama aparte
-(`fix/menu-cache-invalida-al-cambiar-giro`, `4b8c65d`, PUSHEADA SIN MERGEAR):**
+**✅ Hallazgo real de revisión posterior, CERRADO y MERGEADO a `main`** — rama
+`fix/menu-cache-invalida-al-cambiar-giro`, `4b8c65d`.
 `TenantProvisioningService::actualizar()` (Panel Superadmin, "editar tenant", ya en
-producción) puede cambiar `tenant.giro` sin invalidar nunca el caché de `MenuResolver` —
+producción) podía cambiar `tenant.giro` sin invalidar nunca el caché de `MenuResolver` —
 un usuario que ya pidió `/me/menu` antes del cambio seguiría viendo el árbol del giro
-VIEJO hasta 24h. Sin impacto hoy (nada consume el endpoint todavía). Fix de una línea
+VIEJO hasta 24h. Sin impacto real (nada consume el endpoint todavía). Fix de una línea
 (`$tenant->run(fn () => app(MenuResolver::class)->invalidarTenantActivo())` dentro del
 `if ($giroCambio)`), con 2 tests contra tenant físico descartable.
 
 **Fase 1b — Catálogo real de roles/permisos de agencia de viajes + scope de fila —
-TODAS LAS PARTES CERRADAS (10-sep-2026), incluida la Parte 5 (aplicación real,
-autorizada y ejecutada contra `agencia-demo`), rama sin mergear**
+✅ TODAS LAS PARTES CERRADAS Y MERGEADAS A `main` (10-sep-2026), incluida la Parte 5
+(aplicación real, autorizada y ejecutada contra `agencia-demo`)**
 - **Hallazgo real que reformuló la Parte 1**: 159 rutas de Cotizaciones/Reservas/
   Proveedores/etc. YA estaban gateadas, pero con 8 permisos planos sin distinción
   lectura/escritura — el catálogo granular de §3.2 no podía convivir con eso sin romper
