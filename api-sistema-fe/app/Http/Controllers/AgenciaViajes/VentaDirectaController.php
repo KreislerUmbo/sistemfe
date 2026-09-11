@@ -63,6 +63,8 @@ class VentaDirectaController extends Controller
                     'cliente_id' => $validado['cliente_id'],
                     'codigo_prefijo' => $prefijo,
                     'codigo' => $codigo,
+                    // Fase 1b (§3.3) — mismo criterio que CotizacionController::store().
+                    'vendedor_id' => auth()->id(),
                     'destino' => $validado['destino'],
                     'fecha_viaje_desde' => $validado['fecha_servicio'] ?? null,
                     'fecha_viaje_hasta' => $validado['fecha_servicio'] ?? null,

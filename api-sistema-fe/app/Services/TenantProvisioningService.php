@@ -23,6 +23,7 @@ use App\Models\Sale\Sale;
 use App\Models\SunatConfig;
 use App\Models\Tenant;
 use App\Models\User;
+use Database\Seeders\AgenciaViajesRolesSeeder;
 use Database\Seeders\CashConceptSeeder;
 use Database\Seeders\PaymentMethodSeeder;
 use Database\Seeders\PermissionsDemoSeeder;
@@ -113,8 +114,20 @@ class TenantProvisioningService
 
             $this->migrarVertical($tenant, $giro);
 
-            $tenant->run(function () use ($adminName, $adminEmail, $adminPassword) {
+            $tenant->run(function () use ($adminName, $adminEmail, $adminPassword, $giro) {
                 (new PermissionsDemoSeeder())->run();
+
+                // Fase 1b (plan-modulo-menus-y-roles.md §3.2/§7) — catálogo real
+                // de roles/permisos de agencia_viajes, en capas ENCIMA de
+                // PermissionsDemoSeeder (nunca lo reemplaza: agencia_viajes
+                // también usa las tablas 'core' retail que ese seeder cubre).
+                // Deja roles retail sin usar (Jefe de Ventas/Jefe de Almacén/
+                // Cajero/Vendedor/Cliente) — decisión explícita, más seguro que
+                // tocar PermissionsDemoSeeder (lo usan tenants retail reales
+                // hoy) solo para evitar clutter cosmético.
+                if ($giro === 'agencia_viajes') {
+                    (new AgenciaViajesRolesSeeder())->run();
+                }
 
                 // Módulo Caja — Fase 0 (plan-modulo-caja.md §3): catálogos base con
                 // seed inicial, para que un tenant nuevo arranque con los métodos de

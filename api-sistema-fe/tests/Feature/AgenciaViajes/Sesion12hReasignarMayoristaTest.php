@@ -14,8 +14,11 @@ use App\Models\AgenciaViajes\ProveedorTipo;
 use App\Models\AgenciaViajes\ReservaItem;
 use App\Models\AgenciaViajes\ReservaVenta;
 use App\Models\Sale\Sale;
+use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 // Sesión 12h — brief PEGAR-EN-CLAUDE-CODE-reasignar-mayorista-vivo.md
@@ -320,6 +323,12 @@ class Sesion12hReasignarMayoristaTest extends TestCase
         app(ReservaController::class)->reasignarMayorista(new Request([
             'reserva_item_ids' => [$reservaItem->id], 'nueva_opcion_mayorista_id' => $opcionB->id, 'motivo' => 'Test resumen',
         ]), (string) $reserva->id);
+
+        // Fase 1b (§3.3) — show() ahora exige un usuario autenticado.
+        $role = Role::firstOrCreate(['guard_name' => 'api', 'name' => 'Super-Admin']);
+        $admin = User::factory()->create();
+        $admin->assignRole($role);
+        Auth::guard('api')->setUser($admin->fresh());
 
         $response = app(ReservaController::class)->show((string) $reserva->id);
         $body = $response->getData(true);

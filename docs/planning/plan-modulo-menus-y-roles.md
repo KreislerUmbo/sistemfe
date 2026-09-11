@@ -342,11 +342,34 @@ VIEJO hasta 24h. Sin impacto hoy (nada consume el endpoint todavía). Fix de una
 `if ($giroCambio)`), con 2 tests contra tenant físico descartable.
 
 **Fase 1b — Catálogo real de roles/permisos de agencia de viajes + scope de fila —
-DESBLOQUEADA, sin arrancar**
-- Catálogo de 5 roles/permisos de §3.2, seeder + investigación previa contra `agencia-demo`
-  (mismo criterio de Fase 0b: tabla de rol real → rol nuevo antes de aplicar nada).
-- `EscopablePorVendedor` + Policies sobre `Cotizacion`/`Reserva` (§3.3).
-- Test de matriz de permisos (§9.8).
+PARTES 1-4 CERRADAS (10-sep-2026), PARTE 5 (aplicación real) PENDIENTE DE
+AUTORIZACIÓN, rama sin mergear**
+- **Hallazgo real que reformuló la Parte 1**: 159 rutas de Cotizaciones/Reservas/
+  Proveedores/etc. YA estaban gateadas, pero con 8 permisos planos sin distinción
+  lectura/escritura — el catálogo granular de §3.2 no podía convivir con eso sin romper
+  la restricción de alcance de `Contador`/`Vendedor`. Split acotado (decisión
+  confirmada) a Cotizaciones+Reservas (91 rutas remapeadas): el resto queda con su gate
+  plano, §3.2 no necesita más ahí.
+- `AgenciaViajesRolesSeeder` (4 roles, implementa `RolesCatalogProvider` de Fase 1a) en
+  capas encima de `PermissionsDemoSeeder` (nunca lo reemplaza) dentro de `provision()`.
+- **Diagnóstico real de `agencia-demo` (Parte 2)**: solo `Admin-General` (1 usuario
+  real) y `Super-Admin` tienen algo que ver — hallazgo urgente, mergear el split tal
+  cual lo rompería. `permisos:backfill-fase1b-agencia-viajes` preparado, sin correr
+  contra `agencia-demo`. Bug real encontrado y corregido en el propio comando
+  (sobre-otorgaba a los roles nuevos del catálogo, verificado en vivo contra sandbox).
+- **`vendedor_id` no existía en ninguna tabla** (hallazgo real, bloqueante) — migración
+  aditiva agregada a `cotizaciones` (nullable); `Reserva` hereda vía join, sin columna
+  propia.
+- **El Global Scope original de §3.3 rompió 38 tests reales** (lógica interna —
+  `aceptar()`/facturación — accede a la relación `cotizacion` sin ser una consulta de
+  visibilidad). Rediseñado a scope LOCAL (`propias()`, solo en `index()`) — decisión
+  confirmada, cambia el mecanismo técnico de §3.3 sin cambiar el resultado para el
+  usuario final. `CotizacionPolicy`/`ReservaPolicy` pasan a ser la barrera PRINCIPAL
+  para show/update/delete, no una redundante.
+- Test de matriz de permisos (§9.8): 64 filas, contra el catálogo real sembrado.
+- 97 tests nuevos, suite completa verde (salvo `TipoCambioSunat*`, no relacionado).
+- Detalle completo, todos los hallazgos con su evidencia:
+  `docs/planning/agencia-de-viajes/fase1b-roles-permisos.md`.
 - Brief: `claude/PEGAR-EN-CLAUDE-CODE-fase1b-roles-permisos-agencia-viajes.md`.
 
 **Fase 2 — Frontend: consumo dinámico**

@@ -2,6 +2,8 @@
 
 namespace App\Models\AgenciaViajes;
 
+use App\Models\Concerns\EscopablePorVendedor;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
 // Creada al aceptar una alternativa — plan-modulo-cotizaciones-reservas.md
@@ -44,6 +46,8 @@ use Illuminate\Database\Eloquent\Model;
 // ningún sistema externo, sin historial (se limpia al desmarcar).
 class Reserva extends Model
 {
+    use EscopablePorVendedor;
+
     protected $table = 'reserva';
 
     protected $fillable = [
@@ -116,5 +120,23 @@ class Reserva extends Model
     public function anticipos()
     {
         return $this->hasMany(ReservaAnticipo::class, 'reserva_id');
+    }
+
+    protected static function permisoVerTodas(): string
+    {
+        return 'reservas.ver_todas';
+    }
+
+    // Reserva no tiene columna vendedor_id propia (Fase 1b, §3.3 — hallazgo
+    // real: ni cotizaciones ni reserva la tenían; se agregó solo a
+    // cotizaciones, ver 2026_09_10_140000_add_vendedor_id_to_cotizaciones_
+    // table.php). Hereda el dueño de su Cotización padre vía join —
+    // mismo criterio que ya usa el proyecto para fecha_viaje_desde/hasta
+    // antes del fix Cotización↔Reserva: no duplicar un dato que ya vive
+    // arriba en la cadena, salvo que haga falta congelarlo (acá no hace
+    // falta: el vendedor de una cotización no cambia después de aceptada).
+    protected static function aplicarFiltroVendedor(Builder $query, int $vendedorId): void
+    {
+        $query->whereHas('alternativa.cotizacion', fn ($q) => $q->where('vendedor_id', $vendedorId));
     }
 }

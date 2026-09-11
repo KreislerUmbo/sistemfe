@@ -688,7 +688,7 @@ Route::group([
     // Sesión pdf-cotizacion — documento aparte, mismo contenido para toda
     // cotización del tenant (no depende de ninguna alternativa puntual).
     Route::get("condiciones-generales/pdf", [CondicionesGeneralesController::class, 'pdf'])
-        ->middleware('permission:agencia.cotizaciones');
+        ->middleware('permission:cotizaciones.ver|cotizaciones.ver_todas');
 
     // Sesión 11b2 — catálogo de paquetes/tours de plantilla.
     Route::get("paquetes-plantilla", [PaquetePlantillaController::class, 'index'])
@@ -732,280 +732,296 @@ Route::group([
 
     // ═══════════════════════════════════════════════════════════════
     // Vertical Agencia de Viajes — cotizador (Sesión 11b). Permiso propio
-    // 'agencia.cotizaciones', DISTINTO de 'agencia.proveedores' (11a) —
+    // 'agencia.cotizaciones' original, DISTINTO de 'agencia.proveedores' (11a) —
     // cotizar es una operación de venta diaria (cualquier vendedor), el
     // catálogo de proveedores es más admin-level. Ver migración
     // 2026_07_28_180200_add_agencia_cotizaciones_permission.php para el
     // razonamiento completo.
+    //
+    // Fase 1b (plan-modulo-menus-y-roles.md §3.2/§7) — 'agencia.cotizaciones'
+    // reemplazado acá por permisos granulares (cotizaciones.ver/ver_todas/
+    // crear/editar): confirmado con grep que las 58 rutas de este bloque
+    // gateaban TODO (index/show/store/update/destroy) con el mismo permiso
+    // plano — sin esa distinción, un Contador con acceso de solo lectura
+    // (cotizaciones.ver_todas, §3.2) también hubiera podido crear/editar/
+    // borrar cotizaciones vía API directa. El OR (ver|ver_todas) en las
+    // rutas de lectura deja pasar a cualquiera de los dos — ver_todas
+    // además decide, vía EscopablePorVendedor, si ve todas las filas o solo
+    // las propias. 'eliminar' se fusionó con 'editar' (ninguna fila de §3.2
+    // necesita distinguirlos). Mapeo completo, ruta por ruta, en
+    // docs/planning/agencia-de-viajes/fase1b-roles-permisos.md.
     // ═══════════════════════════════════════════════════════════════
     // Biblioteca del cotizador — antes de "cotizaciones/{id}", no colisiona
     // (segmentos distintos) pero se agrupa acá por pertenecer al mismo flujo.
     Route::get("proveedor-tarifas", [ProveedorTarifaController::class, 'biblioteca'])
-        ->middleware('permission:agencia.cotizaciones');
+        ->middleware('permission:cotizaciones.ver|cotizaciones.ver_todas');
     // Sesión 11b3 — biblioteca unificada (tour/paquete/proveedor_tarifa en un
     // solo endpoint, ver BibliotecaCotizadorController). No reemplaza la ruta
     // de arriba, que sigue usada por paquetes/detalle.vue.
     Route::get("biblioteca-cotizador", [BibliotecaCotizadorController::class, 'index'])
-        ->middleware('permission:agencia.cotizaciones');
+        ->middleware('permission:cotizaciones.ver|cotizaciones.ver_todas');
 
     Route::get("cotizaciones", [CotizacionController::class, 'index'])
-        ->middleware('permission:agencia.cotizaciones');
+        ->middleware('permission:cotizaciones.ver|cotizaciones.ver_todas');
     Route::post("cotizaciones", [CotizacionController::class, 'store'])
-        ->middleware('permission:agencia.cotizaciones');
+        ->middleware('permission:cotizaciones.crear');
     Route::get("cotizaciones/{id}", [CotizacionController::class, 'show'])
-        ->middleware('permission:agencia.cotizaciones');
+        ->middleware('permission:cotizaciones.ver|cotizaciones.ver_todas');
     Route::put("cotizaciones/{id}", [CotizacionController::class, 'update'])
-        ->middleware('permission:agencia.cotizaciones');
+        ->middleware('permission:cotizaciones.editar');
     Route::put("cotizaciones/{id}/pasajeros", [CotizacionController::class, 'actualizarPasajeros'])
-        ->middleware('permission:agencia.cotizaciones');
+        ->middleware('permission:cotizaciones.editar');
     Route::delete("cotizaciones/{id}", [CotizacionController::class, 'destroy'])
-        ->middleware('permission:agencia.cotizaciones');
+        ->middleware('permission:cotizaciones.editar');
 
     Route::post("cotizaciones/{id}/alternativas", [AlternativaController::class, 'store'])
-        ->middleware('permission:agencia.cotizaciones');
+        ->middleware('permission:cotizaciones.crear');
     Route::put("alternativas/{id}", [AlternativaController::class, 'update'])
-        ->middleware('permission:agencia.cotizaciones');
+        ->middleware('permission:cotizaciones.editar');
     Route::delete("alternativas/{id}", [AlternativaController::class, 'destroy'])
-        ->middleware('permission:agencia.cotizaciones');
+        ->middleware('permission:cotizaciones.editar');
     // Sesión 11h — clona la alternativa completa (ítems + opciones de
     // mayorista) en una alternativa nueva de la misma cotización.
     Route::post("alternativas/{id}/duplicar", [AlternativaController::class, 'duplicar'])
-        ->middleware('permission:agencia.cotizaciones');
+        ->middleware('permission:cotizaciones.crear');
     // Sesión pdf-cotizacion — PDF comercial de una alternativa puntual.
     Route::get("alternativas/{id}/pdf", [AlternativaController::class, 'pdf'])
-        ->middleware('permission:agencia.cotizaciones');
+        ->middleware('permission:cotizaciones.ver|cotizaciones.ver_todas');
 
     Route::post("alternativas/{id}/items", [AlternativaItemController::class, 'store'])
-        ->middleware('permission:agencia.cotizaciones');
+        ->middleware('permission:cotizaciones.crear');
     // Recalculo en vivo del formulario de pasaje aéreo (PasajeAereoForm.vue),
     // sin persistir — antes de "alternativa-items/{id}" para que
     // "items/preview-pasaje-aereo" no colisione con ninguna otra ruta.
     Route::post("alternativas/{id}/items/preview-pasaje-aereo", [AlternativaItemController::class, 'previewPasajeAereo'])
-        ->middleware('permission:agencia.cotizaciones');
+        ->middleware('permission:cotizaciones.ver|cotizaciones.ver_todas');
     Route::put("alternativa-items/{id}", [AlternativaItemController::class, 'update'])
-        ->middleware('permission:agencia.cotizaciones');
+        ->middleware('permission:cotizaciones.editar');
     Route::delete("alternativa-items/{id}", [AlternativaItemController::class, 'destroy'])
-        ->middleware('permission:agencia.cotizaciones');
+        ->middleware('permission:cotizaciones.editar');
     // Sesión UX2 — borra TODAS las filas de un grupo_opcion_id de una sola
     // vez (antes de "alternativa-items/{id}" para que "grupo/{grupoOpcionId}"
     // no colisione con la ruta de arriba, mismo criterio que preview-pasaje-aereo).
     Route::delete("alternativa-items/grupo/{grupoOpcionId}", [AlternativaItemController::class, 'eliminarGrupo'])
-        ->middleware('permission:agencia.cotizaciones');
+        ->middleware('permission:cotizaciones.editar');
     // Sesión M4 — resuelve un grupo de opciones de hotel (M1).
     Route::put("alternativa-items/{id}/elegir-grupo", [AlternativaItemController::class, 'elegirOpcionGrupo'])
-        ->middleware('permission:agencia.cotizaciones');
+        ->middleware('permission:cotizaciones.editar');
     // Sesión 11q — ítem manual flexible: edición estructural completa
     // (descripción/proveedor/costo/cantidad/pax) y promoción a proveedor real.
     Route::put("alternativa-items/{id}/manual", [AlternativaItemController::class, 'actualizarManual'])
-        ->middleware('permission:agencia.cotizaciones');
+        ->middleware('permission:cotizaciones.editar');
     // Auditoría del módulo Reservas/Cotizador (2026-08-27) — edición
     // estructural completa de un pasaje aéreo suelto, mismo criterio que
     // actualizarManual() arriba (antes de esto no existía ninguna forma de
     // corregir un pasaje aéreo ya cargado, solo borrar y recrear).
     Route::put("alternativa-items/{id}/pasaje-aereo", [AlternativaItemController::class, 'actualizarPasajeAereo'])
-        ->middleware('permission:agencia.cotizaciones');
+        ->middleware('permission:cotizaciones.editar');
     Route::post("alternativa-items/{id}/promover-a-proveedor", [AlternativaItemController::class, 'promoverAProveedor'])
-        ->middleware('permission:agencia.cotizaciones');
+        ->middleware('permission:cotizaciones.editar');
 
     // Sesión 11b3 (Parte A) — cargar un tour_simple/paquete_combo entero en
     // la alternativa (explota todos sus ítems, ver AlternativaItemController::
     // desdePlantilla()) + reasignación de día (lienzo día-por-día, §7.1).
     Route::post("alternativas/{id}/items/desde-plantilla", [AlternativaItemController::class, 'desdePlantilla'])
-        ->middleware('permission:agencia.cotizaciones');
+        ->middleware('permission:cotizaciones.crear');
     Route::put("alternativa-items/{id}/dia", [AlternativaItemController::class, 'reasignarDia'])
-        ->middleware('permission:agencia.cotizaciones');
+        ->middleware('permission:cotizaciones.editar');
     Route::put("alternativas/{id}/items/mover-bloque", [AlternativaItemController::class, 'moverBloque'])
-        ->middleware('permission:agencia.cotizaciones');
+        ->middleware('permission:cotizaciones.editar');
 
     Route::get("alternativas/{id}/opciones-mayorista", [OpcionMayoristaController::class, 'index'])
-        ->middleware('permission:agencia.cotizaciones');
+        ->middleware('permission:cotizaciones.ver|cotizaciones.ver_todas');
     Route::post("alternativas/{id}/opciones-mayorista", [OpcionMayoristaController::class, 'store'])
-        ->middleware('permission:agencia.cotizaciones');
+        ->middleware('permission:cotizaciones.crear');
     Route::post("opciones-mayorista/{id}/elegir", [OpcionMayoristaController::class, 'elegir'])
-        ->middleware('permission:agencia.cotizaciones');
+        ->middleware('permission:cotizaciones.editar');
     Route::put("opciones-mayorista/{id}", [OpcionMayoristaController::class, 'update'])
-        ->middleware('permission:agencia.cotizaciones');
+        ->middleware('permission:cotizaciones.editar');
     Route::post("opciones-mayorista/{id}/descartar", [OpcionMayoristaController::class, 'descartar'])
-        ->middleware('permission:agencia.cotizaciones');
+        ->middleware('permission:cotizaciones.editar');
     Route::post("opciones-mayorista/{id}/reactivar", [OpcionMayoristaController::class, 'reactivar'])
-        ->middleware('permission:agencia.cotizaciones');
+        ->middleware('permission:cotizaciones.editar');
     Route::match(['get', 'post'], "opciones-mayorista/{id}/hoteles", [OpcionMayoristaController::class, 'hoteles'])
-        ->middleware('permission:agencia.cotizaciones');
+        ->middleware('permission:cotizaciones.ver|cotizaciones.ver_todas');
     Route::match(['get', 'post'], "opciones-mayorista/{id}/opcionales", [OpcionMayoristaController::class, 'opcionales'])
-        ->middleware('permission:agencia.cotizaciones');
+        ->middleware('permission:cotizaciones.ver|cotizaciones.ver_todas');
     Route::match(['get', 'post'], "opciones-mayorista/{id}/tours", [OpcionMayoristaController::class, 'tours'])
-        ->middleware('permission:agencia.cotizaciones');
+        ->middleware('permission:cotizaciones.ver|cotizaciones.ver_todas');
     Route::delete("opcion-mayorista-tours/{id}", [OpcionMayoristaController::class, 'quitarTour'])
-        ->middleware('permission:agencia.cotizaciones');
+        ->middleware('permission:cotizaciones.editar');
     Route::put("opcion-mayorista-tours/{id}", [OpcionMayoristaController::class, 'actualizarOrdenTour'])
-        ->middleware('permission:agencia.cotizaciones');
+        ->middleware('permission:cotizaciones.editar');
     Route::delete("opciones-mayorista/{id}", [OpcionMayoristaController::class, 'eliminar'])
-        ->middleware('permission:agencia.cotizaciones');
+        ->middleware('permission:cotizaciones.editar');
     Route::put("opcion-mayorista-opcionales/{id}", [OpcionMayoristaController::class, 'actualizarOpcional'])
-        ->middleware('permission:agencia.cotizaciones');
+        ->middleware('permission:cotizaciones.editar');
     Route::delete("opcion-mayorista-opcionales/{id}", [OpcionMayoristaController::class, 'eliminarOpcional'])
-        ->middleware('permission:agencia.cotizaciones');
+        ->middleware('permission:cotizaciones.editar');
 
     // Calculadora de conversión de moneda (07-sep-2026) — independiente de
     // cualquier Alternativa, ver TipoCambioAgenciaController.
     Route::get("tipo-cambio-agencia/actual", [TipoCambioAgenciaController::class, 'actual'])
-        ->middleware('permission:agencia.cotizaciones');
+        ->middleware('permission:cotizaciones.ver|cotizaciones.ver_todas');
     Route::post("tipo-cambio-agencia", [TipoCambioAgenciaController::class, 'store'])
-        ->middleware('permission:agencia.cotizaciones');
+        ->middleware('permission:cotizaciones.crear');
 
     // Fase 5 (opcional) del plan de Tipo de Cambio SUNAT — solo lectura,
     // sugerencia para prellenar "tipo de cambio del día" al crear una
     // alternativa. Nunca escribe en tipo_cambio_agencia.
     Route::get("tipo-cambio-agencia/sugerencia-sunat", [TipoCambioAgenciaController::class, 'sugerenciaSunat'])
-        ->middleware('permission:agencia.cotizaciones');
+        ->middleware('permission:cotizaciones.ver|cotizaciones.ver_todas');
 
     // Sesión M3 — hotel ad-hoc LOCAL, standalone (sin opcion_mayorista_id).
     Route::post("opciones-hotel", [OpcionHotelController::class, 'store'])
-        ->middleware('permission:agencia.cotizaciones');
+        ->middleware('permission:cotizaciones.crear');
     Route::put("opciones-hotel/{id}", [OpcionHotelController::class, 'update'])
-        ->middleware('permission:agencia.cotizaciones');
+        ->middleware('permission:cotizaciones.editar');
     Route::delete("opciones-hotel/{id}", [OpcionHotelController::class, 'destroy'])
-        ->middleware('permission:agencia.cotizaciones');
+        ->middleware('permission:cotizaciones.editar');
     Route::post("opciones-hotel/{id}/tarifas", [OpcionHotelController::class, 'agregarTarifa'])
-        ->middleware('permission:agencia.cotizaciones');
+        ->middleware('permission:cotizaciones.crear');
     Route::put("opcion-hotel-tarifas/{id}", [OpcionHotelController::class, 'actualizarTarifa'])
-        ->middleware('permission:agencia.cotizaciones');
+        ->middleware('permission:cotizaciones.editar');
     Route::delete("opcion-hotel-tarifas/{id}", [OpcionHotelController::class, 'eliminarTarifa'])
-        ->middleware('permission:agencia.cotizaciones');
+        ->middleware('permission:cotizaciones.editar');
     Route::post("opciones-hotel/{id}/promover", [OpcionHotelController::class, 'promover'])
-        ->middleware('permission:agencia.cotizaciones');
+        ->middleware('permission:cotizaciones.editar');
     // 05-sep-2026 — hasta 3 fotos por hotel (Internacional/mayorista).
     Route::post("opciones-hotel/{id}/fotos", [OpcionHotelController::class, 'agregarFotos'])
-        ->middleware('permission:agencia.cotizaciones');
+        ->middleware('permission:cotizaciones.crear');
     Route::delete("opciones-hotel/{id}/fotos", [OpcionHotelController::class, 'eliminarFoto'])
-        ->middleware('permission:agencia.cotizaciones');
+        ->middleware('permission:cotizaciones.editar');
 
     // Sesión 12e — biblioteca de contenido reutilizable (§9.1 de la
     // auditoría). Solo búsqueda/creación, ver ContenidoTourController.
     Route::get("contenido-tour", [ContenidoTourController::class, 'index'])
-        ->middleware('permission:agencia.cotizaciones');
+        ->middleware('permission:cotizaciones.ver|cotizaciones.ver_todas');
     Route::post("contenido-tour", [ContenidoTourController::class, 'store'])
-        ->middleware('permission:agencia.cotizaciones');
+        ->middleware('permission:cotizaciones.crear');
 
     // Sesión 12f-1 — backend para la UI multi-destino (§7.1). Solo index/
     // store, lo que necesita el botón "+ Agregar destino" de 12f-2.
     Route::get("alternativas/{id}/destinos", [AlternativaDestinoController::class, 'index'])
-        ->middleware('permission:agencia.cotizaciones');
+        ->middleware('permission:cotizaciones.ver|cotizaciones.ver_todas');
     Route::post("alternativas/{id}/destinos", [AlternativaDestinoController::class, 'store'])
-        ->middleware('permission:agencia.cotizaciones');
+        ->middleware('permission:cotizaciones.crear');
     // Sesión 12f-2 — editar/borrar un chip de destino.
     Route::put("alternativas/{alternativaId}/destinos/{id}", [AlternativaDestinoController::class, 'update'])
-        ->middleware('permission:agencia.cotizaciones');
+        ->middleware('permission:cotizaciones.editar');
     Route::delete("alternativas/{alternativaId}/destinos/{id}", [AlternativaDestinoController::class, 'destroy'])
-        ->middleware('permission:agencia.cotizaciones');
+        ->middleware('permission:cotizaciones.editar');
 
     // ═══════════════════════════════════════════════════════════════
     // Vertical Agencia de Viajes — reserva y pasajeros (Sesión 11c).
-    // Permiso propio 'agencia.reservas', distinto de 'agencia.cotizaciones'
-    // (ver 2026_07_30_100100_add_agencia_reservas_permission.php).
+    // Permiso propio 'agencia.reservas' original, distinto de
+    // 'agencia.cotizaciones' (ver 2026_07_30_100100_add_agencia_reservas_
+    // permission.php). Fase 1b: mismo split que arriba, ver ese comentario
+    // — reservas.ver/ver_todas/crear/editar, mapeo completo en
+    // docs/planning/agencia-de-viajes/fase1b-roles-permisos.md.
     // ═══════════════════════════════════════════════════════════════
     Route::post("alternativas/{id}/aceptar", [ReservaController::class, 'aceptar'])
-        ->middleware('permission:agencia.reservas');
+        ->middleware('permission:reservas.crear');
 
     Route::get("reservas", [ReservaController::class, 'index'])
-        ->middleware('permission:agencia.reservas');
+        ->middleware('permission:reservas.ver|reservas.ver_todas');
     Route::get("reservas/{id}", [ReservaController::class, 'show'])
-        ->middleware('permission:agencia.reservas');
+        ->middleware('permission:reservas.ver|reservas.ver_todas');
     // Sesión 11e — reporte operativo por fecha (plan-modulo-cotizaciones-reservas.md §8).
     Route::get("reporte-operativo", [ReporteOperativoController::class, 'index'])
-        ->middleware('permission:agencia.reservas');
+        ->middleware('permission:reservas.ver|reservas.ver_todas');
     // Sesión 11d — PDF (URL firmada, ver "reporte-operativo-pdf" fuera del grupo
     // auth:api) y Excel (descarga directa, mismo criterio que cash/movements/export).
     Route::get("reporte-operativo/pdf-url", [ReporteOperativoController::class, 'pdfSignedUrl'])
-        ->middleware('permission:agencia.reservas');
+        ->middleware('permission:reservas.ver|reservas.ver_todas');
     Route::get("reporte-operativo/export", [ReporteOperativoController::class, 'export'])
-        ->middleware('permission:agencia.reservas');
+        ->middleware('permission:reservas.ver|reservas.ver_todas');
     Route::get("reporte-operativo/filtros", [ReporteOperativoController::class, 'filtrosDisponibles'])
-        ->middleware('permission:agencia.reservas');
+        ->middleware('permission:reservas.ver|reservas.ver_todas');
     Route::put("reservas/{id}/cancelar", [ReservaController::class, 'cancelar'])
-        ->middleware('permission:agencia.reservas');
+        ->middleware('permission:reservas.editar');
     Route::post("reservas/{id}/sincronizar-items", [ReservaController::class, 'sincronizarItems'])
-        ->middleware('permission:agencia.reservas');
+        ->middleware('permission:reservas.editar');
     // Fase 2 del fix Cotización↔Reserva (2026-08-19).
     Route::post("reservas/{id}/reprogramar", [ReservaController::class, 'reprogramar'])
-        ->middleware('permission:agencia.reservas');
+        ->middleware('permission:reservas.editar');
     // Sesión 12h — reasignación en vivo de OpcionMayorista en ReservaItem.
     Route::post("reservas/{id}/reasignar-mayorista", [ReservaController::class, 'reasignarMayorista'])
-        ->middleware('permission:agencia.reservas');
+        ->middleware('permission:reservas.editar');
     // Facturación externa por tenant + por reserva (PEGAR-EN-CLAUDE-CODE-
     // facturacion-externa-tenant.md, 2026-08-20).
     Route::put("reservas/{id}/facturacion-externa", [ReservaController::class, 'actualizarFacturacionExterna'])
-        ->middleware('permission:agencia.reservas');
+        ->middleware('permission:reservas.editar');
     // Fase A del plan "Proceso de reserva: facturación + 3 fixes" (2026-08-19).
     // Guardia tributario (2026-08-20, complemento a 11u): preparar-factura
     // ANTES de facturar, para que el frontend pueda avisar antes de que el
     // usuario llene el modal — el guardia real (bloqueo) vive igual en
     // POST facturar, server-side, sin confiar en este preview.
     Route::get("reservas/{id}/preparar-factura", [ReservaFacturacionController::class, 'prepararFactura'])
-        ->middleware('permission:agencia.reservas');
+        ->middleware('permission:reservas.ver|reservas.ver_todas');
     Route::post("reservas/{id}/facturar", [ReservaFacturacionController::class, 'store'])
-        ->middleware('permission:agencia.reservas');
+        ->middleware('permission:reservas.editar');
 
     // Conexión Adelantos↔Reservas (Tier 0, hallazgo de auditoría del
     // módulo Adelantos, 2026-08-21) — reserva_anticipos existía desde
     // Sesión 8b sin ningún controller que la usara.
     Route::post("reservas/{id}/anticipos", [ReservaAnticipoController::class, 'store'])
-        ->middleware('permission:agencia.reservas');
+        ->middleware('permission:reservas.crear');
     Route::delete("reserva-anticipos/{id}", [ReservaAnticipoController::class, 'destroy'])
-        ->middleware('permission:agencia.reservas');
+        ->middleware('permission:reservas.editar');
 
     // Antes de "reserva-pasajeros/{id}" para que "pasajeros-catalogo" no
     // colisione con ningún segmento dinámico (mismo criterio ya usado con
     // "proveedor-tarifas" antes de "cotizaciones/{id}").
     Route::get("pasajeros-catalogo", [ReservaPasajeroController::class, 'buscarCatalogo'])
-        ->middleware('permission:agencia.reservas');
+        ->middleware('permission:reservas.ver|reservas.ver_todas');
     Route::put("reserva-pasajeros/{id}", [ReservaPasajeroController::class, 'update'])
-        ->middleware('permission:agencia.reservas');
+        ->middleware('permission:reservas.editar');
     // Fase D del plan "Proceso de reserva: facturación + 3 fixes" (2026-08-19).
     Route::delete("reserva-pasajeros/{id}", [ReservaPasajeroController::class, 'destroy'])
-        ->middleware('permission:agencia.reservas');
+        ->middleware('permission:reservas.editar');
 
     Route::put("reserva-items/{id}", [ReservaItemController::class, 'update'])
-        ->middleware('permission:agencia.reservas');
+        ->middleware('permission:reservas.editar');
     Route::delete("reserva-items/{id}", [ReservaItemController::class, 'destroy'])
-        ->middleware('permission:agencia.reservas');
+        ->middleware('permission:reservas.editar');
 
     Route::get("reserva-items/{id}/pasajeros", [ReservaItemPasajeroController::class, 'index'])
-        ->middleware('permission:agencia.reservas');
+        ->middleware('permission:reservas.ver|reservas.ver_todas');
     Route::post("reserva-items/{id}/pasajeros", [ReservaItemPasajeroController::class, 'store'])
-        ->middleware('permission:agencia.reservas');
+        ->middleware('permission:reservas.crear');
     Route::delete("reserva-item-pasajero/{id}", [ReservaItemPasajeroController::class, 'destroy'])
-        ->middleware('permission:agencia.reservas');
+        ->middleware('permission:reservas.editar');
     // Sesión 11d — check-in del reporte operativo. Distinto de store()/destroy() de
     // arriba (esos son la asignación pasajero↔ítem propiamente dicha): acá el vínculo
     // puede no existir todavía y se crea recién al marcar (firstOrCreate en el
     // controller), porque la mayoría de reserva_items no tiene vinculo_especifico.
     Route::post("reserva-items/{id}/pasajeros/{pasajeroId}/checkin", [ReservaItemPasajeroController::class, 'checkin'])
-        ->middleware('permission:agencia.reservas');
+        ->middleware('permission:reservas.editar');
     // Auditoría de UX/funcionalidad del módulo (2026-08-27) — vuelo
     // vendido por la AGENCIA (distinto de reserva_pasajeros.vuelo_*, que
     // es el vuelo por cuenta propia del pasajero). Mismo shape de ruta y
     // mismo criterio de materialización que checkin() arriba.
     Route::put("reserva-items/{id}/pasajeros/{pasajeroId}/vuelo", [ReservaItemPasajeroController::class, 'actualizarVuelo'])
-        ->middleware('permission:agencia.reservas');
+        ->middleware('permission:reservas.editar');
 
     Route::post("venta-directa", [VentaDirectaController::class, 'store'])
-        ->middleware('permission:agencia.reservas');
+        ->middleware('permission:reservas.crear');
 
     // Tablero de despacho — agrupa reserva_items de distintas reservas
     // que comparten tour_origen_id + fecha (ver SalidaOperativa).
     Route::get("salidas-operativas", [SalidaOperativaController::class, 'index'])
-        ->middleware('permission:agencia.reservas');
+        ->middleware('permission:reservas.ver|reservas.ver_todas');
     Route::get("salidas-operativas/{id}", [SalidaOperativaController::class, 'show'])
-        ->middleware('permission:agencia.reservas');
+        ->middleware('permission:reservas.ver|reservas.ver_todas');
     Route::put("salidas-operativas/{id}", [SalidaOperativaController::class, 'update'])
-        ->middleware('permission:agencia.reservas');
+        ->middleware('permission:reservas.editar');
     Route::put("salidas-operativas/{id}/cancelar", [SalidaOperativaController::class, 'cancelar'])
-        ->middleware('permission:agencia.reservas');
+        ->middleware('permission:reservas.editar');
     Route::post("salidas-operativas/{id}/adjuntar-item", [SalidaOperativaController::class, 'attachReservaItem'])
-        ->middleware('permission:agencia.reservas');
+        ->middleware('permission:reservas.editar');
     Route::delete("salidas-operativas/{id}/items/{reservaItemId}", [SalidaOperativaController::class, 'detachReservaItem'])
-        ->middleware('permission:agencia.reservas');
+        ->middleware('permission:reservas.editar');
 
     Route::middleware('auth:api')->group(function () {});
 });
