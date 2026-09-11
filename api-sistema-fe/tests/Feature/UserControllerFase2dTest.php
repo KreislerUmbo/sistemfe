@@ -6,6 +6,7 @@ use App\Http\Controllers\User\UserController;
 use App\Http\Resources\User\UserResource;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use Spatie\Permission\Models\Permission;
@@ -77,6 +78,8 @@ class UserControllerFase2dTest extends TestCase
         $user = User::factory()->create();
         $user->assignRole($role);
 
+        $this->autenticarActorConPermiso('directo_permiso');
+
         $response = app(UserController::class)->permisosDirectos(
             new Request(['permissions' => ['directo_permiso']]),
             (string) $user->id
@@ -101,6 +104,11 @@ class UserControllerFase2dTest extends TestCase
         $user = User::factory()->create();
         $user->givePermissionTo('directo_permiso');
 
+        // Revocar (lista vacía) no agrega nada nuevo — el guard anti-
+        // escalación no debe exigir que el actor tenga 'directo_permiso'
+        // para poder quitárselo a otro.
+        $this->autenticarActorConPermiso(null);
+
         $response = app(UserController::class)->permisosDirectos(
             new Request(['permissions' => []]),
             (string) $user->id
@@ -109,6 +117,83 @@ class UserControllerFase2dTest extends TestCase
 
         $this->assertSame([], $body['direct_permissions']);
         $this->assertCount(0, $user->fresh()->getDirectPermissions());
+    }
+
+    // Hallazgo real de revisión posterior (no parte del brief original de
+    // Fase 2d): el endpoint solo exigía 'edit_user' en la ruta, mucho más
+    // común que 'edit_role'/'delete_role' — sin este guard, cualquier rol
+    // con edit_user podía otorgarse (o darle a otro) CUALQUIER permiso
+    // existente, incluidos delete_role/roles.administrar, sin tenerlo él
+    // mismo. El guard compara el DELTA contra los permisos reales del
+    // actor (vía can(), que sí respeta el bypass de Super-Admin por
+    // Gate::before() — getAllPermissions() no lo haría, Super-Admin no
+    // tiene permisos explícitos asignados).
+    public function test_no_permite_otorgar_un_permiso_que_el_actor_no_tiene(): void
+    {
+        Permission::create(['name' => 'delete_role', 'guard_name' => 'api']);
+        $objetivo = User::factory()->create();
+
+        $this->autenticarActorConPermiso(null); // actor sin ningún permiso
+
+        $response = app(UserController::class)->permisosDirectos(
+            new Request(['permissions' => ['delete_role']]),
+            (string) $objetivo->id
+        );
+        $body = $response->getData(true);
+
+        $this->assertSame(422, $response->getStatusCode());
+        $this->assertStringContainsString('delete_role', $body['message']);
+        $this->assertCount(0, $objetivo->fresh()->getDirectPermissions());
+    }
+
+    public function test_conservar_un_permiso_existente_no_exige_que_el_actor_lo_tenga(): void
+    {
+        Permission::create(['name' => 'permiso_viejo', 'guard_name' => 'api']);
+        Permission::create(['name' => 'permiso_nuevo', 'guard_name' => 'api']);
+        $objetivo = User::factory()->create();
+        $objetivo->givePermissionTo('permiso_viejo'); // otorgado antes, por otro actor (ej. Super-Admin)
+
+        // El actor de este request solo tiene 'permiso_nuevo' — no
+        // 'permiso_viejo' — pero el request incluye ambos (checklist:
+        // conserva lo existente + agrega lo nuevo). No debe rechazarse,
+        // porque 'permiso_viejo' no es parte del delta.
+        $this->autenticarActorConPermiso('permiso_nuevo');
+
+        $response = app(UserController::class)->permisosDirectos(
+            new Request(['permissions' => ['permiso_viejo', 'permiso_nuevo']]),
+            (string) $objetivo->id
+        );
+        $body = $response->getData(true);
+
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertEqualsCanonicalizing(['permiso_viejo', 'permiso_nuevo'], $body['direct_permissions']);
+    }
+
+    public function test_super_admin_puede_otorgar_cualquier_permiso_pese_a_no_tener_ninguno_explicito(): void
+    {
+        Permission::create(['name' => 'roles.administrar', 'guard_name' => 'api']);
+        $objetivo = User::factory()->create();
+
+        $role = Role::create(['name' => 'Super-Admin', 'guard_name' => 'api']);
+        $actor = User::factory()->create();
+        $actor->assignRole($role);
+        Auth::guard('api')->setUser($actor->fresh());
+
+        $response = app(UserController::class)->permisosDirectos(
+            new Request(['permissions' => ['roles.administrar']]),
+            (string) $objetivo->id
+        );
+
+        $this->assertSame(200, $response->getStatusCode());
+    }
+
+    private function autenticarActorConPermiso(?string $permiso): void
+    {
+        $actor = User::factory()->create();
+        if ($permiso) {
+            $actor->givePermissionTo($permiso);
+        }
+        Auth::guard('api')->setUser($actor->fresh());
     }
 
     public function test_index_devuelve_permisos_disponibles(): void

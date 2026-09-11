@@ -22,7 +22,12 @@ class UserController extends Controller
 
         $search = $request->get("search");
 
-        $users = User::whereRaw("(COALESCE(users.name,'') || ' ' || COALESCE(users.surname,'') || ' ' || COALESCE(users.n_document,'')) ILIKE ?", ["%{$search}%"])
+        // ->with('permissions') — Fase 2d agregó direct_permissions a
+        // UserResource (getDirectPermissions(), que lee $this->permissions);
+        // sin eager load acá, cada fila del listado dispara su propia query
+        // (N+1, hasta 10 extra por página).
+        $users = User::with('permissions')
+            ->whereRaw("(COALESCE(users.name,'') || ' ' || COALESCE(users.surname,'') || ' ' || COALESCE(users.n_document,'')) ILIKE ?", ["%{$search}%"])
             ->orderBy("id", "desc")
             ->paginate(10);
             
@@ -147,11 +152,37 @@ class UserController extends Controller
      * a mano vía tinker (cash.close_others_session/cash.approve_expenses
      * en Caja) — esto lo expone desde la UI. syncPermissions() en un User
      * (no un Role) solo toca sus permisos directos, nunca los del rol.
+     *
+     * Guard anti-escalación de privilegios (hallazgo real de revisión
+     * posterior): este endpoint solo exige 'edit_user' — un permiso mucho
+     * más común que 'edit_role'/'delete_role'. Sin este guard, cualquier
+     * rol con edit_user (aunque no administre roles) podría otorgarse a
+     * sí mismo o a otro usuario CUALQUIER permiso existente, incluidos
+     * delete_role/roles.administrar. Solo se valida el DELTA (lo que se
+     * agrega respecto a lo que el usuario ya tenía directo) — remover o
+     * conservar un permiso que el actor no posee no es una escalación.
+     * $actor->can() (no getDirectPermissions()) porque Super-Admin no
+     * tiene permisos explícitos asignados — bypasea vía Gate::before(),
+     * y can() sí pasa por ese Gate (confirmado en tinker).
      */
     public function permisosDirectos(Request $request, string $id)
     {
         $user = User::findOrFail($id);
-        $user->syncPermissions($request->permissions ?? []);
+        $solicitados = $request->permissions ?? [];
+
+        $actor = auth('api')->user();
+        $actuales = $user->getDirectPermissions()->pluck('name')->all();
+        $nuevos = array_diff($solicitados, $actuales);
+        $noAutorizados = array_filter($nuevos, fn ($permiso) => ! $actor?->can($permiso));
+
+        if (! empty($noAutorizados)) {
+            return response()->json([
+                "code" => 422,
+                "message" => "No podés otorgar permisos que vos mismo no tenés: " . implode(', ', $noAutorizados),
+            ], 422);
+        }
+
+        $user->syncPermissions($solicitados);
 
         return response()->json([
             "code" => 200,
