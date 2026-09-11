@@ -3,6 +3,7 @@ import { allRoute } from "@/router/routes";
 import { useAuthStore } from "@/stores/auth";
 import type { User } from "@/types/auth";
 import { useClientAuthStore } from '@/stores/clientAuth'
+import { useMenuStore } from "@/stores/menu";
 
 
 
@@ -50,6 +51,13 @@ router.beforeEach((routeTo, routeFrom, next) => {
 
   // If auth is required and the user is logged in...
   if (authRequired && useAuth.isAuthenticated()) {
+    // Fase 2b (§6) — cubre el caso de sesión restaurada desde localStorage
+    // (F5 en el navegador): saveSession() ya dispara el fetch en el login,
+    // pero acá no hay ningún "login" que lo dispare. Fire-and-forget: no
+    // bloquea la navegación, el sidebar solo queda vacío el instante en
+    // que tarda en resolver.
+    useMenuStore().ensureLoaded();
+
     if (useAuth.isPermitedRoute(routeTo.meta.permission + "")) {
       return next();
     } else {

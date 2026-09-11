@@ -1,4 +1,4 @@
-import { MENU_ITEMS } from "@/assets/data/menu-items";
+import { useMenuStore } from "@/stores/menu";
 import type { MenuItemType } from "@/types/menu";
 import type { RouteRecordName } from "vue-router";
 
@@ -37,6 +37,6 @@ export const menuItemActive = (
   key: string,
   currentRouteName: RouteRecordName | null | undefined,
 ) => {
-  activeMenuItem = getMatchingMenuItems(MENU_ITEMS, currentRouteName);
+  activeMenuItem = getMatchingMenuItems(useMenuStore().items, currentRouteName);
   return activeMenuItem && Object.values(activeMenuItem).includes(key);
 };

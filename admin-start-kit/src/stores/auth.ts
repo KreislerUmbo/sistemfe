@@ -4,6 +4,7 @@ import router from "@/router";
 import type { User } from "@/types/auth";
 import { ref } from "vue";
 import httpClient from "@/helpers/http-client";
+import { useMenuStore } from "@/stores/menu";
 
 export const useAuthStore = defineStore("auth_store", () => {
   const user = ref(localStorage.getItem("user") ? JSON.parse(localStorage.getItem("user") || '') : null);//useSessionStorage<string | null>("RIZZ_VUE_USER", null);
@@ -12,6 +13,9 @@ export const useAuthStore = defineStore("auth_store", () => {
     localStorage.setItem("token", newUser.token || '');
     localStorage.setItem("user", JSON.stringify(newUser));
     user.value = newUser;//JSON.stringify(newUser);
+    // Fase 2b (plan-modulo-menus-y-roles.md §6) — el sidebar se hidrata
+    // desde /me/menu al login (no en cada navegación).
+    useMenuStore().fetch();
   };
 
   const removeSession = () => {
@@ -29,6 +33,11 @@ export const useAuthStore = defineStore("auth_store", () => {
     user.value = null;
     localStorage.removeItem("token");
     localStorage.removeItem("user");
+    // Sin esto, un login posterior (mismo usuario u otro) vería el árbol
+    // de menú del usuario anterior servido desde memoria hasta refrescar
+    // la pestaña — ensureLoaded() no volvería a pedirlo porque loaded
+    // seguiría en true.
+    useMenuStore().clear();
     setTimeout(() => {
       router.push("/auth/sign-in");
     }, 25);

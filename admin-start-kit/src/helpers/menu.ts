@@ -1,49 +1,14 @@
-import { MENU_ITEMS } from "@/assets/data/menu-items";
 import type { MenuItemType } from "@/types/menu";
-import { useAuthStore } from "@/stores/auth";
-const useAuth = useAuthStore();
+import { useMenuStore } from "@/stores/menu";
 
-export const getMenuItems = () => {
-  // NOTE - You can fetch from server and return here as well
-  let FILTER_MENU_ITEMS: MenuItemType[] = [];
-
-  MENU_ITEMS.forEach((MENU) => {
-    if (MENU.route && MENU.permission) {
-      let IS_PERMITED = useAuth.isPermitedRoute(MENU.permission);
-      if (IS_PERMITED) {
-        FILTER_MENU_ITEMS.push(MENU);
-      }
-    } else if (MENU.children) {
-      let SUB_MENUS: MenuItemType[] = [];
-      MENU.children.forEach((children) => {
-        let IS_PERMITED = children.permission ? useAuth.isPermitedRoute(children.permission) : false;
-        if (IS_PERMITED) {
-          SUB_MENUS.push(children);
-        }
-      })
-      if (SUB_MENUS.length > 0) {
-        MENU.children = SUB_MENUS;
-        FILTER_MENU_ITEMS.push(MENU);
-      }
-    } else {
-      if (MENU.permissions) {
-        let headingF = MENU.permissions.filter((permission) => {
-          let IS_PERMITED = useAuth.isPermitedRoute(permission);
-          if (IS_PERMITED) {
-            return true;
-          }
-          return false;
-        })
-        if (headingF.length > 0) {
-          FILTER_MENU_ITEMS.push(MENU);
-        }
-      } else {
-        FILTER_MENU_ITEMS.push(MENU);
-      }
-    }
-  })
-  return FILTER_MENU_ITEMS;
-  //return MENU_ITEMS;
+// Fase 2b (plan-modulo-menus-y-roles.md §6) — el árbol ya viene filtrado
+// por permiso desde el backend (GET /me/menu, MenuResolver) — acá ya no se
+// vuelve a filtrar con isPermitedRoute() como antes (eso filtraba el
+// MENU_ITEMS estático viejo, ver git history de este archivo). El store
+// devuelve [] mientras no haya cargado o si el usuario no tiene ningún
+// ítem visible.
+export const getMenuItems = (): MenuItemType[] => {
+  return useMenuStore().items;
 };
 
 export const findAllParent = (
