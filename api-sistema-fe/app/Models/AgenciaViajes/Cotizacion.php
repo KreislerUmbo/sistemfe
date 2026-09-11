@@ -3,6 +3,9 @@
 namespace App\Models\AgenciaViajes;
 
 use App\Models\Client\Client;
+use App\Models\Concerns\EscopablePorVendedor;
+use App\Models\User;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
 // Header de cotización — plan-modulo-cotizaciones-reservas.md §3.1. Tenant
@@ -26,6 +29,8 @@ use Illuminate\Database\Eloquent\Model;
 // por generarParaReserva() — primera reserva sin sufijo, 2da+ con "-2","-3"...
 class Cotizacion extends Model
 {
+    use EscopablePorVendedor;
+
     protected $table = 'cotizaciones';
 
     protected $fillable = [
@@ -33,6 +38,10 @@ class Cotizacion extends Model
         'codigo',
         'reservas_generadas',
         'cliente_id',
+        // Fase 1b (plan-modulo-menus-y-roles.md §3.3) — scope de fila.
+        // Nullable: cotizaciones creadas antes de esta fase quedan sin
+        // dueño (ver migración add_vendedor_id_to_cotizaciones_table.php).
+        'vendedor_id',
         'destino',
         'fecha_viaje_desde',
         'fecha_viaje_hasta',
@@ -46,6 +55,11 @@ class Cotizacion extends Model
     public function cliente()
     {
         return $this->belongsTo(Client::class, 'cliente_id');
+    }
+
+    public function vendedor()
+    {
+        return $this->belongsTo(User::class, 'vendedor_id');
     }
 
     public function pasajeros()
@@ -105,5 +119,15 @@ class Cotizacion extends Model
         }
 
         return 'borrador';
+    }
+
+    protected static function permisoVerTodas(): string
+    {
+        return 'cotizaciones.ver_todas';
+    }
+
+    protected static function aplicarFiltroVendedor(Builder $query, int $vendedorId): void
+    {
+        $query->where('vendedor_id', $vendedorId);
     }
 }

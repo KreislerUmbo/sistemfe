@@ -8,8 +8,11 @@ use App\Models\AgenciaViajes\Alternativa;
 use App\Models\AgenciaViajes\AlternativaItem;
 use App\Models\AgenciaViajes\Reserva;
 use App\Models\AgenciaViajes\ReservaItem;
+use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 // feature/reservas-destino-filtro-sync-vuelo, punto 3: agregar un servicio a
@@ -167,6 +170,24 @@ class ReservaSincronizarItemsTest extends TestCase
             'precio_venta_snapshot' => 8,
             'precio_convertido' => 8,
         ]);
+
+        // Fase 1b (§3.3) — show() ahora exige un usuario autenticado
+        // (CotizacionPolicy/ReservaPolicy). Este archivo nunca autenticaba
+        // ninguno (no hacía falta hasta ahora) — Super-Admin bypasea el
+        // scope de fila igual que bypasea todo lo demás (Gate::before()).
+        // users.role_id (legacy) exige una fila real en roles — este
+        // archivo nunca la sembró porque nunca había creado un User.
+        if (! DB::table('roles')->where('id', 1)->exists()) {
+            DB::table('roles')->insert([
+                'id' => 1, 'name' => 'test-role-default', 'guard_name' => 'api',
+                'created_at' => now(), 'updated_at' => now(),
+            ]);
+            DB::statement("SELECT setval(pg_get_serial_sequence('roles','id'), (SELECT MAX(id) FROM roles))");
+        }
+        $role = Role::firstOrCreate(['guard_name' => 'api', 'name' => 'Super-Admin']);
+        $admin = User::factory()->create();
+        $admin->assignRole($role);
+        Auth::guard('api')->setUser($admin->fresh());
 
         $response = app(ReservaController::class)->show((string) $reserva->id);
         $body = $response->getData(true);

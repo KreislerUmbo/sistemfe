@@ -72,7 +72,9 @@ class ReservaController extends Controller
 
     public function index(Request $request)
     {
-        $query = Reserva::with('alternativa.cotizacion.cliente');
+        // Fase 1b (§3.3) — scope de fila: propias() es un scope LOCAL (no
+        // global, ver EscopablePorVendedor), aplicado solo en el listado.
+        $query = Reserva::propias()->with('alternativa.cotizacion.cliente');
 
         if ($request->filled('estado')) {
             $query->where('estado', $request->get('estado'));
@@ -108,6 +110,10 @@ class ReservaController extends Controller
     public function show(string $id)
     {
         $reserva = Reserva::with(self::RELACIONES_DETALLE)->findOrFail($id);
+
+        // Fase 1b (§3.3, advertencia 1) — segunda barrera explícita,
+        // independiente del Global Scope (EscopablePorVendedor).
+        $this->authorize('view', $reserva);
 
         return response()->json($this->respuestaDetalle($reserva));
     }
@@ -188,6 +194,9 @@ class ReservaController extends Controller
     public function cancelar(Request $request, string $id)
     {
         $reserva = Reserva::findOrFail($id);
+
+        // Fase 1b (§3.3, advertencia 1) — segunda barrera explícita.
+        $this->authorize('update', $reserva);
 
         if ($reserva->estado === 'cancelada') {
             return response()->json(['code' => 422, 'message' => 'La reserva ya está cancelada.'], 422);

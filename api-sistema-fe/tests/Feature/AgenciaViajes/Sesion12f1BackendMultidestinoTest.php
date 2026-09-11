@@ -22,8 +22,11 @@ use App\Models\AgenciaViajes\ProveedorServicio;
 use App\Models\AgenciaViajes\ProveedorTarifa;
 use App\Models\AgenciaViajes\ProveedorTipo;
 use App\Models\AgenciaViajes\Servicio;
+use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 // Sesión 12f-1 — brief PEGAR-EN-CLAUDE-CODE-12f1-backend-multidestino-ui.md.
@@ -88,6 +91,20 @@ class Sesion12f1BackendMultidestinoTest extends TestCase
     public function test_show_eager_carga_alternativas_destinos(): void
     {
         [$alternativa, $destino] = $this->crearAlternativaConDestino();
+
+        // Fase 1b (§3.3) — show() ahora exige un usuario autenticado.
+        // users.role_id (legacy) exige una fila real en roles.
+        if (! DB::table('roles')->where('id', 1)->exists()) {
+            DB::table('roles')->insert([
+                'id' => 1, 'name' => 'test-role-default', 'guard_name' => 'api',
+                'created_at' => now(), 'updated_at' => now(),
+            ]);
+            DB::statement("SELECT setval(pg_get_serial_sequence('roles','id'), (SELECT MAX(id) FROM roles))");
+        }
+        $role = Role::firstOrCreate(['guard_name' => 'api', 'name' => 'Super-Admin']);
+        $admin = User::factory()->create();
+        $admin->assignRole($role);
+        Auth::guard('api')->setUser($admin->fresh());
 
         $response = app(CotizacionController::class)->show((string) $alternativa->cotizacion_id);
         $data = $response->getData(true);

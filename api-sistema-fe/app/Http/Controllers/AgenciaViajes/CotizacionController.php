@@ -36,7 +36,10 @@ class CotizacionController extends Controller
         // (09-sep-2026, taxonomía de estados del listado: reservada/anulada/
         // vencida/enviada/borrador/descartada). Sin este eager-load,
         // estadoResumen() dispararía un lazy-load por fila (N+1).
-        $query = Cotizacion::with(['cliente', 'alternativas.reserva'])->withCount('alternativas');
+        // Fase 1b (§3.3) — scope de fila: propias() es un scope LOCAL (no
+        // global, ver EscopablePorVendedor), así que solo se aplica acá
+        // donde corresponde (el listado), nunca en show()/acciones internas.
+        $query = Cotizacion::propias()->with(['cliente', 'alternativas.reserva'])->withCount('alternativas');
 
         if ($request->filled('search')) {
             $search = $request->get('search');
@@ -99,6 +102,11 @@ class CotizacionController extends Controller
                 'cliente_id' => $validado['cliente_id'],
                 'codigo_prefijo' => $prefijo,
                 'codigo' => $codigo,
+                // Fase 1b (§3.3) — dueño real para el scope de fila
+                // (EscopablePorVendedor). auth()->id() puede ser null en
+                // contexto de consola/tinker (nunca en una request real,
+                // que ya pasó auth:api) — nullable acepta ambos casos.
+                'vendedor_id' => auth()->id(),
                 'destino' => $validado['destino'],
                 'fecha_viaje_desde' => $validado['fecha_viaje_desde'] ?? null,
                 'fecha_viaje_hasta' => $validado['fecha_viaje_hasta'] ?? null,
@@ -188,6 +196,10 @@ class CotizacionController extends Controller
             'alternativas.destinos.destinoAtractivo',
         ])->findOrFail($id);
 
+        // Fase 1b (§3.3, advertencia 1) — segunda barrera explícita,
+        // independiente del Global Scope (EscopablePorVendedor).
+        $this->authorize('view', $cotizacion);
+
         return response()->json(['cotizacion' => $cotizacion]);
     }
 
@@ -203,6 +215,9 @@ class CotizacionController extends Controller
     public function update(Request $request, string $id)
     {
         $cotizacion = Cotizacion::findOrFail($id);
+
+        // Fase 1b (§3.3, advertencia 1) — segunda barrera explícita.
+        $this->authorize('update', $cotizacion);
 
         $validator = Validator::make($request->all(), [
             'cliente_id' => 'required|integer|exists:clients,id',
@@ -484,6 +499,9 @@ class CotizacionController extends Controller
     public function destroy(string $id)
     {
         $cotizacion = Cotizacion::with('alternativas')->findOrFail($id);
+
+        // Fase 1b (§3.3, advertencia 1) — segunda barrera explícita.
+        $this->authorize('delete', $cotizacion);
 
         $conReserva = Reserva::whereIn('alternativa_id', $cotizacion->alternativas->pluck('id'))->exists();
         if ($conReserva) {
