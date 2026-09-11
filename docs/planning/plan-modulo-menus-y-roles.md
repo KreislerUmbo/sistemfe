@@ -478,9 +478,41 @@ completo (re-hidrata el menú vía `ensureLoaded()`), sin errores de consola. `n
 sin errores nuevos (44 preexistentes antes y después, no relacionados a este cambio —
 confirmado comparando contra el baseline con `git stash`).
 
-**Pendiente, todavía sin arrancar**: 2c (catálogo de permisos dinámico), 2d (pestaña de
-permisos directos por usuario), auditoría de rutas sin `name`/`meta.permission` en
-`router/routes.ts`.
+**✅ Fase 2c — Catálogo de permisos dinámico en el módulo Roles (11-sep-2026, rama
+`feat/menu-fase2c-catalogo-permisos-dinamico`, EN REVISIÓN, sin mergear).** El checklist de
+permisos de `views/roles/index.vue` vivía 100% del catálogo curado y hardcodeado
+`types/roles.ts::PERMISOS` — y ya se había demostrado que se queda desactualizado (varios
+módulos reales, documentados en los propios comentarios del archivo, quedaron con permisos
+inasignables desde la UI hasta que alguien se acordaba de sumarlos a mano). Confirmado con
+grep antes de este trabajo: 0 coincidencias de los permisos granulares de Fase 1b
+(`cotizaciones.*`/`reservas.*`) en ese catálogo.
+
+**No se reemplazó el catálogo curado por uno 100% automático** — se evaluó derivar
+agrupación/etiqueta solo del string del permiso (ej. por prefijo antes del primer `.` o
+`_`), pero la convención de nombres del proyecto es inconsistente (`{recurso}.{accion}` en
+permisos nuevos tipo `cotizaciones.ver` vs. `{accion}_{recurso}` en la mayoría de los viejos
+tipo `register_role`) — un heurístico simple agrupa mal casos reales (ej. `emitir_factura`/
+`emitir_boleta`/`emitir_nota_venta`, hoy agrupados a propósito bajo "Emisión de Comprobantes",
+quedarían en 3 grupos distintos "factura"/"boleta"/"venta" con ese heurístico). Se optó por un
+**híbrido**: `RoleController::index()` ahora también devuelve `permisos_disponibles` (el
+catálogo REAL de `Permission::where('guard_name','api')`, no una copia); el frontend cruza
+esa lista contra `PERMISOS` y agrega cualquier permiso real que falte ahí bajo un grupo nuevo
+"Otros permisos", con una etiqueta auto-generada (reemplaza `.`/`_`/`-` por espacios y
+capitaliza cada palabra) — conserva las etiquetas curadas en español para el 95% ya
+categorizado, y garantiza que ningún permiso real quede invisible/inasignable, que era el
+hallazgo real que motivó esta sub-fase.
+
+2 tests nuevos (`RoleControllerFase2cTest`), suite completa 808/815 verde (7 fallos ya
+conocidos, familia `TipoCambioSunat*`, no relacionados). Verificado en vivo con Playwright
+contra `agencia-demo` real: el grupo "Otros permisos" aparece en el modal de editar
+"Administrador de agencia" con `Cotizaciones Ver/Ver Todas/Crear/Editar`, `Reservas Ver/Ver
+Todas/Crear/Editar`, `Roles Administrar` y otros permisos previamente invisibles — todos con
+su checkbox correctamente marcado según los permisos reales ya asignados a ese rol (el estado
+`permission_selected` siempre vino del backend, nunca dependió del catálogo curado — el bug
+era solo de visibilidad/render, no de datos).
+
+**Pendiente, todavía sin arrancar**: 2d (pestaña de permisos directos por usuario), auditoría
+de rutas sin `name`/`meta.permission` en `router/routes.ts`.
 
 **Fase 3 — Retail al mismo modelo**
 - Reemplazar el `role_id` legacy de retail por roles Spatie reales + seeder propio, para que

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Role;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
+use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 
 class RoleController extends Controller
@@ -36,6 +37,18 @@ class RoleController extends Controller
                     "permissions_pluck" => $role->permissions->pluck("name"),
                 ];
             }),
+            // Fase 2c (plan-modulo-menus-y-roles.md §7) — catálogo REAL de
+            // permisos del tenant (Spatie, guard api), no el catálogo
+            // curado y hardcodeado del frontend (types/roles.ts::PERMISOS,
+            // que ya se demostró que se queda desactualizado — varios
+            // módulos reales quedaron con permisos inasignables desde la UI
+            // hasta que alguien se acordaba de sumarlos a mano ahí). El
+            // frontend cruza esta lista contra su catálogo curado y agrega
+            // los que falten en un grupo aparte, para que ningún permiso
+            // real quede invisible/inasignable.
+            "permisos_disponibles" => Permission::where("guard_name", "api")
+                ->orderBy("name")
+                ->pluck("name"),
         ]);
     }
 
