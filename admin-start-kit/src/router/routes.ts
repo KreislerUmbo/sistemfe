@@ -136,7 +136,11 @@ const accessRoutes = [
     meta: {
       title: setTitle("Roles y Permisos"),
       authRequired: true,
-      permission: 'all',
+      // Fase 2a (plan-modulo-menus-y-roles.md §5) — tenía 'all' (sin gate
+      // real): cualquier usuario logueado podía navegar directo por URL,
+      // aunque el ítem de menú exigiera list_role. Alineado con el permiso
+      // real que ya gatea GET /api/roles en el backend.
+      permission: 'list_role',
     },
     component: () => import("@/views/roles/index.vue"),
   },
@@ -146,7 +150,7 @@ const accessRoutes = [
     meta: {
       title: setTitle("Usuarios"),
       authRequired: true,
-      permission: 'all',
+      permission: 'list_user',
     },
     component: () => import("@/views/users/index.vue"),
   }

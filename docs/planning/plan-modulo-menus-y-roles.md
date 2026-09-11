@@ -394,6 +394,52 @@ VIEJO hasta 24h. Sin impacto real (nada consume el endpoint todavía). Fix de un
   `roles.administrar` en el tenant se quite ese permiso a sí mismo o sea degradado por otro;
   bloquear eliminar un rol con usuarios activos asignados sin reasignación previa explícita.
 
+**✅ Fase 2a — Seguridad del módulo Roles/Usuarios existente (11-sep-2026, rama
+`feat/menu-fase2a-seguridad-roles-usuarios`, EN REVISIÓN, sin mergear).** Antes de tocar el
+sidebar, exploración real del frontend encontró que el módulo "Roles y Permisos" de §5 **ya
+existe** (`admin-start-kit/src/views/roles/index.vue`, CRUD completo con checklist) — no hace
+falta construirlo de cero — pero con 4 huecos de seguridad reales, confirmados leyendo código
+(no supuestos):
+1. `RoleController` no protegía el rol `Super-Admin` — se podía renombrar/reconfigurar/
+   eliminar vía API pese a que §5 lo exige protegido. **Corregido**: `update()`/`destroy()`
+   rechazan con 422 si `$role->name === 'Super-Admin'`.
+2. `destroy()` no tenía ningún guard anti-lockout de los dos que pide §9.5 (el de "eliminar
+   rol con usuarios asignados" — el de "último `roles.administrar`" queda para una sub-fase
+   aparte, ver abajo). **Corregido**: rechaza con 422 si el rol tiene usuarios asignados
+   (`$role->users()->count()`, confirmado que refleja la asignación real — `assignRole()`/
+   `removeRole()` de Spatie, no el `role_id` legacy).
+3. `GET /api/roles` y `GET /api/users` no tenían ningún `permission:` (solo store/update/
+   destroy quedaron gateados en Fase 0b) — cualquier usuario autenticado del tenant podía
+   listar el catálogo completo de roles+permisos o de usuarios vía API directa. **Corregido**:
+   `->middlewareFor('index'/'show', 'permission:list_role'/'list_user')`. Verificado contra
+   los 5 tenants reales que `list_role`/`list_user` ya existen como fila en los 5, y que
+   ningún usuario real no-Super-Admin pierde acceso legítimo (solo `Admin-General`/
+   `Administrador de agencia` en `agencia-demo` los tenían asignados; en el resto, el único
+   usuario con acceso real es Super-Admin, que bypasea via `Gate::before()` sin importar el
+   permiso explícito del rol).
+4. Rutas frontend `/roles-permisos`/`/users` (`router/routes.ts`) tenían `meta.permission:
+   'all'` (sin gate real) pese a que el ítem de menú exige `list_role`/`list_user` — cualquier
+   usuario logueado podía navegar directo por URL. **Corregido**: alineado a `list_role`/
+   `list_user`.
+
+**Hallazgo aparte, no corregido en esta sub-fase**: el catálogo de permisos del checklist de
+roles está **hardcodeado en el frontend** (`admin-start-kit/src/types/roles.ts`, `PERMISOS`) y
+no tiene NINGUNO de los permisos granulares nuevos de Fase 1b (`cotizaciones.*`/`reservas.*`,
+confirmado con grep — 0 coincidencias). Un `Administrador de agencia` hoy no puede ni ver esos
+permisos en el checklist para asignarlos a un rol. Queda para una sub-fase 2c (catálogo
+dinámico desde backend en vez de hardcodeado).
+
+**Anti-lockout "último `roles.administrar`" (§9.5, segunda mitad) diferido a propósito**: ese
+permiso solo existe hoy para tenants `agencia_viajes` (sembrado por `AgenciaViajesRolesSeeder`)
+— los tenants retail (`PermissionsDemoSeeder`) no tienen el concepto todavía, solo los
+permisos planos `edit_role`/`delete_role`/etc. Implementar el guard "correcto" por giro
+requeriría resolver primero la migración de retail al mismo modelo (Fase 3, §8 punto 2) o
+diseñar una regla genérica ambigua entre esquemas de permisos — se deja como decisión abierta,
+no una omisión accidental.
+
+6 tests nuevos (`RoleControllerFase2aTest`), suite completa 807/813 verde (6 fallos ya
+conocidos, familia `TipoCambioSunat*`, no relacionados).
+
 **Fase 3 — Retail al mismo modelo**
 - Reemplazar el `role_id` legacy de retail por roles Spatie reales + seeder propio, para que
   el mismo `MenuResolver` sirva sin ramas especiales por giro.
