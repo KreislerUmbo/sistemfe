@@ -440,6 +440,48 @@ no una omisión accidental.
 6 tests nuevos (`RoleControllerFase2aTest`), suite completa 807/813 verde (6 fallos ya
 conocidos, familia `TipoCambioSunat*`, no relacionados).
 
+**✅ Fase 2b — Sidebar dinámico desde `GET /me/menu` (11-sep-2026, rama
+`feat/menu-fase2b-sidebar-dinamico`, EN REVISIÓN, sin mergear).** Reemplaza el `MENU_ITEMS`
+estático (`admin-start-kit/src/assets/data/menu-items.ts`, **eliminado** — confirmado sin
+ninguna referencia real antes de borrarlo) por un store Pinia nuevo
+(`admin-start-kit/src/stores/menu.ts`) que hidrata desde `GET /me/menu` y mapea
+`{codigo, label, icono, ruta, hijos}` al `MenuItemType` que `AppMenu`/`MenuItemWithChildren`/
+`MenuItem` ya sabían renderizar (soportan nesting arbitrario sin cambios). El árbol ya viene
+pre-filtrado por permiso desde el backend, así que `getMenuItems()` (`helpers/menu.ts`) dejó de
+volver a filtrar con `isPermitedRoute()` — ya no hace falta, era redundante y hubiera bloqueado
+todo si se dejaba (el nodo de la API no trae `permission`, solo el backend lo resuelve).
+
+Dos puntos de carga: `saveSession()` (`stores/auth.ts`) dispara el fetch al login;
+`router/index.ts` llama `ensureLoaded()` (idempotente, no repite si ya cargó) en cada
+navegación autenticada — cubre el caso de sesión restaurada desde `localStorage` tras un F5,
+que el login por sí solo no cubre. `removeSession()` limpia el store al logout para que el
+próximo login (mismo u otro usuario) no sirva el árbol viejo desde memoria.
+`menuActivation.ts` (resaltado del grupo activo) también apuntaba al `MENU_ITEMS` estático por
+separado — si no se corregía ahí también, el resaltado de "grupo activo" habría quedado roto
+en silencio aunque el sidebar mostrara los ítems correctos.
+
+**Cambio estructural real, heredado de una decisión ya tomada en Fase 1a (no nuevo acá)**: el
+catálogo `menu_items` sembrado usa 2 niveles (grupo → hijos planos), mientras el menú estático
+viejo tenía hasta 3 (ej. "Comercial" título + "Productos" sub-grupo con ícono propio +
+Registrar/Listar como nietos). El seed de Fase 1a ya aplanó "Productos"/"Ventas"/"Sistemas"/
+"Recursos" a hijos directos de su grupo — perdiendo el ícono/label de esos sub-grupos
+intermedios (ej. ya no aparece un ítem "Productos" con ícono propio, solo "Registrar"/"Listar"
+sueltos bajo "Comercial"). Confirmado visualmente correcto y aceptado — no se revirtió.
+
+Verificado en vivo con Playwright contra `agencia-demo` real (login real de
+`admin@agencia-demo.test`, sin resetear password): los 8 grupos de primer nivel renderizan en
+el orden sembrado (Dashboards, Admin Portal, Access, Comercial, Caja, Agencia de Viajes,
+Configuraciones, Recursos Cliente), navegación a "Roles y Permisos" carga datos reales (mismo
+gate de Fase 2a, sin romper el acceso legítimo de `Admin-General`), estructura aplanada de
+"Comercial" confirmada (Categorias/Registrar como hijos directos), sesión sobrevive un F5
+completo (re-hidrata el menú vía `ensureLoaded()`), sin errores de consola. `npm run type-check`
+sin errores nuevos (44 preexistentes antes y después, no relacionados a este cambio —
+confirmado comparando contra el baseline con `git stash`).
+
+**Pendiente, todavía sin arrancar**: 2c (catálogo de permisos dinámico), 2d (pestaña de
+permisos directos por usuario), auditoría de rutas sin `name`/`meta.permission` en
+`router/routes.ts`.
+
 **Fase 3 — Retail al mismo modelo**
 - Reemplazar el `role_id` legacy de retail por roles Spatie reales + seeder propio, para que
   el mismo `MenuResolver` sirva sin ramas especiales por giro.
