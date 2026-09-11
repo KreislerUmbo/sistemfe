@@ -208,6 +208,15 @@ class TenantProvisioningService
 
         if ($giroCambio) {
             $this->migrarVertical($tenant, $tenant->giro);
+
+            // plan-modulo-menus-y-roles.md §4.1: MenuResolver filtra por
+            // giro (`giro IS NULL OR giro = $tenant->giro`), cacheado por
+            // tenant+usuario hasta 24h. Sin esto, un usuario que ya pidió
+            // /me/menu antes del cambio seguiría viendo el árbol del giro
+            // VIEJO durante ese TTL, aunque las tablas del vertical nuevo
+            // ya estén migradas arriba. Hallazgo real de revisión posterior
+            // a Fase 1a — el caché nunca tuvo un gancho para este trigger.
+            $tenant->run(fn () => app(MenuResolver::class)->invalidarTenantActivo());
         }
 
         return $tenant->fresh();
