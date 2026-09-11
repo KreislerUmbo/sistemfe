@@ -96,6 +96,18 @@ class RoleController extends Controller
      */
     public function update(Request $request, string $id)
     {
+        $role =  Role::findOrFail($id);
+
+        // Fase 2a (plan-modulo-menus-y-roles.md §5) — Super-Admin es un rol
+        // técnico protegido: no se puede renombrar ni reconfigurar sus
+        // permisos vía este endpoint, sin excepción.
+        if ($role->name === 'Super-Admin') {
+            return response()->json([
+                "code" => 422,
+                "message" => "El rol Super-Admin no se puede editar.",
+            ], 422);
+        }
+
         $is_exist_role = Role::where("id", "<>", $id)->where("name", $request->name)->first();
 
         if ($is_exist_role) {
@@ -105,7 +117,6 @@ class RoleController extends Controller
             ]);
         }
 
-        $role =  Role::findOrFail($id);
         $role->update([
             "name" => $request->name,
         ]);
@@ -138,6 +149,29 @@ class RoleController extends Controller
     public function destroy(string $id)
     {
         $role = Role::findOrFail($id);
+
+        // Fase 2a (plan-modulo-menus-y-roles.md §5) — Super-Admin es un rol
+        // técnico protegido: no se puede eliminar.
+        if ($role->name === 'Super-Admin') {
+            return response()->json([
+                "code" => 422,
+                "message" => "El rol Super-Admin no se puede eliminar.",
+            ], 422);
+        }
+
+        // Fase 2a (§9.5, guard anti-lockout) — bloquear eliminar un rol con
+        // usuarios activos asignados sin reasignación previa explícita: hoy
+        // no hay una UI de reasignación masiva, así que el guard exige
+        // reasignar (o dar de baja) a cada usuario antes de poder borrar el
+        // rol, en vez de dejarlos huérfanos silenciosamente.
+        $usuariosAsignados = $role->users()->count();
+        if ($usuariosAsignados > 0) {
+            return response()->json([
+                "code" => 422,
+                "message" => "No se puede eliminar el rol: tiene {$usuariosAsignados} usuario(s) asignado(s). Reasigná esos usuarios a otro rol antes de eliminarlo.",
+            ], 422);
+        }
+
         $role->delete();
 
         return response()->json([

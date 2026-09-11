@@ -285,7 +285,14 @@ Route::group([
     // Gate::before() (AppServiceProvider) — confirmado leyendo
     // PermissionMiddleware::handle(), usa $user->canAny() que sí pasa por el
     // Gate de Laravel.
+    // Fase 2a (plan-modulo-menus-y-roles.md §5) — index/show quedaban sin
+    // ningún permission:, a diferencia de store/update/destroy ya gateados
+    // en Fase 0b: cualquier usuario autenticado del tenant podía listar el
+    // catálogo completo de roles+permisos o de usuarios vía API directa,
+    // aunque el menú lo ocultara (el menú nunca es el límite real, §9.1).
     Route::resource("roles", RoleController::class)
+        ->middlewareFor('index', 'permission:list_role')
+        ->middlewareFor('show', 'permission:list_role')
         ->middlewareFor('store', 'permission:register_role')
         ->middlewareFor('update', 'permission:edit_role')
         ->middlewareFor('destroy', 'permission:delete_role');
@@ -293,6 +300,8 @@ Route::group([
     Route::post("users/{id}", [UserController::class, 'update']) //como no funciona el resource para el metodo update con PUT lo hago asi, ya que el frontend envia por POST el fromData porque tiene imagenes
         ->middleware('permission:edit_user');
     Route::resource("users", UserController::class)
+        ->middlewareFor('index', 'permission:list_user')
+        ->middlewareFor('show', 'permission:list_user')
         ->middlewareFor('store', 'permission:register_user')
         ->middlewareFor('update', 'permission:edit_user')
         ->middlewareFor('destroy', 'permission:delete_user');
