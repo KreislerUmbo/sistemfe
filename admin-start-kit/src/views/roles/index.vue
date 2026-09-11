@@ -327,7 +327,7 @@ onMounted(() => {
                                     {{ PERMISO.name }}
                                 </b-td>
                                 <ul>
-                                    <li v-for="(permiso, index2) in PERMISO.permisos" :key="index">
+                                    <li v-for="(permiso, index2) in PERMISO.permisos" :key="index2">
                                         <b-form-checkbox :checked="permission_selected.includes(permiso.permiso)"
                                             @click="addPermission(permiso)" name="checkbox-1">
                                             {{ permiso.name }}

@@ -395,7 +395,7 @@ VIEJO hasta 24h. Sin impacto real (nada consume el endpoint todavía). Fix de un
   bloquear eliminar un rol con usuarios activos asignados sin reasignación previa explícita.
 
 **✅ Fase 2a — Seguridad del módulo Roles/Usuarios existente (11-sep-2026, rama
-`feat/menu-fase2a-seguridad-roles-usuarios`, EN REVISIÓN, sin mergear).** Antes de tocar el
+`feat/menu-fase2a-seguridad-roles-usuarios`, MERGEADA a `main` — `0b2fbc2`).** Antes de tocar el
 sidebar, exploración real del frontend encontró que el módulo "Roles y Permisos" de §5 **ya
 existe** (`admin-start-kit/src/views/roles/index.vue`, CRUD completo con checklist) — no hace
 falta construirlo de cero — pero con 4 huecos de seguridad reales, confirmados leyendo código
@@ -441,7 +441,7 @@ no una omisión accidental.
 conocidos, familia `TipoCambioSunat*`, no relacionados).
 
 **✅ Fase 2b — Sidebar dinámico desde `GET /me/menu` (11-sep-2026, rama
-`feat/menu-fase2b-sidebar-dinamico`, EN REVISIÓN, sin mergear).** Reemplaza el `MENU_ITEMS`
+`feat/menu-fase2b-sidebar-dinamico`, MERGEADA a `main` — `750d779`).** Reemplaza el `MENU_ITEMS`
 estático (`admin-start-kit/src/assets/data/menu-items.ts`, **eliminado** — confirmado sin
 ninguna referencia real antes de borrarlo) por un store Pinia nuevo
 (`admin-start-kit/src/stores/menu.ts`) que hidrata desde `GET /me/menu` y mapea
@@ -479,7 +479,7 @@ sin errores nuevos (44 preexistentes antes y después, no relacionados a este ca
 confirmado comparando contra el baseline con `git stash`).
 
 **✅ Fase 2c — Catálogo de permisos dinámico en el módulo Roles (11-sep-2026, rama
-`feat/menu-fase2c-catalogo-permisos-dinamico`, EN REVISIÓN, sin mergear).** El checklist de
+`feat/menu-fase2c-catalogo-permisos-dinamico`, MERGEADA a `main` — `077f215`).** El checklist de
 permisos de `views/roles/index.vue` vivía 100% del catálogo curado y hardcodeado
 `types/roles.ts::PERMISOS` — y ya se había demostrado que se queda desactualizado (varios
 módulos reales, documentados en los propios comentarios del archivo, quedaron con permisos
@@ -512,7 +512,7 @@ su checkbox correctamente marcado según los permisos reales ya asignados a ese 
 era solo de visibilidad/render, no de datos).
 
 **✅ Fase 2d — Permisos directos por usuario (11-sep-2026, rama
-`feat/menu-fase2d-permisos-directos-usuario`, EN REVISIÓN, sin mergear).** §5 del plan pedía
+`feat/menu-fase2d-permisos-directos-usuario`, MERGEADA a `main` — `48a6f72`).** §5 del plan pedía
 "asignar permisos directos a un usuario específico, además de (o por encima de) su rol" como
 pestaña extra en el CRUD de Usuarios ya existente — Spatie ya soporta esto de fábrica
 (`model_has_permissions`, independiente de `role_has_permissions`) y el proyecto ya lo usaba a
@@ -544,6 +544,43 @@ revertido se refleja correctamente (sin quedar cacheado del intento anterior).
 
 **Pendiente, todavía sin arrancar**: auditoría de rutas sin `name`/`meta.permission` en
 `router/routes.ts` (§6 punto 3, mencionada desde Fase 1a, nunca ejecutada).
+
+**✅ Revisión post-Fase 2 — 4 hallazgos reales, 3 corregidos (11-sep-2026, rama
+`fix/fase2-revision-hallazgos-reales`, EN REVISIÓN, sin mergear).** El usuario pidió una
+revisión explícita de bugs/cabos sueltos tras cerrar 2a-2d. Code review dirigido a los archivos
+de la sesión, cada hallazgo verificado antes de aceptarlo (no reportado a ciegas):
+
+1. **Escalación de privilegios real en `UserController::permisosDirectos()`** (el más serio,
+   corregido): el endpoint solo exigía `edit_user` (Fase 2d) — sin ningún guard adicional,
+   cualquier rol con ese permiso (mucho más común que `edit_role`/`delete_role`) podía
+   otorgarse a sí mismo o a otro usuario CUALQUIER permiso existente, incluidos
+   `delete_role`/`roles.administrar`, sin tenerlo él mismo. Confirmado con `tinker` que hoy
+   ningún rol real tiene `edit_user` sin también tener permisos de rol — no explotable HOY,
+   pero el hueco de diseño era real y se activaría con el primer rol nuevo tipo "gestiona
+   usuarios pero no roles". **Corregido**: guard que compara el DELTA (solo lo que se agrega,
+   no lo que se conserva o se quita) contra los permisos reales del actor vía `$actor->can()`
+   (no `getDirectPermissions()`, porque Super-Admin no tiene permisos explícitos — bypasea vía
+   `Gate::before()`, y `can()` sí respeta ese bypass, confirmado en tinker). 3 tests nuevos.
+2. **`:key="index"` duplicado en `views/roles/index.vue`** (corregido): el `<li>` interno del
+   checklist usaba el índice del `<b-tr>` externo en vez del propio — todos los checkboxes de
+   un mismo módulo compartían la misma key de Vue. Antes de Fase 2c era inofensivo (`PERMISOS`
+   nunca cambiaba tras el mount); con el catálogo ahora dinámico (`catalogoCompleto` crece
+   cuando `permisos_disponibles` llega async), el diffing con keys duplicadas puede reasignar
+   mal el estado visual entre checkboxes tras un re-render. El bloque nuevo de
+   `views/users/index.vue` (mismo PR de Fase 2d) ya usaba la key correcta — confirma que fue
+   un descuido en el código viejo, no un patrón deliberado.
+3. **N+1 en `GET /api/users`** (corregido): Fase 2d agregó `direct_permissions` a
+   `UserResource` (`getDirectPermissions()`) sin `->with('permissions')` en la query de
+   `UserController::index()` — hasta 10 queries extra por página/búsqueda. Fix de una línea.
+4. **Race condition en `stores/menu.ts::clear()`** (corregido): `clear()` reseteaba el estado
+   pero no invalidaba un `fetch()` ya en vuelo — si el usuario cerraba sesión con `/me/menu`
+   todavía sin responder, esa respuesta tardía podía repoblar `items`/`loaded` con el árbol del
+   usuario anterior después del logout. Fix con un token incremental: cada `fetch()`/`clear()`
+   invalida las respuestas de llamadas anteriores.
+
+Suite completa 817/823 verde (6 fallos ya conocidos, familia `TipoCambioSunat*`, no
+relacionados) — incluye los 3 tests nuevos del guard anti-escalación.
+`npm run type-check`: 44 errores preexistentes, sin cambios.
 
 **Fase 3 — Retail al mismo modelo**
 - Reemplazar el `role_id` legacy de retail por roles Spatie reales + seeder propio, para que

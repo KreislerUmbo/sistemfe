@@ -29,18 +29,28 @@ export const useMenuStore = defineStore("menu_store", () => {
   const items = ref<MenuItemType[]>([]);
   const loaded = ref(false);
   let enVuelo: Promise<void> | null = null;
+  // Hallazgo real de revisión posterior: clear() reseteaba el estado pero
+  // no invalidaba un fetch() ya en vuelo — si el usuario cerraba sesión
+  // mientras /me/menu todavía no respondía, esa respuesta tardía podía
+  // llegar después y repoblar items/loaded con el árbol del usuario
+  // anterior. token cambia en cada fetch()/clear(); el .then()/.catch()
+  // de una llamada vieja se descarta si ya no coincide.
+  let token = 0;
 
   const fetch = (): Promise<void> => {
     if (enVuelo) return enVuelo;
 
+    const miToken = ++token;
     enVuelo = httpClient
       .get("me/menu")
       .then((res) => {
+        if (miToken !== token) return;
         const menu: MenuNodoApi[] = res.data?.menu ?? [];
         items.value = menu.map(mapearNodo);
         loaded.value = true;
       })
       .catch(() => {
+        if (miToken !== token) return;
         // Sidebar vacío es preferible a uno roto — no bloquea la sesión
         // si /me/menu falla (ej. red caída, tenant sin catálogo sembrado).
         items.value = [];
@@ -65,6 +75,7 @@ export const useMenuStore = defineStore("menu_store", () => {
   // otro usuario) dispare un fetch real, no sirva el árbol del usuario
   // anterior desde memoria.
   const clear = () => {
+    token++;
     items.value = [];
     loaded.value = false;
     enVuelo = null;
