@@ -35,6 +35,12 @@ class UserResource extends JsonResource
             'gender' => $this->resource->gender,
             'formato_impresion_default' => $this->resource->formato_impresion_default,
             'created_at' => $this->resource->created_at->format('Y-m-d H:i:s'),
+            // Fase 2d (plan-modulo-menus-y-roles.md §5) — permisos
+            // asignados DIRECTO a este usuario (independiente de los que
+            // le da su rol) — getDirectPermissions() es el método real de
+            // Spatie para esto, no confundir con getAllPermissions()
+            // (rol+directos combinados, usado en el login).
+            'direct_permissions' => $this->resource->getDirectPermissions()->pluck('name'),
         ];
     }
 }

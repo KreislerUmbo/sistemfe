@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import httpClient from '@/helpers/http-client';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';
-import { PERMISOS, type Role, type RolePermiso, type Roles, type RolesResponse } from '@/types/roles';
+import { type Role, type RolePermiso, type Roles, type RolesResponse } from '@/types/roles';
+import { construirCatalogoCompleto } from '@/helpers/permisos';
 import type { AxiosResponse } from 'axios';
 import { computed, onMounted, ref, watch } from 'vue';
 import { formatFechaHora } from '@/helpers/fecha';
@@ -28,29 +29,11 @@ const perPageRows = ref<number>(3);
 // Fase 2c (plan-modulo-menus-y-roles.md §7) — catálogo real de permisos
 // del tenant, cruzado contra PERMISOS (el catálogo curado) para que
 // ningún permiso real quede invisible en el checklist de abajo.
+// construirCatalogoCompleto() vive en helpers/permisos.ts — compartido
+// con la pestaña de permisos directos de Usuarios (Fase 2d).
 const permisosDisponibles = ref<string[]>([]);
 
-const humanizarPermiso = (permiso: string): string =>
-    permiso
-        .replace(/[._-]/g, ' ')
-        .replace(/\b\w/g, (letra) => letra.toUpperCase());
-
-const catalogoCompleto = computed(() => {
-    const conocidos = new Set(PERMISOS.flatMap((grupo) => grupo.permisos.map((p) => p.permiso)));
-    const nuevos = permisosDisponibles.value.filter((permiso) => !conocidos.has(permiso));
-
-    if (nuevos.length === 0) {
-        return PERMISOS;
-    }
-
-    return [
-        ...PERMISOS,
-        {
-            name: 'Otros permisos',
-            permisos: nuevos.map((permiso) => ({ name: humanizarPermiso(permiso), permiso })),
-        },
-    ];
-});
+const catalogoCompleto = computed(() => construirCatalogoCompleto(permisosDisponibles.value));
 
 const list = async () => {
     try {

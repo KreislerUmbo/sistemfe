@@ -511,8 +511,39 @@ su checkbox correctamente marcado según los permisos reales ya asignados a ese 
 `permission_selected` siempre vino del backend, nunca dependió del catálogo curado — el bug
 era solo de visibilidad/render, no de datos).
 
-**Pendiente, todavía sin arrancar**: 2d (pestaña de permisos directos por usuario), auditoría
-de rutas sin `name`/`meta.permission` en `router/routes.ts`.
+**✅ Fase 2d — Permisos directos por usuario (11-sep-2026, rama
+`feat/menu-fase2d-permisos-directos-usuario`, EN REVISIÓN, sin mergear).** §5 del plan pedía
+"asignar permisos directos a un usuario específico, además de (o por encima de) su rol" como
+pestaña extra en el CRUD de Usuarios ya existente — Spatie ya soporta esto de fábrica
+(`model_has_permissions`, independiente de `role_has_permissions`) y el proyecto ya lo usaba a
+mano vía tinker en el módulo Caja (`cash.close_others_session`/`cash.approve_expenses`), pero
+nunca desde la UI.
+
+- Backend: `UserController::permisosDirectos()` (`PUT users/{id}/permisos`, gateado con
+  `edit_user` — no se creó un permiso nuevo solo para esto) llama `$user->syncPermissions()`
+  (no `$role->syncPermissions()` — clave: sobre un `User`, Spatie solo toca sus permisos
+  DIRECTOS, nunca los del rol). `UserController::index()` también devuelve
+  `permisos_disponibles` (mismo criterio que Fase 2c) y `UserResource` expone
+  `direct_permissions` (`getDirectPermissions()`, no confundir con `getAllPermissions()` que
+  ya usa el login).
+- Frontend: pestaña "Permisos directos" en el modal de editar usuario (`b-tabs`, patrón ya
+  usado en `product/edit.vue`), visible solo editando un usuario existente (no tiene sentido
+  antes de que exista). El checklist reutiliza el mismo patrón híbrido de Fase 2c —
+  `construirCatalogoCompleto()`/`humanizarPermiso()` se extrajeron a
+  `helpers/permisos.ts` (antes duplicado inline en `roles/index.vue`) para no repetir la
+  lógica en las 2 pantallas.
+
+5 tests nuevos (`UserControllerFase2dTest`), suite completa 813/820 verde (7 fallos ya
+conocidos, familia `TipoCambioSunat*`, no relacionados). Verificado en vivo con Playwright
+contra `agencia-demo` real: la pestaña aparece editando "Admin General", el checklist completo
+con "Otros permisos" se renderiza igual que en Roles, se confirmó un guardado real contra la
+base de datos (grant de `roles.administrar` directo, verificado con `tinker` — no solo la UI)
+y se revirtió de inmediato con `syncPermissions([])` para no dejar el tenant real con un
+permiso de prueba puesto a mano; confirmado con una segunda carga de la pantalla que el estado
+revertido se refleja correctamente (sin quedar cacheado del intento anterior).
+
+**Pendiente, todavía sin arrancar**: auditoría de rutas sin `name`/`meta.permission` en
+`router/routes.ts` (§6 punto 3, mencionada desde Fase 1a, nunca ejecutada).
 
 **Fase 3 — Retail al mismo modelo**
 - Reemplazar el `role_id` legacy de retail por roles Spatie reales + seeder propio, para que
