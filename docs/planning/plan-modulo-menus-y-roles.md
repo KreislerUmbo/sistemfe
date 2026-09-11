@@ -6,12 +6,15 @@
 > (3 capas: giro + plan + roles)". Ese documento define el QUÉ (el modelo conceptual de 3
 > capas ya está decidido y no se toca acá); este documento define el CÓMO — el modelo de datos
 > concreto, el catálogo de roles/permisos, y el plan de ejecución.
-> Estado: diseño cerrado, en ejecución — Fase 0, Fase 0b, Fase 1a y Fase 1b (catálogo real
+> Estado: diseño cerrado, en ejecución — Fase 0, Fase 0b, Fase 1a, Fase 1b (catálogo real
 > de roles/permisos + scope de fila, incluida la Parte 5 ya aplicada contra `agencia-demo`)
-> ya mergeadas a `main`, junto con el fix de invalidación de caché de menú por cambio de
-> giro. Fase 0c Parte 1 (modo sombra de Bucket B) activa contra `umbo` y `agencia-demo`, sin
-> mergear — Partes 2/3 esperan una ventana real de observación. Fase 2 (frontend) es la
-> próxima desbloqueada, sin arrancar.
+> y Fase 0c Parte 1 (modo sombra de Bucket B) ya mergeadas a `main`, junto con el fix de
+> invalidación de caché de menú por cambio de giro. El modo sombra sigue activo (nunca
+> bloquea) y corriendo contra `umbo` y `agencia-demo` desde antes del merge — mergear el
+> código no cambia ese comportamiento. Fase 0c Partes 2 (backfill dirigido por los logs) y
+> 3 (activar el gate real) siguen pendientes, esperan una ventana real de observación y
+> autorización explícita antes de tocar `umbo`/`agencia-demo` de nuevo. Fase 2 (frontend) es
+> la próxima desbloqueada, sin arrancar.
 > Última actualización: 10-sep-2026
 
 ---
@@ -313,9 +316,10 @@ distingue de Administrador según lo confirmado en §3.2):
 - Brief: `agencia-de-viajes/PEGAR-EN-CLAUDE-CODE-fase0b-gate-rutas-criticas.md`.
 
 **Fase 0c — Modo sombra + gate real, Bucket B (§9.1 pasos 2-4) — EN CURSO**
-- Parte 1 (modo sombra) implementada y activa ahora mismo contra `umbo` y `agencia-demo`,
-  sin mergear (rama `feat/shadow-mode-bucket-b-rutas-operativas`, `506a02b`). Observando en
-  silencio — sin bloquear ninguna ruta todavía.
+- Parte 1 (modo sombra) implementada, activa contra `umbo` y `agencia-demo`, y MERGEADA a
+  `main` (rama `feat/shadow-mode-bucket-b-rutas-operativas`, merge `fecf4d1`, 10-sep-2026,
+  sin conflictos). Observando en silencio — sin bloquear ninguna ruta todavía; mergear el
+  código no cambió nada del comportamiento en producción, el middleware ya corría igual.
 - Parte 2 (backfill dirigido por logs) y Parte 3 (gate real con flag de rollback): pendientes,
   a la espera de que la ventana de observación real sea representativa.
 - Detalle: `docs/planning/claude/shadow-mode-bucket-b-fase0c.md` (el brief de esta fase se
@@ -505,11 +509,13 @@ sin arriesgar romper producción:**
    registra (log, no bloquea) cada vez que un usuario real habría fallado el chequeo de
    permiso — corrido contra tráfico real de producción unos días. Esto da evidencia real de
    quién se rompería, en vez de una auditoría a ciegas de qué permisos "deberían" tener.
-   ✅ **Implementado y activo (Fase 0c Parte 1, 10-sep-2026)** — `ShadowPermissionMiddleware`
-   corriendo ahora mismo contra `umbo` y `agencia-demo`, sin mergear todavía (rama
-   `feat/shadow-mode-bucket-b-rutas-operativas`, `506a02b`). Detalle del mapeo de permisos y
-   diseño en `docs/planning/claude/shadow-mode-bucket-b-fase0c.md`. Observando en silencio —
-   la lectura de logs (paso 3) espera a que la ventana de observación sea representativa.
+   ✅ **Implementado, activo y MERGEADO a `main`** (Fase 0c Parte 1, 10-sep-2026) —
+   `ShadowPermissionMiddleware` corriendo contra `umbo` y `agencia-demo` desde su despliegue
+   inicial; merge de `feat/shadow-mode-bucket-b-rutas-operativas` a `main` sin conflictos
+   (`fecf4d1`), sin cambio de comportamiento real (el middleware nunca bloquea, en la rama o
+   en `main`). Detalle del mapeo de permisos y diseño en
+   `docs/planning/claude/shadow-mode-bucket-b-fase0c.md`. Observando en silencio — la lectura
+   de logs (paso 3) espera a que la ventana de observación sea representativa.
 3. **Backfill dirigido por esos logs** (no por suposición): a cada usuario real que el modo
    shadow marcó como "habría fallado", asignarle el permiso que le falta — vía rol si aplica a
    todo su rol, o directo al usuario (§5) si es un caso puntual. **Pendiente** — a la espera
@@ -528,7 +534,8 @@ contigo si este hueco se prioriza por delante del propio menú dinámico (Fase 1
 es una vulnerabilidad real activa hoy, no un riesgo futuro. El Bucket A, al menos, no tiene
 motivo para esperar a Fase 1.
 
-**✅ Paso 2 (Bucket B, modo "sombra") IMPLEMENTADO Y ACTIVO (10-sep-2026, Fase 0c —
+**✅ Paso 2 (Bucket B, modo "sombra") IMPLEMENTADO, ACTIVO Y MERGEADO A `main` (10-sep-2026,
+Fase 0c Parte 1, merge `fecf4d1` sin conflictos —
 `docs/planning/claude/shadow-mode-bucket-b-fase0c.md` tiene el diseño completo, el mapeo de
 las 31 rutas a permiso, y la verificación con tráfico real).** `ShadowPermissionMiddleware`
 (alias `shadow.permission`) aplicado a las 31 rutas de Bucket B — nunca bloquea, solo registra
