@@ -91,6 +91,8 @@
             :header-class="`bg-${themeColor}`" title-class="m-0 text-white" :ok-variant="themeColor" hide-footer
             centered size="lg">
 
+            <b-tabs card>
+            <b-tab title="Datos generales" active>
             <b-row>
                 <b-col lg="5">
                     <label for="name-user" class="col-form-label text-lg-end">Nombre: </label>
@@ -215,6 +217,49 @@
                     </div>
                 </b-col>
             </b-row>
+            </b-tab>
+
+            <!-- Fase 2d (plan-modulo-menus-y-roles.md §5) — permisos asignados
+                 DIRECTO a este usuario, además de los que ya le da su rol. Solo
+                 tiene sentido editando un usuario ya existente. -->
+            <b-tab title="Permisos directos" v-if="user_selected">
+                <b-row>
+                    <b-col cols="12">
+                        <b-table-simple responsive class="mb-0 table-centered">
+                            <b-thead class="table-light">
+                                <b-tr>
+                                    <b-th>Modulo</b-th>
+                                    <b-th>Permisos</b-th>
+                                </b-tr>
+                            </b-thead>
+                            <b-tbody>
+                                <b-tr v-for="(PERMISO, index) in catalogoCompleto" :key="index">
+                                    <b-td>
+                                        {{ PERMISO.name }}
+                                    </b-td>
+                                    <ul>
+                                        <li v-for="(permiso, index2) in PERMISO.permisos" :key="index2">
+                                            <b-form-checkbox
+                                                :checked="direct_permission_selected.includes(permiso.permiso)"
+                                                @click="toggleDirectPermission(permiso)" name="checkbox-2">
+                                                {{ permiso.name }}
+                                            </b-form-checkbox>
+                                        </li>
+                                    </ul>
+                                </b-tr>
+                            </b-tbody>
+                        </b-table-simple>
+                    </b-col>
+                    <b-col lg="12" class="mt-3">
+                        <div class="modal-footer">
+                            <b-button type="button" variant="primary" @click="guardarPermisosDirectos">
+                                Guardar permisos directos
+                            </b-button>
+                        </div>
+                    </b-col>
+                </b-row>
+            </b-tab>
+            </b-tabs>
         </b-modal>
     </DefaultLayout>
 </template>
@@ -225,7 +270,9 @@ import httpClient from '@/helpers/http-client';
 import type { AxiosResponse } from 'axios';
 import type { RoleUser, User, UserResponse, Users } from '@/types/users';
 import type { Branch } from '@/types/cash-session';
-import { onMounted, ref, watch } from 'vue';
+import type { RolePermiso } from '@/types/roles';
+import { construirCatalogoCompleto } from '@/helpers/permisos';
+import { computed, onMounted, ref, watch } from 'vue';
 import { formatFechaHora } from '@/helpers/fecha';
 
 import Swal from "sweetalert2/dist/sweetalert2.js";
@@ -260,6 +307,13 @@ const currentPage = ref<number>(1);
 const totalPages = ref<number>(0);
 const perPageRows = ref<number>(10);
 
+// Fase 2d (plan-modulo-menus-y-roles.md §5) — pestaña "Permisos directos":
+// mismo patrón que el checklist de Roles (Fase 2c), catalogoCompleto
+// compartido vía helpers/permisos.ts.
+const permisosDisponibles = ref<string[]>([]);
+const direct_permission_selected = ref<string[]>([]);
+const catalogoCompleto = computed(() => construirCatalogoCompleto(permisosDisponibles.value));
+
 // Función para cargar y previsualizar la imagen seleccionada
 const loadFile = ($event: any) => {
     if ($event.target.files[0].type.indexOf("image") < 0) {// validar que sea una imagen
@@ -290,6 +344,7 @@ const list = async () => {
         totalPages.value = res.data.total;   // total de filas
         perPageRows.value = res.data.paginate; // registros por página
         roles.value = res.data.roles;
+        permisosDisponibles.value = res.data.permisos_disponibles ?? [];
 
     } catch (error) {
         console.log(error);
@@ -313,6 +368,7 @@ const clearFields = () => {
     email.value = '';
     phone.value = 0;
     formato_impresion_default.value = 'a4';
+    direct_permission_selected.value = [];
 };
 
 
@@ -452,8 +508,49 @@ const editUser = (user: User) => {
     formato_impresion_default.value = user.formato_impresion_default ?? 'a4';
     IMAGEN_PREVIZUALIZA.value = user.avatar ?? '';// ?? es un operador de fusión nula que asigna una cadena vacía si user.avatar es undefined o null
     FILE_AVATAR.value = undefined; // Reiniciar el archivo de avatar
+    direct_permission_selected.value = user.direct_permissions ?? [];
 
 
+};
+
+// Fase 2d — checkbox toggle de la pestaña "Permisos directos", mismo
+// patrón que addPermission() de roles/index.vue.
+const toggleDirectPermission = (permiso: RolePermiso) => {
+    const INDEX = direct_permission_selected.value.findIndex((p) => p === permiso.permiso);
+    if (INDEX !== -1) {
+        direct_permission_selected.value.splice(INDEX, 1);
+    } else {
+        direct_permission_selected.value.push(permiso.permiso);
+    }
+};
+
+const guardarPermisosDirectos = async () => {
+    if (!user_selected.value) {
+        return;
+    }
+
+    try {
+        const res: AxiosResponse<{ code: number; message: string; direct_permissions: string[] }> =
+            await httpClient.put(`users/${user_selected.value.id}/permisos`, {
+                permissions: direct_permission_selected.value,
+            });
+
+        const INDEX = users.value.findIndex((usr) => usr.id === user_selected.value?.id);
+        if (INDEX !== -1) {
+            users.value[INDEX].direct_permissions = res.data.direct_permissions;
+        }
+
+        (Swal as TVueSwalInstance).fire(
+            "Felicitaciones!",
+            res.data.message,
+            "success",
+        );
+    } catch (error: any) {
+        console.log(error);
+        if (error.response?.data?.message) {
+            (Swal as TVueSwalInstance).fire('Error', error.response.data.message, 'error');
+        }
+    }
 };
 
 const removeUser = (user: User) => {

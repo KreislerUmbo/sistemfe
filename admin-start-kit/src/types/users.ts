@@ -20,7 +20,10 @@ export type User = {
     n_document:string,
     gender:string,
     formato_impresion_default?: 'a4' | 'ticket80mm',
-    created_at:string
+    created_at:string,
+    // Fase 2d (plan-modulo-menus-y-roles.md §5) — permisos asignados
+    // DIRECTO a este usuario, independiente de los que le da su rol.
+    direct_permissions?: string[],
 }
 //este es para  los return de los index,store,update,
 export type Users = {
@@ -30,6 +33,7 @@ export type Users = {
     total: number,
     paginate: number,
     roles: RoleUser[],
+    permisos_disponibles?: string[],
 }
 
 //esto son las respuestar de los return en el controlador

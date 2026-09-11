@@ -9,6 +9,7 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 
 class UserController extends Controller
@@ -26,7 +27,7 @@ class UserController extends Controller
             ->paginate(10);
             
         $roles = Role::all();
-        
+
         return response()->json([
             "total" => $users->total(),
             "paginate" => 10,
@@ -37,6 +38,15 @@ class UserController extends Controller
                     "name" => $role->name,
                 ];
             }),
+            // Fase 2d (plan-modulo-menus-y-roles.md §5) — catálogo REAL de
+            // permisos del tenant, mismo criterio que
+            // RoleController::index() (Fase 2c): el checklist de "Permisos
+            // directos" de un usuario cruza esto contra PERMISOS (catálogo
+            // curado del frontend) para que ningún permiso real quede
+            // invisible/inasignable.
+            "permisos_disponibles" => Permission::where("guard_name", "api")
+                ->orderBy("name")
+                ->pluck("name"),
         ]);
     }
 
@@ -126,6 +136,27 @@ class UserController extends Controller
             "code" => 200,
             "message" => "Usuario creado con exito",
             "user" => UserResource::make($user),
+        ]);
+    }
+
+    /**
+     * Fase 2d (plan-modulo-menus-y-roles.md §5) — permisos asignados
+     * DIRECTO al usuario, además de (o por encima de) los que ya le da su
+     * rol. Spatie ya soporta esto de fábrica (model_has_permissions,
+     * independiente de role_has_permissions) y el proyecto ya lo usa hoy
+     * a mano vía tinker (cash.close_others_session/cash.approve_expenses
+     * en Caja) — esto lo expone desde la UI. syncPermissions() en un User
+     * (no un Role) solo toca sus permisos directos, nunca los del rol.
+     */
+    public function permisosDirectos(Request $request, string $id)
+    {
+        $user = User::findOrFail($id);
+        $user->syncPermissions($request->permissions ?? []);
+
+        return response()->json([
+            "code" => 200,
+            "message" => "Permisos directos actualizados con éxito",
+            "direct_permissions" => $user->getDirectPermissions()->pluck("name"),
         ]);
     }
 

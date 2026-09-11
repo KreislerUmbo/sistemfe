@@ -306,6 +306,12 @@ Route::group([
         ->middlewareFor('update', 'permission:edit_user')
         ->middlewareFor('destroy', 'permission:delete_user');
 
+    // Fase 2d (plan-modulo-menus-y-roles.md §5) — permisos directos por
+    // usuario, además del rol. Mismo permiso que editar el resto de un
+    // usuario (edit_user) — no se crea un permiso nuevo solo para esto.
+    Route::put('users/{id}/permisos', [UserController::class, 'permisosDirectos'])
+        ->middleware('permission:edit_user');
+
     //categories
     // Fase 0c (plan-modulo-menus-y-roles.md §9.1, modo "sombra", Bucket B) —
     // shadow.permission: nunca bloquea, solo registra en
