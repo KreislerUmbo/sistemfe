@@ -3,7 +3,7 @@ import httpClient from '@/helpers/http-client';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import { PERMISOS, type Role, type RolePermiso, type Roles, type RolesResponse } from '@/types/roles';
 import type { AxiosResponse } from 'axios';
-import { onMounted, ref, watch } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { formatFechaHora } from '@/helpers/fecha';
 
 import Swal from "sweetalert2/dist/sweetalert2.js";
@@ -25,6 +25,33 @@ const currentPage = ref<number>(1);
 const totalPages = ref<number>(1);
 const perPageRows = ref<number>(3);
 
+// Fase 2c (plan-modulo-menus-y-roles.md §7) — catálogo real de permisos
+// del tenant, cruzado contra PERMISOS (el catálogo curado) para que
+// ningún permiso real quede invisible en el checklist de abajo.
+const permisosDisponibles = ref<string[]>([]);
+
+const humanizarPermiso = (permiso: string): string =>
+    permiso
+        .replace(/[._-]/g, ' ')
+        .replace(/\b\w/g, (letra) => letra.toUpperCase());
+
+const catalogoCompleto = computed(() => {
+    const conocidos = new Set(PERMISOS.flatMap((grupo) => grupo.permisos.map((p) => p.permiso)));
+    const nuevos = permisosDisponibles.value.filter((permiso) => !conocidos.has(permiso));
+
+    if (nuevos.length === 0) {
+        return PERMISOS;
+    }
+
+    return [
+        ...PERMISOS,
+        {
+            name: 'Otros permisos',
+            permisos: nuevos.map((permiso) => ({ name: humanizarPermiso(permiso), permiso })),
+        },
+    ];
+});
+
 const list = async () => {
     try {
         const res: AxiosResponse<Roles> = await httpClient.get(
@@ -34,6 +61,7 @@ const list = async () => {
         roles.value = res.data.roles;
         totalPages.value = res.data.total;
         perPageRows.value = res.data.paginate;
+        permisosDisponibles.value = res.data.permisos_disponibles ?? [];
 
     } catch (error) {
         console.log(error);
@@ -311,7 +339,7 @@ onMounted(() => {
                             </b-tr>
                         </b-thead>
                         <b-tbody>
-                            <b-tr v-for="(PERMISO, index) in PERMISOS" :key="index">
+                            <b-tr v-for="(PERMISO, index) in catalogoCompleto" :key="index">
                                 <b-td>
                                     {{ PERMISO.name }}
                                 </b-td>

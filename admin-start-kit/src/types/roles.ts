@@ -10,6 +10,10 @@ export type Roles = {
     total: number,
     paginate: number,
     roles: Role[],
+    // Fase 2c (plan-modulo-menus-y-roles.md §7) — catálogo REAL de permisos
+    // del tenant (Spatie), independiente del catálogo curado PERMISOS de
+    // abajo. Ver su uso en views/roles/index.vue.
+    permisos_disponibles?: string[],
 }
 
 export type RolePermiso = {
@@ -25,6 +29,13 @@ export type RolesResponse = {
 
 
 
+// Catálogo curado (agrupación + etiquetas en español) — se queda
+// desactualizado si alguien crea un permiso nuevo en el backend y se
+// olvida de sumarlo acá (ya pasó varias veces, ver comentarios abajo).
+// Fase 2c: views/roles/index.vue ya no confía en que esta lista esté
+// completa — cruza esto contra `permisos_disponibles` (el catálogo real
+// del backend) y agrega cualquier permiso real que falte acá bajo "Otros
+// permisos", para que nunca quede uno invisible/inasignable desde la UI.
 export const PERMISOS = [
     {
         'name': 'Dashboard',
