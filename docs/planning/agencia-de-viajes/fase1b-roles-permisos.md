@@ -161,13 +161,35 @@ recurso/acción), parametrizado vía `DataProvider`, contra el catálogo REAL se
 `AgenciaViajesRolesSeeder` (no una copia paralela) — un cambio futuro que rompa §3.2/
 §3.3 se detecta acá antes de mergear.
 
-## Parte 5 — Aplicación real (NO ejecutada, requiere autorización explícita)
+## Parte 5 — Aplicación real (✅ EJECUTADA, 10-sep-2026, autorizada explícitamente)
 
-Nada de esto se corrió contra `agencia-demo`:
-- `permisos:backfill-fase1b-agencia-viajes agencia-demo` (arregla la regresión de
-  `Admin-General`).
-- Migración `vendedor_id` contra `agencia-demo` (aditiva, sin efecto real hoy — nada
-  consume el scope de fila desde el frontend todavía).
+Orden real: migración `vendedor_id` primero, después el backfill.
+
+1. `php artisan tenants:migrate --tenants=agencia-demo --path=.../2026_09_10_140000_add_vendedor_id_to_cotizaciones_table.php` —
+   columna confirmada presente después (`Schema::getColumnListing('cotizaciones')`).
+2. `php artisan permisos:backfill-fase1b-agencia-viajes agencia-demo` — salida real:
+   ```
+   Admin-General: +cotizaciones.ver,cotizaciones.ver_todas,cotizaciones.crear,cotizaciones.editar (tenía agencia.cotizaciones)
+   Admin-General: +reservas.ver,reservas.ver_todas,reservas.crear,reservas.editar (tenía agencia.reservas)
+   ```
+   Ningún otro rol tocado (confirma que el fix del bug de sobre-otorgamiento sostiene
+   contra datos reales, no solo en `sandbox`).
+
+**Verificación real posterior** (evidencia, no "debería funcionar"):
+- `Admin-General`: 58 → 66 permisos (ganó exactamente los 8 granulares, nada se le
+  quitó). `Contador`/`Vendedor de agencia`/`Supervisor`/`Administrador de agencia`
+  (roles nuevos, recién sembrados) quedaron con el alcance EXACTO de §3.2/§3.3 —
+  `Contador` sin `cotizaciones.crear`/`reservas.crear`, `Vendedor de agencia` sin
+  `*.ver_todas` ni `reservas.editar`.
+- **Ninguna asignación de usuario→rol cambió** — los 3 usuarios reales
+  (`admin@agencia-demo.test`/`test.perfil.agencia@sandbox.local` = `Super-Admin`,
+  `admin@gmail.com` = `Admin-General`) siguen con el mismo rol que tenían antes.
+- `GET /api/cotizaciones` y `GET /api/reservas` con JWT real de `admin@gmail.com` (vía
+  tinker, sin resetear password) contra el servidor real: **200** en ambas — confirma
+  que el split de rutas + el backfill dejaron a `Admin-General` con acceso real
+  funcionando, no solo el permiso en la tabla.
+- `sandbox`/`umbo`/`negocio2`: no tocados (ningún permiso `agencia.*` ahí, confirmado
+  antes de empezar).
 
 ## Verificación
 

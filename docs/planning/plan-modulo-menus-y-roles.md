@@ -342,8 +342,8 @@ VIEJO hasta 24h. Sin impacto hoy (nada consume el endpoint todavía). Fix de una
 `if ($giroCambio)`), con 2 tests contra tenant físico descartable.
 
 **Fase 1b — Catálogo real de roles/permisos de agencia de viajes + scope de fila —
-PARTES 1-4 CERRADAS (10-sep-2026), PARTE 5 (aplicación real) PENDIENTE DE
-AUTORIZACIÓN, rama sin mergear**
+TODAS LAS PARTES CERRADAS (10-sep-2026), incluida la Parte 5 (aplicación real,
+autorizada y ejecutada contra `agencia-demo`), rama sin mergear**
 - **Hallazgo real que reformuló la Parte 1**: 159 rutas de Cotizaciones/Reservas/
   Proveedores/etc. YA estaban gateadas, pero con 8 permisos planos sin distinción
   lectura/escritura — el catálogo granular de §3.2 no podía convivir con eso sin romper
@@ -354,12 +354,19 @@ AUTORIZACIÓN, rama sin mergear**
   capas encima de `PermissionsDemoSeeder` (nunca lo reemplaza) dentro de `provision()`.
 - **Diagnóstico real de `agencia-demo` (Parte 2)**: solo `Admin-General` (1 usuario
   real) y `Super-Admin` tienen algo que ver — hallazgo urgente, mergear el split tal
-  cual lo rompería. `permisos:backfill-fase1b-agencia-viajes` preparado, sin correr
-  contra `agencia-demo`. Bug real encontrado y corregido en el propio comando
-  (sobre-otorgaba a los roles nuevos del catálogo, verificado en vivo contra sandbox).
+  cual lo rompería. Bug real encontrado y corregido en `permisos:backfill-fase1b-
+  agencia-viajes` (sobre-otorgaba a los roles nuevos del catálogo, verificado en vivo
+  contra sandbox).
 - **`vendedor_id` no existía en ninguna tabla** (hallazgo real, bloqueante) — migración
   aditiva agregada a `cotizaciones` (nullable); `Reserva` hereda vía join, sin columna
   propia.
+- **✅ Parte 5 ejecutada (10-sep-2026, autorizada explícitamente)**: migración
+  `vendedor_id` + `permisos:backfill-fase1b-agencia-viajes` corridas contra
+  `agencia-demo` real. `Admin-General` 58→66 permisos (ganó los 8 granulares, nada se le
+  quitó); ningún otro rol tocado; ninguna asignación usuario→rol cambió. Verificado en
+  vivo con JWT real de `admin@gmail.com`: `GET /api/cotizaciones` y `GET /api/reservas`
+  → 200 (antes hubieran sido 403 con el split de rutas ya mergeado sin este backfill).
+  Detalle completo: `docs/planning/agencia-de-viajes/fase1b-roles-permisos.md` §Parte 5.
 - **El Global Scope original de §3.3 rompió 38 tests reales** (lógica interna —
   `aceptar()`/facturación — accede a la relación `cotizacion` sin ser una consulta de
   visibilidad). Rediseñado a scope LOCAL (`propias()`, solo en `index()`) — decisión
