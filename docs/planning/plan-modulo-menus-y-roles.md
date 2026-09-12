@@ -625,6 +625,33 @@ catálogo de plataforma controlado por el equipo de desarrollo vía seeder (igua
 propia pantalla. El plan menciona "o desde un futuro CRUD en central-panel" como posibilidad,
 nunca construida. Sin decisión tomada de construirlo — queda para cuando el usuario lo pida.
 
+**✅ Fix — `PermissionsDemoSeeder` desactualizado frente a módulos posteriores (12-sep-2026).**
+El usuario preguntó qué menús vería un tenant nuevo "tipo `umbo`" (giro `retail`) — al
+responder se encontró que `PermissionsDemoSeeder` (el que corre para CUALQUIER tenant nuevo,
+sin importar el giro) se quedó congelado en un baseline anterior a varios módulos reales:
+comparado contra los 71 permisos reales de `umbo` hoy, faltaban **39** (Caja, Series de
+Comprobantes, Cotizaciones Comerciales, Amortizaciones/Créditos) — nunca se retro-agregaron al
+seeder cuando esos módulos se construyeron. Un tenant retail nuevo arrancaría sin poder abrir
+caja, emitir factura, ni usar series de comprobante, pese a que esos módulos ya están
+disponibles para cualquier giro. **Corregido**: se agregan los 39 permisos al catálogo, y se
+asignan a `Contador`/`Cajero`/`Vendedor` exactamente como están asignados en `umbo` hoy
+(verificado con tinker, no inventado) — `Jefe de Ventas`/`Jefe de Almacen`/`Cliente` sin
+cambios, ninguno de esos permisos está asignado a esos roles en `umbo` tampoco. Deliberadamente
+NO se asigna `list_branch`/`cash.view_all`/etc. (grupo "Configuraciones" + "Historial y
+Reportes") a ningún rol de negocio — en `umbo` esas pantallas tampoco las administra nadie
+fuera de Super-Admin, no se inventa una capacidad que no existe hoy. 5 tests nuevos
+(`PermissionsDemoSeederTest`), sin regresión en el test de Fase 1b que verifica que
+`AgenciaViajesRolesSeeder` sigue agregando encima sin pisar. **Solo afecta el seeder — NO se
+re-corrió contra `umbo`/`sandbox`/`negocio2` reales**, esto define el baseline para el
+PRÓXIMO tenant que se provisione, no cambia los tenants ya existentes.
+
+Hallazgo aparte, fuera de alcance de este fix: `list_system`/`list_categorie_system` (grupo
+"Admin Portal" del menú) no existen como permisos en NINGÚN tenant real hoy, ni siquiera en
+`umbo` — a diferencia de los 39 de arriba, esto no es "se desactualizó", nunca existió. No se
+tocó — no está claro si "Admin Portal" (gestión del catálogo `systems`/`system_categories`,
+modelos centrales) debería ser operable por un rol de negocio o es exclusivamente de
+Super-Admin por diseño.
+
 **Fase 3 — Retail al mismo modelo**
 - Reemplazar el `role_id` legacy de retail por roles Spatie reales + seeder propio, para que
   el mismo `MenuResolver` sirva sin ramas especiales por giro.
