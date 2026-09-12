@@ -158,6 +158,14 @@
                 top: auto;
                 bottom: auto;
               }
+
+              // El punto de arriba es un marcador genérico del template para
+              // CUALQUIER ítem anidado, tenga ícono propio o no — si el ítem
+              // ya tiene su .menu-icon, el punto queda de más (se ve doble
+              // marca al lado del ícono real). Se oculta solo en ese caso.
+              &:has(.menu-icon):before {
+                display: none;
+              }
             }
           }
         }
