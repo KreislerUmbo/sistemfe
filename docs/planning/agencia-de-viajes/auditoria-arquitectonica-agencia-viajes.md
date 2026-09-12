@@ -271,7 +271,9 @@ Reglas de negocio (idénticas en espíritu a `reprogramar()`):
 
 **UI:** botón "⇄ Reasignar mayorista" al mismo nivel jerárquico que "Reprogramar viaje" en el detalle de reserva, visible solo si la reserva tiene algún ítem con `origen_tipo=mayorista`; modal con el mismo lenguaje visual (plantilla Rizz, header oscuro, botones pill) que "Reprogramar viaje" ya usa. Mockup de referencia: `ReasignarMayorista.dc.html` (Artifact "Cotizador Multidestino").
 
-**Estado:** diseño validado por el usuario, listo para brief de ejecución — pendiente asignar a sesión 12h (ver plan de ejecución y hoja de ruta).
+**Estado: ✅ EJECUTADO (12h, commit `a18eee6`, mergeado a `origin/main`)** — confirmado
+11-sep-2026, ver `plan-hoja-de-ruta-ejecucion.md` fila 12h para el detalle real (incluye un
+bug encontrado y corregido en la propia sesión).
 
 ### 9.3 Corrección del leak de mayorista en el PDF comercial (hallazgo C1, 01-sep-2026)
 
@@ -290,7 +292,9 @@ Sin fallback a ningún dato del `Proveedor` bajo ninguna condición — si el ve
 
 **Verificación mínima:** test de regresión que arme un PDF con un ítem `origen_tipo=mayorista` sin `descripcion_publica` cargada y confirme que el string de `razon_social`/`nombre_comercial` del proveedor no aparece en ningún lugar del PDF renderizado — no alcanza con revisar el campo `nombre`, porque el leak real fue justamente que ese campo terminaba conteniendo el dato prohibido.
 
-**Estado:** diseño cerrado, listo para brief de ejecución — ver `PEGAR-EN-CLAUDE-CODE-fix-leak-mayorista-pdf.md`.
+**Estado: ✅ EJECUTADO (C1, commit `25728f9`, mergeado a `origin/main`, 02-sep-2026)** —
+confirmado 11-sep-2026, el brief de ejecución ya se borró por superado (ver
+`historial-archivo.md`).
 
 ---
 

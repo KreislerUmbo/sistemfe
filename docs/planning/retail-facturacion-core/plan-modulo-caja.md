@@ -523,12 +523,15 @@ simultánea en alguna sede (no antes — el diseño ya lo soporta sin migración
   una caja real).
 
 **Deuda técnica relacionada, pendiente de otra sesión (no bloquea esta fase):**
-- CRUD completo de `branches`/`cash_registers` (hoy solo existe listado de solo lectura,
-  Fase 5).
-- Bug de `AuthController::respondWithToken()` (permisos directos de usuario no llegan al
-  frontend).
 - Filtro de cajero en `history.vue` derivado de sesiones cargadas en vez de un catálogo
-  real de usuarios.
+  real de usuarios. **Único punto que sigue vigente** de esta lista (confirmado 11-sep-2026,
+  sin commits al respecto).
+- *(Los otros 2 puntos que esta lista tenía — CRUD completo de `branches`/`cash_registers`,
+  y el bug de `AuthController::respondWithToken()` — ya se cerraron: CRUD real de sucursales
+  y cajas agregado el 17/20-ago-2026 (`BranchController`/`CashRegisterController` con
+  `store()`/`update()`/`destroy()` completos, ver `project_sucursales_branches_crud` en
+  memoria), y el bug de permisos corregido el 10-sep-2026 — ver la nota `✅ Cerrado` más abajo
+  en este mismo documento, §12.)*
 
 *(Nota aparte, no es una fase de caja: cuando se defina el módulo de delivery/contra-entrega,
 retomar `cash_registers.type = mobile` — ver sección 7.)*

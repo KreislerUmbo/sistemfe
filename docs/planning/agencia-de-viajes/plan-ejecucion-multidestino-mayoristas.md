@@ -1,5 +1,16 @@
 # Plan de ejecución — Multi-destino + Mayoristas + Contenido reutilizable
 
+> **✅ Estado real (confirmado 11-sep-2026 contra `git log`, no contra este documento — la
+> tabla de la sección 2 de abajo se quedó desactualizada, quedó como quedó en cada sesión):
+> 12a, 12b, 12c, 12d, 12e, 12f (12f-1/2/3) y 12h ya están ejecutados y mergeados a
+> `origin/main`** — commits `3d78656`/`0547123`/`b15db69`/`6db5878`/`1555996`/`5574bfe`/
+> `e375c49`/`2e6e0e4`/`a18eee6` respectivamente. Detalle real de cada uno, con tests y
+> verificación en vivo, en `plan-hoja-de-ruta-ejecucion.md` (fila 12a-12h) — esa es la fuente
+> de verdad de estado, no la tabla de la sección 2. **Solo `12g` (limpieza final) sigue
+> pendiente**, bloqueado a propósito hasta que `12f` corra un ciclo completo de reservas en
+> producción. Este documento queda como referencia de diseño/dependencias (sigue siendo
+> correcto como explicación de POR QUÉ ese orden), no como tracker de avance.
+>
 > Este documento traduce `auditoria-arquitectonica-agencia-viajes.md`
 > (§7, §9, §9.1, §19, §23) a sesiones concretas de Claude Code, en el
 > mismo formato que usa `plan-hoja-de-ruta-ejecucion.md`. No vuelve a
@@ -95,21 +106,21 @@ del proyecto: una sesión, un commit, un chat.
 
 ## 2. Sesiones
 
-| # | Sesión | Qué construye | Depende de | Brief |
+| # | Sesión | Qué construye | Depende de | Estado |
 |---|---|---|---|---|
-| 12a | Fase 0 — gaps de bajo riesgo | Guard `alternativa.estado==='aceptada'` en `AlternativaController::update()` para `descuento_global_pct/monto`; índice único parcial `(alternativa_id) WHERE estado='elegida'` en `opcion_mayorista` | Ninguna | `PEGAR-EN-CLAUDE-CODE-fase0-gaps-mayoristas-multidestino.md` (listo, corregido 01-sep-2026 — ver nota abajo) |
-| 12b | Crear `alternativa_destinos` | Migración + modelo `AlternativaDestino` (`alternativa_id`, `destino_atractivo_id`, `orden`, `fecha_inicio/fin`), backfill 1 destino por alternativa existente desde `Cotizacion.destino`/`fecha_viaje_desde/hasta`. Sin tocar `AlternativaItem`/`OpcionMayorista` todavía | 12a | Pendiente de escribir — se redacta al empezar esta sesión |
-| 12c | `AlternativaItem` → `alternativa_destinos` | `alternativa_items.alternativa_destino_id` (nullable, default = destino único de 12b), recalcular `dia_referencial` relativo al inicio del destino (decisión ya cerrada: reiniciar por destino), doble escritura de compatibilidad con el código que hoy asume un solo destino | 12b | Pendiente |
-| 12d | `OpcionMayorista` → `alternativa_destinos` | `opcion_mayorista.alternativa_destino_id` reemplazando `alternativa_id`, índice único parcial `(alternativa_destino_id) WHERE estado='elegida'` (reemplaza al de 12a, que queda como paso intermedio de transición) | 12b | Pendiente |
-| 12e | `contenido_tour` | Tabla nueva (§9.1: sin precio, sin moneda), FK opcional `contenido_tour_id` en `OpcionMayorista`/`OpcionMayoristaOpcional`, **snapshot de descripción/fotos al vincular** (no referencia viva — cierra el hallazgo §23.1.8, para no romper la disciplina de congelamiento del resto del sistema), scoping de tenant confirmado (§23.1.9), UI de biblioteca con buscador antes de crear (mitiga duplicados, §23.1.9) | 12d (recomendado, no estructural) | Pendiente |
-| 12f | UI multi-destino en el cotizador | Todo lo de §7.1 de la auditoría: chips de destino sobre las pestañas de día, comparador de mayoristas acotado al destino activo, subtotal por destino en el panel de precio, botón "+ Agregar destino", PDF agrupado por destino con encabezado de sección | 12c + 12d + 12e | Pendiente — es la sesión más grande, probablemente se divide en 2-3 briefs al llegar (backend de agregación de subtotales, componente de chips, PDF) |
-| 12g | Limpieza final | Dropear `alternativa_items.opcion_hotel_tarifa_id`/`paquete_plantilla_id`, dropear `opcion_mayorista.alternativa_id` una vez todo lea de `alternativa_destino_id` | 12f estable en producción un ciclo de reservas completo | Pendiente |
+| 12a | Fase 0 — gaps de bajo riesgo | Guard `alternativa.estado==='aceptada'` en `AlternativaController::update()` para `descuento_global_pct/monto`; índice único parcial `(alternativa_id) WHERE estado='elegida'` en `opcion_mayorista` | Ninguna | ✅ Ejecutado, commit `3d78656` |
+| 12b | Crear `alternativa_destinos` | Migración + modelo `AlternativaDestino` (`alternativa_id`, `destino_atractivo_id`, `orden`, `fecha_inicio/fin`), backfill 1 destino por alternativa existente desde `Cotizacion.destino`/`fecha_viaje_desde/hasta`. Sin tocar `AlternativaItem`/`OpcionMayorista` todavía | 12a | ✅ Ejecutado, commit `0547123` |
+| 12c | `AlternativaItem` → `alternativa_destinos` | `alternativa_items.alternativa_destino_id` (nullable, default = destino único de 12b), recalcular `dia_referencial` relativo al inicio del destino (decisión ya cerrada: reiniciar por destino), doble escritura de compatibilidad con el código que hoy asume un solo destino | 12b | ✅ Ejecutado, commit `b15db69` |
+| 12d | `OpcionMayorista` → `alternativa_destinos` | `opcion_mayorista.alternativa_destino_id` reemplazando `alternativa_id`, índice único parcial `(alternativa_destino_id) WHERE estado='elegida'` (reemplaza al de 12a, que queda como paso intermedio de transición) | 12b | ✅ Ejecutado, commit `6db5878` |
+| 12e | `contenido_tour` | Tabla nueva (§9.1: sin precio, sin moneda), FK opcional `contenido_tour_id` en `OpcionMayorista`/`OpcionMayoristaOpcional`, **snapshot de descripción/fotos al vincular** (no referencia viva — cierra el hallazgo §23.1.8, para no romper la disciplina de congelamiento del resto del sistema), scoping de tenant confirmado (§23.1.9), UI de biblioteca con buscador antes de crear (mitiga duplicados, §23.1.9) | 12d (recomendado, no estructural) | ✅ Ejecutado, commit `1555996` |
+| 12f | UI multi-destino en el cotizador | Todo lo de §7.1 de la auditoría: chips de destino sobre las pestañas de día, comparador de mayoristas acotado al destino activo, subtotal por destino en el panel de precio, botón "+ Agregar destino", PDF agrupado por destino con encabezado de sección | 12c + 12d + 12e | ✅ Ejecutado en 3 partes (12f-1/2/3), commits `5574bfe`/`e375c49`/`2e6e0e4` |
+| 12g | Limpieza final | Dropear `alternativa_items.opcion_hotel_tarifa_id`/`paquete_plantilla_id`, dropear `opcion_mayorista.alternativa_id` una vez todo lea de `alternativa_destino_id` | 12f estable en producción un ciclo de reservas completo | **Pendiente — único ítem abierto de esta tabla**, esperando ese ciclo de producción |
 
 ---
 
-## 3. Sesión 12h — diseño listo, falta brief (no bloquea esta secuencia)
+## 3. Sesión 12h — ✅ Ejecutado, commit `a18eee6`
 
-**Reasignación en vivo de `OpcionMayorista` en `ReservaItem`** (hallazgo §23.1.4): hoy `ReservaItem` mantiene `proveedor_tarifa_id`/`guia_id` vivos y reasignables después de aceptar, pero no hay un equivalente para cuando el mayorista elegido no puede honrar precio/cupo tras la aceptación — justo el caso de mayor impacto en el segmento internacional. El usuario confirmó (01-sep-2026) que es un caso real de operación y vale la pena construirlo. Diseño de datos y de UI cerrado en `auditoria-arquitectonica-agencia-viajes.md` §9.2 (columnas `opcion_mayorista_original_id`, `motivo_reasignacion_mayorista`, `fecha_reasignacion_mayorista`, `veces_reasignado_mayorista`; mismo patrón que `reprogramar()`) y mockup `ReasignarMayorista.dc.html` (Artifact "Cotizador Multidestino"). No bloquea 12a-12g (son cambios de agrupación, no de reasignación operativa). Brief de ejecución listo: `PEGAR-EN-CLAUDE-CODE-reasignar-mayorista-vivo.md` — se puede insertar como sesión `12h` en cualquier punto después de 12d.
+**Reasignación en vivo de `OpcionMayorista` en `ReservaItem`** (hallazgo §23.1.4): hoy `ReservaItem` mantiene `proveedor_tarifa_id`/`guia_id` vivos y reasignables después de aceptar, pero no hay un equivalente para cuando el mayorista elegido no puede honrar precio/cupo tras la aceptación — justo el caso de mayor impacto en el segmento internacional. El usuario confirmó (01-sep-2026) que es un caso real de operación y vale la pena construirlo. Diseño de datos y de UI cerrado en `auditoria-arquitectonica-agencia-viajes.md` §9.2 (columnas `opcion_mayorista_original_id`, `motivo_reasignacion_mayorista`, `fecha_reasignacion_mayorista`, `veces_reasignado_mayorista`; mismo patrón que `reprogramar()`) y mockup `ReasignarMayorista.dc.html` (Artifact "Cotizador Multidestino"). Ejecutado con 12 tests nuevos, 426/426 backend, verificado en vivo con Playwright contra `agencia-demo` — encontró y corrigió un bug real en el camino (`resolverNombreItem()` no reflejaba la reasignación en el resumen de reserva).
 
 ---
 

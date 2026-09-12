@@ -6,6 +6,10 @@
 > AÚN NO es un brief para pegar en Claude Code, es el diseño a confirmar antes
 > de escribir ese brief (mismo criterio que el resto del proyecto: plan primero,
 > ejecución después).
+> **✅ EJECUTADO y MERGEADO (07-sep-2026, commit `5b00fdd`)** — el brief que tradujo este
+> diseño (`PEGAR-EN-CLAUDE-CODE-mejora-pdf-cotizacion-cliente.md`) ya se ejecutó y se borró
+> por superado (11-sep-2026, ver `historial-archivo.md`). Este documento queda activo como
+> referencia técnica del diseño acordado, no como pendiente de ejecución.
 
 ## 1. Qué problema resuelve
 

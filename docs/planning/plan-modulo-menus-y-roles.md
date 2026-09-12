@@ -6,16 +6,20 @@
 > (3 capas: giro + plan + roles)". Ese documento define el QUÉ (el modelo conceptual de 3
 > capas ya está decidido y no se toca acá); este documento define el CÓMO — el modelo de datos
 > concreto, el catálogo de roles/permisos, y el plan de ejecución.
-> Estado: diseño cerrado, en ejecución — Fase 0, Fase 0b, Fase 1a, Fase 1b (catálogo real
-> de roles/permisos + scope de fila, incluida la Parte 5 ya aplicada contra `agencia-demo`)
-> y Fase 0c Parte 1 (modo sombra de Bucket B) ya mergeadas a `main`, junto con el fix de
-> invalidación de caché de menú por cambio de giro. El modo sombra sigue activo (nunca
-> bloquea) y corriendo contra `umbo` y `agencia-demo` desde antes del merge — mergear el
-> código no cambia ese comportamiento. Fase 0c Partes 2 (backfill dirigido por los logs) y
-> 3 (activar el gate real) siguen pendientes, esperan una ventana real de observación y
-> autorización explícita antes de tocar `umbo`/`agencia-demo` de nuevo. Fase 2 (frontend) es
-> la próxima desbloqueada, sin arrancar.
-> Última actualización: 10-sep-2026
+> Estado (11-sep-2026): **Fase 0, Fase 0b, Fase 1a, Fase 1b, Fase 0c Parte 1 (modo sombra) y
+> Fase 2 completa (2a-2d: seguridad del módulo Roles/Usuarios, sidebar dinámico, catálogo de
+> permisos dinámico, permisos directos por usuario) ya MERGEADAS a `main`**, junto con una
+> revisión de seguridad posterior a Fase 2 que encontró y corrigió 4 bugs reales (el más serio,
+> una escalación de privilegios en `permisosDirectos()`) y una auditoría de rutas de Vue Router
+> que confirmó cero gaps del lado admin. El modo sombra de Bucket B sigue activo (nunca
+> bloquea) contra `umbo`/`agencia-demo`, con `permission_shadow_logs` todavía en 0 filas —
+> **Fase 0c Partes 2 (backfill) y 3 (gate real) siguen sin ejecutar**, esperan una ventana real
+> de observación y autorización explícita antes de tocar esos 2 tenants de nuevo.
+> **Único pendiente real de todo este documento**: Fase 3 (retail al mismo modelo de roles
+> Spatie, hoy sigue en `role_id` legacy) — sin arrancar, sin brief todavía. Fase 4 (giros
+> futuros) es solo un procedimiento documentado, no un trabajo pendiente en sí.
+> Detalle fase por fase, con toda la evidencia de verificación: §7 más abajo.
+> Última actualización: 11-sep-2026
 
 ---
 
@@ -384,15 +388,16 @@ VIEJO hasta 24h. Sin impacto real (nada consume el endpoint todavía). Fix de un
 - 97 tests nuevos, suite completa verde (salvo `TipoCambioSunat*`, no relacionado).
 - Detalle completo, todos los hallazgos con su evidencia:
   `docs/planning/agencia-de-viajes/fase1b-roles-permisos.md`.
-- Brief: `claude/PEGAR-EN-CLAUDE-CODE-fase1b-roles-permisos-agencia-viajes.md`.
 
-**Fase 2 — Frontend: consumo dinámico**
-- Sidebar hidratado desde `/me/menu`.
-- Guard de rutas usando el mismo set de permisos ya corregido en Fase 0.
-- Módulo "Roles y Permisos" (§5).
-- **[§9.5]** Guards anti-lockout en el módulo de §5: bloquear que el ÚLTIMO usuario con
-  `roles.administrar` en el tenant se quite ese permiso a sí mismo o sea degradado por otro;
-  bloquear eliminar un rol con usuarios activos asignados sin reasignación previa explícita.
+**Fase 2 — Frontend: consumo dinámico — ✅ COMPLETA, ver las 4 sub-fases + revisión posterior
+más abajo (2a/2b/2c/2d/Revisión).** El checklist original de esta fase era:
+- Sidebar hidratado desde `/me/menu` → cerrado en **2b**.
+- Guard de rutas usando el mismo set de permisos ya corregido en Fase 0 → sin cambios
+  necesarios, ya funcionaba bien desde el fix de Fase 0.
+- Módulo "Roles y Permisos" (§5) → ya existía, cerrado su hardening en **2a**/**2c**/**2d**.
+- **[§9.5]** Guards anti-lockout: "eliminar rol con usuarios asignados" → cerrado en **2a**.
+  "Último usuario con `roles.administrar`" → **diferido a propósito** (ver entrada de 2a más
+  abajo — ese permiso solo existe para `agencia_viajes` hoy, espera Fase 3).
 
 **✅ Fase 2a — Seguridad del módulo Roles/Usuarios existente (11-sep-2026, rama
 `feat/menu-fase2a-seguridad-roles-usuarios`, MERGEADA a `main` — `0b2fbc2`).** Antes de tocar el
@@ -542,11 +547,21 @@ y se revirtió de inmediato con `syncPermissions([])` para no dejar el tenant re
 permiso de prueba puesto a mano; confirmado con una segunda carga de la pantalla que el estado
 revertido se refleja correctamente (sin quedar cacheado del intento anterior).
 
-**Pendiente, todavía sin arrancar**: auditoría de rutas sin `name`/`meta.permission` en
-`router/routes.ts` (§6 punto 3, mencionada desde Fase 1a, nunca ejecutada).
+**✅ Auditoría de rutas de Vue Router (§6 punto 3) — CERRADA, sin hallazgos que corregir
+(11-sep-2026)**: leído `router/routes.ts` completo (970 líneas). Las 3 rutas sin `name` son 2
+redirects legacy + el wrapper de layout del portal de clientes — correcto por diseño. Las "33
+rutas sin `meta.permission`" mencionadas desde Fase 1a eran una cifra engañosa: casi todas son
+`portalRoutes` (el e-commerce de clientes, con su propio sistema `clientAuth`, nunca debieron
+usar `permission:` de Spatie) más la página de login y las de error (correctamente públicas).
+Del lado admin (`adminPortalRoutes`/`dashboardRoutes`/`accessRoutes`/`comercialRoutes`,
+incluidas las 33 rutas de Agencia de Viajes) — **100% ya tienen `name` y `permission`
+correctos, cero gaps reales**. Hallazgo aparte, sin relación con este plan: el link "Mis
+direcciones" del portal de clientes (`/micuenta/datos`) está roto (ruta sin `component:`, sin
+backend construido sobre `client_addresses`) — diferido a propósito por el usuario, ver
+`project_portal_mis_direcciones_gap` en memoria de proyecto.
 
-**✅ Revisión post-Fase 2 — 4 hallazgos reales, 3 corregidos (11-sep-2026, rama
-`fix/fase2-revision-hallazgos-reales`, EN REVISIÓN, sin mergear).** El usuario pidió una
+**✅ Revisión post-Fase 2 — 4 hallazgos reales, los 4 corregidos (11-sep-2026, rama
+`fix/fase2-revision-hallazgos-reales`, MERGEADA a `main` — `a933457`).** El usuario pidió una
 revisión explícita de bugs/cabos sueltos tras cerrar 2a-2d. Code review dirigido a los archivos
 de la sesión, cada hallazgo verificado antes de aceptarlo (no reportado a ciegas):
 
@@ -609,9 +624,9 @@ relacionados) — incluye los 3 tests nuevos del guard anti-escalación.
   anotado en memoria del proyecto desde antes de este documento, se repite acá para que quede
   en un solo lugar con el resto de la checklist de seguridad.
 
-## 8. Riesgos y decisiones abiertas (a confirmar antes de ejecutar Fase 1b)
+## 8. Riesgos y decisiones — histórico de lo ya resuelto + lo que sigue abierto
 
-**Ya resueltos (10-sep-2026), se dejan documentados para no volver a preguntarlos:**
+**Ya resueltos, se dejan documentados para no volver a preguntarlos:**
 - Catálogo de 5 roles cerrado: `Super-Admin`, `Administrador de agencia` (= Gerente),
   `Supervisor`, `Vendedor`, `Contador` (§3.2).
 - Scope de fila: Vendedor = solo propias; Administrador, Supervisor, Contador y Super-Admin =
@@ -620,19 +635,19 @@ relacionados) — incluye los 3 tests nuevos del guard anti-escalación.
   día (ve y gestiona todo el flujo comercial/operativo), pero no administra usuarios/roles ni
   Configuración del tenant — eso es exclusivo de Administrador (§3.2, §5).
 
-**Siguen abiertos:**
+**Siguen abiertos, ninguno bloquea nada de lo ya construido (Fase 0-2 completas):**
 
 1. **Servicio `modulos_efectivos($tenant)`** (feature-gating por plan) no existe todavía en el
-   código — confirmado con grep en Fase 1a. Bloquea el paso 2 de `MenuResolver` (§4.1) y la
-   auditoría transversal de §9.2. No bloquea Fase 1b.
+   código — confirmado con grep en Fase 1a, y de nuevo sin cambios al cerrar Fase 2. Bloquea el
+   paso 2 de `MenuResolver` (§4.1) y la auditoría transversal de §9.2.
 2. **Migración de retail (Fase 3)** puede ser más grande de lo que parece si hay lógica que
    hoy depende directamente de `role_id` en más lugares de los que el bug ya documentado
    señala — requiere grep completo antes de tocar nada, mismo criterio que el resto del
-   proyecto.
+   proyecto. Es el único trabajo de fase pendiente en todo este documento.
 3. **Permisos finos de "Configuración"** todavía no se desglosaron ítem por ítem (ej. ¿un
    Supervisor puede ver reportes de configuración de series/numeración sin poder editarlos?)
-   — se deja para la sesión de implementación, cuando exista el inventario real de pantallas
-   de Configuración (Fase 0).
+   — se deja para cuando exista el inventario real de pantallas de Configuración (Fase 0), que
+   ya existe (Fase 0 cerrada) pero este desglose puntual nunca se hizo.
 
 ## 9. Brechas de robustez y seguridad — más allá del menú (a incorporar en las fases)
 
@@ -655,10 +670,15 @@ acuerde de agregarlo a mano en cada sesión nueva.
 la auditoría de rutas pedida en Fase 0 encontró **69 rutas backend mutables** (`sales`,
 `clients`, `products`, `roles`, `users`, `enviarSunat`, `notas`, series de comprobantes, caja,
 etc.) protegidas solo por `auth:api`, sin ningún gate de permiso Spatie — `routes/api.php:
-246-364`, detalle completo en `docs/planning/claude/auditoria-menu-admin-start-kit.md`. Hoy,
-en producción, **cualquier usuario autenticado de un tenant, sin importar su rol, puede
-borrar un rol, crear un usuario, eliminar una venta o emitir a SUNAT llamando la API
-directo** — el frontend nunca mostró esos botones, pero la API nunca los bloqueó.
+246-364`, detalle completo en `docs/planning/claude/auditoria-menu-admin-start-kit.md`. **En
+ese momento**, cualquier usuario autenticado de un tenant, sin importar su rol, podía borrar
+un rol, crear un usuario, eliminar una venta o emitir a SUNAT llamando la API directo — el
+frontend nunca mostró esos botones, pero la API nunca los bloqueó. **Estado real al
+11-sep-2026** (no releer este párrafo como el estado actual): Bucket A (`roles`/`users`/
+`company`/etc., 38 rutas) ya está gateado de verdad en `main` desde Fase 0b — ver el paso 1 de
+la estrategia más abajo. Bucket B (`sales`/`enviarSunat`/`notas`/etc., 31 rutas) sigue en modo
+sombra (Fase 0c Parte 1, nunca bloquea todavía) — el riesgo original sigue vigente para ESE
+bucket únicamente, ver estado real al inicio de este documento.
 
 **Riesgo de secuenciación al corregir esto (no es tan simple como agregar `permission:` a las
 69 rutas)**: el giro `retail` todavía usa el `role_id` legacy (§3.2, migración a Spatie real

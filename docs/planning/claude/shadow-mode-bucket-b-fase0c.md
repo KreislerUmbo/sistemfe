@@ -5,6 +5,11 @@
 > 2-4 de la estrategia de rollout. Ejecuta solo la **Parte 1 (modo sombra)** de esas 31 rutas
 > — Partes 2 (backfill) y 3 (gate real) quedan sin ejecutar a propósito, esperando un período
 > real de observación y autorización explícita. Fecha: 10-sep-2026.
+> **✅ Parte 1 MERGEADA a `main`** (rama `feat/shadow-mode-bucket-b-rutas-operativas`, merge
+> `fecf4d1`, 10-sep-2026, sin conflictos pese a solaparse con Fase 1b en `routes/api.php`).
+> Confirmado 11-sep-2026: `permission_shadow_logs` sigue en 0 filas en `umbo`/`agencia-demo` —
+> Partes 2/3 siguen sin arrancar, esperando que pase una ventana de uso real (ver
+> `project_shadow_mode_bucket_b_fase0c` en memoria antes de asumir que ya hay datos).
 
 ## Nota sobre el brief
 

@@ -1,5 +1,42 @@
 # Historial archivado — Vertical Agencia de Viajes (25-jul a 12-ago-2026)
 
+> **11-sep-2026 — tercera tanda de archivado, tras una verificación exhaustiva contra `git
+> log` que confirmó que `INDICE.md` y varios documentos activos se habían quedado
+> desactualizados desde el 01-sep-2026 (describían como "pendiente"/"listo para ejecutar"
+> trabajo que ya estaba mergeado hace días). Se **borraron directo** (sin dejar stub, su
+> contenido ya está capturado en otro lado, mismo criterio que la tanda de 20-ago):**
+> - **3 documentos de auditoría cruda, ya consumidos por completo**:
+>   `auditoria-controllers-services-flujo-cotizacion-reserva.md` (relevamiento factual de
+>   Controllers/Services), `auditoria-schema-modelos-agencia-viajes.md` (relevamiento
+>   factual de schema/modelos Eloquent), y `AUDITORÍA ARQUITECTÓNICA PROFUNDA-chatgpt.md`
+>   (el pliego de preguntas original, no un análisis ya hecho) — los 3 eran material crudo
+>   de insumo para `auditoria-arquitectonica-agencia-viajes.md` (que sigue activo, es la
+>   síntesis ya cerrada) y no aportaban nada que esa síntesis no tuviera ya.
+> - **9 briefs `PEGAR-EN-CLAUDE-CODE-*.md` de sesiones ya ejecutadas y mergeadas a
+>   `origin/main`**: `fix-leak-mayorista-pdf.md` (C1, commit `25728f9`),
+>   `fase0-gaps-mayoristas-multidestino.md` (12a, `3d78656`),
+>   `12b-crear-alternativa-destinos.md` (`0547123`), `12c-alternativa-item-destino.md`
+>   (`b15db69`), `12d-opcion-mayorista-destino.md` (`6db5878`), `12e-contenido-tour.md`
+>   (`1555996`), `12f1-backend-multidestino-ui.md`/`12f2-chips-destino-cotizador.md`/
+>   `12f3-pdf-por-destino.md` (`5574bfe`/`e375c49`/`2e6e0e4`), `reasignar-mayorista-vivo.md`
+>   (12h, `a18eee6`), `matriz-hoteles-m1-nucleo.md`/`matriz-hoteles-m2-trazabilidad.md`/
+>   `matriz-hoteles-m3-adhoc-local.md` (`962dcd9`/`d82d42a`/`98c4fae`) — el detalle real de
+>   cada sesión (tests, verificación en vivo, bugs encontrados) sigue en
+>   `plan-hoja-de-ruta-ejecucion.md` (fila 12a-12h, fila M1-M5) y en
+>   `plan-ejecucion-multidestino-mayoristas.md`/`plan-ejecucion-matriz-hoteles-cotizador.md`,
+>   ambos con su estado ya corregido para reflejar esto.
+> - `PEGAR-EN-CLAUDE-CODE-mejora-pdf-cotizacion-cliente.md` (ejecutado, commit `5b00fdd`) —
+>   el diseño (`plan-mejora-pdf-cotizacion-cliente.md`) queda activo como referencia técnica,
+>   solo se borró el brief de ejecución ya superado.
+> - `plan-hoja-de-ruta-ejecucion-1.md` — confirmado duplicado viejo (un "Guardar como"
+>   accidental de una versión del 29-ago-2026 de `plan-hoja-de-ruta-ejecucion.md`, el
+>   documento vigente llega hasta el 03-sep-2026) — sin contenido único, nada que preservar.
+>
+> `plan-ejecucion-multidestino-mayoristas.md` y `plan-fix-moneda-cotizador.md` NO se
+> borraron ni movieron acá — se actualizaron in-place con su estado real (ver sus propios
+> encabezados) porque siguen siendo referencia de diseño/dependencias, no solo bitácora.
+> `INDICE.md` también se corrigió para reflejar todo esto.
+>
 > **20-ago-2026 — segunda tanda de archivado, distinta de la de abajo:**
 > se movieron acá 4 documentos de diseño fundacional ya cerrados
 > (`plan-general-vertical-agencia-viajes.md`, `plan-modulo-proveedores.md`,

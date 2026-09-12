@@ -151,9 +151,15 @@ giro habilita ∩ módulos que el plan/overrides habilitan ∩ módulos/acciones
 que los permisos del usuario autorizan — y el frontend (plantilla Rizz)
 solo pinta lo que ese endpoint devuelve.
 
-Pendiente de definir cuando se implemente: catálogo exacto de roles base
-por vertical (ej. para agencia de viajes: Vendedor, Administrador de
-agencia, Contador) y su mapeo a permisos Spatie por módulo/acción.
+**✅ Resuelto (11-sep-2026) — ver `docs/planning/plan-modulo-menus-y-roles.md`, el documento
+que formaliza todo este punto y ya está 100% mergeado a `main`:** `GET /me/menu` +
+`MenuResolver` (Fase 1a) arman exactamente esa intersección descrita arriba (menos el
+filtrado por plan/módulo, que todavía no existe — ver su §4.1); el catálogo de roles base por
+vertical (el "pendiente" que este párrafo señalaba) está resuelto para el giro
+`agencia_viajes` (Fase 1b: `Super-Admin`/`Administrador de agencia`/`Supervisor`/`Vendedor`/
+`Contador`, con su mapeo a permisos Spatie granulares). **El giro `retail` (el core original)
+todavía NO tiene su catálogo de roles propio** — sigue en el `role_id` legacy, migrarlo es la
+Fase 3 de ese mismo plan, sin arrancar.
 
 ## Principio general a mantener
 - Nunca fallback silencioso en lógica fiscal/tributaria — eso aplica solo

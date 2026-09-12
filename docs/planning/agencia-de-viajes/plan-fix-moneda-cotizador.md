@@ -7,6 +7,13 @@
 > destino/tramo. Ninguno de los 5 puntos de este plan cambia por eso.
 > Puede ejecutarse ya — falta escribir el brief de sesión (no tiene
 > número asignado en `plan-hoja-de-ruta-ejecucion.md` todavía).
+> **Confirmado 11-sep-2026 contra `git log`: el punto 4 (validación de
+> sanidad) ya quedó resuelto, pero NO como parte de este plan** — se
+> construyó como prerequisito del módulo nuevo "Tipo de Cambio SUNAT/SBS"
+> (`TipoCambioSanityService`, commit `e30d7a0`, commiteado sin pushear al
+> 11-sep-2026). **Los puntos 1, 2, 3 y 5 siguen sin construir**, sin
+> ningún commit que los toque. Ver `project_tipo_cambio_sunat_modulo` y
+> `project_moneda_cotizador_diagnostico` en memoria de proyecto.
 
 ## 1. Diagnóstico (con evidencia reproducida en vivo)
 
@@ -81,12 +88,11 @@ solo se toca lo que corresponde).
    Verificar primero que la API ya devuelve `moneda_costo` por ítem en el
    payload que consume `editar.vue` (todo indica que sí, confirmar antes de
    escribir el frontend).
-4. **(4°) Validación de sanidad al registrar tipo de cambio** —
-   `resolverTipoCambio()`: si `valorNuevo` está fuera de un rango
-   configurable (ej. 2.0–6.0 para USD/PEN), devolver 422 pidiendo
-   confirmación explícita en vez de guardarlo silencioso. Necesita diseño
-   de UX de confirmación en el frontend (reusa el contexto ya mostrado en
-   el punto 2) — no es solo un cambio de backend.
+4. **✅ (4°) Validación de sanidad al registrar tipo de cambio — RESUELTO, no por este plan.**
+   Se construyó `TipoCambioSanityService` (rango 2.0–6.0 USD/PEN) como parte del módulo "Tipo
+   de Cambio SUNAT/SBS" (commit `e30d7a0`), no como parte de esta sesión. Diseño original de
+   este punto (`resolverTipoCambio()` + confirmación en frontend reusando el punto 2) queda
+   como referencia si el mecanismo real terminó siendo distinto — no verificado en detalle.
 5. **(5°, al cierre, con tests dedicados) Refrescar tasa en alternativas
    `borrador`** — endpoint nuevo tipo "actualizar tipo de cambio" que
    recalcula `total_convertido` de los ítems en moneda distinta a la de la

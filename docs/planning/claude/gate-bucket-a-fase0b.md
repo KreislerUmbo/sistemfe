@@ -4,6 +4,11 @@
 > mutables sin gate) y de `plan-modulo-menus-y-roles.md` §9.1. Ejecuta solo el paso 1 (Bucket
 > A) de la estrategia de rollout — Bucket B (31 rutas operativas) queda sin tocar a propósito.
 > Fecha: 10-sep-2026.
+> **✅ MERGEADO a `main`** (rama `fix/gate-permisos-bucket-a-rutas-criticas`, commit `938b606`
+> + fix de Admin-General `cfec262`, merge `ee008a2`) — confirmado en `plan-modulo-menus-y-roles.md`
+> §7/§9.1. El backfill de `umbo`/`negocio2` mencionado más abajo sigue sin ejecutarse (todavía
+> requiere autorización explícita) — no confundir "el código ya está en producción" con "el
+> backfill ya se corrió".
 
 ## Nota sobre el brief
 
