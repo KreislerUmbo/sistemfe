@@ -597,6 +597,34 @@ Suite completa 817/823 verde (6 fallos ya conocidos, familia `TipoCambioSunat*`,
 relacionados) — incluye los 3 tests nuevos del guard anti-escalación.
 `npm run type-check`: 44 errores preexistentes, sin cambios.
 
+**✅ Fix — íconos/nombres perdidos en el sidebar dinámico (12-sep-2026, rama
+`fix/menu-items-iconos-productos-ventas-sistemas`).** El usuario, revisando el menú ya en
+vivo (post 2b), notó que los íconos habían desaparecido y que "Productos" ya no se veía como
+nombre. Confirmado comparando `MenuItemsSeeder.php` contra el `menu-items.ts` estático viejo
+(recuperado con `git show` antes de que 2b lo borrara): al aplanar la Fase 1a la estructura de
+3 niveles a 2, 3 sub-grupos reales ("Productos"/"Ventas" dentro de "Comercial", "Sistemas"
+dentro de "Admin Portal") se aplanaron a hijos directos sin conservar su label, y el ícono de
+cada sub-grupo quedó pegado sin sentido en uno de esos hijos sueltos en vez de descartarse o
+promoverse al grupo de primer nivel. **Corregido en `MenuItemsSeeder.php`**: se restauran los
+3 sub-grupos con su ícono real (`comercial.productos`/`comercial.ventas`/
+`admin_portal.sistemas`, todos `tipo='grupo'`), y los 4 grupos que YA eran de primer nivel en
+el viejo (`caja`/`agencia`/`configuraciones`/`recursos_cliente`) recuperan el ícono que tenían
+ahí. De paso se corrigió un comentario viejo del propio seeder que afirmaba (incorrectamente)
+que "Caja" y "Configuraciones" nunca habían sido grupos reales — sí lo eran, confirmado contra
+el archivo viejo real. `menu_items` pasó de 46 a 49 filas; reseeder corrido contra el central
+real + caché de menú invalidada en los 5 tenants. Verificado en vivo con Playwright contra
+`agencia-demo`: "Productos" vuelve a aparecer con su ícono y se expande a Registrar/Listar (sin
+ícono, como antes); Caja/Agencia de Viajes/Configuraciones/Recursos Cliente ya muestran su
+ícono. 7 tests de `MenuResolverTest` sin cambios (usan fixtures propias, no el seeder real),
+suite completa 816/823 verde (7 fallos ya conocidos, no relacionados).
+
+**Pregunta del usuario, respondida sin cambio de código**: "¿debería haber un módulo para crear
+los menús?" — no existe hoy, a propósito: el diseño original (§3.1) define `menu_items` como
+catálogo de plataforma controlado por el equipo de desarrollo vía seeder (igual que `modulos`/
+`plans`), no algo que cada tenant edite — a diferencia de Roles/Permisos, que sí tiene su
+propia pantalla. El plan menciona "o desde un futuro CRUD en central-panel" como posibilidad,
+nunca construida. Sin decisión tomada de construirlo — queda para cuando el usuario lo pida.
+
 **Fase 3 — Retail al mismo modelo**
 - Reemplazar el `role_id` legacy de retail por roles Spatie reales + seeder propio, para que
   el mismo `MenuResolver` sirva sin ramas especiales por giro.

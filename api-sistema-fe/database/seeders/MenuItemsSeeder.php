@@ -23,10 +23,18 @@ use Illuminate\Database\Seeder;
  *
  * Decisiones tomadas al migrar la estructura (documentadas en el resumen
  * final de la sesión, no solo acá):
- * - Grupos "Caja" y "Configuraciones" eran items PLANOS con "›" en el label
- *   en el frontend viejo (nunca un grupo real) — acá sí se arman como grupo
- *   real con hijos, porque el brief pide "estructura jerárquica real
- *   (grupos/hijos), no una lista plana".
+ * - **Corrección 11-sep-2026 (hallazgo real, reportado por el usuario en vivo)**: la
+ *   afirmación original de este comentario ("Caja y Configuraciones eran ítems planos con
+ *   '›' en el label, nunca un grupo real") era incorrecta — el `menu-items.ts` viejo (visto
+ *   en `git show 7336253~1:...`) ya los tenía como grupos reales con `children`, igual que
+ *   "Agencia de Viajes". El bug real de esta migración fue otro: 3 sub-grupos que SÍ existían
+ *   un nivel más adentro ("Productos"/"Ventas" dentro de "Comercial", "Sistemas" dentro de
+ *   "Admin Portal") se aplanaron a hijos directos de su grupo padre, y el ícono del sub-grupo
+ *   perdido quedó pegado sin sentido en uno de esos hijos sueltos en vez de descartarse o
+ *   promoverse — el usuario lo notó de inmediato ("se perdieron los iconos, productos no lo
+ *   veo como nombre"). Corregido acá: se restauran los 3 sub-grupos con su ícono real, y los
+ *   4 grupos que ya eran de primer nivel en el viejo (`caja`/`agencia`/`configuraciones`/
+ *   `recursos_cliente`) recuperan el ícono que tenían ahí y que se había perdido igual.
  * - Los headers (`tipo=grupo`) llevan `permiso_requerido=NULL` a propósito:
  *   la poda de MenuResolver (paso 5, "grupos vacíos no se pintan") ya
  *   resuelve el mismo efecto que el viejo `permissions` (plural, OR) del
@@ -53,8 +61,9 @@ class MenuItemsSeeder extends Seeder
 
         $adminPortal = $this->item('admin_portal', null, null, 'grupo', 'Admin Portal', null, null, null, 2);
         $this->item('admin_portal.categorias_sistemas', $adminPortal, null, 'enlace', 'Categorias Sistemas', 'fas fa-life-ring', 'system_categories.index', 'list_categorie_system', 1);
-        $this->item('admin_portal.sistemas_registrar', $adminPortal, null, 'enlace', 'Registrar', null, 'system.register', 'register_system', 2);
-        $this->item('admin_portal.sistemas_listar', $adminPortal, null, 'enlace', 'Listar', 'fa-brands fa-windows', 'systems.index', 'list_system', 3);
+        $sistemas = $this->item('admin_portal.sistemas', $adminPortal, null, 'grupo', 'Sistemas', 'fa-brands fa-windows', null, null, 2);
+        $this->item('admin_portal.sistemas_registrar', $sistemas, null, 'enlace', 'Registrar', null, 'system.register', 'register_system', 1);
+        $this->item('admin_portal.sistemas_listar', $sistemas, null, 'enlace', 'Listar', null, 'systems.index', 'list_system', 2);
 
         $access = $this->item('access', null, null, 'grupo', 'Access', null, null, null, 3);
         $this->item('access.roles', $access, null, 'enlace', 'Roles y Permisos', 'fas fa-unlock', 'access.roles', 'list_role', 1);
@@ -62,23 +71,27 @@ class MenuItemsSeeder extends Seeder
 
         $comercial = $this->item('comercial', null, null, 'grupo', 'Comercial', null, null, null, 4);
         $this->item('comercial.categorias', $comercial, null, 'enlace', 'Categorias', 'fas fa-life-ring', 'categories.index', 'list_categorie', 1);
-        $this->item('comercial.productos_registrar', $comercial, null, 'enlace', 'Registrar', null, 'product.register', 'register_product', 2);
-        $this->item('comercial.productos_listar', $comercial, null, 'enlace', 'Listar', 'fas fa-qrcode', 'product.index', 'list_product', 3);
-        $this->item('comercial.clientes', $comercial, null, 'enlace', 'Clientes', 'fas fa-user-plus', 'clients.index', 'list_client', 4);
-        $this->item('comercial.ventas_mis_ventas', $comercial, null, 'enlace', 'Mis Ventas', 'fas fa-money-check-alt', 'sale.list', 'list_sale', 5);
-        $this->item('comercial.ventas_nc_nd', $comercial, null, 'enlace', 'Notas de Credito/Debito', null, 'nota.list', 'list_nota_electronica', 6);
-        $this->item('comercial.ventas_anticipos', $comercial, null, 'enlace', 'Emitir Anticipos', null, 'advances.index', 'list_advance', 7);
+        $productos = $this->item('comercial.productos', $comercial, null, 'grupo', 'Productos', 'fas fa-qrcode', null, null, 2);
+        $this->item('comercial.productos_registrar', $productos, null, 'enlace', 'Registrar', null, 'product.register', 'register_product', 1);
+        $this->item('comercial.productos_listar', $productos, null, 'enlace', 'Listar', null, 'product.index', 'list_product', 2);
+        $this->item('comercial.clientes', $comercial, null, 'enlace', 'Clientes', 'fas fa-user-plus', 'clients.index', 'list_client', 3);
+        $ventas = $this->item('comercial.ventas', $comercial, null, 'grupo', 'Ventas', 'fas fa-money-check-alt', null, null, 4);
+        $this->item('comercial.ventas_mis_ventas', $ventas, null, 'enlace', 'Mis Ventas', null, 'sale.list', 'list_sale', 1);
+        $this->item('comercial.ventas_nc_nd', $ventas, null, 'enlace', 'Notas de Credito/Debito', null, 'nota.list', 'list_nota_electronica', 2);
+        $this->item('comercial.ventas_anticipos', $ventas, null, 'enlace', 'Emitir Anticipos', null, 'advances.index', 'list_advance', 3);
         // Reusa list_sale — mismo criterio que el menú viejo, sin permiso propio.
-        $this->item('comercial.ventas_por_cobrar', $comercial, null, 'enlace', 'Ventas por Cobrar', null, 'credit_receivables.index', 'list_sale', 8);
-        $this->item('comercial.ventas_cotiz_comerciales', $comercial, null, 'enlace', 'Cotizaciones Comerciales', null, 'commercial-quotes.index', 'list_commercial_quote', 9);
+        $this->item('comercial.ventas_por_cobrar', $ventas, null, 'enlace', 'Ventas por Cobrar', null, 'credit_receivables.index', 'list_sale', 4);
+        $this->item('comercial.ventas_cotiz_comerciales', $ventas, null, 'enlace', 'Cotizaciones Comerciales', null, 'commercial-quotes.index', 'list_commercial_quote', 5);
 
-        // Grupo real nuevo — antes era 2 ítems planos con "Caja ›" en el label.
-        $caja = $this->item('caja', null, null, 'grupo', 'Caja', null, null, null, 5);
-        $this->item('caja.turno_activo', $caja, null, 'enlace', 'Turno Activo', 'fas fa-cash-register', 'cash.session', 'cash.open_session', 1);
+        // "Caja"/"Agencia de Viajes"/"Configuraciones"/"Recursos Cliente" ya eran grupos
+        // reales de primer nivel en el frontend viejo (ver corrección del comentario de
+        // arriba) — su ícono va acá, no en ninguno de sus hijos.
+        $caja = $this->item('caja', null, null, 'grupo', 'Caja', 'fas fa-cash-register', null, null, 5);
+        $this->item('caja.turno_activo', $caja, null, 'enlace', 'Turno Activo', null, 'cash.session', 'cash.open_session', 1);
         $this->item('caja.historial', $caja, null, 'enlace', 'Historial y Reportes', null, 'cash.dashboard', 'cash.view_all', 2);
 
-        $agencia = $this->item('agencia', null, 'agencia_viajes', 'grupo', 'Agencia de Viajes', null, null, null, 6);
-        $this->item('agencia.cotizador', $agencia, 'agencia_viajes', 'enlace', 'Cotizador', 'fas fa-suitcase-rolling', 'agencia.cotizador.index', 'agencia.cotizaciones', 1);
+        $agencia = $this->item('agencia', null, 'agencia_viajes', 'grupo', 'Agencia de Viajes', 'fas fa-suitcase-rolling', null, null, 6);
+        $this->item('agencia.cotizador', $agencia, 'agencia_viajes', 'enlace', 'Cotizador', null, 'agencia.cotizador.index', 'agencia.cotizaciones', 1);
         $this->item('agencia.reservas', $agencia, 'agencia_viajes', 'enlace', 'Reservas', null, 'agencia.reservas.index', 'agencia.reservas', 2);
         $this->item('agencia.reporte_operativo', $agencia, 'agencia_viajes', 'enlace', 'Reporte Operativo', null, 'agencia.reporteOperativo.index', 'agencia.reservas', 3);
         $this->item('agencia.salidas_operativas', $agencia, 'agencia_viajes', 'enlace', 'Salidas Operativas', null, 'agencia.salidas.index', 'agencia.reservas', 4);
@@ -91,9 +104,8 @@ class MenuItemsSeeder extends Seeder
         $this->item('agencia.configuracion', $agencia, 'agencia_viajes', 'enlace', 'Configuracion', null, 'agencia.configuracion.index', 'agencia.configuracion', 11);
         $this->item('agencia.configuracion_codigos', $agencia, 'agencia_viajes', 'enlace', 'Codigos y numeracion', null, 'agencia.configuracion.codigos', 'agencia.configuracion', 12);
 
-        // Grupo real nuevo — antes eran 7 ítems planos con "Configuraciones ›" en el label.
-        $config = $this->item('configuraciones', null, null, 'grupo', 'Configuraciones', null, null, null, 7);
-        $this->item('configuraciones.empresa', $config, null, 'enlace', 'Datos de la empresa', 'fas fa-wrench', 'company.index', 'company', 1);
+        $config = $this->item('configuraciones', null, null, 'grupo', 'Configuraciones', 'fas fa-wrench', null, null, 7);
+        $this->item('configuraciones.empresa', $config, null, 'enlace', 'Datos de la empresa', null, 'company.index', 'company', 1);
         $this->item('configuraciones.sucursales', $config, null, 'enlace', 'Sucursales', null, 'branches.index', 'list_branch', 2);
         $this->item('configuraciones.cajas', $config, null, 'enlace', 'Cajas', null, 'cash-registers.index', 'list_cash_register', 3);
         $this->item('configuraciones.metodos_pago', $config, null, 'enlace', 'Metodos de Pago', null, 'payment-methods.index', 'list_payment_method', 4);
@@ -101,8 +113,8 @@ class MenuItemsSeeder extends Seeder
         $this->item('configuraciones.proveedores', $config, null, 'enlace', 'Proveedores', null, 'suppliers.index', 'list_supplier', 6);
         $this->item('configuraciones.conceptos_caja', $config, null, 'enlace', 'Conceptos de Caja', null, 'cash-concepts.index', 'list_cash_concept', 7);
 
-        $recursos = $this->item('recursos_cliente', null, null, 'grupo', 'Recursos Cliente', null, null, null, 8);
-        $this->item('recursos_cliente.listar', $recursos, null, 'enlace', 'Listar', 'fas fa-qrcode', 'recursos.index', 'list_recurso', 1);
+        $recursos = $this->item('recursos_cliente', null, null, 'grupo', 'Recursos Cliente', 'fas fa-qrcode', null, null, 8);
+        $this->item('recursos_cliente.listar', $recursos, null, 'enlace', 'Listar', null, 'recursos.index', 'list_recurso', 1);
         $this->item('recursos_cliente.registrar', $recursos, null, 'enlace', 'Registrar', null, 'recurso.register', 'register_recurso', 2);
         // Reusa register_recurso — mismo criterio que el menú viejo, sin permiso propio.
         $this->item('recursos_cliente.manual', $recursos, null, 'enlace', 'Manual del Sistema', null, 'recurso.manual', 'register_recurso', 3);
