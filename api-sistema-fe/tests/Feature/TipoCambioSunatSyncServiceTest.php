@@ -22,6 +22,16 @@ class TipoCambioSunatSyncServiceTest extends TestCase
     {
         parent::setUp();
         DB::connection('central')->beginTransaction();
+
+        // El sync diario real (Módulo Tipo de Cambio) puede haber dejado
+        // filas reales en la BD central compartida de dev — se limpian acá
+        // DENTRO de la transacción de este test (tearDown() la revierte),
+        // así el dato real vuelve intacto al terminar. Mismo criterio que
+        // TipoCambioSunatAplicadoSaleTest. Sin esto, "correr dos veces el
+        // mismo día actualiza en vez de duplicar" contaba también la fila
+        // real ajena (fecha distinta), rompiendo el assertSame(1, ...).
+        TipoCambioSunat::query()->delete();
+
         config(['services.decolecta.token' => 'fake-token-test']);
     }
 

@@ -44,6 +44,15 @@ class TipoCambioSunatAplicadoSaleTest extends TestCase
         DB::beginTransaction();
         DB::connection('central')->beginTransaction();
 
+        // El sync diario real (Módulo Tipo de Cambio, no relacionado con
+        // este test) puede haber dejado filas reales en la BD central
+        // compartida de dev — se limpian acá DENTRO de la transacción de
+        // este test (tearDown() la revierte), así el dato real vuelve
+        // intacto al terminar. Sin esto, cualquier test de este archivo que
+        // asuma la tabla vacía depende de que ningún sync real haya corrido
+        // todavía, lo que rompe en cualquier entorno donde sí corrió.
+        TipoCambioSunat::query()->delete();
+
         DB::table('roles')->insert([
             'id' => 1, 'name' => 'test-role', 'guard_name' => 'api',
             'created_at' => now(), 'updated_at' => now(),

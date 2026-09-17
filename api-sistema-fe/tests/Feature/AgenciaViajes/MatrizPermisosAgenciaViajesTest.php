@@ -25,8 +25,11 @@ class MatrizPermisosAgenciaViajesTest extends TestCase
 {
     private static ?Tenant $tenant = null;
 
-    /** @var Tenant[] */
-    private static array $tenantsCreados = [];
+    // IDs planos (string), no objetos Tenant — ver comentario de
+    // tearDownAfterClass() sobre por qué no se puede confiar en un objeto
+    // Eloquent en ese contexto.
+    /** @var string[] */
+    private static array $tenantIdsCreados = [];
 
     protected function setUp(): void
     {
@@ -54,18 +57,53 @@ class MatrizPermisosAgenciaViajesTest extends TestCase
 
     public static function tearDownAfterClass(): void
     {
-        foreach (self::$tenantsCreados as $tenant) {
-            $tenant = $tenant->fresh();
+        // Bug real encontrado y confirmado con debug directo 16-sep-2026:
+        // para cuando este método estático corre (después del tearDown()
+        // del ÚLTIMO test de la clase), Laravel ya destruyó por completo el
+        // contenedor de la app de ese test
+        // (InteractsWithTestCaseLifecycle::tearDownTheTestEnvironment()) —
+        // NINGÚN Facade/helper que dependa del container sirve acá, ni
+        // siquiera config() (confirmado: lanza BindingResolutionException
+        // "Target class [config] does not exist"). Reaplicar el config()
+        // de setUp(), como hacen EscopablePorVendedorTest/
+        // BackfillFacturacionHabilitadaTenantsTest en su tearDown() de
+        // INSTANCIA (que sí corre con la app todavía viva), no alcanza acá
+        // por ser un método estático post-mortem de la app.
+        //
+        // Segundo hallazgo, también confirmado con debug directo: ni
+        // siquiera guardar el objeto Tenant y leer $tenant->id más tarde
+        // sirve — con el container destruido, el accessor mágico de
+        // Eloquent para 'id' devuelve 0 (confirmado: $tenant->getAttributes()
+        // trae el string real, pero $tenant->id da 0 igual). Por eso acá se
+        // guardan los IDs como strings planos desde el momento en que se
+        // crean (self::$tenantIdsCreados), nunca el objeto Eloquent, y la
+        // limpieza usa PDO directo — env() sigue funcionando porque lee
+        // $_ENV, no el container. Confirmado con 10+ tenants
+        // "test-matriz-*" huérfanos (fila + BD física) acumulados en
+        // sistemafe_test_migrations antes de este fix.
+        try {
+            $pdo = new \PDO(
+                sprintf('pgsql:host=%s;port=%s;dbname=sistemafe_test_migrations', env('DB_HOST', '127.0.0.1'), env('DB_PORT', '5432')),
+                env('DB_USERNAME', 'root'),
+                env('DB_PASSWORD', '')
+            );
+            $pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
 
-            if (! $tenant) {
-                continue;
+            foreach (self::$tenantIdsCreados as $id) {
+                if (! preg_match('/^[a-z0-9\-]+$/', $id)) {
+                    continue;
+                }
+
+                // config/tenancy.php: 'prefix' => 'tenant', sin suffix.
+                $pdo->exec('DROP DATABASE IF EXISTS "tenant' . $id . '" WITH (FORCE)');
+
+                $stmt = $pdo->prepare('DELETE FROM tenants WHERE id = ?');
+                $stmt->execute([$id]);
             }
-
-            if ($tenant->database()->manager()->databaseExists($tenant->database()->getName())) {
-                $tenant->database()->manager()->deleteDatabase($tenant);
-            }
-
-            $tenant->delete();
+        } catch (\Throwable $e) {
+            // tearDownAfterClass() no reporta bien sus excepciones — se deja
+            // constancia en stderr para no ocultar del todo un fallo real.
+            fwrite(STDERR, 'MatrizPermisosAgenciaViajesTest::tearDownAfterClass() no pudo limpiar: ' . $e->getMessage() . "\n");
         }
     }
 
@@ -108,7 +146,7 @@ class MatrizPermisosAgenciaViajesTest extends TestCase
             'giro' => 'agencia_viajes',
             'facturacion_habilitada' => false,
         ]);
-        self::$tenantsCreados[] = self::$tenant;
+        self::$tenantIdsCreados[] = $id;
 
         return self::$tenant;
     }

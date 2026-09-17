@@ -13,6 +13,14 @@ class SincronizarTipoCambioSunatCommandTest extends TestCase
     {
         parent::setUp();
         DB::connection('central')->beginTransaction();
+
+        // El sync diario real (Módulo Tipo de Cambio) puede haber dejado
+        // filas reales en la BD central compartida de dev — se limpian acá
+        // DENTRO de la transacción de este test (tearDown() la revierte),
+        // así el dato real vuelve intacto al terminar. Mismo criterio que
+        // TipoCambioSunatAplicadoSaleTest.
+        TipoCambioSunat::query()->delete();
+
         config(['services.decolecta.token' => 'fake-token-test']);
     }
 
