@@ -3,9 +3,17 @@ import httpClient from '@/helpers/http-client'
 import type { Cotizacion, CotizacionPasajero } from '@/types/agencia-viajes'
 
 export const cotizacionService = {
-  async listar(params: { page?: number; search?: string; estado?: string } = {}) {
+  async listar(params: {
+    page?: number
+    per_page?: number
+    search?: string
+    estado?: string
+    estado_resumen?: string
+    fecha_desde?: string
+    fecha_hasta?: string
+  } = {}) {
     const response = await httpClient.get('/cotizaciones', { params })
-    return response.data
+    return response.data as { total: number; paginate: number; cotizaciones: Cotizacion[] }
   },
   async obtener(id: number) {
     const response = await httpClient.get(`/cotizaciones/${id}`)

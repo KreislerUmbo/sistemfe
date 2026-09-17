@@ -598,6 +598,11 @@ class SaleController extends Controller
         $fecha_inicio     = $request->start_date;
         $fecha_fin        = $request->end_date;
 
+        // ?per_page= opcional (default 25, igual que antes) — acotado entre
+        // 1 y 100 para que un valor arbitrario del cliente no fuerce un
+        // paginate() gigante.
+        $perPage = min(100, max(1, (int) $request->get('per_page', 25)));
+
         $ventas = Sale::filterMultiple(
             $buscar_producto,
             $categorie_id,
@@ -611,11 +616,11 @@ class SaleController extends Controller
             // el badge de notas en el listado, ver SaleResource).
             ->with("notes")
             ->orderBy("id", "desc")
-            ->paginate(25);
+            ->paginate($perPage);
 
         return response()->json([
             "total"    => $ventas->total(),
-            "paginate" => 25,
+            "paginate" => $perPage,
             "sales"    => SaleCollection::make($ventas),
         ]);
     }

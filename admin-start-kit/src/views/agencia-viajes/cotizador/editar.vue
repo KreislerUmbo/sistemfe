@@ -625,15 +625,10 @@
                                 <i v-else class="fas fa-copy me-1"></i>Duplicar alternativa
                             </button>
 
-                            <div class="d-flex gap-2">
-                                <button class="btn btn-outline-secondary btn-sm flex-fill" :disabled="descargandoPdf" @click="descargarPdfAlternativa">
-                                    <span v-if="descargandoPdf" class="spinner-border spinner-border-sm me-1"></span>
-                                    <i v-else class="fas fa-file-pdf me-1"></i>Ver PDF
-                                </button>
-                                <button class="btn btn-outline-secondary btn-sm flex-fill" disabled title="Disponible cuando exista el envío por WhatsApp/email">
-                                    <i class="fas fa-paper-plane me-1"></i>Enviar
-                                </button>
-                            </div>
+                            <button class="btn btn-outline-secondary btn-sm w-100" :disabled="descargandoPdf" @click="descargarPdfAlternativa">
+                                <span v-if="descargandoPdf" class="spinner-border spinner-border-sm me-1"></span>
+                                <i v-else class="fas fa-file-pdf me-1"></i>Ver PDF
+                            </button>
                             <button class="btn btn-outline-secondary btn-sm w-100" :disabled="descargandoCondiciones" @click="descargarCondicionesGenerales">
                                 <span v-if="descargandoCondiciones" class="spinner-border spinner-border-sm me-1"></span>
                                 <i v-else class="fas fa-file-contract me-1"></i>Descargar condiciones generales

@@ -6,7 +6,7 @@
                     <i class="fas fa-route me-2 text-primary"></i>
                     Cotizaciones
                 </h5>
-                <small class="text-muted">{{ totalPages }} registro(s) encontrado(s)</small>
+                <small class="text-muted">{{ total }} registro(s) encontrado(s)</small>
             </div>
             <router-link to="/agencia-viajes/cotizador/nueva" class="btn btn-primary fw-semibold shadow-sm">
                 <i class="fas fa-plus me-2"></i>Nueva Cotización
@@ -15,9 +15,35 @@
 
         <div class="card border-0 shadow-sm mb-3">
             <div class="card-body">
-                <div class="input-group input-group-sm">
-                    <input type="text" class="form-control" placeholder="Buscar por código o destino..." v-model="search" @keyup.enter="list">
-                    <button class="btn btn-primary" @click="list"><i class="fas fa-search"></i></button>
+                <div class="row g-2">
+                    <div class="col-12 col-md-5">
+                        <div class="input-group input-group-sm">
+                            <input type="text" class="form-control" placeholder="Buscar por código, destino o cliente..." v-model="search" @keyup.enter="buscar">
+                            <button class="btn btn-primary" @click="buscar"><i class="fas fa-search"></i></button>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-2">
+                        <select class="form-select form-select-sm" v-model="estadoResumen" @change="buscar">
+                            <option value="">Todos los estados</option>
+                            <option value="borrador">Borrador</option>
+                            <option value="enviada">Enviada</option>
+                            <option value="reservada">Reservada</option>
+                            <option value="anulada">Anulada</option>
+                            <option value="vencida">Vencida</option>
+                            <option value="descartada">Descartada</option>
+                        </select>
+                    </div>
+                    <div class="col-6 col-md-2">
+                        <input type="date" class="form-control form-control-sm" title="Viaje desde" v-model="fechaDesde" @change="buscar">
+                    </div>
+                    <div class="col-6 col-md-2">
+                        <input type="date" class="form-control form-control-sm" title="Viaje hasta" v-model="fechaHasta" @change="buscar">
+                    </div>
+                    <div class="col-6 col-md-1">
+                        <button class="btn btn-outline-secondary btn-sm w-100" title="Limpiar filtros" @click="limpiarFiltros">
+                            <i class="fas fa-eraser"></i>
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -72,13 +98,35 @@
                         </tbody>
                     </table>
                 </div>
+                <div class="d-flex align-items-center justify-content-between p-3 border-top flex-wrap gap-2">
+                    <div class="d-flex align-items-center gap-2">
+                        <small class="text-muted">Mostrar</small>
+                        <select class="form-select form-select-sm" style="width:auto" v-model.number="paginate" @change="buscar">
+                            <option :value="15">15</option>
+                            <option :value="25">25</option>
+                            <option :value="50">50</option>
+                            <option :value="100">100</option>
+                        </select>
+                    </div>
+                    <div v-if="totalPages > 1" class="d-flex align-items-center gap-2">
+                        <small class="text-muted">Página {{ page }} de {{ totalPages }}</small>
+                        <div class="btn-group btn-group-sm">
+                            <button class="btn btn-outline-secondary" :disabled="page <= 1 || loading" @click="irAPagina(page - 1)">
+                                <i class="fas fa-chevron-left"></i> Anterior
+                            </button>
+                            <button class="btn btn-outline-secondary" :disabled="page >= totalPages || loading" @click="irAPagina(page + 1)">
+                                Siguiente <i class="fas fa-chevron-right"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </DefaultLayout>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import Swal from 'sweetalert2/dist/sweetalert2.js';
 import { cotizacionService } from '@/services/admin/cotizacionService';
@@ -103,18 +151,55 @@ const badgeEstado = (estado?: Cotizacion['estado_resumen']) => {
 
 const cotizaciones = ref<Cotizacion[]>([]);
 const search = ref<string>('');
-const totalPages = ref<number>(0);
+const estadoResumen = ref<string>('');
+const fechaDesde = ref<string>('');
+const fechaHasta = ref<string>('');
+const total = ref<number>(0);
+const paginate = ref<number>(15);
+const page = ref<number>(1);
 const loading = ref<boolean>(false);
+
+const totalPages = computed(() => Math.max(1, Math.ceil(total.value / paginate.value)));
 
 const list = async () => {
     loading.value = true;
     try {
-        const res = await cotizacionService.listar({ search: search.value || undefined });
+        const res = await cotizacionService.listar({
+            page: page.value,
+            per_page: paginate.value,
+            search: search.value || undefined,
+            estado_resumen: estadoResumen.value || undefined,
+            fecha_desde: fechaDesde.value || undefined,
+            fecha_hasta: fechaHasta.value || undefined,
+        });
         cotizaciones.value = res.cotizaciones;
-        totalPages.value = res.total;
+        total.value = res.total;
+        paginate.value = res.paginate;
     } finally {
         loading.value = false;
     }
+};
+
+// Cambiar cualquier filtro vuelve siempre a la página 1 (mismo criterio que
+// Reservas·Listado) — quedarse en una página que puede no existir más para
+// el filtro nuevo sería confuso.
+const buscar = () => {
+    page.value = 1;
+    list();
+};
+
+const irAPagina = (nuevaPagina: number) => {
+    if (nuevaPagina < 1 || nuevaPagina > totalPages.value) return;
+    page.value = nuevaPagina;
+    list();
+};
+
+const limpiarFiltros = () => {
+    search.value = '';
+    estadoResumen.value = '';
+    fechaDesde.value = '';
+    fechaHasta.value = '';
+    buscar();
 };
 
 // El endpoint de listado (CotizacionController::index()) solo trae

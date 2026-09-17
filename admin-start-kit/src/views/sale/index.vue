@@ -353,10 +353,18 @@
                 </div>
 
                 <!-- Paginación -->
-                <div class="d-flex justify-content-between align-items-center px-3 py-2 border-top">
+                <div class="d-flex justify-content-between align-items-center px-3 py-2 border-top flex-wrap gap-2">
                     <small class="text-muted">Mostrando {{ sale_list.length }} de {{ totalPages }} registro(s)</small>
-                    <b-pagination v-model="currentPage" :total-rows="totalPages" :per-page="perPageRows"
-                        prev-text="Anterior" next-text="Siguiente" class="mb-0" />
+                    <div class="d-flex align-items-center gap-2">
+                        <select class="form-select form-select-sm" style="width:auto" v-model.number="perPageRows" @change="cambiarPerPage">
+                            <option :value="15">15</option>
+                            <option :value="25">25</option>
+                            <option :value="50">50</option>
+                            <option :value="100">100</option>
+                        </select>
+                        <b-pagination v-model="currentPage" :total-rows="totalPages" :per-page="perPageRows"
+                            prev-text="Anterior" next-text="Siguiente" class="mb-0" />
+                    </div>
                 </div>
             </div>
         </div>
@@ -514,6 +522,7 @@ const list = async () => {
                 type_payment: type_payment.value ?? '',
                 start_date: start_date.value ?? '',
                 end_date: end_date.value ?? '',
+                per_page: perPageRows.value,
             }
         );
         sale_list.value = res.data.sales.data;
@@ -534,6 +543,11 @@ const config = async () => {
     } catch (error) {
         console.error(error);
     }
+};
+
+const cambiarPerPage = () => {
+    currentPage.value = 1;
+    list();
 };
 
 // ── Limpiar filtros ───────────────────────────────────────────────

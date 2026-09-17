@@ -3,9 +3,17 @@ import httpClient from '@/helpers/http-client'
 import type { ReservaDetalleResponse, Reservas, MotivoCancelacion, Reserva } from '@/types/agencia-viajes'
 
 export const reservaService = {
-  async listar(params: { page?: number; search?: string; estado?: 'activa' | 'cancelada' } = {}) {
+  async listar(params: {
+    page?: number
+    per_page?: number
+    search?: string
+    estado?: 'activa' | 'cancelada'
+    fecha_desde?: string
+    fecha_hasta?: string
+    vendedor_id?: number
+  } = {}) {
     const response = await httpClient.get('/reservas', { params })
-    return response.data as Reservas
+    return response.data as Reservas & { vendedores: Array<{ id: number; nombre: string }> }
   },
   async obtener(id: number) {
     const response = await httpClient.get(`/reservas/${id}`)

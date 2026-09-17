@@ -44,8 +44,16 @@ class CotizacionController extends Controller
         if ($request->filled('search')) {
             $search = $request->get('search');
             $query->where(function ($q) use ($search) {
+                // También busca por cliente (mismo criterio que
+                // ReservaController::index()) — antes solo código/destino,
+                // así que encontrar una cotización por el nombre o
+                // documento del cliente exigía primero saber su código.
                 $q->where('codigo', 'ilike', "%{$search}%")
-                    ->orWhere('destino', 'ilike', "%{$search}%");
+                    ->orWhere('destino', 'ilike', "%{$search}%")
+                    ->orWhereHas('cliente', function ($qq) use ($search) {
+                        $qq->where('full_name', 'ilike', "%{$search}%")
+                            ->orWhere('n_document', 'ilike', "%{$search}%");
+                    });
             });
         }
 
@@ -61,7 +69,42 @@ class CotizacionController extends Controller
             $query->whereHas('alternativas', fn ($q) => $q->where('estado', $estado));
         }
 
-        $cotizaciones = $query->orderByDesc('id')->paginate(15);
+        if ($request->filled('fecha_desde')) {
+            $fechaDesde = $request->get('fecha_desde');
+            $query->where(function ($q) use ($fechaDesde) {
+                $q->where('fecha_viaje_hasta', '>=', $fechaDesde)
+                    ->orWhere('fecha_viaje_desde', '>=', $fechaDesde);
+            });
+        }
+
+        if ($request->filled('fecha_hasta')) {
+            $fechaHasta = $request->get('fecha_hasta');
+            $query->where('fecha_viaje_desde', '<=', $fechaHasta);
+        }
+
+        // 'estado_resumen' (taxonomía del listado, distinta de 'estado'
+        // arriba) es un valor CALCULADO por Cotizacion::estadoResumen() — no
+        // existe como columna filtrable en SQL. En vez de reimplementar esa
+        // regla de negocio (aceptada+reserva, enviada+vencimiento, etc.) en
+        // una segunda versión SQL que se puede desincronizar de la real,
+        // se resuelve en dos pasadas: primero se calcula sobre las filas que
+        // ya cumplen el resto de filtros (reusando el mismo método), y se
+        // acota la query final a esos ids antes de paginar. Costo aceptable
+        // para el volumen actual por tenant (decenas/cientos de filas).
+        if ($request->filled('estado_resumen')) {
+            $estadoResumen = $request->get('estado_resumen');
+            $idsCoincidentes = (clone $query)->get()
+                ->filter(fn (Cotizacion $c) => $c->estadoResumen() === $estadoResumen)
+                ->pluck('id');
+            $query->whereIn('id', $idsCoincidentes);
+        }
+
+        // ?per_page= es opcional (default 15, igual que antes) — acotado
+        // entre 1 y 100 para que un valor arbitrario del cliente no fuerce
+        // un paginate() gigante.
+        $perPage = min(100, max(1, (int) $request->get('per_page', 15)));
+
+        $cotizaciones = $query->orderByDesc('id')->paginate($perPage);
 
         $cotizaciones->getCollection()->transform(function (Cotizacion $c) {
             $c->estado_resumen = $c->estadoResumen();
@@ -71,7 +114,7 @@ class CotizacionController extends Controller
 
         return response()->json([
             'total' => $cotizaciones->total(),
-            'paginate' => 15,
+            'paginate' => $perPage,
             'cotizaciones' => $cotizaciones->items(),
         ]);
     }

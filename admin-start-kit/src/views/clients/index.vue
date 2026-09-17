@@ -95,8 +95,19 @@
                             </b-tr>
                         </b-tbody>
                     </b-table-simple>
-                    <b-pagination v-model="currentPage" :total-rows="totalPages" :per-page="perPageRows"
-                        prev-text="Anterior" next-text="Siguiente" />
+                    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                        <div class="d-flex align-items-center gap-2">
+                            <small class="text-muted">Mostrar</small>
+                            <select class="form-select form-select-sm" style="width:auto" v-model.number="perPageRows" @change="cambiarPerPage">
+                                <option :value="15">15</option>
+                                <option :value="25">25</option>
+                                <option :value="50">50</option>
+                                <option :value="100">100</option>
+                            </select>
+                        </div>
+                        <b-pagination v-model="currentPage" :total-rows="totalPages" :per-page="perPageRows"
+                            prev-text="Anterior" next-text="Siguiente" class="mb-0" />
+                    </div>
                 </b-card-body>
             </b-col>
         </b-row>
@@ -385,7 +396,7 @@ const ModalRegisterClient = ref<boolean>(false);
 const search = ref<string | null>(null);
 const currentPage = ref<number>(1);
 const totalPages = ref<number>(0);
-const perPageRows = ref<number>(15);
+const perPageRows = ref<number>(25);
 
 const themeColor = ref<string>('primary');
 const isSearching = ref<boolean>(false);
@@ -797,7 +808,7 @@ const removeClient = (client: Client) => {
 const list = async () => {
     try {
         const res: AxiosResponse<Clients> = await httpClient.get(
-            `clients?page=${currentPage.value}&search=${search.value ?? ''}`
+            `clients?page=${currentPage.value}&search=${search.value ?? ''}&per_page=${perPageRows.value}`
         );
         clients.value = res.data.clients.data;
         totalPages.value = res.data.total;
@@ -809,6 +820,11 @@ const list = async () => {
 
 const reset = () => {
     search.value = '';
+    currentPage.value = 1;
+    list();
+};
+
+const cambiarPerPage = () => {
     currentPage.value = 1;
     list();
 };

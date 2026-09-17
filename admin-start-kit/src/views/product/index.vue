@@ -129,8 +129,19 @@
                             </b-tr>
                         </b-tbody>
                     </b-table-simple>
-                    <b-pagination v-model="currentPage" :total-rows="totalPages" :per-page="perPageRows"
-                        prev-text="Previous" next-text="Next" />
+                    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                        <div class="d-flex align-items-center gap-2">
+                            <small class="text-muted">Mostrar</small>
+                            <select class="form-select form-select-sm" style="width:auto" v-model.number="perPageRows" @change="cambiarPerPage">
+                                <option :value="15">15</option>
+                                <option :value="25">25</option>
+                                <option :value="50">50</option>
+                                <option :value="100">100</option>
+                            </select>
+                        </div>
+                        <b-pagination v-model="currentPage" :total-rows="totalPages" :per-page="perPageRows"
+                            prev-text="Previous" next-text="Next" class="mb-0" />
+                    </div>
                 </b-card-body>
             </b-col>
         </b-row>
@@ -170,6 +181,7 @@ const list = async () => {
             &categorie_id=${categorie_id.value ?? ''}
             &state=${state.value ?? ''}
             &unidad_medida=${unidad_medida.value ?? ''}
+            &per_page=${perPageRows.value}
             `);
 
         console.log(res);
@@ -200,6 +212,11 @@ const reset = () => {
     categorie_id.value = '';
     unidad_medida.value = '';
     state.value = '';
+    list();
+};
+
+const cambiarPerPage = () => {
+    currentPage.value = 1;
     list();
 };
 

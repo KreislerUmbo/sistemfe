@@ -98,12 +98,60 @@ class ReservaController extends Controller
             });
         }
 
-        $reservas = $query->orderByDesc('id')->paginate(15);
+        // reserva.fecha_viaje_desde/hasta son columnas propias (Fase 1 del
+        // fix Cotización↔Reserva, 2026-08-18) — nunca leer la fecha de la
+        // cotización/alternativa acá, ver CLAUDE.md "Cómo trabajar en este
+        // proyecto". Filtro de solapamiento: cualquier reserva cuyo rango
+        // toque el rango pedido, no solo las que empiecen exacto adentro.
+        if ($request->filled('fecha_desde')) {
+            $fechaDesde = $request->get('fecha_desde');
+            $query->where(function ($q) use ($fechaDesde) {
+                $q->where('fecha_viaje_hasta', '>=', $fechaDesde)
+                    ->orWhere('fecha_viaje_desde', '>=', $fechaDesde);
+            });
+        }
+
+        if ($request->filled('fecha_hasta')) {
+            $fechaHasta = $request->get('fecha_hasta');
+            $query->where('fecha_viaje_desde', '<=', $fechaHasta);
+        }
+
+        // Reserva no tiene vendedor_id propio (ver comentario de
+        // aplicarFiltroVendedor() más abajo) — se filtra por el vendedor de
+        // la cotización padre, mismo camino que usa el scope propias().
+        if ($request->filled('vendedor_id')) {
+            $vendedorId = $request->get('vendedor_id');
+            $query->whereHas('alternativa.cotizacion', fn ($q) => $q->where('vendedor_id', $vendedorId));
+        }
+
+        // Catálogo de vendedores para el filtro — derivado de las reservas
+        // realmente visibles para este usuario con el resto de filtros ya
+        // aplicados (mismo criterio que
+        // ReporteOperativoController::filtrosDisponibles()), no de un
+        // catálogo global de usuarios: evita depender de un endpoint/
+        // permiso nuevo solo para poblar un <select>. Clonado ANTES de
+        // orderByDesc()/paginate() — paginate() aplica limit/offset sobre
+        // el mismo builder, así que clonar después solo vería la página
+        // actual.
+        $vendedores = (clone $query)->with('alternativa.cotizacion.vendedor')
+            ->get()
+            ->map(fn (Reserva $r) => $r->alternativa?->cotizacion?->vendedor)
+            ->filter()
+            ->unique('id')
+            ->values()
+            ->map(fn ($v) => ['id' => $v->id, 'nombre' => trim("{$v->name} {$v->surname}")]);
+
+        // ?per_page= es opcional (default 15, igual que antes) — acotado
+        // entre 1 y 100, mismo criterio que CotizacionController::index().
+        $perPage = min(100, max(1, (int) $request->get('per_page', 15)));
+
+        $reservas = $query->orderByDesc('id')->paginate($perPage);
 
         return response()->json([
             'total' => $reservas->total(),
-            'paginate' => 15,
+            'paginate' => $perPage,
             'reservas' => $reservas->items(),
+            'vendedores' => $vendedores,
         ]);
     }
 

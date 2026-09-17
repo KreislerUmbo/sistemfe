@@ -76,7 +76,11 @@ class PaquetePlantillaController extends Controller
         // biblioteca de tours para armar combos) pedía esto tour por tour
         // con una llamada HTTP aparte por cada fila visible (N+1). Viene
         // gratis en la misma consulta como `items_count`.
-        $paquetes = $query->with('destinoAtractivo')->withCount('items')->orderByDesc('id')->paginate(15);
+        // ?per_page= opcional (default 15, igual que antes) — acotado entre
+        // 1 y 100, mismo criterio que CotizacionController::index().
+        $perPage = min(100, max(1, (int) $request->get('per_page', 15)));
+
+        $paquetes = $query->with('destinoAtractivo')->withCount('items')->orderByDesc('id')->paginate($perPage);
 
         // precio_calculado: SOLO para paquete_combo — su precio no tiene
         // sentido como valor guardado (depende en vivo de los tours
@@ -94,7 +98,7 @@ class PaquetePlantillaController extends Controller
 
         return response()->json([
             'total' => $paquetes->total(),
-            'paginate' => 15,
+            'paginate' => $perPage,
             'paquetes_plantilla' => $paquetes->items(),
         ]);
     }

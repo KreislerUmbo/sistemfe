@@ -121,17 +121,28 @@
             </div>
         </div>
 
-        <nav v-if="totalPages > perPageRows" class="mt-3 d-flex justify-content-end">
-            <ul class="pagination pagination-sm mb-0">
-                <li class="page-item" :class="{ disabled: currentPage === 1 }">
-                    <button class="page-link" @click="currentPage > 1 && (currentPage--, list())">Anterior</button>
-                </li>
-                <li class="page-item disabled"><span class="page-link">Página {{ currentPage }}</span></li>
-                <li class="page-item" :class="{ disabled: paquetes.length < perPageRows }">
-                    <button class="page-link" @click="currentPage++, list()">Siguiente</button>
-                </li>
-            </ul>
-        </nav>
+        <div class="mt-3 d-flex align-items-center justify-content-end gap-3 flex-wrap">
+            <div class="d-flex align-items-center gap-2">
+                <small class="text-muted">Mostrar</small>
+                <select class="form-select form-select-sm" style="width:auto" v-model.number="perPageRows" @change="cambiarPerPage">
+                    <option :value="15">15</option>
+                    <option :value="25">25</option>
+                    <option :value="50">50</option>
+                    <option :value="100">100</option>
+                </select>
+            </div>
+            <nav v-if="totalPages > perPageRows">
+                <ul class="pagination pagination-sm mb-0">
+                    <li class="page-item" :class="{ disabled: currentPage === 1 }">
+                        <button class="page-link" @click="currentPage > 1 && (currentPage--, list())">Anterior</button>
+                    </li>
+                    <li class="page-item disabled"><span class="page-link">Página {{ currentPage }}</span></li>
+                    <li class="page-item" :class="{ disabled: paquetes.length < perPageRows }">
+                        <button class="page-link" @click="currentPage++, list()">Siguiente</button>
+                    </li>
+                </ul>
+            </nav>
+        </div>
     </DefaultLayout>
 </template>
 
@@ -188,6 +199,7 @@ const list = async () => {
     try {
         const res = await paquetePlantillaService.listar({
             page: currentPage.value,
+            per_page: perPageRows.value,
             search: search.value || undefined,
             categoria: categoria.value || undefined,
             tipo: tipo.value || undefined,
@@ -207,6 +219,11 @@ const reset = () => {
     search.value = '';
     categoria.value = null;
     tipo.value = null;
+    currentPage.value = 1;
+    list();
+};
+
+const cambiarPerPage = () => {
     currentPage.value = 1;
     list();
 };

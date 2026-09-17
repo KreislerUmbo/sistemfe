@@ -16,18 +16,35 @@
         <div class="card border-0 shadow-sm mb-3">
             <div class="card-body">
                 <div class="row g-2">
-                    <div class="col-12 col-md-8">
+                    <div class="col-12 col-md-5">
                         <div class="input-group input-group-sm">
                             <input type="text" class="form-control" placeholder="Buscar por código, destino, cliente o documento..." v-model="search" @keyup.enter="buscar">
                             <button class="btn btn-primary" @click="buscar"><i class="fas fa-search"></i></button>
                         </div>
                     </div>
-                    <div class="col-12 col-md-4">
+                    <div class="col-6 col-md-2">
                         <select class="form-select form-select-sm" v-model="estado" @change="buscar">
                             <option value="">Todos los estados</option>
                             <option value="activa">Activa</option>
                             <option value="cancelada">Cancelada</option>
                         </select>
+                    </div>
+                    <div class="col-6 col-md-2">
+                        <select class="form-select form-select-sm" v-model="vendedorId" @change="buscar">
+                            <option value="">Todos los vendedores</option>
+                            <option v-for="v in vendedores" :key="v.id" :value="v.id">{{ v.nombre }}</option>
+                        </select>
+                    </div>
+                    <div class="col-6 col-md-1">
+                        <input type="date" class="form-control form-control-sm" title="Viaje desde" v-model="fechaDesde" @change="buscar">
+                    </div>
+                    <div class="col-6 col-md-1">
+                        <input type="date" class="form-control form-control-sm" title="Viaje hasta" v-model="fechaHasta" @change="buscar">
+                    </div>
+                    <div class="col-6 col-md-1">
+                        <button class="btn btn-outline-secondary btn-sm w-100" title="Limpiar filtros" @click="limpiarFiltros">
+                            <i class="fas fa-eraser"></i>
+                        </button>
                     </div>
                 </div>
             </div>
@@ -78,15 +95,26 @@
                         </tbody>
                     </table>
                 </div>
-                <div v-if="totalPages > 1" class="d-flex align-items-center justify-content-between p-3 border-top">
-                    <small class="text-muted">Página {{ page }} de {{ totalPages }}</small>
-                    <div class="btn-group btn-group-sm">
-                        <button class="btn btn-outline-secondary" :disabled="page <= 1 || loading" @click="irAPagina(page - 1)">
-                            <i class="fas fa-chevron-left"></i> Anterior
-                        </button>
-                        <button class="btn btn-outline-secondary" :disabled="page >= totalPages || loading" @click="irAPagina(page + 1)">
-                            Siguiente <i class="fas fa-chevron-right"></i>
-                        </button>
+                <div class="d-flex align-items-center justify-content-between p-3 border-top flex-wrap gap-2">
+                    <div class="d-flex align-items-center gap-2">
+                        <small class="text-muted">Mostrar</small>
+                        <select class="form-select form-select-sm" style="width:auto" v-model.number="paginate" @change="buscar">
+                            <option :value="15">15</option>
+                            <option :value="25">25</option>
+                            <option :value="50">50</option>
+                            <option :value="100">100</option>
+                        </select>
+                    </div>
+                    <div v-if="totalPages > 1" class="d-flex align-items-center gap-2">
+                        <small class="text-muted">Página {{ page }} de {{ totalPages }}</small>
+                        <div class="btn-group btn-group-sm">
+                            <button class="btn btn-outline-secondary" :disabled="page <= 1 || loading" @click="irAPagina(page - 1)">
+                                <i class="fas fa-chevron-left"></i> Anterior
+                            </button>
+                            <button class="btn btn-outline-secondary" :disabled="page >= totalPages || loading" @click="irAPagina(page + 1)">
+                                Siguiente <i class="fas fa-chevron-right"></i>
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -104,6 +132,10 @@ import { formatFecha } from '@/helpers/fecha';
 const reservas = ref<Reserva[]>([]);
 const search = ref<string>('');
 const estado = ref<'' | 'activa' | 'cancelada'>('');
+const vendedorId = ref<number | ''>('');
+const fechaDesde = ref<string>('');
+const fechaHasta = ref<string>('');
+const vendedores = ref<Array<{ id: number; nombre: string }>>([]);
 const total = ref<number>(0);
 const paginate = ref<number>(15);
 const page = ref<number>(1);
@@ -119,12 +151,17 @@ const list = async () => {
     try {
         const res = await reservaService.listar({
             page: page.value,
+            per_page: paginate.value,
             search: search.value || undefined,
             estado: (estado.value || undefined) as any,
+            vendedor_id: (vendedorId.value || undefined) as any,
+            fecha_desde: fechaDesde.value || undefined,
+            fecha_hasta: fechaHasta.value || undefined,
         });
         reservas.value = res.reservas;
         total.value = res.total;
         paginate.value = res.paginate;
+        vendedores.value = res.vendedores ?? [];
     } finally {
         loading.value = false;
     }
@@ -141,6 +178,15 @@ const irAPagina = (nuevaPagina: number) => {
     if (nuevaPagina < 1 || nuevaPagina > totalPages.value) return;
     page.value = nuevaPagina;
     list();
+};
+
+const limpiarFiltros = () => {
+    search.value = '';
+    estado.value = '';
+    vendedorId.value = '';
+    fechaDesde.value = '';
+    fechaHasta.value = '';
+    buscar();
 };
 
 onMounted(() => list());

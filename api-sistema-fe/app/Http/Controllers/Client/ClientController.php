@@ -16,16 +16,20 @@ class ClientController extends Controller
     {
         $search = $request->get('search', '');
 
+        // ?per_page= opcional (default 25, igual que antes) — acotado entre
+        // 1 y 100, mismo criterio que SaleController::index().
+        $perPage = min(100, max(1, (int) $request->get('per_page', 25)));
+
         $clients = Client::whereRaw(
             "(COALESCE(clients.phone,'') || ' ' || COALESCE(clients.name,'') || ' ' || COALESCE(clients.full_name,'') || ' ' || COALESCE(clients.n_document,'')) ILIKE ?",
             ["%{$search}%"]
         )
             ->orderBy('id', 'desc')
-            ->paginate(25);
+            ->paginate($perPage);
 
         return response()->json([
             'total'    => $clients->total(),
-            'paginate' => 25,
+            'paginate' => $perPage,
             'clients'  => ClientCollection::make($clients),
         ]);
     }

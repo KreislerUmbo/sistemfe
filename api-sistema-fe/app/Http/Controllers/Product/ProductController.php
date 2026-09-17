@@ -69,12 +69,15 @@ class ProductController extends Controller
             ]);
         }
 
-        // Caso normal: paginado
-        $products = $query->paginate(15);
+        // Caso normal: paginado. ?per_page= opcional (default 15, igual que
+        // antes) — acotado entre 1 y 100, mismo criterio que
+        // CotizacionController::index().
+        $perPage = min(100, max(1, (int) $request->get('per_page', 15)));
+        $products = $query->paginate($perPage);
 
         return response()->json([
             "total" => $products->total(),
-            "paginate" => 15,
+            "paginate" => $perPage,
             'products' => ProductCollection::make($products),
         ]);
     }

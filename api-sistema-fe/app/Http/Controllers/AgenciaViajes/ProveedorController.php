@@ -62,7 +62,11 @@ class ProveedorController extends Controller
             $query->whereHas('proveedorServicios.destinoServicio', fn ($q) => $q->whereIn('destino_atractivo_id', $ids));
         }
 
-        $proveedores = $query->orderBy('razon_social')->paginate(15);
+        // ?per_page= opcional (default 15, igual que antes) — acotado entre
+        // 1 y 100, mismo criterio que CotizacionController::index().
+        $perPage = min(100, max(1, (int) $request->get('per_page', 15)));
+
+        $proveedores = $query->orderBy('razon_social')->paginate($perPage);
 
         $proveedores->getCollection()->transform(function (Proveedor $proveedor) {
             $proveedor->setAttribute('fotos', StorageUrl::resolveMuchas($proveedor->fotos ?? []));
@@ -72,7 +76,7 @@ class ProveedorController extends Controller
 
         return response()->json([
             'total' => $proveedores->total(),
-            'paginate' => 15,
+            'paginate' => $perPage,
             'proveedores' => $proveedores->items(),
         ]);
     }

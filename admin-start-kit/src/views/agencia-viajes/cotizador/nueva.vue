@@ -79,10 +79,11 @@
                 <small class="text-muted">(la edad decide el precio adulto/niño/infante de cada proveedor)</small>
             </div>
             <div class="card-body py-3">
-                <div class="d-flex gap-2 mb-3">
-                    <button class="btn btn-sm btn-outline-primary" @click="agregarPax(30)"><i class="fas fa-plus me-1"></i>Adulto</button>
-                    <button class="btn btn-sm btn-outline-primary" @click="agregarPax(8)"><i class="fas fa-plus me-1"></i>Niño</button>
-                    <button class="btn btn-sm btn-outline-primary" @click="agregarPax(1)"><i class="fas fa-plus me-1"></i>Infante</button>
+                <div class="d-flex align-items-center gap-2 mb-3">
+                    <input type="number" class="form-control form-control-sm" style="max-width:70px" v-model.number="cantidadAAgregar" min="1" max="30">
+                    <button class="btn btn-sm btn-outline-primary" @click="agregarPax(30, cantidadAAgregar)"><i class="fas fa-plus me-1"></i>Adulto(s)</button>
+                    <button class="btn btn-sm btn-outline-primary" @click="agregarPax(8, cantidadAAgregar)"><i class="fas fa-plus me-1"></i>Niño(s)</button>
+                    <button class="btn btn-sm btn-outline-primary" @click="agregarPax(1, cantidadAAgregar)"><i class="fas fa-plus me-1"></i>Infante(s)</button>
                 </div>
                 <div v-if="pasajeros.length === 0" class="text-muted small fst-italic mb-2">Agregá al menos un pasajero.</div>
                 <div class="d-flex flex-column gap-2">
@@ -155,6 +156,7 @@ const sinFechaExacta = ref<boolean>(false);
 
 const pasajeros = ref<Array<{ edad: number }>>([]);
 const creando = ref<boolean>(false);
+const cantidadAAgregar = ref<number>(1);
 
 const onClientSearchInput = () => {
     clearTimeout(clientSearchTimeout);
@@ -214,8 +216,11 @@ const tipoPorEdad = (edad: number) => {
     return { label: 'Adulto', clase: 'bg-success-subtle text-success' };
 };
 
-const agregarPax = (edadSugerida: number) => {
-    pasajeros.value.push({ edad: edadSugerida });
+const agregarPax = (edadSugerida: number, cantidad: number = 1) => {
+    const veces = Math.max(1, Math.min(30, cantidad || 1));
+    for (let i = 0; i < veces; i++) {
+        pasajeros.value.push({ edad: edadSugerida });
+    }
 };
 
 const crear = async () => {
