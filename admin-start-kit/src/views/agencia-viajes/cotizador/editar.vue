@@ -650,7 +650,7 @@
                     <div class="modal-content">
                         <div class="modal-header">
                             <div class="d-flex align-items-center gap-2">
-                                <i v-if="pasoDrawer !== 'grid'" class="fas fa-arrow-left" style="cursor:pointer" title="Volver" @click="volverAGridDrawer"></i>
+                                <i v-if="pasoDrawer !== 'grid'" class="fas fa-arrow-left text-white" style="cursor:pointer" title="Volver" @click="volverAGridDrawer"></i>
                                 <strong class="modal-title">{{ tituloDrawer }}</strong>
                             </div>
                             <button type="button" class="btn-close" @click="cerrarDrawerBiblioteca" aria-label="Cerrar"></button>
@@ -694,6 +694,16 @@
                                 </div>
                                 <input type="text" class="form-control form-control-sm mb-2" placeholder="Buscar..."
                                     v-model="bibliotecaSearch" @input="onBibliotecaSearch">
+
+                                <!-- Comparación de varios hoteles Local/Nacional — el grupo es
+                                     dato real (AlternativaItem.grupo_opcion_id), así que este
+                                     aviso sigue apareciendo aunque se cierre el drawer y se
+                                     vuelva más tarde. Clic en cualquier hotel de la grilla lo
+                                     suma a esta misma comparación (ver grupoAbierto en
+                                     matrizHotelActiva). -->
+                                <div v-if="grupoHotelAbiertoDiaActivo" class="alert alert-info py-2 px-3 small mb-2 d-flex justify-content-between align-items-center">
+                                    <span><i class="fas fa-layer-group me-1"></i>Comparando {{ grupoHotelAbiertoDiaActivo.hoteles }} hotel(es) para este día — elegí otro hotel de Alojamiento para sumarlo, o terminá la comparación desde el lienzo.</span>
+                                </div>
 
                                 <!-- 27-ago-2026 — mismos filtros combinables que ya tenía
                                      la biblioteca de paquetes/detalle.vue. servicio/proveedor
@@ -931,7 +941,7 @@
                                              3 lugares donde aparecen Costo/Venta acá abajo: ver precios,
                                              editar una tarifa, agregar una tarifa nueva a un hotel ya
                                              cargado, y el form de crear hotel. -->
-                                        <p class="text-muted fst-italic mb-2" style="font-size:11px">El costo/venta de cada tipo de habitación es el total del paquete por persona (aéreo + tours + hotel según este mayorista), no solo el hospedaje.</p>
+                                        <p class="text-muted fst-italic mb-2" style="font-size:11px">El costo/venta de cada tipo de habitación es el total del paquete por persona (aéreo + tours + hotel según este mayorista), no solo el hospedaje. Si el hotel es nuevo, no hace falta registrarle una tarifa en Proveedores para reusarlo — elegilo del selector de abajo (o dejalo "manual/referencial") y cargá este precio de paquete directo acá.</p>
                                         <!-- 04-sep-2026 — vista unificada (hallazgo del usuario: la tabla de
                                              "elegir" y la lista de gestión de abajo mostraban los mismos
                                              hoteles dos veces, en dos formatos). permitir-gestion-hoteles
@@ -1135,12 +1145,19 @@
 
                         <template v-else-if="pasoDrawer === 'matrizHotel' && matrizHotelActiva">
                             <p class="small fw-semibold mb-2">{{ matrizHotelActiva.nombreProveedor }}</p>
+                            <div v-if="matrizHotelActiva.grupoAbierto" class="alert alert-info py-2 px-3 small mb-2">
+                                <i class="fas fa-layer-group me-1"></i>
+                                Sumando este hotel a la comparación en curso ({{ matrizHotelActiva.grupoAbierto.hoteles }} hotel(es) ya cargado(s) para este día) — elegí 1 o más habitaciones para agregarlas a la misma comparación.
+                            </div>
                             <HabitacionMatrixPicker :tarifas="matrizHotelActiva.tarifas" :moneda="matrizHotelActiva.moneda"
                                 :pasajeros="cotizacion?.pasajeros ?? []"
                                 permitir-cama-adicional
                                 mostrar-cantidad-en-grupo
                                 :edad-max-infante-gratis="matrizHotelActiva.edadMaxInfanteGratis"
                                 :edad-max-nino-cama-adicional="matrizHotelActiva.edadMaxNinoCamaAdicional"
+                                :minimo-grupo="matrizHotelActiva.grupoAbierto || matrizHotelActiva.tarifas.length <= 1 ? 1 : 2"
+                                :iniciar-en-modo-grupo="!!matrizHotelActiva.grupoAbierto"
+                                :cantidad-default="matrizHotelActiva.grupoAbierto?.cantidad"
                                 @seleccionar="({ id, cantidad, pax_incluidos, camas_adicionales_nino }) => matrizHotelActiva!.adhoc ? agregarItemHotelAdhocLocal(id, cantidad, pax_incluidos, camas_adicionales_nino) : agregarItemProveedorHotel(id, cantidad, pax_incluidos, camas_adicionales_nino)"
                                 @agregar-grupo="({ ids, cantidad }) => matrizHotelActiva!.adhoc ? agregarGrupoHotelAdhocLocal(ids, cantidad) : agregarGrupoProveedorHotel(ids, cantidad)" />
                         </template>
@@ -2301,8 +2318,57 @@ const matrizHotelActiva = ref<{
     // seleccionar/agregar-grupo (agregarItemHotelAdhocLocal() en vez de
     // agregarItemProveedorHotel()).
     adhoc?: boolean;
+    // Comparación de varios hoteles Local/Nacional — poblado cuando ya
+    // existe un grupo sin resolver para el día activo (ver
+    // grupoHotelAbiertoDiaActivo más abajo): este hotel se suma a ESE
+    // grupo en vez de arrancar uno nuevo. "cantidad" viaja acá para que el
+    // picker arranque con la misma cantidad de noches que el resto del
+    // grupo, en vez de resetear a 1.
+    grupoAbierto?: { id: string; hoteles: number; cantidad: number } | null;
 } | null>(null);
 const modoPrecioPendiente = ref<{ id: number; nombre: string } | null>(null);
+
+// Comparación de varios hoteles en Local/Nacional — el "estás comparando"
+// vive 100% en datos reales (AlternativaItem.grupo_opcion_id), nunca en
+// estado de sesión: cerrar el drawer y volver no pierde nada (decisión de
+// diseño explícita, ver conversación). Un grupo cuenta como "abierto" solo
+// si NINGUNA de sus filas tiene opcion_elegida=true — bug real encontrado
+// en la verificación en vivo: filtrar solo por opcion_elegida=false no
+// alcanza, porque un grupo YA resuelto deja sus filas no-elegidas con
+// opcion_elegida=false para siempre (M1: exactamente 1 elegida, el resto
+// se desmarca) — sin este chequeo, el banner seguía apareciendo después de
+// resolver la comparación. "Una sola canasta a la vez" (decisión
+// explícita): si hubiera más de un grupo abierto para el mismo día, se
+// toma el primero encontrado.
+const grupoHotelAbiertoDiaActivo = computed<{ id: string; hoteles: number; cantidad: number } | null>(() => {
+    const itemsHotelDelDia = (alternativaActiva.value?.items ?? []).filter((item) =>
+        item.origen_tipo === 'proveedor'
+        && !!item.grupo_opcion_id
+        && item.dia_referencial === diaActivoParaAgregar.value
+        && (item.proveedor_tarifa?.tipo_habitacion || item.opcion_hotel_tarifa),
+    );
+
+    const porGrupo = new Map<string, AlternativaItem[]>();
+    for (const item of itemsHotelDelDia) {
+        const lista = porGrupo.get(item.grupo_opcion_id!) ?? [];
+        lista.push(item);
+        porGrupo.set(item.grupo_opcion_id!, lista);
+    }
+
+    for (const [grupoId, items] of porGrupo) {
+        if (items.some((i) => i.opcion_elegida === true)) continue; // ya resuelto
+
+        // Hotel real = mismo proveedor_servicio_id; ad-hoc = mismo
+        // opcion_hotel_id (NO opcion_hotel_tarifa_id, que es por fila/tipo
+        // de habitación — dos tipos del mismo hotel ad-hoc no son "2 hoteles").
+        const hotelesIds = new Set(items.map((i) =>
+            i.proveedor_tarifa?.proveedor_servicio_id ?? `adhoc-${i.opcion_hotel_tarifa?.opcion_hotel_id}`,
+        ));
+        return { id: grupoId, hoteles: hotelesIds.size, cantidad: items[0].cantidad };
+    }
+
+    return null;
+});
 
 const clicBibliotecaItem = async (tarifa: ProveedorTarifa) => {
     if (tarifa.tipo_habitacion) {
@@ -2325,6 +2391,7 @@ const clicBibliotecaItem = async (tarifa: ProveedorTarifa) => {
             nombreProveedor: tarifa.proveedor_servicio?.proveedor?.nombre_comercial ?? tarifa.proveedor_servicio?.proveedor?.razon_social ?? '',
             edadMaxInfanteGratis: alojamiento?.edad_max_infante_gratis,
             edadMaxNinoCamaAdicional: alojamiento?.edad_max_nino_cama_adicional,
+            grupoAbierto: grupoHotelAbiertoDiaActivo.value,
         };
         return;
     }
@@ -2404,6 +2471,7 @@ const guardarHotelLocal = async () => {
             moneda: res.opcion_hotel.moneda,
             nombreProveedor: res.opcion_hotel.nombre_hotel,
             adhoc: true,
+            grupoAbierto: grupoHotelAbiertoDiaActivo.value,
         };
         formHotelLocal.value = {
             nombre_hotel: '', moneda: 'PEN',
@@ -2463,7 +2531,10 @@ const generarUuidGrupo = (): string => {
 // y lo manda en el emit — se usa ese valor real en vez de 1.
 const agregarGrupoHotelAdhocLocal = async (ids: number[], cantidad: number) => {
     if (!alternativaActiva.value) return;
-    const grupoOpcionId = generarUuidGrupo();
+    // Si ya hay una comparación de hoteles en curso para este día (ver
+    // grupoHotelAbiertoDiaActivo), este hotel se suma a ESE grupo — nunca
+    // arranca uno nuevo mientras el anterior siga sin resolver.
+    const grupoOpcionId = matrizHotelActiva.value?.grupoAbierto?.id ?? generarUuidGrupo();
     try {
         let ultimoItem: AlternativaItem | null = null;
         for (const opcionHotelTarifaId of ids) {
@@ -2492,7 +2563,9 @@ const agregarGrupoHotelAdhocLocal = async (ids: number[], cantidad: number) => {
 // de arriba, ver ese comentario.
 const agregarGrupoProveedorHotel = async (ids: number[], cantidad: number) => {
     if (!alternativaActiva.value) return;
-    const grupoOpcionId = generarUuidGrupo();
+    // Ídem agregarGrupoHotelAdhocLocal() — reusa el grupo abierto en vez de
+    // generar uno nuevo cuando corresponde.
+    const grupoOpcionId = matrizHotelActiva.value?.grupoAbierto?.id ?? generarUuidGrupo();
     try {
         let ultimoItem: AlternativaItem | null = null;
         for (const proveedorTarifaId of ids) {

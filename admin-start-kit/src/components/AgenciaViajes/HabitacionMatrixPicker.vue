@@ -3,8 +3,18 @@
         <!-- Sesión M4 — atajo para ofrecer varias opciones de hotel como
              grupo (el cliente elige después, ver Alternativa::tieneGruposSinResolver()
              y AlternativaItemController::elegirOpcionGrupo()). Opt-in: si
-             nadie lo toca, el picker se comporta exactamente igual que antes. -->
-        <div class="d-flex justify-content-end mb-1" v-if="tarifas.length > 1">
+             nadie lo toca, el picker se comporta exactamente igual que antes.
+             Guardrail (18-sep-2026): antes exigía `tarifas.length > 1` —
+             pensado para comparar tipos de habitación DENTRO de un mismo
+             hotel (M4). La comparación de varios HOTELES (Local/Nacional)
+             rompía con eso: un hotel con una sola tarifa cargada (el caso
+             más común en agencia-demo) nunca mostraba el botón, así que no
+             había forma de arrancar ni de sumarse a un grupo con ese hotel
+             — encontrado en vivo con Hotel Rio Sol/Hotel Playwright Test,
+             cada uno con 1 sola tarifa. `tarifas.length > 0` alcanza: el
+             mínimo real para confirmar lo pone `minimoGrupo` (ver
+             confirmarGrupo()), no esta condición de visibilidad. -->
+        <div class="d-flex justify-content-end mb-1" v-if="tarifas.length > 0">
             <button v-if="!modoGrupo" class="btn btn-sm btn-link text-decoration-none" type="button" @click="activarModoGrupo">
                 <i class="fas fa-layer-group me-1"></i>Comparar varias opciones
             </button>
@@ -183,9 +193,9 @@
                 </div>
             </template>
             <span class="small text-secondary">{{ idsGrupo.length }} opción(es) seleccionada(s)</span>
-            <button class="btn btn-sm btn-primary" type="button" :disabled="idsGrupo.length < 2 || deshabilitarConfirmar"
+            <button class="btn btn-sm btn-primary" type="button" :disabled="idsGrupo.length < (minimoGrupo ?? 2) || deshabilitarConfirmar"
                 :title="deshabilitarConfirmar ? motivoDeshabilitado : ''" @click="confirmarGrupo">
-                <i class="fas fa-check me-1"></i>Agregar {{ idsGrupo.length }} opciones como grupo
+                <i class="fas fa-check me-1"></i>{{ idsGrupo.length === 1 ? 'Sumar a la comparación' : `Agregar ${idsGrupo.length} opciones como grupo` }}
             </button>
         </div>
 
@@ -287,6 +297,19 @@ const props = defineProps<{
     // ese dato y podría desincronizarlo. Opt-in explícito: solo Local
     // activa este stepper, mayorista sigue exactamente igual que antes.
     mostrarCantidadEnGrupo?: boolean;
+    // Comparación de varios hoteles en Local/Nacional (sesión "canasta
+    // persistida") — cuando ya existe un grupo sin resolver para el día
+    // activo y el vendedor suma OTRO hotel a esa misma comparación, alcanza
+    // con elegir 1 sola habitación de este hotel (las 2+ ya están cubiertas
+    // por lo cargado antes). Sin este prop, el mínimo sigue siendo 2 — ni
+    // mayorista ni la primera vez que se arma un grupo en Local cambian de
+    // comportamiento.
+    minimoGrupo?: number;
+    // Mismo caso: si ya hay una comparación en curso, el picker de este
+    // segundo hotel arranca directo en modo "Comparar varias opciones" —
+    // no tiene sentido ofrecer "Elegir"/"Agregar" individual a mitad de una
+    // comparación ya empezada.
+    iniciarEnModoGrupo?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -321,7 +344,7 @@ const cantidad = ref<number>(props.cantidadDefault ?? 1);
 const paxSeleccionados = ref<number[]>([]);
 const camasAdicionales = ref<number>(0);
 
-const modoGrupo = ref<boolean>(false);
+const modoGrupo = ref<boolean>(props.iniciarEnModoGrupo ?? false);
 const idsGrupo = ref<number[]>([]);
 
 // ── Gestión inline (hotel/tarifa), solo con permitirGestionHoteles=true ──
@@ -464,7 +487,7 @@ const cancelarModoGrupo = () => {
 };
 
 const confirmarGrupo = () => {
-    if (idsGrupo.value.length < 2) return;
+    if (idsGrupo.value.length < (props.minimoGrupo ?? 2)) return;
     emit('agregarGrupo', { ids: [...idsGrupo.value], cantidad: cantidad.value });
     cancelarModoGrupo();
 };

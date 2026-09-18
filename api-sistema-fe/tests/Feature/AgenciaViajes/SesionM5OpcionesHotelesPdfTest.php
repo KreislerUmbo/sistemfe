@@ -5,6 +5,10 @@ namespace Tests\Feature\AgenciaViajes;
 use App\Models\AgenciaViajes\Alternativa;
 use App\Models\AgenciaViajes\AlternativaDestino;
 use App\Models\AgenciaViajes\AlternativaItem;
+use App\Models\AgenciaViajes\OpcionHotel;
+use App\Models\AgenciaViajes\OpcionHotelTarifa;
+use App\Models\AgenciaViajes\OpcionMayorista;
+use App\Models\AgenciaViajes\Proveedor;
 use App\Services\AgenciaViajes\AlternativaPdfService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -86,6 +90,7 @@ class SesionM5OpcionesHotelesPdfTest extends TestCase
         string $nombreHotel,
         string $tipoHabitacion,
         float $precio,
+        int $cantidad = 1,
     ): AlternativaItem {
         $destinoAtractivoId = DB::table('destinos_atractivos')->insertGetId([
             'nombre' => 'Zona Test M5 ' . random_int(1000, 9999), 'tipo' => 'lugar', 'created_at' => now(), 'updated_at' => now(),
@@ -110,7 +115,44 @@ class SesionM5OpcionesHotelesPdfTest extends TestCase
         return AlternativaItem::create([
             'alternativa_id' => $alternativa->id, 'origen_tipo' => 'proveedor', 'proveedor_tarifa_id' => $tarifaId,
             'grupo_opcion_id' => $grupoOpcionId, 'opcion_elegida' => $opcionElegida,
-            'modo_precio' => 'tarifa_fija', 'cantidad' => 1, 'moneda_costo' => 'PEN',
+            'modo_precio' => 'tarifa_fija', 'cantidad' => $cantidad, 'moneda_costo' => 'PEN',
+            'costo_snapshot' => $precio * 0.7, 'precio_venta_snapshot' => $precio, 'precio_convertido' => $precio,
+        ]);
+    }
+
+    // Ítem de mayorista con matriz de hoteles (origen_tipo=mayorista +
+    // opcion_hotel_tarifa_id) — mismo formato "hotel · tipo_habitacion" que
+    // crearItemHotel(), pero por el camino de OpcionHotel/OpcionHotelTarifa
+    // (Sesión M2) en vez de proveedor_tarifas. Acá `cantidad` es adultos,
+    // no noches — precio_convertido YA es el paquete completo por persona.
+    // Varios hoteles comparándose entre sí conviven bajo la MISMA
+    // OpcionMayorista (un solo mayorista, varios hoteles de su matriz) —
+    // "opcion_mayorista_alternativa_elegida_unique" no deja 2 filas
+    // 'elegida' por alternativa, así que $opcionMayorista se reusa entre
+    // llamadas en vez de crear una por hotel.
+    private function crearItemHotelMayorista(
+        Alternativa $alternativa,
+        ?OpcionMayorista $opcionMayorista,
+        ?string $grupoOpcionId,
+        bool $opcionElegida,
+        string $nombreHotel,
+        string $tipoHabitacion,
+        float $precio,
+        int $cantidad,
+    ): AlternativaItem {
+        $opcion = $opcionMayorista ?? OpcionMayorista::create([
+            'alternativa_id' => $alternativa->id,
+            'proveedor_id' => Proveedor::create(['razon_social' => 'Mayorista Test M5 ' . random_int(1000, 9999), 'estado' => true])->id,
+            'moneda' => 'PEN', 'estado' => 'elegida',
+        ]);
+        $hotel = OpcionHotel::create(['opcion_mayorista_id' => $opcion->id, 'nombre_hotel' => $nombreHotel, 'moneda' => 'PEN']);
+        $tarifa = OpcionHotelTarifa::create(['opcion_hotel_id' => $hotel->id, 'tipo_habitacion' => $tipoHabitacion, 'precio_costo' => $precio * 0.7, 'precio_venta' => $precio]);
+
+        return AlternativaItem::create([
+            'alternativa_id' => $alternativa->id, 'origen_tipo' => 'mayorista',
+            'opcion_mayorista_id' => $opcion->id, 'opcion_hotel_tarifa_id' => $tarifa->id,
+            'grupo_opcion_id' => $grupoOpcionId, 'opcion_elegida' => $opcionElegida,
+            'modo_precio' => 'tarifa_fija', 'cantidad' => $cantidad, 'moneda_costo' => 'PEN',
             'costo_snapshot' => $precio * 0.7, 'precio_venta_snapshot' => $precio, 'precio_convertido' => $precio,
         ]);
     }
@@ -258,5 +300,46 @@ class SesionM5OpcionesHotelesPdfTest extends TestCase
 
         $this->assertCount(1, $bloques);
         $this->assertSame(['Traslado aeropuerto'], $bloques[0]['nombres']->all());
+    }
+
+    // Guardrail de PDF (17-sep-2026) — hallazgo real revisando cómo queda
+    // la tabla con noches>1: `cantidad` en un hotel de Local/Nacional es
+    // NOCHES, y la tabla mostraba precio_convertido (unitario, UNA noche)
+    // sin decirlo — un cliente con una estadía de varias noches podía leer
+    // ese precio como el total. Ahora usa total_convertido, que ya resuelve
+    // la multiplicación con la misma regla que el resto de la cotización.
+    public function test_hotel_local_nacional_con_varias_noches_multiplica_el_precio_por_cantidad(): void
+    {
+        $alternativa = $this->crearAlternativa();
+        $grupo = (string) Str::uuid();
+        $this->crearItemHotel($alternativa, $grupo, false, 'Hotel Tres Noches', 'doble', 90, cantidad: 3);
+        $this->crearItemHotel($alternativa, $grupo, false, 'Hotel Otro', 'doble', 110, cantidad: 3);
+
+        $resultado = $this->invocar($alternativa);
+
+        $fila = collect($resultado[0]['filas'])->firstWhere('hotel', 'Hotel Tres Noches');
+        $this->assertEquals(270.0, $fila['precios']['doble'], 'precio de 1 noche (90) × 3 noches, no el precio unitario');
+    }
+
+    // Caso contrario, mismo hallazgo: en mayorista `cantidad` es adultos y
+    // precio_convertido YA es el paquete completo "por persona" — multiplicar
+    // de nuevo mostraría el total del grupo en una tabla que dice "tarifa
+    // por persona", no el precio unitario. No debe tocarse.
+    public function test_hotel_mayorista_con_varios_adultos_no_multiplica_el_precio(): void
+    {
+        $alternativa = $this->crearAlternativa();
+        $grupo = (string) Str::uuid();
+        $opcionMayorista = OpcionMayorista::create([
+            'alternativa_id' => $alternativa->id,
+            'proveedor_id' => Proveedor::create(['razon_social' => 'Mayorista Test M5', 'estado' => true])->id,
+            'moneda' => 'PEN', 'estado' => 'elegida',
+        ]);
+        $this->crearItemHotelMayorista($alternativa, $opcionMayorista, $grupo, false, 'Hotel Paquete Mayorista', 'doble', 850, cantidad: 2);
+        $this->crearItemHotelMayorista($alternativa, $opcionMayorista, $grupo, false, 'Hotel Paquete Otro', 'doble', 900, cantidad: 2);
+
+        $resultado = $this->invocar($alternativa);
+
+        $fila = collect($resultado[0]['filas'])->firstWhere('hotel', 'Hotel Paquete Mayorista');
+        $this->assertEquals(850.0, $fila['precios']['doble'], 'precio de paquete por persona, sin multiplicar por adultos');
     }
 }

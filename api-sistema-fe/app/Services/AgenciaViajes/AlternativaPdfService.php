@@ -496,8 +496,22 @@ class AlternativaPdfService
                 [$hotel, $tipoHabitacion] = $partes;
                 $tiposPresentes[$tipoHabitacion] = true;
 
+                // Sesión de guardrails (17-sep-2026) — `cantidad` significa
+                // cosas distintas según el origen: en mayorista ya es
+                // "adultos" y precio_convertido YA es el total del paquete
+                // por persona (multiplicar de nuevo lo rompería); en un
+                // hotel de Local/Nacional (origen_tipo='proveedor', real o
+                // ad-hoc) `cantidad` es noches — la tabla mostraba el precio
+                // de UNA noche sin decirlo, y un cliente con una estadía de
+                // varias noches podía leerlo como el total. total_convertido
+                // ya resuelve la multiplicación con la misma regla que el
+                // resto de la cotización (getTotalConvertidoAttribute()).
+                $precio = $item->origen_tipo === AlternativaItem::ORIGEN_MAYORISTA
+                    ? (float) $item->precio_convertido
+                    : (float) $item->total_convertido;
+
                 $filasPorHotel[$hotel] ??= ['hotel' => $hotel, 'precios' => [], 'elegida' => false, 'opcion_hotel_id' => $item->opcionHotelTarifa?->opcion_hotel_id];
-                $filasPorHotel[$hotel]['precios'][$tipoHabitacion] = (float) $item->precio_convertido;
+                $filasPorHotel[$hotel]['precios'][$tipoHabitacion] = $precio;
                 if ($item->opcion_elegida) {
                     $filasPorHotel[$hotel]['elegida'] = true;
                 }

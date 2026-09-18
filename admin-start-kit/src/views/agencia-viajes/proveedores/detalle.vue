@@ -198,6 +198,18 @@
                             <label class="btn btn-outline-primary btn-sm" for="tab-modal-tributario"><i class="fas fa-file-invoice me-1"></i>Tributario SUNAT</label>
                         </div>
 
+                        <!-- Hallazgo real (17-sep-2026): un precio de PAQUETE de mayorista
+                             (aéreo+tours+hotel todo incluido) terminó cargado acá como si
+                             fuera la tarifa real por noche de la habitación — ese precio se
+                             ve después en Local/Nacional y en cualquier reporte como si
+                             fuera el costo real del hospedaje. Este aviso va en el momento
+                             exacto donde se puede repetir el error. -->
+                        <div v-if="esHotel" class="alert alert-warning py-2 px-3 small mb-3">
+                            <i class="fas fa-triangle-exclamation me-1"></i>
+                            Esta tarifa es el precio real <strong>por noche</strong> de esta habitación — se usa en Local/Nacional y en cualquier reporte que lea este proveedor.
+                            Si el precio que tenés es el <strong>total de un paquete de mayorista</strong> (vuelo + tours + hotel), no lo cargues acá: usá "Agregar hotel a esta opción" dentro de la cotización (pestaña Internacional).
+                        </div>
+
                         <!-- ═══ Comercial ═══ -->
                         <div class="row g-3" v-if="tabModalTarifa === 'comercial'">
                             <div class="col-6 col-md-3">
