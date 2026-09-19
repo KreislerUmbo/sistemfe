@@ -74,6 +74,24 @@ export const reservaService = {
       costo_nuevo: number | null
     }
   },
+  // Espejo de reasignarMayorista(), para el hotel Local/Nacional (catálogo
+  // o ad-hoc) — exactamente uno de nueva_proveedor_tarifa_id /
+  // nuevo_opcion_hotel_tarifa_id, nunca ambos ni ninguno. Permite cruzar
+  // entre catálogo y ad-hoc (ver docblock del backend).
+  async reasignarHotel(id: number, payload: {
+    reserva_item_ids: number[]
+    nueva_proveedor_tarifa_id?: number | null
+    nuevo_opcion_hotel_tarifa_id?: number | null
+    motivo: string
+  }) {
+    const response = await httpClient.post(`/reservas/${id}/reasignar-hotel`, payload)
+    return response.data as ReservaDetalleResponse & {
+      code: number
+      message: string
+      costo_anterior: number
+      costo_nuevo: number | null
+    }
+  },
   // Facturación externa por tenant + por reserva (PEGAR-EN-CLAUDE-CODE-
   // facturacion-externa-tenant.md, 2026-08-20) — solo editable mientras la
   // reserva no tenga ninguna venta asociada (422 si ya la tiene, ver

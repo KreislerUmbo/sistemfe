@@ -45,6 +45,9 @@
                 <button v-if="mostrarBotonReasignarMayorista" class="btn btn-outline-primary btn-sm" @click="abrirModalReasignarMayorista">
                     <i class="fas fa-right-left me-1"></i>Reasignar mayorista
                 </button>
+                <button v-if="mostrarBotonReasignarHotel" class="btn btn-outline-primary btn-sm" @click="abrirModalReasignarHotel">
+                    <i class="fas fa-bed me-1"></i>Reasignar hotel
+                </button>
                 <button v-if="reserva.estado === 'activa'" class="btn btn-outline-danger btn-sm" @click="mostrarModalCancelar = true">
                     <i class="fas fa-ban me-1"></i>Cancelar reserva
                 </button>
@@ -652,6 +655,100 @@
             </div>
         </div>
 
+        <!-- Modal reasignar hotel (18-sep-2026) — espejo de "Reasignar
+             mayorista", para el hotel Local/Nacional (catálogo real o
+             ad-hoc). Deja cruzar entre catálogo y ad-hoc: el caso real que
+             lo motivó fue justo notar que un hotel ad-hoc ya cargado en la
+             cotización en realidad estaba en el catálogo de Proveedores
+             (o viceversa). NUNCA toca precio_venta_snapshot del cliente. -->
+        <div class="modal fade" tabindex="-1" :class="{ show: mostrarModalReasignarHotel, 'd-block': mostrarModalReasignarHotel }"
+            style="background:rgba(0,0,0,.5)" v-if="mostrarModalReasignarHotel">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h6 class="modal-title fw-bold">Reasignar hotel</h6>
+                        <button class="btn-close" @click="mostrarModalReasignarHotel = false"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div v-if="hotelesActualesDistintos.length > 1" class="mb-3">
+                            <label class="form-label small fw-semibold text-secondary">Hotel a reasignar</label>
+                            <select class="form-select form-select-sm" v-model="reasignarHotelForm.clave_hotel_actual" @change="onCambiarHotelActual">
+                                <option v-for="h in hotelesActualesDistintos" :key="h.clave" :value="h.clave">{{ h.nombre }} ({{ h.itemsCount }} ítem{{ h.itemsCount === 1 ? '' : 's' }})</option>
+                            </select>
+                        </div>
+
+                        <div class="card bg-light border-0 p-2 mb-3 small">
+                            <span class="text-muted">Hotel actual</span>
+                            <strong>{{ hotelActualNombre }}</strong>
+                        </div>
+
+                        <label class="form-label small fw-semibold text-secondary">Ítems afectados</label>
+                        <div class="d-flex flex-column gap-1 mb-3">
+                            <label v-for="it in itemsDelHotelActual" :key="it.id" class="small d-flex align-items-center border rounded px-2 py-1" style="cursor:pointer">
+                                <input type="checkbox" class="form-check-input me-2" v-model="reasignarHotelForm.reserva_item_ids" :value="it.id">
+                                {{ nombreItem(it) }}
+                            </label>
+                        </div>
+
+                        <ul class="nav nav-tabs nav-tabs-sm small mb-2">
+                            <li class="nav-item">
+                                <a class="nav-link" :class="{ active: origenNuevoHotel === 'catalogo' }" href="#" @click.prevent="origenNuevoHotel = 'catalogo'">Del catálogo</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" :class="{ active: origenNuevoHotel === 'adhoc' }" href="#" @click.prevent="origenNuevoHotel = 'adhoc'">Ad-hoc de esta reserva</a>
+                            </li>
+                        </ul>
+
+                        <template v-if="origenNuevoHotel === 'catalogo'">
+                            <input type="text" class="form-control form-control-sm mb-2" placeholder="Buscar hotel por nombre..." v-model="buscarHotelCatalogo" @input="buscarTarifasHotelCatalogo">
+                            <div v-if="buscandoTarifasCatalogo" class="small text-muted mb-2"><span class="spinner-border spinner-border-sm me-1"></span>Buscando...</div>
+                            <select v-else class="form-select form-select-sm mb-3" v-model.number="reasignarHotelForm.nueva_proveedor_tarifa_id" @change="reasignarHotelForm.nuevo_opcion_hotel_tarifa_id = null">
+                                <option :value="null" disabled>Elegí una tarifa...</option>
+                                <option v-for="t in tarifasHotelCatalogoCandidatas" :key="t.id" :value="t.id">
+                                    {{ (t.proveedor_servicio?.proveedor?.nombre_comercial || t.proveedor_servicio?.proveedor?.razon_social) ?? 'Hotel' }} · {{ t.tipo_habitacion }} — {{ t.moneda }} {{ Number(t.precio_costo).toFixed(2) }}
+                                </option>
+                            </select>
+                            <p v-if="!buscandoTarifasCatalogo && buscarHotelCatalogo && tarifasHotelCatalogoCandidatas.length === 0" class="small text-muted">Sin resultados para "{{ buscarHotelCatalogo }}".</p>
+                        </template>
+                        <template v-else>
+                            <select class="form-select form-select-sm mb-3" v-model.number="reasignarHotelForm.nuevo_opcion_hotel_tarifa_id" @change="reasignarHotelForm.nueva_proveedor_tarifa_id = null">
+                                <option :value="null" disabled>Elegí una tarifa...</option>
+                                <option v-for="t in tarifasHotelAdhocCandidatas" :key="t.id" :value="t.id">
+                                    {{ t.opcion_hotel?.nombre_hotel ?? 'Hotel' }} · {{ t.tipo_habitacion }} — {{ Number(t.precio_costo).toFixed(2) }}
+                                </option>
+                            </select>
+                            <p v-if="tarifasHotelAdhocCandidatas.length === 0" class="small text-muted">No hay otro hotel ad-hoc cargado en esta reserva todavía.</p>
+                        </template>
+
+                        <label class="form-label small fw-semibold text-secondary">Motivo</label>
+                        <textarea class="form-control form-control-sm" rows="2" v-model="reasignarHotelForm.motivo" placeholder="Ej. El hotel se quedó sin cupo para esas fechas"></textarea>
+
+                        <div class="card border-0 p-2 mt-3 small" :class="diferenciaCostoHotelPreview.clase">
+                            <div class="d-flex justify-content-between">
+                                <span>Costo anterior</span>
+                                <span>{{ diferenciaCostoHotelPreview.costoAnterior.toFixed(2) }}</span>
+                            </div>
+                            <div class="d-flex justify-content-between">
+                                <span>Costo nuevo</span>
+                                <span>{{ diferenciaCostoHotelPreview.costoNuevo !== null ? diferenciaCostoHotelPreview.costoNuevo.toFixed(2) : 'Elegí una tarifa para verlo' }}</span>
+                            </div>
+                            <p class="mb-0 mt-1" style="font-size:11px">
+                                <i class="fas fa-info-circle me-1"></i>El precio que ve el cliente NO cambia automáticamente. Si el negocio decide ajustarlo, es una acción manual aparte desde Facturación.
+                            </p>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn btn-outline-secondary btn-sm" @click="mostrarModalReasignarHotel = false">Volver</button>
+                        <button class="btn btn-primary btn-sm"
+                            :disabled="reasignandoHotel || (!reasignarHotelForm.nueva_proveedor_tarifa_id && !reasignarHotelForm.nuevo_opcion_hotel_tarifa_id) || !reasignarHotelForm.motivo || reasignarHotelForm.reserva_item_ids.length === 0"
+                            @click="confirmarReasignarHotel">
+                            <span v-if="reasignandoHotel" class="spinner-border spinner-border-sm me-1"></span>Confirmar reasignación
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Modal facturar — facturación múltiple por grupo de pasajeros
              (2026-08-20, sobre la base de la Fase A del 2026-08-19). Cada
              pasajero pertenece a un único comprobante: se elige a quién se
@@ -987,7 +1084,7 @@ import { useToast } from '@/composables/useToast';
 import { formatFecha } from '@/helpers/fecha';
 import type {
     Reserva, ReservaPasajero, ReservaItem, ReservaResumenItem, ReservaCabecera,
-    PasajeroCatalogo, ProveedorTarifa, Guia, MotivoCancelacion, AnticipoReserva, OpcionMayorista,
+    PasajeroCatalogo, ProveedorTarifa, Guia, MotivoCancelacion, AnticipoReserva, OpcionMayorista, OpcionHotelTarifa,
 } from '@/types/agencia-viajes';
 import type { PaymentMethod, PaymentMethods } from '@/types/cash';
 
@@ -1379,18 +1476,33 @@ const nombreItem = (it: ReservaItem) => {
     if (item.origen_tipo === 'guia') {
         return 'Guía de turismo' + (item.guia_tarifa?.guia?.nombre ? ` — ${item.guia_tarifa.guia.nombre}` : '');
     }
+    // Reasignar hotel (18-sep-2026) — mismo bug que mayorista tuvo antes
+    // de 12h: leer el hotel SOLO de item (alternativa_item original)
+    // seguía mostrando el hotel viejo después de reasignar, porque
+    // ReservaController::reasignarHotel() reescribe it.proveedor_tarifa_id/
+    // it.opcion_hotel_tarifa_id, nunca los del alternativa_item. it.* tiene
+    // que revisarse PRIMERO — un fallback en "o" (como tenía el caso
+    // opcion_hotel_tarifa de acá abajo) no alcanza: tras cruzar de catálogo
+    // a ad-hoc, item.proveedor_tarifa sigue teniendo tipo_habitacion (no
+    // cambia nunca), así que un "||" seguiría entrando a esta rama con el
+    // hotel viejo en vez de cruzar al bloque de opcion_hotel_tarifa. Recién
+    // si it. no tiene NINGUNO de los 2 (reserva vieja, de antes de que
+    // reserva_items espejara estas columnas) se cae al original.
+    if (it.proveedor_tarifa?.tipo_habitacion) {
+        const p = it.proveedor_tarifa.proveedor_servicio?.proveedor;
+        const proveedor = (p ? (p.nombre_comercial || p.razon_social) : null) ?? 'Hotel';
+        return `${proveedor} · ${it.proveedor_tarifa.tipo_habitacion}`;
+    }
+    if (it.opcion_hotel_tarifa) {
+        return `${it.opcion_hotel_tarifa.opcion_hotel?.nombre_hotel ?? 'Hotel'} · ${it.opcion_hotel_tarifa.tipo_habitacion}`;
+    }
     if (item.proveedor_tarifa?.tipo_habitacion) {
         const p = item.proveedor_tarifa.proveedor_servicio?.proveedor;
         const proveedor = (p ? (p.nombre_comercial || p.razon_social) : null) ?? 'Hotel';
         return `${proveedor} · ${item.proveedor_tarifa.tipo_habitacion}`;
     }
-    // Sesión M2 — hotel de la matriz de un OpcionMayorista, sin
-    // ProveedorTarifa real (ver AlternativaItem::opcionHotelTarifa() en
-    // el backend). it.opcion_hotel_tarifa primero (reserva-level), igual
-    // criterio que opcion_mayorista arriba.
-    const opcionHotelTarifa = it.opcion_hotel_tarifa ?? item.opcion_hotel_tarifa;
-    if (opcionHotelTarifa) {
-        return `${opcionHotelTarifa.opcion_hotel?.nombre_hotel ?? 'Hotel'} · ${opcionHotelTarifa.tipo_habitacion}`;
+    if (item.opcion_hotel_tarifa) {
+        return `${item.opcion_hotel_tarifa.opcion_hotel?.nombre_hotel ?? 'Hotel'} · ${item.opcion_hotel_tarifa.tipo_habitacion}`;
     }
     return item.proveedor_tarifa?.proveedor_servicio?.destino_servicio?.servicio?.nombre ?? 'Servicio';
 };
@@ -1769,6 +1881,148 @@ const confirmarReasignarMayorista = async () => {
         toast.error(error.response?.data?.message ?? 'No se pudo reasignar el mayorista');
     } finally {
         reasignandoMayorista.value = false;
+    }
+};
+
+// ── Reasignar hotel (18-sep-2026) — espejo de "Reasignar mayorista",
+// para el hotel Local/Nacional (catálogo real o ad-hoc). A diferencia de
+// mayorista, el hotel actual se identifica leyendo directamente los
+// campos PROPIOS del reserva_item (it.proveedor_tarifa_id/
+// it.opcion_hotel_tarifa_id) — es exactamente lo que el backend usa para
+// el guard "mismo hotel actual" (ReservaController::reasignarHotel()),
+// así que el frontend tiene que agrupar con el mismo criterio para no
+// ofrecer una combinación que el backend rechazaría después.
+const mostrarModalReasignarHotel = ref(false);
+const reasignandoHotel = ref(false);
+const origenNuevoHotel = ref<'catalogo' | 'adhoc'>('catalogo');
+const buscarHotelCatalogo = ref('');
+const buscandoTarifasCatalogo = ref(false);
+const tarifasHotelCatalogoCandidatas = ref<ProveedorTarifa[]>([]);
+let debounceBuscarHotelCatalogo: ReturnType<typeof setTimeout> | null = null;
+const reasignarHotelForm = ref<{
+    clave_hotel_actual: string;
+    reserva_item_ids: number[];
+    nueva_proveedor_tarifa_id: number | null;
+    nuevo_opcion_hotel_tarifa_id: number | null;
+    motivo: string;
+}>({ clave_hotel_actual: '', reserva_item_ids: [], nueva_proveedor_tarifa_id: null, nuevo_opcion_hotel_tarifa_id: null, motivo: '' });
+
+const claveHotelActual = (it: ReservaItem) => (it.proveedor_tarifa_id ? `proveedor:${it.proveedor_tarifa_id}` : `adhoc:${it.opcion_hotel_tarifa_id}`);
+
+const itemsConHotelActivos = computed(() =>
+    (reserva.value?.items ?? []).filter((it) =>
+        (it.proveedor_tarifa?.tipo_habitacion || it.opcion_hotel_tarifa) && !itemsFacturadosIds.value.includes(it.id)
+    )
+);
+
+const mostrarBotonReasignarHotel = computed(() => reserva.value?.estado === 'activa' && itemsConHotelActivos.value.length > 0);
+
+// Casi siempre hay un único hotel actual en toda la reserva — mismo
+// criterio que mayoristasActualesDistintos.
+const hotelesActualesDistintos = computed(() => {
+    const grupos = new Map<string, { clave: string; nombre: string; itemsCount: number }>();
+    for (const it of itemsConHotelActivos.value) {
+        const clave = claveHotelActual(it);
+        if (!grupos.has(clave)) grupos.set(clave, { clave, nombre: nombreItem(it), itemsCount: 0 });
+        grupos.get(clave)!.itemsCount++;
+    }
+    return Array.from(grupos.values());
+});
+
+const itemsDelHotelActual = computed(() => itemsConHotelActivos.value.filter((it) => claveHotelActual(it) === reasignarHotelForm.value.clave_hotel_actual));
+const hotelActualNombre = computed(() => hotelesActualesDistintos.value.find((h) => h.clave === reasignarHotelForm.value.clave_hotel_actual)?.nombre ?? '—');
+
+// Ad-hoc: candidatas son las tarifas ad-hoc YA usadas en algún otro ítem
+// de esta misma reserva (no hay un "catálogo" de ad-hoc para buscar —
+// nacen sueltas por cotización) — excluye el hotel actual y duplicados.
+const tarifasHotelAdhocCandidatas = computed(() => {
+    const claveActual = reasignarHotelForm.value.clave_hotel_actual;
+    const vistos = new Set<number>();
+    const lista: OpcionHotelTarifa[] = [];
+    for (const it of reserva.value?.items ?? []) {
+        const t = it.opcion_hotel_tarifa;
+        if (t && !vistos.has(t.id) && claveHotelActual(it) !== claveActual) {
+            vistos.add(t.id);
+            lista.push(t);
+        }
+    }
+    return lista;
+});
+
+const diferenciaCostoHotelPreview = computed(() => {
+    const items = itemsDelHotelActual.value.filter((it) => reasignarHotelForm.value.reserva_item_ids.includes(it.id));
+    const costoAnterior = items.reduce((sum, it) => sum + Number(it.alternativa_item?.costo_snapshot ?? 0), 0);
+    let costoNuevo: number | null = null;
+    if (reasignarHotelForm.value.nueva_proveedor_tarifa_id) {
+        const t = tarifasHotelCatalogoCandidatas.value.find((tt) => tt.id === reasignarHotelForm.value.nueva_proveedor_tarifa_id);
+        costoNuevo = t ? Number(t.precio_costo) * items.length : null;
+    } else if (reasignarHotelForm.value.nuevo_opcion_hotel_tarifa_id) {
+        const t = tarifasHotelAdhocCandidatas.value.find((tt) => tt.id === reasignarHotelForm.value.nuevo_opcion_hotel_tarifa_id);
+        costoNuevo = t ? Number(t.precio_costo) * items.length : null;
+    }
+    let clase = '';
+    if (costoNuevo !== null) clase = costoNuevo > costoAnterior ? 'bg-danger-subtle' : costoNuevo < costoAnterior ? 'bg-success-subtle' : 'bg-light';
+    return { costoAnterior, costoNuevo, clase };
+});
+
+const onCambiarHotelActual = () => {
+    reasignarHotelForm.value.reserva_item_ids = itemsDelHotelActual.value.map((it) => it.id);
+    reasignarHotelForm.value.nueva_proveedor_tarifa_id = null;
+    reasignarHotelForm.value.nuevo_opcion_hotel_tarifa_id = null;
+};
+
+const abrirModalReasignarHotel = () => {
+    reasignarHotelForm.value = {
+        clave_hotel_actual: hotelesActualesDistintos.value[0]?.clave ?? '',
+        reserva_item_ids: [], nueva_proveedor_tarifa_id: null, nuevo_opcion_hotel_tarifa_id: null, motivo: '',
+    };
+    onCambiarHotelActual();
+    origenNuevoHotel.value = 'catalogo';
+    buscarHotelCatalogo.value = '';
+    tarifasHotelCatalogoCandidatas.value = [];
+    mostrarModalReasignarHotel.value = true;
+};
+
+const buscarTarifasHotelCatalogo = () => {
+    if (debounceBuscarHotelCatalogo) clearTimeout(debounceBuscarHotelCatalogo);
+    if (!buscarHotelCatalogo.value.trim()) {
+        tarifasHotelCatalogoCandidatas.value = [];
+        return;
+    }
+    debounceBuscarHotelCatalogo = setTimeout(async () => {
+        buscandoTarifasCatalogo.value = true;
+        try {
+            const res = await proveedorService.biblioteca({ search: buscarHotelCatalogo.value, per_page: 30 });
+            tarifasHotelCatalogoCandidatas.value = (res.proveedor_tarifas ?? []).filter((t) => !!t.tipo_habitacion);
+        } catch {
+            toast.error('No se pudo buscar en el catálogo de hoteles');
+        } finally {
+            buscandoTarifasCatalogo.value = false;
+        }
+    }, 350);
+};
+
+const confirmarReasignarHotel = async () => {
+    if (!reserva.value) return;
+    reasignandoHotel.value = true;
+    try {
+        const res = await reservaService.reasignarHotel(reserva.value.id, {
+            reserva_item_ids: reasignarHotelForm.value.reserva_item_ids,
+            nueva_proveedor_tarifa_id: reasignarHotelForm.value.nueva_proveedor_tarifa_id,
+            nuevo_opcion_hotel_tarifa_id: reasignarHotelForm.value.nuevo_opcion_hotel_tarifa_id,
+            motivo: reasignarHotelForm.value.motivo,
+        });
+        reserva.value = res.reserva;
+        resumen.value = res.resumen;
+        total.value = res.total;
+        cabecera.value = res.cabecera;
+        mostrarModalReasignarHotel.value = false;
+        const diffTexto = res.costo_nuevo !== null ? ` Costo: ${res.costo_anterior.toFixed(2)} → ${res.costo_nuevo.toFixed(2)}.` : '';
+        toast.success(res.message + diffTexto);
+    } catch (error: any) {
+        toast.error(error.response?.data?.message ?? 'No se pudo reasignar el hotel');
+    } finally {
+        reasignandoHotel.value = false;
     }
 };
 

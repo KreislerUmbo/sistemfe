@@ -46,11 +46,17 @@ class ReservaItem extends Model
         'motivo_reasignacion_mayorista',
         'fecha_reasignacion_mayorista',
         'veces_reasignado_mayorista',
+        'proveedor_tarifa_original_id',
+        'opcion_hotel_tarifa_original_id',
+        'motivo_reasignacion_hotel',
+        'fecha_reasignacion_hotel',
+        'veces_reasignado_hotel',
     ];
 
     protected $casts = [
         'fecha' => 'date',
         'fecha_reasignacion_mayorista' => 'datetime',
+        'fecha_reasignacion_hotel' => 'datetime',
     ];
 
     public const FECHA_ORIGEN_AUTO = 'auto';
@@ -102,6 +108,23 @@ class ReservaItem extends Model
     public function opcionMayoristaOriginal()
     {
         return $this->belongsTo(OpcionMayorista::class, 'opcion_mayorista_original_id');
+    }
+
+    // El hotel con el que se aceptó la reserva originalmente, antes de
+    // cualquier reasignación vía ReservaController::reasignarHotel() — se
+    // escribe una única vez, mismo trade-off de auditoría simple que
+    // opcion_mayorista_original_id. Un hotel puede venir de 2 caminos
+    // (proveedor_tarifa_id o opcion_hotel_tarifa_id), así que cada uno
+    // tiene su propia columna "original" — la reasignación puede cruzar
+    // de un camino al otro (ver docblock del controller).
+    public function proveedorTarifaOriginal()
+    {
+        return $this->belongsTo(ProveedorTarifa::class, 'proveedor_tarifa_original_id');
+    }
+
+    public function opcionHotelTarifaOriginal()
+    {
+        return $this->belongsTo(OpcionHotelTarifa::class, 'opcion_hotel_tarifa_original_id');
     }
 
     // Sesión 11b4 — mismo propósito que AlternativaItem::tourOrigen(),

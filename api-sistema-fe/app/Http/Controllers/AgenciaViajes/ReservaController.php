@@ -8,6 +8,7 @@ use App\Models\AgenciaViajes\AlternativaItem;
 use App\Models\AgenciaViajes\CotizacionPasajero;
 use App\Models\AgenciaViajes\OpcionHotelTarifa;
 use App\Models\AgenciaViajes\OpcionMayorista;
+use App\Models\AgenciaViajes\ProveedorTarifa;
 use App\Models\AgenciaViajes\Reserva;
 use App\Models\AgenciaViajes\ReservaAnticipo;
 use App\Models\AgenciaViajes\ReservaItem;
@@ -809,6 +810,118 @@ class ReservaController extends Controller
         ));
     }
 
+    // Reasignar hotel Local/Nacional en una reserva ya aceptada, con
+    // auditoría — mismo mecanismo/guards que reasignarMayorista() (ver
+    // arriba), aplicado al lado catálogo/ad-hoc. A diferencia de
+    // mayorista (una sola FK), acá el hotel actual puede venir de 2
+    // caminos mutuamente excluyentes (proveedor_tarifa_id o
+    // opcion_hotel_tarifa_id) y la reasignación puede cruzar de uno al
+    // otro (ej. "este hotel ad-hoc en realidad ya está en mi catálogo,
+    // pasalo al real"). NUNCA toca precio_venta_snapshot del cliente,
+    // mismo criterio que reasignarMayorista().
+    public function reasignarHotel(Request $request, string $id)
+    {
+        $reserva = Reserva::findOrFail($id);
+
+        if ($reserva->estado !== 'activa') {
+            return response()->json(['code' => 422, 'message' => 'Solo se puede reasignar hotel en una reserva activa.'], 422);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'reserva_item_ids' => 'required|array|min:1',
+            'reserva_item_ids.*' => ['integer', Rule::exists('reserva_items', 'id')->where('reserva_id', $reserva->id)],
+            'nueva_proveedor_tarifa_id' => 'nullable|integer|exists:proveedor_tarifas,id',
+            'nuevo_opcion_hotel_tarifa_id' => 'nullable|integer|exists:opciones_hotel_tarifas,id',
+            'motivo' => 'required|string|max:500',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
+        }
+
+        $validado = $validator->validated();
+
+        $tieneNuevoCatalogo = ! empty($validado['nueva_proveedor_tarifa_id']);
+        $tieneNuevoAdhoc = ! empty($validado['nuevo_opcion_hotel_tarifa_id']);
+        if ($tieneNuevoCatalogo === $tieneNuevoAdhoc) {
+            return response()->json(['code' => 422, 'message' => 'Elegí exactamente un hotel nuevo: del catálogo de proveedores, o ad-hoc.'], 422);
+        }
+
+        $items = ReservaItem::with('alternativaItem')->whereIn('id', $validado['reserva_item_ids'])->get();
+
+        // Mismo guard que reasignarMayorista() — un ítem ya cubierto por
+        // una venta real no se toca en silencio acá.
+        $itemIdsFacturados = ReservaVenta::where('reserva_id', $reserva->id)->get()
+            ->flatMap(fn (ReservaVenta $rv) => $rv->reserva_item_ids ?? []);
+        if ($items->pluck('id')->intersect($itemIdsFacturados)->isNotEmpty()) {
+            return response()->json(['code' => 422, 'message' => 'No se puede reasignar: uno o más ítems ya fueron facturados en una venta de esta reserva.'], 422);
+        }
+
+        // "Mismo hotel actual" — clave compuesta, ambos caminos son
+        // mutuamente excluyentes así que alcanza con concatenarlos.
+        $clavesHotelActual = $items->map(fn (ReservaItem $it) => $it->proveedor_tarifa_id . ':' . $it->opcion_hotel_tarifa_id)->unique();
+        if ($clavesHotelActual->count() > 1) {
+            return response()->json(['code' => 422, 'message' => 'Los ítems seleccionados no comparten el mismo hotel actual — no se puede reasignar un lote mezclado.'], 422);
+        }
+        if (! $items->first()->proveedor_tarifa_id && ! $items->first()->opcion_hotel_tarifa_id) {
+            return response()->json(['code' => 422, 'message' => 'Ninguno de los ítems seleccionados tiene un hotel asignado.'], 422);
+        }
+
+        $tarifaCatalogoNueva = null;
+        $tarifaAdhocNueva = null;
+        if ($tieneNuevoCatalogo) {
+            $tarifaCatalogoNueva = ProveedorTarifa::findOrFail($validado['nueva_proveedor_tarifa_id']);
+            if (! $tarifaCatalogoNueva->tipo_habitacion) {
+                return response()->json(['code' => 422, 'message' => 'Esa tarifa no corresponde a una habitación de hotel.'], 422);
+            }
+        } else {
+            $tarifaAdhocNueva = OpcionHotelTarifa::findOrFail($validado['nuevo_opcion_hotel_tarifa_id']);
+        }
+
+        DB::transaction(function () use ($items, $tarifaCatalogoNueva, $tarifaAdhocNueva, $validado) {
+            foreach ($items as $item) {
+                // "Original" se captura de una sola vez, en la PRIMERA
+                // reasignación — no alcanza con `?? valor_actual` como en
+                // reasignarMayorista() (una sola FK, siempre no-nula):
+                // acá las 2 FK son mutuamente excluyentes, así que después
+                // de la 1ra reasignación la que "no se usa" queda en null
+                // y una 2da reasignación de vuelta al otro camino pisaría
+                // el original real con ese null intermedio si se
+                // coalesceara por columna.
+                $primeraVez = $item->veces_reasignado_hotel === 0;
+
+                $item->update([
+                    'proveedor_tarifa_original_id' => $primeraVez ? $item->proveedor_tarifa_id : $item->proveedor_tarifa_original_id,
+                    'opcion_hotel_tarifa_original_id' => $primeraVez ? $item->opcion_hotel_tarifa_id : $item->opcion_hotel_tarifa_original_id,
+                    'proveedor_tarifa_id' => $tarifaCatalogoNueva?->id,
+                    'opcion_hotel_tarifa_id' => $tarifaAdhocNueva?->id,
+                    'motivo_reasignacion_hotel' => $validado['motivo'],
+                    'fecha_reasignacion_hotel' => now(),
+                    'veces_reasignado_hotel' => $item->veces_reasignado_hotel + 1,
+                ]);
+            }
+        });
+
+        // Diferencia de costo — de presentación, no se persiste como
+        // campo, mismo criterio que reasignarMayorista().
+        $costoAnterior = round((float) $items->sum(fn (ReservaItem $item) => (float) ($item->alternativaItem?->costo_snapshot ?? 0)), 2);
+        $costoNuevo = $tarifaCatalogoNueva
+            ? round((float) $tarifaCatalogoNueva->precio_costo * $items->count(), 2)
+            : ($tarifaAdhocNueva ? round((float) $tarifaAdhocNueva->precio_costo * $items->count(), 2) : null);
+
+        $reserva->load(self::RELACIONES_DETALLE);
+
+        return response()->json(array_merge(
+            [
+                'code' => 200,
+                'message' => 'Hotel reasignado correctamente',
+                'costo_anterior' => $costoAnterior,
+                'costo_nuevo' => $costoNuevo,
+            ],
+            $this->respuestaDetalle($reserva)
+        ));
+    }
+
     // PUT reservas/{id}/facturacion-externa — override por reserva,
     // independiente de tenants.facturacion_habilitada. Editable SOLO
     // mientras la reserva no tenga ninguna fila en reserva_ventas (ver
@@ -1079,16 +1192,33 @@ class ReservaController extends Controller
         if ($item->origen_tipo === AlternativaItem::ORIGEN_GUIA) {
             return 'Guía de turismo' . ($item->guiaTarifa?->guia?->nombre ? ' — ' . $item->guiaTarifa->guia->nombre : '');
         }
-        if ($item->proveedorTarifa?->tipo_habitacion) {
+        // Reasignar hotel (18-sep-2026) — reserva_item PRIMERO, refleja una
+        // reasignación real vía ReservaController::reasignarHotel() — mismo
+        // criterio que ya usaba opcionHotelTarifa de acá abajo, ahora
+        // aplicado también al camino de catálogo. Un "?:"/"??" por separado
+        // en cada rama no alcanza: tras cruzar de catálogo a ad-hoc,
+        // item->proveedorTarifa sigue con tipo_habitacion (el AlternativaItem
+        // original nunca cambia) — hay que resolver los 2 caminos del
+        // reserva_item ANTES de mirar el original, y solo caer a este último
+        // si NINGUNO de los 2 tiene nada propio (reserva vieja, de antes del
+        // retrofit de estas columnas, o directamente sin reserva todavía).
+        $tarifaHotelCatalogo = $reservaItem?->proveedor_tarifa_id ? $reservaItem->proveedorTarifa : null;
+        $tarifaHotelAdhoc = $reservaItem?->opcion_hotel_tarifa_id ? $reservaItem->opcionHotelTarifa : null;
+        if (! $tarifaHotelCatalogo && ! $tarifaHotelAdhoc) {
+            $tarifaHotelCatalogo = $item->proveedorTarifa;
+            $tarifaHotelAdhoc = $item->opcionHotelTarifa;
+        }
+
+        if ($tarifaHotelCatalogo?->tipo_habitacion) {
             // nombre_comercial antes que razon_social — mismo criterio que ya usa
             // etiquetaItem() en cotizador/editar.vue (frontend); esta función
             // (resolverNombreItem, backend) se había quedado atrás mostrando solo
             // razón social, lo que generaba el mismo proveedor con 2 nombres
             // distintos según la pantalla (rediseño-reporte-operativo).
-            $proveedorModel = $item->proveedorTarifa->proveedorServicio?->proveedor;
+            $proveedorModel = $tarifaHotelCatalogo->proveedorServicio?->proveedor;
             $proveedor = ($proveedorModel?->nombre_comercial ?: $proveedorModel?->razon_social) ?? 'Hotel';
 
-            return "{$proveedor} · {$item->proveedorTarifa->tipo_habitacion}";
+            return "{$proveedor} · {$tarifaHotelCatalogo->tipo_habitacion}";
         }
 
         // Sesión M2 — hotel de la matriz de un OpcionMayorista, sin
@@ -1096,11 +1226,10 @@ class ReservaController extends Controller
         // Sin esto, un hotel elegido de esta forma degradaba en silencio
         // al genérico 'Servicio' en cualquier vista que no fuera el
         // cotizador (Ronda 5/P13-P14, gap real confirmado).
-        $opcionHotelTarifa = $reservaItem?->opcion_hotel_tarifa_id ? $reservaItem->opcionHotelTarifa : $item->opcionHotelTarifa;
-        if ($opcionHotelTarifa) {
-            $nombreHotel = $opcionHotelTarifa->opcionHotel?->nombre_hotel ?? 'Hotel';
+        if ($tarifaHotelAdhoc) {
+            $nombreHotel = $tarifaHotelAdhoc->opcionHotel?->nombre_hotel ?? 'Hotel';
 
-            return "{$nombreHotel} · {$opcionHotelTarifa->tipo_habitacion}";
+            return "{$nombreHotel} · {$tarifaHotelAdhoc->tipo_habitacion}";
         }
 
         return $item->proveedorTarifa?->proveedorServicio?->destinoServicio?->servicio?->nombre ?? 'Servicio';

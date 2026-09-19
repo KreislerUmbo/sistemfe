@@ -1034,6 +1034,10 @@ Route::group([
     // Sesión 12h — reasignación en vivo de OpcionMayorista en ReservaItem.
     Route::post("reservas/{id}/reasignar-mayorista", [ReservaController::class, 'reasignarMayorista'])
         ->middleware('permission:reservas.editar');
+    // Espejo de reasignar-mayorista, para el hotel Local/Nacional
+    // (catálogo o ad-hoc).
+    Route::post("reservas/{id}/reasignar-hotel", [ReservaController::class, 'reasignarHotel'])
+        ->middleware('permission:reservas.editar');
     // Facturación externa por tenant + por reserva (PEGAR-EN-CLAUDE-CODE-
     // facturacion-externa-tenant.md, 2026-08-20).
     Route::put("reservas/{id}/facturacion-externa", [ReservaController::class, 'actualizarFacturacionExterna'])
