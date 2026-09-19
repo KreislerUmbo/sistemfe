@@ -3,8 +3,8 @@ import PortalLayout from '@/layouts/PortalLayout.vue'
 
 const setTitle = (title: string) => {
   return title
-    ? `${title} | Rizz Vue - Responsive Admin Dashboard Template`
-    : "Rizz Vue | Responsive Admin Dashboard Template";
+    ? `${title} | umbosystem`
+    : "UMBOSYSTEM";
 };
 
 

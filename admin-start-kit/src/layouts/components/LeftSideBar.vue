@@ -17,12 +17,12 @@
             </div>
             <h5 class="mt-3">UmboSystem</h5>
             <p class="mb-3 text-muted">
-              Rizz is a high quality web applications.
+              Hacemos que tu negocio sea más eficiente.
             </p>
             <a
               href="javascript: void(0);"
               class="btn text-primary shadow-sm rounded-pill"
-              >Upgrade your plan</a
+              >Versión 1.0</a
             >
           </div>
         </div>
