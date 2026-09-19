@@ -30,7 +30,13 @@ class Alternativa extends Model
         'tipo_cambio_aplicado' => 'decimal:4',
         'fecha_envio' => 'datetime',
         'fecha_vencimiento' => 'datetime',
-        'descuento_global_pct' => 'decimal:2',
+        // Guardrail (19-sep-2026) — 4 decimales, no 2: este campo también
+        // guarda el % EFECTIVO resuelto desde un monto (modo_descuento_
+        // global='monto'), casi nunca redondo (ver migración
+        // ampliar_precision_descuento_global_pct). Con 2 decimales el
+        // monto "equivalente" reconstruido en el frontend para mostrar en
+        // el input divergía del que el vendedor había tipeado.
+        'descuento_global_pct' => 'decimal:4',
         'total' => 'decimal:2',
     ];
 

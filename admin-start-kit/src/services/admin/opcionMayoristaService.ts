@@ -142,7 +142,10 @@ export const opcionMayoristaService = {
     const response = await httpClient.get(`/opciones-mayorista/${opcionMayoristaId}/tours`)
     return response.data
   },
-  async vincularTour(opcionMayoristaId: number, data: { paquete_plantilla_id: number; orden: number }) {
+  // Guardrail (18-sep-2026) — exactamente uno de los 2: paquete_plantilla_id
+  // (tour real, comportamiento sin cambios) o nombre+descripcion (ad-hoc,
+  // logística de ESTE itinerario — nunca toca el catálogo de Paquetes/Tours).
+  async vincularTour(opcionMayoristaId: number, data: { paquete_plantilla_id?: number; nombre?: string; descripcion?: string; orden: number }) {
     const response = await httpClient.post(`/opciones-mayorista/${opcionMayoristaId}/tours`, data)
     return response.data
   },
@@ -152,8 +155,10 @@ export const opcionMayoristaService = {
   },
   // Solo el "Día" (orden) del vínculo — el contenido del tour se edita
   // aparte, vía paquetePlantillaService.actualizar() (ya existe).
-  async actualizarOrdenTour(opcionMayoristaTourId: number, orden: number) {
-    const response = await httpClient.put(`/opcion-mayorista-tours/${opcionMayoristaTourId}`, { orden })
+  // nombre/descripcion SOLO aplican a un tour ad-hoc (sin paquete_plantilla_id)
+  // — el backend rechaza mandarlos sobre un tour de catálogo.
+  async actualizarOrdenTour(opcionMayoristaTourId: number, orden: number, contenidoAdhoc?: { nombre: string; descripcion: string }) {
+    const response = await httpClient.put(`/opcion-mayorista-tours/${opcionMayoristaTourId}`, { orden, ...contenidoAdhoc })
     return response.data
   }
 }

@@ -315,4 +315,83 @@ class SesionM1MatrizHotelesNucleoTest extends TestCase
         $this->assertEqualsWithDelta(10.0, (float) $alternativa->fresh()->descuento_global_pct, 0.01);
         $this->assertEquals(90.0, (float) $itemNormal->fresh()->precio_convertido); // 100 * 0.9
     }
+
+    // Guardrail (19-sep-2026, hallazgo real del usuario) — un ítem
+    // 'tarifa_fija' con cantidad>1 (mayorista con 2 adultos, ej. "San
+    // Francisco Plaza 3* · matrimonial" a USD 1059 x 2 adultos = 2118)
+    // hacía que sumaPreciosLista sumara solo el precio UNITARIO (1059),
+    // así que pctEfectivo = monto/sumaPreciosLista salía inflado por el
+    // mismo factor de cantidad. Pedir un descuento de 118 sobre el total
+    // (2118 → 2000) terminaba descontando 236 (118 x 2) → total real 1882,
+    // no 2000. sumaPreciosLista ahora multiplica por cantidad para
+    // 'tarifa_fija', igual que AlternativaItem::getTotalConvertidoAttribute().
+    public function test_descuento_global_monto_con_item_cantidad_mayor_a_uno(): void
+    {
+        $alternativa = $this->crearAlternativa();
+        $item = AlternativaItem::create([
+            'alternativa_id' => $alternativa->id, 'origen_tipo' => AlternativaItem::ORIGEN_MAYORISTA,
+            'modo_precio' => 'tarifa_fija', 'cantidad' => 2, 'moneda_costo' => 'PEN',
+            'costo_snapshot' => 800, 'precio_venta_snapshot' => 1059, 'precio_convertido' => 1059,
+        ]);
+
+        app(AlternativaController::class)->update(new Request(['descuento_global_monto' => 118]), (string) $alternativa->id);
+
+        $this->assertEqualsWithDelta(2000.0, (float) $alternativa->fresh()->total, 0.5);
+        $this->assertEqualsWithDelta(1000.0, (float) $item->fresh()->precio_convertido, 0.5, 'precio unitario, sin multiplicar por cantidad');
+    }
+
+    // Guardrail (19-sep-2026, hallazgo real del usuario) — segunda mitad
+    // del mismo bug reportado: aunque el TOTAL ya calculaba bien (test de
+    // arriba), alternativas.descuento_global_pct nació decimal(5,2) — solo
+    // 2 decimales. El % efectivo resuelto desde un monto casi nunca es
+    // redondo (2/2118*100 = 0.0944...%), así que Postgres lo truncaba a
+    // 0.09 al guardar. El frontend reconstruye un "monto equivalente" para
+    // mostrar en el input a partir de ESE % persistido (editar.vue::
+    // calcularMontoGlobalEquivalente()) — con el truncamiento, pedías "2"
+    // y el campo terminaba mostrando "1.91" al recargar. Migración
+    // ampliar_precision_descuento_global_pct ensancha a decimal(9,4).
+    public function test_descuento_global_pct_guarda_precision_suficiente_para_reconstruir_el_monto(): void
+    {
+        $alternativa = $this->crearAlternativa();
+        AlternativaItem::create([
+            'alternativa_id' => $alternativa->id, 'origen_tipo' => AlternativaItem::ORIGEN_MAYORISTA,
+            'modo_precio' => 'tarifa_fija', 'cantidad' => 2, 'moneda_costo' => 'PEN',
+            'costo_snapshot' => 800, 'precio_venta_snapshot' => 1059, 'precio_convertido' => 1059,
+        ]);
+
+        app(AlternativaController::class)->update(new Request(['descuento_global_monto' => 2]), (string) $alternativa->id);
+
+        $montoReconstruido = 2118 * ((float) $alternativa->fresh()->descuento_global_pct / 100);
+        $this->assertEqualsWithDelta(2.0, $montoReconstruido, 0.01, 'con 2 decimales esto daba 1.91, no 2 — el campo del vendedor "saltaba" al recargar');
+    }
+
+    // Guardrail (19-sep-2026) — columna HERMANA de la de arriba, mismo bug:
+    // aplicarDescuentoGlobal() guarda el % efectivo completo (0.0944, no
+    // redondo) en CADA alternativa_items.descuento_pct, no solo en
+    // alternativas.descuento_global_pct. Si esa columna sigue en
+    // decimal(5,2), un recálculo posterior que lea descuento_pct de vuelta
+    // (ej. CotizacionController::recalcularItemsPorPersona(), que preserva
+    // el descuento manual ya aplicado al reconstruir precio_convertido
+    // desde precio de lista) reconstruye un precio distinto en centavos al
+    // que el vendedor había dejado — el mismo drift, un nivel más abajo.
+    public function test_descuento_pct_del_item_guarda_precision_suficiente_para_no_derivar_de_mas(): void
+    {
+        $alternativa = $this->crearAlternativa();
+        AlternativaItem::create([
+            'alternativa_id' => $alternativa->id, 'origen_tipo' => AlternativaItem::ORIGEN_MAYORISTA,
+            'modo_precio' => 'tarifa_fija', 'cantidad' => 2, 'moneda_costo' => 'PEN',
+            'costo_snapshot' => 800, 'precio_venta_snapshot' => 1059, 'precio_convertido' => 1059,
+        ]);
+
+        app(AlternativaController::class)->update(new Request(['descuento_global_monto' => 2]), (string) $alternativa->id);
+
+        $item = $alternativa->items()->first();
+        // Mismo cálculo que haría un recálculo posterior a partir del %
+        // guardado — si descuento_pct quedó truncado a 0.09 (decimal(5,2)
+        // viejo), esto da 1058.0469 en vez de 1058.00 (el precio_convertido
+        // real que dejó aplicarDescuentoGlobal() con el % sin truncar).
+        $precioReconstruido = round(1059 * (1 - (float) $item->descuento_pct / 100), 2);
+        $this->assertEqualsWithDelta((float) $item->precio_convertido, $precioReconstruido, 0.01,
+            'un recálculo posterior (ej. cambio de pasajeros) reconstruiría un precio distinto al que dejó el vendedor');
+    }
 }

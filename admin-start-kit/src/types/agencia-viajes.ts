@@ -577,7 +577,14 @@ export type OpcionMayoristaOpcional = {
 export type OpcionMayoristaTour = {
   id: number;
   opcion_mayorista_id: number;
-  paquete_plantilla_id: number;
+  // Guardrail (18-sep-2026) — nullable: una fila sin paquete_plantilla_id
+  // es un tour ad-hoc (nombre/descripcion propios acá, sin
+  // PaquetePlantilla/TourItinerarioItem detrás), logística de ESTE
+  // itinerario (Arribo/Retorno/traslado) que nunca toca el catálogo de
+  // Paquetes/Tours. Mismo criterio que OpcionHotel.proveedor_id.
+  paquete_plantilla_id?: number | null;
+  nombre?: string | null;
+  descripcion?: string | null;
   orden: number;
   paquete_plantilla?: PaquetePlantilla;
 };
@@ -825,6 +832,16 @@ export type ReservaItem = {
   motivo_reasignacion_mayorista?: string | null;
   fecha_reasignacion_mayorista?: string | null;
   veces_reasignado_mayorista?: number;
+  // Hotel Local/Nacional original, poblado solo desde la PRIMERA
+  // reasignación (POST reservas/{id}/reasignar-hotel) en adelante — mismo
+  // criterio que opcion_mayorista_original_id. Solo una de las 2 puede
+  // tener valor a la vez (proveedor_tarifa_id/opcion_hotel_tarifa_id son
+  // mutuamente excluyentes), ver docblock del backend.
+  proveedor_tarifa_original_id?: number | null;
+  opcion_hotel_tarifa_original_id?: number | null;
+  motivo_reasignacion_hotel?: string | null;
+  fecha_reasignacion_hotel?: string | null;
+  veces_reasignado_hotel?: number;
 };
 
 export type ReservaItemVueloPasajero = {

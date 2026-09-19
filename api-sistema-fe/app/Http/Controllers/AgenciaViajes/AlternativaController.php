@@ -350,12 +350,28 @@ class AlternativaController extends Controller
     private function aplicarDescuentoGlobalMonto(Alternativa $alternativa, float $montoGlobal): array
     {
         return DB::transaction(function () use ($alternativa, $montoGlobal) {
-            $precioListaConvertidoDe = fn (AlternativaItem $item) => $this->priceEngine->convertirMoneda(
-                (float) $item->precio_venta_snapshot,
-                $item->moneda_costo,
-                $alternativa->moneda_cotizacion,
-                (float) $alternativa->tipo_cambio_aplicado
-            );
+            // Guardrail (19-sep-2026, hallazgo real del usuario) — antes esta
+            // closure devolvía el precio de lista UNITARIO (sin cantidad),
+            // pero sumaPreciosLista necesita representar el TOTAL de lista
+            // de la alternativa (mismo criterio que
+            // AlternativaItem::getTotalConvertidoAttribute(): un ítem
+            // 'tarifa_fija' multiplica por cantidad — mayorista con 2
+            // adultos, o un hotel Local/Nacional con varias noches). Sin
+            // esto, un ítem con cantidad>1 hacía que sumaPreciosLista
+            // saliera de menos, y pctEfectivo = monto/sumaPreciosLista se
+            // inflaba en ese mismo factor — pedir un descuento de 118 sobre
+            // un total de 2118 (hotel matrimonial a 1059 × 2 adultos)
+            // terminaba descontando 236 (118 × 2) en vez de 118.
+            $precioListaConvertidoDe = function (AlternativaItem $item) use ($alternativa) {
+                $precioUnitario = $this->priceEngine->convertirMoneda(
+                    (float) $item->precio_venta_snapshot,
+                    $item->moneda_costo,
+                    $alternativa->moneda_cotizacion,
+                    (float) $alternativa->tipo_cambio_aplicado
+                );
+
+                return $item->modo_precio === 'tarifa_fija' ? $precioUnitario * $item->cantidad : $precioUnitario;
+            };
 
             // Sesión M1 — mismo criterio de agrupación que
             // aplicarDescuentoGlobal(): un grupo resuelto cuenta solo su

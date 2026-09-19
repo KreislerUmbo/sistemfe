@@ -33,24 +33,57 @@
             <div v-if="!tourExistenteSeleccionado" class="text-muted text-center mb-2" style="font-size:11px">— o crear un tour nuevo —</div>
         </template>
         <template v-if="esEdicion || !tourExistenteSeleccionado">
-        <input type="text" class="form-control form-control-sm mb-1" placeholder="Nombre (ej. City Tour + Canal de Panamá)"
+        <!-- Guardrail (18-sep-2026) — hallazgo real del usuario: este mismo
+             mini-form era la forma más rápida de armar el itinerario
+             día-por-día para el PDF, pero cada "día" creaba SIEMPRE un
+             PaquetePlantilla nuevo y permanente en el catálogo de
+             Paquetes/Tours — incluso días de pura logística ("Arribo a
+             Cusco", "Retorno") que nunca se revenden como tour. Con el
+             tiempo, cada destino cotizado mintaría su propio "Arribo a
+             X"/"Retorno" suelto, puro ruido creciente en el buscador de
+             tours de CUALQUIER cotización futura. El toggle solo se
+             ofrece al CREAR — cambiar un tour ya guardado de un tipo al
+             otro es una operación distinta (crear/quitar), no una edición
+             de campos, y queda fuera de alcance de este mini-form. -->
+        <div v-if="!esEdicion" class="btn-group btn-group-sm w-100 mb-2" role="group">
+            <input type="radio" class="btn-check" id="tour-tipo-real" :checked="!esAdhoc" @change="esAdhoc = false">
+            <label class="btn btn-outline-secondary" for="tour-tipo-real">Tour real y reutilizable</label>
+            <input type="radio" class="btn-check" id="tour-tipo-adhoc" :checked="esAdhoc" @change="esAdhoc = true">
+            <label class="btn btn-outline-secondary" for="tour-tipo-adhoc">Solo texto de este itinerario</label>
+        </div>
+        <p v-if="esAdhoc" class="text-muted fst-italic mb-2" style="font-size:11px">
+            Para logística sin producto vendible (Arribo, Retorno, traslado) — no crea nada en el catálogo de Paquetes/Tours, queda solo en este itinerario.
+        </p>
+        <input type="text" class="form-control form-control-sm mb-1" :placeholder="esAdhoc ? 'Nombre (ej. Arribo a Cusco)' : 'Nombre (ej. City Tour + Canal de Panamá)'"
             v-model="form.nombre">
+        <template v-if="!esAdhoc">
+        <label class="form-label mb-0 small text-secondary">Categoría de este tour</label>
+        <select class="form-select form-select-sm mb-1" v-model="form.categoria">
+            <option :value="null" disabled>Elegí una categoría...</option>
+            <option value="local">Local</option>
+            <option value="nacional">Nacional</option>
+            <option value="internacional">Internacional</option>
+        </select>
+        <p class="text-muted fst-italic mb-1" style="font-size:11px">
+            Un paquete internacional casi siempre incluye días de tours 100% nacionales (ej. "City Tour en Cusco" dentro de un paquete con vuelo a Panamá) — elegí la categoría real de ESTE tour, no la del paquete completo.
+        </p>
+        </template>
         <div class="mb-1">
             <RichTextEditor v-model="form.descripcion"
                 placeholder="Descripción (narrativa del tour — es lo que se imprime en la sección Itinerario del PDF)" />
         </div>
         <div class="row g-1 mb-1">
-            <div class="col-8">
+            <div class="col-8" v-if="!esAdhoc">
                 <label class="form-label mb-0 small text-secondary">Destino/atractivo</label>
                 <DestinoTreeSelect v-model="form.destino_atractivo_id" placeholder="Zona o atractivo..." />
             </div>
-            <div class="col-2">
+            <div class="col-2" v-if="!esAdhoc">
                 <label class="form-label mb-0 small text-secondary">Duración (h)</label>
                 <input type="number" min="1" class="form-control form-control-sm" v-model.number="form.duracion_horas">
             </div>
-            <div class="col-2">
+            <div :class="esAdhoc ? 'col-12' : 'col-2'">
                 <label class="form-label mb-0 small text-secondary" title="Posición de este tour en la secuencia de tours incluidos de este paquete">Día</label>
-                <input type="number" min="1" class="form-control form-control-sm" v-model.number="form.dia">
+                <input type="number" min="1" class="form-control form-control-sm" :style="esAdhoc ? 'max-width:80px' : ''" v-model.number="form.dia">
             </div>
         </div>
         <!-- Hallazgo del usuario (05-sep-2026): en edición solo se podían
@@ -85,14 +118,16 @@
                 </label>
             </div>
         </div>
+        <template v-if="!esAdhoc">
         <label class="form-label mb-1 small text-secondary">{{ esEdicion ? 'Agregar más fotos (opcional)' : 'Fotos (opcional)' }}</label>
         <input type="file" accept="image/*" multiple class="form-control form-control-sm mb-1" @change="onFotosSeleccionadas">
         <div v-if="fotosSeleccionadas.length" class="d-flex flex-wrap gap-1 mb-1">
             <img v-for="(foto, idx) in fotosSeleccionadas" :key="idx" :src="foto.previewUrl"
                 style="width:50px;height:50px;object-fit:cover;border:1px solid #ccc;border-radius:3px;cursor:zoom-in;" @click="verFotoGrande(fotosSeleccionadas.map((f) => f.previewUrl), idx)">
         </div>
+        </template>
         <div class="d-flex gap-2">
-            <button class="btn btn-primary btn-sm w-100" @click="guardar" :disabled="guardando || !form.nombre.trim() || descripcionVacia || !form.destino_atractivo_id">
+            <button class="btn btn-primary btn-sm w-100" @click="guardar" :disabled="guardando || !form.nombre.trim() || descripcionVacia || (!esAdhoc && (!form.destino_atractivo_id || !form.categoria))">
                 <span v-if="guardando" class="spinner-border spinner-border-sm me-1"></span>{{ esEdicion ? 'Guardar' : 'Crear tour' }}
             </button>
             <button class="btn btn-outline-secondary btn-sm" @click="$emit('cancelar')"><i class="fas fa-times"></i></button>
@@ -131,9 +166,14 @@
 // ya usa el buscador de contenido reutilizable de OpcionMayoristaForm, pero
 // acá busca en paquetes_plantilla (PaquetePlantillaController::index()),
 // no en contenido_tours (que es solo texto suelto para el campo "Incluye",
-// una entidad completamente distinta). Filtra por categoria='internacional'
-// porque es lo único que este form crea/consume — un tour Local/Nacional no
-// aplica al itinerario de un paquete de mayorista.
+// una entidad completamente distinta).
+// Guardrail (18-sep-2026) — antes filtraba por categoria='internacional'
+// porque este form solo creaba tours con esa categoría a fuego (ver
+// guardar() más abajo, bug real: un tour 100% doméstico dentro de un
+// paquete internacional, ej. "City Tour en Cusco", quedaba mal-etiquetado).
+// Ahora que la categoría se elige de verdad, el buscador ya no puede
+// asumir cuál es — busca en TODAS, así encuentra un tour ya corregido a
+// nacional/local igual que uno internacional real.
 import { ref, computed, watch } from 'vue';
 import Swal from 'sweetalert2/dist/sweetalert2.js';
 import DestinoTreeSelect from '@/components/AgenciaViajes/DestinoTreeSelect.vue';
@@ -164,7 +204,18 @@ const esEdicion = computed(() => !!props.tourExistente);
 const form = ref({
     nombre: '', descripcion: '', destino_atractivo_id: props.destinoAtractivoId as number | null,
     duracion_horas: 8, dia: props.diaSugerido,
+    // Guardrail (18-sep-2026) — antes esto se mandaba SIEMPRE como
+    // 'internacional' a fuego (ver guardar() más abajo), sin importar el
+    // contenido real del tour. Es el mismo bug que ya había mal-etiquetado
+    // tours 100% domésticos (Cusco) — sin default a propósito, para forzar
+    // una elección activa en vez de repetir el error en silencio.
+    categoria: null as 'local' | 'nacional' | 'internacional' | null,
 });
+
+// Guardrail (18-sep-2026) — ver comentario del template. true = logística
+// de solo texto para ESTE itinerario (nunca crea PaquetePlantilla); false =
+// tour real y reutilizable, comportamiento original sin cambios.
+const esAdhoc = ref(false);
 
 // Editor de texto enriquecido (07-sep-2026) — Quill nunca deja el v-model
 // en '' cuando está "vacío" a la vista, emite '<p><br></p>'. Mismo guard
@@ -187,10 +238,11 @@ const paqueteIdActual = ref<number | null>(null);
 const resetearCampos = async () => {
     const t = props.tourExistente;
     if (t?.paquete_plantilla) {
+        esAdhoc.value = false;
         const pp = t.paquete_plantilla;
         form.value = {
             nombre: pp.nombre, descripcion: pp.descripcion ?? '', destino_atractivo_id: pp.destino_atractivo_id,
-            duracion_horas: pp.duracion_horas, dia: t.orden,
+            duracion_horas: pp.duracion_horas, dia: t.orden, categoria: pp.categoria,
         };
         fotosExistentes.value = pp.fotos ?? [];
         fotoPortada.value = pp.foto_portada ?? null;
@@ -204,10 +256,25 @@ const resetearCampos = async () => {
             // Sin bloquear la edición si esto falla — guardar() más abajo
             // ya contempla pasoItinerarioId nulo (no actualiza el paso).
         }
+    } else if (t) {
+        // Editando un tour ad-hoc (sin paquete_plantilla) — nombre/descripcion
+        // viven directo en OpcionMayoristaTour, no hay itinerario/fotos/destino
+        // que cargar.
+        esAdhoc.value = true;
+        form.value = {
+            nombre: t.nombre ?? '', descripcion: t.descripcion ?? '', destino_atractivo_id: null,
+            duracion_horas: 8, dia: t.orden, categoria: null,
+        };
+        fotosExistentes.value = [];
+        fotoPortada.value = null;
+        fotosDestacadas.value = [];
+        paqueteIdActual.value = null;
+        pasoItinerarioId.value = null;
     } else {
+        esAdhoc.value = false;
         form.value = {
             nombre: '', descripcion: '', destino_atractivo_id: props.destinoAtractivoId,
-            duracion_horas: 8, dia: props.diaSugerido,
+            duracion_horas: 8, dia: props.diaSugerido, categoria: null,
         };
         fotosExistentes.value = [];
         fotoPortada.value = null;
@@ -312,7 +379,7 @@ const buscarTourExistente = async () => {
         tourBuscarResultados.value = [];
         return;
     }
-    const res = await paquetePlantillaService.listar({ search: tourBuscarQuery.value, categoria: 'internacional' });
+    const res = await paquetePlantillaService.listar({ search: tourBuscarQuery.value });
     tourBuscarResultados.value = res.paquetes_plantilla ?? [];
 };
 
@@ -358,15 +425,51 @@ const onFotosSeleccionadas = (event: Event) => {
 
 const guardando = ref(false);
 const guardar = async () => {
+    if (esAdhoc.value) {
+        guardando.value = true;
+        try {
+            if (esEdicion.value && props.tourExistente) {
+                const res = await opcionMayoristaService.actualizarOrdenTour(props.tourExistente.id, form.value.dia, {
+                    nombre: form.value.nombre,
+                    descripcion: form.value.descripcion,
+                });
+                emit('actualizado', res.opcion_mayorista_tour);
+            } else {
+                const res = await opcionMayoristaService.vincularTour(props.opcionMayoristaId, {
+                    nombre: form.value.nombre,
+                    descripcion: form.value.descripcion,
+                    orden: form.value.dia,
+                });
+                emit('agregado', res.opcion_mayorista_tour);
+            }
+        } catch (error: any) {
+            (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo guardar el tour', 'error');
+        } finally {
+            guardando.value = false;
+        }
+        return;
+    }
+
     if (!form.value.destino_atractivo_id) return;
     guardando.value = true;
     try {
+        if (!form.value.categoria) return;
         const fd = new FormData();
         fd.append('nombre', form.value.nombre);
-        fd.append('categoria', 'internacional');
+        fd.append('categoria', form.value.categoria);
         fd.append('destino_atractivo_id', String(form.value.destino_atractivo_id));
         fd.append('duracion_horas', String(form.value.duracion_horas));
-        fd.append('descripcion', form.value.descripcion);
+        // Guardrail (18-sep-2026) — antes esto mandaba form.value.descripcion
+        // TAMBIÉN acá (PaquetePlantilla.descripcion, "Descripción comercial"
+        // de Datos generales), duplicando el mismo texto largo que ya se
+        // manda abajo al paso de Itinerario. Hallazgo real del usuario: el
+        // PDF SOLO lee la descripción del paso de itinerario
+        // (AlternativaPdfService::itinerarioAlternativa(), $paso->descripcion)
+        // — descripcion a nivel de PaquetePlantilla no se imprime en ningún
+        // lado del PDF, así que duplicarla acá no sumaba nada, solo ensuciaba
+        // "Datos generales" con el itinerario completo. Se deja sin mandar:
+        // si el vendedor quiere un resumen corto ahí, lo escribe aparte
+        // desde Paquetes/Tours > Datos generales > Editar (no se toca acá).
         fotosSeleccionadas.value.forEach((item) => fd.append('fotos[]', item.file));
 
         if (esEdicion.value && props.tourExistente) {

@@ -13,6 +13,7 @@ use App\Models\AgenciaViajes\PaquetePlantilla;
 use App\Services\StorageUrl;
 use App\Services\TextoFormatoService;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 
 // Extraído de AlternativaController (09-sep-2026, auditoría de
 // mantenibilidad project_agencia_viajes_auditoria_mantenibilidad_2026-09-05)
@@ -91,6 +92,8 @@ class AlternativaPdfService
             'items.opcionMayoristaOpcional',
         ])->findOrFail($id);
 
+        $this->validarGruposResueltos($alternativa);
+
         $config = \App\Models\AgenciaViajes\ConfiguracionAgencia::first();
         $empresa = \App\Models\Company::first();
         $cuentasBancarias = \App\Models\AgenciaViajes\CuentaBancaria::where('activo', true)
@@ -157,6 +160,17 @@ class AlternativaPdfService
         $configPdf = ConfiguracionAgenciaPdf::actual();
         $categoria = $this->resolverCategoriaAlternativa($alternativa);
         $colorCategoria = $this->colorPorCategoria($categoria, $configPdf);
+        // Guardrail de diseño (18-sep-2026) — se quitó la "cinta de
+        // categoría" (badge suelto) y se reusa colorCategoria como acento
+        // en el cuadro de cada día del itinerario. Los colores reales
+        // configurados pueden ser bien saturados (ej. rojo puro para
+        // "nacional" en agencia-demo) — usarlos a pleno como FONDO de un
+        // cuadro se ve como alerta, no como diseño. colorCategoriaTinte es
+        // el mismo color mezclado ~92% con blanco, para el fondo del
+        // cuadro; el color real sin mezclar se reserva para el borde/texto
+        // (acento angosto), donde su intensidad no compite con el
+        // contenido.
+        $colorCategoriaTinte = $this->tintClaro($colorCategoria);
         $afiliaciones = $this->afiliacionesParaMostrar($configPdf);
         [$fotoPortadaPrincipal, $fotosPortadaSecundarias] = $this->fotosTourParaPdf($alternativa, $configPdf);
         $hotelesInfo = $this->hotelesInfoParaPdf($opcionesHoteles);
@@ -206,6 +220,7 @@ class AlternativaPdfService
             'afiliaciones' => $afiliaciones,
             'categoria' => $categoria,
             'colorCategoria' => $colorCategoria,
+            'colorCategoriaTinte' => $colorCategoriaTinte,
             'fotoPortadaPrincipal' => $fotoPortadaPrincipal,
             'fotosPortadaSecundarias' => $fotosPortadaSecundarias,
             'hotelesInfo' => $hotelesInfo,
@@ -325,83 +340,51 @@ class AlternativaPdfService
 
         foreach ($this->itemsPorDestino($alternativa) as $grupo) {
             $destino = $grupo['destino'];
-            $tourIds = $grupo['items']->pluck('tour_origen_id')->filter()->unique()->values();
-
-            // Tours incluidos de un paquete de mayorista (OpcionMayoristaTour,
-            // 04-sep-2026) — misma fuente de itinerario que un tour_origen_id
-            // de Local/Nacional, solo que llega vía la opción de mayorista en
-            // vez de directo del ítem. Se agregan DESPUÉS de los de
-            // tour_origen_id (dedup), respetando 'orden' (el "Día" que ve el
-            // vendedor) para la secuencia dentro de cada mayorista.
-            $mayoristasDelGrupo = $grupo['items']->map(fn (AlternativaItem $item) => $item->opcionMayorista)->filter()->unique('id');
-            foreach ($mayoristasDelGrupo as $opcionMayorista) {
-                $tourIds = $tourIds->concat(
-                    $opcionMayorista->tours()->orderBy('orden')->pluck('paquete_plantilla_id')
-                );
-            }
-            $tourIds = $tourIds->unique()->values();
-
-            if ($tourIds->isEmpty()) {
-                continue;
-            }
+            $tourIdsLocal = $grupo['items']->pluck('tour_origen_id')->filter()->unique()->values();
 
             $pasos = [];
             $offsetDia = 0;
 
-            foreach ($tourIds as $tourId) {
-                $tour = \App\Models\AgenciaViajes\PaquetePlantilla::find($tourId);
-                if (! $tour) {
-                    continue;
-                }
+            foreach ($tourIdsLocal as $tourId) {
+                $offsetDia = $this->agregarPasosDeTour(PaquetePlantilla::find($tourId), $pasos, $offsetDia);
+            }
 
-                // Hallazgo real (feedback del usuario sobre el PDF ya en
-                // producción): 'destino_atractivo_id' es un campo
-                // ESTRUCTURADO por paso ("Tio Yacu", "Baños Termales",
-                // "Orquideario"...), independiente de la 'descripcion' en
-                // texto libre — confirmado contra datos reales de
-                // agencia-demo, el nombre del atractivo casi nunca se
-                // repite tal cual dentro de la prosa de 'descripcion'. Sin
-                // el eager-load y sin pasarlo a la vista, el PDF nunca lo
-                // mostraba pese a que el dato ya está cargado por el
-                // vendedor al armar el tour en el catálogo.
-                $pasosDelTour = $tour->paqueteItinerario()->with('destinoAtractivo')->orderBy('dia_relativo')->orderBy('orden')->get();
-                $maxDiaDelTour = 0;
+            // Tours incluidos de un paquete de mayorista (OpcionMayoristaTour,
+            // 04-sep-2026) — misma fuente de itinerario que un tour_origen_id
+            // de Local/Nacional, solo que llega vía la opción de mayorista.
+            //
+            // Guardrail (18-sep-2026) — ya no son SIEMPRE un PaquetePlantilla:
+            // una fila ad-hoc (paquete_plantilla_id null, ver migración
+            // add_adhoc_a_opcion_mayorista_tours) es logística pura de ESTE
+            // itinerario (Arribo/Retorno/traslado), con su nombre/descripcion
+            // propios acá mismo — nunca un producto del catálogo. Se procesa
+            // en el MISMO orden ('orden', el "Día" que ve el vendedor) que
+            // los reales, sin separarlos en 2 pasadas: el vendedor los
+            // intercala (Día 1 Arribo ad-hoc, Día 2 Tour real, Día 3 Retorno
+            // ad-hoc...), así que agruparlos por tipo rompería la secuencia.
+            $mayoristasDelGrupo = $grupo['items']->map(fn (AlternativaItem $item) => $item->opcionMayorista)->filter()->unique('id');
+            foreach ($mayoristasDelGrupo as $opcionMayorista) {
+                foreach ($opcionMayorista->tours()->orderBy('orden')->get() as $tourVinculo) {
+                    if ($tourVinculo->paquete_plantilla_id) {
+                        $offsetDia = $this->agregarPasosDeTour(
+                            PaquetePlantilla::find($tourVinculo->paquete_plantilla_id),
+                            $pasos,
+                            $offsetDia
+                        );
 
-                // Simulación Panamá (04-sep-2026) — fotos del tour, mismo
-                // patrón que 'tour_nombre': se repiten por paso (el blade solo
-                // las imprime una vez, en el primer paso del día) para no
-                // duplicar la lógica de "una vez por tour" en la vista.
-                //
-                // Hallazgo del usuario (06-sep-2026): estas fotos se pasaban
-                // como el ORIGINAL sin recortar (solo resolveParaPdf(), sin
-                // ImagenRecorteService) — dompdf no conocía el tamaño real
-                // hasta decodificar la imagen, y con fotos de celular de
-                // proporción/resolución arbitraria terminaba pisando el
-                // título del día siguiente ("el título de los tours es
-                // montado por las imágenes"). Recorte 4:3 fijo (mismo
-                // servicio que portada/galería/hoteles) elimina la
-                // ambigüedad de tamaño — el blade además fija width/height
-                // explícitos en el <img>, dompdf ya no tiene que adivinar.
-                //
-                // Máximo 3 fotos (pedido del usuario, 07-sep-2026) — mismo
-                // criterio que la tira de hoteles (fachada + 1-2 de
-                // habitación); un tour con muchas fotos cargadas no debe
-                // generar un PDF de tamaño impredecible.
-                $fotosDelTour = $this->imagenRecorte->recortarVariasParaPdf(array_slice($tour->fotos ?? [], 0, 3));
+                        continue;
+                    }
 
-                foreach ($pasosDelTour as $paso) {
+                    $offsetDia++;
                     $pasos[] = [
-                        'dia' => $offsetDia + $paso->dia_relativo,
-                        'hora' => $paso->hora,
-                        'descripcion' => TextoFormatoService::sanitizarHtmlParaPdf($paso->descripcion),
-                        'tour_nombre' => $tour->nombre,
-                        'tour_fotos' => $fotosDelTour,
-                        'atractivo_nombre' => $paso->destinoAtractivo?->nombre,
+                        'dia' => $offsetDia,
+                        'hora' => null,
+                        'descripcion' => TextoFormatoService::sanitizarHtmlParaPdf($tourVinculo->descripcion),
+                        'tour_nombre' => $tourVinculo->nombre,
+                        'tour_fotos' => [],
+                        'atractivo_nombre' => null,
                     ];
-                    $maxDiaDelTour = max($maxDiaDelTour, $paso->dia_relativo);
                 }
-
-                $offsetDia += $maxDiaDelTour;
             }
 
             if (empty($pasos)) {
@@ -418,6 +401,67 @@ class AlternativaPdfService
         }
 
         return $bloques;
+    }
+
+    // Extraído (18-sep-2026) de itinerarioAlternativa() — arma los pasos de
+    // itinerario de UN tour real de catálogo (Local/Nacional directo, o de
+    // mayorista con paquete_plantilla_id), acumulando $pasos por referencia
+    // y devolviendo el offsetDia actualizado (mismo criterio de siempre:
+    // offsetDia += el mayor dia_relativo de ESTE tour, para que el próximo
+    // tour siga la numeración de días donde este terminó).
+    private function agregarPasosDeTour(?PaquetePlantilla $tour, array &$pasos, int $offsetDia): int
+    {
+        if (! $tour) {
+            return $offsetDia;
+        }
+
+        // Hallazgo real (feedback del usuario sobre el PDF ya en
+        // producción): 'destino_atractivo_id' es un campo ESTRUCTURADO por
+        // paso ("Tio Yacu", "Baños Termales", "Orquideario"...),
+        // independiente de la 'descripcion' en texto libre — confirmado
+        // contra datos reales de agencia-demo, el nombre del atractivo
+        // casi nunca se repite tal cual dentro de la prosa de
+        // 'descripcion'. Sin el eager-load y sin pasarlo a la vista, el
+        // PDF nunca lo mostraba pese a que el dato ya está cargado por el
+        // vendedor al armar el tour en el catálogo.
+        $pasosDelTour = $tour->paqueteItinerario()->with('destinoAtractivo')->orderBy('dia_relativo')->orderBy('orden')->get();
+        $maxDiaDelTour = 0;
+
+        // Simulación Panamá (04-sep-2026) — fotos del tour, mismo patrón
+        // que 'tour_nombre': se repiten por paso (el blade solo las
+        // imprime una vez, en el primer paso del día) para no duplicar la
+        // lógica de "una vez por tour" en la vista.
+        //
+        // Hallazgo del usuario (06-sep-2026): estas fotos se pasaban como
+        // el ORIGINAL sin recortar (solo resolveParaPdf(), sin
+        // ImagenRecorteService) — dompdf no conocía el tamaño real hasta
+        // decodificar la imagen, y con fotos de celular de
+        // proporción/resolución arbitraria terminaba pisando el título del
+        // día siguiente ("el título de los tours es montado por las
+        // imágenes"). Recorte 4:3 fijo (mismo servicio que
+        // portada/galería/hoteles) elimina la ambigüedad de tamaño — el
+        // blade además fija width/height explícitos en el <img>, dompdf ya
+        // no tiene que adivinar.
+        //
+        // Máximo 3 fotos (pedido del usuario, 07-sep-2026) — mismo
+        // criterio que la tira de hoteles (fachada + 1-2 de habitación);
+        // un tour con muchas fotos cargadas no debe generar un PDF de
+        // tamaño impredecible.
+        $fotosDelTour = $this->imagenRecorte->recortarVariasParaPdf(array_slice($tour->fotos ?? [], 0, 3));
+
+        foreach ($pasosDelTour as $paso) {
+            $pasos[] = [
+                'dia' => $offsetDia + $paso->dia_relativo,
+                'hora' => $paso->hora,
+                'descripcion' => TextoFormatoService::sanitizarHtmlParaPdf($paso->descripcion),
+                'tour_nombre' => $tour->nombre,
+                'tour_fotos' => $fotosDelTour,
+                'atractivo_nombre' => $paso->destinoAtractivo?->nombre,
+            ];
+            $maxDiaDelTour = max($maxDiaDelTour, $paso->dia_relativo);
+        }
+
+        return $offsetDia + $maxDiaDelTour;
     }
 
     // Sesión 12f-3 — "Incluye" (lista de nombres, sin precio) agrupada por
@@ -472,6 +516,43 @@ class AlternativaPdfService
         return $bloques;
     }
 
+    // Guardrail (19-sep-2026, hallazgo del usuario) — antes se podía generar
+    // el PDF que se manda al cliente con un grupo de opciones (matriz de
+    // hoteles) todavía "sin resolver" (ninguna marcada como elegida).
+    // AlternativaItem::calcularTotalEfectivo() ya arma el total en ese caso
+    // con la opción MÁS BARATA del grupo, en silencio — el cliente veía un
+    // total que en realidad ya asumía un hotel puntual, sin que la tabla de
+    // "Opciones de hoteles" lo marcara como tal (ninguna fila queda
+    // resaltada). Bloquear acá, antes de generar, en vez de solo avisar en
+    // el PDF: es más seguro que confiar en que el vendedor se acuerde de
+    // resolverlo cada vez, y evita mandarle al cliente un precio que
+    // después hay que corregir si termina eligiendo la opción más cara.
+    private function validarGruposResueltos(Alternativa $alternativa): void
+    {
+        $grupos = AlternativaItem::agruparPorGrupoOpcion($alternativa->items)['grupos'];
+
+        $gruposSinResolver = $grupos->reject(
+            fn (array $grupo) => $grupo['items']->contains('opcion_elegida', true)
+        );
+
+        if ($gruposSinResolver->isEmpty()) {
+            return;
+        }
+
+        $nombresPorGrupo = $gruposSinResolver->map(
+            fn (array $grupo) => $grupo['items']
+                ->map(fn (AlternativaItem $item) => explode(' · ', ReservaController::resolverNombreItem($item, null, 'cliente'), 2)[0])
+                ->unique()
+                ->implode(' / ')
+        );
+
+        throw ValidationException::withMessages([
+            'grupo_opcion' => 'No se puede generar el PDF: falta elegir una opción en '
+                .($nombresPorGrupo->count() > 1 ? 'estos grupos de hotel' : 'este grupo de hotel')
+                .' — '.$nombresPorGrupo->implode('; ').'. Marcá una opción como elegida antes de enviar la cotización al cliente.',
+        ]);
+    }
+
     private function opcionesHoteles(Alternativa $alternativa): array
     {
         $grupos = AlternativaItem::agruparPorGrupoOpcion($alternativa->items)['grupos'];
@@ -496,6 +577,19 @@ class AlternativaPdfService
                 [$hotel, $tipoHabitacion] = $partes;
                 $tiposPresentes[$tipoHabitacion] = true;
 
+                // Guardrail (18-sep-2026) — agrupar por NOMBRE (texto
+                // resuelto) fusionaba silenciosamente 2 hoteles distintos
+                // que coincidieran en el nombre tipeado (un hotel real del
+                // catálogo y uno ad-hoc, o 2 proveedores distintos con el
+                // mismo nombre comercial) en una sola fila, pisando sus
+                // precios entre sí. La identidad real es proveedor_servicio_id
+                // (mismo criterio ya usado en editar.vue::
+                // grupoHotelAbiertoDiaActivo) para un hotel de catálogo, u
+                // opcion_hotel_id para uno ad-hoc — nunca el texto.
+                $idHotel = $item->proveedor_tarifa_id
+                    ? 'proveedor:' . $item->proveedorTarifa->proveedor_servicio_id
+                    : 'adhoc:' . $item->opcionHotelTarifa?->opcion_hotel_id;
+
                 // Sesión de guardrails (17-sep-2026) — `cantidad` significa
                 // cosas distintas según el origen: en mayorista ya es
                 // "adultos" y precio_convertido YA es el total del paquete
@@ -510,10 +604,17 @@ class AlternativaPdfService
                     ? (float) $item->precio_convertido
                     : (float) $item->total_convertido;
 
-                $filasPorHotel[$hotel] ??= ['hotel' => $hotel, 'precios' => [], 'elegida' => false, 'opcion_hotel_id' => $item->opcionHotelTarifa?->opcion_hotel_id];
-                $filasPorHotel[$hotel]['precios'][$tipoHabitacion] = $precio;
+                $filasPorHotel[$idHotel] ??= ['hotel' => $hotel, 'precios' => [], 'elegida' => false, 'tipo_elegido' => null, 'opcion_hotel_id' => $item->opcionHotelTarifa?->opcion_hotel_id];
+                $filasPorHotel[$idHotel]['precios'][$tipoHabitacion] = $precio;
                 if ($item->opcion_elegida) {
-                    $filasPorHotel[$hotel]['elegida'] = true;
+                    $filasPorHotel[$idHotel]['elegida'] = true;
+                    // Hallazgo del usuario (19-sep-2026): un hotel puede tener
+                    // varios tipos de habitación en la tabla (doble/matrimonial)
+                    // pero la elección real es de UNO solo — resaltar la fila
+                    // entera (como antes) marcaba ambos precios como "elegida"
+                    // sin decir cuál de los dos arma el total. tipo_elegido
+                    // guarda el tipo específico para resaltar solo esa celda.
+                    $filasPorHotel[$idHotel]['tipo_elegido'] = $tipoHabitacion;
                 }
             }
 
@@ -581,6 +682,28 @@ class AlternativaPdfService
             'local' => $configPdf->color_categoria_local,
             default => $configPdf->color_categoria_nacional,
         };
+    }
+
+    // Mezcla un color hex con blanco — dompdf no soporta color-mix()/rgba()
+    // de forma confiable en todas sus versiones, así que el tinte se
+    // calcula acá y se manda ya resuelto a hex. $peso es cuánto del color
+    // ORIGINAL queda (0.08 = 8% color + 92% blanco); default pensado para
+    // un fondo de cuadro sutil, no para el acento de borde/texto (ese usa
+    // el color sin mezclar).
+    private function tintClaro(string $hex, float $peso = 0.08): string
+    {
+        $hex = ltrim($hex, '#');
+        if (strlen($hex) === 3) {
+            $hex = implode('', array_map(fn ($c) => $c.$c, str_split($hex)));
+        }
+        if (strlen($hex) !== 6 || ! ctype_xdigit($hex)) {
+            return '#f5f5f5';
+        }
+
+        [$r, $g, $b] = array_map(fn ($c) => hexdec($c), str_split($hex, 2));
+        $mezclar = fn ($canal) => (int) round($canal * $peso + 255 * (1 - $peso));
+
+        return sprintf('#%02x%02x%02x', $mezclar($r), $mezclar($g), $mezclar($b));
     }
 
     // plan §4.3 — solo arma la franja si mostrar_afiliaciones=true Y la

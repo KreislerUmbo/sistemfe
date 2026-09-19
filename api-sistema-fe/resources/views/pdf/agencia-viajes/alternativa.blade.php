@@ -148,7 +148,7 @@
             font-weight: bold;
             font-size: 13px;
             text-transform: uppercase;
-            border-bottom: 1px solid #999999;
+            border-bottom: 2px solid {{ $configPdf->color_primario ?? '#1f2937' }};
             padding-bottom: 4px;
             margin-bottom: 8px;
         }
@@ -163,15 +163,43 @@
         }
 
         .dia-item {
-            margin-bottom: 8px;
+            margin-bottom: 10px;
         }
 
+        {{-- Guardrail de diseño (18-sep-2026) — reemplaza la cinta de
+             categoría (badge suelto, quitada) por un acento de color
+             reusado como cuadro SOLO en la etiqueta del día: borde
+             izquierdo + fondo con un tinte muy claro del color de
+             categoría (colorCategoriaTinte, calculado en PHP — dompdf no
+             resuelve color-mix()/rgba() de forma confiable). El color sin
+             mezclar queda reservado para "Día N" (dia-label-dia) y el
+             nombre del tour usa color_primario — 2 colores con un rol
+             cada uno, no una paleta suelta.
+             OJO: este padding/fondo va en .dia-label, NUNCA en .dia-item
+             — .dia-item es el contenedor de .itinerario-fotos, y darle
+             padding ahí le achica el ancho disponible a las fotos
+             (width en % ya frágil en dompdf, ver comentario de
+             .itinerario-fotos más abajo — hallazgo real del usuario
+             probando esto: las fotos se descuadraron apenas .dia-item
+             tuvo padding). --}}
         .dia-item .dia-label {
             font-family: 'Poppins-Medium', 'Poppins', sans-serif;
             font-weight: bold;
             font-size: 12px;
             line-height: 16px;
             margin-bottom: 6px;
+            border-left: 4px solid {{ $colorCategoria }};
+            background-color: {{ $colorCategoriaTinte }};
+            border-radius: 3px;
+            padding: 6px 10px;
+        }
+
+        .dia-item .dia-label .dia-label-dia {
+            color: {{ $colorCategoria }};
+        }
+
+        .dia-item .dia-label .dia-label-tour {
+            color: {{ $configPdf->color_primario ?? '#1f2937' }};
         }
 
         .dia-item .paso {
@@ -306,10 +334,24 @@
             color: #999999;
         }
 
-        .hoteles-tabla tr.fila-elegida td {
+        {{-- Guardrail (19-sep-2026) — antes resaltaba tr.fila-elegida
+             (toda la fila del hotel), lo que marcaba como "elegida" TODOS
+             los tipos de habitación de ese hotel aunque solo uno fuera el
+             real. Ahora resalta solo la celda del tipo específico. --}}
+        .hoteles-tabla td.precio-elegido {
             font-family: 'Poppins-SemiBold', 'Poppins', sans-serif;
             font-weight: bold;
             background: #eef4ff;
+        }
+
+        .precio-elegido-nota {
+            display: block;
+            font-size: 8px;
+            font-family: 'Poppins-Medium', 'Poppins', sans-serif;
+            font-weight: normal;
+            color: #2f6fed;
+            text-transform: uppercase;
+            letter-spacing: .3px;
         }
 
         .hoteles-elegida-nota {
@@ -409,27 +451,6 @@
             line-height: 1.6;
             text-align: center;
             color: #444444;
-        }
-
-        /* ── Mejora del PDF de cotización (plan-mejora-pdf-cotizacion-cliente.md) ──
-           Rediseño 06-sep-2026 (hallazgo del usuario, guiado por el mockup
-           aprobado): pastilla redondeada a la derecha en vez de barra
-           rectangular a todo el ancho — mismo dato, más profesional. */
-        .cinta-categoria-wrap {
-            text-align: right;
-            margin: 6px 0 4px;
-        }
-
-        .cinta-categoria {
-            display: inline-block;
-            color: #ffffff;
-            font-family: 'Poppins-SemiBold', 'Poppins', sans-serif;
-            font-weight: bold;
-            font-size: 10px;
-            text-transform: uppercase;
-            padding: 5px 18px;
-            border-radius: 99px;
-            letter-spacing: 1px;
         }
 
         .afiliaciones-franja {
@@ -616,13 +637,6 @@
         <div class="titulo-doc">Cotización {{ $cotizacion->codigo }}</div>
         <div class="subtitulo-doc">{{ $alternativa->nombre }}</div>
 
-        {{-- Cinta de categoría — Local/Nacional/Internacional, color propio
-             por agencia (configPdf). Categoría mixta usa la más alta
-             presente (plan §7): internacional > nacional > local. --}}
-        <div class="cinta-categoria-wrap">
-            <span class="cinta-categoria" style="background-color: {{ $colorCategoria }};">{{ ucfirst($categoria) }}</span>
-        </div>
-
         {{-- ══════════════════ CLIENTE / FECHAS ══════════════════ --}}
         @php
             $conteoPax = $pasajeros->groupBy('tipo_pax')->map->count();
@@ -779,14 +793,16 @@
                         @endforeach
                     </tr>
                     @foreach ($grupoHotel['filas'] as $fila)
-                        <tr class="{{ $fila['elegida'] ? 'fila-elegida' : (!$loop->even ? '' : 'fila-par') }}">
-                            {{-- '✓' (U+2713) no renderiza con la fuente que usa DomPDF acá
-                                 — sale como "?" (confirmado generando el PDF real contra
-                                 agencia-demo). Texto plano en vez de un glifo unicode. --}}
-                            <td>{{ $fila['hotel'] }}{{ $fila['elegida'] ? ' (elegida)' : '' }}</td>
+                        <tr class="{{ !$loop->even ? '' : 'fila-par' }}">
+                            <td>{{ $fila['hotel'] }}</td>
                             @foreach ($grupoHotel['tipos_habitacion'] as $tipo)
                                 @if (isset($fila['precios'][$tipo]))
-                                    <td class="precio-col">{{ $alternativa->moneda_cotizacion }} {{ number_format($fila['precios'][$tipo], 2) }}</td>
+                                    <td class="precio-col{{ $fila['tipo_elegido'] === $tipo ? ' precio-elegido' : '' }}">
+                                        {{ $alternativa->moneda_cotizacion }} {{ number_format($fila['precios'][$tipo], 2) }}
+                                        @if ($fila['tipo_elegido'] === $tipo)
+                                            <span class="precio-elegido-nota">Elegida</span>
+                                        @endif
+                                    </td>
                                 @else
                                     <td class="sin-precio">—</td>
                                 @endif
@@ -875,9 +891,9 @@
                                  de itinerarioAlternativa()), así que el nombre del
                                  primer paso alcanza para todo el grupo. --}}
                             <div class="dia-label">
-                                Día {{ $dia }}
+                                <span class="dia-label-dia">Día {{ $dia }}</span>
                                 @if ($pasosDelDia->first()['tour_nombre'] ?? null)
-                                    : {{ $pasosDelDia->first()['tour_nombre'] }}
+                                    <span class="dia-label-tour">: {{ $pasosDelDia->first()['tour_nombre'] }}</span>
                                 @endif
                             </div>
                             {{-- Simulación Panamá (04-sep-2026) — fotos del tour

@@ -400,8 +400,16 @@ class OpcionMayoristaController extends Controller
             return response()->json(['opcion_mayorista_tours' => $tours]);
         }
 
+        // Guardrail (18-sep-2026) — exactamente uno de los 2 caminos:
+        // paquete_plantilla_id (tour real del catálogo, comportamiento sin
+        // cambios) o nombre+descripcion (ad-hoc, logística de ESTE
+        // itinerario — nunca toca el catálogo de Paquetes/Tours). Mismo
+        // criterio "exactamente uno" que ya usa ReservaController::
+        // reasignarHotel() para catálogo vs. ad-hoc del lado hotel.
         $validator = Validator::make($request->all(), [
-            'paquete_plantilla_id' => 'required|integer|exists:paquetes_plantilla,id',
+            'paquete_plantilla_id' => 'nullable|integer|exists:paquetes_plantilla,id',
+            'nombre' => 'nullable|string|max:250',
+            'descripcion' => 'nullable|string',
             'orden' => 'required|integer|min:1',
         ]);
 
@@ -409,7 +417,17 @@ class OpcionMayoristaController extends Controller
             return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
         }
 
-        $tour = OpcionMayoristaTour::create($validator->validated() + ['opcion_mayorista_id' => $opcion->id]);
+        $validado = $validator->validated();
+        $esCatalogo = ! empty($validado['paquete_plantilla_id']);
+        $esAdhoc = ! empty($validado['nombre']);
+        if ($esCatalogo === $esAdhoc) {
+            return response()->json([
+                'code' => 422,
+                'message' => 'Elegí exactamente un tour: del catálogo de Paquetes/Tours, o ad-hoc con nombre propio.',
+            ], 422);
+        }
+
+        $tour = OpcionMayoristaTour::create($validado + ['opcion_mayorista_id' => $opcion->id]);
         $tour->load('paquetePlantilla');
         $tour->paquetePlantilla?->setAttribute('fotos', StorageUrl::resolveMuchas($tour->paquetePlantilla->fotos ?? []));
 
@@ -427,23 +445,41 @@ class OpcionMayoristaController extends Controller
         return response()->json(['code' => 200, 'message' => 'Tour desvinculado correctamente']);
     }
 
-    // PUT opcion-mayorista-tours/{id} — solo el "Día" (orden) del vínculo.
-    // El contenido real del tour (nombre/descripción/duración/destino/fotos)
-    // se edita aparte, vía paquetePlantillaService.actualizar() — ya existe,
-    // no hace falta backend nuevo para eso.
+    // PUT opcion-mayorista-tours/{id} — el "Día" (orden) del vínculo, para
+    // CUALQUIER tour (real o ad-hoc). El contenido de un tour REAL
+    // (nombre/descripción/duración/destino/fotos) se sigue editando aparte,
+    // vía paquetePlantillaService.actualizar() — sin cambios. Guardrail
+    // (18-sep-2026) — nombre/descripcion acá SOLO aplican a un tour ad-hoc
+    // (sin paquete_plantilla_id): son su único lugar de edición, no hay
+    // PaquetePlantilla detrás para editar por el otro camino.
     public function actualizarOrdenTour(Request $request, string $id)
     {
         $tour = OpcionMayoristaTour::findOrFail($id);
 
         $validator = Validator::make($request->all(), [
             'orden' => 'required|integer|min:1',
+            'nombre' => 'nullable|string|max:250',
+            'descripcion' => 'nullable|string',
         ]);
 
         if ($validator->fails()) {
             return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
         }
 
-        $tour->update($validator->validated());
+        $validado = $validator->validated();
+        if ($tour->paquete_plantilla_id && (! empty($validado['nombre']) || ! empty($validado['descripcion']))) {
+            return response()->json([
+                'code' => 422,
+                'message' => 'Este tour es del catálogo — su contenido se edita desde Paquetes/Tours, no acá.',
+            ], 422);
+        }
+        if (! $tour->paquete_plantilla_id) {
+            $validado = array_intersect_key($validado, array_flip(['orden', 'nombre', 'descripcion']));
+        } else {
+            $validado = ['orden' => $validado['orden']];
+        }
+
+        $tour->update($validado);
         $tour->load('paquetePlantilla');
         $tour->paquetePlantilla?->setAttribute('fotos', StorageUrl::resolveMuchas($tour->paquetePlantilla->fotos ?? []));
 

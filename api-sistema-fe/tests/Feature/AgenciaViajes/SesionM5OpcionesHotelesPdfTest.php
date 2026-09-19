@@ -79,6 +79,16 @@ class SesionM5OpcionesHotelesPdfTest extends TestCase
         ]);
     }
 
+    // Cachea proveedor_servicio_id por nombre de hotel dentro de un mismo
+    // test — un hotel real con varios tipos de habitación cuelga SIEMPRE
+    // del mismo proveedor_servicio_id (ProveedorTarifaController::store()
+    // nunca crea uno nuevo por tarifa). Sin este cache, 2 llamadas con el
+    // mismo $nombreHotel creaban 2 Proveedor/ProveedorServicio disjuntos
+    // que solo coincidían en el texto — guardrail (18-sep-2026): agrupar
+    // por identidad real en opcionesHoteles() detectó que este fixture no
+    // reflejaba eso, ver commit que lo corrige.
+    private array $proveedorServicioPorHotel = [];
+
     // Ítem real de hotel (origen_tipo=proveedor + proveedor_tarifa_id) —
     // el único camino por el que resolverNombreItem() devuelve
     // "{hotel} · {tipo_habitacion}", que opcionesHoteles() necesita para
@@ -92,19 +102,24 @@ class SesionM5OpcionesHotelesPdfTest extends TestCase
         float $precio,
         int $cantidad = 1,
     ): AlternativaItem {
-        $destinoAtractivoId = DB::table('destinos_atractivos')->insertGetId([
-            'nombre' => 'Zona Test M5 ' . random_int(1000, 9999), 'tipo' => 'lugar', 'created_at' => now(), 'updated_at' => now(),
-        ]);
-        $servicioId = DB::table('servicios')->insertGetId(['nombre' => 'Hospedaje Test M5', 'created_at' => now(), 'updated_at' => now()]);
-        $destinoServicioId = DB::table('destino_servicio')->insertGetId([
-            'destino_atractivo_id' => $destinoAtractivoId, 'servicio_id' => $servicioId, 'created_at' => now(), 'updated_at' => now(),
-        ]);
-        $proveedorId = DB::table('proveedores')->insertGetId([
-            'razon_social' => $nombreHotel, 'estado' => true, 'created_at' => now(), 'updated_at' => now(),
-        ]);
-        $proveedorServicioId = DB::table('proveedor_servicios')->insertGetId([
-            'proveedor_id' => $proveedorId, 'destino_servicio_id' => $destinoServicioId, 'created_at' => now(), 'updated_at' => now(),
-        ]);
+        if (isset($this->proveedorServicioPorHotel[$nombreHotel])) {
+            $proveedorServicioId = $this->proveedorServicioPorHotel[$nombreHotel];
+        } else {
+            $destinoAtractivoId = DB::table('destinos_atractivos')->insertGetId([
+                'nombre' => 'Zona Test M5 ' . random_int(1000, 9999), 'tipo' => 'lugar', 'created_at' => now(), 'updated_at' => now(),
+            ]);
+            $servicioId = DB::table('servicios')->insertGetId(['nombre' => 'Hospedaje Test M5', 'created_at' => now(), 'updated_at' => now()]);
+            $destinoServicioId = DB::table('destino_servicio')->insertGetId([
+                'destino_atractivo_id' => $destinoAtractivoId, 'servicio_id' => $servicioId, 'created_at' => now(), 'updated_at' => now(),
+            ]);
+            $proveedorId = DB::table('proveedores')->insertGetId([
+                'razon_social' => $nombreHotel, 'estado' => true, 'created_at' => now(), 'updated_at' => now(),
+            ]);
+            $proveedorServicioId = DB::table('proveedor_servicios')->insertGetId([
+                'proveedor_id' => $proveedorId, 'destino_servicio_id' => $destinoServicioId, 'created_at' => now(), 'updated_at' => now(),
+            ]);
+            $this->proveedorServicioPorHotel[$nombreHotel] = $proveedorServicioId;
+        }
         $tarifaId = DB::table('proveedor_tarifas')->insertGetId([
             'proveedor_servicio_id' => $proveedorServicioId, 'tipo_tarifa' => 'publica', 'modalidad' => 'privado', 'moneda' => 'PEN',
             'precio_costo' => $precio * 0.7, 'margen_tipo' => 'fijo', 'margen_valor' => $precio * 0.3, 'precio_venta_adulto' => $precio,
@@ -248,6 +263,26 @@ class SesionM5OpcionesHotelesPdfTest extends TestCase
         $this->assertFalse($noElegida['elegida']);
     }
 
+    // Guardrail (19-sep-2026) — hallazgo real del usuario sobre el PDF que
+    // recibe el cliente: un hotel con 2 tipos de habitación (doble Y
+    // matrimonial) donde solo UNO fue elegido no debe marcar ambos como
+    // "elegida" — antes el resaltado era por FILA (hotel), así que el
+    // cliente no podía saber cuál de los 2 precios arma el total.
+    public function test_hotel_con_dos_tipos_marca_solo_el_tipo_elegido(): void
+    {
+        $alternativa = $this->crearAlternativa();
+        $grupo = (string) Str::uuid();
+        $this->crearItemHotel($alternativa, $grupo, false, 'Hotel Dos Tipos', 'doble', 100);
+        $this->crearItemHotel($alternativa, $grupo, true, 'Hotel Dos Tipos', 'matrimonial', 120);
+
+        $resultado = $this->invocar($alternativa);
+
+        $fila = collect($resultado[0]['filas'])->firstWhere('hotel', 'Hotel Dos Tipos');
+        $this->assertTrue($fila['elegida']);
+        $this->assertSame('matrimonial', $fila['tipo_elegido']);
+        $this->assertNotSame('doble', $fila['tipo_elegido']);
+    }
+
     public function test_dos_grupos_distintos_generan_dos_bloques_independientes(): void
     {
         $alternativa = $this->crearAlternativa();
@@ -341,5 +376,89 @@ class SesionM5OpcionesHotelesPdfTest extends TestCase
 
         $fila = collect($resultado[0]['filas'])->firstWhere('hotel', 'Hotel Paquete Mayorista');
         $this->assertEquals(850.0, $fila['precios']['doble'], 'precio de paquete por persona, sin multiplicar por adultos');
+    }
+
+    // Guardrail (18-sep-2026) — bug real encontrado en vivo: 2 hoteles
+    // DISTINTOS (uno real del catálogo, uno ad-hoc) que coinciden en el
+    // texto tipeado se fusionaban en una sola fila (agrupaba por nombre),
+    // pisando el precio de uno con el del otro sin ningún aviso. Ahora
+    // agrupa por identidad real (proveedor_servicio_id / opcion_hotel_id).
+    public function test_hotel_catalogo_y_hotel_adhoc_con_el_mismo_nombre_no_se_fusionan(): void
+    {
+        $alternativa = $this->crearAlternativa();
+        $grupo = (string) Str::uuid();
+        $this->crearItemHotel($alternativa, $grupo, false, 'Hotel Rio Sol', 'simple', 120);
+
+        $hotelAdhoc = OpcionHotel::create(['nombre_hotel' => 'Hotel Rio Sol', 'moneda' => 'PEN']);
+        $tarifaAdhoc = OpcionHotelTarifa::create(['opcion_hotel_id' => $hotelAdhoc->id, 'tipo_habitacion' => 'simple', 'precio_costo' => 90, 'precio_venta' => 130]);
+        AlternativaItem::create([
+            'alternativa_id' => $alternativa->id, 'origen_tipo' => 'proveedor', 'opcion_hotel_tarifa_id' => $tarifaAdhoc->id,
+            'grupo_opcion_id' => $grupo, 'opcion_elegida' => false,
+            'modo_precio' => 'tarifa_fija', 'cantidad' => 1, 'moneda_costo' => 'PEN',
+            'costo_snapshot' => 90, 'precio_venta_snapshot' => 130, 'precio_convertido' => 130,
+        ]);
+
+        $resultado = $this->invocar($alternativa);
+
+        $this->assertCount(2, $resultado[0]['filas'], 'mismo nombre, pero son 2 hoteles distintos — no deben fusionarse en 1 fila');
+        $precios = collect($resultado[0]['filas'])->pluck('precios.simple')->sort()->values();
+        $this->assertEquals([120.0, 130.0], $precios->all());
+    }
+
+    // Guardrail (19-sep-2026, hallazgo del usuario) — generar() rechaza con
+    // 422 si hay un grupo de opciones sin resolver, para no mandarle al
+    // cliente un PDF cuyo total ya asumió en silencio la opción más barata
+    // (AlternativaItem::calcularTotalEfectivo()) sin que la tabla lo marque.
+    // La validación corre ANTES de armar el resto del PDF (Company/
+    // ConfiguracionAgencia/etc. no hacen falta en el fixture).
+    public function test_generar_rechaza_si_hay_un_grupo_sin_resolver(): void
+    {
+        $alternativa = $this->crearAlternativa();
+        $grupo = (string) Str::uuid();
+        $this->crearItemHotel($alternativa, $grupo, false, 'Hotel Rio Sol', 'simple', 120);
+        $this->crearItemHotel($alternativa, $grupo, false, 'Cumbaza Hotel y Convenciones', 'simple', 90);
+
+        $service = app(AlternativaPdfService::class);
+
+        try {
+            $service->generar((string) $alternativa->id);
+            $this->fail('Se esperaba ValidationException por grupo sin resolver.');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            $mensaje = $e->errors()['grupo_opcion'][0];
+            $this->assertStringContainsString('Hotel Rio Sol', $mensaje);
+            $this->assertStringContainsString('Cumbaza Hotel y Convenciones', $mensaje);
+        }
+    }
+
+    public function test_generar_no_rechaza_si_el_grupo_ya_esta_resuelto(): void
+    {
+        $alternativa = $this->crearAlternativa();
+        $grupo = (string) Str::uuid();
+        $this->crearItemHotel($alternativa, $grupo, false, 'Hotel Rio Sol', 'simple', 120);
+        $this->crearItemHotel($alternativa, $grupo, true, 'Cumbaza Hotel y Convenciones', 'simple', 90);
+
+        $service = app(AlternativaPdfService::class);
+
+        try {
+            $service->generar((string) $alternativa->id);
+            $this->assertTrue(true, 'generó sin lanzar ninguna excepción — el guardrail no debía activarse.');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            $this->fail('No debería rechazar: el grupo ya tiene una opción elegida. Mensaje: '.$e->getMessage());
+        }
+    }
+
+    public function test_generar_no_rechaza_sin_grupos_de_opciones(): void
+    {
+        $alternativa = $this->crearAlternativa();
+        $this->crearItemHotel($alternativa, null, false, 'Hotel Suelto', 'doble', 150);
+
+        $service = app(AlternativaPdfService::class);
+
+        try {
+            $service->generar((string) $alternativa->id);
+            $this->assertTrue(true, 'generó sin lanzar ninguna excepción — el guardrail no debía activarse.');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            $this->fail('No debería rechazar: no hay ningún grupo de opciones. Mensaje: '.$e->getMessage());
+        }
     }
 }

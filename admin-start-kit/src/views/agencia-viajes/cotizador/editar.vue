@@ -363,7 +363,7 @@
                                      el paquete, no es un ítem propio). -->
                                 <div v-if="toursDeGrupo(fila.items).length" class="border-top pt-1 mt-1">
                                     <div v-for="t in toursDeGrupo(fila.items)" :key="t.id" class="text-muted" style="font-size:11px">
-                                        <i class="fas fa-route me-1 text-primary"></i>Día {{ t.orden }} · {{ t.paquete_plantilla?.nombre }}
+                                        <i class="fas fa-route me-1 text-primary"></i>Día {{ t.orden }} · {{ t.paquete_plantilla?.nombre ?? t.nombre }}
                                     </div>
                                 </div>
                             </div>
@@ -391,7 +391,7 @@
                                      para un ítem de mayorista SUELTO (sin comparador de hoteles). -->
                                 <div v-if="fila.item.origen_tipo === 'mayorista' && toursDeGrupo([fila.item]).length" class="border-top pt-1 mt-1">
                                     <div v-for="t in toursDeGrupo([fila.item])" :key="t.id" class="text-muted" style="font-size:11px">
-                                        <i class="fas fa-route me-1 text-primary"></i>Día {{ t.orden }} · {{ t.paquete_plantilla?.nombre }}
+                                        <i class="fas fa-route me-1 text-primary"></i>Día {{ t.orden }} · {{ t.paquete_plantilla?.nombre ?? t.nombre }}
                                     </div>
                                 </div>
 
@@ -575,21 +575,29 @@
                         </div>
 
                         <div class="border-top pt-2 mb-2" v-if="(alternativaActiva.items?.length ?? 0) > 0">
-                            <!-- Punto C (Sesión 11i) — un único input, según configuracion_agencia. -->
+                            <!-- Punto C (Sesión 11i) — un único input, según configuracion_agencia.
+                                 Guardrail (19-sep-2026, hallazgo del usuario) — antes el símbolo
+                                 (USD/%) era un <span> suelto al lado del input, no "pegado" como
+                                 un input-group real (mismo patrón que ya usa el descuento POR
+                                 ÍTEM, línea ~444 más abajo) — menos claro a simple vista de qué
+                                 modo está activo. El label ya no repite el modo en texto (antes
+                                 "Descuento global %" vs "Descuento global") — una sola señal (el
+                                 símbolo pegado al input, que siempre refleja la configuración real
+                                 gracias a la invalidación de caché de la sesión anterior) en vez
+                                 de dos que podían leerse como contradictorias si una quedaba vieja. -->
+                            <label class="form-label mb-1 small fw-semibold text-secondary">Descuento global</label>
                             <template v-if="configAgencia?.modo_descuento_global === 'monto'">
-                                <label class="form-label mb-1 small fw-semibold text-secondary">Descuento global</label>
-                                <div class="d-flex align-items-center gap-1">
-                                    <span class="small text-muted">{{ alternativaActiva.moneda_cotizacion }}</span>
-                                    <input type="number" min="0" class="form-control form-control-sm"
+                                <div class="input-group input-group-sm" style="max-width:160px">
+                                    <span class="input-group-text">{{ alternativaActiva.moneda_cotizacion }}</span>
+                                    <input type="number" min="0" class="form-control"
                                         v-model.number="descuentoGlobalMontoLocal" @change="onEditarDescuentoGlobalMonto">
                                 </div>
                             </template>
                             <template v-else>
-                                <label class="form-label mb-1 small fw-semibold text-secondary">Descuento global %</label>
-                                <div class="d-flex align-items-center gap-1">
-                                    <input type="number" min="0" max="100" class="form-control form-control-sm"
+                                <div class="input-group input-group-sm" style="max-width:160px">
+                                    <input type="number" min="0" max="100" class="form-control"
                                         v-model.number="descuentoGlobalLocal" @change="onEditarDescuentoGlobal">
-                                    <span class="small text-muted">%</span>
+                                    <span class="input-group-text">%</span>
                                 </div>
                             </template>
                             <small v-if="lineasFueraDePiso.length" class="text-danger d-block mt-1">
@@ -789,6 +797,29 @@
                                 <div v-if="mostrarFormHotelLocal" class="border rounded p-2 mt-2">
                                     <label class="form-label mb-1 small text-secondary">Nombre del hotel</label>
                                     <input type="text" class="form-control form-control-sm mb-1" placeholder="Nombre del hotel" v-model="formHotelLocal.nombre_hotel">
+                                    <label class="form-label mb-1 small text-secondary">¿Es un proveedor ya registrado? <span class="text-muted fw-normal">(opcional)</span></label>
+                                    <div class="position-relative mb-1">
+                                        <div class="input-group input-group-sm">
+                                            <input type="text" class="form-control" placeholder="Buscar hotel ya registrado..."
+                                                v-model="filtroProveedorHotelLocal"
+                                                @focus="mostrarSugerenciasProveedorHotel = true"
+                                                @blur="onBlurProveedorHotelLocal"
+                                                @input="formHotelLocal.proveedor_id = null">
+                                            <button v-if="formHotelLocal.proveedor_id" type="button" class="btn btn-outline-secondary" @click="quitarVinculoProveedorHotelLocal" title="Quitar vínculo">
+                                                <i class="fas fa-times"></i>
+                                            </button>
+                                        </div>
+                                        <div v-if="mostrarSugerenciasProveedorHotel" class="position-absolute w-100 bg-white border rounded shadow-sm" style="z-index:20; max-height:180px; overflow-y:auto">
+                                            <div v-if="proveedoresHotelFiltrados.length === 0" class="px-2 py-1 small text-muted fst-italic">Sin resultados.</div>
+                                            <div v-for="p in proveedoresHotelFiltrados" :key="p.id" class="px-2 py-1 small" style="cursor:pointer" @mousedown.prevent="elegirProveedorHotelLocal(p)">
+                                                {{ p.nombre_comercial ?? p.razon_social }}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <p v-if="formHotelLocal.proveedor_id" class="text-success small mb-2"><i class="fas fa-check-circle me-1"></i>Vinculado</p>
+                                    <p class="text-muted fst-italic mb-2" style="font-size:11px">
+                                        Vincularlo evita cargar el mismo hotel 2 veces con nombres distintos — si ya está en Proveedores, elegilo acá en vez de dejarlo suelto.
+                                    </p>
                                     <label class="form-label mb-1 small text-secondary">Moneda</label>
                                     <select class="form-select form-select-sm mb-1" v-model="formHotelLocal.moneda">
                                         <option value="PEN">PEN</option>
@@ -1114,7 +1145,7 @@
                                     <div v-if="mostrarToursId === op.id" class="mt-2 border-top pt-2">
                                         <div v-if="!op.tours?.length" class="text-muted small fst-italic mb-2">Sin tours incluidos todavía — con itinerario real, salen en la sección "Itinerario" del PDF.</div>
                                         <div v-for="t in op.tours" :key="t.id" class="d-flex justify-content-between align-items-center border rounded p-2 mb-1">
-                                            <span><span class="badge bg-light text-dark border me-1">Día {{ t.orden }}</span>{{ t.paquete_plantilla?.nombre }}</span>
+                                            <span><span class="badge bg-light text-dark border me-1">Día {{ t.orden }}</span>{{ t.paquete_plantilla?.nombre ?? t.nombre }}</span>
                                             <div class="d-flex gap-2">
                                                 <i class="fas fa-pen text-muted" style="cursor:pointer;font-size:11px" title="Editar este tour" @click="abrirEdicionTour(t)"></i>
                                                 <i class="fas fa-times text-muted" style="cursor:pointer" title="Quitar este tour" @click="quitarTourIncluido(t, op)"></i>
@@ -1628,13 +1659,36 @@ const descargarArchivo = async (url: string, nombreSugerido: string) => {
     window.URL.revokeObjectURL(blobUrl);
 };
 
+// Guardrail (19-sep-2026) — AlternativaPdfService::generar() ahora rechaza
+// con 422 si hay un grupo de opciones de hotel sin resolver (ver
+// validarGruposResueltos()), para no dejar salir al cliente un total que en
+// silencio ya asumía la opción más barata. descargarArchivo() pide
+// responseType:'blob' SIEMPRE (necesario para el PDF binario), así que un
+// error 422 también llega como Blob en vez de JSON — hay que leerlo aparte
+// para mostrar el mensaje real en vez del genérico.
+const leerMensajeErrorBlob = async (error: any, fallback: string): Promise<string> => {
+    const data = error?.response?.data;
+    if (data instanceof Blob && data.type === 'application/json') {
+        try {
+            const texto = await data.text();
+            const json = JSON.parse(texto);
+            const primerError = json.errors ? Object.values(json.errors)[0] : null;
+            return (Array.isArray(primerError) ? primerError[0] : null) ?? json.message ?? fallback;
+        } catch {
+            return fallback;
+        }
+    }
+    return error?.response?.data?.message ?? fallback;
+};
+
 const descargarPdfAlternativa = async () => {
     if (!alternativaActiva.value) return;
     descargandoPdf.value = true;
     try {
         await descargarArchivo(`/alternativas/${alternativaActiva.value.id}/pdf`, `cotizacion-${alternativaActiva.value.nombre}.pdf`);
     } catch (error: any) {
-        toast.error('No se pudo generar el PDF');
+        const mensaje = await leerMensajeErrorBlob(error, 'No se pudo generar el PDF');
+        (Swal as TVueSwalInstance).fire('No se pudo generar el PDF', mensaje, 'warning');
     } finally {
         descargandoPdf.value = false;
     }
@@ -2451,12 +2505,49 @@ const agregarItemProveedorHotel = async (
 // template por matrizHotelActiva.adhoc.
 const mostrarFormHotelLocal = ref(false);
 const formHotelLocal = ref<{
-    nombre_hotel: string; moneda: 'PEN' | 'USD';
+    nombre_hotel: string; moneda: 'PEN' | 'USD'; proveedor_id: number | null;
     tarifas: Array<{ tipo_habitacion: string; precio_costo: number; precio_venta: number; tip_afe_igv: string; destino_tributario: string }>;
 }>({
-    nombre_hotel: '', moneda: 'PEN',
+    nombre_hotel: '', moneda: 'PEN', proveedor_id: null,
     tarifas: [{ tipo_habitacion: 'doble', precio_costo: 0, precio_venta: 0, tip_afe_igv: '10', destino_tributario: 'nacional' }],
 });
+// Guardrail (18-sep-2026) — el select de "¿es un proveedor ya
+// registrado?" listaba TODOS los proveedores (proveedoresFiltro, mismo
+// catálogo genérico de los filtros de la biblioteca), no solo hoteles —
+// confuso con muchos proveedores de otros tipos mezclados. proveedoresHotel
+// ya existe (cargado con tipo_id del catálogo real de Hotel, reusado del
+// flujo "usar tarifa registrada" de mayorista más abajo) — más un filtro de
+// texto en memoria, porque una agencia con muchos hoteles no cabe cómodo
+// en un <select> plano sin buscador.
+const filtroProveedorHotelLocal = ref('');
+const proveedoresHotelFiltrados = computed(() => {
+    const q = filtroProveedorHotelLocal.value.trim().toLowerCase();
+    if (!q) return proveedoresHotel.value;
+    return proveedoresHotel.value.filter((p) => (p.nombre_comercial ?? p.razon_social ?? '').toLowerCase().includes(q));
+});
+// Bug real reportado por el usuario (18-sep-2026): un <select> nativo con
+// sus opciones filtradas por un input aparte no da NINGÚN indicio visual
+// mientras está cerrado — el usuario escribía y "no pasaba nada" porque el
+// cambio solo se ve recién al abrir el desplegable. Reemplazado por un
+// buscador con lista de sugerencias real (mismo patrón que "Buscar hotel
+// por nombre..." de reservas/detalle.vue, pero en memoria — la lista de
+// hoteles ya está cargada completa, no hace falta pedirla por API).
+const mostrarSugerenciasProveedorHotel = ref(false);
+const onBlurProveedorHotelLocal = () => {
+    // Delay para que el mousedown.prevent de abajo alcance a procesar el
+    // clic ANTES de que el blur oculte la lista (si no, el clic nunca
+    // llega a disparar elegirProveedorHotelLocal).
+    setTimeout(() => { mostrarSugerenciasProveedorHotel.value = false; }, 150);
+};
+const elegirProveedorHotelLocal = (p: Proveedor) => {
+    formHotelLocal.value.proveedor_id = p.id;
+    filtroProveedorHotelLocal.value = p.nombre_comercial ?? p.razon_social ?? '';
+    mostrarSugerenciasProveedorHotel.value = false;
+};
+const quitarVinculoProveedorHotelLocal = () => {
+    formHotelLocal.value.proveedor_id = null;
+    filtroProveedorHotelLocal.value = '';
+};
 const guardandoHotelLocal = ref(false);
 
 const guardarHotelLocal = async () => {
@@ -2474,9 +2565,10 @@ const guardarHotelLocal = async () => {
             grupoAbierto: grupoHotelAbiertoDiaActivo.value,
         };
         formHotelLocal.value = {
-            nombre_hotel: '', moneda: 'PEN',
+            nombre_hotel: '', moneda: 'PEN', proveedor_id: null,
             tarifas: [{ tipo_habitacion: 'doble', precio_costo: 0, precio_venta: 0, tip_afe_igv: '10', destino_tributario: 'nacional' }],
         };
+        filtroProveedorHotelLocal.value = '';
     } catch (error: any) {
         (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo guardar el hotel', 'error');
     } finally {
@@ -3450,10 +3542,46 @@ const descuentoGlobalLocal = ref(0);
 const descuentoGlobalMontoLocal = ref(0);
 const lineasFueraDePiso = ref<Array<{ alternativa_item_id: number; precio_minimo_permitido: number | null }>>([]);
 
+// Guardrail (19-sep-2026, hallazgo real del usuario) — antes sumaba
+// precioListaConvertidoDe() de TODOS los ítems tal cual: ni multiplicaba
+// por cantidad (mismo bug que se corrigió en el backend,
+// AlternativaController::aplicarDescuentoGlobalMonto()) ni respetaba
+// grupos de opciones (sumaba las 6 opciones de hotel de una comparación,
+// no solo la elegida o el mínimo del grupo abierto). El resultado: al
+// guardar un monto y recargar la cotización, este cálculo "inverso"
+// (% persistido → monto equivalente para mostrar) no coincidía con el
+// monto que el vendedor acababa de tipear — escribías "1" y el campo
+// terminaba mostrando "3". Ahora replica EXACTAMENTE el mismo criterio de
+// agrupación que totalEfectivoLocal()/el backend, para que el redondeo
+// ida-y-vuelta (monto → % → monto) sea estable.
+const precioListaTotalDe = (item: AlternativaItem) => {
+    const precio = precioListaConvertidoDe(item);
+    return item.modo_precio === 'tarifa_fija' ? precio * item.cantidad : precio;
+};
+
+const sumaPreciosListaLocal = (items: AlternativaItem[]): number => {
+    const sinGrupo = items.filter((item) => !item.grupo_opcion_id);
+    const grupos = new Map<string, AlternativaItem[]>();
+    for (const item of items) {
+        if (!item.grupo_opcion_id) continue;
+        if (!grupos.has(item.grupo_opcion_id)) grupos.set(item.grupo_opcion_id, []);
+        grupos.get(item.grupo_opcion_id)!.push(item);
+    }
+
+    let total = sinGrupo.reduce((sum, item) => sum + precioListaTotalDe(item), 0);
+    for (const itemsDelGrupo of grupos.values()) {
+        const elegida = itemsDelGrupo.find((item) => item.opcion_elegida);
+        total += elegida
+            ? precioListaTotalDe(elegida)
+            : Math.min(...itemsDelGrupo.map((item) => precioListaTotalDe(item)));
+    }
+    return total;
+};
+
 const calcularMontoGlobalEquivalente = () => {
     const pct = Number(alternativaActiva.value?.descuento_global_pct ?? 0);
     if (!pct) return 0;
-    const sumaListaTotal = (alternativaActiva.value?.items ?? []).reduce((sum, item) => sum + precioListaConvertidoDe(item), 0);
+    const sumaListaTotal = sumaPreciosListaLocal(alternativaActiva.value?.items ?? []);
     return Math.round(sumaListaTotal * (pct / 100) * 100) / 100;
 };
 
@@ -3747,6 +3875,19 @@ onMounted(async () => {
         // src/stores/agenciaViajesCatalogos.ts) en vez de pedirlos de cero en
         // cada mount de esta pantalla.
         const catalogos = useAgenciaViajesCatalogosStore();
+        // Guardrail (19-sep-2026, hallazgo real del usuario) — configAgencia
+        // decide con qué SÍMBOLO se interpreta "Descuento global" (USD vs
+        // %), no es un dato cosmético — el TTL de 60s (o una pestaña de
+        // cotizador que ya llevaba un rato abierta cuando alguien cambió el
+        // modo desde Configuración de Agencia en otra pestaña) podía dejar
+        // esta pantalla mostrando "%" mientras la config real ya decía
+        // "Monto fijo", justo el campo donde una lectura vieja hace que el
+        // vendedor tipee un número pensando que es plata y el sistema lo
+        // trate como porcentaje (o viceversa). invalidar() antes de pedirlo
+        // fuerza que ESTA pantalla siempre traiga la config real del
+        // momento, sin tocar el TTL normal que sigue sirviendo a
+        // paquetes/detalle.vue.
+        catalogos.invalidarConfigAgencia();
         const [tiposList, config] = await Promise.all([
             catalogos.obtenerProveedorTipos(),
             catalogos.obtenerConfigAgencia(),

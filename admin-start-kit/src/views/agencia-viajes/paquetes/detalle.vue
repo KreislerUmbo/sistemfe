@@ -953,6 +953,16 @@ const guardarDatos = async () => {
     try {
         const res = await paquetePlantillaService.actualizar(paquete.value.id, {
             ...paquete.value,
+            // Bug real (18-sep-2026): paquete.value.fotos son rutas YA
+            // guardadas (texto), no archivos — las fotos se suben/borran
+            // por sus propios endpoints (agregarFotos()/eliminarFoto()),
+            // nunca por acá. Reenviarlas en este payload hacía que
+            // 'fotos.*' => 'image' del backend rechazara CUALQUIER
+            // guardado de un tour que ya tuviera al menos 1 foto cargada
+            // ("The fotos.0 field must be an image"), sin importar qué
+            // campo se estuviera editando. undefined se cae solo del JSON
+            // (JSON.stringify lo omite), así que el backend ni lo ve.
+            fotos: undefined,
             ...formDatos.value,
         });
         await cargarPaquete();
@@ -990,7 +1000,7 @@ const toggleActivo = async () => {
             await desactivar(false);
         } else {
             try {
-                await paquetePlantillaService.actualizar(paquete.value.id, { ...paquete.value, activo: true });
+                await paquetePlantillaService.actualizar(paquete.value.id, { ...paquete.value, fotos: undefined, activo: true });
                 await cargarPaquete();
             } catch (error: any) {
                 (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo activar', 'error');
@@ -1004,7 +1014,7 @@ const toggleActivo = async () => {
 const desactivar = async (forzar: boolean) => {
     if (!paquete.value) return;
     try {
-        await paquetePlantillaService.actualizar(paquete.value.id, { ...paquete.value, activo: false, forzar_desactivacion: forzar });
+        await paquetePlantillaService.actualizar(paquete.value.id, { ...paquete.value, fotos: undefined, activo: false, forzar_desactivacion: forzar });
         await cargarPaquete();
         if (forzar) (Swal as TVueSwalInstance).fire('Listo', 'Tour desactivado. Los combos afectados excluyen su costo/venta del total.', 'success');
     } catch (error: any) {
@@ -1106,6 +1116,7 @@ const guardarPrecioCombo = async () => {
     try {
         await paquetePlantillaService.actualizar(paquete.value.id, {
             ...paquete.value,
+            fotos: undefined,
             descuento_tipo: descuentoTipoLocal.value,
             descuento_valor: descuentoValorLocal.value,
             margen_minimo_pct: margenMinimoLocal.value,

@@ -81,7 +81,15 @@ class AlternativaItem extends Model
         'dia_referencial' => 'integer',
         'costo_snapshot' => 'decimal:2',
         'precio_venta_snapshot' => 'decimal:2',
-        'descuento_pct' => 'decimal:2',
+        // Guardrail (19-sep-2026) — 4 decimales, no 2: mismo motivo que
+        // Alternativa::descuento_global_pct (columna hermana) — este campo
+        // recibe el % EFECTIVO del descuento global (casi nunca redondo)
+        // cuando AlternativaController::aplicarDescuentoGlobal() lo reparte
+        // a cada ítem. Con 2 decimales, un recálculo posterior que lo lea
+        // de vuelta (ej. CotizacionController::recalcularItemsPorPersona())
+        // reconstruía un precio_convertido distinto al que dejó el
+        // vendedor, por el mismo redondeo perdido.
+        'descuento_pct' => 'decimal:4',
         'precio_convertido' => 'decimal:2',
         'opcion_elegida' => 'boolean',
     ];
