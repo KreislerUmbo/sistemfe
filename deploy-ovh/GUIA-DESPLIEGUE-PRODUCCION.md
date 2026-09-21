@@ -714,6 +714,198 @@ Script: `scripts/backup-postgres.sh` + `config/crontab-deploy.txt`
 
 ---
 
+## Migraciones futuras — qué pasa si cambio de proveedor
+
+Hoy la plataforma depende de **tres proveedores independientes**
+(ver la Fase 6): el registrador del dominio (DonWeb), el DNS y la validación
+del certificado (Cloudflare) y el servidor (OVH). Están desacoplados a
+propósito: cambiar uno **no obliga** a cambiar los otros, siempre que se
+respeten los puntos de cada caso. Esta sección es el checklist para cuando
+llegue el momento; léela **antes** de empezar, no durante.
+
+### Resumen: qué se cae y qué hay que tocar
+
+| Si cambias… | ¿Se cae la plataforma? | Qué hay que tocar | Riesgo principal |
+|---|---|---|---|
+| **El registrador** (DonWeb → otro) | No, si los nameservers se conservan | Solo verificar los nameservers después | Que el nuevo registrador **restablezca los nameservers** a los suyos |
+| **El DNS / Cloudflare** | No, si los registros se recrean **antes** de cambiar | 3 registros DNS + el método de validación de certbot | Certificado que no renueva (hay ~30 días de margen) |
+| **El servidor** (OVH → Google Cloud u otro) | No, si se prepara en paralelo y se cambia solo el registro `A` | 2 registros `A`, bases de datos, `storage/`, `.env` | Perder datos que **no están en git** (bases, archivos, `.env`) |
+
+Regla común a los tres: **nunca cortar lo viejo antes de verificar lo nuevo**, y
+mantener lo viejo funcionando unos días como plan de vuelta.
+
+---
+
+### Caso 1 — Transferir el dominio a otro registrador
+
+El registrador solo guarda *a qué nameservers apunta* el dominio. Como estos
+son los de Cloudflare, la transferencia **no mueve** el DNS, ni el servidor, ni
+el certificado. El único riesgo real: algunos registradores, al recibir un
+dominio, **reemplazan los nameservers por los suyos por defecto**. Si nadie lo
+nota, el dominio deja de resolver y la plataforma queda inaccesible (los datos
+y el servidor siguen intactos, pero nadie puede entrar).
+
+Checklist:
+
+1. **Margen de tiempo**: iniciar la transferencia con **más de 15 días** antes
+   del vencimiento. Un dominio vencido a mitad de camino sí tumba todo.
+2. **Preparar en el registrador actual**: desbloquear el dominio y pedir el
+   **código de autorización (EPP/AuthCode)**. Confirmar que se tiene acceso al
+   **correo del titular**: ahí llegan las aprobaciones.
+3. **Restricciones habituales**: un dominio no se puede transferir en los
+   primeros 60 días desde su registro o desde su última transferencia.
+4. **Mantener DNSSEC desactivado** (hoy lo está). Con DNSSEC activo, la
+   transferencia obliga a coordinar el registro DS y es fácil romper la
+   resolución.
+5. **Durante la transferencia**, si el nuevo proveedor pregunta por nameservers,
+   elegir "mantener los actuales" o poner desde el primer momento:
+   `miki.ns.cloudflare.com` y `nile.ns.cloudflare.com`.
+6. **Después, verificar siempre** (no confiar en que "se conservó"):
+   ```bash
+   nslookup -type=NS umbosystem.com a.gtld-servers.net
+   ```
+   Debe mostrar los dos de Cloudflare. Si muestra otros, corregirlos ya en el
+   panel del nuevo registrador (el sitio estará caído hasta que propague).
+7. Comprobar que los sitios cargan: `curl -sI https://market.umbosystem.com`.
+
+**Alternativa recomendable: transferir a Cloudflare Registrar.** Como el DNS ya
+está en Cloudflare, registrador y DNS quedarían en un solo lugar y desaparece
+el riesgo de los nameservers. Revisar antes que el `.com` cumpla sus
+condiciones de transferencia y el precio vigente.
+
+---
+
+### Caso 2 — Cambiar el DNS y la validación del certificado (salir de Cloudflare)
+
+Cloudflare cumple **dos funciones**: responde el DNS y permite a certbot crear
+los registros TXT de la validación DNS-01. Si algún día se deja Cloudflare, hay
+que reemplazar **ambas**.
+
+**A. Mover el DNS a otro proveedor**
+
+1. **Antes de tocar nada**, crear en el proveedor nuevo los mismos registros:
+   ```
+   A      umbosystem.com      <IP del servidor>
+   A      *.umbosystem.com    <IP del servidor>
+   CNAME  www                 umbosystem.com
+   ```
+   (más cualquier otro registro que se haya agregado desde entonces; comparar
+   con la lista actual en Cloudflare).
+2. Comprobar que el proveedor nuevo responde bien **antes** de delegarle el
+   dominio: `nslookup market.umbosystem.com <nameserver-del-nuevo-proveedor>`.
+3. Recién entonces, cambiar los nameservers **en el registrador** (no en el
+   editor de zona: ver Fase 6). Como los registros son idénticos en ambos lados,
+   el sitio no se interrumpe durante la propagación.
+4. Dejar la zona de Cloudflare activa unos días hasta confirmar que todo resuelve
+   por el proveedor nuevo.
+
+**B. Cambiar cómo se valida el certificado**
+
+- Hay que usar el plugin de certbot del **nuevo proveedor DNS**
+  (`python3-certbot-dns-<proveedor>`), con su propio token, y sustituir el
+  archivo `/root/.secrets/cloudflare.ini`. El script `50-ssl-cloudflare.sh` es la
+  plantilla: se copia y se adapta.
+- Si el nuevo proveedor **no tiene API**, el wildcard no se puede renovar de forma
+  automática (la validación DNS-01 exige crear un TXT por cada renovación). Opciones:
+  delegar solo `_acme-challenge` a una zona que sí tenga API, o dejar de usar
+  wildcard y emitir un certificado por cada subdominio con HTTP-01 (cada tenant
+  nuevo necesitaría su certificado).
+- **Probar siempre en seco antes**: `sudo certbot certonly --dry-run ...`.
+- **Margen de seguridad**: el certificado dura 90 días y certbot empieza a
+  renovarlo cuando faltan 30. Si una renovación falla, Let's Encrypt avisa por
+  correo y hay un mes para corregirlo antes de que caduque. Comprobar el estado:
+  `sudo certbot certificates` y `sudo certbot renew --dry-run`.
+- Si se **rota o elimina** el token de Cloudflare sin haber migrado, la renovación
+  falla: actualizar `/root/.secrets/cloudflare.ini` (ver Fase 6, "Cómo se
+  mantiene").
+
+---
+
+### Caso 3 — Migrar el servidor (OVH → Google Cloud u otro)
+
+OVH sigue siendo muy económico, así que conviene migrar **solo si hay una razón
+concreta** (costo, región, servicios administrados). La migración es viable y
+casi sin corte porque el certificado se valida por DNS (no depende de la IP del
+servidor) y los registros `A` están en modo "Solo DNS" (cambiar la IP surte
+efecto en minutos).
+
+**Qué se recrea desde git** (lo que ya tiene esta guía): hardening, PHP, Redis,
+Postgres (`10`-`40-*.sh`), nginx, supervisor, cron y logrotate (`config/`),
+certificado (`50-ssl-cloudflare.sh`) y despliegue de la app (`deploy.sh`).
+
+**Qué NO está en git y hay que llevarse a mano** (aquí es donde se pierde
+información si se olvida algo):
+
+| Qué | Dónde está | Cómo llevarlo |
+|---|---|---|
+| Base de datos **central** (tenants, dominios, menú, planes) | Postgres | `pg_dump` (ya lo hace `backup-postgres.sh`) |
+| Una base **por tenant** (`tenant<id>`, con todas sus ventas, clientes, comprobantes) | Postgres | `pg_dump` de cada una (mismo script) |
+| Roles/usuarios de Postgres (`sistemafe_app`) | Postgres | `pg_dumpall --globals-only` (mismo script) |
+| **Archivos por tenant**: fotos, logos, XML/CDR, **certificados SUNAT** | `api-sistema-fe/storage/tenant<id>/` (más `storage/app/` con lo central) | `rsync` de toda la carpeta `storage/` |
+| Archivos `.env` (3: backend y los dos frontends) | Solo en el servidor | Copiarlos a mano (contienen secretos: transferir por canal seguro) |
+| Token de Cloudflare | `/root/.secrets/cloudflare.ini` | **No copiar**: crear uno nuevo en la máquina nueva |
+| Configuración de sparse-checkout, llaves SSH, deploy key | Solo en el servidor | Rehacer en el nuevo |
+| Backups viejos / copia offsite | `/var/backups/sistemafe/` | Copiar si se quieren conservar; reconfigurar `rclone` |
+
+**Plan sugerido (sin corte largo):**
+
+1. **Preparar el servidor nuevo en paralelo**, con el mismo Ubuntu y los scripts de
+   esta guía. En una VM de nube (por ejemplo Compute Engine): reservar una **IP
+   estática** (si no, cambia al reiniciar) y abrir 80/443 en el firewall del
+   proveedor **además** de `ufw`. Usar la **misma versión mayor de PostgreSQL**
+   (o superior); no se puede restaurar hacia una versión menor.
+2. **Emitir el certificado en el servidor nuevo antes del cambio**:
+   `sudo ./50-ssl-cloudflare.sh correo`. Funciona aunque el DNS todavía apunte al
+   servidor viejo, porque se valida por DNS.
+3. **Desplegar el código** (`70-primer-deploy.sh` / `deploy.sh`) y copiar los `.env`.
+4. **Ensayo de la restauración con un backup real**, sin tocar producción:
+   restaurar primero los roles y luego cada base, y comprobar que la app arranca
+   con esos datos. Este ensayo es obligatorio: un backup que nunca se restauró
+   no es un backup confiable.
+   ```bash
+   gunzip -c globals_FECHA.sql.gz | sudo -u postgres psql          # roles primero
+   sudo -u postgres createdb -O sistemafe_app tenant<id>            # por cada base
+   gunzip -c tenant<id>_FECHA.sql.gz | sudo -u postgres pg_restore -d tenant<id>
+   ```
+   (`backup-postgres.sh` guarda cada base como `pg_dump -Fc` comprimido con gzip;
+   por eso se descomprime antes de `pg_restore`. Restaurar **sin** `--no-owner`
+   para que los objetos queden a nombre de `sistemafe_app`, que es el usuario que
+   usa la app.)
+5. **Probar el servidor nuevo sin cambiar el DNS**, forzando la IP:
+   `curl -sI --resolve market.umbosystem.com:443:<IP-NUEVA> https://market.umbosystem.com`
+   y, desde un navegador, con una entrada temporal en el archivo `hosts` de
+   una PC de prueba.
+6. **Día del cambio (ventana corta):**
+   a. En el servidor viejo: `php artisan down` (nadie escribe más datos).
+   b. Hacer un **último** volcado de todas las bases + `rsync` de `storage/`
+      (solo lo nuevo desde el ensayo) y restaurarlo en el nuevo.
+   c. En Cloudflare, cambiar la IP de los registros `*` y `umbosystem.com`
+      (el `www` la sigue solo). Con TTL "Automático" tarda unos 5 minutos.
+   d. Verificar en el nuevo (login, una venta de prueba, un PDF, fotos, el
+      menú). Si algo falla, **volver atrás es solo devolver la IP** en Cloudflare
+      mientras el servidor viejo siga intacto.
+7. **Dejar el servidor viejo encendido unos días** (en mantenimiento, sin
+   tráfico) como red de seguridad antes de darlo de baja. Antes de apagarlo,
+   confirmar que los backups automáticos del nuevo se están generando y que la
+   renovación del certificado funciona (`certbot renew --dry-run`).
+
+**Diferencias a tener presentes al cambiar de proveedor**
+
+- **Bases administradas** (por ejemplo Cloud SQL) en vez de Postgres propio: la
+  plataforma crea **una base por tenant automáticamente**, así que el usuario
+  de la app necesita permiso `CREATEDB`. Comprobar que el servicio administrado
+  lo permite y que el costo por muchas bases es razonable; es la parte que más
+  cambia respecto a lo actual.
+- **Rutas y nombres fijos** en `deploy.sh` (`/var/www/html/sistemfe`,
+  `php8.5-fpm`, el programa `sistemafe-worker` de supervisor): se conservan si el
+  servidor nuevo se arma con los mismos scripts; si no, hay que ajustarlos.
+- **Ubicación y latencia**: revisar la región elegida respecto a los usuarios y a
+  los servicios externos (SUNAT).
+- **Costo**: comparar el total real (VM + disco + IP + tráfico + backups), no solo
+  el precio de la máquina.
+
+---
+
 ## Checklist final antes de ir a producción real
 
 - [x] Diagnóstico corrido y revisado (Fase 0)
