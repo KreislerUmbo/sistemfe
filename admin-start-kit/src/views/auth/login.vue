@@ -320,8 +320,8 @@ const redirectUser = () => {
 }
 
 .auth-logo {
-  max-height: 50px;
-  max-width: 70px;
+  max-height: 60px;
+  max-width: 80px;
   object-fit: contain;
 }
 
