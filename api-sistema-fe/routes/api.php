@@ -123,11 +123,24 @@ Route::get('branding', [CompanyController::class, 'branding'])
     ->middleware(['tenant', 'tenant.active', 'tenant.subscription', 'tenant.token'])
     ->name('branding');
 
-// Rutas 100% CENTRALES — sin tenant/tenant.token. Deben responder sin necesidad de
-// que ningún tenant/subdominio se haya resuelto (catálogo comercial del marketplace,
-// compartido por todos los negocios).
+// Guardrail (19-sep-2026) — BUG DE SEGURIDAD real corregido: este grupo tenía
+// solo 'auth:api', bajo la premisa (nunca verificada) de que debía "responder
+// sin necesidad de que ningún tenant/subdominio se haya resuelto". Sin
+// 'tenant', el guard auth:api resolvía el usuario del JWT contra la conexión
+// Postgres DEFAULT (sv_facturacion en producción — la base pre-multitenant
+// original, sigue siendo DB_DATABASE del .env), no contra la base del tenant
+// real dueño del token. Evidencia real: un JWT de un usuario de un tenant
+// (id numérico bajo) autenticó como una persona COMPLETAMENTE DISTINTA en
+// sv_facturacion con el mismo id — pura coincidencia de PK. El frontend
+// SIEMPRE llama estas rutas (systemService.ts/systemCategoryService.ts/
+// recursoService.ts) vía httpClient, que ya apunta al subdominio del tenant
+// activo — no existe ningún caller real "sin tenant resuelto"; esa premisa
+// era una suposición nunca confirmada. Los modelos (System/SystemCategory/
+// ManualRecurso) siguen usando CentralConnection, así que sus QUERIES no
+// cambian — esto corrige SOLO a qué base se resuelve el USUARIO del token.
+// Mismo pipeline que el grupo "Protected routes" de abajo (línea ~264).
 Route::group([
-    'middleware' => ['auth:api'],
+    'middleware' => ['tenant', 'tenant.active', 'tenant.subscription', 'tenant.token', 'auth:api'],
 ], function ($router) {
     // permission:X — Fase 0b (plan-modulo-menus-y-roles.md §9.1, Bucket A):
     // "ADMIN PORTAL" (catálogo del marketplace, compartido por todos los
