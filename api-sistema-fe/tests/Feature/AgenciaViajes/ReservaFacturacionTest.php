@@ -2,10 +2,12 @@
 
 namespace Tests\Feature\AgenciaViajes;
 
+use App\Http\Controllers\AgenciaViajes\ReservaAnticipoController;
 use App\Http\Controllers\AgenciaViajes\ReservaController;
 use App\Http\Controllers\AgenciaViajes\ReservaFacturacionController;
 use App\Http\Controllers\Greenter\GreenterService;
 use App\Http\Controllers\Sale\NotaElectronicaController;
+use App\Models\Advance\Advance;
 use App\Models\AgenciaViajes\Alternativa;
 use App\Models\AgenciaViajes\AlternativaItem;
 use App\Models\AgenciaViajes\Reserva;
@@ -14,12 +16,15 @@ use App\Models\AgenciaViajes\ReservaPasajero;
 use App\Models\AgenciaViajes\ReservaVenta;
 use App\Models\AgenciaViajes\SaleDetailItem;
 use App\Models\Cash\Branch;
+use App\Models\Cash\CashRegister;
+use App\Models\Cash\CashSession;
 use App\Models\Client\Client;
 use App\Models\Company;
 use App\Models\Sale\Note;
 use App\Models\Sale\Sale;
 use App\Models\Sale\SaleDetail;
 use App\Models\Sale\SerieComprobante;
+use App\Models\TipoCambio\TipoCambioSunat;
 use App\Models\User;
 use Greenter\Factory\FeFactory;
 use Greenter\Model\DocumentInterface;
@@ -163,6 +168,65 @@ class ReservaFacturacionTest extends TestCase
         ]);
     }
 
+    // Mismo criterio que serieAdicional(), con moneda elegible — necesario
+    // para los tests de "facturar en moneda distinta a la cotización"
+    // (2026-09-24): SerieComprobanteService::resolverParaUsuario() resuelve
+    // por (branch_id, tipo_comprobante_codigo, moneda), así que facturar en
+    // PEN una cotización USD exige que la sucursal tenga una serie PEN real
+    // para ese tipo de comprobante, no solo la serie USD de la cotización.
+    private function serieAdicionalMoneda(Branch $branch, string $codigo, string $serieTexto, string $moneda): SerieComprobante
+    {
+        return SerieComprobante::create([
+            'branch_id' => $branch->id,
+            'tipo_comprobante_codigo' => $codigo,
+            'moneda' => $moneda,
+            'serie' => $serieTexto,
+            'correlativo_actual' => 0,
+            'correlativo_inicial' => 1,
+            'fecha_inicio' => now()->format('Y-m-d'),
+            'activo' => true,
+        ]);
+    }
+
+    // Fixture liviana para los tests de "facturar en moneda distinta a la
+    // cotización" (2026-09-24) — a diferencia de crearReservaConPasajerosEItems()
+    // (pensada para el guard de selección por pasajero), acá solo importa 1
+    // pasajero + 1 ítem con un monto redondo, en la moneda que pida el test.
+    private function crearReservaConUnPasajeroYUnItemEnMoneda(string $moneda, float $precioConvertido = 100): array
+    {
+        $clienteId = DB::table('clients')->insertGetId([
+            'type_document' => 'DNI', 'n_document' => '99887766', 'full_name' => 'Cliente Test Moneda',
+            'type_client' => 1, 'cod_tipo_doc_sunat' => '1',
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $cotizacionId = DB::table('cotizaciones')->insertGetId([
+            'codigo_prefijo' => 'TEST', 'codigo' => 'TEST-2026-0700-' . uniqid(), 'cliente_id' => $clienteId,
+            'destino' => 'Tarapoto', 'fecha_viaje_desde' => '2026-09-01',
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $alternativa = Alternativa::create([
+            'cotizacion_id' => $cotizacionId, 'nombre' => 'Alternativa 1', 'estado' => 'borrador',
+            'moneda_cotizacion' => $moneda, 'tipo_cambio_aplicado' => 1, 'tipo_cambio_origen' => 'dia',
+        ]);
+        $cp1 = DB::table('cotizacion_pasajeros')->insertGetId([
+            'cotizacion_id' => $cotizacionId, 'tipo_pax' => 'adulto', 'edad' => 30,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        AlternativaItem::create([
+            'alternativa_id' => $alternativa->id, 'origen_tipo' => 'manual', 'dia_referencial' => 1,
+            'descripcion_manual' => 'Servicio en ' . $moneda, 'modo_precio' => 'tarifa_fija', 'cantidad' => 1,
+            'moneda_costo' => $moneda, 'costo_snapshot' => $precioConvertido * 0.8,
+            'precio_venta_snapshot' => $precioConvertido, 'precio_convertido' => $precioConvertido,
+            'pax_incluidos' => [$cp1],
+        ]);
+
+        [$reserva] = app(ReservaController::class)->crearReservaDesdeAlternativa($alternativa->fresh());
+        $pasajero = ReservaPasajero::where('reserva_id', $reserva->id)->first();
+
+        return ['reserva' => $reserva, 'pasajero' => $pasajero];
+    }
+
     /**
      * Reserva con 3 pasajeros y 5 ítems, pensada para cubrir los 3 casos
      * reales del guard de selección por pasajero:
@@ -176,7 +240,7 @@ class ReservaFacturacionTest extends TestCase
      * Todas las tarifas con destino_tributario='nacional' (caso homogéneo
      * por defecto; los tests de mezcla tributaria arman su propia fixture).
      */
-    private function crearReservaConPasajerosEItems(): array
+    private function crearReservaConPasajerosEItems(string $monedaCotizacion = 'PEN'): array
     {
         $clienteId = DB::table('clients')->insertGetId([
             'type_document' => 'DNI', 'n_document' => '90011223', 'full_name' => 'Cliente Test Multipago',
@@ -191,7 +255,7 @@ class ReservaFacturacionTest extends TestCase
 
         $alternativa = Alternativa::create([
             'cotizacion_id' => $cotizacionId, 'nombre' => 'Alternativa 1', 'estado' => 'borrador',
-            'moneda_cotizacion' => 'PEN', 'tipo_cambio_aplicado' => 1, 'tipo_cambio_origen' => 'dia',
+            'moneda_cotizacion' => $monedaCotizacion, 'tipo_cambio_aplicado' => 1, 'tipo_cambio_origen' => 'dia',
         ]);
 
         $cp1 = DB::table('cotizacion_pasajeros')->insertGetId([
@@ -210,6 +274,7 @@ class ReservaFacturacionTest extends TestCase
         $destinoAtractivoId = DB::table('destinos_atractivos')->insertGetId([
             'nombre' => 'Tarapoto', 'tipo' => 'lugar', 'created_at' => now(), 'updated_at' => now(),
         ]);
+
         $servicioHotelId = DB::table('servicios')->insertGetId([
             'nombre' => 'Hospedaje', 'created_at' => now(), 'updated_at' => now(),
         ]);
@@ -485,6 +550,317 @@ class ReservaFacturacionTest extends TestCase
         $this->assertCount(1, $body['items_sin_asignar_disponibles'], 'el único ítem, sin vincular, disponible para elegir a mano');
     }
 
+    // Pedido del usuario (2026-09-24): "debo poder ver lo que he
+    // seleccionado si fue gravado o exonerado" — antes items_por_destino_
+    // tributario solo viajaba cuando bloqueado_tributario=true.
+    public function test_preparar_factura_incluye_tratamiento_tributario_aunque_no_este_bloqueado(): void
+    {
+        [$branch, ] = $this->branchConSerie('01', 'F001');
+        $this->usuarioConPermisos($branch->id, ['emitir_factura']);
+
+        $f = $this->crearReservaConPasajerosEItems();
+
+        $preview = app(ReservaFacturacionController::class)->prepararFactura(new Request([
+            'pasajero_ids' => [$f['p1']->id, $f['p2']->id],
+        ]), (string) $f['reserva']->id);
+        $body = $preview->getData(true);
+
+        $this->assertSame(200, $preview->getStatusCode());
+        $this->assertFalse($body['bloqueado_tributario']);
+        $itemsPorDestino = collect($body['items_por_destino_tributario'])->keyBy('reserva_item_id');
+        $this->assertSame('nacional', $itemsPorDestino[$f['itemP1']->id]['destino_tributario']);
+        $this->assertSame('10', $itemsPorDestino[$f['itemP1']->id]['tip_afe_igv']);
+    }
+
+    // Pedido del usuario (2026-09-24): la agencia factura en PEN y USD con
+    // series distintas para mejor control — mismo patrón exacto que
+    // SaleController::store() (branch_id + can_switch_branch).
+    public function test_store_permite_elegir_sucursal_si_usuario_tiene_can_switch_branch(): void
+    {
+        [$branchA, ] = $this->branchConSerie('01', 'F001');
+        [$branchB, ] = $this->branchConSerie('01', 'F002');
+        $this->usuarioConPermisos($branchA->id, ['emitir_factura', 'can_switch_branch']);
+
+        $f = $this->crearReservaConPasajerosEItems();
+        $cliente = Client::factory()->empresa()->create();
+
+        $response = app(ReservaFacturacionController::class)->store(new Request([
+            'pasajero_ids' => [$f['p1']->id],
+            'client_id' => $cliente->id,
+            'tipo_comprobante_codigo' => '01',
+            'branch_id' => $branchB->id,
+        ]), (string) $f['reserva']->id);
+
+        $body = $response->getData(true);
+        $this->assertSame(200, $body['code'], json_encode($body));
+        $this->assertSame('F002', Sale::find($body['sale_id'])->serie, 'debe usar la serie de la sucursal elegida, no la propia');
+    }
+
+    public function test_store_ignora_branch_id_sin_permiso_can_switch_branch(): void
+    {
+        [$branchA, ] = $this->branchConSerie('01', 'F001');
+        [$branchB, ] = $this->branchConSerie('01', 'F002');
+        $this->usuarioConPermisos($branchA->id, ['emitir_factura']); // sin can_switch_branch
+
+        $f = $this->crearReservaConPasajerosEItems();
+        $cliente = Client::factory()->empresa()->create();
+
+        $response = app(ReservaFacturacionController::class)->store(new Request([
+            'pasajero_ids' => [$f['p1']->id],
+            'client_id' => $cliente->id,
+            'tipo_comprobante_codigo' => '01',
+            'branch_id' => $branchB->id,
+        ]), (string) $f['reserva']->id);
+
+        $body = $response->getData(true);
+        $this->assertSame(200, $body['code'], json_encode($body));
+        $this->assertSame('F001', Sale::find($body['sale_id'])->serie, 'sin el permiso, branch_id se ignora — usa la sucursal propia');
+    }
+
+    // Pedido del usuario (2026-09-24): "tengo mi cotización en dólares,
+    // pero el cliente pide que le facture en soles" — sin moneda_facturacion
+    // en el request, el comportamiento de siempre no cambia: la Sale nace
+    // en la moneda de la cotización, sin ningún override persistido.
+    public function test_store_sin_moneda_facturacion_mantiene_la_moneda_de_la_cotizacion(): void
+    {
+        $branch = Branch::create(['name' => 'Sede USD', 'is_active' => true]);
+        $this->serieAdicionalMoneda($branch, '01', 'F002', 'USD');
+        $this->usuarioConPermisos($branch->id, ['emitir_factura']);
+
+        $f = $this->crearReservaConUnPasajeroYUnItemEnMoneda('USD', 100);
+        $cliente = Client::factory()->empresa()->create();
+
+        $response = app(ReservaFacturacionController::class)->store(new Request([
+            'pasajero_ids' => [$f['pasajero']->id],
+            'client_id' => $cliente->id,
+            'tipo_comprobante_codigo' => '01',
+        ]), (string) $f['reserva']->id);
+
+        $body = $response->getData(true);
+        $this->assertSame(200, $body['code'], json_encode($body));
+
+        $venta = Sale::find($body['sale_id']);
+        $this->assertSame('USD', $venta->currency);
+        $this->assertSame(100.0, (float) $venta->total);
+        $this->assertNull($venta->moneda_original_cotizacion);
+        $this->assertNull($venta->tipo_cambio_override_moneda);
+        $this->assertNull($venta->motivo_override_moneda);
+    }
+
+    // Caso real (2026-09-24): cotización en USD, cliente pide el
+    // comprobante en soles — moneda_facturacion+tipo_cambio_conversion+
+    // motivo_cambio_moneda convierten los montos y quedan auditados en la
+    // Sale (mismo criterio que motivo_override_tributario en reserva_items).
+    public function test_store_factura_en_moneda_distinta_a_la_cotizacion_convierte_montos_y_persiste_override(): void
+    {
+        [$branchPen, ] = $this->branchConSerie('01', 'F001'); // PEN, por branchConSerie()
+        $this->serieAdicionalMoneda($branchPen, '01', 'F009', 'USD');
+        $this->usuarioConPermisos($branchPen->id, ['emitir_factura']);
+
+        $f = $this->crearReservaConUnPasajeroYUnItemEnMoneda('USD', 100);
+        $cliente = Client::factory()->empresa()->create();
+
+        $response = app(ReservaFacturacionController::class)->store(new Request([
+            'pasajero_ids' => [$f['pasajero']->id],
+            'client_id' => $cliente->id,
+            'tipo_comprobante_codigo' => '01',
+            'moneda_facturacion' => 'PEN',
+            'tipo_cambio_conversion' => 3.75,
+            'motivo_cambio_moneda' => 'Cliente pidió el comprobante en soles.',
+        ]), (string) $f['reserva']->id);
+
+        $body = $response->getData(true);
+        $this->assertSame(200, $body['code'], json_encode($body));
+
+        $venta = Sale::find($body['sale_id']);
+        $this->assertSame('PEN', $venta->currency, 'debe usar la serie PEN, no la USD de la cotización');
+        $this->assertSame('F001', $venta->serie);
+        // 100 USD/1.18 = 84.75 subtotal, 15.25 igv -> x3.75 = 317.81 + 57.19 = 375.00
+        $this->assertSame(375.0, (float) $venta->total);
+        $this->assertSame(317.81, (float) $venta->subtotal);
+        $this->assertSame('USD', $venta->moneda_original_cotizacion);
+        $this->assertSame(3.75, (float) $venta->tipo_cambio_override_moneda);
+        $this->assertSame('Cliente pidió el comprobante en soles.', $venta->motivo_override_moneda);
+    }
+
+    public function test_store_rechaza_moneda_facturacion_distinta_sin_tipo_cambio_o_motivo(): void
+    {
+        [$branch, ] = $this->branchConSerie('01', 'F001');
+        $this->serieAdicionalMoneda($branch, '01', 'F009', 'USD');
+        $this->usuarioConPermisos($branch->id, ['emitir_factura']);
+
+        $f = $this->crearReservaConUnPasajeroYUnItemEnMoneda('USD', 100);
+        $cliente = Client::factory()->empresa()->create();
+
+        $response = app(ReservaFacturacionController::class)->store(new Request([
+            'pasajero_ids' => [$f['pasajero']->id],
+            'client_id' => $cliente->id,
+            'tipo_comprobante_codigo' => '01',
+            'moneda_facturacion' => 'PEN',
+            // sin tipo_cambio_conversion ni motivo_cambio_moneda
+        ]), (string) $f['reserva']->id);
+
+        $body = $response->getData(true);
+        $this->assertSame(422, $body['code'], json_encode($body));
+        $this->assertSame(0, Sale::count());
+    }
+
+    // Bug real de auditoría (2026-09-24): un anticipo pagado en la moneda
+    // ORIGINAL de la cotización (USD) no debe intentar aplicarse a una
+    // Sale que terminó en otra moneda por el override — antes del fix,
+    // el auto-aplicado mezclaba montos de las 2 monedas sin convertir y
+    // AdvanceApplicationService::aplicar() abortaba TODA la transacción
+    // con un 422 de "moneda distinta", aunque el vendedor nunca pidió usar
+    // ese anticipo. Debe simplemente ignorarlo y dejar el total íntegro.
+    public function test_store_ignora_anticipo_en_otra_moneda_al_facturar_con_override_de_moneda(): void
+    {
+        [$branchPen, ] = $this->branchConSerie('01', 'F001');
+        $this->serieAdicionalMoneda($branchPen, '01', 'F009', 'USD');
+        // El propio comprobante del anticipo (AdvanceController::store())
+        // se emite en la moneda de la reserva (USD, boleta por defecto).
+        $this->serieAdicionalMoneda($branchPen, '03', 'B009', 'USD');
+        $usuario = $this->usuarioConPermisos($branchPen->id, ['emitir_factura', 'register_advance']);
+
+        // AdvanceController::store() (invocado por ReservaAnticipoController)
+        // exige una sesión de caja abierta para el usuario/sucursal.
+        $cashRegister = CashRegister::create(['branch_id' => $branchPen->id, 'name' => 'Caja Test', 'is_active' => true]);
+        CashSession::create([
+            'cash_register_id' => $cashRegister->id, 'opened_by' => $usuario->id,
+            'opening_amount' => 0, 'opened_at' => now(), 'status' => 'open',
+        ]);
+
+        $f = $this->crearReservaConUnPasajeroYUnItemEnMoneda('USD', 100);
+
+        app(ReservaAnticipoController::class)->store(new Request([
+            'monto' => 20.00, 'medio_pago' => 'EFECTIVO', 'tip_afe_igv' => '10',
+        ]), (string) $f['reserva']->id);
+        $advanceUsd = Advance::first();
+        $this->assertNotNull($advanceUsd);
+        $this->assertSame('USD', $advanceUsd->currency);
+
+        $cliente = Client::factory()->empresa()->create();
+        $response = app(ReservaFacturacionController::class)->store(new Request([
+            'pasajero_ids' => [$f['pasajero']->id],
+            'client_id' => $cliente->id,
+            'tipo_comprobante_codigo' => '01',
+            'moneda_facturacion' => 'PEN',
+            'tipo_cambio_conversion' => 3.75,
+            'motivo_cambio_moneda' => 'Cliente pidió el comprobante en soles.',
+        ]), (string) $f['reserva']->id);
+
+        $body = $response->getData(true);
+        $this->assertSame(200, $body['code'], json_encode($body));
+
+        $venta = Sale::find($body['sale_id']);
+        $this->assertSame('PEN', $venta->currency);
+        $this->assertSame(375.0, (float) $venta->total, 'no se aplicó el anticipo en USD, el total queda íntegro');
+        $this->assertSame(0.0, (float) $venta->paid_out);
+        $this->assertSame(20.0, (float) $advanceUsd->fresh()->availableBalance(), 'el anticipo en USD queda intacto para una futura sub-factura en su propia moneda');
+    }
+
+    // Bug real de auditoría (2026-09-24): convertir el AGREGADO
+    // (subtotalTotal/igvTotal) por separado de las líneas individuales
+    // podía desalinear el header de la Sale (sales.subtotal/igv) respecto
+    // a la suma real de sus sale_details — sumar N líneas redondeadas
+    // independientemente no siempre da lo mismo que redondear la suma. El
+    // fix recalcula el agregado DESDE las líneas ya convertidas, así que
+    // esta invariante debe cumplirse siempre, sin importar el tipo de
+    // cambio ni si hay o no rounding artifacts con estos números puntuales.
+    public function test_store_con_conversion_de_moneda_el_total_de_la_venta_coincide_con_la_suma_de_sus_lineas(): void
+    {
+        [$branch, ] = $this->branchConSerie('01', 'F001');
+        $this->serieAdicionalMoneda($branch, '01', 'F009', 'USD');
+        $this->usuarioConPermisos($branch->id, ['emitir_factura']);
+
+        // 2 categorías distintas (TRANSPORTE 40, vía itemP2 auto-incluido
+        // solo con p2; OTROS 10, vía itemSinAsignar manual) -> 2
+        // sale_details separados con montos que SÍ producen divergencia de
+        // redondeo real con tipo_cambio_conversion=4.35 (verificado con
+        // PriceEngineService::convertirMoneda antes de escribir el test —
+        // sin esta combinación puntual de montos/tipo de cambio, el bug no
+        // se manifestaba). Solo p2 (no p1) para no arrastrar itemCompartido
+        // (vinculado a ambos) y mantener exactamente 2 líneas conocidas.
+        $f = $this->crearReservaConPasajerosEItems('USD');
+        $cliente = Client::factory()->empresa()->create();
+
+        $response = app(ReservaFacturacionController::class)->store(new Request([
+            'pasajero_ids' => [$f['p2']->id],
+            'reserva_item_ids_manual' => [$f['itemSinAsignar']->id],
+            'client_id' => $cliente->id,
+            'tipo_comprobante_codigo' => '01',
+            'moneda_facturacion' => 'PEN',
+            'tipo_cambio_conversion' => 4.35,
+            'motivo_cambio_moneda' => 'Cliente pidió el comprobante en soles.',
+        ]), (string) $f['reserva']->id);
+
+        $body = $response->getData(true);
+        $this->assertSame(200, $body['code'], json_encode($body));
+
+        $venta = Sale::find($body['sale_id']);
+        $sumaLineas = SaleDetail::where('sale_id', $venta->id)->get();
+        $this->assertGreaterThanOrEqual(2, $sumaLineas->count(), 'precondición: al menos 2 líneas separadas');
+
+        $this->assertSame(round((float) $sumaLineas->sum('subtotal'), 2), (float) $venta->subtotal);
+        $this->assertSame(round((float) $sumaLineas->sum('igv'), 2), (float) $venta->igv);
+        $this->assertSame(
+            round((float) $sumaLineas->sum('subtotal') + (float) $sumaLineas->sum('igv'), 2),
+            (float) $venta->total
+        );
+    }
+
+    // El preview de solo lectura sugiere el tipo de cambio SUNAT del día
+    // (o el último hábil anterior) y devuelve los montos ya convertidos con
+    // ese valor — sin que el vendedor tenga que escribir nada todavía.
+    public function test_preparar_factura_sugiere_tipo_cambio_sunat_y_convierte_el_preview(): void
+    {
+        [$branch, ] = $this->branchConSerie('01', 'F001');
+        $this->usuarioConPermisos($branch->id, ['emitir_factura']);
+
+        TipoCambioSunat::create([
+            'fecha' => now()->toDateString(), 'compra' => 3.70, 'venta' => 3.80,
+            'fuente' => 'e-api', 'consultado_en' => now(),
+        ]);
+
+        $f = $this->crearReservaConUnPasajeroYUnItemEnMoneda('USD', 100);
+
+        $preview = app(ReservaFacturacionController::class)->prepararFactura(new Request([
+            'pasajero_ids' => [$f['pasajero']->id],
+            'moneda_facturacion' => 'PEN',
+        ]), (string) $f['reserva']->id);
+
+        $body = $preview->getData(true);
+        $this->assertSame(200, $preview->getStatusCode());
+        $this->assertSame('USD', $body['moneda_cotizacion_original']);
+        $this->assertSame('PEN', $body['moneda_facturacion']);
+        $this->assertSame(3.8, (float) $body['tipo_cambio_sugerido']);
+        $this->assertSame(3.8, (float) $body['tipo_cambio_aplicado']);
+        // 100/1.18=84.75 subtotal x3.80 = 322.05, igv 15.25x3.80=57.95 -> total 380.00
+        $this->assertSame(380.0, (float) $body['total']);
+    }
+
+    // Pedido del usuario (2026-09-24): "debe aparecer de manera visible la
+    // serie" — antes el preview no decía qué serie iba a usarse hasta
+    // confirmar. Solo se resuelve si el vendedor ya eligió tipo de
+    // comprobante (sin eso, null — el preview nunca rompe por esto).
+    public function test_preparar_factura_incluye_la_serie_resuelta_si_se_indica_tipo_de_comprobante(): void
+    {
+        [$branch, ] = $this->branchConSerie('01', 'F001');
+        $this->usuarioConPermisos($branch->id, ['emitir_factura']);
+
+        $f = $this->crearReservaConPasajerosEItems();
+
+        $sinTipo = app(ReservaFacturacionController::class)->prepararFactura(new Request([
+            'pasajero_ids' => [$f['p1']->id],
+        ]), (string) $f['reserva']->id);
+        $this->assertNull($sinTipo->getData(true)['serie_resuelta']);
+
+        $conTipo = app(ReservaFacturacionController::class)->prepararFactura(new Request([
+            'pasajero_ids' => [$f['p1']->id],
+            'tipo_comprobante_codigo' => '01',
+        ]), (string) $f['reserva']->id);
+        $this->assertSame('F001', $conTipo->getData(true)['serie_resuelta']);
+    }
+
     public function test_items_sin_asignar_requieren_seleccion_explicita_y_no_se_incluyen_solos(): void
     {
         [$branch, ] = $this->branchConSerie('01', 'F001');
@@ -647,6 +1023,192 @@ class ReservaFacturacionTest extends TestCase
         $this->assertSame(2, Sale::count(), 'la venta anulada + la nueva');
     }
 
+    // Hallazgo de auditoría (2026-09-23): a diferencia del caso 'total' de
+    // arriba, una NC PARCIAL nunca tocaba reserva_item_ids — el servicio
+    // acreditado quedaba "facturado" para siempre, sin ningún camino de
+    // recuperación (ni refacturarlo, ni editarlo, ni quitarlo de la
+    // reserva). Fixture: p1 (dueño de itemP1, categoría HOTEL) +
+    // itemSinAsignar (manual, categoría OTROS) facturados JUNTOS en el
+    // mismo Sale vía Facturación especial — 2 categorías distintas =>
+    // 2 SaleDetail separados dentro del mismo comprobante, así se puede
+    // acreditar SOLO uno de los dos.
+    public function test_nota_credito_parcial_libera_solo_el_item_acreditado_no_toda_la_venta(): void
+    {
+        [$branch, ] = $this->branchConSerie('01', 'F001');
+        $this->usuarioConPermisos($branch->id, ['emitir_factura']);
+
+        $f = $this->crearReservaConPasajerosEItems();
+        $empresa = Client::factory()->empresa()->create();
+
+        $response = app(ReservaFacturacionController::class)->store(new Request([
+            'pasajero_ids' => [$f['p1']->id],
+            'reserva_item_ids_manual' => [$f['itemSinAsignar']->id],
+            'client_id' => $empresa->id,
+            'tipo_comprobante_codigo' => '01',
+        ]), (string) $f['reserva']->id);
+        $body = $response->getData(true);
+        $this->assertSame(200, $body['code'], json_encode($body));
+        $ventaId = $body['sale_id'];
+
+        $reservaVenta = ReservaVenta::where('sale_id', $ventaId)->first();
+        $this->assertNotNull($reservaVenta);
+        $this->assertContains($f['itemP1']->id, $reservaVenta->reserva_item_ids, 'precondición: itemP1 facturado');
+        $this->assertContains($f['itemSinAsignar']->id, $reservaVenta->reserva_item_ids, 'precondición: itemSinAsignar facturado');
+
+        // Localiza el SaleDetail que cubre SOLO itemSinAsignar (categoría
+        // OTROS, distinta de HOTEL) vía la tabla puente sale_detail_items.
+        $saleDetailItemAcreditar = SaleDetailItem::where('reserva_item_id', $f['itemSinAsignar']->id)->first();
+        $this->assertNotNull($saleDetailItemAcreditar, 'itemSinAsignar debe tener su propia línea de comprobante');
+        $saleDetailOriginal = SaleDetail::find($saleDetailItemAcreditar->sale_detail_id);
+        $this->assertNotSame(
+            SaleDetailItem::where('reserva_item_id', $f['itemP1']->id)->first()->sale_detail_id,
+            $saleDetailOriginal->id,
+            'itemP1 e itemSinAsignar deben estar en líneas de comprobante DISTINTAS (categorías distintas)'
+        );
+        $valorLineaConIgv = round((float) $saleDetailOriginal->subtotal + (float) $saleDetailOriginal->igv, 2);
+
+        // correlativo también hace falta: store() lo copia a
+        // notes.correlativo_afectado (NOT NULL) — mismo criterio que
+        // AdvanceCorreccionTest::marcarAceptadoPorSunat().
+        Sale::where('id', $ventaId)->update([
+            'correlativo' => $ventaId,
+            'n_operacion' => 'F001-' . str_pad((string) $ventaId, 8, '0', STR_PAD_LEFT),
+            'xml' => '<xml>fake</xml>',
+            'cdr' => 'fake-cdr-content',
+        ]);
+
+        Storage::fake('public');
+        Company::create([
+            'razon_social' => 'Empresa de Prueba SAC',
+            'razon_social_comercial' => 'Empresa de Prueba',
+            'n_document' => '20123456789',
+        ]);
+
+        // NC09 "Disminución en el valor" — permite_parcial + modo_monto,
+        // así se acredita el valor completo de la línea sin tocar cantidad/stock.
+        $responseStore = app(NotaElectronicaController::class)->store(new Request([
+            'sale_id' => $ventaId,
+            'tipo_doc' => '07',
+            'tipo_afectacion' => 'parcial',
+            'cod_motivo' => '09',
+            'des_motivo' => 'Ajuste — servicio anulado',
+            'items' => [
+                ['sale_detail_id' => $saleDetailOriginal->id, 'monto' => $valorLineaConIgv],
+            ],
+        ]));
+        $bodyNota = $responseStore->getData(true);
+        $this->assertSame(200, $responseStore->getStatusCode(), json_encode($bodyNota));
+        $notaId = $bodyNota['note']['id'];
+
+        $this->app->instance(GreenterService::class, $this->greenterServiceQueAceptaNota());
+
+        $responseNota = app(NotaElectronicaController::class)->enviarNotaSunat(new Request(['note_id' => $notaId]));
+        $dataNota = $responseNota->getData(true);
+        $this->assertSame('aceptado', $dataNota['note']['status'], json_encode($dataNota));
+
+        $reservaVentaFresh = $reservaVenta->fresh();
+        $this->assertNotNull($reservaVentaFresh, 'la venta sigue cubriendo itemP1 — no debió borrarse completa');
+        $this->assertNotContains($f['itemSinAsignar']->id, $reservaVentaFresh->reserva_item_ids, 'el ítem acreditado debe liberarse');
+        $this->assertContains($f['itemP1']->id, $reservaVentaFresh->reserva_item_ids, 'el ítem NO acreditado debe seguir facturado');
+
+        // Y ahora sí se puede quitar/re-facturar el ítem liberado — antes
+        // del fix, ReservaItemController::destroy() lo rechazaba por
+        // yaFacturado para siempre.
+        $itemLiberado = ReservaItem::find($f['itemSinAsignar']->id);
+        $this->assertFalse(
+            ReservaVenta::where('reserva_id', $f['reserva']->id)
+                ->get()
+                ->flatMap(fn (ReservaVenta $rv) => $rv->reserva_item_ids ?? [])
+                ->contains($itemLiberado->id)
+        );
+    }
+
+    // Bug real de auditoría (2026-09-24) — "ítem zombie": a diferencia del
+    // test anterior (que acredita itemSinAsignar, sin pasajero vinculado),
+    // acá se acredita un ítem CON pasajero vinculado (itemP1) mientras ese
+    // mismo pasajero (p1) sigue cubierto por otro ítem en la misma
+    // ReservaVenta (itemSinAsignar) — reserva_pasajero_ids nunca se toca al
+    // liberar parcialmente, así que p1 sigue "ya facturado". Antes del fix,
+    // itemP1 no calificaba ni para itemsAuto (su pasajero está bloqueado
+    // por pasajerosRepetidos) ni para itemsSinAsignar (tiene pasajero
+    // vinculado) — quedaba invisible para siempre, sin ningún camino de
+    // re-facturación por la API.
+    public function test_nota_credito_parcial_de_item_con_pasajero_vinculado_permite_refacturarlo_despues(): void
+    {
+        [$branch, ] = $this->branchConSerie('01', 'F001');
+        $this->usuarioConPermisos($branch->id, ['emitir_factura']);
+
+        $f = $this->crearReservaConPasajerosEItems();
+        $empresa = Client::factory()->empresa()->create();
+
+        $response = app(ReservaFacturacionController::class)->store(new Request([
+            'pasajero_ids' => [$f['p1']->id],
+            'reserva_item_ids_manual' => [$f['itemSinAsignar']->id],
+            'client_id' => $empresa->id,
+            'tipo_comprobante_codigo' => '01',
+        ]), (string) $f['reserva']->id);
+        $body = $response->getData(true);
+        $this->assertSame(200, $body['code'], json_encode($body));
+        $ventaId = $body['sale_id'];
+
+        $reservaVenta = ReservaVenta::where('sale_id', $ventaId)->first();
+
+        // Localiza el SaleDetail que cubre SOLO itemP1 (categoría HOTEL,
+        // distinta de itemSinAsignar/OTROS).
+        $saleDetailItemAcreditar = SaleDetailItem::where('reserva_item_id', $f['itemP1']->id)->first();
+        $saleDetailOriginal = SaleDetail::find($saleDetailItemAcreditar->sale_detail_id);
+        $valorLineaConIgv = round((float) $saleDetailOriginal->subtotal + (float) $saleDetailOriginal->igv, 2);
+
+        Sale::where('id', $ventaId)->update([
+            'correlativo' => $ventaId,
+            'n_operacion' => 'F001-' . str_pad((string) $ventaId, 8, '0', STR_PAD_LEFT),
+            'xml' => '<xml>fake</xml>',
+            'cdr' => 'fake-cdr-content',
+        ]);
+
+        Storage::fake('public');
+        Company::create([
+            'razon_social' => 'Empresa de Prueba SAC',
+            'razon_social_comercial' => 'Empresa de Prueba',
+            'n_document' => '20123456789',
+        ]);
+
+        $responseStore = app(NotaElectronicaController::class)->store(new Request([
+            'sale_id' => $ventaId,
+            'tipo_doc' => '07',
+            'tipo_afectacion' => 'parcial',
+            'cod_motivo' => '09',
+            'des_motivo' => 'Ajuste — servicio de hotel anulado',
+            'items' => [
+                ['sale_detail_id' => $saleDetailOriginal->id, 'monto' => $valorLineaConIgv],
+            ],
+        ]));
+        $notaId = $responseStore->getData(true)['note']['id'];
+
+        $this->app->instance(GreenterService::class, $this->greenterServiceQueAceptaNota());
+        $responseNota = app(NotaElectronicaController::class)->enviarNotaSunat(new Request(['note_id' => $notaId]));
+        $this->assertSame('aceptado', $responseNota->getData(true)['note']['status']);
+
+        $reservaVentaFresh = $reservaVenta->fresh();
+        $this->assertNotContains($f['itemP1']->id, $reservaVentaFresh->reserva_item_ids, 'itemP1 debe liberarse');
+        $this->assertContains($f['itemSinAsignar']->id, $reservaVentaFresh->reserva_item_ids, 'itemSinAsignar sigue cubierto');
+        $this->assertContains($f['p1']->id, $reservaVentaFresh->reserva_pasajero_ids, 'p1 sigue "facturado" — la NC parcial nunca lo libera a él');
+
+        // El punto del fix: itemP1 (liberado, con pasajero) debe poder
+        // volver a facturarse — reenviando p1 (ya facturado, solo para
+        // cumplir min:1) + reserva_item_ids_manual, mismo mecanismo que
+        // "Facturar simple" ya usa para arrastrar ítems sueltos.
+        $segundaVenta = app(ReservaFacturacionController::class)->store(new Request([
+            'pasajero_ids' => [$f['p1']->id],
+            'reserva_item_ids_manual' => [$f['itemP1']->id],
+            'client_id' => $empresa->id,
+            'tipo_comprobante_codigo' => '01',
+        ]), (string) $f['reserva']->id);
+        $bodySegunda = $segundaVenta->getData(true);
+        $this->assertSame(200, $bodySegunda['code'], json_encode($bodySegunda));
+        $this->assertSame(100.0, (float) Sale::find($bodySegunda['sale_id'])->total);
+    }
+
     // Mismo criterio que EnviarSunatCdrFailureTest::greenterServiceQueFallaAlProcesar():
     // getSee()/getNote()/procesarRespuestaSunat() completamente controlados
     // — cero red real, cero certificado real. getFactory() además mockeado
@@ -790,6 +1352,13 @@ class ReservaFacturacionTest extends TestCase
         $this->assertEqualsCanonicalizing(['amazonia', 'nacional'], $body['destinos_tributarios_detectados']);
         $this->assertSame(0, Sale::count(), 'no debe crear nada a medias');
 
+        // Hallazgo de auditoría (2026-09-23): antes solo se devolvían los
+        // VALORES distintos, sin decir qué servicio es cuál — el frontend
+        // recibía el dato y lo descartaba. Ahora viene el mapeo completo.
+        $itemsPorDestino = collect($body['items_por_destino_tributario'])->keyBy('reserva_item_id');
+        $this->assertSame('amazonia', $itemsPorDestino[$itemAmazonia->id]['destino_tributario']);
+        $this->assertSame('nacional', $itemsPorDestino[$itemNacional->id]['destino_tributario']);
+
         // Preview: mismo bloqueo, sin necesidad de intentar el POST.
         $preview = app(ReservaFacturacionController::class)->prepararFactura(new Request([
             'pasajero_ids' => [$pasajeroA->id, $pasajeroB->id],
@@ -798,6 +1367,7 @@ class ReservaFacturacionTest extends TestCase
         $this->assertSame(200, $preview->getStatusCode());
         $this->assertTrue($previewBody['bloqueado_tributario']);
         $this->assertArrayNotHasKey('grupos_propuestos', $previewBody);
+        $this->assertCount(2, $previewBody['items_por_destino_tributario']);
     }
 
     public function test_guardia_tributario_es_por_subgrupo_no_por_reserva_completa(): void
@@ -837,6 +1407,100 @@ class ReservaFacturacionTest extends TestCase
         $this->assertSame(422, $responseA->getStatusCode());
         $this->assertTrue($bodyA['bloqueado_tributario']);
         $this->assertSame(1, Sale::count(), 'el intento bloqueado no debe crear nada');
+    }
+
+    // ── overrideTratamientoTributario() — Caso 3 Amazonía (2026-09-24) ──
+
+    public function test_override_confirma_amazonia_y_permite_facturar(): void
+    {
+        [$branch, ] = $this->branchConSerie('01', 'F001');
+        $this->usuarioConPermisos($branch->id, ['emitir_factura']);
+
+        [$reserva, $itemAmazonia, , $pasajeroA] = $this->crearReservaConMezclaTributaria();
+        $cliente = Client::factory()->empresa()->create();
+
+        // Antes de confirmar, sigue bloqueado — mismo criterio que
+        // test_guardia_tributario_es_por_subgrupo_no_por_reserva_completa().
+        $antes = app(ReservaFacturacionController::class)->store(new Request([
+            'pasajero_ids' => [$pasajeroA->id],
+            'client_id' => $cliente->id,
+            'tipo_comprobante_codigo' => '01',
+        ]), (string) $reserva->id);
+        $this->assertSame(422, $antes->getStatusCode());
+        $this->assertStringContainsString('confirmados', $antes->getData(true)['motivo']);
+
+        $override = app(ReservaController::class)->overrideTratamientoTributario(new Request([
+            'reserva_item_ids' => [$itemAmazonia->id],
+            'destino_tributario' => 'amazonia',
+            'tip_afe_igv' => '20',
+            'motivo' => 'Servicio confirmado en zona Amazonía por el operador, exonerado según Ley 27037.',
+        ]), (string) $reserva->id);
+        $this->assertSame(200, $override->getStatusCode(), json_encode($override->getData(true)));
+        $this->assertNotNull($itemAmazonia->fresh()->motivo_override_tributario);
+        $this->assertNotNull($itemAmazonia->fresh()->fecha_override_tributario);
+
+        $despues = app(ReservaFacturacionController::class)->store(new Request([
+            'pasajero_ids' => [$pasajeroA->id],
+            'client_id' => $cliente->id,
+            'tipo_comprobante_codigo' => '01',
+        ]), (string) $reserva->id);
+        $bodyDespues = $despues->getData(true);
+        $this->assertSame(200, $bodyDespues['code'], json_encode($bodyDespues));
+
+        $venta = Sale::find($bodyDespues['sale_id']);
+        $this->assertGreaterThan(0, (float) $venta->mto_oper_exoneradas, 'debe salir como operación exonerada, no gravada');
+        $this->assertSame(0.0, (float) $venta->igv, 'exonerado no debe generar IGV');
+    }
+
+    public function test_override_rechaza_reserva_no_activa(): void
+    {
+        [$reserva, $itemAmazonia] = $this->crearReservaConMezclaTributaria();
+        $reserva->update(['estado' => 'cancelada']);
+
+        $response = app(ReservaController::class)->overrideTratamientoTributario(new Request([
+            'reserva_item_ids' => [$itemAmazonia->id],
+            'destino_tributario' => 'amazonia', 'tip_afe_igv' => '20', 'motivo' => 'x',
+        ]), (string) $reserva->id);
+
+        $this->assertSame(422, $response->getStatusCode());
+        $this->assertNull($itemAmazonia->fresh()->motivo_override_tributario);
+    }
+
+    public function test_override_exige_motivo(): void
+    {
+        [$reserva, $itemAmazonia] = $this->crearReservaConMezclaTributaria();
+
+        $response = app(ReservaController::class)->overrideTratamientoTributario(new Request([
+            'reserva_item_ids' => [$itemAmazonia->id],
+            'destino_tributario' => 'amazonia', 'tip_afe_igv' => '20',
+        ]), (string) $reserva->id);
+
+        $this->assertSame(422, $response->getStatusCode());
+        $this->assertNull($itemAmazonia->fresh()->motivo_override_tributario);
+    }
+
+    public function test_override_rechaza_item_ya_facturado(): void
+    {
+        [$branch, ] = $this->branchConSerie('01', 'F001');
+        $this->usuarioConPermisos($branch->id, ['emitir_factura']);
+
+        [$reserva, , $itemNacional, , $pasajeroB] = $this->crearReservaConMezclaTributaria();
+        $cliente = Client::factory()->empresa()->create();
+
+        app(ReservaFacturacionController::class)->store(new Request([
+            'pasajero_ids' => [$pasajeroB->id],
+            'client_id' => $cliente->id,
+            'tipo_comprobante_codigo' => '01',
+        ]), (string) $reserva->id);
+
+        $response = app(ReservaController::class)->overrideTratamientoTributario(new Request([
+            'reserva_item_ids' => [$itemNacional->id],
+            'destino_tributario' => 'amazonia', 'tip_afe_igv' => '20', 'motivo' => 'x',
+        ]), (string) $reserva->id);
+
+        $this->assertSame(422, $response->getStatusCode());
+        $this->assertStringContainsString('facturado', $response->getData(true)['message']);
+        $this->assertNull($itemNacional->fresh()->motivo_override_tributario);
     }
 
     public function test_preparar_factura_lanza_403_si_tenant_no_tiene_facturacion_habilitada(): void

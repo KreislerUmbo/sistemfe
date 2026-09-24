@@ -14,7 +14,9 @@ use App\Models\Product\Product;
 use App\Models\Sale\Sale;
 use App\Models\Sale\SaleDetail;
 use App\Services\AdvanceApplicationService;
+use App\Services\AgenciaViajes\PriceEngineService;
 use App\Services\SerieComprobanteService;
+use App\Services\TipoCambio\TipoCambioSunatResolver;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -99,9 +101,26 @@ class ReservaFacturacionController extends Controller
         . 'distinto (ej. exonerado Amazonía + gravado nacional). No se puede facturar en un solo '
         . 'comprobante todavía — requiere revisión manual con el contador antes de emitir.';
 
-    private const MENSAJE_TRATAMIENTO_TRIBUTARIO_NO_NACIONAL = 'Esta reserva incluye servicios con tratamiento tributario '
-        . 'Amazonía/exonerado. La facturación de estos casos está pausada hasta definir el cálculo correcto '
-        . 'con el contador — contacta a soporte.';
+    // Caso 4 (mezcla) sigue sin responder — sin cambios acá, ver arriba.
+    // Caso "extranjero"/exportación (2026-09-24): sigue bloqueado sin
+    // ninguna excepción — requiere validaciones legales que este flujo no
+    // hace (cliente no domiciliado, consumo fuera del país, medios
+    // bancarizados), fuera de alcance de este fix.
+    private const MENSAJE_TRATAMIENTO_TRIBUTARIO_EXTRANJERO = 'Esta reserva incluye servicios de exportación/extranjero. '
+        . 'La facturación de estos casos está pausada — requiere validaciones legales (cliente no domiciliado, medios '
+        . 'bancarizados) que este flujo todavía no hace. Contacta a soporte.';
+
+    // Caso 3 (Amazonía) confirmado con el usuario (2026-09-24): un
+    // servicio realizado en la Amazonía está exonerado de IGV según Ley
+    // 27037, independientemente del domicilio fiscal de la agencia. Pero
+    // nunca se factura solo porque destino_tributario llegó así copiado de
+    // la proveedor_tarifa (dato que ya se encontró sospechoso al menos una
+    // vez para un producto real) — se exige que un humano lo confirme
+    // ítem por ítem primero, ver ReservaController::
+    // overrideTratamientoTributario() / ReservaItem::motivo_override_tributario.
+    private const MENSAJE_AMAZONIA_SIN_CONFIRMAR = 'Esta reserva incluye servicios de la Amazonía (exonerados de IGV '
+        . 'por Ley 27037), pero todavía no fueron confirmados uno por uno. Confirmá el tratamiento tributario de cada '
+        . 'servicio antes de poder facturarlos.';
 
     // Facturación externa por tenant (PEGAR-EN-CLAUDE-CODE-facturacion-externa-
     // tenant.md §3.1) — doble capa: el frontend ya oculta el botón "Facturar"
@@ -124,7 +143,9 @@ class ReservaFacturacionController extends Controller
 
     public function __construct(
         private SerieComprobanteService $serieComprobanteService,
-        private AdvanceApplicationService $advanceApplicationService
+        private AdvanceApplicationService $advanceApplicationService,
+        private PriceEngineService $priceEngineService,
+        private TipoCambioSunatResolver $tipoCambioSunatResolver
     ) {
     }
 
@@ -154,6 +175,18 @@ class ReservaFacturacionController extends Controller
             'pasajero_ids.*' => 'integer|exists:reserva_pasajeros,id',
             'reserva_item_ids_manual' => 'nullable|array',
             'reserva_item_ids_manual.*' => 'integer|exists:reserva_items,id',
+            // Facturar en moneda distinta a la de la cotización (2026-09-24,
+            // ver resolverMonedaFacturacionPreview()) — sin motivo/tipo de
+            // cambio obligatorios acá, el preview es de solo lectura y
+            // sugiere un tipo de cambio si no se pasó ninguno.
+            'moneda_facturacion' => 'nullable|string|in:PEN,USD',
+            'tipo_cambio_conversion' => 'nullable|numeric|gt:0',
+            // Serie visible en el preview (2026-09-24, pedido del usuario:
+            // "debe aparecer de manera visible la serie") — ambos opcionales,
+            // sin ellos no se resuelve ninguna serie (el vendedor todavía no
+            // eligió tipo de comprobante en este preview).
+            'branch_id' => 'nullable|integer|exists:branches,id',
+            'tipo_comprobante_codigo' => 'nullable|string|in:01,03',
         ]);
 
         if ($validator->fails()) {
@@ -167,6 +200,15 @@ class ReservaFacturacionController extends Controller
             return $resolucion;
         }
         ['items' => $items, 'contexto' => $contexto] = $resolucion;
+
+        $infoMoneda = $this->resolverMonedaFacturacionPreview($request, $reserva);
+        $contexto = array_merge($contexto, [
+            'moneda_cotizacion_original' => $infoMoneda['moneda_original'],
+            'moneda_facturacion' => $infoMoneda['moneda_facturacion'],
+            'tipo_cambio_sugerido' => $infoMoneda['tipo_cambio_sugerido'],
+            'tipo_cambio_aplicado' => $infoMoneda['tipo_cambio'],
+            'serie_resuelta' => $this->resolverSeriePreview($request, $validado, $infoMoneda['moneda_facturacion']),
+        ]);
 
         // Preview de solo lectura: se mantiene siempre 200, con
         // bloqueado_tributario en el body — nunca una excepción. El
@@ -194,6 +236,18 @@ class ReservaFacturacionController extends Controller
         }
 
         [$lineas, $subtotalTotal, $igvTotal] = $this->construirLineas($gruposPorCategoria, $productosPlaceholder);
+
+        if ($infoMoneda['moneda_facturacion'] !== $infoMoneda['moneda_original'] && $infoMoneda['tipo_cambio'] !== null) {
+            [$lineas, $subtotalTotal, $igvTotal] = $this->convertirLineasDeMoneda(
+                $lineas,
+                $subtotalTotal,
+                $igvTotal,
+                $infoMoneda['moneda_original'],
+                $infoMoneda['moneda_facturacion'],
+                $infoMoneda['tipo_cambio']
+            );
+        }
+
         $total = round($subtotalTotal + $igvTotal, 2);
 
         // Tier 0 — conexión Adelantos↔Reservas: solo lectura, para que el
@@ -212,6 +266,9 @@ class ReservaFacturacionController extends Controller
         return response()->json(array_merge([
             'code' => 200,
             'bloqueado_tributario' => false,
+            // Siempre visible, no solo cuando bloquea (pedido del usuario,
+            // 2026-09-24) — ver mapearItemsPorTratamientoTributario().
+            'items_por_destino_tributario' => $this->mapearItemsPorTratamientoTributario($items),
             'grupos_propuestos' => collect($lineas)->map(fn (array $linea) => [
                 'categoria' => $linea['categoria'],
                 'cantidad_items' => $linea['grupo']->count(),
@@ -251,6 +308,19 @@ class ReservaFacturacionController extends Controller
             'client_id' => 'required|integer|exists:clients,id',
             'tipo_comprobante_codigo' => 'required|string|in:01,03',
             'texto_personalizado' => 'nullable|string|max:2000',
+            // Solo tiene efecto si el usuario tiene can_switch_branch (ver
+            // más abajo) — sin ese permiso, se ignora y se usa la
+            // sucursal propia del usuario, mismo criterio que SaleController.
+            'branch_id' => 'nullable|integer|exists:branches,id',
+            // Facturar en moneda distinta a la de la cotización (2026-09-24):
+            // moneda_facturacion es opcional (default = la de la cotización);
+            // si se pide otra, tipo_cambio_conversion y motivo_cambio_moneda
+            // son obligatorios — se valida a mano abajo (resolverMonedaFacturacion())
+            // porque "obligatorio si difiere de un valor que no es un campo del
+            // request" no es expresable con required_if.
+            'moneda_facturacion' => 'nullable|string|in:PEN,USD',
+            'tipo_cambio_conversion' => 'nullable|numeric|gt:0',
+            'motivo_cambio_moneda' => 'nullable|string|max:2000',
             // Tier 0 — conexión Adelantos↔Reservas: vacío = "Facturar"
             // simple (el backend auto-aplica el 100% de los anticipos
             // disponibles de la reserva); poblado = "Facturación especial"
@@ -297,12 +367,30 @@ class ReservaFacturacionController extends Controller
         if ($validado['tipo_comprobante_codigo'] === '01' && (string) $cliente->cod_tipo_doc_sunat !== '6') {
             throw new HttpException(422, 'No se puede emitir Factura a un cliente sin RUC. Selecciona Boleta o cambia el cliente.');
         }
-        $moneda = $reserva->alternativa->moneda_cotizacion;
+
+        $infoMoneda = $this->resolverMonedaFacturacion($request, $reserva);
+        if ($infoMoneda instanceof \Illuminate\Http\JsonResponse) {
+            return $infoMoneda;
+        }
+        $moneda = $infoMoneda['moneda_facturacion'];
+
+        // Pedido del usuario (2026-09-24): la agencia factura en PEN y USD
+        // con series distintas para mejor control — mismo patrón exacto
+        // que SaleController::store() (resolverSerieComprobante()): sin
+        // esto, el vendedor con permiso can_switch_branch no tenía forma
+        // de elegir la sucursal/serie desde Reservas (solo podía desde
+        // Venta Directa/ventas normales). El servicio revalida el permiso
+        // internamente, así que pasar branch_id sin tener el permiso no
+        // hace nada — cae en el branch_id propio del usuario igual.
+        $branchIdSolicitado = ($usuario->can('can_switch_branch') && $request->filled('branch_id'))
+            ? (int) $request->branch_id
+            : null;
 
         $serieResuelta = $this->serieComprobanteService->resolverParaUsuario(
             $usuario,
             $validado['tipo_comprobante_codigo'],
-            $moneda
+            $moneda,
+            $branchIdSolicitado
         );
 
         $gruposPorCategoria = $this->agruparPorCategoria($items);
@@ -330,13 +418,13 @@ class ReservaFacturacionController extends Controller
                 $gruposPorCategoria,
                 $productosPlaceholder,
                 $cliente,
-                $moneda,
                 $serieResuelta,
                 $aplicacionesAdelantoSolicitadas,
                 $usuario,
                 $textoPersonalizado,
                 $pasajeroIdsSolicitados,
-                $idsManualSolicitados
+                $idsManualSolicitados,
+                $infoMoneda
             ) {
                 // Re-chequeo bajo lock: cierra la ventana de carrera con
                 // ReservaController::actualizarFacturacionExterna() sobre la
@@ -380,6 +468,18 @@ class ReservaFacturacionController extends Controller
                 }
 
                 [$lineas, $subtotalTotal, $igvTotal] = $this->construirLineas($gruposPorCategoriaBajoLock, $productosPlaceholder, $textoPersonalizado);
+
+                if ($infoMoneda['moneda_facturacion'] !== $infoMoneda['moneda_original']) {
+                    [$lineas, $subtotalTotal, $igvTotal] = $this->convertirLineasDeMoneda(
+                        $lineas,
+                        $subtotalTotal,
+                        $igvTotal,
+                        $infoMoneda['moneda_original'],
+                        $infoMoneda['moneda_facturacion'],
+                        $infoMoneda['tipo_cambio_conversion']
+                    );
+                }
+
                 $total = round($subtotalTotal + $igvTotal, 2);
 
                 // Análisis de impuestos (28-ago-2026) — antes venía todo
@@ -403,7 +503,7 @@ class ReservaFacturacionController extends Controller
                 }
 
                 $destinoTributarioVenta = $itemsBajoLock->isNotEmpty()
-                    ? $this->resolverDestinoTributario($itemsBajoLock->first())
+                    ? self::resolverDestinoTributario($itemsBajoLock->first())
                     : self::DESTINO_TRIBUTARIO_DEFAULT;
 
                 $venta = Sale::create([
@@ -417,7 +517,12 @@ class ReservaFacturacionController extends Controller
                     'client_id' => $cliente->id,
                     'type_client' => $cliente->type_client,
                     'cod_tipo_doc_cliente' => $cliente->cod_tipo_doc_sunat,
-                    'currency' => $moneda,
+                    'currency' => $infoMoneda['moneda_facturacion'],
+                    'moneda_original_cotizacion' => $infoMoneda['moneda_facturacion'] !== $infoMoneda['moneda_original']
+                        ? $infoMoneda['moneda_original']
+                        : null,
+                    'tipo_cambio_override_moneda' => $infoMoneda['tipo_cambio_conversion'],
+                    'motivo_override_moneda' => $infoMoneda['motivo_cambio_moneda'],
                     'is_exportacion' => $destinoTributarioVenta === 'extranjero' ? 1 : 0,
                     'destino' => $destinoTributarioVenta === 'amazonia' ? 'amazonia' : 'nacional',
                     'type_payment' => 1,
@@ -519,6 +624,17 @@ class ReservaFacturacionController extends Controller
                 $anticiposDelCliente = $reserva->anticipos()->with('advance')
                     ->get()
                     ->filter(fn (ReservaAnticipo $ra) => (int) $ra->advance->client_id === (int) $cliente->id)
+                    // Bug real de auditoría (2026-09-24): con el override de
+                    // moneda al facturar (ver resolverMonedaFacturacion()),
+                    // esta Sale puede terminar en una moneda distinta a la
+                    // del anticipo — sin este filtro, el auto-aplicado de
+                    // abajo mezclaba montos de 2 monedas sin convertir, y
+                    // AdvanceApplicationService::aplicar() rechazaba con 422
+                    // ("adelanto en USD, venta en PEN") abortando TODA la
+                    // transacción por un anticipo que el vendedor ni pidió
+                    // usar. El anticipo en la otra moneda simplemente queda
+                    // disponible para una futura sub-factura en SU moneda.
+                    ->filter(fn (ReservaAnticipo $ra) => $ra->advance->currency === $venta->currency)
                     ->values();
 
                 if (!empty($aplicacionesAdelantoSolicitadas)) {
@@ -660,6 +776,27 @@ class ReservaFacturacionController extends Controller
                 continue;
             }
 
+            // Ítem "huérfano" (hallazgo de auditoría 2026-09-24): TODOS sus
+            // pasajeros vinculados ya están facturados en otra venta de esta
+            // reserva — típicamente porque una Nota de Crédito parcial
+            // liberó este ítem puntual (NotaElectronicaController, caso
+            // tipo_afectacion='parcial') sin tocar reserva_pasajero_ids
+            // (el pasajero sigue legítimamente cubierto por el resto de esa
+            // venta). Sin esto, el ítem no calificaba ni para itemsAuto (su
+            // pasajero ya está bloqueado por pasajerosRepetidos más abajo)
+            // ni para itemsSinAsignar (sí tiene pasajero vinculado) —
+            // quedaba invisible para siempre, sin ningún camino de
+            // re-facturación por la API. Se ofrece acá como "sin asignar"
+            // para que el vendedor lo elija a mano vía
+            // reserva_item_ids_manual, reusando el mismo mecanismo ya
+            // probado que "Facturar simple" usa para arrastrar ítems
+            // sueltos reenviando un pasajero_id ya facturado (ver
+            // pasajeroIdsParaFacturarSimple() en el frontend).
+            if ($pasajerosVinculados->diff($pasajerosYaFacturados)->isEmpty()) {
+                $itemsSinAsignar->push($item);
+                continue;
+            }
+
             $faltantes = $pasajerosVinculados->diff($pasajeroIdsSolicitados)->values();
             if ($faltantes->isEmpty()) {
                 $itemsAuto->push($item);
@@ -794,11 +931,164 @@ class ReservaFacturacionController extends Controller
     // proveedorTarifa queda como fallback de compatibilidad para
     // reserva_items creados ANTES de este fix (columna null) — nunca se
     // retrofitea data histórica, ver plan de impuestos.
-    private function resolverDestinoTributario(ReservaItem $item): string
+    // public static (2026-09-23): sin estado de instancia, pura sobre
+    // $item — ReservaController la reusa para mostrar el tratamiento
+    // tributario por servicio en el tab "Servicios" (badge nuevo, hallazgo
+    // de auditoría: hoy solo se descubre una mezcla al chocar con el
+    // bloqueo de facturar). Una sola fuente de verdad, nunca duplicar esta
+    // cascada en otro controller.
+    public static function resolverDestinoTributario(ReservaItem $item): string
     {
         return $item->destino_tributario
             ?? $item->proveedorTarifa?->destino_tributario
             ?? self::DESTINO_TRIBUTARIO_DEFAULT;
+    }
+
+    // Facturar en una moneda distinta a la de la cotización de origen
+    // (2026-09-24 — caso real: cotización en USD, cliente pide el
+    // comprobante en soles). Versión ESTRICTA, usada por store(): si se
+    // pide una moneda distinta a la de la cotización, exige tipo de cambio
+    // + motivo explícitos en el request (mismo criterio de auditoría que
+    // motivo_override_tributario en reserva_items) — nunca se aplica un
+    // tipo de cambio "sugerido" sin que el vendedor lo haya confirmado
+    // (aunque coincida con la sugerencia, confirmar es parte del flujo).
+    // Devuelve un JsonResponse 422 listo para retornar tal cual si falta
+    // algo, o el array resuelto en éxito.
+    private function resolverMonedaFacturacion(Request $request, Reserva $reserva)
+    {
+        $monedaOriginal = $reserva->alternativa->moneda_cotizacion;
+        $monedaFacturacion = $request->filled('moneda_facturacion') ? $request->input('moneda_facturacion') : $monedaOriginal;
+
+        if ($monedaFacturacion === $monedaOriginal) {
+            return [
+                'moneda_original' => $monedaOriginal,
+                'moneda_facturacion' => $monedaFacturacion,
+                'tipo_cambio_conversion' => null,
+                'motivo_cambio_moneda' => null,
+            ];
+        }
+
+        if (! $request->filled('tipo_cambio_conversion') || ! $request->filled('motivo_cambio_moneda')) {
+            return response()->json([
+                'code' => 422,
+                'message' => "Para facturar en una moneda distinta a la de la cotización ({$monedaOriginal}) hace " .
+                    'falta indicar el tipo de cambio aplicado y el motivo.',
+            ], 422);
+        }
+
+        return [
+            'moneda_original' => $monedaOriginal,
+            'moneda_facturacion' => $monedaFacturacion,
+            'tipo_cambio_conversion' => (float) $request->input('tipo_cambio_conversion'),
+            'motivo_cambio_moneda' => $request->input('motivo_cambio_moneda'),
+        ];
+    }
+
+    // Misma decisión de negocio que resolverMonedaFacturacion(), versión
+    // LENIENTE para prepararFactura() (preview de solo lectura, nunca
+    // persiste nada): si se pide otra moneda pero todavía no hay tipo de
+    // cambio confirmado por el vendedor, sugiere el del día vía
+    // TipoCambioSunatResolver (venta) para que el frontend lo precargue
+    // editable — sin bloquear el preview si no hay dato disponible (mismo
+    // criterio de "no bloquea" que el propio resolver documenta).
+    private function resolverMonedaFacturacionPreview(Request $request, Reserva $reserva): array
+    {
+        $monedaOriginal = $reserva->alternativa->moneda_cotizacion;
+        $monedaFacturacion = $request->filled('moneda_facturacion') ? $request->input('moneda_facturacion') : $monedaOriginal;
+
+        if ($monedaFacturacion === $monedaOriginal) {
+            return [
+                'moneda_original' => $monedaOriginal,
+                'moneda_facturacion' => $monedaFacturacion,
+                'tipo_cambio' => null,
+                'tipo_cambio_sugerido' => null,
+            ];
+        }
+
+        $tipoCambioSugerido = $this->tipoCambioSunatResolver->resolverParaFecha(now())?->venta;
+        $tipoCambio = $request->filled('tipo_cambio_conversion')
+            ? (float) $request->input('tipo_cambio_conversion')
+            : $tipoCambioSugerido;
+
+        return [
+            'moneda_original' => $monedaOriginal,
+            'moneda_facturacion' => $monedaFacturacion,
+            'tipo_cambio' => $tipoCambio !== null ? (float) $tipoCambio : null,
+            'tipo_cambio_sugerido' => $tipoCambioSugerido !== null ? (float) $tipoCambioSugerido : null,
+        ];
+    }
+
+    // Serie visible en el preview (2026-09-24, pedido del usuario: "debe
+    // aparecer de manera visible la serie" — antes solo se veía la
+    // sucursal, el vendedor no sabía si iba a salir F001, F002, etc. hasta
+    // confirmar). Solo lectura: resolverParaUsuario() no reserva ningún
+    // correlativo, solo lee la fila de serie_comprobantes ya existente.
+    // null si todavía no hay suficiente info (sin tipo_comprobante_codigo
+    // elegido) o si no hay ninguna serie activa configurada para esa
+    // combinación — nunca rompe el preview, que siempre debe responder 200.
+    private function resolverSeriePreview(Request $request, array $validado, string $monedaFacturacion): ?string
+    {
+        if (empty($validado['tipo_comprobante_codigo'])) {
+            return null;
+        }
+
+        $usuario = auth('api')->user();
+        if (! $usuario) {
+            return null;
+        }
+
+        $branchIdSolicitado = ($usuario->can('can_switch_branch') && $request->filled('branch_id'))
+            ? (int) $request->branch_id
+            : null;
+
+        try {
+            $serieResuelta = $this->serieComprobanteService->resolverParaUsuario(
+                $usuario,
+                $validado['tipo_comprobante_codigo'],
+                $monedaFacturacion,
+                $branchIdSolicitado
+            );
+
+            return $serieResuelta['serie']->serie;
+        } catch (HttpException $e) {
+            return null;
+        }
+    }
+
+    // Aplica la conversión de PriceEngineService::convertirMoneda() (mismo
+    // criterio ×/÷ ya usado al armar cotizaciones: USD→PEN multiplica,
+    // PEN→USD divide) a cada línea ya calculada por construirLineas() —
+    // se aplica DESPUÉS de construirLineas() a propósito, nunca dentro,
+    // para no acoplar el cálculo puro de líneas (compartido con el flujo
+    // normal sin conversión) a esta decisión de negocio nueva.
+    private function convertirLineasDeMoneda(
+        array $lineas,
+        float $subtotalTotal,
+        float $igvTotal,
+        string $monedaOrigen,
+        string $monedaDestino,
+        float $tipoCambio
+    ): array {
+        foreach ($lineas as &$linea) {
+            $linea['subtotal'] = $this->priceEngineService->convertirMoneda($linea['subtotal'], $monedaOrigen, $monedaDestino, $tipoCambio);
+            $linea['igv'] = $this->priceEngineService->convertirMoneda($linea['igv'], $monedaOrigen, $monedaDestino, $tipoCambio);
+            $linea['precio_final'] = $this->priceEngineService->convertirMoneda($linea['precio_final'], $monedaOrigen, $monedaDestino, $tipoCambio);
+        }
+        unset($linea);
+
+        // Bug real de auditoría (2026-09-24): convertir $subtotalTotal/
+        // $igvTotal por separado (en vez de sumar las líneas YA
+        // convertidas y redondeadas una por una) podía desalinear el
+        // header de la Sale por ±0.01 respecto a la suma real de sus
+        // SaleDetail — sumar N líneas redondeadas independientemente no
+        // siempre da lo mismo que redondear la suma. Mismo criterio que ya
+        // usa construirLineas() (acumula durante el loop, redondea una
+        // sola vez al final) — acá se recalcula desde las líneas ya
+        // convertidas en vez de re-convertir el agregado original.
+        $subtotalTotal = round(collect($lineas)->sum('subtotal'), 2);
+        $igvTotal = round(collect($lineas)->sum('igv'), 2);
+
+        return [$lineas, $subtotalTotal, $igvTotal];
     }
 
     // Mismo criterio de cascada que resolverDestinoTributario(), un nivel
@@ -810,7 +1100,8 @@ class ReservaFacturacionController extends Controller
     // específico que el campo genérico de alternativa_items y tiene
     // prioridad cuando está presente. '10' es el mismo fallback legado de
     // siempre para reserva_items de antes de este fix sin ningún dato.
-    private function resolverTipAfeIgvItem(ReservaItem $item): string
+    // public static — mismo motivo que resolverDestinoTributario() arriba.
+    public static function resolverTipAfeIgvItem(ReservaItem $item): string
     {
         $alternativaItem = $item->alternativaItem;
 
@@ -832,24 +1123,64 @@ class ReservaFacturacionController extends Controller
     // ESTE Sale — dos pasajeros distintos pueden terminar en Sales con
     // distinto destino_tributario cada uno, mientras cada Sale individual
     // sea homogéneo.
+    // Hallazgo de auditoría (2026-09-23) + pedido del usuario (2026-09-24,
+    // "debo poder ver lo que he seleccionado si fue gravado o exonerado"):
+    // antes esto solo se calculaba/devolvía cuando el bloqueo tributario ya
+    // había disparado — antes de eso, el vendedor elegía pasajeros/ítems a
+    // ciegas sin saber el tratamiento hasta chocar con el error. Un solo
+    // mapeo, usado tanto por detectarMezclaTributaria() (bloqueado) como
+    // por prepararFactura() en el camino OK (siempre visible).
+    private function mapearItemsPorTratamientoTributario(Collection $items): Collection
+    {
+        return $items->map(fn (ReservaItem $it) => [
+            'reserva_item_id' => $it->id,
+            'nombre' => ReservaController::resolverNombreItem($it->alternativaItem, $it),
+            'destino_tributario' => self::resolverDestinoTributario($it),
+            'tip_afe_igv' => self::resolverTipAfeIgvItem($it),
+        ])->values();
+    }
+
     private function detectarMezclaTributaria(Collection $items): ?array
     {
-        $destinos = $items->map(fn (ReservaItem $it) => $this->resolverDestinoTributario($it))->unique()->values();
+        $destinos = $items->map(fn (ReservaItem $it) => self::resolverDestinoTributario($it))->unique()->values();
+        $itemsPorDestino = $this->mapearItemsPorTratamientoTributario($items);
 
         if ($destinos->count() > 1) {
             return [
                 'bloqueado_tributario' => true,
                 'motivo' => self::MENSAJE_MEZCLA_TRIBUTARIA,
                 'destinos_tributarios_detectados' => $destinos->all(),
+                'items_por_destino_tributario' => $itemsPorDestino,
             ];
         }
 
-        if ($destinos->contains(fn (string $destino) => $destino !== self::DESTINO_TRIBUTARIO_DEFAULT)) {
+        $destinoUnico = $destinos->first();
+
+        // 'extranjero' sigue bloqueado sin excepción (ver constante).
+        if ($destinoUnico === 'extranjero') {
             return [
                 'bloqueado_tributario' => true,
-                'motivo' => self::MENSAJE_TRATAMIENTO_TRIBUTARIO_NO_NACIONAL,
+                'motivo' => self::MENSAJE_TRATAMIENTO_TRIBUTARIO_EXTRANJERO,
                 'destinos_tributarios_detectados' => $destinos->all(),
+                'items_por_destino_tributario' => $itemsPorDestino,
             ];
+        }
+
+        // 'amazonia' se puede facturar SOLO si cada ítem ya fue confirmado
+        // a mano (motivo_override_tributario no nulo) — ver constante
+        // MENSAJE_AMAZONIA_SIN_CONFIRMAR arriba para el porqué.
+        if ($destinoUnico === 'amazonia') {
+            $sinConfirmar = $items->filter(fn (ReservaItem $it) => $it->motivo_override_tributario === null)->values();
+
+            if ($sinConfirmar->isNotEmpty()) {
+                return [
+                    'bloqueado_tributario' => true,
+                    'motivo' => self::MENSAJE_AMAZONIA_SIN_CONFIRMAR,
+                    'destinos_tributarios_detectados' => $destinos->all(),
+                    'items_por_destino_tributario' => $itemsPorDestino,
+                    'items_sin_confirmar_ids' => $sinConfirmar->pluck('id')->values(),
+                ];
+            }
         }
 
         return null;
@@ -886,7 +1217,7 @@ class ReservaFacturacionController extends Controller
                 continue;
             }
 
-            foreach ($itemsCategoria->groupBy(fn (ReservaItem $it) => $this->resolverTipAfeIgvItem($it)) as $tipAfeIgv => $itemsGrupo) {
+            foreach ($itemsCategoria->groupBy(fn (ReservaItem $it) => self::resolverTipAfeIgvItem($it)) as $tipAfeIgv => $itemsGrupo) {
                 // (string) explícito: PHP castea claves de array que parecen
                 // enteros decimales ('10'/'20'/'30') a int — groupBy() usa un
                 // array por debajo, así que $tipAfeIgv llega acá como int(10),

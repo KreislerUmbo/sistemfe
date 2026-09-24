@@ -41,6 +41,14 @@ class ReservaItem extends Model
         'salida_operativa_id',
         'tip_afe_igv',
         'destino_tributario',
+        // Confirmación explícita por ítem antes de poder facturar un
+        // tratamiento tributario ≠ nacional (Caso 3 Amazonía, ver
+        // ReservaController::overrideTratamientoTributario() y
+        // ReservaFacturacionController::detectarMezclaTributaria()) —
+        // nunca se confía en destino_tributario/tip_afe_igv tal como
+        // llegó copiado de la tarifa sin que un humano lo revise.
+        'motivo_override_tributario',
+        'fecha_override_tributario',
         'opcion_mayorista_id',
         'opcion_mayorista_original_id',
         'motivo_reasignacion_mayorista',
@@ -57,6 +65,7 @@ class ReservaItem extends Model
         'fecha' => 'date',
         'fecha_reasignacion_mayorista' => 'datetime',
         'fecha_reasignacion_hotel' => 'datetime',
+        'fecha_override_tributario' => 'datetime',
     ];
 
     public const FECHA_ORIGEN_AUTO = 'auto';

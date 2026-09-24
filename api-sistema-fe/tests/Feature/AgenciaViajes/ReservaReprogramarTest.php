@@ -7,7 +7,9 @@ use App\Http\Controllers\AgenciaViajes\ReservaItemController;
 use App\Models\AgenciaViajes\Alternativa;
 use App\Models\AgenciaViajes\AlternativaItem;
 use App\Models\AgenciaViajes\ReservaItem;
+use App\Models\AgenciaViajes\ReservaVenta;
 use App\Models\AgenciaViajes\SalidaOperativa;
+use App\Models\Sale\Sale;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
@@ -184,10 +186,64 @@ class ReservaReprogramarTest extends TestCase
         $salidaNueva = SalidaOperativa::find($salidaNuevaDia1);
         $this->assertSame('2026-10-01', $salidaNueva->fecha->toDateString());
 
-        // La salida vieja sigue existiendo (no se borra, podría estar
-        // compartida por otra reserva) pero ya no tiene este ítem.
-        $this->assertTrue(SalidaOperativa::where('id', $salidaViejaDia1)->exists());
-        $this->assertSame(0, ReservaItem::where('salida_operativa_id', $salidaViejaDia1)->count());
+        // Bug real (auditoría 2026-09-22, fix aplicado acá): la salida
+        // vieja se desengancha, y como en este fixture NO está compartida
+        // por ninguna otra reserva, queda vacía — debe borrarse sola en vez
+        // de quedar fantasma en el tablero con 0 pasajeros. Ver
+        // SalidaOperativa::eliminarSiQuedoVacia(). El caso "sigue
+        // compartida, no se borra" está cubierto en
+        // SalidaOperativaTest::test_detach_no_borra_la_salida_si_sigue_compartida_por_otra_reserva().
+        $this->assertFalse(SalidaOperativa::where('id', $salidaViejaDia1)->exists());
+    }
+
+    // Bug real de auditoría (2026-09-24): a diferencia del ítem 'manual'
+    // (arriba), un ítem 'auto' YA FACTURADO no tenía ningún guard — antes
+    // del fix, reprogramar() le movía la fecha y reenganchaba su
+    // SalidaOperativa igual que a cualquier otro ítem pendiente,
+    // desincronizando el reporte operativo de un comprobante SUNAT ya
+    // emitido (que conserva su descripción/fecha congelada al facturar).
+    public function test_reprogramar_no_toca_fecha_ni_salida_de_un_item_ya_facturado(): void
+    {
+        [$reserva, $itemDia1, $itemDia2, ] = $this->crearReservaConItems();
+
+        $reservaItemDia1 = ReservaItem::where('alternativa_item_id', $itemDia1->id)->first();
+        $reservaItemDia2 = ReservaItem::where('alternativa_item_id', $itemDia2->id)->first();
+        $salidaViejaDia1 = $reservaItemDia1->salida_operativa_id;
+
+        // users.role_id default(1) a nivel de Postgres — Sale::factory()
+        // crea un User propio, mismo fixture que ReservaFacturacionTest.
+        DB::table('roles')->insert([
+            'id' => 1, 'name' => 'test-role-default', 'guard_name' => 'api',
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        DB::statement("SELECT setval(pg_get_serial_sequence('roles','id'), (SELECT MAX(id) FROM roles))");
+
+        $sale = Sale::factory()->create();
+        ReservaVenta::create([
+            'reserva_id' => $reserva->id,
+            'sale_id' => $sale->id,
+            'reserva_item_ids' => [$reservaItemDia1->id],
+            'reserva_pasajero_ids' => [],
+        ]);
+
+        $response = app(ReservaController::class)->reprogramar(new Request([
+            'fecha_viaje_desde' => '2026-10-01',
+            'fecha_viaje_hasta' => '2026-10-05',
+            'motivo' => 'Cliente pidió correr el viaje 30 días.',
+        ]), (string) $reserva->id);
+
+        $body = $response->getData(true);
+        $this->assertSame(200, $body['code'], json_encode($body));
+
+        // El ítem ya facturado queda intacto: ni fecha ni SalidaOperativa.
+        $this->assertSame('2026-09-01', $reservaItemDia1->fresh()->fecha->toDateString());
+        $this->assertSame($salidaViejaDia1, $reservaItemDia1->fresh()->salida_operativa_id);
+
+        // El ítem NO facturado sigue recalculándose con normalidad.
+        $this->assertSame('2026-10-02', $reservaItemDia2->fresh()->fecha->toDateString());
+
+        $itemsNoTocados = collect($body['items_no_tocados'])->keyBy('reserva_item_id');
+        $this->assertSame('ya_facturado', $itemsNoTocados[$reservaItemDia1->id]['motivo']);
     }
 
     // Guardia de visibilidad (2026-08-20): un ítem sin dia_referencial no se

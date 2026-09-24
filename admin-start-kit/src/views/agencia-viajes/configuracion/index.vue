@@ -536,6 +536,33 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- Pedido del usuario (2026-09-24): la pantalla de series ya
+                     existía (/series-comprobante) pero vivía fuera del menú de
+                     Agencia de Viajes — no se veía desde acá. Solo un acceso
+                     directo, no duplica la gestión (que sigue siendo la misma
+                     pantalla general, usada también por Retail). -->
+                <div class="accordion-item" v-if="puedeGestionarSeries">
+                    <h2 class="accordion-header">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#accSeries">
+                            <span class="badge bg-primary rounded-pill me-2">12</span>
+                            <span class="fw-semibold text-dark">Series de comprobantes (PEN / USD)</span>
+                        </button>
+                    </h2>
+                    <div id="accSeries" class="accordion-collapse collapse" data-bs-parent="#accConfigAgencia">
+                        <div class="accordion-body">
+                            <p class="small text-muted mb-2">
+                                Cada sucursal puede tener una serie distinta por tipo de comprobante y moneda —
+                                si la agencia factura en soles y en dólares, acá se define qué serie usa cada una
+                                para mejor control. Al facturar (reservas, venta directa, adelantos), la serie
+                                correcta se elige sola según la moneda de esa venta.
+                            </p>
+                            <router-link :to="{ name: 'series-comprobante.index' }" class="btn btn-sm btn-outline-primary">
+                                <i class="fas fa-list-ol me-1"></i>Ver / configurar series de comprobantes
+                            </router-link>
+                        </div>
+                    </div>
+                </div>
             </div>
         </template>
     </DefaultLayout>
@@ -550,12 +577,19 @@ import { configuracionAgenciaService } from '@/services/admin/configuracionAgenc
 import { cuentaBancariaService } from '@/services/admin/cuentaBancariaService';
 import { configuracionAgenciaPdfService, type ConfiguracionAgenciaPdf, type AfiliacionTurismoOpcion } from '@/services/admin/configuracionAgenciaPdfService';
 import { useAgenciaViajesCatalogosStore } from '@/stores/agenciaViajesCatalogos';
+import { useAuthStore } from '@/stores/auth';
 import type { ConfiguracionAgencia, CuentaBancaria } from '@/types/agencia-viajes';
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
 
 const cargando = ref<boolean>(true);
 const guardando = ref<boolean>(false);
+const authStore = useAuthStore();
+
+// Acceso directo a Series de comprobantes (2026-09-24) — mismo permiso que
+// exige la ruta real (routes.ts: 'list_serie_comprobante'), para no mostrar
+// un botón que lleve a una pantalla que el usuario no puede ver.
+const puedeGestionarSeries = computed(() => authStore.isPermitedRoute('list_serie_comprobante'));
 const form = ref<ConfiguracionAgencia>({
     sigla_comercial: null,
     edad_max_infante: 2,

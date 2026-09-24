@@ -1,6 +1,6 @@
 // src/services/admin/reservaService.ts — Sesión 11c (reserva y pasajeros)
 import httpClient from '@/helpers/http-client'
-import type { ReservaDetalleResponse, Reservas, MotivoCancelacion, Reserva } from '@/types/agencia-viajes'
+import type { ReservaDetalleResponse, Reservas, MotivoCancelacion, Reserva, EstadoFacturacionReserva } from '@/types/agencia-viajes'
 
 export const reservaService = {
   async listar(params: {
@@ -11,6 +11,10 @@ export const reservaService = {
     fecha_desde?: string
     fecha_hasta?: string
     vendedor_id?: number
+    // 2026-09-22 — filtro por estado de facturación real (ver
+    // EstadoFacturacionReserva). El backend calcula esto en PHP y pagina
+    // manualmente cuando se usa (no es un WHERE de Postgres directo).
+    estado_facturacion?: EstadoFacturacionReserva
   } = {}) {
     const response = await httpClient.get('/reservas', { params })
     return response.data as Reservas & { vendedores: Array<{ id: number; nombre: string }> }
@@ -91,6 +95,20 @@ export const reservaService = {
       costo_anterior: number
       costo_nuevo: number | null
     }
+  },
+  // Caso 3 Amazonía confirmado con el usuario (2026-09-24) — confirma/
+  // corrige a mano el tratamiento tributario real de uno o varios
+  // servicios, con motivo obligatorio (auditable). Requisito para poder
+  // facturar un servicio con destino_tributario='amazonia' — ver
+  // items_sin_confirmar_ids en PrepararFacturaResponse.
+  async overrideTratamientoTributario(id: number, payload: {
+    reserva_item_ids: number[]
+    destino_tributario: 'amazonia' | 'nacional' | 'extranjero'
+    tip_afe_igv: '10' | '20' | '30'
+    motivo: string
+  }) {
+    const response = await httpClient.post(`/reservas/${id}/override-tratamiento-tributario`, payload)
+    return response.data as ReservaDetalleResponse & { code: number; message: string }
   },
   // Facturación externa por tenant + por reserva (PEGAR-EN-CLAUDE-CODE-
   // facturacion-externa-tenant.md, 2026-08-20) — solo editable mientras la

@@ -6,7 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Models\AgenciaViajes\Reserva;
 use App\Models\AgenciaViajes\ReservaItem;
 use App\Models\AgenciaViajes\ReservaItemPasajero;
+use App\Models\AgenciaViajes\ReservaItemVueloPasajero;
 use App\Models\AgenciaViajes\ReservaVenta;
+use App\Models\AgenciaViajes\SalidaOperativa;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -153,7 +155,19 @@ class ReservaItemController extends Controller
                 // cascadeOnDelete() — hay que limpiarla a mano antes de
                 // poder borrar el ítem.
                 ReservaItemPasajero::where('reserva_item_id', $itemLocked->id)->delete();
+                // Bug real (auditoría 2026-09-22): reserva_item_vuelo_pasajero
+                // (migración 2026_08_27_110000) tampoco tiene cascadeOnDelete()
+                // y quedó fuera de este limpiado desde el día que se creó —
+                // borrar un ítem con vuelo de agencia ya cargado tiraba un 500
+                // de violación de FK en vez de un mensaje claro.
+                ReservaItemVueloPasajero::where('reserva_item_id', $itemLocked->id)->delete();
+                $salidaId = $itemLocked->salida_operativa_id;
                 $itemLocked->delete();
+                // Bug real (auditoría 2026-09-22): ver
+                // SalidaOperativa::eliminarSiQuedoVacia() — borrar el
+                // último ítem enganchado a una salida la dejaba fantasma en
+                // el tablero, con 0 pasajeros.
+                SalidaOperativa::eliminarSiQuedoVacia($salidaId);
             });
         } catch (HttpException $e) {
             return response()->json(['code' => $e->getStatusCode(), 'message' => $e->getMessage()], $e->getStatusCode());

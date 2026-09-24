@@ -1051,6 +1051,11 @@ Route::group([
     // (catálogo o ad-hoc).
     Route::post("reservas/{id}/reasignar-hotel", [ReservaController::class, 'reasignarHotel'])
         ->middleware('permission:reservas.editar');
+    // Caso 3 Amazonía confirmado con el usuario (2026-09-24) — override con
+    // motivo obligatorio, requisito para poder facturar un servicio con
+    // destino_tributario='amazonia' (ver detectarMezclaTributaria()).
+    Route::post("reservas/{id}/override-tratamiento-tributario", [ReservaController::class, 'overrideTratamientoTributario'])
+        ->middleware('permission:reservas.editar');
     // Facturación externa por tenant + por reserva (PEGAR-EN-CLAUDE-CODE-
     // facturacion-externa-tenant.md, 2026-08-20).
     Route::put("reservas/{id}/facturacion-externa", [ReservaController::class, 'actualizarFacturacionExterna'])
@@ -1078,6 +1083,13 @@ Route::group([
     // "proveedor-tarifas" antes de "cotizaciones/{id}").
     Route::get("pasajeros-catalogo", [ReservaPasajeroController::class, 'buscarCatalogo'])
         ->middleware('permission:reservas.ver|reservas.ver_todas');
+    // Hallazgo de auditoría 2026-09-23 (baja confianza, nunca estaba
+    // anotado como alcance diferido a propósito, a diferencia de otros
+    // gaps del módulo): no había ningún camino para sumar un pasajero de
+    // último momento a una reserva ya aceptada — solo nacían todos juntos
+    // al aceptar la alternativa.
+    Route::post("reservas/{id}/pasajeros", [ReservaPasajeroController::class, 'store'])
+        ->middleware('permission:reservas.editar');
     Route::put("reserva-pasajeros/{id}", [ReservaPasajeroController::class, 'update'])
         ->middleware('permission:reservas.editar');
     // Fase D del plan "Proceso de reserva: facturación + 3 fixes" (2026-08-19).

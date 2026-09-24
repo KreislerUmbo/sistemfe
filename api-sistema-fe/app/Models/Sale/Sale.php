@@ -135,6 +135,16 @@ class Sale extends Model
         // null); ver App\Services\TipoCambio\TipoCambioSunatResolver.
         "tipo_cambio_sunat_aplicado",
 
+        // Override de moneda al facturar una reserva en una moneda distinta
+        // a la de su cotización de origen (2026-09-24) — ver migración
+        // add_override_moneda_facturacion_to_sales_table y
+        // ReservaFacturacionController::resolverMonedaYTipoCambio(). null en
+        // los 3 campos = se facturó en la moneda normal de la cotización,
+        // sin override.
+        "moneda_original_cotizacion",
+        "tipo_cambio_override_moneda",
+        "motivo_override_moneda",
+
         // ── Módulo Amortizaciones (ver plan-modulo-amortizaciones.md §2.1) ──
         "condicion_pago",     // 'contado' | 'credito'
         "credit_type",        // 'cuotas_fijas' | 'libre', solo si condicion_pago='credito'

@@ -30,6 +30,15 @@
                         </select>
                     </div>
                     <div class="col-6 col-md-2">
+                        <select class="form-select form-select-sm" v-model="estadoFacturacion" @change="buscar">
+                            <option value="">Facturación: todas</option>
+                            <option value="pendiente">Pendiente</option>
+                            <option value="parcial">Parcial</option>
+                            <option value="total">Facturado total</option>
+                            <option value="facturacion_externa">Facturación externa</option>
+                        </select>
+                    </div>
+                    <div class="col-6 col-md-2">
                         <select class="form-select form-select-sm" v-model="vendedorId" @change="buscar">
                             <option value="">Todos los vendedores</option>
                             <option v-for="v in vendedores" :key="v.id" :value="v.id">{{ v.nombre }}</option>
@@ -61,15 +70,16 @@
                                 <th>Destino</th>
                                 <th>Fechas del viaje</th>
                                 <th class="text-center">Estado</th>
+                                <th class="text-center">Facturación</th>
                                 <th class="text-center pe-3">Acciones</th>
                             </tr>
                         </thead>
                         <tbody>
                             <tr v-if="loading">
-                                <td colspan="6" class="text-center py-5 text-muted"><div class="spinner-border spinner-border-sm me-2"></div>Cargando...</td>
+                                <td colspan="7" class="text-center py-5 text-muted"><div class="spinner-border spinner-border-sm me-2"></div>Cargando...</td>
                             </tr>
                             <tr v-else-if="reservas.length === 0">
-                                <td colspan="6" class="text-center py-5 text-muted fst-italic">Sin reservas registradas.</td>
+                                <td colspan="7" class="text-center py-5 text-muted fst-italic">Sin reservas registradas.</td>
                             </tr>
                             <tr v-for="reserva in reservas" :key="reserva.id">
                                 <td class="ps-3 fw-semibold">{{ reserva.codigo ?? reserva.alternativa?.cotizacion?.codigo }}</td>
@@ -84,6 +94,11 @@
                                 <td class="text-center">
                                     <span class="badge" :class="reserva.estado === 'activa' ? 'bg-success' : 'bg-danger'">
                                         {{ reserva.estado === 'activa' ? 'Activa' : 'Cancelada' }}
+                                    </span>
+                                </td>
+                                <td class="text-center">
+                                    <span class="badge" :class="badgeFacturacion(reserva.estado_facturacion).clase">
+                                        {{ badgeFacturacion(reserva.estado_facturacion).texto }}
                                     </span>
                                 </td>
                                 <td class="text-center pe-3">
@@ -126,12 +141,13 @@
 import { ref, computed, onMounted } from 'vue';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import { reservaService } from '@/services/admin/reservaService';
-import type { Reserva } from '@/types/agencia-viajes';
+import type { Reserva, EstadoFacturacionReserva } from '@/types/agencia-viajes';
 import { formatFecha } from '@/helpers/fecha';
 
 const reservas = ref<Reserva[]>([]);
 const search = ref<string>('');
 const estado = ref<'' | 'activa' | 'cancelada'>('');
+const estadoFacturacion = ref<'' | EstadoFacturacionReserva>('');
 const vendedorId = ref<number | ''>('');
 const fechaDesde = ref<string>('');
 const fechaHasta = ref<string>('');
@@ -154,6 +170,7 @@ const list = async () => {
             per_page: paginate.value,
             search: search.value || undefined,
             estado: (estado.value || undefined) as any,
+            estado_facturacion: (estadoFacturacion.value || undefined) as any,
             vendedor_id: (vendedorId.value || undefined) as any,
             fecha_desde: fechaDesde.value || undefined,
             fecha_hasta: fechaHasta.value || undefined,
@@ -183,10 +200,30 @@ const irAPagina = (nuevaPagina: number) => {
 const limpiarFiltros = () => {
     search.value = '';
     estado.value = '';
+    estadoFacturacion.value = '';
     vendedorId.value = '';
     fechaDesde.value = '';
     fechaHasta.value = '';
     buscar();
+};
+
+// 2026-09-22 — badge de estado de facturación real (ver
+// EstadoFacturacionReserva en types/agencia-viajes.ts). undefined solo
+// puede pasar si el backend todavía no manda el campo (no debería, pero
+// evita un badge roto en vez de romper la fila).
+const badgeFacturacion = (estado?: EstadoFacturacionReserva): { texto: string; clase: string } => {
+    switch (estado) {
+        case 'total':
+            return { texto: 'Facturado', clase: 'bg-success' };
+        case 'parcial':
+            return { texto: 'Parcial', clase: 'bg-warning text-dark' };
+        case 'facturacion_externa':
+            return { texto: 'Externa', clase: 'bg-info text-dark' };
+        case 'pendiente':
+            return { texto: 'Pendiente', clase: 'bg-secondary' };
+        default:
+            return { texto: '—', clase: 'bg-secondary' };
+    }
 };
 
 onMounted(() => list());

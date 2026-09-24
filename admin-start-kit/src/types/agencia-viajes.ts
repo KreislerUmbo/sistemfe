@@ -842,6 +842,18 @@ export type ReservaItem = {
   motivo_reasignacion_hotel?: string | null;
   fecha_reasignacion_hotel?: string | null;
   veces_reasignado_hotel?: number;
+  // Copia propia del reserva_item (Análisis de impuestos, 28-ago-2026) —
+  // fallback a proveedor_tarifa cuando es null (reserva_items creados
+  // antes de ese fix). Ver ReservaFacturacionController::
+  // resolverDestinoTributario()/resolverTipAfeIgvItem() en el backend —
+  // esa es la fuente de verdad, esto solo la refleja para el badge.
+  tip_afe_igv?: TipAfeIgv | null;
+  destino_tributario?: DestinoTributario | null;
+  // Caso 3 Amazonía (2026-09-24) — confirmación explícita por ítem, ver
+  // reservaService.overrideTratamientoTributario(). No nulo = un humano ya
+  // revisó y confirmó este tratamiento tributario a mano.
+  motivo_override_tributario?: string | null;
+  fecha_override_tributario?: string | null;
 };
 
 export type ReservaItemVueloPasajero = {
@@ -892,6 +904,13 @@ export type ReservaItemPasajero = {
   checkin_hora?: string | null;
 };
 
+// Estado de facturación REAL de la reserva (2026-09-22) — solo cuenta un
+// Sale ACEPTADO por SUNAT (n_operacion no nulo) como "facturado de
+// verdad"; un comprobante en borrador o rechazado NO cuenta. Distinto de
+// items_facturados_ids (más abajo), que cuenta cualquier Sale ligado sin
+// importar su estado SUNAT (evita re-ofrecer un ítem ya "ocupado").
+export type EstadoFacturacionReserva = 'pendiente' | 'parcial' | 'total' | 'facturacion_externa';
+
 export type Reserva = {
   id: number;
   // Módulo 12 (códigos y numeración) — derivado del código de la
@@ -924,6 +943,28 @@ export type Reserva = {
   alternativa?: Alternativa & { cotizacion?: Cotizacion };
   pasajeros?: ReservaPasajero[];
   items?: ReservaItem[];
+  // Presente en cada fila del listado (GET /reservas) y en el detalle —
+  // ver EstadoFacturacionReserva.
+  estado_facturacion?: EstadoFacturacionReserva;
+};
+
+// Un comprobante (Sale) real emitido contra esta reserva — una reserva
+// puede tener VARIOS (facturación múltiple por sub-grupo de pasajeros/
+// cliente), nunca uno solo garantizado.
+export type ComprobanteReserva = {
+  reserva_venta_id: number;
+  sale_id: number;
+  tipo_comprobante_codigo: string;
+  serie: string | null;
+  correlativo: number | null;
+  n_operacion: string | null;
+  moneda: 'PEN' | 'USD';
+  total: number;
+  fecha: string | null;
+  estado_sunat: 'aceptado' | 'rechazado' | 'pendiente_envio';
+  sunat_error_message?: string | null;
+  cantidad_items: number;
+  cantidad_pasajeros: number;
 };
 
 export type ReservaResumenItem = {
@@ -993,6 +1034,10 @@ export type ReservaDetalleResponse = {
   // solo miraba pasajeros — un ítem compartido o "sin asignar" podía
   // quedar pendiente para siempre con el badge en verde).
   items_pendientes_de_facturar_count?: number;
+  // Estado de facturación real + comprobantes emitidos (2026-09-22) — ver
+  // EstadoFacturacionReserva/ComprobanteReserva.
+  estado_facturacion?: EstadoFacturacionReserva;
+  comprobantes?: ComprobanteReserva[];
   // Facturación externa por tenant (PEGAR-EN-CLAUDE-CODE-facturacion-externa-
   // tenant.md): flag del TENANT (no de la reserva) — controla si se ofrecen
   // los botones "Facturar"/"Facturación especial". El backend igual bloquea

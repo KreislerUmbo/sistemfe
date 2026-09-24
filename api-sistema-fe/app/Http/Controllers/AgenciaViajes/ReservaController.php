@@ -17,6 +17,7 @@ use App\Models\AgenciaViajes\ReservaPasajero;
 use App\Models\AgenciaViajes\ReservaVenta;
 use App\Models\AgenciaViajes\SalidaMayorista;
 use App\Models\AgenciaViajes\SalidaOperativa;
+use App\Models\Sale\Sale;
 use App\Services\AgenciaViajes\CodigoGeneradorService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -69,6 +70,11 @@ class ReservaController extends Controller
         'items.salidaOperativa.guia',
         'items.tourOrigen',
         'anticipos.advance.sale',
+        // Estado de facturación real + listado de comprobantes emitidos
+        // (2026-09-22) — sale se necesita para n_operacion/sunat_error_code,
+        // sin esto calcularEstadoFacturacion()/el mapeo de comprobantes
+        // dispararía un N+1 (un Sale por cada fila de reserva_ventas).
+        'ventas.sale',
     ];
 
     public function index(Request $request)
@@ -146,7 +152,51 @@ class ReservaController extends Controller
         // entre 1 y 100, mismo criterio que CotizacionController::index().
         $perPage = min(100, max(1, (int) $request->get('per_page', 15)));
 
-        $reservas = $query->orderByDesc('id')->paginate($perPage);
+        // Estado de facturación real (2026-09-22) — ver
+        // calcularEstadoFacturacion(). withCount('items') en vez de
+        // with('items') a propósito: el listado solo necesita el TOTAL de
+        // ítems, no cada fila completa (más liviano para una tabla
+        // paginada); ventas.sale sí hace falta completo para poder mirar
+        // n_operacion de cada Sale.
+        $query->withCount('items')->with('ventas.sale');
+
+        // No es un WHERE de Postgres — "parcial"/"total" dependen de
+        // comparar CUÁNTOS ítems están cubiertos contra el total, algo que
+        // reserva_ventas.reserva_item_ids (columna json, sin índice GIN
+        // posible) no puede resolver de forma barata en SQL. Con el volumen
+        // actual (decisión explícita: "al vuelo, siempre correcto" sobre
+        // materializar un campo — ver conversación de diseño) se trae el
+        // set ya filtrado por los demás criterios, se calcula en PHP, y se
+        // pagina manualmente. Sin este filtro, sigue paginando 100% en
+        // Postgres como antes — el costo extra solo aplica cuando se pide.
+        if ($request->filled('estado_facturacion')) {
+            $estadoPedido = $request->get('estado_facturacion');
+
+            $todasFiltradas = (clone $query)->orderByDesc('id')->get()
+                ->filter(fn (Reserva $r) => self::calcularEstadoFacturacion($r, $r->items_count) === $estadoPedido)
+                ->values();
+
+            $page = max(1, (int) $request->get('page', 1));
+            $itemsPagina = $todasFiltradas->slice(($page - 1) * $perPage, $perPage)->values();
+
+            $reservas = new \Illuminate\Pagination\LengthAwarePaginator(
+                $itemsPagina,
+                $todasFiltradas->count(),
+                $perPage,
+                $page,
+                ['path' => $request->url(), 'query' => $request->query()]
+            );
+        } else {
+            $reservas = $query->orderByDesc('id')->paginate($perPage);
+        }
+
+        $reservas->getCollection()->transform(function (Reserva $r) {
+            $data = $r->toArray();
+            $data['estado_facturacion'] = self::calcularEstadoFacturacion($r, $r->items_count);
+            unset($data['ventas']);
+
+            return $data;
+        });
 
         return response()->json([
             'total' => $reservas->total(),
@@ -288,6 +338,31 @@ class ReservaController extends Controller
                 $totalPax = $reserva->pasajeros()->count();
                 SalidaMayorista::where('id', $opcionElegida->salida_mayorista_id)->decrement('cupo_ocupado', $totalPax);
             }
+
+            // Bug real (2026-09-22, a raíz de la pregunta "qué debe pasar
+            // al cancelar una reserva"): SalidaOperativa (tablero de
+            // despacho — guía/vehículo, DISTINTA de SalidaMayorista de
+            // arriba) nunca se desenganchaba acá. Los ítems de una reserva
+            // cancelada seguían contando pax/reservas en
+            // SalidaOperativaController::resumenSalida() como si fueran a
+            // viajar — inconsistente con ReporteOperativoController, que sí
+            // excluye reservas canceladas (scope 'estado != cancelada').
+            // Mismo patrón que reprogramar(): desenganchar primero, la
+            // salida vieja NUNCA se borra a mano acá, puede seguir
+            // compartida por otra reserva activa —
+            // eliminarSiQuedoVacia() decide.
+            $salidasOperativasAfectadas = ReservaItem::where('reserva_id', $reserva->id)
+                ->whereNotNull('salida_operativa_id')
+                ->pluck('salida_operativa_id')
+                ->unique();
+
+            if ($salidasOperativasAfectadas->isNotEmpty()) {
+                ReservaItem::where('reserva_id', $reserva->id)->update(['salida_operativa_id' => null]);
+
+                foreach ($salidasOperativasAfectadas as $salidaId) {
+                    SalidaOperativa::eliminarSiQuedoVacia($salidaId);
+                }
+            }
         });
 
         return response()->json(['code' => 200, 'message' => 'Reserva cancelada correctamente', 'reserva' => $reserva->fresh()]);
@@ -300,6 +375,51 @@ class ReservaController extends Controller
     private static function filtrarItemsParaReserva(\Illuminate\Support\Collection $items): \Illuminate\Support\Collection
     {
         return $items->filter(fn (AlternativaItem $item) => $item->grupo_opcion_id === null || $item->opcion_elegida)->values();
+    }
+
+    // Estado de facturación REAL de la reserva, para el listado/badge
+    // nuevo (2026-09-22) — "pendiente"/"parcial"/"total"/"facturacion_externa".
+    // A diferencia de items_facturados_ids (respuestaDetalle(), usado para
+    // no re-ofrecer un ítem ya "ocupado" por CUALQUIER Sale sin importar su
+    // estado SUNAT), acá solo un Sale ACEPTADO (n_operacion no nulo) cuenta
+    // como facturado — un comprobante en borrador o rechazado no debe
+    // mostrarse como "Facturado" ante el negocio.
+    //
+    // Requiere $reserva->ventas.sale ya cargado (RELACIONES_DETALLE o
+    // ->with('ventas.sale') en index()) — evita N+1. $totalItems se recibe
+    // aparte para poder usar withCount('items') en el listado en vez de
+    // cargar cada reserva_item completo (más liviano para una tabla
+    // paginada).
+    private static function calcularEstadoFacturacion(Reserva $reserva, int $totalItems): string
+    {
+        if ($reserva->facturacion_externa) {
+            return 'facturacion_externa';
+        }
+
+        $itemsFacturadosAceptadosIds = $reserva->ventas
+            ->filter(fn (ReservaVenta $rv) => $rv->sale && $rv->sale->n_operacion !== null)
+            ->flatMap(fn (ReservaVenta $rv) => $rv->reserva_item_ids ?? [])
+            ->unique();
+
+        if ($itemsFacturadosAceptadosIds->isEmpty()) {
+            return 'pendiente';
+        }
+
+        return $itemsFacturadosAceptadosIds->count() >= $totalItems ? 'total' : 'parcial';
+    }
+
+    // 'aceptado' | 'rechazado' | 'pendiente_envio' — mismos 3 campos que ya
+    // usa Sale (n_operacion/sunat_error_code), sin un enum de estado propio
+    // en el modelo. 'pendiente_envio' = Sale creado pero enviarSunat() todavía
+    // no corrió para este comprobante (envío es un paso manual separado, ver
+    // project_sunat_envio_manual en memoria de proyecto).
+    private static function resolverEstadoSunatSale(Sale $sale): string
+    {
+        if ($sale->n_operacion !== null) {
+            return 'aceptado';
+        }
+
+        return $sale->sunat_error_code !== null ? 'rechazado' : 'pendiente_envio';
     }
 
     // Compartido con VentaDirectaController::store() — arma
@@ -529,23 +649,6 @@ class ReservaController extends Controller
             return response()->json(['code' => 422, 'message' => 'Solo se puede sincronizar una reserva activa.'], 422);
         }
 
-        $alternativaItemIdsEnReserva = ReservaItem::where('reserva_id', $reserva->id)->pluck('alternativa_item_id')->all();
-
-        // Mismo filtro de grupos que crearReservaDesdeAlternativa() (M2)
-        // — en la práctica no debería haber grupos sin resolver acá (la
-        // alternativa queda congelada al aceptar, mismo criterio que el
-        // resto del sistema), pero se aplica igual por si un grupo quedó
-        // resuelto DESPUÉS de aceptar y nunca se sincronizó.
-        $itemsPendientes = self::filtrarItemsParaReserva(
-            AlternativaItem::where('alternativa_id', $reserva->alternativa_id)
-                ->whereNotIn('id', $alternativaItemIdsEnReserva)
-                ->get()
-        );
-
-        if ($itemsPendientes->isEmpty()) {
-            return response()->json(['code' => 422, 'message' => 'No hay ítems pendientes de sincronizar.'], 422);
-        }
-
         // Fase 1 del fix Cotización↔Reserva: base propia de la reserva, NO
         // la cotización en vivo — así los ítems que se sincronizan ahora
         // calculan contra la misma fecha base que los ítems que ya existían
@@ -557,13 +660,48 @@ class ReservaController extends Controller
         $fechaViajeDesde = $reserva->fecha_viaje_desde;
         $mapaPasajeros = $this->reconstruirMapaPasajeros($reserva);
 
-        DB::transaction(function () use ($itemsPendientes, $reserva, $fechaViajeDesde, $mapaPasajeros) {
-            foreach ($itemsPendientes as $alternativaItem) {
-                $this->crearReservaItemDesdeAlternativaItem($reserva, $alternativaItem, $fechaViajeDesde, $mapaPasajeros);
-            }
-        });
+        try {
+            $cantidad = DB::transaction(function () use ($reserva, $fechaViajeDesde, $mapaPasajeros) {
+                // Bug real (auditoría 2026-09-22): este era el único
+                // endpoint del módulo sin el lockForUpdate() que sí tienen
+                // los demás parecidos (ReservaItemController::destroy(),
+                // ReservaPasajeroController::destroy(), actualizarFacturacionExterna()).
+                // Sin esto, un doble clic o dos pestañas abiertas podían leer
+                // el mismo set de "ítems pendientes" dos veces y crear
+                // reserva_items duplicados — que luego se facturarían dos
+                // veces. El cálculo de pendientes se recalcula ACÁ DENTRO,
+                // bajo lock, no antes de abrir la transacción.
+                Reserva::where('id', $reserva->id)->lockForUpdate()->firstOrFail();
 
-        $cantidad = $itemsPendientes->count();
+                $alternativaItemIdsEnReserva = ReservaItem::where('reserva_id', $reserva->id)
+                    ->pluck('alternativa_item_id')->all();
+
+                // Mismo filtro de grupos que crearReservaDesdeAlternativa()
+                // (M2) — en la práctica no debería haber grupos sin resolver
+                // acá (la alternativa queda congelada al aceptar, mismo
+                // criterio que el resto del sistema), pero se aplica igual
+                // por si un grupo quedó resuelto DESPUÉS de aceptar y nunca
+                // se sincronizó.
+                $itemsPendientes = self::filtrarItemsParaReserva(
+                    AlternativaItem::where('alternativa_id', $reserva->alternativa_id)
+                        ->whereNotIn('id', $alternativaItemIdsEnReserva)
+                        ->get()
+                );
+
+                if ($itemsPendientes->isEmpty()) {
+                    throw new HttpException(422, 'No hay ítems pendientes de sincronizar.');
+                }
+
+                foreach ($itemsPendientes as $alternativaItem) {
+                    $this->crearReservaItemDesdeAlternativaItem($reserva, $alternativaItem, $fechaViajeDesde, $mapaPasajeros);
+                }
+
+                return $itemsPendientes->count();
+            });
+        } catch (HttpException $e) {
+            return response()->json(['code' => $e->getStatusCode(), 'message' => $e->getMessage()], $e->getStatusCode());
+        }
+
         $reserva->load(self::RELACIONES_DETALLE);
 
         return response()->json(array_merge(
@@ -602,6 +740,12 @@ class ReservaController extends Controller
         $validado = $validator->validated();
 
         $itemsNoTocados = DB::transaction(function () use ($reserva, $validado) {
+            // Cierra la ventana de carrera con una facturación concurrente
+            // sobre los mismos ítems — mismo patrón que store()/
+            // overrideTratamientoTributario() (hallazgo de auditoría
+            // 2026-09-24: este método no tenía ningún lock).
+            Reserva::where('id', $reserva->id)->lockForUpdate()->firstOrFail();
+
             // Conserva el estado ANTERIOR a esta reprogramación (auditoría
             // simple, no historial completo — mismo trade-off ya aceptado
             // por fecha_cancelacion/motivo_cancelacion, ver docblock de
@@ -620,9 +764,36 @@ class ReservaController extends Controller
 
             $itemsNoTocados = [];
 
+            // Hallazgo de auditoría (2026-09-24): a diferencia de
+            // overrideTratamientoTributario()/reasignarMayorista()/
+            // reasignarHotel() (que rechazan la operación completa si
+            // algún ítem elegido ya está facturado), acá NO tiene sentido
+            // rechazar TODA la reprogramación — es una acción a nivel
+            // reserva, no una selección puntual de ítems, y es normal que
+            // algunos pasajeros ya estén facturados mientras otros no. En
+            // vez de eso, un ítem ya facturado se trata igual que 'manual'/
+            // 'sin_dia_referencial': se deja intacto (no se le mueve la
+            // fecha ni se reengancha su SalidaOperativa) y se informa en la
+            // respuesta — mover la fecha operativa de un servicio con
+            // comprobante SUNAT ya emitido desincronizaría el reporte
+            // operativo de ese comprobante, que conserva su descripción
+            // congelada al momento de facturar.
+            $itemIdsFacturados = ReservaVenta::where('reserva_id', $reserva->id)->get()
+                ->flatMap(fn (ReservaVenta $rv) => $rv->reserva_item_ids ?? []);
+
             $items = ReservaItem::with('alternativaItem')->where('reserva_id', $reserva->id)->get();
 
             foreach ($items as $item) {
+                if ($itemIdsFacturados->contains($item->id)) {
+                    $itemsNoTocados[] = [
+                        'reserva_item_id' => $item->id,
+                        'nombre' => self::resolverNombreItem($item->alternativaItem, $item),
+                        'fecha' => $item->fecha?->toDateString(),
+                        'motivo' => 'ya_facturado',
+                    ];
+                    continue;
+                }
+
                 if ($item->fecha_origen === ReservaItem::FECHA_ORIGEN_MANUAL) {
                     $itemsNoTocados[] = [
                         'reserva_item_id' => $item->id,
@@ -680,7 +851,9 @@ class ReservaController extends Controller
                 // reserva_item — no existe ningún camino donde recalcular
                 // reserva_items.fecha deba mover ese cupo.
                 if ($item->salida_operativa_id) {
+                    $salidaViejaId = $item->salida_operativa_id;
                     $item->update(['salida_operativa_id' => null]);
+                    SalidaOperativa::eliminarSiQuedoVacia($salidaViejaId);
                 }
                 $this->engancharSalidaOperativa($item, $item->alternativaItem, $fechaNueva);
             }
@@ -775,20 +948,40 @@ class ReservaController extends Controller
             }
         }
 
-        DB::transaction(function () use ($items, $validado, $opcionNueva) {
-            foreach ($items as $item) {
-                $item->update([
-                    // Se escribe UNA sola vez — si ya viene de una
-                    // reasignación previa, conserva el mayorista original
-                    // real, no el último antes de esta reasignación.
-                    'opcion_mayorista_original_id' => $item->opcion_mayorista_original_id ?? $item->opcion_mayorista_id,
-                    'opcion_mayorista_id' => $opcionNueva->id,
-                    'motivo_reasignacion_mayorista' => $validado['motivo'],
-                    'fecha_reasignacion_mayorista' => now(),
-                    'veces_reasignado_mayorista' => $item->veces_reasignado_mayorista + 1,
-                ]);
-            }
-        });
+        try {
+            DB::transaction(function () use ($reserva, $items, $validado, $opcionNueva) {
+                // Re-chequeo bajo lock (hallazgo de auditoría 2026-09-23):
+                // el check de "ya facturado" de arriba corrió antes de
+                // abrir la transacción — mismo criterio que
+                // ReservaItemController::destroy() / ReservaFacturacionController::
+                // store() — sin este lock, una facturación concurrente
+                // podía colarse entre ese check y el update real, dejando
+                // un ítem facturado con datos de proveedor distintos de
+                // los que realmente se declararon a SUNAT.
+                Reserva::where('id', $reserva->id)->lockForUpdate()->firstOrFail();
+
+                $itemIdsFacturadosBajoLock = ReservaVenta::where('reserva_id', $reserva->id)->get()
+                    ->flatMap(fn (ReservaVenta $rv) => $rv->reserva_item_ids ?? []);
+                if ($items->pluck('id')->intersect($itemIdsFacturadosBajoLock)->isNotEmpty()) {
+                    throw new HttpException(422, 'No se puede reasignar: uno o más ítems ya fueron facturados en una venta de esta reserva.');
+                }
+
+                foreach ($items as $item) {
+                    $item->update([
+                        // Se escribe UNA sola vez — si ya viene de una
+                        // reasignación previa, conserva el mayorista original
+                        // real, no el último antes de esta reasignación.
+                        'opcion_mayorista_original_id' => $item->opcion_mayorista_original_id ?? $item->opcion_mayorista_id,
+                        'opcion_mayorista_id' => $opcionNueva->id,
+                        'motivo_reasignacion_mayorista' => $validado['motivo'],
+                        'fecha_reasignacion_mayorista' => now(),
+                        'veces_reasignado_mayorista' => $item->veces_reasignado_mayorista + 1,
+                    ]);
+                }
+            });
+        } catch (HttpException $e) {
+            return response()->json(['code' => $e->getStatusCode(), 'message' => $e->getMessage()], $e->getStatusCode());
+        }
 
         // Diferencia de costo — de presentación, no se persiste como
         // campo (§2 del brief). costo_anterior sale del costo_snapshot ya
@@ -878,29 +1071,44 @@ class ReservaController extends Controller
             $tarifaAdhocNueva = OpcionHotelTarifa::findOrFail($validado['nuevo_opcion_hotel_tarifa_id']);
         }
 
-        DB::transaction(function () use ($items, $tarifaCatalogoNueva, $tarifaAdhocNueva, $validado) {
-            foreach ($items as $item) {
-                // "Original" se captura de una sola vez, en la PRIMERA
-                // reasignación — no alcanza con `?? valor_actual` como en
-                // reasignarMayorista() (una sola FK, siempre no-nula):
-                // acá las 2 FK son mutuamente excluyentes, así que después
-                // de la 1ra reasignación la que "no se usa" queda en null
-                // y una 2da reasignación de vuelta al otro camino pisaría
-                // el original real con ese null intermedio si se
-                // coalesceara por columna.
-                $primeraVez = $item->veces_reasignado_hotel === 0;
+        try {
+            DB::transaction(function () use ($reserva, $items, $tarifaCatalogoNueva, $tarifaAdhocNueva, $validado) {
+                // Re-chequeo bajo lock: mismo criterio y mismo hallazgo de
+                // auditoría 2026-09-23 que reasignarMayorista() (ver
+                // comentario ahí).
+                Reserva::where('id', $reserva->id)->lockForUpdate()->firstOrFail();
 
-                $item->update([
-                    'proveedor_tarifa_original_id' => $primeraVez ? $item->proveedor_tarifa_id : $item->proveedor_tarifa_original_id,
-                    'opcion_hotel_tarifa_original_id' => $primeraVez ? $item->opcion_hotel_tarifa_id : $item->opcion_hotel_tarifa_original_id,
-                    'proveedor_tarifa_id' => $tarifaCatalogoNueva?->id,
-                    'opcion_hotel_tarifa_id' => $tarifaAdhocNueva?->id,
-                    'motivo_reasignacion_hotel' => $validado['motivo'],
-                    'fecha_reasignacion_hotel' => now(),
-                    'veces_reasignado_hotel' => $item->veces_reasignado_hotel + 1,
-                ]);
-            }
-        });
+                $itemIdsFacturadosBajoLock = ReservaVenta::where('reserva_id', $reserva->id)->get()
+                    ->flatMap(fn (ReservaVenta $rv) => $rv->reserva_item_ids ?? []);
+                if ($items->pluck('id')->intersect($itemIdsFacturadosBajoLock)->isNotEmpty()) {
+                    throw new HttpException(422, 'No se puede reasignar: uno o más ítems ya fueron facturados en una venta de esta reserva.');
+                }
+
+                foreach ($items as $item) {
+                    // "Original" se captura de una sola vez, en la PRIMERA
+                    // reasignación — no alcanza con `?? valor_actual` como en
+                    // reasignarMayorista() (una sola FK, siempre no-nula):
+                    // acá las 2 FK son mutuamente excluyentes, así que después
+                    // de la 1ra reasignación la que "no se usa" queda en null
+                    // y una 2da reasignación de vuelta al otro camino pisaría
+                    // el original real con ese null intermedio si se
+                    // coalesceara por columna.
+                    $primeraVez = $item->veces_reasignado_hotel === 0;
+
+                    $item->update([
+                        'proveedor_tarifa_original_id' => $primeraVez ? $item->proveedor_tarifa_id : $item->proveedor_tarifa_original_id,
+                        'opcion_hotel_tarifa_original_id' => $primeraVez ? $item->opcion_hotel_tarifa_id : $item->opcion_hotel_tarifa_original_id,
+                        'proveedor_tarifa_id' => $tarifaCatalogoNueva?->id,
+                        'opcion_hotel_tarifa_id' => $tarifaAdhocNueva?->id,
+                        'motivo_reasignacion_hotel' => $validado['motivo'],
+                        'fecha_reasignacion_hotel' => now(),
+                        'veces_reasignado_hotel' => $item->veces_reasignado_hotel + 1,
+                    ]);
+                }
+            });
+        } catch (HttpException $e) {
+            return response()->json(['code' => $e->getStatusCode(), 'message' => $e->getMessage()], $e->getStatusCode());
+        }
 
         // Diferencia de costo — de presentación, no se persiste como
         // campo, mismo criterio que reasignarMayorista().
@@ -918,6 +1126,82 @@ class ReservaController extends Controller
                 'costo_anterior' => $costoAnterior,
                 'costo_nuevo' => $costoNuevo,
             ],
+            $this->respuestaDetalle($reserva)
+        ));
+    }
+
+    // POST reservas/{id}/override-tratamiento-tributario — confirmación
+    // explícita por ítem del tratamiento tributario real (Caso 3 Amazonía,
+    // conversación con el usuario 2026-09-24). destino_tributario/
+    // tip_afe_igv YA existen como columna propia de reserva_item (copiada
+    // de la proveedor_tarifa al aceptar) y ya tienen prioridad en
+    // ReservaFacturacionController::resolverDestinoTributario()/
+    // resolverTipAfeIgvItem() — este endpoint solo los deja corregir/
+    // confirmar a mano, con motivo obligatorio (mismo patrón de auditoría
+    // que reasignarMayorista()/reasignarHotel()). motivo_override_tributario
+    // no nulo es lo que detectarMezclaTributaria() exige antes de dejar
+    // facturar un servicio con destino='amazonia' — un dato de proveedor
+    // sin revisar nunca alcanza solo, tiene que confirmarlo un humano.
+    public function overrideTratamientoTributario(Request $request, string $id)
+    {
+        $reserva = Reserva::findOrFail($id);
+
+        if ($reserva->estado !== 'activa') {
+            return response()->json(['code' => 422, 'message' => 'Solo se puede corregir el tratamiento tributario de una reserva activa.'], 422);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'reserva_item_ids' => 'required|array|min:1',
+            'reserva_item_ids.*' => ['integer', Rule::exists('reserva_items', 'id')->where('reserva_id', $reserva->id)],
+            'destino_tributario' => 'required|string|in:amazonia,nacional,extranjero',
+            'tip_afe_igv' => 'required|string|in:10,20,30',
+            'motivo' => 'required|string|max:500',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
+        }
+
+        $validado = $validator->validated();
+
+        $items = ReservaItem::whereIn('id', $validado['reserva_item_ids'])->get();
+
+        // Mismo guard que reasignarMayorista()/reasignarHotel() — un
+        // ítem ya facturado no se toca en silencio (cambiaría el
+        // tratamiento tributario de un comprobante ya emitido a SUNAT).
+        $itemIdsFacturados = ReservaVenta::where('reserva_id', $reserva->id)->get()
+            ->flatMap(fn (ReservaVenta $rv) => $rv->reserva_item_ids ?? []);
+        if ($items->pluck('id')->intersect($itemIdsFacturados)->isNotEmpty()) {
+            return response()->json(['code' => 422, 'message' => 'No se puede corregir: uno o más ítems ya fueron facturados en una venta de esta reserva.'], 422);
+        }
+
+        try {
+            DB::transaction(function () use ($reserva, $items, $validado) {
+                Reserva::where('id', $reserva->id)->lockForUpdate()->firstOrFail();
+
+                $itemIdsFacturadosBajoLock = ReservaVenta::where('reserva_id', $reserva->id)->get()
+                    ->flatMap(fn (ReservaVenta $rv) => $rv->reserva_item_ids ?? []);
+                if ($items->pluck('id')->intersect($itemIdsFacturadosBajoLock)->isNotEmpty()) {
+                    throw new HttpException(422, 'No se puede corregir: uno o más ítems ya fueron facturados en una venta de esta reserva.');
+                }
+
+                foreach ($items as $item) {
+                    $item->update([
+                        'destino_tributario' => $validado['destino_tributario'],
+                        'tip_afe_igv' => $validado['tip_afe_igv'],
+                        'motivo_override_tributario' => $validado['motivo'],
+                        'fecha_override_tributario' => now(),
+                    ]);
+                }
+            });
+        } catch (HttpException $e) {
+            return response()->json(['code' => $e->getStatusCode(), 'message' => $e->getMessage()], $e->getStatusCode());
+        }
+
+        $reserva->load(self::RELACIONES_DETALLE);
+
+        return response()->json(array_merge(
+            ['code' => 200, 'message' => 'Tratamiento tributario confirmado correctamente'],
             $this->respuestaDetalle($reserva)
         ));
     }
@@ -1063,6 +1347,35 @@ class ReservaController extends Controller
             ];
         })->values();
 
+        // Estado de facturación REAL (2026-09-22) — distinto a propósito de
+        // items_facturados_ids/pasajeros_facturados_ids de arriba: esos
+        // cuentan CUALQUIER fila de reserva_ventas como "ocupado" (evita
+        // que un ítem termine cubierto por 2 Sales — ver
+        // ReservaFacturacionController::itemsSinAsignar()), sin importar si
+        // el Sale se envió a SUNAT. Acá en cambio, "facturado" solo cuenta
+        // un Sale ACEPTADO por SUNAT (n_operacion no nulo) — un comprobante
+        // en borrador (nunca enviado) o rechazado NO cuenta como facturado
+        // de verdad para el negocio.
+        $comprobantes = $reserva->ventas->map(function (ReservaVenta $rv) {
+            $sale = $rv->sale;
+
+            return [
+                'reserva_venta_id' => $rv->id,
+                'sale_id' => $sale->id,
+                'tipo_comprobante_codigo' => $sale->tipo_comprobante_codigo,
+                'serie' => $sale->serie,
+                'correlativo' => $sale->correlativo,
+                'n_operacion' => $sale->n_operacion,
+                'moneda' => $sale->currency,
+                'total' => (float) $sale->total,
+                'fecha' => $sale->date,
+                'estado_sunat' => self::resolverEstadoSunatSale($sale),
+                'sunat_error_message' => $sale->sunat_error_message,
+                'cantidad_items' => count($rv->reserva_item_ids ?? []),
+                'cantidad_pasajeros' => count($rv->reserva_pasajero_ids ?? []),
+            ];
+        })->values();
+
         return [
             'reserva' => $reserva,
             'resumen' => $resumen,
@@ -1072,6 +1385,8 @@ class ReservaController extends Controller
             'items_facturados_ids' => $itemsFacturadosIds,
             'items_pendientes_de_facturar_count' => $itemsPendientesDeFacturarCount,
             'pasajeros_facturados_ids' => $pasajerosFacturadosIds,
+            'estado_facturacion' => self::calcularEstadoFacturacion($reserva, $reserva->items->count()),
+            'comprobantes' => $comprobantes,
             'anticipos' => $anticipos,
             'total_anticipos_disponibles' => round($anticipos->sum('disponible'), 2),
             // Facturación externa por tenant (PEGAR-EN-CLAUDE-CODE-

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\AgenciaViajes;
 
 use App\Http\Controllers\Controller;
 use App\Models\AgenciaViajes\ReservaItem;
+use App\Models\AgenciaViajes\ReservaVenta;
 use App\Models\AgenciaViajes\SalidaOperativa;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -97,8 +98,36 @@ class SalidaOperativaController extends Controller
             return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
         }
 
-        $reservaItem = ReservaItem::findOrFail($request->reserva_item_id);
+        $reservaItem = ReservaItem::with('reserva')->findOrFail($request->reserva_item_id);
+
+        // Bug real (auditoría 2026-09-23): este era el único de los 5
+        // caminos que tocan salida_operativa_id sin validar nada de la
+        // reserva — se podía enganchar a mano un ítem de una reserva
+        // CANCELADA, o uno YA FACTURADO (con datos de proveedor/fecha que
+        // ya no deberían cambiar), a una salida activa. Mismo criterio que
+        // ReservaItemController::destroy()/reasignarMayorista().
+        if ($reservaItem->reserva->estado !== 'activa') {
+            return response()->json(['code' => 422, 'message' => 'Solo se puede enganchar un ítem de una reserva activa.'], 422);
+        }
+
+        $yaFacturado = ReservaVenta::where('reserva_id', $reservaItem->reserva_id)
+            ->get()
+            ->flatMap(fn (ReservaVenta $rv) => $rv->reserva_item_ids ?? [])
+            ->contains($reservaItem->id);
+
+        if ($yaFacturado) {
+            return response()->json(['code' => 422, 'message' => 'No se puede enganchar: este ítem ya fue facturado en una venta de esta reserva.'], 422);
+        }
+
+        // Bug real (auditoría 2026-09-23): no capturaba la salida ANTERIOR
+        // antes de sobrescribirla — si esa salida vieja se quedaba sin
+        // ningún otro ítem, quedaba fantasma en el tablero para siempre
+        // (mismo bug de familia ya corregido en detachReservaItem()/
+        // ReservaController::cancelar()/reprogramar()/ReservaItemController::
+        // destroy(), este era el 5º camino sin cubrir).
+        $salidaViejaId = $reservaItem->salida_operativa_id;
         $reservaItem->update(['salida_operativa_id' => $salida->id]);
+        SalidaOperativa::eliminarSiQuedoVacia($salidaViejaId);
 
         return response()->json(['code' => 200, 'message' => 'Ítem enganchado a la salida.']);
     }
@@ -108,12 +137,24 @@ class SalidaOperativaController extends Controller
         $reservaItem = ReservaItem::where('salida_operativa_id', $id)->findOrFail($reservaItemId);
         $reservaItem->update(['salida_operativa_id' => null]);
 
+        // Bug real (auditoría 2026-09-22): una salida sin ningún ítem
+        // enganchado se quedaba visible para siempre en el tablero, con 0
+        // pasajeros — ver SalidaOperativa::eliminarSiQuedoVacia().
+        SalidaOperativa::eliminarSiQuedoVacia((int) $id);
+
         return response()->json(['code' => 200, 'message' => 'Ítem desenganchado de la salida.']);
     }
 
     private function resumenSalida(SalidaOperativa $s, bool $detalle = false): array
     {
-        $reservasUnicas = $s->reservaItems->pluck('reserva')->filter()->unique('id')->values();
+        // Bug real (auditoría 2026-09-23): sumaba pax/reservas de
+        // CUALQUIER reserva enganchada, sin importar su estado — una
+        // reserva cancelada seguía contando en el tablero de despacho
+        // como si fuera a viajar. Mismo criterio que ya usa
+        // ReporteOperativoController (excluye 'cancelada').
+        $reservasUnicas = $s->reservaItems->pluck('reserva')->filter()
+            ->reject(fn ($r) => $r->estado === 'cancelada')
+            ->unique('id')->values();
 
         $base = [
             'id' => $s->id,

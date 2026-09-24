@@ -11,7 +11,7 @@
                         Pasajeros: {{ (reserva.pasajeros?.length ?? 0) - pasajerosPendientesFacturar.length }}/{{ reserva.pasajeros?.length ?? 0 }} facturados
                     </span>
                     <span v-if="reserva.estado === 'activa'" class="badge ms-2" :class="itemsPendientesDeFacturarCount === 0 ? 'bg-success' : 'bg-warning text-dark'">
-                        {{ itemsPendientesDeFacturarCount === 0 ? 'Ítems: todos facturados' : `Ítems: ${itemsPendientesDeFacturarCount} pendiente(s)` }}
+                        {{ itemsPendientesDeFacturarCount === 0 ? 'Servicios: todos facturados' : `Servicios: ${itemsPendientesDeFacturarCount} pendiente(s)` }}
                     </span>
                 </h5>
                 <small class="text-muted">
@@ -75,7 +75,7 @@
         <div v-if="itemsNoTocadosReprogramacion.length > 0" class="alert alert-warning d-flex justify-content-between align-items-start mb-3">
             <span>
                 <i class="fas fa-triangle-exclamation me-2"></i>
-                Reserva reprogramada. {{ itemsNoTocadosReprogramacion.length }} ítem(s) quedaron con su fecha
+                Reserva reprogramada. {{ itemsNoTocadosReprogramacion.length }} servicio(s) quedaron con su fecha
                 de antes — revísalos y corrígelos a mano si hace falta:
                 <span v-for="(it, idx) in itemsNoTocadosReprogramacion" :key="it.reserva_item_id">
                     {{ it.nombre }} ({{ formatFecha(it.fecha) }},
@@ -128,6 +128,50 @@
             </div>
         </div>
 
+        <!-- Comprobantes emitidos (2026-09-22) — todas las Sale reales
+             generadas contra esta reserva. Puede haber varias (facturación
+             múltiple por sub-grupo de pasajeros/cliente). estado_sunat
+             distingue un borrador nunca enviado o rechazado de uno
+             realmente aceptado (ver EstadoFacturacionReserva). -->
+        <div v-if="comprobantes.length > 0" class="card border-0 shadow-sm mb-3">
+            <div class="card-body py-2">
+                <h6 class="fw-semibold mb-2"><i class="fas fa-file-invoice me-1 text-primary"></i>Comprobantes emitidos</h6>
+                <table class="table table-sm mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Comprobante</th>
+                            <th>Fecha</th>
+                            <th class="text-end">Total</th>
+                            <th>Estado SUNAT</th>
+                            <th class="text-center">Cubre</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="c in comprobantes" :key="c.reserva_venta_id">
+                            <td class="fw-semibold">
+                                {{ c.n_operacion ?? (c.serie ? `${c.serie}-${String(c.correlativo).padStart(8, '0')}` : 'Sin serie') }}
+                            </td>
+                            <td>{{ formatFecha(c.fecha) }}</td>
+                            <td class="text-end">{{ c.moneda }} {{ c.total.toFixed(2) }}</td>
+                            <td>
+                                <span class="badge" :class="badgeEstadoSunat(c.estado_sunat).clase" :title="c.sunat_error_message ?? ''">
+                                    {{ badgeEstadoSunat(c.estado_sunat).texto }}
+                                </span>
+                            </td>
+                            <td class="text-center small text-muted">{{ c.cantidad_items }} servicio(s) · {{ c.cantidad_pasajeros }} pax</td>
+                            <td class="text-end">
+                                <button type="button" class="btn btn-sm btn-link p-0" title="Ver / imprimir comprobante"
+                                    @click="imprimirComprobante(c.sale_id)">
+                                    <i class="fas fa-print"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
         <div v-if="reserva" class="row g-3">
             <div class="col-12 col-lg-8">
                 <ul class="nav nav-pills mb-3">
@@ -138,12 +182,12 @@
                     </li>
                     <li class="nav-item">
                         <button class="nav-link" :class="{ active: tab === 'items' }" @click="tab = 'items'">
-                            Ítems <span class="badge bg-warning text-dark ms-1">{{ itemsSinAsignar }}</span>
+                            Servicios <span class="badge bg-warning text-dark ms-1">{{ itemsSinAsignar }}</span>
                         </button>
                     </li>
                     <li class="nav-item">
                         <button class="nav-link" :class="{ active: tab === 'asignacion' }" @click="cambiarAAsignacion">
-                            Asignación pasajero↔ítem
+                            Pasajeros por servicio
                         </button>
                     </li>
                 </ul>
@@ -329,6 +373,21 @@
                                         :title="it.motivo_reasignacion_mayorista ?? ''">
                                         <i class="fas fa-right-left me-1"></i>Mayorista reasignado {{ it.veces_reasignado_mayorista }}x
                                     </span>
+                                    <!-- 2026-09-23 — antes esto solo se descubría al chocar con el
+                                         bloqueo de "mezcla tributaria" al intentar facturar. -->
+                                    <span class="badge ms-2" :class="badgeTratamientoTributario(it).clase" title="Tratamiento tributario de este servicio">
+                                        <i class="fas fa-file-invoice-dollar me-1"></i>{{ badgeTratamientoTributario(it).texto }}
+                                    </span>
+                                    <!-- Caso 3 Amazonía (2026-09-24) — un servicio con destino≠nacional
+                                         no se puede facturar hasta que alguien lo confirme a mano
+                                         (ver overrideTratamientoTributario()). -->
+                                    <span v-if="requiereConfirmacionTributaria(it)" class="badge bg-warning-subtle text-warning-emphasis border ms-2">
+                                        Sin confirmar
+                                    </span>
+                                    <button v-if="reserva.estado === 'activa' && requiereConfirmacionTributaria(it)" type="button"
+                                        class="btn btn-sm btn-link p-0 ms-2" @click="abrirModalConfirmarTributario([it])">
+                                        Confirmar tratamiento tributario
+                                    </button>
                                 </div>
                                 <button v-if="reserva.estado === 'activa' && !itemsFacturadosIds.includes(it.id)" type="button"
                                     class="btn btn-sm btn-link text-danger p-0" title="Quitar este servicio de la reserva"
@@ -408,7 +467,7 @@
                             </p>
                         </div>
                     </div>
-                    <div v-if="(reserva.items?.length ?? 0) === 0" class="text-muted text-center py-4">Sin ítems.</div>
+                    <div v-if="(reserva.items?.length ?? 0) === 0" class="text-muted text-center py-4">Sin servicios.</div>
                 </div>
 
                 <!-- TAB ASIGNACION -->
@@ -440,7 +499,7 @@
                             </fieldset>
                         </div>
                     </div>
-                    <div v-if="(reserva.items?.length ?? 0) === 0" class="text-muted text-center py-4">Sin ítems.</div>
+                    <div v-if="(reserva.items?.length ?? 0) === 0" class="text-muted text-center py-4">Sin servicios.</div>
                 </div>
             </div>
 
@@ -483,7 +542,7 @@
                             <div class="progress-bar bg-success" :style="{ width: pctPax + '%' }"></div>
                         </div>
                         <div class="d-flex justify-content-between align-items-center small mb-1">
-                            <span><i class="fas fa-clipboard-check me-1 text-muted"></i>Ítems con proveedor/guía</span>
+                            <span><i class="fas fa-clipboard-check me-1 text-muted"></i>Servicios con proveedor/guía</span>
                             <span class="fw-semibold">{{ itemsAsignados }} / {{ itemsAsignables.length }}</span>
                         </div>
                         <div class="progress" style="height:6px">
@@ -556,7 +615,7 @@
                         <label class="form-label small fw-semibold text-secondary">Motivo</label>
                         <textarea class="form-control form-control-sm" rows="2" v-model="reprogramarForm.motivo" placeholder="Ej. Cliente pidió correr el viaje 15 días por motivos laborales"></textarea>
                         <p class="small text-muted mt-2 mb-0">
-                            <i class="fas fa-info-circle me-1"></i>Los ítems con fecha editada a mano
+                            <i class="fas fa-info-circle me-1"></i>Los servicios con fecha editada a mano
                             (<span class="badge bg-light text-dark border">Fecha manual</span>) no se mueven —
                             hay que revisarlos aparte. La cotización original no se toca.
                         </p>
@@ -588,7 +647,7 @@
                         <div v-if="mayoristasActualesDistintos.length > 1" class="mb-3">
                             <label class="form-label small fw-semibold text-secondary">Mayorista a reasignar</label>
                             <select class="form-select form-select-sm" v-model.number="reasignarForm.opcion_mayorista_actual_id" @change="onCambiarMayoristaActual">
-                                <option v-for="m in mayoristasActualesDistintos" :key="m.id" :value="m.id">{{ m.nombre }} ({{ m.itemsCount }} ítem{{ m.itemsCount === 1 ? '' : 's' }})</option>
+                                <option v-for="m in mayoristasActualesDistintos" :key="m.id" :value="m.id">{{ m.nombre }} ({{ m.itemsCount }} servicio{{ m.itemsCount === 1 ? '' : 's' }})</option>
                             </select>
                         </div>
 
@@ -597,7 +656,7 @@
                             <strong>{{ mayoristaActualNombre }}</strong>
                         </div>
 
-                        <label class="form-label small fw-semibold text-secondary">Ítems afectados</label>
+                        <label class="form-label small fw-semibold text-secondary">Servicios afectados</label>
                         <div class="d-flex flex-column gap-1 mb-3">
                             <label v-for="it in itemsDelMayoristaActual" :key="it.id" class="small d-flex align-items-center border rounded px-2 py-1" style="cursor:pointer">
                                 <input type="checkbox" class="form-check-input me-2" v-model="reasignarForm.reserva_item_ids" :value="it.id">
@@ -673,7 +732,7 @@
                         <div v-if="hotelesActualesDistintos.length > 1" class="mb-3">
                             <label class="form-label small fw-semibold text-secondary">Hotel a reasignar</label>
                             <select class="form-select form-select-sm" v-model="reasignarHotelForm.clave_hotel_actual" @change="onCambiarHotelActual">
-                                <option v-for="h in hotelesActualesDistintos" :key="h.clave" :value="h.clave">{{ h.nombre }} ({{ h.itemsCount }} ítem{{ h.itemsCount === 1 ? '' : 's' }})</option>
+                                <option v-for="h in hotelesActualesDistintos" :key="h.clave" :value="h.clave">{{ h.nombre }} ({{ h.itemsCount }} servicio{{ h.itemsCount === 1 ? '' : 's' }})</option>
                             </select>
                         </div>
 
@@ -682,7 +741,7 @@
                             <strong>{{ hotelActualNombre }}</strong>
                         </div>
 
-                        <label class="form-label small fw-semibold text-secondary">Ítems afectados</label>
+                        <label class="form-label small fw-semibold text-secondary">Servicios afectados</label>
                         <div class="d-flex flex-column gap-1 mb-3">
                             <label v-for="it in itemsDelHotelActual" :key="it.id" class="small d-flex align-items-center border rounded px-2 py-1" style="cursor:pointer">
                                 <input type="checkbox" class="form-check-input me-2" v-model="reasignarHotelForm.reserva_item_ids" :value="it.id">
@@ -749,6 +808,60 @@
             </div>
         </div>
 
+        <!-- Modal confirmar tratamiento tributario — Caso 3 Amazonía
+             (2026-09-24). Un servicio con destino≠nacional no se puede
+             facturar hasta que un humano lo confirme a mano, con motivo
+             obligatorio (auditable) — ver overrideTratamientoTributario()
+             en el backend. -->
+        <div class="modal fade" tabindex="-1" :class="{ show: mostrarModalConfirmarTributario, 'd-block': mostrarModalConfirmarTributario }"
+            style="background:rgba(0,0,0,.5)" v-if="mostrarModalConfirmarTributario">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h6 class="modal-title fw-bold">Confirmar tratamiento tributario</h6>
+                        <button class="btn-close" @click="mostrarModalConfirmarTributario = false"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p class="small text-muted">
+                            Un servicio con tratamiento ≠ nacional (ej. Amazonía) no se puede facturar hasta confirmarlo
+                            a mano — esto queda registrado con el motivo, no se puede deshacer sin dejar rastro.
+                        </p>
+                        <label class="form-label small fw-semibold text-secondary">Servicios a confirmar</label>
+                        <ul class="mb-3 small ps-3">
+                            <li v-for="it in confirmarTributarioForm.items" :key="it.id">{{ nombreItem(it) }}</li>
+                        </ul>
+                        <div class="row g-2 mb-2">
+                            <div class="col-6">
+                                <label class="form-label small fw-semibold text-secondary">Destino tributario</label>
+                                <select class="form-select form-select-sm" v-model="confirmarTributarioForm.destino_tributario">
+                                    <option value="amazonia">Amazonía</option>
+                                    <option value="nacional">Nacional</option>
+                                </select>
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label small fw-semibold text-secondary">Tratamiento IGV</label>
+                                <select class="form-select form-select-sm" v-model="confirmarTributarioForm.tip_afe_igv">
+                                    <option value="20">Exonerado</option>
+                                    <option value="30">Inafecto</option>
+                                    <option value="10">Gravado (IGV 18%)</option>
+                                </select>
+                            </div>
+                        </div>
+                        <label class="form-label small fw-semibold text-secondary">Motivo (obligatorio)</label>
+                        <textarea class="form-control form-control-sm" rows="2" v-model="confirmarTributarioForm.motivo"
+                            placeholder="Ej. Servicio confirmado en zona Amazonía por el operador, exonerado según Ley 27037."></textarea>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn btn-outline-secondary btn-sm" @click="mostrarModalConfirmarTributario = false">Cancelar</button>
+                        <button class="btn btn-primary btn-sm" :disabled="confirmandoTributario || !confirmarTributarioForm.motivo"
+                            @click="confirmarTratamientoTributario">
+                            <span v-if="confirmandoTributario" class="spinner-border spinner-border-sm me-1"></span>Confirmar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Modal facturar — facturación múltiple por grupo de pasajeros
              (2026-08-20, sobre la base de la Fase A del 2026-08-19). Cada
              pasajero pertenece a un único comprobante: se elige a quién se
@@ -781,7 +894,7 @@
                                  porque falta incluir a otro pasajero que también los usa. -->
                             <div v-if="previewFacturaEspecial.items_pendientes_por_pasajero_faltante.length > 0" class="alert alert-secondary small py-2 mb-2">
                                 <i class="fas fa-circle-info me-1"></i>
-                                {{ previewFacturaEspecial.items_pendientes_por_pasajero_faltante.length }} ítem(s) compartido(s) quedan pendientes porque los comparte otro pasajero que no está en esta selección:
+                                {{ previewFacturaEspecial.items_pendientes_por_pasajero_faltante.length }} servicio(s) compartido(s) quedan pendientes porque los comparte otro pasajero que no está en esta selección:
                                 {{ previewFacturaEspecial.items_pendientes_por_pasajero_faltante.map(it => it.nombre).join(', ') }}.
                             </div>
 
@@ -789,7 +902,7 @@
                                  ajustes, extras) — el vendedor decide a mano si van en este
                                  comprobante. -->
                             <div v-if="previewFacturaEspecial.items_sin_asignar_disponibles.length > 0" class="mb-2">
-                                <label class="form-label small fw-semibold text-secondary">Otros ítems sin pasajero asignado (agrégalos si corresponden acá)</label>
+                                <label class="form-label small fw-semibold text-secondary">Otros servicios sin pasajero asignado (agrégalos si corresponden acá)</label>
                                 <div class="d-flex flex-column gap-1" style="max-height:120px;overflow-y:auto">
                                     <label v-for="it in previewFacturaEspecial.items_sin_asignar_disponibles" :key="it.reserva_item_id" class="small d-flex justify-content-between align-items-center border rounded px-2 py-1" style="cursor:pointer">
                                         <span>
@@ -831,13 +944,100 @@
                                 </table>
                             </div>
 
+                            <!-- Moneda del comprobante (2026-09-24, pedido del usuario: "tengo
+                                 mi cotización en dólares, pero el cliente pide que le facture en
+                                 soles") — SIEMPRE visible, mismo criterio que sucursal/tributario
+                                 de acá abajo. Por defecto factura en la moneda de la cotización
+                                 (sin override); cambiarla exige tipo de cambio + motivo, ver
+                                 ReservaFacturacionController::resolverMonedaFacturacion(). -->
+                            <div class="mb-2">
+                                <label class="form-label small fw-semibold text-secondary">
+                                    <i class="fas fa-money-bill-wave me-1"></i>Moneda del comprobante
+                                </label>
+                                <select class="form-select form-select-sm" v-model="monedaFacturacionSeleccionada">
+                                    <option value="PEN">Soles (PEN)</option>
+                                    <option value="USD">Dólares (USD)</option>
+                                </select>
+                                <small class="text-muted d-block mt-1">Cotización en {{ moneda }}.</small>
+                            </div>
+                            <div v-if="requiereOverrideMoneda" class="row g-2 mb-2">
+                                <div class="col-6">
+                                    <label class="form-label small fw-semibold text-secondary">
+                                        Tipo de cambio ({{ moneda }} → {{ monedaFacturacionSeleccionada }})
+                                    </label>
+                                    <input type="number" step="0.0001" min="0.0001" class="form-control form-control-sm"
+                                        v-model.number="tipoCambioFacturacion" placeholder="Ej: 3.75">
+                                    <small v-if="previewFacturaEspecial.tipo_cambio_sugerido" class="text-muted">
+                                        Sugerido SUNAT del día: {{ previewFacturaEspecial.tipo_cambio_sugerido }}
+                                    </small>
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label small fw-semibold text-secondary">Motivo del cambio de moneda</label>
+                                    <input type="text" class="form-control form-control-sm" v-model="motivoCambioMonedaFacturacion"
+                                        placeholder="Ej: cliente pidió el comprobante en soles">
+                                </div>
+                            </div>
+
+                            <!-- Sucursal (2026-09-24, pedido del usuario) — SIEMPRE visible,
+                                 bloqueado_tributario o no, para que se vea aunque el bloqueo
+                                 dispare (bug real: antes vivía solo dentro del v-else de abajo,
+                                 así que una reserva que mezcla tratamientos nunca la mostraba en
+                                 "Facturar" simple — solo era visible si el subgrupo elegido daba
+                                 OK). Solo visible con permiso can_switch_branch, mismo criterio
+                                 que sale/register.vue. La serie real se elige sola por
+                                 sucursal+tipo+moneda (SerieComprobanteService), esto solo deja
+                                 elegir DESDE QUÉ sucursal se emite. -->
+                            <div v-if="puedeCambiarSucursal" class="mb-2">
+                                <label class="form-label small fw-semibold text-secondary">
+                                    <i class="fas fa-store me-1"></i>Sucursal (define la serie según moneda)
+                                </label>
+                                <select class="form-select form-select-sm" v-model.number="branchIdFacturacion">
+                                    <option v-for="b in sucursales" :key="b.id" :value="b.id">{{ b.name }}</option>
+                                </select>
+                            </div>
+
+                            <!-- Serie visible (2026-09-24, pedido del usuario: "debe aparecer
+                                 de manera visible la serie") — antes solo se veía la sucursal, el
+                                 vendedor no sabía si iba a salir F001/B001/F002 hasta confirmar.
+                                 Solo lectura (resolverParaUsuario() no reserva ningún
+                                 correlativo), se recalcula solo con sucursal/tipo/moneda. -->
+                            <div v-if="previewFacturaEspecial.serie_resuelta" class="mb-2 small">
+                                <span class="text-muted">Serie a emitir:</span>
+                                <span class="badge bg-light text-dark border ms-1">{{ previewFacturaEspecial.serie_resuelta }}</span>
+                            </div>
+
+                            <!-- Pedido del usuario (2026-09-24): "debo poder ver lo que he
+                                 seleccionado si fue gravado o exonerado" — siempre visible,
+                                 mismo criterio que la sucursal de arriba. -->
+                            <div v-if="(previewFacturaEspecial.items_por_destino_tributario?.length ?? 0) > 0" class="mb-2 small">
+                                <span class="text-muted d-block mb-1">Tratamiento tributario de lo seleccionado:</span>
+                                <span v-for="it in previewFacturaEspecial.items_por_destino_tributario" :key="it.reserva_item_id"
+                                    class="badge bg-light text-dark border me-1 mb-1">
+                                    {{ it.nombre }}: {{ etiquetaTipAfeIgv(it.tip_afe_igv) }}
+                                </span>
+                            </div>
+
                             <!-- Guardia tributario: este subgrupo mezcla tratamientos distintos,
                                  no se puede emitir un solo comprobante — se avisa acá y se oculta
                                  el resto del formulario. -->
                             <div v-if="previewFacturaEspecial.bloqueado_tributario" class="alert alert-danger mb-0">
                                 <i class="fas fa-triangle-exclamation me-2"></i>
                                 <strong>No se puede facturar este grupo así todavía.</strong>
-                                <p class="mb-0 mt-1">{{ previewFacturaEspecial.motivo }}</p>
+                                <p class="mb-1 mt-1">{{ previewFacturaEspecial.motivo }}</p>
+                                <!-- 2026-09-23 — antes solo se sabía QUÉ valores distintos había
+                                     (ej. "nacional" y "amazonia"), nunca cuál servicio era cuál. -->
+                                <ul v-if="(previewFacturaEspecial.items_por_destino_tributario?.length ?? 0) > 0" class="mb-0 small ps-3">
+                                    <li v-for="it in previewFacturaEspecial.items_por_destino_tributario" :key="it.reserva_item_id">
+                                        {{ it.nombre }} — <span class="fw-semibold">{{ it.destino_tributario }}</span>
+                                    </li>
+                                </ul>
+                                <!-- Caso 3 Amazonía (2026-09-24) — CTA directo, sin tener que ir a
+                                     buscar el servicio en el tab "Servicios". -->
+                                <button v-if="(previewFacturaEspecial.items_sin_confirmar_ids?.length ?? 0) > 0" type="button"
+                                    class="btn btn-sm btn-outline-danger mt-2"
+                                    @click="abrirModalConfirmarTributario(itemsPorIds(previewFacturaEspecial.items_sin_confirmar_ids ?? []))">
+                                    Confirmar tratamiento tributario
+                                </button>
                             </div>
 
                             <template v-else>
@@ -852,7 +1052,11 @@
                                     </div>
                                     <div class="col-6">
                                         <label class="form-label small fw-semibold text-secondary">Total de este comprobante</label>
-                                        <input type="text" class="form-control form-control-sm fw-bold" disabled :value="`${moneda} ${Number(previewFacturaEspecial.total ?? 0).toFixed(2)}`">
+                                        <input v-if="!requiereOverrideMoneda || previewFacturaEspecial.tipo_cambio_aplicado" type="text"
+                                            class="form-control form-control-sm fw-bold" disabled
+                                            :value="`${monedaFacturacionSeleccionada} ${Number(previewFacturaEspecial.total ?? 0).toFixed(2)}`">
+                                        <input v-else type="text" class="form-control form-control-sm fw-bold text-danger" disabled
+                                            value="Ingresa un tipo de cambio para calcular el total">
                                     </div>
                                 </div>
 
@@ -863,14 +1067,27 @@
                                         <button type="button" class="btn btn-sm btn-link text-danger p-0" @click="clienteSeleccionado = null">Cambiar</button>
                                     </div>
                                     <template v-else>
-                                        <input type="text" class="form-control form-control-sm" placeholder="Buscar cliente por nombre o documento..."
-                                            v-model="busquedaCliente" @input="onBuscarCliente">
+                                        <div class="input-group input-group-sm">
+                                            <input type="text" class="form-control" placeholder="Buscar cliente por nombre o documento..."
+                                                v-model="busquedaCliente" @input="onBuscarCliente">
+                                            <!-- Bug real (2026-09-24): este buscador solo consultaba
+                                                 clientes YA registrados (clients?search=) — si la
+                                                 empresa era nueva, no había ningún camino sin salir
+                                                 del modal. Mismo componente que ya usa Venta Directa
+                                                 (ClientFormQuick, con búsqueda de RUC vía apisperu). -->
+                                            <button type="button" class="btn btn-outline-primary" @click="abrirModalClienteRapido">
+                                                <i class="fas fa-plus me-1"></i>Nuevo
+                                            </button>
+                                        </div>
                                         <div v-if="resultadosCliente.length > 0" class="border rounded mt-1" style="max-height:140px;overflow-y:auto">
                                             <button v-for="c in resultadosCliente" :key="c.id" type="button"
                                                 class="dropdown-item small w-100 text-start" @click="seleccionarCliente(c)">
                                                 {{ c.full_name }} — {{ c.n_document }}
                                             </button>
                                         </div>
+                                        <small v-else-if="busquedaCliente.trim().length >= 2" class="text-muted d-block mt-1">
+                                            Sin resultados entre los clientes ya registrados — usa "Nuevo" para buscar por RUC/DNI o registrarlo a mano.
+                                        </small>
                                     </template>
                                 </div>
 
@@ -897,8 +1114,28 @@
                         <button v-if="previewFacturaEspecial && !previewFacturaEspecial.bloqueado_tributario" class="btn btn-primary btn-sm"
                             :disabled="facturando || cargandoPreviewFacturaEspecial || facturarEspecialForm.pasajero_ids.length === 0 || !clienteSeleccionado"
                             @click="confirmarFacturacionEspecial">
-                            <span v-if="facturando" class="spinner-border spinner-border-sm me-1"></span>Facturar este grupo
+                            <span v-if="facturando" class="spinner-border spinner-border-sm me-1"></span>Emitir comprobante de este grupo
                         </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Registrar cliente rápido (2026-09-24) — mismo componente que ya
+             usa Venta Directa (ClientFormQuick: búsqueda de RUC/DNI vía
+             apisperu + alta manual). Bug real: "Facturación especial" solo
+             dejaba elegir entre clientes YA registrados, sin ningún camino
+             para una empresa nueva. -->
+        <div class="modal fade" tabindex="-1" :class="{ show: mostrarModalClienteRapido, 'd-block': mostrarModalClienteRapido }"
+            style="background:rgba(0,0,0,.5)" v-if="mostrarModalClienteRapido">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h6 class="modal-title fw-bold">Registrar cliente rápido</h6>
+                        <button class="btn-close" @click="mostrarModalClienteRapido = false"></button>
+                    </div>
+                    <div class="modal-body">
+                        <ClientFormQuick :initial-data="clienteRapidoInitialData" @saved="onClienteRapidoCreado" @cancel="mostrarModalClienteRapido = false" />
                     </div>
                 </div>
             </div>
@@ -925,10 +1162,78 @@
                         </div>
 
                         <template v-else-if="previewFacturaSimple">
+                            <!-- Moneda del comprobante (2026-09-24) — mismo bloque que
+                                 "Facturación especial", ver ese modal para el detalle del
+                                 porqué. -->
+                            <div class="mb-2">
+                                <label class="form-label small fw-semibold text-secondary">
+                                    <i class="fas fa-money-bill-wave me-1"></i>Moneda del comprobante
+                                </label>
+                                <select class="form-select form-select-sm" v-model="monedaFacturacionSeleccionada">
+                                    <option value="PEN">Soles (PEN)</option>
+                                    <option value="USD">Dólares (USD)</option>
+                                </select>
+                                <small class="text-muted d-block mt-1">Cotización en {{ moneda }}.</small>
+                            </div>
+                            <div v-if="requiereOverrideMoneda" class="row g-2 mb-2">
+                                <div class="col-6">
+                                    <label class="form-label small fw-semibold text-secondary">
+                                        Tipo de cambio ({{ moneda }} → {{ monedaFacturacionSeleccionada }})
+                                    </label>
+                                    <input type="number" step="0.0001" min="0.0001" class="form-control form-control-sm"
+                                        v-model.number="tipoCambioFacturacion" placeholder="Ej: 3.75">
+                                    <small v-if="previewFacturaSimple.tipo_cambio_sugerido" class="text-muted">
+                                        Sugerido SUNAT del día: {{ previewFacturaSimple.tipo_cambio_sugerido }}
+                                    </small>
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label small fw-semibold text-secondary">Motivo del cambio de moneda</label>
+                                    <input type="text" class="form-control form-control-sm" v-model="motivoCambioMonedaFacturacion"
+                                        placeholder="Ej: cliente pidió el comprobante en soles">
+                                </div>
+                            </div>
+
+                            <!-- Sucursal + tratamiento tributario (2026-09-24) — SIEMPRE
+                                 visibles, bloqueado_tributario o no. Bug real corregido: antes
+                                 vivían solo dentro del v-else de abajo, así que una reserva que
+                                 mezcla tratamientos (caso real, ver bloqueo abajo) nunca los
+                                 mostraba en "Facturar" simple. -->
+                            <div v-if="puedeCambiarSucursal" class="mb-2">
+                                <label class="form-label small fw-semibold text-secondary">
+                                    <i class="fas fa-store me-1"></i>Sucursal (define la serie según moneda)
+                                </label>
+                                <select class="form-select form-select-sm" v-model.number="branchIdFacturacion">
+                                    <option v-for="b in sucursales" :key="b.id" :value="b.id">{{ b.name }}</option>
+                                </select>
+                            </div>
+                            <!-- Serie visible (2026-09-24) — mismo bloque que "Facturación
+                                 especial", ver ese modal para el detalle del porqué. -->
+                            <div v-if="previewFacturaSimple.serie_resuelta" class="mb-2 small">
+                                <span class="text-muted">Serie a emitir:</span>
+                                <span class="badge bg-light text-dark border ms-1">{{ previewFacturaSimple.serie_resuelta }}</span>
+                            </div>
+                            <div v-if="(previewFacturaSimple.items_por_destino_tributario?.length ?? 0) > 0" class="mb-2 small">
+                                <span class="text-muted d-block mb-1">Tratamiento tributario de lo seleccionado:</span>
+                                <span v-for="it in previewFacturaSimple.items_por_destino_tributario" :key="it.reserva_item_id"
+                                    class="badge bg-light text-dark border me-1 mb-1">
+                                    {{ it.nombre }}: {{ etiquetaTipAfeIgv(it.tip_afe_igv) }}
+                                </span>
+                            </div>
+
                             <div v-if="previewFacturaSimple.bloqueado_tributario" class="alert alert-danger mb-0">
                                 <i class="fas fa-triangle-exclamation me-2"></i>
                                 <strong>No se puede facturar toda la reserva en un solo comprobante.</strong>
                                 <p class="mb-1 mt-1">{{ previewFacturaSimple.motivo }}</p>
+                                <ul v-if="(previewFacturaSimple.items_por_destino_tributario?.length ?? 0) > 0" class="mb-1 small ps-3">
+                                    <li v-for="it in previewFacturaSimple.items_por_destino_tributario" :key="it.reserva_item_id">
+                                        {{ it.nombre }} — <span class="fw-semibold">{{ it.destino_tributario }}</span>
+                                    </li>
+                                </ul>
+                                <button v-if="(previewFacturaSimple.items_sin_confirmar_ids?.length ?? 0) > 0" type="button"
+                                    class="btn btn-sm btn-outline-danger mb-2"
+                                    @click="abrirModalConfirmarTributario(itemsPorIds(previewFacturaSimple.items_sin_confirmar_ids ?? []))">
+                                    Confirmar tratamiento tributario
+                                </button>
                                 <p class="mb-0 small">Usa <strong>Facturación especial</strong> para separar los grupos con distinto tratamiento tributario.</p>
                             </div>
 
@@ -955,7 +1260,11 @@
                                     </div>
                                     <div class="col-6">
                                         <label class="form-label small fw-semibold text-secondary">Total a facturar</label>
-                                        <input type="text" class="form-control form-control-sm fw-bold" disabled :value="`${moneda} ${Number(previewFacturaSimple.total ?? 0).toFixed(2)}`">
+                                        <input v-if="!requiereOverrideMoneda || previewFacturaSimple.tipo_cambio_aplicado" type="text"
+                                            class="form-control form-control-sm fw-bold" disabled
+                                            :value="`${monedaFacturacionSeleccionada} ${Number(previewFacturaSimple.total ?? 0).toFixed(2)}`">
+                                        <input v-else type="text" class="form-control form-control-sm fw-bold text-danger" disabled
+                                            value="Ingresa un tipo de cambio para calcular el total">
                                     </div>
                                 </div>
                                 <p class="small text-muted mb-0">
@@ -970,7 +1279,7 @@
                         <button v-if="previewFacturaSimple && !previewFacturaSimple.bloqueado_tributario" class="btn btn-primary btn-sm"
                             :disabled="facturando || cargandoFacturarSimple"
                             @click="confirmarFacturacionSimple">
-                            <span v-if="facturando" class="spinner-border spinner-border-sm me-1"></span>Facturar
+                            <span v-if="facturando" class="spinner-border spinner-border-sm me-1"></span>Emitir comprobante
                         </button>
                     </div>
                 </div>
@@ -1071,6 +1380,9 @@ import { ref, reactive, computed, onMounted, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import httpClient from '@/helpers/http-client';
+import { useAuthStore } from '@/stores/auth';
+import type { Branch } from '@/types/cash-session';
+import ClientFormQuick from '@/components/Sales/ClientFormQuick.vue';
 import { reservaService } from '@/services/admin/reservaService';
 import { reservaFacturacionService, type PrepararFacturaResponse, type AnticipoDisponiblePreview } from '@/services/admin/reservaFacturacionService';
 import { reservaAnticipoService } from '@/services/admin/reservaAnticipoService';
@@ -1082,9 +1394,11 @@ import { opcionMayoristaService } from '@/services/admin/opcionMayoristaService'
 import Swal from 'sweetalert2/dist/sweetalert2.js';
 import { useToast } from '@/composables/useToast';
 import { formatFecha } from '@/helpers/fecha';
+import { imprimirComprobante } from '@/composables/usePrintComprobante';
 import type {
     Reserva, ReservaPasajero, ReservaItem, ReservaResumenItem, ReservaCabecera,
     PasajeroCatalogo, ProveedorTarifa, Guia, MotivoCancelacion, AnticipoReserva, OpcionMayorista, OpcionHotelTarifa,
+    ComprobanteReserva,
 } from '@/types/agencia-viajes';
 import type { PaymentMethod, PaymentMethods } from '@/types/cash';
 
@@ -1093,6 +1407,49 @@ type TVueSwalInstance = typeof Swal & typeof Swal.fire;
 const route = useRoute();
 const reservaId = Number(route.params.id);
 const toast = useToast();
+const authStore = useAuthStore();
+
+// Sucursal/serie al facturar (2026-09-24, pedido del usuario: "la agencia
+// factura en dólares y en soles... debo poder elegir la serie") — mismo
+// patrón exacto que sale/register.vue: solo visible con can_switch_branch,
+// la serie real se resuelve sola por sucursal+tipo+moneda en el backend
+// (SerieComprobanteService), esto solo deja elegir DESDE QUÉ sucursal.
+const puedeCambiarSucursal = computed(() => authStore.isPermitedRoute('can_switch_branch'));
+const sucursales = ref<Branch[]>([]);
+const branchIdFacturacion = ref<number | undefined>(undefined);
+
+const cargarSucursalesSiCorresponde = async () => {
+    if (!puedeCambiarSucursal.value || sucursales.value.length > 0) return;
+    try {
+        const res = await httpClient.get<{ branches: Branch[] }>('branches?active=1');
+        sucursales.value = res.data.branches;
+        branchIdFacturacion.value = sucursales.value[0]?.id;
+    } catch {
+        // No bloquea el resto del modal — sin sucursales cargadas, el
+        // selector queda vacío y el backend simplemente usa la sucursal
+        // propia del usuario (branch_id nunca viaja).
+    }
+};
+
+// Facturar en moneda distinta a la de la cotización (2026-09-24 — caso
+// real: cotización en USD, cliente pide el comprobante en soles). Un solo
+// set de refs para los dos modales de facturar (Simple/Especial) — nunca
+// están abiertos a la vez, y ambos se resetean al abrir. Ver
+// ReservaFacturacionController::resolverMonedaFacturacion() — el tipo de
+// cambio sugerido de SUNAT es editable, nunca se aplica sin que el
+// vendedor lo confirme (motivo obligatorio en el backend).
+const monedaFacturacionSeleccionada = ref<'PEN' | 'USD'>('PEN');
+const tipoCambioFacturacion = ref<number | null>(null);
+const motivoCambioMonedaFacturacion = ref('');
+const requiereOverrideMoneda = computed(
+    () => monedaFacturacionSeleccionada.value !== moneda.value
+);
+
+const resetearOverrideMoneda = () => {
+    monedaFacturacionSeleccionada.value = moneda.value;
+    tipoCambioFacturacion.value = null;
+    motivoCambioMonedaFacturacion.value = '';
+};
 
 const reserva = ref<Reserva | null>(null);
 const resumen = ref<ReservaResumenItem[]>([]);
@@ -1155,6 +1512,22 @@ const facturacionExternaEditable = ref(false);
 // Adelantos, 2026-08-21): anticipos ya pagados hacia esta reserva.
 const anticipos = ref<AnticipoReserva[]>([]);
 const totalAnticiposDisponibles = ref(0);
+const comprobantes = ref<ComprobanteReserva[]>([]);
+
+// Mismo criterio que badgeFacturacion() en reservas/index.vue (no
+// compartido en un helper común a propósito — son 2 conceptos vecinos
+// pero distintos: acá es el estado de UN comprobante puntual, allá el
+// agregado de toda la reserva).
+const badgeEstadoSunat = (estado: ComprobanteReserva['estado_sunat']): { texto: string; clase: string } => {
+    switch (estado) {
+        case 'aceptado':
+            return { texto: 'Aceptado', clase: 'bg-success' };
+        case 'rechazado':
+            return { texto: 'Rechazado', clase: 'bg-danger' };
+        default:
+            return { texto: 'Sin enviar', clase: 'bg-secondary' };
+    }
+};
 
 const tab = ref<'pax' | 'items' | 'asignacion'>('pax');
 
@@ -1219,6 +1592,7 @@ const cargarReserva = async () => {
     facturacionExternaEditable.value = res.facturacion_externa_editable ?? false;
     anticipos.value = res.anticipos ?? [];
     totalAnticiposDisponibles.value = res.total_anticipos_disponibles ?? 0;
+    comprobantes.value = res.comprobantes ?? [];
 };
 
 const sincronizarItems = async () => {
@@ -1460,7 +1834,7 @@ const cerrarBusquedaProveedor = (it: ReservaItem) => {
 const nombreItem = (it: ReservaItem) => {
     const item = it.alternativa_item;
     if (!item) return 'Servicio';
-    if (item.origen_tipo === 'manual') return item.descripcion_manual ?? 'Ítem manual';
+    if (item.origen_tipo === 'manual') return item.descripcion_manual ?? 'Servicio manual';
     if (item.origen_tipo === 'pasaje_aereo') return item.cotizacion_pasaje_aereo?.aerolinea ?? 'Pasaje aéreo';
     if (item.origen_tipo === 'mayorista') {
         // Sesión 12h — it.opcion_mayorista es quién opera REALMENTE hoy
@@ -1509,6 +1883,56 @@ const nombreItem = (it: ReservaItem) => {
 
 const destinoItem = (it: ReservaItem) => it.alternativa_item?.proveedor_tarifa?.proveedor_servicio?.destino_servicio?.destino_atractivo?.nombre ?? null;
 
+// Tratamiento tributario por servicio (hallazgo de auditoría 2026-09-23):
+// antes esto no se veía en ningún lado del detalle de la reserva — solo se
+// descubría al chocar con el bloqueo de "mezcla tributaria" al intentar
+// facturar. Mismo criterio de resolución que
+// ReservaFacturacionController::resolverDestinoTributario()/
+// resolverTipAfeIgvItem() en el backend (fuente de verdad) — esto solo lo
+// refleja para el badge, no decide nada.
+const destinoTributarioItem = (it: ReservaItem): string =>
+    it.destino_tributario ?? it.proveedor_tarifa?.destino_tributario ?? 'nacional';
+
+const tipAfeIgvItem = (it: ReservaItem): string => {
+    if (it.alternativa_item?.origen_tipo === 'pasaje_aereo' && it.alternativa_item.cotizacion_pasaje_aereo?.tip_afe_igv) {
+        return it.alternativa_item.cotizacion_pasaje_aereo.tip_afe_igv;
+    }
+    return it.tip_afe_igv ?? it.proveedor_tarifa?.tip_afe_igv ?? '10';
+};
+
+// Caso 3 Amazonía (2026-09-24) — mismo criterio que
+// ReservaFacturacionController::detectarMezclaTributaria(): solo
+// 'amazonia' se puede confirmar acá (extranjero sigue bloqueado sin
+// excepción, no tiene sentido ofrecer "confirmar" para ese caso).
+const requiereConfirmacionTributaria = (it: ReservaItem): boolean =>
+    destinoTributarioItem(it) === 'amazonia' && !it.motivo_override_tributario;
+
+const itemsPorIds = (ids: number[]): ReservaItem[] =>
+    (reserva.value?.items ?? []).filter((it) => ids.includes(it.id));
+
+// Compartido con el resumen "Tratamiento tributario de este comprobante" de
+// los modales de facturar (simple/especial) — mismo criterio de etiquetas.
+const etiquetaTipAfeIgv = (codigo: string): string => {
+    if (codigo === '20') return 'Exonerado';
+    if (codigo === '30') return 'Inafecto';
+    return 'Gravado';
+};
+
+const badgeTratamientoTributario = (it: ReservaItem): { texto: string; clase: string } => {
+    const destino = destinoTributarioItem(it);
+    if (destino !== 'nacional') {
+        return {
+            texto: destino === 'amazonia' ? 'Amazonía (exonerado)' : destino,
+            clase: 'bg-warning-subtle text-warning-emphasis border',
+        };
+    }
+
+    const etiqueta = etiquetaTipAfeIgv(tipAfeIgvItem(it));
+    return etiqueta === 'Gravado'
+        ? { texto: etiqueta, clase: 'bg-light text-dark border' }
+        : { texto: etiqueta, clase: 'bg-info-subtle text-info-emphasis border' };
+};
+
 // Resumen de solo lectura para el tab Ítems (auditoría de UX/funcionalidad
 // 2026-08-27) — la edición real del vuelo de agencia vive en el tab
 // Pasajeros (ver itemsVueloAgencia() más abajo), acá solo se cuenta cuántos
@@ -1546,9 +1970,9 @@ const guardarItem = async (it: ReservaItem) => {
             fecha: it.fecha ?? null,
             hora: it.hora ?? null,
         });
-        toast.success('Ítem actualizado');
+        toast.success('Servicio actualizado');
     } catch (error: any) {
-        toast.error(error.response?.data?.message ?? 'No se pudo actualizar el ítem');
+        toast.error(error.response?.data?.message ?? 'No se pudo actualizar el servicio');
     }
 };
 
@@ -1574,10 +1998,10 @@ const quitarItem = async (it: ReservaItem) => {
     eliminandoItemId.value = it.id;
     try {
         await reservaItemService.eliminar(it.id);
-        toast.success('Ítem quitado de la reserva');
+        toast.success('Servicio quitado de la reserva');
         await cargarReserva();
     } catch (error: any) {
-        toast.error(error.response?.data?.message ?? 'No se pudo quitar el ítem');
+        toast.error(error.response?.data?.message ?? 'No se pudo quitar el servicio');
     } finally {
         eliminandoItemId.value = null;
     }
@@ -2026,6 +2450,49 @@ const confirmarReasignarHotel = async () => {
     }
 };
 
+// ── Confirmar tratamiento tributario — Caso 3 Amazonía (2026-09-24) ──
+const mostrarModalConfirmarTributario = ref(false);
+const confirmandoTributario = ref(false);
+const confirmarTributarioForm = ref<{
+    items: ReservaItem[];
+    destino_tributario: 'amazonia' | 'nacional' | 'extranjero';
+    tip_afe_igv: '10' | '20' | '30';
+    motivo: string;
+}>({ items: [], destino_tributario: 'amazonia', tip_afe_igv: '20', motivo: '' });
+
+const abrirModalConfirmarTributario = (items: ReservaItem[]) => {
+    confirmarTributarioForm.value = {
+        items,
+        destino_tributario: (destinoTributarioItem(items[0]) as 'amazonia' | 'nacional' | 'extranjero') ?? 'amazonia',
+        tip_afe_igv: (tipAfeIgvItem(items[0]) as '10' | '20' | '30') ?? '20',
+        motivo: '',
+    };
+    mostrarModalConfirmarTributario.value = true;
+};
+
+const confirmarTratamientoTributario = async () => {
+    if (!reserva.value) return;
+    confirmandoTributario.value = true;
+    try {
+        const res = await reservaService.overrideTratamientoTributario(reserva.value.id, {
+            reserva_item_ids: confirmarTributarioForm.value.items.map((it) => it.id),
+            destino_tributario: confirmarTributarioForm.value.destino_tributario,
+            tip_afe_igv: confirmarTributarioForm.value.tip_afe_igv,
+            motivo: confirmarTributarioForm.value.motivo,
+        });
+        reserva.value = res.reserva;
+        resumen.value = res.resumen;
+        total.value = res.total;
+        cabecera.value = res.cabecera;
+        mostrarModalConfirmarTributario.value = false;
+        toast.success(res.message);
+    } catch (error: any) {
+        toast.error(error.response?.data?.message ?? 'No se pudo confirmar el tratamiento tributario');
+    } finally {
+        confirmandoTributario.value = false;
+    }
+};
+
 // ── Facturar (Fase A del plan "Proceso de reserva: facturación + 3 fixes",
 // 2026-08-19; facturación múltiple por grupo de pasajeros, 2026-08-20) ──
 // Ya no hay un solo Sale por reserva: el vendedor elige a qué pasajeros
@@ -2077,8 +2544,19 @@ const refrescarPreviewFacturaEspecial = async () => {
         previewFacturaEspecial.value = await reservaFacturacionService.prepararFactura(
             reserva.value.id,
             facturarEspecialForm.value.pasajero_ids,
-            facturarEspecialForm.value.reserva_item_ids_manual
+            facturarEspecialForm.value.reserva_item_ids_manual,
+            {
+                monedaFacturacion: monedaFacturacionSeleccionada.value,
+                tipoCambioConversion: tipoCambioFacturacion.value,
+                branchId: branchIdFacturacion.value,
+                tipoComprobanteCodigo: facturarEspecialForm.value.tipo_comprobante_codigo
+            }
         );
+        // Sugerencia SUNAT del día — solo prellena si el vendedor todavía
+        // no escribió nada a mano (nunca pisa un valor ya editado).
+        if (requiereOverrideMoneda.value && tipoCambioFacturacion.value === null && previewFacturaEspecial.value.tipo_cambio_sugerido) {
+            tipoCambioFacturacion.value = previewFacturaEspecial.value.tipo_cambio_sugerido;
+        }
         // Reconstruye el picker preservando lo ya tildado por advance_id —
         // el preview se re-dispara con cada cambio de pasajeros/ítems.
         const previas = new Map(anticiposEspecialSeleccionables.value.map((a) => [a.advance_id, a]));
@@ -2102,6 +2580,39 @@ const refrescarPreviewFacturaEspecial = async () => {
 };
 
 watch(() => [...facturarEspecialForm.value.pasajero_ids, ...facturarEspecialForm.value.reserva_item_ids_manual], () => {
+    if (mostrarModalFacturarEspecial.value) refrescarPreviewFacturaEspecial();
+});
+
+// Cambiar de moneda o editar el tipo de cambio recalcula el total
+// convertido — cualquiera de los dos modales que esté abierto (nunca los
+// dos a la vez).
+const refrescarPreviewFacturacionAbierta = () => {
+    if (mostrarModalFacturarEspecial.value) refrescarPreviewFacturaEspecial();
+    else if (mostrarModalFacturarSimple.value) refrescarPreviewFacturaSimple();
+};
+
+// Cambiar de moneda (select) es una sola acción discreta — refresca al
+// toque. Editar el tipo de cambio es un <input type="number"> que dispara
+// un evento por cada tecla — sin debounce, cada dígito escrito disparaba
+// un preview nuevo (bug real reportado: "me refresca cada vez que escribo
+// un número"). Mismo patrón que clienteSearchTimeout (onBuscarCliente) más
+// abajo en este archivo.
+watch(monedaFacturacionSeleccionada, refrescarPreviewFacturacionAbierta);
+
+let tipoCambioFacturacionTimeout: ReturnType<typeof setTimeout> | undefined;
+watch(tipoCambioFacturacion, () => {
+    clearTimeout(tipoCambioFacturacionTimeout);
+    tipoCambioFacturacionTimeout = setTimeout(refrescarPreviewFacturacionAbierta, 500);
+});
+
+// Serie visible (2026-09-24) — cambiar de sucursal o de tipo de
+// comprobante (Boleta/Factura) también cambia qué serie se resuelve.
+// facturarSimpleForm todavía no existe en este punto del script (se
+// declara más abajo) — su propio watch vive junto a su declaración, ver
+// más abajo, para evitar "Cannot access before initialization" (watch()
+// evalúa el getter una vez de inmediato al registrarse).
+watch(branchIdFacturacion, refrescarPreviewFacturacionAbierta);
+watch(() => facturarEspecialForm.value.tipo_comprobante_codigo, () => {
     if (mostrarModalFacturarEspecial.value) refrescarPreviewFacturaEspecial();
 });
 
@@ -2138,6 +2649,25 @@ const seleccionarCliente = (c: ClienteBusqueda) => {
     busquedaCliente.value = '';
 };
 
+// Cliente nuevo sin salir del modal (2026-09-24) — mismo componente que ya
+// usa Venta Directa. Si lo que se tipeó en el buscador parece un RUC (11
+// dígitos), se precarga en el form rápido para no reescribirlo dos veces.
+const mostrarModalClienteRapido = ref(false);
+const clienteRapidoInitialData = ref<{ type_document: string; n_document: string } | null>(null);
+
+const abrirModalClienteRapido = () => {
+    const query = busquedaCliente.value.trim();
+    clienteRapidoInitialData.value = /^\d{11}$/.test(query)
+        ? { type_document: 'RUC', n_document: query }
+        : null;
+    mostrarModalClienteRapido.value = true;
+};
+
+const onClienteRapidoCreado = (cliente: ClienteBusqueda) => {
+    seleccionarCliente(cliente);
+    mostrarModalClienteRapido.value = false;
+};
+
 // Factura ('01') exige RUC (cod_tipo_doc_sunat='6', Catálogo 06 SUNAT) —
 // el backend ya lo valida y rechaza con 422 (2026-08-24), esto solo evita
 // que el vendedor llegue a intentarlo. Corre cada vez que cambia el
@@ -2161,12 +2691,18 @@ const abrirModalFacturarEspecial = () => {
     clienteSeleccionado.value = null;
     busquedaCliente.value = '';
     resultadosCliente.value = [];
+    resetearOverrideMoneda();
     mostrarModalFacturarEspecial.value = true;
     refrescarPreviewFacturaEspecial();
+    cargarSucursalesSiCorresponde();
 };
 
 const confirmarFacturacionEspecial = async () => {
     if (!reserva.value || !clienteSeleccionado.value) return;
+    if (requiereOverrideMoneda.value && (!tipoCambioFacturacion.value || !motivoCambioMonedaFacturacion.value.trim())) {
+        toast.error('Indica el tipo de cambio y el motivo para facturar en una moneda distinta a la de la cotización.');
+        return;
+    }
     facturando.value = true;
     try {
         const anticiposAplicados = anticiposEspecialSeleccionables.value
@@ -2180,8 +2716,12 @@ const confirmarFacturacionEspecial = async () => {
             client_id: clienteSeleccionado.value.id,
             texto_personalizado: facturarEspecialForm.value.texto_personalizado || null,
             advance_applications: anticiposAplicados.length > 0 ? anticiposAplicados : undefined,
+            branch_id: puedeCambiarSucursal.value ? branchIdFacturacion.value : undefined,
+            moneda_facturacion: requiereOverrideMoneda.value ? monedaFacturacionSeleccionada.value : undefined,
+            tipo_cambio_conversion: requiereOverrideMoneda.value ? tipoCambioFacturacion.value : undefined,
+            motivo_cambio_moneda: requiereOverrideMoneda.value ? motivoCambioMonedaFacturacion.value.trim() : undefined,
         });
-        toast.success(res.message);
+        toast.success(`${res.message} (serie ${res.serie})`);
         // Refresca la reserva completa (marca pasajeros/ítems como
         // facturados) — la venta creada se gestiona desde su propia
         // pantalla (cobrar, enviar a SUNAT), no acá.
@@ -2197,6 +2737,7 @@ const confirmarFacturacionEspecial = async () => {
             previewFacturaEspecial.value = null;
             anticiposEspecialSeleccionables.value = [];
             clienteSeleccionado.value = null;
+            resetearOverrideMoneda();
         } else {
             mostrarModalFacturarEspecial.value = false;
         }
@@ -2220,6 +2761,12 @@ const cargandoFacturarSimple = ref(false);
 const previewFacturaSimple = ref<PrepararFacturaResponse | null>(null);
 const facturarSimpleForm = ref<{ tipo_comprobante_codigo: '01' | '03' }>({ tipo_comprobante_codigo: '01' });
 
+// Serie visible (2026-09-24) — cambiar Boleta/Factura cambia qué serie se
+// resuelve. Ver el watch gemelo de facturarEspecialForm más arriba.
+watch(() => facturarSimpleForm.value.tipo_comprobante_codigo, () => {
+    if (mostrarModalFacturarSimple.value) refrescarPreviewFacturaSimple();
+});
+
 // Cuando ya no queda ningún pasajero pendiente pero sí ítems sueltos sin
 // cubrir (ver itemsPendientesDeFacturarCount), el backend acepta
 // re-enviar pasajero_ids ya facturados SOLO para arrastrar esos ítems
@@ -2238,24 +2785,30 @@ const pasajeroIdsParaFacturarSimple = () => {
 // RUC, arranca directo en boleta.
 const clienteSimpleTieneRuc = computed(() => cabecera.value?.cliente?.cod_tipo_doc_sunat === '6');
 
-const abrirModalFacturarSimple = async () => {
+const refrescarPreviewFacturaSimple = async () => {
     if (!reserva.value) return;
-    previewFacturaSimple.value = null;
-    facturarSimpleForm.value = { tipo_comprobante_codigo: clienteSimpleTieneRuc.value ? '01' : '03' };
-    mostrarModalFacturarSimple.value = true;
     cargandoFacturarSimple.value = true;
     try {
         const pasajeroIds = pasajeroIdsParaFacturarSimple();
+        const opciones = {
+            monedaFacturacion: monedaFacturacionSeleccionada.value,
+            tipoCambioConversion: tipoCambioFacturacion.value,
+            branchId: branchIdFacturacion.value,
+            tipoComprobanteCodigo: facturarSimpleForm.value.tipo_comprobante_codigo
+        };
         // Primer preview: descubre qué ítems sin asignar hay disponibles.
-        const primerPreview = await reservaFacturacionService.prepararFactura(reserva.value.id, pasajeroIds, []);
+        const primerPreview = await reservaFacturacionService.prepararFactura(reserva.value.id, pasajeroIds, [], opciones);
         const idsSinAsignar = (primerPreview.items_sin_asignar_disponibles ?? []).map((it) => it.reserva_item_id);
         // Segundo preview: los agrega todos, para que el total refleje
         // realmente "toda la reserva pendiente" — el modo simple no
         // pregunta cuáles, se asume que todos van en este único
         // comprobante.
         previewFacturaSimple.value = idsSinAsignar.length > 0
-            ? await reservaFacturacionService.prepararFactura(reserva.value.id, pasajeroIds, idsSinAsignar)
+            ? await reservaFacturacionService.prepararFactura(reserva.value.id, pasajeroIds, idsSinAsignar, opciones)
             : primerPreview;
+        if (requiereOverrideMoneda.value && tipoCambioFacturacion.value === null && previewFacturaSimple.value.tipo_cambio_sugerido) {
+            tipoCambioFacturacion.value = previewFacturaSimple.value.tipo_cambio_sugerido;
+        }
     } catch (error: any) {
         toast.error(error.response?.data?.message ?? 'No se pudo calcular la vista previa de la factura');
         mostrarModalFacturarSimple.value = false;
@@ -2264,8 +2817,22 @@ const abrirModalFacturarSimple = async () => {
     }
 };
 
+const abrirModalFacturarSimple = async () => {
+    if (!reserva.value) return;
+    previewFacturaSimple.value = null;
+    facturarSimpleForm.value = { tipo_comprobante_codigo: clienteSimpleTieneRuc.value ? '01' : '03' };
+    resetearOverrideMoneda();
+    mostrarModalFacturarSimple.value = true;
+    cargarSucursalesSiCorresponde();
+    await refrescarPreviewFacturaSimple();
+};
+
 const confirmarFacturacionSimple = async () => {
     if (!reserva.value || !cabecera.value?.cliente?.id) return;
+    if (requiereOverrideMoneda.value && (!tipoCambioFacturacion.value || !motivoCambioMonedaFacturacion.value.trim())) {
+        toast.error('Indica el tipo de cambio y el motivo para facturar en una moneda distinta a la de la cotización.');
+        return;
+    }
     facturando.value = true;
     try {
         const pasajeroIds = pasajeroIdsParaFacturarSimple();
@@ -2275,9 +2842,13 @@ const confirmarFacturacionSimple = async () => {
             reserva_item_ids_manual: idsSinAsignar,
             tipo_comprobante_codigo: facturarSimpleForm.value.tipo_comprobante_codigo,
             client_id: cabecera.value.cliente.id,
+            branch_id: puedeCambiarSucursal.value ? branchIdFacturacion.value : undefined,
+            moneda_facturacion: requiereOverrideMoneda.value ? monedaFacturacionSeleccionada.value : undefined,
+            tipo_cambio_conversion: requiereOverrideMoneda.value ? tipoCambioFacturacion.value : undefined,
+            motivo_cambio_moneda: requiereOverrideMoneda.value ? motivoCambioMonedaFacturacion.value.trim() : undefined,
         });
         mostrarModalFacturarSimple.value = false;
-        toast.success(res.message);
+        toast.success(`${res.message} (serie ${res.serie})`);
         await cargarReserva();
     } catch (error: any) {
         toast.error(error.response?.data?.message ?? 'No se pudo facturar la reserva');

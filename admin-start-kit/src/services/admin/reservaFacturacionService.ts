@@ -20,6 +20,20 @@ export type FacturarReservaPayload = {
   tipo_comprobante_codigo: '01' | '03'
   client_id: number
   texto_personalizado?: string | null
+  // 2026-09-24 — solo tiene efecto si el usuario tiene can_switch_branch
+  // (mismo criterio que sale/register.vue); sin ese permiso el backend lo
+  // ignora y usa la sucursal propia del usuario.
+  branch_id?: number | null
+  // Facturar en una moneda distinta a la de la cotización (2026-09-24 —
+  // caso real: cotización en USD, cliente pide el comprobante en soles).
+  // Sin esto: se factura en la moneda de la cotización, como siempre.
+  // Con esto: tipo_cambio_conversion y motivo_cambio_moneda son
+  // OBLIGATORIOS para el backend (422 si faltan) — ver
+  // reservaFacturacionService.prepararFactura() para el tipo de cambio
+  // sugerido antes de confirmar.
+  moneda_facturacion?: 'PEN' | 'USD' | null
+  tipo_cambio_conversion?: number | null
+  motivo_cambio_moneda?: string | null
   // Tier 0 — conexión Adelantos↔Reservas: vacío/omitido = auto-aplica el
   // 100% de los anticipos disponibles de la reserva (para ESTE cliente);
   // poblado = el vendedor eligió a mano cuáles y cuánto.
@@ -70,6 +84,38 @@ export type PrepararFacturaResponse = {
   bloqueado_tributario: boolean
   motivo?: string
   destinos_tributarios_detectados?: string[]
+  // 2026-09-23 — mapeo por servicio de qué destino_tributario tiene cada
+  // uno (antes solo llegaban los valores distintos detectados, sin decir
+  // qué servicio es cuál).
+  // 2026-09-24 — ahora viaja SIEMPRE (antes solo cuando bloqueado_tributario
+  // era true), para que el vendedor vea el tratamiento de lo que seleccionó
+  // sin tener que chocar con un bloqueo primero.
+  items_por_destino_tributario?: Array<{ reserva_item_id: number; nombre: string; destino_tributario: string; tip_afe_igv: string }>
+  // 2026-09-24 — Caso 3 Amazonía: servicios homogéneos en Amazonía que
+  // TODAVÍA no fueron confirmados uno por uno (ver reservaService.
+  // overrideTratamientoTributario()). Solo viene poblado en ese motivo
+  // específico de bloqueo, nunca junto con mezcla o extranjero.
+  items_sin_confirmar_ids?: number[]
+  // Facturar en otra moneda (2026-09-24) — moneda_cotizacion_original es
+  // siempre la de la reserva; moneda_facturacion es la que se está
+  // previsualizando (default = la misma, si no se pidió otra en el
+  // query). tipo_cambio_sugerido viene de TipoCambioSunatResolver (venta
+  // del día, o el último hábil anterior) — null si no hay dato SUNAT
+  // disponible. tipo_cambio_aplicado es el que realmente se usó para
+  // calcular subtotal/igv/total/grupos_propuestos de este preview (el
+  // pasado por query si vino, si no el sugerido) — null si no hay ninguno
+  // disponible (en ese caso los montos del preview siguen en la moneda
+  // original, sin convertir).
+  moneda_cotizacion_original?: string
+  moneda_facturacion?: string
+  tipo_cambio_sugerido?: number | null
+  tipo_cambio_aplicado?: number | null
+  // Serie que se va a usar (2026-09-24, pedido del usuario: "debe aparecer
+  // de manera visible la serie") — null si todavía no se eligió tipo de
+  // comprobante, o si no hay ninguna serie activa configurada para esa
+  // sucursal/tipo/moneda (el vendedor lo descubre acá, antes de intentar
+  // confirmar, en vez de con un 422 al hacer clic en "Emitir comprobante").
+  serie_resuelta?: string | null
   grupos_propuestos?: Array<{
     categoria: string
     cantidad_items: number
@@ -93,9 +139,26 @@ export const reservaFacturacionService = {
     const response = await httpClient.post(`/reservas/${reservaId}/facturar`, payload)
     return response.data as FacturarReservaResponse
   },
-  async prepararFactura(reservaId: number, pasajeroIds: number[], reservaItemIdsManual: number[] = []) {
+  async prepararFactura(
+    reservaId: number,
+    pasajeroIds: number[],
+    reservaItemIdsManual: number[] = [],
+    opciones: {
+      monedaFacturacion?: 'PEN' | 'USD' | null
+      tipoCambioConversion?: number | null
+      branchId?: number | null
+      tipoComprobanteCodigo?: '01' | '03' | null
+    } = {}
+  ) {
     const response = await httpClient.get(`/reservas/${reservaId}/preparar-factura`, {
-      params: { pasajero_ids: pasajeroIds, reserva_item_ids_manual: reservaItemIdsManual }
+      params: {
+        pasajero_ids: pasajeroIds,
+        reserva_item_ids_manual: reservaItemIdsManual,
+        moneda_facturacion: opciones.monedaFacturacion || undefined,
+        tipo_cambio_conversion: opciones.tipoCambioConversion || undefined,
+        branch_id: opciones.branchId || undefined,
+        tipo_comprobante_codigo: opciones.tipoComprobanteCodigo || undefined
+      }
     })
     return response.data as PrepararFacturaResponse
   }

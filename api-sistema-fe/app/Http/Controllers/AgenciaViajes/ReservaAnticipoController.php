@@ -30,6 +30,20 @@ class ReservaAnticipoController extends Controller
 {
     public function store(Request $request, string $id)
     {
+        // Bug real (auditoría 2026-09-22): la ruta solo exige
+        // 'reservas.crear' pero por dentro invoca directo
+        // AdvanceController::store() — una llamada a método PHP, no un
+        // request HTTP nuevo, así que el middleware 'permission:register_advance'
+        // de la ruta "advances" nunca se vuelve a evaluar acá. Sin este check,
+        // cualquiera con permiso para crear reservas podía registrar dinero
+        // real coleándose por este endpoint.
+        if (! auth('api')->user()->can('register_advance')) {
+            return response()->json([
+                'code' => 403,
+                'message' => "No tienes permiso para registrar anticipos ('register_advance').",
+            ], 403);
+        }
+
         $reserva = Reserva::with('alternativa.cotizacion.cliente')->findOrFail($id);
 
         if ($reserva->estado !== 'activa') {

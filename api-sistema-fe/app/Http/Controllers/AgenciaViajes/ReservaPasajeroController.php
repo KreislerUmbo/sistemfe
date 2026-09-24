@@ -7,6 +7,7 @@ use App\Models\AgenciaViajes\PasajeroCatalogo;
 use App\Models\AgenciaViajes\PasajeroDocumento;
 use App\Models\AgenciaViajes\Reserva;
 use App\Models\AgenciaViajes\ReservaItemPasajero;
+use App\Models\AgenciaViajes\ReservaItemVueloPasajero;
 use App\Models\AgenciaViajes\ReservaPasajero;
 use App\Models\AgenciaViajes\ReservaVenta;
 use App\Models\AgenciaViajes\SalidaMayorista;
@@ -22,6 +23,77 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
 // criterio que el prototipo.
 class ReservaPasajeroController extends Controller
 {
+    // Bug real (auditoría 2026-09-23): no había ningún camino para sumar
+    // un pasajero de último momento a una reserva ya aceptada — solo
+    // nacían todos juntos al aceptar la alternativa
+    // (ReservaController::crearReservaDesdeAlternativa()). Nace como
+    // "shell" (mismo criterio que ahí: nombre/documento nullable,
+    // completables después vía update()), con la opción de mandarlos de
+    // una si el vendedor ya los tiene a mano.
+    public function store(Request $request, string $id)
+    {
+        $reserva = Reserva::with('alternativa.opcionMayoristaElegida')->findOrFail($id);
+
+        if ($reserva->estado !== 'activa') {
+            return response()->json(['code' => 422, 'message' => 'Solo se puede agregar un pasajero a una reserva activa.'], 422);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'tipo_pax' => 'required|in:adulto,nino,infante',
+            'nombre' => 'nullable|string|max:250',
+            'documento' => 'nullable|string|max:50',
+            'pasajero_catalogo_id' => 'nullable|integer|exists:pasajeros_catalogo,id',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
+        }
+
+        $validado = $validator->validated();
+
+        [$pasajero, $alertaCupoExcedido] = DB::transaction(function () use ($reserva, $validado) {
+            $reservaLocked = Reserva::where('id', $reserva->id)->lockForUpdate()->firstOrFail();
+
+            $pasajero = ReservaPasajero::create([
+                'reserva_id' => $reservaLocked->id,
+                'tipo_pax' => $validado['tipo_pax'],
+                'nombre' => $validado['nombre'] ?? null,
+                'documento' => $validado['documento'] ?? null,
+                'pasajero_catalogo_id' => $validado['pasajero_catalogo_id'] ?? null,
+            ]);
+
+            // Mismo movimiento de cupo que crearReservaDesdeAlternativa(),
+            // en reversa de destroy()/ReservaController::cancelar() —
+            // cupo_ocupado se cuenta por cantidad de pasajeros, no se
+            // puede sumar uno sin reflejarlo ahí. No bloqueante — mismo
+            // criterio que al aceptar: si excede cupo_total, se avisa, no
+            // se impide (el negocio decide a mano si el mayorista puede
+            // sumar uno más).
+            $alertaCupoExcedido = false;
+            $opcionElegida = $reservaLocked->alternativa?->opcionMayoristaElegida;
+            if ($opcionElegida && $opcionElegida->salida_mayorista_id) {
+                SalidaMayorista::where('id', $opcionElegida->salida_mayorista_id)->increment('cupo_ocupado');
+                $salida = SalidaMayorista::find($opcionElegida->salida_mayorista_id);
+                if ($salida && $salida->cupo_total !== null && $salida->cupo_ocupado > $salida->cupo_total) {
+                    $alertaCupoExcedido = true;
+                }
+            }
+
+            if ($pasajero->nombre && $pasajero->documento) {
+                $this->sincronizarCatalogo($pasajero);
+            }
+
+            return [$pasajero, $alertaCupoExcedido];
+        });
+
+        return response()->json([
+            'code' => 200,
+            'message' => 'Pasajero agregado correctamente',
+            'reserva_pasajero' => $pasajero->fresh(),
+            'alerta_cupo_excedido' => $alertaCupoExcedido,
+        ]);
+    }
+
     public function update(Request $request, string $id)
     {
         $pasajero = ReservaPasajero::with('reserva')->findOrFail($id);
@@ -168,14 +240,25 @@ class ReservaPasajeroController extends Controller
             return response()->json(['code' => 422, 'message' => 'No se puede quitar: es el último pasajero de la reserva.'], 422);
         }
 
-        // Mismo criterio conservador que ReservaItemController::destroy():
-        // si la reserva ya generó alguna venta, corregir la composición de
-        // pasajeros queda para la fase futura de "editar una reserva ya
-        // facturada" — acá no se toca en silencio.
-        if (ReservaVenta::where('reserva_id', $reserva->id)->exists()) {
+        // Bug real (auditoría 2026-09-23): antes chequeaba "¿esta reserva
+        // tiene ALGUNA venta?" en vez de "¿ESTE pasajero específico ya está
+        // en alguna venta?" — bloqueaba quitar a un pasajero nunca
+        // facturado solo porque OTRO pasajero de la misma reserva ya lo
+        // estaba. Contradecía el propio diseño de "facturación múltiple
+        // por grupo de pasajeros" (ReservaFacturacionController.php:35-43).
+        // Mismo patrón fino que ReservaItemController::destroy() —
+        // pasajerosYaFacturadosIds() (ReservaFacturacionController.php:769-780)
+        // ya usa este mismo criterio para el badge del frontend, el dato ya
+        // existe, solo faltaba conectarlo acá.
+        $yaFacturado = ReservaVenta::where('reserva_id', $reserva->id)
+            ->get()
+            ->flatMap(fn (ReservaVenta $rv) => $rv->reserva_pasajero_ids ?? [])
+            ->contains($pasajero->id);
+
+        if ($yaFacturado) {
             return response()->json([
                 'code' => 422,
-                'message' => 'No se puede quitar: esta reserva ya tiene una venta/comprobante asociado.',
+                'message' => 'No se puede quitar: este pasajero ya fue facturado en una venta de esta reserva.',
             ], 422);
         }
 
@@ -190,14 +273,25 @@ class ReservaPasajeroController extends Controller
                     throw new HttpException(422, 'No se puede quitar: es el último pasajero de la reserva.');
                 }
 
-                if (ReservaVenta::where('reserva_id', $reservaLocked->id)->exists()) {
-                    throw new HttpException(422, 'No se puede quitar: esta reserva ya tiene una venta/comprobante asociado.');
+                $yaFacturadoBajoLock = ReservaVenta::where('reserva_id', $reservaLocked->id)
+                    ->get()
+                    ->flatMap(fn (ReservaVenta $rv) => $rv->reserva_pasajero_ids ?? [])
+                    ->contains($pasajero->id);
+
+                if ($yaFacturadoBajoLock) {
+                    throw new HttpException(422, 'No se puede quitar: este pasajero ya fue facturado en una venta de esta reserva.');
                 }
 
                 // reserva_item_pasajero.reserva_pasajero_id es FK sin
                 // cascadeOnDelete() — hay que limpiarla a mano antes de
                 // poder borrar el pasajero.
                 ReservaItemPasajero::where('reserva_pasajero_id', $pasajero->id)->delete();
+                // Bug real (auditoría 2026-09-22): reserva_item_vuelo_pasajero
+                // (migración 2026_08_27_110000) tampoco tiene cascadeOnDelete()
+                // y quedó fuera de este limpiado desde el día que se creó —
+                // borrar un pasajero con vuelo de agencia ya cargado tiraba un
+                // 500 de violación de FK en vez de un mensaje claro.
+                ReservaItemVueloPasajero::where('reserva_pasajero_id', $pasajero->id)->delete();
                 $pasajero->delete();
 
                 // Mismo movimiento de cupo que ReservaController::cancelar(),

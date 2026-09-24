@@ -108,7 +108,7 @@ class ReservaAnticipoTest extends TestCase
 
         $user = User::factory()->create(['branch_id' => $branch->id]);
         $role = Role::create(['name' => 'rol-test-' . uniqid(), 'guard_name' => 'api']);
-        foreach (['emitir_factura', 'emitir_boleta', 'agencia.reservas'] as $permisoNombre) {
+        foreach (['emitir_factura', 'emitir_boleta', 'agencia.reservas', 'register_advance'] as $permisoNombre) {
             $permission = Permission::firstOrCreate(['name' => $permisoNombre, 'guard_name' => 'api']);
             $role->givePermissionTo($permission);
         }
@@ -121,6 +121,26 @@ class ReservaAnticipoTest extends TestCase
             'cash_register_id' => $cashRegister->id, 'opened_by' => $user->id,
             'opening_amount' => 0, 'opened_at' => now(), 'status' => 'open',
         ]);
+
+        Auth::guard('api')->setUser($user->fresh());
+
+        return $user->fresh();
+    }
+
+    // Mismo fixture que usuarioCompleto() pero SIN 'register_advance' — solo
+    // 'reservas.crear', que es lo único que la ruta HTTP exige hoy. Reproduce
+    // el bug real (auditoría 2026-09-22): antes del fix, este usuario podía
+    // registrar dinero real coleándose por reservas/{id}/anticipos.
+    private function usuarioSinPermisoDeAdelanto(): User
+    {
+        $branch = Branch::create(['name' => 'Sede Test Anticipos Sin Permiso', 'is_active' => true]);
+        $user = User::factory()->create(['branch_id' => $branch->id]);
+        $role = Role::create(['name' => 'rol-test-sin-adelanto-' . uniqid(), 'guard_name' => 'api']);
+        $permission = Permission::firstOrCreate(['name' => 'reservas.crear', 'guard_name' => 'api']);
+        $role->givePermissionTo($permission);
+        $user->assignRole($role);
+        $user->role_id = $role->id;
+        $user->save();
 
         Auth::guard('api')->setUser($user->fresh());
 
@@ -219,6 +239,29 @@ class ReservaAnticipoTest extends TestCase
         $this->assertSame($reserva->id, $reservaAnticipo->reserva_id);
         $this->assertSame($advance->id, $reservaAnticipo->advance_id);
         $this->assertSame(50.0, (float) $reservaAnticipo->monto_asignado);
+    }
+
+    // Bug real (auditoría 2026-09-22): la ruta HTTP solo exige
+    // 'reservas.crear', pero por dentro store() llama directo a
+    // AdvanceController::store() — el mismo código que crea un Adelanto
+    // real conectado a Caja, normalmente detrás de 'register_advance'. Sin
+    // el check inline agregado en el fix, un usuario con solo
+    // 'reservas.crear' podía registrar dinero real coleándose por acá.
+    public function test_store_rechaza_usuario_sin_permiso_register_advance(): void
+    {
+        $this->usuarioCompleto();
+        $reserva = $this->crearReservaSimple();
+
+        $this->usuarioSinPermisoDeAdelanto();
+
+        $response = app(ReservaAnticipoController::class)->store(new Request([
+            'monto' => 50.00,
+            'medio_pago' => 'EFECTIVO', 'tip_afe_igv' => '10',
+        ]), (string) $reserva->id);
+
+        $this->assertSame(403, $response->getStatusCode());
+        $this->assertSame(0, Advance::count(), 'no debió crear ningún Adelanto real');
+        $this->assertSame(0, ReservaAnticipo::count());
     }
 
     public function test_store_rechaza_reserva_no_activa(): void

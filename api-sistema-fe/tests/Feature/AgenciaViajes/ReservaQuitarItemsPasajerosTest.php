@@ -11,6 +11,7 @@ use App\Models\AgenciaViajes\AlternativaItem;
 use App\Models\AgenciaViajes\Reserva;
 use App\Models\AgenciaViajes\ReservaItem;
 use App\Models\AgenciaViajes\ReservaItemPasajero;
+use App\Models\AgenciaViajes\ReservaItemVueloPasajero;
 use App\Models\AgenciaViajes\ReservaPasajero;
 use App\Models\AgenciaViajes\ReservaVenta;
 use Illuminate\Http\Request;
@@ -155,6 +156,29 @@ class ReservaQuitarItemsPasajerosTest extends TestCase
         $this->assertTrue(ReservaItem::where('id', $reservaItem1->id)->exists());
     }
 
+    // Bug real (auditoría 2026-09-22): reserva_item_vuelo_pasajero (vuelo de
+    // agencia, migración 2026_08_27_110000) es una FK sin cascadeOnDelete()
+    // que quedó fuera del limpiado — borrar un ítem con vuelo ya cargado
+    // tiraba un 500 (violación de FK de Postgres) en vez de completar el
+    // borrado o devolver un 422 claro.
+    public function test_quitar_item_con_vuelo_de_agencia_cargado_no_revienta(): void
+    {
+        [, $reservaItem1, , $pasajero1] = $this->crearReservaConDosPasajerosYDosItems();
+
+        ReservaItemVueloPasajero::create([
+            'reserva_item_id' => $reservaItem1->id,
+            'reserva_pasajero_id' => $pasajero1->id,
+            'vuelo_numero_ida' => 'LA2050',
+            'vuelo_fecha_ida' => '2026-10-01',
+        ]);
+
+        $response = app(ReservaItemController::class)->destroy((string) $reservaItem1->id);
+
+        $this->assertSame(200, $response->getStatusCode(), json_encode($response->getData(true)));
+        $this->assertFalse(ReservaItem::where('id', $reservaItem1->id)->exists());
+        $this->assertSame(0, ReservaItemVueloPasajero::where('reserva_item_id', $reservaItem1->id)->count());
+    }
+
     // ── reserva-pasajeros ────────────────────────────────────────────────
 
     public function test_quitar_pasajero_exitoso_limpia_asignaciones_de_item(): void
@@ -205,6 +229,110 @@ class ReservaQuitarItemsPasajerosTest extends TestCase
 
         $this->assertSame(422, $response->getStatusCode());
         $this->assertTrue(ReservaPasajero::where('id', $pasajero1->id)->exists());
+    }
+
+    // Bug real (auditoría 2026-09-23): el guard chequeaba "¿esta reserva
+    // tiene ALGUNA venta?" en vez de "¿ESTE pasajero está en alguna
+    // venta?" — bloqueaba quitar a un pasajero NUNCA facturado solo porque
+    // otro pasajero de la misma reserva ya lo estaba. Contradice el propio
+    // diseño de "facturación múltiple por grupo de pasajeros" (una reserva
+    // de 20, factura a 5, los otros 15 deben poder seguir editándose).
+    public function test_quitar_pasajero_permitido_si_otro_pasajero_de_la_reserva_ya_facturo(): void
+    {
+        [$reserva, , , $pasajero1, $pasajero2] = $this->crearReservaConDosPasajerosYDosItems();
+
+        ReservaVenta::create([
+            'reserva_id' => $reserva->id, 'sale_id' => \App\Models\Sale\Sale::factory()->create()->id,
+            'reserva_item_ids' => [], 'reserva_pasajero_ids' => [$pasajero1->id],
+        ]);
+
+        // pasajero2 nunca apareció en ningún ReservaVenta — debe poder
+        // quitarse igual, aunque pasajero1 (otro, distinto) ya esté facturado.
+        $response = app(ReservaPasajeroController::class)->destroy((string) $pasajero2->id);
+
+        $this->assertSame(200, $response->getStatusCode(), json_encode($response->getData(true)));
+        $this->assertFalse(ReservaPasajero::where('id', $pasajero2->id)->exists());
+        // pasajero1 (el facturado) sigue intacto, sin tocar.
+        $this->assertTrue(ReservaPasajero::where('id', $pasajero1->id)->exists());
+    }
+
+    // Mismo bug que arriba, ahora del lado de borrar el PASAJERO en vez del
+    // ítem — reserva_item_vuelo_pasajero.reserva_pasajero_id también es FK
+    // sin cascadeOnDelete().
+    public function test_quitar_pasajero_con_vuelo_de_agencia_cargado_no_revienta(): void
+    {
+        [, $reservaItem1, , $pasajero1] = $this->crearReservaConDosPasajerosYDosItems();
+
+        ReservaItemVueloPasajero::create([
+            'reserva_item_id' => $reservaItem1->id,
+            'reserva_pasajero_id' => $pasajero1->id,
+            'vuelo_numero_ida' => 'LA2050',
+            'vuelo_fecha_ida' => '2026-10-01',
+        ]);
+
+        $response = app(ReservaPasajeroController::class)->destroy((string) $pasajero1->id);
+
+        $this->assertSame(200, $response->getStatusCode(), json_encode($response->getData(true)));
+        $this->assertFalse(ReservaPasajero::where('id', $pasajero1->id)->exists());
+        $this->assertSame(0, ReservaItemVueloPasajero::where('reserva_pasajero_id', $pasajero1->id)->count());
+    }
+
+    // ── ReservaPasajeroController::store() — agregar pasajero (2026-09-23) ──
+    // Hallazgo de auditoría (baja confianza — nunca estuvo anotado como
+    // alcance diferido a propósito, a diferencia de otros gaps del
+    // módulo): no había ningún camino para sumar un pasajero de último
+    // momento a una reserva ya aceptada.
+
+    public function test_agregar_pasajero_exitoso_crea_shell_vacio(): void
+    {
+        [$reserva] = $this->crearReservaConDosPasajerosYDosItems();
+        $totalAntes = $reserva->pasajeros()->count();
+
+        $response = app(ReservaPasajeroController::class)
+            ->store(new Request(['tipo_pax' => 'adulto']), (string) $reserva->id);
+        $body = $response->getData(true);
+
+        $this->assertSame(200, $response->getStatusCode(), json_encode($body));
+        $this->assertSame($totalAntes + 1, $reserva->pasajeros()->count());
+        $this->assertSame('adulto', $body['reserva_pasajero']['tipo_pax']);
+        $this->assertNull($body['reserva_pasajero']['nombre'], 'nace vacío, mismo criterio que al aceptar la alternativa');
+    }
+
+    public function test_agregar_pasajero_rechaza_si_reserva_no_activa(): void
+    {
+        [$reserva] = $this->crearReservaConDosPasajerosYDosItems();
+        $reserva->update(['estado' => 'cancelada']);
+
+        $response = app(ReservaPasajeroController::class)
+            ->store(new Request(['tipo_pax' => 'adulto']), (string) $reserva->id);
+
+        $this->assertSame(422, $response->getStatusCode());
+    }
+
+    public function test_agregar_pasajero_con_nombre_y_documento_sincroniza_catalogo(): void
+    {
+        [$reserva] = $this->crearReservaConDosPasajerosYDosItems();
+
+        $response = app(ReservaPasajeroController::class)->store(new Request([
+            'tipo_pax' => 'adulto', 'nombre' => 'Pasajero Nuevo', 'documento' => '55443322',
+        ]), (string) $reserva->id);
+        $body = $response->getData(true);
+
+        $this->assertSame(200, $response->getStatusCode(), json_encode($body));
+        $this->assertTrue(
+            \App\Models\AgenciaViajes\PasajeroDocumento::where('numero_documento', '55443322')->exists(),
+            'nombre+documento presentes desde el alta deben sincronizar el catálogo, mismo criterio que update()'
+        );
+    }
+
+    public function test_agregar_pasajero_rechaza_tipo_pax_invalido(): void
+    {
+        [$reserva] = $this->crearReservaConDosPasajerosYDosItems();
+
+        $response = app(ReservaPasajeroController::class)
+            ->store(new Request(['tipo_pax' => 'no-existe']), (string) $reserva->id);
+
+        $this->assertSame(422, $response->getStatusCode());
     }
 
     // ── reserva-item-pasajeros (asignación, store()) ────────────────────
