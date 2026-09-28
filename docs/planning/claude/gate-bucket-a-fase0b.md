@@ -6,7 +6,7 @@
 > Fecha: 10-sep-2026.
 > **✅ MERGEADO a `main`** (rama `fix/gate-permisos-bucket-a-rutas-criticas`, commit `938b606`
 > + fix de Admin-General `cfec262`, merge `ee008a2`) — confirmado en `plan-modulo-menus-y-roles.md`
-> §7/§9.1. El backfill de `umbo`/`negocio2` mencionado más abajo sigue sin ejecutarse (todavía
+> §7/§9.1. **27-sep-2026: backfill corrido contra `umbo` local** (11 creados); `negocio2` se omite a propósito (solo de prueba). En producción sigue pendiente de correr por SSH. Texto original: el backfill (todavía
 > requiere autorización explícita) — no confundir "el código ya está en producción" con "el
 > backfill ya se corrió".
 

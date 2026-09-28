@@ -170,6 +170,25 @@ export const PERMISOS = [
                 name: 'Eliminar',
                 permiso: 'delete_sale',
             },
+            {
+                // Fase 0c (Bucket B, gate real) — antes cualquier usuario
+                // autenticado podía enviar a SUNAT.
+                name: 'Enviar a SUNAT',
+                permiso: 'enviar_sunat',
+            },
+        ]
+    },
+    {
+        // Fase 0c (Bucket B) — endpoints de API sin pantalla propia hoy,
+        // gateados con permiso dedicado por paridad con Venta.
+        'name': 'Detalle y pagos de venta (API)',
+        'permisos': [
+            { name: 'Registrar detalle', permiso: 'register_sale_detail' },
+            { name: 'Editar detalle', permiso: 'edit_sale_detail' },
+            { name: 'Eliminar detalle', permiso: 'delete_sale_detail' },
+            { name: 'Registrar pago', permiso: 'register_sale_payment' },
+            { name: 'Editar pago', permiso: 'edit_sale_payment' },
+            { name: 'Eliminar pago', permiso: 'delete_sale_payment' },
         ]
     },
     {
@@ -353,6 +372,19 @@ export const PERMISOS = [
             {
                 name: 'Reemplazar comprobante',
                 permiso: 'reemplazar-comprobante-credito',
+            },
+            // Fase 0c (Bucket B, gate real).
+            {
+                name: 'Registrar cronograma de cuotas',
+                permiso: 'registrar-cronograma-credito',
+            },
+            {
+                name: 'Editar cuota',
+                permiso: 'editar-cuota-credito',
+            },
+            {
+                name: 'Registrar pago (cobranza)',
+                permiso: 'registrar-pago-credito',
             },
         ]
     },

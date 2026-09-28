@@ -326,18 +326,21 @@ Route::group([
         ->middleware('permission:edit_user');
 
     //categories
-    // Fase 0c (plan-modulo-menus-y-roles.md §9.1, modo "sombra", Bucket B) —
-    // shadow.permission: nunca bloquea, solo registra en
-    // permission_shadow_logs (ver ShadowPermissionMiddleware). Reutiliza los
+    // Fase 0c (plan-modulo-menus-y-roles.md §9.1, Bucket B) — gate REAL desde
+    // 27-sep-2026 (antes shadow.permission:, modo sombra que solo registraba
+    // en permission_shadow_logs). En todo el bloque de Bucket B, "modo
+    // sombra" en los comentarios de abajo es historia: los permisos derivados
+    // se otorgan con `php artisan permisos:backfill-gate-bucket-b` ANTES de
+    // desplegar esto (ver App\Services\GateBucketBPermisos). Reutiliza los
     // permisos ya existentes register_categorie/edit_categorie/
     // delete_categorie (mismos nombres que ya usa el catálogo de Roles del
     // frontend).
     Route::post("categories/{id}", [CategorieController::class, 'update'])
-        ->middleware('shadow.permission:edit_categorie');
+        ->middleware('permission:edit_categorie');
     Route::resource("categories", CategorieController::class)
-        ->middlewareFor('store', 'shadow.permission:register_categorie')
-        ->middlewareFor('update', 'shadow.permission:edit_categorie')
-        ->middlewareFor('destroy', 'shadow.permission:delete_categorie');
+        ->middlewareFor('store', 'permission:register_categorie')
+        ->middlewareFor('update', 'permission:edit_categorie')
+        ->middlewareFor('destroy', 'permission:delete_categorie');
 
     // Módulo Caja — Fase 0 (plan-modulo-caja.md §3): catálogos base.
     Route::resource("payment-methods", PaymentMethodController::class)
@@ -445,13 +448,13 @@ Route::group([
 
     Route::get("catalogs/tributarios", [ProductController::class, 'catalogsTributarios']); //para traer las catalogsTributarios
     Route::post("products/{id}", [ProductController::class, 'update']) //para editar y tiene imagenes
-        ->middleware('shadow.permission:edit_product');
+        ->middleware('permission:edit_product');
     // Fase 0c (§9.1, modo sombra, Bucket B) — reutiliza register_product/
     // edit_product/delete_product.
     Route::resource("products", ProductController::class)
-        ->middlewareFor('store', 'shadow.permission:register_product')
-        ->middlewareFor('update', 'shadow.permission:edit_product')
-        ->middlewareFor('destroy', 'shadow.permission:delete_product');
+        ->middlewareFor('store', 'permission:register_product')
+        ->middlewareFor('update', 'permission:edit_product')
+        ->middlewareFor('destroy', 'permission:delete_product');
 
     //client
     Route::get('/search-document/{type}/{number}', [ClientController::class, 'searchDocument']); //es para el autocomplete de ruc y dni
@@ -467,16 +470,16 @@ Route::group([
     // Fase 0c (§9.1, modo sombra, Bucket B) — reutiliza register_client/
     // edit_client/delete_client.
     Route::resource("clients", ClientController::class)
-        ->middlewareFor('store', 'shadow.permission:register_client')
-        ->middlewareFor('update', 'shadow.permission:edit_client')
-        ->middlewareFor('destroy', 'shadow.permission:delete_client');
+        ->middlewareFor('store', 'permission:register_client')
+        ->middlewareFor('update', 'permission:edit_client')
+        ->middlewareFor('destroy', 'permission:delete_client');
 
     //sales
     Route::get("sales/config", [SaleController::class, 'config']);
     // Fase 0c (§9.1, modo sombra, Bucket B) — es POST solo por el filtro
     // enviado en el body, funcionalmente es un listado: reutiliza list_sale.
     Route::post("sales/index", [SaleController::class, 'index'])
-        ->middleware('shadow.permission:list_sale');
+        ->middleware('permission:list_sale');
     // Módulo de series de comprobantes — preview en vivo de la serie
     // resuelta (register.vue/edit.vue), antes de "sales/{sale}" para que
     // "serie-preview" no se interprete como un id.
@@ -484,9 +487,9 @@ Route::group([
     // Fase 0c (§9.1, modo sombra, Bucket B) — reutiliza register_sale/
     // edit_sale/delete_sale.
     Route::resource("sales", SaleController::class)
-        ->middlewareFor('store', 'shadow.permission:register_sale')
-        ->middlewareFor('update', 'shadow.permission:edit_sale')
-        ->middlewareFor('destroy', 'shadow.permission:delete_sale');
+        ->middlewareFor('store', 'permission:register_sale')
+        ->middlewareFor('update', 'permission:edit_sale')
+        ->middlewareFor('destroy', 'permission:delete_sale');
 
     // sale_details/sale_payments: confirmado en Fase 0b
     // (docs/planning/claude/gate-bucket-a-fase0b.md) que no tienen ningún
@@ -494,19 +497,19 @@ Route::group([
     // criterio register_X/edit_X/delete_X que el resto de Bucket B (no
     // existían antes de esta fase, quedan solo en modo sombra).
     Route::resource("sale_details", SaleDetailController::class)
-        ->middlewareFor('store', 'shadow.permission:register_sale_detail')
-        ->middlewareFor('update', 'shadow.permission:edit_sale_detail')
-        ->middlewareFor('destroy', 'shadow.permission:delete_sale_detail');
+        ->middlewareFor('store', 'permission:register_sale_detail')
+        ->middlewareFor('update', 'permission:edit_sale_detail')
+        ->middlewareFor('destroy', 'permission:delete_sale_detail');
     Route::resource("sale_payments", SalePaymentController::class)
-        ->middlewareFor('store', 'shadow.permission:register_sale_payment')
-        ->middlewareFor('update', 'shadow.permission:edit_sale_payment')
-        ->middlewareFor('destroy', 'shadow.permission:delete_sale_payment');
+        ->middlewareFor('store', 'permission:register_sale_payment')
+        ->middlewareFor('update', 'permission:edit_sale_payment')
+        ->middlewareFor('destroy', 'permission:delete_sale_payment');
     // Permiso nuevo dedicado 'enviar_sunat': no existe hoy nada que gatee el
     // ENVÍO a SUNAT en sí — emitir_boleta/emitir_factura/emitir_nota_venta
     // gatean qué TIPO de documento se puede crear (validado en
     // SaleController::store()), no el acto separado de enviarlo a SUNAT.
     Route::post("enviarSunat", [FacturacionElectronicaController::class, 'enviarSunat'])
-        ->middleware('shadow.permission:enviar_sunat');
+        ->middleware('permission:enviar_sunat');
 
     // notas de crédito/débito
     Route::get("notas/config", [NotaElectronicaController::class, 'config']);
@@ -518,11 +521,11 @@ Route::group([
     // previsualizar y enviar a SUNAT son la misma acción de negocio en 3
     // pasos de la misma pantalla.
     Route::post("notas", [NotaElectronicaController::class, 'store'])
-        ->middleware('shadow.permission:nota_electronica');
+        ->middleware('permission:nota_electronica');
     Route::post("notas/preview", [NotaElectronicaController::class, 'preview'])
-        ->middleware('shadow.permission:nota_electronica');
+        ->middleware('permission:nota_electronica');
     Route::post("notas/enviar-sunat", [NotaElectronicaController::class, 'enviarNotaSunat'])
-        ->middleware('shadow.permission:nota_electronica');
+        ->middleware('permission:nota_electronica');
 
     // adelantos (anticipos de cliente) — permission: explícito a nivel de
     // ruta, mismo criterio que Caja/Amortizaciones (defensa en profundidad,
@@ -562,21 +565,21 @@ Route::group([
     // una venta YA existente es una acción distinta de crear la venta en sí
     // (register_sale) o de la vista previa sin venta todavía (ver abajo).
     Route::post("sales/{sale}/installments/preview", [CreditInstallmentController::class, 'preview'])
-        ->middleware('shadow.permission:registrar-cronograma-credito');
+        ->middleware('permission:registrar-cronograma-credito');
     // Mismo cálculo que la línea de arriba, pero sin requerir una venta ya
     // persistida — usado por register.vue (Fase 8) para el cronograma
     // sugerido antes de guardar la venta. Reutiliza register_sale: es parte
     // del mismo flujo de "registrar una venta a crédito", no una acción
     // aparte.
     Route::post("installments/schedule-preview", [CreditInstallmentController::class, 'previewSchedule'])
-        ->middleware('shadow.permission:register_sale');
+        ->middleware('permission:register_sale|edit_sale');
     Route::post("sales/{sale}/installments", [CreditInstallmentController::class, 'store'])
-        ->middleware('shadow.permission:registrar-cronograma-credito');
+        ->middleware('permission:registrar-cronograma-credito');
     // Permiso nuevo dedicado 'editar-cuota-credito' — distinto de
     // anular-cuota-credito (esa ya existe y anula; esta edita fecha/monto de
     // una cuota sin anularla).
     Route::patch("installments/{installment}", [CreditInstallmentController::class, 'update'])
-        ->middleware('shadow.permission:editar-cuota-credito');
+        ->middleware('permission:editar-cuota-credito');
     Route::post("installments/{installment}/anular", [CreditInstallmentController::class, 'anular'])
         ->middleware('permission:anular-cuota-credito');
 
@@ -585,9 +588,9 @@ Route::group([
     // 'registrar-pago-credito' (mismo estilo que el resto de "Créditos
     // (Amortizaciones)" en el catálogo de Roles).
     Route::post("clients/{client}/payments/preview", [CreditPaymentController::class, 'preview'])
-        ->middleware('shadow.permission:registrar-pago-credito');
+        ->middleware('permission:registrar-pago-credito');
     Route::post("clients/{client}/payments", [CreditPaymentController::class, 'store'])
-        ->middleware('shadow.permission:registrar-pago-credito');
+        ->middleware('permission:registrar-pago-credito');
     Route::post("payment-receipts/{receipt}/anular", [CreditPaymentController::class, 'anular'])
         ->middleware('permission:anular-pago-credito');
     Route::post("sales/{sale}/refund", [CreditPaymentController::class, 'refund'])
