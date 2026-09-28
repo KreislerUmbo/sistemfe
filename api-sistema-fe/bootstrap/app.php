@@ -34,5 +34,20 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        //
+        // Gate de permisos (Fase 0b/0c): el mensaje por defecto de Spatie viene
+        // en inglés y sin decir qué falta — las pantallas muestran
+        // error.response.data.message tal cual, así que se responde en español
+        // con el permiso requerido para que el administrador sepa qué asignar.
+        $exceptions->render(function (\Spatie\Permission\Exceptions\UnauthorizedException $e, $request) {
+            if (! $request->expectsJson() && ! $request->is('api/*')) {
+                return null;
+            }
+            $requeridos = $e->getRequiredPermissions();
+
+            return response()->json([
+                'message' => 'No tienes permiso para realizar esta acción.'
+                    . ($requeridos ? ' Permiso requerido: ' . implode(' o ', $requeridos) . '. Pide a un administrador que lo asigne a tu rol.' : ''),
+                'permisos_requeridos' => $requeridos,
+            ], 403);
+        });
     })->create();

@@ -129,6 +129,12 @@ class TenantProvisioningService
                     (new AgenciaViajesRolesSeeder())->run();
                 }
 
+                // Fase 0c (Bucket B, gate real) — crea los permisos operativos
+                // nuevos y los deriva a los roles recién sembrados (ej. Cajero
+                // con register_sale recibe enviar_sunat/register_client), sin
+                // tener que mantener esa derivación duplicada en cada seeder.
+                app(GateBucketBPermisos::class)->aplicar();
+
                 // Módulo Caja — Fase 0 (plan-modulo-caja.md §3): catálogos base con
                 // seed inicial, para que un tenant nuevo arranque con los métodos de
                 // pago ya usados hoy y conceptos típicos de caja, ambos editables

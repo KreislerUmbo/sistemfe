@@ -60,6 +60,14 @@ class PermissionsDemoSeeder extends Seeder
         'can_switch_branch', 'emitir_factura', 'emitir_boleta', 'emitir_nota_venta',
         'register_commercial_quote', 'list_commercial_quote', 'edit_commercial_quote', 'convert_commercial_quote',
         'anular-cuota-credito', 'anular-pago-credito', 'liquidar-devolucion-credito', 'reemplazar-comprobante-credito',
+
+        // Fase 0c (Bucket B, gate real, 27-sep-2026) — la asignación a roles
+        // NO va en ROLES: la deriva GateBucketBPermisos::aplicar(), que
+        // TenantProvisioningService corre después de este seeder.
+        'enviar_sunat',
+        'register_sale_detail', 'edit_sale_detail', 'delete_sale_detail',
+        'register_sale_payment', 'edit_sale_payment', 'delete_sale_payment',
+        'registrar-cronograma-credito', 'editar-cuota-credito', 'registrar-pago-credito',
     ];
 
     /**

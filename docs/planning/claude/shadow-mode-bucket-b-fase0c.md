@@ -11,6 +11,10 @@
 > Partes 2/3 siguen sin arrancar, esperando que pase una ventana de uso real (ver
 > `project_shadow_mode_bucket_b_fase0c` en memoria antes de asumir que ya hay datos).
 
+> **✅ Partes 2 y 3 EJECUTADAS (27-sep-2026, rama `feat/gate-bucket-b-activacion`)** — ver
+> sección "Activación del gate real" al final. Las 31 rutas pasaron de `shadow.permission:` a
+> `permission:` real.
+
 ## Nota sobre el brief
 
 Mismo desajuste de ubicación que en Fase 0/0b: el brief citaba
@@ -170,3 +174,67 @@ tenancy()->initialize($tenant);
     ->get();
 tenancy()->end();
 ```
+
+## Activación del gate real — Partes 2 y 3 (27-sep-2026)
+
+Autorizada explícitamente por el usuario ("crea los permisos que faltan y activa los
+bloqueos", con foco en `umbo`; `negocio2` es solo de prueba).
+
+**Por qué no se usó el log de modo sombra como fuente:** `permission_shadow_logs` sigue en
+0 filas en TODOS los tenants locales — el uso real ocurre en producción (OVH), sin acceso
+desde esta máquina. En vez de depender del tráfico, el backfill se basa en el **flujo de
+negocio que cada rol ya ejecuta** (determinístico, no depende de que alguien haya pasado
+por la ruta durante la ventana de observación).
+
+**Parte 2 — `App\Services\GateBucketBPermisos` + comando
+`permisos:backfill-gate-bucket-b {tenant?*} {--dry-run}`:**
+1. Crea (idempotente) los 10 permisos nuevos: `enviar_sunat`, `register/edit/delete_sale_detail`,
+   `register/edit/delete_sale_payment`, `registrar-cronograma-credito`, `editar-cuota-credito`,
+   `registrar-pago-credito`. (El mapeo de arriba decía "8 nuevos"; son 10 contando los 3+3 de
+   sale_detail/sale_payment.)
+2. Deriva cada permiso a todo rol (y usuario con permisos directos, Fase 2d) que ya tenga
+   uno de sus permisos "fuente" — `DERIVACIONES` en el servicio. Lo no obvio:
+   `register_client`/`edit_client` se derivan de `register_sale`/`edit_sale`/
+   `cotizaciones.crear|editar`/`reservas.crear|editar`, porque `ClientFormQuick` crea/edita
+   clientes al vuelo desde venta, cotizador, reservas y venta directa — sin esto el Cajero (que
+   nunca tuvo `register_client`) no podría registrar una venta con cliente nuevo.
+   `enviar_sunat` también sale de `register_advance` (`advances/show.vue` llama `enviarSunat`).
+3. Nunca quita nada, nunca `syncPermissions()`, Super-Admin se salta (Gate::before).
+4. `TenantProvisioningService::provision()` lo corre después de los seeders de roles — un
+   tenant nuevo nace con la derivación aplicada. Los 10 nombres se sumaron también a
+   `PermissionsDemoSeeder::PERMISSIONS`.
+
+**Parte 3 — gate real:** `shadow.permission:` → `permission:` en las 31 rutas. Única
+excepción al mapeo: `installments/schedule-preview` exige `register_sale|edit_sale` (la
+llaman `register.vue` Y `edit.vue`; con solo `register_sale` un rol de solo-edición perdía la
+vista previa del cronograma). `ShadowPermissionMiddleware` y la tabla se conservan (sin rutas
+que los usen) por si se reutiliza el mecanismo para otra ronda.
+
+**403 en español:** `bootstrap/app.php` renderiza `UnauthorizedException` de Spatie como
+`{"message":"No tienes permiso ... Permiso requerido: X ...","permisos_requeridos":[...]}`
+— las pantallas ya muestran `error.response.data.message`. Aplica también a Bucket A.
+
+**Frontend:** `types/roles.ts` suma "Enviar a SUNAT" (Venta), grupo "Detalle y pagos de venta
+(API)" y 3 permisos en "Créditos (Amortizaciones)".
+
+**Tests:** `ShadowPermissionMiddlewareTest` → `GateBucketBRoutesTest` (65 tests: 31 rutas × 2
+capas + 403 en español + derivación/idempotencia + dry-run). Bug real encontrado por el test:
+el servicio asumía que `register_client`/`edit_client` existían; ahora también los crea si
+faltan.
+
+**Aplicado en local:** `permisos:backfill-gate-bucket-a umbo` (11 creados) y
+`permisos:backfill-gate-bucket-b umbo agencia-demo sandbox`. Verificado por HTTP real con
+el Contador de `umbo` (JWT vía script, sin tocar password): `POST products`/`categories`,
+`DELETE clients/{id}` → 403 en español; `enviarSunat` → 404 (pasa el gate),
+`POST clients` → 500 (bug preexistente de validación `type_document`, no crea nada),
+`schedule-preview` → 422, `sales/index` → 200.
+
+**Producción (pendiente, lo corre el usuario por SSH):** el backfill debe correr ANTES de
+que el código nuevo atienda requests, o los roles no-Super-Admin recibirán 403 en flujos que
+hoy usan. Orden: `deploy.sh` → apenas termine,
+`php artisan permisos:backfill-gate-bucket-a umbo` y
+`php artisan permisos:backfill-gate-bucket-b` (todos los tenants; conviene `--dry-run` antes).
+**No se agrega a `deploy.sh` a propósito:** correrlo en cada deploy re-otorgaría un permiso
+derivado que un administrador le haya quitado a un rol después (ej. sacarle `enviar_sunat`
+al Vendedor) — es una corrida única por tenant existente; los tenants nuevos ya lo reciben
+en `provision()`.
