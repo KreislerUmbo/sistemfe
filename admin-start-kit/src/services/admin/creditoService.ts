@@ -12,6 +12,7 @@ import type {
   CreditoCreado,
   DestinoExcedente,
   EstadoCaja,
+  Feriado,
   FilaCredito,
   DetalleCredito,
   EstadoCuenta,
@@ -176,6 +177,31 @@ export const creditoService = {
       if ((e as { response?: { status?: number } }).response?.status === 403) return null
       throw e
     }
+  },
+
+  /** PUT creditos/configuracion: solo los campos que cambiaron. */
+  async guardarConfiguracion(cambios: Record<string, unknown>) {
+    const { data } = await httpClient.put('/creditos/configuracion', cambios)
+    return data as ConfiguracionCredito
+  },
+
+  async feriados(anio: number) {
+    const { data } = await httpClient.get('/creditos/feriados', { params: { anio } })
+    return (data.data ?? []) as Feriado[]
+  },
+
+  async crearFeriado(feriado: { fecha: string; descripcion: string }) {
+    const { data } = await httpClient.post('/creditos/feriados', feriado)
+    return data as Feriado
+  },
+
+  async actualizarFeriado(id: number, feriado: { fecha: string; descripcion: string }) {
+    const { data } = await httpClient.put(`/creditos/feriados/${id}`, feriado)
+    return data as Feriado
+  },
+
+  async eliminarFeriado(id: number) {
+    await httpClient.delete(`/creditos/feriados/${id}`)
   },
 
   async metodosPago() {

@@ -71,6 +71,7 @@ declare module 'vue' {
     DialogoRenovar: typeof import('./src/components/Creditos/DialogoRenovar.vue')['default']
     DialogoReprogramar: typeof import('./src/components/Creditos/DialogoReprogramar.vue')['default']
     DropDown: typeof import('./src/components/DropDown.vue')['default']
+    FeriadosCredito: typeof import('./src/components/Creditos/FeriadosCredito.vue')['default']
     FlatPicker: typeof import('./src/components/FlatPicker.vue')['default']
     FooterPortal: typeof import('./src/components/portal/FooterPortal.vue')['default']
     FormCondiciones: typeof import('./src/components/Creditos/FormCondiciones.vue')['default']

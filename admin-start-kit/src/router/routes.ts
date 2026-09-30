@@ -545,6 +545,16 @@ const comercialRoutes = [
     component: () => import("@/views/creditos/migrar.vue"),
   },
   {
+    path: "/creditos/configuracion",
+    name: "creditos.configuracion",
+    meta: {
+      title: setTitle("Configuración de créditos"),
+      authRequired: true,
+      permission: 'creditos.configurar',
+    },
+    component: () => import("@/views/creditos/configuracion.vue"),
+  },
+  {
     path: "/creditos/nuevo",
     name: "creditos.nuevo",
     meta: {

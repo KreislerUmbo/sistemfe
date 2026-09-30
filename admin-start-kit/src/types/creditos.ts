@@ -407,3 +407,10 @@ export interface CobradoHoy {
 export type SolicitudMigracion = CondicionesCredito & {
   condonar_mora: boolean
 } & ({ modo_pagos: 'rapido'; cuotas_pagadas: number } | { modo_pagos: 'detallado'; pagos: { fecha: string; monto: string }[] })
+
+export interface Feriado {
+  id: number
+  fecha: string
+  descripcion: string
+  origen: 'nacional' | 'propio'
+}
