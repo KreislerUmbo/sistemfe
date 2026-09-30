@@ -24,6 +24,7 @@
 // Módulo Créditos (00 1.10, 04-frontend "Errores"): infracciones de límites. Las
 // autorizables ofrecen "Autorizar" solo si el usuario tiene creditos.autorizar_excepcion.
 import { ETIQUETA_REGLA } from '@/composables/creditos/errorCredito'
+import { textoDias } from '@/helpers/creditos/estados'
 import { formatoCentavos } from '@/helpers/creditos/formato'
 import type { Infraccion, ReglaLimite } from '@/types/creditos'
 
@@ -44,7 +45,7 @@ function detalle(i: Infraccion): string {
     // El detalle viene en centavos desde el motor.
     return ` (${formatoCentavos(d.deuda_con_nuevo)} de ${formatoCentavos(d.maximo)})`
   }
-  if (i.regla === 'moroso') return ` (${d.dias_atraso} días)`
+  if (i.regla === 'moroso') return ` (${textoDias(Number(d.dias_atraso))})`
   return ''
 }
 </script>

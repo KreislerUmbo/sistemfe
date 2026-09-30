@@ -10,9 +10,11 @@ import type {
   Credito,
   CotizacionPago,
   CreditoCreado,
+  DatosFicha,
   DestinoExcedente,
   EstadoCaja,
   Feriado,
+  FichaCliente,
   FilaCredito,
   DetalleCredito,
   EstadoCuenta,
@@ -25,6 +27,7 @@ import type {
   SolicitudCobro,
   SolicitudMigracion,
   SolicitudReprogramacion,
+  TipoArchivoCliente,
   PreviewCredito,
   ReglaLimite,
   ResumenClienteCredito,
@@ -202,6 +205,40 @@ export const creditoService = {
 
   async eliminarFeriado(id: number) {
     await httpClient.delete(`/creditos/feriados/${id}`)
+  },
+
+  async fichaCliente(clienteId: number) {
+    const { data } = await httpClient.get(`/clientes/${clienteId}/ficha-credito`)
+    return data as FichaCliente
+  },
+
+  async guardarFicha(clienteId: number, datos: DatosFicha) {
+    const { data } = await httpClient.put(`/clientes/${clienteId}/ficha-credito`, datos)
+    return data.ficha as DatosFicha
+  },
+
+  async subirArchivoCliente(clienteId: number, tipo: TipoArchivoCliente, archivo: File) {
+    const cuerpo = new FormData()
+    cuerpo.append('tipo', tipo)
+    cuerpo.append('archivo', archivo)
+    const { data } = await httpClient.post(`/clientes/${clienteId}/ficha-credito/archivos`, cuerpo)
+    return data.archivo as FichaCliente['archivos'][number]
+  },
+
+  /** La imagen va detrás de la autenticación: se descarga como blob para mostrarla. */
+  async archivoCliente(clienteId: number, archivoId: number) {
+    const { data } = await httpClient.get(`/clientes/${clienteId}/ficha-credito/archivos/${archivoId}`, { responseType: 'blob' })
+    return data as Blob
+  },
+
+  async cobradores() {
+    const { data } = await httpClient.get('/creditos/cobradores')
+    return (data.data ?? []) as { id: number; nombre: string }[]
+  },
+
+  async asignarCobrador(clienteId: number, cobradorId: number | null) {
+    const { data } = await httpClient.put(`/clientes/${clienteId}/cobrador`, { cobrador_id: cobradorId })
+    return data as { cobrador_id: number | null }
   },
 
   async metodosPago() {

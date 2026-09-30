@@ -7,7 +7,7 @@
           <i class="fas fa-chevron-left"></i>
         </button>
         <div class="flex-grow-1 min-w-0">
-          <h5 class="fw-bold mb-0">{{ credito ? (credito.numero_credito ?? 'Borrador') : 'Crédito' }}</h5>
+          <h5 class="fw-bold mb-0 text-nowrap">{{ credito ? (credito.numero_credito ?? 'Borrador') : 'Crédito' }}</h5>
           <small class="text-muted text-truncate d-block">{{ subtitulo }}</small>
         </div>
         <span v-if="credito" class="badge rounded-pill px-3 py-2" :class="insignia.clase">
@@ -77,9 +77,9 @@
           <AccionesCredito class="d-xl-none mb-3" :acciones="acciones" @accion="alAccionar" />
 
           <!-- Pestañas -->
-          <ul class="nav nav-pills flex-nowrap gap-1 mb-3" role="tablist">
-            <li v-for="t in PESTANAS" :key="t.id" class="nav-item" role="presentation">
-              <button type="button" class="nav-link rounded-pill px-3 py-2 text-nowrap" :class="{ active: pestana === t.id }" role="tab"
+          <ul class="nav nav-pills flex-nowrap gap-1 mb-3 pestanas" role="tablist">
+            <li v-for="t in PESTANAS" :key="t.id" class="nav-item" :class="{ 'd-xl-none': t.id === 'cliente' }" role="presentation">
+              <button type="button" class="nav-link rounded-pill px-2 px-sm-3 py-2 text-nowrap" :class="{ active: pestana === t.id }" role="tab"
                 :aria-selected="pestana === t.id" @click="pestana = t.id">
                 {{ t.texto }}<span v-if="t.id === 'pagos' && pagosValidos" class="ms-1 opacity-75">({{ pagosValidos }})</span>
               </button>
@@ -91,6 +91,9 @@
               <CuotasCredito v-if="pestana === 'cuotas'" :cuotas="detalle.cuotas" :hoy="hoy" />
               <PagosCredito v-else-if="pestana === 'pagos'" :pagos="estadoCuenta?.pagos ?? []" :puede-editar="puede('creditos.cobrar')"
                 :puede-anular="(p) => puedeAnularPago(p.registrado_por, usuarioId, puede)" @anular="abrirAnularPago" @editar="abrirEditarPago" />
+              <div v-else-if="pestana === 'cliente'" class="p-3">
+                <FichaCobro v-if="credito.cliente && !esEscritorio" :cliente="credito.cliente" :puede-editar="puede('creditos.crear')" :puede-asignar="puede('creditos.cartera.asignar')" />
+              </div>
               <HistorialCredito v-else-if="estadoCuenta" :estado="estadoCuenta" />
             </div>
           </div>
@@ -112,14 +115,10 @@
               </li>
             </ul>
           </div>
-          <div class="card border-0 shadow-sm">
-            <div class="card-header bg-transparent fw-semibold">Cliente</div>
-            <div class="card-body p-3 small">
-              <div class="fw-semibold">{{ credito.cliente?.nombre }}</div>
-              <div class="text-muted">DNI {{ credito.cliente?.documento }}</div>
-              <a v-if="credito.cliente?.telefono" :href="`tel:${credito.cliente.telefono}`" class="d-block mt-1">
-                <i class="fas fa-phone me-1"></i>{{ credito.cliente.telefono }}
-              </a>
+          <div v-if="credito.cliente && esEscritorio" class="card border-0 shadow-sm">
+            <div class="card-header bg-transparent fw-semibold">Ficha de cobro</div>
+            <div class="card-body p-3">
+              <FichaCobro :cliente="credito.cliente" :puede-editar="puede('creditos.crear')" :puede-asignar="puede('creditos.cartera.asignar')" />
             </div>
           </div>
         </div>
@@ -153,6 +152,7 @@ import DefaultLayout from '@/layouts/DefaultLayout.vue'
 import AccionesCredito, { type IdAccion } from '@/components/Creditos/AccionesCredito.vue'
 import CuotasCredito from '@/components/Creditos/CuotasCredito.vue'
 import PagosCredito from '@/components/Creditos/PagosCredito.vue'
+import FichaCobro from '@/components/Creditos/FichaCobro.vue'
 import HistorialCredito from '@/components/Creditos/HistorialCredito.vue'
 import DialogoCobrar from '@/components/Creditos/DialogoCobrar.vue'
 import DialogoLiquidar from '@/components/Creditos/DialogoLiquidar.vue'
@@ -166,6 +166,7 @@ import { creditoService } from '@/services/admin/creditoService'
 import { useCreditosCatalogosStore } from '@/stores/creditosCatalogos'
 import { useToast } from '@/composables/useToast'
 import { usePermisosCredito } from '@/composables/creditos/usePermisosCredito'
+import { useMediaQuery } from '@/composables/creditos/useMediaQuery'
 import { accionesDisponibles, puedeAnularPago } from '@/composables/creditos/accionesCredito'
 import { interpretarErrorCredito, type ErrorCredito } from '@/composables/creditos/errorCredito'
 import { formatoFecha, formatoSoles, hoyEnLima } from '@/helpers/creditos/formato'
@@ -182,6 +183,8 @@ const PESTANAS = [
   { id: 'cuotas', texto: 'Cuotas' },
   { id: 'pagos', texto: 'Pagos' },
   { id: 'historial', texto: 'Historial' },
+  // En escritorio la ficha está en la columna derecha.
+  { id: 'cliente', texto: 'Cliente' },
 ] as const
 
 const hoy = hoyEnLima()
@@ -194,6 +197,12 @@ const pestana = ref<(typeof PESTANAS)[number]['id']>('cuotas')
 const pagoElegido = ref<Pago | null>(null)
 const dialogo = reactive({ cobrar: false, liquidar: false, reprogramar: false, condonar: false, corregir: false, renovar: false, motivo: false, editarPago: false })
 const motivoActual = ref({ titulo: '', descripcion: '', textoConfirmar: 'Confirmar', variante: 'danger', exito: '', ejecutar: async (_m: string, _c: string): Promise<unknown> => undefined })
+
+/** ≥ 1200 px: la ficha va en la columna derecha; debajo, en la pestaña "Cliente". */
+const esEscritorio = useMediaQuery('(min-width: 1200px)')
+watch(esEscritorio, (valor) => {
+  if (valor && pestana.value === 'cliente') pestana.value = 'cuotas'
+})
 
 const creditoId = computed(() => Number(route.params.id))
 const credito = computed(() => detalle.value?.credito ?? null)
@@ -342,6 +351,11 @@ function volver() {
 }
 .min-w-0 {
   min-width: 0;
+}
+/* Con 4 pestañas en 360 px: se desplazan en su fila, nunca ensanchan la página. */
+.pestanas {
+  overflow-x: auto;
+  scrollbar-width: none;
 }
 @media (min-width: 1200px) {
   .columna-lateral {

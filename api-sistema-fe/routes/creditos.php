@@ -30,6 +30,7 @@ Route::group([
     Route::post('creditos', [CreditoController::class, 'store'])->middleware('permission:creditos.crear');
     Route::post('creditos/migrar', [CreditoMigracionController::class, 'store'])->middleware('permission:creditos.migrar');
     Route::get('creditos/cobranza-del-dia', [CobranzaDelDiaController::class, 'index'])->middleware('permission:creditos.cobrar');
+    Route::get('creditos/cobradores', [ClienteCreditoController::class, 'cobradores'])->middleware('permission:creditos.cartera.asignar');
 
     // Lectura también con crear/migrar: esos formularios muestran estos defaults.
     Route::get('creditos/configuracion', [CreditoConfiguracionController::class, 'show'])->middleware('permission:creditos.configurar|creditos.crear|creditos.migrar');

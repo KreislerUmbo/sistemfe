@@ -60,6 +60,20 @@ class ClienteCreditoService
     }
 
     /** Cierra la asignación vigente (no la borra) y abre la nueva; null = queda sin cobrador. */
+    /**
+     * Usuarios a los que se les puede asignar cartera: el mismo criterio que asignarCobrador()
+     * (can(), así cuenta también el Super-Admin y los permisos directos).
+     *
+     * @return list<array{id: int, nombre: string}>
+     */
+    public function cobradoresDisponibles(): array
+    {
+        return User::orderBy('name')->get(['id', 'name'])
+            ->filter(static fn (User $u): bool => $u->can(self::PERMISO_COBRAR))
+            ->map(static fn (User $u): array => ['id' => $u->id, 'nombre' => $u->name])
+            ->values()->all();
+    }
+
     public function asignarCobrador(Client $cliente, ?User $cobrador, User $asignador): ?CarteraAsignacion
     {
         if ($cobrador !== null && ! $cobrador->can(self::PERMISO_COBRAR)) {

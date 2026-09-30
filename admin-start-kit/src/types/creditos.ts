@@ -414,3 +414,23 @@ export interface Feriado {
   descripcion: string
   origen: 'nacional' | 'propio'
 }
+
+export type TipoArchivoCliente = 'dni_anverso' | 'dni_reverso' | 'foto_cliente' | 'otro'
+
+/** GET clientes/{id}/ficha-credito: datos de cobro del cliente (dato personal, Ley 29733). */
+export interface FichaCliente {
+  ficha: {
+    direccion_cobro: string | null
+    tipo_direccion: 'casa' | 'negocio' | null
+    referencia: string | null
+    latitud: string | null
+    longitud: string | null
+    telefono_alterno: string | null
+    ocupacion: string | null
+    notas: string | null
+  } | null
+  archivos: { id: number; tipo: TipoArchivoCliente; created_at: string }[]
+  cobrador_id: number | null
+}
+
+export type DatosFicha = NonNullable<FichaCliente['ficha']>

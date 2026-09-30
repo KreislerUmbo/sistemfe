@@ -40,6 +40,7 @@ class HttpCreditosTest extends CreditosTestCase
             ['POST', 'api/creditos', 'creditos.crear'],
             ['POST', 'api/creditos/migrar', 'creditos.migrar'],
             ['GET', 'api/creditos/cobranza-del-dia', 'creditos.cobrar'],
+            ['GET', 'api/creditos/cobradores', 'creditos.cartera.asignar'],
             ['PUT', 'api/creditos/configuracion', 'creditos.configurar'],
             ['POST', 'api/creditos/feriados', 'creditos.configurar'],
             ['GET', 'api/creditos/{credito}', 'creditos.ver'],

@@ -43,7 +43,7 @@
             <td class="text-end">{{ c.estado === 'pagada' ? formatoSoles(c.monto_total) : pagadoParcial(c) }}</td>
             <td>
               <span class="fw-semibold" :class="presentacion(c).clase"><i :class="presentacion(c).icono" class="me-1"></i>{{ presentacion(c).texto }}</span>
-              <small v-if="c.dias_atraso_hoy" class="text-danger d-block">{{ c.dias_atraso_hoy }} días</small>
+              <small v-if="c.dias_atraso_hoy" class="text-danger d-block">{{ textoDias(c.dias_atraso_hoy) }}</small>
             </td>
           </tr>
         </tbody>
@@ -56,7 +56,7 @@
 // Módulo Créditos (mockup 2): cuotas vigentes con estado y mora al día (calculada por el
 // backend). En celular se muestra una ventana alrededor de hoy; en escritorio, todas.
 import { computed, ref } from 'vue'
-import { estadoCuota, fechaCorta, PRESENTACION_CUOTA } from '@/helpers/creditos/estados'
+import { estadoCuota, fechaCorta, PRESENTACION_CUOTA, textoDias } from '@/helpers/creditos/estados'
 import { formatoFecha, formatoSoles } from '@/helpers/creditos/formato'
 import type { Cuota } from '@/types/creditos'
 
@@ -86,7 +86,7 @@ function detalle(c: Cuota): string {
   if (estado === 'pagada') return c.fecha_pago ? `Pagada el ${formatoFecha(c.fecha_pago).slice(0, 5)}` : 'Pagada'
   if (estado === 'vencida') {
     const mora = tieneMora(c) ? ` · mora ${formatoSoles(c.mora_pendiente_hoy)}${c.mora_tope_alcanzado ? ' (tope)' : ''}` : ''
-    return `Vencida · ${c.dias_atraso_hoy ?? 0} días${mora}`
+    return `Vencida · ${textoDias(c.dias_atraso_hoy ?? 0)}${mora}`
   }
   if (estado === 'hoy') return 'Vence hoy'
   return pagadoParcial(c) !== '—' ? `Abonado ${pagadoParcial(c)}` : 'Pendiente'

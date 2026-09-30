@@ -177,6 +177,18 @@ class ConsultasYClienteTest extends CreditosTestCase
         $this->assertSame([$atrasado->id], array_column($conAbono['data'], 'credito_id'));
     }
 
+    public function test_los_cobradores_disponibles_son_los_que_pueden_cobrar(): void
+    {
+        $cobrador = $this->usuario(['creditos.ver', 'creditos.cobrar']);
+        $soloVer = $this->usuario(['creditos.ver']);
+
+        $ids = array_column(app(ClienteCreditoService::class)->cobradoresDisponibles(), 'id');
+
+        $this->assertContains($cobrador->id, $ids);
+        $this->assertContains($this->admin->id, $ids);
+        $this->assertNotContains($soloVer->id, $ids);
+    }
+
     public function test_reasignar_cobrador_cierra_la_vigencia_anterior_sin_borrarla(): void
     {
         $cliente = $this->cliente();

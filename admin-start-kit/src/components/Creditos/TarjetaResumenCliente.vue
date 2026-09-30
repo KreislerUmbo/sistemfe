@@ -10,7 +10,7 @@
       <span>{{ resumen.creditos_activos }} de {{ resumen.max_creditos_activos }} créditos activos</span>
       <span>Debe {{ formatoSoles(resumen.deuda_actual) }}</span>
       <span v-if="resumen.deuda_disponible !== null">Disponible {{ formatoSoles(resumen.deuda_disponible) }}</span>
-      <span v-if="resumen.dias_atraso_maximo > 0">Atraso {{ resumen.dias_atraso_maximo }} días</span>
+      <span v-if="resumen.dias_atraso_maximo > 0">Atraso {{ textoDias(resumen.dias_atraso_maximo) }}</span>
       <span>{{ puntualidad }}</span>
     </div>
   </div>
@@ -21,6 +21,7 @@
 // deuda, disponible, atraso y puntualidad. Informativa: el bloqueo real ocurre al activar.
 import { computed, ref, watch } from 'vue'
 import { creditoService } from '@/services/admin/creditoService'
+import { textoDias } from '@/helpers/creditos/estados'
 import { formatoSoles } from '@/helpers/creditos/formato'
 import type { ResumenClienteCredito } from '@/types/creditos'
 

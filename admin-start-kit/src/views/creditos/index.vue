@@ -89,7 +89,7 @@
                   <template v-else>—</template>
                 </td>
                 <td class="text-nowrap" :class="{ 'text-danger fw-semibold': f.situacion?.dias_atraso }">
-                  {{ f.situacion?.dias_atraso ? `${f.situacion.dias_atraso} días` : '—' }}
+                  {{ f.situacion?.dias_atraso ? textoDias(f.situacion.dias_atraso) : '—' }}
                 </td>
                 <td><span class="badge rounded-pill" :class="insignia(f).clase"><i :class="insignia(f).icono" class="me-1"></i>{{ insignia(f).texto }}</span></td>
               </tr>
@@ -130,7 +130,7 @@ import DefaultLayout from '@/layouts/DefaultLayout.vue'
 import { creditoService } from '@/services/admin/creditoService'
 import { usePermisosCredito } from '@/composables/creditos/usePermisosCredito'
 import { interpretarErrorCredito, type ErrorCredito } from '@/composables/creditos/errorCredito'
-import { fechaCorta, PRESENTACION_CREDITO, textoFrecuencia } from '@/helpers/creditos/estados'
+import { fechaCorta, PRESENTACION_CREDITO, textoDias, textoFrecuencia } from '@/helpers/creditos/estados'
 import { formatoFecha, formatoSoles } from '@/helpers/creditos/formato'
 import { alternarOrden, aQuery, desdeQuery, VISTAS, type FiltrosListado, type OrdenListado } from '@/helpers/creditos/listado'
 import type { FilaCredito, Paginado } from '@/types/creditos'
@@ -217,7 +217,7 @@ function insignia(f: FilaCredito) {
 function lineaProxima(f: FilaCredito): string {
   const s = f.situacion
   if (!s) return formatoFecha(f.fecha_desembolso)
-  if (s.dias_atraso) return `${s.dias_atraso} días de atraso`
+  if (s.dias_atraso) return `${textoDias(s.dias_atraso)} de atraso`
   return s.proxima ? `${fechaCorta(s.proxima.fecha_vencimiento)} · ${formatoSoles(s.proxima.pendiente)}` : 'Sin cuotas pendientes'
 }
 

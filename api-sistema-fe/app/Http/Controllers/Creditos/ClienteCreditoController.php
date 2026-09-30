@@ -69,6 +69,12 @@ class ClienteCreditoController extends ControllerCreditos
         return Storage::disk(ClienteCreditoService::DISCO)->response($modelo->ruta_archivo);
     }
 
+    /** Selector de "cobrador asignado" en la ficha de cobro. */
+    public function cobradores(): JsonResponse
+    {
+        return response()->json(['data' => $this->clientes->cobradoresDisponibles()]);
+    }
+
     public function asignarCobrador(AsignarCobradorRequest $request, int $cliente): JsonResponse
     {
         $cobrador = $request->filled('cobrador_id') ? User::findOrFail((int) $request->input('cobrador_id')) : null;

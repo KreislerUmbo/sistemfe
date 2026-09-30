@@ -54,3 +54,8 @@ export function fechaCorta(ymd: string): string {
   const nombre = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'][new Date(Date.UTC(anio, mes - 1, dia)).getUTCDay()]
   return `${nombre} ${String(dia).padStart(2, '0')}/${String(mes).padStart(2, '0')}`
 }
+
+/** 1 → "1 día", 5 → "5 días". */
+export function textoDias(n: number): string {
+  return `${n} día${n === 1 ? '' : 's'}`
+}
