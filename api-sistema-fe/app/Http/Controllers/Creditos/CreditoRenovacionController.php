@@ -34,7 +34,7 @@ class CreditoRenovacionController extends ControllerCreditos
         return $this->idempotente($request, 'credito.renovar', function () use ($modelo, $request): array {
             $nuevo = $this->renovaciones->renovar($modelo, $request->aDatos($modelo->cliente_id), $request->input('motivo_autorizacion'), $this->usuario());
 
-            return [['credito' => (new CreditoResource($nuevo->load(['cliente', 'cuotasVigentes'])))->resolve()], $nuevo->id];
+            return [['credito' => (new CreditoResource($nuevo->load('cliente')->cargarCuotasVigentes()))->resolve()], $nuevo->id];
         }, ['credito' => $credito], 201);
     }
 }

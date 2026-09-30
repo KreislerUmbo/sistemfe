@@ -68,8 +68,13 @@ class PersistidorReparto
     private function validar(ResultadoAplicacion $resultado): void
     {
         if ($resultado->cierresInsuficientes !== []) {
-            $pagos = CreditoPago::whereIn('id', $resultado->cierresInsuficientes)->pluck('numero_recibo')->implode(', ');
-            throw new HttpException(422, "No se puede recalcular: la operación de cierre {$pagos} dejaría de cubrir la deuda. Anula primero esa operación.");
+            $cierres = CreditoPago::whereIn('id', $resultado->cierresInsuficientes)->get(['numero_recibo', 'origen']);
+            $recibos = $cierres->pluck('numero_recibo')->implode(', ');
+            // Una renovación no se anula como pago: se deshace anulando el crédito nuevo (00 1.12).
+            $comoDeshacer = $cierres->contains(fn (CreditoPago $p): bool => $p->origen === OrigenPago::Renovacion)
+                ? 'Anula primero el crédito de la renovación.'
+                : 'Anula primero esa operación.';
+            throw new HttpException(422, "No se puede recalcular: la operación de cierre {$recibos} dejaría de cubrir la deuda. {$comoDeshacer}");
         }
 
         // Un pago ya registrado conserva lo que el crédito recibió; si el recálculo dejara parte

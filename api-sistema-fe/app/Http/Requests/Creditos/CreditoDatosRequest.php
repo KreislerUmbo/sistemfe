@@ -58,8 +58,8 @@ class CreditoDatosRequest extends FormRequest
             'fecha_desembolso' => ['required', 'date_format:Y-m-d'],
             'fecha_primer_vencimiento' => ['nullable', 'date_format:Y-m-d', 'after:fecha_desembolso'],
             'payment_method_id' => ['nullable', 'integer', Rule::exists('payment_methods', 'id')->where('is_active', true)],
-            'dias_no_laborables' => ['nullable', 'array'],
-            'dias_no_laborables.*' => ['integer', 'between:1,7'],
+            'dias_no_laborables' => ['nullable', 'array', 'max:6'],   // al menos un día laborable
+            'dias_no_laborables.*' => ['integer', 'between:1,7', 'distinct'],
             'saltar_feriados' => ['nullable', 'boolean'],
             'regla_no_laborable' => ['nullable', Rule::enum(ReglaNoLaborable::class)],
             'mora_cuenta_no_laborables' => ['nullable', 'boolean'],

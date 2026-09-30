@@ -31,7 +31,7 @@ class CreditoMigracionController extends ControllerCreditos
             );
 
             return [[
-                'credito' => (new CreditoResource($credito->load(['cliente', 'cuotasVigentes'])))->resolve(),
+                'credito' => (new CreditoResource($credito->load('cliente')->cargarCuotasVigentes()))->resolve(),
                 'limites' => $advertencias,
             ], $credito->id];
         }, estado: 201);

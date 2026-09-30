@@ -26,8 +26,8 @@ class ConfiguracionCreditoRequest extends FormRequest
         return [
             'tasa_interes_minimo' => ['sometimes', 'numeric', 'min:0', 'max:100'],
             'dias_gracia' => ['sometimes', ...self::DIAS],
-            'dias_no_laborables' => ['sometimes', 'array'],
-            'dias_no_laborables.*' => ['integer', 'between:1,7'],
+            'dias_no_laborables' => ['sometimes', 'array', 'max:6'],   // al menos un día laborable
+            'dias_no_laborables.*' => ['integer', 'between:1,7', 'distinct'],
             'saltar_feriados' => ['sometimes', 'boolean'],
             'regla_no_laborable' => ['sometimes', Rule::enum(ReglaNoLaborable::class)],
             'mora_cuenta_no_laborables' => ['sometimes', 'boolean'],

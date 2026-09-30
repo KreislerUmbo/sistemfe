@@ -98,12 +98,22 @@ class Credito extends Model
         return $this->hasMany(CreditoCuota::class, 'credito_id');
     }
 
-    /** Cuotas de la versión vigente del cronograma (1.8): toda consulta de negocio parte de aquí. */
+    /**
+     * Cuotas de la versión vigente del cronograma (1.8): toda consulta de negocio parte de aquí.
+     * Solo sobre una instancia: load()/with() arman la relación sobre un modelo vacío, sin
+     * version_cronograma_actual, y devolverían cero cuotas. Para cargarla usar cargarCuotasVigentes().
+     */
     public function cuotasVigentes(): HasMany
     {
         return $this->cuotas()
             ->where('version_cronograma', $this->version_cronograma_actual)
             ->orderBy('numero_cuota');
+    }
+
+    /** Deja cargada la relación cuotasVigentes (reemplazo de load('cuotasVigentes')). */
+    public function cargarCuotasVigentes(): static
+    {
+        return $this->setRelation('cuotasVigentes', $this->cuotasVigentes()->get());
     }
 
     public function pagos(): HasMany

@@ -95,6 +95,6 @@ class CreditoCicloController extends ControllerCreditos
     /** @return array<string, mixed> */
     private function recurso(Credito $credito): array
     {
-        return (new CreditoResource($credito->load(['cliente', 'cuotasVigentes'])))->resolve();
+        return (new CreditoResource($credito->load('cliente')->cargarCuotasVigentes()))->resolve();
     }
 }
