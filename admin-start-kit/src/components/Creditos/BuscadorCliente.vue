@@ -1,7 +1,7 @@
 <template>
   <div class="buscador-cliente position-relative">
-    <label class="form-label fw-semibold small text-uppercase text-muted mb-1" :for="idInput">Cliente</label>
-    <div class="input-group input-group-lg">
+    <label class="form-label mb-1 small fw-semibold text-secondary" :for="idInput">Cliente</label>
+    <div class="input-group input-group-sm">
       <input
         :id="idInput"
         ref="input"
@@ -9,7 +9,7 @@
         type="text"
         class="form-control"
         :class="{ 'is-invalid': !!error }"
-        :placeholder="seleccionado ? '' : 'Nombre o documento…'"
+        :placeholder="seleccionado ? '' : 'Buscar por DNI, RUC o nombre...'"
         :readonly="!!seleccionado"
         autocomplete="off"
         @input="buscar"
@@ -31,7 +31,7 @@
       <li
         v-for="(c, i) in sugerencias"
         :key="c.id"
-        class="list-group-item list-group-item-action py-2"
+        class="list-group-item list-group-item-action py-2 small"
         :class="{ active: i === resaltado }"
         role="option"
         @mousedown.prevent="elegir(c)"
@@ -151,6 +151,5 @@ onMounted(() => {
 }
 .sugerencias .list-group-item {
   cursor: pointer;
-  min-height: 44px;
 }
 </style>

@@ -3,20 +3,20 @@
     :procesando="procesando" :deshabilitado="!cuotaId || !montoValido || !motivo.trim()" :error="error" @confirmar="confirmar">
     <p v-if="!conMora.length" class="text-muted mb-0">Ninguna cuota tiene mora pendiente hoy.</p>
     <template v-else>
-      <label class="form-label small fw-semibold" for="cm-cuota">Cuota</label>
+      <label class="form-label mb-1 small fw-semibold text-secondary" for="cm-cuota">Cuota</label>
       <select id="cm-cuota" v-model="cuotaId" class="form-select mb-3" @change="usarTodo">
         <option v-for="c in conMora" :key="c.id" :value="c.id">
           #{{ c.numero_cuota }} · vence {{ formatoFecha(c.fecha_vencimiento) }} · mora {{ formatoSoles(c.mora_pendiente_hoy) }}
         </option>
       </select>
-      <label class="form-label small fw-semibold" for="cm-monto">Monto a condonar</label>
+      <label class="form-label mb-1 small fw-semibold text-secondary" for="cm-monto">Monto a condonar</label>
       <div class="input-group mb-1">
         <span class="input-group-text">S/</span>
-        <input id="cm-monto" v-model="monto" type="text" inputmode="decimal" class="form-control" :class="{ 'is-invalid': monto && !montoValido }" />
+        <input id="cm-monto" v-model="monto" type="text" inputmode="decimal" class="form-control form-control-sm" :class="{ 'is-invalid': monto && !montoValido }" />
       </div>
       <small class="text-muted d-block mb-3">Hasta la mora pendiente de hoy. El backend valida el tope.</small>
-      <label class="form-label small fw-semibold" for="cm-motivo">Motivo <span class="text-danger">*</span></label>
-      <textarea id="cm-motivo" v-model="motivo" class="form-control" rows="2" maxlength="500"></textarea>
+      <label class="form-label mb-1 small fw-semibold text-secondary" for="cm-motivo">Motivo <span class="text-danger">*</span></label>
+      <textarea id="cm-motivo" v-model="motivo" class="form-control form-control-sm" rows="2" maxlength="500"></textarea>
     </template>
   </DialogoBase>
 </template>

@@ -2,7 +2,7 @@
   <div>
     <p v-if="!pagos.length" class="text-muted text-center py-4 mb-0">Todavía no hay pagos.</p>
     <ul v-else class="list-group list-group-flush cifra">
-      <li v-for="p in ordenados" :key="p.id" class="list-group-item py-3" :class="{ 'opacity-50': p.estado === 'anulado' }">
+      <li v-for="p in ordenados" :key="p.id" class="list-group-item py-2 small" :class="{ 'opacity-50': p.estado === 'anulado' }">
         <div class="d-flex justify-content-between align-items-start gap-2">
           <div>
             <div class="fw-semibold">

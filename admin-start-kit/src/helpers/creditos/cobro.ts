@@ -22,8 +22,9 @@ export function filasDeuda(lineas: DeudaHoy[], hoy: string): FilaDeuda[] {
       filas.push({ clave: `c${l.numero_cuota}`, texto: `Cuota ${l.numero_cuota} · ${cuando}`, monto: l.pendiente, mora: false })
     }
     if (l.mora !== '0.00') {
-      const dias = `${l.dias_atraso} día${l.dias_atraso === 1 ? '' : 's'}`
-      filas.push({ clave: `m${l.numero_cuota}`, texto: `Mora cuota ${l.numero_cuota} · ${dias}${l.mora_tope_alcanzado ? ' (tope)' : ''}`, monto: l.mora, mora: true })
+      // Una cuota ya pagada que sigue debiendo mora tiene 0 días de atraso: no se muestran.
+      const dias = l.dias_atraso > 0 ? ` · ${l.dias_atraso} día${l.dias_atraso === 1 ? '' : 's'}` : ''
+      filas.push({ clave: `m${l.numero_cuota}`, texto: `Mora cuota ${l.numero_cuota}${dias}${l.mora_tope_alcanzado ? ' (tope)' : ''}`, monto: l.mora, mora: true })
     }
     return filas
   })

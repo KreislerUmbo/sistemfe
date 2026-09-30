@@ -63,7 +63,7 @@
         <div v-else>{{ nombreCobrador ?? 'Sin cobrador' }}</div>
       </div>
 
-      <button v-if="puedeEditar" type="button" class="btn btn-sm btn-outline-secondary w-100 boton-alto" @click="abrirEdicion">
+      <button v-if="puedeEditar" type="button" class="btn btn-sm btn-outline-primary w-100" @click="abrirEdicion">
         <i class="fas fa-pen me-1"></i>Editar ficha
       </button>
     </template>
@@ -72,51 +72,51 @@
     <DialogoBase v-model="editando" titulo="Ficha de cobro" texto-confirmar="Guardar" :procesando="guardando" :error="errorGuardar" tamano="lg" @confirmar="guardar">
       <div class="row g-3">
         <div class="col-12 col-md-8">
-          <label class="form-label small fw-semibold" for="ficha-dir">Dirección de cobro</label>
-          <input id="ficha-dir" v-model="borrador.direccion_cobro" type="text" class="form-control" maxlength="255" />
+          <label class="form-label mb-1 small fw-semibold text-secondary" for="ficha-dir">Dirección de cobro</label>
+          <input id="ficha-dir" v-model="borrador.direccion_cobro" type="text" class="form-control form-control-sm" maxlength="255" />
         </div>
         <div class="col-12 col-md-4">
-          <label class="form-label small fw-semibold" for="ficha-tipo">Tipo</label>
-          <select id="ficha-tipo" v-model="borrador.tipo_direccion" class="form-select">
+          <label class="form-label mb-1 small fw-semibold text-secondary" for="ficha-tipo">Tipo</label>
+          <select id="ficha-tipo" v-model="borrador.tipo_direccion" class="form-select form-select-sm">
             <option :value="null">—</option>
             <option value="casa">Casa</option>
             <option value="negocio">Negocio</option>
           </select>
         </div>
         <div class="col-12">
-          <label class="form-label small fw-semibold" for="ficha-ref">Referencia</label>
-          <input id="ficha-ref" v-model="borrador.referencia" type="text" class="form-control" maxlength="255" placeholder="Ej.: frente al mercado, puerta verde" />
+          <label class="form-label mb-1 small fw-semibold text-secondary" for="ficha-ref">Referencia</label>
+          <input id="ficha-ref" v-model="borrador.referencia" type="text" class="form-control form-control-sm" maxlength="255" placeholder="Ej.: frente al mercado, puerta verde" />
         </div>
         <div class="col-6 col-md-4">
-          <label class="form-label small fw-semibold" for="ficha-lat">Latitud</label>
-          <input id="ficha-lat" v-model="borrador.latitud" type="text" inputmode="decimal" class="form-control" />
+          <label class="form-label mb-1 small fw-semibold text-secondary" for="ficha-lat">Latitud</label>
+          <input id="ficha-lat" v-model="borrador.latitud" type="text" inputmode="decimal" class="form-control form-control-sm" />
         </div>
         <div class="col-6 col-md-4">
-          <label class="form-label small fw-semibold" for="ficha-lng">Longitud</label>
-          <input id="ficha-lng" v-model="borrador.longitud" type="text" inputmode="decimal" class="form-control" />
+          <label class="form-label mb-1 small fw-semibold text-secondary" for="ficha-lng">Longitud</label>
+          <input id="ficha-lng" v-model="borrador.longitud" type="text" inputmode="decimal" class="form-control form-control-sm" />
         </div>
         <div class="col-12 col-md-4 d-flex align-items-end">
-          <button type="button" class="btn btn-outline-primary w-100" :disabled="ubicando" @click="usarUbicacion">
+          <button type="button" class="btn btn-sm btn-outline-primary w-100" :disabled="ubicando" @click="usarUbicacion">
             <span v-if="ubicando" class="spinner-border spinner-border-sm me-1"></span><i v-else class="fas fa-crosshairs me-1"></i>Mi ubicación
           </button>
         </div>
         <small v-if="errorUbicacion" class="col-12 text-danger">{{ errorUbicacion }}</small>
         <div class="col-12 col-md-6">
-          <label class="form-label small fw-semibold" for="ficha-tel2">Teléfono alterno</label>
-          <input id="ficha-tel2" v-model="borrador.telefono_alterno" type="tel" class="form-control" maxlength="20" />
+          <label class="form-label mb-1 small fw-semibold text-secondary" for="ficha-tel2">Teléfono alterno</label>
+          <input id="ficha-tel2" v-model="borrador.telefono_alterno" type="tel" class="form-control form-control-sm" maxlength="20" />
         </div>
         <div class="col-12 col-md-6">
-          <label class="form-label small fw-semibold" for="ficha-ocup">Ocupación</label>
-          <input id="ficha-ocup" v-model="borrador.ocupacion" type="text" class="form-control" maxlength="150" />
+          <label class="form-label mb-1 small fw-semibold text-secondary" for="ficha-ocup">Ocupación</label>
+          <input id="ficha-ocup" v-model="borrador.ocupacion" type="text" class="form-control form-control-sm" maxlength="150" />
         </div>
         <div class="col-12">
-          <label class="form-label small fw-semibold" for="ficha-notas">Notas</label>
-          <textarea id="ficha-notas" v-model="borrador.notas" class="form-control" rows="2" maxlength="2000"></textarea>
+          <label class="form-label mb-1 small fw-semibold text-secondary" for="ficha-notas">Notas</label>
+          <textarea id="ficha-notas" v-model="borrador.notas" class="form-control form-control-sm" rows="2" maxlength="2000"></textarea>
         </div>
         <div class="col-12">
-          <div class="form-label small fw-semibold">Fotos</div>
+          <div class="form-label mb-1 small fw-semibold text-secondary">Fotos</div>
           <div class="d-flex flex-wrap gap-2">
-            <label v-for="t in TIPOS_FOTO" :key="t" class="btn btn-light boton-alto mb-0" :class="{ disabled: subiendo === t }">
+            <label v-for="t in TIPOS_FOTO" :key="t" class="btn btn-sm btn-light mb-0" :class="{ disabled: subiendo === t }">
               <span v-if="subiendo === t" class="spinner-border spinner-border-sm me-1"></span><i v-else class="fas fa-camera me-1"></i>
               {{ TEXTO_ARCHIVO[t] }}{{ imagenes[t] ? ' ✓' : '' }}
               <input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" class="d-none" @change="subir(t, $event)" />
@@ -306,12 +306,10 @@ async function subir(tipo: TipoArchivoCliente, evento: Event) {
 
 <style scoped>
 .etiqueta {
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  font-size: 0.75rem;
+  font-weight: 600;
   color: var(--bs-secondary-color);
-  margin-bottom: 0.15rem;
+  margin-bottom: 0.1rem;
 }
 .foto {
   width: 56px;
@@ -344,9 +342,6 @@ async function subir(tipo: TipoArchivoCliente, evento: Event) {
 }
 .min-w-0 {
   min-width: 0;
-}
-.boton-alto {
-  min-height: 44px;
 }
 .text-pre {
   white-space: pre-line;

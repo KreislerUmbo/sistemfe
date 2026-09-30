@@ -2,7 +2,7 @@
   <div>
     <p v-if="!eventos.length" class="text-muted text-center py-4 mb-0">Sin movimientos especiales.</p>
     <ul v-else class="list-group list-group-flush">
-      <li v-for="(e, i) in eventos" :key="i" class="list-group-item py-3">
+      <li v-for="(e, i) in eventos" :key="i" class="list-group-item py-2 small">
         <div class="d-flex justify-content-between gap-2">
           <span class="fw-semibold"><i :class="e.icono" class="me-2 text-muted"></i>{{ e.titulo }}</span>
           <small class="text-muted text-nowrap">{{ e.fecha }}</small>

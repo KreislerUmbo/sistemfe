@@ -1,88 +1,86 @@
 <template>
   <DefaultLayout>
-    <div class="creditos-contenedor mx-auto">
-      <div class="d-flex align-items-center gap-2 mb-3">
-        <h5 class="fw-bold mb-0 flex-grow-1">Configuración de créditos</h5>
+    <EncabezadoCredito titulo="Configuración de créditos" subtitulo="Valores por defecto del negocio y feriados" icono="fas fa-sliders-h" :volver="false" />
+
+    <ul class="nav nav-pills mb-3">
+      <li v-for="t in PESTANAS" :key="t.id" class="nav-item">
+        <button type="button" class="nav-link" :class="{ active: pestana === t.id }" @click="cambiarPestana(t.id)">
+          <i :class="t.icono" class="me-1"></i>{{ t.texto }}
+        </button>
+      </li>
+    </ul>
+
+    <div v-if="pestana === 'feriados'" class="card border-0 shadow-sm">
+      <div class="card-header bg-white border-bottom py-2 fw-semibold text-dark">Feriados</div>
+      <div class="card-body py-3">
+        <FeriadosCredito />
       </div>
+    </div>
 
-      <ul class="nav nav-pills gap-1 mb-3" role="tablist">
-        <li v-for="t in PESTANAS" :key="t.id" class="nav-item" role="presentation">
-          <button type="button" class="nav-link rounded-pill px-3 py-2" :class="{ active: pestana === t.id }" role="tab"
-            :aria-selected="pestana === t.id" @click="cambiarPestana(t.id)">
-            {{ t.texto }}
-          </button>
-        </li>
-      </ul>
+    <template v-else>
+      <div v-if="cargando" class="text-center text-muted py-5"><span class="spinner-border spinner-border-sm me-2"></span>Cargando…</div>
+      <div v-else-if="errorCarga" class="alert alert-danger">{{ errorCarga }}</div>
 
-      <div v-if="pestana === 'feriados'" class="card border-0 shadow-sm">
-        <div class="card-body p-3 p-md-4">
-          <FeriadosCredito />
-        </div>
-      </div>
-
-      <template v-else>
-        <div v-if="cargando" class="text-center text-muted py-5"><span class="spinner-border spinner-border-sm me-2"></span>Cargando…</div>
-        <div v-else-if="errorCarga" class="alert alert-danger">{{ errorCarga }}</div>
-
-        <form v-else-if="form" novalidate @submit.prevent="guardar">
-          <div v-for="s in SECCIONES_CONFIG" :key="s.titulo" class="card border-0 shadow-sm mb-3">
-            <div class="card-body p-3 p-md-4">
-              <h6 class="fw-bold mb-1">{{ s.titulo }}</h6>
-              <p v-if="s.descripcion" class="small text-muted mb-3">{{ s.descripcion }}</p>
-              <div class="row g-3" :class="{ 'mt-0': !s.descripcion }">
-                <template v-for="c in s.campos" :key="c.clave">
-                  <div v-if="!c.visible || c.visible(form)" :class="c.tipo === 'dias' ? 'col-12' : 'col-12 col-md-6 col-xl-4'">
-                    <!-- Días sin cobro: botones que se activan -->
-                    <template v-if="c.tipo === 'dias'">
-                      <div class="form-label small fw-semibold">{{ c.etiqueta }}</div>
-                      <div class="d-flex flex-wrap gap-2" role="group" :aria-label="c.etiqueta">
-                        <button v-for="(d, i) in DIAS" :key="d" type="button" class="btn boton-dia" :aria-pressed="diaMarcado(i + 1)"
-                          :class="diaMarcado(i + 1) ? 'btn-dark' : 'btn-outline-secondary'" @click="alternarDia(i + 1)">
-                          {{ d }}
-                        </button>
-                      </div>
-                      <small class="text-muted">Marcados: no se cobra ese día.</small>
-                    </template>
-
-                    <div v-else-if="c.tipo === 'booleano'" class="form-check form-switch pt-md-4">
-                      <input :id="`cfg-${c.clave}`" v-model="form[c.clave]" class="form-check-input" type="checkbox" role="switch" />
-                      <label class="form-check-label" :for="`cfg-${c.clave}`">{{ c.etiqueta }}</label>
+      <form v-else-if="form" novalidate @submit.prevent="guardar">
+        <div v-for="s in SECCIONES_CONFIG" :key="s.titulo" class="card border-0 shadow-sm mb-3">
+          <div class="card-header bg-white border-bottom py-2">
+            <span class="fw-semibold text-dark">{{ s.titulo }}</span>
+            <small v-if="s.descripcion" class="text-muted d-block">{{ s.descripcion }}</small>
+          </div>
+          <div class="card-body py-3">
+            <div class="row g-3">
+              <template v-for="c in s.campos" :key="c.clave">
+                <div v-if="!c.visible || c.visible(form)" :class="c.tipo === 'dias' ? 'col-12' : 'col-12 col-md-6 col-xl-4'">
+                  <!-- Días sin cobro -->
+                  <template v-if="c.tipo === 'dias'">
+                    <span class="form-label mb-1 small fw-semibold text-secondary d-block">{{ c.etiqueta }}</span>
+                    <div class="d-flex flex-wrap gap-1" role="group" :aria-label="c.etiqueta">
+                      <button v-for="(d, i) in DIAS" :key="d" type="button" class="btn btn-sm" :aria-pressed="diaMarcado(i + 1)"
+                        :class="diaMarcado(i + 1) ? 'btn-secondary' : 'btn-outline-secondary'" @click="alternarDia(i + 1)">
+                        {{ d }}
+                      </button>
                     </div>
+                    <small class="text-muted">Marcados: no se cobra ese día.</small>
+                  </template>
 
-                    <template v-else>
-                      <label class="form-label small fw-semibold" :for="`cfg-${c.clave}`">{{ c.etiqueta }}</label>
-                      <select v-if="c.tipo === 'select'" :id="`cfg-${c.clave}`" v-model="form[c.clave]" class="form-select boton-alto"
-                        :class="{ 'is-invalid': errores[c.clave] }">
-                        <option v-for="o in c.opciones" :key="o.valor" :value="o.valor">{{ o.texto }}</option>
-                      </select>
-                      <div v-else class="input-group">
-                        <span v-if="c.tipo === 'soles'" class="input-group-text">S/</span>
-                        <input :id="`cfg-${c.clave}`" v-model="form[c.clave]" type="text" class="form-control boton-alto"
-                          :inputmode="c.tipo === 'entero' ? 'numeric' : 'decimal'" :placeholder="c.opcional ? 'Sin límite' : ''"
-                          :class="{ 'is-invalid': errores[c.clave] }" />
-                        <span v-if="c.tipo === 'porcentaje'" class="input-group-text">%</span>
-                      </div>
-                      <div v-if="errores[c.clave]" class="invalid-feedback d-block">{{ errores[c.clave] }}</div>
-                      <small v-else-if="c.ayuda" class="text-muted">{{ c.ayuda }}</small>
-                    </template>
+                  <div v-else-if="c.tipo === 'booleano'" class="form-check form-switch pt-md-4 mb-0">
+                    <input :id="`cfg-${c.clave}`" v-model="form[c.clave]" class="form-check-input" type="checkbox" role="switch" />
+                    <label class="form-check-label small" :for="`cfg-${c.clave}`">{{ c.etiqueta }}</label>
                   </div>
-                </template>
-              </div>
+
+                  <template v-else>
+                    <label class="form-label mb-1 small fw-semibold text-secondary" :for="`cfg-${c.clave}`">{{ c.etiqueta }}</label>
+                    <select v-if="c.tipo === 'select'" :id="`cfg-${c.clave}`" v-model="form[c.clave]" class="form-select form-select-sm"
+                      :class="{ 'is-invalid': errores[c.clave] }">
+                      <option v-for="o in c.opciones" :key="o.valor" :value="o.valor">{{ o.texto }}</option>
+                    </select>
+                    <div v-else class="input-group input-group-sm">
+                      <span v-if="c.tipo === 'soles'" class="input-group-text">S/</span>
+                      <input :id="`cfg-${c.clave}`" v-model="form[c.clave]" type="text" class="form-control"
+                        :inputmode="c.tipo === 'entero' ? 'numeric' : 'decimal'" :placeholder="c.opcional ? 'Sin límite' : ''"
+                        :class="{ 'is-invalid': errores[c.clave] }" />
+                      <span v-if="c.tipo === 'porcentaje'" class="input-group-text">%</span>
+                    </div>
+                    <div v-if="errores[c.clave]" class="invalid-feedback d-block">{{ errores[c.clave] }}</div>
+                    <small v-else-if="c.ayuda" class="text-muted">{{ c.ayuda }}</small>
+                  </template>
+                </div>
+              </template>
             </div>
           </div>
+        </div>
 
-          <BarraAccionMovil>
-            <button type="button" class="btn btn-light flex-grow-1 flex-md-grow-0 px-md-4 boton-alto" :disabled="!hayCambios || guardando" @click="descartar">
-              Descartar
-            </button>
-            <button type="submit" class="btn btn-primary flex-grow-1 flex-md-grow-0 px-md-4 boton-alto" :disabled="!hayCambios || guardando">
-              <span v-if="guardando" class="spinner-border spinner-border-sm me-1"></span>
-              Guardar{{ cantidadCambios ? ` (${cantidadCambios})` : '' }}
-            </button>
-          </BarraAccionMovil>
-        </form>
-      </template>
-    </div>
+        <BarraAccionMovil>
+          <button type="button" class="btn btn-outline-secondary" :disabled="!hayCambios || guardando" @click="descartar">
+            <i class="fas fa-undo me-2"></i>Descartar
+          </button>
+          <button type="submit" class="btn btn-primary fw-semibold" :disabled="!hayCambios || guardando">
+            <span v-if="guardando" class="spinner-border spinner-border-sm me-2"></span><i v-else class="fas fa-save me-2"></i>
+            Guardar{{ cantidadCambios ? ` (${cantidadCambios})` : '' }}
+          </button>
+        </BarraAccionMovil>
+      </form>
+    </template>
   </DefaultLayout>
 </template>
 
@@ -93,6 +91,7 @@ import { computed, onMounted, ref } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import DefaultLayout from '@/layouts/DefaultLayout.vue'
 import BarraAccionMovil from '@/components/Creditos/BarraAccionMovil.vue'
+import EncabezadoCredito from '@/components/Creditos/EncabezadoCredito.vue'
 import FeriadosCredito from '@/components/Creditos/FeriadosCredito.vue'
 import { creditoService } from '@/services/admin/creditoService'
 import { useCreditosCatalogosStore } from '@/stores/creditosCatalogos'
@@ -101,8 +100,8 @@ import { interpretarErrorCredito } from '@/composables/creditos/errorCredito'
 import { cambiosConfig, formularioConfig, SECCIONES_CONFIG, type FormConfig } from '@/helpers/creditos/configuracion'
 
 const PESTANAS = [
-  { id: 'negocio', texto: 'Valores del negocio' },
-  { id: 'feriados', texto: 'Feriados' },
+  { id: 'negocio', texto: 'Valores del negocio', icono: 'fas fa-sliders-h' },
+  { id: 'feriados', texto: 'Feriados', icono: 'far fa-calendar-alt' },
 ] as const
 const DIAS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
 
@@ -189,15 +188,3 @@ onBeforeRouteLeave((destino) => {
 })
 </script>
 
-<style scoped>
-.creditos-contenedor {
-  max-width: 1440px;
-}
-.boton-alto {
-  min-height: 44px;
-}
-.boton-dia {
-  min-width: 56px;
-  min-height: 44px;
-}
-</style>

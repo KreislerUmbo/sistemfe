@@ -1,33 +1,19 @@
 <template>
   <DefaultLayout>
-    <div class="creditos-contenedor mx-auto">
-      <div class="d-flex align-items-center gap-3 mb-3">
-        <button type="button" class="btn btn-light btn-volver" aria-label="Volver" @click="alDetalle">
-          <i class="fas fa-chevron-left"></i>
-        </button>
-        <div class="flex-grow-1 min-w-0">
-          <h5 class="fw-bold mb-0">Cobrar</h5>
-          <small class="text-muted text-truncate d-block">{{ subtitulo }}</small>
-        </div>
-      </div>
+    <EncabezadoCredito titulo="Cobrar" :subtitulo="subtitulo" icono="fas fa-money-bill-wave" />
 
-      <div v-if="cargando" class="text-center py-5 text-muted">
-        <span class="spinner-border spinner-border-sm me-2"></span>Cargando…
-      </div>
-      <div v-else-if="errorCarga" class="alert alert-danger">{{ errorCarga.mensaje }}</div>
-      <div v-else-if="detalle && !cobrable" class="alert alert-info">
-        Este crédito está {{ detalle.credito.estado }}: no admite cobros.
-        <router-link :to="{ name: 'creditos.detalle', params: { id: detalle.credito.id } }" class="alert-link">Ver crédito</router-link>
-      </div>
-
-      <div v-else-if="detalle" class="card border-0 shadow-sm">
-        <div class="card-body p-3 p-md-4">
-          <CobrarPanel :detalle="detalle" :metodos-pago="metodosPago" :caja="caja"
-            :puede-fecha-anterior="puede('creditos.pago_fecha_anterior')" :puede-liquidar="puede('creditos.cobrar')"
-            @cerrar="alDetalle" @liquidar="liquidarAbierto = true" />
-        </div>
-      </div>
+    <div v-if="cargando" class="text-center py-5 text-muted">
+      <span class="spinner-border spinner-border-sm me-2"></span>Cargando…
     </div>
+    <div v-else-if="errorCarga" class="alert alert-danger">{{ errorCarga.mensaje }}</div>
+    <div v-else-if="detalle && !cobrable" class="alert alert-info">
+      Este crédito está {{ detalle.credito.estado }}: no admite cobros.
+      <router-link :to="{ name: 'creditos.detalle', params: { id: detalle.credito.id } }" class="alert-link">Ver crédito</router-link>
+    </div>
+
+    <CobrarPanel v-else-if="detalle" :detalle="detalle" :metodos-pago="metodosPago" :caja="caja"
+      :puede-fecha-anterior="puede('creditos.pago_fecha_anterior')" :puede-liquidar="puede('creditos.cobrar')"
+      @cerrar="alDetalle" @liquidar="liquidarAbierto = true" />
 
     <DialogoLiquidar v-if="detalle" v-model="liquidarAbierto" :credito-id="detalle.credito.id" :metodos-pago="metodosPago" @hecho="alLiquidar" />
   </DefaultLayout>
@@ -40,6 +26,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import DefaultLayout from '@/layouts/DefaultLayout.vue'
+import EncabezadoCredito from '@/components/Creditos/EncabezadoCredito.vue'
 import CobrarPanel from '@/components/Creditos/CobrarPanel.vue'
 import DialogoLiquidar from '@/components/Creditos/DialogoLiquidar.vue'
 import { creditoService } from '@/services/admin/creditoService'
@@ -98,19 +85,3 @@ function alLiquidar() {
 }
 </script>
 
-<style scoped>
-.creditos-contenedor {
-  max-width: 1100px;
-}
-.btn-volver {
-  width: 44px;
-  height: 44px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-.min-w-0 {
-  min-width: 0;
-}
-</style>

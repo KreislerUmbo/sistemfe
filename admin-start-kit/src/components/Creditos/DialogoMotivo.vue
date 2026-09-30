@@ -2,8 +2,8 @@
   <DialogoBase v-model="abierto" :titulo="titulo" :texto-confirmar="textoConfirmar" :variante="variante"
     :procesando="procesando" :deshabilitado="!motivo.trim()" :error="error" @confirmar="confirmar">
     <p v-if="descripcion" class="mb-3">{{ descripcion }}</p>
-    <label class="form-label fw-semibold" for="dm-motivo">Motivo <span class="text-danger">*</span></label>
-    <textarea id="dm-motivo" v-model="motivo" class="form-control" rows="3" maxlength="500"
+    <label class="form-label mb-1 small fw-semibold text-secondary" for="dm-motivo">Motivo <span class="text-danger">*</span></label>
+    <textarea id="dm-motivo" v-model="motivo" class="form-control form-control-sm" rows="3" maxlength="500"
       placeholder="Queda registrado en la auditoría"></textarea>
   </DialogoBase>
 </template>

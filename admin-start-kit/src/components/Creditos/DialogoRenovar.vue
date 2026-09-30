@@ -23,8 +23,8 @@
           titulo="La renovación supera los límites del negocio" />
         <div v-if="preview?.limites.bloquea">
           <template v-if="puedeAutorizar">
-            <label class="form-label fw-semibold small" for="rn-motivo">Motivo de la autorización <span class="text-danger">*</span></label>
-            <textarea id="rn-motivo" v-model="motivoAutorizacion" class="form-control" rows="2" maxlength="500"></textarea>
+            <label class="form-label mb-1 small fw-semibold text-secondary" for="rn-motivo">Motivo de la autorización <span class="text-danger">*</span></label>
+            <textarea id="rn-motivo" v-model="motivoAutorizacion" class="form-control form-control-sm" rows="2" maxlength="500"></textarea>
           </template>
           <p v-else class="small text-danger mb-0">Pide a un administrador que autorice la excepción.</p>
         </div>

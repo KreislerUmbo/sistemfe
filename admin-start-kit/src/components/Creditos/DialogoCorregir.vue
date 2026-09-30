@@ -13,8 +13,8 @@
         <ResumenCronograma :preview="preview" :capital="condiciones?.monto_capital ?? '0'" :cargando="cargandoPreview"
           :error="errorPreview?.mensaje ?? null" />
         <div>
-          <label class="form-label fw-semibold small" for="cc-motivo">Motivo <span class="text-danger">*</span></label>
-          <textarea id="cc-motivo" v-model="motivo" class="form-control" rows="2" maxlength="500"></textarea>
+          <label class="form-label mb-1 small fw-semibold text-secondary" for="cc-motivo">Motivo <span class="text-danger">*</span></label>
+          <textarea id="cc-motivo" v-model="motivo" class="form-control form-control-sm" rows="2" maxlength="500"></textarea>
         </div>
       </div>
     </div>

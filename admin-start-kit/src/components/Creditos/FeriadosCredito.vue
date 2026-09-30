@@ -2,9 +2,9 @@
   <div>
     <div class="d-flex align-items-center justify-content-between gap-2 mb-3">
       <div class="btn-group" role="group" aria-label="Año">
-        <button type="button" class="btn btn-light boton-alto" aria-label="Año anterior" @click="anio--"><i class="fas fa-chevron-left"></i></button>
-        <span class="btn btn-light boton-alto fw-bold disabled text-body">{{ anio }}</span>
-        <button type="button" class="btn btn-light boton-alto" aria-label="Año siguiente" @click="anio++"><i class="fas fa-chevron-right"></i></button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" aria-label="Año anterior" @click="anio--"><i class="fas fa-chevron-left"></i></button>
+        <span class="btn btn-sm btn-outline-secondary fw-bold disabled text-body">{{ anio }}</span>
+        <button type="button" class="btn btn-sm btn-outline-secondary" aria-label="Año siguiente" @click="anio++"><i class="fas fa-chevron-right"></i></button>
       </div>
       <small class="text-muted text-end">Días sin cobro si el crédito tiene "No cobrar en feriados".</small>
     </div>
@@ -13,14 +13,14 @@
     <form class="row g-2 mb-3" novalidate @submit.prevent="agregar">
       <div class="col-12 col-sm-4 col-lg-3">
         <label class="visually-hidden" for="fer-fecha">Fecha</label>
-        <input id="fer-fecha" v-model="nuevo.fecha" type="date" class="form-control boton-alto" :min="`${anio}-01-01`" :max="`${anio}-12-31`" />
+        <input id="fer-fecha" v-model="nuevo.fecha" type="date" class="form-control form-control-sm" :min="`${anio}-01-01`" :max="`${anio}-12-31`" />
       </div>
       <div class="col-12 col-sm">
         <label class="visually-hidden" for="fer-desc">Descripción</label>
-        <input id="fer-desc" v-model="nuevo.descripcion" type="text" class="form-control boton-alto" maxlength="150" placeholder="Ej.: Aniversario de la ciudad" />
+        <input id="fer-desc" v-model="nuevo.descripcion" type="text" class="form-control form-control-sm" maxlength="150" placeholder="Ej.: Aniversario de la ciudad" />
       </div>
       <div class="col-12 col-sm-auto">
-        <button type="submit" class="btn btn-primary boton-alto w-100" :disabled="!nuevo.fecha || !nuevo.descripcion.trim() || guardando">
+        <button type="submit" class="btn btn-sm btn-primary w-100" :disabled="!nuevo.fecha || !nuevo.descripcion.trim() || guardando">
           <span v-if="guardando" class="spinner-border spinner-border-sm me-1"></span><i v-else class="fas fa-plus me-1"></i>Agregar
         </button>
       </div>
@@ -34,14 +34,14 @@
       <li v-for="f in feriados" :key="f.id" class="list-group-item py-2">
         <form v-if="editando?.id === f.id" class="row g-2 align-items-center" novalidate @submit.prevent="guardarEdicion">
           <div class="col-12 col-sm-4 col-lg-3">
-            <input v-model="editando.fecha" type="date" class="form-control" :aria-label="`Fecha de ${f.descripcion}`" />
+            <input v-model="editando.fecha" type="date" class="form-control form-control-sm" :aria-label="`Fecha de ${f.descripcion}`" />
           </div>
           <div class="col-12 col-sm">
-            <input v-model="editando.descripcion" type="text" class="form-control" maxlength="150" aria-label="Descripción" @keydown.esc="editando = null" />
+            <input v-model="editando.descripcion" type="text" class="form-control form-control-sm" maxlength="150" aria-label="Descripción" @keydown.esc="editando = null" />
           </div>
           <div class="col-12 col-sm-auto d-flex gap-2">
-            <button type="submit" class="btn btn-primary flex-grow-1" :disabled="guardando || !editando.fecha || !editando.descripcion.trim()">Guardar</button>
-            <button type="button" class="btn btn-light" @click="editando = null">Cancelar</button>
+            <button type="submit" class="btn btn-sm btn-primary flex-grow-1" :disabled="guardando || !editando.fecha || !editando.descripcion.trim()">Guardar</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" @click="editando = null">Cancelar</button>
           </div>
         </form>
         <div v-else class="d-flex align-items-center gap-3">
@@ -50,8 +50,8 @@
           <span class="badge rounded-pill" :class="f.origen === 'nacional' ? 'bg-info-subtle text-info-emphasis' : 'bg-secondary-subtle text-secondary-emphasis'">
             {{ f.origen === 'nacional' ? 'Nacional' : 'Propio' }}
           </span>
-          <button type="button" class="btn btn-sm btn-light" :aria-label="`Editar ${f.descripcion}`" @click="editar(f)"><i class="fas fa-pen"></i></button>
-          <button type="button" class="btn btn-sm btn-light text-danger" :aria-label="`Quitar ${f.descripcion}`" @click="quitar(f)"><i class="fas fa-trash-alt"></i></button>
+          <button type="button" class="btn btn-sm btn-outline-primary" :aria-label="`Editar ${f.descripcion}`" @click="editar(f)"><i class="fas fa-pen"></i></button>
+          <button type="button" class="btn btn-sm btn-outline-danger" :aria-label="`Quitar ${f.descripcion}`" @click="quitar(f)"><i class="fas fa-trash-alt"></i></button>
         </div>
       </li>
     </ul>
@@ -158,9 +158,6 @@ async function quitar(f: Feriado) {
 </script>
 
 <style scoped>
-.boton-alto {
-  min-height: 44px;
-}
 .fecha {
   width: 5.5rem;
   font-variant-numeric: tabular-nums;

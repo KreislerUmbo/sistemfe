@@ -12,14 +12,14 @@
 
     <div v-if="modo === 'desplazar'" class="row g-2 mb-3">
       <div class="col-7">
-        <label class="form-label small fw-semibold" for="rp-desde">Desde la cuota</label>
-        <select id="rp-desde" v-model.number="desdeCuota" class="form-select">
+        <label class="form-label mb-1 small fw-semibold text-secondary" for="rp-desde">Desde la cuota</label>
+        <select id="rp-desde" v-model.number="desdeCuota" class="form-select form-select-sm">
           <option v-for="c in pendientes" :key="c.id" :value="c.numero_cuota">#{{ c.numero_cuota }} · {{ formatoFecha(c.fecha_vencimiento) }}</option>
         </select>
       </div>
       <div class="col-5">
-        <label class="form-label small fw-semibold" for="rp-dias">Días</label>
-        <input id="rp-dias" v-model="dias" type="text" inputmode="numeric" class="form-control" />
+        <label class="form-label mb-1 small fw-semibold text-secondary" for="rp-dias">Días</label>
+        <input id="rp-dias" v-model="dias" type="text" inputmode="numeric" class="form-control form-control-sm" />
       </div>
     </div>
     <div v-else class="mb-3 lista-fechas">
@@ -51,7 +51,7 @@
       </div>
 
       <div v-if="preview.mora_acumulada !== '0.00'" class="mb-3">
-        <span class="form-label small fw-semibold d-block">Mora ya acumulada: {{ formatoSoles(preview.mora_acumulada) }}</span>
+        <span class="form-label mb-1 small fw-semibold text-secondary d-block">Mora ya acumulada: {{ formatoSoles(preview.mora_acumulada) }}</span>
         <div class="form-check form-check-inline">
           <input id="rp-mantener" v-model="accionMora" type="radio" class="form-check-input" value="mantener" />
           <label class="form-check-label" for="rp-mantener">Mantenerla (queda como deuda)</label>
@@ -63,17 +63,17 @@
       </div>
 
       <div class="mb-3">
-        <label class="form-label small fw-semibold" for="rp-cargo">Cargo por reprogramar</label>
-        <div class="input-group">
+        <label class="form-label mb-1 small fw-semibold text-secondary" for="rp-cargo">Cargo por reprogramar</label>
+        <div class="input-group input-group-sm">
           <span class="input-group-text">S/</span>
-          <input id="rp-cargo" v-model="cargo" type="text" inputmode="decimal" class="form-control" />
+          <input id="rp-cargo" v-model="cargo" type="text" inputmode="decimal" class="form-control form-control-sm" />
         </div>
         <small class="text-muted">Sugerido: {{ formatoSoles(preview.cargo_sugerido) }}. Se suma a la primera cuota reprogramada.</small>
       </div>
     </template>
 
-    <label class="form-label small fw-semibold" for="rp-motivo">Motivo <span class="text-danger">*</span></label>
-    <textarea id="rp-motivo" v-model="motivo" class="form-control" rows="2" maxlength="500"></textarea>
+    <label class="form-label mb-1 small fw-semibold text-secondary" for="rp-motivo">Motivo <span class="text-danger">*</span></label>
+    <textarea id="rp-motivo" v-model="motivo" class="form-control form-control-sm" rows="2" maxlength="500"></textarea>
   </DialogoBase>
 </template>
 

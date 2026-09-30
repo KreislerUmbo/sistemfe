@@ -1,73 +1,72 @@
 <template>
   <DefaultLayout>
-    <div class="creditos-contenedor mx-auto">
-      <!-- Encabezado (mockup 1) -->
-      <div class="d-flex align-items-center gap-3 mb-3">
-        <button type="button" class="btn btn-light btn-volver" aria-label="Volver" @click="volver">
-          <i class="fas fa-chevron-left"></i>
-        </button>
-        <div>
-          <h5 class="fw-bold mb-0">{{ creditoId ? 'Editar borrador' : 'Nuevo crédito' }}</h5>
-          <small class="text-muted">{{ credito?.numero_credito ?? 'Borrador' }} · el dinero sale al activar</small>
-        </div>
-      </div>
+    <EncabezadoCredito :titulo="creditoId ? 'Editar borrador' : 'Nuevo crédito'"
+      :subtitulo="`${credito?.numero_credito ?? 'Borrador'} · el dinero sale al activar`" icono="fas fa-hand-holding-usd" />
 
-      <div v-if="cargandoInicial" class="text-center py-5 text-muted">
-        <span class="spinner-border spinner-border-sm me-2"></span>Cargando…
-      </div>
-
-      <div v-else-if="noEditable" class="alert alert-warning">
-        Este crédito ya no es un borrador: sus condiciones quedaron congeladas al activarlo.
-      </div>
-
-      <form v-else class="row g-3" novalidate @submit.prevent>
-        <!-- Formulario (~60 % en escritorio) -->
-        <div class="col-12 col-xl-7">
-          <div class="card border-0 shadow-sm mb-0">
-            <div class="card-body p-3 p-md-4 d-flex flex-column gap-3">
-              <div>
-                <BuscadorCliente v-model="cliente" :error="errores.cliente_id" autofocus />
-                <TarjetaResumenCliente :cliente-id="cliente?.id ?? null" />
-              </div>
-              <FormCondiciones v-model="form" :errores="errores" :metodos-pago="metodosPago"
-                :primer-sugerido="preview?.cronograma.primer_vencimiento ?? null" />
-            </div>
-          </div>
-        </div>
-
-        <!-- Resumen + cronograma fijos a la derecha en escritorio (~40 %) -->
-        <div class="col-12 col-xl-5">
-          <div class="columna-resumen d-flex flex-column gap-3">
-            <ResumenCronograma :preview="preview" :capital="condiciones?.monto_capital ?? '0'" :cargando="cargandoPreview"
-              :error="errorPreview?.tipo === 'validacion' ? primerError(errorPreview.campos) : errorPreview?.mensaje ?? null" />
-
-            <AvisosLimites v-if="bloqueosActivacion.length" :bloqueos="bloqueosActivacion" :puede-autorizar="puedeAutorizar"
-              :autorizando="autorizando" @autorizar="autorizar" />
-            <AvisosLimites v-else-if="preview" :advertencias="[...preview.limites.bloqueos, ...preview.limites.advertencias]" />
-
-            <div v-if="errorAccion" class="alert mb-0" :class="errorAccion.tipo === 'red' ? 'alert-warning' : 'alert-danger'" role="alert">
-              <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap">
-                <span>{{ errorAccion.mensaje }}</span>
-                <button v-if="errorAccion.reintentable && ultimaAccion" type="button" class="btn btn-sm btn-outline-dark" @click="ultimaAccion()">
-                  Reintentar
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="col-12 col-xl-7">
-          <BarraAccionMovil>
-            <button type="button" class="btn btn-outline-dark flex-grow-1 flex-md-grow-0 px-md-4" :disabled="ocupado" @click="guardarBorrador">
-              <span v-if="guardando" class="spinner-border spinner-border-sm me-1"></span>Guardar borrador
-            </button>
-            <button type="button" class="btn btn-primary flex-grow-1 flex-md-grow-0 px-md-4 accion-principal" :disabled="ocupado || !condiciones" @click="activar">
-              <span v-if="activando" class="spinner-border spinner-border-sm me-1"></span>Activar y entregar
-            </button>
-          </BarraAccionMovil>
-        </div>
-      </form>
+    <div v-if="cargandoInicial" class="text-center py-5 text-muted">
+      <span class="spinner-border spinner-border-sm me-2"></span>Cargando…
     </div>
+
+    <div v-else-if="noEditable" class="alert alert-warning">
+      Este crédito ya no es un borrador: sus condiciones quedaron congeladas al activarlo.
+    </div>
+
+    <form v-else class="row g-3" novalidate @submit.prevent>
+      <div class="col-12 col-xl-7">
+        <div class="card border-0 shadow-sm mb-3">
+          <div class="card-header bg-white border-bottom d-flex align-items-center gap-2 py-2">
+            <span class="badge bg-primary rounded-pill">1</span>
+            <span class="fw-semibold text-dark">Cliente</span>
+          </div>
+          <div class="card-body py-3">
+            <BuscadorCliente v-model="cliente" :error="errores.cliente_id" autofocus />
+            <TarjetaResumenCliente :cliente-id="cliente?.id ?? null" />
+          </div>
+        </div>
+        <div class="card border-0 shadow-sm mb-0">
+          <div class="card-header bg-white border-bottom d-flex align-items-center gap-2 py-2">
+            <span class="badge bg-primary rounded-pill">2</span>
+            <span class="fw-semibold text-dark">Condiciones del crédito</span>
+          </div>
+          <div class="card-body py-3">
+            <FormCondiciones v-model="form" :errores="errores" :metodos-pago="metodosPago"
+              :primer-sugerido="preview?.cronograma.primer_vencimiento ?? null" />
+          </div>
+        </div>
+      </div>
+
+      <!-- Resumen + cronograma fijos a la derecha en escritorio -->
+      <div class="col-12 col-xl-5">
+        <div class="columna-resumen d-flex flex-column gap-3">
+          <ResumenCronograma :preview="preview" :capital="condiciones?.monto_capital ?? '0'" :cargando="cargandoPreview"
+            :error="errorPreview?.tipo === 'validacion' ? primerError(errorPreview.campos) : errorPreview?.mensaje ?? null" />
+
+          <AvisosLimites v-if="bloqueosActivacion.length" :bloqueos="bloqueosActivacion" :puede-autorizar="puedeAutorizar"
+            :autorizando="autorizando" @autorizar="autorizar" />
+          <AvisosLimites v-else-if="preview" :advertencias="[...preview.limites.bloqueos, ...preview.limites.advertencias]" />
+
+          <div v-if="errorAccion" class="alert mb-0 py-2 small" :class="errorAccion.tipo === 'red' ? 'alert-warning' : 'alert-danger'" role="alert">
+            <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap">
+              <span>{{ errorAccion.mensaje }}</span>
+              <button v-if="errorAccion.reintentable && ultimaAccion" type="button" class="btn btn-sm btn-outline-dark" @click="ultimaAccion()">
+                Reintentar
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-12 col-xl-7">
+        <BarraAccionMovil>
+          <button type="button" class="btn btn-outline-secondary" :disabled="ocupado" @click="guardarBorrador">
+            <span v-if="guardando" class="spinner-border spinner-border-sm me-2"></span><i v-else class="fas fa-save me-2"></i>Guardar borrador
+          </button>
+          <button type="button" class="btn btn-primary fw-semibold" :disabled="ocupado || !condiciones" @click="activar">
+            <span v-if="activando" class="spinner-border spinner-border-sm me-2"></span><i v-else class="fas fa-check me-2"></i>Activar y entregar
+          </button>
+        </BarraAccionMovil>
+      </div>
+    </form>
   </DefaultLayout>
 </template>
 
@@ -79,6 +78,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import Swal from 'sweetalert2/dist/sweetalert2.js'
 import DefaultLayout from '@/layouts/DefaultLayout.vue'
+import EncabezadoCredito from '@/components/Creditos/EncabezadoCredito.vue'
 import BuscadorCliente, { type ClienteBuscado } from '@/components/Creditos/BuscadorCliente.vue'
 import TarjetaResumenCliente from '@/components/Creditos/TarjetaResumenCliente.vue'
 import FormCondiciones from '@/components/Creditos/FormCondiciones.vue'
@@ -264,23 +264,9 @@ async function autorizar(regla: ReglaLimite) {
   }
 }
 
-function volver() {
-  if (window.history.length > 1) router.back()
-  else router.push({ name: 'creditos.index' })
-}
 </script>
 
 <style scoped>
-.creditos-contenedor {
-  max-width: 1440px;
-}
-.btn-volver {
-  width: 44px;
-  height: 44px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
 @media (min-width: 1200px) {
   .columna-resumen {
     position: sticky;

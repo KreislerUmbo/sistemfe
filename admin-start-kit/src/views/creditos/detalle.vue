@@ -1,125 +1,91 @@
 <template>
   <DefaultLayout>
-    <div class="creditos-contenedor mx-auto">
-      <!-- Encabezado (mockup 2) -->
-      <div class="d-flex align-items-center gap-3 mb-3">
-        <button type="button" class="btn btn-light btn-volver" aria-label="Volver" @click="volver">
-          <i class="fas fa-chevron-left"></i>
-        </button>
-        <div class="flex-grow-1 min-w-0">
-          <h5 class="fw-bold mb-0 text-nowrap">{{ credito ? (credito.numero_credito ?? 'Borrador') : 'Crédito' }}</h5>
-          <small class="text-muted text-truncate d-block">{{ subtitulo }}</small>
-        </div>
-        <span v-if="credito" class="badge rounded-pill px-3 py-2" :class="insignia.clase">
-          <i :class="insignia.icono" class="me-1"></i>{{ insignia.texto }}
-        </span>
-      </div>
+    <EncabezadoCredito :titulo="credito ? `Crédito ${credito.numero_credito ?? '(borrador)'}` : 'Crédito'" :subtitulo="subtitulo">
+      <template v-if="credito" #insignia>
+        <span class="badge ms-2 align-middle" :class="insignia.clase"><i :class="insignia.icono" class="me-1"></i>{{ insignia.texto }}</span>
+      </template>
+      <AccionesCredito v-if="credito" :acciones="acciones" @accion="alAccionar" />
+    </EncabezadoCredito>
 
-      <div v-if="cargando && !detalle" class="text-center py-5 text-muted">
-        <span class="spinner-border spinner-border-sm me-2"></span>Cargando…
-      </div>
-      <div v-else-if="errorCarga" class="alert alert-danger">{{ errorCarga.mensaje }}</div>
+    <div v-if="cargando && !detalle" class="text-center py-5 text-muted">
+      <span class="spinner-border spinner-border-sm me-2"></span>Cargando…
+    </div>
+    <div v-else-if="errorCarga" class="alert alert-danger">{{ errorCarga.mensaje }}</div>
 
-      <div v-else-if="detalle && credito" class="row g-3">
-        <!-- Columna principal -->
-        <div class="col-12 col-xl">
-          <!-- Saldo y progreso -->
-          <div class="card bg-dark text-white border-0 mb-3">
-            <div class="card-body p-3 p-md-4 cifra">
-              <div class="small opacity-75">Saldo por pagar</div>
-              <div class="saldo fw-bold">{{ formatoSoles(credito.estado === 'borrador' ? credito.monto_total : resumen.saldo_por_pagar) }}</div>
-              <div class="progress bg-secondary bg-opacity-50 my-2" style="height: 8px" role="progressbar"
-                :aria-valuenow="resumen.cuotas_pagadas" :aria-valuemax="resumen.cuotas_total">
+    <div v-else-if="detalle && credito" class="row g-3">
+      <!-- Resumen (derecha en escritorio; arriba en celular) -->
+      <div class="col-12 col-lg-4 order-lg-2">
+        <div class="columna-resumen d-flex flex-column gap-3">
+          <div class="card border-0 shadow-sm mb-0">
+            <div class="card-body cifra">
+              <p class="fw-bold mb-0">Resumen del crédito</p>
+              <p class="small text-muted mb-3">{{ tasaTexto }} · {{ credito.numero_cuotas }} pagos</p>
+
+              <div class="d-flex justify-content-between align-items-baseline mb-1">
+                <span class="fw-semibold">Saldo por pagar</span>
+                <span class="fs-4 fw-semibold text-primary">{{ formatoSoles(credito.estado === 'borrador' ? credito.monto_total : resumen.saldo_por_pagar) }}</span>
+              </div>
+              <div class="d-flex justify-content-between small text-muted mb-1">
+                <span><i class="fas fa-list-ol me-1"></i>Pagos completos</span>
+                <span class="fw-semibold">{{ resumen.cuotas_pagadas }} / {{ resumen.cuotas_total || credito.numero_cuotas }}</span>
+              </div>
+              <div class="progress mb-3" style="height: 6px" role="progressbar" :aria-valuenow="resumen.cuotas_pagadas" :aria-valuemax="resumen.cuotas_total">
                 <div class="progress-bar bg-success" :style="{ width: `${progreso}%` }"></div>
               </div>
-              <div class="d-flex justify-content-between small opacity-75">
-                <span>{{ resumen.cuotas_pagadas }} de {{ resumen.cuotas_total || credito.numero_cuotas }} pagos</span>
-                <span>Pagado {{ formatoSoles(resumen.total_pagado) }}</span>
-              </div>
+
+              <table class="table table-sm table-borderless small mb-0">
+                <tbody>
+                  <tr><td class="text-muted ps-0">Prestado</td><td class="text-end pe-0">{{ formatoSoles(credito.monto_capital) }}</td></tr>
+                  <tr><td class="text-muted ps-0">Interés</td><td class="text-end pe-0">{{ formatoSoles(credito.interes_total) }}</td></tr>
+                  <tr><td class="text-muted ps-0">Pagado</td><td class="text-end pe-0">{{ formatoSoles(resumen.total_pagado) }}</td></tr>
+                  <tr :class="{ 'text-danger': resumen.mora_pendiente !== '0.00' }">
+                    <td class="ps-0" :class="{ 'text-muted': resumen.mora_pendiente === '0.00' }">Mora pendiente</td>
+                    <td class="text-end pe-0">{{ formatoSoles(resumen.mora_pendiente) }}</td>
+                  </tr>
+                  <tr class="border-top fw-semibold">
+                    <td class="ps-0">Exigible hoy</td><td class="text-end pe-0">{{ formatoSoles(resumen.exigible_hoy) }}</td>
+                  </tr>
+                  <tr>
+                    <td class="text-muted ps-0">Próximo pago</td>
+                    <td class="text-end pe-0">
+                      <template v-if="resumen.proxima">
+                        {{ resumen.proxima.fecha_vencimiento === hoy ? 'Hoy' : formatoFecha(resumen.proxima.fecha_vencimiento) }} · {{ formatoSoles(resumen.proxima.pendiente) }}
+                      </template>
+                      <template v-else>—</template>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
           </div>
 
-          <!-- Cifras -->
-          <div class="row g-2 mb-3 cifra">
-            <div class="col-6 col-md-3">
-              <div class="card border h-100 mb-0"><div class="card-body p-3">
-                <div class="small text-muted">Prestado</div>
-                <div class="fw-bold fs-6">{{ formatoSoles(credito.monto_capital) }}</div>
-              </div></div>
-            </div>
-            <div class="col-6 col-md-3">
-              <div class="card border h-100 mb-0"><div class="card-body p-3">
-                <div class="small text-muted">Interés ({{ tasaTexto }})</div>
-                <div class="fw-bold fs-6">{{ formatoSoles(credito.interes_total) }}</div>
-              </div></div>
-            </div>
-            <div class="col-6 col-md-3">
-              <div class="card border h-100 mb-0"><div class="card-body p-3">
-                <div class="small text-muted">Mora pendiente</div>
-                <div class="fw-bold fs-6" :class="{ 'text-danger': resumen.mora_pendiente !== '0.00' }">{{ formatoSoles(resumen.mora_pendiente) }}</div>
-              </div></div>
-            </div>
-            <div class="col-6 col-md-3">
-              <div class="card border h-100 mb-0"><div class="card-body p-3">
-                <div class="small text-muted">Próximo pago</div>
-                <div class="fw-bold fs-6">
-                  <template v-if="resumen.proxima">
-                    {{ resumen.proxima.fecha_vencimiento === hoy ? 'Hoy' : formatoFecha(resumen.proxima.fecha_vencimiento).slice(0, 5) }}
-                    · {{ formatoSoles(resumen.proxima.pendiente) }}
-                  </template>
-                  <template v-else>—</template>
-                </div>
-              </div></div>
-            </div>
-          </div>
-
-          <!-- Acciones en celular y tablet -->
-          <AccionesCredito class="d-xl-none mb-3" :acciones="acciones" @accion="alAccionar" />
-
-          <!-- Pestañas -->
-          <ul class="nav nav-pills flex-nowrap gap-1 mb-3 pestanas" role="tablist">
-            <li v-for="t in PESTANAS" :key="t.id" class="nav-item" :class="{ 'd-xl-none': t.id === 'cliente' }" role="presentation">
-              <button type="button" class="nav-link rounded-pill px-2 px-sm-3 py-2 text-nowrap" :class="{ active: pestana === t.id }" role="tab"
-                :aria-selected="pestana === t.id" @click="pestana = t.id">
-                {{ t.texto }}<span v-if="t.id === 'pagos' && pagosValidos" class="ms-1 opacity-75">({{ pagosValidos }})</span>
-              </button>
-            </li>
-          </ul>
-
-          <div class="card border-0 shadow-sm">
-            <div class="card-body p-0 p-xl-3">
-              <CuotasCredito v-if="pestana === 'cuotas'" :cuotas="detalle.cuotas" :hoy="hoy" />
-              <PagosCredito v-else-if="pestana === 'pagos'" :pagos="estadoCuenta?.pagos ?? []" :puede-editar="puede('creditos.cobrar')"
-                :puede-anular="(p) => puedeAnularPago(p.registrado_por, usuarioId, puede)" @anular="abrirAnularPago" @editar="abrirEditarPago" />
-              <div v-else-if="pestana === 'cliente'" class="p-3">
-                <FichaCobro v-if="credito.cliente && !esEscritorio" :cliente="credito.cliente" :puede-editar="puede('creditos.crear')" :puede-asignar="puede('creditos.cartera.asignar')" />
-              </div>
-              <HistorialCredito v-else-if="estadoCuenta" :estado="estadoCuenta" />
+          <div v-if="credito.cliente && esEscritorio" class="card border-0 shadow-sm mb-0">
+            <div class="card-header bg-white border-bottom py-2 fw-semibold text-dark">Ficha de cobro</div>
+            <div class="card-body">
+              <FichaCobro :cliente="credito.cliente" :puede-editar="puede('creditos.crear')" :puede-asignar="puede('creditos.cartera.asignar')" />
             </div>
           </div>
         </div>
+      </div>
 
-        <!-- Columna derecha en escritorio (~340 px): acciones, pagos recientes, cliente -->
-        <div class="col-12 col-xl-auto d-none d-xl-block columna-lateral">
-          <div class="card border-0 shadow-sm mb-3">
-            <div class="card-body p-3">
-              <AccionesCredito :acciones="acciones" vertical @accion="alAccionar" />
-            </div>
-          </div>
-          <div v-if="estadoCuenta?.pagos.length" class="card border-0 shadow-sm mb-3">
-            <div class="card-header bg-transparent fw-semibold">Pagos recientes</div>
-            <ul class="list-group list-group-flush cifra small">
-              <li v-for="p in pagosRecientes" :key="p.id" class="list-group-item d-flex justify-content-between">
-                <span>{{ p.numero_recibo }} · {{ formatoFecha(p.fecha_pago) }}</span>
-                <span :class="{ 'text-decoration-line-through text-muted': p.estado === 'anulado' }">{{ formatoSoles(p.monto_aplicado) }}</span>
-              </li>
-            </ul>
-          </div>
-          <div v-if="credito.cliente && esEscritorio" class="card border-0 shadow-sm">
-            <div class="card-header bg-transparent fw-semibold">Ficha de cobro</div>
-            <div class="card-body p-3">
-              <FichaCobro :cliente="credito.cliente" :puede-editar="puede('creditos.crear')" :puede-asignar="puede('creditos.cartera.asignar')" />
-            </div>
+      <!-- Pestañas -->
+      <div class="col-12 col-lg-8 order-lg-1">
+        <ul class="nav nav-pills mb-3 flex-nowrap pestanas">
+          <li v-for="t in PESTANAS" :key="t.id" class="nav-item" :class="{ 'd-lg-none': t.id === 'cliente' }">
+            <button type="button" class="nav-link text-nowrap" :class="{ active: pestana === t.id }" @click="pestana = t.id">
+              <i :class="t.icono" class="me-1"></i>{{ t.texto }}<span v-if="t.id === 'pagos' && pagosValidos" class="ms-1">({{ pagosValidos }})</span>
+            </button>
+          </li>
+        </ul>
+
+        <div class="card border-0 shadow-sm">
+          <div :class="pestana === 'cliente' ? 'card-body' : 'card-body p-0'">
+            <CuotasCredito v-if="pestana === 'cuotas'" :cuotas="detalle.cuotas" :hoy="hoy" />
+            <PagosCredito v-else-if="pestana === 'pagos'" :pagos="estadoCuenta?.pagos ?? []" :puede-editar="puede('creditos.cobrar')"
+              :puede-anular="(p) => puedeAnularPago(p.registrado_por, usuarioId, puede)" @anular="abrirAnularPago" @editar="abrirEditarPago" />
+            <FichaCobro v-else-if="pestana === 'cliente' && credito.cliente && !esEscritorio" :cliente="credito.cliente"
+              :puede-editar="puede('creditos.crear')" :puede-asignar="puede('creditos.cartera.asignar')" />
+            <HistorialCredito v-else-if="estadoCuenta" :estado="estadoCuenta" />
           </div>
         </div>
       </div>
@@ -149,6 +115,7 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import DefaultLayout from '@/layouts/DefaultLayout.vue'
+import EncabezadoCredito from '@/components/Creditos/EncabezadoCredito.vue'
 import AccionesCredito, { type IdAccion } from '@/components/Creditos/AccionesCredito.vue'
 import CuotasCredito from '@/components/Creditos/CuotasCredito.vue'
 import PagosCredito from '@/components/Creditos/PagosCredito.vue'
@@ -180,11 +147,11 @@ const catalogos = useCreditosCatalogosStore()
 const { puede, usuarioId } = usePermisosCredito()
 
 const PESTANAS = [
-  { id: 'cuotas', texto: 'Cuotas' },
-  { id: 'pagos', texto: 'Pagos' },
-  { id: 'historial', texto: 'Historial' },
+  { id: 'cuotas', texto: 'Cuotas', icono: 'fas fa-list-ol' },
+  { id: 'pagos', texto: 'Pagos', icono: 'fas fa-receipt' },
+  { id: 'historial', texto: 'Historial', icono: 'fas fa-history' },
   // En escritorio la ficha está en la columna derecha.
-  { id: 'cliente', texto: 'Cliente' },
+  { id: 'cliente', texto: 'Cliente', icono: 'fas fa-user' },
 ] as const
 
 const hoy = hoyEnLima()
@@ -198,8 +165,8 @@ const pagoElegido = ref<Pago | null>(null)
 const dialogo = reactive({ cobrar: false, liquidar: false, reprogramar: false, condonar: false, corregir: false, renovar: false, motivo: false, editarPago: false })
 const motivoActual = ref({ titulo: '', descripcion: '', textoConfirmar: 'Confirmar', variante: 'danger', exito: '', ejecutar: async (_m: string, _c: string): Promise<unknown> => undefined })
 
-/** ≥ 1200 px: la ficha va en la columna derecha; debajo, en la pestaña "Cliente". */
-const esEscritorio = useMediaQuery('(min-width: 1200px)')
+/** ≥ 992 px: la ficha va en la columna derecha; debajo, en la pestaña "Cliente". */
+const esEscritorio = useMediaQuery('(min-width: 992px)')
 watch(esEscritorio, (valor) => {
   if (valor && pestana.value === 'cliente') pestana.value = 'cuotas'
 })
@@ -208,7 +175,6 @@ const creditoId = computed(() => Number(route.params.id))
 const credito = computed(() => detalle.value?.credito ?? null)
 const resumen = computed(() => detalle.value!.resumen)
 const pagosValidos = computed(() => estadoCuenta.value?.pagos.filter((p) => p.estado === 'valido').length ?? 0)
-const pagosRecientes = computed(() => [...(estadoCuenta.value?.pagos ?? [])].reverse().slice(0, 4))
 const progreso = computed(() => (resumen.value.cuotas_total ? Math.round((resumen.value.cuotas_pagadas / resumen.value.cuotas_total) * 100) : 0))
 const tasaTexto = computed(() => `${Number.parseFloat(credito.value!.tasa_interes)}% ${credito.value!.unidad_tasa === 'total' ? 'total' : 'mensual'}`)
 const acciones = computed(() => (credito.value ? accionesDisponibles(credito.value.estado, puede, pagosValidos.value > 0) : []))
@@ -324,42 +290,21 @@ async function irAlRenovado(nuevoId: number) {
   await router.push({ name: 'creditos.detalle', params: { id: nuevoId } })
 }
 
-function volver() {
-  if (window.history.length > 1) router.back()
-  else router.push({ name: 'creditos.index' })
-}
 </script>
 
 <style scoped>
-.creditos-contenedor {
-  max-width: 1440px;
-}
-.btn-volver {
-  width: 44px;
-  height: 44px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
 .cifra {
   font-variant-numeric: tabular-nums;
-}
-.saldo {
-  font-size: 2.1rem;
-  letter-spacing: -0.02em;
-}
-.min-w-0 {
-  min-width: 0;
 }
 /* Con 4 pestañas en 360 px: se desplazan en su fila, nunca ensanchan la página. */
 .pestanas {
   overflow-x: auto;
   scrollbar-width: none;
 }
-@media (min-width: 1200px) {
-  .columna-lateral {
-    width: 340px;
+@media (min-width: 992px) {
+  .columna-resumen {
+    position: sticky;
+    top: 116px;
   }
 }
 </style>

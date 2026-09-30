@@ -1,56 +1,65 @@
 <template>
   <div class="d-flex flex-column gap-3">
-    <!-- Resumen (tarjeta oscura del mockup 1) -->
-    <div class="card bg-dark text-white border-0 mb-0">
-      <div class="card-body">
-        <div class="d-flex justify-content-between align-items-center mb-2">
-          <span class="small fw-bold text-uppercase opacity-75">Resumen</span>
-          <span v-if="cargando" class="spinner-border spinner-border-sm opacity-75" aria-label="Calculando"></span>
-        </div>
-
-        <template v-if="preview">
-          <div class="d-flex justify-content-between cifra"><span>Capital</span><span>{{ formatoSoles(capital) }}</span></div>
-          <div class="d-flex justify-content-between cifra"><span>Interés</span><span>{{ formatoSoles(preview.cronograma.interes_total) }}</span></div>
-          <hr class="my-2 opacity-25" />
-          <div class="d-flex justify-content-between cifra fs-5 fw-bold"><span>Total a devolver</span><span>{{ formatoSoles(preview.cronograma.monto_total) }}</span></div>
-          <div class="bg-primary rounded-3 text-center fw-bold fs-5 py-2 px-2 my-2 cifra">{{ textoCuotas }}</div>
-          <div class="d-flex justify-content-between small opacity-75 cifra">
-            <span>Primer pago {{ formatoFecha(preview.cronograma.primer_vencimiento) }}</span>
-            <span>Último {{ formatoFecha(preview.cronograma.ultimo_vencimiento) }}</span>
-          </div>
-        </template>
-        <p v-else-if="error" class="mb-0 text-warning small"><i class="fas fa-exclamation-triangle me-1"></i>{{ error }}</p>
-        <p v-else class="mb-0 small opacity-75">Completa cliente, monto, interés y n.º de pagos para ver el resumen.</p>
+    <div class="card border-0 shadow-sm mb-0">
+      <div class="card-header bg-white border-bottom d-flex align-items-center justify-content-between py-2">
+        <span class="fw-semibold text-dark"><i class="fas fa-calculator me-2 text-primary"></i>Resumen</span>
+        <span v-if="cargando" class="spinner-border spinner-border-sm text-muted" aria-label="Calculando"></span>
+      </div>
+      <div class="card-body py-3">
+        <table v-if="preview" class="table table-sm table-borderless mb-0 small cifra">
+          <tbody>
+            <tr><td class="text-muted ps-0">Capital</td><td class="text-end pe-0">{{ formatoSoles(capital) }}</td></tr>
+            <tr><td class="text-muted ps-0">Interés</td><td class="text-end pe-0">{{ formatoSoles(preview.cronograma.interes_total) }}</td></tr>
+            <tr class="border-top fw-semibold">
+              <td class="ps-0">Total a devolver</td>
+              <td class="text-end pe-0 text-primary fs-6">{{ formatoSoles(preview.cronograma.monto_total) }}</td>
+            </tr>
+            <tr><td class="text-muted ps-0">Pagos</td><td class="text-end pe-0 fw-semibold">{{ textoCuotas }}</td></tr>
+            <tr>
+              <td class="text-muted ps-0">Primero · último</td>
+              <td class="text-end pe-0">{{ formatoFecha(preview.cronograma.primer_vencimiento) }} · {{ formatoFecha(preview.cronograma.ultimo_vencimiento) }}</td>
+            </tr>
+          </tbody>
+        </table>
+        <p v-else-if="error" class="mb-0 text-danger small"><i class="fas fa-exclamation-triangle me-1"></i>{{ error }}</p>
+        <p v-else class="mb-0 small text-muted fst-italic">Completa cliente, monto, interés y n.º de pagos para ver el resumen.</p>
       </div>
     </div>
 
-    <!-- Vista previa del cronograma -->
-    <div v-if="preview" class="card border mb-0">
-      <div class="card-header d-flex justify-content-between align-items-center bg-transparent">
-        <span class="fw-semibold">Vista previa del cronograma</span>
-        <button v-if="cuotas.length > FILAS_RESUMIDAS" type="button" class="btn btn-link btn-sm p-0 fw-semibold" @click="completo = !completo">
-          {{ completo ? 'Ver menos' : 'Ver completo' }}
+    <div v-if="preview" class="card border-0 shadow-sm mb-0">
+      <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center py-2">
+        <span class="fw-semibold text-dark">Cronograma</span>
+        <button v-if="cuotas.length > FILAS_RESUMIDAS" type="button" class="btn btn-link btn-sm p-0" @click="completo = !completo">
+          {{ completo ? 'Ver menos' : `Ver los ${cuotas.length}` }}
         </button>
       </div>
-      <ul class="list-group list-group-flush cronograma" :class="{ 'cronograma-completo': completo }">
-        <li v-for="c in filas" :key="c.numero_cuota" class="list-group-item d-flex align-items-center gap-3 cifra">
-          <span class="text-muted numero">#{{ c.numero_cuota }}</span>
-          <span class="flex-grow-1">
-            {{ formatoFecha(c.fecha_vencimiento) }}
-            <i v-if="c.fecha_forzada_a_siguiente" class="fas fa-info-circle text-warning ms-1"
-              title="Cae en día sin cobro: se pasó al siguiente día hábil"></i>
-          </span>
-          <span v-if="pagadas && c.numero_cuota <= pagadas" class="small text-success fw-semibold"><i class="fas fa-check-circle me-1"></i>Pagada</span>
-          <span class="fw-bold">{{ formatoSoles(c.monto_total) }}</span>
-        </li>
-      </ul>
+      <div class="table-responsive" :class="{ 'cronograma-completo': completo }">
+        <table class="table table-sm table-hover align-middle mb-0 small cifra">
+          <thead class="table-light">
+            <tr><th class="ps-3">#</th><th>Vence</th><th class="text-end pe-3">Cuota</th></tr>
+          </thead>
+          <tbody>
+            <tr v-for="c in filas" :key="c.numero_cuota">
+              <td class="ps-3 text-muted">{{ c.numero_cuota }}</td>
+              <td>
+                {{ formatoFecha(c.fecha_vencimiento) }}
+                <i v-if="c.fecha_forzada_a_siguiente" class="fas fa-info-circle text-warning ms-1"
+                  title="Cae en día sin cobro: se pasó al siguiente día hábil"></i>
+                <span v-if="pagadas && c.numero_cuota <= pagadas" class="badge bg-success-subtle text-success-emphasis ms-1">Pagada</span>
+              </td>
+              <td class="text-end pe-3 fw-semibold">{{ formatoSoles(c.monto_total) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-// Módulo Créditos (mockup 1): resumen y cronograma que devuelve POST creditos/preview.
-// Solo muestra; el agrupado "N pagos de S/ X" compara los montos como texto, sin sumar.
+// Módulo Créditos (mockup 1): resumen y cronograma que devuelve POST creditos/preview, con el
+// mismo estilo de totales que el registro de ventas (card clara + tabla). Solo muestra; el
+// agrupado "N pagos de S/ X" compara los montos como texto, sin sumar.
 import { computed, ref } from 'vue'
 import { formatoFecha, formatoSoles } from '@/helpers/creditos/formato'
 import type { CuotaPrevia, PreviewCredito } from '@/types/creditos'
@@ -95,14 +104,8 @@ const textoCuotas = computed(() => {
 .cifra {
   font-variant-numeric: tabular-nums;
 }
-.numero {
-  width: 2.5rem;
-}
 .cronograma-completo {
   max-height: 420px;
   overflow-y: auto;
-}
-.list-group-item {
-  min-height: 44px;
 }
 </style>

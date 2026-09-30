@@ -1,6 +1,6 @@
 <template>
   <div class="barra-accion">
-    <div class="barra-accion__contenido d-flex gap-2 justify-content-md-end">
+    <div class="barra-accion__contenido d-flex gap-2 justify-content-end">
       <slot />
     </div>
   </div>
@@ -29,8 +29,12 @@
     box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.06);
   }
 
+  /* En celular los botones se reparten el ancho, con el tamaño normal del sistema. */
   .barra-accion__contenido :deep(.btn) {
-    min-height: 48px;
+    flex: 1 1 0;
+    white-space: nowrap;
+    padding-inline: 0.5rem;
+    font-size: 0.8125rem;
   }
 }
 </style>

@@ -24,8 +24,8 @@ describe('filasDeuda', () => {
   })
 
   it('una cuota ya pagada que solo debe mora muestra solo la mora', () => {
-    const filas = filasDeuda([linea({ pendiente: '0.00', mora: '5.00', dias_atraso: 1 })], HOY)
-    expect(filas.map((f) => f.texto)).toEqual(['Mora cuota 11 · 1 día'])
+    const filas = filasDeuda([linea({ pendiente: '0.00', mora: '5.00', dias_atraso: 0, mora_tope_alcanzado: true })], HOY)
+    expect(filas.map((f) => f.texto)).toEqual(['Mora cuota 11 (tope)'])
   })
 
   it('la próxima cuota que vence otro día dice la fecha', () => {

@@ -1,120 +1,102 @@
 <template>
   <DefaultLayout>
-    <div class="creditos-contenedor mx-auto">
-      <div class="d-flex align-items-center gap-2 mb-3">
-        <h5 class="fw-bold mb-0 flex-grow-1">Créditos</h5>
-        <router-link v-if="puede('creditos.crear')" :to="{ name: 'creditos.nuevo' }" class="btn btn-primary boton-alto d-inline-flex align-items-center">
-          <i class="fas fa-plus me-md-1"></i><span class="d-none d-md-inline">Nuevo crédito</span>
-        </router-link>
-      </div>
+    <EncabezadoCredito titulo="Créditos" :subtitulo="meta ? `${meta.total} registro(s) encontrado(s)` : ''" :volver="false">
+      <router-link v-if="puede('creditos.crear')" :to="{ name: 'creditos.nuevo' }" class="btn btn-primary fw-semibold shadow-sm">
+        <i class="fas fa-plus me-2"></i>Nuevo crédito
+      </router-link>
+    </EncabezadoCredito>
 
-      <!-- Filtros -->
-      <div class="d-flex flex-column flex-xl-row gap-2 mb-3">
-        <div class="position-relative buscador">
-          <i class="fas fa-search text-muted icono-buscar"></i>
-          <input v-model="buscarTexto" type="search" class="form-control boton-alto campo-buscar" placeholder="Cliente, DNI o N.º de crédito"
-            aria-label="Buscar créditos" maxlength="100" />
-        </div>
-        <div class="chips d-flex gap-2 overflow-auto pb-1" role="tablist" aria-label="Estado">
-          <button v-for="v in VISTAS" :key="v.id" type="button" role="tab" :aria-selected="filtros.vista === v.id"
-            class="btn btn-sm rounded-pill text-nowrap boton-chip" :class="filtros.vista === v.id ? 'btn-dark' : 'btn-outline-secondary'"
-            @click="cambiar({ vista: v.id })">
-            {{ v.texto }}
-          </button>
-        </div>
-      </div>
-
-      <div v-if="error" class="alert alert-danger">
-        {{ error.mensaje }}
-        <button type="button" class="btn btn-sm btn-danger ms-2" @click="cargar">Reintentar</button>
-      </div>
-
-      <!-- Celular y tablet: tarjetas -->
-      <div class="d-xl-none" :class="{ 'opacity-50': cargando && filas.length }">
+    <!-- Filtros -->
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-body">
         <div class="row g-2">
-          <div v-for="f in filas" :key="f.id" class="col-12 col-md-6">
-            <router-link :to="{ name: 'creditos.detalle', params: { id: f.id } }" class="card border shadow-none h-100 mb-0 text-reset text-decoration-none tarjeta">
-              <div class="card-body p-3 cifra">
-                <div class="d-flex justify-content-between align-items-start gap-2">
-                  <div class="min-w-0">
-                    <div class="fw-semibold text-truncate">{{ f.cliente.nombre }}</div>
-                    <small class="text-muted">{{ f.numero_credito ?? 'Borrador' }} · {{ textoFrecuencia(f.frecuencia_unidad, f.frecuencia_intervalo) }}</small>
-                  </div>
-                  <span class="badge rounded-pill" :class="insignia(f).clase"><i :class="insignia(f).icono" class="me-1"></i>{{ insignia(f).texto }}</span>
-                </div>
-                <div class="d-flex justify-content-between align-items-end mt-2">
-                  <div>
-                    <small class="text-muted d-block">{{ f.situacion ? 'Saldo por pagar' : 'Total del crédito' }}</small>
-                    <span class="fw-bold fs-5">{{ formatoSoles(f.situacion?.saldo_por_pagar ?? f.monto_total) }}</span>
-                  </div>
-                  <small class="text-end" :class="f.situacion?.dias_atraso ? 'text-danger fw-semibold' : 'text-muted'">{{ lineaProxima(f) }}</small>
-                </div>
-                <div v-if="f.situacion?.cuotas_total" class="progress mt-2" style="height: 4px" role="progressbar"
-                  :aria-valuenow="f.situacion.cuotas_pagadas" :aria-valuemax="f.situacion.cuotas_total"
-                  :aria-label="`${f.situacion.cuotas_pagadas} de ${f.situacion.cuotas_total} pagos`">
-                  <div class="progress-bar bg-success" :style="{ width: `${porcentaje(f)}%` }"></div>
-                </div>
-              </div>
-            </router-link>
+          <div class="col-12 col-md-6">
+            <div class="input-group input-group-sm">
+              <input v-model="buscarTexto" type="search" class="form-control" placeholder="Buscar por cliente, DNI o N.º de crédito..."
+                aria-label="Buscar créditos" maxlength="100" />
+              <span class="input-group-text"><i class="fas fa-search"></i></span>
+            </div>
+          </div>
+          <div class="col-8 col-md-4">
+            <select class="form-select form-select-sm" :value="filtros.vista" aria-label="Estado"
+              @change="cambiar({ vista: ($event.target as HTMLSelectElement).value as VistaListado })">
+              <option v-for="v in VISTAS" :key="v.id" :value="v.id">{{ v.id === 'todos' ? 'Todos los estados' : v.texto }}</option>
+            </select>
+          </div>
+          <div class="col-4 col-md-2">
+            <button type="button" class="btn btn-outline-secondary btn-sm w-100" title="Limpiar filtros" @click="limpiar">
+              <i class="fas fa-eraser"></i>
+            </button>
           </div>
         </div>
       </div>
+    </div>
 
-      <!-- Escritorio: tabla -->
-      <div class="card border-0 shadow-sm d-none d-xl-block" :class="{ 'opacity-50': cargando && filas.length }">
-        <div class="table-responsive">
+    <div v-if="error" class="alert alert-danger py-2 small">
+      {{ error.mensaje }}
+      <button type="button" class="btn btn-sm btn-danger ms-2" @click="cargar">Reintentar</button>
+    </div>
+
+    <div class="card border-0 shadow-sm">
+      <div class="card-body p-0">
+        <div class="table-responsive" :class="{ 'opacity-50': cargando && filas.length }">
           <table class="table table-hover align-middle mb-0 cifra">
             <thead class="table-light">
-              <tr>
+              <tr class="small text-secondary text-uppercase">
                 <th v-for="c in COLUMNAS" :key="c.texto" :class="c.clase" :aria-sort="ariaOrden(c.orden)">
-                  <button v-if="c.orden" type="button" class="btn btn-link p-0 fw-semibold text-reset text-decoration-none text-nowrap" @click="ordenar(c.orden)">
+                  <a v-if="c.orden" href="#" class="text-reset text-decoration-none text-nowrap" @click.prevent="ordenar(c.orden)">
                     {{ c.texto }} <i class="fas small" :class="iconoOrden(c.orden)"></i>
-                  </button>
+                  </a>
                   <template v-else>{{ c.texto }}</template>
                 </th>
               </tr>
             </thead>
             <tbody>
-              <tr v-for="f in filas" :key="f.id" class="fila" tabindex="0" @click="abrir(f)" @keydown.enter="abrir(f)">
-                <td class="fw-semibold text-nowrap">{{ f.numero_credito ?? '—' }}</td>
-                <td>
-                  <div class="fw-semibold">{{ f.cliente.nombre }}</div>
-                  <small class="text-muted">{{ f.cliente.documento }}</small>
+              <tr v-if="cargando && !filas.length">
+                <td :colspan="COLUMNAS.length" class="text-center py-5 text-muted"><div class="spinner-border spinner-border-sm me-2"></div>Cargando...</td>
+              </tr>
+              <tr v-else-if="!filas.length">
+                <td :colspan="COLUMNAS.length" class="text-center py-5 text-muted fst-italic">
+                  {{ filtros.buscar || filtros.vista !== 'todos' ? 'Ningún crédito coincide con los filtros.' : 'Sin créditos registrados.' }}
                 </td>
-                <td class="text-nowrap">{{ formatoFecha(f.fecha_desembolso) }}</td>
-                <td class="text-end text-nowrap">{{ formatoSoles(f.monto_capital) }}</td>
+              </tr>
+              <tr v-for="f in filas" :key="f.id">
+                <td class="ps-3 fw-semibold text-nowrap">{{ f.numero_credito ?? '—' }}</td>
+                <td>
+                  {{ f.cliente.nombre }}
+                  <small class="text-muted d-block">{{ f.cliente.documento }}</small>
+                </td>
+                <td class="small text-nowrap d-none d-md-table-cell">{{ formatoFecha(f.fecha_desembolso) }}</td>
+                <td class="text-end text-nowrap d-none d-md-table-cell">{{ formatoSoles(f.monto_capital) }}</td>
                 <td class="text-end text-nowrap fw-semibold">{{ f.situacion ? formatoSoles(f.situacion.saldo_por_pagar) : '—' }}</td>
-                <td class="text-nowrap">
+                <td class="small text-nowrap d-none d-lg-table-cell">
                   <template v-if="f.situacion?.proxima">{{ fechaCorta(f.situacion.proxima.fecha_vencimiento) }} · {{ formatoSoles(f.situacion.proxima.pendiente) }}</template>
                   <template v-else>—</template>
                 </td>
-                <td class="text-nowrap" :class="{ 'text-danger fw-semibold': f.situacion?.dias_atraso }">
-                  {{ f.situacion?.dias_atraso ? textoDias(f.situacion.dias_atraso) : '—' }}
+                <td class="text-center">
+                  <span class="badge rounded-pill" :class="insignia(f).clase">{{ insignia(f).texto }}</span>
+                  <small v-if="f.situacion?.dias_atraso" class="text-danger d-block">{{ textoDias(f.situacion.dias_atraso) }}</small>
                 </td>
-                <td><span class="badge rounded-pill" :class="insignia(f).clase"><i :class="insignia(f).icono" class="me-1"></i>{{ insignia(f).texto }}</span></td>
+                <td class="text-center pe-3">
+                  <router-link :to="{ name: 'creditos.detalle', params: { id: f.id } }" class="btn btn-sm btn-outline-primary text-nowrap">
+                    <i class="fas fa-arrow-right me-1"></i>Abrir
+                  </router-link>
+                </td>
               </tr>
             </tbody>
           </table>
         </div>
-      </div>
-
-      <div v-if="cargando && !filas.length" class="text-center text-muted py-5">
-        <span class="spinner-border spinner-border-sm me-2"></span>Cargando…
-      </div>
-      <div v-else-if="!cargando && !error && !filas.length" class="text-center text-muted py-5">
-        <i class="fas fa-hand-holding-usd fs-2 d-block mb-2 opacity-50"></i>
-        {{ filtros.buscar || filtros.vista !== 'todos' ? 'Ningún crédito coincide con los filtros.' : 'Todavía no hay créditos.' }}
-      </div>
-
-      <!-- Paginación -->
-      <div v-if="meta && meta.last_page > 1" class="d-flex align-items-center justify-content-between gap-2 mt-3">
-        <button type="button" class="btn btn-light boton-alto" :disabled="pagina <= 1 || cargando" @click="irAPagina(pagina - 1)">
-          <i class="fas fa-chevron-left"></i><span class="d-none d-sm-inline ms-1">Anterior</span>
-        </button>
-        <small class="text-muted text-center">Página {{ meta.current_page }} de {{ meta.last_page }} · {{ meta.total }} créditos</small>
-        <button type="button" class="btn btn-light boton-alto" :disabled="pagina >= meta.last_page || cargando" @click="irAPagina(pagina + 1)">
-          <span class="d-none d-sm-inline me-1">Siguiente</span><i class="fas fa-chevron-right"></i>
-        </button>
+        <div v-if="meta && meta.last_page > 1" class="d-flex align-items-center justify-content-end p-3 border-top flex-wrap gap-2">
+          <small class="text-muted">Página {{ meta.current_page }} de {{ meta.last_page }}</small>
+          <div class="btn-group btn-group-sm">
+            <button class="btn btn-outline-secondary" :disabled="pagina <= 1 || cargando" @click="irAPagina(pagina - 1)">
+              <i class="fas fa-chevron-left"></i> Anterior
+            </button>
+            <button class="btn btn-outline-secondary" :disabled="pagina >= meta.last_page || cargando" @click="irAPagina(pagina + 1)">
+              Siguiente <i class="fas fa-chevron-right"></i>
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   </DefaultLayout>
@@ -127,12 +109,13 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import DefaultLayout from '@/layouts/DefaultLayout.vue'
+import EncabezadoCredito from '@/components/Creditos/EncabezadoCredito.vue'
 import { creditoService } from '@/services/admin/creditoService'
 import { usePermisosCredito } from '@/composables/creditos/usePermisosCredito'
 import { interpretarErrorCredito, type ErrorCredito } from '@/composables/creditos/errorCredito'
-import { fechaCorta, PRESENTACION_CREDITO, textoDias, textoFrecuencia } from '@/helpers/creditos/estados'
+import { fechaCorta, PRESENTACION_CREDITO, textoDias } from '@/helpers/creditos/estados'
 import { formatoFecha, formatoSoles } from '@/helpers/creditos/formato'
-import { alternarOrden, aQuery, desdeQuery, VISTAS, type FiltrosListado, type OrdenListado } from '@/helpers/creditos/listado'
+import { alternarOrden, aQuery, desdeQuery, VISTAS, type FiltrosListado, type OrdenListado, type VistaListado } from '@/helpers/creditos/listado'
 import type { FilaCredito, Paginado } from '@/types/creditos'
 
 const route = useRoute()
@@ -140,14 +123,14 @@ const router = useRouter()
 const { puede } = usePermisosCredito()
 
 const COLUMNAS: { texto: string; orden?: OrdenListado; clase?: string }[] = [
-  { texto: 'N.º', orden: 'numero' },
+  { texto: 'N.º', orden: 'numero', clase: 'ps-3' },
   { texto: 'Cliente', orden: 'cliente' },
-  { texto: 'Desembolso', orden: 'desembolso' },
-  { texto: 'Prestado', orden: 'monto', clase: 'text-end' },
+  { texto: 'Desembolso', orden: 'desembolso', clase: 'd-none d-md-table-cell' },
+  { texto: 'Prestado', orden: 'monto', clase: 'text-end d-none d-md-table-cell' },
   { texto: 'Saldo por pagar', clase: 'text-end' },
-  { texto: 'Próximo pago' },
-  { texto: 'Atraso' },
-  { texto: 'Estado' },
+  { texto: 'Próximo pago', clase: 'd-none d-lg-table-cell' },
+  { texto: 'Estado', clase: 'text-center' },
+  { texto: 'Acciones', clase: 'text-center pe-3' },
 ]
 
 const estadoUrl = computed(() => desdeQuery(route.query))
@@ -168,7 +151,10 @@ function cambiar(cambios: Partial<FiltrosListado>, nuevaPagina = 1) {
 
 const ordenar = (columna: OrdenListado) => router.replace({ query: aQuery(alternarOrden(filtros.value, columna), 1) })
 const irAPagina = (n: number) => cambiar({}, n)
-const abrir = (f: FilaCredito) => router.push({ name: 'creditos.detalle', params: { id: f.id } })
+const limpiar = () => {
+  buscarTexto.value = ''
+  router.replace({ query: {} })
+}
 
 async function cargar() {
   const numero = ++ultimaSolicitud
@@ -214,14 +200,7 @@ function insignia(f: FilaCredito) {
   return PRESENTACION_CREDITO[f.estado]
 }
 
-function lineaProxima(f: FilaCredito): string {
-  const s = f.situacion
-  if (!s) return formatoFecha(f.fecha_desembolso)
-  if (s.dias_atraso) return `${textoDias(s.dias_atraso)} de atraso`
-  return s.proxima ? `${fechaCorta(s.proxima.fecha_vencimiento)} · ${formatoSoles(s.proxima.pendiente)}` : 'Sin cuotas pendientes'
-}
 
-const porcentaje = (f: FilaCredito) => Math.round(((f.situacion?.cuotas_pagadas ?? 0) / (f.situacion?.cuotas_total || 1)) * 100)
 
 function ariaOrden(columna?: OrdenListado) {
   if (!columna || filtros.value.orden !== columna) return undefined
@@ -235,47 +214,7 @@ function iconoOrden(columna: OrdenListado) {
 </script>
 
 <style scoped>
-.creditos-contenedor {
-  max-width: 1440px;
-}
-.boton-alto {
-  min-height: 44px;
-}
-.boton-chip {
-  min-height: 40px;
-  padding-inline: 0.9rem;
-}
-.buscador {
-  flex: 1 1 auto;
-}
-@media (min-width: 1200px) {
-  .buscador {
-    max-width: 380px;
-  }
-}
-.campo-buscar {
-  padding-left: 2.6rem;
-}
-.icono-buscar {
-  position: absolute;
-  left: 1rem;
-  top: 50%;
-  transform: translateY(-50%);
-}
-.chips {
-  scrollbar-width: none;
-}
 .cifra {
   font-variant-numeric: tabular-nums;
-}
-.min-w-0 {
-  min-width: 0;
-}
-.fila {
-  cursor: pointer;
-}
-.tarjeta:hover,
-.tarjeta:focus-visible {
-  border-color: var(--bs-primary) !important;
 }
 </style>

@@ -1,9 +1,9 @@
 <template>
-  <div v-if="cargando" class="rounded-3 p-3 bg-light small text-muted mt-2">
+  <div v-if="cargando" class="rounded px-3 py-2 bg-light small text-muted mt-2">
     <span class="spinner-border spinner-border-sm me-2"></span>Revisando al cliente…
   </div>
-  <div v-else-if="resumen" class="rounded-3 p-3 small mt-2" :class="`alert-${estado.color} bg-${estado.color}-subtle text-${estado.color}-emphasis`">
-    <div class="fw-bold mb-1">
+  <div v-else-if="resumen" class="alert py-2 px-3 small mt-2 mb-0" :class="`alert-${estado.color}`">
+    <div class="fw-semibold mb-1">
       <i :class="estado.icono" class="me-1"></i>{{ estado.texto }}
     </div>
     <div class="d-flex flex-wrap gap-x-2 column-gap-3 row-gap-1">

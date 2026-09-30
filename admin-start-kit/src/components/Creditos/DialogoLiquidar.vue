@@ -33,22 +33,22 @@
 
       <div class="row g-2">
         <div class="col-12 col-sm-6">
-          <label class="form-label small fw-semibold" for="liq-monto">Monto recibido</label>
-          <div class="input-group">
+          <label class="form-label mb-1 small fw-semibold text-secondary" for="liq-monto">Monto recibido</label>
+          <div class="input-group input-group-sm">
             <span class="input-group-text">S/</span>
-            <input id="liq-monto" v-model="monto" type="text" inputmode="decimal" class="form-control" :class="{ 'is-invalid': !montoValido }" />
+            <input id="liq-monto" v-model="monto" type="text" inputmode="decimal" class="form-control form-control-sm" :class="{ 'is-invalid': !montoValido }" />
           </div>
           <small class="text-muted">Si recibes más, el vuelto sale de caja.</small>
         </div>
         <div v-if="metodosPago.length > 1" class="col-12 col-sm-6">
-          <label class="form-label small fw-semibold" for="liq-metodo">Método</label>
-          <select id="liq-metodo" v-model="metodo" class="form-select">
+          <label class="form-label mb-1 small fw-semibold text-secondary" for="liq-metodo">Método</label>
+          <select id="liq-metodo" v-model="metodo" class="form-select form-select-sm">
             <option v-for="m in metodosPago" :key="m.id" :value="m.id">{{ m.name }}</option>
           </select>
         </div>
         <div class="col-12">
-          <label class="form-label small fw-semibold" for="liq-ref">Referencia (opcional)</label>
-          <input id="liq-ref" v-model="referencia" type="text" class="form-control" maxlength="100" placeholder="N.º de operación" />
+          <label class="form-label mb-1 small fw-semibold text-secondary" for="liq-ref">Referencia (opcional)</label>
+          <input id="liq-ref" v-model="referencia" type="text" class="form-control form-control-sm" maxlength="100" placeholder="N.º de operación" />
         </div>
       </div>
     </template>

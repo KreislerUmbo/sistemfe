@@ -2,10 +2,10 @@
   <DialogoBase v-model="abierto" :titulo="`Editar ${pago?.numero_recibo ?? 'pago'}`" texto-confirmar="Guardar"
     :procesando="procesando" :error="error" @confirmar="confirmar">
     <p class="small text-muted">Solo se pueden cambiar la referencia y las observaciones; el cambio queda auditado.</p>
-    <label class="form-label small fw-semibold" for="ep-ref">Referencia</label>
-    <input id="ep-ref" v-model="referencia" type="text" class="form-control mb-3" maxlength="100" />
-    <label class="form-label small fw-semibold" for="ep-obs">Observaciones</label>
-    <textarea id="ep-obs" v-model="observaciones" class="form-control" rows="2" maxlength="500"></textarea>
+    <label class="form-label mb-1 small fw-semibold text-secondary" for="ep-ref">Referencia</label>
+    <input id="ep-ref" v-model="referencia" type="text" class="form-control form-control-sm mb-3" maxlength="100" />
+    <label class="form-label mb-1 small fw-semibold text-secondary" for="ep-obs">Observaciones</label>
+    <textarea id="ep-obs" v-model="observaciones" class="form-control form-control-sm" rows="2" maxlength="500"></textarea>
   </DialogoBase>
 </template>
 

@@ -1,8 +1,8 @@
 <template>
   <div>
     <!-- Celular y tablet: filas tipo tarjeta (mockup 2) -->
-    <ul class="list-group list-group-flush d-xl-none cifra">
-      <li v-for="c in visibles" :key="c.id" class="list-group-item d-flex align-items-center gap-3 py-3" :class="fondo(c)">
+    <ul class="list-group list-group-flush d-lg-none cifra">
+      <li v-for="c in visibles" :key="c.id" class="list-group-item d-flex align-items-center gap-3 py-2 small" :class="fondo(c)">
         <span class="text-muted numero">#{{ c.numero_cuota }}</span>
         <div class="flex-grow-1">
           <div class="fw-semibold">{{ fechaCorta(c.fecha_vencimiento) }}</div>
@@ -14,23 +14,23 @@
         </div>
       </li>
     </ul>
-    <button v-if="cuotas.length > visibles.length || todas" type="button" class="btn btn-link w-100 fw-semibold d-xl-none fila-toque"
+    <button v-if="cuotas.length > visibles.length || todas" type="button" class="btn btn-link btn-sm w-100 d-lg-none"
       @click="todas = !todas">
       {{ todas ? 'Ver menos' : `Ver las ${cuotas.length} cuotas` }}
     </button>
 
     <!-- Escritorio: tabla completa -->
-    <div class="table-responsive d-none d-xl-block">
-      <table class="table table-hover align-middle mb-0 cifra">
+    <div class="table-responsive d-none d-lg-block">
+      <table class="table table-sm table-hover align-middle mb-0 small cifra">
         <thead class="table-light">
           <tr>
-            <th>#</th><th>Vence</th><th class="text-end">Capital</th><th class="text-end">Interés</th>
+            <th class="ps-3">#</th><th>Vence</th><th class="text-end">Capital</th><th class="text-end">Interés</th>
             <th class="text-end">Mora hoy</th><th class="text-end">Pagado</th><th>Estado</th>
           </tr>
         </thead>
         <tbody>
           <tr v-for="c in cuotas" :key="c.id" :class="fondo(c)">
-            <td class="text-muted">{{ c.numero_cuota }}</td>
+            <td class="ps-3 text-muted">{{ c.numero_cuota }}</td>
             <td>
               {{ formatoFecha(c.fecha_vencimiento) }}
               <small v-if="c.fecha_vencimiento !== c.fecha_vencimiento_original" class="text-muted d-block">antes {{ formatoFecha(c.fecha_vencimiento_original) }}</small>
@@ -107,9 +107,6 @@ function pagadoParcial(c: Cuota): string {
 }
 .numero {
   width: 2.25rem;
-}
-.fila-toque {
-  min-height: 44px;
 }
 .fila-vencida {
   background: var(--bs-danger-bg-subtle);
