@@ -402,3 +402,8 @@ export interface CobradoHoy {
   ultimo_pago: string
   metodos: string[]
 }
+
+/** POST creditos/migrar: crédito anterior al sistema (00 1.12). No mueve caja. */
+export type SolicitudMigracion = CondicionesCredito & {
+  condonar_mora: boolean
+} & ({ modo_pagos: 'rapido'; cuotas_pagadas: number } | { modo_pagos: 'detallado'; pagos: { fecha: string; monto: string }[] })

@@ -36,7 +36,7 @@ class HttpCreditosTest extends CreditosTestCase
     {
         $filas = [
             ['GET', 'api/creditos', 'creditos.ver'],
-            ['POST', 'api/creditos/preview', 'creditos.crear'],
+            ['POST', 'api/creditos/preview', 'creditos.crear|creditos.migrar'],
             ['POST', 'api/creditos', 'creditos.crear'],
             ['POST', 'api/creditos/migrar', 'creditos.migrar'],
             ['GET', 'api/creditos/cobranza-del-dia', 'creditos.cobrar'],

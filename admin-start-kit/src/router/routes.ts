@@ -535,6 +535,16 @@ const comercialRoutes = [
     component: () => import("@/views/creditos/cobranza.vue"),
   },
   {
+    path: "/creditos/migrar",
+    name: "creditos.migrar",
+    meta: {
+      title: setTitle("Registrar crédito existente"),
+      authRequired: true,
+      permission: 'creditos.migrar',
+    },
+    component: () => import("@/views/creditos/migrar.vue"),
+  },
+  {
     path: "/creditos/nuevo",
     name: "creditos.nuevo",
     meta: {

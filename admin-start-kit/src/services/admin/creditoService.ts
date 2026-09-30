@@ -22,6 +22,7 @@ import type {
   PreviewRenovacion,
   PreviewReprogramacion,
   SolicitudCobro,
+  SolicitudMigracion,
   SolicitudReprogramacion,
   PreviewCredito,
   ReglaLimite,
@@ -40,6 +41,11 @@ export const creditoService = {
   async cobranzaDelDia(cobradorId: number | null = null) {
     const { data } = await httpClient.get('/creditos/cobranza-del-dia', { params: cobradorId === null ? {} : { cobrador_id: cobradorId } })
     return data as CobranzaDelDia
+  },
+
+  async migrar(solicitud: ConClave<SolicitudMigracion>) {
+    const { data } = await httpClient.post('/creditos/migrar', solicitud)
+    return data as CreditoCreado
   },
 
   async preview(condiciones: CondicionesCredito, signal?: AbortSignal) {

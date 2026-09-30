@@ -40,6 +40,7 @@
             <i v-if="c.fecha_forzada_a_siguiente" class="fas fa-info-circle text-warning ms-1"
               title="Cae en día sin cobro: se pasó al siguiente día hábil"></i>
           </span>
+          <span v-if="pagadas && c.numero_cuota <= pagadas" class="small text-success fw-semibold"><i class="fas fa-check-circle me-1"></i>Pagada</span>
           <span class="fw-bold">{{ formatoSoles(c.monto_total) }}</span>
         </li>
       </ul>
@@ -59,6 +60,8 @@ const props = defineProps<{
   capital: string
   cargando?: boolean
   error?: string | null
+  /** Migración en modo rápido: las cuotas 1..N ya se pagaron a tiempo. */
+  pagadas?: number
 }>()
 
 const FILAS_RESUMIDAS = 4

@@ -25,13 +25,14 @@ Route::group([
     'middleware' => ['tenant', 'tenant.active', 'tenant.subscription', 'tenant.token', 'auth:api'],
 ], function () {
     Route::get('creditos', [CreditoController::class, 'index'])->middleware('permission:creditos.ver');
-    Route::post('creditos/preview', [CreditoController::class, 'preview'])->middleware('permission:creditos.crear');
+    // Migrar también usa el preview (cronograma con fechas pasadas).
+    Route::post('creditos/preview', [CreditoController::class, 'preview'])->middleware('permission:creditos.crear|creditos.migrar');
     Route::post('creditos', [CreditoController::class, 'store'])->middleware('permission:creditos.crear');
     Route::post('creditos/migrar', [CreditoMigracionController::class, 'store'])->middleware('permission:creditos.migrar');
     Route::get('creditos/cobranza-del-dia', [CobranzaDelDiaController::class, 'index'])->middleware('permission:creditos.cobrar');
 
-    // Lectura también con crear: el formulario de nuevo crédito muestra estos defaults.
-    Route::get('creditos/configuracion', [CreditoConfiguracionController::class, 'show'])->middleware('permission:creditos.configurar|creditos.crear');
+    // Lectura también con crear/migrar: esos formularios muestran estos defaults.
+    Route::get('creditos/configuracion', [CreditoConfiguracionController::class, 'show'])->middleware('permission:creditos.configurar|creditos.crear|creditos.migrar');
     Route::put('creditos/configuracion', [CreditoConfiguracionController::class, 'update'])->middleware('permission:creditos.configurar');
     Route::get('creditos/feriados', [FeriadoController::class, 'index'])->middleware('permission:creditos.configurar');
     Route::post('creditos/feriados', [FeriadoController::class, 'store'])->middleware('permission:creditos.configurar');
