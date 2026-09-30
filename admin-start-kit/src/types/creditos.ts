@@ -324,3 +324,33 @@ export interface EstadoCaja {
   /** opened_at tal como lo manda el backend (ISO). */
   desde: string | null
 }
+
+/** GET creditos: una fila del listado con su situación a hoy (null en borrador/anulado). */
+export interface FilaCredito {
+  id: number
+  numero_credito: string | null
+  estado: CreditoEstado
+  cliente: { id: number; nombre: string; documento: string | null; telefono: string | null }
+  monto_capital: Soles
+  monto_total: Soles
+  frecuencia_unidad: FrecuenciaUnidad
+  frecuencia_intervalo: number
+  numero_cuotas: number
+  fecha_desembolso: string | null
+  origen_registro: string
+  situacion: {
+    saldo_por_pagar: Soles
+    exigible_hoy: Soles
+    mora_pendiente: Soles
+    dias_atraso: number
+    cuotas_pagadas: number
+    cuotas_vencidas: number
+    cuotas_total: number
+    proxima: ProximaCuota | null
+  } | null
+}
+
+export interface Paginado<T> {
+  data: T[]
+  meta: { current_page: number; last_page: number; per_page: number; total: number }
+}

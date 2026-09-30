@@ -317,7 +317,7 @@ async function irAlRenovado(nuevoId: number) {
 
 function volver() {
   if (window.history.length > 1) router.back()
-  else router.push({ name: 'dashboards.analytics' })
+  else router.push({ name: 'creditos.index' })
 }
 </script>
 

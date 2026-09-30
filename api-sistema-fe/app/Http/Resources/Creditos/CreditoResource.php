@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Resources\Creditos;
 
 use App\Models\Creditos\Credito;
+use App\Services\Creditos\Dinero;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -28,7 +29,7 @@ class CreditoResource extends JsonResource
             'tasa_interes' => $this->tasa_interes,
             'unidad_tasa' => $this->unidad_tasa->value,
             'interes_total' => $this->interes_total,
-            'monto_total' => number_format((float) $this->monto_capital + (float) $this->interes_total, 2, '.', ''),
+            'monto_total' => Dinero::aSoles(Dinero::aCentavos($this->monto_capital) + Dinero::aCentavos($this->interes_total)),
             'frecuencia_unidad' => $this->frecuencia_unidad->value,
             'frecuencia_intervalo' => $this->frecuencia_intervalo,
             'dias_quincena' => $this->dias_quincena,

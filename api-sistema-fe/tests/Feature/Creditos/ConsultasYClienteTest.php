@@ -9,10 +9,13 @@ use App\Models\Creditos\CarteraAsignacion;
 use App\Models\User;
 use App\Services\Creditos\ClienteCreditoService;
 use App\Services\Creditos\CobroService;
+use App\Http\Resources\Creditos\FilaCreditoResource;
 use App\Services\Creditos\ConsultaCreditoService;
+use App\Services\Creditos\CreditoBorradorService;
 use App\Services\Creditos\Dto\SolicitudCobro;
 use App\Services\Creditos\LimitesService;
 use App\Services\Creditos\Motor\Enums\DestinoExcedente;
+use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpKernel\Exception\HttpException;
@@ -106,6 +109,39 @@ class ConsultasYClienteTest extends CreditosTestCase
         $this->assertEqualsCanonicalizing([$asignado->id, $ajeno->id], $delAdmin);
         $this->assertSame([$asignado->id], $delCobrador);
         $this->assertSame(1, app(ConsultaCreditoService::class)->listar([], $cobrador)->total());
+    }
+
+    public function test_el_listado_trae_la_situacion_de_cada_fila(): void
+    {
+        $activo = $this->activo($this->admin);
+        $cliente = $this->cliente();
+        $borrador = app(CreditoBorradorService::class)->crear($this->datos($cliente->id), $this->admin);
+        $this->hoy('2026-02-05');
+
+        $filas = collect(app(ConsultaCreditoService::class)->listarConSituacion([], $this->admin)->items())->keyBy(fn ($d) => $d->credito->id);
+        $json = (new FilaCreditoResource($filas[$activo->id]))->toArray(new Request());
+
+        $this->assertSame('6100.00', $json['situacion']['saldo_por_pagar']);
+        $this->assertSame(5, $json['situacion']['dias_atraso']);
+        $this->assertSame(2, $json['situacion']['proxima']['numero_cuota']);
+        $this->assertSame('6000.00', $json['monto_total']);
+        $this->assertNull((new FilaCreditoResource($filas[$borrador->id]))->toArray(new Request())['situacion']);
+    }
+
+    public function test_el_listado_ordena_por_cliente_y_por_monto(): void
+    {
+        $zeta = $this->cliente();
+        $zeta->update(['full_name' => 'Zeta Zúñiga']);
+        $alfa = $this->cliente();
+        $alfa->update(['full_name' => 'Alfa Arias']);
+        $deZeta = $this->activo($this->admin, $zeta, $this->datos($zeta->id, capital: 100_000));
+        $deAlfa = $this->activo($this->admin, $alfa, $this->datos($alfa->id, capital: 300_000));
+
+        $ids = fn (array $filtros) => app(ConsultaCreditoService::class)->listar($filtros, $this->admin)->pluck('id')->all();
+
+        $this->assertSame([$deAlfa->id, $deZeta->id], $ids(['orden' => 'cliente', 'direccion' => 'asc']));
+        $this->assertSame([$deAlfa->id, $deZeta->id], $ids(['orden' => 'monto', 'direccion' => 'desc']));
+        $this->assertSame([$deZeta->id, $deAlfa->id], $ids(['orden' => 'monto', 'direccion' => 'asc']));
     }
 
     public function test_reasignar_cobrador_cierra_la_vigencia_anterior_sin_borrarla(): void

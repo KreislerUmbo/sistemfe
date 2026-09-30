@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\Creditos;
 
 use App\Enums\Creditos\CreditoEstado;
+use App\Models\Client\Client;
 use App\Models\Creditos\Credito;
 use App\Models\User;
 use App\Services\Creditos\Dto\DetalleCredito;
@@ -32,7 +33,12 @@ class ConsultaCreditoService
     ) {
     }
 
-    /** @param array{estado?: string, cliente_id?: int, con_atraso?: bool, buscar?: string} $filtros */
+    /** Columnas por las que se puede ordenar el listado (el saldo no: sale del motor, no de SQL). */
+    public const ORDENES = ['reciente', 'numero', 'cliente', 'desembolso', 'monto'];
+
+    /**
+     * @param array{estado?: string, cliente_id?: int, con_atraso?: bool, buscar?: string, orden?: string, direccion?: string} $filtros
+     */
     public function listar(array $filtros, User $usuario): LengthAwarePaginator
     {
         $hoy = $this->reloj->hoy()->aTexto();
@@ -44,7 +50,22 @@ class ConsultaCreditoService
                 ->orWhereHas('cliente', fn ($c) => $c->where('full_name', 'ilike', "%{$texto}%")->orWhere('n_document', 'ilike', "%{$texto}%"))))
             ->when($filtros['con_atraso'] ?? false, fn ($q) => $this->conDeudaVencida($q, $hoy, '<'));
 
+        $direccion = ($filtros['direccion'] ?? 'desc') === 'asc' ? 'asc' : 'desc';
+        match ($filtros['orden'] ?? 'reciente') {
+            'numero' => $consulta->orderBy('numero_credito', $direccion),
+            'cliente' => $consulta->orderBy(Client::select('full_name')->whereColumn('clients.id', 'creditos.cliente_id'), $direccion),
+            'desembolso' => $consulta->orderBy('fecha_desembolso', $direccion),
+            'monto' => $consulta->orderBy('monto_capital', $direccion),
+            default => null,
+        };
+
         return $consulta->orderByDesc('id')->paginate(self::POR_PAGINA);
+    }
+
+    /** Página del listado con la situación en vivo de cada crédito (saldo, atraso, próximo pago). */
+    public function listarConSituacion(array $filtros, User $usuario): LengthAwarePaginator
+    {
+        return $this->listar($filtros, $usuario)->through(fn (Credito $c): DetalleCredito => $this->detalle($c, $usuario));
     }
 
     public function detalle(Credito $credito, User $usuario): DetalleCredito

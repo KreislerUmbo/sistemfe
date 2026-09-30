@@ -2,6 +2,7 @@
 // endpoint. Las escrituras llevan clave_idempotencia (useClaveIdempotencia): el backend
 // devuelve la misma respuesta si la clave se repite con el mismo contenido.
 import httpClient from '@/helpers/http-client'
+import { paramsListado, type FiltrosListado } from '@/helpers/creditos/listado'
 import type {
   CondicionesCredito,
   ConfiguracionCredito,
@@ -10,11 +11,13 @@ import type {
   CreditoCreado,
   DestinoExcedente,
   EstadoCaja,
+  FilaCredito,
   DetalleCredito,
   EstadoCuenta,
   Liquidacion,
   MetodoPago,
   Pago,
+  Paginado,
   PreviewRenovacion,
   PreviewReprogramacion,
   SolicitudCobro,
@@ -27,6 +30,11 @@ import type {
 type ConClave<T> = T & { clave_idempotencia: string }
 
 export const creditoService = {
+  async listar(filtros: FiltrosListado, pagina: number) {
+    const { data } = await httpClient.get('/creditos', { params: { ...paramsListado(filtros), page: pagina } })
+    return data as Paginado<FilaCredito>
+  },
+
   async preview(condiciones: CondicionesCredito, signal?: AbortSignal) {
     const { data } = await httpClient.post('/creditos/preview', condiciones, { signal })
     return data as PreviewCredito

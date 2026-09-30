@@ -515,6 +515,16 @@ const comercialRoutes = [
   // Módulo Créditos (docs/planning/creditos/04-frontend.md). Las rutas fijas van antes de
   // /creditos/:id para que no las capture el parámetro.
   {
+    path: "/creditos",
+    name: "creditos.index",
+    meta: {
+      title: setTitle("Créditos"),
+      authRequired: true,
+      permission: 'creditos.ver',
+    },
+    component: () => import("@/views/creditos/index.vue"),
+  },
+  {
     path: "/creditos/nuevo",
     name: "creditos.nuevo",
     meta: {

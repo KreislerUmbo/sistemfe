@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Creditos;
 
+use App\Enums\Creditos\CreditoEstado;
 use App\Http\Requests\Creditos\CreditoDatosRequest;
 use App\Http\Requests\Creditos\CrearCreditoRequest;
 use App\Http\Resources\Creditos\CreditoResource;
 use App\Http\Resources\Creditos\CuotaResource;
 use App\Http\Resources\Creditos\DetalleCreditoResource;
+use App\Http\Resources\Creditos\FilaCreditoResource;
 use App\Http\Resources\Creditos\FormatoCredito;
 use App\Http\Resources\Creditos\PagoResource;
 use App\Services\Creditos\ConsultaCreditoService;
@@ -18,6 +20,7 @@ use App\Services\Creditos\LimitesService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Validation\Rule;
 
 /** Listado, preview, borradores, detalle y estado de cuenta. */
 class CreditoController extends ControllerCreditos
@@ -32,13 +35,15 @@ class CreditoController extends ControllerCreditos
     public function index(Request $request): AnonymousResourceCollection
     {
         $filtros = $request->validate([
-            'estado' => ['nullable', 'string'],
+            'estado' => ['nullable', Rule::enum(CreditoEstado::class)],
             'cliente_id' => ['nullable', 'integer'],
             'con_atraso' => ['nullable', 'boolean'],
             'buscar' => ['nullable', 'string', 'max:100'],
+            'orden' => ['nullable', Rule::in(ConsultaCreditoService::ORDENES)],
+            'direccion' => ['nullable', Rule::in(['asc', 'desc'])],
         ]);
 
-        return CreditoResource::collection($this->consultas->listar($filtros, $this->usuario()));
+        return FilaCreditoResource::collection($this->consultas->listarConSituacion($filtros, $this->usuario()));
     }
 
     public function preview(CreditoDatosRequest $request): JsonResponse
