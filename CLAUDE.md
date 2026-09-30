@@ -369,11 +369,14 @@ memoria de proyecto; duplicación visual "Alto Mayo" en cabecera vs. chip de des
 sincronización del panel de precio con el ítem en edición del lienzo, ambos mencionados sin
 plan armado.
 
-**En curso — Módulo Créditos (giro `creditos`, prestamista; Fases 1-3 de 8, 2026-09-29/30):**
-Motor de cálculo puro, datos y API en la rama `feat/creditos-fase3-api` (sin merge a `main`).
+**En curso — Módulo Créditos (giro `creditos`, prestamista; Fases 1-4 de 8, 2026-09-29/30):**
+Motor de cálculo puro, datos y API en la rama `feat/creditos-fase3-api`; frontend (Fase 4: las 8
+pantallas de `04-frontend.md` + menú, caja y Roles) en `feat/creditos-fase4-frontend`, que sale
+de la anterior. Ninguna mergeada a `main`.
 **Leer siempre** `docs/planning/creditos/00-reglas-y-modelo.md` (fuente de verdad de reglas y
-modelo) + el archivo de la fase en curso (`docs/planning/creditos/03-api.md`, …);
-`historial.md` es solo consulta. Siguiente: Fase 4 (frontend `views/creditos/`).
+modelo) + el archivo de la fase en curso (`docs/planning/creditos/04-frontend.md`, …);
+`historial.md` es solo consulta. Siguiente: Fase 4b (documentos/contrato/recibo).
+Al desplegar: `MenuItemsSeeder` + limpiar la caché de menú (`MenuResolver`, 24 h por usuario).
 
 **Próximos módulos (en orden de prioridad):**
 
