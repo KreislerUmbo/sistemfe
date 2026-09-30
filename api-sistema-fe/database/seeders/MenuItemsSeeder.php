@@ -53,6 +53,12 @@ use Illuminate\Database\Seeder;
  */
 class MenuItemsSeeder extends Seeder
 {
+    /**
+     * Módulo Créditos (plan §4): ítems retail/SUNAT compartidos (giro=NULL) que un
+     * tenant de giro 'creditos' no usa. Excluir un grupo oculta también sus hijos.
+     */
+    private const SIN_CREDITOS = ['creditos'];
+
     public function run(): void
     {
         // giro=null → visible para cualquier giro (MenuResolver: "giro IS
@@ -70,12 +76,12 @@ class MenuItemsSeeder extends Seeder
         $this->item('access.usuarios', $access, null, 'enlace', 'Usuarios', 'fas fa-users', 'access.users', 'list_user', 2);
 
         $comercial = $this->item('comercial', null, null, 'grupo', 'Comercial', null, null, null, 4);
-        $this->item('comercial.categorias', $comercial, null, 'enlace', 'Categorias', 'fas fa-life-ring', 'categories.index', 'list_categorie', 1);
-        $productos = $this->item('comercial.productos', $comercial, null, 'grupo', 'Productos', 'fas fa-qrcode', null, null, 2);
+        $this->item('comercial.categorias', $comercial, null, 'enlace', 'Categorias', 'fas fa-life-ring', 'categories.index', 'list_categorie', 1, self::SIN_CREDITOS);
+        $productos = $this->item('comercial.productos', $comercial, null, 'grupo', 'Productos', 'fas fa-qrcode', null, null, 2, self::SIN_CREDITOS);
         $this->item('comercial.productos_registrar', $productos, null, 'enlace', 'Registrar', null, 'product.register', 'register_product', 1);
         $this->item('comercial.productos_listar', $productos, null, 'enlace', 'Listar', null, 'product.index', 'list_product', 2);
         $this->item('comercial.clientes', $comercial, null, 'enlace', 'Clientes', 'fas fa-user-plus', 'clients.index', 'list_client', 3);
-        $ventas = $this->item('comercial.ventas', $comercial, null, 'grupo', 'Ventas', 'fas fa-money-check-alt', null, null, 4);
+        $ventas = $this->item('comercial.ventas', $comercial, null, 'grupo', 'Ventas', 'fas fa-money-check-alt', null, null, 4, self::SIN_CREDITOS);
         $this->item('comercial.ventas_mis_ventas', $ventas, null, 'enlace', 'Mis Ventas', null, 'sale.list', 'list_sale', 1);
         $this->item('comercial.ventas_nc_nd', $ventas, null, 'enlace', 'Notas de Credito/Debito', null, 'nota.list', 'list_nota_electronica', 2);
         $this->item('comercial.ventas_anticipos', $ventas, null, 'enlace', 'Emitir Anticipos', null, 'advances.index', 'list_advance', 3);
@@ -109,7 +115,7 @@ class MenuItemsSeeder extends Seeder
         $this->item('configuraciones.sucursales', $config, null, 'enlace', 'Sucursales', null, 'branches.index', 'list_branch', 2);
         $this->item('configuraciones.cajas', $config, null, 'enlace', 'Cajas', null, 'cash-registers.index', 'list_cash_register', 3);
         $this->item('configuraciones.metodos_pago', $config, null, 'enlace', 'Metodos de Pago', null, 'payment-methods.index', 'list_payment_method', 4);
-        $this->item('configuraciones.series', $config, null, 'enlace', 'Series de Comprobantes', null, 'series-comprobante.index', 'list_serie_comprobante', 5);
+        $this->item('configuraciones.series', $config, null, 'enlace', 'Series de Comprobantes', null, 'series-comprobante.index', 'list_serie_comprobante', 5, self::SIN_CREDITOS);
         $this->item('configuraciones.proveedores', $config, null, 'enlace', 'Proveedores', null, 'suppliers.index', 'list_supplier', 6);
         $this->item('configuraciones.conceptos_caja', $config, null, 'enlace', 'Conceptos de Caja', null, 'cash-concepts.index', 'list_cash_concept', 7);
 
@@ -129,13 +135,15 @@ class MenuItemsSeeder extends Seeder
         ?string $icono,
         ?string $ruta,
         ?string $permisoRequerido,
-        int $orden
+        int $orden,
+        ?array $girosExcluidos = null
     ): int {
         $menuItem = MenuItem::updateOrCreate(
             ['codigo' => $codigo],
             [
                 'parent_id' => $parentId,
                 'giro' => $giro,
+                'giros_excluidos' => $girosExcluidos,
                 'tipo' => $tipo,
                 'label' => $label,
                 'icono' => $icono,

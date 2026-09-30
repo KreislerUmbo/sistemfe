@@ -39,11 +39,10 @@ final class CalculadoraMora
         $abonos = $this->ordenar($abonos);
         $moraPagada = $this->sumar($abonos, ConceptoAplicacion::Mora);
 
-        // 1.6: la mora cuenta desde el fin de la gracia; 1.19: se congela a la fecha de castigo.
+        // 1.6: la mora cuenta desde el fin de la gracia. Los períodos castigados se descuentan
+        // tramo a tramo (12.12), no cortan la mora: si se revierte el castigo, vuelve a correr.
         $inicio = $cuota->fechaVencimiento->sumarDias($reglas->diasGracia);
-        $fin = $reglas->fechaCongelamiento === null
-            ? $fechaReferencia
-            : Fecha::menor($fechaReferencia, $reglas->fechaCongelamiento);
+        $fin = $fechaReferencia;
         if ($reglas->topeTipo === TopeMoraTipo::DiasMaximos && $reglas->topeValor !== null) {
             $fin = Fecha::menor($fin, $cuota->fechaVencimiento->sumarDias($reglas->topeValor));
         }
@@ -149,7 +148,7 @@ final class CalculadoraMora
             }
             if ($abono->fecha->esPosteriorA($cursor)) {
                 $hasta = Fecha::menor($abono->fecha, $fin);
-                $numerador += Redondeo::multiplicar($saldo, $calendario->diasEntre($cursor, $hasta, $reglas->cuentaNoLaborables));
+                $numerador += Redondeo::multiplicar($saldo, $this->diasConMora($cursor, $hasta, $reglas, $calendario));
                 $cursor = $hasta;
             }
             if (! $cursor->esAnteriorA($fin)) {
@@ -158,7 +157,20 @@ final class CalculadoraMora
             $saldo -= $abono->monto;
         }
 
-        return $numerador + Redondeo::multiplicar(max(0, $saldo), $calendario->diasEntre($cursor, $fin, $reglas->cuentaNoLaborables));
+        return $numerador + Redondeo::multiplicar(max(0, $saldo), $this->diasConMora($cursor, $fin, $reglas, $calendario));
+    }
+
+    /** Días del intervalo (desde, hasta] que generan mora: descuenta los días castigados (12.12). */
+    private function diasConMora(Fecha $desde, Fecha $hasta, ReglasMora $reglas, CalendarioLaborable $calendario): int
+    {
+        $dias = $calendario->diasEntre($desde, $hasta, $reglas->cuentaNoLaborables);
+        foreach ($reglas->periodosCastigo as $periodo) {
+            $inicio = $periodo->desde->esPosteriorA($desde) ? $periodo->desde : $desde;
+            $final = $periodo->hasta === null ? $hasta : Fecha::menor($hasta, $periodo->hasta);
+            $dias -= $calendario->diasEntre($inicio, $final, $reglas->cuentaNoLaborables);
+        }
+
+        return max(0, $dias);
     }
 
     /** @param list<Abono> $abonos */

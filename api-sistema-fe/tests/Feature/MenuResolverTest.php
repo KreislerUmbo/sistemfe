@@ -187,4 +187,23 @@ class MenuResolverTest extends TestCase
         $this->assertCount(1, $arbol);
         $this->assertSame('restringido', $arbol[0]['codigo']);
     }
+
+    public function test_giros_excluidos_oculta_el_item_y_sus_hijos_aun_para_super_admin(): void
+    {
+        // Módulo Créditos (plan §4): Ventas es compartido (giro NULL) pero 'creditos' no lo usa.
+        $ventas = MenuItem::create(['codigo' => 'ventas', 'tipo' => 'grupo', 'label' => 'Ventas', 'giros_excluidos' => ['creditos'], 'orden' => 1]);
+        MenuItem::create(['codigo' => 'ventas.listar', 'parent_id' => $ventas->id, 'tipo' => 'enlace', 'label' => 'Listar', 'ruta' => 'sale.list', 'orden' => 1]);
+        MenuItem::create(['codigo' => 'clientes', 'tipo' => 'enlace', 'label' => 'Clientes', 'ruta' => 'clients.index', 'orden' => 2]);
+
+        $role = \Spatie\Permission\Models\Role::firstOrCreate(['guard_name' => 'api', 'name' => 'Super-Admin']);
+        $user = User::factory()->create();
+        $user->assignRole($role);
+        $user = $user->fresh();
+
+        $creditos = collect($this->resolver->paraUsuario($user, Tenant::make(['id' => 't-creditos', 'giro' => 'creditos'])))->pluck('codigo')->all();
+        $agencia = collect($this->resolver->paraUsuario($user, Tenant::make(['id' => 't-agencia', 'giro' => 'agencia_viajes'])))->pluck('codigo')->all();
+
+        $this->assertSame(['clientes'], $creditos);
+        $this->assertSame(['ventas', 'clientes'], $agencia);
+    }
 }

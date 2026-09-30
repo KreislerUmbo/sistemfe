@@ -9,6 +9,7 @@ use App\Services\Creditos\Motor\Dto\Abono;
 use App\Services\Creditos\Motor\Dto\CuotaVigente;
 use App\Services\Creditos\Motor\Dto\EstadoCredito;
 use App\Services\Creditos\Motor\Dto\MoraCuota;
+use App\Services\Creditos\Motor\Dto\PeriodoCastigo;
 use App\Services\Creditos\Motor\Dto\ReglasCalendario;
 use App\Services\Creditos\Motor\Dto\ReglasMora;
 use App\Services\Creditos\Motor\Enums\ConceptoAplicacion;
@@ -177,10 +178,37 @@ class CalculadoraMoraTest extends TestCase
 
     public function test_castigo_congela_la_mora_pero_no_los_dias_de_atraso(): void
     {
-        $mora = $this->calcular([], '2026-10-30', new ReglasMora(fechaCongelamiento: self::f('2026-10-15')));
+        $mora = $this->calcular([], '2026-10-30', new ReglasMora(periodosCastigo: [new PeriodoCastigo(self::f('2026-10-15'))]));
 
         $this->assertSame(20_000, $mora->moraGenerada);   // solo hasta el castigo
         $this->assertSame(20, $mora->diasAtraso);
+    }
+
+    public function test_castigar_y_revertir_no_genera_mora_del_periodo_castigado(): void
+    {
+        // Castigo el 15/10, revertido el 25/10: corre del 11 al 15 y del 26 al 30 (10 días × 40).
+        $reglas = new ReglasMora(periodosCastigo: [new PeriodoCastigo(self::f('2026-10-15'), self::f('2026-10-25'))]);
+
+        $mora = $this->calcular([], '2026-10-30', $reglas);
+
+        $this->assertSame(40_000, $mora->moraGenerada);
+        $this->assertSame(80_000, $this->calcular([], '2026-10-30')->moraGenerada);   // sin castigo: 20 días
+    }
+
+    public function test_varios_periodos_de_castigo_y_abono_dentro_del_castigo(): void
+    {
+        // Castigos 12/10→14/10 y 20/10→vigente; abono de 600 el 13/10 (dentro del primero).
+        // Días con mora: 11 y 12 sobre 1,200 (2,400) + 15 a 20 sobre 600 (3,600) = 6,000 / 30 = 200.
+        $reglas = new ReglasMora(periodosCastigo: [
+            new PeriodoCastigo(self::f('2026-10-12'), self::f('2026-10-14')),
+            new PeriodoCastigo(self::f('2026-10-20')),
+        ]);
+        $abonos = [
+            new Abono(self::f('2026-10-13'), ConceptoAplicacion::Interes, 20_000),
+            new Abono(self::f('2026-10-13'), ConceptoAplicacion::Capital, 40_000),
+        ];
+
+        $this->assertSame(20_000, $this->calcular($abonos, '2026-10-30', $reglas)->moraGenerada);
     }
 
     public function test_reprogramar_manteniendo_mora_congelada(): void

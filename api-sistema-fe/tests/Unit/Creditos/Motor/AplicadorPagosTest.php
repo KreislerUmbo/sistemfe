@@ -8,6 +8,7 @@ use App\Services\Creditos\Motor\Dto\Aplicacion;
 use App\Services\Creditos\Motor\Dto\CuotaVigente;
 use App\Services\Creditos\Motor\Dto\EstadoCredito;
 use App\Services\Creditos\Motor\Dto\PagoAAplicar;
+use App\Services\Creditos\Motor\Dto\PeriodoCastigo;
 use App\Services\Creditos\Motor\Dto\ReglasMora;
 use App\Services\Creditos\Motor\Dto\ResultadoAplicacion;
 use App\Services\Creditos\Motor\Enums\ConceptoAplicacion;
@@ -376,11 +377,21 @@ class AplicadorPagosTest extends TestCase
 
     public function test_pago_posterior_al_castigo_es_recupero(): void
     {
-        $estado = $this->creditoEjemplo15(reglasMora: new ReglasMora(fechaCongelamiento: self::f('2026-05-01')));
+        $estado = $this->creditoEjemplo15(reglasMora: new ReglasMora(periodosCastigo: [new PeriodoCastigo(self::f('2026-05-01'))]));
         $r = $this->aplicar($estado, [$this->pago('antes', '2026-04-01', 10_000), $this->pago('despues', '2026-05-10', 10_000)], '2026-05-10');
 
         $this->assertFalse($r->pago('antes')->esRecupero);
         $this->assertTrue($r->pago('despues')->esRecupero);
+    }
+
+    public function test_al_revertir_el_castigo_sus_pagos_dejan_de_ser_recupero(): void
+    {
+        $estado = $this->creditoEjemplo15(reglasMora: new ReglasMora(periodosCastigo: [
+            new PeriodoCastigo(self::f('2026-05-01'), self::f('2026-05-20')),
+        ]));
+        $r = $this->aplicar($estado, [$this->pago('durante', '2026-05-10', 10_000)], '2026-05-30');
+
+        $this->assertFalse($r->pago('durante')->esRecupero);
     }
 
     public function test_migracion_rapida_cuotas_pagadas_a_tiempo_sin_mora(): void

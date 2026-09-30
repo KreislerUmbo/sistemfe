@@ -112,8 +112,7 @@ final class AplicadorPagos
     private function aplicarPago(EstadoCredito $estado, PagoAAplicar $pago): array
     {
         $fecha = $pago->fechaPago;
-        $esRecupero = $estado->reglasMora->fechaCongelamiento !== null
-            && ! $fecha->esAnteriorA($estado->reglasMora->fechaCongelamiento);
+        $esRecupero = $this->esRecupero($estado, $fecha);
 
         if ($this->cerrado) {
             return [new ResultadoPago($pago->referencia, 0, $pago->monto, false, $esRecupero), false];
@@ -139,6 +138,21 @@ final class AplicadorPagos
         $aplicado = $this->aplicarNormal($estado, $pago);
 
         return [new ResultadoPago($pago->referencia, $aplicado, $pago->monto - $aplicado, false, $esRecupero), $insuficiente];
+    }
+
+    /**
+     * 12.11: pago hecho durante un castigo vigente. Derivado: al revertir el castigo, sus pagos
+     * dejan de ser recupero.
+     */
+    private function esRecupero(EstadoCredito $estado, Fecha $fecha): bool
+    {
+        foreach ($estado->reglasMora->periodosCastigo as $periodo) {
+            if ($periodo->estaVigente() && ! $fecha->esAnteriorA($periodo->desde)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /** @return int monto aplicado al crédito */

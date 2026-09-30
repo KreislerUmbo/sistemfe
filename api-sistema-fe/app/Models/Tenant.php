@@ -12,7 +12,7 @@ use Stancl\Tenancy\Database\Models\Tenant as BaseTenant;
  * @property string $razon_social
  * @property string $status           'activo' | 'archivado' — columna real (ver getCustomColumns()).
  * @property \Illuminate\Support\Carbon|null $fecha_archivado  Columna real.
- * @property string $giro             'retail' | 'agencia_viajes' | futuros verticales — columna real (ver getCustomColumns()).
+ * @property string $giro             'retail' | 'agencia_viajes' | 'creditos' | futuros verticales — columna real (ver getCustomColumns()).
  * @property string $tipo             'real' | 'demo' — columna real.
  * @property string $sunat_modo       'pruebas' | 'produccion' — columna real.
  * @property bool|null $facturacion_habilitada  true = factura en esta plataforma (ReservaFacturacionController
