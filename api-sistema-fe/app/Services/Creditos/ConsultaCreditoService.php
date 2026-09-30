@@ -8,6 +8,7 @@ use App\Enums\Creditos\CreditoEstado;
 use App\Models\Creditos\Credito;
 use App\Models\User;
 use App\Services\Creditos\Dto\DetalleCredito;
+use App\Services\Creditos\Dto\ProximaCuota;
 use App\Services\Creditos\Motor\AplicadorPagos;
 use App\Services\Creditos\Motor\Dto\MoraCuota;
 use App\Services\Creditos\Motor\Enums\EstadoCuota;
@@ -57,13 +58,36 @@ class ConsultaCreditoService
         $hoy = $this->reloj->hoy();
         $carga = $this->cargador->cargar($credito);
         $situacion = $this->aplicador->aplicar($carga->estado, $carga->pagos, $hoy);
+        // Cifras de la cabecera del detalle (mockup 2), sumadas aquí: el frontend no hace
+        // aritmética de dinero (00 §4).
         $saldoCapital = 0;
         $saldoInteres = 0;
+        $saldoCargos = 0;
+        $totalPagado = 0;
+        $cuotasPagadas = 0;
+        $cuotasVencidas = 0;
+        $proxima = null;
         foreach ($carga->estado->cuotas as $cuota) {
             $saldada = $situacion->cuota($cuota->numero);
-            $saldoCapital += $cuota->montoCapital - $saldada->capitalPagado;
-            $saldoInteres += $cuota->montoInteres - $saldada->interesPagado - $saldada->interesCondonado;
+            $pendienteCapital = $cuota->montoCapital - $saldada->capitalPagado;
+            $pendienteInteres = $cuota->montoInteres - $saldada->interesPagado - $saldada->interesCondonado;
+            $pendienteCargo = $cuota->cargoMonto - $saldada->cargoPagado;
+            $saldoCapital += $pendienteCapital;
+            $saldoInteres += $pendienteInteres;
+            $saldoCargos += $pendienteCargo;
+            $totalPagado += $saldada->capitalPagado + $saldada->interesPagado + $saldada->cargoPagado + $saldada->moraPagada;
+
+            if ($saldada->estado === EstadoCuota::Pagada) {
+                $cuotasPagadas++;
+                continue;
+            }
+            if ($cuota->fechaVencimiento->esAnteriorA($hoy)) {
+                $cuotasVencidas++;
+            } elseif ($proxima === null) {
+                $proxima = new ProximaCuota($cuota->numero, $cuota->fechaVencimiento, $pendienteCapital + $pendienteInteres + $pendienteCargo);
+            }
         }
+        $moraPendiente = $situacion->moraPendienteTotal();
 
         return new DetalleCredito(
             $credito,
@@ -72,6 +96,11 @@ class ConsultaCreditoService
             $saldoCapital,
             $saldoInteres,
             (int) max(array_map(static fn (MoraCuota $m): int => $m->diasAtraso, $situacion->moraAFecha) ?: [0]),
+            $saldoCapital + $saldoInteres + $saldoCargos + $moraPendiente,
+            $totalPagado,
+            $cuotasPagadas,
+            $cuotasVencidas,
+            $proxima,
         );
     }
 

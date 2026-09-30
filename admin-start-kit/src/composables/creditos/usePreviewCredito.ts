@@ -8,11 +8,17 @@ import { interpretarErrorCredito, type ErrorCredito } from './errorCredito'
 
 export const DEBOUNCE_PREVIEW_MS = 300
 
-type Fetcher = (c: CondicionesCredito, signal: AbortSignal) => Promise<PreviewCredito>
+type Fetcher<T> = (c: CondicionesCredito, signal: AbortSignal) => Promise<T>
 
-/** @param condiciones null mientras el formulario no esté completo */
-export function usePreviewCredito(condiciones: Ref<CondicionesCredito | null>, fetcher: Fetcher = creditoService.preview) {
-  const preview = ref<PreviewCredito | null>(null)
+/**
+ * @param condiciones null mientras el formulario no esté completo
+ * @param fetcher por defecto POST creditos/preview; la renovación usa su propio preview
+ */
+export function usePreviewCredito<T = PreviewCredito>(
+  condiciones: Ref<CondicionesCredito | null>,
+  fetcher: Fetcher<T> = creditoService.preview as unknown as Fetcher<T>,
+) {
+  const preview = ref<T | null>(null) as Ref<T | null>
   const cargando = ref(false)
   const error = ref<ErrorCredito | null>(null)
 

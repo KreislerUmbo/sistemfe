@@ -40,6 +40,26 @@ class ConsultasYClienteTest extends CreditosTestCase
         $this->assertSame(5, $detalle->diasAtraso);
         $this->assertSame(130_000, $detalle->exigible);   // cuota 1 + mora + cuota 2 (próxima)
         $this->assertSame(500_000, $detalle->saldoCapital);
+        // Cabecera del detalle (mockup 2): 6,000 por cronograma + 100 de mora.
+        $this->assertSame(610_000, $detalle->saldoPorPagar);
+        $this->assertSame(0, $detalle->totalPagado);
+        $this->assertSame(1, $detalle->cuotasVencidas);
+        $this->assertSame(2, $detalle->proxima?->numeroCuota);
+        $this->assertSame(60_000, $detalle->proxima?->pendiente);
+    }
+
+    public function test_la_cabecera_cuenta_lo_pagado_y_las_cuotas_pagadas(): void
+    {
+        $credito = $this->activo($this->admin);
+        $this->hoy('2026-01-31');
+        app(CobroService::class)->cobrar($credito, new SolicitudCobro(60_000, DestinoExcedente::Devolver, $this->efectivo->id, 'cab-1'), $this->admin);
+
+        $detalle = app(ConsultaCreditoService::class)->detalle($credito->fresh(), $this->admin);
+
+        $this->assertSame(60_000, $detalle->totalPagado);
+        $this->assertSame(1, $detalle->cuotasPagadas);
+        $this->assertSame(540_000, $detalle->saldoPorPagar);
+        $this->assertSame(2, $detalle->proxima?->numeroCuota);
     }
 
     public function test_cobranza_del_dia_respeta_la_cartera_del_cobrador(): void

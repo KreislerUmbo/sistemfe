@@ -7,7 +7,14 @@ import type {
   ConfiguracionCredito,
   Credito,
   CreditoCreado,
+  DetalleCredito,
+  EstadoCuenta,
+  Liquidacion,
   MetodoPago,
+  Pago,
+  PreviewRenovacion,
+  PreviewReprogramacion,
+  SolicitudReprogramacion,
   PreviewCredito,
   ReglaLimite,
   ResumenClienteCredito,
@@ -33,7 +40,71 @@ export const creditoService = {
 
   async obtener(id: number) {
     const { data } = await httpClient.get(`/creditos/${id}`)
-    return data as { credito: Credito; resumen: Record<string, string | number>; cuotas: Credito['cuotas'] }
+    return data as DetalleCredito
+  },
+
+  async estadoCuenta(id: number) {
+    const { data } = await httpClient.get(`/creditos/${id}/estado-cuenta`)
+    return data as EstadoCuenta
+  },
+
+  async cotizarLiquidacion(id: number, fecha?: string) {
+    const { data } = await httpClient.get(`/creditos/${id}/liquidacion`, { params: fecha ? { fecha } : {} })
+    return data as Liquidacion
+  },
+
+  async liquidar(id: number, cuerpo: { monto_recibido: string; payment_method_id: number; referencia?: string | null }, clave: string) {
+    const { data } = await httpClient.post(`/creditos/${id}/liquidar`, { ...cuerpo, clave_idempotencia: clave })
+    return data as { pago: Pago }
+  },
+
+  async anularPago(id: number, pagoId: number, motivo: string, clave: string) {
+    const { data } = await httpClient.post(`/creditos/${id}/pagos/${pagoId}/anular`, { motivo, clave_idempotencia: clave })
+    return data as { pago: Pago }
+  },
+
+  async editarPago(id: number, pagoId: number, cuerpo: { referencia: string | null; observaciones: string | null }) {
+    const { data } = await httpClient.patch(`/creditos/${id}/pagos/${pagoId}`, cuerpo)
+    return data as { pago: Pago }
+  },
+
+  /** anular (crédito), castigar y revertir-castigo: solo piden motivo. */
+  async accionConMotivo(id: number, accion: 'anular' | 'castigar' | 'revertir-castigo', motivo: string, clave: string) {
+    const { data } = await httpClient.post(`/creditos/${id}/${accion}`, { motivo, clave_idempotencia: clave })
+    return data as { credito: Credito }
+  },
+
+  async condonar(id: number, cuotaId: number, monto: string, motivo: string, clave: string) {
+    const { data } = await httpClient.post(`/creditos/${id}/condonar-mora`, { cuota_id: cuotaId, monto, motivo, clave_idempotencia: clave })
+    return data
+  },
+
+  async previewReprogramacion(id: number, solicitud: SolicitudReprogramacion) {
+    const { data } = await httpClient.post(`/creditos/${id}/reprogramar/preview`, solicitud)
+    return data as PreviewReprogramacion
+  },
+
+  async reprogramar(id: number, solicitud: SolicitudReprogramacion & { motivo: string }, clave: string) {
+    const { data } = await httpClient.post(`/creditos/${id}/reprogramar`, { ...solicitud, clave_idempotencia: clave })
+    return data
+  },
+
+  async corregir(id: number, condiciones: CondicionesCredito, motivo: string, clave: string) {
+    const { cliente_id: _cliente, ...sinCliente } = condiciones
+    const { data } = await httpClient.post(`/creditos/${id}/corregir`, { ...sinCliente, motivo, clave_idempotencia: clave })
+    return data as { credito: Credito }
+  },
+
+  async previewRenovacion(id: number, condiciones: CondicionesCredito, signal?: AbortSignal) {
+    const { cliente_id: _cliente, ...sinCliente } = condiciones
+    const { data } = await httpClient.post(`/creditos/${id}/renovar/preview`, sinCliente, { signal })
+    return data as PreviewRenovacion
+  },
+
+  async renovar(id: number, condiciones: CondicionesCredito, motivoAutorizacion: string | null, clave: string) {
+    const { cliente_id: _cliente, ...sinCliente } = condiciones
+    const { data } = await httpClient.post(`/creditos/${id}/renovar`, { ...sinCliente, motivo_autorizacion: motivoAutorizacion, clave_idempotencia: clave })
+    return data as { credito: Credito }
   },
 
   async activar(id: number, clave: string) {

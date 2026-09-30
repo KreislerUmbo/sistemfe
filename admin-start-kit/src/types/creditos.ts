@@ -173,6 +173,102 @@ export interface ConfiguracionCredito {
   [clave: string]: unknown
 }
 
+/** GET creditos/{id}: crédito + situación calculada a hoy por el backend. */
+export interface ResumenDetalle {
+  saldo_capital: Soles
+  saldo_interes: Soles
+  mora_pendiente: Soles
+  exigible_hoy: Soles
+  dias_atraso: number
+  saldo_por_pagar: Soles
+  total_pagado: Soles
+  cuotas_pagadas: number
+  cuotas_total: number
+  cuotas_vencidas: number
+  proxima: { numero_cuota: number; fecha_vencimiento: string; pendiente: Soles } | null
+}
+
+export interface DetalleCredito {
+  credito: Credito
+  resumen: ResumenDetalle
+  cuotas: Cuota[]
+}
+
+export type OrigenPago = 'cobro' | 'liquidacion' | 'renovacion' | 'venta_prenda' | 'saldo_a_favor' | 'saldo_inicial'
+
+export interface Pago {
+  id: number
+  credito_id: number
+  numero_recibo: string
+  monto_recibido: Soles
+  monto_aplicado: Soles
+  monto_excedente: Soles
+  destino_excedente: DestinoExcedente | null
+  fecha_pago: string
+  origen: OrigenPago
+  es_cierre: boolean
+  pagado_por_cliente_id: number | null
+  payment_method_id: number | null
+  referencia: string | null
+  observaciones: string | null
+  estado: 'valido' | 'anulado'
+  motivo_anulacion: string | null
+  registrado_por: number
+  aplicaciones?: { numero_cuota: number | null; concepto: 'interes' | 'capital' | 'cargo' | 'mora'; monto: Soles }[]
+}
+
+export interface EstadoCuenta {
+  credito: Credito
+  cuotas: Cuota[]
+  pagos: Pago[]
+  condonaciones: { numero_cuota: number | null; monto: Soles; motivo: string; estado: string; fecha: string | null }[]
+  cargos: { numero_cuota: number | null; monto: Soles; estado: string }[]
+  castigos: { fecha_castigo: string; fecha_reversion: string | null; tipo: string; motivo: string | null }[]
+  reprogramaciones: { fecha: string | null; motivo: string; cargo: Soles; accion_mora: string; cuotas: { cuota_id: number; fecha_anterior: string; fecha_nueva: string }[] }[]
+  total_pagado: Soles
+}
+
+export interface Liquidacion {
+  fecha: string
+  capital_pendiente: Soles
+  interes_devengado: Soles
+  interes_minimo: Soles
+  interes_final: Soles
+  interes_cobrado: Soles
+  interes_a_cobrar: Soles
+  interes_descontado: Soles
+  cargos_pendientes: Soles
+  mora_pendiente: Soles
+  monto_liquidacion: Soles
+  reparto: { numero_cuota: number; capital: Soles; interes: Soles; interes_descontado: Soles; cargo: Soles; mora: Soles }[]
+}
+
+export interface SolicitudReprogramacion {
+  modo: 'desplazar' | 'editar'
+  desde_cuota?: number
+  dias?: number
+  fechas?: Record<number, string>
+  accion_mora?: 'mantener' | 'condonar'
+  cargo?: string | null
+}
+
+export interface PreviewReprogramacion {
+  cambios: { numero_cuota: number; fecha_anterior: string; fecha_nueva: string; mora_congelada: Soles; cae_en_no_laborable: boolean }[]
+  mora_acumulada: Soles
+  accion_mora: 'mantener' | 'condonar' | 'no_aplica'
+  cargo_tipo: 'ninguno' | 'fijo' | 'interes_por_dias'
+  cargo_sugerido: Soles
+  cargo: Soles
+}
+
+export interface PreviewRenovacion {
+  liquidacion: Liquidacion
+  capital_nuevo: Soles
+  entrega_neta: Soles
+  cronograma: CronogramaPrevio
+  limites: ResultadoLimites
+}
+
 export interface MetodoPago {
   id: number
   code: string

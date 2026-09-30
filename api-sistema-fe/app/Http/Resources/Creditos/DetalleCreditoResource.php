@@ -26,6 +26,16 @@ class DetalleCreditoResource extends JsonResource
                 'mora_pendiente' => Dinero::aSoles($situacion?->moraPendienteTotal() ?? 0),
                 'exigible_hoy' => Dinero::aSoles($d->exigible),
                 'dias_atraso' => $d->diasAtraso,
+                'saldo_por_pagar' => Dinero::aSoles($d->saldoPorPagar),
+                'total_pagado' => Dinero::aSoles($d->totalPagado),
+                'cuotas_pagadas' => $d->cuotasPagadas,
+                'cuotas_total' => $d->credito->cuotasVigentes->count(),
+                'cuotas_vencidas' => $d->cuotasVencidas,
+                'proxima' => $d->proxima === null ? null : [
+                    'numero_cuota' => $d->proxima->numeroCuota,
+                    'fecha_vencimiento' => $d->proxima->fechaVencimiento->aTexto(),
+                    'pendiente' => Dinero::aSoles($d->proxima->pendiente),
+                ],
             ],
             'cuotas' => $d->credito->cuotasVigentes->map(function (CreditoCuota $c) use ($request, $situacion): array {
                 $mora = $situacion?->mora($c->numero_cuota);

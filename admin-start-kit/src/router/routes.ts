@@ -535,6 +535,16 @@ const comercialRoutes = [
     component: () => import("@/views/creditos/nuevo.vue"),
   },
   {
+    path: "/creditos/:id(\\d+)",
+    name: "creditos.detalle",
+    meta: {
+      title: setTitle("Detalle del crédito"),
+      authRequired: true,
+      permission: 'creditos.ver',
+    },
+    component: () => import("@/views/creditos/detalle.vue"),
+  },
+  {
     path: "/recursos/index",
     name: "recursos.index",
     meta: {
