@@ -110,6 +110,14 @@ class MenuItemsSeeder extends Seeder
         $this->item('agencia.configuracion', $agencia, 'agencia_viajes', 'enlace', 'Configuracion', null, 'agencia.configuracion.index', 'agencia.configuracion', 11);
         $this->item('agencia.configuracion_codigos', $agencia, 'agencia_viajes', 'enlace', 'Codigos y numeracion', null, 'agencia.configuracion.codigos', 'agencia.configuracion', 12);
 
+        // Módulo Créditos (04-frontend "Además"): solo para el giro 'creditos'.
+        $creditos = $this->item('creditos', null, 'creditos', 'grupo', 'Créditos', 'fas fa-hand-holding-usd', null, null, 6);
+        $this->item('creditos.cobranza', $creditos, 'creditos', 'enlace', 'Cobranza del día', null, 'creditos.cobranza', 'creditos.cobrar', 1);
+        $this->item('creditos.listado', $creditos, 'creditos', 'enlace', 'Créditos', null, 'creditos.index', 'creditos.ver', 2);
+        $this->item('creditos.nuevo', $creditos, 'creditos', 'enlace', 'Nuevo crédito', null, 'creditos.nuevo', 'creditos.crear', 3);
+        $this->item('creditos.migrar', $creditos, 'creditos', 'enlace', 'Registrar existente', null, 'creditos.migrar', 'creditos.migrar', 4);
+        $this->item('creditos.configuracion', $creditos, 'creditos', 'enlace', 'Configuración', null, 'creditos.configuracion', 'creditos.configurar', 5);
+
         $config = $this->item('configuraciones', null, null, 'grupo', 'Configuraciones', 'fas fa-wrench', null, null, 7);
         $this->item('configuraciones.empresa', $config, null, 'enlace', 'Datos de la empresa', null, 'company.index', 'company', 1);
         $this->item('configuraciones.sucursales', $config, null, 'enlace', 'Sucursales', null, 'branches.index', 'list_branch', 2);

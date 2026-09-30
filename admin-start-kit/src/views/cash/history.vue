@@ -191,7 +191,7 @@
                             <b-td colspan="5" class="text-center text-muted">Sin movimientos</b-td>
                         </b-tr>
                         <b-tr v-for="m in detalle.movements" :key="m.id">
-                            <b-td>{{ m.type }}</b-td>
+                            <b-td>{{ etiquetaTipoMovimiento(m.type) }}</b-td>
                             <b-td>{{ m.payment_method?.name ?? '-' }}</b-td>
                             <b-td>{{ m.direction === 'in' ? '+' : '-' }}{{ Number(m.amount).toFixed(2) }}</b-td>
                             <b-td>{{ m.status }}</b-td>
@@ -217,6 +217,7 @@ import { ref, computed, watch, onMounted } from 'vue';
 import { formatFechaHora } from '@/helpers/fecha';
 import Swal from 'sweetalert2/dist/sweetalert2.js';
 import { useAuthStore } from '@/stores/auth';
+import { etiquetaTipoMovimiento } from '@/helpers/cash/tipoMovimiento';
 import type {
     CashSessionSummary,
     CashSessionsListResponse,

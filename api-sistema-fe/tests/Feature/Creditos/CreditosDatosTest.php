@@ -296,14 +296,16 @@ class CreditosDatosTest extends TestCase
         $creditos = $this->codigosDelMenu($admin, 'creditos');
         $agencia = $this->codigosDelMenu($admin, 'agencia_viajes');
 
-        foreach (['comercial.clientes', 'caja', 'caja.turno_activo', 'caja.historial', 'configuraciones.metodos_pago'] as $visible) {
+        foreach (['comercial.clientes', 'caja', 'caja.turno_activo', 'caja.historial', 'configuraciones.metodos_pago',
+            'creditos', 'creditos.cobranza', 'creditos.listado', 'creditos.nuevo', 'creditos.migrar', 'creditos.configuracion'] as $visible) {
             $this->assertContains($visible, $creditos);
         }
         foreach (['comercial.categorias', 'comercial.productos', 'comercial.productos_listar', 'comercial.ventas',
             'comercial.ventas_mis_ventas', 'comercial.ventas_nc_nd', 'configuraciones.series', 'agencia'] as $oculto) {
             $this->assertNotContains($oculto, $creditos);
         }
-        // Agencia no cambia: sigue viendo Ventas y Series.
+        // Agencia no cambia: sigue viendo Ventas y Series, y no ve Créditos.
+        $this->assertNotContains('creditos', $agencia);
         $this->assertContains('comercial.ventas_mis_ventas', $agencia);
         $this->assertContains('configuraciones.series', $agencia);
     }

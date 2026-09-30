@@ -17,12 +17,22 @@ export const construirCatalogoCompleto = (permisosDisponibles: string[]): GrupoP
     const conocidos = new Set(PERMISOS.flatMap((grupo) => grupo.permisos.map((p) => p.permiso)));
     const nuevos = permisosDisponibles.filter((permiso) => !conocidos.has(permiso));
 
+    // Cada giro tiene sus propios permisos (Agencia de Viajes, Créditos…): del catálogo
+    // curado solo se muestra lo que existe en este tenant, para no ofrecer casillas que el
+    // backend rechazaría. Sin la lista real todavía (cargando), se muestra el catálogo tal cual.
+    const reales = new Set(permisosDisponibles);
+    const curados = reales.size === 0
+        ? PERMISOS
+        : PERMISOS
+            .map((grupo) => ({ ...grupo, permisos: grupo.permisos.filter((p) => reales.has(p.permiso)) }))
+            .filter((grupo) => grupo.permisos.length > 0);
+
     if (nuevos.length === 0) {
-        return PERMISOS;
+        return curados;
     }
 
     return [
-        ...PERMISOS,
+        ...curados,
         {
             name: 'Otros permisos',
             permisos: nuevos.map((permiso) => ({ name: humanizarPermiso(permiso), permiso })),
