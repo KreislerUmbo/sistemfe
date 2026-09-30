@@ -8,15 +8,15 @@ import { interpretarErrorCredito, type ErrorCredito } from './errorCredito'
 
 export const DEBOUNCE_PREVIEW_MS = 300
 
-type Fetcher<T> = (c: CondicionesCredito, signal: AbortSignal) => Promise<T>
+type Fetcher<T, C> = (c: C, signal: AbortSignal) => Promise<T>
 
 /**
- * @param condiciones null mientras el formulario no esté completo
- * @param fetcher por defecto POST creditos/preview; la renovación usa su propio preview
+ * @param condiciones null mientras el formulario no esté completo (cualquier solicitud plana)
+ * @param fetcher por defecto POST creditos/preview; la renovación y el cobro usan el suyo
  */
-export function usePreviewCredito<T = PreviewCredito>(
-  condiciones: Ref<CondicionesCredito | null>,
-  fetcher: Fetcher<T> = creditoService.preview as unknown as Fetcher<T>,
+export function usePreviewCredito<T = PreviewCredito, C extends object = CondicionesCredito>(
+  condiciones: Ref<C | null>,
+  fetcher: Fetcher<T, C> = creditoService.preview as unknown as Fetcher<T, C>,
 ) {
   const preview = ref<T | null>(null) as Ref<T | null>
   const cargando = ref(false)
@@ -26,7 +26,7 @@ export function usePreviewCredito<T = PreviewCredito>(
   let controlador: AbortController | null = null
   let ultimaSolicitud = 0
 
-  const pedir = async (datos: CondicionesCredito) => {
+  const pedir = async (datos: C) => {
     controlador?.abort()
     controlador = new AbortController()
     const numero = ++ultimaSolicitud

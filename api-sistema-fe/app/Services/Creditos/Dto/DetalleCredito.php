@@ -17,12 +17,8 @@ final readonly class DetalleCredito
         public int $saldoCapital,
         public int $saldoInteres,
         public int $diasAtraso,
-        /** Capital + interés + cargos + mora pendientes: lo que falta para cancelar según cronograma. */
-        public int $saldoPorPagar = 0,
-        public int $totalPagado = 0,
-        public int $cuotasPagadas = 0,
-        public int $cuotasVencidas = 0,
-        public ?ProximaCuota $proxima = null,
+        /** Cabecera (por pagar, pagado, próxima cuota, deuda de hoy); null si no tiene situación. */
+        public ?SaldoCredito $saldo = null,
     ) {
     }
 }

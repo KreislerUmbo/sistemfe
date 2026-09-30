@@ -35,3 +35,10 @@ export function formatoFecha(ymd: string | null | undefined): string {
 export function hoyEnLima(ahora: Date = new Date()): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Lima', year: 'numeric', month: '2-digit', day: '2-digit' }).format(ahora)
 }
+
+/** Instante ISO del backend ("2026-10-14T12:30:00Z") → "07:30" en Lima. Vacío si no es válido. */
+export function horaEnLima(iso: string | null | undefined): string {
+  const fecha = iso ? new Date(iso) : null
+  if (!fecha || Number.isNaN(fecha.getTime())) return ''
+  return new Intl.DateTimeFormat('es-PE', { timeZone: 'America/Lima', hour: '2-digit', minute: '2-digit', hour12: false }).format(fecha)
+}

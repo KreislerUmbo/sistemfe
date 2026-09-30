@@ -26,16 +26,14 @@ class DetalleCreditoResource extends JsonResource
                 'mora_pendiente' => Dinero::aSoles($situacion?->moraPendienteTotal() ?? 0),
                 'exigible_hoy' => Dinero::aSoles($d->exigible),
                 'dias_atraso' => $d->diasAtraso,
-                'saldo_por_pagar' => Dinero::aSoles($d->saldoPorPagar),
-                'total_pagado' => Dinero::aSoles($d->totalPagado),
-                'cuotas_pagadas' => $d->cuotasPagadas,
+                'saldo_por_pagar' => Dinero::aSoles($d->saldo?->porPagar() ?? 0),
+                'total_pagado' => Dinero::aSoles($d->saldo?->totalPagado ?? 0),
+                'cuotas_pagadas' => $d->saldo?->cuotasPagadas ?? 0,
                 'cuotas_total' => $d->credito->cuotasVigentes->count(),
-                'cuotas_vencidas' => $d->cuotasVencidas,
-                'proxima' => $d->proxima === null ? null : [
-                    'numero_cuota' => $d->proxima->numeroCuota,
-                    'fecha_vencimiento' => $d->proxima->fechaVencimiento->aTexto(),
-                    'pendiente' => Dinero::aSoles($d->proxima->pendiente),
-                ],
+                'cuotas_vencidas' => $d->saldo?->cuotasVencidas ?? 0,
+                'proxima' => FormatoCredito::proxima($d->saldo?->proxima),
+                // Cuotas vencidas o que vencen hoy con lo que les falta (desglose de "Cobrar").
+                'deuda_hoy' => $d->saldo === null ? [] : FormatoCredito::deudaHoy($d->saldo),
             ],
             'cuotas' => $d->credito->cuotasVigentes->map(function (CreditoCuota $c) use ($request, $situacion): array {
                 $mora = $situacion?->mora($c->numero_cuota);

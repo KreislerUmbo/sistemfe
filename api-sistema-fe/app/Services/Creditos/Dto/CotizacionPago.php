@@ -16,6 +16,8 @@ final readonly class CotizacionPago
         public int $montoExcedente,
         public array $lineas,
         public bool $finalizaCredito,
+        /** Situación del crédito si se confirma el pago (saldo y próxima cuota). */
+        public SaldoCredito $despues,
     ) {
     }
 }

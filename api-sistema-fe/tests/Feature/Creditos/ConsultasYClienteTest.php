@@ -41,11 +41,11 @@ class ConsultasYClienteTest extends CreditosTestCase
         $this->assertSame(130_000, $detalle->exigible);   // cuota 1 + mora + cuota 2 (próxima)
         $this->assertSame(500_000, $detalle->saldoCapital);
         // Cabecera del detalle (mockup 2): 6,000 por cronograma + 100 de mora.
-        $this->assertSame(610_000, $detalle->saldoPorPagar);
-        $this->assertSame(0, $detalle->totalPagado);
-        $this->assertSame(1, $detalle->cuotasVencidas);
-        $this->assertSame(2, $detalle->proxima?->numeroCuota);
-        $this->assertSame(60_000, $detalle->proxima?->pendiente);
+        $this->assertSame(610_000, $detalle->saldo->porPagar());
+        $this->assertSame(0, $detalle->saldo->totalPagado);
+        $this->assertSame(1, $detalle->saldo->cuotasVencidas);
+        $this->assertSame(2, $detalle->saldo->proxima?->numeroCuota);
+        $this->assertSame(60_000, $detalle->saldo->proxima?->pendiente);
     }
 
     public function test_la_cabecera_cuenta_lo_pagado_y_las_cuotas_pagadas(): void
@@ -56,10 +56,40 @@ class ConsultasYClienteTest extends CreditosTestCase
 
         $detalle = app(ConsultaCreditoService::class)->detalle($credito->fresh(), $this->admin);
 
-        $this->assertSame(60_000, $detalle->totalPagado);
-        $this->assertSame(1, $detalle->cuotasPagadas);
-        $this->assertSame(540_000, $detalle->saldoPorPagar);
-        $this->assertSame(2, $detalle->proxima?->numeroCuota);
+        $this->assertSame(60_000, $detalle->saldo->totalPagado);
+        $this->assertSame(1, $detalle->saldo->cuotasPagadas);
+        $this->assertSame(540_000, $detalle->saldo->porPagar());
+        $this->assertSame(2, $detalle->saldo->proxima?->numeroCuota);
+    }
+
+    public function test_la_deuda_de_hoy_desglosa_exactamente_el_exigible(): void
+    {
+        $credito = $this->activo($this->admin);
+        $this->hoy('2026-02-05');   // cuota 1 vencida con 100 de mora, cuota 2 próxima
+
+        $detalle = app(ConsultaCreditoService::class)->detalle($credito, $this->admin);
+        $lineas = $detalle->saldo->deudaHoy;
+
+        $this->assertSame([1, 2], array_map(fn ($l) => $l->numeroCuota, $lineas));
+        $this->assertTrue($lineas[0]->vencida);
+        $this->assertSame([60_000, 10_000, 5], [$lineas[0]->pendiente, $lineas[0]->mora, $lineas[0]->diasAtraso]);
+        $this->assertFalse($lineas[1]->vencida);
+        $this->assertSame([60_000, 0], [$lineas[1]->pendiente, $lineas[1]->mora]);
+        $this->assertSame($detalle->exigible, array_sum(array_map(fn ($l) => $l->pendiente + $l->mora, $lineas)));
+    }
+
+    public function test_la_cotizacion_informa_el_saldo_y_la_proxima_cuota_despues_del_pago(): void
+    {
+        $credito = $this->activo($this->admin);
+        $this->hoy('2026-02-05');
+
+        // Cubre la cuota 1 + su mora (70) y abona 30 a la cuota 2.
+        $cotizacion = app(CobroService::class)->cotizar($credito, 100_000, DestinoExcedente::Devolver, $this->admin);
+
+        $this->assertSame(510_000, $cotizacion->despues->porPagar());   // 6,100 - 1,000
+        $this->assertSame(2, $cotizacion->despues->proxima?->numeroCuota);
+        $this->assertSame(30_000, $cotizacion->despues->proxima?->pendiente);
+        $this->assertSame(0, $cotizacion->despues->mora);
     }
 
     public function test_cobranza_del_dia_respeta_la_cartera_del_cobrador(): void

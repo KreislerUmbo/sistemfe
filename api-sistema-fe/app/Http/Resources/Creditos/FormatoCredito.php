@@ -7,6 +7,9 @@ namespace App\Http\Resources\Creditos;
 use App\Services\Creditos\Dinero;
 use App\Services\Creditos\Dto\CambioFecha;
 use App\Services\Creditos\Dto\CotizacionPago;
+use App\Services\Creditos\Dto\DeudaCuota;
+use App\Services\Creditos\Dto\ProximaCuota;
+use App\Services\Creditos\Dto\SaldoCredito;
 use App\Services\Creditos\Dto\PreviewReprogramacion;
 use App\Services\Creditos\Dto\PreviewRenovacion;
 use App\Services\Creditos\Motor\Dto\Aplicacion;
@@ -79,6 +82,30 @@ final class FormatoCredito
         ];
     }
 
+    /** @return array<string, mixed>|null */
+    public static function proxima(?ProximaCuota $p): ?array
+    {
+        return $p === null ? null : [
+            'numero_cuota' => $p->numeroCuota,
+            'fecha_vencimiento' => $p->fechaVencimiento->aTexto(),
+            'pendiente' => Dinero::aSoles($p->pendiente),
+        ];
+    }
+
+    /** @return list<array<string, mixed>> */
+    public static function deudaHoy(SaldoCredito $s): array
+    {
+        return array_map(static fn (DeudaCuota $d): array => [
+            'numero_cuota' => $d->numeroCuota,
+            'fecha_vencimiento' => $d->fechaVencimiento->aTexto(),
+            'vencida' => $d->vencida,
+            'pendiente' => Dinero::aSoles($d->pendiente),
+            'mora' => Dinero::aSoles($d->mora),
+            'dias_atraso' => $d->diasAtraso,
+            'mora_tope_alcanzado' => $d->moraTopeAlcanzado,
+        ], $s->deudaHoy);
+    }
+
     /** @return array<string, mixed> */
     public static function cotizacion(CotizacionPago $c): array
     {
@@ -87,6 +114,8 @@ final class FormatoCredito
             'monto_aplicado' => Dinero::aSoles($c->montoAplicado),
             'monto_excedente' => Dinero::aSoles($c->montoExcedente),
             'finaliza_credito' => $c->finalizaCredito,
+            'saldo_despues' => Dinero::aSoles($c->despues->porPagar()),
+            'proxima_despues' => self::proxima($c->despues->proxima),
             'aplicacion' => array_map(static fn (Aplicacion $a): array => [
                 'numero_cuota' => $a->numeroCuota,
                 'concepto' => $a->concepto->value,

@@ -15,6 +15,7 @@ use App\Models\Creditos\CreditoPago;
 use App\Models\User;
 use App\Services\Creditos\Dto\CotizacionPago;
 use App\Services\Creditos\Dto\CreditoCargado;
+use App\Services\Creditos\Dto\SaldoCredito;
 use App\Services\Creditos\Dto\SolicitudCobro;
 use App\Services\Creditos\Motor\AplicadorPagos;
 use App\Services\Creditos\Motor\Dto\Aplicacion;
@@ -64,6 +65,7 @@ class CobroService
             $pago->montoExcedente,
             array_values(array_filter($resultado->aplicaciones, static fn (Aplicacion $a): bool => $a->referenciaPago === self::NUEVO)),
             $resultado->finalizado,
+            SaldoCredito::calcular($carga->estado, $resultado, $hoy),
         );
     }
 

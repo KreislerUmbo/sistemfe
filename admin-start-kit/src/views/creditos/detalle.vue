@@ -128,6 +128,9 @@
 
     <!-- Diálogos -->
     <template v-if="credito">
+      <DialogoCobrar v-if="detalle" v-model="dialogo.cobrar" :detalle="detalle" :metodos-pago="metodosPago"
+        :puede-fecha-anterior="puede('creditos.pago_fecha_anterior')" :puede-liquidar="acciones.includes('liquidar')"
+        @hecho="alTerminar('Cobro registrado')" @liquidar="dialogo.liquidar = true" />
       <DialogoLiquidar v-model="dialogo.liquidar" :credito-id="credito.id" :metodos-pago="metodosPago" @hecho="alTerminar('Crédito liquidado')" />
       <DialogoReprogramar v-model="dialogo.reprogramar" :credito-id="credito.id" :cuotas="detalle?.cuotas ?? []" @hecho="alTerminar('Fechas reprogramadas')" />
       <DialogoCondonar v-model="dialogo.condonar" :credito-id="credito.id" :cuotas="detalle?.cuotas ?? []" @hecho="alTerminar('Mora condonada')" />
@@ -151,6 +154,7 @@ import AccionesCredito, { type IdAccion } from '@/components/Creditos/AccionesCr
 import CuotasCredito from '@/components/Creditos/CuotasCredito.vue'
 import PagosCredito from '@/components/Creditos/PagosCredito.vue'
 import HistorialCredito from '@/components/Creditos/HistorialCredito.vue'
+import DialogoCobrar from '@/components/Creditos/DialogoCobrar.vue'
 import DialogoLiquidar from '@/components/Creditos/DialogoLiquidar.vue'
 import DialogoReprogramar from '@/components/Creditos/DialogoReprogramar.vue'
 import DialogoCondonar from '@/components/Creditos/DialogoCondonar.vue'
@@ -188,7 +192,7 @@ const cargando = ref(true)
 const errorCarga = ref<ErrorCredito | null>(null)
 const pestana = ref<(typeof PESTANAS)[number]['id']>('cuotas')
 const pagoElegido = ref<Pago | null>(null)
-const dialogo = reactive({ liquidar: false, reprogramar: false, condonar: false, corregir: false, renovar: false, motivo: false, editarPago: false })
+const dialogo = reactive({ cobrar: false, liquidar: false, reprogramar: false, condonar: false, corregir: false, renovar: false, motivo: false, editarPago: false })
 const motivoActual = ref({ titulo: '', descripcion: '', textoConfirmar: 'Confirmar', variante: 'danger', exito: '', ejecutar: async (_m: string, _c: string): Promise<unknown> => undefined })
 
 const creditoId = computed(() => Number(route.params.id))
@@ -242,7 +246,9 @@ function alAccionar(accion: IdAccion) {
   const c = credito.value!
   switch (accion) {
     case 'cobrar':
-      if (router.hasRoute('creditos.cobrar')) router.push({ name: 'creditos.cobrar', params: { id: c.id } })
+      // 04-frontend: modal ancho en escritorio, pantalla completa en celular y tablet.
+      if (window.matchMedia('(min-width: 992px)').matches) dialogo.cobrar = true
+      else router.push({ name: 'creditos.cobrar', params: { id: c.id } })
       break
     case 'editar':
     case 'activar':

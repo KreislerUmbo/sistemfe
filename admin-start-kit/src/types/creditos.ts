@@ -185,7 +185,48 @@ export interface ResumenDetalle {
   cuotas_pagadas: number
   cuotas_total: number
   cuotas_vencidas: number
-  proxima: { numero_cuota: number; fecha_vencimiento: string; pendiente: Soles } | null
+  proxima: ProximaCuota | null
+  /** Desglose del exigible de hoy: sus líneas (pendiente + mora) suman exigible_hoy. */
+  deuda_hoy: DeudaHoy[]
+}
+
+export interface ProximaCuota {
+  numero_cuota: number
+  fecha_vencimiento: string
+  pendiente: Soles
+}
+
+export interface DeudaHoy {
+  numero_cuota: number
+  fecha_vencimiento: string
+  /** false = la próxima cuota por vencer (o una con solo cargo). */
+  vencida: boolean
+  pendiente: Soles
+  mora: Soles
+  dias_atraso: number
+  mora_tope_alcanzado: boolean
+}
+
+/** POST creditos/{id}/pagos/cotizar: cómo se aplicaría el monto hoy (sin escribir). */
+export interface CotizacionPago {
+  exigible_hoy: Soles
+  monto_aplicado: Soles
+  monto_excedente: Soles
+  finaliza_credito: boolean
+  saldo_despues: Soles
+  proxima_despues: ProximaCuota | null
+  aplicacion: { numero_cuota: number; concepto: 'interes' | 'capital' | 'cargo' | 'mora'; monto: Soles }[]
+}
+
+export interface SolicitudCobro {
+  monto_recibido: string
+  destino_excedente: DestinoExcedente
+  payment_method_id: number
+  referencia?: string | null
+  observaciones?: string | null
+  /** Pago con fecha anterior (creditos.pago_fecha_anterior); exige motivo. */
+  fecha_pago?: string | null
+  motivo?: string | null
 }
 
 export interface DetalleCredito {
@@ -273,4 +314,13 @@ export interface MetodoPago {
   id: number
   code: string
   name: string
+}
+
+/** GET cash/status reducido a lo que muestra Cobrar. */
+export interface EstadoCaja {
+  abierta: boolean
+  caja: string | null
+  cajero: string | null
+  /** opened_at tal como lo manda el backend (ISO). */
+  desde: string | null
 }

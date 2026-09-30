@@ -6,7 +6,10 @@ import type {
   CondicionesCredito,
   ConfiguracionCredito,
   Credito,
+  CotizacionPago,
   CreditoCreado,
+  DestinoExcedente,
+  EstadoCaja,
   DetalleCredito,
   EstadoCuenta,
   Liquidacion,
@@ -14,6 +17,7 @@ import type {
   Pago,
   PreviewRenovacion,
   PreviewReprogramacion,
+  SolicitudCobro,
   SolicitudReprogramacion,
   PreviewCredito,
   ReglaLimite,
@@ -55,6 +59,16 @@ export const creditoService = {
 
   async liquidar(id: number, cuerpo: { monto_recibido: string; payment_method_id: number; referencia?: string | null }, clave: string) {
     const { data } = await httpClient.post(`/creditos/${id}/liquidar`, { ...cuerpo, clave_idempotencia: clave })
+    return data as { pago: Pago }
+  },
+
+  async cotizarPago(id: number, montoRecibido: string, destino: DestinoExcedente, signal?: AbortSignal) {
+    const { data } = await httpClient.post(`/creditos/${id}/pagos/cotizar`, { monto_recibido: montoRecibido, destino_excedente: destino }, { signal })
+    return data as CotizacionPago
+  },
+
+  async cobrar(id: number, solicitud: SolicitudCobro, clave: string) {
+    const { data } = await httpClient.post(`/creditos/${id}/pagos`, { ...solicitud, clave_idempotencia: clave })
     return data as { pago: Pago }
   },
 
@@ -125,6 +139,22 @@ export const creditoService = {
   async configuracion() {
     const { data } = await httpClient.get('/creditos/configuracion')
     return data as ConfiguracionCredito
+  },
+
+  /**
+   * Sesión de caja del usuario (aviso de la pantalla Cobrar). null si no tiene permiso de
+   * caja: el backend igual rechaza el cobro sin caja abierta.
+   */
+  async estadoCaja(): Promise<EstadoCaja | null> {
+    try {
+      const { data } = await httpClient.get('/cash/status')
+      if (!data.has_open_session) return { abierta: false, caja: null, cajero: null, desde: null }
+      const s = data.session
+      return { abierta: true, caja: s.cash_register?.name ?? null, cajero: s.opened_by_user?.name ?? null, desde: s.opened_at ?? null }
+    } catch (e) {
+      if ((e as { response?: { status?: number } }).response?.status === 403) return null
+      throw e
+    }
   },
 
   async metodosPago() {
