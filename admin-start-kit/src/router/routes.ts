@@ -512,6 +512,28 @@ const comercialRoutes = [
     },
     component: () => import("@/views/commercial-quotes/detail.vue"),
   },
+  // Módulo Créditos (docs/planning/creditos/04-frontend.md). Las rutas fijas van antes de
+  // /creditos/:id para que no las capture el parámetro.
+  {
+    path: "/creditos/nuevo",
+    name: "creditos.nuevo",
+    meta: {
+      title: setTitle("Nuevo crédito"),
+      authRequired: true,
+      permission: 'creditos.crear',
+    },
+    component: () => import("@/views/creditos/nuevo.vue"),
+  },
+  {
+    path: "/creditos/:id(\\d+)/editar",
+    name: "creditos.editar",
+    meta: {
+      title: setTitle("Editar borrador"),
+      authRequired: true,
+      permission: 'creditos.crear',
+    },
+    component: () => import("@/views/creditos/nuevo.vue"),
+  },
   {
     path: "/recursos/index",
     name: "recursos.index",
