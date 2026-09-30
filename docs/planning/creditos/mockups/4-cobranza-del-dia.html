@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Cobranza del día</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+body{margin:0;font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:#F4F2EC;color:#1B1E1C}
+.num{font-variant-numeric:tabular-nums}
+.ic{width:44px;height:44px;border-radius:12px;border:1px solid #E6E3DA;background:#fff;display:flex;align-items:center;justify-content:center}
+</style>
+</helmet>
+<div style="width:390px;height:1000px;box-sizing:border-box;background:#F4F2EC;display:flex;flex-direction:column">
+  <div style="padding:20px 20px 16px;background:#1B1E1C;color:#F4F2EC;display:flex;flex-direction:column;gap:14px">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <div><div style="font-size:13px;color:#A9B3AD">Jueves 15 de octubre</div><div style="font-size:22px;font-weight:800">Mi cobranza de hoy</div></div>
+      <span style="padding:6px 10px;border-radius:999px;background:#1F6F54;font-size:12px;font-weight:700">Caja abierta</span>
+    </div>
+    <div class="num" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px">
+      <div><div style="font-size:12px;color:#A9B3AD">Por cobrar</div><div style="font-size:18px;font-weight:800">S/ 1,240</div></div>
+      <div><div style="font-size:12px;color:#A9B3AD">Cobrado</div><div style="font-size:18px;font-weight:800;color:#7FD4AC">S/ 480</div></div>
+      <div><div style="font-size:12px;color:#A9B3AD">Clientes</div><div style="font-size:18px;font-weight:800">12 / 31</div></div>
+    </div>
+    <div style="height:8px;background:#3A3F3C;border-radius:99px;overflow:hidden"><div style="width:39%;height:8px;background:#5FBF94"></div></div>
+  </div>
+
+  <div style="display:flex;gap:8px;padding:14px 20px;overflow:hidden">
+    <span style="padding:10px 14px;border-radius:999px;background:#1B1E1C;color:#fff;font-size:13px;font-weight:700">Pendientes 19</span>
+    <span style="padding:10px 14px;border-radius:999px;background:#fff;border:1px solid #E6E3DA;font-size:13px;font-weight:600">Vencidos 6</span>
+    <span style="padding:10px 14px;border-radius:999px;background:#fff;border:1px solid #E6E3DA;font-size:13px;font-weight:600">Promesas 3</span>
+    <span style="padding:10px 14px;border-radius:999px;background:#fff;border:1px solid #E6E3DA;font-size:13px;font-weight:600">Cobrados</span>
+  </div>
+
+  <div class="num" style="display:flex;flex-direction:column;gap:10px;padding:0 20px 20px">
+    <div style="background:#fff;border:1px solid #E6E3DA;border-left:none;border-radius:16px;padding:14px;display:flex;flex-direction:column;gap:10px">
+      <div style="display:flex;justify-content:space-between;gap:8px">
+        <div><div style="font-size:16px;font-weight:700">Juan Pérez Ramírez</div><div style="font-size:13px;color:#57605B">Jr. Los Pinos 245 · frente al mercado</div></div>
+        <div style="text-align:right"><div style="font-size:17px;font-weight:800">S/ 120.00</div><span style="font-size:12px;font-weight:700;color:#B42318">Vencido 2 días</span></div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="ic" aria-label="Llamar"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1B1E1C" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 01-2.2 2 19.8 19.8 0 01-8.6-3.1 19.5 19.5 0 01-6-6A19.8 19.8 0 012.1 4.2 2 2 0 014.1 2h3a2 2 0 012 1.7c.1.9.4 1.8.7 2.7a2 2 0 01-.5 2.1L8.1 9.8a16 16 0 006 6l1.3-1.3a2 2 0 012.1-.4c.9.3 1.8.6 2.7.7a2 2 0 011.7 2z"></path></svg></button>
+        <button class="ic" aria-label="Abrir mapa"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1B1E1C" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s7-6.2 7-12a7 7 0 10-14 0c0 5.8 7 12 7 12z"></path><circle cx="12" cy="10" r="2.5"></circle></svg></button>
+        <button class="ic" aria-label="WhatsApp"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1B1E1C" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 01-12.4 7.4L3 20.5l1.6-5.4A8.4 8.4 0 1121 11.5z"></path></svg></button>
+        <button style="flex-grow:1;height:44px;border:none;border-radius:12px;background:#1F6F54;color:#fff;font:700 15px 'Plus Jakarta Sans',sans-serif">Cobrar</button>
+      </div>
+    </div>
+
+    <div style="background:#fff;border:1px solid #E6E3DA;border-radius:16px;padding:14px;display:flex;flex-direction:column;gap:10px">
+      <div style="display:flex;justify-content:space-between;gap:8px">
+        <div><div style="font-size:16px;font-weight:700">María Torres Vela</div><div style="font-size:13px;color:#57605B">Bodega Mari · Av. Circunvalación 610</div></div>
+        <div style="text-align:right"><div style="font-size:17px;font-weight:800">S/ 25.00</div><span style="font-size:12px;font-weight:700;color:#1F6F54">Vence hoy</span></div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="ic" aria-label="Llamar"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1B1E1C" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 01-2.2 2 19.8 19.8 0 01-8.6-3.1 19.5 19.5 0 01-6-6A19.8 19.8 0 012.1 4.2 2 2 0 014.1 2h3a2 2 0 012 1.7c.1.9.4 1.8.7 2.7a2 2 0 01-.5 2.1L8.1 9.8a16 16 0 006 6l1.3-1.3a2 2 0 012.1-.4c.9.3 1.8.6 2.7.7a2 2 0 011.7 2z"></path></svg></button>
+        <button class="ic" aria-label="Abrir mapa"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1B1E1C" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s7-6.2 7-12a7 7 0 10-14 0c0 5.8 7 12 7 12z"></path><circle cx="12" cy="10" r="2.5"></circle></svg></button>
+        <button class="ic" aria-label="WhatsApp"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1B1E1C" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 01-12.4 7.4L3 20.5l1.6-5.4A8.4 8.4 0 1121 11.5z"></path></svg></button>
+        <button style="flex-grow:1;height:44px;border:none;border-radius:12px;background:#1F6F54;color:#fff;font:700 15px 'Plus Jakarta Sans',sans-serif">Cobrar</button>
+      </div>
+    </div>
+
+    <div style="background:#fff;border:1px solid #E6E3DA;border-radius:16px;padding:14px;display:flex;flex-direction:column;gap:10px">
+      <div style="display:flex;justify-content:space-between;gap:8px">
+        <div><div style="font-size:16px;font-weight:700">Luis Vásquez Ríos</div><div style="font-size:13px;color:#57605B">Jr. Shapaja 118 · puerta verde</div></div>
+        <div style="text-align:right"><div style="font-size:17px;font-weight:800">S/ 60.00</div><span style="font-size:12px;font-weight:700;color:#8A4B0B">Promesa: hoy 5 pm</span></div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="ic" aria-label="Llamar"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1B1E1C" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 01-2.2 2 19.8 19.8 0 01-8.6-3.1 19.5 19.5 0 01-6-6A19.8 19.8 0 012.1 4.2 2 2 0 014.1 2h3a2 2 0 012 1.7c.1.9.4 1.8.7 2.7a2 2 0 01-.5 2.1L8.1 9.8a16 16 0 006 6l1.3-1.3a2 2 0 012.1-.4c.9.3 1.8.6 2.7.7a2 2 0 011.7 2z"></path></svg></button>
+        <button class="ic" aria-label="Abrir mapa"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1B1E1C" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s7-6.2 7-12a7 7 0 10-14 0c0 5.8 7 12 7 12z"></path><circle cx="12" cy="10" r="2.5"></circle></svg></button>
+        <button style="flex-grow:1;height:44px;border-radius:12px;border:1.5px solid #1B1E1C;background:#fff;font:700 14px 'Plus Jakarta Sans',sans-serif">Registrar visita</button>
+        <button style="flex-grow:1;height:44px;border:none;border-radius:12px;background:#1F6F54;color:#fff;font:700 15px 'Plus Jakarta Sans',sans-serif">Cobrar</button>
+      </div>
+    </div>
+
+    <div style="background:#F6FAF8;border:1px solid #D5E8DE;border-radius:16px;padding:14px;display:flex;justify-content:space-between;align-items:center">
+      <div><div style="font-size:16px;font-weight:700;color:#57605B">Rosa Huamán Paredes</div><div style="font-size:13px;color:#57605B">Cobrado 08:42 · Yape</div></div>
+      <div style="text-align:right"><div style="font-size:17px;font-weight:800;color:#57605B">S/ 40.00</div><span style="font-size:12px;font-weight:700;color:#16533F">✓ Cobrado</span></div>
+    </div>
+  </div>
+
+  <div style="margin-top:auto;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;padding:16px 20px 24px;background:#fff;border-top:1px solid #E6E3DA">
+    <button style="height:52px;border-radius:14px;border:1.5px solid #1B1E1C;background:#fff;font:700 15px 'Plus Jakarta Sans',sans-serif">Buscar cliente</button>
+    <button style="height:52px;border-radius:14px;border:none;background:#1B1E1C;color:#fff;font:700 15px 'Plus Jakarta Sans',sans-serif">Cerrar mi caja</button>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":1000}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Detalle del crédito</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+body{margin:0;font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:#F4F2EC;color:#1B1E1C}
+a{color:#1F6F54}a:hover{color:#16533F}
+.num{font-variant-numeric:tabular-nums}
+</style>
+</helmet>
+<div style="width:390px;height:1180px;box-sizing:border-box;background:#F4F2EC;display:flex;flex-direction:column">
+  <div style="display:flex;align-items:center;gap:12px;padding:18px 20px 14px;background:#FFFFFF;border-bottom:1px solid #E6E3DA">
+    <button aria-label="Volver" style="width:44px;height:44px;border:none;background:#F4F2EC;border-radius:12px;display:flex;align-items:center;justify-content:center"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1B1E1C" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"></path></svg></button>
+    <div style="display:flex;flex-direction:column;flex-grow:1">
+      <div style="font-size:20px;font-weight:800">CR-000123</div>
+      <div style="font-size:13px;color:#57605B">Juan Pérez Ramírez · Diario · 30 pagos</div>
+    </div>
+    <span style="padding:6px 10px;border-radius:999px;background:#FDF0E1;color:#8A4B0B;font-size:12px;font-weight:700">1 atrasada</span>
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:16px;padding:20px">
+    <div style="background:#1B1E1C;color:#F4F2EC;border-radius:18px;padding:20px;display:flex;flex-direction:column;gap:12px">
+      <div style="font-size:13px;color:#A9B3AD">Saldo por pagar</div>
+      <div class="num" style="font-size:36px;font-weight:800;letter-spacing:-.02em">S/ 760.00</div>
+      <div style="height:8px;background:#3A3F3C;border-radius:99px;overflow:hidden"><div style="width:36%;height:8px;background:#5FBF94"></div></div>
+      <div class="num" style="display:flex;justify-content:space-between;font-size:13px;color:#C9D1CC"><span>11 de 30 pagos</span><span>Pagado S/ 440.00</span></div>
+    </div>
+
+    <div class="num" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px">
+      <div style="background:#fff;border:1px solid #E6E3DA;border-radius:14px;padding:14px"><div style="font-size:12px;color:#57605B">Prestado</div><div style="font-size:17px;font-weight:800">S/ 1,000.00</div></div>
+      <div style="background:#fff;border:1px solid #E6E3DA;border-radius:14px;padding:14px"><div style="font-size:12px;color:#57605B">Interés (20% total)</div><div style="font-size:17px;font-weight:800">S/ 200.00</div></div>
+      <div style="background:#fff;border:1px solid #E6E3DA;border-radius:14px;padding:14px"><div style="font-size:12px;color:#57605B">Mora pendiente</div><div style="font-size:17px;font-weight:800;color:#B42318">S/ 40.00</div></div>
+      <div style="background:#fff;border:1px solid #E6E3DA;border-radius:14px;padding:14px"><div style="font-size:12px;color:#57605B">Próximo pago</div><div style="font-size:17px;font-weight:800">Hoy · S/ 40.00</div></div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px">
+      <a href="Cobrar.dc.html" style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 4px;background:#1F6F54;color:#fff;border-radius:14px;text-decoration:none;font-size:13px;font-weight:700"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"></rect><circle cx="12" cy="12" r="2.5"></circle></svg>Cobrar</a>
+      <button style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 4px;background:#fff;border:1px solid #E6E3DA;border-radius:14px;font:700 13px 'Plus Jakarta Sans',sans-serif;color:#1B1E1C"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#1B1E1C" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg>Liquidar</button>
+      <button style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 4px;background:#fff;border:1px solid #E6E3DA;border-radius:14px;font:700 13px 'Plus Jakarta Sans',sans-serif;color:#1B1E1C"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#1B1E1C" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M16 3v4M8 3v4M3 11h18"></path></svg>Reprogramar</button>
+      <button style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 4px;background:#fff;border:1px solid #E6E3DA;border-radius:14px;font:700 13px 'Plus Jakarta Sans',sans-serif;color:#1B1E1C"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#1B1E1C" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 00-2 2v14a2 2 0 002 2h12a2 2 0 002-2V9z"></path><path d="M14 3v6h6"></path></svg>Documentos</button>
+    </div>
+
+    <div style="display:flex;gap:8px">
+      <span style="padding:10px 14px;border-radius:999px;background:#1B1E1C;color:#fff;font-size:13px;font-weight:700">Cuotas</span>
+      <span style="padding:10px 14px;border-radius:999px;background:#fff;border:1px solid #E6E3DA;font-size:13px;font-weight:600">Pagos</span>
+      <span style="padding:10px 14px;border-radius:999px;background:#fff;border:1px solid #E6E3DA;font-size:13px;font-weight:600">Garantías</span>
+      <span style="padding:10px 14px;border-radius:999px;background:#fff;border:1px solid #E6E3DA;font-size:13px;font-weight:600">Historial</span>
+    </div>
+
+    <div class="num" style="background:#fff;border:1px solid #E6E3DA;border-radius:16px;overflow:hidden">
+      <div style="display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid #F0EEE7">
+        <span style="width:34px;color:#57605B;font-size:14px">#10</span>
+        <div style="flex-grow:1"><div style="font-size:15px;font-weight:600">Lun 12/10</div><div style="font-size:12px;color:#57605B">Pagada el 12/10</div></div>
+        <div style="text-align:right"><div style="font-weight:700">S/ 40.00</div><span style="font-size:12px;font-weight:700;color:#16533F">✓ Pagada</span></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid #F0EEE7;background:#FFF7F5">
+        <span style="width:34px;color:#57605B;font-size:14px">#11</span>
+        <div style="flex-grow:1"><div style="font-size:15px;font-weight:600">Mar 13/10</div><div style="font-size:12px;color:#B42318;font-weight:600">Vencida · 2 días · mora S/ 40.00 (tope)</div></div>
+        <div style="text-align:right"><div style="font-weight:700">S/ 40.00</div><span style="font-size:12px;font-weight:700;color:#B42318">● Vencida</span></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid #F0EEE7;background:#F6FAF8">
+        <span style="width:34px;color:#57605B;font-size:14px">#12</span>
+        <div style="flex-grow:1"><div style="font-size:15px;font-weight:600">Jue 15/10</div><div style="font-size:12px;color:#57605B">Vence hoy</div></div>
+        <div style="text-align:right"><div style="font-weight:700">S/ 40.00</div><span style="font-size:12px;font-weight:700;color:#1F6F54">◐ Hoy</span></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid #F0EEE7">
+        <span style="width:34px;color:#57605B;font-size:14px">#13</span>
+        <div style="flex-grow:1"><div style="font-size:15px;font-weight:600">Vie 16/10</div><div style="font-size:12px;color:#57605B">Pendiente</div></div>
+        <div style="text-align:right"><div style="font-weight:700">S/ 40.00</div><span style="font-size:12px;font-weight:600;color:#57605B">○ Pendiente</span></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;padding:14px 16px">
+        <span style="width:34px;color:#57605B;font-size:14px">#14</span>
+        <div style="flex-grow:1"><div style="font-size:15px;font-weight:600">Sáb 17/10</div><div style="font-size:12px;color:#57605B">Pendiente</div></div>
+        <div style="text-align:right"><div style="font-weight:700">S/ 40.00</div><span style="font-size:12px;font-weight:600;color:#57605B">○ Pendiente</span></div>
+      </div>
+    </div>
+    <a href="#" style="text-align:center;font-weight:700;font-size:14px;min-height:44px;display:flex;align-items:center;justify-content:center">Ver las 30 cuotas</a>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":1180}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

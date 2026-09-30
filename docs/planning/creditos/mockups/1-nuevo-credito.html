@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Nuevo crédito</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+body{margin:0;font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:#F4F2EC;color:#1B1E1C}
+a{color:#1F6F54}a:hover{color:#16533F}
+.lbl{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#57605B}
+.inp{box-sizing:border-box;width:100%;height:52px;border:1.5px solid #D9D6CC;border-radius:12px;background:#fff;padding:0 14px;font:600 17px 'Plus Jakarta Sans',sans-serif;color:#1B1E1C}
+.num{font-variant-numeric:tabular-nums}
+</style>
+</helmet>
+<div style="width:390px;height:1320px;box-sizing:border-box;background:#F4F2EC;display:flex;flex-direction:column">
+  <div style="display:flex;align-items:center;gap:12px;padding:18px 20px 14px;background:#FFFFFF;border-bottom:1px solid #E6E3DA">
+    <button aria-label="Volver" style="width:44px;height:44px;border:none;background:#F4F2EC;border-radius:12px;display:flex;align-items:center;justify-content:center"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1B1E1C" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"></path></svg></button>
+    <div style="display:flex;flex-direction:column">
+      <div style="font-size:20px;font-weight:800">Nuevo crédito</div>
+      <div style="font-size:13px;color:#57605B">Borrador · se guarda al activar</div>
+    </div>
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:18px;padding:20px">
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <label class="lbl" for="cli">Cliente</label>
+      <input id="cli" class="inp" value="Juan Pérez Ramírez · DNI 45879632" readonly="readonly">
+      <div style="display:flex;flex-wrap:wrap;gap:8px;padding:12px;background:#E7F2EC;border-radius:12px;font-size:13px;color:#16533F">
+        <span style="font-weight:700">✓ Puede recibir crédito</span>
+        <span>· 1 crédito activo · Debe S/ 350.00 · Disponible S/ 4,650.00 · Puntual 95%</span>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <label class="lbl" for="monto">Monto prestado</label>
+      <div style="position:relative">
+        <span style="position:absolute;left:14px;top:15px;font-weight:700;color:#57605B">S/</span>
+        <input id="monto" class="inp num" inputmode="decimal" value="{{monto}}" onChange="{{onMonto}}" style="padding-left:40px">
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <label class="lbl" for="tasa">Interés</label>
+      <div style="display:flex;gap:10px">
+        <div style="position:relative;width:120px">
+          <input id="tasa" class="inp num" inputmode="decimal" value="{{tasa}}" onChange="{{onTasa}}" style="padding-right:34px">
+          <span style="position:absolute;right:14px;top:15px;font-weight:700;color:#57605B">%</span>
+        </div>
+        <div style="flex-grow:1;display:flex;background:#E6E3DA;border-radius:12px;padding:4px;gap:4px">
+          <button onClick="{{setTotal}}" style="{{segTotal}}">Sobre el total</button>
+          <button onClick="{{setMensual}}" style="{{segMensual}}">Mensual</button>
+        </div>
+      </div>
+      <div style="font-size:13px;color:#57605B">{{tasaAyuda}}</div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px">
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <label class="lbl" for="freq">Forma de pago</label>
+        <select id="freq" class="inp" value="{{freq}}" onChange="{{onFreq}}">
+          <option value="diario">Diario</option>
+          <option value="semanal">Semanal</option>
+          <option value="quincenal">Quincenal</option>
+          <option value="mensual">Mensual</option>
+        </select>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <label class="lbl" for="n">N.º de pagos</label>
+        <input id="n" class="inp num" inputmode="numeric" value="{{n}}" onChange="{{onN}}">
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <label class="lbl" for="fd">Entrega del dinero</label>
+        <input id="fd" class="inp num" value="01/10/2026" readonly="readonly">
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <label class="lbl" for="fp">Primer pago</label>
+        <input id="fp" class="inp num" value="{{primerPago}}" readonly="readonly">
+      </div>
+    </div>
+
+    <label style="display:flex;align-items:center;gap:12px;min-height:44px;font-size:15px;font-weight:600">
+      <input type="checkbox" checked="{{domingos}}" onChange="{{toggleDomingos}}" style="width:22px;height:22px;accent-color:#1F6F54">
+      No cobrar domingos
+    </label>
+
+    <div style="background:#1B1E1C;color:#F4F2EC;border-radius:18px;padding:20px;display:flex;flex-direction:column;gap:10px">
+      <div style="font-size:12px;font-weight:700;letter-spacing:.08em;color:#A9B3AD">RESUMEN</div>
+      <div class="num" style="display:flex;justify-content:space-between;font-size:15px"><span>Capital</span><span>{{capitalTxt}}</span></div>
+      <div class="num" style="display:flex;justify-content:space-between;font-size:15px"><span>Interés</span><span>{{interesTxt}}</span></div>
+      <div style="height:1px;background:#3A3F3C"></div>
+      <div class="num" style="display:flex;justify-content:space-between;font-size:18px;font-weight:800"><span>Total a devolver</span><span>{{totalTxt}}</span></div>
+      <div class="num" style="margin-top:6px;padding:14px;background:#1F6F54;border-radius:12px;font-size:20px;font-weight:800;text-align:center">{{cuotasTxt}}</div>
+      <div class="num" style="display:flex;justify-content:space-between;font-size:13px;color:#C9D1CC"><span>Primer pago {{primerPago}}</span><span>Último {{ultimoPago}}</span></div>
+    </div>
+
+    <div style="background:#FFFFFF;border:1px solid #E6E3DA;border-radius:16px;overflow:hidden">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border-bottom:1px solid #E6E3DA">
+        <span style="font-weight:700">Vista previa del cronograma</span>
+        <a href="#" style="font-size:14px;font-weight:700">Ver completo</a>
+      </div>
+      <sc-for list="{{filas}}" as="f" hint-placeholder-count="4">
+        <div class="num" style="display:flex;justify-content:space-between;padding:12px 16px;border-bottom:1px solid #F0EEE7;font-size:14px">
+          <span style="width:36px;color:#57605B">{{f.num}}</span>
+          <span style="flex-grow:1">{{f.fecha}}</span>
+          <span style="font-weight:700">{{f.monto}}</span>
+        </div>
+      </sc-for>
+    </div>
+
+    <button style="display:flex;justify-content:space-between;align-items:center;min-height:52px;padding:0 16px;background:#FFFFFF;border:1px dashed #C9C5B9;border-radius:14px;font:600 14px 'Plus Jakarta Sans',sans-serif;color:#1B1E1C">
+      <span style="text-align:left">Opciones avanzadas<br><span style="font-weight:500;color:#57605B">Gracia 0 días · Interés mínimo 10% · Mora diaria (tope 100% cuota)</span></span>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1B1E1C" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"></path></svg>
+    </button>
+  </div>
+
+  <div style="margin-top:auto;display:flex;gap:10px;padding:16px 20px 24px;background:#FFFFFF;border-top:1px solid #E6E3DA">
+    <button style="flex-grow:1;height:52px;border-radius:14px;border:1.5px solid #1B1E1C;background:#fff;font:700 15px 'Plus Jakarta Sans',sans-serif">Guardar borrador</button>
+    <a href="Detalle.dc.html" style="flex-grow:2;height:52px;border-radius:14px;background:#1F6F54;color:#fff;font:700 15px 'Plus Jakarta Sans',sans-serif;display:flex;align-items:center;justify-content:center;text-decoration:none">Activar y entregar</a>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":1320}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { monto: '1000', tasa: '20', unidad: 'total', freq: 'diario', n: '30', domingos: true };
+  }
+  money(c) {
+    return 'S/ ' + (c / 100).toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  fecha(d) {
+    const p = (x) => String(x).padStart(2, '0');
+    return p(d.getDate()) + '/' + p(d.getMonth() + 1) + '/' + d.getFullYear();
+  }
+  fechas(n) {
+    const s = this.state; const out = []; let d = new Date(2026, 9, 1); const base = new Date(2026, 9, 1);
+    for (let i = 1; i <= n; i++) {
+      if (s.freq === 'diario') { d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1); if (s.domingos && d.getDay() === 0) d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1); }
+      else if (s.freq === 'semanal') d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 7);
+      else if (s.freq === 'quincenal') d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 15);
+      else { const m = base.getMonth() + i; const last = new Date(base.getFullYear(), m + 1, 0).getDate(); d = new Date(base.getFullYear(), m, Math.min(base.getDate(), last)); }
+      out.push(new Date(d));
+    }
+    return out;
+  }
+  renderVals() {
+    const s = this.state;
+    const C = Math.round((parseFloat(s.monto) || 0) * 100);
+    const r = (parseFloat(s.tasa) || 0) / 100;
+    const n = Math.min(365, Math.max(1, parseInt(s.n, 10) || 1));
+    const dias = { diario: 1, semanal: 7, quincenal: 15, mensual: 30 }[s.freq];
+    const I = Math.round(s.unidad === 'total' ? C * r : C * r * (n * dias / 30));
+    const T = C + I;
+    const cuota = Math.round(T / n / 10) * 10;
+    const ultima = T - cuota * (n - 1);
+    const fs = this.fechas(n);
+    const filas = [];
+    for (let i = 0; i < Math.min(3, n); i++) filas.push({ num: '#' + (i + 1), fecha: this.fecha(fs[i]), monto: this.money(i === n - 1 ? ultima : cuota) });
+    if (n > 3) filas.push({ num: '#' + n, fecha: this.fecha(fs[n - 1]), monto: this.money(ultima) });
+    const on = 'flex-grow:1;border:none;border-radius:9px;background:#FFFFFF;font:700 14px Plus Jakarta Sans,sans-serif;color:#1B1E1C;min-height:44px;box-shadow:0 1px 2px rgba(0,0,0,.12)';
+    const off = 'flex-grow:1;border:none;border-radius:9px;background:transparent;font:600 14px Plus Jakarta Sans,sans-serif;color:#57605B;min-height:44px';
+    return {
+      monto: s.monto, tasa: s.tasa, freq: s.freq, n: s.n, domingos: s.domingos,
+      segTotal: s.unidad === 'total' ? on : off,
+      segMensual: s.unidad === 'mensual' ? on : off,
+      tasaAyuda: s.unidad === 'total' ? 'El ' + s.tasa + '% se cobra una sola vez sobre el monto prestado.' : 'El ' + s.tasa + '% se cobra por cada mes del plazo.',
+      capitalTxt: this.money(C), interesTxt: this.money(I), totalTxt: this.money(T),
+      cuotasTxt: ultima === cuota ? n + ' pagos de ' + this.money(cuota) : (n - 1) + ' pagos de ' + this.money(cuota) + ' + 1 de ' + this.money(ultima),
+      primerPago: this.fecha(fs[0]), ultimoPago: this.fecha(fs[n - 1]), filas: filas,
+      onMonto: (e) => this.setState({ monto: e.target.value }),
+      onTasa: (e) => this.setState({ tasa: e.target.value }),
+      onN: (e) => this.setState({ n: e.target.value }),
+      onFreq: (e) => this.setState({ freq: e.target.value }),
+      setTotal: () => this.setState({ unidad: 'total' }),
+      setMensual: () => this.setState({ unidad: 'mensual' }),
+      toggleDomingos: () => this.setState({ domingos: !s.domingos })
+    };
+  }
+}
+</script>
+</body>
+</html>
