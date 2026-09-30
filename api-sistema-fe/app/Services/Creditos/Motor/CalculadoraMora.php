@@ -55,7 +55,7 @@ final class CalculadoraMora
         if ($reglas->topeTipo === TopeMoraTipo::PorcentajeCuota && $reglas->topeValor !== null) {
             $tope = $this->interes->montoPorPorcentaje($cuota->montoBaseMora(), $reglas->topeValor, $reglas->pasoRedondeo);
             // La mora congelada cuenta dentro del tope de la cuota.
-            $maximo = max(0, $tope - $cuota->moraCongelada);
+            $maximo = max(0, $tope - $cuota->moraCongeladaA($fechaReferencia));
             if ($numerador > 0 && $generada >= $maximo) {
                 $generada = $maximo;
                 $topeAlcanzado = true;
@@ -91,7 +91,7 @@ final class CalculadoraMora
 
         $disponible = $this->interes->montoPorPorcentaje($estado->montoCapital, $reglas->topeValor, $reglas->pasoRedondeo);
         foreach ($estado->cuotas as $cuota) {
-            $disponible -= $cuota->moraCongelada;
+            $disponible -= $cuota->moraCongeladaA($fechaReferencia);
         }
 
         $resultado = [];
@@ -190,10 +190,10 @@ final class CalculadoraMora
             $cuota->numero,
             $diasAtraso,
             $generada,
-            $cuota->moraCongelada,
+            $cuota->moraCongeladaA($fechaReferencia),
             $moraPagada,
             $cuota->moraCondonada,
-            max(0, $generada + $cuota->moraCongelada - $moraPagada - $cuota->moraCondonada),
+            max(0, $generada + $cuota->moraCongeladaA($fechaReferencia) - $moraPagada - $cuota->moraCondonada),
             $topeAlcanzado,
         );
     }

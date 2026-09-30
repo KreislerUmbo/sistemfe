@@ -1213,3 +1213,6 @@ Route::prefix('portal')->middleware(['tenant', 'tenant.active', 'tenant.subscrip
     Route::put('/profile/password', [ProfileController::class, 'updatePassword'])
         ->middleware('auth:client');;
 });
+
+// Módulo Créditos (docs/planning/creditos/03-api.md): rutas en archivo propio.
+require __DIR__ . '/creditos.php';

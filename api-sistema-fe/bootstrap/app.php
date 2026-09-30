@@ -50,4 +50,19 @@ return Application::configure(basePath: dirname(__DIR__))
                 'permisos_requeridos' => $requeridos,
             ], 403);
         });
+
+        // Módulo Créditos (00 §4): las reglas del motor rechazan con mensajes de negocio en
+        // español y sin datos internos; se devuelven como 422 para que la pantalla los muestre.
+        $exceptions->render(function (\App\Services\Creditos\Motor\Excepciones\PagoExcedeDeuda $e) {
+            return response()->json([
+                'message' => 'El pago supera lo que se debe liquidando hoy. Usa "Liquidar" para cancelar el crédito.',
+                'monto_liquidacion' => \App\Services\Creditos\Dinero::aSoles($e->montoLiquidacion),
+            ], 422);
+        });
+        $exceptions->render(function (\App\Services\Creditos\LimitesExcedidos $e) {
+            return response()->json(['message' => $e->getMessage(), 'bloqueos' => $e->detalle()], 422);
+        });
+        $exceptions->render(function (\App\Services\Creditos\Motor\Excepciones\CondicionesInvalidas|\App\Services\Creditos\Motor\Excepciones\MetodoNoSoportado $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        });
     })->create();

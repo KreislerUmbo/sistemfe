@@ -8,6 +8,7 @@ use App\Services\Creditos\Motor\CalendarioLaborable;
 use App\Services\Creditos\Motor\Dto\Abono;
 use App\Services\Creditos\Motor\Dto\CuotaVigente;
 use App\Services\Creditos\Motor\Dto\EstadoCredito;
+use App\Services\Creditos\Motor\Dto\MoraCongelada;
 use App\Services\Creditos\Motor\Dto\MoraCuota;
 use App\Services\Creditos\Motor\Dto\PeriodoCastigo;
 use App\Services\Creditos\Motor\Dto\ReglasCalendario;
@@ -224,6 +225,18 @@ class CalculadoraMoraTest extends TestCase
         $despues = $this->calcular([], '2026-11-13', cuota: $cuota);
         $this->assertSame(12_000, $despues->moraGenerada);
         $this->assertSame(52_000, $despues->moraPendiente);
+    }
+
+    public function test_mora_congelada_con_fecha_solo_existe_desde_su_reprogramacion(): void
+    {
+        // Reprogramada el 20/10 al 10/11 congelando 400: antes del 20/10 esa deuda no existía así.
+        $cuota = new CuotaVigente(
+            1, self::f('2026-09-10'), self::f('2026-11-10'), self::f('2026-10-10'), 100_000, 20_000,
+            morasCongeladas: [new MoraCongelada(self::f('2026-10-20'), 40_000)],
+        );
+
+        $this->assertSame(0, $this->calcular([], '2026-10-19', cuota: $cuota)->moraPendiente);
+        $this->assertSame(40_000, $this->calcular([], '2026-10-20', cuota: $cuota)->moraPendiente);
     }
 
     public function test_reprogramar_condonando_la_mora(): void
