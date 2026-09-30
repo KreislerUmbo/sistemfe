@@ -525,6 +525,16 @@ const comercialRoutes = [
     component: () => import("@/views/creditos/index.vue"),
   },
   {
+    path: "/creditos/cobranza",
+    name: "creditos.cobranza",
+    meta: {
+      title: setTitle("Cobranza del día"),
+      authRequired: true,
+      permission: 'creditos.cobrar',
+    },
+    component: () => import("@/views/creditos/cobranza.vue"),
+  },
+  {
     path: "/creditos/nuevo",
     name: "creditos.nuevo",
     meta: {

@@ -7,12 +7,15 @@ namespace App\Services\Creditos;
 use App\Enums\Creditos\CreditoEstado;
 use App\Models\Client\Client;
 use App\Models\Creditos\Credito;
+use App\Models\Creditos\CreditoPago;
 use App\Models\User;
+use App\Services\Creditos\Dto\CobroDelDia;
 use App\Services\Creditos\Dto\DetalleCredito;
 use App\Services\Creditos\Dto\SaldoCredito;
 use App\Services\Creditos\Motor\AplicadorPagos;
 use App\Services\Creditos\Motor\Dto\MoraCuota;
 use App\Services\Creditos\Motor\Enums\EstadoCuota;
+use App\Services\Creditos\Motor\Enums\OrigenPago;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -144,5 +147,29 @@ class ConsultaCreditoService
         usort($items, static fn (DetalleCredito $a, DetalleCredito $b): int => $b->diasAtraso <=> $a->diasAtraso);
 
         return $items;
+    }
+
+    /**
+     * Cobrado hoy en su alcance (cobros y liquidaciones válidos), agrupado por crédito:
+     * el "Cobrado" de la Cobranza del día (mockup 4).
+     *
+     * @return list<CobroDelDia>
+     */
+    public function cobradosHoy(User $usuario): array
+    {
+        $pagos = CreditoPago::validos()
+            ->whereIn('origen', [OrigenPago::Cobro, OrigenPago::Liquidacion])
+            ->whereDate('fecha_pago', $this->reloj->hoy()->aTexto())
+            ->whereHas('credito', fn (Builder $q) => $this->alcance->aplicar($q, $usuario))
+            ->with(['credito.cliente', 'paymentMethod'])
+            ->orderBy('fecha_pago')
+            ->get();
+
+        return $pagos->groupBy('credito_id')->map(static fn ($delCredito): CobroDelDia => new CobroDelDia(
+            $delCredito->first()->credito,
+            $delCredito->sum(static fn (CreditoPago $p): int => Dinero::aCentavos($p->monto_aplicado)),
+            $delCredito->last()->fecha_pago,
+            $delCredito->map(static fn (CreditoPago $p): ?string => $p->paymentMethod?->name)->filter()->unique()->values()->all(),
+        ))->values()->all();
     }
 }

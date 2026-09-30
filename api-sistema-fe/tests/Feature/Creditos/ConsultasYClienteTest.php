@@ -9,6 +9,7 @@ use App\Models\Creditos\CarteraAsignacion;
 use App\Models\User;
 use App\Services\Creditos\ClienteCreditoService;
 use App\Services\Creditos\CobroService;
+use App\Http\Controllers\Creditos\CobranzaDelDiaController;
 use App\Http\Resources\Creditos\FilaCreditoResource;
 use App\Services\Creditos\ConsultaCreditoService;
 use App\Services\Creditos\CreditoBorradorService;
@@ -16,6 +17,7 @@ use App\Services\Creditos\Dto\SolicitudCobro;
 use App\Services\Creditos\LimitesService;
 use App\Services\Creditos\Motor\Enums\DestinoExcedente;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpKernel\Exception\HttpException;
@@ -142,6 +144,37 @@ class ConsultasYClienteTest extends CreditosTestCase
         $this->assertSame([$deAlfa->id, $deZeta->id], $ids(['orden' => 'cliente', 'direccion' => 'asc']));
         $this->assertSame([$deAlfa->id, $deZeta->id], $ids(['orden' => 'monto', 'direccion' => 'desc']));
         $this->assertSame([$deZeta->id, $deAlfa->id], $ids(['orden' => 'monto', 'direccion' => 'asc']));
+    }
+
+    public function test_la_cobranza_del_dia_resume_pendientes_y_cobrados_y_filtra_por_cobrador(): void
+    {
+        $atrasado = $this->activo($this->admin);
+        $cobrado = $this->activo($this->admin);
+        $cobrador = $this->usuario(['creditos.ver', 'creditos.cobrar']);
+        app(ClienteCreditoService::class)->asignarCobrador($cobrado->cliente, $cobrador, $this->admin);
+        Auth::guard('api')->setUser($this->admin);
+        $this->hoy('2026-02-05');   // cuota 1 vencida hace 5 días: 600 + 100 de mora en cada crédito
+        app(CobroService::class)->cobrar($cobrado, new SolicitudCobro(70_000, DestinoExcedente::Devolver, $this->efectivo->id, 'cdd-1'), $this->admin);
+
+        $respuesta = fn (array $query = []) => app(CobranzaDelDiaController::class)->index(new Request($query))->getData(true);
+        $todo = $respuesta();
+
+        $this->assertSame(['por_cobrar' => '1300.00', 'cobrado' => '700.00', 'clientes_al_dia' => 1, 'clientes_total' => 2], $todo['resumen']);
+        $this->assertSame([$atrasado->id], array_column($todo['data'], 'credito_id'));
+        $this->assertSame('vencido', $todo['data'][0]['estado']);
+        $this->assertSame([$cobrado->id], array_column($todo['cobrados'], 'credito_id'));
+        $this->assertSame($cobrador->id, $todo['cobrados'][0]['cobrador']['id']);
+
+        $delCobrador = $respuesta(['cobrador_id' => $cobrador->id]);
+        $this->assertSame([], $delCobrador['data']);
+        $this->assertSame('0.00', $delCobrador['resumen']['por_cobrar']);
+        $this->assertSame([$atrasado->id], array_column($respuesta(['cobrador_id' => 0])['data'], 'credito_id'));
+
+        // Un abono parcial suma a "cobrado" pero el cliente sigue pendiente: no está al día.
+        app(CobroService::class)->cobrar($atrasado, new SolicitudCobro(10_000, DestinoExcedente::Devolver, $this->efectivo->id, 'cdd-2'), $this->admin);
+        $conAbono = $respuesta();
+        $this->assertSame(['por_cobrar' => '1200.00', 'cobrado' => '800.00', 'clientes_al_dia' => 1, 'clientes_total' => 2], $conAbono['resumen']);
+        $this->assertSame([$atrasado->id], array_column($conAbono['data'], 'credito_id'));
     }
 
     public function test_reasignar_cobrador_cierra_la_vigencia_anterior_sin_borrarla(): void

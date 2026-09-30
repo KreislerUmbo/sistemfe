@@ -4,6 +4,7 @@
 import httpClient from '@/helpers/http-client'
 import { paramsListado, type FiltrosListado } from '@/helpers/creditos/listado'
 import type {
+  CobranzaDelDia,
   CondicionesCredito,
   ConfiguracionCredito,
   Credito,
@@ -33,6 +34,12 @@ export const creditoService = {
   async listar(filtros: FiltrosListado, pagina: number) {
     const { data } = await httpClient.get('/creditos', { params: { ...paramsListado(filtros), page: pagina } })
     return data as Paginado<FilaCredito>
+  },
+
+  /** cobradorId: solo con creditos.ver_todos; 0 = clientes sin cobrador. */
+  async cobranzaDelDia(cobradorId: number | null = null) {
+    const { data } = await httpClient.get('/creditos/cobranza-del-dia', { params: cobradorId === null ? {} : { cobrador_id: cobradorId } })
+    return data as CobranzaDelDia
   },
 
   async preview(condiciones: CondicionesCredito, signal?: AbortSignal) {

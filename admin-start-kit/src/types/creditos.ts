@@ -354,3 +354,51 @@ export interface Paginado<T> {
   data: T[]
   meta: { current_page: number; last_page: number; per_page: number; total: number }
 }
+
+/** GET creditos/cobranza-del-dia (mockup 4): montos y conteos sumados por el backend. */
+export interface CobranzaDelDia {
+  fecha: string
+  resumen: {
+    por_cobrar: Soles
+    cobrado: Soles
+    /** Pagaron hoy y no les queda nada exigible (un abono parcial no cuenta). */
+    clientes_al_dia: number
+    clientes_total: number
+  }
+  /** Vacío si el usuario no ve toda la cartera. */
+  cobradores: { id: number; nombre: string }[]
+  data: PendienteCobranza[]
+  cobrados: CobradoHoy[]
+}
+
+export interface PendienteCobranza {
+  credito_id: number
+  numero_credito: string | null
+  cliente: {
+    id: number
+    nombre: string
+    telefono: string | null
+    telefono_alterno: string | null
+    direccion_cobro: string | null
+    referencia: string | null
+    latitud: string | null
+    longitud: string | null
+  }
+  cobrador: { id: number; nombre: string | null } | null
+  estado: 'vencido' | 'hoy'
+  exigible_hoy: Soles
+  mora_pendiente: Soles
+  dias_atraso: number
+  cuotas_vencidas: number
+}
+
+export interface CobradoHoy {
+  credito_id: number
+  numero_credito: string | null
+  cliente: { id: number; nombre: string }
+  cobrador: { id: number; nombre: string | null } | null
+  monto_aplicado: Soles
+  /** "HH:MM" en Lima. */
+  ultimo_pago: string
+  metodos: string[]
+}

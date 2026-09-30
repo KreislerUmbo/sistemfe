@@ -86,8 +86,10 @@ onMounted(async () => {
   }
 })
 
+/** Desde la Cobranza del día se vuelve a la lista; si no, al detalle del crédito. */
 function alDetalle() {
-  router.replace({ name: 'creditos.detalle', params: { id: creditoId.value } })
+  if (route.query.volver === 'cobranza') router.replace({ name: 'creditos.cobranza' })
+  else router.replace({ name: 'creditos.detalle', params: { id: creditoId.value } })
 }
 
 function alLiquidar() {
