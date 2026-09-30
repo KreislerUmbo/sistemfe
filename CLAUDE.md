@@ -369,6 +369,12 @@ memoria de proyecto; duplicación visual "Alto Mayo" en cabecera vs. chip de des
 sincronización del panel de precio con el ítem en edición del lienzo, ambos mencionados sin
 plan armado.
 
+**En curso — Módulo Créditos (giro `creditos`, prestamista; Fases 1-3 de 8, 2026-09-29/30):**
+Motor de cálculo puro, datos y API en la rama `feat/creditos-fase3-api` (sin merge a `main`).
+**Leer siempre** `docs/planning/creditos/00-reglas-y-modelo.md` (fuente de verdad de reglas y
+modelo) + el archivo de la fase en curso (`docs/planning/creditos/03-api.md`, …);
+`historial.md` es solo consulta. Siguiente: Fase 4 (frontend `views/creditos/`).
+
 **Próximos módulos (en orden de prioridad):**
 
 1. **Representación impresa (PDF) con impresión automática**
