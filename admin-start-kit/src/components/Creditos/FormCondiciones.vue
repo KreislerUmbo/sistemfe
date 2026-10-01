@@ -30,6 +30,7 @@
         {{ form.unidad_tasa === 'total'
           ? `El ${form.tasa_interes || '…'}% se cobra una sola vez sobre el monto prestado.`
           : `El ${form.tasa_interes || '…'}% se cobra por cada mes del plazo.` }}
+        <span v-if="form.unidad_tasa === 'total' && tasaMensual" class="d-block fw-semibold text-body">Equivale a {{ tasaMensual }}% mensual.</span>
       </small>
     </div>
 
@@ -47,21 +48,31 @@
       <div v-if="errores.numero_cuotas" class="invalid-feedback d-block">{{ errores.numero_cuotas }}</div>
     </div>
     <div class="col-6 col-md-3">
-      <label class="form-label mb-1 small fw-semibold text-secondary" for="fc-desembolso">Entrega del dinero</label>
-      <input v-if="desembolsoEditable" id="fc-desembolso" v-model="form.fecha_desembolso" type="date" class="form-control form-control-sm"
-        :max="fechaMaxima" :class="{ 'is-invalid': errores.fecha_desembolso }" />
+      <label class="form-label mb-1 small fw-semibold text-secondary" for="fc-desembolso">
+        {{ desembolsoEditable ? '¿Cuándo entregó el dinero?' : 'Entrega del dinero' }}<span v-if="desembolsoEditable" class="text-danger"> *</span>
+      </label>
+      <CampoFecha v-if="desembolsoEditable" id="fc-desembolso" v-model="form.fecha_desembolso" :max="fechaMaxima" etiqueta="la entrega del dinero"
+        :invalido="!!errores.fecha_desembolso" />
       <input v-else id="fc-desembolso" :value="formatoFecha(form.fecha_desembolso)" type="text" class="form-control form-control-sm" readonly />
       <small v-if="!desembolsoEditable" class="text-muted">Hoy, al activar.</small>
+      <small v-else-if="!form.fecha_desembolso" class="text-muted">Obligatoria; debe ser anterior a hoy.</small>
       <div v-if="errores.fecha_desembolso" class="invalid-feedback d-block">{{ errores.fecha_desembolso }}</div>
     </div>
     <div class="col-6 col-md-4">
-      <label class="form-label mb-1 small fw-semibold text-secondary" for="fc-primer">Primer pago</label>
-      <input id="fc-primer" v-model="form.fecha_primer_vencimiento" type="date" class="form-control form-control-sm"
-        :class="{ 'is-invalid': errores.fecha_primer_vencimiento }" />
-      <small class="text-muted">
-        <template v-if="!form.fecha_primer_vencimiento">Automático{{ primerSugerido ? `: ${formatoFecha(primerSugerido)}` : '' }}</template>
-        <a v-else href="#" @click.prevent="form.fecha_primer_vencimiento = ''">Usar automático</a>
+      <label class="form-label mb-1 small fw-semibold text-secondary d-flex align-items-center gap-1" for="fc-primer">
+        Primer pago
+        <span v-if="!form.fecha_primer_vencimiento && primerSugerido" class="badge bg-info-subtle text-info-emphasis fw-normal">automático</span>
+      </label>
+      <!-- La fecha automática se MUESTRA pero no se guarda: guardarla la volvería el ancla del
+           cronograma y dejaría de recalcularse al cambiar la forma de pago o la entrega. -->
+      <CampoFecha id="fc-primer" :model-value="form.fecha_primer_vencimiento || primerSugerido || ''" etiqueta="el primer pago"
+        :min="form.fecha_desembolso || undefined" :invalido="!!errores.fecha_primer_vencimiento"
+        @update:model-value="cambiarPrimerPago" />
+      <small class="text-muted d-block">
+        <a v-if="form.fecha_primer_vencimiento" href="#" @click.prevent="form.fecha_primer_vencimiento = ''">Usar automático</a>
+        <template v-else-if="primerSugerido">Elige otra fecha en el calendario para cambiarla.</template>
       </small>
+      <small v-if="ajustePrimerPago" class="text-warning-emphasis d-block"><i class="fas fa-info-circle me-1"></i>{{ ajustePrimerPago }}</small>
       <div v-if="errores.fecha_primer_vencimiento" class="invalid-feedback d-block">{{ errores.fecha_primer_vencimiento }}</div>
     </div>
     <div v-if="metodosPago.length > 1" class="col-12 col-md-4">
@@ -73,7 +84,8 @@
     <div class="col-12">
       <div class="form-check mb-0">
         <input id="fc-domingos" v-model="noCobrarDomingos" type="checkbox" class="form-check-input" />
-        <label class="form-check-label small" for="fc-domingos">No cobrar domingos</label>
+        <label class="form-check-label small" for="fc-domingos">{{ domingos.etiqueta }}</label>
+        <small v-if="domingos.ayuda" class="text-muted d-block">{{ domingos.ayuda }}</small>
       </div>
     </div>
 
@@ -153,9 +165,11 @@
 // resultantes los calcula el backend (preview). Estilo de formulario de Agencia/Umbo
 // (etiquetas small, controles -sm).
 import { computed, ref, watch } from 'vue'
+import CampoFecha from '@/components/CampoFecha.vue'
 import { DOMINGO, FORMAS_PAGO, resumenAvanzado, type FormCredito } from '@/helpers/creditos/formulario'
+import { textoAjuste, textoDomingos } from '@/helpers/creditos/cronograma'
 import { formatoFecha } from '@/helpers/creditos/formato'
-import type { MetodoPago } from '@/types/creditos'
+import type { CuotaPrevia, MetodoPago } from '@/types/creditos'
 
 const props = withDefaults(defineProps<{
   errores?: Record<string, string>
@@ -163,7 +177,11 @@ const props = withDefaults(defineProps<{
   primerSugerido?: string | null
   desembolsoEditable?: boolean
   fechaMaxima?: string
-}>(), { errores: () => ({}), metodosPago: () => [], primerSugerido: null, desembolsoEditable: false, fechaMaxima: undefined })
+  /** Primera cuota del preview: explica si su fecha se movió por domingo o feriado. */
+  primeraCuota?: CuotaPrevia | null
+  /** "Sobre el total" expresado en % mensual simple (lo calcula el backend). */
+  tasaMensual?: string | null
+}>(), { errores: () => ({}), metodosPago: () => [], primerSugerido: null, desembolsoEditable: false, fechaMaxima: undefined, primeraCuota: null, tasaMensual: null })
 
 const form = defineModel<FormCredito>({ required: true })
 const avanzadas = ref(false)
@@ -182,6 +200,14 @@ const noCobrarDomingos = computed({
 })
 
 const errores = computed(() => props.errores)
+const domingos = computed(() => textoDomingos(form.value.forma_pago, form.value.regla_no_laborable))
+const ajustePrimerPago = computed(() => (props.primeraCuota ? textoAjuste(props.primeraCuota) : null))
+
+/** Elegir la misma fecha automática no la fija: solo una fecha distinta se vuelve manual. */
+function cambiarPrimerPago(valor: string) {
+  if (!form.value.fecha_primer_vencimiento && valor === props.primerSugerido) return
+  form.value.fecha_primer_vencimiento = valor
+}
 
 // Si el backend rechaza un campo de opciones avanzadas, se despliega la sección para que se vea.
 const CAMPOS_AVANZADOS = ['dias_gracia', 'tasa_interes_minimo', 'tope_mora_tipo', 'tope_mora_valor', 'dias_no_laborables', 'regla_no_laborable']

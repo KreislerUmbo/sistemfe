@@ -18,6 +18,8 @@ final readonly class CuotaProgramada
         public int $montoTotal,
         /** 12.3: la regla `anterior` era imposible y se aplicó `siguiente` (el preview lo indica). */
         public bool $fechaForzadaASiguiente = false,
+        /** Fecha antes del ajuste por día no laborable o feriado; null si no se movió. */
+        public ?Fecha $fechaTeorica = null,
     ) {
     }
 }

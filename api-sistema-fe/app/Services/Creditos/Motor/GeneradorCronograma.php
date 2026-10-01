@@ -46,7 +46,7 @@ final class GeneradorCronograma
         foreach ($fechas as $i => $fecha) {
             $cuotas[] = new CuotaProgramada(
                 $i + 1, $inicio, $fecha->fecha, $capitales[$i], $intereses[$i],
-                $capitales[$i] + $intereses[$i], $fecha->forzadaASiguiente,
+                $capitales[$i] + $intereses[$i], $fecha->forzadaASiguiente, $fecha->original,
             );
             $inicio = $fecha->fecha;
         }
@@ -179,7 +179,8 @@ final class GeneradorCronograma
             if (! $ajustada->fecha->esPosteriorA($limite)) {
                 $ajustada = new FechaAjustada($calendario->siguienteLaborable($limite->sumarDias(1)), $ajustada->forzadaASiguiente);
             }
-            $fechas[] = $ajustada;
+            $movida = $ajustada->fecha->aTexto() !== $teorica->aTexto();
+            $fechas[] = new FechaAjustada($ajustada->fecha, $ajustada->forzadaASiguiente, $movida ? $teorica : null);
             $limite = $ajustada->fecha;
         }
 
@@ -194,8 +195,11 @@ final class GeneradorCronograma
      */
     private function fechasDiarias(int $intervalo, Fecha $desembolso, ?Fecha $primer, int $n, CalendarioLaborable $cal): array
     {
-        $fecha = $cal->siguienteLaborable($primer ?? $desembolso->sumarDias($intervalo));
-        $fechas = [new FechaAjustada($fecha)];
+        // Solo el primer pago se explica como "movido": los siguientes días sin cobro simplemente
+        // no generan cuota (lo dice el checkbox), y anotarlos llenaría el cronograma de avisos.
+        $teorica = $primer ?? $desembolso->sumarDias($intervalo);
+        $fecha = $cal->siguienteLaborable($teorica);
+        $fechas = [new FechaAjustada($fecha, false, $fecha->aTexto() !== $teorica->aTexto() ? $teorica : null)];
         while (count($fechas) < $n) {
             $fecha = $cal->siguienteLaborable($fecha->sumarDias($intervalo));
             $fechas[] = new FechaAjustada($fecha);

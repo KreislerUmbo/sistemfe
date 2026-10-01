@@ -30,7 +30,8 @@
           </div>
           <div class="card-body py-3">
             <FormCondiciones v-model="form" :errores="errores" :metodos-pago="metodosPago"
-              :primer-sugerido="preview?.cronograma.primer_vencimiento ?? null" />
+              :primer-sugerido="preview?.cronograma.primer_vencimiento ?? null"
+              :primera-cuota="preview?.cronograma.cuotas[0] ?? null" :tasa-mensual="preview?.cronograma.tasa_mensual_equivalente ?? null" />
           </div>
         </div>
       </div>
@@ -57,7 +58,7 @@
       </div>
 
       <div class="col-12 col-xl-7">
-        <BarraAccionMovil>
+        <BarraAccionMovil :resumen="resumenMovil">
           <button type="button" class="btn btn-outline-secondary" :disabled="ocupado" @click="guardarBorrador">
             <span v-if="guardando" class="spinner-border spinner-border-sm me-2"></span><i v-else class="fas fa-save me-2"></i>Guardar borrador
           </button>
@@ -93,7 +94,8 @@ import { usePreviewCredito } from '@/composables/creditos/usePreviewCredito'
 import { usePermisosCredito } from '@/composables/creditos/usePermisosCredito'
 import { interpretarErrorCredito, type ErrorCredito } from '@/composables/creditos/errorCredito'
 import { aCondiciones, formularioDesdeConfiguracion, formularioDesdeCredito, type FormCredito } from '@/helpers/creditos/formulario'
-import { hoyEnLima } from '@/helpers/creditos/formato'
+import { formatoSoles, hoyEnLima } from '@/helpers/creditos/formato'
+import { textoPagos } from '@/helpers/creditos/cronograma'
 import type { Credito, Infraccion, MetodoPago, ReglaLimite } from '@/types/creditos'
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire
@@ -132,6 +134,10 @@ const claveActivar = useClaveIdempotencia()
 const condiciones = computed(() => aCondiciones(form.value, cliente.value?.id ?? null))
 const { preview, cargando: cargandoPreview, error: errorPreview } = usePreviewCredito(condiciones)
 
+/** Línea fija en celular: "Total S/ 1,200.00 · 30 pagos de S/ 40.00". */
+const resumenMovil = computed(() => (preview.value
+  ? `Total ${formatoSoles(preview.value.cronograma.monto_total)} · ${textoPagos(preview.value.cronograma.cuotas, formatoSoles)}`
+  : null))
 const primerError = (campos: Record<string, string>) => Object.values(campos)[0] ?? null
 
 onMounted(async () => {

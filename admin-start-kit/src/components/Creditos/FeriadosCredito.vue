@@ -13,7 +13,7 @@
     <form class="row g-2 mb-3" novalidate @submit.prevent="agregar">
       <div class="col-12 col-sm-4 col-lg-3">
         <label class="visually-hidden" for="fer-fecha">Fecha</label>
-        <input id="fer-fecha" v-model="nuevo.fecha" type="date" class="form-control form-control-sm" :min="`${anio}-01-01`" :max="`${anio}-12-31`" />
+        <CampoFecha id="fer-fecha" v-model="nuevo.fecha" :min="`${anio}-01-01`" :max="`${anio}-12-31`" etiqueta="el feriado" />
       </div>
       <div class="col-12 col-sm">
         <label class="visually-hidden" for="fer-desc">Descripción</label>
@@ -34,7 +34,7 @@
       <li v-for="f in feriados" :key="f.id" class="list-group-item py-2">
         <form v-if="editando?.id === f.id" class="row g-2 align-items-center" novalidate @submit.prevent="guardarEdicion">
           <div class="col-12 col-sm-4 col-lg-3">
-            <input v-model="editando.fecha" type="date" class="form-control form-control-sm" :aria-label="`Fecha de ${f.descripcion}`" />
+            <CampoFecha v-model="editando.fecha" :etiqueta="f.descripcion" />
           </div>
           <div class="col-12 col-sm">
             <input v-model="editando.descripcion" type="text" class="form-control form-control-sm" maxlength="150" aria-label="Descripción" @keydown.esc="editando = null" />
@@ -63,6 +63,7 @@
 // reprogramaciones: el cronograma de un crédito activo ya quedó calculado.
 import { onMounted, ref, watch } from 'vue'
 import Swal from 'sweetalert2/dist/sweetalert2.js'
+import CampoFecha from '@/components/CampoFecha.vue'
 import { creditoService } from '@/services/admin/creditoService'
 import { interpretarErrorCredito } from '@/composables/creditos/errorCredito'
 import { useToast } from '@/composables/useToast'

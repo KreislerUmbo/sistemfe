@@ -26,7 +26,7 @@
       <div v-for="c in pendientes" :key="c.id" class="d-flex align-items-center gap-2 mb-2">
         <span class="text-muted numero">#{{ c.numero_cuota }}</span>
         <span class="small text-muted flex-grow-1">{{ formatoFecha(c.fecha_vencimiento) }} →</span>
-        <input v-model="fechas[c.numero_cuota]" type="date" class="form-control form-control-sm fecha" :aria-label="`Nueva fecha cuota ${c.numero_cuota}`" />
+        <CampoFecha v-model="fechas[c.numero_cuota]" class="fecha" :etiqueta="`la cuota ${c.numero_cuota}`" estatico />
       </div>
     </div>
 
@@ -82,6 +82,7 @@
 // previa y la mora a congelar las calcula el backend; aquí solo se arma la solicitud.
 import { computed, ref, watch } from 'vue'
 import DialogoBase from './DialogoBase.vue'
+import CampoFecha from '@/components/CampoFecha.vue'
 import { creditoService } from '@/services/admin/creditoService'
 import { interpretarErrorCredito, type ErrorCredito } from '@/composables/creditos/errorCredito'
 import { useClaveIdempotencia } from '@/composables/creditos/useClaveIdempotencia'

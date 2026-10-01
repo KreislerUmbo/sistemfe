@@ -1,5 +1,6 @@
 <template>
   <div class="barra-accion">
+    <div v-if="resumen" class="barra-accion__resumen d-md-none small fw-semibold text-center mb-2">{{ resumen }}</div>
     <div class="barra-accion__contenido d-flex gap-2 justify-content-end">
       <slot />
     </div>
@@ -9,7 +10,9 @@
 <script setup lang="ts">
 // Módulo Créditos (04-frontend, verificación 4): en celular la acción principal va fija
 // abajo, al alcance del pulgar (la barra superior de Rizz ocupa 100 px fijos). Desde
-// 768 px vuelve a ser una fila normal al pie del formulario.
+// 768 px vuelve a ser una fila normal al pie del formulario. "resumen": una línea con lo esencial
+// (ej. total y pagos) que solo se ve en celular, para no perderlo al hacer scroll.
+defineProps<{ resumen?: string | null }>()
 </script>
 
 <style scoped>

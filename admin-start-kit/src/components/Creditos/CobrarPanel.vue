@@ -120,7 +120,7 @@
               <div v-if="conFechaAnterior" class="row g-2 mt-1">
                 <div class="col-12 col-sm-5">
                   <label class="form-label mb-1 small fw-semibold text-secondary" for="cobro-fecha">Fecha del pago</label>
-                  <input id="cobro-fecha" v-model="fechaPago" type="date" class="form-control form-control-sm" :max="hoy" />
+                  <CampoFecha id="cobro-fecha" v-model="fechaPago" :max="hoy" etiqueta="la fecha del pago" estatico />
                 </div>
                 <div class="col-12 col-sm-7">
                   <label class="form-label mb-1 small fw-semibold text-secondary" for="cobro-motivo">Motivo</label>
@@ -190,6 +190,7 @@
 // backend recalcula todo de nuevo y el botón queda bloqueado mientras procesa.
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import BarraAccionMovil from './BarraAccionMovil.vue'
+import CampoFecha from '@/components/CampoFecha.vue'
 import { creditoService } from '@/services/admin/creditoService'
 import { usePreviewCredito } from '@/composables/creditos/usePreviewCredito'
 import { useDocumentosCredito } from '@/composables/creditos/useDocumentosCredito'

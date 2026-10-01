@@ -12,6 +12,8 @@ final readonly class FechaAjustada
     public function __construct(
         public Fecha $fecha,
         public bool $forzadaASiguiente = false,
+        /** Fecha teórica cuando el calendario la movió (el preview explica el porqué). */
+        public ?Fecha $original = null,
     ) {
     }
 }

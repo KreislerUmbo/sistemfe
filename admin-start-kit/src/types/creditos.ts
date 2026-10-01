@@ -43,6 +43,12 @@ export interface CuotaPrevia {
   monto_interes: Soles
   monto_total: Soles
   fecha_forzada_a_siguiente: boolean
+  /** Fecha antes del ajuste por día sin cobro o feriado; null si no se movió. */
+  fecha_original: string | null
+  /** "domingo", "feriado: Navidad" o "no se pudo adelantar". */
+  motivo_ajuste: string | null
+  /** Nombre del feriado si el pago cae en uno (solo pasa con "no cobrar feriados" apagado). */
+  feriado: string | null
 }
 
 export interface CronogramaPrevio {
@@ -50,6 +56,8 @@ export interface CronogramaPrevio {
   monto_total: Soles
   primer_vencimiento: string
   ultimo_vencimiento: string
+  /** Interés prorrateado a 30 días del plazo (referencia simple, no TEA). */
+  tasa_mensual_equivalente: string | null
   cuotas: CuotaPrevia[]
 }
 

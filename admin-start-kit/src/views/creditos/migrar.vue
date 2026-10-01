@@ -31,7 +31,8 @@
           </div>
           <div class="card-body py-3">
             <FormCondiciones v-model="form" :errores="errores" desembolso-editable :fecha-maxima="ayer"
-              :primer-sugerido="preview?.cronograma.primer_vencimiento ?? null" />
+              :primer-sugerido="preview?.cronograma.primer_vencimiento ?? null"
+              :primera-cuota="preview?.cronograma.cuotas[0] ?? null" :tasa-mensual="preview?.cronograma.tasa_mensual_equivalente ?? null" />
           </div>
         </div>
 
@@ -40,14 +41,19 @@
           <div class="card-header bg-white border-bottom d-flex align-items-center gap-2 py-2 flex-wrap">
             <span class="badge bg-primary rounded-pill">3</span>
             <span class="fw-semibold text-dark">Pagos que ya hizo</span>
-            <div class="btn-group btn-group-sm ms-auto" role="group" aria-label="Cómo registrar los pagos">
-              <input id="mg-modo-rapido" v-model="modo" type="radio" class="btn-check" value="rapido" />
-              <label class="btn btn-outline-primary" for="mg-modo-rapido">Cuotas al día</label>
-              <input id="mg-modo-detallado" v-model="modo" type="radio" class="btn-check" value="detallado" />
-              <label class="btn btn-outline-primary" for="mg-modo-detallado">Pago por pago</label>
-            </div>
           </div>
           <div class="card-body py-3">
+            <div class="btn-group btn-group-sm mb-1 flex-wrap" role="group" aria-label="Cómo registrar los pagos">
+              <input id="mg-modo-rapido" v-model="modo" type="radio" class="btn-check" value="rapido" />
+              <label class="btn btn-outline-primary" for="mg-modo-rapido">Rápido: marcar cuotas pagadas</label>
+              <input id="mg-modo-detallado" v-model="modo" type="radio" class="btn-check" value="detallado" />
+              <label class="btn btn-outline-primary" for="mg-modo-detallado">Detallado: pago por pago</label>
+            </div>
+            <small class="text-muted d-block mb-3">
+              {{ modo === 'rapido'
+                ? 'Para quien pagó sus cuotas puntualmente: indicas cuántas y se registran en su fecha, sin mora.'
+                : 'Para pagos con atraso o montos distintos: cada pago con su fecha real; el sistema calcula la mora.' }}
+            </small>
             <div v-if="modo === 'rapido'">
               <label class="form-label mb-1 small fw-semibold text-secondary" for="mg-pagadas">¿Cuántas cuotas pagó a tiempo?</label>
               <input id="mg-pagadas" v-model="cuotasPagadas" type="number" inputmode="numeric" min="0" :max="totalCuotas || undefined"
@@ -61,8 +67,8 @@
               <div v-for="(fila, i) in filas" :key="fila.id" class="d-flex align-items-start gap-2 mb-2 flex-wrap">
                 <div class="campo-fecha">
                   <label class="visually-hidden" :for="`mg-f${fila.id}`">Fecha del pago {{ i + 1 }}</label>
-                  <input :id="`mg-f${fila.id}`" v-model="fila.fecha" type="date" class="form-control form-control-sm" :min="form.fecha_desembolso" :max="hoy"
-                    :class="{ 'is-invalid': validacion.errores[fila.id] }" />
+                  <CampoFecha :id="`mg-f${fila.id}`" v-model="fila.fecha" :min="form.fecha_desembolso || undefined" :max="hoy"
+                    :etiqueta="`el pago ${i + 1}`" :invalido="!!validacion.errores[fila.id]" />
                 </div>
                 <div class="campo-monto">
                   <label class="visually-hidden" :for="`mg-m${fila.id}`">Monto del pago {{ i + 1 }}</label>
@@ -109,7 +115,7 @@
       </div>
 
       <div class="col-12 col-xl-7">
-        <BarraAccionMovil>
+        <BarraAccionMovil :resumen="resumenMovil">
           <button type="submit" class="btn btn-primary fw-semibold" :disabled="guardando || !condiciones">
             <span v-if="guardando" class="spinner-border spinner-border-sm me-2"></span><i v-else class="fas fa-check me-2"></i>
             {{ errorAccion?.reintentable ? 'Reintentar' : 'Registrar crédito' }}
@@ -128,6 +134,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import DefaultLayout from '@/layouts/DefaultLayout.vue'
 import EncabezadoCredito from '@/components/Creditos/EncabezadoCredito.vue'
+import CampoFecha from '@/components/CampoFecha.vue'
 import BuscadorCliente, { type ClienteBuscado } from '@/components/Creditos/BuscadorCliente.vue'
 import TarjetaResumenCliente from '@/components/Creditos/TarjetaResumenCliente.vue'
 import FormCondiciones from '@/components/Creditos/FormCondiciones.vue'
@@ -142,7 +149,8 @@ import { usePreviewCredito } from '@/composables/creditos/usePreviewCredito'
 import { interpretarErrorCredito, type ErrorCredito } from '@/composables/creditos/errorCredito'
 import { aCondiciones, formularioDesdeConfiguracion, type FormCredito } from '@/helpers/creditos/formulario'
 import { validarPagosHistoricos, type FilaPagoHistorico } from '@/helpers/creditos/migracion'
-import { hoyEnLima } from '@/helpers/creditos/formato'
+import { formatoSoles, hoyEnLima } from '@/helpers/creditos/formato'
+import { textoPagos } from '@/helpers/creditos/cronograma'
 
 const router = useRouter()
 const toast = useToast()
@@ -182,6 +190,10 @@ const condiciones = computed(() => {
 const { preview, cargando: cargandoPreview, error: errorPreview } = usePreviewCredito(condiciones)
 const totalCuotas = computed(() => preview.value?.cronograma.cuotas.length ?? 0)
 const validacion = computed(() => validarPagosHistoricos(filas.value, form.value.fecha_desembolso, hoy))
+/** Línea fija en celular: "Total S/ 1,200.00 · 30 pagos de S/ 40.00". */
+const resumenMovil = computed(() => (preview.value
+  ? `Total ${formatoSoles(preview.value.cronograma.monto_total)} · ${textoPagos(preview.value.cronograma.cuotas, formatoSoles)}`
+  : null))
 const primerError = (campos: Record<string, string>) => Object.values(campos)[0] ?? null
 
 onMounted(async () => {
@@ -253,7 +265,7 @@ async function registrar() {
   max-width: 140px;
 }
 .campo-fecha {
-  width: 150px;
+  width: 170px;
 }
 .campo-monto {
   width: 150px;

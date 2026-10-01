@@ -15,10 +15,8 @@
               <td class="text-end pe-0 text-primary fs-6">{{ formatoSoles(preview.cronograma.monto_total) }}</td>
             </tr>
             <tr><td class="text-muted ps-0">Pagos</td><td class="text-end pe-0 fw-semibold">{{ textoCuotas }}</td></tr>
-            <tr>
-              <td class="text-muted ps-0">Primero · último</td>
-              <td class="text-end pe-0">{{ formatoFecha(preview.cronograma.primer_vencimiento) }} · {{ formatoFecha(preview.cronograma.ultimo_vencimiento) }}</td>
-            </tr>
+            <tr><td class="text-muted ps-0">Primer pago</td><td class="text-end pe-0">{{ formatoFecha(preview.cronograma.primer_vencimiento) }}</td></tr>
+            <tr><td class="text-muted ps-0">Último pago</td><td class="text-end pe-0">{{ formatoFecha(preview.cronograma.ultimo_vencimiento) }}</td></tr>
           </tbody>
         </table>
         <p v-else-if="error" class="mb-0 text-danger small"><i class="fas fa-exclamation-triangle me-1"></i>{{ error }}</p>
@@ -29,7 +27,7 @@
     <div v-if="preview" class="card border-0 shadow-sm mb-0">
       <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center py-2">
         <span class="fw-semibold text-dark">Cronograma</span>
-        <button v-if="cuotas.length > FILAS_RESUMIDAS" type="button" class="btn btn-link btn-sm p-0" @click="completo = !completo">
+        <button v-if="cronogramaResumido(cuotas)" type="button" class="btn btn-link btn-sm p-0" @click="completo = !completo">
           {{ completo ? 'Ver menos' : `Ver los ${cuotas.length}` }}
         </button>
       </div>
@@ -39,16 +37,21 @@
             <tr><th class="ps-3">#</th><th>Vence</th><th class="text-end pe-3">Cuota</th></tr>
           </thead>
           <tbody>
-            <tr v-for="c in filas" :key="c.numero_cuota">
-              <td class="ps-3 text-muted">{{ c.numero_cuota }}</td>
-              <td>
-                {{ formatoFecha(c.fecha_vencimiento) }}
-                <i v-if="c.fecha_forzada_a_siguiente" class="fas fa-info-circle text-warning ms-1"
-                  title="Cae en día sin cobro: se pasó al siguiente día hábil"></i>
-                <span v-if="pagadas && c.numero_cuota <= pagadas" class="badge bg-success-subtle text-success-emphasis ms-1">Pagada</span>
-              </td>
-              <td class="text-end pe-3 fw-semibold">{{ formatoSoles(c.monto_total) }}</td>
-            </tr>
+            <template v-for="(fila, i) in filas" :key="fila.tipo === 'cuota' ? fila.cuota.numero_cuota : `resto${i}`">
+              <tr v-if="fila.tipo === 'resto'" class="fila-resto" role="button" @click="completo = true">
+                <td colspan="3" class="text-center text-muted">⋯ {{ fila.cantidad }} cuota{{ fila.cantidad === 1 ? '' : 's' }} más</td>
+              </tr>
+              <tr v-else>
+                <td class="ps-3 text-muted">{{ fila.cuota.numero_cuota }}</td>
+                <td>
+                  {{ formatoFecha(fila.cuota.fecha_vencimiento) }}
+                  <span v-if="fila.cuota.feriado" class="badge bg-warning-subtle text-warning-emphasis ms-1" :title="fila.cuota.feriado">feriado</span>
+                  <span v-if="pagadas && fila.cuota.numero_cuota <= pagadas" class="badge bg-success-subtle text-success-emphasis ms-1">Pagada</span>
+                  <small v-if="textoAjuste(fila.cuota)" class="d-block text-muted">{{ textoAjuste(fila.cuota) }}</small>
+                </td>
+                <td class="text-end pe-3 fw-semibold">{{ formatoSoles(fila.cuota.monto_total) }}</td>
+              </tr>
+            </template>
           </tbody>
         </table>
       </div>
@@ -62,6 +65,7 @@
 // agrupado "N pagos de S/ X" compara los montos como texto, sin sumar.
 import { computed, ref } from 'vue'
 import { formatoFecha, formatoSoles } from '@/helpers/creditos/formato'
+import { cronogramaResumido, filasCronograma, textoAjuste, textoPagos } from '@/helpers/creditos/cronograma'
 import type { CuotaPrevia, PreviewCredito } from '@/types/creditos'
 
 const props = defineProps<{
@@ -73,36 +77,21 @@ const props = defineProps<{
   pagadas?: number
 }>()
 
-const FILAS_RESUMIDAS = 4
 const completo = ref(false)
 
 const cuotas = computed<CuotaPrevia[]>(() => props.preview?.cronograma.cuotas ?? [])
 
-const filas = computed(() => {
-  const lista = cuotas.value
-  if (completo.value || lista.length <= FILAS_RESUMIDAS) return lista
-  return [...lista.slice(0, FILAS_RESUMIDAS - 1), lista[lista.length - 1]]
-})
+const filas = computed(() => filasCronograma(cuotas.value, completo.value))
 
-/** "30 pagos de S/ 40.00" o "29 pagos de S/ 40.00 + 1 de S/ 40.10". */
-const textoCuotas = computed(() => {
-  const grupos: { monto: string; cantidad: number }[] = []
-  for (const c of cuotas.value) {
-    const ultimo = grupos[grupos.length - 1]
-    if (ultimo && ultimo.monto === c.monto_total) ultimo.cantidad++
-    else grupos.push({ monto: c.monto_total, cantidad: 1 })
-  }
-  const texto = (g: { monto: string; cantidad: number }, primero: boolean) =>
-    `${g.cantidad} ${g.cantidad === 1 ? (primero ? 'pago' : '') : 'pagos'} de ${formatoSoles(g.monto)}`.replace(/\s+/g, ' ')
-
-  if (grupos.length <= 2) return grupos.map((g, i) => texto(g, i === 0)).join(' + ')
-  return `${cuotas.value.length} pagos · primero ${formatoSoles(grupos[0].monto)}`
-})
+const textoCuotas = computed(() => textoPagos(cuotas.value, formatoSoles))
 </script>
 
 <style scoped>
 .cifra {
   font-variant-numeric: tabular-nums;
+}
+.fila-resto {
+  cursor: pointer;
 }
 .cronograma-completo {
   max-height: 420px;

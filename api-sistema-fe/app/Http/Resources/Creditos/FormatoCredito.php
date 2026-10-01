@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Resources\Creditos;
 
+use App\Models\Creditos\Feriado;
 use App\Services\Creditos\Dinero;
 use App\Services\Creditos\Dto\CambioFecha;
 use App\Services\Creditos\Dto\CotizacionPago;
@@ -27,12 +28,20 @@ final class FormatoCredito
     public static function cronograma(Cronograma $c): array
     {
         $cuotas = $c->cuotas;
+        $primera = $cuotas[0];
+        $ultima = $cuotas[array_key_last($cuotas)];
+        // Feriados del rango (fechas finales y teóricas) para explicar ajustes y avisar cuotas en feriado.
+        $feriados = Feriado::whereBetween('fecha', [$primera->fechaInicioPeriodo->aTexto(), $ultima->fechaVencimiento->sumarDias(7)->aTexto()])
+            ->get(['fecha', 'descripcion'])
+            ->mapWithKeys(static fn (Feriado $f): array => [$f->fecha->format('Y-m-d') => $f->descripcion])
+            ->all();
 
         return [
             'interes_total' => Dinero::aSoles($c->interesTotal),
             'monto_total' => Dinero::aSoles($c->montoTotal),
-            'primer_vencimiento' => $cuotas[0]->fechaVencimiento->aTexto(),
-            'ultimo_vencimiento' => $cuotas[array_key_last($cuotas)]->fechaVencimiento->aTexto(),
+            'primer_vencimiento' => $primera->fechaVencimiento->aTexto(),
+            'ultimo_vencimiento' => $ultima->fechaVencimiento->aTexto(),
+            'tasa_mensual_equivalente' => self::tasaMensualSimple($c),
             'cuotas' => array_map(static fn (CuotaProgramada $q): array => [
                 'numero_cuota' => $q->numero,
                 'fecha_vencimiento' => $q->fechaVencimiento->aTexto(),
@@ -40,8 +49,49 @@ final class FormatoCredito
                 'monto_interes' => Dinero::aSoles($q->montoInteres),
                 'monto_total' => Dinero::aSoles($q->montoTotal),
                 'fecha_forzada_a_siguiente' => $q->fechaForzadaASiguiente,
+                'fecha_original' => $q->fechaTeorica?->aTexto(),
+                'motivo_ajuste' => self::motivoAjuste($q, $feriados),
+                'feriado' => $feriados[$q->fechaVencimiento->aTexto()] ?? null,
             ], $cuotas),
         ];
+    }
+
+    private const DIAS = [1 => 'lunes', 2 => 'martes', 3 => 'miércoles', 4 => 'jueves', 5 => 'viernes', 6 => 'sábado', 7 => 'domingo'];
+
+    /**
+     * Por qué el calendario movió la fecha: "domingo", "feriado: Navidad" o, si la regla
+     * `anterior` no pudo aplicarse, "no se pudo adelantar". Null si no se movió.
+     *
+     * @param array<string, string> $feriados fecha → descripción
+     */
+    private static function motivoAjuste(CuotaProgramada $q, array $feriados): ?string
+    {
+        if ($q->fechaTeorica === null) {
+            return null;
+        }
+        if ($q->fechaForzadaASiguiente) {
+            return 'no se pudo adelantar';
+        }
+        $feriado = $feriados[$q->fechaTeorica->aTexto()] ?? null;
+
+        return $feriado !== null ? "feriado: {$feriado}" : self::DIAS[$q->fechaTeorica->diaIso()];
+    }
+
+    /**
+     * Interés total ÷ capital, prorrateado a 30 días del plazo real (de la entrega al último
+     * pago): referencia simple pedida para "sobre el total" (no es TEA/TCEA). 2 decimales.
+     */
+    private static function tasaMensualSimple(Cronograma $c): ?string
+    {
+        $capital = $c->montoTotal - $c->interesTotal;
+        $dias = $c->cuotas[0]->fechaInicioPeriodo->diasHasta($c->cuotas[array_key_last($c->cuotas)]->fechaVencimiento);
+        if ($capital <= 0 || $dias <= 0) {
+            return null;
+        }
+        // Centésimas de punto porcentual, redondeo medio hacia arriba, en enteros.
+        $centesimas = intdiv($c->interesTotal * 100 * 100 * 30 * 2 + $capital * $dias, 2 * $capital * $dias);
+
+        return sprintf('%d.%02d', intdiv($centesimas, 100), $centesimas % 100);
     }
 
     /** @return array<string, mixed> */
