@@ -30,6 +30,7 @@ export interface CondicionesCredito {
   saltar_feriados?: boolean
   regla_no_laborable?: ReglaNoLaborable
   mora_cuenta_no_laborables?: boolean
+  cobra_mora?: boolean
   tasa_interes_minimo?: string
   dias_gracia?: number
   tope_mora_tipo?: TopeMoraTipo
@@ -132,6 +133,7 @@ export interface Credito {
   saltar_feriados: boolean
   regla_no_laborable: ReglaNoLaborable
   mora_cuenta_no_laborables: boolean
+  cobra_mora: boolean
   tasa_interes_minimo: string
   dias_gracia: number
   tope_mora_tipo: TopeMoraTipo
@@ -174,6 +176,7 @@ export interface ConfiguracionCredito {
   saltar_feriados: boolean
   regla_no_laborable: ReglaNoLaborable
   mora_cuenta_no_laborables: boolean
+  cobra_mora: boolean
   tope_mora_tipo: TopeMoraTipo
   tope_mora_valor: number | null
   max_numero_cuotas: number

@@ -94,6 +94,11 @@ describe('accionesDisponibles', () => {
     expect(accionesDisponibles('borrador', todo, false)).toEqual(['editar', 'activar', 'anular'])
   })
 
+  it('un crédito sin mora no ofrece condonar mora', () => {
+    expect(accionesDisponibles('activo', todo, false)).toContain('condonar')
+    expect(accionesDisponibles('activo', todo, false, false)).not.toContain('condonar')
+  })
+
   it('activo con pagos no ofrece corregir ni anular', () => {
     const acciones = accionesDisponibles('activo', todo, true)
     expect(acciones).toContain('cobrar')

@@ -26,15 +26,21 @@ export interface SeccionConfig {
 export type ValorConfig = string | boolean | number[]
 export type FormConfig = Record<string, ValorConfig>
 
+const conMora = (f: FormConfig) => f.cobra_mora === true
+
 export const SECCIONES_CONFIG: SeccionConfig[] = [
   {
     titulo: 'Condiciones por defecto',
     descripcion: 'Se copian a cada crédito nuevo y quedan fijas al activarlo: cambiarlas no afecta créditos ya entregados.',
     campos: [
       { clave: 'tasa_interes_minimo', tipo: 'porcentaje', etiqueta: 'Interés mínimo al cancelar antes', ayuda: 'Porcentaje del capital que se cobra aunque pague antes.' },
-      { clave: 'dias_gracia', tipo: 'entero', etiqueta: 'Días de gracia', ayuda: 'Días después del vencimiento sin mora.' },
       {
-        clave: 'tope_mora_tipo', tipo: 'select', etiqueta: 'Tope de la mora', opciones: [
+        clave: 'cobra_mora', tipo: 'booleano', etiqueta: 'Cobrar mora por atraso',
+        ayuda: 'Valor inicial de cada crédito nuevo; se puede cambiar por crédito en "Opciones avanzadas".',
+      },
+      { clave: 'dias_gracia', tipo: 'entero', etiqueta: 'Días de gracia', ayuda: 'Días después del vencimiento sin mora.', visible: conMora },
+      {
+        clave: 'tope_mora_tipo', tipo: 'select', etiqueta: 'Tope de la mora', visible: conMora, opciones: [
           { valor: 'porcentaje_cuota', texto: '% de la cuota' },
           { valor: 'porcentaje_capital', texto: '% del capital' },
           { valor: 'dias_maximos', texto: 'Máximo de días' },
@@ -43,7 +49,7 @@ export const SECCIONES_CONFIG: SeccionConfig[] = [
       },
       {
         clave: 'tope_mora_valor', tipo: 'entero', etiqueta: 'Valor del tope', opcional: true,
-        ayuda: 'En % o en días, según el tipo de tope.', visible: (f) => f.tope_mora_tipo !== 'sin_tope',
+        ayuda: 'En % o en días, según el tipo de tope.', visible: (f) => conMora(f) && f.tope_mora_tipo !== 'sin_tope',
       },
       { clave: 'max_numero_cuotas', tipo: 'entero', etiqueta: 'Máximo de pagos por crédito' },
       {
@@ -64,7 +70,7 @@ export const SECCIONES_CONFIG: SeccionConfig[] = [
           { valor: 'mantener', texto: 'Se mantiene la fecha' },
         ],
       },
-      { clave: 'mora_cuenta_no_laborables', tipo: 'booleano', etiqueta: 'La mora corre también en días sin cobro' },
+      { clave: 'mora_cuenta_no_laborables', tipo: 'booleano', etiqueta: 'La mora corre también en días sin cobro', visible: conMora },
     ],
   },
   {

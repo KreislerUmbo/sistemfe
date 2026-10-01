@@ -63,6 +63,7 @@ class CreditoDatosRequest extends FormRequest
             'saltar_feriados' => ['nullable', 'boolean'],
             'regla_no_laborable' => ['nullable', Rule::enum(ReglaNoLaborable::class)],
             'mora_cuenta_no_laborables' => ['nullable', 'boolean'],
+            'cobra_mora' => ['nullable', 'boolean'],
             'tasa_interes_minimo' => ['nullable', 'numeric', 'min:0', 'max:100', self::PORCENTAJE],
             'dias_gracia' => ['nullable', 'integer', 'min:0', 'max:365'],
             'tope_mora_tipo' => ['nullable', Rule::enum(TopeMoraTipo::class)],
@@ -98,6 +99,7 @@ class CreditoDatosRequest extends FormRequest
             $tope === TopeMoraTipo::SinTope ? null : (int) $this->input('tope_mora_valor', $c->tope_mora_valor),
             Dinero::aCentavos($c->paso_redondeo),
             $this->filled('payment_method_id') ? (int) $this->input('payment_method_id') : null,
+            $this->boolean('cobra_mora', $c->cobra_mora),
         );
     }
 

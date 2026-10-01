@@ -25,7 +25,7 @@ class CorreccionService
 {
     private const CONDICIONES_AUDITADAS = [
         'monto_capital', 'tasa_interes', 'unidad_tasa', 'interes_total', 'frecuencia_unidad', 'frecuencia_intervalo',
-        'numero_cuotas', 'fecha_desembolso', 'fecha_primer_vencimiento', 'tasa_interes_minimo', 'dias_gracia',
+        'numero_cuotas', 'fecha_desembolso', 'fecha_primer_vencimiento', 'tasa_interes_minimo', 'dias_gracia', 'cobra_mora',
     ];
 
     public function __construct(

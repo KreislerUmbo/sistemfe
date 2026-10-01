@@ -48,6 +48,7 @@ Leer siempre este archivo + el de la fase en curso (`03-api.md`, …). `historia
 - Por cuota, diaria, sobre el **saldo pendiente de la cuota**, por tramos (reconstruidos desde las aplicaciones). No corre sobre cargos; no se capitaliza; se detiene al pagar la cuota.
 - `mora_diaria = saldo_pendiente ÷ días calendario del período ORIGINAL de la cuota`.
 - Cuenta desde el **fin de la gracia** (`dias_gracia`): vence 10, gracia 3, paga 15 → 2 días. `mora_cuenta_no_laborables` solo afecta el conteo de días de mora; `diasAtraso` (escalamiento/castigo/bloqueo) es siempre calendario.
+- **Mora habilitable** (`cobra_mora`, default `true`, 01-oct-2026): default en `credito_configuracion`, editable por crédito en "Opciones avanzadas", congelado al activar (cambia vía Corregir si no hay pagos). `false` = el motor no genera mora (`ReglasMora::cobraMora`); `diasAtraso` sigue corriendo (escalamiento, castigo, bloqueo); el contrato dice "no cobra interés moratorio"; no se ofrece "Condonar mora".
 - Tope configurable (congelado al activar): `porcentaje_cuota` (default 100%), `porcentaje_capital`, `dias_maximos`, `sin_tope`.
 - Castigo: `ReglasMora` recibe lista de `PeriodoCastigo`; los días castigados no generan mora; al revertir, corre desde la reversión (sin retroactivo).
 - Condonación en `credito_condonaciones` (se conserva al recalcular). Mora pendiente se calcula en vivo; cobrada/condonada se guarda. En documentos: "Interés moratorio".

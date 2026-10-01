@@ -41,6 +41,7 @@ class CreditoConfiguracion extends Model
         'dias_para_castigo',
         'tope_mora_tipo',
         'tope_mora_valor',
+        'cobra_mora',
         'dias_max_pago_retroactivo',
         'actualizado_por',
     ];
@@ -51,6 +52,7 @@ class CreditoConfiguracion extends Model
             'dias_no_laborables' => 'array',
             'saltar_feriados' => 'boolean',
             'mora_cuenta_no_laborables' => 'boolean',
+            'cobra_mora' => 'boolean',
             'regla_no_laborable' => ReglaNoLaborable::class,
             'validacion_tasacion' => ValidacionTasacion::class,
             'modo_asignacion_cartera' => ModoAsignacionCartera::class,

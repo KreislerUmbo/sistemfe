@@ -97,6 +97,7 @@ class CargadorCredito
                 topeValor: $credito->tope_mora_valor,
                 periodosCastigo: $this->periodosCastigo($credito),
                 pasoRedondeo: Dinero::aCentavos($credito->paso_redondeo),
+                cobraMora: $credito->cobra_mora,
             ),
             $this->calendario($credito->dias_no_laborables, $credito->saltar_feriados, $credito->regla_no_laborable),
             Dinero::aCentavos($credito->paso_redondeo),

@@ -31,6 +31,7 @@ class ConfiguracionCreditoRequest extends FormRequest
             'saltar_feriados' => ['sometimes', 'boolean'],
             'regla_no_laborable' => ['sometimes', Rule::enum(ReglaNoLaborable::class)],
             'mora_cuenta_no_laborables' => ['sometimes', 'boolean'],
+            'cobra_mora' => ['sometimes', 'boolean'],
             'dias_para_venta' => ['sometimes', ...self::DIAS],
             'porcentaje_prestamo_max' => ['sometimes', 'nullable', 'numeric', 'min:0', 'max:100'],
             'validacion_tasacion' => ['sometimes', Rule::enum(ValidacionTasacion::class)],

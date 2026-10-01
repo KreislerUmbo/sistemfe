@@ -34,6 +34,7 @@ final readonly class DatosCredito
         public ?int $topeMoraValor,
         public int $pasoRedondeo,
         public ?int $paymentMethodId,
+        public bool $cobraMora = true,
     ) {
     }
 
@@ -44,6 +45,7 @@ final readonly class DatosCredito
             $this->fechaDesembolso, $this->fechaPrimerVencimiento, $this->diasNoLaborables, $this->saltarFeriados,
             $this->reglaNoLaborable, $this->moraCuentaNoLaborables, $this->tasaInteresMinimo, $this->diasGracia,
             $this->topeMoraTipo, $this->topeMoraValor, $this->pasoRedondeo, $this->paymentMethodId,
+            $this->cobraMora,
         );
     }
 }

@@ -11,6 +11,7 @@ use App\Http\Requests\Creditos\ClaveRequest;
 use App\Http\Requests\Creditos\CobrarRequest;
 use App\Http\Requests\Creditos\CrearCreditoRequest;
 use App\Models\Creditos\Credito;
+use App\Models\Creditos\CreditoConfiguracion;
 use App\Models\Creditos\CreditoPago;
 use App\Models\User;
 use App\Services\Creditos\Idempotencia;
@@ -139,6 +140,22 @@ class HttpCreditosTest extends CreditosTestCase
             'frecuencia_unidad' => 'dia', 'frecuencia_intervalo' => 30, 'numero_cuotas' => 10,
             'fecha_desembolso' => '2026-01-01', 'payment_method_id' => $this->efectivo->id, 'clave_idempotencia' => $clave,
         ];
+    }
+
+    public function test_cobrar_mora_viene_de_la_configuracion_y_se_puede_cambiar_por_credito(): void
+    {
+        $usuario = $this->usuario();
+        $controller = app(CreditoController::class);
+        $crear = fn (array $extra, string $clave) => $controller->store(
+            $this->peticion(CrearCreditoRequest::class, $this->datosCredito($this->cliente()->id, $clave) + $extra, $usuario),
+        )->getData(true)['credito'];
+
+        $this->assertTrue($crear([], 'mora-0001')['cobra_mora']);
+        $this->assertFalse($crear(['cobra_mora' => false], 'mora-0002')['cobra_mora']);
+
+        CreditoConfiguracion::actual()->update(['cobra_mora' => false]);
+        $this->assertFalse($crear([], 'mora-0003')['cobra_mora']);
+        $this->assertTrue($crear(['cobra_mora' => true], 'mora-0004')['cobra_mora']);
     }
 
     public function test_doble_envio_de_crear_y_de_cobrar_no_duplica(): void

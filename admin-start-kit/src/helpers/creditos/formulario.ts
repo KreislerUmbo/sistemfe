@@ -38,6 +38,8 @@ export interface FormCredito {
   saltar_feriados: boolean
   regla_no_laborable: ReglaNoLaborable
   mora_cuenta_no_laborables: boolean
+  /** false = el crédito no cobra interés moratorio (gracia y tope dejan de aplicar). */
+  cobra_mora: boolean
   tasa_interes_minimo: string
   dias_gracia: string
   tope_mora_tipo: TopeMoraTipo
@@ -62,6 +64,7 @@ export function formularioDesdeConfiguracion(config: ConfiguracionCredito, fecha
     saltar_feriados: config.saltar_feriados,
     regla_no_laborable: config.regla_no_laborable,
     mora_cuenta_no_laborables: config.mora_cuenta_no_laborables,
+    cobra_mora: config.cobra_mora,
     tasa_interes_minimo: String(Number.parseFloat(config.tasa_interes_minimo)),
     dias_gracia: String(config.dias_gracia),
     tope_mora_tipo: config.tope_mora_tipo,
@@ -91,6 +94,7 @@ export function formularioDesdeCredito(c: Credito): FormCredito {
     saltar_feriados: c.saltar_feriados,
     regla_no_laborable: c.regla_no_laborable,
     mora_cuenta_no_laborables: c.mora_cuenta_no_laborables,
+    cobra_mora: c.cobra_mora,
     tasa_interes_minimo: String(Number.parseFloat(c.tasa_interes_minimo)),
     dias_gracia: String(c.dias_gracia),
     tope_mora_tipo: c.tope_mora_tipo,
@@ -120,6 +124,7 @@ export function aCondiciones(f: FormCredito, clienteId: number | null): Condicio
     saltar_feriados: f.saltar_feriados,
     regla_no_laborable: f.regla_no_laborable,
     mora_cuenta_no_laborables: f.mora_cuenta_no_laborables,
+    cobra_mora: f.cobra_mora,
     tasa_interes_minimo: f.tasa_interes_minimo.trim().replace(',', '.') || undefined,
     dias_gracia: ENTERO.test(f.dias_gracia.trim()) ? Number.parseInt(f.dias_gracia, 10) : undefined,
     tope_mora_tipo: f.tope_mora_tipo,
@@ -129,6 +134,7 @@ export function aCondiciones(f: FormCredito, clienteId: number | null): Condicio
 
 /** Texto de "Opciones avanzadas" plegado (mockup 1). */
 export function resumenAvanzado(f: FormCredito): string {
+  if (!f.cobra_mora) return `Sin mora · Interés mínimo ${f.tasa_interes_minimo}%`
   const tope = {
     porcentaje_cuota: `tope ${f.tope_mora_valor}% de la cuota`,
     porcentaje_capital: `tope ${f.tope_mora_valor}% del capital`,

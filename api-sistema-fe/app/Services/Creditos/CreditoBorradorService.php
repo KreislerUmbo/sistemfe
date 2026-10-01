@@ -81,6 +81,7 @@ class CreditoBorradorService
             'paso_redondeo' => Dinero::aSoles($d->pasoRedondeo),
             'tope_mora_tipo' => $d->topeMoraTipo,
             'tope_mora_valor' => $d->topeMoraValor,
+            'cobra_mora' => $d->cobraMora,
         ];
     }
 
@@ -106,6 +107,7 @@ class CreditoBorradorService
             $c->tope_mora_valor,
             Dinero::aCentavos($c->paso_redondeo),
             $c->payment_method_id,
+            $c->cobra_mora,
         );
     }
 }

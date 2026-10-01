@@ -155,6 +155,16 @@ class CalculadoraMoraTest extends TestCase
         $this->assertSame(10, $mora->diasAtraso);
     }
 
+    public function test_credito_sin_mora_no_genera_mora_pero_cuenta_el_atraso(): void
+    {
+        $mora = $this->calcular([], '2026-12-09', new ReglasMora(topeTipo: TopeMoraTipo::SinTope, cobraMora: false));
+
+        $this->assertSame(0, $mora->moraGenerada);
+        $this->assertSame(0, $mora->moraPendiente);
+        $this->assertFalse($mora->topeAlcanzado);
+        $this->assertSame(60, $mora->diasAtraso);   // escalamiento y bloqueo siguen viendo el atraso
+    }
+
     public function test_sin_tope(): void
     {
         $mora = $this->calcular([], '2026-12-09', new ReglasMora(topeTipo: TopeMoraTipo::SinTope));

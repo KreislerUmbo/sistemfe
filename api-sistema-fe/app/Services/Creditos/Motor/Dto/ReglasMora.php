@@ -19,6 +19,8 @@ final readonly class ReglasMora
         /** @var list<PeriodoCastigo> Períodos castigados: no generan mora (1.19, 12.12). */
         public array $periodosCastigo = [],
         public int $pasoRedondeo = Redondeo::PASO_DIEZ_CENTIMOS,
+        /** false = crédito sin interés moratorio: no se genera mora (el atraso igual se cuenta). */
+        public bool $cobraMora = true,
     ) {
     }
 }

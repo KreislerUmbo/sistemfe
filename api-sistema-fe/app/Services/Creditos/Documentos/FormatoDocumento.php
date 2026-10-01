@@ -109,6 +109,9 @@ final class FormatoDocumento
     /** Regla de mora tal como la conoce el cliente (00 1.3, 1.19). */
     public static function reglaMora(Credito $credito): string
     {
+        if (! $credito->cobra_mora) {
+            return 'Este crédito no cobra interés moratorio por atraso en los pagos.';
+        }
         $gracia = $credito->dias_gracia > 0 ? " después de {$credito->dias_gracia} día(s) de gracia" : '';
         $tope = match ($credito->tope_mora_tipo) {
             TopeMoraTipo::PorcentajeCuota => ", con un tope del {$credito->tope_mora_valor}% de la cuota",

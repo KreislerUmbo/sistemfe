@@ -151,11 +151,13 @@ abstract class CreditosTestCase extends TestCase
         int $cuotas = 10,
         string $desembolso = '2026-01-01',
         TopeMoraTipo $tope = TopeMoraTipo::PorcentajeCuota,
+        bool $cobraMora = true,
     ): DatosCredito {
         return new DatosCredito(
             $clienteId, $capital, Tasa::desdeTexto($tasa), UnidadTasa::Total, new Frecuencia(FrecuenciaUnidad::Dia, 30),
             $cuotas, Fecha::desdeTexto($desembolso), null, [], false, ReglaNoLaborable::Siguiente, true,
             Tasa::desdeTexto('10'), 0, $tope, $tope === TopeMoraTipo::SinTope ? null : 100, 10, $this->efectivo->id,
+            $cobraMora,
         );
     }
 

@@ -166,7 +166,7 @@ const ayer = (() => {
 const cliente = ref<ClienteBuscado | null>(null)
 const form = ref<FormCredito>(formularioDesdeConfiguracion({
   tasa_interes_minimo: '10', dias_gracia: 0, paso_redondeo: '0.10', dias_no_laborables: [7], saltar_feriados: false,
-  regla_no_laborable: 'siguiente', mora_cuenta_no_laborables: true, tope_mora_tipo: 'porcentaje_cuota', tope_mora_valor: 100,
+  regla_no_laborable: 'siguiente', mora_cuenta_no_laborables: true, cobra_mora: true, tope_mora_tipo: 'porcentaje_cuota', tope_mora_valor: 100,
   max_numero_cuotas: 365, tasa_maxima: null,
 }, '', null))
 const modo = ref<'rapido' | 'detallado'>('rapido')

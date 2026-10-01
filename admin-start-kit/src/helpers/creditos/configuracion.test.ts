@@ -4,7 +4,7 @@ import type { ConfiguracionCredito } from '@/types/creditos'
 
 const CONFIG = {
   tasa_interes_minimo: '10.0000', dias_gracia: 0, paso_redondeo: '0.10', dias_no_laborables: [7], saltar_feriados: false,
-  regla_no_laborable: 'siguiente', mora_cuenta_no_laborables: true, tope_mora_tipo: 'porcentaje_cuota', tope_mora_valor: 100,
+  regla_no_laborable: 'siguiente', mora_cuenta_no_laborables: true, cobra_mora: true, tope_mora_tipo: 'porcentaje_cuota', tope_mora_valor: 100,
   max_numero_cuotas: 365, tasa_maxima: null, max_creditos_activos: 3, deuda_maxima_cliente: null, dias_atraso_bloqueo: 7,
   dias_max_pago_retroactivo: 3, dias_para_castigo: 90, umbral_alerta_anulaciones: 5, cargo_reprogramacion_tipo: 'ninguno',
   cargo_reprogramacion_monto: '0.00', max_garantias_por_garante: 2, dias_aviso_garante: 15, dias_para_venta: 30,

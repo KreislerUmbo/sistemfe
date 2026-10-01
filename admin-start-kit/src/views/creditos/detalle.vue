@@ -21,7 +21,7 @@
           <div class="card border-0 shadow-sm mb-0">
             <div class="card-body cifra">
               <p class="fw-bold mb-0">Resumen del crédito</p>
-              <p class="small text-muted mb-3">{{ tasaTexto }} · {{ credito.numero_cuotas }} pagos</p>
+              <p class="small text-muted mb-3">{{ tasaTexto }} · {{ credito.numero_cuotas }} pagos<template v-if="!credito.cobra_mora"> · sin mora</template></p>
 
               <div class="d-flex justify-content-between align-items-baseline mb-1">
                 <span class="fw-semibold">Saldo por pagar</span>
@@ -40,7 +40,7 @@
                   <tr><td class="text-muted ps-0">Prestado</td><td class="text-end pe-0">{{ formatoSoles(credito.monto_capital) }}</td></tr>
                   <tr><td class="text-muted ps-0">Interés</td><td class="text-end pe-0">{{ formatoSoles(credito.interes_total) }}</td></tr>
                   <tr><td class="text-muted ps-0">Pagado</td><td class="text-end pe-0">{{ formatoSoles(resumen.total_pagado) }}</td></tr>
-                  <tr :class="{ 'text-danger': resumen.mora_pendiente !== '0.00' }">
+                  <tr v-if="credito.cobra_mora || resumen.mora_pendiente !== '0.00'" :class="{ 'text-danger': resumen.mora_pendiente !== '0.00' }">
                     <td class="ps-0" :class="{ 'text-muted': resumen.mora_pendiente === '0.00' }">Mora pendiente</td>
                     <td class="text-end pe-0">{{ formatoSoles(resumen.mora_pendiente) }}</td>
                   </tr>
@@ -180,7 +180,7 @@ const resumen = computed(() => detalle.value!.resumen)
 const pagosValidos = computed(() => estadoCuenta.value?.pagos.filter((p) => p.estado === 'valido').length ?? 0)
 const progreso = computed(() => (resumen.value.cuotas_total ? Math.round((resumen.value.cuotas_pagadas / resumen.value.cuotas_total) * 100) : 0))
 const tasaTexto = computed(() => `${Number.parseFloat(credito.value!.tasa_interes)}% ${credito.value!.unidad_tasa === 'total' ? 'total' : 'mensual'}`)
-const acciones = computed(() => (credito.value ? accionesDisponibles(credito.value.estado, puede, pagosValidos.value > 0) : []))
+const acciones = computed(() => (credito.value ? accionesDisponibles(credito.value.estado, puede, pagosValidos.value > 0, credito.value.cobra_mora) : []))
 
 const subtitulo = computed(() => {
   const c = credito.value

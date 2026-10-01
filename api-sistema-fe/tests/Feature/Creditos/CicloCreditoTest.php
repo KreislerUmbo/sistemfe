@@ -19,6 +19,7 @@ use App\Services\Creditos\CastigoService;
 use App\Services\Creditos\CobroService;
 use App\Services\Creditos\CondonacionService;
 use App\Services\Creditos\CorreccionService;
+use App\Services\Creditos\Documentos\FormatoDocumento;
 use App\Services\Creditos\Dto\PagoHistorico;
 use App\Services\Creditos\Dto\SolicitudCobro;
 use App\Services\Creditos\Dto\SolicitudReprogramacion;
@@ -171,6 +172,16 @@ class CicloCreditoTest extends CreditosTestCase
 
         $this->expectException(HttpException::class);
         app(CondonacionService::class)->condonar($credito, $credito->cuotasVigentes()->first(), 10_010, 'x', $this->usuario);
+    }
+
+    public function test_credito_sin_mora_no_acumula_mora_y_el_contrato_lo_dice(): void
+    {
+        $cliente = $this->cliente();
+        $credito = $this->activo($this->usuario, $cliente, $this->datos($cliente->id, capital: 100_000, cuotas: 1, cobraMora: false));
+
+        $this->assertFalse($credito->cobra_mora);
+        $this->assertSame(0, $this->mora($credito, 1, '2026-03-02'));   // vence 31/01, 30 días después
+        $this->assertSame('Este crédito no cobra interés moratorio por atraso en los pagos.', FormatoDocumento::reglaMora($credito));
     }
 
     // ---- Castigo ----

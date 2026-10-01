@@ -102,7 +102,14 @@
         </button>
         <div v-show="avanzadas" class="p-3 border-top">
           <div class="row g-3">
-            <div class="col-6 col-md-4">
+            <div class="col-12">
+              <div class="form-check form-switch mb-0">
+                <input id="fc-cobra-mora" v-model="form.cobra_mora" type="checkbox" role="switch" class="form-check-input" />
+                <label class="form-check-label small fw-semibold" for="fc-cobra-mora">Cobrar mora por atraso</label>
+              </div>
+              <small v-if="!form.cobra_mora" class="text-muted">Este crédito no cobrará interés moratorio aunque el cliente se atrase.</small>
+            </div>
+            <div v-if="form.cobra_mora" class="col-6 col-md-4">
               <label class="form-label mb-1 small fw-semibold text-secondary" for="fc-gracia">Días de gracia</label>
               <input id="fc-gracia" v-model="form.dias_gracia" type="text" inputmode="numeric" class="form-control form-control-sm"
                 :class="{ 'is-invalid': errores.dias_gracia }" />
@@ -112,7 +119,7 @@
               <input id="fc-minimo" v-model="form.tasa_interes_minimo" type="text" inputmode="decimal" class="form-control form-control-sm"
                 :class="{ 'is-invalid': errores.tasa_interes_minimo }" />
             </div>
-            <div class="col-12 col-md-4">
+            <div v-if="form.cobra_mora" class="col-12 col-md-4">
               <label class="form-label mb-1 small fw-semibold text-secondary" for="fc-tope">Tope de mora</label>
               <div class="input-group input-group-sm">
                 <select id="fc-tope" v-model="form.tope_mora_tipo" class="form-select">
@@ -139,7 +146,7 @@
                 <input id="fc-feriados" v-model="form.saltar_feriados" type="checkbox" class="form-check-input" />
                 <label class="form-check-label small" for="fc-feriados">No cobrar feriados</label>
               </div>
-              <div class="form-check">
+              <div v-if="form.cobra_mora" class="form-check">
                 <input id="fc-mora-dias" v-model="form.mora_cuenta_no_laborables" type="checkbox" class="form-check-input" />
                 <label class="form-check-label small" for="fc-mora-dias">La mora cuenta también días sin cobro</label>
               </div>

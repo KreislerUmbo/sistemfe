@@ -38,6 +38,9 @@ final class CalculadoraMora
     ): MoraCuota {
         $abonos = $this->ordenar($abonos);
         $moraPagada = $this->sumar($abonos, ConceptoAplicacion::Mora);
+        if (! $reglas->cobraMora) {
+            return $this->armar($cuota, $abonos, $fechaReferencia, 0, $moraPagada, false);
+        }
 
         // 1.6: la mora cuenta desde el fin de la gracia. Los períodos castigados se descuentan
         // tramo a tramo (12.12), no cortan la mora: si se revierte el castigo, vuelve a correr.

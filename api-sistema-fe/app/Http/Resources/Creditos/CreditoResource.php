@@ -41,6 +41,7 @@ class CreditoResource extends JsonResource
             'regla_no_laborable' => $this->regla_no_laborable->value,
             'mora_cuenta_no_laborables' => $this->mora_cuenta_no_laborables,
             'tasa_interes_minimo' => $this->tasa_interes_minimo,
+            'cobra_mora' => $this->cobra_mora,
             'dias_gracia' => $this->dias_gracia,
             'tope_mora_tipo' => $this->tope_mora_tipo->value,
             'tope_mora_valor' => $this->tope_mora_valor,

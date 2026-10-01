@@ -4,7 +4,7 @@ import { aCondiciones, formularioDesdeConfiguracion, formularioDesdeCredito, res
 
 const config = {
   tasa_interes_minimo: '10.0000', dias_gracia: 0, paso_redondeo: '0.10', dias_no_laborables: [7],
-  saltar_feriados: false, regla_no_laborable: 'siguiente', mora_cuenta_no_laborables: true,
+  saltar_feriados: false, regla_no_laborable: 'siguiente', mora_cuenta_no_laborables: true, cobra_mora: true,
   tope_mora_tipo: 'porcentaje_cuota', tope_mora_valor: 100, max_numero_cuotas: 365, tasa_maxima: null,
 } as ConfiguracionCredito
 
@@ -42,12 +42,21 @@ describe('formulario de crédito', () => {
       monto_capital: '1000.00', tasa_interes: '20.0000', unidad_tasa: 'total', frecuencia_unidad: 'dia', frecuencia_intervalo: 15,
       numero_cuotas: 8, fecha_desembolso: '2026-10-01', fecha_primer_vencimiento: null, payment_method_id: 4,
       dias_no_laborables: [7], saltar_feriados: false, regla_no_laborable: 'siguiente', mora_cuenta_no_laborables: true,
-      tasa_interes_minimo: '10.0000', dias_gracia: 0, tope_mora_tipo: 'porcentaje_cuota', tope_mora_valor: 100,
+      cobra_mora: true, tasa_interes_minimo: '10.0000', dias_gracia: 0, tope_mora_tipo: 'porcentaje_cuota', tope_mora_valor: 100,
     } as unknown as Credito
 
     const f = formularioDesdeCredito(credito)
     expect(f.forma_pago).toBe('quincenal')
     expect(f.tasa_interes).toBe('20')
     expect(resumenAvanzado(f)).toBe('Gracia 0 días · Interés mínimo 10% · Mora diaria (tope 100% de la cuota)')
+  })
+
+  it('cobrar mora viene de la configuración, viaja a la API y cambia el resumen', () => {
+    expect(completo().cobra_mora).toBe(true)
+    expect(formularioDesdeConfiguracion({ ...config, cobra_mora: false }, '2026-10-01', 4).cobra_mora).toBe(false)
+
+    const sinMora = { ...completo(), cobra_mora: false }
+    expect(aCondiciones(sinMora, 1)?.cobra_mora).toBe(false)
+    expect(resumenAvanzado(sinMora)).toBe('Sin mora · Interés mínimo 10%')
   })
 })
