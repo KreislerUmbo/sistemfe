@@ -375,7 +375,9 @@ pantallas de `04-frontend.md` + menú, caja y Roles) en `feat/creditos-fase4-fro
 de la anterior. Ninguna mergeada a `main`.
 **Leer siempre** `docs/planning/creditos/00-reglas-y-modelo.md` (fuente de verdad de reglas y
 modelo) + el archivo de la fase en curso (`docs/planning/creditos/04-frontend.md`, …);
-`historial.md` es solo consulta. Siguiente: Fase 4b (documentos/contrato/recibo).
+`historial.md` es solo consulta. Fase 4b (documentos: recibo, contrato con plantilla, cronograma,
+estado de cuenta, constancia, acuerdo de reprogramación) construida en
+`feat/creditos-fase4b-documentos` — ver `docs/planning/creditos/04b-documentos.md`. Siguiente: 4c.
 Al desplegar: `MenuItemsSeeder` + limpiar la caché de menú (`MenuResolver`, 24 h por usuario).
 
 **Próximos módulos (en orden de prioridad):**

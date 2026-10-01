@@ -11,6 +11,10 @@ import type {
   CotizacionPago,
   CreditoCreado,
   DatosFicha,
+  DocumentosCredito,
+  FormatoPdf,
+  PlantillaContrato,
+  TipoDocumentoPdf,
   DestinoExcedente,
   EstadoCaja,
   Feriado,
@@ -239,6 +243,55 @@ export const creditoService = {
   async asignarCobrador(clienteId: number, cobradorId: number | null) {
     const { data } = await httpClient.put(`/clientes/${clienteId}/cobrador`, { cobrador_id: cobradorId })
     return data as { cobrador_id: number | null }
+  },
+
+  // ── Documentos (Fase 4b): cada llamada devuelve una URL firmada de 10 minutos ──
+
+  async documentos(id: number) {
+    const { data } = await httpClient.get(`/creditos/${id}/documentos`)
+    return data as DocumentosCredito
+  },
+
+  /** Contrato (se congela la 1ª vez), cronograma, estado de cuenta, constancia o acuerdo. */
+  async documentoUrl(id: number, documento: TipoDocumentoPdf, formato?: FormatoPdf, reprogramacionId?: number) {
+    const { data } = await httpClient.get(`/creditos/${id}/documentos/url`, {
+      params: { documento, format: formato, reprogramacion_id: reprogramacionId },
+    })
+    return data as { url: string; documento_id?: number }
+  },
+
+  async archivoUrl(id: number, documentoId: number) {
+    const { data } = await httpClient.get(`/creditos/${id}/documentos/${documentoId}/url`)
+    return data as { url: string }
+  },
+
+  /** copia: reimpresión (marca "COPIA"); el original se imprime al terminar el cobro. */
+  async reciboUrl(id: number, pagoId: number, formato?: FormatoPdf, copia = true) {
+    const { data } = await httpClient.get(`/creditos/${id}/pagos/${pagoId}/recibo-url`, { params: { format: formato, copia: copia ? 1 : 0 } })
+    return data as { url: string }
+  },
+
+  async subirContratoFirmado(id: number, archivo: File) {
+    const cuerpo = new FormData()
+    cuerpo.append('archivo', archivo)
+    const { data } = await httpClient.post(`/creditos/${id}/documentos/contrato-firmado`, cuerpo)
+    return data as { documento: { id: number; tipo: string } }
+  },
+
+  async plantillaContrato() {
+    const { data } = await httpClient.get('/creditos/plantillas/contrato')
+    return data as PlantillaContrato
+  },
+
+  async guardarPlantillaContrato(contenido: string) {
+    const { data } = await httpClient.put('/creditos/plantillas/contrato', { contenido })
+    return data as { contenido: string; version: number }
+  },
+
+  /** PDF de la plantilla que se está editando (sin guardar). */
+  async vistaPreviaContrato(contenido: string, creditoId?: number) {
+    const { data } = await httpClient.post('/creditos/plantillas/contrato/vista-previa', { contenido, credito_id: creditoId }, { responseType: 'blob' })
+    return data as Blob
   },
 
   async metodosPago() {

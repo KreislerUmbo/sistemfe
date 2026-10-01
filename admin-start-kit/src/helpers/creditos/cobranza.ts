@@ -44,7 +44,7 @@ export function fechaLarga(ymd: string): string {
 
 /** Búsqueda local por nombre, dirección o N.º de crédito (sin tildes ni mayúsculas). */
 export function coincide(p: Pick<PendienteCobranza, 'numero_credito'> & { cliente: { nombre: string; direccion_cobro?: string | null } }, texto: string): boolean {
-  const normalizar = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+  const normalizar = (s: string) => s.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase()
   const buscado = normalizar(texto.trim())
   if (!buscado) return true
   return [p.cliente.nombre, p.cliente.direccion_cobro ?? '', p.numero_credito ?? ''].some((campo) => normalizar(campo).includes(buscado))

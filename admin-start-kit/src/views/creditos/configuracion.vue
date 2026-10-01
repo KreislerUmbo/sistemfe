@@ -1,6 +1,6 @@
 <template>
   <DefaultLayout>
-    <EncabezadoCredito titulo="Configuración de créditos" subtitulo="Valores por defecto del negocio y feriados" icono="fas fa-sliders-h" :volver="false" />
+    <EncabezadoCredito titulo="Configuración de créditos" subtitulo="Valores por defecto del negocio, feriados y contrato" icono="fas fa-sliders-h" :volver="false" />
 
     <ul class="nav nav-pills mb-3">
       <li v-for="t in PESTANAS" :key="t.id" class="nav-item">
@@ -10,7 +10,9 @@
       </li>
     </ul>
 
-    <div v-if="pestana === 'feriados'" class="card border-0 shadow-sm">
+    <PlantillaContrato v-if="pestana === 'contrato'" />
+
+    <div v-else-if="pestana === 'feriados'" class="card border-0 shadow-sm">
       <div class="card-header bg-white border-bottom py-2 fw-semibold text-dark">Feriados</div>
       <div class="card-body py-3">
         <FeriadosCredito />
@@ -93,6 +95,7 @@ import DefaultLayout from '@/layouts/DefaultLayout.vue'
 import BarraAccionMovil from '@/components/Creditos/BarraAccionMovil.vue'
 import EncabezadoCredito from '@/components/Creditos/EncabezadoCredito.vue'
 import FeriadosCredito from '@/components/Creditos/FeriadosCredito.vue'
+import PlantillaContrato from '@/components/Creditos/PlantillaContrato.vue'
 import { creditoService } from '@/services/admin/creditoService'
 import { useCreditosCatalogosStore } from '@/stores/creditosCatalogos'
 import { useToast } from '@/composables/useToast'
@@ -102,7 +105,9 @@ import { cambiosConfig, formularioConfig, SECCIONES_CONFIG, type FormConfig } fr
 const PESTANAS = [
   { id: 'negocio', texto: 'Valores del negocio', icono: 'fas fa-sliders-h' },
   { id: 'feriados', texto: 'Feriados', icono: 'far fa-calendar-alt' },
+  { id: 'contrato', texto: 'Contrato', icono: 'fas fa-file-signature' },
 ] as const
+type IdPestana = (typeof PESTANAS)[number]['id']
 const DIAS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
 
 const route = useRoute()
@@ -110,7 +115,7 @@ const router = useRouter()
 const toast = useToast()
 const catalogos = useCreditosCatalogosStore()
 
-const pestana = computed(() => (route.query.tab === 'feriados' ? 'feriados' : 'negocio'))
+const pestana = computed<IdPestana>(() => (route.query.tab === 'feriados' || route.query.tab === 'contrato' ? route.query.tab : 'negocio'))
 const original = ref<FormConfig | null>(null)
 const form = ref<FormConfig | null>(null)
 const cargando = ref(true)
@@ -138,7 +143,7 @@ onMounted(async () => {
 })
 
 function cambiarPestana(id: (typeof PESTANAS)[number]['id']) {
-  router.replace({ query: id === 'feriados' ? { tab: 'feriados' } : {} })
+  router.replace({ query: id === 'negocio' ? {} : { tab: id } })
 }
 
 const diaMarcado = (dia: number) => ((form.value?.dias_no_laborables as number[]) ?? []).includes(dia)

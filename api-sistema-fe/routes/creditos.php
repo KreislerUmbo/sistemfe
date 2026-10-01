@@ -11,6 +11,8 @@ use App\Http\Controllers\Creditos\ClienteCreditoController;
 use App\Http\Controllers\Creditos\CobranzaDelDiaController;
 use App\Http\Controllers\Creditos\CreditoCicloController;
 use App\Http\Controllers\Creditos\CreditoCondonacionController;
+use App\Http\Controllers\Creditos\CreditoDocumentoController;
+use App\Http\Controllers\Creditos\CreditoPlantillaController;
 use App\Http\Controllers\Creditos\CreditoConfiguracionController;
 use App\Http\Controllers\Creditos\CreditoController;
 use App\Http\Controllers\Creditos\CreditoLiquidacionController;
@@ -67,7 +69,18 @@ Route::group([
         Route::post('condonar-mora', [CreditoCondonacionController::class, 'store'])->middleware('permission:creditos.condonar_mora');
         Route::post('renovar/preview', [CreditoRenovacionController::class, 'preview'])->middleware('permission:creditos.crear');
         Route::post('renovar', [CreditoRenovacionController::class, 'store'])->middleware('permission:creditos.crear');
+
+        // Documentos (Fase 4b): devuelven una URL firmada; el PDF se sirve por las rutas de abajo.
+        Route::get('documentos', [CreditoDocumentoController::class, 'index'])->middleware('permission:creditos.ver');
+        Route::get('documentos/url', [CreditoDocumentoController::class, 'url'])->middleware('permission:creditos.ver');
+        Route::get('documentos/{documento}/url', [CreditoDocumentoController::class, 'archivoUrl'])->whereNumber('documento')->middleware('permission:creditos.ver');
+        Route::post('documentos/contrato-firmado', [CreditoDocumentoController::class, 'subirFirmado'])->middleware('permission:creditos.crear');
+        Route::get('pagos/{pago}/recibo-url', [CreditoDocumentoController::class, 'reciboUrl'])->whereNumber('pago')->middleware('permission:creditos.ver');
     });
+
+    Route::get('creditos/plantillas/contrato', [CreditoPlantillaController::class, 'show'])->middleware('permission:creditos.configurar');
+    Route::put('creditos/plantillas/contrato', [CreditoPlantillaController::class, 'update'])->middleware('permission:creditos.configurar');
+    Route::post('creditos/plantillas/contrato/vista-previa', [CreditoPlantillaController::class, 'vistaPrevia'])->middleware('permission:creditos.configurar');
 
     Route::prefix('clientes/{cliente}')->whereNumber('cliente')->group(function () {
         Route::get('resumen-credito', [ClienteCreditoController::class, 'resumen'])->middleware('permission:creditos.crear');
@@ -77,4 +90,13 @@ Route::group([
         Route::get('ficha-credito/archivos/{archivo}', [ClienteCreditoController::class, 'verArchivo'])->whereNumber('archivo')->middleware('permission:creditos.ver');
         Route::put('cobrador', [ClienteCreditoController::class, 'asignarCobrador'])->middleware('permission:creditos.cartera.asignar');
     });
+});
+
+// PDFs y archivos del crédito: solo por URL firmada temporal (mismo patrón que sales-pdf).
+// La firma incluye el usuario (?u=) que pidió el documento; el servicio revalida su cartera.
+Route::middleware(['tenant', 'tenant.active', 'tenant.token', 'signed'])->group(function () {
+    Route::get('creditos-pdf/{credito}/{documento}', [CreditoDocumentoController::class, 'pdf'])
+        ->whereNumber('credito')->whereIn('documento', CreditoDocumentoController::DOCUMENTOS)->name('creditos.pdf');
+    Route::get('creditos-recibo-pdf/{pago}', [CreditoDocumentoController::class, 'recibo'])->whereNumber('pago')->name('creditos.recibo.pdf');
+    Route::get('creditos-archivo/{documento}', [CreditoDocumentoController::class, 'archivo'])->whereNumber('documento')->name('creditos.archivo');
 });

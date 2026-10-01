@@ -23,11 +23,23 @@
           {{ p.aplicaciones.map((a) => `#${a.numero_cuota} ${CONCEPTO[a.concepto]} ${formatoSoles(a.monto)}`).join(' · ') }}
         </div>
         <div v-if="p.estado === 'anulado' && p.motivo_anulacion" class="small mt-1">Motivo: {{ p.motivo_anulacion }}</div>
-        <div v-if="p.estado === 'valido' && (puedeEditar || puedeAnular(p))" class="d-flex gap-2 mt-2">
-          <button v-if="puedeEditar" type="button" class="btn btn-sm btn-light" @click="emit('editar', p)">
+        <div class="d-flex flex-wrap gap-2 mt-2">
+          <span class="btn-group btn-group-sm">
+            <button type="button" class="btn btn-outline-primary" :disabled="ocupado" title="Reimprimir (sale como COPIA)" @click="imprimir(p, formatoPorDefecto())">
+              <i class="fas fa-print me-1"></i>Recibo
+            </button>
+            <button type="button" class="btn btn-outline-primary" :disabled="ocupado" :title="formatoPorDefecto() === 'a4' ? 'Ticket 80 mm' : 'A4'"
+              @click="imprimir(p, formatoPorDefecto() === 'a4' ? 'ticket80mm' : 'a4')">
+              {{ formatoPorDefecto() === 'a4' ? 'Ticket' : 'A4' }}
+            </button>
+          </span>
+          <button type="button" class="btn btn-sm btn-outline-success" :disabled="ocupado" title="Compartir por WhatsApp" @click="compartirRecibo(p)">
+            <i class="fab fa-whatsapp"></i>
+          </button>
+          <button v-if="p.estado === 'valido' && puedeEditar" type="button" class="btn btn-sm btn-light" @click="emit('editar', p)">
             <i class="fas fa-pen me-1"></i>Referencia
           </button>
-          <button v-if="puedeAnular(p) && p.origen !== 'renovacion'" type="button" class="btn btn-sm btn-outline-danger" @click="emit('anular', p)">
+          <button v-if="p.estado === 'valido' && puedeAnular(p) && p.origen !== 'renovacion'" type="button" class="btn btn-sm btn-outline-danger" @click="emit('anular', p)">
             <i class="fas fa-undo me-1"></i>Anular
           </button>
         </div>
@@ -39,12 +51,21 @@
 <script setup lang="ts">
 // Módulo Créditos (00 1.8): pagos con su reparto. Anular muestra el botón si es propio o
 // con creditos.anular_pago; el backend decide si la caja sigue abierta. Una renovación
-// no se anula como pago (se anula el crédito nuevo).
+// no se anula como pago (se anula el crédito nuevo). Reimprimir un recibo lo marca "COPIA".
 import { computed } from 'vue'
+import { creditoService } from '@/services/admin/creditoService'
+import { useDocumentosCredito } from '@/composables/creditos/useDocumentosCredito'
+import { mensajeDocumento, nombreArchivo } from '@/helpers/creditos/documentos'
 import { formatoFecha, formatoSoles } from '@/helpers/creditos/formato'
-import type { OrigenPago, Pago } from '@/types/creditos'
+import type { FormatoPdf, OrigenPago, Pago } from '@/types/creditos'
 
-const props = defineProps<{ pagos: Pago[]; puedeEditar: boolean; puedeAnular: (p: Pago) => boolean }>()
+const props = defineProps<{
+  pagos: Pago[]
+  creditoId: number
+  cliente?: { nombre: string; telefono: string | null } | null
+  puedeEditar: boolean
+  puedeAnular: (p: Pago) => boolean
+}>()
 const emit = defineEmits<{ anular: [pago: Pago]; editar: [pago: Pago] }>()
 
 const ORIGEN: Record<OrigenPago, string> = {
@@ -54,6 +75,16 @@ const ORIGEN: Record<OrigenPago, string> = {
 const CONCEPTO = { interes: 'interés', capital: 'capital', cargo: 'cargo', mora: 'mora' } as const
 
 const ordenados = computed(() => [...props.pagos].reverse())
+const { abrir, compartir, formatoPorDefecto, ocupado } = useDocumentosCredito()
+
+const imprimir = (p: Pago, formato: FormatoPdf) => abrir(() => creditoService.reciboUrl(props.creditoId, p.id, formato, true))
+
+const compartirRecibo = (p: Pago) => compartir(
+  () => creditoService.reciboUrl(props.creditoId, p.id, formatoPorDefecto(), true),
+  nombreArchivo('recibo', p.numero_recibo),
+  mensajeDocumento(`recibo de pago ${p.numero_recibo}`, props.cliente?.nombre),
+  props.cliente?.telefono,
+)
 </script>
 
 <style scoped>

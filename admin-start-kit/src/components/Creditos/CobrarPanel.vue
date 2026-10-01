@@ -12,16 +12,16 @@
         Entrega de vuelto: <b>{{ formatoSoles(pagoHecho.monto_excedente) }}</b>
       </template>
     </div>
-    <!-- Recibos: se activan con la Fase 4b (documentos). -->
+    <!-- Recibo original (las reimpresiones desde la pestaña Pagos salen como COPIA). -->
     <div class="d-flex flex-wrap gap-2 justify-content-center my-3">
-      <button type="button" class="btn btn-sm btn-outline-secondary" disabled title="Disponible con los documentos (Fase 4b)">
+      <button type="button" class="btn btn-sm btn-outline-primary" :disabled="ocupadoDocs" @click="imprimirRecibo('ticket80mm')">
         <i class="fas fa-print me-1"></i>Ticket 80mm
       </button>
-      <button type="button" class="btn btn-sm btn-outline-secondary" disabled title="Disponible con los documentos (Fase 4b)">
-        <i class="fas fa-file-pdf me-1"></i>PDF
+      <button type="button" class="btn btn-sm btn-outline-primary" :disabled="ocupadoDocs" @click="imprimirRecibo('a4')">
+        <i class="fas fa-file-pdf me-1"></i>PDF A4
       </button>
-      <button type="button" class="btn btn-sm btn-outline-secondary" disabled title="Disponible con los documentos (Fase 4b)">
-        <i class="fab fa-whatsapp me-1"></i>WhatsApp
+      <button type="button" class="btn btn-sm btn-outline-success" :disabled="ocupadoDocs" @click="compartirRecibo">
+        <span v-if="ocupadoDocs" class="spinner-border spinner-border-sm me-1"></span><i v-else class="fab fa-whatsapp me-1"></i>WhatsApp
       </button>
     </div>
     <button type="button" class="btn btn-primary px-4" @click="emit('cerrar')">Listo</button>
@@ -192,11 +192,13 @@ import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import BarraAccionMovil from './BarraAccionMovil.vue'
 import { creditoService } from '@/services/admin/creditoService'
 import { usePreviewCredito } from '@/composables/creditos/usePreviewCredito'
+import { useDocumentosCredito } from '@/composables/creditos/useDocumentosCredito'
+import { mensajeDocumento, nombreArchivo } from '@/helpers/creditos/documentos'
 import { useClaveIdempotencia } from '@/composables/creditos/useClaveIdempotencia'
 import { interpretarErrorCredito, type ErrorCredito } from '@/composables/creditos/errorCredito'
 import { atajosCobro, filasDeuda, normalizarMonto, textoAplicacion, textoProxima } from '@/helpers/creditos/cobro'
 import { formatoSoles, hoyEnLima, horaEnLima } from '@/helpers/creditos/formato'
-import type { CotizacionPago, DestinoExcedente, DetalleCredito, EstadoCaja, MetodoPago, Pago } from '@/types/creditos'
+import type { CotizacionPago, DestinoExcedente, DetalleCredito, EstadoCaja, FormatoPdf, MetodoPago, Pago } from '@/types/creditos'
 
 const props = defineProps<{
   detalle: DetalleCredito
@@ -272,6 +274,25 @@ const puedeConfirmar = computed(() =>
 function usarMonto(valor: string) {
   montoTexto.value = valor
   campoMonto.value?.focus()
+}
+
+const { abrir, compartir, formatoPorDefecto, ocupado: ocupadoDocs } = useDocumentosCredito()
+
+function imprimirRecibo(formato: FormatoPdf) {
+  const pago = pagoHecho.value
+  if (pago) abrir(() => creditoService.reciboUrl(props.detalle.credito.id, pago.id, formato, false))
+}
+
+function compartirRecibo() {
+  const pago = pagoHecho.value
+  if (!pago) return
+  const cliente = props.detalle.credito.cliente
+  compartir(
+    () => creditoService.reciboUrl(props.detalle.credito.id, pago.id, formatoPorDefecto(), false),
+    nombreArchivo('recibo', pago.numero_recibo),
+    mensajeDocumento(`recibo de pago ${pago.numero_recibo}`, cliente?.nombre),
+    cliente?.telefono,
+  )
 }
 
 async function confirmar() {

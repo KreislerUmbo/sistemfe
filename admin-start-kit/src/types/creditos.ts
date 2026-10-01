@@ -434,3 +434,21 @@ export interface FichaCliente {
 }
 
 export type DatosFicha = NonNullable<FichaCliente['ficha']>
+
+// ── Documentos (Fase 4b) ──
+
+export type FormatoPdf = 'a4' | 'ticket80mm'
+export type TipoDocumentoPdf = 'contrato' | 'cronograma' | 'estado-cuenta' | 'constancia' | 'reprogramacion'
+
+/** GET creditos/{id}/documentos: archivos guardados y reprogramaciones con acuerdo. */
+export interface DocumentosCredito {
+  documentos: { id: number; tipo: 'contrato' | 'contrato_firmado'; plantilla_version: number | null; creado: string | null; registrado_por: string | null }[]
+  reprogramaciones: { id: number; fecha: string | null }[]
+}
+
+export interface PlantillaContrato {
+  contenido: string
+  version: number
+  actualizado: string | null
+  variables: { clave: string; descripcion: string }[]
+}

@@ -63,6 +63,14 @@ class HttpCreditosTest extends CreditosTestCase
             ['POST', 'api/creditos/{credito}/condonar-mora', 'creditos.condonar_mora'],
             ['POST', 'api/creditos/{credito}/renovar/preview', 'creditos.crear'],
             ['POST', 'api/creditos/{credito}/renovar', 'creditos.crear'],
+            ['GET', 'api/creditos/{credito}/documentos', 'creditos.ver'],
+            ['GET', 'api/creditos/{credito}/documentos/url', 'creditos.ver'],
+            ['GET', 'api/creditos/{credito}/documentos/{documento}/url', 'creditos.ver'],
+            ['POST', 'api/creditos/{credito}/documentos/contrato-firmado', 'creditos.crear'],
+            ['GET', 'api/creditos/{credito}/pagos/{pago}/recibo-url', 'creditos.ver'],
+            ['GET', 'api/creditos/plantillas/contrato', 'creditos.configurar'],
+            ['PUT', 'api/creditos/plantillas/contrato', 'creditos.configurar'],
+            ['POST', 'api/creditos/plantillas/contrato/vista-previa', 'creditos.configurar'],
             ['GET', 'api/clientes/{cliente}/resumen-credito', 'creditos.crear'],
             ['GET', 'api/clientes/{cliente}/ficha-credito', 'creditos.ver'],
             ['PUT', 'api/clientes/{cliente}/ficha-credito', 'creditos.crear'],
@@ -93,10 +101,22 @@ class HttpCreditosTest extends CreditosTestCase
         $sinPermiso = collect(Route::getRoutes()->getRoutes())
             ->filter(fn ($r) => str_starts_with($r->uri(), 'api/creditos') || preg_match('#^api/clientes/\{cliente\}/(ficha-credito|resumen-credito|cobrador)#', $r->uri()))
             ->reject(fn ($r) => collect($r->gatherMiddleware())->contains(fn ($m) => str_starts_with($m, 'permission:creditos.')))
+            // PDFs por URL firmada: sin token a propósito; los cubre el test de abajo.
+            ->reject(fn ($r) => in_array('signed', $r->gatherMiddleware(), true))
             ->map(fn ($r) => $r->uri())
             ->values()->all();
 
         $this->assertSame([], $sinPermiso);
+    }
+
+    public function test_los_pdf_del_modulo_solo_se_sirven_con_url_firmada_y_tenant(): void
+    {
+        foreach (['creditos.pdf', 'creditos.recibo.pdf', 'creditos.archivo'] as $nombre) {
+            $middleware = Route::getRoutes()->getByName($nombre)?->gatherMiddleware() ?? [];
+            foreach (['tenant', 'tenant.active', 'tenant.token', 'signed'] as $m) {
+                $this->assertContains($m, $middleware, "{$nombre} sin {$m}");
+            }
+        }
     }
 
     // ---- Idempotencia ----

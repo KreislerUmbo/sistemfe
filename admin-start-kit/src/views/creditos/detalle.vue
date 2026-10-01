@@ -5,6 +5,8 @@
         <span class="badge ms-2 align-middle" :class="insignia.clase"><i :class="insignia.icono" class="me-1"></i>{{ insignia.texto }}</span>
       </template>
       <AccionesCredito v-if="credito" :acciones="acciones" @accion="alAccionar" />
+      <DocumentosCredito v-if="credito && ['activo', 'castigado', 'finalizado'].includes(credito.estado)" :credito-id="credito.id"
+        :estado="credito.estado" :puede-subir="puede('creditos.crear')" />
     </EncabezadoCredito>
 
     <div v-if="cargando && !detalle" class="text-center py-5 text-muted">
@@ -81,7 +83,7 @@
         <div class="card border-0 shadow-sm">
           <div :class="pestana === 'cliente' ? 'card-body' : 'card-body p-0'">
             <CuotasCredito v-if="pestana === 'cuotas'" :cuotas="detalle.cuotas" :hoy="hoy" />
-            <PagosCredito v-else-if="pestana === 'pagos'" :pagos="estadoCuenta?.pagos ?? []" :puede-editar="puede('creditos.cobrar')"
+            <PagosCredito v-else-if="pestana === 'pagos'" :pagos="estadoCuenta?.pagos ?? []" :credito-id="credito.id" :cliente="credito.cliente" :puede-editar="puede('creditos.cobrar')"
               :puede-anular="(p) => puedeAnularPago(p.registrado_por, usuarioId, puede)" @anular="abrirAnularPago" @editar="abrirEditarPago" />
             <FichaCobro v-else-if="pestana === 'cliente' && credito.cliente && !esEscritorio" :cliente="credito.cliente"
               :puede-editar="puede('creditos.crear')" :puede-asignar="puede('creditos.cartera.asignar')" />
@@ -117,6 +119,7 @@ import { useRoute, useRouter } from 'vue-router'
 import DefaultLayout from '@/layouts/DefaultLayout.vue'
 import EncabezadoCredito from '@/components/Creditos/EncabezadoCredito.vue'
 import AccionesCredito, { type IdAccion } from '@/components/Creditos/AccionesCredito.vue'
+import DocumentosCredito from '@/components/Creditos/DocumentosCredito.vue'
 import CuotasCredito from '@/components/Creditos/CuotasCredito.vue'
 import PagosCredito from '@/components/Creditos/PagosCredito.vue'
 import FichaCobro from '@/components/Creditos/FichaCobro.vue'

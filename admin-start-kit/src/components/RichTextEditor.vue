@@ -50,6 +50,18 @@ const onUpdate = (html: string) => {
 // texto tipeado quedaba pegado en pantalla aunque el modelo ya estuviera
 // vacío. Se fuerza la limpieza acá con el método expuesto setHTML().
 const quillRef = ref<InstanceType<typeof QuillEditor> | null>(null);
+// Inserta texto donde está el cursor (o al final). Lo usa la plantilla de contrato de
+// Créditos para sus variables {cliente_nombre}, etc.
+const insertarTexto = (texto: string) => {
+    const quill = quillRef.value?.getQuill();
+    if (!quill) return;
+    const rango = quill.getSelection(true);
+    const indice = rango ? rango.index : quill.getLength() - 1;
+    quill.insertText(indice, texto, 'user');
+    quill.setSelection(indice + texto.length, 0);
+};
+defineExpose({ insertarTexto });
+
 watch(() => props.modelValue, (value) => {
     if (!value) {
         quillRef.value?.setHTML('');

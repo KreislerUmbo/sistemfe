@@ -15,13 +15,13 @@
 </template>
 
 <script setup lang="ts">
-// Módulo Créditos (04-frontend pantalla 2): visibles Cobrar, Liquidar, Reprogramar y
-// Documentos (deshabilitado hasta 4b); el resto en "Más". Botones -sm en el encabezado, igual
-// que el detalle de una reserva. Qué se ofrece lo decide accionesDisponibles().
+// Módulo Créditos (04-frontend pantalla 2): visibles Cobrar, Liquidar y Reprogramar; el resto
+// en "Más". Botones -sm en el encabezado, igual que el detalle de una reserva. Qué se ofrece
+// lo decide accionesDisponibles().
 import { computed } from 'vue'
 import type { AccionCredito } from '@/composables/creditos/accionesCredito'
 
-export type IdAccion = AccionCredito | 'documentos'
+export type IdAccion = AccionCredito
 
 const props = defineProps<{ acciones: AccionCredito[] }>()
 const emit = defineEmits<{ accion: [id: IdAccion] }>()
@@ -45,16 +45,8 @@ const CATALOGO: Record<AccionCredito, Omit<Boton, 'id'>> = {
 const PRINCIPALES: AccionCredito[] = ['cobrar', 'liquidar', 'reprogramar', 'editar', 'activar']
 const boton = (id: AccionCredito): Boton => ({ id, ...CATALOGO[id] })
 
-const principales = computed<Boton[]>(() => {
-  const lista = PRINCIPALES.filter((id) => props.acciones.includes(id)).map(boton)
-  if (props.acciones.includes('cobrar')) {
-    lista.push({
-      id: 'documentos', texto: 'Documentos', icono: 'far fa-file-alt', clase: 'btn-outline-secondary', deshabilitada: true,
-      ayuda: 'Disponible pronto (contrato, recibos y estado de cuenta en PDF)',
-    })
-  }
-  return lista
-})
+// "Documentos" es su propio menú (DocumentosCredito), al lado de estas acciones.
+const principales = computed<Boton[]>(() => PRINCIPALES.filter((id) => props.acciones.includes(id)).map(boton))
 
 const secundarias = computed<Boton[]>(() => props.acciones.filter((id) => !PRINCIPALES.includes(id)).map(boton))
 </script>
