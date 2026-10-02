@@ -1,5 +1,20 @@
 //import { permission } from "process";
 import PortalLayout from '@/layouts/PortalLayout.vue'
+import type { NavigationGuardWithThis } from 'vue-router'
+import { useMenuStore } from '@/stores/menu'
+
+/**
+ * Fase 4d (Créditos): el giro créditos no tiene el Dashboard genérico en su menú; su inicio es
+ * el Panel. Si el menú del usuario trae el Panel y no el Dashboard, el inicio lleva al Panel.
+ */
+const inicioPorGiro: NavigationGuardWithThis<undefined> = async () => {
+  const menu = useMenuStore()
+  await menu.ensureLoaded()
+  if (menu.tieneRuta('creditos.panel') && !menu.tieneRuta('dashboards.analytics')) {
+    return { name: 'creditos.panel' }
+  }
+  return true
+}
 
 const setTitle = (title: string) => {
   return title
@@ -115,6 +130,7 @@ const dashboardRoutes = [
       authRequired: true,
       permission: 'all',
     },
+    beforeEnter: inicioPorGiro,
     component: () => import("@/views/dashboards/analytics/index.vue"),
   },
   {
@@ -544,6 +560,37 @@ const comercialRoutes = [
       permission: 'creditos.ver',
     },
     component: () => import("@/views/creditos/index.vue"),
+  },
+  // Fase 4d: panel de inicio, agenda de cobranza y reportes.
+  {
+    path: "/creditos/panel",
+    name: "creditos.panel",
+    meta: {
+      title: setTitle("Panel"),
+      authRequired: true,
+      permission: 'creditos.ver',
+    },
+    component: () => import("@/views/creditos/panel.vue"),
+  },
+  {
+    path: "/creditos/agenda",
+    name: "creditos.agenda",
+    meta: {
+      title: setTitle("Agenda de cobranza"),
+      authRequired: true,
+      permission: 'creditos.cobrar',
+    },
+    component: () => import("@/views/creditos/agenda.vue"),
+  },
+  {
+    path: "/creditos/reportes",
+    name: "creditos.reportes",
+    meta: {
+      title: setTitle("Reportes de créditos"),
+      authRequired: true,
+      permission: 'creditos.reportes',
+    },
+    component: () => import("@/views/creditos/reportes.vue"),
   },
   {
     path: "/creditos/cobranza",

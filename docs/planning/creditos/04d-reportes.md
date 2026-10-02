@@ -1,7 +1,8 @@
 # Fase 4d — Panel de inicio y reportes
 
-Estado: **diseño aprobado** (02-oct-2026), con el reporte 8 (Agenda de cobranza) agregado a pedido del
-usuario. No hay código escrito de esta fase.
+Estado: **construida** (02-oct-2026) en `feat/creditos-fase4d-reportes` — backend (`00a1ec7`) y
+frontend (Panel, Agenda, Reportes). Ver "Cierre" al final. Diseño aprobado el mismo día, con el
+reporte 8 (Agenda de cobranza) agregado a pedido del usuario.
 Reglas de fondo: Plan §1.16 (reportes) y `00-reglas-y-modelo.md`. Sale de la rama
 `feat/creditos-fase4c1-ajustes`.
 
@@ -106,3 +107,27 @@ Los reportes marcados "Solo `creditos.ver_todos`" además lo exigen en el backen
 2. Exportar a **PDF y Excel**.
 3. Los **pagos de créditos migrados** (anteriores al sistema) no cuentan como ingresos del período.
 4. Se agrega el **reporte 8, Agenda de cobranza** (pedido del usuario).
+
+## Cierre (02-oct-2026)
+- **Menú** (`MenuItemsSeeder`): "Panel" arriba de todo (giro créditos, `creditos.ver`); el Dashboard
+  genérico queda excluido del giro créditos. En el grupo Créditos: "Agenda de cobranza"
+  (`creditos.cobrar`, la usa el cobrador) y "Reportes" (`creditos.reportes`).
+- **Inicio:** la ruta `dashboards.analytics` (`/admin`, a donde lleva el login) redirige al Panel si el
+  menú del usuario trae el Panel y no el Dashboard (`useMenuStore().tieneRuta()`).
+- **Pantallas:** `views/creditos/panel.vue` (4 indicadores, gráfico de cobrado 14 días con vista de
+  tabla, los más atrasados), `agenda.vue` (Mañana · Pasado mañana · Próximos 7 días · Hoy · Rango,
+  incluir atrasados, cobrador/distrito, llamar / recordatorio de WhatsApp con texto / mapa / Cobrar,
+  PDF "hoja de ruta" y Excel), `reportes.vue` (pestañas según permiso, filtros por reporte,
+  "¿cómo se calcula?", PDF y Excel con los mismos filtros). Helper puro `helpers/creditos/reportes.ts`.
+- **Ajuste de API:** `cartera` devuelve `opciones.asesores` (calculadas antes de filtrar).
+- **Hallazgo corregido al verificar:** `con_atraso` de la agenda es del *crédito* (tiene alguna cuota
+  vencida), no de la cuota; la pantalla marcaba "Venció" en cuotas futuras. Ahora "Venció" solo si la
+  fecha de la cuota es anterior a hoy, y una cuota futura de un crédito atrasado lleva "Crédito con
+  atraso"; el recordatorio de WhatsApp usa el mismo criterio. En el PDF/Excel la columna se llama
+  "Crédito con atraso".
+- **Verificación:** 346/346 tests de Créditos + Unit, Vitest 124/124, vue-tsc en el baseline (46).
+  Navegador contra creditos-demo: login y `/admin` → Panel; 6 pestañas sin errores; Excel con nombre
+  `reporte_fechas.xlsx`; PDF de agenda/morosidad/ingresos 200 y revisados rasterizados; sin desborde
+  horizontal a 360 px.
+- **Al desplegar:** correr `MenuItemsSeeder` y limpiar la caché de menú de cada tenant; el comando
+  `creditos:foto-cartera` (23:50 Lima) necesita el cron `schedule:run` en producción.

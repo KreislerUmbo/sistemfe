@@ -73,9 +73,10 @@ onMounted(async () => {
   }
 })
 
-/** Desde la Cobranza del día se vuelve a la lista; si no, al detalle del crédito. */
+/** Desde la Cobranza del día o la Agenda se vuelve a la lista; si no, al detalle del crédito. */
 function alDetalle() {
   if (route.query.volver === 'cobranza') router.replace({ name: 'creditos.cobranza' })
+  else if (route.query.volver === 'agenda') router.replace({ name: 'creditos.agenda' })
   else router.replace({ name: 'creditos.detalle', params: { id: creditoId.value } })
 }
 

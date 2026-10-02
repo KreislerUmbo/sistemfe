@@ -81,5 +81,12 @@ export const useMenuStore = defineStore("menu_store", () => {
     enVuelo = null;
   };
 
-  return { items, loaded, fetch, ensureLoaded, clear };
+  /** ¿Algún enlace del menú (en cualquier nivel) lleva a esta ruta? */
+  const tieneRuta = (nombre: string): boolean => {
+    const buscar = (nodos: MenuItemType[]): boolean =>
+      nodos.some((n) => n.route?.name === nombre || (n.children ? buscar(n.children) : false));
+    return buscar(items.value);
+  };
+
+  return { items, loaded, fetch, ensureLoaded, clear, tieneRuta };
 });

@@ -92,6 +92,11 @@ final class ReportesCreditoTest extends CreditosTestCase
         $this->assertSame($this->a->id, $cartera['filas'][0]['credito_id']);   // el más atrasado primero
         $this->assertSame(['creditos' => 2, 'capital_prestado' => '10000.00', 'saldo_capital' => '9500.00', 'saldo_interes' => '1900.00', 'mora' => '100.00'], $cartera['totales']);
         $this->assertCount(1, $this->reporte('cartera', ['rango' => '1-7'])['filas']);
+        // Opciones del filtro de asesor: salen antes de filtrar (0 = sin asesor).
+        $this->assertSame([['id' => 0, 'nombre' => 'Sin asesor']], $cartera['opciones']['asesores']);
+        $sinAsesor = $this->reporte('cartera', ['asesor_id' => 0, 'rango' => '1-7']);
+        $this->assertCount(1, $sinAsesor['filas']);
+        $this->assertSame([['id' => 0, 'nombre' => 'Sin asesor']], $sinAsesor['opciones']['asesores']);
 
         $morosidad = $this->reporte('morosidad')['total'];
         $rangos = collect($morosidad['rangos'])->keyBy('rango');

@@ -34,9 +34,16 @@ import type {
   TipoArchivoCliente,
   PreviewCredito,
   ReglaLimite,
+  FiltrosReporte, NombreReporte, PanelCreditos, ReportesPorNombre,
   ResumenClienteCredito, CarteraCliente, LimitesCliente, SaldoAFavor, TitularCartera, UsuarioCartera } from '@/types/creditos'
 
 type ConClave<T> = T & { clave_idempotencia: string }
+
+/** Sin vacíos (el backend valida cada filtro) y booleanos como 1/0. */
+const paramsReporte = (filtros: FiltrosReporte) =>
+  Object.fromEntries(Object.entries(filtros)
+    .filter(([, v]) => v !== undefined && v !== null && v !== '')
+    .map(([k, v]) => [k, typeof v === 'boolean' ? (v ? 1 : 0) : v]))
 
 export const creditoService = {
   async listar(filtros: FiltrosListado, pagina: number) {
@@ -325,6 +332,30 @@ export const creditoService = {
   /** PDF de la plantilla que se está editando (sin guardar). */
   async vistaPreviaContrato(contenido: string, creditoId?: number) {
     const { data } = await httpClient.post('/creditos/plantillas/contrato/vista-previa', { contenido, credito_id: creditoId }, { responseType: 'blob' })
+    return data as Blob
+  },
+
+  // ── Panel y reportes (Fase 4d) ──
+
+  async panel() {
+    const { data } = await httpClient.get('/creditos/panel')
+    return data as PanelCreditos
+  },
+
+  async reporte<N extends NombreReporte>(nombre: N, filtros: FiltrosReporte = {}) {
+    const { data } = await httpClient.get(`/creditos/reportes/${nombre}`, { params: paramsReporte(filtros) })
+    return data as ReportesPorNombre[N]
+  },
+
+  /** URL firmada de 10 minutos: el PDF se abre en otra pestaña. */
+  async reportePdfUrl(nombre: NombreReporte, filtros: FiltrosReporte = {}) {
+    const { data } = await httpClient.get(`/creditos/reportes/${nombre}/pdf-url`, { params: paramsReporte(filtros) })
+    return data as { url: string }
+  },
+
+  /** Excel con la sesión (blob). CORS no expone Content-Disposition: el nombre lo arma quien llama. */
+  async reporteExcel(nombre: NombreReporte, filtros: FiltrosReporte = {}) {
+    const { data } = await httpClient.get(`/creditos/reportes/${nombre}/excel`, { params: paramsReporte(filtros), responseType: 'blob' })
     return data as Blob
   },
 

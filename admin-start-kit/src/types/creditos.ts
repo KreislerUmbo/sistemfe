@@ -524,3 +524,185 @@ export interface PlantillaContrato {
   actualizado: string | null
   variables: { clave: string; descripcion: string }[]
 }
+
+// ── Panel y reportes (Fase 4d). Montos en soles como texto, ya sumados por el backend. ──
+
+export type NombreReporte = 'agenda' | 'cartera' | 'morosidad' | 'ingresos' | 'asesores' | 'castigados' | 'control'
+export type RangoAtraso = 'al_dia' | '1-7' | '8-15' | '16-30' | '31-60' | '60+'
+export type AgrupacionIngresos = 'dia' | 'semana' | 'mes'
+
+export interface PeriodoReporte { desde: string; hasta: string; texto: string }
+export interface OpcionReporte { id: number; nombre: string }
+
+/** Filtros que acepta GET creditos/reportes/{reporte} (cada reporte usa los suyos). */
+export interface FiltrosReporte {
+  desde?: string
+  hasta?: string
+  agrupacion?: AgrupacionIngresos
+  asesor_id?: number | null
+  cobrador_id?: number | null
+  rango?: RangoAtraso | ''
+  estado?: 'activo' | 'castigado' | ''
+  distrito?: string
+  accion?: string
+  incluir_atrasados?: boolean
+}
+
+export interface FilaAtraso {
+  credito_id: number
+  numero_credito: string
+  cliente: string
+  cliente_id: number
+  dias_atraso: number
+  saldo_capital: string
+  mora: string
+}
+
+export interface PanelCreditos {
+  corte: string
+  cartera: { saldo_capital: string; creditos: number; clientes: number }
+  riesgo: { porcentaje: string; saldo_capital: string; creditos: number }
+  cobranza_hoy: { por_cobrar: string; cobrado: string; porcentaje: string }
+  conciliacion: { creditos: string; caja: string; cuadra: boolean; diferencia: string }
+  cobrado_dias: { fecha: string; monto: string }[]
+  mas_atrasados: FilaAtraso[]
+}
+
+export interface TotalesAgenda { cuotas: number; clientes: number; monto: string }
+
+export interface FilaAgenda {
+  dia: string | null
+  fecha_vencimiento: string
+  cobrador_id: number | null
+  cobrador: string
+  credito_id: number
+  numero_credito: string
+  forma_pago: string
+  numero_cuota: number
+  cuotas_total: number
+  pendiente: string
+  mora: string
+  con_atraso: boolean
+  cliente: {
+    id: number
+    nombre: string
+    telefono: string | null
+    telefono_alterno: string | null
+    direccion_cobro: string | null
+    referencia: string | null
+    distrito: string | null
+    latitud: string | null
+    longitud: string | null
+  }
+}
+
+export interface GrupoCobradorAgenda { cobrador: string; totales: TotalesAgenda; filas: FilaAgenda[] }
+
+/** dia null = el grupo de cuotas ya atrasadas (con "incluir atrasados"). */
+export interface AgendaCobranza {
+  periodo: PeriodoReporte
+  hoy: string
+  dias: { dia: string | null; totales: TotalesAgenda; cobradores: GrupoCobradorAgenda[] }[]
+  totales: TotalesAgenda
+  opciones: { cobradores: OpcionReporte[]; distritos: string[] }
+}
+
+export interface FilaCartera extends FilaAtraso {
+  estado: 'activo' | 'castigado'
+  asesor: string | null
+  capital_prestado: string
+  saldo_interes: string
+  cuotas_pagadas: number
+  cuotas_total: number
+  proximo_vencimiento: string | null
+  rango_atraso: RangoAtraso
+}
+
+export interface ReporteCartera {
+  corte: string
+  filas: FilaCartera[]
+  totales: { creditos: number; capital_prestado: string; saldo_capital: string; saldo_interes: string; mora: string }
+  opciones: { asesores: OpcionReporte[] }
+}
+
+export interface GrupoMorosidad {
+  rangos: { rango: RangoAtraso; creditos: number; saldo: string }[]
+  saldo_total: string
+  saldo_riesgo: string
+  porcentaje_riesgo: string
+}
+
+export interface ReporteMorosidad {
+  corte: string
+  total: GrupoMorosidad
+  por_asesor: (GrupoMorosidad & { asesor: string })[]
+}
+
+export interface MontosIngresos {
+  desembolsado: string
+  creditos_entregados: number
+  capital: string
+  interes: string
+  mora: string
+  cargo: string
+  mora_condonada: string
+  interes_descontado: string
+  saldo_favor_devuelto: string
+  cobrado: string
+}
+
+export interface ReporteIngresos {
+  periodo: PeriodoReporte
+  agrupacion: AgrupacionIngresos
+  filas: (MontosIngresos & { periodo: string })[]
+  totales: MontosIngresos
+}
+
+export interface ReporteAsesores {
+  periodo: PeriodoReporte
+  filas: {
+    asesor_id: number | null
+    asesor: string
+    colocados: number
+    capital_colocado: string
+    cobrado: string
+    cartera_creditos: number
+    cartera_saldo: string
+    porcentaje_riesgo: string
+  }[]
+}
+
+export interface ReporteCastigados {
+  periodo: PeriodoReporte
+  castigos: { credito_id: number; numero_credito: string | null; cliente: string | null; fecha_castigo: string; tipo: string; revertido: boolean; saldo_hoy: string; motivo: string | null }[]
+  recuperos: { pago_id: number; numero_recibo: string | null; fecha: string; credito_id: number; numero_credito: string; cliente: string; monto: string }[]
+  total_recuperado: string
+}
+
+export interface ReporteControl {
+  periodo: PeriodoReporte
+  eventos: {
+    fecha: string
+    accion: string
+    descripcion: string
+    usuario_id: number | null
+    usuario: string | null
+    credito_id: number | null
+    numero_credito: string | null
+    monto: string | null
+    motivo: string | null
+  }[]
+  umbral_anulaciones: number
+  alertas: { usuario: string | null; anulaciones: number }[]
+  acciones: { valor: string; texto: string }[]
+}
+
+export interface ReportesPorNombre {
+  agenda: AgendaCobranza
+  cartera: ReporteCartera
+  morosidad: ReporteMorosidad
+  ingresos: ReporteIngresos
+  asesores: ReporteAsesores
+  castigados: ReporteCastigados
+  control: ReporteControl
+}

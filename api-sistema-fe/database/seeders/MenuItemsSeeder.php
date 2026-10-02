@@ -63,7 +63,9 @@ class MenuItemsSeeder extends Seeder
     {
         // giro=null → visible para cualquier giro (MenuResolver: "giro IS
         // NULL OR giro = $tenant->giro").
-        $this->item('dashboard', null, null, 'enlace', 'Dashboards', 'iconoir-home-simple', 'dashboards.analytics', null, 1);
+        $this->item('dashboard', null, null, 'enlace', 'Dashboards', 'iconoir-home-simple', 'dashboards.analytics', null, 1, self::SIN_CREDITOS);
+        // Fase 4d: en el giro créditos el inicio es el Panel (reemplaza al Dashboard genérico de la plantilla).
+        $this->item('creditos_panel', null, 'creditos', 'enlace', 'Panel', 'iconoir-home-simple', 'creditos.panel', 'creditos.ver', 1);
 
         $adminPortal = $this->item('admin_portal', null, null, 'grupo', 'Admin Portal', null, null, null, 2);
         $this->item('admin_portal.categorias_sistemas', $adminPortal, null, 'enlace', 'Categorias Sistemas', 'fas fa-life-ring', 'system_categories.index', 'list_categorie_system', 1);
@@ -116,7 +118,10 @@ class MenuItemsSeeder extends Seeder
         $this->item('creditos.listado', $creditos, 'creditos', 'enlace', 'Créditos', null, 'creditos.index', 'creditos.ver', 2);
         $this->item('creditos.nuevo', $creditos, 'creditos', 'enlace', 'Nuevo crédito', null, 'creditos.nuevo', 'creditos.crear', 3);
         $this->item('creditos.migrar', $creditos, 'creditos', 'enlace', 'Registrar existente', null, 'creditos.migrar', 'creditos.migrar', 4);
-        $this->item('creditos.configuracion', $creditos, 'creditos', 'enlace', 'Configuración', null, 'creditos.configuracion', 'creditos.configurar', 5);
+        $this->item('creditos.configuracion', $creditos, 'creditos', 'enlace', 'Configuración', null, 'creditos.configuracion', 'creditos.configurar', 8);
+        // Fase 4d: la agenda la usa también el cobrador; los reportes, quien tiene creditos.reportes.
+        $this->item('creditos.agenda', $creditos, 'creditos', 'enlace', 'Agenda de cobranza', null, 'creditos.agenda', 'creditos.cobrar', 6);
+        $this->item('creditos.reportes', $creditos, 'creditos', 'enlace', 'Reportes', null, 'creditos.reportes', 'creditos.reportes', 7);
 
         $config = $this->item('configuraciones', null, null, 'grupo', 'Configuraciones', 'fas fa-wrench', null, null, 7);
         $this->item('configuraciones.empresa', $config, null, 'enlace', 'Datos de la empresa', null, 'company.index', 'company', 1);

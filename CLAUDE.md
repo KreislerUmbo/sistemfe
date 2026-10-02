@@ -384,8 +384,12 @@ del cliente en vez del modal (`views/clients/ficha.vue`), documento nunca repeti
 parcial en `clients`), nombre repetido solo advierte si es sin documento. Fase 4c.1 (ajustes de la
 revisión previa a reportes: saldo a favor completo, cartera del cliente al crear créditos, bloqueos
 de concurrencia, rol Asesor, castigo automático tolerante a errores, alta de tenant con caja) en
-`feat/creditos-fase4c1-ajustes` — ver la sección 4c.1 de `04c-ficha-cliente.md`. Siguiente: 4d (reportes).
-Al desplegar: `MenuItemsSeeder` + limpiar la caché de menú (`MenuResolver`, 24 h por usuario).
+`feat/creditos-fase4c1-ajustes` — ver la sección 4c.1 de `04c-ficha-cliente.md`. Fase 4d (Panel de
+inicio en lugar del Dashboard, Agenda de cobranza y 6 reportes con PDF/Excel) construida en
+`feat/creditos-fase4d-reportes` — ver `docs/planning/creditos/04d-reportes.md`. Siguiente: despliegue a
+producción (orden acordado en la memoria `project_creditos_modulo_estado`).
+Al desplegar: `MenuItemsSeeder` + limpiar la caché de menú (`MenuResolver`, 24 h por usuario); cron
+`schedule:run` para `creditos:foto-cartera` y `creditos:escalamiento`.
 
 **Próximos módulos (en orden de prioridad):**
 

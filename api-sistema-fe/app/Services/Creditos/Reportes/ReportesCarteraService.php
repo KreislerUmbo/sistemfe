@@ -93,6 +93,13 @@ class ReportesCarteraService
         $situaciones = $this->situaciones($usuario, $estados);
         $asignaciones = $this->asignaciones->de(array_map(static fn (SituacionCartera $s): int => $s->credito->cliente_id, $situaciones));
 
+        // Opciones del filtro antes de filtrar: elegir un asesor no debe vaciar la lista (0 = sin asesor).
+        $asesores = [];
+        foreach ($asignaciones as $a) {
+            $asesores[(int) ($a['asesor_id'] ?? 0)] = $a['asesor_id'] === null ? 'Sin asesor' : $a['asesor'];
+        }
+        asort($asesores);
+
         $filas = [];
         foreach ($situaciones as $s) {
             $a = $asignaciones[$s->credito->cliente_id];
@@ -126,6 +133,7 @@ class ReportesCarteraService
                 'saldo_interes' => Dinero::aSoles(array_sum(array_map(static fn (array $f): int => Dinero::aCentavos($f['saldo_interes']), $filas))),
                 'mora' => Dinero::aSoles(array_sum(array_map(static fn (array $f): int => Dinero::aCentavos($f['mora']), $filas))),
             ],
+            'opciones' => ['asesores' => array_map(static fn (int $id, string $nombre): array => ['id' => $id, 'nombre' => $nombre], array_keys($asesores), $asesores)],
         ];
     }
 

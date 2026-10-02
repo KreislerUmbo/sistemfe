@@ -64,7 +64,7 @@ final class TablasReporte
         }
         ksort($porCobrador);
         $columnas = [['Día', self::IZQ], ['Cliente', self::IZQ], ['Teléfono', self::IZQ], ['Dirección', self::IZQ], ['Distrito', self::IZQ],
-            ['Crédito · cuota', self::IZQ], ['A cobrar', self::DER], ['Con atraso', self::IZQ], ['Cobrado', self::IZQ]];
+            ['Crédito · cuota', self::IZQ], ['A cobrar', self::DER], ['Crédito con atraso', self::IZQ], ['Cobrado', self::IZQ]];
 
         return [
             'titulo' => self::TITULOS['agenda'],
