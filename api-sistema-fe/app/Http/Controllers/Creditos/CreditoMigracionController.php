@@ -22,6 +22,8 @@ class CreditoMigracionController extends ControllerCreditos
 
     public function store(MigrarCreditoRequest $request): JsonResponse
     {
+        $this->asegurarCliente((int) $request->input('cliente_id'));
+
         return $this->idempotente($request, 'credito.migrar', function () use ($request): array {
             $datos = $request->aDatos();
             $advertencias = FormatoCredito::limites($this->limites->evaluar($datos->clienteId, $datos->montoCapital, esMigracion: true));

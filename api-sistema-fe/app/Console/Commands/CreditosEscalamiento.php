@@ -6,6 +6,7 @@ use App\Models\Tenant;
 use App\Services\Creditos\EscalamientoService;
 use App\Services\Creditos\Reloj;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Módulo Créditos (00 1.11) — proceso diario por tenant de giro 'creditos' (no archivados):
@@ -26,11 +27,19 @@ class CreditosEscalamiento extends Command
             ->when($this->option('tenant'), fn ($q, $ids) => $q->whereIn('id', $ids))
             ->get();
 
+        // 04c.1: un tenant que falla no deja sin proceso a los demás; se informa y se sigue.
+        $fallidos = 0;
         foreach ($tenants as $tenant) {
-            $castigados = $tenant->run(fn () => $escalamiento->ejecutar($reloj->hoy()));
-            $this->info("{$tenant->id}: {$castigados} crédito(s) castigado(s).");
+            try {
+                $castigados = $tenant->run(fn () => $escalamiento->ejecutar($reloj->hoy()));
+                $this->info("{$tenant->id}: {$castigados} crédito(s) castigado(s).");
+            } catch (\Throwable $e) {
+                $fallidos++;
+                Log::error('creditos:escalamiento — falló el tenant', ['tenant' => $tenant->id, 'error' => $e->getMessage()]);
+                $this->error("{$tenant->id}: falló ({$e->getMessage()}).");
+            }
         }
 
-        return self::SUCCESS;
+        return $fallidos === 0 ? self::SUCCESS : self::FAILURE;
     }
 }

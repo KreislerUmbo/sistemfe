@@ -12,6 +12,7 @@ const ETIQUETAS: Record<string, string> = {
   credito_desembolso: 'Desembolso de crédito',
   credito_pago: 'Cobro de crédito',
   credito_devolucion_excedente: 'Vuelto de cobro de crédito',
+  credito_devolucion_saldo_favor: 'Devolución de saldo a favor (crédito)',
 }
 
 export function etiquetaTipoMovimiento(tipo: string): string {

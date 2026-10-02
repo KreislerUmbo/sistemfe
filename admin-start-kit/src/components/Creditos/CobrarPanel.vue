@@ -5,7 +5,10 @@
     <h5 class="fw-bold mb-1">Cobro registrado</h5>
     <p class="text-muted small mb-3">{{ pagoHecho.numero_recibo }} · {{ formatoSoles(pagoHecho.monto_aplicado) }} aplicado</p>
     <div v-if="pagoHecho.monto_excedente !== '0.00'" class="alert alert-warning d-inline-block py-2 small">
-      <template v-if="pagoHecho.destino_excedente === 'saldo_a_favor'">
+      <template v-if="pagoHecho.origen === 'saldo_a_favor'">
+        Se pagó con saldo a favor del cliente.
+      </template>
+      <template v-else-if="pagoHecho.destino_excedente === 'saldo_a_favor'">
         {{ formatoSoles(pagoHecho.monto_excedente) }} quedan como saldo a favor del cliente.
       </template>
       <template v-else>
@@ -29,7 +32,7 @@
 
   <form v-else novalidate @submit.prevent="confirmar">
     <!-- Caja (mockup 3): sin caja abierta no se puede cobrar -->
-    <div v-if="caja" class="alert py-2 px-3 small mb-3" :class="caja.abierta ? 'alert-success' : 'alert-danger'">
+    <div v-if="caja && !usarSaldo" class="alert py-2 px-3 small mb-3" :class="caja.abierta ? 'alert-success' : 'alert-danger'">
       <template v-if="caja.abierta">
         <i class="fas fa-cash-register me-1"></i>Caja abierta{{ caja.cajero ? ` · ${caja.cajero}` : '' }}{{ caja.desde ? ` · desde ${horaEnLima(caja.desde)}` : '' }}
       </template>
@@ -64,15 +67,25 @@
           <div class="card-header bg-white border-bottom py-2 fw-semibold text-dark">Pago</div>
           <div class="card-body py-3">
             <div class="row g-3">
-              <div class="col-12 col-md-6">
-                <label class="form-label mb-1 small fw-semibold text-secondary" for="cobro-monto">Monto recibido</label>
-                <div class="input-group input-group-sm">
-                  <span class="input-group-text">S/</span>
-                  <input id="cobro-monto" ref="campoMonto" v-model="montoTexto" type="text" inputmode="decimal" autocomplete="off"
-                    class="form-control fw-semibold cifra" :class="{ 'is-invalid': montoTexto !== '' && !monto }" />
+              <!-- 04c.1: pagar con el saldo a favor del cliente (no entra dinero a caja) -->
+              <div v-if="tieneSaldo" class="col-12">
+                <div class="form-check form-switch mb-0">
+                  <input id="cobro-saldo" v-model="usarSaldo" class="form-check-input" type="checkbox" role="switch" />
+                  <label class="form-check-label small fw-semibold" for="cobro-saldo">
+                    Pagar con saldo a favor del cliente ({{ formatoSoles(saldoFavor!) }})
+                  </label>
                 </div>
               </div>
               <div class="col-12 col-md-6">
+                <label class="form-label mb-1 small fw-semibold text-secondary" for="cobro-monto">{{ usarSaldo ? 'Monto a usar del saldo' : 'Monto recibido' }}</label>
+                <div class="input-group input-group-sm">
+                  <span class="input-group-text">S/</span>
+                  <input id="cobro-monto" ref="campoMonto" v-model="montoTexto" type="text" inputmode="decimal" autocomplete="off"
+                    class="form-control fw-semibold cifra" :class="{ 'is-invalid': (montoTexto !== '' && !monto) || superaSaldo }" />
+                </div>
+                <small v-if="superaSaldo" class="text-danger">No puede superar el saldo a favor.</small>
+              </div>
+              <div v-if="!usarSaldo" class="col-12 col-md-6">
                 <label class="form-label mb-1 small fw-semibold text-secondary" for="cobro-metodo">Método de pago</label>
                 <select id="cobro-metodo" v-model="metodo" class="form-select form-select-sm">
                   <option v-for="m in metodosPago" :key="m.id" :value="m.id">{{ m.name }}</option>
@@ -89,14 +102,17 @@
                   </button>
                 </div>
               </div>
-              <div v-if="!esEfectivo" class="col-12 col-md-6">
+              <div v-if="!esEfectivo && !usarSaldo" class="col-12 col-md-6">
                 <label class="form-label mb-1 small fw-semibold text-secondary" for="cobro-ref">Referencia (opcional)</label>
                 <input id="cobro-ref" v-model="referencia" type="text" class="form-control form-control-sm" maxlength="100" placeholder="N.º de operación" />
               </div>
             </div>
 
+            <small v-if="usarSaldo" class="text-muted d-block mt-3">
+              <i class="fas fa-info-circle me-1"></i>No entra dinero a caja. Si sobra, sigue como saldo a favor del cliente.
+            </small>
             <!-- Excedente (00 1.4): solo si lo recibido supera lo exigible -->
-            <div v-if="hayExcedente" class="alert alert-warning py-2 small mt-3 mb-0">
+            <div v-else-if="hayExcedente" class="alert alert-warning py-2 small mt-3 mb-0">
               <div class="fw-semibold mb-1">
                 {{ cotizacion && cotizacion.monto_excedente !== '0.00' ? `Sobran ${formatoSoles(cotizacion.monto_excedente)}` : 'Recibe más de lo que debe hoy' }}: ¿qué se hace?
               </div>
@@ -148,7 +164,7 @@
                     <td class="ps-0 text-muted">{{ textoAplicacion(a) }}</td><td class="text-end pe-0">{{ formatoSoles(a.monto) }}</td>
                   </tr>
                   <tr v-if="cotizacion.monto_excedente !== '0.00'" class="text-warning-emphasis">
-                    <td class="ps-0">{{ destino === 'devolver' ? 'Vuelto' : destino === 'saldo_a_favor' ? 'Saldo a favor' : 'Excedente' }}</td>
+                    <td class="ps-0">{{ usarSaldo ? 'Sigue como saldo a favor' : destino === 'devolver' ? 'Vuelto' : destino === 'saldo_a_favor' ? 'Saldo a favor' : 'Excedente' }}</td>
                     <td class="text-end pe-0">{{ formatoSoles(cotizacion.monto_excedente) }}</td>
                   </tr>
                   <tr class="border-top fw-semibold">
@@ -244,8 +260,23 @@ watch(hayExcedente, (valor) => {
 
 const esEfectivo = computed(() => /efectivo/i.test(props.metodosPago.find((m) => m.id === metodo.value)?.name ?? ''))
 
+// 04c.1: saldo a favor del cliente; con saldo no se elige método ni caja, y lo que no se
+// aplique sigue siendo saldo (el backend lo trata así; la vista previa usa ese destino).
+const saldoFavor = ref<string | null>(null)
+const usarSaldo = ref(false)
+const tieneSaldo = computed(() => !!saldoFavor.value && saldoFavor.value !== '0.00')
+// Solo comparaciones para guiar; el backend vuelve a validar el saldo al confirmar.
+const superaSaldo = computed(() => usarSaldo.value && !!monto.value && Number(monto.value) > Number(saldoFavor.value))
+watch(usarSaldo, (activo) => {
+  if (activo && saldoFavor.value) {
+    montoTexto.value = Number(saldoFavor.value) < Number(resumen.value.exigible_hoy) || resumen.value.exigible_hoy === '0.00'
+      ? saldoFavor.value
+      : resumen.value.exigible_hoy
+  }
+})
+
 // Vista previa del reparto (debounce + descarte de respuestas viejas).
-const solicitud = computed(() => (monto.value ? { monto: monto.value, destino: destino.value } : null))
+const solicitud = computed(() => (monto.value ? { monto: monto.value, destino: usarSaldo.value ? 'saldo_a_favor' as const : destino.value } : null))
 const { preview: cotizacion, cargando: cargandoCotizacion, error: errorCotizacion } = usePreviewCredito<CotizacionPago, { monto: string; destino: DestinoExcedente }>(
   solicitud,
   (s, signal) => creditoService.cotizarPago(props.detalle.credito.id, s.monto, s.destino, signal),
@@ -253,7 +284,7 @@ const { preview: cotizacion, cargando: cargandoCotizacion, error: errorCotizacio
 
 // La clave NO se renueva al cambiar datos: si un intento anterior sí llegó al servidor,
 // reenviarla con otro contenido da 409 en vez de un segundo cobro. Solo se limpia el error.
-watch([monto, destino, metodo, conFechaAnterior, fechaPago], () => {
+watch([monto, destino, metodo, conFechaAnterior, fechaPago, usarSaldo], () => {
   if (error.value && !error.value.reintentable) error.value = null
 })
 
@@ -264,8 +295,7 @@ watch(() => props.metodosPago, (lista) => {
 const puedeConfirmar = computed(() =>
   !procesando.value
   && !!monto.value
-  && metodo.value !== null
-  && props.caja?.abierta !== false
+  && (usarSaldo.value ? !superaSaldo.value : metodo.value !== null && props.caja?.abierta !== false)
   && !cargandoCotizacion.value
   && !!cotizacion.value
   && cotizacion.value.monto_aplicado !== '0.00'
@@ -297,16 +327,17 @@ function compartirRecibo() {
 }
 
 async function confirmar() {
-  if (!puedeConfirmar.value || !monto.value || metodo.value === null) return
+  if (!puedeConfirmar.value || !monto.value) return
   procesando.value = true
   error.value = null
   const retroactivo = conFechaAnterior.value && fechaPago.value !== hoy
   try {
     const { pago } = await creditoService.cobrar(props.detalle.credito.id, {
       monto_recibido: monto.value,
-      destino_excedente: destino.value,
-      payment_method_id: metodo.value,
-      referencia: esEfectivo.value ? null : referencia.value.trim() || null,
+      destino_excedente: usarSaldo.value ? 'saldo_a_favor' : destino.value,
+      payment_method_id: usarSaldo.value ? null : metodo.value,
+      usar_saldo_a_favor: usarSaldo.value,
+      referencia: esEfectivo.value || usarSaldo.value ? null : referencia.value.trim() || null,
       fecha_pago: retroactivo ? fechaPago.value : null,
       motivo: retroactivo ? motivo.value.trim() : null,
     }, clave.value)
@@ -328,6 +359,8 @@ async function confirmar() {
 }
 
 onMounted(async () => {
+  const clienteId = props.detalle.credito.cliente?.id
+  if (clienteId) creditoService.saldoAFavor(clienteId).then((s) => { saldoFavor.value = s.saldo }).catch(() => undefined)
   await nextTick()
   campoMonto.value?.focus()
   campoMonto.value?.select()

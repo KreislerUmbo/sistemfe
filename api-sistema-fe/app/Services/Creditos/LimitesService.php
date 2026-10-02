@@ -37,6 +37,7 @@ class LimitesService
         private readonly EvaluadorLimites $evaluador,
         private readonly Reloj $reloj,
         private readonly ClienteCreditoService $clientes,
+        private readonly SaldoAFavorService $saldos,
     ) {
     }
 
@@ -116,6 +117,7 @@ class LimitesService
             'cuotas_pagadas' => (clone $pagadas)->count(),
             'cuotas_pagadas_a_tiempo' => (clone $pagadas)->where('dias_atraso_al_pagar', 0)->count(),
             'bloqueado' => $this->estaBloqueado($ajuste, $creditos),
+            'saldo_a_favor' => Dinero::aSoles($this->saldos->saldo($cliente->id)),
             'ficha_faltante' => array_map(
                 static fn (RequisitoFicha $r): array => ['requisito' => $r->value, 'etiqueta' => $r->etiqueta()],
                 $this->clientes->fichaFaltante($cliente->id),

@@ -15,6 +15,7 @@ use App\Services\Creditos\Motor\Dto\Frecuencia;
 use App\Services\Creditos\Motor\Fecha;
 use App\Services\Creditos\Motor\GeneradorCronograma;
 use App\Services\Creditos\Motor\Tasa;
+use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
 /**
@@ -59,12 +60,17 @@ class CreditoBorradorService
 
     public function actualizar(Credito $credito, DatosCredito $datos): Credito
     {
-        if ($credito->estado !== CreditoEstado::Borrador) {
-            throw new HttpException(422, 'Solo se puede editar un crédito en borrador. Para uno activo usa "Corregir".');
-        }
-        $credito->update($this->atributos($datos, $this->preview($datos)));
+        // 04c.1: bloqueo y estado releído — sin esto, guardar un borrador mientras otro lo activa
+        // esperaba a la activación y después cambiaba las condiciones de un crédito ya entregado.
+        return DB::transaction(function () use ($credito, $datos): Credito {
+            $credito = Credito::whereKey($credito->id)->lockForUpdate()->firstOrFail();
+            if ($credito->estado !== CreditoEstado::Borrador) {
+                throw new HttpException(422, 'Solo se puede editar un crédito en borrador. Para uno activo usa "Corregir".');
+            }
+            $credito->update($this->atributos($datos, $this->preview($datos)));
 
-        return $credito->refresh();
+            return $credito->refresh();
+        });
     }
 
     /** Columnas de condiciones de `creditos` a partir de los datos validados (también para corregir, renovar y migrar). */

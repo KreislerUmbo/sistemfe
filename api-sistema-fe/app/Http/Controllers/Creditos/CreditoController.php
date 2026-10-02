@@ -49,6 +49,7 @@ class CreditoController extends ControllerCreditos
     public function preview(CreditoDatosRequest $request): JsonResponse
     {
         $datos = $request->aDatos();
+        $this->asegurarCliente($datos->clienteId);
 
         return response()->json([
             'cronograma' => FormatoCredito::cronograma($this->borradores->preview($datos)),
@@ -58,6 +59,8 @@ class CreditoController extends ControllerCreditos
 
     public function store(CrearCreditoRequest $request): JsonResponse
     {
+        $this->asegurarCliente((int) $request->input('cliente_id'));
+
         return $this->idempotente($request, 'credito.crear', function () use ($request): array {
             $datos = $request->aDatos();
             $credito = $this->borradores->crear($datos, $this->usuario());
@@ -73,6 +76,7 @@ class CreditoController extends ControllerCreditos
     public function update(CrearCreditoRequest $request, int $credito): JsonResponse
     {
         $modelo = $this->credito($credito);
+        $this->asegurarCliente((int) $request->input('cliente_id'));
 
         return $this->idempotente($request, 'credito.editar', fn (): array => [
             ['credito' => (new CreditoResource($this->borradores->actualizar($modelo, $request->aDatos())->load('cliente')))->resolve()],

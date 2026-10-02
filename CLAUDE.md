@@ -381,7 +381,10 @@ estado de cuenta, constancia, acuerdo de reprogramación) construida en
 del cliente + cartera por asesor/cobrador) cerrada en `feat/creditos-fase4c-ficha-cliente` — ver
 `docs/planning/creditos/04c-ficha-cliente.md`; incluye cambios para **todos los giros**: página
 del cliente en vez del modal (`views/clients/ficha.vue`), documento nunca repetido (índice único
-parcial en `clients`), nombre repetido solo advierte si es sin documento. Siguiente: 4d (reportes).
+parcial en `clients`), nombre repetido solo advierte si es sin documento. Fase 4c.1 (ajustes de la
+revisión previa a reportes: saldo a favor completo, cartera del cliente al crear créditos, bloqueos
+de concurrencia, rol Asesor, castigo automático tolerante a errores, alta de tenant con caja) en
+`feat/creditos-fase4c1-ajustes` — ver la sección 4c.1 de `04c-ficha-cliente.md`. Siguiente: 4d (reportes).
 Al desplegar: `MenuItemsSeeder` + limpiar la caché de menú (`MenuResolver`, 24 h por usuario).
 
 **Próximos módulos (en orden de prioridad):**

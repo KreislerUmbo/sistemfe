@@ -35,6 +35,7 @@ Leer siempre este archivo + el de la fase en curso (`03-api.md`, …). `historia
 ### 1.4 Exigible y excedente
 - **Exigible hoy** = cuotas vencidas + mora (incl. congelada) + cargos pendientes + **la próxima cuota por vencer** (`AplicadorPagos::montoExigible`).
 - Lo que supere el exigible es excedente. Destinos: **`devolver` (default)**, `adelanto`, `saldo_a_favor`. Con `devolver`/`saldo_a_favor` no se rechaza el pago. Con `adelanto`, si lo aplicado supera la liquidación → `PagoExcedeDeuda` ("usa Liquidar").
+- **Saldo a favor** (04c.1): se ve en la ficha del cliente, en su tarjeta y al cobrar; se usa al cobrar ("Pagar con saldo a favor": no entra dinero a caja, lo no aplicado sigue como saldo) o se **devuelve** desde la ficha (salida de la caja abierta de quien devuelve, `credito_devolucion_saldo_favor`, permiso `creditos.cobrar`, idempotente). Consumirlo bloquea la fila del cliente (orden crédito → cliente). Un pago cuyo saldo ya se usó o devolvió no se anula hasta deshacer ese uso.
 - Caja registra el total recibido; la devolución es una salida aparte. Efectivo en persona: se da vuelto y se registra lo que corresponde.
 
 ### 1.5 Orden de aplicación de pagos
@@ -116,7 +117,7 @@ monto_liquidacion = capital pendiente + interes_final − interés ya cobrado + 
 | Cobrar | ✓ | ✓ | ✓ su cartera |
 | Anular propio pago con su caja abierta | ✓ | ✓ | ✓ |
 | Anular cualquiera, corregir, reprogramar, condonar, castigar, migrar, pago retroactivo, autorizar excepción, configurar | ✓ | — | — |
-- Roles sembrados al crear el tenant: Administrador de créditos, Cajero de créditos, Cobrador. 16 permisos `creditos.*` (incluye `creditos.ver_todos`: sin él, solo se ve la cartera asignada).
+- Roles sembrados al crear el tenant: Administrador de créditos, Cajero de créditos, **Asesor de créditos** (04c.1: registra a sus clientes, coloca y cobra; sin `ver_todos`), Cobrador. En el giro créditos no se siembran los roles retail, y el alta crea "Caja Principal". 16 permisos `creditos.*` (incluye `creditos.ver_todos`: sin él, solo se ve la cartera asignada).
 - Cobradores/cartera/caja del cobrador: módulo `creditos_cobradores` (fase 8). v1 solo online; `clave_idempotencia` en toda escritura.
 
 ## 2. Modelo de datos (implementado, commit `675e320`)

@@ -21,6 +21,8 @@ class CajaCredito
     public const DESEMBOLSO = 'credito_desembolso';
     public const PAGO = 'credito_pago';
     public const DEVOLUCION_EXCEDENTE = 'credito_devolucion_excedente';
+    /** Entrega del saldo a favor del cliente (04c.1); la referencia es el movimiento de saldo. */
+    public const DEVOLUCION_SALDO_FAVOR = 'credito_devolucion_saldo_favor';
 
     private const ENTRADA = 'in';
     private const SALIDA = 'out';

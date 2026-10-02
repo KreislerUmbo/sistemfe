@@ -8,6 +8,7 @@ use App\Enums\Creditos\RequisitoFicha;
 use App\Enums\Creditos\TipoArchivoCliente;
 use App\Http\Requests\Creditos\ArchivoClienteRequest;
 use App\Http\Requests\Creditos\AsignarCarteraRequest;
+use App\Http\Requests\Creditos\DevolverSaldoRequest;
 use App\Http\Requests\Creditos\FichaCreditoRequest;
 use App\Http\Requests\Creditos\LimitesClienteRequest;
 use App\Models\Client\Client;
@@ -18,6 +19,8 @@ use App\Models\User;
 use App\Services\Creditos\AlcanceCartera;
 use App\Services\Creditos\AuditoriaCredito;
 use App\Services\Creditos\ClienteCreditoService;
+use App\Services\Creditos\Dinero;
+use App\Services\Creditos\SaldoAFavorService;
 use App\Services\Creditos\LimitesService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Storage;
@@ -32,6 +35,7 @@ class ClienteCreditoController extends ControllerCreditos
         private readonly LimitesService $limites,
         private readonly AlcanceCartera $alcance,
         private readonly AuditoriaCredito $auditoria,
+        private readonly SaldoAFavorService $saldos,
     ) {
     }
 
@@ -53,7 +57,34 @@ class ClienteCreditoController extends ControllerCreditos
             'historial_cartera' => $this->clientes->historialCartera($modelo),
             'limites' => $limite?->only(['max_creditos_activos', 'deuda_maxima', 'bloqueado', 'motivo_bloqueo']),
             'ficha_faltante' => $this->faltante($modelo->id),
+            'saldo_a_favor' => Dinero::aSoles($this->saldos->saldo($modelo->id)),
         ]);
+    }
+
+    /** Saldo a favor y sus movimientos (04c.1). */
+    public function saldoAFavor(int $cliente): JsonResponse
+    {
+        $modelo = $this->clienteVisible($cliente);
+
+        return response()->json([
+            'saldo' => Dinero::aSoles($this->saldos->saldo($modelo->id)),
+            'movimientos' => $this->saldos->movimientos($modelo->id),
+        ]);
+    }
+
+    /** Entrega el saldo a favor al cliente: salida de la caja abierta de quien devuelve (04c.1). */
+    public function devolverSaldo(DevolverSaldoRequest $request, int $cliente): JsonResponse
+    {
+        $modelo = $this->clienteVisible($cliente);
+
+        return $this->idempotente($request, 'saldo_favor.devolver', function () use ($request, $modelo): array {
+            $this->saldos->devolver($modelo, $request->centavos(), (int) $request->input('payment_method_id'), trim((string) $request->input('motivo')), $this->usuario());
+
+            return [[
+                'saldo' => Dinero::aSoles($this->saldos->saldo($modelo->id)),
+                'movimientos' => $this->saldos->movimientos($modelo->id),
+            ], null];
+        }, ['cliente' => $modelo->id]);
     }
 
     public function guardarFicha(FichaCreditoRequest $request, int $cliente): JsonResponse
@@ -99,7 +130,7 @@ class ClienteCreditoController extends ControllerCreditos
     {
         $usuario = static fn (?int $id): ?User => $id === null ? null : User::findOrFail($id);
         $cartera = $this->clientes->asignarCartera(
-            Client::findOrFail($cliente),
+            $this->clienteVisible($cliente),
             $usuario($request->filled('asesor_id') ? (int) $request->input('asesor_id') : null),
             $usuario($request->filled('cobrador_id') ? (int) $request->input('cobrador_id') : null),
             $this->usuario(),
@@ -110,7 +141,7 @@ class ClienteCreditoController extends ControllerCreditos
 
     public function guardarLimites(LimitesClienteRequest $request, int $cliente): JsonResponse
     {
-        $limite = $this->clientes->guardarLimites(Client::findOrFail($cliente), $request->datos(), $this->usuario());
+        $limite = $this->clientes->guardarLimites($this->clienteVisible($cliente), $request->datos(), $this->usuario());
 
         return response()->json(['limites' => $limite->only(['max_creditos_activos', 'deuda_maxima', 'bloqueado', 'motivo_bloqueo'])]);
     }

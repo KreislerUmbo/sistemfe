@@ -23,6 +23,24 @@ página sin secciones de Créditos, cliente RUC guardado sin cambios, modal ráp
 error por campo. Backend 1179/1179, frontend 113/113, `vue-tsc` en su línea base (46).
 Dato demo que queda: cliente "Rosa Prueba Cuatroc" (id 5) con ficha parcial.
 
+## Fase 4c.1 — ajustes de la revisión previa a reportes (02-oct-2026)
+Rama `feat/creditos-fase4c1-ajustes` (sale de la 4c). Revisión completa del módulo (permisos, cartera,
+dinero, concurrencia, idempotencia, documentos, alta de tenant desde cero); 7 hallazgos, todos corregidos:
+1. **Saldo a favor completo**: ver (ficha, tarjeta, cobro), usar al cobrar y devolver en caja
+   (`GET/POST clientes/{id}/saldo-a-favor[/devolver]`, `SaldoAFavorCliente.vue`). Antes se podía generar
+   pero no se veía, no se usaba desde la pantalla y no se podía devolver.
+2. **Cartera del cliente** en preview/crear/editar/migrar crédito y en asignar cartera/límites
+   (`ControllerCreditos::asegurarCliente()`): un asesor podía crear créditos o ver la deuda de clientes ajenos por API.
+3. **Editar borrador**: transacción + bloqueo + estado releído; antes podía cambiar el monto de un crédito
+   que se activaba en ese momento.
+4. **Saldo a favor concurrente**: se bloquea la fila del cliente al usarlo, devolverlo o revertirlo.
+5. **Rol "Asesor de créditos"** sembrado (creditos-demo ya lo tiene).
+6. **Castigo automático** sigue con los demás créditos/tenants si uno falla (queda en el log; el comando
+   termina con FAILURE si falló un tenant).
+7. **Alta de tenant**: "Caja Principal" para todos los giros; sin roles retail en el giro créditos.
+Verificado: tenant de créditos creado desde cero (y borrado), saldo a favor en navegador sin confirmar nada
+(datos de prueba borrados). Backend 1187/1187, frontend 113/113.
+
 **Pendiente, fuera de esta fase:** con asesor y cobrador separados, la cobranza del día filtra por
 cobrador, pero aún no hay reporte por asesor (comisiones) — Fase 4d (reportes) o 8 (cobradores).
 

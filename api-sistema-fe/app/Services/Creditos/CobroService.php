@@ -82,8 +82,12 @@ class CobroService
         $hoy = $this->reloj->hoy();
         $fechaPago = $this->fechaDelPago($s, $hoy, $usuario);
         $origen = $s->usarSaldoAFavor ? OrigenPago::SaldoAFavor : OrigenPago::Cobro;
-        if ($s->usarSaldoAFavor && $this->saldos->saldo($credito->cliente_id) < $s->montoRecibido) {
-            throw new HttpException(422, 'El cliente no tiene saldo a favor suficiente.');
+        if ($s->usarSaldoAFavor) {
+            // 04c.1: otro cobro del mismo cliente (en otro crédito) no puede gastar el mismo saldo.
+            $this->saldos->bloquear($credito->cliente_id);
+            if ($this->saldos->saldo($credito->cliente_id) < $s->montoRecibido) {
+                throw new HttpException(422, 'El cliente no tiene saldo a favor suficiente.');
+            }
         }
         // Con saldo a favor no entra dinero: lo que no se aplique sigue siendo saldo del cliente.
         $destino = $s->usarSaldoAFavor ? DestinoExcedente::SaldoAFavor : $s->destinoExcedente;

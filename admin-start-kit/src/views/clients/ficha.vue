@@ -177,6 +177,16 @@
               </div>
             </div>
 
+            <!-- Saldo a favor (04c.1) -->
+            <div v-if="clienteId" class="card border-0 shadow-sm mb-3">
+              <div class="card-header bg-white border-bottom py-2">
+                <span class="fw-semibold text-dark"><i class="fas fa-wallet me-2 text-primary"></i>Saldo a favor</span>
+              </div>
+              <div class="card-body">
+                <SaldoAFavorCliente :cliente-id="clienteId" :puede-devolver="puede('creditos.cobrar')" />
+              </div>
+            </div>
+
             <!-- Créditos del cliente -->
             <div v-if="clienteId" class="card border-0 shadow-sm mb-3">
               <div class="card-header bg-white border-bottom py-2">
@@ -257,6 +267,7 @@ import TarjetaResumenCliente from '@/components/Creditos/TarjetaResumenCliente.v
 import ClienteDatosBase from '@/components/Clientes/ClienteDatosBase.vue'
 import MapaUbicacion, { type Coordenadas } from '@/components/Clientes/MapaUbicacion.vue'
 import DocumentosCliente from '@/components/Clientes/DocumentosCliente.vue'
+import SaldoAFavorCliente from '@/components/Clientes/SaldoAFavorCliente.vue'
 import { useToast } from '@/composables/useToast'
 import { usePermisosCredito } from '@/composables/creditos/usePermisosCredito'
 import { interpretarErrorCredito } from '@/composables/creditos/errorCredito'

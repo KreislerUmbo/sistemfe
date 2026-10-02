@@ -167,6 +167,8 @@ export interface ResumenClienteCredito {
   cuotas_pagadas: number
   cuotas_pagadas_a_tiempo: number
   bloqueado: boolean
+  /** 04c.1: saldo a favor del cliente en soles. */
+  saldo_a_favor: Soles
   ficha_faltante: RequisitoFaltante[]
 }
 
@@ -239,7 +241,10 @@ export interface CotizacionPago {
 export interface SolicitudCobro {
   monto_recibido: string
   destino_excedente: DestinoExcedente
-  payment_method_id: number
+  /** null solo al pagar con saldo a favor (no entra dinero a caja). */
+  payment_method_id: number | null
+  /** 04c.1: paga con el saldo a favor del cliente. */
+  usar_saldo_a_favor?: boolean
   referencia?: string | null
   observaciones?: string | null
   /** Pago con fecha anterior (creditos.pago_fecha_anterior); exige motivo. */
@@ -452,6 +457,20 @@ export interface FichaCliente {
   historial_cartera: AsignacionCartera[]
   limites: LimitesCliente | null
   ficha_faltante: RequisitoFaltante[]
+  saldo_a_favor: Soles
+}
+
+/** 04c.1: saldo a favor del cliente y sus movimientos (abono, uso, devolución, reverso). */
+export interface SaldoAFavor {
+  saldo: Soles
+  movimientos: {
+    id: number
+    tipo: 'abono' | 'uso' | 'devolucion' | 'reverso'
+    monto: Soles
+    numero_recibo: string | null
+    motivo: string | null
+    fecha: string | null
+  }[]
 }
 
 /** Fase 4c: asesor y cobrador del cliente. Con asesor_cobra son la misma persona. */

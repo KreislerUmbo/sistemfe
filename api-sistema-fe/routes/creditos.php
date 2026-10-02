@@ -90,6 +90,9 @@ Route::group([
         Route::get('ficha-credito/archivos/{archivo}', [ClienteCreditoController::class, 'verArchivo'])->whereNumber('archivo')->middleware('permission:creditos.ver');
         Route::put('cartera', [ClienteCreditoController::class, 'asignarCartera'])->middleware('permission:creditos.cartera.asignar');
         Route::put('limites-credito', [ClienteCreditoController::class, 'guardarLimites'])->middleware('permission:creditos.configurar');
+        // 04c.1: saldo a favor del cliente — ver y devolver (sale de la caja de quien devuelve).
+        Route::get('saldo-a-favor', [ClienteCreditoController::class, 'saldoAFavor'])->middleware('permission:creditos.ver');
+        Route::post('saldo-a-favor/devolver', [ClienteCreditoController::class, 'devolverSaldo'])->middleware('permission:creditos.cobrar');
     });
 });
 

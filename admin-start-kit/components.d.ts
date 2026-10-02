@@ -108,6 +108,7 @@ declare module 'vue' {
     RichTextEditor: typeof import('./src/components/RichTextEditor.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
+    SaldoAFavorCliente: typeof import('./src/components/Clientes/SaldoAFavorCliente.vue')['default']
     SeccionCategorias: typeof import('./src/components/portal/SeccionCategorias.vue')['default']
     SeccionProductos: typeof import('./src/components/portal/SeccionProductos.vue')['default']
     SeccionServicios: typeof import('./src/components/portal/SeccionServicios.vue')['default']

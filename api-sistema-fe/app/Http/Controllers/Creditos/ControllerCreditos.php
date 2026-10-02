@@ -12,6 +12,7 @@ use App\Services\Creditos\Idempotencia;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Arr;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 
 /**
  * Base de los controllers del módulo (00 §4: FormRequest → servicio → Resource). Los créditos se
@@ -31,6 +32,18 @@ abstract class ControllerCreditos extends Controller
         app(AlcanceCartera::class)->asegurar($credito, $this->usuario());
 
         return $credito;
+    }
+
+    /**
+     * 04c.1: el cliente de un crédito nuevo (o el nuevo cliente de un borrador) debe estar en la
+     * cartera de quien opera — sin esto, un asesor podía crear créditos o ver la deuda de clientes
+     * de otro asesor llamando a la API. Fuera de su cartera el cliente "no existe" (404).
+     */
+    protected function asegurarCliente(int $clienteId): void
+    {
+        if (! app(AlcanceCartera::class)->puedeVerCliente($clienteId, $this->usuario())) {
+            throw new HttpException(404, 'Cliente no encontrado.');
+        }
     }
 
     /**

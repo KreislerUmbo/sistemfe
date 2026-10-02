@@ -12,6 +12,7 @@
       <span v-if="resumen.deuda_disponible !== null">Disponible {{ formatoSoles(resumen.deuda_disponible) }}</span>
       <span v-if="resumen.dias_atraso_maximo > 0">Atraso {{ textoDias(resumen.dias_atraso_maximo) }}</span>
       <span>{{ puntualidad }}</span>
+      <span v-if="resumen.saldo_a_favor && resumen.saldo_a_favor !== '0.00'" class="fw-semibold">Saldo a favor {{ formatoSoles(resumen.saldo_a_favor) }}</span>
     </div>
     <div v-if="faltante.length" class="mt-1">
       Falta: {{ faltante.map((f) => f.etiqueta).join(', ') }}.
@@ -65,9 +66,10 @@ const urlFicha = computed(() => (props.clienteId ? router.resolve({ name: 'clien
 const estado = computed(() => {
   const r = resumen.value
   if (r?.bloqueado) return { color: 'danger', icono: 'fas fa-ban', texto: 'Cliente bloqueado: requiere autorización' }
-  if (faltante.value.length) return { color: 'warning', icono: 'fas fa-id-card', texto: 'Ficha incompleta: requiere autorización para prestar' }
+  // Lo más grave primero; lo que falta de la ficha igual se lista debajo.
   if (r && r.creditos_activos >= r.max_creditos_activos) return { color: 'warning', icono: 'fas fa-exclamation-triangle', texto: 'Llegó al máximo de créditos activos' }
   if (r && r.dias_atraso_maximo > 0) return { color: 'warning', icono: 'fas fa-exclamation-triangle', texto: 'Tiene cuotas atrasadas' }
+  if (faltante.value.length) return { color: 'warning', icono: 'fas fa-id-card', texto: 'Ficha incompleta: requiere autorización para prestar' }
   return { color: 'success', icono: 'fas fa-check-circle', texto: 'Puede recibir crédito' }
 })
 

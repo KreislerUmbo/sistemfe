@@ -34,7 +34,7 @@ import type {
   TipoArchivoCliente,
   PreviewCredito,
   ReglaLimite,
-  ResumenClienteCredito, CarteraCliente, LimitesCliente, UsuarioCartera } from '@/types/creditos'
+  ResumenClienteCredito, CarteraCliente, LimitesCliente, SaldoAFavor, UsuarioCartera } from '@/types/creditos'
 
 type ConClave<T> = T & { clave_idempotencia: string }
 
@@ -249,6 +249,18 @@ export const creditoService = {
   async asignarCartera(clienteId: number, asesorId: number | null, cobradorId: number | null = null) {
     const { data } = await httpClient.put(`/clientes/${clienteId}/cartera`, { asesor_id: asesorId, cobrador_id: cobradorId })
     return data as CarteraCliente
+  },
+
+  /** 04c.1: saldo a favor del cliente y sus movimientos. */
+  async saldoAFavor(clienteId: number) {
+    const { data } = await httpClient.get(`/clientes/${clienteId}/saldo-a-favor`)
+    return data as SaldoAFavor
+  },
+
+  /** 04c.1: entrega el saldo a favor al cliente; sale de la caja abierta de quien devuelve. */
+  async devolverSaldo(clienteId: number, datos: { monto: string; payment_method_id: number; motivo: string }, clave: string) {
+    const { data } = await httpClient.post(`/clientes/${clienteId}/saldo-a-favor/devolver`, { ...datos, clave_idempotencia: clave })
+    return data as SaldoAFavor
   },
 
   async guardarLimitesCliente(clienteId: number, limites: LimitesCliente) {

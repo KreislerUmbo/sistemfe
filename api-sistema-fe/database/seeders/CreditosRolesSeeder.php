@@ -13,9 +13,11 @@ use Spatie\Permission\Models\Role;
  * reemplaza). Corre en TenantProvisioningService::provision() cuando giro='creditos';
  * el admin del tenant puede ajustar permisos después desde Roles.
  *
- * - Sin creditos.ver_todos (el Cobrador) solo se ven los clientes asignados en
- *   cartera_asignaciones; el filtro vive en el backend (AlcanceCartera), por eso el
- *   Cobrador tampoco recibe list_client.
+ * - Sin creditos.ver_todos (Asesor y Cobrador) solo se ven los clientes asignados en
+ *   cartera_asignaciones; el filtro vive en el backend (AlcanceCartera), también en el
+ *   listado de Clientes desde la Fase 4c — por eso el Asesor sí recibe list_client.
+ * - Asesor de créditos (04c.1): registra a sus clientes, coloca y cobra sus créditos. Con
+ *   credito_configuracion.asesor_cobra = true es también su cobrador. El Cobrador solo cobra.
  * - Anular el propio pago con la misma sesión de caja abierta tampoco es un permiso
  *   (1.9); creditos.anular_pago es para cualquier pago o caja cerrada.
  */
@@ -45,6 +47,11 @@ class CreditosRolesSeeder extends Seeder implements RolesCatalogProvider
         'Administrador de créditos' => [...self::PERMISOS_CREDITOS, ...self::PERMISOS_ADMINISTRACION],
         'Cajero de créditos' => [
             'creditos.ver', 'creditos.ver_todos', 'creditos.crear', 'creditos.cobrar', 'creditos.prendas.gestionar',
+            'register_client', 'list_client', 'edit_client',
+            'cash.open_session',
+        ],
+        'Asesor de créditos' => [
+            'creditos.ver', 'creditos.crear', 'creditos.cobrar',
             'register_client', 'list_client', 'edit_client',
             'cash.open_session',
         ],

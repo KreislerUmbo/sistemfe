@@ -16,6 +16,7 @@ use App\Models\AgenciaViajes\Servicio;
 use App\Models\AgenciaViajes\TipoCambioAgencia;
 use App\Models\AgenciaViajes\TipoRecordatorio;
 use App\Models\Cash\Branch;
+use App\Models\Cash\CashRegister;
 use App\Models\Client\Client;
 use App\Models\Company;
 use App\Models\Product\Product;
@@ -47,6 +48,9 @@ class TenantProvisioningService
     // Mismos valores documentados en el comentario de la columna
     // (2026_07_27_090000_add_giro_tipo_sunat_modo_to_tenants_table.php).
     public const GIROS_VALIDOS = ['retail', 'agencia_viajes', 'creditos'];
+
+    /** Roles de PermissionsDemoSeeder propios de retail (venta/almacén), sin uso en créditos. */
+    private const ROLES_RETAIL = ['Contador', 'Jefe de Ventas', 'Jefe de Almacen', 'Cajero', 'Vendedor', 'Cliente'];
 
     private ?string $lastGeneratedPassword = null;
 
@@ -139,6 +143,10 @@ class TenantProvisioningService
                 if ($giro === 'creditos') {
                     (new CreditosRolesSeeder())->run();
                     (new FeriadosNacionalesSeeder())->run();
+                    // 04c.1: un prestamista no vende ni tiene almacén — los roles retail de
+                    // PermissionsDemoSeeder solo confunden al asignar roles. Recién creados, no
+                    // tienen usuarios; sus permisos quedan (los usan Clientes y Caja).
+                    Role::where('guard_name', 'api')->whereIn('name', self::ROLES_RETAIL)->delete();
                 }
 
                 // Fase 0c (Bucket B, gate real) — crea los permisos operativos
@@ -160,9 +168,17 @@ class TenantProvisioningService
                 // que emitir cualquier boleta/factura quedaba bloqueado desde el
                 // primer día. No usa firstOrCreate: provision() solo corre una vez
                 // por tenant, nunca hay riesgo de duplicar esta fila acá.
-                Branch::create([
+                $sucursal = Branch::create([
                     'name' => 'Sucursal Principal',
                     'code' => '0000',
+                    'is_active' => true,
+                ]);
+
+                // 04c.1: sin una caja no se puede abrir turno, y sin turno no se cobra ni se
+                // entrega un crédito. Se crea la principal; el dueño agrega más en Configuraciones.
+                CashRegister::create([
+                    'branch_id' => $sucursal->id,
+                    'name' => 'Caja Principal',
                     'is_active' => true,
                 ]);
 
