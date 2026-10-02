@@ -123,9 +123,12 @@ class UserController extends Controller
             $request->merge(["avatar" => $path]);
         }
 
-        if (!$request->password) {
-            $request->merge(["password" => bcrypt($request->password)]);
-        }
+        // Contraseña: solo se cambia si se escribe una nueva. La condición estaba invertida
+        // desde la primera versión (`if (!$request->password)`): editar un usuario sin tocar la
+        // contraseña la reemplazaba por bcrypt('') y lo dejaba sin poder iniciar sesión.
+        $datos = $request->filled('password')
+            ? [...$request->except('password'), 'password' => bcrypt($request->password)]
+            : $request->except('password');
 
         if ($user->role_id != $request->role_id) {
             $role_current = Role::find($user->role_id);
@@ -135,7 +138,7 @@ class UserController extends Controller
             $user->assignRole($role_new);
         }
 
-        $user->update($request->all());
+        $user->update($datos);
 
         return response()->json([
             "code" => 200,
