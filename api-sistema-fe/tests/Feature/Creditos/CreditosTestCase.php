@@ -41,7 +41,7 @@ abstract class CreditosTestCase extends TestCase
         'creditos.ver', 'creditos.ver_todos', 'creditos.crear', 'creditos.cobrar', 'creditos.anular_pago',
         'creditos.condonar_mora', 'creditos.corregir', 'creditos.configurar', 'creditos.cartera.asignar',
         'creditos.autorizar_excepcion', 'creditos.reprogramar', 'creditos.castigar', 'creditos.migrar',
-        'creditos.pago_fecha_anterior', 'cash.close_others_session',
+        'creditos.pago_fecha_anterior', 'creditos.reportes', 'cash.close_others_session',
     ];
 
     protected PaymentMethod $efectivo;

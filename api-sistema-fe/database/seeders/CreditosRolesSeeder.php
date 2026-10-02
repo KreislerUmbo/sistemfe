@@ -29,6 +29,8 @@ class CreditosRolesSeeder extends Seeder implements RolesCatalogProvider
         'creditos.prendas.gestionar', 'creditos.prendas.vender', 'creditos.cartera.asignar',
         'creditos.autorizar_excepcion', 'creditos.reprogramar', 'creditos.castigar',
         'creditos.migrar', 'creditos.pago_fecha_anterior',
+        // Fase 4d: panel y reportes (los financieros y de control exigen además creditos.ver_todos).
+        'creditos.reportes',
     ];
 
     private const PERMISOS_ADMINISTRACION = [
@@ -46,7 +48,7 @@ class CreditosRolesSeeder extends Seeder implements RolesCatalogProvider
     private const ROLES = [
         'Administrador de créditos' => [...self::PERMISOS_CREDITOS, ...self::PERMISOS_ADMINISTRACION],
         'Cajero de créditos' => [
-            'creditos.ver', 'creditos.ver_todos', 'creditos.crear', 'creditos.cobrar', 'creditos.prendas.gestionar',
+            'creditos.ver', 'creditos.ver_todos', 'creditos.crear', 'creditos.cobrar', 'creditos.prendas.gestionar', 'creditos.reportes',
             'register_client', 'list_client', 'edit_client',
             'cash.open_session',
         ],

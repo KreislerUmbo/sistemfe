@@ -16,6 +16,7 @@ class CreditoCarteraDiaria extends Model
         'fecha_corte',
         'credito_id',
         'cliente_id',
+        'asesor_id',
         'cobrador_id',
         'saldo_capital',
         'saldo_interes',

@@ -21,6 +21,7 @@ use App\Http\Controllers\Creditos\CreditoPagoController;
 use App\Http\Controllers\Creditos\CreditoReprogramacionController;
 use App\Http\Controllers\Creditos\CreditoRenovacionController;
 use App\Http\Controllers\Creditos\FeriadoController;
+use App\Http\Controllers\Creditos\ReporteCreditoController;
 use Illuminate\Support\Facades\Route;
 
 Route::group([
@@ -31,6 +32,12 @@ Route::group([
     Route::post('creditos/preview', [CreditoController::class, 'preview'])->middleware('permission:creditos.crear|creditos.migrar');
     Route::post('creditos', [CreditoController::class, 'store'])->middleware('permission:creditos.crear');
     Route::post('creditos/migrar', [CreditoMigracionController::class, 'store'])->middleware('permission:creditos.migrar');
+    // Fase 4d: panel y reportes. creditos.ver aquí; el controller exige creditos.reportes (salvo la
+    // agenda, que usa también el cobrador) y creditos.ver_todos en los reportes financieros y de control.
+    Route::get('creditos/panel', [ReporteCreditoController::class, 'panel'])->middleware('permission:creditos.ver');
+    Route::get('creditos/reportes/{reporte}', [ReporteCreditoController::class, 'show'])->whereIn('reporte', ReporteCreditoController::REPORTES)->middleware('permission:creditos.ver');
+    Route::get('creditos/reportes/{reporte}/pdf-url', [ReporteCreditoController::class, 'pdfUrl'])->whereIn('reporte', ReporteCreditoController::REPORTES)->middleware('permission:creditos.ver');
+    Route::get('creditos/reportes/{reporte}/excel', [ReporteCreditoController::class, 'excel'])->whereIn('reporte', ReporteCreditoController::REPORTES)->middleware('permission:creditos.ver');
     Route::get('creditos/cobranza-del-dia', [CobranzaDelDiaController::class, 'index'])->middleware('permission:creditos.cobrar');
     Route::get('creditos/cartera/usuarios', [ClienteCreditoController::class, 'usuariosCartera'])->middleware('permission:creditos.cartera.asignar');
     // 04c.1: traspasar toda la cartera de un usuario (se va, cambia de zona) a otro.
@@ -105,5 +112,7 @@ Route::middleware(['tenant', 'tenant.active', 'tenant.token', 'signed'])->group(
     Route::get('creditos-pdf/{credito}/{documento}', [CreditoDocumentoController::class, 'pdf'])
         ->whereNumber('credito')->whereIn('documento', CreditoDocumentoController::DOCUMENTOS)->name('creditos.pdf');
     Route::get('creditos-recibo-pdf/{pago}', [CreditoDocumentoController::class, 'recibo'])->whereNumber('pago')->name('creditos.recibo.pdf');
+    Route::get('creditos-reporte-pdf/{reporte}', [ReporteCreditoController::class, 'pdf'])
+        ->whereIn('reporte', ReporteCreditoController::REPORTES)->name('creditos.reporte.pdf');
     Route::get('creditos-archivo/{documento}', [CreditoDocumentoController::class, 'archivo'])->whereNumber('documento')->name('creditos.archivo');
 });

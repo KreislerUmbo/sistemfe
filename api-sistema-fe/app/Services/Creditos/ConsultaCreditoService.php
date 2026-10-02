@@ -19,6 +19,7 @@ use App\Services\Creditos\Motor\Enums\EstadoCuota;
 use App\Services\Creditos\Motor\Enums\OrigenPago;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 
 /**
  * Consultas (03-api): listado, detalle con situación en vivo, estado de cuenta y cobranza del
@@ -69,31 +70,58 @@ class ConsultaCreditoService
     /** Página del listado con la situación en vivo de cada crédito (saldo, atraso, próximo pago). */
     public function listarConSituacion(array $filtros, User $usuario): LengthAwarePaginator
     {
-        return $this->listar($filtros, $usuario)->through(fn (Credito $c): DetalleCredito => $this->detalle($c, $usuario));
+        $pagina = $this->listar($filtros, $usuario);
+        $detalles = $this->detallesEnBloque($pagina->getCollection());
+
+        return $pagina->through(fn (Credito $c): DetalleCredito => $detalles[$c->id]);
     }
 
     public function detalle(Credito $credito, User $usuario): DetalleCredito
     {
         $this->alcance->asegurar($credito, $usuario);
-        $credito->load('cliente')->cargarCuotasVigentes();
-        if (! in_array($credito->estado, self::ESTADOS_CON_SITUACION, true)) {
-            return new DetalleCredito($credito, null, 0, Dinero::aCentavos($credito->monto_capital), Dinero::aCentavos($credito->interes_total), 0);
+
+        return $this->detallesEnBloque(new EloquentCollection([$credito]))[$credito->id];
+    }
+
+    /**
+     * Situación de hoy de varios créditos con la carga en bloque (04d): el detalle de un crédito,
+     * el listado y la Cobranza del día pasan todos por aquí, así nunca suman distinto. Quien llama
+     * ya aplicó el alcance de cartera.
+     *
+     * @param \Illuminate\Support\Collection<int, Credito> $creditos
+     * @return array<int, DetalleCredito> credito_id => detalle
+     */
+    public function detallesEnBloque($creditos): array
+    {
+        if ($creditos->isEmpty()) {
+            return [];
+        }
+        $creditos->load('cliente');
+        $cargas = $this->cargador->cargarVarios($creditos);
+        $hoy = $this->reloj->hoy();
+
+        $detalles = [];
+        foreach ($creditos as $credito) {
+            $carga = $cargas[$credito->id];
+            $credito->setRelation('cuotasVigentes', collect(array_values($carga->cuotasPorNumero)));
+            if (! in_array($credito->estado, self::ESTADOS_CON_SITUACION, true)) {
+                $detalles[$credito->id] = new DetalleCredito($credito, null, 0, Dinero::aCentavos($credito->monto_capital), Dinero::aCentavos($credito->interes_total), 0);
+                continue;
+            }
+            $situacion = $this->aplicador->aplicar($carga->estado, $carga->pagos, $hoy);
+            $saldo = SaldoCredito::calcular($carga->estado, $situacion, $hoy);
+            $detalles[$credito->id] = new DetalleCredito(
+                $credito,
+                $situacion,
+                $situacion->finalizado ? 0 : $this->aplicador->montoExigible($carga->estado, $carga->pagos, $hoy),
+                $saldo->capital,
+                $saldo->interes,
+                (int) max(array_map(static fn (MoraCuota $m): int => $m->diasAtraso, $situacion->moraAFecha) ?: [0]),
+                $saldo,
+            );
         }
 
-        $hoy = $this->reloj->hoy();
-        $carga = $this->cargador->cargar($credito);
-        $situacion = $this->aplicador->aplicar($carga->estado, $carga->pagos, $hoy);
-        $saldo = SaldoCredito::calcular($carga->estado, $situacion, $hoy);
-
-        return new DetalleCredito(
-            $credito,
-            $situacion,
-            $situacion->finalizado ? 0 : $this->aplicador->montoExigible($carga->estado, $carga->pagos, $hoy),
-            $saldo->capital,
-            $saldo->interes,
-            (int) max(array_map(static fn (MoraCuota $m): int => $m->diasAtraso, $situacion->moraAFecha) ?: [0]),
-            $saldo,
-        );
+        return $detalles;
     }
 
     public function estadoCuenta(Credito $credito, User $usuario): Credito
@@ -145,7 +173,7 @@ class ConsultaCreditoService
             '<=',
         )->get();
 
-        $items = $creditos->map(fn (Credito $c): DetalleCredito => $this->detalle($c, $usuario))->all();
+        $items = array_values($this->detallesEnBloque($creditos));
         usort($items, static fn (DetalleCredito $a, DetalleCredito $b): int => $b->diasAtraso <=> $a->diasAtraso);
 
         return $items;
