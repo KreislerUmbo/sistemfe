@@ -59,6 +59,18 @@ class ClientController extends Controller
         ]);
     }
 
+    /**
+     * Qué secciones muestra la página del cliente (04c). El frontend no conoce el giro del
+     * tenant y los permisos no alcanzan: el Super-Admin los tiene todos en cualquier giro.
+     */
+    public function contexto(): JsonResponse
+    {
+        return response()->json([
+            'giro' => app(GiroActual::class)->valor(),
+            'creditos' => $this->esCreditos(),
+        ]);
+    }
+
     // ── Búsqueda online DNI / RUC (apisperu) ────────────────────────
     public function searchDocument(string $type, string $number)
     {

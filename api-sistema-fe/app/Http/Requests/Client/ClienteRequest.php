@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Requests\Client;
 
+use App\Models\Client\Client;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -14,18 +15,20 @@ use Illuminate\Validation\Rule;
  */
 class ClienteRequest extends FormRequest
 {
-    public const TIPOS = ['DNI', 'RUC', 'CE', 'PAS', 'SND'];
+    public const TIPOS = ['DNI', 'RUC', 'CE', 'PAS', 'TM', 'SND'];
     private const FORMATOS = [
         'DNI' => '/^\d{8}$/',
         'RUC' => '/^(10|15|16|17|20)\d{9}$/',
         'CE' => '/^[A-Z0-9]{6,12}$/',
         'PAS' => '/^[A-Z0-9]{5,12}$/',
+        'TM' => '/^[A-Z0-9]{5,12}$/',
     ];
     private const MENSAJES_FORMATO = [
         'DNI' => 'El DNI debe tener 8 dígitos.',
         'RUC' => 'El RUC debe tener 11 dígitos y empezar en 10, 15, 16, 17 o 20.',
         'CE' => 'El carné de extranjería debe tener de 6 a 12 letras o números.',
         'PAS' => 'El pasaporte debe tener de 5 a 12 letras o números.',
+        'TM' => 'La tarjeta militar debe tener de 5 a 12 letras o números.',
     ];
 
     public function authorize(): bool
@@ -59,7 +62,7 @@ class ClienteRequest extends FormRequest
             'type_document' => ['required', Rule::in(self::TIPOS)],
             'n_document' => array_filter([
                 'required', 'string', 'max:20',
-                isset(self::FORMATOS[$tipo]) ? 'regex:' . self::FORMATOS[$tipo] : null,
+                isset(self::FORMATOS[$tipo]) && ! $this->documentoSinCambios() ? 'regex:' . self::FORMATOS[$tipo] : null,
             ]),
             'cod_tipo_doc_sunat' => ['nullable', 'string', 'max:5'],
             'type_client' => ['nullable', 'integer'],
@@ -87,6 +90,23 @@ class ClienteRequest extends FormRequest
             // Créditos: asesor elegido al registrar (solo con creditos.cartera.asignar).
             'asesor_id' => ['nullable', 'integer', 'exists:users,id'],
         ];
+    }
+
+    /**
+     * Al editar sin tocar el documento no se exige el formato: hay clientes cargados antes de
+     * esta validación (ej. un DNI de 7 dígitos) y no deben impedir corregir otro dato.
+     */
+    private function documentoSinCambios(): bool
+    {
+        $id = $this->route('client');
+        if ($id === null) {
+            return false;
+        }
+        $actual = Client::find($id);
+
+        return $actual !== null
+            && $actual->type_document === $this->input('type_document')
+            && $actual->n_document === $this->input('n_document');
     }
 
     public function messages(): array

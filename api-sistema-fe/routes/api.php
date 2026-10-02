@@ -469,6 +469,9 @@ Route::group([
 
     // Fase 0c (§9.1, modo sombra, Bucket B) — reutiliza register_client/
     // edit_client/delete_client.
+    // 04c: qué secciones muestra la página del cliente según el giro del tenant.
+    Route::get("clients/contexto", [ClientController::class, 'contexto'])
+        ->middleware('permission:list_client|register_client|edit_client');
     // 04c: restaurar un cliente eliminado cuando se intenta registrar su mismo documento.
     Route::post("clients/{id}/restaurar", [ClientController::class, 'restore'])->whereNumber('id')
         ->middleware('permission:register_client');

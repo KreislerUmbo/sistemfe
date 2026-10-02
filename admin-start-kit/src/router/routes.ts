@@ -362,6 +362,27 @@ const comercialRoutes = [
     },
     component: () => import("@/views/clients/index.vue"),
   },
+  // Fase 4c: página del cliente (reemplaza al modal) — alta y edición, todos los giros.
+  {
+    path: "/clients/nuevo",
+    name: "clients.nuevo",
+    meta: {
+      title: setTitle("Nuevo cliente"),
+      authRequired: true,
+      permission: 'register_client',
+    },
+    component: () => import("@/views/clients/ficha.vue"),
+  },
+  {
+    path: "/clients/:id(\\d+)",
+    name: "clients.ficha",
+    meta: {
+      title: setTitle("Cliente"),
+      authRequired: true,
+      permission: 'list_client|edit_client',
+    },
+    component: () => import("@/views/clients/ficha.vue"),
+  },
   {
     path: "/sale/register",
     name: "sale.register",

@@ -170,6 +170,10 @@ export interface ResumenClienteCredito {
 
 /** GET creditos/configuracion — defaults del negocio. */
 export interface ConfiguracionCredito {
+  /** Fase 4c: el asesor del cliente también lo cobra (una sola asignación). */
+  asesor_cobra?: boolean
+  /** Fase 4c: datos de la ficha exigidos para activar un crédito. */
+  requisitos_ficha?: RequisitoFicha[] | null
   tasa_interes_minimo: string
   dias_gracia: number
   paso_redondeo: string

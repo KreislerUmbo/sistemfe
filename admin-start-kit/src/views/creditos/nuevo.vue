@@ -87,6 +87,7 @@ import ResumenCronograma from '@/components/Creditos/ResumenCronograma.vue'
 import AvisosLimites from '@/components/Creditos/AvisosLimites.vue'
 import BarraAccionMovil from '@/components/Creditos/BarraAccionMovil.vue'
 import { creditoService } from '@/services/admin/creditoService'
+import { clienteService } from '@/services/admin/clienteService'
 import { useCreditosCatalogosStore } from '@/stores/creditosCatalogos'
 import { useToast } from '@/composables/useToast'
 import { useClaveIdempotencia } from '@/composables/creditos/useClaveIdempotencia'
@@ -159,6 +160,10 @@ onMounted(async () => {
       form.value.payment_method_id ??= metodos[0]?.id ?? null
       const c = detalle.credito.cliente
       if (c) cliente.value = { id: c.id, full_name: c.nombre, n_document: c.documento, phone: c.telefono }
+    } else if (route.query.cliente) {
+      // Desde la página del cliente ("Nuevo crédito para este cliente", 04c).
+      const c = await clienteService.obtener(Number(route.query.cliente))
+      cliente.value = { id: c.id, full_name: c.full_name, type_document: c.type_document, n_document: c.n_document ?? '', phone: c.phone ?? null }
     }
   } catch (e) {
     errorAccion.value = interpretarErrorCredito(e)

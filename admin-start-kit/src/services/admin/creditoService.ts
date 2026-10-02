@@ -44,6 +44,12 @@ export const creditoService = {
     return data as Paginado<FilaCredito>
   },
 
+  /** Créditos de un cliente, del más reciente al más antiguo (página del cliente, 04c). */
+  async creditosDeCliente(clienteId: number) {
+    const { data } = await httpClient.get('/creditos', { params: { cliente_id: clienteId, orden: 'reciente', direccion: 'desc' } })
+    return data as Paginado<FilaCredito>
+  },
+
   /** cobradorId: solo con creditos.ver_todos; 0 = clientes sin cobrador. */
   async cobranzaDelDia(cobradorId: number | null = null) {
     const { data } = await httpClient.get('/creditos/cobranza-del-dia', { params: cobradorId === null ? {} : { cobrador_id: cobradorId } })

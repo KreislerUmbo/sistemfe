@@ -1,7 +1,22 @@
 # Fase 4c — Ficha del cliente y cartera por asesor
 
-Estado: diseño aprobado el 01-oct-2026; **paso 1 (backend) construido** en la rama
-`feat/creditos-fase4c-ficha-cliente`. Pasos 2-4 pendientes.
+Estado: diseño aprobado el 01-oct-2026; **pasos 1 (backend) y 2 (página del cliente)
+construidos** en la rama `feat/creditos-fase4c-ficha-cliente`. Pasos 3-4 pendientes.
+
+### Paso 2 — notas de construcción
+- `views/clients/ficha.vue` (`/clients/nuevo`, `/clients/:id`) reemplaza al modal de Clientes en
+  todos los giros; `views/clients/index.vue` reescrito (lista + navegación, sin modal).
+- Las secciones se deciden por **giro**, no por permisos: `GET clients/contexto` (el Super-Admin
+  tiene todos los permisos en cualquier giro, así que "por permiso" mostraba Créditos en umbo).
+- `ClienteDatosBase.vue` + `helpers/clientes/formCliente.ts`: un solo formulario para la página y
+  `ClientFormQuick` (P6). Efecto: el modal rápido ahora calcula `es_amazonia` por la región (antes
+  enviaba siempre `false` y al editar lo pisaba); solo afecta la sugerencia de destino en Ventas.
+- Validación del documento: al editar **sin cambiar** el documento no se exige el formato (había
+  1 cliente de prueba en agencia-demo con DNI de 7 dígitos; revisados los 40 clientes locales).
+- `MapaUbicacion.vue` (Leaflet + OpenStreetMap; la plantilla Rizz traía un token demo de Mapbox),
+  `DocumentosCliente.vue` (cola en el alta, compresión en el navegador), cartera, límites y
+  créditos del cliente. "Nuevo crédito" acepta `?cliente=ID`.
+- `ClienteRequest` acepta `TM` (Tarjeta militar), que el formulario viejo ofrecía.
 
 ### Paso 1 — notas de construcción
 - `cartera_asignaciones.cobrador_id` pasó a `usuario_id` + `funcion`, con índice único parcial

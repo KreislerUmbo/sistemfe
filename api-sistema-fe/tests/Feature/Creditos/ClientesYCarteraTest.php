@@ -104,6 +104,29 @@ final class ClientesYCarteraTest extends CreditosTestCase
         $this->assertSame(200, $this->registrar(['type_document' => 'RUC', 'n_document' => '20123456789', 'full_name' => 'Empresa SAC'])['code']);
     }
 
+    public function test_un_cliente_antiguo_con_documento_mal_formado_se_edita_sin_tocar_el_documento(): void
+    {
+        $viejo = Client::create(['type_document' => 'DNI', 'n_document' => '1236544', 'full_name' => 'Cliente Antiguo', 'type_client' => 1]);
+        $editar = function (array $datos) use ($viejo): FormRequest {
+            $request = ClienteRequest::create("/api/clients/{$viejo->id}", 'PUT', $this->datosCliente($datos));
+            $request->setContainer($this->app)->setRedirector($this->app['redirect']);
+            $ruta = (new \Illuminate\Routing\Route('PUT', 'api/clients/{client}', []))->bind($request);
+            $ruta->setParameter('client', (string) $viejo->id);
+            $request->setRouteResolver(fn () => $ruta);
+            $request->validateResolved();
+
+            return $request;
+        };
+
+        Auth::guard('api')->setUser($this->admin);
+        $respuesta = $this->controlador()->update($editar(['n_document' => '1236544', 'phone' => '999111222']), (string) $viejo->id)->getData(true);
+        $this->assertSame(200, $respuesta['code']);
+        $this->assertSame('999111222', $viejo->fresh()->phone);
+
+        $this->expectException(ValidationException::class);
+        $editar(['n_document' => '1236545']);
+    }
+
     public function test_el_indice_unico_frena_dos_altas_simultaneas(): void
     {
         $fila = ['full_name' => 'Doble', 'type_document' => 'DNI', 'n_document' => '44444444', 'created_at' => now(), 'updated_at' => now()];
