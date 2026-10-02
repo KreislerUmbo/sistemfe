@@ -63,7 +63,7 @@ class MenuItemsSeeder extends Seeder
     {
         // giro=null → visible para cualquier giro (MenuResolver: "giro IS
         // NULL OR giro = $tenant->giro").
-        $this->item('dashboard', null, null, 'enlace', 'Dashboards', 'iconoir-home-simple', 'dashboards.analytics', null, 1, self::SIN_CREDITOS);
+        $this->item('dashboard', null, null, 'enlace', 'Inicio', 'iconoir-home-simple', 'dashboards.analytics', null, 1, self::SIN_CREDITOS);
         // Fase 4d: en el giro créditos el inicio es el Panel (reemplaza al Dashboard genérico de la plantilla).
         $this->item('creditos_panel', null, 'creditos', 'enlace', 'Panel', 'iconoir-home-simple', 'creditos.panel', 'creditos.ver', 1);
 

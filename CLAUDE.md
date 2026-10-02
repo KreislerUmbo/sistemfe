@@ -391,6 +391,14 @@ producción (orden acordado en la memoria `project_creditos_modulo_estado`).
 Al desplegar: `MenuItemsSeeder` + limpiar la caché de menú (`MenuResolver`, 24 h por usuario); cron
 `schedule:run` para `creditos:foto-cartera` y `creditos:escalamiento`.
 
+**Completo — Inicio con datos reales (Dashboard) para retail y agencia (02-oct-2026):**
+Reemplaza la demo de la plantilla Rizz por `GET dashboard` (`DashboardService`): ventas hoy/mes
+por moneda (netas de NC aceptadas, NV aparte), ventas 30 días, pendientes SUNAT, por cobrar, más
+vendidos y sin stock (retail), cotizaciones y próximos 7 días (agencia), cajas. Cada bloque según
+giro y permisos; créditos usa su Panel. Detalle: `docs/planning/retail-facturacion-core/
+inicio-dashboard.md`. Corregido de paso: `elapsed_hours` de `cash/dashboard` salía con decimales
+(Carbon 3 `diffInHours()`), ahora horas enteras.
+
 **Próximos módulos (en orden de prioridad):**
 
 1. **Representación impresa (PDF) con impresión automática**

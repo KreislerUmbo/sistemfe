@@ -126,7 +126,7 @@ const dashboardRoutes = [
     path: "/admin",
     name: "dashboards.analytics",
     meta: {
-      title: setTitle("Analytics"),
+      title: setTitle("Inicio"),
       authRequired: true,
       permission: 'all',
     },

@@ -324,7 +324,9 @@ class CashSessionController extends Controller
             $isStale = false;
 
             if ($session) {
-                $elapsedHours = $session->opened_at->diffInHours($now);
+                // Carbon 3: diffInHours() devuelve decimales y con signo; se muestran horas
+                // enteras transcurridas ("Abierta hace 186 h", no 186.4259...).
+                $elapsedHours = (int) floor($session->opened_at->diffInHours($now, true));
                 $isStale = $elapsedHours > 24;
             }
 

@@ -285,6 +285,10 @@ Route::group([
     // usuario puede ver — no hace falta gatear el endpoint en sí).
     Route::get('me/menu', [\App\Http\Controllers\MenuController::class, 'miMenu']);
 
+    // Inicio con datos reales (retail y agencia; créditos usa su Panel). Mismo criterio que
+    // me/menu: sin permission: propio, el servicio arma cada bloque según los permisos del usuario.
+    Route::get('dashboard', [\App\Http\Controllers\DashboardController::class, 'index']);
+
     //
     // permission:X en store/update/destroy de acá para abajo — Fase 0b
     // (plan-modulo-menus-y-roles.md §9.1, Bucket A): estas rutas solo tenían
