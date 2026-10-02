@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Services\Creditos;
 
 use App\Enums\Creditos\CreditoEstado;
+use App\Enums\Creditos\FuncionCartera;
+use App\Models\Creditos\CarteraAsignacion;
 use App\Models\Creditos\Credito;
 use App\Models\User;
 use App\Services\Creditos\Dto\DatosCredito;
@@ -42,7 +44,17 @@ class CreditoBorradorService
             ...$this->atributos($datos, $cronograma),
             'estado' => CreditoEstado::Borrador,
             'registrado_por' => $usuario->id,
+            'asesor_id' => $this->asesorPara($datos->clienteId, $usuario),
         ])->refresh();
+    }
+
+    /**
+     * Asesor que coloca el crédito (04c): el asesor vigente del cliente; si no tiene, quien lo
+     * registra. Se vuelve a tomar al activar y desde ahí queda fijo (reportes y comisiones).
+     */
+    public function asesorPara(int $clienteId, User $usuario, ?int $actual = null): int
+    {
+        return CarteraAsignacion::usuarioVigente($clienteId, FuncionCartera::Asesor) ?? $actual ?? $usuario->id;
     }
 
     public function actualizar(Credito $credito, DatosCredito $datos): Credito

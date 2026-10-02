@@ -44,7 +44,7 @@ class Sesion12bAlternativaDestinosBackfillTest extends TestCase
     private function crearAlternativa(string $destinoTexto, ?string $fechaDesde = '2026-10-01', ?string $fechaHasta = '2026-10-05'): Alternativa
     {
         $clienteId = DB::table('clients')->insertGetId([
-            'type_document' => 'DNI', 'n_document' => '55667788', 'full_name' => 'Cliente Test 12b',
+            'type_document' => 'DNI', 'n_document' => (string) random_int(10_000_000, 99_999_999), 'full_name' => 'Cliente Test 12b',
             'created_at' => now(), 'updated_at' => now(),
         ]);
         $cotizacionId = DB::table('cotizaciones')->insertGetId([

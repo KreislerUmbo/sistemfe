@@ -165,6 +165,7 @@ export interface ResumenClienteCredito {
   cuotas_pagadas: number
   cuotas_pagadas_a_tiempo: number
   bloqueado: boolean
+  ficha_faltante: RequisitoFaltante[]
 }
 
 /** GET creditos/configuracion — defaults del negocio. */
@@ -441,8 +442,40 @@ export interface FichaCliente {
     notas: string | null
   } | null
   archivos: { id: number; tipo: TipoArchivoCliente; created_at: string }[]
-  cobrador_id: number | null
+  cartera: CarteraCliente
+  historial_cartera: AsignacionCartera[]
+  limites: LimitesCliente | null
+  ficha_faltante: RequisitoFaltante[]
 }
+
+/** Fase 4c: asesor y cobrador del cliente. Con asesor_cobra son la misma persona. */
+export interface CarteraCliente {
+  asesor_id: number | null
+  cobrador_id: number | null
+  asesor_cobra: boolean
+}
+
+export interface AsignacionCartera {
+  funcion: 'asesor' | 'cobrador'
+  usuario: string | null
+  vigente_desde: string | null
+  vigente_hasta: string | null
+  asignado_por: string | null
+}
+
+export interface UsuarioCartera { id: number; nombre: string }
+
+export interface LimitesCliente {
+  max_creditos_activos: number | null
+  deuda_maxima: string | null
+  bloqueado: boolean
+  motivo_bloqueo: string | null
+}
+
+export type RequisitoFicha =
+  | 'dni_anverso' | 'dni_reverso' | 'foto_cliente' | 'telefono' | 'direccion_cobro' | 'referencia' | 'ubicacion' | 'ocupacion'
+
+export interface RequisitoFaltante { requisito: RequisitoFicha; etiqueta: string }
 
 export type DatosFicha = NonNullable<FichaCliente['ficha']>
 

@@ -60,6 +60,11 @@ final class EvaluadorLimites
             $infracciones[] = $this->politica($s, ReglaLimite::Bloqueado);
         }
 
+        // 04c: ficha exigida para prestar. Política del negocio: autorizable; en migración advierte.
+        if ($s->fichaFaltante !== []) {
+            $infracciones[] = $this->politica($s, ReglaLimite::FichaIncompleta, ['faltan' => $s->fichaFaltante]);
+        }
+
         foreach ($s->garantes as $garante) {
             if ($garante->clienteId === $s->clienteId) {
                 // Integridad de datos, no política: bloquea siempre, también en migración (12.11).
@@ -87,7 +92,7 @@ final class EvaluadorLimites
     /**
      * Regla de política del negocio: bloquea y es autorizable; en migración solo advierte (1.20).
      *
-     * @param array<string, int|null> $detalle
+     * @param array<string, int|list<string>|null> $detalle
      */
     private function politica(SolicitudOtorgamiento $s, ReglaLimite $regla, array $detalle = []): Infraccion
     {

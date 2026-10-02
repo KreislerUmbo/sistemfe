@@ -10,6 +10,7 @@ final readonly class SolicitudOtorgamiento
     /**
      * @param list<ResumenCreditoCliente> $creditosActivos incluye castigados (su deuda sigue vigente)
      * @param list<ResumenGarante> $garantes
+     * @param list<string> $fichaFaltante requisitos de la ficha que el cliente no cumple (04c)
      */
     public function __construct(
         public int $clienteId,
@@ -19,6 +20,7 @@ final readonly class SolicitudOtorgamiento
         public array $garantes = [],
         public ?int $creditoARenovarId = null,
         public bool $esMigracion = false,
+        public array $fichaFaltante = [],
     ) {
     }
 }

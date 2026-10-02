@@ -62,8 +62,9 @@ class MigracionService
                 'numero_credito' => $this->correlativos->siguiente(TipoCorrelativo::Credito),
                 'estado' => CreditoEstado::Activo,
                 'origen_registro' => OrigenRegistro::Migracion,
-            'version_cronograma_actual' => 1,
+                'version_cronograma_actual' => 1,
                 'registrado_por' => $usuario->id,
+                'asesor_id' => $this->borradores->asesorPara($datos->clienteId, $usuario),
             ]);
             $this->escritor->guardar($credito, $cronograma, 1);
 

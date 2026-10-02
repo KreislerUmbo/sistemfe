@@ -195,7 +195,7 @@ class ReservaFacturacionTest extends TestCase
     private function crearReservaConUnPasajeroYUnItemEnMoneda(string $moneda, float $precioConvertido = 100): array
     {
         $clienteId = DB::table('clients')->insertGetId([
-            'type_document' => 'DNI', 'n_document' => '99887766', 'full_name' => 'Cliente Test Moneda',
+            'type_document' => 'DNI', 'n_document' => (string) random_int(10_000_000, 99_999_999), 'full_name' => 'Cliente Test Moneda',
             'type_client' => 1, 'cod_tipo_doc_sunat' => '1',
             'created_at' => now(), 'updated_at' => now(),
         ]);
@@ -243,7 +243,7 @@ class ReservaFacturacionTest extends TestCase
     private function crearReservaConPasajerosEItems(string $monedaCotizacion = 'PEN'): array
     {
         $clienteId = DB::table('clients')->insertGetId([
-            'type_document' => 'DNI', 'n_document' => '90011223', 'full_name' => 'Cliente Test Multipago',
+            'type_document' => 'DNI', 'n_document' => (string) random_int(10_000_000, 99_999_999), 'full_name' => 'Cliente Test Multipago',
             'type_client' => 1, 'cod_tipo_doc_sunat' => '1',
             'created_at' => now(), 'updated_at' => now(),
         ]);
@@ -512,7 +512,7 @@ class ReservaFacturacionTest extends TestCase
         // alternativa_item — mismo patrón que casi todos los reserva_items
         // reales de agencia-demo (ítem "sin asignar" desde el vamos).
         $clienteId = DB::table('clients')->insertGetId([
-            'type_document' => 'DNI', 'n_document' => '55667788', 'full_name' => 'Cliente Test Sin Vinculacion',
+            'type_document' => 'DNI', 'n_document' => (string) random_int(10_000_000, 99_999_999), 'full_name' => 'Cliente Test Sin Vinculacion',
             'type_client' => 1, 'cod_tipo_doc_sunat' => '1',
             'created_at' => now(), 'updated_at' => now(),
         ]);
@@ -982,7 +982,7 @@ class ReservaFacturacionTest extends TestCase
         Company::create([
             'razon_social' => 'Empresa de Prueba SAC',
             'razon_social_comercial' => 'Empresa de Prueba',
-            'n_document' => '20123456789',
+            'n_document' => '20' . random_int(100_000_000, 999_999_999),
         ]);
 
         $nota = Note::create([
@@ -1081,7 +1081,7 @@ class ReservaFacturacionTest extends TestCase
         Company::create([
             'razon_social' => 'Empresa de Prueba SAC',
             'razon_social_comercial' => 'Empresa de Prueba',
-            'n_document' => '20123456789',
+            'n_document' => '20' . random_int(100_000_000, 999_999_999),
         ]);
 
         // NC09 "Disminución en el valor" — permite_parcial + modo_monto,
@@ -1170,7 +1170,7 @@ class ReservaFacturacionTest extends TestCase
         Company::create([
             'razon_social' => 'Empresa de Prueba SAC',
             'razon_social_comercial' => 'Empresa de Prueba',
-            'n_document' => '20123456789',
+            'n_document' => '20' . random_int(100_000_000, 999_999_999),
         ]);
 
         $responseStore = app(NotaElectronicaController::class)->store(new Request([
@@ -1678,7 +1678,7 @@ class ReservaFacturacionTest extends TestCase
     private function crearReservaConTratamientoTributarioMixtoMismoDestino(): array
     {
         $clienteId = DB::table('clients')->insertGetId([
-            'type_document' => 'DNI', 'n_document' => '99887766', 'full_name' => 'Cliente Test Mixto Mismo Destino',
+            'type_document' => 'DNI', 'n_document' => (string) random_int(10_000_000, 99_999_999), 'full_name' => 'Cliente Test Mixto Mismo Destino',
             'type_client' => 1, 'cod_tipo_doc_sunat' => '1',
             'created_at' => now(), 'updated_at' => now(),
         ]);
@@ -1774,7 +1774,7 @@ class ReservaFacturacionTest extends TestCase
     private function crearReservaConMezclaTributaria(): array
     {
         $clienteId = DB::table('clients')->insertGetId([
-            'type_document' => 'DNI', 'n_document' => '11223344', 'full_name' => 'Cliente Test Mezcla Tributaria',
+            'type_document' => 'DNI', 'n_document' => (string) random_int(10_000_000, 99_999_999), 'full_name' => 'Cliente Test Mezcla Tributaria',
             'type_client' => 1, 'cod_tipo_doc_sunat' => '1',
             'created_at' => now(), 'updated_at' => now(),
         ]);

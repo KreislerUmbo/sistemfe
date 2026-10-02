@@ -59,6 +59,7 @@ class Credito extends Model
         'version_cronograma_actual',
         'motivo_cierre',
         'registrado_por',
+        'asesor_id',
         'motivo_anulacion',
         'anulado_por',
         'anulado_en',

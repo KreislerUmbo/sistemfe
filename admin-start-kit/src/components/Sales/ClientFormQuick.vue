@@ -103,6 +103,7 @@
 import { ref, computed, watch } from 'vue';
 import httpClient from '@/helpers/http-client';
 import Swal from 'sweetalert2';
+import { guardarCliente } from '@/helpers/clientes/guardarCliente';
 import REGIONES from '../../views/clients/json/regiones.json';
 import PROVINCIAS from '../../views/clients/json/provincias.json';
 import DISTRITOS from '../../views/clients/json/distritos.json';
@@ -256,14 +257,9 @@ const save = async () => {
       payload.surname = form.value.surname;
       payload.full_name = `${form.value.name} ${form.value.surname}`.trim();
     }
-    const res = esEdicion.value
-      ? await httpClient.put(`clients/${props.clienteId}`, payload)
-      : await httpClient.post('clients', payload);
-    if (res.data.code === 200) {
-      emit('saved', res.data.client);
-    } else {
-      Swal.fire('Error', res.data.message, 'error');
-    }
+    // 04c: confirma nombre repetido (sin documento) y ofrece restaurar un cliente eliminado.
+    const resultado = await guardarCliente(payload, esEdicion.value ? props.clienteId : null);
+    if (resultado.ok) emit('saved', resultado.client);
   } catch (error: any) {
     Swal.fire('Error', error.response?.data?.message || 'Error al guardar', 'error');
   }

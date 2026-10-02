@@ -51,7 +51,7 @@ class ReporteOperativoCheckinTest extends TestCase
     private function crearReservaConItemSinVinculo(): array
     {
         $clienteId = DB::table('clients')->insertGetId([
-            'type_document' => 'DNI', 'n_document' => '77889900', 'full_name' => 'Cliente Test Checkin',
+            'type_document' => 'DNI', 'n_document' => (string) random_int(10_000_000, 99_999_999), 'full_name' => 'Cliente Test Checkin',
             'created_at' => now(), 'updated_at' => now(),
         ]);
         $cotizacionId = DB::table('cotizaciones')->insertGetId([

@@ -70,6 +70,7 @@ class ActivacionService
             'estado' => CreditoEstado::Activo,
             'version_cronograma_actual' => 1,
             'cash_movement_id' => $movimiento->id,
+            'asesor_id' => $this->borradores->asesorPara($credito->cliente_id, $usuario, $credito->asesor_id),
         ]);
         $this->auditoria->registrar('credito.activar', $credito, $credito->id, null, ['numero_credito' => $credito->numero_credito], null, $usuario);
 

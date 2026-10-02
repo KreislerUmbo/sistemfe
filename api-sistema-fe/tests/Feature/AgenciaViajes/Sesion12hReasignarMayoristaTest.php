@@ -77,7 +77,7 @@ class Sesion12hReasignarMayoristaTest extends TestCase
     private function crearReservaConItemMayorista(): array
     {
         $clienteId = DB::table('clients')->insertGetId([
-            'type_document' => 'DNI', 'n_document' => '33445566', 'full_name' => 'Cliente Test 12h',
+            'type_document' => 'DNI', 'n_document' => (string) random_int(10_000_000, 99_999_999), 'full_name' => 'Cliente Test 12h',
             'created_at' => now(), 'updated_at' => now(),
         ]);
         $cotizacionId = DB::table('cotizaciones')->insertGetId([

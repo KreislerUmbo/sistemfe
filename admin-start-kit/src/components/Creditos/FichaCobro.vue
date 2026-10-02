@@ -53,14 +53,14 @@
         <div class="text-pre">{{ ficha.notas }}</div>
       </div>
 
-      <!-- Cobrador asignado -->
+      <!-- Cartera: asesor (que también cobra) o cobrador, según la configuración -->
       <div class="mb-3">
-        <label class="etiqueta d-block" for="ficha-cobrador">Cobrador asignado</label>
+        <label class="etiqueta d-block" for="ficha-cobrador">{{ etiquetaCartera }}</label>
         <select v-if="puedeAsignar" id="ficha-cobrador" v-model="cobradorId" class="form-select form-select-sm" :disabled="asignando" @change="asignar">
-          <option :value="null">Sin cobrador</option>
+          <option :value="null">Sin asignar</option>
           <option v-for="c in cobradores" :key="c.id" :value="c.id">{{ c.nombre }}</option>
         </select>
-        <div v-else>{{ nombreCobrador ?? 'Sin cobrador' }}</div>
+        <div v-else>{{ nombreCobrador ?? 'Sin asignar' }}</div>
       </div>
 
       <button v-if="puedeEditar" type="button" class="btn btn-sm btn-outline-primary w-100" @click="abrirEdicion">
@@ -173,6 +173,10 @@ const ficha = computed(() => datos.value?.ficha ?? null)
 const mapa = computed(() => (ficha.value ? enlaceMapa(ficha.value) : null))
 const telefonos = computed(() => [props.cliente.telefono, ficha.value?.telefono_alterno].filter((t): t is string => !!t?.trim()))
 const nombreCobrador = computed(() => cobradores.value.find((c) => c.id === cobradorId.value)?.nombre ?? null)
+const asesorCobra = computed(() => datos.value?.cartera.asesor_cobra ?? true)
+const etiquetaCartera = computed(() => (asesorCobra.value ? 'Asesor (también cobra)' : 'Cobrador asignado'))
+/** Valor del selector: el asesor si también cobra; si no, el cobrador. */
+const asignadoActual = (f: FichaCliente) => (f.cartera.asesor_cobra ? f.cartera.asesor_id : f.cartera.cobrador_id)
 
 function liberarImagenes() {
   for (const t of Object.keys(imagenes) as TipoArchivoCliente[]) {
@@ -202,13 +206,13 @@ async function cargar() {
   cargando.value = true
   error.value = null
   try {
-    const [f, lista] = await Promise.all([
+    const [f, usuarios] = await Promise.all([
       creditoService.fichaCliente(props.cliente.id),
-      props.puedeAsignar ? creditoService.cobradores() : Promise.resolve([]),
+      props.puedeAsignar ? creditoService.usuariosCartera() : Promise.resolve(null),
     ])
     datos.value = f
-    cobradores.value = lista
-    cobradorId.value = f.cobrador_id
+    cobradores.value = usuarios ? (f.cartera.asesor_cobra ? usuarios.asesores : usuarios.cobradores) : []
+    cobradorId.value = asignadoActual(f)
     await cargarImagenes()
   } catch (e) {
     error.value = interpretarErrorCredito(e).mensaje
@@ -223,16 +227,18 @@ onBeforeUnmount(liberarImagenes)
 async function asignar() {
   asignando.value = true
   try {
-    await creditoService.asignarCobrador(props.cliente.id, cobradorId.value)
-    toast.success(cobradorId.value ? `Cartera asignada a ${nombreCobrador.value}` : 'Cliente sin cobrador asignado')
+    const cartera = datos.value!.cartera
+    const nueva = asesorCobra.value
+      ? await creditoService.asignarCartera(props.cliente.id, cobradorId.value)
+      : await creditoService.asignarCartera(props.cliente.id, cartera.asesor_id, cobradorId.value)
+    toast.success(cobradorId.value ? `Cartera asignada a ${nombreCobrador.value}` : 'Cliente sin asignar')
+    datos.value!.cartera = nueva
   } catch (e) {
     toast.warning(interpretarErrorCredito(e).mensaje)
-    cobradorId.value = datos.value?.cobrador_id ?? null
-    return
+    cobradorId.value = datos.value ? asignadoActual(datos.value) : null
   } finally {
     asignando.value = false
   }
-  if (datos.value) datos.value.cobrador_id = cobradorId.value
 }
 
 function abrirEdicion() {

@@ -34,8 +34,7 @@ import type {
   TipoArchivoCliente,
   PreviewCredito,
   ReglaLimite,
-  ResumenClienteCredito,
-} from '@/types/creditos'
+  ResumenClienteCredito, CarteraCliente, LimitesCliente, UsuarioCartera } from '@/types/creditos'
 
 type ConClave<T> = T & { clave_idempotencia: string }
 
@@ -235,14 +234,20 @@ export const creditoService = {
     return data as Blob
   },
 
-  async cobradores() {
-    const { data } = await httpClient.get('/creditos/cobradores')
-    return (data.data ?? []) as { id: number; nombre: string }[]
+  /** Selectores de asesor y cobrador (Fase 4c). */
+  async usuariosCartera() {
+    const { data } = await httpClient.get('/creditos/cartera/usuarios')
+    return data as { asesores: UsuarioCartera[]; cobradores: UsuarioCartera[] }
   },
 
-  async asignarCobrador(clienteId: number, cobradorId: number | null) {
-    const { data } = await httpClient.put(`/clientes/${clienteId}/cobrador`, { cobrador_id: cobradorId })
-    return data as { cobrador_id: number | null }
+  async asignarCartera(clienteId: number, asesorId: number | null, cobradorId: number | null = null) {
+    const { data } = await httpClient.put(`/clientes/${clienteId}/cartera`, { asesor_id: asesorId, cobrador_id: cobradorId })
+    return data as CarteraCliente
+  },
+
+  async guardarLimitesCliente(clienteId: number, limites: LimitesCliente) {
+    const { data } = await httpClient.put(`/clientes/${clienteId}/limites-credito`, limites)
+    return data.limites as LimitesCliente
   },
 
   // ── Documentos (Fase 4b): cada llamada devuelve una URL firmada de 10 minutos ──

@@ -128,7 +128,7 @@ class SalidaOperativaTest extends TestCase
         $tarifa = $this->crearProveedorTarifa($modalidad);
 
         $clienteId = DB::table('clients')->insertGetId([
-            'type_document' => 'DNI', 'n_document' => '87654321', 'full_name' => 'Cliente Test Salida',
+            'type_document' => 'DNI', 'n_document' => (string) random_int(10_000_000, 99_999_999), 'full_name' => 'Cliente Test Salida',
             'created_at' => now(), 'updated_at' => now(),
         ]);
         $cotizacionId = DB::table('cotizaciones')->insertGetId([
@@ -284,7 +284,7 @@ class SalidaOperativaTest extends TestCase
         $tarifa = $this->crearProveedorTarifa('compartido');
 
         $clienteId = DB::table('clients')->insertGetId([
-            'type_document' => 'DNI', 'n_document' => '11119999', 'full_name' => 'Cliente Test Salida Destroy',
+            'type_document' => 'DNI', 'n_document' => (string) random_int(10_000_000, 99_999_999), 'full_name' => 'Cliente Test Salida Destroy',
             'created_at' => now(), 'updated_at' => now(),
         ]);
         $cotizacionId = DB::table('cotizaciones')->insertGetId([

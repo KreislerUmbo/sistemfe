@@ -177,7 +177,7 @@ class CobroTest extends CreditosTestCase
         }
 
         DB::table('cartera_asignaciones')->insert([
-            'cobrador_id' => $cobrador->id, 'tipo' => 'cliente', 'referencia_id' => $credito->cliente_id,
+            'usuario_id' => $cobrador->id, 'funcion' => 'cobrador', 'tipo' => 'cliente', 'referencia_id' => $credito->cliente_id,
             'vigente_desde' => '2026-01-01', 'asignado_por' => $this->usuario->id, 'created_at' => now(), 'updated_at' => now(),
         ]);
         $this->hoy('2026-01-31');

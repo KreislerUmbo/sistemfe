@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace Tests\Feature\Creditos;
 
 use App\Enums\Creditos\TipoArchivoCliente;
+use App\Models\Client\Client;
 use App\Models\Creditos\CarteraAsignacion;
 use App\Models\User;
+use App\Services\Creditos\AlcanceCartera;
 use App\Services\Creditos\ClienteCreditoService;
 use App\Services\Creditos\CobroService;
 use App\Http\Controllers\Creditos\CobranzaDelDiaController;
@@ -18,6 +20,7 @@ use App\Services\Creditos\LimitesService;
 use App\Services\Creditos\Motor\Enums\DestinoExcedente;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpKernel\Exception\HttpException;
@@ -102,7 +105,7 @@ class ConsultasYClienteTest extends CreditosTestCase
         $asignado = $this->activo($this->admin);
         $ajeno = $this->activo($this->admin);
         $cobrador = $this->usuario(['creditos.ver', 'creditos.cobrar']);
-        app(ClienteCreditoService::class)->asignarCobrador($asignado->cliente, $cobrador, $this->admin);
+        $this->asignarSoloCobrador($asignado->cliente, $cobrador);
         $this->hoy('2026-01-31');
 
         $delAdmin = array_map(fn ($d) => $d->credito->id, app(ConsultaCreditoService::class)->cobranzaDelDia($this->admin));
@@ -151,7 +154,7 @@ class ConsultasYClienteTest extends CreditosTestCase
         $atrasado = $this->activo($this->admin);
         $cobrado = $this->activo($this->admin);
         $cobrador = $this->usuario(['creditos.ver', 'creditos.cobrar']);
-        app(ClienteCreditoService::class)->asignarCobrador($cobrado->cliente, $cobrador, $this->admin);
+        $this->asignarSoloCobrador($cobrado->cliente, $cobrador);
         Auth::guard('api')->setUser($this->admin);
         $this->hoy('2026-02-05');   // cuota 1 vencida hace 5 días: 600 + 100 de mora en cada crédito
         app(CobroService::class)->cobrar($cobrado, new SolicitudCobro(70_000, DestinoExcedente::Devolver, $this->efectivo->id, 'cdd-1'), $this->admin);
@@ -177,38 +180,95 @@ class ConsultasYClienteTest extends CreditosTestCase
         $this->assertSame([$atrasado->id], array_column($conAbono['data'], 'credito_id'));
     }
 
-    public function test_los_cobradores_disponibles_son_los_que_pueden_cobrar(): void
+    public function test_asesores_y_cobradores_disponibles_segun_permisos(): void
     {
+        $asesor = $this->usuario(['creditos.ver', 'creditos.crear', 'creditos.cobrar']);
+        $soloColoca = $this->usuario(['creditos.ver', 'creditos.crear']);
         $cobrador = $this->usuario(['creditos.ver', 'creditos.cobrar']);
         $soloVer = $this->usuario(['creditos.ver']);
+        $ids = fn (string $lista) => array_column(app(ClienteCreditoService::class)->usuariosCartera()[$lista], 'id');
 
-        $ids = array_column(app(ClienteCreditoService::class)->cobradoresDisponibles(), 'id');
+        // El asesor también cobra (default): necesita colocar y cobrar.
+        $this->assertContains($asesor->id, $ids('asesores'));
+        $this->assertContains($this->admin->id, $ids('asesores'));
+        $this->assertNotContains($soloColoca->id, $ids('asesores'));
+        $this->assertNotContains($cobrador->id, $ids('asesores'));
+        $this->assertContains($cobrador->id, $ids('cobradores'));
+        $this->assertNotContains($soloVer->id, $ids('cobradores'));
 
-        $this->assertContains($cobrador->id, $ids);
-        $this->assertContains($this->admin->id, $ids);
-        $this->assertNotContains($soloVer->id, $ids);
+        DB::table('credito_configuracion')->update(['asesor_cobra' => false]);
+        $this->assertContains($soloColoca->id, $ids('asesores'));
     }
 
-    public function test_reasignar_cobrador_cierra_la_vigencia_anterior_sin_borrarla(): void
+    public function test_reasignar_asesor_cierra_la_vigencia_anterior_sin_borrarla_y_lo_audita(): void
     {
         $cliente = $this->cliente();
-        $primero = $this->usuario(['creditos.cobrar']);
-        $segundo = $this->usuario(['creditos.cobrar']);
-        app(ClienteCreditoService::class)->asignarCobrador($cliente, $primero, $this->admin);
+        $primero = $this->usuario(['creditos.crear', 'creditos.cobrar']);
+        $segundo = $this->usuario(['creditos.crear', 'creditos.cobrar']);
+        app(ClienteCreditoService::class)->asignarCartera($cliente, $primero, null, $this->admin);
         $this->hoy('2026-02-01');
-        app(ClienteCreditoService::class)->asignarCobrador($cliente, $segundo, $this->admin);
+        $cartera = app(ClienteCreditoService::class)->asignarCartera($cliente, $segundo, null, $this->admin);
 
+        // El asesor también cobra: cada cambio mueve las dos funciones.
+        $this->assertSame(['asesor_id' => $segundo->id, 'cobrador_id' => $segundo->id, 'asesor_cobra' => true], $cartera);
         $historial = CarteraAsignacion::where('referencia_id', $cliente->id)->orderBy('id')->get();
-        $this->assertCount(2, $historial);
-        $this->assertSame('2026-02-01', $historial[0]->vigente_hasta->format('Y-m-d'));
-        $this->assertNull($historial[1]->vigente_hasta);
-        $this->assertSame($segundo->id, $historial[1]->cobrador_id);
+        $this->assertCount(4, $historial);
+        $this->assertSame(['2026-02-01', '2026-02-01'], $historial->take(2)->map(fn ($a) => $a->vigente_hasta->format('Y-m-d'))->all());
+        $this->assertSame([$segundo->id, $segundo->id], $historial->skip(2)->pluck('usuario_id')->values()->all());
+        $this->assertSame(2, DB::table('credito_auditoria')->where('accion', 'cartera.asignar')->where('auditable_id', $cliente->id)->count());
     }
 
-    public function test_no_se_asigna_como_cobrador_a_quien_no_puede_cobrar(): void
+    public function test_asesor_y_cobrador_separados(): void
     {
+        DB::table('credito_configuracion')->update(['asesor_cobra' => false]);
+        $cliente = $this->cliente();
+        $asesor = $this->usuario(['creditos.crear']);
+        $cobrador = $this->usuario(['creditos.cobrar']);
+
+        $cartera = app(ClienteCreditoService::class)->asignarCartera($cliente, $asesor, $cobrador, $this->admin);
+
+        $this->assertSame(['asesor_id' => $asesor->id, 'cobrador_id' => $cobrador->id, 'asesor_cobra' => false], $cartera);
+        // Los dos ven al cliente.
+        $alcance = app(AlcanceCartera::class);
+        $this->assertTrue($alcance->puedeVerCliente($cliente->id, $asesor));
+        $this->assertTrue($alcance->puedeVerCliente($cliente->id, $cobrador));
+    }
+
+    public function test_la_ruta_de_cobro_es_solo_de_los_clientes_que_cobra(): void
+    {
+        DB::table('credito_configuracion')->update(['asesor_cobra' => false]);
+        $asesor = $this->usuario(['creditos.ver', 'creditos.crear', 'creditos.cobrar']);
+        $cobrador = $this->usuario(['creditos.ver', 'creditos.cobrar']);
+        $credito = $this->activo($this->admin);
+        app(ClienteCreditoService::class)->asignarCartera($credito->cliente, $asesor, $cobrador, $this->admin);
+        $this->hoy('2026-01-31');
+
+        $ruta = fn (User $u) => array_map(fn ($d) => $d->credito->id, app(ConsultaCreditoService::class)->cobranzaDelDia($u));
+
+        $this->assertSame([$credito->id], $ruta($cobrador));
+        $this->assertSame([], $ruta($asesor));   // lo asesora, pero no lo cobra
+        $this->assertTrue(app(AlcanceCartera::class)->puedeVer($credito, $asesor));
+    }
+
+    public function test_no_se_asigna_a_quien_no_tiene_permiso_para_esa_funcion(): void
+    {
+        DB::table('credito_configuracion')->update(['asesor_cobra' => false]);
+        try {
+            app(ClienteCreditoService::class)->asignarCartera($this->cliente(), null, $this->usuario(['creditos.ver']), $this->admin);
+            $this->fail('Debía rechazar un cobrador sin permiso de cobrar.');
+        } catch (HttpException $e) {
+            $this->assertSame(422, $e->getStatusCode());
+        }
+
         $this->expectException(HttpException::class);
-        app(ClienteCreditoService::class)->asignarCobrador($this->cliente(), $this->usuario(['creditos.ver']), $this->admin);
+        app(ClienteCreditoService::class)->asignarCartera($this->cliente(), $this->usuario(['creditos.cobrar']), null, $this->admin);
+    }
+
+    /** Solo cobrador (sin asesor), con las funciones separadas. */
+    private function asignarSoloCobrador(Client $cliente, User $cobrador): void
+    {
+        DB::table('credito_configuracion')->update(['asesor_cobra' => false]);
+        app(ClienteCreditoService::class)->asignarCartera($cliente, null, $cobrador, $this->admin);
     }
 
     public function test_archivo_del_cliente_se_comprime_en_el_disco_privado(): void

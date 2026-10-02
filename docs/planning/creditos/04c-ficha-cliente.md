@@ -1,6 +1,24 @@
 # Fase 4c — Ficha del cliente y cartera por asesor
 
-Estado: **diseño para revisión** (01-oct-2026). No hay código escrito de esta fase.
+Estado: diseño aprobado el 01-oct-2026; **paso 1 (backend) construido** en la rama
+`feat/creditos-fase4c-ficha-cliente`. Pasos 2-4 pendientes.
+
+### Paso 1 — notas de construcción
+- `cartera_asignaciones.cobrador_id` pasó a `usuario_id` + `funcion`, con índice único parcial
+  (una vigente por cliente y función). Endpoints: `GET creditos/cartera/usuarios`,
+  `PUT clientes/{id}/cartera`, `PUT clientes/{id}/limites-credito` (reemplazan a
+  `creditos/cobradores` y `clientes/{id}/cobrador`).
+- La cobranza del día usa solo la función **cobrador** (`AlcanceCartera::aplicar(..., Cobrador)`);
+  ver créditos y clientes, cualquiera de las dos.
+- `GiroActual` (servicio) dice si el tenant es de Créditos; los tests lo fijan sin tenancy.
+- Hallazgos en el camino: `guardarFicha`/`subirArchivo` no revisaban la cartera (cualquiera con
+  `creditos.crear` editaba fichas ajenas) — corregido; `credito_autorizaciones.regla` es un CHECK
+  de Postgres con lista cerrada — migración `120200` agrega `ficha_incompleta`.
+- 11 tests de Agencia de Viajes creaban dos clientes con el mismo DNI fijo en un mismo test: ahora
+  usan documentos al azar (sin cambiar lo que prueban).
+- `TipoCambioSunatAplicadoSaleTest::test_venta_en_usd…` falla entre las 19:00 y 24:00 de Lima,
+  preexistente y ajeno a esta fase: `Sale::setCreatedAtAttribute()` cambia la zona horaria global a
+  Lima a mitad del test y el dato se insertó con la fecha UTC.
 Reglas de fondo: `00-reglas-y-modelo.md` §1.14 (cartera), §1.17 (límites), §4 (seguridad).
 Los reportes y el panel de inicio que eran la "4c" pasan a ser la **Fase 4d**.
 

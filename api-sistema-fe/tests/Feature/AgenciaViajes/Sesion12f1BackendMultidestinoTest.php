@@ -64,7 +64,7 @@ class Sesion12f1BackendMultidestinoTest extends TestCase
     private function crearAlternativa(): Alternativa
     {
         $clienteId = DB::table('clients')->insertGetId([
-            'type_document' => 'DNI', 'n_document' => '10203040', 'full_name' => 'Cliente Test 12f1',
+            'type_document' => 'DNI', 'n_document' => (string) random_int(10_000_000, 99_999_999), 'full_name' => 'Cliente Test 12f1',
             'created_at' => now(), 'updated_at' => now(),
         ]);
         $cotizacionId = DB::table('cotizaciones')->insertGetId([

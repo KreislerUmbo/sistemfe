@@ -153,7 +153,7 @@ class ReservaAnticipoTest extends TestCase
     private function crearReservaSimple(float $precioConvertido = 118.00): Reserva
     {
         $clienteId = DB::table('clients')->insertGetId([
-            'type_document' => 'DNI', 'n_document' => '77889900', 'full_name' => 'Cliente Test Anticipos',
+            'type_document' => 'DNI', 'n_document' => (string) random_int(10_000_000, 99_999_999), 'full_name' => 'Cliente Test Anticipos',
             'type_client' => 1, 'cod_tipo_doc_sunat' => '1',
             'created_at' => now(), 'updated_at' => now(),
         ]);

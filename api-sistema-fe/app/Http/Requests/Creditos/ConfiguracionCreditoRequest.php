@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Requests\Creditos;
 
+use App\Enums\Creditos\RequisitoFicha;
 use App\Enums\Creditos\ValidacionTasacion;
 use App\Services\Creditos\Motor\Enums\ReglaNoLaborable;
 use App\Services\Creditos\Motor\Enums\TipoCargoReprogramacion;
@@ -32,6 +33,9 @@ class ConfiguracionCreditoRequest extends FormRequest
             'regla_no_laborable' => ['sometimes', Rule::enum(ReglaNoLaborable::class)],
             'mora_cuenta_no_laborables' => ['sometimes', 'boolean'],
             'cobra_mora' => ['sometimes', 'boolean'],
+            'asesor_cobra' => ['sometimes', 'boolean'],
+            'requisitos_ficha' => ['sometimes', 'array'],
+            'requisitos_ficha.*' => ['string', 'distinct', Rule::enum(RequisitoFicha::class)],
             'dias_para_venta' => ['sometimes', ...self::DIAS],
             'porcentaje_prestamo_max' => ['sometimes', 'nullable', 'numeric', 'min:0', 'max:100'],
             'validacion_tasacion' => ['sometimes', Rule::enum(ValidacionTasacion::class)],

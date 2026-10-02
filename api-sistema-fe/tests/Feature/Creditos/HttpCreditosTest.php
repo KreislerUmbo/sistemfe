@@ -41,7 +41,7 @@ class HttpCreditosTest extends CreditosTestCase
             ['POST', 'api/creditos', 'creditos.crear'],
             ['POST', 'api/creditos/migrar', 'creditos.migrar'],
             ['GET', 'api/creditos/cobranza-del-dia', 'creditos.cobrar'],
-            ['GET', 'api/creditos/cobradores', 'creditos.cartera.asignar'],
+            ['GET', 'api/creditos/cartera/usuarios', 'creditos.cartera.asignar'],
             ['PUT', 'api/creditos/configuracion', 'creditos.configurar'],
             ['POST', 'api/creditos/feriados', 'creditos.configurar'],
             ['GET', 'api/creditos/{credito}', 'creditos.ver'],
@@ -72,11 +72,12 @@ class HttpCreditosTest extends CreditosTestCase
             ['GET', 'api/creditos/plantillas/contrato', 'creditos.configurar'],
             ['PUT', 'api/creditos/plantillas/contrato', 'creditos.configurar'],
             ['POST', 'api/creditos/plantillas/contrato/vista-previa', 'creditos.configurar'],
-            ['GET', 'api/clientes/{cliente}/resumen-credito', 'creditos.crear'],
+            ['GET', 'api/clientes/{cliente}/resumen-credito', 'creditos.crear|creditos.ver'],
             ['GET', 'api/clientes/{cliente}/ficha-credito', 'creditos.ver'],
             ['PUT', 'api/clientes/{cliente}/ficha-credito', 'creditos.crear'],
             ['POST', 'api/clientes/{cliente}/ficha-credito/archivos', 'creditos.crear'],
-            ['PUT', 'api/clientes/{cliente}/cobrador', 'creditos.cartera.asignar'],
+            ['PUT', 'api/clientes/{cliente}/cartera', 'creditos.cartera.asignar'],
+            ['PUT', 'api/clientes/{cliente}/limites-credito', 'creditos.configurar'],
         ];
 
         return array_combine(array_map(static fn (array $f): string => "{$f[0]} {$f[1]}", $filas), $filas);
@@ -100,7 +101,7 @@ class HttpCreditosTest extends CreditosTestCase
     public function test_ninguna_ruta_del_modulo_queda_sin_permiso(): void
     {
         $sinPermiso = collect(Route::getRoutes()->getRoutes())
-            ->filter(fn ($r) => str_starts_with($r->uri(), 'api/creditos') || preg_match('#^api/clientes/\{cliente\}/(ficha-credito|resumen-credito|cobrador)#', $r->uri()))
+            ->filter(fn ($r) => str_starts_with($r->uri(), 'api/creditos') || preg_match('#^api/clientes/\{cliente\}/(ficha-credito|resumen-credito|cartera|limites-credito)#', $r->uri()))
             ->reject(fn ($r) => collect($r->gatherMiddleware())->contains(fn ($m) => str_starts_with($m, 'permission:creditos.')))
             // PDFs por URL firmada: sin token a propósito; los cubre el test de abajo.
             ->reject(fn ($r) => in_array('signed', $r->gatherMiddleware(), true))

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Creditos;
 
+use App\Enums\Creditos\FuncionCartera;
 use App\Enums\Creditos\ModoAsignacionCartera;
 use App\Models\Creditos\CarteraAsignacion;
 use App\Models\Creditos\CreditoClienteFicha;
@@ -42,7 +43,8 @@ class CobranzaDelDiaController extends ControllerCreditos
             ...array_map(static fn (CobroDelDia $c): int => $c->credito->cliente_id, $cobrados),
         ]);
         $cobradorDe = CarteraAsignacion::vigentes()->where('tipo', ModoAsignacionCartera::Cliente)
-            ->whereIn('referencia_id', $clientes)->pluck('cobrador_id', 'referencia_id');
+            ->where('funcion', FuncionCartera::Cobrador)
+            ->whereIn('referencia_id', $clientes)->pluck('usuario_id', 'referencia_id');
         $nombres = User::whereIn('id', $cobradorDe->unique())->pluck('name', 'id');
 
         $verTodos = $usuario->can(AlcanceCartera::PERMISO_VER_TODOS);

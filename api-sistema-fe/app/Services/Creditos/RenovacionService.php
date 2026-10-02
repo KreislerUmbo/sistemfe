@@ -93,6 +93,7 @@ class RenovacionService
             'version_cronograma_actual' => 1,
             'credito_renovado_id' => $anterior->id,
             'registrado_por' => $usuario->id,
+            'asesor_id' => $this->borradores->asesorPara($anterior->cliente_id, $usuario),
         ]);
         $this->escritor->guardar($nuevo, $cronograma, 1);
         foreach ($autorizar as $infraccion) {

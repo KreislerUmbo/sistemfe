@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\Creditos;
 
 use App\Enums\Creditos\CreditoEstado;
+use App\Enums\Creditos\RequisitoFicha;
 use App\Models\Client\Client;
 use App\Models\Creditos\Credito;
 use App\Models\Creditos\CreditoAutorizacion;
@@ -35,6 +36,7 @@ class LimitesService
     public function __construct(
         private readonly EvaluadorLimites $evaluador,
         private readonly Reloj $reloj,
+        private readonly ClienteCreditoService $clientes,
     ) {
     }
 
@@ -54,6 +56,7 @@ class LimitesService
                 [],   // garantes: módulo creditos_garantes (fase 7)
                 $renovarId,
                 $esMigracion,
+                array_map(static fn (RequisitoFicha $r): string => $r->value, $this->clientes->fichaFaltante($clienteId)),
             ),
             $this->politica($ajuste),
         );
@@ -113,6 +116,10 @@ class LimitesService
             'cuotas_pagadas' => (clone $pagadas)->count(),
             'cuotas_pagadas_a_tiempo' => (clone $pagadas)->where('dias_atraso_al_pagar', 0)->count(),
             'bloqueado' => $this->estaBloqueado($ajuste, $creditos),
+            'ficha_faltante' => array_map(
+                static fn (RequisitoFicha $r): array => ['requisito' => $r->value, 'etiqueta' => $r->etiqueta()],
+                $this->clientes->fichaFaltante($cliente->id),
+            ),
         ];
     }
 

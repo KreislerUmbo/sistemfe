@@ -4,16 +4,19 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Creditos;
 
+use App\Enums\Creditos\RequisitoFicha;
 use App\Enums\Creditos\TipoArchivoCliente;
 use App\Http\Requests\Creditos\ArchivoClienteRequest;
-use App\Http\Requests\Creditos\AsignarCobradorRequest;
+use App\Http\Requests\Creditos\AsignarCarteraRequest;
 use App\Http\Requests\Creditos\FichaCreditoRequest;
+use App\Http\Requests\Creditos\LimitesClienteRequest;
 use App\Models\Client\Client;
-use App\Models\Creditos\CarteraAsignacion;
 use App\Models\Creditos\CreditoClienteArchivo;
 use App\Models\Creditos\CreditoClienteFicha;
+use App\Models\Creditos\CreditoClienteLimite;
 use App\Models\User;
 use App\Services\Creditos\AlcanceCartera;
+use App\Services\Creditos\AuditoriaCredito;
 use App\Services\Creditos\ClienteCreditoService;
 use App\Services\Creditos\LimitesService;
 use Illuminate\Http\JsonResponse;
@@ -21,76 +24,111 @@ use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
-/** Resumen de crédito, ficha de cobro, archivos y cobrador asignado del cliente. */
+/** Resumen de crédito, ficha de cobro, archivos, cartera y límites del cliente (04c). */
 class ClienteCreditoController extends ControllerCreditos
 {
     public function __construct(
         private readonly ClienteCreditoService $clientes,
         private readonly LimitesService $limites,
+        private readonly AlcanceCartera $alcance,
+        private readonly AuditoriaCredito $auditoria,
     ) {
     }
 
     public function resumen(int $cliente): JsonResponse
     {
-        return response()->json($this->limites->resumenCliente(Client::findOrFail($cliente)));
+        return response()->json($this->limites->resumenCliente($this->clienteVisible($cliente)));
     }
 
     public function ficha(int $cliente): JsonResponse
     {
         $modelo = $this->clienteVisible($cliente);
+        $limite = CreditoClienteLimite::where('cliente_id', $modelo->id)->first();
 
         return response()->json([
             'ficha' => CreditoClienteFicha::where('cliente_id', $modelo->id)->first(),
             'archivos' => CreditoClienteArchivo::where('cliente_id', $modelo->id)->orderByDesc('id')
                 ->get(['id', 'tipo', 'created_at']),
-            'cobrador_id' => CarteraAsignacion::vigentes()->where('tipo', 'cliente')->where('referencia_id', $modelo->id)->value('cobrador_id'),
+            'cartera' => $this->clientes->cartera($modelo),
+            'historial_cartera' => $this->clientes->historialCartera($modelo),
+            'limites' => $limite?->only(['max_creditos_activos', 'deuda_maxima', 'bloqueado', 'motivo_bloqueo']),
+            'ficha_faltante' => $this->faltante($modelo->id),
         ]);
     }
 
     public function guardarFicha(FichaCreditoRequest $request, int $cliente): JsonResponse
     {
-        return response()->json(['ficha' => $this->clientes->guardarFicha(Client::findOrFail($cliente), $request->validated(), $this->usuario())]);
+        $modelo = $this->clienteVisible($cliente);
+
+        return response()->json([
+            'ficha' => $this->clientes->guardarFicha($modelo, $request->validated(), $this->usuario()),
+            'ficha_faltante' => $this->faltante($modelo->id),
+        ]);
     }
 
     public function subirArchivo(ArchivoClienteRequest $request, int $cliente): JsonResponse
     {
+        $modelo = $this->clienteVisible($cliente);
         $archivo = $this->clientes->subirArchivo(
-            Client::findOrFail($cliente), TipoArchivoCliente::from($request->input('tipo')), $request->file('archivo'), $this->usuario(),
+            $modelo, TipoArchivoCliente::from($request->input('tipo')), $request->file('archivo'), $this->usuario(),
         );
 
-        return response()->json(['archivo' => $archivo->only(['id', 'tipo', 'created_at'])], 201);
+        return response()->json([
+            'archivo' => $archivo->only(['id', 'tipo', 'created_at']),
+            'ficha_faltante' => $this->faltante($modelo->id),
+        ], 201);
     }
 
+    /** El DNI y la foto son datos personales (Ley 29733): cada vista queda auditada. */
     public function verArchivo(int $cliente, int $archivo): StreamedResponse
     {
-        $this->clienteVisible($cliente);
-        $modelo = CreditoClienteArchivo::where('cliente_id', $cliente)->findOrFail($archivo);
+        $modelo = $this->clienteVisible($cliente);
+        $registro = CreditoClienteArchivo::where('cliente_id', $modelo->id)->findOrFail($archivo);
+        $this->auditoria->registrar('cliente.ver_documento', $modelo, null, null, ['archivo_id' => $registro->id, 'tipo' => $registro->tipo->value], null, $this->usuario());
 
-        return Storage::disk(ClienteCreditoService::DISCO)->response($modelo->ruta_archivo);
+        return Storage::disk(ClienteCreditoService::DISCO)->response($registro->ruta_archivo);
     }
 
-    /** Selector de "cobrador asignado" en la ficha de cobro. */
-    public function cobradores(): JsonResponse
+    /** Selectores de asesor y cobrador. */
+    public function usuariosCartera(): JsonResponse
     {
-        return response()->json(['data' => $this->clientes->cobradoresDisponibles()]);
+        return response()->json($this->clientes->usuariosCartera());
     }
 
-    public function asignarCobrador(AsignarCobradorRequest $request, int $cliente): JsonResponse
+    public function asignarCartera(AsignarCarteraRequest $request, int $cliente): JsonResponse
     {
-        $cobrador = $request->filled('cobrador_id') ? User::findOrFail((int) $request->input('cobrador_id')) : null;
-        $asignacion = $this->clientes->asignarCobrador(Client::findOrFail($cliente), $cobrador, $this->usuario());
+        $usuario = static fn (?int $id): ?User => $id === null ? null : User::findOrFail($id);
+        $cartera = $this->clientes->asignarCartera(
+            Client::findOrFail($cliente),
+            $usuario($request->filled('asesor_id') ? (int) $request->input('asesor_id') : null),
+            $usuario($request->filled('cobrador_id') ? (int) $request->input('cobrador_id') : null),
+            $this->usuario(),
+        );
 
-        return response()->json(['cobrador_id' => $asignacion?->cobrador_id]);
+        return response()->json($cartera);
     }
 
-    /** La ficha es dato personal (Ley 29733): el cobrador solo ve la de clientes de su cartera. */
+    public function guardarLimites(LimitesClienteRequest $request, int $cliente): JsonResponse
+    {
+        $limite = $this->clientes->guardarLimites(Client::findOrFail($cliente), $request->datos(), $this->usuario());
+
+        return response()->json(['limites' => $limite->only(['max_creditos_activos', 'deuda_maxima', 'bloqueado', 'motivo_bloqueo'])]);
+    }
+
+    /** @return list<array{requisito: string, etiqueta: string}> */
+    private function faltante(int $clienteId): array
+    {
+        return array_map(
+            static fn (RequisitoFicha $r): array => ['requisito' => $r->value, 'etiqueta' => $r->etiqueta()],
+            $this->clientes->fichaFaltante($clienteId),
+        );
+    }
+
+    /** La ficha es dato personal (Ley 29733): fuera de su cartera, el cliente "no existe". */
     private function clienteVisible(int $cliente): Client
     {
         $modelo = Client::findOrFail($cliente);
-        $usuario = $this->usuario();
-        $asignado = CarteraAsignacion::vigentes()->where('tipo', 'cliente')->where('referencia_id', $modelo->id)
-            ->where('cobrador_id', $usuario->id)->exists();
-        if (! $usuario->can(AlcanceCartera::PERMISO_VER_TODOS) && ! $asignado) {
+        if (! $this->alcance->puedeVerCliente($modelo->id, $this->usuario())) {
             throw new HttpException(404, 'Cliente no encontrado.');
         }
 

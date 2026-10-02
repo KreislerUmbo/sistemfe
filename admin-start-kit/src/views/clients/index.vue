@@ -384,6 +384,7 @@ import type { AxiosResponse } from 'axios';
 import { ref, onMounted, watch, computed, nextTick } from 'vue';
 import { formatFechaHora } from '@/helpers/fecha';
 import Swal from "sweetalert2/dist/sweetalert2.js";
+import { guardarCliente } from '@/helpers/clientes/guardarCliente';
 import type { Client, ClientResponse, Clients, UbigeoClient } from '@/types/clients';
 import REGIONES from './json/regiones.json';
 import PROVINCIAS from './json/provincias.json';
@@ -760,21 +761,15 @@ const store = async () => {
     }
 
     try {
-        const res: AxiosResponse<ClientResponse> = !client_selected.value
-            ? await httpClient.post("clients", data)
-            : await httpClient.put("clients/" + client_selected.value?.id, data);
-
-        if (res.data.code == 405) {
-            (Swal as TVueSwalInstance).fire("¡Atención!", res.data.message, "warning");
-        } else {
+        // 04c: documento repetido (aviso), nombre repetido sin documento (confirmar) y
+        // documento de un cliente eliminado (restaurar) los resuelve guardarCliente().
+        const resultado = await guardarCliente<Client>(data, client_selected.value?.id ?? null);
+        if (resultado.ok) {
             ModalRegisterClient.value = false;
-            if (!client_selected.value) {
-                if (res.data.client) clients.value.unshift(res.data.client);
-            } else {
-                const idx = clients.value.findIndex(c => c.id == client_selected.value?.id);
-                if (idx !== -1 && res.data.client) clients.value[idx] = res.data.client;
-            }
-            (Swal as TVueSwalInstance).fire("¡Éxito!", res.data.message, "success");
+            const idx = clients.value.findIndex(c => c.id == resultado.client.id);
+            if (idx !== -1) clients.value[idx] = resultado.client;
+            else clients.value.unshift(resultado.client);
+            (Swal as TVueSwalInstance).fire("¡Éxito!", resultado.restaurado ? 'Cliente restaurado.' : 'Cliente guardado.', "success");
             reset();
         }
     } catch (error: any) {
@@ -797,7 +792,12 @@ const removeClient = (client: Client) => {
         cancelButtonText: "Cancelar",
     }).then(async (result: any) => {
         if (result.isConfirmed) {
-            await httpClient.delete("clients/" + client.id);
+            const res = await httpClient.delete("clients/" + client.id);
+            // 04c: un cliente con créditos no se elimina (code 405).
+            if (res.data?.code !== 200) {
+                (Swal as TVueSwalInstance).fire("No se eliminó", res.data?.message ?? 'No se pudo eliminar.', "warning");
+                return;
+            }
             const idx = clients.value.findIndex(c => c.id == client.id);
             if (idx !== -1) clients.value.splice(idx, 1);
             (Swal as TVueSwalInstance).fire("Eliminado", `"${client.full_name}" fue eliminado.`, "success");

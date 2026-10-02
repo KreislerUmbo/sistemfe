@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Creditos;
 
+use App\Enums\Creditos\FuncionCartera;
 use App\Enums\Creditos\CreditoEstado;
 use App\Models\Client\Client;
 use App\Models\Creditos\Credito;
@@ -138,7 +139,8 @@ class ConsultaCreditoService
     {
         $hoy = $this->reloj->hoy()->aTexto();
         $creditos = $this->conDeudaVencida(
-            $this->alcance->aplicar(Credito::query(), $usuario)->where('estado', CreditoEstado::Activo),
+            // Su ruta de cobro: solo clientes de los que es cobrador (04c), no los que solo asesora.
+            $this->alcance->aplicar(Credito::query(), $usuario, FuncionCartera::Cobrador)->where('estado', CreditoEstado::Activo),
             $hoy,
             '<=',
         )->get();
@@ -160,7 +162,7 @@ class ConsultaCreditoService
         $pagos = CreditoPago::validos()
             ->whereIn('origen', [OrigenPago::Cobro, OrigenPago::Liquidacion])
             ->whereDate('fecha_pago', $this->reloj->hoy()->aTexto())
-            ->whereHas('credito', fn (Builder $q) => $this->alcance->aplicar($q, $usuario))
+            ->whereHas('credito', fn (Builder $q) => $this->alcance->aplicar($q, $usuario, FuncionCartera::Cobrador))
             ->with(['credito.cliente', 'paymentMethod'])
             ->orderBy('fecha_pago')
             ->get();

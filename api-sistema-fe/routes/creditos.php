@@ -32,7 +32,7 @@ Route::group([
     Route::post('creditos', [CreditoController::class, 'store'])->middleware('permission:creditos.crear');
     Route::post('creditos/migrar', [CreditoMigracionController::class, 'store'])->middleware('permission:creditos.migrar');
     Route::get('creditos/cobranza-del-dia', [CobranzaDelDiaController::class, 'index'])->middleware('permission:creditos.cobrar');
-    Route::get('creditos/cobradores', [ClienteCreditoController::class, 'cobradores'])->middleware('permission:creditos.cartera.asignar');
+    Route::get('creditos/cartera/usuarios', [ClienteCreditoController::class, 'usuariosCartera'])->middleware('permission:creditos.cartera.asignar');
 
     // Lectura también con crear/migrar: esos formularios muestran estos defaults.
     Route::get('creditos/configuracion', [CreditoConfiguracionController::class, 'show'])->middleware('permission:creditos.configurar|creditos.crear|creditos.migrar');
@@ -83,12 +83,13 @@ Route::group([
     Route::post('creditos/plantillas/contrato/vista-previa', [CreditoPlantillaController::class, 'vistaPrevia'])->middleware('permission:creditos.configurar');
 
     Route::prefix('clientes/{cliente}')->whereNumber('cliente')->group(function () {
-        Route::get('resumen-credito', [ClienteCreditoController::class, 'resumen'])->middleware('permission:creditos.crear');
+        Route::get('resumen-credito', [ClienteCreditoController::class, 'resumen'])->middleware('permission:creditos.crear|creditos.ver');
         Route::get('ficha-credito', [ClienteCreditoController::class, 'ficha'])->middleware('permission:creditos.ver');
         Route::put('ficha-credito', [ClienteCreditoController::class, 'guardarFicha'])->middleware('permission:creditos.crear');
         Route::post('ficha-credito/archivos', [ClienteCreditoController::class, 'subirArchivo'])->middleware('permission:creditos.crear');
         Route::get('ficha-credito/archivos/{archivo}', [ClienteCreditoController::class, 'verArchivo'])->whereNumber('archivo')->middleware('permission:creditos.ver');
-        Route::put('cobrador', [ClienteCreditoController::class, 'asignarCobrador'])->middleware('permission:creditos.cartera.asignar');
+        Route::put('cartera', [ClienteCreditoController::class, 'asignarCartera'])->middleware('permission:creditos.cartera.asignar');
+        Route::put('limites-credito', [ClienteCreditoController::class, 'guardarLimites'])->middleware('permission:creditos.configurar');
     });
 });
 

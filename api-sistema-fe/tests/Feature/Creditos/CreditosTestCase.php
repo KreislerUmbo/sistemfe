@@ -67,7 +67,8 @@ abstract class CreditosTestCase extends TestCase
 
         $this->asegurarRolPorDefecto();
         // Configuración neutra para los ejemplos del plan: todos los días laborables.
-        DB::table('credito_configuracion')->update(['dias_no_laborables' => '[]']);
+        // Sin ficha exigida: cada test de 04c fija la suya.
+        DB::table('credito_configuracion')->update(['dias_no_laborables' => '[]', 'requisitos_ficha' => '[]']);
 
         $this->efectivo = PaymentMethod::firstOrCreate(
             ['code' => 'EFECTIVO'],
