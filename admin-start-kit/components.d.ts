@@ -115,6 +115,7 @@ declare module 'vue' {
     SeccionSistemasEmpresariales: typeof import('./src/components/portal/SeccionSistemasEmpresariales.vue')['default']
     TarjetaResumenCliente: typeof import('./src/components/Creditos/TarjetaResumenCliente.vue')['default']
     TourIncluidoForm: typeof import('./src/components/AgenciaViajes/TourIncluidoForm.vue')['default']
+    TraspasoCartera: typeof import('./src/components/Clientes/TraspasoCartera.vue')['default']
     UIComponentCard: typeof import('./src/components/UIComponentCard.vue')['default']
   }
   export interface ComponentCustomProperties {

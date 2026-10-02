@@ -38,6 +38,15 @@ dinero, concurrencia, idempotencia, documentos, alta de tenant desde cero); 7 ha
 6. **Castigo automático** sigue con los demás créditos/tenants si uno falla (queda en el log; el comando
    termina con FAILURE si falló un tenant).
 7. **Alta de tenant**: "Caja Principal" para todos los giros; sin roles retail en el giro créditos.
+8. **Traspaso de cartera** (pedido del usuario en la misma revisión: "¿qué pasa si el asesor se va?"):
+   Clientes → "Traspasar cartera" (requiere `creditos.cartera.asignar` + `creditos.ver_todos`) mueve todos los
+   clientes de un usuario a otro, con historial y auditoría (`cartera.traspasar`); acepta usuarios inactivos o ya
+   eliminados como origen. Los créditos conservan su `asesor_id`. No se elimina ni desactiva a un usuario con
+   cartera (Usuarios responde 405 con el aviso); los selectores de cartera solo ofrecen usuarios activos.
+9. **Bug fuera de Créditos (commit propio `2bb8ddf`)**: `UserController::update()` tenía la condición de la
+   contraseña invertida desde la primera versión: editar un usuario sin escribir contraseña la reemplazaba por
+   `bcrypt('')` y lo dejaba sin acceso, en todos los tenants. Evidencia local: `admin@gmail.com` de agencia-demo con
+   contraseña vacía. **En producción** conviene buscar usuarios afectados (solo lectura) antes de avisarles.
 Verificado: tenant de créditos creado desde cero (y borrado), saldo a favor en navegador sin confirmar nada
 (datos de prueba borrados). Backend 1187/1187, frontend 113/113.
 

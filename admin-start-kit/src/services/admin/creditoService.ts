@@ -34,7 +34,7 @@ import type {
   TipoArchivoCliente,
   PreviewCredito,
   ReglaLimite,
-  ResumenClienteCredito, CarteraCliente, LimitesCliente, SaldoAFavor, UsuarioCartera } from '@/types/creditos'
+  ResumenClienteCredito, CarteraCliente, LimitesCliente, SaldoAFavor, TitularCartera, UsuarioCartera } from '@/types/creditos'
 
 type ConClave<T> = T & { clave_idempotencia: string }
 
@@ -244,6 +244,17 @@ export const creditoService = {
   async usuariosCartera() {
     const { data } = await httpClient.get('/creditos/cartera/usuarios')
     return data as { asesores: UsuarioCartera[]; cobradores: UsuarioCartera[] }
+  },
+
+  /** 04c.1: usuarios con clientes en su cartera (incluidos inactivos y eliminados). */
+  async titularesCartera() {
+    const { data } = await httpClient.get('/creditos/cartera/titulares')
+    return (data.data ?? []) as TitularCartera[]
+  },
+
+  async traspasarCartera(datos: { desde_usuario_id: number; hacia_usuario_id: number; funciones: 'ambas' | 'asesor' | 'cobrador' }, clave: string) {
+    const { data } = await httpClient.post('/creditos/cartera/traspasar', { ...datos, clave_idempotencia: clave })
+    return data as { clientes: number; titulares: TitularCartera[] }
   },
 
   async asignarCartera(clienteId: number, asesorId: number | null, cobradorId: number | null = null) {

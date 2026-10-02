@@ -11,6 +11,7 @@ use App\Http\Requests\Creditos\AsignarCarteraRequest;
 use App\Http\Requests\Creditos\DevolverSaldoRequest;
 use App\Http\Requests\Creditos\FichaCreditoRequest;
 use App\Http\Requests\Creditos\LimitesClienteRequest;
+use App\Http\Requests\Creditos\TraspasarCarteraRequest;
 use App\Models\Client\Client;
 use App\Models\Creditos\CreditoClienteArchivo;
 use App\Models\Creditos\CreditoClienteFicha;
@@ -118,6 +119,34 @@ class ClienteCreditoController extends ControllerCreditos
         $this->auditoria->registrar('cliente.ver_documento', $modelo, null, null, ['archivo_id' => $registro->id, 'tipo' => $registro->tipo->value], null, $this->usuario());
 
         return Storage::disk(ClienteCreditoService::DISCO)->response($registro->ruta_archivo);
+    }
+
+    /** Usuarios con clientes en su cartera, incluidos inactivos y eliminados (04c.1). */
+    public function titularesCartera(): JsonResponse
+    {
+        return response()->json(['data' => $this->clientes->titularesCartera()]);
+    }
+
+    /**
+     * Traspasa toda la cartera de un usuario a otro (04c.1). Mueve clientes que no son del que
+     * opera: exige ver toda la cartera además de poder asignar.
+     */
+    public function traspasarCartera(TraspasarCarteraRequest $request): JsonResponse
+    {
+        if (! $this->usuario()->can(AlcanceCartera::PERMISO_VER_TODOS)) {
+            throw new HttpException(403, 'Traspasar una cartera requiere ver todos los créditos.');
+        }
+
+        return $this->idempotente($request, 'cartera.traspasar', function () use ($request): array {
+            $total = $this->clientes->traspasarCartera(
+                (int) $request->input('desde_usuario_id'),
+                User::findOrFail((int) $request->input('hacia_usuario_id')),
+                (string) ($request->input('funciones') ?? 'ambas'),
+                $this->usuario(),
+            );
+
+            return [['clientes' => $total, 'titulares' => $this->clientes->titularesCartera()], null];
+        });
     }
 
     /** Selectores de asesor y cobrador. */

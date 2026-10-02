@@ -33,6 +33,9 @@ Route::group([
     Route::post('creditos/migrar', [CreditoMigracionController::class, 'store'])->middleware('permission:creditos.migrar');
     Route::get('creditos/cobranza-del-dia', [CobranzaDelDiaController::class, 'index'])->middleware('permission:creditos.cobrar');
     Route::get('creditos/cartera/usuarios', [ClienteCreditoController::class, 'usuariosCartera'])->middleware('permission:creditos.cartera.asignar');
+    // 04c.1: traspasar toda la cartera de un usuario (se va, cambia de zona) a otro.
+    Route::get('creditos/cartera/titulares', [ClienteCreditoController::class, 'titularesCartera'])->middleware('permission:creditos.cartera.asignar');
+    Route::post('creditos/cartera/traspasar', [ClienteCreditoController::class, 'traspasarCartera'])->middleware('permission:creditos.cartera.asignar');
 
     // Lectura también con crear/migrar: esos formularios muestran estos defaults.
     Route::get('creditos/configuracion', [CreditoConfiguracionController::class, 'show'])->middleware('permission:creditos.configurar|creditos.crear|creditos.migrar');

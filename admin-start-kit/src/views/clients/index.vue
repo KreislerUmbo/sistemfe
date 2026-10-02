@@ -4,6 +4,10 @@
       <button v-if="puede('register_client')" type="button" class="btn btn-primary" @click="router.push({ name: 'clients.nuevo' })">
         <i class="fas fa-user-plus me-2"></i>Nuevo cliente
       </button>
+      <button v-if="contexto.creditos && puede('creditos.cartera.asignar') && puede('creditos.ver_todos')" type="button"
+        class="btn btn-outline-primary" @click="traspaso = true">
+        <i class="fas fa-exchange-alt me-2"></i>Traspasar cartera
+      </button>
       <!-- Venta rápida a consumidor sin identificar (boleta menor a S/ 700) -->
       <button v-if="!contexto.creditos" type="button" class="btn btn-outline-secondary" title="Consumidor final sin datos: boleta menor a S/ 700"
         @click="setClienteSinDatos">
@@ -124,6 +128,7 @@
         <b-pagination v-model="currentPage" :total-rows="totalPages" :per-page="perPageRows" size="sm" prev-text="Anterior" next-text="Siguiente" class="mb-0" />
       </div>
     </div>
+    <TraspasoCartera v-if="contexto.creditos" v-model="traspaso" @hecho="list" />
   </DefaultLayout>
 </template>
 
@@ -135,6 +140,7 @@ import { useRouter } from 'vue-router'
 import Swal from 'sweetalert2'
 import DefaultLayout from '@/layouts/DefaultLayout.vue'
 import EncabezadoCredito from '@/components/Creditos/EncabezadoCredito.vue'
+import TraspasoCartera from '@/components/Clientes/TraspasoCartera.vue'
 import httpClient from '@/helpers/http-client'
 import { formatFechaHora } from '@/helpers/fecha'
 import { usePermisosCredito } from '@/composables/creditos/usePermisosCredito'
@@ -164,6 +170,7 @@ const asesores = ref<UsuarioCartera[]>([])
 const filtroAsesor = ref<number | null>(null)
 const filtroSituacion = ref<SituacionCliente | null>(null)
 const filtroFicha = ref(false)
+const traspaso = ref(false)
 const columnas = computed(() => (contexto.value.creditos ? 9 : 8))
 
 const abrir = (client: Client) => router.push({ name: 'clients.ficha', params: { id: client.id } })

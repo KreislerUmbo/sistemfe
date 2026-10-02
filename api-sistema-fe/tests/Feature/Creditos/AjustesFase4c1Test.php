@@ -183,6 +183,90 @@ final class AjustesFase4c1Test extends CreditosTestCase
         $this->assertSame('activo', $mal->fresh()->estado->value);
     }
 
+    // ---- Traspaso de cartera (asesor que se va) ----
+
+    public function test_traspasar_toda_la_cartera_de_un_asesor_a_otro(): void
+    {
+        $sale = $this->usuario(['creditos.ver', 'creditos.crear', 'creditos.cobrar']);
+        $entra = $this->usuario(['creditos.ver', 'creditos.crear', 'creditos.cobrar']);
+        $c1 = $this->cliente();
+        $c2 = $this->cliente();
+        $servicio = app(ClienteCreditoService::class);
+        $servicio->asignarCartera($c1, $sale, null, $this->admin);
+        $servicio->asignarCartera($c2, $sale, null, $this->admin);
+        $credito = $this->activo($this->admin, $c1);
+        $this->hoy('2026-01-10');
+
+        $this->assertSame(2, $servicio->traspasarCartera($sale->id, $entra, 'ambas', $this->admin));
+
+        $alcance = app(\App\Services\Creditos\AlcanceCartera::class);
+        $this->assertFalse($alcance->puedeVerCliente($c1->id, $sale));
+        $this->assertTrue($alcance->puedeVerCliente($c2->id, $entra));
+        $this->assertSame(['asesor_id' => $entra->id, 'cobrador_id' => $entra->id, 'asesor_cobra' => true], $servicio->cartera($c1));
+        $this->assertSame(0, $servicio->clientesEnCartera($sale->id));
+        // Quien colocó el crédito no cambia (comisiones y reportes).
+        $this->assertSame($credito->asesor_id, $credito->fresh()->asesor_id);
+        $this->assertSame(1, DB::table('credito_auditoria')->where('accion', 'cartera.traspasar')->count());
+    }
+
+    public function test_se_traspasa_la_cartera_de_un_usuario_ya_eliminado(): void
+    {
+        $sale = $this->usuario(['creditos.ver', 'creditos.crear', 'creditos.cobrar']);
+        $entra = $this->usuario(['creditos.ver', 'creditos.crear', 'creditos.cobrar']);
+        $cliente = $this->cliente();
+        app(ClienteCreditoService::class)->asignarCartera($cliente, $sale, null, $this->admin);
+        $sale->delete();   // eliminado antes de existir la protección (dato heredado)
+
+        $titular = collect(app(ClienteCreditoService::class)->titularesCartera())->firstWhere('id', $sale->id);
+        $this->assertTrue($titular['eliminado']);
+        $this->assertSame(1, $titular['asesor']);
+
+        $this->assertSame(1, app(ClienteCreditoService::class)->traspasarCartera($sale->id, $entra, 'ambas', $this->admin));
+    }
+
+    public function test_el_traspaso_valida_a_quien_recibe(): void
+    {
+        $sale = $this->usuario(['creditos.ver', 'creditos.crear', 'creditos.cobrar']);
+        app(ClienteCreditoService::class)->asignarCartera($this->cliente(), $sale, null, $this->admin);
+
+        foreach ([$sale, $this->usuario(['creditos.ver'])] as $hacia) {
+            try {
+                app(ClienteCreditoService::class)->traspasarCartera($sale->id, $hacia, 'ambas', $this->admin);
+                $this->fail('Debía rechazar el traspaso.');
+            } catch (HttpException $e) {
+                $this->assertSame(422, $e->getStatusCode());
+            }
+        }
+    }
+
+    public function test_no_se_elimina_ni_desactiva_a_un_usuario_con_cartera(): void
+    {
+        $asesor = $this->usuario(['creditos.ver', 'creditos.crear', 'creditos.cobrar']);
+        app(ClienteCreditoService::class)->asignarCartera($this->cliente(), $asesor, null, $this->admin);
+        Auth::guard('api')->setUser($this->admin);
+        $usuarios = app(\App\Http\Controllers\User\UserController::class);
+
+        $this->assertSame(405, $usuarios->destroy((string) $asesor->id)->getData(true)['code']);
+        $this->assertNull($asesor->fresh()->deleted_at);
+
+        $desactivar = new \Illuminate\Http\Request([
+            'name' => $asesor->name, 'email' => $asesor->email, 'role_id' => (string) $asesor->role_id, 'state' => '2', 'password' => '',
+        ]);
+        $this->assertSame(405, $usuarios->update($desactivar, (string) $asesor->id)->getData(true)['code']);
+        $this->assertNotSame(2, (int) $asesor->fresh()->state);
+    }
+
+    public function test_los_selectores_de_cartera_no_ofrecen_usuarios_inactivos(): void
+    {
+        $inactivo = $this->usuario(['creditos.ver', 'creditos.crear', 'creditos.cobrar']);
+        $inactivo->update(['state' => 2]);
+
+        $lista = app(ClienteCreditoService::class)->usuariosCartera();
+
+        $this->assertNotContains($inactivo->id, array_column($lista['asesores'], 'id'));
+        $this->assertNotContains($inactivo->id, array_column($lista['cobradores'], 'id'));
+    }
+
     // ---- Ayudas ----
 
     /** @return array<string, mixed> */

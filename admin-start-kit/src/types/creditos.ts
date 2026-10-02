@@ -490,6 +490,9 @@ export interface AsignacionCartera {
 
 export interface UsuarioCartera { id: number; nombre: string }
 
+/** 04c.1: usuario con clientes en su cartera (puede estar inactivo o eliminado). */
+export interface TitularCartera { id: number; nombre: string; activo: boolean; eliminado: boolean; asesor: number; cobrador: number }
+
 export interface LimitesCliente {
   max_creditos_activos: number | null
   deuda_maxima: string | null

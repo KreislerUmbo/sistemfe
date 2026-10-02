@@ -35,6 +35,8 @@ class ClienteCreditoService
     private const PERMISO_COBRAR = 'creditos.cobrar';
     private const PERMISO_COLOCAR = 'creditos.crear';
     private const PERMISO_ASIGNAR = 'creditos.cartera.asignar';
+    /** users.state: 1 = activo, 2 = inactivo (pantalla de Usuarios). */
+    private const USUARIO_INACTIVO = 2;
 
     public function __construct(
         private readonly AuditoriaCredito $auditoria,
@@ -104,7 +106,9 @@ class ClienteCreditoService
      */
     public function usuariosCartera(): array
     {
-        $usuarios = User::orderBy('name')->get(['id', 'name']);
+        // Solo usuarios activos: un inactivo o eliminado no puede recibir cartera (04c.1).
+        $usuarios = User::where(static fn ($q) => $q->whereNull('state')->orWhere('state', '!=', self::USUARIO_INACTIVO))
+            ->orderBy('name')->get(['id', 'name']);
         $lista = static fn (callable $filtro): array => $usuarios->filter($filtro)
             ->map(static fn (User $u): array => ['id' => $u->id, 'nombre' => $u->name])->values()->all();
 
@@ -187,6 +191,96 @@ class ClienteCreditoService
             return;
         }
         $this->asignarCartera($cliente, $asesor, null, $registrador);
+    }
+
+    /**
+     * Usuarios que hoy tienen clientes en su cartera, incluidos inactivos y eliminados (de esos
+     * justamente hay que traspasar). Para el selector "Traspasar desde" (04c.1).
+     *
+     * @return list<array{id: int, nombre: string, activo: bool, eliminado: bool, asesor: int, cobrador: int}>
+     */
+    public function titularesCartera(): array
+    {
+        $conteos = CarteraAsignacion::vigentes()->where('tipo', ModoAsignacionCartera::Cliente)
+            ->selectRaw('usuario_id, funcion, count(*) as total')->groupBy('usuario_id', 'funcion')->get();
+        $usuarios = User::withTrashed()->whereIn('id', $conteos->pluck('usuario_id')->unique())->get(['id', 'name', 'state', 'deleted_at'])->keyBy('id');
+
+        return $conteos->groupBy('usuario_id')->map(function ($filas, $id) use ($usuarios): array {
+            $u = $usuarios[$id] ?? null;
+            $total = static fn (FuncionCartera $f): int => (int) ($filas->first(static fn ($x) => ($x->funcion instanceof FuncionCartera ? $x->funcion : FuncionCartera::from($x->funcion)) === $f)?->total ?? 0);
+
+            return [
+                'id' => (int) $id,
+                'nombre' => $u?->name ?? "Usuario #{$id}",
+                'activo' => $u !== null && ! $u->trashed() && (int) $u->state !== self::USUARIO_INACTIVO,
+                'eliminado' => $u === null || $u->trashed(),
+                'asesor' => $total(FuncionCartera::Asesor),
+                'cobrador' => $total(FuncionCartera::Cobrador),
+            ];
+        })->sortBy('nombre')->values()->all();
+    }
+
+    /** Clientes que el usuario tiene hoy en su cartera (cualquier función). */
+    public function clientesEnCartera(int $usuarioId): int
+    {
+        return CarteraAsignacion::vigentes()->where('tipo', ModoAsignacionCartera::Cliente)
+            ->where('usuario_id', $usuarioId)->distinct()->count('referencia_id');
+    }
+
+    /**
+     * Traspasa la cartera de un usuario (que se va, cambia de zona…) a otro: cierra cada
+     * asignación vigente y abre la nueva, con historial y auditoría (04c.1). Los créditos
+     * conservan su asesor_id: quién colocó cada crédito no cambia.
+     *
+     * @param 'ambas'|'asesor'|'cobrador' $funciones con asesor_cobra siempre se traspasan ambas
+     * @return int clientes traspasados
+     */
+    public function traspasarCartera(int $desdeId, User $hacia, string $funciones, User $asignador): int
+    {
+        if ($desdeId === $hacia->id) {
+            throw new HttpException(422, 'Elige un usuario distinto al que tiene hoy la cartera.');
+        }
+        if ((int) $hacia->state === self::USUARIO_INACTIVO) {
+            throw new HttpException(422, 'El usuario que recibe la cartera está inactivo.');
+        }
+        $lista = CreditoConfiguracion::actual()->asesor_cobra || $funciones === 'ambas'
+            ? [FuncionCartera::Asesor, FuncionCartera::Cobrador]
+            : [FuncionCartera::from($funciones)];
+        if (in_array(FuncionCartera::Asesor, $lista, true) && ! $this->puedeSerAsesor($hacia)) {
+            throw new HttpException(422, 'El usuario que recibe no tiene permiso para registrar' . (CreditoConfiguracion::actual()->asesor_cobra ? ' y cobrar' : '') . ' créditos.');
+        }
+        if (in_array(FuncionCartera::Cobrador, $lista, true) && ! $hacia->can(self::PERMISO_COBRAR)) {
+            throw new HttpException(422, 'El usuario que recibe no tiene permiso para cobrar créditos.');
+        }
+
+        return DB::transaction(function () use ($desdeId, $hacia, $lista, $asignador): int {
+            $hoy = $this->reloj->hoy()->aTexto();
+            $vigentes = CarteraAsignacion::vigentes()->where('tipo', ModoAsignacionCartera::Cliente)
+                ->where('usuario_id', $desdeId)->whereIn('funcion', array_map(static fn (FuncionCartera $f): string => $f->value, $lista))
+                ->lockForUpdate()->get();
+            if ($vigentes->isEmpty()) {
+                throw new HttpException(422, 'Ese usuario no tiene clientes en su cartera.');
+            }
+
+            foreach ($vigentes as $a) {
+                $a->update(['vigente_hasta' => $hoy]);
+                CarteraAsignacion::create([
+                    'usuario_id' => $hacia->id,
+                    'funcion' => $a->funcion,
+                    'tipo' => ModoAsignacionCartera::Cliente,
+                    'referencia_id' => $a->referencia_id,
+                    'vigente_desde' => $hoy,
+                    'asignado_por' => $asignador->id,
+                ]);
+            }
+            $clientes = $vigentes->pluck('referencia_id')->unique()->values();
+            $this->auditoria->registrar('cartera.traspasar', $hacia, null,
+                ['usuario_id' => $desdeId, 'clientes' => $clientes->all()],
+                ['usuario_id' => $hacia->id, 'funciones' => array_map(static fn (FuncionCartera $f): string => $f->value, $lista)],
+                null, $asignador);
+
+            return $clientes->count();
+        });
     }
 
     /** @param array{max_creditos_activos: int|null, deuda_maxima: string|null, bloqueado: bool, motivo_bloqueo: string|null} $datos */

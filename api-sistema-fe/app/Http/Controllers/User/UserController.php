@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\User\UserCollection;
 use App\Http\Resources\User\UserResource;
 use App\Models\User;
+use App\Services\Creditos\ClienteCreditoService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -112,6 +113,10 @@ class UserController extends Controller
         }
 
         $user = User::findOrFail($id);
+        // 04c.1: desactivar a quien tiene clientes en su cartera los dejaría sin asesor/cobrador.
+        if ((int) $request->input('state') === 2 && (int) $user->state !== 2 && ($aviso = $this->avisoCartera($user))) {
+            return response()->json(['code' => 405, 'message' => $aviso]);
+        }
         if ($request->hasFile("imagen")) {
             // Si ya existe una imagen de avatar, eliminarla del almacenamiento
             if ($user->avatar && Storage::disk('public')->exists($user->avatar)) {
@@ -200,6 +205,10 @@ class UserController extends Controller
     public function destroy(string $id)
     {
         $user = User::findOrFail($id);
+        // 04c.1: eliminar a quien tiene clientes en su cartera los dejaría huérfanos.
+        if ($aviso = $this->avisoCartera($user)) {
+            return response()->json(['code' => 405, 'message' => $aviso]);
+        }
         if ($user->avatar && Storage::disk('public')->exists($user->avatar)) {
             Storage::disk('public')->delete($user->avatar);
         }
@@ -208,5 +217,14 @@ class UserController extends Controller
             "code" => 200,
             "message" => "Usuario eliminado con exito"
         ]);
+    }
+
+    /** Créditos (04c.1): mensaje si el usuario tiene clientes en su cartera; null si no tiene. */
+    private function avisoCartera(User $user): ?string
+    {
+        $clientes = app(ClienteCreditoService::class)->clientesEnCartera($user->id);
+
+        return $clientes === 0 ? null
+            : "Tiene {$clientes} cliente(s) en su cartera de créditos. Traspásala primero a otro usuario (Clientes → Traspasar cartera).";
     }
 }
