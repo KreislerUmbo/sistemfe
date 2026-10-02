@@ -5,13 +5,14 @@ namespace App\Http\Controllers\Client;
 use App\Enums\Creditos\CreditoEstado;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Client\ClienteRequest;
-use App\Http\Resources\Client\ClientCollection;
 use App\Http\Resources\Client\ClientResource;
 use App\Models\Client\Client;
 use App\Models\Creditos\Credito;
 use App\Models\User;
 use App\Services\Creditos\AlcanceCartera;
 use App\Services\Creditos\ClienteCreditoService;
+use App\Services\Creditos\ClientesCreditoConsulta;
+use Illuminate\Validation\Rule;
 use App\Services\Tenancy\GiroActual;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\QueryException;
@@ -45,17 +46,39 @@ class ClientController extends Controller
         // 1 y 100, mismo criterio que SaleController::index().
         $perPage = min(100, max(1, (int) $request->get('per_page', 25)));
 
-        $clients = $this->visibles(Client::query())->whereRaw(
+        $consulta = $this->visibles(Client::query())->whereRaw(
             "(COALESCE(clients.phone,'') || ' ' || COALESCE(clients.name,'') || ' ' || COALESCE(clients.full_name,'') || ' ' || COALESCE(clients.n_document,'')) ILIKE ?",
             ["%{$search}%"]
-        )
-            ->orderBy('id', 'desc')
-            ->paginate($perPage);
+        );
+
+        // 04c: en el giro Créditos el listado suma asesor, situación y ficha, con sus filtros.
+        $creditos = $this->esCreditos() ? app(ClientesCreditoConsulta::class) : null;
+        if ($creditos !== null) {
+            $filtros = $request->validate([
+                'asesor_id' => ['nullable', 'integer', 'min:0'],
+                'situacion' => ['nullable', Rule::in(ClientesCreditoConsulta::SITUACIONES)],
+                'ficha_incompleta' => ['nullable', 'boolean'],
+            ]);
+            $creditos->filtrar($consulta, [
+                'asesor_id' => isset($filtros['asesor_id']) ? (int) $filtros['asesor_id'] : null,
+                'situacion' => $filtros['situacion'] ?? null,
+                'ficha_incompleta' => $request->boolean('ficha_incompleta'),
+            ]);
+        }
+
+        $clients = $consulta->orderBy('id', 'desc')->paginate($perPage);
+        // Misma forma que ClientCollection ({data: [...]}), con los datos de crédito por fila.
+        $filas = ClientResource::collection($clients->getCollection())->resolve();
+        if ($creditos !== null) {
+            $datos = $creditos->datos($clients->pluck('id')->all());
+            $filas = array_map(static fn (array $c): array => [...$c, 'credito' => $datos[$c['id']] ?? null], $filas);
+        }
+        $lista = ['data' => $filas];
 
         return response()->json([
             'total'    => $clients->total(),
             'paginate' => $perPage,
-            'clients'  => ClientCollection::make($clients),
+            'clients'  => $lista,
         ]);
     }
 

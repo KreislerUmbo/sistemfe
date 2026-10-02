@@ -225,6 +225,47 @@ final class ClientesYCarteraTest extends CreditosTestCase
         $this->assertSame($segundo->id, $activo->fresh()->asesor_id);
     }
 
+    public function test_el_listado_de_creditos_trae_situacion_ficha_y_asesor_y_filtra(): void
+    {
+        $this->giroCreditos();
+        $atrasado = $this->activo($this->admin)->cliente;          // vence el 31/01
+        $alDia = $this->activo($this->admin)->cliente;
+        DB::table('credito_configuracion')->update(['requisitos_ficha' => json_encode(['ubicacion', 'telefono'])]);
+        $bloqueado = $this->cliente();
+        $sinCreditos = $this->cliente();
+        CreditoClienteFicha::create(['cliente_id' => $sinCreditos->id, 'latitud' => '-6.48', 'longitud' => '-76.36']);
+        $sinCreditos->update(['phone' => '987654321']);
+        app(ClienteCreditoController::class)->guardarLimites(
+            $this->peticion(LimitesClienteRequest::class, ['bloqueado' => true, 'motivo_bloqueo' => 'Prueba']), $bloqueado->id,
+        );
+        $asesor = $this->usuario(['creditos.ver', 'creditos.crear', 'creditos.cobrar']);
+        app(ClienteCreditoService::class)->asignarCartera($alDia, $asesor, null, $this->admin);
+        // Paga la cuota 1 del "al día"; el otro queda con la cuota del 31/01 vencida.
+        $this->hoy('2026-01-31');
+        app(\App\Services\Creditos\CobroService::class)->cobrar(
+            \App\Models\Creditos\Credito::where('cliente_id', $alDia->id)->first(),
+            new \App\Services\Creditos\Dto\SolicitudCobro(60_000, \App\Services\Creditos\Motor\Enums\DestinoExcedente::Devolver, $this->efectivo->id, 'lst-1'),
+            $this->admin,
+        );
+        $this->hoy('2026-02-05');
+
+        $filas = collect($this->listadoCompleto([]))->keyBy('id');
+        $this->assertSame('atrasado', $filas[$atrasado->id]['credito']['situacion']);
+        $this->assertSame('al_dia', $filas[$alDia->id]['credito']['situacion']);
+        $this->assertSame('bloqueado', $filas[$bloqueado->id]['credito']['situacion']);
+        $this->assertSame('sin_creditos', $filas[$sinCreditos->id]['credito']['situacion']);
+        $this->assertSame(0, $filas[$sinCreditos->id]['credito']['ficha_faltante']);
+        $this->assertSame(2, $filas[$bloqueado->id]['credito']['ficha_faltante']);
+        $this->assertSame($asesor->name, $filas[$alDia->id]['credito']['asesor']);
+
+        $ids = fn (array $f) => array_column($this->listadoCompleto($f), 'id');
+        $this->assertSame([$atrasado->id], array_values(array_intersect($ids(['situacion' => 'atrasado']), [$atrasado->id, $alDia->id, $bloqueado->id, $sinCreditos->id])));
+        $this->assertNotContains($sinCreditos->id, $ids(['ficha_incompleta' => 1]));
+        $this->assertContains($bloqueado->id, $ids(['ficha_incompleta' => 1]));
+        $this->assertSame([$alDia->id], $ids(['asesor_id' => $asesor->id]));
+        $this->assertNotContains($alDia->id, $ids(['asesor_id' => 0]));
+    }
+
     // ---- Ficha exigida para prestar ----
 
     public function test_la_ficha_incompleta_bloquea_la_activacion_y_se_puede_autorizar(): void
@@ -320,6 +361,14 @@ final class ClientesYCarteraTest extends CreditosTestCase
         $datos = $this->controlador()->index(new Request(['per_page' => 100]))->getData(true);
 
         return array_column($datos['clients']['data'] ?? $datos['clients'], 'id');
+    }
+
+    /** @return list<array<string, mixed>> filas del listado (como admin) con los filtros dados */
+    private function listadoCompleto(array $filtros): array
+    {
+        Auth::guard('api')->setUser($this->admin);
+
+        return $this->controlador()->index(new Request(['per_page' => 100, ...$filtros]))->getData(true)['clients']['data'];
     }
 
     private function datosCliente(array $datos): array

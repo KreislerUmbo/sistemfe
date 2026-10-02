@@ -377,7 +377,11 @@ de la anterior. Ninguna mergeada a `main`.
 modelo) + el archivo de la fase en curso (`docs/planning/creditos/04-frontend.md`, …);
 `historial.md` es solo consulta. Fase 4b (documentos: recibo, contrato con plantilla, cronograma,
 estado de cuenta, constancia, acuerdo de reprogramación) construida en
-`feat/creditos-fase4b-documentos` — ver `docs/planning/creditos/04b-documentos.md`. Siguiente: 4c.
+`feat/creditos-fase4b-documentos` — ver `docs/planning/creditos/04b-documentos.md`. Fase 4c (ficha
+del cliente + cartera por asesor/cobrador) cerrada en `feat/creditos-fase4c-ficha-cliente` — ver
+`docs/planning/creditos/04c-ficha-cliente.md`; incluye cambios para **todos los giros**: página
+del cliente en vez del modal (`views/clients/ficha.vue`), documento nunca repetido (índice único
+parcial en `clients`), nombre repetido solo advierte si es sin documento. Siguiente: 4d (reportes).
 Al desplegar: `MenuItemsSeeder` + limpiar la caché de menú (`MenuResolver`, 24 h por usuario).
 
 **Próximos módulos (en orden de prioridad):**

@@ -27,6 +27,7 @@ export const ETIQUETA_REGLA: Record<string, string> = {
   propio_garante: 'El cliente no puede ser su propio garante',
   garante_moroso: 'El garante tiene cuotas atrasadas',
   garante_saturado: 'El garante ya respalda muchos créditos',
+  ficha_incompleta: 'Ficha del cliente incompleta',
 }
 
 export function interpretarErrorCredito(error: unknown): ErrorCredito {

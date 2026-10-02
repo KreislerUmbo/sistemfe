@@ -25,6 +25,7 @@
 // autorizables ofrecen "Autorizar" solo si el usuario tiene creditos.autorizar_excepcion.
 import { ETIQUETA_REGLA } from '@/composables/creditos/errorCredito'
 import { textoDias } from '@/helpers/creditos/estados'
+import { textoFaltan } from '@/helpers/creditos/ficha'
 import { formatoCentavos } from '@/helpers/creditos/formato'
 import type { Infraccion, ReglaLimite } from '@/types/creditos'
 
@@ -43,9 +44,10 @@ function detalle(i: Infraccion): string {
   if (i.regla === 'max_creditos') return ` (${d.creditos_activos} de ${d.maximo})`
   if (i.regla === 'deuda_maxima' && d.deuda_con_nuevo != null && d.maximo != null) {
     // El detalle viene en centavos desde el motor.
-    return ` (${formatoCentavos(d.deuda_con_nuevo)} de ${formatoCentavos(d.maximo)})`
+    return ` (${formatoCentavos(Number(d.deuda_con_nuevo))} de ${formatoCentavos(Number(d.maximo))})`
   }
   if (i.regla === 'moroso') return ` (${textoDias(Number(d.dias_atraso))})`
+  if (i.regla === 'ficha_incompleta') return `: falta ${textoFaltan(d.faltan)}`
   return ''
 }
 </script>

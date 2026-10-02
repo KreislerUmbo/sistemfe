@@ -32,7 +32,7 @@
           <div class="card-body py-3">
             <div class="row g-3">
               <template v-for="c in s.campos" :key="c.clave">
-                <div v-if="!c.visible || c.visible(form)" :class="c.tipo === 'dias' ? 'col-12' : 'col-12 col-md-6 col-xl-4'">
+                <div v-if="!c.visible || c.visible(form)" :class="c.tipo === 'dias' || c.tipo === 'lista' ? 'col-12' : 'col-12 col-md-6 col-xl-4'">
                   <!-- Días sin cobro -->
                   <template v-if="c.tipo === 'dias'">
                     <span class="form-label mb-1 small fw-semibold text-secondary d-block">{{ c.etiqueta }}</span>
@@ -43,6 +43,20 @@
                       </button>
                     </div>
                     <small class="text-muted">Marcados: no se cobra ese día.</small>
+                  </template>
+
+                  <!-- Varias casillas (ej. ficha exigida) -->
+                  <template v-else-if="c.tipo === 'lista'">
+                    <span class="form-label mb-1 small fw-semibold text-secondary d-block">{{ c.etiqueta }}</span>
+                    <div class="row g-1">
+                      <div v-for="o in c.opciones" :key="o.valor" class="col-12 col-sm-6 col-lg-3">
+                        <div class="form-check mb-0">
+                          <input :id="`cfg-${c.clave}-${o.valor}`" v-model="form[c.clave]" class="form-check-input" type="checkbox" :value="o.valor" />
+                          <label class="form-check-label small" :for="`cfg-${c.clave}-${o.valor}`">{{ o.texto }}</label>
+                        </div>
+                      </div>
+                    </div>
+                    <small v-if="c.ayuda" class="text-muted">{{ c.ayuda }}</small>
                   </template>
 
                   <div v-else-if="c.tipo === 'booleano'" class="form-check form-switch pt-md-4 mb-0">

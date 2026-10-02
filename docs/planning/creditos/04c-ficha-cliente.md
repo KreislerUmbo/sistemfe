@@ -1,7 +1,30 @@
 # Fase 4c — Ficha del cliente y cartera por asesor
 
-Estado: diseño aprobado el 01-oct-2026; **pasos 1 (backend) y 2 (página del cliente)
-construidos** en la rama `feat/creditos-fase4c-ficha-cliente`. Pasos 3-4 pendientes.
+Estado: **CERRADA el 02-oct-2026** (pasos 1-4) en la rama `feat/creditos-fase4c-ficha-cliente`,
+sin merge a `main`. Al desplegar: `php artisan tenants:migrate-verticales` (3 migraciones; la del
+índice único de documento se detiene si encuentra duplicados en producción).
+
+### Paso 3 — notas de construcción
+- `ClientesCreditoConsulta`: situación (al día / atrasado / bloqueado / sin créditos), requisitos
+  faltantes y asesor, en SQL (filtrable y paginable). `GET clients` suma `credito` por fila y los
+  filtros `asesor_id` (0 = sin asesor), `situacion`, `ficha_incompleta` — solo en el giro Créditos.
+- `TarjetaResumenCliente`: "Ficha incompleta" con lo que falta y enlace "Completar ficha" (pestaña
+  nueva). `AvisosLimites` explica la regla `ficha_incompleta` ("falta DNI (reverso), …").
+- `FichaCobro` quedó de solo lectura; "Editar ficha" lleva a la página del cliente.
+- Configuración → "Cartera y ficha del cliente": `asesor_cobra` y `requisitos_ficha` (campo tipo
+  `lista`).
+
+### Paso 4 — verificación (02-oct-2026, creditos-demo y agencia-demo)
+Alta completa con ficha, punto en el mapa y foto en cola; reapertura con todo guardado; listado
+con columnas y filtros; Nuevo crédito con `?cliente=` mostrando "Ficha incompleta"; activar bloqueado
+con "falta DNI (reverso), Foto del cliente" + Autorizar (el borrador de prueba se anuló);
+Configuración guardada y revertida; "Editar ficha" desde el detalle. Regresión en agencia-demo:
+página sin secciones de Créditos, cliente RUC guardado sin cambios, modal rápido del Cotizador con
+error por campo. Backend 1179/1179, frontend 113/113, `vue-tsc` en su línea base (46).
+Dato demo que queda: cliente "Rosa Prueba Cuatroc" (id 5) con ficha parcial.
+
+**Pendiente, fuera de esta fase:** con asesor y cobrador separados, la cobranza del día filtra por
+cobrador, pero aún no hay reporte por asesor (comisiones) — Fase 4d (reportes) o 8 (cobradores).
 
 ### Paso 2 — notas de construcción
 - `views/clients/ficha.vue` (`/clients/nuevo`, `/clients/:id`) reemplaza al modal de Clientes en

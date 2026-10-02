@@ -223,7 +223,7 @@
                 </template>
               </div>
             </div>
-            <TarjetaResumenCliente v-if="contexto.creditos && clienteId" :cliente-id="clienteId" />
+            <TarjetaResumenCliente v-if="contexto.creditos && clienteId" :key="faltante.length" :cliente-id="clienteId" :enlace-ficha="false" />
             <router-link v-if="contexto.creditos && clienteId && puede('creditos.crear')" class="btn btn-outline-primary"
               :to="{ name: 'creditos.nuevo', query: { cliente: clienteId } }">
               <i class="fas fa-plus me-2"></i>Nuevo crédito para este cliente

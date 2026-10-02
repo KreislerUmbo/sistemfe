@@ -63,83 +63,24 @@
         <div v-else>{{ nombreCobrador ?? 'Sin asignar' }}</div>
       </div>
 
-      <button v-if="puedeEditar" type="button" class="btn btn-sm btn-outline-primary w-100" @click="abrirEdicion">
+      <router-link v-if="puedeEditar" :to="{ name: 'clients.ficha', params: { id: cliente.id } }" class="btn btn-sm btn-outline-primary w-100">
         <i class="fas fa-pen me-1"></i>Editar ficha
-      </button>
+      </router-link>
     </template>
-
-    <!-- Edición -->
-    <DialogoBase v-model="editando" titulo="Ficha de cobro" texto-confirmar="Guardar" :procesando="guardando" :error="errorGuardar" tamano="lg" @confirmar="guardar">
-      <div class="row g-3">
-        <div class="col-12 col-md-8">
-          <label class="form-label mb-1 small fw-semibold text-secondary" for="ficha-dir">Dirección de cobro</label>
-          <input id="ficha-dir" v-model="borrador.direccion_cobro" type="text" class="form-control form-control-sm" maxlength="255" />
-        </div>
-        <div class="col-12 col-md-4">
-          <label class="form-label mb-1 small fw-semibold text-secondary" for="ficha-tipo">Tipo</label>
-          <select id="ficha-tipo" v-model="borrador.tipo_direccion" class="form-select form-select-sm">
-            <option :value="null">—</option>
-            <option value="casa">Casa</option>
-            <option value="negocio">Negocio</option>
-          </select>
-        </div>
-        <div class="col-12">
-          <label class="form-label mb-1 small fw-semibold text-secondary" for="ficha-ref">Referencia</label>
-          <input id="ficha-ref" v-model="borrador.referencia" type="text" class="form-control form-control-sm" maxlength="255" placeholder="Ej.: frente al mercado, puerta verde" />
-        </div>
-        <div class="col-6 col-md-4">
-          <label class="form-label mb-1 small fw-semibold text-secondary" for="ficha-lat">Latitud</label>
-          <input id="ficha-lat" v-model="borrador.latitud" type="text" inputmode="decimal" class="form-control form-control-sm" />
-        </div>
-        <div class="col-6 col-md-4">
-          <label class="form-label mb-1 small fw-semibold text-secondary" for="ficha-lng">Longitud</label>
-          <input id="ficha-lng" v-model="borrador.longitud" type="text" inputmode="decimal" class="form-control form-control-sm" />
-        </div>
-        <div class="col-12 col-md-4 d-flex align-items-end">
-          <button type="button" class="btn btn-sm btn-outline-primary w-100" :disabled="ubicando" @click="usarUbicacion">
-            <span v-if="ubicando" class="spinner-border spinner-border-sm me-1"></span><i v-else class="fas fa-crosshairs me-1"></i>Mi ubicación
-          </button>
-        </div>
-        <small v-if="errorUbicacion" class="col-12 text-danger">{{ errorUbicacion }}</small>
-        <div class="col-12 col-md-6">
-          <label class="form-label mb-1 small fw-semibold text-secondary" for="ficha-tel2">Teléfono alterno</label>
-          <input id="ficha-tel2" v-model="borrador.telefono_alterno" type="tel" class="form-control form-control-sm" maxlength="20" />
-        </div>
-        <div class="col-12 col-md-6">
-          <label class="form-label mb-1 small fw-semibold text-secondary" for="ficha-ocup">Ocupación</label>
-          <input id="ficha-ocup" v-model="borrador.ocupacion" type="text" class="form-control form-control-sm" maxlength="150" />
-        </div>
-        <div class="col-12">
-          <label class="form-label mb-1 small fw-semibold text-secondary" for="ficha-notas">Notas</label>
-          <textarea id="ficha-notas" v-model="borrador.notas" class="form-control form-control-sm" rows="2" maxlength="2000"></textarea>
-        </div>
-        <div class="col-12">
-          <div class="form-label mb-1 small fw-semibold text-secondary">Fotos</div>
-          <div class="d-flex flex-wrap gap-2">
-            <label v-for="t in TIPOS_FOTO" :key="t" class="btn btn-sm btn-light mb-0" :class="{ disabled: subiendo === t }">
-              <span v-if="subiendo === t" class="spinner-border spinner-border-sm me-1"></span><i v-else class="fas fa-camera me-1"></i>
-              {{ TEXTO_ARCHIVO[t] }}{{ imagenes[t] ? ' ✓' : '' }}
-              <input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" class="d-none" @change="subir(t, $event)" />
-            </label>
-          </div>
-          <small class="text-muted">JPG, PNG o WEBP, hasta 10 MB. Se guardan al elegirlas.</small>
-        </div>
-      </div>
-    </DialogoBase>
   </div>
 </template>
 
 <script setup lang="ts">
 // Módulo Créditos — Ficha de cobro (04-frontend pantalla 8): dirección, referencia, mapa,
 // teléfonos, DNI y foto, cobrador asignado. Es dato personal (Ley 29733): el backend solo
-// la entrega a quien ve toda la cartera o al cobrador asignado.
+// la entrega a quien ve toda la cartera o al cobrador asignado. Solo lectura: se edita en la
+// página del cliente (Fase 4c, views/clients/ficha.vue).
 import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
-import DialogoBase from './DialogoBase.vue'
 import { creditoService } from '@/services/admin/creditoService'
-import { interpretarErrorCredito, type ErrorCredito } from '@/composables/creditos/errorCredito'
+import { interpretarErrorCredito } from '@/composables/creditos/errorCredito'
 import { useToast } from '@/composables/useToast'
 import { enlaceLlamada, enlaceMapa, enlaceWhatsapp } from '@/helpers/creditos/cobranza'
-import type { DatosFicha, FichaCliente, TipoArchivoCliente } from '@/types/creditos'
+import type { FichaCliente, TipoArchivoCliente } from '@/types/creditos'
 
 const props = defineProps<{
   cliente: { id: number; nombre: string; documento: string | null; telefono: string | null }
@@ -150,8 +91,6 @@ const props = defineProps<{
 const TEXTO_ARCHIVO: Record<TipoArchivoCliente, string> = {
   foto_cliente: 'Foto del cliente', dni_anverso: 'DNI anverso', dni_reverso: 'DNI reverso', otro: 'Otro',
 }
-const TIPOS_FOTO: TipoArchivoCliente[] = ['foto_cliente', 'dni_anverso', 'dni_reverso']
-const VACIA: DatosFicha = { direccion_cobro: null, tipo_direccion: null, referencia: null, latitud: null, longitud: null, telefono_alterno: null, ocupacion: null, notas: null }
 
 const toast = useToast()
 const datos = ref<FichaCliente | null>(null)
@@ -161,13 +100,6 @@ const imagenes = reactive<Partial<Record<TipoArchivoCliente, string>>>({})
 const cobradores = ref<{ id: number; nombre: string }[]>([])
 const cobradorId = ref<number | null>(null)
 const asignando = ref(false)
-const editando = ref(false)
-const guardando = ref(false)
-const errorGuardar = ref<ErrorCredito | null>(null)
-const borrador = ref<DatosFicha>({ ...VACIA })
-const ubicando = ref(false)
-const errorUbicacion = ref<string | null>(null)
-const subiendo = ref<TipoArchivoCliente | null>(null)
 
 const ficha = computed(() => datos.value?.ficha ?? null)
 const mapa = computed(() => (ficha.value ? enlaceMapa(ficha.value) : null))
@@ -241,73 +173,6 @@ async function asignar() {
   }
 }
 
-function abrirEdicion() {
-  borrador.value = { ...VACIA, ...(ficha.value ?? {}) }
-  errorGuardar.value = null
-  errorUbicacion.value = null
-  editando.value = true
-}
-
-async function guardar() {
-  guardando.value = true
-  errorGuardar.value = null
-  const limpio = Object.fromEntries(
-    Object.entries(borrador.value).map(([k, v]) => [k, typeof v === 'string' ? v.trim() || null : v]),
-  ) as DatosFicha
-  try {
-    const guardada = await creditoService.guardarFicha(props.cliente.id, limpio)
-    if (datos.value) datos.value.ficha = guardada
-    editando.value = false
-    toast.success('Ficha actualizada')
-  } catch (e) {
-    const interpretado = interpretarErrorCredito(e)
-    if (interpretado.tipo === 'validacion') interpretado.mensaje = Object.values(interpretado.campos).join(' ')
-    errorGuardar.value = interpretado
-  } finally {
-    guardando.value = false
-  }
-}
-
-function usarUbicacion() {
-  errorUbicacion.value = null
-  if (!('geolocation' in navigator)) {
-    errorUbicacion.value = 'Este navegador no permite obtener la ubicación.'
-    return
-  }
-  ubicando.value = true
-  navigator.geolocation.getCurrentPosition(
-    (pos) => {
-      borrador.value.latitud = pos.coords.latitude.toFixed(7)
-      borrador.value.longitud = pos.coords.longitude.toFixed(7)
-      ubicando.value = false
-    },
-    () => {
-      errorUbicacion.value = 'No se pudo obtener la ubicación (revisa el permiso del navegador; requiere conexión segura https).'
-      ubicando.value = false
-    },
-    { enableHighAccuracy: true, timeout: 15_000 },
-  )
-}
-
-async function subir(tipo: TipoArchivoCliente, evento: Event) {
-  const input = evento.target as HTMLInputElement
-  const archivo = input.files?.[0]
-  input.value = ''
-  if (!archivo) return
-  subiendo.value = tipo
-  try {
-    const nuevo = await creditoService.subirArchivoCliente(props.cliente.id, tipo, archivo)
-    datos.value?.archivos.unshift(nuevo)
-    if (imagenes[tipo]) URL.revokeObjectURL(imagenes[tipo]!)
-    imagenes[tipo] = URL.createObjectURL(archivo)
-    toast.success(`${TEXTO_ARCHIVO[tipo]} guardada`)
-  } catch (e) {
-    const interpretado = interpretarErrorCredito(e)
-    toast.warning(interpretado.tipo === 'validacion' ? Object.values(interpretado.campos).join(' ') : interpretado.mensaje)
-  } finally {
-    subiendo.value = null
-  }
-}
 </script>
 
 <style scoped>

@@ -2,8 +2,10 @@
 // campos por sección, conversión formulario ↔ API y envío solo de lo que cambió (el PUT
 // valida con "sometimes"). Los montos viajan como texto decimal; aquí no se calcula nada.
 import type { ConfiguracionCredito } from '@/types/creditos'
+import { ETIQUETA_REQUISITO, REQUISITOS } from './ficha'
 
-type Tipo = 'entero' | 'porcentaje' | 'soles' | 'booleano' | 'select' | 'dias'
+/** lista = varias casillas de "opciones" (se guarda como arreglo de valores). */
+type Tipo = 'entero' | 'porcentaje' | 'soles' | 'booleano' | 'select' | 'dias' | 'lista'
 
 export interface CampoConfig {
   clave: string
@@ -23,7 +25,7 @@ export interface SeccionConfig {
   campos: CampoConfig[]
 }
 
-export type ValorConfig = string | boolean | number[]
+export type ValorConfig = string | boolean | number[] | string[]
 export type FormConfig = Record<string, ValorConfig>
 
 const conMora = (f: FormConfig) => f.cobra_mora === true
@@ -55,6 +57,21 @@ export const SECCIONES_CONFIG: SeccionConfig[] = [
       {
         clave: 'tasa_maxima', tipo: 'porcentaje', etiqueta: 'Tasa máxima permitida', opcional: true,
         ayuda: 'Tope legal (BCRP / usura) a confirmar con su abogado. Vacío = sin tope.',
+      },
+    ],
+  },
+  {
+    titulo: 'Cartera y ficha del cliente',
+    descripcion: 'Quién atiende a cada cliente y qué datos se exigen antes de prestarle.',
+    campos: [
+      {
+        clave: 'asesor_cobra', tipo: 'booleano', etiqueta: 'El asesor también cobra',
+        ayuda: 'Apagado: cada cliente tiene un asesor y un cobrador por separado.',
+      },
+      {
+        clave: 'requisitos_ficha', tipo: 'lista', etiqueta: 'Exigir para activar un crédito',
+        ayuda: 'Si falta algo, activar el crédito pide autorización. En créditos migrados solo avisa.',
+        opciones: REQUISITOS.map((r) => ({ valor: r, texto: ETIQUETA_REQUISITO[r] })),
       },
     ],
   },
@@ -140,6 +157,7 @@ export function formularioConfig(config: ConfiguracionCredito): FormConfig {
     const v = config[c.clave]
     if (c.tipo === 'booleano') form[c.clave] = Boolean(v)
     else if (c.tipo === 'dias') form[c.clave] = Array.isArray(v) ? [...(v as number[])].sort() : []
+    else if (c.tipo === 'lista') form[c.clave] = ordenLista(c, Array.isArray(v) ? (v as string[]) : [])
     else if (c.tipo === 'porcentaje' || c.tipo === 'soles') form[c.clave] = decimalATexto(v)
     else form[c.clave] = v === null || v === undefined ? '' : String(v)
   }
@@ -149,10 +167,17 @@ export function formularioConfig(config: ConfiguracionCredito): FormConfig {
 const ENTERO = /^\d{1,6}$/
 const DECIMAL = { porcentaje: /^\d{1,6}(?:\.\d{1,4})?$/, soles: /^\d{1,12}(?:\.\d{1,2})?$/ }
 
-type ValorApi = string | number | boolean | number[] | null
+type ValorApi = string | number | boolean | number[] | string[] | null
+
+/** Valores de una lista en el orden de sus opciones (para comparar sin falsos cambios). */
+export function ordenLista(campo: CampoConfig, valores: string[]): string[] {
+  const orden = (campo.opciones ?? []).map((o) => o.valor)
+  return orden.filter((v) => valores.includes(v))
+}
 
 /** Valor para la API o un mensaje de error. */
 function aApi(campo: CampoConfig, valor: ValorConfig): { valor: ValorApi } | { error: string } {
+  if (campo.tipo === 'lista') return { valor: ordenLista(campo, valor as string[]) }
   if (campo.tipo === 'booleano' || campo.tipo === 'dias' || campo.tipo === 'select') {
     if (campo.tipo === 'dias' && (valor as number[]).length > 6) return { error: 'Debe quedar al menos un día de cobro.' }
     return { valor: valor as ValorApi }

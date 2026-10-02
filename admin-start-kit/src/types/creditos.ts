@@ -12,6 +12,7 @@ export type ReglaNoLaborable = 'siguiente' | 'anterior' | 'mantener'
 export type TopeMoraTipo = 'porcentaje_cuota' | 'porcentaje_capital' | 'dias_maximos' | 'sin_tope'
 export type DestinoExcedente = 'devolver' | 'adelanto' | 'saldo_a_favor'
 export type ReglaLimite = 'max_creditos' | 'deuda_maxima' | 'moroso' | 'bloqueado' | 'propio_garante' | 'garante_moroso' | 'garante_saturado'
+  | 'ficha_incompleta'
 
 /** Cuerpo de POST creditos/preview, POST creditos y PUT creditos/{id}. */
 export interface CondicionesCredito {
@@ -65,7 +66,8 @@ export interface CronogramaPrevio {
 export interface Infraccion {
   regla: ReglaLimite
   autorizable: boolean
-  detalle: Record<string, number | null>
+  /** ficha_incompleta trae "faltan": lista de requisitos (Fase 4c). */
+  detalle: Record<string, number | string[] | null>
 }
 
 export interface ResultadoLimites {

@@ -13,11 +13,36 @@
 
     <div class="card border-0 shadow-sm mb-3">
       <div class="card-body py-2">
-        <div class="input-group input-group-sm">
-          <span class="input-group-text"><i class="fas fa-search"></i></span>
-          <input id="buscar-cliente" v-model="search" type="search" class="form-control" placeholder="Buscar por nombre, documento o teléfono…"
-            aria-label="Buscar cliente" @keyup.enter="buscar" />
-          <button type="button" class="btn btn-outline-secondary" title="Limpiar búsqueda" @click="reset"><i class="fas fa-sync"></i></button>
+        <div class="row g-2 align-items-center">
+          <div class="col-12" :class="{ 'col-lg-5': contexto.creditos }">
+            <div class="input-group input-group-sm">
+              <span class="input-group-text"><i class="fas fa-search"></i></span>
+              <input id="buscar-cliente" v-model="search" type="search" class="form-control" placeholder="Buscar por nombre, documento o teléfono…"
+                aria-label="Buscar cliente" @keyup.enter="buscar" />
+              <button type="button" class="btn btn-outline-secondary" title="Limpiar filtros" @click="reset"><i class="fas fa-sync"></i></button>
+            </div>
+          </div>
+          <template v-if="contexto.creditos">
+            <div v-if="asesores.length" class="col-6 col-lg-3">
+              <select v-model="filtroAsesor" class="form-select form-select-sm" aria-label="Asesor" @change="buscar">
+                <option :value="null">Todos los asesores</option>
+                <option :value="0">Sin asesor</option>
+                <option v-for="a in asesores" :key="a.id" :value="a.id">{{ a.nombre }}</option>
+              </select>
+            </div>
+            <div class="col-6 col-lg-2">
+              <select v-model="filtroSituacion" class="form-select form-select-sm" aria-label="Situación" @change="buscar">
+                <option :value="null">Toda situación</option>
+                <option v-for="(p, clave) in PRESENTACION_SITUACION" :key="clave" :value="clave">{{ p.texto }}</option>
+              </select>
+            </div>
+            <div class="col-12 col-lg-2">
+              <div class="form-check mb-0">
+                <input id="filtro-ficha" v-model="filtroFicha" type="checkbox" class="form-check-input" @change="buscar" />
+                <label class="form-check-label small" for="filtro-ficha">Ficha incompleta</label>
+              </div>
+            </div>
+          </template>
         </div>
       </div>
     </div>
@@ -30,7 +55,10 @@
               <tr class="small text-secondary text-uppercase">
                 <th class="ps-3">Cliente</th>
                 <th>Teléfono</th>
-                <th>Tipo</th>
+                <th v-if="contexto.creditos">Asesor</th>
+                <th v-if="contexto.creditos">Situación</th>
+                <th v-if="contexto.creditos">Ficha</th>
+                <th v-if="!contexto.creditos">Tipo</th>
                 <th>Ubigeo</th>
                 <th v-if="!contexto.creditos">Amazonía</th>
                 <th>Estado</th>
@@ -39,15 +67,27 @@
               </tr>
             </thead>
             <tbody>
-              <tr v-if="cargando"><td colspan="8" class="text-center text-muted py-4"><span class="spinner-border spinner-border-sm me-2"></span>Cargando…</td></tr>
-              <tr v-else-if="clients.length === 0"><td colspan="8" class="text-center text-muted py-4">No hay clientes{{ search ? ' con esa búsqueda' : '' }}.</td></tr>
+              <tr v-if="cargando"><td :colspan="columnas" class="text-center text-muted py-4"><span class="spinner-border spinner-border-sm me-2"></span>Cargando…</td></tr>
+              <tr v-else-if="clients.length === 0"><td :colspan="columnas" class="text-center text-muted py-4">No hay clientes{{ search ? ' con esa búsqueda' : '' }}.</td></tr>
               <tr v-for="client in clients" v-else :key="client.id" role="button" @click="abrir(client)">
                 <td class="ps-3">
                   <div class="fw-semibold">{{ client.full_name }}</div>
                   <small class="text-muted">{{ client.type_document === 'SND' ? 'Sin documento' : `${client.type_document} ${client.n_document}` }}</small>
                 </td>
                 <td>{{ client.phone || '—' }}</td>
-                <td><span class="badge" :class="TIPO[client.type_client]?.clase ?? TIPO['3'].clase">{{ TIPO[client.type_client]?.texto ?? TIPO['3'].texto }}</span></td>
+                <template v-if="contexto.creditos">
+                  <td class="small">{{ client.credito?.asesor ?? '—' }}</td>
+                  <td>
+                    <span v-if="client.credito" class="badge" :class="PRESENTACION_SITUACION[client.credito.situacion].clase">
+                      {{ PRESENTACION_SITUACION[client.credito.situacion].texto }}
+                    </span>
+                  </td>
+                  <td class="small">
+                    <span v-if="!client.credito?.ficha_faltante" class="text-success"><i class="fas fa-check-circle me-1"></i>Completa</span>
+                    <span v-else class="text-warning-emphasis"><i class="fas fa-exclamation-triangle me-1"></i>Faltan {{ client.credito.ficha_faltante }}</span>
+                  </td>
+                </template>
+                <td v-else><span class="badge" :class="TIPO[client.type_client]?.clase ?? TIPO['3'].clase">{{ TIPO[client.type_client]?.texto ?? TIPO['3'].texto }}</span></td>
                 <td class="small text-muted">{{ [client.distrito, client.region].filter(Boolean).join(', ') || '—' }}</td>
                 <td v-if="!contexto.creditos" class="text-center">
                   <span v-if="client.es_amazonia" class="badge bg-success-subtle text-success-emphasis" title="Zona Amazonía — Ley 27037"><i class="fas fa-tree me-1"></i>Sí</span>
@@ -90,7 +130,7 @@
 <script setup lang="ts">
 // Clientes, todos los giros. Alta y edición van a la página del cliente (Fase 4c,
 // views/clients/ficha.vue); el modal de antes quedó reemplazado.
-import { onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import Swal from 'sweetalert2'
 import DefaultLayout from '@/layouts/DefaultLayout.vue'
@@ -99,6 +139,9 @@ import httpClient from '@/helpers/http-client'
 import { formatFechaHora } from '@/helpers/fecha'
 import { usePermisosCredito } from '@/composables/creditos/usePermisosCredito'
 import { clienteService, type ContextoCliente } from '@/services/admin/clienteService'
+import { creditoService } from '@/services/admin/creditoService'
+import { PRESENTACION_SITUACION, type SituacionCliente } from '@/helpers/creditos/ficha'
+import type { UsuarioCartera } from '@/types/creditos'
 import type { Client, Clients } from '@/types/clients'
 
 const TIPO: Record<string, { texto: string; clase: string }> = {
@@ -117,6 +160,11 @@ const perPageRows = ref(25)
 const clients = ref<Client[]>([])
 const cargando = ref(false)
 const contexto = ref<ContextoCliente>({ giro: null, creditos: false })
+const asesores = ref<UsuarioCartera[]>([])
+const filtroAsesor = ref<number | null>(null)
+const filtroSituacion = ref<SituacionCliente | null>(null)
+const filtroFicha = ref(false)
+const columnas = computed(() => (contexto.value.creditos ? 9 : 8))
 
 const abrir = (client: Client) => router.push({ name: 'clients.ficha', params: { id: client.id } })
 
@@ -160,7 +208,14 @@ const removeClient = async (client: Client) => {
 const list = async () => {
   cargando.value = true
   try {
-    const res = await httpClient.get<Clients>('clients', { params: { page: currentPage.value, search: search.value ?? '', per_page: perPageRows.value } })
+    const filtros = contexto.value.creditos
+      ? {
+          ...(filtroAsesor.value !== null ? { asesor_id: filtroAsesor.value } : {}),
+          ...(filtroSituacion.value ? { situacion: filtroSituacion.value } : {}),
+          ...(filtroFicha.value ? { ficha_incompleta: 1 } : {}),
+        }
+      : {}
+    const res = await httpClient.get<Clients>('clients', { params: { page: currentPage.value, search: search.value ?? '', per_page: perPageRows.value, ...filtros } })
     clients.value = res.data.clients.data
     totalPages.value = res.data.total
     perPageRows.value = res.data.paginate
@@ -179,6 +234,9 @@ const buscar = () => {
 
 const reset = () => {
   search.value = ''
+  filtroAsesor.value = null
+  filtroSituacion.value = null
+  filtroFicha.value = false
   buscar()
 }
 
@@ -187,7 +245,15 @@ const cambiarPerPage = () => buscar()
 watch(currentPage, () => list())
 
 onMounted(async () => {
-  clienteService.contexto().then((c) => { contexto.value = c }).catch(() => undefined)
+  // El contexto decide columnas y filtros: se pide antes de listar.
+  try {
+    contexto.value = await clienteService.contexto()
+  } catch {
+    // Sin contexto se lista como en cualquier giro.
+  }
+  if (contexto.value.creditos && puede('creditos.cartera.asignar')) {
+    creditoService.usuariosCartera().then((u) => { asesores.value = u.asesores }).catch(() => undefined)
+  }
   await list()
 })
 </script>
