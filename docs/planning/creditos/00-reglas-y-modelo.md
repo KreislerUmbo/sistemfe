@@ -72,7 +72,11 @@ monto_liquidacion = capital pendiente + interes_final − interés ya cobrado + 
 - Permisos: el usuario anula su propio pago con su caja abierta; si no, `creditos.anular_pago`.
 
 ### 1.9 Corrección, anulación y reprogramación del crédito
-- `borrador`: edición libre. `activo` sin pagos: **Corregir** (`creditos.corregir`, motivo) → mismo número, cuotas viejas `anulada`, `version_cronograma_actual+1`; si cambia el capital, ajuste de caja. **Anular crédito**: solo sin pagos, revierte desembolso.
+- `borrador`: edición libre. `activo` sin pagos: **Corregir** (`creditos.corregir`, motivo) → mismo número, cuotas viejas `anulada`, `version_cronograma_actual+1`; si cambia el capital **o el método de pago**, ajuste de caja (reverso + nuevo desembolso). **Anular crédito**: solo sin pagos, revierte desembolso.
+- Reglas de Corregir agregadas en la revisión del 03-oct-2026 (cada una reproducía un problema real):
+  - **No procede con reprogramaciones, condonaciones o cargos vigentes**: cuelgan de las cuotas de la versión vigente y quedarían sin efecto en silencio (la condonación seguía sumando en Ingresos). Camino: anular y registrar de nuevo.
+  - **Subir el capital evalúa los límites** como renovar (el propio crédito excluido de deuda y conteo); quien tiene `creditos.autorizar_excepcion` autoriza en el mismo acto con el motivo de la corrección. Bajarlo no los evalúa.
+  - **Fecha de desembolso**: nunca posterior al día de la entrega (primer movimiento de desembolso en caja); solo se adelanta hasta `dias_max_pago_retroactivo` días, con `creditos.pago_fecha_anterior` (entrega registrada tarde). La caja no se mueve. Más atrás, el préstamo es anterior: anular y "Registrar crédito existente".
 - **Reprogramar fechas** (`creditos.reprogramar`, motivo, preview): desplazar N días desde la cuota X o editar una a una; solo cuotas pendientes, fechas ascendentes, no antes de hoy. Cambia la fecha en la misma cuota (historial en `credito_reprogramacion_cuotas`, `fecha_vencimiento_original`). Mora ya acumulada: admin elige **mantener** (`mora_congelada`) o **condonar**. Cargo configurable (`ninguno|fijo|interes_por_dias`), editable por admin, sumado a la primera cuota reprogramada. Genera "Acuerdo de reprogramación".
 - Reprogramación con cambio de montos y amortización parcial de capital: fase posterior.
 
@@ -97,7 +101,7 @@ monto_liquidacion = capital pendiente + interes_final − interés ya cobrado + 
 ### 1.12 Operaciones especiales
 - **Crédito existente (migración)** (`creditos.migrar`): condiciones originales con fecha pasada; pagos históricos modo rápido ("cuotas 1..N a tiempo") o detallado (fecha + monto); `origen='saldo_inicial'`, `origen_registro='migracion'`, **sin caja**; límites solo advierten; se sube el contrato firmado.
 - **Renovación**: liquidación del actual (1.7) descontada del nuevo; entrega neta = capital nuevo − liquidación (> 0); anterior `finalizado` (`renovacion`), pago `origen='renovacion'` `es_cierre=true` sin caja; caja solo la salida neta; `credito_renovado_id`. Ej.: debe 300, pide 1,000 → entrega 700.
-- **Pago con fecha anterior** (`creditos.pago_fecha_anterior`, motivo, máx. `dias_max_pago_retroactivo` = 3): `fecha_pago` real, `created_at` = registro; reaplica pagos posteriores; caja: entra a la caja abierta actual.
+- **Pago con fecha anterior** (`creditos.pago_fecha_anterior`, motivo, máx. `dias_max_pago_retroactivo` = 3): `fecha_pago` real, `created_at` = registro; reaplica pagos posteriores; caja: entra a la caja abierta actual. Nunca antes del desembolso ni antes del día de la última reprogramación (misma regla que anular, 1.8 b) — revisión 03-oct-2026.
 - **Desembolso** siempre completo (sin comisión ni interés adelantado).
 - **Activar** exige `fecha_desembolso` = hoy (desembolsos pasados → migración). `fecha_primer_vencimiento` guarda la fecha **pedida** (ancla del cronograma), no la ajustada.
 - `fecha_pago` se guarda en hora de Lima (fecha de negocio, indicado en el comment de la columna); timestamps de auditoría en UTC.

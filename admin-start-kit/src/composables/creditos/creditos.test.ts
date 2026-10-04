@@ -99,6 +99,12 @@ describe('accionesDisponibles', () => {
     expect(accionesDisponibles('activo', todo, false, false)).not.toContain('condonar')
   })
 
+  it('con reprogramaciones, condonaciones o cargos no ofrece corregir, pero sí anular', () => {
+    const acciones = accionesDisponibles('activo', todo, false, true, true)
+    expect(acciones).not.toContain('corregir')
+    expect(acciones).toContain('anular')
+  })
+
   it('activo con pagos no ofrece corregir ni anular', () => {
     const acciones = accionesDisponibles('activo', todo, true)
     expect(acciones).toContain('cobrar')

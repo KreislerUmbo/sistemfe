@@ -29,12 +29,15 @@ export function accionesDisponibles(
   tienePermiso: (permiso: string) => boolean,
   tienePagos: boolean,
   cobraMora = true,
+  /** Reprogramaciones, condonaciones o cargos vigentes: corregir los dejaría sin efecto (se anula y se registra de nuevo). */
+  tieneAjustes = false,
 ): AccionCredito[] {
   return (Object.keys(REGLAS) as AccionCredito[]).filter((accion) => {
     const regla = REGLAS[accion]
     if (accion === 'condonar' && !cobraMora) return false
     if (!regla.estados.includes(estado) || !tienePermiso(regla.permiso)) return false
     if (SOLO_SIN_PAGOS.includes(accion) && estado === 'activo' && tienePagos) return false
+    if (accion === 'corregir' && tieneAjustes) return false
     return true
   })
 }

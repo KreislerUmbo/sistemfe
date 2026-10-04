@@ -180,7 +180,15 @@ const resumen = computed(() => detalle.value!.resumen)
 const pagosValidos = computed(() => estadoCuenta.value?.pagos.filter((p) => p.estado === 'valido').length ?? 0)
 const progreso = computed(() => (resumen.value.cuotas_total ? Math.round((resumen.value.cuotas_pagadas / resumen.value.cuotas_total) * 100) : 0))
 const tasaTexto = computed(() => `${Number.parseFloat(credito.value!.tasa_interes)}% ${credito.value!.unidad_tasa === 'total' ? 'total' : 'mensual'}`)
-const acciones = computed(() => (credito.value ? accionesDisponibles(credito.value.estado, puede, pagosValidos.value > 0, credito.value.cobra_mora) : []))
+// Con reprogramaciones, condonaciones o cargos vigentes no se corrige: se anula y se registra de nuevo.
+const tieneAjustes = computed(() => {
+  const e = estadoCuenta.value
+  if (!e) return false
+  return e.reprogramaciones.length > 0
+    || e.condonaciones.some((c) => c.estado === 'vigente')
+    || e.cargos.some((c) => c.estado === 'vigente')
+})
+const acciones = computed(() => (credito.value ? accionesDisponibles(credito.value.estado, puede, pagosValidos.value > 0, credito.value.cobra_mora, tieneAjustes.value) : []))
 
 const subtitulo = computed(() => {
   const c = credito.value

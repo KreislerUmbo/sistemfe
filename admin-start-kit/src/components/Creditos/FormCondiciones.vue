@@ -55,6 +55,7 @@
         :invalido="!!errores.fecha_desembolso" />
       <input v-else id="fc-desembolso" :value="formatoFecha(form.fecha_desembolso)" type="text" class="form-control form-control-sm" readonly />
       <small v-if="!desembolsoEditable" class="text-muted">Hoy, al activar.</small>
+      <small v-else-if="ayudaDesembolso" class="text-muted">{{ ayudaDesembolso }}</small>
       <small v-else-if="!form.fecha_desembolso" class="text-muted">Obligatoria; debe ser anterior a hoy.</small>
       <div v-if="errores.fecha_desembolso" class="invalid-feedback d-block">{{ errores.fecha_desembolso }}</div>
     </div>
@@ -184,11 +185,13 @@ const props = withDefaults(defineProps<{
   primerSugerido?: string | null
   desembolsoEditable?: boolean
   fechaMaxima?: string
+  /** Nota bajo la fecha de entrega cuando es editable (Corregir: solo unos días hacia atrás). */
+  ayudaDesembolso?: string
   /** Primera cuota del preview: explica si su fecha se movió por domingo o feriado. */
   primeraCuota?: CuotaPrevia | null
   /** "Sobre el total" expresado en % mensual simple (lo calcula el backend). */
   tasaMensual?: string | null
-}>(), { errores: () => ({}), metodosPago: () => [], primerSugerido: null, desembolsoEditable: false, fechaMaxima: undefined, primeraCuota: null, tasaMensual: null })
+}>(), { errores: () => ({}), metodosPago: () => [], primerSugerido: null, desembolsoEditable: false, fechaMaxima: undefined, ayudaDesembolso: undefined, primeraCuota: null, tasaMensual: null })
 
 const form = defineModel<FormCredito>({ required: true })
 const avanzadas = ref(false)

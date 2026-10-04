@@ -2,12 +2,14 @@
   <DialogoBase v-model="abierto" titulo="Corregir crédito" texto-confirmar="Guardar corrección" variante="warning" tamano="xl"
     :procesando="procesando" :deshabilitado="!condiciones || !motivo.trim()" :error="error" @confirmar="confirmar">
     <div class="alert alert-warning py-2 small">
-      Se genera un cronograma nuevo con el mismo número; el anterior queda anulado. Si cambia el monto, se ajusta el desembolso en caja.
+      Se genera un cronograma nuevo con el mismo número; el anterior queda anulado. Si cambia el monto o el método de pago, se ajusta el desembolso en caja.
     </div>
     <div v-if="form" class="row g-3">
       <div class="col-12 col-lg-7">
         <FormCondiciones v-model="form" :errores="errores" :metodos-pago="metodosPago"
-          :primer-sugerido="preview?.cronograma.primer_vencimiento ?? null" />
+          :primer-sugerido="preview?.cronograma.primer_vencimiento ?? null"
+          :desembolso-editable="puedeAdelantarFecha" :fecha-maxima="credito.fecha_desembolso ?? undefined"
+          ayuda-desembolso="Solo si entregaste el dinero antes de registrarlo: hasta los días que permite la Configuración. La caja no cambia." />
       </div>
       <div class="col-12 col-lg-5 d-flex flex-column gap-3">
         <ResumenCronograma :preview="preview" :capital="condiciones?.monto_capital ?? '0'" :cargando="cargandoPreview"
@@ -33,6 +35,7 @@ import { interpretarErrorCredito, type ErrorCredito } from '@/composables/credit
 import { useClaveIdempotencia } from '@/composables/creditos/useClaveIdempotencia'
 import { usePreviewCredito } from '@/composables/creditos/usePreviewCredito'
 import { aCondiciones, formularioDesdeCredito, type FormCredito } from '@/helpers/creditos/formulario'
+import { usePermisosCredito } from '@/composables/creditos/usePermisosCredito'
 import type { Credito, MetodoPago } from '@/types/creditos'
 
 const props = defineProps<{ credito: Credito; metodosPago: MetodoPago[] }>()
@@ -45,6 +48,9 @@ const errores = ref<Record<string, string>>({})
 const procesando = ref(false)
 const error = ref<ErrorCredito | null>(null)
 const { clave, renovar } = useClaveIdempotencia()
+const { puede } = usePermisosCredito()
+// Adelantar la fecha (entrega registrada tarde) usa el mismo permiso que el pago con fecha anterior.
+const puedeAdelantarFecha = computed(() => puede('creditos.pago_fecha_anterior'))
 
 const condiciones = computed(() => (abierto.value && form.value ? aCondiciones(form.value, props.credito.cliente_id) : null))
 const { preview, cargando: cargandoPreview, error: errorPreview } = usePreviewCredito(condiciones)
