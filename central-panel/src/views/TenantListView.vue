@@ -28,6 +28,8 @@ function giroLabel(giro: string): string {
       return 'Agencia de viajes';
     case 'retail':
       return 'Retail';
+    case 'creditos':
+      return 'Créditos';
     default:
       return giro;
   }
@@ -193,6 +195,7 @@ async function onConfirmDelete(id: string) {
               <option value="" disabled>Elegir giro…</option>
               <option value="retail">Retail</option>
               <option value="agencia_viajes">Agencia de viajes</option>
+              <option value="creditos">Créditos (préstamos)</option>
             </select>
             <div class="form-text">
               Determina qué migraciones de vertical corre el tenant — se puede corregir

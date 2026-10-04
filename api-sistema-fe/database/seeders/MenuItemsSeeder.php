@@ -53,11 +53,19 @@ use Illuminate\Database\Seeder;
  */
 class MenuItemsSeeder extends Seeder
 {
+    /**
+     * Módulo Créditos (plan §4): ítems retail/SUNAT compartidos (giro=NULL) que un
+     * tenant de giro 'creditos' no usa. Excluir un grupo oculta también sus hijos.
+     */
+    private const SIN_CREDITOS = ['creditos'];
+
     public function run(): void
     {
         // giro=null → visible para cualquier giro (MenuResolver: "giro IS
         // NULL OR giro = $tenant->giro").
-        $this->item('dashboard', null, null, 'enlace', 'Dashboards', 'iconoir-home-simple', 'dashboards.analytics', null, 1);
+        $this->item('dashboard', null, null, 'enlace', 'Inicio', 'iconoir-home-simple', 'dashboards.analytics', null, 1, self::SIN_CREDITOS);
+        // Fase 4d: en el giro créditos el inicio es el Panel (reemplaza al Dashboard genérico de la plantilla).
+        $this->item('creditos_panel', null, 'creditos', 'enlace', 'Panel', 'iconoir-home-simple', 'creditos.panel', 'creditos.ver', 1);
 
         $adminPortal = $this->item('admin_portal', null, null, 'grupo', 'Admin Portal', null, null, null, 2);
         $this->item('admin_portal.categorias_sistemas', $adminPortal, null, 'enlace', 'Categorias Sistemas', 'fas fa-life-ring', 'system_categories.index', 'list_categorie_system', 1);
@@ -70,12 +78,12 @@ class MenuItemsSeeder extends Seeder
         $this->item('access.usuarios', $access, null, 'enlace', 'Usuarios', 'fas fa-users', 'access.users', 'list_user', 2);
 
         $comercial = $this->item('comercial', null, null, 'grupo', 'Comercial', null, null, null, 4);
-        $this->item('comercial.categorias', $comercial, null, 'enlace', 'Categorias', 'fas fa-life-ring', 'categories.index', 'list_categorie', 1);
-        $productos = $this->item('comercial.productos', $comercial, null, 'grupo', 'Productos', 'fas fa-qrcode', null, null, 2);
+        $this->item('comercial.categorias', $comercial, null, 'enlace', 'Categorias', 'fas fa-life-ring', 'categories.index', 'list_categorie', 1, self::SIN_CREDITOS);
+        $productos = $this->item('comercial.productos', $comercial, null, 'grupo', 'Productos', 'fas fa-qrcode', null, null, 2, self::SIN_CREDITOS);
         $this->item('comercial.productos_registrar', $productos, null, 'enlace', 'Registrar', null, 'product.register', 'register_product', 1);
         $this->item('comercial.productos_listar', $productos, null, 'enlace', 'Listar', null, 'product.index', 'list_product', 2);
         $this->item('comercial.clientes', $comercial, null, 'enlace', 'Clientes', 'fas fa-user-plus', 'clients.index', 'list_client', 3);
-        $ventas = $this->item('comercial.ventas', $comercial, null, 'grupo', 'Ventas', 'fas fa-money-check-alt', null, null, 4);
+        $ventas = $this->item('comercial.ventas', $comercial, null, 'grupo', 'Ventas', 'fas fa-money-check-alt', null, null, 4, self::SIN_CREDITOS);
         $this->item('comercial.ventas_mis_ventas', $ventas, null, 'enlace', 'Mis Ventas', null, 'sale.list', 'list_sale', 1);
         $this->item('comercial.ventas_nc_nd', $ventas, null, 'enlace', 'Notas de Credito/Debito', null, 'nota.list', 'list_nota_electronica', 2);
         $this->item('comercial.ventas_anticipos', $ventas, null, 'enlace', 'Emitir Anticipos', null, 'advances.index', 'list_advance', 3);
@@ -104,12 +112,23 @@ class MenuItemsSeeder extends Seeder
         $this->item('agencia.configuracion', $agencia, 'agencia_viajes', 'enlace', 'Configuracion', null, 'agencia.configuracion.index', 'agencia.configuracion', 11);
         $this->item('agencia.configuracion_codigos', $agencia, 'agencia_viajes', 'enlace', 'Codigos y numeracion', null, 'agencia.configuracion.codigos', 'agencia.configuracion', 12);
 
+        // Módulo Créditos (04-frontend "Además"): solo para el giro 'creditos'.
+        $creditos = $this->item('creditos', null, 'creditos', 'grupo', 'Créditos', 'fas fa-hand-holding-usd', null, null, 6);
+        $this->item('creditos.cobranza', $creditos, 'creditos', 'enlace', 'Cobranza del día', null, 'creditos.cobranza', 'creditos.cobrar', 1);
+        $this->item('creditos.listado', $creditos, 'creditos', 'enlace', 'Créditos', null, 'creditos.index', 'creditos.ver', 2);
+        $this->item('creditos.nuevo', $creditos, 'creditos', 'enlace', 'Nuevo crédito', null, 'creditos.nuevo', 'creditos.crear', 3);
+        $this->item('creditos.migrar', $creditos, 'creditos', 'enlace', 'Registrar existente', null, 'creditos.migrar', 'creditos.migrar', 4);
+        $this->item('creditos.configuracion', $creditos, 'creditos', 'enlace', 'Configuración', null, 'creditos.configuracion', 'creditos.configurar', 8);
+        // Fase 4d: la agenda la usa también el cobrador; los reportes, quien tiene creditos.reportes.
+        $this->item('creditos.agenda', $creditos, 'creditos', 'enlace', 'Agenda de cobranza', null, 'creditos.agenda', 'creditos.cobrar', 6);
+        $this->item('creditos.reportes', $creditos, 'creditos', 'enlace', 'Reportes', null, 'creditos.reportes', 'creditos.reportes', 7);
+
         $config = $this->item('configuraciones', null, null, 'grupo', 'Configuraciones', 'fas fa-wrench', null, null, 7);
         $this->item('configuraciones.empresa', $config, null, 'enlace', 'Datos de la empresa', null, 'company.index', 'company', 1);
         $this->item('configuraciones.sucursales', $config, null, 'enlace', 'Sucursales', null, 'branches.index', 'list_branch', 2);
         $this->item('configuraciones.cajas', $config, null, 'enlace', 'Cajas', null, 'cash-registers.index', 'list_cash_register', 3);
         $this->item('configuraciones.metodos_pago', $config, null, 'enlace', 'Metodos de Pago', null, 'payment-methods.index', 'list_payment_method', 4);
-        $this->item('configuraciones.series', $config, null, 'enlace', 'Series de Comprobantes', null, 'series-comprobante.index', 'list_serie_comprobante', 5);
+        $this->item('configuraciones.series', $config, null, 'enlace', 'Series de Comprobantes', null, 'series-comprobante.index', 'list_serie_comprobante', 5, self::SIN_CREDITOS);
         $this->item('configuraciones.proveedores', $config, null, 'enlace', 'Proveedores', null, 'suppliers.index', 'list_supplier', 6);
         $this->item('configuraciones.conceptos_caja', $config, null, 'enlace', 'Conceptos de Caja', null, 'cash-concepts.index', 'list_cash_concept', 7);
 
@@ -129,13 +148,15 @@ class MenuItemsSeeder extends Seeder
         ?string $icono,
         ?string $ruta,
         ?string $permisoRequerido,
-        int $orden
+        int $orden,
+        ?array $girosExcluidos = null
     ): int {
         $menuItem = MenuItem::updateOrCreate(
             ['codigo' => $codigo],
             [
                 'parent_id' => $parentId,
                 'giro' => $giro,
+                'giros_excluidos' => $girosExcluidos,
                 'tipo' => $tipo,
                 'label' => $label,
                 'icono' => $icono,

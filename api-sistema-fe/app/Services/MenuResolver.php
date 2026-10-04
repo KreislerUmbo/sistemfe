@@ -41,7 +41,11 @@ class MenuResolver
             ->where(function ($q) use ($tenant) {
                 $q->whereNull('giro')->orWhere('giro', $tenant->giro);
             })
-            ->get();
+            ->get()
+            // Ítems compartidos (giro NULL) que un giro no usa, ej. Productos/Ventas en
+            // 'creditos'. Se filtra en PHP (json, pocas filas); al quitar un grupo sus
+            // hijos quedan sin padre y armarArbol() no los alcanza.
+            ->reject(fn (MenuItem $item) => in_array($tenant->giro, $item->giros_excluidos ?? [], true));
 
         // Paso 2 del plan (§4.1) — filtro por modulos_efectivos($tenant) — NO
         // IMPLEMENTADO A PROPÓSITO. Confirmado con grep sobre todo app/ antes

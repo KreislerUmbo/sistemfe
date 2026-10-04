@@ -16,7 +16,7 @@ class ProvisionTenant extends Command
         {--admin-name= : Nombre del usuario admin inicial}
         {--admin-email= : Email del usuario admin inicial}
         {--admin-password= : Password del admin. Si se omite, se genera uno random y se muestra al final}
-        {--giro= : Giro de negocio del tenant. Valores válidos: retail | agencia_viajes}
+        {--giro= : Giro de negocio del tenant. Valores válidos: retail | agencia_viajes | creditos (ver TenantProvisioningService::GIROS_VALIDOS)}
         {--tipo= : real | demo}';
 
     protected $description = 'Provisiona un tenant nuevo: Tenant + Domain + roles/permisos + usuario admin. No crea companies (paso aparte).';

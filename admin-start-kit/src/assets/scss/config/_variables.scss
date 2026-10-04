@@ -330,7 +330,10 @@ $cyans: (
 
 // scss-docs-start theme-color-variables
 $primary: $green;
-$secondary: $gray-600;
+// Accesibilidad (01-oct-2026): $gray-600 (#95a0c5) daba ~2.6:1 sobre blanco en etiquetas
+// (.text-secondary); #6b7590 mantiene el tono y llega a ~4.6:1 (WCAG AA). El modo oscuro usa
+// su propio gris ($text-secondary-dark).
+$secondary: #6b7590;
 $success: $teal;
 $info: $cyan;
 $warning: $yellow;
@@ -497,7 +500,8 @@ $body-text-align: null;
 $body-color: $gray-900;
 $body-bg: #f7f9fb;
 
-$body-secondary-color: #96a0b5;
+// Texto atenuado (.text-muted, ayudas de formulario): mismo criterio de contraste que $secondary.
+$body-secondary-color: #6b7590;
 $body-secondary-bg: $white; // card-bg
 
 $body-tertiary-color: rgba($body-color, 0.5);

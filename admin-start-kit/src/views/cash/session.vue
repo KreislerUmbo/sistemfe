@@ -348,6 +348,7 @@ import type {
     CounterpartySearchResult,
 } from '@/types/cash-session';
 import type { PaymentMethod, PaymentMethods, CashConcept, CashConcepts } from '@/types/cash';
+import { etiquetaTipoMovimiento } from '@/helpers/cash/tipoMovimiento';
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
 
@@ -479,16 +480,7 @@ const cargarCatalogosMovimiento = async () => {
 
 const puedeAprobar = computed(() => authStore.isPermitedRoute('cash.approve_expenses'));
 
-const tipoLabel = (type: string) => {
-    const labels: Record<string, string> = {
-        opening_fund: 'Fondo de apertura',
-        sale_payment: 'Pago de venta',
-        manual_income: 'Ingreso manual',
-        manual_expense: 'Egreso manual',
-        correction: 'Corrección',
-    };
-    return labels[type] ?? type;
-};
+const tipoLabel = etiquetaTipoMovimiento;
 
 // Solo movimientos manuales, no ya corregidos, y solo si la sesión sigue
 // abierta o el usuario tiene permiso de supervisor sobre sesión cerrada —

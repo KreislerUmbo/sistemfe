@@ -296,6 +296,7 @@ const domainsText = computed(() =>
               <select v-model="editForm.giro" class="form-select" @change="giroChangeConfirmed = false">
                 <option value="retail">Retail</option>
                 <option value="agencia_viajes">Agencia de viajes</option>
+                <option value="creditos">Créditos (préstamos)</option>
               </select>
             </div>
             <div v-if="giroChanged" class="col-12">

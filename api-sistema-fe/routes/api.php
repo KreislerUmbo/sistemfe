@@ -285,6 +285,10 @@ Route::group([
     // usuario puede ver — no hace falta gatear el endpoint en sí).
     Route::get('me/menu', [\App\Http\Controllers\MenuController::class, 'miMenu']);
 
+    // Inicio con datos reales (retail y agencia; créditos usa su Panel). Mismo criterio que
+    // me/menu: sin permission: propio, el servicio arma cada bloque según los permisos del usuario.
+    Route::get('dashboard', [\App\Http\Controllers\DashboardController::class, 'index']);
+
     //
     // permission:X en store/update/destroy de acá para abajo — Fase 0b
     // (plan-modulo-menus-y-roles.md §9.1, Bucket A): estas rutas solo tenían
@@ -469,6 +473,12 @@ Route::group([
 
     // Fase 0c (§9.1, modo sombra, Bucket B) — reutiliza register_client/
     // edit_client/delete_client.
+    // 04c: qué secciones muestra la página del cliente según el giro del tenant.
+    Route::get("clients/contexto", [ClientController::class, 'contexto'])
+        ->middleware('permission:list_client|register_client|edit_client');
+    // 04c: restaurar un cliente eliminado cuando se intenta registrar su mismo documento.
+    Route::post("clients/{id}/restaurar", [ClientController::class, 'restore'])->whereNumber('id')
+        ->middleware('permission:register_client');
     Route::resource("clients", ClientController::class)
         ->middlewareFor('store', 'permission:register_client')
         ->middlewareFor('update', 'permission:edit_client')
@@ -1213,3 +1223,6 @@ Route::prefix('portal')->middleware(['tenant', 'tenant.active', 'tenant.subscrip
     Route::put('/profile/password', [ProfileController::class, 'updatePassword'])
         ->middleware('auth:client');;
 });
+
+// Módulo Créditos (docs/planning/creditos/03-api.md): rutas en archivo propio.
+require __DIR__ . '/creditos.php';

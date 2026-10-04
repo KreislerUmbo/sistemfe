@@ -37,3 +37,7 @@ Schedule::command('tenants:run-automatic-backups')->dailyAt('02:00');
 // día. Tabla central (db_tenant_central), un solo dato para todo el
 // sistema — no depende de qué tenant dispare el cron.
 Schedule::command('tipo-cambio:sincronizar-sunat')->dailyAt('05:00');
+// Módulo Créditos (00 1.11): castigo automático por atraso, en la madrugada de Lima (la app corre en UTC).
+Schedule::command('creditos:escalamiento')->dailyAt('02:30')->timezone('America/Lima');
+// Módulo Créditos (04d): foto diaria de cartera al cierre del día de Lima (tendencias e históricos).
+Schedule::command('creditos:foto-cartera')->dailyAt('23:50')->timezone('America/Lima');

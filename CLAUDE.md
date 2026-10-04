@@ -369,6 +369,36 @@ memoria de proyecto; duplicación visual "Alto Mayo" en cabecera vs. chip de des
 sincronización del panel de precio con el ítem en edición del lienzo, ambos mencionados sin
 plan armado.
 
+**En curso — Módulo Créditos (giro `creditos`, prestamista; Fases 1-4 de 8, 2026-09-29/30):**
+Motor de cálculo puro, datos y API en la rama `feat/creditos-fase3-api`; frontend (Fase 4: las 8
+pantallas de `04-frontend.md` + menú, caja y Roles) en `feat/creditos-fase4-frontend`, que sale
+de la anterior. Ninguna mergeada a `main`.
+**Leer siempre** `docs/planning/creditos/00-reglas-y-modelo.md` (fuente de verdad de reglas y
+modelo) + el archivo de la fase en curso (`docs/planning/creditos/04-frontend.md`, …);
+`historial.md` es solo consulta. Fase 4b (documentos: recibo, contrato con plantilla, cronograma,
+estado de cuenta, constancia, acuerdo de reprogramación) construida en
+`feat/creditos-fase4b-documentos` — ver `docs/planning/creditos/04b-documentos.md`. Fase 4c (ficha
+del cliente + cartera por asesor/cobrador) cerrada en `feat/creditos-fase4c-ficha-cliente` — ver
+`docs/planning/creditos/04c-ficha-cliente.md`; incluye cambios para **todos los giros**: página
+del cliente en vez del modal (`views/clients/ficha.vue`), documento nunca repetido (índice único
+parcial en `clients`), nombre repetido solo advierte si es sin documento. Fase 4c.1 (ajustes de la
+revisión previa a reportes: saldo a favor completo, cartera del cliente al crear créditos, bloqueos
+de concurrencia, rol Asesor, castigo automático tolerante a errores, alta de tenant con caja) en
+`feat/creditos-fase4c1-ajustes` — ver la sección 4c.1 de `04c-ficha-cliente.md`. Fase 4d (Panel de
+inicio en lugar del Dashboard, Agenda de cobranza y 6 reportes con PDF/Excel) construida en
+`feat/creditos-fase4d-reportes` — ver `docs/planning/creditos/04d-reportes.md`. Siguiente: despliegue a
+producción (orden acordado en la memoria `project_creditos_modulo_estado`).
+Al desplegar: `MenuItemsSeeder` + limpiar la caché de menú (`MenuResolver`, 24 h por usuario); cron
+`schedule:run` para `creditos:foto-cartera` y `creditos:escalamiento`.
+
+**Completo — Inicio con datos reales (Dashboard) para retail y agencia (02-oct-2026):**
+Reemplaza la demo de la plantilla Rizz por `GET dashboard` (`DashboardService`): ventas hoy/mes
+por moneda (netas de NC aceptadas, NV aparte), ventas 30 días, pendientes SUNAT, por cobrar, más
+vendidos y sin stock (retail), cotizaciones y próximos 7 días (agencia), cajas. Cada bloque según
+giro y permisos; créditos usa su Panel. Detalle: `docs/planning/retail-facturacion-core/
+inicio-dashboard.md`. Corregido de paso: `elapsed_hours` de `cash/dashboard` salía con decimales
+(Carbon 3 `diffInHours()`), ahora horas enteras.
+
 **Próximos módulos (en orden de prioridad):**
 
 1. **Representación impresa (PDF) con impresión automática**

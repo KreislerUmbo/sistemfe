@@ -5,7 +5,7 @@
 // Mismos 2 valores que TenantProvisioningService::GIROS_VALIDOS (backend) — sin
 // endpoint de catálogo dedicado, se mantiene sincronizado a mano (mismo criterio ya
 // aceptado en otros selectores fijos de este panel, ej. tabs de TenantDetailView).
-export type Giro = 'retail' | 'agencia_viajes';
+export type Giro = 'retail' | 'agencia_viajes' | 'creditos';
 
 // GET tenants/{id} — metadata del Tenant (central), NO es lo mismo que Company.
 export interface TenantOverview {

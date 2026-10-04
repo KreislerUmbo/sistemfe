@@ -1,5 +1,20 @@
 //import { permission } from "process";
 import PortalLayout from '@/layouts/PortalLayout.vue'
+import type { NavigationGuardWithThis } from 'vue-router'
+import { useMenuStore } from '@/stores/menu'
+
+/**
+ * Fase 4d (Créditos): el giro créditos no tiene el Dashboard genérico en su menú; su inicio es
+ * el Panel. Si el menú del usuario trae el Panel y no el Dashboard, el inicio lleva al Panel.
+ */
+const inicioPorGiro: NavigationGuardWithThis<undefined> = async () => {
+  const menu = useMenuStore()
+  await menu.ensureLoaded()
+  if (menu.tieneRuta('creditos.panel') && !menu.tieneRuta('dashboards.analytics')) {
+    return { name: 'creditos.panel' }
+  }
+  return true
+}
 
 const setTitle = (title: string) => {
   return title
@@ -111,10 +126,11 @@ const dashboardRoutes = [
     path: "/admin",
     name: "dashboards.analytics",
     meta: {
-      title: setTitle("Analytics"),
+      title: setTitle("Inicio"),
       authRequired: true,
       permission: 'all',
     },
+    beforeEnter: inicioPorGiro,
     component: () => import("@/views/dashboards/analytics/index.vue"),
   },
   {
@@ -362,6 +378,27 @@ const comercialRoutes = [
     },
     component: () => import("@/views/clients/index.vue"),
   },
+  // Fase 4c: página del cliente (reemplaza al modal) — alta y edición, todos los giros.
+  {
+    path: "/clients/nuevo",
+    name: "clients.nuevo",
+    meta: {
+      title: setTitle("Nuevo cliente"),
+      authRequired: true,
+      permission: 'register_client',
+    },
+    component: () => import("@/views/clients/ficha.vue"),
+  },
+  {
+    path: "/clients/:id(\\d+)",
+    name: "clients.ficha",
+    meta: {
+      title: setTitle("Cliente"),
+      authRequired: true,
+      permission: 'list_client|edit_client',
+    },
+    component: () => import("@/views/clients/ficha.vue"),
+  },
   {
     path: "/sale/register",
     name: "sale.register",
@@ -511,6 +548,119 @@ const comercialRoutes = [
       permission: 'list_commercial_quote',
     },
     component: () => import("@/views/commercial-quotes/detail.vue"),
+  },
+  // Módulo Créditos (docs/planning/creditos/04-frontend.md). Las rutas fijas van antes de
+  // /creditos/:id para que no las capture el parámetro.
+  {
+    path: "/creditos",
+    name: "creditos.index",
+    meta: {
+      title: setTitle("Créditos"),
+      authRequired: true,
+      permission: 'creditos.ver',
+    },
+    component: () => import("@/views/creditos/index.vue"),
+  },
+  // Fase 4d: panel de inicio, agenda de cobranza y reportes.
+  {
+    path: "/creditos/panel",
+    name: "creditos.panel",
+    meta: {
+      title: setTitle("Panel"),
+      authRequired: true,
+      permission: 'creditos.ver',
+    },
+    component: () => import("@/views/creditos/panel.vue"),
+  },
+  {
+    path: "/creditos/agenda",
+    name: "creditos.agenda",
+    meta: {
+      title: setTitle("Agenda de cobranza"),
+      authRequired: true,
+      permission: 'creditos.cobrar',
+    },
+    component: () => import("@/views/creditos/agenda.vue"),
+  },
+  {
+    path: "/creditos/reportes",
+    name: "creditos.reportes",
+    meta: {
+      title: setTitle("Reportes de créditos"),
+      authRequired: true,
+      permission: 'creditos.reportes',
+    },
+    component: () => import("@/views/creditos/reportes.vue"),
+  },
+  {
+    path: "/creditos/cobranza",
+    name: "creditos.cobranza",
+    meta: {
+      title: setTitle("Cobranza del día"),
+      authRequired: true,
+      permission: 'creditos.cobrar',
+    },
+    component: () => import("@/views/creditos/cobranza.vue"),
+  },
+  {
+    path: "/creditos/migrar",
+    name: "creditos.migrar",
+    meta: {
+      title: setTitle("Registrar crédito existente"),
+      authRequired: true,
+      permission: 'creditos.migrar',
+    },
+    component: () => import("@/views/creditos/migrar.vue"),
+  },
+  {
+    path: "/creditos/configuracion",
+    name: "creditos.configuracion",
+    meta: {
+      title: setTitle("Configuración de créditos"),
+      authRequired: true,
+      permission: 'creditos.configurar',
+    },
+    component: () => import("@/views/creditos/configuracion.vue"),
+  },
+  {
+    path: "/creditos/nuevo",
+    name: "creditos.nuevo",
+    meta: {
+      title: setTitle("Nuevo crédito"),
+      authRequired: true,
+      permission: 'creditos.crear',
+    },
+    component: () => import("@/views/creditos/nuevo.vue"),
+  },
+  {
+    path: "/creditos/:id(\\d+)/editar",
+    name: "creditos.editar",
+    meta: {
+      title: setTitle("Editar borrador"),
+      authRequired: true,
+      permission: 'creditos.crear',
+    },
+    component: () => import("@/views/creditos/nuevo.vue"),
+  },
+  {
+    path: "/creditos/:id(\\d+)/cobrar",
+    name: "creditos.cobrar",
+    meta: {
+      title: setTitle("Cobrar"),
+      authRequired: true,
+      permission: 'creditos.cobrar',
+    },
+    component: () => import("@/views/creditos/cobrar.vue"),
+  },
+  {
+    path: "/creditos/:id(\\d+)",
+    name: "creditos.detalle",
+    meta: {
+      title: setTitle("Detalle del crédito"),
+      authRequired: true,
+      permission: 'creditos.ver',
+    },
+    component: () => import("@/views/creditos/detalle.vue"),
   },
   {
     path: "/recursos/index",

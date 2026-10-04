@@ -28,7 +28,7 @@ class AdvanceController extends Controller
     // hay forma de registrar esta línea sin un producto real (mismo patrón
     // que NotaElectronicaController::armarLineasParciales() usa para
     // conceptos libres de Nota de Débito).
-    private const SKU_PRODUCTO_ADELANTO = 'ADELANTO-001';
+    public const SKU_PRODUCTO_ADELANTO = 'ADELANTO-001';
 
     public function __construct(private SerieComprobanteService $serieComprobanteService)
     {

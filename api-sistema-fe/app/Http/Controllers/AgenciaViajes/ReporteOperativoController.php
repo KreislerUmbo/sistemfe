@@ -9,6 +9,7 @@ use App\Models\AgenciaViajes\ReservaItem;
 use App\Models\AgenciaViajes\ReservaItemPasajero;
 use App\Models\AgenciaViajes\ReservaPasajero;
 use App\Models\Company;
+use App\Services\AgenciaViajes\AsignacionOperativa;
 use App\Services\StorageUrl;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
@@ -214,22 +215,9 @@ class ReporteOperativoController extends Controller
     // filtros) — evita duplicar el whereBetween/whereHas/with entre ambos usos.
     private function queryItemsDelRango(Carbon $fechaDesde, Carbon $fechaHasta): Builder
     {
-        return ReservaItem::whereBetween('fecha', [$fechaDesde->toDateString(), $fechaHasta->toDateString()])
-            ->whereHas('reserva', fn ($q) => $q->where('estado', '!=', 'cancelada'))
-            // Pedido explícito del usuario (rediseño-reporte-operativo): "Ajuste de
-            // redondeo" es un AlternativaItem manual puramente de PRECIO (costo=0,
-            // sin destino/guía/proveedor real — ver AlternativaItemController::
-            // store(), línea ~378) que se genera automáticamente cuando el paquete
-            // tiene ajuste_redondeo configurado. No es un servicio operativo real,
-            // así que no pertenece al Reporte Operativo (ni pantalla en vivo, ni
-            // PDF, ni Excel) — sí debe seguir viéndose en Reservas/cotización, donde
-            // es información de precio legítima. Filtrado acá en la query base
-            // porque la comparten obtenerFilas() (index/pdf/export) y
-            // filtrosDisponibles() (catálogo de filtros) — así tampoco aparece como
-            // opción de filtro.
-            ->whereDoesntHave('alternativaItem', fn ($q) => $q
-                ->where('origen_tipo', AlternativaItem::ORIGEN_MANUAL)
-                ->where('descripcion_manual', 'Ajuste de redondeo'))
+        // Base compartida con el Inicio (AsignacionOperativa::itemsDelRango): rango de fechas,
+        // reserva no cancelada y sin el ítem manual "Ajuste de redondeo" (precio, no servicio).
+        return AsignacionOperativa::itemsDelRango($fechaDesde->toDateString(), $fechaHasta->toDateString())
             ->with([
                 'reserva.pasajeros',
                 'reserva.alternativa.cotizacion',
@@ -343,25 +331,10 @@ class ReporteOperativoController extends Controller
     // 'proveedor'/'guia' tienen un campo de asignación operativa real hoy.
     // 'incluyendo es_referencial' (fila 11e): un guía/proveedor referencial es un
     // placeholder, no una asignación confirmada — cuenta igual como pendiente.
+    // Criterio compartido con el Inicio (AsignacionOperativa::sinAsignar).
     private function itemSinAsignacionOperativa(ReservaItem $item): bool
     {
-        $origenTipo = $item->alternativaItem?->origen_tipo;
-
-        if ($origenTipo === AlternativaItem::ORIGEN_GUIA) {
-            $guia = $this->resolverGuiaEfectivo($item);
-
-            return ! $guia || (bool) $guia->es_referencial;
-        }
-
-        if ($origenTipo === AlternativaItem::ORIGEN_PROVEEDOR) {
-            if (! $item->proveedor_tarifa_id) {
-                return true;
-            }
-
-            return (bool) $item->alternativaItem?->proveedorTarifa?->proveedorServicio?->proveedor?->es_referencial;
-        }
-
-        return false;
+        return AsignacionOperativa::sinAsignar($item);
     }
 
     // Un ítem origen_tipo='guia' enganchado a una Salida Operativa (tablero de
@@ -372,7 +345,7 @@ class ReporteOperativoController extends Controller
     // acá creando un segundo guía desincronizado del de la salida.
     private function resolverGuiaEfectivo(ReservaItem $item)
     {
-        return $item->salida_operativa_id ? $item->salidaOperativa?->guia : $item->guia;
+        return AsignacionOperativa::guiaEfectivo($item);
     }
 
     // Pedido explícito del usuario (rediseño-reporte-operativo): mostrar el nombre

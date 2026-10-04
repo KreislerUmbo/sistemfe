@@ -515,4 +515,76 @@ export const PERMISOS = [
             },
         ]
     },
+    {
+        // Módulo Créditos (giro 'creditos', prestamista). Mismos 16 permisos que
+        // CreditosRolesSeeder; distinto de "Créditos (Amortizaciones)", que son las
+        // ventas a crédito de retail.
+        'name': 'Créditos (préstamos)',
+        'permisos': [
+            {
+                name: 'Ver créditos (su cartera)',
+                permiso: 'creditos.ver',
+            },
+            {
+                name: 'Ver toda la cartera',
+                permiso: 'creditos.ver_todos',
+            },
+            {
+                name: 'Crear y activar créditos (y renovar)',
+                permiso: 'creditos.crear',
+            },
+            {
+                name: 'Cobrar y liquidar',
+                permiso: 'creditos.cobrar',
+            },
+            {
+                name: 'Registrar pagos con fecha anterior',
+                permiso: 'creditos.pago_fecha_anterior',
+            },
+            {
+                name: 'Anular pagos de otros usuarios o con caja cerrada',
+                permiso: 'creditos.anular_pago',
+            },
+            {
+                name: 'Condonar mora',
+                permiso: 'creditos.condonar_mora',
+            },
+            {
+                name: 'Reprogramar fechas',
+                permiso: 'creditos.reprogramar',
+            },
+            {
+                name: 'Corregir y anular créditos',
+                permiso: 'creditos.corregir',
+            },
+            {
+                name: 'Castigar y revertir castigo',
+                permiso: 'creditos.castigar',
+            },
+            {
+                name: 'Autorizar excepciones de límites',
+                permiso: 'creditos.autorizar_excepcion',
+            },
+            {
+                name: 'Registrar créditos existentes',
+                permiso: 'creditos.migrar',
+            },
+            {
+                name: 'Asignar cartera a cobradores',
+                permiso: 'creditos.cartera.asignar',
+            },
+            {
+                name: 'Configuración y feriados',
+                permiso: 'creditos.configurar',
+            },
+            {
+                name: 'Gestionar prendas (módulo prendas)',
+                permiso: 'creditos.prendas.gestionar',
+            },
+            {
+                name: 'Vender prendas (módulo prendas)',
+                permiso: 'creditos.prendas.vender',
+            },
+        ]
+    },
 ];

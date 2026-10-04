@@ -33,7 +33,9 @@ export type Client = {
     distrito:string,
     address:string,
     gender:string,
-    created_at:string
+    created_at:string,
+    /** Solo en el giro Créditos (Fase 4c): asesor vigente, situación y requisitos de ficha que faltan. */
+    credito?: { asesor: string | null; situacion: 'al_dia' | 'atrasado' | 'bloqueado' | 'sin_creditos'; ficha_faltante: number } | null
 }
 export type Clients = { //esto nos sirve para listar que en el backend es el return del index
     clients:  {

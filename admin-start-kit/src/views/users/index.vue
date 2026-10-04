@@ -567,10 +567,14 @@ const removeUser = (user: User) => {
             })
             .then(async (result: any) => { //then maneja la respuesta de la alerta
                 if (result.isConfirmed) {
-                    const res: AxiosResponse<User> = await httpClient.delete(
+                    const res: AxiosResponse<any> = await httpClient.delete(
                         "users/" + user.id
                     );
-                    console.log(res);
+                    // 04c.1: no se elimina a quien tiene clientes en su cartera de créditos.
+                    if (res.data?.code == 405) {
+                        (Swal as TVueSwalInstance).fire("No se eliminó", res.data.message, "warning");
+                        return;
+                    }
 
                     (Swal as TVueSwalInstance).fire(
                         "Felicitaciones!",

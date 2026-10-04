@@ -67,7 +67,7 @@ class ReservaEstadoFacturacionTest extends TestCase
     private function crearReservaConDosItems(string $codigo): Reserva
     {
         $clienteId = DB::table('clients')->insertGetId([
-            'type_document' => 'DNI', 'n_document' => '99887766', 'full_name' => 'Cliente Test Estado Facturación',
+            'type_document' => 'DNI', 'n_document' => (string) random_int(10_000_000, 99_999_999), 'full_name' => 'Cliente Test Estado Facturación',
             'created_at' => now(), 'updated_at' => now(),
         ]);
         $cotizacionId = DB::table('cotizaciones')->insertGetId([

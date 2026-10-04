@@ -67,7 +67,7 @@ class ReservaFacturacionExternaTest extends TestCase
     private function crearReserva(): Reserva
     {
         $clienteId = DB::table('clients')->insertGetId([
-            'type_document' => 'DNI', 'n_document' => '55667788', 'full_name' => 'Cliente Test Facturación Externa',
+            'type_document' => 'DNI', 'n_document' => (string) random_int(10_000_000, 99_999_999), 'full_name' => 'Cliente Test Facturación Externa',
             'created_at' => now(), 'updated_at' => now(),
         ]);
         $cotizacionId = DB::table('cotizaciones')->insertGetId([

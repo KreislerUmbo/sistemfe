@@ -48,4 +48,10 @@ return [
         'url' => env('E_API_URL', 'https://free.e-api.net.pe'),
     ],
 
+    // Búsqueda de DNI/RUC al registrar clientes (ClientController::searchDocument). Solo desde
+    // .env: antes tenía un token por defecto escrito en el código (04c P5).
+    'apisperu' => [
+        'token' => env('APISPERU_TOKEN'),
+    ],
+
 ];
