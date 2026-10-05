@@ -6,6 +6,7 @@ use App\Mail\TenantBackupFailedMail;
 use App\Models\Central\CentralUser;
 use App\Models\Central\PlatformSetting;
 use App\Models\Central\TenantBackup;
+use App\Models\Central\TenantRestore;
 use App\Models\Tenant;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Mail;
@@ -80,7 +81,14 @@ class TenantBackupService
                 }
             }
 
-            $this->aplicarRetencion($tenant);
+            // Revisión 05-oct-2026: la poda iba fuera de todo try; una excepción en la de un
+            // tenant (FK de tenant_restores) abortaba el comando y los tenants siguientes se
+            // quedaban sin backup cada noche. Ahora se registra y el lote sigue.
+            try {
+                $this->aplicarRetencion($tenant);
+            } catch (\Throwable $e) {
+                report($e);
+            }
         }
 
         return $resumen;
@@ -94,6 +102,30 @@ class TenantBackupService
             'estado' => 'en_proceso',
         ]);
 
+        // Revisión 05-oct-2026: un error no previsto entre crear la fila y terminar (p. ej.
+        // permisos de la carpeta) dejaba el backup 'en_proceso' para siempre. Los fallos que
+        // volcar() ya registra llegan con estado 'fallido' y solo se relanzan.
+        try {
+            return $this->volcar($backup, $tenant, $tipo);
+        } catch (\Throwable $e) {
+            if ($backup->fresh()?->estado === 'en_proceso') {
+                $backup->update([
+                    'estado' => 'fallido',
+                    'error_message' => substr(@iconv('UTF-8', 'UTF-8//IGNORE', $e->getMessage()) ?: get_class($e), 0, 1000),
+                ]);
+                $this->auditLogger->log('tenant.backup.failed', TenantBackup::class, (string) $backup->id, [
+                    'tenant_id' => $tenant->id,
+                    'tipo' => $tipo,
+                    'fase' => 'inesperado',
+                ]);
+            }
+
+            throw $e;
+        }
+    }
+
+    private function volcar(TenantBackup $backup, Tenant $tenant, string $tipo): TenantBackup
+    {
         $dbName = $tenant->database()->getName();
         $relativePath = sprintf(
             'backups/%s/%s_%s.dump',
@@ -102,7 +134,12 @@ class TenantBackupService
             now()->format('Ymd_His')
         );
 
-        Storage::disk('private')->makeDirectory('backups/' . $tenant->id);
+        // Solo si no existe: con visibility=private, makeDirectory() también hace chmod, y en
+        // Linux solo el dueño puede (la carpeta la crea el cron como umbo; la web es www-data).
+        $directorio = 'backups/' . $tenant->id;
+        if (! Storage::disk('private')->directoryExists($directorio)) {
+            Storage::disk('private')->makeDirectory($directorio);
+        }
         $absolutePath = Storage::disk('private')->path($relativePath);
 
         $result = Process::timeout(300)
@@ -253,17 +290,23 @@ class TenantBackupService
     {
         $limite = Carbon::today()->subDays($this->retencionDiasDefault());
 
+        // Un backup restaurado (o el de seguridad previo a restaurar) es parte del historial de
+        // esa restauración: tenant_restores lo referencia con FK RESTRICT. Se conserva.
         $viejos = TenantBackup::where('tenant_id', $tenant->id)
             ->where('tipo', 'automatico')
             ->where('created_at', '<', $limite)
+            ->whereNotIn('id', TenantRestore::query()->select('backup_id'))
+            ->whereNotIn('id', TenantRestore::query()->whereNotNull('pre_restore_backup_id')->select('pre_restore_backup_id'))
             ->get();
 
         foreach ($viejos as $backup) {
-            if ($backup->path && Storage::disk('private')->exists($backup->path)) {
-                Storage::disk('private')->delete($backup->path);
-            }
-
+            // Primero la fila: si la base la rechazara, el archivo sigue en disco (antes se
+            // borraba el archivo y la fila quedaba apuntando a nada).
+            $path = $backup->path;
             $backup->delete();
+            if ($path && Storage::disk('private')->exists($path)) {
+                Storage::disk('private')->delete($path);
+            }
         }
 
         if ($viejos->isNotEmpty()) {
