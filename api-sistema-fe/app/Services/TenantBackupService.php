@@ -233,6 +233,39 @@ class TenantBackupService
     }
 
     /**
+     * Descarga desde el panel (05-oct-2026): solo un backup completado cuyo archivo siga en
+     * disco. Sacar del servidor la base completa de un negocio queda en la auditoría (quién y
+     * cuándo). Devuelve la ruta relativa en el disco 'private' y el nombre para el archivo.
+     *
+     * @return array{path: string, nombre: string}
+     */
+    public function prepararDescarga(TenantBackup $backup): array
+    {
+        if ($backup->estado !== 'completado') {
+            throw new HttpException(422, 'Solo se puede descargar un backup completado.');
+        }
+        if (! $backup->path || ! Storage::disk('private')->exists($backup->path)) {
+            throw new HttpException(404, 'El archivo de este backup ya no está en el servidor (se podó por antigüedad o se borró).');
+        }
+
+        $this->auditLogger->log('tenant.backup.downloaded', TenantBackup::class, (string) $backup->id, [
+            'tenant_id' => $backup->tenant_id,
+            'tipo' => $backup->tipo,
+            'size_bytes' => $backup->size_bytes,
+        ]);
+
+        return ['path' => $backup->path, 'nombre' => self::nombreDescarga($backup)];
+    }
+
+    /** "dakamu_2026-10-05_1806_manual.dump" (hora de Lima). */
+    public static function nombreDescarga(TenantBackup $backup): string
+    {
+        $momento = $backup->created_at->copy()->setTimezone('America/Lima')->format('Y-m-d_Hi');
+
+        return "{$backup->tenant_id}_{$momento}_{$backup->tipo}.dump";
+    }
+
+    /**
      * Fase C.4 — único punto de verdad para "¿este dump es legible?" (pg_restore --list,
      * nunca toca ninguna base). Usado automáticamente al crear cada backup (arriba), por
      * TenantRestoreService::crearPreview() (revalida en el momento de restaurar, no solo

@@ -26,6 +26,27 @@ function formatBytes(bytes: number | null): string {
   return `${value.toFixed(1)} ${units[unitIndex]}`;
 }
 
+// created_at llega en UTC ("2026-10-05T23:06:31.000000Z"); se muestra en hora de Lima.
+const formatoLima = new Intl.DateTimeFormat('es-PE', {
+  timeZone: 'America/Lima', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false,
+});
+function formatFecha(iso: string | null): string {
+  if (!iso) return '—';
+  const fecha = new Date(iso);
+  return Number.isNaN(fecha.getTime()) ? iso : formatoLima.format(fecha).replace(',', '');
+}
+
+// "dakamu_2026-10-05_1806_manual.dump": mismo nombre que arma el backend (hora de Lima).
+function nombreDescarga(backup: { id: number; tipo: string; created_at: string }): string {
+  const partes = Object.fromEntries(
+    new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Lima', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false,
+    }).formatToParts(new Date(backup.created_at)).map((p) => [p.type, p.value]),
+  );
+  const hora = partes.hour === '24' ? '00' : partes.hour;
+  return `${props.tenantId}_${partes.year}-${partes.month}-${partes.day}_${hora}${partes.minute}_${backup.tipo}.dump`;
+}
+
 function estadoBadgeClass(estado: string): string {
   switch (estado) {
     case 'completado':
@@ -116,6 +137,9 @@ const countdownLabel = computed(() => {
     </div>
 
     <div v-if="restoreResult" class="alert alert-success py-2">{{ restoreResult }}</div>
+    <!-- Errores de crear / verificar / descargar (antes no se mostraban: un backup manual
+         fallido no daba ningún aviso en pantalla). -->
+    <div v-if="store.backups.actionError && !restoreError" class="alert alert-danger py-2">{{ store.backups.actionError }}</div>
     <div v-if="restoreError" class="alert alert-danger py-2">{{ restoreError }}</div>
 
     <!-- Confirmación de restauración: resumen + countdown + botón de doble confirmación -->
@@ -123,7 +147,7 @@ const countdownLabel = computed(() => {
       <p class="mb-1">
         <strong>Restaurar backup #{{ activeRestore.backup.id }}</strong>
         ({{ activeRestore.backup.tipo }}, {{ formatBytes(activeRestore.backup.size_bytes) }},
-        creado {{ activeRestore.backup.created_at }}).
+        creado {{ formatFecha(activeRestore.backup.created_at) }}).
       </p>
       <p class="mb-2">
         Esto reemplaza los datos actuales del tenant con los de este backup (se crea un
@@ -193,7 +217,7 @@ const countdownLabel = computed(() => {
               <span v-if="backup.integridad_verificada" class="text-success">✓ verificada</span>
               <span v-else class="text-muted">sin verificar</span>
             </td>
-            <td>{{ backup.created_at }}</td>
+            <td class="text-nowrap">{{ formatFecha(backup.created_at) }}</td>
             <td>
               <div class="d-flex gap-1">
                 <button
@@ -203,6 +227,15 @@ const countdownLabel = computed(() => {
                   @click="store.verifyBackup(tenantId, backup.id)"
                 >
                   Verificar
+                </button>
+                <button
+                  type="button"
+                  class="btn btn-sm btn-outline-primary"
+                  :disabled="backup.estado !== 'completado' || store.backups.actionLoading"
+                  title="Descargar el archivo .dump (copia fuera del servidor)"
+                  @click="store.downloadBackup(tenantId, backup.id, nombreDescarga(backup))"
+                >
+                  Descargar
                 </button>
                 <button
                   type="button"

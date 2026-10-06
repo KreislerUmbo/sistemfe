@@ -146,6 +146,40 @@ final class RespaldosTenantTest extends TestCase
         $this->assertSame('completado', $backup->estado);
     }
 
+    public function test_descargar_un_backup_completado_entrega_el_archivo_y_queda_auditado(): void
+    {
+        $tenant = $this->tenant('resp-dakamu');
+        $backup = app(TenantBackupService::class)->crearManual($tenant);
+        $backup->forceFill(['created_at' => '2026-10-05 23:06:31'])->save();   // UTC = 18:06 en Lima
+
+        $respuesta = app(\App\Http\Controllers\Central\TenantBackupController::class)->download('resp-dakamu', (string) $backup->id);
+
+        $this->assertStringContainsString('resp-dakamu_2026-10-05_1806_manual.dump', $respuesta->headers->get('Content-Disposition'));
+        ob_start();
+        $respuesta->sendContent();
+        $this->assertSame('PGDMP simulado', ob_get_clean());
+        $this->assertTrue(DB::connection('central')->table('central_audit_logs')
+            ->where('action', 'tenant.backup.downloaded')->where('auditable_id', (string) $backup->id)->exists());
+    }
+
+    public function test_no_descarga_un_backup_fallido_ni_uno_cuyo_archivo_ya_no_existe(): void
+    {
+        $this->tenant('resp-dakamu');
+        $controlador = app(\App\Http\Controllers\Central\TenantBackupController::class);
+        $fallido = TenantBackup::create(['tenant_id' => 'resp-dakamu', 'tipo' => 'manual', 'estado' => 'fallido']);
+        $podado = TenantBackup::create(['tenant_id' => 'resp-dakamu', 'tipo' => 'automatico', 'estado' => 'completado', 'path' => 'backups/resp-dakamu/no-existe.dump']);
+
+        foreach ([[$fallido, 422, 'completado'], [$podado, 404, 'ya no está en el servidor']] as [$backup, $codigo, $mensaje]) {
+            try {
+                $controlador->download('resp-dakamu', (string) $backup->id);
+                $this->fail('Se esperaba un error al descargar.');
+            } catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) {
+                $this->assertSame($codigo, $e->getStatusCode());
+                $this->assertStringContainsString($mensaje, $e->getMessage());
+            }
+        }
+    }
+
     public function test_un_error_inesperado_deja_el_backup_fallido_y_no_en_proceso(): void
     {
         $tenant = $this->tenant('resp-market');

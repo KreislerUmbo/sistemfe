@@ -261,6 +261,9 @@ Route::prefix('central')->group(function () {
         // que ya corre al crear cada backup, dentro de TenantBackupService::ejecutarDump()).
         Route::post('tenants/{id}/backups/{backupId}/verify', [TenantBackupController::class, 'verify']);
 
+        // 05-oct-2026 — descargar el .dump (copia fuera del servidor); cada descarga se audita.
+        Route::get('tenants/{id}/backups/{backupId}/download', [TenantBackupController::class, 'download']);
+
         // Fase C.3 — restauración, 2 pasos (nunca un solo POST): preview genera un token,
         // confirm lo exige en la URL para ejecutar de verdad.
         Route::post('tenants/{id}/backups/{backupId}/restore-preview', [TenantRestoreController::class, 'preview']);

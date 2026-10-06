@@ -522,6 +522,39 @@ export const useTenantsStore = defineStore('tenants', () => {
     }
   };
 
+  // 05-oct-2026 — descarga del .dump como blob (la petición lleva el token del panel; un
+  // enlace directo no lo enviaría). El backend audita cada descarga.
+  const downloadBackup = async (tenantId: string, backupId: number, nombreArchivo: string) => {
+    backups.actionLoading = true;
+    backups.actionError = null;
+
+    try {
+      const { data } = await httpClient.get(`central/tenants/${tenantId}/backups/${backupId}/download`, {
+        responseType: 'blob',
+      });
+      const url = URL.createObjectURL(data as Blob);
+      const enlace = document.createElement('a');
+      enlace.href = url;
+      enlace.download = nombreArchivo;
+      enlace.click();
+      setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    } catch (e: any) {
+      // Con responseType 'blob' el error JSON del backend también llega como blob.
+      let mensaje = 'No se pudo descargar el backup.';
+      const cuerpo = e.response?.data;
+      if (cuerpo instanceof Blob) {
+        try {
+          mensaje = JSON.parse(await cuerpo.text()).message ?? mensaje;
+        } catch {
+          // respuesta no JSON: queda el mensaje genérico
+        }
+      }
+      backups.actionError = mensaje;
+    } finally {
+      backups.actionLoading = false;
+    }
+  };
+
   // Devuelve el preview al componente (no se guarda en el store) — el componente
   // arma el modal de confirmación con el confirm_token/expiración/resumen del backup.
   const previewRestore = async (
@@ -701,6 +734,7 @@ export const useTenantsStore = defineStore('tenants', () => {
     fetchBackups,
     createBackup,
     verifyBackup,
+    downloadBackup,
     previewRestore,
     confirmRestore,
 
