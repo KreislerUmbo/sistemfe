@@ -67,76 +67,86 @@ class MenuItemsSeeder extends Seeder
         // Fase 4d: en el giro créditos el inicio es el Panel (reemplaza al Dashboard genérico de la plantilla).
         $this->item('creditos_panel', null, 'creditos', 'enlace', 'Panel', 'iconoir-home-simple', 'creditos.panel', 'creditos.ver', 1);
 
-        $adminPortal = $this->item('admin_portal', null, null, 'grupo', 'Admin Portal', null, null, null, 2);
-        $this->item('admin_portal.categorias_sistemas', $adminPortal, null, 'enlace', 'Categorias Sistemas', 'fas fa-life-ring', 'system_categories.index', 'list_categorie_system', 1);
-        $sistemas = $this->item('admin_portal.sistemas', $adminPortal, null, 'grupo', 'Sistemas', 'fa-brands fa-windows', null, null, 2);
-        $this->item('admin_portal.sistemas_registrar', $sistemas, null, 'enlace', 'Registrar', null, 'system.register', 'register_system', 1);
-        $this->item('admin_portal.sistemas_listar', $sistemas, null, 'enlace', 'Listar', null, 'systems.index', 'list_system', 2);
+        // Portal web edita el catálogo central: solo el tenant dueño de la plataforma
+        // (config/plataforma.php). Ocultar el grupo oculta también sus hijos.
+        $adminPortal = $this->item('admin_portal', null, null, 'grupo', 'Portal web', 'iconoir-app-window', null, null, 2, soloPlataforma: true);
+        $this->item('admin_portal.categorias_sistemas', $adminPortal, null, 'enlace', 'Categorías de sistemas', 'iconoir-label', 'system_categories.index', 'list_categorie_system', 1);
+        $this->item('admin_portal.sistemas', $adminPortal, null, 'enlace', 'Sistemas', 'iconoir-multiple-pages-empty', 'systems.index', 'list_system', 2);
 
-        $access = $this->item('access', null, null, 'grupo', 'Access', null, null, null, 3);
-        $this->item('access.roles', $access, null, 'enlace', 'Roles y Permisos', 'fas fa-unlock', 'access.roles', 'list_role', 1);
-        $this->item('access.usuarios', $access, null, 'enlace', 'Usuarios', 'fas fa-users', 'access.users', 'list_user', 2);
+        $access = $this->item('access', null, null, 'grupo', 'Accesos', 'iconoir-lock', null, null, 3);
+        $this->item('access.roles', $access, null, 'enlace', 'Roles y permisos', 'iconoir-shield-check', 'access.roles', 'list_role', 1);
+        $this->item('access.usuarios', $access, null, 'enlace', 'Usuarios', 'iconoir-group', 'access.users', 'list_user', 2);
 
-        $comercial = $this->item('comercial', null, null, 'grupo', 'Comercial', null, null, null, 4);
-        $this->item('comercial.categorias', $comercial, null, 'enlace', 'Categorias', 'fas fa-life-ring', 'categories.index', 'list_categorie', 1, self::SIN_CREDITOS);
-        $productos = $this->item('comercial.productos', $comercial, null, 'grupo', 'Productos', 'fas fa-qrcode', null, null, 2, self::SIN_CREDITOS);
-        $this->item('comercial.productos_registrar', $productos, null, 'enlace', 'Registrar', null, 'product.register', 'register_product', 1);
-        $this->item('comercial.productos_listar', $productos, null, 'enlace', 'Listar', null, 'product.index', 'list_product', 2);
-        $this->item('comercial.clientes', $comercial, null, 'enlace', 'Clientes', 'fas fa-user-plus', 'clients.index', 'list_client', 3);
-        $ventas = $this->item('comercial.ventas', $comercial, null, 'grupo', 'Ventas', 'fas fa-money-check-alt', null, null, 4, self::SIN_CREDITOS);
-        $this->item('comercial.ventas_mis_ventas', $ventas, null, 'enlace', 'Mis Ventas', null, 'sale.list', 'list_sale', 1);
-        $this->item('comercial.ventas_nc_nd', $ventas, null, 'enlace', 'Notas de Credito/Debito', null, 'nota.list', 'list_nota_electronica', 2);
-        $this->item('comercial.ventas_anticipos', $ventas, null, 'enlace', 'Emitir Anticipos', null, 'advances.index', 'list_advance', 3);
+        $comercial = $this->item('comercial', null, null, 'grupo', 'Comercial', 'iconoir-shop', null, null, 4);
+        $this->item('comercial.categorias', $comercial, null, 'enlace', 'Categorías', 'iconoir-label', 'categories.index', 'list_categorie', 1, self::SIN_CREDITOS);
+        $this->item('comercial.productos', $comercial, null, 'enlace', 'Productos', 'iconoir-box-iso', 'product.index', 'list_product', 2, self::SIN_CREDITOS);
+        $this->item('comercial.clientes', $comercial, null, 'enlace', 'Clientes', 'iconoir-user', 'clients.index', 'list_client', 3);
+        $ventas = $this->item('comercial.ventas', $comercial, null, 'grupo', 'Ventas', 'iconoir-cart', null, null, 4, self::SIN_CREDITOS);
+        $this->item('comercial.ventas_mis_ventas', $ventas, null, 'enlace', 'Mis ventas', null, 'sale.list', 'list_sale', 1);
+        $this->item('comercial.ventas_nc_nd', $ventas, null, 'enlace', 'Notas de crédito/débito', null, 'nota.list', 'list_nota_electronica', 2);
+        $this->item('comercial.ventas_anticipos', $ventas, null, 'enlace', 'Emitir anticipos', null, 'advances.index', 'list_advance', 3);
         // Reusa list_sale — mismo criterio que el menú viejo, sin permiso propio.
-        $this->item('comercial.ventas_por_cobrar', $ventas, null, 'enlace', 'Ventas por Cobrar', null, 'credit_receivables.index', 'list_sale', 4);
-        $this->item('comercial.ventas_cotiz_comerciales', $ventas, null, 'enlace', 'Cotizaciones Comerciales', null, 'commercial-quotes.index', 'list_commercial_quote', 5);
+        $this->item('comercial.ventas_por_cobrar', $ventas, null, 'enlace', 'Ventas por cobrar', null, 'credit_receivables.index', 'list_sale', 4);
+        $this->item('comercial.ventas_cotiz_comerciales', $ventas, null, 'enlace', 'Cotizaciones comerciales', null, 'commercial-quotes.index', 'list_commercial_quote', 5);
 
         // "Caja"/"Agencia de Viajes"/"Configuraciones"/"Recursos Cliente" ya eran grupos
         // reales de primer nivel en el frontend viejo (ver corrección del comentario de
         // arriba) — su ícono va acá, no en ninguno de sus hijos.
-        $caja = $this->item('caja', null, null, 'grupo', 'Caja', 'fas fa-cash-register', null, null, 5);
-        $this->item('caja.turno_activo', $caja, null, 'enlace', 'Turno Activo', null, 'cash.session', 'cash.open_session', 1);
-        $this->item('caja.historial', $caja, null, 'enlace', 'Historial y Reportes', null, 'cash.dashboard', 'cash.view_all', 2);
+        $caja = $this->item('caja', null, null, 'grupo', 'Caja', 'iconoir-cash', null, null, 5);
+        $this->item('caja.turno_activo', $caja, null, 'enlace', 'Turno activo', null, 'cash.session', 'cash.open_session', 1);
+        $this->item('caja.historial', $caja, null, 'enlace', 'Historial y reportes', null, 'cash.dashboard', 'cash.view_all', 2);
 
-        $agencia = $this->item('agencia', null, 'agencia_viajes', 'grupo', 'Agencia de Viajes', 'fas fa-suitcase-rolling', null, null, 6);
+        $agencia = $this->item('agencia', null, 'agencia_viajes', 'grupo', 'Agencia de viajes', 'iconoir-airplane', null, null, 6);
         $this->item('agencia.cotizador', $agencia, 'agencia_viajes', 'enlace', 'Cotizador', null, 'agencia.cotizador.index', 'agencia.cotizaciones', 1);
         $this->item('agencia.reservas', $agencia, 'agencia_viajes', 'enlace', 'Reservas', null, 'agencia.reservas.index', 'agencia.reservas', 2);
-        $this->item('agencia.reporte_operativo', $agencia, 'agencia_viajes', 'enlace', 'Reporte Operativo', null, 'agencia.reporteOperativo.index', 'agencia.reservas', 3);
-        $this->item('agencia.salidas_operativas', $agencia, 'agencia_viajes', 'enlace', 'Salidas Operativas', null, 'agencia.salidas.index', 'agencia.reservas', 4);
-        $this->item('agencia.venta_directa', $agencia, 'agencia_viajes', 'enlace', 'Venta Directa', null, 'agencia.ventaDirecta', 'agencia.reservas', 5);
+        $this->item('agencia.reporte_operativo', $agencia, 'agencia_viajes', 'enlace', 'Reporte operativo', null, 'agencia.reporteOperativo.index', 'agencia.reservas', 3);
+        $this->item('agencia.salidas_operativas', $agencia, 'agencia_viajes', 'enlace', 'Salidas operativas', null, 'agencia.salidas.index', 'agencia.reservas', 4);
+        $this->item('agencia.venta_directa', $agencia, 'agencia_viajes', 'enlace', 'Venta directa', null, 'agencia.ventaDirecta', 'agencia.reservas', 5);
         $this->item('agencia.proveedores', $agencia, 'agencia_viajes', 'enlace', 'Proveedores', null, 'agencia.proveedores.index', 'agencia.proveedores', 6);
-        $this->item('agencia.destinos', $agencia, 'agencia_viajes', 'enlace', 'Destinos y Atractivos', null, 'agencia.destinos.index', 'agencia.destinos', 7);
+        $this->item('agencia.destinos', $agencia, 'agencia_viajes', 'enlace', 'Destinos y atractivos', null, 'agencia.destinos.index', 'agencia.destinos', 7);
         $this->item('agencia.temporadas', $agencia, 'agencia_viajes', 'enlace', 'Temporadas', null, 'agencia.temporadas.index', 'agencia.temporadas', 8);
-        $this->item('agencia.guias', $agencia, 'agencia_viajes', 'enlace', 'Guias Turisticos', null, 'agencia.guias.index', 'agencia.guias', 9);
-        $this->item('agencia.paquetes', $agencia, 'agencia_viajes', 'enlace', 'Paquetes / Tours', null, 'agencia.paquetes.index', 'agencia.paquetes', 10);
-        $this->item('agencia.configuracion', $agencia, 'agencia_viajes', 'enlace', 'Configuracion', null, 'agencia.configuracion.index', 'agencia.configuracion', 11);
-        $this->item('agencia.configuracion_codigos', $agencia, 'agencia_viajes', 'enlace', 'Codigos y numeracion', null, 'agencia.configuracion.codigos', 'agencia.configuracion', 12);
+        $this->item('agencia.guias', $agencia, 'agencia_viajes', 'enlace', 'Guías turísticos', null, 'agencia.guias.index', 'agencia.guias', 9);
+        $this->item('agencia.paquetes', $agencia, 'agencia_viajes', 'enlace', 'Paquetes y tours', null, 'agencia.paquetes.index', 'agencia.paquetes', 10);
+        $this->item('agencia.configuracion', $agencia, 'agencia_viajes', 'enlace', 'Config. de la Agencia', null, 'agencia.configuracion.index', 'agencia.configuracion', 11);
+        $this->item('agencia.configuracion_codigos', $agencia, 'agencia_viajes', 'enlace', 'Códigos y numeración', null, 'agencia.configuracion.codigos', 'agencia.configuracion', 12);
 
         // Módulo Créditos (04-frontend "Además"): solo para el giro 'creditos'.
-        $creditos = $this->item('creditos', null, 'creditos', 'grupo', 'Créditos', 'fas fa-hand-holding-usd', null, null, 6);
+        $creditos = $this->item('creditos', null, 'creditos', 'grupo', 'Créditos', 'iconoir-hand-cash', null, null, 6);
         $this->item('creditos.cobranza', $creditos, 'creditos', 'enlace', 'Cobranza del día', null, 'creditos.cobranza', 'creditos.cobrar', 1);
-        $this->item('creditos.listado', $creditos, 'creditos', 'enlace', 'Créditos', null, 'creditos.index', 'creditos.ver', 2);
+        $this->item('creditos.listado', $creditos, 'creditos', 'enlace', 'Listado de Créditos', null, 'creditos.index', 'creditos.ver', 2);
         $this->item('creditos.nuevo', $creditos, 'creditos', 'enlace', 'Nuevo crédito', null, 'creditos.nuevo', 'creditos.crear', 3);
-        $this->item('creditos.migrar', $creditos, 'creditos', 'enlace', 'Registrar existente', null, 'creditos.migrar', 'creditos.migrar', 4);
-        $this->item('creditos.configuracion', $creditos, 'creditos', 'enlace', 'Configuración', null, 'creditos.configuracion', 'creditos.configurar', 8);
+        $this->item('creditos.migrar', $creditos, 'creditos', 'enlace', 'Registrar crédito antiguo', null, 'creditos.migrar', 'creditos.migrar', 4);
+        $this->item('creditos.configuracion', $creditos, 'creditos', 'enlace', 'Configuración de créditos', null, 'creditos.configuracion', 'creditos.configurar', 8);
         // Fase 4d: la agenda la usa también el cobrador; los reportes, quien tiene creditos.reportes.
         $this->item('creditos.agenda', $creditos, 'creditos', 'enlace', 'Agenda de cobranza', null, 'creditos.agenda', 'creditos.cobrar', 6);
         $this->item('creditos.reportes', $creditos, 'creditos', 'enlace', 'Reportes', null, 'creditos.reportes', 'creditos.reportes', 7);
 
-        $config = $this->item('configuraciones', null, null, 'grupo', 'Configuraciones', 'fas fa-wrench', null, null, 7);
+        $config = $this->item('configuraciones', null, null, 'grupo', 'Configuración', 'iconoir-settings', null, null, 7);
         $this->item('configuraciones.empresa', $config, null, 'enlace', 'Datos de la empresa', null, 'company.index', 'company', 1);
         $this->item('configuraciones.sucursales', $config, null, 'enlace', 'Sucursales', null, 'branches.index', 'list_branch', 2);
         $this->item('configuraciones.cajas', $config, null, 'enlace', 'Cajas', null, 'cash-registers.index', 'list_cash_register', 3);
-        $this->item('configuraciones.metodos_pago', $config, null, 'enlace', 'Metodos de Pago', null, 'payment-methods.index', 'list_payment_method', 4);
-        $this->item('configuraciones.series', $config, null, 'enlace', 'Series de Comprobantes', null, 'series-comprobante.index', 'list_serie_comprobante', 5, self::SIN_CREDITOS);
-        $this->item('configuraciones.proveedores', $config, null, 'enlace', 'Proveedores', null, 'suppliers.index', 'list_supplier', 6);
-        $this->item('configuraciones.conceptos_caja', $config, null, 'enlace', 'Conceptos de Caja', null, 'cash-concepts.index', 'list_cash_concept', 7);
+        $this->item('configuraciones.metodos_pago', $config, null, 'enlace', 'Métodos de pago', null, 'payment-methods.index', 'list_payment_method', 4);
+        $this->item('configuraciones.series', $config, null, 'enlace', 'Series de comprobantes', null, 'series-comprobante.index', 'list_serie_comprobante', 5, self::SIN_CREDITOS);
+        $this->item('configuraciones.proveedores', $config, null, 'enlace', 'Proveedores de gastos', null, 'suppliers.index', 'list_supplier', 6);
+        $this->item('configuraciones.conceptos_caja', $config, null, 'enlace', 'Conceptos de caja', null, 'cash-concepts.index', 'list_cash_concept', 7);
 
-        $recursos = $this->item('recursos_cliente', null, null, 'grupo', 'Recursos Cliente', 'fas fa-qrcode', null, null, 8);
-        $this->item('recursos_cliente.listar', $recursos, null, 'enlace', 'Listar', null, 'recursos.index', 'list_recurso', 1);
-        $this->item('recursos_cliente.registrar', $recursos, null, 'enlace', 'Registrar', null, 'recurso.register', 'register_recurso', 2);
+        $recursos = $this->item('recursos_cliente', null, null, 'grupo', 'Capacitación', 'iconoir-book-stack', null, null, 8);
+        // Administrar el contenido es de la plataforma; verlo ("Manuales y videos") es de todos.
+        $this->item('recursos_cliente.listar', $recursos, null, 'enlace', 'Administrar recursos', null, 'recursos.index', 'list_recurso', 1, soloPlataforma: true);
         // Reusa register_recurso — mismo criterio que el menú viejo, sin permiso propio.
-        $this->item('recursos_cliente.manual', $recursos, null, 'enlace', 'Manual del Sistema', null, 'recurso.manual', 'register_recurso', 3);
+        $this->item('recursos_cliente.manual', $recursos, null, 'enlace', 'Manuales y videos', null, 'recurso.manual', 'register_recurso', 3);
+
+        // 07-oct-2026: "Registrar" ya no tiene entrada propia en el menú — el listado tiene su
+        // botón (visible solo con el permiso de registrar), y Productos/Sistemas pasan a ser
+        // enlaces directos al listado. Se desactivan en vez de borrarse: updateOrCreate no
+        // quita filas, y así un tenant ya sembrado deja de verlas al re-correr este seeder.
+        MenuItem::whereIn('codigo', [
+            'admin_portal.sistemas_registrar',
+            'admin_portal.sistemas_listar',
+            'comercial.productos_registrar',
+            'comercial.productos_listar',
+            'recursos_cliente.registrar',
+        ])->update(['activo' => false]);
     }
 
     private function item(
@@ -149,7 +159,8 @@ class MenuItemsSeeder extends Seeder
         ?string $ruta,
         ?string $permisoRequerido,
         int $orden,
-        ?array $girosExcluidos = null
+        ?array $girosExcluidos = null,
+        bool $soloPlataforma = false
     ): int {
         $menuItem = MenuItem::updateOrCreate(
             ['codigo' => $codigo],
@@ -157,6 +168,7 @@ class MenuItemsSeeder extends Seeder
                 'parent_id' => $parentId,
                 'giro' => $giro,
                 'giros_excluidos' => $girosExcluidos,
+                'solo_plataforma' => $soloPlataforma,
                 'tipo' => $tipo,
                 'label' => $label,
                 'icono' => $icono,

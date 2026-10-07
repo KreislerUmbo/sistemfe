@@ -22,7 +22,7 @@
               </b-button>
             </b-col>
             <b-col lg="2" sm="2">
-              <b-button type="button" variant="success" to="/manuales/register">
+              <b-button v-if="puedeRegistrar" type="button" variant="success" :to="{ name: 'recurso.register' }">
                 <i class="far fa-plus-square ml-2"></i> Nuevo Recurso
               </b-button>
             </b-col>
@@ -123,6 +123,9 @@ import { ref, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import Swal from 'sweetalert2'
 import { recursoService, type RecursoManual } from '@/services/admin/recursoService'
+import { useAuthStore } from '@/stores/auth'
+
+const puedeRegistrar = useAuthStore().isPermitedRoute('register_recurso')
 
 const router = useRouter()
 

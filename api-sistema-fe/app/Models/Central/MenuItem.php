@@ -18,6 +18,7 @@ class MenuItem extends Model
         'parent_id',
         'giro',
         'giros_excluidos',
+        'solo_plataforma',
         'modulo_id',
         'permiso_requerido',
         'label',
@@ -33,6 +34,7 @@ class MenuItem extends Model
         return [
             'activo' => 'boolean',
             'giros_excluidos' => 'array',
+            'solo_plataforma' => 'boolean',
             'orden' => 'integer',
         ];
     }

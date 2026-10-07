@@ -1,6 +1,6 @@
 import { useMenuStore } from "@/stores/menu";
 import type { MenuItemType } from "@/types/menu";
-import type { RouteRecordName } from "vue-router";
+import { useRoute, type RouteRecordName } from "vue-router";
 
 let activeMenuItem = {};
 
@@ -10,22 +10,18 @@ const getMatchingMenuItems = (
 ) => {
   const matchingItems: string[] = [];
 
-  const traverse = (item: MenuItemType) => {
-    if (
-      item.children &&
-      item.children.some(
-        (child) => child.route?.name && child.route.name === currentRouteName,
-      )
-    ) {
-      matchingItems.push(item.key); // Add parent's key if a child matches
-      if (item.parentKey) {
-        matchingItems.push(item.parentKey);
-      }
+  // Marca cada grupo que contenga la ruta actual en CUALQUIER nivel, no solo
+  // como hijo directo: el árbol de /me/menu no trae parentKey, así que con
+  // Comercial › Ventas › Mis ventas el abuelo "Comercial" quedaba cerrado y
+  // ocultaba el ítem activo.
+  const traverse = (item: MenuItemType): boolean => {
+    const selfMatch = !!item.route?.name && item.route.name === currentRouteName;
+    let descendantMatch = false;
+    for (const child of item.children ?? []) {
+      if (traverse(child)) descendantMatch = true;
     }
-
-    if (item.children) {
-      item.children.forEach((child) => traverse(child));
-    }
+    if (descendantMatch) matchingItems.push(item.key);
+    return selfMatch || descendantMatch;
   };
 
   data.forEach(traverse);
@@ -39,4 +35,13 @@ export const menuItemActive = (
 ) => {
   activeMenuItem = getMatchingMenuItems(useMenuStore().items, currentRouteName);
   return activeMenuItem && Object.values(activeMenuItem).includes(key);
+};
+
+// Ruta que el menú considera activa: las pantallas sin entrada propia (ej.
+// registrar/editar producto) declaran `meta.menuActivo` con la ruta del
+// listado, así ese ítem queda resaltado y su grupo abierto. Llamar solo
+// dentro de setup() (usa useRoute()).
+export const rutaActivaDelMenu = (): RouteRecordName | null | undefined => {
+  const ruta = useRoute();
+  return (ruta.meta.menuActivo as RouteRecordName | undefined) ?? ruta.name;
 };

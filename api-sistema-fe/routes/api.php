@@ -150,25 +150,25 @@ Route::group([
     // permisos:backfill-gate-bucket-a, sin asignar a ningún rol (solo
     // Super-Admin los usa hoy, bypasea vía Gate::before).
     Route::resource('system_categories', SystemCategoryController::class)
-        ->middlewareFor('store', 'permission:register_categorie_system')
-        ->middlewareFor('update', 'permission:edit_categorie_system')
-        ->middlewareFor('destroy', 'permission:delete_categorie_system');
+        ->middlewareFor('store', ['tenant.plataforma', 'permission:register_categorie_system'])
+        ->middlewareFor('update', ['tenant.plataforma', 'permission:edit_categorie_system'])
+        ->middlewareFor('destroy', ['tenant.plataforma', 'permission:delete_categorie_system']);
     Route::post("system_categories/{id}", [SystemCategoryController::class, 'update'])
-        ->middleware('permission:edit_categorie_system');
+        ->middleware(['tenant.plataforma', 'permission:edit_categorie_system']);
 
     Route::get("systems/config", [SystemController::class, 'config']);
     Route::resource('systems', SystemController::class)
-        ->middlewareFor('store', 'permission:register_system')
-        ->middlewareFor('update', 'permission:edit_system')
-        ->middlewareFor('destroy', 'permission:delete_system');
+        ->middlewareFor('store', ['tenant.plataforma', 'permission:register_system'])
+        ->middlewareFor('update', ['tenant.plataforma', 'permission:edit_system'])
+        ->middlewareFor('destroy', ['tenant.plataforma', 'permission:delete_system']);
 
     // Contenido de ayuda del marketplace (tutoriales: cómo registrar producto, venta,
     // etc.) — catálogo de la plataforma, no dato de negocio de un tenant. Antes vivía
     // mal cableado contra ProductController/products (ver plan §1c.3e/§1c.3f).
     Route::resource('recursos', ManualRecursoController::class)
-        ->middlewareFor('store', 'permission:register_recurso')
-        ->middlewareFor('update', 'permission:edit_recurso')
-        ->middlewareFor('destroy', 'permission:delete_recurso');
+        ->middlewareFor('store', ['tenant.plataforma', 'permission:register_recurso'])
+        ->middlewareFor('update', ['tenant.plataforma', 'permission:edit_recurso'])
+        ->middlewareFor('destroy', ['tenant.plataforma', 'permission:delete_recurso']);
 });
 
 // Panel superadmin (plan-panel-superadmin.md, Fase A) — guard 'central', completamente
