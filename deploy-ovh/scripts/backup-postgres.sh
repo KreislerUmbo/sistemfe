@@ -5,9 +5,10 @@
 # tenant), comprimido y con retención. Pensado para correr por cron como
 # el usuario 'postgres' o con sudo.
 #
-# Instalación (crontab de root):
-#   crontab -e
-#   0 3 * * * /var/backups/sistemafe/scripts/backup-postgres.sh >> /var/log/backup-postgres.log 2>&1
+# Instalación (crontab de ROOT, nunca el de umbo: ahí sudo pide contraseña y falla en silencio):
+#   sudo crontab -e
+#   30 3 * * * /var/backups/sistemafe/scripts/backup-postgres.sh >> /var/log/backup-postgres.log 2>&1
+# 3:30 hora del servidor (Lima): después del backup por tenant del panel (03:00).
 # ============================================================================
 set -euo pipefail
 

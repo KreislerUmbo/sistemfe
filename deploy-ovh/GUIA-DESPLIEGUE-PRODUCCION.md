@@ -605,8 +605,10 @@ LOG_LEVEL=warning                  # info/debug generan demasiado ruido en prod
   ```
 
 - `config/crontab-deploy.txt` — instala el scheduler de Laravel
-  (`php artisan schedule:run` cada minuto) como crontab de `umbo`, más el
-  cron de backup nocturno.
+  (`php artisan schedule:run` cada minuto) como crontab de `umbo`. El backup de
+  PostgreSQL **no** va ahí: va en el crontab de **root** (ver Fase 8). En el de `umbo`
+  falla en silencio, porque `sudo -u postgres` pide contraseña (caso real hasta el
+  05-oct-2026).
 
   ```bash
   crontab -e   # como umbo, pega el contenido de crontab-deploy.txt
@@ -672,7 +674,20 @@ Detalles que conviene saber:
 
 Script: `scripts/backup-postgres.sh` + `config/crontab-deploy.txt`
 
-- Backup diario (3 AM hora Lima) de **todas** las bases del cluster —
+Instalación (una sola vez; el cron espera el script en `/var/backups/sistemafe/scripts/`):
+
+```bash
+sudo mkdir -p /var/backups/sistemafe/scripts
+sudo cp /var/www/html/sistemfe/deploy-ovh/scripts/backup-postgres.sh /var/backups/sistemafe/scripts/
+sudo chmod 750 /var/backups/sistemafe/scripts/backup-postgres.sh
+( sudo crontab -l 2>/dev/null | grep -v backup-postgres; echo '30 3 * * * /var/backups/sistemafe/scripts/backup-postgres.sh >> /var/log/backup-postgres.log 2>&1' ) | sudo crontab -
+```
+
+Además de este backup completo, el panel superadmin hace uno **por tenant** cada día a las
+03:00 (hora Lima, `tenants:run-automatic-backups` en `routes/console.php`), descargable desde
+la pestaña Backups de cada tenant.
+
+- Backup diario (**3:30 AM** hora Lima, en el crontab de **root**) de **todas** las bases del cluster —
   incluye la central y cada base de tenant, porque cada una es una BD
   Postgres separada (así es como funciona `stancl/tenancy`).
 - Comprimido (`pg_dump -Fc` + gzip), retención de 14 días en disco.
