@@ -13,5 +13,12 @@
 # limpieza, reportes, lo que uses vía app/Console/Kernel.php o routes/console.php)
 * * * * * cd /var/www/html/sistemfe/api-sistema-fe && php artisan schedule:run >> /dev/null 2>&1
 
-# Backup de PostgreSQL todas las noches a las 3:00 AM (hora Lima)
-0 3 * * * /var/backups/sistemafe/scripts/backup-postgres.sh >> /var/log/backup-postgres.log 2>&1
+# El backup de PostgreSQL NO va en este crontab (umbo): el script usa "sudo -u postgres" y,
+# corriendo como umbo desde cron, sudo pide contraseña y falla en silencio todas las noches
+# (caso real en producción hasta el 05-oct-2026; además umbo no puede escribir en /var/log).
+# Va en el crontab de ROOT, a las 3:30 (hora Lima, la del servidor), después del backup por
+# tenant del panel (03:00, routes/console.php):
+#
+#   ( sudo crontab -l 2>/dev/null | grep -v backup-postgres; \
+#     echo '30 3 * * * /var/backups/sistemafe/scripts/backup-postgres.sh >> /var/log/backup-postgres.log 2>&1' ) | sudo crontab -
+#   sudo crontab -l    # verificar
