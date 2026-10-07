@@ -206,4 +206,25 @@ class MenuResolverTest extends TestCase
         $this->assertSame(['clientes'], $creditos);
         $this->assertSame(['ventas', 'clientes'], $agencia);
     }
+
+    public function test_solo_plataforma_oculta_el_item_y_sus_hijos_fuera_del_tenant_plataforma(): void
+    {
+        config(['plataforma.tenants' => ['umbo']]);
+
+        $portal = MenuItem::create(['codigo' => 'portal', 'tipo' => 'grupo', 'label' => 'Portal web', 'solo_plataforma' => true, 'orden' => 1]);
+        MenuItem::create(['codigo' => 'portal.sistemas', 'parent_id' => $portal->id, 'tipo' => 'enlace', 'label' => 'Sistemas', 'ruta' => 'systems.index', 'orden' => 1]);
+        MenuItem::create(['codigo' => 'manuales', 'tipo' => 'enlace', 'label' => 'Manuales y videos', 'ruta' => 'recurso.manual', 'orden' => 2]);
+
+        // Super-Admin: pasa cualquier permiso, igual no debe ver el catálogo central en otro tenant.
+        $role = \Spatie\Permission\Models\Role::firstOrCreate(['guard_name' => 'api', 'name' => 'Super-Admin']);
+        $user = User::factory()->create();
+        $user->assignRole($role);
+        $user = $user->fresh();
+
+        $cliente = collect($this->resolver->paraUsuario($user, Tenant::make(['id' => 'market', 'giro' => 'retail'])))->pluck('codigo')->all();
+        $plataforma = collect($this->resolver->paraUsuario($user, Tenant::make(['id' => 'umbo', 'giro' => 'retail'])))->pluck('codigo')->all();
+
+        $this->assertSame(['manuales'], $cliente);
+        $this->assertSame(['portal', 'manuales'], $plataforma);
+    }
 }

@@ -44,14 +44,13 @@
 <script setup lang="ts">
 import { ref, watch } from "vue";
 import MenuItem from "@/components/AppMenu/MenuItem.vue";
-import { menuItemActive } from "@/components/AppMenu/menuActivation";
+import { menuItemActive, rutaActivaDelMenu } from "@/components/AppMenu/menuActivation";
 import type { SubMenus } from "@/types/menu";
 const props = defineProps<SubMenus>();
 
 const visible = ref(true);
 
-import router from "@/router";
-const currentRouteName = router.currentRoute.value.name;
+const currentRouteName = rutaActivaDelMenu();
 
 const toggle = () => {
   return visible.value || menuItemActive(props.item.key, currentRouteName);

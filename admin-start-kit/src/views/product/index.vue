@@ -21,7 +21,7 @@
                             </b-button>
                         </b-col>
                         <b-col lang="2" sm="2">
-                            <b-button type="button" variant="success" to="/product/register">
+                            <b-button v-if="puedeRegistrar" type="button" variant="success" :to="{ name: 'product.register' }">
                                 <i class="far fa-plus-square ml-2"></i> Registrar
                             </b-button>
                         </b-col>
@@ -157,6 +157,10 @@ import { ref, onMounted, watch } from 'vue';
 import Swal from "sweetalert2/dist/sweetalert2.js";
 import { UNITS, type Product, type ProductCategorie, type ProductConfigResponse, type ProductResponse, type Products, type ProductUnit } from '@/types/products';
 import router from '@/router';
+import { useAuthStore } from '@/stores/auth';
+
+const puedeRegistrar = useAuthStore().isPermitedRoute('register_product');
+
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
 
 const search = ref<string | null>(null);

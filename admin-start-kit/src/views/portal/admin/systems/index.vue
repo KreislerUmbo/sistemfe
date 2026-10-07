@@ -19,7 +19,7 @@
                                 </b-button>
                             </b-col>
                             <b-col lg="2">
-                                <b-button type="button" variant="success" @click="goToCreate">
+                                <b-button v-if="puedeRegistrar" type="button" variant="success" @click="goToCreate">
                                     <i class="far fa-plus-square ml-2"></i> Registrar
                                 </b-button>
                             </b-col>
@@ -92,6 +92,9 @@ import { ref, onMounted, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import Swal from 'sweetalert2';
 import type { AxiosResponse } from 'axios';
+import { useAuthStore } from '@/stores/auth';
+
+const puedeRegistrar = useAuthStore().isPermitedRoute('register_system');
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
 
@@ -121,7 +124,7 @@ const reset = () => {
 };
 
 const goToCreate = () => {
-    router.push({ name: 'systems.create' });
+    router.push({ name: 'system.register' });
 };
 
 const editSystem = (id: number) => {

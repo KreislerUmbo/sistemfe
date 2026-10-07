@@ -3,7 +3,7 @@
         <b-row class="justify-content-center">
             <b-col cols="12">
                 <b-card-header>
-                    <b-card-title>Proveedores</b-card-title>
+                    <b-card-title>Proveedores de gastos</b-card-title>
                     <b-row class="align-items-center justify-content-between mt-3">
                         <b-col lg="7" class="text-center">
                             <b-form-input type="text" id="search" v-model="search"

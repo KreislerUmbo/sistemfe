@@ -28,6 +28,9 @@ return Application::configure(basePath: dirname(__DIR__))
             // concepto distinto de 'archivado' (EnsureTenantIsActive), mismo patrón.
             'tenant.subscription' => \App\Http\Middleware\TenantSubscriptionMiddleware::class,
             'tenant.token' => \App\Http\Middleware\EnsureTokenBelongsToTenant::class,
+            // Escrituras del catálogo central (Portal web, recursos): solo el tenant
+            // dueño de la plataforma, ver config/plataforma.php.
+            'tenant.plataforma' => \App\Http\Middleware\EnsureTenantIsPlataforma::class,
             // Panel superadmin — usar junto a auth:central en rutas /api/central/*
             // (Fase A), orden: auth:central → central.token.
             'central.token' => \App\Http\Middleware\EnsureTokenIsCentralGuard::class,

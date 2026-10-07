@@ -17,9 +17,9 @@
 
 <script setup lang="ts">
 import type { SubMenus } from "@/types/menu";
-import router from "@/router";
+import { rutaActivaDelMenu } from "@/components/AppMenu/menuActivation";
 
 defineProps<SubMenus>();
 
-const currentRouteName = router.currentRoute.value.name;
+const currentRouteName = rutaActivaDelMenu();
 </script>
