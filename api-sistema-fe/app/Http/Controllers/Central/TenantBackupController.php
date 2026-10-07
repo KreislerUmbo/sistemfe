@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\Central\TenantBackup;
 use App\Models\Tenant;
 use App\Services\TenantBackupService;
+use Illuminate\Support\Facades\Storage;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
 // Fase C.1 (plan-panel-superadmin.md) — backups on-demand por tenant, gestión desde el
@@ -46,6 +48,17 @@ class TenantBackupController extends Controller
         $backup = $this->backupService->reverificar($backup);
 
         return response()->json(['backup' => $backup]);
+    }
+
+    // 05-oct-2026 — descarga del archivo .dump (copia fuera del servidor). La validación y la
+    // auditoría viven en el servicio; aquí solo se entrega el archivo.
+    public function download(string $id, string $backupId): StreamedResponse
+    {
+        $descarga = $this->backupService->prepararDescarga($this->resolveBackup($id, $backupId));
+
+        return Storage::disk('private')->download($descarga['path'], $descarga['nombre'], [
+            'Content-Type' => 'application/octet-stream',
+        ]);
     }
 
     private function resolveTenant(string $id): Tenant
