@@ -10,12 +10,14 @@ return [
     | escribir. Antes cualquier Super-Admin de cualquier tenant podía editarlo, porque
     | Gate::before le salta los permisos.
     |
-    | Lista separada por comas de ids de tenant. Si ninguno coincide, nadie puede
-    | escribir en el catálogo (falla cerrado, no abierto).
+    | Lista separada por comas de ids de tenant (= subdominio, ver
+    | TenantProvisioningService). En producción es 'market' (market.umbosystem.com,
+    | el tenant de UmboSystem); en dev local se usa 'umbo' vía .env. Si ninguno
+    | coincide, nadie puede escribir en el catálogo (falla cerrado, no abierto).
     */
     'tenants' => array_values(array_filter(array_map(
         'trim',
-        explode(',', (string) env('PLATAFORMA_TENANTS', 'umbo'))
+        explode(',', (string) env('PLATAFORMA_TENANTS', 'market'))
     ))),
 
 ];
