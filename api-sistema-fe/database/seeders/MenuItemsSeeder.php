@@ -107,16 +107,16 @@ class MenuItemsSeeder extends Seeder
         $this->item('agencia.temporadas', $agencia, 'agencia_viajes', 'enlace', 'Temporadas', null, 'agencia.temporadas.index', 'agencia.temporadas', 8);
         $this->item('agencia.guias', $agencia, 'agencia_viajes', 'enlace', 'Guías turísticos', null, 'agencia.guias.index', 'agencia.guias', 9);
         $this->item('agencia.paquetes', $agencia, 'agencia_viajes', 'enlace', 'Paquetes y tours', null, 'agencia.paquetes.index', 'agencia.paquetes', 10);
-        $this->item('agencia.configuracion', $agencia, 'agencia_viajes', 'enlace', 'Configuración', null, 'agencia.configuracion.index', 'agencia.configuracion', 11);
+        $this->item('agencia.configuracion', $agencia, 'agencia_viajes', 'enlace', 'Config. de la Agencia', null, 'agencia.configuracion.index', 'agencia.configuracion', 11);
         $this->item('agencia.configuracion_codigos', $agencia, 'agencia_viajes', 'enlace', 'Códigos y numeración', null, 'agencia.configuracion.codigos', 'agencia.configuracion', 12);
 
         // Módulo Créditos (04-frontend "Además"): solo para el giro 'creditos'.
         $creditos = $this->item('creditos', null, 'creditos', 'grupo', 'Créditos', 'iconoir-hand-cash', null, null, 6);
         $this->item('creditos.cobranza', $creditos, 'creditos', 'enlace', 'Cobranza del día', null, 'creditos.cobranza', 'creditos.cobrar', 1);
-        $this->item('creditos.listado', $creditos, 'creditos', 'enlace', 'Créditos', null, 'creditos.index', 'creditos.ver', 2);
+        $this->item('creditos.listado', $creditos, 'creditos', 'enlace', 'Listado de Créditos', null, 'creditos.index', 'creditos.ver', 2);
         $this->item('creditos.nuevo', $creditos, 'creditos', 'enlace', 'Nuevo crédito', null, 'creditos.nuevo', 'creditos.crear', 3);
-        $this->item('creditos.migrar', $creditos, 'creditos', 'enlace', 'Registrar existente', null, 'creditos.migrar', 'creditos.migrar', 4);
-        $this->item('creditos.configuracion', $creditos, 'creditos', 'enlace', 'Configuración', null, 'creditos.configuracion', 'creditos.configurar', 8);
+        $this->item('creditos.migrar', $creditos, 'creditos', 'enlace', 'Registrar crédito antiguo', null, 'creditos.migrar', 'creditos.migrar', 4);
+        $this->item('creditos.configuracion', $creditos, 'creditos', 'enlace', 'Configuración de créditos', null, 'creditos.configuracion', 'creditos.configurar', 8);
         // Fase 4d: la agenda la usa también el cobrador; los reportes, quien tiene creditos.reportes.
         $this->item('creditos.agenda', $creditos, 'creditos', 'enlace', 'Agenda de cobranza', null, 'creditos.agenda', 'creditos.cobrar', 6);
         $this->item('creditos.reportes', $creditos, 'creditos', 'enlace', 'Reportes', null, 'creditos.reportes', 'creditos.reportes', 7);

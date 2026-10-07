@@ -42,7 +42,7 @@
       </select>
     </div>
     <div class="col-6 col-md-2">
-      <label class="form-label mb-1 small fw-semibold text-secondary" for="fc-n">N.º de pagos</label>
+      <label class="form-label mb-1 small fw-semibold text-secondary" for="fc-n">N.º de cuotas</label>
       <input id="fc-n" v-model="form.numero_cuotas" type="text" inputmode="numeric" class="form-control form-control-sm"
         :class="{ 'is-invalid': errores.numero_cuotas }" placeholder="0" autocomplete="off" />
       <div v-if="errores.numero_cuotas" class="invalid-feedback d-block">{{ errores.numero_cuotas }}</div>
