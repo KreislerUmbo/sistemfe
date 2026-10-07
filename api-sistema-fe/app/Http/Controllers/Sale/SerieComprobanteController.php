@@ -106,7 +106,7 @@ class SerieComprobanteController extends Controller
             // primer correlativo real; ver SerieComprobanteService).
             'correlativo_actual'      => 0,
             'correlativo_inicial'     => $correlativo_inicial,
-            'fecha_inicio'            => $request->fecha_inicio ?? now()->format('Y-m-d'),
+            'fecha_inicio'            => $request->fecha_inicio ?? \App\Services\HoraPeru::ahora()->format('Y-m-d'),
             'activo'                  => $request->boolean('activo', true),
         ]);
 

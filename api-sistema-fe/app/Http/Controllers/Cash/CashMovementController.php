@@ -309,7 +309,7 @@ class CashMovementController extends Controller
 
         $query->orderByDesc('created_at');
 
-        $nombreArchivo = 'movimientos_caja_' . now()->format('Ymd_His') . '.xlsx';
+        $nombreArchivo = 'movimientos_caja_' . \App\Services\HoraPeru::ahora()->format('Ymd_His') . '.xlsx';
 
         return Excel::download(new CashMovementsExport($query), $nombreArchivo);
     }
