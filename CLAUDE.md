@@ -390,6 +390,9 @@ inicio en lugar del Dashboard, Agenda de cobranza y 6 reportes con PDF/Excel) co
 producción (orden acordado en la memoria `project_creditos_modulo_estado`).
 Al desplegar: `MenuItemsSeeder` + limpiar la caché de menú (`MenuResolver`, 24 h por usuario); cron
 `schedule:run` para `creditos:foto-cartera` y `creditos:escalamiento`.
+**En producción desde 05-oct-2026** (`1974b7c`). Tenant real: `credishirley`. **Pendiente antes de operar:** fijar
+`tasa_maxima` (tasa máxima legal BCRP) y reemplazar la plantilla de contrato genérica por la del abogado — ver
+`00-reglas-y-modelo.md` §5 "Pendientes de puesta en marcha".
 
 **Completo — Inicio con datos reales (Dashboard) para retail y agencia (02-oct-2026):**
 Reemplaza la demo de la plantilla Rizz por `GET dashboard` (`DashboardService`): ventas hoy/mes

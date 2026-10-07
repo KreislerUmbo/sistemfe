@@ -143,3 +143,15 @@ Fuente de verdad: las migraciones de `database/migrations/tenant/core/` y sus co
 ## 5. Legal y negocio (pendiente con el cliente)
 - Tasas máximas BCRP (compensatoria y moratoria): exceder puede configurar **usura (art. 214 CP)** → fijar `tasa_maxima`. Registro SBS, venta de prendas (Ley de Garantía Mobiliaria), texto del contrato, protección de datos (Ley 29733): con su abogado.
 - Confirmar: interés mínimo 10%, mora diaria sobre saldo con tope 100% de la cuota, domingos, lista de feriados, módulos a contratar, si emite comprobantes por intereses.
+
+### Pendientes de puesta en marcha — tenant real `credishirley` (creado 05-oct-2026 en producción)
+Antes de que opere con préstamos reales (decisión del usuario, 05-oct-2026: anotarlos aquí):
+- [ ] **Tasa máxima** (`tasa_maxima`, Créditos › Configuración): hoy vacía = el sistema no limita la tasa
+  que se cobra. Fijarla con la tasa máxima legal vigente del BCRP (compensatoria y moratoria) que confirme
+  el abogado/contador del cliente. Con ella, ningún crédito se puede crear por encima (validación de 03-api).
+- [ ] **Plantilla de contrato** (Créditos › Configuración › plantilla): el tenant arranca con la versión 1,
+  la genérica del sistema ("BORRADOR — revisar con su abogado"). Reemplazarla por el texto revisado por el
+  abogado del cliente. Cada guardado crea una versión nueva; el contrato de un crédito se congela con la
+  versión vigente al primer pedido, así que conviene hacerlo **antes del primer crédito real**.
+- Revisión de solo lectura de la configuración completa del tenant (config, empresa, usuarios, roles,
+  cajas, feriados): consulta tinker preparada el 05-oct-2026, sin correr todavía en producción.
