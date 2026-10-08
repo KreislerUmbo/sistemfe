@@ -5,61 +5,15 @@ namespace App\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Services\StorageUrl;
-use Spatie\Permission\Models\Role;
-use Validator;
 
 
 class AuthController extends Controller
 {
 
-    /**
-     * Register a User.
-     *
-     * @return \Illuminate\Http\JsonResponse
-     */
-    public function register()
-    {
-        $validator = Validator::make(request()->all(), [
-            'name' => 'required',
-            'email' => 'required|email|unique:users',
-            'password' => 'required|min:8',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json($validator->errors()->toJson(), 400);
-        }
-
-
-        // Buscar el rol "cliente" (puedes obtenerlo por nombre o por ID fijo)
-        $clienteRole = Role::where('name', 'Cliente')->first();
-        if (!$clienteRole) {
-            // Si no existe, podrías crearlo automáticamente (recomendado hacerlo en un seeder)
-            $clienteRole = Role::create(['name' => 'Cliente']);
-        }
-
-        $user = User::create([
-            'name' => request()->name,
-            'email' => request()->email,
-            'password' => bcrypt(request()->password),
-            'role_id' => $clienteRole->id,
-            'user_id' => auth('api')->check()
-                ? auth('api')->id()
-                : null, // será null si no está logueado
-        ]);
-        // Opcional: generar token automáticamente después del registro
-        $token = auth('api')->login($user);
-        return $this->respondWithToken($token);
-    }
-  
-  /*       $user = new User;
-        $user->name = request()->name;
-        $user->email = request()->email;
-        $user->password = bcrypt(request()->password);
-        $user->save();
-  
-        return response()->json($user, 201);
-    } */
-
+    // register() (POST auth/register) se retiró en la auditoría de seguridad del
+    // 08-oct-2026: era público y creaba un usuario del panel con token válido en
+    // cualquier tenant, lo que daba lectura a ventas/clientes/productos. Los
+    // usuarios se crean solo desde Usuarios (UserController::store, con permiso).
 
     /**
      * Get a JWT via given credentials.
@@ -72,6 +26,12 @@ class AuthController extends Controller
 
         if (! $token = auth('api')->attempt($credentials)) {
             return response()->json(['error' => 'Correo o contraseña incorrectos.'], 401);
+        }
+
+        if ((int) auth('api')->user()->state === User::STATE_INACTIVO) {
+            auth('api')->invalidate(true);
+
+            return response()->json(['error' => 'Tu usuario está desactivado. Pide a un administrador que lo reactive.'], 403);
         }
 
         return $this->respondWithToken($token);

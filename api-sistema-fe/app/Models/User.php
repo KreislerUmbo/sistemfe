@@ -18,6 +18,11 @@ class User extends Authenticatable implements JWTSubject
 
      use HasRoles;
     use SoftDeletes;
+
+    // users.state: 1 = Activo, 2 = Inactivo (pantalla Usuarios). Un inactivo no
+    // puede iniciar sesión ni usar un token ya emitido (EnsureUserIsActive).
+    public const STATE_INACTIVO = 2;
+
     /**
      * The attributes that are mass assignable.
      *

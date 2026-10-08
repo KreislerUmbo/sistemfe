@@ -99,14 +99,13 @@ Route::group([
 ], function ($router) {
     // throttle:6,1 = máx. 6 intentos por minuto por IP+ruta (Laravel RateLimiter por
     // defecto) — antes no había ningún límite, quedaba abierto a fuerza bruta.
-    Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:6,1')->name('register');
     Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:6,1')->name('login');
-    Route::post('/me', [AuthController::class, 'me'])->middleware('auth:api')->name('me');
+    Route::post('/me', [AuthController::class, 'me'])->middleware(['auth:api', 'user.active'])->name('me');
     // Renovación silenciosa de sesión (aviso "por expirar" en el frontend,
     // http-client.ts) — el método ya existía en AuthController pero nunca
     // había quedado enrutado. auth:api exige token todavía válido: se llama
     // ANTES de que expire (temporizador en el frontend), no después.
-    Route::post('/refresh', [AuthController::class, 'refresh'])->middleware('auth:api')->name('refresh');
+    Route::post('/refresh', [AuthController::class, 'refresh'])->middleware(['auth:api', 'user.active'])->name('refresh');
     // Mismo caso que /refresh: el método ya existía (auth('api')->logout(),
     // invalida/blacklistea el token) pero nunca había quedado enrutado —
     // "cerrar sesión" en el frontend solo borraba el token del navegador,
@@ -140,7 +139,7 @@ Route::get('branding', [CompanyController::class, 'branding'])
 // cambian — esto corrige SOLO a qué base se resuelve el USUARIO del token.
 // Mismo pipeline que el grupo "Protected routes" de abajo (línea ~264).
 Route::group([
-    'middleware' => ['tenant', 'tenant.active', 'tenant.subscription', 'tenant.token', 'auth:api'],
+    'middleware' => ['tenant', 'tenant.active', 'tenant.subscription', 'tenant.token', 'auth:api', 'user.active'],
 ], function ($router) {
     // permission:X — Fase 0b (plan-modulo-menus-y-roles.md §9.1, Bucket A):
     // "ADMIN PORTAL" (catálogo del marketplace, compartido por todos los
@@ -277,7 +276,7 @@ Route::prefix('central')->group(function () {
 });
 
 Route::group([
-    'middleware' => ['tenant', 'tenant.active', 'tenant.subscription', 'tenant.token', 'auth:api'],
+    'middleware' => ['tenant', 'tenant.active', 'tenant.subscription', 'tenant.token', 'auth:api', 'user.active'],
 ], function ($router) {
 
     // Protected routes go here

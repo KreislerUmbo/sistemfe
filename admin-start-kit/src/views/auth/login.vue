@@ -126,13 +126,6 @@
             </div>
           </b-form>
 
-          <p class="text-center text-muted mt-4 mb-0">
-            ¿No tienes una cuenta?
-            <router-link to="/auth/register" class="text-success fw-semibold ms-1">
-              Regístrate gratis
-            </router-link>
-          </p>
-
           <p class="text-center text-muted small mt-4 mb-0">
             <i class="fas fa-shield-halved me-1"></i>
             Tu información está protegida con encriptación de nivel empresarial.
