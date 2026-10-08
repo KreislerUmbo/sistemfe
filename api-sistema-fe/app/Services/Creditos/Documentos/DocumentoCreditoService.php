@@ -90,6 +90,7 @@ class DocumentoCreditoService
             'conceptos' => self::CONCEPTOS,
             'metodo' => $pago->paymentMethod ? FormatoDocumento::textoPdf($pago->paymentMethod->name) : null,
             'cajero' => User::find($pago->registrado_por)?->name,
+            'renovacion' => $this->desgloseRenovacion($pago),
         ], "recibo-{$pago->numero_recibo}", 330 + count($lineas) * 42);
     }
 
@@ -301,5 +302,28 @@ class DocumentoCreditoService
         $formato === 'ticket80mm' ? $pdf->setPaper([0, 0, self::ANCHO_TICKET, $altoTicket], 'portrait') : $pdf->setPaper('a4', 'portrait');
 
         return $pdf->stream(Str::slug($nombre) . '.pdf');
+    }
+
+    /**
+     * Pago "renovación" (1.21): cuánto cubrió el crédito nuevo y cuánto pagó el cliente en caja
+     * (ej.: debía 600, renovó por 500 → crédito nuevo 500, cliente 100). Null si no es renovación.
+     *
+     * @return array{credito: string|null, cubierto: string, cliente: string}|null
+     */
+    private function desgloseRenovacion(CreditoPago $pago): ?array
+    {
+        if ($pago->origen !== \App\Services\Creditos\Motor\Enums\OrigenPago::Renovacion) {
+            return null;
+        }
+        $nuevo = Credito::where('credito_renovado_id', $pago->credito_id)
+            ->where('estado', '!=', \App\Enums\Creditos\CreditoEstado::Anulado)->latest('id')->first()
+            ?? Credito::where('credito_renovado_id', $pago->credito_id)->latest('id')->first();
+        $cubierto = $nuevo ? Dinero::aCentavos((string) $nuevo->monto_capital) : 0;
+
+        return [
+            'credito' => $nuevo?->numero_credito,
+            'cubierto' => FormatoDocumento::soles(Dinero::aSoles($cubierto)),
+            'cliente' => FormatoDocumento::soles(Dinero::aSoles(\App\Services\Creditos\CobradoAlCliente::centavos($pago))),
+        ];
     }
 }

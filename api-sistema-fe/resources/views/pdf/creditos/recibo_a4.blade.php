@@ -52,7 +52,12 @@
     </table>
 
     <table class="totales">
-        <tr><td>Recibido</td><td class="derecha">{{ F::soles((string) $pago->monto_recibido) }}</td></tr>
+        @if ($renovacion)
+            <tr><td>Cubierto con el crédito {{ $renovacion['credito'] ?? 'nuevo' }}</td><td class="derecha">{{ $renovacion['cubierto'] }}</td></tr>
+            <tr><td>Pagado por el cliente</td><td class="derecha">{{ $renovacion['cliente'] }}</td></tr>
+        @else
+            <tr><td>Recibido</td><td class="derecha">{{ F::soles((string) $pago->monto_recibido) }}</td></tr>
+        @endif
         @if ((string) $pago->monto_excedente !== '0.00')
             <tr><td>{{ $destino === 'saldo_a_favor' ? 'A saldo a favor' : 'Vuelto' }}</td><td class="derecha">{{ F::soles((string) $pago->monto_excedente) }}</td></tr>
         @endif

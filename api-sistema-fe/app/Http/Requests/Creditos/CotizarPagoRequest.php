@@ -22,6 +22,8 @@ class CotizarPagoRequest extends FormRequest
         return [
             'monto_recibido' => ['required', new MontoSoles()],
             'destino_excedente' => ['nullable', Rule::enum(DestinoExcedente::class)],
+            // Pago con fecha anterior: la vista previa se calcula a esa fecha (el permiso lo valida el servicio).
+            'fecha_pago' => ['nullable', 'date_format:Y-m-d'],
         ];
     }
 }

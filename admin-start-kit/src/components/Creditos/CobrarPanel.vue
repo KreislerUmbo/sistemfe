@@ -142,7 +142,10 @@
                   <label class="form-label mb-1 small fw-semibold text-secondary" for="cobro-motivo">Motivo</label>
                   <input id="cobro-motivo" v-model="motivo" type="text" class="form-control form-control-sm" maxlength="500" placeholder="Ej.: pagó ayer y no se registró" />
                 </div>
-                <small class="col-12 text-muted">La vista previa es a hoy; al confirmar, el reparto se recalcula a la fecha indicada.</small>
+                <small class="col-12 text-muted">
+                  La vista previa se calcula a esa fecha.
+                  <template v-if="fechaCotizada && cotizacion">Para ponerse al día ese día: <strong>{{ formatoSoles(cotizacion.exigible_hoy) }}</strong>.</template>
+                </small>
               </div>
             </div>
           </div>
@@ -276,10 +279,12 @@ watch(usarSaldo, (activo) => {
 })
 
 // Vista previa del reparto (debounce + descarte de respuestas viejas).
-const solicitud = computed(() => (monto.value ? { monto: monto.value, destino: usarSaldo.value ? 'saldo_a_favor' as const : destino.value } : null))
-const { preview: cotizacion, cargando: cargandoCotizacion, error: errorCotizacion } = usePreviewCredito<CotizacionPago, { monto: string; destino: DestinoExcedente }>(
+// Con fecha anterior, la vista previa se calcula a esa fecha (la mora de ese día), igual que el pago.
+const fechaCotizada = computed(() => (conFechaAnterior.value && fechaPago.value && fechaPago.value !== hoy ? fechaPago.value : null))
+const solicitud = computed(() => (monto.value ? { monto: monto.value, destino: usarSaldo.value ? 'saldo_a_favor' as const : destino.value, fecha: fechaCotizada.value } : null))
+const { preview: cotizacion, cargando: cargandoCotizacion, error: errorCotizacion } = usePreviewCredito<CotizacionPago, { monto: string; destino: DestinoExcedente; fecha: string | null }>(
   solicitud,
-  (s, signal) => creditoService.cotizarPago(props.detalle.credito.id, s.monto, s.destino, signal),
+  (s, signal) => creditoService.cotizarPago(props.detalle.credito.id, s.monto, s.destino, signal, s.fecha),
 )
 
 // La clave NO se renueva al cambiar datos: si un intento anterior sí llegó al servidor,

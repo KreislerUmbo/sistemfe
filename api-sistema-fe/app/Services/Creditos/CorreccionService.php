@@ -142,6 +142,8 @@ class CorreccionService
             ->where('estado', PagoEstado::Valido)
             ->firstOrFail();
         $pago->update(['estado' => PagoEstado::Anulado, 'motivo_anulacion' => "Renovación anulada: {$motivo}", 'anulado_por' => $usuario->id, 'anulado_en' => now()]);
+        // Si al renovar el cliente pagó la diferencia (1.21 ampliada), esa entrada de caja se revierte.
+        $this->caja->revertirReferencia(CajaCredito::PAGO, $pago->id, $usuario);
 
         $carga = $this->cargador->cargar($anterior);
         $this->persistidor->persistir($anterior, $carga, $this->aplicador->aplicar($carga->estado, $carga->pagos, $this->reloj->hoy()));
@@ -209,7 +211,7 @@ class CorreccionService
      */
     private function bloqueosAAutorizar(Credito $credito, DatosCredito $datos, User $usuario): array
     {
-        $bloqueos = $this->limites->evaluar($credito->cliente_id, $datos->montoCapital, $credito->id)->bloqueos();
+        $bloqueos = $this->limites->evaluarParaOtorgar($credito->cliente_id, $datos->montoCapital, $credito->id)->bloqueos();
         if ($bloqueos === []) {
             return [];
         }

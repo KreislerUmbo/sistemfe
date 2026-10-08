@@ -18,19 +18,36 @@
         <summary class="text-secondary">Movimientos ({{ datos.movimientos.length }})</summary>
         <table class="table table-sm mb-0 mt-2 cifra">
           <thead class="table-light">
-            <tr><th>Fecha</th><th>Movimiento</th><th>Detalle</th><th class="text-end">Monto</th></tr>
+            <tr><th>Fecha</th><th>Movimiento</th><th>Detalle</th><th class="text-end">Monto</th><th v-if="puedeDevolver"></th></tr>
           </thead>
           <tbody>
             <tr v-for="m in datos.movimientos" :key="m.id">
               <td class="text-nowrap">{{ m.fecha ?? '—' }}</td>
-              <td>{{ TIPO[m.tipo] }}</td>
+              <td>
+                {{ TIPO[m.tipo] }}
+                <span v-if="m.anulada" class="badge bg-secondary-subtle text-secondary ms-1">Anulada</span>
+              </td>
               <td class="text-muted">{{ m.numero_recibo ?? m.motivo ?? '—' }}</td>
-              <td class="text-end" :class="m.monto.startsWith('-') ? 'text-danger' : 'text-success'">{{ formatoSoles(m.monto) }}</td>
+              <td class="text-end" :class="[m.monto.startsWith('-') ? 'text-danger' : 'text-success', { 'text-decoration-line-through': m.anulada }]">{{ formatoSoles(m.monto) }}</td>
+              <td v-if="puedeDevolver" class="text-end">
+                <button v-if="m.tipo === 'devolucion' && !m.anulada" type="button" class="btn btn-link btn-sm p-0 text-danger"
+                  title="Anular esta devolución" @click="abrirAnulacion(m.id, m.monto)">Anular</button>
+              </td>
             </tr>
           </tbody>
         </table>
       </details>
     </template>
+
+    <DialogoBase v-model="dialogoAnular" titulo="Anular devolución" texto-confirmar="Anular devolución" variante="danger"
+      :procesando="procesando" :error="errorAnulacion" :deshabilitado="motivoAnular.trim() === ''" @confirmar="anular">
+      <p class="small mb-3">
+        Los <strong>{{ formatoSoles(montoAnular.replace('-', '')) }}</strong> vuelven a tu caja y al saldo a favor del cliente.
+        Úsalo solo si la devolución se registró por error.
+      </p>
+      <label class="form-label mb-1 small fw-semibold text-secondary" for="anular-motivo">Motivo</label>
+      <input id="anular-motivo" v-model="motivoAnular" type="text" class="form-control form-control-sm" maxlength="500" placeholder="Ej.: se digitó mal el monto" />
+    </DialogoBase>
 
     <DialogoBase v-model="dialogo" titulo="Devolver saldo a favor" texto-confirmar="Devolver" :procesando="procesando" :error="errorDevolucion"
       :deshabilitado="!formularioValido" @confirmar="devolver">
@@ -83,6 +100,7 @@ const TIPO: Record<SaldoAFavor['movimientos'][number]['tipo'], string> = {
 const toast = useToast()
 const catalogos = useCreditosCatalogosStore()
 const { clave, renovar } = useClaveIdempotencia()
+const claveAnular = useClaveIdempotencia()
 const datos = ref<SaldoAFavor | null>(null)
 const cargando = ref(false)
 const error = ref<string | null>(null)
@@ -93,6 +111,11 @@ const motivo = ref('')
 const metodos = ref<MetodoPago[]>([])
 const procesando = ref(false)
 const errorDevolucion = ref<ErrorCredito | null>(null)
+const dialogoAnular = ref(false)
+const movimientoAnular = ref<number | null>(null)
+const montoAnular = ref('')
+const motivoAnular = ref('')
+const errorAnulacion = ref<ErrorCredito | null>(null)
 
 const tieneSaldo = computed(() => !!datos.value && datos.value.saldo !== '0.00')
 const montoValido = computed(() => normalizarMonto(monto.value))
@@ -123,6 +146,32 @@ async function abrirDevolucion() {
   if (!metodos.value.length) {
     metodos.value = await catalogos.obtenerMetodosPago()
     metodo.value = metodos.value[0]?.id ?? null
+  }
+}
+
+function abrirAnulacion(id: number, montoMovimiento: string) {
+  if (movimientoAnular.value !== id) claveAnular.renovar()
+  movimientoAnular.value = id
+  montoAnular.value = montoMovimiento
+  motivoAnular.value = ''
+  errorAnulacion.value = null
+  dialogoAnular.value = true
+}
+
+async function anular() {
+  if (movimientoAnular.value === null || motivoAnular.value.trim() === '') return
+  procesando.value = true
+  errorAnulacion.value = null
+  try {
+    datos.value = await creditoService.anularDevolucionSaldo(props.clienteId, movimientoAnular.value, motivoAnular.value.trim(), claveAnular.clave.value)
+    claveAnular.renovar()
+    dialogoAnular.value = false
+    emit('cambio', datos.value.saldo)
+    toast.success('Devolución anulada')
+  } catch (e) {
+    errorAnulacion.value = interpretarErrorCredito(e)
+  } finally {
+    procesando.value = false
   }
 }
 

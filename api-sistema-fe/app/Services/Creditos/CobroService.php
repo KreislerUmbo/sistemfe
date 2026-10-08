@@ -52,16 +52,18 @@ class CobroService
     ) {
     }
 
-    public function cotizar(Credito $credito, int $monto, DestinoExcedente $destino, User $usuario): CotizacionPago
+    /** Revisión 08-oct-2026: con fecha anterior, la vista previa se calcula a esa fecha (la mora de ese día). */
+    public function cotizar(Credito $credito, int $monto, DestinoExcedente $destino, User $usuario, ?Fecha $fechaPago = null): CotizacionPago
     {
         $this->validarCobrable($credito, $usuario);
         $hoy = $this->reloj->hoy();
+        $fecha = $this->fechaDelPago($credito, $fechaPago, null, $hoy, $usuario, exigirMotivo: false);
         $carga = $this->cargador->cargar($credito);
-        $resultado = $this->aplicarNuevo($carga, $hoy, $monto, OrigenPago::Cobro, $destino, $hoy);
+        $resultado = $this->aplicarNuevo($carga, $fecha, $monto, OrigenPago::Cobro, $destino, $hoy);
         $pago = $resultado->pago(self::NUEVO);
 
         return new CotizacionPago(
-            $this->aplicador->montoExigible($carga->estado, $carga->pagos, $hoy),
+            $this->aplicador->montoExigible($carga->estado, $carga->pagos, $fecha),
             $pago->montoAplicado,
             $pago->montoExcedente,
             array_values(array_filter($resultado->aplicaciones, static fn (Aplicacion $a): bool => $a->referenciaPago === self::NUEVO)),
@@ -81,7 +83,7 @@ class CobroService
         $this->validarCobrable($credito, $usuario);
 
         $hoy = $this->reloj->hoy();
-        $fechaPago = $this->fechaDelPago($credito, $s, $hoy, $usuario);
+        $fechaPago = $this->fechaDelPago($credito, $s->fechaPago, $s->motivoRetroactivo, $hoy, $usuario);
         $origen = $s->usarSaldoAFavor ? OrigenPago::SaldoAFavor : OrigenPago::Cobro;
         if ($s->usarSaldoAFavor) {
             // 04c.1: otro cobro del mismo cliente (en otro crédito) no puede gastar el mismo saldo.
@@ -177,39 +179,39 @@ class CobroService
         return $destino === DestinoExcedente::Adelanto ? DestinoExcedente::Devolver : $destino;
     }
 
-    private function fechaDelPago(Credito $credito, SolicitudCobro $s, Fecha $hoy, User $usuario): Fecha
+    private function fechaDelPago(Credito $credito, ?Fecha $fechaPago, ?string $motivo, Fecha $hoy, User $usuario, bool $exigirMotivo = true): Fecha
     {
-        if ($s->fechaPago === null || $s->fechaPago->esIgualA($hoy)) {
+        if ($fechaPago === null || $fechaPago->esIgualA($hoy)) {
             return $hoy;
         }
-        if ($s->fechaPago->esPosteriorA($hoy)) {
+        if ($fechaPago->esPosteriorA($hoy)) {
             throw new HttpException(422, 'La fecha del pago no puede ser futura.');
         }
         if (! $usuario->can(self::PERMISO_RETROACTIVO)) {
             throw new HttpException(403, 'Registrar un pago con fecha anterior requiere el permiso creditos.pago_fecha_anterior.');
         }
-        if (trim((string) $s->motivoRetroactivo) === '') {
+        if ($exigirMotivo && trim((string) $motivo) === '') {
             throw new HttpException(422, 'Indica el motivo del pago con fecha anterior.');
         }
         $maximo = CreditoConfiguracion::actual()->dias_max_pago_retroactivo;
-        if ($s->fechaPago->diasHasta($hoy) > $maximo) {
+        if ($fechaPago->diasHasta($hoy) > $maximo) {
             throw new HttpException(422, "Solo se pueden registrar pagos de hasta {$maximo} días atrás.");
         }
         // Revisión 03-oct-2026: antes del desembolso no hay deuda que pagar.
         $desembolso = CargadorCredito::fecha($credito->fecha_desembolso);
-        if ($s->fechaPago->esAnteriorA($desembolso)) {
+        if ($fechaPago->esAnteriorA($desembolso)) {
             throw new HttpException(422, 'La fecha del pago no puede ser anterior al desembolso del crédito (' . self::fechaTexto($desembolso) . ').');
         }
         // Misma regla que anular (1.8 b): la mora de ese tramo ya se calcula con las fechas nuevas.
         $reprogramado = CreditoReprogramacion::where('credito_id', $credito->id)->max('created_at');
         if ($reprogramado !== null) {
             $dia = Fecha::desdeTexto(\Carbon\CarbonImmutable::parse((string) $reprogramado, 'UTC')->setTimezone(Reloj::ZONA)->format('Y-m-d'));
-            if ($s->fechaPago->esAnteriorA($dia)) {
+            if ($fechaPago->esAnteriorA($dia)) {
                 throw new HttpException(422, 'No se puede registrar un pago con fecha anterior a la reprogramación del ' . self::fechaTexto($dia) . ': la mora de ese tramo ya se calculó con las fechas nuevas.');
             }
         }
 
-        return $s->fechaPago;
+        return $fechaPago;
     }
 
     private static function fechaTexto(Fecha $fecha): string
