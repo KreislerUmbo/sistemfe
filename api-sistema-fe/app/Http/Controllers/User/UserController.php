@@ -8,6 +8,7 @@ use App\Http\Resources\User\UserCollection;
 use App\Http\Resources\User\UserResource;
 use App\Models\User;
 use App\Services\Creditos\ClienteCreditoService;
+use App\Services\EscaladaPermisos;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -73,7 +74,7 @@ class UserController extends Controller
     public function store(Request $request)
     {
         $request->validate(['imagen' => ArchivoSubido::imagen()], ArchivoSubido::MENSAJES);
-        if ($rechazo = $this->protegerSuperAdmin($request, null)) {
+        if ($rechazo = $this->protegerPrivilegios($request, null)) {
             return $rechazo;
         }
 
@@ -130,7 +131,7 @@ class UserController extends Controller
         }
 
         $user = User::findOrFail($id);
-        if ($rechazo = $this->protegerSuperAdmin($request, $user)) {
+        if ($rechazo = $this->protegerPrivilegios($request, $user)) {
             return $rechazo;
         }
         // 04c.1: desactivar a quien tiene clientes en su cartera los dejaría sin asesor/cobrador.
@@ -196,20 +197,18 @@ class UserController extends Controller
     public function permisosDirectos(Request $request, string $id)
     {
         $user = User::findOrFail($id);
-        if ($rechazo = $this->protegerSuperAdmin($request, $user)) {
+        if ($rechazo = $this->protegerPrivilegios($request, $user, controlTotal: false)) {
             return $rechazo;
         }
         $solicitados = $request->permissions ?? [];
 
-        $actor = auth('api')->user();
         $actuales = $user->getDirectPermissions()->pluck('name')->all();
-        $nuevos = array_diff($solicitados, $actuales);
-        $noAutorizados = array_filter($nuevos, fn ($permiso) => ! $actor?->can($permiso));
+        $noAutorizados = EscaladaPermisos::faltantes(array_diff($solicitados, $actuales));
 
         if (! empty($noAutorizados)) {
             return response()->json([
                 "code" => 422,
-                "message" => "No podés otorgar permisos que vos mismo no tenés: " . implode(', ', $noAutorizados),
+                "message" => EscaladaPermisos::mensaje('otorgar estos permisos', $noAutorizados),
             ], 422);
         }
 
@@ -228,7 +227,7 @@ class UserController extends Controller
     public function destroy(string $id)
     {
         $user = User::findOrFail($id);
-        if ($rechazo = $this->protegerSuperAdmin(null, $user)) {
+        if ($rechazo = $this->protegerPrivilegios(null, $user)) {
             return $rechazo;
         }
         // 04c.1: eliminar a quien tiene clientes en su cartera los dejaría huérfanos.
@@ -251,10 +250,16 @@ class UserController extends Controller
     }
 
     /**
-     * Rechazo (403) si quien opera no es Super-Admin y pretende asignar ese rol o tocar a un
-     * usuario que ya lo tiene. Null si puede seguir.
+     * Rechazo (403) si quien opera no es Super-Admin y pretende:
+     * - asignar el rol Super-Admin o tocar a un usuario que ya lo tiene;
+     * - con $controlTotal (editar/eliminar): tocar a un usuario con permisos que él no tiene
+     *   (ej. cambiarle la contraseña a un Administrador para entrar como él). permisosDirectos()
+     *   no lo exige a propósito: ahí solo cuenta lo que se AGREGA, quitar no es escalar;
+     * - asignar un rol con permisos que él no tiene (ej. darse "Administrador" a sí mismo).
+     * Los dos últimos, auditoría de seguridad 08-oct-2026 (ver EscaladaPermisos).
+     * Null si puede seguir.
      */
-    private function protegerSuperAdmin(?Request $request, ?User $objetivo): ?JsonResponse
+    private function protegerPrivilegios(?Request $request, ?User $objetivo, bool $controlTotal = true): ?JsonResponse
     {
         if ($this->actorEsSuperAdmin()) {
             return null;
@@ -264,6 +269,15 @@ class UserController extends Controller
         }
         if ($request?->filled('role_id') && Role::whereKey($request->role_id)->value('name') === self::SUPER_ADMIN) {
             return response()->json(['code' => 403, 'message' => 'Solo un Super-Admin puede asignar el rol Super-Admin.'], 403);
+        }
+        if ($controlTotal && $objetivo && ($faltan = EscaladaPermisos::faltantes($objetivo->getAllPermissions()->pluck('name')))) {
+            return response()->json(['code' => 403, 'message' => EscaladaPermisos::mensaje('modificar a este usuario', $faltan)], 403);
+        }
+        if ($request?->filled('role_id') && (int) $request->role_id !== (int) $objetivo?->role_id) {
+            $rol = Role::find($request->role_id);
+            if ($rol && ($faltan = EscaladaPermisos::faltantes($rol->permissions->pluck('name')))) {
+                return response()->json(['code' => 403, 'message' => EscaladaPermisos::mensaje("asignar el rol {$rol->name}", $faltan)], 403);
+            }
         }
 
         return null;

@@ -146,8 +146,14 @@ const store = async () => {
 
             //list();
         }
-    } catch (error) {
-        console.log(error);
+    } catch (error: any) {
+        // 422/403 del backend (ej. agregar permisos que uno mismo no tiene, editar
+        // Super-Admin) — antes solo iba a consola y el modal "no hacía nada".
+        (Swal as TVueSwalInstance).fire(
+            "No se guardó",
+            error.response?.data?.message ?? "No se pudo guardar el rol.",
+            "warning",
+        );
     }
 
 }
