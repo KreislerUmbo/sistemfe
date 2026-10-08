@@ -77,7 +77,7 @@
             <tbody>
                 @foreach ($cuenta->condonaciones as $c)
                     <tr>
-                        <td>{{ $c->created_at?->format('d/m/Y') }}</td>
+                        <td>{{ \App\Services\HoraPeru::deUtc($c->created_at)?->format('d/m/Y') }}</td>
                         <td>Condonación de mora{{ F::valor($c->estado) !== 'vigente' ? ' (anulada)' : '' }}</td>
                         <td>Cuota {{ $c->cuota?->numero_cuota }} · {{ $c->motivo }}</td>
                         <td class="derecha">{{ F::soles((string) $c->monto) }}</td>
@@ -85,7 +85,7 @@
                 @endforeach
                 @foreach ($cuenta->reprogramaciones as $r)
                     <tr>
-                        <td>{{ $r->created_at?->format('d/m/Y') }}</td>
+                        <td>{{ \App\Services\HoraPeru::deUtc($r->created_at)?->format('d/m/Y') }}</td>
                         <td>Reprogramación de fechas</td>
                         <td>{{ $r->cuotas->count() }} cuota(s) · {{ $r->motivo }}</td>
                         <td class="derecha">{{ (string) $r->cargo_monto !== '0.00' ? 'Cargo ' . F::soles((string) $r->cargo_monto) : '—' }}</td>

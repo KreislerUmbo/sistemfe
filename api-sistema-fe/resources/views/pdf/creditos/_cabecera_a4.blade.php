@@ -31,4 +31,6 @@
         </td>
     </tr>
 </table>
-<div class="pie">Generado el {{ \App\Services\HoraPeru::ahora()->format('d/m/Y H:i') }}</div>
+@if (empty($sinPie))
+    <div class="pie">Generado el {{ \App\Services\HoraPeru::ahora()->format('d/m/Y H:i') }}</div>
+@endif

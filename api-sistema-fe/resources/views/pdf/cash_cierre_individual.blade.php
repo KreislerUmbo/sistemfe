@@ -226,11 +226,11 @@
                         </tr>
                         <tr>
                             <td>APERTURA</td>
-                            <td>: {{ optional($sessionData['opened_at'])->format('d/m/Y H:i') ?? '-' }}</td>
+                            <td>: {{ \App\Services\HoraPeru::deUtc($sessionData['opened_at'])?->format('d/m/Y H:i') ?? '-' }}</td>
                         </tr>
                         <tr>
                             <td>CIERRE</td>
-                            <td>: {{ $sessionData['closed_at'] ? $sessionData['closed_at']->format('d/m/Y H:i') : 'En curso' }}</td>
+                            <td>: {{ $sessionData['closed_at'] ? \App\Services\HoraPeru::deUtc($sessionData['closed_at'])->format('d/m/Y H:i') : 'En curso' }}</td>
                         </tr>
                         @if ($sessionData['closed_by_user'])
                             <tr>

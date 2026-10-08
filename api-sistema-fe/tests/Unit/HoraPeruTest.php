@@ -31,4 +31,24 @@ class HoraPeruTest extends TestCase
         $this->assertSame('2026-10-31', HoraPeru::ahora()->format('Y-m-d'));
         $this->assertSame('1026', HoraPeru::ahora()->format('my'));
     }
+
+    // 08-oct-2026 — apertura de caja y created_at de créditos se guardan en UTC y los PDFs los
+    // imprimían tal cual (5 horas adelantados).
+    public function test_de_utc_convierte_a_hora_de_peru(): void
+    {
+        $this->assertSame('08/10/2026 16:58', HoraPeru::deUtc('2026-10-08 21:58:37')->format('d/m/Y H:i'));
+        $this->assertSame('2026-10-08', HoraPeru::deUtc(Carbon::parse('2026-10-09 03:00:00', 'UTC'))->format('Y-m-d'));
+        $this->assertNull(HoraPeru::deUtc(null));
+    }
+
+    public function test_de_utc_no_depende_de_la_zona_por_defecto_de_php(): void
+    {
+        $original = date_default_timezone_get();
+        date_default_timezone_set('America/Lima');   // como hacen los mutadores de algunos modelos
+        try {
+            $this->assertSame('16:58', HoraPeru::deUtc(new \DateTimeImmutable('2026-10-08 21:58:37'))->format('H:i'));
+        } finally {
+            date_default_timezone_set($original);
+        }
+    }
 }

@@ -16,7 +16,8 @@
 </head>
 <body>
     <div class="generado">Generado por {{ $generadoPor }} el {{ $generadoEn }}</div>
-    @include('pdf.creditos._cabecera_a4', ['titulo' => $tabla['titulo'], 'numero' => null])
+    {{-- Sin el pie de la cabecera: el reporte ya lleva "Generado por … el …" (salían dos superpuestos). --}}
+    @include('pdf.creditos._cabecera_a4', ['titulo' => $tabla['titulo'], 'numero' => null, 'sinPie' => true])
     <div class="subtitulo">{{ $tabla['subtitulo'] }}</div>
 
     @forelse ($tabla['secciones'] as $i => $seccion)

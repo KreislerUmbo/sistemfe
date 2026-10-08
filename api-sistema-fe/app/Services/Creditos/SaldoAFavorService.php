@@ -55,7 +55,7 @@ class SaldoAFavorService
                 'monto' => (string) $m->monto,
                 'numero_recibo' => $m->pago?->numero_recibo,
                 'motivo' => $m->motivo,
-                'fecha' => $m->created_at?->format('Y-m-d H:i'),
+                'fecha' => \App\Services\HoraPeru::deUtc($m->created_at)?->format('Y-m-d H:i'),
                 'anulada' => $m->tipo === TipoMovimientoSaldoFavor::Devolucion && in_array($m->cash_movement_id, $anuladas, true),
             ])->all();
     }

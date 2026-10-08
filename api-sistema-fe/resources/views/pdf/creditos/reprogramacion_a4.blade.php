@@ -16,7 +16,7 @@
     @endphp
 
     <p style="font-size: 11px; line-height: 1.6;">
-        El {{ $reprogramacion->created_at?->format('d/m/Y') }}, a solicitud del cliente, se acuerda cambiar las fechas de pago
+        El {{ \App\Services\HoraPeru::deUtc($reprogramacion->created_at)?->format('d/m/Y') }}, a solicitud del cliente, se acuerda cambiar las fechas de pago
         de las cuotas indicadas abajo. Los montos de las cuotas no cambian.
         <br>Motivo: {{ $reprogramacion->motivo }}
     </p>
