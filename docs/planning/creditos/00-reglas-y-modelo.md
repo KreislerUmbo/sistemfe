@@ -147,6 +147,10 @@ Fuente de verdad: las migraciones de `database/migrations/tenant/core/` y sus co
 
 ### Pendientes de puesta en marcha — tenant real `credishirley` (creado 05-oct-2026 en producción)
 Antes de que opere con préstamos reales (decisión del usuario, 05-oct-2026: anotarlos aquí):
+- [x] **Usuario del dueño** con el rol "Administrador de créditos" (08-oct-2026). El Super-Admin queda
+  como soporte de UmboSystem.
+- [x] **Código al día en producción** (08-oct-2026, `85154d8`): renovación ampliada, revisión de octubre y
+  auditoría de seguridad.
 - [ ] **Tasa máxima** (`tasa_maxima`, Créditos › Configuración): hoy vacía = el sistema no limita la tasa
   que se cobra. Fijarla con la tasa máxima legal vigente del BCRP (compensatoria y moratoria) que confirme
   el abogado/contador del cliente. Con ella, ningún crédito se puede crear por encima (validación de 03-api).

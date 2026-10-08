@@ -1,8 +1,8 @@
 # Plan — Módulo de Créditos
 
-Versión: **v24 — Fase 1 completada; listo para Fase 2** (la versión vive aquí, no en el título ni en el nombre del archivo; ubicación en el repo: `docs/planning/Plan — Módulo de Créditos.md`).
+Versión: **v24** (la versión vive aquí, no en el título ni en el nombre del archivo; ubicación en el repo: `docs/planning/creditos/Plan — Módulo de Créditos.md`).
 
-Estado (2026-09-29): **plan cerrado y aprobado, listo para ejecutar desde la Fase 1 (Motor)**. Mockups aprobados (canvas "Pantallas Módulo Créditos"). Verificaciones de código en §10 antes de cada fase.
+Estado (08-oct-2026): **Fases 1-4d construidas y en producción** (tenant real `credishirley`). Este documento es el plan original de diseño; las reglas vigentes —con todos los ajustes posteriores— están en `00-reglas-y-modelo.md`, y la cronología y el estado de cada fase en `historial.md`. Quedan sin fecha las fases 6-8 (módulos contratables, garantes y prendas, cobradores con caja propia). Mockups aprobados (canvas "Pantallas Módulo Créditos").
 
 Contexto: tenant **nuevo** para un cliente externo (negocio de préstamos), `giro='creditos'`. No se relaciona con retail ni agencia de viajes.
 

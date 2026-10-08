@@ -1,6 +1,6 @@
 # Fase 4d — Panel de inicio y reportes
 
-Estado: **construida** (02-oct-2026) en `feat/creditos-fase4d-reportes` — backend (`00a1ec7`) y
+Estado: **construida** (02-oct-2026) y **en producción** desde el 05-oct-2026 (main `1974b7c`; el paso "Al desplegar" del Cierre ya se hizo). Desde el 08-oct el "cobrado" del Panel y la Agenda incluye lo que el cliente paga al renovar. Rama original: `feat/creditos-fase4d-reportes` — backend (`00a1ec7`) y
 frontend (Panel, Agenda, Reportes). Ver "Cierre" al final. Diseño aprobado el mismo día, con el
 reporte 8 (Agenda de cobranza) agregado a pedido del usuario.
 Reglas de fondo: Plan §1.16 (reportes) y `00-reglas-y-modelo.md`. Sale de la rama

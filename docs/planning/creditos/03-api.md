@@ -1,5 +1,7 @@
 # Créditos — Fase 3: API (backend)
 
+Estado: **construida y en producción** (main `1974b7c`, 05-oct-2026). Rutas vigentes: `routes/creditos.php` (se agregaron después rutas de 4b-4d y `saldo-a-favor/{movimiento}/anular`). Las reglas actualizadas viven en `00-reglas-y-modelo.md`.
+
 Leer junto con `00-reglas-y-modelo.md` (las reglas se citan por número, no se repiten aquí).
 Rama sugerida: `feat/creditos-fase3-api` desde `feat/creditos-fase1-motor`.
 **Antes de codificar**: mostrar lista de rutas, FormRequests, servicios y sus firmas públicas; esperar aprobación.

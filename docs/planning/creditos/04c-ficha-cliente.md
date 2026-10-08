@@ -1,7 +1,6 @@
 # Fase 4c — Ficha del cliente y cartera por asesor
 
-Estado: **CERRADA el 02-oct-2026** (pasos 1-4) en la rama `feat/creditos-fase4c-ficha-cliente`,
-sin merge a `main`. Al desplegar: `php artisan tenants:migrate-verticales` (3 migraciones; la del
+Estado: **CERRADA el 02-oct-2026** (pasos 1-4); **en producción** desde el 05-oct-2026 (main `1974b7c`). Al desplegar: `php artisan tenants:migrate-verticales` (3 migraciones; la del
 índice único de documento se detiene si encuentra duplicados en producción).
 
 ### Paso 3 — notas de construcción
@@ -50,8 +49,8 @@ dinero, concurrencia, idempotencia, documentos, alta de tenant desde cero); 7 ha
 Verificado: tenant de créditos creado desde cero (y borrado), saldo a favor en navegador sin confirmar nada
 (datos de prueba borrados). Backend 1187/1187, frontend 113/113.
 
-**Pendiente, fuera de esta fase:** con asesor y cobrador separados, la cobranza del día filtra por
-cobrador, pero aún no hay reporte por asesor (comisiones) — Fase 4d (reportes) o 8 (cobradores).
+~~**Pendiente, fuera de esta fase:** reporte por asesor~~ — **resuelto en 4d** (reporte 5 "Por asesor", base
+para comisiones).
 
 ### Paso 2 — notas de construcción
 - `views/clients/ficha.vue` (`/clients/nuevo`, `/clients/:id`) reemplaza al modal de Clientes en

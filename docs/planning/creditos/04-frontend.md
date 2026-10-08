@@ -1,5 +1,7 @@
 # Créditos — Fase 4: Frontend (admin-start-kit)
 
+Estado: **construida y en producción** (main `1974b7c`, 05-oct-2026).
+
 Leer junto con `00-reglas-y-modelo.md`. API: `routes/creditos.php` (Fase 3). Rama sugerida: `feat/creditos-fase4-frontend`.
 **Antes de codificar**: verificaciones (abajo) + lista de vistas, componentes, stores y composables; esperar aprobación.
 

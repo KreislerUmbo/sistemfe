@@ -1,7 +1,8 @@
 # Fase 4b — Documentos del crédito
 
-Estado: **construida** el 2026-10-01 en la rama `feat/creditos-fase4b-documentos` (sale de
-`feat/creditos-fase4-frontend`). Reglas de fondo: Plan §1.15 y `00-reglas-y-modelo.md`.
+Estado: **construida** el 2026-10-01 (rama `feat/creditos-fase4b-documentos`); **en producción** desde el
+05-oct-2026 (main `1974b7c`). El recibo de una renovación muestra desde el 08-oct el desglose "cubierto con
+el crédito X" / "pagado por el cliente". Reglas de fondo: Plan §1.15 y `00-reglas-y-modelo.md`.
 
 ## Decisiones tomadas con el usuario (01-oct-2026)
 | Tema | Plan original (1.15) | Decidido |
