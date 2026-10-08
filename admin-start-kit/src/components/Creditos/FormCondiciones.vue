@@ -30,7 +30,12 @@
         {{ form.unidad_tasa === 'total'
           ? `El ${form.tasa_interes || '…'}% se cobra una sola vez sobre el monto prestado.`
           : `El ${form.tasa_interes || '…'}% se cobra por cada mes del plazo.` }}
+        <!-- Oculto 07-oct-2026 (decisión del usuario) hasta calcular el costo con criterio BCRP:
+             tasa_mensual_equivalente es interés simple prorrateado (ignora que el capital se devuelve
+             en cada cuota) y subestima el costo real (ej. 9.84% simple vs ≈13.07% TEM efectiva).
+             Reactivar mostrando TEM/TEA efectivas — ver 00-reglas-y-modelo.md §5.
         <span v-if="form.unidad_tasa === 'total' && tasaMensual" class="d-block fw-semibold text-body">Equivale a {{ tasaMensual }}% mensual.</span>
+        -->
       </small>
     </div>
 
