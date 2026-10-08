@@ -23,7 +23,7 @@
         @endif
         . A la fecha, el cliente <strong>no mantiene deuda pendiente</strong> por este crédito.
     </p>
-    <p style="font-size: 12px; line-height: 1.8;">Se expide la presente a solicitud del interesado, el {{ now()->format('d/m/Y') }}.</p>
+    <p style="font-size: 12px; line-height: 1.8;">Se expide la presente a solicitud del interesado, el {{ \App\Services\HoraPeru::ahora()->format('d/m/Y') }}.</p>
 
     <table class="firmas">
         <tr>

@@ -5,6 +5,7 @@ namespace App\Services\AgenciaViajes;
 use App\Models\AgenciaViajes\CodigoSecuencia;
 use App\Models\AgenciaViajes\ConfiguracionCodigo;
 use App\Models\AgenciaViajes\Cotizacion;
+use App\Services\HoraPeru;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpKernel\Exception\HttpException;
@@ -35,7 +36,7 @@ class CodigoGeneradorService
             );
         }
 
-        $periodo = $config->incluye_periodo ? now()->format('my') : null;
+        $periodo = $config->incluye_periodo ? HoraPeru::ahora()->format('my') : null;
 
         $siguiente = DB::transaction(function () use ($tipo) {
             $fila = CodigoSecuencia::where('tipo', $tipo)->whereNull('periodo')->lockForUpdate()->first();
@@ -114,7 +115,7 @@ class CodigoGeneradorService
             // Sin una cotización real de referencia, se simula con un
             // ejemplo — mismo criterio que ya usaba el placeholder de
             // cotizador/nueva.vue antes de este módulo.
-            return $config->prefijo.$config->separador.now()->format('my').$config->separador.'0000001';
+            return $config->prefijo.$config->separador.HoraPeru::ahora()->format('my').$config->separador.'0000001';
         }
 
         $config = ConfiguracionCodigo::where('tipo', $tipo)->where('activo', true)->first();
@@ -127,7 +128,7 @@ class CodigoGeneradorService
             'prefijo', 'separador', 'incluye_periodo', 'longitud_correlativo',
         ])));
 
-        $periodo = $config->incluye_periodo ? now()->format('my') : null;
+        $periodo = $config->incluye_periodo ? HoraPeru::ahora()->format('my') : null;
         $fila = CodigoSecuencia::where('tipo', $tipo)->whereNull('periodo')->first();
         $siguiente = ($fila->ultimo_correlativo ?? 0) + 1;
 
