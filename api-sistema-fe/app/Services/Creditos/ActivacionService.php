@@ -51,7 +51,7 @@ class ActivacionService
 
         $pendientes = $this->limites->bloqueosSinAutorizar(
             $credito,
-            $this->limites->evaluar($credito->cliente_id, Dinero::aCentavos($credito->monto_capital)),
+            $this->limites->evaluarParaOtorgar($credito->cliente_id, Dinero::aCentavos($credito->monto_capital)),
         );
         if ($pendientes !== []) {
             throw new LimitesExcedidos($pendientes);

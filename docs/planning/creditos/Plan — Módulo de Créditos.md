@@ -383,12 +383,16 @@ El negocio ya tiene préstamos vivos (cuaderno/Excel). Acción **"Registrar cré
 ### 1.21 Renovación de crédito
 Acción **"Renovar"** sobre un crédito activo: el cliente debe un saldo y pide un préstamo nuevo.
 - Se calcula la liquidación del crédito actual a hoy (regla 1.5, con interés mínimo y mora).
-- Nuevo crédito por el capital pedido; **entrega neta = capital nuevo − monto de liquidación** (debe ser > 0).
-- Crédito anterior → `finalizado`, `motivo_cierre='renovacion'`, pago `origen='renovacion'` **sin ingreso a caja**. Caja solo registra la **salida neta**.
+- Nuevo crédito por el capital pedido; **neto = capital nuevo − monto de liquidación**, con tres casos (ampliado 08-oct-2026):
+  - **> 0 → se entrega** la diferencia (salida de caja `credito_desembolso`).
+  - **= 0 → sin movimiento de dinero** (ej. ya pagó el interés aparte y renueva por el mismo capital).
+  - **< 0 → el cliente paga** la diferencia (entrada de caja `credito_pago`, referida al pago de renovación). Caso típico: le prestó 500 al 20 %, vence hoy (debe 600), paga los 100 de interés y sigue con 500 un mes más.
+  - Todo en **una sola operación de cierre**: si el pago del cliente fuera un cobro aparte, en una renovación anticipada el interés adelantado no se descontaría (1.5) y pagaría de más. Con neto ≠ 0 el método de pago es obligatorio.
+- Crédito anterior → `finalizado`, `motivo_cierre='renovacion'`, pago `origen='renovacion'`. La parte que cubre el crédito nuevo **no pasa por caja**; solo pasa por caja la diferencia (salida o entrada). Anular el crédito nuevo reabre el anterior y revierte esa diferencia.
 - Enlace `credito_renovado_id` en el nuevo crédito; historial de renovaciones visible en la ficha del cliente.
 - Límites (1.17): la deuda máxima se evalúa sin el crédito que se cancela; cliente moroso → requiere autorización de admin.
-- Documentos: contrato del nuevo + constancia de cancelación del anterior. Recibo muestra: capital nuevo, descuento por liquidación, entregado.
-- Ej.: debe 300 (liquidación) y pide 1,000 → se le entregan 700.
+- Documentos: contrato del nuevo + constancia de cancelación del anterior. El recibo del pago de renovación desglosa "cubierto con el crédito X" y "pagado por el cliente".
+- Ej.: debe 300 (liquidación) y pide 1,000 → se le entregan 700. Debe 600 y renueva por 500 → el cliente paga 100.
 
 ### 1.22 Pago con fecha anterior
 Para cobros hechos y registrados después (ej. cobrador sin señal):

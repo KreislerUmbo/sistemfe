@@ -329,6 +329,10 @@ export interface PreviewRenovacion {
   liquidacion: Liquidacion
   capital_nuevo: Soles
   entrega_neta: Soles
+  /** Qué pasa con el dinero (1.21 ampliada): se entrega, no se mueve o el cliente paga la diferencia. */
+  movimiento: 'entrega' | 'sin_movimiento' | 'cobro'
+  /** Monto de ese movimiento, siempre en positivo (lo calcula el backend). */
+  monto_movimiento: Soles
   cronograma: CronogramaPrevio
   limites: ResultadoLimites
 }
@@ -466,6 +470,8 @@ export interface SaldoAFavor {
   movimientos: {
     id: number
     tipo: 'abono' | 'uso' | 'devolucion' | 'reverso'
+    /** Devolución anulada (su salida de caja se revirtió). */
+    anulada: boolean
     monto: Soles
     numero_recibo: string | null
     motivo: string | null

@@ -200,6 +200,9 @@ final class FormatoCredito
             'liquidacion' => self::liquidacion($p->liquidacion),
             'capital_nuevo' => Dinero::aSoles($p->capitalNuevo),
             'entrega_neta' => Dinero::aSoles($p->entregaNeta),
+            // entrega | sin_movimiento | cobro, y el monto en positivo para mostrarlo tal cual.
+            'movimiento' => PreviewRenovacion::movimiento($p->entregaNeta),
+            'monto_movimiento' => Dinero::aSoles(abs($p->entregaNeta)),
             'cronograma' => self::cronograma($p->cronograma),
             'limites' => self::limites($p->limites),
         ];

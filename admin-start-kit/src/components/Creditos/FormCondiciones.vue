@@ -82,7 +82,7 @@
       <div v-if="errores.fecha_primer_vencimiento" class="invalid-feedback d-block">{{ errores.fecha_primer_vencimiento }}</div>
     </div>
     <div v-if="metodosPago.length > 1" class="col-12 col-md-4">
-      <label class="form-label mb-1 small fw-semibold text-secondary" for="fc-metodo">Método de entrega</label>
+      <label class="form-label mb-1 small fw-semibold text-secondary" for="fc-metodo">{{ etiquetaMetodo }}</label>
       <select id="fc-metodo" v-model="form.payment_method_id" class="form-select form-select-sm">
         <option v-for="m in metodosPago" :key="m.id" :value="m.id">{{ m.name }}</option>
       </select>
@@ -192,11 +192,13 @@ const props = withDefaults(defineProps<{
   fechaMaxima?: string
   /** Nota bajo la fecha de entrega cuando es editable (Corregir: solo unos días hacia atrás). */
   ayudaDesembolso?: string
+  /** Renovar cuando el cliente paga la diferencia: el método es con el que paga, no con el que se entrega. */
+  etiquetaMetodo?: string
   /** Primera cuota del preview: explica si su fecha se movió por domingo o feriado. */
   primeraCuota?: CuotaPrevia | null
   /** "Sobre el total" expresado en % mensual simple (lo calcula el backend). */
   tasaMensual?: string | null
-}>(), { errores: () => ({}), metodosPago: () => [], primerSugerido: null, desembolsoEditable: false, fechaMaxima: undefined, ayudaDesembolso: undefined, primeraCuota: null, tasaMensual: null })
+}>(), { errores: () => ({}), metodosPago: () => [], primerSugerido: null, desembolsoEditable: false, fechaMaxima: undefined, ayudaDesembolso: undefined, etiquetaMetodo: 'Método de entrega', primeraCuota: null, tasaMensual: null })
 
 const form = defineModel<FormCredito>({ required: true })
 const avanzadas = ref(false)

@@ -180,15 +180,14 @@ class ConsultaCreditoService
     }
 
     /**
-     * Cobrado hoy en su alcance (cobros y liquidaciones válidos), agrupado por crédito:
+     * Cobrado hoy en su alcance (cobros, liquidaciones y lo que el cliente pagó al renovar), agrupado por crédito:
      * el "Cobrado" de la Cobranza del día (mockup 4).
      *
      * @return list<CobroDelDia>
      */
     public function cobradosHoy(User $usuario): array
     {
-        $pagos = CreditoPago::validos()
-            ->whereIn('origen', [OrigenPago::Cobro, OrigenPago::Liquidacion])
+        $pagos = CobradoAlCliente::filtrar(CreditoPago::validos())
             ->whereDate('fecha_pago', $this->reloj->hoy()->aTexto())
             ->whereHas('credito', fn (Builder $q) => $this->alcance->aplicar($q, $usuario, FuncionCartera::Cobrador))
             ->with(['credito.cliente', 'paymentMethod'])
@@ -197,7 +196,7 @@ class ConsultaCreditoService
 
         return $pagos->groupBy('credito_id')->map(static fn ($delCredito): CobroDelDia => new CobroDelDia(
             $delCredito->first()->credito,
-            $delCredito->sum(static fn (CreditoPago $p): int => Dinero::aCentavos($p->monto_aplicado)),
+            $delCredito->sum(static fn (CreditoPago $p): int => CobradoAlCliente::centavos($p)),
             $delCredito->last()->fecha_pago,
             $delCredito->map(static fn (CreditoPago $p): ?string => $p->paymentMethod?->name)->filter()->unique()->values()->all(),
         ))->values()->all();

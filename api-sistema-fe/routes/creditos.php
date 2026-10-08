@@ -103,6 +103,8 @@ Route::group([
         // 04c.1: saldo a favor del cliente — ver y devolver (sale de la caja de quien devuelve).
         Route::get('saldo-a-favor', [ClienteCreditoController::class, 'saldoAFavor'])->middleware('permission:creditos.ver');
         Route::post('saldo-a-favor/devolver', [ClienteCreditoController::class, 'devolverSaldo'])->middleware('permission:creditos.cobrar');
+        // Anular una devolución mal registrada (propia con caja abierta; otras con creditos.anular_pago).
+        Route::post('saldo-a-favor/{movimiento}/anular', [ClienteCreditoController::class, 'anularDevolucion'])->whereNumber('movimiento')->middleware('permission:creditos.cobrar');
     });
 });
 

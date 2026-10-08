@@ -103,8 +103,9 @@ export const creditoService = {
     return data as { pago: Pago }
   },
 
-  async cotizarPago(id: number, montoRecibido: string, destino: DestinoExcedente, signal?: AbortSignal) {
-    const { data } = await httpClient.post(`/creditos/${id}/pagos/cotizar`, { monto_recibido: montoRecibido, destino_excedente: destino }, { signal })
+  /** fechaPago: pago con fecha anterior; la vista previa se calcula a esa fecha. */
+  async cotizarPago(id: number, montoRecibido: string, destino: DestinoExcedente, signal?: AbortSignal, fechaPago: string | null = null) {
+    const { data } = await httpClient.post(`/creditos/${id}/pagos/cotizar`, { monto_recibido: montoRecibido, destino_excedente: destino, fecha_pago: fechaPago }, { signal })
     return data as CotizacionPago
   },
 
@@ -276,6 +277,11 @@ export const creditoService = {
   },
 
   /** 04c.1: entrega el saldo a favor al cliente; sale de la caja abierta de quien devuelve. */
+  async anularDevolucionSaldo(clienteId: number, movimientoId: number, motivo: string, clave: string) {
+    const { data } = await httpClient.post(`/clientes/${clienteId}/saldo-a-favor/${movimientoId}/anular`, { motivo, clave_idempotencia: clave })
+    return data as SaldoAFavor
+  },
+
   async devolverSaldo(clienteId: number, datos: { monto: string; payment_method_id: number; motivo: string }, clave: string) {
     const { data } = await httpClient.post(`/clientes/${clienteId}/saldo-a-favor/devolver`, { ...datos, clave_idempotencia: clave })
     return data as SaldoAFavor

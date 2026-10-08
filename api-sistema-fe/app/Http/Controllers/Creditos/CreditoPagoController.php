@@ -15,6 +15,7 @@ use App\Services\Creditos\AnulacionPagoService;
 use App\Services\Creditos\CobroService;
 use App\Services\Creditos\Dinero;
 use App\Services\Creditos\Motor\Enums\DestinoExcedente;
+use App\Services\Creditos\Motor\Fecha;
 use Illuminate\Http\JsonResponse;
 
 /** Cotizar, cobrar (incl. retroactivo), editar referencia y anular pagos (00 1.4-1.8, 1.12). */
@@ -33,6 +34,7 @@ class CreditoPagoController extends ControllerCreditos
             Dinero::aCentavos($request->input('monto_recibido')),
             DestinoExcedente::tryFrom((string) $request->input('destino_excedente')) ?? DestinoExcedente::Devolver,
             $this->usuario(),
+            $request->filled('fecha_pago') ? Fecha::desdeTexto((string) $request->input('fecha_pago')) : null,
         );
 
         return response()->json(FormatoCredito::cotizacion($cotizacion));

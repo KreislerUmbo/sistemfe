@@ -12,6 +12,7 @@ use App\Models\User;
 use App\Services\Creditos\AlcanceCartera;
 use App\Services\Creditos\CajaCredito;
 use App\Services\Creditos\ConsultaCreditoService;
+use App\Services\Creditos\CobradoAlCliente;
 use App\Services\Creditos\Dinero;
 use App\Services\Creditos\Dto\CobroDelDia;
 use App\Services\Creditos\Dto\DetalleCredito;
@@ -191,6 +192,13 @@ class ReportesCarteraService
             ->get(['monto_recibido', 'monto_excedente', 'destino_excedente']);
         $creditos = $pagos->sum(static fn (CreditoPago $p): int => Dinero::aCentavos($p->monto_recibido)
             - ($p->destino_excedente?->value === 'devolver' ? Dinero::aCentavos($p->monto_excedente) : 0));
+        // 1.21 ampliada: renovación en la que el cliente pagó la diferencia en caja.
+        $creditos += CreditoPago::where('estado', PagoEstado::Valido)
+            ->where('origen', OrigenPago::Renovacion)
+            ->whereNotNull('payment_method_id')
+            ->where('created_at', '>=', $periodo->desdeUtc())->where('created_at', '<', $periodo->hastaUtc())
+            ->get(['credito_id', 'origen', 'payment_method_id', 'monto_aplicado'])
+            ->sum(static fn (CreditoPago $p): int => CobradoAlCliente::centavos($p));
 
         $caja = DB::table('cash_movements')
             ->whereIn('reference_type', [CajaCredito::PAGO, CajaCredito::DEVOLUCION_EXCEDENTE])
@@ -207,16 +215,15 @@ class ReportesCarteraService
         ];
     }
 
-    /** @return list<array{fecha: string, monto: string}> monto aplicado por día (cobros y liquidaciones) */
+    /** @return list<array{fecha: string, monto: string}> cobrado por día (cobros, liquidaciones y lo pagado al renovar) */
     public function cobradoPorDia(User $usuario, Periodo $periodo): array
     {
-        $totales = CreditoPago::where('estado', PagoEstado::Valido)
-            ->whereIn('origen', self::ORIGENES_CAJA)
+        $totales = CobradoAlCliente::filtrar(CreditoPago::where('estado', PagoEstado::Valido))
             ->where('fecha_pago', '>=', $periodo->desde->aTexto())->where('fecha_pago', '<', $periodo->hastaExclusivo())
             ->whereHas('credito', fn ($q) => $this->alcance->aplicar($q, $usuario))
-            ->get(['fecha_pago', 'monto_aplicado'])
+            ->get(['credito_id', 'origen', 'payment_method_id', 'fecha_pago', 'monto_aplicado'])
             ->groupBy(static fn (CreditoPago $p): string => $p->fecha_pago->format('Y-m-d'))
-            ->map(static fn ($pagos): int => $pagos->sum(static fn (CreditoPago $p): int => Dinero::aCentavos($p->monto_aplicado)));
+            ->map(static fn ($pagos): int => $pagos->sum(static fn (CreditoPago $p): int => CobradoAlCliente::centavos($p)));
 
         return array_map(static fn (Fecha $d): array => ['fecha' => $d->aTexto(), 'monto' => Dinero::aSoles($totales[$d->aTexto()] ?? 0)], $periodo->dias());
     }

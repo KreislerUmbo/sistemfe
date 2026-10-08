@@ -77,12 +77,19 @@ class RenovacionService
         }
 
         $liquidacion = $this->liquidaciones->calcular($anterior, $hoy);
+        // 08-oct-2026 (1.21 ampliada): neto > 0 se entrega, 0 sin dinero, < 0 el cliente paga la
+        // diferencia (caso típico: paga el interés y renueva por el mismo capital). Todo en una sola
+        // operación de cierre: si el pago del cliente fuera un cobro aparte, en una renovación
+        // anticipada el interés adelantado no se descontaría (1.5) y pagaría de más.
         $neto = $datos->montoCapital - $liquidacion->montoLiquidacion;
-        if ($neto <= 0) {
-            throw new HttpException(422, 'El capital nuevo debe superar lo que se debe hoy (S/ ' . Dinero::aSoles($liquidacion->montoLiquidacion) . ').');
-        }
         $autorizar = $this->bloqueosAAutorizar($anterior, $datos, $motivoAutorizacion, $usuario);
-        $sesion = $this->caja->sesionAbierta($usuario);
+        $sesion = null;
+        if ($neto !== 0) {
+            if ($datos->paymentMethodId === null) {
+                throw new HttpException(422, $neto > 0 ? 'Indica el método con el que se entrega el dinero.' : 'Indica el método con el que paga el cliente.');
+            }
+            $sesion = $this->caja->sesionAbierta($usuario);
+        }
 
         $cronograma = $this->borradores->preview($datos);
         $nuevo = Credito::create([
@@ -103,8 +110,9 @@ class RenovacionService
             ]);
         }
 
-        // El anterior se cancela con la liquidación, sin movimiento de caja (00 §3).
-        CreditoPago::create([
+        // El anterior se cancela con la liquidación: la parte que cubre el crédito nuevo no pasa por
+        // caja (00 §3); si el cliente paga la diferencia, esa parte entra a caja con este mismo pago.
+        $pagoRenovacion = CreditoPago::create([
             'credito_id' => $anterior->id,
             'numero_recibo' => $this->correlativos->siguiente(TipoCorrelativo::Recibo),
             'monto_recibido' => Dinero::aSoles($liquidacion->montoLiquidacion),
@@ -121,13 +129,19 @@ class RenovacionService
         $carga = $this->cargador->cargar($anterior);
         $this->persistidor->persistir($anterior, $carga, $this->aplicador->aplicar($carga->estado, $carga->pagos, $hoy));
 
-        $movimiento = $this->caja->salida($sesion, $usuario, CajaCredito::DESEMBOLSO, $nuevo->id, $neto, $datos->paymentMethodId, $anterior->cliente, "Desembolso neto por renovación de {$anterior->numero_credito}");
-        $nuevo->update(['cash_movement_id' => $movimiento->id]);
+        if ($neto > 0) {
+            $movimiento = $this->caja->salida($sesion, $usuario, CajaCredito::DESEMBOLSO, $nuevo->id, $neto, $datos->paymentMethodId, $anterior->cliente, "Desembolso neto por renovación de {$anterior->numero_credito}");
+            $nuevo->update(['cash_movement_id' => $movimiento->id]);
+        } elseif ($neto < 0) {
+            $entrada = $this->caja->entrada($sesion, $usuario, CajaCredito::PAGO, $pagoRenovacion->id, -$neto, $datos->paymentMethodId, $anterior->cliente, "Pago del cliente al renovar {$anterior->numero_credito} ({$nuevo->numero_credito})");
+            $pagoRenovacion->update(['payment_method_id' => $datos->paymentMethodId, 'cash_movement_id' => $entrada->id]);
+        }
 
         $this->auditoria->registrar('credito.renovar', $nuevo, $nuevo->id, null, [
             'credito_anterior' => $anterior->numero_credito,
             'liquidacion' => Dinero::aSoles($liquidacion->montoLiquidacion),
-            'entrega_neta' => Dinero::aSoles($neto),
+            'entrega_neta' => Dinero::aSoles(max(0, $neto)),
+            'pago_del_cliente' => Dinero::aSoles(max(0, -$neto)),
         ], $motivoAutorizacion, $usuario);
 
         return $nuevo->refresh();
@@ -136,7 +150,7 @@ class RenovacionService
     /** @return list<Infraccion> bloqueos que se autorizan en el mismo acto (con permiso y motivo) */
     private function bloqueosAAutorizar(Credito $anterior, DatosCredito $datos, ?string $motivo, User $usuario): array
     {
-        $bloqueos = $this->limites->evaluar($anterior->cliente_id, $datos->montoCapital, $anterior->id)->bloqueos();
+        $bloqueos = $this->limites->evaluarParaOtorgar($anterior->cliente_id, $datos->montoCapital, $anterior->id)->bloqueos();
         if ($bloqueos === []) {
             return [];
         }

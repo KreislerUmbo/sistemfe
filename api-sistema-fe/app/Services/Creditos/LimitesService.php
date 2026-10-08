@@ -41,6 +41,17 @@ class LimitesService
     ) {
     }
 
+    /**
+     * evaluar() bloqueando al cliente hasta el fin de la transacción (revisión 08-oct-2026): dos
+     * créditos del mismo cliente otorgados a la vez (dos cajeros) no pasan ambos max_creditos.
+     */
+    public function evaluarParaOtorgar(int $clienteId, int $capitalNuevo, ?int $renovarId = null): ResultadoLimites
+    {
+        $this->saldos->bloquear($clienteId);
+
+        return $this->evaluar($clienteId, $capitalNuevo, $renovarId);
+    }
+
     public function evaluar(int $clienteId, int $capitalNuevo, ?int $renovarId = null, bool $esMigracion = false): ResultadoLimites
     {
         $creditos = $this->creditosVivos($clienteId);

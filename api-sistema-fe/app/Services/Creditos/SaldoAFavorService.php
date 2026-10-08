@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\Creditos;
 
 use App\Enums\Creditos\TipoMovimientoSaldoFavor;
+use App\Models\Cash\CashMovement;
 use App\Models\Client\Client;
 use App\Models\Creditos\CreditoSaldoFavorMovimiento;
 use App\Models\User;
@@ -39,10 +40,15 @@ class SaldoAFavorService
     /** @return list<array<string, mixed>> movimientos del cliente, el más reciente primero */
     public function movimientos(int $clienteId): array
     {
-        return CreditoSaldoFavorMovimiento::where('cliente_id', $clienteId)
+        $movimientos = CreditoSaldoFavorMovimiento::where('cliente_id', $clienteId)
             ->with('pago:id,numero_recibo')
             ->orderByDesc('id')
-            ->get()
+            ->get();
+        // Devoluciones cuya salida de caja ya se revirtió (anuladas).
+        $anuladas = CashMovement::whereIn('id', $movimientos->pluck('cash_movement_id')->filter())
+            ->whereNotNull('corrected_by')->pluck('id')->all();
+
+        return $movimientos
             ->map(static fn (CreditoSaldoFavorMovimiento $m): array => [
                 'id' => $m->id,
                 'tipo' => $m->tipo->value,
@@ -50,6 +56,7 @@ class SaldoAFavorService
                 'numero_recibo' => $m->pago?->numero_recibo,
                 'motivo' => $m->motivo,
                 'fecha' => $m->created_at?->format('Y-m-d H:i'),
+                'anulada' => $m->tipo === TipoMovimientoSaldoFavor::Devolucion && in_array($m->cash_movement_id, $anuladas, true),
             ])->all();
     }
 
@@ -94,6 +101,37 @@ class SaldoAFavorService
                 ['saldo' => Dinero::aSoles($disponible - $centavos), 'devuelto' => Dinero::aSoles($centavos)], $motivo, $usuario);
 
             return $movimiento;
+        });
+    }
+
+    /**
+     * Anula una devolución mal registrada (revisión 08-oct-2026): el dinero vuelve a la caja y el
+     * saldo, al cliente. Mismo criterio que anular un pago (1.14): la propia con la caja todavía
+     * abierta; cualquier otra, creditos.anular_pago.
+     */
+    public function anularDevolucion(Client $cliente, int $movimientoId, string $motivo, User $usuario): CreditoSaldoFavorMovimiento
+    {
+        return DB::transaction(function () use ($cliente, $movimientoId, $motivo, $usuario): CreditoSaldoFavorMovimiento {
+            $this->bloquear($cliente->id);
+            $devolucion = CreditoSaldoFavorMovimiento::where('cliente_id', $cliente->id)
+                ->where('tipo', TipoMovimientoSaldoFavor::Devolucion)->findOrFail($movimientoId);
+            $salida = $devolucion->cash_movement_id === null ? null : CashMovement::with('cashSession')->find($devolucion->cash_movement_id);
+            if ($salida === null || $salida->corrected_by !== null) {
+                throw new HttpException(422, 'Esta devolución ya está anulada.');
+            }
+            $propiaConCajaAbierta = $devolucion->registrado_por === $usuario->id
+                && $salida->cashSession->status === 'open' && $salida->cashSession->opened_by === $usuario->id;
+            if (! $propiaConCajaAbierta && ! $usuario->can('creditos.anular_pago')) {
+                throw new HttpException(403, 'Solo puedes anular tus propias devoluciones mientras tu caja siga abierta. Para otros casos se requiere creditos.anular_pago.');
+            }
+
+            $this->caja->revertirReferencia(CajaCredito::DEVOLUCION_SALDO_FAVOR, $devolucion->id, $usuario);
+            $centavos = -Dinero::aCentavos((string) $devolucion->monto);
+            $reverso = $this->registrar($cliente->id, TipoMovimientoSaldoFavor::Reverso, $centavos, null, "Anulación de la devolución: {$motivo}", $usuario);
+            $this->auditoria->registrar('saldo_favor.anular_devolucion', $cliente, null, ['devolucion_id' => $devolucion->id],
+                ['saldo' => Dinero::aSoles($this->saldo($cliente->id)), 'repuesto' => Dinero::aSoles($centavos)], $motivo, $usuario);
+
+            return $reverso;
         });
     }
 

@@ -6,6 +6,7 @@ namespace App\Http\Controllers\Creditos;
 
 use App\Enums\Creditos\RequisitoFicha;
 use App\Enums\Creditos\TipoArchivoCliente;
+use App\Http\Requests\Creditos\MotivoRequest;
 use App\Http\Requests\Creditos\ArchivoClienteRequest;
 use App\Http\Requests\Creditos\AsignarCarteraRequest;
 use App\Http\Requests\Creditos\DevolverSaldoRequest;
@@ -86,6 +87,21 @@ class ClienteCreditoController extends ControllerCreditos
                 'movimientos' => $this->saldos->movimientos($modelo->id),
             ], null];
         }, ['cliente' => $modelo->id]);
+    }
+
+    /** Anula una devolución mal registrada: el dinero vuelve a la caja y el saldo al cliente. */
+    public function anularDevolucion(MotivoRequest $request, int $cliente, int $movimiento): JsonResponse
+    {
+        $modelo = $this->clienteVisible($cliente);
+
+        return $this->idempotente($request, 'saldo_favor.anular_devolucion', function () use ($request, $modelo, $movimiento): array {
+            $this->saldos->anularDevolucion($modelo, $movimiento, trim((string) $request->input('motivo')), $this->usuario());
+
+            return [[
+                'saldo' => Dinero::aSoles($this->saldos->saldo($modelo->id)),
+                'movimientos' => $this->saldos->movimientos($modelo->id),
+            ], null];
+        }, ['cliente' => $modelo->id, 'movimiento' => $movimiento]);
     }
 
     public function guardarFicha(FichaCreditoRequest $request, int $cliente): JsonResponse

@@ -35,7 +35,7 @@ Leer siempre este archivo + el de la fase en curso (`03-api.md`, …). `historia
 ### 1.4 Exigible y excedente
 - **Exigible hoy** = cuotas vencidas + mora (incl. congelada) + cargos pendientes + **la próxima cuota por vencer** (`AplicadorPagos::montoExigible`).
 - Lo que supere el exigible es excedente. Destinos: **`devolver` (default)**, `adelanto`, `saldo_a_favor`. Con `devolver`/`saldo_a_favor` no se rechaza el pago. Con `adelanto`, si lo aplicado supera la liquidación → `PagoExcedeDeuda` ("usa Liquidar").
-- **Saldo a favor** (04c.1): se ve en la ficha del cliente, en su tarjeta y al cobrar; se usa al cobrar ("Pagar con saldo a favor": no entra dinero a caja, lo no aplicado sigue como saldo) o se **devuelve** desde la ficha (salida de la caja abierta de quien devuelve, `credito_devolucion_saldo_favor`, permiso `creditos.cobrar`, idempotente). Consumirlo bloquea la fila del cliente (orden crédito → cliente). Un pago cuyo saldo ya se usó o devolvió no se anula hasta deshacer ese uso.
+- **Saldo a favor** (04c.1): se ve en la ficha del cliente, en su tarjeta y al cobrar; se usa al cobrar ("Pagar con saldo a favor": no entra dinero a caja, lo no aplicado sigue como saldo) o se **devuelve** desde la ficha (salida de la caja abierta de quien devuelve, `credito_devolucion_saldo_favor`, permiso `creditos.cobrar`, idempotente). Consumirlo bloquea la fila del cliente (orden crédito → cliente). Un pago cuyo saldo ya se usó o devolvió no se anula hasta deshacer ese uso. Una devolución mal registrada se **anula** desde la ficha (revisión 08-oct-2026): revierte su salida de caja y repone el saldo (movimiento `reverso`); la propia con la caja abierta, cualquier otra con `creditos.anular_pago`.
 - Caja registra el total recibido; la devolución es una salida aparte. Efectivo en persona: se da vuelto y se registra lo que corresponde.
 
 ### 1.5 Orden de aplicación de pagos
@@ -83,7 +83,7 @@ monto_liquidacion = capital pendiente + interes_final − interés ya cobrado + 
 ### 1.10 Límites de otorgamiento (`EvaluadorLimites`)
 | Regla | Efecto |
 |---|---|
-| `max_creditos` (default 2), `deuda_maxima` (saldo capital + nuevo), `moroso` (atraso > `dias_atraso_bloqueo`, default 7), `bloqueado` (manual o con crédito castigado) | Bloquea; admin autoriza con motivo (`creditos.autorizar_excepcion`, `credito_autorizaciones`) |
+| `max_creditos` (default 2), `deuda_maxima` (saldo capital + nuevo), `moroso` (atraso > `dias_atraso_bloqueo`, default 7), `bloqueado` (manual o con crédito castigado) | Bloquea; admin autoriza con motivo (`creditos.autorizar_excepcion`, `credito_autorizaciones`). Al otorgar (activar, renovar, subir capital) se bloquea la fila del cliente mientras se evalúa (`evaluarParaOtorgar`, revisión 08-oct-2026): dos otorgamientos simultáneos no pasan ambos el máximo. |
 | `propio_garante` | Bloquea, no autorizable (también en migración) |
 | `garante_moroso`, `garante_saturado` (`max_garantias_por_garante`, default 3) | Advierte |
 - Ajustes por cliente en `credito_cliente_limites`. Migración: todo advierte salvo `propio_garante`. Renovación: el crédito renovado se excluye de deuda y conteo pero **sí** cuenta para `moroso`. Castigados cuentan como activos.
@@ -96,12 +96,13 @@ monto_liquidacion = capital pendiente + interes_final − interés ya cobrado + 
 | > `dias_aviso_garante` (15) | Lista "Cobrar al garante" |
 | > `dias_para_venta` (30) | Prendas `apta_para_venta` (vuelven a custodia si se pone al día) |
 | > `dias_para_castigo` (90) | Crédito `castigado` (también manual: `creditos.castigar`; reversible, auditado) |
+- Revertir un castigo (revisión 08-oct-2026): el castigo automático no vuelve a castigar ese crédito hasta que pasen otra vez `dias_para_castigo` desde la reversión (antes lo recastigaba esa misma noche). El castigo manual sigue disponible.
 - Castigado: sale de cartera activa y del % en riesgo; mora congelada; pagos = **recupero** (`esRecupero`, solo con castigo vigente); pagado todo → `finalizado` (`recupero_castigo`); cliente bloqueado hasta desbloqueo manual.
 
 ### 1.12 Operaciones especiales
 - **Crédito existente (migración)** (`creditos.migrar`): condiciones originales con fecha pasada; pagos históricos modo rápido ("cuotas 1..N a tiempo") o detallado (fecha + monto); `origen='saldo_inicial'`, `origen_registro='migracion'`, **sin caja**; límites solo advierten; se sube el contrato firmado.
-- **Renovación**: liquidación del actual (1.7) descontada del nuevo; entrega neta = capital nuevo − liquidación (> 0); anterior `finalizado` (`renovacion`), pago `origen='renovacion'` `es_cierre=true` sin caja; caja solo la salida neta; `credito_renovado_id`. Ej.: debe 300, pide 1,000 → entrega 700.
-- **Pago con fecha anterior** (`creditos.pago_fecha_anterior`, motivo, máx. `dias_max_pago_retroactivo` = 3): `fecha_pago` real, `created_at` = registro; reaplica pagos posteriores; caja: entra a la caja abierta actual. Nunca antes del desembolso ni antes del día de la última reprogramación (misma regla que anular, 1.8 b) — revisión 03-oct-2026.
+- **Renovación**: liquidación del actual (1.7) descontada del nuevo; neto = capital nuevo − liquidación: **> 0 se entrega** (salida `credito_desembolso`), **= 0 sin dinero**, **< 0 el cliente paga** la diferencia (entrada `credito_pago` con referencia al pago de renovación; ampliado 08-oct-2026). Anterior `finalizado` (`renovacion`), un solo pago `origen='renovacion'` `es_cierre=true`; la parte cubierta por el crédito nuevo no pasa por caja; `credito_renovado_id`. Método obligatorio si neto ≠ 0. Anular el nuevo reabre el anterior y revierte la diferencia en caja. Ej.: debe 300, pide 1,000 → entrega 700; debe 600, renueva por 500 → cliente paga 100.
+- **Pago con fecha anterior** (`creditos.pago_fecha_anterior`, motivo, máx. `dias_max_pago_retroactivo` = 3): `fecha_pago` real, `created_at` = registro; reaplica pagos posteriores; caja: entra a la caja abierta actual. Nunca antes del desembolso ni antes del día de la última reprogramación (misma regla que anular, 1.8 b) — revisión 03-oct-2026. La vista previa del cobro se calcula a esa fecha (`pagos/cotizar` con `fecha_pago`, mismas validaciones salvo el motivo) — revisión 08-oct-2026.
 - **Desembolso** siempre completo (sin comisión ni interés adelantado).
 - **Activar** exige `fecha_desembolso` = hoy (desembolsos pasados → migración). `fecha_primer_vencimiento` guarda la fecha **pedida** (ancla del cronograma), no la ajustada.
 - `fecha_pago` se guarda en hora de Lima (fecha de negocio, indicado en el comment de la columna); timestamps de auditoría en UTC.
@@ -133,7 +134,7 @@ Fuente de verdad: las migraciones de `database/migrations/tenant/core/` y sus co
 - Central: `menu_items.giros_excluidos` (tenant `creditos` no ve retail/agencia; sí Clientes, Caja, Métodos de pago).
 
 ## 3. Caja (`reference_type`)
-`credito_desembolso` (salida) · `credito_pago` (entrada) · `credito_devolucion_excedente` (salida) · `prenda_venta` (entrada) · `prenda_excedente` (salida) · correcciones vía `CashCorrectionService` · transferencia caja cobrador → principal. Todo dentro de la misma transacción que la operación. Sin caja: migración y la parte de liquidación en una renovación.
+`credito_desembolso` (salida) · `credito_pago` (entrada) · `credito_devolucion_excedente` (salida) · `prenda_venta` (entrada) · `prenda_excedente` (salida) · correcciones vía `CashCorrectionService` · transferencia caja cobrador → principal. Todo dentro de la misma transacción que la operación. Sin caja: migración y la parte de la liquidación que cubre el crédito nuevo en una renovación (la diferencia, si el cliente paga, entra como `credito_pago`).
 
 ## 4. Estándares
 - **Código**: `strict_types`, tipos completos, DTOs `readonly`, clases chicas, sin números mágicos, controllers delgados (FormRequest → servicio → Resource), comentarios solo para el "por qué" citando la regla.

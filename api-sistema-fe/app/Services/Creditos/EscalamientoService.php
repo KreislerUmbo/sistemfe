@@ -16,6 +16,9 @@ use Illuminate\Support\Facades\Log;
  * Proceso diario (00 1.11, 03-api decisión 5). Bloqueo por atraso y "cobrar al garante" se
  * calculan en vivo desde los días de atraso; lo único que se escribe es el castigo automático.
  * Idempotente: un crédito ya castigado no vuelve a entrar.
+ *
+ * Revisión 08-oct-2026: si una persona revirtió un castigo, el automático no lo vuelve a castigar
+ * esa misma noche; la cuenta de dias_para_castigo empieza de nuevo desde la reversión.
  */
 class EscalamientoService
 {
@@ -34,6 +37,7 @@ class EscalamientoService
                 ->where('estado', EstadoCuota::Pendiente)
                 // Atraso > dias_para_castigo ⇔ vencimiento anterior a hoy − dias_para_castigo.
                 ->where('fecha_vencimiento', '<', $limite->aTexto()))
+            ->whereDoesntHave('castigos', fn ($q) => $q->where('fecha_reversion', '>=', $limite->aTexto()))
             ->get();
 
         // 04c.1: un crédito que falla no corta el proceso de los demás; queda en el log.
