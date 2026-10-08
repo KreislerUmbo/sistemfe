@@ -70,10 +70,14 @@
                                     {{ formatFechaHora(user.created_at) }}
                                 </b-td>
                                 <b-td class="text-end">
-                                    <a href="#" @click="editUser(user)"><i
-                                            class="las la-pen text-secondary fs-22"></i></a>{{ " " }}
-                                    <a href="#" @click="removeUser(user)"><i
-                                            class="las la-trash-alt text-secondary fs-22"></i></a>
+                                    <!-- Un Super-Admin solo lo gestiona otro Super-Admin (el backend también lo exige). -->
+                                    <template v-if="puedeGestionar(user)">
+                                        <a href="#" @click="editUser(user)"><i
+                                                class="las la-pen text-secondary fs-22"></i></a>{{ " " }}
+                                        <a href="#" @click="removeUser(user)"><i
+                                                class="las la-trash-alt text-secondary fs-22"></i></a>
+                                    </template>
+                                    <span v-else class="badge bg-secondary-subtle text-secondary" title="Solo un Super-Admin puede modificarlo">Protegido</span>
                                 </b-td>
                             </b-tr>
 
@@ -274,11 +278,16 @@ import type { RolePermiso } from '@/types/roles';
 import { construirCatalogoCompleto } from '@/helpers/permisos';
 import { computed, onMounted, ref, watch } from 'vue';
 import { formatFechaHora } from '@/helpers/fecha';
+import { useAuthStore } from '@/stores/auth';
 
 import Swal from "sweetalert2/dist/sweetalert2.js";
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
 
 const users = ref<User[]>([]);
+
+// 07-oct-2026: el Super-Admin (soporte de UmboSystem) no se edita ni se elimina desde otro rol.
+const actorEsSuperAdmin = computed(() => useAuthStore().user?.role?.name === 'Super-Admin');
+const puedeGestionar = (user: User): boolean => actorEsSuperAdmin.value || user.role?.name !== 'Super-Admin';
 const user_selected = ref<User | undefined>(undefined);
 const themeColor = ref<string>('primary');
 
@@ -567,9 +576,14 @@ const removeUser = (user: User) => {
             })
             .then(async (result: any) => { //then maneja la respuesta de la alerta
                 if (result.isConfirmed) {
-                    const res: AxiosResponse<any> = await httpClient.delete(
-                        "users/" + user.id
-                    );
+                    let res: AxiosResponse<any>;
+                    try {
+                        res = await httpClient.delete("users/" + user.id);
+                    } catch (error: any) {
+                        // Antes un error HTTP aquí no se mostraba (quedaba fuera del try externo).
+                        (Swal as TVueSwalInstance).fire("No se eliminó", error.response?.data?.message ?? "No se pudo eliminar el usuario.", "warning");
+                        return;
+                    }
                     // 04c.1: no se elimina a quien tiene clientes en su cartera de créditos.
                     if (res.data?.code == 405) {
                         (Swal as TVueSwalInstance).fire("No se eliminó", res.data.message, "warning");
