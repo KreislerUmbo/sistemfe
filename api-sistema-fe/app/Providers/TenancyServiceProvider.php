@@ -124,7 +124,12 @@ class TenancyServiceProvider extends ServiceProvider
     // es inutilizable en este proyecto.
     protected function configureTenantAssetsMiddleware()
     {
-        TenantAssetsController::$tenancyMiddleware = Middleware\InitializeTenancyBySubdomain::class;
+        // ProtegerArchivosServidos: un archivo que no es imagen/PDF se entrega como
+        // descarga aislada, nunca como página del mismo dominio (auditoría 08-oct-2026).
+        TenantAssetsController::$tenancyMiddleware = [
+            Middleware\InitializeTenancyBySubdomain::class,
+            \App\Http\Middleware\ProtegerArchivosServidos::class,
+        ];
     }
 
     /**

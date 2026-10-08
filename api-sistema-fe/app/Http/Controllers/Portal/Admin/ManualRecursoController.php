@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Portal\Admin;
 
+use App\Rules\ArchivoSubido;
 use App\Http\Controllers\Controller;
 use App\Models\AdminPortal\ManualRecurso;
 use Illuminate\Http\Request;
@@ -44,7 +45,10 @@ class ManualRecursoController extends Controller
             'orden' => 'nullable|integer',
             'destacado' => 'boolean',
             'estado' => 'boolean',
-        ]);
+            // Mismos formatos que acepta recursos/register.vue.
+            'archivo' => ['nullable', 'file', 'mimes:mp4,pdf,doc,docx,ppt,pptx,jpg,jpeg,png,gif,webp', 'max:25600'],
+            'miniatura' => ArchivoSubido::imagen(),
+        ], ArchivoSubido::MENSAJES);
 
         $data = $request->only([
             'sistema_id', 'categoria', 'titulo', 'descripcion',
@@ -97,7 +101,10 @@ class ManualRecursoController extends Controller
             'orden' => 'nullable|integer',
             'destacado' => 'boolean',
             'estado' => 'boolean',
-        ]);
+            // Mismos formatos que acepta recursos/register.vue.
+            'archivo' => ['nullable', 'file', 'mimes:mp4,pdf,doc,docx,ppt,pptx,jpg,jpeg,png,gif,webp', 'max:25600'],
+            'miniatura' => ArchivoSubido::imagen(),
+        ], ArchivoSubido::MENSAJES);
 
         $data = $request->only([
             'sistema_id', 'categoria', 'titulo', 'descripcion',

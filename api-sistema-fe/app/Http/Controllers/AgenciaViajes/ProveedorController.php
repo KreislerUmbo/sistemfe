@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\AgenciaViajes;
 
+use App\Rules\ArchivoSubido;
 use App\Http\Controllers\Controller;
 use App\Models\AgenciaViajes\Amenidad;
 use App\Models\AgenciaViajes\ConfiguracionAgencia;
@@ -83,6 +84,7 @@ class ProveedorController extends Controller
 
     public function store(Request $request)
     {
+        $request->validate(['logo' => ArchivoSubido::imagen()], ArchivoSubido::MENSAJES);
         $validado = $this->validarPayload($request);
         if ($validado instanceof JsonResponse) {
             return $validado;
@@ -164,6 +166,7 @@ class ProveedorController extends Controller
 
     public function update(Request $request, string $id)
     {
+        $request->validate(['logo' => ArchivoSubido::imagen()], ArchivoSubido::MENSAJES);
         $proveedor = Proveedor::findOrFail($id);
 
         $validado = $this->validarPayload($request);

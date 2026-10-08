@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\User;
 
+use App\Rules\ArchivoSubido;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\User\UserCollection;
 use App\Http\Resources\User\UserResource;
@@ -71,6 +72,7 @@ class UserController extends Controller
      */
     public function store(Request $request)
     {
+        $request->validate(['imagen' => ArchivoSubido::imagen()], ArchivoSubido::MENSAJES);
         if ($rechazo = $this->protegerSuperAdmin($request, null)) {
             return $rechazo;
         }
@@ -117,6 +119,7 @@ class UserController extends Controller
      */
     public function update(Request $request, string $id)
     {
+        $request->validate(['imagen' => ArchivoSubido::imagen()], ArchivoSubido::MENSAJES);
         $is_user_exists = User::where("id", "<>", $id)->where("email", $request->email)->first();
 
         if ($is_user_exists) {

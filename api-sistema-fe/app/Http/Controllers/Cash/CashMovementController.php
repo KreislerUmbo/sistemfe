@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Cash;
 
+use App\Rules\ArchivoSubido;
 use App\Exports\CashMovementsExport;
 use App\Http\Controllers\Controller;
 use App\Models\Cash\CashConcept;
@@ -49,7 +50,7 @@ class CashMovementController extends Controller
             'counterparty_id'       => 'nullable|integer',
             'counterparty_name'     => 'nullable|string',
             'counterparty_document' => 'nullable|string',
-            'attachment'            => 'nullable|file|max:10240',
+            'attachment'            => ArchivoSubido::imagenOPdf(),
         ]);
 
         $tipo      = $request->type;

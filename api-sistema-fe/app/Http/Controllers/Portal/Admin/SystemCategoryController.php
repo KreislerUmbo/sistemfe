@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Portal\Admin;
 
+use App\Rules\ArchivoSubido;
 use App\Http\Controllers\Controller;
 use App\Models\AdminPortal\SystemCategory;
 use Illuminate\Http\Request;
@@ -42,6 +43,7 @@ class SystemCategoryController extends Controller
      */
     public function store(Request $request)
     {
+        $request->validate(['image' => ArchivoSubido::imagen()], ArchivoSubido::MENSAJES);
         // Validación
         $request->validate([
             'nombre' => 'required|string|max:50|unique:system_categories,nombre',
@@ -101,6 +103,7 @@ class SystemCategoryController extends Controller
 
     public function update(Request $request, string $id)
     {
+        $request->validate(['image' => ArchivoSubido::imagen()], ArchivoSubido::MENSAJES);
         $is_exist_category = SystemCategory::where('id', '<>', $id)->where('nombre', $request->nombre)->first();
         if ($is_exist_category) {
             return response()->json([
