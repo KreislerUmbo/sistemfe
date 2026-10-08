@@ -1379,7 +1379,7 @@ class AlternativaItemController extends Controller
                 'margen_tipo' => 'fijo',
                 'margen_valor' => $margenValor,
                 'precio_venta_adulto' => $v['precio_venta_adulto'],
-                'vigente_desde' => now()->toDateString(),
+                'vigente_desde' => \App\Services\HoraPeru::hoyTexto(),
                 'tip_afe_igv' => $tratamientoTributario['tip_afe_igv'],
                 'destino_tributario' => $tratamientoTributario['destino_tributario'],
             ]);

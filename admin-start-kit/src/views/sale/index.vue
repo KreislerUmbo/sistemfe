@@ -494,7 +494,8 @@ const setPeriod = (key: string) => {
         default: return;
     }
     // Formato YYYY-MM-DD
-    const format = (d: Date) => d.toISOString().split('T')[0];
+    // from/to ya son medianoches locales: armar el texto con sus partes locales, sin pasar por UTC.
+    const format = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     start_date.value = format(from);
     end_date.value = format(to);
     // Cerrar panel de periodo

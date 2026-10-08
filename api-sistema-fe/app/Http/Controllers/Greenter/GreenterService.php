@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Greenter;
 
 use App\Models\Sale\Sale;
 use App\Models\SunatConfig;
+use App\Services\HoraPeru;
 use DateTime;
 use Greenter\Model\Client\Client;
 use Greenter\Model\Company\Address;
@@ -211,7 +212,7 @@ class GreenterService
             ->setCompany($this->getCompany($empresa))
             ->setClient($this->getCliente($venta))
             ->setTipoMoneda($datos_comprobante['tipo_moneda'])       // 'PEN' o 'USD'
-            ->setFechaEmision(new DateTime());
+            ->setFechaEmision($this->fechaEmision());
 
         // ── Forma de pago ─────────────────────────────────────────────
         // Módulo Amortizaciones — Fase 8.0 (fix bloqueante antes de
@@ -464,6 +465,17 @@ class GreenterService
         return $comprobante;
     }
 
+    // ── Fecha de emisión del comprobante (XML) ────────────────────────
+    // El instante actual en hora de Perú. Greenter igual convierte la fecha a
+    // America/Lima al armar el XML (TwigBuilder::configureTimezone()), así que
+    // no depende de la zona por defecto de PHP; se pasa en hora de Perú para
+    // que no dependa tampoco de ese detalle interno de la librería.
+    // GreenterFechaEmisionTest fija IssueDate de 19:00 a 24:00.
+    public function fechaEmision(): DateTime
+    {
+        return HoraPeru::ahora()->toDateTime();
+    }
+
     // ── Cuotas vigentes del cronograma de crédito de una venta ────────
     // Módulo Amortizaciones — Fase 8.0. Único criterio de "¿esta venta
     // tiene un cronograma financiable para declarar ante SUNAT?" —
@@ -503,7 +515,7 @@ class GreenterService
             ->setCompany($this->getCompany($empresa))
             ->setClient($this->getCliente($nota))
             ->setTipoMoneda($datos_nota['tipo_moneda'])
-            ->setFechaEmision(new DateTime())
+            ->setFechaEmision($this->fechaEmision())
             // ── Referencia al documento afectado (Catálogo 01 + serie-correlativo) ──
             ->setTipDocAfectado($nota->tipo_doc_afectado)
             ->setNumDocfectado(

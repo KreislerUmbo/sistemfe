@@ -73,10 +73,10 @@ class GuiaTarifaController extends Controller
             || PaquetePlantillaItem::where('guia_tarifa_id', $tarifaActual->id)->exists();
 
         if ($tieneUso) {
-            $tarifaActual->update(['vigente_hasta' => now()->toDateString()]);
+            $tarifaActual->update(['vigente_hasta' => \App\Services\HoraPeru::hoyTexto()]);
 
             $validado['guia_id'] = $tarifaActual->guia_id;
-            $validado['vigente_desde'] = $validado['vigente_desde'] ?? now()->toDateString();
+            $validado['vigente_desde'] = $validado['vigente_desde'] ?? \App\Services\HoraPeru::hoyTexto();
             // La nueva versión hereda el estado activo/inactivo de la que
             // reemplaza — editar el precio de una tarifa desactivada no
             // debe reactivarla en silencio, eso requiere un activar()

@@ -128,7 +128,7 @@ import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import DestinoTreeSelect from '@/components/AgenciaViajes/DestinoTreeSelect.vue';
 import Swal from 'sweetalert2/dist/sweetalert2.js';
 import { guiaService } from '@/services/admin/guiaService';
-import { formatFecha } from '@/helpers/fecha';
+import { formatFecha, hoyPeru } from '@/helpers/fecha';
 import type { Guia, GuiaTarifa } from '@/types/agencia-viajes';
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
@@ -142,7 +142,7 @@ const tarifas = ref<GuiaTarifa[]>([]);
 const formTarifaVacio = (): Partial<Omit<GuiaTarifa, 'destino_id'>> & { destino_id: number | null } => ({
     destino_id: null, modalidad: 'dia_local', costo_diario: 0,
     tipo_margen: 'porcentaje', margen_valor: 0, moneda: 'PEN',
-    vigente_desde: new Date().toISOString().slice(0, 10), vigente_hasta: null,
+    vigente_desde: hoyPeru(), vigente_hasta: null,
 });
 const formTarifa = ref(formTarifaVacio());
 

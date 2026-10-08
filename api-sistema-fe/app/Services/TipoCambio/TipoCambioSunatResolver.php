@@ -3,7 +3,7 @@
 namespace App\Services\TipoCambio;
 
 use App\Models\TipoCambio\TipoCambioSunat;
-use Carbon\Carbon;
+use Carbon\CarbonInterface;
 
 // Fase 4 del plan de Tipo de Cambio SUNAT. Decisión del usuario
 // (09-sep-2026): NO bloquea la emisión de un comprobante en USD si no hay
@@ -13,7 +13,7 @@ use Carbon\Carbon;
 // notes.tipo_cambio_sunat_aplicado).
 class TipoCambioSunatResolver
 {
-    public function resolverParaFecha(Carbon $fecha): ?TipoCambioSunat
+    public function resolverParaFecha(CarbonInterface $fecha): ?TipoCambioSunat
     {
         $fechaStr = $fecha->toDateString();
 

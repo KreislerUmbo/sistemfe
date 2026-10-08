@@ -85,7 +85,7 @@ class CreditInstallmentController extends Controller
             (float) $sale->saldo_pendiente,
             (int) $request->num_cuotas,
             $request->periodicidad,
-            $sale->date ? Carbon::parse($sale->date) : now()
+            $sale->date ? Carbon::parse($sale->date) : \App\Services\HoraPeru::hoy()
         );
 
         return response()->json([
@@ -115,7 +115,7 @@ class CreditInstallmentController extends Controller
             (float) $request->monto_total,
             (int) $request->num_cuotas,
             $request->periodicidad,
-            $request->filled('fecha_anchor') ? Carbon::parse($request->fecha_anchor) : now()
+            $request->filled('fecha_anchor') ? Carbon::parse($request->fecha_anchor) : \App\Services\HoraPeru::hoy()
         );
 
         return response()->json([

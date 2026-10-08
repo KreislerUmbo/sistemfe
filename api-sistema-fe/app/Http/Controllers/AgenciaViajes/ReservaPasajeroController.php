@@ -166,7 +166,7 @@ class ReservaPasajeroController extends Controller
                 'pasajero_catalogo_id' => $catalogo->id,
                 'tipo_documento' => 'DNI', // único tipo que maneja hoy el form de reserva_pasajeros
                 'numero_documento' => $pasajero->documento,
-                'fecha_registro' => now(),
+                'fecha_registro' => \App\Services\HoraPeru::hoyTexto(),
             ]);
         } else {
             $catalogo->update([
@@ -183,7 +183,7 @@ class ReservaPasajeroController extends Controller
                     'pasajero_catalogo_id' => $catalogo->id,
                     'tipo_documento' => 'DNI',
                     'numero_documento' => $pasajero->documento,
-                    'fecha_registro' => now(),
+                    'fecha_registro' => \App\Services\HoraPeru::hoyTexto(),
                 ]);
             }
         }

@@ -51,7 +51,7 @@ class CreditSummaryCalculator
     // si no se pasa (mismo criterio que MoraCalculator/CreditPaymentAllocator).
     public function resumenVenta(Sale $venta, ?Carbon $fechaReferencia = null): array
     {
-        $fechaReferencia ??= now();
+        $fechaReferencia ??= \App\Services\HoraPeru::hoy();
         $hoy = $fechaReferencia->copy()->startOfDay();
 
         $saldoCentavos = (int) round((float) $venta->saldo_pendiente * 100);

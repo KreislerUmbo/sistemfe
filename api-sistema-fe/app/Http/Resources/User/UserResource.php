@@ -34,7 +34,8 @@ class UserResource extends JsonResource
             'n_document' => $this->resource->n_document,
             'gender' => $this->resource->gender,
             'formato_impresion_default' => $this->resource->formato_impresion_default,
-            'created_at' => $this->resource->created_at->format('Y-m-d H:i:s'),
+            // Instante en UTC con zona (ISO 'Z'): el frontend lo pasa a hora de Perú.
+            'created_at' => $this->resource->created_at?->toISOString(),
             // Fase 2d (plan-modulo-menus-y-roles.md §5) — permisos
             // asignados DIRECTO a este usuario (independiente de los que
             // le da su rol) — getDirectPermissions() es el método real de

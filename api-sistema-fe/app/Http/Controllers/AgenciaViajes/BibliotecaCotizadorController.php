@@ -114,7 +114,7 @@ class BibliotecaCotizadorController extends Controller
     // que ya tenía biblioteca().
     private function buscarProveedorTarifas(?int $proveedorTipoId, ?string $search, ?array $destinoIds, ?int $servicioId, ?int $proveedorId): array
     {
-        $hoy = now()->toDateString();
+        $hoy = \App\Services\HoraPeru::hoyTexto();
 
         $query = ProveedorTarifa::with([
             // alojamientoDetalle — Consolidación de hoteles: el cotizador

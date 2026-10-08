@@ -508,7 +508,7 @@ class ReservaFacturacionController extends Controller
 
                 $venta = Sale::create([
                     'type' => 'sale',
-                    'date' => now()->toDateString(),
+                    'date' => \App\Services\HoraPeru::hoyTexto(),
                     'serie' => $serieResuelta['serie']->serie,
                     'tipo_comprobante_codigo' => $serieResuelta['tipo']->codigo,
                     'serie_comprobante_id' => $serieResuelta['serie']->id,
@@ -1005,7 +1005,7 @@ class ReservaFacturacionController extends Controller
             ];
         }
 
-        $tipoCambioSugerido = $this->tipoCambioSunatResolver->resolverParaFecha(now())?->venta;
+        $tipoCambioSugerido = $this->tipoCambioSunatResolver->resolverParaFecha(\App\Services\HoraPeru::ahora())?->venta;
         $tipoCambio = $request->filled('tipo_cambio_conversion')
             ? (float) $request->input('tipo_cambio_conversion')
             : $tipoCambioSugerido;

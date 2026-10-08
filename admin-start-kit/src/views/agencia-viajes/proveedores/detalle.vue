@@ -387,7 +387,7 @@ import Swal from 'sweetalert2/dist/sweetalert2.js';
 import { proveedorService } from '@/services/admin/proveedorService';
 import { destinoAtractivoService } from '@/services/admin/destinoAtractivoService';
 import { useAgenciaViajesCatalogosStore } from '@/stores/agenciaViajesCatalogos';
-import { formatFecha } from '@/helpers/fecha';
+import { formatFecha, hoyPeru } from '@/helpers/fecha';
 import type { Proveedor, ProveedorTipo, ProveedorServicio, ProveedorTarifa, DestinoServicio, ConfiguracionAgencia } from '@/types/agencia-viajes';
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
@@ -437,7 +437,7 @@ const claseMargen = (pct: number): string => (pct >= MARGEN_MINIMO_ACEPTABLE_PCT
 const margenTarifa = (tarifa: ProveedorTarifa): number => calcularMargenPct(tarifa.precio_costo, tarifa.precio_venta_adulto);
 
 const estadoVigencia = (tarifa: ProveedorTarifa): { label: string; clase: string } => {
-    const hoy = new Date().toISOString().slice(0, 10);
+    const hoy = hoyPeru();
     if (tarifa.vigente_hasta && tarifa.vigente_hasta < hoy) return { label: 'Vencida', clase: 'bg-secondary' };
     if (tarifa.vigente_desde > hoy) return { label: 'Programada', clase: 'bg-info' };
     return { label: 'Vigente hoy', clase: 'bg-success' };
@@ -594,7 +594,7 @@ const abrirFormTarifa = (ps: ProveedorServicio, tarifa: ProveedorTarifa | null =
             // distinto al default.
             destino_tributario: configAgencia.value?.destino_tributario_default ?? 'nacional',
             tip_afe_igv: configAgencia.value?.tip_afe_igv_default ?? '10',
-            vigente_desde: new Date().toISOString().slice(0, 10), vigente_hasta: null,
+            vigente_desde: hoyPeru(), vigente_hasta: null,
         };
     modalTarifaAbierto.value = true;
 };

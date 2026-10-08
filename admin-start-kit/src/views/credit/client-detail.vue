@@ -317,6 +317,7 @@
 
 <script setup lang="ts">
 import DefaultLayout from "@/layouts/DefaultLayout.vue";
+import { hoyPeru } from "@/helpers/fecha";
 import { computed, onMounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import Swal from "sweetalert2/dist/sweetalert2.js";
@@ -351,7 +352,7 @@ const modo = ref<"general" | "especifico">(route.query.sale_id ? "especifico" : 
 const selectedSaleId = ref<number | null>(route.query.sale_id ? Number(route.query.sale_id) : null);
 
 const montoTotal = ref<number>(0);
-const fechaPago = ref<string>(new Date().toISOString().slice(0, 10));
+const fechaPago = ref<string>(hoyPeru());
 const medioPago = ref<string>("EFECTIVO");
 const nroOperacion = ref<string>("");
 

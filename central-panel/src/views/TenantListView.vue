@@ -37,7 +37,9 @@ function giroLabel(giro: string): string {
 
 function formatFecha(fecha: string | null): string {
   if (!fecha) return '—';
+  // created_at del tenant (instante UTC con "Z"): se muestra el día de Perú.
   return new Date(fecha).toLocaleDateString('es-PE', {
+    timeZone: 'America/Lima',
     year: 'numeric',
     month: 'short',
     day: '2-digit',

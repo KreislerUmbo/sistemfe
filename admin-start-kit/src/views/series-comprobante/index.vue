@@ -142,6 +142,7 @@
 
 <script setup lang="ts">
 import DefaultLayout from '@/layouts/DefaultLayout.vue';
+import { hoyPeru } from '@/helpers/fecha';
 import httpClient from '@/helpers/http-client';
 import type { AxiosResponse } from 'axios';
 import { ref, computed, onMounted, watch } from 'vue';
@@ -181,7 +182,7 @@ const tipo_comprobante_codigo = ref<string | null>(null);
 const moneda = ref<'PEN' | 'USD'>('PEN');
 const serie = ref<string>('');
 const correlativo_inicial = ref<number>(1);
-const fecha_inicio = ref<string>(new Date().toISOString().slice(0, 10));
+const fecha_inicio = ref<string>(hoyPeru());
 const activo = ref<boolean>(true);
 
 const itemSelected = ref<SerieComprobante | undefined>(undefined);
@@ -240,7 +241,7 @@ const clearFields = () => {
     moneda.value = 'PEN';
     serie.value = '';
     correlativo_inicial.value = 1;
-    fecha_inicio.value = new Date().toISOString().slice(0, 10);
+    fecha_inicio.value = hoyPeru();
     activo.value = true;
 };
 

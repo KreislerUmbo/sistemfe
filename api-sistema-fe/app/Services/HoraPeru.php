@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Carbon;
 
 /**
  * "Ahora" en hora de Perú para lo que ve el usuario (PDF, nombres de archivo) y para
@@ -17,6 +18,41 @@ class HoraPeru
     public static function ahora(): CarbonImmutable
     {
         return CarbonImmutable::now(self::ZONA);
+    }
+
+    /**
+     * "Hoy" de Perú como fecha de negocio (Y-m-d): fecha de emisión, de pago, vigencias, filtros.
+     */
+    public static function hoyTexto(): string
+    {
+        return self::ahora()->toDateString();
+    }
+
+    /**
+     * "Hoy" de Perú a medianoche, en la zona por defecto de PHP: para comparar o restar contra
+     * columnas `date` (vencimientos, fecha_limite_pago), que Eloquent también lee en esa zona.
+     * No usar ahora()->startOfDay() para eso: la medianoche de Lima son las 05:00 UTC y quedaría
+     * "después" de un vencimiento del mismo día.
+     */
+    public static function hoy(): Carbon
+    {
+        return Carbon::parse(self::hoyTexto());
+    }
+
+    /**
+     * Inicio del día $ymd de Perú expresado en UTC: límite inclusivo para filtrar columnas que se
+     * guardan en UTC (where col >= desdeUtc). Un día de Perú va de 05:00 UTC a 05:00 UTC del día
+     * siguiente; whereDate(col, $ymd) sobre una columna UTC corta el día a las 19:00 de Perú.
+     */
+    public static function inicioDiaUtc(string $ymd): string
+    {
+        return CarbonImmutable::parse(substr($ymd, 0, 10) . ' 00:00:00', self::ZONA)->utc()->format('Y-m-d H:i:s');
+    }
+
+    /** Inicio del día SIGUIENTE a $ymd de Perú, en UTC: límite exclusivo (where col < finDiaUtc). */
+    public static function finDiaUtc(string $ymd): string
+    {
+        return CarbonImmutable::parse(substr($ymd, 0, 10) . ' 00:00:00', self::ZONA)->addDay()->utc()->format('Y-m-d H:i:s');
     }
 
     /**

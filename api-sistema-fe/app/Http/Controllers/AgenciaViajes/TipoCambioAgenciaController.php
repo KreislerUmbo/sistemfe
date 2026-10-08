@@ -48,7 +48,7 @@ class TipoCambioAgenciaController extends Controller
     // en AlternativaController, sin cambios).
     public function sugerenciaSunat()
     {
-        $sugerido = $this->tipoCambioSunatResolver->resolverParaFecha(now());
+        $sugerido = $this->tipoCambioSunatResolver->resolverParaFecha(\App\Services\HoraPeru::ahora());
 
         return response()->json([
             'code' => 200,
@@ -84,7 +84,7 @@ class TipoCambioAgenciaController extends Controller
         }
 
         $tipoCambio = TipoCambioAgencia::create([
-            'fecha' => now()->toDateString(),
+            'fecha' => \App\Services\HoraPeru::hoyTexto(),
             'origen' => $validado['origen'],
             'valor' => $validado['valor'],
             'registrado_por' => $request->user()->id,

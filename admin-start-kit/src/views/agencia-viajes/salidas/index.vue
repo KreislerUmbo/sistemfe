@@ -183,7 +183,7 @@ import Swal from 'sweetalert2/dist/sweetalert2.js';
 import { salidaOperativaService } from '@/services/admin/salidaOperativaService';
 import { guiaService } from '@/services/admin/guiaService';
 import { useToast } from '@/composables/useToast';
-import { formatFecha } from '@/helpers/fecha';
+import { formatFecha, hoyPeru, sumarDiasISO } from '@/helpers/fecha';
 import type { SalidaOperativa, Guia } from '@/types/agencia-viajes';
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
@@ -198,12 +198,8 @@ const currentPage = ref<number>(1);
 const perPageRows = ref<number>(20);
 const loading = ref<boolean>(false);
 
-const hoy = new Date();
-const enSieteDias = new Date(hoy.getTime() + 7 * 24 * 60 * 60 * 1000);
-const aIso = (d: Date) => d.toISOString().substring(0, 10);
-
-const fechaDesde = ref<string>(aIso(hoy));
-const fechaHasta = ref<string>(aIso(enSieteDias));
+const fechaDesde = ref<string>(hoyPeru());
+const fechaHasta = ref<string>(sumarDiasISO(hoyPeru(), 7));
 const estado = ref<'' | 'activa' | 'cancelada'>('');
 
 const guiaEditando = ref<number | null>(null);
@@ -229,8 +225,8 @@ const list = async () => {
 };
 
 const reset = () => {
-    fechaDesde.value = aIso(hoy);
-    fechaHasta.value = aIso(enSieteDias);
+    fechaDesde.value = hoyPeru();
+    fechaHasta.value = sumarDiasISO(hoyPeru(), 7);
     estado.value = '';
     currentPage.value = 1;
     list();

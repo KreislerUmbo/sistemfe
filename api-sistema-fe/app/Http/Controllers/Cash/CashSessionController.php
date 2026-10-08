@@ -12,6 +12,7 @@ use App\Models\Company;
 use App\Services\CashVisibilityResolver;
 use App\Services\ExpectedCashCalculator;
 use Barryvdh\DomPDF\Facade\Pdf;
+use App\Services\HoraPeru;
 use Carbon\Carbon;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\Request;
@@ -264,11 +265,12 @@ class CashSessionController extends Controller
         if ($openedBy !== null) {
             $query->where('opened_by', $openedBy);
         }
+        // opened_at se guarda en UTC; las fechas del filtro son días de Perú.
         if ($request->filled('date_from')) {
-            $query->whereDate('opened_at', '>=', $request->query('date_from'));
+            $query->where('opened_at', '>=', HoraPeru::inicioDiaUtc($request->query('date_from')));
         }
         if ($request->filled('date_to')) {
-            $query->whereDate('opened_at', '<=', $request->query('date_to'));
+            $query->where('opened_at', '<', HoraPeru::finDiaUtc($request->query('date_to')));
         }
         if ($request->filled('branch_id')) {
             $branchId = $request->query('branch_id');
@@ -443,8 +445,8 @@ class CashSessionController extends Controller
         $this->validarRangoMaximo($request->date_from, $request->date_to);
 
         $query = CashSession::with(['cashRegister.branch', 'openedByUser', 'closedByUser', 'cashMovements.paymentMethod'])
-            ->whereDate('opened_at', '>=', $request->date_from)
-            ->whereDate('opened_at', '<=', $request->date_to);
+            ->where('opened_at', '>=', HoraPeru::inicioDiaUtc($request->date_from))
+            ->where('opened_at', '<', HoraPeru::finDiaUtc($request->date_to));
 
         if ($request->filled('branch_id')) {
             $branchId = $request->branch_id;
