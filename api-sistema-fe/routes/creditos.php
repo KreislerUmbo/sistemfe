@@ -25,7 +25,7 @@ use App\Http\Controllers\Creditos\ReporteCreditoController;
 use Illuminate\Support\Facades\Route;
 
 Route::group([
-    'middleware' => ['tenant', 'tenant.active', 'tenant.subscription', 'tenant.token', 'auth:api'],
+    'middleware' => ['tenant', 'tenant.active', 'tenant.subscription', 'tenant.token', 'auth:api', 'user.active'],
 ], function () {
     Route::get('creditos', [CreditoController::class, 'index'])->middleware('permission:creditos.ver');
     // Migrar también usa el preview (cronograma con fechas pasadas).

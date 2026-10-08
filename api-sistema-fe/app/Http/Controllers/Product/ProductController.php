@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Product;
 
+use App\Rules\ArchivoSubido;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\Product\ProductCollection;
 use App\Http\Resources\Product\ProductResource;
@@ -140,6 +141,7 @@ class ProductController extends Controller
      */
     public function store(Request $request)
     {
+        $request->validate(['image' => ArchivoSubido::imagen()], ArchivoSubido::MENSAJES);
         $is_product_title = Product::where('title', $request->title)->first();
         if ($is_product_title) {
             return response()->json([
@@ -210,6 +212,7 @@ class ProductController extends Controller
      */
     public function update(Request $request, string $id)
     {
+        $request->validate(['image' => ArchivoSubido::imagen()], ArchivoSubido::MENSAJES);
         $is_product_title = Product::where('id', '<>', $id)
             ->where('title', $request->title)->first();
 

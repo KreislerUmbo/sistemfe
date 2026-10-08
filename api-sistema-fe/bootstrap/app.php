@@ -28,6 +28,8 @@ return Application::configure(basePath: dirname(__DIR__))
             // concepto distinto de 'archivado' (EnsureTenantIsActive), mismo patrón.
             'tenant.subscription' => \App\Http\Middleware\TenantSubscriptionMiddleware::class,
             'tenant.token' => \App\Http\Middleware\EnsureTokenBelongsToTenant::class,
+            // Después de auth:api — corta tokens ya emitidos de un usuario desactivado.
+            'user.active' => \App\Http\Middleware\EnsureUserIsActive::class,
             // Escrituras del catálogo central (Portal web, recursos): solo el tenant
             // dueño de la plataforma, ver config/plataforma.php.
             'tenant.plataforma' => \App\Http\Middleware\EnsureTenantIsPlataforma::class,

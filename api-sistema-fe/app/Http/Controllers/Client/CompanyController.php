@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Client;
 
+use App\Rules\ArchivoSubido;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\Client\CompanyResource;
 use App\Models\Company;
@@ -36,6 +37,10 @@ class CompanyController extends Controller
 
     public function store(Request $request)
     {
+        $request->validate([
+            'logo_vertical' => ArchivoSubido::imagen(),
+            'logo_horizontal' => ArchivoSubido::imagen(),
+        ], ArchivoSubido::MENSAJES);
         $company = Company::first();
 
         $datos = $request->except(['logo_vertical', 'logo_horizontal']);

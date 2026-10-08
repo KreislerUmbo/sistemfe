@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Product;
 
+use App\Rules\ArchivoSubido;
 use App\Http\Controllers\Controller;
 use App\Models\Product\Categorie;
 use App\Services\StorageUrl;
@@ -40,6 +41,7 @@ class CategorieController extends Controller
      */
     public function store(Request $request)
     {
+        $request->validate(['image' => ArchivoSubido::imagen()], ArchivoSubido::MENSAJES);
         $is_exist_categorie = Categorie::where('title', $request->title)->first();
         if ($is_exist_categorie) {
             return response()->json([
@@ -84,6 +86,7 @@ class CategorieController extends Controller
      */
     public function update(Request $request, string $id)
     {
+        $request->validate(['image' => ArchivoSubido::imagen()], ArchivoSubido::MENSAJES);
         $is_exist_categorie = Categorie::where('id', '<>', $id)->where('title', $request->title)->first();
 
         if ($is_exist_categorie) {

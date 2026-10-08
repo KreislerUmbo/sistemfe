@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Role;
 
 use App\Http\Controllers\Controller;
+use App\Services\EscaladaPermisos;
 use Illuminate\Http\Request;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
@@ -64,6 +65,15 @@ class RoleController extends Controller
                 "code" => 405,
                 "message" => "El rol ya existe"
             ]);
+        }
+
+        // Auditoría de seguridad 08-oct-2026 — mismo criterio que permisos directos
+        // (UserController::permisosDirectos): nadie crea un rol más poderoso que él.
+        if ($faltan = EscaladaPermisos::faltantes($request->permissions ?? [])) {
+            return response()->json([
+                "code" => 422,
+                "message" => EscaladaPermisos::mensaje('crear un rol con estos permisos', $faltan),
+            ], 422);
         }
 
         $role =  Role::create([
@@ -128,6 +138,18 @@ class RoleController extends Controller
                 "code" => 405,
                 "message" => "El rol ya existe"
             ]);
+        }
+
+        // Auditoría de seguridad 08-oct-2026: solo se valida lo que se AGREGA — quitar o
+        // conservar un permiso que el actor no tiene no es escalar (mismo criterio que
+        // UserController::permisosDirectos). Sin esto, quien tenía edit_role podía darle
+        // a su propio rol cualquier permiso.
+        $nuevos = array_diff($request->permissions ?? [], $role->permissions->pluck('name')->all());
+        if ($faltan = EscaladaPermisos::faltantes($nuevos)) {
+            return response()->json([
+                "code" => 422,
+                "message" => EscaladaPermisos::mensaje('agregar estos permisos al rol', $faltan),
+            ], 422);
         }
 
         $role->update([
