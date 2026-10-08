@@ -7,6 +7,7 @@ use App\Http\Resources\User\UserCollection;
 use App\Http\Resources\User\UserResource;
 use App\Models\User;
 use App\Services\Creditos\ClienteCreditoService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -15,6 +16,14 @@ use Spatie\Permission\Models\Role;
 
 class UserController extends Controller
 {
+    /**
+     * 07-oct-2026 — el rol Super-Admin se salta todos los permisos (Gate::before). Antes cualquiera
+     * con register_user/edit_user podía asignárselo (a otro o a sí mismo) y editar o eliminar al
+     * Super-Admin del tenant (el de soporte de UmboSystem). Ahora solo un Super-Admin asigna ese
+     * rol y solo un Super-Admin toca a otro Super-Admin.
+     */
+    private const SUPER_ADMIN = 'Super-Admin';
+
     /**
      * Display a listing of the resource.
      */
@@ -32,7 +41,8 @@ class UserController extends Controller
             ->orderBy("id", "desc")
             ->paginate(10);
             
-        $roles = Role::all();
+        // Quien no es Super-Admin no ve ese rol en el catálogo (no lo puede asignar).
+        $roles = Role::all()->when(! $this->actorEsSuperAdmin(), fn ($c) => $c->reject(fn (Role $r): bool => $r->name === self::SUPER_ADMIN));
 
         return response()->json([
             "total" => $users->total(),
@@ -61,6 +71,10 @@ class UserController extends Controller
      */
     public function store(Request $request)
     {
+        if ($rechazo = $this->protegerSuperAdmin($request, null)) {
+            return $rechazo;
+        }
+
         $is_user_exists = User::where("email", $request->email)->first();
         if ($is_user_exists) {
             return response()->json([
@@ -113,6 +127,9 @@ class UserController extends Controller
         }
 
         $user = User::findOrFail($id);
+        if ($rechazo = $this->protegerSuperAdmin($request, $user)) {
+            return $rechazo;
+        }
         // 04c.1: desactivar a quien tiene clientes en su cartera los dejaría sin asesor/cobrador.
         if ((int) $request->input('state') === 2 && (int) $user->state !== 2 && ($aviso = $this->avisoCartera($user))) {
             return response()->json(['code' => 405, 'message' => $aviso]);
@@ -176,6 +193,9 @@ class UserController extends Controller
     public function permisosDirectos(Request $request, string $id)
     {
         $user = User::findOrFail($id);
+        if ($rechazo = $this->protegerSuperAdmin($request, $user)) {
+            return $rechazo;
+        }
         $solicitados = $request->permissions ?? [];
 
         $actor = auth('api')->user();
@@ -205,6 +225,9 @@ class UserController extends Controller
     public function destroy(string $id)
     {
         $user = User::findOrFail($id);
+        if ($rechazo = $this->protegerSuperAdmin(null, $user)) {
+            return $rechazo;
+        }
         // 04c.1: eliminar a quien tiene clientes en su cartera los dejaría huérfanos.
         if ($aviso = $this->avisoCartera($user)) {
             return response()->json(['code' => 405, 'message' => $aviso]);
@@ -217,6 +240,30 @@ class UserController extends Controller
             "code" => 200,
             "message" => "Usuario eliminado con exito"
         ]);
+    }
+
+    private function actorEsSuperAdmin(): bool
+    {
+        return (bool) auth('api')->user()?->hasRole(self::SUPER_ADMIN);
+    }
+
+    /**
+     * Rechazo (403) si quien opera no es Super-Admin y pretende asignar ese rol o tocar a un
+     * usuario que ya lo tiene. Null si puede seguir.
+     */
+    private function protegerSuperAdmin(?Request $request, ?User $objetivo): ?JsonResponse
+    {
+        if ($this->actorEsSuperAdmin()) {
+            return null;
+        }
+        if ($objetivo?->hasRole(self::SUPER_ADMIN)) {
+            return response()->json(['code' => 403, 'message' => 'Solo un Super-Admin puede modificar o eliminar a un usuario Super-Admin.'], 403);
+        }
+        if ($request?->filled('role_id') && Role::whereKey($request->role_id)->value('name') === self::SUPER_ADMIN) {
+            return response()->json(['code' => 403, 'message' => 'Solo un Super-Admin puede asignar el rol Super-Admin.'], 403);
+        }
+
+        return null;
     }
 
     /** Créditos (04c.1): mensaje si el usuario tiene clientes en su cartera; null si no tiene. */
