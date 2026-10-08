@@ -181,7 +181,7 @@
 
         {{-- ══════════════════ FOOTER ══════════════════ --}}
         <div class="footer-legal">
-            Documento generado el {{ now()->format('d/m/Y') }}.
+            Documento generado el {{ \App\Services\HoraPeru::ahora()->format('d/m/Y') }}.
         </div>
 
     </div>

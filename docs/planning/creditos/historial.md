@@ -56,4 +56,5 @@ Panel de inicio (reemplaza al Dashboard en el giro), Agenda de cobranza, 6 repor
 | 6 | Sistema de módulos + adicionales en factura | Sin fecha |
 | 7 | Garantes y prendas | Sin fecha |
 | 8 | Cobradores con caja propia, transferencias, gestiones y promesas | Sin fecha (cartera por cobrador ya existe desde 4c) |
+| Adicional | Crédito "Solo interés" (cuotas de solo interés, capital al final), configurable — diseñado 08-oct, opción A del interés mínimo; ver `adicional-solo-interes.md` | Para más adelante; hoy se resuelve renovando cada mes |
 | Posterior | Reprogramación con montos, amortización parcial, otros métodos, zonas, GPS, offline (transversal), WhatsApp automático | — |

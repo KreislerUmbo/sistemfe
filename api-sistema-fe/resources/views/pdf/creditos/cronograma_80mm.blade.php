@@ -32,6 +32,6 @@
             <tr class="negrita"><td>SALDO POR PAGAR</td><td class="derecha">{{ F::soles($detalle->saldo->porPagar()) }}</td></tr>
         </table>
     @endif
-    <div class="leyenda">Generado el {{ now()->format('d/m/Y H:i') }}</div>
+    <div class="leyenda">Generado el {{ \App\Services\HoraPeru::ahora()->format('d/m/Y H:i') }}</div>
 </body>
 </html>

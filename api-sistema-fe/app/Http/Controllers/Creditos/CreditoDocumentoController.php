@@ -48,7 +48,7 @@ class CreditoDocumentoController extends ControllerCreditos
                     'registrado_por' => User::find($d->registrado_por)?->name,
                 ]),
             'reprogramaciones' => CreditoReprogramacion::where('credito_id', $modelo->id)->orderBy('id')->get(['id', 'created_at'])
-                ->map(static fn (CreditoReprogramacion $r): array => ['id' => $r->id, 'fecha' => $r->created_at?->format('Y-m-d')]),
+                ->map(static fn (CreditoReprogramacion $r): array => ['id' => $r->id, 'fecha' => \App\Services\HoraPeru::deUtc($r->created_at)?->format('Y-m-d')]),
         ]);
     }
 

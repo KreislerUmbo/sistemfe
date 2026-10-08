@@ -693,7 +693,7 @@
                     <table class="info-grid">
                         <tr>
                             <td style="width:110px;">Fecha emisión</td>
-                            <td>: {{ now()->format('d/m/Y') }}</td>
+                            <td>: {{ \App\Services\HoraPeru::ahora()->format('d/m/Y') }}</td>
                         </tr>
                         @if ($alternativa->fecha_vencimiento)
                             <tr>

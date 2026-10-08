@@ -148,7 +148,7 @@ class PlantillaContratoService
             'empresa_razon_social' => $empresa?->razon_social ?? '—',
             'empresa_ruc' => $empresa?->n_document ?? '—',
             'empresa_direccion' => $empresa?->address ?? '—',
-            'fecha_hoy' => now()->format('d/m/Y'),
+            'fecha_hoy' => \App\Services\HoraPeru::ahora()->format('d/m/Y'),
         ];
         $escapados = array_map(static fn (string $v): string => e($v), $texto);
 

@@ -207,8 +207,8 @@
                 @foreach ($sessionsConTotales as $item)
                     @php $sesion = $item['session']; @endphp
                     <tr>
-                        <td>{{ $sesion->opened_at->format('d/m/Y H:i') }}</td>
-                        <td>{{ $sesion->closed_at ? $sesion->closed_at->format('d/m/Y H:i') : '—' }}</td>
+                        <td>{{ \App\Services\HoraPeru::deUtc($sesion->opened_at)->format('d/m/Y H:i') }}</td>
+                        <td>{{ $sesion->closed_at ? \App\Services\HoraPeru::deUtc($sesion->closed_at)->format('d/m/Y H:i') : '—' }}</td>
                         <td>{{ $sesion->cashRegister->branch->name ?? '-' }}</td>
                         <td>{{ $sesion->cashRegister->name ?? '-' }}</td>
                         <td>{{ $sesion->openedByUser->name ?? '-' }}</td>
