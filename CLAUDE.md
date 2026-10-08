@@ -393,7 +393,9 @@ consulta (cronología y commits).
 credishirley hasta corregirla** (propuesta sin aprobar en `00-reglas-y-modelo.md` §5); (2) plantilla
 de contrato del abogado, antes del primer crédito real; (3) fases 6-8 del plan, sin fecha (módulos
 contratables, garantes y prendas, cobradores con caja propia y gestiones); (4) QR de verificación del
-recibo e impresión silenciosa en ticketera, sin decidir.
+recibo e impresión silenciosa en ticketera, sin decidir; (5) adicional **"Solo interés"** (capital al
+final, configurable) diseñado y guardado para más adelante — `docs/planning/creditos/
+adicional-solo-interes.md`; hoy se resuelve renovando cada mes por el mismo capital.
 
 **Completo — Inicio con datos reales (Dashboard) para retail y agencia (02-oct-2026):**
 Reemplaza la demo de la plantilla Rizz por `GET dashboard` (`DashboardService`): ventas hoy/mes
