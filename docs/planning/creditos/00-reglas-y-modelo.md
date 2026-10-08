@@ -149,6 +149,14 @@ Antes de que opere con préstamos reales (decisión del usuario, 05-oct-2026: an
 - [ ] **Tasa máxima** (`tasa_maxima`, Créditos › Configuración): hoy vacía = el sistema no limita la tasa
   que se cobra. Fijarla con la tasa máxima legal vigente del BCRP (compensatoria y moratoria) que confirme
   el abogado/contador del cliente. Con ella, ningún crédito se puede crear por encima (validación de 03-api).
+  ⚠️ **Antes de fijarla hay que corregir la validación** (hallazgo 07-oct-2026): hoy `CreditoDatosRequest`
+  compara el número tipeado (`tasa_interes`, "sobre el total" o "mensual" según `unidad_tasa`) directamente
+  contra `tasa_maxima`, sin convertir unidades; la del BCRP es una **TEA** efectiva. Ej.: con tope 100% TEA
+  se aceptaría un 15% mensual (≈435% TEA). Propuesta (pendiente de aprobar): calcular TEM/TEA efectivas
+  del cronograma en el backend (flujo: entrega vs. cuotas en sus fechas), definir `tasa_maxima` como TEA y
+  validar la TEA real; mostrar "Costo efectivo: X% mensual · Y% anual (TEA)" en el formulario y evaluar
+  informar TEA/TCEA en contrato y cronograma. Mientras tanto se ocultó el "Equivale a X% mensual" del
+  formulario (interés simple prorrateado: subestima el costo, 9.84% vs ≈13.07% TEM en 2 cuotas).
 - [ ] **Plantilla de contrato** (Créditos › Configuración › plantilla): el tenant arranca con la versión 1,
   la genérica del sistema ("BORRADOR — revisar con su abogado"). Reemplazarla por el texto revisado por el
   abogado del cliente. Cada guardado crea una versión nueva; el contrato de un crédito se congela con la
