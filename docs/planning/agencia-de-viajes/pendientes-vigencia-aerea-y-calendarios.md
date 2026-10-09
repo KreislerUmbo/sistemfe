@@ -14,6 +14,19 @@ sección). Verificado con el PDF real de CDKM-0926-0000011 (`agencia-demo`).
 
 ## 1. Vigencia de la cotización cuando incluye pasajes aéreos
 
+> **HECHO 09-oct-2026** (rama `feat/agencia-vigencia-tarifa-aerea`), con la propuesta tal cual:
+> `cotizacion_pasaje_aereo.tarifa_valida_hasta` (instante UTC; la API recibe
+> `"Y-m-d H:i"` en hora de Perú y lo convierte con `HoraPeru::aUtc()`), campos "Tarifa válida
+> hasta" + "Hora límite" en `PasajeAereoForm.vue` (sin hora = 23:59), PDF con el límite más
+> temprano + nota fija *"Tarifa aérea sujeta a disponibilidad y variación hasta la emisión del
+> boleto."* (siempre que haya pasaje aéreo), aviso "Tarifa vencida" / "Tarifa válida hasta" en
+> el lienzo del cotizador. Duplicar la alternativa conserva la vigencia. 6 tests
+> (`PasajeAereoVigenciaTarifaTest`). Verificado en vivo contra `agencia-demo` (alternativa 73,
+> restaurada a su estado original).
+> **Quedaron sin hacer (las 2 dudas, se tomó el default):** la nota es texto fijo (no
+> editable en Configuración de Agencia) y no hay "Vigencia hasta" manual por alternativa
+> (`alternativas.fecha_vencimiento` sigue sin pantalla que la escriba).
+
 ### Problema
 El PDF muestra `Vigencia: 15 días desde la emisión` (sale de
 `configuracion_agencia.dias_vigencia_cotizacion`, un número fijo para toda la agencia).

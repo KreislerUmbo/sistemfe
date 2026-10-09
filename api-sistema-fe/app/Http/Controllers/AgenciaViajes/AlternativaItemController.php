@@ -1046,6 +1046,7 @@ class AlternativaItemController extends Controller
                 'tua_incluida_en_tarifa' => $validado['tua_incluida_en_tarifa'] ?? false,
                 'fee_agencia_monto' => $validado['fee_agencia_monto'] ?? 0,
                 'tip_afe_igv' => $validado['tip_afe_igv'] ?? null,
+                'tarifa_valida_hasta' => $validado['tarifa_valida_hasta'],
                 'costo_total' => $resultado['costo_total'],
                 'precio_venta_total' => $resultado['venta_total'],
             ]);
@@ -1098,6 +1099,7 @@ class AlternativaItemController extends Controller
                 'fee_agencia_monto' => $validado['fee_agencia_monto'] ?? 0,
                 'tip_afe_igv' => $validado['tip_afe_igv'] ?? null,
                 'fecha_cotizado' => now(),
+                'tarifa_valida_hasta' => $validado['tarifa_valida_hasta'],
                 'costo_total' => $resultado['costo_total'],
                 'precio_venta_total' => $resultado['venta_total'],
             ]);
@@ -1140,6 +1142,9 @@ class AlternativaItemController extends Controller
             // (crearItemPasajeAereo()); actualizarPasajeAereo() no lo lee,
             // el destino de un ítem ya existente no se mueve por acá.
             'alternativa_destino_id' => ['nullable', 'integer', $this->reglaAlternativaDestinoId($alternativa)],
+            // Vigencia de la tarifa aérea (09-oct-2026): fecha-hora límite que
+            // da la aerolínea, escrita en hora de Perú; se guarda en UTC.
+            'tarifa_valida_hasta' => 'nullable|date_format:Y-m-d H:i',
         ]);
 
         if ($validator->fails()) {
@@ -1147,6 +1152,7 @@ class AlternativaItemController extends Controller
         }
 
         $validado = $validator->validated();
+        $validado['tarifa_valida_hasta'] = \App\Services\HoraPeru::aUtc($validado['tarifa_valida_hasta'] ?? null);
         // 29-ago-2026 — capitalización tipo título, solo hacia adelante.
         $validado['aerolinea'] = \App\Services\TextoFormatoService::capitalizarNombrePropio($validado['aerolinea']);
 

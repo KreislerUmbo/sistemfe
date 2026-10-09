@@ -17,6 +17,17 @@
                 <textarea class="form-control form-control-sm" rows="2" v-model="form.itinerario"
                     placeholder="Tramos ida/vuelta, fechas, horas, equipaje..."></textarea>
             </div>
+            <!-- Vigencia de la tarifa aérea (09-oct-2026) — el límite que da la
+                 aerolínea; en el PDF reemplaza a los "N días desde la emisión".
+                 Sin hora se toma 23:59. -->
+            <div class="col-7">
+                <label class="form-label mb-1 small fw-semibold text-secondary">Tarifa válida hasta</label>
+                <CampoFecha v-model="vigenciaFecha" etiqueta="la vigencia de la tarifa" />
+            </div>
+            <div class="col-5">
+                <label class="form-label mb-1 small fw-semibold text-secondary">Hora límite</label>
+                <CampoHora v-model="vigenciaHora" etiqueta="la hora límite" :placeholder="vigenciaFecha ? '23:59' : 'hh:mm'" />
+            </div>
         </div>
 
         <!-- ¿A quiénes aplica? — antes este form siempre mandaba pax_incluidos
@@ -153,6 +164,9 @@ import { ref, reactive, computed, watch } from 'vue';
 import Swal from 'sweetalert2/dist/sweetalert2.js';
 import { alternativaItemService } from '@/services/admin/alternativaItemService';
 import { desglosarPrecioFinal } from '@/utils/desglosarPrecioFinal';
+import { partesFechaHoraPeru } from '@/helpers/fecha';
+import CampoFecha from '@/components/CampoFecha.vue';
+import CampoHora from '@/components/CampoHora.vue';
 import type { AlternativaItem, CotizacionPasajero, TipAfeIgv, DestinoTributario } from '@/types/agencia-viajes';
 
 const props = defineProps<{
@@ -188,6 +202,11 @@ const form = reactive({
 });
 const paxSeleccionados = ref<number[]>([]);
 const guardando = ref(false);
+// Fecha y hora en hora de Perú; el backend lo guarda como instante UTC.
+const vigenciaFecha = ref('');
+const vigenciaHora = ref('');
+const tarifaValidaHastaParaEnviar = () =>
+    vigenciaFecha.value ? `${vigenciaFecha.value} ${vigenciaHora.value || '23:59'}` : null;
 
 const preview = ref<{ costo_total: number; venta_total: number } | null>(null);
 const calculando = ref(false);
@@ -229,6 +248,9 @@ const resetearCampos = () => {
         paxSeleccionados.value = item.pax_incluidos && item.pax_incluidos.length
             ? [...item.pax_incluidos]
             : (props.pasajeros ?? []).map((p) => p.id);
+        const vigencia = partesFechaHoraPeru(cpa.tarifa_valida_hasta);
+        vigenciaFecha.value = vigencia.fecha;
+        vigenciaHora.value = vigencia.hora;
     } else {
         form.aerolinea = '';
         form.itinerario = '';
@@ -242,6 +264,8 @@ const resetearCampos = () => {
         form.tip_afe_igv = props.tipAfeIgvDefault ?? '10';
         form.destino_tributario = props.destinoTributarioDefault ?? 'nacional';
         paxSeleccionados.value = (props.pasajeros ?? []).map((p) => p.id);
+        vigenciaFecha.value = '';
+        vigenciaHora.value = '';
     }
 };
 
@@ -273,6 +297,7 @@ const agregar = async () => {
         const payload = {
             ...form,
             pax_incluidos: paxIncluidosParaEnviar(),
+            tarifa_valida_hasta: tarifaValidaHastaParaEnviar(),
             dia_referencial: props.diaActivo,
         };
 

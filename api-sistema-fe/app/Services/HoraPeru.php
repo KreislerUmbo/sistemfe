@@ -71,4 +71,17 @@ class HoraPeru
 
         return CarbonImmutable::parse($texto, 'UTC')->setTimezone(self::ZONA);
     }
+
+    /**
+     * Fecha-hora escrita por el usuario en hora de Perú ("2026-10-10 18:00") pasada a UTC para
+     * guardarla como instante. Inverso de deUtc().
+     */
+    public static function aUtc(?string $textoPeru): ?string
+    {
+        if ($textoPeru === null || trim($textoPeru) === '') {
+            return null;
+        }
+
+        return CarbonImmutable::parse($textoPeru, self::ZONA)->utc()->format('Y-m-d H:i:s');
+    }
 }
