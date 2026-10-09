@@ -695,7 +695,15 @@
                             <td style="width:110px;">Fecha emisión</td>
                             <td>: {{ \App\Services\HoraPeru::ahora()->format('d/m/Y') }}</td>
                         </tr>
-                        @if ($alternativa->fecha_vencimiento)
+                        {{-- Vigencia de la tarifa aérea (09-oct-2026) — fecha-hora
+                             límite que dio la aerolínea, más temprana entre los
+                             pasajes; manda sobre los "N días desde la emisión". --}}
+                        @if ($vigenciaTarifaAerea)
+                            <tr>
+                                <td>Vigencia</td>
+                                <td>: hasta {{ $vigenciaTarifaAerea }}</td>
+                            </tr>
+                        @elseif ($alternativa->fecha_vencimiento)
                             <tr>
                                 <td>Vigencia</td>
                                 <td>: hasta {{ \Carbon\Carbon::parse($alternativa->fecha_vencimiento)->format('d/m/Y') }}</td>
@@ -710,6 +718,13 @@
                             <td>Moneda</td>
                             <td>: {{ $alternativa->moneda_cotizacion }}</td>
                         </tr>
+                        @if ($tienePasajeAereo)
+                            <tr>
+                                <td colspan="2" style="font-size:8px; color:#666; font-style:italic; padding-top:4px;">
+                                    Tarifa aérea sujeta a disponibilidad y variación hasta la emisión del boleto.
+                                </td>
+                            </tr>
+                        @endif
                     </table>
                 </td>
             </tr>

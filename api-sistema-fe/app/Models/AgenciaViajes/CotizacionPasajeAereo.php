@@ -30,6 +30,7 @@ class CotizacionPasajeAereo extends Model
         'fee_agencia_monto',
         'tip_afe_igv',
         'fecha_cotizado',
+        'tarifa_valida_hasta',
         'costo_total',
         'precio_venta_total',
     ];
@@ -42,6 +43,7 @@ class CotizacionPasajeAereo extends Model
         'tua_incluida_en_tarifa' => 'boolean',
         'fee_agencia_monto' => 'decimal:2',
         'fecha_cotizado' => 'datetime',
+        'tarifa_valida_hasta' => 'datetime',
         'costo_total' => 'decimal:2',
         'precio_venta_total' => 'decimal:2',
     ];

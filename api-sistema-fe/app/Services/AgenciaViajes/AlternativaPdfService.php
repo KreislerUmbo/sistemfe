@@ -153,6 +153,16 @@ class AlternativaPdfService
                     : '',
             ]);
         $mayoristasVuelo = $mayoristasVuelo->concat($pasajesVuelo)->values();
+        // Vigencia de la tarifa aérea (09-oct-2026): la aerolínea sostiene el
+        // precio solo hasta una fecha-hora límite — si algún pasaje la tiene,
+        // reemplaza a los "N días desde la emisión" (vence antes que el resto
+        // de la cotización). Con varios pasajes manda el límite más temprano.
+        $pasajesAereos = $alternativa->items
+            ->filter(fn (AlternativaItem $item) => $item->origen_tipo === 'pasaje_aereo' && $item->cotizacionPasajeAereo)
+            ->map(fn (AlternativaItem $item) => $item->cotizacionPasajeAereo);
+        $tienePasajeAereo = $pasajesAereos->isNotEmpty();
+        $limiteTarifaAerea = $pasajesAereos->pluck('tarifa_valida_hasta')->filter()->sort()->first();
+        $vigenciaTarifaAerea = $limiteTarifaAerea ? \App\Services\HoraPeru::deUtc($limiteTarifaAerea)->format('d/m/Y H:i') : null;
         $mayoristasOpcionales = $this->mayoristasOpcionalesPendientes($alternativa, $mayoristas);
 
         // Sesión 12f-3 — el PDF comercial deja de mostrar precio por ítem
@@ -247,6 +257,8 @@ class AlternativaPdfService
             'mayoristasIncluye' => $mayoristasIncluye,
             'mayoristasNoIncluye' => $mayoristasNoIncluye,
             'mayoristasVuelo' => $mayoristasVuelo,
+            'tienePasajeAereo' => $tienePasajeAereo,
+            'vigenciaTarifaAerea' => $vigenciaTarifaAerea,
             'mayoristasOpcionales' => $mayoristasOpcionales,
             'total' => $total,
             'totalOriginal' => $totalOriginal,

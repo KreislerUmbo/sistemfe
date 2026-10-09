@@ -421,6 +421,16 @@
                                 </div>
                                 <div class="text-muted mt-1 d-flex align-items-center gap-2" style="font-size:11px" v-if="fila.item.origen_tipo === 'pasaje_aereo' && fila.item.cotizacion_pasaje_aereo">
                                     <span>{{ fila.item.cotizacion_pasaje_aereo.aerolinea }}</span>
+                                    <!-- Vigencia de la tarifa aérea (09-oct-2026): avisar antes de
+                                         reenviar al cliente un precio que la aerolínea ya no sostiene. -->
+                                    <template v-if="fila.item.cotizacion_pasaje_aereo.tarifa_valida_hasta && !fila.item.reserva_item">
+                                        <span v-if="tarifaAereaVencida(fila.item.cotizacion_pasaje_aereo.tarifa_valida_hasta)" class="badge bg-danger-subtle text-danger">
+                                            <i class="fas fa-exclamation-triangle me-1"></i>Tarifa vencida ({{ formatFechaHora(fila.item.cotizacion_pasaje_aereo.tarifa_valida_hasta) }})
+                                        </span>
+                                        <span v-else>
+                                            <i class="far fa-clock me-1"></i>Tarifa válida hasta {{ formatFechaHora(fila.item.cotizacion_pasaje_aereo.tarifa_valida_hasta) }}
+                                        </span>
+                                    </template>
                                     <a v-if="!fila.item.reserva_item" href="#" class="text-secondary" @click.prevent="abrirEdicionPasajeAereo(fila.item)">
                                         <i class="fas fa-pencil me-1"></i>Editar
                                     </a>
@@ -1266,13 +1276,16 @@ import { servicioService } from '@/services/admin/servicioService';
 import { bibliotecaCotizadorService, type BibliotecaTipo } from '@/services/admin/bibliotecaCotizadorService';
 import { reservaService } from '@/services/admin/reservaService';
 import { useAgenciaViajesCatalogosStore } from '@/stores/agenciaViajesCatalogos';
-import { formatFecha, sumarDiasISO } from '@/helpers/fecha';
+import { formatFecha, formatFechaHora, sumarDiasISO } from '@/helpers/fecha';
 import { guiaService } from '@/services/admin/guiaService';
 import { tipoCambioAgenciaService } from '@/services/admin/tipoCambioAgenciaService';
 import type { Cotizacion, Alternativa, AlternativaItem, ProveedorTarifa, OpcionMayorista, OpcionMayoristaTour, OpcionMayoristaOpcional, OpcionHotelTarifa, Proveedor, ProveedorTipo, BibliotecaResultado, ConfiguracionAgencia, DestinoServicio, Guia, GuiaTarifa, Servicio, TipAfeIgv, DestinoTributario } from '@/types/agencia-viajes';
 import type { Client } from '@/types/clients';
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
+
+// Vigencia de la tarifa aérea (09-oct-2026) — instante UTC ya pasado = vencida.
+const tarifaAereaVencida = (iso: string) => new Date(iso).getTime() < Date.now();
 
 // Vista previa como texto plano (07-sep-2026) — bug real reportado por el
 // usuario: incluye/vuelo_detalle ahora puede ser HTML real

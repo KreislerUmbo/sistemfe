@@ -486,6 +486,8 @@ export type CotizacionPasajeAereo = {
   fee_agencia_monto: number;
   tip_afe_igv?: string | null;
   fecha_cotizado: string;
+  // Vigencia de la tarifa aérea (09-oct-2026) — instante UTC (ISO con Z), null si no se cargó.
+  tarifa_valida_hasta: string | null;
   costo_total: number;
   precio_venta_total: number;
 };

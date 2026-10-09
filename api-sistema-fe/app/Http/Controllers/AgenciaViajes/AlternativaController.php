@@ -631,6 +631,7 @@ class AlternativaController extends Controller
                             'fee_agencia_monto' => $pasaje->fee_agencia_monto,
                             'tip_afe_igv' => $pasaje->tip_afe_igv,
                             'fecha_cotizado' => $pasaje->fecha_cotizado,
+                            'tarifa_valida_hasta' => $pasaje->tarifa_valida_hasta,
                             'costo_total' => $pasaje->costo_total,
                             'precio_venta_total' => $pasaje->precio_venta_total,
                         ]);

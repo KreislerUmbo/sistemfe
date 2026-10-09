@@ -54,3 +54,15 @@ export function sumarDiasISO(ymd: string, dias: number): string {
   const [a, m, d] = ymd.slice(0, 10).split('-').map(Number);
   return new Date(Date.UTC(a, m - 1, d + dias)).toISOString().slice(0, 10);
 }
+
+/**
+ * Instante ISO con zona ("...Z") partido en fecha "YYYY-MM-DD" y hora "HH:mm" de Perú — para
+ * cargar un instante guardado en UTC en un par CampoFecha + CampoHora. Vacío si no hay valor.
+ */
+export function partesFechaHoraPeru(f?: string | null): { fecha: string; hora: string } {
+  if (!f) return { fecha: '', hora: '' };
+  const d = new Date(f);
+  if (isNaN(d.getTime())) return { fecha: '', hora: '' };
+  const p = Object.fromEntries(formatoPeru.formatToParts(d).map((x) => [x.type, x.value]));
+  return { fecha: `${p.year}-${p.month}-${p.day}`, hora: `${p.hour}:${p.minute}` };
+}
