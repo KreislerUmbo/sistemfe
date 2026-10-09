@@ -37,6 +37,7 @@ const CATALOGO: Record<AccionCredito, Omit<Boton, 'id'>> = {
   condonar: { texto: 'Condonar mora', icono: 'fas fa-hand-holding-heart' },
   corregir: { texto: 'Corregir', icono: 'fas fa-wrench' },
   renovar: { texto: 'Renovar', icono: 'fas fa-sync-alt' },
+  cambiar_asesor: { texto: 'Cambiar asesor', icono: 'fas fa-user-tie' },
   castigar: { texto: 'Castigar', icono: 'fas fa-gavel', peligro: true },
   revertir_castigo: { texto: 'Revertir castigo', icono: 'fas fa-undo' },
   anular: { texto: 'Anular crédito', icono: 'fas fa-ban', peligro: true },

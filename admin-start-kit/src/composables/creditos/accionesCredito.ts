@@ -5,7 +5,7 @@ import type { CreditoEstado } from '@/types/creditos'
 
 export type AccionCredito =
   | 'editar' | 'activar' | 'cobrar' | 'liquidar' | 'reprogramar' | 'condonar'
-  | 'corregir' | 'anular' | 'castigar' | 'revertir_castigo' | 'renovar'
+  | 'corregir' | 'anular' | 'castigar' | 'revertir_castigo' | 'renovar' | 'cambiar_asesor'
 
 const REGLAS: Record<AccionCredito, { permiso: string; estados: CreditoEstado[] }> = {
   editar: { permiso: 'creditos.crear', estados: ['borrador'] },
@@ -20,6 +20,8 @@ const REGLAS: Record<AccionCredito, { permiso: string; estados: CreditoEstado[] 
   castigar: { permiso: 'creditos.castigar', estados: ['activo'] },
   revertir_castigo: { permiso: 'creditos.castigar', estados: ['castigado'] },
   renovar: { permiso: 'creditos.crear', estados: ['activo', 'castigado'] },
+  // 08-oct-2026: un finalizado o anulado no se toca (cambiaría reportes de períodos pasados).
+  cambiar_asesor: { permiso: 'creditos.cartera.asignar', estados: ['activo', 'castigado'] },
 }
 
 const SOLO_SIN_PAGOS: AccionCredito[] = ['corregir', 'anular']

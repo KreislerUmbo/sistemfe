@@ -125,6 +125,12 @@ export const creditoService = {
   },
 
   /** anular (crédito), castigar y revertir-castigo: solo piden motivo. */
+  /** Cambia quién figura como asesor de un crédito activo o castigado (08-oct-2026). */
+  async cambiarAsesor(id: number, asesorId: number, motivo: string, clave: string) {
+    const { data } = await httpClient.post(`/creditos/${id}/cambiar-asesor`, { asesor_id: asesorId, motivo, clave_idempotencia: clave })
+    return data as { credito: Credito }
+  },
+
   async accionConMotivo(id: number, accion: 'anular' | 'castigar' | 'revertir-castigo', motivo: string, clave: string) {
     const { data } = await httpClient.post(`/creditos/${id}/${accion}`, { motivo, clave_idempotencia: clave })
     return data as { credito: Credito }
@@ -260,9 +266,12 @@ export const creditoService = {
     return (data.data ?? []) as TitularCartera[]
   },
 
-  async traspasarCartera(datos: { desde_usuario_id: number; hacia_usuario_id: number; funciones: 'ambas' | 'asesor' | 'cobrador' }, clave: string) {
+  async traspasarCartera(datos: {
+    desde_usuario_id: number; hacia_usuario_id: number; funciones: 'ambas' | 'asesor' | 'cobrador'
+    con_creditos?: boolean; motivo_creditos?: string | null
+  }, clave: string) {
     const { data } = await httpClient.post('/creditos/cartera/traspasar', { ...datos, clave_idempotencia: clave })
-    return data as { clientes: number; titulares: TitularCartera[] }
+    return data as { clientes: number; creditos: number; titulares: TitularCartera[] }
   },
 
   async asignarCartera(clienteId: number, asesorId: number | null, cobradorId: number | null = null) {

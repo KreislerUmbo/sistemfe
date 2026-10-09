@@ -119,6 +119,8 @@ export interface Credito {
   numero_credito: string | null
   estado: CreditoEstado
   cliente?: ClienteCredito
+  /** Quien colocó el crédito (viene en el detalle y el listado). */
+  asesor?: { id: number; nombre: string } | null
   cliente_id: number
   monto_capital: Soles
   tasa_interes: string
@@ -289,6 +291,8 @@ export interface EstadoCuenta {
   cargos: { numero_cuota: number | null; monto: Soles; estado: string }[]
   castigos: { fecha_castigo: string; fecha_reversion: string | null; tipo: string; motivo: string | null }[]
   reprogramaciones: { fecha: string | null; motivo: string; cargo: Soles; accion_mora: string; cuotas: { cuota_id: number; fecha_anterior: string; fecha_nueva: string }[] }[]
+  /** Cambios de asesor (auditoría), para el Historial. */
+  cambios_asesor: { fecha: string | null; motivo: string | null; de: string | null; a: string | null }[]
   total_pagado: Soles
 }
 
@@ -497,7 +501,11 @@ export interface AsignacionCartera {
 export interface UsuarioCartera { id: number; nombre: string }
 
 /** 04c.1: usuario con clientes en su cartera (puede estar inactivo o eliminado). */
-export interface TitularCartera { id: number; nombre: string; activo: boolean; eliminado: boolean; asesor: number; cobrador: number }
+export interface TitularCartera {
+  id: number; nombre: string; activo: boolean; eliminado: boolean; asesor: number; cobrador: number
+  /** Créditos activos o castigados que colocó (se pueden pasar con el traspaso). */
+  creditos: number
+}
 
 export interface LimitesCliente {
   max_creditos_activos: number | null

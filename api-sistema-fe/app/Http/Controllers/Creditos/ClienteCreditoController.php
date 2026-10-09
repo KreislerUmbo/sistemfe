@@ -25,6 +25,7 @@ use App\Services\Creditos\Dinero;
 use App\Services\Creditos\SaldoAFavorService;
 use App\Services\Creditos\LimitesService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use Symfony\Component\HttpKernel\Exception\HttpException;
@@ -154,14 +155,36 @@ class ClienteCreditoController extends ControllerCreditos
         }
 
         return $this->idempotente($request, 'cartera.traspasar', function () use ($request): array {
-            $total = $this->clientes->traspasarCartera(
-                (int) $request->input('desde_usuario_id'),
-                User::findOrFail((int) $request->input('hacia_usuario_id')),
-                (string) ($request->input('funciones') ?? 'ambas'),
-                $this->usuario(),
-            );
+            $desde = (int) $request->input('desde_usuario_id');
+            $hacia = User::findOrFail((int) $request->input('hacia_usuario_id'));
+            $funciones = (string) ($request->input('funciones') ?? 'ambas');
+            $conCreditos = $request->boolean('con_creditos');
+            if ($conCreditos && $funciones === 'cobrador') {
+                throw new HttpException(422, 'Los créditos se pasan junto con la función de asesor.');
+            }
 
-            return [['clientes' => $total, 'titulares' => $this->clientes->titularesCartera()], null];
+            // Clientes y créditos en una sola operación: o pasa todo o nada.
+            [$clientes, $creditos] = DB::transaction(function () use ($desde, $hacia, $funciones, $conCreditos, $request): array {
+                // Quien solo colocó créditos (sin clientes asignados) igual puede traspasarlos.
+                $clientes = ! $conCreditos || $this->clientes->clientesEnCartera($desde) > 0
+                    ? $this->clientes->traspasarCartera($desde, $hacia, $funciones, $this->usuario())
+                    : 0;
+                if (! $conCreditos) {
+                    return [$clientes, 0];
+                }
+                if ($desde === $hacia->id) {
+                    throw new HttpException(422, 'Elige un usuario distinto al que tiene hoy la cartera.');
+                }
+                $this->clientes->validarAsesor($hacia);
+                $creditos = $this->clientes->cambiarAsesorDeCreditos($desde, $hacia, trim((string) $request->input('motivo_creditos')), $this->usuario());
+                if ($clientes === 0 && $creditos === 0) {
+                    throw new HttpException(422, 'Ese usuario no tiene clientes ni créditos activos para traspasar.');
+                }
+
+                return [$clientes, $creditos];
+            });
+
+            return [['clientes' => $clientes, 'creditos' => $creditos, 'titulares' => $this->clientes->titularesCartera()], null];
         });
     }
 

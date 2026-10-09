@@ -6,16 +6,19 @@ namespace App\Http\Controllers\Creditos;
 
 use App\Enums\Creditos\TipoCastigo;
 use App\Http\Requests\Creditos\AutorizarExcepcionRequest;
+use App\Http\Requests\Creditos\CambiarAsesorRequest;
 use App\Http\Requests\Creditos\ClaveRequest;
 use App\Http\Requests\Creditos\CorregirCreditoRequest;
 use App\Http\Requests\Creditos\MotivoRequest;
 use App\Http\Resources\Creditos\CreditoResource;
 use App\Services\Creditos\ActivacionService;
 use App\Services\Creditos\CastigoService;
+use App\Services\Creditos\ClienteCreditoService;
 use App\Services\Creditos\CorreccionService;
 use App\Services\Creditos\LimitesService;
 use App\Services\Creditos\Motor\Enums\ReglaLimite;
 use App\Models\Creditos\Credito;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 
 /** Activar, corregir, anular, castigar/revertir y autorizar excepciones (00 1.9-1.11). */
@@ -26,6 +29,7 @@ class CreditoCicloController extends ControllerCreditos
         private readonly CorreccionService $correccion,
         private readonly CastigoService $castigos,
         private readonly LimitesService $limites,
+        private readonly ClienteCreditoService $clientes,
     ) {
     }
 
@@ -78,6 +82,18 @@ class CreditoCicloController extends ControllerCreditos
             $this->castigos->revertir($modelo, $request->input('motivo'), $this->usuario());
 
             return [['credito' => $this->recurso($modelo->refresh())], $modelo->id];
+        }, ['credito' => $credito]);
+    }
+
+    /** Cambiar quién figura como asesor (08-oct-2026). */
+    public function cambiarAsesor(CambiarAsesorRequest $request, int $credito): JsonResponse
+    {
+        $modelo = $this->credito($credito);
+
+        return $this->idempotente($request, 'credito.cambiar_asesor', function () use ($modelo, $request): array {
+            $this->clientes->cambiarAsesor($modelo, User::findOrFail((int) $request->input('asesor_id')), trim((string) $request->input('motivo')), $this->usuario());
+
+            return [['credito' => $this->recurso($modelo->refresh()->load('asesor:id,name'))], $modelo->id];
         }, ['credito' => $credito]);
     }
 

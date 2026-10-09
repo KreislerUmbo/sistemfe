@@ -14,7 +14,7 @@
 </template>
 
 <script setup lang="ts">
-// Módulo Créditos: condonaciones, cargos, castigos y reprogramaciones del estado de cuenta.
+// Módulo Créditos: condonaciones, cargos, castigos, reprogramaciones y cambios de asesor del estado de cuenta.
 import { computed } from 'vue'
 import { formatoFecha, formatoSoles } from '@/helpers/creditos/formato'
 import type { EstadoCuenta } from '@/types/creditos'
@@ -29,6 +29,10 @@ const eventos = computed(() => [
   ...props.estado.condonaciones.map((c) => ({
     icono: 'fas fa-hand-holding-heart', titulo: `Condonación de mora${c.estado !== 'vigente' ? ' (anulada)' : ''}`, fecha: formatoFecha(c.fecha),
     detalle: `Cuota #${c.numero_cuota} · ${formatoSoles(c.monto)} · ${c.motivo}`,
+  })),
+  ...(props.estado.cambios_asesor ?? []).map((c) => ({
+    icono: 'fas fa-user-tie', titulo: 'Cambio de asesor', fecha: formatoFecha(c.fecha),
+    detalle: `${c.de ?? 'Sin asesor'} → ${c.a ?? '—'}${c.motivo ? ` · ${c.motivo}` : ''}`,
   })),
   ...props.estado.castigos.map((c) => ({
     icono: 'fas fa-gavel', titulo: c.fecha_reversion ? 'Castigo revertido' : 'Crédito castigado', fecha: formatoFecha(c.fecha_castigo),

@@ -63,6 +63,8 @@ Route::group([
         Route::post('castigar', [CreditoCicloController::class, 'castigar'])->middleware('permission:creditos.castigar');
         Route::post('revertir-castigo', [CreditoCicloController::class, 'revertirCastigo'])->middleware('permission:creditos.castigar');
         Route::post('autorizaciones', [CreditoCicloController::class, 'autorizar'])->middleware('permission:creditos.autorizar_excepcion');
+        // 08-oct-2026: quién figura como asesor (quién colocó) de un crédito activo o castigado.
+        Route::post('cambiar-asesor', [CreditoCicloController::class, 'cambiarAsesor'])->middleware('permission:creditos.cartera.asignar');
 
         Route::post('pagos/cotizar', [CreditoPagoController::class, 'cotizar'])->middleware('permission:creditos.cobrar');
         // Retroactivo: mismo endpoint; creditos.pago_fecha_anterior lo verifica el servicio.

@@ -40,7 +40,7 @@ dinero, concurrencia, idempotencia, documentos, alta de tenant desde cero); 7 ha
 8. **Traspaso de cartera** (pedido del usuario en la misma revisión: "¿qué pasa si el asesor se va?"):
    Clientes → "Traspasar cartera" (requiere `creditos.cartera.asignar` + `creditos.ver_todos`) mueve todos los
    clientes de un usuario a otro, con historial y auditoría (`cartera.traspasar`); acepta usuarios inactivos o ya
-   eliminados como origen. Los créditos conservan su `asesor_id`. No se elimina ni desactiva a un usuario con
+   eliminados como origen. Los créditos conservan su `asesor_id` (salvo que se marque "Pasar también sus créditos", 08-oct-2026; ver 00 §1.14). No se elimina ni desactiva a un usuario con
    cartera (Usuarios responde 405 con el aviso); los selectores de cartera solo ofrecen usuarios activos.
 9. **Bug fuera de Créditos (commit propio `2bb8ddf`)**: `UserController::update()` tenía la condición de la
    contraseña invertida desde la primera versión: editar un usuario sin escribir contraseña la reemplazaba por
