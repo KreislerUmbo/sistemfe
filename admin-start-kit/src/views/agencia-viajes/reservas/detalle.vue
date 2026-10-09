@@ -1395,6 +1395,7 @@ import { guiaService } from '@/services/admin/guiaService';
 import { opcionMayoristaService } from '@/services/admin/opcionMayoristaService';
 import Swal from 'sweetalert2/dist/sweetalert2.js';
 import { useToast } from '@/composables/useToast';
+import { useAgenciaViajesCatalogosStore } from '@/stores/agenciaViajesCatalogos';
 import { formatFecha } from '@/helpers/fecha';
 import { imprimirComprobante } from '@/composables/usePrintComprobante';
 import type {
@@ -2879,8 +2880,18 @@ const cargarPaymentMethods = async () => {
     }
 };
 
-const abrirModalAnticipo = () => {
-    formAnticipo.value = { monto: 0, medio_pago: paymentMethods.value[0]?.code ?? '', tip_afe_igv: '10', notas: '' };
+// 09-oct-2026 (hallazgo del usuario) — el tratamiento tributario del
+// anticipo nacía fijo en Gravado; ahora arranca con el default de
+// Configuración de Agencia (mismo que usa el cotizador), editable igual.
+const catalogosAgencia = useAgenciaViajesCatalogosStore();
+const abrirModalAnticipo = async () => {
+    let tipAfeIgvDefault: '10' | '20' | '30' = '10';
+    try {
+        tipAfeIgvDefault = (await catalogosAgencia.obtenerConfigAgencia())?.tip_afe_igv_default ?? '10';
+    } catch {
+        // Sin config se queda en Gravado, igual que antes — no bloquea el cobro.
+    }
+    formAnticipo.value = { monto: 0, medio_pago: paymentMethods.value[0]?.code ?? '', tip_afe_igv: tipAfeIgvDefault, notas: '' };
     mostrarModalAnticipo.value = true;
 };
 
