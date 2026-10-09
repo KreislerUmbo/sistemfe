@@ -61,7 +61,7 @@ class ReporteOperativoController extends Controller
             // "quién" y "cuándo" en este momento y viaja protegido por la firma, igual
             // que fecha_desde/fecha_hasta.
             'generado_por' => auth('api')->user()->name,
-            'generado_en' => now()->toIso8601String(),
+            'generado_en' => \App\Services\HoraPeru::ahora()->toIso8601String(),
         ]);
 
         $url = URL::temporarySignedRoute('reporte-operativo.pdf', now()->addMinutes(10), $params);
@@ -100,7 +100,7 @@ class ReporteOperativoController extends Controller
             'generadoPor' => $request->input('generado_por', 'Sistema'),
             'generadoEn' => $request->filled('generado_en')
                 ? Carbon::parse($request->input('generado_en'))->translatedFormat('d/m/Y H:i')
-                : now()->translatedFormat('d/m/Y H:i'),
+                : \App\Services\HoraPeru::ahora()->translatedFormat('d/m/Y H:i'),
         ]);
         $pdf->setPaper('a4', 'landscape');
 
@@ -132,7 +132,7 @@ class ReporteOperativoController extends Controller
                 $reporte['fecha_desde'],
                 $reporte['fecha_hasta'],
                 auth('api')->user()->name,
-                now()
+                Carbon::now(\App\Services\HoraPeru::ZONA)
             ),
             $this->nombreArchivo($reporte['fecha_desde'], $reporte['fecha_hasta'], 'xlsx')
         );
@@ -202,7 +202,7 @@ class ReporteOperativoController extends Controller
     {
         $fechaDesde = $request->filled('fecha_desde')
             ? Carbon::parse($request->input('fecha_desde'))->startOfDay()
-            : Carbon::today();
+            : \App\Services\HoraPeru::hoy();
         $fechaHasta = $request->filled('fecha_hasta')
             ? Carbon::parse($request->input('fecha_hasta'))->startOfDay()
             : $fechaDesde->copy();

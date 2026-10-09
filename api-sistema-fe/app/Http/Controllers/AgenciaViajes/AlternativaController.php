@@ -800,7 +800,7 @@ class AlternativaController extends Controller
             }
 
             return TipoCambioAgencia::create([
-                'fecha' => now()->toDateString(),
+                'fecha' => \App\Services\HoraPeru::hoyTexto(),
                 'origen' => $origen,
                 'valor' => $valorNuevo,
                 'registrado_por' => $request->user()->id,

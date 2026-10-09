@@ -1265,7 +1265,7 @@ import { servicioService } from '@/services/admin/servicioService';
 import { bibliotecaCotizadorService, type BibliotecaTipo } from '@/services/admin/bibliotecaCotizadorService';
 import { reservaService } from '@/services/admin/reservaService';
 import { useAgenciaViajesCatalogosStore } from '@/stores/agenciaViajesCatalogos';
-import { formatFecha } from '@/helpers/fecha';
+import { formatFecha, sumarDiasISO } from '@/helpers/fecha';
 import { guiaService } from '@/services/admin/guiaService';
 import { tipoCambioAgenciaService } from '@/services/admin/tipoCambioAgenciaService';
 import type { Cotizacion, Alternativa, AlternativaItem, ProveedorTarifa, OpcionMayorista, OpcionMayoristaTour, OpcionMayoristaOpcional, OpcionHotelTarifa, Proveedor, ProveedorTipo, BibliotecaResultado, ConfiguracionAgencia, DestinoServicio, Guia, GuiaTarifa, Servicio, TipAfeIgv, DestinoTributario } from '@/types/agencia-viajes';
@@ -1835,9 +1835,7 @@ const abrirFormDestino = () => {
     // 1, editable") — nunca bloquea si el vendedor la cambia.
     const ultimo = alternativaDestinos.value[alternativaDestinos.value.length - 1];
     if (ultimo?.fecha_fin) {
-        const siguiente = new Date(ultimo.fecha_fin);
-        siguiente.setDate(siguiente.getDate() + 1);
-        nuevoDestinoFechaInicio.value = siguiente.toISOString().slice(0, 10);
+        nuevoDestinoFechaInicio.value = sumarDiasISO(ultimo.fecha_fin, 1);
     } else {
         nuevoDestinoFechaInicio.value = '';
     }

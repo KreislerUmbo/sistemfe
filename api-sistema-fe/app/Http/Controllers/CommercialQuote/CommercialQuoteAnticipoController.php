@@ -82,7 +82,7 @@ class CommercialQuoteAnticipoController extends Controller
                 'commercial_quote_id' => $cotizacion->id,
                 'advance_id' => $datosAdelanto['advance_id'],
                 'monto_asignado' => $validado['monto'],
-                'fecha_asignacion' => now()->toDateString(),
+                'fecha_asignacion' => \App\Services\HoraPeru::hoyTexto(),
             ]);
         });
 

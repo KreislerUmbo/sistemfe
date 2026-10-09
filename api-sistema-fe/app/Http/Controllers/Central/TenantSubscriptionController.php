@@ -37,7 +37,7 @@ class TenantSubscriptionController extends Controller
             'periodo' => ['nullable', 'regex:/^\d{4}-(0[1-9]|1[0-2])$/'],
         ]);
 
-        $periodo = $data['periodo'] ?? now()->format('Y-m');
+        $periodo = $data['periodo'] ?? \App\Services\HoraPeru::ahora()->format('Y-m');
 
         $subscription = TenantSubscription::where('tenant_id', $id)
             ->where('estado', 'activa')

@@ -219,7 +219,7 @@ import { reservaItemService } from '@/services/admin/reservaItemService';
 import { guiaService } from '@/services/admin/guiaService';
 import { proveedorService } from '@/services/admin/proveedorService';
 import { useToast } from '@/composables/useToast';
-import { formatFecha } from '@/helpers/fecha';
+import { formatFecha, hoyPeru, sumarDiasISO } from '@/helpers/fecha';
 import type { Guia, ProveedorTarifa, ReporteOperativoFila, ReporteOperativoFiltrosDisponibles } from '@/types/agencia-viajes';
 
 const toast = useToast();
@@ -256,13 +256,11 @@ const proveedorBuscando = ref<number | null>(null); // reserva_item_id en modo b
 const proveedorSearch = ref<Record<number, string>>({});
 
 function hoyISO(): string {
-    return new Date().toISOString().slice(0, 10);
+    return hoyPeru();
 }
 
 function sumarDias(fechaISO: string, dias: number): string {
-    const d = new Date(fechaISO + 'T00:00:00');
-    d.setDate(d.getDate() + dias);
-    return d.toISOString().slice(0, 10);
+    return sumarDiasISO(fechaISO, dias);
 }
 
 // Saltar de rango (Hoy/Esta semana) limpia los 4 filtros de dimensión: sus opciones

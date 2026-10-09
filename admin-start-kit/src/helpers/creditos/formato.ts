@@ -2,6 +2,8 @@
 // montos como string decimal; aquí solo se formatean para mostrar, nunca se suman ni
 // se redondean (el cálculo vive en el motor del backend).
 
+import { hoyPeru } from '@/helpers/fecha'
+
 const soles = new Intl.NumberFormat('es-PE', { style: 'currency', currency: 'PEN' })
 
 /** "1234.5" → "S/ 1,234.50". Vacío o inválido → "S/ 0.00". */
@@ -33,7 +35,7 @@ export function formatoFecha(ymd: string | null | undefined): string {
 
 /** Fecha de hoy en Lima como "YYYY-MM-DD" (la fecha de desembolso de un crédito nuevo). */
 export function hoyEnLima(ahora: Date = new Date()): string {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Lima', year: 'numeric', month: '2-digit', day: '2-digit' }).format(ahora)
+  return hoyPeru(ahora)
 }
 
 /** Instante ISO del backend ("2026-10-14T12:30:00Z") → "07:30" en Lima. Vacío si no es válido. */

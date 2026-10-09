@@ -425,7 +425,7 @@ class OpcionHotelController extends Controller
                     'margen_valor' => round((float) $t->precio_venta - (float) $t->precio_costo, 2),
                     'precio_venta_adulto' => $t->precio_venta,
                     'tipo_habitacion' => $t->tipo_habitacion,
-                    'vigente_desde' => now()->toDateString(),
+                    'vigente_desde' => \App\Services\HoraPeru::hoyTexto(),
                     'tip_afe_igv' => $tratamientoTributario['tip_afe_igv'],
                     'destino_tributario' => $tratamientoTributario['destino_tributario'],
                 ]);

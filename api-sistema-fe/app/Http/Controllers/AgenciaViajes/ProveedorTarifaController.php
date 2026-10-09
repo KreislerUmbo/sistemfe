@@ -41,7 +41,7 @@ class ProveedorTarifaController extends Controller
     // lista TODO el catálogo activo con búsqueda de texto en su lugar.
     public function biblioteca(Request $request)
     {
-        $hoy = now()->toDateString();
+        $hoy = \App\Services\HoraPeru::hoyTexto();
         $search = $request->get('search');
 
         $query = ProveedorTarifa::with([
@@ -158,10 +158,10 @@ class ProveedorTarifaController extends Controller
         $tieneUso = AlternativaItem::where('proveedor_tarifa_id', $tarifaActual->id)->exists();
 
         if ($tieneUso) {
-            $tarifaActual->update(['vigente_hasta' => now()->toDateString()]);
+            $tarifaActual->update(['vigente_hasta' => \App\Services\HoraPeru::hoyTexto()]);
 
             $validado['proveedor_servicio_id'] = $tarifaActual->proveedor_servicio_id;
-            $validado['vigente_desde'] = $validado['vigente_desde'] ?? now()->toDateString();
+            $validado['vigente_desde'] = $validado['vigente_desde'] ?? \App\Services\HoraPeru::hoyTexto();
             // La nueva versión hereda el estado activo/inactivo de la que
             // reemplaza — editar el precio de una tarifa desactivada no
             // debe reactivarla en silencio, eso requiere un activar()

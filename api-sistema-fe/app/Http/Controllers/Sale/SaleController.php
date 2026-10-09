@@ -628,7 +628,7 @@ class SaleController extends Controller
     // ── Configuración inicial del formulario de ventas ───────────────
     public function config()
     {
-        $fecha_hoy = today();
+        $fecha_hoy = \App\Services\HoraPeru::hoy();
 
         // Clientes activos ordenados por nombre para el selector
         $clientes = Client::where("state", 1)
@@ -1332,7 +1332,7 @@ public function update(Request $request, string $id)
                 "sale_id"        => $venta->id,
                 "method_payment" => $pago['method_payment'],
                 "amount"         => $pago['amount'],
-                "date_payment"   => $pago['date_payment'] ?? now(),
+                "date_payment"   => $pago['date_payment'] ?? \App\Services\HoraPeru::hoyTexto(),
             ]);
         }
 

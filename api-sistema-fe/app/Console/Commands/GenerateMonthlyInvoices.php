@@ -14,7 +14,7 @@ class GenerateMonthlyInvoices extends Command
 
     public function handle(TenantInvoiceService $service): int
     {
-        $periodo = $this->option('periodo') ?? now()->format('Y-m');
+        $periodo = $this->option('periodo') ?? \App\Services\HoraPeru::ahora()->format('Y-m');
 
         $resultado = $service->generarMensualParaActivas($periodo);
 

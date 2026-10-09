@@ -209,7 +209,7 @@ class AdvanceController extends Controller
                 "sale_id"        => $venta->id,
                 "method_payment" => $request->payment_method,
                 "amount"         => $amount,
-                "date_payment"   => now()->toDateString(),
+                "date_payment"   => \App\Services\HoraPeru::hoyTexto(),
                 "comments"       => $request->payment_reference,
             ]);
 
@@ -277,7 +277,7 @@ class AdvanceController extends Controller
 
         $venta = Sale::create([
             "type"                 => "advance",
-            "date"                 => now()->toDateString(),
+            "date"                 => \App\Services\HoraPeru::hoyTexto(),
             "serie"                   => $serieResuelta['serie']->serie,
             "tipo_comprobante_codigo" => $serieResuelta['tipo']->codigo,
             "serie_comprobante_id"    => $serieResuelta['serie']->id,

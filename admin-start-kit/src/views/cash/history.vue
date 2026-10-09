@@ -214,7 +214,7 @@
 import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import httpClient from '@/helpers/http-client';
 import { ref, computed, watch, onMounted } from 'vue';
-import { formatFechaHora } from '@/helpers/fecha';
+import { formatFechaHora, hoyPeru } from '@/helpers/fecha';
 import Swal from 'sweetalert2/dist/sweetalert2.js';
 import { useAuthStore } from '@/stores/auth';
 import { etiquetaTipoMovimiento } from '@/helpers/cash/tipoMovimiento';
@@ -404,7 +404,7 @@ async function exportarExcel() {
         const url = window.URL.createObjectURL(new Blob([response.data]));
         const link = document.createElement('a');
         link.href = url;
-        link.download = `movimientos_caja_${new Date().toISOString().slice(0, 10)}.xlsx`;
+        link.download = `movimientos_caja_${hoyPeru()}.xlsx`;
         document.body.appendChild(link);
         link.click();
         link.remove();

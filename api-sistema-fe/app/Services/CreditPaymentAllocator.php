@@ -75,7 +75,7 @@ class CreditPaymentAllocator
         ?Carbon $fechaReferencia = null,
         bool $incluirMora = true
     ): array {
-        $fechaReferencia ??= now();
+        $fechaReferencia ??= \App\Services\HoraPeru::hoy();
 
         $todasLasVentasAbiertas = Sale::where('client_id', $client->id)
             ->where('saldo_pendiente', '>', 0)

@@ -303,7 +303,7 @@ class FacturacionElectronicaController extends Controller
         // el envío — si no hay dato disponible queda null.
         $tipoCambioSunatAplicado = null;
         if ($datos_comprobante['tipo_moneda'] === 'USD') {
-            $tipoCambioSunatAplicado = $this->tipoCambioSunatResolver->resolverParaFecha(now())?->venta;
+            $tipoCambioSunatAplicado = $this->tipoCambioSunatResolver->resolverParaFecha(\App\Services\HoraPeru::ahora())?->venta;
         }
 
         // ── Enviar a SUNAT usando Greenter ────────────────────────────

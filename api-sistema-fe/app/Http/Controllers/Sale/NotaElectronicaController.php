@@ -324,7 +324,7 @@ class NotaElectronicaController extends Controller
         // disponible queda null.
         $tipoCambioSunatAplicado = null;
         if (($nota->currency ?? 'PEN') === 'USD') {
-            $tipoCambioSunatAplicado = $this->tipoCambioSunatResolver->resolverParaFecha(now())?->venta;
+            $tipoCambioSunatAplicado = $this->tipoCambioSunatResolver->resolverParaFecha(\App\Services\HoraPeru::ahora())?->venta;
         }
 
         // Una nota ya resuelta (aceptada o rechazada) no se reintenta sobre

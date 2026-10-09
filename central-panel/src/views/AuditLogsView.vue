@@ -119,7 +119,7 @@ function toggleExpanded(id: number) {
         <tbody>
           <template v-for="log in page.data" :key="log.id">
             <tr>
-              <td>{{ new Date(log.created_at).toLocaleString('es-PE') }}</td>
+              <td>{{ new Date(log.created_at).toLocaleString('es-PE', { timeZone: 'America/Lima' }) }}</td>
               <td>{{ log.central_user?.name ?? 'Sistema' }}</td>
               <td><code class="small">{{ log.action }}</code></td>
               <td>{{ log.auditable_id }}</td>

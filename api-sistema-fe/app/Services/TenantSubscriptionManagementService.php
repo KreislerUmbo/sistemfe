@@ -30,7 +30,7 @@ class TenantSubscriptionManagementService
         }
 
         $invoice->estado = 'pagado';
-        $invoice->fecha_pago = now()->toDateString();
+        $invoice->fecha_pago = \App\Services\HoraPeru::hoyTexto();
         $invoice->save();
 
         $this->auditLogger->log('tenant.invoice.paid_manually', TenantInvoice::class, (string) $invoice->id, [
@@ -169,7 +169,7 @@ class TenantSubscriptionManagementService
 
         $quedanVencidos = TenantInvoice::where('tenant_id', $tenant->id)
             ->where('estado', '!=', 'pagado')
-            ->where('fecha_vencimiento', '<=', now()->toDateString())
+            ->where('fecha_vencimiento', '<=', \App\Services\HoraPeru::hoyTexto())
             ->exists();
 
         if ($quedanVencidos) {

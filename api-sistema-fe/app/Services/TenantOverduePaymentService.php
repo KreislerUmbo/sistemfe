@@ -29,7 +29,7 @@ class TenantOverduePaymentService
 
     public function procesar(): array
     {
-        $hoy = Carbon::today();
+        $hoy = \App\Services\HoraPeru::hoy();
         $diasGraciaDefault = $this->diasGraciaDefault();
 
         $resumen = ['recordatorios' => 0, 'avisos_gracia' => 0, 'suspensiones' => 0];
