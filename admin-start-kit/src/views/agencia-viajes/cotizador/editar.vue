@@ -873,7 +873,7 @@
                                             </select>
                                         </div>
                                     </div>
-                                    <button class="btn btn-sm btn-outline-secondary mb-1" @click="formHotelLocal.tarifas.push({ tipo_habitacion: 'doble', precio_costo: 0, precio_venta: 0, tip_afe_igv: '10', destino_tributario: 'nacional' })">+ tipo de habitación</button>
+                                    <button class="btn btn-sm btn-outline-secondary mb-1" @click="formHotelLocal.tarifas.push(tarifaHotelLocalVacia())">+ tipo de habitación</button>
                                     <button class="btn btn-sm btn-primary w-100" @click="guardarHotelLocal" :disabled="guardandoHotelLocal">
                                         <span v-if="guardandoHotelLocal" class="spinner-border spinner-border-sm me-1"></span>Guardar hotel
                                     </button>
@@ -2516,12 +2516,28 @@ const agregarItemProveedorHotel = async (
 // agregarGrupoHotelAdhocLocal() son sus equivalentes, distinguidos en el
 // template por matrizHotelActiva.adhoc.
 const mostrarFormHotelLocal = ref(false);
+// 09-oct-2026 (hallazgo del usuario) — antes cada tipo de habitación nacía
+// fijo en Gravado/Nacional, ignorando el tratamiento tributario por defecto
+// de Configuración de Agencia (mismo default que ya usaban guía, ítem
+// manual y pasaje aéreo).
+const tarifaHotelLocalVacia = () => ({
+    tipo_habitacion: 'doble', precio_costo: 0, precio_venta: 0,
+    tip_afe_igv: configAgencia.value?.tip_afe_igv_default ?? '10',
+    destino_tributario: configAgencia.value?.destino_tributario_default ?? 'nacional',
+});
+// El form se arma antes de que cargue configAgencia: al abrirlo, si nadie
+// tocó todavía la fila inicial, se rearma con el default ya cargado.
+watch(mostrarFormHotelLocal, (abierto) => {
+    const f = formHotelLocal.value;
+    const intacto = !f.nombre_hotel && f.tarifas.length === 1 && !f.tarifas[0].precio_costo && !f.tarifas[0].precio_venta;
+    if (abierto && intacto) f.tarifas = [tarifaHotelLocalVacia()];
+});
 const formHotelLocal = ref<{
     nombre_hotel: string; moneda: 'PEN' | 'USD'; proveedor_id: number | null;
     tarifas: Array<{ tipo_habitacion: string; precio_costo: number; precio_venta: number; tip_afe_igv: string; destino_tributario: string }>;
 }>({
     nombre_hotel: '', moneda: 'PEN', proveedor_id: null,
-    tarifas: [{ tipo_habitacion: 'doble', precio_costo: 0, precio_venta: 0, tip_afe_igv: '10', destino_tributario: 'nacional' }],
+    tarifas: [tarifaHotelLocalVacia()],
 });
 // Guardrail (18-sep-2026) — el select de "¿es un proveedor ya
 // registrado?" listaba TODOS los proveedores (proveedoresFiltro, mismo
@@ -2578,7 +2594,7 @@ const guardarHotelLocal = async () => {
         };
         formHotelLocal.value = {
             nombre_hotel: '', moneda: 'PEN', proveedor_id: null,
-            tarifas: [{ tipo_habitacion: 'doble', precio_costo: 0, precio_venta: 0, tip_afe_igv: '10', destino_tributario: 'nacional' }],
+            tarifas: [tarifaHotelLocalVacia()],
         };
         filtroProveedorHotelLocal.value = '';
     } catch (error: any) {
