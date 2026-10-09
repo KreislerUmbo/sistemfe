@@ -54,6 +54,17 @@ el que vence primero.
 
 ## 2. Calendarios del vertical Agencia de Viajes → `CampoFecha.vue` (Rizz)
 
+> **HECHO 09-oct-2026** (rama `feat/agencia-calendarios-rizz`): los 33 campos de fecha pasan
+> a `CampoFecha` y los 13 de hora a `CampoHora.vue` (nuevo, flatpickr sin calendario, 24 h,
+> `v-model` `HH:mm`, recorta `HH:mm:ss` de la base, evento `cambio` al cerrar para guardar
+> una sola vez). `CampoFecha` acepta ahora `null` en el `v-model`. Filtros de Reservas
+> reordenados en 2 filas (las columnas `col-md-1` no alcanzaban). Modales del vertical son
+> manuales (sin focus trap) → no necesitan `estatico`. Verificado con Playwright contra
+> `agencia-demo`: filtro de reservas (10 → 2 registros), hora de paquete escrita a mano,
+> fechas/horas existentes cargadas en el detalle de reserva, guardado automático de la hora
+> de un ítem = 1 solo PUT (ítem 28 de la reserva 16, restaurado a su estado original).
+> Lo de abajo queda como referencia del inventario.
+
 ### Problema
 El módulo usa `<input type="date">` / `<input type="time">` nativos del navegador. El
 estándar del sistema (Créditos, y la regla de memoria `feedback_estilo_ui_como_agencia_y_ventas`)

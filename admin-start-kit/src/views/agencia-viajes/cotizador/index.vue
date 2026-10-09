@@ -34,10 +34,10 @@
                         </select>
                     </div>
                     <div class="col-6 col-md-2">
-                        <input type="date" class="form-control form-control-sm" title="Viaje desde" v-model="fechaDesde" @change="buscar">
+                        <CampoFecha etiqueta="Viaje desde" placeholder="Viaje desde" v-model="fechaDesde" @update:model-value="buscar" />
                     </div>
                     <div class="col-6 col-md-2">
-                        <input type="date" class="form-control form-control-sm" title="Viaje hasta" v-model="fechaHasta" @change="buscar">
+                        <CampoFecha etiqueta="Viaje hasta" placeholder="Viaje hasta" v-model="fechaHasta" @update:model-value="buscar" />
                     </div>
                     <div class="col-6 col-md-1">
                         <button class="btn btn-outline-secondary btn-sm w-100" title="Limpiar filtros" @click="limpiarFiltros">
@@ -126,6 +126,7 @@
 </template>
 
 <script setup lang="ts">
+import CampoFecha from '@/components/CampoFecha.vue';
 import { ref, computed, onMounted } from 'vue';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import Swal from 'sweetalert2/dist/sweetalert2.js';

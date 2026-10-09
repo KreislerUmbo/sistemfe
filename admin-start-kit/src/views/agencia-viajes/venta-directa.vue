@@ -50,7 +50,7 @@
                     </div>
                     <div class="col-12 col-md-4">
                         <label class="form-label mb-1 small fw-semibold text-secondary">Fecha del servicio</label>
-                        <input type="date" class="form-control form-control-sm" v-model="fechaServicio">
+                        <CampoFecha v-model="fechaServicio" />
                     </div>
                 </div>
             </div>
@@ -179,6 +179,7 @@
 </template>
 
 <script setup lang="ts">
+import CampoFecha from '@/components/CampoFecha.vue';
 import { ref, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';

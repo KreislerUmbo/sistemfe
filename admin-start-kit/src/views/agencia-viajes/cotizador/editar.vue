@@ -104,11 +104,11 @@
                     </div>
                     <div class="col-6 col-md-3">
                         <label class="form-label mb-1 small fw-semibold text-secondary">Fecha desde</label>
-                        <input type="date" class="form-control form-control-sm" v-model="formCabecera.fecha_viaje_desde">
+                        <CampoFecha v-model="formCabecera.fecha_viaje_desde" />
                     </div>
                     <div class="col-6 col-md-3">
                         <label class="form-label mb-1 small fw-semibold text-secondary">Fecha hasta</label>
-                        <input type="date" class="form-control form-control-sm" v-model="formCabecera.fecha_viaje_hasta">
+                        <CampoFecha v-model="formCabecera.fecha_viaje_hasta" />
                     </div>
                 </div>
             </div>
@@ -230,11 +230,11 @@
                     </div>
                     <div class="col-6 col-md-3">
                         <label class="form-label mb-1 small fw-semibold text-secondary">Fecha desde</label>
-                        <input type="date" class="form-control form-control-sm" v-model="nuevoDestinoFechaInicio">
+                        <CampoFecha v-model="nuevoDestinoFechaInicio" />
                     </div>
                     <div class="col-6 col-md-3">
                         <label class="form-label mb-1 small fw-semibold text-secondary">Fecha hasta</label>
-                        <input type="date" class="form-control form-control-sm" v-model="nuevoDestinoFechaFin">
+                        <CampoFecha v-model="nuevoDestinoFechaFin" />
                     </div>
                     <div class="col-12 col-md-2 d-flex gap-2">
                         <button class="btn btn-primary btn-sm w-100" @click="guardarNuevoDestino" :disabled="guardandoDestino || !nuevoDestinoTexto.trim()">
@@ -1236,6 +1236,7 @@
 </template>
 
 <script setup lang="ts">
+import CampoFecha from '@/components/CampoFecha.vue';
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';

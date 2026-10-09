@@ -15,11 +15,11 @@
                 <div class="row g-2 align-items-end">
                     <div class="col-6 col-md-3">
                         <label class="form-label mb-1 small fw-semibold text-secondary">Desde</label>
-                        <input type="date" class="form-control form-control-sm" v-model="fechaDesde" @change="list">
+                        <CampoFecha v-model="fechaDesde" @update:model-value="list" />
                     </div>
                     <div class="col-6 col-md-3">
                         <label class="form-label mb-1 small fw-semibold text-secondary">Hasta</label>
-                        <input type="date" class="form-control form-control-sm" v-model="fechaHasta" @change="list">
+                        <CampoFecha v-model="fechaHasta" @update:model-value="list" />
                     </div>
                     <div class="col-6 col-md-3">
                         <label class="form-label mb-1 small fw-semibold text-secondary">Estado</label>
@@ -176,6 +176,7 @@
 </template>
 
 <script setup lang="ts">
+import CampoFecha from '@/components/CampoFecha.vue';
 import { ref, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';

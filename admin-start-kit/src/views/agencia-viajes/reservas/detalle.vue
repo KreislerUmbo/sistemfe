@@ -278,11 +278,11 @@
                                     </div>
                                     <div class="col-md-4">
                                         <label class="form-label small text-secondary mb-1">Vuelo ida — fecha</label>
-                                        <input type="date" class="form-control form-control-sm" v-model="p.vuelo_fecha_ida">
+                                        <CampoFecha v-model="p.vuelo_fecha_ida" />
                                     </div>
                                     <div class="col-md-4">
                                         <label class="form-label small text-secondary mb-1">Vuelo ida — hora</label>
-                                        <input type="time" class="form-control form-control-sm" placeholder="18:45" v-model="p.vuelo_hora_ida">
+                                        <CampoHora v-model="p.vuelo_hora_ida" />
                                     </div>
                                     <div class="col-md-4">
                                         <label class="form-label small text-secondary mb-1">Vuelo vuelta — aerolínea</label>
@@ -290,11 +290,11 @@
                                     </div>
                                     <div class="col-md-4">
                                         <label class="form-label small text-secondary mb-1">Vuelo vuelta — fecha</label>
-                                        <input type="date" class="form-control form-control-sm" v-model="p.vuelo_fecha_vuelta">
+                                        <CampoFecha v-model="p.vuelo_fecha_vuelta" />
                                     </div>
                                     <div class="col-md-4">
                                         <label class="form-label small text-secondary mb-1">Vuelo vuelta — hora</label>
-                                        <input type="time" class="form-control form-control-sm" placeholder="18:45" v-model="p.vuelo_hora_vuelta">
+                                        <CampoHora v-model="p.vuelo_hora_vuelta" />
                                     </div>
                                 </div>
 
@@ -320,11 +320,11 @@
                                             </div>
                                             <div class="col-md-2">
                                                 <label class="form-label small text-secondary mb-1">Ida — fecha</label>
-                                                <input type="date" class="form-control form-control-sm" v-model="vueloAgenciaForm(it, p).vuelo_fecha_ida">
+                                                <CampoFecha v-model="vueloAgenciaForm(it, p).vuelo_fecha_ida" />
                                             </div>
                                             <div class="col-md-2">
                                                 <label class="form-label small text-secondary mb-1">Ida — hora</label>
-                                                <input type="time" class="form-control form-control-sm" v-model="vueloAgenciaForm(it, p).vuelo_hora_ida">
+                                                <CampoHora v-model="vueloAgenciaForm(it, p).vuelo_hora_ida" />
                                             </div>
                                             <div class="col-md-4">
                                                 <label class="form-label small text-secondary mb-1">Vuelo vuelta — número</label>
@@ -332,11 +332,11 @@
                                             </div>
                                             <div class="col-md-2">
                                                 <label class="form-label small text-secondary mb-1">Vuelta — fecha</label>
-                                                <input type="date" class="form-control form-control-sm" v-model="vueloAgenciaForm(it, p).vuelo_fecha_vuelta">
+                                                <CampoFecha v-model="vueloAgenciaForm(it, p).vuelo_fecha_vuelta" />
                                             </div>
                                             <div class="col-md-2">
                                                 <label class="form-label small text-secondary mb-1">Vuelta — hora</label>
-                                                <input type="time" class="form-control form-control-sm" v-model="vueloAgenciaForm(it, p).vuelo_hora_vuelta">
+                                                <CampoHora v-model="vueloAgenciaForm(it, p).vuelo_hora_vuelta" />
                                             </div>
                                         </div>
                                         <button class="btn btn-outline-primary btn-sm mt-2" :disabled="guardandoVueloAgenciaKey === claveVuelo(it, p)" @click="guardarVueloAgencia(it, p)">
@@ -455,11 +455,11 @@
                                             <i class="fas fa-link me-1"></i>Vía salida operativa
                                         </router-link>
                                     </div>
-                                    <input v-else type="date" class="form-control form-control-sm" v-model="it.fecha" @change="guardarItem(it)">
+                                    <CampoFecha v-else v-model="it.fecha" @update:model-value="guardarItem(it)" />
                                 </div>
                                 <div :class="tieneAsignacionAplicable(it) ? 'col-md-3' : 'col-md-6'">
                                     <label class="form-label small text-secondary mb-1">Hora</label>
-                                    <input type="time" class="form-control form-control-sm" v-model="it.hora" @change="guardarItem(it)">
+                                    <CampoHora v-model="it.hora" @cambio="guardarItem(it)" />
                                 </div>
                             </fieldset>
                             <p v-if="tieneAsignacionAplicable(it) && !it.proveedor_tarifa_id && !it.guia_id" class="small mt-2 mb-0" style="color:#adb5bd;font-style:italic">
@@ -605,11 +605,11 @@
                         <div class="row g-2 mb-2">
                             <div class="col-6">
                                 <label class="form-label small fw-semibold text-secondary">Fecha desde</label>
-                                <input type="date" class="form-control form-control-sm" v-model="reprogramarForm.fecha_viaje_desde">
+                                <CampoFecha v-model="reprogramarForm.fecha_viaje_desde" />
                             </div>
                             <div class="col-6">
                                 <label class="form-label small fw-semibold text-secondary">Fecha hasta</label>
-                                <input type="date" class="form-control form-control-sm" v-model="reprogramarForm.fecha_viaje_hasta">
+                                <CampoFecha v-model="reprogramarForm.fecha_viaje_hasta" />
                             </div>
                         </div>
                         <label class="form-label small fw-semibold text-secondary">Motivo</label>
@@ -1306,7 +1306,7 @@
                         </div>
                         <div class="mb-2">
                             <label class="form-label small">Fecha de facturación externa (opcional)</label>
-                            <input v-model="formFacturacionExterna.fecha_facturacion_externa" type="date" class="form-control form-control-sm">
+                            <CampoFecha v-model="formFacturacionExterna.fecha_facturacion_externa" />
                         </div>
                     </div>
                     <div class="modal-footer">
@@ -1376,6 +1376,8 @@
 </template>
 
 <script setup lang="ts">
+import CampoHora from '@/components/CampoHora.vue';
+import CampoFecha from '@/components/CampoFecha.vue';
 import { ref, reactive, computed, onMounted, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';

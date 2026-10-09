@@ -360,11 +360,11 @@
                             </div>
                             <div class="col-6 col-md-3">
                                 <label class="form-label mb-1 small fw-semibold text-secondary">Vigente desde</label>
-                                <input type="date" class="form-control form-control-sm" v-model="formTarifa.vigente_desde">
+                                <CampoFecha v-model="formTarifa.vigente_desde" />
                             </div>
                             <div class="col-6 col-md-3">
                                 <label class="form-label mb-1 small fw-semibold text-secondary">Vigente hasta</label>
-                                <input type="date" class="form-control form-control-sm" v-model="formTarifa.vigente_hasta">
+                                <CampoFecha v-model="formTarifa.vigente_hasta" />
                             </div>
                         </div>
                     </div>
@@ -379,6 +379,7 @@
 </template>
 
 <script setup lang="ts">
+import CampoFecha from '@/components/CampoFecha.vue';
 import { ref, computed, watch, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';

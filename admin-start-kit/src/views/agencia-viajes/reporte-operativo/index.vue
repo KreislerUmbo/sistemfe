@@ -30,11 +30,11 @@
                 <div class="row g-2 align-items-end">
                     <div class="col-6 col-md-2">
                         <label class="form-label mb-1 small fw-semibold text-secondary">Desde</label>
-                        <input type="date" class="form-control form-control-sm" v-model="filtros.fecha_desde">
+                        <CampoFecha v-model="filtros.fecha_desde" />
                     </div>
                     <div class="col-6 col-md-2">
                         <label class="form-label mb-1 small fw-semibold text-secondary">Hasta</label>
-                        <input type="date" class="form-control form-control-sm" v-model="filtros.fecha_hasta">
+                        <CampoFecha v-model="filtros.fecha_hasta" />
                     </div>
                     <div class="col-auto">
                         <div class="btn-group btn-group-sm">
@@ -212,6 +212,7 @@
 </template>
 
 <script setup lang="ts">
+import CampoFecha from '@/components/CampoFecha.vue';
 import { ref, computed, onMounted } from 'vue';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import { reporteOperativoService } from '@/services/admin/reporteOperativoService';

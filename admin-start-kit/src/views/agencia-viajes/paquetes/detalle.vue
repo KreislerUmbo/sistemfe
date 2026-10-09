@@ -133,11 +133,11 @@
                     </div>
                     <div class="col-6 col-md-3">
                         <label class="form-label mb-1 small fw-semibold text-secondary">Hora de salida</label>
-                        <b-form-input type="time" size="sm" v-model="formDatos.hora_salida" />
+                        <CampoHora v-model="formDatos.hora_salida" />
                     </div>
                     <div class="col-6 col-md-3">
                         <label class="form-label mb-1 small fw-semibold text-secondary">Hora de retorno</label>
-                        <b-form-input type="time" size="sm" v-model="formDatos.hora_retorno" />
+                        <CampoHora v-model="formDatos.hora_retorno" />
                     </div>
                     <div class="col-12">
                         <label class="form-label mb-1 small fw-semibold text-secondary">Lugar de recojo</label>
@@ -167,11 +167,11 @@
                     </div>
                     <div class="col-6 col-md-3">
                         <label class="form-label mb-1 small fw-semibold text-secondary">Vigente desde</label>
-                        <b-form-input type="date" size="sm" v-model="formDatos.vigencia_desde" />
+                        <CampoFecha v-model="formDatos.vigencia_desde" />
                     </div>
                     <div class="col-6 col-md-3">
                         <label class="form-label mb-1 small fw-semibold text-secondary">Vigente hasta</label>
-                        <b-form-input type="date" size="sm" v-model="formDatos.vigencia_hasta" />
+                        <CampoFecha v-model="formDatos.vigencia_hasta" />
                     </div>
                     <div class="col-12 col-md-6 d-flex align-items-center">
                         <b-form-checkbox id="publicadoWebDatos" v-model="formDatos.publicado_web">Publicado en portal web <span class="text-muted">(sin efecto todavía)</span></b-form-checkbox>
@@ -290,7 +290,7 @@
                         </div>
                         <div class="col-6 col-md-2">
                             <label class="form-label mb-1 small fw-semibold text-secondary">Hora</label>
-                            <input type="time" class="form-control form-control-sm" v-model="formPaso.hora">
+                            <CampoHora v-model="formPaso.hora" />
                         </div>
                         <div class="col-6 col-md-2">
                             <label class="form-label mb-1 small fw-semibold text-secondary">Orden</label>
@@ -340,7 +340,7 @@
                                 </div>
                                 <div class="col-6 col-md-2">
                                     <label class="form-label mb-1 small fw-semibold text-secondary">Hora</label>
-                                    <input type="time" class="form-control form-control-sm" v-model="pasoEnEdicion.hora">
+                                    <CampoHora v-model="pasoEnEdicion.hora" />
                                 </div>
                                 <div class="col-6 col-md-2">
                                     <label class="form-label mb-1 small fw-semibold text-secondary">Orden</label>
@@ -839,6 +839,8 @@
 </template>
 
 <script setup lang="ts">
+import CampoHora from '@/components/CampoHora.vue';
+import CampoFecha from '@/components/CampoFecha.vue';
 import { ref, computed, onMounted, nextTick, watch } from 'vue';
 import Sortable from 'sortablejs';
 import { useRoute, useRouter } from 'vue-router';

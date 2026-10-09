@@ -56,11 +56,11 @@
 
                     <div class="col-12 col-md-2">
                         <label class="form-label mb-1 small fw-semibold text-secondary">Fecha desde</label>
-                        <input type="date" class="form-control form-control-sm" v-model="fechaViajeDesde" :disabled="sinFechaExacta">
+                        <CampoFecha v-model="fechaViajeDesde" :disabled="sinFechaExacta" />
                     </div>
                     <div class="col-12 col-md-2">
                         <label class="form-label mb-1 small fw-semibold text-secondary">Fecha hasta</label>
-                        <input type="date" class="form-control form-control-sm" v-model="fechaViajeHasta" :disabled="sinFechaExacta">
+                        <CampoFecha v-model="fechaViajeHasta" :disabled="sinFechaExacta" />
                     </div>
                     <div class="col-12 col-md-8 d-flex align-items-end">
                         <div class="form-check">
@@ -125,6 +125,7 @@
 </template>
 
 <script setup lang="ts">
+import CampoFecha from '@/components/CampoFecha.vue';
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';
