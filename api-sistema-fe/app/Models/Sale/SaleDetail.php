@@ -62,19 +62,6 @@ class SaleDetail extends Model
         "descripcion_detalle",
     ];
 
-    public function setCreatedAtAttribute($value)
-    {
-        date_default_timezone_set('America/Lima');
-        $this->attributes["created_at"] = Carbon::now();
-    }
-
-    public function setUpdatedAtAttribute($value)
-    {
-        date_default_timezone_set("America/Lima");
-        $this->attributes["updated_at"] = Carbon::now();
-    }
-
-
     public function sale()
     {
         return $this->belongsTo(Sale::class, "sale_id");

@@ -55,20 +55,6 @@ class Product extends Model
         'controla_stock'    => 'boolean',
     ];
 
-
-    public function setCreatedAtAttribute($value)
-    {
-        date_default_timezone_set('America/Lima');
-        $this->attributes["created_at"] = Carbon::now();
-    }
-
-    public function setUpdatedAtAttribute($value)
-    {
-        date_default_timezone_set("America/Lima");
-        $this->attributes["updated_at"] = Carbon::now();
-    }
-
-
     public function categorie()
     {
         return $this->belongsTo(Categorie::class, "categorie_id");

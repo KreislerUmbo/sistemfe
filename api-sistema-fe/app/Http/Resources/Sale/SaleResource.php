@@ -185,11 +185,11 @@ class SaleResource extends JsonResource
             // Motivo de rechazo SUNAT (si lo hay) — correlativo puede estar
             // seteado sin xml/cdr cuando un envío fue rechazado o falló.
             'sunat_error_message' => $this->resource->sunat_error_message,
-            'sunat_sent_at'        => $this->resource->sunat_sent_at?->format('Y-m-d H:i:s'),
+            'sunat_sent_at'        => \App\Services\HoraPeru::deUtc($this->resource->sunat_sent_at)?->format('Y-m-d H:i:s'),
 
-            // ── Fechas ────────────────────────────────────────────
-            'created_at'        => $this->resource->created_at?->format('Y-m-d h:i A'),
-            'created_at_format' => $this->resource->created_at?->format('Y-m-d'),
+            // ── Fechas (se guardan en UTC; se envían ya en hora de Perú) ──
+            'created_at'        => \App\Services\HoraPeru::deUtc($this->resource->created_at)?->format('Y-m-d h:i A'),
+            'created_at_format' => \App\Services\HoraPeru::deUtc($this->resource->created_at)?->format('Y-m-d'),
 
             // ── Detalles (con toda la info que necesita el edit) ──
             'sale_details' => $this->resource->sale_details->map(function ($detail) {

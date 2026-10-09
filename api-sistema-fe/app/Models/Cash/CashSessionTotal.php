@@ -25,18 +25,6 @@ class CashSessionTotal extends Model
         "expected_amount" => "decimal:2",
     ];
 
-    public function setCreatedAtAttribute($value)
-    {
-        date_default_timezone_set('America/Lima');
-        $this->attributes["created_at"] = Carbon::now();
-    }
-
-    public function setUpdatedAtAttribute($value)
-    {
-        date_default_timezone_set("America/Lima");
-        $this->attributes["updated_at"] = Carbon::now();
-    }
-
     public function cashSession()
     {
         return $this->belongsTo(CashSession::class, "cash_session_id");

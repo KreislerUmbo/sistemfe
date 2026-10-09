@@ -52,22 +52,24 @@ class QrCodeService
             return null;
         }
 
-        $empresa = Company::first();
+        return $this->renderizarQr($this->cadenaQrNota($nota));
+    }
 
-        $valor_qr = $this->construirCadenaQr(
-            $empresa,
+    /** Texto que codifica el QR de una nota (sin render), separado para poder verificar la fecha. */
+    public function cadenaQrNota(Note $nota): string
+    {
+        return $this->construirCadenaQr(
+            Company::first(),
             $nota->tipo_doc, // '07' NC, '08' ND
             $nota->serie,
             $nota->correlativo,
             (float) $nota->mto_igv,
             (float) $nota->mto_imp_venta,
-            optional($nota->sunat_sent_at)->format('Y-m-d'),
+            \App\Services\HoraPeru::deUtc($nota->sunat_sent_at)?->format('Y-m-d'),   // fecha de emisión: día de Perú (sunat_sent_at en UTC)
             $nota->cod_tipo_doc_cliente,
             $nota->client->n_document ?? '',
             $nota->hash_cpe
         );
-
-        return $this->renderizarQr($valor_qr);
     }
 
     // ── String según especificación SUNAT (Res. 183-2016 y modificatorias) ──

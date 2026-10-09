@@ -58,7 +58,8 @@ class ProductResource extends JsonResource
             'contenido_neto_litros' => $this->resource->contenido_neto_litros,
             'percentage_isc' => $this->resource->percentage_isc,
 
-            'created_at' => $this->resource->created_at?->format("Y-m-d h:i A") ?? null,
+            // Se guarda en UTC; se envía ya en hora de Perú.
+            'created_at' => \App\Services\HoraPeru::deUtc($this->resource->created_at)?->format("Y-m-d h:i A"),
         ];
     }
 }

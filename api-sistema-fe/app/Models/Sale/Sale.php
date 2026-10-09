@@ -209,20 +209,6 @@ class Sale extends Model
         return parent::forceDelete();
     }
 
-
-    // ── Timestamps en zona Lima ───────────────────────────────────────
-    public function setCreatedAtAttribute($value)
-    {
-        date_default_timezone_set('America/Lima');
-        $this->attributes["created_at"] = Carbon::now();
-    }
-
-    public function setUpdatedAtAttribute($value)
-    {
-        date_default_timezone_set("America/Lima");
-        $this->attributes["updated_at"] = Carbon::now();
-    }
-
     // ── Relaciones ────────────────────────────────────────────────────
     public function client()
     {
@@ -429,10 +415,9 @@ class Sale extends Model
         }
 
         if ($fecha_inicio && $fecha_fin) {
-            $query->whereBetween("created_at", [
-                Carbon::parse($fecha_inicio)->format("Y-m-d") . " 00:00:00",
-                Carbon::parse($fecha_fin)->format("Y-m-d") . " 23:59:59",
-            ]);
+            // created_at se guarda en UTC; el rango son días de Perú.
+            $query->where("created_at", ">=", \App\Services\HoraPeru::inicioDiaUtc(Carbon::parse($fecha_inicio)->format("Y-m-d")))
+                ->where("created_at", "<", \App\Services\HoraPeru::finDiaUtc(Carbon::parse($fecha_fin)->format("Y-m-d")));
         }
 
         return $query;

@@ -71,7 +71,7 @@ class ProveedorTarifaDesactivarTest extends TestCase
             'margen_tipo' => 'porcentaje',
             'margen_valor' => 25,
             'precio_venta_adulto' => 100,
-            'vigente_desde' => now()->toDateString(),
+            'vigente_desde' => \App\Services\HoraPeru::hoyTexto(),
             'tip_afe_igv' => '10',
             'destino_tributario' => 'nacional',
         ]);
@@ -118,7 +118,7 @@ class ProveedorTarifaDesactivarTest extends TestCase
         $respuesta = app(ProveedorTarifaController::class)->store(new Request([
             'tipo_tarifa' => 'publica', 'modalidad' => 'privado', 'moneda' => 'PEN',
             'precio_costo' => 50, 'margen_tipo' => 'porcentaje', 'margen_valor' => 20,
-            'precio_venta_adulto' => 60, 'vigente_desde' => now()->toDateString(),
+            'precio_venta_adulto' => 60, 'vigente_desde' => \App\Services\HoraPeru::hoyTexto(),
             'tip_afe_igv' => '10', 'destino_tributario' => 'nacional',
         ]), (string) $proveedorServicio->id);
 
@@ -145,7 +145,7 @@ class ProveedorTarifaDesactivarTest extends TestCase
         $respuesta = app(ProveedorTarifaController::class)->update(new Request([
             'tipo_tarifa' => 'publica', 'modalidad' => 'privado', 'moneda' => 'PEN',
             'precio_costo' => 90, 'margen_tipo' => 'porcentaje', 'margen_valor' => 25,
-            'precio_venta_adulto' => 112.5, 'vigente_desde' => now()->toDateString(),
+            'precio_venta_adulto' => 112.5, 'vigente_desde' => \App\Services\HoraPeru::hoyTexto(),
             'tip_afe_igv' => '10', 'destino_tributario' => 'nacional',
         ]), (string) $tarifa->id);
 

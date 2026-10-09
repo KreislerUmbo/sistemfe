@@ -100,8 +100,10 @@ class PaymentReceiptController extends Controller
             // date_payment es un timestamp crudo (sin cast a Carbon en el
             // modelo, a diferencia de fecha_pago en PaymentReceipt) — a
             // veces null en pagos contado (ver venta #37), por eso el
-            // fallback a created_at.
-            'fecha_pago' => \Carbon\Carbon::parse($pago->date_payment ?? $pago->created_at)->format('Y-m-d'),
+            // fallback a created_at (instante en UTC → día de Perú).
+            'fecha_pago' => $pago->date_payment
+                ? \Carbon\Carbon::parse($pago->date_payment)->format('Y-m-d')
+                : \App\Services\HoraPeru::deUtc($pago->created_at)?->format('Y-m-d'),
             'medio_pago' => $pago->method_payment,
             'nro_operacion' => null,
             'monto_total' => (float) $pago->amount,
@@ -109,7 +111,7 @@ class PaymentReceiptController extends Controller
             'estado' => 'activo',
             'motivo_anulacion' => null,
             'anulado_en' => null,
-            'created_at' => $pago->created_at?->format('Y-m-d H:i:s'),
+            'created_at' => \App\Services\HoraPeru::deUtc($pago->created_at)?->format('Y-m-d H:i:s'),
             'sale_id' => $pago->sale_id,
             'sale_n_operacion' => $pago->sale->n_operacion
                 ?? ($pago->sale->serie . '-' . $pago->sale->correlativo),
@@ -137,8 +139,8 @@ class PaymentReceiptController extends Controller
             'monto_no_aplicado' => (float) $receipt->monto_no_aplicado,
             'estado' => $receipt->estado,
             'motivo_anulacion' => $receipt->motivo_anulacion,
-            'anulado_en' => $receipt->anulado_en?->format('Y-m-d H:i:s'),
-            'created_at' => $receipt->created_at?->format('Y-m-d H:i:s'),
+            'anulado_en' => \App\Services\HoraPeru::deUtc($receipt->anulado_en)?->format('Y-m-d H:i:s'),
+            'created_at' => \App\Services\HoraPeru::deUtc($receipt->created_at)?->format('Y-m-d H:i:s'),
             'sale_id' => null,
             'sale_n_operacion' => null,
             'applications' => $receipt->applications->map(fn ($a) => [

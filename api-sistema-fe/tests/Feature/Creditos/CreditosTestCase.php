@@ -99,7 +99,8 @@ abstract class CreditosTestCase extends TestCase
     protected function hoy(string $fecha, string $hora = '10:00:00'): void
     {
         $momento = CarbonImmutable::parse("{$fecha} {$hora}", Reloj::ZONA);
-        $this->travelTo($momento);
+        // Como en producción: now() en UTC (config/app.php); el negocio (Reloj) en hora de Lima.
+        $this->travelTo($momento->utc());
         $this->app->instance(Reloj::class, new Reloj($momento));
     }
 

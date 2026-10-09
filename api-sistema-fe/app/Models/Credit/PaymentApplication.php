@@ -30,18 +30,6 @@ class PaymentApplication extends Model
         "origen_application_id", // solo si estado='trasladada' (§3.13)
     ];
 
-    public function setCreatedAtAttribute($value)
-    {
-        date_default_timezone_set('America/Lima');
-        $this->attributes["created_at"] = Carbon::now();
-    }
-
-    public function setUpdatedAtAttribute($value)
-    {
-        date_default_timezone_set("America/Lima");
-        $this->attributes["updated_at"] = Carbon::now();
-    }
-
     public function paymentReceipt()
     {
         return $this->belongsTo(PaymentReceipt::class, "payment_receipt_id");

@@ -44,18 +44,6 @@ class CashSession extends Model
         "difference" => "decimal:2",
     ];
 
-    public function setCreatedAtAttribute($value)
-    {
-        date_default_timezone_set('America/Lima');
-        $this->attributes["created_at"] = Carbon::now();
-    }
-
-    public function setUpdatedAtAttribute($value)
-    {
-        date_default_timezone_set("America/Lima");
-        $this->attributes["updated_at"] = Carbon::now();
-    }
-
     public function cashRegister()
     {
         return $this->belongsTo(CashRegister::class, "cash_register_id");

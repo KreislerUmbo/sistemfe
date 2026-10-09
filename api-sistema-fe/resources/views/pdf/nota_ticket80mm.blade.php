@@ -116,7 +116,7 @@
 
     <div class="linea"></div>
 
-    <div>Fecha: {{ optional($nota->sunat_sent_at)->format('d/m/Y H:i') ?? '-' }}</div>
+    <div>Fecha: {{ \App\Services\HoraPeru::deUtc($nota->sunat_sent_at)?->format('d/m/Y H:i') ?? '-' }}</div>
     <div>Cliente: {{ $nota->client->full_name }}</div>
     <div>{{ $nota->client->type_document }}: {{ $nota->client->n_document }}</div>
     <div>Vendedor: {{ $nota->user->name }} {{ $nota->user->surname }}</div>

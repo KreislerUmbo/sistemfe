@@ -284,11 +284,12 @@ class CashMovementController extends Controller
         if ($openedBy !== null) {
             $query->whereHas('cashSession', fn ($q) => $q->where('opened_by', $openedBy));
         }
+        // created_at se guarda en UTC; las fechas del filtro son días de Perú.
         if ($request->filled('date_from')) {
-            $query->whereDate('created_at', '>=', $request->query('date_from'));
+            $query->where('created_at', '>=', \App\Services\HoraPeru::inicioDiaUtc($request->query('date_from')));
         }
         if ($request->filled('date_to')) {
-            $query->whereDate('created_at', '<=', $request->query('date_to'));
+            $query->where('created_at', '<', \App\Services\HoraPeru::finDiaUtc($request->query('date_to')));
         }
         if ($request->filled('branch_id')) {
             $branchId = $request->query('branch_id');

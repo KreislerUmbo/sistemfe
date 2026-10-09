@@ -276,7 +276,7 @@
                     <table class="info-grid">
                         <tr>
                             <td style="width:135px;">FECHA EMISIÓN</td>
-                            <td>: {{ optional($nota->sunat_sent_at)->format('d/m/Y') ?? '-' }}</td>
+                            <td>: {{ \App\Services\HoraPeru::deUtc($nota->sunat_sent_at)?->format('d/m/Y') ?? '-' }}</td>
                         </tr>
                         <tr>
                             <td>MONEDA</td>
