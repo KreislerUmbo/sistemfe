@@ -415,6 +415,22 @@ npm), `v-html` sin sanitizar (paquetes, proveedores, portal), `OrderController` 
 precios/totales enviados por el cliente, certificados beta con clave privada en el historial de git,
 falta HSTS/CSP en nginx y CORS `*`. Detalle: memoria `project_auditoria_seguridad_2026-10-08`.
 
+**Completo — Fechas y horas homogéneas: todo en UTC, todo se muestra en hora de Perú
+(08/09-oct-2026, rama `fix/zona-horaria-homogenea`):**
+F0 (en producción desde 08-oct): fechas de negocio con `HoraPeru` (la fecha de emisión que
+proponía Ventas, Adelantos y Facturar reserva salía con el día siguiente de 19:00 a 24:00), mora
+de Amortizaciones, historial de caja, frontend sin `toISOString()`. F1: `fechas:diagnosticar`
+(decide la zona de cada `created_at` por huellas de modelos Lima en la misma petición; validado
+contra logs de Postgres: 878 bien, 0 mal). F2+F3: quitados los mutadores Lima de 27 modelos,
+lecturas convertidas (incluida la fecha del QR de notas, fiscal) y migraciones de datos tenant +
+central `2026_10_09_100000_migrar_fechas_lima_a_utc` (+5 h fila por fila, registrado en
+`ajustes_zona_horaria`, reversible con `down()`). La fecha del XML SUNAT nunca estuvo mal
+(Greenter convierte a America/Lima). Regla completa en "Cómo trabajar en este proyecto".
+**Pendiente real:** desplegar F2+F3 (backup → `fechas:migrar-utc --simular` → `deploy.sh`; ojo,
+`deploy.sh` sigue aunque falle `tenants:migrate-verticales`); comprobantes de prueba locales con
+fecha impresa del día siguiente quedan como están (en producción no hay ninguno); el XML usa
+la fecha del envío y no `sales.date` (umbo F001-30) — pregunta para el contador.
+
 **Próximos módulos (en orden de prioridad):**
 
 1. **Representación impresa (PDF) con impresión automática**
@@ -493,6 +509,28 @@ propuesto que quedó obsoleto en cuanto se construyó el módulo real de Adelant
   `<router-link>`).
 
 ## Cómo trabajar en este proyecto
+- **Regla única de fechas y horas (09-oct-2026):** todo instante (`created_at`, `updated_at`,
+  `*_at`, `anulado_en`…) se guarda en **UTC** (`config/app.php` → `UTC`, hardcodeado) y se
+  muestra en **hora de Perú** (UTC−5, sin horario de verano). Guardar es automático: Laravel
+  llena los timestamps solo, sin mutadores. Solo 3 casos piden decir "Perú" explícitamente:
+  1. **Fecha de negocio "hoy"** (emisión, pago, vigencia, período): `HoraPeru::hoyTexto()`
+     (texto) u `HoraPeru::hoy()` (Carbon a medianoche, para comparar con columnas `date`);
+     Créditos usa `Creditos\Reloj`. **Nunca** `now()`/`today()`/`now()->toDateString()`: de
+     19:00 a 24:00 de Perú ya son el día siguiente.
+  2. **Filtrar un instante por día:** `where(col, '>=', HoraPeru::inicioDiaUtc($dia))` +
+     `where(col, '<', HoraPeru::finDiaUtc($dia))` — nunca `whereDate(col, $dia)`.
+  3. **Formatear un instante en el servidor** (PDF, Excel, Resource que manda texto):
+     `HoraPeru::deUtc($col)->format(...)`. Si el Resource manda el Carbon tal cual, sale ISO
+     con "Z" y el frontend lo convierte.
+  Frontend: `formatFechaHora()` (siempre en America/Lima, sin importar la zona de la PC; un
+  texto sin zona se muestra tal cual) y `hoyPeru()`/`sumarDiasISO()` de `helpers/fecha.ts` —
+  nunca `new Date().toISOString().slice(0, 10)`. **Prohibido `date_default_timezone_set`**:
+  cambiaba la zona de PHP para el resto de la petición y fue la causa de los datos mezclados
+  (27 modelos con mutadores Lima, quitados y migrados en F2/F3). `tests/Unit/ReglaFechasNegocioTest.php`
+  falla si reaparece cualquiera de estos patrones. Excepción a propósito:
+  `credito_pagos.fecha_pago` es fecha-hora **de negocio** en hora Lima (vía `Reloj`), no un
+  instante. Herramientas (solo lectura, pre-migración): `fechas:diagnosticar`,
+  `fechas:migrar-utc --simular`. Ver memoria `project_zona_horaria_utc_mezclada`.
 - **Nunca usar `env('APP_URL')` (ni concatenar host+"/storage/"+path a mano) para construir
   URLs de archivos servidos por tenant (avatar, imagen, foto).** Usar
   `App\Services\StorageUrl::resolve()`/`resolveMuchas()`, que arma la URL con
