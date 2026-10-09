@@ -22,3 +22,9 @@
 #   ( sudo crontab -l 2>/dev/null | grep -v backup-postgres; \
 #     echo '30 3 * * * /var/backups/sistemafe/scripts/backup-postgres.sh >> /var/log/backup-postgres.log 2>&1' ) | sudo crontab -
 #   sudo crontab -l    # verificar
+#
+# La copia offsite (Backblaze B2) también va en el crontab de ROOT, a las 04:00
+# (después del backup completo). Configuración de rclone en GUIA-DESPLIEGUE-PRODUCCION.md, Fase 8:
+#
+#   ( sudo crontab -l 2>/dev/null | grep -v backup-offsite; \
+#     echo '0 4 * * * /var/backups/sistemafe/scripts/backup-offsite.sh >> /var/log/backup-offsite.log 2>&1' ) | sudo crontab -

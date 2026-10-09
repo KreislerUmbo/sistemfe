@@ -12,6 +12,16 @@
     sharedscripts
 }
 
+/var/log/backup-postgres.log /var/log/backup-offsite.log {
+    weekly
+    missingok
+    rotate 8
+    compress
+    delaycompress
+    notifempty
+    create 0640 root adm
+}
+
 /var/log/nginx/sistemfe.*.log {
     daily
     missingok

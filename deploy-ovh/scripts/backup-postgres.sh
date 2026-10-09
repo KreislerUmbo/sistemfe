@@ -37,11 +37,7 @@ echo "[$(date)] Backup completo. Archivos actuales:"
 ls -lh "$BACKUP_DIR" | tail -n 20
 
 # --------------------------------------------------------------------------
-# RECOMENDADO: copiar offsite. OVH ofrece Object Storage (S3-compatible).
-# Ejemplo con rclone (instalar y configurar `rclone config` una sola vez):
-#
-#   rclone sync "$BACKUP_DIR" ovh-s3:sistemafe-backups/postgres --min-age 1h
-#
-# Sin copia offsite, un backup en el mismo disco NO te protege si el
-# servidor se pierde completo (falla de disco, borrado accidental, etc.)
+# Copia offsite: la hace backup-offsite.sh (Backblaze B2, cifrada e
+# inmutable), en su propia línea de cron a las 04:00. Ver
+# GUIA-DESPLIEGUE-PRODUCCION.md, Fase 8.
 # --------------------------------------------------------------------------
