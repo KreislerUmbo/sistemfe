@@ -139,6 +139,20 @@ class AlternativaPdfService
                 'detalle' => TextoFormatoService::textoLibreParaPdf($m->vuelo_detalle),
             ])
             ->values();
+        // Pasaje aéreo suelto (09-oct-2026, hallazgo del usuario): su
+        // itinerario se capturaba en el cotizador pero nunca se imprimía —
+        // la sección "Vuelo" solo leía los datos de vuelo del mayorista.
+        // El itinerario es un <textarea> plano: se respetan sus saltos de
+        // línea tal cual (sin convertirlos en viñetas).
+        $pasajesVuelo = $alternativa->items
+            ->filter(fn (AlternativaItem $item) => $item->origen_tipo === 'pasaje_aereo' && $item->cotizacionPasajeAereo)
+            ->map(fn (AlternativaItem $item) => [
+                'aerolinea' => $item->cotizacionPasajeAereo->aerolinea,
+                'detalle' => filled($item->cotizacionPasajeAereo->itinerario)
+                    ? nl2br(e(trim($item->cotizacionPasajeAereo->itinerario)))
+                    : '',
+            ]);
+        $mayoristasVuelo = $mayoristasVuelo->concat($pasajesVuelo)->values();
         $mayoristasOpcionales = $this->mayoristasOpcionalesPendientes($alternativa, $mayoristas);
 
         // Sesión 12f-3 — el PDF comercial deja de mostrar precio por ítem
@@ -493,7 +507,11 @@ class AlternativaPdfService
             // información dos veces en el mismo documento. Los ítems
             // SIN grupo (el 100% de "Incluye" antes de este plan) siguen
             // exactamente igual.
-            $itemsSinGrupoDeHotel = $grupo['items']->whereNull('grupo_opcion_id');
+            // Mismo criterio para el pasaje aéreo suelto (09-oct-2026): ya
+            // sale completo (aerolínea + itinerario) en la sección "Vuelo".
+            $itemsSinGrupoDeHotel = $grupo['items']
+                ->whereNull('grupo_opcion_id')
+                ->reject(fn (AlternativaItem $item) => $item->origen_tipo === 'pasaje_aereo');
 
             if ($itemsSinGrupoDeHotel->isEmpty()) {
                 continue;
