@@ -104,11 +104,11 @@
                             </div>
                             <div class="col-4">
                                 <label class="form-label small fw-semibold text-secondary">Desde *</label>
-                                <input type="date" class="form-control form-control-sm" v-model="formOcurrencia.fecha_desde">
+                                <CampoFecha v-model="formOcurrencia.fecha_desde" />
                             </div>
                             <div class="col-4">
                                 <label class="form-label small fw-semibold text-secondary">Hasta *</label>
-                                <input type="date" class="form-control form-control-sm" v-model="formOcurrencia.fecha_hasta">
+                                <CampoFecha v-model="formOcurrencia.fecha_hasta" />
                             </div>
                         </div>
                     </div>
@@ -123,6 +123,7 @@
 </template>
 
 <script setup lang="ts">
+import CampoFecha from '@/components/CampoFecha.vue';
 import { ref, onMounted } from 'vue';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import Swal from 'sweetalert2/dist/sweetalert2.js';

@@ -169,11 +169,11 @@
                 <div class="row g-3">
                     <div class="col-6 col-md-3">
                         <label class="form-label mb-1 small fw-semibold text-secondary">Hora check-in</label>
-                        <input type="time" class="form-control form-control-sm" v-model="formAlojamiento.hora_checkin">
+                        <CampoHora v-model="formAlojamiento.hora_checkin" />
                     </div>
                     <div class="col-6 col-md-3">
                         <label class="form-label mb-1 small fw-semibold text-secondary">Hora check-out</label>
-                        <input type="time" class="form-control form-control-sm" v-model="formAlojamiento.hora_checkout">
+                        <CampoHora v-model="formAlojamiento.hora_checkout" />
                     </div>
                     <div class="col-6 col-md-3">
                         <label class="form-label mb-1 small fw-semibold text-secondary">
@@ -274,6 +274,7 @@
 </template>
 
 <script setup lang="ts">
+import CampoHora from '@/components/CampoHora.vue';
 import { ref, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';

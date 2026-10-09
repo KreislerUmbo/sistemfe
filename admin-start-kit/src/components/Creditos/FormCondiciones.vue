@@ -221,9 +221,9 @@ const domingos = computed(() => textoDomingos(form.value.forma_pago, form.value.
 const ajustePrimerPago = computed(() => (props.primeraCuota ? textoAjuste(props.primeraCuota) : null))
 
 /** Elegir la misma fecha automática no la fija: solo una fecha distinta se vuelve manual. */
-function cambiarPrimerPago(valor: string) {
+function cambiarPrimerPago(valor: string | null) {
   if (!form.value.fecha_primer_vencimiento && valor === props.primerSugerido) return
-  form.value.fecha_primer_vencimiento = valor
+  form.value.fecha_primer_vencimiento = valor ?? ''
 }
 
 // Si el backend rechaza un campo de opciones avanzadas, se despliega la sección para que se vea.

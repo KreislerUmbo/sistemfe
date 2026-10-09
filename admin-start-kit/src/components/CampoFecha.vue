@@ -31,7 +31,7 @@ const props = withDefaults(defineProps<{
   estatico?: boolean
 }>(), { id: undefined, min: undefined, max: undefined, placeholder: 'dd/mm/aaaa', invalido: false, disabled: false, etiqueta: undefined, estatico: false })
 
-const modelo = defineModel<string>({ default: '' })
+const modelo = defineModel<string | null>({ default: '' })
 const entrada = ref<HTMLInputElement | null>(null)
 const instancia = ref<Instance | null>(null)
 

@@ -57,6 +57,7 @@ declare module 'vue' {
     BuscadorCliente: typeof import('./src/components/Creditos/BuscadorCliente.vue')['default']
     CalculadoraTipoCambioModal: typeof import('./src/components/AgenciaViajes/CalculadoraTipoCambioModal.vue')['default']
     CampoFecha: typeof import('./src/components/CampoFecha.vue')['default']
+    CampoHora: typeof import('./src/components/CampoHora.vue')['default']
     CartDrawer: typeof import('./src/components/portal/CartDrawer.vue')['default']
     ChartJs: typeof import('./src/components/ChartJs.vue')['default']
     ClienteDatosBase: typeof import('./src/components/Clientes/ClienteDatosBase.vue')['default']
