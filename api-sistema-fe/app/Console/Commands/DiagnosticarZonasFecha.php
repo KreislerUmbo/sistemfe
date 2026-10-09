@@ -65,8 +65,8 @@ class DiagnosticarZonasFecha extends Command
 
         $this->newLine();
         $this->line($revisar === 0
-            ? '<info>Todas las tablas coinciden con lo esperado.</info>'
-            : "<comment>{$revisar} tabla(s) para revisar (contradicciones con la zona esperada).</comment>");
+            ? '<info>Sin ambigüedades ni anomalías: todo se puede decidir automáticamente.</info>'
+            : "<comment>{$revisar} tabla(s) para revisar (filas ambiguas, o filas de una tabla Lima que están en UTC).</comment>");
         $this->warn('Este comando NO modificó ningún dato.');
 
         return self::SUCCESS;
@@ -105,6 +105,12 @@ class DiagnosticarZonasFecha extends Command
         ));
     }
 
+    /** @param list<int> $ids */
+    private static function ids(array $ids): string
+    {
+        return implode(',', array_slice($ids, 0, 5)) . (count($ids) > 5 ? '…' : '');
+    }
+
     /** @param array{tablas: list<array<string, mixed>>, ventas_fecha_distinta: list<array<string, mixed>>} $base */
     private function imprimir(string $titulo, array $base): int
     {
@@ -116,15 +122,22 @@ class DiagnosticarZonasFecha extends Command
             if ($t['total'] === 0 && ! $this->option('todas')) {
                 continue;
             }
-            $contra = count($t['contradicciones']);
-            $mixta = $t['esperada'] === CatalogoZonasFecha::MIXTA;
-            $estado = $contra > 0 ? 'REVISAR' : ($mixta && $t['LIMA'] > 0 ? 'MIXTA' : 'ok');
-            $revisar += $contra > 0 ? 1 : 0;
-            $filas[] = [$t['tabla'], $t['esperada'], $t['total'], $t['LIMA'], $t['UTC'], $t['AMBIGUA'], $t['SIN_VECINO'],
-                $contra > 0 ? $contra . ' (ids ' . implode(',', array_slice($t['contradicciones'], 0, 5)) . ($contra > 5 ? '…' : '') . ')' : '—',
+            $enLima = count($t['a_corregir']);
+            $esLima = $t['esperada'] === CatalogoZonasFecha::LIMA;
+            $estado = match (true) {
+                $t['anomalias'] !== [] || $t['ambiguas'] !== [] => 'REVISAR',
+                $esLima => 'tabla Lima',
+                $enLima > 0 => 'filas Lima sueltas',
+                default => 'ok',
+            };
+            $revisar += $estado === 'REVISAR' ? 1 : 0;
+            $filas[] = [$t['tabla'], $t['esperada'], $t['total'], $t['LIMA'], $t['UTC'], $t['SIN_HUELLA'],
+                $enLima > 0 ? ($esLima ? $enLima : $enLima . ' (ids ' . self::ids($t['a_corregir']) . ')') : '—',
+                $t['ambiguas'] !== [] ? count($t['ambiguas']) . ' (ids ' . self::ids($t['ambiguas']) . ')' : '—',
+                $t['anomalias'] !== [] ? count($t['anomalias']) . ' (ids ' . self::ids($t['anomalias']) . ')' : '—',
                 $estado];
         }
-        $this->table(['Tabla', 'Esperada', 'Filas', 'Lima', 'UTC', 'Ambigua', 'Sin vecino', 'Contradicciones', 'Estado'], $filas);
+        $this->table(['Tabla', 'Esperada', 'Filas', 'Huella Lima', 'Huella UTC', 'Sin huella', 'En Lima (+5 h en F3)', 'Ambiguas', 'Anomalías', 'Estado'], $filas);
 
         $ventas = $base['ventas_fecha_distinta'];
         if ($ventas !== []) {
