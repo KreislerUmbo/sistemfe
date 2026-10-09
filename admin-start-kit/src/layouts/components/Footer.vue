@@ -10,9 +10,9 @@
                 {{ currentYear }}
                 Umbosystem
                 <span class="text-muted d-none d-sm-inline-block float-end">
-                  Crafted with
+                  Generamos confianza
                   <i class="iconoir-heart text-danger"></i>
-                  by {{ developedBy }}</span
+                   {{ developedBy }}</span
                 >
               </p>
             </b-card-body>
