@@ -201,7 +201,7 @@
             <div class="caja-anulado">
                 RECIBO ANULADO — Motivo: {{ $receipt->motivo_anulacion ?? '-' }}
                 @if ($receipt->anulado_en)
-                    — {{ $receipt->anulado_en->format('d/m/Y H:i') }}
+                    — {{ \App\Services\HoraPeru::deUtc($receipt->anulado_en)->format('d/m/Y H:i') }}
                 @endif
                 @if ($receipt->anuladoPor)
                     — {{ $receipt->anuladoPor->name }} {{ $receipt->anuladoPor->surname }}

@@ -71,10 +71,9 @@ class CommercialQuoteController extends Controller
         }
 
         if ($request->filled('start_date') && $request->filled('end_date')) {
-            $query->whereBetween('created_at', [
-                $request->start_date . ' 00:00:00',
-                $request->end_date . ' 23:59:59',
-            ]);
+            // created_at se guarda en UTC; el rango son días de Perú.
+            $query->where('created_at', '>=', \App\Services\HoraPeru::inicioDiaUtc($request->start_date))
+                ->where('created_at', '<', \App\Services\HoraPeru::finDiaUtc($request->end_date));
         }
 
         $cotizaciones = $query->paginate(25);
@@ -384,7 +383,7 @@ class CommercialQuoteController extends Controller
             'currency'   => $q->currency,
             'valid_until' => $q->valid_until?->format('Y-m-d'),
             'converted_sale_id' => $q->converted_sale_id,
-            'created_at' => $q->created_at?->format('Y-m-d H:i:s'),
+            'created_at' => \App\Services\HoraPeru::deUtc($q->created_at)?->format('Y-m-d H:i:s'),
         ];
     }
 
@@ -395,7 +394,7 @@ class CommercialQuoteController extends Controller
             'discount_global' => (float) $q->discount_global,
             'subtotal' => (float) $q->subtotal,
             'observacion' => $q->observacion,
-            'converted_at' => $q->converted_at?->format('Y-m-d H:i:s'),
+            'converted_at' => \App\Services\HoraPeru::deUtc($q->converted_at)?->format('Y-m-d H:i:s'),
             'converted_sale' => $q->convertedSale ? [
                 'id' => $q->convertedSale->id,
                 'n_operacion' => $q->convertedSale->n_operacion,

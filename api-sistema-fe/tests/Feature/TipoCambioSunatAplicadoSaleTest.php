@@ -113,7 +113,7 @@ class TipoCambioSunatAplicadoSaleTest extends TestCase
     public function test_venta_en_usd_con_dato_disponible_setea_el_snapshot(): void
     {
         DB::connection('central')->table('tipo_cambio_sunat')->insert([
-            'fecha' => now()->toDateString(), 'compra' => 3.70, 'venta' => 3.705,
+            'fecha' => \App\Services\HoraPeru::hoyTexto(), 'compra' => 3.70, 'venta' => 3.705,
             'fuente' => 'decolecta', 'consultado_en' => now(), 'created_at' => now(), 'updated_at' => now(),
         ]);
 

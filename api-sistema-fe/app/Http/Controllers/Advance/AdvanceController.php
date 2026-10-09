@@ -89,12 +89,13 @@ class AdvanceController extends Controller
             $query->where('status', $request->status);
         }
 
+        // created_at se guarda en UTC; las fechas del filtro son días de Perú.
         if ($request->filled('fecha_desde')) {
-            $query->whereDate('created_at', '>=', $request->fecha_desde);
+            $query->where('created_at', '>=', \App\Services\HoraPeru::inicioDiaUtc($request->fecha_desde));
         }
 
         if ($request->filled('fecha_hasta')) {
-            $query->whereDate('created_at', '<=', $request->fecha_hasta);
+            $query->where('created_at', '<', \App\Services\HoraPeru::finDiaUtc($request->fecha_hasta));
         }
 
         $adelantos = $query->orderBy('id', 'desc')->paginate(25);

@@ -26,16 +26,4 @@ class PaymentMethod extends Model
         "is_active" => "boolean",
         "affects_cash_count" => "boolean",
     ];
-
-    public function setCreatedAtAttribute($value)
-    {
-        date_default_timezone_set('America/Lima');
-        $this->attributes["created_at"] = Carbon::now();
-    }
-
-    public function setUpdatedAtAttribute($value)
-    {
-        date_default_timezone_set("America/Lima");
-        $this->attributes["updated_at"] = Carbon::now();
-    }
 }

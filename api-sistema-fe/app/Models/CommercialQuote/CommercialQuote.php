@@ -44,19 +44,6 @@ class CommercialQuote extends Model
         "observacion",
     ];
 
-    // ── Timestamps en zona Lima (mismo patrón que Sale/Advance) ─────────
-    public function setCreatedAtAttribute($value)
-    {
-        date_default_timezone_set('America/Lima');
-        $this->attributes["created_at"] = Carbon::now();
-    }
-
-    public function setUpdatedAtAttribute($value)
-    {
-        date_default_timezone_set("America/Lima");
-        $this->attributes["updated_at"] = Carbon::now();
-    }
-
     // ── Relaciones ───────────────────────────────────────────────────────
     public function items()
     {

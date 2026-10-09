@@ -143,7 +143,7 @@ class ReservaFacturacionTest extends TestCase
             'serie' => $serieTexto,
             'correlativo_actual' => 0,
             'correlativo_inicial' => 1,
-            'fecha_inicio' => now()->format('Y-m-d'),
+            'fecha_inicio' => \App\Services\HoraPeru::hoyTexto(),
             'activo' => true,
         ]);
 
@@ -163,7 +163,7 @@ class ReservaFacturacionTest extends TestCase
             'serie' => $serieTexto,
             'correlativo_actual' => 0,
             'correlativo_inicial' => 1,
-            'fecha_inicio' => now()->format('Y-m-d'),
+            'fecha_inicio' => \App\Services\HoraPeru::hoyTexto(),
             'activo' => true,
         ]);
     }
@@ -183,7 +183,7 @@ class ReservaFacturacionTest extends TestCase
             'serie' => $serieTexto,
             'correlativo_actual' => 0,
             'correlativo_inicial' => 1,
-            'fecha_inicio' => now()->format('Y-m-d'),
+            'fecha_inicio' => \App\Services\HoraPeru::hoyTexto(),
             'activo' => true,
         ]);
     }
@@ -817,7 +817,7 @@ class ReservaFacturacionTest extends TestCase
         $this->usuarioConPermisos($branch->id, ['emitir_factura']);
 
         TipoCambioSunat::create([
-            'fecha' => now()->toDateString(), 'compra' => 3.70, 'venta' => 3.80,
+            'fecha' => \App\Services\HoraPeru::hoyTexto(), 'compra' => 3.70, 'venta' => 3.80,
             'fuente' => 'e-api', 'consultado_en' => now(),
         ]);
 

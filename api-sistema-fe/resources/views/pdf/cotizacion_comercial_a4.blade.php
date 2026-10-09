@@ -251,7 +251,7 @@
                     <table class="info-grid">
                         <tr>
                             <td style="width:110px;">FECHA</td>
-                            <td>: {{ $cotizacion->created_at->format('d/m/Y') }}</td>
+                            <td>: {{ \App\Services\HoraPeru::deUtc($cotizacion->created_at)?->format('d/m/Y') }}</td>
                         </tr>
                         <tr>
                             <td>VÁLIDA HASTA</td>

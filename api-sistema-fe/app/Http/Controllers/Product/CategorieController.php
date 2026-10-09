@@ -30,7 +30,7 @@ class CategorieController extends Controller
                     'title' => $categorie->title,
                     'imagen' => StorageUrl::resolve($categorie->imagen),
                     'state' => $categorie->state,
-                    'created_at' => $categorie->created_at->format('d-m-Y' .' | '. 'H:i:s'),
+                    'created_at' => \App\Services\HoraPeru::deUtc($categorie->created_at)?->format('d-m-Y | H:i:s'),
                 ];
             })
         ]);

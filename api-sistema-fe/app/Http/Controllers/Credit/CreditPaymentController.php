@@ -498,7 +498,6 @@ class CreditPaymentController extends Controller
                 $client->save();
             }
 
-            date_default_timezone_set('America/Lima');
             $receiptLock->estado = 'anulado';
             $receiptLock->motivo_anulacion = $request->motivo_anulacion;
             $receiptLock->anulado_por = auth('api')->id();

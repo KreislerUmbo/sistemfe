@@ -17,6 +17,9 @@ class ReglaFechasNegocioTest extends TestCase
         '/now\(\)->toDateString\(\)/' => 'now()->toDateString()',
         '/now\(\)->format\(\s*[\'"]Y-m(-d)?[\'"]\s*\)/' => "now()->format('Y-m[-d]')",
         '/new\s+\\\\?DateTime\(\s*\)/' => 'new DateTime()',
+        // Cambia la zona de PHP para el resto de la petición: fue la causa de los datos mezclados
+        // (mutadores de 27 modelos, quitados en la F2). Todo instante se guarda en UTC.
+        '/date_default_timezone_set\(/' => 'date_default_timezone_set()',
     ];
 
     // Excepciones justificadas: comparan contra columnas que se guardan en UTC.

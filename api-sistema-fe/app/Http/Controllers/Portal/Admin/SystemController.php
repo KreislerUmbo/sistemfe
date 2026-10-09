@@ -40,7 +40,7 @@ class SystemController extends Controller
                     'is_featured' => $system->is_featured,
                     'is_active' => $system->is_active,
                     'metadata' => $system->metadata,
-                    'created_at' => $system->created_at ? $system->created_at->format('d-m-Y | H:i:s') : null,
+                    'created_at' => \App\Services\HoraPeru::deUtc($system->created_at)?->format('d-m-Y | H:i:s'),
                 ];
             })
         ]);

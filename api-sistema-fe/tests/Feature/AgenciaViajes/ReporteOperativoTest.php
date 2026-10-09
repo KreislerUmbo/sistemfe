@@ -343,7 +343,7 @@ class ReporteOperativoTest extends TestCase
         $response = app(ReporteOperativoController::class)->index(new Request());
         $body = $response->getData(true);
 
-        $this->assertSame(now()->toDateString(), $body['fecha_desde']);
-        $this->assertSame(now()->toDateString(), $body['fecha_hasta']);
+        $this->assertSame(\App\Services\HoraPeru::hoyTexto(), $body['fecha_desde']);
+        $this->assertSame(\App\Services\HoraPeru::hoyTexto(), $body['fecha_hasta']);
     }
 }

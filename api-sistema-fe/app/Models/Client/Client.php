@@ -2,7 +2,6 @@
 
 namespace App\Models\Client;
 
-
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use App\Models\User;
 use Carbon\Carbon;
@@ -67,18 +66,6 @@ class Client extends Authenticatable implements JWTSubject
             'tenant_id' => tenant('id'),
         ];
     }
-    public function setCreatedAtAttribute($value)
-    {
-        date_default_timezone_set('America/Lima');
-        $this->attributes["created_at"] = Carbon::now();
-    }
-
-    public function setUpdatedAtAttribute($value)
-    {
-        date_default_timezone_set("America/Lima");
-        $this->attributes["updated_at"] = Carbon::now();
-    }
-
 
     public function user()
     {

@@ -21,18 +21,6 @@ class AdvanceApplication extends Model
         "amount_applied",  // alimenta PrepaidPayment/PaidAmount en el XML de esa venta
     ];
 
-    public function setCreatedAtAttribute($value)
-    {
-        date_default_timezone_set('America/Lima');
-        $this->attributes["created_at"] = Carbon::now();
-    }
-
-    public function setUpdatedAtAttribute($value)
-    {
-        date_default_timezone_set("America/Lima");
-        $this->attributes["updated_at"] = Carbon::now();
-    }
-
     public function advance()
     {
         return $this->belongsTo(Advance::class, "advance_id");

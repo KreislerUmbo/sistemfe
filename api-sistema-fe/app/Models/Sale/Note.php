@@ -99,19 +99,6 @@ class Note extends Model
         "sunat_sent_by_user_id",
     ];
 
-    // ── Timestamps en zona Lima (mismo patrón que Sale) ────────────────────
-    public function setCreatedAtAttribute($value)
-    {
-        date_default_timezone_set('America/Lima');
-        $this->attributes["created_at"] = Carbon::now();
-    }
-
-    public function setUpdatedAtAttribute($value)
-    {
-        date_default_timezone_set("America/Lima");
-        $this->attributes["updated_at"] = Carbon::now();
-    }
-
     // ── Relaciones ───────────────────────────────────────────────────────
     public function sale()
     {

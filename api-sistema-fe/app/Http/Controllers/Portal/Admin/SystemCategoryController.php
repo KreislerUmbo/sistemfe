@@ -32,7 +32,7 @@ class SystemCategoryController extends Controller
                     'imagen' => $categorie->imagen ? env('APP_URL') . 'storage/' . $categorie->imagen : null,
                     'state' => $categorie->state,
                     'display_order' => $categorie->display_order,
-                    'created_at' => $categorie->created_at? $categorie->created_at->format('d-m-Y | H:i:s'): null,
+                    'created_at' => \App\Services\HoraPeru::deUtc($categorie->created_at)?->format('d-m-Y | H:i:s'),
                 ];
             })
         ]);

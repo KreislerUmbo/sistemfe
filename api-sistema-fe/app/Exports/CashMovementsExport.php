@@ -49,7 +49,7 @@ class CashMovementsExport implements FromQuery, WithHeadings, WithMapping
     {
         return [
             $movimiento->id,
-            $movimiento->created_at?->format('Y-m-d H:i:s'),
+            \App\Services\HoraPeru::deUtc($movimiento->created_at)?->format('Y-m-d H:i:s'),   // UTC → hora de Perú
             $movimiento->cash_session_id,
             $movimiento->cashSession->cashRegister->branch->name ?? '',
             $movimiento->cashSession->cashRegister->name ?? '',

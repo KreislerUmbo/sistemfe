@@ -85,7 +85,7 @@ class TipoCambioAgenciaCalculadoraTest extends TestCase
         $tipoCambio = $response->getData(true)['tipo_cambio_agencia'];
         $this->assertEquals(3.42, (float) $tipoCambio['valor']);
         $this->assertSame($usuario->id, $tipoCambio['registrado_por']);
-        $this->assertSame(now()->toDateString(), substr($tipoCambio['fecha'], 0, 10));
+        $this->assertSame(\App\Services\HoraPeru::hoyTexto(), substr($tipoCambio['fecha'], 0, 10));
     }
 
     public function test_store_rechaza_valor_cero_o_negativo(): void

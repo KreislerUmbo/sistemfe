@@ -33,7 +33,7 @@ class TipoCambioAgenciaSugerenciaSunatTest extends TestCase
 
     public function test_devuelve_el_ultimo_valor_venta_disponible(): void
     {
-        TipoCambioSunat::create(['fecha' => now()->toDateString(), 'compra' => 3.70, 'venta' => 3.705, 'fuente' => 'decolecta', 'consultado_en' => now()]);
+        TipoCambioSunat::create(['fecha' => \App\Services\HoraPeru::hoyTexto(), 'compra' => 3.70, 'venta' => 3.705, 'fuente' => 'decolecta', 'consultado_en' => now()]);
 
         $respuesta = app(TipoCambioAgenciaController::class)->sugerenciaSunat();
 

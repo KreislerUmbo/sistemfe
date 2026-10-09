@@ -65,7 +65,7 @@ class BibliotecaCotizadorFiltrosTest extends TestCase
             'proveedor_servicio_id' => $proveedorServicio->id,
             'tipo_tarifa' => 'publica', 'modalidad' => 'privado', 'moneda' => 'PEN',
             'precio_costo' => 80, 'margen_tipo' => 'porcentaje', 'margen_valor' => 25,
-            'precio_venta_adulto' => 100, 'vigente_desde' => now()->toDateString(),
+            'precio_venta_adulto' => 100, 'vigente_desde' => \App\Services\HoraPeru::hoyTexto(),
             'tip_afe_igv' => '10', 'destino_tributario' => 'nacional',
         ]);
     }

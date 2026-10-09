@@ -4,9 +4,7 @@ namespace App\Models\AdminPortal;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Support\Carbon;
 use Stancl\Tenancy\Database\Concerns\CentralConnection;
-
 
 class System extends Model
 {
@@ -35,8 +33,6 @@ class System extends Model
         'rating_prom' => 'decimal:1',
     ];
 
-
-
     // Relaciones
     public function category()
     {
@@ -60,17 +56,5 @@ class System extends Model
     public function media()
     {
         // return $this->hasMany(SystemMedia::class);
-    }
-    // Mutators para zona horaria
-    public function setCreatedAtAttribute($value)
-    {
-        date_default_timezone_set('America/Lima');
-        $this->attributes['created_at'] = Carbon::now();
-    }
-
-    public function setUpdatedAtAttribute($value)
-    {
-        date_default_timezone_set('America/Lima');
-        $this->attributes['updated_at'] = Carbon::now();
     }
 }

@@ -352,7 +352,6 @@ class CreditInstallmentController extends Controller
                 // sale.saldo_pendiente NO cambia — el total sigue siendo el mismo.
             }
 
-            date_default_timezone_set('America/Lima');
             $cuotaLock->estado = 'anulada';
             $cuotaLock->motivo_anulacion = $request->motivo_anulacion;
             $cuotaLock->anulado_por = auth('api')->id();
