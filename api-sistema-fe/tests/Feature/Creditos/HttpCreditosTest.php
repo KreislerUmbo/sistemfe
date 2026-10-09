@@ -53,6 +53,7 @@ class HttpCreditosTest extends CreditosTestCase
             ['POST', 'api/creditos/{credito}/castigar', 'creditos.castigar'],
             ['POST', 'api/creditos/{credito}/revertir-castigo', 'creditos.castigar'],
             ['POST', 'api/creditos/{credito}/autorizaciones', 'creditos.autorizar_excepcion'],
+            ['POST', 'api/creditos/{credito}/cambiar-asesor', 'creditos.cartera.asignar'],
             ['POST', 'api/creditos/{credito}/pagos/cotizar', 'creditos.cobrar'],
             ['POST', 'api/creditos/{credito}/pagos', 'creditos.cobrar'],
             ['PATCH', 'api/creditos/{credito}/pagos/{pago}', 'creditos.cobrar'],
@@ -78,6 +79,7 @@ class HttpCreditosTest extends CreditosTestCase
             ['POST', 'api/clientes/{cliente}/ficha-credito/archivos', 'creditos.crear'],
             ['PUT', 'api/clientes/{cliente}/cartera', 'creditos.cartera.asignar'],
             ['PUT', 'api/clientes/{cliente}/limites-credito', 'creditos.configurar'],
+            ['POST', 'api/clientes/{cliente}/saldo-a-favor/{movimiento}/anular', 'creditos.cobrar'],
         ];
 
         return array_combine(array_map(static fn (array $f): string => "{$f[0]} {$f[1]}", $filas), $filas);

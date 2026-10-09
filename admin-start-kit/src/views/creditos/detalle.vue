@@ -37,6 +37,9 @@
 
               <table class="table table-sm table-borderless small mb-0">
                 <tbody>
+                  <tr v-if="credito.estado !== 'borrador'">
+                    <td class="text-muted ps-0">Asesor</td><td class="text-end pe-0">{{ credito.asesor?.nombre ?? 'Sin asesor' }}</td>
+                  </tr>
                   <tr><td class="text-muted ps-0">Prestado</td><td class="text-end pe-0">{{ formatoSoles(credito.monto_capital) }}</td></tr>
                   <tr><td class="text-muted ps-0">Interés</td><td class="text-end pe-0">{{ formatoSoles(credito.interes_total) }}</td></tr>
                   <tr><td class="text-muted ps-0">Pagado</td><td class="text-end pe-0">{{ formatoSoles(resumen.total_pagado) }}</td></tr>
@@ -104,6 +107,7 @@
       <DialogoCorregir v-model="dialogo.corregir" :credito="credito" :metodos-pago="metodosPago" @hecho="alTerminar('Crédito corregido')" />
       <DialogoRenovar v-model="dialogo.renovar" :credito="credito" :metodos-pago="metodosPago" :puede-autorizar="puede('creditos.autorizar_excepcion')"
         @hecho="irAlRenovado" />
+      <DialogoCambiarAsesor v-model="dialogo.cambiarAsesor" :credito-id="credito.id" :actual="credito.asesor ?? null" @hecho="alTerminar('Asesor cambiado')" />
       <DialogoMotivo v-model="dialogo.motivo" v-bind="motivoActual" @hecho="alTerminar(motivoActual.exito)" />
       <DialogoEditarPago v-model="dialogo.editarPago" :credito-id="credito.id" :pago="pagoElegido" @hecho="alTerminar('Pago actualizado')" />
     </template>
@@ -131,6 +135,7 @@ import DialogoCondonar from '@/components/Creditos/DialogoCondonar.vue'
 import DialogoCorregir from '@/components/Creditos/DialogoCorregir.vue'
 import DialogoRenovar from '@/components/Creditos/DialogoRenovar.vue'
 import DialogoMotivo from '@/components/Creditos/DialogoMotivo.vue'
+import DialogoCambiarAsesor from '@/components/Creditos/DialogoCambiarAsesor.vue'
 import DialogoEditarPago from '@/components/Creditos/DialogoEditarPago.vue'
 import { creditoService } from '@/services/admin/creditoService'
 import { useCreditosCatalogosStore } from '@/stores/creditosCatalogos'
@@ -165,7 +170,7 @@ const cargando = ref(true)
 const errorCarga = ref<ErrorCredito | null>(null)
 const pestana = ref<(typeof PESTANAS)[number]['id']>('cuotas')
 const pagoElegido = ref<Pago | null>(null)
-const dialogo = reactive({ cobrar: false, liquidar: false, reprogramar: false, condonar: false, corregir: false, renovar: false, motivo: false, editarPago: false })
+const dialogo = reactive({ cobrar: false, liquidar: false, reprogramar: false, condonar: false, corregir: false, renovar: false, motivo: false, editarPago: false, cambiarAsesor: false })
 const motivoActual = ref({ titulo: '', descripcion: '', textoConfirmar: 'Confirmar', variante: 'danger', exito: '', ejecutar: async (_m: string, _c: string): Promise<unknown> => undefined })
 
 /** ≥ 992 px: la ficha va en la columna derecha; debajo, en la pestaña "Cliente". */
@@ -246,6 +251,9 @@ function alAccionar(accion: IdAccion) {
     case 'corregir':
     case 'renovar':
       dialogo[accion] = true
+      break
+    case 'cambiar_asesor':
+      dialogo.cambiarAsesor = true
       break
     case 'anular':
       abrirMotivo({

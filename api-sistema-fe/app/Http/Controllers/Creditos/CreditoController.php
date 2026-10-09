@@ -115,6 +115,13 @@ class CreditoController extends ControllerCreditos
                     'cuota_id' => $q->cuota_id, 'fecha_anterior' => $q->fecha_anterior->format('Y-m-d'), 'fecha_nueva' => $q->fecha_nueva->format('Y-m-d'),
                 ])->values(),
             ])->values(),
+            // 08-oct-2026: cambios de asesor (auditoría), para el Historial.
+            'cambios_asesor' => \App\Models\Creditos\CreditoAuditoria::where('credito_id', $modelo->id)
+                ->where('accion', 'credito.cambiar_asesor')->orderBy('id')->get()
+                ->map(fn ($a) => [
+                    'fecha' => $a->created_at?->toIso8601String(), 'motivo' => $a->motivo,
+                    'de' => $a->antes['asesor'] ?? null, 'a' => $a->despues['asesor'] ?? null,
+                ])->values(),
             'total_pagado' => Dinero::aSoles($modelo->pagos->where('estado.value', 'valido')->sum(fn ($p) => Dinero::aCentavos($p->monto_aplicado))),
         ]);
     }

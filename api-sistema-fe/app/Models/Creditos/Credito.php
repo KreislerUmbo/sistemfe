@@ -174,6 +174,12 @@ class Credito extends Model
         return $this->hasMany(CreditoAutorizacion::class, 'credito_id');
     }
 
+    /** Quien colocó el crédito (04c); se cambia con "Cambiar asesor". */
+    public function asesor(): BelongsTo
+    {
+        return $this->belongsTo(\App\Models\User::class, 'asesor_id')->withTrashed();
+    }
+
     public function creditoRenovado(): BelongsTo
     {
         return $this->belongsTo(self::class, 'credito_renovado_id');

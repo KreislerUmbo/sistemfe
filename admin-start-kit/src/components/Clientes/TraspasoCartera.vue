@@ -2,8 +2,8 @@
   <DialogoBase v-model="abierto" titulo="Traspasar cartera" texto-confirmar="Traspasar" :procesando="procesando" :error="error"
     :deshabilitado="!valido" tamano="lg" @confirmar="traspasar">
     <p class="small text-muted mb-3">
-      Mueve todos los clientes de un usuario (que se va o cambia de zona) a otro. Queda en el historial de cada cliente;
-      los créditos ya entregados conservan a quien los colocó.
+      Mueve todos los clientes de un usuario (que se va o cambia de zona) a otro. Queda en el historial de cada cliente.
+      Los créditos ya entregados conservan a quien los colocó, salvo que marques pasarlos también.
     </p>
     <div v-if="cargando" class="small text-muted"><span class="spinner-border spinner-border-sm me-2"></span>Cargando…</div>
     <div v-else class="row g-3">
@@ -12,7 +12,7 @@
         <select id="tr-desde" v-model="desde" class="form-select form-select-sm">
           <option :value="null" disabled>Elige quién entrega la cartera</option>
           <option v-for="t in titulares" :key="t.id" :value="t.id">
-            {{ t.nombre }}{{ t.eliminado ? ' (eliminado)' : !t.activo ? ' (inactivo)' : '' }} · {{ Math.max(t.asesor, t.cobrador) }} cliente(s)
+            {{ t.nombre }}{{ t.eliminado ? ' (eliminado)' : !t.activo ? ' (inactivo)' : '' }} · {{ Math.max(t.asesor, t.cobrador) }} cliente(s){{ t.creditos ? ` · ${t.creditos} crédito(s)` : '' }}
           </option>
         </select>
         <small v-if="!titulares.length" class="text-muted">Nadie tiene clientes asignados todavía.</small>
@@ -33,10 +33,20 @@
           </template>
         </div>
       </div>
+      <div v-if="seleccionado && seleccionado.creditos > 0 && pasaAsesor" class="col-12">
+        <div class="form-check mb-1">
+          <input id="tr-creditos" v-model="conCreditos" class="form-check-input" type="checkbox" />
+          <label class="form-check-label small" for="tr-creditos">
+            Pasar también sus <b>{{ seleccionado.creditos }}</b> crédito(s) activos o castigados (quién los colocó)
+          </label>
+        </div>
+        <input v-if="conCreditos" v-model="motivoCreditos" type="text" class="form-control form-control-sm" maxlength="500"
+          placeholder="Motivo (obligatorio). Ej.: los registró soporte a nombre de la asesora" aria-label="Motivo para pasar los créditos" />
+      </div>
       <div v-if="seleccionado" class="col-12">
         <div class="alert alert-info py-2 small mb-0">
-          Se moverán <b>{{ cantidad }}</b> cliente(s) de {{ seleccionado.nombre }}
-          a {{ destinos.find((u) => u.id === hacia)?.nombre ?? '…' }}.
+          Se moverán <b>{{ cantidad }}</b> cliente(s)<template v-if="conCreditos"> y <b>{{ seleccionado.creditos }}</b> crédito(s)</template>
+          de {{ seleccionado.nombre }} a {{ destinos.find((u) => u.id === hacia)?.nombre ?? '…' }}.
         </div>
       </div>
     </div>
@@ -77,6 +87,8 @@ const asesorCobra = ref(true)
 const desde = ref<number | null>(null)
 const hacia = ref<number | null>(null)
 const funciones = ref<Funciones>('ambas')
+const conCreditos = ref(false)
+const motivoCreditos = ref('')
 
 const seleccionado = computed(() => titulares.value.find((t) => t.id === desde.value) ?? null)
 // Quien recibe necesita el permiso de lo que se traspasa; el que entrega no puede recibir.
@@ -88,13 +100,20 @@ const cantidad = computed(() => {
   if (asesorCobra.value || funciones.value === 'ambas') return Math.max(t.asesor, t.cobrador)
   return funciones.value === 'asesor' ? t.asesor : t.cobrador
 })
-const valido = computed(() => desde.value !== null && hacia.value !== null && cantidad.value > 0)
+// Los créditos van con la función de asesor (quien coloca).
+const pasaAsesor = computed(() => asesorCobra.value || funciones.value !== 'cobrador')
+const llevaCreditos = computed(() => conCreditos.value && pasaAsesor.value && (seleccionado.value?.creditos ?? 0) > 0)
+const valido = computed(() => desde.value !== null && hacia.value !== null
+  && (cantidad.value > 0 || llevaCreditos.value)
+  && (!llevaCreditos.value || motivoCreditos.value.trim() !== ''))
 
 watch(abierto, async (visible) => {
   if (!visible) return
   desde.value = null
   hacia.value = null
   funciones.value = 'ambas'
+  conCreditos.value = false
+  motivoCreditos.value = ''
   error.value = null
   cargando.value = true
   try {
@@ -116,12 +135,13 @@ async function traspasar() {
   procesando.value = true
   error.value = null
   try {
-    const { clientes } = await creditoService.traspasarCartera({
+    const { clientes, creditos } = await creditoService.traspasarCartera({
       desde_usuario_id: desde.value, hacia_usuario_id: hacia.value, funciones: asesorCobra.value ? 'ambas' : funciones.value,
+      con_creditos: llevaCreditos.value, motivo_creditos: llevaCreditos.value ? motivoCreditos.value.trim() : null,
     }, clave.value)
     renovar()
     abierto.value = false
-    toast.success(`Se traspasaron ${clientes} cliente(s)`)
+    toast.success(`Se traspasaron ${clientes} cliente(s)${creditos ? ` y ${creditos} crédito(s)` : ''}`)
     emit('hecho')
   } catch (e) {
     error.value = interpretarErrorCredito(e)

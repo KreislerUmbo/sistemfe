@@ -123,6 +123,7 @@ monto_liquidacion = capital pendiente + interes_final − interés ya cobrado + 
 | Anular propio pago con su caja abierta | ✓ | ✓ | ✓ |
 | Anular cualquiera, corregir, reprogramar, condonar, castigar, migrar, pago retroactivo, autorizar excepción, configurar | ✓ | — | — |
 - Roles sembrados al crear el tenant: Administrador de créditos, Cajero de créditos, **Asesor de créditos** (04c.1: registra a sus clientes, coloca y cobra; sin `ver_todos`), Cobrador. En el giro créditos no se siembran los roles retail, y el alta crea "Caja Principal". 16 permisos `creditos.*` (incluye `creditos.ver_todos`: sin él, solo se ve la cartera asignada).
+- **Asesor del crédito** (`creditos.asesor_id`, quién lo colocó; base del reporte "Por asesor"): se fija al activar y es independiente de la cartera del cliente. **Cambiar asesor** (08-oct-2026): con `creditos.cartera.asignar` y motivo, solo en créditos activos o castigados (un finalizado o anulado no se toca: cambiaría reportes de períodos pasados), auditado (`credito.cambiar_asesor`, visible en el Historial). Uno por uno desde el detalle ("Más") o en bloque desde "Traspasar cartera" con la casilla "Pasar también sus créditos" (también para quien solo colocó créditos sin clientes asignados, p. ej. soporte).
 - Cobradores/cartera/caja del cobrador: módulo `creditos_cobradores` (fase 8). v1 solo online; `clave_idempotencia` en toda escritura.
 
 ## 2. Modelo de datos (implementado, commit `675e320`)

@@ -9,7 +9,9 @@ use App\Enums\Creditos\ModoAsignacionCartera;
 use App\Enums\Creditos\RequisitoFicha;
 use App\Enums\Creditos\TipoArchivoCliente;
 use App\Models\Client\Client;
+use App\Enums\Creditos\CreditoEstado;
 use App\Models\Creditos\CarteraAsignacion;
+use App\Models\Creditos\Credito;
 use App\Models\Creditos\CreditoClienteArchivo;
 use App\Models\Creditos\CreditoClienteFicha;
 use App\Models\Creditos\CreditoClienteLimite;
@@ -35,6 +37,8 @@ class ClienteCreditoService
     private const PERMISO_COBRAR = 'creditos.cobrar';
     private const PERMISO_COLOCAR = 'creditos.crear';
     private const PERMISO_ASIGNAR = 'creditos.cartera.asignar';
+    /** Estados en que se puede cambiar el asesor de un crédito (08-oct-2026). */
+    private const ESTADOS_CAMBIO_ASESOR = [CreditoEstado::Activo, CreditoEstado::Castigado];
     /** users.state: 1 = activo, 2 = inactivo (pantalla de Usuarios). */
     private const USUARIO_INACTIVO = 2;
 
@@ -203,9 +207,14 @@ class ClienteCreditoService
     {
         $conteos = CarteraAsignacion::vigentes()->where('tipo', ModoAsignacionCartera::Cliente)
             ->selectRaw('usuario_id, funcion, count(*) as total')->groupBy('usuario_id', 'funcion')->get();
-        $usuarios = User::withTrashed()->whereIn('id', $conteos->pluck('usuario_id')->unique())->get(['id', 'name', 'state', 'deleted_at'])->keyBy('id');
+        // 08-oct-2026: también quien solo colocó créditos (p. ej. soporte), para pasarlos a otro asesor.
+        $creditos = Credito::whereNotNull('asesor_id')->whereIn('estado', self::ESTADOS_CAMBIO_ASESOR)
+            ->selectRaw('asesor_id, count(*) as total')->groupBy('asesor_id')->pluck('total', 'asesor_id');
+        $ids = $conteos->pluck('usuario_id')->merge($creditos->keys())->map(static fn ($id): int => (int) $id)->unique();
+        $usuarios = User::withTrashed()->whereIn('id', $ids)->get(['id', 'name', 'state', 'deleted_at'])->keyBy('id');
+        $porUsuario = $conteos->groupBy('usuario_id');
 
-        return $conteos->groupBy('usuario_id')->map(function ($filas, $id) use ($usuarios): array {
+        return $ids->mapWithKeys(fn (int $id): array => [$id => $porUsuario[$id] ?? collect()])->map(function ($filas, $id) use ($usuarios, $creditos): array {
             $u = $usuarios[$id] ?? null;
             $total = static fn (FuncionCartera $f): int => (int) ($filas->first(static fn ($x) => ($x->funcion instanceof FuncionCartera ? $x->funcion : FuncionCartera::from($x->funcion)) === $f)?->total ?? 0);
 
@@ -216,6 +225,7 @@ class ClienteCreditoService
                 'eliminado' => $u === null || $u->trashed(),
                 'asesor' => $total(FuncionCartera::Asesor),
                 'cobrador' => $total(FuncionCartera::Cobrador),
+                'creditos' => (int) ($creditos[$id] ?? 0),
             ];
         })->sortBy('nombre')->values()->all();
     }
@@ -281,6 +291,70 @@ class ClienteCreditoService
 
             return $clientes->count();
         });
+    }
+
+    /**
+     * Cambia quién figura como asesor (quién colocó) de un crédito activo o castigado (08-oct-2026):
+     * p. ej. créditos registrados por soporte a nombre de la asesora. Uno finalizado o anulado no se
+     * toca: cambiaría reportes y comisiones de períodos pasados. Auditado con motivo.
+     */
+    public function cambiarAsesor(Credito $credito, User $nuevo, string $motivo, User $usuario): Credito
+    {
+        if (! $this->puedeSerAsesor($nuevo) || (int) $nuevo->state === self::USUARIO_INACTIVO) {
+            throw new HttpException(422, 'El usuario elegido no puede ser asesor: necesita estar activo y tener permiso para registrar créditos.');
+        }
+
+        return DB::transaction(function () use ($credito, $nuevo, $motivo, $usuario): Credito {
+            $credito = Credito::whereKey($credito->id)->lockForUpdate()->firstOrFail();
+            if (! in_array($credito->estado, self::ESTADOS_CAMBIO_ASESOR, true)) {
+                throw new HttpException(422, 'Solo se cambia el asesor de un crédito activo o castigado.');
+            }
+            if ($credito->asesor_id === $nuevo->id) {
+                throw new HttpException(422, 'Ese usuario ya es el asesor de este crédito.');
+            }
+            $this->registrarCambioAsesor($credito, $nuevo, $motivo, $usuario);
+
+            return $credito->refresh();
+        });
+    }
+
+    /**
+     * En bloque, desde "Traspasar cartera": los créditos activos y castigados que colocó un usuario
+     * pasan a otro, cada uno auditado. Quien llama ya validó que el que recibe puede ser asesor.
+     *
+     * @return int créditos cambiados
+     */
+    public function cambiarAsesorDeCreditos(int $desdeId, User $hacia, string $motivo, User $usuario): int
+    {
+        $creditos = Credito::where('asesor_id', $desdeId)->whereIn('estado', self::ESTADOS_CAMBIO_ASESOR)
+            ->orderBy('id')->lockForUpdate()->get();
+        foreach ($creditos as $credito) {
+            $this->registrarCambioAsesor($credito, $hacia, $motivo, $usuario);
+        }
+
+        return $creditos->count();
+    }
+
+    /** Créditos activos o castigados que colocó el usuario (para el traspaso). */
+    public function creditosColocados(int $usuarioId): int
+    {
+        return Credito::where('asesor_id', $usuarioId)->whereIn('estado', self::ESTADOS_CAMBIO_ASESOR)->count();
+    }
+
+    public function validarAsesor(User $usuario): void
+    {
+        if (! $this->puedeSerAsesor($usuario)) {
+            throw new HttpException(422, 'El usuario que recibe no tiene permiso para registrar créditos.');
+        }
+    }
+
+    private function registrarCambioAsesor(Credito $credito, User $nuevo, string $motivo, User $usuario): void
+    {
+        $anterior = $credito->asesor_id === null ? null : User::withTrashed()->find($credito->asesor_id);
+        $credito->update(['asesor_id' => $nuevo->id]);
+        $this->auditoria->registrar('credito.cambiar_asesor', $credito, $credito->id,
+            ['asesor_id' => $anterior?->id, 'asesor' => $anterior?->name],
+            ['asesor_id' => $nuevo->id, 'asesor' => $nuevo->name], $motivo, $usuario);
     }
 
     /** @param array{max_creditos_activos: int|null, deuda_maxima: string|null, bloqueado: bool, motivo_bloqueo: string|null} $datos */

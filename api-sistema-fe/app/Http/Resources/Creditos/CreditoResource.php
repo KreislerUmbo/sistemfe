@@ -43,6 +43,7 @@ class CreditoResource extends JsonResource
             'tasa_interes_minimo' => $this->tasa_interes_minimo,
             'cobra_mora' => $this->cobra_mora,
             'asesor_id' => $this->asesor_id,
+            'asesor' => $this->whenLoaded('asesor', fn (): ?array => $this->asesor ? ['id' => $this->asesor->id, 'nombre' => $this->asesor->name] : null),
             'dias_gracia' => $this->dias_gracia,
             'tope_mora_tipo' => $this->tope_mora_tipo->value,
             'tope_mora_valor' => $this->tope_mora_valor,

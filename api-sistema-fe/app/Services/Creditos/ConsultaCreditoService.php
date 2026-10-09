@@ -96,7 +96,7 @@ class ConsultaCreditoService
         if ($creditos->isEmpty()) {
             return [];
         }
-        $creditos->load('cliente');
+        $creditos->load(['cliente', 'asesor:id,name']);
         $cargas = $this->cargador->cargarVarios($creditos);
         $hoy = $this->reloj->hoy();
 

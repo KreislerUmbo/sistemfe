@@ -124,6 +124,14 @@ describe('accionesDisponibles', () => {
     expect(accionesDisponibles('finalizado', todo, true)).toEqual([])
   })
 
+  it('cambiar asesor: con creditos.cartera.asignar, solo activo o castigado', () => {
+    const asigna = (p: string) => p === 'creditos.cartera.asignar'
+    expect(accionesDisponibles('activo', asigna, true)).toEqual(['cambiar_asesor'])
+    expect(accionesDisponibles('castigado', asigna, true)).toEqual(['cambiar_asesor'])
+    expect(accionesDisponibles('borrador', asigna, false)).toEqual([])
+    expect(accionesDisponibles('activo', (p) => p === 'creditos.crear', true)).not.toContain('cambiar_asesor')
+  })
+
   it('anular pago: propio o con creditos.anular_pago', () => {
     const cajero = (p: string) => p === 'creditos.cobrar'
     expect(puedeAnularPago(7, 7, cajero)).toBe(true)
