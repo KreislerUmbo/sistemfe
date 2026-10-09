@@ -5,46 +5,7 @@
     <meta charset="utf-8">
     <title>Cotización {{ $cotizacion->codigo }} - {{ $alternativa->nombre }}</title>
     <style>
-        @page {
-            /* Hallazgo del usuario (06-sep-2026) — el margen top/bottom
-               reserva exactamente el alto del header/footer FIJO (ver
-               AlternativaController::alturaHeaderMm()/alturaFooterMm()),
-               para que el contenido normal nunca se superponga con la
-               banda fija. */
-            margin: {{ $alturaHeaderMm }}mm 12mm {{ $alturaFooterMm }}mm 12mm;
-        }
-
-        /* ── Header/footer FIJOS (hoja membretada real) ────────────
-           position:fixed dentro del margen de @page se repite en CADA
-           página en DomPDF (misma técnica ya usada en
-           reporte-operativo.blade.php, ".marca-generacion"). Offset
-           lateral negativo = bleed hasta el borde físico de la hoja,
-           igual que el membrete real de la agencia (sin franja blanca
-           a los costados). */
-        .header-fijo {
-            position: fixed;
-            top: -{{ $alturaHeaderMm }}mm;
-            left: -12mm;
-            right: -12mm;
-        }
-
-        .footer-fijo {
-            position: fixed;
-            bottom: -{{ $alturaFooterMm }}mm;
-            left: -12mm;
-            right: -12mm;
-        }
-
-        .header-fijo img,
-        .footer-fijo img {
-            width: 100%;
-            display: block;
-        }
-
-        .header-fijo .header-generado,
-        .footer-fijo .footer-generado {
-            padding: 0 12mm;
-        }
+        @include('pdf.agencia-viajes.partials.membrete-estilos')
 
         * {
             box-sizing: border-box;
@@ -73,34 +34,6 @@
         .documento {
             border: 1px solid #999999;
             padding: 24px;
-        }
-
-        /* ── Header ─────────────────────────────────────────────── */
-        .header-wrap {
-            border-bottom: 1px solid #111111;
-            padding-bottom: 16px;
-        }
-
-        .logo-box {
-            width: 170px;
-            height: 70px;
-            border: 1px dashed #cccccc;
-            text-align: center;
-            color: #999999;
-            font-size: 11px;
-            padding-top: 28px;
-        }
-
-        .empresa-nombre {
-            font-family: 'Poppins-SemiBold', 'Poppins', sans-serif;
-            font-weight: bold;
-            font-size: 14px;
-            text-transform: uppercase;
-        }
-
-        .empresa-datos {
-            font-size: 12px;
-            line-height: 1.5;
         }
 
         .titulo-doc {
@@ -442,32 +375,6 @@
             border-bottom: 1px solid #eeeeee;
         }
 
-        /* ── Footer ─────────────────────────────────────────────── */
-        .footer-legal {
-            margin-top: 18px;
-            border: 1px solid #999999;
-            padding: 10px 14px;
-            font-size: 11px;
-            line-height: 1.6;
-            text-align: center;
-            color: #444444;
-        }
-
-        .afiliaciones-franja {
-            margin-top: 8px;
-            padding-top: 6px;
-            border-top: 1px solid #cccccc;
-            font-size: 9px;
-            color: #666666;
-            text-align: center;
-        }
-
-        .afiliaciones-franja img {
-            max-height: 24px;
-            margin: 0 6px;
-            vertical-align: middle;
-        }
-
         .portada-bloque {
             margin: 12px 0;
         }
@@ -562,75 +469,11 @@
             margin-top: 3px;
         }
 
-        .footer-marca {
-            margin-top: 14px;
-            text-align: center;
-            font-size: 10px;
-            color: #666666;
-        }
-
-        .footer-marca .eslogan {
-            font-style: italic;
-            margin-bottom: 2px;
-        }
     </style>
 </head>
 
 <body>
-    {{-- ══════════════════ HEADER FIJO ══════════════════ --}}
-    {{-- Hallazgo del usuario (06-sep-2026): antes vivía DENTRO de
-         .documento como contenido normal — subía/bajaba con el flujo en
-         vez de quedar fijo como una hoja membretada real. Ahora es
-         hermano de .documento, con position:fixed (ver CSS arriba), y se
-         repite en cada página automáticamente (motor de DomPDF). --}}
-    <div class="header-fijo">
-        {{-- Override total (plan §4.2): si la agencia cargó su propio
-             membrete diseñado (ej. DKM Xplore), se usa tal cual a ancho
-             completo y se ignoran logo/colores/contacto de abajo para esta
-             zona. Sin override, se genera desde Company + configPdf. --}}
-        @if (!empty($headerCustomUrl))
-            <img src="{{ $headerCustomUrl }}">
-        @else
-            <div class="header-generado">
-                <table style="width:100%;" class="header-wrap">
-                    <tr>
-                        <td style="width:170px; vertical-align:top;">
-                            @if (!empty($logoUrl))
-                                <img src="{{ $logoUrl }}" style="max-width:170px; max-height:70px;">
-                            @else
-                                <div class="logo-box">LOGO</div>
-                            @endif
-                        </td>
-                        <td style="vertical-align:top; padding:0 16px;">
-                            <div class="empresa-nombre" style="color: {{ $configPdf->color_primario }};">{{ $empresa->razon_social_comercial ?? $empresa->razon_social ?? '' }}</div>
-                            <div class="empresa-datos">
-                                RUC: {{ $empresa->n_document ?? '-' }}<br>
-                                Teléfono: {{ $empresa->phone ?? '-' }} &nbsp;·&nbsp; Email: {{ $empresa->email ?? '-' }}
-                            </div>
-                            @if (!empty($configPdf->eslogan))
-                                <div class="empresa-datos" style="font-style: italic; color: {{ $configPdf->color_secundario }};">{{ $configPdf->eslogan }}</div>
-                            @endif
-                        </td>
-                    </tr>
-                </table>
-                {{-- Franja de afiliaciones (Mincetur/Apavit/PromPerú) — solo si
-                     mostrar_afiliaciones=true Y la agencia marcó al menos una
-                     (AlternativaController::afiliacionesParaMostrar()). Un
-                     catálogo sin logo_path cargado cae al nombre en texto. --}}
-                @if (count($afiliaciones) > 0)
-                    <div class="afiliaciones-franja">
-                        @foreach ($afiliaciones as $afiliacion)
-                            @if (!empty($afiliacion['logo']))
-                                <img src="{{ $afiliacion['logo'] }}">
-                            @else
-                                <strong>{{ $afiliacion['nombre'] }}</strong>
-                            @endif
-                        @endforeach
-                    </div>
-                @endif
-            </div>
-        @endif
-    </div>
+    @include('pdf.agencia-viajes.partials.membrete-header')
 
     <div class="documento">
 
@@ -1144,34 +987,7 @@
 
     </div>
 
-    {{-- ══════════════════ FOOTER FIJO ══════════════════ --}}
-    {{-- Hallazgo del usuario (06-sep-2026): mismo problema y mismo fix que
-         el header — position:fixed, hermano de .documento, se repite en
-         cada página. El aviso de condiciones generales queda SIEMPRE
-         visible (no es branding, es legal) con el padding normal de
-         12mm; el membrete custom o las redes sociales van debajo. --}}
-    <div class="footer-fijo">
-        <div class="footer-generado">
-            <div class="footer-legal">
-                Consultá las condiciones generales del servicio en el documento adjunto.
-            </div>
-        </div>
-
-        {{-- Override total (plan §4.2): mismo criterio que el header — si
-             hay footer_custom cargado, se usa tal cual (bleed) y se
-             ignoran las redes sociales de abajo. --}}
-        @if (!empty($footerCustomUrl))
-            <img src="{{ $footerCustomUrl }}" style="margin-top:4px;">
-        @elseif (!empty($configPdf->redes_sociales))
-            <div class="footer-generado">
-                <div class="footer-marca">
-                    @foreach ($configPdf->redes_sociales as $red)
-                        {{ ucfirst($red['red']) }}: {{ $red['usuario'] }}{{ !$loop->last ? ' &nbsp;·&nbsp; ' : '' }}
-                    @endforeach
-                </div>
-            </div>
-        @endif
-    </div>
+    @include('pdf.agencia-viajes.partials.membrete-footer', ['textoLegal' => 'Consultá las condiciones generales del servicio en el documento adjunto.'])
 </body>
 
 </html>

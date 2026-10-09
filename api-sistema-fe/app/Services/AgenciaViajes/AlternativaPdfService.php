@@ -3,16 +3,13 @@
 namespace App\Services\AgenciaViajes;
 
 use App\Http\Controllers\AgenciaViajes\ReservaController;
-use App\Models\AgenciaViajes\AfiliacionTurismo;
 use App\Models\AgenciaViajes\Alternativa;
 use App\Models\AgenciaViajes\AlternativaDestino;
 use App\Models\AgenciaViajes\AlternativaItem;
 use App\Models\AgenciaViajes\ConfiguracionAgenciaPdf;
 use App\Models\AgenciaViajes\OpcionHotel;
 use App\Models\AgenciaViajes\PaquetePlantilla;
-use App\Services\StorageUrl;
 use App\Services\TextoFormatoService;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 
 // Extraído de AlternativaController (09-sep-2026, auditoría de
@@ -40,29 +37,11 @@ class AlternativaPdfService
     // según origen_tipo/proveedor_tarifa_id/opcion_hotel_tarifa_id.
     private const ORDEN_TIPO_HABITACION = ['simple', 'matrimonial', 'doble', 'triple', 'familiar'];
 
-    // Hallazgo del usuario (06-sep-2026) — hoja membretada real: el
-    // header/footer debe quedar FIJO arriba/abajo de CADA página, no
-    // subir/bajar con el contenido. dompdf soporta esto con
-    // position:fixed dentro del margen reservado por @page (mismo truco
-    // ya usado en reporte-operativo.blade.php) — pero el margen de @page
-    // es un valor fijo en el CSS, así que hay que calcular acá cuánto
-    // alto reservar según lo que realmente se va a imprimir arriba/abajo.
-    //
-    // Con imagen custom: la agencia sube su membrete con la proporción
-    // que quiera (ver los 2 casos reales de DKM Xplore) — se mide el
-    // archivo real y se calcula qué alto le corresponde al ancho
-    // completo de la hoja A4 (el membrete hace bleed hasta el borde
-    // físico, ver ANCHO_PAGINA_A4_MM en alturaBandaCompletaMm()).
-    //
-    // Sin imagen custom: el header/footer generado desde
-    // ConfiguracionAgenciaPdf tiene un alto predecible (logo + 2 líneas
-    // de contacto, +eslogan, +franja de afiliaciones) — reserva fija por
-    // bloque presente, no medida en píxeles porque no hay ninguna imagen
-    // que medir.
-    private const ANCHO_PAGINA_A4_MM = 210.0;
-
-    public function __construct(private ImagenRecorteService $imagenRecorte)
-    {
+    public function __construct(
+        private ImagenRecorteService $imagenRecorte,
+        // Membrete compartido con las condiciones generales (09-oct-2026).
+        private MembreteAgenciaPdfService $membrete,
+    ) {
     }
 
     public function generar(string $id)
@@ -95,7 +74,6 @@ class AlternativaPdfService
         $this->validarGruposResueltos($alternativa);
 
         $config = \App\Models\AgenciaViajes\ConfiguracionAgencia::first();
-        $empresa = \App\Models\Company::first();
         $cuentasBancarias = \App\Models\AgenciaViajes\CuentaBancaria::where('activo', true)
             ->orderBy('orden')->orderBy('id')->get();
 
@@ -180,8 +158,11 @@ class AlternativaPdfService
         // — marca por agencia, fotos de portada/galería/hoteles, cinta de
         // categoría. Todo con defaults de sistema si el tenant no configuró
         // nada (§6 del plan): ConfiguracionAgenciaPdf::actual() nunca
-        // devuelve null.
-        $configPdf = ConfiguracionAgenciaPdf::actual();
+        // devuelve null. Membrete (logo, header/footer fijos, afiliaciones,
+        // alturas) compartido con las condiciones generales — ver
+        // MembreteAgenciaPdfService.
+        $membrete = $this->membrete->datos();
+        $configPdf = $membrete['configPdf'];
         $categoria = $this->resolverCategoriaAlternativa($alternativa);
         $colorCategoria = $this->colorPorCategoria($categoria, $configPdf);
         // Guardrail de diseño (18-sep-2026) — se quitó la "cinta de
@@ -195,20 +176,8 @@ class AlternativaPdfService
         // (acento angosto), donde su intensidad no compite con el
         // contenido.
         $colorCategoriaTinte = $this->tintClaro($colorCategoria);
-        $afiliaciones = $this->afiliacionesParaMostrar($configPdf);
         [$fotoPortadaPrincipal, $fotosPortadaSecundarias] = $this->fotosTourParaPdf($alternativa, $configPdf);
         $hotelesInfo = $this->hotelesInfoParaPdf($opcionesHoteles);
-
-        // Hallazgo del usuario (06-sep-2026, comparando contra el mockup
-        // aprobado): el header/footer custom (membrete real de la agencia)
-        // se imprimía como contenido normal — subía/bajaba con el flujo de
-        // la página en vez de quedar fijo arriba/abajo como una hoja
-        // membretada real. Fix: position:fixed dentro del margen de @page
-        // (misma técnica ya usada en reporte-operativo.blade.php,
-        // ".marca-generacion") — el alto reservado se calcula acá porque
-        // la imagen la sube la agencia con la proporción que quiera.
-        $alturaHeaderMm = $this->alturaHeaderMm($configPdf, $afiliaciones);
-        $alturaFooterMm = $this->alturaFooterMm($configPdf);
 
         // Pedido del usuario (06-sep-2026) — Poppins en vez de Arial. Se
         // registra ANTES de loadView(), no después: confirmado con el PDF
@@ -223,25 +192,14 @@ class AlternativaPdfService
         \App\Services\PdfFontService::registrarPoppins($pdf->getDomPDF());
 
         $pdf = $pdf->loadView('pdf.agencia-viajes.alternativa', [
+            // configPdf/empresa/logoUrl/headerCustomUrl/footerCustomUrl/
+            // afiliaciones/alturaHeaderMm/alturaFooterMm — ver
+            // MembreteAgenciaPdfService::datos().
+            ...$membrete,
             'alternativa' => $alternativa,
             'cotizacion' => $alternativa->cotizacion,
             'cliente' => $alternativa->cotizacion->cliente,
-            'empresa' => $empresa,
-            // resolveParaPdf(), no resolve() — DomPDF corre con
-            // enable_remote=false, así que la URL de resolve() (pensada
-            // para el navegador) nunca carga como imagen embebida acá
-            // dentro. Mismo bug ya corregido en SaleController/NotaController/
-            // PaymentReceiptController/CommercialQuoteController/
-            // ReporteOperativoController — quedaba pendiente acá a propósito
-            // (29-ago-2026).
-            'logoUrl' => \App\Services\StorageUrl::resolveParaPdf($empresa?->logo_horizontal),
             'config' => $config,
-            'configPdf' => $configPdf,
-            'headerCustomUrl' => StorageUrl::resolveParaPdf($configPdf->imagen_header_custom),
-            'footerCustomUrl' => StorageUrl::resolveParaPdf($configPdf->imagen_footer_custom),
-            'alturaHeaderMm' => $alturaHeaderMm,
-            'alturaFooterMm' => $alturaFooterMm,
-            'afiliaciones' => $afiliaciones,
             'categoria' => $categoria,
             'colorCategoria' => $colorCategoria,
             'colorCategoriaTinte' => $colorCategoriaTinte,
@@ -734,80 +692,6 @@ class AlternativaPdfService
         $mezclar = fn ($canal) => (int) round($canal * $peso + 255 * (1 - $peso));
 
         return sprintf('#%02x%02x%02x', $mezclar($r), $mezclar($g), $mezclar($b));
-    }
-
-    // plan §4.3 — solo arma la franja si mostrar_afiliaciones=true Y la
-    // agencia marcó al menos una. AfiliacionTurismo vive en la base
-    // central (CentralConnection) — un solo whereIn() para resolver todas
-    // las marcadas, sin N+1.
-    private function afiliacionesParaMostrar(ConfiguracionAgenciaPdf $configPdf): \Illuminate\Support\Collection
-    {
-        if (! $configPdf->mostrar_afiliaciones || ! $configPdf->exists) {
-            return collect();
-        }
-
-        $marcadas = $configPdf->afiliaciones()->get();
-        if ($marcadas->isEmpty()) {
-            return collect();
-        }
-
-        $catalogo = AfiliacionTurismo::whereIn('id', $marcadas->pluck('afiliacion_id'))->get()->keyBy('id');
-
-        return $marcadas->map(function ($m) use ($catalogo) {
-            $afiliacion = $catalogo->get($m->afiliacion_id);
-
-            return $afiliacion ? [
-                'nombre' => $afiliacion->nombre,
-                'logo' => StorageUrl::resolveParaPdf($afiliacion->logo_path),
-            ] : null;
-        })->filter()->values();
-    }
-
-    private function alturaHeaderMm(ConfiguracionAgenciaPdf $configPdf, \Illuminate\Support\Collection $afiliaciones): float
-    {
-        if ($configPdf->imagen_header_custom) {
-            return $this->alturaBandaCompletaMm($configPdf->imagen_header_custom);
-        }
-
-        $altura = 28.0; // logo + nombre comercial + RUC/teléfono/email
-        if (! empty($configPdf->eslogan)) {
-            $altura += 4.0;
-        }
-        if ($afiliaciones->isNotEmpty()) {
-            $altura += 10.0;
-        }
-
-        return $altura;
-    }
-
-    private function alturaFooterMm(ConfiguracionAgenciaPdf $configPdf): float
-    {
-        if ($configPdf->imagen_footer_custom) {
-            // +14mm: el aviso de condiciones generales (footer-legal) va
-            // SIEMPRE arriba del membrete custom, es contenido legal, no
-            // branding — el override total del plan §4.2 solo reemplaza
-            // eslogan/redes, no este aviso.
-            return $this->alturaBandaCompletaMm($configPdf->imagen_footer_custom) + 14.0;
-        }
-
-        return empty($configPdf->redes_sociales) ? 16.0 : 22.0;
-    }
-
-    private function alturaBandaCompletaMm(string $path): float
-    {
-        if (! Storage::disk('public')->exists($path)) {
-            return 20.0;
-        }
-
-        // getimagesize() alcanza acá — solo hace falta el ancho/alto real
-        // del archivo, no manipular la imagen (eso ya lo hace
-        // ImagenRecorteService para las fotos de tour/hotel).
-        $medidas = @getimagesize(Storage::disk('public')->path($path));
-        if (! $medidas || $medidas[0] <= 0) {
-            return 20.0;
-        }
-
-        return round(self::ANCHO_PAGINA_A4_MM * ($medidas[1] / $medidas[0]), 1);
     }
 
     // plan §4.5 — portada (1 principal + hasta 2 secundarias) + galería de
