@@ -31,7 +31,7 @@
 set -euo pipefail
 
 # ── Configuración ───────────────────────────────────────────────────────────
-APP_DIR="${APP_DIR:-/home/umbo/sistemfe/api-sistema-fe}"
+APP_DIR="${APP_DIR:-/var/www/html/sistemfe/api-sistema-fe}"
 PG_DIR="${PG_DIR:-/var/backups/sistemafe/postgres}"
 ARCHIVOS_DIR="${ARCHIVOS_DIR:-/var/backups/sistemafe/archivos}"
 REMOTO="${REMOTO:-sistemafe-cifrado:}"
