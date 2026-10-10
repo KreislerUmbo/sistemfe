@@ -691,14 +691,135 @@ la pestaña Backups de cada tenant.
   incluye la central y cada base de tenant, porque cada una es una BD
   Postgres separada (así es como funciona `stancl/tenancy`).
 - Comprimido (`pg_dump -Fc` + gzip), retención de 14 días en disco.
-- **Recomendado fuertemente:** copia offsite. Un backup que vive en el
-  mismo disco que la base de datos no te protege si el servidor completo
-  falla o se borra por error. OVH tiene Object Storage (compatible S3);
-  con `rclone` es una línea de cron adicional (comentada al final del
-  script, lista para activar cuando configures las credenciales).
+- **Copia offsite (Backblaze B2, cifrada e inmutable)** — ver la sección de abajo.
 - Prueba de restore: un backup que nunca probaste restaurar no es un
   backup confiable. Cuando tengas el primer backup real, practica
   restaurarlo en un servidor de prueba antes de necesitarlo de verdad.
+
+> **Estado real en producción (09-oct-2026):** el proyecto vive en
+> `/home/umbo/sistemfe` (no en `/var/www/html/sistemfe` como dicen los comandos
+> de arriba) y la línea de `backup-postgres.sh` quedó en el crontab de root a las
+> **03:00** (no 3:30). Funciona: dumps diarios de central + 3 tenants + globals.
+
+### Copia offsite en Backblaze B2 (`scripts/backup-offsite.sh`)
+
+**Por qué:** el backup en `/var/backups` vive en el mismo disco que la base. Si el
+VPS se pierde, se borra o lo compromete un atacante con root, se van la base y el
+backup juntos. `backup-offsite.sh` sube cada noche, **cifrado**, los dumps de
+Postgres + un `.tar.gz` del `storage/` (logos, membretes, fotos, certificados
+SUNAT, backups del panel) + el `.env`, a un bucket de Backblaze B2 con **Object
+Lock**: cada archivo queda bloqueado 30 días y nadie puede borrarlo, ni siquiera
+con la llave que vive en el servidor.
+
+#### Paso 1 — Backblaze (desde el navegador)
+
+1. Crear la cuenta en <https://www.backblaze.com> (producto **B2 Cloud Storage**).
+   Los primeros 10 GB son gratis; estos backups ocupan pocos MB.
+2. **Buckets → Create a Bucket**:
+   - Nombre: `umbosystem-backups-<algo-único>` (el nombre es global en B2).
+   - Files in Bucket: **Private**.
+   - Default Encryption: **Enable**.
+   - Object Lock: **Enable** (también se puede activar después, desde
+     "Object Lock" en la configuración del bucket — así se hizo con
+     `backup-sistemfe` el 09-oct-2026).
+3. En el bucket creado → **Object Lock → Default Retention Policy**: modo
+   **Compliance**, **30 días**. Compliance significa que ni vos ni un atacante
+   pueden acortar ese plazo.
+4. En el bucket → **Lifecycle Settings → Usar normas de ciclos de vida
+   personalizadas**: prefijo vacío, *Days till hide* **60**, *Days till delete*
+   **1** (así la copia no crece para siempre). **No** usar "Guardar las versiones
+   anteriores para este número de días": solo afecta versiones reemplazadas, y el
+   script nunca reemplaza archivos — no se borraría nada nunca.
+5. CORS: **No compartir ningún archivo con ningún origen** (el bucket no lo usa
+   ningún navegador).
+6. **Application Keys → Add a New Application Key**:
+   - Name: `sistemafe-vps`.
+   - Allow access to Bucket(s): **solo** el bucket de arriba.
+   - Type of Access: **Read and Write**.
+   - Copiar `keyID` y `applicationKey` (la segunda **se muestra una sola vez**).
+
+#### Paso 2 — Contraseñas del cifrado (ANTES de tocar el servidor)
+
+Generar dos contraseñas largas (en cualquier PC):
+
+```bash
+openssl rand -base64 32   # contraseña 1
+openssl rand -base64 32   # contraseña 2 (salt)
+```
+
+**Guardarlas YA en un gestor de contraseñas, junto con el `keyID`, el
+`applicationKey` y el nombre del bucket.** Si el servidor se pierde, esas cinco
+cosas son lo único que permite descifrar la copia. Sin las contraseñas, los
+archivos en B2 no sirven para nada.
+
+#### Paso 3 — Servidor (como `umbo`, con sudo)
+
+```bash
+# rclone (versión oficial, la de apt suele ser vieja)
+curl -fsSL https://rclone.org/install.sh | sudo bash
+
+# Configuración en la cuenta de ROOT (el cron corre como root).
+# El espacio al inicio de cada línea evita que quede en el historial de bash.
+ sudo rclone config create b2-sistemafe b2 account=<KEY_ID> key=<APPLICATION_KEY> hard_delete=false
+ sudo rclone config create sistemafe-cifrado crypt \
+     remote=b2-sistemafe:backup-sistemfe/sistemafe \
+     password='<CONTRASEÑA_1>' password2='<CONTRASEÑA_2>' --obscure
+# --obscure: las contraseñas de openssl (base64, 44 caracteres) pueden hacer que
+# rclone crea que ya vienen ofuscadas y las guarde en claro; así se fuerza.
+
+# Script + permisos
+sudo cp /home/umbo/sistemfe/deploy-ovh/scripts/backup-offsite.sh /var/backups/sistemafe/scripts/
+sudo chmod 750 /var/backups/sistemafe/scripts/backup-offsite.sh
+
+# Primera corrida a mano (tiene que terminar en "Copia offsite completa")
+sudo /var/backups/sistemafe/scripts/backup-offsite.sh
+
+# Cron de root: todos los días a las 04:00, después de backup-postgres.sh
+( sudo crontab -l 2>/dev/null | grep -v backup-offsite; \
+  echo '0 4 * * * /var/backups/sistemafe/scripts/backup-offsite.sh >> /var/log/backup-offsite.log 2>&1' ) | sudo crontab -
+sudo crontab -l
+```
+
+Comprobaciones:
+
+```bash
+sudo rclone lsf sistemafe-cifrado:postgres | tail      # nombres legibles (rclone descifra)
+sudo rclone lsf b2-sistemafe:backup-sistemfe/sistemafe/  # en B2 se ven cifrados
+```
+
+Opcional (recomendado): crear un check gratis en <https://healthchecks.io>
+("Period" 1 día, "Grace" 2 h) y poner su URL en `HEALTHCHECK_URL` dentro del
+script — avisa por correo la noche que la copia no llegue.
+
+#### Restaurar desde B2 (servidor nuevo o perdido)
+
+```bash
+curl -fsSL https://rclone.org/install.sh | sudo bash
+# Recrear los dos remotos con los 5 datos guardados en el gestor (Paso 3)
+sudo rclone lsf sistemafe-cifrado:postgres | sort | tail -20     # elegir la fecha
+sudo mkdir -p /root/restauracion && cd /root/restauracion
+sudo rclone copy sistemafe-cifrado:postgres . --include "*_<FECHA>_*"
+sudo rclone copy sistemafe-cifrado:archivos . --include "storage-y-env_<FECHA>*"
+```
+
+Con eso quedan los mismos archivos que había en `/var/backups/sistemafe/postgres`
+(restaurar con los pasos de "Caso 3 — Migrar el servidor", punto 4) y el paquete
+`storage-y-env_*.tar.gz` (descomprimir en la carpeta del proyecto: trae `storage/`
+y `.env`). **Si la restauración es por un ataque, elegir una fecha anterior al
+ataque y cambiar después todos los secretos** (ver "Si el servidor se ve
+comprometido", abajo).
+
+#### Si el servidor se ve comprometido
+
+No se limpia: se reemplaza. Snapshot del disco desde el panel de OVH (para
+investigar), VPS nuevo, código desde GitHub (nunca copiado del servidor
+infectado), bases y storage desde B2 con fecha anterior al ataque (del storage
+solo imágenes/PDF, nunca `.php`), y cambiar **todos** los secretos: contraseña de
+Postgres, `JWT_SECRET`, tokens de APIs, llaves SSH, contraseñas de usuarios y
+— lo más grave — **revocar y reemplazar los certificados SUNAT y claves SOL de
+cada tenant**. `APP_KEY` solo se cambia después de revisar qué datos guarda
+Laravel cifrados con ella. Si hubo datos personales expuestos, la Ley 29733
+obliga a comunicarlo.
 
 ---
 
@@ -946,7 +1067,7 @@ información si se olvida algo):
 - [ ] Migraciones `core` + `verticals/agencia-viajes` corridas
 - [ ] Supervisor corriendo los workers de cola
 - [ ] Cron del scheduler de Laravel instalado
-- [ ] Backup automático corriendo + copia offsite configurada
+- [ ] Backup automático corriendo (✔ 09-oct) + copia offsite configurada (`backup-offsite.sh`, Backblaze B2)
 - [ ] Logrotate instalado
 - [ ] Monitoreo externo de uptime configurado
 - [ ] Al menos un ciclo de `deploy.sh` probado de punta a punta
