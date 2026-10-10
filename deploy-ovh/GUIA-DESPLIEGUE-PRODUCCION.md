@@ -719,14 +719,20 @@ con la llave que vive en el servidor.
    - Nombre: `umbosystem-backups-<algo-único>` (el nombre es global en B2).
    - Files in Bucket: **Private**.
    - Default Encryption: **Enable**.
-   - Object Lock: **Enable** (solo se puede activar al crear el bucket).
+   - Object Lock: **Enable** (también se puede activar después, desde
+     "Object Lock" en la configuración del bucket — así se hizo con
+     `backup-sistemfe` el 09-oct-2026).
 3. En el bucket creado → **Object Lock → Default Retention Policy**: modo
    **Compliance**, **30 días**. Compliance significa que ni vos ni un atacante
    pueden acortar ese plazo.
-4. En el bucket → **Lifecycle Settings → Use custom lifecycle rules**: ocultar
-   archivos a los **60 días** de subidos y borrarlos **1 día** después de ocultos
-   (así la copia no crece para siempre).
-5. **Application Keys → Add a New Application Key**:
+4. En el bucket → **Lifecycle Settings → Usar normas de ciclos de vida
+   personalizadas**: prefijo vacío, *Days till hide* **60**, *Days till delete*
+   **1** (así la copia no crece para siempre). **No** usar "Guardar las versiones
+   anteriores para este número de días": solo afecta versiones reemplazadas, y el
+   script nunca reemplaza archivos — no se borraría nada nunca.
+5. CORS: **No compartir ningún archivo con ningún origen** (el bucket no lo usa
+   ningún navegador).
+6. **Application Keys → Add a New Application Key**:
    - Name: `sistemafe-vps`.
    - Allow access to Bucket(s): **solo** el bucket de arriba.
    - Type of Access: **Read and Write**.
@@ -756,7 +762,7 @@ curl -fsSL https://rclone.org/install.sh | sudo bash
 # El espacio al inicio de cada línea evita que quede en el historial de bash.
  sudo rclone config create b2-sistemafe b2 account=<KEY_ID> key=<APPLICATION_KEY> hard_delete=false
  sudo rclone config create sistemafe-cifrado crypt \
-     remote=b2-sistemafe:<NOMBRE_DEL_BUCKET>/sistemafe \
+     remote=b2-sistemafe:backup-sistemfe/sistemafe \
      password='<CONTRASEÑA_1>' password2='<CONTRASEÑA_2>' --obscure
 # --obscure: las contraseñas de openssl (base64, 44 caracteres) pueden hacer que
 # rclone crea que ya vienen ofuscadas y las guarde en claro; así se fuerza.
@@ -778,7 +784,7 @@ Comprobaciones:
 
 ```bash
 sudo rclone lsf sistemafe-cifrado:postgres | tail      # nombres legibles (rclone descifra)
-sudo rclone lsf b2-sistemafe:<NOMBRE_DEL_BUCKET>/sistemafe/  # en B2 se ven cifrados
+sudo rclone lsf b2-sistemafe:backup-sistemfe/sistemafe/  # en B2 se ven cifrados
 ```
 
 Opcional (recomendado): crear un check gratis en <https://healthchecks.io>
