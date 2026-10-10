@@ -397,6 +397,18 @@ recibo e impresión silenciosa en ticketera, sin decidir; (5) adicional **"Solo 
 final, configurable) diseñado y guardado para más adelante — `docs/planning/creditos/
 adicional-solo-interes.md`; hoy se resuelve renovando cada mes por el mismo capital.
 
+**Completo — Agencia de Viajes, Venta Directa bloque 1 (09-oct-2026, `ae0f1f5`):**
+Corregidas 4 fallas de `VentaDirectaController`: "Concepto libre" fallaba siempre (422, faltaba
+`costo_snapshot`); el ítem de la reserva nacía sin fecha (no salía en Reporte Operativo); el
+código de reserva derivado chocaba con el de una cotización del mismo correlativo; y las
+cotizaciones de soporte ensuciaban Cotizador/Inicio. **Regla nueva:** `cotizaciones.origen`
+(`cotizador`/`venta_directa`) — listados comerciales usan `Cotizacion::delCotizador()`; la
+reserva de una venta directa lleva **el código de la propia venta** (`VDKM-…`), no uno con
+`R`; no se permite repetir prefijo entre tipos en Códigos y numeración.
+**Pendiente real (bloques 2-5 del análisis, sin aprobar):** total en vivo + modo de precio
+deducido de la tarifa; "Cobrar y emitir" en el mismo paso; varias líneas y pasajeros con
+nombre; tratamiento tributario en concepto libre, destino del árbol, pasaje aéreo suelto.
+
 **Completo — Inicio con datos reales (Dashboard) para retail y agencia (02-oct-2026):**
 Reemplaza la demo de la plantilla Rizz por `GET dashboard` (`DashboardService`): ventas hoy/mes
 por moneda (netas de NC aceptadas, NV aparte), ventas 30 días, pendientes SUNAT, por cobrar, más

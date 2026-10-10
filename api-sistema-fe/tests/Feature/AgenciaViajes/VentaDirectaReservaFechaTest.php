@@ -15,17 +15,10 @@ use Tests\TestCase;
 // infraestructura que ReservaFechaAutoCompletadaTest: Postgres real
 // (sistemafe_test_migrations), transacción por test revertida.
 //
-// origen_tipo='proveedor' con una proveedor_tarifa real, NO 'manual': se
-// encontró al escribir este test que VentaDirectaController::store() arma
-// $itemRequest desde SU PROPIO $validator->validated() (línea ~92), cuyas
-// reglas no incluyen 'costo_snapshot' — cualquier origen_tipo='manual'
-// pierde ese campo al reenviarlo a AlternativaItemController::crearItemManual()
-// (que sí lo exige, 'required'), y falla con 422 sin relación con este fix.
-// Gap real, preexistente, AJENO a la Fase 1 (es un problema de reenvío de
-// payload entre dos validadores, no de fechas) — fuera de alcance de este
-// brief, no se toca acá. origen_tipo='proveedor' CON proveedor_tarifa_id
-// real es el único camino que hoy funciona de punta a punta sin tocar ese
-// código, así que es el que prueba esta fase.
+// origen_tipo='proveedor' con una proveedor_tarifa real. El gap de
+// 'manual' que se encontró al escribir este test (costo_snapshot descartado
+// por el validador de VentaDirectaController) se corrigió el 09-oct-2026 —
+// ver VentaDirectaBloque1Test.
 class VentaDirectaReservaFechaTest extends TestCase
 {
     protected function setUp(): void

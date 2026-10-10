@@ -313,6 +313,7 @@ class DashboardService
     private function cotizaciones(CarbonImmutable $hoy): array
     {
         $estados = Cotizacion::propias()
+            ->delCotizador()
             ->whereBetween('created_at', [$hoy->startOfMonth()->utc(), $hoy->endOfDay()->utc()])
             ->with('alternativas.reserva')
             ->get()
