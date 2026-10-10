@@ -39,7 +39,9 @@ class CotizacionController extends Controller
         // Fase 1b (§3.3) — scope de fila: propias() es un scope LOCAL (no
         // global, ver EscopablePorVendedor), así que solo se aplica acá
         // donde corresponde (el listado), nunca en show()/acciones internas.
-        $query = Cotizacion::propias()->with(['cliente', 'alternativas.reserva'])->withCount('alternativas');
+        // delCotizador() — la cotización de soporte de una venta directa no
+        // es una cotización comercial (ver Cotizacion::$origen).
+        $query = Cotizacion::propias()->delCotizador()->with(['cliente', 'alternativas.reserva'])->withCount('alternativas');
 
         if ($request->filled('search')) {
             $search = $request->get('search');

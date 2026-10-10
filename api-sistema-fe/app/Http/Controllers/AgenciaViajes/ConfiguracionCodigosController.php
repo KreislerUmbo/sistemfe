@@ -48,6 +48,21 @@ class ConfiguracionCodigosController extends Controller
 
         $validado = $validator->validated();
 
+        // 09-oct-2026: un prefijo por tipo. La reserva de una venta directa
+        // lleva el código de la propia venta directa (ver
+        // CodigoGeneradorService::generarParaReserva()) — si reserva y
+        // venta_directa compartieran prefijo, sus códigos podrían repetirse.
+        $prefijoEnUso = ConfiguracionCodigo::where('tipo', '!=', $tipo)
+            ->whereRaw('LOWER(prefijo) = ?', [mb_strtolower($validado['prefijo'])])
+            ->value('tipo');
+
+        if ($prefijoEnUso) {
+            return response()->json([
+                'code' => 422,
+                'message' => "El prefijo '{$validado['prefijo']}' ya lo usa el tipo '{$prefijoEnUso}'. Cada tipo de documento necesita un prefijo propio.",
+            ], 422);
+        }
+
         // §6.2: reinicio_correlativo se fuerza a 'nunca' cuando el tipo no
         // incluye periodo (evita el choque "TDKM-0001" repetido cada mes/año
         // si un tipo sin periodo visible reiniciara su correlativo).

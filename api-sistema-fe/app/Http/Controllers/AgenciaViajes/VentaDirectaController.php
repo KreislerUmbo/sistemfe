@@ -44,6 +44,10 @@ class VentaDirectaController extends Controller
             'cantidad' => 'nullable|integer|min:1',
             'descripcion_manual' => 'required_if:origen_tipo,manual|string|max:500',
             'precio_venta_snapshot' => 'required_if:origen_tipo,manual|numeric|min:0',
+            // crearItemManual() lo exige desde la Sesión 11q — antes no
+            // estaba en estas reglas, validated() lo descartaba y todo
+            // "Concepto libre" fallaba con 422.
+            'costo_snapshot' => 'required_if:origen_tipo,manual|numeric|min:0',
             'moneda_costo' => 'required_if:origen_tipo,manual|in:PEN,USD',
         ]);
 
@@ -63,6 +67,7 @@ class VentaDirectaController extends Controller
                     'cliente_id' => $validado['cliente_id'],
                     'codigo_prefijo' => $prefijo,
                     'codigo' => $codigo,
+                    'origen' => Cotizacion::ORIGEN_VENTA_DIRECTA,
                     // Fase 1b (§3.3) — mismo criterio que CotizacionController::store().
                     'vendedor_id' => auth()->id(),
                     'destino' => $validado['destino'],
@@ -97,7 +102,17 @@ class VentaDirectaController extends Controller
                 // normal, nada reimplementado acá. Request::create() con
                 // método POST para que Request::input()/all() lean el
                 // payload de la bolsa 'request' (POST), no de 'query'.
-                $itemRequest = Request::create('/', 'POST', $validado);
+                //
+                // cantidad: crearItemManual() la exige (1 si no vino).
+                // dia_referencial=1: sin él, crearReservaDesdeAlternativa()
+                // deja reserva_items.fecha en NULL aunque haya
+                // fecha_servicio, y el servicio no aparece en el Reporte
+                // Operativo ni se engancha a una Salida Operativa.
+                $itemRequest = Request::create('/', 'POST', [
+                    ...$validado,
+                    'cantidad' => $validado['cantidad'] ?? 1,
+                    'dia_referencial' => 1,
+                ]);
                 $itemResponse = app(AlternativaItemController::class)->store($itemRequest, (string) $alternativa->id);
                 $itemPayload = $itemResponse->getData(true);
 

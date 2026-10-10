@@ -14,6 +14,7 @@ export type VentaDirectaPayload = {
   cantidad?: number
   // origen_tipo=manual
   descripcion_manual?: string
+  costo_snapshot?: number
   precio_venta_snapshot?: number
   moneda_costo?: 'PEN' | 'USD'
 }

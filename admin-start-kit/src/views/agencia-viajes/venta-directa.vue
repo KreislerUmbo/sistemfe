@@ -138,11 +138,19 @@
                         <label class="form-label small text-secondary mb-1">Descripción</label>
                         <input type="text" class="form-control form-control-sm" v-model="descripcionManual" placeholder="Ej. Traslado aeropuerto-hotel">
                     </div>
-                    <div class="col-6">
+                    <div class="col-6 col-md-3">
+                        <label class="form-label small text-secondary mb-1">Costo</label>
+                        <input type="number" min="0" step="0.01" class="form-control form-control-sm" v-model.number="costoSnapshot">
+                    </div>
+                    <div class="col-6 col-md-3">
                         <label class="form-label small text-secondary mb-1">Precio de venta</label>
                         <input type="number" min="0" step="0.01" class="form-control form-control-sm" v-model.number="precioVentaSnapshot">
                     </div>
-                    <div class="col-6">
+                    <div class="col-6 col-md-3">
+                        <label class="form-label small text-secondary mb-1">Cantidad</label>
+                        <input type="number" min="1" class="form-control form-control-sm" v-model.number="cantidadManual">
+                    </div>
+                    <div class="col-6 col-md-3">
                         <label class="form-label small text-secondary mb-1">Moneda</label>
                         <select class="form-select form-select-sm" v-model="monedaCosto">
                             <option value="PEN">Soles</option>
@@ -220,6 +228,10 @@ const tarifaSeleccionada = computed(() => bibliotecaTarifas.value.find((t) => t.
 
 const descripcionManual = ref('');
 const precioVentaSnapshot = ref<number | null>(null);
+// Costo real del concepto libre (lo exige el backend desde la Sesión 11q) —
+// 0 es válido si la agencia no tiene costo asociado.
+const costoSnapshot = ref<number | null>(0);
+const cantidadManual = ref<number>(1);
 const monedaCosto = ref<'PEN' | 'USD'>('PEN');
 
 const onClientSearchInput = () => {
@@ -270,6 +282,7 @@ const crear = async () => {
     if (pax.value.length === 0) { (Swal as TVueSwalInstance).fire('Error', 'Agregá al menos un pasajero.', 'error'); return; }
     if (origenTipo.value === 'proveedor' && !proveedorTarifaId.value) { (Swal as TVueSwalInstance).fire('Error', 'Seleccioná una tarifa del catálogo.', 'error'); return; }
     if (origenTipo.value === 'manual' && (!descripcionManual.value.trim() || !precioVentaSnapshot.value)) { (Swal as TVueSwalInstance).fire('Error', 'Completá la descripción y el precio.', 'error'); return; }
+    if (origenTipo.value === 'manual' && (costoSnapshot.value === null || costoSnapshot.value < 0 || !cantidadManual.value || cantidadManual.value < 1)) { (Swal as TVueSwalInstance).fire('Error', 'Revisá el costo (0 o más) y la cantidad (1 o más).', 'error'); return; }
 
     creando.value = true;
     try {
@@ -281,7 +294,7 @@ const crear = async () => {
             pax: pax.value,
             ...(origenTipo.value === 'proveedor'
                 ? { proveedor_tarifa_id: proveedorTarifaId.value!, modo_precio: modoPrecio.value, cantidad: cantidad.value }
-                : { descripcion_manual: descripcionManual.value.trim(), precio_venta_snapshot: precioVentaSnapshot.value!, moneda_costo: monedaCosto.value }),
+                : { descripcion_manual: descripcionManual.value.trim(), costo_snapshot: costoSnapshot.value!, precio_venta_snapshot: precioVentaSnapshot.value!, cantidad: cantidadManual.value, moneda_costo: monedaCosto.value }),
         });
 
         router.push(`/agencia-viajes/reservas/${res.reserva.id}`);

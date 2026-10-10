@@ -81,8 +81,17 @@ class CodigoGeneradorService
 
             $fila->increment('reservas_generadas');
 
-            $resto = Str::after($fila->codigo, $fila->codigo_prefijo);
-            $codigo = $config->prefijo.$resto;
+            // Venta directa (09-oct-2026): su reserva lleva el código de la
+            // propia venta directa, no uno derivado con el prefijo de
+            // reserva. Derivarlo chocaba con las cotizaciones — contadores
+            // distintos, mismo resto: VDKM-1026-0000015 y CDKM-1026-0000015
+            // daban los dos RDKM-1026-0000015 (reserva.codigo es unique). El
+            // código de venta directa ya es único por su propio contador, y
+            // ConfiguracionCodigosController impide que reserva y
+            // venta_directa compartan prefijo.
+            $codigo = $fila->esVentaDirecta()
+                ? $fila->codigo
+                : $config->prefijo.Str::after($fila->codigo, $fila->codigo_prefijo);
 
             if ($fila->reservas_generadas > 1) {
                 $codigo .= $config->separador.$fila->reservas_generadas;

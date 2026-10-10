@@ -19,11 +19,16 @@ use Illuminate\Database\Eloquent\Model;
 // cada caller (CotizacionController::store()/VentaDirectaController::store())
 // pide su código explícitamente a
 // App\Services\AgenciaViajes\CodigoGeneradorService::generar('cotizacion'|
-// 'venta_directa') ANTES de Cotizacion::create(), sin ambigüedad y sin
-// necesitar una columna nueva para distinguir el origen. codigo_prefijo se
+// 'venta_directa') ANTES de Cotizacion::create(). codigo_prefijo se
 // sigue guardando (viene de ConfiguracionCodigo::prefijo en el momento de
 // generar) porque CodigoGeneradorService::generarParaReserva() lo usa para
 // extraer el resto del código al derivar el de la reserva (Str::after()).
+//
+// origen (09-oct-2026): 'cotizador' | 'venta_directa'. Una venta directa
+// crea esta misma cadena como soporte interno de su reserva, pero no es una
+// cotización comercial — el listado del Cotizador y el Inicio la excluyen
+// (scopeDelCotizador()) y su reserva no deriva el código como la de una
+// cotización (ver generarParaReserva()).
 //
 // reservas_generadas: contador acotado por cotización (§6.4), incrementado
 // por generarParaReserva() — primera reserva sin sufijo, 2da+ con "-2","-3"...
@@ -31,11 +36,16 @@ class Cotizacion extends Model
 {
     use EscopablePorVendedor;
 
+    public const ORIGEN_COTIZADOR = 'cotizador';
+
+    public const ORIGEN_VENTA_DIRECTA = 'venta_directa';
+
     protected $table = 'cotizaciones';
 
     protected $fillable = [
         'codigo_prefijo',
         'codigo',
+        'origen',
         'reservas_generadas',
         'cliente_id',
         // Fase 1b (plan-modulo-menus-y-roles.md §3.3) — scope de fila.
@@ -119,6 +129,16 @@ class Cotizacion extends Model
         }
 
         return 'borrador';
+    }
+
+    public function scopeDelCotizador(Builder $query): Builder
+    {
+        return $query->where('origen', self::ORIGEN_COTIZADOR);
+    }
+
+    public function esVentaDirecta(): bool
+    {
+        return $this->origen === self::ORIGEN_VENTA_DIRECTA;
     }
 
     protected static function permisoVerTodas(): string
