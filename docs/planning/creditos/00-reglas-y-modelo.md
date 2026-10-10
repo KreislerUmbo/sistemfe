@@ -72,7 +72,7 @@ monto_liquidacion = capital pendiente + interes_final − interés ya cobrado + 
 - Permisos: el usuario anula su propio pago con su caja abierta; si no, `creditos.anular_pago`.
 
 ### 1.9 Corrección, anulación y reprogramación del crédito
-- `borrador`: edición libre. `activo` sin pagos: **Corregir** (`creditos.corregir`, motivo) → mismo número, cuotas viejas `anulada`, `version_cronograma_actual+1`; si cambia el capital **o el método de pago**, ajuste de caja (reverso + nuevo desembolso). **Anular crédito**: solo sin pagos, revierte desembolso.
+- `borrador`: edición libre. `activo` sin pagos: **Corregir** (`creditos.corregir`, motivo) → mismo número, cuotas viejas `anulada`, `version_cronograma_actual+1`; si cambia el capital **o el método de pago**, ajuste de caja (reverso + nuevo desembolso). **Anular crédito**: solo sin pagos (un castigado, revertir el castigo primero), revierte desembolso y anula sus condonaciones y cargos vigentes — si no, la mora condonada seguía sumando en Ingresos (revisión 10-oct-2026).
 - Reglas de Corregir agregadas en la revisión del 03-oct-2026 (cada una reproducía un problema real):
   - **No procede con reprogramaciones, condonaciones o cargos vigentes**: cuelgan de las cuotas de la versión vigente y quedarían sin efecto en silencio (la condonación seguía sumando en Ingresos). Camino: anular y registrar de nuevo.
   - **Subir el capital evalúa los límites** como renovar (el propio crédito excluido de deuda y conteo); quien tiene `creditos.autorizar_excepcion` autoriza en el mismo acto con el motivo de la corrección. Bajarlo no los evalúa.
