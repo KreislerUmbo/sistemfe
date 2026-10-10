@@ -696,9 +696,10 @@ la pestaña Backups de cada tenant.
   backup confiable. Cuando tengas el primer backup real, practica
   restaurarlo en un servidor de prueba antes de necesitarlo de verdad.
 
-> **Estado real en producción (09-oct-2026):** el proyecto vive en
-> `/home/umbo/sistemfe` (no en `/var/www/html/sistemfe` como dicen los comandos
-> de arriba) y la línea de `backup-postgres.sh` quedó en el crontab de root a las
+> **Estado real en producción (09-oct-2026):** la app que corre está en
+> `/var/www/html/sistemfe`. **Ojo:** existe también `/home/umbo/sistemfe`, una copia
+> vieja del primer despliegue que NO es la que funciona — no hacer `git pull` ni
+> deploy ahí. La línea de `backup-postgres.sh` quedó en el crontab de root a las
 > **03:00** (no 3:30). Funciona: dumps diarios de central + 3 tenants + globals.
 
 ### Copia offsite en Backblaze B2 (`scripts/backup-offsite.sh`)
@@ -768,7 +769,7 @@ curl -fsSL https://rclone.org/install.sh | sudo bash
 # rclone crea que ya vienen ofuscadas y las guarde en claro; así se fuerza.
 
 # Script + permisos
-sudo cp /home/umbo/sistemfe/deploy-ovh/scripts/backup-offsite.sh /var/backups/sistemafe/scripts/
+sudo cp /var/www/html/sistemfe/deploy-ovh/scripts/backup-offsite.sh /var/backups/sistemafe/scripts/
 sudo chmod 750 /var/backups/sistemafe/scripts/backup-offsite.sh
 
 # Primera corrida a mano (tiene que terminar en "Copia offsite completa")
