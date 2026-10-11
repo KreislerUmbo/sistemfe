@@ -1,9 +1,8 @@
 # Fase 5 — Aviso diario de cobranza ("lo que cobras hoy")
 
-Estado: **diseño aprobado** (11-oct-2026); prerrequisito de correo en producción **resuelto** el
-mismo día (Brevo, ver "Verificar antes de construir"). **Entregas 1 (backend del
-correo) y 3 (pantallas) construidas** en la rama `feat/creditos-avisos-cobranza` (sale de
-`main`): el aviso por correo queda usable de punta a punta. Falta la entrega 2 (push). Surge de un análisis con el usuario sobre
+Estado: **las 3 entregas construidas** (11-oct-2026). Correo (entregas 1 y 3) **en producción**
+desde el 11-oct (`1c60195`); push (entrega 2) en la rama `feat/creditos-avisos-push` — al
+desplegarla, ver "Entrega 2 → Al desplegar" (hay que generar las claves VAPID). Surge de un análisis con el usuario sobre
 avisar a clientes y administradores; este documento cubre **solo el aviso interno** (administrador,
 asesor que cobra, cobrador). El aviso al cliente (página "Mi crédito", ronda de recordatorios por
 WhatsApp manual, WhatsApp automático pagado) queda para un documento propio — ver "Fuera de alcance".
@@ -198,6 +197,57 @@ La entrega 1 se apoya en lo existente y tiene el menor riesgo; la 2 es la parte 
   (`fe_sendauth: no password supplied`), no de este código.
 - **Para activarlo en credishirley tras desplegar:** el dueño entra a Configuración → Avisos y lo
   enciende; cada usuario guarda y confirma su correo en "Mis avisos" y se manda una prueba.
+
+### Entrega 2 — construida (11-oct-2026, rama `feat/creditos-avisos-push`)
+- **Backend:** `minishlink/web-push` ^9 (Web Push estándar, VAPID). Tabla `push_suscripciones`
+  (`tenant/core`, una fila por dispositivo, `endpoint_hash` único: el mismo navegador con otro
+  usuario pasa a ese usuario). `Push\EnviadorPush` (interfaz; `WebPushEnviador` real, TTL 12 h,
+  urgencia alta) → `ResultadoPush` (entregadas, vencidas 404/410 que se borran, errores). Claves en
+  `config/services.php` → `webpush` (`VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY`/`VAPID_SUBJECT`); sin
+  ellas el push se omite ("push no configurado en el servidor") y la pantalla lo dice.
+- **El aviso** (`AvisoCobranzaService::avisar`) ahora calcula la agenda **una vez** y la reparte a
+  los canales pedidos (correo y push), cada uno con su fila en `credito_avisos`. Push **solo los
+  días con cobros** (también para el admin) y **solo totales** (pantalla bloqueada): "Hoy: 15
+  cobros · S/ 2,652.40" / "Tienes 6 cobros hoy · S/ 620.00", cuerpo "N atrasados · Toca para abrir
+  la Agenda". La URL lleva `&aviso={id}`: la Agenda llama `POST creditos/avisos/{id}/abierto` →
+  `abierto_en` (solo el dueño del aviso, solo la primera vez).
+- **API nueva:** `POST creditos/avisos/push` (activar este dispositivo; enciende `recibir_push`),
+  `POST …/push/quitar`, `POST …/push/prueba`, `POST creditos/avisos/{id}/abierto`. Preferencias
+  devuelven además `push_clave_publica`, `push_dispositivos`, `aviso_activo` y `aviso_hora`.
+- **Comando** `php artisan webpush:claves`: imprime el par VAPID para pegar en el `.env` (no escribe
+  nada). Cambiar las claves invalida todas las suscripciones.
+- **Frontend:** app instalable (`public/manifest.webmanifest`, íconos en `public/icons/` generados
+  — "U" blanca sobre `#22c55e`, reemplazables), `public/sw.js` (solo push y clic; **sin caché a
+  propósito**), registrado en `main.ts`. Helper `helpers/creditos/push.ts` (+ Vitest). "Mis
+  avisos" gana la tarjeta "Avisos en el celular": estados no soportado / iPhone sin instalar (con
+  instrucciones) / bloqueado / activar / activo con prueba y desactivar, lista de dispositivos y
+  el interruptor `recibir_push`; aviso visible si el negocio tiene el aviso apagado.
+- **nginx:** cachea `.js` 1 año, pero el navegador siempre revalida el script del service worker
+  (`updateViaCache: 'imports'` por defecto): no hace falta tocar la configuración de producción.
+- **Verificación:** `AvisoPushTest` 7 (enviador falso) + `AvisoCobranzaTest` 10; Vitest 145/145;
+  vue-tsc en el baseline. Enviador real contra un servidor local: cifrado `aes128gcm`,
+  `Authorization: vapid …`, TTL 43200, 410 → vencida. **En vivo con el servicio real de Google
+  (FCM)** abriendo el demo como `http://creditos-demo.localhost:5173` (contexto seguro sin
+  HTTPS): activar → suscripción FCM real; "Enviarme un aviso de prueba" → notificación mostrada
+  por el service worker; corrida programada (usuario temporal "Administrador de créditos",
+  domingo habilitado a mano) → push con `&aviso=2` que reemplaza al anterior (misma etiqueta).
+  Todo revertido después.
+- **Hallazgos:** (1) en Windows, OpenSSL de PHP necesita `OPENSSL_CONF` para crear claves EC
+  (`webpush:claves` y el cifrado fallan sin él); en el servidor Linux no pasa. (2) El usuario
+  `admin@` de un tenant recién provisionado es **Super-Admin**, que el aviso excluye a propósito:
+  quien cobra debe tener un rol del negocio (en credishirley el dueño ya tiene "Administrador de
+  créditos"). (3) Bug propio corregido antes de cerrar: el aviso "negocio apagado" cortaba la
+  cadena `v-if/v-else-if` y la pantalla quedaba vacía.
+- **Al desplegar:**
+  1. `./deploy.sh` (la migración `push_suscripciones` va por `tenants:migrate-verticales`).
+  2. Una sola vez: `php artisan webpush:claves`, pegar las 3 líneas en el `.env` de
+     producción, `php artisan config:cache`, reload de php-fpm y restart del worker.
+  3. Cada usuario, desde su celular: Android → Chrome, abrir el panel, Mis avisos → "Activar
+     avisos en este dispositivo" → "Enviarme un aviso de prueba". iPhone (iOS 16.4+) → Safari,
+     Compartir → Agregar a inicio, abrir desde ese ícono e iniciar sesión, y lo mismo.
+- **Local (Windows):** `composer.lock` está armado para PHP 8.5 (producción); el `vendor/` local
+  es el del lock de `84e18f1` + web-push. **No correr `composer install` aquí** con el lock actual
+  (instala paquetes que piden PHP 8.3+ y Laravel deja de arrancar).
 
 ## Verificar antes de construir
 - ~~Producción sin correo~~ **RESUELTO 11-oct-2026:** hasta ese día `MAIL_MAILER=log` (ningún

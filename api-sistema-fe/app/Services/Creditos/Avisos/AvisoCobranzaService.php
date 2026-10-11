@@ -9,6 +9,7 @@ use App\Models\Company;
 use App\Models\Creditos\CreditoAviso;
 use App\Models\Creditos\CreditoAvisoPreferencia;
 use App\Models\Creditos\CreditoConfiguracion;
+use App\Models\PushSuscripcion;
 use App\Models\User;
 use App\Services\Creditos\AlcanceCartera;
 use App\Services\Creditos\Dinero;
@@ -17,6 +18,7 @@ use App\Services\Creditos\Reloj;
 use App\Services\Creditos\Reportes\AgendaCobranzaService;
 use App\Services\Creditos\Reportes\Periodo;
 use App\Services\Creditos\Reportes\ReportePdf;
+use App\Services\Push\EnviadorPush;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Mail;
@@ -40,10 +42,12 @@ class AvisoCobranzaService
     /** Lunes a sábado: los domingos no se cobra salvo que el negocio lo configure. */
     private const DIAS_POR_DEFECTO = [1, 2, 3, 4, 5, 6];
     private const USUARIO_INACTIVO = User::STATE_INACTIVO;
+    public const CANALES = [CreditoAviso::CANAL_CORREO, CreditoAviso::CANAL_PUSH];
 
     public function __construct(
         private readonly AgendaCobranzaService $agenda,
         private readonly ReportePdf $reportePdf,
+        private readonly EnviadorPush $push,
         private readonly Reloj $reloj,
     ) {
     }
@@ -64,13 +68,15 @@ class AvisoCobranzaService
 
         $hoy = $this->reloj->hoy();
         foreach ($this->destinatarios() as $usuario) {
-            $estado = $this->avisar($usuario, $hoy, $config, $urlAgenda);
-            match ($estado) {
-                CreditoAviso::ESTADO_ENVIADO => $resultado['enviados']++,
-                CreditoAviso::ESTADO_OMITIDO => $resultado['omitidos']++,
-                CreditoAviso::ESTADO_FALLIDO => $resultado['fallidos']++,
-                default => null,   // ya resuelto en una corrida anterior
-            };
+            // Un conteo por canal: "enviados" suma correos y push.
+            foreach ($this->avisar($usuario, $hoy, $config, $urlAgenda) as $estado) {
+                match ($estado) {
+                    CreditoAviso::ESTADO_ENVIADO => $resultado['enviados']++,
+                    CreditoAviso::ESTADO_OMITIDO => $resultado['omitidos']++,
+                    CreditoAviso::ESTADO_FALLIDO => $resultado['fallidos']++,
+                    default => null,   // ya resuelto en una corrida anterior
+                };
+            }
         }
 
         return [...$resultado, 'corrio' => true];
@@ -109,19 +115,43 @@ class AvisoCobranzaService
     }
 
     /**
-     * Aviso por correo de un usuario para el día. Devuelve el estado final, o null si ese día ya
-     * estaba resuelto. Con $prueba no registra nada ni respeta lo ya enviado (botón "Enviar
-     * prueba"): devuelve enviado / omitido / fallido igual.
+     * Aviso de un usuario para el día, por cada canal pedido. La agenda se calcula una sola vez y
+     * cada canal tiene su propio registro en credito_avisos. Devuelve el estado por canal, o null
+     * en el canal que ese día ya estaba resuelto. Con $prueba no registra nada ni respeta lo ya
+     * enviado (botones "Enviarme una prueba"): devuelve enviado / omitido / fallido igual.
+     *
+     * @param list<string> $canales
+     * @return array<string, string|null> canal => estado
      */
-    public function avisar(User $usuario, Fecha $hoy, CreditoConfiguracion $config, string $urlAgenda, bool $prueba = false): ?string
+    public function avisar(User $usuario, Fecha $hoy, CreditoConfiguracion $config, string $urlAgenda, bool $prueba = false, array $canales = self::CANALES): array
     {
-        $aviso = $prueba ? null : $this->reservar($usuario, $hoy);
-        if (! $prueba && $aviso === null) {
-            return null;
+        $avisos = [];
+        foreach ($canales as $canal) {
+            $avisos[$canal] = $prueba ? null : $this->reservar($usuario, $hoy, $canal);
+        }
+        $pendientes = $prueba ? $canales : array_keys(array_filter($avisos));
+        $estados = array_fill_keys($canales, null);
+        if ($pendientes === []) {
+            return $estados;
         }
 
         $agenda = $this->agenda->agenda($usuario, Periodo::dia($hoy), (bool) $config->avisos_incluir_atrasados);
         $resumen = $this->resumen($agenda);
+        foreach ($pendientes as $canal) {
+            $estados[$canal] = $canal === CreditoAviso::CANAL_PUSH
+                ? $this->porPush($usuario, $avisos[$canal], $resumen, $urlAgenda, $prueba)
+                : $this->porCorreo($usuario, $avisos[$canal], $hoy, $config, $agenda, $resumen, $urlAgenda, $prueba);
+        }
+
+        return $estados;
+    }
+
+    /**
+     * @param array<string, mixed> $agenda
+     * @param array{cuotas: int, clientes: int, monto: string, atrasados: int} $resumen
+     */
+    private function porCorreo(User $usuario, ?CreditoAviso $aviso, Fecha $hoy, CreditoConfiguracion $config, array $agenda, array $resumen, string $urlAgenda, bool $prueba): string
+    {
         $verTodos = $usuario->can(AlcanceCartera::PERMISO_VER_TODOS);
         $correo = CreditoAvisoPreferencia::de($usuario)->correoUtilizable();
 
@@ -161,12 +191,79 @@ class AvisoCobranzaService
     }
 
     /**
-     * Toma (o retoma) el aviso del día. null = ya enviado u omitido, o fallido sin intentos.
+     * Push a los dispositivos del usuario. Solo los días con cobros (un push "hoy no hay nada"
+     * molesta; el correo del administrador ya confirma que el proceso corrió). Lleva solo
+     * totales: se ve en la pantalla bloqueada, nunca nombres de clientes.
+     *
+     * @param array{cuotas: int, clientes: int, monto: string, atrasados: int} $resumen
      */
-    private function reservar(User $usuario, Fecha $hoy): ?CreditoAviso
+    private function porPush(User $usuario, ?CreditoAviso $aviso, array $resumen, string $urlAgenda, bool $prueba): string
+    {
+        $dispositivos = PushSuscripcion::where('user_id', $usuario->id)->get();
+        $motivo = match (true) {
+            ! $this->push->configurado() => 'push no configurado en el servidor',
+            $resumen['cuotas'] === 0 && ! $prueba => 'sin cobros hoy',
+            ! CreditoAvisoPreferencia::de($usuario)->recibir_push => 'push apagado',
+            $dispositivos->isEmpty() => 'sin dispositivos con avisos activados',
+            default => null,
+        };
+        if ($motivo !== null) {
+            return $this->cerrar($aviso, CreditoAviso::ESTADO_OMITIDO, $resumen, $motivo);
+        }
+
+        try {
+            // El aviso viaja en la URL para registrar cuándo lo abrió (abierto_en).
+            $url = $aviso ? $urlAgenda . (str_contains($urlAgenda, '?') ? '&' : '?') . 'aviso=' . $aviso->id : $urlAgenda;
+            $r = $this->push->enviar($dispositivos, [...$this->mensajePush($usuario, $resumen, $prueba), 'url' => $url, 'etiqueta' => 'cobranza-dia']);
+        } catch (\Throwable $e) {
+            Log::error('Aviso de cobranza: falló el push', ['usuario' => $usuario->id, 'error' => $e->getMessage()]);
+
+            return $this->cerrar($aviso, CreditoAviso::ESTADO_FALLIDO, $resumen, mb_substr($e->getMessage(), 0, 500));
+        }
+
+        if ($r->vencidas !== []) {
+            PushSuscripcion::whereIn('id', $r->vencidas)->delete();
+        }
+        if ($r->entregadas === 0) {
+            $detalle = $r->errores !== [] ? implode(' | ', $r->errores) : 'ningún dispositivo seguía activo';
+
+            return $this->cerrar($aviso, CreditoAviso::ESTADO_FALLIDO, $resumen, mb_substr($detalle, 0, 500));
+        }
+        PushSuscripcion::where('user_id', $usuario->id)->update(['ultimo_envio_en' => now()]);
+
+        return $this->cerrar($aviso, CreditoAviso::ESTADO_ENVIADO, $resumen, null);
+    }
+
+    /**
+     * @param array{cuotas: int, clientes: int, monto: string, atrasados: int} $resumen
+     * @return array{titulo: string, cuerpo: string}
+     */
+    public function mensajePush(User $usuario, array $resumen, bool $prueba = false): array
+    {
+        $monto = 'S/ ' . number_format((float) $resumen['monto'], 2, '.', ',');
+        $titulo = $usuario->can(AlcanceCartera::PERMISO_VER_TODOS)
+            ? "Hoy: {$resumen['cuotas']} cobros · {$monto}"
+            : "Tienes {$resumen['cuotas']} cobros hoy · {$monto}";
+        $atrasados = match ($resumen['atrasados']) {
+            0 => '',
+            1 => '1 atrasado · ',
+            default => "{$resumen['atrasados']} atrasados · ",
+        };
+
+        return [
+            'titulo' => ($prueba ? '[Prueba] ' : '') . $titulo,
+            'cuerpo' => $atrasados . 'Toca para abrir la Agenda',
+        ];
+    }
+
+    /**
+     * Toma (o retoma) el aviso del día en un canal. null = ya enviado u omitido, o fallido sin
+     * intentos.
+     */
+    private function reservar(User $usuario, Fecha $hoy, string $canal): ?CreditoAviso
     {
         $aviso = CreditoAviso::firstOrCreate(
-            ['user_id' => $usuario->id, 'tipo' => CreditoAviso::TIPO_COBRANZA_DIA, 'fecha' => $hoy->aTexto(), 'canal' => CreditoAviso::CANAL_CORREO],
+            ['user_id' => $usuario->id, 'tipo' => CreditoAviso::TIPO_COBRANZA_DIA, 'fecha' => $hoy->aTexto(), 'canal' => $canal],
             ['estado' => CreditoAviso::ESTADO_PENDIENTE],
         );
         if (in_array($aviso->estado, [CreditoAviso::ESTADO_ENVIADO, CreditoAviso::ESTADO_OMITIDO], true)

@@ -397,6 +397,18 @@ recibo e impresión silenciosa en ticketera, sin decidir; (5) adicional **"Solo 
 final, configurable) diseñado y guardado para más adelante — `docs/planning/creditos/
 adicional-solo-interes.md`; hoy se resuelve renovando cada mes por el mismo capital.
 
+**Completo — Créditos, aviso diario de cobranza (Fase 5, 11-oct-2026):**
+Cada usuario que cobra (o ve toda la cartera) recibe a las 06:45 Lima (configurable, L-S) lo que
+cobra hoy: **correo** (en producción desde `1c60195`; PDF adjunto con `creditos.avisos_pdf_adjunto`,
+si no enlace a la Agenda) y **push en el celular** (Web Push/VAPID, entrega 2). Comando
+`creditos:aviso-cobranza-dia` cada 15 min, idempotente vía `credito_avisos`; correo para avisos
+confirmado por enlace firmado; pantallas Configuración → Avisos y "Mis avisos". El Super-Admin no
+recibe avisos (soporte). Correo de producción: Brevo + `avisos@umbosystem.com` (antes
+`MAIL_MAILER=log`, nada salía). Detalle: `docs/planning/creditos/05-avisos-cobranza.md`.
+**Pendiente real:** desplegar la entrega 2 y generar las claves VAPID (`php artisan webpush:claves`);
+rotar la clave SMTP de Brevo; aviso al **cliente** (página "Mi crédito", recordatorio por WhatsApp)
+sin diseñar. Local: no correr `composer install` (lock para PHP 8.5, local 8.2).
+
 **Completo — Agencia de Viajes, Venta Directa bloque 1 (09-oct-2026, `ae0f1f5`):**
 Corregidas 4 fallas de `VentaDirectaController`: "Concepto libre" fallaba siempre (422, faltaba
 `costo_snapshot`); el ítem de la reserva nacía sin fecha (no salía en Reporte Operativo); el

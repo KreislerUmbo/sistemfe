@@ -54,4 +54,12 @@ return [
         'token' => env('APISPERU_TOKEN'),
     ],
 
+    // Avisos push del navegador (Web Push, Fase 5 de Créditos). Un solo par de claves VAPID para
+    // toda la plataforma; se generan con `php artisan webpush:claves`. Sin ellas el push se omite.
+    'webpush' => [
+        'public_key' => env('VAPID_PUBLIC_KEY'),
+        'private_key' => env('VAPID_PRIVATE_KEY'),
+        'subject' => env('VAPID_SUBJECT', 'mailto:avisos@umbosystem.com'),
+    ],
+
 ];

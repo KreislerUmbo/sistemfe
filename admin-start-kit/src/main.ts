@@ -41,6 +41,14 @@ app.use(router);
 app.use(createBootstrap({ components: true, directives: true }));
 app.use(VueApexCharts);
 
+// Service worker de los avisos push (public/sw.js). Se registra siempre, así el celular puede
+// recibir avisos aunque el panel esté cerrado; sin soporte del navegador simplemente no hace nada.
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').catch(() => { /* sin push en este navegador */ });
+    });
+}
+
 // Restaurar sesión cliente
 const clientAuth = useClientAuthStore(pinia);
 clientAuth.initializeAuth().finally(() => {

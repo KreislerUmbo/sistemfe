@@ -235,6 +235,27 @@ export const creditoService = {
     return data as { mensaje: string }
   },
 
+  /** Entrega 2: activa los avisos push en este dispositivo (suscripción del navegador). */
+  async activarPushDispositivo(suscripcion: PushSubscriptionJSON) {
+    const { data } = await httpClient.post('/creditos/avisos/push', suscripcion)
+    return data as PreferenciasAvisos
+  },
+
+  async quitarPushDispositivo(endpoint: string) {
+    const { data } = await httpClient.post('/creditos/avisos/push/quitar', { endpoint })
+    return data as PreferenciasAvisos
+  },
+
+  async probarPush() {
+    const { data } = await httpClient.post('/creditos/avisos/push/prueba')
+    return data as { mensaje: string }
+  },
+
+  /** El usuario abrió la Agenda desde un aviso push (?aviso=). Sin efecto si no es suyo. */
+  async marcarAvisoAbierto(aviso: number) {
+    await httpClient.post(`/creditos/avisos/${aviso}/abierto`)
+  },
+
   async feriados(anio: number) {
     const { data } = await httpClient.get('/creditos/feriados', { params: { anio } })
     return (data.data ?? []) as Feriado[]

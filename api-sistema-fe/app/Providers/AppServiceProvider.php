@@ -12,7 +12,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        // Fase 5 de Créditos: avisos push (los tests lo reemplazan por uno falso).
+        $this->app->bind(\App\Services\Push\EnviadorPush::class, \App\Services\Push\WebPushEnviador::class);
     }
 
     /**

@@ -1,11 +1,17 @@
 <template>
   <DefaultLayout>
-    <EncabezadoCredito titulo="Mis avisos de cobranza" subtitulo="Cada mañana, lo que tienes que cobrar ese día, en tu correo" icono="far fa-envelope" :volver="false" />
+    <EncabezadoCredito titulo="Mis avisos de cobranza" subtitulo="Cada mañana, lo que tienes que cobrar ese día, en tu correo y en tu celular" icono="far fa-envelope" :volver="false" />
 
     <div v-if="cargando" class="text-center text-muted py-5"><span class="spinner-border spinner-border-sm me-2"></span>Cargando…</div>
     <div v-else-if="errorCarga" class="alert alert-danger">{{ errorCarga }}</div>
 
     <div v-else-if="prefs" class="row g-3">
+      <div v-if="!prefs.aviso_activo" class="col-12">
+        <div class="alert alert-warning small py-2 mb-0">
+          <i class="fas fa-info-circle me-1"></i>El negocio tiene el aviso diario <strong>apagado</strong>: puedes dejar todo listo,
+          pero no llegará nada hasta que el administrador lo encienda en Configuración de créditos → Avisos.
+        </div>
+      </div>
       <div class="col-12 col-lg-7">
         <div class="card border-0 shadow-sm">
           <div class="card-header bg-white border-bottom py-2 d-flex align-items-center justify-content-between gap-2">
@@ -60,6 +66,71 @@
             <small v-if="!puedeProbar" class="text-muted d-block mt-1">Primero confirma tu correo y deja encendido el aviso.</small>
           </div>
         </div>
+
+        <!-- Entrega 2: avisos push en el dispositivo -->
+        <div class="card border-0 shadow-sm mt-3">
+          <div class="card-header bg-white border-bottom py-2 d-flex align-items-center justify-content-between gap-2">
+            <span class="fw-semibold text-dark">Avisos en el celular</span>
+            <span v-if="estadoDispositivo === 'activo'" class="badge bg-success-subtle text-success">
+              <i class="fas fa-check me-1"></i>Activo en este dispositivo
+            </span>
+          </div>
+          <div class="card-body py-3 small">
+            <p class="text-muted mb-3">
+              Una notificación a las {{ horaAviso }} con cuántos cobros tienes y cuánto suma; al tocarla se abre la Agenda.
+              Solo los días con cobros, y sin nombres de clientes (se ve en la pantalla bloqueada).
+            </p>
+
+            <div v-if="!prefs.push_clave_publica" class="alert alert-secondary py-2 mb-0">
+              Los avisos en el celular todavía no están disponibles en este sistema.
+            </div>
+            <template v-else>
+              <div v-if="estadoDispositivo === 'ios-instalar'" class="alert alert-info py-2">
+                <strong>En iPhone</strong> los avisos solo llegan con la app instalada: toca
+                <i class="fas fa-arrow-up-from-bracket mx-1"></i><strong>Compartir</strong> → <strong>Agregar a inicio</strong>,
+                abre UmboSystem desde ese ícono, inicia sesión y vuelve a esta pantalla.
+              </div>
+              <div v-else-if="estadoDispositivo === 'no-soportado'" class="alert alert-secondary py-2">
+                Este navegador no permite avisos. En Android usa Chrome; en iPhone, la app agregada a la pantalla de inicio.
+              </div>
+              <div v-else-if="estadoDispositivo === 'bloqueado'" class="alert alert-warning py-2">
+                Las notificaciones de este sitio están <strong>bloqueadas</strong> en el navegador. Permítelas desde el candado
+                junto a la dirección (Configuración del sitio → Notificaciones) y recarga esta página.
+              </div>
+
+              <div class="d-flex flex-wrap gap-2 mb-3">
+                <button v-if="estadoDispositivo === 'inactivo'" type="button" class="btn btn-sm btn-primary" :disabled="procesandoPush" @click="activarDispositivo">
+                  <span v-if="procesandoPush" class="spinner-border spinner-border-sm me-1"></span><i v-else class="far fa-bell me-1"></i>
+                  Activar avisos en este dispositivo
+                </button>
+                <template v-if="estadoDispositivo === 'activo'">
+                  <button type="button" class="btn btn-sm btn-outline-primary" :disabled="procesandoPush" @click="probarDispositivo">
+                    <span v-if="procesandoPush" class="spinner-border spinner-border-sm me-1"></span><i v-else class="far fa-paper-plane me-1"></i>
+                    Enviarme un aviso de prueba
+                  </button>
+                  <button type="button" class="btn btn-sm btn-outline-secondary" :disabled="procesandoPush" @click="desactivarDispositivo">
+                    <i class="far fa-bell-slash me-1"></i>Desactivar en este dispositivo
+                  </button>
+                </template>
+              </div>
+
+              <template v-if="prefs.push_dispositivos.length">
+                <div class="form-check form-switch mb-2">
+                  <input id="avisos-push" :checked="prefs.recibir_push" class="form-check-input" type="checkbox" role="switch"
+                    :disabled="guardando" @change="alternarPush(($event.target as HTMLInputElement).checked)" />
+                  <label class="form-check-label" for="avisos-push">Recibir avisos en mis dispositivos</label>
+                </div>
+                <span class="text-secondary fw-semibold d-block mb-1">Dispositivos con avisos activados</span>
+                <ul class="list-unstyled mb-0">
+                  <li v-for="d in prefs.push_dispositivos" :key="d.endpoint_hash" class="d-flex justify-content-between gap-2 py-1 border-bottom">
+                    <span><i class="fas fa-mobile-alt me-1 text-muted"></i>{{ nombreDispositivo(d.agente) }}</span>
+                    <span class="text-muted">{{ d.ultimo_envio_en ? `último aviso ${formatFechaHora(d.ultimo_envio_en)}` : 'sin avisos aún' }}</span>
+                  </li>
+                </ul>
+              </template>
+            </template>
+          </div>
+        </div>
       </div>
 
       <div class="col-12 col-lg-5">
@@ -94,7 +165,9 @@ import { creditoService } from '@/services/admin/creditoService'
 import { useToast } from '@/composables/useToast'
 import { interpretarErrorCredito } from '@/composables/creditos/errorCredito'
 import { formatoFecha, formatoSoles } from '@/helpers/creditos/formato'
+import { formatFechaHora } from '@/helpers/fecha'
 import { estadoAviso } from '@/helpers/creditos/avisos'
+import { activarPush, desactivarPush, estadoPush, nombreDispositivo, type EstadoPush } from '@/helpers/creditos/push'
 import type { PreferenciasAvisos } from '@/types/creditos'
 
 const toast = useToast()
@@ -108,8 +181,12 @@ const probando = ref(false)
 const errorCarga = ref<string | null>(null)
 const errorCorreo = ref<string | null>(null)
 
+const estadoDispositivo = ref<EstadoPush>('no-soportado')
+const procesandoPush = ref(false)
+
 const correoCambio = computed(() => !!correo.value && correo.value.toLowerCase() !== (prefs.value?.correo ?? ''))
 const puedeProbar = computed(() => !!prefs.value?.correo_verificado && !!prefs.value?.recibir_correo)
+const horaAviso = computed(() => prefs.value?.aviso_hora?.slice(0, 5) ?? '06:45')
 
 function aplicar(datos: PreferenciasAvisos) {
   prefs.value = datos
@@ -118,13 +195,72 @@ function aplicar(datos: PreferenciasAvisos) {
 
 onMounted(async () => {
   try {
-    aplicar(await creditoService.preferenciasAvisos())
+    const [datos, estado] = await Promise.all([creditoService.preferenciasAvisos(), estadoPush().catch((): EstadoPush => 'no-soportado')])
+    aplicar(datos)
+    estadoDispositivo.value = estado
   } catch (e) {
     errorCarga.value = interpretarErrorCredito(e).mensaje
   } finally {
     cargando.value = false
   }
 })
+
+async function activarDispositivo() {
+  if (!prefs.value?.push_clave_publica) return
+  procesandoPush.value = true
+  try {
+    const r = await activarPush(prefs.value.push_clave_publica)
+    if (!r.ok) {
+      estadoDispositivo.value = r.estado
+      if (r.estado === 'inactivo') toast.warning('Necesitamos tu permiso para mostrarte avisos.')
+      return
+    }
+    aplicar(await creditoService.activarPushDispositivo(r.suscripcion))
+    estadoDispositivo.value = 'activo'
+    toast.success('Avisos activados en este dispositivo. Prueba que te llegue uno.')
+  } catch (e) {
+    toast.warning(interpretarErrorCredito(e).mensaje || 'No se pudo activar los avisos en este dispositivo.')
+  } finally {
+    procesandoPush.value = false
+  }
+}
+
+async function desactivarDispositivo() {
+  procesandoPush.value = true
+  try {
+    const endpoint = await desactivarPush()
+    if (endpoint) aplicar(await creditoService.quitarPushDispositivo(endpoint))
+    estadoDispositivo.value = await estadoPush()
+    toast.success('Avisos desactivados en este dispositivo.')
+  } catch (e) {
+    toast.warning(interpretarErrorCredito(e).mensaje)
+  } finally {
+    procesandoPush.value = false
+  }
+}
+
+async function probarDispositivo() {
+  procesandoPush.value = true
+  try {
+    toast.success((await creditoService.probarPush()).mensaje)
+  } catch (e) {
+    toast.warning(interpretarErrorCredito(e).mensaje)
+  } finally {
+    procesandoPush.value = false
+  }
+}
+
+async function alternarPush(recibir: boolean) {
+  guardando.value = true
+  try {
+    aplicar(await creditoService.guardarPreferenciasAvisos({ recibir_push: recibir }))
+    toast.success(recibir ? 'Avisos en el celular encendidos' : 'Avisos en el celular apagados')
+  } catch (e) {
+    toast.warning(interpretarErrorCredito(e).mensaje)
+  } finally {
+    guardando.value = false
+  }
+}
 
 async function guardarCorreo() {
   if (!correoCambio.value || guardando.value) return
