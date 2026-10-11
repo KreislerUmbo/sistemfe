@@ -412,7 +412,7 @@ días, 5 fallos → 15 min); ve su próxima cuota N de M, lo vencido con mora, c
 pagos. Ficha del cliente: enviar por WhatsApp, copiar, regenerar; el recordatorio de la Agenda suma
 el link. Detalle: `docs/planning/creditos/05b-mi-credito-cliente.md`.
 **Pendiente real:** desplegar la entrega 2 del aviso (push) y generar las claves VAPID
-(`php artisan webpush:claves`); unir y desplegar "Mi crédito"; rotar la clave SMTP de Brevo;
+(`php artisan webpush:claves`); unir y desplegar "Mi crédito";
 cláusula de consentimiento (Ley 29733) en el contrato del abogado. Local: no correr
 `composer install` (lock para PHP 8.5, local 8.2).
 

@@ -257,8 +257,8 @@ La entrega 1 se apoya en lo existente y tiene el menor riesgo; la 2 es la parte 
   autenticado en Brevo (DKIM `brevo1/brevo2._domainkey` CNAME + `brevo-code` TXT + `_dmarc`
   `p=none`, en Cloudflare, nube gris). `avisos@` recibe vía **Cloudflare Email Routing** → reenvía
   a `umbosac@gmail.com` (MX `route1-3.mx.cloudflare.net` + SPF de Cloudflare). Prueba real
-  entregada. Pendientes chicos: rotar la clave SMTP (quedó parcialmente expuesta en un
-  `config:show`), endurecer DMARC a `p=quarantine` tras unas semanas estables, borrar en Brevo el
+  entregada. Clave SMTP rotada el mismo día (había quedado parcialmente expuesta en un
+  `config:show`). Pendientes chicos: endurecer DMARC a `p=quarantine` tras unas semanas estables, borrar en Brevo el
   remitente `umbosac@gmail.com` (no apto: dominio gmail.com).
 - **Producción sí tiene worker de colas** (`sistemafe-worker` bajo supervisor, `deploy.sh` lo
   reinicia). La entrega 1 igual envía síncrono (ver "Costo en el servidor"). Ojo: tras cambiar
