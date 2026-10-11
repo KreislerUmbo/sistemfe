@@ -1,8 +1,8 @@
 # Fase 5b — "Mi crédito": el cliente consulta su cuota
 
-Estado: diseño aprobado (11-oct-2026); **entregas 1 (página "Mi crédito") y 2 (QR en recibos y
-contrato) construidas** en la rama `feat/creditos-mi-credito`, sin merge. Falta la 3 (ficha del
-cliente y link en el recordatorio de WhatsApp). Es la otra
+Estado: **las 3 entregas construidas** (11-oct-2026) en la rama `feat/creditos-mi-credito`, sin
+merge ni despliegue: página "Mi crédito", QR en recibos y contrato, ficha del cliente y link en el
+recordatorio de WhatsApp. Es la otra
 mitad del pedido original de la Fase 5: que el **cliente** sepa su cuota (número N de M), cuánto le
 falta y la próxima fecha. El aviso interno (administrador/cobrador) está en `05-avisos-cobranza.md`.
 Reglas de fondo: `00-reglas-y-modelo.md`.
@@ -156,6 +156,30 @@ cuenta); sin tareas programadas nuevas.
 - **Verificación:** `MiCreditoTest` 10/10 (+3: recibo con QR crea un solo link, sin documento sale
   sin QR y sin link, vista previa no crea links); `DocumentosCreditoTest` 11/11 sin cambios. PDFs
   revisados rasterizados (ticket, recibo A4, contrato).
+
+### Entrega 3 — construida (11-oct-2026, misma rama)
+- **Ficha del cliente** (`views/clients/ficha.vue`, columna derecha, solo giro créditos):
+  `components/Creditos/MiCreditoCliente.vue` — el link (copiar, con respaldo sin HTTPS), "Entró N
+  veces · última …" o "Todavía no entró", aviso si está bloqueado, **Enviar por WhatsApp** (texto
+  `mensajeMiCredito()`: saludo con el primer nombre + link + "te pedirá los últimos 4 dígitos de
+  tu DNI"; sin celular registrado: "copia el link y envíalo") y **Regenerar** (`creditos.crear`,
+  con `DialogoBase` que explica que los QR impresos dejan de funcionar). Se vuelve a consultar al
+  guardar la ficha (el documento pudo cambiar). Sin documento muestra el motivo del 422.
+- **Agenda → recordatorio de WhatsApp**: suma "Consulta tu crédito aquí: {link}" al texto de
+  siempre (`conLinkMiCredito()`). Pide el link al tocar (una vez por cliente) y abre la pestaña
+  **antes** de esperar (si no, el navegador la bloquea como ventana emergente); sin link (cliente sin
+  documento o error) el recordatorio sale igual que antes.
+- **Bug encontrado por el test nuevo:** un link recién creado devolvía `accesos`/`version` en null
+  (el modelo no conocía los defaults de la tabla) → `$attributes` en `CreditoEnlaceCliente`. Con
+  `version` null la credencial podía no coincidir después con la guardada.
+- **Verificación:** `MiCreditoTest` 11/11 (+1: el panel ve y regenera el link y un cobrador fuera
+  de su cartera recibe 404); Vitest 153/153; vue-tsc en el baseline. En vivo contra
+  `creditos-demo`: tarjeta en la ficha de un cliente real, mensaje de WhatsApp con su link,
+  Regenerar con confirmación (cambia el link), recordatorio de la Agenda que abre WhatsApp con el
+  link nuevo al final. Datos de prueba borrados (link y auditoría).
+
+**Fase 5b completa.** Al desplegar: `tenants:migrate-verticales` (tabla `credito_enlaces_cliente`).
+Sin `.env` nuevo: el link usa `TENANT_FRONTEND_URL` (default `https://{tenant}.umbosystem.com`).
 
 ## Fuera de alcance (posible fase siguiente)
 - **Avisos push al cliente** desde la misma página "Mi crédito" (botón "Avisarme un día antes de

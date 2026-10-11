@@ -1,5 +1,19 @@
 import { describe, expect, it } from 'vitest'
-import { fechaConDia, limpiarDigitos, primerNombre, textoVence, textoVencido } from './miCredito'
+import { conLinkMiCredito, fechaConDia, limpiarDigitos, mensajeMiCredito, primerNombre, textoVence, textoVencido } from './miCredito'
+
+describe('mensajes de WhatsApp', () => {
+  it('manda el link con el primer nombre y avisa de los 4 dígitos', () => {
+    expect(mensajeMiCredito('JUAN PÉREZ', 'https://demo.umbosystem.com/c/abc')).toBe(
+      'Hola Juan, aquí puedes ver tu crédito cuando quieras: tu próxima cuota, cuánto te falta y tus pagos. '
+      + 'https://demo.umbosystem.com/c/abc (te pedirá los últimos 4 dígitos de tu DNI).',
+    )
+  })
+
+  it('el recordatorio suma el link solo si lo hay', () => {
+    expect(conLinkMiCredito('Hola Juan, le recordamos su cuota.', 'https://x/c/abc')).toBe('Hola Juan, le recordamos su cuota. Consulta tu crédito aquí: https://x/c/abc')
+    expect(conLinkMiCredito('Hola Juan.', null)).toBe('Hola Juan.')
+  })
+})
 
 describe('textoVence', () => {
   it('hoy, mañana o la fecha con el día', () => {

@@ -222,6 +222,30 @@ final class MiCreditoTest extends CreditosTestCase
         $this->assertSame(0, CreditoEnlaceCliente::count());
     }
 
+    public function test_el_panel_ve_y_regenera_el_link_solo_dentro_de_su_cartera(): void
+    {
+        \Illuminate\Support\Facades\Auth::guard('api')->setUser($this->admin);
+        $controller = app(\App\Http\Controllers\Creditos\EnlaceClienteController::class);
+        $datos = $controller->show($this->cliente->id)->getData(true);
+        $this->assertStringContainsString('/c/', $datos['url']);
+        $this->assertSame(0, $datos['accesos']);
+        $this->assertSame($datos['url'], $controller->show($this->cliente->id)->getData(true)['url']);   // no crea otro
+
+        $nuevo = $controller->regenerar($this->cliente->id)->getData(true);
+        $this->assertNotSame($datos['url'], $nuevo['url']);
+        $this->assertNotNull($nuevo['regenerado_en']);
+
+        // Un cobrador sin este cliente en su cartera: para él el cliente "no existe".
+        $cobrador = $this->usuario(['creditos.ver', 'creditos.cobrar']);
+        \Illuminate\Support\Facades\Auth::guard('api')->setUser($cobrador);
+        try {
+            app(\App\Http\Controllers\Creditos\EnlaceClienteController::class)->show($this->cliente->id);
+            $this->fail('Debía dar 404 fuera de su cartera.');
+        } catch (HttpException $e) {
+            $this->assertSame(404, $e->getStatusCode());
+        }
+    }
+
     public function test_un_link_inexistente_responde_404_sin_dar_pistas(): void
     {
         try {

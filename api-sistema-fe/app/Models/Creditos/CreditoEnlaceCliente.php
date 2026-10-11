@@ -20,6 +20,9 @@ class CreditoEnlaceCliente extends Model
 
     protected $hidden = ['token', 'token_hash'];
 
+    /** Los mismos defaults que la tabla: sin esto, un link recién creado tenía accesos/versión null. */
+    protected $attributes = ['version' => 1, 'intentos_fallidos' => 0, 'accesos' => 0];
+
     protected function casts(): array
     {
         return [

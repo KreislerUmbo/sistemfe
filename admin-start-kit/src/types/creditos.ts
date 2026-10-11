@@ -233,6 +233,17 @@ export interface PreferenciasAvisos {
   ultimos: AvisoRegistro[]
 }
 
+/** Fase 5b: el link "Mi crédito" de un cliente visto desde el panel (GET clientes/{id}/mi-credito). */
+export interface EnlaceMiCredito {
+  url: string
+  accesos: number
+  ultimo_acceso_en: string | null
+  /** Bloqueado por 5 intentos fallidos con el documento (hasta esa hora). */
+  bloqueado_hasta: string | null
+  regenerado_en: string | null
+  creado_en: string | null
+}
+
 /** Fase 5b: lo que ve el cliente en "Mi crédito" (página pública /c/:token). */
 export interface MiCredito {
   negocio: { nombre: string | null; telefono: string | null; logo: string | null }

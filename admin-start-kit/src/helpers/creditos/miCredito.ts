@@ -37,6 +37,18 @@ export function primerNombre(nombre: string): string {
   return primero ? primero.charAt(0).toUpperCase() + primero.slice(1).toLowerCase() : ''
 }
 
+/** Mensaje de WhatsApp para mandarle al cliente su link "Mi crédito" (ficha del cliente). */
+export function mensajeMiCredito(nombre: string, url: string): string {
+  const saludo = primerNombre(nombre)
+  return `Hola${saludo ? ` ${saludo}` : ''}, aquí puedes ver tu crédito cuando quieras: tu próxima cuota, cuánto te falta y tus pagos. `
+    + `${url} (te pedirá los últimos 4 dígitos de tu DNI).`
+}
+
+/** Suma el link al final de un recordatorio de la Agenda; sin link, el texto queda igual. */
+export function conLinkMiCredito(texto: string, url: string | null): string {
+  return url ? `${texto} Consulta tu crédito aquí: ${url}` : texto
+}
+
 /** Solo letras y números, en mayúscula, máximo 4: lo que se escribe en el campo del documento. */
 export function limpiarDigitos(texto: string): string {
   return texto.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 4)

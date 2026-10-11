@@ -234,6 +234,9 @@
               </div>
             </div>
             <TarjetaResumenCliente v-if="contexto.creditos && clienteId" :key="faltante.length" :cliente-id="clienteId" :enlace-ficha="false" />
+            <!-- Fase 5b: link "Mi crédito" del cliente (se vuelve a consultar al guardar: p. ej. al completar el documento). -->
+            <MiCreditoCliente v-if="contexto.creditos && clienteId" :cliente-id="clienteId" :nombre="nombreCompleto(form)"
+              :telefono="form.phone || null" :puede-regenerar="puede('creditos.crear')" :version="guardados" />
             <router-link v-if="contexto.creditos && clienteId && puede('creditos.crear')" class="btn btn-outline-primary"
               :to="{ name: 'creditos.nuevo', query: { cliente: clienteId } }">
               <i class="fas fa-plus me-2"></i>Nuevo crédito para este cliente
@@ -264,6 +267,7 @@ import DefaultLayout from '@/layouts/DefaultLayout.vue'
 import EncabezadoCredito from '@/components/Creditos/EncabezadoCredito.vue'
 import BarraAccionMovil from '@/components/Creditos/BarraAccionMovil.vue'
 import TarjetaResumenCliente from '@/components/Creditos/TarjetaResumenCliente.vue'
+import MiCreditoCliente from '@/components/Creditos/MiCreditoCliente.vue'
 import ClienteDatosBase from '@/components/Clientes/ClienteDatosBase.vue'
 import MapaUbicacion, { type Coordenadas } from '@/components/Clientes/MapaUbicacion.vue'
 import DocumentosCliente from '@/components/Clientes/DocumentosCliente.vue'
@@ -292,6 +296,8 @@ const FICHA_VACIA: DatosFicha = {
 
 const clienteId = ref<number | null>(route.params.id ? Number(route.params.id) : null)
 const contexto = ref<ContextoCliente>({ giro: null, creditos: false })
+/** Sube en cada guardado: la tarjeta "Mi crédito" vuelve a consultar (el documento pudo cambiar). */
+const guardados = ref(0)
 const cargando = ref(true)
 const errorCarga = ref<string | null>(null)
 const guardando = ref(false)
@@ -411,6 +417,7 @@ async function guardar() {
     if (pendientes.length) toast.warning('El cliente se guardó, pero algunas fotos no se subieron. Vuelve a intentarlo desde Documentos.')
     else toast.success(resultado.restaurado ? 'Cliente restaurado' : nuevo ? 'Cliente registrado' : 'Cambios guardados')
 
+    guardados.value++
     if (nuevo || resultado.restaurado) await router.replace({ name: 'clients.ficha', params: { id } })
     else if (contexto.value.creditos) await cargarCreditos()
   } catch (e) {

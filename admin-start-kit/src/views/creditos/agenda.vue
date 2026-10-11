@@ -140,7 +140,8 @@
                     <a v-if="enlaceLlamada(f.cliente.telefono)" :href="enlaceLlamada(f.cliente.telefono)!" class="btn btn-sm btn-outline-secondary me-1"
                       :title="`Llamar ${f.cliente.telefono}`" :aria-label="`Llamar a ${f.cliente.nombre}`"><i class="fas fa-phone"></i></a>
                     <a v-if="enlaceWhatsapp(f.cliente.telefono)" :href="enlaceWhatsappConTexto(f.cliente.telefono, mensajeRecordatorio(f, datos!.hoy))" target="_blank" rel="noopener"
-                      class="btn btn-sm btn-outline-success me-1" title="Enviar recordatorio por WhatsApp" :aria-label="`Recordatorio por WhatsApp a ${f.cliente.nombre}`"><i class="fab fa-whatsapp"></i></a>
+                      class="btn btn-sm btn-outline-success me-1" title="Enviar recordatorio por WhatsApp (con su link Mi crédito)" :aria-label="`Recordatorio por WhatsApp a ${f.cliente.nombre}`"
+                      @click.prevent="recordatorio(f)"><i class="fab fa-whatsapp"></i></a>
                     <a v-if="enlaceMapa(f.cliente)" :href="enlaceMapa(f.cliente)!" target="_blank" rel="noopener"
                       class="btn btn-sm btn-outline-secondary me-1" title="Abrir mapa" aria-label="Abrir mapa"><i class="fas fa-map-marker-alt"></i></a>
                     <router-link v-if="f.dia === null || f.dia === datos!.hoy" :to="{ name: 'creditos.cobrar', params: { id: f.credito_id }, query: { volver: 'agenda' } }"
@@ -171,6 +172,7 @@ import { useToast } from '@/composables/useToast'
 import { interpretarErrorCredito, type ErrorCredito } from '@/composables/creditos/errorCredito'
 import { enlaceLlamada, enlaceMapa, enlaceWhatsapp } from '@/helpers/creditos/cobranza'
 import { enlaceWhatsappConTexto } from '@/helpers/creditos/documentos'
+import { conLinkMiCredito } from '@/helpers/creditos/miCredito'
 import { formatoFecha, formatoSoles, hoyEnLima } from '@/helpers/creditos/formato'
 import {
   cuotaVencida, descargarBlob, fechasAgenda, mensajeRecordatorio, nombreArchivoReporte, RANGOS_AGENDA, tituloDiaAgenda, type RangoAgenda,
@@ -237,6 +239,30 @@ onMounted(() => {
   if (Number.isInteger(aviso) && aviso > 0) creditoService.marcarAvisoAbierto(aviso).catch(() => {})
 })
 watch([desde, hasta, incluirAtrasados, cobradorId, distrito], cargar)
+
+/** Link "Mi crédito" ya pedido por cliente (null = no tiene: p. ej. sin documento). */
+const linksMiCredito = new Map<number, string | null>()
+
+/**
+ * Recordatorio por WhatsApp con el link "Mi crédito" del cliente al final (Fase 5b). La pestaña se
+ * abre antes de pedir el link: abierta después de esperar, el navegador la bloquea. Sin link, el
+ * recordatorio sale igual que antes.
+ */
+async function recordatorio(f: FilaAgenda) {
+  const ventana = window.open('', '_blank')
+  let url = linksMiCredito.get(f.cliente.id)
+  if (url === undefined) {
+    url = await creditoService.enlaceMiCredito(f.cliente.id).then((e) => e.url).catch(() => null)
+    linksMiCredito.set(f.cliente.id, url)
+  }
+  const destino = enlaceWhatsappConTexto(f.cliente.telefono, conLinkMiCredito(mensajeRecordatorio(f, datos.value!.hoy), url))
+  if (ventana) {
+    ventana.opener = null
+    ventana.location.href = destino
+  } else {
+    window.location.href = destino
+  }
+}
 
 function direccion(f: FilaAgenda): string {
   return [f.cliente.direccion_cobro, f.cliente.referencia, f.cliente.distrito].filter(Boolean).join(' · ')

@@ -405,9 +405,16 @@ si no enlace a la Agenda) y **push en el celular** (Web Push/VAPID, entrega 2). 
 confirmado por enlace firmado; pantallas Configuración → Avisos y "Mis avisos". El Super-Admin no
 recibe avisos (soporte). Correo de producción: Brevo + `avisos@umbosystem.com` (antes
 `MAIL_MAILER=log`, nada salía). Detalle: `docs/planning/creditos/05-avisos-cobranza.md`.
-**Pendiente real:** desplegar la entrega 2 y generar las claves VAPID (`php artisan webpush:claves`);
-rotar la clave SMTP de Brevo; aviso al **cliente** (página "Mi crédito", recordatorio por WhatsApp)
-sin diseñar. Local: no correr `composer install` (lock para PHP 8.5, local 8.2).
+**Aviso al cliente — "Mi crédito" (Fase 5b, 11-oct-2026, rama `feat/creditos-mi-credito`):** link
+permanente por cliente (`/c/:token`, página pública móvil) con QR en recibos (80 mm/A4) y al final
+del contrato; la primera vez en cada celular pide los últimos 4 dígitos del documento (recordado 90
+días, 5 fallos → 15 min); ve su próxima cuota N de M, lo vencido con mora, cuánto le falta y sus
+pagos. Ficha del cliente: enviar por WhatsApp, copiar, regenerar; el recordatorio de la Agenda suma
+el link. Detalle: `docs/planning/creditos/05b-mi-credito-cliente.md`.
+**Pendiente real:** desplegar la entrega 2 del aviso (push) y generar las claves VAPID
+(`php artisan webpush:claves`); unir y desplegar "Mi crédito"; rotar la clave SMTP de Brevo;
+cláusula de consentimiento (Ley 29733) en el contrato del abogado. Local: no correr
+`composer install` (lock para PHP 8.5, local 8.2).
 
 **Completo — Agencia de Viajes, Venta Directa bloque 1 (09-oct-2026, `ae0f1f5`):**
 Corregidas 4 fallas de `VentaDirectaController`: "Concepto libre" fallaba siempre (422, faltaba
