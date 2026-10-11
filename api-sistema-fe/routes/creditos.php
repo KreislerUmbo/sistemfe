@@ -53,6 +53,11 @@ Route::group([
     Route::put('creditos/avisos/preferencias', [AvisoCobranzaController::class, 'update'])->middleware('permission:creditos.cobrar|creditos.ver_todos');
     Route::post('creditos/avisos/preferencias/reenviar-verificacion', [AvisoCobranzaController::class, 'reenviarVerificacion'])->middleware('permission:creditos.cobrar|creditos.ver_todos');
     Route::post('creditos/avisos/prueba', [AvisoCobranzaController::class, 'prueba'])->middleware('permission:creditos.cobrar|creditos.ver_todos');
+    // Entrega 2: avisos push en el celular (Web Push).
+    Route::post('creditos/avisos/push', [AvisoCobranzaController::class, 'suscribirPush'])->middleware('permission:creditos.cobrar|creditos.ver_todos');
+    Route::post('creditos/avisos/push/quitar', [AvisoCobranzaController::class, 'desuscribirPush'])->middleware('permission:creditos.cobrar|creditos.ver_todos');
+    Route::post('creditos/avisos/push/prueba', [AvisoCobranzaController::class, 'pruebaPush'])->middleware('permission:creditos.cobrar|creditos.ver_todos');
+    Route::post('creditos/avisos/{aviso}/abierto', [AvisoCobranzaController::class, 'abierto'])->whereNumber('aviso')->middleware('permission:creditos.cobrar|creditos.ver_todos');
     Route::get('creditos/feriados', [FeriadoController::class, 'index'])->middleware('permission:creditos.configurar');
     Route::post('creditos/feriados', [FeriadoController::class, 'store'])->middleware('permission:creditos.configurar');
     Route::put('creditos/feriados/{feriado}', [FeriadoController::class, 'update'])->whereNumber('feriado')->middleware('permission:creditos.configurar');

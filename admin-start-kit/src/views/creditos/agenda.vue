@@ -230,7 +230,12 @@ function elegirRango(nuevo: RangoAgenda) {
   }
 }
 
-onMounted(cargar)
+onMounted(() => {
+  cargar()
+  // Llegó tocando el aviso push: se registra que lo abrió (indicador del aviso). Sin efecto si falla.
+  const aviso = Number(route.query.aviso)
+  if (Number.isInteger(aviso) && aviso > 0) creditoService.marcarAvisoAbierto(aviso).catch(() => {})
+})
 watch([desde, hasta, incluirAtrasados, cobradorId, distrito], cargar)
 
 function direccion(f: FilaAgenda): string {

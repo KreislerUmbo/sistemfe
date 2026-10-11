@@ -216,6 +216,9 @@ export interface AvisoRegistro {
 
 /** Fase 5: GET/PUT creditos/avisos/preferencias (las del usuario que inicia sesión). */
 export interface PreferenciasAvisos {
+  /** Si el negocio tiene encendido el aviso diario, y a qué hora (HH:mm, Perú). */
+  aviso_activo: boolean
+  aviso_hora: string
   correo: string | null
   /** El correo de inicio de sesión, sugerido cuando todavía no guardó uno. */
   correo_sugerido: string | null
@@ -224,7 +227,18 @@ export interface PreferenciasAvisos {
   recibir_push: boolean
   /** Con el permiso creditos.avisos_pdf_adjunto el PDF llega adjunto; si no, un enlace. */
   pdf_adjunto: boolean
+  /** Entrega 2: clave VAPID del servidor; null = el push no está configurado en el servidor. */
+  push_clave_publica: string | null
+  push_dispositivos: DispositivoPush[]
   ultimos: AvisoRegistro[]
+}
+
+/** Entrega 2: un dispositivo con los avisos push activados. */
+export interface DispositivoPush {
+  endpoint_hash: string
+  agente: string | null
+  ultimo_envio_en: string | null
+  created_at: string
 }
 
 /** GET creditos/{id}: crédito + situación calculada a hoy por el backend. */
