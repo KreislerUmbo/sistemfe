@@ -1,8 +1,9 @@
 # Fase 5 — Aviso diario de cobranza ("lo que cobras hoy")
 
 Estado: **diseño aprobado** (11-oct-2026); prerrequisito de correo en producción **resuelto** el
-mismo día (Brevo, ver "Verificar antes de construir"). Entrega 1 en curso en la rama
-`feat/creditos-avisos-cobranza` (sale de `main`). Surge de un análisis con el usuario sobre
+mismo día (Brevo, ver "Verificar antes de construir"). **Entrega 1 (backend del
+correo) construida** en la rama `feat/creditos-avisos-cobranza` (sale de `main`); faltan push
+(entrega 2) y pantallas (entrega 3). Surge de un análisis con el usuario sobre
 avisar a clientes y administradores; este documento cubre **solo el aviso interno** (administrador,
 asesor que cobra, cobrador). El aviso al cliente (página "Mi crédito", ronda de recordatorios por
 WhatsApp manual, WhatsApp automático pagado) queda para un documento propio — ver "Fuera de alcance".
@@ -94,10 +95,13 @@ Orden del día en el servidor: 02:30 castigos (los castigados ya no aparecen) ·
 - La hora configurable implica que el comando corra cada 15 min y despache a los tenants cuya hora
   ya pasó y no tienen aviso del día — la tabla `credito_avisos` hace que no se repita.
 
-## Datos nuevos (tenant, `verticals/creditos`)
+## Datos nuevos (tenant, `tenant/core` como el resto del módulo)
 - `credito_avisos`: `user_id`, `tipo` (`cobranza_dia`), `fecha` (negocio), `canal` (`push|correo`),
-  `estado` (`enviado|fallido|omitido`), `detalle` (error o motivo), `cantidad_cobros`,
-  `monto_esperado` (centavos), `abierto_en` (clic del push). Único (`user_id`, `tipo`, `fecha`, `canal`).
+  `estado` (`pendiente|enviado|fallido|omitido`), `intentos`, `detalle` (error o motivo),
+  `cantidad_cobros`, `monto_esperado` (soles, decimal), `enviado_en`, `abierto_en` (clic del push).
+  Único (`user_id`, `tipo`, `fecha`, `canal`).
+- `credito_aviso_preferencias`: una fila por usuario (`correo`, `correo_verificado_en`,
+  `recibir_correo`, `recibir_push`).
 - `push_subscriptions` (del paquete).
 - Columnas de configuración por usuario/tenant (ver arriba).
 - Recordar: `php artisan tenants:migrate-verticales`, no `tenants:migrate`.
@@ -120,9 +124,11 @@ VPS de producción (revisado 09-oct): 3.7 GB RAM, 2 GB swap, disco 25 %. El cron
 | 50 tenants × 10 usuarios | 500 | 15–20 min | US$0 servidor; correo dentro de plan gratis/centavos |
 
 Protecciones: `withoutOverlapping()`, aislamiento de fallas por tenant, sin PDF si el usuario no
-tiene cobros, PDF en memoria (uno a la vez). El worker de colas ya existe en producción
-(`sistemafe-worker`), así que el envío puede encolarse desde el inicio (reintentos gratis); el
-comando solo arma y despacha.
+tiene cobros, PDF en memoria (uno a la vez). **Envío síncrono a propósito** (decidido al
+construir la entrega 1): con el volumen actual sobra, el registro sabe en el momento si salió o
+falló, y el PDF adjunto no viaja serializado en la cola. Los reintentos los da el propio comando
+(cada 15 min, hasta 3 intentos por día). Si el volumen crece, el worker de colas
+(`sistemafe-worker`) ya existe en producción.
 
 ## Analítica
 - `credito_avisos` responde quién recibió qué, por qué canal, y si falló.
@@ -139,6 +145,40 @@ comando solo arma y despacha.
 
 La entrega 1 se apoya en lo existente y tiene el menor riesgo; la 2 es la parte nueva.
 
+### Entrega 1 — construida (11-oct-2026, rama `feat/creditos-avisos-cobranza`)
+- **Migraciones** (`tenant/core`): `2026_10_11_100000_creditos_avisos_cobranza` (5 columnas
+  `avisos_*` en `credito_configuracion`, **apagado por defecto**; tablas `credito_aviso_preferencias`
+  y `credito_avisos`) y `2026_10_11_100100_add_creditos_avisos_pdf_adjunto_permission` (al
+  "Administrador de créditos"; también en `CreditosRolesSeeder` y en el catálogo de Roles).
+- **Servicio** `Creditos\Avisos\AvisoCobranzaService` (`ejecutar`, `motivoParaNoCorrer`,
+  `destinatarios` — activos con `creditos.cobrar` o `ver_todos`, sin Super-Admin —, `avisar`).
+  Reutiliza `AgendaCobranzaService` con `Periodo::dia(hoy)`.
+- **PDF:** generación extraída de `ReporteCreditoController::pdf()` a `Reportes\ReportePdf`
+  (la usan la descarga y el aviso); pie "Confidencial — generado para … el …" en el aviso.
+- **Correos:** `AvisoCobranzaDiaMail` (remitente `avisos@` con el nombre de la empresa, Reply-To al
+  correo de la empresa) y `VerificarCorreoAvisosMail` (enlace firmado de 48 h ligado al correo
+  guardado: si el correo cambia, el enlace viejo da 410).
+- **API:** `GET/PUT creditos/avisos/preferencias`, `POST …/preferencias/reenviar-verificacion`,
+  `POST creditos/avisos/prueba` (envía el de hoy ahora, sin contar como el del día), y la ruta
+  firmada `GET creditos-avisos/verificar-correo`. La configuración del tenant va por el
+  `PUT creditos/configuracion` existente (`avisos_activo`, `avisos_hora`, `avisos_dias`,
+  `avisos_incluir_atrasados`, `avisos_sin_cobros`).
+- **Comando** `creditos:aviso-cobranza-dia` cada 15 min con `withoutOverlapping(30)`.
+- **Enlace al panel:** `config/creditos.php` → `TENANT_FRONTEND_URL` (default
+  `https://{tenant}.umbosystem.com`; en local `http://{tenant}.sistemafe.test:5173`). La Agenda
+  ahora acepta `?rango=hoy&atrasados=1`.
+- **Hallazgo previo corregido:** `creditos.reportes` no estaba en el catálogo de Roles del
+  frontend (no se podía asignar desde la pantalla).
+- **Verificación:** `AvisoCobranzaTest` 10/10 (incluye el render real de ambos correos);
+  Créditos + Unit 408/408; vue-tsc en el baseline (46). Correo y PDF revisados a mano (render a 400
+  px y PDF rasterizado). Bug encontrado así: el desglose por cobrador salía sin coma de miles (las
+  propiedades públicas del Mailable pisan las variables de `with`).
+- **Falta para usarlo en producción:** pantalla de preferencias (correo para avisos, confirmar,
+  probar) y los campos `avisos_*` en la Configuración de Créditos — entrega 3. Hasta entonces el
+  aviso queda apagado.
+- **Al desplegar:** `tenants:migrate-verticales` (las migraciones son de `tenant/core`) y nada más;
+  el cron `schedule:run` ya existe.
+
 ## Verificar antes de construir
 - ~~Producción sin correo~~ **RESUELTO 11-oct-2026:** hasta ese día `MAIL_MAILER=log` (ningún
   correo salía; en el log solo había un "Recordatorio de pago vencido — INV-1-202609" nunca
@@ -151,9 +191,8 @@ La entrega 1 se apoya en lo existente y tiene el menor riesgo; la 2 es la parte 
   `config:show`), endurecer DMARC a `p=quarantine` tras unas semanas estables, borrar en Brevo el
   remitente `umbosac@gmail.com` (no apto: dominio gmail.com).
 - **Producción sí tiene worker de colas** (`sistemafe-worker` bajo supervisor, `deploy.sh` lo
-  reinicia): el envío de correos/push puede ir a la cola (`ShouldQueue`) en vez de síncrono en el
-  cron. Ojo: tras cambiar `.env`, `config:cache` + reload de php-fpm + `supervisorctl restart
-  sistemafe-worker:*`.
+  reinicia). La entrega 1 igual envía síncrono (ver "Costo en el servidor"). Ojo: tras cambiar
+  `.env`, `config:cache` + reload de php-fpm + `supervisorctl restart sistemafe-worker:*`.
 - Extensiones PHP del VPS que pide `minishlink/web-push` (openssl, curl, mbstring; gmp recomendada).
 - Que los usuarios reales de credishirley tengan un correo real.
 - Con asesor y `asesor_cobra = false`, la agenda del asesor sale vacía → no recibe aviso

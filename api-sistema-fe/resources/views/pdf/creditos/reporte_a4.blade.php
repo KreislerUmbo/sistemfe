@@ -15,7 +15,11 @@
     </style>
 </head>
 <body>
-    <div class="generado">Generado por {{ $generadoPor }} el {{ $generadoEn }}</div>
+    @if (! empty($confidencial))
+        <div class="generado">Confidencial — generado para {{ $generadoPor }} el {{ $generadoEn }}</div>
+    @else
+        <div class="generado">Generado por {{ $generadoPor }} el {{ $generadoEn }}</div>
+    @endif
     {{-- Sin el pie de la cabecera: el reporte ya lleva "Generado por … el …" (salían dos superpuestos). --}}
     @include('pdf.creditos._cabecera_a4', ['titulo' => $tabla['titulo'], 'numero' => null, 'sinPie' => true])
     <div class="subtitulo">{{ $tabla['subtitulo'] }}</div>

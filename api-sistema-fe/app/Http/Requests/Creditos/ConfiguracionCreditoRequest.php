@@ -53,6 +53,13 @@ class ConfiguracionCreditoRequest extends FormRequest
             'tope_mora_tipo' => ['sometimes', Rule::enum(TopeMoraTipo::class)],
             'tope_mora_valor' => ['sometimes', 'nullable', 'integer', 'min:0', 'max:1000'],
             'dias_max_pago_retroactivo' => ['sometimes', 'integer', 'min:0', 'max:60'],
+            // Fase 5: aviso diario de cobranza.
+            'avisos_activo' => ['sometimes', 'boolean'],
+            'avisos_hora' => ['sometimes', 'date_format:H:i'],
+            'avisos_dias' => ['sometimes', 'array', 'min:1', 'max:7'],
+            'avisos_dias.*' => ['integer', 'between:1,7', 'distinct'],
+            'avisos_incluir_atrasados' => ['sometimes', 'boolean'],
+            'avisos_sin_cobros' => ['sometimes', 'boolean'],
         ];
     }
 }

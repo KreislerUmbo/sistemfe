@@ -516,7 +516,7 @@ export const PERMISOS = [
         ]
     },
     {
-        // Módulo Créditos (giro 'creditos', prestamista). Mismos 16 permisos que
+        // Módulo Créditos (giro 'creditos', prestamista). Mismos 18 permisos que
         // CreditosRolesSeeder; distinto de "Créditos (Amortizaciones)", que son las
         // ventas a crédito de retail.
         'name': 'Créditos (préstamos)',
@@ -584,6 +584,14 @@ export const PERMISOS = [
             {
                 name: 'Vender prendas (módulo prendas)',
                 permiso: 'creditos.prendas.vender',
+            },
+            {
+                name: 'Ver reportes de créditos',
+                permiso: 'creditos.reportes',
+            },
+            {
+                name: 'Recibir el PDF de la agenda adjunto en el aviso diario',
+                permiso: 'creditos.avisos_pdf_adjunto',
             },
         ]
     },
