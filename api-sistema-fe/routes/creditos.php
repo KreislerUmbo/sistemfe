@@ -21,7 +21,9 @@ use App\Http\Controllers\Creditos\CreditoMigracionController;
 use App\Http\Controllers\Creditos\CreditoPagoController;
 use App\Http\Controllers\Creditos\CreditoReprogramacionController;
 use App\Http\Controllers\Creditos\CreditoRenovacionController;
+use App\Http\Controllers\Creditos\EnlaceClienteController;
 use App\Http\Controllers\Creditos\FeriadoController;
+use App\Http\Controllers\Creditos\MiCreditoController;
 use App\Http\Controllers\Creditos\ReporteCreditoController;
 use Illuminate\Support\Facades\Route;
 
@@ -113,6 +115,9 @@ Route::group([
         Route::get('ficha-credito/archivos/{archivo}', [ClienteCreditoController::class, 'verArchivo'])->whereNumber('archivo')->middleware('permission:creditos.ver');
         Route::put('cartera', [ClienteCreditoController::class, 'asignarCartera'])->middleware('permission:creditos.cartera.asignar');
         Route::put('limites-credito', [ClienteCreditoController::class, 'guardarLimites'])->middleware('permission:creditos.configurar');
+        // Fase 5b: link "Mi crédito" del cliente (lo crea la primera vez) y regenerarlo.
+        Route::get('mi-credito', [EnlaceClienteController::class, 'show'])->middleware('permission:creditos.ver');
+        Route::post('mi-credito/regenerar', [EnlaceClienteController::class, 'regenerar'])->middleware('permission:creditos.crear');
         // 04c.1: saldo a favor del cliente — ver y devolver (sale de la caja de quien devuelve).
         Route::get('saldo-a-favor', [ClienteCreditoController::class, 'saldoAFavor'])->middleware('permission:creditos.ver');
         Route::post('saldo-a-favor/devolver', [ClienteCreditoController::class, 'devolverSaldo'])->middleware('permission:creditos.cobrar');
@@ -132,4 +137,12 @@ Route::middleware(['tenant', 'tenant.active', 'tenant.token', 'signed'])->group(
     Route::get('creditos-archivo/{documento}', [CreditoDocumentoController::class, 'archivo'])->whereNumber('documento')->name('creditos.archivo');
     // Fase 5: enlace del correo que confirma el correo para avisos (se abre sin sesión).
     Route::get('creditos-avisos/verificar-correo', [AvisoCobranzaController::class, 'verificar'])->name('creditos.avisos.verificar-correo');
+});
+
+// Fase 5b: "Mi crédito", la página pública del cliente (sin sesión: protegida por el token del link
+// + los 4 caracteres del documento). throttle por IP además del bloqueo por link, para que no se
+// puedan barrer links distintos.
+Route::middleware(['tenant', 'tenant.active', 'tenant.subscription', 'tenant.token'])->group(function () {
+    Route::post('mi-credito/{token}/verificar', [MiCreditoController::class, 'verificar'])->middleware('throttle:10,1');
+    Route::get('mi-credito/{token}', [MiCreditoController::class, 'show'])->middleware('throttle:60,1');
 });

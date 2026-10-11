@@ -1,6 +1,8 @@
 # Fase 5b — "Mi crédito": el cliente consulta su cuota
 
-Estado: **diseño aprobado en sus decisiones de fondo** (11-oct-2026), sin construir. Es la otra
+Estado: diseño aprobado (11-oct-2026); **entrega 1 (página "Mi crédito") construida** en la rama
+`feat/creditos-mi-credito`, sin merge. Faltan la 2 (QR en recibos y contrato) y la 3 (ficha del
+cliente y link en el recordatorio de WhatsApp). Es la otra
 mitad del pedido original de la Fase 5: que el **cliente** sepa su cuota (número N de M), cuánto le
 falta y la próxima fecha. El aviso interno (administrador/cobrador) está en `05-avisos-cobranza.md`.
 Reglas de fondo: `00-reglas-y-modelo.md`.
@@ -97,6 +99,45 @@ cuenta); sin tareas programadas nuevas.
 | 1 | Tabla, link por cliente, API pública (verificar 4 dígitos, credencial de 90 días, bloqueo, throttle), página `/c/:token` móvil, tests | 1.5–2 |
 | 2 | QR + link en recibos (80 mm y A4) y contrato (bloque fijo) | 0.5–1 |
 | 3 | Ficha del cliente (enviar por WhatsApp, copiar, regenerar, accesos) y link en el recordatorio de la Agenda | 0.5–1 |
+
+### Entrega 1 — construida (11-oct-2026, rama `feat/creditos-mi-credito`)
+- **Datos:** `credito_enlaces_cliente` (`2026_10_11_120000`): un link por cliente (`cliente_id`
+  único), token **cifrado** con la APP_KEY (hay que reimprimirlo en cada recibo: no alcanza con el
+  hash) + `token_hash` único para buscarlo, `version`, `intentos_fallidos`, `bloqueado_hasta`,
+  `accesos`, `ultimo_acceso_en`, `creado_por`, `regenerado_en`.
+- **`MiCredito\EnlaceClienteService`:** `paraCliente()` (lo crea la primera vez; sin documento →
+  `SinDocumentoException` 422), `regenerar()` (nuevo token + versión, auditado), `verificar()`
+  (5 fallos → 15 min, auditado), credencial de dispositivo `base64url(json{e,v,x}).hmac` firmada con
+  la APP_KEY + id del tenant, `ultimos4()` (sin guiones/espacios, en mayúscula: sirve para RUC/CE).
+  Token de 16 caracteres sin los que se confunden al tipear (0/O, 1/l/I).
+- **`MiCredito\MiCreditoService`:** créditos activos y castigados (al cliente nunca se le dice
+  "castigado": se ve "Con atraso") + los 3 cancelados más recientes; por crédito `proxima` (la
+  primera cuota **todavía no vencida**), `vencido` (cuotas, días, monto, mora, total; `cuotas` del
+  contador del motor porque una cuota pagada puede seguir debiendo mora), cuotas pagadas/restantes,
+  saldo por pagar; últimos 5 pagos válidos (`fecha_pago` es fecha-hora de negocio Lima, tal cual).
+  Todo sale de `ConsultaCreditoService::detallesEnBloque()`.
+- **API pública** (`tenant` + `tenant.active` + `tenant.subscription` + `tenant.token`, sin sesión):
+  `POST mi-credito/{token}/verificar` (`throttle:10,1`; 200 credencial / 422 con intentos
+  restantes / 423 bloqueado) y `GET mi-credito/{token}` (`throttle:60,1`; cabecera
+  `X-Mi-Credito`; 401 = pedir documento). Link inexistente o regenerado → 404 siempre igual.
+- **API del panel** (para la ficha, entrega 3): `GET clientes/{id}/mi-credito` (`creditos.ver`,
+  dentro de la cartera; crea el link si no existe) y `POST …/mi-credito/regenerar`
+  (`creditos.crear`).
+- **Frontend:** ruta pública `/c/:token` → `views/creditos/mi-credito.vue` (móvil, sin el menú del
+  panel), `services/public/miCreditoService.ts` (axios propio sin sesión: no reutiliza el cliente
+  del portal porque manda su token y redirige a su login ante un 401; credencial en
+  `localStorage`, en memoria si el navegador no deja), helper `helpers/creditos/miCredito.ts`
+  (+ Vitest). La marca del negocio sale del endpoint público `branding` (se ve antes de verificar).
+  Botón WhatsApp al negocio (o llamar si el teléfono no es celular) y "Salir en este celular".
+- **Verificación:** `MiCreditoTest` 7/7 (cuota y próxima fecha, atrasado con mora y pago que lo
+  pone al día, bloqueo y desbloqueo a los 15 min, regenerar invalida link y celulares, credencial
+  de 90 días y no transferible a otro cliente, firma alterada, documentos con letras, cliente sin
+  documento, 404 sin pistas); Vitest 151/151; vue-tsc en el baseline. En vivo contra
+  `creditos-demo` a 375 px con un cliente real con 3 créditos atrasados: dígitos incorrectos
+  ("te quedan 4 intentos"), correctos → sus 3 créditos con mora y últimos pagos, "Salir en este
+  celular", link inexistente. Link de prueba borrado después.
+- **Al desplegar:** `tenants:migrate-verticales` (migración de `tenant/core`). Sin `.env` nuevo.
+  Hasta la entrega 3 el link se obtiene con `GET clientes/{id}/mi-credito`.
 
 ## Fuera de alcance (posible fase siguiente)
 - **Avisos push al cliente** desde la misma página "Mi crédito" (botón "Avisarme un día antes de

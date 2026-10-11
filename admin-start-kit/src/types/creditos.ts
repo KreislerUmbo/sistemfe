@@ -233,6 +233,31 @@ export interface PreferenciasAvisos {
   ultimos: AvisoRegistro[]
 }
 
+/** Fase 5b: lo que ve el cliente en "Mi crédito" (página pública /c/:token). */
+export interface MiCredito {
+  negocio: { nombre: string | null; telefono: string | null; logo: string | null }
+  cliente: { nombre: string }
+  hoy: string
+  generado_en: string
+  creditos: MiCreditoItem[]
+  pagos: { fecha: string | null; monto: Soles; recibo: string | null; credito: string | null }[]
+}
+
+export type MiCreditoItem =
+  | {
+      numero: string
+      estado: 'al_dia' | 'atrasado'
+      monto_prestado: Soles
+      cuotas_total: number
+      cuotas_pagadas: number
+      cuotas_restantes: number
+      saldo_por_pagar: Soles
+      proxima: { numero_cuota: number; fecha: string; monto: Soles } | null
+      /** null = al día. cuotas 0 = solo debe mora de una cuota ya pagada. */
+      vencido: { cuotas: number; dias_atraso: number; monto: Soles; mora: Soles; total: Soles } | null
+    }
+  | { numero: string; estado: 'cancelado'; monto_prestado: Soles; cancelado_el: string | null }
+
 /** Entrega 2: un dispositivo con los avisos push activados. */
 export interface DispositivoPush {
   endpoint_hash: string

@@ -616,6 +616,14 @@ const comercialRoutes = [
     component: () => import("@/views/creditos/migrar.vue"),
   },
   {
+    // Fase 5b: "Mi crédito", página PÚBLICA del cliente (link/QR de contrato y recibos). Sin
+    // authRequired: la protege el token del link + los 4 dígitos del documento (backend).
+    path: "/c/:token",
+    name: "creditos.mi-credito",
+    meta: { title: "Mi crédito" },
+    component: () => import("@/views/creditos/mi-credito.vue"),
+  },
+  {
     // Fase 5: correo de cada usuario para el aviso diario de cobranza.
     path: "/creditos/avisos",
     name: "creditos.avisos",
