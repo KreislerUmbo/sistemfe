@@ -30,6 +30,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use App\Services\Creditos\MiCredito\QrMiCredito;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
@@ -59,6 +60,7 @@ class DocumentoCreditoService
         private readonly PlantillaContratoService $plantillas,
         private readonly AuditoriaCredito $auditoria,
         private readonly AlcanceCartera $alcance,
+        private readonly QrMiCredito $qrMiCredito,
     ) {
     }
 
@@ -78,7 +80,11 @@ class DocumentoCreditoService
                 'conceptos' => $grupo->groupBy(fn ($a) => $a->concepto->value)->map(fn ($g) => FormatoDocumento::soles($g->sum(fn ($a) => Dinero::aCentavos((string) $a->monto))))->all(),
             ])->sortKeys()->values()->all();
 
+        // Fase 5b: QR "Mi crédito" (sin documento del cliente, el recibo sale igual, sin QR).
+        $miCredito = $this->qrMiCredito->paraCliente($credito->cliente);
+
         return $this->pdf('recibo', $formato, [
+            'miCredito' => $miCredito,
             'pago' => $pago,
             'credito' => $credito,
             'lineas' => $lineas,
@@ -91,7 +97,7 @@ class DocumentoCreditoService
             'metodo' => $pago->paymentMethod ? FormatoDocumento::textoPdf($pago->paymentMethod->name) : null,
             'cajero' => User::find($pago->registrado_por)?->name,
             'renovacion' => $this->desgloseRenovacion($pago),
-        ], "recibo-{$pago->numero_recibo}", 330 + count($lineas) * 42);
+        ], "recibo-{$pago->numero_recibo}", 330 + count($lineas) * 42 + ($miCredito ? 135 : 0));
     }
 
     /** Saldo y próxima cuota justo después de este pago (pagos válidos hasta él, a su fecha). */
@@ -172,7 +178,7 @@ class DocumentoCreditoService
 
             $plantilla = $this->plantillas->vigente();
             $html = $this->plantillas->renderizar($plantilla->contenido, $this->plantillas->valores($credito));
-            $contenido = $this->renderizarContrato($html, $credito)->output();
+            $contenido = $this->renderizarContrato($html, $credito, $this->qrMiCredito->paraCliente($credito->cliente))->output();
             $ruta = "creditos/{$credito->id}/contrato-v{$plantilla->version}-" . Str::uuid() . '.pdf';
             Storage::disk(self::DISCO)->put($ruta, $contenido);
 
@@ -198,7 +204,8 @@ class DocumentoCreditoService
             static fn (string $descripcion): string => '[' . e($descripcion) . ']',
             PlantillaContratoService::VARIABLES,
         );
-        $pdf = $this->renderizarContrato($this->plantillas->renderizar($limpio, $valores), $ejemplo);
+        // Vista previa: un recuadro en lugar del QR, sin crear el link de ningún cliente.
+        $pdf = $this->renderizarContrato($this->plantillas->renderizar($limpio, $valores), $ejemplo, null, ejemplo: true);
 
         return $pdf->stream('vista-previa-contrato.pdf');
     }
@@ -269,12 +276,15 @@ class DocumentoCreditoService
         })->values()->all();
     }
 
-    private function renderizarContrato(string $html, ?Credito $credito): \Barryvdh\DomPDF\PDF
+    /** @param array{qr: string, url: string, texto: string}|null $miCredito */
+    private function renderizarContrato(string $html, ?Credito $credito, ?array $miCredito = null, bool $ejemplo = false): \Barryvdh\DomPDF\PDF
     {
         [$empresa, $logo] = $this->empresa('a4');
 
-        return Pdf::loadView('pdf.creditos.contrato_a4', ['cuerpo' => $html, 'credito' => $credito, 'empresa' => $empresa, 'logo' => $logo])
-            ->setPaper('a4', 'portrait');
+        return Pdf::loadView('pdf.creditos.contrato_a4', [
+            'cuerpo' => $html, 'credito' => $credito, 'empresa' => $empresa, 'logo' => $logo,
+            'miCredito' => $miCredito, 'qrEjemplo' => $ejemplo,
+        ])->setPaper('a4', 'portrait');
     }
 
     private function exigirConDocumentos(Credito $credito): void

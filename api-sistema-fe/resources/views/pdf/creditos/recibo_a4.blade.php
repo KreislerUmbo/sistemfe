@@ -72,5 +72,6 @@
 
     <p class="apagado" style="margin-top: 24px; font-size: 10px;">Son: {{ F::enLetras((string) $pago->monto_aplicado) }}.
         Documento interno de control de pago; no es comprobante de pago electrónico.</p>
+    @include('pdf.creditos._mi_credito_qr', ['formato' => 'a4'])
 </body>
 </html>

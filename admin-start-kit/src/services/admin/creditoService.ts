@@ -36,7 +36,7 @@ import type {
   ReglaLimite,
   FiltrosReporte, NombreReporte, PanelCreditos, ReportesPorNombre,
   ResumenClienteCredito, CarteraCliente, LimitesCliente, SaldoAFavor, TitularCartera, UsuarioCartera,
-  PreferenciasAvisos } from '@/types/creditos'
+  PreferenciasAvisos, EnlaceMiCredito } from '@/types/creditos'
 
 type ConClave<T> = T & { clave_idempotencia: string }
 
@@ -254,6 +254,18 @@ export const creditoService = {
   /** El usuario abrió la Agenda desde un aviso push (?aviso=). Sin efecto si no es suyo. */
   async marcarAvisoAbierto(aviso: number) {
     await httpClient.post(`/creditos/avisos/${aviso}/abierto`)
+  },
+
+  /** Fase 5b: link "Mi crédito" del cliente (lo crea la primera vez; 422 si no tiene documento). */
+  async enlaceMiCredito(clienteId: number) {
+    const { data } = await httpClient.get(`/clientes/${clienteId}/mi-credito`)
+    return data as EnlaceMiCredito
+  },
+
+  /** Link nuevo: el anterior y los QR ya impresos dejan de funcionar. */
+  async regenerarMiCredito(clienteId: number) {
+    const { data } = await httpClient.post(`/clientes/${clienteId}/mi-credito/regenerar`)
+    return data as EnlaceMiCredito
   },
 
   async feriados(anio: number) {

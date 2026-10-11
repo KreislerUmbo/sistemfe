@@ -98,6 +98,7 @@ declare module 'vue' {
     MenuItem: typeof import('./src/components/AppMenu/MenuItem.vue')['default']
     MenuItemLink: typeof import('./src/components/AppMenu/MenuItemLink.vue')['default']
     MenuItemWithChildren: typeof import('./src/components/AppMenu/MenuItemWithChildren.vue')['default']
+    MiCreditoCliente: typeof import('./src/components/Creditos/MiCreditoCliente.vue')['default']
     NavbarPortal: typeof import('./src/components/portal/NavbarPortal.vue')['default']
     OpcionMayoristaForm: typeof import('./src/components/AgenciaViajes/OpcionMayoristaForm.vue')['default']
     Pagination: typeof import('./src/components/portal/Pagination.vue')['default']

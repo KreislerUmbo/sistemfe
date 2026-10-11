@@ -59,5 +59,6 @@
     <div class="linea"></div>
     <div>Atendido por: {{ $cajero ?? '—' }}</div>
     <div class="leyenda">Documento interno de control de pago.<br>No es comprobante de pago electrónico.</div>
+    @include('pdf.creditos._mi_credito_qr', ['formato' => 'ticket'])
 </body>
 </html>
