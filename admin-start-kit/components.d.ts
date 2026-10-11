@@ -63,6 +63,7 @@ declare module 'vue' {
     ClienteDatosBase: typeof import('./src/components/Clientes/ClienteDatosBase.vue')['default']
     ClientFormQuick: typeof import('./src/components/Sales/ClientFormQuick.vue')['default']
     CobrarPanel: typeof import('./src/components/Creditos/CobrarPanel.vue')['default']
+    ConfigAvisosCobranza: typeof import('./src/components/Creditos/ConfigAvisosCobranza.vue')['default']
     CuotasCredito: typeof import('./src/components/Creditos/CuotasCredito.vue')['default']
     DestinoServicioPicker: typeof import('./src/components/AgenciaViajes/DestinoServicioPicker.vue')['default']
     DestinoTreeSelect: typeof import('./src/components/AgenciaViajes/DestinoTreeSelect.vue')['default']

@@ -45,6 +45,12 @@ class CreditoConfiguracion extends Model
         'dias_max_pago_retroactivo',
         'asesor_cobra',
         'requisitos_ficha',
+        // Fase 5: aviso diario de cobranza.
+        'avisos_activo',
+        'avisos_hora',
+        'avisos_dias',
+        'avisos_incluir_atrasados',
+        'avisos_sin_cobros',
         'actualizado_por',
     ];
 
@@ -57,6 +63,10 @@ class CreditoConfiguracion extends Model
             'cobra_mora' => 'boolean',
             'asesor_cobra' => 'boolean',
             'requisitos_ficha' => 'array',
+            'avisos_activo' => 'boolean',
+            'avisos_dias' => 'array',
+            'avisos_incluir_atrasados' => 'boolean',
+            'avisos_sin_cobros' => 'boolean',
             'regla_no_laborable' => ReglaNoLaborable::class,
             'validacion_tasacion' => ValidacionTasacion::class,
             'modo_asignacion_cartera' => ModoAsignacionCartera::class,

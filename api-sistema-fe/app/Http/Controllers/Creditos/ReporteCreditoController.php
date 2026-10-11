@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Creditos;
 
 use App\Exports\Creditos\ReporteCreditoExport;
-use App\Models\Company;
 use App\Models\User;
 use App\Services\Creditos\AlcanceCartera;
 use App\Services\Creditos\Motor\Fecha;
@@ -14,10 +13,9 @@ use App\Services\Creditos\Reportes\AgendaCobranzaService;
 use App\Services\Creditos\Reportes\ControlAuditoriaService;
 use App\Services\Creditos\Reportes\Periodo;
 use App\Services\Creditos\Reportes\ReportesCarteraService;
+use App\Services\Creditos\Reportes\ReportePdf;
 use App\Services\Creditos\Reportes\ReportesFinancierosService;
 use App\Services\Creditos\Reportes\TablasReporte;
-use App\Services\StorageUrl;
-use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\URL;
@@ -44,6 +42,7 @@ class ReporteCreditoController extends ControllerCreditos
         private readonly AgendaCobranzaService $agenda,
         private readonly ReportesFinancierosService $financieros,
         private readonly ControlAuditoriaService $control,
+        private readonly ReportePdf $reportePdf,
         private readonly Reloj $reloj,
     ) {
     }
@@ -75,17 +74,13 @@ class ReporteCreditoController extends ControllerCreditos
     public function pdf(Request $request, string $reporte): Response
     {
         $usuario = User::findOrFail((int) $request->query('u'));
-        $tabla = TablasReporte::de($reporte, $this->datos($reporte, $request, $usuario));
-        $empresa = Company::first();
 
-        return Pdf::loadView('pdf.creditos.reporte_a4', [
-            'tabla' => $tabla,
-            'empresa' => $empresa,
-            'logo' => StorageUrl::resolveParaPdf($empresa?->logo_horizontal),
-            'generadoPor' => $usuario->name,
-            'generadoEn' => \Carbon\CarbonImmutable::parse((string) $request->query('generado_en', now()->toIso8601String()))
-                ->setTimezone(Reloj::ZONA)->format('d/m/Y H:i'),
-        ])->setPaper('a4', 'landscape')->stream($this->nombreArchivo($reporte, $request, 'pdf'));
+        return $this->reportePdf->generar(
+            $reporte,
+            $this->datos($reporte, $request, $usuario),
+            $usuario,
+            \Carbon\CarbonImmutable::parse((string) $request->query('generado_en', now()->toIso8601String())),
+        )->stream($this->nombreArchivo($reporte, $request, 'pdf'));
     }
 
     public function excel(Request $request, string $reporte): BinaryFileResponse

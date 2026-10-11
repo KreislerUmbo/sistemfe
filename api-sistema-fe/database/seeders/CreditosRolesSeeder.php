@@ -31,6 +31,8 @@ class CreditosRolesSeeder extends Seeder implements RolesCatalogProvider
         'creditos.migrar', 'creditos.pago_fecha_anterior',
         // Fase 4d: panel y reportes (los financieros y de control exigen además creditos.ver_todos).
         'creditos.reportes',
+        // Fase 5: el aviso diario de cobranza lleva el PDF adjunto (el resto recibe un enlace).
+        'creditos.avisos_pdf_adjunto',
     ];
 
     private const PERMISOS_ADMINISTRACION = [

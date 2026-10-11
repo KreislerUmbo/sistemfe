@@ -7,6 +7,7 @@
 // Las rutas fijas (preview, migrar, cobranza-del-dia, configuracion, feriados) van
 // antes de creditos/{credito}.
 
+use App\Http\Controllers\Creditos\AvisoCobranzaController;
 use App\Http\Controllers\Creditos\ClienteCreditoController;
 use App\Http\Controllers\Creditos\CobranzaDelDiaController;
 use App\Http\Controllers\Creditos\CreditoCicloController;
@@ -47,6 +48,11 @@ Route::group([
     // Lectura también con crear/migrar: esos formularios muestran estos defaults.
     Route::get('creditos/configuracion', [CreditoConfiguracionController::class, 'show'])->middleware('permission:creditos.configurar|creditos.crear|creditos.migrar');
     Route::put('creditos/configuracion', [CreditoConfiguracionController::class, 'update'])->middleware('permission:creditos.configurar');
+    // Fase 5: preferencias del aviso diario de cobranza (cada usuario las suyas).
+    Route::get('creditos/avisos/preferencias', [AvisoCobranzaController::class, 'show'])->middleware('permission:creditos.cobrar|creditos.ver_todos');
+    Route::put('creditos/avisos/preferencias', [AvisoCobranzaController::class, 'update'])->middleware('permission:creditos.cobrar|creditos.ver_todos');
+    Route::post('creditos/avisos/preferencias/reenviar-verificacion', [AvisoCobranzaController::class, 'reenviarVerificacion'])->middleware('permission:creditos.cobrar|creditos.ver_todos');
+    Route::post('creditos/avisos/prueba', [AvisoCobranzaController::class, 'prueba'])->middleware('permission:creditos.cobrar|creditos.ver_todos');
     Route::get('creditos/feriados', [FeriadoController::class, 'index'])->middleware('permission:creditos.configurar');
     Route::post('creditos/feriados', [FeriadoController::class, 'store'])->middleware('permission:creditos.configurar');
     Route::put('creditos/feriados/{feriado}', [FeriadoController::class, 'update'])->whereNumber('feriado')->middleware('permission:creditos.configurar');
@@ -119,4 +125,6 @@ Route::middleware(['tenant', 'tenant.active', 'tenant.token', 'signed'])->group(
     Route::get('creditos-reporte-pdf/{reporte}', [ReporteCreditoController::class, 'pdf'])
         ->whereIn('reporte', ReporteCreditoController::REPORTES)->name('creditos.reporte.pdf');
     Route::get('creditos-archivo/{documento}', [CreditoDocumentoController::class, 'archivo'])->whereNumber('documento')->name('creditos.archivo');
+    // Fase 5: enlace del correo que confirma el correo para avisos (se abre sin sesión).
+    Route::get('creditos-avisos/verificar-correo', [AvisoCobranzaController::class, 'verificar'])->name('creditos.avisos.verificar-correo');
 });

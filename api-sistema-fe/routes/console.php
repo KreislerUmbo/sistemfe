@@ -46,3 +46,6 @@ Schedule::command('tipo-cambio:sincronizar-sunat')->dailyAt('05:00')->timezone('
 Schedule::command('creditos:escalamiento')->dailyAt('02:30')->timezone('America/Lima');
 // Módulo Créditos (04d): foto diaria de cartera al cierre del día de Lima (tendencias e históricos).
 Schedule::command('creditos:foto-cartera')->dailyAt('23:50')->timezone('America/Lima');
+// Módulo Créditos (Fase 5): aviso diario de cobranza. Cada 15 min porque cada tenant elige su
+// hora (default 06:45 Lima); credito_avisos evita repetir el aviso del día.
+Schedule::command('creditos:aviso-cobranza-dia')->everyFifteenMinutes()->withoutOverlapping(30);

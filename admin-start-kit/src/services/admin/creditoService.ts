@@ -35,7 +35,8 @@ import type {
   PreviewCredito,
   ReglaLimite,
   FiltrosReporte, NombreReporte, PanelCreditos, ReportesPorNombre,
-  ResumenClienteCredito, CarteraCliente, LimitesCliente, SaldoAFavor, TitularCartera, UsuarioCartera } from '@/types/creditos'
+  ResumenClienteCredito, CarteraCliente, LimitesCliente, SaldoAFavor, TitularCartera, UsuarioCartera,
+  PreferenciasAvisos } from '@/types/creditos'
 
 type ConClave<T> = T & { clave_idempotencia: string }
 
@@ -209,6 +210,29 @@ export const creditoService = {
   async guardarConfiguracion(cambios: Record<string, unknown>) {
     const { data } = await httpClient.put('/creditos/configuracion', cambios)
     return data as ConfiguracionCredito
+  },
+
+  /** Fase 5: preferencias del aviso diario de cobranza del usuario que inicia sesión. */
+  async preferenciasAvisos() {
+    const { data } = await httpClient.get('/creditos/avisos/preferencias')
+    return data as PreferenciasAvisos
+  },
+
+  /** Un correo nuevo vuelve a quedar sin confirmar y el backend manda el enlace de confirmación. */
+  async guardarPreferenciasAvisos(cambios: Partial<Pick<PreferenciasAvisos, 'correo' | 'recibir_correo' | 'recibir_push'>>) {
+    const { data } = await httpClient.put('/creditos/avisos/preferencias', cambios)
+    return data as PreferenciasAvisos
+  },
+
+  async reenviarVerificacionAvisos() {
+    const { data } = await httpClient.post('/creditos/avisos/preferencias/reenviar-verificacion')
+    return data as { mensaje: string }
+  },
+
+  /** Manda ahora el aviso de hoy al correo confirmado (no cuenta como el aviso del día). */
+  async probarAviso() {
+    const { data } = await httpClient.post('/creditos/avisos/prueba')
+    return data as { mensaje: string }
   },
 
   async feriados(anio: number) {

@@ -7,6 +7,9 @@
       <button type="button" class="btn btn-outline-success btn-sm" :disabled="!datos || exportando" @click="exportarExcel">
         <i class="fas fa-file-excel me-1"></i>Excel
       </button>
+      <router-link :to="{ name: 'creditos.avisos' }" class="btn btn-outline-primary btn-sm" title="Recibir esta agenda cada mañana por correo">
+        <i class="far fa-envelope me-1"></i>Aviso diario
+      </router-link>
       <button type="button" class="btn btn-outline-secondary btn-sm" :disabled="cargando" title="Actualizar" aria-label="Actualizar" @click="cargar">
         <i class="fas fa-sync-alt" :class="{ 'fa-spin': cargando }"></i>
       </button>
@@ -158,6 +161,7 @@
 // en un rango, agrupados por día y cobrador, para organizar la ruta con anticipación. El
 // backend decide el alcance (el cobrador ve solo su cartera) y suma los totales.
 import { onMounted, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import DefaultLayout from '@/layouts/DefaultLayout.vue'
 import CampoFecha from '@/components/CampoFecha.vue'
 import EncabezadoCredito from '@/components/Creditos/EncabezadoCredito.vue'
@@ -180,10 +184,15 @@ const toast = useToast()
 const verTodos = puede('creditos.ver_todos')
 
 const hoy = hoyEnLima()
-const rango = ref<RangoAgenda>('manana')
-const desde = ref(fechasAgenda('manana', hoy)!.desde)
-const hasta = ref(fechasAgenda('manana', hoy)!.hasta)
-const incluirAtrasados = ref(false)
+// El enlace del aviso diario de cobranza abre ?rango=hoy&atrasados=1 (Fase 5); sin parámetros, "Mañana".
+const route = useRoute()
+const rangoInicial: RangoAgenda = RANGOS_AGENDA.some(r => r.id === route.query.rango && r.id !== 'rango')
+  ? route.query.rango as RangoAgenda
+  : 'manana'
+const rango = ref<RangoAgenda>(rangoInicial)
+const desde = ref(fechasAgenda(rangoInicial, hoy)!.desde)
+const hasta = ref(fechasAgenda(rangoInicial, hoy)!.hasta)
+const incluirAtrasados = ref(route.query.atrasados === '1')
 const cobradorId = ref<number | null>(null)
 const distrito = ref('')
 

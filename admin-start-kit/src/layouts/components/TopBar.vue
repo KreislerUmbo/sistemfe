@@ -259,6 +259,11 @@
                 </div>
               </div>
               <div class="dropdown-divider mt-0"></div>
+              <!-- Módulo Créditos (Fase 5): solo en negocios cuyo menú trae la Agenda de cobranza. -->
+              <router-link v-if="menu.tieneRuta('creditos.agenda')" class="dropdown-item" :to="{ name: 'creditos.avisos' }">
+                <i class="las la-envelope fs-18 me-1 align-text-bottom"></i>
+                Mis avisos de cobranza
+              </router-link>
               <small class="text-muted px-2 pb-1 d-block">Account</small>
               <router-link class="dropdown-item" to="/pages/profile">
                 <i class="las la-user fs-18 me-1 align-text-bottom"></i>
@@ -302,7 +307,9 @@ import DropDown from "@/components/DropDown.vue";
 import { useLayoutStore } from "@/stores/layout";
 
 import { useAuthStore } from "@/stores/auth";
+import { useMenuStore } from "@/stores/menu";
 
+const menu = useMenuStore();
 const show = ref("all-tab");
 const useLayout = useLayoutStore();
 const { layout, setLeftSideBarSize } = useLayout;
