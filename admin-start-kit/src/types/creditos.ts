@@ -192,7 +192,39 @@ export interface ConfiguracionCredito {
   tope_mora_valor: number | null
   max_numero_cuotas: number
   tasa_maxima: string | null
+  /** Fase 5: aviso diario de cobranza (apagado por defecto). */
+  avisos_activo?: boolean
+  /** Hora de Lima "HH:mm" desde la que sale el aviso. */
+  avisos_hora?: string
+  /** Días ISO (1 = lunes … 7 = domingo); null = lunes a sábado. */
+  avisos_dias?: number[] | null
+  avisos_incluir_atrasados?: boolean
+  avisos_sin_cobros?: boolean
   [clave: string]: unknown
+}
+
+/** Fase 5: un aviso enviado o intentado (últimos 7 en "Mis avisos"). */
+export interface AvisoRegistro {
+  fecha: string
+  canal: 'correo' | 'push'
+  estado: 'pendiente' | 'enviado' | 'fallido' | 'omitido'
+  detalle: string | null
+  cantidad_cobros: number
+  monto_esperado: Soles
+  enviado_en: string | null
+}
+
+/** Fase 5: GET/PUT creditos/avisos/preferencias (las del usuario que inicia sesión). */
+export interface PreferenciasAvisos {
+  correo: string | null
+  /** El correo de inicio de sesión, sugerido cuando todavía no guardó uno. */
+  correo_sugerido: string | null
+  correo_verificado: boolean
+  recibir_correo: boolean
+  recibir_push: boolean
+  /** Con el permiso creditos.avisos_pdf_adjunto el PDF llega adjunto; si no, un enlace. */
+  pdf_adjunto: boolean
+  ultimos: AvisoRegistro[]
 }
 
 /** GET creditos/{id}: crédito + situación calculada a hoy por el backend. */

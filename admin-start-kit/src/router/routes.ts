@@ -616,6 +616,17 @@ const comercialRoutes = [
     component: () => import("@/views/creditos/migrar.vue"),
   },
   {
+    // Fase 5: correo de cada usuario para el aviso diario de cobranza.
+    path: "/creditos/avisos",
+    name: "creditos.avisos",
+    meta: {
+      title: setTitle("Mis avisos de cobranza"),
+      authRequired: true,
+      permission: 'creditos.cobrar|creditos.ver_todos',
+    },
+    component: () => import("@/views/creditos/avisos.vue"),
+  },
+  {
     path: "/creditos/configuracion",
     name: "creditos.configuracion",
     meta: {

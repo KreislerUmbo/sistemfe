@@ -7,6 +7,9 @@
       <button type="button" class="btn btn-outline-success btn-sm" :disabled="!datos || exportando" @click="exportarExcel">
         <i class="fas fa-file-excel me-1"></i>Excel
       </button>
+      <router-link :to="{ name: 'creditos.avisos' }" class="btn btn-outline-primary btn-sm" title="Recibir esta agenda cada mañana por correo">
+        <i class="far fa-envelope me-1"></i>Aviso diario
+      </router-link>
       <button type="button" class="btn btn-outline-secondary btn-sm" :disabled="cargando" title="Actualizar" aria-label="Actualizar" @click="cargar">
         <i class="fas fa-sync-alt" :class="{ 'fa-spin': cargando }"></i>
       </button>

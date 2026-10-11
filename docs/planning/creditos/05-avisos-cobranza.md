@@ -1,9 +1,9 @@
 # Fase 5 — Aviso diario de cobranza ("lo que cobras hoy")
 
 Estado: **diseño aprobado** (11-oct-2026); prerrequisito de correo en producción **resuelto** el
-mismo día (Brevo, ver "Verificar antes de construir"). **Entrega 1 (backend del
-correo) construida** en la rama `feat/creditos-avisos-cobranza` (sale de `main`); faltan push
-(entrega 2) y pantallas (entrega 3). Surge de un análisis con el usuario sobre
+mismo día (Brevo, ver "Verificar antes de construir"). **Entregas 1 (backend del
+correo) y 3 (pantallas) construidas** en la rama `feat/creditos-avisos-cobranza` (sale de
+`main`): el aviso por correo queda usable de punta a punta. Falta la entrega 2 (push). Surge de un análisis con el usuario sobre
 avisar a clientes y administradores; este documento cubre **solo el aviso interno** (administrador,
 asesor que cobra, cobrador). El aviso al cliente (página "Mi crédito", ronda de recordatorios por
 WhatsApp manual, WhatsApp automático pagado) queda para un documento propio — ver "Fuera de alcance".
@@ -173,11 +173,31 @@ La entrega 1 se apoya en lo existente y tiene el menor riesgo; la 2 es la parte 
   Créditos + Unit 408/408; vue-tsc en el baseline (46). Correo y PDF revisados a mano (render a 400
   px y PDF rasterizado). Bug encontrado así: el desglose por cobrador salía sin coma de miles (las
   propiedades públicas del Mailable pisan las variables de `with`).
-- **Falta para usarlo en producción:** pantalla de preferencias (correo para avisos, confirmar,
-  probar) y los campos `avisos_*` en la Configuración de Créditos — entrega 3. Hasta entonces el
-  aviso queda apagado.
 - **Al desplegar:** `tenants:migrate-verticales` (las migraciones son de `tenant/core`) y nada más;
   el cron `schedule:run` ya existe.
+
+### Entrega 3 — construida (11-oct-2026, misma rama; se hizo antes que la 2 a pedido del usuario)
+- **Configuración → pestaña "Avisos"** (`components/Creditos/ConfigAvisosCobranza.vue`, permiso
+  `creditos.configurar`): encender/apagar, hora (CampoHora), días en que sale, sumar atrasados,
+  avisar al admin sin cobros, y quién lo recibe. Guarda solo los `avisos_*` que cambiaron por el
+  `PUT creditos/configuracion` existente. Helper puro `helpers/creditos/avisos.ts` (+ Vitest).
+- **"Mis avisos"** (`views/creditos/avisos.vue`, ruta `/creditos/avisos`, permiso
+  `creditos.cobrar|creditos.ver_todos`): correo para avisos (sugiere el de inicio de sesión),
+  estado Confirmado / Sin confirmar con "Reenviar enlace", encender/apagar el correo, "Enviarme
+  una prueba ahora" y los últimos 7 avisos. El interruptor de push queda para la entrega 2.
+- **Accesos:** menú del usuario (arriba a la derecha) → "Mis avisos de cobranza", solo si el menú
+  trae la Agenda (`menu.tieneRuta('creditos.agenda')`, así no aparece en otros giros); botón
+  "Aviso diario" en la Agenda.
+- **Verificación:** Vitest 141/141 (5 nuevos), vue-tsc en el baseline (46). En vivo contra
+  `creditos-demo` (migraciones aplicadas solo ahí, por archivo): encender y guardar; guardar
+  correo → enlace en el log → página "Correo confirmado"; "Enviarme una prueba" → correo
+  `[Prueba] Hoy: 15 cobros · S/ 2,652.40` con PDF adjunto y enlace a `…/creditos/agenda?rango=hoy&atrasados=1`,
+  que abre la Agenda con las mismas 15 cuotas y S/ 2,652.40; comando en domingo → "hoy no es día
+  de aviso"; "Mis avisos" a 375 px. Datos de prueba revertidos (aviso apagado, correo borrado).
+  Un 500 durante la prueba fue el intermitente conocido de Apache en Windows
+  (`fe_sendauth: no password supplied`), no de este código.
+- **Para activarlo en credishirley tras desplegar:** el dueño entra a Configuración → Avisos y lo
+  enciende; cada usuario guarda y confirma su correo en "Mis avisos" y se manda una prueba.
 
 ## Verificar antes de construir
 - ~~Producción sin correo~~ **RESUELTO 11-oct-2026:** hasta ese día `MAIL_MAILER=log` (ningún

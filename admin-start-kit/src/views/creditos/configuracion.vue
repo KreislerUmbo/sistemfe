@@ -1,6 +1,6 @@
 <template>
   <DefaultLayout>
-    <EncabezadoCredito titulo="Configuración de créditos" subtitulo="Valores por defecto del negocio, feriados y contrato" icono="fas fa-sliders-h" :volver="false" />
+    <EncabezadoCredito titulo="Configuración de créditos" subtitulo="Valores por defecto del negocio, feriados, contrato y avisos" icono="fas fa-sliders-h" :volver="false" />
 
     <ul class="nav nav-pills mb-3">
       <li v-for="t in PESTANAS" :key="t.id" class="nav-item">
@@ -11,6 +11,8 @@
     </ul>
 
     <PlantillaContrato v-if="pestana === 'contrato'" />
+
+    <ConfigAvisosCobranza v-else-if="pestana === 'avisos'" />
 
     <div v-else-if="pestana === 'feriados'" class="card border-0 shadow-sm">
       <div class="card-header bg-white border-bottom py-2 fw-semibold text-dark">Feriados</div>
@@ -107,6 +109,7 @@ import { computed, onMounted, ref } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import DefaultLayout from '@/layouts/DefaultLayout.vue'
 import BarraAccionMovil from '@/components/Creditos/BarraAccionMovil.vue'
+import ConfigAvisosCobranza from '@/components/Creditos/ConfigAvisosCobranza.vue'
 import EncabezadoCredito from '@/components/Creditos/EncabezadoCredito.vue'
 import FeriadosCredito from '@/components/Creditos/FeriadosCredito.vue'
 import PlantillaContrato from '@/components/Creditos/PlantillaContrato.vue'
@@ -120,6 +123,7 @@ const PESTANAS = [
   { id: 'negocio', texto: 'Valores del negocio', icono: 'fas fa-sliders-h' },
   { id: 'feriados', texto: 'Feriados', icono: 'far fa-calendar-alt' },
   { id: 'contrato', texto: 'Contrato', icono: 'fas fa-file-signature' },
+  { id: 'avisos', texto: 'Avisos', icono: 'far fa-envelope' },
 ] as const
 type IdPestana = (typeof PESTANAS)[number]['id']
 const DIAS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
@@ -129,7 +133,7 @@ const router = useRouter()
 const toast = useToast()
 const catalogos = useCreditosCatalogosStore()
 
-const pestana = computed<IdPestana>(() => (route.query.tab === 'feriados' || route.query.tab === 'contrato' ? route.query.tab : 'negocio'))
+const pestana = computed<IdPestana>(() => (PESTANAS.find((t) => t.id === route.query.tab)?.id ?? 'negocio'))
 const original = ref<FormConfig | null>(null)
 const form = ref<FormConfig | null>(null)
 const cargando = ref(true)
