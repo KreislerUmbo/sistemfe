@@ -1,7 +1,7 @@
 # Fase 5b — "Mi crédito": el cliente consulta su cuota
 
-Estado: diseño aprobado (11-oct-2026); **entrega 1 (página "Mi crédito") construida** en la rama
-`feat/creditos-mi-credito`, sin merge. Faltan la 2 (QR en recibos y contrato) y la 3 (ficha del
+Estado: diseño aprobado (11-oct-2026); **entregas 1 (página "Mi crédito") y 2 (QR en recibos y
+contrato) construidas** en la rama `feat/creditos-mi-credito`, sin merge. Falta la 3 (ficha del
 cliente y link en el recordatorio de WhatsApp). Es la otra
 mitad del pedido original de la Fase 5: que el **cliente** sepa su cuota (número N de M), cuánto le
 falta y la próxima fecha. El aviso interno (administrador/cobrador) está en `05-avisos-cobranza.md`.
@@ -138,6 +138,24 @@ cuenta); sin tareas programadas nuevas.
   celular", link inexistente. Link de prueba borrado después.
 - **Al desplegar:** `tenants:migrate-verticales` (migración de `tenant/core`). Sin `.env` nuevo.
   Hasta la entrega 3 el link se obtiene con `GET clientes/{id}/mi-credito`.
+
+### Entrega 2 — construida (11-oct-2026, misma rama)
+- **`MiCredito\QrMiCredito::paraCliente()`**: crea el link si falta y devuelve el QR (data URI PNG,
+  `QrCodeService::generarQrTexto()` nuevo, `endroid/qr-code`) + el link escrito sin `https://`.
+  **Cliente sin documento → null: el documento sale igual, sin QR** (imprimir un cobro nunca falla
+  por esto).
+- **Partial** `pdf/creditos/_mi_credito_qr.blade.php`: ticket (centrado, QR 92 px + link) y A4
+  (recuadro con QR 86 px y "Consulta tu crédito… te pediremos los últimos 4 dígitos de tu DNI").
+- **Recibo** 80 mm y A4: QR al final (el ticket crece 135 pt). Resuelve el pendiente "QR de
+  verificación del recibo": el cliente ve ese pago en "Mi crédito".
+- **Contrato**: bloque **al final, después de las firmas** (cambio respecto del diseño, que decía
+  "primera página": arriba va la plantilla del abogado y un QR superpuesto podría tapar el título;
+  al final no choca con nada y queda fuera de lo editable). Solo en contratos **nuevos**: el
+  contrato se congela la primera vez, los ya generados no se redibujan. La **vista previa** de la
+  plantilla muestra un recuadro "[QR Mi crédito]" sin crear el link de ningún cliente.
+- **Verificación:** `MiCreditoTest` 10/10 (+3: recibo con QR crea un solo link, sin documento sale
+  sin QR y sin link, vista previa no crea links); `DocumentosCreditoTest` 11/11 sin cambios. PDFs
+  revisados rasterizados (ticket, recibo A4, contrato).
 
 ## Fuera de alcance (posible fase siguiente)
 - **Avisos push al cliente** desde la misma página "Mi crédito" (botón "Avisarme un día antes de

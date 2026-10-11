@@ -28,5 +28,8 @@
             <td><div class="linea">EL PRESTAMISTA<br>{{ $empresa?->razon_social ?? '' }}<br>RUC {{ $empresa?->n_document ?? '' }}</div></td>
         </tr>
     </table>
+
+    {{-- Fase 5b: bloque fijo fuera de la plantilla editable (el negocio no puede borrarlo por error). --}}
+    @include('pdf.creditos._mi_credito_qr', ['formato' => 'a4', 'ejemplo' => $qrEjemplo ?? false])
 </body>
 </html>

@@ -100,6 +100,12 @@ class QrCodeService
         ]);
     }
 
+    /** QR de un texto cualquiera (ej. el link "Mi crédito" de Créditos, Fase 5b) como data URI PNG. */
+    public function generarQrTexto(string $texto): string
+    {
+        return $this->renderizarQr($texto);
+    }
+
     private function renderizarQr(string $valorQr): string
     {
         $qrCode = new QrCode(

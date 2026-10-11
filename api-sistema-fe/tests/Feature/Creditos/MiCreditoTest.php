@@ -178,6 +178,50 @@ final class MiCreditoTest extends CreditosTestCase
         $this->servicio()->paraCliente($sinDocumento);
     }
 
+    public function test_el_recibo_lleva_el_qr_y_crea_el_link_la_primera_vez(): void
+    {
+        $this->hoy('2026-01-31');
+        $pago = app(CobroService::class)->cobrar($this->credito, new SolicitudCobro(60_000, DestinoExcedente::Devolver, $this->efectivo->id, 'mc-recibo'), $this->admin);
+        $documentos = app(\App\Services\Creditos\Documentos\DocumentoCreditoService::class);
+
+        foreach (['ticket80mm', 'a4'] as $formato) {
+            $pdf = $documentos->recibo($pago, $formato, false, $this->admin);
+            $this->assertStringStartsWith('%PDF', (string) $pdf->getContent());
+        }
+        // Un solo link aunque se imprima varias veces, y el QR apunta a él.
+        $enlace = CreditoEnlaceCliente::sole();
+        $qr = app(\App\Services\Creditos\MiCredito\QrMiCredito::class)->paraCliente($this->cliente);
+        $this->assertSame($this->servicio()->urlDe($enlace), $qr['url']);
+        $this->assertStringStartsWith('data:image/png;base64,', $qr['qr']);
+        $this->assertStringEndsWith('/c/' . $enlace->token, $qr['texto']);
+        $this->assertStringNotContainsString('://', $qr['texto']);
+
+        $html = view('pdf.creditos._mi_credito_qr', ['miCredito' => $qr, 'formato' => 'ticket'])->render();
+        $this->assertStringContainsString('Consulta tu crédito', $html);
+        $this->assertStringContainsString(e($qr['texto']), $html);
+    }
+
+    public function test_sin_documento_el_recibo_sale_igual_sin_qr(): void
+    {
+        $this->cliente->update(['n_document' => '']);
+        $this->hoy('2026-01-31');
+        $pago = app(CobroService::class)->cobrar($this->credito, new SolicitudCobro(60_000, DestinoExcedente::Devolver, $this->efectivo->id, 'mc-sin-doc'), $this->admin);
+
+        $pdf = app(\App\Services\Creditos\Documentos\DocumentoCreditoService::class)->recibo($pago, 'ticket80mm', false, $this->admin);
+
+        $this->assertSame(200, $pdf->getStatusCode());
+        $this->assertSame(0, CreditoEnlaceCliente::count());
+        $this->assertNull(app(\App\Services\Creditos\MiCredito\QrMiCredito::class)->paraCliente($this->cliente->fresh()));
+    }
+
+    public function test_la_vista_previa_del_contrato_no_crea_links(): void
+    {
+        $pdf = app(\App\Services\Creditos\Documentos\DocumentoCreditoService::class)->vistaPreviaContrato('<p>Contrato</p>', $this->credito);
+
+        $this->assertStringStartsWith('%PDF', (string) $pdf->getContent());
+        $this->assertSame(0, CreditoEnlaceCliente::count());
+    }
+
     public function test_un_link_inexistente_responde_404_sin_dar_pistas(): void
     {
         try {
