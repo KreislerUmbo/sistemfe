@@ -311,4 +311,25 @@ class CicloCreditoTest extends CreditosTestCase
         $this->assertSame(0, $this->mora($credito, 1, '2026-02-10'));
         $this->assertSame('200.00', $credito->cuotasVigentes()->first()->mora_condonada);
     }
+
+    public function test_anular_un_existente_castigado_anula_su_mora_condonada_y_sale_de_los_reportes(): void
+    {
+        // Caso real (credishirley CR-00000006, 10-oct-2026): existente registrado con el año
+        // equivocado, sin pagos, mora histórica condonada y castigado esa misma noche.
+        $cliente = $this->cliente();
+        $this->hoy('2026-06-01');
+        $credito = app(MigracionService::class)->migrar($this->datos($cliente->id), null, [], true, 'm-4', $this->usuario);
+        $this->assertSame(1, app(EscalamientoService::class)->ejecutar(Fecha::desdeTexto('2026-06-01')));
+        $periodo = \App\Services\Creditos\Reportes\Periodo::dia(Fecha::desdeTexto('2026-06-01'));
+        $ingresos = fn (): string => app(\App\Services\Creditos\Reportes\ReportesFinancierosService::class)->ingresos($periodo, 'dia')['totales']['mora_condonada'];
+        $this->assertNotSame('0.00', $ingresos());
+
+        app(CastigoService::class)->revertir($credito->fresh(), 'Registrado con el año equivocado', $this->usuario);
+        app(CorreccionService::class)->anular($credito->fresh(), 'Registrado con el año equivocado', $this->usuario);
+
+        $this->assertSame(CreditoEstado::Anulado, $credito->fresh()->estado);
+        $this->assertSame(0, \App\Models\Creditos\CreditoCondonacion::where('credito_id', $credito->id)
+            ->where('estado', \App\Enums\Creditos\CondonacionEstado::Vigente)->count());
+        $this->assertSame('0.00', $ingresos());
+    }
 }

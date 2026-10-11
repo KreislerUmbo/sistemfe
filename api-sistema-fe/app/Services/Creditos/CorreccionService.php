@@ -116,6 +116,7 @@ class CorreccionService
             if ($estabaActivo) {
                 $this->caja->revertirReferencia(CajaCredito::DESEMBOLSO, $credito->id, $usuario);
                 $this->escritor->anularVersion($credito, $credito->version_cronograma_actual);
+                $this->anularAjustes($credito, $usuario);
             }
             $credito->update([
                 'estado' => CreditoEstado::Anulado,
@@ -131,6 +132,19 @@ class CorreccionService
 
             return $credito->refresh();
         });
+    }
+
+    /**
+     * Condonaciones y cargos cuelgan de las cuotas recién anuladas: si quedaran vigentes, la mora
+     * condonada de un crédito que no existe seguiría sumando en los reportes (revisión 10-oct-2026,
+     * caso real: crédito existente registrado con el año equivocado, 119 condonaciones históricas).
+     */
+    private function anularAjustes(Credito $credito, User $usuario): void
+    {
+        CreditoCondonacion::where('credito_id', $credito->id)->where('estado', CondonacionEstado::Vigente)
+            ->update(['estado' => CondonacionEstado::Anulada, 'anulado_por' => $usuario->id, 'anulado_en' => now()]);
+        CreditoCargo::where('credito_id', $credito->id)->where('estado', CargoEstado::Vigente)
+            ->update(['estado' => CargoEstado::Anulado]);
     }
 
     /** El pago "renovación" del crédito anterior (sin caja) se anula y el anterior vuelve a quedar abierto. */
