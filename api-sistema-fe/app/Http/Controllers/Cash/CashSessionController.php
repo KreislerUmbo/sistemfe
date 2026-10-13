@@ -352,6 +352,8 @@ class CashSessionController extends Controller
                 'with_open_session' => $data->where('has_open_session', true)->count(),
                 'stale' => $data->where('is_stale', true)->count(),
             ],
+            // Para el cierre desde el Dashboard (misma validación de motivo que cash/status).
+            'difference_tolerance' => (float) (Company::first()?->difference_tolerance ?? 2.00),
         ]);
     }
 
