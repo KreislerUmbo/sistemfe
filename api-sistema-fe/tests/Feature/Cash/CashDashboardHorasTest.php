@@ -25,5 +25,7 @@ final class CashDashboardHorasTest extends CreditosTestCase
 
         $this->assertSame(30, $caja['elapsed_hours']);
         $this->assertTrue($caja['is_stale']);
+        // El Dashboard cierra sesiones: necesita la tolerancia para pedir motivo de diferencia.
+        $this->assertIsNumeric($datos['difference_tolerance']);
     }
 }

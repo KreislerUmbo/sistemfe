@@ -392,12 +392,14 @@ Route::group([
     // que las rutas de Amortizaciones con permission: explícito.
     // cash.close_others_session se valida inline dentro de close(), no acá,
     // porque solo aplica al caso puntual de cerrar la sesión de un tercero.
+    // La ruta de cierre la admite también sola: un supervisor puede cerrar
+    // desde el Dashboard la caja olvidada de otro sin tener caja propia.
     Route::get("cash/status", [CashSessionController::class, 'status'])
         ->middleware('permission:cash.open_session');
     Route::post("cash/open", [CashSessionController::class, 'open'])
         ->middleware('permission:cash.open_session');
     Route::post("cash/close", [CashSessionController::class, 'close'])
-        ->middleware('permission:cash.open_session');
+        ->middleware('permission:cash.open_session|cash.close_others_session');
 
     // Módulo Caja — Fase 4 (plan-modulo-caja.md §5 regla #1, #4, §6):
     // movimientos manuales. Mismo criterio de permiso a nivel de ruta que

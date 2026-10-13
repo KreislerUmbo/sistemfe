@@ -205,4 +205,5 @@ export type CashDashboardResponse = {
         with_open_session: number;
         stale: number;
     };
+    difference_tolerance: number;
 };
