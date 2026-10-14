@@ -710,6 +710,10 @@ adelante la importación SIRE (los comprobantes llegan solos y solo hay que asig
 
 ## 6. Fases (estimados gruesos, a afinar al empezar cada una)
 
+> **14-oct-2026:** la fase 1 se ejecuta en **dos sesiones**:
+> - **1a — el tour en el catálogo** (precio, Incluye con costo e IGV, calculadora, temporadas, uso, diagnóstico; sin tocar la cotización). Brief: `PEGAR-EN-CLAUDE-CODE-13-fase1a-tour-catalogo.md`.
+> - **1b — el tour en la cotización** (interruptor `modo_tours`, línea de tour, extranjeros, combos, PDF, facturación por pasajero, retiro de `ajuste_redondeo`, conversión de tours). Esbozo en el anexo del brief de la 1a.
+
 | Fase | Contenido | Estimado |
 |---|---|---|
 | 1 | **Tour simple:** columnas de §3.1 (incluido `uso`, N15, con su backfill y el bloqueo de carga en el cotizador para `solo_itinerario`), Incluye estructurado (con costo e IGV por servicio), calculadora, una línea por tipo de IGV cuando hay mezcla (N14), extranjeros (residencia en cotización), cotización con línea de tour, combos (una línea por tour, descuento E3), facturación con la línea de tour, retiro de `ajuste_redondeo`, conversión de los tours existentes con confirmación del usuario.  Además (§5c): desglose de precio por pasajero para facturar por subgrupo (C1), Incluye del PDF desde la lista del tour (C5), permisos y menú. **Precio por temporada (§3.12, N16)**. | 6.5–7.5 días |
