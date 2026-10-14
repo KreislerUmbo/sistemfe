@@ -428,6 +428,20 @@ reserva de una venta directa lleva **el código de la propia venta** (`VDKM-…`
 deducido de la tarifa; "Cobrar y emitir" en el mismo paso; varias líneas y pasajeros con
 nombre; tratamiento tributario en concepto libre, destino del árbol, pasaje aéreo suelto.
 
+**En diseño — Agencia de Viajes, tours: vender simple, operar por salida, medir el costo real
+(11-14 oct-2026, fila 13 + 13E, sin implementar):** el precio escrito en el tour
+(`precio_venta_final`) nunca llegaba a la cotización. Diseño vigente:
+`docs/planning/agencia-de-viajes/plan-tours-venta-simple-costo-real.md` (tour con precio por
+persona y por temporada, una línea por tour detrás del interruptor `modo_tours`, operación por
+salida, Compras, rentabilidad, registros SIRE) y `plan-endoso-pasajeros.md` (versión 2).
+`plan-precio-tour-por-persona.md` está **descartado** (no implementar). Orden acordado: fase 1 →
+fase 2 → pausa para evaluar con uso real → fases 3-5. Hallazgos ya verificados en código (no
+corregidos todavía): el cotizador no resuelve temporadas al cargar un tour; `ajuste_redondeo`
+no se multiplica por pasajero; el descuento de combos no llega a la cotización;
+`recalcularItemsPorPersona()` no actualiza el costo; `moverBloque()` mueve todas las cargas de un
+mismo tour; `AsignacionOperativa::itemsDelRango()` filtra "Ajuste de redondeo" por nombre (ese
+filtro se queda).
+
 **Completo — Inicio con datos reales (Dashboard) para retail y agencia (02-oct-2026):**
 Reemplaza la demo de la plantilla Rizz por `GET dashboard` (`DashboardService`): ventas hoy/mes
 por moneda (netas de NC aceptadas, NV aparte), ventas 30 días, pendientes SUNAT, por cobrar, más
@@ -478,7 +492,14 @@ la fecha del envío y no `sales.date` (umbo F001-30) — pregunta para el contad
      hoy (`window.open()` + `.print()`) abre el diálogo de impresión del navegador, no es
      automático/silencioso.
 
-2. **Compras** — módulo futuro, reglas de negocio aún sin definir.
+2. **Compras** — **reglas definidas (diseño cerrado 14-oct-2026, sin implementar)** dentro de
+   `docs/planning/agencia-de-viajes/plan-tours-venta-simple-costo-real.md` §3.7-§3.7d y §3.8:
+   módulo del sistema base para todos los giros (comprobantes recibidos contado/crédito, pagos
+   desde Caja o Banco sin sesión de caja, gastos sin comprobante, rendiciones, **tabla única
+   `proveedores`** que reemplaza a `suppliers` de Caja, cadena Obligación/Cuota/Pago/Aplicación
+   para mayoristas, comisiones), Registro de Ventas/Compras para el contador (SIRE, no PLE).
+   Es la fase 3 de ese plan (fila 13 de la hoja de ruta de Agencia). **No construir sobre
+   `cronograma_pago_proveedor`/`pago_proveedor` ni ampliar `suppliers`:** se reemplazan.
 
 (Anticipos/Adelantos, Amortizaciones y Caja ya no están en esta lista — están construidos o
 en progreso, ver sus secciones propias arriba. Este ítem de "Anticipos" describía un diseño

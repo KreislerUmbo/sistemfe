@@ -300,6 +300,13 @@ class AlternativaItemController extends Controller
     // mismo motor que ya resuelve el precio "calculado" que el vendedor ve
     // en el catálogo (paquetes/detalle.vue), así que el total acá siempre
     // coincide con el que ya vio ahí.
+    //
+    // 14-oct-2026 (diseño, sin implementar): con modo_tours='nuevo' el tour
+    // entra como UNA línea con su propio precio por persona y por temporada, en
+    // vez de desarmarse en servicios; este camino queda como modo 'clasico'.
+    // Ver plan-tours-venta-simple-costo-real.md (N6, §3.12, §5b). Hallazgos
+    // conocidos de este método: no consulta la temporada, y el ajuste de
+    // redondeo (más abajo) no se multiplica por pasajero.
     public function desdePlantilla(Request $request, string $alternativaId)
     {
         $alternativa = Alternativa::findOrFail($alternativaId);

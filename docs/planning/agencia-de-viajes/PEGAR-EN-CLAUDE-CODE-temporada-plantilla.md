@@ -1,5 +1,13 @@
 # Brief para Claude Code — Auditoría y fix: resolución de tarifa por temporada al cargar una cotización desde `paquete_plantilla`
 
+> **Actualización 14-oct-2026 — no ejecutar este brief tal cual.** La sospecha se confirmó
+> leyendo el código: al cargar un tour, `AlternativaItemController::desdePlantilla()` y
+> `ComboExplosionService` no consultan la temporada. En `agencia-demo` ninguna tarifa tiene
+> temporada todavía (0 de 26), por eso no hay errores visibles. **Para los tours** la solución
+> queda en `plan-tours-venta-simple-costo-real.md` §3.12 (precio del tour por temporada, elegido
+> según la fecha del día del tour). **Para los servicios sueltos** queda anotado como siguiente
+> etapa (§3.15 de ese plan).
+
 > Pégale este archivo completo a una sesión nueva de Claude Code sobre el
 > repo real del vertical Agencia de Viajes. Referencias exactas a leer
 > primero: `docs/planning/agencia-de-viajes/plan-modulo-cotizaciones-reservas.md`

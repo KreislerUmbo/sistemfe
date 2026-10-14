@@ -54,11 +54,14 @@ reservas, todo construido y en producción.
 | `plan-fix-moneda-cotizador.md` | Bug real confirmado (tipo de cambio 1:1 aceptado sin validar). **El punto 4 de 5 (validación de rango de sanidad) ya se resolvió, pero por otra vía** — como parte del módulo "Tipo de Cambio SUNAT/SBS" (`TipoCambioSanityService`, commit `e30d7a0`), no de este plan. **Puntos 1, 2, 3 y 5 siguen sin construir**, sin brief de sesión todavía. |
 | `plan-mejora-pdf-cotizacion-cliente.md` | Diseño del PDF de cotización mejorado con marca personalizable — **✅ EJECUTADO y MERGEADO (07-sep-2026, commit `5b00fdd`)**. Queda activo como referencia técnica del diseño acordado. |
 | `fase1b-roles-permisos.md` | Detalle completo de Fase 1b de `docs/planning/plan-modulo-menus-y-roles.md` (catálogo real de roles/permisos + scope de fila para el giro `agencia_viajes`) — **✅ CERRADO y MERGEADO** (`abf71bc`, 10-sep-2026). Vive acá porque es específico del vertical, aunque el plan "madre" está en la raíz. |
-| `plan-modulo-cotizaciones-reservas.md` | Cotizaciones, alternativas, reservas, itinerarios, facturación (simple y múltiple por grupo de pasajeros), integración con el core de ventas. Todavía activo — las filas abiertas (11f/11g) referencian sus secciones §4.6/§8bis directamente. |
+| `plan-modulo-cotizaciones-reservas.md` | Cotizaciones, alternativas, reservas, itinerarios, facturación (simple y múltiple por grupo de pasajeros), integración con el core de ventas. Todavía activo — las filas abiertas (11f/11g) referencian sus secciones §4.6/§8bis directamente. (14-oct-2026: §3.7 precio del tour y §4.6 pagos a proveedores tienen nota de actualización hacia `plan-tours-venta-simple-costo-real.md`.) |
 | `plan-modulo-codigos-numeracion.md` | Módulo 12 — prefijo editable por agencia + correlativo configurable para tours/paquetes/cotizaciones/reservas. **Construido y mergeado (26-ago-2026)** — fila 12 de `plan-hoja-de-ruta-ejecucion.md`. |
 | `plan-modulo-planes-acceso.md` | Feature gating por plan contratado (económico/estándar/pro) + add-ons. **Confirmado sin cambios desde 23-jul-2026** (11-sep-2026, sin ningún commit relacionado en el log) — sigue teniendo trabajo real pendiente (mecanismo de tenant demo/real, feature-gating de módulos), ver su propia sección "Recomendación". |
 | `sincronizacion.md` | Protocolo de por qué `plan-hoja-de-ruta-ejecucion.md` puede desactualizarse frente al repo real y cómo resincronizarlo |
-| `PEGAR-EN-CLAUDE-CODE-temporada-plantilla.md` | Brief sin ejecutar, confirmado (11-sep-2026, sin commits relacionados) — auditoría/fix de resolución de tarifa por temporada al cargar una cotización desde `paquete_plantilla` |
+| `PEGAR-EN-CLAUDE-CODE-temporada-plantilla.md` | Brief **no ejecutar tal cual** (14-oct-2026): la sospecha se confirmó; para tours lo resuelve `plan-tours-venta-simple-costo-real.md` §3.12, para servicios sueltos queda en su siguiente etapa. |
+| `plan-tours-venta-simple-costo-real.md` | **Diseño vigente (11-14 oct-2026, sin implementar) — fila 13 de la hoja de ruta.** Tours con precio por persona y por temporada, una línea por tour, operación por salida, Compras del sistema base (contado/crédito, Caja o Banco, rendiciones, tabla única de proveedores, mayoristas y comisiones), rentabilidad real, registros para el contador (SIRE), guía con usuario, bandeja de pendientes. Interruptor `modo_tours` reversible. Absorbe la fila 11g y la Fase 4 de la auditoría. |
+| `plan-endoso-pasajeros.md` | **Diseño cerrado, versión 2 (14-oct-2026) — fila 13E.** Enviar endosos (salida operada por un tercero) y recibirlos (reservas con origen `endoso_recibido`, precio para agencias, reciprocidad). |
+| `plan-precio-tour-por-persona.md` | **DESCARTADO (13-oct-2026)** — reparto exacto del precio del tour entre servicios. Reemplazado por `plan-tours-venta-simple-costo-real.md`; se conserva como alternativa evaluada. No implementar. |
 | `historial-archivo.md` | Todo lo demás: las ~20 sesiones ya cerradas con detalle completo, documentos de diseño fundacional archivados, y (11-sep-2026) 9 briefs `PEGAR-EN-CLAUDE-CODE-*.md` de sesiones 12a-12h/M1-M3/C1 ya ejecutadas + 3 documentos de auditoría cruda ya consumidos por `auditoria-arquitectonica-agencia-viajes.md` + un duplicado viejo de la hoja de ruta — todos borrados por superados, detalle de cada uno en la entrada de esa fecha |
 
 **Pendiente real de este vertical (actualizado 11-sep-2026, verificado contra `git log` — no
@@ -70,6 +73,11 @@ desactualizada).** El frente de multi-destino/mayoristas y el de matriz de hotel
 - **Frente histórico (sin cambios desde 26-ago):** 11f (motor de
   recordatorios), 11g (controllers de pago a proveedor), 11t (bug
   colateral de `VentaDirectaController`, sin brief propio todavía).
+  *14-oct-2026:* 11g queda integrada a la fila 13 (Compras) y 11f pasa a ser la base de su
+  bandeja de pendientes.
+- **Filas 13 y 13E (14-oct-2026, diseño cerrado, sin implementar):** tours con venta simple y
+  costo real (`plan-tours-venta-simple-costo-real.md`) y endoso de pasajeros
+  (`plan-endoso-pasajeros.md`). Orden acordado: fase 1 → fase 2 → pausa para evaluar → fases 3-5.
 - **12g** (limpieza final de columnas deprecadas) — bloqueado a propósito, esperando un
   ciclo completo de reservas en producción con 12f ya estable.
 - **C3** (margen automático por mayorista, huérfano de `plan-refactor-mayoristas-tramos.md`)

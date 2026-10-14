@@ -750,6 +750,15 @@ opciones_hotel (ver estructura completa en sección 2.4)
 `precio_venta_final` queda como el precio "desde" mostrado en listados
 (el más barato de todas las opciones de hotel), no como el único precio
 real del paquete.
+
+> **Actualización 14-oct-2026 (diseño, sin implementar):** el precio del tour se rediseña en
+> `plan-tours-venta-simple-costo-real.md`. Ahí `precio_venta_final` pasa a ser el **precio adulto
+> nacional** que sí se cobra en la cotización (con niño, extranjero y precio por temporada), el
+> Incluye pasa a ser una lista estructurada sin precio de venta propio, y el tour se carga como
+> **una línea** en vez de desarmarse en servicios (detrás de un interruptor por tenant,
+> `modo_tours`). Las opciones de hotel de esta sección ya se habían retirado del paquete
+> (`2026_08_11_090500_drop_paquete_plantilla_id_from_opciones_hotel_table`). Mientras no se
+> implemente, el comportamiento descrito aquí sigue siendo el vigente.
 Un vendedor puede partir de un `paquete_plantilla` al armar una
 alternativa, en vez de construir todo desde cero — ahorra tiempo hoy y
 deja lista la base para cuando se construya el portal (proyecto aparte,
@@ -1118,6 +1127,11 @@ automáticamente al `AdvanceApplication` — eso queda para una sesión
 futura, sin número asignado todavía.
 
 ### 4.6 Cronograma de pagos a proveedores/mayoristas
+
+> **Actualización 14-oct-2026:** `cronograma_pago_proveedor` y `pago_proveedor` nunca se
+> conectaron (cero controllers, cero filas). Se reemplazan por la cadena
+> Obligación/Cuota/Pago/Aplicación de la auditoría arquitectónica §12, integrada al módulo de
+> Compras: `plan-tours-venta-simple-costo-real.md` §3.7d. No construir sobre estas dos tablas.
 `pago_proveedor` (sección 6) solo registra pagos **ya realizados** — no
 existía un cronograma de lo que se debe pagar y cuándo (caso real: viaje
 de fin de año, cronograma armado desde junio, tanto para lo que el

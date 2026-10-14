@@ -54,6 +54,9 @@ payment_methods                          -- por tenant
 - sort_order
 
 suppliers                                -- por tenant, catálogo simple (se amplía cuando exista el módulo de Compras)
+                                         -- 14-oct-2026 (diseño): se reemplaza por la tabla única `proveedores` del sistema base,
+                                         -- ver plan-tours-venta-simple-costo-real.md §3.7c. Los pagos de Compras también podrán
+                                         -- salir de "Banco" sin sesión de caja (§5c, C2).
 - id
 - name
 - document          -- RUC/DNI, opcional

@@ -46,6 +46,9 @@ class PaquetePlantilla extends Model
         'vuelo_incluido',
         'vuelo_aerolinea',
         'vuelo_detalle',
+        // Hoy es solo el precio "desde" del catálogo: desdePlantilla() no lo usa.
+        // 14-oct-2026 (diseño, sin implementar): pasa a ser el precio adulto que
+        // sí se cobra (plan-tours-venta-simple-costo-real.md §3.1).
         'precio_venta_final',
         'vigencia_desde',
         'vigencia_hasta',
@@ -54,6 +57,9 @@ class PaquetePlantilla extends Model
         'descuento_tipo',
         'descuento_valor',
         'margen_minimo_pct',
+        // 14-oct-2026 (diseño): se retira con plan-tours-venta-simple-costo-real.md
+        // (§3.1): convertir los tours que lo usen antes de quitarlo. Ojo: AsignacionOperativa filtra la
+        // línea "Ajuste de redondeo" por nombre; ese filtro se queda.
         'ajuste_redondeo',
     ];
 

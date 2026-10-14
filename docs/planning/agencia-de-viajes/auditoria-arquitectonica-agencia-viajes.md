@@ -316,6 +316,12 @@ Sin cambios estructurales. El diseño actual ya resuelve correctamente lo que el
 
 ## 12. Modelo financiero recomendado
 
+> **Actualización 14-oct-2026:** el lado proveedor de esta sección se **integró** al módulo de
+> Compras de `plan-tours-venta-simple-costo-real.md` §3.7d, con estos mismos nombres
+> (Obligación/Cuota/Pago/Aplicación) más el comprobante de compra que llega después. La
+> decisión de §17 sobre cuotas quedó resuelta: **sí hacen falta** (el usuario paga en partes
+> antes del viaje). La "Fase 4" de §19 se ejecuta dentro de la fase 3 de ese plan.
+
 **Lado cliente (cobros):** ya resuelto y bien limitado — `ReservaVenta`/`ReservaAnticipo` como puente liviano sobre `Sale`/`Advance` del core, sin duplicar nada. **CONSERVAR.** La limitación conocida y documentada (reparto de un ítem `tarifa_fija` compartido entre pasajeros facturados en Sales distintos) es una decisión de negocio pendiente, no un bug — no se debe "improvisar una fórmula" como el propio código ya decidió.
 
 **Lado proveedor (pagos):** aquí sí hace falta trabajo real. `CronogramaPagoProveedor`/`PagoProveedor` tienen schema pero cero conexión funcional, y estructuralmente no alcanzan para el caso real del brief §21 (pago consolidado de USD 6,500 cubriendo 3 reservas distintas de un mismo proveedor) porque no existe ninguna tabla que registre *cuánto de ese pago consolidado corresponde a cada reserva*.
@@ -407,6 +413,8 @@ documenta como decisión consciente? Hoy el campo existe pero nunca se llena.
 [DECISIÓN REQUERIDA] Pagos a proveedor: ¿hace falta el nivel de "cuota" (pago
 programado en partes, tipo cronograma) o alcanza con Obligación → Pago →
 Aplicación sin cuotas para el primer lanzamiento?
+→ **Resuelta (14-oct-2026): sí hacen falta cuotas** — el usuario paga a los mayoristas en partes
+antes del viaje y la factura llega al final. Ver `plan-tours-venta-simple-costo-real.md` §3.7d.
 
 [DECISIÓN REQUERIDA] Ubicar o reconstruir plan-refactor-mayoristas-tramos.md,
 plan-matriz-hoteles-cotizador.md y plan-fix-moneda-cotizador.md — el brief de
@@ -479,6 +487,9 @@ DECISIÓN CERRADA — Guardia tributario de facturación solo permite destino
 - Frontend: cotizador (`cotizaciones/editar.vue` o equivalente, store de cotizador, componente de comparador de mayoristas). Riesgo: medio, es la superficie más visible al vendedor y requiere capacitación del equipo de ventas. Dependencias: Fase 2.
 
 ### FASE 4 — Pagos a proveedor (Obligación/Cuota/Pago/Aplicación)
+
+> **14-oct-2026:** absorbida por la fase 3 (Compras) de `plan-tours-venta-simple-costo-real.md`
+> (§3.7d). No ejecutar por separado.
 - Objetivo: reemplazar `cronograma_pago_proveedor`/`pago_proveedor` (0 filas reales, confirmado) por la cadena descrita en §12.
 - Tablas: nuevas `obligaciones_proveedor`, `cuotas_proveedor` (si la decisión abierta lo confirma), `pagos_proveedor` (rediseñada), `aplicaciones_pago_proveedor`. Modelos y Controllers: nuevos, completos (CRUD real, cosa que nunca existió). Datos existentes: ninguno que migrar (tablas vacías en producción). Riesgo: bajo en migración de datos, medio en superficie nueva de negocio (contable). Dependencias: ninguna respecto a `alternativa_destinos` — puede ejecutarse en paralelo a las Fases 1-3.
 
