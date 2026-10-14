@@ -1,6 +1,6 @@
 # Tours: vender simple, operar por salida, medir el costo real
 
-> **Estado: DISEÑO — pendiente de aprobación, no implementar todavía.** 13-oct-2026.
+> **Estado: EN EJECUCIÓN — fase 1a hecha (14-oct-2026, ver §6); sigue la 1b.** Diseño del 13-oct-2026.
 > Nace de una propuesta del usuario que reemplaza el enfoque de
 > `plan-precio-tour-por-persona.md` (ese plan queda **descartado como alternativa**, con la
 > razón en su encabezado y en §1 de este documento). Revisado contra el código y los datos de
@@ -713,6 +713,57 @@ adelante la importación SIRE (los comprobantes llegan solos y solo hay que asig
 > **14-oct-2026:** la fase 1 se ejecuta en **dos sesiones**:
 > - **1a — el tour en el catálogo** (precio, Incluye con costo e IGV, calculadora, temporadas, uso, diagnóstico; sin tocar la cotización). Brief: `PEGAR-EN-CLAUDE-CODE-13-fase1a-tour-catalogo.md`.
 > - **1b — el tour en la cotización** (interruptor `modo_tours`, línea de tour, extranjeros, combos, PDF, facturación por pasajero, retiro de `ajuste_redondeo`, conversión de tours). Esbozo en el anexo del brief de la 1a.
+>
+> **Fase 1a — HECHA (14-oct-2026, rama `feat/tours-fase1a-catalogo`, sin commitear ni unir a `main`).**
+> Qué quedó:
+> - **Migraciones** (vertical, solo aditivas, `down()` probado en `sistemafe_test_migrations`):
+>   - `paquetes_plantilla`: precios niño y extranjero, costo estimado (nacional/extranjero), moneda, IGV por defecto, modalidad, mínimo para salir, `uso`. Backfill de `uso` (N15).
+>   - `paquete_plantilla_items`: **`destino_servicio_id`** (ver hallazgo 1), `proveedor_id` sugerido (`nullOnDelete`), costo estimado (nacional/extranjero), IGV por servicio. Backfill de servicio y proveedor desde la tarifa.
+>   - Tabla `paquete_plantilla_precios` (§3.12).
+>   - Aplicadas a `agencia-demo` con `tenants:migrate-verticales`.
+> - **Servicios:**
+>   - `TourCostoEstimadoService`: calculadora (§3.9b) y costo del tour (suma del Incluye o el escrito a mano).
+>   - `TemporadaResolverService`: elige la ocurrencia que cubre una fecha; si se superponen, gana la más corta y, en empate, la de menor id. `precioParaFecha()` queda listo para la 1b y, si la temporada más específica no tiene precio en el tour, cae a la siguiente que sí lo tenga.
+>   - `DiagnosticoToursService`.
+> - **Endpoints:**
+>   - `GET paquetes-plantilla/{id}/calculadora-costos?temporada_id=` (solo sugiere).
+>   - `GET …/precio-para-fecha?fecha=` (vista previa).
+>   - `POST/PUT/DELETE …/precios[/{precioId}]`.
+>   - `PUT paquete-plantilla-items/{id}` (costo, IGV y proveedor sugerido; la tarifa no se cambia por acá).
+>   - `?uso=` en el listado.
+>   - `show()` devuelve además `costo_estimado`, `margen_minimo_agencia_pct` y `tratamiento_default`.
+> - **Comando** `agencia-viajes:diagnosticar-tours [--tenant=] [--json]`, de solo lectura. En `agencia-demo`:
+>   - 6 `solo_itinerario` y 6 tours con precio.
+>   - Lamas mezcla IGV 10/20.
+>   - Laguna Azul y Encañada tienen tarifas privadas: falta el mínimo para salir.
+>   - #16 y #19 no tienen Incluye; #29 no tiene precio ni tarifas.
+> - **Frontend:**
+>   - `TourPrecioVentaCampos.vue` (bloque "Precio y venta", en `form.vue` y en la edición del tab Datos).
+>   - `MargenEnVivo.vue` (S/ y % sobre el costo, contra el mínimo del tour o el de la agencia).
+>   - Pestaña "Incluye y costos" (`TourIncluyeCostos.vue`: costo e IGV por servicio, calculadora, servicio sin tarifa, aviso de IGV mezclado e IGV de la tarifa como referencia).
+>   - `TourPreciosTemporada.vue`, con "Probar una fecha".
+>   - Etiqueta y filtro "Solo itinerario" en el catálogo.
+>   - `TourIncluidoForm.vue` (tours de mayorista) crea con `uso=solo_itinerario`.
+> - **Pruebas:**
+>   - 25 tests nuevos (`Fila13Fase1aTourCatalogoTest`), entre ellos uno de regresión: `desdePlantilla()` da el mismo resultado con todo lo nuevo cargado.
+>   - Type-check del frontend: 46 errores, todos anteriores; 0 nuevos.
+>   - Verificado en vivo con Playwright en `agencia-demo` (tour #12, revertido a su estado original).
+>
+> **Hallazgos de la sesión:**
+> 1. **El Incluye no tenía columna de servicio** (se deducía de la tarifa), así que no podía existir "un servicio sin tarifa con costo a mano" (§3.2). Se agregó `destino_servicio_id`, con aprobación del usuario. Consecuencia que se corrigió:
+>    - `DestinoServicioController::fusionar()` habría dado error 500 por la clave foránea; ahora lleva también los ítems del Incluye.
+>    - `destroy()` bloquea con 422 si un tour lo usa.
+> 2. **Exigir precio a todo tour `venta` rompía pantallas existentes:**
+>    - `TourIncluidoForm.vue` crea tours sin precio.
+>    - `detalle.vue` desactiva un tour (y guarda el combo) reenviando el objeto completo con `precio_venta_final: null`.
+>
+>    Regla final: el precio se exige al **crear**, al **pasar a `venta`** o al **borrar un precio que existía**. Los tours viejos sin precio se siguen editando, con aviso, hasta su conversión (1b). El IGV del tour no es obligatorio: vacío = el default de la agencia.
+> 3. **IGV del Incluye contra el de la tarifa:** en `agencia-demo` las tarifas de Laguna Azul son gravadas (10), pero el default de la agencia es exonerado. Un ítem sin IGV propio hereda el del tour (regla del plan), así que la pantalla muestra "La tarifa es Gravado · usar". **Para la 1b:** la conversión debe proponer el IGV de la tarifa por ítem, no dejarlo vacío.
+> 4. **E5 sin corregir a propósito:** `resolverCostoVentaItem()` (cotizador clásico) sigue contando el guía como 1 día. La calculadora sí multiplica por los días. Queda para la 1b, en un commit aparte, si se decide tocar el clásico.
+> 5. La capitalización automática de nombres (`capitalizarNombrePropio`) convierte "-Full Day" en "-full Day" al guardar. Es anterior a esta sesión y no se tocó; anotado.
+> 6. `sistemafe_test_migrations` tiene un desfase anterior: `2026_09_07_120000_add_opcion_mayorista_opcional…` está aplicado pero no figura en el registro de migraciones. Correr el directorio completo falla; las migraciones nuevas se aplican por archivo.
+>
+> **Diagnóstico de dakamu (§7): hecho el 14-oct-2026, sin riesgo** (3 tours sin precio, 0 vinculados a mayoristas).
 
 | Fase | Contenido | Estimado |
 |---|---|---|
@@ -738,6 +789,24 @@ pueden ser la mayoría. Migraciones con
 `php artisan tenants:migrate-verticales`; las de Compras y registros, en `tenant/core/`.
 
 ## 7. Preguntas abiertas
+
+**Diagnóstico de producción (dakamu) — HECHO 14-oct-2026, sin riesgo para el despliegue.**
+- 3 tours simples, 0 con precio, 0 con ajuste de redondeo, 0 combos.
+- **0 tours vinculados a mayoristas** (`mayorista_con_precio` = 0): el backfill N15 no marca ninguno como `solo_itinerario`, y los 3 quedan `venta` sin precio (se editan con aviso hasta la conversión de la 1b).
+- 4 tarifas: compartido 1 (sin hotel), privado 3 (hotel). 0 con temporada.
+- 1 solo ítem en el Incluye (con tarifa de proveedor, en PEN). 0 IGV mezclado, 0 hoteles dentro de tours.
+- La suposición de §6 ("el uso de mayoristas es el 100 % de un tenant real, ahí los tours vinculados pueden ser mayoría") **no se cumple en dakamu**: hoy no tiene tours vinculados a opciones de mayorista.
+
+Corrida en producción con `php artisan tinker --execute="$(cat archivo.php)"`: pegar el bloque directo en `tinker` falla porque evalúa línea por línea.
+
+Referencia local (`agencia-demo`, 14-oct-2026):
+- 13 tours simples, 6 con precio, 0 con ajuste; 1 combo.
+- 6 tours vinculados a mayoristas, 0 de ellos con precio.
+- Tarifas: privado 5 y compartido 12 (sin hotel); compartido 2 y privado 7 de hotel. 0 con temporada.
+- 1 tour con IGV mezclado.
+- 12 ítems en el Incluye: 9 con tarifa de proveedor, 0 de guía y 3 tours hijo. Todas las tarifas usadas en tours están en PEN.
+
+Si en dakamu hay tours vinculados a mayoristas **con** precio, la regla N15 los deja en `venta`: revisarlos uno por uno antes de la 1b.
 
 - ~~P1 — IGV del tour~~ **Resuelta (14-oct, contador):** no se puede un solo tipo si hay mezcla; cada concepto con su afectación (código 10 gravado, código 20 exonerado). → N5, N14.
 - ~~P2 — Extranjeros~~ **Resuelta (14-oct, contador):** en tours, el IGV depende de dónde se presta el servicio, no de la residencia del cliente. → N5, §3.3. *(No cubierto por la respuesta: hospedaje y alimentación a no domiciliados. Sigue como hoy en las líneas de hotel; revisar con el contador si se toca esa parte.)*
