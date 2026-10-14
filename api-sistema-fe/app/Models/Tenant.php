@@ -30,6 +30,9 @@ class Tenant extends BaseTenant implements TenantWithDatabase
         // `if (! tenant('facturacion_habilitada'))` (ReservaFacturacionController/
         // ReservaController) depende de este cast para funcionar bien.
         'facturacion_habilitada' => 'boolean',
+        // Envío de cotizaciones por correo (plan-modulo-envio-correo-cotizacion.md §3.1).
+        'correo_cotizaciones_habilitado' => 'boolean',
+        'correo_limite_diario' => 'integer',
     ];
 
     /**
@@ -57,6 +60,6 @@ class Tenant extends BaseTenant implements TenantWithDatabase
      */
     public static function getCustomColumns(): array
     {
-        return array_merge(parent::getCustomColumns(), ['status', 'fecha_archivado', 'giro', 'tipo', 'sunat_modo', 'facturacion_habilitada']);
+        return array_merge(parent::getCustomColumns(), ['status', 'fecha_archivado', 'giro', 'tipo', 'sunat_modo', 'facturacion_habilitada', 'correo_cotizaciones_habilitado', 'correo_limite_diario']);
     }
 }

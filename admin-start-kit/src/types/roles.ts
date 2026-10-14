@@ -501,6 +501,13 @@ export const PERMISOS = [
                 name: 'Cotizaciones, alternativas e ítems',
                 permiso: 'agencia.cotizaciones',
             },
+            {
+                // Envío de la cotización por correo (plan-modulo-envio-correo-
+                // cotizacion.md). Respeta la misma regla de fila que ver la
+                // cotización: sin "ver todas", solo las propias.
+                name: 'Enviar cotizaciones por correo',
+                permiso: 'cotizaciones.enviar_correo',
+            },
         ]
     },
     {

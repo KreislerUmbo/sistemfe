@@ -62,4 +62,12 @@ return [
         'subject' => env('VAPID_SUBJECT', 'mailto:avisos@umbosystem.com'),
     ],
 
+    // API de Brevo (no el SMTP): solo la usa el Superadmin para registrar y verificar el
+    // dominio de correo de cada agencia (plan-modulo-envio-correo-cotizacion.md §2.1, §3.1).
+    // Solo en el entorno central; nunca se expone al tenant ni al frontend.
+    'brevo' => [
+        'api_key' => env('BREVO_API_KEY'),
+        'base_url' => env('BREVO_API_URL', 'https://api.brevo.com/v3'),
+    ],
+
 ];

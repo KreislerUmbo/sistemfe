@@ -115,4 +115,11 @@ return [
         'name' => env('MAIL_FROM_NAME', 'Example'),
     ],
 
+    // Envío de cotizaciones por correo (plan-modulo-envio-correo-cotizacion.md
+    // §2.3): remitente de respaldo cuando el dominio de la agencia todavía no
+    // está verificado en Brevo. Sale con el nombre de la agencia y Reply-To a
+    // la agencia. Tiene que ser una dirección del dominio ya autenticado de la
+    // plataforma.
+    'cotizaciones_respaldo' => env('MAIL_COTIZACIONES_RESPALDO', 'cotizaciones@umbosystem.com'),
+
 ];

@@ -564,6 +564,8 @@
                     </div>
                 </div>
             </div>
+
+            <ConfiguracionCorreoSeccion />
         </template>
     </DefaultLayout>
 </template>
@@ -572,6 +574,7 @@
 import { ref, computed, onMounted } from 'vue';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import RichTextEditor from '@/components/RichTextEditor.vue';
+import ConfiguracionCorreoSeccion from '@/components/AgenciaViajes/ConfiguracionCorreoSeccion.vue';
 import Swal from 'sweetalert2/dist/sweetalert2.js';
 import { configuracionAgenciaService } from '@/services/admin/configuracionAgenciaService';
 import { cuentaBancariaService } from '@/services/admin/cuentaBancariaService';

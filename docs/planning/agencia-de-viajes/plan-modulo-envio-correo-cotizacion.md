@@ -1,7 +1,10 @@
 # Plan — Envío de la cotización por correo, desde el dominio de la agencia
 
-> Estado: **DISEÑO EN PAUSA** (11-oct-2026). Nada implementado; se retoma más adelante
-> desde la §11 ("Cómo retomar"). Las decisiones de la §10 siguen sin aprobar.
+> Estado: **CONSTRUIDO (14-oct-2026), sin desplegar** — rama `feat/envio-correo-cotizacion`.
+> Etapas E1 (backend), E2 (frontend del tenant) y E3 (Superadmin) completas. Falta lo
+> externo: registrar el dominio de la agencia en Brevo y que la agencia cargue sus DNS
+> (§12), y desplegar. Decisiones D1-D6 tomadas con la recomendación (§10).
+> Diseño original: 11-oct-2026.
 > Requisito del usuario: el usuario de la agencia envía al cliente, por correo, el PDF de la
 > cotización y el de condiciones generales; el correo sale **desde una dirección de la
 > agencia**; el envío es **configurable por tenant**.
@@ -310,7 +313,17 @@ Pendiente de E0:
 
 ---
 
-## 10. Decisiones abiertas (confirmar antes de E1)
+## 10. Decisiones (tomadas el 14-oct-2026, con la recomendación)
+
+> El usuario pidió construir el módulo completo para ofrecerlo a las agencias (posible
+> adicional al plan mensual), dejando para después solo la configuración externa. Se tomaron
+> las recomendaciones: **D1** V1 (cuenta Brevo de UmboSystem, capa lista para V2); **D2**
+> enviar con respaldo `cotizaciones@umbosystem.com` + Reply-To de la agencia; **D3** envío
+> síncrono; **D4** casilla "marcar como enviada", marcada por defecto, solo si está en
+> borrador; **D5** cotización + condiciones generales; **D6** permiso
+> `cotizaciones.enviar_correo` + la misma regla de fila que ver la cotización
+> (`CotizacionPolicy::view`: sin `ver_todas`, solo las propias). Todas se pueden cambiar.
+> Texto original de las preguntas:
 
 - **D1. Variante de cuenta Brevo:** V1, la cuenta de UmboSystem (recomendada para empezar),
   o V2, una cuenta por agencia.
@@ -392,3 +405,73 @@ Destinatario: quien administra el Cloudflare de `dkmxplore.com` en Dakamu. Compl
   adjunto): https://help.brevo.com/hc/en-us/articles/4402811730962
 - No encontrado: si el plan gratuito limita la cantidad de dominios autenticados. Se
   confirma en el paso 2.
+
+---
+
+## 12. Implementación (14-oct-2026)
+
+**Rama:** `feat/envio-correo-cotizacion` (sale de `docs/plan-tours-costo-real`; unir en ese
+orden).
+
+### Lo construido
+
+| Pieza | Dónde |
+|---|---|
+| Interruptor y límite por tenant | `tenants.correo_cotizaciones_habilitado` / `correo_limite_diario` (central) |
+| Dominio de la agencia en Brevo | tabla central `tenant_dominios_correo`, `BrevoDominiosService` (API v3: registrar, consultar, autenticar, eliminar) |
+| Configuración de la agencia | `configuracion_correo` (vertical) + `ConfiguracionCorreoController` (ver, guardar, correo de prueba) |
+| Historial y límite diario | `cotizacion_envios` (vertical); toda solicitud deja fila, también si falla |
+| Remitente, plantillas, transporte | `CorreoAgenciaService` |
+| Correo | `CotizacionClienteMail` + vistas `emails/agencia-viajes/cotizacion-cliente(-texto)` (texto plano escapado) |
+| Envío | `CotizacionEnvioController` (estado, preparar, enviar, historial) |
+| Superadmin | `TenantCorreoController` + pestaña "Correo" en el detalle del tenant (`central-panel`) |
+| Cotizador | `EnviarCorreoCotizacion.vue` (botón, ventana, historial) en `cotizador/editar.vue` |
+| Configuración de Agencia | `ConfiguracionCorreoSeccion.vue` (sección 13, con vista previa y "Enviarme una prueba") |
+| Permiso | `cotizaciones.enviar_correo` (migración + `AgenciaViajesRolesSeeder`: Administrador, Supervisor, Vendedor) |
+| Refactor de PDFs | `AlternativaPdfService::contenido()` y `CondicionesGeneralesPdfService::contenido()`; `generar()` igual que antes |
+
+**Corrección de paso:** `alternativas.fecha_vencimiento` no se llenaba en ningún lado (solo se
+leía), así que una cotización nunca llegaba a "vencida". Ahora `Alternativa::camposAlMarcarEnviada()`
+la calcula con `dias_vigencia_cotizacion` al marcar "enviada", a mano o por correo.
+
+### Verificación
+
+- **Tests:** 25 nuevos (`EnvioCorreoCotizacionTest`, `BrevoDominiosServiceTest`). Suite completa
+  1391/1391 antes de la corrección del Mailable; el archivo del envío, 19/19 después.
+- **PDFs:** los 16 PDFs de cotización imprimibles de `agencia-demo` y el de condiciones salen
+  idénticos con el refactor (solo varía el `/ID` aleatorio que DomPDF pone en cada generación).
+- **Frontend:** type-check sin errores nuevos (46 preexistentes, la misma lista que en la base);
+  `central-panel` sin errores.
+- **En vivo contra `agencia-demo`** (Playwright, `MAIL_MAILER=log`): envío con CC y los dos
+  adjuntos, alternativa marcada "enviada" con vencimiento a 15 días, historial, cliente sin
+  correo (botón Enviar deshabilitado), validación de la dirección del remitente, vista previa
+  en vivo y correo de prueba. Endpoints del Superadmin probados llamando al controller (sin
+  `BREVO_API_KEY`: rechazo claro; dominio mal escrito: rechazo). Datos de prueba revertidos.
+- **Bug real encontrado en vivo y corregido:** con adjuntos, la plantilla fallaba ("Array to
+  string conversion") porque Laravel pasa a la vista las propiedades **públicas** del Mailable y
+  la pública `$adjuntos` pisaba la lista de nombres. Los tests no lo veían porque `Mail::fake()`
+  no dibuja la vista. Propiedades pasadas a privadas + test de regresión que dibuja el correo con
+  adjuntos (falla sin la corrección).
+
+### Pendiente (externo, no de código)
+
+1. **Brevo** (lo hace el usuario, con su cuenta): verificar que `cotizaciones@umbosystem.com`
+   pueda enviar (dominio `umbosystem.com` ya autenticado para `avisos@`), y crear la clave de
+   **API** (no la SMTP) para `BREVO_API_KEY`.
+2. **Producción, `.env` central:** `BREVO_API_KEY=...` y, si se cambia la dirección,
+   `MAIL_COTIZACIONES_RESPALDO=...`.
+3. **Despliegue:**
+   - migraciones centrales: `php artisan migrate --path=database/migrations/2026_10_14_100000_add_correo_cotizaciones_to_tenants_table.php`
+     y `--path=database/migrations/2026_10_14_100100_create_tenant_dominios_correo_table.php`
+     (en local el historial central tenía pendientes ajenas; aplicar solo estas dos);
+   - `php artisan tenants:migrate-verticales`;
+   - `php artisan roles:sync-permisos-nuevos 'Database\Seeders\AgenciaViajesRolesSeeder'` (agrega
+     `cotizaciones.enviar_correo` a los roles base sin pisar personalizaciones).
+4. **Activar para una agencia** (cuando la contrate): Superadmin → tenant → pestaña "Correo" →
+   habilitar y fijar el límite. Desde ese momento ya puede enviar con el respaldo.
+5. **Dominio propio de la agencia** (opcional, mejora la entrega): en la misma pestaña,
+   "Registrar en Brevo" → copiar los registros DNS → mandarlos a la agencia (§11.1) →
+   "Verificar ahora". **No crear un segundo SPF** (§11, paso 3).
+6. **Confirmar con la cuenta real** la forma exacta de `dns_records` que devuelve la API de
+   Brevo: `BrevoDominiosService::registrosDns()` la normaliza de forma defensiva y la pestaña
+   muestra lo que tenga tipo, nombre y valor.

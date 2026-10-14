@@ -651,6 +651,8 @@
                                 <span v-if="descargandoCondiciones" class="spinner-border spinner-border-sm me-1"></span>
                                 <i v-else class="fas fa-file-contract me-1"></i>Descargar condiciones generales
                             </button>
+                            <EnviarCorreoCotizacion :alternativa-id="alternativaActiva.id" :alternativa-nombre="alternativaActiva.nombre"
+                                @enviada="onAlternativaEnviadaPorCorreo" />
                         </div>
                     </div>
                 </div>
@@ -1263,6 +1265,7 @@ import PromoverProveedorModal from '@/components/AgenciaViajes/PromoverProveedor
 import PromoverHotelProveedorModal from '@/components/AgenciaViajes/PromoverHotelProveedorModal.vue';
 import DestinoTreeSelect from '@/components/AgenciaViajes/DestinoTreeSelect.vue';
 import CalculadoraTipoCambioModal from '@/components/AgenciaViajes/CalculadoraTipoCambioModal.vue';
+import EnviarCorreoCotizacion from '@/components/AgenciaViajes/EnviarCorreoCotizacion.vue';
 import ClientFormQuick from '@/components/Sales/ClientFormQuick.vue';
 import { useToast } from '@/composables/useToast';
 import { cotizacionService } from '@/services/admin/cotizacionService';
@@ -1541,6 +1544,13 @@ const cargarCotizacion = async () => {
     inicializarEdicionItems();
     resolverDestinoActivo();
     inicializarDias();
+};
+
+// Envío por correo (EnviarCorreoCotizacion.vue): el backend puede haberla
+// pasado de borrador a enviada; se refleja sin recargar toda la cotización.
+const onAlternativaEnviadaPorCorreo = (estado: string) => {
+    const alternativa = cotizacion.value?.alternativas?.find((a: any) => a.id === alternativaActivaId.value);
+    if (alternativa && estado) alternativa.estado = estado as typeof alternativa.estado;
 };
 
 const seleccionarAlternativa = (id: number) => {

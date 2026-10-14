@@ -48,6 +48,8 @@ class AgenciaViajesRolesSeeder extends Seeder implements RolesCatalogProvider
     private const PERMISOS = [
         // Nuevos — granulares, Fase 1b.
         'cotizaciones.ver', 'cotizaciones.ver_todas', 'cotizaciones.crear', 'cotizaciones.editar',
+        // Envío de cotizaciones por correo (plan-modulo-envio-correo-cotizacion.md, 14-oct-2026).
+        'cotizaciones.enviar_correo',
         'reservas.ver', 'reservas.ver_todas', 'reservas.crear', 'reservas.editar',
         'roles.administrar',
 
@@ -74,7 +76,7 @@ class AgenciaViajesRolesSeeder extends Seeder implements RolesCatalogProvider
     // no se le asigna nada acá, mismo criterio que PermissionsDemoSeeder.
     private const ROLES = [
         'Administrador de agencia' => [
-            'cotizaciones.ver', 'cotizaciones.ver_todas', 'cotizaciones.crear', 'cotizaciones.editar', 'agencia.cotizaciones',
+            'cotizaciones.ver', 'cotizaciones.ver_todas', 'cotizaciones.crear', 'cotizaciones.editar', 'cotizaciones.enviar_correo', 'agencia.cotizaciones',
             'reservas.ver', 'reservas.ver_todas', 'reservas.crear', 'reservas.editar', 'agencia.reservas',
             'agencia.proveedores', 'agencia.destinos', 'agencia.temporadas', 'agencia.guias', 'agencia.paquetes', 'agencia.configuracion',
             'nota_electronica', 'list_nota_electronica',
@@ -95,7 +97,7 @@ class AgenciaViajesRolesSeeder extends Seeder implements RolesCatalogProvider
         // roles.administrar ni "Configuración del tenant" (§3.2, confirmado
         // 10-sep-2026: esa es la línea que lo distingue de Administrador).
         'Supervisor' => [
-            'cotizaciones.ver', 'cotizaciones.ver_todas', 'cotizaciones.crear', 'cotizaciones.editar', 'agencia.cotizaciones',
+            'cotizaciones.ver', 'cotizaciones.ver_todas', 'cotizaciones.crear', 'cotizaciones.editar', 'cotizaciones.enviar_correo', 'agencia.cotizaciones',
             'reservas.ver', 'reservas.ver_todas', 'reservas.crear', 'reservas.editar', 'agencia.reservas',
             'agencia.proveedores', 'agencia.destinos', 'agencia.temporadas', 'agencia.guias', 'agencia.paquetes',
             'nota_electronica', 'list_nota_electronica',
@@ -108,7 +110,7 @@ class AgenciaViajesRolesSeeder extends Seeder implements RolesCatalogProvider
         // una cotización se aceptó y es una Reserva real, cancelarla/
         // reprogramarla/facturarla queda para Administrador/Supervisor.
         'Vendedor de agencia' => [
-            'cotizaciones.ver', 'cotizaciones.crear', 'cotizaciones.editar', 'agencia.cotizaciones',
+            'cotizaciones.ver', 'cotizaciones.crear', 'cotizaciones.editar', 'cotizaciones.enviar_correo', 'agencia.cotizaciones',
             'reservas.ver', 'reservas.crear', 'agencia.reservas',
             'cash.open_session',
         ],
