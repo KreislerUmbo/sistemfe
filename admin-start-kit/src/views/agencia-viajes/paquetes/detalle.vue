@@ -14,6 +14,7 @@
                         {{ esCombo ? 'Paquete combo' : 'Tour simple' }}
                     </span>
                     <span v-if="!paquete.activo" class="badge bg-secondary-subtle text-secondary border ms-1">Inactivo</span>
+                    <span v-if="paquete.uso === 'solo_itinerario'" class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle ms-1" title="Solo presta itinerario y fotos a paquetes de mayorista">Solo itinerario</span>
                 </h5>
                 <small class="text-muted">{{ paquete.codigo ?? 'sin código' }} · {{ etiquetaCategoria(paquete.categoria) }}</small>
             </div>
@@ -48,7 +49,27 @@
                     <i class="fas fa-list-check me-1"></i>Agregar Costos
                 </a>
             </li>
+            <!-- Fila 13, fase 1a: costo por servicio, IGV, calculadora y precios por temporada -->
+            <li class="nav-item" v-if="!esCombo">
+                <a class="nav-link" :class="{ active: tabActiva === 'costos' }" href="#" @click.prevent="tabActiva = 'costos'">
+                    <i class="fas fa-calculator me-1"></i>Incluye y costos
+                </a>
+            </li>
         </ul>
+
+        <!-- ═══ TAB: Incluye y costos (fila 13, fase 1a — solo tour simple) ═══ -->
+        <div v-if="tabActiva === 'costos' && paquete && !esCombo">
+            <div v-if="paquete.uso === 'solo_itinerario'" class="card border-0 shadow-sm">
+                <div class="card-body text-muted small">
+                    <i class="fas fa-info-circle me-1"></i>Este tour es "solo itinerario": no lleva precio, costo ni IGV. Para venderlo, cámbialo a "Para vender" en el tab Datos.
+                </div>
+            </div>
+            <div v-else class="d-flex flex-column gap-3">
+                <TourIncluyeCostos :paquete="paquete" :items="items" :costo-estimado="costoEstimado" :margen-minimo-agencia="margenMinimoAgencia"
+                    :tratamiento-default="tratamientoDefault" @actualizado="recargarCostos" />
+                <TourPreciosTemporada :paquete="paquete" @actualizado="cargarPaquete" />
+            </div>
+        </div>
 
         <!-- ═══ TAB: Datos ═══ -->
         <b-card v-if="tabActiva === 'datos' && paquete" class="shadow-sm">
@@ -81,7 +102,30 @@
                     <b-col md="4"><p class="text-muted mb-1 fs-13"><i class="fas fa-route me-1"></i>Horario</p><p class="mb-0 fw-semibold">{{ paquete.hora_salida ?? '—' }} — {{ paquete.hora_retorno ?? '—' }}</p></b-col>
                     <b-col md="8"><p class="text-muted mb-1 fs-13"><i class="fas fa-map-pin me-1"></i>Lugar de recojo</p><p class="mb-0 fw-semibold">{{ paquete.lugar_recojo ?? '—' }}</p></b-col>
                     <b-col md="4"><p class="text-muted mb-1 fs-13"><i class="fas fa-calendar me-1"></i>Vigencia</p><p class="mb-0 fw-semibold">{{ paquete.vigencia_desde ? formatFecha(paquete.vigencia_desde) : 'Sin inicio' }} — {{ paquete.vigencia_hasta ? formatFecha(paquete.vigencia_hasta) : 'Indefinida' }}</p></b-col>
-                    <b-col md="4" v-if="!esCombo"><p class="text-muted mb-1 fs-13"><i class="fas fa-tag me-1"></i>Precio de catálogo desde</p><p class="mb-0 fw-semibold text-primary">{{ paquete.precio_venta_final != null ? `S/ ${Number(paquete.precio_venta_final).toFixed(2)}` : '—' }}</p></b-col>
+                    <!-- Fila 13, fase 1a: precio por persona, costo y margen del tour -->
+                    <template v-if="!esCombo && paquete.uso !== 'solo_itinerario'">
+                        <b-col md="4"><p class="text-muted mb-1 fs-13"><i class="fas fa-tag me-1"></i>Precio por persona</p>
+                            <p class="mb-0 fw-semibold text-primary">
+                                <template v-if="paquete.precio_venta_final != null">
+                                    Adulto {{ simboloTour }} {{ Number(paquete.precio_venta_final).toFixed(2) }}<template v-if="paquete.precio_venta_nino != null"> · Niño {{ simboloTour }} {{ Number(paquete.precio_venta_nino).toFixed(2) }}</template>
+                                </template>
+                                <span v-else class="text-warning-emphasis">Sin precio</span>
+                            </p>
+                            <p v-if="paquete.precio_venta_adulto_ext != null || paquete.precio_venta_nino_ext != null" class="mb-0 small text-muted">
+                                Extranjero: adulto {{ paquete.precio_venta_adulto_ext != null ? Number(paquete.precio_venta_adulto_ext).toFixed(2) : '= nacional' }}<template v-if="paquete.precio_venta_nino_ext != null"> · niño {{ Number(paquete.precio_venta_nino_ext).toFixed(2) }}</template>
+                            </p>
+                        </b-col>
+                        <b-col md="4"><p class="text-muted mb-1 fs-13"><i class="fas fa-users me-1"></i>Modalidad</p>
+                            <p class="mb-0 fw-semibold">{{ paquete.modalidad === 'privado' ? 'Privado' : 'Compartido' }}<template v-if="paquete.pax_minimo_salida"> · mínimo {{ paquete.pax_minimo_salida }} pax</template></p>
+                        </b-col>
+                        <b-col md="4"><p class="text-muted mb-1 fs-13"><i class="fas fa-receipt me-1"></i>IGV por defecto</p>
+                            <p class="mb-0 fw-semibold">{{ paquete.tip_afe_igv ? etiquetaIgv(paquete.tip_afe_igv) : `El de la agencia (${etiquetaIgv(tratamientoDefault?.tip_afe_igv)})` }}</p>
+                        </b-col>
+                        <b-col cols="12">
+                            <MargenEnVivo :moneda="simboloTour" :precio="paquete.precio_venta_final != null ? Number(paquete.precio_venta_final) : null" :costo="costoEstimado?.costo ?? null"
+                                :margen-minimo-tour="paquete.margen_minimo_pct != null ? Number(paquete.margen_minimo_pct) : null" :margen-minimo-agencia="margenMinimoAgencia" etiqueta="Margen estimado (adulto nacional)" />
+                        </b-col>
+                    </template>
                     <b-col md="4"><p class="text-muted mb-1 fs-13"><i class="fas fa-calculator me-1"></i>Ajuste de redondeo</p><p class="mb-0 fw-semibold">{{ paquete.ajuste_redondeo != null ? `${Number(paquete.ajuste_redondeo) >= 0 ? '+' : ''}S/ ${Number(paquete.ajuste_redondeo).toFixed(2)}` : '—' }}</p></b-col>
                     <b-col cols="12" v-if="paquete.descripcion"><div class="border-top pt-3"><p class="text-muted mb-1 fs-13">Descripción comercial</p><div class="small" v-html="paquete.descripcion"></div></div></b-col>
                     <b-col md="6" v-if="paquete.no_incluye"><div class="border-top pt-3"><p class="text-muted mb-1 fs-13">No incluye</p><div class="small" v-html="paquete.no_incluye"></div></div></b-col>
@@ -122,10 +166,6 @@
                         <label class="form-label mb-1 small fw-semibold text-secondary">Duración (horas) *</label>
                         <b-form-input type="number" min="1" size="sm" v-model.number="formDatos.duracion_horas" />
                     </div>
-                    <div class="col-6 col-md-3" v-if="!esCombo">
-                        <label class="form-label mb-1 small fw-semibold text-secondary">Precio venta (desde)</label>
-                        <b-form-input type="number" step="0.01" min="0" size="sm" v-model.number="formDatos.precio_venta_final" placeholder="Se resuelve solo con los hoteles" />
-                    </div>
                     <div class="col-6 col-md-3">
                         <label class="form-label mb-1 small fw-semibold text-secondary">Ajuste de redondeo (S/)</label>
                         <b-form-input type="number" step="0.01" size="sm" v-model.number="formDatos.ajuste_redondeo" placeholder="Ej. 6.34 para redondear hacia arriba" />
@@ -143,6 +183,13 @@
                         <label class="form-label mb-1 small fw-semibold text-secondary">Lugar de recojo</label>
                         <b-form-input size="sm" v-model="formDatos.lugar_recojo" placeholder="Ej. Hoteles ubicados dentro de la ciudad" />
                     </div>
+                    <template v-if="!esCombo">
+                        <b-col cols="12"><hr class="my-1"><h6 class="mb-0">Precio y venta</h6><p class="text-muted fs-13 mb-0">Precio por persona, costo estimado, IGV y uso del tour.</p></b-col>
+                        <b-col cols="12">
+                            <TourPrecioVentaCampos v-model="formDatos" :costo-estimado="costoEstimado" :margen-minimo-agencia="margenMinimoAgencia"
+                                :tratamiento-default="tratamientoDefault" />
+                        </b-col>
+                    </template>
                     <b-col cols="12"><hr class="my-1"><h6 class="mb-0">Contenido y publicación</h6><p class="text-muted fs-13 mb-0">Información adicional para el pasajero y el portal.</p></b-col>
                     <div class="col-12 col-md-6">
                         <label class="form-label mb-1 small fw-semibold text-secondary">No incluye</label>
@@ -847,6 +894,10 @@ import { useRoute, useRouter } from 'vue-router';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import DestinoTreeSelect from '@/components/AgenciaViajes/DestinoTreeSelect.vue';
 import RichTextEditor from '@/components/RichTextEditor.vue';
+import MargenEnVivo from '@/components/AgenciaViajes/MargenEnVivo.vue';
+import TourPrecioVentaCampos from '@/components/AgenciaViajes/TourPrecioVentaCampos.vue';
+import TourIncluyeCostos from '@/components/AgenciaViajes/TourIncluyeCostos.vue';
+import TourPreciosTemporada from '@/components/AgenciaViajes/TourPreciosTemporada.vue';
 import Swal from 'sweetalert2/dist/sweetalert2.js';
 import { paquetePlantillaService } from '@/services/admin/paquetePlantillaService';
 import { proveedorService, proveedorTipoService } from '@/services/admin/proveedorService';
@@ -857,7 +908,7 @@ import { formatFecha } from '@/helpers/fecha';
 import type {
     PaquetePlantilla, PaquetePlantillaItem, TourItinerarioItem,
     ProveedorTarifa, Proveedor, Guia, GuiaTarifa, ComboDatos, ComboItinerarioPaso, PaquetePlantillaResumen,
-    ConfiguracionAgencia, Servicio, ProveedorTipo,
+    ConfiguracionAgencia, Servicio, ProveedorTipo, TourCostoEstimado, CamposPrecioTour,
 } from '@/types/agencia-viajes';
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
@@ -870,7 +921,18 @@ const cargandoPagina = ref(true);
 const paquete = ref<PaquetePlantilla | null>(null);
 const combo = ref<ComboDatos | null>(null);
 const esCombo = computed(() => paquete.value?.tipo === 'paquete_combo');
-const tabActiva = ref<'datos' | 'itinerario' | 'incluye'>('datos');
+const tabActiva = ref<'datos' | 'itinerario' | 'incluye' | 'costos'>('datos');
+
+// Fila 13, fase 1a — datos que show() agrega para el margen en vivo y el
+// IGV por defecto (ver TourPrecioVentaCampos/TourIncluyeCostos).
+const costoEstimado = ref<TourCostoEstimado | null>(null);
+const margenMinimoAgencia = ref<number | null>(null);
+const tratamientoDefault = ref<{ tip_afe_igv: string; destino_tributario: string } | null>(null);
+const simboloTour = computed(() => (paquete.value?.moneda === 'USD' ? 'US$' : 'S/'));
+const etiquetaIgv = (codigo: string | null | undefined) => ({ '10': 'Gravado', '17': 'IVAP', '20': 'Exonerado', '30': 'Inafecto', '40': 'Exportación' } as Record<string, string>)[codigo ?? ''] ?? '—';
+const recargarCostos = async () => {
+    await Promise.all([cargarItems(), cargarPaquete()]);
+};
 
 // Sesión 11p — edición in-situ del tab "Datos". Mismo criterio que
 // guardarPrecioCombo()/toggleActivo() más abajo en este archivo: en
@@ -889,7 +951,7 @@ const formDatos = ref<{
     no_incluye: string | null; recomendaciones: string | null;
     vuelo_incluido: boolean; vuelo_aerolinea: string | null; vuelo_detalle: string | null;
     vigencia_desde: string | null; vigencia_hasta: string | null; publicado_web: boolean;
-}>({
+} & CamposPrecioTour>({
     codigo: null, categoria: 'local', nombre: '', descripcion: null,
     destino_atractivo_id: null, duracion_horas: 1, precio_venta_final: null,
     ajuste_redondeo: null,
@@ -925,6 +987,19 @@ const iniciarEdicionDatos = () => {
         vigencia_desde: paquete.value.vigencia_desde ?? null,
         vigencia_hasta: paquete.value.vigencia_hasta ?? null,
         publicado_web: paquete.value.publicado_web ?? false,
+        // Fila 13, fase 1a (TourPrecioVentaCampos).
+        uso: paquete.value.uso ?? 'venta',
+        moneda: paquete.value.moneda ?? 'PEN',
+        modalidad: paquete.value.modalidad ?? 'compartido',
+        pax_minimo_salida: paquete.value.pax_minimo_salida ?? null,
+        precio_venta_nino: paquete.value.precio_venta_nino ?? null,
+        precio_venta_adulto_ext: paquete.value.precio_venta_adulto_ext ?? null,
+        precio_venta_nino_ext: paquete.value.precio_venta_nino_ext ?? null,
+        costo_estimado_persona: paquete.value.costo_estimado_persona ?? null,
+        costo_estimado_persona_ext: paquete.value.costo_estimado_persona_ext ?? null,
+        margen_minimo_pct: paquete.value.margen_minimo_pct ?? null,
+        tip_afe_igv: paquete.value.tip_afe_igv ?? null,
+        destino_tributario: paquete.value.destino_tributario ?? null,
     };
     editandoDatos.value = true;
 };
@@ -984,6 +1059,9 @@ const cargarPaquete = async () => {
     const res = await paquetePlantillaService.obtener(paqueteId.value);
     paquete.value = res.paquete_plantilla;
     combo.value = res.combo;
+    costoEstimado.value = res.costo_estimado ?? null;
+    margenMinimoAgencia.value = res.margen_minimo_agencia_pct ?? null;
+    tratamientoDefault.value = res.tratamiento_default ?? null;
     if (combo.value) {
         descuentoTipoLocal.value = paquete.value.descuento_tipo ?? null;
         descuentoValorLocal.value = paquete.value.descuento_valor ?? null;

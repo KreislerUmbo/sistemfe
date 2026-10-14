@@ -5,10 +5,12 @@ import type {
   PaquetePlantillaItem,
   TourItinerarioItem,
   PaquetePlantillaShowResponse,
+  PaquetePlantillaPrecio,
+  CalculadoraCostos,
 } from '@/types/agencia-viajes'
 
 export const paquetePlantillaService = {
-  async listar(params: { page?: number; per_page?: number; search?: string; categoria?: string; tipo?: string; activo?: boolean; destino_atractivo_id?: number } = {}) {
+  async listar(params: { page?: number; per_page?: number; search?: string; categoria?: string; tipo?: string; uso?: string; activo?: boolean; destino_atractivo_id?: number } = {}) {
     const response = await httpClient.get('/paquetes-plantilla', { params })
     return response.data
   },
@@ -54,13 +56,51 @@ export const paquetePlantillaService = {
     const response = await httpClient.get(`/paquetes-plantilla/${paqueteId}/items`)
     return response.data as { paquete_plantilla_items: PaquetePlantillaItem[] }
   },
-  async agregarItem(paqueteId: number, data: { proveedor_tarifa_id?: number; guia_tarifa_id?: number; paquete_plantilla_hijo_id?: number; orden?: number }) {
+  async agregarItem(paqueteId: number, data: { proveedor_tarifa_id?: number; guia_tarifa_id?: number; paquete_plantilla_hijo_id?: number; destino_servicio_id?: number; costo_estimado_persona?: number; orden?: number }) {
     const response = await httpClient.post(`/paquetes-plantilla/${paqueteId}/items`, data)
     return response.data
   },
   async quitarItem(itemId: number) {
     const response = await httpClient.delete(`/paquete-plantilla-items/${itemId}`)
     return response.data
+  },
+  // Fila 13, fase 1a — costo estimado, IGV y proveedor sugerido de un
+  // servicio del Incluye (la tarifa de referencia no se cambia por acá).
+  async actualizarItem(itemId: number, data: {
+    proveedor_id?: number | null;
+    costo_estimado_persona?: number | null;
+    costo_estimado_persona_ext?: number | null;
+    tip_afe_igv?: string | null;
+    destino_tributario?: string | null;
+  }) {
+    const response = await httpClient.put(`/paquete-plantilla-items/${itemId}`, data)
+    return response.data as { code: number; message: string; paquete_plantilla_item: PaquetePlantillaItem }
+  },
+
+  // ── Fila 13, fase 1a: calculadora y precios por temporada ───────────
+  async calculadoraCostos(paqueteId: number, temporadaId: number | null = null) {
+    const response = await httpClient.get(`/paquetes-plantilla/${paqueteId}/calculadora-costos`, {
+      params: temporadaId ? { temporada_id: temporadaId } : {},
+    })
+    return response.data as CalculadoraCostos
+  },
+  async guardarPrecio(paqueteId: number, data: Partial<PaquetePlantillaPrecio>, precioId: number | null = null) {
+    const response = precioId
+      ? await httpClient.put(`/paquetes-plantilla/${paqueteId}/precios/${precioId}`, data)
+      : await httpClient.post(`/paquetes-plantilla/${paqueteId}/precios`, data)
+    return response.data as { code: number; message: string; precio: PaquetePlantillaPrecio }
+  },
+  async eliminarPrecio(paqueteId: number, precioId: number) {
+    const response = await httpClient.delete(`/paquetes-plantilla/${paqueteId}/precios/${precioId}`)
+    return response.data
+  },
+  async precioParaFecha(paqueteId: number, fecha: string) {
+    const response = await httpClient.get(`/paquetes-plantilla/${paqueteId}/precio-para-fecha`, { params: { fecha } })
+    return response.data as {
+      precio_temporada: PaquetePlantillaPrecio | null;
+      temporada: { id: number; nombre: string } | null;
+      ocurrencia: { id: number; anio: number; fecha_desde: string; fecha_hasta: string } | null;
+    }
   },
 
   // ── Itinerario día-por-día ───────────────────────────────────────────

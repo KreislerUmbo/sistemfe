@@ -81,10 +81,6 @@
                         <label class="form-label mb-1 small fw-semibold text-secondary">Duración (horas) *</label>
                         <input type="number" min="1" class="form-control form-control-sm" v-model.number="form.duracion_horas">
                     </div>
-                    <div class="col-6 col-md-3" v-if="form.tipo !== 'paquete_combo'">
-                        <label class="form-label mb-1 small fw-semibold text-secondary">Precio venta (desde)</label>
-                        <input type="number" step="0.01" min="0" class="form-control form-control-sm" v-model.number="form.precio_venta_final" placeholder="Se resuelve solo con los hoteles">
-                    </div>
                     <div class="col-6 col-md-3">
                         <label class="form-label mb-1 small fw-semibold text-secondary">Hora de salida</label>
                         <CampoHora v-model="form.hora_salida" />
@@ -106,6 +102,17 @@
                         <RichTextEditor v-model="form.recomendaciones" />
                     </div>
                 </div>
+            </div>
+        </div>
+
+        <!-- ═══ Fila 13, fase 1a: precio por persona, costo, IGV y uso (solo tour simple) ═══ -->
+        <div class="card border-0 shadow-sm mb-3" v-if="form.tipo !== 'paquete_combo'">
+            <div class="card-header bg-white border-bottom py-2">
+                <span class="fw-semibold text-dark small">Precio y venta</span>
+            </div>
+            <div class="card-body py-3">
+                <TourPrecioVentaCampos v-model="form" :costo-estimado="costoEstimado" :margen-minimo-agencia="margenMinimoAgencia"
+                    :tratamiento-default="tratamientoDefault" :es-nuevo="!esEdicion" />
             </div>
         </div>
 
@@ -198,8 +205,9 @@ import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import Swal from 'sweetalert2/dist/sweetalert2.js';
 import DestinoTreeSelect from '@/components/AgenciaViajes/DestinoTreeSelect.vue';
 import RichTextEditor from '@/components/RichTextEditor.vue';
+import TourPrecioVentaCampos from '@/components/AgenciaViajes/TourPrecioVentaCampos.vue';
 import { paquetePlantillaService } from '@/services/admin/paquetePlantillaService';
-import type { PaquetePlantilla } from '@/types/agencia-viajes';
+import type { PaquetePlantilla, TourCostoEstimado } from '@/types/agencia-viajes';
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
 
@@ -235,7 +243,27 @@ const form = ref<Partial<PaquetePlantilla> & { destino_atractivo_id: number | nu
     descuento_tipo: null,
     descuento_valor: null,
     margen_minimo_pct: null,
+    // Fila 13, fase 1a (plan-tours-venta-simple-costo-real.md §3.1).
+    uso: 'venta',
+    moneda: 'PEN',
+    modalidad: 'compartido',
+    pax_minimo_salida: null,
+    precio_venta_nino: null,
+    precio_venta_adulto_ext: null,
+    precio_venta_nino_ext: null,
+    costo_estimado_persona: null,
+    costo_estimado_persona_ext: null,
+    tip_afe_igv: null,
+    destino_tributario: null,
 });
+
+// Fila 13, fase 1a — datos que el show() agrega para el margen en vivo
+// (ver TourPrecioVentaCampos.vue).
+const costoEstimado = ref<TourCostoEstimado | null>(null);
+const margenMinimoAgencia = ref<number | null>(null);
+const tratamientoDefault = ref<{ tip_afe_igv: string; destino_tributario: string } | null>(null);
+const precioOriginal = ref<number | null>(null);
+const numero = (v: unknown): number | null => (v === null || v === undefined || v === '' ? null : Number(v));
 
 // Una vez guardado el header CON ítems cargados en "Incluye", el backend
 // bloquea cambiar `tipo` (ver PaquetePlantillaController::update()) — el
@@ -248,6 +276,10 @@ const cargarPaquete = async () => {
     try {
         const res = await paquetePlantillaService.obtener(paqueteId.value);
         form.value = { ...res.paquete_plantilla };
+        costoEstimado.value = res.costo_estimado ?? null;
+        margenMinimoAgencia.value = res.margen_minimo_agencia_pct ?? null;
+        tratamientoDefault.value = res.tratamiento_default ?? null;
+        precioOriginal.value = numero(res.paquete_plantilla.precio_venta_final);
         // El backend devuelve hora_salida/hora_retorno tal cual las guarda
         // Postgres (columna `time`, sin $cast) — "06:00:00", no "06:00".
         // <input type="time"> espera/valida H:i sin segundos, y si el
@@ -277,6 +309,14 @@ const guardar = async () => {
     }
     if (form.value.tipo === 'paquete_combo') {
         form.value.precio_venta_final = null;
+        form.value.uso = 'venta';
+    }
+    // Misma regla que el backend: el precio se exige al crear o al borrar
+    // uno que ya existía (un tour viejo sin precio se sigue pudiendo editar).
+    const exigePrecio = !esEdicion.value || precioOriginal.value !== null;
+    if (form.value.tipo === 'tour_simple' && form.value.uso === 'venta' && exigePrecio && numero(form.value.precio_venta_final) === null) {
+        (Swal as TVueSwalInstance).fire('Error', 'Un tour para vender necesita su precio adulto. Si solo sirve de itinerario para paquetes de mayorista, márcalo como "Solo itinerario".', 'error');
+        return;
     }
 
     guardando.value = true;

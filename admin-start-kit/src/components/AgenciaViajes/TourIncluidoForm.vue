@@ -491,6 +491,9 @@ const guardar = async () => {
 
             emit('actualizado', tourActualizado);
         } else {
+            // Fila 13, fase 1a (N15): un tour creado acá solo presta
+            // itinerario y fotos al paquete del mayorista — sin precio.
+            fd.append('uso', 'solo_itinerario');
             const resTour = await paquetePlantillaService.crear(fd);
             const paqueteId = resTour.paquete_plantilla.id;
 

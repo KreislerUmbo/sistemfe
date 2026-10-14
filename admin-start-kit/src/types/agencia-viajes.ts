@@ -656,6 +656,21 @@ export type PaquetePlantilla = {
   // para tour_simple se aplica client-side sobre totalesIncluye (sin
   // endpoint de "precio_calculado" propio, mismo criterio ya existente).
   ajuste_redondeo?: number | null;
+  // Fila 13, fase 1a (plan-tours-venta-simple-costo-real.md §3.1):
+  // precio_venta_final es el precio adulto nacional; vacíos: niño → adulto,
+  // extranjero → nacional. IGV vacío = default de la agencia.
+  precio_venta_nino?: number | string | null;
+  precio_venta_adulto_ext?: number | string | null;
+  precio_venta_nino_ext?: number | string | null;
+  costo_estimado_persona?: number | string | null;
+  costo_estimado_persona_ext?: number | string | null;
+  moneda?: 'PEN' | 'USD';
+  tip_afe_igv?: string | null;
+  destino_tributario?: 'amazonia' | 'nacional' | 'extranjero' | null;
+  modalidad?: 'compartido' | 'privado';
+  pax_minimo_salida?: number | null;
+  uso?: PaquetePlantillaUso;
+  precios?: PaquetePlantillaPrecio[];
   items?: PaquetePlantillaItem[];
   paquete_itinerario?: TourItinerarioItem[];
   // Solo presente en index() para tipo=paquete_combo (Sesión 11b4a) — ver
@@ -679,6 +694,77 @@ export type PaquetePlantillaItem = {
   paquete_plantilla_hijo_id?: number | null;
   paquete_plantilla_hijo?: PaquetePlantilla | null;
   orden?: number | null;
+  // Fila 13, fase 1a (§3.2): el Incluye estructurado. destino_servicio_id
+  // permite un servicio sin tarifa (costo escrito a mano); la tarifa queda
+  // solo como referencia de la calculadora. IGV vacío = el del tour.
+  destino_servicio_id?: number | null;
+  destino_servicio?: { id: number; servicio?: { id: number; nombre: string }; destino_atractivo?: DestinoAtractivo } | null;
+  proveedor_id?: number | null;
+  proveedor?: { id: number; razon_social: string; nombre_comercial?: string | null } | null;
+  costo_estimado_persona?: number | string | null;
+  costo_estimado_persona_ext?: number | string | null;
+  tip_afe_igv?: string | null;
+  destino_tributario?: 'amazonia' | 'nacional' | 'extranjero' | null;
+};
+
+// Fila 13, fase 1a (N15): 'solo_itinerario' = tour que solo presta
+// itinerario y fotos a los paquetes de mayorista (sin precio).
+export type PaquetePlantillaUso = 'venta' | 'solo_itinerario';
+
+// Fila 13, fase 1a (§3.12): precio del tour por temporada (catálogo central
+// `temporadas`). El precio base son las columnas del propio tour.
+export type PaquetePlantillaPrecio = {
+  id: number;
+  paquete_plantilla_id: number;
+  temporada_id: number;
+  temporada?: { id: number; nombre: string; tipo?: string } | null;
+  precio_venta_adulto: number | string;
+  precio_venta_nino?: number | string | null;
+  precio_venta_adulto_ext?: number | string | null;
+  precio_venta_nino_ext?: number | string | null;
+  costo_estimado_persona?: number | string | null;
+  costo_estimado_persona_ext?: number | string | null;
+};
+
+// GET paquetes-plantilla/{id}/calculadora-costos — solo sugiere.
+export type CalculadoraCostoItem = {
+  item_id: number;
+  costo_sugerido: number | null;
+  detalle: string | null;
+  motivo: string | null;
+  tarifa_usada_id: number | null;
+  de_temporada: boolean;
+};
+
+export type CalculadoraCostos = {
+  items: CalculadoraCostoItem[];
+  total: number | null;
+  dias: number;
+  temporada_id: number | null;
+};
+
+// Campos que edita TourPrecioVentaCampos.vue (form.vue y tab Datos de detalle.vue).
+export type CamposPrecioTour = {
+  uso?: PaquetePlantillaUso;
+  moneda?: 'PEN' | 'USD';
+  modalidad?: 'compartido' | 'privado';
+  pax_minimo_salida?: number | null;
+  precio_venta_final?: number | string | null;
+  precio_venta_nino?: number | string | null;
+  precio_venta_adulto_ext?: number | string | null;
+  precio_venta_nino_ext?: number | string | null;
+  costo_estimado_persona?: number | string | null;
+  costo_estimado_persona_ext?: number | string | null;
+  margen_minimo_pct?: number | string | null;
+  tip_afe_igv?: string | null;
+  destino_tributario?: 'amazonia' | 'nacional' | 'extranjero' | null;
+};
+
+export type TourCostoEstimado = {
+  costo: number | null;
+  costo_ext: number | null;
+  origen: 'incluye' | 'manual' | null;
+  items_sin_costo: number;
 };
 
 // ═══════════════════════════════════════════════════════════════
@@ -755,6 +841,10 @@ export type PaquetePlantillaShowResponse = {
   paquete_plantilla: PaquetePlantilla;
   // null para tour_simple — solo poblado para paquete_combo (Sesión 11b4a).
   combo: ComboDatos | null;
+  // Fila 13, fase 1a — solo tour_simple (null en combo).
+  costo_estimado?: TourCostoEstimado | null;
+  margen_minimo_agencia_pct?: number | null;
+  tratamiento_default?: { tip_afe_igv: string; destino_tributario: string };
 };
 
 // ═══════════════════════════════════════════════════════════════
