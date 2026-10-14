@@ -173,8 +173,8 @@ class AlternativaController extends Controller
         $lineasFueraDePiso = [];
 
         DB::transaction(function () use ($alternativa, $validado, &$lineasFueraDePiso) {
-            if (($validado['estado'] ?? null) === 'enviada' && ! $alternativa->fecha_envio) {
-                $validado['fecha_envio'] = now();
+            if (($validado['estado'] ?? null) === 'enviada') {
+                $validado += $alternativa->camposAlMarcarEnviada();
             }
 
             // descuento_global_monto no es columna real de `alternativas` —

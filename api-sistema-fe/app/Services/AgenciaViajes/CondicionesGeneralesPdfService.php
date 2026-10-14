@@ -34,6 +34,20 @@ class CondicionesGeneralesPdfService
 
     public function generar()
     {
+        return $this->construir()->download(self::NOMBRE_ARCHIVO);
+    }
+
+    // Bytes y nombre del PDF, sin respuesta HTTP — para adjuntarlo a un correo
+    // (plan-modulo-envio-correo-cotizacion.md §5.1).
+    public function contenido(): array
+    {
+        return ['bytes' => $this->construir()->output(), 'nombre' => self::NOMBRE_ARCHIVO];
+    }
+
+    private const NOMBRE_ARCHIVO = 'Condiciones-Generales-del-Servicio.pdf';
+
+    private function construir()
+    {
         $config = ConfiguracionAgencia::first();
         $membrete = $this->membrete->datos();
         $contenido = self::prepararContenido($config?->condiciones_generales_servicio);
@@ -55,7 +69,7 @@ class CondicionesGeneralesPdfService
             'textoLegal' => trim('Condiciones generales del servicio' . ($agencia ? " · {$agencia}" : '') . " · Emitido el {$emision}"),
         ]);
 
-        return $pdf->download('Condiciones-Generales-del-Servicio.pdf');
+        return $pdf;
     }
 
     /**

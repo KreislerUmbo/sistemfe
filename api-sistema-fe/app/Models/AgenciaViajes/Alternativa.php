@@ -57,6 +57,33 @@ class Alternativa extends Model
 
     protected $appends = ['tiene_grupos_sin_resolver'];
 
+    // Campos que se completan al pasar a 'enviada', compartido entre el cambio
+    // de estado manual (AlternativaController::update()) y el envío por correo
+    // (CotizacionEnvioController). Nunca pisa valores ya guardados.
+    //
+    // fecha_vencimiento (14-oct-2026): antes no se llenaba en ningún lado —
+    // solo se leía (Cotizacion::estado_resumen), así que una cotización nunca
+    // llegaba a "vencida" aunque la agencia configurara dias_vigencia_cotizacion.
+    // Sin días configurados queda en null, igual que antes.
+    public function camposAlMarcarEnviada(): array
+    {
+        $campos = [];
+        $fechaEnvio = $this->fecha_envio ?? now();
+
+        if (! $this->fecha_envio) {
+            $campos['fecha_envio'] = $fechaEnvio;
+        }
+
+        if (! $this->fecha_vencimiento) {
+            $dias = ConfiguracionAgencia::first()?->dias_vigencia_cotizacion;
+            if ($dias) {
+                $campos['fecha_vencimiento'] = $fechaEnvio->copy()->addDays((int) $dias);
+            }
+        }
+
+        return $campos;
+    }
+
     public function cotizacion()
     {
         return $this->belongsTo(Cotizacion::class, 'cotizacion_id');

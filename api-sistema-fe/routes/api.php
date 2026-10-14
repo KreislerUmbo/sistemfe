@@ -10,6 +10,8 @@ use App\Http\Controllers\AgenciaViajes\CondicionesGeneralesController;
 use App\Http\Controllers\AgenciaViajes\ConfiguracionAgenciaController;
 use App\Http\Controllers\AgenciaViajes\ConfiguracionAgenciaPdfController;
 use App\Http\Controllers\AgenciaViajes\ConfiguracionCodigosController;
+use App\Http\Controllers\AgenciaViajes\ConfiguracionCorreoController;
+use App\Http\Controllers\AgenciaViajes\CotizacionEnvioController;
 use App\Http\Controllers\AgenciaViajes\ContenidoTourController;
 use App\Http\Controllers\AgenciaViajes\CotizacionController;
 use App\Http\Controllers\AgenciaViajes\CuentaBancariaController;
@@ -51,6 +53,7 @@ use App\Http\Controllers\Central\CentralAuditLogController;
 use App\Http\Controllers\Central\CentralAuthController;
 use App\Http\Controllers\Central\ProveedorTipoController;
 use App\Http\Controllers\Central\TenantAdminController;
+use App\Http\Controllers\Central\TenantCorreoController;
 use App\Http\Controllers\Central\TenantBackupController;
 use App\Http\Controllers\Central\TenantPlanController;
 use App\Http\Controllers\Central\TenantRestoreController;
@@ -198,6 +201,12 @@ Route::prefix('central')->group(function () {
         // razón que reset-admin-password): decisión de modelo de negocio, propia
         // acción de auditoría en central_audit_logs.
         Route::put('tenants/{id}/facturacion-habilitada', [TenantAdminController::class, 'updateFacturacionHabilitada']);
+        // Envío de cotizaciones por correo (plan-modulo-envio-correo-cotizacion.md §3.1).
+        Route::get('tenants/{id}/correo', [TenantCorreoController::class, 'show']);
+        Route::put('tenants/{id}/correo', [TenantCorreoController::class, 'update']);
+        Route::post('tenants/{id}/correo/dominio', [TenantCorreoController::class, 'registrarDominio']);
+        Route::post('tenants/{id}/correo/dominio/verificar', [TenantCorreoController::class, 'verificarDominio']);
+        Route::delete('tenants/{id}/correo/dominio', [TenantCorreoController::class, 'eliminarDominio']);
 
         // "Archivado, no borrado" (§11.2) — bloquea login/API, conserva base/storage.
         // Wrappers HTTP delgados sobre TenantProvisioningService, misma lógica que los
@@ -766,6 +775,15 @@ Route::group([
     Route::put("configuracion-agencia", [ConfiguracionAgenciaController::class, 'update'])
         ->middleware('permission:agencia.configuracion');
 
+    // Envío de cotizaciones por correo (plan-modulo-envio-correo-cotizacion.md
+    // §3.2) — sección "Correo" de Configuración de Agencia.
+    Route::get("configuracion-correo", [ConfiguracionCorreoController::class, 'show'])
+        ->middleware('permission:agencia.configuracion');
+    Route::put("configuracion-correo", [ConfiguracionCorreoController::class, 'update'])
+        ->middleware('permission:agencia.configuracion');
+    Route::post("configuracion-correo/prueba", [ConfiguracionCorreoController::class, 'prueba'])
+        ->middleware(['permission:agencia.configuracion', 'throttle:5,1']);
+
     // Mejora del PDF de cotización — pestaña "Marca del PDF"
     // (plan-mejora-pdf-cotizacion-cliente.md §4.4). Reusa 'agencia.configuracion',
     // mismo criterio que configuracion-codigos/cuentas-bancarias.
@@ -902,6 +920,18 @@ Route::group([
         ->middleware('permission:cotizaciones.crear');
     // Sesión pdf-cotizacion — PDF comercial de una alternativa puntual.
     Route::get("alternativas/{id}/pdf", [AlternativaController::class, 'pdf'])
+        ->middleware('permission:cotizaciones.ver|cotizaciones.ver_todas');
+    // Envío de la alternativa por correo al cliente
+    // (plan-modulo-envio-correo-cotizacion.md §4-§5). La regla de fila
+    // (solo propias sin ver_todas) la aplica CotizacionPolicy::view en el
+    // controller; el interruptor por tenant, el propio controller.
+    Route::get("correo-cotizaciones/estado", [CotizacionEnvioController::class, 'estado'])
+        ->middleware('permission:cotizaciones.enviar_correo');
+    Route::get("alternativas/{id}/envio-correo", [CotizacionEnvioController::class, 'preparar'])
+        ->middleware('permission:cotizaciones.enviar_correo');
+    Route::post("alternativas/{id}/enviar-correo", [CotizacionEnvioController::class, 'enviar'])
+        ->middleware(['permission:cotizaciones.enviar_correo', 'throttle:10,1']);
+    Route::get("alternativas/{id}/envios-correo", [CotizacionEnvioController::class, 'historial'])
         ->middleware('permission:cotizaciones.ver|cotizaciones.ver_todas');
 
     Route::post("alternativas/{id}/items", [AlternativaItemController::class, 'store'])

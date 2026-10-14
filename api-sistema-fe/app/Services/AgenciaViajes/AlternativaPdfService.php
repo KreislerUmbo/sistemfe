@@ -44,7 +44,27 @@ class AlternativaPdfService
     ) {
     }
 
+    // Descarga del PDF (botón "Descargar PDF" del cotizador). Mismo resultado
+    // que antes del refactor de envío por correo: solo envuelve construir().
     public function generar(string $id)
+    {
+        [$pdf, $nombreArchivo] = $this->construir($id);
+
+        return $pdf->download($nombreArchivo);
+    }
+
+    // Bytes y nombre del PDF, sin respuesta HTTP — para adjuntarlo a un correo
+    // (plan-modulo-envio-correo-cotizacion.md §5.1). Lanza la misma
+    // ValidationException que generar() si la alternativa no se puede imprimir
+    // (un grupo de hotel sin opción elegida, ver validarGruposResueltos()).
+    public function contenido(string $id): array
+    {
+        [$pdf, $nombreArchivo] = $this->construir($id);
+
+        return ['bytes' => $pdf->output(), 'nombre' => $nombreArchivo];
+    }
+
+    private function construir(string $id): array
     {
         $alternativa = Alternativa::with([
             'cotizacion.cliente',
@@ -226,7 +246,7 @@ class AlternativaPdfService
 
         $nombreArchivo = 'Cotizacion-' . ($alternativa->cotizacion->codigo ?? $alternativa->cotizacion_id) . '-' . \Illuminate\Support\Str::slug($alternativa->nombre) . '.pdf';
 
-        return $pdf->download($nombreArchivo);
+        return [$pdf, $nombreArchivo];
     }
 
     // Si TODOS los ítems de la alternativa comparten el mismo tour_origen_id
