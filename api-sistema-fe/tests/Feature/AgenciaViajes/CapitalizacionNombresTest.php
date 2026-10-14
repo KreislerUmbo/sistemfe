@@ -129,6 +129,8 @@ class CapitalizacionNombresTest extends TestCase
         $respuesta = app(PaquetePlantillaController::class)->store(new Request([
             'categoria' => 'local', 'nombre' => 'CIRCUITO TURISTICO RIOJA',
             'destino_atractivo_id' => $destino->id, 'duracion_horas' => 4,
+            // Fila 13, fase 1a (N1): un tour de venta nace con su precio adulto.
+            'precio_venta_final' => 50,
         ]));
 
         $this->assertSame('Circuito Turistico Rioja', $respuesta->getData(true)['paquete_plantilla']['nombre']);

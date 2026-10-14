@@ -5,6 +5,7 @@ namespace App\Http\Controllers\AgenciaViajes;
 use App\Http\Controllers\Controller;
 use App\Models\AgenciaViajes\DestinoAtractivo;
 use App\Models\AgenciaViajes\DestinoServicio;
+use App\Models\AgenciaViajes\PaquetePlantillaItem;
 use App\Models\AgenciaViajes\Proveedor;
 use App\Models\AgenciaViajes\ProveedorServicio;
 use Illuminate\Http\Request;
@@ -74,6 +75,17 @@ class DestinoServicioController extends Controller
             return response()->json([
                 'code' => 422,
                 'message' => "No se puede quitar: hay {$proveedoresAsociados} proveedor(es) con este servicio/destino asociado. Si la asociación fue un error, usa \"Mover a otro destino\" en su lugar.",
+            ], 422);
+        }
+
+        // Fila 13, fase 1a: el Incluye de un tour también apunta a
+        // destino_servicio (servicio sin tarifa, costo a mano).
+        $toursQueLoIncluyen = PaquetePlantillaItem::where('destino_servicio_id', $destinoServicio->id)->count();
+
+        if ($toursQueLoIncluyen > 0) {
+            return response()->json([
+                'code' => 422,
+                'message' => "No se puede quitar: está en el Incluye de {$toursQueLoIncluyen} tour(s). Quítalo de esos tours primero, o usa \"Mover a otro destino\".",
             ], 422);
         }
 
@@ -183,6 +195,8 @@ class DestinoServicioController extends Controller
 
         DB::transaction(function () use ($origen, $destino) {
             ProveedorServicio::where('destino_servicio_id', $origen->id)->update(['destino_servicio_id' => $destino->id]);
+            // Fila 13, fase 1a: el Incluye de los tours sigue al servicio.
+            PaquetePlantillaItem::where('destino_servicio_id', $origen->id)->update(['destino_servicio_id' => $destino->id]);
             $origen->delete();
         });
 

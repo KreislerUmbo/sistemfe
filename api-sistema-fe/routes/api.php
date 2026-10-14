@@ -846,9 +846,24 @@ Route::group([
     Route::post("paquetes-plantilla/{id}/duplicar", [PaquetePlantillaController::class, 'duplicar'])
         ->middleware('permission:agencia.paquetes');
 
+    // Fila 13, fase 1a — calculadora de costos (solo sugiere), precios por
+    // temporada y vista previa del precio que toma el tour en una fecha.
+    Route::get("paquetes-plantilla/{id}/calculadora-costos", [PaquetePlantillaController::class, 'calculadoraCostos'])
+        ->middleware('permission:agencia.paquetes');
+    Route::get("paquetes-plantilla/{id}/precio-para-fecha", [PaquetePlantillaController::class, 'precioParaFecha'])
+        ->middleware('permission:agencia.paquetes');
+    Route::post("paquetes-plantilla/{id}/precios", [PaquetePlantillaController::class, 'guardarPrecio'])
+        ->middleware('permission:agencia.paquetes');
+    Route::put("paquetes-plantilla/{id}/precios/{precioId}", [PaquetePlantillaController::class, 'guardarPrecio'])
+        ->middleware('permission:agencia.paquetes');
+    Route::delete("paquetes-plantilla/{id}/precios/{precioId}", [PaquetePlantillaController::class, 'eliminarPrecio'])
+        ->middleware('permission:agencia.paquetes');
+
     Route::get("paquetes-plantilla/{id}/items", [PaquetePlantillaItemController::class, 'index'])
         ->middleware('permission:agencia.paquetes');
     Route::post("paquetes-plantilla/{id}/items", [PaquetePlantillaItemController::class, 'store'])
+        ->middleware('permission:agencia.paquetes');
+    Route::put("paquete-plantilla-items/{id}", [PaquetePlantillaItemController::class, 'update'])
         ->middleware('permission:agencia.paquetes');
     Route::delete("paquete-plantilla-items/{id}", [PaquetePlantillaItemController::class, 'destroy'])
         ->middleware('permission:agencia.paquetes');
