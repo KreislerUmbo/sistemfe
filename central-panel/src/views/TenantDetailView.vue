@@ -11,6 +11,7 @@ import BackupsTab from '@/components/tenant-detail/BackupsTab.vue';
 import SunatConfigTab from '@/components/tenant-detail/SunatConfigTab.vue';
 import CertificadoTab from '@/components/tenant-detail/CertificadoTab.vue';
 import TestEmissionTab from '@/components/tenant-detail/TestEmissionTab.vue';
+import CorreoTab from '@/components/tenant-detail/CorreoTab.vue';
 
 const route = useRoute();
 const tenantId = route.params.id as string;
@@ -176,6 +177,7 @@ const tabs = [
   { key: 'sunat-config', label: 'SunatConfig' },
   { key: 'certificado', label: 'Certificado' },
   { key: 'test-emission', label: 'Test-emission' },
+  { key: 'correo', label: 'Correo' },
 ] as const;
 
 const activeTab = ref<(typeof tabs)[number]['key']>('company');
@@ -408,6 +410,7 @@ const domainsText = computed(() =>
       <SunatConfigTab v-else-if="activeTab === 'sunat-config'" :tenant-id="tenantId" />
       <CertificadoTab v-else-if="activeTab === 'certificado'" :tenant-id="tenantId" />
       <TestEmissionTab v-else-if="activeTab === 'test-emission'" :tenant-id="tenantId" />
+      <CorreoTab v-else-if="activeTab === 'correo'" :tenant-id="tenantId" />
     </template>
   </div>
 </template>

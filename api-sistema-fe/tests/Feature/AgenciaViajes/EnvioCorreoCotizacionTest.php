@@ -410,6 +410,23 @@ class EnvioCorreoCotizacionTest extends TestCase
         $this->assertStringContainsString('<br />', $html);
     }
 
+    // Regresión (verificación en vivo, 14-oct-2026): con adjuntos, la vista
+    // fallaba con "Array to string conversion" porque una propiedad pública del
+    // Mailable pisaba la lista de nombres. Mail::fake() no dibuja la vista, por
+    // eso los demás tests no lo detectaban.
+    public function test_el_correo_con_adjuntos_se_dibuja_y_lista_los_nombres(): void
+    {
+        $mail = new CotizacionClienteMail('a@b.test', 'Agencia', 'r@b.test', 'Asunto', 'Hola', [
+            ['bytes' => '%PDF-1', 'nombre' => 'Cotizacion-X.pdf'],
+            ['bytes' => '%PDF-2', 'nombre' => 'Condiciones.pdf'],
+        ]);
+
+        $html = $mail->render();
+
+        $this->assertStringContainsString('Cotizacion-X.pdf · Condiciones.pdf', $html);
+        $this->assertCount(2, $mail->attachments());
+    }
+
     public function test_configuracion_solo_acepta_la_parte_antes_de_la_arroba(): void
     {
         $this->tenant();

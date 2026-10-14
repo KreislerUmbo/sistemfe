@@ -20,16 +20,21 @@ use Illuminate\Mail\Mailables\Envelope;
 class CotizacionClienteMail extends Mailable
 {
     /**
+     * Propiedades privadas a propósito: Laravel pasa a la vista toda propiedad
+     * PÚBLICA del Mailable, y una pública $adjuntos (con los bytes de los PDF)
+     * pisaba la lista de nombres de content() → "Array to string conversion"
+     * al dibujar la plantilla (hallado en la verificación en vivo, 14-oct-2026).
+     *
      * @param  array<int, array{bytes: string, nombre: string}>  $adjuntos
      */
     public function __construct(
-        public readonly string $remitenteEmail,
-        public readonly string $remitenteNombre,
-        public readonly ?string $replyToEmail,
-        public readonly string $asunto,
-        public readonly string $mensaje,
-        public readonly array $adjuntos = [],
-        public readonly bool $prueba = false,
+        private readonly string $remitenteEmail,
+        private readonly string $remitenteNombre,
+        private readonly ?string $replyToEmail,
+        private readonly string $asunto,
+        private readonly string $mensaje,
+        private readonly array $adjuntos = [],
+        private readonly bool $prueba = false,
     ) {
     }
 
