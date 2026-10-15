@@ -712,7 +712,15 @@ adelante la importación SIRE (los comprobantes llegan solos y solo hay que asig
 
 > **14-oct-2026:** la fase 1 se ejecuta en **dos sesiones**:
 > - **1a — el tour en el catálogo** (precio, Incluye con costo e IGV, calculadora, temporadas, uso, diagnóstico; sin tocar la cotización). Brief: `PEGAR-EN-CLAUDE-CODE-13-fase1a-tour-catalogo.md`.
-> - **1b — el tour en la cotización** (interruptor `modo_tours`, línea de tour, extranjeros, combos, PDF, facturación por pasajero, retiro de `ajuste_redondeo`, conversión de tours). Esbozo en el anexo del brief de la 1a.
+> - **1b — el tour en la cotización** (interruptor `modo_tours`, línea de tour con temporada, IGV mezclado en líneas, snapshot, residencia, recálculo al cambiar pasajeros, combos con E3, PDF C5, pestaña unificada "Incluye y costos", ajuste de redondeo fuera de la pantalla). Brief: `PEGAR-EN-CLAUDE-CODE-13-fase1b-tour-cotizacion.md` (revisado contra el código, listo).
+> - **1c — facturar la línea de tour y convertir los tours** (mezcla de IGV en un comprobante, facturación por subgrupo de pasajeros C1, conversión tour por tour). Borrador: `PEGAR-EN-CLAUDE-CODE-13-fase1c-facturacion-conversion.md`.
+>
+> **Revisión del brief de la 1b contra el código (14-oct-2026) — hallazgos y decisiones del usuario:**
+> - `ReservaFacturacionController::detectarMezclaTributaria()` **bloquea** un comprobante con más de un destino tributario (Amazonía + nacional). N14 suponía que "ya agrupa por IGV": eso solo pasa dentro de un mismo destino. **D1:** un solo comprobante con una línea exonerada y otra gravada, permitido solo entre líneas de una misma carga de tour (se implementa en la 1c).
+> - La facturación por subgrupo **nunca parte una línea** entre comprobantes (decisión documentada en ese controlador), así que C1 es un cambio de diseño: pasa a la **1c (D2)**.
+> - `CotizacionController::recalcularItemsPorPersona()` solo reprecia líneas `proveedor` con tarifa. La línea de tour debe recalcularse al cambiar pasajeros (agregado a la 1b, junto con E2).
+> - El Reporte Operativo y las Salidas no operan la línea de tour hasta la fase 2. **D3:** el modo nuevo se activa solo en `agencia-demo` hasta terminar la fase 2, y el interruptor lo cambia solo el Super-Admin.
+> - `clasificarCategoria()` clasificaría la línea de tour como `OTROS`: corregido en la 1b (`TOUR`).
 >
 > **Fase 1a — HECHA (14-oct-2026, rama `feat/tours-fase1a-catalogo`, sin commitear ni unir a `main`).**
 > Qué quedó:
