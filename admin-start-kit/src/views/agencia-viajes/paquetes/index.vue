@@ -16,7 +16,7 @@
         <div class="card border-0 shadow-sm mb-3">
             <div class="card-body">
                 <div class="row g-2 align-items-end">
-                    <div class="col-12 col-md-5">
+                    <div class="col-12 col-md-3">
                         <label class="form-label mb-1 small fw-semibold text-secondary">Buscar</label>
                         <input type="text" class="form-control form-control-sm" placeholder="Nombre o código..."
                             v-model="search" @keyup.enter="list">
@@ -36,6 +36,14 @@
                             <option :value="null">— Todos —</option>
                             <option value="tour_simple">Tour simple</option>
                             <option value="paquete_combo">Paquete combo</option>
+                        </select>
+                    </div>
+                    <div class="col-6 col-md-2">
+                        <label class="form-label mb-1 small fw-semibold text-secondary">Uso</label>
+                        <select class="form-select form-select-sm" v-model="uso" @change="list">
+                            <option :value="null">— Todos —</option>
+                            <option value="venta">Para vender</option>
+                            <option value="solo_itinerario">Solo itinerario</option>
                         </select>
                     </div>
                     <div class="col-6 col-md-3 d-flex gap-2">
@@ -80,7 +88,11 @@
                             </tr>
                             <tr v-for="paquete in paquetes" :key="paquete.id" :class="{ 'opacity-50': !paquete.activo }">
                                 <td class="ps-3">
-                                    <div class="fw-semibold">{{ paquete.nombre }}</div>
+                                    <div class="fw-semibold">
+                                        {{ paquete.nombre }}
+                                        <span v-if="paquete.uso === 'solo_itinerario'" class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle ms-1 fw-normal"
+                                            title="Solo presta itinerario y fotos a paquetes de mayorista">Solo itinerario</span>
+                                    </div>
                                     <small class="text-muted" v-if="paquete.codigo">{{ paquete.codigo }}</small>
                                 </td>
                                 <td>
@@ -162,6 +174,8 @@ const paquetes = ref<PaquetePlantilla[]>([]);
 const search = ref<string>('');
 const categoria = ref<string | null>(null);
 const tipo = ref<string | null>(null);
+// Fila 13, fase 1a (N15): filtro de tours solo de itinerario.
+const uso = ref<string | null>(null);
 const currentPage = ref<number>(1);
 const totalPages = ref<number>(0);
 const perPageRows = ref<number>(15);
@@ -176,7 +190,10 @@ const precioMostrado = (paquete: PaquetePlantilla) => {
     if (paquete.tipo === 'paquete_combo') {
         return paquete.precio_calculado ? `S/ ${paquete.precio_calculado.venta_neta_combo.toFixed(0)}` : '—';
     }
-    return paquete.precio_venta_final != null ? `desde S/ ${Number(paquete.precio_venta_final).toFixed(0)}` : '—';
+    // Fila 13, fase 1a: precio_venta_final es el precio adulto por persona.
+    if (paquete.uso === 'solo_itinerario') return '—';
+    const simbolo = paquete.moneda === 'USD' ? 'US$' : 'S/';
+    return paquete.precio_venta_final != null ? `${simbolo} ${Number(paquete.precio_venta_final).toFixed(2)} x pers.` : 'Sin precio';
 };
 
 // Cantidad de tours incluidos por combo — el listado no la trae (frontend-
@@ -203,6 +220,7 @@ const list = async () => {
             search: search.value || undefined,
             categoria: categoria.value || undefined,
             tipo: tipo.value || undefined,
+            uso: uso.value || undefined,
         });
         paquetes.value = res.paquetes_plantilla;
         totalPages.value = res.total;
@@ -219,6 +237,7 @@ const reset = () => {
     search.value = '';
     categoria.value = null;
     tipo.value = null;
+    uso.value = null;
     currentPage.value = 1;
     list();
 };

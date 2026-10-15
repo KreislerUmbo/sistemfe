@@ -11,6 +11,11 @@ use App\Services\AgenciaViajes\CodigoGeneradorService;
 use App\Services\AgenciaViajes\ComboExplosionService;
 use App\Services\AgenciaViajes\ComboValidationService;
 use App\Services\AgenciaViajes\FotoUploadService;
+use App\Services\AgenciaViajes\TemporadaResolverService;
+use App\Services\AgenciaViajes\TourCostoEstimadoService;
+use App\Models\AgenciaViajes\ConfiguracionAgencia;
+use App\Models\AgenciaViajes\PaquetePlantillaPrecio;
+use App\Models\AgenciaViajes\Temporada;
 use App\Services\StorageUrl;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -38,6 +43,8 @@ class PaquetePlantillaController extends Controller
         private ComboExplosionService $comboExplosion,
         private FotoUploadService $fotoUploadService,
         private CodigoGeneradorService $codigoGenerador,
+        private TourCostoEstimadoService $costoEstimado,
+        private TemporadaResolverService $temporadaResolver,
     ) {
     }
 
@@ -51,6 +58,11 @@ class PaquetePlantillaController extends Controller
 
         if ($request->filled('tipo')) {
             $query->where('tipo', $request->get('tipo'));
+        }
+
+        // Fila 13, fase 1a (N15): etiqueta y filtro de tours solo de itinerario.
+        if ($request->filled('uso')) {
+            $query->where('uso', $request->get('uso'));
         }
 
         if ($request->filled('search')) {
@@ -132,6 +144,9 @@ class PaquetePlantillaController extends Controller
         );
 
         $paquete = PaquetePlantilla::create($validado);
+        // Fila 13, fase 1a: recarga para devolver los defaults de la BD
+        // (uso, moneda, modalidad) que la pantalla necesita.
+        $paquete->refresh();
         $paquete->setAttribute('fotos', StorageUrl::resolveMuchas($paquete->fotos ?? []));
 
         return response()->json([
@@ -149,6 +164,10 @@ class PaquetePlantillaController extends Controller
             'items.proveedorTarifa.proveedorServicio.proveedor',
             'items.guiaTarifa.guia',
             'items.paquetePlantillaHijo',
+            'items.destinoServicio.servicio',
+            'items.destinoServicio.destinoAtractivo',
+            'items.proveedor',
+            'precios.temporada',
             'paqueteItinerario' => fn ($q) => $q->orderBy('dia_relativo')->orderBy('orden'),
             'paqueteItinerario.destinoAtractivo',
         ])->findOrFail($id);
@@ -171,17 +190,120 @@ class PaquetePlantillaController extends Controller
         $paquete->setAttribute('foto_portada', StorageUrl::resolve($paquete->foto_portada));
         $paquete->setAttribute('fotos_destacadas_pdf', StorageUrl::resolveMuchas($paquete->fotos_destacadas_pdf ?? []));
 
+        // Fila 13, fase 1a (§3.1, §3.9b): costo estimado resuelto (suma del
+        // Incluye o el escrito a mano) y los dos pisos de margen para el
+        // margen en vivo de la pantalla: el del tour y el de la agencia.
+        // tratamiento_default: IGV que hereda un tour sin IGV propio.
+        $config = ConfiguracionAgencia::first();
+
         return response()->json([
             'paquete_plantilla' => $paquete,
             'combo' => $datosCombo,
+            'costo_estimado' => $paquete->esTourSimple() ? $this->costoEstimado->costoDelTour($paquete) : null,
+            'margen_minimo_agencia_pct' => $config?->margen_minimo_aceptable_pct !== null ? (float) $config->margen_minimo_aceptable_pct : null,
+            'tratamiento_default' => ConfiguracionAgencia::tratamientoTributarioDefault(),
         ]);
+    }
+
+    // GET paquetes-plantilla/{id}/calculadora-costos?temporada_id= — fila 13,
+    // fase 1a (§3.9b, N4). Solo SUGIERE: no guarda nada.
+    public function calculadoraCostos(Request $request, string $id)
+    {
+        $paquete = PaquetePlantilla::findOrFail($id);
+
+        if (! $paquete->esTourSimple()) {
+            return response()->json(['code' => 422, 'message' => 'La calculadora aplica solo a tours simples.'], 422);
+        }
+
+        $temporadaId = $request->filled('temporada_id') ? (int) $request->get('temporada_id') : null;
+
+        return response()->json($this->costoEstimado->calcular($paquete, $temporadaId));
+    }
+
+    // GET paquetes-plantilla/{id}/precio-para-fecha?fecha=Y-m-d — vista previa
+    // de qué precio tomaría el tour en esa fecha (§3.12). Es la misma
+    // resolución que usará la sesión 1b al cargar el tour en la cotización.
+    public function precioParaFecha(Request $request, string $id)
+    {
+        $paquete = PaquetePlantilla::findOrFail($id);
+
+        $validator = Validator::make($request->all(), ['fecha' => 'required|date_format:Y-m-d']);
+        if ($validator->fails()) {
+            return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
+        }
+
+        $resuelto = $this->temporadaResolver->precioParaFecha($paquete, $request->get('fecha'));
+
+        return response()->json([
+            'precio_temporada' => $resuelto['precio'],
+            'temporada' => $resuelto['ocurrencia']?->temporada?->only(['id', 'nombre']),
+            'ocurrencia' => $resuelto['ocurrencia']?->only(['id', 'anio', 'fecha_desde', 'fecha_hasta']),
+        ]);
+    }
+
+    // Precios por temporada (§3.12, N16) — agregar, editar y quitar.
+    public function guardarPrecio(Request $request, string $id, ?string $precioId = null)
+    {
+        $paquete = PaquetePlantilla::findOrFail($id);
+        $precio = $precioId !== null
+            ? PaquetePlantillaPrecio::where('paquete_plantilla_id', $paquete->id)->findOrFail($precioId)
+            : null;
+
+        if (! $paquete->esTourSimple()) {
+            return response()->json(['code' => 422, 'message' => 'Los precios por temporada aplican solo a tours simples.'], 422);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'temporada_id' => [
+                'required', 'integer',
+                Rule::unique('paquete_plantilla_precios', 'temporada_id')
+                    ->where('paquete_plantilla_id', $paquete->id)
+                    ->ignore($precio?->id),
+            ],
+            'precio_venta_adulto' => 'required|numeric|min:0',
+            'precio_venta_nino' => 'nullable|numeric|min:0',
+            'precio_venta_adulto_ext' => 'nullable|numeric|min:0',
+            'precio_venta_nino_ext' => 'nullable|numeric|min:0',
+            'costo_estimado_persona' => 'nullable|numeric|min:0',
+            'costo_estimado_persona_ext' => 'nullable|numeric|min:0',
+        ], [
+            'temporada_id.unique' => 'Este tour ya tiene un precio para esa temporada.',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
+        }
+
+        $validado = $validator->validated();
+
+        if (! Temporada::where('id', $validado['temporada_id'])->where('giro', 'agencia_viajes')->exists()) {
+            return response()->json(['code' => 422, 'message' => 'La temporada seleccionada no existe.'], 422);
+        }
+
+        $precio = $precio
+            ? tap($precio)->update($validado)
+            : PaquetePlantillaPrecio::create($validado + ['paquete_plantilla_id' => $paquete->id]);
+
+        return response()->json([
+            'code' => 200,
+            'message' => 'Precio por temporada guardado correctamente',
+            'precio' => $precio->fresh()->load('temporada'),
+        ]);
+    }
+
+    public function eliminarPrecio(string $id, string $precioId)
+    {
+        $precio = PaquetePlantillaPrecio::where('paquete_plantilla_id', $id)->findOrFail($precioId);
+        $precio->delete();
+
+        return response()->json(['code' => 200, 'message' => 'Precio por temporada quitado correctamente']);
     }
 
     public function update(Request $request, string $id)
     {
         $paquete = PaquetePlantilla::findOrFail($id);
 
-        $validado = $this->validarPayload($request, $paquete->id);
+        $validado = $this->validarPayload($request, $paquete);
         if ($validado instanceof JsonResponse) {
             return $validado;
         }
@@ -408,8 +530,22 @@ class PaquetePlantillaController extends Controller
                     'proveedor_tarifa_id' => $item->proveedor_tarifa_id,
                     'guia_tarifa_id' => $item->guia_tarifa_id,
                     'paquete_plantilla_hijo_id' => $item->paquete_plantilla_hijo_id,
+                    'destino_servicio_id' => $item->destino_servicio_id,
+                    'proveedor_id' => $item->proveedor_id,
+                    'costo_estimado_persona' => $item->costo_estimado_persona,
+                    'costo_estimado_persona_ext' => $item->costo_estimado_persona_ext,
+                    'tip_afe_igv' => $item->tip_afe_igv,
+                    'destino_tributario' => $item->destino_tributario,
                     'orden' => $item->orden,
                 ]);
+            }
+
+            // Fila 13, fase 1a: también los precios por temporada.
+            foreach ($original->precios as $precio) {
+                PaquetePlantillaPrecio::create(array_merge(
+                    $precio->only($precio->getFillable()),
+                    ['paquete_plantilla_id' => $copia->id]
+                ));
             }
 
             return $copia;
@@ -451,7 +587,7 @@ class PaquetePlantillaController extends Controller
         return response()->json(['code' => 200, 'message' => 'Paquete/tour eliminado correctamente']);
     }
 
-    private function validarPayload(Request $request, ?int $ignoreId = null): array|JsonResponse
+    private function validarPayload(Request $request, ?PaquetePlantilla $paquete = null): array|JsonResponse
     {
         // Tolerancia de entrada: si llega "HH:MM:SS" (p.ej. un valor de
         // hora_salida/hora_retorno recargado desde la BD y reenviado sin
@@ -467,7 +603,7 @@ class PaquetePlantillaController extends Controller
         }
 
         $validator = Validator::make($request->all(), [
-            'codigo' => ['nullable', 'string', 'max:50', Rule::unique('paquetes_plantilla', 'codigo')->ignore($ignoreId)],
+            'codigo' => ['nullable', 'string', 'max:50', Rule::unique('paquetes_plantilla', 'codigo')->ignore($paquete?->id)],
             'categoria' => 'required|in:local,nacional,internacional',
             'tipo' => 'nullable|in:tour_simple,paquete_combo',
             'nombre' => 'required|string|max:250',
@@ -503,6 +639,18 @@ class PaquetePlantillaController extends Controller
             // paquete_combo) — mismo campo, mismo mecanismo, sin el bloqueo
             // 422 que sí existe para precio_venta_final en combo (ver abajo).
             'ajuste_redondeo' => 'nullable|numeric',
+            // Fila 13, fase 1a (plan-tours-venta-simple-costo-real.md §3.1).
+            'precio_venta_nino' => 'nullable|numeric|min:0',
+            'precio_venta_adulto_ext' => 'nullable|numeric|min:0',
+            'precio_venta_nino_ext' => 'nullable|numeric|min:0',
+            'costo_estimado_persona' => 'nullable|numeric|min:0',
+            'costo_estimado_persona_ext' => 'nullable|numeric|min:0',
+            'moneda' => 'nullable|in:PEN,USD',
+            'tip_afe_igv' => 'nullable|in:10,17,20,30,40',
+            'destino_tributario' => 'nullable|required_with:tip_afe_igv|in:amazonia,nacional,extranjero',
+            'modalidad' => 'nullable|in:compartido,privado',
+            'pax_minimo_salida' => 'nullable|integer|min:1',
+            'uso' => 'nullable|in:venta,solo_itinerario',
         ]);
 
         if ($validator->fails()) {
@@ -522,6 +670,44 @@ class PaquetePlantillaController extends Controller
             return response()->json([
                 'code' => 422,
                 'message' => 'precio_venta_final no aplica a paquete_combo — se calcula en vivo desde los tours incluidos y el descuento configurado.',
+            ], 422);
+        }
+
+        // Fila 13, fase 1a (N1, N15): un tour simple de VENTA necesita su
+        // precio adulto; uno solo_itinerario no exige precio, costo ni IGV.
+        // Cada campo se mira con lo que trae el pedido o, si no lo trae, con
+        // lo ya guardado. Se exige al crear, al pasar el tour a 'venta' o al
+        // borrar un precio que ya tenía. Un tour viejo que nunca tuvo precio
+        // se sigue pudiendo editar (desactivar, TourIncluidoForm.vue de
+        // mayoristas, detalle.vue que reenvía el objeto completo): su precio
+        // se resuelve en la conversión de la sesión 1b, no bloqueando hoy
+        // pantallas que ya funcionan. El IGV del tour no es obligatorio:
+        // vacío = el default de la agencia (ConfiguracionAgencia), mismo
+        // criterio que los demás orígenes sin tarifa propia.
+        $valorFinal = fn (string $campo, mixed $default = null) => array_key_exists($campo, $validado)
+            ? $validado[$campo]
+            : ($paquete?->{$campo} ?? $default);
+
+        $tipoFinal = $valorFinal('tipo', PaquetePlantilla::TIPO_TOUR_SIMPLE);
+        $usoFinal = $valorFinal('uso', PaquetePlantilla::USO_VENTA);
+
+        if ($tipoFinal === PaquetePlantilla::TIPO_PAQUETE_COMBO && $usoFinal === PaquetePlantilla::USO_SOLO_ITINERARIO) {
+            return response()->json(['code' => 422, 'message' => 'Solo un tour simple puede ser "solo itinerario".'], 422);
+        }
+
+        $tocaPrecio = $paquete === null
+            || (array_key_exists('uso', $validado) && $validado['uso'] !== $paquete->uso)
+            || $paquete->precio_venta_final !== null;
+
+        if (
+            $tocaPrecio
+            && $tipoFinal === PaquetePlantilla::TIPO_TOUR_SIMPLE
+            && $usoFinal === PaquetePlantilla::USO_VENTA
+            && $valorFinal('precio_venta_final') === null
+        ) {
+            return response()->json([
+                'code' => 422,
+                'message' => 'Un tour de venta necesita su precio adulto. Si solo sirve de itinerario para paquetes de mayorista, márcalo como "Solo itinerario".',
             ], 422);
         }
 

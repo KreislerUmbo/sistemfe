@@ -22,6 +22,12 @@ class PaquetePlantilla extends Model
     public const TIPO_TOUR_SIMPLE = 'tour_simple';
     public const TIPO_PAQUETE_COMBO = 'paquete_combo';
 
+    // Fila 13, fase 1a (plan-tours-venta-simple-costo-real.md N15): un tour
+    // 'solo_itinerario' solo presta itinerario y fotos a los paquetes de
+    // mayorista; no exige precio, costo ni IGV.
+    public const USO_VENTA = 'venta';
+    public const USO_SOLO_ITINERARIO = 'solo_itinerario';
+
     protected $table = 'paquetes_plantilla';
 
     protected $fillable = [
@@ -50,6 +56,20 @@ class PaquetePlantilla extends Model
         // 14-oct-2026 (diseño, sin implementar): pasa a ser el precio adulto que
         // sí se cobra (plan-tours-venta-simple-costo-real.md §3.1).
         'precio_venta_final',
+        // Fila 13, fase 1a (§3.1): precio_venta_final es el adulto nacional;
+        // el resto vacío = el precio del que deriva (niño → adulto,
+        // extranjero → nacional).
+        'precio_venta_nino',
+        'precio_venta_adulto_ext',
+        'precio_venta_nino_ext',
+        'costo_estimado_persona',
+        'costo_estimado_persona_ext',
+        'moneda',
+        'tip_afe_igv',
+        'destino_tributario',
+        'modalidad',
+        'pax_minimo_salida',
+        'uso',
         'vigencia_desde',
         'vigencia_hasta',
         'publicado_web',
@@ -68,6 +88,12 @@ class PaquetePlantilla extends Model
         'fotos_destacadas_pdf' => 'array',
         'vuelo_incluido' => 'boolean',
         'precio_venta_final' => 'decimal:2',
+        'precio_venta_nino' => 'decimal:2',
+        'precio_venta_adulto_ext' => 'decimal:2',
+        'precio_venta_nino_ext' => 'decimal:2',
+        'costo_estimado_persona' => 'decimal:2',
+        'costo_estimado_persona_ext' => 'decimal:2',
+        'pax_minimo_salida' => 'integer',
         'vigencia_desde' => 'date',
         'vigencia_hasta' => 'date',
         'publicado_web' => 'boolean',
@@ -115,6 +141,12 @@ class PaquetePlantilla extends Model
         return $this->hasMany(PaquetePlantillaItem::class, 'paquete_plantilla_id');
     }
 
+    // Precios por temporada (§3.12). El precio base son las columnas propias.
+    public function precios()
+    {
+        return $this->hasMany(PaquetePlantillaPrecio::class, 'paquete_plantilla_id');
+    }
+
     // Combos que incluyen ESTE paquete como tour-hijo — usado por
     // ComboValidationService::bloqueosPorDesactivar() para listar qué combos
     // activos se verían afectados al desactivar un tour_simple.
@@ -131,5 +163,10 @@ class PaquetePlantilla extends Model
     public function esPaqueteCombo(): bool
     {
         return $this->tipo === self::TIPO_PAQUETE_COMBO;
+    }
+
+    public function esSoloItinerario(): bool
+    {
+        return $this->uso === self::USO_SOLO_ITINERARIO;
     }
 }

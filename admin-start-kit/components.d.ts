@@ -97,6 +97,7 @@ declare module 'vue' {
     JustGage: typeof import('./src/components/JustGage.vue')['default']
     LogoBox: typeof import('./src/components/LogoBox.vue')['default']
     MapaUbicacion: typeof import('./src/components/Clientes/MapaUbicacion.vue')['default']
+    MargenEnVivo: typeof import('./src/components/AgenciaViajes/MargenEnVivo.vue')['default']
     MenuItem: typeof import('./src/components/AppMenu/MenuItem.vue')['default']
     MenuItemLink: typeof import('./src/components/AppMenu/MenuItemLink.vue')['default']
     MenuItemWithChildren: typeof import('./src/components/AppMenu/MenuItemWithChildren.vue')['default']
@@ -121,6 +122,9 @@ declare module 'vue' {
     SeccionSistemasEmpresariales: typeof import('./src/components/portal/SeccionSistemasEmpresariales.vue')['default']
     TarjetaResumenCliente: typeof import('./src/components/Creditos/TarjetaResumenCliente.vue')['default']
     TourIncluidoForm: typeof import('./src/components/AgenciaViajes/TourIncluidoForm.vue')['default']
+    TourIncluyeCostos: typeof import('./src/components/AgenciaViajes/TourIncluyeCostos.vue')['default']
+    TourPreciosTemporada: typeof import('./src/components/AgenciaViajes/TourPreciosTemporada.vue')['default']
+    TourPrecioVentaCampos: typeof import('./src/components/AgenciaViajes/TourPrecioVentaCampos.vue')['default']
     TraspasoCartera: typeof import('./src/components/Clientes/TraspasoCartera.vue')['default']
     UIComponentCard: typeof import('./src/components/UIComponentCard.vue')['default']
   }

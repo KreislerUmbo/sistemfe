@@ -42,6 +42,8 @@ class PaquetePlantillaFotosPdfTest extends TestCase
             app(ComboExplosionService::class),
             app(FotoUploadService::class),
             app(CodigoGeneradorService::class),
+            app(\App\Services\AgenciaViajes\TourCostoEstimadoService::class),
+            app(\App\Services\AgenciaViajes\TemporadaResolverService::class),
         );
     }
 
