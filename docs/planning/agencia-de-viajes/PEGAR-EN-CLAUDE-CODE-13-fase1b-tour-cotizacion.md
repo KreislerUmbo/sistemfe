@@ -47,8 +47,16 @@
 - Facturación por subgrupo de pasajeros (C1): desglose de precio por pasajero en la línea.
 - Lectura de los dos formatos en todas las pantallas (§3.11).
 
+**Pantalla del tour (decidido con el usuario, 14-oct-2026):**
+- **Unir las dos pestañas del Incluye en una sola llamada "Incluye y costos"** (nombre elegido por el usuario: más informativo e intuitivo). Hoy son dos pestañas sobre la misma lista (`paquete_plantilla_items`):
+  - **"Agregar Costos"** (antigua): biblioteca de proveedores y guías, venta y costo de cada tarifa;
+  - **"Incluye y costos"** (fase 1a): costo por persona, IGV, calculadora y servicio sin tarifa.
+- La pestaña unificada permite agregar desde la biblioteca o sin tarifa y editar costo e IGV en la misma lista. La "venta de la tarifa" queda solo como referencia del modo clásico.
+- **No se borra nada:** la tabla se reutiliza (la tarifa pasa a ser referencia de la calculadora) y el modo clásico sigue leyendo las tarifas mientras dure el piloto (§5b).
+- El campo **"Ajuste de redondeo"** del tab Datos se retira de la pantalla junto con esta unificación. El usuario prefirió esperar a la 1b en vez de ocultarlo antes. Nadie lo usa: 0 tours en `agencia-demo` y 0 en dakamu.
+
 **Retiro y conversión:**
-- Retiro de `ajuste_redondeo`, manteniendo el filtro por nombre de `AsignacionOperativa::itemsDelRango()`.
+- Retiro de `ajuste_redondeo`, manteniendo el filtro por nombre de `AsignacionOperativa::itemsDelRango()`. La columna y la lógica del modo clásico se borran recién al terminar el piloto con éxito (§5b); en la 1b solo dejan de usarse en el camino nuevo y desaparecen de la pantalla.
 - Conversión de los tours existentes, **confirmada tour por tour por el usuario**, partiendo de `diagnosticar-tours`.
 - **Hallazgo 3 de la 1a:** la conversión debe proponer el **IGV de la tarifa** en cada ítem del Incluye, no dejarlo vacío.
 
