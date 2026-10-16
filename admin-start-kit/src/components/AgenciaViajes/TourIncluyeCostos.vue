@@ -39,9 +39,12 @@
                             <td>
                                 <div class="fw-semibold text-dark">{{ titulo(fila.item) }}</div>
                                 <div class="text-muted">
+                                    <!-- Fila 13, fase 1b: la venta de la tarifa queda solo como
+                                         referencia (la usa el modo clásico de la cotización). -->
                                     <template v-if="fila.item.proveedor_tarifa">
                                         {{ proveedorDe(fila.item) }} · tarifa {{ fila.item.proveedor_tarifa.modalidad }}
-                                        {{ fila.item.proveedor_tarifa.moneda }} {{ Number(fila.item.proveedor_tarifa.precio_costo).toFixed(2) }}
+                                        costo {{ fila.item.proveedor_tarifa.moneda }} {{ Number(fila.item.proveedor_tarifa.precio_costo).toFixed(2) }}
+                                        <span title="Precio de la tarifa: solo lo usa el modo clásico de la cotización"> · venta {{ Number(fila.item.proveedor_tarifa.precio_venta_adulto).toFixed(2) }}</span>
                                     </template>
                                     <template v-else-if="fila.item.guia_tarifa">
                                         Guía · {{ fila.item.guia_tarifa.moneda }} {{ Number(fila.item.guia_tarifa.costo_diario).toFixed(2) }} por día
@@ -49,11 +52,11 @@
                                     <template v-else>
                                         <span class="badge bg-light text-secondary border">Sin tarifa</span>
                                         <span v-if="fila.item.proveedor"> · {{ fila.item.proveedor.nombre_comercial ?? fila.item.proveedor.razon_social }}</span>
-                                        <button type="button" class="btn btn-sm btn-link text-danger p-0 ms-2" @click="quitar(fila.item)" :disabled="quitandoId === fila.item.id" title="Quitar del Incluye">
-                                            <span v-if="quitandoId === fila.item.id" class="spinner-border spinner-border-sm"></span>
-                                            <i v-else class="fas fa-trash-can"></i>
-                                        </button>
                                     </template>
+                                    <button type="button" class="btn btn-sm btn-link text-danger p-0 ms-2" @click="quitar(fila.item)" :disabled="quitandoId === fila.item.id" title="Quitar del Incluye">
+                                        <span v-if="quitandoId === fila.item.id" class="spinner-border spinner-border-sm"></span>
+                                        <i v-else class="fas fa-trash-can"></i>
+                                    </button>
                                 </div>
                             </td>
                             <td>

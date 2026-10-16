@@ -49,6 +49,13 @@ class AsignacionOperativa
     {
         $origenTipo = $item->alternativaItem?->origen_tipo;
 
+        // Fila 13, fase 1b: la línea de tour no tiene guía ni proveedor
+        // propios; su operación (vehículo, guía, proveedores) será la de su
+        // salida en la fase 2. Hasta entonces no cuenta como "sin asignar".
+        if ($origenTipo === AlternativaItem::ORIGEN_TOUR) {
+            return false;
+        }
+
         if ($origenTipo === AlternativaItem::ORIGEN_GUIA) {
             $guia = self::guiaEfectivo($item);
 

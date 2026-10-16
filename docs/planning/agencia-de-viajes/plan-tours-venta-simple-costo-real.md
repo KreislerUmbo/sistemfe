@@ -1,6 +1,6 @@
 # Tours: vender simple, operar por salida, medir el costo real
 
-> **Estado: EN EJECUCIÓN — fase 1a hecha (14-oct-2026, ver §6); sigue la 1b.** Diseño del 13-oct-2026.
+> **Estado: EN EJECUCIÓN — fases 1a y 1b hechas (14-oct-2026, ver §6); sigue la 1c.** Diseño del 13-oct-2026.
 > Nace de una propuesta del usuario que reemplaza el enfoque de
 > `plan-precio-tour-por-persona.md` (ese plan queda **descartado como alternativa**, con la
 > razón en su encabezado y en §1 de este documento). Revisado contra el código y los datos de
@@ -772,6 +772,33 @@ adelante la importación SIRE (los comprobantes llegan solos y solo hay que asig
 > 6. `sistemafe_test_migrations` tiene un desfase anterior: `2026_09_07_120000_add_opcion_mayorista_opcional…` está aplicado pero no figura en el registro de migraciones. Correr el directorio completo falla; las migraciones nuevas se aplican por archivo.
 >
 > **Diagnóstico de dakamu (§7): hecho el 14-oct-2026, sin riesgo** (3 tours sin precio, 0 vinculados a mayoristas).
+>
+> **Fase 1b — HECHA (14-oct-2026, rama `feat/tours-fase1b-cotizacion`, sin commitear).**
+> Qué quedó:
+> - **Migraciones** (vertical, solo aditivas, `down()` probado en `sistemafe_test_migrations` por archivo; aplicadas a `agencia-demo` con `tenants:migrate-verticales`):
+>   - `configuracion_agencia.modo_tours` (`clasico` por defecto).
+>   - `alternativa_items`: `carga_tour`, `carga_combo`, `combo_origen_id`, `tour_linea` (JSON con precios y costos unitarios, grupos de IGV, descuento del combo y fecha del tour), `temporada_id`, `desglose_costo_snapshot`, `precio_manual`.
+>   - `reserva_items`: `carga_tour`, `carga_combo`, `desglose_costo_snapshot` (copiados al aceptar).
+>   - `cotizacion_pasajeros.residencia`.
+> - **`TourLineaService`**: carga del tour o del combo (`origen_tipo='tour'`), precio por pasajero, temporada del día del tour, una línea por grupo de IGV con reparto exacto en centavos (`repartir()`), combo con descuento repartido por precio de lista (E3), recálculo por pasajeros sin releer el catálogo, precio a mano, aviso y recálculo de temporada, aviso al reprogramar.
+> - **Interruptor**: `desdePlantilla()` deriva al modo nuevo al inicio; el resto del método es el clásico, con el bucle extraído a `crearItemClasicoDesdeEntrada()` (mismo resultado, vigilado por el test de regresión de la 1a). `PUT configuracion-agencia/modo-tours`, solo Super-Admin (403 para otros).
+> - **Endpoints nuevos**: `DELETE alternativas/{id}/cargas/{carga}`, `PUT …/cargas/{carga}/precio`, `PUT …/items/mover-carga`, `GET …/temporadas-tours`, `POST …/recalcular-temporadas`. `CotizacionController::update()` devuelve `temporadas_desactualizadas`; `ReservaController::reprogramar()`, `avisos_temporada`.
+> - **Lectura de los dos formatos**: nombre de la línea en `resolverNombreItem()` (con "(gravado)/(exonerado)" si hay varias), PDF con el Incluye del tour (C5), Reporte Operativo con una fila por tour (no por línea de IGV) y sin "sin asignar", facturación `TOUR`, Salida Operativa rechaza enganchar a mano una línea de tour (fase 2), `duplicar()` copia con cargas nuevas, `moverBloque()` ya no arrastra líneas de tour.
+> - **E2** corregido: el costo de una línea por persona de proveedor es el total sin infantes (al crear y al recalcular). `recalcularItemsPorPersona()` guarda el total con `calcularTotalEfectivo()`.
+> - **Frontend**: interruptor en Configuración de Agencia (solo Super-Admin); residencia en los pasajeros (`nueva.vue`, `editar.vue`); en el cotizador, bloque de línea de tour (temporada, combo, precio a mano, desglose por pasajero, Incluye desplegable, mover y quitar por carga), aviso "las fechas cambiaron de temporada" con "Recalcular precios por temporada", biblioteca con precio por persona y bloqueo de `solo_itinerario`; reserva y Reporte Operativo leen la línea; en el tour simple, una sola pestaña "Incluye y costos" (biblioteca + costos, quitar en todo servicio, venta de la tarifa como referencia) y sin "Ajuste de redondeo" (sigue en el combo).
+> - **Pruebas**: 24 tests nuevos (`Fila13Fase1bTourCotizacionTest`); suite completa 1441 en verde (1417 + 24). Type-check: 46 errores, todos anteriores. Verificado en vivo en `agencia-demo` (cotización 50, revertida; modo devuelto a `clasico`).
+>
+> **Decisiones del usuario en la sesión (14-oct):**
+> - **E2:** costo de la línea por persona = total sin infantes (antes, la línea suelta guardaba el costo de una sola persona y la del tour clásico contaba a los infantes; la reserva y el piso lo leían como total).
+> - **Descuento "S/ fijo" del combo** = por persona que paga (adultos + niños).
+>
+> **Hallazgos de la 1b:**
+> 1. `costo_snapshot` de las líneas por persona se guardaba de dos formas (unitario en la línea suelta, total con infantes en el tour clásico). Corregido con E2 al crear y recalcular la línea suelta; el clásico de `desdePlantilla()` no se tocó (sigue contando infantes) hasta que alguien recalcule los pasajeros.
+> 2. `recalcularItemsPorPersona()` sumaba todas las opciones de un grupo de hoteles al total (no la elegida). Corregido de paso.
+> 3. Un tour exonerado (Amazonía) cargado como línea exige, como todo ítem Amazonía, confirmar el tratamiento en la reserva antes de facturar (regla existente). Hay que tenerlo en cuenta en la 1c.
+> 4. El catálogo central de temporadas no existe en `sistemafe_test_migrations`: los tests de temporada usan un resolver en memoria.
+> 5. Un combo con tours de monedas distintas no se carga en el modo nuevo (422): su descuento no se puede repartir entre monedas.
+> 6. Errores 500 intermitentes en catálogos (`proveedores`, `servicios`) durante la prueba en vivo, sin nada en el log: el problema ya conocido de Apache + dotenv en local, no de la 1b.
 
 | Fase | Contenido | Estimado |
 |---|---|---|

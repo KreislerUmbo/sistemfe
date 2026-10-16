@@ -89,6 +89,8 @@ class AlternativaPdfService
             // OpcionMayoristaOpcional elegido de verdad (ver
             // ReservaController::resolverNombreItem()).
             'items.opcionMayoristaOpcional',
+            // Fila 13, fase 1b — nombre e Incluye de la línea de tour (C5).
+            'items.tourOrigen',
         ])->findOrFail($id);
 
         $this->validarGruposResueltos($alternativa);
@@ -514,14 +516,45 @@ class AlternativaPdfService
                 'destino_nombre' => $destino->destinoAtractivo?->nombre ?? $destino->destino_texto ?? 'Destino',
                 'fecha_inicio' => $destino->fecha_inicio,
                 'fecha_fin' => $destino->fecha_fin,
+                // Fila 13, fase 1b (C5): una línea de tour no lista su propio
+                // nombre ("Laguna Azul Full Day") sino los servicios del Incluye
+                // del tour; varias líneas del mismo tour (IGV mezclado) dan la
+                // misma lista, que unique() deja una sola vez.
                 'nombres' => $itemsSinGrupoDeHotel
-                    ->map(fn (AlternativaItem $item) => ReservaController::resolverNombreItem($item, null, 'cliente'))
+                    ->flatMap(fn (AlternativaItem $item) => $item->esLineaTour()
+                        ? $this->incluyeDelTour($item)
+                        : [ReservaController::resolverNombreItem($item, null, 'cliente')])
                     ->unique()
                     ->values(),
             ];
         }
 
         return $bloques;
+    }
+
+    // Servicios del Incluye del tour de una línea de tour (C5), en el orden del
+    // catálogo. Sin Incluye cargado, el nombre del tour (mejor que nada).
+    private function incluyeDelTour(AlternativaItem $item): array
+    {
+        $tour = $item->tourOrigen;
+        if (! $tour) {
+            return [ReservaController::resolverNombreItem($item, null, 'cliente')];
+        }
+
+        $nombres = $tour->items()
+            ->whereNull('paquete_plantilla_hijo_id')
+            ->with(['destinoServicio.servicio', 'proveedorTarifa.proveedorServicio.destinoServicio.servicio', 'guiaTarifa'])
+            ->orderBy('orden')
+            ->orderBy('id')
+            ->get()
+            ->map(fn ($i) => $i->guia_tarifa_id
+                ? 'Guía de turismo'
+                : ($i->destinoServicio?->servicio?->nombre ?? $i->proveedorTarifa?->proveedorServicio?->destinoServicio?->servicio?->nombre))
+            ->filter()
+            ->values()
+            ->all();
+
+        return $nombres !== [] ? $nombres : [$tour->nombre];
     }
 
     // Guardrail (19-sep-2026, hallazgo del usuario) — antes se podía generar

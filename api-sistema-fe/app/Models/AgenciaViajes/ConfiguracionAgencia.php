@@ -49,6 +49,10 @@ class ConfiguracionAgencia extends Model
         // AlternativaItemController::resolverTratamientoTributarioDefault().
         'tip_afe_igv_default',
         'destino_tributario_default',
+        // Fila 13, fase 1b (§5b): update() de la pantalla no lo valida ni lo
+        // escribe; solo ConfiguracionAgenciaController::actualizarModoTours()
+        // (Super-Admin).
+        'modo_tours',
     ];
 
     protected $casts = [
@@ -69,5 +73,15 @@ class ConfiguracionAgencia extends Model
             'tip_afe_igv' => $config->tip_afe_igv_default ?? '10',
             'destino_tributario' => $config->destino_tributario_default ?? 'nacional',
         ];
+    }
+
+    public const MODO_TOURS_CLASICO = 'clasico';
+    public const MODO_TOURS_NUEVO = 'nuevo';
+
+    // Fila 13, fase 1b (§5b): cómo se carga un tour en la cotización. Sin
+    // fila (tenant de prueba sin seed) = clásico, el comportamiento de siempre.
+    public static function modoToursNuevo(): bool
+    {
+        return static::first()?->modo_tours === self::MODO_TOURS_NUEVO;
     }
 }

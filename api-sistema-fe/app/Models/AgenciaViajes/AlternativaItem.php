@@ -34,6 +34,11 @@ class AlternativaItem extends Model
     public const ORIGEN_PASAJE_AEREO = 'pasaje_aereo';
     public const ORIGEN_MANUAL = 'manual';
     public const ORIGEN_GUIA = 'guia';
+    // Fila 13, fase 1b (plan-tours-venta-simple-costo-real.md N6): el tour
+    // como UNA línea con su precio por persona (modo_tours='nuevo'). La crea
+    // TourLineaService (vía desdePlantilla()), nunca store(): por eso no está
+    // en ORIGENES, que es la lista que store() acepta.
+    public const ORIGEN_TOUR = 'tour';
 
     public const ORIGENES = [
         self::ORIGEN_PROVEEDOR,
@@ -73,6 +78,15 @@ class AlternativaItem extends Model
         'precio_convertido',
         'tip_afe_igv',
         'destino_tributario',
+        // Fila 13, fase 1b — línea de tour, ver migración
+        // 2026_10_14_170100_add_linea_tour_to_alternativa_items_table.php.
+        'carga_tour',
+        'carga_combo',
+        'combo_origen_id',
+        'tour_linea',
+        'temporada_id',
+        'desglose_costo_snapshot',
+        'precio_manual',
     ];
 
     protected $casts = [
@@ -92,6 +106,10 @@ class AlternativaItem extends Model
         'descuento_pct' => 'decimal:4',
         'precio_convertido' => 'decimal:2',
         'opcion_elegida' => 'boolean',
+        'tour_linea' => 'array',
+        'desglose_costo_snapshot' => 'array',
+        'temporada_id' => 'integer',
+        'precio_manual' => 'boolean',
     ];
 
     protected $appends = ['total', 'total_convertido'];
@@ -155,6 +173,17 @@ class AlternativaItem extends Model
     public function tourOrigen()
     {
         return $this->belongsTo(PaquetePlantilla::class, 'tour_origen_id');
+    }
+
+    // Fila 13, fase 1b — combo del que vino esta línea de tour (N7).
+    public function comboOrigen()
+    {
+        return $this->belongsTo(PaquetePlantilla::class, 'combo_origen_id');
+    }
+
+    public function esLineaTour(): bool
+    {
+        return $this->origen_tipo === self::ORIGEN_TOUR;
     }
 
     public function cotizacionPasajeAereo()

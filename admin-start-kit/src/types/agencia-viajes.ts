@@ -248,6 +248,9 @@ export type ConfiguracionAgencia = {
   // '20' exonerado, '30' inafecto.
   tip_afe_igv_default: '10' | '20' | '30';
   destino_tributario_default: 'amazonia' | 'nacional' | 'extranjero';
+  // Fila 13, fase 1b (§5b): cómo se carga un tour en la cotización. Solo lo
+  // cambia el Super-Admin (PUT configuracion-agencia/modo-tours).
+  modo_tours?: 'clasico' | 'nuevo';
 };
 
 export type TipAfeIgv = '10' | '20' | '30';
@@ -293,6 +296,8 @@ export type CotizacionPasajero = {
   cotizacion_id: number;
   tipo_pax: 'adulto' | 'nino' | 'infante';
   edad: number;
+  // Fila 13, fase 1b (§3.3): solo cambia el precio del tour. No es la nacionalidad.
+  residencia?: 'nacional' | 'extranjero';
 };
 
 export type Cotizacion = {
@@ -366,7 +371,42 @@ export type AlternativaResponse = {
   lineas_fuera_de_piso?: Array<{ alternativa_item_id: number; precio_minimo_permitido: number | null }>;
 };
 
-export type OrigenItem = 'proveedor' | 'mayorista' | 'pasaje_aereo' | 'manual' | 'guia';
+// 'tour' (fila 13, fase 1b): el tour como UNA línea (modo_tours='nuevo').
+export type OrigenItem = 'proveedor' | 'mayorista' | 'pasaje_aereo' | 'manual' | 'guia' | 'tour';
+
+// Fila 13, fase 1b — datos con los que se calculó una línea de tour.
+export type TourLineaDatos = {
+  tour_nombre: string;
+  fecha_tour: string | null;
+  temporada_nombre: string | null;
+  precios: { adulto: number; nino: number; adulto_ext: number; nino_ext: number };
+  grupo: number;
+  n_grupos: number;
+  combo: { id: number; nombre: string; descuento_tipo: string | null; descuento_valor: number | null } | null;
+};
+
+// Fila 13, fase 1b (§3.9b) — costo por servicio del Incluye al cotizar.
+export type DesgloseCostoServicio = {
+  paquete_plantilla_item_id: number;
+  servicio: string;
+  proveedor_id: number | null;
+  costo_persona: number | null;
+  costo_persona_ext: number | null;
+  pax_nacional: number;
+  pax_extranjero: number;
+};
+
+// Fila 13, fase 1b (§3.12) — tour cuya temporada ya no es la de su día.
+export type TemporadaDesactualizada = {
+  carga_tour: string;
+  tour_nombre: string;
+  dia_referencial: number | null;
+  temporada_actual: string | null;
+  temporada_nueva: string | null;
+  precio_manual: boolean;
+  alternativa_id?: number;
+  alternativa_nombre?: string;
+};
 
 export type AlternativaItem = {
   id: number;
@@ -438,6 +478,16 @@ export type AlternativaItem = {
   // actualizarPasajeAereo()); esto le permite al frontend avisarlo ANTES
   // de que el vendedor intente la acción y se encuentre con un 422.
   reserva_item?: { id: number } | null;
+  // Fila 13, fase 1b — línea de tour (origen_tipo='tour'). Las líneas de una
+  // misma carga (una por grupo de IGV) comparten carga_tour; las de un combo,
+  // carga_combo.
+  carga_tour?: string | null;
+  carga_combo?: string | null;
+  combo_origen_id?: number | null;
+  tour_linea?: TourLineaDatos | null;
+  temporada_id?: number | null;
+  desglose_costo_snapshot?: DesgloseCostoServicio[] | null;
+  precio_manual?: boolean;
 };
 
 export type AlternativaItemResponse = {
@@ -464,6 +514,9 @@ export type DesdePlantillaResponse = {
   // Usado en el cotizador para no dejar un día "invisible" sin pestaña.
   dia_final_combo: number;
   resumen: { tours: number | null; items: number };
+  // Fila 13, fase 1b — solo en modo_tours='nuevo'.
+  modo_tours?: 'nuevo';
+  avisos?: string[];
 };
 
 // Sesión 11b3 — GET biblioteca-cotizador (BibliotecaCotizadorController).

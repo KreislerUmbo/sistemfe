@@ -91,6 +91,12 @@
                         <span class="badge" :class="tipoPorEdad(pax.edad).clase" style="min-width:70px">{{ tipoPorEdad(pax.edad).label }}</span>
                         <label class="text-muted mb-0">Edad</label>
                         <input type="number" class="form-control form-control-sm" style="max-width:80px" v-model.number="pax.edad" min="0" max="99">
+                        <!-- Fila 13, fase 1b (§3.3): residencia, solo para el precio del
+                             tour (un extranjero residente paga como nacional). -->
+                        <select class="form-select form-select-sm" style="max-width:130px" v-model="pax.residencia" title="Residencia (precio del tour)">
+                            <option value="nacional">Nacional</option>
+                            <option value="extranjero">Extranjero</option>
+                        </select>
                         <i class="fas fa-times text-danger ms-auto" style="cursor:pointer" @click="pasajeros.splice(idx, 1)"></i>
                     </div>
                 </div>
@@ -155,7 +161,7 @@ const fechaViajeDesde = ref<string>('');
 const fechaViajeHasta = ref<string>('');
 const sinFechaExacta = ref<boolean>(false);
 
-const pasajeros = ref<Array<{ edad: number }>>([]);
+const pasajeros = ref<Array<{ edad: number; residencia: 'nacional' | 'extranjero' }>>([]);
 const creando = ref<boolean>(false);
 const cantidadAAgregar = ref<number>(1);
 
@@ -220,7 +226,7 @@ const tipoPorEdad = (edad: number) => {
 const agregarPax = (edadSugerida: number, cantidad: number = 1) => {
     const veces = Math.max(1, Math.min(30, cantidad || 1));
     for (let i = 0; i < veces; i++) {
-        pasajeros.value.push({ edad: edadSugerida });
+        pasajeros.value.push({ edad: edadSugerida, residencia: 'nacional' });
     }
 };
 

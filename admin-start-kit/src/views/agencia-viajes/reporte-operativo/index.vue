@@ -149,6 +149,12 @@
                                                 {{ g.nombre }}{{ g.es_referencial ? ' (Referencial)' : '' }}
                                             </option>
                                         </select>
+                                        <!-- Fila 13, fase 1b — tour cargado como una sola línea (modo nuevo):
+                                             no tiene proveedor ni guía por servicio; su operación (vehículo,
+                                             guía, proveedores) será la de su salida, en la fase 2. -->
+                                        <span v-else-if="fila.origen_tipo === 'tour'" class="small text-muted">
+                                            <i class="fas fa-route me-1"></i>Tour completo
+                                        </span>
                                         <!-- Caso proveedor (origen_tipo='proveedor') — el caso real más común. Mismo
                                              buscador inline que reservas/detalle.vue, no un <select> nativo porque la
                                              biblioteca de tarifas puede ser larga. -->

@@ -85,6 +85,16 @@
             <button class="btn-close" @click="itemsNoTocadosReprogramacion = []"></button>
         </div>
 
+        <!-- Fila 13, fase 1b (§3.12) — reprogramada a otra temporada: el precio
+             ya vendido no cambia, solo se avisa. -->
+        <div v-if="avisosTemporadaReprogramacion.length > 0" class="alert alert-info d-flex justify-content-between align-items-start mb-3">
+            <span>
+                <i class="fas fa-calendar-alt me-2"></i>
+                <span v-for="(aviso, idx) in avisosTemporadaReprogramacion" :key="idx">{{ aviso }} </span>
+            </span>
+            <button class="btn-close" @click="avisosTemporadaReprogramacion = []"></button>
+        </div>
+
         <!-- Anticipos recibidos (Tier 0 — conexión Adelantos↔Reservas,
              2026-08-21): visible solo si el cliente ya pagó algo hacia esta
              reserva. El comprobante propio de cada anticipo se maneja desde
@@ -1498,6 +1508,7 @@ const cabecera = ref<ReservaCabecera | null>(null);
 const itemsPendientesSincronizar = ref<Array<{ id: number; nombre: string }>>([]);
 const sincronizando = ref(false);
 const itemsNoTocadosReprogramacion = ref<Array<{ reserva_item_id: number; nombre: string; fecha: string | null; motivo: 'manual' | 'sin_dia_referencial' }>>([]);
+const avisosTemporadaReprogramacion = ref<string[]>([]);
 const itemsFacturadosIds = ref<number[]>([]);
 // Facturación múltiple por grupo de pasajeros (2026-08-20): pasajeros ya
 // cubiertos por ALGUNA ReservaVenta — cada pasajero pertenece a un único
@@ -1839,6 +1850,13 @@ const nombreItem = (it: ReservaItem) => {
     if (!item) return 'Servicio';
     if (item.origen_tipo === 'manual') return item.descripcion_manual ?? 'Servicio manual';
     if (item.origen_tipo === 'pasaje_aereo') return item.cotizacion_pasaje_aereo?.aerolinea ?? 'Pasaje aéreo';
+    // Fila 13, fase 1b — línea de tour del modo nuevo (mismo criterio que
+    // ReservaController::resolverNombreItem()).
+    if (item.origen_tipo === 'tour') {
+        const nombre = item.tour_origen?.nombre ?? item.tour_linea?.tour_nombre ?? 'Tour';
+        const sufijo: Record<string, string> = { '10': ' (gravado)', '20': ' (exonerado)', '30': ' (inafecto)' };
+        return (item.tour_linea?.n_grupos ?? 1) > 1 ? nombre + (sufijo[item.tip_afe_igv ?? ''] ?? '') : nombre;
+    }
     if (item.origen_tipo === 'mayorista') {
         // Sesión 12h — it.opcion_mayorista es quién opera REALMENTE hoy
         // (puede diferir del original de la alternativa si ya se
@@ -2176,6 +2194,7 @@ const confirmarReprogramacion = async () => {
         total.value = res.total;
         cabecera.value = res.cabecera;
         itemsNoTocadosReprogramacion.value = res.items_no_tocados ?? [];
+        avisosTemporadaReprogramacion.value = res.avisos_temporada ?? [];
         mostrarModalReprogramar.value = false;
         toast.success(res.message);
     } catch (error: any) {

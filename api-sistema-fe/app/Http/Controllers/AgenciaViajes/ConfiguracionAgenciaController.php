@@ -38,6 +38,7 @@ class ConfiguracionAgenciaController extends Controller
         'condiciones_generales_servicio' => null,
         'tip_afe_igv_default' => '10',
         'destino_tributario_default' => 'nacional',
+        'modo_tours' => 'clasico',
     ];
 
     public function show()
@@ -90,6 +91,36 @@ class ConfiguracionAgenciaController extends Controller
         return response()->json([
             'code' => 200,
             'message' => 'Configuración actualizada correctamente',
+            'configuracion_agencia' => $config,
+        ]);
+    }
+
+    // PUT configuracion-agencia/modo-tours — interruptor de cómo se carga un
+    // tour en la cotización (fila 13, fase 1b, §5b). Solo el Super-Admin
+    // (soporte de UmboSystem): el dueño de la agencia no lo ve ni lo cambia
+    // (D3: el modo nuevo queda en agencia-demo hasta terminar la fase 2,
+    // porque el Reporte Operativo y las Salidas todavía no operan la línea de
+    // tour). update() no lo valida, así que la pantalla general no lo pisa.
+    public function actualizarModoTours(Request $request)
+    {
+        if (! $request->user()?->hasRole('Super-Admin')) {
+            return response()->json(['code' => 403, 'message' => 'Solo el soporte de UmboSystem puede cambiar el modo de tours.'], 403);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'modo_tours' => 'required|in:'.ConfiguracionAgencia::MODO_TOURS_CLASICO.','.ConfiguracionAgencia::MODO_TOURS_NUEVO,
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
+        }
+
+        $config = ConfiguracionAgencia::first() ?? ConfiguracionAgencia::create(self::DEFAULTS);
+        $config->update(['modo_tours' => $validator->validated()['modo_tours']]);
+
+        return response()->json([
+            'code' => 200,
+            'message' => 'Modo de tours actualizado',
             'configuracion_agencia' => $config,
         ]);
     }

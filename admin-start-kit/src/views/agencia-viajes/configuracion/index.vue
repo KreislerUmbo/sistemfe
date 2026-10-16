@@ -563,6 +563,37 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- Fila 13, fase 1b (§5b, D3) — interruptor de cómo se carga un
+                     tour en la cotización. Solo lo ve y lo cambia el soporte de
+                     UmboSystem (Super-Admin): el dueño de la agencia no lo ve. -->
+                <div class="accordion-item" v-if="esSuperAdmin">
+                    <h2 class="accordion-header">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#accModoTours">
+                            <span class="badge bg-secondary rounded-pill me-2"><i class="fas fa-user-shield"></i></span>
+                            <span class="fw-semibold text-dark">Modo de tours en la cotización (soporte)</span>
+                        </button>
+                    </h2>
+                    <div id="accModoTours" class="accordion-collapse collapse" data-bs-parent="#accConfigAgencia">
+                        <div class="accordion-body">
+                            <p class="small text-muted mb-2">
+                                <strong>Clásico:</strong> el tour se desarma en sus servicios, con el precio de cada tarifa.
+                                <strong>Nuevo:</strong> el tour entra como una sola línea con su precio por persona y por temporada.
+                                El Reporte Operativo y las Salidas operan la línea nueva recién desde la fase 2: dejarlo en
+                                clásico en las agencias reales hasta entonces.
+                            </p>
+                            <div class="d-flex align-items-center gap-2">
+                                <select class="form-select form-select-sm" style="max-width:220px" v-model="modoTours">
+                                    <option value="clasico">Clásico</option>
+                                    <option value="nuevo">Nuevo (piloto)</option>
+                                </select>
+                                <button class="btn btn-sm btn-primary" @click="guardarModoTours" :disabled="guardandoModoTours || modoTours === (form.modo_tours ?? 'clasico')">
+                                    <span v-if="guardandoModoTours" class="spinner-border spinner-border-sm me-1"></span>Aplicar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <ConfiguracionCorreoSeccion />
@@ -593,6 +624,24 @@ const authStore = useAuthStore();
 // exige la ruta real (routes.ts: 'list_serie_comprobante'), para no mostrar
 // un botón que lleve a una pantalla que el usuario no puede ver.
 const puedeGestionarSeries = computed(() => authStore.isPermitedRoute('list_serie_comprobante'));
+
+// Fila 13, fase 1b (§5b) — interruptor modo_tours, solo Super-Admin (el
+// backend también lo exige: 403 para cualquier otro rol).
+const esSuperAdmin = computed(() => authStore.user?.role?.name === 'Super-Admin');
+const modoTours = ref<'clasico' | 'nuevo'>('clasico');
+const guardandoModoTours = ref(false);
+const guardarModoTours = async () => {
+    guardandoModoTours.value = true;
+    try {
+        const res = await configuracionAgenciaService.actualizarModoTours(modoTours.value);
+        form.value.modo_tours = res.configuracion_agencia.modo_tours;
+        (Swal as TVueSwalInstance).fire('Listo', `Modo de tours: ${modoTours.value === 'nuevo' ? 'nuevo (piloto)' : 'clásico'}.`, 'success');
+    } catch (error: any) {
+        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo cambiar el modo de tours', 'error');
+    } finally {
+        guardandoModoTours.value = false;
+    }
+};
 const form = ref<ConfiguracionAgencia>({
     sigla_comercial: null,
     edad_max_infante: 2,
@@ -705,6 +754,7 @@ const cargar = async () => {
     try {
         const res = await configuracionAgenciaService.obtener();
         form.value = res.configuracion_agencia;
+        modoTours.value = res.configuracion_agencia.modo_tours ?? 'clasico';
     } finally {
         cargando.value = false;
     }

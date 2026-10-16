@@ -583,6 +583,7 @@ class AlternativaController extends Controller
             // tributario resuelto (incluida la exoneración Amazonía) se
             // perdía en silencio cayendo al default del tenant.
             $itemsClonados = [];
+            $cargasClonadas = [];
             foreach ($original->items()->get() as $item) {
                 $nuevoItem = AlternativaItem::create([
                     'alternativa_id' => $nueva->id,
@@ -612,6 +613,16 @@ class AlternativaController extends Controller
                     'precio_convertido' => $item->precio_convertido,
                     'tip_afe_igv' => $item->tip_afe_igv,
                     'destino_tributario' => $item->destino_tributario,
+                    // Fila 13, fase 1b — línea de tour: la copia lleva cargas
+                    // propias (mismo agrupamiento, otro identificador), para
+                    // que mover o quitar en una alternativa no toque la otra.
+                    'carga_tour' => $item->carga_tour !== null ? ($cargasClonadas[$item->carga_tour] ??= (string) \Illuminate\Support\Str::uuid()) : null,
+                    'carga_combo' => $item->carga_combo !== null ? ($cargasClonadas[$item->carga_combo] ??= (string) \Illuminate\Support\Str::uuid()) : null,
+                    'combo_origen_id' => $item->combo_origen_id,
+                    'tour_linea' => $item->tour_linea,
+                    'temporada_id' => $item->temporada_id,
+                    'desglose_costo_snapshot' => $item->desglose_costo_snapshot,
+                    'precio_manual' => $item->precio_manual,
                 ]);
                 $itemsClonados[$item->id] = $nuevoItem;
 

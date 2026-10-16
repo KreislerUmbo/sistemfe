@@ -1,6 +1,6 @@
 // src/services/admin/cotizacionService.ts — Sesión 11b (cotizador)
 import httpClient from '@/helpers/http-client'
-import type { Cotizacion, CotizacionPasajero } from '@/types/agencia-viajes'
+import type { Cotizacion, CotizacionPasajero, TemporadaDesactualizada } from '@/types/agencia-viajes'
 
 export const cotizacionService = {
   async listar(params: {
@@ -33,7 +33,7 @@ export const cotizacionService = {
   // backend hace diff por id (no borra-y-recrea todo), y devuelve cuántos
   // ítems 'por_persona' recalculó solo vs. cuáles quedaron pendientes de
   // revisar a mano — ver CotizacionController::actualizarPasajeros().
-  async actualizarPasajeros(id: number, pasajeros: Array<Pick<CotizacionPasajero, 'edad'> & Partial<Pick<CotizacionPasajero, 'id'>>>) {
+  async actualizarPasajeros(id: number, pasajeros: Array<Pick<CotizacionPasajero, 'edad'> & Partial<Pick<CotizacionPasajero, 'id' | 'residencia'>>>) {
     const response = await httpClient.put(`/cotizaciones/${id}/pasajeros`, { pasajeros })
     return response.data as {
       code: number
@@ -53,7 +53,9 @@ export const cotizacionService = {
     fecha_viaje_hasta?: string | null
   }) {
     const response = await httpClient.put(`/cotizaciones/${id}`, data)
-    return response.data as { code: number; message: string; cotizacion: Cotizacion }
+    // temporadas_desactualizadas (fila 13, fase 1b, §3.12): tours que con la
+    // fecha nueva cayeron en otra temporada; solo aviso, no se recalculan solos.
+    return response.data as { code: number; message: string; cotizacion: Cotizacion; temporadas_desactualizadas?: TemporadaDesactualizada[] }
   },
   async eliminar(id: number) {
     const response = await httpClient.delete(`/cotizaciones/${id}`)

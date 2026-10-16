@@ -11,10 +11,16 @@ class CotizacionPasajero extends Model
 {
     protected $table = 'cotizacion_pasajeros';
 
+    public const RESIDENCIA_NACIONAL = 'nacional';
+    public const RESIDENCIA_EXTRANJERO = 'extranjero';
+
     protected $fillable = [
         'cotizacion_id',
         'tipo_pax',
         'edad',
+        // Fila 13, fase 1b (§3.3): solo cambia el precio del tour, no el IGV.
+        // No es la nacionalidad.
+        'residencia',
     ];
 
     protected $casts = [

@@ -19,6 +19,7 @@ use App\Models\AgenciaViajes\SalidaMayorista;
 use App\Models\AgenciaViajes\SalidaOperativa;
 use App\Models\Sale\Sale;
 use App\Services\AgenciaViajes\CodigoGeneradorService;
+use App\Services\AgenciaViajes\TourLineaService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -547,8 +548,17 @@ class ReservaController extends Controller
             // mayorista/guia/pasaje_aereo, que no tienen proveedor_tarifa).
             'tip_afe_igv' => $alternativaItem->tip_afe_igv,
             'destino_tributario' => $alternativaItem->destino_tributario,
+            // Fila 13, fase 1b (§3.9b, N14): la carga de tour (para la mezcla
+            // de IGV de la 1c y la salida de la fase 2) y la copia del costo
+            // por servicio, congelada al aceptar.
+            'carga_tour' => $alternativaItem->carga_tour,
+            'carga_combo' => $alternativaItem->carga_combo,
+            'desglose_costo_snapshot' => $alternativaItem->desglose_costo_snapshot,
         ]);
 
+        // La línea de tour todavía no se engancha a una Salida Operativa: eso
+        // es la fase 2 (C3). engancharSalidaOperativa() ya la deja fuera
+        // (solo origen_tipo=proveedor compartido).
         $this->engancharSalidaOperativa($reservaItem, $alternativaItem, $fechaCalculada);
 
         // pax_incluidos null/vacío = aplica a todos, no se crea ninguna
@@ -863,11 +873,18 @@ class ReservaController extends Controller
 
         $reserva->load(self::RELACIONES_DETALLE);
 
+        // Fila 13, fase 1b (§3.12): un tour que cae en otra temporada NO
+        // cambia de precio (ya se vendió); solo se avisa.
+        $avisosTemporada = app(TourLineaService::class)->avisosTemporadaReprogramacion(
+            $reserva->items()->with('alternativaItem.tourOrigen')->get()
+        );
+
         return response()->json(array_merge(
             [
                 'code' => 200,
                 'message' => 'Reserva reprogramada correctamente',
                 'items_no_tocados' => $itemsNoTocados,
+                'avisos_temporada' => $avisosTemporada,
             ],
             $this->respuestaDetalle($reserva)
         ));
@@ -1454,6 +1471,22 @@ class ReservaController extends Controller
         }
         if ($item->origen_tipo === AlternativaItem::ORIGEN_PASAJE_AEREO) {
             return $item->cotizacionPasajeAereo?->aerolinea ?? 'Pasaje aéreo';
+        }
+        // Fila 13, fase 1b — la línea de tour lleva el nombre del tour; si el
+        // Incluye mezcla IGV (una línea por grupo, N14), se aclara cuál es.
+        if ($item->origen_tipo === AlternativaItem::ORIGEN_TOUR) {
+            $nombre = $item->tourOrigen?->nombre ?? $item->tour_linea['tour_nombre'] ?? 'Tour';
+
+            if (($item->tour_linea['n_grupos'] ?? 1) > 1) {
+                $nombre .= match ($item->tip_afe_igv) {
+                    '10' => ' (gravado)',
+                    '20' => ' (exonerado)',
+                    '30' => ' (inafecto)',
+                    default => '',
+                };
+            }
+
+            return $nombre;
         }
         // Simulación Panamá (04-sep-2026) — bug real encontrado generando el
         // PDF real de la matriz de hoteles (Sesión M5): un ítem
