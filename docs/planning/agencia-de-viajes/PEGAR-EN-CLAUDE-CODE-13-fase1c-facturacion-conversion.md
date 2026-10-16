@@ -24,8 +24,9 @@
 - **Se mantiene todo lo demás:**
   - mezcla de servicios sueltos de distinto destino: sigue bloqueada;
   - `extranjero`: sigue bloqueado;
-  - Amazonía: sigue exigiendo la confirmación ítem por ítem (`motivo_override_tributario`). **Hallazgo 3 de la 1b:** un tour exonerado cargado como línea cae en esta regla. Decidir con el usuario si la confirmación se hace una vez por carga (todas sus líneas) en vez de línea por línea.
-- Pregunta abierta: ¿un combo (`carga_combo`) cuenta como una misma carga para la mezcla? D1 dice "una misma carga de tour"; confirmarlo antes de implementar.
+  - Amazonía: sigue exigiendo la confirmación ítem por ítem (`motivo_override_tributario`). **Hallazgo 3 de la 1b:** un tour exonerado cargado como línea cae en esta regla.
+- **D4 (16-oct-2026, usuario) — confirmación Amazonía de una línea de tour:** "por tour si todas sus líneas tienen el mismo IGV; línea por línea solo si hay mezcla de afectaciones". Con el modelo de la 1b, una carga tiene varias líneas **solo** cuando mezcla IGV; si no mezcla, es una sola línea. Así que la regla equivale a la de hoy (confirmar cada línea Amazonía): **no hace falta cambiar el mecanismo de confirmación**. Ver la explicación dada al usuario el 16-oct; si él quiso decir otra cosa, revisarlo antes de implementar.
+- **D5 (16-oct-2026, usuario) — combo:** cada tour del combo va como ítem separado; la mezcla de IGV en un solo comprobante se permite **solo entre líneas de la misma `carga_tour`**. Un combo (`carga_combo`) **no** cuenta como una sola carga para mezclar.
 
 ### Facturación por subgrupo de pasajeros con la línea de tour (C1)
 - Hoy una línea nunca se parte entre dos comprobantes. La línea de tour puede saber cuánto le toca a cada pasajero: `tour_linea.precios` × tipo y residencia del pasajero (la residencia está en `cotizacion_pasajeros`; **revisar si se copia a `reserva_pasajeros`** — la 1b no lo hizo — o si hay que mapear por el pasajero de cotización).
