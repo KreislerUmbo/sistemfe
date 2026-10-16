@@ -11,5 +11,11 @@ export const configuracionAgenciaService = {
   async actualizar(data: ConfiguracionAgencia) {
     const response = await httpClient.put('/configuracion-agencia', data)
     return response.data
+  },
+  // Fila 13, fase 1b (§5b) — solo el Super-Admin; el backend responde 403 a
+  // cualquier otro rol.
+  async actualizarModoTours(modo_tours: 'clasico' | 'nuevo') {
+    const response = await httpClient.put('/configuracion-agencia/modo-tours', { modo_tours })
+    return response.data as { configuracion_agencia: ConfiguracionAgencia }
   }
 }

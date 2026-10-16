@@ -44,12 +44,16 @@
                     <i class="fas fa-route me-1"></i>Itinerario
                 </a>
             </li>
-            <li class="nav-item">
+            <!-- Fila 13, fase 1b: en el tour simple, "Agregar Costos" y "Incluye y
+                 costos" eran dos pestañas sobre la misma lista
+                 (paquete_plantilla_items): quedan unidas en "Incluye y costos". El
+                 combo sigue con su pestaña de siempre. -->
+            <li class="nav-item" v-if="esCombo">
                 <a class="nav-link" :class="{ active: tabActiva === 'incluye' }" href="#" @click.prevent="tabActiva = 'incluye'">
                     <i class="fas fa-list-check me-1"></i>Agregar Costos
                 </a>
             </li>
-            <!-- Fila 13, fase 1a: costo por servicio, IGV, calculadora y precios por temporada -->
+            <!-- Fila 13, fase 1a/1b: biblioteca, costo por servicio, IGV, calculadora y precios por temporada -->
             <li class="nav-item" v-if="!esCombo">
                 <a class="nav-link" :class="{ active: tabActiva === 'costos' }" href="#" @click.prevent="tabActiva = 'costos'">
                     <i class="fas fa-calculator me-1"></i>Incluye y costos
@@ -58,16 +62,9 @@
         </ul>
 
         <!-- ═══ TAB: Incluye y costos (fila 13, fase 1a — solo tour simple) ═══ -->
-        <div v-if="tabActiva === 'costos' && paquete && !esCombo">
-            <div v-if="paquete.uso === 'solo_itinerario'" class="card border-0 shadow-sm">
-                <div class="card-body text-muted small">
-                    <i class="fas fa-info-circle me-1"></i>Este tour es "solo itinerario": no lleva precio, costo ni IGV. Para venderlo, cámbialo a "Para vender" en el tab Datos.
-                </div>
-            </div>
-            <div v-else class="d-flex flex-column gap-3">
-                <TourIncluyeCostos :paquete="paquete" :items="items" :costo-estimado="costoEstimado" :margen-minimo-agencia="margenMinimoAgencia"
-                    :tratamiento-default="tratamientoDefault" @actualizado="recargarCostos" />
-                <TourPreciosTemporada :paquete="paquete" @actualizado="cargarPaquete" />
+        <div v-if="tabActiva === 'costos' && paquete && !esCombo && paquete.uso === 'solo_itinerario'" class="card border-0 shadow-sm">
+            <div class="card-body text-muted small">
+                <i class="fas fa-info-circle me-1"></i>Este tour es "solo itinerario": no lleva precio, costo ni IGV. Para venderlo, cámbialo a "Para vender" en el tab Datos.
             </div>
         </div>
 
@@ -126,7 +123,8 @@
                                 :margen-minimo-tour="paquete.margen_minimo_pct != null ? Number(paquete.margen_minimo_pct) : null" :margen-minimo-agencia="margenMinimoAgencia" etiqueta="Margen estimado (adulto nacional)" />
                         </b-col>
                     </template>
-                    <b-col md="4"><p class="text-muted mb-1 fs-13"><i class="fas fa-calculator me-1"></i>Ajuste de redondeo</p><p class="mb-0 fw-semibold">{{ paquete.ajuste_redondeo != null ? `${Number(paquete.ajuste_redondeo) >= 0 ? '+' : ''}S/ ${Number(paquete.ajuste_redondeo).toFixed(2)}` : '—' }}</p></b-col>
+                    <!-- Fila 13, fase 1b (§5b): el ajuste de redondeo ya no se muestra en el tour simple. -->
+                    <b-col md="4" v-if="esCombo"><p class="text-muted mb-1 fs-13"><i class="fas fa-calculator me-1"></i>Ajuste de redondeo</p><p class="mb-0 fw-semibold">{{ paquete.ajuste_redondeo != null ? `${Number(paquete.ajuste_redondeo) >= 0 ? '+' : ''}S/ ${Number(paquete.ajuste_redondeo).toFixed(2)}` : '—' }}</p></b-col>
                     <b-col cols="12" v-if="paquete.descripcion"><div class="border-top pt-3"><p class="text-muted mb-1 fs-13">Descripción comercial</p><div class="small" v-html="paquete.descripcion"></div></div></b-col>
                     <b-col md="6" v-if="paquete.no_incluye"><div class="border-top pt-3"><p class="text-muted mb-1 fs-13">No incluye</p><div class="small" v-html="paquete.no_incluye"></div></div></b-col>
                     <b-col md="6" v-if="paquete.recomendaciones"><div class="border-top pt-3"><p class="text-muted mb-1 fs-13">Recomendaciones</p><div class="small" v-html="paquete.recomendaciones"></div></div></b-col>
@@ -166,7 +164,7 @@
                         <label class="form-label mb-1 small fw-semibold text-secondary">Duración (horas) *</label>
                         <b-form-input type="number" min="1" size="sm" v-model.number="formDatos.duracion_horas" />
                     </div>
-                    <div class="col-6 col-md-3">
+                    <div class="col-6 col-md-3" v-if="esCombo">
                         <label class="form-label mb-1 small fw-semibold text-secondary">Ajuste de redondeo (S/)</label>
                         <b-form-input type="number" step="0.01" size="sm" v-model.number="formDatos.ajuste_redondeo" placeholder="Ej. 6.34 para redondear hacia arriba" />
                         <div class="form-text small">Corrige la suma de ítems al total real que se cobra. Positivo o negativo. Se refleja como línea aparte en la cotización.</div>
@@ -445,9 +443,10 @@
         </div>
 
         <!-- ═══ TAB: Incluye (unificado tour_simple / paquete_combo) ═══ -->
-        <div v-if="tabActiva === 'incluye'" class="row g-3 av-incluye">
-            <!-- Columna principal -->
-            <div class="col-lg-8">
+        <div v-if="(tabActiva === 'incluye' && esCombo) || (tabActiva === 'costos' && !esCombo && paquete && paquete.uso !== 'solo_itinerario')" class="row g-3 av-incluye">
+            <!-- Columna principal (en el tour simple, todo el ancho: el resumen
+                 de costo y margen está en "Incluye y costos por persona") -->
+            <div :class="esCombo ? 'col-lg-8' : 'col-12'">
                 <!-- Panel: agregar ítem -->
                 <div class="card border-0 shadow-sm mb-3 av-add-panel">
                     <div class="card-header bg-white border-bottom py-2">
@@ -613,81 +612,17 @@
                     </div>
                 </div>
 
-                <!-- Ítems incluidos: tour_simple -->
-                <template v-if="!esCombo">
-                    <div class="card border-0 shadow-sm">
-                        <div class="card-header bg-white border-bottom py-2 d-flex justify-content-between align-items-center">
-                            <span class="fw-semibold text-dark small"><i class="fas fa-list-check text-primary me-1"></i>Ítems incluidos</span>
-                            <span class="badge bg-light text-dark border">{{ items.length }}</span>
-                        </div>
-                        <div class="card-body">
-                            <div v-if="itemsProveedor.length" class="av-group mb-3">
-                                <div class="av-group-title">Servicios de proveedor</div>
-                                <TransitionGroup tag="ul" name="av-fade" class="list-group list-group-flush">
-                                    <li v-for="item in itemsProveedor" :key="item.id" class="list-group-item small px-0 d-flex justify-content-between align-items-center gap-2">
-                                        <div class="d-flex align-items-start gap-2" style="min-width:0">
-                                            <i class="fas fa-concierge-bell text-info mt-1"></i>
-                                            <div style="min-width:0">
-                                                <div class="av-item-title">
-                                                    {{ tituloItemIncluido(item) }}
-                                                    <span v-if="item.proveedor_tarifa!.proveedor_servicio?.proveedor?.es_referencial" class="av-badge av-badge-muted">Referencial</span>
-                                                </div>
-                                                <div class="av-item-sub">{{ subtituloItemIncluido(item) }}</div>
-                                            </div>
-                                        </div>
-                                        <div class="d-flex align-items-center gap-2 flex-shrink-0">
-                                            <span class="av-badge av-badge-servicio">{{ categoriaItem(item) }}</span>
-                                            <div class="text-end" style="min-width:64px">
-                                                <div class="av-item-price">{{ monedaItem(item) }} {{ ventaItem(item).toFixed(2) }}</div>
-                                                <div class="av-item-cost">costo {{ monedaItem(item) }} {{ costoItem(item).toFixed(2) }}</div>
-                                            </div>
-                                            <button type="button" class="btn btn-sm btn-link text-danger p-0" @click="quitarItem(item)" :disabled="eliminandoItemId === item.id">
-                                                <span v-if="eliminandoItemId === item.id" class="spinner-border spinner-border-sm"></span>
-                                                <i v-else class="fas fa-trash-can"></i>
-                                            </button>
-                                        </div>
-                                    </li>
-                                </TransitionGroup>
-                            </div>
-
-                            <div v-if="itemsGuia.length" class="av-group">
-                                <div class="av-group-title">Guías de turismo</div>
-                                <TransitionGroup tag="ul" name="av-fade" class="list-group list-group-flush">
-                                    <li v-for="item in itemsGuia" :key="item.id" class="list-group-item small px-0 d-flex justify-content-between align-items-center gap-2">
-                                        <div class="d-flex align-items-start gap-2" style="min-width:0">
-                                            <i class="fas fa-user-tie text-warning mt-1"></i>
-                                            <div style="min-width:0">
-                                                <div class="av-item-title">
-                                                    {{ tituloItemIncluido(item) }}
-                                                    <span v-if="item.guia_tarifa!.guia?.es_referencial" class="av-badge av-badge-muted">Referencial</span>
-                                                </div>
-                                                <div class="av-item-sub">{{ subtituloItemIncluido(item) }}</div>
-                                            </div>
-                                        </div>
-                                        <div class="d-flex align-items-center gap-2 flex-shrink-0">
-                                            <span class="av-badge av-badge-servicio">{{ categoriaItem(item) }}</span>
-                                            <div class="text-end" style="min-width:64px">
-                                                <div class="av-item-price">{{ monedaItem(item) }} {{ ventaItem(item).toFixed(2) }}</div>
-                                                <div class="av-item-cost">costo {{ monedaItem(item) }} {{ costoItem(item).toFixed(2) }}</div>
-                                            </div>
-                                            <button type="button" class="btn btn-sm btn-link text-danger p-0" @click="quitarItem(item)" :disabled="eliminandoItemId === item.id">
-                                                <span v-if="eliminandoItemId === item.id" class="spinner-border spinner-border-sm"></span>
-                                                <i v-else class="fas fa-trash-can"></i>
-                                            </button>
-                                        </div>
-                                    </li>
-                                </TransitionGroup>
-                            </div>
-
-                            <div v-if="items.length === 0" class="text-muted fst-italic text-center py-4">
-                                Este paquete/tour todavía no tiene ítems incluidos.
-                            </div>
-                        </div>
-                    </div>
-                </template>
+                <!-- Fila 13, fase 1b: tour simple — una sola lista del Incluye con costo
+                     por persona, IGV, calculadora, servicio sin tarifa y quitar. La venta
+                     de cada tarifa queda solo como referencia (la usa el modo clásico). -->
+                <div v-if="!esCombo && paquete" class="d-flex flex-column gap-3">
+                    <TourIncluyeCostos :paquete="paquete" :items="items" :costo-estimado="costoEstimado" :margen-minimo-agencia="margenMinimoAgencia"
+                        :tratamiento-default="tratamientoDefault" @actualizado="recargarCostos" />
+                    <TourPreciosTemporada :paquete="paquete" @actualizado="cargarPaquete" />
+                </div>
 
                 <!-- Ítems incluidos: paquete_combo -->
-                <template v-else>
+                <template v-if="esCombo">
                     <TransitionGroup tag="div" name="av-fade" class="d-flex flex-column gap-2 mb-2">
                         <div v-for="grupo in itemsPorTourAgrupados" :key="grupo.item.id" class="card border-0 shadow-sm av-tour-card">
                             <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center py-2" style="cursor:pointer" @click="toggleExpandido(grupo.item.paquete_plantilla_hijo_id!)">
@@ -772,62 +707,10 @@
             </div>
 
             <!-- Columna sticky: resumen de precio -->
-            <div class="col-lg-4">
+            <div class="col-lg-4" v-if="esCombo">
                 <div class="av-summary-sticky">
-                    <!-- Resumen: tour_simple -->
-                    <div v-if="!esCombo" class="card border-0 shadow-sm">
-                        <div class="card-header bg-white border-bottom py-2">
-                            <span class="fw-semibold text-dark small"><i class="fas fa-coins text-primary me-1"></i>Resumen</span>
-                        </div>
-                        <div class="card-body">
-                            <template v-if="items.length">
-                                <div class="d-flex justify-content-between small mb-2">
-                                    <span class="text-muted">Costo total</span><span class="fw-semibold">S/ {{ totalesIncluye.costoTotal.toFixed(2) }}</span>
-                                </div>
-                                <div class="d-flex justify-content-between small mb-2">
-                                    <span class="text-muted">Venta total</span><span class="fw-semibold">S/ {{ totalesIncluye.ventaTotal.toFixed(2) }}</span>
-                                </div>
-                                <div v-if="totalesIncluye.ajusteRedondeo !== null" class="d-flex justify-content-between small mb-2">
-                                    <span class="text-muted">Ajuste de redondeo <span class="fst-italic">(tab Datos)</span></span>
-                                    <span class="fw-semibold" :class="totalesIncluye.ajusteRedondeo >= 0 ? 'text-success' : 'text-danger'">
-                                        {{ totalesIncluye.ajusteRedondeo >= 0 ? '+' : '' }}S/ {{ totalesIncluye.ajusteRedondeo.toFixed(2) }}
-                                    </span>
-                                </div>
-                                <div v-if="totalesIncluye.ajusteRedondeo !== null" class="d-flex justify-content-between align-items-center small mb-2">
-                                    <span class="text-muted fw-semibold">Total final (lo que se cobra)</span><span class="fw-bold text-primary">S/ {{ totalesIncluye.ventaFinal.toFixed(2) }}</span>
-                                </div>
-                                <div class="d-flex justify-content-between align-items-center border-top pt-2 mb-2">
-                                    <span class="text-muted small">Margen</span>
-                                    <span class="fs-5 fw-bold" :class="totalesIncluye.margenResultantePct >= margenMinimoAceptablePct ? 'text-success' : 'text-danger'">
-                                        {{ totalesIncluye.margenResultantePct.toFixed(1) }}%
-                                    </span>
-                                </div>
-                                <div v-if="desglosePorCategoria.length" class="border-top pt-2">
-                                    <div class="d-flex justify-content-between small mb-1" v-for="cat in desglosePorCategoria" :key="cat.categoria"
-                                        :class="cat.categoria === 'Sin categoría' ? 'text-warning-emphasis' : 'text-muted'">
-                                        <span>{{ cat.categoria }}</span><span>S/ {{ cat.venta.toFixed(2) }}</span>
-                                    </div>
-                                    <div v-if="hayItemsSinCategoria" class="small text-muted fst-italic mt-1">
-                                        <i class="fas fa-circle-info me-1"></i>Asignale un tipo a tus servicios en
-                                        <router-link to="/agencia-viajes/destinos">Destinos → Servicios asociados</router-link>
-                                        para un desglose más preciso.
-                                    </div>
-                                </div>
-                                <div v-if="diferenciaVentaFinal !== null" class="alert alert-warning small mt-3 mb-0 py-2">
-                                    <i class="fas fa-triangle-exclamation me-1"></i>
-                                    El "Precio venta (desde)" de catálogo (S/ {{ Number(paquete!.precio_venta_final).toFixed(2) }}) no coincide con la
-                                    suma de ítems (diferencia: S/ {{ diferenciaVentaFinal.toFixed(2) }}). Es solo informativo — no afecta el total real
-                                    de la cotización. Si querés cobrar un número redondo, usá "Ajuste de redondeo" en el tab Datos.
-                                </div>
-                            </template>
-                            <div v-else class="text-muted small text-center py-3 fst-italic">
-                                Agregá ítems para ver el resumen de costos y margen.
-                            </div>
-                        </div>
-                    </div>
-
                     <!-- Resumen: paquete_combo -->
-                    <div v-else class="card border-0 shadow-sm">
+                    <div class="card border-0 shadow-sm">
                         <div class="card-header bg-white border-bottom py-2">
                             <span class="fw-semibold text-dark small"><i class="fas fa-coins text-primary me-1"></i>Precio del combo</span>
                         </div>

@@ -225,7 +225,7 @@ class ReporteOperativoController extends Controller
                 'alternativaItem.proveedorTarifa.proveedorServicio.destinoServicio.servicio',
                 'alternativaItem.proveedorTarifa.proveedorServicio.proveedor',
                 'alternativaItem.cotizacionPasajeAereo',
-                'tourOrigen',
+                'tourOrigen.destinoAtractivo',
                 'guia',
                 // Un ítem origen_tipo='guia' puede estar enganchado a una Salida
                 // Operativa (tablero de despacho, SalidaOperativaController::
@@ -286,7 +286,12 @@ class ReporteOperativoController extends Controller
         $query = $this->queryItemsDelRango($fechaDesde, $fechaHasta);
         $this->aplicarFiltrosDimension($query, $request);
 
-        $items = $query->orderBy('fecha')->orderBy('hora')->get();
+        $items = $query->orderBy('fecha')->orderBy('hora')->get()
+            // Fila 13, fase 1b: un tour con IGV mezclado son varias líneas de
+            // una misma carga (una por IGV), pero en la operación es UN tour:
+            // una sola fila por pasajero.
+            ->unique(fn (ReservaItem $i) => $i->carga_tour ?? 'item_'.$i->id)
+            ->values();
 
         // Mapa de check-in existente, cargado en una sola query — evita N+1 dentro del
         // loop de abajo. La mayoría de reserva_items no tiene vinculo_especifico, así
@@ -438,7 +443,11 @@ class ReporteOperativoController extends Controller
                 'fecha' => $vueloAgencia->vuelo_fecha_vuelta,
                 'hora' => $vueloAgencia->vuelo_hora_vuelta,
             ] : null,
-            'servicio' => $alternativaItem ? ReservaController::resolverNombreItem($alternativaItem) : 'Servicio',
+            // Línea de tour (fila 13, fase 1b): el nombre del tour, sin el
+            // "(gravado)/(exonerado)" de facturación (acá es una sola fila).
+            'servicio' => $alternativaItem?->esLineaTour()
+                ? ($item->tourOrigen?->nombre ?? ReservaController::resolverNombreItem($alternativaItem))
+                : ($alternativaItem ? ReservaController::resolverNombreItem($alternativaItem) : 'Servicio'),
             'servicio_id' => $destinoServicio?->servicio_id,
             // Categoría amplia del servicio (ej. "Transporte", "Entrada"), a
             // diferencia de 'servicio' de arriba que es el nombre completo
@@ -450,7 +459,7 @@ class ReporteOperativoController extends Controller
             // usado para agrupar por Tour en la vista jerárquica.
             'tour_origen_id' => $item->tour_origen_id,
             'tour_origen_nombre' => $item->tourOrigen?->nombre,
-            'destino' => $destinoServicio?->destinoAtractivo?->nombre,
+            'destino' => $destinoServicio?->destinoAtractivo?->nombre ?? ($alternativaItem?->esLineaTour() ? $item->tourOrigen?->destinoAtractivo?->nombre : null),
             // Sesión 11d (mejora post-11d) — nombre del proveedor asignado a CUALQUIER
             // ítem origen_tipo='proveedor' (antes solo se exponía para hoteles vía
             // 'hotel'). El reporte necesita mostrarlo para poder reasignarlo inline —
@@ -801,6 +810,7 @@ class ReporteOperativoController extends Controller
             AlternativaItem::ORIGEN_MANUAL => 'Ítem manual',
             AlternativaItem::ORIGEN_MAYORISTA => 'Paquete mayorista',
             AlternativaItem::ORIGEN_GUIA => 'Guía',
+            AlternativaItem::ORIGEN_TOUR => 'Tour',
             default => 'Otros servicios',
         };
     }

@@ -42,6 +42,11 @@
                         <span class="badge" :class="tipoPorEdadEdicion(pax.edad).clase" style="min-width:70px">{{ tipoPorEdadEdicion(pax.edad).label }}</span>
                         <label class="text-muted mb-0">Edad</label>
                         <input type="number" class="form-control form-control-sm" style="max-width:80px" v-model.number="pax.edad" min="0" max="120">
+                        <!-- Fila 13, fase 1b (§3.3): residencia, solo para el precio del tour. -->
+                        <select class="form-select form-select-sm" style="max-width:130px" v-model="pax.residencia" title="Residencia (precio del tour)">
+                            <option value="nacional">Nacional</option>
+                            <option value="extranjero">Extranjero</option>
+                        </select>
                         <span v-if="!pax.id" class="badge bg-info-subtle text-info">nuevo</span>
                         <i class="fas fa-times text-danger ms-auto" style="cursor:pointer" @click="formPasajeros.splice(idx, 1)"></i>
                     </div>
@@ -300,6 +305,20 @@
                     </div>
                 </div>
 
+                <!-- Fila 13, fase 1b (§3.12) — la fecha cambió y algún tour quedó en
+                     otra temporada: solo aviso, recalcular es a pedido del vendedor. -->
+                <div v-if="temporadasDesactualizadas.length" class="alert alert-warning py-2 px-3 small mb-2 d-flex justify-content-between align-items-center gap-2 flex-wrap">
+                    <span>
+                        <i class="fas fa-calendar-alt me-1"></i><strong>Las fechas cambiaron de temporada:</strong>
+                        <span v-for="(t, idx) in temporadasDesactualizadas" :key="t.carga_tour">
+                            {{ idx > 0 ? '; ' : ' ' }}{{ t.tour_nombre }} ({{ t.temporada_actual ?? 'precio base' }} → {{ t.temporada_nueva ?? 'precio base' }}){{ t.precio_manual ? ' — precio a mano, no se toca' : '' }}
+                        </span>
+                    </span>
+                    <button class="btn btn-sm btn-warning" @click="recalcularTemporadas" :disabled="recalculandoTemporadas">
+                        <span v-if="recalculandoTemporadas" class="spinner-border spinner-border-sm me-1"></span>Recalcular precios por temporada
+                    </button>
+                </div>
+
                 <div class="card border-0 shadow-sm">
                     <div class="card-body">
                         <div v-if="bloquesLienzo.length === 0 && mostrarTabsDia && diasDesdeCombo.has(diaActivo)" class="drop-hint text-center text-muted py-4 border rounded" style="border-style:dashed">
@@ -310,9 +329,67 @@
                             Agregá un servicio con el botón de arriba
                         </div>
 
-                        <div v-for="bloque in bloquesLienzo" :key="bloque.tourOrigenId ?? 'sueltos'" class="mb-3"
+                        <div v-for="bloque in bloquesLienzo" :key="bloque.clave" class="mb-3"
                             :class="{ 'border-start border-3 border-primary bg-light-subtle rounded-2 p-2': bloque.tourOrigenId }">
-                            <div v-if="bloque.tourOrigenId" class="d-flex justify-content-between align-items-center mb-1">
+                            <!-- Fila 13, fase 1b — línea de tour (modo nuevo): una carga =
+                                 un tour, con una línea por grupo de IGV. Precio del tour
+                                 completo editable; se mueve y se quita entera. -->
+                            <template v-if="bloque.carga">
+                                <div class="d-flex justify-content-between align-items-center mb-1 flex-wrap gap-1">
+                                    <span class="small fw-semibold text-dark">
+                                        <i class="fas fa-route me-1 text-primary"></i>{{ bloque.tourNombre ?? 'Tour' }}
+                                        <span v-if="bloque.comboNombre" class="badge bg-primary-subtle text-primary ms-1" style="font-size:10px"><i class="fas fa-layer-group me-1"></i>Combo {{ bloque.comboNombre }}</span>
+                                        <span class="badge ms-1" :class="temporadaDeCarga(bloque) ? 'bg-warning-subtle text-warning-emphasis' : 'bg-light text-dark border'" style="font-size:10px"
+                                            :title="bloque.items[0]?.tour_linea?.fecha_tour ? `Día del tour: ${formatFecha(bloque.items[0].tour_linea.fecha_tour)}` : 'La cotización no tiene fecha de viaje'">
+                                            <i class="fas fa-calendar-alt me-1"></i>{{ temporadaDeCarga(bloque) ?? 'Precio base' }}
+                                        </span>
+                                        <span v-if="bloque.items.some((i) => i.precio_manual)" class="badge bg-secondary-subtle text-secondary ms-1" style="font-size:10px"><i class="fas fa-pen me-1"></i>Precio a mano</span>
+                                    </span>
+                                    <span class="d-flex align-items-center gap-2">
+                                        <select v-if="mostrarTabsDia && !lineaTourBloqueada(bloque)" class="form-select form-select-sm" style="width:auto;font-size:11px" :value="diaActivo" @change="onMoverCarga(bloque, $event)">
+                                            <option v-for="d in diasCreados" :key="d" :value="d">{{ bloque.cargaCombo ? 'Mover combo a' : 'Mover a' }} Día {{ d }}</option>
+                                            <option :value="diaSiguiente">Mover a Día {{ diaSiguiente }} (nuevo)</option>
+                                        </select>
+                                        <span v-if="eliminandoCarga === bloque.carga" class="spinner-border spinner-border-sm text-danger"></span>
+                                        <i v-else-if="!lineaTourBloqueada(bloque)" class="fas fa-trash text-danger" style="cursor:pointer" title="Quitar el tour" @click="eliminarCargaTour(bloque)"></i>
+                                    </span>
+                                </div>
+                                <div class="canvas-item border rounded p-2 small bg-white">
+                                    <div v-if="desglosePrecioTour(bloque)" class="text-muted" style="font-size:11px">
+                                        <i class="fas fa-users me-1"></i>{{ desglosePrecioTour(bloque) }}
+                                    </div>
+                                    <div class="d-flex align-items-end flex-wrap gap-2 mt-1">
+                                        <div class="d-flex flex-column">
+                                            <label class="form-label mb-0 text-muted" style="font-size:10px">Precio del tour</label>
+                                            <div class="input-group input-group-sm" style="width:auto">
+                                                <span class="input-group-text">{{ alternativaActiva.moneda_cotizacion }}</span>
+                                                <input type="number" step="0.01" min="0" class="form-control" style="max-width:120px"
+                                                    :value="subtotalGrupo(bloque.items).toFixed(2)" :disabled="lineaTourBloqueada(bloque) || guardandoPrecioCarga === bloque.carga"
+                                                    @change="onPrecioCarga(bloque, $event)">
+                                                <span v-if="guardandoPrecioCarga === bloque.carga" class="input-group-text"><span class="spinner-border spinner-border-sm"></span></span>
+                                            </div>
+                                        </div>
+                                        <div class="d-flex flex-column gap-1">
+                                            <span v-for="linea in bloque.items" :key="linea.id" class="d-flex align-items-center gap-1" style="font-size:11px">
+                                                <span v-if="badgeTratamientoTributario(linea)" class="badge" :class="badgeTratamientoTributario(linea)!.clase" style="font-size:10px">{{ badgeTratamientoTributario(linea)!.texto }}</span>
+                                                <span v-if="bloque.items.length > 1" class="text-muted">{{ alternativaActiva.moneda_cotizacion }} {{ totalConvertidoLocal(linea).toFixed(2) }}</span>
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <a v-if="incluyeDeCarga(bloque).length" href="#" class="d-inline-block mt-1" style="font-size:11px" @click.prevent="toggleIncluye(bloque.carga)">
+                                        <i class="fas me-1" :class="incluyeAbierto.has(bloque.carga) ? 'fa-chevron-up' : 'fa-chevron-down'"></i>Incluye ({{ incluyeDeCarga(bloque).length }})
+                                    </a>
+                                    <ul v-if="incluyeAbierto.has(bloque.carga)" class="list-unstyled mb-0 mt-1 text-muted" style="font-size:11px">
+                                        <li v-for="servicio in incluyeDeCarga(bloque)" :key="servicio.paquete_plantilla_item_id">
+                                            <i class="fas fa-check me-1 text-success"></i>{{ servicio.servicio }}
+                                            <span v-if="servicio.costo_persona != null"> · costo {{ bloque.items[0].moneda_costo }} {{ Number(servicio.costo_persona).toFixed(2) }}/pax</span>
+                                        </li>
+                                    </ul>
+                                    <span v-if="lineaTourBloqueada(bloque)" class="d-block text-muted fst-italic mt-1" style="font-size:11px"><i class="fas fa-lock me-1"></i>Ya tiene una reserva generada</span>
+                                </div>
+                            </template>
+
+                            <div v-if="bloque.tourOrigenId && !bloque.carga" class="d-flex justify-content-between align-items-center mb-1">
                                 <span class="small fw-semibold text-dark"><i class="fas fa-route me-1 text-primary"></i>{{ bloque.tourNombre ?? 'Tour' }}</span>
                                 <span class="d-flex align-items-center gap-2">
                                     <select v-if="mostrarTabsDia" class="form-select form-select-sm" style="width:auto;font-size:11px" :value="diaActivo" @change="onMoverBloque(bloque, $event)">
@@ -324,7 +401,7 @@
                                 </span>
                             </div>
 
-                            <template v-for="fila in filasDelBloque(bloque.items)" :key="fila.esGrupo ? fila.grupoId : fila.item.id">
+                            <template v-for="fila in (bloque.carga ? [] : filasDelBloque(bloque.items))" :key="fila.esGrupo ? fila.grupoId : fila.item.id">
                             <!-- Sesión M4 — grupo "comparar varias opciones": una tarjeta
                                  compacta con las N opciones y el botón de resolución, en
                                  vez de N tarjetas de ítem sueltas (ver filasDelBloque()). -->
@@ -512,7 +589,7 @@
                                         </span>
                                     </div>
                                     <div v-if="destinosExpandido.has(bloqueDestino.destinoId)" class="ms-2 mt-1">
-                                        <div v-for="grupo in bloqueDestino.grupos" :key="grupo.tourOrigenId ?? 'sueltos'" class="mb-2 pb-1">
+                                        <div v-for="grupo in bloqueDestino.grupos" :key="grupo.clave" class="mb-2 pb-1">
                                             <template v-if="grupo.tourOrigenId">
                                                 <div class="d-flex justify-content-between align-items-center" style="cursor:pointer" @click="toggleGrupoExpandido(grupo.tourOrigenId)">
                                                     <span class="fw-semibold"><i class="fas fa-route me-1 text-primary"></i>{{ grupo.tourNombre ?? 'Tour' }}</span>
@@ -548,7 +625,7 @@
                                 </div>
                             </template>
                             <template v-else>
-                                <div v-for="grupo in gruposPrecioPanel" :key="grupo.tourOrigenId ?? 'sueltos'" class="mb-2 pb-2 border-bottom">
+                                <div v-for="grupo in gruposPrecioPanel" :key="grupo.clave" class="mb-2 pb-2 border-bottom">
                                     <template v-if="grupo.tourOrigenId">
                                         <div class="d-flex justify-content-between align-items-center" style="cursor:pointer" @click="toggleGrupoExpandido(grupo.tourOrigenId)">
                                             <span class="fw-semibold"><i class="fas fa-route me-1 text-primary"></i>{{ grupo.tourNombre ?? 'Tour' }}</span>
@@ -785,6 +862,13 @@
                                             </div>
                                             <div class="text-muted" style="font-size:11px">
                                                 {{ etiquetaCategoriaPaquete(fila.data.categoria) }}<span v-if="fila.data.codigo"> · {{ fila.data.codigo }}</span>
+                                            </div>
+                                            <!-- Fila 13, fase 1b — precio por persona del tour y los que no
+                                                 se pueden cargar como línea en el modo nuevo. -->
+                                            <div v-if="fila.data.tipo_resultado === 'tour'" class="mt-1" style="font-size:11px">
+                                                <span v-if="fila.data.uso === 'solo_itinerario'" class="badge bg-secondary-subtle text-secondary">Solo itinerario (mayorista)</span>
+                                                <span v-else-if="fila.data.precio_venta_final != null" class="fw-semibold">{{ fila.data.moneda ?? 'PEN' }} {{ Number(fila.data.precio_venta_final).toFixed(2) }} <span class="text-muted fw-normal">por persona</span></span>
+                                                <span v-else-if="modoToursNuevo" class="badge bg-warning-subtle text-warning-emphasis"><i class="fas fa-triangle-exclamation me-1"></i>Sin precio: complétalo en el catálogo</span>
                                             </div>
                                         </template>
                                     </div>
@@ -1282,7 +1366,7 @@ import { useAgenciaViajesCatalogosStore } from '@/stores/agenciaViajesCatalogos'
 import { formatFecha, formatFechaHora, sumarDiasISO } from '@/helpers/fecha';
 import { guiaService } from '@/services/admin/guiaService';
 import { tipoCambioAgenciaService } from '@/services/admin/tipoCambioAgenciaService';
-import type { Cotizacion, Alternativa, AlternativaItem, ProveedorTarifa, OpcionMayorista, OpcionMayoristaTour, OpcionMayoristaOpcional, OpcionHotelTarifa, Proveedor, ProveedorTipo, BibliotecaResultado, ConfiguracionAgencia, DestinoServicio, Guia, GuiaTarifa, Servicio, TipAfeIgv, DestinoTributario } from '@/types/agencia-viajes';
+import type { Cotizacion, Alternativa, AlternativaItem, ProveedorTarifa, OpcionMayorista, OpcionMayoristaTour, OpcionMayoristaOpcional, OpcionHotelTarifa, Proveedor, ProveedorTipo, BibliotecaResultado, ConfiguracionAgencia, DestinoServicio, Guia, GuiaTarifa, Servicio, TipAfeIgv, DestinoTributario, TemporadaDesactualizada } from '@/types/agencia-viajes';
 import type { Client } from '@/types/clients';
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
@@ -1485,7 +1569,7 @@ const guardarCabecera = async () => {
 const hayAlternativaAceptada = computed(() => (cotizacion.value?.alternativas ?? []).some((a) => a.estado === 'aceptada'));
 
 const editandoPasajeros = ref(false);
-const formPasajeros = ref<Array<{ id?: number; edad: number }>>([]);
+const formPasajeros = ref<Array<{ id?: number; edad: number; residencia: 'nacional' | 'extranjero' }>>([]);
 const guardandoPasajeros = ref(false);
 
 const tipoPorEdadEdicion = (edad: number) => {
@@ -1496,12 +1580,12 @@ const tipoPorEdadEdicion = (edad: number) => {
 
 const abrirEdicionPasajeros = () => {
     if (!cotizacion.value) return;
-    formPasajeros.value = (cotizacion.value.pasajeros ?? []).map((p) => ({ id: p.id, edad: p.edad }));
+    formPasajeros.value = (cotizacion.value.pasajeros ?? []).map((p) => ({ id: p.id, edad: p.edad, residencia: p.residencia ?? 'nacional' }));
     editandoPasajeros.value = true;
 };
 
 const agregarPaxEdicion = (edadSugerida: number) => {
-    formPasajeros.value.push({ edad: edadSugerida });
+    formPasajeros.value.push({ edad: edadSugerida, residencia: 'nacional' });
 };
 
 const guardarPasajeros = async () => {
@@ -1543,6 +1627,7 @@ const cargarCotizacion = async () => {
     }
     inicializarEdicionItems();
     resolverDestinoActivo();
+    cargarTemporadasTours();
     inicializarDias();
 };
 
@@ -1982,27 +2067,195 @@ const itemsVisiblesLienzo = computed(() => (mostrarTabsDia.value ? itemsDelDiaAc
 // ("sueltos") van en un bloque final sin encabezado. Compartido por el
 // lienzo (solo el día activo, o todo en modo simple) y por el panel de
 // precio (siempre TODOS los días) — un solo lugar que arma el agrupamiento.
-type BloqueItem = { tourOrigenId: number | null; tourNombre: string | null; items: AlternativaItem[] };
+// Fila 13, fase 1b: la línea de tour del modo nuevo (origen_tipo='tour') se
+// agrupa por su carga (carga_tour: una carga = un tour cargado, con una línea
+// por grupo de IGV), no por tour_origen_id — dos cargas del mismo tour son dos
+// bloques, y un bloque clásico del mismo tour no se mezcla con la línea nueva.
+// clave: identificador estable para :key (antes tourOrigenId, que ahora puede
+// repetirse entre un bloque clásico y una carga).
+type BloqueItem = {
+    clave: string;
+    tourOrigenId: number | null;
+    tourNombre: string | null;
+    items: AlternativaItem[];
+    carga: string | null;
+    cargaCombo: string | null;
+    comboNombre: string | null;
+};
 
 const agruparPorTour = (items: AlternativaItem[]): BloqueItem[] => {
-    const bloques = new Map<number, BloqueItem>();
+    const bloques = new Map<string, BloqueItem>();
     const sueltos: AlternativaItem[] = [];
 
     for (const item of items) {
-        if (item.tour_origen_id) {
-            if (!bloques.has(item.tour_origen_id)) {
-                bloques.set(item.tour_origen_id, { tourOrigenId: item.tour_origen_id, tourNombre: item.tour_origen?.nombre ?? null, items: [] });
+        if (item.origen_tipo === 'tour' && item.carga_tour) {
+            const clave = `carga-${item.carga_tour}`;
+            if (!bloques.has(clave)) {
+                bloques.set(clave, {
+                    clave,
+                    tourOrigenId: item.tour_origen_id ?? null,
+                    tourNombre: item.tour_origen?.nombre ?? item.tour_linea?.tour_nombre ?? null,
+                    items: [],
+                    carga: item.carga_tour,
+                    cargaCombo: item.carga_combo ?? null,
+                    comboNombre: item.tour_linea?.combo?.nombre ?? null,
+                });
             }
-            bloques.get(item.tour_origen_id)!.items.push(item);
+            bloques.get(clave)!.items.push(item);
+        } else if (item.tour_origen_id) {
+            const clave = `tour-${item.tour_origen_id}`;
+            if (!bloques.has(clave)) {
+                bloques.set(clave, { clave, tourOrigenId: item.tour_origen_id, tourNombre: item.tour_origen?.nombre ?? null, items: [], carga: null, cargaCombo: null, comboNombre: null });
+            }
+            bloques.get(clave)!.items.push(item);
         } else {
             sueltos.push(item);
         }
     }
 
     const resultado = Array.from(bloques.values());
-    if (sueltos.length) resultado.push({ tourOrigenId: null, tourNombre: null, items: sueltos });
+    if (sueltos.length) resultado.push({ clave: 'sueltos', tourOrigenId: null, tourNombre: null, items: sueltos, carga: null, cargaCombo: null, comboNombre: null });
 
     return resultado;
+};
+
+// ── Línea de tour (fila 13, fase 1b) ─────────────────────────────────────
+const lineaTourBloqueada = (bloque: BloqueItem) =>
+    alternativaActiva.value?.estado === 'aceptada' || bloque.items.some((i) => !!i.reserva_item);
+
+// Temporada aplicada a la carga (null = precio base).
+const temporadaDeCarga = (bloque: BloqueItem) => bloque.items[0]?.tour_linea?.temporada_nombre ?? null;
+
+// "2 adultos × PEN 150.00 + 1 niño × PEN 130.00", con los precios con que se
+// cotizó la línea (tour_linea.precios) y la residencia de cada pasajero.
+const desglosePrecioTour = (bloque: BloqueItem): string | null => {
+    const linea = bloque.items[0];
+    const precios = linea?.tour_linea?.precios;
+    if (!precios) return null;
+
+    const pax = cotizacion.value?.pasajeros ?? [];
+    const moneda = linea.moneda_costo;
+    const tipos: Array<{ clave: 'adulto' | 'nino' | 'adulto_ext' | 'nino_ext'; tipo: 'adulto' | 'nino'; ext: boolean; etiqueta: string }> = [
+        { clave: 'adulto', tipo: 'adulto', ext: false, etiqueta: 'adulto' },
+        { clave: 'nino', tipo: 'nino', ext: false, etiqueta: 'niño' },
+        { clave: 'adulto_ext', tipo: 'adulto', ext: true, etiqueta: 'adulto extranjero' },
+        { clave: 'nino_ext', tipo: 'nino', ext: true, etiqueta: 'niño extranjero' },
+    ];
+    const partes = tipos.flatMap((t) => {
+        const n = pax.filter((p) => p.tipo_pax === t.tipo && (p.residencia === 'extranjero') === t.ext).length;
+        return n > 0 ? [`${n} ${t.etiqueta}${n > 1 ? 's' : ''} × ${moneda} ${Number(precios[t.clave]).toFixed(2)}`] : [];
+    });
+    const infantes = pax.filter((p) => p.tipo_pax === 'infante').length;
+    if (infantes) partes.push(`${infantes} infante${infantes > 1 ? 's' : ''} sin costo`);
+
+    return partes.length ? partes.join(' + ') : null;
+};
+
+// Incluye del tour con el costo por persona copiado al cotizar.
+const incluyeDeCarga = (bloque: BloqueItem) => bloque.items.flatMap((i) => i.desglose_costo_snapshot ?? []);
+const incluyeAbierto = ref<Set<string>>(new Set());
+const toggleIncluye = (carga: string) => {
+    if (incluyeAbierto.value.has(carga)) incluyeAbierto.value.delete(carga);
+    else incluyeAbierto.value.add(carga);
+};
+
+const guardandoPrecioCarga = ref<string | null>(null);
+const onPrecioCarga = async (bloque: BloqueItem, event: Event) => {
+    const precio = Number((event.target as HTMLInputElement).value);
+    if (!alternativaActiva.value || !bloque.carga || Number.isNaN(precio) || precio < 0) return;
+    if (Math.abs(precio - subtotalGrupo(bloque.items)) < 0.005) return;
+
+    guardandoPrecioCarga.value = bloque.carga;
+    try {
+        await alternativaItemService.precioCarga(alternativaActiva.value.id, bloque.carga, precio);
+        await cargarCotizacion();
+        toast.success('Precio del tour actualizado');
+    } catch (error: any) {
+        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo cambiar el precio', 'error');
+    } finally {
+        guardandoPrecioCarga.value = null;
+    }
+};
+
+// Un combo se mueve entero (conserva la distancia entre sus días).
+const onMoverCarga = async (bloque: BloqueItem, event: Event) => {
+    const valor = Number((event.target as HTMLSelectElement).value);
+    const carga = bloque.cargaCombo ?? bloque.carga;
+    if (!alternativaActiva.value || !carga || !valor || valor === diaActivo.value) return;
+    try {
+        await alternativaItemService.moverCarga(alternativaActiva.value.id, { carga, dia_referencial: valor });
+        await cargarCotizacion();
+    } catch (error: any) {
+        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo mover el tour', 'error');
+    }
+};
+
+const eliminandoCarga = ref<string | null>(null);
+const eliminarCargaTour = async (bloque: BloqueItem) => {
+    if (!alternativaActiva.value || !bloque.carga) return;
+
+    const confirmacion = await (Swal as TVueSwalInstance).fire({
+        title: `¿Quitar "${bloque.tourNombre ?? 'este tour'}"?`,
+        text: bloque.cargaCombo ? `Es parte del combo "${bloque.comboNombre}": podés quitar solo este tour o el combo entero.` : 'Se quita el tour de esta alternativa.',
+        icon: 'warning',
+        showCancelButton: true,
+        showDenyButton: !!bloque.cargaCombo,
+        confirmButtonText: bloque.cargaCombo ? 'Solo este tour' : 'Sí, quitar',
+        denyButtonText: 'Todo el combo',
+        cancelButtonText: 'Cancelar',
+    });
+    if (!confirmacion.isConfirmed && !confirmacion.isDenied) return;
+
+    const carga = confirmacion.isDenied ? bloque.cargaCombo! : bloque.carga;
+    eliminandoCarga.value = bloque.carga;
+    try {
+        await alternativaItemService.eliminarCarga(alternativaActiva.value.id, carga);
+        toast.success('Tour quitado');
+    } catch (error: any) {
+        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo quitar el tour', 'error');
+    } finally {
+        eliminandoCarga.value = null;
+        await cargarCotizacion();
+    }
+};
+
+// §3.12 — tours cuya temporada ya no es la de su día (cambió la fecha de la
+// cotización o se movió el tour de día). Solo aviso; recalcular es a pedido
+// del vendedor.
+const temporadasDesactualizadas = ref<TemporadaDesactualizada[]>([]);
+const cargarTemporadasTours = async () => {
+    const alt = alternativaActiva.value;
+    if (!alt || !['borrador', 'enviada'].includes(alt.estado) || !(alt.items ?? []).some((i) => i.origen_tipo === 'tour')) {
+        temporadasDesactualizadas.value = [];
+        return;
+    }
+    try {
+        temporadasDesactualizadas.value = (await alternativaItemService.temporadasTours(alt.id)).temporadas_desactualizadas;
+    } catch {
+        temporadasDesactualizadas.value = [];
+    }
+};
+const recalculandoTemporadas = ref(false);
+const recalcularTemporadas = async () => {
+    if (!alternativaActiva.value) return;
+    recalculandoTemporadas.value = true;
+    try {
+        const res = await alternativaItemService.recalcularTemporadas(alternativaActiva.value.id);
+        await cargarCotizacion();
+        if (res.omitidas.length) {
+            (Swal as TVueSwalInstance).fire({
+                icon: 'info',
+                title: `${res.recalculadas} tour(s) recalculado(s)`,
+                html: `<p class="text-start mb-1">No se tocaron:</p><ul class="text-start small mb-0">${res.omitidas.map((o) => `<li>${o}</li>`).join('')}</ul>`,
+            });
+        } else {
+            toast.success('Precios por temporada recalculados');
+        }
+    } catch (error: any) {
+        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo recalcular', 'error');
+    } finally {
+        recalculandoTemporadas.value = false;
+    }
 };
 
 // Sesión M4 — dentro de un bloque, N ítems consecutivos que comparten
@@ -2316,8 +2569,16 @@ const vistaPreviaCombo = ref<Array<{ tourOrigenId: number; dia: number; nombre: 
 // para que el vendedor anticipe cuántas líneas va a inyectar. Punto A: a
 // diferencia de un ítem suelto, esto SÍ cierra el drawer — el vendedor debe
 // ver el resultado (lienzo + vista previa) antes de seguir agregando.
+const modoToursNuevo = computed(() => configAgencia.value?.modo_tours === 'nuevo');
+
 const clicResultadoPlantilla = async (p: Extract<BibliotecaResultado, { tipo_resultado: 'tour' | 'paquete' }>) => {
     if (!alternativaActiva.value) return;
+    // Fila 13, fase 1b (N15): en modo nuevo un tour solo de itinerario no
+    // se carga (el backend también lo rechaza con 422).
+    if (modoToursNuevo.value && p.tipo_resultado === 'tour' && p.uso === 'solo_itinerario') {
+        toast.warning('Es un tour solo de itinerario (de mayorista): no se carga en la cotización.');
+        return;
+    }
     const diaInicioCarga = diaActivoParaAgregar.value;
     try {
         const res = await alternativaItemService.cargarDesdePlantilla(alternativaActiva.value.id, {
@@ -2334,6 +2595,12 @@ const clicResultadoPlantilla = async (p: Extract<BibliotecaResultado, { tipo_res
                 html: `<p class="text-start mb-1">El costo ya se sumó al total — falta confirmar cuál guía puntual queda asignado (eso se hace recién al reservar):</p><ul class="text-start">${lista}</ul>`,
                 icon: 'info',
             });
+        }
+
+        // Fila 13, fase 1b — avisos del modo nuevo (sin fecha: precio base;
+        // tour sin costo estimado; tour del combo desactivado).
+        if (res.avisos?.length) {
+            res.avisos.forEach((aviso) => toast.warning(aviso));
         }
 
         const idsTourOrigen = new Set(res.items_agregados.map((i) => i.tour_origen_id).filter((id): id is number => id != null));
@@ -3710,6 +3977,7 @@ const enviarEdicion = async (itemId: number, payload: { descuento_pct?: number; 
 };
 
 const iconoItem = (item: AlternativaItem) => {
+    if (item.origen_tipo === 'tour') return 'fa-route';
     if (item.origen_tipo === 'pasaje_aereo') return 'fa-plane';
     if (item.origen_tipo === 'mayorista') return 'fa-plane-departure';
     if (item.origen_tipo === 'manual') return 'fa-pen';
@@ -3738,6 +4006,12 @@ const toursDeGrupo = (items: AlternativaItem[]): OpcionMayoristaTour[] => {
 
 const etiquetaItem = (item: AlternativaItem) => {
     if (item.origen_tipo === 'manual') return item.descripcion_manual ?? 'Servicio sin catálogo';
+    // Fila 13, fase 1b — mismo criterio que ReservaController::resolverNombreItem().
+    if (item.origen_tipo === 'tour') {
+        const nombre = item.tour_origen?.nombre ?? item.tour_linea?.tour_nombre ?? 'Tour';
+        const sufijo: Record<string, string> = { '10': ' (gravado)', '20': ' (exonerado)', '30': ' (inafecto)' };
+        return (item.tour_linea?.n_grupos ?? 1) > 1 ? nombre + (sufijo[item.tip_afe_igv ?? ''] ?? '') : nombre;
+    }
     if (item.origen_tipo === 'pasaje_aereo') return item.cotizacion_pasaje_aereo?.aerolinea ?? 'Pasaje aéreo';
     // Hallazgo del usuario (04-sep-2026): esta función es una copia en el
     // frontend del mismo resolver que se corrigió hoy en el backend
@@ -3882,6 +4156,7 @@ watch(destinoActivoId, () => { if (modo.value === 'intl') cargarOpcionesMayorist
 watch(alternativaActivaId, () => {
     inicializarEdicionItems();
     resolverDestinoActivo();
+    cargarTemporadasTours();
     inicializarDias();
     vistaPreviaCombo.value = null;
     drawerBibliotecaAbierto.value = false;

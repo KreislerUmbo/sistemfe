@@ -1305,6 +1305,12 @@ class ReservaFacturacionController extends Controller
             return 'VUELO';
         }
 
+        // Fila 13, fase 1b: la línea de tour del modo nuevo es un tour,
+        // no "otros" (no tiene servicio de proveedor del que deducirlo).
+        if ($alternativaItem?->origen_tipo === AlternativaItem::ORIGEN_TOUR) {
+            return 'TOUR';
+        }
+
         $nombreServicio = mb_strtolower(
             $alternativaItem?->proveedorTarifa?->proveedorServicio?->destinoServicio?->servicio?->nombre ?? ''
         );

@@ -21,6 +21,8 @@ use App\Models\AgenciaViajes\ProveedorTipoConfig;
 use App\Models\AgenciaViajes\ReservaItem;
 use App\Services\AgenciaViajes\ComboExplosionService;
 use App\Services\AgenciaViajes\PriceEngineService;
+use App\Services\AgenciaViajes\TourLineaException;
+use App\Services\AgenciaViajes\TourLineaService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -36,7 +38,8 @@ class AlternativaItemController extends Controller
 {
     public function __construct(
         private PriceEngineService $priceEngine,
-        private ComboExplosionService $comboExplosion
+        private ComboExplosionService $comboExplosion,
+        private TourLineaService $tourLinea
     ) {
     }
 
@@ -152,6 +155,9 @@ class AlternativaItemController extends Controller
         $item->update([
             'descuento_pct' => $descuentoPct,
             'precio_convertido' => $precioConvertido,
+            // Fila 13, fase 1b: en una línea de tour, cambiar el precio la
+            // marca como precio a mano (el recálculo por pasajeros no lo pisa).
+            'precio_manual' => $item->esLineaTour() ? true : $item->precio_manual,
         ]);
 
         $this->recalcularTotalAlternativa($alternativa);
@@ -232,6 +238,13 @@ class AlternativaItemController extends Controller
                 'code' => 422,
                 'message' => 'No se puede eliminar: este servicio ya tiene una reserva generada (por ejemplo, vía Venta Directa). Cancelá la reserva primero si corresponde.',
             ], 422);
+        }
+
+        // Fila 13, fase 1b: una línea de tour se quita con toda su carga (las
+        // demás líneas de IGV del mismo tour); quitar solo una dejaría el
+        // tour cobrado a medias.
+        if ($item->esLineaTour() && $item->carga_tour) {
+            return $this->eliminarCarga((string) $alternativa->id, $item->carga_tour);
         }
 
         DB::transaction(function () use ($item) {
@@ -327,6 +340,13 @@ class AlternativaItemController extends Controller
         // carga de plantilla van al mismo destino (§0/§3 del brief 12f-1).
         $alternativaDestinoId = $this->resolverAlternativaDestinoId($alternativa, $validado['alternativa_destino_id'] ?? null);
 
+        // Fila 13, fase 1b (§5b): con modo_tours='nuevo' el tour entra como
+        // línea propia (TourLineaService); todo lo de abajo es el camino
+        // 'clasico', igual que siempre.
+        if (ConfiguracionAgencia::modoToursNuevo()) {
+            return $this->desdePlantillaModoNuevo($alternativa, $paquete, (int) $validado['dia_referencial'], $alternativaDestinoId);
+        }
+
         // Cada entrada trae su propio dia_referencial ya resuelto — para un
         // tour_simple suelto, el mismo día activo para todos sus ítems
         // (decisión confirmada: un tour multi-día cae en un solo bloque, no
@@ -403,103 +423,9 @@ class AlternativaItemController extends Controller
 
         DB::transaction(function () use ($alternativa, $entradas, $ajusteRedondeo, $validado, $alternativaDestinoId, &$itemsCreados, &$guiasPendientes) {
             foreach ($entradas as $entrada) {
-                if ($entrada['proveedor_tarifa_id']) {
-                    $tarifa = ProveedorTarifa::findOrFail($entrada['proveedor_tarifa_id']);
-
-                    // Sesión 11o: 'compartido' se cobra por pasajero REAL de
-                    // la cotización (no un adulto plano) — mismo cálculo que
-                    // crearItemProveedor() ya usa para modo_precio=
-                    // 'por_persona' (contarPasajerosPorTipo()). 'privado' (o
-                    // sin modalidad, ej. guía suelto que igual cae acá si
-                    // algún día tuviera proveedor_tarifa_id) sigue con
-                    // tarifa_fija/cantidad=1 tal como antes: el precio que
-                    // trae la explosión ya es el tier adulto plano, sin
-                    // repartir por pax — mismo criterio que el precio
-                    // "calculado" del catálogo (totalesTour()/totalesCombo()).
-                    if ($entrada['modalidad'] === 'compartido' && $tarifa->tipo_habitacion === null) {
-                        $conteo = $this->contarPasajerosPorTipo($alternativa->cotizacion_id, null);
-                        $ventaPorPersona = $conteo['adulto'] * ($entrada['precio_venta_adulto'] ?? 0)
-                            + $conteo['nino'] * ($entrada['precio_venta_nino'] ?? 0)
-                            + $conteo['infante'] * ($entrada['precio_venta_infante'] ?? 0);
-                        $costoPorPersona = ($entrada['precio_costo'] ?? 0)
-                            * ($conteo['adulto'] + $conteo['nino'] + $conteo['infante']);
-
-                        $itemsCreados[] = AlternativaItem::create([
-                            'alternativa_id' => $alternativa->id,
-                            'alternativa_destino_id' => $alternativaDestinoId,
-                            'origen_tipo' => AlternativaItem::ORIGEN_PROVEEDOR,
-                            'proveedor_tarifa_id' => $tarifa->id,
-                            'tour_origen_id' => $entrada['tour_origen_id'],
-                            'dia_referencial' => $entrada['dia_referencial'],
-                            'modo_precio' => 'por_persona',
-                            // cantidad NOT NULL en BD (default 1) — sin
-                            // efecto real acá, el accessor total() no
-                            // multiplica para 'por_persona' (mismo criterio
-                            // que crearItemProveedor() ya usa).
-                            'cantidad' => 1,
-                            'moneda_costo' => $tarifa->moneda,
-                            'costo_snapshot' => $costoPorPersona,
-                            'precio_venta_snapshot' => $ventaPorPersona,
-                            'precio_convertido' => $this->priceEngine->convertirMoneda($ventaPorPersona, $tarifa->moneda, $alternativa->moneda_cotizacion, (float) $alternativa->tipo_cambio_aplicado),
-                        ]);
-
-                        continue;
-                    }
-
-                    $itemsCreados[] = AlternativaItem::create([
-                        'alternativa_id' => $alternativa->id,
-                        'alternativa_destino_id' => $alternativaDestinoId,
-                        'origen_tipo' => AlternativaItem::ORIGEN_PROVEEDOR,
-                        'proveedor_tarifa_id' => $tarifa->id,
-                        'tour_origen_id' => $entrada['tour_origen_id'],
-                        'dia_referencial' => $entrada['dia_referencial'],
-                        'modo_precio' => 'tarifa_fija',
-                        'cantidad' => 1,
-                        'moneda_costo' => $tarifa->moneda,
-                        'costo_snapshot' => $entrada['costo'],
-                        'precio_venta_snapshot' => $entrada['venta'],
-                        'precio_convertido' => $this->priceEngine->convertirMoneda($entrada['venta'], $tarifa->moneda, $alternativa->moneda_cotizacion, (float) $alternativa->tipo_cambio_aplicado),
-                    ]);
-
-                    continue;
-                }
-
-                if ($entrada['guia_tarifa_id']) {
-                    // Fix guia-como-item-real: guiasPendientes se mantiene
-                    // igual — sigue siendo el aviso de "falta confirmar cuál
-                    // guía puntual" (esa asignación es a nivel reserva,
-                    // reserva_items.guia_id). Lo nuevo es el AlternativaItem
-                    // real de abajo: costo/venta ya vienen resueltos por
-                    // ComboExplosionService::resolverCostoVentaItem() (mismo
-                    // cálculo que crearItemGuia() usa para un guía suelto),
-                    // así que el costo SÍ entra al total desde que se carga
-                    // el combo, aunque el guía puntual siga sin asignar.
-                    $guiaTarifa = GuiaTarifa::with(['guia', 'destino'])->find($entrada['guia_tarifa_id']);
-                    $tourOrigen = PaquetePlantilla::find($entrada['tour_origen_id']);
-
-                    $guiasPendientes[] = [
-                        'tour_origen_id' => $entrada['tour_origen_id'],
-                        'tour_origen_nombre' => $tourOrigen?->nombre,
-                        'guia_nombre' => $guiaTarifa?->guia?->nombre,
-                        'destino_nombre' => $guiaTarifa?->destino?->nombre,
-                    ];
-
-                    if ($guiaTarifa) {
-                        $itemsCreados[] = AlternativaItem::create([
-                            'alternativa_id' => $alternativa->id,
-                            'alternativa_destino_id' => $alternativaDestinoId,
-                            'origen_tipo' => AlternativaItem::ORIGEN_GUIA,
-                            'guia_tarifa_id' => $guiaTarifa->id,
-                            'tour_origen_id' => $entrada['tour_origen_id'],
-                            'dia_referencial' => $entrada['dia_referencial'],
-                            'modo_precio' => 'tarifa_fija',
-                            'cantidad' => 1,
-                            'moneda_costo' => $guiaTarifa->moneda,
-                            'costo_snapshot' => $entrada['costo'],
-                            'precio_venta_snapshot' => $entrada['venta'],
-                            'precio_convertido' => $this->priceEngine->convertirMoneda($entrada['venta'], $guiaTarifa->moneda, $alternativa->moneda_cotizacion, (float) $alternativa->tipo_cambio_aplicado),
-                        ]);
-                    }
+                $item = $this->crearItemClasicoDesdeEntrada($alternativa, $entrada, $alternativaDestinoId, $guiasPendientes);
+                if ($item) {
+                    $itemsCreados[] = $item;
                 }
             }
 
@@ -533,6 +459,294 @@ class AlternativaItemController extends Controller
                 'items' => count($itemsCreados),
             ],
         ]);
+    }
+
+    // Una entrada de ComboExplosionService → un AlternativaItem del modo
+    // clásico. Extraído tal cual del bucle de desdePlantilla() (fila 13, fase
+    // 1b) para reusarlo con los ítems sueltos de un combo en el modo nuevo;
+    // test_desde_plantilla_da_el_mismo_resultado_que_antes vigila que el
+    // clásico no cambie.
+    private function crearItemClasicoDesdeEntrada(Alternativa $alternativa, array $entrada, ?int $alternativaDestinoId, array &$guiasPendientes): ?AlternativaItem
+    {
+        if ($entrada['proveedor_tarifa_id']) {
+            $tarifa = ProveedorTarifa::findOrFail($entrada['proveedor_tarifa_id']);
+
+            // Sesión 11o: 'compartido' se cobra por pasajero REAL de
+            // la cotización (no un adulto plano) — mismo cálculo que
+            // crearItemProveedor() ya usa para modo_precio=
+            // 'por_persona' (contarPasajerosPorTipo()). 'privado' (o
+            // sin modalidad, ej. guía suelto que igual cae acá si
+            // algún día tuviera proveedor_tarifa_id) sigue con
+            // tarifa_fija/cantidad=1 tal como antes: el precio que
+            // trae la explosión ya es el tier adulto plano, sin
+            // repartir por pax — mismo criterio que el precio
+            // "calculado" del catálogo (totalesTour()/totalesCombo()).
+            if ($entrada['modalidad'] === 'compartido' && $tarifa->tipo_habitacion === null) {
+                $conteo = $this->contarPasajerosPorTipo($alternativa->cotizacion_id, null);
+                $ventaPorPersona = $conteo['adulto'] * ($entrada['precio_venta_adulto'] ?? 0)
+                    + $conteo['nino'] * ($entrada['precio_venta_nino'] ?? 0)
+                    + $conteo['infante'] * ($entrada['precio_venta_infante'] ?? 0);
+                $costoPorPersona = ($entrada['precio_costo'] ?? 0)
+                    * ($conteo['adulto'] + $conteo['nino'] + $conteo['infante']);
+
+                return AlternativaItem::create([
+                    'alternativa_id' => $alternativa->id,
+                    'alternativa_destino_id' => $alternativaDestinoId,
+                    'origen_tipo' => AlternativaItem::ORIGEN_PROVEEDOR,
+                    'proveedor_tarifa_id' => $tarifa->id,
+                    'tour_origen_id' => $entrada['tour_origen_id'],
+                    'dia_referencial' => $entrada['dia_referencial'],
+                    'modo_precio' => 'por_persona',
+                    // cantidad NOT NULL en BD (default 1) — sin
+                    // efecto real acá, el accessor total() no
+                    // multiplica para 'por_persona' (mismo criterio
+                    // que crearItemProveedor() ya usa).
+                    'cantidad' => 1,
+                    'moneda_costo' => $tarifa->moneda,
+                    'costo_snapshot' => $costoPorPersona,
+                    'precio_venta_snapshot' => $ventaPorPersona,
+                    'precio_convertido' => $this->priceEngine->convertirMoneda($ventaPorPersona, $tarifa->moneda, $alternativa->moneda_cotizacion, (float) $alternativa->tipo_cambio_aplicado),
+                ]);
+            }
+
+            return AlternativaItem::create([
+                'alternativa_id' => $alternativa->id,
+                'alternativa_destino_id' => $alternativaDestinoId,
+                'origen_tipo' => AlternativaItem::ORIGEN_PROVEEDOR,
+                'proveedor_tarifa_id' => $tarifa->id,
+                'tour_origen_id' => $entrada['tour_origen_id'],
+                'dia_referencial' => $entrada['dia_referencial'],
+                'modo_precio' => 'tarifa_fija',
+                'cantidad' => 1,
+                'moneda_costo' => $tarifa->moneda,
+                'costo_snapshot' => $entrada['costo'],
+                'precio_venta_snapshot' => $entrada['venta'],
+                'precio_convertido' => $this->priceEngine->convertirMoneda($entrada['venta'], $tarifa->moneda, $alternativa->moneda_cotizacion, (float) $alternativa->tipo_cambio_aplicado),
+            ]);
+        }
+
+        if ($entrada['guia_tarifa_id']) {
+            // Fix guia-como-item-real: guiasPendientes se mantiene
+            // igual — sigue siendo el aviso de "falta confirmar cuál
+            // guía puntual" (esa asignación es a nivel reserva,
+            // reserva_items.guia_id). Lo nuevo es el AlternativaItem
+            // real de abajo: costo/venta ya vienen resueltos por
+            // ComboExplosionService::resolverCostoVentaItem() (mismo
+            // cálculo que crearItemGuia() usa para un guía suelto),
+            // así que el costo SÍ entra al total desde que se carga
+            // el combo, aunque el guía puntual siga sin asignar.
+            $guiaTarifa = GuiaTarifa::with(['guia', 'destino'])->find($entrada['guia_tarifa_id']);
+            $tourOrigen = PaquetePlantilla::find($entrada['tour_origen_id']);
+
+            $guiasPendientes[] = [
+                'tour_origen_id' => $entrada['tour_origen_id'],
+                'tour_origen_nombre' => $tourOrigen?->nombre,
+                'guia_nombre' => $guiaTarifa?->guia?->nombre,
+                'destino_nombre' => $guiaTarifa?->destino?->nombre,
+            ];
+
+            if ($guiaTarifa) {
+                return AlternativaItem::create([
+                    'alternativa_id' => $alternativa->id,
+                    'alternativa_destino_id' => $alternativaDestinoId,
+                    'origen_tipo' => AlternativaItem::ORIGEN_GUIA,
+                    'guia_tarifa_id' => $guiaTarifa->id,
+                    'tour_origen_id' => $entrada['tour_origen_id'],
+                    'dia_referencial' => $entrada['dia_referencial'],
+                    'modo_precio' => 'tarifa_fija',
+                    'cantidad' => 1,
+                    'moneda_costo' => $guiaTarifa->moneda,
+                    'costo_snapshot' => $entrada['costo'],
+                    'precio_venta_snapshot' => $entrada['venta'],
+                    'precio_convertido' => $this->priceEngine->convertirMoneda($entrada['venta'], $guiaTarifa->moneda, $alternativa->moneda_cotizacion, (float) $alternativa->tipo_cambio_aplicado),
+                ]);
+            }
+        }
+
+        return null;
+    }
+
+    // Fila 13, fase 1b — camino modo_tours='nuevo' de desdePlantilla(): el tour
+    // (o cada tour de un combo) es una línea propia con su precio por persona
+    // y temporada (TourLineaService). Los ítems sueltos de un combo (hotel,
+    // guía) siguen como en el clásico, agrupados con el combo por carga_combo.
+    // Sin "ajuste de redondeo": no se usa en este modo (§5b).
+    private function desdePlantillaModoNuevo(Alternativa $alternativa, PaquetePlantilla $paquete, int $dia, ?int $alternativaDestinoId): JsonResponse
+    {
+        $guiasPendientes = [];
+
+        try {
+            $resultado = DB::transaction(function () use ($alternativa, $paquete, $dia, $alternativaDestinoId, &$guiasPendientes) {
+                $resultado = $this->tourLinea->cargar($alternativa, $paquete, $dia, $alternativaDestinoId);
+
+                if ($paquete->esPaqueteCombo()) {
+                    foreach ($this->comboExplosion->explotarItemsSueltos($paquete) as $entrada) {
+                        $entrada['dia_referencial'] = $dia;
+                        $item = $this->crearItemClasicoDesdeEntrada($alternativa, $entrada, $alternativaDestinoId, $guiasPendientes);
+                        if ($item) {
+                            $item->update(['carga_combo' => $resultado['carga_combo'], 'combo_origen_id' => $paquete->id]);
+                            $resultado['items'][] = $item;
+                        }
+                    }
+                }
+
+                $this->recalcularTotalAlternativa($alternativa);
+
+                return $resultado;
+            });
+        } catch (TourLineaException $e) {
+            return response()->json(['code' => 422, 'message' => $e->getMessage()], 422);
+        }
+
+        return response()->json([
+            'code' => 200,
+            'message' => 'Tour cargado correctamente',
+            'modo_tours' => ConfiguracionAgencia::MODO_TOURS_NUEVO,
+            'items_agregados' => $resultado['items'],
+            'guias_pendientes' => $guiasPendientes,
+            'avisos' => $resultado['avisos'],
+            'dia_final_combo' => $resultado['dia_final_combo'],
+            'resumen' => [
+                'tours' => $paquete->esPaqueteCombo() ? $this->comboExplosion->toursDelCombo($paquete)->count() : null,
+                'items' => count($resultado['items']),
+            ],
+        ]);
+    }
+
+    // ── Cargas de tour (fila 13, fase 1b) ─────────────────────────────
+    // Las líneas de una carga de tour (una por grupo de IGV) y, si vino de un
+    // combo, todas las del combo, se mueven, quitan y reprecian juntas.
+
+    private function lineasDeCarga(Alternativa $alternativa, string $carga)
+    {
+        return AlternativaItem::where('alternativa_id', $alternativa->id)
+            ->where(fn ($q) => $q->where('carga_tour', $carga)->orWhere('carga_combo', $carga))
+            ->get();
+    }
+
+    // DELETE alternativas/{id}/cargas/{carga} — quita una carga de tour (o un
+    // combo entero, con sus ítems sueltos).
+    public function eliminarCarga(string $alternativaId, string $carga): JsonResponse
+    {
+        $alternativa = Alternativa::findOrFail($alternativaId);
+        $items = $this->lineasDeCarga($alternativa, $carga);
+
+        if ($items->isEmpty()) {
+            return response()->json(['code' => 404, 'message' => 'No se encontró ese tour en esta alternativa.'], 404);
+        }
+        if (ReservaItem::whereIn('alternativa_item_id', $items->pluck('id'))->exists()) {
+            return response()->json([
+                'code' => 422,
+                'message' => 'No se puede quitar: este tour ya tiene una reserva generada. Cancelá la reserva primero si corresponde.',
+            ], 422);
+        }
+
+        DB::transaction(function () use ($items, $alternativa) {
+            AlternativaItem::whereIn('id', $items->pluck('id'))->delete();
+            $this->recalcularTotalAlternativa($alternativa);
+        });
+
+        return response()->json(['code' => 200, 'message' => 'Tour quitado correctamente']);
+    }
+
+    // POST alternativas/{id}/mover-carga — mueve una carga de tour a otro día;
+    // un combo se desplaza entero, conservando la distancia entre sus días.
+    public function moverCarga(Request $request, string $alternativaId): JsonResponse
+    {
+        $alternativa = Alternativa::findOrFail($alternativaId);
+
+        $validator = Validator::make($request->all(), [
+            'carga' => 'required|uuid',
+            'dia_referencial' => 'required|integer|min:1',
+        ]);
+        if ($validator->fails()) {
+            return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
+        }
+        if ($alternativa->estado === 'aceptada') {
+            return response()->json([
+                'code' => 422,
+                'message' => 'Esta alternativa ya fue aceptada y generó una reserva — usa reprogramar sobre la reserva en vez de mover ítems acá.',
+            ], 422);
+        }
+
+        $validado = $validator->validated();
+        $items = $this->lineasDeCarga($alternativa, $validado['carga']);
+        if ($items->isEmpty()) {
+            return response()->json(['code' => 422, 'message' => 'No se encontró ese tour en esta alternativa.'], 422);
+        }
+
+        $delta = (int) $validado['dia_referencial'] - (int) $items->min('dia_referencial');
+        DB::transaction(function () use ($items, $delta) {
+            foreach ($items as $item) {
+                $item->update(['dia_referencial' => max(1, (int) $item->dia_referencial + $delta)]);
+            }
+        });
+
+        return response()->json([
+            'code' => 200,
+            'message' => 'Tour movido correctamente',
+            'temporadas_desactualizadas' => $this->tourLinea->temporadasDesactualizadas($alternativa),
+        ]);
+    }
+
+    // PUT alternativas/{id}/cargas/{carga}/precio — el vendedor cambia el
+    // precio total de un tour (moneda de la cotización); se reparte entre sus
+    // líneas de IGV y queda como precio a mano (los recálculos no lo pisan).
+    public function precioCarga(Request $request, string $alternativaId, string $carga): JsonResponse
+    {
+        $alternativa = Alternativa::findOrFail($alternativaId);
+
+        $validator = Validator::make($request->all(), ['precio' => 'required|numeric|min:0']);
+        if ($validator->fails()) {
+            return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
+        }
+        if ($alternativa->estado === 'aceptada') {
+            return response()->json(['code' => 422, 'message' => 'Esta alternativa ya fue aceptada y generó una reserva — el precio ya no se cambia desde acá.'], 422);
+        }
+
+        $lineas = AlternativaItem::where('alternativa_id', $alternativa->id)
+            ->where('carga_tour', $carga)
+            ->where('origen_tipo', AlternativaItem::ORIGEN_TOUR)
+            ->get();
+        if ($lineas->isEmpty()) {
+            return response()->json(['code' => 404, 'message' => 'No se encontró ese tour en esta alternativa.'], 404);
+        }
+
+        DB::transaction(function () use ($lineas, $alternativa, $validator) {
+            $this->tourLinea->fijarPrecio($lineas, $alternativa, (float) $validator->validated()['precio']);
+            $this->recalcularTotalAlternativa($alternativa);
+        });
+
+        return response()->json(['code' => 200, 'message' => 'Precio actualizado correctamente', 'alternativa' => $alternativa->fresh('items')]);
+    }
+
+    // GET alternativas/{id}/temporadas-tours — tours cuya temporada ya no es
+    // la de su día (cambió la fecha de la cotización). Solo aviso (§3.12).
+    public function temporadasTours(string $alternativaId): JsonResponse
+    {
+        $alternativa = Alternativa::findOrFail($alternativaId);
+
+        return response()->json(['temporadas_desactualizadas' => $this->tourLinea->temporadasDesactualizadas($alternativa)]);
+    }
+
+    // POST alternativas/{id}/recalcular-temporadas — botón "Recalcular precios
+    // por temporada". Nunca se dispara solo.
+    public function recalcularTemporadas(string $alternativaId): JsonResponse
+    {
+        $alternativa = Alternativa::findOrFail($alternativaId);
+
+        if ($alternativa->estado === 'aceptada') {
+            return response()->json(['code' => 422, 'message' => 'Esta alternativa ya fue aceptada: el precio vendido no cambia.'], 422);
+        }
+
+        $resultado = DB::transaction(function () use ($alternativa) {
+            $resultado = $this->tourLinea->recalcularTemporadas($alternativa);
+            $this->recalcularTotalAlternativa($alternativa);
+
+            return $resultado;
+        });
+
+        return response()->json(['code' => 200, 'message' => 'Precios por temporada recalculados'] + $resultado + ['alternativa' => $alternativa->fresh('items')]);
     }
 
     // Sesión 11b3 — reasignar el día de un ítem SUELTO (sin tour_origen_id).
@@ -604,8 +818,12 @@ class AlternativaItemController extends Controller
 
         $validado = $validator->validated();
 
+        // whereNull('carga_tour') (fila 13, fase 1b): las líneas de tour del
+        // modo nuevo se mueven por su carga (moverCarga()); sin esto, mover el
+        // bloque clásico de un tour arrastraba también su línea nueva.
         $actualizados = AlternativaItem::where('alternativa_id', $alternativa->id)
             ->where('tour_origen_id', $validado['tour_origen_id'])
+            ->whereNull('carga_tour')
             ->update(['dia_referencial' => $validado['dia_referencial']]);
 
         if ($actualizados === 0) {
@@ -695,6 +913,11 @@ class AlternativaItemController extends Controller
                 $precioVentaSnapshot = $conteo['adulto'] * (float) $tarifa->precio_venta_adulto
                     + $conteo['nino'] * (float) ($tarifa->precio_venta_nino ?? 0)
                     + $conteo['infante'] * (float) ($tarifa->precio_venta_infante ?? 0);
+                // E2 (fila 13, fase 1b; decisión del usuario 14-oct-2026): el
+                // costo de una línea por persona es el TOTAL de la línea, sin
+                // infantes — antes guardaba el de una sola persona, mientras la
+                // reserva y el piso lo leían como total.
+                $costoSnapshot = round($costoSnapshot * ($conteo['adulto'] + $conteo['nino']), 2);
             } else {
                 // tarifa_fija (hotel por habitación, transporte privado por vehículo):
                 // un solo precio, no diferenciado por tipo de pasajero.

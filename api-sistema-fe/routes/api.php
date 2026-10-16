@@ -774,6 +774,10 @@ Route::group([
         ->middleware('permission:agencia.configuracion');
     Route::put("configuracion-agencia", [ConfiguracionAgenciaController::class, 'update'])
         ->middleware('permission:agencia.configuracion');
+    // Fila 13, fase 1b (§5b, D3) — interruptor modo_tours: solo el
+    // Super-Admin (soporte), validado en el controller además del permiso.
+    Route::put("configuracion-agencia/modo-tours", [ConfiguracionAgenciaController::class, 'actualizarModoTours'])
+        ->middleware('permission:agencia.configuracion');
 
     // Envío de cotizaciones por correo (plan-modulo-envio-correo-cotizacion.md
     // §3.2) — sección "Correo" de Configuración de Agencia.
@@ -989,6 +993,19 @@ Route::group([
     Route::put("alternativa-items/{id}/dia", [AlternativaItemController::class, 'reasignarDia'])
         ->middleware('permission:cotizaciones.editar');
     Route::put("alternativas/{id}/items/mover-bloque", [AlternativaItemController::class, 'moverBloque'])
+        ->middleware('permission:cotizaciones.editar');
+    // Fila 13, fase 1b — líneas de tour del modo nuevo (TourLineaService):
+    // quitar/mover/cambiar precio por carga, y el aviso y recálculo de
+    // temporada al cambiar la fecha de la cotización (§3.12).
+    Route::delete("alternativas/{id}/cargas/{carga}", [AlternativaItemController::class, 'eliminarCarga'])
+        ->middleware('permission:cotizaciones.editar');
+    Route::put("alternativas/{id}/cargas/{carga}/precio", [AlternativaItemController::class, 'precioCarga'])
+        ->middleware('permission:cotizaciones.editar');
+    Route::put("alternativas/{id}/items/mover-carga", [AlternativaItemController::class, 'moverCarga'])
+        ->middleware('permission:cotizaciones.editar');
+    Route::get("alternativas/{id}/temporadas-tours", [AlternativaItemController::class, 'temporadasTours'])
+        ->middleware('permission:cotizaciones.ver|cotizaciones.ver_todas');
+    Route::post("alternativas/{id}/recalcular-temporadas", [AlternativaItemController::class, 'recalcularTemporadas'])
         ->middleware('permission:cotizaciones.editar');
 
     Route::get("alternativas/{id}/opciones-mayorista", [OpcionMayoristaController::class, 'index'])

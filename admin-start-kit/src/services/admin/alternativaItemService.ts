@@ -3,7 +3,7 @@
 // mismo endpoint de creación — el payload varía, ver
 // AlternativaItemController::store() en el backend.
 import httpClient from '@/helpers/http-client'
-import type { DesdePlantillaResponse } from '@/types/agencia-viajes'
+import type { DesdePlantillaResponse, TemporadaDesactualizada } from '@/types/agencia-viajes'
 
 export const alternativaItemService = {
   async agregarProveedor(alternativaId: number, data: Record<string, any>) {
@@ -64,6 +64,31 @@ export const alternativaItemService = {
   async moverBloque(alternativaId: number, data: { tour_origen_id: number; dia_referencial: number }) {
     const response = await httpClient.put(`/alternativas/${alternativaId}/items/mover-bloque`, data)
     return response.data
+  },
+
+  // Fila 13, fase 1b — líneas de tour del modo nuevo: se quitan, mueven y
+  // reprecian por carga (carga_tour; o carga_combo para un combo entero).
+  async eliminarCarga(alternativaId: number, carga: string) {
+    const response = await httpClient.delete(`/alternativas/${alternativaId}/cargas/${carga}`)
+    return response.data
+  },
+  async moverCarga(alternativaId: number, data: { carga: string; dia_referencial: number }) {
+    const response = await httpClient.put(`/alternativas/${alternativaId}/items/mover-carga`, data)
+    return response.data as { code: number; message: string; temporadas_desactualizadas: TemporadaDesactualizada[] }
+  },
+  // Precio total del tour en la moneda de la cotización; queda como precio a mano.
+  async precioCarga(alternativaId: number, carga: string, precio: number) {
+    const response = await httpClient.put(`/alternativas/${alternativaId}/cargas/${carga}/precio`, { precio })
+    return response.data
+  },
+  async temporadasTours(alternativaId: number) {
+    const response = await httpClient.get(`/alternativas/${alternativaId}/temporadas-tours`)
+    return response.data as { temporadas_desactualizadas: TemporadaDesactualizada[] }
+  },
+  // "Recalcular precios por temporada" — nunca se dispara solo (§3.12).
+  async recalcularTemporadas(alternativaId: number) {
+    const response = await httpClient.post(`/alternativas/${alternativaId}/recalcular-temporadas`)
+    return response.data as { code: number; message: string; recalculadas: number; omitidas: string[] }
   },
   // Sesión 11q — edición estructural completa de un ítem manual
   // (descripción/proveedor/costo/cantidad/pax), separado de actualizar()

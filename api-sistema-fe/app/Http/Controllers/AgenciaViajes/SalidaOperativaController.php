@@ -98,7 +98,14 @@ class SalidaOperativaController extends Controller
             return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
         }
 
-        $reservaItem = ReservaItem::with('reserva')->findOrFail($request->reserva_item_id);
+        $reservaItem = ReservaItem::with(['reserva', 'alternativaItem'])->findOrFail($request->reserva_item_id);
+
+        // Fila 13, fase 1b: la línea de tour (modo nuevo) se operará por su
+        // propia salida en la fase 2 (C3); engancharla a mano a una salida de
+        // líneas de proveedor mezclaría los dos modelos.
+        if ($reservaItem->alternativaItem?->esLineaTour()) {
+            return response()->json(['code' => 422, 'message' => 'Un tour cargado como una sola línea todavía no se engancha a una Salida Operativa (llega en la fase 2).'], 422);
+        }
 
         // Bug real (auditoría 2026-09-23): este era el único de los 5
         // caminos que tocan salida_operativa_id sin validar nada de la

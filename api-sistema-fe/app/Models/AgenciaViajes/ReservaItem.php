@@ -59,6 +59,11 @@ class ReservaItem extends Model
         'motivo_reasignacion_hotel',
         'fecha_reasignacion_hotel',
         'veces_reasignado_hotel',
+        // Fila 13, fase 1b — copia de la línea de tour al aceptar (ver
+        // 2026_10_14_170200_add_linea_tour_to_reserva_items_table.php).
+        'carga_tour',
+        'carga_combo',
+        'desglose_costo_snapshot',
     ];
 
     protected $casts = [
@@ -66,6 +71,7 @@ class ReservaItem extends Model
         'fecha_reasignacion_mayorista' => 'datetime',
         'fecha_reasignacion_hotel' => 'datetime',
         'fecha_override_tributario' => 'datetime',
+        'desglose_costo_snapshot' => 'array',
     ];
 
     public const FECHA_ORIGEN_AUTO = 'auto';

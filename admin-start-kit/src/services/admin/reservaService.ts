@@ -57,6 +57,9 @@ export const reservaService = {
       // automático) — guardia de visibilidad agregado 2026-08-20, antes
       // este segundo caso quedaba invisible en la respuesta.
       items_no_tocados: Array<{ reserva_item_id: number; nombre: string; fecha: string | null; motivo: 'manual' | 'sin_dia_referencial' }>
+      // Fila 13, fase 1b (§3.12): tours que con la fecha nueva caen en otra
+      // temporada. El precio vendido no cambia; solo se avisa.
+      avisos_temporada?: string[]
     }
   },
   // Sesión 12h — reasignación en vivo de OpcionMayorista en ReservaItem

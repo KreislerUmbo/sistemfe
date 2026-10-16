@@ -13,6 +13,7 @@ use App\Models\AgenciaViajes\ConfiguracionCodigo;
 use App\Models\Client\Client;
 use App\Services\AgenciaViajes\CodigoGeneradorService;
 use App\Services\AgenciaViajes\PriceEngineService;
+use App\Services\AgenciaViajes\TourLineaService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -27,6 +28,7 @@ class CotizacionController extends Controller
     public function __construct(
         private PriceEngineService $priceEngine,
         private CodigoGeneradorService $codigoGenerador,
+        private TourLineaService $tourLinea,
     ) {
     }
 
@@ -130,6 +132,8 @@ class CotizacionController extends Controller
             'fecha_viaje_hasta' => 'nullable|date|after_or_equal:fecha_viaje_desde',
             'pasajeros' => 'required|array|min:1',
             'pasajeros.*.edad' => 'required|integer|min:0|max:120',
+            // Fila 13, fase 1b (§3.3): vacío = nacional.
+            'pasajeros.*.residencia' => 'nullable|in:nacional,extranjero',
         ]);
 
         if ($validator->fails()) {
@@ -162,6 +166,7 @@ class CotizacionController extends Controller
                     'cotizacion_id' => $cotizacion->id,
                     'edad' => $pax['edad'],
                     'tipo_pax' => $this->derivarTipoPax((int) $pax['edad'], $edadMaxInfante, $edadMaxNino),
+                    'residencia' => $pax['residencia'] ?? CotizacionPasajero::RESIDENCIA_NACIONAL,
                 ]);
             }
 
@@ -275,13 +280,27 @@ class CotizacionController extends Controller
             return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
         }
 
+        $fechaAntes = $cotizacion->fecha_viaje_desde?->toDateString();
         $cotizacion->update($validator->validated());
         $cotizacion->load('cliente');
+
+        // Fila 13, fase 1b (§3.12): si cambió la fecha y algún tour de una
+        // alternativa en borrador quedó en otra temporada, solo se avisa
+        // ("Recalcular precios por temporada" lo hace el vendedor a mano).
+        $temporadasDesactualizadas = [];
+        if ($fechaAntes !== $cotizacion->fecha_viaje_desde?->toDateString()) {
+            foreach ($cotizacion->alternativas()->whereIn('estado', ['borrador', 'enviada'])->get() as $alternativa) {
+                foreach ($this->tourLinea->temporadasDesactualizadas($alternativa) as $aviso) {
+                    $temporadasDesactualizadas[] = $aviso + ['alternativa_id' => $alternativa->id, 'alternativa_nombre' => $alternativa->nombre];
+                }
+            }
+        }
 
         return response()->json([
             'code' => 200,
             'message' => 'Cotización actualizada correctamente',
             'cotizacion' => $cotizacion,
+            'temporadas_desactualizadas' => $temporadasDesactualizadas,
         ]);
     }
 
@@ -319,6 +338,8 @@ class CotizacionController extends Controller
             'pasajeros' => 'required|array|min:1',
             'pasajeros.*.id' => 'nullable|integer|exists:cotizacion_pasajeros,id',
             'pasajeros.*.edad' => 'required|integer|min:0|max:120',
+            // Fila 13, fase 1b (§3.3): vacío = se conserva (o nacional si es nuevo).
+            'pasajeros.*.residencia' => 'nullable|in:nacional,extranjero',
         ]);
 
         if ($validator->fails()) {
@@ -362,12 +383,14 @@ class CotizacionController extends Controller
                 if (! empty($pax['id'])) {
                     CotizacionPasajero::where('cotizacion_id', $cotizacion->id)
                         ->findOrFail($pax['id'])
-                        ->update(['edad' => $pax['edad'], 'tipo_pax' => $tipoPax]);
+                        ->update(['edad' => $pax['edad'], 'tipo_pax' => $tipoPax]
+                            + (isset($pax['residencia']) ? ['residencia' => $pax['residencia']] : []));
                 } else {
                     CotizacionPasajero::create([
                         'cotizacion_id' => $cotizacion->id,
                         'edad' => $pax['edad'],
                         'tipo_pax' => $tipoPax,
+                        'residencia' => $pax['residencia'] ?? CotizacionPasajero::RESIDENCIA_NACIONAL,
                     ]);
                 }
             }
@@ -433,7 +456,26 @@ class CotizacionController extends Controller
 
             $huboCambio = false;
 
-            foreach ($alternativa->items()->where('modo_precio', 'por_persona')->get() as $item) {
+            // Fila 13, fase 1b: la línea de tour se reprecia sola (precio y
+            // costo por pasajero, misma temporada y mismo reparto por IGV ya
+            // cotizados). Con precio a mano, solo costo: el precio se avisa.
+            foreach ($this->tourLinea->unidades($alternativa->items()->get()) as $lineas) {
+                $resultado = $this->tourLinea->recalcularUnidad($lineas, $alternativa);
+                if ($resultado['cambio']) {
+                    $itemsRecalculados += $lineas->count();
+                    $huboCambio = true;
+                }
+                if ($resultado['precio_manual']) {
+                    $itemsParaRevisar[] = [
+                        'alternativa_item_id' => $lineas->first()->id,
+                        'alternativa_id' => $alternativa->id,
+                        'alternativa_nombre' => $alternativa->nombre,
+                        'motivo' => 'El tour «'.($lineas->first()->tour_linea['combo']['nombre'] ?? $lineas->first()->tour_linea['tour_nombre'] ?? 'Tour').'» tiene el precio cambiado a mano: se actualizó el costo, revisa el precio.',
+                    ];
+                }
+            }
+
+            foreach ($alternativa->items()->where('modo_precio', 'por_persona')->where('origen_tipo', '!=', AlternativaItem::ORIGEN_TOUR)->get() as $item) {
                 // Único caso de alta confianza: origen_tipo=proveedor con
                 // una proveedor_tarifa real detrás — mismo cálculo exacto
                 // que AlternativaItemController::crearItemProveedor().
@@ -492,24 +534,35 @@ class CotizacionController extends Controller
                 $descuentoPct = (float) ($item->descuento_pct ?? 0);
                 $nuevoPrecioConvertido = round($precioListaConvertido * (1 - $descuentoPct / 100), 2);
 
+                // E2 (fila 13, fase 1b; decisión del usuario 14-oct-2026):
+                // el costo también sigue a los pasajeros — total de la línea,
+                // sin infantes. Antes solo se actualizaba la venta y el margen
+                // quedaba inflado o desinflado.
+                $nuevoCostoSnapshot = round((float) $tarifa->precio_costo * ($conteo['adulto'] + $conteo['nino']), 2);
+
                 // precio_venta_snapshot es decimal:2 (Eloquent lo entrega
                 // como string) — comparar como float con round(2) en ambos
                 // lados evita falsos "cambió" por ruido de precisión
                 // binaria, y evita reescribir el ítem/recalcular el total
                 // de la alternativa cuando el precio en realidad no varió.
-                if (round((float) $item->precio_venta_snapshot, 2) !== $nuevoPrecioVentaSnapshot) {
+                if (round((float) $item->precio_venta_snapshot, 2) !== $nuevoPrecioVentaSnapshot
+                    || round((float) $item->costo_snapshot, 2) !== $nuevoCostoSnapshot) {
                     $item->update([
                         'precio_venta_snapshot' => $nuevoPrecioVentaSnapshot,
                         'precio_convertido' => $nuevoPrecioConvertido,
+                        'costo_snapshot' => $nuevoCostoSnapshot,
                     ]);
                     $itemsRecalculados++;
                     $huboCambio = true;
                 }
             }
 
+            // calcularTotalEfectivo() (fila 13, fase 1b): la suma plana de
+            // antes contaba todas las opciones de un grupo de hoteles, no
+            // solo la elegida (o la más barata si está abierto), a
+            // diferencia del resto de los puntos que guardan el total.
             if ($huboCambio) {
-                $total = $alternativa->items()->get()->sum(fn (AlternativaItem $item) => $item->total_convertido);
-                $alternativa->update(['total' => round($total, 2)]);
+                $alternativa->update(['total' => AlternativaItem::calcularTotalEfectivo($alternativa->items()->get())['total']]);
             }
         }
 
