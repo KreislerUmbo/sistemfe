@@ -368,6 +368,49 @@ class TourLineaService
     }
 
     /**
+     * Fila 13, 1c (C1): precio de lista de un grupo de pasajeros, con los
+     * precios unitarios de tour_linea. El infante paga 0.
+     *
+     * @param  array{adulto: float, nino: float, adulto_ext: float, nino_ext: float}  $precios
+     * @param  array<int, array{tipo_pax: string, residencia: ?string}>  $pasajeros
+     */
+    public static function precioDeLista(array $precios, array $pasajeros): float
+    {
+        $total = 0.0;
+
+        foreach ($pasajeros as $pasajero) {
+            if ($pasajero['tipo_pax'] === 'infante') {
+                continue;
+            }
+
+            $clave = $pasajero['tipo_pax'] === 'nino' ? 'nino' : 'adulto';
+            if ($pasajero['residencia'] === CotizacionPasajero::RESIDENCIA_EXTRANJERO) {
+                $clave .= '_ext';
+            }
+
+            $total += $precios[$clave];
+        }
+
+        return round($total, 2);
+    }
+
+    /**
+     * Fila 13, 1c (C1): lo que le toca a un grupo del precio vendido del tour.
+     * El precio vendido puede diferir del de lista (descuento del combo, de la
+     * alternativa o precio a mano): el grupo paga su lista en la misma
+     * proporción. Los centavos de redondeo los ajusta quien factura el último
+     * grupo.
+     */
+    public static function parteDelGrupo(float $listaGrupo, float $listaTotal, float $vendidoTotal): float
+    {
+        if ($listaTotal <= 0) {
+            return 0.0;
+        }
+
+        return round($vendidoTotal * $listaGrupo / $listaTotal, 2);
+    }
+
+    /**
      * @return array{adulto_nac: int, nino_nac: int, adulto_ext: int, nino_ext: int, infante: int}
      */
     public function conteo(int $cotizacionId): array

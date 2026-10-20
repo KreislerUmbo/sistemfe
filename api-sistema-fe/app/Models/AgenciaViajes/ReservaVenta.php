@@ -19,12 +19,29 @@ class ReservaVenta extends Model
         'sale_id',
         'reserva_item_ids',
         'reserva_pasajero_ids',
+        'partes_tour',
     ];
 
     protected $casts = [
         'reserva_item_ids' => 'array',
         'reserva_pasajero_ids' => 'array',
+        // Fila 13, 1c: lo cobrado de cada línea de tour en esta factura, ver
+        // migración 2026_10_20_100000_add_partes_tour_to_reserva_ventas_table.
+        'partes_tour' => 'array',
     ];
+
+    // Líneas de tour que alguna de estas ventas cobró solo en parte, sin que
+    // ninguna haya cobrado la última parte (cierra). Siguen pendientes de
+    // facturar, aunque figuren en reserva_item_ids.
+    public static function itemsDeTourAMedias(iterable $ventas): \Illuminate\Support\Collection
+    {
+        $partes = collect($ventas)->flatMap(fn (self $rv) => $rv->partes_tour ?? []);
+
+        return $partes->pluck('reserva_item_id')
+            ->unique()
+            ->diff($partes->where('cierra', true)->pluck('reserva_item_id'))
+            ->values();
+    }
 
     public function reserva()
     {

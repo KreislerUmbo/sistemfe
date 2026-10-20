@@ -23,6 +23,7 @@ class ReservaPasajero extends Model
     protected $fillable = [
         'reserva_id',
         'tipo_pax',
+        'residencia',
         'nombre',
         'documento',
         'nacionalidad',

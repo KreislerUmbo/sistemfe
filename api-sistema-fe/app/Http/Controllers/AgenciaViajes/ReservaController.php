@@ -397,8 +397,9 @@ class ReservaController extends Controller
             return 'facturacion_externa';
         }
 
-        $itemsFacturadosAceptadosIds = $reserva->ventas
-            ->filter(fn (ReservaVenta $rv) => $rv->sale && $rv->sale->n_operacion !== null)
+        $ventasAceptadas = $reserva->ventas
+            ->filter(fn (ReservaVenta $rv) => $rv->sale && $rv->sale->n_operacion !== null);
+        $itemsFacturadosAceptadosIds = $ventasAceptadas
             ->flatMap(fn (ReservaVenta $rv) => $rv->reserva_item_ids ?? [])
             ->unique();
 
@@ -406,7 +407,11 @@ class ReservaController extends Controller
             return 'pendiente';
         }
 
-        return $itemsFacturadosAceptadosIds->count() >= $totalItems ? 'total' : 'parcial';
+        // Fila 13, 1c: una línea de tour cobrada solo a una parte de los
+        // pasajeros todavía no está facturada del todo.
+        $itemsCompletos = $itemsFacturadosAceptadosIds->diff(ReservaVenta::itemsDeTourAMedias($ventasAceptadas));
+
+        return $itemsCompletos->count() >= $totalItems ? 'total' : 'parcial';
     }
 
     // 'aceptado' | 'rechazado' | 'pendiente_envio' — mismos 3 campos que ya
@@ -465,6 +470,8 @@ class ReservaController extends Controller
             $reservaPasajero = ReservaPasajero::create([
                 'reserva_id' => $reserva->id,
                 'tipo_pax' => $cotizacionPasajero->tipo_pax,
+                // Fila 13, 1c: para la parte de cada pasajero en la línea de tour.
+                'residencia' => $cotizacionPasajero->residencia,
                 'pasajero_catalogo_id' => $pasajeroCatalogoIds[$index] ?? null,
             ]);
             $mapaPasajeros[$cotizacionPasajero->id] = $reservaPasajero->id;

@@ -15,6 +15,7 @@ use App\Models\Sale\Sale;
 use App\Models\Sale\SaleDetail;
 use App\Services\AdvanceApplicationService;
 use App\Services\AgenciaViajes\PriceEngineService;
+use App\Services\AgenciaViajes\TourLineaService;
 use App\Services\SerieComprobanteService;
 use App\Services\TipoCambio\TipoCambioSunatResolver;
 use Illuminate\Http\Request;
@@ -97,9 +98,11 @@ class ReservaFacturacionController extends Controller
 
     private const DESTINO_TRIBUTARIO_DEFAULT = 'nacional';
 
+    // Fila 13, 1c: la única mezcla permitida es la de un tour con IGV
+    // mezclado (ver mezclaDentroDeUnaCargaTour()).
     private const MENSAJE_MEZCLA_TRIBUTARIA = 'La reserva combina servicios con tratamiento tributario '
-        . 'distinto (ej. exonerado Amazonía + gravado nacional). No se puede facturar en un solo '
-        . 'comprobante todavía — requiere revisión manual con el contador antes de emitir.';
+        . 'distinto (ej. exonerado Amazonía + gravado nacional). Solo un mismo tour puede llevar los dos '
+        . 'en un comprobante; factura estos servicios en comprobantes separados o revísalo con el contador.';
 
     // Caso 4 (mezcla) sigue sin responder — sin cambios acá, ver arriba.
     // Caso "extranjero"/exportación (2026-09-24): sigue bloqueado sin
@@ -199,7 +202,7 @@ class ReservaFacturacionController extends Controller
         if ($resolucion instanceof \Illuminate\Http\JsonResponse) {
             return $resolucion;
         }
-        ['items' => $items, 'contexto' => $contexto] = $resolucion;
+        ['items' => $items, 'contexto' => $contexto, 'partes_tour' => $partesTour] = $resolucion;
 
         $infoMoneda = $this->resolverMonedaFacturacionPreview($request, $reserva);
         $contexto = array_merge($contexto, [
@@ -235,7 +238,7 @@ class ReservaFacturacionController extends Controller
             }
         }
 
-        [$lineas, $subtotalTotal, $igvTotal] = $this->construirLineas($gruposPorCategoria, $productosPlaceholder);
+        [$lineas, $subtotalTotal, $igvTotal] = $this->construirLineas($gruposPorCategoria, $productosPlaceholder, null, $partesTour);
 
         if ($infoMoneda['moneda_facturacion'] !== $infoMoneda['moneda_original'] && $infoMoneda['tipo_cambio'] !== null) {
             [$lineas, $subtotalTotal, $igvTotal] = $this->convertirLineasDeMoneda(
@@ -449,7 +452,7 @@ class ReservaFacturacionController extends Controller
                     throw new HttpException(422, $resolucionBajoLock->getData(true)['message']);
                 }
 
-                ['items' => $itemsBajoLock] = $resolucionBajoLock;
+                ['items' => $itemsBajoLock, 'partes_tour' => $partesTourBajoLock] = $resolucionBajoLock;
                 if ($itemsBajoLock->isEmpty()) {
                     throw new HttpException(422, 'No hay ningún ítem disponible para facturar con esta selección.');
                 }
@@ -467,7 +470,7 @@ class ReservaFacturacionController extends Controller
                     }
                 }
 
-                [$lineas, $subtotalTotal, $igvTotal] = $this->construirLineas($gruposPorCategoriaBajoLock, $productosPlaceholder, $textoPersonalizado);
+                [$lineas, $subtotalTotal, $igvTotal] = $this->construirLineas($gruposPorCategoriaBajoLock, $productosPlaceholder, $textoPersonalizado, $partesTourBajoLock);
 
                 if ($infoMoneda['moneda_facturacion'] !== $infoMoneda['moneda_original']) {
                     [$lineas, $subtotalTotal, $igvTotal] = $this->convertirLineasDeMoneda(
@@ -484,13 +487,10 @@ class ReservaFacturacionController extends Controller
 
                 // Análisis de impuestos (28-ago-2026) — antes venía todo
                 // hardcodeado a gravadas=subtotalTotal/exoneradas=0/
-                // inafectas=0 y destino='nacional' literal. detectarMezclaTributaria()
-                // ya garantiza que todos los itemsBajoLock comparten el
-                // mismo destino_tributario, así que alcanza con resolverlo
-                // de cualquiera de ellos (hoy siempre 'nacional', porque es
-                // lo único que pasa el guardia — ver clase, pendiente
-                // Amazonía/extranjero). tip_afe_igv SÍ puede variar por
-                // línea (ej. Apéndice II) aunque el destino sea homogéneo.
+                // inafectas=0 y destino='nacional' literal. Los montos se
+                // suman por el tip_afe_igv de cada línea, así que una
+                // factura con una línea exonerada y otra gravada (tour con
+                // IGV mezclado, fila 13 1c) queda bien partida acá.
                 $montoGravadas = 0.0;
                 $montoExoneradas = 0.0;
                 $montoInafectas = 0.0;
@@ -502,9 +502,9 @@ class ReservaFacturacionController extends Controller
                     };
                 }
 
-                $destinoTributarioVenta = $itemsBajoLock->isNotEmpty()
-                    ? self::resolverDestinoTributario($itemsBajoLock->first())
-                    : self::DESTINO_TRIBUTARIO_DEFAULT;
+                // Fila 13, 1c: con un tour de IGV mezclado ya no hay un solo
+                // destino — ver resolverDestinoVenta().
+                $destinoTributarioVenta = $this->resolverDestinoVenta($itemsBajoLock);
 
                 $venta = Sale::create([
                     'type' => 'sale',
@@ -712,6 +712,7 @@ class ReservaFacturacionController extends Controller
                     'sale_id' => $venta->id,
                     'reserva_item_ids' => $reservaItemIdsFacturados,
                     'reserva_pasajero_ids' => $pasajeroIdsSolicitados,
+                    'partes_tour' => $partesTourBajoLock ?: null,
                 ]);
 
                 return [$venta, $lineas];
@@ -752,7 +753,11 @@ class ReservaFacturacionController extends Controller
         $pasajerosYaFacturados = $this->pasajerosYaFacturadosIds($reserva);
         $pasajerosRepetidos = collect($pasajeroIdsSolicitados)->intersect($pasajerosYaFacturados)->values();
 
-        $idsItemsYaFacturados = $this->itemsYaFacturadosIds($reserva);
+        // Fila 13, 1c: una línea de tour cobrada solo en parte sigue
+        // disponible para la factura de los pasajeros que faltan.
+        $idsItemsYaFacturados = $this->itemsYaFacturadosIds($reserva)
+            ->diff(ReservaVenta::itemsDeTourAMedias($reserva->ventas))
+            ->values();
 
         $todosLosItems = ReservaItem::with([
             'pasajeros',
@@ -767,8 +772,16 @@ class ReservaFacturacionController extends Controller
         $itemsAuto = collect();
         $pendientesPorFaltante = [];
         $itemsSinAsignar = collect();
+        $itemsTour = collect();
 
         foreach ($todosLosItems as $item) {
+            // Fila 13, 1c: la línea de tour se reparte por pasajero, ver
+            // partesDeTour().
+            if ($item->alternativaItem?->origen_tipo === AlternativaItem::ORIGEN_TOUR) {
+                $itemsTour->push($item);
+                continue;
+            }
+
             $pasajerosVinculados = $item->pasajeros->pluck('id');
 
             if ($pasajerosVinculados->isEmpty()) {
@@ -844,9 +857,15 @@ class ReservaFacturacionController extends Controller
         // que el preview fallara apenas se abre el modal. store() sí
         // bloquea explícitamente con 422 antes de intentar crear un Sale
         // vacío, ver más abajo.
+        // Con pasajeros ya facturados (reenvío para arrastrar ítems sueltos)
+        // no hay pasajeros nuevos, así que tampoco parte de tour que cobrar.
+        ['items' => $itemsTourFacturables, 'partes' => $partesTour] = $pasajerosRepetidos->isNotEmpty()
+            ? ['items' => collect(), 'partes' => []]
+            : $this->partesDeTour($reserva, $itemsTour, $pasajeroIdsSolicitados, $pasajerosYaFacturados);
+
         $itemsFinal = $pasajerosRepetidos->isNotEmpty()
             ? $itemsManual
-            : $itemsAuto->concat($itemsManual)->unique('id')->values();
+            : $itemsAuto->concat($itemsTourFacturables)->concat($itemsManual)->unique('id')->values();
 
         $pasajerosPendientes = $reserva->pasajeros->pluck('id')
             ->diff($pasajerosYaFacturados)
@@ -869,6 +888,11 @@ class ReservaFacturacionController extends Controller
                 'nombre' => ReservaController::resolverNombreItem($it->alternativaItem),
                 'total' => (float) $it->alternativaItem->total_convertido,
             ])->values(),
+            // Fila 13, 1c: cuánto se cobra de cada línea de tour en esta factura.
+            'partes_tour' => collect($partesTour)->map(fn (array $parte) => $parte + [
+                'nombre' => ReservaController::resolverNombreItem($itemsTour->firstWhere('id', $parte['reserva_item_id'])->alternativaItem),
+                'total_linea' => (float) $itemsTour->firstWhere('id', $parte['reserva_item_id'])->alternativaItem->total_convertido,
+            ])->values(),
         ];
 
         // Sugerencia de cliente (no vinculante): si se seleccionó un solo
@@ -889,7 +913,65 @@ class ReservaFacturacionController extends Controller
             }
         }
 
-        return ['items' => $itemsFinal, 'contexto' => $contexto];
+        return ['items' => $itemsFinal, 'contexto' => $contexto, 'partes_tour' => $partesTour];
+    }
+
+    // Fila 13, fase 1c (C1, decidido con el usuario el 18-oct-2026): a
+    // diferencia de cualquier otro ítem, una línea de tour SÍ se parte entre
+    // facturas, porque sabe cuánto le toca a cada pasajero
+    // (tour_linea.precios × tipo y residencia). Cubre a todos los pasajeros
+    // de la reserva y entra sola en la factura de un grupo, con la parte de
+    // los pasajeros elegidos:
+    // - parte = vendido de la línea × lista del grupo ÷ lista de todos (el
+    //   descuento del combo, de la alternativa o el precio a mano se reparte
+    //   en la misma proporción); el infante paga 0;
+    // - la factura que cobra a los últimos pasajeros pendientes se lleva
+    //   "vendido − lo ya cobrado", así la suma de las partes da exacto el
+    //   total de la línea (cierra = true);
+    // - que un pasajero no se cobre dos veces ya lo asegura
+    //   pasajerosYaFacturadosIds(); acá solo se calculan montos.
+    // Una carga con IGV mezclado son varias líneas: cada una se reparte con
+    // la misma proporción. Devuelve los ítems que entran en esta factura y
+    // sus partes [{reserva_item_id, monto, cierra}].
+    private function partesDeTour(Reserva $reserva, Collection $itemsTour, array $pasajeroIdsSolicitados, Collection $pasajerosYaFacturados): array
+    {
+        $pagan = $reserva->pasajeros->where('tipo_pax', '!=', 'infante')->values();
+        // Solo infantes: nadie tiene precio, se reparte entre todos por igual.
+        $participantes = $pagan->isNotEmpty() ? $pagan : $reserva->pasajeros->values();
+
+        $pendientes = $participantes->whereNotIn('id', $pasajerosYaFacturados->all())->values();
+        $delGrupo = $pendientes->whereIn('id', $pasajeroIdsSolicitados)->values();
+
+        if ($delGrupo->isEmpty()) {
+            return ['items' => collect(), 'partes' => []];
+        }
+
+        $cierra = $delGrupo->count() === $pendientes->count();
+        $comoDatos = fn (Collection $pasajeros) => $pasajeros
+            ->map(fn ($p) => ['tipo_pax' => $p->tipo_pax, 'residencia' => $p->residencia])
+            ->all();
+        $partesPrevias = $reserva->ventas->flatMap(fn (ReservaVenta $rv) => $rv->partes_tour ?? []);
+
+        $partes = [];
+        foreach ($itemsTour as $item) {
+            $vendido = (float) $item->alternativaItem->total_convertido;
+
+            if ($cierra) {
+                $yaCobrado = (float) $partesPrevias->where('reserva_item_id', $item->id)->sum('monto');
+                $monto = round($vendido - $yaCobrado, 2);
+            } else {
+                $precios = $item->alternativaItem->tour_linea['precios'] ?? [];
+                $listaTodos = $precios ? TourLineaService::precioDeLista($precios, $comoDatos($participantes)) : 0.0;
+                $monto = $listaTodos > 0
+                    ? TourLineaService::parteDelGrupo(TourLineaService::precioDeLista($precios, $comoDatos($delGrupo)), $listaTodos, $vendido)
+                    // Sin precios de lista (tour sin precio): por cabeza.
+                    : round($vendido * $delGrupo->count() / $participantes->count(), 2);
+            }
+
+            $partes[] = ['reserva_item_id' => $item->id, 'monto' => $monto, 'cierra' => $cierra];
+        }
+
+        return ['items' => $itemsTour->values(), 'partes' => $partes];
     }
 
     // Ningún reserva_item pedido puede estar ya cubierto por una
@@ -1145,7 +1227,18 @@ class ReservaFacturacionController extends Controller
         $destinos = $items->map(fn (ReservaItem $it) => self::resolverDestinoTributario($it))->unique()->values();
         $itemsPorDestino = $this->mapearItemsPorTratamientoTributario($items);
 
-        if ($destinos->count() > 1) {
+        // 'extranjero' sigue bloqueado sin excepción (ver constante), solo o
+        // mezclado con otro destino.
+        if ($destinos->contains('extranjero')) {
+            return [
+                'bloqueado_tributario' => true,
+                'motivo' => $destinos->count() > 1 ? self::MENSAJE_MEZCLA_TRIBUTARIA : self::MENSAJE_TRATAMIENTO_TRIBUTARIO_EXTRANJERO,
+                'destinos_tributarios_detectados' => $destinos->all(),
+                'items_por_destino_tributario' => $itemsPorDestino,
+            ];
+        }
+
+        if ($destinos->count() > 1 && ! $this->mezclaDentroDeUnaCargaTour($items)) {
             return [
                 'bloqueado_tributario' => true,
                 'motivo' => self::MENSAJE_MEZCLA_TRIBUTARIA,
@@ -1154,36 +1247,76 @@ class ReservaFacturacionController extends Controller
             ];
         }
 
-        $destinoUnico = $destinos->first();
+        // 'amazonia' se puede facturar SOLO si cada ítem Amazonía ya fue
+        // confirmado a mano (motivo_override_tributario no nulo) — ver
+        // constante MENSAJE_AMAZONIA_SIN_CONFIRMAR arriba para el porqué.
+        // Fila 13, 1c (D4): en un tour con IGV mezclado se confirma cada
+        // línea Amazonía de la carga, igual que cualquier otro ítem.
+        $sinConfirmar = $items
+            ->filter(fn (ReservaItem $it) => self::resolverDestinoTributario($it) === 'amazonia'
+                && $it->motivo_override_tributario === null)
+            ->values();
 
-        // 'extranjero' sigue bloqueado sin excepción (ver constante).
-        if ($destinoUnico === 'extranjero') {
+        if ($sinConfirmar->isNotEmpty()) {
             return [
                 'bloqueado_tributario' => true,
-                'motivo' => self::MENSAJE_TRATAMIENTO_TRIBUTARIO_EXTRANJERO,
+                'motivo' => self::MENSAJE_AMAZONIA_SIN_CONFIRMAR,
                 'destinos_tributarios_detectados' => $destinos->all(),
                 'items_por_destino_tributario' => $itemsPorDestino,
+                'items_sin_confirmar_ids' => $sinConfirmar->pluck('id')->values(),
             ];
         }
 
-        // 'amazonia' se puede facturar SOLO si cada ítem ya fue confirmado
-        // a mano (motivo_override_tributario no nulo) — ver constante
-        // MENSAJE_AMAZONIA_SIN_CONFIRMAR arriba para el porqué.
-        if ($destinoUnico === 'amazonia') {
-            $sinConfirmar = $items->filter(fn (ReservaItem $it) => $it->motivo_override_tributario === null)->values();
+        return null;
+    }
 
-            if ($sinConfirmar->isNotEmpty()) {
-                return [
-                    'bloqueado_tributario' => true,
-                    'motivo' => self::MENSAJE_AMAZONIA_SIN_CONFIRMAR,
-                    'destinos_tributarios_detectados' => $destinos->all(),
-                    'items_por_destino_tributario' => $itemsPorDestino,
-                    'items_sin_confirmar_ids' => $sinConfirmar->pluck('id')->values(),
-                ];
-            }
+    // Fila 13, fase 1c (D1 y D5, decididas con el usuario el 14 y 16-oct-2026):
+    // un tour cuyo Incluye mezcla servicios de la Amazonía (exonerados) y de
+    // fuera (gravados) se carga como varias líneas con la misma carga_tour, y
+    // SUNAT exige cada concepto con su afectación. Esas líneas sí pueden ir
+    // juntas en un comprobante. La mezcla se permite solo si:
+    // - exactamente UNA carga_tour tiene líneas de más de un destino, y
+    // - todo lo demás del comprobante (servicios sueltos y otras cargas)
+    //   comparte un solo destino.
+    // Dos cargas mezcladas, o servicios sueltos de distinto destino, siguen
+    // bloqueados. Un combo (carga_combo) no cuenta como una sola carga (D5):
+    // cada tour del combo es su propia carga_tour.
+    private function mezclaDentroDeUnaCargaTour(Collection $items): bool
+    {
+        $cargasMezcladas = $items
+            ->filter(fn (ReservaItem $it) => $it->carga_tour !== null)
+            ->groupBy('carga_tour')
+            ->filter(fn (Collection $lineas) => $lineas
+                ->map(fn (ReservaItem $it) => self::resolverDestinoTributario($it))
+                ->unique()
+                ->count() > 1);
+
+        if ($cargasMezcladas->count() !== 1) {
+            return false;
         }
 
-        return null;
+        $cargaMezclada = $cargasMezcladas->keys()->first();
+
+        return $items
+            ->reject(fn (ReservaItem $it) => $it->carga_tour === $cargaMezclada)
+            ->map(fn (ReservaItem $it) => self::resolverDestinoTributario($it))
+            ->unique()
+            ->count() <= 1;
+    }
+
+    // Destino que se guarda en sales.destino. Con una mezcla permitida (un
+    // tour con IGV mezclado) queda 'amazonia' si alguna línea lo es: ese campo
+    // solo decide la leyenda de la Ley 27037 en el PDF, y Sale ya la muestra
+    // únicamente si hay monto exonerado (Sale::muestra_leyenda_amazonia).
+    private function resolverDestinoVenta(Collection $items): string
+    {
+        $destinos = $items->map(fn (ReservaItem $it) => self::resolverDestinoTributario($it))->unique();
+
+        if ($destinos->contains('amazonia')) {
+            return 'amazonia';
+        }
+
+        return $destinos->first() ?? self::DESTINO_TRIBUTARIO_DEFAULT;
     }
 
     // Agrupa reserva_items por categoría (HOTEL/TRANSPORTE/TOUR/VUELO/
@@ -1196,9 +1329,8 @@ class ReservaFacturacionController extends Controller
     // dos ítems de la misma categoría pueden tener tratamiento tributario
     // distinto (ej. dos hoteles nacionales, uno exonerado por Apéndice II)
     // y fusionarlos en una sola línea de SaleDetail perdería esa
-    // diferencia. detectarMezclaTributaria() ya garantiza que el DESTINO es
-    // homogéneo en todo el Sale — esto es un nivel más fino, dentro de ese
-    // mismo destino. Devuelve una lista plana (ya no un array keyed por
+    // diferencia. Es también lo que parte un tour con IGV mezclado (fila 13,
+    // 1c) en una línea TOUR exonerada y otra gravada. Devuelve una lista plana (ya no un array keyed por
     // categoría — puede haber más de un grupo por categoría ahora), cada
     // elemento con 'categoria'/'tip_afe_igv'/'items'.
     private function agruparPorCategoria(Collection $items): array
@@ -1242,8 +1374,12 @@ class ReservaFacturacionController extends Controller
     // descripcion_detalle autogenerada en TODAS las líneas de este Sale
     // (confirmado con el usuario: un texto por Sale completo, no por
     // línea individual). Devuelve [lineas, subtotalTotal, igvTotal].
-    private function construirLineas(array $gruposPorCategoria, Collection $productosPlaceholder, ?string $textoPersonalizado = null): array
+    // $partesTour (fila 13, 1c): de una línea de tour se cobra solo la parte
+    // de los pasajeros de esta factura, no su total (ver partesDeTour()).
+    private function construirLineas(array $gruposPorCategoria, Collection $productosPlaceholder, ?string $textoPersonalizado = null, array $partesTour = []): array
     {
+        $montoTour = collect($partesTour)->pluck('monto', 'reserva_item_id');
+
         $subtotalTotal = 0;
         $igvTotal = 0;
         $lineas = [];
@@ -1259,7 +1395,7 @@ class ReservaFacturacionController extends Controller
             // de impuestos, 28-ago-2026) — el valor real viene del ítem.
             $porcentajeIgv = $tipAfeIgv === '10' ? 18.0 : 0.0;
 
-            $precioFinalLinea = round($items->sum(fn (ReservaItem $it) => (float) $it->alternativaItem->total_convertido), 2);
+            $precioFinalLinea = round($items->sum(fn (ReservaItem $it) => (float) ($montoTour[$it->id] ?? $it->alternativaItem->total_convertido)), 2);
             $subtotalLinea = round($precioFinalLinea / (1 + $porcentajeIgv / 100), 2);
             $igvLinea = round($precioFinalLinea - $subtotalLinea, 2);
 
