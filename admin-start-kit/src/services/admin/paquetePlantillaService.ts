@@ -125,3 +125,73 @@ export const paquetePlantillaService = {
     return response.data
   },
 }
+
+// Fila 13, fase 1c — conversión de los tours existentes al modelo nuevo
+// (plan-tours-venta-simple-costo-real.md §3.11). Listar y ver la propuesta no
+// escriben nada; confirmar() guarda lo que el usuario aceptó.
+export type IgvServicio = { tip_afe_igv: string; destino_tributario: string }
+
+export interface TourConversionFila {
+  id: number
+  codigo: string | null
+  nombre: string
+  activo: boolean
+  precio_cargado: number | null
+  precio_propuesto: number | null
+  igv_tipos: string
+  igv_mezclado: boolean
+  servicios: number
+  avisos: string[]
+  conversion_confirmada_en: string | null
+}
+
+export interface TourConversionItem {
+  id: number
+  servicio: string
+  proveedor: string | null
+  costo_actual: number | null
+  costo_sugerido: number | null
+  detalle_sugerido: string | null
+  motivo_sin_sugerencia: string | null
+  costo_propuesto: number | null
+  igv_actual: IgvServicio | null
+  igv_tarifa: IgvServicio | null
+  igv_propuesto: IgvServicio | null
+}
+
+export interface TourConversionPropuesta {
+  id: number
+  codigo: string | null
+  nombre: string
+  moneda: string
+  igv_tour: IgvServicio
+  igv_tour_es_default: boolean
+  precio_cargado: number | null
+  precio_propuesto: number | null
+  precio_origen: 'cargado' | 'tarifas' | null
+  suma_venta_tarifas: number
+  ajuste_redondeo: number | null
+  costo_tour_actual: number | null
+  items: TourConversionItem[]
+  avisos: string[]
+  conversion_confirmada_en: string | null
+}
+
+export const conversionToursService = {
+  async listar(): Promise<{ tours: TourConversionFila[]; fuera: { combos: number; solo_itinerario: number } }> {
+    const response = await httpClient.get('/tours-conversion')
+    return response.data
+  },
+  async propuesta(tourId: number): Promise<TourConversionPropuesta> {
+    const response = await httpClient.get(`/tours-conversion/${tourId}`)
+    return response.data.propuesta
+  },
+  async confirmar(tourId: number, data: {
+    precio_venta_final: number
+    costo_estimado_persona?: number | null
+    items: { id: number; costo_estimado_persona: number | null; tip_afe_igv: string | null; destino_tributario: string | null }[]
+  }): Promise<{ message: string; propuesta: TourConversionPropuesta }> {
+    const response = await httpClient.post(`/tours-conversion/${tourId}/confirmar`, data)
+    return response.data
+  },
+}

@@ -81,6 +81,9 @@ class PaquetePlantilla extends Model
         // (§3.1): convertir los tours que lo usen antes de quitarlo. Ojo: AsignacionOperativa filtra la
         // línea "Ajuste de redondeo" por nombre; ese filtro se queda.
         'ajuste_redondeo',
+        // Fila 13, 1c: conversión al modelo nuevo confirmada por el usuario (§3.11).
+        'conversion_confirmada_en',
+        'conversion_confirmada_por',
     ];
 
     protected $casts = [
@@ -101,6 +104,7 @@ class PaquetePlantilla extends Model
         'descuento_valor' => 'decimal:2',
         'margen_minimo_pct' => 'decimal:2',
         'ajuste_redondeo' => 'decimal:2',
+        'conversion_confirmada_en' => 'datetime',
     ];
 
     // hora_salida/hora_retorno son columnas `time` de Postgres: Eloquent las

@@ -691,11 +691,11 @@ class Fila13Fase1bTourCotizacionTest extends TestCase
         // cada ítem a mano antes de facturar (regla existente, no de la 1b).
         $this->cargar($alternativa, $this->crearTour(['tip_afe_igv' => '10', 'destino_tributario' => 'nacional']));
         [$reserva] = app(ReservaController::class)->crearReservaDesdeAlternativa($alternativa->fresh());
-        $item = ReservaItem::where('reserva_id', $reserva->id)->first();
 
+        // Desde la 1c la línea de tour entra sola con la parte de los pasajeros
+        // elegidos (no se agrega como ítem sin asignar).
         $preview = app(ReservaFacturacionController::class)->prepararFactura(new Request([
             'pasajero_ids' => ReservaPasajero::where('reserva_id', $reserva->id)->pluck('id')->all(),
-            'reserva_item_ids_manual' => [$item->id],
         ]), (string) $reserva->id);
 
         $this->assertSame(200, $preview->getStatusCode(), json_encode($preview->getData(true)));

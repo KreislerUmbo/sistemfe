@@ -21,6 +21,7 @@ use App\Http\Controllers\AgenciaViajes\GuiaController;
 use App\Http\Controllers\AgenciaViajes\GuiaTarifaController;
 use App\Http\Controllers\AgenciaViajes\OpcionHotelController;
 use App\Http\Controllers\AgenciaViajes\OpcionMayoristaController;
+use App\Http\Controllers\AgenciaViajes\ConversionToursController;
 use App\Http\Controllers\AgenciaViajes\PaquetePlantillaController;
 use App\Http\Controllers\AgenciaViajes\PaquetePlantillaItemController;
 use App\Http\Controllers\AgenciaViajes\ProveedorController;
@@ -861,6 +862,15 @@ Route::group([
     Route::put("paquetes-plantilla/{id}/precios/{precioId}", [PaquetePlantillaController::class, 'guardarPrecio'])
         ->middleware('permission:agencia.paquetes');
     Route::delete("paquetes-plantilla/{id}/precios/{precioId}", [PaquetePlantillaController::class, 'eliminarPrecio'])
+        ->middleware('permission:agencia.paquetes');
+
+    // Fila 13, fase 1c — conversión de los tours existentes al modelo nuevo,
+    // tour por tour y con confirmación del usuario (§3.11).
+    Route::get("tours-conversion", [ConversionToursController::class, 'index'])
+        ->middleware('permission:agencia.paquetes');
+    Route::get("tours-conversion/{id}", [ConversionToursController::class, 'show'])
+        ->middleware('permission:agencia.paquetes');
+    Route::post("tours-conversion/{id}/confirmar", [ConversionToursController::class, 'confirmar'])
         ->middleware('permission:agencia.paquetes');
 
     Route::get("paquetes-plantilla/{id}/items", [PaquetePlantillaItemController::class, 'index'])

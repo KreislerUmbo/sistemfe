@@ -799,6 +799,18 @@ adelante la importación SIRE (los comprobantes llegan solos y solo hay que asig
 > 4. El catálogo central de temporadas no existe en `sistemafe_test_migrations`: los tests de temporada usan un resolver en memoria.
 > 5. Un combo con tours de monedas distintas no se carga en el modo nuevo (422): su descuento no se puede repartir entre monedas.
 > 6. Errores 500 intermitentes en catálogos (`proveedores`, `servicios`) durante la prueba en vivo, sin nada en el log: el problema ya conocido de Apache + dotenv en local, no de la 1b.
+>
+> **Fase 1c — HECHA (18-20 oct-2026, rama `feat/tours-fase1c-facturacion`; partes A y B en `802fee3`, parte C en el commit siguiente).**
+> Qué quedó:
+> - **A. Factura con IGV mezclado (D1, D4, D5):** `ReservaFacturacionController::detectarMezclaTributaria()` deja pasar Amazonía + nacional en un comprobante solo si la mezcla está dentro de una misma `carga_tour` y el resto tiene un solo destino (`mezclaDentroDeUnaCargaTour()`). Siguen bloqueados: sueltos de distinto destino, dos cargas mezcladas, un combo (cada tour es su carga) y `extranjero`. Cada línea Amazonía sigue pidiendo confirmación. `sales.destino='amazonia'` si alguna línea lo es (solo decide la leyenda de la Ley 27037).
+> - **B. Facturación por grupo de pasajeros (C1), reglas decididas con el usuario el 18-oct:** la línea de tour entra sola en la factura de un grupo con la parte de esos pasajeros = vendido × lista del grupo ÷ lista de todos (`partesDeTour()`, `TourLineaService::precioDeLista()`/`parteDelGrupo()`); el infante paga 0; el último grupo se lleva "vendido − lo ya cobrado". Migraciones: `reserva_pasajeros.residencia` (copiada al aceptar; las reservas viejas quedan `nacional`) y `reserva_ventas.partes_tour` (`[{reserva_item_id, monto, cierra}]`). Una línea cobrada a medias deja la reserva en "parcial" (`ReservaVenta::itemsDeTourAMedias()`) y cuenta como facturada para las protecciones (no se borra ni se mueve).
+> - **C. Conversión de los tours existentes (§3.11):** `ConversionToursService` + `ConversionToursController` (`GET tours-conversion`, `GET tours-conversion/{id}` solo lectura; `POST tours-conversion/{id}/confirmar`, lo único que escribe). Propone precio (el cargado, o la suma de ventas de sus tarifas + ajuste de redondeo), costo por servicio (calculadora) e IGV por servicio **de la tarifa** (hallazgo 3 de la 1a). Con IGV mezclado exige costo en todos los servicios (422 y nada se guarda). Combos y `solo_itinerario` quedan fuera. Migración `paquetes_plantilla.conversion_confirmada_en`/`_por`. Pantalla `paquetes/conversion.vue` (botón "Convertir tours" en el catálogo).
+> - **Pruebas:** `Fila13Fase1cFacturacionTest` (19 tests); suite completa 1460 en verde. Type-check: 46 errores, todos anteriores. Pantalla de conversión verificada en el navegador contra `agencia-demo` (sin confirmar nada).
+>
+> **Hallazgos de la 1c:**
+> 1. **IGV "exonerado fuera de la Amazonía"** (`20` + `nacional`): existe en tarifas reales de `agencia-demo` (Entrada de Lamas). Los selectores de IGV no lo ofrecían y salía en blanco; corregido en la pantalla de conversión y en la pestaña "Incluye y costos" (`TourIncluyeCostos.vue`, 1a), con aprobación del usuario.
+> 2. **Facturar por tipo de servicio a dos clientes distintos** (vuelos a un RUC, el resto a otro) funciona en el backend pero la pantalla lo bloquea después de la primera factura: anotado como fila **F1** de `plan-hoja-de-ruta-ejecucion.md` (pendiente, decisión del usuario).
+> 3. Un servicio que no es tour asignado a pasajeros de dos grupos sigue sin poder facturarse por este flujo (ya documentado en el controlador); anotado dentro de F1.
 
 | Fase | Contenido | Estimado |
 |---|---|---|

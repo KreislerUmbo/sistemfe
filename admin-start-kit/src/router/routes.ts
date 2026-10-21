@@ -827,6 +827,17 @@ const comercialRoutes = [
     },
     component: () => import("@/views/agencia-viajes/paquetes/index.vue"),
   },
+  // Fila 13, fase 1c — conversión de los tours existentes al modelo nuevo.
+  {
+    path: "/agencia-viajes/paquetes/conversion",
+    name: "agencia.paquetes.conversion",
+    meta: {
+      title: setTitle("Convertir tours"),
+      authRequired: true,
+      permission: 'agencia.paquetes',
+    },
+    component: () => import("@/views/agencia-viajes/paquetes/conversion.vue"),
+  },
   {
     path: "/agencia-viajes/paquetes/nuevo",
     name: "agencia.paquetes.create",
