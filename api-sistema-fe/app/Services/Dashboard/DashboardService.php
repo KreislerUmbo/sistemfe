@@ -349,12 +349,17 @@ class DashboardService
             ->orderBy('fecha_viaje_desde')->orderBy('id')
             ->get();
 
-        $salidas = SalidaOperativa::where('estado', 'activa')
+        // Fila 13, fase 2a (C3): programadas y confirmadas, también las de
+        // líneas de tour del modo nuevo.
+        $salidas = SalidaOperativa::enCurso()
             ->whereBetween('fecha', [$desde, $hasta])
             // Pasajeros = los de cada reserva enganchada, como el tablero de Salidas Operativas.
-            ->with(['tourOrigen:id,nombre', 'guia:id,nombre', 'reservaItems' => fn ($q) => $q
+            ->with(['tourOrigen:id,nombre,pax_minimo_salida', 'guia:id,nombre', 'reservaItems' => fn ($q) => $q
                 ->whereHas('reserva', fn ($r) => $r->where('estado', '!=', 'cancelada'))
-                ->with(['reserva' => fn ($r) => $r->withCount('pasajeros')])])
+                ->with(['reserva' => fn ($r) => $r->withCount([
+                    'pasajeros',
+                    'pasajeros as infantes_count' => fn ($p) => $p->where('tipo_pax', 'infante'),
+                ])])])
             ->orderBy('fecha')->orderBy('hora')
             ->limit(self::MAXIMO_LISTA)
             ->get();
@@ -385,6 +390,11 @@ class DashboardService
                 'reservas' => ($reservas = $s->reservaItems->pluck('reserva')->filter()->unique('id'))->count(),
                 'pasajeros' => $reservas->sum('pasajeros_count'),
                 'cupo' => $s->cupo_maximo,
+                'estado' => $s->estado,
+                'minimo' => $s->tourOrigen?->pax_minimo_salida,
+                // Mismo criterio que el tablero: el infante no cuenta para el mínimo.
+                'bajo_minimo' => $s->tourOrigen?->pax_minimo_salida !== null
+                    && ($reservas->sum('pasajeros_count') - $reservas->sum('infantes_count')) < $s->tourOrigen->pax_minimo_salida,
             ])->all(),
             'sin_asignar' => $sinAsignar,
         ];

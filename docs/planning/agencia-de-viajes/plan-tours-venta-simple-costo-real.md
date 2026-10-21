@@ -811,6 +811,25 @@ adelante la importación SIRE (los comprobantes llegan solos y solo hay que asig
 > 1. **IGV "exonerado fuera de la Amazonía"** (`20` + `nacional`): existe en tarifas reales de `agencia-demo` (Entrada de Lamas). Los selectores de IGV no lo ofrecían y salía en blanco; corregido en la pantalla de conversión y en la pestaña "Incluye y costos" (`TourIncluyeCostos.vue`, 1a), con aprobación del usuario.
 > 2. **Facturar por tipo de servicio a dos clientes distintos** (vuelos a un RUC, el resto a otro) funciona en el backend pero la pantalla lo bloquea después de la primera factura: anotado como fila **F1** de `plan-hoja-de-ruta-ejecucion.md` (pendiente, decisión del usuario).
 > 3. Un servicio que no es tour asignado a pasajeros de dos grupos sigue sin poder facturarse por este flujo (ya documentado en el controlador); anotado dentro de F1.
+>
+> **Fase 2 — decisiones del usuario (21-oct-2026), antes de empezar:**
+> - **D6:** la fase 2 se parte en **2a** (la salida agrupa las líneas de tour: enganche automático compartido/privado, pasajeros y mínimo, estados, reprogramar C4, Reporte Operativo e Inicio C3), **2b** (servicios a reservar por salida y varios vehículos) y **2c** (órdenes de servicio, avisos al cancelar, reprogramar salida completa), en ese orden.
+> - **D7:** la **bandeja de pendientes (§3.14) queda fuera** de la fase 2: se hace junto con la campana de recordatorios (fila 11f). En la fase 2 los avisos se ven en la propia salida y en el tablero.
+> - **D8:** las **exclusiones** de un servicio por pasajero (§3.2, caso de §5) **quedan para después**: en la 2b la cantidad de cada servicio = pasajeros de la salida, ajustable a mano.
+> - **D9:** estados de la salida programada → confirmada → realizada / cancelada; las salidas existentes en `activa` pasan a `programada` (migración).
+>
+> **Fase 2a — HECHA (21-oct-2026, rama `feat/tours-fase2a-salidas`).**
+> Qué quedó:
+> - **Migración** `2026_10_21_100000_salidas_operativas_privadas_y_estados` (`down()` probado): `salidas_operativas.privada_reserva_id` (salida propia de una reserva si el tour es `privado`); índice único (tour, fecha) solo para las compartidas y (tour, fecha, reserva) para las privadas; estados con `CHECK` nuevo, `activa` → `programada`.
+> - **Enganche automático de la línea de tour** (`ReservaController::engancharSalidaOperativa()`): modalidad del tour (`paquetes_plantilla.modalidad`) → salida compartida por tour y fecha, o privada por reserva. Las líneas de una carga con IGV mezclado caen juntas. **C4 sin código nuevo:** `reprogramar()` ya usaba esa función, así que mueve el tour a la salida de la nueva fecha.
+> - **`SalidaOperativaController`:** resumen con pasajeros por tipo (adultos, niños, infantes, extranjeros), mínimo para salir (cuentan adultos y niños; `bajo_minimo`) y lista de pasajeros en el detalle; `PUT salidas-operativas/{id}/estado` (programada ⇄ confirmada ⇄ realizada; realizada exige que haya llegado la fecha; cancelada no vuelve; una realizada no se cancela); enganche manual de una línea de tour solo a una salida de su tour (y a una privada solo de su reserva); enganchar y soltar mueven la carga entera.
+> - **`AsignacionOperativa::sinAsignar()`:** línea de tour pendiente si no está en una salida (o la suya se canceló), o si el tour lleva guía en su Incluye y la salida no tiene guía (`tourLlevaGuia()`).
+> - **Inicio (C3):** salidas en curso (`SalidaOperativa::enCurso()`), con estado y aviso "Bajo el mínimo".
+> - **Frontend:** tablero `salidas/index.vue` (estados nuevos, "2 / 6 mín.", etiqueta Privada, Confirmar / Marcar realizada / Volver, pasajeros en el detalle); Inicio con los avisos.
+> - **Manual:** `docs/aprendizaje/04-recorridos-salidas.md`.
+> - **Pruebas:** `Fila13Fase2aSalidasTest` (8 tests); tests de salidas existentes pasados de `activa` a `programada`; el de la 1b que esperaba "sin salida" ahora comprueba que la carga cae en una sola salida. Tablero verificado en el navegador contra `agencia-demo` (sin cambiar datos).
+>
+> **Hallazgo de la 2a:** `ReservaFacturacionController::resolverSeleccion()` leía los ítems sin `orderBy`. Al engancharse a la salida, el ítem se actualiza y Postgres puede devolverlo en otro orden: el orden de las líneas del comprobante y de `partes_tour` cambiaba entre ejecuciones (lo detectó un test de la 1c que pasaba solo y fallaba en grupo). Corregido con `orderBy('id')`. Mismo patrón que el bug de `Alternativa::items()` del 29-ago.
 
 | Fase | Contenido | Estimado |
 |---|---|---|

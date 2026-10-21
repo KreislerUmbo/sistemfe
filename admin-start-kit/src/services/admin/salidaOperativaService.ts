@@ -19,6 +19,11 @@ export const salidaOperativaService = {
     const response = await httpClient.put(`/salidas-operativas/${id}/cancelar`)
     return response.data
   },
+  // Fila 13, fase 2a (D9): avanza o retrocede un paso (programada ⇄ confirmada ⇄ realizada).
+  async cambiarEstado(id: number, estado: 'programada' | 'confirmada' | 'realizada') {
+    const response = await httpClient.put(`/salidas-operativas/${id}/estado`, { estado })
+    return response.data
+  },
   async adjuntarItem(salidaId: number, reservaItemId: number) {
     const response = await httpClient.post(`/salidas-operativas/${salidaId}/adjuntar-item`, { reserva_item_id: reservaItemId })
     return response.data

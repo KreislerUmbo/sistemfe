@@ -49,7 +49,8 @@ export interface BloquesDashboard {
     hasta: string
     viajes: { id: number; codigo: string | null; cliente: string | null; desde: string | null; hasta: string | null; pasajeros: number }[]
     viajes_total: number
-    salidas: { id: number; fecha: string; hora: string | null; tour: string | null; guia: string | null; reservas: number; pasajeros: number; cupo: number | null }[]
+    // Fila 13, fase 2a: estado (programada/confirmada) y mínimo para salir.
+    salidas: { id: number; fecha: string; hora: string | null; tour: string | null; guia: string | null; reservas: number; pasajeros: number; cupo: number | null; estado: string; minimo: number | null; bajo_minimo: boolean }[]
     sin_asignar: number
   }
 }

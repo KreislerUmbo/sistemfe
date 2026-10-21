@@ -236,6 +236,8 @@
                   <ul v-else class="list-group list-group-flush">
                     <li v-for="s in b.proximos.salidas" :key="s.id" class="list-group-item">
                       <router-link :to="{ name: 'agencia.salidas.detalle', params: { id: s.id } }" class="fw-semibold text-reset">{{ s.tour ?? 'Salida' }}</router-link>
+                      <span v-if="s.estado === 'confirmada'" class="badge bg-success ms-1">Confirmada</span>
+                      <span v-if="s.bajo_minimo" class="badge bg-danger-subtle text-danger-emphasis ms-1">Bajo el mínimo ({{ s.minimo }})</span>
                       <small class="text-muted d-block">
                         {{ formatoFecha(s.fecha) }}{{ s.hora ? ` ${s.hora}` : '' }} · {{ s.pasajeros }}{{ s.cupo ? `/${s.cupo}` : '' }} pasajero(s)
                         · <span :class="{ 'text-danger': !s.guia }">{{ s.guia ?? 'sin guía' }}</span>

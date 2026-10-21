@@ -55,6 +55,12 @@ Casi todo en el sistema sigue el mismo camino:
 | Modelo | `Models/AgenciaViajes/AlternativaItem.php` → `create()` | guarda la línea |
 | Tabla | `alternativa_items` | queda el registro |
 
+Más recorridos, por fase:
+- `03-recorridos-facturacion-y-conversion.md`: fila 13, fase 1c (facturar tours por grupo de
+  pasajeros, IGV mezclado, convertir tours).
+- `04-recorridos-salidas.md`: fila 13, fase 2a (la salida agrupa los tours: enganche
+  compartido/privado, pasajeros y mínimo, estados, reprogramar).
+
 ## 3. Carpetas del backend (`api-sistema-fe/`)
 
 | Carpeta / archivo | Qué hay |

@@ -3,10 +3,13 @@
 namespace App\Http\Controllers\AgenciaViajes;
 
 use App\Http\Controllers\Controller;
+use App\Models\AgenciaViajes\CotizacionPasajero;
 use App\Models\AgenciaViajes\ReservaItem;
 use App\Models\AgenciaViajes\ReservaVenta;
 use App\Models\AgenciaViajes\SalidaOperativa;
+use App\Services\HoraPeru;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Validator;
 
 // Tablero de despacho — agrupa reserva_items de distintas reservas que
@@ -14,11 +17,25 @@ use Illuminate\Support\Facades\Validator;
 // engancharSalidaOperativa()). El guía se asigna una vez acá, no por
 // reserva; el proveedor de transporte NUNCA se centraliza (sigue en
 // reserva_items, editable por reserva).
+//
+// Fila 13, fase 2a (§3.6): también agrupa las líneas de tour del modo nuevo
+// (una salida privada por reserva si el tour es 'privado'), muestra los
+// pasajeros contra el mínimo para salir y maneja los estados programada →
+// confirmada → realizada / cancelada (D9).
 class SalidaOperativaController extends Controller
 {
+    private const RELACIONES = [
+        'tourOrigen',
+        'guia',
+        'reservaPrivada',
+        'reservaItems.alternativaItem',
+        'reservaItems.reserva.pasajeros.pasajeroCatalogo',
+        'reservaItems.reserva.alternativa.cotizacion.cliente',
+    ];
+
     public function index(Request $request)
     {
-        $query = SalidaOperativa::with(['tourOrigen', 'guia', 'reservaItems.reserva.pasajeros', 'reservaItems.reserva.alternativa.cotizacion.cliente']);
+        $query = SalidaOperativa::with(self::RELACIONES);
 
         if ($request->filled('fecha_desde')) {
             $query->where('fecha', '>=', $request->get('fecha_desde'));
@@ -42,8 +59,7 @@ class SalidaOperativaController extends Controller
 
     public function show(string $id)
     {
-        $salida = SalidaOperativa::with(['tourOrigen', 'guia', 'reservaItems.reserva.pasajeros', 'reservaItems.reserva.alternativa.cotizacion.cliente', 'reservaItems.alternativaItem'])
-            ->findOrFail($id);
+        $salida = SalidaOperativa::with(self::RELACIONES)->findOrFail($id);
 
         return response()->json($this->resumenSalida($salida, true));
     }
@@ -65,7 +81,7 @@ class SalidaOperativaController extends Controller
         }
 
         $salida->update($validator->validated());
-        $salida->load(['tourOrigen', 'guia', 'reservaItems.reserva.pasajeros', 'reservaItems.reserva.alternativa.cotizacion.cliente']);
+        $salida->load(self::RELACIONES);
 
         return response()->json(['code' => 200, 'message' => 'Salida actualizada', 'salida' => $this->resumenSalida($salida, true)]);
     }
@@ -73,13 +89,60 @@ class SalidaOperativaController extends Controller
     public function cancelar(string $id)
     {
         $salida = SalidaOperativa::findOrFail($id);
-        $salida->update(['estado' => 'cancelada']);
+
+        if ($salida->estado === SalidaOperativa::ESTADO_REALIZADA) {
+            return response()->json(['code' => 422, 'message' => 'Una salida ya realizada no se puede cancelar.'], 422);
+        }
+
+        $salida->update(['estado' => SalidaOperativa::ESTADO_CANCELADA]);
 
         // A propósito: NO cancela ni toca ninguna reserva enganchada. Es
         // plata de un cliente, cada una se resuelve a mano — la salida
         // cancelada solo queda como aviso visual en el tablero y en cada
         // reserva enganchada (ver reservas/detalle.vue).
         return response()->json(['code' => 200, 'message' => 'Salida marcada como cancelada. Las reservas enganchadas no se modificaron — revísalas una por una.']);
+    }
+
+    // PUT salidas-operativas/{id}/estado — fila 13, fase 2a (D9). Avanza o
+    // retrocede un paso: programada ⇄ confirmada ⇄ realizada. Cancelar tiene
+    // su propio endpoint; una salida cancelada no vuelve atrás por acá.
+    public function cambiarEstado(Request $request, string $id)
+    {
+        $salida = SalidaOperativa::findOrFail($id);
+
+        $validator = Validator::make($request->all(), [
+            'estado' => 'required|in:'.implode(',', [
+                SalidaOperativa::ESTADO_PROGRAMADA,
+                SalidaOperativa::ESTADO_CONFIRMADA,
+                SalidaOperativa::ESTADO_REALIZADA,
+            ]),
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
+        }
+
+        $nuevo = $request->get('estado');
+        $permitidos = [
+            SalidaOperativa::ESTADO_PROGRAMADA => [SalidaOperativa::ESTADO_CONFIRMADA],
+            SalidaOperativa::ESTADO_CONFIRMADA => [SalidaOperativa::ESTADO_PROGRAMADA, SalidaOperativa::ESTADO_REALIZADA],
+            SalidaOperativa::ESTADO_REALIZADA => [SalidaOperativa::ESTADO_CONFIRMADA],
+            SalidaOperativa::ESTADO_CANCELADA => [],
+        ];
+
+        if (! in_array($nuevo, $permitidos[$salida->estado] ?? [], true)) {
+            return response()->json(['code' => 422, 'message' => "Una salida {$salida->estado} no puede pasar a {$nuevo}."], 422);
+        }
+
+        // Realizada = ya se hizo: no puede ser una salida de una fecha futura.
+        if ($nuevo === SalidaOperativa::ESTADO_REALIZADA && $salida->fecha->gt(HoraPeru::hoy())) {
+            return response()->json(['code' => 422, 'message' => 'La salida todavía no llega a su fecha: no se puede marcar como realizada.'], 422);
+        }
+
+        $salida->update(['estado' => $nuevo]);
+        $salida->load(self::RELACIONES);
+
+        return response()->json(['code' => 200, 'message' => 'Estado de la salida actualizado.', 'salida' => $this->resumenSalida($salida, true)]);
     }
 
     // Enganche manual — para ítems que nunca se auto-enganchan: origen_tipo
@@ -100,11 +163,19 @@ class SalidaOperativaController extends Controller
 
         $reservaItem = ReservaItem::with(['reserva', 'alternativaItem'])->findOrFail($request->reserva_item_id);
 
-        // Fila 13, fase 1b: la línea de tour (modo nuevo) se operará por su
-        // propia salida en la fase 2 (C3); engancharla a mano a una salida de
-        // líneas de proveedor mezclaría los dos modelos.
+        if (! in_array($salida->estado, SalidaOperativa::ESTADOS_EN_CURSO, true)) {
+            return response()->json(['code' => 422, 'message' => 'Solo se puede enganchar a una salida programada o confirmada.'], 422);
+        }
+
+        // Fila 13, fase 2a: una línea de tour solo va a una salida de SU tour,
+        // y a una privada solo si es de su misma reserva.
         if ($reservaItem->alternativaItem?->esLineaTour()) {
-            return response()->json(['code' => 422, 'message' => 'Un tour cargado como una sola línea todavía no se engancha a una Salida Operativa (llega en la fase 2).'], 422);
+            if ((int) $salida->tour_origen_id !== (int) $reservaItem->tour_origen_id) {
+                return response()->json(['code' => 422, 'message' => 'Un tour solo se engancha a una salida de ese mismo tour.'], 422);
+            }
+            if ($salida->esPrivada() && (int) $salida->privada_reserva_id !== (int) $reservaItem->reserva_id) {
+                return response()->json(['code' => 422, 'message' => 'Esa salida es privada de otra reserva.'], 422);
+            }
         }
 
         // Bug real (auditoría 2026-09-23): este era el único de los 5
@@ -117,12 +188,13 @@ class SalidaOperativaController extends Controller
             return response()->json(['code' => 422, 'message' => 'Solo se puede enganchar un ítem de una reserva activa.'], 422);
         }
 
-        $yaFacturado = ReservaVenta::where('reserva_id', $reservaItem->reserva_id)
-            ->get()
-            ->flatMap(fn (ReservaVenta $rv) => $rv->reserva_item_ids ?? [])
-            ->contains($reservaItem->id);
+        $itemsAMover = $this->itemsDeLaMismaCarga($reservaItem);
 
-        if ($yaFacturado) {
+        $facturados = ReservaVenta::where('reserva_id', $reservaItem->reserva_id)
+            ->get()
+            ->flatMap(fn (ReservaVenta $rv) => $rv->reserva_item_ids ?? []);
+
+        if ($itemsAMover->pluck('id')->intersect($facturados)->isNotEmpty()) {
             return response()->json(['code' => 422, 'message' => 'No se puede enganchar: este ítem ya fue facturado en una venta de esta reserva.'], 422);
         }
 
@@ -132,17 +204,26 @@ class SalidaOperativaController extends Controller
         // (mismo bug de familia ya corregido en detachReservaItem()/
         // ReservaController::cancelar()/reprogramar()/ReservaItemController::
         // destroy(), este era el 5º camino sin cubrir).
-        $salidaViejaId = $reservaItem->salida_operativa_id;
-        $reservaItem->update(['salida_operativa_id' => $salida->id]);
-        SalidaOperativa::eliminarSiQuedoVacia($salidaViejaId);
+        foreach ($itemsAMover as $item) {
+            $salidaViejaId = $item->salida_operativa_id;
+            $item->update(['salida_operativa_id' => $salida->id]);
+            if ((int) $salidaViejaId !== (int) $salida->id) {
+                SalidaOperativa::eliminarSiQuedoVacia($salidaViejaId);
+            }
+        }
 
         return response()->json(['code' => 200, 'message' => 'Ítem enganchado a la salida.']);
     }
 
     public function detachReservaItem(string $id, string $reservaItemId)
     {
-        $reservaItem = ReservaItem::where('salida_operativa_id', $id)->findOrFail($reservaItemId);
-        $reservaItem->update(['salida_operativa_id' => null]);
+        $reservaItem = ReservaItem::with('alternativaItem')->where('salida_operativa_id', $id)->findOrFail($reservaItemId);
+
+        foreach ($this->itemsDeLaMismaCarga($reservaItem) as $item) {
+            if ((int) $item->salida_operativa_id === (int) $id) {
+                $item->update(['salida_operativa_id' => null]);
+            }
+        }
 
         // Bug real (auditoría 2026-09-22): una salida sin ningún ítem
         // enganchado se quedaba visible para siempre en el tablero, con 0
@@ -150,6 +231,20 @@ class SalidaOperativaController extends Controller
         SalidaOperativa::eliminarSiQuedoVacia((int) $id);
 
         return response()->json(['code' => 200, 'message' => 'Ítem desenganchado de la salida.']);
+    }
+
+    // Fila 13, fase 2a: las líneas de un tour con IGV mezclado (misma
+    // carga_tour) son UN tour en la operación — se enganchan y desenganchan
+    // juntas. Cualquier otro ítem se mueve solo.
+    private function itemsDeLaMismaCarga(ReservaItem $item): Collection
+    {
+        if (! $item->carga_tour) {
+            return collect([$item]);
+        }
+
+        return ReservaItem::where('reserva_id', $item->reserva_id)
+            ->where('carga_tour', $item->carga_tour)
+            ->get();
     }
 
     private function resumenSalida(SalidaOperativa $s, bool $detalle = false): array
@@ -163,6 +258,11 @@ class SalidaOperativaController extends Controller
             ->reject(fn ($r) => $r->estado === 'cancelada')
             ->unique('id')->values();
 
+        $pasajeros = $reservasUnicas->flatMap(fn ($r) => $r->pasajeros);
+        $infantes = $pasajeros->where('tipo_pax', 'infante')->count();
+        $paxQueCuentan = $pasajeros->count() - $infantes;
+        $minimo = $s->tourOrigen?->pax_minimo_salida;
+
         $base = [
             'id' => $s->id,
             'tour_origen_id' => $s->tour_origen_id,
@@ -175,8 +275,22 @@ class SalidaOperativaController extends Controller
             'vehiculo_descripcion' => $s->vehiculo_descripcion,
             'estado' => $s->estado,
             'notas' => $s->notas,
-            'total_pax' => $reservasUnicas->sum(fn ($r) => $r->pasajeros->count()),
+            'privada' => $s->esPrivada(),
+            'privada_reserva_id' => $s->privada_reserva_id,
+            'tiene_lineas_tour' => $s->reservaItems->contains(fn (ReservaItem $i) => $i->alternativaItem?->esLineaTour()),
+            'total_pax' => $pasajeros->count(),
             'total_reservas' => $reservasUnicas->count(),
+            // Mínimo para salir (§3.6): cuentan adultos y niños; el infante
+            // va en brazos y no ocupa lugar.
+            'pax' => [
+                'adultos' => $pasajeros->where('tipo_pax', 'adulto')->count(),
+                'ninos' => $pasajeros->where('tipo_pax', 'nino')->count(),
+                'infantes' => $infantes,
+                'extranjeros' => $pasajeros->where('residencia', CotizacionPasajero::RESIDENCIA_EXTRANJERO)->count(),
+            ],
+            'pax_minimo' => $minimo,
+            'pax_que_cuentan' => $paxQueCuentan,
+            'bajo_minimo' => $minimo !== null && $paxQueCuentan < $minimo,
         ];
 
         if ($detalle) {
@@ -186,6 +300,17 @@ class SalidaOperativaController extends Controller
                 'cliente' => $r->alternativa?->cotizacion?->cliente?->full_name,
                 'total_pax' => $r->pasajeros->count(),
             ])->values();
+
+            $base['pasajeros'] = $reservasUnicas->flatMap(fn ($r) => $r->pasajeros->map(fn ($p) => [
+                'id' => $p->id,
+                'reserva_id' => $r->id,
+                'reserva_codigo' => $r->alternativa?->cotizacion?->codigo,
+                'nombre' => $p->nombre ?? $p->pasajeroCatalogo?->nombre,
+                'documento' => $p->documento,
+                'tipo_pax' => $p->tipo_pax,
+                'residencia' => $p->residencia,
+                'alimentacion_especial' => $p->alimentacion_especial,
+            ]))->values();
         }
 
         return $base;

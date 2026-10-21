@@ -1028,12 +1028,33 @@ export type SalidaOperativa = {
   guia?: Guia | null;
   cupo_maximo?: number | null;
   vehiculo_descripcion?: string | null;
-  estado: 'activa' | 'cancelada';
+  // Fila 13, fase 2a (D9): programada → confirmada → realizada, o cancelada.
+  estado: EstadoSalidaOperativa;
   notas?: string | null;
   total_pax?: number;
   total_reservas?: number;
   reservas?: Array<{ id: number; codigo: string | null; cliente: string | null; total_pax: number }>;
+  // Fila 13, fase 2a: salida privada (tour 'privado'), pasajeros y mínimo para salir.
+  privada?: boolean;
+  privada_reserva_id?: number | null;
+  tiene_lineas_tour?: boolean;
+  pax?: { adultos: number; ninos: number; infantes: number; extranjeros: number };
+  pax_minimo?: number | null;
+  pax_que_cuentan?: number;
+  bajo_minimo?: boolean;
+  pasajeros?: Array<{
+    id: number;
+    reserva_id: number;
+    reserva_codigo: string | null;
+    nombre: string | null;
+    documento: string | null;
+    tipo_pax: string | null;
+    residencia: string | null;
+    alimentacion_especial: string | null;
+  }>;
 };
+
+export type EstadoSalidaOperativa = 'programada' | 'confirmada' | 'realizada' | 'cancelada';
 
 export type SalidasOperativasResponse = {
   total: number;

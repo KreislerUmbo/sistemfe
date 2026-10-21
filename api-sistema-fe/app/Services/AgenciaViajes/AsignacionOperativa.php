@@ -6,7 +6,9 @@ namespace App\Services\AgenciaViajes;
 
 use App\Models\AgenciaViajes\AlternativaItem;
 use App\Models\AgenciaViajes\Guia;
+use App\Models\AgenciaViajes\PaquetePlantillaItem;
 use App\Models\AgenciaViajes\ReservaItem;
+use App\Models\AgenciaViajes\SalidaOperativa;
 use Illuminate\Database\Eloquent\Builder;
 
 /**
@@ -49,11 +51,18 @@ class AsignacionOperativa
     {
         $origenTipo = $item->alternativaItem?->origen_tipo;
 
-        // Fila 13, fase 1b: la línea de tour no tiene guía ni proveedor
-        // propios; su operación (vehículo, guía, proveedores) será la de su
-        // salida en la fase 2. Hasta entonces no cuenta como "sin asignar".
+        // Fila 13, fase 2a: la línea de tour no tiene guía ni proveedor
+        // propios; se opera por su salida. Sin asignar = no está en ninguna
+        // salida (o la suya se canceló), o el tour lleva guía en su Incluye y
+        // la salida todavía no tiene guía. (Vehículos y proveedores por
+        // salida: fase 2b.)
         if ($origenTipo === AlternativaItem::ORIGEN_TOUR) {
-            return false;
+            $salida = $item->salidaOperativa;
+            if (! $salida || $salida->estado === SalidaOperativa::ESTADO_CANCELADA) {
+                return true;
+            }
+
+            return ! $salida->guia_id && self::tourLlevaGuia($item->tour_origen_id);
         }
 
         if ($origenTipo === AlternativaItem::ORIGEN_GUIA) {
@@ -71,5 +80,23 @@ class AsignacionOperativa
         }
 
         return false;
+    }
+
+    /** @var array<int, bool> tour_id => lleva guía (cache por petición) */
+    private static array $tourLlevaGuia = [];
+
+    /**
+     * Fila 13, fase 2a: un tour "lleva guía" si su Incluye tiene un servicio de guía.
+     */
+    public static function tourLlevaGuia(?int $tourId): bool
+    {
+        if ($tourId === null) {
+            return false;
+        }
+
+        return self::$tourLlevaGuia[$tourId] ??= PaquetePlantillaItem::where('paquete_plantilla_id', $tourId)
+            ->whereNull('paquete_plantilla_hijo_id')
+            ->whereNotNull('guia_tarifa_id')
+            ->exists();
     }
 }

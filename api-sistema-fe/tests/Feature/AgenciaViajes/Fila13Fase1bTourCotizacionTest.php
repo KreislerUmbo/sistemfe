@@ -650,9 +650,12 @@ class Fila13Fase1bTourCotizacionTest extends TestCase
             $this->assertSame($item->alternativaItem->carga_tour, $item->carga_tour);
             $this->assertSame($item->alternativaItem->tip_afe_igv, $item->tip_afe_igv);
             $this->assertSame($item->alternativaItem->desglose_costo_snapshot, $item->desglose_costo_snapshot);
-            $this->assertNull($item->salida_operativa_id); // se engancha recién en la fase 2
             $this->assertSame('2026-11-15', $item->fecha->toDateString());
         }
+        // Desde la fase 2a la línea de tour se engancha a su salida; las dos
+        // líneas de IGV de la carga caen en la misma.
+        $this->assertNotNull($deTour->first()->salida_operativa_id);
+        $this->assertCount(1, $deTour->pluck('salida_operativa_id')->unique());
     }
 
     public function test_reporte_operativo_y_pdf_leen_los_dos_formatos(): void

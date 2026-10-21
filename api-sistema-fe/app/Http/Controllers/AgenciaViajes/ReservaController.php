@@ -15,6 +15,7 @@ use App\Models\AgenciaViajes\ReservaItem;
 use App\Models\AgenciaViajes\ReservaItemPasajero;
 use App\Models\AgenciaViajes\ReservaPasajero;
 use App\Models\AgenciaViajes\ReservaVenta;
+use App\Models\AgenciaViajes\PaquetePlantilla;
 use App\Models\AgenciaViajes\SalidaMayorista;
 use App\Models\AgenciaViajes\SalidaOperativa;
 use App\Models\Sale\Sale;
@@ -563,9 +564,8 @@ class ReservaController extends Controller
             'desglose_costo_snapshot' => $alternativaItem->desglose_costo_snapshot,
         ]);
 
-        // La línea de tour todavía no se engancha a una Salida Operativa: eso
-        // es la fase 2 (C3). engancharSalidaOperativa() ya la deja fuera
-        // (solo origen_tipo=proveedor compartido).
+        // Proveedor compartido y, desde la fase 2a, la línea de tour: ver
+        // engancharSalidaOperativa().
         $this->engancharSalidaOperativa($reservaItem, $alternativaItem, $fechaCalculada);
 
         // pax_incluidos null/vacío = aplica a todos, no se crea ninguna
@@ -596,33 +596,45 @@ class ReservaController extends Controller
     // tablero (SalidaOperativaController::attachReservaItem()). Ítems sin
     // tour_origen_id tampoco se enganchan nunca (mismo motivo: sin esa
     // clave no hay forma de agrupar).
+    //
+    // Fila 13, fase 2a (§3.6): la LÍNEA DE TOUR del modo nuevo también se
+    // engancha sola. Su modalidad sale del tour (paquetes_plantilla.modalidad):
+    // 'compartido' → la salida del tour y la fecha, compartida con otras
+    // reservas; 'privado' → una salida propia de esta reserva. Las varias
+    // líneas de una misma carga (IGV mezclado) caen en la misma salida porque
+    // comparten tour, fecha y reserva.
     private function engancharSalidaOperativa(ReservaItem $reservaItem, AlternativaItem $alternativaItem, $fechaCalculada): void
     {
         if (! $fechaCalculada || ! $alternativaItem->tour_origen_id) {
             return;
         }
 
-        if ($alternativaItem->origen_tipo !== AlternativaItem::ORIGEN_PROVEEDOR) {
+        $privadaReservaId = null;
+
+        if ($alternativaItem->esLineaTour()) {
+            $tour = $alternativaItem->tourOrigen ?? PaquetePlantilla::find($alternativaItem->tour_origen_id);
+            if ($tour?->modalidad === 'privado') {
+                $privadaReservaId = $reservaItem->reserva_id;
+            }
+        } elseif ($alternativaItem->origen_tipo !== AlternativaItem::ORIGEN_PROVEEDOR
+            || $alternativaItem->proveedorTarifa?->modalidad !== 'compartido') {
             return;
         }
 
-        if ($alternativaItem->proveedorTarifa?->modalidad !== 'compartido') {
-            return;
-        }
+        $clave = [
+            'tour_origen_id' => $alternativaItem->tour_origen_id,
+            'fecha' => $fechaCalculada,
+            'privada_reserva_id' => $privadaReservaId,
+        ];
 
         try {
-            $salida = SalidaOperativa::firstOrCreate(
-                ['tour_origen_id' => $alternativaItem->tour_origen_id, 'fecha' => $fechaCalculada],
-                ['estado' => 'activa']
-            );
+            $salida = SalidaOperativa::firstOrCreate($clave, ['estado' => SalidaOperativa::ESTADO_PROGRAMADA]);
         } catch (\Illuminate\Database\QueryException $e) {
             // Condición de carrera: otra request creó la misma salida entre
             // el find y el create de firstOrCreate() — el índice único
             // parcial (ver migración) la bloqueó. Recupera la que ya existe
             // en vez de tragarte el error.
-            $salida = SalidaOperativa::where('tour_origen_id', $alternativaItem->tour_origen_id)
-                ->where('fecha', $fechaCalculada)
-                ->first();
+            $salida = SalidaOperativa::where($clave)->first();
 
             if (! $salida) {
                 throw $e;

@@ -767,7 +767,12 @@ class ReservaFacturacionController extends Controller
             // necesita esto para el caso pasaje_aereo (única fuente más
             // específica que el campo genérico de alternativa_items).
             'alternativaItem.cotizacionPasajeAereo',
-        ])->where('reserva_id', $reserva->id)->whereNotIn('id', $idsItemsYaFacturados)->get();
+        ])->where('reserva_id', $reserva->id)->whereNotIn('id', $idsItemsYaFacturados)
+            // Orden estable: sin orderBy, Postgres puede devolver primero una
+            // fila recién actualizada (p. ej. al engancharse a una salida) y
+            // cambiar el orden de las líneas y de partes_tour (fila 13, 2a).
+            ->orderBy('id')
+            ->get();
 
         $itemsAuto = collect();
         $pendientesPorFaltante = [];

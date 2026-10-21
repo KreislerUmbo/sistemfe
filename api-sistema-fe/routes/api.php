@@ -1222,6 +1222,9 @@ Route::group([
         ->middleware('permission:reservas.editar');
     Route::put("salidas-operativas/{id}/cancelar", [SalidaOperativaController::class, 'cancelar'])
         ->middleware('permission:reservas.editar');
+    // Fila 13, fase 2a (D9): programada → confirmada → realizada.
+    Route::put("salidas-operativas/{id}/estado", [SalidaOperativaController::class, 'cambiarEstado'])
+        ->middleware('permission:reservas.editar');
     Route::post("salidas-operativas/{id}/adjuntar-item", [SalidaOperativaController::class, 'attachReservaItem'])
         ->middleware('permission:reservas.editar');
     Route::delete("salidas-operativas/{id}/items/{reservaItemId}", [SalidaOperativaController::class, 'detachReservaItem'])

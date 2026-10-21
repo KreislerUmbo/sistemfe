@@ -125,7 +125,7 @@ class ReporteOperativoSalidaOperativaTest extends TestCase
 
         $salida = SalidaOperativa::create([
             'tour_origen_id' => $f['item']->tour_origen_id, 'fecha' => '2026-09-20',
-            'guia_id' => $guiaSalida->id, 'estado' => 'activa',
+            'guia_id' => $guiaSalida->id, 'estado' => 'programada',
             'vehiculo_descripcion' => 'Camioneta ABC-123',
         ]);
         $f['item']->update(['salida_operativa_id' => $salida->id]);
@@ -147,7 +147,7 @@ class ReporteOperativoSalidaOperativaTest extends TestCase
         $f = $this->crearReservaConItemGuia();
 
         $salida = SalidaOperativa::create([
-            'tour_origen_id' => $f['item']->tour_origen_id, 'fecha' => '2026-09-20', 'estado' => 'activa',
+            'tour_origen_id' => $f['item']->tour_origen_id, 'fecha' => '2026-09-20', 'estado' => 'programada',
         ]);
         $f['item']->update(['salida_operativa_id' => $salida->id]);
 
