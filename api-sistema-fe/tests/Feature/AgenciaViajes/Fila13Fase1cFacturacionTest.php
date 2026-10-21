@@ -3,6 +3,7 @@
 namespace Tests\Feature\AgenciaViajes;
 
 use App\Http\Controllers\AgenciaViajes\AlternativaItemController;
+use App\Http\Controllers\AgenciaViajes\ConversionToursController;
 use App\Http\Controllers\AgenciaViajes\ReservaController;
 use App\Http\Controllers\AgenciaViajes\ReservaFacturacionController;
 use App\Models\AgenciaViajes\Alternativa;
@@ -332,6 +333,86 @@ class Fila13Fase1cFacturacionTest extends TestCase
     }
 
     // ═══════════════════════════════════════════════════════════════
+    // Conversión de los tours existentes (§3.11)
+    // ═══════════════════════════════════════════════════════════════
+
+    public function test_la_propuesta_no_escribe_nada_y_toma_el_igv_y_el_costo_de_la_tarifa(): void
+    {
+        // Tour viejo: sin precio, Incluye con una tarifa gravada por persona y sin IGV propio.
+        $tour = $this->crearTour(['precio_venta_final' => null, 'costo_estimado_persona' => null]);
+        $item = $this->incluyeConTarifa($tour, costo: 30, venta: 45, igv: '10', destino: 'nacional');
+        $antes = [$tour->fresh()->toArray(), $item->fresh()->toArray()];
+
+        $respuesta = app(ConversionToursController::class)->show((string) $tour->id)->getData(true);
+
+        $this->assertSame(200, $respuesta['code'], json_encode($respuesta));
+        $propuesta = $respuesta['propuesta'];
+        $this->assertEqualsWithDelta(45.0, $propuesta['precio_propuesto'], 0.001); // suma de ventas de sus tarifas
+        $this->assertSame('tarifas', $propuesta['precio_origen']);
+        $this->assertEqualsWithDelta(30.0, $propuesta['items'][0]['costo_propuesto'], 0.001); // calculadora
+        $this->assertNull($propuesta['items'][0]['igv_actual']);
+        $this->assertSame(['tip_afe_igv' => '10', 'destino_tributario' => 'nacional'], $propuesta['items'][0]['igv_propuesto']);
+        // Nada cambió en la base.
+        $this->assertSame($antes, [$tour->fresh()->toArray(), $item->fresh()->toArray()]);
+    }
+
+    public function test_confirmar_guarda_lo_que_el_usuario_acepto(): void
+    {
+        $tour = $this->crearTour(['precio_venta_final' => null, 'costo_estimado_persona' => null]);
+        $item = $this->incluyeConTarifa($tour, costo: 30, venta: 45, igv: '10', destino: 'nacional');
+
+        $respuesta = app(ConversionToursController::class)->confirmar(new Request([
+            'precio_venta_final' => 50,
+            'items' => [['id' => $item->id, 'costo_estimado_persona' => 32, 'tip_afe_igv' => '10', 'destino_tributario' => 'nacional']],
+        ]), (string) $tour->id)->getData(true);
+
+        $this->assertSame(200, $respuesta['code'], json_encode($respuesta));
+        $tour->refresh();
+        $item->refresh();
+        $this->assertEqualsWithDelta(50.0, (float) $tour->precio_venta_final, 0.001);
+        $this->assertEqualsWithDelta(32.0, (float) $item->costo_estimado_persona, 0.001);
+        $this->assertSame('10', $item->tip_afe_igv);
+        $this->assertNotNull($tour->conversion_confirmada_en);
+        $this->assertSame(Auth::guard('api')->id(), $tour->conversion_confirmada_por);
+
+        $fila = collect(app(ConversionToursController::class)->index()->getData(true)['tours'])->firstWhere('id', $tour->id);
+        $this->assertNotNull($fila['conversion_confirmada_en']);
+    }
+
+    public function test_confirmar_un_tour_mezclado_con_un_servicio_sin_costo_no_guarda_nada(): void
+    {
+        $tour = $this->crearTour(['precio_venta_final' => null, 'costo_estimado_persona' => null]);
+        $bote = $this->incluye($tour, 'Bote', 60, '20', 'amazonia');
+        $transporte = $this->incluye($tour, 'Transporte', null);
+
+        $respuesta = app(ConversionToursController::class)->confirmar(new Request([
+            'precio_venta_final' => 100,
+            'items' => [['id' => $transporte->id, 'costo_estimado_persona' => null, 'tip_afe_igv' => '10', 'destino_tributario' => 'nacional']],
+        ]), (string) $tour->id);
+
+        $this->assertSame(422, $respuesta->getStatusCode());
+        $this->assertStringContainsString('mezcla tipos de IGV', $respuesta->getData(true)['message']);
+        $this->assertNull($tour->fresh()->precio_venta_final);
+        $this->assertNull($transporte->fresh()->tip_afe_igv);
+        $this->assertNull($tour->fresh()->conversion_confirmada_en);
+        $this->assertSame('20', $bote->fresh()->tip_afe_igv);
+    }
+
+    public function test_combos_y_tours_solo_itinerario_quedan_fuera(): void
+    {
+        $soloItinerario = $this->crearTour(['uso' => PaquetePlantilla::USO_SOLO_ITINERARIO]);
+        $combo = $this->crearCombo([$this->crearTour()]);
+
+        $listado = app(ConversionToursController::class)->index()->getData(true);
+        $ids = collect($listado['tours'])->pluck('id');
+
+        $this->assertNotContains($soloItinerario->id, $ids);
+        $this->assertNotContains($combo->id, $ids);
+        $this->assertSame(422, app(ConversionToursController::class)->show((string) $soloItinerario->id)->getStatusCode());
+        $this->assertSame(422, app(ConversionToursController::class)->confirmar(new Request(['precio_venta_final' => 10]), (string) $combo->id)->getStatusCode());
+    }
+
+    // ═══════════════════════════════════════════════════════════════
     // Fixtures
     // ═══════════════════════════════════════════════════════════════
 
@@ -431,6 +512,25 @@ class Fila13Fase1cFacturacionTest extends TestCase
             'tip_afe_igv' => $igv,
             'destino_tributario' => $destino,
             'orden' => PaquetePlantillaItem::where('paquete_plantilla_id', $tour->id)->count() + 1,
+        ]);
+    }
+
+    // Servicio del Incluye como lo dejaba el modelo viejo: con tarifa de
+    // proveedor y sin costo ni IGV propios.
+    private function incluyeConTarifa(PaquetePlantilla $tour, float $costo, float $venta, string $igv, string $destino): PaquetePlantillaItem
+    {
+        $proveedor = Proveedor::create(['razon_social' => 'Proveedor Test '.uniqid(), 'estado' => true]);
+        $proveedorServicio = ProveedorServicio::create(['proveedor_id' => $proveedor->id, 'destino_servicio_id' => $this->servicio('Transporte')->id]);
+        $tarifa = ProveedorTarifa::create([
+            'proveedor_servicio_id' => $proveedorServicio->id, 'tipo_tarifa' => 'publica', 'modalidad' => 'compartido',
+            'moneda' => 'PEN', 'precio_costo' => $costo, 'margen_tipo' => 'porcentaje', 'margen_valor' => 20,
+            'precio_venta_adulto' => $venta, 'vigente_desde' => HoraPeru::hoyTexto(),
+            'tip_afe_igv' => $igv, 'destino_tributario' => $destino,
+        ]);
+
+        return PaquetePlantillaItem::create([
+            'paquete_plantilla_id' => $tour->id, 'proveedor_tarifa_id' => $tarifa->id, 'proveedor_id' => $proveedor->id,
+            'destino_servicio_id' => $proveedorServicio->destino_servicio_id, 'orden' => 1,
         ]);
     }
 

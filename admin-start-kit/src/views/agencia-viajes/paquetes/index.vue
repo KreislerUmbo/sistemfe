@@ -8,9 +8,14 @@
                 </h5>
                 <small class="text-muted">{{ totalPages }} registro(s) encontrado(s)</small>
             </div>
-            <router-link to="/agencia-viajes/paquetes/nuevo" class="btn btn-primary fw-semibold shadow-sm">
-                <i class="fas fa-plus me-2"></i>Nuevo Paquete/Tour
-            </router-link>
+            <div class="d-flex gap-2">
+                <router-link to="/agencia-viajes/paquetes/conversion" class="btn btn-outline-primary fw-semibold">
+                    <i class="fas fa-right-left me-2"></i>Convertir tours
+                </router-link>
+                <router-link to="/agencia-viajes/paquetes/nuevo" class="btn btn-primary fw-semibold shadow-sm">
+                    <i class="fas fa-plus me-2"></i>Nuevo Paquete/Tour
+                </router-link>
+            </div>
         </div>
 
         <div class="card border-0 shadow-sm mb-3">

@@ -277,7 +277,7 @@ class TourLineaService
         ], $grupos);
     }
 
-    private function nombreServicio(PaquetePlantillaItem $item): string
+    public static function nombreServicio(PaquetePlantillaItem $item): string
     {
         if ($item->guia_tarifa_id) {
             return 'Guía'.($item->guiaTarifa?->guia?->nombre ? ' — '.$item->guiaTarifa->guia->nombre : '');

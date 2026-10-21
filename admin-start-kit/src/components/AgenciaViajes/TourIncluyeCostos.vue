@@ -70,6 +70,8 @@
                                     <option :value="null">Del tour ({{ etiquetaIgv(igvTour) }})</option>
                                     <option value="10|nacional">Gravado</option>
                                     <option value="20|amazonia">Exonerado (Amazonía)</option>
+                                    <!-- Fila 13, 1c: hay tarifas exoneradas fuera de la Amazonía (20 + nacional); sin esta opción el selector salía en blanco. -->
+                                    <option value="20|nacional">Exonerado (fuera de la Amazonía)</option>
                                     <option value="30|nacional">Inafecto</option>
                                     <option value="40|extranjero">Exportación</option>
                                 </select>
