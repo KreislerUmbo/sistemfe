@@ -126,9 +126,12 @@ class ReporteOperativoSalidaOperativaTest extends TestCase
         $salida = SalidaOperativa::create([
             'tour_origen_id' => $f['item']->tour_origen_id, 'fecha' => '2026-09-20',
             'guia_id' => $guiaSalida->id, 'estado' => 'programada',
-            'vehiculo_descripcion' => 'Camioneta ABC-123',
         ]);
         $f['item']->update(['salida_operativa_id' => $salida->id]);
+        // Fila 13, fase 2b (D13): el vehículo vive en salida_vehiculos, con
+        // las reservas que lleva (antes era el texto vehiculo_descripcion).
+        \App\Models\AgenciaViajes\SalidaVehiculo::create(['salida_operativa_id' => $salida->id, 'descripcion' => 'Camioneta ABC-123'])
+            ->reservas()->sync([$f['item']->reserva_id]);
 
         $body = app(ReporteOperativoController::class)->index(new Request([
             'fecha_desde' => '2026-09-20', 'fecha_hasta' => '2026-09-20',

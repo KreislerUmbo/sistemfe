@@ -39,7 +39,15 @@ class AsignacionOperativa
      */
     public static function guiaEfectivo(ReservaItem $item): ?Guia
     {
-        return $item->salida_operativa_id ? $item->salidaOperativa?->guia : $item->guia;
+        if (! $item->salida_operativa_id) {
+            return $item->guia;
+        }
+
+        // Fila 13, fase 2b (D12): si la reserva va en un vehículo con su
+        // propio guía (grupo grande), ese es su guía; si no, el de la salida.
+        $salida = $item->salidaOperativa;
+
+        return $salida?->vehiculoDeReserva((int) $item->reserva_id)?->guia ?? $salida?->guia;
     }
 
     /**
@@ -53,16 +61,22 @@ class AsignacionOperativa
 
         // Fila 13, fase 2a: la línea de tour no tiene guía ni proveedor
         // propios; se opera por su salida. Sin asignar = no está en ninguna
-        // salida (o la suya se canceló), o el tour lleva guía en su Incluye y
-        // la salida todavía no tiene guía. (Vehículos y proveedores por
-        // salida: fase 2b.)
+        // salida (o la suya se canceló); el tour lleva guía en su Incluye y
+        // ni la salida ni el vehículo de la reserva tienen guía; o algún
+        // servicio a reservar de la salida no tiene proveedor (fase 2b). Que
+        // falte un vehículo es un aviso del tablero, no un pendiente: hay
+        // tours sin transporte.
         if ($origenTipo === AlternativaItem::ORIGEN_TOUR) {
             $salida = $item->salidaOperativa;
             if (! $salida || $salida->estado === SalidaOperativa::ESTADO_CANCELADA) {
                 return true;
             }
 
-            return ! $salida->guia_id && self::tourLlevaGuia($item->tour_origen_id);
+            if (! self::guiaEfectivo($item) && self::tourLlevaGuia($item->tour_origen_id)) {
+                return true;
+            }
+
+            return $salida->servicios->contains(fn ($servicio) => $servicio->proveedor_id === null);
         }
 
         if ($origenTipo === AlternativaItem::ORIGEN_GUIA) {

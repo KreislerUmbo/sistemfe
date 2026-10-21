@@ -46,7 +46,7 @@
                                 <th class="ps-3">Fecha / Hora</th>
                                 <th>Tour</th>
                                 <th style="min-width:180px">Guía</th>
-                                <th style="min-width:200px">Vehículo / Cupo</th>
+                                <th style="min-width:200px">Operación</th>
                                 <th class="text-center">Pax</th>
                                 <th class="text-center">Reservas</th>
                                 <th class="text-center">Estado</th>
@@ -89,11 +89,24 @@
                                         <i class="fas fa-triangle-exclamation me-1"></i>Falta guía
                                     </div>
                                 </td>
-                                <td>
-                                    <input type="text" class="form-control form-control-sm mb-1" placeholder="Vehículo (ej. Van 14 pax)"
-                                        v-model="s.vehiculo_descripcion" @blur="guardarCampos(s)">
-                                    <input type="number" min="1" class="form-control form-control-sm" placeholder="Cupo máximo"
-                                        v-model.number="s.cupo_maximo" @blur="guardarCampos(s)">
+                                <!-- Fila 13, fase 2b: resumen de servicios y vehículos; se editan en el detalle. -->
+                                <td class="small">
+                                    <div>
+                                        <i class="fas fa-van-shuttle text-muted me-1"></i>
+                                        <template v-if="s.vehiculos_total">
+                                            {{ s.vehiculos_total }} vehículo(s){{ s.capacidad_total ? ` · ${s.capacidad_total} asientos` : '' }}
+                                        </template>
+                                        <span v-else class="text-muted fst-italic">Sin vehículo</span>
+                                    </div>
+                                    <div v-if="s.servicios_total">
+                                        <i class="fas fa-list-check text-muted me-1"></i>{{ s.servicios_total - (s.servicios_por_reservar ?? 0) }}/{{ s.servicios_total }} servicios reservados
+                                    </div>
+                                    <div v-if="s.servicios_sin_proveedor" class="text-warning-emphasis">
+                                        <i class="fas fa-triangle-exclamation me-1"></i>{{ s.servicios_sin_proveedor }} servicio(s) sin proveedor
+                                    </div>
+                                    <div v-if="s.reservas_sin_vehiculo" class="text-warning-emphasis">
+                                        <i class="fas fa-triangle-exclamation me-1"></i>{{ s.reservas_sin_vehiculo }} reserva(s) sin vehículo
+                                    </div>
                                 </td>
                                 <td class="text-center">
                                     <div class="fw-semibold">{{ s.total_pax ?? 0 }}</div>
@@ -140,7 +153,7 @@
         <!-- Modal detalle -->
         <div class="modal fade" tabindex="-1" :class="{ show: !!detalle, 'd-block': !!detalle }"
             style="background:rgba(0,0,0,.5)" v-if="detalle">
-            <div class="modal-dialog modal-lg">
+            <div class="modal-dialog modal-xl modal-dialog-scrollable">
                 <div class="modal-content">
                     <div class="modal-header">
                         <h6 class="modal-title fw-bold">
@@ -152,8 +165,9 @@
                         <div class="row g-2 mb-3 small">
                             <div class="col-6"><strong>Guía:</strong> {{ detalle.guia?.nombre ?? 'Sin asignar' }}</div>
                             <div class="col-6"><strong>Estado:</strong> {{ ETIQUETA_ESTADO[detalle.estado] }}<span v-if="detalle.privada"> · privada</span></div>
-                            <div class="col-6"><strong>Vehículo:</strong> {{ detalle.vehiculo_descripcion ?? '—' }}</div>
-                            <div class="col-6"><strong>Cupo máximo:</strong> {{ detalle.cupo_maximo ?? '—' }}</div>
+                            <div class="col-6">
+                                <strong>Vehículos:</strong> {{ detalle.vehiculos_total ?? 0 }}{{ detalle.capacidad_total ? ` (${detalle.capacidad_total} asientos)` : '' }}
+                            </div>
                             <div class="col-6">
                                 <strong>Total pax:</strong> {{ detalle.total_pax ?? 0 }}
                                 <span v-if="detalle.pax" class="text-muted">
@@ -189,6 +203,8 @@
                                 </table>
                             </div>
                         </template>
+                        <!-- Fila 13, fase 2b (D10-D13) -->
+                        <SalidaServiciosVehiculos class="mb-3" :salida="detalle" :guias="guias" @cambio="recargarDetalle" />
                         <h6 class="small fw-semibold text-secondary text-uppercase">Reservas</h6>
                         <ul class="list-group">
                             <li v-for="r in detalle.reservas ?? []" :key="r.id" class="list-group-item d-flex justify-content-between align-items-center py-2">
@@ -225,6 +241,7 @@
 
 <script setup lang="ts">
 import CampoFecha from '@/components/CampoFecha.vue';
+import SalidaServiciosVehiculos from '@/components/AgenciaViajes/SalidaServiciosVehiculos.vue';
 import { ref, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';
@@ -339,15 +356,18 @@ const guardarGuia = async (s: SalidaOperativa, valor: string) => {
     }
 };
 
-const guardarCampos = async (s: SalidaOperativa) => {
-    try {
-        await salidaOperativaService.actualizar(s.id, {
-            vehiculo_descripcion: s.vehiculo_descripcion || null,
-            cupo_maximo: s.cupo_maximo || null,
-        });
-    } catch (error: any) {
-        toast.error(error.response?.data?.message ?? 'No se pudo actualizar la salida');
-    }
+// Fila 13, fase 2b: tras cambiar un servicio o vehículo, recarga el detalle
+// (cantidades, asientos, avisos) y la fila del tablero.
+const recargarDetalle = async () => {
+    if (!detalle.value) return;
+    const id = detalle.value.id;
+    await abrirDetalle(id);
+    const res = await salidaOperativaService.listar({
+        fecha_desde: fechaDesde.value || undefined,
+        fecha_hasta: fechaHasta.value || undefined,
+        estado: estado.value || undefined,
+    });
+    salidas.value = res.salidas;
 };
 
 const abrirDetalle = async (id: number) => {

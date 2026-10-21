@@ -7,6 +7,8 @@ use App\Models\AgenciaViajes\CotizacionPasajero;
 use App\Models\AgenciaViajes\ReservaItem;
 use App\Models\AgenciaViajes\ReservaVenta;
 use App\Models\AgenciaViajes\SalidaOperativa;
+use App\Models\AgenciaViajes\SalidaServicio;
+use App\Models\AgenciaViajes\SalidaVehiculo;
 use App\Services\HoraPeru;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -31,6 +33,11 @@ class SalidaOperativaController extends Controller
         'reservaItems.alternativaItem',
         'reservaItems.reserva.pasajeros.pasajeroCatalogo',
         'reservaItems.reserva.alternativa.cotizacion.cliente',
+        // Fila 13, fase 2b.
+        'servicios.proveedor',
+        'vehiculos.proveedor',
+        'vehiculos.guia',
+        'vehiculos.reservas',
     ];
 
     public function index(Request $request)
@@ -293,6 +300,22 @@ class SalidaOperativaController extends Controller
             'bajo_minimo' => $minimo !== null && $paxQueCuentan < $minimo,
         ];
 
+        // Fila 13, fase 2b: servicios a reservar y vehículos (D10-D13).
+        // Pasajeros que ocupan asiento por reserva: sin infantes.
+        $ocupanPorReserva = $reservasUnicas->mapWithKeys(fn ($r) => [
+            $r->id => $r->pasajeros->where('tipo_pax', '!=', 'infante')->count(),
+        ]);
+        $reservasEnVehiculo = $s->vehiculos->flatMap(fn ($v) => $v->reservas->pluck('id'))->unique();
+
+        $base['servicios_total'] = $s->servicios->count();
+        $base['servicios_sin_proveedor'] = $s->servicios->whereNull('proveedor_id')->count();
+        $base['servicios_por_reservar'] = $s->servicios->where('estado', SalidaServicio::ESTADO_POR_RESERVAR)->count();
+        $base['vehiculos_total'] = $s->vehiculos->count();
+        $base['capacidad_total'] = $s->vehiculos->sum('capacidad');
+        $base['reservas_sin_vehiculo'] = $s->vehiculos->isEmpty()
+            ? 0
+            : $reservasUnicas->pluck('id')->diff($reservasEnVehiculo)->count();
+
         if ($detalle) {
             $base['reservas'] = $reservasUnicas->map(fn ($r) => [
                 'id' => $r->id,
@@ -311,6 +334,40 @@ class SalidaOperativaController extends Controller
                 'residencia' => $p->residencia,
                 'alimentacion_especial' => $p->alimentacion_especial,
             ]))->values();
+
+            $base['servicios'] = $s->servicios->map(fn (SalidaServicio $sv) => [
+                'id' => $sv->id,
+                'nombre' => $sv->nombre,
+                'del_tour' => $sv->paquete_plantilla_item_id !== null,
+                'proveedor_id' => $sv->proveedor_id,
+                'proveedor' => $sv->proveedor ? ($sv->proveedor->nombre_comercial ?: $sv->proveedor->razon_social) : null,
+                // Cantidad: la fijada a mano o, si no, adultos + niños de la salida.
+                'cantidad' => $sv->cantidad_manual ?? $paxQueCuentan,
+                'cantidad_manual' => $sv->cantidad_manual,
+                'estado' => $sv->estado,
+                'notas' => $sv->notas,
+            ])->values();
+
+            $base['vehiculos'] = $s->vehiculos->map(function (SalidaVehiculo $v) use ($ocupanPorReserva, $reservasUnicas) {
+                $reservaIds = $v->reservas->pluck('id')->intersect($reservasUnicas->pluck('id'))->values();
+                $pasajeros = $reservaIds->sum(fn ($id) => $ocupanPorReserva[$id] ?? 0);
+
+                return [
+                    'id' => $v->id,
+                    'proveedor_id' => $v->proveedor_id,
+                    'proveedor' => $v->proveedor ? ($v->proveedor->nombre_comercial ?: $v->proveedor->razon_social) : null,
+                    'descripcion' => $v->descripcion,
+                    'chofer_nombre' => $v->chofer_nombre,
+                    'chofer_telefono' => $v->chofer_telefono,
+                    'capacidad' => $v->capacidad,
+                    'guia_id' => $v->guia_id,
+                    'guia' => $v->guia?->nombre,
+                    'notas' => $v->notas,
+                    'reserva_ids' => $reservaIds,
+                    'pasajeros' => $pasajeros,
+                    'excede_capacidad' => $v->capacidad !== null && $pasajeros > $v->capacidad,
+                ];
+            })->values();
         }
 
         return $base;

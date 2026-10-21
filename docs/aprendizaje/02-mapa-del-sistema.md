@@ -60,6 +60,8 @@ Más recorridos, por fase:
   pasajeros, IGV mezclado, convertir tours).
 - `04-recorridos-salidas.md`: fila 13, fase 2a (la salida agrupa los tours: enganche
   compartido/privado, pasajeros y mínimo, estados, reprogramar).
+- `05-recorridos-servicios-y-vehiculos.md`: fila 13, fase 2b (servicios a reservar, vehículos,
+  guía por vehículo).
 
 ## 3. Carpetas del backend (`api-sistema-fe/`)
 

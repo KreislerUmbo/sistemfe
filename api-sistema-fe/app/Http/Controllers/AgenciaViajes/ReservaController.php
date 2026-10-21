@@ -20,6 +20,7 @@ use App\Models\AgenciaViajes\SalidaMayorista;
 use App\Models\AgenciaViajes\SalidaOperativa;
 use App\Models\Sale\Sale;
 use App\Services\AgenciaViajes\CodigoGeneradorService;
+use App\Services\AgenciaViajes\SalidaServiciosService;
 use App\Services\AgenciaViajes\TourLineaService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -642,6 +643,12 @@ class ReservaController extends Controller
         }
 
         $reservaItem->update(['salida_operativa_id' => $salida->id]);
+
+        // Fila 13, fase 2b (D10): con el primer tour, la salida arma su lista
+        // de servicios a reservar desde el Incluye (idempotente).
+        if ($alternativaItem->esLineaTour()) {
+            app(SalidaServiciosService::class)->sincronizarDesdeTour($salida);
+        }
     }
 
     // Reconstruye cotizacion_pasajero_id → reserva_pasajero_id para una

@@ -236,6 +236,10 @@ class ReporteOperativoController extends Controller
                 // en vez del <select>) — el reporte necesita el mismo criterio para no
                 // mostrar/permitir un guía duplicado y desincronizado del real.
                 'salidaOperativa.guia',
+                // Fila 13, fase 2b: vehículos (guía y vehículo por reserva) y servicios.
+                'salidaOperativa.vehiculos.reservas',
+                'salidaOperativa.vehiculos.guia',
+                'salidaOperativa.servicios',
                 'pasajeros',
                 // Vuelo vendido por la AGENCIA (corrección 2026-08-27, tabla
                 // propia — ver docblock de ReservaItemVueloPasajero, sin
@@ -348,6 +352,26 @@ class ReporteOperativoController extends Controller
     // establecido en reservas/detalle.vue). Sin esto, el reporte mostraría "sin
     // asignar" con un guía real ya puesto en la salida, o peor: dejaría "corregirlo"
     // acá creando un segundo guía desincronizado del de la salida.
+    // "Van 14 pax · ABC-123 · chofer Juan (999…)" del vehículo en el que va
+    // la reserva del ítem; null si no está en una salida o no tiene vehículo.
+    private function textoVehiculo(ReservaItem $item): ?string
+    {
+        $vehiculo = $item->salida_operativa_id
+            ? $item->salidaOperativa?->vehiculoDeReserva((int) $item->reserva_id)
+            : null;
+
+        if (! $vehiculo) {
+            return null;
+        }
+
+        $chofer = $vehiculo->chofer_nombre
+            ? 'chofer '.$vehiculo->chofer_nombre.($vehiculo->chofer_telefono ? " ({$vehiculo->chofer_telefono})" : '')
+            : null;
+        $texto = collect([$vehiculo->descripcion, $chofer])->filter()->implode(' · ');
+
+        return $texto !== '' ? $texto : 'Vehículo asignado';
+    }
+
     private function resolverGuiaEfectivo(ReservaItem $item)
     {
         return AsignacionOperativa::guiaEfectivo($item);
@@ -482,7 +506,8 @@ class ReporteOperativoController extends Controller
             // el ítem está enganchado a una Salida Operativa, el guía se cambia desde
             // ahí (compartido con otras reservas), no acá — ver resolverGuiaEfectivo().
             'salida_operativa_id' => $item->salida_operativa_id,
-            'salida_vehiculo' => $item->salida_operativa_id ? $item->salidaOperativa?->vehiculo_descripcion : null,
+            // Fila 13, fase 2b: el vehículo en el que va esta reserva (D13).
+            'salida_vehiculo' => $this->textoVehiculo($item),
         ];
     }
 

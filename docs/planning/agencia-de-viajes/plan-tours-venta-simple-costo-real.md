@@ -829,6 +829,27 @@ adelante la importación SIRE (los comprobantes llegan solos y solo hay que asig
 > - **Manual:** `docs/aprendizaje/04-recorridos-salidas.md`.
 > - **Pruebas:** `Fila13Fase2aSalidasTest` (8 tests); tests de salidas existentes pasados de `activa` a `programada`; el de la 1b que esperaba "sin salida" ahora comprueba que la carga cae en una sola salida. Tablero verificado en el navegador contra `agencia-demo` (sin cambiar datos).
 >
+> **Fase 2b — decisiones del usuario (21-oct-2026), antes de empezar:**
+> - **D10:** los **servicios a reservar** de una salida se arman solos cuando entra el primer tour, desde el Incluye actual del tour (proveedor sugerido; cantidad = adultos + niños, ajustable). Botón "Actualizar desde el tour" agrega lo nuevo sin borrar lo asignado. También se pueden agregar a mano.
+> - **D11:** cada servicio tiene estado **Por reservar / Reservado** (base de las órdenes de servicio de la 2c).
+> - **D12:** **guía principal** de la salida (como hoy) + **guía opcional por vehículo** para grupos grandes.
+> - **D13:** **varios vehículos** por salida (transportista o propio, descripción, chofer, capacidad, guía opcional, reservas que lleva). El texto "Vehículo" y el "Cupo máximo" actuales pasan al primer vehículo (migración); las columnas viejas se conservan sin uso en pantalla.
+>
+> **Fase 2b — HECHA (21-oct-2026, rama `feat/tours-fase2b-servicios-vehiculos`, sobre la 2a).**
+> Qué quedó:
+> - **Migración** `2026_10_21_200000_create_salida_servicios_y_vehiculos_tables` (`down()` probado): `salida_servicios` (nombre, proveedor, `cantidad_manual`, estado `por_reservar`/`reservado` con CHECK, índice único salida + ítem del tour), `salida_vehiculos` (transportista, descripción, chofer, teléfono, capacidad, guía), `salida_vehiculo_reservas`. D13: el texto "Vehículo" y el cupo de cada salida pasan a un primer vehículo **con todas las reservas de su salida** (en `agencia-demo`: 2 salidas).
+> - **`SalidaServiciosService::sincronizarDesdeTour()`**: arma la lista desde el Incluye actual del tour (sin el guía; proveedor sugerido o el de la tarifa), idempotente. Se llama al enganchar cada línea de tour y desde "Actualizar desde el tour".
+> - **`SalidaServicioController`** (agregar a mano, editar proveedor/cantidad/estado/notas, quitar, actualizar desde el tour; "Reservado" exige proveedor) y **`SalidaVehiculoController`** (agregar, editar, quitar, asignar reservas: una reserva en un solo vehículo; el primer vehículo se lleva todas las reservas; capacidad excedida = aviso, no bloqueo). Nada se modifica en una salida cancelada.
+> - **Cantidad automática** = adultos + niños de la salida (no se guarda; sigue a los pasajeros).
+> - **Guía por vehículo (D12):** `AsignacionOperativa::guiaEfectivo()` usa el del vehículo de la reserva o, si no, el de la salida. `SalidaOperativa::vehiculoDeReserva()`: asignación **explícita** (pantalla, reporte y guía leen lo mismo).
+> - **"Sin asignar":** además, un servicio de la salida sin proveedor. Que falte un vehículo es solo aviso (hay tours sin transporte).
+> - **Reporte Operativo:** vehículo y chofer de cada reserva (`textoVehiculo()`); **Inicio:** cupo = suma de capacidades.
+> - **Frontend:** `SalidaServiciosVehiculos.vue` (servicios solo si la salida tiene tours del modo nuevo; vehículos), `ProveedorBuscador.vue` (búsqueda en servidor), columna "Operación" del tablero con avisos.
+> - **Manual:** `docs/aprendizaje/05-recorridos-servicios-y-vehiculos.md`. Fixtures de la fase 2 en el trait `tests/Feature/AgenciaViajes/Concerns/SalidasFixtures.php`.
+> - **Pruebas:** `Fila13Fase2bServiciosVehiculosTest` (8). Ajustados a las reglas nuevas: el test de la 1b del Reporte Operativo (el tour sin proveedores en sus servicios sale "sin asignar") y el del vehículo de la salida (lee `salida_vehiculos`). Suite completa 1476 en verde. Detalle verificado en el navegador contra `agencia-demo` (solo lectura).
+>
+> **Hallazgo de la 2b:** la primera versión dejaba que `vehiculoDeReserva()` diera por asignado "el único vehículo" sin asignación real. La pantalla mostraba "0 / 14 asientos, 2 reservas sin vehículo" mientras el reporte sí les ponía el vehículo. Corregido: asignación siempre explícita, con la migración y el primer vehículo asignando las reservas.
+>
 > **Hallazgo de la 2a:** `ReservaFacturacionController::resolverSeleccion()` leía los ítems sin `orderBy`. Al engancharse a la salida, el ítem se actualiza y Postgres puede devolverlo en otro orden: el orden de las líneas del comprobante y de `partes_tour` cambiaba entre ejecuciones (lo detectó un test de la 1c que pasaba solo y fallaba en grupo). Corregido con `orderBy('id')`. Mismo patrón que el bug de `Alternativa::items()` del 29-ago.
 
 | Fase | Contenido | Estimado |

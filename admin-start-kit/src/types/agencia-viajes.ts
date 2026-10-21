@@ -1052,9 +1052,47 @@ export type SalidaOperativa = {
     residencia: string | null;
     alimentacion_especial: string | null;
   }>;
+  // Fila 13, fase 2b (D10-D13): servicios a reservar y vehículos.
+  servicios_total?: number;
+  servicios_sin_proveedor?: number;
+  servicios_por_reservar?: number;
+  vehiculos_total?: number;
+  capacidad_total?: number;
+  reservas_sin_vehiculo?: number;
+  servicios?: SalidaServicio[];
+  vehiculos?: SalidaVehiculo[];
 };
 
 export type EstadoSalidaOperativa = 'programada' | 'confirmada' | 'realizada' | 'cancelada';
+
+export type SalidaServicio = {
+  id: number;
+  nombre: string;
+  del_tour: boolean;
+  proveedor_id: number | null;
+  proveedor: string | null;
+  // La fijada a mano o, si no, adultos + niños de la salida.
+  cantidad: number;
+  cantidad_manual: number | null;
+  estado: 'por_reservar' | 'reservado';
+  notas: string | null;
+};
+
+export type SalidaVehiculo = {
+  id: number;
+  proveedor_id: number | null;
+  proveedor: string | null;
+  descripcion: string | null;
+  chofer_nombre: string | null;
+  chofer_telefono: string | null;
+  capacidad: number | null;
+  guia_id: number | null;
+  guia: string | null;
+  notas: string | null;
+  reserva_ids: number[];
+  pasajeros: number;
+  excede_capacidad: boolean;
+};
 
 export type SalidasOperativasResponse = {
   total: number;

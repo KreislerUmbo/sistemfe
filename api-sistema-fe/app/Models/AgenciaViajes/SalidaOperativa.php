@@ -56,6 +56,24 @@ class SalidaOperativa extends Model
         return $this->hasMany(ReservaItem::class, 'salida_operativa_id');
     }
 
+    // Fila 13, fase 2b: lo que hay que reservar y los vehículos de la salida.
+    public function servicios()
+    {
+        return $this->hasMany(SalidaServicio::class, 'salida_operativa_id')->orderBy('orden')->orderBy('id');
+    }
+
+    public function vehiculos()
+    {
+        return $this->hasMany(SalidaVehiculo::class, 'salida_operativa_id')->orderBy('orden')->orderBy('id');
+    }
+
+    // El vehículo en el que va una reserva (asignación explícita: la pantalla,
+    // el Reporte Operativo y el guía efectivo leen lo mismo).
+    public function vehiculoDeReserva(int $reservaId): ?SalidaVehiculo
+    {
+        return $this->vehiculos->first(fn (SalidaVehiculo $v) => $v->reservas->contains('id', $reservaId));
+    }
+
     // Solo en una salida privada: la reserva dueña.
     public function reservaPrivada()
     {
