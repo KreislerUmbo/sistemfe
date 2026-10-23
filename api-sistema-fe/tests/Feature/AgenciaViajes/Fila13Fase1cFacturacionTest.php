@@ -333,6 +333,79 @@ class Fila13Fase1cFacturacionTest extends TestCase
     }
 
     // ═══════════════════════════════════════════════════════════════
+    // F1 (hoja de ruta): dos comprobantes a clientes distintos por tipo de
+    // servicio, con los mismos pasajeros (vuelos a un RUC, el resto a otro)
+    // ═══════════════════════════════════════════════════════════════
+
+    public function test_f1_segunda_factura_con_los_mismos_pasajeros_para_el_resto_de_servicios(): void
+    {
+        $alternativa = $this->crearAlternativa([['adulto', 30], ['adulto', 28]]);
+        $vuelo = $this->servicioSuelto($alternativa, 'nacional', '10', 300);
+        $traslado = $this->servicioSuelto($alternativa, 'nacional', '10', 50);
+        $reserva = $this->aceptar($alternativa);
+        $pasajeros = ReservaPasajero::where('reserva_id', $reserva->id)->pluck('id')->all();
+        $itemVuelo = ReservaItem::where('reserva_id', $reserva->id)->where('alternativa_item_id', $vuelo->id)->value('id');
+        $itemTraslado = ReservaItem::where('reserva_id', $reserva->id)->where('alternativa_item_id', $traslado->id)->value('id');
+        $controller = app(ReservaFacturacionController::class);
+
+        // Factura 1: los vuelos, al RUC 20.
+        $primera = $controller->store(new Request([
+            'pasajero_ids' => $pasajeros, 'reserva_item_ids_manual' => [$itemVuelo],
+            'client_id' => Client::factory()->empresa()->create()->id, 'tipo_comprobante_codigo' => '01',
+        ]), (string) $reserva->id)->getData(true);
+        $this->assertSame(200, $primera['code'], json_encode($primera));
+
+        // La pantalla pide la vista previa SIN ítems marcados para saber qué
+        // queda por facturar: tiene que responder 200 y ofrecer el traslado.
+        $preview = $controller->prepararFactura(new Request(['pasajero_ids' => $pasajeros]), (string) $reserva->id);
+        $this->assertSame(200, $preview->getStatusCode(), json_encode($preview->getData(true)));
+        $this->assertSame([$itemTraslado], collect($preview->getData(true)['items_sin_asignar_disponibles'])->pluck('reserva_item_id')->all());
+
+        // Factura 2: el resto, a OTRO cliente (RUC 10), con los mismos pasajeros.
+        $otroCliente = Client::factory()->empresa()->create();
+        $segunda = $controller->store(new Request([
+            'pasajero_ids' => $pasajeros, 'reserva_item_ids_manual' => [$itemTraslado],
+            'client_id' => $otroCliente->id, 'tipo_comprobante_codigo' => '01',
+        ]), (string) $reserva->id)->getData(true);
+        $this->assertSame(200, $segunda['code'], json_encode($segunda));
+        $this->assertSame($otroCliente->id, \App\Models\Sale\Sale::find($segunda['sale_id'])->client_id);
+
+        // Sin nada más por facturar, emitir de nuevo se rechaza.
+        $tercera = $this->facturarSinCapturar($reserva, $pasajeros, []);
+        $this->assertSame(422, $tercera);
+    }
+
+    public function test_f1_pasajeros_ya_facturados_mezclados_con_pendientes_siguen_rechazados(): void
+    {
+        $alternativa = $this->crearAlternativa([['adulto', 30], ['adulto', 28]]);
+        $vuelo = $this->servicioSuelto($alternativa, 'nacional', '10', 300);
+        $reserva = $this->aceptar($alternativa);
+        [$a, $b] = ReservaPasajero::where('reserva_id', $reserva->id)->orderBy('id')->pluck('id')->all();
+        $itemVuelo = ReservaItem::where('reserva_id', $reserva->id)->where('alternativa_item_id', $vuelo->id)->value('id');
+
+        app(ReservaFacturacionController::class)->store(new Request([
+            'pasajero_ids' => [$a], 'reserva_item_ids_manual' => [$itemVuelo],
+            'client_id' => Client::factory()->empresa()->create()->id, 'tipo_comprobante_codigo' => '01',
+        ]), (string) $reserva->id);
+
+        // A ya está facturado y B no: mezclarlos sigue siendo un error.
+        $preview = app(ReservaFacturacionController::class)->prepararFactura(new Request(['pasajero_ids' => [$a, $b]]), (string) $reserva->id);
+        $this->assertSame(422, $preview->getStatusCode());
+    }
+
+    private function facturarSinCapturar(Reserva $reserva, array $pasajeroIds, array $manual): int
+    {
+        try {
+            return app(ReservaFacturacionController::class)->store(new Request([
+                'pasajero_ids' => $pasajeroIds, 'reserva_item_ids_manual' => $manual,
+                'client_id' => Client::factory()->empresa()->create()->id, 'tipo_comprobante_codigo' => '01',
+            ]), (string) $reserva->id)->getStatusCode();
+        } catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) {
+            return $e->getStatusCode();
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
     // Conversión de los tours existentes (§3.11)
     // ═══════════════════════════════════════════════════════════════
 

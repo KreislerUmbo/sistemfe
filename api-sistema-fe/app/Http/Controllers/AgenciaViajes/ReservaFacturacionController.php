@@ -848,7 +848,15 @@ class ReservaFacturacionController extends Controller
         $itemsManual = $itemsSinAsignar->whereIn('id', $idsManualSolicitados)->values();
         if ($pasajerosRepetidos->isNotEmpty()) {
             $todosLosPasajerosYaFacturados = $pasajerosRepetidos->count() === count($pasajeroIdsSolicitados);
-            if (! $todosLosPasajerosYaFacturados || $itemsManual->isEmpty()) {
+            // F1 de la hoja de ruta (23-oct-2026): con TODOS los pasajeros ya
+            // facturados se acepta aunque todavía no venga ningún ítem — la
+            // pantalla primero pide la vista previa sin ítems para saber qué
+            // servicios quedan (vuelos a un RUC, el resto a otro). Antes esto
+            // respondía 422 y la segunda factura era imposible. Emitir una
+            // factura vacía sigue bloqueado en store() ("No hay ningún ítem
+            // disponible…"). Lo que sigue rechazado: mezclar pasajeros ya
+            // facturados con pendientes.
+            if (! $todosLosPasajerosYaFacturados) {
                 return response()->json([
                     'code' => 422,
                     'message' => 'Los siguientes pasajeros ya fueron facturados en otra venta de esta reserva: ' . $pasajerosRepetidos->implode(', '),

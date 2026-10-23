@@ -896,9 +896,18 @@
                         <button class="btn-close" @click="mostrarModalFacturarEspecial = false"></button>
                     </div>
                     <div class="modal-body">
+                        <!-- F1 (hoja de ruta, 23-oct-2026): todos los pasajeros ya tienen
+                             comprobante pero quedan servicios (p. ej. vuelos a un RUC y el
+                             resto a otro): esta factura lleva solo los servicios marcados. -->
+                        <div v-if="soloServiciosPendientes" class="alert alert-info small py-2 mb-3">
+                            <i class="fas fa-circle-info me-1"></i>
+                            Todos los pasajeros ya tienen comprobante: esta factura lleva <strong>solo los servicios que marques</strong> abajo, al cliente que elijas.
+                        </div>
+                        <template v-else>
                         <label class="form-label small fw-semibold text-secondary">¿A quién le facturamos en esta pasada?</label>
                         <p class="small text-muted mb-2">Marca uno o varios pasajeros — cada grupo genera su propio comprobante, con su propio cliente. Puedes repetir esto después para el resto.</p>
-                        <div class="d-flex flex-column gap-1 mb-3" style="max-height:160px;overflow-y:auto">
+                        </template>
+                        <div v-if="!soloServiciosPendientes" class="d-flex flex-column gap-1 mb-3" style="max-height:160px;overflow-y:auto">
                             <label v-for="p in pasajerosPendientesFacturar" :key="p.id" class="small d-flex align-items-center border rounded px-2 py-1" style="cursor:pointer">
                                 <input type="checkbox" class="form-check-input me-2" v-model="facturarEspecialForm.pasajero_ids" :value="p.id">
                                 {{ nombrePasajero(p) }}
@@ -1132,7 +1141,8 @@
                     <div class="modal-footer">
                         <button class="btn btn-outline-secondary btn-sm" @click="mostrarModalFacturarEspecial = false">Cerrar</button>
                         <button v-if="previewFacturaEspecial && !previewFacturaEspecial.bloqueado_tributario" class="btn btn-primary btn-sm"
-                            :disabled="facturando || cargandoPreviewFacturaEspecial || facturarEspecialForm.pasajero_ids.length === 0 || !clienteSeleccionado"
+                            :disabled="facturando || cargandoPreviewFacturaEspecial || facturarEspecialForm.pasajero_ids.length === 0 || !clienteSeleccionado
+                                || (soloServiciosPendientes && facturarEspecialForm.reserva_item_ids_manual.length === 0)"
                             @click="confirmarFacturacionEspecial">
                             <span v-if="facturando" class="spinner-border spinner-border-sm me-1"></span>Emitir comprobante de este grupo
                         </button>
@@ -2768,9 +2778,14 @@ watch(clienteSeleccionado, (cliente) => {
     }
 });
 
+// F1 (hoja de ruta, 23-oct-2026): sin pasajeros pendientes pero con servicios
+// por facturar, el modal factura solo servicios; se mandan todos los pasajeros
+// (ya facturados) igual que "Facturar" — ver pasajeroIdsParaFacturarSimple().
+const soloServiciosPendientes = computed(() => pasajerosPendientesFacturar.value.length === 0);
+
 const abrirModalFacturarEspecial = () => {
     facturarEspecialForm.value = {
-        pasajero_ids: pasajerosPendientesFacturar.value.map((p) => p.id),
+        pasajero_ids: pasajeroIdsParaFacturarSimple(),
         reserva_item_ids_manual: [],
         tipo_comprobante_codigo: '01',
         texto_personalizado: '',

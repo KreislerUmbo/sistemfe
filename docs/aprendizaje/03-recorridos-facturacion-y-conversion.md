@@ -94,6 +94,26 @@ De dónde salen los datos:
 Cuenta los ítems de facturas **aceptadas por SUNAT** y descuenta las líneas de tour cobradas a
 medias.
 
+## 5b. Dos comprobantes a clientes distintos por tipo de servicio (F1, 23-oct-2026)
+
+Caso: los mismos pasajeros, pero los vuelos a un RUC y el resto de servicios a otro.
+
+1. **Primera factura:** "Facturación especial" → todos los pasajeros, el cliente con RUC 20 y
+   marcar solo los vuelos.
+2. **Segunda factura:** como ya no quedan pasajeros pendientes, el modal entra en **modo "solo
+   servicios"** (`soloServiciosPendientes` en `reservas/detalle.vue`): un aviso en lugar de la lista
+   de pasajeros, el cliente con RUC 10 y marcar el resto. Por detrás manda todos los pasajeros
+   (`pasajeroIdsParaFacturarSimple()`).
+
+En el backend (`resolverSeleccion()`): si **todos** los pasajeros pedidos ya están facturados, se
+acepta aunque no venga ningún ítem. Así la vista previa puede listar lo que queda. Lo que se
+rechaza: **mezclar** pasajeros ya facturados con pendientes. Y emitir una factura sin ningún ítem
+lo bloquea `store()`.
+
+Tests: `test_f1_segunda_factura_con_los_mismos_pasajeros_para_el_resto_de_servicios` y
+`test_f1_pasajeros_ya_facturados_mezclados_con_pendientes_siguen_rechazados`
+(`tests/Feature/AgenciaViajes/Fila13Fase1cFacturacionTest.php`).
+
 ## 6. Convertir tours al modelo nuevo
 
 Pantalla nueva: Paquetes / Tours → botón **"Convertir tours"**.
