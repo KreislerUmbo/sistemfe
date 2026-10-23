@@ -160,6 +160,7 @@ class ReservaFacturacionController extends Controller
     public function prepararFactura(Request $request, string $id)
     {
         $reserva = Reserva::with(['alternativa.cotizacion', 'pasajeros', 'ventas'])->findOrFail($id);
+        $this->authorize('view', $reserva);
 
         if ($reserva->estado !== 'activa') {
             return response()->json(['code' => 422, 'message' => 'Solo se puede facturar una reserva activa.'], 422);
@@ -294,6 +295,7 @@ class ReservaFacturacionController extends Controller
     public function store(Request $request, string $id)
     {
         $reserva = Reserva::with(['alternativa.cotizacion', 'pasajeros', 'ventas'])->findOrFail($id);
+        $this->authorize('update', $reserva);
 
         if ($reserva->estado !== 'activa') {
             return response()->json(['code' => 422, 'message' => 'Solo se puede facturar una reserva activa.'], 422);

@@ -20,6 +20,7 @@ class ReservaItemPasajeroController extends Controller
     public function index(string $reservaItemId)
     {
         $item = ReservaItem::with('reserva')->findOrFail($reservaItemId);
+        $this->authorize('view', $item->reserva);
 
         if ($item->reserva->estado !== 'activa') {
             return response()->json(['code' => 422, 'message' => 'Solo se pueden asignar pasajeros en una reserva activa.'], 422);
@@ -39,6 +40,7 @@ class ReservaItemPasajeroController extends Controller
     public function store(Request $request, string $reservaItemId)
     {
         $item = ReservaItem::with('reserva')->findOrFail($reservaItemId);
+        $this->authorize('update', $item->reserva);
 
         // Mismo guard que index()/destroy() — faltaba acá (bug real
         // encontrado 2026-08-28): sin esto se podía asignar un pasajero
@@ -93,6 +95,7 @@ class ReservaItemPasajeroController extends Controller
     public function checkin(Request $request, string $reservaItemId, string $pasajeroId)
     {
         $item = ReservaItem::with(['reserva', 'pasajeros'])->findOrFail($reservaItemId);
+        $this->authorize('update', $item->reserva);
 
         if ($item->reserva->estado !== 'activa') {
             return response()->json(['code' => 422, 'message' => 'Solo se puede marcar check-in en una reserva activa.'], 422);
@@ -163,6 +166,7 @@ class ReservaItemPasajeroController extends Controller
     public function actualizarVuelo(Request $request, string $reservaItemId, string $pasajeroId)
     {
         $item = ReservaItem::with(['reserva', 'alternativaItem'])->findOrFail($reservaItemId);
+        $this->authorize('update', $item->reserva);
 
         if ($item->reserva->estado !== 'activa') {
             return response()->json(['code' => 422, 'message' => 'Solo se puede editar el vuelo en una reserva activa.'], 422);
@@ -209,6 +213,7 @@ class ReservaItemPasajeroController extends Controller
     public function destroy(string $id)
     {
         $asignacion = ReservaItemPasajero::with('reservaItem.reserva')->findOrFail($id);
+        $this->authorize('update', $asignacion->reservaItem->reserva);
         $item = $asignacion->reservaItem;
 
         if ($item->reserva->estado !== 'activa') {

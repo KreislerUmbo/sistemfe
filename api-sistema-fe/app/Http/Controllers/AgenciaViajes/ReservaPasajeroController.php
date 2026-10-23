@@ -33,6 +33,7 @@ class ReservaPasajeroController extends Controller
     public function store(Request $request, string $id)
     {
         $reserva = Reserva::with('alternativa.opcionMayoristaElegida')->findOrFail($id);
+        $this->authorize('update', $reserva);
 
         if ($reserva->estado !== 'activa') {
             return response()->json(['code' => 422, 'message' => 'Solo se puede agregar un pasajero a una reserva activa.'], 422);
@@ -97,6 +98,7 @@ class ReservaPasajeroController extends Controller
     public function update(Request $request, string $id)
     {
         $pasajero = ReservaPasajero::with('reserva')->findOrFail($id);
+        $this->authorize('update', $pasajero->reserva);
 
         if ($pasajero->reserva->estado !== 'activa') {
             return response()->json(['code' => 422, 'message' => 'Solo se puede editar un pasajero de una reserva activa.'], 422);
@@ -230,6 +232,7 @@ class ReservaPasajeroController extends Controller
     public function destroy(string $id)
     {
         $pasajero = ReservaPasajero::with('reserva')->findOrFail($id);
+        $this->authorize('update', $pasajero->reserva);
         $reserva = $pasajero->reserva;
 
         if ($reserva->estado !== 'activa') {

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\AgenciaViajes;
 
+use Tests\Feature\AgenciaViajes\Concerns\ConAccesoATodasLasReservas;
 use App\Http\Controllers\AgenciaViajes\AlternativaController;
 use App\Http\Controllers\AgenciaViajes\AlternativaItemController;
 use App\Http\Controllers\AgenciaViajes\ConfiguracionAgenciaController;
@@ -51,6 +52,8 @@ use Tests\TestCase;
 // en memoria (las reglas de elección ya están probadas en la 1a).
 class Fila13Fase1bTourCotizacionTest extends TestCase
 {
+    use ConAccesoATodasLasReservas;
+
     private DestinoAtractivo $destino;
 
     protected function setUp(): void
@@ -74,6 +77,8 @@ class Fila13Fase1bTourCotizacionTest extends TestCase
             'tip_afe_igv_default' => '20',
             'destino_tributario_default' => 'amazonia',
         ]);
+
+        $this->verTodasLasReservas();
     }
 
     protected function tearDown(): void
@@ -740,6 +745,6 @@ class Fila13Fase1bTourCotizacionTest extends TestCase
         $user = User::factory()->create(['branch_id' => $branch->id, 'role_id' => $role->id]);
         $role->givePermissionTo(Permission::firstOrCreate(['name' => 'emitir_factura', 'guard_name' => 'api']));
         $user->assignRole($role);
-        Auth::guard('api')->setUser($user->fresh());
+        $this->verTodasLasReservas($user);
     }
 }

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\AgenciaViajes;
 
+use Tests\Feature\AgenciaViajes\Concerns\ConAccesoATodasLasReservas;
 use App\Http\Controllers\AgenciaViajes\ReservaAnticipoController;
 use App\Http\Controllers\AgenciaViajes\ReservaController;
 use App\Http\Controllers\AgenciaViajes\ReservaFacturacionController;
@@ -52,6 +53,8 @@ use Tests\TestCase;
 // Postgres real (sistemafe_test_migrations), transacción por test revertida.
 class ReservaFacturacionTest extends TestCase
 {
+    use ConAccesoATodasLasReservas;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -86,6 +89,8 @@ class ReservaFacturacionTest extends TestCase
         // facturar estaba habilitado). Los tests nuevos del guard llaman
         // setUpTenantFixture(false)/(null) explícitamente.
         $this->setUpTenantFixture(true);
+
+        $this->verTodasLasReservas();
     }
 
     protected function tearDown(): void
@@ -128,7 +133,7 @@ class ReservaFacturacionTest extends TestCase
         $user->role_id = $role->id;
         $user->save();
 
-        Auth::guard('api')->setUser($user->fresh());
+        $this->verTodasLasReservas($user);
 
         return $user->fresh();
     }

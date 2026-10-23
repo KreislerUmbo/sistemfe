@@ -56,6 +56,22 @@ return Application::configure(basePath: dirname(__DIR__))
             ], 403);
         });
 
+        // Policies de fila (Cotización/Reserva — auditoría 23-oct-2026): Laravel
+        // responde "This action is unauthorized." Solo se reemplaza ese texto por
+        // defecto; una Policy que niega con su propio mensaje lo conserva.
+        $exceptions->render(function (\Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException $e, $request) {
+            if (! $e->getPrevious() instanceof \Illuminate\Auth\Access\AuthorizationException
+                || $e->getMessage() !== 'This action is unauthorized.'
+                || (! $request->expectsJson() && ! $request->is('api/*'))) {
+                return null;
+            }
+
+            return response()->json([
+                'message' => 'No tienes acceso a este registro: pertenece a otro usuario. '
+                    . 'Pide a un administrador el permiso para ver todos.',
+            ], 403);
+        });
+
         // Módulo Créditos (00 §4): las reglas del motor rechazan con mensajes de negocio en
         // español y sin datos internos; se devuelven como 422 para que la pantalla los muestre.
         $exceptions->render(function (\App\Services\Creditos\Motor\Excepciones\PagoExcedeDeuda $e) {

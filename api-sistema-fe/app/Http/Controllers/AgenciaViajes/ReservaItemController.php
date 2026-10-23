@@ -23,6 +23,7 @@ class ReservaItemController extends Controller
     public function update(Request $request, string $id)
     {
         $item = ReservaItem::with('reserva')->findOrFail($id);
+        $this->authorize('update', $item->reserva);
         $reserva = $item->reserva;
 
         if ($reserva->estado !== 'activa') {
@@ -97,6 +98,7 @@ class ReservaItemController extends Controller
     public function destroy(string $id)
     {
         $item = ReservaItem::with('reserva')->findOrFail($id);
+        $this->authorize('update', $item->reserva);
         $reserva = $item->reserva;
 
         if ($reserva->estado !== 'activa') {

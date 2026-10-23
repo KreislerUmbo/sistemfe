@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\AgenciaViajes;
 
+use Tests\Feature\AgenciaViajes\Concerns\ConAccesoATodasLasReservas;
 use App\Http\Controllers\AgenciaViajes\AlternativaController;
 use App\Http\Controllers\AgenciaViajes\ReservaController;
 use App\Models\AgenciaViajes\Alternativa;
@@ -19,6 +20,8 @@ use Tests\TestCase;
 // revertida.
 class SesionM1MatrizHotelesNucleoTest extends TestCase
 {
+    use ConAccesoATodasLasReservas;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -33,6 +36,8 @@ class SesionM1MatrizHotelesNucleoTest extends TestCase
         ]);
         DB::purge('pgsql');
         DB::beginTransaction();
+
+        $this->verTodasLasReservas();
     }
 
     protected function tearDown(): void

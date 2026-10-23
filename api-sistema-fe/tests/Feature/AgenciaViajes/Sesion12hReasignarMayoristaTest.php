@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\AgenciaViajes;
 
+use Tests\Feature\AgenciaViajes\Concerns\ConAccesoATodasLasReservas;
 use App\Http\Controllers\AgenciaViajes\ReservaController;
 use App\Models\AgenciaViajes\Alternativa;
 use App\Models\AgenciaViajes\AlternativaDestino;
@@ -27,6 +28,8 @@ use Tests\TestCase;
 // (sistemafe_test_migrations), transacción por test revertida.
 class Sesion12hReasignarMayoristaTest extends TestCase
 {
+    use ConAccesoATodasLasReservas;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -50,6 +53,8 @@ class Sesion12hReasignarMayoristaTest extends TestCase
             'created_at' => now(), 'updated_at' => now(),
         ]);
         DB::statement("SELECT setval(pg_get_serial_sequence('roles','id'), (SELECT MAX(id) FROM roles))");
+
+        $this->verTodasLasReservas();
     }
 
     protected function tearDown(): void
@@ -328,7 +333,7 @@ class Sesion12hReasignarMayoristaTest extends TestCase
         $role = Role::firstOrCreate(['guard_name' => 'api', 'name' => 'Super-Admin']);
         $admin = User::factory()->create();
         $admin->assignRole($role);
-        Auth::guard('api')->setUser($admin->fresh());
+        $this->verTodasLasReservas($admin);
 
         $response = app(ReservaController::class)->show((string) $reserva->id);
         $body = $response->getData(true);

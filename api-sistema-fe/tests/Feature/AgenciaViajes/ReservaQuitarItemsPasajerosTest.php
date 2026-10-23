@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\AgenciaViajes;
 
+use Tests\Feature\AgenciaViajes\Concerns\ConAccesoATodasLasReservas;
 use App\Http\Controllers\AgenciaViajes\ReservaController;
 use App\Http\Controllers\AgenciaViajes\ReservaItemController;
 use App\Http\Controllers\AgenciaViajes\ReservaItemPasajeroController;
@@ -25,6 +26,8 @@ use Tests\TestCase;
 // (sistemafe_test_migrations), transacción por test revertida.
 class ReservaQuitarItemsPasajerosTest extends TestCase
 {
+    use ConAccesoATodasLasReservas;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -49,6 +52,8 @@ class ReservaQuitarItemsPasajerosTest extends TestCase
             'created_at' => now(), 'updated_at' => now(),
         ]);
         DB::statement("SELECT setval(pg_get_serial_sequence('roles','id'), (SELECT MAX(id) FROM roles))");
+
+        $this->verTodasLasReservas();
     }
 
     protected function tearDown(): void

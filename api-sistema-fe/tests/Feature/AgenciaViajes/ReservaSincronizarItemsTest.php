@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\AgenciaViajes;
 
+use Tests\Feature\AgenciaViajes\Concerns\ConAccesoATodasLasReservas;
 use App\Http\Controllers\AgenciaViajes\AlternativaItemController;
 use App\Http\Controllers\AgenciaViajes\ReservaController;
 use App\Models\AgenciaViajes\Alternativa;
@@ -33,6 +34,8 @@ use Tests\TestCase;
 // `agencia-viajes:diagnosticar-fechas-reserva`).
 class ReservaSincronizarItemsTest extends TestCase
 {
+    use ConAccesoATodasLasReservas;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -47,6 +50,8 @@ class ReservaSincronizarItemsTest extends TestCase
         ]);
         DB::purge('pgsql');
         DB::beginTransaction();
+
+        $this->verTodasLasReservas();
     }
 
     protected function tearDown(): void
@@ -187,7 +192,7 @@ class ReservaSincronizarItemsTest extends TestCase
         $role = Role::firstOrCreate(['guard_name' => 'api', 'name' => 'Super-Admin']);
         $admin = User::factory()->create();
         $admin->assignRole($role);
-        Auth::guard('api')->setUser($admin->fresh());
+        $this->verTodasLasReservas($admin);
 
         $response = app(ReservaController::class)->show((string) $reserva->id);
         $body = $response->getData(true);

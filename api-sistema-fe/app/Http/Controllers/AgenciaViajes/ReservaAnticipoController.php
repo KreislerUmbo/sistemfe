@@ -45,6 +45,7 @@ class ReservaAnticipoController extends Controller
         }
 
         $reserva = Reserva::with('alternativa.cotizacion.cliente')->findOrFail($id);
+        $this->authorize('update', $reserva);
 
         if ($reserva->estado !== 'activa') {
             return response()->json(['code' => 422, 'message' => 'Solo se puede cobrar un anticipo sobre una reserva activa.'], 422);
@@ -113,6 +114,7 @@ class ReservaAnticipoController extends Controller
     public function destroy(string $id)
     {
         $reservaAnticipo = ReservaAnticipo::with('advance.applications')->findOrFail($id);
+        $this->authorize('update', $reservaAnticipo->reserva);
 
         // El Advance en sí no se toca — sigue existiendo con su plata. Esto
         // solo quita la etiqueta hacia esta reserva. Bloqueado si ya se

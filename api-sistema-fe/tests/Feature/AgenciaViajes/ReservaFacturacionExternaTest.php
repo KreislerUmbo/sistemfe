@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\AgenciaViajes;
 
+use Tests\Feature\AgenciaViajes\Concerns\ConAccesoATodasLasReservas;
 use App\Http\Controllers\AgenciaViajes\ReservaController;
 use App\Models\AgenciaViajes\Alternativa;
 use App\Models\AgenciaViajes\AlternativaItem;
@@ -22,6 +23,8 @@ use Tests\TestCase;
 // (sistemafe_test_migrations), transacción por test revertida.
 class ReservaFacturacionExternaTest extends TestCase
 {
+    use ConAccesoATodasLasReservas;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -45,6 +48,8 @@ class ReservaFacturacionExternaTest extends TestCase
             'created_at' => now(), 'updated_at' => now(),
         ]);
         DB::statement("SELECT setval(pg_get_serial_sequence('roles','id'), (SELECT MAX(id) FROM roles))");
+
+        $this->verTodasLasReservas();
     }
 
     protected function tearDown(): void

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\AgenciaViajes;
 
+use Tests\Feature\AgenciaViajes\Concerns\ConAccesoATodasLasReservas;
 use App\Http\Controllers\AgenciaViajes\ReservaAnticipoController;
 use App\Http\Controllers\AgenciaViajes\ReservaController;
 use App\Http\Controllers\AgenciaViajes\ReservaFacturacionController;
@@ -37,6 +38,8 @@ use Tests\TestCase;
 // (sistemafe_test_migrations), transacción por test revertida.
 class ReservaAnticipoTest extends TestCase
 {
+    use ConAccesoATodasLasReservas;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -69,6 +72,8 @@ class ReservaAnticipoTest extends TestCase
         );
 
         $this->setUpTenantFixture(true);
+
+        $this->verTodasLasReservas();
     }
 
     protected function tearDown(): void
@@ -122,7 +127,7 @@ class ReservaAnticipoTest extends TestCase
             'opening_amount' => 0, 'opened_at' => now(), 'status' => 'open',
         ]);
 
-        Auth::guard('api')->setUser($user->fresh());
+        $this->verTodasLasReservas($user);
 
         return $user->fresh();
     }
@@ -142,7 +147,7 @@ class ReservaAnticipoTest extends TestCase
         $user->role_id = $role->id;
         $user->save();
 
-        Auth::guard('api')->setUser($user->fresh());
+        $this->verTodasLasReservas($user);
 
         return $user->fresh();
     }

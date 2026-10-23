@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\AgenciaViajes;
 
+use Tests\Feature\AgenciaViajes\Concerns\ConAccesoATodasLasReservas;
 use App\Http\Controllers\AgenciaViajes\ReporteOperativoController;
 use App\Http\Controllers\AgenciaViajes\ReservaController;
 use App\Http\Controllers\AgenciaViajes\ReservaItemController;
@@ -21,6 +22,8 @@ use Tests\TestCase;
 // (sistemafe_test_migrations), transacción por test revertida.
 class ReporteOperativoTest extends TestCase
 {
+    use ConAccesoATodasLasReservas;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -35,6 +38,8 @@ class ReporteOperativoTest extends TestCase
         ]);
         DB::purge('pgsql');
         DB::beginTransaction();
+
+        $this->verTodasLasReservas();
     }
 
     protected function tearDown(): void

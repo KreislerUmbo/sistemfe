@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\AgenciaViajes;
 
+use Tests\Feature\AgenciaViajes\Concerns\ConAccesoATodasLasReservas;
 use App\Http\Controllers\AgenciaViajes\AlternativaItemController;
 use App\Http\Controllers\AgenciaViajes\ConversionToursController;
 use App\Http\Controllers\AgenciaViajes\ReservaController;
@@ -44,6 +45,8 @@ use Tests\TestCase;
 // transacción por test revertida.
 class Fila13Fase1cFacturacionTest extends TestCase
 {
+    use ConAccesoATodasLasReservas;
+
     private DestinoAtractivo $destino;
 
     protected function setUp(): void
@@ -743,6 +746,6 @@ class Fila13Fase1cFacturacionTest extends TestCase
         $user = User::factory()->create(['branch_id' => $branch->id, 'role_id' => $role->id]);
         $role->givePermissionTo(Permission::firstOrCreate(['name' => 'emitir_factura', 'guard_name' => 'api']));
         $user->assignRole($role);
-        Auth::guard('api')->setUser($user->fresh());
+        $this->verTodasLasReservas($user);
     }
 }

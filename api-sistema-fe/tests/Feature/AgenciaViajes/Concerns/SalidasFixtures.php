@@ -30,6 +30,8 @@ use Illuminate\Support\Facades\DB;
 // aceptada.
 trait SalidasFixtures
 {
+    use ConAccesoATodasLasReservas;
+
     private DestinoAtractivo $destino;
 
     protected function setUp(): void
@@ -53,6 +55,8 @@ trait SalidasFixtures
             'tip_afe_igv_default' => '10',
             'destino_tributario_default' => 'nacional',
         ]);
+
+        $this->verTodasLasReservas();
     }
 
     protected function tearDown(): void

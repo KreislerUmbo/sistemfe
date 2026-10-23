@@ -226,6 +226,7 @@ class ReservaController extends Controller
     public function aceptar(Request $request, string $alternativaId)
     {
         $alternativa = Alternativa::findOrFail($alternativaId);
+        $this->authorize('update', $alternativa->cotizacion);
 
         if (! in_array($alternativa->estado, ['borrador', 'enviada'], true)) {
             return response()->json([
@@ -646,6 +647,7 @@ class ReservaController extends Controller
     public function sincronizarItems(string $id)
     {
         $reserva = Reserva::findOrFail($id);
+        $this->authorize('update', $reserva);
 
         if ($reserva->estado !== 'activa') {
             return response()->json(['code' => 422, 'message' => 'Solo se puede sincronizar una reserva activa.'], 422);
@@ -724,6 +726,7 @@ class ReservaController extends Controller
     public function reprogramar(Request $request, string $id)
     {
         $reserva = Reserva::findOrFail($id);
+        $this->authorize('update', $reserva);
 
         if ($reserva->estado !== 'activa') {
             return response()->json(['code' => 422, 'message' => 'Solo se puede reprogramar una reserva activa.'], 422);
@@ -894,6 +897,7 @@ class ReservaController extends Controller
     public function reasignarMayorista(Request $request, string $id)
     {
         $reserva = Reserva::findOrFail($id);
+        $this->authorize('update', $reserva);
 
         if ($reserva->estado !== 'activa') {
             return response()->json(['code' => 422, 'message' => 'Solo se puede reasignar mayorista en una reserva activa.'], 422);
@@ -1024,6 +1028,7 @@ class ReservaController extends Controller
     public function reasignarHotel(Request $request, string $id)
     {
         $reserva = Reserva::findOrFail($id);
+        $this->authorize('update', $reserva);
 
         if ($reserva->estado !== 'activa') {
             return response()->json(['code' => 422, 'message' => 'Solo se puede reasignar hotel en una reserva activa.'], 422);
@@ -1154,6 +1159,7 @@ class ReservaController extends Controller
     public function overrideTratamientoTributario(Request $request, string $id)
     {
         $reserva = Reserva::findOrFail($id);
+        $this->authorize('update', $reserva);
 
         if ($reserva->estado !== 'activa') {
             return response()->json(['code' => 422, 'message' => 'Solo se puede corregir el tratamiento tributario de una reserva activa.'], 422);
@@ -1224,6 +1230,7 @@ class ReservaController extends Controller
     public function actualizarFacturacionExterna(Request $request, string $id)
     {
         $reserva = Reserva::findOrFail($id);
+        $this->authorize('update', $reserva);
 
         if ($reserva->estado !== 'activa') {
             return response()->json(['code' => 422, 'message' => 'Solo se puede editar facturación externa de una reserva activa.'], 422);
