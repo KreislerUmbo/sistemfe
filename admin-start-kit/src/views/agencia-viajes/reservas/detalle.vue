@@ -1043,6 +1043,8 @@
                                 <span class="badge bg-light text-dark border ms-1">{{ previewFacturaEspecial.serie_resuelta }}</span>
                             </div>
 
+                            <!-- F1 (23-oct-2026): qué entra y cuánto, también con bloqueo. -->
+                            <DetalleComprobantePreview :preview="previewFacturaEspecial" :anticipo-aplicado="anticipoEspecialAplicado" />
                             <!-- Pedido del usuario (2026-09-24): "debo poder ver lo que he
                                  seleccionado si fue gravado o exonerado" — siempre visible,
                                  mismo criterio que la sucursal de arriba. -->
@@ -1236,6 +1238,8 @@
                                 <span class="text-muted">Serie a emitir:</span>
                                 <span class="badge bg-light text-dark border ms-1">{{ previewFacturaSimple.serie_resuelta }}</span>
                             </div>
+                            <!-- F1 (23-oct-2026): qué entra y cuánto, también con bloqueo. -->
+                            <DetalleComprobantePreview :preview="previewFacturaSimple" />
                             <div v-if="(previewFacturaSimple.items_por_destino_tributario?.length ?? 0) > 0" class="mb-2 small">
                                 <span class="text-muted d-block mb-1">Tratamiento tributario de lo seleccionado:</span>
                                 <span v-for="it in previewFacturaSimple.items_por_destino_tributario" :key="it.reserva_item_id"
@@ -1258,7 +1262,9 @@
                                     @click="abrirModalConfirmarTributario(itemsPorIds(previewFacturaSimple.items_sin_confirmar_ids ?? []))">
                                     Confirmar tratamiento tributario
                                 </button>
-                                <p class="mb-0 small">Usa <strong>Facturación especial</strong> para separar los grupos con distinto tratamiento tributario.</p>
+                                <!-- Solo si el bloqueo es por mezcla: con servicios de la Amazonía sin
+                                     confirmar, separar en grupos no lo resuelve (F1, 23-oct-2026). -->
+                                <p v-if="(previewFacturaSimple.items_sin_confirmar_ids?.length ?? 0) === 0" class="mb-0 small">Usa <strong>Facturación especial</strong> para separar los grupos con distinto tratamiento tributario.</p>
                             </div>
 
                             <template v-else>
@@ -1418,6 +1424,7 @@ import { useAuthStore } from '@/stores/auth';
 import type { Branch } from '@/types/cash-session';
 import ClientFormQuick from '@/components/Sales/ClientFormQuick.vue';
 import ClienteComprobanteSelector, { type ClienteComprobante } from '@/components/AgenciaViajes/ClienteComprobanteSelector.vue';
+import DetalleComprobantePreview from '@/components/AgenciaViajes/DetalleComprobantePreview.vue';
 import { reservaService } from '@/services/admin/reservaService';
 import { reservaFacturacionService, type PrepararFacturaResponse, type AnticipoDisponiblePreview } from '@/services/admin/reservaFacturacionService';
 import { reservaAnticipoService } from '@/services/admin/reservaAnticipoService';
@@ -2630,6 +2637,10 @@ const cargandoPreviewFacturaEspecial = ref(false);
 // ya usado con ítems compartidos), el vendedor elige a mano.
 type AnticipoCheckoutItem = AnticipoDisponiblePreview & { seleccionado: boolean; monto_aplicado: number };
 const anticiposEspecialSeleccionables = ref<AnticipoCheckoutItem[]>([]);
+// F1 (23-oct-2026): lo que se descuenta, para el "saldo a cobrar" del detalle.
+const anticipoEspecialAplicado = computed(() => anticiposEspecialSeleccionables.value
+    .filter((a) => a.seleccionado)
+    .reduce((s, a) => s + (Number(a.monto_aplicado) || 0), 0));
 
 const onAnticipoEspecialToggle = (a: AnticipoCheckoutItem) => {
     a.monto_aplicado = a.seleccionado ? a.disponible : 0;

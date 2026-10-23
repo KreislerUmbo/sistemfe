@@ -124,6 +124,11 @@ class Fila13Fase1cFacturacionTest extends TestCase
 
         $this->assertTrue($preview['bloqueado_tributario']);
         $this->assertStringContainsString('Amazonía', $preview['motivo']);
+        // F1: aunque esté bloqueado, el detalle muestra el tour (una fila con
+        // sus dos líneas de IGV) y su monto.
+        $this->assertCount(1, $preview['detalle']);
+        $this->assertEqualsWithDelta(100.0, $preview['detalle'][0]['monto'], 0.001);
+        $this->assertCount(2, $preview['detalle'][0]['reserva_item_ids']);
         // Solo la línea Amazonía pide confirmación; la gravada nacional no.
         $amazonia = ReservaItem::where('reserva_id', $reserva->id)->where('destino_tributario', 'amazonia')->pluck('id')->all();
         $this->assertSame($amazonia, $preview['items_sin_confirmar_ids']);
@@ -239,6 +244,13 @@ class Fila13Fase1cFacturacionTest extends TestCase
         $previewRojas = $this->preview($reserva, [$rojas1, $rojas2]);
         $this->assertEqualsWithDelta(270.0, (float) $previewRojas['total'], 0.001, json_encode($previewRojas));
         $this->assertFalse($previewRojas['partes_tour'][0]['cierra']);
+        // F1: el detalle de la vista previa dice qué parte del tour entra.
+        $this->assertCount(1, $previewRojas['detalle']);
+        $this->assertEqualsWithDelta(270.0, $previewRojas['detalle'][0]['monto'], 0.001);
+        $this->assertEqualsWithDelta(522.0, $previewRojas['detalle'][0]['total_servicio'], 0.001);
+        $this->assertTrue($previewRojas['detalle'][0]['parcial']);
+        $this->assertSame(2, $previewRojas['detalle'][0]['pasajeros_grupo']);
+        $this->assertSame(4, $previewRojas['detalle'][0]['pasajeros_total']);
         $ventaRojas = $this->facturarOk($reserva, [$rojas1, $rojas2]);
 
         $previewPerez = $this->preview($reserva, [$perez, $perezNino]);

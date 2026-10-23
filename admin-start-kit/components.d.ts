@@ -69,6 +69,7 @@ declare module 'vue' {
     CuotasCredito: typeof import('./src/components/Creditos/CuotasCredito.vue')['default']
     DestinoServicioPicker: typeof import('./src/components/AgenciaViajes/DestinoServicioPicker.vue')['default']
     DestinoTreeSelect: typeof import('./src/components/AgenciaViajes/DestinoTreeSelect.vue')['default']
+    DetalleComprobantePreview: typeof import('./src/components/AgenciaViajes/DetalleComprobantePreview.vue')['default']
     DialogoBase: typeof import('./src/components/Creditos/DialogoBase.vue')['default']
     DialogoCambiarAsesor: typeof import('./src/components/Creditos/DialogoCambiarAsesor.vue')['default']
     DialogoCobrar: typeof import('./src/components/Creditos/DialogoCobrar.vue')['default']

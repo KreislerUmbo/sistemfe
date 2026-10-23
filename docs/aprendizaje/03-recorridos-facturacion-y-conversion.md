@@ -116,6 +116,13 @@ tributario, y el pie dice "Se emitirá a: …". Los pasajeros marcados deciden *
 cliente decide **a nombre de quién**. En "Facturar" (simple) siempre es el cliente de la
 cotización, y el modal lo dice arriba.
 
+**Qué entra y cuánto** (`components/AgenciaViajes/DetalleComprobantePreview.vue`): la vista previa
+trae `detalle`, armado por `ReservaFacturacionController::detallePreview()` **antes** del guardia
+tributario, así que se ve aunque haya un bloqueo. Una fila por servicio (un tour con varias líneas
+de IGV es una fila); un tour cobrado por grupo dice "Parte de 2 de 4 pasajeros — del total del
+tour S/ 522.00". Debajo: cómo sale en la factura (`grupos_propuestos`, con su tipo de IGV) y, en
+"Facturación especial", los anticipos marcados y el saldo a cobrar.
+
 **Anticipo a nombre de otro cliente:** `ReservaAnticipoController::store()` acepta `client_id`
 opcional (vacío = el cliente de la cotización; la moneda sigue saliendo de la reserva). Importa
 porque un anticipo **solo se descuenta en una factura del mismo cliente**

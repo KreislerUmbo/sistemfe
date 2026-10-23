@@ -211,6 +211,8 @@ class ReservaFacturacionController extends Controller
             'tipo_cambio_sugerido' => $infoMoneda['tipo_cambio_sugerido'],
             'tipo_cambio_aplicado' => $infoMoneda['tipo_cambio'],
             'serie_resuelta' => $this->resolverSeriePreview($request, $validado, $infoMoneda['moneda_facturacion']),
+            // F1 (23-oct-2026): qué entra y cuánto, también con bloqueo.
+            'detalle' => $this->detallePreview($items, $partesTour),
         ]);
 
         // Preview de solo lectura: se mantiene siempre 200, con
@@ -274,6 +276,8 @@ class ReservaFacturacionController extends Controller
             'items_por_destino_tributario' => $this->mapearItemsPorTratamientoTributario($items),
             'grupos_propuestos' => collect($lineas)->map(fn (array $linea) => [
                 'categoria' => $linea['categoria'],
+                // F1: para mostrar "TOUR — exonerado" en la vista previa.
+                'tip_afe_igv' => $linea['tip_afe_igv'],
                 'cantidad_items' => $linea['grupo']->count(),
                 'subtotal' => $linea['subtotal'],
                 'igv' => $linea['igv'],
@@ -763,6 +767,8 @@ class ReservaFacturacionController extends Controller
             'pasajeros',
             'proveedorTarifa',
             'alternativaItem.proveedorTarifa.proveedorServicio.destinoServicio.servicio',
+            // F1: nombre del tour en el detalle de la vista previa.
+            'tourOrigen',
             // Análisis de impuestos (28-ago-2026) — resolverTipAfeIgvItem()
             // necesita esto para el caso pasaje_aereo (única fuente más
             // específica que el campo genérico de alternativa_items).
@@ -981,10 +987,53 @@ class ReservaFacturacionController extends Controller
                     : round($vendido * $delGrupo->count() / $participantes->count(), 2);
             }
 
-            $partes[] = ['reserva_item_id' => $item->id, 'monto' => $monto, 'cierra' => $cierra];
+            $partes[] = [
+                'reserva_item_id' => $item->id,
+                'monto' => $monto,
+                'cierra' => $cierra,
+                // Para la vista previa: "2 de 4 pasajeros" (F1, 23-oct-2026).
+                'pasajeros_grupo' => $delGrupo->count(),
+                'pasajeros_total' => $participantes->count(),
+            ];
         }
 
         return ['items' => $itemsTour->values(), 'partes' => $partes];
+    }
+
+    // F1 (23-oct-2026, pedido del usuario): qué entra en este comprobante y
+    // cuánto, para la vista previa — se calcula ANTES del guardia tributario,
+    // así se ve aunque haya un bloqueo. Una fila por servicio; las líneas de
+    // un mismo tour (una por código de IGV) son una sola fila. Una línea de
+    // tour cobrada por grupo muestra su parte ("2 de 4 pasajeros"). Montos en
+    // la moneda de la cotización (antes de convertir, si se factura en otra).
+    private function detallePreview(Collection $items, array $partesTour): array
+    {
+        $partes = collect($partesTour)->keyBy('reserva_item_id');
+
+        return $items
+            ->groupBy(fn (ReservaItem $it) => $it->carga_tour ?? 'item_'.$it->id)
+            ->map(function (Collection $lineas) use ($partes) {
+                $primera = $lineas->first();
+                $esTour = $primera->alternativaItem?->esLineaTour() ?? false;
+                $parte = $partes->get($primera->id);
+                $total = round($lineas->sum(fn (ReservaItem $it) => (float) $it->alternativaItem->total_convertido), 2);
+                $monto = round($lineas->sum(fn (ReservaItem $it) => (float) ($partes->get($it->id)['monto'] ?? $it->alternativaItem->total_convertido)), 2);
+
+                return [
+                    'reserva_item_ids' => $lineas->pluck('id')->values(),
+                    'nombre' => $esTour
+                        ? ($primera->tourOrigen?->nombre ?? ReservaController::resolverNombreItem($primera->alternativaItem))
+                        : ReservaController::resolverNombreItem($primera->alternativaItem, $primera),
+                    'fecha' => $primera->fecha?->toDateString(),
+                    'monto' => $monto,
+                    'total_servicio' => $total,
+                    'parcial' => $parte !== null && abs($monto - $total) > 0.004,
+                    'pasajeros_grupo' => $parte['pasajeros_grupo'] ?? null,
+                    'pasajeros_total' => $parte['pasajeros_total'] ?? null,
+                ];
+            })
+            ->values()
+            ->all();
     }
 
     // Ningún reserva_item pedido puede estar ya cubierto por una

@@ -79,6 +79,18 @@ export type AnticipoDisponiblePreview = {
 // mal calculada. Se evalúa por Sale (subconjunto elegido), no por reserva
 // completa — dos pasajeros distintos pueden terminar en Sales con
 // distinto destino_tributario cada uno.
+export type DetalleComprobantePreview = {
+  reserva_item_ids: number[]
+  nombre: string
+  fecha: string | null
+  monto: number
+  total_servicio: number
+  // Un tour cobrado por grupo de pasajeros: entra solo su parte.
+  parcial: boolean
+  pasajeros_grupo: number | null
+  pasajeros_total: number | null
+}
+
 export type PrepararFacturaResponse = {
   code: number
   bloqueado_tributario: boolean
@@ -116,8 +128,13 @@ export type PrepararFacturaResponse = {
   // sucursal/tipo/moneda (el vendedor lo descubre acá, antes de intentar
   // confirmar, en vez de con un 422 al hacer clic en "Emitir comprobante").
   serie_resuelta?: string | null
+  // F1 (23-oct-2026): qué entra en este comprobante y cuánto (viaja también
+  // con bloqueo). Una fila por servicio; un tour = una fila. Montos en la
+  // moneda de la cotización.
+  detalle?: DetalleComprobantePreview[]
   grupos_propuestos?: Array<{
     categoria: string
+    tip_afe_igv?: string
     cantidad_items: number
     subtotal: number
     igv: number
