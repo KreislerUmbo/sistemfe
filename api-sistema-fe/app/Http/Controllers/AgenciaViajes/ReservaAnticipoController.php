@@ -57,6 +57,12 @@ class ReservaAnticipoController extends Controller
             // ahora exige elegir tratamiento tributario, ya no gravado fijo.
             'tip_afe_igv' => 'required|string|in:10,20,30',
             'notas' => 'nullable|string',
+            // F1 (23-oct-2026, pedido del usuario): a nombre de quién sale el
+            // anticipo. Vacío = el cliente de la cotización (como antes). Un
+            // anticipo solo se descuenta en una factura del MISMO cliente
+            // (AdvanceApplicationService), así que si la reserva se va a
+            // facturar a una empresa, el anticipo tiene que ir a su RUC.
+            'client_id' => 'nullable|integer|exists:clients,id',
         ]);
 
         if ($validator->fails()) {
@@ -65,12 +71,14 @@ class ReservaAnticipoController extends Controller
 
         $validado = $validator->validated();
 
-        // client_id/moneda se DERIVAN de la reserva, nunca del payload —
-        // el anticipo es de ESTA reserva, no de un cliente/moneda a
-        // elección libre (evita de raíz el guard de moneda distinta que
-        // ya blindamos en SaleController::store()/AdvanceApplicationService).
+        // La moneda se DERIVA de la reserva, nunca del payload (evita de raíz
+        // el guard de moneda distinta que ya blindamos en
+        // SaleController::store()/AdvanceApplicationService). El cliente
+        // también, salvo que se elija otro (F1, ver validación arriba).
         $cotizacion = $reserva->alternativa->cotizacion;
-        $cliente = $cotizacion->cliente;
+        $cliente = ! empty($validado['client_id'])
+            ? \App\Models\Client\Client::findOrFail($validado['client_id'])
+            : $cotizacion->cliente;
         $moneda = $reserva->alternativa->moneda_cotizacion;
 
         $requestAdelanto = new Request([

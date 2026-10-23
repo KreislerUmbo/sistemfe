@@ -60,6 +60,7 @@ declare module 'vue' {
     CampoHora: typeof import('./src/components/CampoHora.vue')['default']
     CartDrawer: typeof import('./src/components/portal/CartDrawer.vue')['default']
     ChartJs: typeof import('./src/components/ChartJs.vue')['default']
+    ClienteComprobanteSelector: typeof import('./src/components/AgenciaViajes/ClienteComprobanteSelector.vue')['default']
     ClienteDatosBase: typeof import('./src/components/Clientes/ClienteDatosBase.vue')['default']
     ClientFormQuick: typeof import('./src/components/Sales/ClientFormQuick.vue')['default']
     CobrarPanel: typeof import('./src/components/Creditos/CobrarPanel.vue')['default']

@@ -110,7 +110,20 @@ acepta aunque no venga ningún ítem. Así la vista previa puede listar lo que q
 rechaza: **mezclar** pasajeros ya facturados con pendientes. Y emitir una factura sin ningún ítem
 lo bloquea `store()`.
 
-Tests: `test_f1_segunda_factura_con_los_mismos_pasajeros_para_el_resto_de_servicios` y
+**A nombre de quién sale** (`components/AgenciaViajes/ClienteComprobanteSelector.vue`): en
+"Facturación especial" el cliente está arriba y siempre visible, aunque haya un bloqueo
+tributario, y el pie dice "Se emitirá a: …". Los pasajeros marcados deciden **qué** entra; el
+cliente decide **a nombre de quién**. En "Facturar" (simple) siempre es el cliente de la
+cotización, y el modal lo dice arriba.
+
+**Anticipo a nombre de otro cliente:** `ReservaAnticipoController::store()` acepta `client_id`
+opcional (vacío = el cliente de la cotización; la moneda sigue saliendo de la reserva). Importa
+porque un anticipo **solo se descuenta en una factura del mismo cliente**
+(`AdvanceApplicationService`): si la reserva se facturará a una empresa, el anticipo tiene que ir
+a su RUC. Pantalla: "Cobrar anticipo" en `reservas/detalle.vue`.
+
+Tests: `test_f1_segunda_factura_con_los_mismos_pasajeros_para_el_resto_de_servicios`,
+`ReservaAnticipoTest::test_store_permite_elegir_el_cliente_del_anticipo` y
 `test_f1_pasajeros_ya_facturados_mezclados_con_pendientes_siguen_rechazados`
 (`tests/Feature/AgenciaViajes/Fila13Fase1cFacturacionTest.php`).
 

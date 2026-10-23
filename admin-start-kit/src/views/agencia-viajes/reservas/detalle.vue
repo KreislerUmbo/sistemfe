@@ -914,6 +914,14 @@
                             </label>
                         </div>
 
+                        <!-- F1 (23-oct-2026): a nombre de quién sale el comprobante, arriba y
+                             siempre visible (antes estaba al final y se ocultaba con un bloqueo). -->
+                        <div class="mb-3">
+                            <label class="form-label small fw-semibold text-secondary">¿A nombre de quién sale el comprobante?</label>
+                            <ClienteComprobanteSelector v-model="clienteSeleccionado" @nuevo="(texto) => abrirModalClienteRapido('especial', texto)" />
+                            <small class="text-muted">Los pasajeros marcados deciden qué servicios entran; el cliente decide a nombre de quién (DNI o RUC).</small>
+                        </div>
+
                         <div v-if="cargandoPreviewFacturaEspecial" class="small text-muted mb-2">
                             <span class="spinner-border spinner-border-sm me-1"></span>Calculando...
                         </div>
@@ -1067,6 +1075,10 @@
                                     @click="abrirModalConfirmarTributario(itemsPorIds(previewFacturaEspecial.items_sin_confirmar_ids ?? []))">
                                     Confirmar tratamiento tributario
                                 </button>
+                                <!-- F1 (23-oct-2026): que se vea que hay más pasos detrás del bloqueo. -->
+                                <p class="small mb-0 mt-2 text-body-secondary">
+                                    Cuando lo resuelvas, aquí aparecen el tipo de comprobante (factura o boleta), el total y los anticipos para descontar.
+                                </p>
                             </div>
 
                             <template v-else>
@@ -1090,37 +1102,6 @@
                                 </div>
 
                                 <div class="mb-2">
-                                    <label class="form-label small fw-semibold text-secondary">Cliente para este comprobante</label>
-                                    <div v-if="clienteSeleccionado" class="d-flex justify-content-between align-items-center border rounded px-2 py-1 small">
-                                        <span>{{ clienteSeleccionado.full_name }} — {{ clienteSeleccionado.n_document }}</span>
-                                        <button type="button" class="btn btn-sm btn-link text-danger p-0" @click="clienteSeleccionado = null">Cambiar</button>
-                                    </div>
-                                    <template v-else>
-                                        <div class="input-group input-group-sm">
-                                            <input type="text" class="form-control" placeholder="Buscar cliente por nombre o documento..."
-                                                v-model="busquedaCliente" @input="onBuscarCliente">
-                                            <!-- Bug real (2026-09-24): este buscador solo consultaba
-                                                 clientes YA registrados (clients?search=) — si la
-                                                 empresa era nueva, no había ningún camino sin salir
-                                                 del modal. Mismo componente que ya usa Venta Directa
-                                                 (ClientFormQuick, con búsqueda de RUC vía apisperu). -->
-                                            <button type="button" class="btn btn-outline-primary" @click="abrirModalClienteRapido">
-                                                <i class="fas fa-plus me-1"></i>Nuevo
-                                            </button>
-                                        </div>
-                                        <div v-if="resultadosCliente.length > 0" class="border rounded mt-1" style="max-height:140px;overflow-y:auto">
-                                            <button v-for="c in resultadosCliente" :key="c.id" type="button"
-                                                class="dropdown-item small w-100 text-start" @click="seleccionarCliente(c)">
-                                                {{ c.full_name }} — {{ c.n_document }}
-                                            </button>
-                                        </div>
-                                        <small v-else-if="busquedaCliente.trim().length >= 2" class="text-muted d-block mt-1">
-                                            Sin resultados entre los clientes ya registrados — usa "Nuevo" para buscar por RUC/DNI o registrarlo a mano.
-                                        </small>
-                                    </template>
-                                </div>
-
-                                <div class="mb-2">
                                     <label class="form-label small fw-semibold text-secondary">Texto para este comprobante (opcional)</label>
                                     <textarea class="form-control form-control-sm" rows="2"
                                         placeholder="Ej: Servicio de movilización y hospedaje — comisión de servicio"
@@ -1139,6 +1120,13 @@
                         </p>
                     </div>
                     <div class="modal-footer">
+                        <!-- F1 (23-oct-2026): a nombre de quién sale, junto al botón. -->
+                        <span class="small me-auto" :class="clienteSeleccionado ? 'text-body' : 'text-warning-emphasis'">
+                            <template v-if="clienteSeleccionado">
+                                Se emitirá a: <strong>{{ clienteSeleccionado.full_name }}</strong> — {{ clienteSeleccionado.n_document }}
+                            </template>
+                            <template v-else><i class="fas fa-circle-exclamation me-1"></i>Elige a nombre de quién sale el comprobante</template>
+                        </span>
                         <button class="btn btn-outline-secondary btn-sm" @click="mostrarModalFacturarEspecial = false">Cerrar</button>
                         <button v-if="previewFacturaEspecial && !previewFacturaEspecial.bloqueado_tributario" class="btn btn-primary btn-sm"
                             :disabled="facturando || cargandoPreviewFacturaEspecial || facturarEspecialForm.pasajero_ids.length === 0 || !clienteSeleccionado
@@ -1187,6 +1175,12 @@
                         <button class="btn-close" @click="mostrarModalFacturarSimple = false"></button>
                     </div>
                     <div class="modal-body">
+                        <!-- F1 (23-oct-2026): a nombre de quién sale, siempre visible. -->
+                        <div class="border rounded px-2 py-1 small bg-light mb-3">
+                            <i class="fas fa-user-tie me-1 text-muted"></i>A nombre de:
+                            <strong>{{ cabecera?.cliente?.full_name ?? 'Sin cliente' }}</strong>{{ cabecera?.cliente?.n_document ? ` — ${cabecera.cliente.n_document}` : '' }}
+                            <span class="text-muted">(cliente de la cotización; para otro DNI o RUC usa <strong>Facturación especial</strong>)</span>
+                        </div>
                         <div v-if="cargandoFacturarSimple" class="small text-muted mb-2">
                             <span class="spinner-border spinner-border-sm me-1"></span>Calculando...
                         </div>
@@ -1366,9 +1360,16 @@
                     </div>
                     <div class="modal-body">
                         <p class="small text-muted">
-                            Genera su propio comprobante SUNAT a nombre de {{ cabecera?.cliente?.full_name }}
-                            ({{ moneda }}) — enviarlo a SUNAT se hace después, desde el módulo de Adelantos.
+                            Genera su propio comprobante SUNAT ({{ moneda }}) — enviarlo a SUNAT se hace después, desde el módulo de Adelantos.
                         </p>
+                        <!-- F1 (23-oct-2026, pedido del usuario): el anticipo solo se descuenta
+                             en una factura del MISMO cliente; si la reserva se facturará a una
+                             empresa, el anticipo tiene que ir a su RUC. -->
+                        <div class="mb-2">
+                            <label class="form-label small fw-semibold">¿A nombre de quién sale el anticipo?</label>
+                            <ClienteComprobanteSelector v-model="clienteAnticipo" @nuevo="(texto) => abrirModalClienteRapido('anticipo', texto)" />
+                            <small class="text-muted">Usa el mismo cliente al que vas a facturar la reserva: el anticipo solo se descuenta de una factura de ese cliente.</small>
+                        </div>
                         <div class="mb-2">
                             <label class="form-label small fw-semibold">Monto recibido</label>
                             <input type="number" class="form-control form-control-sm" min="0.01" step="0.01" v-model.number="formAnticipo.monto">
@@ -1394,7 +1395,7 @@
                     </div>
                     <div class="modal-footer">
                         <button class="btn btn-outline-secondary btn-sm" @click="mostrarModalAnticipo = false">Cerrar</button>
-                        <button class="btn btn-primary btn-sm" :disabled="guardandoAnticipo || formAnticipo.monto <= 0 || !formAnticipo.medio_pago"
+                        <button class="btn btn-primary btn-sm" :disabled="guardandoAnticipo || formAnticipo.monto <= 0 || !formAnticipo.medio_pago || !clienteAnticipo"
                             @click="guardarAnticipo">
                             <span v-if="guardandoAnticipo" class="spinner-border spinner-border-sm me-1"></span>Registrar anticipo
                         </button>
@@ -1416,6 +1417,7 @@ import httpClient from '@/helpers/http-client';
 import { useAuthStore } from '@/stores/auth';
 import type { Branch } from '@/types/cash-session';
 import ClientFormQuick from '@/components/Sales/ClientFormQuick.vue';
+import ClienteComprobanteSelector, { type ClienteComprobante } from '@/components/AgenciaViajes/ClienteComprobanteSelector.vue';
 import { reservaService } from '@/services/admin/reservaService';
 import { reservaFacturacionService, type PrepararFacturaResponse, type AnticipoDisponiblePreview } from '@/services/admin/reservaFacturacionService';
 import { reservaAnticipoService } from '@/services/admin/reservaAnticipoService';
@@ -2694,8 +2696,7 @@ const refrescarPreviewFacturacionAbierta = () => {
 // toque. Editar el tipo de cambio es un <input type="number"> que dispara
 // un evento por cada tecla — sin debounce, cada dígito escrito disparaba
 // un preview nuevo (bug real reportado: "me refresca cada vez que escribo
-// un número"). Mismo patrón que clienteSearchTimeout (onBuscarCliente) más
-// abajo en este archivo.
+// un número"). Mismo patrón que el buscador de ClienteComprobanteSelector.vue.
 watch(monedaFacturacionSeleccionada, refrescarPreviewFacturacionAbierta);
 
 let tipoCambioFacturacionTimeout: ReturnType<typeof setTimeout> | undefined;
@@ -2715,55 +2716,34 @@ watch(() => facturarEspecialForm.value.tipo_comprobante_codigo, () => {
     if (mostrarModalFacturarEspecial.value) refrescarPreviewFacturaEspecial();
 });
 
-// ── Buscador de cliente (mismo endpoint que usa el formulario de Ventas,
-// `clients?search=`) — simplificado: solo busca y elige entre clientes ya
-// existentes, no crea uno nuevo (si no existe, se crea desde la pantalla
-// de Clientes primero). ──
-type ClienteBusqueda = { id: number; full_name: string; n_document: string; cod_tipo_doc_sunat?: string };
-const clienteSeleccionado = ref<ClienteBusqueda | null>(null);
-const busquedaCliente = ref('');
-const resultadosCliente = ref<ClienteBusqueda[]>([]);
-let clienteSearchTimeout: ReturnType<typeof setTimeout> | undefined;
-
-const onBuscarCliente = () => {
-    clearTimeout(clienteSearchTimeout);
-    const query = busquedaCliente.value.trim();
-    if (query.length < 2) {
-        resultadosCliente.value = [];
-        return;
-    }
-    clienteSearchTimeout = setTimeout(async () => {
-        try {
-            const res = await httpClient.get(`clients?search=${encodeURIComponent(query)}&take=10`);
-            resultadosCliente.value = res.data.clients.data;
-        } catch {
-            resultadosCliente.value = [];
-        }
-    }, 300);
-};
-
-const seleccionarCliente = (c: ClienteBusqueda) => {
-    clienteSeleccionado.value = c;
-    resultadosCliente.value = [];
-    busquedaCliente.value = '';
-};
+// ── A nombre de quién sale el comprobante (F1, 23-oct-2026): el buscador
+// vive en components/AgenciaViajes/ClienteComprobanteSelector.vue (mismo
+// endpoint `clients?search=` que Ventas); acá solo queda el cliente elegido
+// de cada modal y el alta rápida compartida. ──
+const clienteSeleccionado = ref<ClienteComprobante | null>(null);
 
 // Cliente nuevo sin salir del modal (2026-09-24) — mismo componente que ya
 // usa Venta Directa. Si lo que se tipeó en el buscador parece un RUC (11
 // dígitos), se precarga en el form rápido para no reescribirlo dos veces.
+// `destinoClienteRapido`: a qué modal vuelve el cliente creado.
 const mostrarModalClienteRapido = ref(false);
 const clienteRapidoInitialData = ref<{ type_document: string; n_document: string } | null>(null);
+const destinoClienteRapido = ref<'especial' | 'anticipo'>('especial');
 
-const abrirModalClienteRapido = () => {
-    const query = busquedaCliente.value.trim();
-    clienteRapidoInitialData.value = /^\d{11}$/.test(query)
-        ? { type_document: 'RUC', n_document: query }
+const abrirModalClienteRapido = (destino: 'especial' | 'anticipo', texto: string) => {
+    destinoClienteRapido.value = destino;
+    clienteRapidoInitialData.value = /^\d{11}$/.test(texto)
+        ? { type_document: 'RUC', n_document: texto }
         : null;
     mostrarModalClienteRapido.value = true;
 };
 
-const onClienteRapidoCreado = (cliente: ClienteBusqueda) => {
-    seleccionarCliente(cliente);
+const onClienteRapidoCreado = (cliente: ClienteComprobante) => {
+    if (destinoClienteRapido.value === 'anticipo') {
+        clienteAnticipo.value = cliente;
+    } else {
+        clienteSeleccionado.value = cliente;
+    }
     mostrarModalClienteRapido.value = false;
 };
 
@@ -2793,8 +2773,6 @@ const abrirModalFacturarEspecial = () => {
     previewFacturaEspecial.value = null;
     anticiposEspecialSeleccionables.value = [];
     clienteSeleccionado.value = null;
-    busquedaCliente.value = '';
-    resultadosCliente.value = [];
     resetearOverrideMoneda();
     mostrarModalFacturarEspecial.value = true;
     refrescarPreviewFacturaEspecial();
@@ -2971,6 +2949,8 @@ const paymentMethods = ref<PaymentMethod[]>([]);
 const formAnticipo = ref<{ monto: number; medio_pago: string; tip_afe_igv: '10' | '20' | '30'; notas: string }>({
     monto: 0, medio_pago: '', tip_afe_igv: '10', notas: '',
 });
+// F1 (23-oct-2026): a nombre de quién sale el anticipo.
+const clienteAnticipo = ref<ClienteComprobante | null>(null);
 
 const cargarPaymentMethods = async () => {
     try {
@@ -2993,6 +2973,11 @@ const abrirModalAnticipo = async () => {
         // Sin config se queda en Gravado, igual que antes — no bloquea el cobro.
     }
     formAnticipo.value = { monto: 0, medio_pago: paymentMethods.value[0]?.code ?? '', tip_afe_igv: tipAfeIgvDefault, notas: '' };
+    // Por defecto, el cliente de la cotización (como antes); se puede cambiar.
+    const clienteCotizacion = cabecera.value?.cliente;
+    clienteAnticipo.value = clienteCotizacion?.id
+        ? { id: clienteCotizacion.id, full_name: clienteCotizacion.full_name ?? '', n_document: clienteCotizacion.n_document ?? '' }
+        : null;
     mostrarModalAnticipo.value = true;
 };
 
@@ -3005,6 +2990,7 @@ const guardarAnticipo = async () => {
             medio_pago: formAnticipo.value.medio_pago,
             tip_afe_igv: formAnticipo.value.tip_afe_igv,
             notas: formAnticipo.value.notas || null,
+            client_id: clienteAnticipo.value?.id ?? null,
         });
         toast.success(res.message);
         mostrarModalAnticipo.value = false;

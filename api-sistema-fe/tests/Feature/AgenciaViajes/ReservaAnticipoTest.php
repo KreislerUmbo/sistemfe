@@ -217,12 +217,12 @@ class ReservaAnticipoTest extends TestCase
         $reserva = $this->crearReservaSimple();
         $clienteEsperado = $reserva->alternativa->cotizacion->cliente_id;
 
-        // client_id enviado en el payload debe ser IGNORADO — se deriva de
-        // la reserva, nunca del payload (blindaje de moneda/cliente).
+        // Sin client_id, el anticipo sale a nombre del cliente de la
+        // cotización (F1, 23-oct-2026: antes el client_id del payload se
+        // ignoraba siempre; ahora es opcional, ver el test de abajo).
         $response = app(ReservaAnticipoController::class)->store(new Request([
             'monto' => 50.00,
             'medio_pago' => 'EFECTIVO', 'tip_afe_igv' => '10',
-            'client_id' => 999999,
         ]), (string) $reserva->id);
 
         $body = $response->getData(true);
@@ -239,6 +239,33 @@ class ReservaAnticipoTest extends TestCase
         $this->assertSame($reserva->id, $reservaAnticipo->reserva_id);
         $this->assertSame($advance->id, $reservaAnticipo->advance_id);
         $this->assertSame(50.0, (float) $reservaAnticipo->monto_asignado);
+    }
+
+    // F1 (23-oct-2026, pedido del usuario): el anticipo puede ir a nombre de
+    // otro cliente (p. ej. la empresa con RUC a la que se facturará la
+    // reserva), porque solo se descuenta en una factura del mismo cliente.
+    // La moneda sigue saliendo de la reserva.
+    public function test_store_permite_elegir_el_cliente_del_anticipo(): void
+    {
+        $this->usuarioCompleto();
+        $reserva = $this->crearReservaSimple();
+        $empresa = \App\Models\Client\Client::factory()->empresa()->create();
+
+        $response = app(ReservaAnticipoController::class)->store(new Request([
+            'monto' => 80.00, 'medio_pago' => 'EFECTIVO', 'tip_afe_igv' => '10',
+            'client_id' => $empresa->id, 'currency' => 'USD',
+        ]), (string) $reserva->id);
+
+        $this->assertSame(200, $response->getData(true)['code'], json_encode($response->getData(true)));
+        $advance = Advance::first();
+        $this->assertSame($empresa->id, $advance->client_id);
+        $this->assertSame('PEN', $advance->currency); // la moneda no se elige
+
+        // Un cliente que no existe se rechaza.
+        $invalido = app(ReservaAnticipoController::class)->store(new Request([
+            'monto' => 10.00, 'medio_pago' => 'EFECTIVO', 'tip_afe_igv' => '10', 'client_id' => 999999,
+        ]), (string) $reserva->id);
+        $this->assertSame(422, $invalido->getStatusCode());
     }
 
     // Bug real (auditoría 2026-09-22): la ruta HTTP solo exige
