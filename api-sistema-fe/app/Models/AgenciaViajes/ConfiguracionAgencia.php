@@ -3,12 +3,19 @@
 namespace App\Models\AgenciaViajes;
 
 use Illuminate\Database\Eloquent\Model;
+use App\Models\AgenciaViajes\Concerns\ExoneradoEsAmazonia;
 
 // Configuración general de la agencia — singleton, una sola fila por
 // tenant (la migración inserta la fila default en up(), ver
 // plan-modulo-maestros-iniciales.md §6.2). Tenant (sin CentralConnection).
 class ConfiguracionAgencia extends Model
 {
+    // Fila 13 (22-oct-2026): en Agencia, exonerado (20) ⇒ destino Amazonía.
+    use ExoneradoEsAmazonia;
+
+    // Sus columnas se llaman distinto (son el default de la agencia).
+    protected array $columnasTratamiento = ['tip_afe_igv' => 'tip_afe_igv_default', 'destino' => 'destino_tributario_default'];
+
     protected $table = 'configuracion_agencia';
 
     protected $fillable = [

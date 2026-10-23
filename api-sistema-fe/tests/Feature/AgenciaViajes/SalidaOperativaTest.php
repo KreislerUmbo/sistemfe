@@ -182,7 +182,7 @@ class SalidaOperativaTest extends TestCase
         $salida = SalidaOperativa::first();
         $this->assertSame($tour->id, $salida->tour_origen_id);
         $this->assertSame('2026-09-01', $salida->fecha->toDateString());
-        $this->assertSame('activa', $salida->estado);
+        $this->assertSame('programada', $salida->estado);
         $this->assertNotSame($reservaA->id, $reservaB->id);
     }
 
@@ -403,7 +403,7 @@ class SalidaOperativaTest extends TestCase
 
         // Salida B armada a mano, sin tour_origen_id (el camino real de
         // "el staff decide agrupar acá", ver docblock de attachReservaItem()).
-        $salidaB = SalidaOperativa::create(['fecha' => '2026-12-25', 'estado' => 'activa']);
+        $salidaB = SalidaOperativa::create(['fecha' => '2026-12-25', 'estado' => 'programada']);
 
         $response = app(SalidaOperativaController::class)
             ->attachReservaItem(new Request(['reserva_item_id' => $item->id]), (string) $salidaB->id);
@@ -420,7 +420,7 @@ class SalidaOperativaTest extends TestCase
         [$reserva, $item] = $this->crearReservaConItemProveedor($tour->id, '2026-09-01', 1, 'compartido', 'TEST-2026-2021');
         $reserva->update(['estado' => 'cancelada']);
 
-        $salidaB = SalidaOperativa::create(['fecha' => '2026-12-25', 'estado' => 'activa']);
+        $salidaB = SalidaOperativa::create(['fecha' => '2026-12-25', 'estado' => 'programada']);
 
         $response = app(SalidaOperativaController::class)
             ->attachReservaItem(new Request(['reserva_item_id' => $item->id]), (string) $salidaB->id);
@@ -451,7 +451,7 @@ class SalidaOperativaTest extends TestCase
             'reserva_item_ids' => [$item->id], 'reserva_pasajero_ids' => [],
         ]);
 
-        $salidaB = SalidaOperativa::create(['fecha' => '2026-12-25', 'estado' => 'activa']);
+        $salidaB = SalidaOperativa::create(['fecha' => '2026-12-25', 'estado' => 'programada']);
 
         $response = app(SalidaOperativaController::class)
             ->attachReservaItem(new Request(['reserva_item_id' => $item->id]), (string) $salidaB->id);

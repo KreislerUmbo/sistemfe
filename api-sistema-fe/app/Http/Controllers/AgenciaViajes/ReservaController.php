@@ -19,6 +19,8 @@ use App\Models\AgenciaViajes\SalidaMayorista;
 use App\Models\AgenciaViajes\SalidaOperativa;
 use App\Models\Sale\Sale;
 use App\Services\AgenciaViajes\CodigoGeneradorService;
+use App\Services\AgenciaViajes\SalidaEngancheService;
+use App\Services\AgenciaViajes\SalidaOperacionService;
 use App\Services\AgenciaViajes\TourLineaService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -322,6 +324,14 @@ class ReservaController extends Controller
 
         $motivo = $validator->validated()['motivo_cancelacion'];
 
+        // Fila 13, fase 2c (D15): foto de cada salida antes de cancelar, para
+        // avisar qué ajustar con los proveedores.
+        $operacion = app(SalidaOperacionService::class);
+        $fotosAntes = ReservaItem::where('reserva_id', $reserva->id)->whereNotNull('salida_operativa_id')
+            ->distinct()->pluck('salida_operativa_id')
+            ->mapWithKeys(fn ($salidaId) => [$salidaId => $operacion->foto((int) $salidaId)])
+            ->filter();
+
         DB::transaction(function () use ($reserva, $motivo) {
             $reserva->update([
                 'estado' => 'cancelada',
@@ -360,13 +370,29 @@ class ReservaController extends Controller
             if ($salidasOperativasAfectadas->isNotEmpty()) {
                 ReservaItem::where('reserva_id', $reserva->id)->update(['salida_operativa_id' => null]);
 
+                // Fila 13, fase 2c (D15): la reserva cancelada ya no va en
+                // ningún vehículo.
+                DB::table('salida_vehiculo_reservas')->where('reserva_id', $reserva->id)->delete();
+
                 foreach ($salidasOperativasAfectadas as $salidaId) {
                     SalidaOperativa::eliminarSiQuedoVacia($salidaId);
                 }
             }
         });
 
-        return response()->json(['code' => 200, 'message' => 'Reserva cancelada correctamente', 'reserva' => $reserva->fresh()]);
+        $avisosSalidas = $fotosAntes->map(fn (array $antes, $salidaId) => [
+            'salida_id' => (int) $salidaId,
+            'tour' => $antes['tour'],
+            'fecha' => $antes['fecha'],
+            'avisos' => $operacion->avisos($antes, $operacion->foto((int) $salidaId)),
+        ])->filter(fn (array $s) => $s['avisos'] !== [])->values();
+
+        return response()->json([
+            'code' => 200,
+            'message' => 'Reserva cancelada correctamente',
+            'reserva' => $reserva->fresh(),
+            'avisos_salidas' => $avisosSalidas,
+        ]);
     }
 
     // Sesión M2 — descarta las filas de AlternativaItem que son opciones
@@ -563,9 +589,8 @@ class ReservaController extends Controller
             'desglose_costo_snapshot' => $alternativaItem->desglose_costo_snapshot,
         ]);
 
-        // La línea de tour todavía no se engancha a una Salida Operativa: eso
-        // es la fase 2 (C3). engancharSalidaOperativa() ya la deja fuera
-        // (solo origen_tipo=proveedor compartido).
+        // Proveedor compartido y, desde la fase 2a, la línea de tour: ver
+        // engancharSalidaOperativa().
         $this->engancharSalidaOperativa($reservaItem, $alternativaItem, $fechaCalculada);
 
         // pax_incluidos null/vacío = aplica a todos, no se crea ninguna
@@ -584,52 +609,12 @@ class ReservaController extends Controller
         return $reservaItem;
     }
 
-    // Enganche automático a una salida_operativa compartida — ver diseño
-    // completo en la migración de creación de salidas_operativas. Solo
-    // origen_tipo=proveedor con modalidad=compartido se engancha solo:
-    // proveedor_tarifas.modalidad SÍ tiene semántica compartido/privado
-    // real. guia_tarifas.modalidad ('dia_local'/'grupo_multidia') es un eje
-    // de duración de contrato, sin ninguna señal confiable de si un ítem
-    // de guía puntual es exclusivo de una reserva o compartible con
-    // otras — así que los ítems origen_tipo=guia NUNCA se auto-enganchan
-    // en esta fase, quedan disponibles para engancharse a mano desde el
-    // tablero (SalidaOperativaController::attachReservaItem()). Ítems sin
-    // tour_origen_id tampoco se enganchan nunca (mismo motivo: sin esa
-    // clave no hay forma de agrupar).
+    // Enganche automático a la Salida Operativa: el criterio completo vive en
+    // SalidaEngancheService (extraído en la fila 13, fase 2c, para usarlo
+    // también al reprogramar una salida completa).
     private function engancharSalidaOperativa(ReservaItem $reservaItem, AlternativaItem $alternativaItem, $fechaCalculada): void
     {
-        if (! $fechaCalculada || ! $alternativaItem->tour_origen_id) {
-            return;
-        }
-
-        if ($alternativaItem->origen_tipo !== AlternativaItem::ORIGEN_PROVEEDOR) {
-            return;
-        }
-
-        if ($alternativaItem->proveedorTarifa?->modalidad !== 'compartido') {
-            return;
-        }
-
-        try {
-            $salida = SalidaOperativa::firstOrCreate(
-                ['tour_origen_id' => $alternativaItem->tour_origen_id, 'fecha' => $fechaCalculada],
-                ['estado' => 'activa']
-            );
-        } catch (\Illuminate\Database\QueryException $e) {
-            // Condición de carrera: otra request creó la misma salida entre
-            // el find y el create de firstOrCreate() — el índice único
-            // parcial (ver migración) la bloqueó. Recupera la que ya existe
-            // en vez de tragarte el error.
-            $salida = SalidaOperativa::where('tour_origen_id', $alternativaItem->tour_origen_id)
-                ->where('fecha', $fechaCalculada)
-                ->first();
-
-            if (! $salida) {
-                throw $e;
-            }
-        }
-
-        $reservaItem->update(['salida_operativa_id' => $salida->id]);
+        app(SalidaEngancheService::class)->enganchar($reservaItem, $alternativaItem, $fechaCalculada);
     }
 
     // Reconstruye cotizacion_pasajero_id → reserva_pasajero_id para una

@@ -72,7 +72,7 @@
                 </div>
                 <div class="col-6 col-md-3">
                     <label class="form-label mb-1 small fw-semibold text-secondary">Destino tributario</label>
-                    <select class="form-select form-select-sm" v-model="modelo.destino_tributario" :disabled="!modelo.tip_afe_igv">
+                    <select class="form-select form-select-sm" v-model="modelo.destino_tributario" :disabled="!modelo.tip_afe_igv || modelo.tip_afe_igv === IGV_EXONERADO">
                         <option :value="null" disabled>—</option>
                         <option value="amazonia">Amazonía</option>
                         <option value="nacional">Nacional</option>
@@ -115,6 +115,7 @@
 </template>
 
 <script setup lang="ts">
+import { destinoParaIgvAgencia, IGV_EXONERADO } from '@/helpers/tratamientoTributarioAgencia';
 // Fila 13, fase 1a (plan-tours-venta-simple-costo-real.md §3.1, N1/N2/N5/N15):
 // precio por persona, costo, IGV por defecto, modalidad, mínimo y uso del
 // tour simple. Lo comparten paquetes/form.vue (alta) y la edición en línea
@@ -145,9 +146,9 @@ const verExtranjero = ref<boolean>(
 const alCambiarIgv = () => {
     if (!modelo.value.tip_afe_igv) {
         modelo.value.destino_tributario = null;
-    } else if (!modelo.value.destino_tributario) {
-        // Exonerado casi siempre es Amazonía (Ley 27037); el resto, nacional.
-        modelo.value.destino_tributario = modelo.value.tip_afe_igv === '20' ? 'amazonia' : 'nacional';
+    } else {
+        // Exonerado en Agencia = Amazonía (Ley 27037); el resto, nacional si no tenía.
+        modelo.value.destino_tributario = destinoParaIgvAgencia(modelo.value.tip_afe_igv, modelo.value.destino_tributario ?? 'nacional');
     }
 };
 

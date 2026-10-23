@@ -7,14 +7,31 @@ use Illuminate\Database\Eloquent\Model;
 // Agrupa reserva_items de distintas reservas que comparten
 // tour_origen_id + fecha y son modalidad='compartido' — ver comentario
 // completo de diseño en la migración de creación de esta tabla.
+//
+// Fila 13, fase 2a (plan-tours-venta-simple-costo-real.md §3.6, D9): agrupa
+// también las líneas de tour del modo nuevo. Tour 'compartido' = una salida
+// por tour y fecha; tour 'privado' = una salida por reserva
+// (privada_reserva_id). Estados: programada → confirmada → realizada, o
+// cancelada.
 class SalidaOperativa extends Model
 {
     protected $table = 'salidas_operativas';
 
+    public const ESTADO_PROGRAMADA = 'programada';
+    public const ESTADO_CONFIRMADA = 'confirmada';
+    public const ESTADO_REALIZADA = 'realizada';
+    public const ESTADO_CANCELADA = 'cancelada';
+
+    // Salidas que todavía se operan (se ven en el Inicio, reciben reservas).
+    public const ESTADOS_EN_CURSO = [self::ESTADO_PROGRAMADA, self::ESTADO_CONFIRMADA];
+
     protected $fillable = [
         'tour_origen_id',
+        'privada_reserva_id',
         'fecha',
         'hora',
+        // Fila 13, fase 2c: hora y lugar de recojo nacen del tour, editables acá.
+        'lugar_recojo',
         'guia_id',
         'cupo_maximo',
         'vehiculo_descripcion',
@@ -39,6 +56,40 @@ class SalidaOperativa extends Model
     public function reservaItems()
     {
         return $this->hasMany(ReservaItem::class, 'salida_operativa_id');
+    }
+
+    // Fila 13, fase 2b: lo que hay que reservar y los vehículos de la salida.
+    public function servicios()
+    {
+        return $this->hasMany(SalidaServicio::class, 'salida_operativa_id')->orderBy('orden')->orderBy('id');
+    }
+
+    public function vehiculos()
+    {
+        return $this->hasMany(SalidaVehiculo::class, 'salida_operativa_id')->orderBy('orden')->orderBy('id');
+    }
+
+    // El vehículo en el que va una reserva (asignación explícita: la pantalla,
+    // el Reporte Operativo y el guía efectivo leen lo mismo).
+    public function vehiculoDeReserva(int $reservaId): ?SalidaVehiculo
+    {
+        return $this->vehiculos->first(fn (SalidaVehiculo $v) => $v->reservas->contains('id', $reservaId));
+    }
+
+    // Solo en una salida privada: la reserva dueña.
+    public function reservaPrivada()
+    {
+        return $this->belongsTo(Reserva::class, 'privada_reserva_id');
+    }
+
+    public function esPrivada(): bool
+    {
+        return $this->privada_reserva_id !== null;
+    }
+
+    public function scopeEnCurso($query)
+    {
+        return $query->whereIn('estado', self::ESTADOS_EN_CURSO);
     }
 
     // Bug real (auditoría 2026-09-22): los 3 puntos donde un reserva_item

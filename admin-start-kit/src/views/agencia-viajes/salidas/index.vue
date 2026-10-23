@@ -25,8 +25,7 @@
                         <label class="form-label mb-1 small fw-semibold text-secondary">Estado</label>
                         <select class="form-select form-select-sm" v-model="estado" @change="list">
                             <option value="">Todos</option>
-                            <option value="activa">Activa</option>
-                            <option value="cancelada">Cancelada</option>
+                            <option v-for="(etiqueta, valor) in ETIQUETA_ESTADO" :key="valor" :value="valor">{{ etiqueta }}</option>
                         </select>
                     </div>
                     <div class="col-6 col-md-3">
@@ -47,7 +46,7 @@
                                 <th class="ps-3">Fecha / Hora</th>
                                 <th>Tour</th>
                                 <th style="min-width:180px">Guía</th>
-                                <th style="min-width:200px">Vehículo / Cupo</th>
+                                <th style="min-width:200px">Operación</th>
                                 <th class="text-center">Pax</th>
                                 <th class="text-center">Reservas</th>
                                 <th class="text-center">Estado</th>
@@ -71,7 +70,10 @@
                                     <div class="fw-semibold">{{ formatFecha(s.fecha) }}</div>
                                     <small class="text-muted" v-if="s.hora">{{ s.hora }}</small>
                                 </td>
-                                <td>{{ s.tour_nombre ?? '—' }}</td>
+                                <td>
+                                    {{ s.tour_nombre ?? '—' }}
+                                    <span v-if="s.privada" class="badge bg-info-subtle text-info-emphasis ms-1">Privada</span>
+                                </td>
                                 <td>
                                     <div v-if="guiaEditando !== s.id" class="d-flex align-items-center justify-content-between border rounded px-2 py-1 bg-white"
                                         style="cursor:pointer;min-height:31px" @click="guiaEditando = s.id">
@@ -87,24 +89,45 @@
                                         <i class="fas fa-triangle-exclamation me-1"></i>Falta guía
                                     </div>
                                 </td>
-                                <td>
-                                    <input type="text" class="form-control form-control-sm mb-1" placeholder="Vehículo (ej. Van 14 pax)"
-                                        v-model="s.vehiculo_descripcion" @blur="guardarCampos(s)">
-                                    <input type="number" min="1" class="form-control form-control-sm" placeholder="Cupo máximo"
-                                        v-model.number="s.cupo_maximo" @blur="guardarCampos(s)">
+                                <!-- Fila 13, fase 2b: resumen de servicios y vehículos; se editan en el detalle. -->
+                                <td class="small">
+                                    <div>
+                                        <i class="fas fa-van-shuttle text-muted me-1"></i>
+                                        <template v-if="s.vehiculos_total">
+                                            {{ s.vehiculos_total }} vehículo(s){{ s.capacidad_total ? ` · ${s.capacidad_total} asientos` : '' }}
+                                        </template>
+                                        <span v-else class="text-muted fst-italic">Sin vehículo</span>
+                                    </div>
+                                    <div v-if="s.servicios_total">
+                                        <i class="fas fa-list-check text-muted me-1"></i>{{ s.servicios_total - (s.servicios_por_reservar ?? 0) }}/{{ s.servicios_total }} servicios reservados
+                                    </div>
+                                    <div v-if="s.servicios_sin_proveedor" class="text-warning-emphasis">
+                                        <i class="fas fa-triangle-exclamation me-1"></i>{{ s.servicios_sin_proveedor }} servicio(s) sin proveedor
+                                    </div>
+                                    <div v-if="s.reservas_sin_vehiculo" class="text-warning-emphasis">
+                                        <i class="fas fa-triangle-exclamation me-1"></i>{{ s.reservas_sin_vehiculo }} reserva(s) sin vehículo
+                                    </div>
                                 </td>
-                                <td class="text-center fw-semibold">{{ s.total_pax ?? 0 }}</td>
+                                <td class="text-center">
+                                    <div class="fw-semibold">{{ s.total_pax ?? 0 }}</div>
+                                    <!-- Mínimo para salir: cuentan adultos y niños (el infante no). -->
+                                    <small v-if="s.pax_minimo" :class="s.bajo_minimo ? 'text-danger fw-semibold' : 'text-muted'">
+                                        {{ s.pax_que_cuentan }} / {{ s.pax_minimo }} mín.
+                                    </small>
+                                </td>
                                 <td class="text-center">{{ s.total_reservas ?? 0 }}</td>
                                 <td class="text-center">
-                                    <span class="badge" :class="s.estado === 'activa' ? 'bg-success' : 'bg-secondary'">
-                                        {{ s.estado === 'activa' ? 'Activa' : 'Cancelada' }}
-                                    </span>
+                                    <span class="badge" :class="CLASE_ESTADO[s.estado]">{{ ETIQUETA_ESTADO[s.estado] }}</span>
                                 </td>
-                                <td class="text-center pe-3">
+                                <td class="text-center pe-3 text-nowrap">
                                     <button class="btn btn-sm btn-outline-primary me-1" title="Ver detalle" @click="abrirDetalle(s.id)">
                                         <i class="fas fa-eye"></i>
                                     </button>
-                                    <button v-if="s.estado === 'activa'" class="btn btn-sm btn-outline-danger" title="Cancelar salida" @click="confirmarCancelar(s)">
+                                    <button v-if="siguienteEstado(s)" class="btn btn-sm btn-outline-success me-1"
+                                        :title="siguienteEstado(s)!.texto" @click="avanzarEstado(s)">
+                                        <i :class="siguienteEstado(s)!.icono"></i>
+                                    </button>
+                                    <button v-if="enCurso(s)" class="btn btn-sm btn-outline-danger" title="Cancelar salida" @click="confirmarCancelar(s)">
                                         <i class="fas fa-ban"></i>
                                     </button>
                                 </td>
@@ -130,7 +153,7 @@
         <!-- Modal detalle -->
         <div class="modal fade" tabindex="-1" :class="{ show: !!detalle, 'd-block': !!detalle }"
             style="background:rgba(0,0,0,.5)" v-if="detalle">
-            <div class="modal-dialog modal-lg">
+            <div class="modal-dialog modal-xl modal-dialog-scrollable">
                 <div class="modal-content">
                     <div class="modal-header">
                         <h6 class="modal-title fw-bold">
@@ -140,13 +163,64 @@
                     </div>
                     <div class="modal-body">
                         <div class="row g-2 mb-3 small">
+                            <!-- Fila 13, fase 2c: hora y lugar de recojo (nacen del tour, valen para todas las reservas). -->
+                            <div class="col-12 col-md-3">
+                                <label class="form-label mb-0 small text-secondary">Hora de salida</label>
+                                <input type="time" class="form-control form-control-sm" :value="detalle.hora ?? ''" :disabled="!enCurso(detalle)"
+                                    @change="guardarDatosSalida(detalle, { hora: ($event.target as HTMLInputElement).value || null })">
+                            </div>
+                            <div class="col-12 col-md-9">
+                                <label class="form-label mb-0 small text-secondary">Lugar de recojo / punto de encuentro</label>
+                                <input type="text" class="form-control form-control-sm" :value="detalle.lugar_recojo ?? ''" :disabled="!enCurso(detalle)"
+                                    placeholder="Ej. Plaza de Armas de Tarapoto, o recojo en el hotel"
+                                    @change="guardarDatosSalida(detalle, { lugar_recojo: ($event.target as HTMLInputElement).value.trim() || null })">
+                            </div>
                             <div class="col-6"><strong>Guía:</strong> {{ detalle.guia?.nombre ?? 'Sin asignar' }}</div>
-                            <div class="col-6"><strong>Estado:</strong> {{ detalle.estado === 'activa' ? 'Activa' : 'Cancelada' }}</div>
-                            <div class="col-6"><strong>Vehículo:</strong> {{ detalle.vehiculo_descripcion ?? '—' }}</div>
-                            <div class="col-6"><strong>Cupo máximo:</strong> {{ detalle.cupo_maximo ?? '—' }}</div>
-                            <div class="col-6"><strong>Total pax:</strong> {{ detalle.total_pax ?? 0 }}</div>
+                            <div class="col-6"><strong>Estado:</strong> {{ ETIQUETA_ESTADO[detalle.estado] }}<span v-if="detalle.privada"> · privada</span></div>
+                            <div class="col-6">
+                                <strong>Vehículos:</strong> {{ detalle.vehiculos_total ?? 0 }}{{ detalle.capacidad_total ? ` (${detalle.capacidad_total} asientos)` : '' }}
+                            </div>
+                            <div class="col-6">
+                                <strong>Total pax:</strong> {{ detalle.total_pax ?? 0 }}
+                                <span v-if="detalle.pax" class="text-muted">
+                                    ({{ detalle.pax.adultos }} adulto(s), {{ detalle.pax.ninos }} niño(s), {{ detalle.pax.infantes }} infante(s){{ detalle.pax.extranjeros ? `, ${detalle.pax.extranjeros} extranjero(s)` : '' }})
+                                </span>
+                            </div>
+                            <div class="col-6">
+                                <strong>Mínimo para salir:</strong>
+                                <template v-if="detalle.pax_minimo">
+                                    <span :class="detalle.bajo_minimo ? 'text-danger fw-semibold' : ''">{{ detalle.pax_que_cuentan }} / {{ detalle.pax_minimo }}</span>
+                                    <span v-if="detalle.bajo_minimo" class="text-danger"> · bajo el mínimo</span>
+                                </template>
+                                <template v-else>— (el tour no lo define)</template>
+                            </div>
                             <div class="col-6"><strong>Reservas enganchadas:</strong> {{ detalle.total_reservas ?? 0 }}</div>
                         </div>
+                        <template v-if="(detalle.pasajeros ?? []).length > 0">
+                            <h6 class="small fw-semibold text-secondary text-uppercase">Pasajeros</h6>
+                            <div class="table-responsive mb-3">
+                                <table class="table table-sm align-middle mb-0 small">
+                                    <thead class="table-light">
+                                        <tr><th>Nombre</th><th>Tipo</th><th>Residencia</th><th>Alimentación</th><th>Reserva</th></tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr v-for="p in detalle.pasajeros" :key="p.id">
+                                            <td>{{ p.nombre ?? '(sin nombre todavía)' }}<div v-if="p.documento" class="text-muted">{{ p.documento }}</div></td>
+                                            <td>{{ ETIQUETA_TIPO_PAX[p.tipo_pax ?? ''] ?? '—' }}</td>
+                                            <td>{{ p.residencia === 'extranjero' ? 'Extranjero' : 'Nacional' }}</td>
+                                            <td>{{ p.alimentacion_especial || '—' }}</td>
+                                            <td>{{ p.reserva_codigo ?? ('#' + p.reserva_id) }}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </template>
+                        <!-- Fila 13, fase 2b (D10-D13) -->
+                        <SalidaServiciosVehiculos class="mb-3" :salida="detalle" :guias="guias" @cambio="recargarDetalle" />
+                        <!-- Fila 13, fase 2c (D14, D16) -->
+                        <SalidaOrdenesServicio v-if="enCurso(detalle)" :key="`ordenes-${detalle.id}`" class="mb-3" :salida-id="detalle.id" />
+                        <SalidaReprogramar v-if="reprogramando && enCurso(detalle)" class="mb-3" :salida="detalle"
+                            @cerrar="reprogramando = false" @reprogramada="alReprogramar" />
                         <h6 class="small fw-semibold text-secondary text-uppercase">Reservas</h6>
                         <ul class="list-group">
                             <li v-for="r in detalle.reservas ?? []" :key="r.id" class="list-group-item d-flex justify-content-between align-items-center py-2">
@@ -164,8 +238,17 @@
                         </ul>
                     </div>
                     <div class="modal-footer">
-                        <button v-if="detalle.estado === 'activa'" class="btn btn-outline-danger btn-sm" @click="confirmarCancelar(detalle)">
+                        <button v-if="estadoAnterior(detalle)" class="btn btn-outline-secondary btn-sm me-auto" @click="volverEstado(detalle)">
+                            <i class="fas fa-rotate-left me-1"></i>Volver a {{ ETIQUETA_ESTADO[estadoAnterior(detalle)!].toLowerCase() }}
+                        </button>
+                        <button v-if="enCurso(detalle) && !reprogramando" class="btn btn-outline-warning btn-sm" @click="reprogramando = true">
+                            <i class="fas fa-calendar-days me-1"></i>Reprogramar
+                        </button>
+                        <button v-if="enCurso(detalle)" class="btn btn-outline-danger btn-sm" @click="confirmarCancelar(detalle)">
                             <i class="fas fa-ban me-1"></i>Cancelar salida
+                        </button>
+                        <button v-if="siguienteEstado(detalle)" class="btn btn-success btn-sm" @click="avanzarEstado(detalle)">
+                            <i :class="siguienteEstado(detalle)!.icono" class="me-1"></i>{{ siguienteEstado(detalle)!.texto }}
                         </button>
                         <button class="btn btn-outline-secondary btn-sm" @click="detalle = null">Cerrar</button>
                     </div>
@@ -177,6 +260,9 @@
 
 <script setup lang="ts">
 import CampoFecha from '@/components/CampoFecha.vue';
+import SalidaServiciosVehiculos from '@/components/AgenciaViajes/SalidaServiciosVehiculos.vue';
+import SalidaOrdenesServicio from '@/components/AgenciaViajes/SalidaOrdenesServicio.vue';
+import SalidaReprogramar from '@/components/AgenciaViajes/SalidaReprogramar.vue';
 import { ref, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';
@@ -185,9 +271,34 @@ import { salidaOperativaService } from '@/services/admin/salidaOperativaService'
 import { guiaService } from '@/services/admin/guiaService';
 import { useToast } from '@/composables/useToast';
 import { formatFecha, hoyPeru, sumarDiasISO } from '@/helpers/fecha';
-import type { SalidaOperativa, Guia } from '@/types/agencia-viajes';
+import type { SalidaOperativa, Guia, EstadoSalidaOperativa } from '@/types/agencia-viajes';
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
+
+// Fila 13, fase 2a (D9): programada → confirmada → realizada, o cancelada.
+const ETIQUETA_ESTADO: Record<EstadoSalidaOperativa, string> = {
+    programada: 'Programada',
+    confirmada: 'Confirmada',
+    realizada: 'Realizada',
+    cancelada: 'Cancelada',
+};
+const CLASE_ESTADO: Record<EstadoSalidaOperativa, string> = {
+    programada: 'bg-primary-subtle text-primary-emphasis',
+    confirmada: 'bg-success',
+    realizada: 'bg-secondary',
+    cancelada: 'bg-danger-subtle text-danger-emphasis',
+};
+const ETIQUETA_TIPO_PAX: Record<string, string> = { adulto: 'Adulto', nino: 'Niño', infante: 'Infante' };
+
+const enCurso = (s: SalidaOperativa) => s.estado === 'programada' || s.estado === 'confirmada';
+const siguienteEstado = (s: SalidaOperativa): { estado: 'confirmada' | 'realizada'; texto: string; icono: string } | null => {
+    if (s.estado === 'programada') return { estado: 'confirmada', texto: 'Confirmar salida', icono: 'fas fa-check' };
+    // Realizada solo cuando ya llegó la fecha (el backend también lo exige).
+    if (s.estado === 'confirmada' && s.fecha.slice(0, 10) <= hoyPeru()) return { estado: 'realizada', texto: 'Marcar realizada', icono: 'fas fa-flag-checkered' };
+    return null;
+};
+const estadoAnterior = (s: SalidaOperativa): 'programada' | 'confirmada' | null =>
+    s.estado === 'confirmada' ? 'programada' : s.estado === 'realizada' ? 'confirmada' : null;
 
 const route = useRoute();
 const toast = useToast();
@@ -201,12 +312,31 @@ const loading = ref<boolean>(false);
 
 const fechaDesde = ref<string>(hoyPeru());
 const fechaHasta = ref<string>(sumarDiasISO(hoyPeru(), 7));
-const estado = ref<'' | 'activa' | 'cancelada'>('');
+const estado = ref<'' | EstadoSalidaOperativa>('');
 
 const guiaEditando = ref<number | null>(null);
 const detalle = ref<SalidaOperativa | null>(null);
 
-const faltaGuia = (s: SalidaOperativa) => s.estado === 'activa' && !s.guia_id;
+const faltaGuia = (s: SalidaOperativa) => enCurso(s) && !s.guia_id;
+
+const cambiarEstado = async (s: SalidaOperativa, nuevo: 'programada' | 'confirmada' | 'realizada') => {
+    try {
+        const res = await salidaOperativaService.cambiarEstado(s.id, nuevo);
+        toast.success(res.message);
+        if (detalle.value?.id === s.id) detalle.value = res.salida;
+        await list();
+    } catch (error: any) {
+        toast.error(error.response?.data?.message ?? 'No se pudo cambiar el estado de la salida');
+    }
+};
+const avanzarEstado = (s: SalidaOperativa) => {
+    const siguiente = siguienteEstado(s);
+    if (siguiente) cambiarEstado(s, siguiente.estado);
+};
+const volverEstado = (s: SalidaOperativa) => {
+    const anterior = estadoAnterior(s);
+    if (anterior) cambiarEstado(s, anterior);
+};
 
 const list = async () => {
     loading.value = true;
@@ -247,15 +377,40 @@ const guardarGuia = async (s: SalidaOperativa, valor: string) => {
     }
 };
 
-const guardarCampos = async (s: SalidaOperativa) => {
+// Fila 13, fase 2c: hora y lugar de recojo de la salida (las órdenes de
+// servicio y el Reporte Operativo los toman de acá).
+const guardarDatosSalida = async (s: SalidaOperativa, data: { hora?: string | null; lugar_recojo?: string | null }) => {
     try {
-        await salidaOperativaService.actualizar(s.id, {
-            vehiculo_descripcion: s.vehiculo_descripcion || null,
-            cupo_maximo: s.cupo_maximo || null,
-        });
+        await salidaOperativaService.actualizar(s.id, data);
+        toast.success('Salida actualizada');
+        await recargarDetalle();
     } catch (error: any) {
         toast.error(error.response?.data?.message ?? 'No se pudo actualizar la salida');
     }
+};
+
+// Fila 13, fase 2c (D16): tras reprogramar, la salida vieja suele borrarse;
+// se abre la nueva (si quedó alguna reserva) y se recarga el tablero.
+const reprogramando = ref(false);
+const alReprogramar = async (salidaNuevaId: number | null) => {
+    reprogramando.value = false;
+    detalle.value = null;
+    await list();
+    if (salidaNuevaId) await abrirDetalle(salidaNuevaId);
+};
+
+// Fila 13, fase 2b: tras cambiar un servicio o vehículo, recarga el detalle
+// (cantidades, asientos, avisos) y la fila del tablero.
+const recargarDetalle = async () => {
+    if (!detalle.value) return;
+    const id = detalle.value.id;
+    await abrirDetalle(id);
+    const res = await salidaOperativaService.listar({
+        fecha_desde: fechaDesde.value || undefined,
+        fecha_hasta: fechaHasta.value || undefined,
+        estado: estado.value || undefined,
+    });
+    salidas.value = res.salidas;
 };
 
 const abrirDetalle = async (id: number) => {

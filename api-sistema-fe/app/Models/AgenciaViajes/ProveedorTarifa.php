@@ -3,6 +3,7 @@
 namespace App\Models\AgenciaViajes;
 
 use Illuminate\Database\Eloquent\Model;
+use App\Models\AgenciaViajes\Concerns\ExoneradoEsAmazonia;
 
 // plan-modulo-proveedores.md §2.6 + plan-modulo-cotizaciones-reservas.md
 // §2.2/§2.3. Tenant (sin CentralConnection). proveedor_servicio_id lleva
@@ -17,6 +18,9 @@ use Illuminate\Database\Eloquent\Model;
 // OpcionHotelTarifa desde Sesión 5.
 class ProveedorTarifa extends Model
 {
+    // Fila 13 (22-oct-2026): en Agencia, exonerado (20) ⇒ destino Amazonía.
+    use ExoneradoEsAmazonia;
+
     protected $table = 'proveedor_tarifas';
 
     protected $fillable = [

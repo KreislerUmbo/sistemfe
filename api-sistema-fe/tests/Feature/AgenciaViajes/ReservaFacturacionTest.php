@@ -1619,17 +1619,21 @@ class ReservaFacturacionTest extends TestCase
     // Análisis de impuestos (28-ago-2026) — regresión del Caso 2 del
     // análisis: 2 ítems de la MISMA categoría y MISMO destino_tributario
     // ('nacional', pasa el guardia sin problema) pero distinto tip_afe_igv
-    // (uno gravado por Apéndice II, no relacionado con Amazonía). Antes de
-    // este fix se fusionaban en una sola línea de SaleDetail con 18% fijo
-    // para todo — el exonerado terminaba pagando IGV igual, sin que
-    // ninguna guardia lo detectara (detectarMezclaTributaria() solo mira
-    // destino_tributario, nunca tip_afe_igv).
+    // (uno gravado y otro sin IGV). Antes de este fix se fusionaban en una
+    // sola línea de SaleDetail con 18% fijo para todo — el que no lleva IGV
+    // terminaba pagándolo igual, sin que ninguna guardia lo detectara
+    // (detectarMezclaTributaria() solo mira destino_tributario, nunca
+    // tip_afe_igv).
+    // Fila 13 (22-oct-2026): el ejemplo era "exonerado + nacional" (Apéndice
+    // II). En Agencia el exonerado solo viene de la Amazonía (regla del
+    // usuario, trait ExoneradoEsAmazonia), así que el caso pasa a gravado +
+    // INAFECTO, ambos nacionales: mismo destino, distinto tipo de IGV.
     public function test_factura_dos_tratamientos_tributarios_distintos_en_la_misma_categoria_y_destino(): void
     {
         [$branch, ] = $this->branchConSerie('01', 'F001');
         $this->usuarioConPermisos($branch->id, ['emitir_factura']);
 
-        [$reserva, $itemGravado, $itemExonerado, $pasajeroA, $pasajeroB] = $this->crearReservaConTratamientoTributarioMixtoMismoDestino();
+        [$reserva, $itemGravado, $itemInafecto, $pasajeroA, $pasajeroB] = $this->crearReservaConTratamientoTributarioMixtoMismoDestino();
         $cliente = Client::factory()->empresa()->create();
 
         $response = app(ReservaFacturacionController::class)->store(new Request([
@@ -1653,9 +1657,9 @@ class ReservaFacturacionTest extends TestCase
         $this->assertCount(2, $detalles);
 
         $gravado = $detalles->firstWhere('tip_afe_igv', '10');
-        $exonerado = $detalles->firstWhere('tip_afe_igv', '20');
+        $inafecto = $detalles->firstWhere('tip_afe_igv', '30');
         $this->assertNotNull($gravado, 'debe existir una línea gravada');
-        $this->assertNotNull($exonerado, 'debe existir una línea exonerada');
+        $this->assertNotNull($inafecto, 'debe existir una línea inafecta');
 
         $this->assertSame(18.0, (float) $gravado->porcentaje_igv);
         $this->assertSame(40.0, (float) $gravado->price_final);
@@ -1663,16 +1667,16 @@ class ReservaFacturacionTest extends TestCase
         $this->assertEqualsWithDelta($subtotalEsperadoGravado, (float) $gravado->subtotal, 0.01);
         $this->assertEqualsWithDelta(round(40 - $subtotalEsperadoGravado, 2), (float) $gravado->igv, 0.01);
 
-        $this->assertSame(0.0, (float) $exonerado->porcentaje_igv);
-        $this->assertSame(60.0, (float) $exonerado->price_final);
-        $this->assertSame(60.0, (float) $exonerado->subtotal);
-        $this->assertSame(0.0, (float) $exonerado->igv);
+        $this->assertSame(0.0, (float) $inafecto->porcentaje_igv);
+        $this->assertSame(60.0, (float) $inafecto->price_final);
+        $this->assertSame(60.0, (float) $inafecto->subtotal);
+        $this->assertSame(0.0, (float) $inafecto->igv);
 
         // Sale-level: ya no todo va a mto_oper_gravadas — se reparte según
         // el tratamiento real de cada línea.
         $this->assertEqualsWithDelta($subtotalEsperadoGravado, (float) $venta->mto_oper_gravadas, 0.01);
-        $this->assertSame(60.0, (float) $venta->mto_oper_exoneradas);
-        $this->assertSame(0.0, (float) $venta->mto_oper_inafectas);
+        $this->assertSame(0.0, (float) $venta->mto_oper_exoneradas);
+        $this->assertSame(60.0, (float) $venta->mto_oper_inafectas);
     }
 
     private function crearReservaConTratamientoTributarioMixtoMismoDestino(): array
@@ -1739,7 +1743,7 @@ class ReservaFacturacionTest extends TestCase
             'tipo_tarifa' => 'publica', 'modalidad' => 'compartido', 'moneda' => 'PEN',
             'precio_costo' => 40, 'margen_tipo' => 'fijo', 'margen_valor' => 20,
             'precio_venta_adulto' => 60,
-            'vigente_desde' => '2026-01-01', 'tip_afe_igv' => '20', 'destino_tributario' => 'nacional',
+            'vigente_desde' => '2026-01-01', 'tip_afe_igv' => '30', 'destino_tributario' => 'nacional',
             'created_at' => now(), 'updated_at' => now(),
         ]);
 
@@ -1755,7 +1759,7 @@ class ReservaFacturacionTest extends TestCase
             'proveedor_tarifa_id' => $tarifaExoneradaId, 'dia_referencial' => 1, 'pax_incluidos' => [$cpB],
             'modo_precio' => 'tarifa_fija', 'cantidad' => 1, 'moneda_costo' => 'PEN',
             'costo_snapshot' => 40, 'precio_venta_snapshot' => 60, 'precio_convertido' => 60,
-            'tip_afe_igv' => '20', 'destino_tributario' => 'nacional',
+            'tip_afe_igv' => '30', 'destino_tributario' => 'nacional',
         ]);
 
         [$reserva] = app(ReservaController::class)->crearReservaDesdeAlternativa($alternativa->fresh());

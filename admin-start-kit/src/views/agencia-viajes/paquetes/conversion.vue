@@ -131,8 +131,6 @@
                                                 <option :value="null">Del tour ({{ etiquetaIgv(propuesta.igv_tour.tip_afe_igv) }})</option>
                                                 <option value="10|nacional">Gravado</option>
                                                 <option value="20|amazonia">Exonerado (Amazonía)</option>
-                                                <!-- Hay tarifas exoneradas fuera de la Amazonía (20 + nacional) en agencia-demo. -->
-                                                <option value="20|nacional">Exonerado (fuera de la Amazonía)</option>
                                                 <option value="30|nacional">Inafecto</option>
                                                 <option value="40|extranjero">Exportación</option>
                                             </select>
@@ -212,8 +210,9 @@ const claveIgv = (igv: IgvServicio | null) => (igv ? `${igv.tip_afe_igv}|${igv.d
 const dinero = (n: number | null) => (n === null ? '—' : `${propuesta.value?.moneda === 'USD' ? 'US$' : 'S/'} ${n.toFixed(2)}`);
 const numero = (v: unknown) => (v === '' || v === null || v === undefined || Number.isNaN(Number(v)) ? null : Number(v));
 
-// Grupo de IGV efectivo de cada servicio: el suyo, o el del tour si no tiene.
-const igvEfectivo = (f: Fila) => f.igv ?? claveIgv(propuesta.value?.igv_tour ?? null);
+// Código SUNAT efectivo de cada servicio: el suyo, o el del tour si no tiene.
+// La mezcla se mide por código (22-oct): el destino no parte la línea.
+const igvEfectivo = (f: Fila) => (f.igv ?? claveIgv(propuesta.value?.igv_tour ?? null))?.split('|')[0] ?? null;
 const hayIgvMezclado = computed(() => new Set(filas.value.map(igvEfectivo)).size > 1);
 const faltaCostoConMezcla = computed(() => hayIgvMezclado.value && filas.value.some((f) => numero(f.costo) === null));
 const costoDesdeIncluye = computed(() => filas.value.length > 0 && filas.value.every((f) => numero(f.costo) !== null));

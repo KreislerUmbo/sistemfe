@@ -3,6 +3,7 @@
 namespace App\Models\AgenciaViajes;
 
 use Illuminate\Database\Eloquent\Model;
+use App\Models\AgenciaViajes\Concerns\ExoneradoEsAmazonia;
 
 // Copiado de la alternativa aceptada, con fecha/hora concretas —
 // plan-modulo-cotizaciones-reservas.md §4. Tenant (sin CentralConnection).
@@ -26,6 +27,9 @@ use Illuminate\Database\Eloquent\Model;
 // alguien a propósito".
 class ReservaItem extends Model
 {
+    // Fila 13 (22-oct-2026): en Agencia, exonerado (20) ⇒ destino Amazonía.
+    use ExoneradoEsAmazonia;
+
     protected $table = 'reserva_items';
 
     protected $fillable = [

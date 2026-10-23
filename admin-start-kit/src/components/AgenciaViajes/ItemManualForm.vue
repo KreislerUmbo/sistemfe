@@ -45,7 +45,8 @@
         <div class="row g-2 mb-2">
             <div class="col-6">
                 <label class="form-label mb-1 small fw-semibold text-secondary">Tratamiento tributario</label>
-                <select class="form-select form-select-sm" v-model="tipAfeIgv">
+                <select class="form-select form-select-sm" v-model="tipAfeIgv"
+                    @change="destinoTributario = destinoParaIgvAgencia(tipAfeIgv, destinoTributario)">
                     <option value="10">Gravado</option>
                     <option value="20">Exonerado</option>
                     <option value="30">Inafecto</option>
@@ -53,7 +54,7 @@
             </div>
             <div class="col-6">
                 <label class="form-label mb-1 small fw-semibold text-secondary">Destino</label>
-                <select class="form-select form-select-sm" v-model="destinoTributario">
+                <select class="form-select form-select-sm" v-model="destinoTributario" :disabled="tipAfeIgv === IGV_EXONERADO">
                     <option value="amazonia">Amazonía</option>
                     <option value="nacional">Nacional</option>
                     <option value="extranjero">Extranjero</option>
@@ -90,6 +91,7 @@
 </template>
 
 <script setup lang="ts">
+import { destinoParaIgvAgencia, IGV_EXONERADO } from '@/helpers/tratamientoTributarioAgencia';
 // Ítem sin proveedor registrado — Sesión 11b, plan-modulo-cotizaciones-reservas.md
 // §3. Sesión 11q: costo/cantidad/pax_incluidos dejaron de ser sentinels sin
 // efecto (ver AlternativaItem::getTotalAttribute() en el backend) y se

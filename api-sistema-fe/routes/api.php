@@ -36,6 +36,8 @@ use App\Http\Controllers\AgenciaViajes\ReservaItemController;
 use App\Http\Controllers\AgenciaViajes\ReservaItemPasajeroController;
 use App\Http\Controllers\AgenciaViajes\ReservaPasajeroController;
 use App\Http\Controllers\AgenciaViajes\SalidaOperativaController;
+use App\Http\Controllers\AgenciaViajes\SalidaServicioController;
+use App\Http\Controllers\AgenciaViajes\SalidaVehiculoController;
 use App\Http\Controllers\AgenciaViajes\ServicioController;
 use App\Http\Controllers\AgenciaViajes\TemporadaController;
 use App\Http\Controllers\AgenciaViajes\TemporadaOcurrenciaController;
@@ -1221,6 +1223,33 @@ Route::group([
     Route::put("salidas-operativas/{id}", [SalidaOperativaController::class, 'update'])
         ->middleware('permission:reservas.editar');
     Route::put("salidas-operativas/{id}/cancelar", [SalidaOperativaController::class, 'cancelar'])
+        ->middleware('permission:reservas.editar');
+    // Fila 13, fase 2a (D9): programada → confirmada → realizada.
+    Route::put("salidas-operativas/{id}/estado", [SalidaOperativaController::class, 'cambiarEstado'])
+        ->middleware('permission:reservas.editar');
+    // Fila 13, fase 2c (D14, D16): órdenes de servicio y reprogramar la salida completa.
+    Route::get("salidas-operativas/{id}/ordenes", [SalidaOperativaController::class, 'ordenes'])
+        ->middleware('permission:reservas.ver|reservas.ver_todas');
+    Route::get("salidas-operativas/{id}/ordenes/{proveedorId}/pdf", [SalidaOperativaController::class, 'ordenPdf'])
+        ->middleware('permission:reservas.ver|reservas.ver_todas');
+    Route::post("salidas-operativas/{id}/reprogramar", [SalidaOperativaController::class, 'reprogramar'])
+        ->middleware('permission:reservas.editar');
+    // Fila 13, fase 2b (D10-D13): servicios a reservar y vehículos de la salida.
+    Route::post("salidas-operativas/{id}/servicios", [SalidaServicioController::class, 'store'])
+        ->middleware('permission:reservas.editar');
+    Route::post("salidas-operativas/{id}/servicios/actualizar", [SalidaServicioController::class, 'actualizarDesdeTour'])
+        ->middleware('permission:reservas.editar');
+    Route::put("salida-servicios/{id}", [SalidaServicioController::class, 'update'])
+        ->middleware('permission:reservas.editar');
+    Route::delete("salida-servicios/{id}", [SalidaServicioController::class, 'destroy'])
+        ->middleware('permission:reservas.editar');
+    Route::post("salidas-operativas/{id}/vehiculos", [SalidaVehiculoController::class, 'store'])
+        ->middleware('permission:reservas.editar');
+    Route::put("salida-vehiculos/{id}", [SalidaVehiculoController::class, 'update'])
+        ->middleware('permission:reservas.editar');
+    Route::delete("salida-vehiculos/{id}", [SalidaVehiculoController::class, 'destroy'])
+        ->middleware('permission:reservas.editar');
+    Route::put("salida-vehiculos/{id}/reservas", [SalidaVehiculoController::class, 'asignarReservas'])
         ->middleware('permission:reservas.editar');
     Route::post("salidas-operativas/{id}/adjuntar-item", [SalidaOperativaController::class, 'attachReservaItem'])
         ->middleware('permission:reservas.editar');

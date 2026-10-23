@@ -6,7 +6,9 @@ namespace App\Services\AgenciaViajes;
 
 use App\Models\AgenciaViajes\AlternativaItem;
 use App\Models\AgenciaViajes\Guia;
+use App\Models\AgenciaViajes\PaquetePlantillaItem;
 use App\Models\AgenciaViajes\ReservaItem;
+use App\Models\AgenciaViajes\SalidaOperativa;
 use Illuminate\Database\Eloquent\Builder;
 
 /**
@@ -37,7 +39,15 @@ class AsignacionOperativa
      */
     public static function guiaEfectivo(ReservaItem $item): ?Guia
     {
-        return $item->salida_operativa_id ? $item->salidaOperativa?->guia : $item->guia;
+        if (! $item->salida_operativa_id) {
+            return $item->guia;
+        }
+
+        // Fila 13, fase 2b (D12): si la reserva va en un vehículo con su
+        // propio guía (grupo grande), ese es su guía; si no, el de la salida.
+        $salida = $item->salidaOperativa;
+
+        return $salida?->vehiculoDeReserva((int) $item->reserva_id)?->guia ?? $salida?->guia;
     }
 
     /**
@@ -49,11 +59,24 @@ class AsignacionOperativa
     {
         $origenTipo = $item->alternativaItem?->origen_tipo;
 
-        // Fila 13, fase 1b: la línea de tour no tiene guía ni proveedor
-        // propios; su operación (vehículo, guía, proveedores) será la de su
-        // salida en la fase 2. Hasta entonces no cuenta como "sin asignar".
+        // Fila 13, fase 2a: la línea de tour no tiene guía ni proveedor
+        // propios; se opera por su salida. Sin asignar = no está en ninguna
+        // salida (o la suya se canceló); el tour lleva guía en su Incluye y
+        // ni la salida ni el vehículo de la reserva tienen guía; o algún
+        // servicio a reservar de la salida no tiene proveedor (fase 2b). Que
+        // falte un vehículo es un aviso del tablero, no un pendiente: hay
+        // tours sin transporte.
         if ($origenTipo === AlternativaItem::ORIGEN_TOUR) {
-            return false;
+            $salida = $item->salidaOperativa;
+            if (! $salida || $salida->estado === SalidaOperativa::ESTADO_CANCELADA) {
+                return true;
+            }
+
+            if (! self::guiaEfectivo($item) && self::tourLlevaGuia($item->tour_origen_id)) {
+                return true;
+            }
+
+            return $salida->servicios->contains(fn ($servicio) => $servicio->proveedor_id === null);
         }
 
         if ($origenTipo === AlternativaItem::ORIGEN_GUIA) {
@@ -71,5 +94,23 @@ class AsignacionOperativa
         }
 
         return false;
+    }
+
+    /** @var array<int, bool> tour_id => lleva guía (cache por petición) */
+    private static array $tourLlevaGuia = [];
+
+    /**
+     * Fila 13, fase 2a: un tour "lleva guía" si su Incluye tiene un servicio de guía.
+     */
+    public static function tourLlevaGuia(?int $tourId): bool
+    {
+        if ($tourId === null) {
+            return false;
+        }
+
+        return self::$tourLlevaGuia[$tourId] ??= PaquetePlantillaItem::where('paquete_plantilla_id', $tourId)
+            ->whereNull('paquete_plantilla_hijo_id')
+            ->whereNotNull('guia_tarifa_id')
+            ->exists();
     }
 }

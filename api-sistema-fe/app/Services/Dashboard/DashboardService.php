@@ -349,18 +349,23 @@ class DashboardService
             ->orderBy('fecha_viaje_desde')->orderBy('id')
             ->get();
 
-        $salidas = SalidaOperativa::where('estado', 'activa')
+        // Fila 13, fase 2a (C3): programadas y confirmadas, también las de
+        // líneas de tour del modo nuevo.
+        $salidas = SalidaOperativa::enCurso()
             ->whereBetween('fecha', [$desde, $hasta])
             // Pasajeros = los de cada reserva enganchada, como el tablero de Salidas Operativas.
-            ->with(['tourOrigen:id,nombre', 'guia:id,nombre', 'reservaItems' => fn ($q) => $q
+            ->with(['tourOrigen:id,nombre,pax_minimo_salida', 'guia:id,nombre', 'vehiculos:id,salida_operativa_id,capacidad', 'reservaItems' => fn ($q) => $q
                 ->whereHas('reserva', fn ($r) => $r->where('estado', '!=', 'cancelada'))
-                ->with(['reserva' => fn ($r) => $r->withCount('pasajeros')])])
+                ->with(['reserva' => fn ($r) => $r->withCount([
+                    'pasajeros',
+                    'pasajeros as infantes_count' => fn ($p) => $p->where('tipo_pax', 'infante'),
+                ])])])
             ->orderBy('fecha')->orderBy('hora')
             ->limit(self::MAXIMO_LISTA)
             ->get();
 
         $sinAsignar = AsignacionOperativa::itemsDelRango($desde, $hasta)
-            ->with(['alternativaItem.proveedorTarifa.proveedorServicio.proveedor', 'guia', 'salidaOperativa.guia'])
+            ->with(['alternativaItem.proveedorTarifa.proveedorServicio.proveedor', 'guia', 'salidaOperativa.guia', 'salidaOperativa.vehiculos.reservas', 'salidaOperativa.vehiculos.guia', 'salidaOperativa.servicios'])
             ->get()
             ->filter(static fn ($item): bool => AsignacionOperativa::sinAsignar($item))
             ->count();
@@ -384,7 +389,13 @@ class DashboardService
                 'guia' => $s->guia?->nombre,
                 'reservas' => ($reservas = $s->reservaItems->pluck('reserva')->filter()->unique('id'))->count(),
                 'pasajeros' => $reservas->sum('pasajeros_count'),
-                'cupo' => $s->cupo_maximo,
+                // Fila 13, fase 2b (D13): suma de las capacidades de los vehículos.
+                'cupo' => $s->vehiculos->sum('capacidad') ?: null,
+                'estado' => $s->estado,
+                'minimo' => $s->tourOrigen?->pax_minimo_salida,
+                // Mismo criterio que el tablero: el infante no cuenta para el mínimo.
+                'bajo_minimo' => $s->tourOrigen?->pax_minimo_salida !== null
+                    && ($reservas->sum('pasajeros_count') - $reservas->sum('infantes_count')) < $s->tourOrigen->pax_minimo_salida,
             ])->all(),
             'sin_asignar' => $sinAsignar,
         ];

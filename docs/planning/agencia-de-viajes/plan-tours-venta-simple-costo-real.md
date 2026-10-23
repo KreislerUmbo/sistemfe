@@ -811,6 +811,71 @@ adelante la importación SIRE (los comprobantes llegan solos y solo hay que asig
 > 1. **IGV "exonerado fuera de la Amazonía"** (`20` + `nacional`): existe en tarifas reales de `agencia-demo` (Entrada de Lamas). Los selectores de IGV no lo ofrecían y salía en blanco; corregido en la pantalla de conversión y en la pestaña "Incluye y costos" (`TourIncluyeCostos.vue`, 1a), con aprobación del usuario.
 > 2. **Facturar por tipo de servicio a dos clientes distintos** (vuelos a un RUC, el resto a otro) funciona en el backend pero la pantalla lo bloquea después de la primera factura: anotado como fila **F1** de `plan-hoja-de-ruta-ejecucion.md` (pendiente, decisión del usuario).
 > 3. Un servicio que no es tour asignado a pasajeros de dos grupos sigue sin poder facturarse por este flujo (ya documentado en el controlador); anotado dentro de F1.
+>
+> **Fase 2 — decisiones del usuario (21-oct-2026), antes de empezar:**
+> - **D6:** la fase 2 se parte en **2a** (la salida agrupa las líneas de tour: enganche automático compartido/privado, pasajeros y mínimo, estados, reprogramar C4, Reporte Operativo e Inicio C3), **2b** (servicios a reservar por salida y varios vehículos) y **2c** (órdenes de servicio, avisos al cancelar, reprogramar salida completa), en ese orden.
+> - **D7:** la **bandeja de pendientes (§3.14) queda fuera** de la fase 2: se hace junto con la campana de recordatorios (fila 11f). En la fase 2 los avisos se ven en la propia salida y en el tablero.
+> - **D8:** las **exclusiones** de un servicio por pasajero (§3.2, caso de §5) **quedan para después**: en la 2b la cantidad de cada servicio = pasajeros de la salida, ajustable a mano.
+> - **D9:** estados de la salida programada → confirmada → realizada / cancelada; las salidas existentes en `activa` pasan a `programada` (migración).
+>
+> **Fase 2a — HECHA (21-oct-2026, rama `feat/tours-fase2a-salidas`).**
+> Qué quedó:
+> - **Migración** `2026_10_21_100000_salidas_operativas_privadas_y_estados` (`down()` probado): `salidas_operativas.privada_reserva_id` (salida propia de una reserva si el tour es `privado`); índice único (tour, fecha) solo para las compartidas y (tour, fecha, reserva) para las privadas; estados con `CHECK` nuevo, `activa` → `programada`.
+> - **Enganche automático de la línea de tour** (`ReservaController::engancharSalidaOperativa()`): modalidad del tour (`paquetes_plantilla.modalidad`) → salida compartida por tour y fecha, o privada por reserva. Las líneas de una carga con IGV mezclado caen juntas. **C4 sin código nuevo:** `reprogramar()` ya usaba esa función, así que mueve el tour a la salida de la nueva fecha.
+> - **`SalidaOperativaController`:** resumen con pasajeros por tipo (adultos, niños, infantes, extranjeros), mínimo para salir (cuentan adultos y niños; `bajo_minimo`) y lista de pasajeros en el detalle; `PUT salidas-operativas/{id}/estado` (programada ⇄ confirmada ⇄ realizada; realizada exige que haya llegado la fecha; cancelada no vuelve; una realizada no se cancela); enganche manual de una línea de tour solo a una salida de su tour (y a una privada solo de su reserva); enganchar y soltar mueven la carga entera.
+> - **`AsignacionOperativa::sinAsignar()`:** línea de tour pendiente si no está en una salida (o la suya se canceló), o si el tour lleva guía en su Incluye y la salida no tiene guía (`tourLlevaGuia()`).
+> - **Inicio (C3):** salidas en curso (`SalidaOperativa::enCurso()`), con estado y aviso "Bajo el mínimo".
+> - **Frontend:** tablero `salidas/index.vue` (estados nuevos, "2 / 6 mín.", etiqueta Privada, Confirmar / Marcar realizada / Volver, pasajeros en el detalle); Inicio con los avisos.
+> - **Manual:** `docs/aprendizaje/04-recorridos-salidas.md`.
+> - **Pruebas:** `Fila13Fase2aSalidasTest` (8 tests); tests de salidas existentes pasados de `activa` a `programada`; el de la 1b que esperaba "sin salida" ahora comprueba que la carga cae en una sola salida. Tablero verificado en el navegador contra `agencia-demo` (sin cambiar datos).
+>
+> **Fase 2b — decisiones del usuario (21-oct-2026), antes de empezar:**
+> - **D10:** los **servicios a reservar** de una salida se arman solos cuando entra el primer tour, desde el Incluye actual del tour (proveedor sugerido; cantidad = adultos + niños, ajustable). Botón "Actualizar desde el tour" agrega lo nuevo sin borrar lo asignado. También se pueden agregar a mano.
+> - **D11:** cada servicio tiene estado **Por reservar / Reservado** (base de las órdenes de servicio de la 2c).
+> - **D12:** **guía principal** de la salida (como hoy) + **guía opcional por vehículo** para grupos grandes.
+> - **D13:** **varios vehículos** por salida (transportista o propio, descripción, chofer, capacidad, guía opcional, reservas que lleva). El texto "Vehículo" y el "Cupo máximo" actuales pasan al primer vehículo (migración); las columnas viejas se conservan sin uso en pantalla.
+>
+> **Fase 2c — decisiones tomadas por defecto el 21-oct-2026; confirmadas por el usuario el 22-oct-2026** (pidió avanzar mientras no estaba):
+> - **D14 — órdenes de servicio:** una por proveedor (servicios de la salida + transportista de los vehículos), para salidas programadas o confirmadas; si la salida no está confirmada, la orden lo dice. Mensaje para WhatsApp (enlace `wa.me` al número del proveedor) y PDF. **Datos mínimos (Ley 29733):** restaurante y entradas reciben cantidades por tipo y alimentación especial **sin nombres**; el transportista recibe por vehículo las reservas con titular y n.º de pasajeros, **sin documentos**. Se arman en el momento, así que siempre están al día.
+> - **D15 — avisos al cancelar una reserva:** al cancelar, la respuesta trae qué cambió en cada salida ("El Mirador (Almuerzo): ahora son 6, no 9"; "Van 2: queda vacía"; "la salida ya no va") y la pantalla lo muestra. No se guardan: la bandeja de pendientes es la 11f (D7). Cancelar además saca la reserva de los vehículos de la salida.
+> - **D16 — reprogramar una salida completa:** para cada reserva, reprogramar (por defecto) o cancelar (endosar es la 13E). Reserva que es **solo de ese día** → se reprograma la reserva completa (`ReservaController::reprogramar()`); **viaje de varios días** → solo se mueven sus servicios de esa salida (quedan con fecha manual), para no correr los otros días. Lo configurado (proveedores, cantidades a mano, vehículos y sus reservas) pasa a la salida nueva, con los servicios en "Por reservar" (hay que volver a reservar con la fecha nueva). Avisos a proveedores como en D15.
+> - **D17:** cancelar dentro de "reprogramar salida" usa los motivos de cancelación de la reserva (clima, fuerza mayor…); un motivo común para todas.
+>
+> **Fase 2c — HECHA (21-oct-2026, rama `feat/tours-fase2c-operacion`, sobre la 2b; SIN COMMIT hasta que el usuario revise D14-D17).**
+> Qué quedó:
+> - **`SalidaOperacionService`**: `foto()` (servicios con cantidad, vehículos con pasajeros), `avisos()` (compara antes y después: "ahora son 2, no 4", "queda vacío", "ya no va", "por debajo del mínimo") y `ordenes()` (una por proveedor, texto para WhatsApp y enlace `wa.me` con el 51 delante de un celular de 9 dígitos).
+> - **Órdenes de servicio (D14):** `GET salidas-operativas/{id}/ordenes` y `…/ordenes/{proveedorId}/pdf` (blade `pdf/agencia-viajes/orden-servicio`); solo salidas en curso; datos mínimos.
+> - **Cancelar una reserva (D15):** `ReservaController::cancelar()` toma la foto antes y después, saca la reserva de los vehículos y responde `avisos_salidas`; la ficha de la reserva los muestra.
+> - **Reprogramar la salida completa (D16, D17):** `POST salidas-operativas/{id}/reprogramar`, en una transacción: cancelar las marcadas; reserva solo de ese día → `ReservaController::reprogramar()`; viaje de varios días → `moverServiciosDeLaSalida()` (solo esos servicios, fecha manual). `llevarConfiguracion()` pasa guía, proveedores, cantidades a mano y vehículos con sus reservas a la salida nueva (servicios "Por reservar").
+> - **Refactor sin cambio de criterio:** el enganche automático pasó de `ReservaController` (privado) a `SalidaEngancheService`, para usarlo también al reprogramar la salida.
+> - **Frontend:** `SalidaOrdenesServicio.vue` (copiar, WhatsApp, PDF), `SalidaReprogramar.vue`, botón "Reprogramar" en el detalle, avisos al cancelar en `reservas/detalle.vue`.
+> - **Manual:** `docs/aprendizaje/06-recorridos-operacion-salida.md`.
+> - **Pruebas:** `Fila13Fase2cOperacionTest` (8). Pantallas verificadas en el navegador contra `agencia-demo` (solo lectura: preparar órdenes y abrir el formulario, sin reprogramar).
+>
+> **Agregado a la 2c el 22-oct-2026 (pedidos del usuario, antes del commit):**
+> - **D18 — en Agencia, exonerado = Amazonía:** para SUNAT solo existe el código 20; `destino_tributario` es un dato interno (leyenda de la Ley 27037, confirmación antes de facturar). El formulario de la tarifa dejaba elegir "Exonerado + Nacional" por separado y así se cargaron 7 tarifas en `agencia-demo` (12 registros en tarifas, tours, cotizaciones y reservas). Regla: código 20 ⇒ destino Amazonía, **solo en Agencia** (en retail "20 + nacional" es válido: Apéndice I; productos, ventas y `resolverTipAfeIgv()` no se tocan). Trait `Concerns\ExoneradoEsAmazonia` en 7 modelos de Agencia, helper `tratamientoTributarioAgencia.ts` en 7 pantallas (mismos códigos y nombres que retail: Gravado, Exonerado, Inafecto), migración `2026_10_22_100000_corregir_exonerado_nacional_a_amazonia` (registra las filas en `ajustes_exonerado_amazonia`; `down()` las devuelve; probada con los datos reales de `agencia-demo`: 12 → 0 → 12 → 0). `TourLineaService::gruposDeIgv()` agrupa solo por código SUNAT. Se quitó la opción "Exonerado (fuera de la Amazonía)" que la 1c había agregado.
+> - **Hora y lugar de recojo:** la salida nace con `hora_salida` y `lugar_recojo` del tour (que ya existían, sin uso operativo), editables en la salida; migración `2026_10_22_110000_add_lugar_recojo_y_hora_a_salidas` (columna `salidas_operativas.lugar_recojo` y completa las existentes donde estaba vacío: 14/14 con hora en `agencia-demo`). `reserva_items.hora` pasa a ser "hora de recojo" (vacío = la hora de la salida). Reporte Operativo, orden de servicio y reprogramar los usan.
+> - **Una tarjeta por tour** en la pestaña Servicios de la reserva (las líneas de una misma `carga_tour`; hora y quitar valen para todas).
+> - Tests: 4 más en `Fila13Fase2cOperacionTest` (12 en total).
+>
+> **Hallazgo de la 2c (22-oct):** el plan de endoso dice que una salida propia que queda vacía pasa a "cancelada" y no se borra; el código la borra (`eliminarSiQuedoVacia()`), y desde la 2b se lleva con ella sus servicios y vehículos. Anotado en `plan-endoso-pasajeros.md` §5 para resolverlo al empezar la E1.
+>
+> **Fase 2b — HECHA (21-oct-2026, rama `feat/tours-fase2b-servicios-vehiculos`, sobre la 2a).**
+> Qué quedó:
+> - **Migración** `2026_10_21_200000_create_salida_servicios_y_vehiculos_tables` (`down()` probado): `salida_servicios` (nombre, proveedor, `cantidad_manual`, estado `por_reservar`/`reservado` con CHECK, índice único salida + ítem del tour), `salida_vehiculos` (transportista, descripción, chofer, teléfono, capacidad, guía), `salida_vehiculo_reservas`. D13: el texto "Vehículo" y el cupo de cada salida pasan a un primer vehículo **con todas las reservas de su salida** (en `agencia-demo`: 2 salidas).
+> - **`SalidaServiciosService::sincronizarDesdeTour()`**: arma la lista desde el Incluye actual del tour (sin el guía; proveedor sugerido o el de la tarifa), idempotente. Se llama al enganchar cada línea de tour y desde "Actualizar desde el tour".
+> - **`SalidaServicioController`** (agregar a mano, editar proveedor/cantidad/estado/notas, quitar, actualizar desde el tour; "Reservado" exige proveedor) y **`SalidaVehiculoController`** (agregar, editar, quitar, asignar reservas: una reserva en un solo vehículo; el primer vehículo se lleva todas las reservas; capacidad excedida = aviso, no bloqueo). Nada se modifica en una salida cancelada.
+> - **Cantidad automática** = adultos + niños de la salida (no se guarda; sigue a los pasajeros).
+> - **Guía por vehículo (D12):** `AsignacionOperativa::guiaEfectivo()` usa el del vehículo de la reserva o, si no, el de la salida. `SalidaOperativa::vehiculoDeReserva()`: asignación **explícita** (pantalla, reporte y guía leen lo mismo).
+> - **"Sin asignar":** además, un servicio de la salida sin proveedor. Que falte un vehículo es solo aviso (hay tours sin transporte).
+> - **Reporte Operativo:** vehículo y chofer de cada reserva (`textoVehiculo()`); **Inicio:** cupo = suma de capacidades.
+> - **Frontend:** `SalidaServiciosVehiculos.vue` (servicios solo si la salida tiene tours del modo nuevo; vehículos), `ProveedorBuscador.vue` (búsqueda en servidor), columna "Operación" del tablero con avisos.
+> - **Manual:** `docs/aprendizaje/05-recorridos-servicios-y-vehiculos.md`. Fixtures de la fase 2 en el trait `tests/Feature/AgenciaViajes/Concerns/SalidasFixtures.php`.
+> - **Pruebas:** `Fila13Fase2bServiciosVehiculosTest` (8). Ajustados a las reglas nuevas: el test de la 1b del Reporte Operativo (el tour sin proveedores en sus servicios sale "sin asignar") y el del vehículo de la salida (lee `salida_vehiculos`). Suite completa 1476 en verde. Detalle verificado en el navegador contra `agencia-demo` (solo lectura).
+>
+> **Hallazgo de la 2b:** la primera versión dejaba que `vehiculoDeReserva()` diera por asignado "el único vehículo" sin asignación real. La pantalla mostraba "0 / 14 asientos, 2 reservas sin vehículo" mientras el reporte sí les ponía el vehículo. Corregido: asignación siempre explícita, con la migración y el primer vehículo asignando las reservas.
+>
+> **Hallazgo de la 2a:** `ReservaFacturacionController::resolverSeleccion()` leía los ítems sin `orderBy`. Al engancharse a la salida, el ítem se actualiza y Postgres puede devolverlo en otro orden: el orden de las líneas del comprobante y de `partes_tour` cambiaba entre ejecuciones (lo detectó un test de la 1c que pasaba solo y fallaba en grupo). Corregido con `orderBy('id')`. Mismo patrón que el bug de `Alternativa::items()` del 29-ago.
 
 | Fase | Contenido | Estimado |
 |---|---|---|

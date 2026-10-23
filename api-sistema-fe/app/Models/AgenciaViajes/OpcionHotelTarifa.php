@@ -3,6 +3,7 @@
 namespace App\Models\AgenciaViajes;
 
 use Illuminate\Database\Eloquent\Model;
+use App\Models\AgenciaViajes\Concerns\ExoneradoEsAmazonia;
 
 // plan-modulo-cotizaciones-reservas.md §2.4. Tenant (sin CentralConnection).
 // opcion_hotel_id es FK real dentro de la misma DB tenant (misma sesión),
@@ -18,6 +19,9 @@ use Illuminate\Database\Eloquent\Model;
 // siga viva, no reemplazan tenerlo guardado.
 class OpcionHotelTarifa extends Model
 {
+    // Fila 13 (22-oct-2026): en Agencia, exonerado (20) ⇒ destino Amazonía.
+    use ExoneradoEsAmazonia;
+
     protected $table = 'opciones_hotel_tarifas';
 
     protected $fillable = [

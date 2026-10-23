@@ -72,6 +72,23 @@ Todo lo demás ya existe en el plan de tours y funciona igual para una salida en
 
 **El precio y la factura al cliente no cambian** (ya puede estar facturado).
 
+> **Choque con el código actual — resolver al empezar E1 (encontrado el 22-oct-2026, al cerrar la
+> fase 2c del plan de tours):** el punto 2 dice que una salida propia que queda vacía "pasa a
+> cancelada (no se borra)". Hoy el sistema **la borra**: `SalidaOperativa::eliminarSiQuedoVacia()`
+> (auditoría del 22-sep-2026, para que no quedaran salidas fantasma con 0 pasajeros en el tablero),
+> llamado al cancelar o reprogramar una reserva, al quitar un ítem y al desenganchar. Desde la fase
+> 2b, borrar la salida **borra también sus servicios a reservar y sus vehículos** (cascada en
+> `salida_servicios` y `salida_vehiculos`). Revertir un endoso necesita volver a la salida propia
+> con lo que ya tenía armado, así que para la salida que se endosa hay que decidir entre:
+> - marcarla `cancelada` en vez de borrarla (como dice este plan), o
+> - borrarla igual y que "revertir" la arme de nuevo, guardando antes lo configurado (lo que ya hace
+>   "reprogramar salida completa" de la fase 2c con `SalidaOperacionService::foto()` y
+>   `llevarConfiguracion()`).
+>
+> En cualquiera de los dos casos, el aviso del punto 3 ya existe: `SalidaOperacionService::avisos()`
+> (fase 2c). La lista de pasajeros para el operador puede reutilizar el generador de las órdenes de
+> servicio (`SalidaOperacionService::ordenes()`).
+
 **Revertir:** devuelve las líneas a la salida propia de ese tour y fecha (la crea si no existe).
 Si ya hay una factura del operador asignada a esa salida, se avisa antes de revertir.
 

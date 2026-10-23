@@ -236,8 +236,15 @@ class TourLineaService
                 'tip_afe_igv' => $item->tip_afe_igv ?? $igvTour['tip_afe_igv'],
                 'destino_tributario' => $item->destino_tributario ?? $igvTour['destino_tributario'],
             ];
-            $clave = $igv['tip_afe_igv'].'|'.$igv['destino_tributario'];
+            // Fila 13 (22-oct-2026): una línea por CÓDIGO SUNAT, no por código +
+            // destino: para SUNAT, dos servicios exonerados son una sola línea.
+            // Si alguno se presta en la Amazonía, la línea queda como Amazonía
+            // (leyenda de la Ley 27037 y confirmación antes de facturar).
+            $clave = $igv['tip_afe_igv'];
             $grupos[$clave] ??= $igv + ['items' => []];
+            if ($igv['destino_tributario'] === 'amazonia') {
+                $grupos[$clave]['destino_tributario'] = 'amazonia';
+            }
             $grupos[$clave]['items'][] = [
                 'paquete_plantilla_item_id' => $item->id,
                 'servicio' => $this->nombreServicio($item),
