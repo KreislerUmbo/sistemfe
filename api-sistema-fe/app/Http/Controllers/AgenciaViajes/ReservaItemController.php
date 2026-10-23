@@ -30,9 +30,7 @@ class ReservaItemController extends Controller
             return response()->json(['code' => 422, 'message' => 'Solo se puede editar un ítem de una reserva activa.'], 422);
         }
 
-        $yaFacturado = ReservaVenta::where('reserva_id', $reserva->id)
-            ->get()
-            ->flatMap(fn (ReservaVenta $rv) => $rv->reserva_item_ids ?? [])
+        $yaFacturado = ReservaVenta::itemIdsFacturados($reserva->id)
             ->contains($item->id);
 
         if ($yaFacturado) {
@@ -116,9 +114,7 @@ class ReservaItemController extends Controller
         // cubierto por una venta real no se puede quitar en silencio acá;
         // corregir una reserva ya facturada es la Fase futura de "Camino 1"
         // (Nota de Crédito + venta nueva), fuera de alcance de este borrado.
-        $yaFacturado = ReservaVenta::where('reserva_id', $reserva->id)
-            ->get()
-            ->flatMap(fn (ReservaVenta $rv) => $rv->reserva_item_ids ?? [])
+        $yaFacturado = ReservaVenta::itemIdsFacturados($reserva->id)
             ->contains($item->id);
 
         if ($yaFacturado) {
@@ -144,9 +140,7 @@ class ReservaItemController extends Controller
                     throw new HttpException(422, 'No se puede quitar: es el último ítem de la reserva.');
                 }
 
-                $yaFacturadoBajoLock = ReservaVenta::where('reserva_id', $reserva->id)
-                    ->get()
-                    ->flatMap(fn (ReservaVenta $rv) => $rv->reserva_item_ids ?? [])
+                $yaFacturadoBajoLock = ReservaVenta::itemIdsFacturados($reserva->id)
                     ->contains($itemLocked->id);
 
                 if ($yaFacturadoBajoLock) {

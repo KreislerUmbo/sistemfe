@@ -39,9 +39,7 @@ class QuitarPasajeroReservaService
 
             // Solo cuenta si ESTE pasajero está en una venta (auditoría
             // 2026-09-23): otro pasajero ya facturado no impide quitarlo.
-            $yaFacturado = ReservaVenta::where('reserva_id', $reservaLocked->id)
-                ->get()
-                ->flatMap(fn (ReservaVenta $rv) => $rv->reserva_pasajero_ids ?? [])
+            $yaFacturado = ReservaVenta::pasajeroIdsFacturados($reservaLocked->id)
                 ->contains($pasajero->id);
 
             if ($yaFacturado) {

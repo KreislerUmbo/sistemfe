@@ -762,12 +762,15 @@ class ReservaFacturacionController extends Controller
             ], 422);
         }
 
-        $pasajerosYaFacturados = $this->pasajerosYaFacturadosIds($reserva);
+        // Cada pasajero pertenece a un único Sale por diseño (un responsable
+        // de pago, un comprobante): uno ya facturado no vuelve a elegirse.
+        // Ver el docblock de la clase para el caso de ítems compartidos.
+        $pasajerosYaFacturados = ReservaVenta::pasajeroIdsDe($reserva->ventas);
         $pasajerosRepetidos = collect($pasajeroIdsSolicitados)->intersect($pasajerosYaFacturados)->values();
 
         // Fila 13, 1c: una línea de tour cobrada solo en parte sigue
         // disponible para la factura de los pasajeros que faltan.
-        $idsItemsYaFacturados = $this->itemsYaFacturadosIds($reserva)
+        $idsItemsYaFacturados = ReservaVenta::itemIdsDe($reserva->ventas)
             ->diff(ReservaVenta::itemsDeTourAMedias($reserva->ventas))
             ->values();
 
@@ -1052,30 +1055,6 @@ class ReservaFacturacionController extends Controller
             })
             ->values()
             ->all();
-    }
-
-    // Ningún reserva_item pedido puede estar ya cubierto por una
-    // ReservaVenta existente de esta reserva — compartido por
-    // resolverSeleccion() y usado también dentro de ella.
-    private function itemsYaFacturadosIds(Reserva $reserva): Collection
-    {
-        return $reserva->ventas
-            ->flatMap(fn (ReservaVenta $rv) => $rv->reserva_item_ids ?? [])
-            ->unique()
-            ->values();
-    }
-
-    // Un pasajero ya facturado (apareció en el reserva_pasajero_ids de
-    // ALGUNA ReservaVenta previa) no puede volver a seleccionarse — cada
-    // pasajero pertenece a un único Sale por diseño (un responsable de
-    // pago, un comprobante). Ver docblock de la clase para el trade-off
-    // de ítems compartidos que esto implica.
-    private function pasajerosYaFacturadosIds(Reserva $reserva): Collection
-    {
-        return $reserva->ventas
-            ->flatMap(fn (ReservaVenta $rv) => $rv->reserva_pasajero_ids ?? [])
-            ->unique()
-            ->values();
     }
 
     // Fuente de verdad: el proveedor_tarifa_id PROPIO del reserva_item

@@ -230,9 +230,7 @@ class ReservaItemPasajeroController extends Controller
 
     private function itemYaFacturado(ReservaItem $item): bool
     {
-        return ReservaVenta::where('reserva_id', $item->reserva_id)
-            ->get()
-            ->flatMap(fn (ReservaVenta $rv) => $rv->reserva_item_ids ?? [])
+        return ReservaVenta::itemIdsFacturados($item->reserva_id)
             ->contains($item->id);
     }
 }

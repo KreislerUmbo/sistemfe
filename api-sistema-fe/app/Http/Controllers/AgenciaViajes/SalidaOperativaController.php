@@ -341,8 +341,7 @@ class SalidaOperativaController extends Controller
     // devuelva. Lo ya facturado no se mueve (mismo criterio que reprogramar()).
     private function moverServiciosDeLaSalida($reserva, SalidaOperativa $salida, string $fechaNueva, SalidaEngancheService $enganche): array
     {
-        $facturados = ReservaVenta::where('reserva_id', $reserva->id)->get()
-            ->flatMap(fn (ReservaVenta $rv) => $rv->reserva_item_ids ?? []);
+        $facturados = ReservaVenta::itemIdsFacturados($reserva->id);
         $noTocados = [];
 
         $items = ReservaItem::with('alternativaItem')
@@ -467,9 +466,7 @@ class SalidaOperativaController extends Controller
 
         $itemsAMover = $this->itemsDeLaMismaCarga($reservaItem);
 
-        $facturados = ReservaVenta::where('reserva_id', $reservaItem->reserva_id)
-            ->get()
-            ->flatMap(fn (ReservaVenta $rv) => $rv->reserva_item_ids ?? []);
+        $facturados = ReservaVenta::itemIdsFacturados($reservaItem->reserva_id);
 
         if ($itemsAMover->pluck('id')->intersect($facturados)->isNotEmpty()) {
             return response()->json(['code' => 422, 'message' => 'No se puede enganchar: este ítem ya fue facturado en una venta de esta reserva.'], 422);

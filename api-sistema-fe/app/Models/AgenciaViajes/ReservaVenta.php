@@ -43,6 +43,32 @@ class ReservaVenta extends Model
             ->values();
     }
 
+    // Qué servicios y qué pasajeros de una reserva ya están en alguna venta
+    // (auditoría reserva + facturación, punto 5, 23-oct-2026: antes este
+    // cálculo estaba escrito a mano en 17 lugares). Lo que está aquí no se
+    // vuelve a facturar ni se puede editar o quitar de la reserva.
+    // Consulta la base cada vez: se puede usar dentro de un lockForUpdate().
+    public static function itemIdsFacturados(int $reservaId): \Illuminate\Support\Collection
+    {
+        return self::itemIdsDe(self::where('reserva_id', $reservaId)->get());
+    }
+
+    public static function pasajeroIdsFacturados(int $reservaId): \Illuminate\Support\Collection
+    {
+        return self::pasajeroIdsDe(self::where('reserva_id', $reservaId)->get());
+    }
+
+    // Lo mismo a partir de ventas ya cargadas ($reserva->ventas), sin consultar.
+    public static function itemIdsDe(iterable $ventas): \Illuminate\Support\Collection
+    {
+        return collect($ventas)->flatMap(fn (self $rv) => $rv->reserva_item_ids ?? [])->unique()->values();
+    }
+
+    public static function pasajeroIdsDe(iterable $ventas): \Illuminate\Support\Collection
+    {
+        return collect($ventas)->flatMap(fn (self $rv) => $rv->reserva_pasajero_ids ?? [])->unique()->values();
+    }
+
     // Una Nota de Crédito 07 aceptada por SUNAT sobre una venta que salió de
     // facturar una reserva. Salió de NotaElectronicaController (auditoría
     // reserva + facturación, 23-oct-2026) para poder probarla sin SUNAT.

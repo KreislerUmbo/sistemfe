@@ -813,8 +813,7 @@ class ReservaController extends Controller
             // comprobante SUNAT ya emitido desincronizaría el reporte
             // operativo de ese comprobante, que conserva su descripción
             // congelada al momento de facturar.
-            $itemIdsFacturados = ReservaVenta::where('reserva_id', $reserva->id)->get()
-                ->flatMap(fn (ReservaVenta $rv) => $rv->reserva_item_ids ?? []);
+            $itemIdsFacturados = ReservaVenta::itemIdsFacturados($reserva->id);
 
             $items = ReservaItem::with('alternativaItem')->where('reserva_id', $reserva->id)->get();
 
@@ -960,8 +959,7 @@ class ReservaController extends Controller
         // ni siquiera para algo que no afecta el precio (corregir una
         // reserva ya facturada es la Fase futura de "Camino 1", fuera de
         // alcance).
-        $itemIdsFacturados = ReservaVenta::where('reserva_id', $reserva->id)->get()
-            ->flatMap(fn (ReservaVenta $rv) => $rv->reserva_item_ids ?? []);
+        $itemIdsFacturados = ReservaVenta::itemIdsFacturados($reserva->id);
         if ($items->pluck('id')->intersect($itemIdsFacturados)->isNotEmpty()) {
             return response()->json(['code' => 422, 'message' => 'No se puede reasignar: uno o más ítems ya fueron facturados en una venta de esta reserva.'], 422);
         }
@@ -1003,8 +1001,7 @@ class ReservaController extends Controller
                 // los que realmente se declararon a SUNAT.
                 Reserva::where('id', $reserva->id)->lockForUpdate()->firstOrFail();
 
-                $itemIdsFacturadosBajoLock = ReservaVenta::where('reserva_id', $reserva->id)->get()
-                    ->flatMap(fn (ReservaVenta $rv) => $rv->reserva_item_ids ?? []);
+                $itemIdsFacturadosBajoLock = ReservaVenta::itemIdsFacturados($reserva->id);
                 if ($items->pluck('id')->intersect($itemIdsFacturadosBajoLock)->isNotEmpty()) {
                     throw new HttpException(422, 'No se puede reasignar: uno o más ítems ya fueron facturados en una venta de esta reserva.');
                 }
@@ -1088,8 +1085,7 @@ class ReservaController extends Controller
 
         // Mismo guard que reasignarMayorista() — un ítem ya cubierto por
         // una venta real no se toca en silencio acá.
-        $itemIdsFacturados = ReservaVenta::where('reserva_id', $reserva->id)->get()
-            ->flatMap(fn (ReservaVenta $rv) => $rv->reserva_item_ids ?? []);
+        $itemIdsFacturados = ReservaVenta::itemIdsFacturados($reserva->id);
         if ($items->pluck('id')->intersect($itemIdsFacturados)->isNotEmpty()) {
             return response()->json(['code' => 422, 'message' => 'No se puede reasignar: uno o más ítems ya fueron facturados en una venta de esta reserva.'], 422);
         }
@@ -1122,8 +1118,7 @@ class ReservaController extends Controller
                 // comentario ahí).
                 Reserva::where('id', $reserva->id)->lockForUpdate()->firstOrFail();
 
-                $itemIdsFacturadosBajoLock = ReservaVenta::where('reserva_id', $reserva->id)->get()
-                    ->flatMap(fn (ReservaVenta $rv) => $rv->reserva_item_ids ?? []);
+                $itemIdsFacturadosBajoLock = ReservaVenta::itemIdsFacturados($reserva->id);
                 if ($items->pluck('id')->intersect($itemIdsFacturadosBajoLock)->isNotEmpty()) {
                     throw new HttpException(422, 'No se puede reasignar: uno o más ítems ya fueron facturados en una venta de esta reserva.');
                 }
@@ -1214,8 +1209,7 @@ class ReservaController extends Controller
         // Mismo guard que reasignarMayorista()/reasignarHotel() — un
         // ítem ya facturado no se toca en silencio (cambiaría el
         // tratamiento tributario de un comprobante ya emitido a SUNAT).
-        $itemIdsFacturados = ReservaVenta::where('reserva_id', $reserva->id)->get()
-            ->flatMap(fn (ReservaVenta $rv) => $rv->reserva_item_ids ?? []);
+        $itemIdsFacturados = ReservaVenta::itemIdsFacturados($reserva->id);
         if ($items->pluck('id')->intersect($itemIdsFacturados)->isNotEmpty()) {
             return response()->json(['code' => 422, 'message' => 'No se puede corregir: uno o más ítems ya fueron facturados en una venta de esta reserva.'], 422);
         }
@@ -1224,8 +1218,7 @@ class ReservaController extends Controller
             DB::transaction(function () use ($reserva, $items, $validado) {
                 Reserva::where('id', $reserva->id)->lockForUpdate()->firstOrFail();
 
-                $itemIdsFacturadosBajoLock = ReservaVenta::where('reserva_id', $reserva->id)->get()
-                    ->flatMap(fn (ReservaVenta $rv) => $rv->reserva_item_ids ?? []);
+                $itemIdsFacturadosBajoLock = ReservaVenta::itemIdsFacturados($reserva->id);
                 if ($items->pluck('id')->intersect($itemIdsFacturadosBajoLock)->isNotEmpty()) {
                     throw new HttpException(422, 'No se puede corregir: uno o más ítems ya fueron facturados en una venta de esta reserva.');
                 }
@@ -1357,10 +1350,7 @@ class ReservaController extends Controller
         // cubiertos por alguna ReservaVenta, para que el frontend no
         // vuelva a ofrecerlos al facturar (el backend igual lo bloquea con
         // 422, esto es solo para que la UI no invite a un error evitable).
-        $itemsFacturadosIds = $reserva->ventas
-            ->flatMap(fn (ReservaVenta $rv) => $rv->reserva_item_ids ?? [])
-            ->unique()
-            ->values();
+        $itemsFacturadosIds = ReservaVenta::itemIdsDe($reserva->ventas);
 
         $itemsPendientesDeFacturarCount = $reserva->items
             ->pluck('id')
@@ -1372,10 +1362,7 @@ class ReservaController extends Controller
         // reserva_pasajero_ids de ALGUNA ReservaVenta — usado por el
         // frontend para el badge "Facturación completa" vs. "Falta
         // facturar a N pasajeros" sin tener que abrir el modal.
-        $pasajerosFacturadosIds = $reserva->ventas
-            ->flatMap(fn (ReservaVenta $rv) => $rv->reserva_pasajero_ids ?? [])
-            ->unique()
-            ->values();
+        $pasajerosFacturadosIds = ReservaVenta::pasajeroIdsDe($reserva->ventas);
 
         // Tier 0 — conexión Adelantos↔Reservas (hallazgo de auditoría del
         // módulo Adelantos, 2026-08-21): anticipos que el cliente ya pagó
