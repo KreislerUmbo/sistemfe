@@ -62,6 +62,8 @@ Más recorridos, por fase:
   compartido/privado, pasajeros y mínimo, estados, reprogramar).
 - `05-recorridos-servicios-y-vehiculos.md`: fila 13, fase 2b (servicios a reservar, vehículos,
   guía por vehículo).
+- `06-recorridos-operacion-salida.md`: fila 13, fase 2c (órdenes de servicio, avisos al cancelar,
+  reprogramar la salida completa).
 
 ## 3. Carpetas del backend (`api-sistema-fe/`)
 

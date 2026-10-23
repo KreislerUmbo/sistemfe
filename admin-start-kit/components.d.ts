@@ -117,6 +117,8 @@ declare module 'vue' {
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
     SaldoAFavorCliente: typeof import('./src/components/Clientes/SaldoAFavorCliente.vue')['default']
+    SalidaOrdenesServicio: typeof import('./src/components/AgenciaViajes/SalidaOrdenesServicio.vue')['default']
+    SalidaReprogramar: typeof import('./src/components/AgenciaViajes/SalidaReprogramar.vue')['default']
     SalidaServiciosVehiculos: typeof import('./src/components/AgenciaViajes/SalidaServiciosVehiculos.vue')['default']
     SeccionCategorias: typeof import('./src/components/portal/SeccionCategorias.vue')['default']
     SeccionProductos: typeof import('./src/components/portal/SeccionProductos.vue')['default']

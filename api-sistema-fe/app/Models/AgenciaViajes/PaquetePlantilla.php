@@ -4,6 +4,7 @@ namespace App\Models\AgenciaViajes;
 
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
+use App\Models\AgenciaViajes\Concerns\ExoneradoEsAmazonia;
 
 // "Tour" — plan-modulo-cotizaciones-reservas.md §3.7 +
 // plan-modulo-tours-catalogo.md §5 (confirmado 24-jul-2026: misma entidad
@@ -19,6 +20,9 @@ use Illuminate\Database\Eloquent\Model;
 // el cálculo de precio en vivo del combo.
 class PaquetePlantilla extends Model
 {
+    // Fila 13 (22-oct-2026): en Agencia, exonerado (20) ⇒ destino Amazonía.
+    use ExoneradoEsAmazonia;
+
     public const TIPO_TOUR_SIMPLE = 'tour_simple';
     public const TIPO_PAQUETE_COMBO = 'paquete_combo';
 

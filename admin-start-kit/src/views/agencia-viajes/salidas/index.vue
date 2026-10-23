@@ -163,6 +163,18 @@
                     </div>
                     <div class="modal-body">
                         <div class="row g-2 mb-3 small">
+                            <!-- Fila 13, fase 2c: hora y lugar de recojo (nacen del tour, valen para todas las reservas). -->
+                            <div class="col-12 col-md-3">
+                                <label class="form-label mb-0 small text-secondary">Hora de salida</label>
+                                <input type="time" class="form-control form-control-sm" :value="detalle.hora ?? ''" :disabled="!enCurso(detalle)"
+                                    @change="guardarDatosSalida(detalle, { hora: ($event.target as HTMLInputElement).value || null })">
+                            </div>
+                            <div class="col-12 col-md-9">
+                                <label class="form-label mb-0 small text-secondary">Lugar de recojo / punto de encuentro</label>
+                                <input type="text" class="form-control form-control-sm" :value="detalle.lugar_recojo ?? ''" :disabled="!enCurso(detalle)"
+                                    placeholder="Ej. Plaza de Armas de Tarapoto, o recojo en el hotel"
+                                    @change="guardarDatosSalida(detalle, { lugar_recojo: ($event.target as HTMLInputElement).value.trim() || null })">
+                            </div>
                             <div class="col-6"><strong>Guía:</strong> {{ detalle.guia?.nombre ?? 'Sin asignar' }}</div>
                             <div class="col-6"><strong>Estado:</strong> {{ ETIQUETA_ESTADO[detalle.estado] }}<span v-if="detalle.privada"> · privada</span></div>
                             <div class="col-6">
@@ -205,6 +217,10 @@
                         </template>
                         <!-- Fila 13, fase 2b (D10-D13) -->
                         <SalidaServiciosVehiculos class="mb-3" :salida="detalle" :guias="guias" @cambio="recargarDetalle" />
+                        <!-- Fila 13, fase 2c (D14, D16) -->
+                        <SalidaOrdenesServicio v-if="enCurso(detalle)" :key="`ordenes-${detalle.id}`" class="mb-3" :salida-id="detalle.id" />
+                        <SalidaReprogramar v-if="reprogramando && enCurso(detalle)" class="mb-3" :salida="detalle"
+                            @cerrar="reprogramando = false" @reprogramada="alReprogramar" />
                         <h6 class="small fw-semibold text-secondary text-uppercase">Reservas</h6>
                         <ul class="list-group">
                             <li v-for="r in detalle.reservas ?? []" :key="r.id" class="list-group-item d-flex justify-content-between align-items-center py-2">
@@ -225,6 +241,9 @@
                         <button v-if="estadoAnterior(detalle)" class="btn btn-outline-secondary btn-sm me-auto" @click="volverEstado(detalle)">
                             <i class="fas fa-rotate-left me-1"></i>Volver a {{ ETIQUETA_ESTADO[estadoAnterior(detalle)!].toLowerCase() }}
                         </button>
+                        <button v-if="enCurso(detalle) && !reprogramando" class="btn btn-outline-warning btn-sm" @click="reprogramando = true">
+                            <i class="fas fa-calendar-days me-1"></i>Reprogramar
+                        </button>
                         <button v-if="enCurso(detalle)" class="btn btn-outline-danger btn-sm" @click="confirmarCancelar(detalle)">
                             <i class="fas fa-ban me-1"></i>Cancelar salida
                         </button>
@@ -242,6 +261,8 @@
 <script setup lang="ts">
 import CampoFecha from '@/components/CampoFecha.vue';
 import SalidaServiciosVehiculos from '@/components/AgenciaViajes/SalidaServiciosVehiculos.vue';
+import SalidaOrdenesServicio from '@/components/AgenciaViajes/SalidaOrdenesServicio.vue';
+import SalidaReprogramar from '@/components/AgenciaViajes/SalidaReprogramar.vue';
 import { ref, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';
@@ -354,6 +375,28 @@ const guardarGuia = async (s: SalidaOperativa, valor: string) => {
     } finally {
         guiaEditando.value = null;
     }
+};
+
+// Fila 13, fase 2c: hora y lugar de recojo de la salida (las órdenes de
+// servicio y el Reporte Operativo los toman de acá).
+const guardarDatosSalida = async (s: SalidaOperativa, data: { hora?: string | null; lugar_recojo?: string | null }) => {
+    try {
+        await salidaOperativaService.actualizar(s.id, data);
+        toast.success('Salida actualizada');
+        await recargarDetalle();
+    } catch (error: any) {
+        toast.error(error.response?.data?.message ?? 'No se pudo actualizar la salida');
+    }
+};
+
+// Fila 13, fase 2c (D16): tras reprogramar, la salida vieja suele borrarse;
+// se abre la nueva (si quedó alguna reserva) y se recarga el tablero.
+const reprogramando = ref(false);
+const alReprogramar = async (salidaNuevaId: number | null) => {
+    reprogramando.value = false;
+    detalle.value = null;
+    await list();
+    if (salidaNuevaId) await abrirDetalle(salidaNuevaId);
 };
 
 // Fila 13, fase 2b: tras cambiar un servicio o vehículo, recarga el detalle

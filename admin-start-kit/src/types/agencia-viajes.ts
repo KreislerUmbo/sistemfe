@@ -958,6 +958,9 @@ export type ReservaItem = {
   alternativa_item?: AlternativaItem;
   salida_operativa_id?: number | null;
   salida_operativa?: SalidaOperativa | null;
+  // Fila 13: las líneas de un mismo tour cargado (una por código de IGV)
+  // comparten carga_tour; en la reserva se muestran como una sola tarjeta.
+  carga_tour?: string | null;
   // Vuelo vendido por la AGENCIA, por pasajero (corrección 2026-08-27 —
   // tabla propia ReservaItemVueloPasajero, sin relación con el checkbox
   // del tab Asignación pasajero↔ítem — ver docblock del modelo en el
@@ -1028,6 +1031,8 @@ export type SalidaOperativa = {
   guia?: Guia | null;
   cupo_maximo?: number | null;
   vehiculo_descripcion?: string | null;
+  // Fila 13, fase 2c: nace con el lugar de recojo del tour; editable.
+  lugar_recojo?: string | null;
   // Fila 13, fase 2a (D9): programada → confirmada → realizada, o cancelada.
   estado: EstadoSalidaOperativa;
   notas?: string | null;

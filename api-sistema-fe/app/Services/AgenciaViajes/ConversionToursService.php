@@ -152,7 +152,8 @@ class ConversionToursService
         // tour mezcla: en ese caso todos los servicios necesitan costo para
         // repartir el precio entre las líneas (si no, la carga da 422).
         $default = ConfiguracionAgencia::tratamientoTributarioDefault();
-        $igvTour = ($tour->tip_afe_igv ?? $default['tip_afe_igv']).'|'.($tour->destino_tributario ?? $default['destino_tributario']);
+        // Mezcla = más de un código SUNAT (22-oct: el destino no parte la línea).
+        $igvTour = (string) ($tour->tip_afe_igv ?? $default['tip_afe_igv']);
         $finales = $itemsDelTour->map(function (PaquetePlantillaItem $item) use ($cambios, $igvTour) {
             $cambio = $cambios->get($item->id);
             $tip = $cambio ? ($cambio['tip_afe_igv'] ?? null) : $item->tip_afe_igv;
@@ -164,7 +165,7 @@ class ConversionToursService
                 'tip_afe_igv' => $tip,
                 'destino_tributario' => $tip !== null ? $destino : null,
                 'costo' => $costo !== null ? (float) $costo : null,
-                'grupo' => $tip !== null ? $tip.'|'.$destino : $igvTour,
+                'grupo' => $tip !== null ? (string) $tip : $igvTour,
             ];
         });
 
@@ -241,7 +242,7 @@ class ConversionToursService
         }
 
         $igvFinal = collect($p['items'])->map(fn (array $i) => $i['igv_propuesto'] ?? $p['igv_tour'])
-            ->map(fn (array $igv) => $igv['tip_afe_igv'].'|'.$igv['destino_tributario'])
+            ->map(fn (array $igv) => $igv['tip_afe_igv'])
             ->unique();
         $sinCosto = collect($p['items'])->whereNull('costo_propuesto');
 

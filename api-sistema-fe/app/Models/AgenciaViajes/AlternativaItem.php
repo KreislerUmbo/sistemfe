@@ -3,6 +3,7 @@
 namespace App\Models\AgenciaViajes;
 
 use Illuminate\Database\Eloquent\Model;
+use App\Models\AgenciaViajes\Concerns\ExoneradoEsAmazonia;
 
 // Ítem atómico de una alternativa — plan-modulo-cotizaciones-reservas.md
 // §3.1/§3.3. Tenant (sin CentralConnection). alternativa_id/proveedor_tarifa_id/
@@ -27,6 +28,9 @@ use Illuminate\Database\Eloquent\Model;
 // confirmado por 2 auditorías independientes antes de M1/M2).
 class AlternativaItem extends Model
 {
+    // Fila 13 (22-oct-2026): en Agencia, exonerado (20) ⇒ destino Amazonía.
+    use ExoneradoEsAmazonia;
+
     protected $table = 'alternativa_items';
 
     public const ORIGEN_PROVEEDOR = 'proveedor';

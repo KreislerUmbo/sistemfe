@@ -3,6 +3,7 @@
 namespace App\Models\AgenciaViajes;
 
 use Illuminate\Database\Eloquent\Model;
+use App\Models\AgenciaViajes\Concerns\ExoneradoEsAmazonia;
 
 // Ítems del "Incluye" de un paquete_plantilla — plan-modulo-cotizaciones-reservas.md
 // §3.7 ("cada ítem es un destino_servicio + proveedor_tarifa real, no
@@ -15,6 +16,9 @@ use Illuminate\Database\Eloquent\Model;
 // en ComboValidationService, no acá ni en la migración.
 class PaquetePlantillaItem extends Model
 {
+    // Fila 13 (22-oct-2026): en Agencia, exonerado (20) ⇒ destino Amazonía.
+    use ExoneradoEsAmazonia;
+
     protected $table = 'paquete_plantilla_items';
 
     protected $fillable = [

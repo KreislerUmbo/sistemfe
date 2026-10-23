@@ -30,6 +30,8 @@ class SalidaOperativa extends Model
         'privada_reserva_id',
         'fecha',
         'hora',
+        // Fila 13, fase 2c: hora y lugar de recojo nacen del tour, editables acá.
+        'lugar_recojo',
         'guia_id',
         'cupo_maximo',
         'vehiculo_descripcion',

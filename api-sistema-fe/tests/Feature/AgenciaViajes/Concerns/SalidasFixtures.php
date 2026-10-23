@@ -112,11 +112,11 @@ trait SalidasFixtures
     }
 
     /**
-     * Cotización con el tour cargado el día 1 (15-nov-2026) y su reserva aceptada.
+     * Cotización que empieza el 15-nov-2026 con el tour cargado el día $dia, y su reserva aceptada.
      *
      * @param  array<int, array{0: string, 1: int, 2?: string}>  $pasajeros  [tipo, edad, residencia]
      */
-    private function reservaConTour(PaquetePlantilla $tour, array $pasajeros): Reserva
+    private function reservaConTour(PaquetePlantilla $tour, array $pasajeros, int $dia = 1): Reserva
     {
         $clienteId = DB::table('clients')->insertGetId([
             'type_document' => 'DNI', 'n_document' => (string) random_int(10000000, 99999999), 'full_name' => 'Cliente Test Salidas',
@@ -136,7 +136,7 @@ trait SalidasFixtures
         AlternativaDestino::create(['alternativa_id' => $alternativa->id, 'destino_atractivo_id' => $this->destino->id, 'orden' => 1]);
 
         $carga = app(AlternativaItemController::class)->desdePlantilla(
-            new Request(['paquete_plantilla_id' => $tour->id, 'dia_referencial' => 1]),
+            new Request(['paquete_plantilla_id' => $tour->id, 'dia_referencial' => $dia]),
             (string) $alternativa->id
         );
         $this->assertLessThan(300, $carga->getStatusCode(), json_encode($carga->getData(true)));

@@ -342,7 +342,7 @@
                         <div class="row g-3" v-if="tabModalTarifa === 'tributario'">
                             <div class="col-6 col-md-3">
                                 <label class="form-label mb-1 small fw-semibold text-secondary">Destino tributario</label>
-                                <select class="form-select form-select-sm" v-model="formTarifa.destino_tributario">
+                                <select class="form-select form-select-sm" v-model="formTarifa.destino_tributario" :disabled="formTarifa.tip_afe_igv === IGV_EXONERADO">
                                     <option value="nacional">Nacional</option>
                                     <option value="amazonia">Amazonía</option>
                                     <option value="extranjero">Extranjero</option>
@@ -350,13 +350,15 @@
                             </div>
                             <div class="col-6 col-md-3">
                                 <label class="form-label mb-1 small fw-semibold text-secondary">Tip. Afectación IGV</label>
-                                <select class="form-select form-select-sm" v-model="formTarifa.tip_afe_igv">
+                                <select class="form-select form-select-sm" v-model="formTarifa.tip_afe_igv"
+                                    @change="formTarifa.destino_tributario = destinoParaIgvAgencia(formTarifa.tip_afe_igv, formTarifa.destino_tributario)">
                                     <option value="10">Gravado</option>
                                     <option value="17">IVAP</option>
                                     <option value="20">Exonerado</option>
                                     <option value="30">Inafecto</option>
                                     <option value="40">Exportación</option>
                                 </select>
+                                <small v-if="formTarifa.tip_afe_igv === IGV_EXONERADO" class="text-muted">{{ NOTA_EXONERADO_AGENCIA }}</small>
                             </div>
                             <div class="col-6 col-md-3">
                                 <label class="form-label mb-1 small fw-semibold text-secondary">Vigente desde</label>
@@ -379,6 +381,7 @@
 </template>
 
 <script setup lang="ts">
+import { destinoParaIgvAgencia, IGV_EXONERADO, NOTA_EXONERADO_AGENCIA } from '@/helpers/tratamientoTributarioAgencia';
 import CampoFecha from '@/components/CampoFecha.vue';
 import { ref, computed, watch, onMounted } from 'vue';
 import { useRoute } from 'vue-router';

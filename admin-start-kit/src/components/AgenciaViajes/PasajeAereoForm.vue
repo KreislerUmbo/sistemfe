@@ -99,7 +99,8 @@
         <div class="row g-2 mb-2">
             <div class="col-6">
                 <label class="form-label mb-1 small fw-semibold text-secondary">Tratamiento tributario (fee de agencia)</label>
-                <select class="form-select form-select-sm" v-model="form.tip_afe_igv">
+                <select class="form-select form-select-sm" v-model="form.tip_afe_igv"
+                    @change="form.destino_tributario = destinoParaIgvAgencia(form.tip_afe_igv, form.destino_tributario)">
                     <option value="10">Gravado</option>
                     <option value="20">Exonerado</option>
                     <option value="30">Inafecto</option>
@@ -107,7 +108,7 @@
             </div>
             <div class="col-6">
                 <label class="form-label mb-1 small fw-semibold text-secondary">Destino</label>
-                <select class="form-select form-select-sm" v-model="form.destino_tributario">
+                <select class="form-select form-select-sm" v-model="form.destino_tributario" :disabled="form.tip_afe_igv === IGV_EXONERADO">
                     <option value="amazonia">Amazonía</option>
                     <option value="nacional">Nacional</option>
                     <option value="extranjero">Extranjero</option>
@@ -149,6 +150,7 @@
 </template>
 
 <script setup lang="ts">
+import { destinoParaIgvAgencia, IGV_EXONERADO } from '@/helpers/tratamientoTributarioAgencia';
 // Ítem de pasaje aéreo suelto — Sesión 11b, plan-modulo-cotizaciones-reservas.md
 // §2.5. El total NUNCA se calcula acá — se le pide al backend
 // (previewPasajeAereo, mismo PriceEngineService que la creación real) cada

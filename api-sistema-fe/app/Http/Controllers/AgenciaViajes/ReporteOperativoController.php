@@ -494,7 +494,9 @@ class ReporteOperativoController extends Controller
                 ? ($this->nombreProveedor($proveedorTarifa->proveedorServicio?->proveedor) ?? 'Hotel')
                 : null,
             'fecha' => optional($item->fecha)->toDateString(),
-            'hora' => $item->hora,
+            // Fila 13, fase 2c: la hora de recojo de la reserva si la tiene; si
+            // no, la de su salida (que nace con la hora del tour).
+            'hora' => $item->hora ?? ($item->salidaOperativa?->hora ? substr((string) $item->salidaOperativa->hora, 0, 5) : null),
             'guia' => ($guiaEfectivo = $this->resolverGuiaEfectivo($item)) ? [
                 'id' => $guiaEfectivo->id,
                 'nombre' => $guiaEfectivo->nombre,

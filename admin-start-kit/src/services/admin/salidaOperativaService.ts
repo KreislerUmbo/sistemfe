@@ -2,6 +2,18 @@
 import httpClient from '@/helpers/http-client'
 import type { SalidaOperativa, SalidasOperativasResponse, SalidaServicio, SalidaVehiculo } from '@/types/agencia-viajes'
 
+// Fila 13, fase 2c (D14): orden de servicio de un proveedor para una salida.
+export type OrdenServicio = {
+  proveedor_id: number
+  proveedor: string
+  telefono: string | null
+  servicios: { nombre: string; cantidad: number; estado: string; notas: string | null }[]
+  vehiculos: { descripcion: string; chofer: string | null; capacidad: number | null; reservas: { codigo: string; titular: string | null; pasajeros: number; infantes: number; con_discapacidad: number }[] }[]
+  alimentacion_especial: Record<string, number>
+  mensaje: string
+  whatsapp_url: string | null
+}
+
 export const salidaOperativaService = {
   async listar(params: { fecha_desde?: string; fecha_hasta?: string; estado?: string } = {}) {
     const response = await httpClient.get<SalidasOperativasResponse>('/salidas-operativas', { params })
@@ -23,6 +35,21 @@ export const salidaOperativaService = {
   async cambiarEstado(id: number, estado: 'programada' | 'confirmada' | 'realizada') {
     const response = await httpClient.put(`/salidas-operativas/${id}/estado`, { estado })
     return response.data
+  },
+  // Fila 13, fase 2c (D14): órdenes de servicio, una por proveedor.
+  async ordenes(salidaId: number) {
+    const response = await httpClient.get(`/salidas-operativas/${salidaId}/ordenes`)
+    return response.data as { code: number; ordenes: OrdenServicio[] }
+  },
+  // Abre el PDF en una pestaña nueva (la ruta exige el token, por eso blob).
+  async abrirOrdenPdf(salidaId: number, proveedorId: number) {
+    const { data } = await httpClient.get(`/salidas-operativas/${salidaId}/ordenes/${proveedorId}/pdf`, { responseType: 'blob' })
+    window.open(URL.createObjectURL(new Blob([data], { type: 'application/pdf' })), '_blank')
+  },
+  // Fila 13, fase 2c (D16): reprogramar la salida completa.
+  async reprogramar(salidaId: number, data: { fecha_nueva: string; motivo: string; cancelar_reserva_ids?: number[]; motivo_cancelacion?: string }) {
+    const response = await httpClient.post(`/salidas-operativas/${salidaId}/reprogramar`, data)
+    return response.data as { code: number; message: string; salida_nueva_id: number | null; avisos: string[]; items_no_tocados: unknown[] }
   },
   // Fila 13, fase 2b (D10-D13): servicios a reservar y vehículos.
   async agregarServicio(salidaId: number, data: { nombre: string; proveedor_id?: number | null; cantidad_manual?: number | null }) {

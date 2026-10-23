@@ -267,7 +267,8 @@
                             <div class="row g-3">
                                 <div class="col-6 col-md-3">
                                     <label class="form-label mb-1 small fw-semibold text-secondary">Tratamiento</label>
-                                    <select class="form-select form-select-sm" v-model="form.tip_afe_igv_default">
+                                    <select class="form-select form-select-sm" v-model="form.tip_afe_igv_default"
+                                        @change="form.destino_tributario_default = destinoParaIgvAgencia(form.tip_afe_igv_default, form.destino_tributario_default)">
                                         <option value="10">Gravado</option>
                                         <option value="20">Exonerado</option>
                                         <option value="30">Inafecto</option>
@@ -275,7 +276,7 @@
                                 </div>
                                 <div class="col-6 col-md-3">
                                     <label class="form-label mb-1 small fw-semibold text-secondary">Destino</label>
-                                    <select class="form-select form-select-sm" v-model="form.destino_tributario_default">
+                                    <select class="form-select form-select-sm" v-model="form.destino_tributario_default" :disabled="form.tip_afe_igv_default === IGV_EXONERADO">
                                         <option value="amazonia">Amazonía</option>
                                         <option value="nacional">Nacional</option>
                                         <option value="extranjero">Extranjero</option>
@@ -602,6 +603,7 @@
 </template>
 
 <script setup lang="ts">
+import { destinoParaIgvAgencia, IGV_EXONERADO } from '@/helpers/tratamientoTributarioAgencia';
 import { ref, computed, onMounted } from 'vue';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import RichTextEditor from '@/components/RichTextEditor.vue';

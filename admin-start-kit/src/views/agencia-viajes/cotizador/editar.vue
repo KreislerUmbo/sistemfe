@@ -945,14 +945,15 @@
                                             <input type="number" class="form-control form-control-sm" placeholder="Venta" v-model.number="tf.precio_venta">
                                         </div>
                                         <div class="col-3">
-                                            <select class="form-select form-select-sm" v-model="tf.tip_afe_igv">
+                                            <select class="form-select form-select-sm" v-model="tf.tip_afe_igv"
+                                                @change="tf.destino_tributario = destinoParaIgvAgencia(tf.tip_afe_igv, tf.destino_tributario)">
                                                 <option value="10">Gravado</option>
                                                 <option value="20">Exonerado</option>
                                                 <option value="30">Inafecto</option>
                                             </select>
                                         </div>
                                         <div class="col-2">
-                                            <select class="form-select form-select-sm" v-model="tf.destino_tributario">
+                                            <select class="form-select form-select-sm" v-model="tf.destino_tributario" :disabled="tf.tip_afe_igv === IGV_EXONERADO">
                                                 <option value="amazonia">Amazonía</option>
                                                 <option value="nacional">Nacional</option>
                                                 <option value="extranjero">Extranjero</option>
@@ -1332,6 +1333,7 @@
 </template>
 
 <script setup lang="ts">
+import { destinoParaIgvAgencia, IGV_EXONERADO } from '@/helpers/tratamientoTributarioAgencia';
 import CampoFecha from '@/components/CampoFecha.vue';
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
@@ -2571,11 +2573,14 @@ const vistaPreviaCombo = ref<Array<{ tourOrigenId: number; dia: number; nombre: 
 // ver el resultado (lienzo + vista previa) antes de seguir agregando.
 const modoToursNuevo = computed(() => configAgencia.value?.modo_tours === 'nuevo');
 
+
+
+//clicResultadoPlantilla es una funcion que sirve para cargar un tour o paquete desde la biblioteca
 const clicResultadoPlantilla = async (p: Extract<BibliotecaResultado, { tipo_resultado: 'tour' | 'paquete' }>) => {
-    if (!alternativaActiva.value) return;
+    if (!alternativaActiva.value) return;//esta validacion es para evitar que se cargue un tour o paquete sin una alternativa activa
     // Fila 13, fase 1b (N15): en modo nuevo un tour solo de itinerario no
     // se carga (el backend también lo rechaza con 422).
-    if (modoToursNuevo.value && p.tipo_resultado === 'tour' && p.uso === 'solo_itinerario') {
+    if (modoToursNuevo.value && p.tipo_resultado === 'tour' && p.uso === 'solo_itinerario') {//
         toast.warning('Es un tour solo de itinerario (de mayorista): no se carga en la cotización.');
         return;
     }

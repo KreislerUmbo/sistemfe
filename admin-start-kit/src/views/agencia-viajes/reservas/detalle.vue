@@ -368,11 +368,13 @@
 
                 <!-- TAB ITEMS -->
                 <div v-if="tab === 'items'" class="d-flex flex-column gap-2">
-                    <div v-for="it in reserva.items" :key="it.id" class="card border-0 shadow-sm">
+                    <!-- Fila 13 (22-oct): las líneas de un mismo tour (misma carga_tour) son una
+                         sola tarjeta; la hora y el quitar valen para todas sus líneas. -->
+                    <div v-for="it in itemsPorTarjeta" :key="it.id" class="card border-0 shadow-sm">
                         <div class="card-body py-2">
                             <div class="mb-2 d-flex justify-content-between align-items-start">
                                 <div>
-                                    <strong>{{ nombreItem(it) }}</strong>
+                                    <strong>{{ lineasDeTarjeta(it).length > 1 ? nombreTour(it) : nombreItem(it) }}</strong>
                                     <span v-if="it.fecha_origen === 'manual'" class="badge bg-light text-dark border ms-2" title="Esta fecha fue editada a mano — una reprogramación de la reserva no la mueve sola">
                                         <i class="fas fa-hand me-1"></i>Fecha manual
                                     </span>
@@ -385,21 +387,23 @@
                                     </span>
                                     <!-- 2026-09-23 — antes esto solo se descubría al chocar con el
                                          bloqueo de "mezcla tributaria" al intentar facturar. -->
-                                    <span class="badge ms-2" :class="badgeTratamientoTributario(it).clase" title="Tratamiento tributario de este servicio">
-                                        <i class="fas fa-file-invoice-dollar me-1"></i>{{ badgeTratamientoTributario(it).texto }}
+                                    <!-- Un tour con IGV mezclado muestra el tratamiento de cada línea. -->
+                                    <span v-for="badge in badgesDeTarjeta(it)" :key="`igv-${it.id}-${badge.texto}`" class="badge ms-2"
+                                        :class="badge.clase" title="Tratamiento tributario de este servicio">
+                                        <i class="fas fa-file-invoice-dollar me-1"></i>{{ badge.texto }}
                                     </span>
                                     <!-- Caso 3 Amazonía (2026-09-24) — un servicio con destino≠nacional
                                          no se puede facturar hasta que alguien lo confirme a mano
                                          (ver overrideTratamientoTributario()). -->
-                                    <span v-if="requiereConfirmacionTributaria(it)" class="badge bg-warning-subtle text-warning-emphasis border ms-2">
+                                    <span v-if="lineasSinConfirmar(it).length > 0" class="badge bg-warning-subtle text-warning-emphasis border ms-2">
                                         Sin confirmar
                                     </span>
-                                    <button v-if="reserva.estado === 'activa' && requiereConfirmacionTributaria(it)" type="button"
-                                        class="btn btn-sm btn-link p-0 ms-2" @click="abrirModalConfirmarTributario([it])">
+                                    <button v-if="reserva.estado === 'activa' && lineasSinConfirmar(it).length > 0" type="button"
+                                        class="btn btn-sm btn-link p-0 ms-2" @click="abrirModalConfirmarTributario(lineasSinConfirmar(it))">
                                         Confirmar tratamiento tributario
                                     </button>
                                 </div>
-                                <button v-if="reserva.estado === 'activa' && !itemsFacturadosIds.includes(it.id)" type="button"
+                                <button v-if="reserva.estado === 'activa' && !lineasDeTarjeta(it).some((l) => itemsFacturadosIds.includes(l.id))" type="button"
                                     class="btn btn-sm btn-link text-danger p-0" title="Quitar este servicio de la reserva"
                                     :disabled="eliminandoItemId === it.id" @click="quitarItem(it)">
                                     <span v-if="eliminandoItemId === it.id" class="spinner-border spinner-border-sm"></span>
@@ -468,8 +472,13 @@
                                     <CampoFecha v-else v-model="it.fecha" @update:model-value="guardarItem(it)" />
                                 </div>
                                 <div :class="tieneAsignacionAplicable(it) ? 'col-md-3' : 'col-md-6'">
-                                    <label class="form-label small text-secondary mb-1">Hora</label>
-                                    <CampoHora v-model="it.hora" @cambio="guardarItem(it)" />
+                                    <!-- Fila 13, fase 2c: en una salida, la hora del tour es la de la
+                                         salida; este campo es la hora de recojo de ESTA reserva (opcional). -->
+                                    <label class="form-label small text-secondary mb-1">{{ it.salida_operativa_id ? 'Hora de recojo' : 'Hora' }}</label>
+                                    <CampoHora v-model="it.hora" :placeholder="horaDeSalida(it) ?? 'hh:mm'" @cambio="guardarHoraDeTarjeta(it)" />
+                                    <div v-if="it.salida_operativa_id && horaDeSalida(it)" class="text-muted" style="font-size:11px">
+                                        Vacío = {{ horaDeSalida(it) }}, la hora de la salida
+                                    </div>
                                 </div>
                             </fieldset>
                             <p v-if="tieneAsignacionAplicable(it) && !it.proveedor_tarifa_id && !it.guia_id" class="small mt-2 mb-0" style="color:#adb5bd;font-style:italic">
@@ -843,14 +852,15 @@
                         <div class="row g-2 mb-2">
                             <div class="col-6">
                                 <label class="form-label small fw-semibold text-secondary">Destino tributario</label>
-                                <select class="form-select form-select-sm" v-model="confirmarTributarioForm.destino_tributario">
+                                <select class="form-select form-select-sm" v-model="confirmarTributarioForm.destino_tributario" :disabled="confirmarTributarioForm.tip_afe_igv === IGV_EXONERADO">
                                     <option value="amazonia">Amazonía</option>
                                     <option value="nacional">Nacional</option>
                                 </select>
                             </div>
                             <div class="col-6">
                                 <label class="form-label small fw-semibold text-secondary">Tratamiento IGV</label>
-                                <select class="form-select form-select-sm" v-model="confirmarTributarioForm.tip_afe_igv">
+                                <select class="form-select form-select-sm" v-model="confirmarTributarioForm.tip_afe_igv"
+                                    @change="confirmarTributarioForm.destino_tributario = destinoParaIgvAgencia(confirmarTributarioForm.tip_afe_igv, confirmarTributarioForm.destino_tributario)">
                                     <option value="20">Exonerado</option>
                                     <option value="30">Inafecto</option>
                                     <option value="10">Gravado (IGV 18%)</option>
@@ -1386,6 +1396,7 @@
 </template>
 
 <script setup lang="ts">
+import { destinoParaIgvAgencia, IGV_EXONERADO } from '@/helpers/tratamientoTributarioAgencia';
 import CampoHora from '@/components/CampoHora.vue';
 import CampoFecha from '@/components/CampoFecha.vue';
 import { ref, reactive, computed, onMounted, watch } from 'vue';
@@ -1983,6 +1994,47 @@ const pctItems = computed(() => {
     return total ? Math.round((itemsAsignados.value / total) * 100) : 0;
 });
 
+// ── Fila 13 (22-oct): una tarjeta por tour ─────────────────────────────
+// Las líneas de un mismo tour cargado (una por código de IGV) comparten
+// carga_tour: en la pestaña Servicios son una sola tarjeta.
+const lineasDeTarjeta = (it: ReservaItem): ReservaItem[] =>
+    it.carga_tour ? (reserva.value?.items ?? []).filter((l) => l.carga_tour === it.carga_tour) : [it];
+const itemsPorTarjeta = computed(() => {
+    const vistos = new Set<string>();
+    return (reserva.value?.items ?? []).filter((it) => {
+        if (!it.carga_tour) return true;
+        if (vistos.has(it.carga_tour)) return false;
+        vistos.add(it.carga_tour);
+        return true;
+    });
+});
+const lineasSinConfirmar = (it: ReservaItem) => lineasDeTarjeta(it).filter((l) => requiereConfirmacionTributaria(l));
+// Un distintivo por tratamiento distinto (dos líneas iguales no se repiten).
+const badgesDeTarjeta = (it: ReservaItem) => {
+    const vistos = new Set<string>();
+    return lineasDeTarjeta(it).map((l) => badgeTratamientoTributario(l)).filter((b) => !vistos.has(b.texto) && vistos.add(b.texto));
+};
+const nombreTour = (it: ReservaItem) => it.alternativa_item?.tour_origen?.nombre ?? it.tour_origen?.nombre ?? nombreItem(it);
+const horaDeSalida = (it: ReservaItem): string | null => it.salida_operativa?.hora ? it.salida_operativa.hora.slice(0, 5) : null;
+
+// La hora de recojo vale para todas las líneas del tour.
+const guardarHoraDeTarjeta = async (it: ReservaItem) => {
+    const lineas = lineasDeTarjeta(it);
+    if (lineas.length === 1) return guardarItem(it);
+    try {
+        await Promise.all(lineas.map((l) => reservaItemService.actualizar(l.id, {
+            guia_id: l.guia_id ?? null,
+            proveedor_tarifa_id: l.proveedor_tarifa_id ?? null,
+            fecha: l.fecha ?? null,
+            hora: it.hora ?? null,
+        })));
+        lineas.forEach((l) => { l.hora = it.hora ?? null; });
+        toast.success('Servicio actualizado');
+    } catch (error: any) {
+        toast.error(error.response?.data?.message ?? 'No se pudo actualizar el servicio');
+    }
+};
+
 const guardarItem = async (it: ReservaItem) => {
     try {
         await reservaItemService.actualizar(it.id, {
@@ -2007,7 +2059,7 @@ const guardarItem = async (it: ReservaItem) => {
 const eliminandoItemId = ref<number | null>(null);
 const quitarItem = async (it: ReservaItem) => {
     const confirmacion = await (Swal as TVueSwalInstance).fire({
-        title: `¿Quitar "${nombreItem(it)}" de la reserva?`,
+        title: `¿Quitar "${lineasDeTarjeta(it).length > 1 ? nombreTour(it) : nombreItem(it)}" de la reserva?`,
         text: 'Esta acción no se puede deshacer.',
         icon: 'warning',
         showCancelButton: true,
@@ -2018,7 +2070,10 @@ const quitarItem = async (it: ReservaItem) => {
 
     eliminandoItemId.value = it.id;
     try {
-        await reservaItemService.eliminar(it.id);
+        // Fila 13: un tour con varias líneas de IGV se quita entero.
+        for (const linea of lineasDeTarjeta(it)) {
+            await reservaItemService.eliminar(linea.id);
+        }
         toast.success('Servicio quitado de la reserva');
         await cargarReserva();
     } catch (error: any) {
@@ -2150,10 +2205,22 @@ const confirmarCancelacion = async () => {
     if (!reserva.value) return;
     cancelando.value = true;
     try {
-        await reservaService.cancelar(reserva.value.id, motivoCancelacion.value);
+        const res = await reservaService.cancelar(reserva.value.id, motivoCancelacion.value);
         mostrarModalCancelar.value = false;
         await cargarReserva();
         toast.success('Reserva cancelada correctamente');
+        // Fila 13, fase 2c (D15): qué ajustar con los proveedores de sus salidas.
+        const avisosSalidas: { tour: string; fecha: string; avisos: string[] }[] = res.avisos_salidas ?? [];
+        if (avisosSalidas.length > 0) {
+            const escapar = (t: string) => t.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string));
+            await (Swal as TVueSwalInstance).fire({
+                title: 'Avisa a los proveedores',
+                icon: 'info',
+                html: '<div class="text-start small">' + avisosSalidas.map((s) =>
+                    `<strong>${escapar(s.tour)} · ${escapar(s.fecha)}</strong><ul class="mt-1">`
+                    + s.avisos.map((a) => `<li>${escapar(a)}</li>`).join('') + '</ul>').join('') + '</div>',
+            });
+        }
     } catch (error: any) {
         toast.error(error.response?.data?.message ?? 'No se pudo cancelar la reserva');
     } finally {
