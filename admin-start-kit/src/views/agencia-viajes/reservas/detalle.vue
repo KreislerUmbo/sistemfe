@@ -223,12 +223,13 @@
                                     <span class="badge" :class="esPasajeroCompleto(p) ? 'bg-success' : 'bg-warning text-dark'">
                                         {{ esPasajeroCompleto(p) ? 'Completo' : 'Incompleto' }}
                                     </span>
-                                    <button v-if="reserva.estado === 'activa' && (reserva.pasajeros?.length ?? 0) > 1" type="button"
-                                        class="btn btn-sm btn-link text-danger p-0" title="Quitar este pasajero de la reserva"
-                                        :disabled="eliminandoPasajeroId === p.id" @click.stop="quitarPasajero(p)">
-                                        <span v-if="eliminandoPasajeroId === p.id" class="spinner-border spinner-border-sm"></span>
-                                        <i v-else class="fas fa-trash-can"></i>
-                                    </button>
+                                    <!-- F4 etapa 1 (23-oct-2026): quitar un pasajero cambia el precio y
+                                         puede llevar penalidad; se hará desde "Modificar reserva". -->
+                                    <span v-if="reserva.estado === 'activa' && (reserva.pasajeros?.length ?? 0) > 1"
+                                        class="text-muted small" style="cursor: help"
+                                        title="Quitar un pasajero cambia el precio y puede llevar una penalidad según los términos y condiciones. Se hará desde «Modificar reserva» (en construcción).">
+                                        <i class="fas fa-user-minus opacity-50"></i>
+                                    </span>
                                 </span>
                             </div>
 
@@ -2099,30 +2100,6 @@ const quitarItem = async (it: ReservaItem) => {
         toast.error(error.response?.data?.message ?? 'No se pudo quitar el servicio');
     } finally {
         eliminandoItemId.value = null;
-    }
-};
-
-const eliminandoPasajeroId = ref<number | null>(null);
-const quitarPasajero = async (p: ReservaPasajero) => {
-    const confirmacion = await (Swal as TVueSwalInstance).fire({
-        title: `¿Quitar a ${p.nombre || 'este pasajero'} de la reserva?`,
-        text: 'Esta acción no se puede deshacer.',
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonText: 'Sí, quitar',
-        cancelButtonText: 'Cancelar',
-    });
-    if (!confirmacion.isConfirmed) return;
-
-    eliminandoPasajeroId.value = p.id;
-    try {
-        await reservaPasajeroService.eliminar(p.id);
-        toast.success('Pasajero quitado de la reserva');
-        await cargarReserva();
-    } catch (error: any) {
-        toast.error(error.response?.data?.message ?? 'No se pudo quitar el pasajero');
-    } finally {
-        eliminandoPasajeroId.value = null;
     }
 };
 

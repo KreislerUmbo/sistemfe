@@ -22,6 +22,8 @@ class ReservaPasajero extends Model
 
     protected $fillable = [
         'reserva_id',
+        // F4 etapa 1: de qué pasajero de la cotización viene (null = agregado en la reserva).
+        'cotizacion_pasajero_id',
         'tipo_pax',
         'residencia',
         'nombre',

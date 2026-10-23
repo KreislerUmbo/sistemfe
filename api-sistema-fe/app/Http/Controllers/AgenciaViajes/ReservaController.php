@@ -496,6 +496,7 @@ class ReservaController extends Controller
         foreach ($cotizacionPasajeros as $index => $cotizacionPasajero) {
             $reservaPasajero = ReservaPasajero::create([
                 'reserva_id' => $reserva->id,
+                'cotizacion_pasajero_id' => $cotizacionPasajero->id,
                 'tipo_pax' => $cotizacionPasajero->tipo_pax,
                 // Fila 13, 1c: para la parte de cada pasajero en la línea de tour.
                 'residencia' => $cotizacionPasajero->residencia,
@@ -619,26 +620,25 @@ class ReservaController extends Controller
     }
 
     // Reconstruye cotizacion_pasajero_id → reserva_pasajero_id para una
-    // reserva YA existente (mismo criterio posicional que
-    // crearReservaDesdeAlternativa(): los reserva_pasajeros se crean una
-    // sola vez, en el mismo orden que cotizacion_pasajeros, y no se agregan
-    // ni se borran después — por eso alinear por orden sigue siendo válido
-    // acá).
+    // reserva YA existente. F4 etapa 1 (23-oct-2026): se lee del vínculo
+    // guardado al aceptar (reserva_pasajeros.cotizacion_pasajero_id). Antes
+    // se alineaba por posición, y al quitar un pasajero en la reserva los
+    // servicios caían en otra persona. Un pasajero agregado en la reserva
+    // (sin vínculo) no recibe servicios por esta vía.
     private function reconstruirMapaPasajeros(Reserva $reserva): array
     {
-        $cotizacionPasajeros = CotizacionPasajero::where('cotizacion_id', $reserva->alternativa->cotizacion_id)
-            ->orderBy('id')
-            ->get();
-        $reservaPasajeros = ReservaPasajero::where('reserva_id', $reserva->id)->orderBy('id')->get()->values();
+        return ReservaPasajero::where('reserva_id', $reserva->id)
+            ->whereNotNull('cotizacion_pasajero_id')
+            ->pluck('id', 'cotizacion_pasajero_id')
+            ->all();
+    }
 
-        $mapa = [];
-        foreach ($cotizacionPasajeros as $index => $cp) {
-            if (isset($reservaPasajeros[$index])) {
-                $mapa[$cp->id] = $reservaPasajeros[$index]->id;
-            }
-        }
-
-        return $mapa;
+    // Un servicio solo para pasajeros que ya no están en la reserva: si se
+    // creara, quedaría sin asignar, que significa "para todos".
+    private static function soloParaPasajerosQuitados(AlternativaItem $item, array $mapaPasajeros): bool
+    {
+        return ! empty($item->pax_incluidos)
+            && collect($item->pax_incluidos)->every(fn ($id) => ! isset($mapaPasajeros[$id]));
     }
 
     // POST reservas/{id}/sincronizar-items — Opción C acordada: nunca
@@ -692,24 +692,37 @@ class ReservaController extends Controller
                         ->get()
                 );
 
+                // F4 etapa 1: lo que es solo para pasajeros ya quitados no entra.
+                [$omitidos, $itemsPendientes] = $itemsPendientes
+                    ->partition(fn (AlternativaItem $item) => self::soloParaPasajerosQuitados($item, $mapaPasajeros));
+                $nombresOmitidos = $omitidos->map(fn (AlternativaItem $item) => self::resolverNombreItem($item))->values()->all();
+
                 if ($itemsPendientes->isEmpty()) {
-                    throw new HttpException(422, 'No hay ítems pendientes de sincronizar.');
+                    throw new HttpException(422, $omitidos->isEmpty()
+                        ? 'No hay ítems pendientes de sincronizar.'
+                        : 'No hay ítems para sincronizar: '.implode(', ', $nombresOmitidos).' es solo para pasajeros que ya no están en la reserva.');
                 }
 
                 foreach ($itemsPendientes as $alternativaItem) {
                     $this->crearReservaItemDesdeAlternativaItem($reserva, $alternativaItem, $fechaViajeDesde, $mapaPasajeros);
                 }
 
-                return $itemsPendientes->count();
+                return [$itemsPendientes->count(), $nombresOmitidos];
             });
         } catch (HttpException $e) {
             return response()->json(['code' => $e->getStatusCode(), 'message' => $e->getMessage()], $e->getStatusCode());
         }
 
+        [$cantidad, $nombresOmitidos] = $cantidad;
         $reserva->load(self::RELACIONES_DETALLE);
 
         return response()->json(array_merge(
-            ['code' => 200, 'message' => "{$cantidad} ítem(s) sincronizado(s) correctamente."],
+            [
+                'code' => 200,
+                'message' => "{$cantidad} ítem(s) sincronizado(s) correctamente."
+                    .($nombresOmitidos ? ' No se pasó: '.implode(', ', $nombresOmitidos).' (solo para pasajeros que ya no están en la reserva).' : ''),
+                'items_omitidos' => $nombresOmitidos,
+            ],
             $this->respuestaDetalle($reserva)
         ));
     }

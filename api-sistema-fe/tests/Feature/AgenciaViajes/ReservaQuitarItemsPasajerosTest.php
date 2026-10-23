@@ -15,8 +15,11 @@ use App\Models\AgenciaViajes\ReservaItemPasajero;
 use App\Models\AgenciaViajes\ReservaItemVueloPasajero;
 use App\Models\AgenciaViajes\ReservaPasajero;
 use App\Models\AgenciaViajes\ReservaVenta;
+use App\Services\AgenciaViajes\QuitarPasajeroReservaService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 use Tests\TestCase;
 
 // Fase D del plan "Proceso de reserva: facturación + 3 fixes" (2026-08-19)
@@ -185,12 +188,37 @@ class ReservaQuitarItemsPasajerosTest extends TestCase
     }
 
     // ── reserva-pasajeros ────────────────────────────────────────────────
+    // F4 etapa 1 (23-oct-2026): el endpoint quedó bloqueado; las reglas y la
+    // limpieza viven en QuitarPasajeroReservaService (lo usará "Modificar
+    // reserva"), y estos tests las prueban ahí. El ayudante devuelve una
+    // respuesta con el mismo formato que daba el endpoint.
+    private function quitarPasajero(ReservaPasajero $pasajero): JsonResponse
+    {
+        try {
+            app(QuitarPasajeroReservaService::class)->quitar($pasajero->fresh());
+        } catch (HttpException $e) {
+            return response()->json(['code' => $e->getStatusCode(), 'message' => $e->getMessage()], $e->getStatusCode());
+        }
+
+        return response()->json(['code' => 200]);
+    }
+
+    public function test_el_endpoint_de_quitar_pasajero_esta_bloqueado_hasta_modificar_reserva(): void
+    {
+        [$reserva, , , $pasajero1] = $this->crearReservaConDosPasajerosYDosItems();
+
+        $response = app(ReservaPasajeroController::class)->destroy((string) $pasajero1->id);
+
+        $this->assertSame(422, $response->getStatusCode());
+        $this->assertStringContainsString('Modificar reserva', $response->getData(true)['message']);
+        $this->assertSame(2, $reserva->pasajeros()->count());
+    }
 
     public function test_quitar_pasajero_exitoso_limpia_asignaciones_de_item(): void
     {
         [, , , $pasajero1] = $this->crearReservaConDosPasajerosYDosItems();
 
-        $response = app(ReservaPasajeroController::class)->destroy((string) $pasajero1->id);
+        $response = $this->quitarPasajero($pasajero1);
 
         $this->assertSame(200, $response->getStatusCode());
         $this->assertFalse(ReservaPasajero::where('id', $pasajero1->id)->exists());
@@ -201,10 +229,10 @@ class ReservaQuitarItemsPasajerosTest extends TestCase
     {
         [$reserva, , , $pasajero1, $pasajero2] = $this->crearReservaConDosPasajerosYDosItems();
 
-        app(ReservaPasajeroController::class)->destroy((string) $pasajero1->id);
+        $this->quitarPasajero($pasajero1);
         $this->assertSame(1, $reserva->pasajeros()->count());
 
-        $response = app(ReservaPasajeroController::class)->destroy((string) $pasajero2->id);
+        $response = $this->quitarPasajero($pasajero2);
 
         $this->assertSame(422, $response->getStatusCode());
         $this->assertTrue(ReservaPasajero::where('id', $pasajero2->id)->exists());
@@ -215,7 +243,7 @@ class ReservaQuitarItemsPasajerosTest extends TestCase
         [$reserva, , , $pasajero1] = $this->crearReservaConDosPasajerosYDosItems();
         $reserva->update(['estado' => 'cancelada']);
 
-        $response = app(ReservaPasajeroController::class)->destroy((string) $pasajero1->id);
+        $response = $this->quitarPasajero($pasajero1);
 
         $this->assertSame(422, $response->getStatusCode());
         $this->assertTrue(ReservaPasajero::where('id', $pasajero1->id)->exists());
@@ -230,7 +258,7 @@ class ReservaQuitarItemsPasajerosTest extends TestCase
             'reserva_item_ids' => [], 'reserva_pasajero_ids' => [$pasajero1->id],
         ]);
 
-        $response = app(ReservaPasajeroController::class)->destroy((string) $pasajero1->id);
+        $response = $this->quitarPasajero($pasajero1);
 
         $this->assertSame(422, $response->getStatusCode());
         $this->assertTrue(ReservaPasajero::where('id', $pasajero1->id)->exists());
@@ -253,7 +281,7 @@ class ReservaQuitarItemsPasajerosTest extends TestCase
 
         // pasajero2 nunca apareció en ningún ReservaVenta — debe poder
         // quitarse igual, aunque pasajero1 (otro, distinto) ya esté facturado.
-        $response = app(ReservaPasajeroController::class)->destroy((string) $pasajero2->id);
+        $response = $this->quitarPasajero($pasajero2);
 
         $this->assertSame(200, $response->getStatusCode(), json_encode($response->getData(true)));
         $this->assertFalse(ReservaPasajero::where('id', $pasajero2->id)->exists());
@@ -275,7 +303,7 @@ class ReservaQuitarItemsPasajerosTest extends TestCase
             'vuelo_fecha_ida' => '2026-10-01',
         ]);
 
-        $response = app(ReservaPasajeroController::class)->destroy((string) $pasajero1->id);
+        $response = $this->quitarPasajero($pasajero1);
 
         $this->assertSame(200, $response->getStatusCode(), json_encode($response->getData(true)));
         $this->assertFalse(ReservaPasajero::where('id', $pasajero1->id)->exists());
