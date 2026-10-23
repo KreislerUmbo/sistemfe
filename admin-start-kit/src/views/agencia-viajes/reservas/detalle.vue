@@ -27,10 +27,10 @@
                     class="btn btn-outline-secondary btn-sm">
                     <i class="fas fa-file-lines me-1"></i>Ver cotización
                 </router-link>
-                <button v-if="mostrarBotonesFacturar" class="btn btn-primary btn-sm" @click="abrirModalFacturarSimple">
+                <button v-if="mostrarBotonesFacturar" class="btn btn-primary btn-sm" @click="mostrarModalFacturarSimple = true">
                     <i class="fas fa-file-invoice me-1"></i>Facturar
                 </button>
-                <button v-if="mostrarBotonesFacturar" class="btn btn-outline-primary btn-sm" @click="abrirModalFacturarEspecial">
+                <button v-if="mostrarBotonesFacturar" class="btn btn-outline-primary btn-sm" @click="mostrarModalFacturarEspecial = true">
                     <i class="fas fa-layer-group me-1"></i>Facturación especial
                 </button>
                 <button v-if="mostrarMarcarFacturacionExterna" class="btn btn-outline-secondary btn-sm" @click="abrirModalFacturacionExterna">
@@ -883,264 +883,11 @@
             </div>
         </div>
 
-        <!-- Modal facturar — facturación múltiple por grupo de pasajeros
-             (2026-08-20, sobre la base de la Fase A del 2026-08-19). Cada
-             pasajero pertenece a un único comprobante: se elige a quién se
-             factura en esta pasada, con su propio cliente/texto, y el
-             modal se puede repetir para los pasajeros que van quedando. -->
-        <div class="modal fade" tabindex="-1" :class="{ show: mostrarModalFacturarEspecial, 'd-block': mostrarModalFacturarEspecial }"
-            style="background:rgba(0,0,0,.5)" v-if="mostrarModalFacturarEspecial">
-            <div class="modal-dialog modal-lg">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h6 class="modal-title fw-bold">Facturación especial</h6>
-                        <button class="btn-close" @click="mostrarModalFacturarEspecial = false"></button>
-                    </div>
-                    <div class="modal-body">
-                        <!-- F1 (hoja de ruta, 23-oct-2026): todos los pasajeros ya tienen
-                             comprobante pero quedan servicios (p. ej. vuelos a un RUC y el
-                             resto a otro): esta factura lleva solo los servicios marcados. -->
-                        <div v-if="soloServiciosPendientes" class="alert alert-info small py-2 mb-3">
-                            <i class="fas fa-circle-info me-1"></i>
-                            Todos los pasajeros ya tienen comprobante: esta factura lleva <strong>solo los servicios que marques</strong> abajo, al cliente que elijas.
-                        </div>
-                        <template v-else>
-                        <label class="form-label small fw-semibold text-secondary">¿A quién le facturamos en esta pasada?</label>
-                        <p class="small text-muted mb-2">Marca uno o varios pasajeros — cada grupo genera su propio comprobante, con su propio cliente. Puedes repetir esto después para el resto.</p>
-                        </template>
-                        <div v-if="!soloServiciosPendientes" class="d-flex flex-column gap-1 mb-3" style="max-height:160px;overflow-y:auto">
-                            <label v-for="p in pasajerosPendientesFacturar" :key="p.id" class="small d-flex align-items-center border rounded px-2 py-1" style="cursor:pointer">
-                                <input type="checkbox" class="form-check-input me-2" v-model="facturarEspecialForm.pasajero_ids" :value="p.id">
-                                {{ nombrePasajero(p) }}
-                            </label>
-                        </div>
-
-                        <!-- F1 (23-oct-2026): a nombre de quién sale el comprobante, arriba y
-                             siempre visible (antes estaba al final y se ocultaba con un bloqueo). -->
-                        <div class="mb-3">
-                            <label class="form-label small fw-semibold text-secondary">¿A nombre de quién sale el comprobante?</label>
-                            <ClienteComprobanteSelector v-model="clienteSeleccionado" @nuevo="(texto) => abrirModalClienteRapido('especial', texto)" />
-                            <small class="text-muted">Los pasajeros marcados deciden qué servicios entran; el cliente decide a nombre de quién (DNI o RUC).</small>
-                        </div>
-
-                        <div v-if="cargandoPreviewFacturaEspecial" class="small text-muted mb-2">
-                            <span class="spinner-border spinner-border-sm me-1"></span>Calculando...
-                        </div>
-
-                        <template v-else-if="previewFacturaEspecial">
-                            <!-- Ítems compartidos (ej. habitación doble) que no entran todavía
-                                 porque falta incluir a otro pasajero que también los usa. -->
-                            <div v-if="previewFacturaEspecial.items_pendientes_por_pasajero_faltante.length > 0" class="alert alert-secondary small py-2 mb-2">
-                                <i class="fas fa-circle-info me-1"></i>
-                                {{ previewFacturaEspecial.items_pendientes_por_pasajero_faltante.length }} servicio(s) compartido(s) quedan pendientes porque los comparte otro pasajero que no está en esta selección:
-                                {{ previewFacturaEspecial.items_pendientes_por_pasajero_faltante.map(it => it.nombre).join(', ') }}.
-                            </div>
-
-                            <!-- Ítems sin ningún pasajero asignado (el caso más común hoy:
-                                 ajustes, extras) — el vendedor decide a mano si van en este
-                                 comprobante. -->
-                            <div v-if="previewFacturaEspecial.items_sin_asignar_disponibles.length > 0" class="mb-2">
-                                <label class="form-label small fw-semibold text-secondary">Otros servicios sin pasajero asignado (agrégalos si corresponden acá)</label>
-                                <div class="d-flex flex-column gap-1" style="max-height:120px;overflow-y:auto">
-                                    <label v-for="it in previewFacturaEspecial.items_sin_asignar_disponibles" :key="it.reserva_item_id" class="small d-flex justify-content-between align-items-center border rounded px-2 py-1" style="cursor:pointer">
-                                        <span>
-                                            <input type="checkbox" class="form-check-input me-2" v-model="facturarEspecialForm.reserva_item_ids_manual" :value="it.reserva_item_id">
-                                            {{ it.nombre }}
-                                        </span>
-                                        <span class="fw-semibold">{{ moneda }} {{ Number(it.total).toFixed(2) }}</span>
-                                    </label>
-                                </div>
-                            </div>
-
-                            <!-- Anticipos disponibles (Tier 0 — conexión Adelantos↔Reservas):
-                                 un anticipo es de la reserva completa, no de un pasajero puntual —
-                                 no se reparte solo entre sub-facturas, el vendedor elige a mano. -->
-                            <div v-if="!previewFacturaEspecial.bloqueado_tributario && (previewFacturaEspecial.anticipos_disponibles?.length ?? 0) > 0" class="mb-2">
-                                <label class="form-label small fw-semibold text-secondary">Aplicar anticipos ya cobrados a este comprobante</label>
-                                <table class="table table-sm table-bordered align-middle mb-0">
-                                    <thead class="table-light">
-                                        <tr>
-                                            <th style="width:36px;"></th>
-                                            <th>Anticipo</th>
-                                            <th class="text-end" style="width:120px;">Disponible</th>
-                                            <th style="width:130px;">Monto a aplicar</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <tr v-for="a in anticiposEspecialSeleccionables" :key="a.id">
-                                            <td>
-                                                <input type="checkbox" v-model="a.seleccionado" @change="onAnticipoEspecialToggle(a)">
-                                            </td>
-                                            <td>Anticipo #{{ a.advance_id }}</td>
-                                            <td class="text-end">{{ a.moneda === 'USD' ? 'US$' : 'S/' }} {{ a.disponible.toFixed(2) }}</td>
-                                            <td>
-                                                <input type="number" class="form-control form-control-sm" min="0" :max="a.disponible" step="0.01"
-                                                    v-model.number="a.monto_aplicado" :disabled="!a.seleccionado">
-                                            </td>
-                                        </tr>
-                                    </tbody>
-                                </table>
-                            </div>
-
-                            <!-- Moneda del comprobante (2026-09-24, pedido del usuario: "tengo
-                                 mi cotización en dólares, pero el cliente pide que le facture en
-                                 soles") — SIEMPRE visible, mismo criterio que sucursal/tributario
-                                 de acá abajo. Por defecto factura en la moneda de la cotización
-                                 (sin override); cambiarla exige tipo de cambio + motivo, ver
-                                 ReservaFacturacionController::resolverMonedaFacturacion(). -->
-                            <div class="mb-2">
-                                <label class="form-label small fw-semibold text-secondary">
-                                    <i class="fas fa-money-bill-wave me-1"></i>Moneda del comprobante
-                                </label>
-                                <select class="form-select form-select-sm" v-model="monedaFacturacionSeleccionada">
-                                    <option value="PEN">Soles (PEN)</option>
-                                    <option value="USD">Dólares (USD)</option>
-                                </select>
-                                <small class="text-muted d-block mt-1">Cotización en {{ moneda }}.</small>
-                            </div>
-                            <div v-if="requiereOverrideMoneda" class="row g-2 mb-2">
-                                <div class="col-6">
-                                    <label class="form-label small fw-semibold text-secondary">
-                                        Tipo de cambio ({{ moneda }} → {{ monedaFacturacionSeleccionada }})
-                                    </label>
-                                    <input type="number" step="0.0001" min="0.0001" class="form-control form-control-sm"
-                                        v-model.number="tipoCambioFacturacion" placeholder="Ej: 3.75">
-                                    <small v-if="previewFacturaEspecial.tipo_cambio_sugerido" class="text-muted">
-                                        Sugerido SUNAT del día: {{ previewFacturaEspecial.tipo_cambio_sugerido }}
-                                    </small>
-                                </div>
-                                <div class="col-6">
-                                    <label class="form-label small fw-semibold text-secondary">Motivo del cambio de moneda</label>
-                                    <input type="text" class="form-control form-control-sm" v-model="motivoCambioMonedaFacturacion"
-                                        placeholder="Ej: cliente pidió el comprobante en soles">
-                                </div>
-                            </div>
-
-                            <!-- Sucursal (2026-09-24, pedido del usuario) — SIEMPRE visible,
-                                 bloqueado_tributario o no, para que se vea aunque el bloqueo
-                                 dispare (bug real: antes vivía solo dentro del v-else de abajo,
-                                 así que una reserva que mezcla tratamientos nunca la mostraba en
-                                 "Facturar" simple — solo era visible si el subgrupo elegido daba
-                                 OK). Solo visible con permiso can_switch_branch, mismo criterio
-                                 que sale/register.vue. La serie real se elige sola por
-                                 sucursal+tipo+moneda (SerieComprobanteService), esto solo deja
-                                 elegir DESDE QUÉ sucursal se emite. -->
-                            <div v-if="puedeCambiarSucursal" class="mb-2">
-                                <label class="form-label small fw-semibold text-secondary">
-                                    <i class="fas fa-store me-1"></i>Sucursal (define la serie según moneda)
-                                </label>
-                                <select class="form-select form-select-sm" v-model.number="branchIdFacturacion">
-                                    <option v-for="b in sucursales" :key="b.id" :value="b.id">{{ b.name }}</option>
-                                </select>
-                            </div>
-
-                            <!-- Serie visible (2026-09-24, pedido del usuario: "debe aparecer
-                                 de manera visible la serie") — antes solo se veía la sucursal, el
-                                 vendedor no sabía si iba a salir F001/B001/F002 hasta confirmar.
-                                 Solo lectura (resolverParaUsuario() no reserva ningún
-                                 correlativo), se recalcula solo con sucursal/tipo/moneda. -->
-                            <div v-if="previewFacturaEspecial.serie_resuelta" class="mb-2 small">
-                                <span class="text-muted">Serie a emitir:</span>
-                                <span class="badge bg-light text-dark border ms-1">{{ previewFacturaEspecial.serie_resuelta }}</span>
-                            </div>
-
-                            <!-- F1 (23-oct-2026): qué entra y cuánto, también con bloqueo. -->
-                            <DetalleComprobantePreview :preview="previewFacturaEspecial" :anticipo-aplicado="anticipoEspecialAplicado" />
-                            <!-- Pedido del usuario (2026-09-24): "debo poder ver lo que he
-                                 seleccionado si fue gravado o exonerado" — siempre visible,
-                                 mismo criterio que la sucursal de arriba. -->
-                            <div v-if="(previewFacturaEspecial.items_por_destino_tributario?.length ?? 0) > 0" class="mb-2 small">
-                                <span class="text-muted d-block mb-1">Tratamiento tributario de lo seleccionado:</span>
-                                <span v-for="it in previewFacturaEspecial.items_por_destino_tributario" :key="it.reserva_item_id"
-                                    class="badge bg-light text-dark border me-1 mb-1">
-                                    {{ it.nombre }}: {{ etiquetaTipAfeIgv(it.tip_afe_igv) }}
-                                </span>
-                            </div>
-
-                            <!-- Guardia tributario: este subgrupo mezcla tratamientos distintos,
-                                 no se puede emitir un solo comprobante — se avisa acá y se oculta
-                                 el resto del formulario. -->
-                            <div v-if="previewFacturaEspecial.bloqueado_tributario" class="alert alert-danger mb-0">
-                                <i class="fas fa-triangle-exclamation me-2"></i>
-                                <strong>No se puede facturar este grupo así todavía.</strong>
-                                <p class="mb-1 mt-1">{{ previewFacturaEspecial.motivo }}</p>
-                                <!-- 2026-09-23 — antes solo se sabía QUÉ valores distintos había
-                                     (ej. "nacional" y "amazonia"), nunca cuál servicio era cuál. -->
-                                <ul v-if="(previewFacturaEspecial.items_por_destino_tributario?.length ?? 0) > 0" class="mb-0 small ps-3">
-                                    <li v-for="it in previewFacturaEspecial.items_por_destino_tributario" :key="it.reserva_item_id">
-                                        {{ it.nombre }} — <span class="fw-semibold">{{ it.destino_tributario }}</span>
-                                    </li>
-                                </ul>
-                                <!-- Caso 3 Amazonía (2026-09-24) — CTA directo, sin tener que ir a
-                                     buscar el servicio en el tab "Servicios". -->
-                                <button v-if="(previewFacturaEspecial.items_sin_confirmar_ids?.length ?? 0) > 0" type="button"
-                                    class="btn btn-sm btn-outline-danger mt-2"
-                                    @click="abrirModalConfirmarTributario(itemsPorIds(previewFacturaEspecial.items_sin_confirmar_ids ?? []))">
-                                    Confirmar tratamiento tributario
-                                </button>
-                                <!-- F1 (23-oct-2026): que se vea que hay más pasos detrás del bloqueo. -->
-                                <p class="small mb-0 mt-2 text-body-secondary">
-                                    Cuando lo resuelvas, aquí aparecen el tipo de comprobante (factura o boleta), el total y los anticipos para descontar.
-                                </p>
-                            </div>
-
-                            <template v-else>
-                                <div class="row g-2 mb-2">
-                                    <div class="col-6">
-                                        <label class="form-label small fw-semibold text-secondary">Tipo de comprobante</label>
-                                        <select class="form-select form-select-sm" v-model="facturarEspecialForm.tipo_comprobante_codigo">
-                                            <option value="01" :disabled="!clienteEspecialTieneRuc">Factura</option>
-                                            <option value="03">Boleta</option>
-                                        </select>
-                                        <small v-if="!clienteEspecialTieneRuc" class="text-muted">El cliente elegido no tiene RUC — solo puede recibir boleta.</small>
-                                    </div>
-                                    <div class="col-6">
-                                        <label class="form-label small fw-semibold text-secondary">Total de este comprobante</label>
-                                        <input v-if="!requiereOverrideMoneda || previewFacturaEspecial.tipo_cambio_aplicado" type="text"
-                                            class="form-control form-control-sm fw-bold" disabled
-                                            :value="`${monedaFacturacionSeleccionada} ${Number(previewFacturaEspecial.total ?? 0).toFixed(2)}`">
-                                        <input v-else type="text" class="form-control form-control-sm fw-bold text-danger" disabled
-                                            value="Ingresa un tipo de cambio para calcular el total">
-                                    </div>
-                                </div>
-
-                                <div class="mb-2">
-                                    <label class="form-label small fw-semibold text-secondary">Texto para este comprobante (opcional)</label>
-                                    <textarea class="form-control form-control-sm" rows="2"
-                                        placeholder="Ej: Servicio de movilización y hospedaje — comisión de servicio"
-                                        v-model="facturarEspecialForm.texto_personalizado"></textarea>
-                                </div>
-
-                                <p class="small text-muted mb-0">
-                                    <i class="fas fa-info-circle me-1"></i>La venta se crea pendiente de cobro. Cobrarla y
-                                    enviarla a SUNAT se hace después, desde la pantalla normal de ventas.
-                                </p>
-                            </template>
-                        </template>
-
-                        <p v-else-if="facturarEspecialForm.pasajero_ids.length === 0" class="small text-muted mb-0">
-                            Marca al menos un pasajero para ver la propuesta de comprobante.
-                        </p>
-                    </div>
-                    <div class="modal-footer">
-                        <!-- F1 (23-oct-2026): a nombre de quién sale, junto al botón. -->
-                        <span class="small me-auto" :class="clienteSeleccionado ? 'text-body' : 'text-warning-emphasis'">
-                            <template v-if="clienteSeleccionado">
-                                Se emitirá a: <strong>{{ clienteSeleccionado.full_name }}</strong> — {{ clienteSeleccionado.n_document }}
-                            </template>
-                            <template v-else><i class="fas fa-circle-exclamation me-1"></i>Elige a nombre de quién sale el comprobante</template>
-                        </span>
-                        <button class="btn btn-outline-secondary btn-sm" @click="mostrarModalFacturarEspecial = false">Cerrar</button>
-                        <button v-if="previewFacturaEspecial && !previewFacturaEspecial.bloqueado_tributario" class="btn btn-primary btn-sm"
-                            :disabled="facturando || cargandoPreviewFacturaEspecial || facturarEspecialForm.pasajero_ids.length === 0 || !clienteSeleccionado
-                                || (soloServiciosPendientes && facturarEspecialForm.reserva_item_ids_manual.length === 0)"
-                            @click="confirmarFacturacionEspecial">
-                            <span v-if="facturando" class="spinner-border spinner-border-sm me-1"></span>Emitir comprobante de este grupo
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
+        <!-- Facturación especial: por grupo de pasajeros o solo servicios, a un
+             cliente elegido (components/AgenciaViajes/FacturarReservaEspecialModal.vue). -->
+        <FacturarReservaEspecialModal v-if="mostrarModalFacturarEspecial && reserva" :reserva="reserva" :moneda="moneda"
+            :pasajeros-pendientes="pasajerosPendientesFacturar" :recargar="cargarReserva"
+            @cerrar="mostrarModalFacturarEspecial = false" @confirmar-tributario="confirmarTributarioDesdeFacturar" />
 
         <!-- Registrar cliente rápido (2026-09-24) — mismo componente que ya
              usa Venta Directa (ClientFormQuick: búsqueda de RUC/DNI vía
@@ -1162,160 +909,11 @@
             </div>
         </div>
 
-        <!-- Modal facturar simple (2026-08-20) — camino de todos los días:
-             un solo responsable de pago, cubre a TODOS los pasajeros y
-             ítems pendientes en un único comprobante, sin pedir selección
-             manual. Usa el cliente de la cotización directamente. Mismo
-             backend (preparar-factura/facturar) que Facturación especial —
-             solo arma el payload distinto: pasajero_ids = todos los
-             pendientes, reserva_item_ids_manual = todo el pool sin asignar. -->
-        <div class="modal fade" tabindex="-1" :class="{ show: mostrarModalFacturarSimple, 'd-block': mostrarModalFacturarSimple }"
-            style="background:rgba(0,0,0,.5)" v-if="mostrarModalFacturarSimple">
-            <div class="modal-dialog">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h6 class="modal-title fw-bold">Facturar reserva</h6>
-                        <button class="btn-close" @click="mostrarModalFacturarSimple = false"></button>
-                    </div>
-                    <div class="modal-body">
-                        <!-- F1 (23-oct-2026): a nombre de quién sale, siempre visible. -->
-                        <div class="border rounded px-2 py-1 small bg-light mb-3">
-                            <i class="fas fa-user-tie me-1 text-muted"></i>A nombre de:
-                            <strong>{{ cabecera?.cliente?.full_name ?? 'Sin cliente' }}</strong>{{ cabecera?.cliente?.n_document ? ` — ${cabecera.cliente.n_document}` : '' }}
-                            <span class="text-muted">(cliente de la cotización; para otro DNI o RUC usa <strong>Facturación especial</strong>)</span>
-                        </div>
-                        <div v-if="cargandoFacturarSimple" class="small text-muted mb-2">
-                            <span class="spinner-border spinner-border-sm me-1"></span>Calculando...
-                        </div>
-
-                        <template v-else-if="previewFacturaSimple">
-                            <!-- Moneda del comprobante (2026-09-24) — mismo bloque que
-                                 "Facturación especial", ver ese modal para el detalle del
-                                 porqué. -->
-                            <div class="mb-2">
-                                <label class="form-label small fw-semibold text-secondary">
-                                    <i class="fas fa-money-bill-wave me-1"></i>Moneda del comprobante
-                                </label>
-                                <select class="form-select form-select-sm" v-model="monedaFacturacionSeleccionada">
-                                    <option value="PEN">Soles (PEN)</option>
-                                    <option value="USD">Dólares (USD)</option>
-                                </select>
-                                <small class="text-muted d-block mt-1">Cotización en {{ moneda }}.</small>
-                            </div>
-                            <div v-if="requiereOverrideMoneda" class="row g-2 mb-2">
-                                <div class="col-6">
-                                    <label class="form-label small fw-semibold text-secondary">
-                                        Tipo de cambio ({{ moneda }} → {{ monedaFacturacionSeleccionada }})
-                                    </label>
-                                    <input type="number" step="0.0001" min="0.0001" class="form-control form-control-sm"
-                                        v-model.number="tipoCambioFacturacion" placeholder="Ej: 3.75">
-                                    <small v-if="previewFacturaSimple.tipo_cambio_sugerido" class="text-muted">
-                                        Sugerido SUNAT del día: {{ previewFacturaSimple.tipo_cambio_sugerido }}
-                                    </small>
-                                </div>
-                                <div class="col-6">
-                                    <label class="form-label small fw-semibold text-secondary">Motivo del cambio de moneda</label>
-                                    <input type="text" class="form-control form-control-sm" v-model="motivoCambioMonedaFacturacion"
-                                        placeholder="Ej: cliente pidió el comprobante en soles">
-                                </div>
-                            </div>
-
-                            <!-- Sucursal + tratamiento tributario (2026-09-24) — SIEMPRE
-                                 visibles, bloqueado_tributario o no. Bug real corregido: antes
-                                 vivían solo dentro del v-else de abajo, así que una reserva que
-                                 mezcla tratamientos (caso real, ver bloqueo abajo) nunca los
-                                 mostraba en "Facturar" simple. -->
-                            <div v-if="puedeCambiarSucursal" class="mb-2">
-                                <label class="form-label small fw-semibold text-secondary">
-                                    <i class="fas fa-store me-1"></i>Sucursal (define la serie según moneda)
-                                </label>
-                                <select class="form-select form-select-sm" v-model.number="branchIdFacturacion">
-                                    <option v-for="b in sucursales" :key="b.id" :value="b.id">{{ b.name }}</option>
-                                </select>
-                            </div>
-                            <!-- Serie visible (2026-09-24) — mismo bloque que "Facturación
-                                 especial", ver ese modal para el detalle del porqué. -->
-                            <div v-if="previewFacturaSimple.serie_resuelta" class="mb-2 small">
-                                <span class="text-muted">Serie a emitir:</span>
-                                <span class="badge bg-light text-dark border ms-1">{{ previewFacturaSimple.serie_resuelta }}</span>
-                            </div>
-                            <!-- F1 (23-oct-2026): qué entra y cuánto, también con bloqueo. -->
-                            <DetalleComprobantePreview :preview="previewFacturaSimple" />
-                            <div v-if="(previewFacturaSimple.items_por_destino_tributario?.length ?? 0) > 0" class="mb-2 small">
-                                <span class="text-muted d-block mb-1">Tratamiento tributario de lo seleccionado:</span>
-                                <span v-for="it in previewFacturaSimple.items_por_destino_tributario" :key="it.reserva_item_id"
-                                    class="badge bg-light text-dark border me-1 mb-1">
-                                    {{ it.nombre }}: {{ etiquetaTipAfeIgv(it.tip_afe_igv) }}
-                                </span>
-                            </div>
-
-                            <div v-if="previewFacturaSimple.bloqueado_tributario" class="alert alert-danger mb-0">
-                                <i class="fas fa-triangle-exclamation me-2"></i>
-                                <strong>No se puede facturar toda la reserva en un solo comprobante.</strong>
-                                <p class="mb-1 mt-1">{{ previewFacturaSimple.motivo }}</p>
-                                <ul v-if="(previewFacturaSimple.items_por_destino_tributario?.length ?? 0) > 0" class="mb-1 small ps-3">
-                                    <li v-for="it in previewFacturaSimple.items_por_destino_tributario" :key="it.reserva_item_id">
-                                        {{ it.nombre }} — <span class="fw-semibold">{{ it.destino_tributario }}</span>
-                                    </li>
-                                </ul>
-                                <button v-if="(previewFacturaSimple.items_sin_confirmar_ids?.length ?? 0) > 0" type="button"
-                                    class="btn btn-sm btn-outline-danger mb-2"
-                                    @click="abrirModalConfirmarTributario(itemsPorIds(previewFacturaSimple.items_sin_confirmar_ids ?? []))">
-                                    Confirmar tratamiento tributario
-                                </button>
-                                <!-- Solo si el bloqueo es por mezcla: con servicios de la Amazonía sin
-                                     confirmar, separar en grupos no lo resuelve (F1, 23-oct-2026). -->
-                                <p v-if="(previewFacturaSimple.items_sin_confirmar_ids?.length ?? 0) === 0" class="mb-0 small">Usa <strong>Facturación especial</strong> para separar los grupos con distinto tratamiento tributario.</p>
-                            </div>
-
-                            <template v-else>
-                                <p class="small text-muted mb-2">
-                                    <template v-if="pasajerosPendientesFacturar.length > 0">
-                                        Se factura de una vez a {{ pasajerosPendientesFacturar.length }} pasajero(s) pendiente(s)
-                                    </template>
-                                    <template v-else>
-                                        Se facturan {{ itemsPendientesDeFacturarCount }} ítem(s) sueltos pendientes (todos los pasajeros ya fueron facturados)
-                                    </template>
-                                    , a nombre de
-                                    <strong>{{ cabecera?.cliente?.full_name ?? 'el cliente de la cotización' }}</strong>.
-                                    ¿Necesitas dividirlo en varios comprobantes o cambiar el cliente? Usa <strong>Facturación especial</strong>.
-                                </p>
-                                <div class="row g-2 mb-2">
-                                    <div class="col-6">
-                                        <label class="form-label small fw-semibold text-secondary">Tipo de comprobante</label>
-                                        <select class="form-select form-select-sm" v-model="facturarSimpleForm.tipo_comprobante_codigo">
-                                            <option value="01" :disabled="!clienteSimpleTieneRuc">Factura</option>
-                                            <option value="03">Boleta</option>
-                                        </select>
-                                        <small v-if="!clienteSimpleTieneRuc" class="text-muted">Este cliente no tiene RUC — solo puede recibir boleta.</small>
-                                    </div>
-                                    <div class="col-6">
-                                        <label class="form-label small fw-semibold text-secondary">Total a facturar</label>
-                                        <input v-if="!requiereOverrideMoneda || previewFacturaSimple.tipo_cambio_aplicado" type="text"
-                                            class="form-control form-control-sm fw-bold" disabled
-                                            :value="`${monedaFacturacionSeleccionada} ${Number(previewFacturaSimple.total ?? 0).toFixed(2)}`">
-                                        <input v-else type="text" class="form-control form-control-sm fw-bold text-danger" disabled
-                                            value="Ingresa un tipo de cambio para calcular el total">
-                                    </div>
-                                </div>
-                                <p class="small text-muted mb-0">
-                                    <i class="fas fa-info-circle me-1"></i>La venta se crea pendiente de cobro. Cobrarla y
-                                    enviarla a SUNAT se hace después, desde la pantalla normal de ventas.
-                                </p>
-                            </template>
-                        </template>
-                    </div>
-                    <div class="modal-footer">
-                        <button class="btn btn-outline-secondary btn-sm" @click="mostrarModalFacturarSimple = false">Cerrar</button>
-                        <button v-if="previewFacturaSimple && !previewFacturaSimple.bloqueado_tributario" class="btn btn-primary btn-sm"
-                            :disabled="facturando || cargandoFacturarSimple"
-                            @click="confirmarFacturacionSimple">
-                            <span v-if="facturando" class="spinner-border spinner-border-sm me-1"></span>Emitir comprobante
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
+        <!-- Facturar: toda la reserva pendiente en un comprobante, al cliente
+             de la cotización (components/AgenciaViajes/FacturarReservaSimpleModal.vue). -->
+        <FacturarReservaSimpleModal v-if="mostrarModalFacturarSimple && reserva" :reserva="reserva" :cabecera="cabecera"
+            :moneda="moneda" :pasajeros-pendientes="pasajerosPendientesFacturar" :items-pendientes-count="itemsPendientesDeFacturarCount"
+            :recargar="cargarReserva" @cerrar="mostrarModalFacturarSimple = false" @confirmar-tributario="confirmarTributarioDesdeFacturar" />
 
         <!-- Facturación externa por tenant + por reserva -->
         <div class="modal fade" tabindex="-1" :class="{ show: mostrarModalFacturacionExterna, 'd-block': mostrarModalFacturacionExterna }"
@@ -1374,7 +972,7 @@
                              empresa, el anticipo tiene que ir a su RUC. -->
                         <div class="mb-2">
                             <label class="form-label small fw-semibold">¿A nombre de quién sale el anticipo?</label>
-                            <ClienteComprobanteSelector v-model="clienteAnticipo" @nuevo="(texto) => abrirModalClienteRapido('anticipo', texto)" />
+                            <ClienteComprobanteSelector v-model="clienteAnticipo" @nuevo="abrirModalClienteRapido" />
                             <small class="text-muted">Usa el mismo cliente al que vas a facturar la reserva: el anticipo solo se descuenta de una factura de ese cliente.</small>
                         </div>
                         <div class="mb-2">
@@ -1414,20 +1012,19 @@
 </template>
 
 <script setup lang="ts">
-import { destinoParaIgvAgencia, IGV_EXONERADO } from '@/helpers/tratamientoTributarioAgencia';
+import { destinoParaIgvAgencia, etiquetaTipAfeIgv, IGV_EXONERADO } from '@/helpers/tratamientoTributarioAgencia';
+import { etiquetaTipoPax } from '@/helpers/reservaPasajero';
 import CampoHora from '@/components/CampoHora.vue';
 import CampoFecha from '@/components/CampoFecha.vue';
-import { ref, reactive, computed, onMounted, watch } from 'vue';
+import { ref, reactive, computed, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import httpClient from '@/helpers/http-client';
-import { useAuthStore } from '@/stores/auth';
-import type { Branch } from '@/types/cash-session';
 import ClientFormQuick from '@/components/Sales/ClientFormQuick.vue';
 import ClienteComprobanteSelector, { type ClienteComprobante } from '@/components/AgenciaViajes/ClienteComprobanteSelector.vue';
-import DetalleComprobantePreview from '@/components/AgenciaViajes/DetalleComprobantePreview.vue';
+import FacturarReservaSimpleModal from '@/components/AgenciaViajes/FacturarReservaSimpleModal.vue';
+import FacturarReservaEspecialModal from '@/components/AgenciaViajes/FacturarReservaEspecialModal.vue';
 import { reservaService } from '@/services/admin/reservaService';
-import { reservaFacturacionService, type PrepararFacturaResponse, type AnticipoDisponiblePreview } from '@/services/admin/reservaFacturacionService';
 import { reservaAnticipoService } from '@/services/admin/reservaAnticipoService';
 import { reservaPasajeroService } from '@/services/admin/reservaPasajeroService';
 import { reservaItemService, type ActualizarVueloPayload } from '@/services/admin/reservaItemService';
@@ -1451,49 +1048,6 @@ type TVueSwalInstance = typeof Swal & typeof Swal.fire;
 const route = useRoute();
 const reservaId = Number(route.params.id);
 const toast = useToast();
-const authStore = useAuthStore();
-
-// Sucursal/serie al facturar (2026-09-24, pedido del usuario: "la agencia
-// factura en dólares y en soles... debo poder elegir la serie") — mismo
-// patrón exacto que sale/register.vue: solo visible con can_switch_branch,
-// la serie real se resuelve sola por sucursal+tipo+moneda en el backend
-// (SerieComprobanteService), esto solo deja elegir DESDE QUÉ sucursal.
-const puedeCambiarSucursal = computed(() => authStore.isPermitedRoute('can_switch_branch'));
-const sucursales = ref<Branch[]>([]);
-const branchIdFacturacion = ref<number | undefined>(undefined);
-
-const cargarSucursalesSiCorresponde = async () => {
-    if (!puedeCambiarSucursal.value || sucursales.value.length > 0) return;
-    try {
-        const res = await httpClient.get<{ branches: Branch[] }>('branches?active=1');
-        sucursales.value = res.data.branches;
-        branchIdFacturacion.value = sucursales.value[0]?.id;
-    } catch {
-        // No bloquea el resto del modal — sin sucursales cargadas, el
-        // selector queda vacío y el backend simplemente usa la sucursal
-        // propia del usuario (branch_id nunca viaja).
-    }
-};
-
-// Facturar en moneda distinta a la de la cotización (2026-09-24 — caso
-// real: cotización en USD, cliente pide el comprobante en soles). Un solo
-// set de refs para los dos modales de facturar (Simple/Especial) — nunca
-// están abiertos a la vez, y ambos se resetean al abrir. Ver
-// ReservaFacturacionController::resolverMonedaFacturacion() — el tipo de
-// cambio sugerido de SUNAT es editable, nunca se aplica sin que el
-// vendedor lo confirme (motivo obligatorio en el backend).
-const monedaFacturacionSeleccionada = ref<'PEN' | 'USD'>('PEN');
-const tipoCambioFacturacion = ref<number | null>(null);
-const motivoCambioMonedaFacturacion = ref('');
-const requiereOverrideMoneda = computed(
-    () => monedaFacturacionSeleccionada.value !== moneda.value
-);
-
-const resetearOverrideMoneda = () => {
-    monedaFacturacionSeleccionada.value = moneda.value;
-    tipoCambioFacturacion.value = null;
-    motivoCambioMonedaFacturacion.value = '';
-};
 
 const reserva = ref<Reserva | null>(null);
 const resumen = ref<ReservaResumenItem[]>([]);
@@ -1660,8 +1214,6 @@ const sincronizarItems = async () => {
 };
 
 const iniciales = (nombre?: string | null) => (nombre || '?').split(' ').map((x) => x[0]).slice(0, 2).join('').toUpperCase();
-const etiquetaTipoPax = (t?: string | null) => t === 'adulto' ? 'Adulto' : t === 'nino' ? 'Niño' : t === 'infante' ? 'Infante' : '—';
-const nombrePasajero = (p: ReservaPasajero) => p.nombre || `${etiquetaTipoPax(p.tipo_pax)} #${p.id} (sin datos todavía)`;
 
 // ── Pasajeros ────────────────────────────────────────────────────────
 const esPasajeroCompleto = (p: ReservaPasajero) => !!(p.nombre && p.documento);
@@ -1961,14 +1513,6 @@ const requiereConfirmacionTributaria = (it: ReservaItem): boolean =>
 
 const itemsPorIds = (ids: number[]): ReservaItem[] =>
     (reserva.value?.items ?? []).filter((it) => ids.includes(it.id));
-
-// Compartido con el resumen "Tratamiento tributario de este comprobante" de
-// los modales de facturar (simple/especial) — mismo criterio de etiquetas.
-const etiquetaTipAfeIgv = (codigo: string): string => {
-    if (codigo === '20') return 'Exonerado';
-    if (codigo === '30') return 'Inafecto';
-    return 'Gravado';
-};
 
 const badgeTratamientoTributario = (it: ReservaItem): { texto: string; clase: string } => {
     const destino = destinoTributarioItem(it);
@@ -2578,148 +2122,25 @@ const confirmarTratamientoTributario = async () => {
     }
 };
 
-// ── Facturar (Fase A del plan "Proceso de reserva: facturación + 3 fixes",
-// 2026-08-19; facturación múltiple por grupo de pasajeros, 2026-08-20) ──
-// Ya no hay un solo Sale por reserva: el vendedor elige a qué pasajeros
-// factura en esta pasada (cada pasajero termina en un único comprobante),
-// con su propio cliente/texto, y puede repetir el proceso para el resto
-// sin cerrar el modal.
+// ── Facturar y Facturación especial: cada modal es un componente
+// (FacturarReservaSimpleModal / FacturarReservaEspecialModal, salieron de
+// aquí en la auditoría reserva + facturación, punto 5, 23-oct-2026). Esta
+// pantalla solo los abre y les pasa la reserva. ──
+const mostrarModalFacturarSimple = ref(false);
 const mostrarModalFacturarEspecial = ref(false);
-const facturando = ref(false);
-const facturarEspecialForm = ref<{
-    pasajero_ids: number[];
-    reserva_item_ids_manual: number[];
-    tipo_comprobante_codigo: '01' | '03';
-    texto_personalizado: string;
-}>({
-    pasajero_ids: [], reserva_item_ids_manual: [], tipo_comprobante_codigo: '01', texto_personalizado: '',
-});
 
-// Guardia tributario (2026-08-20): antes de dejar confirmar, se consulta
-// GET preparar-factura con los pasajeros/ítems marcados. Si el subgrupo
-// mezcla tratamientos tributarios distintos (ej. exonerado Amazonía +
-// gravado nacional), no se puede emitir un solo comprobante — se avisa
-// acá, ANTES de llenar todo el formulario. El guardia real (el que de
-// verdad protege) vive en el backend (POST facturar también lo revisa) —
-// esto es solo para que el usuario no pierda tiempo ni se lleve una
-// sorpresa al confirmar.
-const previewFacturaEspecial = ref<PrepararFacturaResponse | null>(null);
-const cargandoPreviewFacturaEspecial = ref(false);
-
-// Tier 0 — conexión Adelantos↔Reservas: picker de anticipos disponibles
-// para esta sub-factura, mismo patrón (checkbox + monto editable) que ya
-// usa sale/register.vue para aplicar adelantos en el checkout normal. Un
-// anticipo es de la reserva completa, no de un pasajero puntual — no se
-// reparte automáticamente entre sub-facturas sin adivinar (mismo criterio
-// ya usado con ítems compartidos), el vendedor elige a mano.
-type AnticipoCheckoutItem = AnticipoDisponiblePreview & { seleccionado: boolean; monto_aplicado: number };
-const anticiposEspecialSeleccionables = ref<AnticipoCheckoutItem[]>([]);
-// F1 (23-oct-2026): lo que se descuenta, para el "saldo a cobrar" del detalle.
-const anticipoEspecialAplicado = computed(() => anticiposEspecialSeleccionables.value
-    .filter((a) => a.seleccionado)
-    .reduce((s, a) => s + (Number(a.monto_aplicado) || 0), 0));
-
-const onAnticipoEspecialToggle = (a: AnticipoCheckoutItem) => {
-    a.monto_aplicado = a.seleccionado ? a.disponible : 0;
+// Un modal pide confirmar servicios de la Amazonía antes de poder emitir.
+const confirmarTributarioDesdeFacturar = (itemIds: number[]) => {
+    abrirModalConfirmarTributario(itemsPorIds(itemIds));
 };
 
-const refrescarPreviewFacturaEspecial = async () => {
-    if (!reserva.value || facturarEspecialForm.value.pasajero_ids.length === 0) {
-        previewFacturaEspecial.value = null;
-        return;
-    }
-    cargandoPreviewFacturaEspecial.value = true;
-    try {
-        previewFacturaEspecial.value = await reservaFacturacionService.prepararFactura(
-            reserva.value.id,
-            facturarEspecialForm.value.pasajero_ids,
-            facturarEspecialForm.value.reserva_item_ids_manual,
-            {
-                monedaFacturacion: monedaFacturacionSeleccionada.value,
-                tipoCambioConversion: tipoCambioFacturacion.value,
-                branchId: branchIdFacturacion.value,
-                tipoComprobanteCodigo: facturarEspecialForm.value.tipo_comprobante_codigo
-            }
-        );
-        // Sugerencia SUNAT del día — solo prellena si el vendedor todavía
-        // no escribió nada a mano (nunca pisa un valor ya editado).
-        if (requiereOverrideMoneda.value && tipoCambioFacturacion.value === null && previewFacturaEspecial.value.tipo_cambio_sugerido) {
-            tipoCambioFacturacion.value = previewFacturaEspecial.value.tipo_cambio_sugerido;
-        }
-        // Reconstruye el picker preservando lo ya tildado por advance_id —
-        // el preview se re-dispara con cada cambio de pasajeros/ítems.
-        const previas = new Map(anticiposEspecialSeleccionables.value.map((a) => [a.advance_id, a]));
-        anticiposEspecialSeleccionables.value = (previewFacturaEspecial.value?.anticipos_disponibles ?? []).map((a) => {
-            const previa = previas.get(a.advance_id);
-            return { ...a, seleccionado: previa?.seleccionado ?? false, monto_aplicado: previa?.monto_aplicado ?? 0 };
-        });
-        // Sugerencia de cliente (no vinculante): si el backend detectó que
-        // el único pasajero seleccionado ya tiene perfil de cliente
-        // propio, se lo ofrece como punto de partida — el vendedor puede
-        // cambiarlo con el buscador igual.
-        if (previewFacturaEspecial.value?.cliente_sugerido && !clienteSeleccionado.value) {
-            clienteSeleccionado.value = previewFacturaEspecial.value.cliente_sugerido;
-        }
-    } catch (error: any) {
-        toast.error(error.response?.data?.message ?? 'No se pudo calcular la vista previa de la factura');
-        previewFacturaEspecial.value = null;
-    } finally {
-        cargandoPreviewFacturaEspecial.value = false;
-    }
-};
-
-watch(() => [...facturarEspecialForm.value.pasajero_ids, ...facturarEspecialForm.value.reserva_item_ids_manual], () => {
-    if (mostrarModalFacturarEspecial.value) refrescarPreviewFacturaEspecial();
-});
-
-// Cambiar de moneda o editar el tipo de cambio recalcula el total
-// convertido — cualquiera de los dos modales que esté abierto (nunca los
-// dos a la vez).
-const refrescarPreviewFacturacionAbierta = () => {
-    if (mostrarModalFacturarEspecial.value) refrescarPreviewFacturaEspecial();
-    else if (mostrarModalFacturarSimple.value) refrescarPreviewFacturaSimple();
-};
-
-// Cambiar de moneda (select) es una sola acción discreta — refresca al
-// toque. Editar el tipo de cambio es un <input type="number"> que dispara
-// un evento por cada tecla — sin debounce, cada dígito escrito disparaba
-// un preview nuevo (bug real reportado: "me refresca cada vez que escribo
-// un número"). Mismo patrón que el buscador de ClienteComprobanteSelector.vue.
-watch(monedaFacturacionSeleccionada, refrescarPreviewFacturacionAbierta);
-
-let tipoCambioFacturacionTimeout: ReturnType<typeof setTimeout> | undefined;
-watch(tipoCambioFacturacion, () => {
-    clearTimeout(tipoCambioFacturacionTimeout);
-    tipoCambioFacturacionTimeout = setTimeout(refrescarPreviewFacturacionAbierta, 500);
-});
-
-// Serie visible (2026-09-24) — cambiar de sucursal o de tipo de
-// comprobante (Boleta/Factura) también cambia qué serie se resuelve.
-// facturarSimpleForm todavía no existe en este punto del script (se
-// declara más abajo) — su propio watch vive junto a su declaración, ver
-// más abajo, para evitar "Cannot access before initialization" (watch()
-// evalúa el getter una vez de inmediato al registrarse).
-watch(branchIdFacturacion, refrescarPreviewFacturacionAbierta);
-watch(() => facturarEspecialForm.value.tipo_comprobante_codigo, () => {
-    if (mostrarModalFacturarEspecial.value) refrescarPreviewFacturaEspecial();
-});
-
-// ── A nombre de quién sale el comprobante (F1, 23-oct-2026): el buscador
-// vive en components/AgenciaViajes/ClienteComprobanteSelector.vue (mismo
-// endpoint `clients?search=` que Ventas); acá solo queda el cliente elegido
-// de cada modal y el alta rápida compartida. ──
-const clienteSeleccionado = ref<ClienteComprobante | null>(null);
-
-// Cliente nuevo sin salir del modal (2026-09-24) — mismo componente que ya
-// usa Venta Directa. Si lo que se tipeó en el buscador parece un RUC (11
-// dígitos), se precarga en el form rápido para no reescribirlo dos veces.
-// `destinoClienteRapido`: a qué modal vuelve el cliente creado.
+// Cliente nuevo sin salir del modal de anticipo (2026-09-24): mismo
+// componente que Venta Directa. Si lo escrito parece un RUC (11 dígitos), se
+// precarga. (Facturación especial tiene su propio alta rápida.)
 const mostrarModalClienteRapido = ref(false);
 const clienteRapidoInitialData = ref<{ type_document: string; n_document: string } | null>(null);
-const destinoClienteRapido = ref<'especial' | 'anticipo'>('especial');
 
-const abrirModalClienteRapido = (destino: 'especial' | 'anticipo', texto: string) => {
-    destinoClienteRapido.value = destino;
+const abrirModalClienteRapido = (texto: string) => {
     clienteRapidoInitialData.value = /^\d{11}$/.test(texto)
         ? { type_document: 'RUC', n_document: texto }
         : null;
@@ -2727,204 +2148,8 @@ const abrirModalClienteRapido = (destino: 'especial' | 'anticipo', texto: string
 };
 
 const onClienteRapidoCreado = (cliente: ClienteComprobante) => {
-    if (destinoClienteRapido.value === 'anticipo') {
-        clienteAnticipo.value = cliente;
-    } else {
-        clienteSeleccionado.value = cliente;
-    }
+    clienteAnticipo.value = cliente;
     mostrarModalClienteRapido.value = false;
-};
-
-// Factura ('01') exige RUC (cod_tipo_doc_sunat='6', Catálogo 06 SUNAT) —
-// el backend ya lo valida y rechaza con 422 (2026-08-24), esto solo evita
-// que el vendedor llegue a intentarlo. Corre cada vez que cambia el
-// cliente elegido, no solo al abrir el modal.
-const clienteEspecialTieneRuc = computed(() => clienteSeleccionado.value?.cod_tipo_doc_sunat === '6');
-watch(clienteSeleccionado, (cliente) => {
-    if (cliente && cliente.cod_tipo_doc_sunat !== '6' && facturarEspecialForm.value.tipo_comprobante_codigo === '01') {
-        facturarEspecialForm.value.tipo_comprobante_codigo = '03';
-    }
-});
-
-// F1 (hoja de ruta, 23-oct-2026): sin pasajeros pendientes pero con servicios
-// por facturar, el modal factura solo servicios; se mandan todos los pasajeros
-// (ya facturados) igual que "Facturar" — ver pasajeroIdsParaFacturarSimple().
-const soloServiciosPendientes = computed(() => pasajerosPendientesFacturar.value.length === 0);
-
-const abrirModalFacturarEspecial = () => {
-    facturarEspecialForm.value = {
-        pasajero_ids: pasajeroIdsParaFacturarSimple(),
-        reserva_item_ids_manual: [],
-        tipo_comprobante_codigo: '01',
-        texto_personalizado: '',
-    };
-    previewFacturaEspecial.value = null;
-    anticiposEspecialSeleccionables.value = [];
-    clienteSeleccionado.value = null;
-    resetearOverrideMoneda();
-    mostrarModalFacturarEspecial.value = true;
-    refrescarPreviewFacturaEspecial();
-    cargarSucursalesSiCorresponde();
-};
-
-const confirmarFacturacionEspecial = async () => {
-    if (!reserva.value || !clienteSeleccionado.value) return;
-    if (requiereOverrideMoneda.value && (!tipoCambioFacturacion.value || !motivoCambioMonedaFacturacion.value.trim())) {
-        toast.error('Indica el tipo de cambio y el motivo para facturar en una moneda distinta a la de la cotización.');
-        return;
-    }
-    facturando.value = true;
-    try {
-        const anticiposAplicados = anticiposEspecialSeleccionables.value
-            .filter((a) => a.seleccionado && a.monto_aplicado > 0)
-            .map((a) => ({ advance_id: a.advance_id, amount: a.monto_aplicado }));
-
-        const res = await reservaFacturacionService.facturar(reserva.value.id, {
-            pasajero_ids: facturarEspecialForm.value.pasajero_ids,
-            reserva_item_ids_manual: facturarEspecialForm.value.reserva_item_ids_manual,
-            tipo_comprobante_codigo: facturarEspecialForm.value.tipo_comprobante_codigo,
-            client_id: clienteSeleccionado.value.id,
-            texto_personalizado: facturarEspecialForm.value.texto_personalizado || null,
-            advance_applications: anticiposAplicados.length > 0 ? anticiposAplicados : undefined,
-            branch_id: puedeCambiarSucursal.value ? branchIdFacturacion.value : undefined,
-            moneda_facturacion: requiereOverrideMoneda.value ? monedaFacturacionSeleccionada.value : undefined,
-            tipo_cambio_conversion: requiereOverrideMoneda.value ? tipoCambioFacturacion.value : undefined,
-            motivo_cambio_moneda: requiereOverrideMoneda.value ? motivoCambioMonedaFacturacion.value.trim() : undefined,
-        });
-        toast.success(`${res.message} (serie ${res.serie})`);
-        // Refresca la reserva completa (marca pasajeros/ítems como
-        // facturados) — la venta creada se gestiona desde su propia
-        // pantalla (cobrar, enviar a SUNAT), no acá.
-        await cargarReserva();
-        // Iterativo: si todavía quedan pasajeros pendientes, el modal
-        // sigue abierto listo para la próxima pasada; si no queda
-        // ninguno, se cierra solo — evita que el vendedor tenga que
-        // cerrar/reabrir para facturar al resto del grupo.
-        if (pasajerosPendientesFacturar.value.length > 0) {
-            facturarEspecialForm.value = {
-                pasajero_ids: [], reserva_item_ids_manual: [], tipo_comprobante_codigo: '01', texto_personalizado: '',
-            };
-            previewFacturaEspecial.value = null;
-            anticiposEspecialSeleccionables.value = [];
-            clienteSeleccionado.value = null;
-            resetearOverrideMoneda();
-        } else {
-            mostrarModalFacturarEspecial.value = false;
-        }
-    } catch (error: any) {
-        // El guardia tributario también puede rechazar acá (422,
-        // bloqueado_tributario) si el preview no llegó a correr a tiempo
-        // — mismo mensaje, nunca deja crear la venta a medias.
-        toast.error(error.response?.data?.message ?? 'No se pudo facturar la reserva');
-    } finally {
-        facturando.value = false;
-    }
-};
-
-// ── Facturar simple (2026-08-20) — camino de todos los días: un solo
-// responsable de pago, cubre a TODOS los pasajeros pendientes (sin
-// selección manual) usando el cliente de la cotización. Mismo backend
-// que Facturación especial: arma el payload automáticamente en vez de
-// pedírselo al vendedor.
-const mostrarModalFacturarSimple = ref(false);
-const cargandoFacturarSimple = ref(false);
-const previewFacturaSimple = ref<PrepararFacturaResponse | null>(null);
-const facturarSimpleForm = ref<{ tipo_comprobante_codigo: '01' | '03' }>({ tipo_comprobante_codigo: '01' });
-
-// Serie visible (2026-09-24) — cambiar Boleta/Factura cambia qué serie se
-// resuelve. Ver el watch gemelo de facturarEspecialForm más arriba.
-watch(() => facturarSimpleForm.value.tipo_comprobante_codigo, () => {
-    if (mostrarModalFacturarSimple.value) refrescarPreviewFacturaSimple();
-});
-
-// Cuando ya no queda ningún pasajero pendiente pero sí ítems sueltos sin
-// cubrir (ver itemsPendientesDeFacturarCount), el backend acepta
-// re-enviar pasajero_ids ya facturados SOLO para arrastrar esos ítems
-// (resolverSeleccion() los ignora para armar líneas, los usa nada más
-// para no violar el "pasajero_ids requerido, mínimo 1") — sin esto, un
-// ítem compartido/sin asignar que quedó huérfano después de facturar a
-// todos los pasajeros nunca tendría forma de facturarse.
-const pasajeroIdsParaFacturarSimple = () => {
-    const pendientes = pasajerosPendientesFacturar.value.map((p) => p.id);
-    if (pendientes.length > 0) return pendientes;
-    return (reserva.value?.pasajeros ?? []).map((p) => p.id);
-};
-
-// Mismo criterio que clienteEspecialTieneRuc: "Facturar simple" usa
-// siempre el cliente fijo de la cotización, sin buscador — si no tiene
-// RUC, arranca directo en boleta.
-const clienteSimpleTieneRuc = computed(() => cabecera.value?.cliente?.cod_tipo_doc_sunat === '6');
-
-const refrescarPreviewFacturaSimple = async () => {
-    if (!reserva.value) return;
-    cargandoFacturarSimple.value = true;
-    try {
-        const pasajeroIds = pasajeroIdsParaFacturarSimple();
-        const opciones = {
-            monedaFacturacion: monedaFacturacionSeleccionada.value,
-            tipoCambioConversion: tipoCambioFacturacion.value,
-            branchId: branchIdFacturacion.value,
-            tipoComprobanteCodigo: facturarSimpleForm.value.tipo_comprobante_codigo
-        };
-        // Primer preview: descubre qué ítems sin asignar hay disponibles.
-        const primerPreview = await reservaFacturacionService.prepararFactura(reserva.value.id, pasajeroIds, [], opciones);
-        const idsSinAsignar = (primerPreview.items_sin_asignar_disponibles ?? []).map((it) => it.reserva_item_id);
-        // Segundo preview: los agrega todos, para que el total refleje
-        // realmente "toda la reserva pendiente" — el modo simple no
-        // pregunta cuáles, se asume que todos van en este único
-        // comprobante.
-        previewFacturaSimple.value = idsSinAsignar.length > 0
-            ? await reservaFacturacionService.prepararFactura(reserva.value.id, pasajeroIds, idsSinAsignar, opciones)
-            : primerPreview;
-        if (requiereOverrideMoneda.value && tipoCambioFacturacion.value === null && previewFacturaSimple.value.tipo_cambio_sugerido) {
-            tipoCambioFacturacion.value = previewFacturaSimple.value.tipo_cambio_sugerido;
-        }
-    } catch (error: any) {
-        toast.error(error.response?.data?.message ?? 'No se pudo calcular la vista previa de la factura');
-        mostrarModalFacturarSimple.value = false;
-    } finally {
-        cargandoFacturarSimple.value = false;
-    }
-};
-
-const abrirModalFacturarSimple = async () => {
-    if (!reserva.value) return;
-    previewFacturaSimple.value = null;
-    facturarSimpleForm.value = { tipo_comprobante_codigo: clienteSimpleTieneRuc.value ? '01' : '03' };
-    resetearOverrideMoneda();
-    mostrarModalFacturarSimple.value = true;
-    cargarSucursalesSiCorresponde();
-    await refrescarPreviewFacturaSimple();
-};
-
-const confirmarFacturacionSimple = async () => {
-    if (!reserva.value || !cabecera.value?.cliente?.id) return;
-    if (requiereOverrideMoneda.value && (!tipoCambioFacturacion.value || !motivoCambioMonedaFacturacion.value.trim())) {
-        toast.error('Indica el tipo de cambio y el motivo para facturar en una moneda distinta a la de la cotización.');
-        return;
-    }
-    facturando.value = true;
-    try {
-        const pasajeroIds = pasajeroIdsParaFacturarSimple();
-        const idsSinAsignar = (previewFacturaSimple.value?.items_sin_asignar_disponibles ?? []).map((it) => it.reserva_item_id);
-        const res = await reservaFacturacionService.facturar(reserva.value.id, {
-            pasajero_ids: pasajeroIds,
-            reserva_item_ids_manual: idsSinAsignar,
-            tipo_comprobante_codigo: facturarSimpleForm.value.tipo_comprobante_codigo,
-            client_id: cabecera.value.cliente.id,
-            branch_id: puedeCambiarSucursal.value ? branchIdFacturacion.value : undefined,
-            moneda_facturacion: requiereOverrideMoneda.value ? monedaFacturacionSeleccionada.value : undefined,
-            tipo_cambio_conversion: requiereOverrideMoneda.value ? tipoCambioFacturacion.value : undefined,
-            motivo_cambio_moneda: requiereOverrideMoneda.value ? motivoCambioMonedaFacturacion.value.trim() : undefined,
-        });
-        mostrarModalFacturarSimple.value = false;
-        toast.success(`${res.message} (serie ${res.serie})`);
-        await cargarReserva();
-    } catch (error: any) {
-        toast.error(error.response?.data?.message ?? 'No se pudo facturar la reserva');
-    } finally {
-        facturando.value = false;
-    }
 };
 
 // ── Cobrar anticipo (Tier 0 — conexión Adelantos↔Reservas, 2026-08-21) ──

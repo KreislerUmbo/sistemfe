@@ -16,3 +16,11 @@ export const NOTA_EXONERADO_AGENCIA = 'En Agencia, el exonerado viene de la Amaz
 export function destinoParaIgvAgencia<T extends string | null | undefined>(tipAfeIgv: string | null | undefined, destinoActual: T): T | 'amazonia' {
   return tipAfeIgv === IGV_EXONERADO ? 'amazonia' : destinoActual;
 }
+
+// Etiqueta del código SUNAT de IGV, con los mismos nombres que retail
+// (detalle de la reserva y modales de facturar).
+export function etiquetaTipAfeIgv(codigo: string | null | undefined): string {
+  if (codigo === '20') return 'Exonerado';
+  if (codigo === '30') return 'Inafecto';
+  return 'Gravado';
+}
