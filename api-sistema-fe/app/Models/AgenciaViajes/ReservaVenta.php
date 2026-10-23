@@ -43,6 +43,58 @@ class ReservaVenta extends Model
             ->values();
     }
 
+    // Una Nota de Crédito 07 aceptada por SUNAT sobre una venta que salió de
+    // facturar una reserva. Salió de NotaElectronicaController (auditoría
+    // reserva + facturación, 23-oct-2026) para poder probarla sin SUNAT.
+    // - total: anula la venta entera; la reserva vuelve a poder facturar esos
+    //   pasajeros y servicios (auditoría 2026-08-24).
+    // - parcial: acredita solo algunas líneas (sale_detail_id); se liberan
+    //   los servicios que esas líneas agrupaban (sale_detail_items), y si no
+    //   queda ninguno es lo mismo que la total (auditoría 2026-09-23).
+    public static function liberarPorNotaDeCredito(int $saleId, string $tipoAfectacion, iterable $saleDetailIdsAcreditados): void
+    {
+        if ($tipoAfectacion === 'total') {
+            self::where('sale_id', $saleId)->delete();
+
+            return;
+        }
+
+        if ($tipoAfectacion !== 'parcial') {
+            return;
+        }
+
+        $reservaVenta = self::where('sale_id', $saleId)->first();
+        if (! $reservaVenta) {
+            return;
+        }
+
+        $reservaItemIdsAcreditados = SaleDetailItem::whereIn('sale_detail_id', collect($saleDetailIdsAcreditados)->filter()->values())
+            ->pluck('reserva_item_id');
+
+        $itemIdsRestantes = collect($reservaVenta->reserva_item_ids ?? [])
+            ->diff($reservaItemIdsAcreditados)
+            ->values()
+            ->all();
+
+        if (empty($itemIdsRestantes)) {
+            $reservaVenta->delete();
+
+            return;
+        }
+
+        // La parte de un tour acreditada deja de contar como cobrada: si no,
+        // la factura que cierra el tour la descontaba igual y cobraba de menos.
+        $partesRestantes = collect($reservaVenta->partes_tour ?? [])
+            ->reject(fn (array $parte) => $reservaItemIdsAcreditados->contains($parte['reserva_item_id']))
+            ->values()
+            ->all();
+
+        $reservaVenta->update([
+            'reserva_item_ids' => $itemIdsRestantes,
+            'partes_tour' => $partesRestantes ?: null,
+        ]);
+    }
+
     public function reserva()
     {
         return $this->belongsTo(Reserva::class, 'reserva_id');

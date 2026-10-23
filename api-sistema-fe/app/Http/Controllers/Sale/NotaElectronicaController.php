@@ -8,7 +8,6 @@ use App\Http\Resources\Product\ProductCollection;
 use App\Models\Advance\Advance;
 use App\Models\Advance\AdvanceRefund;
 use App\Models\AgenciaViajes\ReservaVenta;
-use App\Models\AgenciaViajes\SaleDetailItem;
 use App\Models\Company;
 use App\Models\Product\Product;
 use App\Models\Sale\Note;
@@ -417,57 +416,16 @@ class NotaElectronicaController extends Controller
                 }
             }
 
-            // ── Reserva de Agencia de Viajes: liberar el ReservaVenta
-            // original (hallazgo de auditoría 2026-08-24) ── una NC total
-            // (07, tipo_afectacion='total') anula por completo la venta
-            // original. Si esa venta nació de facturar una reserva
-            // (ReservaFacturacionController::store()), su ReservaVenta debe
-            // desaparecer acá — si no, pasajerosYaFacturadosIds()/
-            // itemsYaFacturadosIds() siguen contando esa venta como
-            // vigente para siempre y la reserva queda bloqueada para
-            // volver a facturar esos pasajeros/ítems, sin ningún camino de
-            // recuperación por la API (no hay ningún ReservaVenta::update()/
-            // delete() en el resto del proyecto salvo este y
-            // SaleController::destroy()).
-            if ($nota->tipo_doc === '07' && $nota->tipo_afectacion === 'total') {
-                ReservaVenta::where('sale_id', $nota->sale_id)->delete();
-            }
-
-            // ── Reserva de Agencia de Viajes: liberar ítems puntuales
-            // acreditados por una NC PARCIAL (hallazgo de auditoría
-            // 2026-09-23) — el caso 'total' de arriba borra el ReservaVenta
-            // completo, pero una NC 'parcial' (acredita solo algunas
-            // líneas del Sale, vía sale_detail_id) nunca tocaba
-            // reserva_item_ids: el servicio acreditado quedaba "facturado"
-            // para siempre, sin ningún camino de recuperación por la API
-            // (ni volver a facturarlo, ni editarlo, ni quitarlo de la
-            // reserva — ReservaItemController::destroy() también lo
-            // bloquea por yaFacturado). sale_detail_items es la tabla
-            // puente real entre una línea de comprobante y los
-            // reserva_item que agrupa (ver ReservaFacturacionController::
-            // store(), "$linea['grupo']").
-            if ($nota->tipo_doc === '07' && $nota->tipo_afectacion === 'parcial') {
-                $reservaVenta = ReservaVenta::where('sale_id', $nota->sale_id)->first();
-
-                if ($reservaVenta) {
-                    $saleDetailIdsAcreditados = $nota->note_details->pluck('sale_detail_id')->filter()->values();
-
-                    $reservaItemIdsAcreditados = SaleDetailItem::whereIn('sale_detail_id', $saleDetailIdsAcreditados)
-                        ->pluck('reserva_item_id');
-
-                    $itemIdsRestantes = collect($reservaVenta->reserva_item_ids ?? [])
-                        ->diff($reservaItemIdsAcreditados)
-                        ->values()
-                        ->all();
-
-                    if (empty($itemIdsRestantes)) {
-                        // Se acreditó todo lo que este ReservaVenta cubría —
-                        // funcionalmente equivalente al caso 'total' de arriba.
-                        $reservaVenta->delete();
-                    } else {
-                        $reservaVenta->update(['reserva_item_ids' => $itemIdsRestantes]);
-                    }
-                }
+            // ── Reserva de Agencia de Viajes: la NC libera lo que acredita
+            // (total: la venta entera; parcial: las líneas acreditadas), para
+            // que la reserva pueda volver a facturarlo. Reglas en
+            // ReservaVenta::liberarPorNotaDeCredito().
+            if ($nota->tipo_doc === '07') {
+                ReservaVenta::liberarPorNotaDeCredito(
+                    (int) $nota->sale_id,
+                    (string) $nota->tipo_afectacion,
+                    $nota->note_details->pluck('sale_detail_id')
+                );
             }
 
             // ── Si esta nota es el reembolso de un adelanto ────────────

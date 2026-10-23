@@ -333,53 +333,70 @@ class ReservaController extends Controller
             ->mapWithKeys(fn ($salidaId) => [$salidaId => $operacion->foto((int) $salidaId)])
             ->filter();
 
-        DB::transaction(function () use ($reserva, $motivo) {
-            $reserva->update([
-                'estado' => 'cancelada',
-                'fecha_cancelacion' => now(),
-                'motivo_cancelacion' => $motivo,
-            ]);
-
-            // Liberación de cupo (§4.2, entra en el primer lanzamiento aunque
-            // el resto de 4.2 sea Fase 2) — mismo movimiento que el
-            // incremento al aceptar, en reversa.
-            $alternativa = $reserva->alternativa;
-            $opcionElegida = $alternativa?->opcionMayoristaElegida;
-
-            if ($opcionElegida && $opcionElegida->salida_mayorista_id) {
-                $totalPax = $reserva->pasajeros()->count();
-                SalidaMayorista::where('id', $opcionElegida->salida_mayorista_id)->decrement('cupo_ocupado', $totalPax);
-            }
-
-            // Bug real (2026-09-22, a raíz de la pregunta "qué debe pasar
-            // al cancelar una reserva"): SalidaOperativa (tablero de
-            // despacho — guía/vehículo, DISTINTA de SalidaMayorista de
-            // arriba) nunca se desenganchaba acá. Los ítems de una reserva
-            // cancelada seguían contando pax/reservas en
-            // SalidaOperativaController::resumenSalida() como si fueran a
-            // viajar — inconsistente con ReporteOperativoController, que sí
-            // excluye reservas canceladas (scope 'estado != cancelada').
-            // Mismo patrón que reprogramar(): desenganchar primero, la
-            // salida vieja NUNCA se borra a mano acá, puede seguir
-            // compartida por otra reserva activa —
-            // eliminarSiQuedoVacia() decide.
-            $salidasOperativasAfectadas = ReservaItem::where('reserva_id', $reserva->id)
-                ->whereNotNull('salida_operativa_id')
-                ->pluck('salida_operativa_id')
-                ->unique();
-
-            if ($salidasOperativasAfectadas->isNotEmpty()) {
-                ReservaItem::where('reserva_id', $reserva->id)->update(['salida_operativa_id' => null]);
-
-                // Fila 13, fase 2c (D15): la reserva cancelada ya no va en
-                // ningún vehículo.
-                DB::table('salida_vehiculo_reservas')->where('reserva_id', $reserva->id)->delete();
-
-                foreach ($salidasOperativasAfectadas as $salidaId) {
-                    SalidaOperativa::eliminarSiQuedoVacia($salidaId);
+        try {
+            DB::transaction(function () use ($reserva, $motivo) {
+                // Auditoría reserva + facturación (23-oct-2026): se repiten los dos
+                // chequeos bajo el mismo lock que usa ReservaFacturacionController::
+                // store(). Sin esto, una factura emitida en el mismo instante podía
+                // quedar en una reserva cancelada, y dos clics devolvían el cupo
+                // del mayorista dos veces.
+                $reservaLocked = Reserva::where('id', $reserva->id)->lockForUpdate()->firstOrFail();
+                if ($reservaLocked->estado === 'cancelada') {
+                    throw new HttpException(422, 'La reserva ya está cancelada.');
                 }
-            }
-        });
+                if (ReservaVenta::where('reserva_id', $reserva->id)->exists()) {
+                    throw new HttpException(422, 'No se puede cancelar: esta reserva ya tiene una venta/comprobante asociado.');
+                }
+
+                $reserva->update([
+                    'estado' => 'cancelada',
+                    'fecha_cancelacion' => now(),
+                    'motivo_cancelacion' => $motivo,
+                ]);
+
+                // Liberación de cupo (§4.2, entra en el primer lanzamiento aunque
+                // el resto de 4.2 sea Fase 2) — mismo movimiento que el
+                // incremento al aceptar, en reversa.
+                $alternativa = $reserva->alternativa;
+                $opcionElegida = $alternativa?->opcionMayoristaElegida;
+
+                if ($opcionElegida && $opcionElegida->salida_mayorista_id) {
+                    $totalPax = $reserva->pasajeros()->count();
+                    SalidaMayorista::where('id', $opcionElegida->salida_mayorista_id)->decrement('cupo_ocupado', $totalPax);
+                }
+
+                // Bug real (2026-09-22, a raíz de la pregunta "qué debe pasar
+                // al cancelar una reserva"): SalidaOperativa (tablero de
+                // despacho — guía/vehículo, DISTINTA de SalidaMayorista de
+                // arriba) nunca se desenganchaba acá. Los ítems de una reserva
+                // cancelada seguían contando pax/reservas en
+                // SalidaOperativaController::resumenSalida() como si fueran a
+                // viajar — inconsistente con ReporteOperativoController, que sí
+                // excluye reservas canceladas (scope 'estado != cancelada').
+                // Mismo patrón que reprogramar(): desenganchar primero, la
+                // salida vieja NUNCA se borra a mano acá, puede seguir
+                // compartida por otra reserva activa —
+                // eliminarSiQuedoVacia() decide.
+                $salidasOperativasAfectadas = ReservaItem::where('reserva_id', $reserva->id)
+                    ->whereNotNull('salida_operativa_id')
+                    ->pluck('salida_operativa_id')
+                    ->unique();
+
+                if ($salidasOperativasAfectadas->isNotEmpty()) {
+                    ReservaItem::where('reserva_id', $reserva->id)->update(['salida_operativa_id' => null]);
+
+                    // Fila 13, fase 2c (D15): la reserva cancelada ya no va en
+                    // ningún vehículo.
+                    DB::table('salida_vehiculo_reservas')->where('reserva_id', $reserva->id)->delete();
+
+                    foreach ($salidasOperativasAfectadas as $salidaId) {
+                        SalidaOperativa::eliminarSiQuedoVacia($salidaId);
+                    }
+                }
+            });
+        } catch (HttpException $e) {
+            return response()->json(['code' => $e->getStatusCode(), 'message' => $e->getMessage()], $e->getStatusCode());
+        }
 
         $avisosSalidas = $fotosAntes->map(fn (array $antes, $salidaId) => [
             'salida_id' => (int) $salidaId,

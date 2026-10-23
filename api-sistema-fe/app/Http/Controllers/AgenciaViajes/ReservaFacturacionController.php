@@ -445,6 +445,12 @@ class ReservaFacturacionController extends Controller
                     ->where('id', $reserva->id)
                     ->lockForUpdate()
                     ->firstOrFail();
+                // Se repite bajo el lock (auditoría 23-oct-2026): una cancelación
+                // en el mismo instante no puede dejar una factura en una reserva
+                // cancelada. ReservaController::cancelar() usa el mismo lock.
+                if ($reservaLocked->estado !== 'activa') {
+                    throw new HttpException(422, 'Solo se puede facturar una reserva activa.');
+                }
                 if ($reservaLocked->facturacion_externa) {
                     throw new HttpException(403, self::MENSAJE_FACTURACION_EXTERNA);
                 }
@@ -879,13 +885,14 @@ class ReservaFacturacionController extends Controller
         // bloquea explícitamente con 422 antes de intentar crear un Sale
         // vacío, ver más abajo.
         // Con pasajeros ya facturados (reenvío para arrastrar ítems sueltos)
-        // no hay pasajeros nuevos, así que tampoco parte de tour que cobrar.
-        ['items' => $itemsTourFacturables, 'partes' => $partesTour] = $pasajerosRepetidos->isNotEmpty()
-            ? ['items' => collect(), 'partes' => []]
-            : $this->partesDeTour($reserva, $itemsTour, $pasajeroIdsSolicitados, $pasajerosYaFacturados);
+        // normalmente no queda parte de tour que cobrar; sí la hay si una NC
+        // parcial acreditó la línea del tour (auditoría 23-oct-2026).
+        // partesDeTour() mira quién pagó cada tour, no quién está facturado.
+        ['items' => $itemsTourFacturables, 'partes' => $partesTour] =
+            $this->partesDeTour($reserva, $itemsTour, $pasajeroIdsSolicitados);
 
         $itemsFinal = $pasajerosRepetidos->isNotEmpty()
-            ? $itemsManual
+            ? $itemsManual->concat($itemsTourFacturables)->values()
             : $itemsAuto->concat($itemsTourFacturables)->concat($itemsManual)->unique('id')->values();
 
         $pasajerosPendientes = $reserva->pasajeros->pluck('id')
@@ -949,32 +956,40 @@ class ReservaFacturacionController extends Controller
     // - la factura que cobra a los últimos pasajeros pendientes se lleva
     //   "vendido − lo ya cobrado", así la suma de las partes da exacto el
     //   total de la línea (cierra = true);
-    // - que un pasajero no se cobre dos veces ya lo asegura
-    //   pasajerosYaFacturadosIds(); acá solo se calculan montos.
+    // - que un pasajero no pague dos veces el mismo tour: cada tour mira
+    //   quién ya lo pagó (las ventas que tienen ese tour), no quién está
+    //   facturado en general. Así, si una NC parcial acreditó la línea del
+    //   tour, esa parte vuelve a estar pendiente aunque el pasajero siga
+    //   facturado por otro servicio (auditoría 23-oct-2026).
     // Una carga con IGV mezclado son varias líneas: cada una se reparte con
     // la misma proporción. Devuelve los ítems que entran en esta factura y
     // sus partes [{reserva_item_id, monto, cierra}].
-    private function partesDeTour(Reserva $reserva, Collection $itemsTour, array $pasajeroIdsSolicitados, Collection $pasajerosYaFacturados): array
+    private function partesDeTour(Reserva $reserva, Collection $itemsTour, array $pasajeroIdsSolicitados): array
     {
         $pagan = $reserva->pasajeros->where('tipo_pax', '!=', 'infante')->values();
         // Solo infantes: nadie tiene precio, se reparte entre todos por igual.
         $participantes = $pagan->isNotEmpty() ? $pagan : $reserva->pasajeros->values();
 
-        $pendientes = $participantes->whereNotIn('id', $pasajerosYaFacturados->all())->values();
-        $delGrupo = $pendientes->whereIn('id', $pasajeroIdsSolicitados)->values();
-
-        if ($delGrupo->isEmpty()) {
-            return ['items' => collect(), 'partes' => []];
-        }
-
-        $cierra = $delGrupo->count() === $pendientes->count();
         $comoDatos = fn (Collection $pasajeros) => $pasajeros
             ->map(fn ($p) => ['tipo_pax' => $p->tipo_pax, 'residencia' => $p->residencia])
             ->all();
         $partesPrevias = $reserva->ventas->flatMap(fn (ReservaVenta $rv) => $rv->partes_tour ?? []);
 
         $partes = [];
+        $itemsQueEntran = collect();
         foreach ($itemsTour as $item) {
+            $yaPagaron = $reserva->ventas
+                ->filter(fn (ReservaVenta $rv) => in_array($item->id, $rv->reserva_item_ids ?? [], true)
+                    || collect($rv->partes_tour ?? [])->contains('reserva_item_id', $item->id))
+                ->flatMap(fn (ReservaVenta $rv) => $rv->reserva_pasajero_ids ?? []);
+            $pendientes = $participantes->whereNotIn('id', $yaPagaron->all())->values();
+            $delGrupo = $pendientes->whereIn('id', $pasajeroIdsSolicitados)->values();
+
+            if ($delGrupo->isEmpty()) {
+                continue;
+            }
+
+            $cierra = $delGrupo->count() === $pendientes->count();
             $vendido = (float) $item->alternativaItem->total_convertido;
 
             if ($cierra) {
@@ -997,9 +1012,10 @@ class ReservaFacturacionController extends Controller
                 'pasajeros_grupo' => $delGrupo->count(),
                 'pasajeros_total' => $participantes->count(),
             ];
+            $itemsQueEntran->push($item);
         }
 
-        return ['items' => $itemsTour->values(), 'partes' => $partes];
+        return ['items' => $itemsQueEntran, 'partes' => $partes];
     }
 
     // F1 (23-oct-2026, pedido del usuario): qué entra en este comprobante y

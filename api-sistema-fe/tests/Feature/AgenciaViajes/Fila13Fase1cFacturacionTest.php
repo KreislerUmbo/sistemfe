@@ -25,6 +25,8 @@ use App\Models\AgenciaViajes\ReservaPasajero;
 use App\Models\AgenciaViajes\Servicio;
 use App\Models\AgenciaViajes\TourItinerarioItem;
 use App\Models\Cash\Branch;
+use App\Models\AgenciaViajes\ReservaVenta;
+use App\Models\AgenciaViajes\SaleDetailItem;
 use App\Models\Client\Client;
 use App\Models\Sale\Sale;
 use App\Models\Sale\SerieComprobante;
@@ -406,6 +408,45 @@ class Fila13Fase1cFacturacionTest extends TestCase
         // A ya está facturado y B no: mezclarlos sigue siendo un error.
         $preview = app(ReservaFacturacionController::class)->prepararFactura(new Request(['pasajero_ids' => [$a, $b]]), (string) $reserva->id);
         $this->assertSame(422, $preview->getStatusCode());
+    }
+
+    // Auditoría reserva + facturación (23-oct-2026): una NC parcial que acredita
+    // solo la línea del tour liberaba el servicio, pero el pasajero seguía como
+    // "facturado" y su parte seguía contando como cobrada. Resultado: esa parte
+    // del tour no se podía volver a facturar y la reserva cobraba de menos.
+    public function test_nc_parcial_sobre_la_linea_del_tour_deja_volver_a_facturar_esa_parte(): void
+    {
+        // 3 adultos, tour de lista 150 c/u (450) + un traslado suelto.
+        $alternativa = $this->crearAlternativa([['adulto', 40], ['adulto', 38], ['adulto', 35]]);
+        $this->cargar($alternativa, $this->tourGravado(150, null));
+        $traslado = $this->servicioSuelto($alternativa, 'nacional', '10', 50);
+        $reserva = $this->aceptar($alternativa);
+        [$p1, $p2, $p3] = $this->pasajeros($reserva);
+        $itemTraslado = ReservaItem::where('reserva_id', $reserva->id)->where('alternativa_item_id', $traslado->id)->value('id');
+        $itemTour = ReservaItem::where('reserva_id', $reserva->id)->where('alternativa_item_id', '!=', $traslado->id)->value('id');
+
+        // Factura A: el pasajero 1 (su parte del tour, 150) + el traslado.
+        $ventaA = app(ReservaFacturacionController::class)->store(new Request([
+            'pasajero_ids' => [$p1], 'reserva_item_ids_manual' => [$itemTraslado],
+            'client_id' => Client::factory()->empresa()->create()->id, 'tipo_comprobante_codigo' => '01',
+        ]), (string) $reserva->id)->getData(true);
+        $this->assertSame(200, $ventaA['code'], json_encode($ventaA));
+
+        // NC parcial aceptada sobre la línea del tour de la factura A (el traslado se queda).
+        $lineasDelTour = SaleDetailItem::where('reserva_item_id', $itemTour)->pluck('sale_detail_id');
+        ReservaVenta::liberarPorNotaDeCredito($ventaA['sale_id'], 'parcial', $lineasDelTour);
+
+        // Los pasajeros 2 y 3 pagan su parte: 300, sin "cerrar" el tour.
+        $previewResto = $this->preview($reserva, [$p2, $p3]);
+        $this->assertEqualsWithDelta(300.0, (float) $previewResto['total'], 0.001);
+        $this->assertFalse($previewResto['partes_tour'][0]['cierra'], 'La parte del pasajero 1 sigue pendiente.');
+        $this->facturarOk($reserva, [$p2, $p3]);
+
+        // La parte del pasajero 1 se puede volver a facturar: 150.
+        $previewP1 = $this->preview($reserva, [$p1]);
+        $this->assertSame([$itemTour], collect($previewP1['partes_tour'])->pluck('reserva_item_id')->all());
+        $this->assertEqualsWithDelta(150.0, (float) $previewP1['total'], 0.001);
+        $this->assertTrue($previewP1['partes_tour'][0]['cierra']);
     }
 
     private function facturarSinCapturar(Reserva $reserva, array $pasajeroIds, array $manual): int
