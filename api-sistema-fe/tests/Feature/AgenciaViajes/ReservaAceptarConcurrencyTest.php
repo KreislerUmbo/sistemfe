@@ -86,6 +86,15 @@ class ReservaAceptarConcurrencyTest extends TestCase
         // Un lock entre dos conexiones solo se ve con los datos ya guardados de
         // verdad: se hace commit (también del usuario de setUp()) y el finally
         // borra a mano todo lo creado, para no dejar filas en la base de pruebas.
+        // Los permisos que setUp() creó también se guardarían con el commit:
+        // antes se anotan los que ya estaban guardados (la segunda conexión
+        // solo ve lo confirmado) para borrar después solo los nuevos. Sin esto
+        // quedaban en la base de pruebas y rompían los tests de Roles y Usuarios
+        // que los crean (PermissionAlreadyExists, 24-oct-2026).
+        config(['database.connections.pgsql_b' => config('database.connections.pgsql')]);
+        DB::purge('pgsql_b');
+        $permisosQueYaEstaban = DB::connection('pgsql_b')->table('permissions')->pluck('id')->all();
+
         DB::commit();
 
         $bloqueada = false;
@@ -93,8 +102,6 @@ class ReservaAceptarConcurrencyTest extends TestCase
 
         try {
             // La "otra pestaña": una segunda conexión que tiene tomada la cotización.
-            config(['database.connections.pgsql_b' => config('database.connections.pgsql')]);
-            DB::purge('pgsql_b');
             DB::connection('pgsql_b')->beginTransaction();
             DB::connection('pgsql_b')->select(
                 'select * from cotizaciones where id = ? for update',
@@ -141,6 +148,7 @@ class ReservaAceptarConcurrencyTest extends TestCase
             DB::table('cotizaciones')->where('id', $alternativa->cotizacion_id)->delete();
             DB::table('clients')->where('id', $clienteId)->delete();
             $this->borrarUsuarioDeSetUp();
+            DB::table('permissions')->whereNotIn('id', $permisosQueYaEstaban)->delete();
             DB::beginTransaction();
         }
     }
@@ -162,10 +170,13 @@ class ReservaAceptarConcurrencyTest extends TestCase
     }
 
     // El usuario de setUp() queda guardado por el commit del test del lock:
-    // se borran él, su rol y sus permisos directos.
+    // se borran él, su rol, sus permisos directos y la auditoría que generó
+    // darle esos permisos (role_audit_logs; sin esto fallaba
+    // RolePermissionChangedListenerTest, que cuenta las filas, 24-oct-2026).
     private function borrarUsuarioDeSetUp(): void
     {
         $roleId = $this->usuario->role_id;
+        DB::table('role_audit_logs')->where('target_type', 'user')->where('target_id', $this->usuario->id)->delete();
         DB::table('model_has_permissions')->where('model_id', $this->usuario->id)->where('model_type', User::class)->delete();
         DB::table('model_has_roles')->where('model_id', $this->usuario->id)->where('model_type', User::class)->delete();
         DB::table('users')->where('id', $this->usuario->id)->delete();
