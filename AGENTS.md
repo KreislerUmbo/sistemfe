@@ -4,6 +4,10 @@
 no lo reemplaza. Antes de cambios arquitectónicos, consultar `CLAUDE.md` y
 `docs/planning/INDICE.md` (y los planes pertinentes).
 
+**Proceso de trabajo:** `docs/proceso.md` (tipos de documento, etapas, Definición de Hecho,
+checklist de seguridad). Si te pasaron una tarea `docs/tareas/T-…md`, léela junto con ese
+documento antes de empezar. El estado de las tareas vive solo en `docs/backlog.md`.
+
 ## Fuente de verdad y seguridad
 
 - El código y la configuración efectiva prevalecen sobre documentación histórica. Ante una

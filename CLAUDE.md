@@ -1,5 +1,10 @@
 # Sistema POS / E-commerce — Contexto del proyecto
 
+> **Proceso de trabajo (desde 24-oct-2026):** `docs/proceso.md` — cada dato vive en un solo
+> lugar; el estado de las tareas solo en `docs/backlog.md`; tareas para agentes en
+> `docs/tareas/` con la plantilla de `docs/plantillas/tarea.md`. La sección "Estado actual"
+> de abajo es de la forma anterior y se irá archivando (ver `proceso.md` §6).
+
 ## Estructura del proyecto
 ```
 sistemafe/
