@@ -107,8 +107,9 @@ Para revisar (con Claude): "Revisa la rama `feat/T-042-…` contra `docs/tareas/
 
 Se hace de a poco, sin parar el trabajo:
 
-1. Este documento, las plantillas y el backlog (hecho).
-2. Piloto con una tarea real usando el proceso completo.
+1. Este documento, las plantillas y el backlog.
+2. Piloto con un requerimiento real: "Modificar reserva"
+   (`docs/requerimientos/agencia-modificar-reserva.md` → T-001 a T-007).
 3. `CLAUDE.md` adelgazado: estado e historial → `docs/archivo/`.
 4. Documentos actuales congelados en `docs/archivo/`; las reglas vigentes de un módulo se
    extraen a `reglas.md` **cuando una tarea toca ese módulo**, no todas de golpe.

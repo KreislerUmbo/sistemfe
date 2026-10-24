@@ -5,7 +5,7 @@
 | **Fecha** | 2026-10-24 (decisión de fondo: 23-oct-2026) |
 | **Módulo** | AGE |
 | **Pedido por** | usuario |
-| **Estado del documento** | en análisis — faltan respuestas a §2.5 |
+| **Estado del documento** | aprobado el 24-oct-2026; ya no se edita (ver §3) |
 
 > Primer requerimiento escrito con `docs/proceso.md` (piloto). Antecedentes: fila F4 de
 > `docs/planning/agencia-de-viajes/plan-hoja-de-ruta-ejecucion.md` (etapa 1 hecha el 23-oct:
@@ -180,7 +180,10 @@ defecto silencioso (regla tributaria del proyecto), hasta que el contador defina
 
 ## 3. Resultado
 
-Se completa al aprobar.
+Aprobado por el usuario el 24-oct-2026: las 7 recomendaciones de §2.5, tal cual.
 
-- **Decisiones:**
-- **Tareas:**
+- **Decisiones:** D-AGE-030 (preguntas 1), D-AGE-031 (2), D-AGE-032 (3 y 4), D-AGE-033 (5),
+  en `docs/modulos/agencia/decisiones/`. Las preguntas 6 (PDF) y 7 (permiso) quedaron como
+  alcance de T-006 y como R-AGE-10.
+- **Reglas:** R-AGE-01 a R-AGE-11 en `docs/modulos/agencia/reglas.md`.
+- **Tareas:** T-001 a T-007 en `docs/tareas/` (estado en `docs/backlog.md`).
