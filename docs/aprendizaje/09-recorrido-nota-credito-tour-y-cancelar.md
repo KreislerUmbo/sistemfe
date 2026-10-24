@@ -1,4 +1,4 @@
-# Recorrido: nota de crédito parcial sobre un tour, y cancelar mientras se factura
+# Recorrido: nota de crédito parcial sobre un tour, cancelar mientras se factura y aceptar dos veces
 
 Auditoría de reserva + facturación, punto 2 (23-oct-2026). Fila F3 de
 `docs/planning/agencia-de-viajes/plan-hoja-de-ruta-ejecucion.md`.
@@ -97,6 +97,64 @@ test corre una sola a la vez. Se sigue el mismo patrón que ya usan las otras ac
 
 ---
 
+## Parte C — Aceptar la misma cotización dos veces
+
+Cambio hecho por el usuario y revisado el 23-oct-2026.
+
+### 1. El problema
+
+Una cotización puede tener varias alternativas, pero **solo una reserva activa**. `aceptar()`
+revisaba "¿ya tiene reserva?" sin bloquear nada. Con dos pestañas abiertas:
+
+```
+ Pestaña 1 (acepta Alternativa 1)         Pestaña 2 (acepta Alternativa 2)
+ ¿la cotización tiene reserva? → no
+                                           ¿la cotización tiene reserva? → no
+ crea la reserva A
+                                           crea la reserva B
+ → DOS reservas activas para la misma cotización
+```
+
+### 2. La corrección: la llave es la cotización
+
+La pregunta clave es **qué fila bloquear**. Si se bloqueara la alternativa, las dos pestañas
+bloquearían filas distintas (Alternativa 1 y Alternativa 2) y ninguna esperaría a la otra. Como
+la regla es por **cotización**, se bloquea la fila de la cotización: las dos pestañas piden la
+misma llave y una espera.
+
+```
+ ReservaController::aceptar()
+   revisión rápida (sin llave): responde enseguida en el caso común
+   DB::transaction:
+     Cotizacion::...->lockForUpdate()        ← toma la llave de la cotización
+     vuelve a leer la alternativa             ← pudo cambiar mientras esperaba
+     alternativaAceptable()?          si no → HttpException 422
+     cotizacionTieneReservaActiva()?  si sí → HttpException 422
+     acepta, descarta las otras, crea la reserva
+   catch (HttpException) → respuesta 422 con el mensaje
+```
+
+- **`alternativaAceptable()` y `cotizacionTieneReservaActiva()`**: las dos revisiones se hacen
+  dos veces (antes y dentro de la llave). Por eso son funciones y los mensajes son constantes: así
+  no pueden quedar distintas.
+- **`HttpException` en vez de `return`**: lanzar la excepción deshace la transacción. Hoy no hay
+  nada escrito antes de la revisión, pero si mañana alguien agrega una escritura, con `return`
+  quedaría guardada.
+- **El orden de las llaves:** al generar el código de la reserva, `CodigoGeneradorService` bloquea
+  la misma fila de la cotización. Como es la misma llave y en el mismo orden, no hay riesgo de que
+  dos operaciones se queden esperándose una a la otra.
+
+### 3. Test
+
+`ReservaAceptarConcurrencyTest`:
+- **Dos conexiones reales**: una "pestaña" tiene tomada la cotización; `aceptar()` espera y
+  Postgres corta la espera con el código `55P03`. Prueba que `aceptar()` sí pide la llave.
+- **Dos alternativas de la misma cotización**: la segunda ya no genera otra reserva.
+- Para que el bloqueo se vea entre dos conexiones, el primer test **guarda los datos de verdad**
+  (`DB::commit()`), así que los borra él mismo en el `finally`, incluido el usuario de prueba.
+
+---
+
 ## Ejercicios
 
 1. En la tabla de la Parte A, ¿cuánto cobra ahora la factura B? ¿Y la C? ¿Suman 450?
@@ -106,3 +164,7 @@ test corre una sola a la vez. Se sigue el mismo patrón que ya usan las otras ac
    `partes_tour`?
 4. En `cancelar()`, mueve mentalmente el chequeo "¿ya tiene factura?" fuera de la transacción
    otra vez. Dibuja con dos columnas, como arriba, cómo se rompe.
+5. En `aceptar()`, ¿qué pasaría si en vez de bloquear la cotización se bloqueara la alternativa?
+   Dibuja las dos pestañas aceptando alternativas distintas.
+6. En `ReservaAceptarConcurrencyTest`, ¿por qué el primer test necesita `DB::commit()` y el
+   segundo no?

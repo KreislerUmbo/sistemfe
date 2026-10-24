@@ -5,6 +5,7 @@ namespace App\Http\Controllers\AgenciaViajes;
 use App\Http\Controllers\Controller;
 use App\Models\AgenciaViajes\Alternativa;
 use App\Models\AgenciaViajes\AlternativaItem;
+use App\Models\AgenciaViajes\Cotizacion;
 use App\Models\AgenciaViajes\CotizacionPasajero;
 use App\Models\AgenciaViajes\OpcionHotelTarifa;
 use App\Models\AgenciaViajes\OpcionMayorista;
@@ -45,6 +46,10 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
 // ese camino anidado. Ver docblock de Reserva::class.
 class ReservaController extends Controller
 {
+    // aceptar(): se revisan antes y dentro del lock, con el mismo mensaje.
+    private const MENSAJE_ALTERNATIVA_NO_ACEPTABLE = 'La alternativa no está en un estado válido para aceptar (ya fue aceptada o descartada).';
+    private const MENSAJE_COTIZACION_CON_RESERVA = 'Esta cotización ya tiene una reserva activa.';
+
     private const RELACIONES_DETALLE = [
         'alternativa.cotizacion.cliente',
         'pasajeros.pasajeroCatalogo',
@@ -228,23 +233,14 @@ class ReservaController extends Controller
         $alternativa = Alternativa::findOrFail($alternativaId);
         $this->authorize('update', $alternativa->cotizacion);
 
-        if (! in_array($alternativa->estado, ['borrador', 'enviada'], true)) {
-            return response()->json([
-                'code' => 422,
-                'message' => 'La alternativa no está en un estado válido para aceptar (ya fue aceptada o descartada).',
-            ], 422);
+        // Revisión rápida antes del lock: responde enseguida en el caso común.
+        // La que protege de verdad se repite dentro de la transacción.
+        if (! self::alternativaAceptable($alternativa)) {
+            return response()->json(['code' => 422, 'message' => self::MENSAJE_ALTERNATIVA_NO_ACEPTABLE], 422);
         }
 
-        $existeReservaActiva = Reserva::whereHas(
-            'alternativa',
-            fn ($q) => $q->where('cotizacion_id', $alternativa->cotizacion_id)
-        )->where('estado', 'activa')->exists();
-
-        if ($existeReservaActiva) {
-            return response()->json([
-                'code' => 422,
-                'message' => 'Esta cotización ya tiene una reserva activa.',
-            ], 422);
+        if (self::cotizacionTieneReservaActiva($alternativa->cotizacion_id)) {
+            return response()->json(['code' => 422, 'message' => self::MENSAJE_COTIZACION_CON_RESERVA], 422);
         }
 
         // Sesión M1 (matriz de opciones de hotel, Ronda 2/P4) — no se
@@ -279,12 +275,36 @@ class ReservaController extends Controller
         // posición nullable.
         $pasajeroCatalogoIds = $request->input('pasajero_catalogo_ids', []);
 
-        [$reserva, $alertaCupoExcedido] = DB::transaction(function () use ($alternativa, $pasajeroCatalogoIds) {
-            $alternativa->update(['estado' => 'aceptada']);
-            AlternativaController::descartarOtras($alternativa);
+        try {
+            [$reserva, $alertaCupoExcedido] = DB::transaction(function () use ($alternativa, $pasajeroCatalogoIds) {
+                // Doble aceptación (revisión del usuario, 23-oct-2026; mismo
+                // criterio que la auditoría F3 de la hoja de ruta): la regla es
+                // UNA reserva activa por COTIZACIÓN, no por alternativa. Por eso
+                // se bloquea la fila de la cotización: dos pestañas que aceptan
+                // alternativas distintas de la misma cotización esperan su turno.
+                // CodigoGeneradorService::generarParaReserva() bloquea la misma
+                // fila más adelante, en esta misma transacción: mismo orden, sin
+                // riesgo de que dos operaciones se esperen entre sí.
+                Cotizacion::where('id', $alternativa->cotizacion_id)->lockForUpdate()->firstOrFail();
 
-            return $this->crearReservaDesdeAlternativa($alternativa->fresh(), $pasajeroCatalogoIds);
-        });
+                // Con el lock tomado se vuelve a leer y a revisar: mientras
+                // esperaba, la otra aceptación pudo aceptar o descartar esta.
+                $alternativaBloqueada = Alternativa::findOrFail($alternativa->id);
+                if (! self::alternativaAceptable($alternativaBloqueada)) {
+                    throw new HttpException(422, self::MENSAJE_ALTERNATIVA_NO_ACEPTABLE);
+                }
+                if (self::cotizacionTieneReservaActiva($alternativaBloqueada->cotizacion_id)) {
+                    throw new HttpException(422, self::MENSAJE_COTIZACION_CON_RESERVA);
+                }
+
+                $alternativaBloqueada->update(['estado' => 'aceptada']);
+                AlternativaController::descartarOtras($alternativaBloqueada);
+
+                return $this->crearReservaDesdeAlternativa($alternativaBloqueada->fresh(), $pasajeroCatalogoIds);
+            });
+        } catch (HttpException $e) {
+            return response()->json(['code' => $e->getStatusCode(), 'message' => $e->getMessage()], $e->getStatusCode());
+        }
 
         $reserva->load(self::RELACIONES_DETALLE);
 
@@ -292,6 +312,20 @@ class ReservaController extends Controller
             ['code' => 200, 'message' => 'Reserva creada correctamente', 'alerta_cupo_excedido' => $alertaCupoExcedido],
             $this->respuestaDetalle($reserva)
         ));
+    }
+
+    // Solo se acepta una alternativa que todavía no fue aceptada ni descartada.
+    private static function alternativaAceptable(Alternativa $alternativa): bool
+    {
+        return in_array($alternativa->estado, ['borrador', 'enviada'], true);
+    }
+
+    // Una cotización tiene como máximo una reserva activa.
+    private static function cotizacionTieneReservaActiva(int $cotizacionId): bool
+    {
+        return Reserva::whereHas('alternativa', fn ($q) => $q->where('cotizacion_id', $cotizacionId))
+            ->where('estado', 'activa')
+            ->exists();
     }
 
     public function cancelar(Request $request, string $id)
@@ -686,7 +720,7 @@ class ReservaController extends Controller
                 // Bug real (auditoría 2026-09-22): este era el único
                 // endpoint del módulo sin el lockForUpdate() que sí tienen
                 // los demás parecidos (ReservaItemController::destroy(),
-                // ReservaPasajeroController::destroy(), actualizarFacturacionExterna()).
+                // QuitarPasajeroReservaService::quitar(), actualizarFacturacionExterna()).
                 // Sin esto, un doble clic o dos pestañas abiertas podían leer
                 // el mismo set de "ítems pendientes" dos veces y crear
                 // reserva_items duplicados — que luego se facturarían dos
