@@ -1425,7 +1425,10 @@ public function update(Request $request, string $id)
         }
 
         DB::transaction(function () use ($venta) {
-            \App\Models\AgenciaViajes\ReservaVenta::where('sale_id', $venta->id)->delete();
+            // Solo en tenants con reservas (Agencia): en retail la tabla no existe.
+            if (\App\Models\AgenciaViajes\ReservaVenta::hayReservasEnEsteTenant()) {
+                \App\Models\AgenciaViajes\ReservaVenta::where('sale_id', $venta->id)->delete();
+            }
             $venta->delete();
         });
 

@@ -43,6 +43,16 @@ class ReservaVenta extends Model
             ->values();
     }
 
+    // ¿Este tenant tiene reservas? reserva_ventas es una tabla del vertical
+    // Agencia: no existe en retail ni en créditos. Todo código del sistema
+    // base (Ventas, Notas de crédito) que la consulte pregunta esto antes
+    // (bug real 24-oct-2026: desde el 24-ago, eliminar una venta o aceptar
+    // una NC en retail fallaba con "no existe la relación reserva_ventas").
+    public static function hayReservasEnEsteTenant(): bool
+    {
+        return \Illuminate\Support\Facades\Schema::hasTable((new self)->getTable());
+    }
+
     // Qué servicios y qué pasajeros de una reserva ya están en alguna venta
     // (auditoría reserva + facturación, punto 5, 23-oct-2026: antes este
     // cálculo estaba escrito a mano en 17 lugares). Lo que está aquí no se
@@ -79,6 +89,11 @@ class ReservaVenta extends Model
     //   queda ninguno es lo mismo que la total (auditoría 2026-09-23).
     public static function liberarPorNotaDeCredito(int $saleId, string $tipoAfectacion, iterable $saleDetailIdsAcreditados): void
     {
+        // Retail y créditos no tienen reservas que liberar.
+        if (! self::hayReservasEnEsteTenant()) {
+            return;
+        }
+
         if ($tipoAfectacion === 'total') {
             self::where('sale_id', $saleId)->delete();
 
