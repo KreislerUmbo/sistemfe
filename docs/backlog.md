@@ -22,6 +22,8 @@ Próximo ID libre: **T-001**.
 
 | Módulo | Qué | Origen |
 |---|---|---|
+| AGE | Modificar reserva aceptada (F4 etapa 2) — requerimiento en análisis, faltan respuestas: `docs/requerimientos/agencia-modificar-reserva.md` | piloto del proceso, 24-oct-2026 |
+| AGE | `AlternativaItemController::update()` no rechaza alternativa aceptada (precio vendido editable por API) — visto leyendo, sin probar | requerimiento anterior §2.2 |
 | TRA | Escribir `docs/transversal/seguridad.md` (detalle del checklist de `proceso.md` §4) | `proceso.md`, 24-oct-2026 |
 | TRA | Migración del proceso, pasos 2-6 de `proceso.md` §6 (piloto, adelgazar `CLAUDE.md`, archivar, pasar pendientes, limpiar memoria) | `proceso.md`, 24-oct-2026 |
 
