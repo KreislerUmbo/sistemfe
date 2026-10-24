@@ -1,5 +1,6 @@
 # Brief para Claude Code — Fila 13, fase 1c: facturar la línea de tour y convertir los tours
 
+> **YA EJECUTADO** — fase 1c hecha y unida a `main` (`93a7eb5`). Se conserva como registro del pedido; el estado vigente está en la fila 13 de `plan-hoja-de-ruta-ejecucion.md` y en `plan-tours-venta-simple-costo-real.md` §6. **No volver a pegar.**
 > Redactado el 14-oct-2026 y **completado al cerrar la 1b** (mismo día) con lo que esa sesión
 > aprendió. No ejecutar antes de que la 1b esté en `main`. Tercera y última parte de la fase 1.
 

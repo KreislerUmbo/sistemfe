@@ -75,6 +75,14 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
 //   este flujo hasta resolución manual (reasignar en la pestaña de
 //   asignación, o facturarlo como ítem sin asignar a criterio del
 //   vendedor). No se improvisó ninguna fórmula de reparto.
+// - Excepción: la línea de TOUR sí se reparte entre facturas, porque sabe
+//   cuánto le toca a cada pasajero (fila 13, fase 1c; ver partesDeTour() y
+//   reserva_ventas.partes_tour).
+//
+// Seguridad (auditoría 23-oct-2026): prepararFactura() y store() preguntan a
+// ReservaPolicy (dueño de la cotización o reservas.ver_todas). "Qué está
+// facturado" se calcula con ReservaVenta::itemIdsDe()/pasajeroIdsDe(); una NC
+// aceptada libera lo acreditado con ReservaVenta::liberarPorNotaDeCredito().
 class ReservaFacturacionController extends Controller
 {
     // SKU de los 5 productos placeholder sembrados por
@@ -814,8 +822,8 @@ class ReservaFacturacionController extends Controller
             // Ítem "huérfano" (hallazgo de auditoría 2026-09-24): TODOS sus
             // pasajeros vinculados ya están facturados en otra venta de esta
             // reserva — típicamente porque una Nota de Crédito parcial
-            // liberó este ítem puntual (NotaElectronicaController, caso
-            // tipo_afectacion='parcial') sin tocar reserva_pasajero_ids
+            // liberó este ítem puntual (ReservaVenta::liberarPorNotaDeCredito(),
+            // caso 'parcial') sin tocar reserva_pasajero_ids
             // (el pasajero sigue legítimamente cubierto por el resto de esa
             // venta). Sin esto, el ítem no calificaba ni para itemsAuto (su
             // pasajero ya está bloqueado por pasajerosRepetidos más abajo)
@@ -826,7 +834,8 @@ class ReservaFacturacionController extends Controller
             // reserva_item_ids_manual, reusando el mismo mecanismo ya
             // probado que "Facturar simple" usa para arrastrar ítems
             // sueltos reenviando un pasajero_id ya facturado (ver
-            // pasajeroIdsParaFacturarSimple() en el frontend).
+            // pasajeroIdsParaFacturar() en
+            // admin-start-kit/src/helpers/reservaPasajero.ts).
             if ($pasajerosVinculados->diff($pasajerosYaFacturados)->isEmpty()) {
                 $itemsSinAsignar->push($item);
                 continue;

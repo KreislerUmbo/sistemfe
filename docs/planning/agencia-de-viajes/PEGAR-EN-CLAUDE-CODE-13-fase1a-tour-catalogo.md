@@ -1,5 +1,6 @@
 # Brief para Claude Code — Fila 13, fase 1a: el tour en el catálogo (precio, Incluye, temporadas)
 
+> **YA EJECUTADO** — fase 1a hecha y unida a `main` (`4023c99`). Se conserva como registro del pedido; el estado vigente está en la fila 13 de `plan-hoja-de-ruta-ejecucion.md` y en `plan-tours-venta-simple-costo-real.md` §6. **No volver a pegar.**
 > Pega este archivo completo al inicio de una sesión nueva de Claude Code sobre el repo real.
 > Redactado el 14-oct-2026 al cerrar la sesión de diseño. **La fase 1 del plan se partió en
 > dos sesiones** (1a y 1b) porque completa son 6.5–7.5 días: esta es la **1a**.

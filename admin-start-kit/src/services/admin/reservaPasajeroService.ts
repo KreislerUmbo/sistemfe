@@ -13,13 +13,8 @@ export const reservaPasajeroService = {
   async buscarCatalogo(search: string) {
     const response = await httpClient.get('/pasajeros-catalogo', { params: { search } })
     return response.data as { pasajeros_catalogo: PasajeroCatalogo[] }
-  },
-
-  // Quitar un pasajero de la reserva (Fase D del backend, conectado recién
-  // en la auditoría 2026-08-27 — el endpoint ya existía sin ningún botón
-  // que lo llamara).
-  async eliminar(id: number) {
-    const response = await httpClient.delete(`/reserva-pasajeros/${id}`)
-    return response.data as { code: number; message: string }
   }
+  // Quitar un pasajero de una reserva aceptada está bloqueado desde F4
+  // etapa 1 (23-oct-2026): cambia el precio y lleva penalidad. Se hará desde
+  // "Modificar reserva" (hoja de ruta de Agencia, fila F4).
 }

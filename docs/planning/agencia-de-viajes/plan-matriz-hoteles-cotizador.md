@@ -1,7 +1,7 @@
 # Matriz de opciones de hotel dentro de una misma Alternativa
 
 > **Estado: DISEÑO CERRADO (29-ago-2026, 6 rondas / 18 preguntas) —
-> EJECUCIÓN EN CURSO.** Traducido a sesiones concretas en
+> EJECUTADO Y COMPLETO (M1-M5, 02-sep-2026, en `origin/main`).** Traducido a sesiones concretas en
 > `docs/planning/agencia-de-viajes/plan-ejecucion-matriz-hoteles-cotizador.md`
 > (sesiones M1-M5). Este documento queda como referencia de diseño — no
 > se vuelve a editar salvo que aparezca un caso nuevo durante la

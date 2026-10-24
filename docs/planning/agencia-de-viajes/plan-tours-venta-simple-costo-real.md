@@ -1,6 +1,6 @@
 # Tours: vender simple, operar por salida, medir el costo real
 
-> **Estado: EN EJECUCIÓN — fases 1a y 1b hechas (14-oct-2026, ver §6); sigue la 1c.** Diseño del 13-oct-2026.
+> **Estado: EN EJECUCIÓN — fases 1 y 2 hechas (14 al 22-oct-2026, ver §6), unidas a `main` local en `9268b70`, sin desplegar. Ahora: pausa para probar la fase 2 con uso real; después, fase 3 (Compras).** Diseño del 13-oct-2026.
 > Nace de una propuesta del usuario que reemplaza el enfoque de
 > `plan-precio-tour-por-persona.md` (ese plan queda **descartado como alternativa**, con la
 > razón en su encabezado y en §1 de este documento). Revisado contra el código y los datos de
@@ -722,7 +722,7 @@ adelante la importación SIRE (los comprobantes llegan solos y solo hay que asig
 > - El Reporte Operativo y las Salidas no operan la línea de tour hasta la fase 2. **D3:** el modo nuevo se activa solo en `agencia-demo` hasta terminar la fase 2, y el interruptor lo cambia solo el Super-Admin.
 > - `clasificarCategoria()` clasificaría la línea de tour como `OTROS`: corregido en la 1b (`TOUR`).
 >
-> **Fase 1a — HECHA (14-oct-2026, rama `feat/tours-fase1a-catalogo`, sin commitear ni unir a `main`).**
+> **Fase 1a — HECHA (14-oct-2026; en `main` desde `4023c99`).**
 > Qué quedó:
 > - **Migraciones** (vertical, solo aditivas, `down()` probado en `sistemafe_test_migrations`):
 >   - `paquetes_plantilla`: precios niño y extranjero, costo estimado (nacional/extranjero), moneda, IGV por defecto, modalidad, mínimo para salir, `uso`. Backfill de `uso` (N15).
@@ -773,7 +773,7 @@ adelante la importación SIRE (los comprobantes llegan solos y solo hay que asig
 >
 > **Diagnóstico de dakamu (§7): hecho el 14-oct-2026, sin riesgo** (3 tours sin precio, 0 vinculados a mayoristas).
 >
-> **Fase 1b — HECHA (14-oct-2026, rama `feat/tours-fase1b-cotizacion`, sin commitear).**
+> **Fase 1b — HECHA (14-oct-2026; `45778bf`, en `main` desde `2f6480b`).**
 > Qué quedó:
 > - **Migraciones** (vertical, solo aditivas, `down()` probado en `sistemafe_test_migrations` por archivo; aplicadas a `agencia-demo` con `tenants:migrate-verticales`):
 >   - `configuracion_agencia.modo_tours` (`clasico` por defecto).
@@ -800,7 +800,7 @@ adelante la importación SIRE (los comprobantes llegan solos y solo hay que asig
 > 5. Un combo con tours de monedas distintas no se carga en el modo nuevo (422): su descuento no se puede repartir entre monedas.
 > 6. Errores 500 intermitentes en catálogos (`proveedores`, `servicios`) durante la prueba en vivo, sin nada en el log: el problema ya conocido de Apache + dotenv en local, no de la 1b.
 >
-> **Fase 1c — HECHA (18-20 oct-2026, rama `feat/tours-fase1c-facturacion`; partes A y B en `802fee3`, parte C en el commit siguiente).**
+> **Fase 1c — HECHA (18-20 oct-2026; partes A y B en `802fee3`, parte C en `ff3f0c1`; en `main` desde `93a7eb5`).**
 > Qué quedó:
 > - **A. Factura con IGV mezclado (D1, D4, D5):** `ReservaFacturacionController::detectarMezclaTributaria()` deja pasar Amazonía + nacional en un comprobante solo si la mezcla está dentro de una misma `carga_tour` y el resto tiene un solo destino (`mezclaDentroDeUnaCargaTour()`). Siguen bloqueados: sueltos de distinto destino, dos cargas mezcladas, un combo (cada tour es su carga) y `extranjero`. Cada línea Amazonía sigue pidiendo confirmación. `sales.destino='amazonia'` si alguna línea lo es (solo decide la leyenda de la Ley 27037).
 > - **B. Facturación por grupo de pasajeros (C1), reglas decididas con el usuario el 18-oct:** la línea de tour entra sola en la factura de un grupo con la parte de esos pasajeros = vendido × lista del grupo ÷ lista de todos (`partesDeTour()`, `TourLineaService::precioDeLista()`/`parteDelGrupo()`); el infante paga 0; el último grupo se lleva "vendido − lo ya cobrado". Migraciones: `reserva_pasajeros.residencia` (copiada al aceptar; las reservas viejas quedan `nacional`) y `reserva_ventas.partes_tour` (`[{reserva_item_id, monto, cierra}]`). Una línea cobrada a medias deja la reserva en "parcial" (`ReservaVenta::itemsDeTourAMedias()`) y cuenta como facturada para las protecciones (no se borra ni se mueve).
@@ -818,7 +818,7 @@ adelante la importación SIRE (los comprobantes llegan solos y solo hay que asig
 > - **D8:** las **exclusiones** de un servicio por pasajero (§3.2, caso de §5) **quedan para después**: en la 2b la cantidad de cada servicio = pasajeros de la salida, ajustable a mano.
 > - **D9:** estados de la salida programada → confirmada → realizada / cancelada; las salidas existentes en `activa` pasan a `programada` (migración).
 >
-> **Fase 2a — HECHA (21-oct-2026, rama `feat/tours-fase2a-salidas`).**
+> **Fase 2a — HECHA (21-oct-2026; `51661e5`, en `main` local desde `9268b70`).**
 > Qué quedó:
 > - **Migración** `2026_10_21_100000_salidas_operativas_privadas_y_estados` (`down()` probado): `salidas_operativas.privada_reserva_id` (salida propia de una reserva si el tour es `privado`); índice único (tour, fecha) solo para las compartidas y (tour, fecha, reserva) para las privadas; estados con `CHECK` nuevo, `activa` → `programada`.
 > - **Enganche automático de la línea de tour** (`ReservaController::engancharSalidaOperativa()`): modalidad del tour (`paquetes_plantilla.modalidad`) → salida compartida por tour y fecha, o privada por reserva. Las líneas de una carga con IGV mezclado caen juntas. **C4 sin código nuevo:** `reprogramar()` ya usaba esa función, así que mueve el tour a la salida de la nueva fecha.
@@ -841,7 +841,7 @@ adelante la importación SIRE (los comprobantes llegan solos y solo hay que asig
 > - **D16 — reprogramar una salida completa:** para cada reserva, reprogramar (por defecto) o cancelar (endosar es la 13E). Reserva que es **solo de ese día** → se reprograma la reserva completa (`ReservaController::reprogramar()`); **viaje de varios días** → solo se mueven sus servicios de esa salida (quedan con fecha manual), para no correr los otros días. Lo configurado (proveedores, cantidades a mano, vehículos y sus reservas) pasa a la salida nueva, con los servicios en "Por reservar" (hay que volver a reservar con la fecha nueva). Avisos a proveedores como en D15.
 > - **D17:** cancelar dentro de "reprogramar salida" usa los motivos de cancelación de la reserva (clima, fuerza mayor…); un motivo común para todas.
 >
-> **Fase 2c — HECHA (21-oct-2026, rama `feat/tours-fase2c-operacion`, sobre la 2b; SIN COMMIT hasta que el usuario revise D14-D17).**
+> **Fase 2c — HECHA (21-22 oct-2026; `da92877`, D14-D17 revisadas con el usuario; en `main` local desde `9268b70`).**
 > Qué quedó:
 > - **`SalidaOperacionService`**: `foto()` (servicios con cantidad, vehículos con pasajeros), `avisos()` (compara antes y después: "ahora son 2, no 4", "queda vacío", "ya no va", "por debajo del mínimo") y `ordenes()` (una por proveedor, texto para WhatsApp y enlace `wa.me` con el 51 delante de un celular de 9 dígitos).
 > - **Órdenes de servicio (D14):** `GET salidas-operativas/{id}/ordenes` y `…/ordenes/{proveedorId}/pdf` (blade `pdf/agencia-viajes/orden-servicio`); solo salidas en curso; datos mínimos.
@@ -860,7 +860,7 @@ adelante la importación SIRE (los comprobantes llegan solos y solo hay que asig
 >
 > **Hallazgo de la 2c (22-oct):** el plan de endoso dice que una salida propia que queda vacía pasa a "cancelada" y no se borra; el código la borra (`eliminarSiQuedoVacia()`), y desde la 2b se lleva con ella sus servicios y vehículos. Anotado en `plan-endoso-pasajeros.md` §5 para resolverlo al empezar la E1.
 >
-> **Fase 2b — HECHA (21-oct-2026, rama `feat/tours-fase2b-servicios-vehiculos`, sobre la 2a).**
+> **Fase 2b — HECHA (21-oct-2026; `b19471b`, en `main` local desde `9268b70`).**
 > Qué quedó:
 > - **Migración** `2026_10_21_200000_create_salida_servicios_y_vehiculos_tables` (`down()` probado): `salida_servicios` (nombre, proveedor, `cantidad_manual`, estado `por_reservar`/`reservado` con CHECK, índice único salida + ítem del tour), `salida_vehiculos` (transportista, descripción, chofer, teléfono, capacidad, guía), `salida_vehiculo_reservas`. D13: el texto "Vehículo" y el cupo de cada salida pasan a un primer vehículo **con todas las reservas de su salida** (en `agencia-demo`: 2 salidas).
 > - **`SalidaServiciosService::sincronizarDesdeTour()`**: arma la lista desde el Incluye actual del tour (sin el guía; proveedor sugerido o el de la tarifa), idempotente. Se llama al enganchar cada línea de tour y desde "Actualizar desde el tour".

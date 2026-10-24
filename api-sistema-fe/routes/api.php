@@ -1184,6 +1184,8 @@ Route::group([
     Route::put("reserva-pasajeros/{id}", [ReservaPasajeroController::class, 'update'])
         ->middleware('permission:reservas.editar');
     // Fase D del plan "Proceso de reserva: facturación + 3 fixes" (2026-08-19).
+    // Bloqueado desde F4 etapa 1 (23-oct-2026): responde 422 con la explicación;
+    // quitar un pasajero se hará desde "Modificar reserva" (hoja de ruta, F4).
     Route::delete("reserva-pasajeros/{id}", [ReservaPasajeroController::class, 'destroy'])
         ->middleware('permission:reservas.editar');
 

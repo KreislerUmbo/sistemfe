@@ -428,19 +428,40 @@ reserva de una venta directa lleva **el código de la propia venta** (`VDKM-…`
 deducido de la tarifa; "Cobrar y emitir" en el mismo paso; varias líneas y pasajeros con
 nombre; tratamiento tributario en concepto libre, destino del árbol, pasaje aéreo suelto.
 
-**En diseño — Agencia de Viajes, tours: vender simple, operar por salida, medir el costo real
-(11-14 oct-2026, fila 13 + 13E, sin implementar):** el precio escrito en el tour
-(`precio_venta_final`) nunca llegaba a la cotización. Diseño vigente:
-`docs/planning/agencia-de-viajes/plan-tours-venta-simple-costo-real.md` (tour con precio por
-persona y por temporada, una línea por tour detrás del interruptor `modo_tours`, operación por
-salida, Compras, rentabilidad, registros SIRE) y `plan-endoso-pasajeros.md` (versión 2).
-`plan-precio-tour-por-persona.md` está **descartado** (no implementar). Orden acordado: fase 1 →
-fase 2 → pausa para evaluar con uso real → fases 3-5. Hallazgos ya verificados en código (no
-corregidos todavía): el cotizador no resuelve temporadas al cargar un tour; `ajuste_redondeo`
-no se multiplica por pasajero; el descuento de combos no llega a la cotización;
-`recalcularItemsPorPersona()` no actualiza el costo; `moverBloque()` mueve todas las cargas de un
-mismo tour; `AsignacionOperativa::itemsDelRango()` filtra "Ajuste de redondeo" por nombre (ese
-filtro se queda).
+**Mapa del vertical Agencia de Viajes:** `docs/planning/agencia-de-viajes/00-mapa-de-modulos.md`
+— qué hace cada módulo, en qué archivos vive y en qué documento están sus requisitos. Leerlo
+antes de tocar Agencia. Estado de cada fila: `plan-hoja-de-ruta-ejecucion.md`.
+
+**En ejecución — Agencia de Viajes, tours: vender simple, operar por salida, medir el costo
+real (fila 13; fases 1 y 2 hechas 14-22 oct-2026, unidas a `main` local en `9268b70`, sin
+pushear ni desplegar):** tour con precio por persona y por temporada, una línea por tour detrás
+del interruptor `modo_tours` (solo Super-Admin; todos los tenants siguen en `clasico`),
+facturación de la línea de tour por grupo de pasajeros (`reserva_ventas.partes_tour`),
+conversión de los tours existentes, salidas operativas (servicios, vehículos, órdenes de
+servicio, avisos, reprogramar, hora y lugar de recojo) y regla D18: **en Agencia, exonerado
+(20) = Amazonía** (retail no cambia). Diseño y decisiones D6-D18:
+`plan-tours-venta-simple-costo-real.md` §6; endoso: `plan-endoso-pasajeros.md` (versión 2, sin
+aprobar); `plan-precio-tour-por-persona.md` está **descartado**. **Ahora:** pausa para probar la
+fase 2 con uso real; después fase 3 (Compras). Al desplegar, `tenants:migrate-verticales` toca
+datos de Agencia (corrección exonerado→Amazonía con tabla de registro, hora y lugar de las
+salidas). Manual de código: `docs/aprendizaje/03` a `06`.
+
+**Completo en rama, sin unir a `main` — Agencia: F1 + auditoría de reserva y facturación (F3) +
+Modificar reserva etapa 1 (F4), 23-oct-2026, rama `feat/f1-facturacion-por-servicio`:**
+- F1: dos comprobantes a clientes distintos con los mismos pasajeros (p. ej. vuelos a un RUC y
+  el resto a otro); cliente elegible en el anticipo; "qué entra y cuánto" en los modales.
+- F3: **toda acción sobre una reserva pasa por `ReservaPolicy`** (antes solo ver y cancelar);
+  NC parcial sobre un tour ya no pierde la parte acreditada; cancelar y facturar se revisan bajo
+  el mismo `lockForUpdate()`; "qué está facturado" en `ReservaVenta::itemIdsFacturados()` /
+  `pasajeroIdsFacturados()` / `itemIdsDe()` / `pasajeroIdsDe()` / `liberarPorNotaDeCredito()`
+  (no volver a escribirlo a mano); modales de facturar como componentes
+  (`FacturarReservaSimpleModal`, `FacturarReservaEspecialModal`, `useOpcionesFacturacion`).
+- F4 etapa 1: `reserva_pasajeros.cotizacion_pasajero_id` (antes el vínculo se adivinaba por
+  posición) y **quitar pasajero bloqueado** hasta "Modificar reserva" (la lógica vive en
+  `QuitarPasajeroReservaService`). **Pendiente:** diseño detallado de F4 etapa 2 (versión de la
+  alternativa en el cotizador + diferencia + PDF + penalidad + aplicar a la reserva), a revisar
+  con el usuario antes de programar.
+Suite completa 1500 en verde. Manual: `docs/aprendizaje/07` a `10`.
 
 **Completo — Inicio con datos reales (Dashboard) para retail y agencia (02-oct-2026):**
 Reemplaza la demo de la plantilla Rizz por `GET dashboard` (`DashboardService`): ventas hoy/mes

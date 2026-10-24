@@ -87,7 +87,8 @@ class ReservaItemController extends Controller
     // existía desde Fase D pero nunca tuvo botón en el frontend que lo
     // llamara (reservaItemService.ts no tenía eliminar()) — quedó conectado
     // recién ahora. De paso se pareja con dos cosas que
-    // ReservaPasajeroController::destroy() ya tenía y este no: guard de
+    // quitar pasajero ya tenía y este no (hoy en
+    // QuitarPasajeroReservaService): guard de
     // "mínimo 1" (acá "mínimo 1 ítem", ninguna reserva debería quedar sin
     // ningún ítem) y lockForUpdate() sobre la reserva para cerrar la
     // ventana de carrera con una facturación concurrente

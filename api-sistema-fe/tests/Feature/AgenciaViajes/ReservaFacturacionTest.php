@@ -946,13 +946,14 @@ class ReservaFacturacionTest extends TestCase
     // Escenario real reportado por el usuario probando manualmente contra
     // agencia-demo (2026-08-24): facturar una reserva y después anular esa
     // venta (Nota de Crédito total, motivo NC01) dejaba la reserva
-    // marcada como facturada para siempre — pasajerosYaFacturadosIds()/
-    // itemsYaFacturadosIds() seguían contando la ReservaVenta como
-    // vigente, sin ningún camino de recuperación por la API (pasajero_ids
-    // exige min:1 y rechaza cualquier pasajero ya facturado). Cerrado
-    // conectando NotaElectronicaController::enviarNotaSunat() — al aceptar
-    // una NC total, borra la ReservaVenta cuyo sale_id es el de la venta
-    // anulada.
+    // marcada como facturada para siempre — el cálculo de "ya facturado"
+    // (hoy ReservaVenta::pasajeroIdsDe()/itemIdsDe()) seguía contando la
+    // ReservaVenta como vigente, sin ningún camino de recuperación por la
+    // API (pasajero_ids exige min:1 y rechaza cualquier pasajero ya
+    // facturado). Cerrado: al aceptar una NC total,
+    // NotaElectronicaController::enviarNotaSunat() llama a
+    // ReservaVenta::liberarPorNotaDeCredito(), que borra la ReservaVenta
+    // cuyo sale_id es el de la venta anulada.
     public function test_anular_venta_por_nota_credito_total_libera_la_reserva_para_refacturar(): void
     {
         [$branch, ] = $this->branchConSerie('01', 'F001');
