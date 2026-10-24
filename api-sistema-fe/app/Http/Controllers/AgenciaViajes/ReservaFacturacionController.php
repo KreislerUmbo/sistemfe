@@ -1533,11 +1533,18 @@ class ReservaFacturacionController extends Controller
             $subtotalLinea = round($precioFinalLinea / (1 + $porcentajeIgv / 100), 2);
             $igvLinea = round($precioFinalLinea - $subtotalLinea, 2);
 
-            $descripcionDetalle = $textoPersonalizado ?? $items->map(fn (ReservaItem $it) => sprintf(
-                '%s (%s)',
-                ReservaController::resolverNombreItem($it->alternativaItem),
-                $it->fecha?->toDateString() ?? 'sin fecha'
-            ))->implode('; ');
+            // Lo que sale en el comprobante (PDF y XML, ver
+            // SaleDetail::descripcionParaSunat()): el texto del vendedor si
+            // lo escribió (p. ej. "Tours en vacaciones al Alto Mayo y Sauce");
+            // si no, cada servicio con su fecha (24-oct-2026, pedido del usuario),
+            // en el orden del viaje.
+            $descripcionDetalle = filled($textoPersonalizado)
+                ? trim($textoPersonalizado)
+                : $items->sortBy(fn (ReservaItem $it) => [$it->fecha?->toDateString() ?? '9999-12-31', $it->id])->map(fn (ReservaItem $it) => sprintf(
+                    '%s (%s)',
+                    self::nombreEnComprobante($it),
+                    $it->fecha?->format('d/m/Y') ?? 'sin fecha'
+                ))->unique()->implode('; ');
 
             $subtotalTotal += $subtotalLinea;
             $igvTotal += $igvLinea;
@@ -1556,6 +1563,21 @@ class ReservaFacturacionController extends Controller
         }
 
         return [$lineas, round($subtotalTotal, 2), round($igvTotal, 2)];
+    }
+
+    // Nombre de un servicio en el comprobante que recibe el cliente. Un tour
+    // lleva su nombre tal cual: el nombre interno de una línea de tour con
+    // IGV mezclado agrega " (exonerado)"/" (gravado)", que en la factura ya
+    // dice cada línea. El resto, el nombre para el cliente (audiencia
+    // 'cliente': sin datos internos del mayorista, igual que el PDF de la
+    // cotización).
+    private static function nombreEnComprobante(ReservaItem $item): string
+    {
+        if ($item->alternativaItem?->esLineaTour() && $item->tourOrigen?->nombre) {
+            return $item->tourOrigen->nombre;
+        }
+
+        return ReservaController::resolverNombreItem($item->alternativaItem, $item, 'cliente');
     }
 
     // Heurística best-effort, documentada como tal (no una regla de

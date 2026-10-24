@@ -351,7 +351,14 @@
                         <td>{{ rtrim(rtrim(number_format($detalle->quantity, 2), '0'), '.') }}</td>
                         <td>{{ $detalle->unidad_medida }}</td>
                         <td>{{ $detalle->product->sku ?? '-' }}</td>
-                        <td>{{ $detalle->product->title }}</td>
+                        <td>
+                            {{ $detalle->product->title }}
+                            {{-- Reserva de Agencia (24-oct-2026): los servicios con su fecha, o el texto
+                                 del vendedor. Es lo mismo que va en el XML (SaleDetail::descripcionParaSunat()). --}}
+                            @if (trim((string) $detalle->descripcion_detalle) !== '')
+                                <div style="font-size: 9px; color: #555;">{{ $detalle->descripcion_detalle }}</div>
+                            @endif
+                        </td>
                         <td class="right">{{ number_format($detalle->price_base, 3) }}</td>
                         <td class="right">{{ number_format($detalle->price_final, 3) }}</td>
                         <td class="right">{{ number_format($detalle->subtotal, 2) }}</td>

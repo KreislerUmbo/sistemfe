@@ -74,4 +74,23 @@ class SaleDetail extends Model
     {
         return $this->belongsTo(Categorie::class, "product_categorie_id");
     }
+
+    // Descripción de la línea en el XML que va a SUNAT (GreenterService) y en
+    // el PDF, que tienen que decir lo mismo (24-oct-2026, pedido del usuario:
+    // la factura de una reserva solo decía "Tour / Actividad turística").
+    // Retail: descripcion_detalle está vacío, sale el título del producto como
+    // siempre. Reserva de Agencia: el título más el detalle (los servicios con
+    // su fecha, o el "Texto para este comprobante" que escribió el vendedor).
+    // SUNAT acepta hasta 500 caracteres en la descripción de una línea.
+    public function descripcionParaSunat(): string
+    {
+        $titulo = (string) ($this->product?->title ?? '');
+        $detalle = trim((string) $this->descripcion_detalle);
+
+        if ($detalle === '') {
+            return $titulo;
+        }
+
+        return mb_substr($titulo.' - '.$detalle, 0, 500);
+    }
 }

@@ -656,7 +656,7 @@ class GreenterService
             $detalle_greenter = (new SaleDetail())
                 ->setCodProducto($detalle->product->sku ?? 'P001')
                 ->setUnidad($detalle->unidad_medida)
-                ->setDescripcion($detalle->product->title)
+                ->setDescripcion($detalle->descripcionParaSunat())
                 ->setCantidad($detalle->quantity)
                 // Precio unitario sin IGV
                 ->setMtoValorUnitario($precio_valor_unitario)

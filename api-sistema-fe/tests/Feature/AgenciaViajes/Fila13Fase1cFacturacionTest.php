@@ -410,6 +410,39 @@ class Fila13Fase1cFacturacionTest extends TestCase
         $this->assertTrue($preview['detalle'][0]['excluido']);
     }
 
+    // El comprobante dice qué se cobró (24-oct-2026, pedido del usuario): sin
+    // texto del vendedor, cada servicio con su fecha; con texto, el texto. Es
+    // lo mismo en el PDF y en el XML (SaleDetail::descripcionParaSunat()).
+    public function test_el_comprobante_lista_los_servicios_o_el_texto_del_vendedor(): void
+    {
+        $alternativa = $this->crearAlternativa([['adulto', 40], ['adulto', 38]]);
+        $this->cargar($alternativa, $this->tourGravado(150, null, 'Alto Mayo'), 1);
+        $this->cargar($alternativa, $this->tourGravado(150, null, 'Laguna Azul'), 2);
+        $reserva = $this->aceptar($alternativa);
+        [$a, $b] = $this->pasajeros($reserva);
+        $fecha = fn (string $tour) => ReservaItem::where('reserva_id', $reserva->id)
+            ->whereHas('tourOrigen', fn ($q) => $q->where('nombre', $tour))->first()->fecha->format('d/m/Y');
+
+        $sinTexto = $this->facturarOk($reserva, [$a])->sale_details()->first();
+        $this->assertSame("Alto Mayo ({$fecha('Alto Mayo')}); Laguna Azul ({$fecha('Laguna Azul')})", $sinTexto->descripcion_detalle);
+        $this->assertSame($sinTexto->product->title.' - '.$sinTexto->descripcion_detalle, $sinTexto->descripcionParaSunat());
+
+        $conTexto = $this->facturarOk($reserva, [$b], ['texto_personalizado' => 'Tours en vacaciones al Alto Mayo y Sauce'])->sale_details()->first();
+        $this->assertSame('Tours en vacaciones al Alto Mayo y Sauce', $conTexto->descripcion_detalle);
+        $this->assertSame($conTexto->product->title.' - Tours en vacaciones al Alto Mayo y Sauce', $conTexto->descripcionParaSunat());
+    }
+
+    // Retail: sin detalle, la descripción que va a SUNAT es el título del producto, como siempre.
+    public function test_sin_detalle_la_descripcion_para_sunat_es_el_titulo(): void
+    {
+        $detalle = new \App\Models\Sale\SaleDetail(['descripcion_detalle' => null]);
+        $detalle->setRelation('product', new \App\Models\Product\Product(['title' => 'Arroz 5 kg']));
+        $this->assertSame('Arroz 5 kg', $detalle->descripcionParaSunat());
+
+        $detalle->descripcion_detalle = str_repeat('x', 600);
+        $this->assertSame(500, mb_strlen($detalle->descripcionParaSunat()), 'SUNAT acepta hasta 500 caracteres.');
+    }
+
     public function test_repartir_centavos_no_gana_ni_pierde_centimos(): void
     {
         // El caso de arriba: 101.615 + 48.385 = 150.00 exacto.
