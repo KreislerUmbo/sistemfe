@@ -429,7 +429,11 @@ class NotaElectronicaController extends Controller
             // recuperación por la API (no hay ningún ReservaVenta::update()/
             // delete() en el resto del proyecto salvo este y
             // SaleController::destroy()).
-            if ($nota->tipo_doc === '07' && $nota->tipo_afectacion === 'total') {
+            // Solo en tenants con reservas (Agencia): en retail y créditos la
+            // tabla no existe y la consulta fallaba tras la aceptación de SUNAT
+            // (bug real 24-oct-2026).
+            $hayReservas = ReservaVenta::hayReservasEnEsteTenant();
+            if ($hayReservas && $nota->tipo_doc === '07' && $nota->tipo_afectacion === 'total') {
                 ReservaVenta::where('sale_id', $nota->sale_id)->delete();
             }
 
@@ -446,7 +450,7 @@ class NotaElectronicaController extends Controller
             // puente real entre una línea de comprobante y los
             // reserva_item que agrupa (ver ReservaFacturacionController::
             // store(), "$linea['grupo']").
-            if ($nota->tipo_doc === '07' && $nota->tipo_afectacion === 'parcial') {
+            if ($hayReservas && $nota->tipo_doc === '07' && $nota->tipo_afectacion === 'parcial') {
                 $reservaVenta = ReservaVenta::where('sale_id', $nota->sale_id)->first();
 
                 if ($reservaVenta) {

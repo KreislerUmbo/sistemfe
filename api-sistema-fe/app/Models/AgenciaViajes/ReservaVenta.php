@@ -26,6 +26,16 @@ class ReservaVenta extends Model
         'reserva_pasajero_ids' => 'array',
     ];
 
+    // ¿Este tenant tiene reservas? reserva_ventas es una tabla del vertical
+    // Agencia: no existe en retail ni en créditos. Todo código del sistema
+    // base (Ventas, Notas de crédito) que la consulte pregunta esto antes
+    // (bug real 24-oct-2026: desde el 24-ago, eliminar una venta o aceptar
+    // una NC en retail fallaba con "no existe la relación reserva_ventas").
+    public static function hayReservasEnEsteTenant(): bool
+    {
+        return \Illuminate\Support\Facades\Schema::hasTable((new self)->getTable());
+    }
+
     public function reserva()
     {
         return $this->belongsTo(Reserva::class, 'reserva_id');
