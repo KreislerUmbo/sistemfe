@@ -94,7 +94,7 @@
                             :tipo-cambio-sugerido="preview.tipo_cambio_sugerido" :serie-resuelta="preview.serie_resuelta" />
 
                         <!-- F1 (23-oct-2026): qué entra y cuánto, también con bloqueo. -->
-                        <DetalleComprobantePreview :preview="preview" :anticipo-aplicado="anticipoAplicado" />
+                        <DetalleComprobantePreview :preview="preview" :anticipo-aplicado="anticipoAplicado" seleccionable @alternar="alternarServicio" />
                         <div v-if="(preview.items_por_destino_tributario?.length ?? 0) > 0" class="mb-2 small">
                             <span class="text-muted d-block mb-1">Tratamiento tributario de lo seleccionado:</span>
                             <span v-for="it in preview.items_por_destino_tributario" :key="it.reserva_item_id"
@@ -173,7 +173,7 @@
                     <button class="btn btn-outline-secondary btn-sm" @click="emit('cerrar')">Cerrar</button>
                     <button v-if="preview && !preview.bloqueado_tributario" class="btn btn-primary btn-sm"
                         :disabled="facturando || cargando || form.pasajero_ids.length === 0 || !cliente
-                            || (soloServicios && form.reserva_item_ids_manual.length === 0)"
+                            || !hayServiciosQueEntran"
                         @click="confirmar">
                         <span v-if="facturando" class="spinner-border spinner-border-sm me-1"></span>Emitir comprobante de este grupo
                     </button>
@@ -238,11 +238,13 @@ const cliente = ref<ClienteComprobante | null>(null);
 type Formulario = {
     pasajero_ids: number[];
     reserva_item_ids_manual: number[];
+    // Desmarcados en "Qué entra en este comprobante": quedan pendientes.
+    reserva_item_ids_excluidos: number[];
     tipo_comprobante_codigo: '01' | '03';
     texto_personalizado: string;
 };
 const formVacio = (pasajeroIds: number[]): Formulario => ({
-    pasajero_ids: pasajeroIds, reserva_item_ids_manual: [], tipo_comprobante_codigo: '01', texto_personalizado: '',
+    pasajero_ids: pasajeroIds, reserva_item_ids_manual: [], reserva_item_ids_excluidos: [], tipo_comprobante_codigo: '01', texto_personalizado: '',
 });
 const form = ref<Formulario>(formVacio([]));
 
@@ -269,7 +271,7 @@ const refrescarPreview = async () => {
             props.reserva.id,
             form.value.pasajero_ids,
             form.value.reserva_item_ids_manual,
-            opciones.opcionesPreview(form.value.tipo_comprobante_codigo),
+            { ...opciones.opcionesPreview(form.value.tipo_comprobante_codigo), reservaItemIdsExcluidos: form.value.reserva_item_ids_excluidos },
         );
         opciones.proponerTipoCambio(preview.value.tipo_cambio_sugerido);
         // La vista previa se pide de nuevo con cada cambio: se conserva lo
@@ -293,9 +295,30 @@ const refrescarPreview = async () => {
 
 const opciones = useOpcionesFacturacion(toRef(props, 'moneda'), refrescarPreview);
 
-watch(() => [...form.value.pasajero_ids, ...form.value.reserva_item_ids_manual], refrescarPreview);
+watch(
+    () => [form.value.pasajero_ids, form.value.reserva_item_ids_manual, form.value.reserva_item_ids_excluidos],
+    refrescarPreview,
+    { deep: true },
+);
 // Boleta o factura cambia la serie que se resuelve.
 watch(() => form.value.tipo_comprobante_codigo, refrescarPreview);
+
+// Casilla de un servicio en "Qué entra en este comprobante" (24-oct-2026).
+// Un servicio "sin asignar" entra porque se marcó en su lista: desmarcarlo lo
+// quita de esa lista. Cualquier otro (los de los pasajeros y su parte de los
+// tours) pasa a "queda pendiente" para otro comprobante, o vuelve a entrar.
+const alternarServicio = (ids: number[], entra: boolean) => {
+    const manuales = form.value.reserva_item_ids_manual;
+    if (!entra && ids.every((id) => manuales.includes(id))) {
+        form.value.reserva_item_ids_manual = manuales.filter((id) => !ids.includes(id));
+        return;
+    }
+    const excluidos = form.value.reserva_item_ids_excluidos.filter((id) => !ids.includes(id));
+    form.value.reserva_item_ids_excluidos = entra ? excluidos : [...excluidos, ...ids];
+};
+
+// No se emite un comprobante vacío (el backend también lo rechaza).
+const hayServiciosQueEntran = computed(() => (preview.value?.detalle ?? []).some((f) => !f.excluido));
 
 // Factura ('01') exige RUC (catálogo 06 SUNAT, '6'); el backend también lo valida.
 const clienteTieneRuc = computed(() => cliente.value?.cod_tipo_doc_sunat === '6');
@@ -342,6 +365,7 @@ const confirmar = async () => {
         const res = await reservaFacturacionService.facturar(props.reserva.id, {
             pasajero_ids: form.value.pasajero_ids,
             reserva_item_ids_manual: form.value.reserva_item_ids_manual,
+            reserva_item_ids_excluidos: form.value.reserva_item_ids_excluidos,
             tipo_comprobante_codigo: form.value.tipo_comprobante_codigo,
             client_id: cliente.value.id,
             texto_personalizado: form.value.texto_personalizado || null,

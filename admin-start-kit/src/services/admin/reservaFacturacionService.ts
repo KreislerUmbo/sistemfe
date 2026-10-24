@@ -17,6 +17,9 @@ import httpClient from '@/helpers/http-client'
 export type FacturarReservaPayload = {
   pasajero_ids: number[]
   reserva_item_ids_manual?: number[]
+  // Servicios desmarcados en "Qué entra en este comprobante" (24-oct-2026):
+  // quedan pendientes para otra factura.
+  reserva_item_ids_excluidos?: number[]
   tipo_comprobante_codigo: '01' | '03'
   client_id: number
   texto_personalizado?: string | null
@@ -89,6 +92,8 @@ export type DetalleComprobantePreview = {
   parcial: boolean
   pasajeros_grupo: number | null
   pasajeros_total: number | null
+  // Desmarcado por el vendedor: se muestra (con su monto) pero no suma.
+  excluido?: boolean
 }
 
 export type PrepararFacturaResponse = {
@@ -165,6 +170,7 @@ export const reservaFacturacionService = {
       tipoCambioConversion?: number | null
       branchId?: number | null
       tipoComprobanteCodigo?: '01' | '03' | null
+      reservaItemIdsExcluidos?: number[]
     } = {}
   ) {
     const response = await httpClient.get(`/reservas/${reservaId}/preparar-factura`, {
@@ -174,7 +180,8 @@ export const reservaFacturacionService = {
         moneda_facturacion: opciones.monedaFacturacion || undefined,
         tipo_cambio_conversion: opciones.tipoCambioConversion || undefined,
         branch_id: opciones.branchId || undefined,
-        tipo_comprobante_codigo: opciones.tipoComprobanteCodigo || undefined
+        tipo_comprobante_codigo: opciones.tipoComprobanteCodigo || undefined,
+        reserva_item_ids_excluidos: opciones.reservaItemIdsExcluidos?.length ? opciones.reservaItemIdsExcluidos : undefined
       }
     })
     return response.data as PrepararFacturaResponse

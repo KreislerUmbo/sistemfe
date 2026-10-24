@@ -357,6 +357,59 @@ class Fila13Fase1cFacturacionTest extends TestCase
         $this->assertEqualsWithDelta(150.0, (float) $ventaB->total, 0.001);
     }
 
+    // Elegir qué servicios entran (24-oct-2026, pedido del usuario): Kreisler
+    // paga ahora solo Alto Mayo; su Laguna Azul queda pendiente y se factura
+    // después, aunque él ya tenga un comprobante.
+    public function test_servicio_desmarcado_queda_pendiente_y_se_factura_despues(): void
+    {
+        $alternativa = $this->crearAlternativa([['adulto', 40], ['adulto', 38]]);
+        $this->cargar($alternativa, $this->tourGravado(150, null, 'Alto Mayo'), 1);
+        $this->cargar($alternativa, $this->tourGravado(150, null, 'Laguna Azul'), 2);
+        $reserva = $this->aceptar($alternativa);
+        [$kreisler, $roxana] = $this->pasajeros($reserva);
+        $laguna = ReservaItem::where('reserva_id', $reserva->id)->whereHas('tourOrigen', fn ($q) => $q->where('nombre', 'Laguna Azul'))->pluck('id')->all();
+        $this->assertNotEmpty($laguna);
+
+        // Vista previa: Laguna Azul se ve desmarcada y no suma.
+        $preview = app(ReservaFacturacionController::class)->prepararFactura(new Request([
+            'pasajero_ids' => [$kreisler], 'reserva_item_ids_excluidos' => $laguna,
+        ]), (string) $reserva->id)->getData(true);
+        $this->assertEqualsWithDelta(150.0, (float) $preview['total'], 0.001);
+        $filaLaguna = collect($preview['detalle'])->firstWhere('nombre', 'Laguna Azul');
+        $this->assertTrue($filaLaguna['excluido']);
+        $this->assertEqualsWithDelta(150.0, $filaLaguna['monto'], 0.001, 'Se ve cuánto sería, aunque no entre.');
+
+        $ventaKreisler = $this->facturarOk($reserva, [$kreisler], ['reserva_item_ids_excluidos' => $laguna]);
+        $ventaRoxana = $this->facturarOk($reserva, [$roxana]);
+        // La Laguna Azul de Kreisler, después (él ya tiene comprobante).
+        $ventaLagunaKreisler = $this->facturarOk($reserva, [$kreisler]);
+
+        $this->assertEqualsWithDelta(150.0, (float) $ventaKreisler->total, 0.001);
+        $this->assertEqualsWithDelta(300.0, (float) $ventaRoxana->total, 0.001);
+        $this->assertEqualsWithDelta(150.0, (float) $ventaLagunaKreisler->total, 0.001);
+        // Nada más por facturar.
+        $this->assertSame(422, $this->facturar($reserva, [$kreisler])->getStatusCode());
+    }
+
+    // Un tour con IGV mezclado son varias líneas: desmarcar una saca el tour entero.
+    public function test_desmarcar_una_linea_de_un_tour_mezclado_saca_el_tour_entero(): void
+    {
+        $alternativa = $this->crearAlternativa([['adulto', 40]]);
+        $this->cargar($alternativa, $this->tourMezclado());
+        $reserva = $this->aceptar($alternativa);
+        $this->confirmarAmazonia($reserva);
+        $lineas = ReservaItem::where('reserva_id', $reserva->id)->whereNotNull('carga_tour')->pluck('id');
+        $this->assertCount(2, $lineas);
+
+        $preview = app(ReservaFacturacionController::class)->prepararFactura(new Request([
+            'pasajero_ids' => $this->pasajeros($reserva), 'reserva_item_ids_excluidos' => [$lineas->first()],
+        ]), (string) $reserva->id)->getData(true);
+
+        $this->assertSame([], $preview['partes_tour']);
+        $this->assertCount(1, $preview['detalle']);
+        $this->assertTrue($preview['detalle'][0]['excluido']);
+    }
+
     public function test_repartir_centavos_no_gana_ni_pierde_centimos(): void
     {
         // El caso de arriba: 101.615 + 48.385 = 150.00 exacto.
@@ -805,18 +858,18 @@ class Fila13Fase1cFacturacionTest extends TestCase
         $this->assertStringContainsString('Solo un mismo tour', $preview['motivo']);
     }
 
-    private function facturarOk(Reserva $reserva, ?array $pasajeroIds = null): Sale
+    private function facturarOk(Reserva $reserva, ?array $pasajeroIds = null, array $extra = []): Sale
     {
-        $respuesta = $this->facturar($reserva, $pasajeroIds)->getData(true);
+        $respuesta = $this->facturar($reserva, $pasajeroIds, $extra)->getData(true);
         $this->assertSame(200, $respuesta['code'], json_encode($respuesta));
 
         return Sale::find($respuesta['sale_id']);
     }
 
-    private function facturar(Reserva $reserva, ?array $pasajeroIds = null)
+    private function facturar(Reserva $reserva, ?array $pasajeroIds = null, array $extra = [])
     {
         try {
-            return app(ReservaFacturacionController::class)->store($this->pedidoDeFactura($reserva, $pasajeroIds, [
+            return app(ReservaFacturacionController::class)->store($this->pedidoDeFactura($reserva, $pasajeroIds, $extra + [
                 'client_id' => Client::factory()->empresa()->create()->id,
                 'tipo_comprobante_codigo' => '01',
             ]), (string) $reserva->id);

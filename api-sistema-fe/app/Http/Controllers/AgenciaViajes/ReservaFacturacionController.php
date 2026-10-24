@@ -187,6 +187,9 @@ class ReservaFacturacionController extends Controller
             'pasajero_ids.*' => 'integer|exists:reserva_pasajeros,id',
             'reserva_item_ids_manual' => 'nullable|array',
             'reserva_item_ids_manual.*' => 'integer|exists:reserva_items,id',
+            // Servicios desmarcados en "Qué entra en este comprobante" (24-oct-2026).
+            'reserva_item_ids_excluidos' => 'nullable|array',
+            'reserva_item_ids_excluidos.*' => 'integer',
             // Facturar en moneda distinta a la de la cotización (2026-09-24,
             // ver resolverMonedaFacturacionPreview()) — sin motivo/tipo de
             // cambio obligatorios acá, el preview es de solo lectura y
@@ -207,11 +210,11 @@ class ReservaFacturacionController extends Controller
 
         $validado = $validator->validated();
 
-        $resolucion = $this->resolverSeleccion($reserva, $validado['pasajero_ids'], $validado['reserva_item_ids_manual'] ?? []);
+        $resolucion = $this->resolverSeleccion($reserva, $validado['pasajero_ids'], $validado['reserva_item_ids_manual'] ?? [], $validado['reserva_item_ids_excluidos'] ?? []);
         if ($resolucion instanceof \Illuminate\Http\JsonResponse) {
             return $resolucion;
         }
-        ['items' => $items, 'contexto' => $contexto, 'partes_tour' => $partesTour] = $resolucion;
+        ['items' => $items, 'contexto' => $contexto, 'partes_tour' => $partesTour, 'items_excluidos' => $itemsExcluidos, 'partes_excluidas' => $partesExcluidas] = $resolucion;
 
         $infoMoneda = $this->resolverMonedaFacturacionPreview($request, $reserva);
         $contexto = array_merge($contexto, [
@@ -221,7 +224,7 @@ class ReservaFacturacionController extends Controller
             'tipo_cambio_aplicado' => $infoMoneda['tipo_cambio'],
             'serie_resuelta' => $this->resolverSeriePreview($request, $validado, $infoMoneda['moneda_facturacion']),
             // F1 (23-oct-2026): qué entra y cuánto, también con bloqueo.
-            'detalle' => $this->detallePreview($items, $partesTour),
+            'detalle' => $this->detallePreview($items, $partesTour, $itemsExcluidos, $partesExcluidas),
         ]);
 
         // Preview de solo lectura: se mantiene siempre 200, con
@@ -322,6 +325,9 @@ class ReservaFacturacionController extends Controller
             'pasajero_ids.*' => 'integer|exists:reserva_pasajeros,id',
             'reserva_item_ids_manual' => 'nullable|array',
             'reserva_item_ids_manual.*' => 'integer|exists:reserva_items,id',
+            // Servicios desmarcados en "Qué entra en este comprobante" (24-oct-2026).
+            'reserva_item_ids_excluidos' => 'nullable|array',
+            'reserva_item_ids_excluidos.*' => 'integer',
             'client_id' => 'required|integer|exists:clients,id',
             'tipo_comprobante_codigo' => 'required|string|in:01,03',
             'texto_personalizado' => 'nullable|string|max:2000',
@@ -354,7 +360,7 @@ class ReservaFacturacionController extends Controller
 
         $validado = $validator->validated();
 
-        $resolucion = $this->resolverSeleccion($reserva, $validado['pasajero_ids'], $validado['reserva_item_ids_manual'] ?? []);
+        $resolucion = $this->resolverSeleccion($reserva, $validado['pasajero_ids'], $validado['reserva_item_ids_manual'] ?? [], $validado['reserva_item_ids_excluidos'] ?? []);
         if ($resolucion instanceof \Illuminate\Http\JsonResponse) {
             return $resolucion;
         }
@@ -427,6 +433,7 @@ class ReservaFacturacionController extends Controller
         $textoPersonalizado = $validado['texto_personalizado'] ?? null;
         $pasajeroIdsSolicitados = $validado['pasajero_ids'];
         $idsManualSolicitados = $validado['reserva_item_ids_manual'] ?? [];
+        $idsExcluidosSolicitados = $validado['reserva_item_ids_excluidos'] ?? [];
         $aplicacionesAdelantoSolicitadas = $validado['advance_applications'] ?? [];
 
         try {
@@ -441,6 +448,7 @@ class ReservaFacturacionController extends Controller
                 $textoPersonalizado,
                 $pasajeroIdsSolicitados,
                 $idsManualSolicitados,
+                $idsExcluidosSolicitados,
                 $infoMoneda
             ) {
                 // Re-chequeo bajo lock: cierra la ventana de carrera con
@@ -466,7 +474,8 @@ class ReservaFacturacionController extends Controller
                 $resolucionBajoLock = $this->resolverSeleccion(
                     $reservaLocked,
                     $pasajeroIdsSolicitados,
-                    $idsManualSolicitados
+                    $idsManualSolicitados,
+                    $idsExcluidosSolicitados
                 );
                 if ($resolucionBajoLock instanceof \Illuminate\Http\JsonResponse) {
                     throw new HttpException(422, $resolucionBajoLock->getData(true)['message']);
@@ -759,8 +768,10 @@ class ReservaFacturacionController extends Controller
     // error devuelve un JsonResponse 422 listo para retornar tal cual;
     // sobre éxito devuelve ['items' => Collection<ReservaItem> (con
     // relaciones cargadas para agrupar/calcular), 'contexto' => array
-    // (campos informativos para la respuesta del preview)].
-    private function resolverSeleccion(Reserva $reserva, array $pasajeroIdsSolicitados, array $idsManualSolicitados)
+    // (campos informativos para la respuesta del preview)]. $idsExcluidos:
+    // servicios desmarcados por el vendedor (24-oct-2026); vuelven aparte en
+    // 'items_excluidos'/'partes_excluidas' para que la vista previa los muestre.
+    private function resolverSeleccion(Reserva $reserva, array $pasajeroIdsSolicitados, array $idsManualSolicitados, array $idsExcluidos = [])
     {
         $pasajerosAjenos = collect($pasajeroIdsSolicitados)->diff($reserva->pasajeros->pluck('id'))->values();
         if ($pasajerosAjenos->isNotEmpty()) {
@@ -907,6 +918,12 @@ class ReservaFacturacionController extends Controller
             ? $itemsManual->concat($itemsTourFacturables)->values()
             : $itemsAuto->concat($itemsTourFacturables)->concat($itemsManual)->unique('id')->values();
 
+        // Servicios que el vendedor desmarcó en "Qué entra en este
+        // comprobante" (24-oct-2026, pedido del usuario): no entran en esta
+        // factura y quedan pendientes para otra.
+        ['items' => $itemsFinal, 'partes' => $partesTour, 'items_excluidos' => $itemsExcluidos, 'partes_excluidas' => $partesExcluidas]
+            = self::separarExcluidos($itemsFinal, $partesTour, $idsExcluidos);
+
         $pasajerosPendientes = $reserva->pasajeros->pluck('id')
             ->diff($pasajerosYaFacturados)
             ->diff($pasajeroIdsSolicitados)
@@ -953,7 +970,10 @@ class ReservaFacturacionController extends Controller
             }
         }
 
-        return ['items' => $itemsFinal, 'contexto' => $contexto, 'partes_tour' => $partesTour];
+        return [
+            'items' => $itemsFinal, 'contexto' => $contexto, 'partes_tour' => $partesTour,
+            'items_excluidos' => $itemsExcluidos, 'partes_excluidas' => $partesExcluidas,
+        ];
     }
 
     // Fila 13, fase 1c (C1, decidido con el usuario el 18-oct-2026): a
@@ -1040,19 +1060,54 @@ class ReservaFacturacionController extends Controller
         return ['items' => $itemsQueEntran, 'partes' => array_values($partes)];
     }
 
+    // Saca de la factura los servicios desmarcados por el vendedor (24-oct-2026).
+    // Un tour con IGV mezclado son varias líneas: si se desmarca una, sale el
+    // tour entero (nunca una línea sola). Lo que sale queda pendiente:
+    // - un servicio con pasajeros asignados, como "sin asignar" (ítem huérfano,
+    //   ver resolverSeleccion()) cuando esos pasajeros ya estén facturados;
+    // - la parte de un tour, porque partesDeTour() mira quién pagó cada tour.
+    private static function separarExcluidos(Collection $items, array $partesTour, array $idsExcluidos): array
+    {
+        $cargasExcluidas = $items->whereIn('id', $idsExcluidos)->pluck('carga_tour')->filter()->unique();
+        $sale = fn (ReservaItem $it) => in_array($it->id, $idsExcluidos, true)
+            || ($it->carga_tour !== null && $cargasExcluidas->contains($it->carga_tour));
+
+        $itemsExcluidos = $items->filter($sale)->values();
+        $idsQueSalen = $itemsExcluidos->pluck('id')->all();
+        $deLosQueSalen = fn (array $parte) => in_array($parte['reserva_item_id'], $idsQueSalen, true);
+
+        return [
+            'items' => $items->reject($sale)->values(),
+            'partes' => array_values(array_filter($partesTour, fn (array $parte) => ! $deLosQueSalen($parte))),
+            'items_excluidos' => $itemsExcluidos,
+            'partes_excluidas' => array_values(array_filter($partesTour, $deLosQueSalen)),
+        ];
+    }
+
     // F1 (23-oct-2026, pedido del usuario): qué entra en este comprobante y
     // cuánto, para la vista previa — se calcula ANTES del guardia tributario,
     // así se ve aunque haya un bloqueo. Una fila por servicio; las líneas de
     // un mismo tour (una por código de IGV) son una sola fila. Una línea de
     // tour cobrada por grupo muestra su parte ("2 de 4 pasajeros"). Montos en
     // la moneda de la cotización (antes de convertir, si se factura en otra).
-    private function detallePreview(Collection $items, array $partesTour): array
+    // Los servicios desmarcados (24-oct-2026) también salen, con
+    // 'excluido' => true, para poder volver a marcarlos; no suman al total.
+    private function detallePreview(Collection $items, array $partesTour, ?Collection $itemsExcluidos = null, array $partesExcluidas = []): array
+    {
+        return collect($this->filasDetalle($items, $partesTour, false))
+            ->concat($this->filasDetalle($itemsExcluidos ?? collect(), $partesExcluidas, true))
+            ->sortBy(fn (array $fila) => $fila['reserva_item_ids']->min())
+            ->values()
+            ->all();
+    }
+
+    private function filasDetalle(Collection $items, array $partesTour, bool $excluido): array
     {
         $partes = collect($partesTour)->keyBy('reserva_item_id');
 
         return $items
             ->groupBy(fn (ReservaItem $it) => $it->carga_tour ?? 'item_'.$it->id)
-            ->map(function (Collection $lineas) use ($partes) {
+            ->map(function (Collection $lineas) use ($partes, $excluido) {
                 $primera = $lineas->first();
                 $esTour = $primera->alternativaItem?->esLineaTour() ?? false;
                 $parte = $partes->get($primera->id);
@@ -1070,6 +1125,7 @@ class ReservaFacturacionController extends Controller
                     'parcial' => $parte !== null && abs($monto - $total) > 0.004,
                     'pasajeros_grupo' => $parte['pasajeros_grupo'] ?? null,
                     'pasajeros_total' => $parte['pasajeros_total'] ?? null,
+                    'excluido' => $excluido,
                 ];
             })
             ->values()
