@@ -599,25 +599,9 @@
                             desde este formulario.
                         </div>
                     </div>
-                    <div class="col-6 col-md-2">
-                        <label class="form-label mb-1 small fw-semibold text-secondary">N° de cuotas</label>
-                        <b-form-input type="number" v-model.number="num_cuotas" min="1" max="60" size="sm" />
-                    </div>
-                    <div class="col-6 col-md-3">
-                        <label class="form-label mb-1 small fw-semibold text-secondary">Periodicidad</label>
-                        <select v-model="periodicidad" class="form-select form-select-sm">
-                            <option value="mensual">Mensual</option>
-                            <option value="quincenal">Quincenal</option>
-                            <option value="semanal">Semanal</option>
-                            <option value="personalizada">Personalizada (fechas manuales)</option>
-                        </select>
-                    </div>
-                    <div class="col-12 col-md-3">
-                        <button type="button" class="btn btn-outline-primary btn-sm w-100 fw-semibold"
-                            :disabled="generandoCronograma" @click="generarCronogramaSugerido()">
-                            <i class="fas fa-magic me-1"></i>Generar cronograma sugerido
-                        </button>
-                    </div>
+                    <!-- Cuotas: components/CronogramaCuotasCampos.vue (compartido con edit.vue y la facturación de reservas). -->
+                    <CronogramaCuotasCampos v-model="cronograma" v-model:num-cuotas="num_cuotas" v-model:periodicidad="periodicidad"
+                        :monto-a-financiar="montoAFinanciar()" :moneda="currency" :fecha-base="today" />
                     <div class="col-6 col-md-2">
                         <div class="form-check form-switch pt-4">
                             <input class="form-check-input" type="checkbox" role="switch" id="aplica-mora"
@@ -640,43 +624,6 @@
                             </select>
                         </div>
                     </template>
-
-                    <div class="col-12" v-if="cronograma.length > 0">
-                        <p class="small fw-semibold text-secondary mb-1">
-                            <i class="fas fa-calendar-check me-1"></i>Cronograma de cuotas
-                        </p>
-                        <div class="table-responsive">
-                            <table class="table table-sm table-bordered align-middle mb-0">
-                                <thead class="table-light">
-                                    <tr class="small text-secondary text-uppercase">
-                                        <th>#</th>
-                                        <th>Monto</th>
-                                        <th>Fecha de vencimiento</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr v-for="(c, idx) in cronograma" :key="idx">
-                                        <td class="small text-muted">{{ c.numero_cuota }}</td>
-                                        <td>
-                                            <b-input-group size="sm">
-                                                <b-input-group-text>{{ currency }}</b-input-group-text>
-                                                <b-form-input type="number" v-model.number="c.monto_programado"
-                                                    step="0.01" size="sm" />
-                                            </b-input-group>
-                                        </td>
-                                        <td>
-                                            <b-form-input type="date" v-model="c.fecha_vencimiento" size="sm" />
-                                        </td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                        <div class="small mt-1"
-                            :class="Math.abs(sumaCronograma() - montoAFinanciar()) < 0.01 ? 'text-success' : 'text-danger fw-bold'">
-                            Suma cronograma: {{ currency }} {{ sumaCronograma().toFixed(2) }}
-                            / Monto a financiar: {{ currency }} {{ montoAFinanciar().toFixed(2) }}
-                        </div>
-                    </div>
                 </div>
 
                 <!-- Lista de pagos + observaciones + botones -->
@@ -814,6 +761,7 @@ import type { Client } from '@/types/clients';
 import type { Product } from '@/types/products';
 import ClientFormQuick from '@/components/Sales/ClientFormQuick.vue';
 import ProductFormQuick from '@/components/Sales/ProductFormQuick.vue';
+import CronogramaCuotasCampos from '@/components/CronogramaCuotasCampos.vue';
 import { imprimirComprobante } from '@/composables/usePrintComprobante';
 import { getPrecioBaseSinIgv } from '@/composables/useProductPricing';
 import { useAuthStore } from '@/stores/auth';
@@ -1027,7 +975,6 @@ const cronograma = ref<{ numero_cuota: number; monto_programado: number; fecha_v
 const aplica_mora = ref<boolean>(false);
 const tasa_mora = ref<number>(0);
 const tipo_mora = ref<string>('porcentaje_diario');
-const generandoCronograma = ref<boolean>(false);
 const company_mora_defaults = ref<{ mora_habilitada_default: boolean; tasa_mora_default: number | null; tipo_mora_default: string | null }>({
     mora_habilitada_default: false,
     tasa_mora_default: null,
@@ -1610,28 +1557,6 @@ const aplicarDefaultsMora = () => {
     aplica_mora.value = company_mora_defaults.value.mora_habilitada_default;
     tasa_mora.value = company_mora_defaults.value.tasa_mora_default ?? 0;
     tipo_mora.value = company_mora_defaults.value.tipo_mora_default ?? 'porcentaje_diario';
-};
-
-const generarCronogramaSugerido = async () => {
-    const monto = montoAFinanciar();
-    if (monto <= 0) {
-        (Swal as TVueSwalInstance).fire('Error', 'No hay monto a financiar (el total ya está cubierto por adelantos/pagos).', 'error');
-        return;
-    }
-    generandoCronograma.value = true;
-    try {
-        const res = await httpClient.post('installments/schedule-preview', {
-            monto_total: monto,
-            num_cuotas: num_cuotas.value,
-            periodicidad: periodicidad.value,
-            fecha_anchor: today.value,
-        });
-        cronograma.value = (res.data as any).cronograma;
-    } catch (error: any) {
-        (Swal as TVueSwalInstance).fire('Error', error?.response?.data?.message ?? 'No se pudo generar el cronograma.', 'error');
-    } finally {
-        generandoCronograma.value = false;
-    }
 };
 
 // ── Pagos ─────────────────────────────────────────────────────────

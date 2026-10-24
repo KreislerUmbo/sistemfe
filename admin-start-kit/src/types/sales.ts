@@ -144,6 +144,8 @@ export type Sale = {
     codigo_detraccion: string
     porcentaje_detraccion: number,
     is_locked?: boolean;
+    // De qué reserva salió (Agencia): no se edita desde Ventas (24-oct-2026).
+    reserva_origen?: { reserva_id: number; codigo: string | null } | null;
     type?:string,
     mto_oper_gravadas?: number,
 }

@@ -204,6 +204,10 @@
                                         {{ sale.n_operacion }}
                                     </span>
                                     <span v-else class="text-muted small">{{ sale.serie || '—' }}</span>
+                                    <!-- Salió de facturar una reserva (Agencia, 24-oct-2026): se corrige desde la reserva. -->
+                                    <div v-if="sale.reserva_origen" class="small text-muted mt-1">
+                                        <i class="fas fa-suitcase-rolling me-1"></i>De reserva {{ sale.reserva_origen.codigo ?? `#${sale.reserva_origen.reserva_id}` }}
+                                    </div>
 
                                     <!-- Condición tributaria: detracción, percepción, retención, exoneración, exportación -->
                                     <div v-if="condicionesTributarias(sale).length" class="d-flex flex-wrap gap-1 mt-1">
@@ -664,6 +668,18 @@ const editSale = (sale: Sale) => {
             text: `La venta N° ${sale.id} no se puede editar porque ya fue enviada a SUNAT.`,
             icon: "warning",
             confirmButtonText: "Aceptar",
+        });
+        return;
+    }
+    // Salió de una reserva (Agencia, 24-oct-2026): editarla aquí descuadraría
+    // la reserva; el backend también lo rechaza (SaleController::update()).
+    if (sale.reserva_origen) {
+        const codigo = sale.reserva_origen.codigo ?? `#${sale.reserva_origen.reserva_id}`;
+        (Swal as TVueSwalInstance).fire({
+            title: "Venta de una reserva",
+            text: `Esta venta salió de la reserva ${codigo}. Para corregirla, elimínala (mientras no se haya enviado a SUNAT) y vuelve a facturar desde la reserva.`,
+            icon: "info",
+            confirmButtonText: "Entendido",
         });
         return;
     }

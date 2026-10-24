@@ -119,6 +119,16 @@
     <div>Cliente: {{ $venta->client->full_name }}</div>
     <div>{{ $venta->client->type_document }}: {{ $venta->client->n_document }}</div>
     <div>Vendedor: {{ $venta->user->name }} {{ $venta->user->surname }}</div>
+    {{-- Condición de pago (24-oct-2026, todos los giros): la misma que el XML;
+         a crédito, las cuotas vigentes (Sale::cuotasVigentes()). --}}
+    @php
+        $es_credito = (int) $venta->type_payment === 2;
+        $cuotas_pdf = $es_credito ? $venta->cuotasVigentes() : collect();
+    @endphp
+    <div>Condición de pago: {{ $es_credito ? 'Crédito' : 'Contado' }}</div>
+    @foreach ($cuotas_pdf as $cuota)
+        <div>&nbsp;Cuota {{ $cuota->numero_cuota }}: {{ $venta->currency === 'USD' ? 'US$' : 'S/' }} {{ number_format((float) $cuota->monto_programado, 2) }} — vence {{ \Carbon\Carbon::parse($cuota->fecha_vencimiento)->format('d/m/Y') }}</div>
+    @endforeach
 
     <div class="linea"></div>
 

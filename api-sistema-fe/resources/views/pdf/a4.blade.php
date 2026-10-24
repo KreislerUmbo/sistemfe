@@ -273,11 +273,15 @@
 
         {{-- ══════════════════ CLIENTE / FECHAS ══════════════════ --}}
         @php
-            $fecha_venc = null;
-            if ($venta->type_payment == 2 && $venta->sale_payments->isNotEmpty()) {
-                $ultimo_pago = $venta->sale_payments->sortByDesc('date_payment')->first();
-                $fecha_venc = \Carbon\Carbon::parse($ultimo_pago->date_payment)->format('d/m/Y');
-            }
+            // Condición de pago (24-oct-2026, todos los giros): la misma que va en
+            // el XML. A crédito, las cuotas vigentes (Sale::cuotasVigentes(), la
+            // misma fuente que GreenterService) y el vencimiento de la última.
+            // Antes la fecha de vencimiento salía del último pago registrado.
+            $es_credito = (int) $venta->type_payment === 2;
+            $cuotas_pdf = $es_credito ? $venta->cuotasVigentes() : collect();
+            $fecha_venc = $cuotas_pdf->isNotEmpty()
+                ? \Carbon\Carbon::parse($cuotas_pdf->last()->fecha_vencimiento)->format('d/m/Y')
+                : null;
             $moneda_label = $venta->currency === 'USD' ? 'DÓLARES' : 'SOLES';
         @endphp
         <table style="width:100%; margin-top:16px;">
@@ -313,6 +317,10 @@
                         <tr>
                             <td>MONEDA</td>
                             <td>: {{ $moneda_label }}</td>
+                        </tr>
+                        <tr>
+                            <td>CONDICIÓN DE PAGO</td>
+                            <td>: {{ $es_credito ? 'CRÉDITO' : 'CONTADO' }}</td>
                         </tr>
                         <tr>
                             <td>VENDEDOR</td>
@@ -518,6 +526,18 @@
         <div class="caja-redonda">
             <span style="font-weight:bold;">IMPORTE EN LETRAS:</span> {{ $resumen['monto_en_letras'] }}
         </div>
+
+        {{-- ══════════════════ CUOTAS (venta a crédito) ══════════════════ --}}
+        @if ($cuotas_pdf->isNotEmpty())
+            <div class="caja-redonda compacta">
+                <span style="font-weight:bold;">CRÉDITO — CUOTAS:</span>
+                @foreach ($cuotas_pdf as $cuota)
+                    Cuota {{ $cuota->numero_cuota }}: {{ $venta->currency === 'USD' ? 'US$' : 'S/' }}
+                    {{ number_format((float) $cuota->monto_programado, 2) }} vence
+                    {{ \Carbon\Carbon::parse($cuota->fecha_vencimiento)->format('d/m/Y') }}@if (! $loop->last) · @endif
+                @endforeach
+            </div>
+        @endif
 
         {{-- ══════════════════ LEYENDA AMAZONÍA (si aplica) ══════════════════ --}}
         @if ($resumen['muestra_leyenda_amazonia'])

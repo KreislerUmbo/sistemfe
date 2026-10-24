@@ -488,10 +488,8 @@ class GreenterService
     // mismo orden en que Greenter espera las Cuota[] del XML.
     public function cuotasActivasParaCredito(Sale $venta)
     {
-        return $venta->installments()
-            ->where('estado', '!=', 'anulada')
-            ->orderBy('numero_cuota')
-            ->get();
+        // Misma fuente que el PDF (24-oct-2026): ver Sale::cuotasVigentes().
+        return $venta->cuotasVigentes();
     }
 
     // ── Armar la Nota de Crédito/Débito completa para Greenter ────────

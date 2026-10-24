@@ -41,6 +41,10 @@ export type FacturarReservaPayload = {
   // 100% de los anticipos disponibles de la reserva (para ESTE cliente);
   // poblado = el vendedor eligió a mano cuáles y cuánto.
   advance_applications?: Array<{ advance_id: number; amount: number }>
+  // Condición de pago (fila F5, 24-oct-2026): sin esto, contado. Crédito
+  // exige cronograma que sume exacto el saldo a cobrar (saldo_a_cobrar).
+  condicion_pago?: 'contado' | 'credito'
+  cronograma?: Array<{ numero_cuota: number; monto_programado: number; fecha_vencimiento: string }>
 }
 
 export type FacturarReservaResponse = {
@@ -154,6 +158,10 @@ export type PrepararFacturaResponse = {
   items_sin_asignar_disponibles: ItemSinAsignarDisponible[]
   cliente_sugerido?: { id: number; full_name: string; n_document: string }
   anticipos_disponibles?: AnticipoDisponiblePreview[]
+  // Fila F5: con client_id, lo que se descuenta de anticipos y lo que queda
+  // por cobrar, con la misma regla que la emisión (las cuotas suman esto).
+  anticipo_que_se_aplica?: number
+  saldo_a_cobrar?: number
 }
 
 export const reservaFacturacionService = {
@@ -171,6 +179,8 @@ export const reservaFacturacionService = {
       branchId?: number | null
       tipoComprobanteCodigo?: '01' | '03' | null
       reservaItemIdsExcluidos?: number[]
+      clientId?: number | null
+      advanceApplications?: Array<{ advance_id: number; amount: number }>
     } = {}
   ) {
     const response = await httpClient.get(`/reservas/${reservaId}/preparar-factura`, {
@@ -181,7 +191,9 @@ export const reservaFacturacionService = {
         tipo_cambio_conversion: opciones.tipoCambioConversion || undefined,
         branch_id: opciones.branchId || undefined,
         tipo_comprobante_codigo: opciones.tipoComprobanteCodigo || undefined,
-        reserva_item_ids_excluidos: opciones.reservaItemIdsExcluidos?.length ? opciones.reservaItemIdsExcluidos : undefined
+        reserva_item_ids_excluidos: opciones.reservaItemIdsExcluidos?.length ? opciones.reservaItemIdsExcluidos : undefined,
+        client_id: opciones.clientId || undefined,
+        advance_applications: opciones.advanceApplications?.length ? opciones.advanceApplications : undefined
       }
     })
     return response.data as PrepararFacturaResponse

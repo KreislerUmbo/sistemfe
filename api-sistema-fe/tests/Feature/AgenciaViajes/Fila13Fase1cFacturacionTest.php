@@ -443,6 +443,81 @@ class Fila13Fase1cFacturacionTest extends TestCase
         $this->assertSame(500, mb_strlen($detalle->descripcionParaSunat()), 'SUNAT acepta hasta 500 caracteres.');
     }
 
+    // Condición de pago (fila F5, 24-oct-2026): a crédito, con sus cuotas; el
+    // XML sale con "Crédito" y esas cuotas (GreenterService las lee de
+    // installments) y el cobro se sigue en Cuentas por Cobrar.
+    public function test_factura_a_credito_guarda_sus_cuotas(): void
+    {
+        $alternativa = $this->crearAlternativa([['adulto', 40], ['adulto', 38]]);
+        $this->cargar($alternativa, $this->tourGravado(150, null, 'Alto Mayo'));
+        $reserva = $this->aceptar($alternativa);
+
+        $venta = $this->facturarOk($reserva, null, [
+            'condicion_pago' => 'credito',
+            'cronograma' => [
+                ['numero_cuota' => 1, 'monto_programado' => 100, 'fecha_vencimiento' => '2026-11-15'],
+                ['numero_cuota' => 2, 'monto_programado' => 200, 'fecha_vencimiento' => '2026-12-15'],
+            ],
+        ]);
+
+        $this->assertSame(2, (int) $venta->type_payment);
+        $this->assertSame('credito', $venta->condicion_pago);
+        $this->assertSame('cuotas_fijas', $venta->credit_type);
+        $cuotas = app(\App\Http\Controllers\Greenter\GreenterService::class)->cuotasActivasParaCredito($venta);
+        $this->assertSame([100.0, 200.0], $cuotas->pluck('monto_programado')->map(fn ($m) => (float) $m)->all());
+    }
+
+    public function test_cuotas_que_no_calzan_con_el_saldo_se_rechazan(): void
+    {
+        $alternativa = $this->crearAlternativa([['adulto', 40]]);
+        $this->cargar($alternativa, $this->tourGravado(150, null, 'Alto Mayo'));
+        $reserva = $this->aceptar($alternativa);
+        $ventasAntes = Sale::count();
+
+        $respuesta = $this->facturar($reserva, null, [
+            'condicion_pago' => 'credito',
+            'cronograma' => [['numero_cuota' => 1, 'monto_programado' => 100, 'fecha_vencimiento' => '2026-11-15']],
+        ]);
+
+        $this->assertSame(422, $respuesta->getStatusCode());
+        $this->assertStringContainsString('no calza con el saldo a financiar', $respuesta->getData(true)['message']);
+        // Todo o nada: ni venta ni registro en la reserva.
+        $this->assertSame($ventasAntes, Sale::count());
+        $this->assertFalse(\App\Models\AgenciaViajes\ReservaVenta::where('reserva_id', $reserva->id)->exists());
+    }
+
+    public function test_al_contado_por_defecto_como_siempre(): void
+    {
+        $alternativa = $this->crearAlternativa([['adulto', 40]]);
+        $this->cargar($alternativa, $this->tourGravado(150, null, 'Alto Mayo'));
+        $reserva = $this->aceptar($alternativa);
+
+        $venta = $this->facturarOk($reserva);
+
+        $this->assertSame(1, (int) $venta->type_payment);
+        $this->assertSame('contado', $venta->condicion_pago);
+        $this->assertSame(0, $venta->installments()->count());
+    }
+
+    // Editar en Ventas una venta que salió de una reserva la descuadraría:
+    // se rechaza y se indica el camino (eliminar y volver a facturar).
+    public function test_una_venta_de_reserva_no_se_edita_desde_ventas(): void
+    {
+        $alternativa = $this->crearAlternativa([['adulto', 40]]);
+        $this->cargar($alternativa, $this->tourGravado(150, null, 'Alto Mayo'));
+        $reserva = $this->aceptar($alternativa);
+        $venta = $this->facturarOk($reserva);
+
+        try {
+            app(\App\Http\Controllers\Sale\SaleController::class)->update(new Request(['type_payment' => 1]), (string) $venta->id);
+            $this->fail('Se esperaba que Ventas rechazara editar una venta de reserva.');
+        } catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) {
+            $this->assertSame(422, $e->getStatusCode());
+            $this->assertStringContainsString('salió de la reserva', $e->getMessage());
+            $this->assertStringContainsString('vuelve a facturar desde la reserva', $e->getMessage());
+        }
+    }
+
     public function test_repartir_centavos_no_gana_ni_pierde_centimos(): void
     {
         // El caso de arriba: 101.615 + 48.385 = 150.00 exacto.

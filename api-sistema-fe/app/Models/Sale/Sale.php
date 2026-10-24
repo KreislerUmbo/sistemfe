@@ -250,6 +250,25 @@ class Sale extends Model
         return $this->hasMany(\App\Models\Credit\Installment::class, "sale_id");
     }
 
+    // La reserva de la que salió esta venta (Agencia). Cargarla solo si
+    // ReservaVenta::hayReservasEnEsteTenant(): la tabla no existe en retail.
+    public function reservaVenta()
+    {
+        return $this->hasOne(\App\Models\AgenciaViajes\ReservaVenta::class, "sale_id");
+    }
+
+    // Las cuotas que declara una venta a crédito: las que van en el XML
+    // (GreenterService::cuotasActivasParaCredito()) y las que imprime el PDF
+    // (condición de pago y fecha de vencimiento), para que digan lo mismo
+    // (24-oct-2026, fila F5 de Agencia). Una cuota anulada no cuenta.
+    public function cuotasVigentes()
+    {
+        return $this->installments()
+            ->where('estado', '!=', 'anulada')
+            ->orderBy('numero_cuota')
+            ->get();
+    }
+
     public function paymentApplications()
     {
         return $this->hasMany(\App\Models\Credit\PaymentApplication::class, "sale_id");

@@ -503,4 +503,48 @@ class ReservaAnticipoTest extends TestCase
         $this->assertSame(75.0, (float) $body['anticipos_disponibles'][0]['disponible']);
         $this->assertSame('PEN', $body['anticipos_disponibles'][0]['moneda']);
     }
+
+    // Fila F5 (24-oct-2026): con el cliente, la vista previa dice cuánto
+    // queda por cobrar tras los anticipos, con la misma regla que la emisión.
+    // A crédito, las cuotas tienen que sumar exactamente eso.
+    public function test_preparar_factura_con_cliente_dice_el_saldo_a_cobrar(): void
+    {
+        $this->usuarioCompleto();
+        $reserva = $this->crearReservaSimple(118.00);
+        $pasajero = $this->pasajero($reserva);
+        $clienteId = $reserva->alternativa->cotizacion->cliente_id;
+
+        app(ReservaAnticipoController::class)->store(new Request([
+            'monto' => 50.00, 'medio_pago' => 'EFECTIVO', 'tip_afe_igv' => '10',
+        ]), (string) $reserva->id);
+
+        // El servicio tiene al pasajero asignado: entra solo con él.
+        $pedido = ['pasajero_ids' => [$pasajero->id]];
+
+        $conCliente = app(ReservaFacturacionController::class)->prepararFactura(new Request($pedido + ['client_id' => $clienteId]), (string) $reserva->id)->getData(true);
+        $this->assertEqualsWithDelta(50.0, $conCliente['anticipo_que_se_aplica'], 0.001);
+        $this->assertEqualsWithDelta(68.0, $conCliente['saldo_a_cobrar'], 0.001);
+
+        // Como llega desde la pantalla (por la URL, todo es texto): el anticipo
+        // marcado a mano también se descuenta (bug real 24-oct-2026: con el id
+        // como texto no se reconocía y el saldo salía sin descontar).
+        $advanceId = \App\Models\AgenciaViajes\ReservaAnticipo::where('reserva_id', $reserva->id)->value('advance_id');
+        $marcado = app(ReservaFacturacionController::class)->prepararFactura(new Request([
+            'pasajero_ids' => [(string) $pasajero->id], 'client_id' => (string) $clienteId,
+            'advance_applications' => [['advance_id' => (string) $advanceId, 'amount' => '20.00']],
+        ]), (string) $reserva->id)->getData(true);
+        $this->assertEqualsWithDelta(98.0, $marcado['saldo_a_cobrar'], 0.001);
+
+        // Un servicio desmarcado con su id como texto sale de la factura.
+        $item = \App\Models\AgenciaViajes\ReservaItem::where('reserva_id', $reserva->id)->value('id');
+        $sinServicio = app(ReservaFacturacionController::class)->prepararFactura(new Request([
+            'pasajero_ids' => [(string) $pasajero->id], 'reserva_item_ids_excluidos' => [(string) $item],
+        ]), (string) $reserva->id)->getData(true);
+        $this->assertTrue($sinServicio['detalle'][0]['excluido']);
+
+        // El anticipo es de ese cliente: para otro, no se descuenta.
+        $otro = Client::factory()->create();
+        $otroCliente = app(ReservaFacturacionController::class)->prepararFactura(new Request($pedido + ['client_id' => $otro->id]), (string) $reserva->id)->getData(true);
+        $this->assertEqualsWithDelta(118.0, $otroCliente['saldo_a_cobrar'], 0.001);
+    }
 }

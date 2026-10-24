@@ -23,6 +23,7 @@ use App\Models\Sale\SerieComprobante;
 use App\Models\Sale\TipoComprobante;
 use App\Services\AdvanceApplicationService;
 use App\Services\CashCorrectionService;
+use App\Services\CronogramaCreditoValidator;
 use App\Services\QrCodeService;
 use App\Services\SerieComprobanteService;
 use App\Services\StorageUrl;
@@ -355,64 +356,16 @@ class SaleController extends Controller
             return;
         }
 
-        if ($request->credit_type !== 'cuotas_fijas') {
-            throw new HttpException(
-                422,
-                "Solo se soporta credit_type='cuotas_fijas' desde este formulario por ahora " .
-                "(recibido: '{$request->credit_type}'). 'libre' se sigue creando por fuera de este flujo."
-            );
-        }
-
-        $cronograma = $request->cronograma ?? [];
-        if (empty($cronograma)) {
-            throw new HttpException(422, "Una venta a crédito requiere un cronograma de cuotas (cronograma).");
-        }
-
-        $numerosVistos = [];
-        $sumaCronogramaCentavos = 0;
-
-        foreach ($cronograma as $cuota) {
-            if (!isset($cuota['numero_cuota'], $cuota['monto_programado'], $cuota['fecha_vencimiento'])) {
-                throw new HttpException(
-                    422,
-                    "Cada cuota del cronograma requiere numero_cuota, monto_programado y fecha_vencimiento."
-                );
-            }
-
-            if ((float) $cuota['monto_programado'] <= 0) {
-                throw new HttpException(422, "monto_programado debe ser mayor a 0 en cada cuota del cronograma.");
-            }
-
-            $numero = (int) $cuota['numero_cuota'];
-            if (in_array($numero, $numerosVistos, true)) {
-                throw new HttpException(422, "numero_cuota no puede repetirse dentro del cronograma.");
-            }
-            $numerosVistos[] = $numero;
-
-            $sumaCronogramaCentavos += (int) round((float) $cuota['monto_programado'] * 100);
-        }
-
-        $saldoCentavos = (int) round((float) $request->debt * 100);
-
-        if ($sumaCronogramaCentavos !== $saldoCentavos) {
-            throw new HttpException(
-                422,
-                sprintf(
-                    "La suma del cronograma (%s) no calza con el saldo a financiar (%s).",
-                    number_format($sumaCronogramaCentavos / 100, 2),
-                    number_format($saldoCentavos / 100, 2)
-                )
-            );
-        }
-
-        if ($request->boolean('aplica_mora')) {
-            if ((float) $request->tasa_mora <= 0) {
-                throw new HttpException(422, "aplica_mora=true requiere tasa_mora > 0.");
-            }
-            if (!in_array($request->tipo_mora, ['fijo_por_cuota', 'porcentaje_diario', 'porcentaje_fijo_unico'], true)) {
-                throw new HttpException(422, "tipo_mora inválido: '{$request->tipo_mora}'.");
-            }
-        }
+        // La regla vive en App\Services\CronogramaCreditoValidator (24-oct-2026),
+        // compartida con la facturación de reservas de Agencia.
+        CronogramaCreditoValidator::validar(
+            $request->credit_type,
+            $request->cronograma ?? [],
+            (float) $request->debt,
+            $request->boolean('aplica_mora'),
+            $request->tasa_mora,
+            $request->tipo_mora
+        );
     }
 
     // ── Blindaje Caja (Módulo Caja — Fase 3, plan-modulo-caja.md §5 regla
@@ -615,6 +568,9 @@ class SaleController extends Controller
             // Notas ya emitidas por venta (eager load: evita N+1 al armar
             // el badge de notas en el listado, ver SaleResource).
             ->with("notes")
+            // De qué reserva salió (Agencia, 24-oct-2026): marca en el listado y
+            // botón Editar desactivado. Solo donde existe la tabla.
+            ->when(\App\Models\AgenciaViajes\ReservaVenta::hayReservasEnEsteTenant(), fn ($q) => $q->with("reservaVenta.reserva"))
             ->orderBy("id", "desc")
             ->paginate($perPage);
 
@@ -709,7 +665,9 @@ class SaleController extends Controller
         if ($formato === 'ticket80mm') {
             // Ancho fijo 80mm (≈226.77pt). Dompdf no soporta alto "auto" real,
             // así que se estima el alto según cantidad de ítems.
-            $alto_estimado = 480 + ($venta->sale_details->count() * 40);
+            // + condición de pago y una línea por cuota si es crédito (24-oct-2026).
+            $alto_estimado = 480 + ($venta->sale_details->count() * 40) + 14
+                + ((int) $venta->type_payment === 2 ? $venta->cuotasVigentes()->count() * 14 : 0);
             $pdf->setPaper([0, 0, 226.77, $alto_estimado], 'portrait');
         } else {
             // Papel A4 explícito — el default de Dompdf es "letter" (carta US),
@@ -1052,6 +1010,23 @@ public function update(Request $request, string $id)
             "message" => "No se puede editar una venta ya facturada electrónicamente. " .
                          "Si hay un error, emite una Nota de Crédito.",
         ]);
+    }
+
+    // ── Blindaje: venta que salió de facturar una reserva (Agencia, fila F5,
+    // 24-oct-2026) ── la reserva guarda qué servicios, qué pasajeros y qué
+    // parte de cada tour cobró esta venta (reserva_ventas, sale_detail_items).
+    // Editar aquí montos, líneas o la condición de pago no le llega a la
+    // reserva y la descuadra. Se corrige eliminándola (libera la reserva,
+    // ver destroy()) y volviendo a facturar desde la reserva.
+    $reservaVenta = \App\Models\AgenciaViajes\ReservaVenta::hayReservasEnEsteTenant()
+        ? \App\Models\AgenciaViajes\ReservaVenta::with('reserva')->where('sale_id', $venta->id)->first()
+        : null;
+    if ($reservaVenta) {
+        throw new HttpException(
+            422,
+            "Esta venta salió de la reserva " . ($reservaVenta->reserva?->codigo ?? "#{$reservaVenta->reserva_id}") .
+            ". Para corregirla, elimínala (mientras no se haya enviado a SUNAT) y vuelve a facturar desde la reserva."
+        );
     }
 
     // ── Blindaje venta a crédito (Módulo Amortizaciones — Fase 8) ──

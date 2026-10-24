@@ -10,12 +10,14 @@ use App\Models\AgenciaViajes\ReservaItem;
 use App\Models\AgenciaViajes\ReservaVenta;
 use App\Models\AgenciaViajes\SaleDetailItem;
 use App\Models\Client\Client;
+use App\Models\Credit\Installment;
 use App\Models\Product\Product;
 use App\Models\Sale\Sale;
 use App\Models\Sale\SaleDetail;
 use App\Services\AdvanceApplicationService;
 use App\Services\AgenciaViajes\PriceEngineService;
 use App\Services\AgenciaViajes\TourLineaService;
+use App\Services\CronogramaCreditoValidator;
 use App\Services\SerieComprobanteService;
 use App\Services\TipoCambio\TipoCambioSunatResolver;
 use Illuminate\Http\Request;
@@ -202,6 +204,12 @@ class ReservaFacturacionController extends Controller
             // eligió tipo de comprobante en este preview).
             'branch_id' => 'nullable|integer|exists:branches,id',
             'tipo_comprobante_codigo' => 'nullable|string|in:01,03',
+            // Para el saldo a cobrar (fila F5, 24-oct-2026): con el cliente y los
+            // anticipos elegidos, la vista previa aplica la misma regla que store().
+            'client_id' => 'nullable|integer|exists:clients,id',
+            'advance_applications' => 'nullable|array',
+            'advance_applications.*.advance_id' => 'required_with:advance_applications|integer',
+            'advance_applications.*.amount' => 'required_with:advance_applications|numeric|min:0.01',
         ]);
 
         if ($validator->fails()) {
@@ -280,6 +288,18 @@ class ReservaFacturacionController extends Controller
             ->filter(fn (array $a) => $a['disponible'] > 0)
             ->values();
 
+        // Lo que quedará por cobrar tras los anticipos (fila F5): con crédito,
+        // las cuotas tienen que sumar esto. Sin cliente, sin anticipos.
+        $anticipoQueSeAplica = 0.0;
+        if (! empty($validado['client_id'])) {
+            try {
+                $aplicaciones = $this->anticiposQueSeAplican($reserva, (int) $validado['client_id'], $infoMoneda['moneda_facturacion'], $total, $validado['advance_applications'] ?? []);
+                $anticipoQueSeAplica = round(collect($aplicaciones)->sum('amount'), 2);
+            } catch (HttpException) {
+                // Anticipos elegidos que no valen: store() los rechazará con su mensaje.
+            }
+        }
+
         return response()->json(array_merge([
             'code' => 200,
             'bloqueado_tributario' => false,
@@ -296,6 +316,8 @@ class ReservaFacturacionController extends Controller
                 'total' => $linea['precio_final'],
             ])->values(),
             'anticipos_disponibles' => $anticiposDisponibles,
+            'anticipo_que_se_aplica' => $anticipoQueSeAplica,
+            'saldo_a_cobrar' => round(max(0, $total - $anticipoQueSeAplica), 2),
             'subtotal' => $subtotalTotal,
             'igv' => $igvTotal,
             'total' => $total,
@@ -352,6 +374,10 @@ class ReservaFacturacionController extends Controller
             'advance_applications' => 'nullable|array',
             'advance_applications.*.advance_id' => 'required_with:advance_applications|integer',
             'advance_applications.*.amount' => 'required_with:advance_applications|numeric|min:0.01',
+            // Condición de pago (fila F5, 24-oct-2026): contado (por defecto) o
+            // crédito con cuotas sobre el saldo que queda tras los anticipos.
+            'condicion_pago' => 'nullable|string|in:contado,credito',
+            'cronograma' => 'nullable|array',
         ]);
 
         if ($validator->fails()) {
@@ -435,6 +461,8 @@ class ReservaFacturacionController extends Controller
         $idsManualSolicitados = $validado['reserva_item_ids_manual'] ?? [];
         $idsExcluidosSolicitados = $validado['reserva_item_ids_excluidos'] ?? [];
         $aplicacionesAdelantoSolicitadas = $validado['advance_applications'] ?? [];
+        $condicionPago = $validado['condicion_pago'] ?? 'contado';
+        $cronograma = $validado['cronograma'] ?? [];
 
         try {
             [$venta, $lineas] = DB::transaction(function () use (
@@ -449,6 +477,8 @@ class ReservaFacturacionController extends Controller
                 $pasajeroIdsSolicitados,
                 $idsManualSolicitados,
                 $idsExcluidosSolicitados,
+                $condicionPago,
+                $cronograma,
                 $infoMoneda
             ) {
                 // Re-chequeo bajo lock: cierra la ventana de carrera con
@@ -650,66 +680,7 @@ class ReservaFacturacionController extends Controller
                 // B/el propio pasajero) — filtrar acá por client_id evita
                 // ofrecer/auto-aplicar un anticipo que de todos modos el
                 // servicio rechazaría, con un error más claro.
-                $anticiposDelCliente = $reserva->anticipos()->with('advance')
-                    ->get()
-                    ->filter(fn (ReservaAnticipo $ra) => (int) $ra->advance->client_id === (int) $cliente->id)
-                    // Bug real de auditoría (2026-09-24): con el override de
-                    // moneda al facturar (ver resolverMonedaFacturacion()),
-                    // esta Sale puede terminar en una moneda distinta a la
-                    // del anticipo — sin este filtro, el auto-aplicado de
-                    // abajo mezclaba montos de 2 monedas sin convertir, y
-                    // AdvanceApplicationService::aplicar() rechazaba con 422
-                    // ("adelanto en USD, venta en PEN") abortando TODA la
-                    // transacción por un anticipo que el vendedor ni pidió
-                    // usar. El anticipo en la otra moneda simplemente queda
-                    // disponible para una futura sub-factura en SU moneda.
-                    ->filter(fn (ReservaAnticipo $ra) => $ra->advance->currency === $venta->currency)
-                    ->values();
-
-                if (!empty($aplicacionesAdelantoSolicitadas)) {
-                    $advanceIdsPermitidos = $anticiposDelCliente->pluck('advance_id')->all();
-
-                    $sumaSolicitada = 0;
-                    foreach ($aplicacionesAdelantoSolicitadas as $aplicacion) {
-                        if (!in_array($aplicacion['advance_id'], $advanceIdsPermitidos, true)) {
-                            throw new HttpException(
-                                422,
-                                "El adelanto #{$aplicacion['advance_id']} no está asociado a esta reserva " .
-                                "para el cliente de esta factura (#{$cliente->id})."
-                            );
-                        }
-                        $sumaSolicitada += (float) $aplicacion['amount'];
-                    }
-
-                    if (round($sumaSolicitada, 2) > round($total, 2)) {
-                        throw new HttpException(
-                            422,
-                            "La suma de anticipos aplicados (S/ " . number_format($sumaSolicitada, 2) . ") " .
-                            "supera el total de esta factura (S/ " . number_format($total, 2) . ")."
-                        );
-                    }
-
-                    $aplicacionesAdelanto = $aplicacionesAdelantoSolicitadas;
-                } else {
-                    $restante = $total;
-                    $aplicacionesAdelanto = [];
-
-                    foreach ($anticiposDelCliente as $reservaAnticipo) {
-                        if ($restante <= 0) {
-                            break;
-                        }
-
-                        $disponible = $reservaAnticipo->advance->availableBalance();
-                        if ($disponible <= 0) {
-                            continue;
-                        }
-
-                        $monto = round(min($disponible, $restante), 2);
-                        $aplicacionesAdelanto[] = ['advance_id' => $reservaAnticipo->advance_id, 'amount' => $monto];
-                        $restante = round($restante - $monto, 2);
-                    }
-                }
-
+                $aplicacionesAdelanto = $this->anticiposQueSeAplican($reserva, (int) $cliente->id, $venta->currency, $total, $aplicacionesAdelantoSolicitadas);
                 $totalAplicadoAdelantos = $this->advanceApplicationService->aplicar($venta, $aplicacionesAdelanto);
 
                 if ($totalAplicadoAdelantos > 0) {
@@ -728,6 +699,34 @@ class ReservaFacturacionController extends Controller
                         'saldo_pendiente' => $nuevoTotal,
                         'state_payment' => $nuevoTotal <= 0 ? 3 : 1,
                     ]);
+                }
+
+                // Crédito (fila F5, 24-oct-2026): "contado" ante SUNAT declara
+                // pago al emitir; si el cliente paga después, la factura va a
+                // crédito con sus cuotas (viajan en el XML; el cobro se sigue
+                // en Cuentas por Cobrar). Se financia lo que queda tras los
+                // anticipos, con la misma regla que Ventas.
+                if ($condicionPago === 'credito') {
+                    $saldoAFinanciar = round((float) $venta->total, 2);
+                    if ($saldoAFinanciar <= 0) {
+                        throw new HttpException(422, 'Los anticipos cubren todo el comprobante: no queda saldo para dar a crédito. Emítelo al contado.');
+                    }
+                    CronogramaCreditoValidator::validar('cuotas_fijas', $cronograma, $saldoAFinanciar);
+
+                    $venta->update([
+                        'type_payment' => 2,
+                        'condicion_pago' => 'credito',
+                        'credit_type' => 'cuotas_fijas',
+                    ]);
+                    foreach ($cronograma as $cuota) {
+                        Installment::create([
+                            'sale_id' => $venta->id,
+                            'numero_cuota' => $cuota['numero_cuota'],
+                            'monto_programado' => $cuota['monto_programado'],
+                            'fecha_vencimiento' => $cuota['fecha_vencimiento'],
+                            'estado' => 'pendiente',
+                        ]);
+                    }
                 }
 
                 // reserva_pasajero_ids: el subconjunto que el vendedor
@@ -976,6 +975,78 @@ class ReservaFacturacionController extends Controller
         ];
     }
 
+    // Qué anticipos de la reserva se aplican a una factura y cuánto. Salió de
+    // store() (24-oct-2026, fila F5) para que la vista previa calcule el
+    // mismo saldo a cobrar que la emisión: con crédito, las cuotas tienen que
+    // calzar con ese saldo. Solo anticipos del MISMO cliente y moneda de la
+    // factura. Con aplicaciones elegidas por el vendedor se validan; sin
+    // ninguna, se aplica lo disponible hasta cubrir el total.
+    private function anticiposQueSeAplican(Reserva $reserva, int $clienteId, string $moneda, float $total, array $aplicacionesAdelantoSolicitadas): array
+    {
+        $anticiposDelCliente = $reserva->anticipos()->with('advance')
+            ->get()
+            ->filter(fn (ReservaAnticipo $ra) => (int) $ra->advance->client_id === $clienteId)
+            // Bug real de auditoría (2026-09-24): con el override de
+            // moneda al facturar (ver resolverMonedaFacturacion()),
+            // esta Sale puede terminar en una moneda distinta a la
+            // del anticipo — sin este filtro, el auto-aplicado de
+            // abajo mezclaba montos de 2 monedas sin convertir, y
+            // AdvanceApplicationService::aplicar() rechazaba con 422
+            // ("adelanto en USD, venta en PEN") abortando TODA la
+            // transacción por un anticipo que el vendedor ni pidió
+            // usar. El anticipo en la otra moneda simplemente queda
+            // disponible para una futura sub-factura en SU moneda.
+            ->filter(fn (ReservaAnticipo $ra) => $ra->advance->currency === $moneda)
+            ->values();
+
+        if (!empty($aplicacionesAdelantoSolicitadas)) {
+            $advanceIdsPermitidos = $anticiposDelCliente->pluck('advance_id')->all();
+
+            $sumaSolicitada = 0;
+            foreach ($aplicacionesAdelantoSolicitadas as $aplicacion) {
+                // (int): en la vista previa el id llega por la URL como texto.
+                if (!in_array((int) $aplicacion['advance_id'], $advanceIdsPermitidos, true)) {
+                    throw new HttpException(
+                        422,
+                        "El adelanto #{$aplicacion['advance_id']} no está asociado a esta reserva " .
+                        "para el cliente de esta factura (#{$clienteId})."
+                    );
+                }
+                $sumaSolicitada += (float) $aplicacion['amount'];
+            }
+
+            if (round($sumaSolicitada, 2) > round($total, 2)) {
+                throw new HttpException(
+                    422,
+                    "La suma de anticipos aplicados (S/ " . number_format($sumaSolicitada, 2) . ") " .
+                    "supera el total de esta factura (S/ " . number_format($total, 2) . ")."
+                );
+            }
+
+            $aplicacionesAdelanto = $aplicacionesAdelantoSolicitadas;
+        } else {
+            $restante = $total;
+            $aplicacionesAdelanto = [];
+
+            foreach ($anticiposDelCliente as $reservaAnticipo) {
+                if ($restante <= 0) {
+                    break;
+                }
+
+                $disponible = $reservaAnticipo->advance->availableBalance();
+                if ($disponible <= 0) {
+                    continue;
+                }
+
+                $monto = round(min($disponible, $restante), 2);
+                $aplicacionesAdelanto[] = ['advance_id' => $reservaAnticipo->advance_id, 'amount' => $monto];
+                $restante = round($restante - $monto, 2);
+            }
+        }
+
+        return $aplicacionesAdelanto;
+    }
+
     // Fila 13, fase 1c (C1, decidido con el usuario el 18-oct-2026): a
     // diferencia de cualquier otro ítem, una línea de tour SÍ se parte entre
     // facturas, porque sabe cuánto le toca a cada pasajero
@@ -1068,6 +1139,10 @@ class ReservaFacturacionController extends Controller
     // - la parte de un tour, porque partesDeTour() mira quién pagó cada tour.
     private static function separarExcluidos(Collection $items, array $partesTour, array $idsExcluidos): array
     {
+        // Desde la vista previa los ids llegan por la URL como texto ("35"):
+        // se pasan a número para la comparación estricta de abajo (bug real
+        // 24-oct-2026: un servicio suelto desmarcado no salía de la factura).
+        $idsExcluidos = array_map('intval', $idsExcluidos);
         $cargasExcluidas = $items->whereIn('id', $idsExcluidos)->pluck('carga_tour')->filter()->unique();
         $sale = fn (ReservaItem $it) => in_array($it->id, $idsExcluidos, true)
             || ($it->carga_tour !== null && $cargasExcluidas->contains($it->carga_tour));

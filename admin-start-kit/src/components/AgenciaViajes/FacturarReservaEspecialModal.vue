@@ -125,6 +125,8 @@
                         </div>
 
                         <template v-else>
+                            <CondicionPagoCampos v-model:condicion="condicionPago" v-model:cronograma="cronograma"
+                                :saldo="saldoACobrar" :moneda="opciones.moneda" :fecha-base="hoyPeru()" />
                             <div class="row g-2 mb-2">
                                 <div class="col-6">
                                     <label class="form-label small fw-semibold text-secondary">Tipo de comprobante</label>
@@ -209,6 +211,10 @@ import ClientFormQuick from '@/components/Sales/ClientFormQuick.vue';
 import ClienteComprobanteSelector, { type ClienteComprobante } from '@/components/AgenciaViajes/ClienteComprobanteSelector.vue';
 import DetalleComprobantePreview from '@/components/AgenciaViajes/DetalleComprobantePreview.vue';
 import OpcionesFacturacionCampos from '@/components/AgenciaViajes/OpcionesFacturacionCampos.vue';
+import CondicionPagoCampos from '@/components/AgenciaViajes/CondicionPagoCampos.vue';
+import type { CuotaCronograma } from '@/components/CronogramaCuotasCampos.vue';
+import { validarCondicionPago, payloadCondicionPago, type CondicionPago } from '@/helpers/condicionPago';
+import { hoyPeru } from '@/helpers/fecha';
 import { useOpcionesFacturacion } from '@/composables/agencia-viajes/useOpcionesFacturacion';
 import { useToast } from '@/composables/useToast';
 import { etiquetaTipAfeIgv } from '@/helpers/tratamientoTributarioAgencia';
@@ -233,6 +239,12 @@ const toast = useToast();
 const cargando = ref(false);
 const facturando = ref(false);
 const preview = ref<PrepararFacturaResponse | null>(null);
+
+// Condición de pago (fila F5): contado por defecto; a crédito se financia el
+// saldo que queda tras los anticipos (lo calcula el backend en la vista previa).
+const condicionPago = ref<CondicionPago>('contado');
+const cronograma = ref<CuotaCronograma[]>([]);
+const saldoACobrar = computed(() => preview.value?.saldo_a_cobrar ?? Number(preview.value?.total ?? 0));
 const cliente = ref<ClienteComprobante | null>(null);
 
 type Formulario = {
@@ -260,6 +272,11 @@ const anticipoAplicado = computed(() => anticipos.value
     .filter((a) => a.seleccionado)
     .reduce((s, a) => s + (Number(a.monto_aplicado) || 0), 0));
 
+// Los anticipos marcados, como los recibe el backend (vista previa y emisión).
+const anticiposMarcados = () => anticipos.value
+    .filter((a) => a.seleccionado && a.monto_aplicado > 0)
+    .map((a) => ({ advance_id: a.advance_id, amount: a.monto_aplicado }));
+
 const refrescarPreview = async () => {
     if (form.value.pasajero_ids.length === 0) {
         preview.value = null;
@@ -271,7 +288,13 @@ const refrescarPreview = async () => {
             props.reserva.id,
             form.value.pasajero_ids,
             form.value.reserva_item_ids_manual,
-            { ...opciones.opcionesPreview(form.value.tipo_comprobante_codigo), reservaItemIdsExcluidos: form.value.reserva_item_ids_excluidos },
+            {
+                ...opciones.opcionesPreview(form.value.tipo_comprobante_codigo),
+                reservaItemIdsExcluidos: form.value.reserva_item_ids_excluidos,
+                // Para el saldo a cobrar tras los anticipos (fila F5).
+                clientId: cliente.value?.id,
+                advanceApplications: anticiposMarcados(),
+            },
         );
         opciones.proponerTipoCambio(preview.value.tipo_cambio_sugerido);
         // La vista previa se pide de nuevo con cada cambio: se conserva lo
@@ -328,6 +351,18 @@ watch(cliente, (c) => {
     }
 });
 
+// El saldo a cobrar (para las cuotas a crédito, fila F5) depende del cliente
+// (un anticipo solo se descuenta al mismo cliente) y de los anticipos
+// marcados: si cambian, se vuelve a pedir la vista previa. Los anticipos se
+// comparan por lo marcado (no por la lista, que la vista previa rearma) y con
+// una espera, porque el monto se edita tecla a tecla.
+watch(() => cliente.value?.id, refrescarPreview);
+let esperaAnticipos: ReturnType<typeof setTimeout> | undefined;
+watch(() => anticiposMarcados().map((a) => `${a.advance_id}:${a.amount}`).join(','), () => {
+    clearTimeout(esperaAnticipos);
+    esperaAnticipos = setTimeout(refrescarPreview, 400);
+});
+
 // Cliente rápido: si lo escrito en el buscador parece un RUC (11 dígitos),
 // se precarga para no escribirlo dos veces.
 const mostrarClienteRapido = ref(false);
@@ -347,20 +382,20 @@ const empezar = (pasajeroIds: number[]) => {
     anticipos.value = [];
     cliente.value = null;
     opciones.resetear();
+    condicionPago.value = 'contado';
+    cronograma.value = [];
 };
 
 const confirmar = async () => {
     if (!cliente.value) return;
-    const error = opciones.validar();
+    const error = opciones.validar() ?? validarCondicionPago(condicionPago.value, cronograma.value, saldoACobrar.value);
     if (error) {
         toast.error(error);
         return;
     }
     facturando.value = true;
     try {
-        const anticiposAplicados = anticipos.value
-            .filter((a) => a.seleccionado && a.monto_aplicado > 0)
-            .map((a) => ({ advance_id: a.advance_id, amount: a.monto_aplicado }));
+        const anticiposAplicados = anticiposMarcados();
 
         const res = await reservaFacturacionService.facturar(props.reserva.id, {
             pasajero_ids: form.value.pasajero_ids,
@@ -370,6 +405,7 @@ const confirmar = async () => {
             client_id: cliente.value.id,
             texto_personalizado: form.value.texto_personalizado || null,
             advance_applications: anticiposAplicados.length > 0 ? anticiposAplicados : undefined,
+            ...payloadCondicionPago(condicionPago.value, cronograma.value),
             ...opciones.payload(),
         });
         toast.success(`${res.message} (serie ${res.serie})`);

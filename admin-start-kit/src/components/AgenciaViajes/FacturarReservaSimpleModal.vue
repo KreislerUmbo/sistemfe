@@ -65,6 +65,8 @@
                                 <strong>{{ cabecera?.cliente?.full_name ?? 'el cliente de la cotización' }}</strong>.
                                 ¿Necesitas dividirlo en varios comprobantes o cambiar el cliente? Usa <strong>Facturación especial</strong>.
                             </p>
+                            <CondicionPagoCampos v-model:condicion="condicionPago" v-model:cronograma="cronograma"
+                                :saldo="saldoACobrar" :moneda="opciones.moneda" :fecha-base="hoyPeru()" />
                             <div class="row g-2 mb-2">
                                 <div class="col-6">
                                     <label class="form-label small fw-semibold text-secondary">Tipo de comprobante</label>
@@ -108,6 +110,10 @@
 // pendiente en un comprobante, al cliente de la cotización.
 import { computed, onMounted, ref, toRef, watch } from 'vue';
 import OpcionesFacturacionCampos from '@/components/AgenciaViajes/OpcionesFacturacionCampos.vue';
+import CondicionPagoCampos from '@/components/AgenciaViajes/CondicionPagoCampos.vue';
+import type { CuotaCronograma } from '@/components/CronogramaCuotasCampos.vue';
+import { validarCondicionPago, payloadCondicionPago, type CondicionPago } from '@/helpers/condicionPago';
+import { hoyPeru } from '@/helpers/fecha';
 import DetalleComprobantePreview from '@/components/AgenciaViajes/DetalleComprobantePreview.vue';
 import { useOpcionesFacturacion } from '@/composables/agencia-viajes/useOpcionesFacturacion';
 import { useToast } from '@/composables/useToast';
@@ -136,6 +142,12 @@ const cargando = ref(false);
 const facturando = ref(false);
 const preview = ref<PrepararFacturaResponse | null>(null);
 
+// Condición de pago (fila F5): contado por defecto; a crédito se financia el
+// saldo que queda tras los anticipos (lo calcula el backend en la vista previa).
+const condicionPago = ref<CondicionPago>('contado');
+const cronograma = ref<CuotaCronograma[]>([]);
+const saldoACobrar = computed(() => preview.value?.saldo_a_cobrar ?? Number(preview.value?.total ?? 0));
+
 // Factura ('01') exige RUC (catálogo 06 SUNAT, '6'); el backend también lo valida.
 const clienteTieneRuc = computed(() => props.cabecera?.cliente?.cod_tipo_doc_sunat === '6');
 const tipoComprobante = ref<'01' | '03'>(clienteTieneRuc.value ? '01' : '03');
@@ -145,7 +157,8 @@ const pasajeroIds = () => pasajeroIdsParaFacturar(props.reserva.pasajeros ?? [],
 const refrescarPreview = async () => {
     cargando.value = true;
     try {
-        const opcionesPreview = opciones.opcionesPreview(tipoComprobante.value);
+        // Con el cliente, el backend dice el saldo a cobrar tras los anticipos (fila F5).
+        const opcionesPreview = { ...opciones.opcionesPreview(tipoComprobante.value), clientId: props.cabecera?.cliente?.id };
         // Primero se pregunta qué servicios sin pasajero quedan; después se
         // piden todos, porque este modal no pregunta cuáles: van todos.
         const primero = await reservaFacturacionService.prepararFactura(props.reserva.id, pasajeroIds(), [], opcionesPreview);
@@ -169,7 +182,7 @@ watch(tipoComprobante, refrescarPreview);
 
 const confirmar = async () => {
     if (!props.cabecera?.cliente?.id) return;
-    const error = opciones.validar();
+    const error = opciones.validar() ?? validarCondicionPago(condicionPago.value, cronograma.value, saldoACobrar.value);
     if (error) {
         toast.error(error);
         return;
@@ -182,6 +195,7 @@ const confirmar = async () => {
             tipo_comprobante_codigo: tipoComprobante.value,
             client_id: props.cabecera.cliente.id,
             ...opciones.payload(),
+            ...payloadCondicionPago(condicionPago.value, cronograma.value),
         });
         toast.success(`${res.message} (serie ${res.serie})`);
         emit('cerrar');

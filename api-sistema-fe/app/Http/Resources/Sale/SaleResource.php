@@ -216,6 +216,16 @@ class SaleResource extends JsonResource
             // badge del listado y la tabla de "notas ya emitidas" en
             // sale/nota-create.vue. Requiere with('notes') en el
             // controlador para evitar N+1 (ver SaleController::index()/show()).
+            // De qué reserva salió la venta (Agencia, 24-oct-2026): el listado
+            // la marca y desactiva Editar (SaleController::update() la
+            // rechaza). Null si no viene de una reserva o no se cargó.
+            'reserva_origen' => $this->resource->relationLoaded('reservaVenta') && $this->resource->reservaVenta
+                ? [
+                    'reserva_id' => $this->resource->reservaVenta->reserva_id,
+                    'codigo' => $this->resource->reservaVenta->reserva?->codigo,
+                ]
+                : null,
+
             'notes' => $this->resource->relationLoaded('notes')
                 ? $this->resource->notes->map(fn ($n) => [
                     'id'              => $n->id,
