@@ -410,11 +410,41 @@ class TourLineaService
      */
     public static function parteDelGrupo(float $listaGrupo, float $listaTotal, float $vendidoTotal): float
     {
+        return round(self::parteExacta($listaGrupo, $listaTotal, $vendidoTotal), 2);
+    }
+
+    // Lo mismo sin redondear: lo usa repartirCentavos() cuando un tour tiene
+    // varias líneas (una por código de IGV).
+    public static function parteExacta(float $listaGrupo, float $listaTotal, float $vendidoTotal): float
+    {
         if ($listaTotal <= 0) {
             return 0.0;
         }
 
-        return round($vendidoTotal * $listaGrupo / $listaTotal, 2);
+        return $vendidoTotal * $listaGrupo / $listaTotal;
+    }
+
+    // Redondea varias partes de un mismo tour sin que la suma gane o pierda
+    // céntimos (caso real 24-oct-2026: 101.615 + 48.385 daban 101.62 + 48.39 =
+    // 150.01). Se redondea el total y la última parte se lleva la diferencia.
+    // Recibe y devuelve las partes en el mismo orden y con las mismas claves.
+    public static function repartirCentavos(array $exactas): array
+    {
+        if ($exactas === []) {
+            return [];
+        }
+
+        $total = round(array_sum($exactas), 2);
+        $claves = array_keys($exactas);
+        $ultima = array_pop($claves);
+
+        $redondeadas = [];
+        foreach ($claves as $clave) {
+            $redondeadas[$clave] = round($exactas[$clave], 2);
+        }
+        $redondeadas[$ultima] = round($total - array_sum($redondeadas), 2);
+
+        return $redondeadas;
     }
 
     /**

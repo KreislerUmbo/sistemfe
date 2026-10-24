@@ -989,6 +989,9 @@ class ReservaFacturacionController extends Controller
 
         $partes = [];
         $itemsQueEntran = collect();
+        // Parte sin redondear de cada línea que no cierra, por tour (carga):
+        // se redondean juntas al final para que la suma no gane céntimos.
+        $exactasPorCarga = [];
         foreach ($itemsTour as $item) {
             $yaPagaron = $reserva->ventas
                 ->filter(fn (ReservaVenta $rv) => in_array($item->id, $rv->reserva_item_ids ?? [], true)
@@ -1010,13 +1013,14 @@ class ReservaFacturacionController extends Controller
             } else {
                 $precios = $item->alternativaItem->tour_linea['precios'] ?? [];
                 $listaTodos = $precios ? TourLineaService::precioDeLista($precios, $comoDatos($participantes)) : 0.0;
-                $monto = $listaTodos > 0
-                    ? TourLineaService::parteDelGrupo(TourLineaService::precioDeLista($precios, $comoDatos($delGrupo)), $listaTodos, $vendido)
+                $exactasPorCarga[$item->carga_tour ?? 'item_'.$item->id][$item->id] = $listaTodos > 0
+                    ? TourLineaService::parteExacta(TourLineaService::precioDeLista($precios, $comoDatos($delGrupo)), $listaTodos, $vendido)
                     // Sin precios de lista (tour sin precio): por cabeza.
-                    : round($vendido * $delGrupo->count() / $participantes->count(), 2);
+                    : $vendido * $delGrupo->count() / $participantes->count();
+                $monto = null; // se redondea abajo, junto con las otras líneas del tour
             }
 
-            $partes[] = [
+            $partes[$item->id] = [
                 'reserva_item_id' => $item->id,
                 'monto' => $monto,
                 'cierra' => $cierra,
@@ -1027,7 +1031,13 @@ class ReservaFacturacionController extends Controller
             $itemsQueEntran->push($item);
         }
 
-        return ['items' => $itemsQueEntran, 'partes' => $partes];
+        foreach ($exactasPorCarga as $exactas) {
+            foreach (TourLineaService::repartirCentavos($exactas) as $itemId => $monto) {
+                $partes[$itemId]['monto'] = $monto;
+            }
+        }
+
+        return ['items' => $itemsQueEntran, 'partes' => array_values($partes)];
     }
 
     // F1 (23-oct-2026, pedido del usuario): qué entra en este comprobante y

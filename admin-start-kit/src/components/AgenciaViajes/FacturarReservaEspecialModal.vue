@@ -364,6 +364,9 @@ const confirmar = async () => {
     }
 };
 
+// La pantalla lo llama tras confirmar el tratamiento tributario de un servicio.
+defineExpose({ refrescarPreview });
+
 onMounted(() => {
     empezar(pasajeroIdsParaFacturar(props.reserva.pasajeros ?? [], props.pasajerosPendientes));
     opciones.cargarSucursales();

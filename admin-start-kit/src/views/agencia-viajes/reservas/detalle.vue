@@ -832,9 +832,12 @@
              (2026-09-24). Un servicio con destino≠nacional no se puede
              facturar hasta que un humano lo confirme a mano, con motivo
              obligatorio (auditable) — ver overrideTratamientoTributario()
-             en el backend. -->
+             en el backend.
+             z-index 1065 (24-oct-2026, reportado por el usuario): se abre
+             también desde los modales de facturar (1055, el de Bootstrap) y
+             tiene que verse encima de ellos; antes quedaba tapado. -->
         <div class="modal fade" tabindex="-1" :class="{ show: mostrarModalConfirmarTributario, 'd-block': mostrarModalConfirmarTributario }"
-            style="background:rgba(0,0,0,.5)" v-if="mostrarModalConfirmarTributario">
+            style="background:rgba(0,0,0,.5); z-index:1065" v-if="mostrarModalConfirmarTributario">
             <div class="modal-dialog">
                 <div class="modal-content">
                     <div class="modal-header">
@@ -885,7 +888,7 @@
 
         <!-- Facturación especial: por grupo de pasajeros o solo servicios, a un
              cliente elegido (components/AgenciaViajes/FacturarReservaEspecialModal.vue). -->
-        <FacturarReservaEspecialModal v-if="mostrarModalFacturarEspecial && reserva" :reserva="reserva" :moneda="moneda"
+        <FacturarReservaEspecialModal v-if="mostrarModalFacturarEspecial && reserva" ref="modalFacturarEspecial" :reserva="reserva" :moneda="moneda"
             :pasajeros-pendientes="pasajerosPendientesFacturar" :recargar="cargarReserva"
             @cerrar="mostrarModalFacturarEspecial = false" @confirmar-tributario="confirmarTributarioDesdeFacturar" />
 
@@ -911,7 +914,7 @@
 
         <!-- Facturar: toda la reserva pendiente en un comprobante, al cliente
              de la cotización (components/AgenciaViajes/FacturarReservaSimpleModal.vue). -->
-        <FacturarReservaSimpleModal v-if="mostrarModalFacturarSimple && reserva" :reserva="reserva" :cabecera="cabecera"
+        <FacturarReservaSimpleModal v-if="mostrarModalFacturarSimple && reserva" ref="modalFacturarSimple" :reserva="reserva" :cabecera="cabecera"
             :moneda="moneda" :pasajeros-pendientes="pasajerosPendientesFacturar" :items-pendientes-count="itemsPendientesDeFacturarCount"
             :recargar="cargarReserva" @cerrar="mostrarModalFacturarSimple = false" @confirmar-tributario="confirmarTributarioDesdeFacturar" />
 
@@ -2115,6 +2118,10 @@ const confirmarTratamientoTributario = async () => {
         cabecera.value = res.cabecera;
         mostrarModalConfirmarTributario.value = false;
         toast.success(res.message);
+        // Si se confirmó desde un modal de facturar, que quite el bloqueo y
+        // muestre el resto sin tener que cerrarlo (24-oct-2026).
+        modalFacturarSimple.value?.refrescarPreview();
+        modalFacturarEspecial.value?.refrescarPreview();
     } catch (error: any) {
         toast.error(error.response?.data?.message ?? 'No se pudo confirmar el tratamiento tributario');
     } finally {
@@ -2128,6 +2135,9 @@ const confirmarTratamientoTributario = async () => {
 // pantalla solo los abre y les pasa la reserva. ──
 const mostrarModalFacturarSimple = ref(false);
 const mostrarModalFacturarEspecial = ref(false);
+// Para pedirle al modal abierto que recalcule su vista previa (refrescarPreview).
+const modalFacturarSimple = ref<InstanceType<typeof FacturarReservaSimpleModal> | null>(null);
+const modalFacturarEspecial = ref<InstanceType<typeof FacturarReservaEspecialModal> | null>(null);
 
 // Un modal pide confirmar servicios de la Amazonía antes de poder emitir.
 const confirmarTributarioDesdeFacturar = (itemIds: number[]) => {

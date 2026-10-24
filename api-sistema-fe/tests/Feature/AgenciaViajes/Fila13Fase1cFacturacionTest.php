@@ -333,6 +333,56 @@ class Fila13Fase1cFacturacionTest extends TestCase
         $this->assertEqualsWithDelta(100.0, (float) $venta->total, 0.001);
     }
 
+    // Caso real (RDKM-1026-0000012, 24-oct-2026): tour de 300 con IGV mezclado
+    // en dos líneas (203.23 + 96.77) y 2 adultos. Repartir cada línea por
+    // separado redondeaba las dos hacia arriba (101.62 + 48.39 = 150.01) y el
+    // otro pasajero pagaba 149.99. La parte se calcula sobre el tour entero.
+    public function test_tour_en_varias_lineas_reparte_sin_centavos_de_mas(): void
+    {
+        $alternativa = $this->crearAlternativa([['adulto', 40], ['adulto', 38]]);
+        $this->cargar($alternativa, $this->tourMezclado());
+        $this->fijarVendidoDeLasLineas($alternativa, ['20' => 203.23, '10' => 96.77]);
+        $reserva = $this->aceptar($alternativa);
+        $this->confirmarAmazonia($reserva);
+        [$a, $b] = $this->pasajeros($reserva);
+
+        $previewA = $this->preview($reserva, [$a]);
+        $this->assertEqualsWithDelta(150.0, collect($previewA['partes_tour'])->sum('monto'), 0.001);
+        $this->assertEqualsWithDelta(150.0, collect($previewA['detalle'])->sum('monto'), 0.001);
+        $ventaA = $this->facturarOk($reserva, [$a]);
+
+        $ventaB = $this->facturarOk($reserva, [$b]);
+
+        $this->assertEqualsWithDelta(150.0, (float) $ventaA->total, 0.001);
+        $this->assertEqualsWithDelta(150.0, (float) $ventaB->total, 0.001);
+    }
+
+    public function test_repartir_centavos_no_gana_ni_pierde_centimos(): void
+    {
+        // El caso de arriba: 101.615 + 48.385 = 150.00 exacto.
+        $this->assertSame([7 => 101.62, 9 => 48.38], TourLineaService::repartirCentavos([7 => 101.615, 9 => 48.385]));
+        // Tres partes de 33.333…: la última se lleva el céntimo.
+        $this->assertSame([1 => 33.33, 2 => 33.33, 3 => 33.34], TourLineaService::repartirCentavos([1 => 100 / 3, 2 => 100 / 3, 3 => 100 / 3]));
+        // Una sola parte: igual que redondear.
+        $this->assertSame([5 => 12.35], TourLineaService::repartirCentavos([5 => 12.345]));
+        $this->assertSame([], TourLineaService::repartirCentavos([]));
+    }
+
+    // Lo vendido de cada línea de la carga del tour, por código de IGV.
+    private function fijarVendidoDeLasLineas(Alternativa $alternativa, array $vendidoPorIgv): void
+    {
+        foreach (AlternativaItem::where('alternativa_id', $alternativa->id)->whereNotNull('carga_tour')->get() as $linea) {
+            $vendido = $vendidoPorIgv[$linea->tip_afe_igv];
+            $precio = $linea->modo_precio === 'tarifa_fija' ? $vendido / max(1, (float) $linea->cantidad) : $vendido;
+            $linea->update(['precio_convertido' => $precio, 'precio_venta_snapshot' => $precio]);
+        }
+        $this->assertEqualsWithDelta(
+            array_sum($vendidoPorIgv),
+            AlternativaItem::where('alternativa_id', $alternativa->id)->whereNotNull('carga_tour')->get()->sum('total_convertido'),
+            0.001
+        );
+    }
+
     public function test_reserva_con_un_tour_cobrado_a_medias_queda_parcial(): void
     {
         $alternativa = $this->crearAlternativa([['adulto', 40], ['adulto', 38]]);
