@@ -416,29 +416,76 @@ lista para que la vea el cliente?".
 | Datos incompletos | Sin fecha de viaje; alternativa sin ítems; edades de niños faltantes si la tarifa distingue niño; cliente sin correo (solo para "Enviar por correo"); tipo de cambio aplicado viejo (pendiente ya conocido: "refrescar tasa en borrador") |
 | Vigencia de la propuesta | Fecha en que vencerá si se envía hoy; si ya se envió y **venció** (`estado_resumen = vencida`); la vigencia pasa la fecha de viaje; pasaje aéreo que vence antes que la propuesta o en menos de 24 h |
 
-**Propuesta:**
-- **Un solo cálculo en el backend** (`GET alternativas/{id}/revision`): lista de pendientes con
-  nivel (`bloquea` / `aviso`), mensaje corto y **a dónde llevar** (destino, día, ítem o sección:
-  Datos de la cotización, Pasajeros, Tipo de cambio). Lo usan la pantalla y el envío por correo.
-- **Panel "Lista para el cliente"** en la alternativa: ✓ "Lista" o "N pendientes"; cada línea es
-  un enlace que abre el día/destino y resalta el ítem (o abre el formulario que corresponde).
-- Al hacer clic en **Ver PDF** o **Enviar por correo** con pendientes: modal con la lista y dos
-  botones, "Revisar" y "Enviar igual". Si hay alguno que **bloquea**, no se puede enviar.
-- El panel se recalcula después de cada cambio en la alternativa.
+**Propuesta inicial** (reemplazada por el diseño de abajo, que recorta la lista a lo crítico):
+un cálculo único en el backend, un panel "Lista para el cliente" con enlaces y un modal antes de
+enviar.
 
-**Preguntas para el usuario:**
-1. **¿Algo debe bloquear el envío**, o todo es aviso y el vendedor decide? Propuesta: bloquean
-   solo "precio 0 / sin precio" y "alternativa sin ítems"; el resto avisa.
-2. **"Tarifas por confirmar":** ¿te refieres a lo de la tabla (ítem manual, hotel referencial,
-   proveedor de referencia, aéreo con plazo)? ¿O a otro estado que hoy no existe, por ejemplo un
-   servicio cotizado al proveedor y **sin respuesta todavía**? Si es lo segundo, hace falta una
-   marca nueva "por confirmar" en el ítem.
-3. **Precio que cambió en la ficha** desde que se agregó a la cotización: ¿solo avisar, o además
-   ofrecer "actualizar al precio nuevo" desde la misma alerta?
-4. **¿Ver PDF** también debe pasar por la revisión, o solo el correo? (Ver PDF se usa también para
-   revisar internamente; quizás solo mostrar el panel sin el modal.)
-5. **Margen bajo:** ¿se avisa con el `margen_minimo_pct` de cada tarifa, o quieres un margen
-   mínimo general de la agencia en Configuración?
+**Diseño (a aprobar) — solo lo crítico:**
+
+*Las únicas 6 revisiones* (todo lo demás de la tabla de arriba queda fuera a propósito):
+
+| # | Revisión | Nivel | Por qué es crítica | Lleva a |
+|---|---|---|---|---|
+| 1 | Alternativa sin servicios | **Bloquea** | Se enviaría una propuesta vacía | Lienzo |
+| 2 | Servicio sin precio o en 0 | **Bloquea** | El cliente vería un precio que no existe | El servicio |
+| 3 | Venta por debajo del costo, o margen bajo el mínimo general | Aviso | Se pierde dinero | El servicio |
+| 4 | Hay un **precio nuevo** para la tarifa usada (se editó en la ficha) o la tarifa ya **no vale para la fecha del viaje** (vencida, desactivada u otra temporada) | Aviso | Se cotiza un precio que ya no existe | El servicio, con "Actualizar al precio nuevo" |
+| 5 | Pasaje aéreo con la tarifa **vencida** o que vence antes que la propuesta | Aviso | La aerolínea ya no sostiene ese precio | El pasaje |
+| 6 | La propuesta ya se envió y **venció** | Aviso | Se reenviarían precios viejos | Datos de la cotización |
+
+Fuera, por triviales o por ser decisiones del vendedor: ítem manual, precio puesto a mano,
+proveedor o guía de referencia, edades de niños, cliente sin correo (el formulario de envío ya
+lo pide), tipo de cambio, fecha de viaje vacía (sin fecha, las revisiones 4 y 5 simplemente no
+se evalúan).
+
+*Cómo se ve, sin agregar pasos:*
+- **Todo bien = silencio:** junto a los botones de envío solo aparece un ✓ "Lista para el
+  cliente". Sin modal, sin clics extra.
+- **Con pendientes:** una insignia "N pendientes" que despliega una lista corta. **Avisos del mismo
+  tipo se agrupan** en una línea ("3 servicios con precio nuevo"), que al hacer clic lleva al
+  primero y permite ir al siguiente.
+- **Ver PDF:** nunca se frena; si hay pendientes, la lista queda visible al lado.
+- **Enviar por correo:** con bloqueos, el botón de enviar del formulario queda deshabilitado con
+  el motivo; con solo avisos, la lista aparece dentro del mismo formulario de envío con "Enviar
+  igual" (no es un modal aparte).
+- Se recalcula sola al cambiar la alternativa.
+
+*"Actualizar al precio nuevo" (respuesta 3):*
+- Editar el precio de una tarifa hoy crea una **versión nueva** y cierra la anterior
+  (`ProveedorTarifaController::update()`: `vigente_hasta` = hoy, `version_anterior_id`). La
+  alerta detecta que la tarifa del servicio tiene una versión más nueva activa.
+- Al hacer clic: confirmación "Precio actual S/ X → nuevo S/ Y. ¿Actualizar?". Al confirmar se
+  re-engancha el servicio a la versión nueva, con su costo y su precio, respetando el descuento
+  del servicio y recalculando el total. Uno por uno (sin "actualizar todos", para no cambiar
+  precios sin mirarlos).
+- Solo en alternativas no aceptadas (T-001 ya bloquea cambiar precios de una aceptada).
+
+*Margen mínimo general (respuesta 5):* `configuracion_agencia.margen_minimo_alerta_pct`; vacío =
+no se avisa margen (la venta bajo costo se avisa siempre).
+
+*Un solo cálculo:* el backend arma la lista (`GET alternativas/{id}/revision`) y el envío por
+correo la vuelve a correr antes de enviar (los bloqueos se respetan aunque se llame a la API
+directo).
+
+**Respuestas del usuario (26-oct-2026):**
+1. Bloquean **solo** "alternativa sin servicios" y "servicio sin precio o en 0"; el resto avisa.
+2. Pidió ayuda para decidir → decidido abajo (D2).
+3. Precio que cambió en la ficha: **avisar y ofrecer "Actualizar al precio nuevo"** desde la
+   alerta, **con confirmación** antes de aplicar.
+4. **Ver PDF** muestra el panel con las alertas pero **siempre** deja generar el PDF (es también
+   para revisar internamente). **Enviar por correo** ejecuta la revisión: con bloqueos hay que
+   corregir primero; con solo avisos ofrece "Enviar igual".
+5. Margen: **solo un margen mínimo general** de la agencia (Configuración), no el de cada tarifa.
+6. **Regla de fondo (la más importante):** que no se vuelva espeso. La revisión tiene que acelerar
+   el envío, no frenarlo: **solo puntos críticos de valor, nada trivial.**
+
+**D2 — "Tarifas por confirmar": no se crea un estado nuevo.** Una marca "por confirmar" en cada
+servicio obligaría al vendedor a ponerla y quitarla a mano: un paso más en cada cotización, y si
+se olvida de quitarla la alerta se vuelve ruido que se aprende a ignorar. Tampoco se avisa de un
+servicio manual o de un precio puesto a mano: es una decisión que el vendedor ya tomó, avisarla
+en cada envío sería trivial. Lo único que de verdad está "por confirmar" por un tercero y puede
+hacer quedar mal a la agencia es el **plazo de la tarifa aérea** (la aerolínea la sostiene hasta
+una fecha y hora): esa sí entra.
 
 ---
 
