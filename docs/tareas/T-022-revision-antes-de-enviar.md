@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Módulo** | AGE |
-| **Depende de** | ninguna (si T-001 ya está hecha, "Actualizar al precio nuevo" respeta su bloqueo de alternativa aceptada) |
+| **Depende de** | **T-028** (vínculo `version_anterior_id` y scope de "vigente"); si T-001 ya está hecha, "Actualizar al precio nuevo" respeta su bloqueo de alternativa aceptada |
 | **Reglas** | — |
 | **Decisiones** | `docs/requerimientos/observaciones-pruebas-usuario.md` → punto 8 (respuestas 1-6, D2, "Diseño — solo lo crítico") |
 | **Rama** | `feat/T-022-revision-antes-de-enviar` |
@@ -37,10 +37,10 @@ construcción aparece la tentación de agregar otra revisión, **no**: anotarla 
 - `GET alternativas/{id}/revision` (misma Policy/permiso que ver la cotización).
 - `CotizacionEnvioController::enviar()`: correr la revisión y responder 422 con la lista si hay
   algún `bloquea` (aunque se llame a la API directo). `preparar()` devuelve la revisión para el formulario.
-- **Vínculo de versiones:** migración `proveedor_tarifas.version_anterior_id` (nullable, FK a sí
-  misma); `ProveedorTarifaController::update()` lo llena al crear la versión nueva. Sin backfill
-  (las versiones viejas no avisan "precio nuevo"; sí "vencida"). Si `GuiaTarifaController` versiona
-  igual, mismo cambio en `guia_tarifas`; si no, anotarlo.
+- **Vínculo de versiones:** lo construye **T-028** (`proveedor_tarifas.version_anterior_id` y el
+  scope de "vigente"). Acá solo se usa: "precio nuevo" = existe una tarifa vigente cuyo
+  `version_anterior_id` es la del servicio. Versiones de antes de T-028 no avisan "precio nuevo";
+  sí "vencida".
 - **"Actualizar al precio nuevo":** `PUT alternativa-items/{id}/actualizar-tarifa` — re-engancha el
   ítem a la versión siguiente activa (costo y precio de la versión nueva, convertidos a la moneda de
   la alternativa como al agregar un ítem; conserva `descuento_pct` y cantidad), recalcula el total
