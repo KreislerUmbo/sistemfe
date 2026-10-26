@@ -8,7 +8,7 @@
 
 Cada línea: ID · qué · estado · depende de · rama o commit. El detalle está en
 `docs/tareas/T-…md` (se borra al cerrar; para una tarea hecha, el commit es la referencia).
-Próximo ID libre: **T-008**.
+Próximo ID libre: **T-019**.
 
 ## Activas
 
@@ -21,6 +21,17 @@ Próximo ID libre: **T-008**.
 | T-005 | AGE | Modificar reserva: aplicar a la reserva | por hacer | T-003, T-004 | |
 | T-006 | AGE | Modificar reserva: PDF para el cliente | por hacer | T-003 | |
 | T-007 | AGE | Modificar reserva: pantallas | por hacer | T-005, T-006 | |
+| T-008 | VEN + CAJ | Eliminar una venta anula sus movimientos de caja (todos los giros) | por hacer | — | |
+| T-009 | CAJ | Caja, paso A: la moneda en cada movimiento | por hacer | — | |
+| T-010 | VEN + CAJ | Servicio compartido de cobro, con n.º de operación y moneda de pago (Obs. 1) | por hacer | T-009 | |
+| T-011 | AGE + CAJ | Cobro al contado al facturar una reserva (Obs. 1) | por hacer | T-010 | |
+| T-012 | AGE + CAJ | Traspaso del cobro tras una nota de crédito | por hacer | T-011 | |
+| T-013 | CAJ | Caja, paso B: por moneda + cambio de moneda. **Requisito para desplegar T-011 con dólares** | por hacer | T-009 | |
+| T-014 | VEN | Forma de pago y n.º de operación en el PDF (Obs. 2) | por hacer | T-010 | |
+| T-015 | PLA + AGE | Catálogo central de aerolíneas + panel central (Obs. 3) | por hacer | — | |
+| T-016 | AGE | Buscador de aerolíneas, corrección de nombres y aerolínea por defecto (Obs. 3) | por hacer | T-015 | |
+| T-017 | AGE | El cliente como primer pasajero al aceptar (Obs. 4) | por hacer | — | |
+| T-018 | AGE | "Buscar pasajero" también en Clientes (Obs. 5) | por hacer | T-017 | |
 
 ## Por analizar
 
@@ -35,11 +46,6 @@ Próximo ID libre: **T-008**.
 | AGE | Enviar el PDF de modificación por correo | T-006, fuera de alcance |
 | TRA | Escribir `docs/transversal/seguridad.md` (detalle del checklist de `proceso.md` §4) | `proceso.md`, 24-oct-2026 |
 | TRA | Migración del proceso, pasos 3-6 de `proceso.md` §6 (adelgazar `CLAUDE.md`, archivar, pasar pendientes, limpiar memoria) | `proceso.md`, 24-oct-2026 |
-| AGE + CAJ | **Obs. 1** — Al contado: forma de pago y n.º de operación al facturar una reserva (controlar caja) | `docs/requerimientos/observaciones-pruebas-usuario.md` §1, 24-oct-2026 |
-| VEN | **Obs. 2** — PDF: forma de pago y n.º de operación (la condición ya sale desde F5) | observaciones §2 |
-| AGE | **Obs. 3** — Catálogo de aerolíneas con buscador; aerolínea por defecto en Pasajeros | observaciones §3 |
-| AGE | **Obs. 4** — El cliente que cotiza como primer pasajero por defecto | observaciones §4 |
-| AGE | **Obs. 5** — "Buscar pasajero" también busca en Clientes | observaciones §5 |
 | CAJ + NOT | Devolver dinero al cliente por una NC sin volver a facturar (hoy la NC no mueve la caja en ningún giro) | revisión de fallos de las observaciones, 25-oct-2026 |
 | TRA | Sesión por inactividad: hoy el JWT vence a la hora fija desde el login (`JWT_TTL`, 60 min por defecto) y el aviso sale 2 min antes **aunque el usuario esté trabajando**. Propuesta: renovar en silencio mientras hay actividad y mostrar el aviso solo tras N minutos sin uso (falta decidir N). Solo frontend: `helpers/sessionExpiryWatcher.ts` + `helpers/http-client.ts`; `auth/refresh` ya existe | pregunta del usuario, 24-oct-2026 |
 

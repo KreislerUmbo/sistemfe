@@ -302,7 +302,7 @@ por algún caso, avísame).
 
 ## Orden de construcción propuesto (a aprobar)
 
-Cada línea será una tarea `T-…` al aprobarse el diseño. El orden sigue las dependencias reales:
+Aprobado el 25-oct-2026: son las tareas T-008 a T-018, en este orden (estado en `docs/backlog.md`):
 
 1. **VEN + CAJ** — Eliminar una venta anula sus movimientos de caja (R1, todos los giros).
 2. **CAJ** — Caja, paso A: moneda en cada movimiento + completar los ya guardados.
