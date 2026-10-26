@@ -40,6 +40,7 @@ Próximo ID libre: **T-008**.
 | AGE | **Obs. 3** — Catálogo de aerolíneas con buscador; aerolínea por defecto en Pasajeros | observaciones §3 |
 | AGE | **Obs. 4** — El cliente que cotiza como primer pasajero por defecto | observaciones §4 |
 | AGE | **Obs. 5** — "Buscar pasajero" también busca en Clientes | observaciones §5 |
+| CAJ + NOT | Devolver dinero al cliente por una NC sin volver a facturar (hoy la NC no mueve la caja en ningún giro) | revisión de fallos de las observaciones, 25-oct-2026 |
 | TRA | Sesión por inactividad: hoy el JWT vence a la hora fija desde el login (`JWT_TTL`, 60 min por defecto) y el aviso sale 2 min antes **aunque el usuario esté trabajando**. Propuesta: renovar en silencio mientras hay actividad y mostrar el aviso solo tras N minutos sin uso (falta decidir N). Solo frontend: `helpers/sessionExpiryWatcher.ts` + `helpers/http-client.ts`; `auth/refresh` ya existe | pregunta del usuario, 24-oct-2026 |
 
 ## Hechas
