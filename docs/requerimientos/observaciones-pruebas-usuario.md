@@ -17,7 +17,7 @@
 | 4 | AGE | Reserva · pasajeros | El cliente que cotiza como primer pasajero por defecto (editable) |
 | 5 | AGE | Reserva · pasajeros | "Buscar pasajero" también encuentra a los clientes registrados |
 | 6 | AGE | Cotizador · comparar hoteles | Empezar la comparación con 1 habitación (hoy pide 2 en el primer hotel) |
-| 7 | AGE | PDF de cotización | Fotos de los hoteles de la comparativa (3 por hotel), como en mayoristas |
+| 7 | AGE | PDF de cotización | Fotos de los hoteles (fachada + habitaciones), con comparativa o con un solo hotel |
 
 ---
 
@@ -359,11 +359,37 @@ hoteles muestre **3 imágenes** por hotel, igual que sale con los mayoristas.
   que en mayorista.
 - Sin fotos: el hotel no imprime bloque, como hoy.
 
-**Preguntas para el usuario:**
-1. La galería del proveedor no distingue fachada de habitación. ¿Basta con **las 3 primeras**
-   (tú ordenas la galería en la ficha del proveedor), o quieres poder marcar cuál es la fachada?
-2. ¿Las fotos salen **solo en la comparativa**, o también cuando la cotización lleva **un solo
-   hotel** (sin comparación)? Hoy, sin comparación, no sale ninguna foto de hotel.
+**Respuestas del usuario (26-oct-2026):**
+1. **Marcar qué foto es la fachada** (no solo "las 3 primeras"): el dato sirve para otras cosas
+   más adelante, porque se puede elegir.
+2. **En los dos casos:** con comparativa y con un solo hotel. Así el cliente ve cómo es el hotel
+   donde se va a alojar y, si no le gusta, pide otra opción.
+
+**Lo que hay además (verificado):** la galería del proveedor (`proveedores.fotos`) es una lista
+de rutas sin tipo; la leen solo `ProveedorController` y `proveedores/detalle.vue`/`form.vue`. Las
+fotos de `opciones_hotel` ya pasaron por el mismo cambio (`2026_09_05_100400_migrar_fotos_
+opciones_hotel_a_tipo_foto`: de lista de rutas a `{path, tipo_foto}`, con `OpcionHotel::
+normalizarFotos()`/`fotosResueltas()`). Al **promover** un hotel no registrado a Proveedor
+(`OpcionHotelController::promover()`), sus fotos **no se copian** al proveedor.
+
+**Diseño (a aprobar):**
+- **Un solo formato de fotos de hotel:** `proveedores.fotos` pasa a `{path, tipo_foto}`, igual que
+  `opciones_hotel`. Tipos: `fachada` (máx. 1), `habitacion`, `otra`. Migración de datos
+  idempotente: las fotos ya cargadas quedan como `otra`. Los helpers de normalizar y resolver se
+  comparten con `OpcionHotel` (no se duplican).
+- **Ficha del proveedor:** en la galería, elegir el tipo de cada foto ("Marcar como fachada",
+  "Habitación"). Marcar una fachada desmarca la anterior. Para proveedores que no son hotel, el
+  selector no se muestra (todas quedan `otra`).
+- **Promover un hotel no registrado** copia sus fotos con su tipo al proveedor nuevo.
+- **Hotel no registrado de Local:** subir fotos con su tipo desde el picker de Local, igual que en
+  mayorista.
+- **PDF:** la sección "Fotos referenciales de los hoteles" incluye **todos los hoteles de la
+  alternativa**: los de una comparación y los sueltos, sin repetir un hotel que aparezca dos
+  veces (por ejemplo, en varios destinos). Por hotel: la fachada primero, después hasta 2 de
+  habitación; si faltan, se completa con `otra` hasta 3. Más check-in/check-out del proveedor.
+  Hotel sin fotos: no imprime bloque.
+- Verificar el PDF real con Ghostscript (memoria `reference_pdf_visual_verification_ghostscript`):
+  esta sección ya tuvo solapes con DomPDF (`page-break-before: always`).
 
 ---
 
