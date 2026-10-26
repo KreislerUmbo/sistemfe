@@ -533,8 +533,74 @@ alternativa aceptada).
 | H18 | Media (tributario) | **Tour clásico desde plantilla: el guía y el "Ajuste de redondeo" nacen sin tratamiento tributario.** Al facturar, `resolverTipAfeIgvItem()`/`resolverDestinoTributario()` caen al fijo `'10'`/`'nacional'`, no al default de la agencia (el guía agregado suelto sí usa el default). En una agencia de la Amazonía el guía se factura gravado y la mezcla con servicios exonerados puede **bloquear la facturación**. Sin reproducir. | `AlternativaItemController::crearItemClasicoDesdeEntrada()` y el ítem de ajuste en `desdePlantilla()` |
 | H19 | Baja | Tour clásico desde plantilla, servicio compartido: el costo cuenta también a los infantes; el alta normal (y el recálculo al cambiar pasajeros) no los cuenta. El margen cambia al editar pasajeros. | `crearItemClasicoDesdeEntrada()` vs. `crearItemProveedor()` |
 | | | **Decisión del usuario sobre H7 (26-oct-2026):** en **servicios de tour**, si la tarifa no tiene precio de niño, **el niño paga como adulto** (misma regla que los tours); **en hoteles no**, porque tienen sus propias tarifas. → T-031 | |
+| | | **Encontrados en la medición en pantalla (obs. 9), 26-oct-2026:** | |
+| H20 | Media | **PDF: la tabla "Opciones de hoteles" dice "tarifa por persona"** pero en Local/Nacional muestra el total por habitación y noches (PEN 1,020 = 340 × 3). El cliente lo lee mal. Confirmado en el PDF real. | `alternativa.blade.php` (encabezado de la tabla) |
+| H21 | **Alta (tributario, decisión)** | **Un paquete internacional de mayorista nace "Exonerado · Amazonía"**: toma el tratamiento por defecto de la agencia. Un viaje a Panamá no se consume en la Amazonía (Ley 27037). Al facturar saldría exonerado. Confirmado en pantalla. Falta decidir con el contador qué tratamiento le corresponde al paquete internacional (y si cambia entre la comisión y el resto). | `AlternativaItemController::crearItemMayorista()` → `resolverTratamientoTributario()` |
+| H22 | **Alta** | **Mayorista: el niño no se cobra.** El precio del paquete se multiplica por la cantidad de **adultos**; con 2 adultos + 1 niño el total fue USD 1,900 (950 × 2) y el panel dice "Total (2 adultos + 1 niño)". No hay precio de niño para el paquete ni aviso. Confirmado en pantalla. | `cantidadAdultosCotizacion` (editar.vue), `crearItemMayorista()` |
+| H23 | Media | Crear una alternativa sin escribir nombre: error en inglés en ventana ("The nombre field is required."); el texto de ayuda dice "Alternativa B" en la primera. → R1/R7 | `AlternativaController::store()`, `editar.vue` |
+| H24 | Baja | "Alternativa A" se guarda como "Alternativa a" (la capitalización baja la letra suelta) y el panel muestra "Alternativa Alternativa a". | `TextoFormatoService::capitalizarNombrePropio()`, panel de precio |
+| H25 | Verificar | El tipo de cambio "del día" sugerido era del 9-sep (en local). Confirmar que la sincronización diaria corre en producción. | `tipo-cambio:sincronizar` (cron) |
 | H8 | Baja | Elegir, descartar o editar una opción de mayorista de una alternativa aceptada no está bloqueado (eliminar sí). | `OpcionMayoristaController` |
 | H9 | Baja | Solo por API: `pax_incluidos` acepta pasajeros de otra cotización (el precio sale 0); el pasaje aéreo acepta cualquier código de IGV de 2 caracteres. | `AlternativaItemController` |
+
+### 9. Rapidez y facilidad del cotizador — medición real (26-oct-2026)
+
+**Lo que pide el usuario:** le preocupa la rapidez y la facilidad de uso (puntaje 6/10 en ambas).
+Se acordó medir antes de rediseñar, con los 3 tipos de cotización más usados.
+
+**Cómo se midió:** recorridos completos en `agencia-demo` con el navegador automatizado
+(Playwright), contando cada acción del vendedor (clic, campo, marca) y el tiempo de espera de cada
+paso. Entorno local (Apache en Windows): los tiempos de producción pueden ser distintos. Datos de
+prueba borrados al terminar.
+
+| Recorrido | Acciones hoy | Esperas | Acciones posibles con las mejoras |
+|---|---|---|---|
+| 1. Tour nacional + hotel (2 adultos + 1 niño, 3 noches) | **31** (+2 por un error) | 1–3 s por acción; 3,6 s hasta ver la matriz del hotel | **~20** |
+| 2. Comparativa de 2 hoteles | **20** | ídem | **~12** |
+| 3. Internacional con mayorista (2 hoteles) | **28** (16 son datos que el vendedor tiene que escribir sí o sí) | ídem | **~23** |
+
+**Fricciones vistas en pantalla (en orden de recorrido):**
+1. Después de crear la cotización la pantalla queda vacía: hay que crear la alternativa a mano
+   (nombre, moneda, tipo de cambio). Si no se escribe el nombre: error **en inglés** ("The nombre
+   field is required.") en una ventana; el texto gris "Alternativa B" es solo ayuda (y dice B en la
+   primera). → H23
+2. La biblioteca no se filtra por el destino de la cotización (Cusco → muestra Alto Mayo y Lamas);
+   en Local/Nacional, 6 de 12 tours visibles son "Solo itinerario (mayorista)" o internacionales y
+   no se pueden cargar.
+3. Al cambiar de categoría (Tours, Alojamiento) la lista tarda ~2 s **sin indicador de carga** y
+   mientras tanto muestra los resultados anteriores: se puede hacer clic en el equivocado.
+4. Hotel: **noches = 1** por defecto aunque las fechas digan 3; **ningún ocupante marcado** (hay
+   que marcar a cada pasajero).
+5. Comparativa: con una sola habitación marcada, "Sumar a la comparación" queda **deshabilitado sin
+   explicación** (T-019); el PDF se bloquea si no se marca una elegida (T-023).
+6. Después de cada acción la pantalla tarda **2–3 s** en mostrar el cambio, sin indicador (recarga
+   toda la cotización en cada paso; ver también H13).
+7. Mayorista: formulario sin etiquetas (solo texto gris dentro de cada campo); hay que pulsar
+   "Hoteles" para ver dónde se cargan y "Elegir mayorista" antes de poder confirmar una habitación,
+   aunque sea la única opción.
+8. El PDF se descarga como "cotizacion-Alternativa a.pdf": sin código ni cliente, difícil de
+   encontrar después.
+
+**Mejoras rápidas propuestas (a aprobar), por ahorro:**
+
+| # | Mejora | Ahorra |
+|---|---|---|
+| R1 | Al crear la cotización nace sola la "Alternativa A" (moneda por defecto y tipo de cambio del día); el formulario de nueva alternativa usa el nombre sugerido si se deja vacío | 3–5 acciones y un error |
+| R2 | Hotel: noches calculadas de las fechas (del destino o de la cotización) y ocupantes marcados por defecto (todos) | 2–5 acciones por hotel |
+| R3 | Biblioteca abierta ya filtrada por el destino de la alternativa; en Local/Nacional no se listan tours "solo itinerario" | búsqueda y errores de selección |
+| R4 | Indicador de carga en la biblioteca y en cada acción; la lista vieja se atenúa mientras carga | clics equivocados; sensación de lentitud |
+| R5 | Actualizar en pantalla solo lo que cambió (el ítem y el total) en vez de recargar toda la cotización | 1–2 s por acción (≈ 30–60 s por cotización) |
+| R6 | Mayorista: etiquetas visibles en el formulario; si hay una sola opción, queda elegida sola | 1–2 acciones y dudas |
+| R7 | Errores de validación en español y junto al campo, no en ventana | interrupciones |
+| R8 | Nombre del PDF con código y cliente (`CDKM-1026-0000015 - Rivera.pdf`) | encontrar el archivo |
+
+Junto con T-019 y T-023 (comparativa), llevarían los recorridos a los números de la última columna.
+
+**Preguntas para el usuario:**
+1. ¿Apruebas R1–R8 (o cuáles)? Propuesta de orden: R5 y R4 primero (se sienten en todo), luego R1,
+   R2, R3, y al final R6–R8.
+2. R1: ¿la alternativa automática nace en **soles** siempre, o en la moneda que la agencia use más
+   (configurable)?
 
 ---
 
