@@ -42,7 +42,7 @@ Próximo ID libre: **T-038**.
 | T-026 | TRA | `CampoFecha` muestra el día correcto aunque reciba una fecha con hora y zona (H11) | por hacer | — | |
 | T-027 | AGE | Eliminar un tour clásico en una sola operación (total guardado correcto) + subtotal por destino (H12, H14) | por hacer | — | |
 | T-028 | AGE | La versión vigente de una tarifa: solo se ofrece y se usa la vigente; plantillas de tours a la versión nueva (H5, H16, H17) | por hacer | — | |
-| T-029 | AGE | Tour clásico desde plantilla: cada servicio nace con su tratamiento tributario; costo sin infantes (H18, H19) | por hacer | — | |
+| T-029 | AGE | Tour clásico desde plantilla: cada servicio nace con su tratamiento tributario; costo sin infantes (H18, H19) | bloqueada: espera la decisión de la obs. 10 (tributario deducido por reglas) y al contador | — | |
 | T-030 | AGE | Una alternativa aceptada no cambia de estado ni de mayorista por API (H3, H8) | por hacer | — | |
 | T-031 | AGE | Servicio de tour sin precio de niño: el niño paga como adulto; hoteles no cambian (H7) | por hacer | — | |
 | T-032 | AGE | Cotizador: actualizar solo lo que cambió + indicadores de carga (R5, R4, H13) | por hacer | — | |
@@ -67,6 +67,7 @@ Próximo ID libre: **T-038**.
 | TRA | Migración del proceso, pasos 3-6 de `proceso.md` §6 (adelgazar `CLAUDE.md`, archivar, pasar pendientes, limpiar memoria) | `proceso.md`, 24-oct-2026 |
 | AGE | **Revisión de cotizaciones, lo que queda** (26-oct; el resto ya es tarea: T-023 a T-031): H9 y H15 bajas (H13 pasó a T-032) | `docs/requerimientos/observaciones-pruebas-usuario.md`, "Revisión del flujo de cotizaciones" |
 | AGE | **Obs. 9, lo que queda** (R1-R8 → T-032 a T-037): **H21 paquete internacional nace "Exonerado · Amazonía" — consultar al contador qué tratamiento corresponde**; precio de niño en paquetes de mayorista (hoy solo adultos, decisión 26-oct); H25 verificar que el tipo de cambio diario se sincroniza en producción | `docs/requerimientos/observaciones-pruebas-usuario.md` §9 |
+| AGE | **Obs. 10 — tributario fuera de la cotización**: recomendación B (el sistema lo deduce con reglas del contador; la cotización solo lleva costo, venta y margen). Espera las 5 preguntas al contador. Pausa T-029 y H21 | `docs/requerimientos/observaciones-pruebas-usuario.md` §10, 26-oct-2026 |
 | CAJ + NOT | Devolver dinero al cliente por una NC sin volver a facturar (hoy la NC no mueve la caja en ningún giro) | revisión de fallos de las observaciones, 25-oct-2026 |
 | TRA | Sesión por inactividad: hoy el JWT vence a la hora fija desde el login (`JWT_TTL`, 60 min por defecto) y el aviso sale 2 min antes **aunque el usuario esté trabajando**. Propuesta: renovar en silencio mientras hay actividad y mostrar el aviso solo tras N minutos sin uso (falta decidir N). Solo frontend: `helpers/sessionExpiryWatcher.ts` + `helpers/http-client.ts`; `auth/refresh` ya existe | pregunta del usuario, 24-oct-2026 |
 

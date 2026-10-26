@@ -605,6 +605,63 @@ Junto con T-019 y T-023 (comparativa), llevarían los recorridos a los números 
 3. H22: **por ahora el paquete de mayorista se cotiza solo por adultos** → se hace visible en
    pantalla (T-036); el precio de niño del paquete queda para más adelante.
 
+### 10. ¿Sacar el tributario (gravado / exonerado) de la cotización y decidirlo al facturar?
+
+**Lo que propone el usuario (26-oct-2026):** el costo con exoneraciones o gravados complica los
+procesos. ¿Qué pasa si en la cotización solo se cargan costo, precio de venta y margen, y recién al
+facturar se separa lo exonerado de lo gravado (según lo que diga el contador)?
+
+**Lo que hay hoy (verificado):**
+- El tratamiento se **captura en 7 tablas** (tarifas de proveedor, tarifas de hotel de la matriz,
+  servicios del tour, pasaje aéreo, ítems de la alternativa, ítems de la reserva y un valor por
+  defecto de la agencia) y se pide o muestra en **~12 pantallas de Agencia** (ítem manual, pasaje
+  aéreo, hotel no registrado, tours, catálogo de proveedores, lienzo del cotizador con la insignia
+  "Exonerado · Amazonía", reserva, facturar…).
+- **El precio y el margen de la cotización no usan el IGV**: `PriceEngineService` calcula con los
+  montos tal cual (el precio de venta es el precio final al cliente). El tributario hoy solo sirve
+  para **facturar** (afectación de cada línea en SUNAT) y para partir la línea de tour por grupo de
+  IGV.
+- Los errores de esta área salen justamente de **capturarlo en muchos lugares con valores por
+  defecto**: H18 (guía y ajuste sin IGV), H21 (paquete internacional nace "Exonerado · Amazonía"),
+  y la corrección masiva del 22-oct (exonerado nacional → Amazonía).
+
+**Opciones:**
+
+| | A. Decidir todo al facturar (la propuesta, literal) | **B. El sistema lo deduce; nadie lo escribe en la cotización** (recomendada) |
+|---|---|---|
+| Cotización | Solo costo, venta, margen | Solo costo, venta, margen (igual que A) |
+| Al facturar | Quien factura clasifica **cada línea, cada vez** | El sistema agrupa solo ("S/ 1,000 exonerado + S/ 200 gravado") y quien factura **confirma**; puede corregir una línea (ya existe, con motivo) |
+| De dónde sale el tratamiento | De la persona que factura | De **reglas que define el contador** (por lugar donde se presta el servicio, tipo de servicio, internacional…), aplicadas al destino del servicio |
+| Rapidez al facturar | Más lenta (decide todo a mano) | Igual que hoy o más rápida |
+| Riesgo de error | Alto: depende de la memoria de quien factura | Bajo: una regla, en un lugar, validada por el contador |
+| Tours con servicios mezclados (parte exonerado, parte gravado) | Hay que repartir el monto a mano al facturar | Se reparte solo, como hoy |
+
+**Recomendación: B.** Cumple lo que buscas (la cotización queda limpia: costo, venta y margen) sin
+pasar el trabajo ni el riesgo al momento de facturar. El dato sigue existiendo, pero lo pone el
+sistema con las reglas del contador, no la persona.
+
+**Qué cambiaría con B (a diseñar en detalle después de hablar con el contador):**
+1. Una tabla de reglas tributarias de la agencia, validada por el contador (ej.: "servicio prestado
+   en un destino de la Amazonía → exonerado 20"; "fuera de la Amazonía → gravado 10"; "paquete
+   internacional → lo que diga el contador").
+2. Se quitan los selectores e insignias de IGV del cotizador, de los formularios de ítem manual,
+   pasaje aéreo y hotel no registrado, y (si el contador lo permite) del catálogo de tarifas.
+3. El tratamiento de cada servicio se calcula con la regla al aceptar la cotización (o al facturar);
+   la pantalla de facturar muestra el resumen por tratamiento y permite corregir una línea con motivo.
+4. Los datos ya guardados no se borran: dejan de pedirse.
+5. Se pausan **T-029** (tributario de tours clásicos) y el tratamiento de **H21**: con B se resuelven
+   de raíz con las reglas.
+
+**Preguntas para el contador** (necesarias para A o para B):
+1. ¿Qué define que un servicio vaya exonerado por Ley 27037: el **lugar donde se presta** (Amazonía),
+   el domicilio de la agencia, o el del cliente?
+2. ¿La agencia factura el **total** del servicio o solo su **comisión** (intermediación)? ¿Cambia
+   según el servicio (hotel, transporte, entradas, guía)?
+3. **Paquete internacional / mayorista**: ¿con qué afectación se factura (exportación, no gravado,
+   gravado solo la comisión)?
+4. **Pasaje aéreo**: ¿la tarifa de la aerolínea y el fee de la agencia van con afectaciones distintas?
+5. **Cliente extranjero no domiciliado**: ¿algún servicio califica como exportación?
+
 ---
 
 ## Orden de construcción propuesto (a aprobar)
