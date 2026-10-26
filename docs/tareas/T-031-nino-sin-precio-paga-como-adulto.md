@@ -1,18 +1,20 @@
-# T-031 — Tarifa de proveedor sin precio de niño: el niño paga como adulto
+# T-031 — Servicio de tour sin precio de niño: el niño paga como adulto (hoteles no cambian)
 
 | | |
 |---|---|
 | **Módulo** | AGE |
 | **Depende de** | ninguna |
 | **Reglas** | Misma regla que ya usan los tours: "precio de niño vacío = precio de adulto" (`TourPrecioVentaCampos.vue`, `TourLineaService`) |
-| **Decisiones** | `docs/requerimientos/observaciones-pruebas-usuario.md` → "Revisión del flujo de cotizaciones", H7 (decisión del usuario, 26-oct-2026: **si la tarifa no tiene precio de niño, el niño paga como adulto**) |
+| **Decisiones** | `docs/requerimientos/observaciones-pruebas-usuario.md` → "Revisión del flujo de cotizaciones", H7 (decisión del usuario, 26-oct-2026: **en servicios de tour, si la tarifa no tiene precio de niño, el niño paga como adulto; en hoteles no, porque tienen sus propias tarifas**) |
 | **Rama** | `fix/T-031-nino-paga-como-adulto` |
 
 ## Contexto
 En las tarifas de proveedor, `precio_venta_nino` vacío se toma hoy como **0**: el niño sale gratis,
 pero su costo sí se cuenta → margen negativo sin aviso. En los tours, el mismo campo vacío
-significa "igual al adulto". El usuario decidió unificar: **vacío = paga como adulto**. El infante
-no cambia (vacío = sin costo).
+significa "igual al adulto". El usuario decidió: **en servicios de tour** (entradas, transporte,
+actividades: tarifas sin `tipo_habitacion`), vacío = paga como adulto. **Las tarifas de hotel
+(`tipo_habitacion` no nulo) no cambian**: tienen sus propias tarifas por habitación y cama
+adicional. El infante no cambia en ningún caso (vacío = sin costo).
 
 Lugares donde hoy vacío vale 0:
 - `AlternativaItemController::crearItemProveedor()` (alta por persona)
@@ -23,11 +25,13 @@ Lugares donde hoy vacío vale 0:
 
 ## Alcance
 - Un solo punto que resuelva el precio de venta de niño de una tarifa (por ejemplo
-  `ProveedorTarifa::precioVentaNinoEfectivo()`: `precio_venta_nino ?? precio_venta_adulto`) y usarlo
-  en los 4 lugares. Infante sin cambios.
+  `ProveedorTarifa::precioVentaNinoEfectivo()`): si es tarifa de hotel (`tipo_habitacion` no nulo),
+  `precio_venta_nino ?? 0` (igual que hoy); si no, `precio_venta_nino ?? precio_venta_adulto`.
+  Usarlo en los 4 lugares. Infante sin cambios.
+- Aplica igual si el servicio de tour se agrega suelto o dentro de un tour cargado desde plantilla.
 - `ComboExplosionService`: la entrada lleva el precio de niño efectivo.
 - Pantalla de tarifas del proveedor (`proveedores/detalle.vue`): placeholder "Vacío = adulto" en el
-  precio de niño, igual que en tours. Hoy el formulario lo autocalcula con el costo × factor si no
+  precio de niño, igual que en tours, **solo en tarifas que no son de hotel**. Hoy el formulario lo autocalcula con el costo × factor si no
   se toca: confirmar que ese comportamiento sigue igual.
 - Cotizaciones ya armadas: **no se cambian** (precio guardado). Solo al recalcular por cambio de
   pasajeros (alternativas en borrador/enviada) se aplica la regla nueva: anotarlo en "Resultado".
@@ -48,6 +52,8 @@ Lugares donde hoy vacío vale 0:
   niño → precio de la línea S/ 300. → test (falla antes del fix)
 - [ ] **CA2** — Con niño S/ 70 → S/ 270 (sin cambio). → test
 - [ ] **CA3** — Infante con precio vacío sigue en 0. → test
+- [ ] **CA3b** — Tarifa de hotel (`tipo_habitacion` = doble) por persona, sin precio de niño → el
+  niño sigue en 0, igual que hoy. → test
 - [ ] **CA4** — Tour clásico desde plantilla con un servicio compartido sin precio de niño → el niño
   paga como adulto. → test
 - [ ] **CA5** — Cambiar pasajeros en una alternativa en borrador recalcula con la regla nueva. → test

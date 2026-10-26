@@ -44,7 +44,7 @@ Próximo ID libre: **T-032**.
 | T-028 | AGE | La versión vigente de una tarifa: solo se ofrece y se usa la vigente; plantillas de tours a la versión nueva (H5, H16, H17) | por hacer | — | |
 | T-029 | AGE | Tour clásico desde plantilla: cada servicio nace con su tratamiento tributario; costo sin infantes (H18, H19) | por hacer | — | |
 | T-030 | AGE | Una alternativa aceptada no cambia de estado ni de mayorista por API (H3, H8) | por hacer | — | |
-| T-031 | AGE | Tarifa de proveedor sin precio de niño: el niño paga como adulto (H7) | por hacer | — | |
+| T-031 | AGE | Servicio de tour sin precio de niño: el niño paga como adulto; hoteles no cambian (H7) | por hacer | — | |
 
 ## Por analizar
 
