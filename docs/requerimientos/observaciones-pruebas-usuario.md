@@ -451,9 +451,12 @@ se evalúan).
 - Se recalcula sola al cambiar la alternativa.
 
 *"Actualizar al precio nuevo" (respuesta 3):*
-- Editar el precio de una tarifa hoy crea una **versión nueva** y cierra la anterior
-  (`ProveedorTarifaController::update()`: `vigente_hasta` = hoy, `version_anterior_id`). La
-  alerta detecta que la tarifa del servicio tiene una versión más nueva activa.
+- Editar el precio de una tarifa ya usada crea una **versión nueva** y cierra la anterior
+  (`ProveedorTarifaController::update()`: `vigente_hasta` = hoy). **Hallazgo al armar la tarea:**
+  el vínculo entre versiones **no se guarda** (`version_anterior_id` solo viaja en la respuesta
+  JSON). Se agrega la columna `proveedor_tarifas.version_anterior_id` y se llena desde ahora; las
+  versiones viejas sin vínculo no generan el aviso de precio nuevo (solo el de tarifa vencida).
+  La alerta detecta que la tarifa del servicio tiene una versión siguiente activa.
 - Al hacer clic: confirmación "Precio actual S/ X → nuevo S/ Y. ¿Actualizar?". Al confirmar se
   re-engancha el servicio a la versión nueva, con su costo y su precio, respetando el descuento
   del servicio y recalculando el total. Uno por uno (sin "actualizar todos", para no cambiar
