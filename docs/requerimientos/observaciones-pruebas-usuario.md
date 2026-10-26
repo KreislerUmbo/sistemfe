@@ -587,7 +587,7 @@ prueba borrados al terminar.
 |---|---|---|
 | R1 | Al crear la cotización nace sola la "Alternativa A" (moneda por defecto y tipo de cambio del día); el formulario de nueva alternativa usa el nombre sugerido si se deja vacío | 3–5 acciones y un error |
 | R2 | Hotel: noches calculadas de las fechas (del destino o de la cotización) y ocupantes marcados por defecto (todos) | 2–5 acciones por hotel |
-| R3 | Biblioteca abierta ya filtrada por el destino de la alternativa; en Local/Nacional no se listan tours "solo itinerario" | búsqueda y errores de selección |
+| R3 | Biblioteca abierta ya filtrada por el **destino activo** de la alternativa (el chip seleccionado; con varios destinos, el que se está armando, que es adonde va lo que se agregue), incluidos sus lugares (`idsConDescendientes`). Destino escrito a mano sin catálogo: sin filtro. El filtro se ve como "Mostrando: Cusco ✕" y se quita con un clic; si el vendedor lo cambia, se respeta mientras la biblioteca siga abierta. En Local/Nacional no se listan tours "solo itinerario" (pregunta del usuario sobre 2 destinos, 26-oct-2026) | búsqueda y errores de selección |
 | R4 | Indicador de carga en la biblioteca y en cada acción; la lista vieja se atenúa mientras carga | clics equivocados; sensación de lentitud |
 | R5 | Actualizar en pantalla solo lo que cambió (el ítem y el total) en vez de recargar toda la cotización | 1–2 s por acción (≈ 30–60 s por cotización) |
 | R6 | Mayorista: etiquetas visibles en el formulario; si hay una sola opción, queda elegida sola | 1–2 acciones y dudas |
