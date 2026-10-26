@@ -39,8 +39,10 @@ exactamente 1 elegida por grupo.
   grupo de 1 fila (tarjeta "1 opciones de hotel" con "Sin resolver"). → prueba funcional
 - [ ] **CA2** — Clic en el Hotel B → abre en modo comparación con el aviso; marcar Matrimonial →
   la tarjeta queda con 2 opciones del mismo grupo. → prueba funcional
-- [ ] **CA3** — PDF con el grupo abierto: tabla "Opciones de hoteles" con los 2 hoteles en la
-  columna Matrimonial. → prueba funcional (descargar el PDF)
+- [ ] **CA3** — Con el grupo **abierto** el PDF sigue bloqueado (`AlternativaPdfService::
+  validarGruposResueltos()`, guardrail del 19-sep — no se toca). Marcando una como elegida, el
+  PDF sale con la tabla "Opciones de hoteles": los 2 hoteles en la columna Matrimonial y la
+  elegida resaltada. → prueba funcional (descargar el PDF en los dos estados)
 - [ ] **CA4** — Marcar una como elegida y aceptar la cotización funciona; con el grupo sin
   resolver, aceptar sigue bloqueado (422). → prueba funcional + tests existentes del guard en verde
 - [ ] **CA5** — Picker de mayorista: sigue pidiendo 2. → prueba funcional

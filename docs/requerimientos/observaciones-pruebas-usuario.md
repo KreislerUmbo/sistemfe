@@ -321,6 +321,12 @@ los dos con habitación matrimonial.
   se marcan las 2 matrimoniales de una vez.
 - La regla de fondo ya está en el backend: no se puede **aceptar** con una comparación sin
   resolver (exactamente 1 elegida).
+- **Corrección (26-oct-2026, revisión del flujo de cotizaciones):** tampoco se puede **generar el
+  PDF** con una comparación sin resolver (`AlternativaPdfService::validarGruposResueltos()`,
+  guardrail del 19-sep: el total salía con el hotel más barato sin decirlo). La instrucción que se
+  le dio al usuario ("no marques ninguna como elegida y descarga el PDF") era incorrecta: para
+  enviar la comparativa hay que **marcar una como elegida** (la recomendada); el PDF muestra la
+  tabla con todos los hoteles y la elegida resaltada, y el total con esa. Ver hallazgo H4.
 
 **Propuesta:** el primer hotel puede empezar la comparación con **1 sola habitación** (el banner
 "Comparando 1 hotel(es)" invita a sumar el siguiente). Una comparación de 1 sola fila al resolverse
@@ -489,6 +495,30 @@ servicio manual o de un precio puesto a mano: es una decisión que el vendedor y
 en cada envío sería trivial. Lo único que de verdad está "por confirmar" por un tercero y puede
 hacer quedar mal a la agencia es el **plazo de la tarifa aérea** (la aerolínea la sostiene hasta
 una fecha y hora): esa sí entra.
+
+---
+
+## AGE — Revisión del flujo de cotizaciones (26-oct-2026)
+
+Pedido del usuario: buscar fallos en todo el flujo de cotizaciones. Revisado leyendo el código de
+`CotizacionController`, `AlternativaController`, `AlternativaItemController`,
+`CotizacionEnvioController`, `OpcionMayoristaController`, `AlternativaPdfService`,
+`BibliotecaCotizadorController` y `ReservaController::aceptar()`. Los 706 tests de Agencia pasan:
+estos casos no están cubiertos. **Nada reproducido todavía en pantalla**: confirmar cada uno con
+un test que falle antes de corregirlo. Lo que ya es tarea no se repite (T-001: cambiar precio en
+alternativa aceptada).
+
+| # | Prioridad | Hallazgo | Dónde |
+|---|---|---|---|
+| H1 | **Alta** | **Duplicar + "Eliminar todo este bloque" borra la comparación de hoteles en las dos alternativas.** Duplicar copia el mismo `grupo_opcion_id`; `eliminarGrupo()` busca solo por ese id, sin alternativa. Además el total de la otra alternativa no se recalcula, y si la original está aceptada la copia no puede borrar su grupo (422). | `AlternativaController::duplicar()`, `AlternativaItemController::eliminarGrupo()` |
+| H2 | **Alta** | **Un vendedor puede cambiar o borrar alternativas, servicios, hoteles y mayoristas de cotizaciones de otro vendedor, y bajar su PDF.** La regla "cada vendedor ve solo lo suyo" (`CotizacionPolicy`) se revisa al ver la cotización, al aceptar y al enviar por correo, pero no en esos controladores (solo piden el permiso general `cotizaciones.editar`). Tampoco en `actualizarPasajeros()`. Mismo tipo de hueco que se cerró en Reservas con `ReservaPolicy` (F3). | `AlternativaController`, `AlternativaItemController`, `OpcionMayoristaController`, `OpcionHotelController`, `AlternativaDestinoController`, `CotizacionController::actualizarPasajeros()` |
+| H3 | Media | **Una alternativa aceptada (con reserva) se puede pasar a borrador, enviada o descartada por API.** Solo se bloquea pasarla a "aceptada". En borrador se desbloquea la edición de precios y la reserva queda desalineada. | `AlternativaController::update()` |
+| H4 | Media (decisión) | **No se puede generar el PDF con una comparación de hoteles abierta** (guardrail del 19-sep, porque el total salía con el más barato sin decirlo). Choca con enviar la comparativa para que el cliente elija (obs. 6). Opciones: dejarlo así (se marca la recomendada) o permitir el PDF abierto mostrando "Total desde X, según el hotel que elijas" y la tabla sin elegida. | `AlternativaPdfService::validarGruposResueltos()` |
+| H5 | Media | **El día que se cambia el precio de una tarifa, la biblioteca muestra la versión vieja y la nueva.** La vieja se cierra con `vigente_hasta` = hoy y la nueva empieza hoy; la búsqueda incluye las dos. El vendedor puede elegir el precio viejo. | `ProveedorTarifaController::update()`, `BibliotecaCotizadorController::buscarProveedorTarifas()` |
+| H6 | Media (a confirmar) | **Mayoristas en dos destinos de la misma alternativa:** "Elegir" desmarca la elegida de toda la alternativa (no por destino), y sigue el índice único viejo por alternativa (limpieza 12g pendiente). Con 2 destinos internacionales con mayoristas distintos, solo uno puede quedar elegido. ¿Se cotiza así en la práctica? | `OpcionMayoristaController::elegir()`, índice `opcion_mayorista_alternativa_elegida_unique` |
+| H7 | Media | **Tarifa de proveedor sin precio de niño = niño gratis, pero el costo sí lo cuenta** → margen negativo sin aviso. En tours, vacío significa "igual al adulto". Dos reglas distintas para el mismo campo vacío. | `AlternativaItemController::crearItemProveedor()`, `CotizacionController::recalcularItemsPorPersona()`, `ComboExplosionService` |
+| H8 | Baja | Elegir, descartar o editar una opción de mayorista de una alternativa aceptada no está bloqueado (eliminar sí). | `OpcionMayoristaController` |
+| H9 | Baja | Solo por API: `pax_incluidos` acepta pasajeros de otra cotización (el precio sale 0); el pasaje aéreo acepta cualquier código de IGV de 2 caracteres. | `AlternativaItemController` |
 
 ---
 
