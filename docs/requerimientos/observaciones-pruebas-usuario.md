@@ -661,6 +661,32 @@ sistema con las reglas del contador, no la persona.
    gravado solo la comisión)?
 4. **Pasaje aéreo**: ¿la tarifa de la aerolínea y el fee de la agencia van con afectaciones distintas?
 5. **Cliente extranjero no domiciliado**: ¿algún servicio califica como exportación?
+6. La agencia vende también servicios fuera de la Amazonía (Cusco, internacional). ¿Eso cuenta como
+   "producción fuera de la Amazonía" (art. 2 del D.S. 103-99-EF) y pone en riesgo la exoneración de
+   todo lo demás? ¿Cambia si la agencia solo intermedia (comisión)?
+
+**Lo que ya se sabe de la pregunta 1 (26-oct-2026, norma + práctica del usuario):** la exoneración
+depende de **dos condiciones a la vez** y **no** del domicilio del cliente:
+- **La agencia** es "empresa ubicada en la Amazonía" (art. 2 del D.S. 103-99-EF): domicilio fiscal y
+  sede en la Amazonía, inscripción registral allí, 70% de activos fijos allí, sin producción fuera.
+  La agencia tiene domicilio fiscal en **Tarapoto** (San Martín).
+- **El servicio se presta en la Amazonía** (art. 13.1 de la Ley 27037; art. 11 del Reglamento).
+- En San Martín los negocios emiten hoy comprobantes exonerados por servicios prestados y bienes
+  transferidos en la región, con la leyenda "… para ser consumidos en la misma" (dato del usuario).
+  La duda sobre la Ley 28575 queda descartada en la práctica: afectó sobre todo importaciones.
+
+Para el camino B, la regla queda: **agencia que cumple el art. 2** (dato de configuración, una vez)
+**+ servicio prestado en un destino de la Amazonía** (dato del árbol de destinos) → exonerado 20.
+
+**Hallazgos de código al revisar esto (26-oct-2026, todos los giros):**
+- **H26 — La leyenda de Amazonía no va en el XML.** SUNAT tiene leyendas propias en el Catálogo 52
+  (2001 bienes, 2002 servicios, 2003 construcción: "… EN LA AMAZONÍA REGIÓN SELVA PARA SER CONSUMIDOS
+  EN LA MISMA"). `FacturacionElectronicaController::armarLeyendas()` y
+  `NotaElectronicaController::armarLeyendasNota()` solo mandan la 1000 (monto en letras). El PDF
+  sí imprime un texto propio ("OPERACIÓN EXONERADA DEL IGV — LEY N° 27037"), distinto del que usan
+  los negocios de la zona. Confirmar con el contador si la leyenda es obligatoria en el XML y su texto.
+- **H27 — Monto en letras siempre en "SOLES".** `armarLeyendas()` pasa `'SOLES'` fijo: una factura en
+  dólares sale al XML con el monto en letras en soles. Las notas sí miran la moneda.
 
 ---
 
