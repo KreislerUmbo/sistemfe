@@ -18,6 +18,7 @@
 | 5 | AGE | Reserva · pasajeros | "Buscar pasajero" también encuentra a los clientes registrados |
 | 6 | AGE | Cotizador · comparar hoteles | Empezar la comparación con 1 habitación (hoy pide 2 en el primer hotel) |
 | 7 | AGE | PDF de cotización | Fotos de los hoteles (fachada + habitaciones), con comparativa o con un solo hotel |
+| 8 | AGE | Cotizador · envío | Revisión antes de enviar: lista de pendientes que lleva a donde se corrige |
 
 ---
 
@@ -390,6 +391,54 @@ normalizarFotos()`/`fotosResueltas()`). Al **promover** un hotel no registrado a
   Hotel sin fotos: no imprime bloque.
 - Verificar el PDF real con Ghostscript (memoria `reference_pdf_visual_verification_ghostscript`):
   esta sección ya tuvo solapes con DomPDF (`page-break-before: always`).
+
+### 8. Revisión antes de enviar: "¿esta propuesta ya está lista para el cliente?"
+
+**Lo que pide el usuario (26-oct-2026):** antes de enviar el PDF o el correo, una revisión con
+una lista breve de pendientes: tarifas por confirmar, precios que requieren revisión manual,
+temporada desactualizada, datos incompletos y vigencia de la propuesta. Cada alerta lleva a la
+sección donde se corrige. El vendedor tiene que poder responder rápido: "¿esta propuesta ya está
+lista para que la vea el cliente?".
+
+**Lo que hay hoy (verificado):**
+- En la alternativa hay 3 acciones de envío: **Ver PDF** (solo descarga, no cambia el estado),
+  **Condiciones generales** y **Enviar por correo** (`EnviarCorreoCotizacion`, que sí la marca
+  `enviada` y calcula `fecha_vencimiento` = envío + `dias_vigencia_cotizacion`,
+  `CotizacionEnvioController`). No hay ninguna revisión previa: se envía lo que haya.
+- El único bloqueo existente es al **aceptar** (comparación de hoteles sin resolver, 422).
+- Datos que ya existen y sirven para cada alerta:
+
+| Alerta pedida | Dato real que la detecta |
+|---|---|
+| Tarifas por confirmar | Ítem **manual** (sin tarifa, `origen_tipo='manual'`); hotel con precio **referencial** cargado a mano; proveedor o guía **de referencia** (`es_referencial`: precio de lista, operador sin definir); pasaje aéreo con `tarifa_valida_hasta` |
+| Precios que requieren revisión | Venta menor que el costo; margen bajo el `margen_minimo_pct` de la tarifa; descuento sobre `descuento_maximo_pct`; precio 0 |
+| Temporada desactualizada | La tarifa usada **vence** antes del viaje (`vigente_hasta`) o fue **desactivada** (`activo=false`); su **temporada** no cubre la fecha de viaje, o no hay ocurrencia cargada para ese año (`temporada_ocurrencias`, central); el precio de la tarifa **cambió** desde que se agregó (snapshot ≠ ficha actual); tour con precio por temporada (`paquete_plantilla_precios`) |
+| Datos incompletos | Sin fecha de viaje; alternativa sin ítems; edades de niños faltantes si la tarifa distingue niño; cliente sin correo (solo para "Enviar por correo"); tipo de cambio aplicado viejo (pendiente ya conocido: "refrescar tasa en borrador") |
+| Vigencia de la propuesta | Fecha en que vencerá si se envía hoy; si ya se envió y **venció** (`estado_resumen = vencida`); la vigencia pasa la fecha de viaje; pasaje aéreo que vence antes que la propuesta o en menos de 24 h |
+
+**Propuesta:**
+- **Un solo cálculo en el backend** (`GET alternativas/{id}/revision`): lista de pendientes con
+  nivel (`bloquea` / `aviso`), mensaje corto y **a dónde llevar** (destino, día, ítem o sección:
+  Datos de la cotización, Pasajeros, Tipo de cambio). Lo usan la pantalla y el envío por correo.
+- **Panel "Lista para el cliente"** en la alternativa: ✓ "Lista" o "N pendientes"; cada línea es
+  un enlace que abre el día/destino y resalta el ítem (o abre el formulario que corresponde).
+- Al hacer clic en **Ver PDF** o **Enviar por correo** con pendientes: modal con la lista y dos
+  botones, "Revisar" y "Enviar igual". Si hay alguno que **bloquea**, no se puede enviar.
+- El panel se recalcula después de cada cambio en la alternativa.
+
+**Preguntas para el usuario:**
+1. **¿Algo debe bloquear el envío**, o todo es aviso y el vendedor decide? Propuesta: bloquean
+   solo "precio 0 / sin precio" y "alternativa sin ítems"; el resto avisa.
+2. **"Tarifas por confirmar":** ¿te refieres a lo de la tabla (ítem manual, hotel referencial,
+   proveedor de referencia, aéreo con plazo)? ¿O a otro estado que hoy no existe, por ejemplo un
+   servicio cotizado al proveedor y **sin respuesta todavía**? Si es lo segundo, hace falta una
+   marca nueva "por confirmar" en el ítem.
+3. **Precio que cambió en la ficha** desde que se agregó a la cotización: ¿solo avisar, o además
+   ofrecer "actualizar al precio nuevo" desde la misma alerta?
+4. **¿Ver PDF** también debe pasar por la revisión, o solo el correo? (Ver PDF se usa también para
+   revisar internamente; quizás solo mostrar el panel sin el modal.)
+5. **Margen bajo:** ¿se avisa con el `margen_minimo_pct` de cada tarifa, o quieres un margen
+   mínimo general de la agencia en Configuración?
 
 ---
 
