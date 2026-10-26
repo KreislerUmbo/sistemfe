@@ -596,11 +596,14 @@ prueba borrados al terminar.
 
 Junto con T-019 y T-023 (comparativa), llevarían los recorridos a los números de la última columna.
 
-**Preguntas para el usuario:**
-1. ¿Apruebas R1–R8 (o cuáles)? Propuesta de orden: R5 y R4 primero (se sienten en todo), luego R1,
-   R2, R3, y al final R6–R8.
-2. R1: ¿la alternativa automática nace en **soles** siempre, o en la moneda que la agencia use más
-   (configurable)?
+**Respuestas del usuario (26-oct-2026):**
+1. **R1–R8 aprobadas**, en el orden propuesto. → T-032 (R5, R4), T-033 (R1, R7), T-034 (R2),
+   T-035 (R3), T-036 (R6 + H22), T-037 (R8 + H20).
+2. R1: la alternativa nace sola, pero **el nombre (título que ve el cliente) y la moneda se tienen
+   que poder cambiar** → se eligen ya en "Nueva cotización" (prellenados) y la moneda se puede
+   cambiar mientras la alternativa no tenga servicios.
+3. H22: **por ahora el paquete de mayorista se cotiza solo por adultos** → se hace visible en
+   pantalla (T-036); el precio de niño del paquete queda para más adelante.
 
 ---
 

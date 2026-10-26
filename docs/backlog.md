@@ -8,7 +8,7 @@
 
 Cada línea: ID · qué · estado · depende de · rama o commit. El detalle está en
 `docs/tareas/T-…md` (se borra al cerrar; para una tarea hecha, el commit es la referencia).
-Próximo ID libre: **T-032**.
+Próximo ID libre: **T-038**.
 
 ## Activas
 
@@ -45,6 +45,12 @@ Próximo ID libre: **T-032**.
 | T-029 | AGE | Tour clásico desde plantilla: cada servicio nace con su tratamiento tributario; costo sin infantes (H18, H19) | por hacer | — | |
 | T-030 | AGE | Una alternativa aceptada no cambia de estado ni de mayorista por API (H3, H8) | por hacer | — | |
 | T-031 | AGE | Servicio de tour sin precio de niño: el niño paga como adulto; hoteles no cambian (H7) | por hacer | — | |
+| T-032 | AGE | Cotizador: actualizar solo lo que cambió + indicadores de carga (R5, R4, H13) | por hacer | — | |
+| T-033 | AGE | La primera alternativa nace con la cotización; nombre y moneda editables; errores en español (R1, R7, H23, H24) | por hacer | — | |
+| T-034 | AGE | Hotel: noches calculadas y ocupantes marcados por defecto (R2) | por hacer | — | |
+| T-035 | AGE | Biblioteca filtrada por el destino activo; sin tours "solo itinerario" en Local (R3) | por hacer | — | |
+| T-036 | AGE | Mayorista: etiquetas, primera opción elegida sola, "solo adultos" a la vista (R6, H22) | por hacer | — | |
+| T-037 | AGE | PDF: nombre de archivo con código y cliente; rótulo correcto de la tabla de hoteles (R8, H20) | por hacer | — | |
 
 ## Por analizar
 
@@ -60,7 +66,7 @@ Próximo ID libre: **T-032**.
 | TRA | Escribir `docs/transversal/seguridad.md` (detalle del checklist de `proceso.md` §4) | `proceso.md`, 24-oct-2026 |
 | TRA | Migración del proceso, pasos 3-6 de `proceso.md` §6 (adelgazar `CLAUDE.md`, archivar, pasar pendientes, limpiar memoria) | `proceso.md`, 24-oct-2026 |
 | AGE | **Revisión de cotizaciones, lo que queda** (26-oct; el resto ya es tarea: T-023 a T-031): **H13** precio en línea que se pierde al recargar (verificar en pantalla); H9 y H15 bajas | `docs/requerimientos/observaciones-pruebas-usuario.md`, "Revisión del flujo de cotizaciones" |
-| AGE | **Obs. 9 — rapidez y facilidad del cotizador**: medición real (31/20/28 acciones en los 3 recorridos) y mejoras R1-R8 a aprobar; hallazgos **H21 internacional nace exonerado Amazonía (tributario, decisión)**, **H22 mayorista no cobra al niño**, H20 PDF "tarifa por persona" mal rotulado, H23-H24 nombre de alternativa, H25 verificar tipo de cambio en prod | `docs/requerimientos/observaciones-pruebas-usuario.md` §9 y "Revisión del flujo de cotizaciones", 26-oct-2026 |
+| AGE | **Obs. 9, lo que queda** (R1-R8 → T-032 a T-037): **H21 paquete internacional nace "Exonerado · Amazonía" — consultar al contador qué tratamiento corresponde**; precio de niño en paquetes de mayorista (hoy solo adultos, decisión 26-oct); H25 verificar que el tipo de cambio diario se sincroniza en producción | `docs/requerimientos/observaciones-pruebas-usuario.md` §9 |
 | CAJ + NOT | Devolver dinero al cliente por una NC sin volver a facturar (hoy la NC no mueve la caja en ningún giro) | revisión de fallos de las observaciones, 25-oct-2026 |
 | TRA | Sesión por inactividad: hoy el JWT vence a la hora fija desde el login (`JWT_TTL`, 60 min por defecto) y el aviso sale 2 min antes **aunque el usuario esté trabajando**. Propuesta: renovar en silencio mientras hay actividad y mostrar el aviso solo tras N minutos sin uso (falta decidir N). Solo frontend: `helpers/sessionExpiryWatcher.ts` + `helpers/http-client.ts`; `auth/refresh` ya existe | pregunta del usuario, 24-oct-2026 |
 
