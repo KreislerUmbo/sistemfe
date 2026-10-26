@@ -46,6 +46,8 @@ Próximo ID libre: **T-019**.
 | AGE | Enviar el PDF de modificación por correo | T-006, fuera de alcance |
 | TRA | Escribir `docs/transversal/seguridad.md` (detalle del checklist de `proceso.md` §4) | `proceso.md`, 24-oct-2026 |
 | TRA | Migración del proceso, pasos 3-6 de `proceso.md` §6 (adelgazar `CLAUDE.md`, archivar, pasar pendientes, limpiar memoria) | `proceso.md`, 24-oct-2026 |
+| AGE | **Obs. 6** — Comparar hoteles: empezar la comparación con 1 sola habitación | `docs/requerimientos/observaciones-pruebas-usuario.md` §6, 26-oct-2026 |
+| AGE | **Obs. 7** — PDF de cotización: fotos de los hoteles de la comparativa, como en mayoristas | observaciones §7 |
 | CAJ + NOT | Devolver dinero al cliente por una NC sin volver a facturar (hoy la NC no mueve la caja en ningún giro) | revisión de fallos de las observaciones, 25-oct-2026 |
 | TRA | Sesión por inactividad: hoy el JWT vence a la hora fija desde el login (`JWT_TTL`, 60 min por defecto) y el aviso sale 2 min antes **aunque el usuario esté trabajando**. Propuesta: renovar en silencio mientras hay actividad y mostrar el aviso solo tras N minutos sin uso (falta decidir N). Solo frontend: `helpers/sessionExpiryWatcher.ts` + `helpers/http-client.ts`; `auth/refresh` ya existe | pregunta del usuario, 24-oct-2026 |
 

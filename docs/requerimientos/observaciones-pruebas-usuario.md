@@ -16,6 +16,8 @@
 | 3 | AGE | Vuelos · aerolíneas | Catálogo de aerolíneas con buscador; aerolínea por defecto en la pestaña Pasajeros |
 | 4 | AGE | Reserva · pasajeros | El cliente que cotiza como primer pasajero por defecto (editable) |
 | 5 | AGE | Reserva · pasajeros | "Buscar pasajero" también encuentra a los clientes registrados |
+| 6 | AGE | Cotizador · comparar hoteles | Empezar la comparación con 1 habitación (hoy pide 2 en el primer hotel) |
+| 7 | AGE | PDF de cotización | Fotos de los hoteles de la comparativa (3 por hotel), como en mayoristas |
 
 ---
 
@@ -297,6 +299,71 @@ personas registradas en Clientes; propone buscar en las dos tablas y, si no apar
 
 **Preguntas para el usuario:** ninguna por ahora (si quieres que un cliente empresa sí aparezca
 por algún caso, avísame).
+
+---
+
+## AGE — Cotizador: comparar hoteles
+
+### 6. Comparar el mismo tipo de habitación en varios hoteles
+
+**Lo que pide el usuario (26-oct-2026):** enviar la comparativa de 2 alojamientos en la matriz,
+los dos con habitación matrimonial.
+
+**Lo que hay hoy (verificado en el código, sin probar en pantalla):**
+- En Local/Nacional, la comparación se arma hotel por hotel ("Comparar varias opciones" en
+  `HabitacionMatrixPicker.vue`). Para **el primer hotel** el botón exige marcar **al menos 2
+  habitaciones** si el hotel tiene más de un tipo cargado (`editar.vue`,
+  `:minimo-grupo="… tarifas.length <= 1 ? 1 : 2"`). Del segundo hotel en adelante basta 1.
+- Resultado: comparar "matrimonial del Hotel A vs. matrimonial del Hotel B" obliga a agregar una
+  habitación de más en el Hotel A y quitarla después con la ✕ de su fila en el lienzo.
+- En mayorista (Internacional) no pasa: la lista muestra todos los hoteles de la opción juntos y
+  se marcan las 2 matrimoniales de una vez.
+- La regla de fondo ya está en el backend: no se puede **aceptar** con una comparación sin
+  resolver (exactamente 1 elegida).
+
+**Propuesta:** el primer hotel puede empezar la comparación con **1 sola habitación** (el banner
+"Comparando 1 hotel(es)" invita a sumar el siguiente). Una comparación de 1 sola fila al resolverse
+se comporta como un ítem normal. Solo frontend (el mínimo es del picker); revisar si el backend
+pone algún mínimo al crear el grupo.
+
+**Preguntas para el usuario:** ninguna.
+
+### 7. Fotos de los hoteles en el PDF de la cotización, como en mayoristas
+
+**Lo que pide el usuario (26-oct-2026):** que el PDF de la cotización con la comparativa de
+hoteles muestre **3 imágenes** por hotel, igual que sale con los mayoristas.
+
+**Lo que hay hoy (verificado):**
+- El PDF (`alternativa.blade.php`, `AlternativaPdfService::hotelesInfoParaPdf()`) imprime
+  "Fotos referenciales de los hoteles": por hotel, **1 foto de fachada + hasta 2 de habitación**,
+  más check-in/check-out. Esas fotos salen **solo de `opciones_hotel.fotos`**, cada una marcada
+  `fachada` o `habitacion`.
+- **Hoteles de mayorista:** son `opciones_hotel`, y el picker de mayorista tiene subida de fotos
+  por tipo → salen.
+- **Hoteles registrados como Proveedor** (lo habitual en Local/Nacional): la fila de la
+  comparación no trae `opcion_hotel_id`, así que **nunca salen fotos**, aunque el proveedor
+  tenga galería: `proveedores.fotos` ya existe (lista de fotos, **sin** marca de fachada o
+  habitación) y se carga en la ficha del proveedor.
+- **Hotel "no registrado" de Local** (`opciones_hotel` sin mayorista): el PDF ya imprimiría sus
+  fotos, pero el picker de Local **no ofrece subirlas** (solo el de mayorista recibe
+  `permitir-gestion-hoteles`).
+
+**¿Es posible?** Sí, y reutiliza casi todo: la sección del PDF, el recorte 4:3
+(`ImagenRecorteService`) y la galería del proveedor ya existen.
+
+**Propuesta:**
+- Hotel Proveedor: la fila de la comparación lleva el `proveedor_id`, y `hotelesInfoParaPdf()`
+  toma de `proveedores.fotos` las **3 primeras**, con el check-in/check-out de su
+  `alojamientoDetalle` (ya lo hace para los de mayorista ligados a un proveedor).
+- Hotel no registrado de Local: subir fotos (fachada/habitación) desde el picker de Local, igual
+  que en mayorista.
+- Sin fotos: el hotel no imprime bloque, como hoy.
+
+**Preguntas para el usuario:**
+1. La galería del proveedor no distingue fachada de habitación. ¿Basta con **las 3 primeras**
+   (tú ordenas la galería en la ficha del proveedor), o quieres poder marcar cuál es la fachada?
+2. ¿Las fotos salen **solo en la comparativa**, o también cuando la cotización lleva **un solo
+   hotel** (sin comparación)? Hoy, sin comparación, no sale ninguna foto de hotel.
 
 ---
 
