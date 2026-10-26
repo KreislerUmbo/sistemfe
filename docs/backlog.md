@@ -8,7 +8,7 @@
 
 Cada línea: ID · qué · estado · depende de · rama o commit. El detalle está en
 `docs/tareas/T-…md` (se borra al cerrar; para una tarea hecha, el commit es la referencia).
-Próximo ID libre: **T-026**.
+Próximo ID libre: **T-028**.
 
 ## Activas
 
@@ -39,6 +39,8 @@ Próximo ID libre: **T-026**.
 | T-023 | AGE | PDF de cotización con la comparación de hoteles abierta + descuento bien calculado (H4, H10) | por hacer | — | |
 | T-024 | AGE | La comparación de hoteles de una alternativa duplicada es independiente de la original (H1) | por hacer | — | |
 | T-025 | AGE | Cotizador: cada acción verifica que la cotización sea del vendedor (H2) | por hacer | — | |
+| T-026 | TRA | `CampoFecha` muestra el día correcto aunque reciba una fecha con hora y zona (H11) | por hacer | — | |
+| T-027 | AGE | Eliminar un tour clásico en una sola operación (total guardado correcto) + subtotal por destino (H12, H14) | por hacer | — | |
 
 ## Por analizar
 
@@ -53,7 +55,7 @@ Próximo ID libre: **T-026**.
 | AGE | Enviar el PDF de modificación por correo | T-006, fuera de alcance |
 | TRA | Escribir `docs/transversal/seguridad.md` (detalle del checklist de `proceso.md` §4) | `proceso.md`, 24-oct-2026 |
 | TRA | Migración del proceso, pasos 3-6 de `proceso.md` §6 (adelgazar `CLAUDE.md`, archivar, pasar pendientes, limpiar memoria) | `proceso.md`, 24-oct-2026 |
-| AGE | **Revisión de cotizaciones, lo que queda** (26-oct; H1→T-024, H2→T-025, H4+H10→T-023, H6 descartado): H3 alternativa aceptada vuelve a borrador; H5 tarifa vieja y nueva el mismo día; H7 niño sin precio = gratis; H8-H9 bajas; pantalla: H11 fecha de destino un día antes, H12 eliminar tour deja mal el total guardado, H13 precio en línea se pierde, H14-H15 bajas | `docs/requerimientos/observaciones-pruebas-usuario.md`, "Revisión del flujo de cotizaciones" |
+| AGE | **Revisión de cotizaciones, lo que queda** (26-oct; H1→T-024, H2→T-025, H4+H10→T-023, H6 descartado): H3 alternativa aceptada vuelve a borrador; H5 tarifa vieja y nueva el mismo día; H7 niño sin precio = gratis; H8-H9 bajas; pantalla (H11→T-026, H12+H14→T-027): H13 precio en línea se pierde (verificar en pantalla), H15 baja | `docs/requerimientos/observaciones-pruebas-usuario.md`, "Revisión del flujo de cotizaciones" |
 | CAJ + NOT | Devolver dinero al cliente por una NC sin volver a facturar (hoy la NC no mueve la caja en ningún giro) | revisión de fallos de las observaciones, 25-oct-2026 |
 | TRA | Sesión por inactividad: hoy el JWT vence a la hora fija desde el login (`JWT_TTL`, 60 min por defecto) y el aviso sale 2 min antes **aunque el usuario esté trabajando**. Propuesta: renovar en silencio mientras hay actividad y mostrar el aviso solo tras N minutos sin uso (falta decidir N). Solo frontend: `helpers/sessionExpiryWatcher.ts` + `helpers/http-client.ts`; `auth/refresh` ya existe | pregunta del usuario, 24-oct-2026 |
 
