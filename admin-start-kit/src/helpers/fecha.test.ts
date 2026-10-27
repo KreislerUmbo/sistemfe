@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatFechaHora, hoyPeru, sumarDiasISO } from './fecha'
+import { formatFechaHora, hoyPeru, soloFechaISO, sumarDiasISO } from './fecha'
 
 // Regla única de fechas (08-oct-2026): todo se muestra en hora de Perú, sin depender de la
 // zona horaria de la PC. Los casos van de 19:00 a 24:00 de Perú, donde UTC ya es el día siguiente.
@@ -40,5 +40,19 @@ describe('sumarDiasISO', () => {
     expect(sumarDiasISO('2026-10-31', 1)).toBe('2026-11-01')
     expect(sumarDiasISO('2026-12-31', 7)).toBe('2027-01-07')
     expect(sumarDiasISO('2026-09-01T00:00:00.000000Z', 1)).toBe('2026-09-02')
+  })
+})
+
+describe('soloFechaISO', () => {
+  it('toma el día escrito de una fecha con hora y zona, sin convertirla', () => {
+    expect(soloFechaISO('2026-08-20T00:00:00.000000Z')).toBe('2026-08-20')
+    expect(soloFechaISO('2026-08-20 00:00:00')).toBe('2026-08-20')
+  })
+
+  it('una fecha sola queda igual; vacío o nulo da texto vacío', () => {
+    expect(soloFechaISO('2026-08-20')).toBe('2026-08-20')
+    expect(soloFechaISO('')).toBe('')
+    expect(soloFechaISO(null)).toBe('')
+    expect(soloFechaISO(undefined)).toBe('')
   })
 })

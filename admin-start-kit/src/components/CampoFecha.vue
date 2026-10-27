@@ -17,6 +17,7 @@ import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import flatpickr from 'flatpickr'
 import { Spanish } from 'flatpickr/dist/l10n/es.js'
 import type { Instance } from 'flatpickr/dist/types/instance'
+import { soloFechaISO } from '@/helpers/fecha'
 
 const props = withDefaults(defineProps<{
   id?: string
@@ -46,7 +47,7 @@ onMounted(() => {
     allowInput: true,
     disableMobile: true,
     static: props.estatico,
-    defaultDate: modelo.value || undefined,
+    defaultDate: soloFechaISO(modelo.value) || undefined,
     minDate: props.min || undefined,
     maxDate: props.max || undefined,
     onChange: (_fechas, texto) => {
@@ -58,7 +59,22 @@ onMounted(() => {
     },
   }) as Instance
   sincronizarAlterno()
+  normalizarModelo()
 })
+
+/**
+ * T-026: si el formulario trae la fecha con hora y zona ("2026-08-20T00:00:00.000000Z"),
+ * flatpickr la leía como un instante UTC y mostraba el día anterior. El campo toma el día
+ * escrito y deja el modelo en "YYYY-MM-DD", el mismo formato que al elegir en el calendario.
+ */
+function normalizarModelo(): boolean {
+  const fecha = soloFechaISO(modelo.value)
+  if (modelo.value && fecha !== modelo.value) {
+    modelo.value = fecha
+    return true
+  }
+  return false
+}
 
 onBeforeUnmount(() => instancia.value?.destroy())
 
@@ -72,6 +88,8 @@ function sincronizarAlterno() {
 }
 
 watch(modelo, (valor) => {
+  // Con hora: se corrige el modelo y este mismo watch vuelve a correr con la fecha sola.
+  if (normalizarModelo()) return
   const actual = instancia.value?.input.value ?? ''
   if ((valor || '') !== actual) instancia.value?.setDate(valor || '', false)
 })

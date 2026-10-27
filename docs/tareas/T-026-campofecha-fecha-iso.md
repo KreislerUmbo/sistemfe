@@ -71,9 +71,26 @@ cd admin-start-kit && npx vitest run src/helpers/fecha.test.ts && npm run type-c
 ---
 
 ## Resultado
-- **Commits:**
-- **Tests:**
-- **Desviaciones de la tarea y por qué:**
+- **Commits:** rama `fix/T-026-campofecha-fecha-iso` (ver `git log`).
+- **Tests:** 2 nuevos en Vitest (`soloFechaISO` en `fecha.test.ts`); Vitest 159 en verde;
+  `type-check` con los mismos 46 errores previos; `build` correcto.
+- **Prueba funcional (agencia-demo, cotización 45, destino temporal 20/08–22/08, borrado al
+  terminar):**
+  - **Antes:** el formulario de editar destino mostraba 19/08 y 21/08, y el valor interno ya era
+    `2026-08-19`: guardar sin tocar nada **corría la fecha un día atrás en la base** (peor que
+    solo mostrarla mal).
+  - **Después:** muestra 20/08 y 22/08; guardar sin tocar deja 2026-08-20 / 2026-08-22.
+  - **CA4** (otro giro): no se probó en pantalla; para un valor `YYYY-MM-DD` (el que llega al
+    elegir en el calendario) `normalizarModelo()` no hace nada, así que el comportamiento no
+    cambia.
+- **Cómo quedó:** `soloFechaISO()` en `helpers/fecha.ts`; `CampoFecha` la usa en `defaultDate`, al
+  montar y en el `watch` del modelo, y si el valor traía hora deja el modelo en `YYYY-MM-DD`.
+  Revisados los padres con `watch` profundo (`PasajeAereoForm`, `DialogoReprogramar`): solo piden
+  una vista previa; normalizar provoca a lo sumo una más.
+- **`slice(0, 10)` del cotizador** (`editar.vue`, cabecera): **se dejó**. Con el arreglo es
+  redundante para el campo, pero esos valores también se usan fuera de `CampoFecha`.
+- **Otras pantallas:** `CampoFecha` se usa en 25 archivos; todas quedan cubiertas por el arreglo
+  central, sin cambios en cada una.
 
 ## Hallazgos fuera de alcance
--
+- Ninguno.
