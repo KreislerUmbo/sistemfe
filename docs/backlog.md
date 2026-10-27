@@ -76,7 +76,6 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 | T-035 | AGE | Biblioteca filtrada por el destino activo; sin tours "solo itinerario" en Local (R3) | por hacer | — | |
 | T-036 | AGE | Mayorista: etiquetas, primera opción elegida sola, "solo adultos" a la vista (R6, H22) | por hacer | — | |
 | T-037 | AGE | PDF: nombre de archivo con código y cliente; rótulo correcto de la tabla de hoteles (R8, H20) | por hacer | — | |
-| T-038 | VEN | Monto en letras del XML según la moneda de la venta (H27) | por hacer | — | |
 | T-039 | AGE | Listas de proveedores, hoteles, mayoristas y guías sin cortar a 15: buscador contra el servidor (H28) | por hacer | — | |
 | T-040 | AGE | Avisos a proveedores también al reprogramar, quitar un servicio, agregar un pasajero o cancelar la salida (H29, H37) | por hacer | — | |
 | T-041 | AGE | El check-in en su propia tabla: no cambia la asignación ni la facturación (H30) | por hacer | — | |
@@ -149,6 +148,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 
 | ID | Módulo | Qué | Commit |
 |---|---|---|---|
+| T-038 | VEN | Monto en letras del XML según la moneda (DOLARES en ventas en USD); un solo helper para XML y PDF | ver merge de `fix/T-038-monto-en-letras-moneda` |
 | T-008 | VEN + CAJ | Eliminar una venta anula sus cobros en caja con una corrección (todos los giros) | ver merge de `fix/T-008-eliminar-venta-anula-caja` |
 | T-068 | POR + TRA | Pedido del portal: precios y total calculados en el servidor (y el invitado nuevo ya puede comprar); HTML de usuarios saneado con DOMPurify | `db3f427` |
 | T-064 | VEN | El comprobante guarda documento, razón social y dirección del cliente al emitirse (PDF, XML y QR ya no cambian al editar el cliente) | `7fa1024` |
