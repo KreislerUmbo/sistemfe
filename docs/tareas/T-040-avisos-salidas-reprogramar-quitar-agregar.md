@@ -22,6 +22,9 @@ no avisan: el proveedor puede quedar contratado para otra cantidad u otra fecha.
     operación: su "antes" es vacío).
   - `ReservaItemController::destroy()`: la salida del servicio quitado.
   - `ReservaPasajeroController::store()`: las salidas de la reserva.
+  - Cambios de un servicio después de facturar (T-056) y antes: reasignar proveedor u hotel
+    (`ReservaItemController::update()`, `ReservaController::reasignarHotel()`) avisa al proveedor
+    que sale y al que entra; cambiar la fecha de un servicio enganchado, como reprogramar.
   - `SalidaOperativaController::cancelar()` (H37): "{proveedor} ({servicio}): la salida del {fecha}
     ya no va" para cada proveedor de servicios y vehículos. La salida no se borra, así que
     `avisos($antes, $despues)` no lo detecta: usar la foto de antes y el mismo texto que

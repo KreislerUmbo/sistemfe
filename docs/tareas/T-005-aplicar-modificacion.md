@@ -36,7 +36,8 @@ que T-002.
    - no facturados con sucesor → `alternativa_item_id` apunta al ítem nuevo. Se conservan
      `fecha`/`fecha_origen`, el proveedor u hotel reasignado, la salida, el check-in y el
      tratamiento tributario sobrescrito (si existe; verificar `overrideTratamientoTributario`).
-     `reserva_item_pasajero` se re-arma desde `pax_incluidos` del ítem nuevo;
+     `reserva_item_pasajero` se re-arma desde `pax_incluidos` del ítem nuevo; si T-041 ya está hecha, el
+     check-in vive en su propia tabla y re-armar las asignaciones no lo toca;
    - agregados (incluidas las penalidades) → reusar la creación de
      `crearReservaItemDesdeAlternativaItem()`, extrayéndola de `ReservaController` a un
      servicio sin cambiar su comportamiento;

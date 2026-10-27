@@ -1111,6 +1111,62 @@ de sus sucursales?
    27-oct-2026: basta con que salga en el PDF). T-066 se retiró sin construir; se retoma solo si
    un cliente lo exige.
 
+### 19. Revisión del backlog: repetidos, contradicciones y pendientes sueltos (27-oct-2026)
+
+**Pedido del usuario:** ordenar todas las tareas, revisar si algo se repite o se contradice, y
+buscar en los documentos y planes anteriores procesos que quedaron en el aire.
+
+**Cruces corregidos en las tareas** (sin cambiar lo aprobado):
+- T-046 y T-017 iban a convertir al cliente en pasajero cada una a su manera → T-046 depende de
+  T-017 y usa el mismo servicio.
+- T-022 mostraba la revisión solo en el envío por correo; T-050 creó "Enviar" con tres caminos →
+  la revisión se muestra en los tres.
+- T-059 creaba la cotización a mano; T-033 hace que la primera alternativa nazca con la
+  cotización → T-059 depende de T-033 y reusa ese servicio.
+- T-040 (avisos a proveedores) no cubría cambiar el proveedor, el hotel o la fecha de un servicio,
+  que T-056 habilita también después de facturar → agregado a T-040.
+- T-039 no incluía las listas del Reporte operativo (guías y biblioteca de tarifas) → agregado.
+- T-005 re-arma las asignaciones de pasajeros; con T-041 el check-in vive aparte → nota en T-005.
+- T-011 decía que Venta directa estaba sin aprobar → ahora es T-048.
+- El orden aprobado el 25-oct (T-008 a T-018, más abajo) queda reemplazado por el orden en olas del
+  backlog.
+- Fila 11t de la hoja de ruta (Venta directa pierde `costo_snapshot`) figuraba pendiente: está
+  corregida desde `ae0f1f5` (09-oct).
+
+**Repetido de fondo, a decidir — dos bandejas de pendientes:**
+- El plan de tours (§3.14, fila 11f) prevé una **bandeja única de pendientes automáticos** (salida
+  bajo el mínimo, pago a proveedor por vencer, factura faltante, rendición abierta…) sobre la tabla
+  `recordatorios` (creada en julio, sin controller ni uso).
+- El CRM (T-051) crea `crm_acciones` y la pantalla "Seguimiento".
+- **Propuesta:** una sola bandeja para el usuario. "Seguimiento" y "Mis pendientes" (T-051) son esa
+  bandeja, con dos fuentes: las acciones del CRM (las escribe una persona, con fecha) y los
+  pendientes automáticos (11f, **calculados** al consultar: aparecen y desaparecen solos según el
+  estado, sin filas que mantener). La tabla `recordatorios` y `tipos_recordatorio` se retiran
+  cuando se construya 11f, si no se les encuentra uso. T-051 ya quedó preparada para recibir la
+  segunda fuente.
+
+**Pendientes sueltos encontrados en otros documentos y verificados contra el código** (pasan a
+"Por analizar" del backlog, salvo los que ya son tarea):
+- **Código terminado sin unir ni desplegar** (fila 13 fases 1b-2, F1, F3, F4 etapa 1, F5) →
+  T-067.
+- **Seguridad** (auditoría 08-oct): el pedido del portal guarda precios enviados por el navegador y
+  hay `v-html` sin sanear en 4 pantallas → T-068. Siguen fuera: dependencias con advisories,
+  certificados beta en el historial de git, HSTS/CSP y CORS `*`.
+- **Ley de la Amazonía (fila F2)**: interruptor "la empresa cumple la Ley de la Amazonía" (hoy
+  cualquier agencia puede marcar exonerado) y expediente de sustento por reserva; se suman a la
+  obs. 10 (contador).
+- **Ventas, todos los giros:** comunicación de baja a SUNAT sin conectar a ningún flujo; archivo
+  de depuración del XML con nombre fijo (`debug_xml.xml`, choque entre ventas simultáneas);
+  `controla_stock` del producto ignorado (el stock se descuenta siempre); al aceptar una NC no se
+  ajusta la deuda de la venta ni hay saldo a favor del cliente; `sales.debt`/`paid_out` congelados
+  al cobrar desde Cuentas por Cobrar.
+- **Créditos:** la tasa máxima se compara sin convertir unidades (TEA) — sigue igual en
+  `CreditoDatosRequest`; no fijar `tasa_maxima` hasta corregirlo; plantilla de contrato del
+  abogado con la cláusula de la Ley 29733.
+- **Agencia:** motor de pendientes automáticos (11f) y Compras (fila 13, fase 3: tabla única de
+  proveedores, pagos a proveedores — reemplaza 11g); limpieza de multi-destino (12g, espera
+  producción); guía cotizado que no pasa a la reserva privada.
+
 **Preguntas para el usuario (originales):**
 1. ¿Rehacemos T-050 a T-053 como fases C1, C2, C3 y C6 del CRM (recomendado), o se construyen
    como están y el CRM va después?
@@ -1126,6 +1182,9 @@ de sus sucursales?
 ---
 
 ## Orden de construcción propuesto (a aprobar)
+
+> **Reemplazado el 27-oct-2026** por el orden en olas de `docs/backlog.md` (obs. 19), que incluye
+> estas tareas junto con las nuevas. Se conserva solo como referencia de lo aprobado el 25-oct.
 
 Aprobado el 25-oct-2026: son las tareas T-008 a T-018, en este orden (estado en `docs/backlog.md`):
 

@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Módulo** | AGE |
-| **Depende de** | **T-028** (vínculo `version_anterior_id` y scope de "vigente"); si T-001 ya está hecha, "Actualizar al precio nuevo" respeta su bloqueo de alternativa aceptada |
+| **Depende de** | **T-028** y T-050 (el botón "Enviar" donde se muestra la revisión) (vínculo `version_anterior_id` y scope de "vigente"); si T-001 ya está hecha, "Actualizar al precio nuevo" respeta su bloqueo de alternativa aceptada |
 | **Reglas** | — |
 | **Decisiones** | `docs/requerimientos/observaciones-pruebas-usuario.md` → punto 8 (respuestas 1-6, D2, "Diseño — solo lo crítico") |
 | **Rama** | `feat/T-022-revision-antes-de-enviar` |
@@ -59,8 +59,10 @@ construcción aparece la tentación de agregar otra revisión, **no**: anotarla 
 - Se recalcula tras cualquier cambio de la alternativa (mismo momento en que hoy se refresca el total;
   evitar llamadas en cada tecla).
 - **Ver PDF:** nunca se bloquea.
-- **`EnviarCorreoCotizacion.vue`:** muestra la lista dentro del mismo formulario; con `bloquea`, el
-  botón Enviar queda deshabilitado con el motivo; con solo avisos, el botón dice "Enviar igual".
+- **Botón "Enviar" de T-050 (correo, WhatsApp, "ya la envié por otro medio"):** la revisión se
+  muestra al elegir **cualquiera** de los tres caminos, no solo el correo; con `bloquea`, ese camino
+  queda deshabilitado con el motivo; con solo avisos, el botón dice "Enviar igual". (Ajustado el
+  27-oct-2026: T-050 reemplazó el envío solo por correo.)
 - Configuración de Agencia: campo "Margen mínimo para avisar (%)".
 
 ## Fuera de alcance

@@ -23,6 +23,9 @@ sin aviso. En agencia-demo ya pasa: 16 hoteles (falta 1 en "usar tarifa registra
   - hotel registrado del mayorista (`proveedoresHotel`);
   - guía en el cotizador (`guiaService.listar({})`) y en el tablero de salidas (`salidas/index.vue`, `guiaService.listar({ page: 1 })`).
 - Lo mismo en `paquetes/detalle.vue` (`proveedoresFiltro`, guías).
+- Reporte operativo (`reporte-operativo/index.vue`): el select de guías (`guiaService.listar({ page: 1 })`)
+  y la biblioteca completa de tarifas que carga al abrir para reasignar proveedor
+  (`proveedorService.biblioteca()`), obs. 15.
 - `stores/agenciaViajesCatalogos.ts` → `proveedoresActivos`: ver quién lo usa; si es una lista entera,
   pasarlo al buscador o quitarlo.
 - `GuiaController::index`: aceptar `search` y `per_page` acotado, como `ProveedorController::index`.

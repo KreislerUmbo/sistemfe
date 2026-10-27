@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Módulo** | CLI + AGE |
-| **Depende de** | T-050 |
+| **Depende de** | T-050, T-033 (crear la cotización con su primera alternativa: reusar ese servicio, no armar la alternativa a mano como `VentaDirectaController`) |
 | **Reglas** | ayudas sin fricción |
 | **Decisiones** | `docs/requerimientos/observaciones-pruebas-usuario.md` → obs. 16, fase C4 y respuestas 2 y 3 (27-oct-2026: origen por consulta, el cliente guarda el primero; sin responsable fijo) |
 | **Rama** | `feat/T-059-crm-consulta-origen` |

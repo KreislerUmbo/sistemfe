@@ -33,6 +33,13 @@ Después de enviar no hay forma de agendar el siguiente paso ni de ver qué toca
   bloques (atrasadas, hoy, próximos 7 días), filtros por tipo y responsable ("de todos" solo con
   `cotizaciones.ver_todas`), marcar hecha y reprogramar desde la fila. Ruta nueva
   `agencia.seguimiento`; si T-063 aún no está, la entrada de menú se agrega aquí y T-063 la ubica.
+- **Una sola bandeja:** el plan de tours prevé una "bandeja única de pendientes" automáticos
+  (salida bajo el mínimo, pago a proveedor por vencer, factura faltante…;
+  `plan-tours-venta-simple-costo-real.md` §3.14, fila 11f). "Seguimiento" y "Mis pendientes" se
+  arman como **esa** bandeja con una primera fuente (las acciones del CRM): la respuesta de la API
+  lleva `fuente` (`crm` | `operacion`) y la pantalla no supone que todo es una acción manual, para
+  que 11f sume sus pendientes sin otra pantalla. La tabla `recordatorios` (vertical, sin
+  controller ni uso) no se usa aquí: decisión en la obs. 19.
 
 ## Fuera de alcance
 - Recordatorios por correo o push (motor 11f).

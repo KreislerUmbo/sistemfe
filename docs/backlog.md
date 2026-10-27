@@ -8,7 +8,33 @@
 
 Cada línea: ID · qué · estado · depende de · rama o commit. El detalle está en
 `docs/tareas/T-…md` (se borra al cerrar; para una tarea hecha, el commit es la referencia).
-Próximo ID libre: **T-067**.
+Próximo ID libre: **T-069**.
+
+## Orden de construcción (27-oct-2026)
+
+> Criterio: primero poner al día lo ya hecho; después lo que daña comprobantes, datos o seguridad
+> en producción (todos los giros); después los errores de Agencia que traban la operación; el
+> cobro; "Modificar reserva" (quitar un pasajero está bloqueado hasta entonces); y al final las
+> mejoras. Dentro de cada ola, en el orden escrito. Detalle: obs. 19 de
+> `docs/requerimientos/observaciones-pruebas-usuario.md`.
+
+| Ola | Tareas | Por qué en este lugar |
+|---|---|---|
+| 0 | T-067 | Código terminado sin unir ni desplegar: cuanto más se construya encima, más difícil unir |
+| 1 | T-064 → T-068 → T-008 → T-038 → T-026 | Todos los giros, producción: PDF de comprobantes que cambia al editar el cliente, precios del portal manipulables, caja que no se anula al eliminar una venta, monto en letras en dólares, fechas que se muestran un día antes |
+| 2 | T-054 → T-056 → T-043 → T-042 → T-001 → T-030 → T-025 → T-024 → T-027 → T-028 → T-039 | Errores de Agencia: PDF de campo con el proveedor equivocado, operación trabada tras facturar, salidas que no se ven, cambios a una alternativa aceptada, permisos del cotizador, datos cruzados entre alternativas |
+| 3 | T-009 → T-010 → T-011 → T-014 → T-013 → T-012 | Cobro y caja (orden aprobado el 25-oct). T-011 no se despliega con dólares sin T-013 |
+| 4 | T-002 → T-003 → T-004 → T-005 → T-006 → T-007 | Modificar reserva: hoy no se puede quitar un pasajero y el agregado no cambia el precio |
+| 5 | T-063 → T-033 → T-050 → T-051 → T-052 → T-059 → T-061 → T-053 | Menú nuevo y CRM base (T-033 antes: "Nueva consulta" crea la cotización con su alternativa) |
+| 6 | T-041 → T-040 → T-055 → T-057 → T-058 → T-044 → T-017 → T-018 | Operación diaria de Agencia |
+| 7 | T-045 → T-046 → T-047 → T-048 → T-049 | Venta directa (T-046 necesita T-017; T-048, el cobro de la ola 3) |
+| 8 | T-032 → T-034 → T-019 → T-035 → T-036 → T-031 → T-022 → T-020 → T-021 → T-023 → T-037 → T-015 → T-016 | Cotizador más rápido y claro, PDF de cotización, aerolíneas |
+| 9 | T-060 → T-062 → T-065 | Completar CRM y clientes |
+| — | T-029 | Bloqueada: espera al contador (obs. 10) |
+
+Después de estas olas (sin tareas todavía): **Compras** (fila 13, fase 3 de
+`plan-tours-venta-simple-costo-real.md`, con la tabla única de proveedores) junto con el motor de
+pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 
 ## Activas
 
@@ -35,7 +61,7 @@ Próximo ID libre: **T-067**.
 | T-019 | AGE | Comparar hoteles: empezar la comparación con 1 sola habitación (Obs. 6) | por hacer | — | |
 | T-020 | AGE | Fotos de hotel con tipo (fachada / habitación) en la galería del proveedor (Obs. 7) | por hacer | — | |
 | T-021 | AGE | PDF de cotización: fotos de todos los hoteles de la alternativa (Obs. 7) | por hacer | T-020 | |
-| T-022 | AGE | Cotizador: revisión antes de enviar ("¿lista para el cliente?") (Obs. 8) | por hacer | T-028 | |
+| T-022 | AGE | Cotizador: revisión antes de enviar ("¿lista para el cliente?") (Obs. 8) | por hacer | T-028, T-050 | |
 | T-023 | AGE | PDF de cotización con la comparación de hoteles abierta + descuento bien calculado (H4, H10) | por hacer | — | |
 | T-024 | AGE | La comparación de hoteles de una alternativa duplicada es independiente de la original (H1) | por hacer | — | |
 | T-025 | AGE | Cotizador: cada acción verifica que la cotización sea del vendedor (H2) | por hacer | — | |
@@ -59,7 +85,7 @@ Próximo ID libre: **T-067**.
 | T-043 | AGE | Tablero de salidas: "Siguiente" cambia de página de verdad (H36) | por hacer | — | |
 | T-044 | AGE | Aviso cuando un guía o un chofer ya tiene otra salida ese día (H38) | por hacer | — | |
 | T-045 | AGE | Venta directa: total en vivo, modo de precio claro y fecha por defecto hoy (H42, H44) | por hacer | — | |
-| T-046 | AGE | Venta directa: pasajeros rápidos con residencia y el cliente como primer pasajero (H43) | por hacer | — | |
+| T-046 | AGE | Venta directa: pasajeros rápidos con residencia y el cliente como primer pasajero (H43) | por hacer | T-017 | |
 | T-047 | AGE | Venta directa: vender un tour del catálogo, enganchado a la salida del día (H41) | por hacer | T-045, T-046 | |
 | T-048 | AGE + CAJ | Venta directa: "Crear y cobrar" en un solo paso (H45) | por hacer | T-011 | |
 | T-049 | AGE | Venta directa: varias líneas en la misma venta y destino del árbol (H46, H47) | por hacer | T-047 | |
@@ -72,13 +98,15 @@ Próximo ID libre: **T-067**.
 | T-056 | AGE | Cambiar proveedor, guía, fecha, hora y hotel después de facturar (H55) | por hacer | — | |
 | T-057 | AGE | Reporte operativo: el tour muestra su salida, guía, vehículo y por qué está pendiente (H57) | por hacer | — | |
 | T-058 | AGE | Reporte operativo: "Mañana", búsqueda, check-in a todos, filtros recordados y rango controlado (H58, H59) | por hacer | T-041 | |
-| T-059 | CLI + AGE | CRM C4: "Nueva consulta" y origen de contacto | por hacer | T-050 | |
+| T-059 | CLI + AGE | CRM C4: "Nueva consulta" y origen de contacto | por hacer | T-050, T-033 | |
 | T-060 | CLI + AGE | CRM C5: la ficha del cliente con preferencias del viajero y línea de tiempo | por hacer | T-050, T-051 | |
 | T-061 | CLI + AGE | CRM: pasar el trabajo abierto de un usuario que se va | por hacer | T-051 | |
 | T-062 | AGE | CRM C6b: reportes de conversión, origen, vendedor y motivos | por hacer | T-052, T-059 | |
 | T-063 | PLA + AGE | Menú de Agencia por tareas del negocio (Ventas, Viajes, Finanzas, Catálogos, Administración) | por hacer | — | |
 | T-064 | VEN | Copiar documento, razón social y dirección del cliente al comprobante al emitirlo (H60) | por hacer | — | |
 | T-065 | CLI + VEN | Varias direcciones por cliente y elegir la dirección al emitir (H61) | por hacer | T-064 | |
+| T-067 | PLA + AGE | Unir a `main` y desplegar lo ya construido (fila 13 fases 1b-2, F1, F3, F4 etapa 1, F5) + operación pendiente en producción | por hacer (cuándo desplegar: decide el usuario) | — | `feat/f1-facturacion-por-servicio` |
+| T-068 | POR + TRA | Seguridad: precios del pedido del portal calculados en el servidor y `v-html` saneado | por hacer | — | |
 
 ## Por analizar
 
@@ -106,6 +134,15 @@ Próximo ID libre: **T-067**.
 | AGE + CLI | **Obs. 16 — CRM práctico** (→ T-050 a T-053, T-059 a T-062): solo Agencia por ahora; sin responsable fijo del cliente (rotación de personal) | `docs/requerimientos/observaciones-pruebas-usuario.md` §16, 27-oct-2026 |
 | PLA | **Obs. 14 — Módulo de uso del sistema** (solo UmboSystem; qué se usa, dónde se traban, qué es lento): **en espera** hasta avanzar las tareas pendientes, por decisión del usuario | `docs/requerimientos/observaciones-pruebas-usuario.md` §14, 27-oct-2026 |
 | CAJ + NOT | Devolver dinero al cliente por una NC sin volver a facturar (hoy la NC no mueve la caja en ningún giro) | revisión de fallos de las observaciones, 25-oct-2026 |
+| AGE | **Dos bandejas de pendientes, a decidir:** la bandeja única de pendientes automáticos (11f, §3.14 del plan de tours, tabla `recordatorios` sin uso) y "Seguimiento" del CRM (T-051). Propuesta: una sola bandeja con dos fuentes; pendientes automáticos calculados, sin filas; retirar `recordatorios` si no se le encuentra uso | obs. 19, 27-oct-2026 |
+| AGE | **Ley de la Amazonía (fila F2), lo que queda:** interruptor "la empresa cumple la Ley de la Amazonía" (hoy cualquier agencia puede marcar exonerado) y expediente de sustento por reserva (itinerario + pasajeros + órdenes de servicio). Junto con la obs. 10 (contador) | `plan-hoja-de-ruta-ejecucion.md` fila F2, 23-oct-2026 |
+| VEN | Comunicación de baja a SUNAT sin conectar a ningún flujo (verificado 27-oct: no hay uso en `app/` ni rutas) | `CLAUDE.md`, Ventas |
+| VEN | Archivo de depuración del XML con nombre fijo: `FacturacionElectronicaController` escribe `debug_xml.xml` en cada envío (choque entre ventas simultáneas, y entre tenants si el disco no está particionado) — verificado 27-oct | `CLAUDE.md`, multitenancy §4 |
+| VEN | `controla_stock` del producto ignorado: `SaleController` descuenta stock siempre (verificado 27-oct) | `TODO.md`, Sesión 9a |
+| VEN + NOT | Al aceptar una NC/ND no se ajustan `debt`/`paid_out`/`state_payment`; `client_credit_movements` (saldo a favor) diseñado sin construir; `sales.debt`/`paid_out` quedan congelados al cobrar desde Cuentas por Cobrar | `CLAUDE.md`, Notas y Amortizaciones |
+| CRE | **Tasa máxima como TEA:** `CreditoDatosRequest` compara la tasa tipeada con `tasa_maxima` sin convertir unidades (verificado 27-oct); no fijar `tasa_maxima` en credishirley hasta corregirlo. Plantilla de contrato del abogado con la cláusula de la Ley 29733 | `docs/planning/creditos/00-reglas-y-modelo.md` §5 |
+| TRA | Seguridad de infraestructura (auditoría 08-oct): dependencias con advisories, certificados beta con clave privada en el historial de git, HSTS/CSP en nginx, CORS `*`. (Pedidos del portal y `v-html` → T-068) | memoria `project_auditoria_seguridad_2026-10-08` |
+| AGE | Pendientes de diseño ya conocidos: Compras + pagos a proveedores (fila 13 fase 3, reemplaza 11g), limpieza multi-destino (12g, espera producción), guía cotizado que no pasa a la reserva privada, endoso de pasajeros (v2 sin aprobar) | `plan-hoja-de-ruta-ejecucion.md`, memoria |
 | TRA | Sesión por inactividad: hoy el JWT vence a la hora fija desde el login (`JWT_TTL`, 60 min por defecto) y el aviso sale 2 min antes **aunque el usuario esté trabajando**. Propuesta: renovar en silencio mientras hay actividad y mostrar el aviso solo tras N minutos sin uso (falta decidir N). Solo frontend: `helpers/sessionExpiryWatcher.ts` + `helpers/http-client.ts`; `auth/refresh` ya existe | pregunta del usuario, 24-oct-2026 |
 
 ## Hechas

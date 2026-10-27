@@ -39,7 +39,7 @@ n.º de operación es opcional y sin caja abierta se bloquea.
 - Traspaso del cobro tras una NC (T-012).
 - **Despliegue a producción con pagos en dólares:** requiere T-013. Si se despliega antes, el
   backend debe rechazar `moneda_pago='USD'` con un interruptor (`config`), documentado en "Resultado".
-- Venta Directa (bloque 3 de su análisis, sin aprobar).
+- Venta Directa: "Crear y cobrar" es T-048 (usa este mismo cobro).
 - Ventas ya emitidas pendientes (R3: no se hace nada).
 
 ## Archivos probables

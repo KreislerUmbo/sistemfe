@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Módulo** | AGE |
-| **Depende de** | ninguna (si T-017 ya está hecha, reutilizar su forma de proponer al cliente) |
+| **Depende de** | T-017 (reutiliza `PasajeroCatalogoService::desdeCliente()`; no escribir otra forma de convertir un cliente en pasajero) |
 | **Reglas** | — |
 | **Decisiones** | `docs/requerimientos/observaciones-pruebas-usuario.md` → obs. 12, H43 (aprobada 27-oct-2026) |
 | **Rama** | `feat/T-046-venta-directa-pasajeros` |
