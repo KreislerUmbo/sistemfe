@@ -15,7 +15,7 @@ use App\Services\TotalesComprobanteCalculator;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
-use Luecano\NumeroALetras\NumeroALetras;
+use App\Services\MontoEnLetras;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class FacturacionElectronicaController extends Controller
@@ -181,7 +181,7 @@ class FacturacionElectronicaController extends Controller
         // completa del bien/servicio, y solo el total a pagar
         // (PayableAmount / mto_imp_venta) se reduce, más abajo.
         $datos_comprobante = $this->calcularTotalesComprobante($venta);
-        $datos_comprobante = $this->armarLeyendas($datos_comprobante);
+        $datos_comprobante = $this->armarLeyendas($datos_comprobante, $venta->currency);
 
         // ── Adelantos aplicados a esta venta (PrepaidPayment) ─────────
         $totalAnticipos = round((float) $venta->advance_applications()->sum('amount_applied'), 2);
@@ -448,15 +448,13 @@ Storage::disk('public')->put('debug_xml.xml', $xml);
 
     // ── Armar las leyendas del comprobante ────────────────────────────
     // La leyenda más común es el monto en letras (código 1000)
-    // Ej: "SON: CIENTO CINCUENTA Y DOS CON 50/100 SOLES"
-    public function armarLeyendas(array $datos): array
+    // Ej: "SON: CIENTO CINCUENTA Y DOS CON 50/100 SOLES" (o DOLARES, T-038)
+    public function armarLeyendas(array $datos, ?string $moneda): array
     {
-        $convertidor = new NumeroALetras();
-
         $datos['legends'] = [
             [
                 'code'  => '1000', // Catálogo 52: 1000 = monto en letras
-                'value' => $convertidor->toInvoice($datos['mto_imp_venta'], 2, 'SOLES'),
+                'value' => MontoEnLetras::comprobante((float) $datos['mto_imp_venta'], $moneda),
             ]
         ];
 

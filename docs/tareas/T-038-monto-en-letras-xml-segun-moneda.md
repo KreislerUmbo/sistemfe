@@ -56,9 +56,20 @@ php artisan test
 ---
 
 ## Resultado
-- **Commits:**
-- **Tests:** (nuevos / suite completa)
-- **Desviaciones de la tarea y por qué:**
+- **Commits:** rama `fix/T-038-monto-en-letras-moneda` (ver `git log`).
+- **Tests:** 3 nuevos (`MontoEnLetrasLeyendaTest`); suite completa 1538 en verde. CA3: el test arma
+  el XML real con Greenter (`InvoiceBuilder`, sin firmar ni enviar) de una factura en USD y otra en
+  PEN y comprueba "… CON 00/100 DOLARES/SOLES" y que coincida con el PDF.
+- **Cómo quedó:** `App\Services\MontoEnLetras::comprobante($monto, $moneda)`, un solo lugar para
+  la leyenda 1000 de la venta (`armarLeyendas()`, ahora recibe la moneda), la de la nota
+  (`armarLeyendasNota()`) y el PDF (`Sale`/`Note::resumenImpresion()`). Sin moneda → soles
+  (ventas antiguas); una moneda distinta de PEN/USD lanza excepción en vez de decir "SOLES".
+- **Otros armados de la leyenda 1000:** adelantos y facturas de reserva pasan por
+  `FacturacionElectronicaController::enviarSunat()`, así que quedan corregidos con este cambio.
+  Créditos (`FormatoDocumento::enLetras()`) es solo en soles y no se tocó.
+- **Desviaciones de la tarea y por qué:** ninguna.
+- **Recorrido:** sin documento propio (cambio de un solo punto, explicado arriba y en el
+  comentario de `MontoEnLetras`).
 
 ## Hallazgos fuera de alcance
-- 
+- Ninguno.
