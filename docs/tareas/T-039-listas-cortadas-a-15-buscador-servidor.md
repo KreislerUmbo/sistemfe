@@ -16,12 +16,12 @@ sin aviso. En agencia-demo ya pasa: 16 hoteles (falta 1 en "usar tarifa registra
 
 ## Alcance
 - Reemplazar los `<select>` con lista entera por un buscador que consulta al servidor al escribir
-  (mismo patrón que ya usan otros buscadores del vertical, p. ej. el de proveedores en
+  (reutilizar `components/AgenciaViajes/ProveedorBuscador.vue`, que ya usa el tablero de salidas, o el de
   `reservas/detalle.vue`), con los primeros resultados al abrirlo:
   - filtro de proveedor de la biblioteca (`proveedoresFiltro`);
   - proveedor mayorista en `OpcionMayoristaForm.vue` (`proveedoresMayoristas`);
   - hotel registrado del mayorista (`proveedoresHotel`);
-  - guía en el cotizador (`guiaService.listar({})`).
+  - guía en el cotizador (`guiaService.listar({})`) y en el tablero de salidas (`salidas/index.vue`, `guiaService.listar({ page: 1 })`).
 - Lo mismo en `paquetes/detalle.vue` (`proveedoresFiltro`, guías).
 - `stores/agenciaViajesCatalogos.ts` → `proveedoresActivos`: ver quién lo usa; si es una lista entera,
   pasarlo al buscador o quitarlo.

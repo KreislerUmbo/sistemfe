@@ -748,6 +748,25 @@ cancelar/facturar y doble aceptación; el cambio de precio tras aceptar es T-001
 Además: "Corregir tratamiento tributario" de la reserva acepta combinaciones que contradicen D18
 (Amazonía + gravado, nacional + exonerado). Espera la obs. 10.
 
+## AGE — Revisión de salidas operativas (26-oct-2026)
+
+Revisión de código de `SalidaOperativaController`, `SalidaServicioController`,
+`SalidaVehiculoController`, `SalidaEngancheService`, `SalidaServiciosService`,
+`SalidaOperacionService` y `salidas/index.vue`. Sin prueba en vivo.
+
+| ID | Prioridad | Qué pasa | Dónde |
+|---|---|---|---|
+| H35 | **Alta** | **Una salida cancelada atrapa a las reservas nuevas de ese tour y fecha.** Solo puede haber una salida compartida por tour y fecha (índice único, sin mirar el estado) y una cancelada no vuelve atrás. Si se cancela la salida del 10/11 por lluvia y después entra otra reserva de ese tour para el 10/11 (o se reprograma una reserva o una salida hacia esa fecha), el enganche la mete en la salida cancelada: no salen órdenes de servicio y la ficha avisa "salida cancelada" en una reserva que nadie canceló. | `SalidaEngancheService::enganchar()` (`firstOrCreate` sin estado), `SalidaOperativaController::cambiarEstado()` (cancelada → nada), índice `salidas_operativas_tour_fecha_unique` |
+| H36 | Media | **"Siguiente" del tablero no cambia de página.** El listado trae 20 salidas por página, pero la pantalla no manda el número de página: "Página 2" muestra otra vez las mismas 20. Con más de 20 salidas en el rango (por defecto 7 días), el resto no se ve. | `salidas/index.vue` `list()`, `salidaOperativaService.listar()` |
+| H37 | Media | **Cancelar la salida no avisa a los proveedores.** Cancelar una salida no muestra "El Mirador (Almuerzo): la salida del 10/11 ya no va", aunque el aviso ya existe (`avisos()` con salida que ya no va) y tenga servicios reservados. | `SalidaOperativaController::cancelar()` |
+| H38 | Media (mejora) | **Mismo guía o mismo chofer en dos salidas a la vez, sin aviso.** Se puede asignar el mismo guía a dos salidas del mismo día y hora. | `SalidaOperativaController::update()`, `SalidaVehiculoController` |
+| H39 | Media-baja | **Un servicio quitado de la salida vuelve solo.** Cada vez que otra reserva se engancha a la salida, la lista se completa desde el Incluye del tour (`sincronizarDesdeTour()`), y lo que el operador quitó a propósito reaparece como "Por reservar". | `SalidaEngancheService::enganchar()` |
+| H40 | Baja | **Desenganchar no revisa nada.** Enganchar a mano exige reserva activa, servicio no facturado y salida en curso; desenganchar no exige nada (se puede sacar un servicio facturado de una salida ya realizada). Ninguno de los dos pasa por `ReservaPolicy`. | `SalidaOperativaController::detachReservaItem()`/`attachReservaItem()` |
+
+Además, el selector de guía del tablero (`guiaService.listar({ page: 1 })`) muestra como máximo 15
+guías: mismo caso que H28 (entra en T-039). Para los proveedores, el tablero ya usa
+`ProveedorBuscador` (búsqueda contra el servidor): T-039 puede reutilizarlo.
+
 ---
 
 ## Orden de construcción propuesto (a aprobar)
