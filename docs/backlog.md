@@ -8,7 +8,7 @@
 
 Cada línea: ID · qué · estado · depende de · rama o commit. El detalle está en
 `docs/tareas/T-…md` (se borra al cerrar; para una tarea hecha, el commit es la referencia).
-Próximo ID libre: **T-042**.
+Próximo ID libre: **T-045**.
 
 ## Activas
 
@@ -53,8 +53,11 @@ Próximo ID libre: **T-042**.
 | T-037 | AGE | PDF: nombre de archivo con código y cliente; rótulo correcto de la tabla de hoteles (R8, H20) | por hacer | — | |
 | T-038 | VEN | Monto en letras del XML según la moneda de la venta (H27) | por hacer | — | |
 | T-039 | AGE | Listas de proveedores, hoteles, mayoristas y guías sin cortar a 15: buscador contra el servidor (H28) | por hacer | — | |
-| T-040 | AGE | Avisos a proveedores también al reprogramar, quitar un servicio o agregar un pasajero (H29) | por hacer | — | |
+| T-040 | AGE | Avisos a proveedores también al reprogramar, quitar un servicio, agregar un pasajero o cancelar la salida (H29, H37) | por hacer | — | |
 | T-041 | AGE | El check-in en su propia tabla: no cambia la asignación ni la facturación (H30) | por hacer | — | |
+| T-042 | AGE | Reactivar una salida cancelada y avisar cuando una reserva cae en una (H35) | por hacer | — | |
+| T-043 | AGE | Tablero de salidas: "Siguiente" cambia de página de verdad (H36) | por hacer | — | |
+| T-044 | AGE | Aviso cuando un guía o un chofer ya tiene otra salida ese día (H38) | por hacer | — | |
 
 ## Por analizar
 
@@ -75,7 +78,7 @@ Próximo ID libre: **T-042**.
 | VEN + NOT | **H26** leyenda Amazonía del Catálogo 52 (2001/2002/2003) no va en el XML; el PDF usa otro texto — confirmar con el contador si es obligatoria (H27 pasó a T-038) | `docs/requerimientos/observaciones-pruebas-usuario.md` §10, 26-oct-2026 |
 | AGE | **Obs. 11 — entrada separada al cotizador** ("tours y servicios" / "paquete de mayorista"): en espera, el usuario lo decide tras evaluar a los usuarios. Ya hecho: solo el renombre de las pestañas | `docs/requerimientos/observaciones-pruebas-usuario.md` §11, 26-oct-2026 |
 | AGE | **Revisión de reservas (26-oct)** H31-H34 (H29 → T-040, H30 → T-041): reasignar mayorista no mueve el cupo (H31), reserva cancelada sin camino de vuelta, ver T-030 (H32), pasajero agregado sin residencia (H33), 500 en carrera de facturación externa (H34). Falta la prueba en vivo | `docs/requerimientos/observaciones-pruebas-usuario.md`, "Revisión de reservas" |
-| AGE | **Revisión de salidas operativas (26-oct)** H35-H40: salida cancelada atrapa reservas nuevas de ese tour y fecha (H35, alta), "Siguiente" del tablero no pagina (H36), cancelar la salida no avisa a proveedores (H37), guía o chofer en dos salidas a la vez (H38), servicio quitado vuelve solo (H39), desenganchar sin revisiones (H40) | `docs/requerimientos/observaciones-pruebas-usuario.md`, "Revisión de salidas operativas" |
+| AGE | **Revisión de salidas operativas (26-oct)** H39-H40 (H35 → T-042, H36 → T-043, H37 → T-040, H38 → T-044): servicio quitado vuelve solo cuando se engancha otra reserva (H39), desenganchar sin revisiones ni ReservaPolicy (H40) | `docs/requerimientos/observaciones-pruebas-usuario.md`, "Revisión de salidas operativas" |
 | CAJ + NOT | Devolver dinero al cliente por una NC sin volver a facturar (hoy la NC no mueve la caja en ningún giro) | revisión de fallos de las observaciones, 25-oct-2026 |
 | TRA | Sesión por inactividad: hoy el JWT vence a la hora fija desde el login (`JWT_TTL`, 60 min por defecto) y el aviso sale 2 min antes **aunque el usuario esté trabajando**. Propuesta: renovar en silencio mientras hay actividad y mostrar el aviso solo tras N minutos sin uso (falta decidir N). Solo frontend: `helpers/sessionExpiryWatcher.ts` + `helpers/http-client.ts`; `auth/refresh` ya existe | pregunta del usuario, 24-oct-2026 |
 

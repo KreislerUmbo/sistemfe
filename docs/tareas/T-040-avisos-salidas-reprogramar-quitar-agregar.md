@@ -1,11 +1,11 @@
-# T-040 — Avisos a proveedores también al reprogramar, quitar un servicio o agregar un pasajero (H29)
+# T-040 — Avisos a proveedores también al reprogramar, quitar un servicio, agregar un pasajero o cancelar la salida (H29, H37)
 
 | | |
 |---|---|
 | **Módulo** | AGE |
 | **Depende de** | ninguna |
 | **Reglas** | D15 (`plan-tours-venta-simple-costo-real.md` §6) |
-| **Decisiones** | `docs/requerimientos/observaciones-pruebas-usuario.md` → "Revisión de reservas", H29 (aprobada 26-oct-2026: mismo aviso que al cancelar) |
+| **Decisiones** | `docs/requerimientos/observaciones-pruebas-usuario.md` → "Revisión de reservas", H29, y "Revisión de salidas operativas", H37 (aprobadas 26-oct-2026: mismo aviso que al cancelar una reserva) |
 | **Rama** | `feat/T-040-avisos-salidas` |
 
 ## Contexto
@@ -22,6 +22,7 @@ no avisan: el proveedor puede quedar contratado para otra cantidad u otra fecha.
     operación: su "antes" es vacío).
   - `ReservaItemController::destroy()`: la salida del servicio quitado.
   - `ReservaPasajeroController::store()`: las salidas de la reserva.
+  - `SalidaOperativaController::cancelar()` (H37): `avisos($antes, null)`-style "la salida del {fecha} ya no va" para cada proveedor de servicios y vehículos (la salida no se borra: usar la foto de antes y redactar el aviso de salida que ya no va).
 - Frontend: el mismo cuadro "Avisa a los proveedores" de cancelar, sacado a una función que usen
   las cuatro acciones en `reservas/detalle.vue`.
 - Revisar si quitar el pasajero (`QuitarPasajeroReservaService`, hoy bloqueado) y el vehículo
@@ -37,12 +38,14 @@ no avisan: el proveedor puede quedar contratado para otra cantidad u otra fecha.
 - `api-sistema-fe/app/Http/Controllers/AgenciaViajes/ReservaItemController.php`
 - `api-sistema-fe/app/Http/Controllers/AgenciaViajes/ReservaPasajeroController.php`
 - `api-sistema-fe/app/Services/AgenciaViajes/SalidaOperacionService.php`
-- `admin-start-kit/src/views/agencia-viajes/reservas/detalle.vue`
+- `admin-start-kit/src/views/agencia-viajes/reservas/detalle.vue`, `salidas/index.vue`
+- `api-sistema-fe/app/Http/Controllers/AgenciaViajes/SalidaOperativaController.php`
 
 ## Criterios de aceptación
 - [ ] **CA1** — Reprogramar una reserva de 3 pasajeros que comparte salida con otra → avisos de la salida vieja (menos pasajeros) y de la nueva. → test
 - [ ] **CA2** — Quitar un servicio enganchado a una salida → aviso de esa salida. → test
 - [ ] **CA3** — Agregar un pasajero a una reserva con salidas → aviso de cada salida. → test
+- [ ] **CA3b** — Cancelar una salida con servicios con proveedor → un aviso "ya no va" por proveedor; el tablero lo muestra. → test + prueba funcional
 - [ ] **CA4** — Reserva sin salidas → `avisos_salidas` vacío y sin cuadro. → test + prueba funcional
 - [ ] **CA5** — La ficha muestra el cuadro en las cuatro acciones. → prueba funcional en agencia-demo
 - [ ] **CA6** — Suite del vertical en verde; `type-check` sin errores nuevos.
