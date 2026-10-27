@@ -365,7 +365,7 @@ class DashboardService
             ->get();
 
         $sinAsignar = AsignacionOperativa::itemsDelRango($desde, $hasta)
-            ->with(['alternativaItem.proveedorTarifa.proveedorServicio.proveedor', 'guia', 'salidaOperativa.guia', 'salidaOperativa.vehiculos.reservas', 'salidaOperativa.vehiculos.guia', 'salidaOperativa.servicios'])
+            ->with(['alternativaItem', 'proveedorTarifa.proveedorServicio.proveedor', 'guia', 'salidaOperativa.guia', 'salidaOperativa.vehiculos.reservas', 'salidaOperativa.vehiculos.guia', 'salidaOperativa.servicios'])
             ->get()
             ->filter(static fn ($item): bool => AsignacionOperativa::sinAsignar($item))
             ->count();

@@ -157,15 +157,16 @@ class ReporteOperativoController extends Controller
 
         $items = $this->queryItemsDelRango($fechaDesde, $fechaHasta)->get();
 
+        // T-054: mismo origen que las filas (tarifa real de la reserva).
         $destinos = $items
-            ->map(fn (ReservaItem $i) => $i->alternativaItem?->proveedorTarifa?->proveedorServicio?->destinoServicio?->destinoAtractivo)
+            ->map(fn (ReservaItem $i) => $this->tarifaDelServicio($i)?->proveedorServicio?->destinoServicio?->destinoAtractivo)
             ->filter()
             ->unique('id')
             ->values()
             ->map(fn ($d) => ['id' => $d->id, 'nombre' => $d->nombre]);
 
         $servicios = $items
-            ->map(fn (ReservaItem $i) => $i->alternativaItem?->proveedorTarifa?->proveedorServicio?->destinoServicio?->servicio)
+            ->map(fn (ReservaItem $i) => $this->tarifaDelServicio($i)?->proveedorServicio?->destinoServicio?->servicio)
             ->filter()
             ->unique('id')
             ->values()
@@ -179,8 +180,8 @@ class ReporteOperativoController extends Controller
             ->map(fn ($t) => ['id' => $t->id, 'nombre' => $t->nombre, 'codigo' => $t->codigo]);
 
         $hoteles = $items
-            ->filter(fn (ReservaItem $i) => (bool) $i->alternativaItem?->proveedorTarifa?->tipo_habitacion)
-            ->map(fn (ReservaItem $i) => $i->alternativaItem->proveedorTarifa->proveedorServicio?->proveedor)
+            ->filter(fn (ReservaItem $i) => (bool) $this->tarifaReal($i)?->tipo_habitacion)
+            ->map(fn (ReservaItem $i) => $this->tarifaReal($i)->proveedorServicio?->proveedor)
             ->filter()
             ->unique('id')
             ->values()
@@ -225,6 +226,12 @@ class ReporteOperativoController extends Controller
                 'alternativaItem.proveedorTarifa.proveedorServicio.destinoServicio.servicio',
                 'alternativaItem.proveedorTarifa.proveedorServicio.proveedor',
                 'alternativaItem.cotizacionPasajeAereo',
+                // T-054: la tarifa y el hotel reales del ítem de la reserva
+                // (reasignar proveedor/hotel escribe aquí, no en la cotización).
+                'proveedorTarifa.proveedorServicio.destinoServicio.destinoAtractivo',
+                'proveedorTarifa.proveedorServicio.destinoServicio.servicio',
+                'proveedorTarifa.proveedorServicio.proveedor',
+                'opcionHotelTarifa.opcionHotel',
                 'tourOrigen.destinoAtractivo',
                 'guia',
                 // Un ítem origen_tipo='guia' puede estar enganchado a una Salida
@@ -255,18 +262,12 @@ class ReporteOperativoController extends Controller
     {
         if ($request->filled('destino_atractivo_id')) {
             $destinoId = $request->integer('destino_atractivo_id');
-            $query->whereHas(
-                'alternativaItem.proveedorTarifa.proveedorServicio.destinoServicio',
-                fn ($q) => $q->where('destino_atractivo_id', $destinoId)
-            );
+            $this->filtrarPorDestinoServicio($query, fn ($q) => $q->where('destino_atractivo_id', $destinoId));
         }
 
         if ($request->filled('servicio_id')) {
             $servicioId = $request->integer('servicio_id');
-            $query->whereHas(
-                'alternativaItem.proveedorTarifa.proveedorServicio.destinoServicio',
-                fn ($q) => $q->where('servicio_id', $servicioId)
-            );
+            $this->filtrarPorDestinoServicio($query, fn ($q) => $q->where('servicio_id', $servicioId));
         }
 
         if ($request->filled('tour_id')) {
@@ -275,11 +276,51 @@ class ReporteOperativoController extends Controller
 
         if ($request->filled('hotel_proveedor_id')) {
             $hotelProveedorId = $request->integer('hotel_proveedor_id');
-            $query->whereHas('alternativaItem.proveedorTarifa', function ($q) use ($hotelProveedorId) {
+            $query->whereHas('proveedorTarifa', function ($q) use ($hotelProveedorId) {
                 $q->whereNotNull('tipo_habitacion')
                     ->whereHas('proveedorServicio', fn ($q2) => $q2->where('proveedor_id', $hotelProveedorId));
             });
         }
+    }
+
+    // T-054: el servicio y el lugar salen de la tarifa real de la reserva; si
+    // se le quitó el proveedor, de la cotizada (el servicio no cambia).
+    private function filtrarPorDestinoServicio(Builder $query, \Closure $condicion): void
+    {
+        $query->where(function ($q) use ($condicion) {
+            $q->whereHas('proveedorTarifa.proveedorServicio.destinoServicio', $condicion)
+                ->orWhere(fn ($q2) => $q2->whereNull('proveedor_tarifa_id')
+                    ->whereHas('alternativaItem.proveedorTarifa.proveedorServicio.destinoServicio', $condicion));
+        });
+    }
+
+    // T-054: la tarifa del ítem de la RESERVA (reasignar proveedor y
+    // reasignar hotel escriben aquí). null = se le quitó el proveedor.
+    private function tarifaReal(ReservaItem $item): ?\App\Models\AgenciaViajes\ProveedorTarifa
+    {
+        return $item->proveedor_tarifa_id ? $item->proveedorTarifa : null;
+    }
+
+    // Para el servicio y el lugar: la real o, sin proveedor, la cotizada.
+    private function tarifaDelServicio(ReservaItem $item): ?\App\Models\AgenciaViajes\ProveedorTarifa
+    {
+        return $this->tarifaReal($item) ?? $item->alternativaItem?->proveedorTarifa;
+    }
+
+    // Hotel real: el de catálogo de la reserva, o el no registrado al que se
+    // reasignó (opcion_hotel_tarifa_id).
+    private function hotelDelItem(ReservaItem $item): ?string
+    {
+        $tarifa = $this->tarifaReal($item);
+        if ($tarifa?->tipo_habitacion) {
+            return $this->nombreProveedor($tarifa->proveedorServicio?->proveedor) ?? 'Hotel';
+        }
+
+        if ($item->opcion_hotel_tarifa_id) {
+            return $item->opcionHotelTarifa?->opcionHotel?->nombre_hotel ?? 'Hotel';
+        }
+
+        return null;
     }
 
     private function obtenerFilas(Request $request): array
@@ -406,8 +447,10 @@ class ReporteOperativoController extends Controller
     private function armarFila(ReservaItem $item, ReservaPasajero $pasajero, bool $sinGuia, bool $vinculoEspecifico, ?ReservaItemPasajero $checkin): array
     {
         $alternativaItem = $item->alternativaItem;
-        $proveedorTarifa = $alternativaItem?->proveedorTarifa;
-        $destinoServicio = $proveedorTarifa?->proveedorServicio?->destinoServicio;
+        // T-054: proveedor y hotel del ítem de la reserva, no los cotizados
+        // (antes, reasignar no se veía y el PDF de campo decía el hotel viejo).
+        $proveedorTarifa = $this->tarifaReal($item);
+        $destinoServicio = $this->tarifaDelServicio($item)?->proveedorServicio?->destinoServicio;
 
         return [
             'reserva_id' => $item->reserva_id,
@@ -471,7 +514,7 @@ class ReporteOperativoController extends Controller
             // "(gravado)/(exonerado)" de facturación (acá es una sola fila).
             'servicio' => $alternativaItem?->esLineaTour()
                 ? ($item->tourOrigen?->nombre ?? ReservaController::resolverNombreItem($alternativaItem))
-                : ($alternativaItem ? ReservaController::resolverNombreItem($alternativaItem) : 'Servicio'),
+                : ($alternativaItem ? ReservaController::resolverNombreItem($alternativaItem, $item) : 'Servicio'),
             'servicio_id' => $destinoServicio?->servicio_id,
             // Categoría amplia del servicio (ej. "Transporte", "Entrada"), a
             // diferencia de 'servicio' de arriba que es el nombre completo
@@ -489,10 +532,10 @@ class ReporteOperativoController extends Controller
             // 'hotel'). El reporte necesita mostrarlo para poder reasignarlo inline —
             // mismo criterio que ReservaItemController::update() ya permite, solo que
             // el reporte no tenía forma de mostrar "a quién" hasta ahora.
-            'proveedor' => $this->nombreProveedor($proveedorTarifa?->proveedorServicio?->proveedor),
-            'hotel' => $proveedorTarifa?->tipo_habitacion
-                ? ($this->nombreProveedor($proveedorTarifa->proveedorServicio?->proveedor) ?? 'Hotel')
-                : null,
+            'proveedor' => $proveedorTarifa
+                ? $this->nombreProveedor($proveedorTarifa->proveedorServicio?->proveedor)
+                : ($item->opcion_hotel_tarifa_id ? $this->hotelDelItem($item) : null),
+            'hotel' => $this->hotelDelItem($item),
             'fecha' => optional($item->fecha)->toDateString(),
             // Fila 13, fase 2c: la hora de recojo de la reserva si la tiene; si
             // no, la de su salida (que nace con la hora del tour).
