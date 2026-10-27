@@ -1107,12 +1107,9 @@ de sus sucursales?
    → T-065
 3. **Elegir la dirección al emitir** (por defecto la fiscal; elegir otra o agregarla en el
    momento): venta, factura de reserva, nota. → T-065
-4. **Dirección en el XML** (Greenter lo permite): **bloqueada hasta confirmar con el contador** si
-   algún cliente lo exige y si conviene enviarla. → T-066
-
-**Para el contador:** la dirección del adquirente no parece obligatoria en la factura
-electrónica (sí RUC y razón social); algunas empresas exigen la dirección de la sucursal que
-compró. ¿Conviene enviarla en el XML?
+4. **Dirección en el XML** (Greenter lo permite): **no por ahora** (decisión del usuario,
+   27-oct-2026: basta con que salga en el PDF). T-066 se retiró sin construir; se retoma solo si
+   un cliente lo exige.
 
 **Preguntas para el usuario (originales):**
 1. ¿Rehacemos T-050 a T-053 como fases C1, C2, C3 y C6 del CRM (recomendado), o se construyen

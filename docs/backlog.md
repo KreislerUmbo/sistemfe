@@ -79,7 +79,6 @@ Próximo ID libre: **T-067**.
 | T-063 | PLA + AGE | Menú de Agencia por tareas del negocio (Ventas, Viajes, Finanzas, Catálogos, Administración) | por hacer | — | |
 | T-064 | VEN | Copiar documento, razón social y dirección del cliente al comprobante al emitirlo (H60) | por hacer | — | |
 | T-065 | CLI + VEN | Varias direcciones por cliente y elegir la dirección al emitir (H61) | por hacer | T-064 | |
-| T-066 | VEN | Enviar la dirección del cliente en el XML del comprobante | bloqueada (respuesta del contador, obs. 18) | T-064 | |
 
 ## Por analizar
 
