@@ -1230,6 +1230,8 @@ export type ReservaDetalleResponse = {
   moneda: 'PEN' | 'USD';
   cabecera: ReservaCabecera;
   alerta_cupo_excedido?: boolean;
+  // T-042: salidas canceladas en las que quedó la reserva.
+  avisos_salida_cancelada?: string[];
   items_pendientes_sincronizar?: Array<{ id: number; nombre: string }>;
   // Fase A — facturación de reservas: reserva_item_ids ya cubiertos por
   // alguna venta, para no volver a ofrecerlos al facturar.

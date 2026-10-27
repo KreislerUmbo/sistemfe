@@ -1424,6 +1424,9 @@ class ReservaController extends Controller
             'total' => round($total, 2),
             'moneda' => $reserva->alternativa->moneda_cotizacion,
             'items_pendientes_sincronizar' => $itemsPendientesSincronizar,
+            // T-042: salidas canceladas en las que está la reserva (la pantalla
+            // lo avisa después de aceptar, sincronizar o reprogramar).
+            'avisos_salida_cancelada' => SalidaOperativa::avisosCanceladas($reserva->id),
             'items_facturados_ids' => $itemsFacturadosIds,
             'items_pendientes_de_facturar_count' => $itemsPendientesDeFacturarCount,
             'pasajeros_facturados_ids' => $pasajerosFacturadosIds,

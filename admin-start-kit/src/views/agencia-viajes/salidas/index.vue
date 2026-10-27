@@ -247,6 +247,10 @@
                         <button v-if="enCurso(detalle)" class="btn btn-outline-danger btn-sm" @click="confirmarCancelar(detalle)">
                             <i class="fas fa-ban me-1"></i>Cancelar salida
                         </button>
+                        <button v-if="detalle.estado === 'cancelada' && detalle.fecha.slice(0, 10) >= hoyPeru()" class="btn btn-outline-primary btn-sm"
+                            @click="confirmarReactivar(detalle)">
+                            <i class="fas fa-rotate-right me-1"></i>Reactivar salida
+                        </button>
                         <button v-if="siguienteEstado(detalle)" class="btn btn-success btn-sm" @click="avanzarEstado(detalle)">
                             <i :class="siguienteEstado(detalle)!.icono" class="me-1"></i>{{ siguienteEstado(detalle)!.texto }}
                         </button>
@@ -451,6 +455,28 @@ const confirmarCancelar = async (s: SalidaOperativa) => {
         await list();
     } catch (error: any) {
         toast.error(error.response?.data?.message ?? 'No se pudo cancelar la salida');
+    }
+};
+
+// T-042 (H35): una salida cancelada vuelve a "programada" solo a mano.
+const confirmarReactivar = async (s: SalidaOperativa) => {
+    const confirmacion = await (Swal as TVueSwalInstance).fire({
+        title: '¿Reactivar esta salida?',
+        text: 'Vuelve a programada. Sus servicios quedan "Por reservar": confirma de nuevo con cada proveedor.',
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, reactivar',
+        cancelButtonText: 'Volver',
+    });
+    if (!confirmacion.isConfirmed) return;
+
+    try {
+        const res = await salidaOperativaService.cambiarEstado(s.id, 'programada');
+        toast.success(res.message);
+        if (detalle.value?.id === s.id) detalle.value = res.salida;
+        await list();
+    } catch (error: any) {
+        toast.error(error.response?.data?.message ?? 'No se pudo reactivar la salida');
     }
 };
 

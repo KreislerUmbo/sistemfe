@@ -15,7 +15,7 @@ export type ActualizarVueloPayload = {
 export const reservaItemService = {
   async actualizar(id: number, data: { guia_id?: number | null; proveedor_tarifa_id?: number | null; fecha?: string | null; hora?: string | null }) {
     const response = await httpClient.put(`/reserva-items/${id}`, data)
-    return response.data as { code: number; message: string; reserva_item: ReservaItem }
+    return response.data as { code: number; message: string; reserva_item: ReservaItem; avisos_salida_cancelada?: string[] }
   },
 
   // ── Asignación pasajero↔ítem (reserva_item_pasajero) ──────────────────

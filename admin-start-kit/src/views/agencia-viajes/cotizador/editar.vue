@@ -1847,6 +1847,8 @@ const marcarAceptada = async () => {
         if (res.alerta_cupo_excedido) {
             await (Swal as TVueSwalInstance).fire('Cupo excedido', 'La salida de mayorista elegida ya superó su cupo total — la reserva se creó igual, es solo un aviso.', 'warning');
         }
+        // T-042: un tour de un día con la salida cancelada (la reserva se crea igual).
+        (res.avisos_salida_cancelada ?? []).forEach((aviso: string) => toast.warning(aviso));
         router.push(`/agencia-viajes/reservas/${res.reserva.id}`);
     } catch (error: any) {
         (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo aceptar la alternativa', 'error');
