@@ -20,8 +20,8 @@ Próximo ID libre: **T-070**.
 
 | Ola | Tareas | Por qué en este lugar |
 |---|---|---|
-| 0 | T-067 | Código terminado sin unir ni desplegar: cuanto más se construya encima, más difícil unir |
-| 1 | T-064 → T-068 → T-008 → T-038 → T-026 | Todos los giros, producción: PDF de comprobantes que cambia al editar el cliente, precios del portal manipulables, caja que no se anula al eliminar una venta, monto en letras en dólares, fechas que se muestran un día antes |
+| 0 | ~~T-067~~ hecha 27-oct | Desplegado en producción (`cd017d4`) |
+| 1 | ~~T-064 → T-068 → T-008 → T-038 → T-026~~ hechas y desplegadas 27-oct | Todos los giros, producción: PDF de comprobantes que cambia al editar el cliente, precios del portal manipulables, caja que no se anula al eliminar una venta, monto en letras en dólares, fechas que se muestran un día antes |
 | 2 | T-054 → T-056 → T-043 → T-042 → T-001 → T-030 → T-025 → T-024 → T-027 → T-028 → T-039 | Errores de Agencia: PDF de campo con el proveedor equivocado, operación trabada tras facturar, salidas que no se ven, cambios a una alternativa aceptada, permisos del cotizador, datos cruzados entre alternativas |
 | 3 | T-009 → T-010 → T-011 → T-014 → T-013 → T-012 | Cobro y caja (orden aprobado el 25-oct). T-011 no se despliega con dólares sin T-013 |
 | 4 | T-002 → T-003 → T-004 → T-005 → T-006 → T-007 | Modificar reserva: hoy no se puede quitar un pasajero y el agregado no cambia el precio |
@@ -101,7 +101,6 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 | T-062 | AGE | CRM C6b: reportes de conversión, origen, vendedor y motivos | por hacer | T-052, T-059 | |
 | T-063 | PLA + AGE | Menú de Agencia por tareas del negocio (Ventas, Viajes, Finanzas, Catálogos, Administración) | por hacer | — | |
 | T-065 | CLI + VEN | Varias direcciones por cliente y elegir la dirección al emitir (H61) | por hacer | T-064 | |
-| T-067 | PLA + AGE | Unir a `main` y desplegar lo ya construido (fila 13 fases 1b-2, F1, F3, F4 etapa 1, F5) + operación pendiente en producción | por hacer (cuándo desplegar: decide el usuario) | — | `feat/f1-facturacion-por-servicio` |
 
 ## Por analizar
 
@@ -147,6 +146,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 
 | ID | Módulo | Qué | Commit |
 |---|---|---|---|
+| T-067 | PLA + AGE | Desplegado en producción 27-oct-2026: fila 13 fases 1b-2, F1, F3, F4 etapa 1, F5 y ola 1 (`9c35bef`), luego T-069 (`cd017d4`). Respaldo previo 15:33; 13 migraciones en dakamu (0 filas exonerado cambiadas), dakamu sigue en modo clásico | `cd017d4` |
 | T-069 | VEN | Descargar XML y CDR por dirección firmada desde la carpeta del negocio (daban 404 en producción; reportado en market 27-oct) | ver merge de `fix/T-069-descargar-xml-cdr` |
 | T-026 | TRA | CampoFecha toma el día escrito aunque la fecha llegue con hora y zona (antes mostraba un día menos y lo guardaba así) | ver merge de `fix/T-026-campofecha-fecha-iso` |
 | T-038 | VEN | Monto en letras del XML según la moneda (DOLARES en ventas en USD); un solo helper para XML y PDF | ver merge de `fix/T-038-monto-en-letras-moneda` |
