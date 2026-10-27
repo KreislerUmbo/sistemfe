@@ -47,7 +47,6 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 | T-005 | AGE | Modificar reserva: aplicar a la reserva | por hacer | T-003, T-004 | |
 | T-006 | AGE | Modificar reserva: PDF para el cliente | por hacer | T-003 | |
 | T-007 | AGE | Modificar reserva: pantallas | por hacer | T-005, T-006 | |
-| T-008 | VEN + CAJ | Eliminar una venta anula sus movimientos de caja (todos los giros) | por hacer | — | |
 | T-009 | CAJ | Caja, paso A: la moneda en cada movimiento | por hacer | — | |
 | T-010 | VEN + CAJ | Servicio compartido de cobro, con n.º de operación y moneda de pago (Obs. 1) | por hacer | T-009 | |
 | T-011 | AGE + CAJ | Cobro al contado al facturar una reserva (Obs. 1) | por hacer | T-010 | |
@@ -138,6 +137,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 | VEN | `controla_stock` del producto ignorado: `SaleController` descuenta stock siempre (verificado 27-oct) | `TODO.md`, Sesión 9a |
 | VEN + NOT | Al aceptar una NC/ND no se ajustan `debt`/`paid_out`/`state_payment`; `client_credit_movements` (saldo a favor) diseñado sin construir; `sales.debt`/`paid_out` quedan congelados al cobrar desde Cuentas por Cobrar | `CLAUDE.md`, Notas y Amortizaciones |
 | CRE | **Tasa máxima como TEA:** `CreditoDatosRequest` compara la tasa tipeada con `tasa_maxima` sin convertir unidades (verificado 27-oct); no fijar `tasa_maxima` en credishirley hasta corregirlo. Plantilla de contrato del abogado con la cláusula de la Ley 29733 | `docs/planning/creditos/00-reglas-y-modelo.md` §5 |
+| VEN | Eliminar venta: los guards de `destroy()` (enviada a SUNAT, con adelanto) responden HTTP 200 con `code: 405` y la pantalla muestra "Eliminada" aunque no se borró; id inexistente da 500 | hallazgo de T-008, 27-oct-2026 |
 | TRA | Seguridad de infraestructura (auditoría 08-oct): dependencias con advisories, certificados beta con clave privada en el historial de git, HSTS/CSP en nginx, CORS `*`. (Pedidos del portal y `v-html` → T-068) | memoria `project_auditoria_seguridad_2026-10-08` |
 | AGE | Pendientes de diseño ya conocidos: Compras + pagos a proveedores (fila 13 fase 3, reemplaza 11g), limpieza multi-destino (12g, espera producción), guía cotizado que no pasa a la reserva privada, endoso de pasajeros (v2 sin aprobar) | `plan-hoja-de-ruta-ejecucion.md`, memoria |
 | TRA | Sesión por inactividad: hoy el JWT vence a la hora fija desde el login (`JWT_TTL`, 60 min por defecto) y el aviso sale 2 min antes **aunque el usuario esté trabajando**. Propuesta: renovar en silencio mientras hay actividad y mostrar el aviso solo tras N minutos sin uso (falta decidir N). Solo frontend: `helpers/sessionExpiryWatcher.ts` + `helpers/http-client.ts`; `auth/refresh` ya existe | pregunta del usuario, 24-oct-2026 |
@@ -149,6 +149,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 
 | ID | Módulo | Qué | Commit |
 |---|---|---|---|
+| T-008 | VEN + CAJ | Eliminar una venta anula sus cobros en caja con una corrección (todos los giros) | ver merge de `fix/T-008-eliminar-venta-anula-caja` |
 | T-068 | POR + TRA | Pedido del portal: precios y total calculados en el servidor (y el invitado nuevo ya puede comprar); HTML de usuarios saneado con DOMPurify | `db3f427` |
 | T-064 | VEN | El comprobante guarda documento, razón social y dirección del cliente al emitirse (PDF, XML y QR ya no cambian al editar el cliente) | `7fa1024` |
 | — | TRA | **Hotfix en producción:** eliminar venta y aceptar NC fallaban en retail y créditos (`reserva_ventas`). Desplegado 24-oct-2026 | `89a1ff7` (rama de trabajo: `224137c`) |
