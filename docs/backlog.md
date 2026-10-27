@@ -66,7 +66,6 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 | T-027 | AGE | Eliminar un tour clásico en una sola operación (total guardado correcto) + subtotal por destino (H12, H14) | por hacer | — | |
 | T-028 | AGE | La versión vigente de una tarifa: solo se ofrece y se usa la vigente; plantillas de tours a la versión nueva (H5, H16, H17) | por hacer | — | |
 | T-029 | AGE | Tour clásico desde plantilla: cada servicio nace con su tratamiento tributario; costo sin infantes (H18, H19) | bloqueada: espera la decisión de la obs. 10 (tributario deducido por reglas) y al contador | — | |
-| T-030 | AGE | Una alternativa aceptada no cambia de estado ni de mayorista por API (H3, H8) | por hacer | — | |
 | T-031 | AGE | Servicio de tour sin precio de niño: el niño paga como adulto; hoteles no cambian (H7) | por hacer | — | |
 | T-032 | AGE | Cotizador: actualizar solo lo que cambió + indicadores de carga (R5, R4, H13) | por hacer | — | |
 | T-033 | AGE | La primera alternativa nace con la cotización; nombre y moneda editables; errores en español (R1, R7, H23, H24) | por hacer | — | |
@@ -132,6 +131,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 | VEN | Eliminar venta: los guards de `destroy()` (enviada a SUNAT, con adelanto) responden HTTP 200 con `code: 405` y la pantalla muestra "Eliminada" aunque no se borró; id inexistente da 500 | hallazgo de T-008, 27-oct-2026 |
 | AGE | Reporte operativo: el selector "Hotel" lista la razón social y la tabla el nombre comercial (mismo hotel con dos nombres) | hallazgo de T-054, 27-oct-2026 |
 | AGE | Reprogramar la reserva completa no mueve los servicios ya facturados (los lista como "no tocados"); desde T-056 se mueven uno por uno. Decidir si reprogramar debe moverlos | hallazgo de T-056, 27-oct-2026 |
+| AGE | Cotizador: las acciones del mayorista (elegir, descartar, editar, agregar hotel u opcional) siguen visibles en una alternativa aceptada; desde T-030 responden 422. Ocultarlas | hallazgo de T-030, 27-oct-2026 |
 | TRA | Seguridad de infraestructura (auditoría 08-oct): dependencias con advisories, certificados beta con clave privada en el historial de git, HSTS/CSP en nginx, CORS `*`. (Pedidos del portal y `v-html` → T-068) | memoria `project_auditoria_seguridad_2026-10-08` |
 | AGE | Pendientes de diseño ya conocidos: Compras + pagos a proveedores (fila 13 fase 3, reemplaza 11g), limpieza multi-destino (12g, espera producción), guía cotizado que no pasa a la reserva privada, endoso de pasajeros (v2 sin aprobar) | `plan-hoja-de-ruta-ejecucion.md`, memoria |
 | TRA | Sesión por inactividad: hoy el JWT vence a la hora fija desde el login (`JWT_TTL`, 60 min por defecto) y el aviso sale 2 min antes **aunque el usuario esté trabajando**. Propuesta: renovar en silencio mientras hay actividad y mostrar el aviso solo tras N minutos sin uso (falta decidir N). Solo frontend: `helpers/sessionExpiryWatcher.ts` + `helpers/http-client.ts`; `auth/refresh` ya existe | pregunta del usuario, 24-oct-2026 |
@@ -143,6 +143,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 
 | ID | Módulo | Qué | Commit |
 |---|---|---|---|
+| T-030 | AGE | Una alternativa aceptada no cambia de estado ni de mayorista (opción, hoteles, opcionales, tours) por API | ver merge de `fix/T-030-alternativa-aceptada-sin-cambios` |
 | T-001 | AGE | El precio de un servicio no cambia en una alternativa aceptada (backend) | ver merge de `fix/T-001-precio-alternativa-aceptada` |
 | T-042 | AGE | Reactivar una salida cancelada (servicios a "Por reservar"); aviso y marca "Salida cancelada" cuando una reserva cae en una | ver merge de `fix/T-042-salida-cancelada` |
 | T-043 | AGE | Tablero de salidas: "Siguiente" cambia de página de verdad, "Página N de M" | ver merge de `fix/T-043-salidas-paginacion` |
