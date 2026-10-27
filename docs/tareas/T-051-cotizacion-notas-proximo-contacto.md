@@ -29,6 +29,10 @@ Después de enviar no hay forma de agendar el siguiente paso ni de ver qué toca
   atrasadas primero, con cliente, motivo y enlace; marcar hecha desde ahí. Quien tiene
   `cotizaciones.ver_todas` puede ver también "de todos".
 - Cabecera de la cotización: "Próxima acción: llamar el jue 30/10 (Ana)".
+- **Pantalla "Seguimiento"** (menú VENTAS, ver T-063): bandeja de acciones pendientes en tres
+  bloques (atrasadas, hoy, próximos 7 días), filtros por tipo y responsable ("de todos" solo con
+  `cotizaciones.ver_todas`), marcar hecha y reprogramar desde la fila. Ruta nueva
+  `agencia.seguimiento`; si T-063 aún no está, la entrada de menú se agrega aquí y T-063 la ubica.
 
 ## Fuera de alcance
 - Recordatorios por correo o push (motor 11f).

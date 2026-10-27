@@ -1036,6 +1036,44 @@ después C4, C5 y C6. Cada fase se puede usar sola.
 C6 = T-053 (listado) y T-062 (reportes), y T-061 (trabajo de un usuario que se va). Estado en
 `docs/backlog.md`.
 
+**Dónde vive el CRM (27-oct-2026):** sin módulo aparte. Se registra en las pantallas que ya se
+usan (cotizador, reservas, ficha del cliente, Inicio, usuarios), más dos entradas de menú:
+**Seguimiento** (bandeja de acciones, en T-051) y **Reportes comerciales** (T-062).
+
+### 17. Menú de Agencia por tareas del negocio (27-oct-2026)
+
+**Pedido del usuario:** reordenar el menú de Agencia (hoy 12 opciones en una sola lista, más
+"Comercial" con su propio "Ventas"). Propuesta del usuario ajustada y aprobada:
+
+```
+Inicio
+VENTAS          Seguimiento · Clientes · Cotizaciones · Venta directa · Reportes comerciales
+VIAJES          Reservas · Salidas operativas · Reporte operativo
+FINANZAS        Comprobantes ▸ Mis ventas · Notas de crédito/débito
+                Cobros y anticipos ▸ Ventas por cobrar · Anticipos
+                Caja ▸ Turno activo · Historial y reportes
+CATÁLOGOS       Tours y paquetes · Proveedores · Destinos · Guías · Temporadas
+ADMINISTRACIÓN  Configuración de agencia
+                Empresa y sucursales ▸ Datos de la empresa · Sucursales
+                Configuración de caja ▸ Cajas · Métodos de pago · Conceptos de caja
+                Series y numeración ▸ Series de comprobantes · Códigos de agencia
+                Usuarios y permisos ▸ Usuarios · Roles y permisos
+AYUDA           Manuales y videos
+```
+
+- Ajustes a la propuesta del usuario: se agregan Seguimiento y Reportes comerciales (CRM);
+  "Salidas y operaciones" → "Salidas operativas" (nombre usado en todo el sistema y no se confunde
+  con Reporte operativo); "Formas de pago" no puede contener Conceptos de caja → "Configuración de
+  caja"; se agregan las opciones de configuración de caja que faltaban.
+- **Se ocultan para Agencia:** Productos, Categorías (los 5 productos internos de facturación de
+  reservas se buscan por SKU: editarlos o borrarlos rompería la facturación), Cotizaciones
+  comerciales, Proveedores de gastos (no se usa en otra pantalla; lo reemplazará Compras, que
+  entrará en FINANZAS), Portal web. También el botón "Nueva Venta" de Mis ventas (vende productos
+  de retail).
+- Retail y Créditos no cambian. Submenús de pantallas comunes con el nombre que muestra la
+  pantalla; las pantallas propias de Agencia ajustan su título al menú.
+- **Tarea:** T-063.
+
 **Preguntas para el usuario (originales):**
 1. ¿Rehacemos T-050 a T-053 como fases C1, C2, C3 y C6 del CRM (recomendado), o se construyen
    como están y el CRM va después?

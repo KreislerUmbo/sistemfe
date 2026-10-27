@@ -8,7 +8,7 @@
 
 Cada línea: ID · qué · estado · depende de · rama o commit. El detalle está en
 `docs/tareas/T-…md` (se borra al cerrar; para una tarea hecha, el commit es la referencia).
-Próximo ID libre: **T-063**.
+Próximo ID libre: **T-064**.
 
 ## Activas
 
@@ -64,7 +64,7 @@ Próximo ID libre: **T-063**.
 | T-048 | AGE + CAJ | Venta directa: "Crear y cobrar" en un solo paso (H45) | por hacer | T-011 | |
 | T-049 | AGE | Venta directa: varias líneas en la misma venta y destino del árbol (H46, H47) | por hacer | T-047 | |
 | T-050 | CLI + AGE | CRM C1: historial de actividades del cliente y "Enviar" la cotización (H48, H49) | por hacer | — | |
-| T-051 | CLI + AGE | CRM C2: próximas acciones y "Mis pendientes de hoy" (H50) | por hacer | T-050 | |
+| T-051 | CLI + AGE | CRM C2: próximas acciones, "Mis pendientes de hoy" y pantalla Seguimiento (H50) | por hacer | T-050 | |
 | T-052 | AGE | CRM C3: por qué se ganó o se perdió la venta (H51) | por hacer | T-050 | |
 | T-053 | AGE | CRM C6a: listado de cotizaciones con el seguimiento a la vista (H52) | por hacer | T-051, T-052 | |
 | T-054 | AGE | Reporte operativo: mostrar el proveedor real de la reserva, no el cotizado (H53) | por hacer | — | |
@@ -76,6 +76,7 @@ Próximo ID libre: **T-063**.
 | T-060 | CLI + AGE | CRM C5: la ficha del cliente con preferencias del viajero y línea de tiempo | por hacer | T-050, T-051 | |
 | T-061 | CLI + AGE | CRM: pasar el trabajo abierto de un usuario que se va | por hacer | T-051 | |
 | T-062 | AGE | CRM C6b: reportes de conversión, origen, vendedor y motivos | por hacer | T-052, T-059 | |
+| T-063 | PLA + AGE | Menú de Agencia por tareas del negocio (Ventas, Viajes, Finanzas, Catálogos, Administración) | por hacer | — | |
 
 ## Por analizar
 
