@@ -351,4 +351,91 @@ class ReporteOperativoTest extends TestCase
         $this->assertSame(\App\Services\HoraPeru::hoyTexto(), $body['fecha_desde']);
         $this->assertSame(\App\Services\HoraPeru::hoyTexto(), $body['fecha_hasta']);
     }
+
+    // ── T-054: el proveedor y el hotel reales son los del ítem de la reserva ──
+
+    private function filaDe(array $body, int $reservaItemId): array
+    {
+        return collect($body['filas'])->firstWhere('reserva_item_id', $reservaItemId);
+    }
+
+    private function reporteDel1(array $extra = []): array
+    {
+        return app(ReporteOperativoController::class)->index(new Request([
+            'fecha_desde' => '2026-09-01', 'fecha_hasta' => '2026-09-01',
+        ] + $extra))->getData(true);
+    }
+
+    // Un hotel nuevo del mismo destino, como lo dejaría reasignarHotel().
+    private function tarifaHotelNuevo(): int
+    {
+        $destinoServicioId = DB::table('destino_servicio')->orderByDesc('id')->value('id');
+        $hotelId = DB::table('proveedores')->insertGetId([
+            'razon_social' => 'Hotel Nuevo SAC', 'nombre_comercial' => 'Hotel Nuevo', 'estado' => true, 'es_referencial' => false,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $psId = DB::table('proveedor_servicios')->insertGetId([
+            'proveedor_id' => $hotelId, 'destino_servicio_id' => $destinoServicioId, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        return DB::table('proveedor_tarifas')->insertGetId([
+            'proveedor_servicio_id' => $psId, 'tipo_tarifa' => 'publica', 'modalidad' => 'privado', 'moneda' => 'PEN',
+            'precio_costo' => 100, 'margen_tipo' => 'fijo', 'margen_valor' => 20, 'precio_venta_adulto' => 120,
+            'vigente_desde' => '2026-01-01', 'tip_afe_igv' => '10', 'destino_tributario' => 'nacional',
+            'tipo_habitacion' => 'doble', 'created_at' => now(), 'updated_at' => now(),
+        ]);
+    }
+
+    public function test_proveedor_reasignado_se_ve_el_nuevo(): void
+    {
+        $f = $this->crearReservaConItems();
+        $tarifaReal = ReservaItem::find($f['riProveedorAsignado']->id)->proveedor_tarifa_id;
+
+        // El cotizado era el referencial; en la reserva se reasignó al real.
+        $f['riProveedorReferencial']->update(['proveedor_tarifa_id' => $tarifaReal]);
+
+        $fila = $this->filaDe($this->reporteDel1(), $f['riProveedorReferencial']->id);
+        $this->assertSame('Operador Real SAC', $fila['proveedor']);
+        $this->assertFalse($fila['sin_guia'], 'ya no es referencial');
+    }
+
+    public function test_sin_proveedor_en_la_reserva_no_muestra_el_cotizado(): void
+    {
+        $f = $this->crearReservaConItems();
+
+        $fila = $this->filaDe($this->reporteDel1(), $f['riProveedorSinAsignar']->id);
+        $this->assertNull($fila['proveedor'], 'antes mostraba el cotizado y a la vez "sin asignar"');
+        $this->assertTrue($fila['sin_guia']);
+        $this->assertNotNull($fila['servicio_id'], 'sigue sabiendo qué servicio es, para reasignarlo');
+    }
+
+    public function test_hotel_reasignado_sale_en_el_reporte_y_en_su_filtro(): void
+    {
+        $f = $this->crearReservaConItems();
+        $f['riProveedorAsignado']->update(['proveedor_tarifa_id' => $this->tarifaHotelNuevo()]);
+
+        $fila = $this->filaDe($this->reporteDel1(), $f['riProveedorAsignado']->id);
+        $this->assertSame('Hotel Nuevo', $fila['hotel']);
+        $this->assertSame('Hotel Nuevo · doble', $fila['servicio']);
+
+        $hotelId = DB::table('proveedores')->where('razon_social', 'Hotel Nuevo SAC')->value('id');
+        $filtrado = $this->reporteDel1(['hotel_proveedor_id' => $hotelId]);
+        $this->assertSame([$f['riProveedorAsignado']->id], array_values(array_unique(array_column($filtrado['filas'], 'reserva_item_id'))));
+
+        $opciones = app(ReporteOperativoController::class)->filtrosDisponibles(new Request([
+            'fecha_desde' => '2026-09-01', 'fecha_hasta' => '2026-09-01',
+        ]))->getData(true);
+        $this->assertContains('Hotel Nuevo SAC', array_column($opciones['hoteles'], 'nombre'), 'el selector lista el hotel real');
+    }
+
+    public function test_filtro_por_servicio_incluye_el_item_sin_proveedor(): void
+    {
+        $f = $this->crearReservaConItems();
+        $servicioId = DB::table('servicios')->where('nombre', 'City tour')->orderByDesc('id')->value('id');
+
+        $ids = array_unique(array_column($this->reporteDel1(['servicio_id' => $servicioId])['filas'], 'reserva_item_id'));
+
+        $this->assertContains($f['riProveedorSinAsignar']->id, $ids);
+        $this->assertContains($f['riProveedorAsignado']->id, $ids);
+    }
 }

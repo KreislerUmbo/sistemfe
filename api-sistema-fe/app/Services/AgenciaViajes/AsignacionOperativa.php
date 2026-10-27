@@ -52,8 +52,8 @@ class AsignacionOperativa
 
     /**
      * Sin asignación: guía o proveedor ausente, o asignado a uno "referencial" (placeholder de
-     * cotización). Requiere cargadas alternativaItem.proveedorTarifa.proveedorServicio.proveedor,
-     * guia y salidaOperativa.guia.
+     * cotización). Requiere cargadas alternativaItem, proveedorTarifa.proveedorServicio.proveedor
+     * (la del ítem de la RESERVA), guia y salidaOperativa.guia.
      */
     public static function sinAsignar(ReservaItem $item): bool
     {
@@ -85,12 +85,16 @@ class AsignacionOperativa
             return ! $guia || (bool) $guia->es_referencial;
         }
 
+        // T-054: el proveedor real es el del ítem de la reserva (lo cambian
+        // reasignar proveedor y reasignar hotel), no el cotizado. Un hotel
+        // reasignado a uno no registrado (opcion_hotel_tarifa_id) sí está
+        // asignado aunque no tenga tarifa de catálogo.
         if ($origenTipo === AlternativaItem::ORIGEN_PROVEEDOR) {
             if (! $item->proveedor_tarifa_id) {
-                return true;
+                return ! $item->opcion_hotel_tarifa_id;
             }
 
-            return (bool) $item->alternativaItem?->proveedorTarifa?->proveedorServicio?->proveedor?->es_referencial;
+            return (bool) $item->proveedorTarifa?->proveedorServicio?->proveedor?->es_referencial;
         }
 
         return false;

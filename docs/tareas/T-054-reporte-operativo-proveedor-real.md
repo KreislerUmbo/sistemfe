@@ -62,9 +62,32 @@ php artisan test --filter=ReporteOperativo
 ---
 
 ## Resultado
-- **Commits:**
-- **Tests:** (nuevos / suite completa)
+- **Commits:** rama `fix/T-054-reporte-proveedor-real` (ver `git log`).
+- **Tests:** 4 nuevos en `ReporteOperativoTest` (reasignado, sin proveedor, hotel reasignado con
+  su filtro y el selector, filtro por servicio con un ítem sin proveedor); los 27 del reporte y la suite completa (1548) en
+  verde. Con el código anterior fallan 3 de los 4 (el del filtro por servicio pasaba igual: queda
+  como protección).
+- **Datos reales (agencia-demo, reserva 12 y 19):** los ítems 14, 24 y 53 (proveedor quitado en
+  la reserva) ahora salen con proveedor vacío y "sin asignar"; antes mostraban "Turismo Selva",
+  "Guía Provisional" y "Cumbaza Hotel". El ítem 20 (reasignado a otra tarifa) muestra la real.
+- **Cómo quedó:** `tarifaReal()` (la del ítem de la reserva), `tarifaDelServicio()` (la real o,
+  sin proveedor, la cotizada: el servicio y el lugar no cambian) y `hotelDelItem()` (catálogo de la
+  reserva u `opcion_hotel_tarifa_id` no registrado). El nombre del servicio pasa por
+  `resolverNombreItem($alternativaItem, $item)`, que ya sabía preferir el hotel de la reserva.
+  `AsignacionOperativa::sinAsignar()` mira la tarifa de la reserva; un hotel reasignado a uno no
+  registrado cuenta como asignado. El Inicio carga esa relación.
 - **Desviaciones de la tarea y por qué:**
+  - Sin proveedor en la reserva, el **nombre del servicio** sigue siendo el cotizado (p. ej.
+    "Cumbaza Hotel · matrimonial" en el ítem 53): es lo que se vendió, como pedía la tarea; lo que
+    se vacía es la columna Proveedor/Hotel y la fila queda "sin asignar".
+  - Los hoteles de un paquete de mayorista (matriz, `opcion_hotel_tarifa_id`) ahora también
+    llenan la columna Hotel del reporte (antes salía vacía).
+- **Otros lectores revisados:** la ficha de la reserva ya usaba la tarifa real
+  (`item.proveedor_tarifa`); las órdenes de servicio salen de los servicios de la salida. Sin más
+  cambios.
+- **Recorrido:** sin documento propio (cambio de origen del dato, explicado aquí y en los
+  comentarios de `ReporteOperativoController`).
 
 ## Hallazgos fuera de alcance
-- 
+- El selector "Hotel" del reporte lista la razón social y la tabla muestra el nombre comercial
+  (mismo hotel con dos nombres). Igualar con `nombreProveedor()`.
