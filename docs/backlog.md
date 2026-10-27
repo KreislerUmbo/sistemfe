@@ -40,8 +40,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 
 | ID | Módulo | Qué | Estado | Depende de | Rama / commit |
 |---|---|---|---|---|---|
-| T-001 | AGE | Bloquear el cambio de precio de un servicio en una alternativa aceptada | por hacer | — | |
-| T-002 | AGE | Modificar reserva: crear y descartar la modificación (cotización propia + copia) | por hacer | T-001 | |
+| T-002 | AGE | Modificar reserva: crear y descartar la modificación (cotización propia + copia) | por hacer | — | |
 | T-003 | AGE | Modificar reserva: calcular la diferencia con lo vendido | por hacer | T-002 | |
 | T-004 | AGE | Modificar reserva: penalidad por pasajero quitado | por hacer | T-003 | |
 | T-005 | AGE | Modificar reserva: aplicar a la reserva | por hacer | T-003, T-004 | |
@@ -144,6 +143,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 
 | ID | Módulo | Qué | Commit |
 |---|---|---|---|
+| T-001 | AGE | El precio de un servicio no cambia en una alternativa aceptada (backend) | ver merge de `fix/T-001-precio-alternativa-aceptada` |
 | T-042 | AGE | Reactivar una salida cancelada (servicios a "Por reservar"); aviso y marca "Salida cancelada" cuando una reserva cae en una | ver merge de `fix/T-042-salida-cancelada` |
 | T-043 | AGE | Tablero de salidas: "Siguiente" cambia de página de verdad, "Página N de M" | ver merge de `fix/T-043-salidas-paginacion` |
 | T-056 | AGE | Después de facturar se cambian proveedor, guía, fecha, hora, hotel y mayorista; cambiar la fecha mueve el servicio a la salida del día nuevo | ver merge de `feat/T-056-cambios-tras-facturar` |
