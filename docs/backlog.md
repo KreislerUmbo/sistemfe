@@ -8,7 +8,7 @@
 
 Cada línea: ID · qué · estado · depende de · rama o commit. El detalle está en
 `docs/tareas/T-…md` (se borra al cerrar; para una tarea hecha, el commit es la referencia).
-Próximo ID libre: **T-069**.
+Próximo ID libre: **T-070**.
 
 ## Orden de construcción (27-oct-2026)
 
@@ -147,6 +147,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 
 | ID | Módulo | Qué | Commit |
 |---|---|---|---|
+| T-069 | VEN | Descargar XML y CDR por dirección firmada desde la carpeta del negocio (daban 404 en producción; reportado en market 27-oct) | ver merge de `fix/T-069-descargar-xml-cdr` |
 | T-026 | TRA | CampoFecha toma el día escrito aunque la fecha llegue con hora y zona (antes mostraba un día menos y lo guardaba así) | ver merge de `fix/T-026-campofecha-fecha-iso` |
 | T-038 | VEN | Monto en letras del XML según la moneda (DOLARES en ventas en USD); un solo helper para XML y PDF | ver merge de `fix/T-038-monto-en-letras-moneda` |
 | T-008 | VEN + CAJ | Eliminar una venta anula sus cobros en caja con una corrección (todos los giros) | ver merge de `fix/T-008-eliminar-venta-anula-caja` |
