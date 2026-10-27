@@ -688,6 +688,40 @@ Para el camino B, la regla queda: **agencia que cumple el art. 2** (dato de conf
 - **H27 — Monto en letras siempre en "SOLES".** `armarLeyendas()` pasa `'SOLES'` fijo: una factura en
   dólares sale al XML con el monto en letras en soles. Las notas sí miran la moneda.
 
+### 11. Separar "servicios de la agencia" y "paquete de mayorista" (26-oct-2026)
+
+**Pedido del usuario:** separar Local/Nacional e Internacional (mayoristas) en menús distintos para
+que sea más fácil, sin perder la cotización que mezcla las dos cosas.
+
+**Decisión (aprobada 26-oct-2026): separar la entrada, no la cotización.** Motivo: los vuelos
+internacionales salen de Lima, así que un paquete de mayorista suele ir con un pasaje suelto
+Tarapoto–Lima o un traslado; partirlo en dos módulos daría dos cotizaciones, dos PDF, dos totales y
+dos reservas. Caso real que mezcla: CDKM-0826-0000003 (Alto Mayo + Cusco con pasaje y hotel +
+mayorista en la misma alternativa).
+- Menú (o pregunta al crear): "Cotizar tours y servicios" / "Cotizar paquete de mayorista". Abren el
+  **mismo cotizador y el mismo modal**, sin formularios nuevos; solo cambia cómo arranca: pestaña
+  preseleccionada, formulario del mayorista abierto o biblioteca filtrada por destino, y la pestaña
+  que no corresponde oculta detrás de "+ Agregar paquete de mayorista" / "+ Agregar algo más".
+- Si la cotización ya tiene un ítem de mayorista, esa pestaña siempre se ve.
+- La entrada no se guarda como tipo de cotización: solo decide cómo se abre la pantalla.
+- Pestañas renombradas por quién arma el paquete, no por destino: "Servicios de la agencia" /
+  "Paquete de mayorista" (un mayorista también vende Cusco).
+- Las listas de la pestaña oculta (mayoristas, hoteles del mayorista) se cargan al abrirla, no al
+  entrar al cotizador.
+
+**Pregunta del usuario: ¿se pondrá lento con más datos?** Revisado el 26-oct-2026:
+- Lo que más crece (historial de cotizaciones, reservas, tarifas) **no** se carga al abrir el
+  cotizador: solo la cotización abierta y la biblioteca, que busca en la base y trae como máximo
+  50-100 resultados. Abrir una cotización con 5.000 cotizaciones en el sistema cuesta lo mismo que hoy.
+- La lentitud real de hoy es otra: después de cada acción se vuelve a cargar la cotización entera
+  (T-032), y en local corre sobre un servidor de desarrollo.
+- **H28 (falla real, al revés):** varias listas del cotizador piden "todos" pero el servidor devuelve
+  solo la primera página de 15, sin avisar. En agencia-demo ya hay 16 hoteles (falta 1 en "usar
+  tarifa registrada" del mayorista) y 41 proveedores (el filtro de la biblioteca muestra 15). Igual
+  en mayoristas y guías (`GuiaController::index` fija 15); servicios se corta en 200. También en
+  `paquetes/detalle.vue` y en `stores/agenciaViajesCatalogos.ts`. Solución que además escala:
+  buscador que consulta al servidor mientras se escribe, en vez de cargar la lista entera.
+
 ---
 
 ## Orden de construcción propuesto (a aprobar)

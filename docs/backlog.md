@@ -8,7 +8,7 @@
 
 Cada línea: ID · qué · estado · depende de · rama o commit. El detalle está en
 `docs/tareas/T-…md` (se borra al cerrar; para una tarea hecha, el commit es la referencia).
-Próximo ID libre: **T-039**.
+Próximo ID libre: **T-041**.
 
 ## Activas
 
@@ -52,6 +52,8 @@ Próximo ID libre: **T-039**.
 | T-036 | AGE | Mayorista: etiquetas, primera opción elegida sola, "solo adultos" a la vista (R6, H22) | por hacer | — | |
 | T-037 | AGE | PDF: nombre de archivo con código y cliente; rótulo correcto de la tabla de hoteles (R8, H20) | por hacer | — | |
 | T-038 | VEN | Monto en letras del XML según la moneda de la venta (H27) | por hacer | — | |
+| T-039 | AGE | Listas de proveedores, hoteles, mayoristas y guías sin cortar a 15: buscador contra el servidor (H28) | por hacer | — | |
+| T-040 | AGE | Dos entradas al cotizador: "tours y servicios" o "paquete de mayorista" (obs. 11) | por hacer | T-035, T-039 | |
 
 ## Por analizar
 
