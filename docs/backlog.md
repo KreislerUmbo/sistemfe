@@ -8,7 +8,7 @@
 
 Cada línea: ID · qué · estado · depende de · rama o commit. El detalle está en
 `docs/tareas/T-…md` (se borra al cerrar; para una tarea hecha, el commit es la referencia).
-Próximo ID libre: **T-064**.
+Próximo ID libre: **T-067**.
 
 ## Activas
 
@@ -77,6 +77,9 @@ Próximo ID libre: **T-064**.
 | T-061 | CLI + AGE | CRM: pasar el trabajo abierto de un usuario que se va | por hacer | T-051 | |
 | T-062 | AGE | CRM C6b: reportes de conversión, origen, vendedor y motivos | por hacer | T-052, T-059 | |
 | T-063 | PLA + AGE | Menú de Agencia por tareas del negocio (Ventas, Viajes, Finanzas, Catálogos, Administración) | por hacer | — | |
+| T-064 | VEN | Copiar documento, razón social y dirección del cliente al comprobante al emitirlo (H60) | por hacer | — | |
+| T-065 | CLI + VEN | Varias direcciones por cliente y elegir la dirección al emitir (H61) | por hacer | T-064 | |
+| T-066 | VEN | Enviar la dirección del cliente en el XML del comprobante | bloqueada (respuesta del contador, obs. 18) | T-064 | |
 
 ## Por analizar
 

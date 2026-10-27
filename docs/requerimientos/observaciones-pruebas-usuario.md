@@ -1081,6 +1081,39 @@ AYUDA           Manuales y videos
   pantalla; las pantallas propias de Agencia ajustan su título al menú.
 - **Tarea:** T-063.
 
+### 18. Comprobante a un RUC con varias direcciones (sucursales) (27-oct-2026)
+
+**Pregunta del usuario:** ¿se puede emitir un comprobante a un RUC eligiendo la dirección de una
+de sus sucursales?
+
+**Cómo es hoy (todos los giros):**
+- El cliente tiene **una sola dirección** (`clients.address`). La tabla `client_addresses` existe
+  (migración `2026_06_01_010200`) y ninguna pantalla la usa.
+- El XML a SUNAT **no lleva dirección del cliente**: solo tipo y número de documento y razón social
+  (`GreenterService::getCliente()`).
+- El PDF (A4 y ticket, ventas y notas) imprime **en vivo** del cliente: documento, razón social y
+  dirección (`pdf/a4.blade.php`, `ticket80mm.blade.php`, `nota_a4.blade.php`,
+  `nota_ticket80mm.blade.php`).
+
+| ID | Prioridad | Qué pasa |
+|---|---|---|
+| H60 | **Alta** | **El PDF de un comprobante ya emitido cambia si se edita el cliente.** Documento, razón social y dirección se leen del cliente al imprimir. Corregir la razón social o el documento de un cliente cambia la reimpresión de todos sus comprobantes, que dejan de coincidir con el XML aceptado por SUNAT. |
+| H61 | Media | **No se puede elegir la dirección de una sucursal del cliente.** Cambiar la dirección del cliente para una factura es peor: arrastra H60 a todos sus comprobantes. |
+
+**Decisión (aprobada 27-oct-2026):**
+1. Guardar documento, razón social y dirección del cliente **en el comprobante al emitirlo**; los
+   PDF leen esa copia. (H60) → T-064
+2. **Varias direcciones por cliente** (fiscal + sucursales con nombre), en `client_addresses`. (H61)
+   → T-065
+3. **Elegir la dirección al emitir** (por defecto la fiscal; elegir otra o agregarla en el
+   momento): venta, factura de reserva, nota. → T-065
+4. **Dirección en el XML** (Greenter lo permite): **bloqueada hasta confirmar con el contador** si
+   algún cliente lo exige y si conviene enviarla. → T-066
+
+**Para el contador:** la dirección del adquirente no parece obligatoria en la factura
+electrónica (sí RUC y razón social); algunas empresas exigen la dirección de la sucursal que
+compró. ¿Conviene enviarla en el XML?
+
 **Preguntas para el usuario (originales):**
 1. ¿Rehacemos T-050 a T-053 como fases C1, C2, C3 y C6 del CRM (recomendado), o se construyen
    como están y el CRM va después?
