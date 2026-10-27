@@ -980,6 +980,57 @@ servidor, `ProveedorBuscador`). El check-in en su propia tabla ya es T-041.
 **Tareas (aprobadas 27-oct-2026):** T-054 (H53), T-055 (H54), T-056 (H55), T-057 (H57),
 T-058 (H58, H59). Estado en `docs/backlog.md`.
 
+### 16. CRM práctico unido a cotizaciones y reservas (27-oct-2026)
+
+**Pedido del usuario:** un CRM práctico, unido a cotizaciones y reservas: prospecto, origen de
+contacto, vendedor, preferencias, historial, próxima acción y motivo por el que se ganó o perdió
+una venta.
+
+**Qué ya existe y se reutiliza:**
+- **Cliente sin documento:** `clients` acepta tipo `SND`; un prospecto puede ser un cliente con solo
+  nombre y teléfono, y completar sus datos fiscales al facturar. No hace falta una tabla aparte de
+  prospectos (evita duplicar personas al convertirlos).
+- **La oportunidad ya existe: es la cotización.** Tiene cliente, `vendedor_id`,
+  `fecha_viaje_tentativa` y estado calculado (`estadoResumen()`); al aceptarse genera la reserva.
+- **Responsable del cliente:** `cartera_asignaciones` (core, todos los giros) ya guarda asesor o
+  cobrador por cliente con historial (`vigente_hasta`), y la ficha del cliente tiene la sección
+  "Cartera". Se agrega la función `vendedor`.
+- **Ficha del cliente** (`views/clients/ficha.vue`, todos los giros): es el lugar del historial.
+- **Obs. 13 (T-050 a T-053, sin construir):** historial de envíos, próximo contacto, motivo de
+  pérdida y listado por seguir. Son la mitad del CRM: conviene **rehacerlas como parte del CRM**
+  para no construir dos veces (sobre todo, el historial por cliente y no solo por cotización).
+
+**Lo que falta hoy:** origen del contacto (no se registra en ningún lado); registrar una consulta
+rápida (hoy hay que crear el cliente y una cotización completa); preferencias del viajero;
+historial del cliente en un solo lugar (cotizaciones, reservas, comprobantes, contactos); próximas
+acciones con responsable; motivo de ganancia; reportes de conversión por origen y vendedor.
+
+**Propuesta (a aprobar), en fases:**
+
+| Fase | Qué | Reemplaza |
+|---|---|---|
+| C1 | **Historial y envío.** Tabla `crm_actividades` (cliente obligatorio; cotización y reserva opcionales; tipo: envío, llamada, WhatsApp, visita, nota, cambio de estado; canal; nota; usuario). Botón "Enviar" de la cotización (correo, WhatsApp, otro medio) y "Anotar contacto". | T-050 |
+| C2 | **Próximas acciones.** Tabla `crm_acciones` (cliente; cotización o reserva opcional; qué hacer: llamar, enviar cotización, cobrar saldo, saludar…; fecha; responsable; hecha). Se propone una al enviar una cotización, sin ser obligatoria. Bloque **"Mis pendientes de hoy"** en Inicio. | T-051 y el bloque de Inicio de T-053 |
+| C3 | **Resultado de la venta.** Catálogo editable de motivos con dos tipos: **perdida** (precio, otra agencia, cambió de planes, no respondió, otro) y **ganada** (precio, rapidez de respuesta, recomendación, itinerario, ya era cliente, otro). "Cerrar como perdida" con motivo; al aceptar una cotización, motivo de ganancia **opcional** de un clic. | T-052 |
+| C4 | **Consulta rápida y origen.** Catálogo editable de **origen de contacto** (WhatsApp, Facebook, Instagram, TikTok, web, recomendación, pasó por la oficina, llamada, cliente antiguo, otro). "Nueva consulta": nombre, teléfono, origen, destino de interés, fechas tentativas, pasajeros y nota → crea el cliente (sin documento si no lo da) y, si se quiere, la cotización en borrador asignada al vendedor. El origen se guarda en la cotización; el cliente guarda el de su primer contacto. Vendedor responsable del cliente en "Cartera". | — |
+| C5 | **Ficha del cliente como centro.** Preferencias del viajero (tabla del vertical: tipo de viaje por etiquetas, presupuesto aproximado por persona, alimentación, movilidad, hotel preferido, notas) y **línea de tiempo** con todo: consultas, cotizaciones, reservas, comprobantes, pagos, actividades y acciones. | — |
+| C6 | **Listados y reportes.** Seguimiento en el listado de cotizaciones y filtro "por seguir hoy" (lo de T-053); reportes: embudo por origen (consultas → cotizadas → ganadas → perdidas), conversión por vendedor, motivos de ganancia y pérdida, tiempo de respuesta (consulta → primera cotización enviada), ventas por origen. | T-053 |
+
+Orden sugerido: C1 → C2 → C3 (lo que ya estaba aprobado en la obs. 13, ahora por cliente),
+después C4, C5 y C6. Cada fase se puede usar sola.
+
+**Preguntas para el usuario:**
+1. ¿Rehacemos T-050 a T-053 como fases C1, C2, C3 y C6 del CRM (recomendado), o se construyen
+   como están y el CRM va después?
+2. Origen de contacto: ¿en cada consulta/cotización (un cliente antiguo puede volver por otro
+   canal) y el cliente guarda el primero? (recomendado)
+3. Vendedor: ¿cada cotización tiene su vendedor (ya existe) y además el cliente tiene un
+   **responsable** en Cartera, o basta con el de cada cotización?
+4. Preferencias del viajero: ¿qué datos le sirven a la agencia de verdad? (propuestos: tipo de
+   viaje, presupuesto por persona, alimentación, movilidad, hotel preferido, notas)
+5. ¿Solo Agencia por ahora, o también retail con Cotizaciones Comerciales? (Las tablas quedan en
+   el núcleo para que sirvan a todos los giros; la primera integración sería Agencia.)
+
 ---
 
 ## Orden de construcción propuesto (a aprobar)
