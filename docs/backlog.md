@@ -103,7 +103,6 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 | T-061 | CLI + AGE | CRM: pasar el trabajo abierto de un usuario que se va | por hacer | T-051 | |
 | T-062 | AGE | CRM C6b: reportes de conversión, origen, vendedor y motivos | por hacer | T-052, T-059 | |
 | T-063 | PLA + AGE | Menú de Agencia por tareas del negocio (Ventas, Viajes, Finanzas, Catálogos, Administración) | por hacer | — | |
-| T-064 | VEN | Copiar documento, razón social y dirección del cliente al comprobante al emitirlo (H60) | en revisión | — | `fix/T-064-datos-cliente-en-comprobante` |
 | T-065 | CLI + VEN | Varias direcciones por cliente y elegir la dirección al emitir (H61) | por hacer | T-064 | |
 | T-067 | PLA + AGE | Unir a `main` y desplegar lo ya construido (fila 13 fases 1b-2, F1, F3, F4 etapa 1, F5) + operación pendiente en producción | por hacer (cuándo desplegar: decide el usuario) | — | `feat/f1-facturacion-por-servicio` |
 | T-068 | POR + TRA | Seguridad: precios del pedido del portal calculados en el servidor y `v-html` saneado | por hacer | — | |
@@ -151,6 +150,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 
 | ID | Módulo | Qué | Commit |
 |---|---|---|---|
+| T-064 | VEN | El comprobante guarda documento, razón social y dirección del cliente al emitirse (PDF, XML y QR ya no cambian al editar el cliente) | `7fa1024` |
 | — | TRA | **Hotfix en producción:** eliminar venta y aceptar NC fallaban en retail y créditos (`reserva_ventas`). Desplegado 24-oct-2026 | `89a1ff7` (rama de trabajo: `224137c`) |
 | F5 | AGE | Condición de pago al facturar una reserva (contado / crédito con cuotas) y en el PDF de todos los giros; venta de reserva no editable desde Ventas | `37eed40` (sin unir a `main`) |
 | F1 | AGE | El comprobante de una reserva detalla los servicios cobrados | `9416387` (sin unir a `main`) |
