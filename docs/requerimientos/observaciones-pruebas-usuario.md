@@ -1144,6 +1144,10 @@ buscar en los documentos y planes anteriores procesos que quedaron en el aire.
   estado, sin filas que mantener). La tabla `recordatorios` y `tipos_recordatorio` se retiran
   cuando se construya 11f, si no se les encuentra uso. T-051 ya quedó preparada para recibir la
   segunda fuente.
+- **Decidido por el usuario (27-oct-2026): una sola bandeja.** Cuidados: separar por origen
+  ("Mis acciones" · "Operación") con lo atrasado arriba, para que lo automático no tape lo
+  manual; los pendientes automáticos no se marcan "hecha": llevan a resolverlos y desaparecen
+  solos; calcularlos solo para los próximos días y guardar el conteo de la campana unos minutos.
 
 **Pendientes sueltos encontrados en otros documentos y verificados contra el código** (pasan a
 "Por analizar" del backlog, salvo los que ya son tarea):

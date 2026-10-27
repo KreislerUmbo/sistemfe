@@ -39,7 +39,9 @@ Después de enviar no hay forma de agendar el siguiente paso ni de ver qué toca
   arman como **esa** bandeja con una primera fuente (las acciones del CRM): la respuesta de la API
   lleva `fuente` (`crm` | `operacion`) y la pantalla no supone que todo es una acción manual, para
   que 11f sume sus pendientes sin otra pantalla. La tabla `recordatorios` (vertical, sin
-  controller ni uso) no se usa aquí: decisión en la obs. 19.
+  controller ni uso) no se usa aquí: decisión en la obs. 19. **Decidido 27-oct: una sola bandeja.** Pestañas o
+  filtro por origen ("Mis acciones" · "Operación"); un pendiente automático no tiene "Marcar hecha"
+  sino "Resolver" (enlace), y desaparece solo.
 
 ## Fuera de alcance
 - Recordatorios por correo o push (motor 11f).
