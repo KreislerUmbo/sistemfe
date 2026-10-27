@@ -866,10 +866,16 @@ de borrador a aceptada sin registro de envío.
 Con esto sale solo un reporte de conversión: enviadas → aceptadas → perdidas por motivo, por
 vendedor y por mes.
 
-**Preguntas para el usuario:**
-1. ¿Cómo envían la mayoría de las cotizaciones: WhatsApp, correo o en persona?
-2. ¿La lista de motivos de pérdida sirve así, o falta alguno?
-3. ¿Interesa el enlace para el cliente (punto 6), o con lo demás alcanza por ahora?
+**Preguntas para el usuario y respuestas (27-oct-2026):**
+1. ¿Cómo envían la mayoría de las cotizaciones? **Correo y WhatsApp.** WhatsApp no deja adjuntar
+   un archivo desde un enlace (`wa.me` solo lleva texto): el sistema descarga el PDF y abre el
+   chat con el texto armado; el vendedor adjunta el PDF.
+2. ¿La lista de motivos sirve? **Sí, como base; se irán agregando.** Por eso los motivos son un
+   catálogo editable en Configuración de Agencia, sembrado con la lista base.
+3. Enlace para el cliente (punto 6): **para después**, sin urgencia. No entra en las tareas.
+
+**Tareas (aprobadas 27-oct-2026):** T-050 (H48, H49), T-051 (H50), T-052 (H51), T-053 (H52).
+Estado en `docs/backlog.md`.
 
 ### 14. Módulo de uso del sistema: dónde se traban los usuarios y qué usan más (27-oct-2026)
 
@@ -916,10 +922,14 @@ grabación de sesiones casi sin programar, pero envían las pantallas (con datos
 tercero; hay que enmascarar los campos. Pueden servir para una prueba corta con un tenant y con
 permiso, no como solución permanente.
 
-**Preguntas para el usuario:**
-1. ¿Quién mira estos datos: solo tú (UmboSystem, todos los tenants) o también el dueño de cada
-   negocio para sus usuarios?
-2. ¿Empezamos por la fase 1 (backend, sin tocar pantallas) y vemos qué sale en dos semanas?
+**Preguntas para el usuario y respuestas (27-oct-2026):**
+1. ¿Quién mira estos datos? **Solo UmboSystem**, para medir el comportamiento del sistema y
+   proponer mejoras. El panel va solo en el panel central.
+2. ¿Empezamos por la fase 1? **Todavía no:** primero las tareas pendientes; medir tiene sentido
+   cuando estén hechas. **En espera.** Nota a favor de adelantar solo la fase 1 (decide el
+   usuario): es un middleware chico, no toca pantallas, mostraría los errores reales que ya ven
+   los usuarios de producción y daría una línea de base para comparar antes y después de las
+   tareas.
 
 ---
 

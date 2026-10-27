@@ -8,7 +8,7 @@
 
 Cada línea: ID · qué · estado · depende de · rama o commit. El detalle está en
 `docs/tareas/T-…md` (se borra al cerrar; para una tarea hecha, el commit es la referencia).
-Próximo ID libre: **T-050**.
+Próximo ID libre: **T-054**.
 
 ## Activas
 
@@ -63,6 +63,10 @@ Próximo ID libre: **T-050**.
 | T-047 | AGE | Venta directa: vender un tour del catálogo, enganchado a la salida del día (H41) | por hacer | T-045, T-046 | |
 | T-048 | AGE + CAJ | Venta directa: "Crear y cobrar" en un solo paso (H45) | por hacer | T-011 | |
 | T-049 | AGE | Venta directa: varias líneas en la misma venta y destino del árbol (H46, H47) | por hacer | T-047 | |
+| T-050 | AGE | Cotización: enviar por WhatsApp u otro medio, y el historial de seguimiento (H48, H49) | por hacer | — | |
+| T-051 | AGE | Cotización: notas de contacto y próximo contacto (H50) | por hacer | T-050 | |
+| T-052 | AGE | Cotización: cerrar como perdida con motivo (H51) | por hacer | T-050 | |
+| T-053 | AGE | Listado de cotizaciones e Inicio con el seguimiento a la vista (H52) | por hacer | T-051, T-052 | |
 
 ## Por analizar
 
@@ -85,8 +89,8 @@ Próximo ID libre: **T-050**.
 | AGE | **Revisión de reservas (26-oct)** H31-H34 (H29 → T-040, H30 → T-041): reasignar mayorista no mueve el cupo (H31), reserva cancelada sin camino de vuelta, ver T-030 (H32), pasajero agregado sin residencia (H33), 500 en carrera de facturación externa (H34). Falta la prueba en vivo | `docs/requerimientos/observaciones-pruebas-usuario.md`, "Revisión de reservas" |
 | AGE | **Revisión de salidas operativas (26-oct)** H39-H40 (H35 → T-042, H36 → T-043, H37 → T-040, H38 → T-044): servicio quitado vuelve solo cuando se engancha otra reserva (H39), desenganchar sin revisiones ni ReservaPolicy (H40) | `docs/requerimientos/observaciones-pruebas-usuario.md`, "Revisión de salidas operativas" |
 | AGE | **Obs. 12 — Venta directa** (H41-H47 → T-045 a T-049): solo queda la pregunta 3, ¿vender un paquete de varios días por venta directa? (sin decidir) | `docs/requerimientos/observaciones-pruebas-usuario.md` §12, 27-oct-2026 |
-| AGE | **Obs. 13 — Seguimiento de cotizaciones** (H48-H52): enviar por WhatsApp o en persona no deja rastro, ninguna alternativa llega a "enviada" (H48, alta); sin seguimiento ni próximo contacto (H50, alta); sin motivo de pérdida; listado sin seguimiento. Propuesta en espera de 3 preguntas | `docs/requerimientos/observaciones-pruebas-usuario.md` §13, 27-oct-2026 |
-| PLA | **Obs. 14 — Módulo de uso del sistema** (qué se usa, dónde se traban, qué es lento): propuesta en 4 fases, en espera de 2 preguntas | `docs/requerimientos/observaciones-pruebas-usuario.md` §14, 27-oct-2026 |
+| AGE | **Obs. 13 — Seguimiento de cotizaciones** (H48-H52 → T-050 a T-053): quedan para después el enlace para el cliente ("abrió la cotización") y el reporte de conversión por motivo | `docs/requerimientos/observaciones-pruebas-usuario.md` §13, 27-oct-2026 |
+| PLA | **Obs. 14 — Módulo de uso del sistema** (solo UmboSystem; qué se usa, dónde se traban, qué es lento): **en espera** hasta avanzar las tareas pendientes, por decisión del usuario | `docs/requerimientos/observaciones-pruebas-usuario.md` §14, 27-oct-2026 |
 | CAJ + NOT | Devolver dinero al cliente por una NC sin volver a facturar (hoy la NC no mueve la caja en ningún giro) | revisión de fallos de las observaciones, 25-oct-2026 |
 | TRA | Sesión por inactividad: hoy el JWT vence a la hora fija desde el login (`JWT_TTL`, 60 min por defecto) y el aviso sale 2 min antes **aunque el usuario esté trabajando**. Propuesta: renovar en silencio mientras hay actividad y mostrar el aviso solo tras N minutos sin uso (falta decidir N). Solo frontend: `helpers/sessionExpiryWatcher.ts` + `helpers/http-client.ts`; `auth/refresh` ya existe | pregunta del usuario, 24-oct-2026 |
 
