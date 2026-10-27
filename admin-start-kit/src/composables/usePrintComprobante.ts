@@ -151,6 +151,24 @@ export async function imprimirReciboPago(
     }
 }
 
+// T-069: XML o CDR de una venta o nota, por dirección firmada (como el PDF).
+// Antes se abría la ruta guardada ("/storage/cdrs/x.zip"), que en producción
+// da 404: el archivo vive en la carpeta del negocio. Ver ArchivoSunatController.
+export async function descargarArchivoSunat(
+    documento: 'venta' | 'nota',
+    id: string | number,
+    archivo: 'xml' | 'cdr',
+): Promise<void> {
+    try {
+        const { data } = await httpClient.get(`sunat-archivo-url/${documento}/${id}`, {
+            params: { archivo },
+        });
+        window.open(data.url, '_blank');
+    } catch (e: any) {
+        Swal.fire('Error', e.response?.data?.message ?? `No se pudo descargar el ${archivo.toUpperCase()}.`, 'error');
+    }
+}
+
 // Intento best-effort de disparar el diálogo de impresión automáticamente.
 // El PDF vive en otro origen (backend), así que el navegador puede bloquear
 // el acceso a la ventana — en ese caso, el usuario igual puede imprimir

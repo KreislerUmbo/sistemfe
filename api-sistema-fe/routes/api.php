@@ -81,6 +81,7 @@ use App\Http\Controllers\Product\CategorieController;
 use App\Http\Controllers\Product\ProductController;
 use App\Http\Controllers\Role\RoleController;
 use App\Http\Controllers\Sale\FacturacionElectronicaController;
+use App\Http\Controllers\Sale\ArchivoSunatController;
 use App\Http\Controllers\Sale\NotaController;
 use App\Http\Controllers\Sale\NotaElectronicaController;
 use App\Http\Controllers\Sale\SaleController;
@@ -640,6 +641,11 @@ Route::group([
 
     // URL firmada temporal para ver/imprimir el PDF del comprobante (ver sales-pdf/{id} más abajo)
     Route::get("sales-pdf-url/{id}", [SaleController::class, 'pdfSignedUrl']);
+
+    // T-069: URL firmada para descargar el XML o el CDR de una venta o nota
+    // (?archivo=xml|cdr; ver sunat-archivo/... más abajo)
+    Route::get("sunat-archivo-url/{documento}/{id}", [ArchivoSunatController::class, 'urlFirmada'])
+        ->whereIn('documento', ['venta', 'nota']);
 
     // URL firmada temporal para ver/imprimir el PDF del recibo de pago (ver payment-receipts-pdf/{id} más abajo)
     Route::get("payment-receipts-pdf-url/{id}", [PaymentReceiptController::class, 'pdfSignedUrl']);
@@ -1264,6 +1270,13 @@ Route::group([
 // Requiere URL firmada (ver SaleController::pdfSignedUrl, arriba, dentro del grupo auth:api)
 Route::get("sales-pdf/{id}", [SaleController::class, 'pdf'])
     ->name('sales.pdf')
+    ->middleware(['tenant', 'tenant.active', 'tenant.token', 'signed']);
+
+// Requiere URL firmada (ver ArchivoSunatController::urlFirmada, arriba, dentro del grupo auth:api)
+Route::get("sunat-archivo/{documento}/{id}/{archivo}", [ArchivoSunatController::class, 'descargar'])
+    ->name('sunat.archivo')
+    ->whereIn('documento', ['venta', 'nota'])
+    ->whereIn('archivo', ['xml', 'cdr'])
     ->middleware(['tenant', 'tenant.active', 'tenant.token', 'signed']);
 
 // Requiere URL firmada (ver NotaController::pdfSignedUrl, arriba, dentro del grupo auth:api)

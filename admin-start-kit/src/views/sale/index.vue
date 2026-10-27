@@ -273,16 +273,16 @@
                                         </button>
 
                                         <!-- Con correlativo: XML y CDR -->
-                                        <a v-if="sale.correlativo && sale.xml" :href="getFileUrl(sale.xml)"
-                                            target="_blank" class="btn btn-sm btn-outline-success py-0 px-2"
-                                            title="Descargar XML">
+                                        <button v-if="sale.correlativo && sale.xml" type="button"
+                                            class="btn btn-sm btn-outline-success py-0 px-2"
+                                            title="Descargar XML" @click="descargarArchivoSunat('venta', sale.id, 'xml')">
                                             <img :src="xmlLg" width="22" alt="XML">
-                                        </a>
-                                        <a v-if="sale.correlativo && sale.cdr" :href="getFileUrl(sale.cdr)"
-                                            target="_blank" class="btn btn-sm btn-outline-warning py-0 px-2"
-                                            title="Descargar CDR">
+                                        </button>
+                                        <button v-if="sale.correlativo && sale.cdr" type="button"
+                                            class="btn btn-sm btn-outline-warning py-0 px-2"
+                                            title="Descargar CDR" @click="descargarArchivoSunat('venta', sale.id, 'cdr')">
                                             <img :src="cdrLg" width="22" alt="CDR">
-                                        </a>
+                                        </button>
 
                                         <!-- Nota de crédito/débito -->
                                         <!-- sale.correlativo por sí solo NO basta: queda seteado incluso
@@ -389,7 +389,7 @@ import notaCLg from "@/assets/images/nota-c.png";
 import type { AxiosResponse } from "axios";
 import httpClient from "@/helpers/http-client";
 import router from "@/router";
-import { imprimirComprobante } from "@/composables/usePrintComprobante";
+import { descargarArchivoSunat, imprimirComprobante } from "@/composables/usePrintComprobante";
 import { useAuthStore } from "@/stores/auth";
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
@@ -772,12 +772,6 @@ const verEstadoSunat = (sale: Sale) => {
 
 const clonarVenta = (sale: Sale) => {
     (Swal as TVueSwalInstance).fire("Clonar venta", `Clonando venta N° ${sale.id}... (próximamente)`, "info");
-};
-
-// ── URL para descargar XML/CDR ────────────────────────────────────
-const getFileUrl = (path: string): string => {
-    if (!path) return '#';
-    return import.meta.env.VITE_STORAGE_URL + path;
 };
 
 // ── Lifecycle ─────────────────────────────────────────────────────
