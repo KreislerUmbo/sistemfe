@@ -186,9 +186,11 @@ class GreenterService
     // ── Datos del cliente receptor ───────────────────────────────────
     // Usa cod_tipo_doc_cliente guardado en la venta (no recalcula)
     // Este dato se copió del cliente al crear la venta para preservarlo
+    // T-064: número y razón social también de la copia del comprobante
+    // (CopiaDatosDelCliente), igual que el PDF. Sirve para Sale y Note.
     public function getCliente($venta): Client
     {
-        $cliente = $venta->client;
+        $cliente = $venta->datosClienteImpresos();
 
         // Usamos el código que ya calculamos y guardamos en la venta
         // Catálogo 06 SUNAT: 0=Sin doc, 1=DNI, 4=CE, 6=RUC, 7=Pasaporte
@@ -196,8 +198,8 @@ class GreenterService
 
         return (new Client())
             ->setTipoDoc($codigo_tipo_documento)
-            ->setNumDoc($cliente->n_document)
-            ->setRznSocial($cliente->full_name);
+            ->setNumDoc($cliente['num_doc'])
+            ->setRznSocial($cliente['razon_social']);
     }
 
     // ── Armar el Invoice completo para Greenter ──────────────────────

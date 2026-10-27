@@ -116,8 +116,8 @@
     <div class="linea"></div>
 
     <div>Fecha: {{ \Carbon\Carbon::parse($venta->date)->format('d/m/Y H:i') }}</div>
-    <div>Cliente: {{ $venta->client->full_name }}</div>
-    <div>{{ $venta->client->type_document }}: {{ $venta->client->n_document }}</div>
+    <div>Cliente: {{ $venta->datosClienteImpresos()['razon_social'] }}</div>
+    <div>{{ $venta->datosClienteImpresos()['tipo_doc'] }}: {{ $venta->datosClienteImpresos()['num_doc'] }}</div>
     <div>Vendedor: {{ $venta->user->name }} {{ $venta->user->surname }}</div>
     {{-- Condición de pago (24-oct-2026, todos los giros): la misma que el XML;
          a crédito, las cuotas vigentes (Sale::cuotasVigentes()). --}}

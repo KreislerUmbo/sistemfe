@@ -103,7 +103,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 | T-061 | CLI + AGE | CRM: pasar el trabajo abierto de un usuario que se va | por hacer | T-051 | |
 | T-062 | AGE | CRM C6b: reportes de conversión, origen, vendedor y motivos | por hacer | T-052, T-059 | |
 | T-063 | PLA + AGE | Menú de Agencia por tareas del negocio (Ventas, Viajes, Finanzas, Catálogos, Administración) | por hacer | — | |
-| T-064 | VEN | Copiar documento, razón social y dirección del cliente al comprobante al emitirlo (H60) | por hacer | — | |
+| T-064 | VEN | Copiar documento, razón social y dirección del cliente al comprobante al emitirlo (H60) | en revisión | — | `fix/T-064-datos-cliente-en-comprobante` |
 | T-065 | CLI + VEN | Varias direcciones por cliente y elegir la dirección al emitir (H61) | por hacer | T-064 | |
 | T-067 | PLA + AGE | Unir a `main` y desplegar lo ya construido (fila 13 fases 1b-2, F1, F3, F4 etapa 1, F5) + operación pendiente en producción | por hacer (cuándo desplegar: decide el usuario) | — | `feat/f1-facturacion-por-servicio` |
 | T-068 | POR + TRA | Seguridad: precios del pedido del portal calculados en el servidor y `v-html` saneado | por hacer | — | |

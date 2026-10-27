@@ -3,6 +3,7 @@
 namespace App\Models\Sale;
 
 use App\Models\Client\Client;
+use App\Models\Concerns\CopiaDatosDelCliente;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -14,6 +15,7 @@ class Sale extends Model
 {
     use SoftDeletes;
     use HasFactory;
+    use CopiaDatosDelCliente; // T-064: copia de los datos del cliente al emitir
 
     protected $table = "sales";
 
@@ -43,6 +45,14 @@ class Sale extends Model
         // aunque el cliente cambie su tipo de documento después
         // '0'=Sin doc, '1'=DNI, '4'=CE, '6'=RUC, '7'=Pasaporte
         "cod_tipo_doc_cliente",
+
+        // T-064: copia de documento, razón social y dirección del cliente
+        // (CopiaDatosDelCliente). El PDF, el XML y el QR leen esto, no el
+        // cliente: editar el cliente no cambia un comprobante emitido.
+        "tipo_doc_cliente",
+        "num_doc_cliente",
+        "razon_social_cliente",
+        "direccion_cliente",
 
         // ── Configuración de la operación ─────────────────────────────
         // 'PEN' = soles, 'USD' = dólares (código ISO — Greenter lo requiere así)

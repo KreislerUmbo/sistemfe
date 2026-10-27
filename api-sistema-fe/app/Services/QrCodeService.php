@@ -35,7 +35,7 @@ class QrCodeService
             (float) $venta->mto_imp_venta,
             $venta->date,
             $venta->cod_tipo_doc_cliente,
-            $venta->client->n_document ?? '',
+            $venta->datosClienteImpresos()['num_doc'] ?? '', // T-064: la copia del comprobante
             $venta->hash_cpe
         );
 
@@ -67,7 +67,7 @@ class QrCodeService
             (float) $nota->mto_imp_venta,
             \App\Services\HoraPeru::deUtc($nota->sunat_sent_at)?->format('Y-m-d'),   // fecha de emisión: día de Perú (sunat_sent_at en UTC)
             $nota->cod_tipo_doc_cliente,
-            $nota->client->n_document ?? '',
+            $nota->datosClienteImpresos()['num_doc'] ?? '', // T-064: la copia del comprobante
             $nota->hash_cpe
         );
     }

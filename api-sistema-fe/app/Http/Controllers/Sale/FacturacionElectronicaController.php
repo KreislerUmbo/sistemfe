@@ -165,6 +165,14 @@ class FacturacionElectronicaController extends Controller
             ]);
         }
 
+        // T-064: todavía sin CDR, el XML sale con los datos del cliente de
+        // hoy (si se corrigió antes de enviar, sale corregido). Desde que
+        // SUNAT lo acepta, la copia ya no cambia.
+        if (! $venta->cdr) {
+            $venta->copiarDatosDelCliente();
+            $venta->save();
+        }
+
         // ── Calcular los totales del comprobante ──────────────────────
         // calcularTotalesComprobante() deriva todo desde sale_details, con
         // el valor ÍNTEGRO de los ítems — no descuenta adelantos. Así lo
