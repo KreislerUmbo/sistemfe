@@ -22,7 +22,10 @@ no avisan: el proveedor puede quedar contratado para otra cantidad u otra fecha.
     operación: su "antes" es vacío).
   - `ReservaItemController::destroy()`: la salida del servicio quitado.
   - `ReservaPasajeroController::store()`: las salidas de la reserva.
-  - `SalidaOperativaController::cancelar()` (H37): `avisos($antes, null)`-style "la salida del {fecha} ya no va" para cada proveedor de servicios y vehículos (la salida no se borra: usar la foto de antes y redactar el aviso de salida que ya no va).
+  - `SalidaOperativaController::cancelar()` (H37): "{proveedor} ({servicio}): la salida del {fecha}
+    ya no va" para cada proveedor de servicios y vehículos. La salida no se borra, así que
+    `avisos($antes, $despues)` no lo detecta: usar la foto de antes y el mismo texto que
+    `avisos($antes, null)`. El tablero lo muestra.
 - Frontend: el mismo cuadro "Avisa a los proveedores" de cancelar, sacado a una función que usen
   las cuatro acciones en `reservas/detalle.vue`.
 - Revisar si quitar el pasajero (`QuitarPasajeroReservaService`, hoy bloqueado) y el vehículo
