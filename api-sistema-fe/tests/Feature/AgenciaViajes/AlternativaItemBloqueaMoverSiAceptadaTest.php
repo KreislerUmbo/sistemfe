@@ -138,4 +138,45 @@ class AlternativaItemBloqueaMoverSiAceptadaTest extends TestCase
         $this->assertSame(200, $response->getStatusCode());
         $this->assertSame(7, $itemDeBloque->fresh()->dia_referencial);
     }
+
+    // ── T-001: el precio de un servicio no cambia en una alternativa aceptada ──
+    // Facturar una reserva lee el precio en vivo de alternativa_items
+    // (total_convertido): un PUT directo cambiaba lo que faltaba facturar.
+
+    public function test_precio_no_cambia_si_alternativa_ya_aceptada(): void
+    {
+        [$alternativa, $itemSuelto] = $this->crearAlternativaConItemSuelto('aceptada');
+        $alternativa->update(['total' => 15]);
+
+        $response = app(AlternativaItemController::class)->update(new Request(['precio_convertido' => 99]), (string) $itemSuelto->id);
+
+        $this->assertSame(422, $response->getStatusCode());
+        $this->assertStringContainsString('ya no se cambia desde acá', $response->getData(true)['message']);
+        $item = $itemSuelto->fresh();
+        $this->assertSame(15.0, (float) $item->precio_convertido);
+        $this->assertSame(15.0, (float) $item->total_convertido);
+        $this->assertSame(15.0, (float) $alternativa->fresh()->total);
+    }
+
+    public function test_descuento_no_cambia_si_alternativa_ya_aceptada(): void
+    {
+        [, $itemSuelto] = $this->crearAlternativaConItemSuelto('aceptada');
+        $descuentoAntes = $itemSuelto->descuento_pct;
+
+        $response = app(AlternativaItemController::class)->update(new Request(['descuento_pct' => 50]), (string) $itemSuelto->id);
+
+        $this->assertSame(422, $response->getStatusCode());
+        $this->assertEquals($descuentoAntes, $itemSuelto->fresh()->descuento_pct);
+        $this->assertSame(15.0, (float) $itemSuelto->fresh()->total_convertido);
+    }
+
+    public function test_precio_sigue_cambiando_en_borrador(): void
+    {
+        [, $itemSuelto] = $this->crearAlternativaConItemSuelto('borrador');
+
+        $response = app(AlternativaItemController::class)->update(new Request(['precio_convertido' => 20]), (string) $itemSuelto->id);
+
+        $this->assertSame(200, $response->getStatusCode(), json_encode($response->getData(true)));
+        $this->assertSame(20.0, (float) $itemSuelto->fresh()->precio_convertido);
+    }
 }
