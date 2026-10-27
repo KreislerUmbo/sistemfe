@@ -69,9 +69,33 @@ cd admin-start-kit && npm run type-check && npm run test:unit
 ---
 
 ## Resultado
-- **Commits:**
-- **Tests:** (nuevos / suite completa)
+- **Commits:** rama `fix/T-068-seguridad-portal-v-html` (ver `git log`).
+- **Tests:** 5 nuevos en el backend (`PedidoPortalTest`) y 4 en Vitest (`sanearHtml.test.ts`);
+  suite del backend (1529) y Vitest (157) en verde; `type-check` con los mismos 46 errores previos;
+  `build` correcto.
+- **Prueba funcional** (umbo local, con el cliente HTTP real del portal): pedido con
+  `precio: 0.01` y `total: 0.02` → guardado en S/ 13 999,80 (2 × 6 999,90, el precio del
+  producto). Pedidos y clientes de prueba borrados.
+- **Precio usado:** `products.price_general`, el mismo que muestra el catálogo del portal
+  (`Portal\ProductController`); producto válido = `state = 1`, el mismo filtro del catálogo.
+- **Cupón:** no hay lógica de cupones en el servidor. El "TECH20" (20 %) de la plantilla vivía solo
+  en `Checkout.vue`: se quitó de la pantalla (mostraba un descuento que no se cobraba) y el
+  servidor guarda el código enviado sin descontar nada.
 - **Desviaciones de la tarea y por qué:**
+  - **El pedido como invitado fallaba siempre** (confirmado con el controlador anterior: `type_document`
+    nulo en `clients` → 500). El portal no manda tipo de documento. Ahora: con DNI, se usa el
+    cliente que ya lo tiene o se crea con `DNI`; sin DNI, `SND`/`00000000`. Se valida **antes** de
+    crear el cliente (antes se creaba con datos sin validar).
+  - El error 500 ya no devuelve el mensaje interno (ruta pública); se registra en el log.
+  - DOMPurify `3.2.4` (la 3.1.6 no trae tipos) y `jsdom 24.1.3` solo para las pruebas.
+- **Otros `v-html`:** no hay más que los 4 de la tarea (8 usos en esas 4 pantallas).
+- **Otros endpoints públicos que guardan montos:** ninguno encontrado (el portal solo crea pedidos).
 
 ## Hallazgos fuera de alcance
-- 
+- `Checkout.vue` del portal tiene restos de la plantilla que no deben llegar a producción:
+  `buscarDni()` llena "Carlos Alberto Ramírez Torres" con cualquier DNI; un formulario de tarjeta
+  (número, CVV) que no se envía a ningún lado; "Incluye IGV" calculado como `total × 0.18` (si el
+  precio ya incluye IGV, es `total / 1.18 × 0.18`).
+- Un invitado que escribe el correo de otro cliente deja el pedido en la cuenta de ese cliente
+  (lo verá en "Mis pedidos"). Pedir confirmación o no vincular por correo.
+- `npm audit` reporta vulnerabilidades en dependencias del frontend (ya en "Por analizar").

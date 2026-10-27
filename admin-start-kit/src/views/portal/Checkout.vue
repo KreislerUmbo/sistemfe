@@ -388,18 +388,8 @@
               </div>
             </div>
 
-            <!-- Cupón -->
-            <div class="px-3 mb-3">
-              <div class="input-group">
-                <input type="text" class="form-control bg-dark text-white border-secondary"
-                  placeholder="🏷️ Código de descuento..." v-model="cuponCode">
-                <button class="btn btn-outline-danger" @click="aplicarCupon">Aplicar</button>
-              </div>
-              <div v-if="cuponAplicado" class="mt-2 small text-success d-flex justify-content-between">
-                <span>🎟️ Cupón TECH20 — 20% aplicado</span>
-                <button class="btn btn-sm btn-link text-danger" @click="removerCupon">×</button>
-              </div>
-            </div>
+            <!-- T-068: sin cupón. El "TECH20" de la plantilla solo existía en esta
+                 pantalla; el servidor calcula el total y no tiene cupones. -->
 
             <div class="p-3 border-top border-secondary">
               <div class="d-flex justify-content-between small mb-1">
@@ -409,10 +399,6 @@
               <div v-if="descuentoProductos > 0" class="d-flex justify-content-between small text-success mb-1">
                 <span>🏷️ Descuento en productos</span>
                 <span>- S/ {{ descuentoProductos.toLocaleString() }}</span>
-              </div>
-              <div v-if="cuponAplicado" class="d-flex justify-content-between small text-warning mb-1">
-                <span>🎟️ Cupón TECH20 (20%)</span>
-                <span>- S/ {{ descuentoCupon.toLocaleString() }}</span>
               </div>
               <div class="d-flex justify-content-between small mb-2">
                 <span class="text-muted">🚚 Envío</span>
@@ -518,15 +504,11 @@ const cardYear = ref(new Date().getFullYear())
 const cardCvv = ref('')
 const cuotasSeleccionadas = ref(1)
 
-// Cupón
-const cuponCode = ref('')
-const cuponAplicado = ref(false)
-
-// Computed del carrito
+// Computed del carrito (solo para mostrar: el total real lo calcula el
+// servidor con el precio de cada producto, T-068)
 const subtotal = computed(() => cartStore.totalPrecio)
 const descuentoProductos = computed(() => 0) // podrías calcular si tienes ofertas
-const descuentoCupon = computed(() => cuponAplicado.value ? subtotal.value * 0.20 : 0)
-const totalFinal = computed(() => subtotal.value - descuentoProductos.value - descuentoCupon.value)
+const totalFinal = computed(() => subtotal.value - descuentoProductos.value)
 const igv = computed(() => totalFinal.value * 0.18)
 
 // Tarjeta visual
@@ -566,15 +548,6 @@ const formatCardNumber = () => {
 }
 const copiar = (texto: string) => {
   navigator.clipboard.writeText(texto)
-}
-const aplicarCupon = () => {
-  if (cuponCode.value.toUpperCase() === 'TECH20') {
-    cuponAplicado.value = true
-  }
-}
-const removerCupon = () => {
-  cuponAplicado.value = false
-  cuponCode.value = ''
 }
 const editSection = (section: string) => {
   // scroll al section correspondiente
@@ -627,7 +600,6 @@ const confirmarPedido = async () => {
       form: form.value,
       entregaTipo: entregaTipo.value,
       comprobanteTipo: comprobanteTipo.value,
-      cuponAplicado: cuponAplicado.value,
       selectedPay: selectedPay.value,
     }))
     authModalRef.value?.show()
@@ -655,14 +627,10 @@ const confirmarPedido = async () => {
     ruc: comprobanteTipo.value === 'factura' ? form.value.ruc : null,
     razon_social: comprobanteTipo.value === 'factura' ? form.value.razonSocial : null,
     metodo_pago: selectedPay.value,
-    cupon: cuponAplicado.value ? cuponCode.value.toUpperCase() : null,
-    subtotal: subtotal.value,
-    descuento: descuentoProductos.value + descuentoCupon.value,
-    total: totalFinal.value,
+    // Solo producto y cantidad: precios y total los calcula el servidor (T-068)
     items: cartStore.items.map(item => ({
       id: item.id,
-      cantidad: item.cantidad,
-      precio: item.precio
+      cantidad: item.cantidad
     }))
 
   };
@@ -714,7 +682,6 @@ onMounted(() => {
     form.value = { ...form.value, ...state.form }//copiar los valores del formulario
     entregaTipo.value = state.entregaTipo
     comprobanteTipo.value = state.comprobanteTipo
-    cuponAplicado.value = state.cuponAplicado
     selectedPay.value = state.selectedPay
     localStorage.removeItem('checkoutState')
   }

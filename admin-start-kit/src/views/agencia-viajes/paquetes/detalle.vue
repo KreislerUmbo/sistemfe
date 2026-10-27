@@ -125,9 +125,9 @@
                     </template>
                     <!-- Fila 13, fase 1b (§5b): el ajuste de redondeo ya no se muestra en el tour simple. -->
                     <b-col md="4" v-if="esCombo"><p class="text-muted mb-1 fs-13"><i class="fas fa-calculator me-1"></i>Ajuste de redondeo</p><p class="mb-0 fw-semibold">{{ paquete.ajuste_redondeo != null ? `${Number(paquete.ajuste_redondeo) >= 0 ? '+' : ''}S/ ${Number(paquete.ajuste_redondeo).toFixed(2)}` : '—' }}</p></b-col>
-                    <b-col cols="12" v-if="paquete.descripcion"><div class="border-top pt-3"><p class="text-muted mb-1 fs-13">Descripción comercial</p><div class="small" v-html="paquete.descripcion"></div></div></b-col>
-                    <b-col md="6" v-if="paquete.no_incluye"><div class="border-top pt-3"><p class="text-muted mb-1 fs-13">No incluye</p><div class="small" v-html="paquete.no_incluye"></div></div></b-col>
-                    <b-col md="6" v-if="paquete.recomendaciones"><div class="border-top pt-3"><p class="text-muted mb-1 fs-13">Recomendaciones</p><div class="small" v-html="paquete.recomendaciones"></div></div></b-col>
+                    <b-col cols="12" v-if="paquete.descripcion"><div class="border-top pt-3"><p class="text-muted mb-1 fs-13">Descripción comercial</p><div class="small" v-html="sanearHtml(paquete.descripcion)"></div></div></b-col>
+                    <b-col md="6" v-if="paquete.no_incluye"><div class="border-top pt-3"><p class="text-muted mb-1 fs-13">No incluye</p><div class="small" v-html="sanearHtml(paquete.no_incluye)"></div></div></b-col>
+                    <b-col md="6" v-if="paquete.recomendaciones"><div class="border-top pt-3"><p class="text-muted mb-1 fs-13">Recomendaciones</p><div class="small" v-html="sanearHtml(paquete.recomendaciones)"></div></div></b-col>
                     <b-col cols="12" v-if="paquete.vuelo_incluido"><div class="border-top pt-3"><p class="text-muted mb-1 fs-13">Información del vuelo</p><p class="mb-0"><strong>{{ paquete.vuelo_aerolinea ?? '—' }}</strong><span v-if="paquete.vuelo_detalle"> · {{ paquete.vuelo_detalle }}</span></p></div></b-col>
                 </b-row>
 
@@ -368,7 +368,7 @@
                                 <i class="fas fa-grip-vertical grip text-muted me-2" style="cursor:grab"></i>
                                 <span v-if="paso.hora" class="badge bg-light text-dark border me-2">{{ paso.hora }}</span>
                                 <span v-else-if="paso.orden != null" class="badge bg-light text-dark border me-2">#{{ paso.orden }}</span>
-                                <span v-html="paso.descripcion"></span>
+                                <span v-html="sanearHtml(paso.descripcion)"></span>
                                 <span v-if="paso.destino_atractivo" class="text-muted"> — {{ paso.destino_atractivo.nombre }}</span>
                             </span>
                             <span class="d-flex align-items-center gap-3">
@@ -433,7 +433,7 @@
                     <li v-for="(paso, idx) in pasos" :key="idx" class="list-group-item small">
                         <span v-if="paso.hora" class="badge bg-light text-dark border me-2">{{ paso.hora }}</span>
                         <span v-else-if="paso.orden != null" class="badge bg-light text-dark border me-2">#{{ paso.orden }}</span>
-                        <span v-html="paso.descripcion"></span>
+                        <span v-html="sanearHtml(paso.descripcion)"></span>
                     </li>
                 </ul>
             </div>
@@ -769,6 +769,7 @@
 </template>
 
 <script setup lang="ts">
+import { sanearHtml } from '@/helpers/sanearHtml';
 import CampoHora from '@/components/CampoHora.vue';
 import CampoFecha from '@/components/CampoFecha.vue';
 import { ref, computed, onMounted, nextTick, watch } from 'vue';

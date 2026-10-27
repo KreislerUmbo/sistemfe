@@ -92,7 +92,7 @@
         </div>
         <!-- Documento / Link -->
         <div v-else>
-          <p v-html="recursoSeleccionado.descripcion"></p>
+          <p v-html="sanearHtml(recursoSeleccionado.descripcion)"></p>
           <a v-if="recursoSeleccionado.url" :href="recursoSeleccionado.url" target="_blank" class="btn btn-danger">🔗 Abrir enlace</a>
           <a v-if="recursoSeleccionado.archivo" :href="urlStorage(recursoSeleccionado.archivo)" download class="btn btn-danger">⬇️ Descargar</a>
         </div>
@@ -108,6 +108,7 @@
 </template>
 
 <script setup lang="ts">
+import { sanearHtml } from '@/helpers/sanearHtml'
 import DefaultLayout from '@/layouts/DefaultLayout.vue'
 import { ref, onMounted } from 'vue'
 import { recursoService } from '@/services/admin/recursoService'

@@ -2,97 +2,89 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\Portal\PedidoPortalRequest;
 use App\Models\Client\Client;
 use App\Models\Order;
 use App\Models\OrderItem;
-use Illuminate\Http\Request;
+use App\Models\Product\Product;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\ValidationException;
 
 class OrderController extends Controller
 {
-    public function store(Request $request)
+    // T-068: ruta pública (también invitados). Precios, subtotal, descuento y
+    // total se calculan aquí con el producto; lo que mande el navegador no se
+    // lee (antes se guardaba tal cual: cualquiera podía comprar al precio que
+    // quisiera). Se valida ANTES de crear al cliente invitado.
+    public function store(PedidoPortalRequest $request)
     {
-        $client = null;// se inicializa la variable
-        if (auth('client')->check()) {// si el usuario esta autenticado
-            $client = auth('client')->user();
-        } else {// si el usuario no esta autenticado
-            $client = Client::where('email', $request->email)->first();// se busca el cliente
-            if (!$client) {// si no se encuentra el cliente
-                // Crear cliente nuevo (invitado, sin contraseña)
-                $client = Client::create([
-                    'name' => $request->nombres,
-                    'surname' => $request->apellidos,
-                    'full_name' => $request->nombres . ' ' . $request->apellidos,
-                    'email' => $request->email,
-                    'phone' => $request->telefono,
-                    'type_document' => $request->tipoDocumento,
-                    'n_document' => $request->dni,
-                    'address' => $request->direccion,
-                    'distrito' => $request->distrito,
-                    'provincia' => $request->provincia,
-                    'region' => $request->departamento,
-                    'type_client' => 1,
-                    'state' => 1,
+        $datos = $request->validated();
+
+        // Mismo filtro que el catálogo del portal (Portal\ProductController).
+        $productos = Product::where('state', 1)
+            ->whereIn('id', collect($datos['items'])->pluck('id'))
+            ->get()
+            ->keyBy('id');
+
+        $lineas = [];
+        $subtotalCentavos = 0;
+        foreach ($datos['items'] as $i => $item) {
+            $producto = $productos->get($item['id']);
+            if (! $producto) {
+                throw ValidationException::withMessages([
+                    "items.$i.id" => 'Uno de los productos ya no está disponible. Actualiza tu carrito.',
                 ]);
             }
+
+            $precioCentavos = (int) round((float) $producto->price_general * 100);
+            $lineaCentavos = $precioCentavos * (int) $item['cantidad'];
+            $subtotalCentavos += $lineaCentavos;
+
+            $lineas[] = [
+                'product_id' => $producto->id,
+                'cantidad' => (int) $item['cantidad'],
+                'precio_unitario' => $precioCentavos / 100,
+                'subtotal' => $lineaCentavos / 100,
+            ];
         }
-        $request->validate([
-            'nombres' => 'required|string|max:255',
-            'apellidos' => 'required|string|max:255',
-            'email' => 'required|email',
-            'telefono' => 'required|string',
-            'dni' => 'nullable|string|max:11',
-            'direccion' => 'nullable|string',
-            'departamento' => 'nullable|string',
-            'provincia' => 'nullable|string',
-            'distrito' => 'nullable|string',
-            'referencia' => 'nullable|string',
-            'entrega_tipo' => 'required|in:despacho,tienda',
-            'comprobante_tipo' => 'required|in:boleta,factura',
-            'ruc' => 'nullable|required_if:comprobante_tipo,factura',
-            'razon_social' => 'nullable|required_if:comprobante_tipo,factura',
-            'metodo_pago' => 'required|string',
-            'cupon' => 'nullable|string',
-            'items' => 'required|array',
-            'items.*.id' => 'required|exists:products,id',
-            'items.*.cantidad' => 'required|integer|min:1',
-            'items.*.precio' => 'required|numeric',
-        ]);
+
+        // No hay cupones en el servidor: el código se guarda como referencia
+        // y no descuenta nada (el "TECH20" de la plantilla vivía solo en la
+        // pantalla).
+        $descuentoCentavos = 0;
+        $totalCentavos = $subtotalCentavos - $descuentoCentavos;
 
         DB::beginTransaction();
         try {
+            $client = $this->clienteDelPedido($datos);
+
             $order = Order::create([
-                'client_id' => $client->id, // puede ser null si es invitado
-                'nombres' => $request->nombres,
-                'apellidos' => $request->apellidos,
-                'email' => $request->email,
-                'telefono' => $request->telefono,
-                'dni' => $request->dni,
-                'direccion' => $request->direccion,
-                'departamento' => $request->departamento,
-                'provincia' => $request->provincia,
-                'distrito' => $request->distrito,
-                'referencia' => $request->referencia,
-                'entrega_tipo' => $request->entrega_tipo,
-                'comprobante_tipo' => $request->comprobante_tipo,
-                'ruc' => $request->ruc,
-                'razon_social' => $request->razon_social,
-                'metodo_pago' => $request->metodo_pago,
-                'cupon' => $request->cupon,
-                'subtotal' => $request->subtotal,
-                'descuento' => $request->descuento ?? 0,
-                'total' => $request->total,
+                'client_id' => $client->id,
+                'nombres' => $datos['nombres'],
+                'apellidos' => $datos['apellidos'],
+                'email' => $datos['email'],
+                'telefono' => $datos['telefono'],
+                'dni' => $datos['dni'] ?? null,
+                'direccion' => $datos['direccion'] ?? null,
+                'departamento' => $datos['departamento'] ?? null,
+                'provincia' => $datos['provincia'] ?? null,
+                'distrito' => $datos['distrito'] ?? null,
+                'referencia' => $datos['referencia'] ?? null,
+                'entrega_tipo' => $datos['entrega_tipo'],
+                'comprobante_tipo' => $datos['comprobante_tipo'],
+                'ruc' => $datos['ruc'] ?? null,
+                'razon_social' => $datos['razon_social'] ?? null,
+                'metodo_pago' => $datos['metodo_pago'],
+                'cupon' => $datos['cupon'] ?? null,
+                'subtotal' => $subtotalCentavos / 100,
+                'descuento' => $descuentoCentavos / 100,
+                'total' => $totalCentavos / 100,
                 'estado' => 'pendiente',
             ]);
 
-            foreach ($request->items as $item) {
-                OrderItem::create([
-                    'order_id' => $order->id,
-                    'product_id' => $item['id'],
-                    'cantidad' => $item['cantidad'],
-                    'precio_unitario' => $item['precio'],
-                    'subtotal' => $item['precio'] * $item['cantidad'],
-                ]);
+            foreach ($lineas as $linea) {
+                OrderItem::create(['order_id' => $order->id] + $linea);
             }
 
             DB::commit();
@@ -104,7 +96,51 @@ class OrderController extends Controller
             ], 201);
         } catch (\Exception $e) {
             DB::rollBack();
-            return response()->json(['error' => 'Error al procesar el pedido', 'message' => $e->getMessage()], 500);
+            Log::error('Pedido del portal: ' . $e->getMessage(), ['exception' => $e]);
+
+            // Sin el mensaje interno: la ruta es pública.
+            return response()->json(['error' => 'Error al procesar el pedido'], 500);
         }
+    }
+
+    // El cliente logueado, o el que ya existe con ese correo, o uno nuevo
+    // (invitado, sin contraseña).
+    private function clienteDelPedido(array $datos): Client
+    {
+        if (auth('client')->check()) {
+            return auth('client')->user();
+        }
+
+        $client = Client::where('email', $datos['email'])->first();
+        if ($client) {
+            return $client;
+        }
+
+        // T-068: el portal no manda tipo de documento y la columna es
+        // obligatoria; antes el alta de un invitado fallaba con 500. Con DNI,
+        // primero el cliente que ya lo tiene (índice único de documento).
+        $dni = $datos['dni'] ?? null;
+        if ($dni) {
+            $client = Client::where('type_document', 'DNI')->where('n_document', $dni)->first();
+            if ($client) {
+                return $client;
+            }
+        }
+
+        return Client::create([
+            'name' => $datos['nombres'],
+            'surname' => $datos['apellidos'],
+            'full_name' => $datos['nombres'] . ' ' . $datos['apellidos'],
+            'email' => $datos['email'],
+            'phone' => $datos['telefono'],
+            'type_document' => $dni ? 'DNI' : 'SND',
+            'n_document' => $dni ?: '00000000',
+            'address' => $datos['direccion'] ?? null,
+            'distrito' => $datos['distrito'] ?? null,
+            'provincia' => $datos['provincia'] ?? null,
+            'region' => $datos['departamento'] ?? null,
+            'type_client' => 1,
+            'state' => 1,
+        ]);
     }
 }

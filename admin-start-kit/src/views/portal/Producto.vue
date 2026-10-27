@@ -60,7 +60,7 @@
               </div>
               <!-- Descripción -->
               <div class="tab-pane fade" id="description" role="tabpanel">
-                <div v-html="producto.descripcion || 'Sin descripción disponible.'" class="text-white-50 lh-lg"></div>
+                <div v-html="sanearHtml(producto.descripcion) || 'Sin descripción disponible.'" class="text-white-50 lh-lg"></div>
               </div>
               <!-- Reseñas (mock por ahora) -->
               <div class="tab-pane fade" id="reviews" role="tabpanel">
@@ -211,6 +211,7 @@
 </template>
 
 <script setup lang="ts">
+import { sanearHtml } from '@/helpers/sanearHtml'
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useCarritoStore } from '@/stores/carrito'
