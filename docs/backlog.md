@@ -64,7 +64,6 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 | T-023 | AGE | PDF de cotización con la comparación de hoteles abierta + descuento bien calculado (H4, H10) | por hacer | — | |
 | T-024 | AGE | La comparación de hoteles de una alternativa duplicada es independiente de la original (H1) | por hacer | — | |
 | T-025 | AGE | Cotizador: cada acción verifica que la cotización sea del vendedor (H2) | por hacer | — | |
-| T-026 | TRA | `CampoFecha` muestra el día correcto aunque reciba una fecha con hora y zona (H11) | por hacer | — | |
 | T-027 | AGE | Eliminar un tour clásico en una sola operación (total guardado correcto) + subtotal por destino (H12, H14) | por hacer | — | |
 | T-028 | AGE | La versión vigente de una tarifa: solo se ofrece y se usa la vigente; plantillas de tours a la versión nueva (H5, H16, H17) | por hacer | — | |
 | T-029 | AGE | Tour clásico desde plantilla: cada servicio nace con su tratamiento tributario; costo sin infantes (H18, H19) | bloqueada: espera la decisión de la obs. 10 (tributario deducido por reglas) y al contador | — | |
@@ -148,6 +147,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 
 | ID | Módulo | Qué | Commit |
 |---|---|---|---|
+| T-026 | TRA | CampoFecha toma el día escrito aunque la fecha llegue con hora y zona (antes mostraba un día menos y lo guardaba así) | ver merge de `fix/T-026-campofecha-fecha-iso` |
 | T-038 | VEN | Monto en letras del XML según la moneda (DOLARES en ventas en USD); un solo helper para XML y PDF | ver merge de `fix/T-038-monto-en-letras-moneda` |
 | T-008 | VEN + CAJ | Eliminar una venta anula sus cobros en caja con una corrección (todos los giros) | ver merge de `fix/T-008-eliminar-venta-anula-caja` |
 | T-068 | POR + TRA | Pedido del portal: precios y total calculados en el servidor (y el invitado nuevo ya puede comprar); HTML de usuarios saneado con DOMPurify | `db3f427` |
