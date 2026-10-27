@@ -15,15 +15,15 @@
                 <div class="row g-2 align-items-end">
                     <div class="col-6 col-md-3">
                         <label class="form-label mb-1 small fw-semibold text-secondary">Desde</label>
-                        <CampoFecha v-model="fechaDesde" @update:model-value="list" />
+                        <CampoFecha v-model="fechaDesde" @update:model-value="buscar" />
                     </div>
                     <div class="col-6 col-md-3">
                         <label class="form-label mb-1 small fw-semibold text-secondary">Hasta</label>
-                        <CampoFecha v-model="fechaHasta" @update:model-value="list" />
+                        <CampoFecha v-model="fechaHasta" @update:model-value="buscar" />
                     </div>
                     <div class="col-6 col-md-3">
                         <label class="form-label mb-1 small fw-semibold text-secondary">Estado</label>
-                        <select class="form-select form-select-sm" v-model="estado" @change="list">
+                        <select class="form-select form-select-sm" v-model="estado" @change="buscar">
                             <option value="">Todos</option>
                             <option v-for="(etiqueta, valor) in ETIQUETA_ESTADO" :key="valor" :value="valor">{{ etiqueta }}</option>
                         </select>
@@ -143,9 +143,9 @@
                 <li class="page-item" :class="{ disabled: currentPage === 1 }">
                     <button class="page-link" @click="currentPage > 1 && (currentPage--, list())">Anterior</button>
                 </li>
-                <li class="page-item disabled"><span class="page-link">Página {{ currentPage }}</span></li>
-                <li class="page-item" :class="{ disabled: salidas.length < perPageRows }">
-                    <button class="page-link" @click="currentPage++, list()">Siguiente</button>
+                <li class="page-item disabled"><span class="page-link">Página {{ currentPage }} de {{ totalPaginas }}</span></li>
+                <li class="page-item" :class="{ disabled: currentPage >= totalPaginas }">
+                    <button class="page-link" @click="currentPage < totalPaginas && (currentPage++, list())">Siguiente</button>
                 </li>
             </ul>
         </nav>
@@ -263,7 +263,7 @@ import CampoFecha from '@/components/CampoFecha.vue';
 import SalidaServiciosVehiculos from '@/components/AgenciaViajes/SalidaServiciosVehiculos.vue';
 import SalidaOrdenesServicio from '@/components/AgenciaViajes/SalidaOrdenesServicio.vue';
 import SalidaReprogramar from '@/components/AgenciaViajes/SalidaReprogramar.vue';
-import { ref, onMounted } from 'vue';
+import { computed, ref, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import Swal from 'sweetalert2/dist/sweetalert2.js';
@@ -341,10 +341,12 @@ const volverEstado = (s: SalidaOperativa) => {
 const list = async () => {
     loading.value = true;
     try {
+        // T-043: antes no se mandaba la página y "Siguiente" repetía las mismas 20.
         const res = await salidaOperativaService.listar({
             fecha_desde: fechaDesde.value || undefined,
             fecha_hasta: fechaHasta.value || undefined,
             estado: estado.value || undefined,
+            page: currentPage.value,
         });
         salidas.value = res.salidas;
         total.value = res.total;
@@ -353,6 +355,15 @@ const list = async () => {
     } finally {
         loading.value = false;
     }
+};
+
+const totalPaginas = computed(() => Math.max(1, Math.ceil(total.value / perPageRows.value)));
+
+// Un filtro nuevo vuelve a la primera página (si no, se podía quedar en una
+// página que ya no existe con el filtro nuevo).
+const buscar = () => {
+    currentPage.value = 1;
+    list();
 };
 
 const reset = () => {

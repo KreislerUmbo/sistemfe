@@ -15,7 +15,7 @@ export type OrdenServicio = {
 }
 
 export const salidaOperativaService = {
-  async listar(params: { fecha_desde?: string; fecha_hasta?: string; estado?: string } = {}) {
+  async listar(params: { fecha_desde?: string; fecha_hasta?: string; estado?: string; page?: number } = {}) {
     const response = await httpClient.get<SalidasOperativasResponse>('/salidas-operativas', { params })
     return response.data
   },
