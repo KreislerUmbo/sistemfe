@@ -26,6 +26,9 @@ una sola lista. Se reordena por lo que hace cada persona; retail y Créditos no 
   - Antes de escribir: confirmar cómo arma el árbol `MenuController`/servicio de menú (filtro por
     `giro` y `giros_excluidos`, ocultar un grupo sin hijos visibles, `solo_plataforma`) y si hay un
     seeder del menú que deba quedar igual (fuente de verdad del menú: editar ahí, no solo en datos).
+- **Proveedores de gastos** (`suppliers.index`) va en ADMINISTRACIÓN → Configuración de caja, no
+  se oculta: Caja lo usa como contraparte de egresos. Se retira cuando exista la tabla única de
+  proveedores (Compras, `plan-tours-venta-simple-costo-real.md` §3.7c).
 - Seguimiento y Reportes comerciales: se agregan aquí si sus rutas ya existen; si no, lo hacen
   T-051 y T-062 en el grupo VENTAS.
 - Frontend:

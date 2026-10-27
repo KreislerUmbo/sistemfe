@@ -1055,7 +1055,8 @@ FINANZAS        Comprobantes ▸ Mis ventas · Notas de crédito/débito
 CATÁLOGOS       Tours y paquetes · Proveedores · Destinos · Guías · Temporadas
 ADMINISTRACIÓN  Configuración de agencia
                 Empresa y sucursales ▸ Datos de la empresa · Sucursales
-                Configuración de caja ▸ Cajas · Métodos de pago · Conceptos de caja
+                Configuración de caja ▸ Cajas · Métodos de pago · Conceptos de caja ·
+                                        Proveedores de gastos (hasta la tabla única, ver abajo)
                 Series y numeración ▸ Series de comprobantes · Códigos de agencia
                 Usuarios y permisos ▸ Usuarios · Roles y permisos
 AYUDA           Manuales y videos
@@ -1067,9 +1068,15 @@ AYUDA           Manuales y videos
   caja"; se agregan las opciones de configuración de caja que faltaban.
 - **Se ocultan para Agencia:** Productos, Categorías (los 5 productos internos de facturación de
   reservas se buscan por SKU: editarlos o borrarlos rompería la facturación), Cotizaciones
-  comerciales, Proveedores de gastos (no se usa en otra pantalla; lo reemplazará Compras, que
-  entrará en FINANZAS), Portal web. También el botón "Nueva Venta" de Mis ventas (vende productos
-  de retail).
+  comerciales, Portal web. También el botón "Nueva Venta" de Mis ventas (vende productos de
+  retail).
+- **Corrección (27-oct-2026): Proveedores de gastos NO se oculta todavía.** Se había dicho que no
+  lo usaba otra pantalla; es falso: el movimiento manual de Caja (Turno activo → egreso a un
+  proveedor) busca en `suppliers` (`CashMovementController`). Ocultarlo dejaría a la agencia sin
+  poder crear esos proveedores. Queda en "Configuración de caja" hasta que exista la **tabla única
+  `proveedores`** (`plan-tours-venta-simple-costo-real.md` §3.7c, decidida 14-oct-2026, fase 3 /
+  Compras): ese día `suppliers` se retira, Caja busca en `proveedores` y la entrada desaparece
+  (todo queda en CATÁLOGOS → Proveedores).
 - Retail y Créditos no cambian. Submenús de pantallas comunes con el nombre que muestra la
   pantalla; las pantallas propias de Agencia ajustan su título al menú.
 - **Tarea:** T-063.
