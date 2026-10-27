@@ -382,6 +382,12 @@
                                     <span v-if="itemsFacturadosIds.includes(it.id)" class="badge bg-success-subtle text-success border ms-2">
                                         <i class="fas fa-file-invoice me-1"></i>Facturado
                                     </span>
+                                    <!-- T-042: el servicio quedó en una salida cancelada (una sola por tour y fecha). -->
+                                    <router-link v-if="it.salida_operativa?.estado === 'cancelada'" :to="`/agencia-viajes/salidas/${it.salida_operativa_id}`"
+                                        class="badge bg-danger-subtle text-danger border ms-2 text-decoration-none"
+                                        title="La salida de este servicio está cancelada: reactívala desde Salidas o reprograma la reserva">
+                                        <i class="fas fa-ban me-1"></i>Salida cancelada
+                                    </router-link>
                                     <span v-if="(it.veces_reasignado_mayorista ?? 0) > 0" class="badge bg-info-subtle text-info-emphasis border ms-2"
                                         :title="it.motivo_reasignacion_mayorista ?? ''">
                                         <i class="fas fa-right-left me-1"></i>Mayorista reasignado {{ it.veces_reasignado_mayorista }}x
@@ -1209,6 +1215,7 @@ const sincronizarItems = async () => {
         total.value = res.total;
         itemsPendientesSincronizar.value = res.items_pendientes_sincronizar ?? [];
         toast.success(res.message);
+        avisarSalidasCanceladas(res.avisos_salida_cancelada);
     } catch (error: any) {
         toast.error(error.response?.data?.message ?? 'No se pudo sincronizar');
     } finally {
@@ -1602,15 +1609,21 @@ const guardarHoraDeTarjeta = async (it: ReservaItem) => {
     }
 };
 
+// T-042: aviso (sin bloquear) cuando un servicio quedó en una salida cancelada.
+const avisarSalidasCanceladas = (avisos?: string[]) => {
+    (avisos ?? []).forEach((aviso) => toast.warning(aviso));
+};
+
 const guardarItem = async (it: ReservaItem) => {
     try {
-        await reservaItemService.actualizar(it.id, {
+        const res = await reservaItemService.actualizar(it.id, {
             guia_id: it.guia_id ?? null,
             proveedor_tarifa_id: it.proveedor_tarifa_id ?? null,
             fecha: it.fecha ?? null,
             hora: it.hora ?? null,
         });
         toast.success('Servicio actualizado');
+        avisarSalidasCanceladas(res?.avisos_salida_cancelada);
     } catch (error: any) {
         toast.error(error.response?.data?.message ?? 'No se pudo actualizar el servicio');
     }
@@ -1807,6 +1820,7 @@ const confirmarReprogramacion = async () => {
         avisosTemporadaReprogramacion.value = res.avisos_temporada ?? [];
         mostrarModalReprogramar.value = false;
         toast.success(res.message);
+        avisarSalidasCanceladas(res.avisos_salida_cancelada);
     } catch (error: any) {
         toast.error(error.response?.data?.message ?? 'No se pudo reprogramar la reserva');
     } finally {

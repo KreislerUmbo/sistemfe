@@ -94,6 +94,8 @@ class ReservaItemController extends Controller
             'code' => 200,
             'message' => 'Ítem actualizado correctamente',
             'reserva_item' => $item->fresh(['alternativaItem', 'guia', 'proveedorTarifa']),
+            // T-042: con la fecha nueva pudo caer en una salida cancelada.
+            'avisos_salida_cancelada' => $cambiaFecha ? SalidaOperativa::avisosCanceladas($reserva->id) : [],
         ]);
     }
 

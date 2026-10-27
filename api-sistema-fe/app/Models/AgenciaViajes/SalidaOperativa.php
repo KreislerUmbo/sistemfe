@@ -101,6 +101,29 @@ class SalidaOperativa extends Model
     // borra acá, puede seguir compartida por otras reservas") sigue siendo
     // la razón correcta de NO borrar siempre — este helper solo cubre el
     // caso real de que NO quedó compartida por nadie.
+    // T-042 (H35): hay una sola salida compartida por tour y fecha, y la
+    // cancelada sigue siendo esa: una reserva nueva de ese tour y fecha (o una
+    // reprogramada hacia ese día) cae en ella. Esto no la reactiva ni bloquea:
+    // avisa, para que alguien decida.
+    public static function avisosCanceladas(int $reservaId): array
+    {
+        return self::where('estado', self::ESTADO_CANCELADA)
+            ->whereHas('reservaItems', fn ($q) => $q->where('reserva_id', $reservaId))
+            ->with('tourOrigen')
+            ->orderBy('fecha')
+            ->get()
+            ->map(fn (self $salida) => $salida->avisoCancelada())
+            ->values()
+            ->all();
+    }
+
+    public function avisoCancelada(): string
+    {
+        $tour = $this->tourOrigen?->nombre ?? 'el tour';
+
+        return "La salida de {$tour} del {$this->fecha->format('d/m/Y')} está cancelada: reactívala desde Salidas o reprograma la reserva.";
+    }
+
     public static function eliminarSiQuedoVacia(?int $salidaId): void
     {
         if ($salidaId === null) {

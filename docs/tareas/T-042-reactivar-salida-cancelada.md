@@ -68,9 +68,30 @@ cd admin-start-kit && npm run type-check
 ---
 
 ## Resultado
-- **Commits:**
-- **Tests:** (nuevos / suite completa)
-- **Desviaciones de la tarea y por qué:**
+- **Commits:** rama `fix/T-042-salida-cancelada` (ver `git log`).
+- **Tests:** en `Fila13Fase2aSalidasTest`, la prueba que esperaba "una cancelada no vuelve" se
+  reemplazó por 3: reactivar (servicios a "Por reservar"), solo a programada y nunca si ya pasó,
+  y una reserva nueva que cae en la salida cancelada trae el aviso (y no la reactiva). Suite
+  completa 1553 en verde; `type-check` con los 46 errores previos.
+- **Prueba funcional (agencia-demo, salida 8 del 01/11 de la reserva 12):** cancelada → la ficha
+  de la reserva (pestaña Servicios) marca "Salida cancelada" con enlace a la salida y la
+  respuesta trae el aviso; en el tablero, "Reactivar salida" con confirmación → "Salida
+  reactivada…" y vuelve a Programada (estado original restaurado).
+- **Cómo quedó:**
+  - `cambiarEstado()`: cancelada → programada; 422 si la fecha ya pasó; en la misma transacción
+    sus servicios pasan a "Por reservar". Otros cambios desde cancelada siguen en 422.
+  - `SalidaOperativa::avisosCanceladas($reservaId)` / `avisoCancelada()`: un solo texto.
+  - Avisos: `respuestaDetalle()` lleva `avisos_salida_cancelada` (cubre aceptar, sincronizar,
+    reprogramar la reserva y ver la ficha); `ReservaItemController::update()` al cambiar la
+    fecha; reprogramar la salida suma el aviso a `avisos` si la del día nuevo está cancelada.
+  - Pantallas: toast de advertencia tras aceptar (cotizador), sincronizar, reprogramar y guardar
+    un servicio (ficha), sin pedir confirmación; marca "Salida cancelada" en la tarjeta del
+    servicio; botón "Reactivar salida" en el detalle de la salida (solo si no pasó la fecha).
+  - Comentario de `SalidaOperativaController::cancelar()` corregido.
+- **Desviaciones de la tarea y por qué:** el aviso va en `respuestaDetalle()` (todas las
+  respuestas de la ficha) en vez de devolverlo desde `SalidaEngancheService::enganchar()`: un
+  solo punto cubre las cuatro acciones; la pantalla decide cuándo mostrarlo (solo tras una
+  acción, no al abrir la ficha).
 
 ## Hallazgos fuera de alcance
-- 
+- Ninguno.

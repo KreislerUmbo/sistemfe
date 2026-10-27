@@ -115,8 +115,9 @@ class SalidaOperativaController extends Controller
 
         // A propósito: NO cancela ni toca ninguna reserva enganchada. Es
         // plata de un cliente, cada una se resuelve a mano — la salida
-        // cancelada solo queda como aviso visual en el tablero y en cada
-        // reserva enganchada (ver reservas/detalle.vue).
+        // cancelada queda marcada en el tablero y en cada servicio enganchado
+        // de la ficha de la reserva ("Salida cancelada", T-042). Se puede
+        // reactivar con cambiarEstado() (cancelada → programada).
         return response()->json(['code' => 200, 'message' => 'Salida marcada como cancelada. Las reservas enganchadas no se modificaron — revísalas una por una.']);
     }
 
@@ -144,11 +145,17 @@ class SalidaOperativaController extends Controller
             SalidaOperativa::ESTADO_PROGRAMADA => [SalidaOperativa::ESTADO_CONFIRMADA],
             SalidaOperativa::ESTADO_CONFIRMADA => [SalidaOperativa::ESTADO_PROGRAMADA, SalidaOperativa::ESTADO_REALIZADA],
             SalidaOperativa::ESTADO_REALIZADA => [SalidaOperativa::ESTADO_CONFIRMADA],
-            SalidaOperativa::ESTADO_CANCELADA => [],
+            // T-042 (H35): "Reactivar salida". Solo a mano, nunca sola.
+            SalidaOperativa::ESTADO_CANCELADA => [SalidaOperativa::ESTADO_PROGRAMADA],
         ];
 
         if (! in_array($nuevo, $permitidos[$salida->estado] ?? [], true)) {
             return response()->json(['code' => 422, 'message' => "Una salida {$salida->estado} no puede pasar a {$nuevo}."], 422);
+        }
+
+        $reactivar = $salida->estado === SalidaOperativa::ESTADO_CANCELADA;
+        if ($reactivar && $salida->fecha->lt(HoraPeru::hoy())) {
+            return response()->json(['code' => 422, 'message' => 'La salida ya pasó: no tiene sentido reactivarla.'], 422);
         }
 
         // Realizada = ya se hizo: no puede ser una salida de una fecha futura.
@@ -156,10 +163,21 @@ class SalidaOperativaController extends Controller
             return response()->json(['code' => 422, 'message' => 'La salida todavía no llega a su fecha: no se puede marcar como realizada.'], 422);
         }
 
-        $salida->update(['estado' => $nuevo]);
+        DB::transaction(function () use ($salida, $nuevo, $reactivar) {
+            $salida->update(['estado' => $nuevo]);
+
+            // Al cancelar pudieron liberarse con el proveedor: se vuelven a reservar.
+            if ($reactivar) {
+                $salida->servicios()->update(['estado' => SalidaServicio::ESTADO_POR_RESERVAR]);
+            }
+        });
         $salida->load(self::RELACIONES);
 
-        return response()->json(['code' => 200, 'message' => 'Estado de la salida actualizado.', 'salida' => $this->resumenSalida($salida, true)]);
+        return response()->json([
+            'code' => 200,
+            'message' => $reactivar ? 'Salida reactivada: vuelve a reservar sus servicios con los proveedores.' : 'Estado de la salida actualizado.',
+            'salida' => $this->resumenSalida($salida, true),
+        ]);
     }
 
     // GET salidas-operativas/{id}/ordenes — fila 13, fase 2c (D14): la orden
@@ -309,6 +327,10 @@ class SalidaOperativaController extends Controller
         }
         if ($aCancelar->isNotEmpty()) {
             $avisos[] = $aCancelar->count().' reserva(s) cancelada(s): revisa las cantidades con cada proveedor.';
+        }
+        // T-042: el día nuevo ya tenía una salida cancelada y las reservas cayeron en ella.
+        if ($resultado['nueva']?->estado === SalidaOperativa::ESTADO_CANCELADA) {
+            $avisos[] = $resultado['nueva']->avisoCancelada();
         }
 
         return response()->json([

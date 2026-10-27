@@ -7,6 +7,7 @@ use App\Http\Controllers\AgenciaViajes\SalidaOperativaController;
 use App\Models\AgenciaViajes\PaquetePlantillaItem;
 use App\Models\AgenciaViajes\ReservaItem;
 use App\Models\AgenciaViajes\SalidaOperativa;
+use App\Models\AgenciaViajes\SalidaServicio;
 use App\Services\AgenciaViajes\AsignacionOperativa;
 use App\Services\HoraPeru;
 use Illuminate\Http\Request;
@@ -103,15 +104,50 @@ class Fila13Fase2aSalidasTest extends TestCase
         $this->assertSame(200, $cambiar('confirmada')->getStatusCode()); // deshacer un paso
     }
 
-    public function test_una_salida_cancelada_no_vuelve_por_cambiar_estado(): void
+    // T-042 (H35): antes una salida cancelada no volvía nunca, y como hay una
+    // sola por tour y fecha, las reservas nuevas de ese día caían en ella.
+    public function test_una_salida_cancelada_se_reactiva_y_sus_servicios_vuelven_a_por_reservar(): void
     {
         $salida = $this->salidaDe($this->reservaConTour($this->crearTour(), [['adulto', 40]]));
+        $servicio = SalidaServicio::create([
+            'salida_operativa_id' => $salida->id, 'nombre' => 'Almuerzo', 'estado' => SalidaServicio::ESTADO_RESERVADO, 'orden' => 1,
+        ]);
         app(SalidaOperativaController::class)->cancelar((string) $salida->id);
 
         $respuesta = app(SalidaOperativaController::class)->cambiarEstado(new Request(['estado' => 'programada']), (string) $salida->id);
 
-        $this->assertSame(422, $respuesta->getStatusCode());
+        $this->assertSame(200, $respuesta->getStatusCode(), json_encode($respuesta->getData(true)));
+        $this->assertSame(SalidaOperativa::ESTADO_PROGRAMADA, $salida->fresh()->estado);
+        $this->assertSame(SalidaServicio::ESTADO_POR_RESERVAR, $servicio->fresh()->estado);
+    }
+
+    public function test_cancelada_solo_vuelve_a_programada_y_no_si_ya_paso(): void
+    {
+        $salida = $this->salidaDe($this->reservaConTour($this->crearTour(), [['adulto', 40]]));
+        app(SalidaOperativaController::class)->cancelar((string) $salida->id);
+        $cambiar = fn (string $estado) => app(SalidaOperativaController::class)->cambiarEstado(new Request(['estado' => $estado]), (string) $salida->id);
+
+        $this->assertSame(422, $cambiar('confirmada')->getStatusCode());
+        $this->assertSame(422, $cambiar('realizada')->getStatusCode());
+
+        $salida->update(['fecha' => \Carbon\Carbon::parse(HoraPeru::hoyTexto())->subDay()->toDateString()]);
+        $this->assertSame(422, $cambiar('programada')->getStatusCode(), 'una salida que ya pasó no se reactiva');
         $this->assertSame(SalidaOperativa::ESTADO_CANCELADA, $salida->fresh()->estado);
+    }
+
+    public function test_una_reserva_que_cae_en_una_salida_cancelada_lo_avisa(): void
+    {
+        $tour = $this->crearTour();
+        $salida = $this->salidaDe($this->reservaConTour($tour, [['adulto', 40]]));
+        app(SalidaOperativaController::class)->cancelar((string) $salida->id);
+
+        $nueva = $this->reservaConTour($tour, [['adulto', 30]]);
+        $detalle = app(ReservaController::class)->show((string) $nueva->id)->getData(true);
+
+        $this->assertSame($salida->id, $this->salidaDe($nueva)->id, 'cae en la misma salida, no la reactiva');
+        $this->assertSame(SalidaOperativa::ESTADO_CANCELADA, $salida->fresh()->estado);
+        $this->assertCount(1, $detalle['avisos_salida_cancelada']);
+        $this->assertStringContainsString('está cancelada', $detalle['avisos_salida_cancelada'][0]);
     }
 
     // ═══════════════════════════════════════════════════════════════
