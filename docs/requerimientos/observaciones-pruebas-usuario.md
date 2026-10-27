@@ -931,6 +931,49 @@ permiso, no como solución permanente.
    los usuarios de producción y daría una línea de base para comparar antes y después de las
    tareas.
 
+### 15. Revisión del Reporte operativo (27-oct-2026)
+
+**Pedido del usuario:** revisar el Reporte operativo y proponer mejoras.
+
+**Revisado:** `ReporteOperativoController`, `AsignacionOperativa`, `reporte-operativo/index.vue`,
+`ReservaItemController::update()`, contra datos de agencia-demo.
+
+| ID | Prioridad | Qué pasa | Dónde |
+|---|---|---|---|
+| H53 | **Alta** (confirmado con datos) | **El reporte muestra el proveedor cotizado, no el de la reserva.** Proveedor, hotel, servicio, destino y los filtros salen de `alternativa_item.proveedor_tarifa_id`; la reserva guarda el real en `reserva_items.proveedor_tarifa_id` (lo cambian reasignar proveedor y reasignar hotel). Efectos: (a) reasignar el proveedor desde el reporte dice "Proveedor actualizado" y la celda sigue mostrando el anterior si es otro proveedor; (b) un servicio al que se le quitó el proveedor muestra el cotizado y a la vez cuenta como "sin asignar" (agencia-demo: ítems 14 "Turismo Selva", 24 "Guía Provisional" y 53 "Cumbaza Hotel"); (c) tras reasignar un hotel, el reporte y el PDF que se reparte al equipo de campo dicen el hotel viejo. | `armarFila()`, `filtrosDisponibles()`, `aplicarFiltrosDimension()` |
+| H54 | **Alta** | **El hotel solo aparece el día de entrada.** Una estadía de 3 noches es un solo ítem con la fecha de entrada (`cantidad` = noches). Los días 2 y 3 la columna "Hotel" queda vacía (el guía no sabe dónde recoger al pasajero) y el día de salida no aparece. | `hotelDelDiaPorPasajero()` |
+| H55 | Media-alta (a confirmar) | **Facturada la reserva, no se puede cambiar nada operativo.** `ReservaItemController::update()` rechaza con "ya fue facturado" cambiar proveedor, guía, fecha u hora. Ninguno cambia lo facturado al cliente (el precio vive en la alternativa). En agencia-demo, 4 de 10 reservas activas ya están facturadas: lo normal es cobrar antes del viaje. | `ReservaItemController::update()` |
+| H56 | Media | **Ve todas las reservas quien solo puede ver las suyas.** El reporte pide `reservas.ver` o `reservas.ver_todas`, pero no filtra: un vendedor con solo `reservas.ver` ve nombres y documentos de los pasajeros de todas las reservas. Cambiar algo sí pasa por `ReservaPolicy`. | rutas `reporte-operativo*` |
+| H57 | Media | **Un tour no muestra su operación.** La fila de un tour dice solo "Tour completo": no muestra el guía ni el vehículo de su salida (el dato ya viene en la fila), no enlaza a la salida, y si cuenta como "sin asignar" no dice por qué (sin salida, salida cancelada, sin guía, servicio sin proveedor). | `index.vue` |
+| H58 | Media | **Ajustes de uso** (ya listados al cerrar 11d y nunca priorizados): acceso rápido "Mañana"; buscar por pasajero o código de reserva; check-in de todos los pasajeros de un servicio; los filtros se pierden al ir a una reserva y volver; el contador "x/y check-in" cuenta filas (pasajero × servicio), no pasajeros. | `index.vue` |
+| H59 | Baja | **Rango sin control.** "Hasta" antes de "Desde" devuelve vacío sin aviso; una fecha inválida da 500; un rango de meses trae todo sin paginar y `filtrosDisponibles()` carga todos los ítems con sus relaciones solo para armar las opciones. Con más datos se pondrá lento. | `resolverRangoFechas()` |
+
+Además: la lista de guías del reporte se corta en 15 (entra en T-039), y la biblioteca completa de
+tarifas se carga al abrir la pantalla para el buscador de proveedor (mismo caso: buscar contra el
+servidor, `ProveedorBuscador`). El check-in en su propia tabla ya es T-041.
+
+**Propuesta (a aprobar):**
+1. **H53:** el reporte lee el proveedor real del ítem de la reserva (y su servicio, destino y
+   hotel); los filtros, igual. Sin proveedor → "Sin asignar", sin nombre. Test con un ítem
+   reasignado y uno sin proveedor.
+2. **H54:** una estadía se reparte en sus noches: "Hotel" en cada día de la estadía y una fila
+   "Salida del hotel" el último día (con la hora de checkout del hotel, si está cargada).
+3. **H55:** después de facturar se puede cambiar proveedor, guía, fecha y hora (no cambian el
+   comprobante). Sigue bloqueado lo que cambia el precio.
+4. **H56:** el reporte muestra todas las reservas solo con `reservas.ver_todas`; con
+   `reservas.ver`, solo las propias (mismo criterio que el listado de reservas).
+5. **H57:** la fila de un tour muestra guía y vehículo de su salida, enlace "Ver salida" y el
+   motivo cuando está pendiente.
+6. **H58 + H59:** "Mañana", búsqueda por pasajero o código, "Check-in a todos" por servicio,
+   filtros recordados, contador por pasajero; "Hasta" no anterior a "Desde" y rango máximo de
+   31 días.
+
+**Preguntas para el usuario:**
+1. H55: después de facturar, ¿se debe poder cambiar proveedor, guía, fecha y hora de un servicio?
+2. H56: ¿quién usa el reporte? ¿Un vendedor debe ver solo sus reservas, o el reporte es de
+   operaciones y todos ven todo?
+3. ¿Hacemos los seis puntos, o alguno queda para después?
+
 ---
 
 ## Orden de construcción propuesto (a aprobar)
