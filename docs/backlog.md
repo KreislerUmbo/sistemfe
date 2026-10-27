@@ -8,7 +8,7 @@
 
 Cada línea: ID · qué · estado · depende de · rama o commit. El detalle está en
 `docs/tareas/T-…md` (se borra al cerrar; para una tarea hecha, el commit es la referencia).
-Próximo ID libre: **T-045**.
+Próximo ID libre: **T-050**.
 
 ## Activas
 
@@ -58,6 +58,11 @@ Próximo ID libre: **T-045**.
 | T-042 | AGE | Reactivar una salida cancelada y avisar cuando una reserva cae en una (H35) | por hacer | — | |
 | T-043 | AGE | Tablero de salidas: "Siguiente" cambia de página de verdad (H36) | por hacer | — | |
 | T-044 | AGE | Aviso cuando un guía o un chofer ya tiene otra salida ese día (H38) | por hacer | — | |
+| T-045 | AGE | Venta directa: total en vivo, modo de precio claro y fecha por defecto hoy (H42, H44) | por hacer | — | |
+| T-046 | AGE | Venta directa: pasajeros rápidos con residencia y el cliente como primer pasajero (H43) | por hacer | — | |
+| T-047 | AGE | Venta directa: vender un tour del catálogo, enganchado a la salida del día (H41) | por hacer | T-045, T-046 | |
+| T-048 | AGE + CAJ | Venta directa: "Crear y cobrar" en un solo paso (H45) | por hacer | T-011 | |
+| T-049 | AGE | Venta directa: varias líneas en la misma venta y destino del árbol (H46, H47) | por hacer | T-047 | |
 
 ## Por analizar
 
@@ -79,7 +84,7 @@ Próximo ID libre: **T-045**.
 | AGE | **Obs. 11 — entrada separada al cotizador** ("tours y servicios" / "paquete de mayorista"): en espera, el usuario lo decide tras evaluar a los usuarios. Ya hecho: solo el renombre de las pestañas | `docs/requerimientos/observaciones-pruebas-usuario.md` §11, 26-oct-2026 |
 | AGE | **Revisión de reservas (26-oct)** H31-H34 (H29 → T-040, H30 → T-041): reasignar mayorista no mueve el cupo (H31), reserva cancelada sin camino de vuelta, ver T-030 (H32), pasajero agregado sin residencia (H33), 500 en carrera de facturación externa (H34). Falta la prueba en vivo | `docs/requerimientos/observaciones-pruebas-usuario.md`, "Revisión de reservas" |
 | AGE | **Revisión de salidas operativas (26-oct)** H39-H40 (H35 → T-042, H36 → T-043, H37 → T-040, H38 → T-044): servicio quitado vuelve solo cuando se engancha otra reserva (H39), desenganchar sin revisiones ni ReservaPolicy (H40) | `docs/requerimientos/observaciones-pruebas-usuario.md`, "Revisión de salidas operativas" |
-| AGE | **Obs. 12 — Venta directa para mostrador** (H41-H47): vender un tour (H41, alta: hoy no se puede y nunca se engancha a una salida), total en vivo y modo de precio (H42, alta: puede cobrar de menos), pasajeros rápidos, fecha por defecto hoy, "Crear y cobrar", varias líneas, destino del árbol. Propuesta en espera de las 3 preguntas | `docs/requerimientos/observaciones-pruebas-usuario.md` §12, 26-oct-2026 |
+| AGE | **Obs. 12 — Venta directa** (H41-H47 → T-045 a T-049): solo queda la pregunta 3, ¿vender un paquete de varios días por venta directa? (sin decidir) | `docs/requerimientos/observaciones-pruebas-usuario.md` §12, 27-oct-2026 |
 | CAJ + NOT | Devolver dinero al cliente por una NC sin volver a facturar (hoy la NC no mueve la caja en ningún giro) | revisión de fallos de las observaciones, 25-oct-2026 |
 | TRA | Sesión por inactividad: hoy el JWT vence a la hora fija desde el login (`JWT_TTL`, 60 min por defecto) y el aviso sale 2 min antes **aunque el usuario esté trabajando**. Propuesta: renovar en silencio mientras hay actividad y mostrar el aviso solo tras N minutos sin uso (falta decidir N). Solo frontend: `helpers/sessionExpiryWatcher.ts` + `helpers/http-client.ts`; `auth/refresh` ya existe | pregunta del usuario, 24-oct-2026 |
 
