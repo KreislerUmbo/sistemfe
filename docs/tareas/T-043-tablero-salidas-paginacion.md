@@ -50,9 +50,17 @@ cd admin-start-kit && npm run type-check
 ---
 
 ## Resultado
-- **Commits:**
-- **Tests:** (nuevos / suite completa)
-- **Desviaciones de la tarea y por qué:**
+- **Commits:** rama `fix/T-043-salidas-paginacion` (ver `git log`).
+- **Tests:** solo frontend; `type-check` con los mismos 46 errores previos y `build` correcto.
+- **Prueba funcional (agencia-demo, 31 salidas temporales en el rango por defecto, borradas al
+  terminar; ninguna quedó enganchada):** 36 salidas en el rango → página 1 con 20, "Página 1 de
+  2"; "Siguiente" → página 2 con las 16 restantes y "Siguiente" deshabilitado; cambiar el
+  filtro de estado desde la página 2 vuelve a la página 1.
+- **Cómo quedó:** `salidaOperativaService.listar()` acepta `page`; `list()` manda
+  `currentPage`; los filtros (fechas y estado) llaman a `buscar()`, que vuelve a la página 1;
+  "Siguiente" se deshabilita con `currentPage >= totalPaginas` (antes miraba
+  `salidas.length < 20`); se muestra "Página N de M".
+- **Desviaciones de la tarea y por qué:** ninguna.
 
 ## Hallazgos fuera de alcance
-- 
+- Ninguno.
