@@ -1019,7 +1019,24 @@ acciones con responsable; motivo de ganancia; reportes de conversión por origen
 Orden sugerido: C1 → C2 → C3 (lo que ya estaba aprobado en la obs. 13, ahora por cliente),
 después C4, C5 y C6. Cada fase se puede usar sola.
 
-**Preguntas para el usuario:**
+**Respuestas del usuario (27-oct-2026):**
+1. **Sí:** T-050 a T-053 se rehacen como fases del CRM (mismos ID, alcance nuevo).
+2. **Sí:** origen en cada consulta/cotización; el cliente guarda el de su primer contacto.
+3. **Sin responsable fijo** (decidido con el usuario): el personal tiene contratos de 3 a 6 meses
+   y una asignación fija queda vieja enseguida. En su lugar: el vendedor de cada cotización (ya
+   existe), el responsable de cada próxima acción, la ficha muestra **"Atendido por última vez
+   por…"** (calculado, no guardado), y una herramienta para **pasar el trabajo abierto de un
+   usuario que se va** (cotizaciones abiertas y acciones pendientes) a otro, con aviso al
+   administrador cuando un usuario desactivado deja pendientes.
+4. **Preferencias:** las propuestas; se ajustan con el uso.
+5. **Solo Agencia por ahora.** Las tablas generales (actividades, acciones, origen) van en el
+   núcleo, con la referencia a cotización o reserva sin FK, para que retail las use después.
+
+**Tareas (aprobadas 27-oct-2026):** C1 = T-050, C2 = T-051, C3 = T-052, C4 = T-059, C5 = T-060,
+C6 = T-053 (listado) y T-062 (reportes), y T-061 (trabajo de un usuario que se va). Estado en
+`docs/backlog.md`.
+
+**Preguntas para el usuario (originales):**
 1. ¿Rehacemos T-050 a T-053 como fases C1, C2, C3 y C6 del CRM (recomendado), o se construyen
    como están y el CRM va después?
 2. Origen de contacto: ¿en cada consulta/cotización (un cliente antiguo puede volver por otro

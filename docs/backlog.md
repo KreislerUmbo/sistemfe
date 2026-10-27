@@ -8,7 +8,7 @@
 
 Cada línea: ID · qué · estado · depende de · rama o commit. El detalle está en
 `docs/tareas/T-…md` (se borra al cerrar; para una tarea hecha, el commit es la referencia).
-Próximo ID libre: **T-059**.
+Próximo ID libre: **T-063**.
 
 ## Activas
 
@@ -63,15 +63,19 @@ Próximo ID libre: **T-059**.
 | T-047 | AGE | Venta directa: vender un tour del catálogo, enganchado a la salida del día (H41) | por hacer | T-045, T-046 | |
 | T-048 | AGE + CAJ | Venta directa: "Crear y cobrar" en un solo paso (H45) | por hacer | T-011 | |
 | T-049 | AGE | Venta directa: varias líneas en la misma venta y destino del árbol (H46, H47) | por hacer | T-047 | |
-| T-050 | AGE | Cotización: enviar por WhatsApp u otro medio, y el historial de seguimiento (H48, H49) | por hacer | — | |
-| T-051 | AGE | Cotización: notas de contacto y próximo contacto (H50) | por hacer | T-050 | |
-| T-052 | AGE | Cotización: cerrar como perdida con motivo (H51) | por hacer | T-050 | |
-| T-053 | AGE | Listado de cotizaciones e Inicio con el seguimiento a la vista (H52) | por hacer | T-051, T-052 | |
+| T-050 | CLI + AGE | CRM C1: historial de actividades del cliente y "Enviar" la cotización (H48, H49) | por hacer | — | |
+| T-051 | CLI + AGE | CRM C2: próximas acciones y "Mis pendientes de hoy" (H50) | por hacer | T-050 | |
+| T-052 | AGE | CRM C3: por qué se ganó o se perdió la venta (H51) | por hacer | T-050 | |
+| T-053 | AGE | CRM C6a: listado de cotizaciones con el seguimiento a la vista (H52) | por hacer | T-051, T-052 | |
 | T-054 | AGE | Reporte operativo: mostrar el proveedor real de la reserva, no el cotizado (H53) | por hacer | — | |
 | T-055 | AGE | Reporte operativo: el hotel en cada noche de la estadía (H54) | por hacer | T-054 | |
 | T-056 | AGE | Cambiar proveedor, guía, fecha, hora y hotel después de facturar (H55) | por hacer | — | |
 | T-057 | AGE | Reporte operativo: el tour muestra su salida, guía, vehículo y por qué está pendiente (H57) | por hacer | — | |
 | T-058 | AGE | Reporte operativo: "Mañana", búsqueda, check-in a todos, filtros recordados y rango controlado (H58, H59) | por hacer | T-041 | |
+| T-059 | CLI + AGE | CRM C4: "Nueva consulta" y origen de contacto | por hacer | T-050 | |
+| T-060 | CLI + AGE | CRM C5: la ficha del cliente con preferencias del viajero y línea de tiempo | por hacer | T-050, T-051 | |
+| T-061 | CLI + AGE | CRM: pasar el trabajo abierto de un usuario que se va | por hacer | T-051 | |
+| T-062 | AGE | CRM C6b: reportes de conversión, origen, vendedor y motivos | por hacer | T-052, T-059 | |
 
 ## Por analizar
 
@@ -94,9 +98,9 @@ Próximo ID libre: **T-059**.
 | AGE | **Revisión de reservas (26-oct)** H31-H34 (H29 → T-040, H30 → T-041): reasignar mayorista no mueve el cupo (H31), reserva cancelada sin camino de vuelta, ver T-030 (H32), pasajero agregado sin residencia (H33), 500 en carrera de facturación externa (H34). Falta la prueba en vivo | `docs/requerimientos/observaciones-pruebas-usuario.md`, "Revisión de reservas" |
 | AGE | **Revisión de salidas operativas (26-oct)** H39-H40 (H35 → T-042, H36 → T-043, H37 → T-040, H38 → T-044): servicio quitado vuelve solo cuando se engancha otra reserva (H39), desenganchar sin revisiones ni ReservaPolicy (H40) | `docs/requerimientos/observaciones-pruebas-usuario.md`, "Revisión de salidas operativas" |
 | AGE | **Obs. 12 — Venta directa** (H41-H47 → T-045 a T-049): solo queda la pregunta 3, ¿vender un paquete de varios días por venta directa? (sin decidir) | `docs/requerimientos/observaciones-pruebas-usuario.md` §12, 27-oct-2026 |
-| AGE | **Obs. 13 — Seguimiento de cotizaciones** (H48-H52 → T-050 a T-053): quedan para después el enlace para el cliente ("abrió la cotización") y el reporte de conversión por motivo | `docs/requerimientos/observaciones-pruebas-usuario.md` §13, 27-oct-2026 |
+| AGE | **Obs. 13 — Seguimiento de cotizaciones** (H48-H52): absorbida por el CRM (obs. 16); queda para después el enlace para el cliente ("abrió la cotización") | `docs/requerimientos/observaciones-pruebas-usuario.md` §13, 27-oct-2026 |
 | AGE | **Obs. 15 — Reporte operativo** (H53-H59 → T-054 a T-058): H56 sin tarea, por ahora todos ven todo en solo lectura; si una agencia pide restringir, por usuario (supervisores y administradores ven todo) | `docs/requerimientos/observaciones-pruebas-usuario.md` §15, 27-oct-2026 |
-| AGE + CLI | **Obs. 16 — CRM práctico** (consulta rápida, origen de contacto, vendedor, preferencias, historial por cliente, próximas acciones, motivo de ganancia y pérdida, reportes): propuesta en 6 fases C1-C6, que absorbería T-050 a T-053. En espera de 5 preguntas | `docs/requerimientos/observaciones-pruebas-usuario.md` §16, 27-oct-2026 |
+| AGE + CLI | **Obs. 16 — CRM práctico** (→ T-050 a T-053, T-059 a T-062): solo Agencia por ahora; sin responsable fijo del cliente (rotación de personal) | `docs/requerimientos/observaciones-pruebas-usuario.md` §16, 27-oct-2026 |
 | PLA | **Obs. 14 — Módulo de uso del sistema** (solo UmboSystem; qué se usa, dónde se traban, qué es lento): **en espera** hasta avanzar las tareas pendientes, por decisión del usuario | `docs/requerimientos/observaciones-pruebas-usuario.md` §14, 27-oct-2026 |
 | CAJ + NOT | Devolver dinero al cliente por una NC sin volver a facturar (hoy la NC no mueve la caja en ningún giro) | revisión de fallos de las observaciones, 25-oct-2026 |
 | TRA | Sesión por inactividad: hoy el JWT vence a la hora fija desde el login (`JWT_TTL`, 60 min por defecto) y el aviso sale 2 min antes **aunque el usuario esté trabajando**. Propuesta: renovar en silencio mientras hay actividad y mostrar el aviso solo tras N minutos sin uso (falta decidir N). Solo frontend: `helpers/sessionExpiryWatcher.ts` + `helpers/http-client.ts`; `auth/refresh` ya existe | pregunta del usuario, 24-oct-2026 |

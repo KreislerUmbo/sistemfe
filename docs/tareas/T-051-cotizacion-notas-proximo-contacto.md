@@ -1,62 +1,67 @@
-# T-051 — Cotización: notas de contacto y próximo contacto (H50)
+# T-051 — CRM C2: próximas acciones y "Mis pendientes de hoy" (H50)
 
 | | |
 |---|---|
-| **Módulo** | AGE |
+| **Módulo** | CLI + AGE |
 | **Depende de** | T-050 |
 | **Reglas** | ayudas sin fricción (nada obligatorio) |
-| **Decisiones** | `docs/requerimientos/observaciones-pruebas-usuario.md` → obs. 13, H50 (aprobada 27-oct-2026) |
-| **Rama** | `feat/T-051-cotizacion-proximo-contacto` |
+| **Decisiones** | `docs/requerimientos/observaciones-pruebas-usuario.md` → obs. 13 (H50) y obs. 16, fase C2 y respuesta 3 (27-oct-2026: responsable por acción, sin responsable fijo del cliente) |
+| **Rama** | `feat/T-051-crm-acciones` |
 
 ## Contexto
-Después de enviar no queda dónde anotar el contacto con el cliente ("llamé, lo está pensando") ni
-cuándo volver a llamarlo. `dias_aviso_vencimiento_cotizacion` se configura y nada lo lee.
+Después de enviar no hay forma de agendar el siguiente paso ni de ver qué toca hacer hoy.
+`dias_aviso_vencimiento_cotizacion` se configura y nada lo lee.
 
 ## Alcance
-- Columna `cotizaciones.proximo_contacto` (date, nullable).
-- **Al enviar** (T-050): se propone `hoy + N días` (nuevo `configuracion_agencia.dias_proximo_contacto`,
-  por defecto 2, editable en Configuración de Agencia). Se puede cambiar o quitar en el mismo
-  paso, sin pedir confirmación.
-- **"Anotar contacto"** en el historial: nota (obligatoria, es lo único que se escribe) + próximo
-  contacto propuesto (`hoy + N`, editable, se puede dejar vacío). Deja una fila
-  `contacto` en `cotizacion_seguimientos` y actualiza `proximo_contacto`.
-- Al aceptar o cerrar como perdida (T-052), `proximo_contacto` se limpia.
-- La cabecera de la cotización muestra "Próximo contacto: jueves 30/10" (o "hoy", "vencido hace 2
-  días") con un enlace para cambiarlo.
-- Configuración: si `dias_aviso_vencimiento_cotizacion` no tiene uso tras T-053, anotarlo en
-  "Hallazgos".
+- Tabla `crm_acciones` en **core**: `cliente_id`, `referencia_tipo`/`referencia_id` (como T-050),
+  `tipo` (`llamar` | `whatsapp` | `enviar_cotizacion` | `cobrar_saldo` | `saludar` | `otro`),
+  `descripcion` (nullable), `fecha` (date), `responsable_id`, `hecha_en` (nullable),
+  `hecha_por`, `creada_por`, timestamps.
+- **Al enviar** una alternativa (T-050): se propone "Llamar en N días" (nuevo
+  `configuracion_agencia.dias_proximo_contacto`, por defecto 2) con responsable = quien envía.
+  Se puede cambiar o quitar en el mismo paso, sin confirmación.
+- **"Agendar acción"** desde la cotización, la reserva o la ficha del cliente (tipo, fecha,
+  responsable, descripción). **Marcar hecha** ofrece anotar el resultado como actividad (T-050) y
+  agendar la siguiente, ambos opcionales.
+- Al aceptar o cerrar como perdida una cotización, sus acciones pendientes se cierran solas
+  (`hecha_en` + actividad `estado`).
+- **Inicio: "Mis pendientes de hoy"** (agencia): acciones del usuario con fecha ≤ hoy, las
+  atrasadas primero, con cliente, motivo y enlace; marcar hecha desde ahí. Quien tiene
+  `cotizaciones.ver_todas` puede ver también "de todos".
+- Cabecera de la cotización: "Próxima acción: llamar el jue 30/10 (Ana)".
 
 ## Fuera de alcance
 - Recordatorios por correo o push (motor 11f).
-- Listado e Inicio (T-053).
+- Pasar acciones de un usuario que se va (T-061).
 
 ## Archivos probables
-- migración nueva (vertical agencia): `cotizaciones.proximo_contacto`, `configuracion_agencia.dias_proximo_contacto`
-- `api-sistema-fe/app/Http/Controllers/AgenciaViajes/` (controller de seguimiento de T-050)
-- `admin-start-kit/src/views/agencia-viajes/cotizador/editar.vue`, `configuracion/agencia.vue` (o donde viva)
+- migraciones nuevas: `crm_acciones` (core), `dias_proximo_contacto` (vertical agencia)
+- `api-sistema-fe/app/Models/Client/CrmAccion.php`, controller nuevo
+- `api-sistema-fe/app/Services/Dashboard/DashboardService.php`
+- `admin-start-kit/src/views/agencia-viajes/cotizador/editar.vue`, `reservas/detalle.vue`, `views/clients/ficha.vue`, vista de Inicio
 
 ## Criterios de aceptación
-- [ ] **CA1** — Enviar con 2 días configurados → `proximo_contacto` = hoy (Perú) + 2. → test
-- [ ] **CA2** — Enviar quitando la fecha → `proximo_contacto` null. → test
-- [ ] **CA3** — Anotar contacto con nota y fecha → fila `contacto` + fecha actualizada. → test
-- [ ] **CA4** — Nota vacía → 422. → test
-- [ ] **CA5** — Aceptar la alternativa → `proximo_contacto` null. → test
-- [ ] **CA6** — Prueba funcional en agencia-demo; suite del vertical en verde; `type-check` sin errores nuevos.
+- [ ] **CA1** — Enviar con 2 días configurados → acción "llamar" para hoy (Perú) + 2 a nombre de quien envía. → test
+- [ ] **CA2** — Enviar quitando la acción → ninguna. → test
+- [ ] **CA3** — Aceptar la cotización → sus acciones pendientes cerradas. → test
+- [ ] **CA4** — "Mis pendientes" muestra solo las del usuario con fecha ≤ hoy, atrasadas primero. → test
+- [ ] **CA5** — Marcar hecha con resultado → actividad creada. → test
+- [ ] **CA6** — Prueba funcional en agencia-demo; suite completa en verde; `type-check` sin errores nuevos.
 
 ## Seguridad y correctitud
-- [ ] Permisos / Policy en rutas nuevas: mismo permiso que editar la cotización
-- [ ] Aislamiento de tenant: no aplica
-- [ ] Validación de entrada / archivos: nota máx. 1000; fecha no anterior a hoy
+- [ ] Permisos / Policy en rutas nuevas: crear/editar acciones de una cotización con su Policy; "de todos" solo con `cotizaciones.ver_todas`
+- [ ] Aislamiento de tenant: tabla en la base del tenant
+- [ ] Validación de entrada / archivos: fecha no anterior a hoy al crear; responsable activo
 - [ ] Concurrencia (`lockForUpdate`): no aplica
 - [ ] Dinero en centavos: no aplica
-- [ ] Fechas con `HoraPeru`: `HoraPeru::hoy()` para proponer y comparar
+- [ ] Fechas con `HoraPeru`: `HoraPeru::hoy()` para proponer y para "hoy"
 - [ ] Tributario sin fallback silencioso: no aplica
-- [ ] Sin `v-html` sin sanitizar: notas como texto
+- [ ] Sin `v-html` sin sanitizar: descripciones como texto
 - [ ] Migraciones nuevas + `tenants:migrate-verticales`: sí
 
 ## Cómo verificar
 ```
-php artisan test --filter=Cotizacion
+php artisan test --filter="Crm|Cotizacion|Dashboard"
 cd admin-start-kit && npm run type-check
 ```
 
