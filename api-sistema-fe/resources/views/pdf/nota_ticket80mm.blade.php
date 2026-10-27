@@ -117,8 +117,8 @@
     <div class="linea"></div>
 
     <div>Fecha: {{ \App\Services\HoraPeru::deUtc($nota->sunat_sent_at)?->format('d/m/Y H:i') ?? '-' }}</div>
-    <div>Cliente: {{ $nota->client->full_name }}</div>
-    <div>{{ $nota->client->type_document }}: {{ $nota->client->n_document }}</div>
+    <div>Cliente: {{ $nota->datosClienteImpresos()['razon_social'] }}</div>
+    <div>{{ $nota->datosClienteImpresos()['tipo_doc'] }}: {{ $nota->datosClienteImpresos()['num_doc'] }}</div>
     <div>Vendedor: {{ $nota->user->name }} {{ $nota->user->surname }}</div>
 
     <div class="ref-doc">

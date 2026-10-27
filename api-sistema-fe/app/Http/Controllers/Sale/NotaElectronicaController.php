@@ -232,9 +232,13 @@ class NotaElectronicaController extends Controller
         // ── Calcular totales (compartido con ventas) ────────────────────
         $datos = $this->totales_calculator->calcular($lineasNota, $descuentoGlobalNota);
 
+        // T-064: la nota lleva el mismo receptor que el comprobante que
+        // modifica (su copia), no lo que el cliente tenga hoy.
+        $clienteDeLaVenta = $sale->datosClienteImpresos();
+
         $nota = DB::transaction(function () use (
             $sale, $tipo_doc, $tipo_doc_afectado, $motivo, $des_motivo,
-            $tipo_afectacion, $datos, $lineasNota, $request, $descuentoGlobalNota
+            $tipo_afectacion, $datos, $lineasNota, $request, $descuentoGlobalNota, $clienteDeLaVenta
         ) {
             $nota = Note::create([
                 'sale_id'              => $sale->id,
@@ -248,6 +252,10 @@ class NotaElectronicaController extends Controller
                 'tipo_afectacion'      => $tipo_afectacion,
                 'client_id'            => $sale->client_id,
                 'cod_tipo_doc_cliente' => $sale->cod_tipo_doc_cliente,
+                'tipo_doc_cliente'     => $clienteDeLaVenta['tipo_doc'],
+                'num_doc_cliente'      => $clienteDeLaVenta['num_doc'],
+                'razon_social_cliente' => $clienteDeLaVenta['razon_social'],
+                'direccion_cliente'    => $clienteDeLaVenta['direccion'],
                 'currency'             => $sale->currency,
                 'discount_global'      => $descuentoGlobalNota,
                 'mto_oper_gravadas'    => $datos['mto_oper_gravadas'],

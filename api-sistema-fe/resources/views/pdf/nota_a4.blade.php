@@ -258,16 +258,16 @@
                     <div class="titulo">DATOS DEL CLIENTE</div>
                     <table class="info-grid">
                         <tr>
-                            <td style="width:110px;">{{ $nota->client->type_document }}</td>
-                            <td>: {{ $nota->client->n_document }}</td>
+                            <td style="width:110px;">{{ $nota->datosClienteImpresos()['tipo_doc'] }}</td>
+                            <td>: {{ $nota->datosClienteImpresos()['num_doc'] }}</td>
                         </tr>
                         <tr>
                             <td>DENOMINACIÓN</td>
-                            <td>: {{ $nota->client->full_name }}</td>
+                            <td>: {{ $nota->datosClienteImpresos()['razon_social'] }}</td>
                         </tr>
                         <tr>
                             <td>DIRECCIÓN</td>
-                            <td>: {{ $nota->client->address ?: '-' }}</td>
+                            <td>: {{ $nota->datosClienteImpresos()['direccion'] ?: '-' }}</td>
                         </tr>
                     </table>
                 </td>

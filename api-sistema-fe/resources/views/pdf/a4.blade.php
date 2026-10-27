@@ -290,16 +290,16 @@
                     <div class="titulo">DATOS DEL CLIENTE</div>
                     <table class="info-grid">
                         <tr>
-                            <td style="width:110px;">{{ $venta->client->type_document }}</td>
-                            <td>: {{ $venta->client->n_document }}</td>
+                            <td style="width:110px;">{{ $venta->datosClienteImpresos()['tipo_doc'] }}</td>
+                            <td>: {{ $venta->datosClienteImpresos()['num_doc'] }}</td>
                         </tr>
                         <tr>
                             <td>DENOMINACIÓN</td>
-                            <td>: {{ $venta->client->full_name }}</td>
+                            <td>: {{ $venta->datosClienteImpresos()['razon_social'] }}</td>
                         </tr>
                         <tr>
                             <td>DIRECCIÓN</td>
-                            <td>: {{ $venta->client->address ?: '-' }}</td>
+                            <td>: {{ $venta->datosClienteImpresos()['direccion'] ?: '-' }}</td>
                         </tr>
                     </table>
                 </td>

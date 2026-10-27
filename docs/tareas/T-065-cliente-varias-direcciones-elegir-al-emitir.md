@@ -26,6 +26,9 @@ dirección de la sucursal que compró. Hoy el cliente tiene una sola dirección.
   elegida se guarda en `cliente_direccion` (T-064). La nota hereda la del comprobante que
   modifica, editable.
 - Backend: `client_address_id` opcional en cada endpoint de emisión; debe pertenecer al cliente.
+- T-064 rehace la copia del cliente al editar y al enviar sin CDR (`copiarDatosDelCliente()`): con
+  una dirección elegida, esa no se pisa (guardar `client_address_id` en el comprobante y copiar la
+  dirección desde ahí). Revisar también `cod_tipo_doc_cliente` (hallazgo de T-064).
 
 ## Fuera de alcance
 - Dirección en el XML (T-066).

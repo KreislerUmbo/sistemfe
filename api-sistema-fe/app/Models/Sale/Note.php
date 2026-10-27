@@ -3,6 +3,7 @@
 namespace App\Models\Sale;
 
 use App\Models\Client\Client;
+use App\Models\Concerns\CopiaDatosDelCliente;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -14,6 +15,7 @@ class Note extends Model
 {
     use SoftDeletes;
     use HasFactory;
+    use CopiaDatosDelCliente; // T-064: copia de los datos del cliente
 
     protected $table = "notes";
 
@@ -51,6 +53,11 @@ class Note extends Model
         // ── Cliente y moneda (copiados de la venta al crear) ─────────────
         "client_id",
         "cod_tipo_doc_cliente",
+        // T-064: los de la venta afectada (CopiaDatosDelCliente)
+        "tipo_doc_cliente",
+        "num_doc_cliente",
+        "razon_social_cliente",
+        "direccion_cliente",
         "currency",
 
         // ── Totales para Greenter — calculados en servidor ───────────────

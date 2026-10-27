@@ -1186,6 +1186,11 @@ public function update(Request $request, string $id)
             "description"   => $request->description,
         ]);
 
+        // T-064: una venta editable no tiene CDR; su copia del cliente se
+        // rehace (pudo cambiar de cliente o el cliente se corrigió).
+        $venta->copiarDatosDelCliente();
+        $venta->save();
+
         // ── Reservar correlativo si el tipo cambió A uno no-fiscal ────
         // Mismo criterio que store(): nota de venta nunca pasa por
         // enviarSunat(), así que reserva su correlativo de inmediato. Solo

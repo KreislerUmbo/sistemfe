@@ -63,9 +63,32 @@ php artisan test
 ---
 
 ## Resultado
-- **Commits:**
-- **Tests:** (nuevos / suite completa)
+- **Commits:** rama `fix/T-064-datos-cliente-en-comprobante` (ver `git log`).
+- **Tests:** 6 nuevos (`DatosClienteEnComprobanteTest`); suite completa 1524 en verde (antes 1518).
+- **Caminos que crean comprobantes** (todos cubiertos por el evento `creating` del trait, sin tocar
+  cada uno): `SaleController::store()`, `ReservaFacturacionController::store()`,
+  `AdvanceController::store()` (ventas); `NotaElectronicaController::store()` (notas, que además
+  copian de su venta).
+- **Migración aplicada** en los 7 tenants locales (`tenants:migrate-verticales`) y en
+  `sistemafe_test_migrations` (migrate + rollback + migrate). Comprobantes sin copia tras el
+  llenado: 0 en umbo (24 ventas, 15 notas), agencia-demo (11), sandbox (16).
 - **Desviaciones de la tarea y por qué:**
+  - Nombres de columna `tipo_doc_cliente`, `num_doc_cliente`, `razon_social_cliente`,
+    `direccion_cliente` (no `cliente_*`): siguen a la columna vecina `cod_tipo_doc_cliente`.
+  - La copia también se rehace **al enviar a SUNAT** mientras no hay CDR (la tarea solo pedía al
+    editar): si el cliente se corrigió entre crear y enviar, el XML sale corregido. Desde que SUNAT
+    acepta, no cambia.
+  - El QR también lee la copia (la tarea no lo nombraba; lleva el número de documento del cliente).
+  - Una nota copia los datos **de su venta**, no del cliente de hoy (mismo receptor que el
+    comprobante que modifica).
+  - Sin test de `SaleController::update()` (el payload completo de una venta es grande); usa el
+    mismo método que el envío, que sí tiene test.
+- **Recorrido:** `docs/aprendizaje/14-recorrido-datos-cliente-en-comprobante.md`.
 
 ## Hallazgos fuera de alcance
-- 
+- `cod_tipo_doc_cliente` (código SUNAT del tipo de documento) se sigue tomando del formulario al
+  crear y editar, y **no** se rehace al enviar: si se corrige el tipo de documento del cliente
+  (DNI → RUC) entre crear y enviar, el XML llevaría el número nuevo con el código viejo. Revisar
+  junto con T-065.
+- T-065 debe respetar la dirección elegida: hoy `copiarDatosDelCliente()` pisa
+  `direccion_cliente` con la del cliente al editar o enviar.
