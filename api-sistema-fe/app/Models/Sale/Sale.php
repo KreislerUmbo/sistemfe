@@ -9,7 +9,7 @@ use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use Luecano\NumeroALetras\NumeroALetras;
+use App\Services\MontoEnLetras;
 
 class Sale extends Model
 {
@@ -382,11 +382,7 @@ class Sale extends Model
 
             // Monto en letras — se recalcula aquí (no se persiste en BD)
             // con el mismo paquete que usa armarLeyendas() al emitir a SUNAT.
-            'monto_en_letras' => (new NumeroALetras())->toInvoice(
-                (float) ($this->mto_imp_venta ?: $this->total),
-                2,
-                $this->currency === 'USD' ? 'DOLARES' : 'SOLES'
-            ),
+            'monto_en_letras' => MontoEnLetras::comprobante((float) ($this->mto_imp_venta ?: $this->total), $this->currency),
         ];
     }
 

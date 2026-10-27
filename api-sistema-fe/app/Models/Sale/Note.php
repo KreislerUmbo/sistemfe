@@ -9,7 +9,7 @@ use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use Luecano\NumeroALetras\NumeroALetras;
+use App\Services\MontoEnLetras;
 
 class Note extends Model
 {
@@ -154,11 +154,7 @@ class Note extends Model
             // mostrar la leyenda — es más preciso que un flag de cabecera.
             'muestra_leyenda_amazonia' => (float) $this->mto_oper_exoneradas > 0,
 
-            'monto_en_letras' => (new NumeroALetras())->toInvoice(
-                (float) $this->mto_imp_venta,
-                2,
-                $this->currency === 'USD' ? 'DOLARES' : 'SOLES'
-            ),
+            'monto_en_letras' => MontoEnLetras::comprobante((float) $this->mto_imp_venta, $this->currency),
         ];
     }
 }

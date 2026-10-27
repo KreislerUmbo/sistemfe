@@ -23,7 +23,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
-use Luecano\NumeroALetras\NumeroALetras;
+use App\Services\MontoEnLetras;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 use Throwable;
 
@@ -765,22 +765,15 @@ class NotaElectronicaController extends Controller
         return $lineas;
     }
 
-    // ── Armar la leyenda del monto en letras — currency-aware ───────────
-    // A diferencia de FacturacionElectronicaController::armarLeyendas(),
-    // que hardcodea "SOLES", esta versión respeta la moneda de la nota
-    // (heredada de la venta), igual que Sale::resumenImpresion().
+    // ── Armar la leyenda del monto en letras ─────────────────────────────
+    // En la moneda de la nota (heredada de la venta), con el mismo helper que
+    // la venta y el PDF (MontoEnLetras, T-038).
     private function armarLeyendasNota(array $datos, ?string $currency): array
     {
-        $convertidor = new NumeroALetras();
-
         $datos['legends'] = [
             [
                 'code'  => '1000',
-                'value' => $convertidor->toInvoice(
-                    $datos['mto_imp_venta'],
-                    2,
-                    $currency === 'USD' ? 'DOLARES' : 'SOLES'
-                ),
+                'value' => MontoEnLetras::comprobante((float) $datos['mto_imp_venta'], $currency),
             ],
         ];
 
