@@ -968,11 +968,17 @@ servidor, `ProveedorBuscador`). El check-in en su propia tabla ya es T-041.
    filtros recordados, contador por pasajero; "Hasta" no anterior a "Desde" y rango máximo de
    31 días.
 
-**Preguntas para el usuario:**
-1. H55: después de facturar, ¿se debe poder cambiar proveedor, guía, fecha y hora de un servicio?
-2. H56: ¿quién usa el reporte? ¿Un vendedor debe ver solo sus reservas, o el reporte es de
-   operaciones y todos ven todo?
-3. ¿Hacemos los seis puntos, o alguno queda para después?
+**Preguntas para el usuario y respuestas (27-oct-2026):**
+1. H55: después de facturar, ¿se puede cambiar proveedor, guía, fecha y hora? **Sí**: el
+   proveedor puede fallar a última hora. Revisado: reasignar hotel y reasignar mayorista tienen el
+   mismo bloqueo y tampoco tocan el precio del cliente; entran en la misma tarea.
+2. H56: **por ahora todos ven todo, en solo lectura.** Si una agencia pide restringir, se hará por
+   usuario y solo supervisores o administradores verán todo. **Sin tarea**; la propuesta 4 queda
+   descartada por ahora.
+3. ¿Los seis puntos? **Sí, todos** (salvo el 4, por la respuesta 2).
+
+**Tareas (aprobadas 27-oct-2026):** T-054 (H53), T-055 (H54), T-056 (H55), T-057 (H57),
+T-058 (H58, H59). Estado en `docs/backlog.md`.
 
 ---
 
