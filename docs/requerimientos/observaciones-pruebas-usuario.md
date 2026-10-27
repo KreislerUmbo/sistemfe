@@ -809,11 +809,19 @@ aceptada + reserva y lleva a la ficha de la reserva; facturar y cobrar es otro p
 **Orden sugerido:** 1-2-4 primero (lo que evita cobrar mal y lo más vendido), después 3, después 5
 (depende de T-010/T-011), y 6-7 al final.
 
-**Preguntas para el usuario:**
+**Preguntas para el usuario y respuestas (27-oct-2026):**
 1. ¿El supuesto de uso es correcto (cliente en mostrador que paga en el momento)?
-2. En "Crear y cobrar", ¿qué comprobante por defecto: boleta, o lo que pida el cliente cada vez?
-3. ¿Hace falta vender un **paquete de varios días** por venta directa, o eso siempre va por el
-   cotizador?
+   **No necesariamente en la oficina: también puede pagar por transferencia.** Es la venta que se
+   cierra y se paga en el momento, esté donde esté el cliente. "Crear y cobrar" acepta
+   transferencia con n.º de operación (T-010); si el pago llega después, se usa "Crear" y se
+   cobra al facturar desde la reserva (T-011).
+2. En "Crear y cobrar", ¿qué comprobante por defecto? **Se elige cada vez** (sin valor por
+   defecto).
+3. ¿Hace falta vender un **paquete de varios días** por venta directa? **Sin decidir.** Queda
+   fuera de las tareas; se retoma cuando el usuario lo tenga claro.
+
+**Tareas (aprobadas 27-oct-2026):** T-045 (H42, H44), T-046 (H43), T-047 (H41), T-048 (H45),
+T-049 (H46, H47). Estado en `docs/backlog.md`.
 
 ---
 
