@@ -92,6 +92,14 @@ class AlternativaItemController extends Controller
     {
         $item = AlternativaItem::with(['alternativa', 'proveedorTarifa'])->findOrFail($id);
 
+        // T-001 (R-AGE-11): facturar una reserva lee el precio en vivo de
+        // alternativa_items (total_convertido); cambiarlo aquí cambiaba lo que
+        // faltaba facturar de una reserva ya vendida. Mismo guard que
+        // precioCarga(), antes de calcular nada.
+        if ($item->alternativa->estado === 'aceptada') {
+            return response()->json(['code' => 422, 'message' => 'Esta alternativa ya fue aceptada y generó una reserva — el precio ya no se cambia desde acá.'], 422);
+        }
+
         $validator = Validator::make($request->all(), [
             'descuento_pct' => 'nullable|numeric|min:0|max:100',
             'precio_convertido' => 'nullable|numeric|min:0',

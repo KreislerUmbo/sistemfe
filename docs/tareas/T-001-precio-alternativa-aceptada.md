@@ -68,9 +68,32 @@ php artisan test   # suite completa, contra PostgreSQL
 ---
 
 ## Resultado
-- **Commits:**
-- **Tests:**
-- **Desviaciones de la tarea y por qué:**
+- **Commits:** rama `fix/T-001-precio-alternativa-aceptada` (ver `git log`).
+- **Tests:** 3 nuevos en `AlternativaItemBloqueaMoverSiAceptadaTest` (precio y descuento en
+  aceptada → 422 sin cambios en el ítem ni en el total; en borrador sigue funcionando).
+  **CA4:** sin el guard fallan los 2 de alternativa aceptada (el precio y el descuento sí
+  cambiaban). Suite completa 1556 en verde.
+- **Cómo quedó:** en `AlternativaItemController::update()`, el mismo guard y mensaje que
+  `precioCarga()`, justo después de cargar el ítem y antes de validar o calcular.
+- **Desviaciones de la tarea y por qué:** ninguna.
 
 ## Hallazgos fuera de alcance
-- 
+Revisión del resto de `AlternativaItemController` (métodos que cambian precio, cantidad o
+pasajeros):
+
+| Método | Guard "alternativa aceptada" | Guard "ya tiene reserva" | Nota |
+|---|---|---|---|
+| `update()` | **sí (T-001)** | no | — |
+| `precioCarga()` | sí | no | — |
+| `elegirOpcionGrupo()` / `eliminarGrupo()` | sí | no | — |
+| `moverCarga()` / `reasignarDia()` / `moverBloque()` / `recalcularTemporadas()` | sí | no | no cambian precio salvo `recalcularTemporadas()` |
+| `actualizarPasajeAereo()` | no | sí | cubierto: en una aceptada sus ítems tienen reserva |
+| `actualizarManual()` | no | sí | ídem |
+| `destroy()` / `eliminarCarga()` | no | sí | ídem |
+| `desdePlantilla()` / `store()` | no | no | a propósito: agregar a una aceptada es lo que usa `sincronizarItems()` |
+| `promoverAProveedor()` | no | no | no cambia precio (solo anota el proveedor creado) |
+
+- Un servicio **agregado** a una alternativa aceptada y todavía **sin sincronizar** a la reserva
+  ya no puede cambiar de precio antes de sincronizarse (lo mismo pasaba con `precioCarga()` para
+  tours). Si se necesita ajustar el precio de algo agregado después, el camino es "Modificar
+  reserva" (T-002 a T-007).
