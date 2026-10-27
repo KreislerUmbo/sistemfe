@@ -79,7 +79,6 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 | T-040 | AGE | Avisos a proveedores también al reprogramar, quitar un servicio, agregar un pasajero o cancelar la salida (H29, H37) | por hacer | — | |
 | T-041 | AGE | El check-in en su propia tabla: no cambia la asignación ni la facturación (H30) | por hacer | — | |
 | T-042 | AGE | Reactivar una salida cancelada y avisar cuando una reserva cae en una (H35) | por hacer | — | |
-| T-043 | AGE | Tablero de salidas: "Siguiente" cambia de página de verdad (H36) | por hacer | — | |
 | T-044 | AGE | Aviso cuando un guía o un chofer ya tiene otra salida ese día (H38) | por hacer | — | |
 | T-045 | AGE | Venta directa: total en vivo, modo de precio claro y fecha por defecto hoy (H42, H44) | por hacer | — | |
 | T-046 | AGE | Venta directa: pasajeros rápidos con residencia y el cliente como primer pasajero (H43) | por hacer | T-017 | |
@@ -146,6 +145,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 
 | ID | Módulo | Qué | Commit |
 |---|---|---|---|
+| T-043 | AGE | Tablero de salidas: "Siguiente" cambia de página de verdad, "Página N de M" | ver merge de `fix/T-043-salidas-paginacion` |
 | T-056 | AGE | Después de facturar se cambian proveedor, guía, fecha, hora, hotel y mayorista; cambiar la fecha mueve el servicio a la salida del día nuevo | ver merge de `feat/T-056-cambios-tras-facturar` |
 | T-054 | AGE | Reporte operativo (pantalla, PDF, Excel, filtros, Inicio) con el proveedor y el hotel reales de la reserva | ver merge de `fix/T-054-reporte-proveedor-real` |
 | T-067 | PLA + AGE | Desplegado en producción 27-oct-2026: fila 13 fases 1b-2, F1, F3, F4 etapa 1, F5 y ola 1 (`9c35bef`), luego T-069 (`cd017d4`). Respaldo previo 15:33; 13 migraciones en dakamu (0 filas exonerado cambiadas), dakamu sigue en modo clásico | `cd017d4` |
