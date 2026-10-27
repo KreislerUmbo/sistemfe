@@ -90,7 +90,6 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 | T-051 | CLI + AGE | CRM C2: próximas acciones, "Mis pendientes de hoy" y pantalla Seguimiento (H50) | por hacer | T-050 | |
 | T-052 | AGE | CRM C3: por qué se ganó o se perdió la venta (H51) | por hacer | T-050 | |
 | T-053 | AGE | CRM C6a: listado de cotizaciones con el seguimiento a la vista (H52) | por hacer | T-051, T-052 | |
-| T-054 | AGE | Reporte operativo: mostrar el proveedor real de la reserva, no el cotizado (H53) | por hacer | — | |
 | T-055 | AGE | Reporte operativo: el hotel en cada noche de la estadía (H54) | por hacer | T-054 | |
 | T-056 | AGE | Cambiar proveedor, guía, fecha, hora y hotel después de facturar (H55) | por hacer | — | |
 | T-057 | AGE | Reporte operativo: el tour muestra su salida, guía, vehículo y por qué está pendiente (H57) | por hacer | — | |
@@ -135,6 +134,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 | VEN + NOT | Al aceptar una NC/ND no se ajustan `debt`/`paid_out`/`state_payment`; `client_credit_movements` (saldo a favor) diseñado sin construir; `sales.debt`/`paid_out` quedan congelados al cobrar desde Cuentas por Cobrar | `CLAUDE.md`, Notas y Amortizaciones |
 | CRE | **Tasa máxima como TEA:** `CreditoDatosRequest` compara la tasa tipeada con `tasa_maxima` sin convertir unidades (verificado 27-oct); no fijar `tasa_maxima` en credishirley hasta corregirlo. Plantilla de contrato del abogado con la cláusula de la Ley 29733 | `docs/planning/creditos/00-reglas-y-modelo.md` §5 |
 | VEN | Eliminar venta: los guards de `destroy()` (enviada a SUNAT, con adelanto) responden HTTP 200 con `code: 405` y la pantalla muestra "Eliminada" aunque no se borró; id inexistente da 500 | hallazgo de T-008, 27-oct-2026 |
+| AGE | Reporte operativo: el selector "Hotel" lista la razón social y la tabla el nombre comercial (mismo hotel con dos nombres) | hallazgo de T-054, 27-oct-2026 |
 | TRA | Seguridad de infraestructura (auditoría 08-oct): dependencias con advisories, certificados beta con clave privada en el historial de git, HSTS/CSP en nginx, CORS `*`. (Pedidos del portal y `v-html` → T-068) | memoria `project_auditoria_seguridad_2026-10-08` |
 | AGE | Pendientes de diseño ya conocidos: Compras + pagos a proveedores (fila 13 fase 3, reemplaza 11g), limpieza multi-destino (12g, espera producción), guía cotizado que no pasa a la reserva privada, endoso de pasajeros (v2 sin aprobar) | `plan-hoja-de-ruta-ejecucion.md`, memoria |
 | TRA | Sesión por inactividad: hoy el JWT vence a la hora fija desde el login (`JWT_TTL`, 60 min por defecto) y el aviso sale 2 min antes **aunque el usuario esté trabajando**. Propuesta: renovar en silencio mientras hay actividad y mostrar el aviso solo tras N minutos sin uso (falta decidir N). Solo frontend: `helpers/sessionExpiryWatcher.ts` + `helpers/http-client.ts`; `auth/refresh` ya existe | pregunta del usuario, 24-oct-2026 |
@@ -146,6 +146,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 
 | ID | Módulo | Qué | Commit |
 |---|---|---|---|
+| T-054 | AGE | Reporte operativo (pantalla, PDF, Excel, filtros, Inicio) con el proveedor y el hotel reales de la reserva | ver merge de `fix/T-054-reporte-proveedor-real` |
 | T-067 | PLA + AGE | Desplegado en producción 27-oct-2026: fila 13 fases 1b-2, F1, F3, F4 etapa 1, F5 y ola 1 (`9c35bef`), luego T-069 (`cd017d4`). Respaldo previo 15:33; 13 migraciones en dakamu (0 filas exonerado cambiadas), dakamu sigue en modo clásico | `cd017d4` |
 | T-069 | VEN | Descargar XML y CDR por dirección firmada desde la carpeta del negocio (daban 404 en producción; reportado en market 27-oct) | ver merge de `fix/T-069-descargar-xml-cdr` |
 | T-026 | TRA | CampoFecha toma el día escrito aunque la fecha llegue con hora y zona (antes mostraba un día menos y lo guardaba así) | ver merge de `fix/T-026-campofecha-fecha-iso` |
