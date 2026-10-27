@@ -298,7 +298,9 @@ class Sesion12hReasignarMayoristaTest extends TestCase
         $this->assertSame(422, $response->getStatusCode());
     }
 
-    public function test_rechaza_item_ya_facturado(): void
+    // T-056 (obs. 15, H55): antes se rechazaba con 422. Cambiar quién opera
+    // no cambia el precio cobrado.
+    public function test_item_ya_facturado_tambien_se_reasigna(): void
     {
         ['reserva' => $reserva, 'reservaItem' => $reservaItem, 'opcionB' => $opcionB] = $this->crearReservaConItemMayorista();
 
@@ -308,11 +310,11 @@ class Sesion12hReasignarMayoristaTest extends TestCase
         ]);
 
         $response = app(ReservaController::class)->reasignarMayorista(new Request([
-            'reserva_item_ids' => [$reservaItem->id], 'nueva_opcion_mayorista_id' => $opcionB->id, 'motivo' => 'Ya facturado',
+            'reserva_item_ids' => [$reservaItem->id], 'nueva_opcion_mayorista_id' => $opcionB->id, 'motivo' => 'El mayorista no tiene cupo',
         ]), (string) $reserva->id);
 
-        $this->assertSame(422, $response->getStatusCode());
-        $this->assertStringContainsString('facturado', $response->getData(true)['message']);
+        $this->assertSame(200, $response->getStatusCode(), json_encode($response->getData(true)));
+        $this->assertSame($opcionB->id, $reservaItem->fresh()->opcion_mayorista_id);
     }
 
     // Hallazgo real de esta sesión (verificación en vivo contra

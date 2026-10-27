@@ -333,4 +333,62 @@ class ReservaReprogramarTest extends TestCase
         $this->assertSame('2026-10-01', $reservaFresh->fecha_viaje_desde_original->toDateString());
         $this->assertSame('Segunda reprogramación', $reservaFresh->motivo_reprogramacion);
     }
+
+    // ── T-056: editar un servicio después de facturar ─────────────────────
+
+    private function facturarItem(int $reservaId, int $reservaItemId): void
+    {
+        DB::table('roles')->insertOrIgnore([
+            'id' => 1, 'name' => 'test-role-default', 'guard_name' => 'api', 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        ReservaVenta::create([
+            'reserva_id' => $reservaId, 'sale_id' => Sale::factory()->create()->id,
+            'reserva_item_ids' => [$reservaItemId], 'reserva_pasajero_ids' => [],
+        ]);
+    }
+
+    public function test_un_servicio_facturado_se_puede_editar_y_su_precio_no_cambia(): void
+    {
+        [$reserva, $itemDia1] = $this->crearReservaConItems();
+        $reservaItem = ReservaItem::where('alternativa_item_id', $itemDia1->id)->first();
+        $this->facturarItem($reserva->id, $reservaItem->id);
+
+        $response = app(ReservaItemController::class)->update(new Request(['hora' => '07:30']), (string) $reservaItem->id);
+
+        $this->assertSame(200, $response->getStatusCode(), json_encode($response->getData(true)));
+        $this->assertSame('07:30', substr((string) $reservaItem->fresh()->hora, 0, 5));
+        $this->assertSame(30.0, (float) $itemDia1->fresh()->precio_venta_snapshot);
+    }
+
+    public function test_cambiar_la_fecha_mueve_el_servicio_a_la_salida_del_dia_nuevo(): void
+    {
+        [$reserva, $itemDia1] = $this->crearReservaConItems();
+        $reservaItem = ReservaItem::where('alternativa_item_id', $itemDia1->id)->first();
+        $salidaVieja = $reservaItem->salida_operativa_id;
+        $this->assertNotNull($salidaVieja, 'el fixture engancha el ítem del día 1');
+        $this->facturarItem($reserva->id, $reservaItem->id);
+
+        $response = app(ReservaItemController::class)->update(new Request(['fecha' => '2026-09-10']), (string) $reservaItem->id);
+
+        $this->assertSame(200, $response->getStatusCode(), json_encode($response->getData(true)));
+        $reservaItem->refresh();
+        $this->assertSame('2026-09-10', $reservaItem->fecha->toDateString());
+        $this->assertSame(ReservaItem::FECHA_ORIGEN_MANUAL, $reservaItem->fecha_origen);
+        $this->assertNotNull($reservaItem->salida_operativa_id);
+        $this->assertNotSame($salidaVieja, $reservaItem->salida_operativa_id);
+        $this->assertSame('2026-09-10', SalidaOperativa::find($reservaItem->salida_operativa_id)->fecha->toDateString());
+        $this->assertNull(SalidaOperativa::find($salidaVieja), 'la salida vieja quedó vacía y se borró');
+    }
+
+    public function test_quitar_un_servicio_facturado_sigue_bloqueado(): void
+    {
+        [$reserva, $itemDia1] = $this->crearReservaConItems();
+        $reservaItem = ReservaItem::where('alternativa_item_id', $itemDia1->id)->first();
+        $this->facturarItem($reserva->id, $reservaItem->id);
+
+        $response = app(ReservaItemController::class)->destroy((string) $reservaItem->id);
+
+        $this->assertSame(422, $response->getStatusCode());
+        $this->assertNotNull($reservaItem->fresh());
+    }
 }

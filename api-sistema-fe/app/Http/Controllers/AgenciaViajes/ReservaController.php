@@ -988,15 +988,11 @@ class ReservaController extends Controller
 
         $items = ReservaItem::with('alternativaItem')->whereIn('id', $validado['reserva_item_ids'])->get();
 
-        // Mismo guard que ReservaItemController::update()/destroy() — un
-        // ítem ya cubierto por una venta real no se toca en silencio acá,
-        // ni siquiera para algo que no afecta el precio (corregir una
-        // reserva ya facturada es la Fase futura de "Camino 1", fuera de
-        // alcance).
-        $itemIdsFacturados = ReservaVenta::itemIdsFacturados($reserva->id);
-        if ($items->pluck('id')->intersect($itemIdsFacturados)->isNotEmpty()) {
-            return response()->json(['code' => 422, 'message' => 'No se puede reasignar: uno o más ítems ya fueron facturados en una venta de esta reserva.'], 422);
-        }
+        // T-056 (obs. 15, H55): ya no se bloquea un ítem facturado. Cambiar
+        // quién opera el servicio no cambia el precio cobrado ni el
+        // comprobante (nunca se toca precio_venta_snapshot); el proveedor
+        // puede fallar a última hora y la reserva se suele cobrar antes del
+        // viaje.
 
         $opcionMayoristaActualIds = $items->pluck('opcion_mayorista_id')->unique();
         if ($opcionMayoristaActualIds->count() > 1) {
@@ -1025,20 +1021,10 @@ class ReservaController extends Controller
 
         try {
             DB::transaction(function () use ($reserva, $items, $validado, $opcionNueva) {
-                // Re-chequeo bajo lock (hallazgo de auditoría 2026-09-23):
-                // el check de "ya facturado" de arriba corrió antes de
-                // abrir la transacción — mismo criterio que
-                // ReservaItemController::destroy() / ReservaFacturacionController::
-                // store() — sin este lock, una facturación concurrente
-                // podía colarse entre ese check y el update real, dejando
-                // un ítem facturado con datos de proveedor distintos de
-                // los que realmente se declararon a SUNAT.
+                // Mismo lock que facturar y cancelar: los cambios a la
+                // reserva no se cruzan entre sí (el re-chequeo de "ya
+                // facturado" se quitó en T-056, ver arriba).
                 Reserva::where('id', $reserva->id)->lockForUpdate()->firstOrFail();
-
-                $itemIdsFacturadosBajoLock = ReservaVenta::itemIdsFacturados($reserva->id);
-                if ($items->pluck('id')->intersect($itemIdsFacturadosBajoLock)->isNotEmpty()) {
-                    throw new HttpException(422, 'No se puede reasignar: uno o más ítems ya fueron facturados en una venta de esta reserva.');
-                }
 
                 foreach ($items as $item) {
                     $item->update([
@@ -1117,12 +1103,8 @@ class ReservaController extends Controller
 
         $items = ReservaItem::with('alternativaItem')->whereIn('id', $validado['reserva_item_ids'])->get();
 
-        // Mismo guard que reasignarMayorista() — un ítem ya cubierto por
-        // una venta real no se toca en silencio acá.
-        $itemIdsFacturados = ReservaVenta::itemIdsFacturados($reserva->id);
-        if ($items->pluck('id')->intersect($itemIdsFacturados)->isNotEmpty()) {
-            return response()->json(['code' => 422, 'message' => 'No se puede reasignar: uno o más ítems ya fueron facturados en una venta de esta reserva.'], 422);
-        }
+        // T-056: un ítem facturado también se reasigna (mismo criterio que
+        // reasignarMayorista(): no cambia el precio cobrado).
 
         // "Mismo hotel actual" — clave compuesta, ambos caminos son
         // mutuamente excluyentes así que alcanza con concatenarlos.
@@ -1147,15 +1129,8 @@ class ReservaController extends Controller
 
         try {
             DB::transaction(function () use ($reserva, $items, $tarifaCatalogoNueva, $tarifaAdhocNueva, $validado) {
-                // Re-chequeo bajo lock: mismo criterio y mismo hallazgo de
-                // auditoría 2026-09-23 que reasignarMayorista() (ver
-                // comentario ahí).
+                // Mismo lock que reasignarMayorista() (ver comentario ahí).
                 Reserva::where('id', $reserva->id)->lockForUpdate()->firstOrFail();
-
-                $itemIdsFacturadosBajoLock = ReservaVenta::itemIdsFacturados($reserva->id);
-                if ($items->pluck('id')->intersect($itemIdsFacturadosBajoLock)->isNotEmpty()) {
-                    throw new HttpException(422, 'No se puede reasignar: uno o más ítems ya fueron facturados en una venta de esta reserva.');
-                }
 
                 foreach ($items as $item) {
                     // "Original" se captura de una sola vez, en la PRIMERA

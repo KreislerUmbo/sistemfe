@@ -1830,11 +1830,10 @@ const reasignarForm = ref<{
     motivo: string;
 }>({ opcion_mayorista_actual_id: null, reserva_item_ids: [], nueva_opcion_mayorista_id: null, nueva_opcion_hotel_tarifa_id: null, motivo: '' });
 
-// Ítems origen_tipo=mayorista con un mayorista real asignado, excluyendo
-// los ya facturados (el backend los rechaza igual — mejor no ofrecerlos
-// en el checklist que dejar que el submit falle).
+// Ítems origen_tipo=mayorista con un mayorista real asignado. T-056: los ya
+// facturados también (cambiar quién opera no cambia el precio cobrado).
 const itemsConMayoristaActivos = computed(() =>
-    (reserva.value?.items ?? []).filter((it) => it.opcion_mayorista_id && !itemsFacturadosIds.value.includes(it.id))
+    (reserva.value?.items ?? []).filter((it) => it.opcion_mayorista_id)
 );
 
 const mostrarBotonReasignarMayorista = computed(() => reserva.value?.estado === 'activa' && itemsConMayoristaActivos.value.length > 0);
@@ -1965,10 +1964,10 @@ const reasignarHotelForm = ref<{
 
 const claveHotelActual = (it: ReservaItem) => (it.proveedor_tarifa_id ? `proveedor:${it.proveedor_tarifa_id}` : `adhoc:${it.opcion_hotel_tarifa_id}`);
 
+// T-056: los ya facturados también se reasignan (el hotel puede fallar a
+// última hora; el precio cobrado no cambia).
 const itemsConHotelActivos = computed(() =>
-    (reserva.value?.items ?? []).filter((it) =>
-        (it.proveedor_tarifa?.tipo_habitacion || it.opcion_hotel_tarifa) && !itemsFacturadosIds.value.includes(it.id)
-    )
+    (reserva.value?.items ?? []).filter((it) => it.proveedor_tarifa?.tipo_habitacion || it.opcion_hotel_tarifa)
 );
 
 const mostrarBotonReasignarHotel = computed(() => reserva.value?.estado === 'activa' && itemsConHotelActivos.value.length > 0);

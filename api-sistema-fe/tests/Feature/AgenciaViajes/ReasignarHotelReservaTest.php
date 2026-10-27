@@ -265,9 +265,13 @@ class ReasignarHotelReservaTest extends TestCase
         $this->assertSame(422, $response->getStatusCode());
     }
 
-    public function test_rechaza_item_ya_facturado(): void
+    // T-056 (obs. 15, H55): antes se rechazaba con 422. El hotel puede
+    // fallar a última hora y la reserva se suele cobrar antes del viaje;
+    // reasignar no cambia el precio cobrado.
+    public function test_item_ya_facturado_tambien_se_reasigna(): void
     {
         ['reserva' => $reserva, 'reservaItem' => $reservaItem, 'tarifaAdhoc' => $tarifaAdhoc] = $this->crearReservaConItemHotelCatalogo();
+        $precioAntes = (float) $reservaItem->alternativaItem->precio_venta_snapshot;
 
         ReservaVenta::create([
             'reserva_id' => $reserva->id, 'sale_id' => Sale::factory()->create()->id,
@@ -275,11 +279,12 @@ class ReasignarHotelReservaTest extends TestCase
         ]);
 
         $response = app(ReservaController::class)->reasignarHotel(new Request([
-            'reserva_item_ids' => [$reservaItem->id], 'nuevo_opcion_hotel_tarifa_id' => $tarifaAdhoc->id, 'motivo' => 'Ya facturado',
+            'reserva_item_ids' => [$reservaItem->id], 'nuevo_opcion_hotel_tarifa_id' => $tarifaAdhoc->id, 'motivo' => 'El hotel canceló',
         ]), (string) $reserva->id);
 
-        $this->assertSame(422, $response->getStatusCode());
-        $this->assertStringContainsString('facturado', $response->getData(true)['message']);
+        $this->assertSame(200, $response->getStatusCode(), json_encode($response->getData(true)));
+        $this->assertSame($tarifaAdhoc->id, $reservaItem->fresh()->opcion_hotel_tarifa_id);
+        $this->assertSame($precioAntes, (float) $reservaItem->fresh()->alternativaItem->precio_venta_snapshot);
     }
 
     public function test_rechaza_lote_con_hoteles_actuales_mezclados(): void

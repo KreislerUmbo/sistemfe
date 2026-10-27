@@ -65,9 +65,28 @@ cd admin-start-kit && npm run type-check
 ---
 
 ## Resultado
-- **Commits:**
-- **Tests:** (nuevos / suite completa)
-- **Desviaciones de la tarea y por qué:**
+- **Commits:** rama `feat/T-056-cambios-tras-facturar` (ver `git log`).
+- **Tests:** 3 nuevos en `ReservaReprogramarTest` (editar un servicio facturado sin cambiar el
+  precio; cambiar la fecha mueve el servicio a la salida del día nuevo; quitar un servicio
+  facturado sigue bloqueado) y 2 cambiados (`ReasignarHotelReservaTest`,
+  `Sesion12hReasignarMayoristaTest`: antes esperaban 422, ahora reasignan y el precio no cambia).
+  Suite completa 1551 en verde.
+- **Cómo quedó:** se quitó el bloqueo "ya facturado" de `ReservaItemController::update()`,
+  `ReservaController::reasignarMayorista()` y `reasignarHotel()` (antes y bajo lock; el lock de
+  la reserva se mantiene). Siguen bloqueados: quitar un servicio o un pasajero facturado y
+  corregir el tratamiento tributario (`overrideTratamientoTributario()`): esos sí cambian lo
+  facturado. Pantalla: reasignar hotel y reasignar mayorista ya ofrecen también los servicios
+  facturados.
+- **Fecha de un servicio en una salida (CA4):** antes de esta tarea, cambiar la fecha desde la
+  reserva **no** movía el servicio de salida (quedaba en la del día viejo, facturado o no).
+  Ahora, en una transacción con el lock de la reserva: se suelta de la salida vieja (que solo se
+  borra si quedó vacía), se guarda la fecha y se engancha con `SalidaEngancheService` en la del
+  día nuevo, igual que `reprogramar()`.
+- **Desviaciones de la tarea y por qué:** ninguna.
+- **Recorrido:** sin documento propio (quitar bloqueos y reusar el enganche de reprogramar).
 
 ## Hallazgos fuera de alcance
-- 
+- `reprogramar()` de la reserva completa sigue sin mover los servicios facturados (los lista como
+  "no tocados"). Con T-056 se pueden mover uno por uno; decidir si reprogramar debe moverlos
+  también.
+- Cambiar proveedor, hotel o fecha no avisa a los proveedores: queda para T-040 (ya ampliada).
