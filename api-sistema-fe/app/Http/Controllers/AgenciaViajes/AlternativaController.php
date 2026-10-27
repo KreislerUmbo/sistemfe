@@ -156,6 +156,17 @@ class AlternativaController extends Controller
             ], 422);
         }
 
+        // T-030 (H3): una aceptada ya generó su reserva; volverla a borrador,
+        // enviada o descartada por este PUT la dejaba fuera del flujo (una
+        // reserva activa colgando de una alternativa "no aceptada"). El
+        // nombre sí se sigue cambiando.
+        if ($alternativa->estado === 'aceptada' && array_key_exists('estado', $validado) && $validado['estado'] !== 'aceptada') {
+            return response()->json([
+                'code' => 422,
+                'message' => 'Esta alternativa ya fue aceptada y generó una reserva — su estado ya no se cambia desde acá.',
+            ], 422);
+        }
+
         // Sesión 12a (Fase 0, auditoría §3.2) — único camino documentado
         // donde el total de una alternativa ya aceptada (con su reserva ya
         // creada) podía cambiar en vivo sin que nadie lo note. Mismo

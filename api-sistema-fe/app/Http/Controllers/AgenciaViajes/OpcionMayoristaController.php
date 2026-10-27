@@ -57,6 +57,9 @@ class OpcionMayoristaController extends Controller
     public function store(Request $request, string $alternativaId)
     {
         $alternativa = Alternativa::findOrFail($alternativaId);
+        if ($rechazo = $this->rechazoSiAceptada($alternativa)) {
+            return $rechazo;
+        }
 
         $validator = Validator::make($request->all(), [
             'proveedor_id' => 'required|integer|exists:proveedores,id',
@@ -123,7 +126,10 @@ class OpcionMayoristaController extends Controller
     // después, llamando de nuevo a este mismo endpoint sobre otra opción.
     public function elegir(string $id)
     {
-        $opcion = OpcionMayorista::findOrFail($id);
+        $opcion = OpcionMayorista::with('alternativa')->findOrFail($id);
+        if ($rechazo = $this->rechazoSiAceptada($opcion->alternativa)) {
+            return $rechazo;
+        }
 
         DB::transaction(function () use ($opcion) {
             OpcionMayorista::where('alternativa_id', $opcion->alternativa_id)
@@ -144,7 +150,10 @@ class OpcionMayoristaController extends Controller
     // opciones_hotel_tarifas, editar acá no lo toca.
     public function update(Request $request, string $id)
     {
-        $opcion = OpcionMayorista::findOrFail($id);
+        $opcion = OpcionMayorista::with('alternativa')->findOrFail($id);
+        if ($rechazo = $this->rechazoSiAceptada($opcion->alternativa)) {
+            return $rechazo;
+        }
 
         $validator = Validator::make($request->all(), [
             'proveedor_id' => 'required|integer|exists:proveedores,id',
@@ -181,7 +190,10 @@ class OpcionMayoristaController extends Controller
     // nunca se escribía hasta ahora).
     public function descartar(string $id)
     {
-        $opcion = OpcionMayorista::findOrFail($id);
+        $opcion = OpcionMayorista::with('alternativa')->findOrFail($id);
+        if ($rechazo = $this->rechazoSiAceptada($opcion->alternativa)) {
+            return $rechazo;
+        }
         $opcion->update(['estado' => 'descartada']);
 
         return response()->json(['code' => 200, 'message' => 'Opción descartada', 'opcion_mayorista' => $opcion->fresh()]);
@@ -189,7 +201,10 @@ class OpcionMayoristaController extends Controller
 
     public function reactivar(string $id)
     {
-        $opcion = OpcionMayorista::findOrFail($id);
+        $opcion = OpcionMayorista::with('alternativa')->findOrFail($id);
+        if ($rechazo = $this->rechazoSiAceptada($opcion->alternativa)) {
+            return $rechazo;
+        }
         $opcion->update(['estado' => 'candidata']);
 
         return response()->json(['code' => 200, 'message' => 'Opción reactivada', 'opcion_mayorista' => $opcion->fresh()]);
@@ -250,13 +265,17 @@ class OpcionMayoristaController extends Controller
     // + su matriz de precios en un solo request.
     public function hoteles(Request $request, string $id)
     {
-        $opcion = OpcionMayorista::findOrFail($id);
+        $opcion = OpcionMayorista::with('alternativa')->findOrFail($id);
 
         if ($request->isMethod('get')) {
             $hoteles = OpcionHotel::where('opcion_mayorista_id', $opcion->id)->with('opcionesHotelTarifas')->get();
             $hoteles->each(fn (OpcionHotel $h) => $h->setAttribute('fotos', OpcionHotel::fotosResueltas($h->fotos ?? [])));
 
             return response()->json(['opciones_hotel' => $hoteles]);
+        }
+
+        if ($rechazo = $this->rechazoSiAceptada($opcion->alternativa)) {
+            return $rechazo;
         }
 
         $validator = Validator::make($request->all(), [
@@ -316,10 +335,14 @@ class OpcionMayoristaController extends Controller
     // Tours opcionales — nunca se suman automáticamente al total (§2.4).
     public function opcionales(Request $request, string $id)
     {
-        $opcion = OpcionMayorista::findOrFail($id);
+        $opcion = OpcionMayorista::with('alternativa')->findOrFail($id);
 
         if ($request->isMethod('get')) {
             return response()->json(['opcion_mayorista_opcionales' => OpcionMayoristaOpcional::where('opcion_mayorista_id', $opcion->id)->get()]);
+        }
+
+        if ($rechazo = $this->rechazoSiAceptada($opcion->alternativa)) {
+            return $rechazo;
         }
 
         $validator = Validator::make($request->all(), [
@@ -354,6 +377,9 @@ class OpcionMayoristaController extends Controller
     public function actualizarOpcional(Request $request, string $id)
     {
         $opcional = OpcionMayoristaOpcional::findOrFail($id);
+        if ($rechazo = $this->rechazoSiAceptada($opcional->opcionMayorista?->alternativa)) {
+            return $rechazo;
+        }
 
         $validator = Validator::make($request->all(), [
             'nombre' => 'required|string|max:250',
@@ -375,6 +401,9 @@ class OpcionMayoristaController extends Controller
     public function eliminarOpcional(string $id)
     {
         $opcional = OpcionMayoristaOpcional::findOrFail($id);
+        if ($rechazo = $this->rechazoSiAceptada($opcional->opcionMayorista?->alternativa)) {
+            return $rechazo;
+        }
         $opcional->delete();
 
         return response()->json(['code' => 200, 'message' => 'Opcional eliminado correctamente']);
@@ -390,7 +419,7 @@ class OpcionMayoristaController extends Controller
     // tours de un combo Local/Nacional.
     public function tours(Request $request, string $id)
     {
-        $opcion = OpcionMayorista::findOrFail($id);
+        $opcion = OpcionMayorista::with('alternativa')->findOrFail($id);
 
         if ($request->isMethod('get')) {
             $tours = OpcionMayoristaTour::where('opcion_mayorista_id', $opcion->id)
@@ -398,6 +427,10 @@ class OpcionMayoristaController extends Controller
             $tours->each(fn (OpcionMayoristaTour $t) => $t->paquetePlantilla?->setAttribute('fotos', StorageUrl::resolveMuchas($t->paquetePlantilla->fotos ?? [])));
 
             return response()->json(['opcion_mayorista_tours' => $tours]);
+        }
+
+        if ($rechazo = $this->rechazoSiAceptada($opcion->alternativa)) {
+            return $rechazo;
         }
 
         // Guardrail (18-sep-2026) — exactamente uno de los 2 caminos:
@@ -440,6 +473,9 @@ class OpcionMayoristaController extends Controller
     public function quitarTour(string $id)
     {
         $tour = OpcionMayoristaTour::findOrFail($id);
+        if ($rechazo = $this->rechazoSiAceptada($tour->opcionMayorista?->alternativa)) {
+            return $rechazo;
+        }
         $tour->delete();
 
         return response()->json(['code' => 200, 'message' => 'Tour desvinculado correctamente']);
@@ -455,6 +491,9 @@ class OpcionMayoristaController extends Controller
     public function actualizarOrdenTour(Request $request, string $id)
     {
         $tour = OpcionMayoristaTour::findOrFail($id);
+        if ($rechazo = $this->rechazoSiAceptada($tour->opcionMayorista?->alternativa)) {
+            return $rechazo;
+        }
 
         $validator = Validator::make($request->all(), [
             'orden' => 'required|integer|min:1',
@@ -507,5 +546,20 @@ class OpcionMayoristaController extends Controller
             'contenido_tour_descripcion_snapshot' => $contenidoTour->descripcion,
             'contenido_tour_fotos_snapshot' => $contenidoTour->fotos,
         ];
+    }
+
+    // T-030 (H8): una alternativa aceptada ya generó su reserva con este
+    // mayorista, sus hoteles y sus tarifas; cambiarlos aquí desincroniza la
+    // reserva en silencio. En la reserva se usa "Reasignar mayorista".
+    private function rechazoSiAceptada(?Alternativa $alternativa): ?\Illuminate\Http\JsonResponse
+    {
+        if ($alternativa?->estado !== 'aceptada') {
+            return null;
+        }
+
+        return response()->json([
+            'code' => 422,
+            'message' => 'Esta alternativa ya fue aceptada y generó una reserva — el mayorista ya no se cambia desde acá. En la reserva usa "Reasignar mayorista".',
+        ], 422);
     }
 }
