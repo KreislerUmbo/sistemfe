@@ -45,7 +45,7 @@
                     <div class="col-12" v-if="proveedor.observaciones"><strong>Observaciones:</strong> {{ proveedor.observaciones }}</div>
                     <div class="col-12" v-if="proveedor.descripcion">
                         <strong>Descripción:</strong>
-                        <div v-html="proveedor.descripcion"></div>
+                        <div v-html="sanearHtml(proveedor.descripcion)"></div>
                     </div>
                     <div class="col-12" v-if="esHotel && proveedor.alojamiento_detalle">
                         <strong>Horario:</strong>
@@ -381,6 +381,7 @@
 </template>
 
 <script setup lang="ts">
+import { sanearHtml } from '@/helpers/sanearHtml';
 import { destinoParaIgvAgencia, IGV_EXONERADO, NOTA_EXONERADO_AGENCIA } from '@/helpers/tratamientoTributarioAgencia';
 import CampoFecha from '@/components/CampoFecha.vue';
 import { ref, computed, watch, onMounted } from 'vue';
