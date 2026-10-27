@@ -9,6 +9,7 @@ use App\Models\AgenciaViajes\ReservaItemPasajero;
 use App\Models\AgenciaViajes\ReservaItemVueloPasajero;
 use App\Models\AgenciaViajes\ReservaVenta;
 use App\Models\AgenciaViajes\SalidaOperativa;
+use App\Services\AgenciaViajes\SalidaEngancheService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -30,12 +31,10 @@ class ReservaItemController extends Controller
             return response()->json(['code' => 422, 'message' => 'Solo se puede editar un ítem de una reserva activa.'], 422);
         }
 
-        $yaFacturado = ReservaVenta::itemIdsFacturados($reserva->id)
-            ->contains($item->id);
-
-        if ($yaFacturado) {
-            return response()->json(['code' => 422, 'message' => 'No se puede editar: este ítem ya fue facturado en una venta de esta reserva.'], 422);
-        }
+        // T-056 (obs. 15, H55): un ítem facturado también se edita. Guía,
+        // proveedor, fecha y hora son datos operativos: no cambian el precio
+        // ni el comprobante (el precio vive en la alternativa). Quitar el
+        // ítem sí sigue bloqueado (destroy()).
 
         $validator = Validator::make($request->all(), [
             'guia_id' => 'nullable|integer|exists:guias,id',
@@ -64,11 +63,32 @@ class ReservaItemController extends Controller
         // pise sin decisión explícita. array_key_exists(), no isset(): un
         // 'fecha' => null explícito también cuenta como edición manual.
         $fechaActual = $item->fecha?->toDateString();
-        if (array_key_exists('fecha', $validado) && $validado['fecha'] !== $fechaActual) {
+        $cambiaFecha = array_key_exists('fecha', $validado) && $validado['fecha'] !== $fechaActual;
+        if ($cambiaFecha) {
             $validado['fecha_origen'] = ReservaItem::FECHA_ORIGEN_MANUAL;
         }
 
-        $item->update($validado);
+        if (! $cambiaFecha) {
+            $item->update($validado);
+        } else {
+            // T-056: con la fecha nueva, el servicio pasa a la salida
+            // operativa de ese día (antes se quedaba en la del día viejo).
+            // Mismo criterio que ReservaController::reprogramar(): la salida
+            // vieja no se borra a mano, solo si quedó vacía.
+            DB::transaction(function () use ($item, $validado, $reserva) {
+                Reserva::where('id', $reserva->id)->lockForUpdate()->firstOrFail();
+
+                $salidaViejaId = $item->salida_operativa_id;
+                $item->update($validado + ['salida_operativa_id' => null]);
+                if ($salidaViejaId) {
+                    SalidaOperativa::eliminarSiQuedoVacia($salidaViejaId);
+                }
+
+                if ($item->fecha && $item->alternativaItem) {
+                    app(SalidaEngancheService::class)->enganchar($item, $item->alternativaItem, $item->fecha->toDateString());
+                }
+            });
+        }
 
         return response()->json([
             'code' => 200,
