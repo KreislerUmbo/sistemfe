@@ -823,6 +823,104 @@ aceptada + reserva y lleva a la ficha de la reserva; facturar y cobrar es otro p
 **Tareas (aprobadas 27-oct-2026):** T-045 (H42, H44), T-046 (H43), T-047 (H41), T-048 (H45),
 T-049 (H46, H47). Estado en `docs/backlog.md`.
 
+### 13. Seguimiento de cotizaciones: el envío como un proceso visible (27-oct-2026)
+
+**Pedido del usuario:** el seguimiento de las cotizaciones; convertir el envío en un proceso
+visible.
+
+**Cómo es hoy:** una alternativa pasa a "enviada" **solo** al enviarla por correo desde el sistema
+(`CotizacionEnvioController`, casilla "Marcar la alternativa como enviada"). Al pasar a enviada se
+llenan `fecha_envio` y `fecha_vencimiento` (`Alternativa::camposAlMarcarEnviada()`).
+`AlternativaController::update()` acepta `estado='enviada'`, pero ninguna pantalla lo usa.
+
+**Datos reales (agencia-demo):** 21 alternativas: 12 aceptadas, 5 en borrador, 4 descartadas,
+**ninguna enviada**, ninguna con `fecha_envio` y 0 envíos por correo. Las que se aceptaron pasaron
+de borrador a aceptada sin registro de envío.
+
+| ID | Prioridad | Qué pasa |
+|---|---|---|
+| H48 | **Alta** | **Enviar por WhatsApp o en persona no deja rastro.** El PDF se descarga y se manda por fuera; la alternativa sigue en borrador. Por eso la cotización nunca llega a "Enviada" ni a "Vencida", y el bloque "enviadas" de Inicio queda en 0. |
+| H49 | Media | **No hay historial del envío** salvo los correos: ni canal (WhatsApp, correo, en persona), ni reenvíos, ni quién la mandó. |
+| H50 | **Alta** | **No hay seguimiento.** Ni notas de contacto ("llamé, lo está pensando"), ni fecha de próximo contacto, ni recordatorio. `dias_aviso_vencimiento_cotizacion` se configura y nada lo lee (el motor de recordatorios, fila 11f, no está construido). |
+| H51 | Media | **No se registra por qué se pierde una venta.** Solo se puede descartar una alternativa, sin motivo. No se puede saber si se pierde por precio, por otra agencia o porque el cliente no respondió. |
+| H52 | Media | **El listado no muestra el seguimiento:** cuándo se envió, cuántos días lleva sin respuesta, cuándo vence, ni un filtro "por seguir hoy". |
+
+**Propuesta (a aprobar):**
+1. **Botón "Enviar"** con tres caminos: **Correo** (el actual), **WhatsApp** (abre WhatsApp con un
+   texto armado y el PDF descargado, o un enlace al PDF) y **"Ya la envié por otro medio"**. Los
+   tres marcan la alternativa como enviada con un clic. (H48)
+2. **Historial de seguimiento** en la cotización, en orden de fecha: envíos (canal, quién,
+   cuándo), notas de contacto, cambios de estado y vencimiento. Tabla nueva
+   `cotizacion_seguimientos`; los correos actuales se muestran ahí también. (H49)
+3. **Próximo contacto:** al enviar, se propone una fecha (N días después, configurable) y se puede
+   cambiar o quitar; al anotar un contacto, se propone la siguiente. **No es obligatorio**. (H50)
+4. **"Cerrar como perdida"** con motivo de una lista corta (precio, eligió otra agencia, cambió
+   de fechas o de planes, no respondió, otro con texto). Nuevo estado del listado: "Perdida".
+   (H51)
+5. **Listado e Inicio:** columna "Seguimiento" ("Enviada hace 3 días · contactar hoy", "Vence
+   mañana"), filtro "Por seguir hoy" y bloque "Cotizaciones por seguir" en Inicio. Desde ahí,
+   "Extender vigencia". (H52)
+6. *(Opcional, para después)* **Enlace para el cliente:** el PDF se comparte por un enlace propio
+   y el historial anota "el cliente abrió la cotización". Sirve para saber cuándo llamar.
+
+Con esto sale solo un reporte de conversión: enviadas → aceptadas → perdidas por motivo, por
+vendedor y por mes.
+
+**Preguntas para el usuario:**
+1. ¿Cómo envían la mayoría de las cotizaciones: WhatsApp, correo o en persona?
+2. ¿La lista de motivos de pérdida sirve así, o falta alguno?
+3. ¿Interesa el enlace para el cliente (punto 6), o con lo demás alcanza por ahora?
+
+### 14. Módulo de uso del sistema: dónde se traban los usuarios y qué usan más (27-oct-2026)
+
+**Pedido del usuario:** un seguimiento interno de la experiencia de uso, para ver dónde se traban
+más los usuarios y qué usan más, y así mejorar.
+
+**Qué hay hoy:** solo auditorías puntuales (`CentralAuditLog` del panel central,
+`RoleAuditLog` de roles). No hay registro de uso de pantallas, de errores que ve el usuario, ni de
+tiempos.
+
+**Qué medir:**
+
+| Pregunta | Señal |
+|---|---|
+| ¿Qué usan más? | Pantallas abiertas y acciones realizadas, por giro, por rol y por tenant |
+| ¿Dónde se traban? | Errores que ve el usuario (cada 422 con su mensaje, cada 500), el mismo error repetido por el mismo usuario en pocos minutos, errores de JavaScript |
+| ¿Dónde abandonan? | Procesos que empiezan y no terminan: abrir "Facturar" y cerrar sin emitir, empezar una cotización y nunca enviarla |
+| ¿Qué es lento? | Peticiones de más de 2 s y pantallas que tardan en cargar |
+| ¿Cuánto tarda un proceso? | Tiempo de cotización creada → enviada → aceptada → facturada |
+
+**Cómo se arma (propuesta en 4 fases):**
+1. **Backend, sin tocar pantallas:** un middleware anota cada petición de la API (ruta, código de
+   respuesta, duración, usuario, tenant) **sin el contenido**. Para los 422 guarda el mensaje
+   mostrado. Ya responde "qué se usa", "qué falla" y "qué es lento". Es la fase de más valor.
+2. **Frontend:** una función `registrarUso()` anota pantalla abierta, tiempo en pantalla y errores
+   de JavaScript, en lotes (cada 10 s o al cerrar, con `sendBeacon`) para no hacer más lenta la
+   aplicación.
+3. **Procesos con nombre:** eventos como `facturar.abierto` / `facturar.emitido` en los procesos
+   clave, para medir abandono y tiempo por paso.
+4. **Panel en el panel central** (Super-Admin): lo más usado, las trabas más frecuentes (los 20
+   errores que más se repiten con su pantalla), el embudo por proceso, lo más lento, por tenant y
+   giro.
+
+**Dónde se guarda:** en la base central, con `tenant_id`, porque el análisis es del producto para
+todos los tenants. Los eventos crudos se borran a los 90 días; queda un resumen diario por pantalla
+y acción.
+
+**Privacidad (Ley 29733):** no se guarda nada de lo que el usuario escribe (ni nombres de clientes
+ni montos), solo qué pantalla, qué acción y el mensaje de error. Se avisa a los usuarios en los
+términos de uso. Se puede apagar por tenant.
+
+**Alternativa externa:** herramientas como Microsoft Clarity o PostHog dan mapas de calor y
+grabación de sesiones casi sin programar, pero envían las pantallas (con datos de clientes) a un
+tercero; hay que enmascarar los campos. Pueden servir para una prueba corta con un tenant y con
+permiso, no como solución permanente.
+
+**Preguntas para el usuario:**
+1. ¿Quién mira estos datos: solo tú (UmboSystem, todos los tenants) o también el dueño de cada
+   negocio para sus usuarios?
+2. ¿Empezamos por la fase 1 (backend, sin tocar pantallas) y vemos qué sale en dos semanas?
+
 ---
 
 ## Orden de construcción propuesto (a aprobar)
