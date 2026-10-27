@@ -72,9 +72,34 @@ php artisan test   # suite completa, contra PostgreSQL
 ---
 
 ## Resultado
-- **Commits:**
-- **Tests:**
-- **Desviaciones de la tarea y por qué:**
+- **Commits:** rama `fix/T-030-alternativa-aceptada-sin-cambios` (ver `git log`).
+- **Tests:** 1 nuevo en `Sesion12aFase0GapsTest` (cambiar el estado de una aceptada a borrador,
+  enviada o descartada → 422) y 2 en `OpcionMayoristaCrudTest` (los 9 métodos de escritura del
+  mayorista → 422 sin cambios; la lectura de hoteles y tours sigue con 200). Las pruebas que ya
+  había (cambiar el nombre de una aceptada, eliminar una opción) siguen en verde. Suite completa:
+  1559 en verde.
+- **`AlternativaController::update()`:** en una aceptada, cualquier `estado` distinto → 422; el
+  nombre se sigue cambiando.
+- **`OpcionMayoristaController`**, helper `rechazoSiAceptada()`, un solo mensaje:
+
+| Método | Guard |
+|---|---|
+| `store`, `elegir`, `update`, `descartar`, `reactivar` | sí (nuevo) |
+| `hoteles`, `opcionales`, `tours` (POST; el GET sigue libre) | sí (nuevo) |
+| `actualizarOpcional`, `eliminarOpcional`, `quitarTour`, `actualizarOrdenTour` | sí (nuevo) |
+| `eliminar` | ya lo tenía (se dejó su mensaje propio) |
+| `index` | lectura |
+
+- **`AlternativaDestinoController`:** ya cubierto (`guardAceptada()` en store, update y destroy).
+- **`OpcionHotelController`:** no es el mismo caso: son hoteles no registrados que no cuelgan de
+  una alternativa (pueden compartirse); `destroy`/`eliminarTarifa` ya bloquean si hay reserva. Ver
+  hallazgos.
+- **Desviaciones de la tarea y por qué:** ninguna.
 
 ## Hallazgos fuera de alcance
--
+- `cotizador/editar.vue` **no** oculta las acciones del mayorista (elegir, descartar, editar,
+  agregar hotel u opcional) en una alternativa aceptada: el usuario las ve y ahora recibe el
+  mensaje del 422. Ocultarlas o deshabilitarlas con `alternativaActiva.estado === 'aceptada'`.
+- `OpcionHotelController::update()`, `agregarTarifa()`, `actualizarTarifa()` y las fotos no
+  revisan si el hotel no registrado se usa en una reserva. El precio vendido no cambia (el ítem
+  guarda su snapshot), pero conviene revisarlo junto con "Modificar reserva".

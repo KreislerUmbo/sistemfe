@@ -262,4 +262,47 @@ class OpcionMayoristaCrudTest extends TestCase
         // El PaquetePlantilla real nunca se toca por este endpoint.
         $this->assertSame('Tour Test Orden', $tour->fresh()->nombre);
     }
+
+    // ── T-030 (H8): con la alternativa aceptada, el mayorista no cambia por API ──
+
+    public function test_con_la_alternativa_aceptada_no_se_cambia_el_mayorista(): void
+    {
+        $alternativa = $this->crearAlternativa('aceptada');
+        [$opcion] = $this->crearOpcionConHotelYTarifa($alternativa);
+        $opcional = OpcionMayoristaOpcional::create([
+            'opcion_mayorista_id' => $opcion->id, 'nombre' => 'Original', 'precio_por_persona' => 50, 'moneda' => 'USD',
+        ]);
+        $c = app(OpcionMayoristaController::class);
+        $post = fn (array $datos) => Request::create('/', 'POST', $datos);
+
+        $respuestas = [
+            'elegir' => $c->elegir((string) $opcion->id),
+            'descartar' => $c->descartar((string) $opcion->id),
+            'reactivar' => $c->reactivar((string) $opcion->id),
+            'update' => $c->update(new Request(['proveedor_id' => $opcion->proveedor_id, 'moneda' => 'PEN']), (string) $opcion->id),
+            'store' => $c->store(new Request(['proveedor_id' => $opcion->proveedor_id, 'moneda' => 'USD']), (string) $alternativa->id),
+            'hoteles' => $c->hoteles($post(['nombre_hotel' => 'Otro']), (string) $opcion->id),
+            'opcionales' => $c->opcionales($post(['nombre' => 'Otro', 'precio_por_persona' => 10, 'moneda' => 'USD']), (string) $opcion->id),
+            'actualizarOpcional' => $c->actualizarOpcional(new Request(['nombre' => 'Cambiado', 'precio_por_persona' => 99, 'moneda' => 'USD']), (string) $opcional->id),
+            'eliminarOpcional' => $c->eliminarOpcional((string) $opcional->id),
+        ];
+
+        foreach ($respuestas as $metodo => $respuesta) {
+            $this->assertSame(422, $respuesta->getStatusCode(), $metodo);
+        }
+        $this->assertSame('elegida', $opcion->fresh()->estado);
+        $this->assertSame('USD', $opcion->fresh()->moneda);
+        $this->assertSame('Original', $opcional->fresh()->nombre);
+        $this->assertSame(1, OpcionMayorista::where('alternativa_id', $alternativa->id)->count());
+    }
+
+    public function test_con_la_alternativa_aceptada_la_lectura_sigue_funcionando(): void
+    {
+        $alternativa = $this->crearAlternativa('aceptada');
+        [$opcion] = $this->crearOpcionConHotelYTarifa($alternativa);
+        $get = Request::create('/', 'GET');
+
+        $this->assertSame(200, app(OpcionMayoristaController::class)->hoteles($get, (string) $opcion->id)->getStatusCode());
+        $this->assertSame(200, app(OpcionMayoristaController::class)->tours($get, (string) $opcion->id)->getStatusCode());
+    }
 }

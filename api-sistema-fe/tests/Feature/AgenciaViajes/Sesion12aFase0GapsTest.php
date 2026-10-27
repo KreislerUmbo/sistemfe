@@ -181,4 +181,18 @@ class Sesion12aFase0GapsTest extends TestCase
         $this->assertSame('elegida', $opcion2->fresh()->estado);
         $this->assertSame('candidata', $opcion1->fresh()->estado);
     }
+
+    // T-030 (H3): una aceptada no vuelve a borrador, enviada ni descartada por
+    // este PUT (dejaba su reserva colgando de una alternativa "no aceptada").
+    public function test_update_rechaza_cambiar_el_estado_de_una_alternativa_aceptada(): void
+    {
+        $alternativa = $this->crearAlternativa('aceptada');
+
+        foreach (['borrador', 'enviada', 'descartada'] as $estado) {
+            $response = app(AlternativaController::class)->update(new Request(['estado' => $estado]), (string) $alternativa->id);
+
+            $this->assertSame(422, $response->getStatusCode(), $estado);
+            $this->assertSame('aceptada', $alternativa->fresh()->estado);
+        }
+    }
 }
