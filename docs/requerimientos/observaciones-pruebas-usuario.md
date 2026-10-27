@@ -767,6 +767,54 @@ Además, el selector de guía del tablero (`guiaService.listar({ page: 1 })`) mu
 guías: mismo caso que H28 (entra en T-039). Para los proveedores, el tablero ya usa
 `ProveedorBuscador` (búsqueda contra el servidor): T-039 puede reutilizarlo.
 
+### 12. Venta directa: ¿qué falta mejorar? (26-oct-2026)
+
+**Pregunta del usuario:** qué tenemos por mejorar en ventas directas.
+
+**Para qué sirve (supuesto a confirmar):** el cliente que llega a la oficina y compra en el momento
+(un tour de hoy o mañana, un traslado, una entrada) y paga ahí mismo. Tiene que ser más rápido que
+el cotizador.
+
+**Cómo es hoy** (`VentaDirectaController`, `venta-directa.vue`; bloque 1 corregido el 09-oct):
+cliente, destino (texto libre), fecha opcional, pasajeros solo por edad, **un** servicio (tarifa de
+proveedor o concepto libre) y "Crear venta directa". Crea por dentro cotización + alternativa
+aceptada + reserva y lleva a la ficha de la reserva; facturar y cobrar es otro paso, desde ahí.
+
+| ID | Prioridad | Qué pasa |
+|---|---|---|
+| H41 | **Alta** | **No se puede vender un tour.** Solo tarifa de proveedor o concepto libre. El tour del catálogo (lo más vendido en mostrador, con precio por persona y por temporada) obliga a pasar por el cotizador completo. Y como un servicio suelto no tiene tour, la venta directa **nunca** se engancha a una salida operativa: no cuenta en las cantidades del almuerzo ni en el vehículo. |
+| H42 | **Alta** | **No se ve el total antes de crear, y el modo de precio puede cobrar de menos.** El modo viene en "Tarifa fija" por defecto: una entrada por persona para 4 pasajeros con cantidad 1 cobra 1 entrada. El vendedor recién ve el monto en la reserva. |
+| H43 | Media | **Pasajeros sin nombre ni residencia.** Solo edad. La residencia (nacional / extranjero) cambia el precio de tours y entradas. El cliente no se propone como primer pasajero (T-017 es solo para aceptar una cotización). |
+| H44 | Media | **Fecha opcional.** Sin fecha, el servicio no sale en el Reporte operativo. En mostrador casi siempre es hoy o mañana. |
+| H45 | Media | **Cobrar y emitir es otro paso.** Después de crear hay que ir a la reserva → Facturar → (cobro). Para quien paga en el momento son 3 pantallas. |
+| H46 | Media-baja | **Un solo servicio por venta.** Tour + traslado = dos ventas directas, dos reservas, dos comprobantes. |
+| H47 | Baja | **Destino como texto libre**, no del árbol de destinos; la biblioteca no se filtra por destino y empieza vacía hasta escribir. |
+
+**Propuesta (a aprobar):** una venta directa pensada para el mostrador, en una sola pantalla:
+1. **Vender un tour** del catálogo (precio por persona según residencia, temporada de la fecha),
+   además de tarifa de proveedor y concepto libre. Se engancha a la salida del día como cualquier
+   reserva. (H41)
+2. **Total en vivo** mientras se arma, y el modo de precio claro: el tour ya es por persona; para
+   una tarifa, la pregunta "¿por persona o por unidad?" con el total de cada opción a la vista. (H42)
+3. **Pasajeros rápidos:** cantidad de adultos / niños / infantes con nacional o extranjero; nombres
+   opcionales; el cliente como primer pasajero. (H43)
+4. **Fecha obligatoria**, por defecto hoy, con acceso a "mañana". (H44)
+5. **"Crear y cobrar"**: botón que, además de crear, emite el comprobante (boleta / factura / nota
+   de venta) y registra el cobro en caja en el mismo paso, con el servicio de cobro de T-010/T-011.
+   "Crear" solo sigue existiendo para vender a crédito o facturar después. (H45)
+6. **Varias líneas** (tour + traslado) en la misma venta. (H46)
+7. Destino del árbol, o tomado del tour elegido. (H47)
+- El tratamiento tributario del concepto libre espera la obs. 10 (contador).
+
+**Orden sugerido:** 1-2-4 primero (lo que evita cobrar mal y lo más vendido), después 3, después 5
+(depende de T-010/T-011), y 6-7 al final.
+
+**Preguntas para el usuario:**
+1. ¿El supuesto de uso es correcto (cliente en mostrador que paga en el momento)?
+2. En "Crear y cobrar", ¿qué comprobante por defecto: boleta, o lo que pida el cliente cada vez?
+3. ¿Hace falta vender un **paquete de varios días** por venta directa, o eso siempre va por el
+   cotizador?
+
 ---
 
 ## Orden de construcción propuesto (a aprobar)
