@@ -74,9 +74,26 @@ sesión de caja (el esperado vuelve atrás y el historial muestra la corrección
 ---
 
 ## Resultado
-- **Commits:**
-- **Tests:**
-- **Desviaciones de la tarea y por qué:**
+- **Commits:** rama `fix/T-008-eliminar-venta-anula-caja` (ver `git log`).
+- **Tests:** 6 nuevos (`tests/Feature/Cash/EliminarVentaAnulaCajaTest.php`), uno por criterio
+  (CA1-CA5; CA3 en dos tests); suite completa 1535 en verde. **CA6:** con el `SaleController` anterior fallan 5 de 6; el de
+  venta sin cobros (CA5) pasa igual, porque ese caso no cambia.
+- **Cómo quedó:** `prepararSincronizacionCaja()` (edición) y `destroy()` comparten
+  `movimientosCajaActivos()` y `sesionParaCorregirCaja()` (permiso si la sesión original cerró +
+  sesión abierta actual). En la edición, mismos mensajes y comportamiento que antes. En
+  `destroy()` se revisa antes de la transacción; dentro, con la venta bloqueada
+  (`lockForUpdate()`), se vuelven a leer los cobros vivos y se corrigen con
+  `CashCorrectionService::revertirMovimiento()`.
+- **Desviaciones de la tarea y por qué:** ninguna.
+- **Prueba funcional:** cubierta por los tests contra Postgres (sesión real, movimientos y
+  `ExpectedCashCalculator`); falta la prueba a mano en umbo (abrir caja, vender en efectivo,
+  eliminar, ver el esperado y la corrección en el historial).
+- **Recorrido:** `docs/aprendizaje/16-recorrido-eliminar-venta-anula-caja.md`.
 
 ## Hallazgos fuera de alcance
--
+- Los guards que ya existían en `destroy()` (venta enviada a SUNAT, venta con adelanto aplicado)
+  responden **HTTP 200** con `code: 405` en el cuerpo. `sale/index.vue` → `deleteSale()` solo mira
+  si la petición falló, así que muestra "Eliminada" y quita la fila aunque la venta **no** se
+  eliminó (reaparece al recargar). Arreglo chico: devolver 409/422 real, o que la pantalla mire
+  `code`.
+- `destroy()` usa `Sale::find($id)` sin comprobar null: un id inexistente da 500.

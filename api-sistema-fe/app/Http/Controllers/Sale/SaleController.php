@@ -449,12 +449,7 @@ class SaleController extends Controller
     // supervisor) se resuelve acá; aplicarSincronizacionCaja() solo ejecuta.
     private function prepararSincronizacionCaja(Sale $venta, array $pagosNuevos): array
     {
-        $movimientosActivos = CashMovement::where('reference_type', 'sale')
-            ->where('reference_id', $venta->id)
-            ->where('type', 'sale_payment')
-            ->whereNull('corrected_by')
-            ->with('paymentMethod')
-            ->get();
+        $movimientosActivos = $this->movimientosCajaActivos($venta);
 
         $firmaVieja = $movimientosActivos
             ->map(fn ($m) => strtolower($m->paymentMethod->code) . '|' . number_format((float) $m->amount, 2, '.', ''))
@@ -468,10 +463,40 @@ class SaleController extends Controller
             return ['accion' => 'ninguna'];
         }
 
-        // Algo cambió (montos, métodos, o se agregaron/quitaron pagos). Si
-        // había movimientos vivos y su sesión ya cerró (ya se hizo el
-        // arqueo de ese día), corregirlos exige permiso de supervisor —
-        // igual criterio que el cierre de sesión por terceros (Fase 2).
+        // Algo cambió (montos, métodos, o se agregaron/quitaron pagos).
+        $sesionActual = $this->sesionParaCorregirCaja(
+            $movimientosActivos,
+            'No hay una sesión de caja abierta. Debes abrir caja antes de modificar los pagos de una venta.'
+        );
+
+        return [
+            'accion'                 => 'sincronizar',
+            'sesion_destino_id'      => $sesionActual->id,
+            'movimientos_a_corregir' => $movimientosActivos,
+            'pagos_nuevos'           => $pagosNuevos,
+        ];
+    }
+
+    // Movimientos de cobro de la venta que siguen vivos (sin corregir).
+    private function movimientosCajaActivos(Sale $venta)
+    {
+        return CashMovement::where('reference_type', 'sale')
+            ->where('reference_id', $venta->id)
+            ->where('type', 'sale_payment')
+            ->whereNull('corrected_by')
+            ->with('paymentMethod')
+            ->get();
+    }
+
+    // Compartido por update() y destroy() (T-008), antes de la transacción:
+    // - si los movimientos a corregir son de una sesión ya cerrada (ya se hizo
+    //   el arqueo de ese día), hace falta permiso de supervisor — igual
+    //   criterio que el cierre de sesión por terceros (Fase 2);
+    // - la corrección se registra en la sesión abierta ACTUAL de quien
+    //   corrige — nunca en la sesión vieja (aunque siga abierta y sea la
+    //   misma), mismo criterio que la regla #2 del plan para reembolsos de NC.
+    private function sesionParaCorregirCaja($movimientosActivos, string $mensajeSinCaja): CashSession
+    {
         if ($movimientosActivos->isNotEmpty()) {
             $sesionOriginal = CashSession::find($movimientosActivos->first()->cash_session_id);
 
@@ -485,27 +510,15 @@ class SaleController extends Controller
             }
         }
 
-        // La corrección y/o los pagos nuevos siempre se registran en la
-        // sesión abierta ACTUAL de quien edita — nunca en la sesión vieja
-        // (aunque siga abierta y sea la misma), mismo criterio que la regla
-        // #2 del plan para reembolsos de NC.
         $sesionActual = CashSession::where('opened_by', auth('api')->user()->id)
             ->where('status', 'open')
             ->first();
 
         if (!$sesionActual) {
-            throw new HttpException(
-                422,
-                'No hay una sesión de caja abierta. Debes abrir caja antes de modificar los pagos de una venta.'
-            );
+            throw new HttpException(422, $mensajeSinCaja);
         }
 
-        return [
-            'accion'                 => 'sincronizar',
-            'sesion_destino_id'      => $sesionActual->id,
-            'movimientos_a_corregir' => $movimientosActivos,
-            'pagos_nuevos'           => $pagosNuevos,
-        ];
+        return $sesionActual;
     }
 
     // Corre DENTRO de la transacción de update(), junto al reemplazo de
@@ -1404,7 +1417,28 @@ public function update(Request $request, string $id)
             ]);
         }
 
+        // T-008 (R1): los cobros de la venta en caja se anulan con una
+        // corrección (nunca se borran). Antes quedaban vivos y la caja
+        // esperaba al cierre un dinero de una venta que ya no existía. Permiso
+        // y caja abierta se revisan aquí, antes de la transacción; sin
+        // cobros, no se pide caja.
+        $movimientosActivos = $this->movimientosCajaActivos($venta);
+        if ($movimientosActivos->isNotEmpty()) {
+            $this->sesionParaCorregirCaja(
+                $movimientosActivos,
+                'No hay una sesión de caja abierta. Debes abrir caja para eliminar una venta con pagos registrados.'
+            );
+        }
+
         DB::transaction(function () use ($venta) {
+            // Con la venta bloqueada, se vuelven a leer los cobros vivos: si
+            // otro usuario la editó o eliminó a la vez, no se corrige dos
+            // veces el mismo movimiento.
+            Sale::whereKey($venta->id)->lockForUpdate()->first();
+            foreach ($this->movimientosCajaActivos($venta) as $movimiento) {
+                $this->cashCorrection->revertirMovimiento($movimiento, auth('api')->user());
+            }
+
             // Solo en tenants con reservas (Agencia): en retail la tabla no existe.
             if (\App\Models\AgenciaViajes\ReservaVenta::hayReservasEnEsteTenant()) {
                 \App\Models\AgenciaViajes\ReservaVenta::where('sale_id', $venta->id)->delete();
