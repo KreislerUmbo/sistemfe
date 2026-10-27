@@ -10,6 +10,16 @@ export const ZONA_PERU = 'America/Lima';
 // zonas horarias detrás de UTC (Perú, UTC-5) — mismo bug ya
 // resuelto puntualmente en cotizador/editar.vue y reservas/detalle.vue,
 // ahora centralizado acá.
+// T-026: una fecha de negocio (columna 'date') llega a veces con hora y zona
+// ("2026-08-20T00:00:00.000000Z", el cast 'date' de Laravel). Es el día
+// escrito: se toman los 10 primeros caracteres, nunca se convierte de zona
+// (medianoche UTC son las 19:00 del día anterior en Perú).
+export function soloFechaISO(valor?: string | null): string {
+  if (!valor) return '';
+  const m = /^(\d{4}-\d{2}-\d{2})/.exec(valor);
+  return m ? m[1] : valor;
+}
+
 export function formatFecha(f?: string | null): string {
   if (!f) return 'sin fecha';
   const d = new Date(f.slice(0, 10) + 'T00:00:00');
