@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Módulo** | AGE |
-| **Depende de** | ninguna (hacer antes o junto con T-040, que carga la pestaña de mayorista al abrirla) |
+| **Depende de** | ninguna |
 | **Reglas** | — |
 | **Decisiones** | `docs/requerimientos/observaciones-pruebas-usuario.md` → obs. 11, H28 (26-oct-2026) |
 | **Rama** | `fix/T-039-listas-sin-cortar` |

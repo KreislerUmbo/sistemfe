@@ -756,9 +756,9 @@
                         <template v-if="pasoDrawer === 'grid'">
                             <div class="btn-group w-100 mb-2" role="group" aria-label="Tipo de biblioteca">
                                 <input type="radio" class="btn-check" name="modoBiblioteca" id="modoLocal" autocomplete="off" :checked="modo === 'local'" @change="modo = 'local'">
-                                <label class="btn btn-outline-primary btn-sm" for="modoLocal">Local / Nacional</label>
+                                <label class="btn btn-outline-primary btn-sm" for="modoLocal">Servicios de la agencia</label>
                                 <input type="radio" class="btn-check" name="modoBiblioteca" id="modoIntl" autocomplete="off" :checked="modo === 'intl'" @change="modo = 'intl'">
-                                <label class="btn btn-outline-primary btn-sm" for="modoIntl">Internacional</label>
+                                <label class="btn btn-outline-primary btn-sm" for="modoIntl">Paquete de mayorista</label>
                                 <input type="radio" class="btn-check" name="modoBiblioteca" id="modoGuia" autocomplete="off" :checked="modo === 'guia'" @change="modo = 'guia'">
                                 <label class="btn btn-outline-primary btn-sm" for="modoGuia"><i class="fas fa-user-tie me-1"></i>Guías</label>
                             </div>

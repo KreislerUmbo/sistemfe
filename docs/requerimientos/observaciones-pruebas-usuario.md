@@ -693,7 +693,12 @@ Para el camino B, la regla queda: **agencia que cumple el art. 2** (dato de conf
 **Pedido del usuario:** separar Local/Nacional e Internacional (mayoristas) en menús distintos para
 que sea más fácil, sin perder la cotización que mezcla las dos cosas.
 
-**Decisión (aprobada 26-oct-2026): separar la entrada, no la cotización.** Motivo: los vuelos
+**Estado (26-oct-2026): en espera.** El usuario lo pensará cuando evalúe a los usuarios reales. Por
+ahora **solo** se renombraron las pestañas del modal "Agregar servicio": "Local / Nacional" →
+"Servicios de la agencia", "Internacional" → "Paquete de mayorista". Lo de abajo es la propuesta,
+sin aprobar ni convertir en tarea.
+
+**Propuesta: separar la entrada, no la cotización.** Motivo: los vuelos
 internacionales salen de Lima, así que un paquete de mayorista suele ir con un pasaje suelto
 Tarapoto–Lima o un traslado; partirlo en dos módulos daría dos cotizaciones, dos PDF, dos totales y
 dos reservas. Caso real que mezcla: CDKM-0826-0000003 (Alto Mayo + Cusco con pasaje y hotel +

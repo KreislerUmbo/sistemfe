@@ -23,7 +23,7 @@ internacionales y no se pueden cargar ahí.
   filtro a mano, se respeta mientras la biblioteca siga abierta (no se reimpone en cada búsqueda);
   al volver a abrirla, vuelve al destino activo.
 - Cambiar de chip de destino con la biblioteca cerrada → la próxima vez abre con el nuevo destino.
-- En la pestaña Local/Nacional no se listan tours con `uso = 'solo_itinerario'` ni los de ámbito
+- En la pestaña "Servicios de la agencia" (antes "Local / Nacional") no se listan tours con `uso = 'solo_itinerario'` ni los de ámbito
   internacional (revisar el campo que lo indica en `paquetes_plantilla`), en el backend
   (`BibliotecaCotizadorController`) para que la paginación cuente bien.
 
@@ -38,7 +38,7 @@ internacionales y no se pueden cargar ahí.
 - [ ] **CA1** — Cotización a Cusco: la biblioteca abre mostrando solo Cusco y sus lugares, con "Mostrando: Cusco ✕". → prueba funcional
 - [ ] **CA2** — Con Lima y Cusco, chip Lima activo → abre con Lima. → prueba funcional
 - [ ] **CA3** — ✕ → muestra todo; buscar después no vuelve a filtrar. → prueba funcional
-- [ ] **CA4** — Local/Nacional no lista tours "solo itinerario" ni internacionales. → test del endpoint
+- [ ] **CA4** — "Servicios de la agencia" no lista tours "solo itinerario" ni internacionales. → test del endpoint
 - [ ] **CA5** — `type-check` y `build` sin errores.
 
 ## Seguridad y correctitud
