@@ -729,6 +729,27 @@ mayorista en la misma alternativa).
 
 ---
 
+## AGE — Revisión de reservas (26-oct-2026)
+
+Revisión de código de `ReservaController`, `ReservaItemController`, `ReservaPasajeroController`,
+`ReservaItemPasajeroController`, `ReservaAnticipoController` y de la selección en
+`ReservaFacturacionController`. La auditoría F3 (23-oct) ya cubrió permisos, NC parcial, cruces
+cancelar/facturar y doble aceptación; el cambio de precio tras aceptar es T-001. Sin prueba en vivo.
+
+| ID | Prioridad | Qué pasa | Dónde |
+|---|---|---|---|
+| H29 | Media | **Avisos a proveedores solo al cancelar.** Cancelar responde qué cambió en cada salida ("El Mirador: ahora son 6, no 9", D15). Reprogramar la reserva desde su ficha, quitar un servicio o agregar un pasajero también cambian las cantidades de las salidas (la vieja pierde pasajeros, la nueva los gana) y no avisan nada. | `ReservaController::reprogramar()`, `ReservaItemController::destroy()`, `ReservaPasajeroController::store()` |
+| H30 | Media | **El check-in cambia cómo se factura.** Un servicio sin pasajeros asignados vale "para todos" y en Facturación especial se elige a mano. Al marcar el primer check-in, el sistema asigna el servicio a todos los pasajeros; desde ahí, al facturar por grupos queda "pendiente: faltan pasajeros" y solo sale en la última factura. Una acción operativa no debería cambiar la facturación. | `ReservaItemPasajeroController::checkin()` + `resolverSeleccion()` |
+| H31 | Media-baja | **Reasignar mayorista no mueve el cupo.** El cupo de la salida del mayorista se suma al aceptar y se resta al cancelar, siempre en la opción original; al reasignar a otro mayorista, el cupo queda ocupado en el viejo y el nuevo no lo cuenta. | `ReservaController::reasignarMayorista()` |
+| H32 | Baja | **Reserva cancelada sin camino de vuelta.** Al cancelar, la alternativa sigue "aceptada" y las demás "descartadas"; para volver a reservar hay que duplicar la alternativa. Con T-030 (una aceptada no cambia de estado) queda así a propósito: T-030 debe decir qué pasa con la alternativa cuando su reserva se cancela. | `ReservaController::cancelar()`, T-030 |
+| H33 | Baja | **Pasajero agregado sin residencia.** El formulario de agregar pasajero no pide residencia y la línea de tour reparte su precio por residencia al facturar por grupos. Va con F4 (agregar pasajero sin recalcular precio). | `ReservaPasajeroController::store()` |
+| H34 | Baja | **Error 500 en una carrera.** `actualizarFacturacionExterna()` lanza la excepción de "ya tiene venta" dentro de la transacción sin capturarla: con dos clics simultáneos responde 500 en vez del mensaje. | `ReservaController::actualizarFacturacionExterna()` |
+
+Además: "Corregir tratamiento tributario" de la reserva acepta combinaciones que contradicen D18
+(Amazonía + gravado, nacional + exonerado). Espera la obs. 10.
+
+---
+
 ## Orden de construcción propuesto (a aprobar)
 
 Aprobado el 25-oct-2026: son las tareas T-008 a T-018, en este orden (estado en `docs/backlog.md`):
