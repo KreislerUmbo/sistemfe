@@ -75,7 +75,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 | T-035 | AGE | Biblioteca filtrada por el destino activo; sin tours "solo itinerario" en Local (R3) | por hacer | — | |
 | T-036 | AGE | Mayorista: etiquetas, primera opción elegida sola, "solo adultos" a la vista (R6, H22) | por hacer | — | |
 | T-037 | AGE | PDF: nombre de archivo con código y cliente; rótulo correcto de la tabla de hoteles (R8, H20) | por hacer | — | |
-| T-039 | AGE | Listas de proveedores, hoteles, mayoristas y guías sin cortar a 15: buscador contra el servidor (H28) | en curso (Codex, carpeta `C:/xampp/htdocs/sistemfe-codex`) | — | `fix/T-039-listas-sin-cortar` |
+| T-039 | AGE | Listas de proveedores, hoteles, mayoristas y guías sin cortar a 15: buscador contra el servidor (H28) | en pausa: avance parcial de Codex sin revisar en `fix/T-039-listas-sin-cortar` (`5bc9f7a`, carpeta `sistemfe-codex`); lo termina Claude después de T-025 | — | `fix/T-039-listas-sin-cortar` |
 | T-040 | AGE | Avisos a proveedores también al reprogramar, quitar un servicio, agregar un pasajero o cancelar la salida (H29, H37) | por hacer | — | |
 | T-041 | AGE | El check-in en su propia tabla: no cambia la asignación ni la facturación (H30) | por hacer | — | |
 | T-044 | AGE | Aviso cuando un guía o un chofer ya tiene otra salida ese día (H38) | por hacer | — | |
