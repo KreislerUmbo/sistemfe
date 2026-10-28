@@ -155,9 +155,9 @@ Llenar "Resultado" (salida de los comandos, desviaciones, hallazgos). Commits co
 ---
 
 ## Resultado
-- **Commits:**
-- **Tests:**
-- **Desviaciones de la tarea y por qué:**
+- **Commits:** parte 1 `3b48cb3`, parte 2 (ver `git log`)
+- **Tests:** suite completa tras la parte 1: 1582 en verde; T028 13/13; type-check 46 errores (los preexistentes). `agencia-viajes:plantillas-a-tarifa-vigente --simular` en agencia-demo: reapuntaría 0, 1 para revisar a mano (ítem de tour 38, tarifa 26, sin tarifa vigente equivalente). CA7 (prueba funcional) queda para Opus.
+- **Desviaciones de la tarea y por qué:** ninguna. Un test mío ("vigente_hasta anterior") usa fin pasado con inicio original, porque con inicio futuro caía antes en la validación existente `after_or_equal`.
 
 ## Hallazgos fuera de alcance
 -
