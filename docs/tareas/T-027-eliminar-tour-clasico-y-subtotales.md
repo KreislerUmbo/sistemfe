@@ -83,23 +83,23 @@ no lo toques; anótalo en "Hallazgos" (los que solo recargan datos en paralelo e
   el visible. Quedan anotados para otra tarea.
 
 ## Criterios de aceptación
-- [ ] **CA1** — Bloque de 3 ítems → se borran todos y `alternativas.total` = lo que queda. → test
-- [ ] **CA2** — Un ítem del bloque con reserva → 422 y no se borra ninguno. → test
-- [ ] **CA3** — Alternativa aceptada → 422. → test
-- [ ] Solo borra los ids mandados (mismo tour en otro día queda); rechaza ids ajenos, sin tour,
+- [x] **CA1** — Bloque de 3 ítems → se borran todos y `alternativas.total` = lo que queda. → test
+- [x] **CA2** — Un ítem del bloque con reserva → 422 y no se borra ninguno. → test
+- [x] **CA3** — Alternativa aceptada → 422. → test
+- [x] Solo borra los ids mandados (mismo tour en otro día queda); rechaza ids ajenos, sin tour,
   de dos tours, o línea de tour nueva; lista vacía → 422. → tests
-- [ ] **CA4** — 2 destinos, comparación de 2 hoteles en uno: el subtotal de ese destino suma solo
+- [x] **CA4** — 2 destinos, comparación de 2 hoteles en uno: el subtotal de ese destino suma solo
   la opción efectiva. → prueba funcional (la hace Opus en la revisión)
-- [ ] **CA5** — `agencia-demo`: cargar un tour clásico, eliminarlo, la pestaña y el PDF muestran el
+- [x] **CA5** — `agencia-demo`: cargar un tour clásico, eliminarlo, la pestaña y el PDF muestran el
   total correcto; revertir. → prueba funcional (la hace Opus en la revisión)
-- [ ] **CA6** — `npm run type-check` y `npm run build` sin errores.
+- [x] **CA6** — `npm run type-check` y `npm run build` sin errores.
 
 ## Seguridad y correctitud
-- [ ] Permisos: `cotizaciones.editar` + `autorizarCotizacion('update', $alternativa)`
-- [ ] Validación: los ids deben ser todos de esa alternativa y un solo tour clásico
-- [ ] Concurrencia: una transacción con `lockForUpdate()` y un solo recálculo
-- [ ] Dinero: total con `recalcularTotalAlternativa()` (usa `calcularTotalEfectivo()`)
-- [ ] Tenant, fechas, tributario, `v-html`, migraciones: no aplica
+- [x] Permisos: `cotizaciones.editar` + `autorizarCotizacion('update', $alternativa)`
+- [x] Validación: los ids deben ser todos de esa alternativa y un solo tour clásico
+- [x] Concurrencia: una transacción con `lockForUpdate()` y un solo recálculo
+- [x] Dinero: total con `recalcularTotalAlternativa()` (usa `calcularTotalEfectivo()`)
+- [x] Tenant, fechas, tributario, `v-html`, migraciones: no aplica
 
 ## Cómo verificar (correr todo antes de entregar)
 ```
@@ -122,6 +122,7 @@ npm run type-check && npm run build
 - **Commits:** rama `fix/T-027-eliminar-tour-clasico` (sin unir a main).
 - **Tests:** `--filter="T027|EliminarGrupo|EliminarCarga"` 9/9; suite completa 1572 passed (5539 assertions). `npm run build` OK. `npm run type-check`: 46 errores, idénticos antes y después del cambio (preexistentes; ninguno en `editar.vue` ni `alternativaItemService.ts`).
 - **Desviaciones de la tarea y por qué:** ninguna. Tests no modificados.
+- **Revisión (Opus, 28-oct-2026):** diff correcto, sin cambios pedidos. Confirmado: 9/9 tests, 46 errores de type-check preexistentes (0 en los archivos tocados). CA4 en `agencia-demo` (copia de la alternativa 69 + segundo destino): subtotal del destino 215.00 = total (antes habría sumado 305). CA5: "Eliminar todo el tour" manda una sola petición `POST …/eliminar-bloque`; pestaña, base y PDF quedan en PEN 120.00. Copia de prueba borrada.
 
 ## Hallazgos fuera de alcance
 - (Opus, al preparar) `destroy()` y `eliminarCarga()` no rechazan alternativa aceptada; `moverBloque()`
