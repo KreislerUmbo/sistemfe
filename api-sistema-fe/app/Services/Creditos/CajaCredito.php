@@ -79,6 +79,7 @@ class CajaCredito
             'payment_method_id' => $paymentMethodId,
             'direction' => $direccion,
             'amount' => Dinero::aSoles($centavos),
+            'currency' => 'PEN', // T-009: la tabla creditos no tiene moneda
             'reference_type' => $tipo,
             'reference_id' => $referenciaId,
             'description' => $descripcion,

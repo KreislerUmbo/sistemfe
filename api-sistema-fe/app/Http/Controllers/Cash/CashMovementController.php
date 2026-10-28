@@ -93,6 +93,7 @@ class CashMovementController extends Controller
             'payment_method_id' => $metodo->id,
             'direction'         => $direccion,
             'amount'            => $amount,
+            'currency'          => 'PEN', // T-009: el formulario aún no pide moneda (T-013)
             'concept_id'        => $concepto->id,
             'description'       => $request->description,
             'counterparty_type'     => $contraparte['counterparty_type'],
@@ -189,6 +190,7 @@ class CashMovementController extends Controller
                 'payment_method_id' => $metodo->id,
                 'direction'         => $direccion,
                 'amount'            => $amount,
+                'currency'          => 'PEN', // T-009: el formulario aún no pide moneda (T-013)
                 'concept_id'        => $concepto->id,
                 'description'       => $request->description,
                 'counterparty_type'     => $contraparte['counterparty_type'],

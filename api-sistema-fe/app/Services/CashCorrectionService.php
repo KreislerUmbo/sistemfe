@@ -57,6 +57,7 @@ class CashCorrectionService
             'payment_method_id'     => $original->payment_method_id,
             'direction'             => $original->direction === 'in' ? 'out' : 'in',
             'amount'                => $original->amount,
+            'currency'              => $original->currency,
             'concept_id'            => $original->concept_id,
             'description'           => 'Corrección de movimiento #' . $original->id,
             'reference_type'        => 'cash_movement',

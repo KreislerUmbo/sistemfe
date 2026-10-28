@@ -149,6 +149,7 @@ class CashSessionController extends Controller
                 'payment_method_id' => $efectivo->id,
                 'direction' => 'in',
                 'amount' => $openingAmount,
+                'currency' => 'PEN',
                 'status' => 'confirmed',
                 'created_by' => $user->id,
             ]);

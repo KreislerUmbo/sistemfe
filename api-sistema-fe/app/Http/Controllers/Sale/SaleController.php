@@ -426,6 +426,7 @@ class SaleController extends Controller
                 'payment_method_id' => $metodo->id,
                 'direction'         => 'in',
                 'amount'            => $pago['amount'],
+                'currency'          => CashMovement::monedaOFalla($venta->currency),
                 'reference_type'    => 'sale',
                 'reference_id'      => $venta->id,
                 'status'            => 'confirmed',

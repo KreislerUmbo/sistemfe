@@ -231,6 +231,7 @@ class AdvanceController extends Controller
                 "payment_method_id" => $metodoPago->id,
                 "direction"         => "in",
                 "amount"            => $amount,
+                "currency"          => CashMovement::monedaOFalla($adelanto->currency),
                 "reference_type"    => "advance",
                 "reference_id"      => $adelanto->id,
                 "status"            => "confirmed",
