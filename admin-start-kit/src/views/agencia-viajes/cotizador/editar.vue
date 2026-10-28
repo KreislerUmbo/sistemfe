@@ -2320,7 +2320,7 @@ const gruposPrecioPorDestino = computed<BloqueDestino[]>(() => {
         return {
             destinoId: destino.id,
             destinoTexto: destino.destino_texto,
-            subtotal: items.reduce((sum, it) => sum + totalConvertidoLocal(it), 0),
+            subtotal: totalEfectivoLocal(items),
             grupos: agruparPorTour(items),
         };
     });
@@ -2348,13 +2348,12 @@ const onMoverBloque = async (bloque: BloqueItem, event: Event) => {
     }
 };
 
-// Punto D — elimina TODOS los ítems del bloque (mismo tour_origen_id). Sin
-// endpoint de borrado masivo en el backend — se dispara un DELETE por ítem
-// (mismo criterio ya usado en el resto del proyecto de resolver en el
-// frontend cuando alcanza, ver CLAUDE.md "Frontend-first").
+// Punto D — elimina TODOS los ítems del bloque (mismo tour_origen_id) en una
+// sola operación atómica (T-027): un DELETE por ítem en paralelo dejaba el
+// total de la alternativa mal guardado.
 const eliminandoBloqueId = ref<number | null>(null);
 const eliminarBloque = async (bloque: BloqueItem) => {
-    if (!bloque.tourOrigenId) return;
+    if (!bloque.tourOrigenId || !alternativaActiva.value) return;
 
     const confirmacion = await (Swal as TVueSwalInstance).fire({
         title: `¿Eliminar "${bloque.tourNombre ?? 'este tour'}"?`,
@@ -2368,10 +2367,10 @@ const eliminarBloque = async (bloque: BloqueItem) => {
 
     eliminandoBloqueId.value = bloque.tourOrigenId;
     try {
-        await Promise.all(bloque.items.map((item) => alternativaItemService.eliminar(item.id)));
+        await alternativaItemService.eliminarBloque(alternativaActiva.value.id, bloque.items.map((i) => i.id));
         toast.success('Tour eliminado');
     } catch (error: any) {
-        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudieron eliminar todos los ítems del bloque', 'error');
+        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo eliminar el tour', 'error');
     } finally {
         eliminandoBloqueId.value = null;
         await cargarCotizacion();

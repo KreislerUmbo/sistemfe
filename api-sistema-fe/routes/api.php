@@ -1013,6 +1013,8 @@ Route::group([
         ->middleware('permission:cotizaciones.editar');
     Route::put("alternativas/{id}/items/mover-bloque", [AlternativaItemController::class, 'moverBloque'])
         ->middleware('permission:cotizaciones.editar');
+    Route::post("alternativas/{id}/items/eliminar-bloque", [AlternativaItemController::class, 'eliminarBloque'])
+        ->middleware('permission:cotizaciones.editar');
     // Fila 13, fase 1b — líneas de tour del modo nuevo (TourLineaService):
     // quitar/mover/cambiar precio por carga, y el aviso y recálculo de
     // temporada al cambiar la fecha de la cotización (§3.12).

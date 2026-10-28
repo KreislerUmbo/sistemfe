@@ -72,6 +72,10 @@ export const alternativaItemService = {
     const response = await httpClient.delete(`/alternativas/${alternativaId}/cargas/${carga}`)
     return response.data
   },
+  async eliminarBloque(alternativaId: number, itemIds: number[]) {
+    const response = await httpClient.post(`/alternativas/${alternativaId}/items/eliminar-bloque`, { item_ids: itemIds })
+    return response.data
+  },
   async moverCarga(alternativaId: number, data: { carga: string; dia_referencial: number }) {
     const response = await httpClient.put(`/alternativas/${alternativaId}/items/mover-carga`, data)
     return response.data as { code: number; message: string; temporadas_desactualizadas: TemporadaDesactualizada[] }
