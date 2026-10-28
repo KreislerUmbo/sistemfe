@@ -46,7 +46,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 | T-005 | AGE | Modificar reserva: aplicar a la reserva | por hacer | T-003, T-004 | |
 | T-006 | AGE | Modificar reserva: PDF para el cliente | por hacer | T-003 | |
 | T-007 | AGE | Modificar reserva: pantallas | por hacer | T-005, T-006 | |
-| T-009 | CAJ | Caja, paso A: la moneda en cada movimiento | por hacer | — | |
+| T-009 | CAJ | Caja, paso A: la moneda en cada movimiento | lista para otro agente (Sonnet), 2 partes: tests de la parte 1 escritos | — | `feat/T-009-caja-moneda-movimientos` |
 | T-010 | VEN + CAJ | Servicio compartido de cobro, con n.º de operación y moneda de pago (Obs. 1) | por hacer | T-009 | |
 | T-011 | AGE + CAJ | Cobro al contado al facturar una reserva (Obs. 1) | por hacer | T-010 | |
 | T-012 | AGE + CAJ | Traspaso del cobro tras una nota de crédito | por hacer | T-011 | |
