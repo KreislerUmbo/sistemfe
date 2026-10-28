@@ -674,6 +674,70 @@ class AlternativaItemController extends Controller
         return response()->json(['code' => 200, 'message' => 'Tour quitado correctamente']);
     }
 
+    // T-027 (H12): quitar un tour clásico (ítems con el mismo tour_origen_id, sin
+    // carga_tour) borraba con un DELETE por ítem en paralelo, y cada destroy()
+    // recalculaba el total con los ítems que veía en ese momento: el último en
+    // guardar podía dejar el total mal, y un fallo dejaba el tour a medias.
+    // Acá se borra todo en una transacción con un solo recálculo.
+    public function eliminarBloque(Request $request, string $alternativaId): JsonResponse
+    {
+        $alternativa = Alternativa::findOrFail($alternativaId);
+        $this->autorizarCotizacion('update', $alternativa);
+
+        $validator = Validator::make($request->all(), [
+            'item_ids' => 'required|array|min:1',
+            'item_ids.*' => 'integer|distinct',
+        ]);
+        if ($validator->fails()) {
+            return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
+        }
+        if ($alternativa->estado === 'aceptada') {
+            return response()->json([
+                'code' => 422,
+                'message' => 'Esta alternativa ya fue aceptada y generó una reserva — no se pueden eliminar ítems acá.',
+            ], 422);
+        }
+
+        $ids = $validator->validated()['item_ids'];
+
+        $rechazo = DB::transaction(function () use ($alternativa, $ids) {
+            Alternativa::whereKey($alternativa->id)->lockForUpdate()->first();
+            $items = AlternativaItem::where('alternativa_id', $alternativa->id)
+                ->whereIn('id', $ids)
+                ->lockForUpdate()
+                ->get();
+
+            if ($items->count() !== count($ids)) {
+                return response()->json(['code' => 404, 'message' => 'No se encontró ese tour en esta alternativa.'], 404);
+            }
+            $tourOrigen = $items->pluck('tour_origen_id')->unique();
+            if ($tourOrigen->count() !== 1 || $tourOrigen->first() === null || $items->contains(fn ($i) => $i->carga_tour !== null)) {
+                return response()->json(['code' => 422, 'message' => 'Estos servicios no forman un solo tour.'], 422);
+            }
+            if (ReservaItem::whereIn('alternativa_item_id', $items->pluck('id'))->exists()) {
+                return response()->json([
+                    'code' => 422,
+                    'message' => 'No se puede quitar: este tour ya tiene una reserva generada. Cancelá la reserva primero si corresponde.',
+                ], 422);
+            }
+
+            $aereos = $items->where('origen_tipo', AlternativaItem::ORIGEN_PASAJE_AEREO)->pluck('id');
+            if ($aereos->isNotEmpty()) {
+                CotizacionPasajeAereo::whereIn('alternativa_item_id', $aereos)->delete();
+            }
+            AlternativaItem::whereIn('id', $items->pluck('id'))->delete();
+            $this->recalcularTotalAlternativa($alternativa);
+
+            return null;
+        });
+
+        if ($rechazo) {
+            return $rechazo;
+        }
+
+        return response()->json(['code' => 200, 'message' => 'Tour eliminado correctamente']);
+    }
+
     // POST alternativas/{id}/mover-carga — mueve una carga de tour a otro día;
     // un combo se desplaza entero, conservando la distancia entre sus días.
     public function moverCarga(Request $request, string $alternativaId): JsonResponse
