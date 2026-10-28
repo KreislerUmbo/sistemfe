@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\AgenciaViajes;
 
+use App\Http\Controllers\Concerns\AutorizaCotizacion;
 use App\Http\Controllers\Controller;
 use App\Models\AgenciaViajes\Alternativa;
 use App\Models\AgenciaViajes\AlternativaDestino;
@@ -26,6 +27,8 @@ use Illuminate\Support\Facades\Validator;
 // Anidada bajo cotización (store), directa por su propio id (update/destroy).
 class AlternativaController extends Controller
 {
+    use AutorizaCotizacion;
+
     private const MAX_ALTERNATIVAS_POR_COTIZACION = 5;
 
     public function __construct(
@@ -38,6 +41,7 @@ class AlternativaController extends Controller
     public function store(Request $request, string $cotizacionId)
     {
         $cotizacion = Cotizacion::findOrFail($cotizacionId);
+        $this->autorizarCotizacion('update', $cotizacion);
 
         $validator = Validator::make($request->all(), [
             'nombre' => 'required|string|max:100',
@@ -113,6 +117,7 @@ class AlternativaController extends Controller
     public function update(Request $request, string $id)
     {
         $alternativa = Alternativa::findOrFail($id);
+        $this->autorizarCotizacion('update', $alternativa);
 
         $validator = Validator::make($request->all(), [
             'nombre' => 'nullable|string|max:100',
@@ -431,6 +436,7 @@ class AlternativaController extends Controller
     public function destroy(string $id)
     {
         $alternativa = Alternativa::findOrFail($id);
+        $this->autorizarCotizacion('update', $alternativa);
 
         if (Reserva::where('alternativa_id', $alternativa->id)->exists()) {
             return response()->json([
@@ -493,6 +499,7 @@ class AlternativaController extends Controller
     public function duplicar(string $id)
     {
         $original = Alternativa::findOrFail($id);
+        $this->autorizarCotizacion('update', $original);
 
         if ($original->cotizacion->alternativas()->count() >= self::MAX_ALTERNATIVAS_POR_COTIZACION) {
             return response()->json([
@@ -798,6 +805,8 @@ class AlternativaController extends Controller
     // método finalmente consume.
     public function pdf(string $id)
     {
+        $this->autorizarCotizacion('view', Alternativa::findOrFail($id));
+
         return $this->alternativaPdfService->generar($id);
     }
 

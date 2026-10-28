@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\AgenciaViajes;
 
+use Tests\Feature\AgenciaViajes\Concerns\ConAccesoATodasLasReservas;
 use App\Http\Controllers\AgenciaViajes\OpcionMayoristaController;
 use App\Models\AgenciaViajes\Alternativa;
 use App\Models\AgenciaViajes\OpcionHotel;
@@ -28,6 +29,8 @@ use Tests\TestCase;
 // controller) para que no se pueda repetir en un tercer lugar.
 class OpcionMayoristaHotelFotosRegressionTest extends TestCase
 {
+    use ConAccesoATodasLasReservas;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -42,6 +45,9 @@ class OpcionMayoristaHotelFotosRegressionTest extends TestCase
         ]);
         DB::purge('pgsql');
         DB::beginTransaction();
+
+        // T-025: el cotizador pregunta a CotizacionPolicy; estos tests prueban otras reglas.
+        $this->verTodasLasReservas();
     }
 
     protected function tearDown(): void

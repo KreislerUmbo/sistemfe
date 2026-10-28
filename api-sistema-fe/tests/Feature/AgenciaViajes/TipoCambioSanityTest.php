@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\AgenciaViajes;
 
+use Tests\Feature\AgenciaViajes\Concerns\ConAccesoATodasLasReservas;
 use App\Http\Controllers\AgenciaViajes\AlternativaController;
 use App\Http\Controllers\AgenciaViajes\TipoCambioAgenciaController;
 use App\Models\AgenciaViajes\TipoCambioAgencia;
@@ -20,6 +21,8 @@ use Tests\TestCase;
 // registrado 4 veces en agencia-demo sin que nada lo rechazara.
 class TipoCambioSanityTest extends TestCase
 {
+    use ConAccesoATodasLasReservas;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -34,6 +37,9 @@ class TipoCambioSanityTest extends TestCase
         ]);
         DB::purge('pgsql');
         DB::beginTransaction();
+
+        // T-025: el cotizador pregunta a CotizacionPolicy; estos tests prueban otras reglas.
+        $this->verTodasLasReservas();
     }
 
     protected function tearDown(): void

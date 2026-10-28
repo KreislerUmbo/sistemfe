@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\AgenciaViajes;
 
+use Tests\Feature\AgenciaViajes\Concerns\ConAccesoATodasLasReservas;
 use App\Http\Controllers\AgenciaViajes\AlternativaController;
 use App\Http\Controllers\AgenciaViajes\AlternativaItemController;
 use App\Http\Controllers\AgenciaViajes\DestinoAtractivoController;
@@ -31,6 +32,8 @@ use Tests\TestCase;
 // guardado), nunca razon_social ni ningún campo de clientes.
 class CapitalizacionNombresTest extends TestCase
 {
+    use ConAccesoATodasLasReservas;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -45,6 +48,9 @@ class CapitalizacionNombresTest extends TestCase
         ]);
         DB::purge('pgsql');
         DB::beginTransaction();
+
+        // T-025: el cotizador pregunta a CotizacionPolicy; estos tests prueban otras reglas.
+        $this->verTodasLasReservas();
 
         Storage::fake('public');
 

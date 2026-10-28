@@ -333,6 +333,8 @@ class CotizacionController extends Controller
     public function actualizarPasajeros(Request $request, string $id)
     {
         $cotizacion = Cotizacion::with('alternativas')->findOrFail($id);
+        // T-025 (H2): mismo criterio que update().
+        $this->authorize('update', $cotizacion);
 
         $validator = Validator::make($request->all(), [
             'pasajeros' => 'required|array|min:1',

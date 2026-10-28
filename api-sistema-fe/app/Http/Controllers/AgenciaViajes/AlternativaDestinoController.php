@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\AgenciaViajes;
 
+use App\Http\Controllers\Concerns\AutorizaCotizacion;
 use App\Http\Controllers\Controller;
 use App\Models\AgenciaViajes\Alternativa;
 use App\Models\AgenciaViajes\AlternativaDestino;
@@ -16,9 +17,12 @@ use Illuminate\Support\Facades\Validator;
 // deuda conocida documentada en el brief de 12f-2.
 class AlternativaDestinoController extends Controller
 {
+    use AutorizaCotizacion;
+
     public function index(string $alternativaId)
     {
         $alternativa = Alternativa::findOrFail($alternativaId);
+        $this->autorizarCotizacion('view', $alternativa);
 
         return response()->json(['alternativa_destinos' => $alternativa->destinos]);
     }
@@ -26,6 +30,7 @@ class AlternativaDestinoController extends Controller
     public function store(Request $request, string $alternativaId)
     {
         $alternativa = Alternativa::findOrFail($alternativaId);
+        $this->autorizarCotizacion('update', $alternativa);
 
         if ($guard = $this->guardAceptada($alternativa)) {
             return $guard;
@@ -58,6 +63,7 @@ class AlternativaDestinoController extends Controller
     public function update(Request $request, string $alternativaId, string $id)
     {
         $alternativa = Alternativa::findOrFail($alternativaId);
+        $this->autorizarCotizacion('update', $alternativa);
         $destino = AlternativaDestino::where('alternativa_id', $alternativa->id)->findOrFail($id);
 
         if ($guard = $this->guardAceptada($alternativa)) {
@@ -88,6 +94,7 @@ class AlternativaDestinoController extends Controller
     public function destroy(string $alternativaId, string $id)
     {
         $alternativa = Alternativa::findOrFail($alternativaId);
+        $this->autorizarCotizacion('update', $alternativa);
         $destino = AlternativaDestino::where('alternativa_id', $alternativa->id)->findOrFail($id);
 
         if ($guard = $this->guardAceptada($alternativa)) {
