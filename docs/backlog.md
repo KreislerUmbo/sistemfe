@@ -69,7 +69,6 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 | T-035 | AGE | Biblioteca filtrada por el destino activo; sin tours "solo itinerario" en Local (R3) | por hacer | — | |
 | T-036 | AGE | Mayorista: etiquetas, primera opción elegida sola, "solo adultos" a la vista (R6, H22) | por hacer | — | |
 | T-037 | AGE | PDF: nombre de archivo con código y cliente; rótulo correcto de la tabla de hoteles (R8, H20) | por hacer | — | |
-| T-039 | AGE | Listas de proveedores, hoteles, mayoristas y guías sin cortar a 15: buscador contra el servidor (H28) | en pausa: avance parcial de Codex sin revisar en `fix/T-039-listas-sin-cortar` (`5bc9f7a`, carpeta `sistemfe-codex`); lo termina Claude después de T-028 | — | `fix/T-039-listas-sin-cortar` |
 | T-040 | AGE | Avisos a proveedores también al reprogramar, quitar un servicio, agregar un pasajero o cancelar la salida (H29, H37) | por hacer | — | |
 | T-041 | AGE | El check-in en su propia tabla: no cambia la asignación ni la facturación (H30) | por hacer | — | |
 | T-044 | AGE | Aviso cuando un guía o un chofer ya tiene otra salida ese día (H38) | por hacer | — | |
@@ -102,6 +101,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 | AGE | `AlternativaItemController::destroy()` y `eliminarCarga()` no rechazan una alternativa aceptada (solo miran si hay reserva); `moverBloque()` mueve el tour clásico en todos los días, no solo el visible | T-027, 28-oct-2026 |
 | AGE | `Fila13Fase1cFacturacionTest::descuento_del_combo_se_reparte_entre_los_grupos` falla a ratos (≈1 de 4, también corriendo solo): `partes_tour` sale `[180, 90]` en vez de `[90, 180]`. El combo (`orden`) y los ítems de la reserva (`orderBy('id')`) ya van ordenados; el desorden entra en otro punto del armado de las partes. Revisar si el orden de las líneas del comprobante también varía | T-024, 28-oct-2026 |
 | AGE | Tarifas de guía: `GuiaTarifaController::update()` versiona como lo hacía proveedores antes de T-028 — cierra la vieja con `vigente_hasta = hoy` (dos vigentes ese día), toma el `vigente_desde` original del formulario, no guarda `version_anterior_id`, no revisa si ya fue reemplazada y los tours (`guia_tarifa_id`) siguen con el precio viejo. Repetir el patrón de T-028 | T-028, 28-oct-2026 |
+| AGE | Mismo corte de listas que T-039 en otras pantallas: `reservas/detalle.vue` (~2292) carga `proveedorService.biblioteca()` (30 tarifas) y `guiaService.listar({ page: 1 })` (15 guías) al abrir; servicios cortan en 200 (cotizador, paquetes, store); la lista de reasignar proveedor del reporte operativo puede quedar cortada en las últimas filas de la tabla (usar `useListaFlotante`) | T-039, 28-oct-2026 |
 | AGE | IGV de la penalidad por cancelación: preguntar al contador (hoy lo elige el vendedor, D-AGE-033) | requerimiento Modificar reserva, 24-oct-2026 |
 | AGE | Penalidad calculada con `reglas_cancelacion` (franjas por días) | D-AGE-033 |
 | AGE | Agregar pasajero rápido en la reserva para tours por persona (después de probar Modificar reserva) | fila F4 de la hoja de ruta |
@@ -142,6 +142,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 
 | ID | Módulo | Qué | Commit |
 |---|---|---|---|
+| T-039 | AGE | Proveedores, hoteles, mayoristas y guías sin cortar a 15: `ProveedorBuscador`/`GuiaBuscador` contra el servidor en cotizador, paquetes, salidas y reporte operativo; avance de Codex terminado por Opus | ver merge de `fix/T-039-listas-sin-cortar-v2` |
 | T-028 | AGE | Solo se ofrece y se cotiza la versión vigente de una tarifa; al cambiar el precio los tours pasan a la nueva; comando `agencia-viajes:plantillas-a-tarifa-vigente`; implementada por Sonnet, revisada y probada en agencia-demo por Opus | ver merge de `fix/T-028-version-vigente-tarifa` |
 | T-027 | AGE | Eliminar un tour clásico en una sola operación (total guardado correcto) + subtotal por destino; implementada por Sonnet, revisada por Opus | ver merge de `fix/T-027-eliminar-tour-clasico` |
 | T-024 | AGE | La comparación de hoteles de una alternativa duplicada es independiente de la original; eliminar un bloque solo toca su alternativa; comando `agencia-viajes:separar-grupos-duplicados` | ver merge de `fix/T-024-duplicar-grupo-hoteles` |
