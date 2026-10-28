@@ -219,4 +219,93 @@ class T028VersionVigenteTarifaTest extends TestCase
         $this->assertSame($tarifa->id, $datos['proveedor_tarifa']['id']);
         $this->assertNull($tarifa->fresh()->vigente_hasta);
     }
+
+    // Cuatro tarifas del mismo servicio: vigente, vieja (cerrada), desactivada y futura.
+    private function cuatroTarifas(): array
+    {
+        $vigente = $this->tarifa(200);
+        $copiar = fn (array $cambios) => ProveedorTarifa::create(array_merge(
+            collect($vigente->getAttributes())->except(['id', 'created_at', 'updated_at'])->all(),
+            ['diferenciador' => null],
+            $cambios
+        ));
+        $vieja = $copiar(['vigente_desde' => $this->dias(-60), 'vigente_hasta' => $this->dias(-31)]);
+        $desactivada = $copiar(['activo' => false]);
+        $futura = $copiar(['vigente_desde' => $this->dias(5)]);
+
+        return [$vigente, $vieja, $desactivada, $futura];
+    }
+
+    public function test_ca2_index_con_solo_vigentes_filtra_y_sin_parametro_devuelve_todo(): void
+    {
+        [$vigente, $vieja, $desactivada, $futura] = $this->cuatroTarifas();
+        $servicioId = (string) $vigente->proveedor_servicio_id;
+        $controlador = app(ProveedorTarifaController::class);
+
+        $soloVigentes = collect($controlador->index(new Request(['solo_vigentes' => '1']), $servicioId)->getData(true)['proveedor_tarifas'])->pluck('id')->all();
+        $todas = collect($controlador->index(new Request, $servicioId)->getData(true)['proveedor_tarifas'])->pluck('id')->all();
+
+        $this->assertSame([$vigente->id], $soloVigentes);
+        $this->assertEqualsCanonicalizing([$vigente->id, $vieja->id, $desactivada->id, $futura->id], $todas);
+    }
+
+    public function test_ca2_tarifas_hotel_ofrece_solo_la_vigente(): void
+    {
+        [$vigente] = $this->cuatroTarifas();
+        $tipoId = \App\Models\AgenciaViajes\ProveedorTipo::where('slug', 'alojamiento-hoteles')->value('id');
+        if (! $tipoId) {
+            $this->markTestSkipped("Catálogo central sin 'alojamiento-hoteles' en este entorno.");
+        }
+        $proveedor = $vigente->proveedorServicio->proveedor;
+        $proveedor->update(['tipo_id' => $tipoId]);
+
+        $datos = app(\App\Http\Controllers\AgenciaViajes\ProveedorController::class)->tarifasHotel((string) $proveedor->id)->getData(true);
+
+        $this->assertSame([$vigente->id], collect($datos['proveedor_tarifas'])->pluck('id')->all());
+    }
+
+    public function test_vigente_hasta_anterior_al_inicio_de_la_nueva_version_da_422_y_no_cambia_nada(): void
+    {
+        $vieja = $this->tarifa(200);
+        $this->agregarAlaCotizacion($this->alternativa(), $vieja);
+
+        $respuesta = app(ProveedorTarifaController::class)->update(
+            new Request(array_merge($vieja->fresh()->toArray(), ['precio_venta_adulto' => 260, 'vigente_hasta' => $this->dias(-5)])),
+            (string) $vieja->id
+        );
+
+        $this->assertSame(422, $respuesta->getStatusCode());
+        $this->assertStringContainsString('La fecha de fin no puede ser anterior', $respuesta->getData(true)['message']);
+        $this->assertNull($vieja->fresh()->vigente_hasta);
+        $this->assertSame(1, ProveedorTarifa::where('proveedor_servicio_id', $vieja->proveedor_servicio_id)->count());
+    }
+
+    // Revisión Opus: doble clic en "Guardar" o editar una fila "Vencida" del historial.
+    public function test_una_version_ya_reemplazada_no_se_vuelve_a_reemplazar(): void
+    {
+        $vieja = $this->tarifa(200);
+        $this->agregarAlaCotizacion($this->alternativa(), $vieja);
+        $nuevaId = $this->editarPrecio($vieja, 260)['proveedor_tarifa']['id'];
+
+        $respuesta = app(ProveedorTarifaController::class)->update(
+            new Request(array_merge($vieja->fresh()->toArray(), ['precio_venta_adulto' => 300, 'vigente_hasta' => null])),
+            (string) $vieja->id
+        );
+
+        $this->assertSame(422, $respuesta->getStatusCode());
+        $this->assertStringContainsString('ya fue reemplazada', $respuesta->getData(true)['message']);
+        $this->assertSame([$nuevaId], $this->enBiblioteca($vieja), 'sigue habiendo una sola vigente');
+    }
+
+    public function test_editar_una_tarifa_ya_vencida_no_estira_su_fecha_de_fin(): void
+    {
+        $vieja = $this->tarifa(200);
+        $this->agregarAlaCotizacion($this->alternativa(), $vieja);
+        $vieja->update(['vigente_hasta' => $this->dias(-20)]);
+
+        $nuevaId = $this->editarPrecio($vieja, 260, ['vigente_hasta' => null])['proveedor_tarifa']['id'];
+
+        $this->assertSame($this->dias(-20), $vieja->fresh()->vigente_hasta->toDateString());
+        $this->assertSame($this->hoy(), ProveedorTarifa::find($nuevaId)->vigente_desde->toDateString());
+    }
 }

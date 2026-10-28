@@ -2,6 +2,8 @@
 
 namespace App\Models\AgenciaViajes;
 
+use App\Services\HoraPeru;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use App\Models\AgenciaViajes\Concerns\ExoneradoEsAmazonia;
 
@@ -30,6 +32,7 @@ class ProveedorTarifa extends Model
         // index() (la pantalla de gestión del proveedor muestra todo, con
         // badge), solo biblioteca() y la validación al crear un ítem nuevo.
         'activo',
+        'version_anterior_id',
         'proveedor_servicio_id',
         'tipo_tarifa',
         'modalidad',
@@ -74,6 +77,26 @@ class ProveedorTarifa extends Model
         'vigente_desde' => 'date',
         'vigente_hasta' => 'date',
     ];
+
+    // T-028: única definición de "vigente hoy" (activa y dentro de su rango).
+    public function scopeVigentes(Builder $query, ?string $dia = null): Builder
+    {
+        $dia ??= HoraPeru::hoyTexto();
+
+        return $query->where('activo', true)
+            ->where('vigente_desde', '<=', $dia)
+            ->where(fn ($q) => $q->whereNull('vigente_hasta')->orWhere('vigente_hasta', '>=', $dia));
+    }
+
+    // T-028: la misma regla de scopeVigentes(), para validar una sola fila.
+    public function estaVigente(?string $dia = null): bool
+    {
+        $dia ??= HoraPeru::hoyTexto();
+
+        return $this->activo
+            && $this->vigente_desde->toDateString() <= $dia
+            && ($this->vigente_hasta === null || $this->vigente_hasta->toDateString() >= $dia);
+    }
 
     public function proveedorServicio()
     {

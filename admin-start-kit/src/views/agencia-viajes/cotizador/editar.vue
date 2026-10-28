@@ -2722,7 +2722,7 @@ const grupoHotelAbiertoDiaActivo = computed<{ id: string; hoteles: number; canti
 const clicBibliotecaItem = async (tarifa: ProveedorTarifa) => {
     if (tarifa.tipo_habitacion) {
         // Hotel: matriz completa de habitaciones de ESE proveedor_servicio.
-        const res = await proveedorService.listarTarifas(tarifa.proveedor_servicio_id);
+        const res = await proveedorService.listarTarifas(tarifa.proveedor_servicio_id, { solo_vigentes: true });
         // Consolidación de hoteles — tramo de edad para cama adicional, ahora
         // a nivel de proveedor (proveedor_alojamiento_detalle), no del hotel
         // de un paquete_plantilla (eliminado). Sin la fila configurada, el

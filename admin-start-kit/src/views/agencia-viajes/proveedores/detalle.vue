@@ -443,8 +443,12 @@ const margenTarifa = (tarifa: ProveedorTarifa): number => calcularMargenPct(tari
 
 const estadoVigencia = (tarifa: ProveedorTarifa): { label: string; clase: string } => {
     const hoy = hoyPeru();
-    if (tarifa.vigente_hasta && tarifa.vigente_hasta < hoy) return { label: 'Vencida', clase: 'bg-secondary' };
-    if (tarifa.vigente_desde > hoy) return { label: 'Programada', clase: 'bg-info' };
+    // La API manda las fechas como "2026-10-28T00:00:00.000000Z": se compara
+    // solo el día, si no una tarifa que empieza hoy sale "Programada".
+    const desde = tarifa.vigente_desde?.slice(0, 10) ?? '';
+    const hasta = tarifa.vigente_hasta?.slice(0, 10) ?? null;
+    if (hasta && hasta < hoy) return { label: 'Vencida', clase: 'bg-secondary' };
+    if (desde > hoy) return { label: 'Programada', clase: 'bg-info' };
     return { label: 'Vigente hoy', clase: 'bg-success' };
 };
 

@@ -78,8 +78,10 @@ export const proveedorService = {
   },
 
   // ── Tarifas (proveedor_tarifas) ─────────────────────────────────────
-  async listarTarifas(proveedorServicioId: number) {
-    const response = await httpClient.get(`/proveedor-servicios/${proveedorServicioId}/tarifas`)
+  async listarTarifas(proveedorServicioId: number, params?: { solo_vigentes?: boolean }) {
+    const response = await httpClient.get(`/proveedor-servicios/${proveedorServicioId}/tarifas`, {
+      params: params?.solo_vigentes ? { solo_vigentes: 1 } : undefined,
+    })
     return response.data as { proveedor_tarifas: ProveedorTarifa[] }
   },
   async crearTarifa(proveedorServicioId: number, data: Partial<ProveedorTarifa>) {

@@ -157,6 +157,7 @@ class ProveedorController extends Controller
 
         $tarifas = ProveedorTarifa::whereHas('proveedorServicio', fn ($q) => $q->where('proveedor_id', $proveedor->id))
             ->whereNotNull('tipo_habitacion')
+            ->vigentes()
             ->with('proveedorServicio.destinoServicio.servicio')
             ->orderBy('tipo_habitacion')
             ->get();
