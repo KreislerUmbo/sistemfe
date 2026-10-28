@@ -119,10 +119,12 @@ npm run type-check && npm run build
 ---
 
 ## Resultado
-- **Commits:**
-- **Tests:**
-- **Desviaciones de la tarea y por qué:**
+- **Commits:** rama `fix/T-027-eliminar-tour-clasico` (sin unir a main).
+- **Tests:** `--filter="T027|EliminarGrupo|EliminarCarga"` 9/9; suite completa 1572 passed (5539 assertions). `npm run build` OK. `npm run type-check`: 46 errores, idénticos antes y después del cambio (preexistentes; ninguno en `editar.vue` ni `alternativaItemService.ts`).
+- **Desviaciones de la tarea y por qué:** ninguna. Tests no modificados.
 
 ## Hallazgos fuera de alcance
 - (Opus, al preparar) `destroy()` y `eliminarCarga()` no rechazan alternativa aceptada; `moverBloque()`
   mueve el tour en todos los días.
+- (Sonnet) Los demás `Promise.all` de `editar.vue` (~3140-3235, 4211, 4232) solo recargan datos en
+  paralelo; ninguno borra ni cambia varios ítems.
