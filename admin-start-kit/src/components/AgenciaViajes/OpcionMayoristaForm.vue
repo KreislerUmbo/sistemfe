@@ -1,9 +1,6 @@
 <template>
     <div class="card border p-2 small">
-        <select ref="selectProveedorRef" class="form-select form-select-sm mb-1" v-model="form.proveedor_id">
-            <option :value="null">— Proveedor mayorista —</option>
-            <option v-for="p in proveedoresMayoristas" :key="p.id" :value="p.id">{{ p.nombre_comercial ?? p.razon_social }}</option>
-        </select>
+        <ProveedorBuscador v-model="form.proveedor_id" :tipo-id="props.tipoMayoristaId" class="mb-1" placeholder="Buscar proveedor mayorista…" />
         <select class="form-select form-select-sm mb-1" v-model="form.moneda">
             <option value="USD">USD</option>
             <option value="PEN">PEN</option>
@@ -70,12 +67,13 @@
 // crear) sin duplicar el markup del buscador de contenido reutilizable.
 // Mismo molde que PasajeAereoForm.vue/ItemManualForm.vue: opcionExistente
 // nullable + watch inmediato para poblar/limpiar, emit agregado/actualizado.
-import { ref, watch, nextTick } from 'vue';
+import { ref, watch } from 'vue';
 import Swal from 'sweetalert2/dist/sweetalert2.js';
 import RichTextEditor from '@/components/RichTextEditor.vue';
+import ProveedorBuscador from '@/components/AgenciaViajes/ProveedorBuscador.vue';
 import { opcionMayoristaService } from '@/services/admin/opcionMayoristaService';
 import { contenidoTourService } from '@/services/admin/contenidoTourService';
-import type { OpcionMayorista, Proveedor, ContenidoTour } from '@/types/agencia-viajes';
+import type { OpcionMayorista, ContenidoTour } from '@/types/agencia-viajes';
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
 
@@ -83,7 +81,8 @@ const props = defineProps<{
     alternativaId: number;
     destinoActivoId: number | null;
     opcionExistente?: OpcionMayorista | null;
-    proveedoresMayoristas: Proveedor[];
+    // T-039: el mayorista se busca en el servidor, acotado a este tipo.
+    tipoMayoristaId?: number | null;
 }>();
 const emit = defineEmits<{
     (e: 'agregado', payload: OpcionMayorista): void;
@@ -177,13 +176,10 @@ watch(() => props.opcionExistente, resetearCampos, { immediate: true });
 // `return` sin ningún aviso — el botón "Agregar" parecía "pegado" (ni
 // spinner, ni mensaje) si el vendedor completaba todo el formulario menos
 // el proveedor mayorista, que es el único campo realmente obligatorio acá.
-const selectProveedorRef = ref<HTMLSelectElement | null>(null);
 const guardando = ref(false);
 const guardar = async () => {
     if (!form.value.proveedor_id) {
         await (Swal as TVueSwalInstance).fire('Falta el proveedor mayorista', 'Elegí a qué mayorista corresponde esta cotización antes de guardar.', 'warning');
-        await nextTick();
-        selectProveedorRef.value?.focus();
         return;
     }
     guardando.value = true;

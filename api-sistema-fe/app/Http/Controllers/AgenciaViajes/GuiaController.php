@@ -12,17 +12,28 @@ use Illuminate\Support\Facades\Validator;
 // §5.3.
 class GuiaController extends Controller
 {
+    // T-039: los buscadores del cotizador, paquetes, salidas y reporte operativo
+    // consultan acá con ?search= (antes cargaban la primera página de 15 entera).
     public function index(Request $request)
     {
-        $search = $request->get('search');
+        $validator = Validator::make($request->all(), [
+            'search' => 'nullable|string|max:250',
+            'per_page' => 'nullable|integer|min:1|max:100',
+        ]);
+        if ($validator->fails()) {
+            return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
+        }
 
-        $guias = Guia::when($search, fn ($q) => $q->where('nombre', 'ilike', "%{$search}%"))
+        $search = trim((string) $request->get('search', ''));
+        $perPage = (int) $request->get('per_page', 15);
+
+        $guias = Guia::when($search !== '', fn ($q) => $q->where('nombre', 'ilike', "%{$search}%"))
             ->orderBy('nombre')
-            ->paginate(15);
+            ->paginate($perPage);
 
         return response()->json([
             'total' => $guias->total(),
-            'paginate' => 15,
+            'paginate' => $perPage,
             'guias' => $guias->items(),
         ]);
     }

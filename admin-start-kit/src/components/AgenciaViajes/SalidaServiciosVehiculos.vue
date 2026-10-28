@@ -124,11 +124,9 @@
                         </div>
                         <div class="col-6 col-md-2">
                             <label class="form-label mb-0 small text-secondary">Guía del vehículo</label>
-                            <select class="form-select form-select-sm" :disabled="soloLectura" :value="v.guia_id ?? ''"
-                                @change="guardarVehiculo(v, { guia_id: numero($event) })">
-                                <option value="">El de la salida</option>
-                                <option v-for="g in guias" :key="g.id" :value="g.id">{{ g.nombre }}</option>
-                            </select>
+                            <GuiaBuscador :model-value="v.guia_id" :nombre-actual="v.guia" :disabled="soloLectura"
+                                placeholder="El de la salida" texto-quitar="El de la salida"
+                                @elegido="(g) => guardarVehiculo(v, { guia_id: g?.id ?? null })" />
                         </div>
                         <div class="col-6 col-md-4">
                             <label class="form-label mb-0 small text-secondary">Chofer</label>
@@ -168,15 +166,15 @@
 import { computed, ref } from 'vue';
 import Swal from 'sweetalert2/dist/sweetalert2.js';
 import ProveedorBuscador from '@/components/AgenciaViajes/ProveedorBuscador.vue';
+import GuiaBuscador from '@/components/AgenciaViajes/GuiaBuscador.vue';
 import { salidaOperativaService } from '@/services/admin/salidaOperativaService';
 import { useToast } from '@/composables/useToast';
-import type { Guia, SalidaOperativa, SalidaServicio, SalidaVehiculo } from '@/types/agencia-viajes';
+import type { SalidaOperativa, SalidaServicio, SalidaVehiculo } from '@/types/agencia-viajes';
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
 
 const props = defineProps<{
     salida: SalidaOperativa;
-    guias: Guia[];
 }>();
 
 const emit = defineEmits<{ (e: 'cambio'): void }>();

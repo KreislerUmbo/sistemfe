@@ -518,10 +518,7 @@
                                     </select>
                                 </div>
                                 <div class="col-6 col-md-4">
-                                    <select class="form-select form-select-sm" v-model="filtroProveedorId">
-                                        <option :value="null">Cualquier proveedor</option>
-                                        <option v-for="p in proveedoresFiltro" :key="p.id" :value="p.id">{{ p.nombre_comercial ?? p.razon_social }}</option>
-                                    </select>
+                                    <ProveedorBuscador v-model="filtroProveedorId" placeholder="Cualquier proveedor" />
                                 </div>
                             </div>
                             <TransitionGroup tag="div" name="av-fade" class="av-lib-grid">
@@ -561,10 +558,8 @@
 
                         <!-- Buscador: guía de turismo -->
                         <div v-else>
-                            <select class="form-select form-select-sm mb-2" v-model="guiaSeleccionadaId" @change="cargarTarifasGuia">
-                                <option :value="null">— Elegí un guía —</option>
-                                <option v-for="g in guias" :key="g.id" :value="g.id">{{ g.nombre }}{{ g.es_referencial ? ' (Referencial)' : '' }}</option>
-                            </select>
+                            <GuiaBuscador v-model="guiaSeleccionadaId" class="mb-2" placeholder="Buscar guía…"
+                                @elegido="cargarTarifasGuia" />
                             <TransitionGroup tag="div" name="av-fade" class="av-lib-grid">
                                 <div v-for="t in tarifasGuia" :key="'guia-' + t.id" class="av-item-card"
                                     :class="{ 'is-selected': guiaTarifaSeleccionada?.id === t.id, 'is-added': idsGuiaTarifaEnItems.has(t.id) }"
@@ -771,6 +766,8 @@
 <script setup lang="ts">
 import { sanearHtml } from '@/helpers/sanearHtml';
 import CampoHora from '@/components/CampoHora.vue';
+import ProveedorBuscador from '@/components/AgenciaViajes/ProveedorBuscador.vue';
+import GuiaBuscador from '@/components/AgenciaViajes/GuiaBuscador.vue';
 import CampoFecha from '@/components/CampoFecha.vue';
 import { ref, computed, onMounted, nextTick, watch } from 'vue';
 import Sortable from 'sortablejs';
@@ -791,7 +788,7 @@ import { servicioService } from '@/services/admin/servicioService';
 import { formatFecha } from '@/helpers/fecha';
 import type {
     PaquetePlantilla, PaquetePlantillaItem, TourItinerarioItem,
-    ProveedorTarifa, Proveedor, Guia, GuiaTarifa, ComboDatos, ComboItinerarioPaso, PaquetePlantillaResumen,
+    ProveedorTarifa, GuiaTarifa, ComboDatos, ComboItinerarioPaso, PaquetePlantillaResumen,
     ConfiguracionAgencia, Servicio, ProveedorTipo, TourCostoEstimado, CamposPrecioTour,
 } from '@/types/agencia-viajes';
 
@@ -1297,7 +1294,6 @@ const filtroDestinoId = ref<number | null>(null);
 const filtroServicioId = ref<number | null>(null);
 const filtroProveedorId = ref<number | null>(null);
 const serviciosFiltro = ref<Servicio[]>([]);
-const proveedoresFiltro = ref<Proveedor[]>([]);
 
 // Paginación de la biblioteca — antes el backend traía como mucho 100
 // resultados sin avisar que había más. Ahora pagina de verdad: "cargar
@@ -1339,7 +1335,6 @@ const cargarMasBiblioteca = async () => {
     }
 };
 
-const guias = ref<Guia[]>([]);
 const guiaSeleccionadaId = ref<number | null>(null);
 const tarifasGuia = ref<GuiaTarifa[]>([]);
 const guiaTarifaSeleccionada = ref<GuiaTarifa | null>(null);
@@ -1644,7 +1639,6 @@ onMounted(async () => {
         // Sesión 11l v2 — catálogos de servicios/proveedores para los filtros
         // de la biblioteca del tab Incluye, en paralelo (no bloquean la carga).
         servicioService.listar({ per_page: 200 }).then((res) => { serviciosFiltro.value = res.servicios ?? []; });
-        proveedorService.listar({ estado: true }).then((res) => { proveedoresFiltro.value = res.proveedores ?? []; });
 
         // cargarPaquete() va primero porque cargarItinerario() decide qué
         // pedir según esCombo.value (derivado de paquete.value). El resto
@@ -1657,7 +1651,6 @@ onMounted(async () => {
             cargarItinerario(),
             cargarItems(),
             cargarBiblioteca(),
-            guiaService.listar({}).then((res) => { guias.value = res.guias ?? []; }),
             proveedorTipoService.listar().then((tipos) => { proveedorTipos.value = tipos.proveedor_tipos; }),
         ]);
     } catch (error: any) {

@@ -1,5 +1,5 @@
 // Cache de catálogos de solo-lectura del vertical Agencia de Viajes
-// (proveedor_tipos, configuracion_agencia, servicios, proveedores activos)
+// (proveedor_tipos, configuracion_agencia, servicios)
 // compartidos entre paquetes/detalle.vue y cotizador/editar.vue — antes cada
 // mount de cualquiera de las dos pantallas volvía a pedir los 4 desde cero,
 // aunque casi nunca cambian entre una navegación y la siguiente.
@@ -12,7 +12,7 @@
 // datos desactualizados por mucho tiempo sin tener que enganchar invalidación
 // manual en cada punto que los crea/edita/borra.
 import { defineStore } from 'pinia'
-import { proveedorTipoService, proveedorService } from '@/services/admin/proveedorService'
+import { proveedorTipoService } from '@/services/admin/proveedorService'
 import { configuracionAgenciaService } from '@/services/admin/configuracionAgenciaService'
 import { servicioService } from '@/services/admin/servicioService'
 
@@ -58,15 +58,11 @@ export const useAgenciaViajesCatalogosStore = defineStore('agencia_viajes_catalo
   const servicios = crearCache(() =>
     servicioService.listar({ per_page: 200 }).then((r) => r.servicios ?? [])
   )
-  const proveedoresActivos = crearCache(() =>
-    proveedorService.listar({ estado: true }).then((r) => r.proveedores ?? [])
-  )
 
   return {
     obtenerProveedorTipos: proveedorTipos.obtener,
     obtenerConfigAgencia: configAgencia.obtener,
     obtenerServicios: servicios.obtener,
-    obtenerProveedoresActivos: proveedoresActivos.obtener,
     // Invalidación manual — hoy solo se usa desde
     // configuracion/index.vue tras un PUT exitoso, para que el cambio se
     // vea de inmediato en vez de esperar el TTL. servicios/proveedores no
