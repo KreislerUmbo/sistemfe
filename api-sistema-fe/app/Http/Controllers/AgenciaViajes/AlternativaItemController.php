@@ -28,6 +28,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 // El corazón de la Sesión 11b — plan-modulo-cotizaciones-reservas.md §3.
@@ -281,16 +282,22 @@ class AlternativaItemController extends Controller
     // TODAS las filas de un mismo grupo_opcion_id de una sola vez — mismo
     // guard de reserva que destroy(), evaluado sobre el grupo completo antes
     // de borrar cualquier fila (todo o nada).
-    public function eliminarGrupo(string $grupoOpcionId)
+    //
+    // T-024: acotado a una alternativa. Antes buscaba solo por el grupo, y
+    // una alternativa duplicada compartía el id con la original: borrar el
+    // bloque en la copia borraba también el de la original.
+    public function eliminarGrupo(string $alternativaId, string $grupoOpcionId)
     {
-        $items = AlternativaItem::with('alternativa')->where('grupo_opcion_id', $grupoOpcionId)->get();
-        $this->autorizarCotizacion('update', $items->first());
+        $alternativa = Alternativa::findOrFail($alternativaId);
+        $this->autorizarCotizacion('update', $alternativa);
+
+        $items = Str::isUuid($grupoOpcionId)
+            ? AlternativaItem::where('alternativa_id', $alternativa->id)->where('grupo_opcion_id', $grupoOpcionId)->get()
+            : collect();
 
         if ($items->isEmpty()) {
-            return response()->json(['code' => 404, 'message' => 'Grupo no encontrado.'], 404);
+            return response()->json(['code' => 404, 'message' => 'Grupo no encontrado en esta alternativa.'], 404);
         }
-
-        $alternativa = $items->first()->alternativa;
 
         if ($alternativa->estado === 'aceptada') {
             return response()->json([

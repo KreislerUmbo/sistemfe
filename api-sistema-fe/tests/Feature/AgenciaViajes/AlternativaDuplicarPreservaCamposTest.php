@@ -113,11 +113,11 @@ class AlternativaDuplicarPreservaCamposTest extends TestCase
         $this->assertCount(2, $itemsCopia, 'los 2 ítems del grupo se clonaron');
 
         // grupo_opcion_id: mismo valor entre los 2 ítems de la COPIA (el
-        // agrupamiento sigue intacto) — no hace falta que sea distinto del
-        // original, agruparPorGrupoOpcion() siempre opera sobre los ítems
-        // de UNA alternativa a la vez, nunca mezcla dos alternativas.
+        // agrupamiento sigue intacto) y distinto del original (T-024: si lo
+        // compartían, eliminar el bloque en la copia borraba el original).
         $this->assertNotNull($itemsCopia[0]->grupo_opcion_id);
         $this->assertSame($itemsCopia[0]->grupo_opcion_id, $itemsCopia[1]->grupo_opcion_id);
+        $this->assertNotSame($grupoOpcionId, $itemsCopia[0]->grupo_opcion_id);
 
         // opcion_elegida: exactamente uno de los dos, coherente con el original.
         $elegidos = $itemsCopia->where('opcion_elegida', true);

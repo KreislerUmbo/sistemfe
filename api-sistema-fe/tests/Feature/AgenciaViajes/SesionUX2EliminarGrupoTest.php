@@ -93,7 +93,7 @@ class SesionUX2EliminarGrupoTest extends TestCase
             'costo_snapshot' => 30, 'precio_venta_snapshot' => 50, 'precio_convertido' => 50,
         ]);
 
-        $response = app(AlternativaItemController::class)->eliminarGrupo($grupo);
+        $response = app(AlternativaItemController::class)->eliminarGrupo((string) $alternativa->id, $grupo);
 
         $this->assertSame(200, $response->getStatusCode());
         foreach ($items as $item) {
@@ -109,7 +109,7 @@ class SesionUX2EliminarGrupoTest extends TestCase
         [$grupo, $items] = $this->crearGrupoDeTresHoteles($alternativa);
         $alternativa->update(['estado' => 'aceptada']);
 
-        $response = app(AlternativaItemController::class)->eliminarGrupo($grupo);
+        $response = app(AlternativaItemController::class)->eliminarGrupo((string) $alternativa->id, $grupo);
 
         $this->assertSame(422, $response->getStatusCode());
         foreach ($items as $item) {
@@ -124,7 +124,7 @@ class SesionUX2EliminarGrupoTest extends TestCase
         $reserva = Reserva::create(['alternativa_id' => $alternativa->id, 'estado' => 'activa']);
         ReservaItem::create(['reserva_id' => $reserva->id, 'alternativa_item_id' => $items[1]->id]);
 
-        $response = app(AlternativaItemController::class)->eliminarGrupo($grupo);
+        $response = app(AlternativaItemController::class)->eliminarGrupo((string) $alternativa->id, $grupo);
 
         $this->assertSame(422, $response->getStatusCode());
         foreach ($items as $item) {
@@ -134,7 +134,7 @@ class SesionUX2EliminarGrupoTest extends TestCase
 
     public function test_eliminar_grupo_404_si_no_existe(): void
     {
-        $response = app(AlternativaItemController::class)->eliminarGrupo((string) Str::uuid());
+        $response = app(AlternativaItemController::class)->eliminarGrupo((string) $this->crearAlternativa()->id, (string) Str::uuid());
 
         $this->assertSame(404, $response->getStatusCode());
     }

@@ -46,26 +46,26 @@ leyendo el código; reproducir con un test antes de corregir.
 - `admin-start-kit/src/views/agencia-viajes/cotizador/editar.vue`
 
 ## Criterios de aceptación
-- [ ] **CA1** — Duplicar una alternativa con un grupo → la copia tiene un `grupo_opcion_id` distinto
+- [x] **CA1** — Duplicar una alternativa con un grupo → la copia tiene un `grupo_opcion_id` distinto
   y conserva el agrupamiento y la elegida. → test
-- [ ] **CA2** — Eliminar el grupo en la copia → la original conserva todas sus filas y su total. → test
+- [x] **CA2** — Eliminar el grupo en la copia → la original conserva todas sus filas y su total. → test
   (falla antes del fix; anotarlo)
-- [ ] **CA3** — Original aceptada + copia en borrador → eliminar el grupo de la copia funciona. → test
-- [ ] **CA4** — El comando encuentra grupos compartidos, `--simular` no escribe, sin `--simular`
+- [x] **CA3** — Original aceptada + copia en borrador → eliminar el grupo de la copia funciona. → test
+- [x] **CA4** — El comando encuentra grupos compartidos, `--simular` no escribe, sin `--simular`
   separa y registra; correrlo dos veces no cambia nada. → test
-- [ ] **CA5** — Prueba funcional en `agencia-demo`: duplicar, borrar el bloque en la copia, la
+- [x] **CA5** — Prueba funcional en `agencia-demo`: duplicar, borrar el bloque en la copia, la
   original intacta. Revertir datos de prueba.
 
 ## Seguridad y correctitud
-- [ ] Permisos: misma ruta/permiso `cotizaciones.editar` (la verificación de dueño es T-025)
-- [ ] Aislamiento de tenant: el comando corre por tenant de Agencia
-- [ ] Validación de entrada: la alternativa del grupo debe existir y contener ese grupo
-- [ ] Concurrencia: no aplica
-- [ ] Dinero: total recalculado con `calcularTotalEfectivo()`
-- [ ] Fechas con `HoraPeru`: no aplica
-- [ ] Tributario: no aplica
-- [ ] `v-html`: no aplica
-- [ ] Migraciones: tabla de registro del comando, si se usa una, en `verticals/agencia-viajes/`
+- [x] Permisos: misma ruta/permiso `cotizaciones.editar` (la verificación de dueño es T-025)
+- [x] Aislamiento de tenant: el comando corre por tenant de Agencia
+- [x] Validación de entrada: la alternativa del grupo debe existir y contener ese grupo
+- [x] Concurrencia: no aplica
+- [x] Dinero: total recalculado con `calcularTotalEfectivo()`
+- [x] Fechas con `HoraPeru`: no aplica
+- [x] Tributario: no aplica
+- [x] `v-html`: no aplica
+- [x] Migraciones: tabla de registro del comando, si se usa una, en `verticals/agencia-viajes/`
 
 ## Cómo verificar
 ```
@@ -77,9 +77,23 @@ php artisan test   # suite completa, contra PostgreSQL
 ---
 
 ## Resultado
-- **Commits:**
-- **Tests:**
-- **Desviaciones de la tarea y por qué:**
+- **Commits:** ver `git log fix/T-024-duplicar-grupo-hoteles`
+- **Tests:** `T024GrupoHotelesIndependienteTest` (CA1-CA4 + 404 si el grupo no es de esa
+  alternativa). Antes del fix fallaba CA1 ("la copia no comparte el grupo con la original"); CA2
+  y CA3 no se podían escribir contra la firma vieja (sin alternativa). Ajustados
+  `SesionUX2EliminarGrupoTest` (firma nueva) y `AlternativaDuplicarPreservaCamposTest` (el
+  comentario decía que no hacía falta un grupo distinto; ahora lo exige).
+- **CA5:** `agencia-demo`, cotización 47: duplicada la alternativa 69 → copia 81 con grupo propio;
+  "Eliminar todo este bloque" en la copia → la copia quedó con 3 ítems y total 95; la 69 intacta
+  (5 ítems, su grupo, total 215). Copia borrada después.
+- **Comando:** `--simular` en `agencia-demo` → 0 grupos compartidos.
+- **Desviaciones de la tarea y por qué:** se eligió la ruta con la alternativa
+  (`DELETE alternativas/{alternativaId}/grupos/{grupoOpcionId}`) en vez de `alternativa_id` en
+  el cuerpo: el frontend ya tiene `alternativa_id` en las filas del grupo, cambia una línea. El
+  trabajo del comando vive en `SepararGruposDuplicadosService` para poder probarlo sin tenants;
+  registro en `ajustes_grupo_opcion` (vertical agencia-viajes).
 
 ## Hallazgos fuera de alcance
--
+- Ningún otro lugar busca por `grupo_opcion_id` sin alternativa: `elegirOpcionGrupo()`,
+  `agruparPorGrupoOpcion()`, `ReservaController` y `AlternativaPdfService` ya trabajan con los
+  ítems de una alternativa.

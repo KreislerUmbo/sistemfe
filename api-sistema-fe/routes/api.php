@@ -985,7 +985,8 @@ Route::group([
     // Sesión UX2 — borra TODAS las filas de un grupo_opcion_id de una sola
     // vez (antes de "alternativa-items/{id}" para que "grupo/{grupoOpcionId}"
     // no colisione con la ruta de arriba, mismo criterio que preview-pasaje-aereo).
-    Route::delete("alternativa-items/grupo/{grupoOpcionId}", [AlternativaItemController::class, 'eliminarGrupo'])
+    // T-024: la ruta lleva la alternativa — el grupo se busca solo dentro de ella.
+    Route::delete("alternativas/{alternativaId}/grupos/{grupoOpcionId}", [AlternativaItemController::class, 'eliminarGrupo'])
         ->middleware('permission:cotizaciones.editar');
     // Sesión M4 — resuelve un grupo de opciones de hotel (M1).
     Route::put("alternativa-items/{id}/elegir-grupo", [AlternativaItemController::class, 'elegirOpcionGrupo'])

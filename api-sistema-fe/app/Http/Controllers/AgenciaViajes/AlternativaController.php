@@ -613,7 +613,10 @@ class AlternativaController extends Controller
                     'opcion_hotel_tarifa_id' => $item->opcion_hotel_tarifa_id !== null
                         ? ($tarifasHotelClonadas[$item->opcion_hotel_tarifa_id] ?? null)
                         : null,
-                    'grupo_opcion_id' => $item->grupo_opcion_id,
+                    // T-024: la copia lleva su propio grupo (mismo agrupamiento, otro
+                    // identificador) — compartido, "eliminar todo este bloque" en una
+                    // alternativa borraba también el de la otra.
+                    'grupo_opcion_id' => $item->grupo_opcion_id !== null ? ($cargasClonadas[$item->grupo_opcion_id] ??= (string) \Illuminate\Support\Str::uuid()) : null,
                     'opcion_elegida' => $item->opcion_elegida,
                     'guia_tarifa_id' => $item->guia_tarifa_id,
                     'tour_origen_id' => $item->tour_origen_id,
