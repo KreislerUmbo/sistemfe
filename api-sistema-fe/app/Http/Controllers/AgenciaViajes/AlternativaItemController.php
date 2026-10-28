@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\AgenciaViajes;
 
+use App\Http\Controllers\Concerns\AutorizaCotizacion;
 use App\Http\Controllers\Controller;
 use App\Models\AgenciaViajes\Alternativa;
 use App\Models\AgenciaViajes\AlternativaItem;
@@ -36,6 +37,8 @@ use Illuminate\Validation\Rule;
 // descuento_pct/precio_convertido con validación de piso.
 class AlternativaItemController extends Controller
 {
+    use AutorizaCotizacion;
+
     public function __construct(
         private PriceEngineService $priceEngine,
         private ComboExplosionService $comboExplosion,
@@ -63,6 +66,7 @@ class AlternativaItemController extends Controller
     public function store(Request $request, string $alternativaId)
     {
         $alternativa = Alternativa::findOrFail($alternativaId);
+        $this->autorizarCotizacion('update', $alternativa);
         // input(), NO get() — get() es el ParameterBag de Symfony (query
         // string/route/POST-form), no lee body JSON crudo. Bug real
         // encontrado corriendo la verificación de esta sesión.
@@ -91,6 +95,7 @@ class AlternativaItemController extends Controller
     public function update(Request $request, string $id)
     {
         $item = AlternativaItem::with(['alternativa', 'proveedorTarifa'])->findOrFail($id);
+        $this->autorizarCotizacion('update', $item);
 
         // T-001 (R-AGE-11): facturar una reserva lee el precio en vivo de
         // alternativa_items (total_convertido); cambiarlo aquí cambiaba lo que
@@ -188,6 +193,7 @@ class AlternativaItemController extends Controller
     public function elegirOpcionGrupo(string $id)
     {
         $item = AlternativaItem::with('alternativa')->findOrFail($id);
+        $this->autorizarCotizacion('update', $item);
         $alternativa = $item->alternativa;
 
         if ($alternativa->estado === 'aceptada') {
@@ -239,6 +245,7 @@ class AlternativaItemController extends Controller
     public function destroy(string $id)
     {
         $item = AlternativaItem::with('alternativa')->findOrFail($id);
+        $this->autorizarCotizacion('update', $item);
         $alternativa = $item->alternativa;
 
         if (ReservaItem::where('alternativa_item_id', $item->id)->exists()) {
@@ -277,6 +284,7 @@ class AlternativaItemController extends Controller
     public function eliminarGrupo(string $grupoOpcionId)
     {
         $items = AlternativaItem::with('alternativa')->where('grupo_opcion_id', $grupoOpcionId)->get();
+        $this->autorizarCotizacion('update', $items->first());
 
         if ($items->isEmpty()) {
             return response()->json(['code' => 404, 'message' => 'Grupo no encontrado.'], 404);
@@ -331,6 +339,7 @@ class AlternativaItemController extends Controller
     public function desdePlantilla(Request $request, string $alternativaId)
     {
         $alternativa = Alternativa::findOrFail($alternativaId);
+        $this->autorizarCotizacion('update', $alternativa);
 
         $validator = Validator::make($request->all(), [
             'paquete_plantilla_id' => 'required|integer|exists:paquetes_plantilla,id',
@@ -637,6 +646,7 @@ class AlternativaItemController extends Controller
     public function eliminarCarga(string $alternativaId, string $carga): JsonResponse
     {
         $alternativa = Alternativa::findOrFail($alternativaId);
+        $this->autorizarCotizacion('update', $alternativa);
         $items = $this->lineasDeCarga($alternativa, $carga);
 
         if ($items->isEmpty()) {
@@ -662,6 +672,7 @@ class AlternativaItemController extends Controller
     public function moverCarga(Request $request, string $alternativaId): JsonResponse
     {
         $alternativa = Alternativa::findOrFail($alternativaId);
+        $this->autorizarCotizacion('update', $alternativa);
 
         $validator = Validator::make($request->all(), [
             'carga' => 'required|uuid',
@@ -703,6 +714,7 @@ class AlternativaItemController extends Controller
     public function precioCarga(Request $request, string $alternativaId, string $carga): JsonResponse
     {
         $alternativa = Alternativa::findOrFail($alternativaId);
+        $this->autorizarCotizacion('update', $alternativa);
 
         $validator = Validator::make($request->all(), ['precio' => 'required|numeric|min:0']);
         if ($validator->fails()) {
@@ -733,6 +745,7 @@ class AlternativaItemController extends Controller
     public function temporadasTours(string $alternativaId): JsonResponse
     {
         $alternativa = Alternativa::findOrFail($alternativaId);
+        $this->autorizarCotizacion('view', $alternativa);
 
         return response()->json(['temporadas_desactualizadas' => $this->tourLinea->temporadasDesactualizadas($alternativa)]);
     }
@@ -742,6 +755,7 @@ class AlternativaItemController extends Controller
     public function recalcularTemporadas(string $alternativaId): JsonResponse
     {
         $alternativa = Alternativa::findOrFail($alternativaId);
+        $this->autorizarCotizacion('update', $alternativa);
 
         if ($alternativa->estado === 'aceptada') {
             return response()->json(['code' => 422, 'message' => 'Esta alternativa ya fue aceptada: el precio vendido no cambia.'], 422);
@@ -764,6 +778,7 @@ class AlternativaItemController extends Controller
     public function reasignarDia(Request $request, string $id)
     {
         $item = AlternativaItem::with('alternativa')->findOrFail($id);
+        $this->autorizarCotizacion('update', $item);
 
         $validator = Validator::make($request->all(), [
             'dia_referencial' => 'required|integer|min:1',
@@ -805,6 +820,7 @@ class AlternativaItemController extends Controller
     public function moverBloque(Request $request, string $alternativaId)
     {
         $alternativa = Alternativa::findOrFail($alternativaId);
+        $this->autorizarCotizacion('update', $alternativa);
 
         $validator = Validator::make($request->all(), [
             'tour_origen_id' => 'required|integer',
@@ -1216,6 +1232,7 @@ class AlternativaItemController extends Controller
     public function previewPasajeAereo(Request $request, string $alternativaId)
     {
         $alternativa = Alternativa::findOrFail($alternativaId);
+        $this->autorizarCotizacion('view', $alternativa);
 
         $validado = $this->validarPasajeAereo($request, $alternativa);
         if ($validado instanceof JsonResponse) {
@@ -1238,6 +1255,7 @@ class AlternativaItemController extends Controller
     public function actualizarPasajeAereo(Request $request, string $id): JsonResponse
     {
         $item = AlternativaItem::with(['alternativa', 'cotizacionPasajeAereo'])->findOrFail($id);
+        $this->autorizarCotizacion('update', $item);
 
         if ($item->origen_tipo !== AlternativaItem::ORIGEN_PASAJE_AEREO) {
             return response()->json(['code' => 422, 'message' => 'Solo se puede editar así un pasaje aéreo suelto.'], 422);
@@ -1486,6 +1504,7 @@ class AlternativaItemController extends Controller
     public function actualizarManual(Request $request, string $id): JsonResponse
     {
         $item = AlternativaItem::with('alternativa')->findOrFail($id);
+        $this->autorizarCotizacion('update', $item);
 
         if ($item->origen_tipo !== AlternativaItem::ORIGEN_MANUAL) {
             return response()->json(['code' => 422, 'message' => 'Solo se puede editar así un ítem manual.'], 422);
@@ -1552,6 +1571,7 @@ class AlternativaItemController extends Controller
     public function promoverAProveedor(Request $request, string $id): JsonResponse
     {
         $item = AlternativaItem::findOrFail($id);
+        $this->autorizarCotizacion('update', $item);
 
         if ($item->origen_tipo !== AlternativaItem::ORIGEN_MANUAL) {
             return response()->json(['code' => 422, 'message' => 'Solo se puede promover un ítem manual.'], 422);

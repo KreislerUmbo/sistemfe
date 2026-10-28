@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\AgenciaViajes;
 
+use Tests\Feature\AgenciaViajes\Concerns\ConAccesoATodasLasReservas;
 use App\Http\Controllers\AgenciaViajes\AlternativaItemController;
 use App\Http\Controllers\AgenciaViajes\GuiaController;
 use App\Http\Controllers\AgenciaViajes\GuiaTarifaController;
@@ -25,6 +26,8 @@ use Tests\TestCase;
 // transacción por test revertida.
 class GuiaTarifaDesactivarTest extends TestCase
 {
+    use ConAccesoATodasLasReservas;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -39,6 +42,9 @@ class GuiaTarifaDesactivarTest extends TestCase
         ]);
         DB::purge('pgsql');
         DB::beginTransaction();
+
+        // T-025: el cotizador pregunta a CotizacionPolicy; estos tests prueban otras reglas.
+        $this->verTodasLasReservas();
     }
 
     protected function tearDown(): void

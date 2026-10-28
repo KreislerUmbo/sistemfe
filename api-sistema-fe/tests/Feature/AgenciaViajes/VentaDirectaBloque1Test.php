@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\AgenciaViajes;
 
+use Tests\Feature\AgenciaViajes\Concerns\ConAccesoATodasLasReservas;
 use App\Http\Controllers\AgenciaViajes\ConfiguracionCodigosController;
 use App\Http\Controllers\AgenciaViajes\CotizacionController;
 use App\Http\Controllers\AgenciaViajes\VentaDirectaController;
@@ -21,6 +22,8 @@ use Tests\TestCase;
 // transacción por test revertida.
 class VentaDirectaBloque1Test extends TestCase
 {
+    use ConAccesoATodasLasReservas;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -35,6 +38,9 @@ class VentaDirectaBloque1Test extends TestCase
         ]);
         DB::purge('pgsql');
         DB::beginTransaction();
+
+        // T-025: el cotizador pregunta a CotizacionPolicy; estos tests prueban otras reglas.
+        $this->verTodasLasReservas();
     }
 
     protected function tearDown(): void

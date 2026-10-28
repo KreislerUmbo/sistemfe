@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\AgenciaViajes;
 
+use Tests\Feature\AgenciaViajes\Concerns\ConAccesoATodasLasReservas;
 use App\Http\Controllers\AgenciaViajes\AlternativaDestinoController;
 use App\Http\Controllers\AgenciaViajes\AlternativaItemController;
 use App\Http\Controllers\AgenciaViajes\CotizacionController;
@@ -39,6 +40,8 @@ use Tests\TestCase;
 // revertida.
 class Sesion12f1BackendMultidestinoTest extends TestCase
 {
+    use ConAccesoATodasLasReservas;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -53,6 +56,9 @@ class Sesion12f1BackendMultidestinoTest extends TestCase
         ]);
         DB::purge('pgsql');
         DB::beginTransaction();
+
+        // T-025: el cotizador pregunta a CotizacionPolicy; estos tests prueban otras reglas.
+        $this->verTodasLasReservas();
     }
 
     protected function tearDown(): void

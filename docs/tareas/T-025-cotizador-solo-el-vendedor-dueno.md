@@ -71,9 +71,43 @@ php artisan test   # suite completa, contra PostgreSQL
 ---
 
 ## Resultado
-- **Commits:**
-- **Tests:**
-- **Desviaciones de la tarea y por qué:**
+- **Commits:** rama `fix/T-025-cotizador-solo-el-dueno` (ver `git log`).
+- **Tests:** `CotizacionPolicyAccionesTest` (3): un vendedor sin `ver_todas` no puede ejecutar 13
+  acciones de lectura y escritura sobre la cotización de otro (403, nada cambia); el dueño y quien
+  tiene `ver_todas` sí; un hotel suelto que nadie usa no tiene dueño. Sin el arreglo falla en la
+  primera acción ("ver PDF"). Las 29 clases de prueba del cotizador que actuaban sin usuario ahora
+  usan `ConAccesoATodasLasReservas` (da `cotizaciones.ver_todas`), igual que las de reservas.
+  Suite completa 1562 en verde.
+- **Cómo quedó:** `App\Services\AgenciaViajes\CotizacionDuena::de($recurso)` resuelve la
+  cotización de cualquier objeto del cotizador (cotización, alternativa, ítem, destino, opción de
+  mayorista, opcional, tour, hotel, tarifa de hotel); el trait
+  `App\Http\Controllers\Concerns\AutorizaCotizacion::autorizarCotizacion($habilidad, $recurso)`
+  llama a `CotizacionPolicy`. Va justo después de cargar el objeto, antes de cualquier otro guard.
+
+| Controlador | Método | Verificación |
+|---|---|---|
+| AlternativaController | store, update, destroy, duplicar | update |
+| | pdf | view |
+| AlternativaItemController | store, update, elegirOpcionGrupo, destroy, eliminarGrupo, desdePlantilla, eliminarCarga, moverCarga, precioCarga, recalcularTemporadas, reasignarDia, moverBloque, actualizarPasajeAereo, actualizarManual, promoverAProveedor | update |
+| | temporadasTours, previewPasajeAereo | view |
+| OpcionMayoristaController | store, elegir, update, descartar, reactivar, eliminar, actualizarOpcional, eliminarOpcional, quitarTour, actualizarOrdenTour | update |
+| | index | view |
+| | hoteles, opcionales, tours | view (GET) / update (POST) |
+| OpcionHotelController | update, agregarFotos, eliminarFoto, destroy, agregarTarifa, actualizarTarifa, eliminarTarifa, promover | update (si el hotel ya cuelga de una cotización) |
+| | store | ninguna: crea un hotel suelto, sin cotización |
+| AlternativaDestinoController | store, update, destroy | update |
+| | index | view |
+| CotizacionController | actualizarPasajeros | update |
+| TipoCambioAgenciaController | actual, sugerenciaSunat, store | no aplica: no actúa sobre una alternativa |
+
+- **Hotel no registrado** (decisión de la tarea): su dueño es la cotización de su opción de
+  mayorista o, si es local, la del primer servicio que usa una de sus tarifas; si nadie lo usa
+  todavía, no hay dueño y se permite (se puede reutilizar entre alternativas).
+- **Venta directa** sigue funcionando: crea la cotización con `vendedor_id` = el usuario y luego
+  llama a `AlternativaItemController::store()`, que lo reconoce como dueño.
+- **Desviaciones de la tarea y por qué:** ninguna.
 
 ## Hallazgos fuera de alcance
--
+- Un hotel no registrado que dos cotizaciones de vendedores distintos usan queda "de" la primera
+  que lo usó (el primer servicio encontrado): el segundo vendedor recibe 403 al editarlo. Caso raro
+  hoy (se crean por cotización); si pasa, decidir si el hotel suelto debe copiarse por cotización.

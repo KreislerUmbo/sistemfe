@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\AgenciaViajes;
 
+use App\Http\Controllers\Concerns\AutorizaCotizacion;
 use App\Http\Controllers\Controller;
 use App\Models\AgenciaViajes\AlternativaItem;
 use App\Models\AgenciaViajes\ConfiguracionAgencia;
@@ -29,6 +30,8 @@ use Illuminate\Validation\ValidationException;
 // schema, no hizo falta migración para permitirlo).
 class OpcionHotelController extends Controller
 {
+    use AutorizaCotizacion;
+
     public function __construct(private FotoUploadService $fotoUploadService)
     {
     }
@@ -104,6 +107,7 @@ class OpcionHotelController extends Controller
     public function update(Request $request, string $id)
     {
         $hotel = OpcionHotel::findOrFail($id);
+        $this->autorizarCotizacion('update', $hotel);
 
         $validator = Validator::make($request->all(), [
             'nombre_hotel' => 'required|string|max:250',
@@ -137,6 +141,7 @@ class OpcionHotelController extends Controller
     public function agregarFotos(Request $request, string $id)
     {
         $hotel = OpcionHotel::findOrFail($id);
+        $this->autorizarCotizacion('update', $hotel);
         $existentes = OpcionHotel::normalizarFotos($hotel->fotos ?? []);
 
         $validator = Validator::make($request->all(), [
@@ -186,6 +191,7 @@ class OpcionHotelController extends Controller
     public function eliminarFoto(Request $request, string $id)
     {
         $hotel = OpcionHotel::findOrFail($id);
+        $this->autorizarCotizacion('update', $hotel);
 
         $validator = Validator::make($request->all(), [
             'path' => 'required|string',
@@ -221,6 +227,7 @@ class OpcionHotelController extends Controller
     public function destroy(string $id)
     {
         $hotel = OpcionHotel::with('opcionesHotelTarifas')->findOrFail($id);
+        $this->autorizarCotizacion('update', $hotel);
         $tarifaIds = $hotel->opcionesHotelTarifas->pluck('id');
 
         if (self::tieneReservaGenerada($tarifaIds)) {
@@ -249,6 +256,7 @@ class OpcionHotelController extends Controller
     public function agregarTarifa(Request $request, string $id)
     {
         $hotel = OpcionHotel::findOrFail($id);
+        $this->autorizarCotizacion('update', $hotel);
 
         $validator = Validator::make($request->all(), [
             'tipo_habitacion' => 'required|in:simple,matrimonial,doble,triple,familiar',
@@ -271,6 +279,7 @@ class OpcionHotelController extends Controller
     public function actualizarTarifa(Request $request, string $id)
     {
         $tarifa = OpcionHotelTarifa::findOrFail($id);
+        $this->autorizarCotizacion('update', $tarifa);
 
         $validator = Validator::make($request->all(), [
             'tipo_habitacion' => 'required|in:simple,matrimonial,doble,triple,familiar',
@@ -292,6 +301,7 @@ class OpcionHotelController extends Controller
     public function eliminarTarifa(string $id)
     {
         $tarifa = OpcionHotelTarifa::findOrFail($id);
+        $this->autorizarCotizacion('update', $tarifa);
 
         if (self::tieneReservaGenerada(collect([$tarifa->id]))) {
             return response()->json([
@@ -354,6 +364,7 @@ class OpcionHotelController extends Controller
     public function promover(Request $request, string $id)
     {
         $hotel = OpcionHotel::with('opcionesHotelTarifas')->findOrFail($id);
+        $this->autorizarCotizacion('update', $hotel);
 
         if ($hotel->proveedor_promovido_id) {
             return response()->json(['code' => 422, 'message' => 'Este hotel ya fue promovido a proveedor.'], 422);

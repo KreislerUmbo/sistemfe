@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\AgenciaViajes;
 
+use App\Http\Controllers\Concerns\AutorizaCotizacion;
 use App\Http\Controllers\Controller;
 use App\Models\AgenciaViajes\Alternativa;
 use App\Models\AgenciaViajes\AlternativaItem;
@@ -24,9 +25,12 @@ use Illuminate\Validation\Rule;
 // Comparador de mayoristas — plan-modulo-cotizaciones-reservas.md §2.4.
 class OpcionMayoristaController extends Controller
 {
+    use AutorizaCotizacion;
+
     public function index(string $alternativaId)
     {
         $alternativa = Alternativa::findOrFail($alternativaId);
+        $this->autorizarCotizacion('view', $alternativa);
 
         $opciones = OpcionMayorista::where('alternativa_id', $alternativa->id)
             ->with(['proveedor', 'opcionesHotel.opcionesHotelTarifas', 'opcionales', 'tours.paquetePlantilla'])
@@ -57,6 +61,7 @@ class OpcionMayoristaController extends Controller
     public function store(Request $request, string $alternativaId)
     {
         $alternativa = Alternativa::findOrFail($alternativaId);
+        $this->autorizarCotizacion('update', $alternativa);
         if ($rechazo = $this->rechazoSiAceptada($alternativa)) {
             return $rechazo;
         }
@@ -127,6 +132,7 @@ class OpcionMayoristaController extends Controller
     public function elegir(string $id)
     {
         $opcion = OpcionMayorista::with('alternativa')->findOrFail($id);
+        $this->autorizarCotizacion('update', $opcion);
         if ($rechazo = $this->rechazoSiAceptada($opcion->alternativa)) {
             return $rechazo;
         }
@@ -151,6 +157,7 @@ class OpcionMayoristaController extends Controller
     public function update(Request $request, string $id)
     {
         $opcion = OpcionMayorista::with('alternativa')->findOrFail($id);
+        $this->autorizarCotizacion('update', $opcion);
         if ($rechazo = $this->rechazoSiAceptada($opcion->alternativa)) {
             return $rechazo;
         }
@@ -191,6 +198,7 @@ class OpcionMayoristaController extends Controller
     public function descartar(string $id)
     {
         $opcion = OpcionMayorista::with('alternativa')->findOrFail($id);
+        $this->autorizarCotizacion('update', $opcion);
         if ($rechazo = $this->rechazoSiAceptada($opcion->alternativa)) {
             return $rechazo;
         }
@@ -202,6 +210,7 @@ class OpcionMayoristaController extends Controller
     public function reactivar(string $id)
     {
         $opcion = OpcionMayorista::with('alternativa')->findOrFail($id);
+        $this->autorizarCotizacion('update', $opcion);
         if ($rechazo = $this->rechazoSiAceptada($opcion->alternativa)) {
             return $rechazo;
         }
@@ -223,6 +232,7 @@ class OpcionMayoristaController extends Controller
     public function eliminar(string $id)
     {
         $opcion = OpcionMayorista::with('alternativa')->findOrFail($id);
+        $this->autorizarCotizacion('update', $opcion);
         $alternativa = $opcion->alternativa;
 
         if ($alternativa->estado === 'aceptada') {
@@ -266,6 +276,7 @@ class OpcionMayoristaController extends Controller
     public function hoteles(Request $request, string $id)
     {
         $opcion = OpcionMayorista::with('alternativa')->findOrFail($id);
+        $this->autorizarCotizacion($request->isMethod('get') ? 'view' : 'update', $opcion);
 
         if ($request->isMethod('get')) {
             $hoteles = OpcionHotel::where('opcion_mayorista_id', $opcion->id)->with('opcionesHotelTarifas')->get();
@@ -336,6 +347,7 @@ class OpcionMayoristaController extends Controller
     public function opcionales(Request $request, string $id)
     {
         $opcion = OpcionMayorista::with('alternativa')->findOrFail($id);
+        $this->autorizarCotizacion($request->isMethod('get') ? 'view' : 'update', $opcion);
 
         if ($request->isMethod('get')) {
             return response()->json(['opcion_mayorista_opcionales' => OpcionMayoristaOpcional::where('opcion_mayorista_id', $opcion->id)->get()]);
@@ -377,6 +389,7 @@ class OpcionMayoristaController extends Controller
     public function actualizarOpcional(Request $request, string $id)
     {
         $opcional = OpcionMayoristaOpcional::findOrFail($id);
+        $this->autorizarCotizacion('update', $opcional);
         if ($rechazo = $this->rechazoSiAceptada($opcional->opcionMayorista?->alternativa)) {
             return $rechazo;
         }
@@ -401,6 +414,7 @@ class OpcionMayoristaController extends Controller
     public function eliminarOpcional(string $id)
     {
         $opcional = OpcionMayoristaOpcional::findOrFail($id);
+        $this->autorizarCotizacion('update', $opcional);
         if ($rechazo = $this->rechazoSiAceptada($opcional->opcionMayorista?->alternativa)) {
             return $rechazo;
         }
@@ -420,6 +434,7 @@ class OpcionMayoristaController extends Controller
     public function tours(Request $request, string $id)
     {
         $opcion = OpcionMayorista::with('alternativa')->findOrFail($id);
+        $this->autorizarCotizacion($request->isMethod('get') ? 'view' : 'update', $opcion);
 
         if ($request->isMethod('get')) {
             $tours = OpcionMayoristaTour::where('opcion_mayorista_id', $opcion->id)
@@ -473,6 +488,7 @@ class OpcionMayoristaController extends Controller
     public function quitarTour(string $id)
     {
         $tour = OpcionMayoristaTour::findOrFail($id);
+        $this->autorizarCotizacion('update', $tour);
         if ($rechazo = $this->rechazoSiAceptada($tour->opcionMayorista?->alternativa)) {
             return $rechazo;
         }
@@ -491,6 +507,7 @@ class OpcionMayoristaController extends Controller
     public function actualizarOrdenTour(Request $request, string $id)
     {
         $tour = OpcionMayoristaTour::findOrFail($id);
+        $this->autorizarCotizacion('update', $tour);
         if ($rechazo = $this->rechazoSiAceptada($tour->opcionMayorista?->alternativa)) {
             return $rechazo;
         }

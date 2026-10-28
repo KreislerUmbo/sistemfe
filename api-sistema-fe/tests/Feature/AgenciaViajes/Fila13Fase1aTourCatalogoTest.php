@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\AgenciaViajes;
 
+use Tests\Feature\AgenciaViajes\Concerns\ConAccesoATodasLasReservas;
 use App\Http\Controllers\AgenciaViajes\AlternativaItemController;
 use App\Http\Controllers\AgenciaViajes\DestinoServicioController;
 use App\Http\Controllers\AgenciaViajes\PaquetePlantillaController;
@@ -38,6 +39,8 @@ use Tests\TestCase;
 // Postgres real (sistemafe_test_migrations), transacción por test revertida.
 class Fila13Fase1aTourCatalogoTest extends TestCase
 {
+    use ConAccesoATodasLasReservas;
+
     private DestinoAtractivo $destino;
 
     protected function setUp(): void
@@ -54,6 +57,9 @@ class Fila13Fase1aTourCatalogoTest extends TestCase
         ]);
         DB::purge('pgsql');
         DB::beginTransaction();
+
+        // T-025: el cotizador pregunta a CotizacionPolicy; estos tests prueban otras reglas.
+        $this->verTodasLasReservas();
 
         $this->destino = DestinoAtractivo::create(['nombre' => 'Laguna Azul '.uniqid(), 'tipo' => 'zona']);
     }
