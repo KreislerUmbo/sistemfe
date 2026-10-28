@@ -61,7 +61,6 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 | T-021 | AGE | PDF de cotización: fotos de todos los hoteles de la alternativa (Obs. 7) | por hacer | T-020 | |
 | T-022 | AGE | Cotizador: revisión antes de enviar ("¿lista para el cliente?") (Obs. 8) | por hacer | T-028, T-050 | |
 | T-023 | AGE | PDF de cotización con la comparación de hoteles abierta + descuento bien calculado (H4, H10) | por hacer | — | |
-| T-028 | AGE | La versión vigente de una tarifa: solo se ofrece y se usa la vigente; plantillas de tours a la versión nueva (H5, H16, H17) | lista para otro agente (Sonnet), 2 partes: tests de la parte 1 escritos | — | `fix/T-028-version-vigente-tarifa` |
 | T-029 | AGE | Tour clásico desde plantilla: cada servicio nace con su tratamiento tributario; costo sin infantes (H18, H19) | bloqueada: espera la decisión de la obs. 10 (tributario deducido por reglas) y al contador | — | |
 | T-031 | AGE | Servicio de tour sin precio de niño: el niño paga como adulto; hoteles no cambian (H7) | por hacer | — | |
 | T-032 | AGE | Cotizador: actualizar solo lo que cambió + indicadores de carga (R5, R4, H13) | por hacer | — | |
@@ -102,6 +101,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 |---|---|---|
 | AGE | `AlternativaItemController::destroy()` y `eliminarCarga()` no rechazan una alternativa aceptada (solo miran si hay reserva); `moverBloque()` mueve el tour clásico en todos los días, no solo el visible | T-027, 28-oct-2026 |
 | AGE | `Fila13Fase1cFacturacionTest::descuento_del_combo_se_reparte_entre_los_grupos` falla a ratos (≈1 de 4, también corriendo solo): `partes_tour` sale `[180, 90]` en vez de `[90, 180]`. El combo (`orden`) y los ítems de la reserva (`orderBy('id')`) ya van ordenados; el desorden entra en otro punto del armado de las partes. Revisar si el orden de las líneas del comprobante también varía | T-024, 28-oct-2026 |
+| AGE | Tarifas de guía: `GuiaTarifaController::update()` versiona como lo hacía proveedores antes de T-028 — cierra la vieja con `vigente_hasta = hoy` (dos vigentes ese día), toma el `vigente_desde` original del formulario, no guarda `version_anterior_id`, no revisa si ya fue reemplazada y los tours (`guia_tarifa_id`) siguen con el precio viejo. Repetir el patrón de T-028 | T-028, 28-oct-2026 |
 | AGE | IGV de la penalidad por cancelación: preguntar al contador (hoy lo elige el vendedor, D-AGE-033) | requerimiento Modificar reserva, 24-oct-2026 |
 | AGE | Penalidad calculada con `reglas_cancelacion` (franjas por días) | D-AGE-033 |
 | AGE | Agregar pasajero rápido en la reserva para tours por persona (después de probar Modificar reserva) | fila F4 de la hoja de ruta |
@@ -142,6 +142,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 
 | ID | Módulo | Qué | Commit |
 |---|---|---|---|
+| T-028 | AGE | Solo se ofrece y se cotiza la versión vigente de una tarifa; al cambiar el precio los tours pasan a la nueva; comando `agencia-viajes:plantillas-a-tarifa-vigente`; implementada por Sonnet, revisada y probada en agencia-demo por Opus | ver merge de `fix/T-028-version-vigente-tarifa` |
 | T-027 | AGE | Eliminar un tour clásico en una sola operación (total guardado correcto) + subtotal por destino; implementada por Sonnet, revisada por Opus | ver merge de `fix/T-027-eliminar-tour-clasico` |
 | T-024 | AGE | La comparación de hoteles de una alternativa duplicada es independiente de la original; eliminar un bloque solo toca su alternativa; comando `agencia-viajes:separar-grupos-duplicados` | ver merge de `fix/T-024-duplicar-grupo-hoteles` |
 | T-025 | AGE | Cada acción del cotizador verifica que la cotización sea del vendedor o que vea todas (CotizacionPolicy) | ver merge de `fix/T-025-cotizador-solo-el-dueno` |
