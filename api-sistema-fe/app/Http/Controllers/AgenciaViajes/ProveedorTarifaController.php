@@ -11,8 +11,8 @@ use App\Models\AgenciaViajes\ProveedorTarifa;
 use App\Models\AgenciaViajes\ProveedorTipo;
 use App\Models\AgenciaViajes\ReservaItem;
 use App\Models\AgenciaViajes\Temporada;
-use Illuminate\Http\JsonResponse;
 use Carbon\Carbon;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -179,12 +179,23 @@ class ProveedorTarifaController extends Controller
                 ], 422);
             }
 
-            [$nueva, $tours] = DB::transaction(function () use ($tarifaActual, $validado, $desdeNueva) {
+            $resultado = DB::transaction(function () use ($tarifaActual, $validado, $desdeNueva) {
                 $vieja = ProveedorTarifa::lockForUpdate()->findOrFail($tarifaActual->id);
 
+                // Una versión ya reemplazada no se vuelve a reemplazar (doble
+                // clic, o editar una fila "Vencida" del historial): quedarían
+                // dos versiones vigentes y los tours en la primera.
+                if (ProveedorTarifa::where('version_anterior_id', $vieja->id)->exists()) {
+                    return null;
+                }
+
+                // Se cierra la víspera, sin estirar una que ya vencía antes.
                 // Si queda antes de su vigente_desde, el rango vacío significa
                 // "nunca vigente" y vigentes() la excluye.
-                $vieja->update(['vigente_hasta' => Carbon::parse($desdeNueva)->subDay()->toDateString()]);
+                $hasta = Carbon::parse($desdeNueva)->subDay()->toDateString();
+                if ($vieja->vigente_hasta === null || $vieja->vigente_hasta->toDateString() > $hasta) {
+                    $vieja->update(['vigente_hasta' => $hasta]);
+                }
 
                 $validado['proveedor_servicio_id'] = $vieja->proveedor_servicio_id;
                 $validado['vigente_desde'] = $desdeNueva;
@@ -204,6 +215,14 @@ class ProveedorTarifaController extends Controller
 
                 return [$nueva, $tours];
             });
+
+            if ($resultado === null) {
+                return response()->json([
+                    'code' => 422,
+                    'message' => 'Esta versión de la tarifa ya fue reemplazada: edita la versión vigente.',
+                ], 422);
+            }
+            [$nueva, $tours] = $resultado;
 
             $mensaje = 'Esta tarifa ya se usó en una cotización — se cerró la versión anterior y se creó una nueva.';
             if ($tours > 0) {

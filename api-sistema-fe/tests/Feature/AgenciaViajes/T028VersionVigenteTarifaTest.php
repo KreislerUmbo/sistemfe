@@ -279,4 +279,33 @@ class T028VersionVigenteTarifaTest extends TestCase
         $this->assertNull($vieja->fresh()->vigente_hasta);
         $this->assertSame(1, ProveedorTarifa::where('proveedor_servicio_id', $vieja->proveedor_servicio_id)->count());
     }
+
+    // Revisión Opus: doble clic en "Guardar" o editar una fila "Vencida" del historial.
+    public function test_una_version_ya_reemplazada_no_se_vuelve_a_reemplazar(): void
+    {
+        $vieja = $this->tarifa(200);
+        $this->agregarAlaCotizacion($this->alternativa(), $vieja);
+        $nuevaId = $this->editarPrecio($vieja, 260)['proveedor_tarifa']['id'];
+
+        $respuesta = app(ProveedorTarifaController::class)->update(
+            new Request(array_merge($vieja->fresh()->toArray(), ['precio_venta_adulto' => 300, 'vigente_hasta' => null])),
+            (string) $vieja->id
+        );
+
+        $this->assertSame(422, $respuesta->getStatusCode());
+        $this->assertStringContainsString('ya fue reemplazada', $respuesta->getData(true)['message']);
+        $this->assertSame([$nuevaId], $this->enBiblioteca($vieja), 'sigue habiendo una sola vigente');
+    }
+
+    public function test_editar_una_tarifa_ya_vencida_no_estira_su_fecha_de_fin(): void
+    {
+        $vieja = $this->tarifa(200);
+        $this->agregarAlaCotizacion($this->alternativa(), $vieja);
+        $vieja->update(['vigente_hasta' => $this->dias(-20)]);
+
+        $nuevaId = $this->editarPrecio($vieja, 260, ['vigente_hasta' => null])['proveedor_tarifa']['id'];
+
+        $this->assertSame($this->dias(-20), $vieja->fresh()->vigente_hasta->toDateString());
+        $this->assertSame($this->hoy(), ProveedorTarifa::find($nuevaId)->vigente_desde->toDateString());
+    }
 }

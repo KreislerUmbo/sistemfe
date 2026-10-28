@@ -159,5 +159,13 @@ Llenar "Resultado" (salida de los comandos, desviaciones, hallazgos). Commits co
 - **Tests:** suite completa tras la parte 1: 1582 en verde; T028 13/13; type-check 46 errores (los preexistentes). `agencia-viajes:plantillas-a-tarifa-vigente --simular` en agencia-demo: reapuntaría 0, 1 para revisar a mano (ítem de tour 38, tarifa 26, sin tarifa vigente equivalente). CA7 (prueba funcional) queda para Opus.
 - **Desviaciones de la tarea y por qué:** ninguna. Un test mío ("vigente_hasta anterior") usa fin pasado con inicio original, porque con inicio futuro caía antes en la validación existente `after_or_equal`.
 
+- **Revisión (Opus, 28-oct-2026), commit 3:** `update()` no revisaba, tras el lock, si la versión ya
+  tenía sucesora: un doble clic o editar una fila "Vencida" creaba una tercera versión vigente desde
+  hoy junto a la segunda (H5 otra vez). Ahora → 422 "ya fue reemplazada". Además la vieja ya no se
+  estira: se cierra en el menor entre su `vigente_hasta` y la víspera de la nueva. 2 tests nuevos.
+
 ## Hallazgos fuera de alcance
--
+- `GuiaTarifaController::update()` (~línea 76) tiene el mismo problema que tenía esta: cierra la vieja
+  con `vigente_hasta = hoy` (dos vigentes ese día), toma el `vigente_desde` original del formulario,
+  no guarda `version_anterior_id` y los tours (`paquete_plantilla_items.guia_tarifa_id`) siguen con el
+  precio viejo. Candidata a tarea propia.
