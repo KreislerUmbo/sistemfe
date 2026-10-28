@@ -62,7 +62,6 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 | T-022 | AGE | Cotizador: revisión antes de enviar ("¿lista para el cliente?") (Obs. 8) | por hacer | T-028, T-050 | |
 | T-023 | AGE | PDF de cotización con la comparación de hoteles abierta + descuento bien calculado (H4, H10) | por hacer | — | |
 | T-024 | AGE | La comparación de hoteles de una alternativa duplicada es independiente de la original (H1) | por hacer | — | |
-| T-025 | AGE | Cotizador: cada acción verifica que la cotización sea del vendedor (H2) | por hacer | — | |
 | T-027 | AGE | Eliminar un tour clásico en una sola operación (total guardado correcto) + subtotal por destino (H12, H14) | por hacer | — | |
 | T-028 | AGE | La versión vigente de una tarifa: solo se ofrece y se usa la vigente; plantillas de tours a la versión nueva (H5, H16, H17) | por hacer | — | |
 | T-029 | AGE | Tour clásico desde plantilla: cada servicio nace con su tratamiento tributario; costo sin infantes (H18, H19) | bloqueada: espera la decisión de la obs. 10 (tributario deducido por reglas) y al contador | — | |
@@ -143,6 +142,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 
 | ID | Módulo | Qué | Commit |
 |---|---|---|---|
+| T-025 | AGE | Cada acción del cotizador verifica que la cotización sea del vendedor o que vea todas (CotizacionPolicy) | ver merge de `fix/T-025-cotizador-solo-el-dueno` |
 | T-030 | AGE | Una alternativa aceptada no cambia de estado ni de mayorista (opción, hoteles, opcionales, tours) por API | ver merge de `fix/T-030-alternativa-aceptada-sin-cambios` |
 | T-001 | AGE | El precio de un servicio no cambia en una alternativa aceptada (backend) | ver merge de `fix/T-001-precio-alternativa-aceptada` |
 | T-042 | AGE | Reactivar una salida cancelada (servicios a "Por reservar"); aviso y marca "Salida cancelada" cuando una reserva cae en una | ver merge de `fix/T-042-salida-cancelada` |
