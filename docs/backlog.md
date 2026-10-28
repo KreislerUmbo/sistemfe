@@ -61,7 +61,6 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 | T-021 | AGE | PDF de cotización: fotos de todos los hoteles de la alternativa (Obs. 7) | por hacer | T-020 | |
 | T-022 | AGE | Cotizador: revisión antes de enviar ("¿lista para el cliente?") (Obs. 8) | por hacer | T-028, T-050 | |
 | T-023 | AGE | PDF de cotización con la comparación de hoteles abierta + descuento bien calculado (H4, H10) | por hacer | — | |
-| T-024 | AGE | La comparación de hoteles de una alternativa duplicada es independiente de la original (H1) | por hacer | — | |
 | T-027 | AGE | Eliminar un tour clásico en una sola operación (total guardado correcto) + subtotal por destino (H12, H14) | por hacer | — | |
 | T-028 | AGE | La versión vigente de una tarifa: solo se ofrece y se usa la vigente; plantillas de tours a la versión nueva (H5, H16, H17) | por hacer | — | |
 | T-029 | AGE | Tour clásico desde plantilla: cada servicio nace con su tratamiento tributario; costo sin infantes (H18, H19) | bloqueada: espera la decisión de la obs. 10 (tributario deducido por reglas) y al contador | — | |
@@ -72,7 +71,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 | T-035 | AGE | Biblioteca filtrada por el destino activo; sin tours "solo itinerario" en Local (R3) | por hacer | — | |
 | T-036 | AGE | Mayorista: etiquetas, primera opción elegida sola, "solo adultos" a la vista (R6, H22) | por hacer | — | |
 | T-037 | AGE | PDF: nombre de archivo con código y cliente; rótulo correcto de la tabla de hoteles (R8, H20) | por hacer | — | |
-| T-039 | AGE | Listas de proveedores, hoteles, mayoristas y guías sin cortar a 15: buscador contra el servidor (H28) | en pausa: avance parcial de Codex sin revisar en `fix/T-039-listas-sin-cortar` (`5bc9f7a`, carpeta `sistemfe-codex`); lo termina Claude después de T-025 | — | `fix/T-039-listas-sin-cortar` |
+| T-039 | AGE | Listas de proveedores, hoteles, mayoristas y guías sin cortar a 15: buscador contra el servidor (H28) | en pausa: avance parcial de Codex sin revisar en `fix/T-039-listas-sin-cortar` (`5bc9f7a`, carpeta `sistemfe-codex`); lo termina Claude después de T-028 | — | `fix/T-039-listas-sin-cortar` |
 | T-040 | AGE | Avisos a proveedores también al reprogramar, quitar un servicio, agregar un pasajero o cancelar la salida (H29, H37) | por hacer | — | |
 | T-041 | AGE | El check-in en su propia tabla: no cambia la asignación ni la facturación (H30) | por hacer | — | |
 | T-044 | AGE | Aviso cuando un guía o un chofer ya tiene otra salida ese día (H38) | por hacer | — | |
@@ -102,6 +101,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 
 | Módulo | Qué | Origen |
 |---|---|---|
+| AGE | `Fila13Fase1cFacturacionTest::descuento_del_combo_se_reparte_entre_los_grupos` falla a ratos (≈1 de 4, también corriendo solo): `partes_tour` sale `[180, 90]` en vez de `[90, 180]`. El combo (`orden`) y los ítems de la reserva (`orderBy('id')`) ya van ordenados; el desorden entra en otro punto del armado de las partes. Revisar si el orden de las líneas del comprobante también varía | T-024, 28-oct-2026 |
 | AGE | IGV de la penalidad por cancelación: preguntar al contador (hoy lo elige el vendedor, D-AGE-033) | requerimiento Modificar reserva, 24-oct-2026 |
 | AGE | Penalidad calculada con `reglas_cancelacion` (franjas por días) | D-AGE-033 |
 | AGE | Agregar pasajero rápido en la reserva para tours por persona (después de probar Modificar reserva) | fila F4 de la hoja de ruta |
@@ -142,6 +142,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 
 | ID | Módulo | Qué | Commit |
 |---|---|---|---|
+| T-024 | AGE | La comparación de hoteles de una alternativa duplicada es independiente de la original; eliminar un bloque solo toca su alternativa; comando `agencia-viajes:separar-grupos-duplicados` | ver merge de `fix/T-024-duplicar-grupo-hoteles` |
 | T-025 | AGE | Cada acción del cotizador verifica que la cotización sea del vendedor o que vea todas (CotizacionPolicy) | ver merge de `fix/T-025-cotizador-solo-el-dueno` |
 | T-030 | AGE | Una alternativa aceptada no cambia de estado ni de mayorista (opción, hoteles, opcionales, tours) por API | ver merge de `fix/T-030-alternativa-aceptada-sin-cambios` |
 | T-001 | AGE | El precio de un servicio no cambia en una alternativa aceptada (backend) | ver merge de `fix/T-001-precio-alternativa-aceptada` |

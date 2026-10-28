@@ -3715,7 +3715,7 @@ const eliminarGrupoLienzo = async (fila: { grupoId: string; items: AlternativaIt
 
     eliminandoGrupoId.value = fila.grupoId;
     try {
-        await alternativaItemService.eliminarGrupo(fila.grupoId);
+        await alternativaItemService.eliminarGrupo(fila.items[0].alternativa_id, fila.grupoId);
         toast.success('Grupo eliminado');
         await cargarCotizacion();
     } catch (error: any) {

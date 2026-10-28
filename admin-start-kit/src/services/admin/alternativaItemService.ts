@@ -127,8 +127,10 @@ export const alternativaItemService = {
   // grupo_opcion_id de una sola vez (evita borrar fila por fila un bloque
   // "N opciones de hotel" duplicado), ver
   // AlternativaItemController::eliminarGrupo().
-  async eliminarGrupo(grupoOpcionId: string) {
-    const response = await httpClient.delete(`/alternativa-items/grupo/${grupoOpcionId}`)
+  // T-024: el grupo se busca solo dentro de su alternativa (una duplicada
+  // podía compartir el id con la original).
+  async eliminarGrupo(alternativaId: number, grupoOpcionId: string) {
+    const response = await httpClient.delete(`/alternativas/${alternativaId}/grupos/${grupoOpcionId}`)
     return response.data
   }
 }
