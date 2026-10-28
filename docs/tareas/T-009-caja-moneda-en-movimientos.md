@@ -38,7 +38,9 @@ Hallado al preparar:
   comando de la parte 2 solo tiene que pasar a `USD` las que correspondan.
 
 ## Regla para el cobro de crédito (decidida)
-El movimiento toma la moneda de las ventas del recibo. Si el recibo aplica a ventas en **monedas
+Confirmado por el usuario (28-oct-2026): una venta es toda en soles o toda en dólares, y por ahora
+no se mezclan monedas. Un recibo de Cuentas por Cobrar puede pagar varias ventas a la vez, así que
+la regla se extiende al recibo. El movimiento toma la moneda de las ventas del recibo. Si el recibo aplica a ventas en **monedas
 distintas** → 422 `'Un recibo no puede mezclar ventas en soles y en dólares: regístralos por separado.'`
 antes de escribir nada (mismo lugar de las otras validaciones de `store()`, dentro de la
 transacción, con las ventas ya bloqueadas).
