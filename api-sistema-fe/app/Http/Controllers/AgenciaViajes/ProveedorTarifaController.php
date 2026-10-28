@@ -12,7 +12,9 @@ use App\Models\AgenciaViajes\ProveedorTipo;
 use App\Models\AgenciaViajes\ReservaItem;
 use App\Models\AgenciaViajes\Temporada;
 use Illuminate\Http\JsonResponse;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 
 // plan-modulo-proveedores.md §2.6 / plan-modulo-cotizaciones-reservas.md
@@ -21,11 +23,16 @@ use Illuminate\Support\Facades\Validator;
 // padre, no hace falta repetir el proveedor_servicio_id en la URL).
 class ProveedorTarifaController extends Controller
 {
-    public function index(string $proveedorServicioId)
+    // T-028: sin parámetros devuelve el historial completo (pantalla de
+    // proveedores); el cotizador pasa solo_vigentes=1.
+    public function index(Request $request, string $proveedorServicioId)
     {
         $proveedorServicio = ProveedorServicio::findOrFail($proveedorServicioId);
 
-        $tarifas = $proveedorServicio->proveedorTarifas()->orderByDesc('vigente_desde')->get();
+        $tarifas = $proveedorServicio->proveedorTarifas()
+            ->when($request->boolean('solo_vigentes'), fn ($q) => $q->vigentes())
+            ->orderByDesc('vigente_desde')
+            ->get();
 
         return response()->json(['proveedor_tarifas' => $tarifas]);
     }
@@ -41,7 +48,6 @@ class ProveedorTarifaController extends Controller
     // lista TODO el catálogo activo con búsqueda de texto en su lugar.
     public function biblioteca(Request $request)
     {
-        $hoy = \App\Services\HoraPeru::hoyTexto();
         $search = $request->get('search');
 
         $query = ProveedorTarifa::with([
@@ -53,9 +59,7 @@ class ProveedorTarifaController extends Controller
             // desactivada a mano no debe ofrecerse para cotizaciones/
             // paquetes nuevos, aunque su rango de vigente_desde/hasta
             // siga siendo válido por fecha.
-            ->where('activo', true)
-            ->where('vigente_desde', '<=', $hoy)
-            ->where(fn ($q) => $q->whereNull('vigente_hasta')->orWhere('vigente_hasta', '>=', $hoy))
+            ->vigentes()
             // Sesión 11k, Fix 8 — un proveedor dado de baja no debe seguir
             // ofreciéndose como resultado nuevo en la biblioteca, aunque sus
             // tarifas sigan vigentes por fecha.
@@ -142,9 +146,10 @@ class ProveedorTarifaController extends Controller
     }
 
     // Versionado (§2.2): "nunca se sobrescribe un precio ya usado en una
-    // cotización". Si la tarifa ya aparece en alternativa_items, se cierra
-    // vigente_hasta=hoy sobre la fila actual y se crea una nueva versión con
-    // los datos editados. Si nunca se usó, UPDATE directo — no ensucia el
+    // cotización". Si la tarifa ya aparece en alternativa_items, la actual se
+    // cierra la víspera del inicio de la nueva versión (hoy, o la fecha futura
+    // pedida) y se crea la nueva con version_anterior_id; los tours pasan a la
+    // nueva (T-028). Si nunca se usó, UPDATE directo — no ensucia el
     // historial con correcciones de tipeo de una tarifa recién cargada.
     public function update(Request $request, string $id)
     {
@@ -158,21 +163,56 @@ class ProveedorTarifaController extends Controller
         $tieneUso = AlternativaItem::where('proveedor_tarifa_id', $tarifaActual->id)->exists();
 
         if ($tieneUso) {
-            $tarifaActual->update(['vigente_hasta' => \App\Services\HoraPeru::hoyTexto()]);
+            // T-028: la nueva empieza hoy (o en la fecha futura que se pida,
+            // precio programado); el vigente_desde viejo que manda el
+            // formulario no cuenta. La vieja se cierra la víspera: nunca
+            // quedan dos versiones vigentes el mismo día.
+            $hoy = \App\Services\HoraPeru::hoyTexto();
+            $desdeNueva = ! empty($validado['vigente_desde']) && Carbon::parse($validado['vigente_desde'])->toDateString() > $hoy
+                ? Carbon::parse($validado['vigente_desde'])->toDateString()
+                : $hoy;
 
-            $validado['proveedor_servicio_id'] = $tarifaActual->proveedor_servicio_id;
-            $validado['vigente_desde'] = $validado['vigente_desde'] ?? \App\Services\HoraPeru::hoyTexto();
-            // La nueva versión hereda el estado activo/inactivo de la que
-            // reemplaza — editar el precio de una tarifa desactivada no
-            // debe reactivarla en silencio, eso requiere un activar()
-            // explícito. Mismo motivo que en store(): sin esto quedaría
-            // null en vez de heredar el valor real.
-            $validado['activo'] = $tarifaActual->activo;
-            $nueva = ProveedorTarifa::create($validado);
+            if (! empty($validado['vigente_hasta']) && Carbon::parse($validado['vigente_hasta'])->toDateString() < $desdeNueva) {
+                return response()->json([
+                    'code' => 422,
+                    'message' => 'La fecha de fin no puede ser anterior al inicio de la nueva versión ('.Carbon::parse($desdeNueva)->format('d/m/Y').').',
+                ], 422);
+            }
+
+            [$nueva, $tours] = DB::transaction(function () use ($tarifaActual, $validado, $desdeNueva) {
+                $vieja = ProveedorTarifa::lockForUpdate()->findOrFail($tarifaActual->id);
+
+                // Si queda antes de su vigente_desde, el rango vacío significa
+                // "nunca vigente" y vigentes() la excluye.
+                $vieja->update(['vigente_hasta' => Carbon::parse($desdeNueva)->subDay()->toDateString()]);
+
+                $validado['proveedor_servicio_id'] = $vieja->proveedor_servicio_id;
+                $validado['vigente_desde'] = $desdeNueva;
+                $validado['version_anterior_id'] = $vieja->id;
+                // La nueva versión hereda el estado activo/inactivo de la que
+                // reemplaza — editar el precio de una tarifa desactivada no
+                // debe reactivarla en silencio, eso requiere un activar()
+                // explícito. Mismo motivo que en store(): sin esto quedaría
+                // null en vez de heredar el valor real.
+                $validado['activo'] = $vieja->activo;
+                $nueva = ProveedorTarifa::create($validado);
+
+                // H17: los tours (plantillas) cotizan con la versión vigente;
+                // alternativa_items y reserva_items conservan su precio congelado.
+                $tours = PaquetePlantillaItem::where('proveedor_tarifa_id', $vieja->id)
+                    ->update(['proveedor_tarifa_id' => $nueva->id]);
+
+                return [$nueva, $tours];
+            });
+
+            $mensaje = 'Esta tarifa ya se usó en una cotización — se cerró la versión anterior y se creó una nueva.';
+            if ($tours > 0) {
+                $mensaje .= " {$tours} tour(s) pasan a usar el precio nuevo.";
+            }
 
             return response()->json([
                 'code' => 200,
-                'message' => 'Esta tarifa ya se usó en una cotización — se cerró la versión anterior y se creó una nueva.',
+                'message' => $mensaje,
                 'proveedor_tarifa' => $nueva,
                 'version_anterior_id' => $tarifaActual->id,
             ]);

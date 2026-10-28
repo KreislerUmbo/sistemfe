@@ -999,6 +999,16 @@ class AlternativaItemController extends Controller
             ], 422);
         }
 
+        // T-028: una versión vieja (cerrada) o futura no se cotiza; hay que
+        // usar la versión vigente.
+        if ($tarifa && ! $tarifa->estaVigente()) {
+            $mensaje = $tarifa->vigente_desde->toDateString() > \App\Services\HoraPeru::hoyTexto()
+                ? 'Esta tarifa todavía no está vigente (desde '.$tarifa->vigente_desde->format('d/m/Y').').'
+                : 'Esta tarifa ya no está vigente: usa la versión actual.';
+
+            return response()->json(['code' => 422, 'message' => $mensaje], 422);
+        }
+
         if ($tarifa) {
             $monedaCosto = $tarifa->moneda;
             $costoSnapshot = (float) $tarifa->precio_costo;

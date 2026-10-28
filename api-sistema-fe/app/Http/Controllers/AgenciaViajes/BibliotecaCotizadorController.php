@@ -114,8 +114,6 @@ class BibliotecaCotizadorController extends Controller
     // que ya tenía biblioteca().
     private function buscarProveedorTarifas(?int $proveedorTipoId, ?string $search, ?array $destinoIds, ?int $servicioId, ?int $proveedorId): array
     {
-        $hoy = \App\Services\HoraPeru::hoyTexto();
-
         $query = ProveedorTarifa::with([
             // alojamientoDetalle — Consolidación de hoteles: el cotizador
             // necesita el tramo de edad de cama adicional del proveedor
@@ -125,9 +123,7 @@ class BibliotecaCotizadorController extends Controller
             'proveedorServicio.destinoServicio.destinoAtractivo',
             'proveedorServicio.destinoServicio.servicio',
         ])
-            ->where('activo', true)
-            ->where('vigente_desde', '<=', $hoy)
-            ->where(fn ($q) => $q->whereNull('vigente_hasta')->orWhere('vigente_hasta', '>=', $hoy))
+            ->vigentes()
             // Sesión 11k, Fix 8 — mismo filtro que ProveedorTarifaController::biblioteca().
             ->whereHas('proveedorServicio.proveedor', fn ($q) => $q->where('estado', true));
 

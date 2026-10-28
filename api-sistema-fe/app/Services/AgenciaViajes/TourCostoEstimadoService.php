@@ -161,15 +161,12 @@ class TourCostoEstimadoService
     // Tarifa del mismo servicio del proveedor para la temporada pedida.
     private function tarifaDeTemporada(ProveedorTarifa $referencia, int $temporadaId): ?ProveedorTarifa
     {
-        $hoy = HoraPeru::hoyTexto();
-
         return ProveedorTarifa::query()
             ->where('proveedor_servicio_id', $referencia->proveedor_servicio_id)
             ->where('modalidad', $referencia->modalidad)
             ->whereNull('tipo_habitacion')
             ->where('temporada_id', $temporadaId)
-            ->where('activo', true)
-            ->where(fn ($q) => $q->whereNull('vigente_hasta')->orWhere('vigente_hasta', '>=', $hoy))
+            ->vigentes()
             ->orderByDesc('vigente_desde')
             ->orderByDesc('id')
             ->first();
