@@ -141,14 +141,9 @@
                                             </router-link>
                                         </div>
                                         <!-- Caso guía (origen_tipo='guia') sin salida — poco frecuente en la práctica. -->
-                                        <select v-else-if="fila.origen_tipo === 'guia'" class="form-select form-select-sm"
-                                            :value="fila.guia?.id ?? ''"
-                                            @change="guardarGuia(fila, valorSelect($event))">
-                                            <option value="">Sin asignar</option>
-                                            <option v-for="g in guias" :key="g.id" :value="g.id">
-                                                {{ g.nombre }}{{ g.es_referencial ? ' (Referencial)' : '' }}
-                                            </option>
-                                        </select>
+                                        <GuiaBuscador v-else-if="fila.origen_tipo === 'guia'" :key="`${fila.reserva_item_id}-${rearmarBuscadorGuia}`"
+                                            :model-value="fila.guia?.id ?? null" :nombre-actual="fila.guia?.nombre ?? null"
+                                            placeholder="Sin asignar" texto-quitar="Sin asignar" @elegido="(g) => guardarGuia(fila, g)" />
                                         <!-- Fila 13, fase 1b — tour cargado como una sola línea (modo nuevo):
                                              no tiene proveedor ni guía por servicio; su operación (vehículo,
                                              guía, proveedores) será la de su salida, en la fase 2. -->
@@ -167,17 +162,20 @@
                                             </div>
                                             <div v-else class="position-relative">
                                                 <input type="text" class="form-control form-control-sm" placeholder="Buscar proveedor..."
-                                                    v-model="proveedorSearch[fila.reserva_item_id]"
+                                                    v-model="proveedorSearch[fila.reserva_item_id]" @input="buscarTarifasConPausa(fila)"
                                                     @blur="cerrarBusquedaProveedor(fila.reserva_item_id)" autofocus>
                                                 <div class="list-group position-absolute w-100 shadow-sm" style="z-index:10;max-height:220px;overflow-y:auto">
                                                     <button type="button" class="list-group-item list-group-item-action py-1 small text-muted" @mousedown.prevent="elegirProveedor(fila, null)">
                                                         Sin asignar
                                                     </button>
-                                                    <button type="button" class="list-group-item list-group-item-action py-1 small" v-for="t in proveedoresFiltrados(fila)" :key="t.id" @mousedown.prevent="elegirProveedor(fila, t.id)">
+                                                    <button type="button" class="list-group-item list-group-item-action py-1 small" v-for="t in tarifasProveedor" :key="t.id" @mousedown.prevent="elegirProveedor(fila, t.id)">
                                                         {{ t.proveedor_servicio?.proveedor?.nombre_comercial || t.proveedor_servicio?.proveedor?.razon_social || ('Tarifa #' + t.id) }}{{ t.proveedor_servicio?.proveedor?.es_referencial ? ' (Referencial)' : '' }}
                                                         <span class="text-muted">— {{ t.tipo_tarifa }} · {{ t.modalidad }} · {{ t.moneda }} {{ Number(t.precio_venta_adulto).toFixed(0) }}</span>
                                                     </button>
-                                                    <div v-if="proveedoresFiltrados(fila).length === 0" class="list-group-item small text-muted py-1">Sin resultados</div>
+                                                    <div v-if="buscandoTarifas" class="list-group-item small text-muted py-1">
+                                                        <span class="spinner-border spinner-border-sm me-1"></span>Buscando…
+                                                    </div>
+                                                    <div v-else-if="tarifasProveedor.length === 0" class="list-group-item small text-muted py-1">Sin resultados</div>
                                                 </div>
                                             </div>
                                         </template>
@@ -223,7 +221,7 @@ import { ref, computed, onMounted } from 'vue';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import { reporteOperativoService } from '@/services/admin/reporteOperativoService';
 import { reservaItemService } from '@/services/admin/reservaItemService';
-import { guiaService } from '@/services/admin/guiaService';
+import GuiaBuscador from '@/components/AgenciaViajes/GuiaBuscador.vue';
 import { proveedorService } from '@/services/admin/proveedorService';
 import { useToast } from '@/composables/useToast';
 import { formatFecha, hoyPeru, sumarDiasISO } from '@/helpers/fecha';
@@ -248,17 +246,18 @@ const filtros = ref<{
 const filas = ref<ReporteOperativoFila[]>([]);
 const totalSinGuia = ref(0);
 const loading = ref(false);
-const guias = ref<Guia[]>([]);
 const filtrosDisponibles = ref<Omit<ReporteOperativoFiltrosDisponibles, 'code'>>({
     destinos: [], servicios: [], tours: [], hoteles: [],
 });
 
 // ── Reasignar proveedor inline (origen_tipo='proveedor') ────────────────────
-// Mismo patrón que reservas/detalle.vue (buscador con biblioteca completa cargada
-// una vez, filtrada en cliente por servicio_id + texto) — es el caso REAL más común
-// en el reporte (a diferencia del select de guía de arriba, casi no usado en la
-// práctica: los datos reales de agencia-demo son casi todos origen_tipo='proveedor').
-const bibliotecaTarifas = ref<ProveedorTarifa[]>([]);
+// Es el caso REAL más común en el reporte (a diferencia del guía de arriba, casi no
+// usado en la práctica: los datos reales de agencia-demo son casi todos
+// origen_tipo='proveedor'). T-039: antes cargaba la biblioteca una vez (solo las
+// primeras 30 tarifas) y filtraba en el navegador; ahora consulta al servidor por
+// el servicio de la fila y el texto escrito.
+const tarifasProveedor = ref<ProveedorTarifa[]>([]);
+const buscandoTarifas = ref(false);
 const proveedorBuscando = ref<number | null>(null); // reserva_item_id en modo búsqueda
 const proveedorSearch = ref<Record<number, string>>({});
 
@@ -382,19 +381,14 @@ const buscar = () => {
     Promise.all([cargarFiltrosDisponibles(), cargar()]);
 };
 
-const cargarGuias = async () => {
-    const res = await guiaService.listar({ page: 1 });
-    guias.value = res.guias ?? [];
-};
-
 // ── Reasignar guía inline (solo para ítems origen_tipo='guia') ──────────────
-// El select vive por fila (pasajero), pero el guía pertenece al reserva_item —
+// El buscador vive por fila (pasajero), pero el guía pertenece al reserva_item —
 // se actualiza en TODAS las filas que comparten ese reserva_item_id para que no
 // quede una vista inconsistente entre pasajeros del mismo servicio.
-const guardarGuia = async (fila: ReporteOperativoFila, nuevoGuiaId: number | null) => {
+const rearmarBuscadorGuia = ref(0);
+const guardarGuia = async (fila: ReporteOperativoFila, nuevoGuia: Guia | null) => {
     try {
-        await reservaItemService.actualizar(fila.reserva_item_id, { guia_id: nuevoGuiaId });
-        const nuevoGuia = nuevoGuiaId ? guias.value.find((g) => g.id === nuevoGuiaId) ?? null : null;
+        await reservaItemService.actualizar(fila.reserva_item_id, { guia_id: nuevoGuia?.id ?? null });
         const sinGuia = !nuevoGuia || !!nuevoGuia.es_referencial;
         for (const f of filas.value) {
             if (f.reserva_item_id === fila.reserva_item_id) {
@@ -406,12 +400,9 @@ const guardarGuia = async (fila: ReporteOperativoFila, nuevoGuiaId: number | nul
         toast.success('Guía actualizado');
     } catch (e: any) {
         toast.error(e.response?.data?.message ?? 'No se pudo actualizar el guía');
+        // El buscador ya muestra el guía elegido: se rearma para volver al guardado.
+        rearmarBuscadorGuia.value++;
     }
-};
-
-const valorSelect = (event: Event): number | null => {
-    const valor = (event.target as HTMLSelectElement).value;
-    return valor ? Number(valor) : null;
 };
 
 // ── Reasignar proveedor inline (origen_tipo='proveedor') ────────────────────
@@ -419,22 +410,30 @@ const valorSelect = (event: Event): number | null => {
 // conocer al proveedor por cualquiera de los dos) — la lista de resultados
 // solo MUESTRA nombre comercial (con fallback a razón social), mismo criterio
 // que ya se usa en el resto del reporte.
-const proveedoresFiltrados = (fila: ReporteOperativoFila) => {
-    const q = (proveedorSearch.value[fila.reserva_item_id] ?? '').trim().toLowerCase();
-    return bibliotecaTarifas.value
-        .filter((t) => !fila.servicio_id || t.proveedor_servicio?.destino_servicio?.servicio_id === fila.servicio_id)
-        .filter((t) => {
-            if (!q) return true;
-            const proveedor = t.proveedor_servicio?.proveedor;
-            return (proveedor?.nombre_comercial ?? '').toLowerCase().includes(q)
-                || (proveedor?.razon_social ?? '').toLowerCase().includes(q);
-        })
-        .slice(0, 30);
+let pausaTarifas: ReturnType<typeof setTimeout> | null = null;
+const buscarTarifas = async (fila: ReporteOperativoFila) => {
+    buscandoTarifas.value = true;
+    try {
+        const res = await proveedorService.biblioteca({
+            search: (proveedorSearch.value[fila.reserva_item_id] ?? '').trim() || undefined,
+            servicio_id: fila.servicio_id ?? undefined,
+            per_page: 30,
+        });
+        tarifasProveedor.value = res.proveedor_tarifas ?? [];
+    } finally {
+        buscandoTarifas.value = false;
+    }
+};
+const buscarTarifasConPausa = (fila: ReporteOperativoFila) => {
+    if (pausaTarifas) clearTimeout(pausaTarifas);
+    pausaTarifas = setTimeout(() => buscarTarifas(fila), 300);
 };
 
 const abrirBusquedaProveedor = (fila: ReporteOperativoFila) => {
     proveedorBuscando.value = fila.reserva_item_id;
     proveedorSearch.value[fila.reserva_item_id] = '';
+    tarifasProveedor.value = [];
+    buscarTarifas(fila);
 };
 
 // mismo truco que detalle.vue: @mousedown.prevent en los botones de la lista
@@ -518,14 +517,9 @@ const nombreArchivo = (extension: string): string => {
     return `reporte_operativo_del_${formatear(filtros.value.fecha_desde)}_al_${formatear(filtros.value.fecha_hasta)}.${extension}`;
 };
 
-const cargarBibliotecaTarifas = async () => {
-    const res = await proveedorService.biblioteca();
-    bibliotecaTarifas.value = res.proveedor_tarifas ?? [];
-};
-
 // Independientes entre sí — Promise.all en vez de awaits secuenciales
 // (mismo criterio que el fix de paquetes/detalle.vue y cotizador/editar.vue).
 onMounted(() => {
-    Promise.all([cargarGuias(), cargarBibliotecaTarifas(), cargarFiltrosDisponibles(), cargar()]);
+    Promise.all([cargarFiltrosDisponibles(), cargar()]);
 });
 </script>

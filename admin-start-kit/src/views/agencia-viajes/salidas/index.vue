@@ -75,16 +75,9 @@
                                     <span v-if="s.privada" class="badge bg-info-subtle text-info-emphasis ms-1">Privada</span>
                                 </td>
                                 <td>
-                                    <div v-if="guiaEditando !== s.id" class="d-flex align-items-center justify-content-between border rounded px-2 py-1 bg-white"
-                                        style="cursor:pointer;min-height:31px" @click="guiaEditando = s.id">
-                                        <span class="small" :class="{ 'text-muted fst-italic': !s.guia }">{{ s.guia?.nombre ?? 'Sin asignar' }}</span>
-                                        <i class="fas fa-pen text-muted small"></i>
-                                    </div>
-                                    <select v-else class="form-select form-select-sm" :value="s.guia_id ?? ''" autofocus
-                                        @change="guardarGuia(s, ($event.target as HTMLSelectElement).value)" @blur="guiaEditando = null">
-                                        <option value="">Sin asignar</option>
-                                        <option v-for="g in guias" :key="g.id" :value="g.id">{{ g.nombre }}{{ g.es_referencial ? ' (Referencial)' : '' }}</option>
-                                    </select>
+                                    <!-- T-039: buscador contra el servidor (antes, select con los primeros 15 guías). -->
+                                    <GuiaBuscador :key="`${s.id}-${rearmarBuscadorGuia}`" :model-value="s.guia_id" :nombre-actual="s.guia?.nombre ?? null"
+                                        placeholder="Sin asignar" texto-quitar="Sin asignar" @elegido="(g) => guardarGuia(s, g)" />
                                     <div v-if="faltaGuia(s)" class="small text-warning-emphasis mt-1">
                                         <i class="fas fa-triangle-exclamation me-1"></i>Falta guía
                                     </div>
@@ -216,7 +209,7 @@
                             </div>
                         </template>
                         <!-- Fila 13, fase 2b (D10-D13) -->
-                        <SalidaServiciosVehiculos class="mb-3" :salida="detalle" :guias="guias" @cambio="recargarDetalle" />
+                        <SalidaServiciosVehiculos class="mb-3" :salida="detalle" @cambio="recargarDetalle" />
                         <!-- Fila 13, fase 2c (D14, D16) -->
                         <SalidaOrdenesServicio v-if="enCurso(detalle)" :key="`ordenes-${detalle.id}`" class="mb-3" :salida-id="detalle.id" />
                         <SalidaReprogramar v-if="reprogramando && enCurso(detalle)" class="mb-3" :salida="detalle"
@@ -272,7 +265,7 @@ import { useRoute } from 'vue-router';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import Swal from 'sweetalert2/dist/sweetalert2.js';
 import { salidaOperativaService } from '@/services/admin/salidaOperativaService';
-import { guiaService } from '@/services/admin/guiaService';
+import GuiaBuscador from '@/components/AgenciaViajes/GuiaBuscador.vue';
 import { useToast } from '@/composables/useToast';
 import { formatFecha, hoyPeru, sumarDiasISO } from '@/helpers/fecha';
 import type { SalidaOperativa, Guia, EstadoSalidaOperativa } from '@/types/agencia-viajes';
@@ -308,7 +301,6 @@ const route = useRoute();
 const toast = useToast();
 
 const salidas = ref<SalidaOperativa[]>([]);
-const guias = ref<Guia[]>([]);
 const total = ref<number>(0);
 const currentPage = ref<number>(1);
 const perPageRows = ref<number>(20);
@@ -318,7 +310,6 @@ const fechaDesde = ref<string>(hoyPeru());
 const fechaHasta = ref<string>(sumarDiasISO(hoyPeru(), 7));
 const estado = ref<'' | EstadoSalidaOperativa>('');
 
-const guiaEditando = ref<number | null>(null);
 const detalle = ref<SalidaOperativa | null>(null);
 
 const faltaGuia = (s: SalidaOperativa) => enCurso(s) && !s.guia_id;
@@ -378,17 +369,18 @@ const reset = () => {
     list();
 };
 
-const guardarGuia = async (s: SalidaOperativa, valor: string) => {
-    const guiaId = valor ? Number(valor) : null;
+const rearmarBuscadorGuia = ref(0);
+const guardarGuia = async (s: SalidaOperativa, guia: Guia | null) => {
+    const guiaId = guia?.id ?? null;
     try {
         await salidaOperativaService.actualizar(s.id, { guia_id: guiaId });
         s.guia_id = guiaId;
-        s.guia = guiaId ? guias.value.find((g) => g.id === guiaId) ?? null : null;
+        s.guia = guia;
         toast.success('Guía actualizado');
     } catch (error: any) {
         toast.error(error.response?.data?.message ?? 'No se pudo actualizar el guía');
-    } finally {
-        guiaEditando.value = null;
+        // El buscador ya muestra el guía elegido: se rearma para volver al guardado.
+        rearmarBuscadorGuia.value++;
     }
 };
 
@@ -482,8 +474,6 @@ const confirmarReactivar = async (s: SalidaOperativa) => {
 
 onMounted(async () => {
     await list();
-    const gs = await guiaService.listar({ page: 1 });
-    guias.value = gs.guias ?? [];
 
     const idParam = route.params.id ? Number(route.params.id) : null;
     if (idParam) {

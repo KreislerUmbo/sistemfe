@@ -817,10 +817,7 @@
                                         </select>
                                     </div>
                                     <div class="col-6 col-md-4">
-                                        <select class="form-select form-select-sm" v-model="filtroProveedorId">
-                                            <option :value="null">Cualquier proveedor</option>
-                                            <option v-for="p in proveedoresFiltro" :key="p.id" :value="p.id">{{ p.nombre_comercial ?? p.razon_social }}</option>
-                                        </select>
+                                        <ProveedorBuscador v-model="filtroProveedorId" placeholder="Cualquier proveedor" />
                                     </div>
                                 </div>
 
@@ -895,22 +892,7 @@
                                     <input type="text" class="form-control form-control-sm mb-1" placeholder="Nombre del hotel" v-model="formHotelLocal.nombre_hotel">
                                     <label class="form-label mb-1 small text-secondary">¿Es un proveedor ya registrado? <span class="text-muted fw-normal">(opcional)</span></label>
                                     <div class="position-relative mb-1">
-                                        <div class="input-group input-group-sm">
-                                            <input type="text" class="form-control" placeholder="Buscar hotel ya registrado..."
-                                                v-model="filtroProveedorHotelLocal"
-                                                @focus="mostrarSugerenciasProveedorHotel = true"
-                                                @blur="onBlurProveedorHotelLocal"
-                                                @input="formHotelLocal.proveedor_id = null">
-                                            <button v-if="formHotelLocal.proveedor_id" type="button" class="btn btn-outline-secondary" @click="quitarVinculoProveedorHotelLocal" title="Quitar vínculo">
-                                                <i class="fas fa-times"></i>
-                                            </button>
-                                        </div>
-                                        <div v-if="mostrarSugerenciasProveedorHotel" class="position-absolute w-100 bg-white border rounded shadow-sm" style="z-index:20; max-height:180px; overflow-y:auto">
-                                            <div v-if="proveedoresHotelFiltrados.length === 0" class="px-2 py-1 small text-muted fst-italic">Sin resultados.</div>
-                                            <div v-for="p in proveedoresHotelFiltrados" :key="p.id" class="px-2 py-1 small" style="cursor:pointer" @mousedown.prevent="elegirProveedorHotelLocal(p)">
-                                                {{ p.nombre_comercial ?? p.razon_social }}
-                                            </div>
-                                        </div>
+                                        <ProveedorBuscador v-model="formHotelLocal.proveedor_id" :tipo-id="tipoHotelId" placeholder="Buscar hotel ya registrado…" />
                                     </div>
                                     <p v-if="formHotelLocal.proveedor_id" class="text-success small mb-2"><i class="fas fa-check-circle me-1"></i>Vinculado</p>
                                     <p class="text-muted fst-italic mb-2" style="font-size:11px">
@@ -971,10 +953,8 @@
                                  que ya usa paquetes/detalle.vue: elegir guía, después su lista de
                                  tarifas (cada una ya trae su destino/modalidad/costo_diario). -->
                             <template v-else-if="modo === 'guia'">
-                                <select class="form-select form-select-sm mb-2" v-model="guiaSeleccionadaIdCotizador" @change="cargarTarifasGuiaCotizador">
-                                    <option :value="null">— Elegí un guía —</option>
-                                    <option v-for="g in guiasCotizador" :key="g.id" :value="g.id">{{ g.nombre }}{{ g.es_referencial ? ' (Referencial)' : '' }}</option>
-                                </select>
+                                <GuiaBuscador v-model="guiaSeleccionadaIdCotizador" class="mb-2" placeholder="Buscar guía…"
+                                    @elegido="cargarTarifasGuiaCotizador" />
                                 <div v-if="guiaSeleccionadaIdCotizador" class="d-flex flex-column gap-1 mb-2">
                                     <div v-for="t in tarifasGuiaCotizador" :key="t.id" class="border rounded p-2 small lib-item"
                                         :class="{ 'border-primary bg-light': guiaTarifaSeleccionadaCotizador?.id === t.id }"
@@ -1056,7 +1036,7 @@
                                     </div>
                                     <OpcionMayoristaForm v-if="opcionMayoristaEnEdicionId === op.id"
                                         :alternativa-id="alternativaActiva!.id" :destino-activo-id="destinoActivoId"
-                                        :opcion-existente="op" :proveedores-mayoristas="proveedoresMayoristas"
+                                        :opcion-existente="op" :tipo-mayorista-id="tipoMayoristaId"
                                         class="mt-2 border-top pt-2"
                                         @actualizado="onOpcionMayoristaGuardada" @cancelar="opcionMayoristaEnEdicionId = null" />
                                     <div v-if="opcionHotelesActivaId === op.id" class="mt-2 border-top pt-2">
@@ -1099,10 +1079,7 @@
                                             <label class="form-label mb-1 small text-secondary">Nombre del hotel</label>
                                             <input type="text" class="form-control form-control-sm mb-1" placeholder="Nombre del hotel" v-model="formHotel.nombre_hotel">
                                             <label class="form-label mb-1 small text-secondary">Proveedor</label>
-                                            <select class="form-select form-select-sm mb-1" v-model="formHotel.proveedor_id" @change="onCambiarProveedorHotel">
-                                                <option :value="null">Hotel manual/referencial (sin proveedor)</option>
-                                                <option v-for="p in proveedoresHotel" :key="p.id" :value="p.id">{{ p.nombre_comercial ?? p.razon_social }}</option>
-                                            </select>
+                                            <ProveedorBuscador v-model="formHotel.proveedor_id" :tipo-id="tipoHotelId" placeholder="Hotel manual o buscar proveedor" @elegido="onCambiarProveedorHotel" />
                                             <!-- Nota de costo/venta ya no va acá — quedó una sola vez arriba
                                                  de toda la tabla (04-sep-2026), cubre también este form. -->
                                             <!-- Encabezados de columna — cumplen el rol de label para cada
@@ -1266,7 +1243,7 @@
                                 </button>
                                 <OpcionMayoristaForm v-if="mostrarFormMayorista"
                                     :alternativa-id="alternativaActiva!.id" :destino-activo-id="destinoActivoId"
-                                    :opcion-existente="null" :proveedores-mayoristas="proveedoresMayoristas"
+                                    :opcion-existente="null" :tipo-mayorista-id="tipoMayoristaId"
                                     @agregado="onOpcionMayoristaGuardada" @cancelar="mostrarFormMayorista = false" />
                             </div>
                         </template>
@@ -1343,6 +1320,8 @@ import Swal from 'sweetalert2/dist/sweetalert2.js';
 import httpClient from '@/helpers/http-client';
 import RichTextEditor from '@/components/RichTextEditor.vue';
 import HabitacionMatrixPicker from '@/components/AgenciaViajes/HabitacionMatrixPicker.vue';
+import ProveedorBuscador from '@/components/AgenciaViajes/ProveedorBuscador.vue';
+import GuiaBuscador from '@/components/AgenciaViajes/GuiaBuscador.vue';
 import OpcionMayoristaForm from '@/components/AgenciaViajes/OpcionMayoristaForm.vue';
 import TourIncluidoForm from '@/components/AgenciaViajes/TourIncluidoForm.vue';
 import PasajeAereoForm from '@/components/AgenciaViajes/PasajeAereoForm.vue';
@@ -1368,7 +1347,7 @@ import { useAgenciaViajesCatalogosStore } from '@/stores/agenciaViajesCatalogos'
 import { formatFecha, formatFechaHora, sumarDiasISO } from '@/helpers/fecha';
 import { guiaService } from '@/services/admin/guiaService';
 import { tipoCambioAgenciaService } from '@/services/admin/tipoCambioAgenciaService';
-import type { Cotizacion, Alternativa, AlternativaItem, ProveedorTarifa, OpcionMayorista, OpcionMayoristaTour, OpcionMayoristaOpcional, OpcionHotelTarifa, Proveedor, ProveedorTipo, BibliotecaResultado, ConfiguracionAgencia, DestinoServicio, Guia, GuiaTarifa, Servicio, TipAfeIgv, DestinoTributario, TemporadaDesactualizada } from '@/types/agencia-viajes';
+import type { Cotizacion, Alternativa, AlternativaItem, ProveedorTarifa, OpcionMayorista, OpcionMayoristaTour, OpcionMayoristaOpcional, OpcionHotelTarifa, Proveedor, ProveedorTipo, BibliotecaResultado, ConfiguracionAgencia, DestinoServicio, GuiaTarifa, Servicio, TipAfeIgv, DestinoTributario, TemporadaDesactualizada } from '@/types/agencia-viajes';
 import type { Client } from '@/types/clients';
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
@@ -2443,7 +2422,6 @@ const filtroDestinoId = ref<number | null>(null);
 const filtroServicioId = ref<number | null>(null);
 const filtroProveedorId = ref<number | null>(null);
 const serviciosFiltro = ref<Servicio[]>([]);
-const proveedoresFiltro = ref<Proveedor[]>([]);
 
 const cargarBiblioteca = async () => {
     const res = await bibliotecaCotizadorService.buscar({
@@ -2822,43 +2800,6 @@ const formHotelLocal = ref<{
     nombre_hotel: '', moneda: 'PEN', proveedor_id: null,
     tarifas: [tarifaHotelLocalVacia()],
 });
-// Guardrail (18-sep-2026) — el select de "¿es un proveedor ya
-// registrado?" listaba TODOS los proveedores (proveedoresFiltro, mismo
-// catálogo genérico de los filtros de la biblioteca), no solo hoteles —
-// confuso con muchos proveedores de otros tipos mezclados. proveedoresHotel
-// ya existe (cargado con tipo_id del catálogo real de Hotel, reusado del
-// flujo "usar tarifa registrada" de mayorista más abajo) — más un filtro de
-// texto en memoria, porque una agencia con muchos hoteles no cabe cómodo
-// en un <select> plano sin buscador.
-const filtroProveedorHotelLocal = ref('');
-const proveedoresHotelFiltrados = computed(() => {
-    const q = filtroProveedorHotelLocal.value.trim().toLowerCase();
-    if (!q) return proveedoresHotel.value;
-    return proveedoresHotel.value.filter((p) => (p.nombre_comercial ?? p.razon_social ?? '').toLowerCase().includes(q));
-});
-// Bug real reportado por el usuario (18-sep-2026): un <select> nativo con
-// sus opciones filtradas por un input aparte no da NINGÚN indicio visual
-// mientras está cerrado — el usuario escribía y "no pasaba nada" porque el
-// cambio solo se ve recién al abrir el desplegable. Reemplazado por un
-// buscador con lista de sugerencias real (mismo patrón que "Buscar hotel
-// por nombre..." de reservas/detalle.vue, pero en memoria — la lista de
-// hoteles ya está cargada completa, no hace falta pedirla por API).
-const mostrarSugerenciasProveedorHotel = ref(false);
-const onBlurProveedorHotelLocal = () => {
-    // Delay para que el mousedown.prevent de abajo alcance a procesar el
-    // clic ANTES de que el blur oculte la lista (si no, el clic nunca
-    // llega a disparar elegirProveedorHotelLocal).
-    setTimeout(() => { mostrarSugerenciasProveedorHotel.value = false; }, 150);
-};
-const elegirProveedorHotelLocal = (p: Proveedor) => {
-    formHotelLocal.value.proveedor_id = p.id;
-    filtroProveedorHotelLocal.value = p.nombre_comercial ?? p.razon_social ?? '';
-    mostrarSugerenciasProveedorHotel.value = false;
-};
-const quitarVinculoProveedorHotelLocal = () => {
-    formHotelLocal.value.proveedor_id = null;
-    filtroProveedorHotelLocal.value = '';
-};
 const guardandoHotelLocal = ref(false);
 
 const guardarHotelLocal = async () => {
@@ -2879,7 +2820,6 @@ const guardarHotelLocal = async () => {
             nombre_hotel: '', moneda: 'PEN', proveedor_id: null,
             tarifas: [tarifaHotelLocalVacia()],
         };
-        filtroProveedorHotelLocal.value = '';
     } catch (error: any) {
         (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo guardar el hotel', 'error');
     } finally {
@@ -2990,7 +2930,10 @@ const agregarGrupoProveedorHotel = async (ids: number[], cantidad: number) => {
 
 // ── Comparador de mayoristas ──────────────────────────────────────────
 const opcionesMayorista = ref<OpcionMayorista[]>([]);
-const proveedoresMayoristas = ref<Proveedor[]>([]);
+// T-039: los mayoristas y hoteles se buscan en el servidor (ProveedorBuscador
+// con tipo-id); acá solo queda el id de cada tipo del catálogo real.
+const tipoMayoristaId = ref<number | null>(null);
+const tipoHotelId = ref<number | null>(null);
 const opcionHotelesActivaId = ref<number | null>(null);
 const mostrarFormMayorista = ref(false);
 const opcionMayoristaEnEdicionId = ref<number | null>(null);
@@ -3037,7 +2980,6 @@ const quitarFotoHotelNuevo = (idx: number) => {
 
 // Sesión 11k, Fix 9 — proveedores tipo Hotel (para "usar tarifa registrada")
 // + sus tarifas Hotel una vez elegido uno. Mismo patrón que detalle.vue.
-const proveedoresHotel = ref<Proveedor[]>([]);
 const tarifasHotelProveedorSeleccionado = ref<ProveedorTarifa[]>([]);
 
 const onCambiarProveedorHotel = async () => {
@@ -3490,7 +3432,6 @@ const agregarGrupoMayorista = async (op: OpcionMayorista, opcionHotelTarifaIds: 
 // que esta sección vive aparte del grid de biblioteca, igual que el
 // comparador de mayoristas ya vive aparte (toggle "Local / Nacional" vs
 // "Internacional" — acá se suma un tercer modo, "Guías").
-const guiasCotizador = ref<Guia[]>([]);
 const guiaSeleccionadaIdCotizador = ref<number | null>(null);
 const tarifasGuiaCotizador = ref<GuiaTarifa[]>([]);
 const guiaTarifaSeleccionadaCotizador = ref<GuiaTarifa | null>(null);
@@ -3506,12 +3447,6 @@ watch(configAgencia, (c) => {
         destinoTributarioGuia.value = c.destino_tributario_default;
     }
 }, { immediate: true });
-
-const cargarGuiasCotizador = async () => {
-    if (guiasCotizador.value.length) return;
-    const res = await guiaService.listar({});
-    guiasCotizador.value = res.guias ?? [];
-};
 
 const cargarTarifasGuiaCotizador = async () => {
     guiaTarifaSeleccionadaCotizador.value = null;
@@ -3542,8 +3477,6 @@ const agregarItemGuiaCotizador = async () => {
         agregandoGuia.value = false;
     }
 };
-
-watch(modo, (m) => { if (m === 'guia') cargarGuiasCotizador(); });
 
 // ── Drawer de biblioteca (Punto A) ─────────────────────────────────────
 const drawerBibliotecaAbierto = ref(false);
@@ -4183,7 +4116,6 @@ onMounted(async () => {
         // nuevos de la biblioteca (destino/servicio/proveedor), en paralelo
         // (no bloquean la carga) — mismo patrón que paquetes/detalle.vue.
         servicioService.listar({ per_page: 200 }).then((res) => { serviciosFiltro.value = res.servicios ?? []; });
-        proveedorService.listar({ estado: true }).then((res) => { proveedoresFiltro.value = res.proveedores ?? []; });
 
         // proveedor_tipos: catálogo real (editable desde el panel superadmin,
         // NO los 4 valores del seeder original) — alimenta tanto los chips de
@@ -4223,25 +4155,11 @@ onMounted(async () => {
         // 'alojamiento-hoteles' (Sesión 11k, Fix 9 — proveedores tipo Hotel,
         // para "usar tarifa registrada" al armar un hotel de opcion_mayorista;
         // ver mismo hallazgo documentado en ProveedorController::tarifasHotel(),
-        // backend — 'hotel' no matchea nada). Ninguna de las 4 llamadas de
-        // abajo depende de las otras — todas en paralelo.
-        const tipoMayorista = tiposList.find((t) => t.slug === 'agencia-mayorista');
-        const tipoHotel = tiposList.find((t) => t.slug === 'alojamiento-hoteles');
+        // backend — 'hotel' no matchea nada).
+        tipoMayoristaId.value = tiposList.find((t) => t.slug === 'agencia-mayorista')?.id ?? null;
+        tipoHotelId.value = tiposList.find((t) => t.slug === 'alojamiento-hoteles')?.id ?? null;
 
-        await Promise.all([
-            cargarCotizacion(),
-            cargarBiblioteca(),
-            tipoMayorista
-                ? httpClient.get('/proveedores', { params: { tipo_id: tipoMayorista.id } }).then((res) => {
-                      proveedoresMayoristas.value = res.data.proveedores ?? [];
-                  })
-                : Promise.resolve(),
-            tipoHotel
-                ? httpClient.get('/proveedores', { params: { tipo_id: tipoHotel.id, estado: true } }).then((res) => {
-                      proveedoresHotel.value = res.data.proveedores ?? [];
-                  })
-                : Promise.resolve(),
-        ]);
+        await Promise.all([cargarCotizacion(), cargarBiblioteca()]);
     } catch (error: any) {
         (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo cargar la cotización.', 'error');
     } finally {

@@ -94,6 +94,7 @@ declare module 'vue' {
     FlatPicker: typeof import('./src/components/FlatPicker.vue')['default']
     FooterPortal: typeof import('./src/components/portal/FooterPortal.vue')['default']
     FormCondiciones: typeof import('./src/components/Creditos/FormCondiciones.vue')['default']
+    GuiaBuscador: typeof import('./src/components/AgenciaViajes/GuiaBuscador.vue')['default']
     HabitacionMatrixPicker: typeof import('./src/components/AgenciaViajes/HabitacionMatrixPicker.vue')['default']
     HeroPortal: typeof import('./src/components/portal/HeroPortal.vue')['default']
     HistorialCredito: typeof import('./src/components/Creditos/HistorialCredito.vue')['default']
