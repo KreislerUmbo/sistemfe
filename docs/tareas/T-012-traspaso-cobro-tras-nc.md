@@ -96,9 +96,13 @@ php artisan test   # suite completa, contra PostgreSQL
   test de la vista previa, que se corrió aparte). Frontend: `vue-tsc` sin errores en lo tocado (los
   errores previos son de otros archivos); `vite build` OK; Vitest nuevo `cobroFactura.test.ts` (5).
 - **Desviaciones de la tarea y por qué:**
-  - **Prueba funcional en pantalla real no hecha** (Definición de Hecho, §3): el bloque de traspaso
-    del frontend solo se comprobó con type-check, build y Vitest. Falta, en agencia-demo: facturar
-    con cobro, NC total aceptada, abrir "Facturar" y ver "Usar lo cobrado en…" preseleccionado.
+  - **Prueba funcional en agencia-demo (29-oct, Playwright):** reserva 29 en US$: facturar con
+    cobro en efectivo (venta 19, 1 movimiento de caja) → NC total aceptada → "Facturar" muestra
+    "Usar lo cobrado en B002 (disponible US$ 424.00)" marcado y con 424 → emitir: venta 20 pagada
+    con un pago `TRASPASO` de 424 desde la venta 19 y **0 movimientos de caja**. La NC aceptada se
+    insertó directo en la base del demo (no hay SUNAT en local) y se llamó a
+    `liberarPorNotaDeCredito()`. Quedan en agencia-demo la reserva 29, las ventas 19-20, esa NC y
+    una caja abierta de admin@agencia-demo.test.
   - **Reserva de la venta de origen:** una NC total borra su fila de `reserva_ventas`, así que
     "misma reserva" se reconoce por `sale_detail_items → reserva_items.reserva_id` (sobrevive a la NC).
   - **"Pagado" del origen** = todos sus `sale_payments`, incluidos traspasos que ella recibió
@@ -108,10 +112,14 @@ php artisan test   # suite completa, contra PostgreSQL
   - `method_payment` del traspaso se guarda como `'TRASPASO'` (columna de texto libre).
   - El frontend propone usar todo lo traspasable (hasta el saldo) sin que el usuario lo marque, para
     evitar cobrar dos veces; puede destildarlo o editar el monto.
-  - Migración `2026_10_30_100000_…` aplicada solo a la base de tests; falta `tenants:migrate-verticales`.
+  - Migración `2026_10_30_100000_…` aplicada a la base de tests y a los tenants locales con
+    `tenants:migrate-verticales`; falta en producción al desplegar.
 
 ## Hallazgos fuera de alcance
 - `SaleController::update()` borra y recrea los `sale_payments`: editar una venta con traspaso
   perdería `origen` y `traspasado_de_sale_id` (relacionado con R5). Revisar antes de encender el cobro.
+- El rótulo del origen usa `n_operacion` o serie-correlativo; mientras el comprobante no se envió a
+  SUNAT no tiene correlativo y sale solo la serie ("B002"). En la práctica una NC aceptada ya tiene
+  correlativo, pero el caso de prueba lo mostró así.
 - Otros lectores de `sale_payments` (Cuentas por Cobrar, reportes por forma de pago) no se revisaron
   para ver cómo tratan filas `origen='traspaso'` (no son dinero nuevo).
