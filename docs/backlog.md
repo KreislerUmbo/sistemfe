@@ -46,7 +46,6 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 | T-005 | AGE | Modificar reserva: aplicar a la reserva | por hacer | T-003, T-004 | |
 | T-006 | AGE | Modificar reserva: PDF para el cliente | por hacer | T-003 | |
 | T-007 | AGE | Modificar reserva: pantallas | por hacer | T-005, T-006 | |
-| T-011 | AGE + CAJ | Cobro al contado al facturar una reserva (Obs. 1) | lista para otro agente (Sonnet), 3 partes; interruptor `agencia.cobro_al_facturar` (producción en false hasta T-013) | — | `feat/T-011-cobro-contado-reserva` |
 | T-012 | AGE + CAJ | Traspaso del cobro tras una nota de crédito | por hacer | T-011 | |
 | T-013 | CAJ | Caja, paso B: por moneda + cambio de moneda. **Requisito para desplegar T-011 con dólares** | por hacer | T-009 | |
 | T-014 | VEN | Forma de pago y n.º de operación en el PDF (Obs. 2) | por hacer | T-010 | |
@@ -142,6 +141,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 
 | ID | Módulo | Qué | Commit |
 |---|---|---|---|
+| T-011 | AGE + CAJ | Facturar una reserva al contado pide el cobro (mixto, soles/dólares, n.º de operación, vuelto) y lo registra en la caja; detrás de `AGENCIA_COBRO_AL_FACTURAR` (apagado por defecto; encender en producción solo con T-013); implementada por Sonnet, revisada y probada en agencia-demo por Opus | ver merge de `feat/T-011-cobro-contado-reserva` |
 | T-010 | VEN + CAJ | `CobroVentaService` (cobro compartido Ventas/Agencia): n.º de operación, moneda de pago con tipo de cambio, vuelto; monedas por forma de pago (Yape/Plin solo soles). **Antes de desplegar: `caja:completar-moneda`**; implementada por Sonnet, revisada por Opus | ver merge de `feat/T-010-servicio-cobro` |
 | T-009 | CAJ | Cada movimiento de caja guarda la moneda del dinero (`cash_movements.currency`); un recibo de crédito no mezcla soles y dólares; comando `caja:completar-moneda` para los movimientos viejos; implementada por Sonnet, revisada por Opus | ver merge de `feat/T-009-caja-moneda-movimientos` |
 | T-039 | AGE | Proveedores, hoteles, mayoristas y guías sin cortar a 15: `ProveedorBuscador`/`GuiaBuscador` contra el servidor en cotizador, paquetes, salidas y reporte operativo; avance de Codex terminado por Opus | ver merge de `fix/T-039-listas-sin-cortar-v2` |
