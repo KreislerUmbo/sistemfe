@@ -8,7 +8,7 @@
 
 Cada línea: ID · qué · estado · depende de · rama o commit. El detalle está en
 `docs/tareas/T-…md` (se borra al cerrar; para una tarea hecha, el commit es la referencia).
-Próximo ID libre: **T-070**.
+Próximo ID libre: **T-071**.
 
 ## Orden de construcción (27-oct-2026)
 
@@ -40,6 +40,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 
 | ID | Módulo | Qué | Estado | Depende de | Rama / commit |
 |---|---|---|---|---|---|
+| T-070 | PLA + AGE | Comando para borrar la operación de prueba de un tenant de Agencia (cotizaciones, reservas, ventas, pagos, caja); conserva tours, tarifas y configuración | en revisión | — | `feat/T-070-limpiar-operacion-prueba` |
 | T-002 | AGE | Modificar reserva: crear y descartar la modificación (cotización propia + copia) | por hacer | — | |
 | T-003 | AGE | Modificar reserva: calcular la diferencia con lo vendido | por hacer | T-002 | |
 | T-004 | AGE | Modificar reserva: penalidad por pasajero quitado | por hacer | T-003 | |
