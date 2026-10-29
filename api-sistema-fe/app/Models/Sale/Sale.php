@@ -8,6 +8,7 @@ use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Collection;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use App\Services\MontoEnLetras;
 
@@ -318,6 +319,49 @@ class Sale extends Model
     public function getFirstPaymentAttribute()
     {
         return $this->sale_payments()->first() ?? null;
+    }
+
+    // T-014: filas del bloque "FORMA DE PAGO" (A4 y ticket), en el orden de date_payment y id.
+    // forma: nombre de payment_methods sin emoji ni símbolos al inicio (si el código no está en el
+    //        catálogo, el código tal cual); operacion: nro_operacion o null;
+    // fecha: d/m/Y; monto: lo entregado, en moneda_pago ("S/ 300.00", "US$ 1,000.00");
+    // tipo_cambio: "T.C. 3.75" solo si moneda_pago difiere de la moneda de la venta, si no null.
+    /** @return Collection<int, array{forma: string, operacion: ?string, fecha: string, monto: string, tipo_cambio: ?string}> */
+    public function pagosImpresos(): Collection
+    {
+        $nombres = \App\Models\Cash\PaymentMethod::pluck('name', 'code');
+        $simbolo = fn (?string $moneda) => $moneda === 'USD' ? 'US$' : 'S/';
+
+        return $this->sale_payments
+            ->sortBy(fn ($p) => [$p->date_payment, $p->id])
+            ->values()
+            ->map(function ($p) use ($nombres, $simbolo) {
+                $moneda = $p->moneda_pago ?: $this->currency;
+                $nombre = $nombres[$p->method_payment] ?? null;
+                $forma  = $nombre !== null
+                    ? trim(preg_replace('/^[^\p{L}\p{N}]+/u', '', $nombre))
+                    : (string) $p->method_payment;
+
+                return [
+                    'forma'       => $forma !== '' ? $forma : (string) $p->method_payment,
+                    'operacion'   => filled($p->nro_operacion) ? (string) $p->nro_operacion : null,
+                    'fecha'       => Carbon::parse($p->date_payment)->format('d/m/Y'),
+                    'monto'       => $simbolo($moneda) . ' ' . number_format((float) ($p->monto_pagado ?? $p->amount), 2),
+                    'tipo_cambio' => $moneda !== $this->currency
+                        ? 'T.C. ' . rtrim(rtrim(number_format((float) $p->tipo_cambio, 4, '.', ''), '0'), '.')
+                        : null,
+                ];
+            });
+    }
+
+    // "Vuelto S/ 50.00" si la venta tiene vuelto; null si no.
+    public function vueltoImpreso(): ?string
+    {
+        if ((float) $this->vuelto_monto <= 0) {
+            return null;
+        }
+
+        return 'Vuelto ' . ($this->vuelto_moneda === 'USD' ? 'US$' : 'S/') . ' ' . number_format((float) $this->vuelto_monto, 2);
     }
 
     // ── Resumen de totales para la representación impresa ─────────────
