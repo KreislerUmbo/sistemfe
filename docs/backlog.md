@@ -46,7 +46,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 | T-005 | AGE | Modificar reserva: aplicar a la reserva | por hacer | T-003, T-004 | |
 | T-006 | AGE | Modificar reserva: PDF para el cliente | por hacer | T-003 | |
 | T-007 | AGE | Modificar reserva: pantallas | por hacer | T-005, T-006 | |
-| T-011 | AGE + CAJ | Cobro al contado al facturar una reserva (Obs. 1) | por hacer | T-010 | |
+| T-011 | AGE + CAJ | Cobro al contado al facturar una reserva (Obs. 1) | lista para otro agente (Sonnet), 3 partes; interruptor `agencia.cobro_al_facturar` (producción en false hasta T-013) | — | `feat/T-011-cobro-contado-reserva` |
 | T-012 | AGE + CAJ | Traspaso del cobro tras una nota de crédito | por hacer | T-011 | |
 | T-013 | CAJ | Caja, paso B: por moneda + cambio de moneda. **Requisito para desplegar T-011 con dólares** | por hacer | T-009 | |
 | T-014 | VEN | Forma de pago y n.º de operación en el PDF (Obs. 2) | por hacer | T-010 | |
