@@ -63,7 +63,7 @@ class GuiaComoItemRealTest extends TestCase
             'tipo_margen' => $tipoMargen,
             'margen_valor' => $margenValor,
             'moneda' => 'PEN',
-            'vigente_desde' => now()->toDateString(),
+            'vigente_desde' => \App\Services\HoraPeru::hoyTexto(),
         ]);
     }
 

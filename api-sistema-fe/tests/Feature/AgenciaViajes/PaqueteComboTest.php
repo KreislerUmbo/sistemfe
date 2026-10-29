@@ -90,7 +90,7 @@ class PaqueteComboTest extends TestCase
             'margen_tipo' => 'porcentaje',
             'margen_valor' => 20,
             'precio_venta_adulto' => $ventaAdulto,
-            'vigente_desde' => now()->toDateString(),
+            'vigente_desde' => \App\Services\HoraPeru::hoyTexto(),
             'tip_afe_igv' => '10',
             'destino_tributario' => 'nacional',
         ]);
@@ -109,7 +109,7 @@ class PaqueteComboTest extends TestCase
             'tipo_margen' => 'porcentaje',
             'margen_valor' => 10,
             'moneda' => 'PEN',
-            'vigente_desde' => now()->toDateString(),
+            'vigente_desde' => \App\Services\HoraPeru::hoyTexto(),
         ]);
     }
 
