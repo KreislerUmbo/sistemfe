@@ -18,10 +18,11 @@
 <!-- Lo que alguien podría creer que entra y no entra. -->
 - 
 
-## Archivos probables
-<!-- Punto de partida, no lista cerrada. -->
-- `api-sistema-fe/...`
-- `admin-start-kit/src/...`
+## Dónde tocar
+<!-- Archivo + función/método (y línea aprox.), para no leer archivos grandes enteros
+     (docs/proceso.md §7). Punto de partida, no lista cerrada. -->
+- `api-sistema-fe/...` → `Clase::metodo()` (~línea)
+- `admin-start-kit/src/...` → función o bloque
 
 ## Criterios de aceptación
 <!-- Cada uno verificable. Indicar el test que lo cubre o el paso manual. -->

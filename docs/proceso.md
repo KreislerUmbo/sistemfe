@@ -103,6 +103,33 @@ Primer mensaje de la sesión (no copiar documentos, dar rutas):
 
 Para revisar (con Claude): "Revisa la rama `feat/T-042-…` contra `docs/tareas/T-042-….md`".
 
+**Quién construye, según el tamaño** (ver §7):
+- **Tarea chica** (1 commit, 1-3 archivos): la construye en la misma sesión quien la analizó,
+  con el contexto ya cargado. Separarla en tres sesiones hace leer lo mismo tres veces.
+- **Tarea grande o en partes:** Sonnet en otra sesión; Opus analiza, escribe tests y revisa.
+
+## 7. Gasto de tokens
+
+Medido el 29-oct-2026 en las sesiones reales: **entre 85 % y 90 % del gasto es releer y
+reescribir el contexto acumulado**; lo que el modelo escribe es solo 11-14 %. Las sesiones de
+~1000 turnos llegaron a casi 1 millón de tokens de contexto. Por eso:
+
+1. **Una tarea por sesión.** Al terminarla, `/clear` o sesión nueva. Si la sesión pasa de
+   ~150 turnos, cerrarla y anotar en la tarea dónde quedó.
+2. **Tras una pausa de más de 1 hora, sesión nueva.** La caché dura 1 hora: retomar una sesión
+   grande reescribe todo su contexto al precio más caro.
+3. **Las tareas dicen archivo y función exactos**, para buscar con `grep`/leer por rango y no
+   leer archivos grandes enteros (`cotizador/editar.vue`, `ReservaController.php`…). Todo lo
+   leído queda en el contexto hasta el final de la sesión.
+4. **Verificar primero con texto** (tests, consultas, snapshot del navegador); capturas o
+   imágenes de PDF solo para la verificación final.
+5. **Revisión liviana:** diff + tests de la tarea (la suite completa ya la corrió quien
+   construyó); prueba visual solo si se tocó un PDF o una pantalla.
+6. **Salidas filtradas:** `tail`/`grep` sobre la salida de la suite, logs y `git log`.
+7. Tareas chicas relacionadas, juntas en una sesión y una rama.
+
+No ayuda bajar el razonamiento del modelo: es una parte chica del gasto y cuesta calidad.
+
 ## 6. Migración desde la forma anterior
 
 Se hace de a poco, sin parar el trabajo:

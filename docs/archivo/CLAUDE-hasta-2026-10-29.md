@@ -1,0 +1,823 @@
+> **Archivado el 29-oct-2026** (docs/proceso.md §6 paso 3). Es el `CLAUDE.md` completo hasta esa fecha:
+> estado de cada módulo, historial y pendientes. No se actualiza. Lo vigente: `CLAUDE.md` (contexto y
+> reglas) y `docs/backlog.md` (estado). Un pendiente de acá que no esté en el backlog está **sin
+> verificar**: confirmarlo contra el código antes de convertirlo en tarea.
+
+# Sistema POS / E-commerce — Contexto del proyecto
+
+> **Proceso de trabajo (desde 24-oct-2026):** `docs/proceso.md` — cada dato vive en un solo
+> lugar; el estado de las tareas solo en `docs/backlog.md`; tareas para agentes en
+> `docs/tareas/` con la plantilla de `docs/plantillas/tarea.md`. La sección "Estado actual"
+> de abajo es de la forma anterior y se irá archivando (ver `proceso.md` §6).
+
+## Estructura del proyecto
+```
+sistemafe/
+├── CLAUDE.md
+├── api-sistema-fe/       → Backend Laravel (API REST, lógica de negocio, SUNAT/Greenter)
+└── admin-start-kit/      → Frontend Vue 3 (panel admin/POS, template Rizz/Riz)
+```
+El portal e-commerce (Vue.js) consume la misma API de `api-sistema-fe/` pero vive en un
+repositorio/carpeta separado (no incluido en este workspace).
+
+## Estado actual del proyecto (avance)
+
+> **Nota de mantenimiento (25-ago-2026):** esta sección se comprimió — cada módulo cerrado
+> quedó con un resumen corto + un pointer al documento que tiene el detalle completo
+> (fase por fase, bugs reales encontrados, evidencia de verificación). Nada se perdió: el
+> detalle sigue existiendo en `docs/planning/*/historial-archivo.md`, en los planes de
+> módulo activos (`plan-modulo-amortizaciones.md`/`plan-modulo-caja.md`/
+> `plan-hoja-de-ruta-ejecucion.md`), o en memoria de proyecto (`[[nombre]]`). Antes de
+> asumir que un pendiente ya no aplica, seguir el pointer y confirmar contra el documento
+> vigente, no solo contra este resumen.
+
+**Completado (CRUD):**
+- Roles y permisos
+- Usuarios
+- Categorías
+- Productos
+- Clientes
+
+**Completado — Ventas: matriz de pruebas tributarias (cerrado 2026-07-19):**
+Registrar/actualizar/enviar a SUNAT implementado. Matriz de pruebas tributarias
+(Bloques A-E) resuelta y automatizada: `resolverTipAfeIgv()` extraída y testeada
+(15/15 — la matriz original tenía mal el modelo de variables, `destino_venta` solo
+tiene 2 valores reales); `validarRegimenEspecial()` 14/14; FormaPago contado/crédito
+5/5 contra Postgres real; Bloques C/E resueltos como no-aplicables al modelo de datos
+actual. 3 bugs reales de infraestructura de envío SUNAT corregidos en el camino.
+Primera infraestructura de testing real del proyecto (`sistemafe_test_migrations`,
+`vitest` en frontend).
+Detalle completo: `docs/planning/retail-facturacion-core/historial-archivo.md`.
+**Pendiente real:** comunicación de baja SUNAT sin conectar a ningún flujo; producto
+real en `umbo` (id=37) con `tip_afe_igv_default` sospechoso, a confirmar con el
+contador; migración central que sigue alterando `products` (tabla de tenant),
+pregunta arquitectónica abierta.
+
+**Completado — Notas de Crédito/Débito (cerrado 2026-07-14/15):**
+Módulo completo: emisión, envío a SUNAT, PDF (A4/ticket 80mm), listado con filtros,
+reposición de stock atada a aceptación real de SUNAT. Los 13 motivos del catálogo
+SUNAT (09 NC/10 ND) habilitados y validados contra SUNAT BETA real. 3 bugs reales
+corregidos (IGV no se reducía con descuento global, `$d->subtotal` como objeto rompía
+notas clonadas, tope de cantidad acreditable contaba mal los motivos de valor).
+Detalle completo: `docs/planning/retail-facturacion-core/historial-archivo.md`.
+**Pendiente real:** ajuste automático de `debt`/`paid_out`/`state_payment` al aceptar
+una NC/ND; tabla `client_credit_movements` (saldo a favor del cliente) diseñada, sin
+construir.
+
+**Completo — Módulo de Amortizaciones / ventas a crédito (Fases 1-9 de 9, 2026-07-15
+a 2026-07-21):**
+Cronograma de cuotas, pagos con algoritmo FIFO, anulaciones, devolución con retención
+parcial, reemplazo de comprobante con traspaso de pagos, mora on-the-fly. Cerrado con
+historial de recibos + PDF, edición de venta a crédito pre-SUNAT, UI de anular pago +
+permisos configurables desde Roles, y fix de `sales.state_payment` desincronizado del
+módulo (una venta a crédito ya cobrada 100% seguía apareciendo "Pendiente" en Ventas).
+Detalle completo, fase por fase: `docs/planning/retail-facturacion-core/
+plan-modulo-amortizaciones.md` (documento activo, no archivado — sigue siendo
+referencia técnica viva).
+**Pendiente real, documentado sin resolver:** `sales.debt`/`paid_out` quedan
+congelados al cobrar vía Cuentas por Cobrar (`CreditPaymentController` nunca los
+toca) — sin bug visible hoy (ninguna pantalla los lee), pero cualquier reporte futuro
+que los use como "saldo actual" leerá un dato viejo. `credit_type='libre'` sigue sin
+soportarse (solo `cuotas_fijas`); UI de anular cuota/refund/replace sigue siendo solo
+por API directa.
+
+**Completo — Módulo de Caja, Fases 0-6 de 7 (2026-07-18/19):**
+Catálogos base (`payment_methods`/`suppliers`/`cash_concepts`), apertura/cierre con
+lock + índice único parcial de Postgres, integración con ventas (guard de sesión
+abierta + `cash_movement` tipo `correction` en vez de editar/borrar — "ningún
+movimiento de dinero debe ser silencioso"), movimientos manuales con aprobación
+condicional, reportes (PDF/Excel/dashboard), integración con Adelantos y
+Amortizaciones (`CashCorrectionService` compartido, patrón de corrección unificado).
+Detalle completo, fase por fase: `docs/planning/retail-facturacion-core/
+plan-modulo-caja.md` (documento activo — checklist de activación de Fase 7 en su
+sección propia).
+**Pendiente real:** Fase 7 (multi-caja simultánea), sin fecha, espera que el negocio
+abra una segunda caja real. Deuda técnica sin bloquear ninguna fase: filtro de cajero en
+`history.vue` derivado de sesiones cargadas, no de un catálogo real de usuarios. (Ya
+resueltos, no repetir: CRUD de `branches`/`cash_registers` en Configuraciones — 17-ago; bug de
+permisos directos en `AuthController::respondWithToken()` — 10-sep, usa
+`getAllPermissions()`.)
+
+**Completo — Módulo de series de comprobantes, con Nota de Venta interna (cerrado
+2026-07-19):**
+Resuelve de raíz el bug de concurrencia de `reservarCorrelativo()` con series nuevas
+(`serie_comprobantes` con fila semilla `correlativo_actual=0` + `lockForUpdate()` real
+sobre esa fila, no `MAX(sales.correlativo)`). Nota de Venta interna: documento no
+fiscal y terminal, nunca pasa por `enviarSunat()`, reserva su correlativo de inmediato
+en `store()`. Permisos de emisión por tipo de documento, validados en backend, nunca
+solo confiados al frontend. `AdvanceController` conectado al mecanismo nuevo el mismo
+día (antes generaba su propia serie con un string hardcodeado).
+Detalle completo: `docs/planning/retail-facturacion-core/historial-archivo.md`.
+**Pendiente real:** completar el Catálogo 01 SUNAT del código 15 en adelante; migrar
+NC/ND (07/08) del mecanismo viejo (`note_series`) a este módulo; CRUD completo de
+`branches`; reporte SUNAT/PLE (usar siempre `Sale::scopeSoloDocumentosFiscales()`
+cuando se construya, nunca inferir por prefijo de `serie`).
+
+**Panel Superadmin (gestión central de tenants) — todas las fases cerradas en su
+alcance actual (Fases 0/A/B/B.0.5/B.2/C/D/E, 2026-07-20/21):**
+Provisioning (`tenants:provision` + `TenantAdminController`), `Company`/`SunatConfig`
++ certificado por tenant, backups con restauración de fricción intencional (preview →
+backup de seguridad obligatorio → restore in-place, nunca `DROP DATABASE`), panel Vue
+propio (`central-panel/`) con listado/detalle/audit logs/alta de tenant/
+archivar-restaurar/eliminar, y verificación de emisión (`test-emission`) que valida
+Company/SunatConfig/certificado sin quemar ningún correlativo SUNAT real antes de
+habilitar producción.
+Detalle completo, fase por fase: `docs/planning/panel-superadmin/historial-archivo.md`
+y `docs/planning/panel-superadmin/plan-panel-superadmin.md` (stub con los pendientes
+reales).
+**Pendiente real:** decisión de negocio sobre si `test-emission` se vuelve gate
+obligatorio antes de `modo=produccion`, o sigue informativo; confirmar/corregir el
+`giro` real de `market.umbosystem.com`; mismatch no bloqueante de manejo de errores en
+2 vistas (`sale/index.vue`/`advances/show.vue`) que leen el shape anidado de error
+distinto al esperado en fallos de red de `enviarSunat()`.
+
+**Completo — URL de API dinámica en dev + URLs de storage tenant-aware (2026-07-31):**
+Dev permite tener abierta una pestaña por tenant simultáneamente sin editar `.env` ni
+reiniciar Vite (`resolveApiBaseUrl()`, calcula la URL desde el hostname actual). Bug
+real de storage multi-tenant corregido: `public/storage` es un symlink ESTÁTICO que
+Apache sirve directo, siempre apuntando a la carpeta CENTRAL — cualquier tenant nuevo
+daba 403 en sus fotos/avatares sin importar el host de la URL ("umbo" "funcionaba"
+solo por archivos duplicados a mano desde antes del split). Resuelto con
+`tenant_asset()` + `StorageUrl::resolve()`/`resolveMuchas()` — ver regla completa en
+"Cómo trabajar en este proyecto", abajo.
+Detalle completo: `docs/planning/historial-archivo.md`.
+**Pendiente real:** `SystemCategory`/`ManualRecurso` (modelos centrales) siguen
+subiendo sus archivos al disco particionado por tenant, inconsistente con ser datos
+centrales que deberían verse igual desde cualquier tenant.
+
+**Completo — spinners de carga, editor de texto enriquecido y cache de preflight CORS
+(2026-08-10/11):**
+Spinners en toda acción async de `paquetes/detalle.vue`/`cotizador/editar.vue` que no
+los tenía. `RichTextEditor.vue` (Quill) reemplaza `<textarea>` en descripciones de
+paquetes/destinos. `config/cors.php` publicado con `max_age=3600` — antes el
+navegador repetía el preflight OPTIONS en cada request real, duplicando round-trips
+en TODAS las pantallas.
+Detalle completo: `docs/planning/historial-archivo.md`.
+**Hallazgo de rendimiento en dev, diagnosticado y no resuelto (no bloquea nada,
+dev-only):** abrir un paquete/tour tarda 2.8-3s — causa dominante es `php artisan
+serve` sin workers atendiendo una sola request a la vez, no el N+1 conocido de
+`ComboExplosionService` (secundario, ~180ms).
+
+**Backfill comprimido + ítem manual flexible + mover/fusionar servicio entre destinos
+(30-jul a 12-ago-2026):**
+~23 commits del vertical Agencia de Viajes (cambio arquitectónico de hoteles a
+`proveedor_tarifa`, precio por pasajero real, primer `CotizacionController::destroy()`,
+ítem manual con costo/cantidad reales + "promover a proveedor", corrección de
+asociación destino↔servicio mal hecha sin perder tarifas ya enganchadas).
+Detalle completo: `docs/planning/agencia-de-viajes/historial-archivo.md` y
+`plan-hoja-de-ruta-ejecucion.md` §3.
+
+**Completo — Facturación de reservas, de punta a punta (filas 11u/11v/11w de la hoja
+de ruta de Agencia de Viajes, 2026-08-19/20):**
+Cierra el gap de que una reserva aceptada no tenía forma de generar una venta real:
+`ReservaFacturacionController::store()` arma Sale/SaleDetail/SaleDetailItem/
+ReservaVenta reales (líneas agrupadas por categoría, solo contado, guard
+anti-doble-facturación por ítem/pasajero). Guardia tributario (`GET reservas/{id}/
+preparar-factura` + validación real en `store()`) bloquea facturar ítems con
+tratamiento tributario mezclado en un mismo comprobante. Facturación múltiple: N
+`Sale` por reserva, uno por subgrupo de pasajeros/cliente. Split en dos botones,
+"Facturar" (simple) vs. "Facturación especial" (selección manual, mismo backend).
+Facturación externa por tenant (11w): `tenants.facturacion_habilitada` +
+`reserva.facturacion_externa` para tenants que facturan con otro sistema aparte.
+Quitar ítems/pasajeros de una reserva ya aceptada (bloqueado si ya facturado).
+Detalle completo, fase por fase: `docs/planning/agencia-de-viajes/
+plan-hoja-de-ruta-ejecucion.md` §3 (entradas 19/20-ago-2026) y
+`docs/planning/agencia-de-viajes/historial-archivo.md`.
+**Pendientes reales, documentados sin resolver:** reglas tributarias de la venta
+generada son una simplificación conocida (IGV 18%/`destino='nacional'` fijo por
+producto placeholder, no por proveedor/destino real de cada ítem); reparto de un ítem
+`tarifa_fija` compartido entre pasajeros que terminan en Sales distintos no tiene
+ningún mecanismo; bloqueos inconsistentes entre `ReservaItemController`/
+`ReservaPasajeroController::destroy()`, sin guard "mínimo 1 ítem", condición de
+carrera sin `lockForUpdate()`, `SalidaOperativa` huérfana tras quitar su último ítem —
+todo documentado, queda para una sesión futura dedicada a esos dos controllers.
+
+**Completo — Módulo Adelantos: gaps de integridad, conexión con Reservas, selector
+fiscal y corrección post-SUNAT (2026-08-24):**
+Auditoría propia sobre el módulo construido 2026-07-11/12 — Tier 0 conecta
+`reserva_anticipos` (schema puente inerte desde antes) con un controller real y con
+`ReservaFacturacionController`; Tier 1 agrega integridad (moneda, locks, permisos) y
+un selector de tratamiento tributario que ya no fuerza gravado 18% siempre (resuelve
+el hallazgo Amazonía que había quedado pendiente desde la construcción original);
+Tier 2 agrega corrección post-SUNAT vía NC motivo 01, preservando el mismo
+`Advance.id`; Tier 3 rediseña las 3 pantallas. 226/226 tests backend en verde.
+Detalle completo: `docs/planning/retail-facturacion-core/historial-archivo.md` y
+`project_advances_module` en memoria de proyecto (mecánica SUNAT no obvia del bloque
+`PrepaidPayment`).
+**Pendiente real:** validar contra SUNAT Beta un comprobante de adelanto exonerado/
+inafecto y una corrección real vía NC motivo 01 (requiere credenciales de tenant
+real). Retail (fuera de Agencia de Viajes) sigue sin un mecanismo estructurado de
+"adelanto → venta futura" como `reserva_anticipos` — descartado de alcance, no
+reconfirmado con el usuario si hace falta.
+
+**Completo — Cotizaciones Comerciales, módulo nuevo (2026-08-25):**
+Retira `state_sale` de `Sale` (la cotización comercial dejó de vivir como un estado de
+venta) y construye `commercial_quotes`/`commercial_quote_items`/
+`commercial_quote_anticipos` como módulo propio, con PDF A4 dedicado. Verificado en
+los 5 tenants de producción.
+Detalle completo: `docs/planning/retail-facturacion-core/historial-archivo.md` y
+`project_cotizaciones_comerciales_modulo` en memoria de proyecto.
+
+**Completo — Agencia de Viajes, módulo 12: códigos y numeración configurable por
+tenant (2026-08-26):**
+Reemplaza el mecanismo ad-hoc anterior (prefijo tipeado a mano por el usuario en cada
+cotización, código de venta directa hardcodeado `'VD'`, paquete/tour con texto libre
+sin generar, reserva sin código propio) por generación atómica configurable: sigla
+única de agencia + letra por tipo de documento (T/P/C/R/V), contador con lock real
+(mismo patrón que `SerieComprobanteService`) — `CodigoGeneradorService`
+(`generar()`/`generarParaReserva()`/`previsualizar()`, esta última sin persistir, para
+la vista previa en vivo). Reserva deriva su código de la cotización padre sin
+necesitar columnas nuevas. Frontend: pantalla `configuracion/codigos.vue`, sigla
+nueva en Configuración de Agencia, prefijo manual quitado de `cotizador/nueva.vue`,
+código de paquete/tour pasa a generarse. Diseño revisado y aprobado el mismo día (3
+gaps cerrados con el usuario), implementado completo en la misma sesión. 20 tests
+nuevos (incluye lock real con 2 conexiones Postgres), 170/170 en el vertical, 288/288
+en toda la suite backend.
+Detalle completo: `docs/planning/agencia-de-viajes/plan-modulo-codigos-numeracion.md`
+(fila 12 de `plan-hoja-de-ruta-ejecucion.md`).
+**Pendiente real:** correr `tenants:migrate-verticales` contra cualquier tenant
+nuevo con `giro='agencia_viajes'` que se provisione (hoy solo `agencia-demo` tiene
+el vertical). Bug real encontrado y corregido el mismo día (commit `05e9d55`):
+`sigla_comercial` se guardaba en Configuración de Agencia pero nada la leía — el
+prefijo sugerido en "Códigos y numeración" quedó desconectado de ella al escribir
+la pantalla; corregido con un hint "Sugerido: TDKM" + botón "usar" por fila.
+
+**Completo — Agencia de Viajes, fila 11d: pantalla del Reporte Operativo
+(2026-08-26):**
+Tabla filtrable por fecha (con accesos rápidos Hoy/Esta semana) y por
+destino/tour/hotel/servicio (catálogo de opciones acotado al rango de fecha
+vigente, no un catálogo global), agrupada visualmente por día, con 2 acciones
+inline: marcar check-in de un pasajero y reasignar guía/proveedor sin salir de la
+pantalla. Alcance recortado a propósito (confirmado con el usuario): la campana de
+recordatorios queda fuera — depende de la fila 11f (motor automático), que no tiene
+backend construido todavía. Ampliado en 2 rondas de mejoras pedidas por el usuario
+más allá del spec original (`plan-modulo-cotizaciones-reservas.md` §8, que solo
+pedía PDF):
+- Exportación a Excel (con cabecera propia — título/rango/generado por, no solo la
+  tabla) además del PDF; marca "generado por + fecha/hora" repetida en cada página
+  del PDF (técnica `position:fixed` de DomPDF); nombre de archivo de descarga
+  estandarizado (`reporte_operativo_del_DD-MM-YYYY_al_DD-MM-YYYY`). Bug real
+  corregido en el camino: el logo nunca cargaba en el PDF —
+  `StorageUrl::resolve()` no funciona dentro de un PDF (DomPDF trae
+  `enable_remote=false`), corregido a `StorageUrl::resolveParaPdf()`, el mismo
+  patrón que ya usan `SaleController`/`NotaController`/`PaymentReceiptController`.
+  `AlternativaController` (PDF de cotización) tenía el mismo bug latente —
+  **corregido 29-ago-2026**, ver sección propia más abajo.
+- Reasignación de proveedor inline (el caso real más común con datos de
+  `agencia-demo` — a diferencia del select de guía, que casi no se usa en la
+  práctica) con el mismo buscador ya establecido en `reservas/detalle.vue`.
+- **Fix real de duplicidad de guía con Salida Operativa**, hallazgo del usuario: un
+  ítem `origen_tipo='guia'` enganchado a una Salida Operativa (tablero de despacho)
+  tiene su guía real ahí — compartido entre varias reservas, junto con la placa del
+  vehículo y la capacidad. El reporte no lo consideraba: podía mostrar "sin
+  asignar" con un guía real ya puesto en la salida, o dejar "corregirlo" desde el
+  reporte creando un segundo guía desincronizado del de la salida.
+  `reservas/detalle.vue` ya resolvía esto (solo lectura + link a la salida cuando
+  el ítem está enganchado) — el reporte quedó igualado a ese mismo criterio.
+Verificado en vivo con Playwright contra `agencia-demo` en cada ronda (filtros,
+logo, marca de generación, nombres de archivo, reasignación de proveedor, el bug de
+Salida Operativa reproducido y corregido) sin dejar mutaciones sin revertir. 151
+tests backend en verde en el vertical (incluye 3 tests nuevos que reproducen el bug
+de Salida Operativa antes del fix).
+Detalle completo: `plan-hoja-de-ruta-ejecucion.md` fila 11d (párrafo "11d cerrada").
+**Pendiente real:** filtro de texto libre (buscar por pasajero/código de reserva),
+persistencia de filtros al navegar a una reserva y volver, check-in masivo por
+servicio, acceso rápido "Mañana", y un tooltip explicando el propósito del check-in
+— identificados en una ronda de análisis UX pedida por el usuario, priorización
+pendiente de confirmar.
+
+**Completo — Agencia de Viajes, sesión de ajustes cortos y mejoras
+(29-ago-2026, commits `6613b78`..`07169a3`):**
+Serie de mejoras chicas pedidas en vivo por el usuario, sin brief propio —
+detalle completo en cada commit (`git log`), resumen acá:
+- **Lienzo del cotizador — bug de orden real:** `Alternativa::items()` sin
+  `orderBy` dejaba el orden de fila a criterio de Postgres, que lo puede
+  reubicar físicamente tras un `UPDATE` (editar precio) — el ítem
+  "saltaba" de posición. Fix de una línea (`orderBy('id')`).
+- **Slug de proveedor_tipos desalineado en prod:** "Hotel" quedaba con
+  `slug='hotel'` (lo que genera el seeder) en vez de `'alojamiento-hoteles'`
+  (el real, editado a mano en dev) — ocultaba en producción todo el bloque
+  de UI hotelero (check-in/checkout, tipo de habitación) pese a que el
+  código sí estaba desplegado correctamente. Mismo patrón de bug ya
+  conocido para `SLUG_MAYORISTA`, nunca replicado a Hotel. Ver
+  `project_proveedor_tipos_slug_desalineado_prod` en memoria.
+- **`ReservaItemPasajeroController::store()`** no tenía los guards de
+  reserva activa / ítem ya facturado que `index()`/`destroy()` de la
+  misma clase ya aplicaban — se podía asignar un pasajero nuevo a un
+  ítem con comprobante SUNAT ya emitido.
+- **Modal de tarifa de proveedor** ya no se cierra al hacer clic (o
+  arrastrar una selección de texto) fuera del cuadro — antes perdía todo
+  lo tipeado. Cards de "Agregar a este tour/combo": el tipo de servicio
+  pasa a tener el realce visual (antes lo tenía "pública/privada", dato
+  secundario); tipo de habitación (alojamiento) suma su propio badge.
+  Ítems incluidos (tour simple y combo) homogenizados en formato de fila
+  uniforme en las 4 listas, con título/subtítulo/categoría/costo/venta —
+  para alojamiento el título es "Proveedor · tipo de habitación" en vez
+  del nombre de servicio genérico "Alojamiento" (se repetiría igual en
+  todos los hoteles).
+- **Sesión (JWT):** aviso "por expirar" 2 min antes del vencimiento con
+  opción de renovar en silencio (`auth/refresh`, el método ya existía en
+  `AuthController` pero nunca había quedado enrutado); `auth/logout`
+  también quedó enrutado — cerrar sesión ahora invalida el token en el
+  servidor, antes solo lo borraba del navegador.
+- **Paridad tarifas de guía con proveedor:** `GuiaTarifaController` no
+  tenía `update()`/`destroy()` a propósito desde la Sesión 5 — se agrega
+  `activo` + `desactivar()`/`activar()` reversible, `destroy()` bloqueado
+  si está en uso (`alternativa_items`/`paquete_plantilla_items`, `update()`
+  con versionado igual que `proveedor_tarifas`. Frontend:
+  `guias/detalle.vue` gana columna de acciones.
+- **Configuración de Agencia** pasa a acordeón (antes 9 secciones + cuentas
+  bancarias siempre expandidas, pantalla muy larga).
+- **Destinos:** buscador con filtro de texto + tipo + "sin servicios
+  asociados" (`withCount` en los 3 niveles del árbol).
+- **Catálogo de servicios** (diagnóstico UX/técnico propio, puntos 1-4 de
+  5 — el 5°, pantalla propia de catálogo para fusionar duplicados viejos,
+  queda diferido, ver `project_destinos_catalogo_servicios_pendiente` en
+  memoria): `ServicioController` rechaza nombres duplicados
+  (case-insensitive + trim — causa real de que la mayoría cayera en "Sin
+  categoría"); buscador unificado en el modal de destinos (antes
+  buscar/crear eran 2 cajas separadas); aviso reforzado de que "editar" un
+  servicio renombra el catálogo global, no solo la asociación con ese
+  destino; paginación real ("Cargar más") en el buscador.
+- **Fix logo roto en el PDF de cotización** (`AlternativaController`) —
+  quedaba pendiente a propósito desde el cierre de 11d (ver arriba), mismo
+  patrón `resolveParaPdf()` ya usado en otros 5 controllers.
+- **Capitalización de nombres/títulos, solo hacia adelante:** destinos,
+  servicios, `Proveedor.nombre_comercial` (nunca `razon_social`, dato
+  fiscal), guías, tours/paquetes, alternativas, aerolínea de pasaje aéreo
+  suelto — nunca reescribe lo ya guardado, clientes queda completamente
+  fuera. `TextoFormatoService::capitalizarNombrePropio()`, conectado en
+  los 7 puntos de escritura reales.
+18 tests nuevos, 359/359 en toda la suite backend al cierre.
+
+**Completo — Agencia de Viajes, diagnóstico + 4 rondas de UX/UI del cotizador (fila UX1,
+03-sep-2026):**
+Sin brief previo — surgió de una revisión de UX pedida en vivo sobre `editar.vue`, no de un
+ítem ya planeado. Consistencia de color con regla fija por significado de acción (`success`
+sólido reservado solo a "Aceptado por cliente"), drawer de biblioteca migrado de CSS custom a
+`.modal` nativo de Bootstrap, jerarquía visual Alternativa→Destino→Día (chips como
+`badge rounded-pill`, editar/eliminar oculto hasta hover, bloque de tour agrupado con
+borde+fondo). Comparador de mayoristas gana funcionalidad que no existía: editar una opción ya
+creada, descartar/reactivar (`estado='descartada'` ya estaba en el schema desde el diseño
+original pero ningún endpoint lo escribía), ver hoteles ya cargados antes de elegir el
+mayorista, sección "Opcionales" conectada a un backend que ya existía sin ninguna pantalla.
+`HabitacionMatrixPicker.vue` ya no dice "Noches"/default 1 en el flujo mayorista (el precio ahí
+es el paquete completo por persona) — dice "Adultos" con la cantidad real de la cotización;
+formulario de mayorista extraído a `OpcionMayoristaForm.vue` para editar inline dentro de cada
+card. Detalle completo: `docs/planning/agencia-de-viajes/plan-hoja-de-ruta-ejecucion.md` fila
+UX1. Commit `b0f6395`, mergeado y pusheado a `origin/main` (`c9ea33b`).
+**Pendiente real, diagnosticado y diferido a propósito** (decisión explícita del usuario en
+cada caso, no un olvido): alta inline de un destino inexistente en `DestinoTreeSelect.vue`
+(plan diseñado, no aprobado — antes de eso el usuario pidió auditar si el mismo problema
+aplica a otros catálogos, ver hallazgos en el propio hilo de la sesión); alta inline de
+Proveedor mayorista/hotel (descartado, "se agregan por su propia pantalla de Proveedores");
+`reserva_items.guia_id` no hereda el `guia_tarifa_id` ya cotizado (nace siempre `NULL`) — el
+usuario confirmó que sí hay un caso de negocio real (reservas privadas, sin Salida Operativa
+compartida) pero pidió no tocarlo todavía, ver `project_guia_tres_capas_reserva_privada` en
+memoria de proyecto; duplicación visual "Alto Mayo" en cabecera vs. chip de destino, y
+sincronización del panel de precio con el ítem en edición del lienzo, ambos mencionados sin
+plan armado.
+
+**Completo y en producción — Módulo Créditos (giro `creditos`, prestamista; Fases 1-4d,
+2026-09-29 a 2026-10-08):**
+Motor, datos, API, frontend (8 pantallas + menú, caja y Roles), documentos (4b: recibo, contrato con
+plantilla, cronograma, estado de cuenta, constancia, acuerdo de reprogramación), ficha del cliente y
+cartera por asesor/cobrador (4c/4c.1 — con cambios para **todos los giros**: página del cliente
+`views/clients/ficha.vue` en vez del modal, documento nunca repetido), Panel de inicio, Agenda de
+cobranza y 6 reportes con PDF/Excel (4d). Merge a `main` en `1974b7c` (04-oct), **en producción
+desde 05-oct-2026**. Tenant real: `credishirley` (el usuario del dueño, rol "Administrador de
+créditos", ya existe; el Super-Admin es soporte de UmboSystem). Cron `schedule:run` activo en
+producción; tareas en hora de Lima (escalamiento 02:30, foto de cartera 23:50).
+Revisiones posteriores, **todas ya en producción** (no repetirlas): edición/corrección del crédito
+(03-oct, 7 bugs: Corregir bloquea si hubo reprogramación/condonación, límites al subir capital, caja
+al cambiar método, fecha de desembolso acotada, retroactivo antes del desembolso/reprogramación);
+"Equivale a X% mensual" oculto (07-oct); renovación ampliada — sin movimiento de dinero o con el
+cliente pagando la diferencia, p. ej. paga el interés y renueva por el mismo capital — y revisión de
+octubre: castigo revertido no se recastiga esa noche, vista previa del pago retroactivo a su fecha,
+bloqueo del cliente al otorgar, anular devolución de saldo a favor (08-oct, `85154d8`).
+**Leer siempre** `docs/planning/creditos/00-reglas-y-modelo.md` (fuente de verdad de reglas y
+modelo); el detalle de cada fase está en `03-api.md` … `04d-reportes.md`; `historial.md` es solo
+consulta (cronología y commits).
+**Pendiente real:** (1) **tasa máxima como TEA** — la validación actual compara la tasa tipeada
+(total o mensual) contra `tasa_maxima` sin convertir unidades; **no fijar `tasa_maxima` en
+credishirley hasta corregirla** (propuesta sin aprobar en `00-reglas-y-modelo.md` §5); (2) plantilla
+de contrato del abogado, antes del primer crédito real; (3) fases 6-8 del plan, sin fecha (módulos
+contratables, garantes y prendas, cobradores con caja propia y gestiones); (4) QR de verificación del
+recibo e impresión silenciosa en ticketera, sin decidir; (5) adicional **"Solo interés"** (capital al
+final, configurable) diseñado y guardado para más adelante — `docs/planning/creditos/
+adicional-solo-interes.md`; hoy se resuelve renovando cada mes por el mismo capital.
+
+**Completo — Créditos, aviso diario de cobranza (Fase 5, 11-oct-2026):**
+Cada usuario que cobra (o ve toda la cartera) recibe a las 06:45 Lima (configurable, L-S) lo que
+cobra hoy: **correo** (en producción desde `1c60195`; PDF adjunto con `creditos.avisos_pdf_adjunto`,
+si no enlace a la Agenda) y **push en el celular** (Web Push/VAPID, entrega 2). Comando
+`creditos:aviso-cobranza-dia` cada 15 min, idempotente vía `credito_avisos`; correo para avisos
+confirmado por enlace firmado; pantallas Configuración → Avisos y "Mis avisos". El Super-Admin no
+recibe avisos (soporte). Correo de producción: Brevo + `avisos@umbosystem.com` (antes
+`MAIL_MAILER=log`, nada salía). Detalle: `docs/planning/creditos/05-avisos-cobranza.md`.
+**Aviso al cliente — "Mi crédito" (Fase 5b, 11-oct-2026, rama `feat/creditos-mi-credito`):** link
+permanente por cliente (`/c/:token`, página pública móvil) con QR en recibos (80 mm/A4) y al final
+del contrato; la primera vez en cada celular pide los últimos 4 dígitos del documento (recordado 90
+días, 5 fallos → 15 min); ve su próxima cuota N de M, lo vencido con mora, cuánto le falta y sus
+pagos. Ficha del cliente: enviar por WhatsApp, copiar, regenerar; el recordatorio de la Agenda suma
+el link. Detalle: `docs/planning/creditos/05b-mi-credito-cliente.md`.
+**Pendiente real:** desplegar la entrega 2 del aviso (push) y generar las claves VAPID
+(`php artisan webpush:claves`); unir y desplegar "Mi crédito";
+cláusula de consentimiento (Ley 29733) en el contrato del abogado. Local: no correr
+`composer install` (lock para PHP 8.5, local 8.2).
+
+**Completo — Agencia de Viajes, Venta Directa bloque 1 (09-oct-2026, `ae0f1f5`):**
+Corregidas 4 fallas de `VentaDirectaController`: "Concepto libre" fallaba siempre (422, faltaba
+`costo_snapshot`); el ítem de la reserva nacía sin fecha (no salía en Reporte Operativo); el
+código de reserva derivado chocaba con el de una cotización del mismo correlativo; y las
+cotizaciones de soporte ensuciaban Cotizador/Inicio. **Regla nueva:** `cotizaciones.origen`
+(`cotizador`/`venta_directa`) — listados comerciales usan `Cotizacion::delCotizador()`; la
+reserva de una venta directa lleva **el código de la propia venta** (`VDKM-…`), no uno con
+`R`; no se permite repetir prefijo entre tipos en Códigos y numeración.
+**Pendiente real (bloques 2-5 del análisis, sin aprobar):** total en vivo + modo de precio
+deducido de la tarifa; "Cobrar y emitir" en el mismo paso; varias líneas y pasajeros con
+nombre; tratamiento tributario en concepto libre, destino del árbol, pasaje aéreo suelto.
+
+**Mapa del vertical Agencia de Viajes:** `docs/planning/agencia-de-viajes/00-mapa-de-modulos.md`
+— qué hace cada módulo, en qué archivos vive y en qué documento están sus requisitos. Leerlo
+antes de tocar Agencia. Estado de cada fila: `plan-hoja-de-ruta-ejecucion.md`.
+
+**En ejecución — Agencia de Viajes, tours: vender simple, operar por salida, medir el costo
+real (fila 13; fases 1 y 2 hechas 14-22 oct-2026, unidas a `main` local en `9268b70`, sin
+pushear ni desplegar):** tour con precio por persona y por temporada, una línea por tour detrás
+del interruptor `modo_tours` (solo Super-Admin; todos los tenants siguen en `clasico`),
+facturación de la línea de tour por grupo de pasajeros (`reserva_ventas.partes_tour`),
+conversión de los tours existentes, salidas operativas (servicios, vehículos, órdenes de
+servicio, avisos, reprogramar, hora y lugar de recojo) y regla D18: **en Agencia, exonerado
+(20) = Amazonía** (retail no cambia). Diseño y decisiones D6-D18:
+`plan-tours-venta-simple-costo-real.md` §6; endoso: `plan-endoso-pasajeros.md` (versión 2, sin
+aprobar); `plan-precio-tour-por-persona.md` está **descartado**. **Ahora:** pausa para probar la
+fase 2 con uso real; después fase 3 (Compras). Al desplegar, `tenants:migrate-verticales` toca
+datos de Agencia (corrección exonerado→Amazonía con tabla de registro, hora y lugar de las
+salidas). Manual de código: `docs/aprendizaje/03` a `06`.
+
+**Completo en rama, sin unir a `main` — Agencia: F1 + auditoría de reserva y facturación (F3) +
+Modificar reserva etapa 1 (F4), 23-oct-2026, rama `feat/f1-facturacion-por-servicio`:**
+- F1: dos comprobantes a clientes distintos con los mismos pasajeros (p. ej. vuelos a un RUC y
+  el resto a otro); cliente elegible en el anticipo; "qué entra y cuánto" en los modales.
+- F3: **toda acción sobre una reserva pasa por `ReservaPolicy`** (antes solo ver y cancelar);
+  NC parcial sobre un tour ya no pierde la parte acreditada; cancelar y facturar se revisan bajo
+  el mismo `lockForUpdate()`; "qué está facturado" en `ReservaVenta::itemIdsFacturados()` /
+  `pasajeroIdsFacturados()` / `itemIdsDe()` / `pasajeroIdsDe()` / `liberarPorNotaDeCredito()`
+  (no volver a escribirlo a mano); modales de facturar como componentes
+  (`FacturarReservaSimpleModal`, `FacturarReservaEspecialModal`, `useOpcionesFacturacion`).
+- F4 etapa 1: `reserva_pasajeros.cotizacion_pasajero_id` (antes el vínculo se adivinaba por
+  posición) y **quitar pasajero bloqueado** hasta "Modificar reserva" (la lógica vive en
+  `QuitarPasajeroReservaService`). **Pendiente:** diseño detallado de F4 etapa 2 (versión de la
+  alternativa en el cotizador + diferencia + PDF + penalidad + aplicar a la reserva), a revisar
+  con el usuario antes de programar.
+Suite completa 1500 en verde. Manual: `docs/aprendizaje/07` a `10`.
+
+**Completo — Inicio con datos reales (Dashboard) para retail y agencia (02-oct-2026):**
+Reemplaza la demo de la plantilla Rizz por `GET dashboard` (`DashboardService`): ventas hoy/mes
+por moneda (netas de NC aceptadas, NV aparte), ventas 30 días, pendientes SUNAT, por cobrar, más
+vendidos y sin stock (retail), cotizaciones y próximos 7 días (agencia), cajas. Cada bloque según
+giro y permisos; créditos usa su Panel. Detalle: `docs/planning/retail-facturacion-core/
+inicio-dashboard.md`. Corregido de paso: `elapsed_hours` de `cash/dashboard` salía con decimales
+(Carbon 3 `diffInHours()`), ahora horas enteras.
+
+**Completo — Auditoría de seguridad (08-oct-2026, en producción con `85154d8`):**
+Quitado el registro público (`POST auth/register` creaba usuarios con JWT válido en cualquier
+tenant); usuarios inactivos bloqueados (middleware `user.active`); tipo de archivo validado en todas
+las subidas y archivos ya guardados servidos sin ejecutar (`/tenancy/assets`); escalada de permisos
+vía Usuarios/Roles cerrada (nadie otorga permisos que no tiene) y Super-Admin protegido.
+**Pendiente real:** dependencias con advisories (laravel/framework, guzzle, dompdf, maatwebsite/excel,
+npm), `v-html` sin sanitizar (paquetes, proveedores, portal), `OrderController` del portal confía en
+precios/totales enviados por el cliente, certificados beta con clave privada en el historial de git,
+falta HSTS/CSP en nginx y CORS `*`. Detalle: memoria `project_auditoria_seguridad_2026-10-08`.
+
+**Completo — Fechas y horas homogéneas: todo en UTC, todo se muestra en hora de Perú
+(08/09-oct-2026, rama `fix/zona-horaria-homogenea`):**
+F0 (en producción desde 08-oct): fechas de negocio con `HoraPeru` (la fecha de emisión que
+proponía Ventas, Adelantos y Facturar reserva salía con el día siguiente de 19:00 a 24:00), mora
+de Amortizaciones, historial de caja, frontend sin `toISOString()`. F1: `fechas:diagnosticar`
+(decide la zona de cada `created_at` por huellas de modelos Lima en la misma petición; validado
+contra logs de Postgres: 878 bien, 0 mal). F2+F3: quitados los mutadores Lima de 27 modelos,
+lecturas convertidas (incluida la fecha del QR de notas, fiscal) y migraciones de datos tenant +
+central `2026_10_09_100000_migrar_fechas_lima_a_utc` (+5 h fila por fila, registrado en
+`ajustes_zona_horaria`, reversible con `down()`). La fecha del XML SUNAT nunca estuvo mal
+(Greenter convierte a America/Lima). Regla completa en "Cómo trabajar en este proyecto".
+**Pendiente real:** desplegar F2+F3 (backup → `fechas:migrar-utc --simular` → `deploy.sh`; ojo,
+`deploy.sh` sigue aunque falle `tenants:migrate-verticales`); comprobantes de prueba locales con
+fecha impresa del día siguiente quedan como están (en producción no hay ninguno); el XML usa
+la fecha del envío y no `sales.date` (umbo F001-30) — pregunta para el contador.
+
+**Próximos módulos (en orden de prioridad):**
+
+1. **Representación impresa (PDF) con impresión automática**
+   - Generación de PDF con **dos formatos** (A4 y ticket térmico 80mm) **ya implementada**,
+     tanto para ventas (`sales-pdf-url/{id}`) como para notas (`notas-pdf-url/{id}`), con
+     selector manual de formato al momento de imprimir
+     (`usePrintComprobante.ts::imprimirComprobante()`/`imprimirNota()`).
+   - **Sin confirmar:** si ya existe el "formato por defecto configurable por usuario/caja"
+     persistido en algún lado, o si hoy el default es fijo — verificar antes de cerrar este
+     ítem.
+   - Método de impresión automática **silenciosa** (sin diálogo del navegador): **pendiente
+     de decidir** entre modo kiosco de Chrome (`--kiosk-printing`), servicio local de
+     impresión en la PC del cajero, o SDK/ESC-POS directo a la impresora térmica. Lo que hay
+     hoy (`window.open()` + `.print()`) abre el diálogo de impresión del navegador, no es
+     automático/silencioso.
+
+2. **Compras** — **reglas definidas (diseño cerrado 14-oct-2026, sin implementar)** dentro de
+   `docs/planning/agencia-de-viajes/plan-tours-venta-simple-costo-real.md` §3.7-§3.7d y §3.8:
+   módulo del sistema base para todos los giros (comprobantes recibidos contado/crédito, pagos
+   desde Caja o Banco sin sesión de caja, gastos sin comprobante, rendiciones, **tabla única
+   `proveedores`** que reemplaza a `suppliers` de Caja, cadena Obligación/Cuota/Pago/Aplicación
+   para mayoristas, comisiones), Registro de Ventas/Compras para el contador (SIRE, no PLE).
+   Es la fase 3 de ese plan (fila 13 de la hoja de ruta de Agencia). **No construir sobre
+   `cronograma_pago_proveedor`/`pago_proveedor` ni ampliar `suppliers`:** se reemplazan.
+
+(Anticipos/Adelantos, Amortizaciones y Caja ya no están en esta lista — están construidos o
+en progreso, ver sus secciones propias arriba. Este ítem de "Anticipos" describía un diseño
+propuesto que quedó obsoleto en cuanto se construyó el módulo real de Adelantos —
+`AdvanceController`, tabla `advances`, integrado con Caja Fase 6 y Panel Superadmin Fase E.)
+
+## Stack técnico
+- **Frontend (POS/admin):** Vue 3, template Rizz/Riz basado en Bootstrap 5
+- **Frontend (e-commerce):** Portal Vue.js separado, conectado al mismo backend Laravel
+- **Backend:** Laravel
+- **Base de datos:** PostgreSQL
+- **Facturación electrónica:** Integración con Greenter (SUNAT), generación y envío de XML
+
+## Contexto de negocio
+- Sistema orientado al mercado peruano, con cumplimiento de facturación electrónica SUNAT
+  y reglas tributarias regionales.
+- **Exoneración de Amazonía (Ley 27037):** aplica según combinación de naturaleza del
+  producto, destino de la venta y si es exportación.
+- **`resolverTipAfeIgv()`:** función central que determina el tipo de afectación del IGV
+  combinando naturaleza de producto + destino + exportación. Cualquier cambio en reglas
+  tributarias regionales probablemente pasa por aquí.
+- **`SaleController::update()`:** usa una estrategia de sincronización con transacción DB
+  de tres casos. Al modificar ventas existentes, mantener esta estructura transaccional
+  para evitar inconsistencias entre la venta, sus detalles y el comprobante SUNAT asociado.
+
+## Módulos principales
+- Gestión de clientes y productos
+- Registro y edición de ventas
+- Generación de comprobantes electrónicos (boleta/factura) vía Greenter
+- Portal e-commerce: catálogo, categorías, carrito — consume la misma API Laravel
+
+## Convenciones y preferencias de trabajo
+- **Frontend-first cuando sea suficiente:** si un problema se puede resolver de forma
+  simple en el frontend (Vue), preferir esa solución antes que modificar el backend.
+- **Explicar antes de corregir:** al debuggear, explicar la causa raíz del problema antes
+  de aplicar la solución.
+- **Comunicación entre frontend y backend:** usar el helper `httpClient` (Axios) para
+  llamadas a la API Laravel.
+- **Estilos:** cuidado con variables CSS personalizadas en estilos "scoped" de Vue — han
+  dado problemas antes; si una variable CSS no se aplica en un componente, considerar
+  moverla a `main.css` (global) en vez de depurar el scoping.
+- **Timing del DOM en Vue:** evitar `document.getElementById()` directo en el montaje de
+  componentes; usar `ref` de Vue + hooks de ciclo de vida (`onMounted`, etc.) para evitar
+  errores de timing.
+- **URL de la API en desarrollo (`admin-start-kit`):** en dev, `httpClient`/
+  `publicHttpClient` calculan la URL de la API en el momento a partir del hostname actual
+  (`src/helpers/apiBaseUrl.ts::resolveApiBaseUrl()`, puerto configurable vía
+  `VITE_API_DEV_PORT`, default 8000) — así se puede tener abierta una pestaña por tenant
+  (`http://umbo.sistemafe.test:5173`, `http://agencia-demo.sistemafe.test:5173`, etc.)
+  simultáneamente contra el mismo `npm run dev`, sin editar `.env` ni reiniciar Vite para
+  cambiar de tenant. En producción sigue usando `VITE_API_BASE_URL` fijo desde `.env`, sin
+  cambios.
+
+## Notas de arquitectura recientes
+- Sync de ventas en edición: enfoque de tres casos dentro de una transacción DB en
+  `SaleController::update()` (crear/actualizar/eliminar detalles de venta de forma atómica).
+- Bugs resueltos recientemente: cálculo de impuestos, manejo de tipos de datos, renderizado
+  de modales, alineación de íconos de navegación (flexbox + `<span>` dentro de
+  `<router-link>`).
+
+## Cómo trabajar en este proyecto
+- **Regla única de fechas y horas (09-oct-2026):** todo instante (`created_at`, `updated_at`,
+  `*_at`, `anulado_en`…) se guarda en **UTC** (`config/app.php` → `UTC`, hardcodeado) y se
+  muestra en **hora de Perú** (UTC−5, sin horario de verano). Guardar es automático: Laravel
+  llena los timestamps solo, sin mutadores. Solo 3 casos piden decir "Perú" explícitamente:
+  1. **Fecha de negocio "hoy"** (emisión, pago, vigencia, período): `HoraPeru::hoyTexto()`
+     (texto) u `HoraPeru::hoy()` (Carbon a medianoche, para comparar con columnas `date`);
+     Créditos usa `Creditos\Reloj`. **Nunca** `now()`/`today()`/`now()->toDateString()`: de
+     19:00 a 24:00 de Perú ya son el día siguiente.
+  2. **Filtrar un instante por día:** `where(col, '>=', HoraPeru::inicioDiaUtc($dia))` +
+     `where(col, '<', HoraPeru::finDiaUtc($dia))` — nunca `whereDate(col, $dia)`.
+  3. **Formatear un instante en el servidor** (PDF, Excel, Resource que manda texto):
+     `HoraPeru::deUtc($col)->format(...)`. Si el Resource manda el Carbon tal cual, sale ISO
+     con "Z" y el frontend lo convierte.
+  Frontend: `formatFechaHora()` (siempre en America/Lima, sin importar la zona de la PC; un
+  texto sin zona se muestra tal cual) y `hoyPeru()`/`sumarDiasISO()` de `helpers/fecha.ts` —
+  nunca `new Date().toISOString().slice(0, 10)`. **Prohibido `date_default_timezone_set`**:
+  cambiaba la zona de PHP para el resto de la petición y fue la causa de los datos mezclados
+  (27 modelos con mutadores Lima, quitados y migrados en F2/F3). `tests/Unit/ReglaFechasNegocioTest.php`
+  falla si reaparece cualquiera de estos patrones. Excepción a propósito:
+  `credito_pagos.fecha_pago` es fecha-hora **de negocio** en hora Lima (vía `Reloj`), no un
+  instante. Herramientas (solo lectura, pre-migración): `fechas:diagnosticar`,
+  `fechas:migrar-utc --simular`. Ver memoria `project_zona_horaria_utc_mezclada`.
+- **Nunca usar `env('APP_URL')` (ni concatenar host+"/storage/"+path a mano) para construir
+  URLs de archivos servidos por tenant (avatar, imagen, foto).** Usar
+  `App\Services\StorageUrl::resolve()`/`resolveMuchas()`, que arma la URL con
+  `tenant_asset()` (helper de `stancl/tenancy`, ruta `/tenancy/assets/{path}`) — refleja
+  siempre el tenant de la petición actual, tanto en el HOST como en el archivo físico que
+  sirve. **Motivo, no solo estilo:** `public/storage` es un symlink ESTÁTICO (Apache lo
+  sirve directo, sin pasar por Laravel) que apunta siempre a la carpeta CENTRAL
+  (`storage/app/public`) — nunca a `storage/tenant{slug}/app/public/...`, que es donde vive
+  de verdad el archivo de cualquier tenant creado después del split a multi-tenancy. `/storage/`
+  directo da **403 para cualquier tenant salvo "umbo"** (el tenant original, con archivos
+  duplicados a mano desde antes del split — por eso ahí "funcionaba", tapando el bug).
+  `tenant_asset()` resuelve bien porque la ruta que genera corre DENTRO de una petición
+  Laravel bootstrapeada, donde `FilesystemTenancyBootstrapper` ya reescribió `storage_path()`
+  al tenant correcto. Requirió un fix adicional en
+  `App\Providers\TenancyServiceProvider::configureTenantAssetsMiddleware()`: el paquete
+  registra esa ruta con `InitializeTenancyByDomain` hardcodeado, pero este proyecto
+  identifica tenants por SUBDOMINIO (`InitializeTenancyBySubdomain`) — sin el override, la
+  ruta tira 500 (`TenantCouldNotBeIdentifiedOnDomainException`) para cualquier tenant.
+  **`SystemCategoryController`/`ManualRecursoController` quedan fuera de esta regla a
+  propósito**: `SystemCategory`/`ManualRecurso` son modelos CENTRALES
+  (`CentralConnection`, catálogo/marketplace del SaaS) — no correspondería resolverlos por
+  tenant. **Pendiente, no resuelto:** sus archivos SÍ se suben hoy al disco `public`
+  suffijado por tenant (`Storage::putFile()` sin disco central dedicado), así que un
+  archivo subido mientras se navega bajo un tenant queda físicamente aislado en la
+  partición de ESE tenant — inconsistente con que el dato sea central y debería verse
+  igual desde cualquier tenant. No es el mismo bug que el de arriba, pero es de la misma
+  familia (storage y tenancy no siempre coinciden) — evaluar en una sesión dedicada.
+- **Agencia de Viajes — fecha de una `Reserva`:** leer siempre de
+  `reserva.fecha_viaje_desde`/`fecha_viaje_hasta` (columnas propias, Fase 1 del fix
+  Cotización↔Reserva, 2026-08-18) — **nunca** de
+  `reserva.alternativa.cotizacion.fecha_viaje_desde`/`fecha_viaje_hasta`. **Motivo:**
+  `Cotizacion.fecha_viaje_desde/hasta` sigue siendo editable sin ningún guard incluso
+  después de que la cotización ya generó una reserva
+  (`CotizacionController::update()`, a propósito) — antes de esta fase,
+  `reserva_items.fecha` se calculaba en vivo contra ese valor, así que cualquier
+  corrección posterior de la cotización desincronizaba en silencio la fecha operativa
+  ya congelada de la reserva (confirmado con datos reales de prueba en `agencia-demo`:
+  reservas con ítems calculados contra 3-4 fechas base distintas entre sí). La relación
+  `alternativa.cotizacion` se sigue cargando y su fecha sigue viajando en el JSON
+  completo de `ReservaController::show()` — es intencional (refleja la propuesta
+  comercial vigente), no un bug; el punto es no leerla como si fuera la fecha de la
+  reserva. `reserva_items.fecha_origen` (`'auto'`/`'manual'`) distingue una fecha
+  calculada por la fórmula de una editada a mano
+  (`ReservaItemController::update()`) — ningún recálculo automático futuro debe pisar
+  un ítem `'manual'` sin decisión explícita. Diagnóstico de datos existentes:
+  `php artisan agencia-viajes:diagnosticar-fechas-reserva` (solo lectura). Ver
+  `docs/planning/agencia-de-viajes/plan-modulo-cotizaciones-reservas.md` y el brief
+  "Fix fechas Cotización↔Reserva, FASE 1". **Fase 2 CERRADA (2026-08-19):**
+  `POST reservas/{id}/reprogramar` (`ReservaController::reprogramar()`) mueve
+  `reserva.fecha_viaje_desde/hasta` y recalcula `reserva_items.fecha` SOLO para los
+  ítems `fecha_origen='auto'` — los `'manual'` quedan intactos y vuelven en
+  `items_no_tocados` de la respuesta. Re-engancha `SalidaOperativa` de los ítems
+  recalculados que cambiaron de fecha (desengancha de la vieja — nunca se borra, puede
+  seguir compartida por otra reserva — y reintenta `engancharSalidaOperativa()` con las
+  mismas reglas que al aceptar). **No toca `SalidaMayorista.cupo_ocupado`**: confirmado
+  leyendo el código antes de escribir la Fase 2 (no asumido del brief) que ese contador
+  es por RESERVA completa (`reserva.mayorista_elegida_id`, fijado una única vez al
+  aceptar/cancelar, atado a una salida de catálogo con fecha propia), nunca por
+  `reserva_item` — no existe ningún camino donde recalcular `reserva_items.fecha` deba
+  mover ese cupo. Columnas de auditoría simple en `reserva`
+  (`fecha_viaje_desde_original`/`fecha_viaje_hasta_original`/`fecha_reprogramacion`/
+  `motivo_reprogramacion`) — mismo trade-off que `fecha_cancelacion`/
+  `motivo_cancelacion`: solo la reprogramación más reciente queda visible, no un
+  historial completo. `reasignarDia()`/`moverBloque()`
+  (`AlternativaItemController.php`) ahora rechazan con 422 explícito si
+  `alternativa.estado === 'aceptada'` ("usa reprogramar sobre la reserva en vez de mover
+  ítems acá"). Frontend: botón "Reprogramar viaje" + modal en `reservas/detalle.vue`,
+  badge "Fecha manual" en los ítems con `fecha_origen='manual'`. Verificado con 8 tests
+  nuevos (`ReservaReprogramarTest`, `AlternativaItemBloqueaMoverSiAceptadaTest`) y
+  contra datos reales de `agencia-demo` (reserva #12: reprogramada de 2026-08-27 a
+  2026-11-01, ítems auto movidos, un ítem marcado manual a mano quedó intacto y listado,
+  guard de `reasignarDia()` confirmado con 422 real — datos revertidos a su estado
+  original después de verificar).
+- Antes de tocar lógica tributaria (IGV, exoneraciones, `resolverTipAfeIgv()`), revisar
+  el flujo completo: producto → destino → tipo de operación, ya que estas reglas están
+  interrelacionadas y un cambio aislado puede romper otro caso.
+- Antes de tocar `SaleController::update()`, confirmar que cualquier cambio mantenga la
+  transacción DB atómica (todo-o-nada) entre venta, detalles y comprobante SUNAT.
+- Al agregar migraciones nuevas en `database/migrations/tenant/` (`core/` o
+  `verticals/*`), correr `php artisan tenants:migrate-verticales` para aplicarlas a los
+  tenants ya provisionados — **NO** usar `tenants:migrate` a secas para esto, ese
+  comando solo cubre `tenant/core/` (ver `config/tenancy.php`
+  `migration_parameters.--path`, hardcodeado) y deja las de `verticals/` sin aplicar en
+  silencio (bug real, arrastrado desde el primer vertical — ver
+  `arquitectura-multitenant-backend_1.md`).
+
+## Migración a multi-tenancy (stancl/tenancy) — estado al 2026-07-12
+
+### 1. Drift de schema — CERRADO
+El schema real de Postgres (dev) y las migraciones en disco estaban desincronizados: 16
+tablas sin `Schema::create` en absoluto (`categories`, `clients`, `client_addresses`,
+`companies`, `products`, `sale_details`, `sales`, `sale_payments`, `system_categories`,
+`systems`, `system_features`, `system_media`, `system_modules`, `plans`, `manual_recursos`,
+`services`), más `users`/`orders`/`tax_configs`/`detraction_codes` con columnas incorrectas
+o de más. Causa raíz: varias tablas se crearon/editaron directo en Postgres (pgAdmin/SQL
+manual) sin pasar nunca por una migración.
+
+Resuelto con 22 migraciones correctivas nuevas (`2026_06_01_*` y `2026_07_13_*`), validadas
+contra una base vacía (`sistemafe_test_migrations`) con `migrate:fresh` — 43 migraciones en
+total corren sin error, y el diff de `information_schema` contra dev quedó limpio. Backup de
+dev tomado antes de tocar nada: `sv_facturacion_20260712_211130.dump`.
+
+3 mejoras aplicadas a dev (fuera de las migraciones, vía `ALTER TABLE` directo + `INSERT` en
+el ledger `migrations`, batch 13): `companies.id` ahora tiene secuencia/autoincrement;
+`plans.billing_period `/`description ` corregidos (tenían un espacio al final del nombre,
+era un typo); `sale_payments` ahora tiene primary key sobre `id`. Las 22 migraciones nuevas
+están registradas en `migrations` de dev como ya ejecutadas (su efecto ya existía en dev
+antes de escribir las migraciones — nunca deben correrse literalmente contra dev, están
+pensadas para `tenants:migrate` sobre bases nuevas).
+
+### 2. Mapa central vs. tenant — CERRADO
+
+**Nota de ubicación física (actualizada 2026-07-20):** la categorización central/tenant de
+abajo sigue siendo correcta, pero las tablas centrales listadas ya no viven físicamente en
+`sv_facturacion` — se migraron a `db_tenant_central` en Fase B.0.5 del panel superadmin
+(`plan-panel-superadmin.md`), junto con `tenants`/`domains`. `sv_facturacion` ya no cumple
+ningún rol de infraestructura; solo conserva los datos históricos del negocio original
+pre-multitenant.
+
+**Central** (compartido por todos los tenants): `systems`, `system_categories`,
+`system_features`, `system_modules`, `system_media`, `plans`, `manual_recursos`
+(catálogo/marketplace del SaaS); `tax_configs`, `detraction_codes`, `note_motivos`
+(catálogos legales SUNAT).
+
+**Tenant** (dato propio de cada negocio): `products`, `categories`, `clients`,
+`client_addresses`, `sales`, `sale_details`, `sale_payments`, `orders`, `order_items`,
+`notes`, `note_details`, `note_series` (es configuración propia del negocio, no ley),
+`companies`, `users`, `roles`/`permissions`/`model_has_roles`/`model_has_permissions`/
+`role_has_permissions` (Spatie), `advances`, `advance_applications`, `advance_refunds`,
+`cache`/`cache_locks`, `jobs`/`job_batches`/`failed_jobs`.
+
+**Excluida por completo**: `personal_access_tokens` (Sanctum instalado pero sin usar — 21
+tokens de prueba abandonados, ninguno con `last_used_at`; no se migra a ningún lado).
+
+**Referencias cross-boundary detectadas** (tenant → central, sin FK de Postgres posible
+entre bases distintas):
+- `products.codigo_detraccion` y `sales.codigo_detraccion` → `detraction_codes.codigo`
+- `notes.cod_motivo` + `notes.tipo_doc` → `note_motivos.(catalogo, codigo)`
+- `tax_configs` no tiene referencia persistida (se lee en vivo, el valor calculado se copia
+  a `sales.*`)
+
+### 3. Mecanismo cross-boundary — diseño aprobado
+
+- Los 10 modelos centrales (`DetractionCode`, `NoteMotivo`, `TaxConfig`, `System`,
+  `SystemCategory`, `SystemFeature`, `SystemModule`, `SystemMedia`, `Plan`,
+  `ManualRecurso`) deben usar el trait `Stancl\Tenancy\Database\Concerns\CentralConnection`
+  (fuerza la conexión central sin importar el contexto de tenant activo).
+- `Product::belongsTo(DetractionCode::class, ...)` no necesita cambios — Eloquent resuelve
+  la conexión desde el modelo relacionado.
+- `NotaElectronicaController::validarMotivo()` ya valida `cod_motivo` correctamente — no
+  necesita cambios, solo que `NoteMotivo` tenga el trait.
+- Gap real encontrado: `codigo_detraccion` (en `products` y `sales`) no tenía ninguna
+  validación en PHP — se sostenía 100% por la FK de Postgres. Se agrega un check explícito
+  (mismo estilo que `validarMotivo()`) en `ProductController`/`SaleController`.
+- **Orden de implementación**: el check de validación de `codigo_detraccion` debe
+  implementarse y probarse **antes** de mover `detraction_codes`/`tax_configs` a la base
+  central — para no dejar una ventana sin ninguna de las dos protecciones (ni FK de
+  Postgres, ni validación de aplicación).
+
+### 4. Pendientes conocidos (no resueltos, fuera del alcance de esta ronda de auditoría)
+- `DatabaseSeeder`/`PermissionsDemoSeeder` no están listos para `tenants:seed` — usuario
+  admin hardcodeado (`umbosac@gmail.com`/`12345678`) y `Permission::create()` no idempotente.
+- `TaxConfigSeeder`/`DetractionCodeSeeder` deberían correr una sola vez contra la base
+  central (no por tenant) — falta decidir el mecanismo concreto de cuándo/cómo se disparan.
+- Rutas de storage `xml/`/`cdrs/` con nombre fijo para `debug_xml.xml` (bug de concurrencia
+  ya detectado en single-tenant, se agrava con multi-tenant) — sin resolver. (El
+  particionado por tenant del storage en sí ya funciona vía `FilesystemTenancyBootstrapper`
+  para los discos `public`/`private`, esto es específicamente el nombre fijo del archivo de
+  debug, no la partición.)
+- **CERRADO (2026-07-20, plan-panel-superadmin.md Fase B.1):** Config de SUNAT (RUC/usuario
+  SOL/clave SOL) ya no vive en `.env` — `GreenterService::getSee()` la lee de `SunatConfig`
+  por tenant (`sandbox`/`umbo` migrados con las credenciales que antes eran implícitas,
+  `modo='beta'`). Cada tenant sin `SunatConfig` activo falla explícito al emitir, sin
+  fallback a una identidad compartida.
+- **CERRADO (2026-07-20, plan-panel-superadmin.md Fase B.2):** el certificado SUNAT ya no
+  vive en el disco `public` — disco `private` nuevo (`storage/app/private`, sin symlink
+  público), particionado por tenant vía `FilesystemTenancyBootstrapper`. El certificado
+  demo central compartido (`certificate-demo.pem`, para tenants en `beta` sin certificado
+  propio todavía) sigue con `base_path()` directo a propósito, fuera de este disco.
+- **CERRADO (2026-07-30, rama `fix/infra-migracion-verticals-pendientes`, mergeada a
+  `main` en `3fc2c6f`):** `config/tenancy.php` `migration_parameters['--path']` está
+  hardcodeado a `tenant/core/` — así que el comando genérico `php artisan tenants:migrate`
+  (sin `--path` explícito), usado como mantenimiento normal para aplicar migraciones
+  **nuevas** a tenants **ya provisionados**, nunca corría `tenant/verticals/*`, para
+  ningún tenant, sin importar su `giro`. Bug preexistente desde el primer vertical
+  (agencia de viajes, Sesión 2) — se venía compensando con migración manual cada sesión
+  (ver hallazgo real de la Sesión 11b4b en
+  `docs/planning/agencia-de-viajes/plan-hoja-de-ruta-ejecucion.md`) sin que nadie notara
+  que el mecanismo automático estaba roto. Distinto del camino de **provisioning
+  inicial** (`TenantProvisioningService::provision()` → `migrarVertical()`), que sí
+  funciona bien porque arma un `--path` explícito por tenant según su `giro` en el
+  momento de crearlo.
+  **Fix**: comando nuevo `php artisan tenants:migrate-verticales`
+  (`app/Console/Commands/MigrateVerticalesPendientes.php`) — reemplaza a `tenants:migrate`
+  a secas como comando de mantenimiento de acá en adelante (ver checklist en "Cómo
+  trabajar en este proyecto", arriba). Corre `tenant/core/` para todos los tenants, agrupa
+  por `giro`, y corre `tenant/verticals/{giro}/` con `--path` explícito por grupo —
+  reutiliza `TenantProvisioningService::rutaVertical()` (extraído de `migrarVertical()`,
+  antes privado, para no duplicar el mapeo snake_case→kebab-case). Idempotente por diseño.
+  Test de cobertura real (`tests/Feature/MigrateVerticalesPendientesTest.php`): crea 2
+  tenants físicos descartables (uno `agencia_viajes`, uno `retail`), confirma que las
+  tablas de vertical llegan solo al que corresponde. Corrido de verdad contra los tenants
+  reales existentes (`negocio2`/`umbo`/`umbo-archivado`/`sandbox`/`agencia-demo`): puso al
+  día un backlog de `tenant/core/` acumulado en varios de ellos; `agencia-demo` ya estaba
+  al día en `verticals/agencia-viajes/` (venía del workaround manual de la Sesión 11b4b),
+  confirmando el fix sin necesitar backfill adicional ahí. Detalle completo en
+  `docs/planning/arquitectura-multitenant-backend_1.md`.
