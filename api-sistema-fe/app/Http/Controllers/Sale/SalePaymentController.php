@@ -100,7 +100,8 @@ class SalePaymentController extends Controller
                 "sale_id" => $sale_payment->sale_id,
                 "method_payment" => $sale_payment->method_payment,
                 "amount" => $sale_payment->amount,
-                "date_payment" => $sale_payment->date_payment
+                "date_payment" => $sale_payment->date_payment,
+                "nro_operacion" => $sale_payment->nro_operacion,
             ],
             "code" => 200,
             "message" => "Pago registrado correctamente"

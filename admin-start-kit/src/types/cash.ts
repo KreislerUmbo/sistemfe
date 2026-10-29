@@ -6,6 +6,7 @@ export type PaymentMethod = {
     name: string;
     is_active: boolean;
     sort_order: number;
+    monedas?: string[];
     created_at: string;
 };
 
