@@ -46,7 +46,6 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 | T-005 | AGE | Modificar reserva: aplicar a la reserva | por hacer | T-003, T-004 | |
 | T-006 | AGE | Modificar reserva: PDF para el cliente | por hacer | T-003 | |
 | T-007 | AGE | Modificar reserva: pantallas | por hacer | T-005, T-006 | |
-| T-009 | CAJ | Caja, paso A: la moneda en cada movimiento | lista para otro agente (Sonnet), 2 partes: tests de la parte 1 escritos | — | `feat/T-009-caja-moneda-movimientos` |
 | T-010 | VEN + CAJ | Servicio compartido de cobro, con n.º de operación y moneda de pago (Obs. 1) | por hacer | T-009 | |
 | T-011 | AGE + CAJ | Cobro al contado al facturar una reserva (Obs. 1) | por hacer | T-010 | |
 | T-012 | AGE + CAJ | Traspaso del cobro tras una nota de crédito | por hacer | T-011 | |
@@ -143,6 +142,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 
 | ID | Módulo | Qué | Commit |
 |---|---|---|---|
+| T-009 | CAJ | Cada movimiento de caja guarda la moneda del dinero (`cash_movements.currency`); un recibo de crédito no mezcla soles y dólares; comando `caja:completar-moneda` para los movimientos viejos; implementada por Sonnet, revisada por Opus | ver merge de `feat/T-009-caja-moneda-movimientos` |
 | T-039 | AGE | Proveedores, hoteles, mayoristas y guías sin cortar a 15: `ProveedorBuscador`/`GuiaBuscador` contra el servidor en cotizador, paquetes, salidas y reporte operativo; avance de Codex terminado por Opus | ver merge de `fix/T-039-listas-sin-cortar-v2` |
 | T-028 | AGE | Solo se ofrece y se cotiza la versión vigente de una tarifa; al cambiar el precio los tours pasan a la nueva; comando `agencia-viajes:plantillas-a-tarifa-vigente`; implementada por Sonnet, revisada y probada en agencia-demo por Opus | ver merge de `fix/T-028-version-vigente-tarifa` |
 | T-027 | AGE | Eliminar un tour clásico en una sola operación (total guardado correcto) + subtotal por destino; implementada por Sonnet, revisada por Opus | ver merge de `fix/T-027-eliminar-tour-clasico` |
