@@ -277,6 +277,17 @@ class CreditPaymentController extends Controller
                 ];
             });
 
+            // T-009: el dinero del recibo entra a caja en la moneda de las ventas que paga;
+            // un recibo no mezcla soles y dólares. Sin aplicaciones (todo saldo a favor) = soles.
+            $monedasVentas = collect($ventasLock)
+                ->map(fn ($v) => CashMovement::monedaOFalla($v->currency))
+                ->unique()
+                ->values();
+            if ($monedasVentas->count() > 1) {
+                abort(422, 'Un recibo no puede mezclar ventas en soles y en dólares: regístralos por separado.');
+            }
+            $monedaRecibo = $monedasVentas->first() ?? 'PEN';
+
             $montoNoAplicadoCentavos = $montoTotalCentavos - $sumaTotalCentavos;
 
             // Sanity check final antes de commitear (pedido explícito, §3.4
@@ -310,6 +321,7 @@ class CreditPaymentController extends Controller
                 'payment_method_id' => $medioPago->id,
                 'direction' => 'in',
                 'amount' => round($montoTotalCentavos / 100, 2),
+                'currency' => $monedaRecibo,
                 'reference_type' => 'payment_receipt',
                 'reference_id' => $receipt->id,
                 'status' => 'confirmed',

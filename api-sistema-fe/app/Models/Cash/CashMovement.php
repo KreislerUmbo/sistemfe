@@ -26,6 +26,7 @@ class CashMovement extends Model
         "payment_method_id",
         "direction",
         "amount",
+        "currency",
         "reference_type",
         "reference_id",
         "concept_id",
@@ -46,6 +47,28 @@ class CashMovement extends Model
         "amount" => "decimal:2",
         "corrected_at" => "datetime",
     ];
+
+    // T-009: moneda de un documento ('PEN', 'S/.', 'USD', '$'…) → 'PEN' | 'USD'; null si no se reconoce.
+    public static function normalizarMoneda(?string $moneda): ?string
+    {
+        return match (strtoupper(trim((string) $moneda))) {
+            'PEN', 'S/.', 'S/' => 'PEN',
+            'USD', '$', 'US$' => 'USD',
+            default => null,
+        };
+    }
+
+    // T-009: igual que normalizarMoneda(), pero una moneda desconocida detiene el registro
+    // en vez de caer en soles en silencio.
+    public static function monedaOFalla(?string $moneda): string
+    {
+        $normalizada = self::normalizarMoneda($moneda);
+        if ($normalizada === null) {
+            throw new \RuntimeException("Moneda no reconocida para el movimiento de caja: \"{$moneda}\".");
+        }
+
+        return $normalizada;
+    }
 
     public function cashSession()
     {
