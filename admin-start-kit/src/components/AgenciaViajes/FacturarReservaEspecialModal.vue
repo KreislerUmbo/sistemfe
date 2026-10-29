@@ -127,6 +127,10 @@
                         <template v-else>
                             <CondicionPagoCampos v-model:condicion="condicionPago" v-model:cronograma="cronograma"
                                 :saldo="saldoACobrar" :moneda="opciones.moneda" :fecha-base="hoyPeru()" />
+                            <CobroFacturaCampos v-model:pagos="pagosCobro" v-model:vuelto-moneda="vueltoMoneda"
+                                :habilitado="cobroHabilitado" :condicion="condicionPago" :saldo="saldoACobrar"
+                                :moneda="opciones.moneda" :formas-pago="formasPago" :tipo-cambio-dia="preview?.tipo_cambio_dia ?? null"
+                                :caja-abierta="cajaAbierta" />
                             <div class="row g-2 mb-2">
                                 <div class="col-6">
                                     <label class="form-label small fw-semibold text-secondary">Tipo de comprobante</label>
@@ -174,7 +178,7 @@
                     </span>
                     <button class="btn btn-outline-secondary btn-sm" @click="emit('cerrar')">Cerrar</button>
                     <button v-if="preview && !preview.bloqueado_tributario" class="btn btn-primary btn-sm"
-                        :disabled="facturando || cargando || form.pasajero_ids.length === 0 || !cliente
+                        :disabled="facturando || cargando || sinCajaParaCobrar || form.pasajero_ids.length === 0 || !cliente
                             || !hayServiciosQueEntran"
                         @click="confirmar">
                         <span v-if="facturando" class="spinner-border spinner-border-sm me-1"></span>Emitir comprobante de este grupo
@@ -212,6 +216,8 @@ import ClienteComprobanteSelector, { type ClienteComprobante } from '@/component
 import DetalleComprobantePreview from '@/components/AgenciaViajes/DetalleComprobantePreview.vue';
 import OpcionesFacturacionCampos from '@/components/AgenciaViajes/OpcionesFacturacionCampos.vue';
 import CondicionPagoCampos from '@/components/AgenciaViajes/CondicionPagoCampos.vue';
+import CobroFacturaCampos from '@/components/AgenciaViajes/CobroFacturaCampos.vue';
+import { payloadCobro, validarCobro, diferencia, type FilaCobro, type FormaPagoCobro, type MonedaCobro } from '@/helpers/cobroFactura';
 import type { CuotaCronograma } from '@/components/CronogramaCuotasCampos.vue';
 import { validarCondicionPago, payloadCondicionPago, type CondicionPago } from '@/helpers/condicionPago';
 import { hoyPeru } from '@/helpers/fecha';
@@ -245,6 +251,15 @@ const preview = ref<PrepararFacturaResponse | null>(null);
 const condicionPago = ref<CondicionPago>('contado');
 const cronograma = ref<CuotaCronograma[]>([]);
 const saldoACobrar = computed(() => preview.value?.saldo_a_cobrar ?? Number(preview.value?.total ?? 0));
+
+// Cobro al contado (T-011): el bloque aparece solo si el servidor lo habilita y es contado con saldo.
+const pagosCobro = ref<FilaCobro[]>([]);
+const vueltoMoneda = ref<MonedaCobro>(props.moneda);
+const cobroHabilitado = computed(() => preview.value?.cobro_habilitado ?? false);
+const cajaAbierta = computed(() => preview.value?.caja_abierta ?? false);
+const formasPago = computed<FormaPagoCobro[]>(() => (preview.value?.formas_pago ?? []) as FormaPagoCobro[]);
+const cobraAhora = computed(() => cobroHabilitado.value && condicionPago.value === 'contado' && saldoACobrar.value > 0);
+const sinCajaParaCobrar = computed(() => cobraAhora.value && !cajaAbierta.value);
 const cliente = ref<ClienteComprobante | null>(null);
 
 type Formulario = {
@@ -383,12 +398,15 @@ const empezar = (pasajeroIds: number[]) => {
     cliente.value = null;
     opciones.resetear();
     condicionPago.value = 'contado';
+    pagosCobro.value = [];
+    vueltoMoneda.value = props.moneda;
     cronograma.value = [];
 };
 
 const confirmar = async () => {
     if (!cliente.value) return;
-    const error = opciones.validar() ?? validarCondicionPago(condicionPago.value, cronograma.value, saldoACobrar.value);
+    const error = opciones.validar() ?? validarCondicionPago(condicionPago.value, cronograma.value, saldoACobrar.value)
+        ?? (cobraAhora.value ? validarCobro(pagosCobro.value, saldoACobrar.value, opciones.moneda as MonedaCobro, formasPago.value) : null);
     if (error) {
         toast.error(error);
         return;
@@ -406,6 +424,8 @@ const confirmar = async () => {
             texto_personalizado: form.value.texto_personalizado || null,
             advance_applications: anticiposAplicados.length > 0 ? anticiposAplicados : undefined,
             ...payloadCondicionPago(condicionPago.value, cronograma.value),
+            ...payloadCobro(condicionPago.value, saldoACobrar.value, cobroHabilitado.value, pagosCobro.value, vueltoMoneda.value,
+                Math.max(0, -diferencia(pagosCobro.value, saldoACobrar.value, opciones.moneda as MonedaCobro))),
             ...opciones.payload(),
         });
         toast.success(`${res.message} (serie ${res.serie})`);
