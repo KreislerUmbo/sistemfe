@@ -164,9 +164,22 @@ Llenar "Resultado" (salida de los comandos, desviaciones, hallazgos). Commits co
 ---
 
 ## Resultado
-- **Commits:**
-- **Tests:**
+- **Commits:** `777d7c6` (parte 1), `2e99f2f` (parte 2), en `feat/T-009-caja-moneda-movimientos`. Sin unir ni pushear.
+- **Tests:** parte 1: suite completa 1598 en verde. Parte 2: `T009CompletarMonedaCajaTest` 4/4. Suite final: 1599 pasan, 3 fallan,
+  todos en `PrecioPorPasajeroTest` (cama adicional / edad real, `422` en vez de `200`); fallan igual en `main` sin mis cambios
+  (verificado con `git stash`), no relacionados con Caja.
+  `php artisan caja:completar-moneda --simular` en los 6 tenants locales (credishirley, agencia-demo, negocio2, sandbox, umbo,
+  creditos-demo): **0 cambiarían, 0 para revisar** (no hay ventas/adelantos en USD con movimiento de caja en local).
 - **Desviaciones de la tarea y por qué:**
+  - La tarea dice copiar `2026_10_28_120000_create_ajustes_plantilla_tarifa_table.php` de `tenant/core/`; en realidad vive en
+    `tenant/verticals/agencia-viajes/`. Se tomó como molde y la migración nueva quedó en `tenant/core/` como pide la tarea.
+  - `normalizarMoneda()` reconoce solo `PEN/S/./S/` y `USD/$/US$` (lo de la tarea); además agregué `monedaOFalla()` (lanza
+    `RuntimeException`) para los creadores que reciben moneda de un documento (venta, adelanto, cobro de crédito).
+  - Recibo de crédito sin aplicaciones (todo saldo a favor): moneda `PEN` (la tarea no lo cubría).
+  - Tests de la parte 1 propios agregados al final de `T009MonedaCajaTest.php` (CA1, CA2, CA6, cobro en USD, apertura, normalizar).
 
 ## Hallazgos fuera de alcance
--
+- `PrecioPorPasajeroTest`: 2 tests de cama adicional fallan en `main` (422 en vez de 200); posiblemente dependen de la fecha
+  actual (28-oct-2026) o de datos de la base de pruebas. Hay un intermitente conocido distinto (`Fila13Fase1c…`).
+- Si `normalizarMoneda()` recibe un valor no reconocido en `SaleController` (p. ej. fila vieja con otra moneda), el `store()` falla
+  con 500 y mensaje claro; no se cubrió con test.
