@@ -48,7 +48,6 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 | T-007 | AGE | Modificar reserva: pantallas | por hacer | T-005, T-006 | |
 | T-012 | AGE + CAJ | Traspaso del cobro tras una nota de crédito | por hacer | T-011 | |
 | T-013 | CAJ | Caja, paso B: por moneda + cambio de moneda. **Requisito para desplegar T-011 con dólares** | por hacer | T-009 | |
-| T-014 | VEN | Forma de pago y n.º de operación en el PDF (Obs. 2): mejorar el bloque "FORMA DE PAGO" que ya existe | lista para otro agente (Sonnet), 1 commit: tests escritos | — | `feat/T-014-pdf-forma-de-pago` |
 | T-015 | PLA + AGE | Catálogo central de aerolíneas + panel central (Obs. 3) | por hacer | — | |
 | T-016 | AGE | Buscador de aerolíneas, corrección de nombres y aerolínea por defecto (Obs. 3) | por hacer | T-015 | |
 | T-017 | AGE | El cliente como primer pasajero al aceptar (Obs. 4) | por hacer | — | |
@@ -141,6 +140,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 
 | ID | Módulo | Qué | Commit |
 |---|---|---|---|
+| T-014 | VEN | El bloque "FORMA DE PAGO" del PDF (A4 y ticket) muestra el nombre de la forma de pago sin emoji, el n.º de operación, lo entregado en su moneda con T.C. y el vuelto (`Sale::pagosImpresos()`/`vueltoImpreso()`); implementada por Sonnet, revisada por Opus con verificación visual (Ghostscript) | ver merge de `feat/T-014-pdf-forma-de-pago` |
 | T-011 | AGE + CAJ | Facturar una reserva al contado pide el cobro (mixto, soles/dólares, n.º de operación, vuelto) y lo registra en la caja; detrás de `AGENCIA_COBRO_AL_FACTURAR` (apagado por defecto; encender en producción solo con T-013); implementada por Sonnet, revisada y probada en agencia-demo por Opus | ver merge de `feat/T-011-cobro-contado-reserva` |
 | T-010 | VEN + CAJ | `CobroVentaService` (cobro compartido Ventas/Agencia): n.º de operación, moneda de pago con tipo de cambio, vuelto; monedas por forma de pago (Yape/Plin solo soles). **Antes de desplegar: `caja:completar-moneda`**; implementada por Sonnet, revisada por Opus | ver merge de `feat/T-010-servicio-cobro` |
 | T-009 | CAJ | Cada movimiento de caja guarda la moneda del dinero (`cash_movements.currency`); un recibo de crédito no mezcla soles y dólares; comando `caja:completar-moneda` para los movimientos viejos; implementada por Sonnet, revisada por Opus | ver merge de `feat/T-009-caja-moneda-movimientos` |
