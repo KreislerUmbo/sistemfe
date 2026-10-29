@@ -35,6 +35,7 @@ class CashMovementsExport implements FromQuery, WithHeadings, WithMapping
             'Tipo',
             'Método de pago',
             'Dirección',
+            'Moneda',
             'Monto',
             'Concepto',
             'Descripción',
@@ -57,6 +58,7 @@ class CashMovementsExport implements FromQuery, WithHeadings, WithMapping
             $movimiento->type,
             $movimiento->paymentMethod->name ?? '',
             $movimiento->direction,
+            $movimiento->currency === 'USD' ? 'US$' : 'S/',   // T-013: S/ y US$ no se mezclan en una columna
             (float) $movimiento->amount,
             $movimiento->concept->name ?? '',
             $movimiento->description,

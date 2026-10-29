@@ -112,19 +112,26 @@
                     </div>
                 </div>
 
-                <p>Efectivo esperado: <strong>S/ {{ sesionACerrar.expected_cash_live.toFixed(2) }}</strong></p>
+                <p>
+                    Efectivo esperado: <strong>S/ {{ sesionACerrar.expected_cash_live.toFixed(2) }}</strong>
+                    y <strong>US$ {{ sesionACerrar.expected_cash_usd_live.toFixed(2) }}</strong>
+                </p>
 
                 <div class="mb-3">
                     <label class="form-label fw-semibold">Efectivo contado (S/)</label>
                     <b-form-input type="number" step="0.01" min="0" size="sm" v-model.number="countedCash" />
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Efectivo contado en dólares (US$)</label>
+                    <b-form-input type="number" step="0.01" min="0" size="sm" v-model.number="countedCashUsd" />
                 </div>
 
                 <div class="mb-3" v-if="requiereMotivo">
                     <label class="form-label fw-semibold">Motivo de la diferencia (obligatorio)</label>
                     <b-form-textarea v-model="differenceReason" rows="2" />
                     <small class="text-muted">
-                        La diferencia (S/ {{ diferenciaEstimada.toFixed(2) }}) supera la tolerancia
-                        (S/ {{ tolerancia.toFixed(2) }}).
+                        La diferencia (S/ {{ diferenciaEstimada.toFixed(2) }} / US$ {{ diferenciaEstimadaUsd.toFixed(2) }})
+                        supera la tolerancia ({{ tolerancia.toFixed(2) }}).
                     </small>
                 </div>
 
@@ -196,6 +203,7 @@ const showCloseModal = ref(false);
 const sesionACerrar = ref<CashSessionDetail | null>(null);
 const cargandoSesionId = ref<number | null>(null);
 const countedCash = ref<number>(0);
+const countedCashUsd = ref<number>(0);
 const differenceReason = ref('');
 const closingNotes = ref('');
 const closing = ref(false);
@@ -205,7 +213,12 @@ const esAjena = computed(() => !!sesionACerrar.value && sesionACerrar.value.open
 const diferenciaEstimada = computed(() =>
     sesionACerrar.value ? countedCash.value - sesionACerrar.value.expected_cash_live : 0
 );
-const requiereMotivo = computed(() => Math.abs(diferenciaEstimada.value) > tolerancia.value);
+const diferenciaEstimadaUsd = computed(() =>
+    sesionACerrar.value ? (countedCashUsd.value || 0) - sesionACerrar.value.expected_cash_usd_live : 0
+);
+const requiereMotivo = computed(() =>
+    Math.abs(diferenciaEstimada.value) > tolerancia.value || Math.abs(diferenciaEstimadaUsd.value) > tolerancia.value
+);
 
 async function abrirModalCierre(r: CashDashboardRegister) {
     cargandoSesionId.value = r.session_id;
@@ -218,6 +231,7 @@ async function abrirModalCierre(r: CashDashboardRegister) {
         }
         sesionACerrar.value = data.session;
         countedCash.value = 0;
+        countedCashUsd.value = 0;
         differenceReason.value = '';
         closingNotes.value = '';
         showCloseModal.value = true;
@@ -244,6 +258,7 @@ async function confirmarCierre() {
         const { data }: { data: CashCloseResponse } = await httpClient.post('cash/close', {
             cash_session_id: sesionACerrar.value.id,
             counted_cash: countedCash.value,
+            counted_cash_usd: countedCashUsd.value || 0,
             difference_reason: differenceReason.value || null,
             closing_notes: closingNotes.value || null,
         });
@@ -254,7 +269,10 @@ async function confirmarCierre() {
             'Caja cerrada',
             `Esperado: S/ ${Number(cerrada.expected_cash).toFixed(2)} — ` +
             `Contado: S/ ${Number(cerrada.counted_cash).toFixed(2)} — ` +
-            `Diferencia: S/ ${Number(cerrada.difference).toFixed(2)}`,
+            `Diferencia: S/ ${Number(cerrada.difference).toFixed(2)} — ` +
+            `Dólares: esperado US$ ${Number(cerrada.expected_cash_usd).toFixed(2)}, ` +
+            `contado US$ ${Number(cerrada.counted_cash_usd).toFixed(2)}, ` +
+            `diferencia US$ ${Number(cerrada.difference_usd).toFixed(2)}`,
             'success'
         );
         await cargar();

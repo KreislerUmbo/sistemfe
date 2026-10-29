@@ -89,10 +89,15 @@ Se partió en B1 (esta rama) y B2 (T-013b), acordado con el usuario.
   Suite completa: 1650 pasan, 1 falla: `Fila13Fase1cFacturacionTest` (intermitente conocido, ajeno).
   CA5: tests de Créditos en verde. `type-check` sin errores nuevos en Caja (46 previos en otros archivos, mismos
   con y sin cambios); `vite build` OK. Test DB migrada con `migrate --path` a `sistemafe_test_migrations`.
+- **B2 (hecho):** `history.vue` (lista y detalle con líneas US$ solo si la sesión tuvo dólares), `dashboard.vue`
+  (el cierre pide también el contado en US$; sin eso toda sesión con dólares cerraría con diferencia negativa),
+  PDF individual y de rango (líneas US$, totales y billetes rotulados con la moneda), Excel con columna "Moneda".
+  Tests: `T013bReportesPorMonedaTest` (CA4: sesión cerrada antes de T-013 se abre y su PDF sale; PDF con dólares;
+  Excel). `--filter="Cash|Credito|T013"`: 440 pasan; `type-check` sin errores nuevos en Caja; `vite build` OK.
 - **Desviaciones de la tarea y por qué:**
-  - Falta B2: `history.vue`, `dashboard.vue`, PDF `cash_cierre_individual`/`rango`, `CashMovementsExport`, y CA4/CA6
-    (prueba funcional en pantalla real, no hecha). Hasta B2, los PDF muestran por separado cada método/moneda pero
-    sin rotular la moneda: **no desplegar T-011 con dólares**.
+  - **CA6 sin hacer:** la prueba funcional en pantalla real (abrir, mover en dos monedas, cambiar, cerrar, ver PDF y
+    Excel) no la hice; los PDF solo se comprobaron por test (renderizan), no a la vista con Ghostscript. Falta antes
+    de desplegar T-011 con dólares. La suite completa no se volvió a correr tras B2 (sí tras B1).
   - `cash_session_totals` no se tocó: ninguna parte del código la llena (tabla sin uso); no se agregó moneda.
   - Un cambio de moneda no se edita ni elimina desde movimientos manuales (corregirlo = tarea aparte).
   - Tolerancia de diferencia: el mismo número se aplica a soles y a dólares.
