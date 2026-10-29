@@ -66,7 +66,7 @@ class GuiaTarifaDesactivarTest extends TestCase
             'tipo_margen' => 'porcentaje',
             'margen_valor' => 25,
             'moneda' => 'PEN',
-            'vigente_desde' => now()->toDateString(),
+            'vigente_desde' => \App\Services\HoraPeru::hoyTexto(),
         ]);
     }
 
@@ -107,7 +107,7 @@ class GuiaTarifaDesactivarTest extends TestCase
         $respuesta = app(GuiaTarifaController::class)->store(new Request([
             'destino_id' => $destino->id, 'modalidad' => 'dia_local',
             'costo_diario' => 60, 'tipo_margen' => 'porcentaje', 'margen_valor' => 20,
-            'moneda' => 'PEN', 'vigente_desde' => now()->toDateString(),
+            'moneda' => 'PEN', 'vigente_desde' => \App\Services\HoraPeru::hoyTexto(),
         ]), (string) $guia->id);
 
         $this->assertSame(true, $respuesta->getData(true)['guia_tarifa']['activo']);
@@ -147,7 +147,7 @@ class GuiaTarifaDesactivarTest extends TestCase
         $respuesta = app(GuiaTarifaController::class)->update(new Request([
             'destino_id' => $tarifa->destino_id, 'modalidad' => 'dia_local',
             'costo_diario' => 100, 'tipo_margen' => 'porcentaje', 'margen_valor' => 25,
-            'moneda' => 'PEN', 'vigente_desde' => now()->toDateString(),
+            'moneda' => 'PEN', 'vigente_desde' => \App\Services\HoraPeru::hoyTexto(),
         ]), (string) $tarifa->id);
 
         $payload = $respuesta->getData(true);

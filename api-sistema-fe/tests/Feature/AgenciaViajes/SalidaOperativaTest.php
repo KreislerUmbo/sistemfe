@@ -98,7 +98,7 @@ class SalidaOperativaTest extends TestCase
             'margen_tipo' => 'porcentaje',
             'margen_valor' => 20,
             'precio_venta_adulto' => 120,
-            'vigente_desde' => now()->toDateString(),
+            'vigente_desde' => \App\Services\HoraPeru::hoyTexto(),
             'tip_afe_igv' => '10',
             'destino_tributario' => 'nacional',
         ]);

@@ -236,7 +236,7 @@ class Sesion12f1BackendMultidestinoTest extends TestCase
         return GuiaTarifa::create([
             'guia_id' => $guia->id, 'destino_id' => $destino->id, 'modalidad' => 'dia_local',
             'costo_diario' => 100, 'tipo_margen' => 'porcentaje', 'margen_valor' => 20,
-            'moneda' => 'PEN', 'vigente_desde' => now()->toDateString(),
+            'moneda' => 'PEN', 'vigente_desde' => \App\Services\HoraPeru::hoyTexto(),
         ]);
     }
 
@@ -278,7 +278,7 @@ class Sesion12f1BackendMultidestinoTest extends TestCase
         return ProveedorTarifa::create([
             'proveedor_servicio_id' => $proveedorServicio->id, 'tipo_tarifa' => 'publica', 'modalidad' => 'privado',
             'moneda' => 'PEN', 'precio_costo' => 60, 'margen_tipo' => 'porcentaje', 'margen_valor' => 20,
-            'precio_venta_adulto' => 93.66, 'vigente_desde' => now()->toDateString(),
+            'precio_venta_adulto' => 93.66, 'vigente_desde' => \App\Services\HoraPeru::hoyTexto(),
             'tip_afe_igv' => '10', 'destino_tributario' => 'nacional',
         ]);
     }

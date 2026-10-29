@@ -92,7 +92,7 @@ class PrecioPorPasajeroTest extends TestCase
             'precio_venta_adulto' => $ventaAdulto,
             'precio_venta_nino' => $ventaNino,
             'precio_venta_infante' => $ventaInfante,
-            'vigente_desde' => now()->toDateString(),
+            'vigente_desde' => \App\Services\HoraPeru::hoyTexto(),
             'tip_afe_igv' => '10',
             'destino_tributario' => 'nacional',
         ]);
@@ -235,7 +235,7 @@ class PrecioPorPasajeroTest extends TestCase
             'precio_venta_adulto' => 150,
             'precio_costo_cama_adicional' => $costoCamaAdicional,
             'precio_venta_cama_adicional' => $ventaCamaAdicional,
-            'vigente_desde' => now()->toDateString(),
+            'vigente_desde' => \App\Services\HoraPeru::hoyTexto(),
             'tip_afe_igv' => '10',
             'destino_tributario' => 'nacional',
         ]);
@@ -342,7 +342,7 @@ class PrecioPorPasajeroTest extends TestCase
             'tipo_tarifa' => 'publica', 'modalidad' => 'privado', 'moneda' => 'PEN',
             'tipo_habitacion' => 'matrimonial', 'precio_costo' => 100, 'margen_tipo' => 'porcentaje', 'margen_valor' => 50,
             'precio_venta_adulto' => 150, 'precio_costo_cama_adicional' => 15, 'precio_venta_cama_adicional' => 30,
-            'vigente_desde' => now()->toDateString(), 'tip_afe_igv' => '10', 'destino_tributario' => 'nacional',
+            'vigente_desde' => \App\Services\HoraPeru::hoyTexto(), 'tip_afe_igv' => '10', 'destino_tributario' => 'nacional',
         ]);
 
         $alternativa = $this->crearAlternativaConPasajeros();
