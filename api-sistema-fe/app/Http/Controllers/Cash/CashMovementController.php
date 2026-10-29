@@ -126,7 +126,8 @@ class CashMovementController extends Controller
             'from_currency' => 'required|string|in:PEN,USD',
             'to_currency'   => 'required|string|in:PEN,USD|different:from_currency',
             'amount'        => 'required|numeric|min:0.01',
-            'exchange_rate' => 'required|numeric|gt:0',
+            // Mínimo 0.0001: se guarda con 4 decimales; uno menor redondearía a 0 (división por cero).
+            'exchange_rate' => 'required|numeric|min:0.0001',
             'description'   => 'nullable|string',
         ]);
 

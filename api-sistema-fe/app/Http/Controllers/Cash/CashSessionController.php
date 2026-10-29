@@ -615,6 +615,15 @@ class CashSessionController extends Controller
             ? ['PEN' => (float) $session->expected_cash, 'USD' => (float) $session->expected_cash_usd]
             : $this->expectedCashCalculator->computePorMoneda($session);
 
+        // Cierre anterior a T-013 con movimientos en dólares: su expected_cash sumó S/ y US$ juntos.
+        // No se recalcula ni se guarda nada; se marca y se da el esperado por moneda solo como referencia.
+        $esperadoMezclado = $session->status === 'closed'
+            && $session->expected_cash_usd === null
+            && $session->cashMovements->contains(fn ($m) => $m->currency === 'USD');
+        $esperadoReferencia = $esperadoMezclado
+            ? array_map(fn ($v) => round($v, 2), $this->expectedCashCalculator->computePorMoneda($session))
+            : null;
+
         return [
             'id' => $session->id,
             'cash_register' => $session->cashRegister,
@@ -630,6 +639,8 @@ class CashSessionController extends Controller
             'expected_cash_live' => round($expectedLive['PEN'], 2),
             'expected_cash_usd' => $session->expected_cash_usd,
             'expected_cash_usd_live' => round($expectedLive['USD'], 2),
+            'esperado_mezclado' => $esperadoMezclado,
+            'esperado_referencia' => $esperadoReferencia,
             'counted_cash' => $session->counted_cash,
             'counted_cash_usd' => $session->counted_cash_usd,
             'difference' => $session->difference,

@@ -259,9 +259,18 @@
                         @php
                             // T-013: las líneas en dólares solo salen si la sesión tuvo dólares
                             // (los cierres anteriores a T-013 quedan como estaban).
-                            $tieneUsd = (float) $sessionData['opening_amount_usd'] > 0
-                                || collect($sessionData['movements'])->contains(fn ($m) => $m->currency === 'USD');
+                            // Cierre anterior con dólares: en vez de líneas US$ en 0, la nota de abajo.
+                            $tieneUsd = !$sessionData['esperado_mezclado'] && ((float) $sessionData['opening_amount_usd'] > 0
+                                || collect($sessionData['movements'])->contains(fn ($m) => $m->currency === 'USD'));
                         @endphp
+                        @if ($sessionData['esperado_mezclado'])
+                            <tr>
+                                <td>NOTA</td>
+                                <td>: Cierre anterior a la separación por moneda; el esperado sumó S/ y US$.
+                                    Por moneda: S/ {{ number_format($sessionData['esperado_referencia']['PEN'], 2) }}
+                                    y US$ {{ number_format($sessionData['esperado_referencia']['USD'], 2) }} (referencia).</td>
+                            </tr>
+                        @endif
                         @if ($tieneUsd)
                             <tr>
                                 <td>FONDO INICIAL US$</td>

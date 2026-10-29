@@ -139,6 +139,9 @@ export type CashSessionDetail = {
     // T-013: dólares (las columnas sin sufijo son soles). Cierres anteriores: null.
     expected_cash_usd: string | number | null;
     expected_cash_usd_live: number;
+    // Cierre anterior a T-013 con movimientos en US$: expected_cash sumó las dos monedas.
+    esperado_mezclado: boolean;
+    esperado_referencia: { PEN: number; USD: number } | null;
     counted_cash: string | number | null;
     counted_cash_usd: string | number | null;
     difference: string | number | null;

@@ -170,6 +170,8 @@ final class T013CajaPorMonedaTest extends CreditosTestCase
             ['from_currency' => 'EUR', 'to_currency' => 'PEN', 'amount' => 10, 'exchange_rate' => 3.7],
             ['from_currency' => 'USD', 'to_currency' => 'USD', 'amount' => 10, 'exchange_rate' => 3.7],
             ['from_currency' => 'USD', 'to_currency' => 'PEN', 'amount' => 10, 'exchange_rate' => 0],
+            // Redondeado a 4 decimales daría 0 y S/ → US$ dividiría por cero.
+            ['from_currency' => 'PEN', 'to_currency' => 'USD', 'amount' => 10, 'exchange_rate' => 0.00001],
         ] as $datos) {
             try {
                 $this->cambiar($datos);

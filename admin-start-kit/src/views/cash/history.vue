@@ -168,7 +168,7 @@
                             <td class="text-muted">Diferencia</td>
                             <td class="text-end fw-semibold">S/ {{ Number(detalle.difference ?? 0).toFixed(2) }}</td>
                         </tr>
-                        <template v-if="detalleTieneUsd">
+                        <template v-if="detalleTieneUsd && !detalle.esperado_mezclado">
                             <tr>
                                 <td class="text-muted">Fondo inicial US$</td>
                                 <td class="text-end fw-semibold">US$ {{ Number(detalle.opening_amount_usd).toFixed(2) }}</td>
@@ -188,6 +188,12 @@
                         </template>
                     </tbody>
                 </table>
+
+                <div v-if="detalle.esperado_mezclado && detalle.esperado_referencia" class="alert alert-info py-2 mb-3">
+                    Cierre anterior a la separación por moneda: el esperado guardado sumó soles y dólares juntos.
+                    Por moneda sería S/ {{ detalle.esperado_referencia.PEN.toFixed(2) }} y
+                    US$ {{ detalle.esperado_referencia.USD.toFixed(2) }} (solo referencia, el cierre no se recalcula).
+                </div>
 
                 <div v-if="detalle.difference_reason" class="alert alert-warning py-2 mb-3">
                     <strong>Motivo de diferencia:</strong> {{ detalle.difference_reason }}

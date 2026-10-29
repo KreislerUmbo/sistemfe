@@ -57,6 +57,30 @@ final class T013bReportesPorMonedaTest extends CreditosTestCase
         $this->assertArrayHasKey('difference_usd', $lista['sessions'][0]);
     }
 
+    public function test_cierre_anterior_con_dolares_se_marca_como_mezclado_sin_recalcular(): void
+    {
+        $cajero = $this->usuario(['cash.open_session', 'cash.view_all']);
+        $sesion = $this->abrirCaja($cajero);
+        $this->mov($sesion, 'PEN', 300);
+        $this->mov($sesion, 'USD', 200); // T-009 lo marcó en dólares después del cierre
+        // El cierre de entonces sumó todo junto: 300 + 200 (+ fondo de apertura en soles).
+        $mezclado = (float) $sesion->opening_amount + 500;
+        $sesion->update(['status' => 'closed', 'closed_by' => $cajero->id, 'closed_at' => now(),
+            'expected_cash' => $mezclado, 'counted_cash' => $mezclado, 'difference' => 0]);
+
+        $detalle = app(CashSessionController::class)->show((string) $sesion->id)->getData(true)['session'];
+        $this->assertTrue($detalle['esperado_mezclado']);
+        $this->assertEquals((float) $sesion->opening_amount + 300, $detalle['esperado_referencia']['PEN']);
+        $this->assertEquals(200, $detalle['esperado_referencia']['USD']);
+        $this->assertEquals($mezclado, $detalle['expected_cash_live']); // lo guardado no cambia
+        $this->assertNull($sesion->fresh()->expected_cash_usd);
+        $this->assertStringStartsWith('%PDF', $this->pdf($sesion));
+
+        $hoy = \App\Services\HoraPeru::hoyTexto();
+        $rango = app(CashSessionController::class)->pdfRange(Request::create('/x', 'GET', ['date_from' => $hoy, 'date_to' => $hoy]));
+        $this->assertStringStartsWith('%PDF', $rango->getContent());
+    }
+
     public function test_pdf_de_sesion_con_dolares_sale(): void
     {
         $cajero = $this->usuario(['cash.open_session']);

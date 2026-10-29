@@ -94,6 +94,11 @@ Se partió en B1 (esta rama) y B2 (T-013b), acordado con el usuario.
   PDF individual y de rango (líneas US$, totales y billetes rotulados con la moneda), Excel con columna "Moneda".
   Tests: `T013bReportesPorMonedaTest` (CA4: sesión cerrada antes de T-013 se abre y su PDF sale; PDF con dólares;
   Excel). `--filter="Cash|Credito|T013"`: 440 pasan; `type-check` sin errores nuevos en Caja; `vite build` OK.
+- **Correcciones de la revisión (29-oct):** (1) un cierre anterior a T-013 con movimientos en US$ (marcados por
+  T-009) guardó un `expected_cash` que sumaba S/ y US$; ahora se marca `esperado_mezclado` y el historial y el PDF
+  individual muestran una nota con el esperado por moneda como referencia (no se recalcula ni se guarda); el PDF de
+  rango lo rotula "(incluye US$)" en vez de líneas US$ en 0. (2) Tipo de cambio mínimo 0.0001: uno menor redondeaba
+  a 0 y el cambio S/ → US$ daba error 500. Tests: `--filter="Cash|Credito|T013"` 442 pasan.
 - **Desviaciones de la tarea y por qué:**
   - **CA6 sin hacer:** la prueba funcional en pantalla real (abrir, mover en dos monedas, cambiar, cerrar, ver PDF y
     Excel) no la hice; los PDF solo se comprobaron por test (renderizan), no a la vista con Ghostscript. Falta antes
