@@ -15,7 +15,16 @@ class SalePayment extends Model
         "amount",
         "date_payment",
         "comments", //COLLATE en postgresql significa que se ignora la mayuscula en la busqueda
-        "user_id",
+        "nro_operacion",
+        "moneda_pago",
+        "monto_pagado",
+        "tipo_cambio",
+    ];
+
+    protected $casts = [
+        "amount" => "float",
+        "monto_pagado" => "float",
+        "tipo_cambio" => "float",
     ];
 
     public function sale()

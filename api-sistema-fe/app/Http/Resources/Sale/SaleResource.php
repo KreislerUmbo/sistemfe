@@ -201,6 +201,12 @@ class SaleResource extends JsonResource
                 return [
                     'id'             => $payment->id,
                     'amount'         => (float) $payment->amount,
+                    // T-010: el n.º de operación y la moneda real del pago viajan a la pantalla de edición,
+                    // que los reenvía al guardar (R5).
+                    'nro_operacion'  => $payment->nro_operacion,
+                    'moneda_pago'    => $payment->moneda_pago,
+                    'monto_pagado'   => (float) $payment->monto_pagado,
+                    'tipo_cambio'    => (float) $payment->tipo_cambio,
                     'method_payment' => $payment->method_payment,
                     'date_payment'   => $payment->date_payment
                         ? Carbon::parse($payment->date_payment)->format('Y-m-d')

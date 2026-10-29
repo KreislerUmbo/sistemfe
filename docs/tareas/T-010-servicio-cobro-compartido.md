@@ -184,9 +184,43 @@ Llenar "Resultado" (salida de los comandos, desviaciones, hallazgos). Commits co
 ---
 
 ## Resultado
-- **Commits:**
-- **Tests:**
+- **Commits:** `b2c9017` (parte 1, backend), `80a08cf` (parte 2, pantallas), en `feat/T-010-servicio-cobro`. Sin unir ni pushear.
+- **Tests:** suite completa backend **1621 en verde** (incluye `CobroVentaServiceTest` 15/15 sin tocar y `T010VentasCobroTest`
+  4/4: CA1, pago de más sigue rechazado, CA8, vuelto revertido al eliminar). Frontend: `npm run build` OK; `type-check`
+  46 errores, los mismos 46 de antes (verificado con `git stash`), ninguno nuevo.
+  CA2 verificado en `umbo` local: 19 pagos, todos `moneda_pago=PEN`, `monto_pagado=amount`, `tipo_cambio=1`; `payment_methods`
+  con Yape/Plin en `["PEN"]` y el resto en `["PEN","USD"]`. Local no tiene ventas en USD, así que la rama USD de la
+  migración (`'USD'`, `'$'`, `'US$'`) solo está revisada por lectura.
+- **Prueba funcional en pantalla: NO hecha.** El dev server está arriba pero no tengo credenciales de `umbo`/`sandbox` y la
+  memoria indica no resetear contraseñas. Pendiente probar a mano: venta con Yape + n.º de operación, editarla sin tocar
+  pagos, agregar un pago con n.º desde editar, y Yape solo en soles en Formas de pago.
 - **Desviaciones de la tarea y por qué:**
+  - `SaleResource` (sale_payments) ahora devuelve `nro_operacion`, `moneda_pago`, `monto_pagado`, `tipo_cambio`, y
+    `SalePaymentController::store()` devuelve `nro_operacion`. Sin eso `edit.vue` no podía reenviar el n.º de operación al
+    guardar (R5). Es backend en la parte 2.
+  - El servicio expone además `guardarPagos()` y `crearMovimientos()` (públicos): `update()` de Ventas debe rehacer las filas de
+    `sale_payments` (para conservar el n.º) aunque la caja no cambie; `registrar()` los usa por dentro.
+  - Los pagos preparados traen dos claves extra (`payment_method_id`, `afecta_efectivo`) además de las del contrato.
+  - Mensaje de "pagarse de más": usa `S/` o `US$` según la moneda de la venta (antes siempre `S/`; igual para soles).
+  - `AdvanceController`: `payment_reference` va a `nro_operacion` cortado a 50 caracteres (el campo original admite 255).
+- **Ojo para la revisión:** la firma de `update()` ahora incluye la moneda. Un movimiento viejo de una venta en USD que
+  quedó como `PEN` antes de T-009 no coincide con el nuevo `USD` → al editar esa venta se generaría una corrección. Correr
+  `caja:completar-moneda` en producción antes de desplegar esto evita ese caso.
+
+- **Revisión (Opus, 29-oct-2026):** sin cambios de fondo. Dos ajustes:
+  - `PaymentMethodSeeder`: en un tenant nuevo la migración corre antes de que existan Yape/Plin y
+    el seeder los creaba con el default (soles y dólares). Ahora los crea solo en soles; re-correrlo
+    no pisa lo que el tenant edite. Test nuevo en `T010VentasCobroTest`.
+  - `SalePaymentController::store()`: `monedaOFalla()` en vez de `?? 'PEN'` (sin caer en soles en silencio).
+  - Pantallas revisadas en agencia-demo: Formas de pago (columna y casillas; Yape/Plin solo soles) y
+    el campo "N.º de operación" en Registrar venta. No se registró una venta real.
+  - Suite completa 1621 en verde + el intermitente conocido (`Fila13Fase1c…`, línea 304).
+  - **Antes de desplegar:** correr `caja:completar-moneda` (T-009) en producción, porque la firma de
+    `update()` ahora compara la moneda (ver la nota de Sonnet arriba).
+  - Comportamiento nuevo a tener en cuenta: una venta en USD ya no acepta un pago con Yape/Plin
+    (422 "no acepta pagos en dólares"); y si al editar se cambia la moneda de la venta con pagos ya
+    cargados, esos pagos quedan en la moneda vieja y piden tipo de cambio.
 
 ## Hallazgos fuera de alcance
--
+- Dos errores de tipado de `type-check` ya conocidos siguen (46); no se tocaron.
+- `SalePaymentController::destroy()` no corrige la caja al borrar un pago (ya estaba en "Por analizar").

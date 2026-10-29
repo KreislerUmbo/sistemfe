@@ -202,16 +202,18 @@ class AdvanceController extends Controller
             DB::beginTransaction();
 
             $venta = $this->crearComprobanteAdelanto($cliente, $amount, $request->currency, $request->tip_afe_igv, $request->notes);
-
-            // sale_payments no tiene columna user_id pese a que el modelo la
-            // lista en $fillable (drift de esquema — ver SaleController::store(),
-            // que tampoco la pasa).
+            // T-010: el adelanto se paga en su propia moneda (tipo de cambio 1); la referencia de pago
+            // va a comments (completa) y a nro_operacion (primeros 50 caracteres).
             SalePayment::create([
                 "sale_id"        => $venta->id,
                 "method_payment" => $request->payment_method,
                 "amount"         => $amount,
                 "date_payment"   => \App\Services\HoraPeru::hoyTexto(),
                 "comments"       => $request->payment_reference,
+                "nro_operacion"  => $request->payment_reference ? mb_substr(trim($request->payment_reference), 0, 50) : null,
+                "moneda_pago"    => $request->currency,
+                "monto_pagado"   => $amount,
+                "tipo_cambio"    => 1,
             ]);
 
             $adelanto = Advance::create([

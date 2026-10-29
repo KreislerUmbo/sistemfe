@@ -121,6 +121,8 @@ class Sale extends Model
         "type_payment",   // 1=contado, 2=crédito
         "state_payment",  // 1=pendiente, 2=pago parcial, 3=pagado completo
         "debt",           // saldo pendiente de pago
+        "vuelto_monto",   // T-010: vuelto entregado al cobrar
+        "vuelto_moneda",
         "paid_out",       // monto ya pagado
 
         // ── Observaciones ─────────────────────────────────────────────

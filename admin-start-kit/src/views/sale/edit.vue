@@ -550,6 +550,11 @@
                         <b-form-input type="date" v-model="date_payment" size="sm" :disabled="tiene_cobros_formales" />
                     </div>
                     <div class="col-6 col-md-2">
+                        <label class="form-label mb-1 small fw-semibold text-secondary">N.º de operación</label>
+                        <input type="text" v-model="nro_operacion" maxlength="50" class="form-control form-control-sm"
+                            placeholder="Opcional" :disabled="type_payment == 2 && tiene_cobros_formales" />
+                    </div>
+                    <div class="col-6 col-md-2">
                         <button type="button" class="btn btn-primary btn-sm w-100 fw-semibold"
                             :disabled="type_payment == 2 && tiene_cobros_formales" @click="addPayment()">
                             <i class="fas fa-plus me-1"></i>{{ type_payment == 2 ? 'Agregar Pago Inicial' : 'Agregar Pago' }}
@@ -617,6 +622,7 @@
                                     <tr class="small text-secondary text-uppercase">
                                         <th>#</th>
                                         <th>Método</th>
+                                        <th>N.º operación</th>
                                         <th class="text-end">Monto</th>
                                         <th v-if="type_payment == 2">Fecha</th>
                                         <th></th>
@@ -624,13 +630,14 @@
                                 </thead>
                                 <tbody>
                                     <tr v-if="sale_payments.length === 0">
-                                        <td colspan="5" class="text-center text-muted fst-italic py-3 small">
+                                        <td colspan="6" class="text-center text-muted fst-italic py-3 small">
                                             {{ type_payment == 2 ? 'Sin pago inicial' : 'Sin pagos aún' }}
                                         </td>
                                     </tr>
                                     <tr v-for="(p, index) in sale_payments" :key="index">
                                         <td class="text-muted small">{{ index + 1 }}</td>
                                         <td class="fw-semibold small">{{ p.method_payment }}</td>
+                                        <td class="small text-muted">{{ p.nro_operacion || "—" }}</td>
                                         <td class="text-end fw-bold">{{ currency }} {{ p.amount }}</td>
                                         <td v-if="type_payment == 2" class="small text-muted">{{ p.date_payment }}
                                         </td>
@@ -918,6 +925,7 @@ const type_payment = ref<number>(1);
 const method_payment = ref<string>('EFECTIVO');
 const amount = ref<number>(0);
 const date_payment = ref<string>('');
+const nro_operacion = ref<string>(''); // T-010: opcional, max 50
 const sale_payments = ref<SalePayment[]>([]);
 
 // Módulo Caja — Fase 0 (plan-modulo-caja.md §3): picker dinámico en vez del
@@ -1509,7 +1517,8 @@ const addPayment = () => {
         sale_id: sale_id.value,
         method_payment: method_payment.value,
         amount: amount.value,
-        date_payment: date_payment.value
+        date_payment: date_payment.value,
+        nro_operacion: nro_operacion.value.trim() || null
     };
 
     httpClient.post('sale_payments', data)
@@ -1519,6 +1528,7 @@ const addPayment = () => {
                 method_payment.value = '';
                 amount.value = 0;
                 date_payment.value = '';
+                nro_operacion.value = '';
                 sumDetails();
             }, 50);
         })
@@ -2009,6 +2019,7 @@ watch(type_payment, () => {
         method_payment.value = '';
         amount.value = 0;
         date_payment.value = '';
+        nro_operacion.value = '';
         sumDetails();
     }, 50);
 });

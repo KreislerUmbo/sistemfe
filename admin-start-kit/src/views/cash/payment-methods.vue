@@ -33,6 +33,7 @@
                                 <b-td>Nro</b-td>
                                 <b-th>Código</b-th>
                                 <b-th>Nombre</b-th>
+                                <b-th>Monedas</b-th>
                                 <b-th>Orden</b-th>
                                 <b-th>Estado</b-th>
                                 <b-th>Fecha Registro</b-th>
@@ -44,6 +45,7 @@
                                 <b-td>{{ paymentMethods.length - index }}</b-td>
                                 <b-td>{{ item.code }}</b-td>
                                 <b-td>{{ item.name }}</b-td>
+                                <b-td>{{ (item.monedas || ["PEN", "USD"]).map((m: string) => m === "USD" ? "Dólares" : "Soles").join(" y ") }}</b-td>
                                 <b-td>{{ item.sort_order }}</b-td>
                                 <b-td>
                                     <b-badge variant="primary" v-if="item.is_active">Activo</b-badge>
@@ -80,6 +82,11 @@
                 <b-col lg="6" class="mt-3">
                     <label for="sort_order-payment-method" class="col-form-label text-lg-end">Orden: </label>
                     <b-form-input type="number" id="sort_order-payment-method" v-model.number="sort_order" />
+                </b-col>
+                <b-col lg="6" class="mt-3">
+                    <label class="col-form-label text-lg-end d-block">Monedas en que se acepta: </label>
+                    <b-form-checkbox v-model="acepta_soles" inline>Soles</b-form-checkbox>
+                    <b-form-checkbox v-model="acepta_dolares" inline>Dólares</b-form-checkbox>
                 </b-col>
                 <b-col lg="6" class="mt-3 d-flex align-items-end">
                     <b-form-checkbox v-model="is_active" switch>Activo</b-form-checkbox>
@@ -127,6 +134,8 @@ const code = ref<string>("");
 const name = ref<string>("");
 const sort_order = ref<number>(0);
 const is_active = ref<boolean>(true);
+const acepta_soles = ref<boolean>(true);
+const acepta_dolares = ref<boolean>(true);
 
 const itemSelected = ref<PaymentMethod | undefined>(undefined);
 
@@ -154,6 +163,8 @@ const clearFields = () => {
     name.value = "";
     sort_order.value = 0;
     is_active.value = true;
+    acepta_soles.value = true;
+    acepta_dolares.value = true;
 };
 
 const store = async () => {
@@ -164,11 +175,17 @@ const store = async () => {
             return;
         }
 
+        if (!acepta_soles.value && !acepta_dolares.value) {
+            await (Swal as TVueSwalInstance).fire('Error', 'Elige al menos una moneda.', 'error');
+            return;
+        }
+
         const payload = {
             code: code.value,
             name: name.value,
             sort_order: sort_order.value,
             is_active: is_active.value,
+            monedas: [...(acepta_soles.value ? ['PEN'] : []), ...(acepta_dolares.value ? ['USD'] : [])],
         };
 
         const res: AxiosResponse<PaymentMethodResponse> =
@@ -210,6 +227,9 @@ const editItem = (item: PaymentMethod) => {
     name.value = item.name;
     sort_order.value = item.sort_order;
     is_active.value = item.is_active;
+    const monedas = item.monedas || ["PEN", "USD"];
+    acepta_soles.value = monedas.includes("PEN");
+    acepta_dolares.value = monedas.includes("USD");
 };
 
 const toggleActive = (item: PaymentMethod) => {

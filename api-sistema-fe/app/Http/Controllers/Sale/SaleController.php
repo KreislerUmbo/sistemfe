@@ -23,6 +23,7 @@ use App\Models\Sale\SerieComprobante;
 use App\Models\Sale\TipoComprobante;
 use App\Services\AdvanceApplicationService;
 use App\Services\CashCorrectionService;
+use App\Services\Cobro\CobroVentaService;
 use App\Services\CronogramaCreditoValidator;
 use App\Services\QrCodeService;
 use App\Services\SerieComprobanteService;
@@ -38,7 +39,8 @@ class SaleController extends Controller
     public function __construct(
         private CashCorrectionService $cashCorrection,
         private SerieComprobanteService $serieComprobanteService,
-        private AdvanceApplicationService $advanceApplicationService
+        private AdvanceApplicationService $advanceApplicationService,
+        private CobroVentaService $cobro
     ) {
     }
 
@@ -292,49 +294,30 @@ class SaleController extends Controller
     // anticipo" más abajo), así que acá se resta lo mismo que ya se
     // validó en validarAdelantosPayload() para comparar contra lo que
     // realmente queda por pagar.
-    private function validarPagosPayload(Request $request): void
+    private function prepararPagosVenta(Request $request): array
     {
         $pagos = $request->payments ?? [];
 
         if (empty($pagos)) {
-            return;
+            return [];
         }
 
-        $suma_pagos = 0;
-        foreach ($pagos as $pago) {
-            if (!isset($pago['amount']) || (float) $pago['amount'] <= 0) {
-                throw new HttpException(422, "Cada pago requiere un amount > 0.");
-            }
-
-            // Módulo Caja — Fase 0 (plan-modulo-caja.md §3): el método de pago
-            // recibido debe existir y estar activo en payment_methods.
-            // Comparación normalizada (LOWER) como cinturón de seguridad ante
-            // inconsistencias de formato — no transforma method_payment, solo
-            // valida; sales.payment_method sigue guardándose tal cual llega.
-            $metodo_pago = trim($pago['method_payment'] ?? '');
-            $existe_metodo_activo = PaymentMethod::whereRaw('LOWER(code) = ?', [strtolower($metodo_pago)])
-                ->where('is_active', true)
-                ->exists();
-
-            if (!$existe_metodo_activo) {
-                throw new HttpException(422, "Método de pago no válido o inactivo: \"{$metodo_pago}\".");
-            }
-
-            $suma_pagos += (float) $pago['amount'];
-        }
+        // T-010: la regla de cada pago (método activo, moneda, monto) vive en CobroVentaService.
+        // Ventas retail no cobra en otra moneda ni da vuelto todavía: el pago llega en la moneda
+        // de la venta y lo cobrado puede faltar pero no pasarse.
+        $preparados = $this->cobro->prepararPagos($pagos, (string) $request->currency);
 
         $suma_adelantos = collect($request->advance_applications ?? [])
             ->sum(fn ($aplicacion) => (float) ($aplicacion['amount'] ?? 0));
 
-        $total_a_pagar = round((float) $request->total - $suma_adelantos, 2);
+        $this->cobro->validarContraSaldo(
+            $preparados,
+            round((float) $request->total - $suma_adelantos, 2),
+            (string) $request->currency,
+            exacto: false
+        );
 
-        if (round($suma_pagos, 2) > $total_a_pagar) {
-            throw new HttpException(
-                422,
-                "La suma de pagos (S/ " . number_format($suma_pagos, 2) . ") " .
-                "supera el total a pagar de la venta (S/ " . number_format($total_a_pagar, 2) . ")."
-            );
-        }
+        return $preparados;
     }
 
     // ── Blindaje venta a crédito (Módulo Amortizaciones — Fase 8) ────
@@ -368,73 +351,6 @@ class SaleController extends Controller
         );
     }
 
-    // ── Blindaje Caja (Módulo Caja — Fase 3, plan-modulo-caja.md §5 regla
-    // #3, §6). Cualquier pago inmediato (payments[] con amount > 0) exige
-    // una cash_session abierta del cajero — incluye el pago inicial de una
-    // venta a crédito (type_payment==2 con payments no vacío). Una venta
-    // 100% a crédito sin pago inicial (payments vacío) nunca exige caja,
-    // coherente con la regla #3: el financiamiento no genera cash_movement
-    // al momento de la venta, solo cuando se cobra una cuota
-    // (CreditPaymentController, módulo Amortizaciones).
-    //
-    // Sin distinción de canal (pos/ecommerce): confirmado por grep que el
-    // portal e-commerce no pasa por este controller — usa Order/
-    // OrderController (tabla `orders`), completamente separado de `Sale`.
-    // El guard aplica a todo store()/update() sin condición de canal.
-    private function resolverSesionCajaAbierta(Request $request): ?CashSession
-    {
-        $pagos = $request->payments ?? [];
-
-        if (empty($pagos)) {
-            return null;
-        }
-
-        $sesion = CashSession::where('opened_by', auth('api')->user()->id)
-            ->where('status', 'open')
-            ->first();
-
-        if (!$sesion) {
-            throw new HttpException(
-                422,
-                'No hay una sesión de caja abierta. Debes abrir caja antes de registrar ventas.'
-            );
-        }
-
-        return $sesion;
-    }
-
-    // Genera un cash_movement tipo 'sale_payment' por cada pago — compartido
-    // por store() (alta directa) y aplicarSincronizacionCaja() (update()).
-    private function crearCashMovementsPorPagos(array $pagos, CashSession $sesion, Sale $venta, int $userId): void
-    {
-        foreach ($pagos as $pago) {
-            $metodo = PaymentMethod::whereRaw('LOWER(code) = ?', [strtolower(trim($pago['method_payment']))])->first();
-
-            // No debería pasar — validarPagosPayload() ya validó que el
-            // método existe y está activo antes de llegar acá — pero esas
-            // son dos llamadas separadas en el tiempo, y si este helper
-            // alguna vez se invoca desde otro lugar sin pasar por esa
-            // validación primero, un $metodo->id sobre null sería un 500
-            // sin contexto en vez de un error controlado.
-            if (!$metodo) {
-                throw new HttpException(500, "Método de pago no resuelto al generar cash_movement: \"{$pago['method_payment']}\" — esto no debería pasar si validarPagosPayload() ya corrió antes.");
-            }
-
-            CashMovement::create([
-                'cash_session_id'   => $sesion->id,
-                'type'              => 'sale_payment',
-                'payment_method_id' => $metodo->id,
-                'direction'         => 'in',
-                'amount'            => $pago['amount'],
-                'currency'          => CashMovement::monedaOFalla($venta->currency),
-                'reference_type'    => 'sale',
-                'reference_id'      => $venta->id,
-                'status'            => 'confirmed',
-                'created_by'        => $userId,
-            ]);
-        }
-    }
-
     // ── Sincronización Caja en update() (Módulo Caja — Fase 3, plan §5
     // regla #1). Los cash_movements nunca se editan/borran a nivel de dato.
     // Si los pagos de la venta cambian, se generan movimientos 'correction'
@@ -453,11 +369,11 @@ class SaleController extends Controller
         $movimientosActivos = $this->movimientosCajaActivos($venta);
 
         $firmaVieja = $movimientosActivos
-            ->map(fn ($m) => strtolower($m->paymentMethod->code) . '|' . number_format((float) $m->amount, 2, '.', ''))
+            ->map(fn ($m) => strtolower($m->paymentMethod->code) . '|' . $m->currency . '|' . number_format((float) $m->amount, 2, '.', ''))
             ->sort()->values()->all();
 
         $firmaNueva = collect($pagosNuevos)
-            ->map(fn ($p) => strtolower(trim($p['method_payment'])) . '|' . number_format((float) $p['amount'], 2, '.', ''))
+            ->map(fn ($p) => strtolower($p['method_payment']) . '|' . $p['moneda_pago'] . '|' . number_format((float) $p['monto_pagado'], 2, '.', ''))
             ->sort()->values()->all();
 
         if ($firmaVieja === $firmaNueva) {
@@ -478,12 +394,14 @@ class SaleController extends Controller
         ];
     }
 
-    // Movimientos de cobro de la venta que siguen vivos (sin corregir).
-    private function movimientosCajaActivos(Sale $venta)
+    // Movimientos de cobro de la venta que siguen vivos (sin corregir). Con $conVuelto también el
+    // vuelto (sale_change), para que eliminar la venta lo revierta (T-010); update() compara solo
+    // los cobros.
+    private function movimientosCajaActivos(Sale $venta, bool $conVuelto = false)
     {
         return CashMovement::where('reference_type', 'sale')
             ->where('reference_id', $venta->id)
-            ->where('type', 'sale_payment')
+            ->whereIn('type', $conVuelto ? ['sale_payment', 'sale_change'] : ['sale_payment'])
             ->whereNull('corrected_by')
             ->with('paymentMethod')
             ->get();
@@ -544,14 +462,13 @@ class SaleController extends Controller
             return;
         }
 
-        $userId = auth('api')->user()->id;
         $sesionDestino = CashSession::find($plan['sesion_destino_id']);
 
         foreach ($plan['movimientos_a_corregir'] as $original) {
             $this->cashCorrection->revertirMovimiento($original, auth('api')->user());
         }
 
-        $this->crearCashMovementsPorPagos($plan['pagos_nuevos'], $sesionDestino, $venta, $userId);
+        $this->cobro->crearMovimientos($venta, $plan['pagos_nuevos'], $sesionDestino, auth('api')->user());
     }
 
     // ── Listado de ventas con filtros ────────────────────────────────
@@ -720,13 +637,12 @@ class SaleController extends Controller
         $this->validarRegimenEspecial($request);
         $this->validarCodigoDetraccion($request);
         $this->validarAdelantosPayload($request);
-        $this->validarPagosPayload($request);
-        $sesionCaja = $this->resolverSesionCajaAbierta($request);
+        $pagosPreparados = $this->prepararPagosVenta($request);
+        $sesionCaja = $pagosPreparados ? $this->cobro->sesionAbierta(auth('api')->user()) : null;
         $this->validarConfiguracionCredito($request);
         $serieResuelta = $this->resolverSerieComprobante($request);
 
         $detalles_venta       = $request->sale_details;
-        $pagos_venta          = $request->payments;
         $aplicaciones_adelanto = $request->advance_applications ?? [];
         $cronograma_credito    = $request->cronograma ?? [];
 
@@ -957,21 +873,11 @@ class SaleController extends Controller
                 SaleDetail::create($campos_detalle);
             }
 
-            // ── Guardar pagos ─────────────────────────────────────────
-            foreach ($pagos_venta as $pago) {
-                SalePayment::create([
-                    "sale_id"        => $venta->id,
-                    "method_payment" => $pago["method_payment"],
-                    "amount"         => $pago["amount"],
-                    "date_payment"   => $pago["date_payment"],
-                ]);
-            }
-
-            // ── Módulo Caja — Fase 3: cash_movement por cada pago inmediato ──
-            // $sesionCaja es null cuando la venta es 100% a crédito sin pago
-            // inicial (regla #3) — nada que generar en ese caso.
+            // ── Guardar pagos y su movimiento de caja (T-010: CobroVentaService) ──
+            // $sesionCaja es null cuando la venta es 100% a crédito sin pago inicial
+            // (regla #3 de Caja) — nada que cobrar en ese caso.
             if ($sesionCaja) {
-                $this->crearCashMovementsPorPagos($pagos_venta, $sesionCaja, $venta, auth('api')->user()->id);
+                $this->cobro->registrar($venta, $pagosPreparados, $sesionCaja, auth('api')->user());
             }
 
             // ── Descontar stock de cada producto ─────────────────────
@@ -1112,16 +1018,15 @@ public function update(Request $request, string $id)
 
     $this->validarRegimenEspecial($request);
     $this->validarCodigoDetraccion($request);
-    $this->validarPagosPayload($request);
+    $pagosPreparados = $this->prepararPagosVenta($request);
     $serieResuelta = $this->resolverSerieComprobanteUpdate($venta, $request);
 
     $detalles_nuevos = $request->sale_details ?? [];
-    $pagos_nuevos    = $request->payments ?? [];
 
     // Módulo Caja — Fase 3: toda la validación/decisión (incluido el
     // permiso de supervisor sobre sesión cerrada) corre acá, antes de abrir
     // la transacción — ver comentario de prepararSincronizacionCaja().
-    $planCaja = $this->prepararSincronizacionCaja($venta, $pagos_nuevos);
+    $planCaja = $this->prepararSincronizacionCaja($venta, $pagosPreparados);
 
     try {
         DB::beginTransaction();
@@ -1320,15 +1225,9 @@ public function update(Request $request, string $id)
         // una venta a crédito) — reemplazo total, más simple y seguro que
         // un diff por id ya que sale_payments no tiene relaciones propias
         // que dependan de conservar el mismo id entre ediciones.
+        // T-010: cada pago conserva su n.º de operación (R5) porque viene en el payload.
         SalePayment::where('sale_id', $venta->id)->delete();
-        foreach ($pagos_nuevos as $pago) {
-            SalePayment::create([
-                "sale_id"        => $venta->id,
-                "method_payment" => $pago['method_payment'],
-                "amount"         => $pago['amount'],
-                "date_payment"   => $pago['date_payment'] ?? \App\Services\HoraPeru::hoyTexto(),
-            ]);
-        }
+        $this->cobro->guardarPagos($venta, $pagosPreparados);
 
         // Módulo Caja — Fase 3: ejecuta el plan ya decidido arriba (antes de
         // la transacción). No vuelve a validar ni a lanzar HttpException.
@@ -1423,7 +1322,7 @@ public function update(Request $request, string $id)
         // esperaba al cierre un dinero de una venta que ya no existía. Permiso
         // y caja abierta se revisan aquí, antes de la transacción; sin
         // cobros, no se pide caja.
-        $movimientosActivos = $this->movimientosCajaActivos($venta);
+        $movimientosActivos = $this->movimientosCajaActivos($venta, true);
         if ($movimientosActivos->isNotEmpty()) {
             $this->sesionParaCorregirCaja(
                 $movimientosActivos,
@@ -1436,7 +1335,7 @@ public function update(Request $request, string $id)
             // otro usuario la editó o eliminó a la vez, no se corrige dos
             // veces el mismo movimiento.
             Sale::whereKey($venta->id)->lockForUpdate()->first();
-            foreach ($this->movimientosCajaActivos($venta) as $movimiento) {
+            foreach ($this->movimientosCajaActivos($venta, true) as $movimiento) {
                 $this->cashCorrection->revertirMovimiento($movimiento, auth('api')->user());
             }
 

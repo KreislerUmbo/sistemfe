@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Sale;
 
 use App\Http\Controllers\Controller;
+use App\Models\Cash\CashMovement;
 use App\Models\Sale\Sale;
 use App\Models\Sale\SalePayment;
 use Illuminate\Http\Request;
@@ -49,6 +50,9 @@ class SalePaymentController extends Controller
             );
         }
 
+        $request->validate(['nro_operacion' => 'nullable|string|max:50']);
+        $nroOperacion = trim((string) $request->nro_operacion) ?: null;
+
         if ((float) $request->amount <= 0) {
             throw new HttpException(422, 'El monto del pago debe ser mayor a 0.');
         }
@@ -66,6 +70,11 @@ class SalePaymentController extends Controller
             "method_payment" => $request->method_payment,
             "amount" => $request->amount,
             "date_payment" => $request->date_payment,
+            // T-010: este flujo cobra en la moneda de la venta.
+            "nro_operacion" => $nroOperacion,
+            "moneda_pago" => CashMovement::monedaOFalla($sale->currency),
+            "monto_pagado" => $request->amount,
+            "tipo_cambio" => 1,
         ]);
 
         // Módulo Amortizaciones (§9) — espejo simétrico de 'debt', mismo
@@ -91,7 +100,8 @@ class SalePaymentController extends Controller
                 "sale_id" => $sale_payment->sale_id,
                 "method_payment" => $sale_payment->method_payment,
                 "amount" => $sale_payment->amount,
-                "date_payment" => $sale_payment->date_payment
+                "date_payment" => $sale_payment->date_payment,
+                "nro_operacion" => $sale_payment->nro_operacion,
             ],
             "code" => 200,
             "message" => "Pago registrado correctamente"
