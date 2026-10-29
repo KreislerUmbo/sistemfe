@@ -90,9 +90,28 @@ php artisan test   # suite completa, contra PostgreSQL
 ---
 
 ## Resultado
-- **Commits:**
-- **Tests:**
+- **Commits:** ver `git log feat/T-012-traspaso-cobro-nc`.
+- **Tests:** `tests/Feature/Cobro/T012TraspasoCobroTest.php` (CA1–CA7 + vista previa): 8 pasan.
+  Suite completa del backend contra PostgreSQL: 1670 pasan, 0 fallan (corrida antes de agregar el
+  test de la vista previa, que se corrió aparte). Frontend: `vue-tsc` sin errores en lo tocado (los
+  errores previos son de otros archivos); `vite build` OK; Vitest nuevo `cobroFactura.test.ts` (5).
 - **Desviaciones de la tarea y por qué:**
+  - **Prueba funcional en pantalla real no hecha** (Definición de Hecho, §3): el bloque de traspaso
+    del frontend solo se comprobó con type-check, build y Vitest. Falta, en agencia-demo: facturar
+    con cobro, NC total aceptada, abrir "Facturar" y ver "Usar lo cobrado en…" preseleccionado.
+  - **Reserva de la venta de origen:** una NC total borra su fila de `reserva_ventas`, así que
+    "misma reserva" se reconoce por `sale_detail_items → reserva_items.reserva_id` (sobrevive a la NC).
+  - **"Pagado" del origen** = todos sus `sale_payments`, incluidos traspasos que ella recibió
+    (permite encadenar corrección tras corrección); el dinero no se cuenta dos veces porque lo que
+    ya salió se resta (`traspasado_de_sale_id`). Interpretación mía del texto "sin contar traspasos…
+    dos veces"; si se quería otra, cambia una línea en `disponiblesParaTraspasar()`.
+  - `method_payment` del traspaso se guarda como `'TRASPASO'` (columna de texto libre).
+  - El frontend propone usar todo lo traspasable (hasta el saldo) sin que el usuario lo marque, para
+    evitar cobrar dos veces; puede destildarlo o editar el monto.
+  - Migración `2026_10_30_100000_…` aplicada solo a la base de tests; falta `tenants:migrate-verticales`.
 
 ## Hallazgos fuera de alcance
--
+- `SaleController::update()` borra y recrea los `sale_payments`: editar una venta con traspaso
+  perdería `origen` y `traspasado_de_sale_id` (relacionado con R5). Revisar antes de encender el cobro.
+- Otros lectores de `sale_payments` (Cuentas por Cobrar, reportes por forma de pago) no se revisaron
+  para ver cómo tratan filas `origen='traspaso'` (no son dinero nuevo).

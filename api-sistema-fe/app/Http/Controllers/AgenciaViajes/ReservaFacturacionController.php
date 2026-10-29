@@ -332,6 +332,10 @@ class ReservaFacturacionController extends Controller
                     'affects_cash_count' => (bool) $m->affects_cash_count,
                 ])->values(),
             'tipo_cambio_dia' => $this->tipoCambioSunatResolver->resolverParaFecha(\App\Services\HoraPeru::ahora())?->venta,
+            // T-012: cobro de comprobantes anulados con NC que se puede usar en esta factura.
+            'traspasos_disponibles' => config('agencia.cobro_al_facturar')
+                ? array_values($this->cobro->disponiblesParaTraspasar((int) $reserva->id, $infoMoneda['moneda_facturacion']))
+                : [],
             'subtotal' => $subtotalTotal,
             'igv' => $igvTotal,
             'total' => $total,
@@ -401,6 +405,10 @@ class ReservaFacturacionController extends Controller
             'pagos.*.tipo_cambio' => 'nullable|numeric|gt:0',
             'pagos.*.nro_operacion' => 'nullable|string|max:50',
             'vuelto_moneda' => 'nullable|string|in:PEN,USD',
+            // T-012: traspaso de lo ya cobrado en otro comprobante de la misma reserva (tras una NC).
+            'traspasos' => 'nullable|array',
+            'traspasos.*.sale_id' => 'required|integer',
+            'traspasos.*.monto' => 'required|numeric|gt:0',
         ]);
 
         if ($validator->fails()) {
@@ -491,20 +499,24 @@ class ReservaFacturacionController extends Controller
         $pagosPreparados = [];
         $sesionCobro = null;
         $monedaVuelto = $validado['vuelto_moneda'] ?? null;
-        if (! empty($validado['pagos'])) {
+        $traspasosSolicitados = $validado['traspasos'] ?? [];
+        if (! empty($validado['pagos']) || $traspasosSolicitados) {
             if (! config('agencia.cobro_al_facturar')) {
                 throw new HttpException(422, 'El cobro al facturar todavía no está habilitado.');
             }
             if ($condicionPago === 'credito') {
                 throw new HttpException(422, 'A crédito no se cobra al facturar: el cobro se registra en Cuentas por Cobrar.');
             }
-            $pagosPreparados = $this->cobro->prepararPagos($validado['pagos'], $moneda);
-            $sesionCobro = $this->cobro->sesionAbierta($usuario);
+            if (! empty($validado['pagos'])) {
+                $pagosPreparados = $this->cobro->prepararPagos($validado['pagos'], $moneda);
+                $sesionCobro = $this->cobro->sesionAbierta($usuario);
+            }
         }
 
         try {
             [$venta, $lineas, $cobrado] = DB::transaction(function () use (
                 $pagosPreparados,
+                $traspasosSolicitados,
                 $sesionCobro,
                 $monedaVuelto,
                 $moneda,
@@ -749,16 +761,27 @@ class ReservaFacturacionController extends Controller
                 $cobrado = false;
                 if ($condicionPago === 'contado' && config('agencia.cobro_al_facturar')) {
                     $saldoACobrar = round((float) $venta->total, 2);
+                    // T-012: bajo el lock de la reserva, con las ventas de origen bloqueadas.
+                    $traspasosPreparados = $traspasosSolicitados
+                        ? $this->cobro->prepararTraspasos(
+                            $traspasosSolicitados,
+                            $this->cobro->disponiblesParaTraspasar((int) $reservaLocked->id, $moneda, bloquear: true),
+                            $moneda
+                        )
+                        : [];
                     $simbolo = $moneda === 'USD' ? 'US$' : 'S/';
-                    if ($saldoACobrar > 0 && ! $pagosPreparados) {
+                    if ($saldoACobrar > 0 && ! $pagosPreparados && ! $traspasosPreparados) {
                         throw new HttpException(422, "Al contado registra el cobro: falta {$simbolo} " . number_format($saldoACobrar, 2) . '.');
                     }
-                    if ($saldoACobrar <= 0 && $pagosPreparados) {
+                    if ($saldoACobrar <= 0 && ($pagosPreparados || $traspasosPreparados)) {
                         throw new HttpException(422, 'Los anticipos cubren todo el comprobante: no hay nada que cobrar.');
                     }
                     if ($saldoACobrar > 0) {
-                        $vuelto = $this->cobro->validarContraSaldo($pagosPreparados, $saldoACobrar, $moneda, exacto: true, monedaVuelto: $monedaVuelto);
-                        $this->cobro->registrar($venta, $pagosPreparados, $sesionCobro, $usuario, $vuelto);
+                        $vuelto = $this->cobro->validarContraSaldo(array_merge($pagosPreparados, $traspasosPreparados), $saldoACobrar, $moneda, exacto: true, monedaVuelto: $monedaVuelto);
+                        if ($pagosPreparados) {
+                            $this->cobro->registrar($venta, $pagosPreparados, $sesionCobro, $usuario, $vuelto);
+                        }
+                        $this->cobro->guardarTraspasos($venta, $traspasosPreparados);
                         $venta->update([
                             'state_payment' => 3,
                             'debt' => 0,

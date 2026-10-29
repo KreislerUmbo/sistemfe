@@ -5,10 +5,12 @@ namespace App\Services\Cobro;
 use App\Models\Cash\CashMovement;
 use App\Models\Cash\CashSession;
 use App\Models\Cash\PaymentMethod;
+use App\Models\Sale\Note;
 use App\Models\Sale\Sale;
 use App\Models\Sale\SalePayment;
 use App\Models\User;
 use App\Services\HoraPeru;
+use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
 /**
@@ -154,6 +156,120 @@ class CobroVentaService
         $monto = $monedaVenta === 'PEN' ? ($exceso / 100) / $tipoCambio : ($exceso / 100) * $tipoCambio;
 
         return ['monto' => round($monto, 2), 'moneda' => $monedaVuelto];
+    }
+
+    /**
+     * T-012 — lo que se puede traspasar al comprobante nuevo de una reserva: por cada venta de
+     * la MISMA reserva y MISMA moneda, lo pagado (todos sus `sale_payments`, incluidos traspasos
+     * que ella recibió) acotado al monto de sus NC aceptadas, menos lo ya traspasado desde ella.
+     * Las ventas se reconocen por sale_detail_items → reserva_items, porque una NC total borra
+     * su fila de reserva_ventas. $bloquear (dentro de la transacción) toma lockForUpdate de las
+     * ventas de origen: dos facturas a la vez no usan el mismo saldo.
+     *
+     * @return array<int, array{sale_id: int, comprobante: string, disponible: float}> indexado por sale_id
+     */
+    public function disponiblesParaTraspasar(int $reservaId, string $monedaVenta, bool $bloquear = false): array
+    {
+        $monedaVenta = CashMovement::monedaOFalla($monedaVenta);
+
+        $saleIds = DB::table('sale_detail_items as sdi')
+            ->join('sale_details as sd', 'sd.id', '=', 'sdi.sale_detail_id')
+            ->join('reserva_items as ri', 'ri.id', '=', 'sdi.reserva_item_id')
+            ->where('ri.reserva_id', $reservaId)
+            ->distinct()
+            ->pluck('sd.sale_id');
+        if ($saleIds->isEmpty()) {
+            return [];
+        }
+
+        $ventas = Sale::whereIn('id', $saleIds)->orderBy('id');
+        if ($bloquear) {
+            $ventas->lockForUpdate();
+        }
+
+        $disponibles = [];
+        foreach ($ventas->get() as $venta) {
+            if (CashMovement::normalizarMoneda($venta->currency) !== $monedaVenta) {
+                continue;
+            }
+
+            $acreditado = $this->centavos((float) Note::where('sale_id', $venta->id)
+                ->where('tipo_doc', '07')->where('status', 'aceptado')->sum('mto_imp_venta'));
+            $pagado = $this->centavos((float) SalePayment::where('sale_id', $venta->id)->sum('amount'));
+            $traspasado = $this->centavos((float) SalePayment::where('traspasado_de_sale_id', $venta->id)->sum('amount'));
+
+            $disponible = max(0, min($pagado, $acreditado) - $traspasado);
+            if ($disponible > 0) {
+                $disponibles[$venta->id] = [
+                    'sale_id' => $venta->id,
+                    'comprobante' => $venta->n_operacion ?: trim($venta->serie.'-'.$venta->correlativo, '-'),
+                    'disponible' => $disponible / 100,
+                ];
+            }
+        }
+
+        return $disponibles;
+    }
+
+    /**
+     * Valida lo pedido contra el disponible (ya calculado bajo lock). Varias líneas de la misma
+     * venta se suman. Cada resultado cuenta como pago sin efectivo para validarContraSaldo().
+     *
+     * @param  array<int, array{sale_id: int, comprobante: string, disponible: float}>  $disponibles
+     * @return list<array{sale_id: int, comprobante: string, afecta_efectivo: bool, moneda_pago: string, amount: float}>
+     */
+    public function prepararTraspasos(array $traspasos, array $disponibles, string $monedaVenta): array
+    {
+        $monedaVenta = CashMovement::monedaOFalla($monedaVenta);
+        $pedidoPorVenta = [];
+        foreach ($traspasos as $traspaso) {
+            $monto = $traspaso['monto'] ?? null;
+            if (! is_numeric($monto) || $this->centavos((float) $monto) <= 0) {
+                throw new HttpException(422, 'Cada traspaso requiere un monto mayor a 0.');
+            }
+            $saleId = (int) ($traspaso['sale_id'] ?? 0);
+            if (! isset($disponibles[$saleId])) {
+                throw new HttpException(422, 'Ese comprobante no tiene cobro disponible para traspasar a esta factura (otra reserva, otra moneda, sin NC aceptada o ya traspasado).');
+            }
+            $pedidoPorVenta[$saleId] = ($pedidoPorVenta[$saleId] ?? 0) + $this->centavos((float) $monto);
+        }
+
+        $simbolo = $monedaVenta === 'USD' ? 'US$' : 'S/';
+        $preparados = [];
+        foreach ($pedidoPorVenta as $saleId => $centavos) {
+            $origen = $disponibles[$saleId];
+            if ($centavos > $this->centavos($origen['disponible'])) {
+                throw new HttpException(422, "Del comprobante {$origen['comprobante']} solo hay {$simbolo} ".number_format($origen['disponible'], 2).' disponibles para traspasar.');
+            }
+            $preparados[] = [
+                'sale_id' => $saleId,
+                'comprobante' => $origen['comprobante'],
+                'afecta_efectivo' => false,
+                'moneda_pago' => $monedaVenta,
+                'amount' => $centavos / 100,
+            ];
+        }
+
+        return $preparados;
+    }
+
+    /** Un `sale_payment` origen=traspaso por origen. Sin movimiento de caja: el dinero ya entró. */
+    public function guardarTraspasos(Sale $venta, array $traspasosPreparados): void
+    {
+        foreach ($traspasosPreparados as $traspaso) {
+            SalePayment::create([
+                'sale_id' => $venta->id,
+                'method_payment' => 'TRASPASO',
+                'amount' => $traspaso['amount'],
+                'date_payment' => HoraPeru::hoyTexto(),
+                'comments' => 'Traspaso del cobro de '.$traspaso['comprobante'],
+                'moneda_pago' => $traspaso['moneda_pago'],
+                'monto_pagado' => $traspaso['amount'],
+                'tipo_cambio' => 1,
+                'origen' => 'traspaso',
+                'traspasado_de_sale_id' => $traspaso['sale_id'],
+            ]);
+        }
     }
 
     public function sesionAbierta(User $usuario): CashSession

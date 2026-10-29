@@ -19,6 +19,8 @@ class SalePayment extends Model
         "moneda_pago",
         "monto_pagado",
         "tipo_cambio",
+        "origen", // T-012: 'cobro' | 'traspaso'
+        "traspasado_de_sale_id",
     ];
 
     protected $casts = [

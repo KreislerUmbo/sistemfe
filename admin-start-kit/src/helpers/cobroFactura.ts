@@ -20,7 +20,15 @@ export type FilaCobro = {
   nro_operacion: string;
 };
 
+// T-012: cobro de un comprobante anulado con NC que se puede usar en esta factura.
+export type TraspasoDisponible = { sale_id: number; comprobante: string; disponible: number };
+export type FilaTraspaso = { sale_id: number; monto: number };
+
 const aCentavos = (monto: number) => Math.round((Number(monto) || 0) * 100);
+
+export function totalTraspasado(traspasos: FilaTraspaso[]): number {
+  return traspasos.reduce((suma, t) => suma + aCentavos(t.monto), 0) / 100;
+}
 
 // Equivalente de la fila en la moneda de la venta.
 export function equivalenteFila(fila: FilaCobro, monedaVenta: MonedaCobro): number {
@@ -36,8 +44,8 @@ export function totalCobrado(filas: FilaCobro[], monedaVenta: MonedaCobro): numb
 }
 
 // Positivo = falta; negativo = sobra (posible vuelto).
-export function diferencia(filas: FilaCobro[], saldo: number, monedaVenta: MonedaCobro): number {
-  return (aCentavos(saldo) - aCentavos(totalCobrado(filas, monedaVenta))) / 100;
+export function diferencia(filas: FilaCobro[], saldo: number, monedaVenta: MonedaCobro, traspasado = 0): number {
+  return (aCentavos(saldo) - aCentavos(totalCobrado(filas, monedaVenta)) - aCentavos(traspasado)) / 100;
 }
 
 // Vuelto en la moneda pedida; null si no se puede convertir (no hay efectivo en esa moneda).
@@ -76,15 +84,18 @@ export function filaNueva(formas: FormaPagoCobro[], monedaVenta: MonedaCobro, mo
 // Mensaje de error, o null si el cobro se puede enviar. Solo avisa lo que el usuario puede
 // arreglar en la pantalla; el backend vuelve a validar todo.
 export function validarCobro(
-  filas: FilaCobro[], saldo: number, monedaVenta: MonedaCobro, formas: FormaPagoCobro[]
+  filas: FilaCobro[], saldo: number, monedaVenta: MonedaCobro, formas: FormaPagoCobro[], traspasos: FilaTraspaso[] = []
 ): string | null {
-  if (filas.length === 0) return 'Al contado registra el cobro.';
+  const traspasado = totalTraspasado(traspasos);
+  if (filas.length === 0 && traspasado <= 0) return 'Al contado registra el cobro.';
+  if (traspasos.some((t) => !(Number(t.monto) > 0))) return 'Cada traspaso necesita un monto mayor a 0.';
+  if (aCentavos(traspasado) > aCentavos(saldo)) return 'Lo traspasado supera el total a cobrar.';
   for (const f of filas) {
     if (!(Number(f.monto_pagado) > 0)) return 'Cada pago necesita un monto mayor a 0.';
     if (f.moneda_pago !== monedaVenta && !(Number(f.tipo_cambio) > 0)) return 'Un pago en otra moneda necesita tipo de cambio.';
     if (f.nro_operacion.length > 50) return 'El n.º de operación no puede pasar de 50 caracteres.';
   }
-  const dif = diferencia(filas, saldo, monedaVenta);
+  const dif = diferencia(filas, saldo, monedaVenta, traspasado);
   if (dif > 0) return `Falta cobrar ${monedaVenta === 'USD' ? 'US$' : 'S/'} ${dif.toFixed(2)}.`;
   if (dif < 0 && !filas.some((f) => formas.find((p) => p.code === f.method_payment)?.affects_cash_count)) {
     return 'Lo cobrado supera el total y no hay efectivo para dar vuelto.';
@@ -94,10 +105,12 @@ export function validarCobro(
 
 // Lo que se manda al emitir. Nada si no corresponde cobrar (crédito, sin saldo o apagado).
 export function payloadCobro(
-  condicion: CondicionPago, saldo: number, habilitado: boolean, filas: FilaCobro[], vueltoMoneda: MonedaCobro, exceso: number
+  condicion: CondicionPago, saldo: number, habilitado: boolean, filas: FilaCobro[], vueltoMoneda: MonedaCobro, exceso: number,
+  traspasos: FilaTraspaso[] = []
 ) {
   if (!habilitado || condicion !== 'contado' || saldo <= 0) return {};
   return {
+    ...(traspasos.length ? { traspasos: traspasos.map((t) => ({ sale_id: t.sale_id, monto: Number(t.monto) })) } : {}),
     pagos: filas.map((f) => ({
       method_payment: f.method_payment,
       moneda_pago: f.moneda_pago,
