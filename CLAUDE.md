@@ -5,7 +5,7 @@
 > historial en `git log`. Este archivo tiene contexto, reglas y trampas — **no** avance de módulos.
 > El estado e historial que vivían acá (hasta 29-oct-2026) están en
 > `docs/archivo/CLAUDE-hasta-2026-10-29.md`: consultarlo solo si hace falta el detalle de un
-> módulo; sus pendientes que no estén en el backlog están sin verificar.
+> módulo; sus pendientes ya se pasaron al backlog, verificados (29-oct-2026).
 
 ## Estructura
 ```

@@ -105,7 +105,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 | AGE | Agregar pasajero rápido en la reserva para tours por persona (después de probar Modificar reserva) | fila F4 de la hoja de ruta |
 | AGE | Enviar el PDF de modificación por correo | T-006, fuera de alcance |
 | TRA | Escribir `docs/transversal/seguridad.md` (detalle del checklist de `proceso.md` §4) | `proceso.md`, 24-oct-2026 |
-| TRA | Migración del proceso, pasos 3-6 de `proceso.md` §6 (adelgazar `CLAUDE.md`, archivar, pasar pendientes, limpiar memoria) | `proceso.md`, 24-oct-2026 |
+| TRA | Migración del proceso, lo que queda de `proceso.md` §6: paso 5 para `TODO.md`, planes y memoria (los del archivo de `CLAUDE.md` ya pasaron, 29-oct-2026) y paso 6 (limpiar memoria) | `proceso.md`, 24-oct-2026 |
 | AGE | **Revisión de cotizaciones, lo que queda** (26-oct; el resto ya es tarea: T-023 a T-031): H9 y H15 bajas (H13 pasó a T-032) | `docs/requerimientos/observaciones-pruebas-usuario.md`, "Revisión del flujo de cotizaciones" |
 | AGE | **Obs. 9, lo que queda** (R1-R8 → T-032 a T-037): **H21 paquete internacional nace "Exonerado · Amazonía" — consultar al contador qué tratamiento corresponde**; precio de niño en paquetes de mayorista (hoy solo adultos, decisión 26-oct); H25 verificar que el tipo de cambio diario se sincroniza en producción | `docs/requerimientos/observaciones-pruebas-usuario.md` §9 |
 | AGE | **Obs. 10 — tributario fuera de la cotización**: recomendación B (el sistema lo deduce con reglas del contador; la cotización solo lleva costo, venta y margen). Espera las 6 preguntas al contador (la 1 ya se sabe: agencia en la Amazonía + servicio prestado allí). Pausa T-029 y H21 | `docs/requerimientos/observaciones-pruebas-usuario.md` §10, 26-oct-2026 |
@@ -131,6 +131,33 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 | AGE | Cotizador: las acciones del mayorista (elegir, descartar, editar, agregar hotel u opcional) siguen visibles en una alternativa aceptada; desde T-030 responden 422. Ocultarlas | hallazgo de T-030, 27-oct-2026 |
 | TRA | Seguridad de infraestructura (auditoría 08-oct): dependencias con advisories, certificados beta con clave privada en el historial de git, HSTS/CSP en nginx, CORS `*`. (Pedidos del portal y `v-html` → T-068) | memoria `project_auditoria_seguridad_2026-10-08` |
 | AGE | Pendientes de diseño ya conocidos: Compras + pagos a proveedores (fila 13 fase 3, reemplaza 11g), limpieza multi-destino (12g, espera producción), guía cotizado que no pasa a la reserva privada, endoso de pasajeros (v2 sin aprobar) | `plan-hoja-de-ruta-ejecucion.md`, memoria |
+| VEN | Catálogo 01 incompleto: `tipos_comprobante` solo tiene 00-14 y NV (migración `2026_07_19_150000`); faltan los códigos 15 en adelante | archivo `CLAUDE.md`, series; verificado 29-oct-2026 |
+| VEN + NOT | Las NC/ND siguen sacando su serie de `note_series` (`SerieNotaResolver`), no del módulo de series (`serie_comprobantes`) | archivo `CLAUDE.md`, series; verificado 29-oct-2026 |
+| VEN | Error al enviar a SUNAT: un fallo de red devuelve 500 con `response.error.message` (`FacturacionElectronicaController` ~344, con `$e->getMessage()` crudo); `sale/index.vue::enviarSunat()` lee `error.response.data.message` y muestra el genérico "Error inesperado". Revisar también `advances/show.vue` | archivo `CLAUDE.md`, panel superadmin; verificado 29-oct-2026 |
+| VEN | La fecha de emisión del XML es la del envío (`GreenterService::fechaEmision()` = `HoraPeru::ahora()`), no `sales.date` (caso umbo F001-30). Pregunta para el contador | archivo `CLAUDE.md`, fechas; verificado 29-oct-2026 |
+| VEN | Producto real de `umbo` (id=37) con `tip_afe_igv_default` sospechoso: confirmar con el contador (es un dato, no código) | archivo `CLAUDE.md`, Ventas |
+| VEN | Registro de Ventas para el contador (SIRE): no existe; usar `Sale::scopeSoloDocumentosFiscales()`. Va con Compras (§3.8 de `plan-tours-venta-simple-costo-real.md`) | archivo `CLAUDE.md`, series y Compras; verificado 29-oct-2026 |
+| VEN + CRE | Impresión silenciosa (sin diálogo del navegador) en ticketera: decidir entre modo kiosco de Chrome, servicio local o ESC-POS. Hoy `window.open()` + `print()`. El formato por defecto por usuario ya existe (`users.formato_impresion_default`) | archivo `CLAUDE.md`, próximos módulos y Créditos |
+| AMO | `credit_type='libre'` sin soporte en el formulario de venta (solo `cuotas_fijas`, `sale/register.vue` ~977) | archivo `CLAUDE.md`, Amortizaciones; verificado 29-oct-2026 |
+| AMO | Anular cuota, devolución y reemplazo de comprobante solo por API: las rutas existen (`installments/{id}/anular`, `sales/{id}/refund`, `sales/{id}/replace`), ninguna pantalla las llama | archivo `CLAUDE.md`, Amortizaciones; verificado 29-oct-2026 |
+| CAJ | Fase 7, multi-caja simultánea: espera que el negocio abra una segunda caja real (checklist en `plan-modulo-caja.md`) | archivo `CLAUDE.md`, Caja |
+| CAJ | Filtro "Cajero" de `cash/history.vue` (~286) sale de las sesiones cargadas, no de un catálogo de usuarios | archivo `CLAUDE.md`, Caja; verificado 29-oct-2026 |
+| ADE | Validar contra SUNAT Beta un adelanto exonerado/inafecto y una corrección real con NC motivo 01 (necesita credenciales de un tenant real) | archivo `CLAUDE.md`, Adelantos |
+| ADE | Retail no tiene "adelanto → venta futura" como `reserva_anticipos` de Agencia: se descartó del alcance sin reconfirmar con el usuario si hace falta | archivo `CLAUDE.md`, Adelantos |
+| PLA | `test-emission` es informativo: pasar a `modo=produccion` solo exige certificado válido (`TenantSunatController` ~138). Decidir si se vuelve requisito | archivo `CLAUDE.md`, panel superadmin; verificado 29-oct-2026 |
+| PLA | Confirmar/corregir el `giro` real de `market.umbosystem.com` (dato de producción) | archivo `CLAUDE.md`, panel superadmin |
+| PLA | `ManualRecursoController` sube con `Storage::putFile()` al disco por defecto, que queda en la carpeta del tenant donde se navega, aunque `ManualRecurso` es central | archivo `CLAUDE.md`, storage; verificado 29-oct-2026 |
+| PLA | `TaxConfigSeeder`/`DetractionCodeSeeder` (y otros catálogos: `ProveedorTipoSeeder`…) se corren a mano; falta decidir cuándo y cómo se disparan | archivo `CLAUDE.md`, multitenancy §4; verificado 29-oct-2026 |
+| AGE | Un ítem `tarifa_fija` compartido (habitación doble) entre pasajeros que van a comprobantes distintos no tiene reparto: queda sin poder facturarse por el flujo normal (`ReservaFacturacionController`, comentario ~72) | archivo `CLAUDE.md`, facturación de reservas; verificado 29-oct-2026 |
+| AGE | Venta directa: el concepto libre no lleva tratamiento tributario (`VentaDirectaController` no lo recibe); mayorista y pasaje aéreo suelto fuera de T-049 | archivo `CLAUDE.md`, Venta Directa; verificado 29-oct-2026 |
+| AGE | Alta de un destino nuevo desde `DestinoTreeSelect.vue` (plan sin aprobar; antes, auditar si el mismo problema está en otros catálogos) | archivo `CLAUDE.md`, UX1; verificado 29-oct-2026 |
+| AGE | Cotizador: "Alto Mayo" repetido en la cabecera y en el chip del destino; el panel de precio no se sincroniza con el ítem en edición. Sin plan; ver en pantalla | archivo `CLAUDE.md`, UX1 |
+| AGE | Reporte operativo: ayuda que explique para qué es el check-in (el resto de esa ronda UX → T-058) | archivo `CLAUDE.md`, fila 11d |
+| AGE | Abrir un paquete/tour: N+1 conocido en `ComboExplosionService` (~180 ms, medido en ago-2026) | archivo `CLAUDE.md`, rendimiento |
+| CRE | Fases 6-8 del plan, sin fecha: módulos contratables, garantes y prendas, cobradores con caja propia y gestiones | archivo `CLAUDE.md`, Créditos |
+| CRE | QR de verificación del recibo, sin decidir | archivo `CLAUDE.md`, Créditos |
+| CRE | Adicional "Solo interés" (capital al final), diseñado: `docs/planning/creditos/adicional-solo-interes.md`. Hoy se renueva cada mes | archivo `CLAUDE.md`, Créditos |
+| CRE | Aviso push de cobranza: el código está en producción (`cd017d4`); falta generar las claves VAPID en el servidor (`php artisan webpush:claves`) y activarlo en credishirley — verificar en el servidor | archivo `CLAUDE.md`, Créditos fase 5 |
 | TRA | Sesión por inactividad: hoy el JWT vence a la hora fija desde el login (`JWT_TTL`, 60 min por defecto) y el aviso sale 2 min antes **aunque el usuario esté trabajando**. Propuesta: renovar en silencio mientras hay actividad y mostrar el aviso solo tras N minutos sin uso (falta decidir N). Solo frontend: `helpers/sessionExpiryWatcher.ts` + `helpers/http-client.ts`; `auth/refresh` ya existe | pregunta del usuario, 24-oct-2026 |
 
 ## Hechas
@@ -163,6 +190,6 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 | T-068 | POR + TRA | Pedido del portal: precios y total calculados en el servidor (y el invitado nuevo ya puede comprar); HTML de usuarios saneado con DOMPurify | `db3f427` |
 | T-064 | VEN | El comprobante guarda documento, razón social y dirección del cliente al emitirse (PDF, XML y QR ya no cambian al editar el cliente) | `7fa1024` |
 | — | TRA | **Hotfix en producción:** eliminar venta y aceptar NC fallaban en retail y créditos (`reserva_ventas`). Desplegado 24-oct-2026 | `89a1ff7` (rama de trabajo: `224137c`) |
-| F5 | AGE | Condición de pago al facturar una reserva (contado / crédito con cuotas) y en el PDF de todos los giros; venta de reserva no editable desde Ventas | `37eed40` (sin unir a `main`) |
-| F1 | AGE | El comprobante de una reserva detalla los servicios cobrados | `9416387` (sin unir a `main`) |
-| F1 | AGE | Casillas para elegir qué servicios entran; céntimos del tour; confirmar tributario encima del modal | `c957976`, `1a56a64` (sin unir a `main`) |
+| F5 | AGE | Condición de pago al facturar una reserva (contado / crédito con cuotas) y en el PDF de todos los giros; venta de reserva no editable desde Ventas | `37eed40` (desplegado con T-067) |
+| F1 | AGE | El comprobante de una reserva detalla los servicios cobrados | `9416387` (desplegado con T-067) |
+| F1 | AGE | Casillas para elegir qué servicios entran; céntimos del tour; confirmar tributario encima del modal | `c957976`, `1a56a64` (desplegado con T-067) |
