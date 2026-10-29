@@ -598,7 +598,10 @@ class SaleController extends Controller
             // así que se estima el alto según cantidad de ítems.
             // + condición de pago y una línea por cuota si es crédito (24-oct-2026).
             $alto_estimado = 480 + ($venta->sale_details->count() * 40) + 14
-                + ((int) $venta->type_payment === 2 ? $venta->cuotasVigentes()->count() * 14 : 0);
+                + ((int) $venta->type_payment === 2 ? $venta->cuotasVigentes()->count() * 14 : 0)
+                // T-014: una línea extra por pago con n.º de operación o T.C., y otra por el vuelto.
+                + $venta->pagosImpresos()->filter(fn ($p) => $p['operacion'] || $p['tipo_cambio'])->count() * 14
+                + ($venta->vueltoImpreso() ? 14 : 0);
             $pdf->setPaper([0, 0, 226.77, $alto_estimado], 'portrait');
         } else {
             // Papel A4 explícito — el default de Dompdf es "letter" (carta US),

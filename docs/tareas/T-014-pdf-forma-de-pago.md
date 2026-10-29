@@ -99,9 +99,9 @@ Llenar "Resultado". Commit con `Co-Authored-By:` de tu sesión. **No** unir a `m
 ---
 
 ## Resultado
-- **Commits:**
-- **Tests:**
-- **Desviaciones de la tarea y por qué:**
+- **Commits:** ver `git log feat/T-014-pdf-forma-de-pago` (1 commit, sin unir ni pushear).
+- **Tests:** `ComprobantePdf|DatosClienteEnComprobante` 16/16; suite completa 1641 en verde.
+- **Desviaciones de la tarea y por qué:** ninguna. Los tests no se tocaron. Nota: el alto del ticket está en `app/Http/Controllers/Sale/SaleController.php` (no en `Api/Sale/`). CA4 (verificación visual con Ghostscript) queda para la revisión de Opus.
 
 ## Hallazgos fuera de alcance
 -

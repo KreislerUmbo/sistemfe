@@ -219,12 +219,22 @@
 
         <div class="bold">FORMA DE PAGO</div>
         <table class="totales">
-            @foreach ($venta->sale_payments->sortBy('date_payment') as $pago)
+            @foreach ($venta->pagosImpresos() as $pago)
                 <tr>
-                    <td>{{ $pago->method_payment }} ({{ \Carbon\Carbon::parse($pago->date_payment)->format('d/m/Y') }})</td>
-                    <td class="right">{{ $venta->currency }} {{ number_format($pago->amount, 2) }}</td>
+                    <td>{{ $pago['forma'] }} ({{ $pago['fecha'] }})</td>
+                    <td class="right">{{ $pago['monto'] }}</td>
                 </tr>
+                @if ($pago['operacion'] || $pago['tipo_cambio'])
+                    <tr>
+                        <td colspan="2" style="font-size:8px;">{{ collect([$pago['operacion'] ? 'op. ' . $pago['operacion'] : null, $pago['tipo_cambio']])->filter()->implode(' · ') }}</td>
+                    </tr>
+                @endif
             @endforeach
+            @if ($venta->vueltoImpreso())
+                <tr>
+                    <td colspan="2" class="right">{{ $venta->vueltoImpreso() }}</td>
+                </tr>
+            @endif
         </table>
     @endif
 

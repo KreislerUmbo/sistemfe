@@ -402,17 +402,29 @@
                             <div class="titulo">FORMA DE PAGO</div>
                             <table class="pagos-table">
                                 <tr>
-                                    <th>Método</th>
+                                    <th>Forma de pago</th>
+                                    <th>N.º operación</th>
                                     <th>Fecha</th>
                                     <th class="right">Monto</th>
                                 </tr>
-                                @foreach ($venta->sale_payments->sortBy('date_payment') as $pago)
+                                @foreach ($venta->pagosImpresos() as $pago)
                                     <tr>
-                                        <td>{{ $pago->method_payment }}</td>
-                                        <td>{{ \Carbon\Carbon::parse($pago->date_payment)->format('d/m/Y') }}</td>
-                                        <td class="right">{{ $venta->currency === 'USD' ? 'US$' : 'S/' }} {{ number_format($pago->amount, 2) }}</td>
+                                        <td>{{ $pago['forma'] }}</td>
+                                        <td>{{ $pago['operacion'] }}</td>
+                                        <td>{{ $pago['fecha'] }}</td>
+                                        <td class="right">
+                                            {{ $pago['monto'] }}
+                                            @if ($pago['tipo_cambio'])
+                                                <br><span style="font-size:9px;">{{ $pago['tipo_cambio'] }}</span>
+                                            @endif
+                                        </td>
                                     </tr>
                                 @endforeach
+                                @if ($venta->vueltoImpreso())
+                                    <tr>
+                                        <td colspan="4" class="right">{{ $venta->vueltoImpreso() }}</td>
+                                    </tr>
+                                @endif
                             </table>
                         </div>
                     @endif
