@@ -41,12 +41,15 @@ class CompletarMonedaCajaService
             $cambios[] = ['movimiento_id' => (int) $mov->id, 'moneda_anterior' => $mov->currency, 'moneda_nueva' => $moneda];
 
             if (! $simular) {
-                DB::table('cash_movements')->where('id', $mov->id)->update(['currency' => $moneda]);
-                DB::table('ajustes_moneda_caja')->insert([
-                    'cash_movement_id' => $mov->id,
-                    'moneda_anterior' => $mov->currency,
-                    'moneda_nueva' => $moneda,
-                ]);
+                // El cambio y su registro van juntos: nunca un cambio sin rastro.
+                DB::transaction(function () use ($mov, $moneda) {
+                    DB::table('cash_movements')->where('id', $mov->id)->update(['currency' => $moneda]);
+                    DB::table('ajustes_moneda_caja')->insert([
+                        'cash_movement_id' => $mov->id,
+                        'moneda_anterior' => $mov->currency,
+                        'moneda_nueva' => $moneda,
+                    ]);
+                });
             }
         }
 

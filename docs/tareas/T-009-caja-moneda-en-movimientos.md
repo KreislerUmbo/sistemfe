@@ -178,6 +178,8 @@ Llenar "Resultado" (salida de los comandos, desviaciones, hallazgos). Commits co
   - Recibo de crédito sin aplicaciones (todo saldo a favor): moneda `PEN` (la tarea no lo cubría).
   - Tests de la parte 1 propios agregados al final de `T009MonedaCajaTest.php` (CA1, CA2, CA6, cobro en USD, apertura, normalizar).
 
+- **Revisión (Opus, 28-oct-2026):** sin cambios de fondo. Ajuste: en `CompletarMonedaCajaService` el cambio de moneda y su registro en `ajustes_moneda_caja` van en una transacción. Los 3 fallos de `PrecioPorPasajeroTest` no eran de Caja: 16 tarifas de prueba nacían con `now()->toDateString()` (fecha UTC); de 19:00 a 24:00 de Perú quedaban "todavía no vigentes" y desde T-028 no se pueden cotizar. Corregido en `main` (`c02f217`). Suite completa 1602 en verde (corrida a las 23:00 de Perú). `caja:completar-moneda --simular` local: 0 cambios, 0 para revisar.
+
 ## Hallazgos fuera de alcance
 - `PrecioPorPasajeroTest`: 2 tests de cama adicional fallan en `main` (422 en vez de 200); posiblemente dependen de la fecha
   actual (28-oct-2026) o de datos de la base de pruebas. Hay un intermitente conocido distinto (`Fila13Fase1c…`).
