@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\AgenciaViajes;
 
+use Tests\Feature\AgenciaViajes\Concerns\FacturaCobrando;
 use Tests\Feature\AgenciaViajes\Concerns\ConAccesoATodasLasReservas;
 use App\Http\Controllers\AgenciaViajes\AlternativaItemController;
 use App\Http\Controllers\AgenciaViajes\ConversionToursController;
@@ -48,6 +49,7 @@ use Tests\TestCase;
 class Fila13Fase1cFacturacionTest extends TestCase
 {
     use ConAccesoATodasLasReservas;
+    use FacturaCobrando;
 
     private DestinoAtractivo $destino;
 
@@ -577,7 +579,7 @@ class Fila13Fase1cFacturacionTest extends TestCase
         $controller = app(ReservaFacturacionController::class);
 
         // Factura 1: los vuelos, al RUC 20.
-        $primera = $controller->store(new Request([
+        $primera = $this->facturarCobrando(new Request([
             'pasajero_ids' => $pasajeros, 'reserva_item_ids_manual' => [$itemVuelo],
             'client_id' => Client::factory()->empresa()->create()->id, 'tipo_comprobante_codigo' => '01',
         ]), (string) $reserva->id)->getData(true);
@@ -591,7 +593,7 @@ class Fila13Fase1cFacturacionTest extends TestCase
 
         // Factura 2: el resto, a OTRO cliente (RUC 10), con los mismos pasajeros.
         $otroCliente = Client::factory()->empresa()->create();
-        $segunda = $controller->store(new Request([
+        $segunda = $this->facturarCobrando(new Request([
             'pasajero_ids' => $pasajeros, 'reserva_item_ids_manual' => [$itemTraslado],
             'client_id' => $otroCliente->id, 'tipo_comprobante_codigo' => '01',
         ]), (string) $reserva->id)->getData(true);
@@ -611,7 +613,7 @@ class Fila13Fase1cFacturacionTest extends TestCase
         [$a, $b] = ReservaPasajero::where('reserva_id', $reserva->id)->orderBy('id')->pluck('id')->all();
         $itemVuelo = ReservaItem::where('reserva_id', $reserva->id)->where('alternativa_item_id', $vuelo->id)->value('id');
 
-        app(ReservaFacturacionController::class)->store(new Request([
+        $this->facturarCobrando(new Request([
             'pasajero_ids' => [$a], 'reserva_item_ids_manual' => [$itemVuelo],
             'client_id' => Client::factory()->empresa()->create()->id, 'tipo_comprobante_codigo' => '01',
         ]), (string) $reserva->id);
@@ -637,7 +639,7 @@ class Fila13Fase1cFacturacionTest extends TestCase
         $itemTour = ReservaItem::where('reserva_id', $reserva->id)->where('alternativa_item_id', '!=', $traslado->id)->value('id');
 
         // Factura A: el pasajero 1 (su parte del tour, 150) + el traslado.
-        $ventaA = app(ReservaFacturacionController::class)->store(new Request([
+        $ventaA = $this->facturarCobrando(new Request([
             'pasajero_ids' => [$p1], 'reserva_item_ids_manual' => [$itemTraslado],
             'client_id' => Client::factory()->empresa()->create()->id, 'tipo_comprobante_codigo' => '01',
         ]), (string) $reserva->id)->getData(true);
@@ -663,7 +665,7 @@ class Fila13Fase1cFacturacionTest extends TestCase
     private function facturarSinCapturar(Reserva $reserva, array $pasajeroIds, array $manual): int
     {
         try {
-            return app(ReservaFacturacionController::class)->store(new Request([
+            return $this->facturarCobrando(new Request([
                 'pasajero_ids' => $pasajeroIds, 'reserva_item_ids_manual' => $manual,
                 'client_id' => Client::factory()->empresa()->create()->id, 'tipo_comprobante_codigo' => '01',
             ]), (string) $reserva->id)->getStatusCode();
@@ -977,7 +979,7 @@ class Fila13Fase1cFacturacionTest extends TestCase
     private function facturar(Reserva $reserva, ?array $pasajeroIds = null, array $extra = [])
     {
         try {
-            return app(ReservaFacturacionController::class)->store($this->pedidoDeFactura($reserva, $pasajeroIds, $extra + [
+            return $this->facturarCobrando($this->pedidoDeFactura($reserva, $pasajeroIds, $extra + [
                 'client_id' => Client::factory()->empresa()->create()->id,
                 'tipo_comprobante_codigo' => '01',
             ]), (string) $reserva->id);

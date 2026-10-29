@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\AgenciaViajes;
 
+use Tests\Feature\AgenciaViajes\Concerns\FacturaCobrando;
 use Tests\Feature\AgenciaViajes\Concerns\ConAccesoATodasLasReservas;
 use App\Http\Controllers\AgenciaViajes\ReservaAnticipoController;
 use App\Http\Controllers\AgenciaViajes\ReservaController;
@@ -39,6 +40,7 @@ use Tests\TestCase;
 class ReservaAnticipoTest extends TestCase
 {
     use ConAccesoATodasLasReservas;
+    use FacturaCobrando;
 
     protected function setUp(): void
     {
@@ -375,7 +377,7 @@ class ReservaAnticipoTest extends TestCase
         $advance = Advance::first();
         $this->simularAdelantoAceptado($advance);
 
-        $response = app(ReservaFacturacionController::class)->store(new Request([
+        $response = $this->facturarCobrando(new Request([
             'pasajero_ids' => [$pasajero->id],
             'client_id' => $cliente->id,
             // Boleta: clienteDeLaReserva() usa el cliente DNI de
@@ -400,6 +402,8 @@ class ReservaAnticipoTest extends TestCase
 
     public function test_facturar_sin_anticipos_se_comporta_igual_que_antes(): void
     {
+        // Este test describe el comportamiento previo al cobro (venta pendiente): interruptor apagado.
+        config(['agencia.cobro_al_facturar' => false]);
         $this->usuarioCompleto();
         $reserva = $this->crearReservaSimple();
         $pasajero = $this->pasajero($reserva);
@@ -421,6 +425,8 @@ class ReservaAnticipoTest extends TestCase
 
     public function test_facturar_especial_con_advance_applications_explicito(): void
     {
+        // Aserta paid_out == solo el anticipo (venta pendiente de cobro): interruptor apagado.
+        config(['agencia.cobro_al_facturar' => false]);
         $this->usuarioCompleto();
         $reserva = $this->crearReservaSimple();
         $pasajero = $this->pasajero($reserva);
@@ -467,7 +473,7 @@ class ReservaAnticipoTest extends TestCase
         // como HttpException (catch(HttpException) { throw $e; }, mismo
         // patrón que el resto del método), no vuelve como Response.
         try {
-            app(ReservaFacturacionController::class)->store(new Request([
+            $this->facturarCobrando(new Request([
                 'pasajero_ids' => [$pasajeroA->id],
                 'client_id' => $cliente->id,
                 // Boleta: clienteDeLaReserva() (ver comentario de la clase).

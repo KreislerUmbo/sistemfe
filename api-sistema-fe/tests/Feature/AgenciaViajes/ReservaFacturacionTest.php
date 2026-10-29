@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\AgenciaViajes;
 
+use Tests\Feature\AgenciaViajes\Concerns\FacturaCobrando;
 use Tests\Feature\AgenciaViajes\Concerns\ConAccesoATodasLasReservas;
 use App\Http\Controllers\AgenciaViajes\ReservaAnticipoController;
 use App\Http\Controllers\AgenciaViajes\ReservaController;
@@ -54,6 +55,7 @@ use Tests\TestCase;
 class ReservaFacturacionTest extends TestCase
 {
     use ConAccesoATodasLasReservas;
+    use FacturaCobrando;
 
     protected function setUp(): void
     {
@@ -391,7 +393,7 @@ class ReservaFacturacionTest extends TestCase
         $clientePasajero = Client::factory()->create(['type_client' => 1, 'cod_tipo_doc_sunat' => '1']);
 
         // P3 → boleta a su propio nombre.
-        $r1 = app(ReservaFacturacionController::class)->store(new Request([
+        $r1 = $this->facturarCobrando(new Request([
             'pasajero_ids' => [$f['p3']->id],
             'client_id' => $clientePasajero->id,
             'tipo_comprobante_codigo' => '03',
@@ -402,7 +404,7 @@ class ReservaFacturacionTest extends TestCase
 
         // P1 → factura a empresa A (su ítem individual — el compartido con
         // P2 queda pendiente, ver §itemCompartido).
-        $r2 = app(ReservaFacturacionController::class)->store(new Request([
+        $r2 = $this->facturarCobrando(new Request([
             'pasajero_ids' => [$f['p1']->id],
             'client_id' => $empresaA->id,
             'tipo_comprobante_codigo' => '01',
@@ -412,7 +414,7 @@ class ReservaFacturacionTest extends TestCase
         $this->assertSame(200, $body2['code'], json_encode($body2));
 
         // P2 → factura a empresa B (su ítem individual).
-        $r3 = app(ReservaFacturacionController::class)->store(new Request([
+        $r3 = $this->facturarCobrando(new Request([
             'pasajero_ids' => [$f['p2']->id],
             'client_id' => $empresaB->id,
             'tipo_comprobante_codigo' => '01',
@@ -458,7 +460,7 @@ class ReservaFacturacionTest extends TestCase
         $f = $this->crearReservaConPasajerosEItems();
         $cliente = Client::factory()->empresa()->create();
 
-        $response = app(ReservaFacturacionController::class)->store(new Request([
+        $response = $this->facturarCobrando(new Request([
             'pasajero_ids' => [$f['p1']->id, $f['p2']->id],
             'client_id' => $cliente->id,
             'tipo_comprobante_codigo' => '01',
@@ -589,7 +591,7 @@ class ReservaFacturacionTest extends TestCase
         $f = $this->crearReservaConPasajerosEItems();
         $cliente = Client::factory()->empresa()->create();
 
-        $response = app(ReservaFacturacionController::class)->store(new Request([
+        $response = $this->facturarCobrando(new Request([
             'pasajero_ids' => [$f['p1']->id],
             'client_id' => $cliente->id,
             'tipo_comprobante_codigo' => '01',
@@ -610,7 +612,7 @@ class ReservaFacturacionTest extends TestCase
         $f = $this->crearReservaConPasajerosEItems();
         $cliente = Client::factory()->empresa()->create();
 
-        $response = app(ReservaFacturacionController::class)->store(new Request([
+        $response = $this->facturarCobrando(new Request([
             'pasajero_ids' => [$f['p1']->id],
             'client_id' => $cliente->id,
             'tipo_comprobante_codigo' => '01',
@@ -635,7 +637,7 @@ class ReservaFacturacionTest extends TestCase
         $f = $this->crearReservaConUnPasajeroYUnItemEnMoneda('USD', 100);
         $cliente = Client::factory()->empresa()->create();
 
-        $response = app(ReservaFacturacionController::class)->store(new Request([
+        $response = $this->facturarCobrando(new Request([
             'pasajero_ids' => [$f['pasajero']->id],
             'client_id' => $cliente->id,
             'tipo_comprobante_codigo' => '01',
@@ -665,7 +667,7 @@ class ReservaFacturacionTest extends TestCase
         $f = $this->crearReservaConUnPasajeroYUnItemEnMoneda('USD', 100);
         $cliente = Client::factory()->empresa()->create();
 
-        $response = app(ReservaFacturacionController::class)->store(new Request([
+        $response = $this->facturarCobrando(new Request([
             'pasajero_ids' => [$f['pasajero']->id],
             'client_id' => $cliente->id,
             'tipo_comprobante_codigo' => '01',
@@ -697,7 +699,7 @@ class ReservaFacturacionTest extends TestCase
         $f = $this->crearReservaConUnPasajeroYUnItemEnMoneda('USD', 100);
         $cliente = Client::factory()->empresa()->create();
 
-        $response = app(ReservaFacturacionController::class)->store(new Request([
+        $response = $this->facturarCobrando(new Request([
             'pasajero_ids' => [$f['pasajero']->id],
             'client_id' => $cliente->id,
             'tipo_comprobante_codigo' => '01',
@@ -719,6 +721,8 @@ class ReservaFacturacionTest extends TestCase
     // ese anticipo. Debe simplemente ignorarlo y dejar el total íntegro.
     public function test_store_ignora_anticipo_en_otra_moneda_al_facturar_con_override_de_moneda(): void
     {
+        // Aserta paid_out == 0 (venta pendiente de cobro): interruptor apagado.
+        config(['agencia.cobro_al_facturar' => false]);
         [$branchPen, ] = $this->branchConSerie('01', 'F001');
         $this->serieAdicionalMoneda($branchPen, '01', 'F009', 'USD');
         // El propio comprobante del anticipo (AdvanceController::store())
@@ -788,7 +792,7 @@ class ReservaFacturacionTest extends TestCase
         $f = $this->crearReservaConPasajerosEItems('USD');
         $cliente = Client::factory()->empresa()->create();
 
-        $response = app(ReservaFacturacionController::class)->store(new Request([
+        $response = $this->facturarCobrando(new Request([
             'pasajero_ids' => [$f['p2']->id],
             'reserva_item_ids_manual' => [$f['itemSinAsignar']->id],
             'client_id' => $cliente->id,
@@ -884,7 +888,7 @@ class ReservaFacturacionTest extends TestCase
         $this->assertSame($f['itemSinAsignar']->id, $body['items_sin_asignar_disponibles'][0]['reserva_item_id']);
 
         // Con reserva_item_ids_manual: ahora sí se incluye, sumado al total.
-        $response = app(ReservaFacturacionController::class)->store(new Request([
+        $response = $this->facturarCobrando(new Request([
             'pasajero_ids' => [$f['p3']->id],
             'reserva_item_ids_manual' => [$f['itemSinAsignar']->id],
             'client_id' => $cliente->id,
@@ -905,7 +909,7 @@ class ReservaFacturacionTest extends TestCase
 
         // itemP1 SÍ tiene pasajero vinculado — no puede colarse por el
         // canal "manual" (reservado para ítems sin asignar).
-        $response = app(ReservaFacturacionController::class)->store(new Request([
+        $response = $this->facturarCobrando(new Request([
             'pasajero_ids' => [$f['p3']->id],
             'reserva_item_ids_manual' => [$f['itemP1']->id],
             'client_id' => $cliente->id,
@@ -924,14 +928,14 @@ class ReservaFacturacionTest extends TestCase
         $f = $this->crearReservaConPasajerosEItems();
         $cliente = Client::factory()->empresa()->create();
 
-        app(ReservaFacturacionController::class)->store(new Request([
+        $this->facturarCobrando(new Request([
             'pasajero_ids' => [$f['p3']->id],
             'client_id' => $cliente->id,
             'tipo_comprobante_codigo' => '01',
         ]), (string) $f['reserva']->id);
         $this->assertSame(1, Sale::count());
 
-        $response = app(ReservaFacturacionController::class)->store(new Request([
+        $response = $this->facturarCobrando(new Request([
             'pasajero_ids' => [$f['p3']->id, $f['p2']->id],
             'client_id' => $cliente->id,
             'tipo_comprobante_codigo' => '01',
@@ -962,7 +966,7 @@ class ReservaFacturacionTest extends TestCase
         $f = $this->crearReservaConPasajerosEItems();
         $cliente = Client::factory()->empresa()->create();
 
-        $response = app(ReservaFacturacionController::class)->store(new Request([
+        $response = $this->facturarCobrando(new Request([
             'pasajero_ids' => [$f['p3']->id],
             'client_id' => $cliente->id,
             'tipo_comprobante_codigo' => '01',
@@ -976,7 +980,7 @@ class ReservaFacturacionTest extends TestCase
         // Refacturar el mismo pasajero ANTES de anular: sigue bloqueado
         // (comportamiento ya cubierto por test_rechaza_refacturar_pasajero_ya_facturado,
         // repetido acá solo como control antes/después).
-        $intentoAntes = app(ReservaFacturacionController::class)->store(new Request([
+        $intentoAntes = $this->facturarCobrando(new Request([
             'pasajero_ids' => [$f['p3']->id],
             'client_id' => $cliente->id,
             'tipo_comprobante_codigo' => '01',
@@ -1019,7 +1023,7 @@ class ReservaFacturacionTest extends TestCase
         $this->assertNull(ReservaVenta::where('sale_id', $ventaId)->first(), 'la ReservaVenta debe liberarse tras la NC total aceptada');
 
         // ── Y ahora sí se puede refacturar el mismo pasajero ──
-        $intentoDespues = app(ReservaFacturacionController::class)->store(new Request([
+        $intentoDespues = $this->facturarCobrando(new Request([
             'pasajero_ids' => [$f['p3']->id],
             'client_id' => $cliente->id,
             'tipo_comprobante_codigo' => '01',
@@ -1046,7 +1050,7 @@ class ReservaFacturacionTest extends TestCase
         $f = $this->crearReservaConPasajerosEItems();
         $empresa = Client::factory()->empresa()->create();
 
-        $response = app(ReservaFacturacionController::class)->store(new Request([
+        $response = $this->facturarCobrando(new Request([
             'pasajero_ids' => [$f['p1']->id],
             'reserva_item_ids_manual' => [$f['itemSinAsignar']->id],
             'client_id' => $empresa->id,
@@ -1147,7 +1151,7 @@ class ReservaFacturacionTest extends TestCase
         $f = $this->crearReservaConPasajerosEItems();
         $empresa = Client::factory()->empresa()->create();
 
-        $response = app(ReservaFacturacionController::class)->store(new Request([
+        $response = $this->facturarCobrando(new Request([
             'pasajero_ids' => [$f['p1']->id],
             'reserva_item_ids_manual' => [$f['itemSinAsignar']->id],
             'client_id' => $empresa->id,
@@ -1204,7 +1208,7 @@ class ReservaFacturacionTest extends TestCase
         // volver a facturarse — reenviando p1 (ya facturado, solo para
         // cumplir min:1) + reserva_item_ids_manual, mismo mecanismo que
         // "Facturar simple" ya usa para arrastrar ítems sueltos.
-        $segundaVenta = app(ReservaFacturacionController::class)->store(new Request([
+        $segundaVenta = $this->facturarCobrando(new Request([
             'pasajero_ids' => [$f['p1']->id],
             'reserva_item_ids_manual' => [$f['itemP1']->id],
             'client_id' => $empresa->id,
@@ -1267,7 +1271,7 @@ class ReservaFacturacionTest extends TestCase
         $fB = $this->crearReservaConPasajerosEItems();
         $cliente = Client::factory()->create();
 
-        $response = app(ReservaFacturacionController::class)->store(new Request([
+        $response = $this->facturarCobrando(new Request([
             'pasajero_ids' => [$fA['p1']->id],
             'client_id' => $cliente->id,
             'tipo_comprobante_codigo' => '01',
@@ -1284,7 +1288,7 @@ class ReservaFacturacionTest extends TestCase
 
         $f = $this->crearReservaConPasajerosEItems();
 
-        $response = app(ReservaFacturacionController::class)->store(new Request([
+        $response = $this->facturarCobrando(new Request([
             'pasajero_ids' => [$f['p3']->id],
             'tipo_comprobante_codigo' => '01',
         ]), (string) $f['reserva']->id);
@@ -1302,7 +1306,7 @@ class ReservaFacturacionTest extends TestCase
         $f['reserva']->update(['estado' => 'cancelada']);
         $cliente = Client::factory()->create();
 
-        $response = app(ReservaFacturacionController::class)->store(new Request([
+        $response = $this->facturarCobrando(new Request([
             'pasajero_ids' => [$f['p3']->id],
             'client_id' => $cliente->id,
             'tipo_comprobante_codigo' => '01',
@@ -1322,7 +1326,7 @@ class ReservaFacturacionTest extends TestCase
         $cliente = Client::factory()->create();
 
         try {
-            app(ReservaFacturacionController::class)->store(new Request([
+            $this->facturarCobrando(new Request([
                 'pasajero_ids' => [$f['p3']->id],
                 'client_id' => $cliente->id,
                 'tipo_comprobante_codigo' => '01',
@@ -1345,7 +1349,7 @@ class ReservaFacturacionTest extends TestCase
 
         // Guardia real: server-side en POST facturar, sin pasar por
         // prepararFactura() — nunca confía en que el frontend ya filtró.
-        $response = app(ReservaFacturacionController::class)->store(new Request([
+        $response = $this->facturarCobrando(new Request([
             'pasajero_ids' => [$pasajeroA->id, $pasajeroB->id],
             'reserva_item_ids_manual' => [], // ambos ítems tienen pasajero vinculado
             'client_id' => $cliente->id,
@@ -1388,7 +1392,7 @@ class ReservaFacturacionTest extends TestCase
         // mezcla ni tratamiento no-nacional dentro de ESTE Sale, debe
         // pasar sin problema aunque la reserva completa mezcle
         // tratamientos entre sus pasajeros.
-        $response = app(ReservaFacturacionController::class)->store(new Request([
+        $response = $this->facturarCobrando(new Request([
             'pasajero_ids' => [$pasajeroB->id],
             'client_id' => $cliente->id,
             'tipo_comprobante_codigo' => '01',
@@ -1404,7 +1408,7 @@ class ReservaFacturacionTest extends TestCase
         // 2026-08-24, ver detectarMezclaTributaria()): confirma que el
         // guardia evalúa el SUBGRUPO elegido, no la reserva completa —
         // pasajeroB pasa, pasajeroA de la misma reserva no.
-        $responseA = app(ReservaFacturacionController::class)->store(new Request([
+        $responseA = $this->facturarCobrando(new Request([
             'pasajero_ids' => [$pasajeroA->id],
             'client_id' => $cliente->id,
             'tipo_comprobante_codigo' => '01',
@@ -1427,7 +1431,7 @@ class ReservaFacturacionTest extends TestCase
 
         // Antes de confirmar, sigue bloqueado — mismo criterio que
         // test_guardia_tributario_es_por_subgrupo_no_por_reserva_completa().
-        $antes = app(ReservaFacturacionController::class)->store(new Request([
+        $antes = $this->facturarCobrando(new Request([
             'pasajero_ids' => [$pasajeroA->id],
             'client_id' => $cliente->id,
             'tipo_comprobante_codigo' => '01',
@@ -1445,7 +1449,7 @@ class ReservaFacturacionTest extends TestCase
         $this->assertNotNull($itemAmazonia->fresh()->motivo_override_tributario);
         $this->assertNotNull($itemAmazonia->fresh()->fecha_override_tributario);
 
-        $despues = app(ReservaFacturacionController::class)->store(new Request([
+        $despues = $this->facturarCobrando(new Request([
             'pasajero_ids' => [$pasajeroA->id],
             'client_id' => $cliente->id,
             'tipo_comprobante_codigo' => '01',
@@ -1493,7 +1497,7 @@ class ReservaFacturacionTest extends TestCase
         [$reserva, , $itemNacional, , $pasajeroB] = $this->crearReservaConMezclaTributaria();
         $cliente = Client::factory()->empresa()->create();
 
-        app(ReservaFacturacionController::class)->store(new Request([
+        $this->facturarCobrando(new Request([
             'pasajero_ids' => [$pasajeroB->id],
             'client_id' => $cliente->id,
             'tipo_comprobante_codigo' => '01',
@@ -1537,7 +1541,7 @@ class ReservaFacturacionTest extends TestCase
         $cliente = Client::factory()->create();
 
         try {
-            app(ReservaFacturacionController::class)->store(new Request([
+            $this->facturarCobrando(new Request([
                 'pasajero_ids' => [$f['p3']->id],
                 'client_id' => $cliente->id,
                 'tipo_comprobante_codigo' => '01',
@@ -1562,7 +1566,7 @@ class ReservaFacturacionTest extends TestCase
         $cliente = Client::factory()->create();
 
         try {
-            app(ReservaFacturacionController::class)->store(new Request([
+            $this->facturarCobrando(new Request([
                 'pasajero_ids' => [$f['p3']->id],
                 'client_id' => $cliente->id,
                 'tipo_comprobante_codigo' => '01',
@@ -1590,7 +1594,7 @@ class ReservaFacturacionTest extends TestCase
         $cliente = Client::factory()->create();
 
         try {
-            app(ReservaFacturacionController::class)->store(new Request([
+            $this->facturarCobrando(new Request([
                 'pasajero_ids' => [$f['p3']->id],
                 'client_id' => $cliente->id,
                 'tipo_comprobante_codigo' => '01',
@@ -1642,7 +1646,7 @@ class ReservaFacturacionTest extends TestCase
         [$reserva, $itemGravado, $itemInafecto, $pasajeroA, $pasajeroB] = $this->crearReservaConTratamientoTributarioMixtoMismoDestino();
         $cliente = Client::factory()->empresa()->create();
 
-        $response = app(ReservaFacturacionController::class)->store(new Request([
+        $response = $this->facturarCobrando(new Request([
             'pasajero_ids' => [$pasajeroA->id, $pasajeroB->id],
             'client_id' => $cliente->id,
             'tipo_comprobante_codigo' => '01',
