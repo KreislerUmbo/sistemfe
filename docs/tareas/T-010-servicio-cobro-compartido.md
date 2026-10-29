@@ -3,91 +3,183 @@
 | | |
 |---|---|
 | **Módulo** | VEN + CAJ |
-| **Depende de** | T-009 |
-| **Reglas** | — |
-| **Decisiones** | `docs/requerimientos/observaciones-pruebas-usuario.md` → punto 1, "Cómo se guarda un pago" y R5/R7 |
+| **Depende de** | T-009 (hecha). T-011 y T-014 dependen de esta |
+| **Reglas** | regla #1 de Caja (un movimiento no se edita: se corrige); R7: `sale_payments.amount` sigue en la moneda de la venta |
+| **Decisiones** | `docs/requerimientos/observaciones-pruebas-usuario.md` → punto 1, "Cómo se guarda un pago", R5/R7 |
 | **Rama** | `feat/T-010-servicio-cobro` |
+| **Implementa** | otro agente (Sonnet), en **2 partes con un commit cada una**. Análisis, tests de la parte 1 y revisión: Claude Opus, 28-oct-2026 |
 
-## Contexto
-Guardar los pagos de una venta y sus movimientos de caja vive hoy en métodos privados de
-`SaleController` (`validarPagosPayload()`, `resolverSesionCajaAbierta()`,
-`crearCashMovementsPorPagos()`). Agencia (T-011) necesita la misma regla. Además el pago gana
-n.º de operación y la posibilidad de pagar en una moneda distinta a la de la venta.
+## Contexto (verificado contra el código el 28-oct-2026)
+Los pagos de una venta y sus movimientos de caja viven en métodos privados de `SaleController`:
+`validarPagosPayload()` (~295), `resolverSesionCajaAbierta()` (~384),
+`crearCashMovementsPorPagos()` (~408), `prepararSincronizacionCaja()` (~451),
+`movimientosCajaActivos()` (~482), `sesionParaCorregirCaja()` (~499),
+`aplicarSincronizacionCaja()` (~541). `store()` guarda los pagos ~962; `update()` los borra
+(soft delete) y los vuelve a crear ~1323 (R5: hoy perdería el n.º de operación).
+Agencia (T-011) necesita la misma regla, más pagar en otra moneda y el vuelto.
 
-## Alcance
-- Migración tenant `core/`, `sale_payments`: `nro_operacion` (nullable, max 50),
-  `moneda_pago` (string 3), `monto_pagado` (decimal 12,2), `tipo_cambio` (decimal 10,4). Los
-  pagos ya guardados: `moneda_pago` = `sales.currency`, `monto_pagado` = `amount`,
-  `tipo_cambio` = 1 (en la migración: es un cálculo dentro del mismo tenant, sin catálogo externo).
-- **`amount` sigue siendo el monto en la moneda de la venta** (R7): no cambiar a nadie que lo lea.
-- Migración tenant `core/`, `payment_methods.monedas` (json, default `["PEN","USD"]`); Yape y Plin
-  quedan en `["PEN"]` (por `code`). Editable en la pantalla de formas de pago.
-- `sales.vuelto_monto` (decimal 12,2, nullable) y `sales.vuelto_moneda` (string 3, nullable).
-- Servicio nuevo (por ejemplo `App\Services\Cobro\CobroVentaService`) con:
-  - validar los pagos (método activo y permitido en esa moneda, monto > 0, tipo de cambio > 0,
-    equivalente = `monto_pagado` convertido a la moneda de la venta, redondeado a 2 decimales);
-  - validar el total contra un saldo esperado, aceptando **vuelto** solo si hay algún pago en
-    efectivo y el vuelto no supera lo pagado en efectivo (en equivalente);
-  - resolver la sesión de caja abierta del usuario (422 "Abre tu caja para cobrar");
-  - guardar `sale_payments` y un `cash_movement` por pago **en la moneda y monto del pago**
-    (`currency` = `moneda_pago`, `amount` = `monto_pagado`), más uno de salida por el vuelto
-    (tipo nuevo, por ejemplo `sale_change`, en la moneda del vuelto).
-  - Validaciones que lanzan HttpException: llamables **antes** de abrir la transacción (ver el
-    comentario de `prepararSincronizacionCaja()` sobre el `catch(\Throwable)`).
-- `SaleController::store()` y `update()` pasan a usar el servicio, **sin cambiar su comportamiento
-  actual** (Ventas retail sigue con pagos en la moneda de la venta y sin vuelto por ahora).
-- `prepararSincronizacionCaja()`: la "firma" de pagos viejos vs. nuevos compara
-  método + moneda + `monto_pagado` (hoy compara `amount`, que dejaría de coincidir con el monto del
-  movimiento cuando la moneda difiera).
-- `update()` conserva `nro_operacion` al recrear los pagos (R5).
-- Frontend Ventas (`sale/register.vue`, `sale/edit.vue`): campo **n.º de operación** en cada fila
-  de pago (opcional), y lo reenvía al editar.
-- Pantalla de formas de pago (`cash/payment-methods.vue`): elegir las monedas que acepta.
+Hoy se escribe en `sale_payments` en **4** lugares: `SaleController::store()`/`update()`,
+`SalePaymentController::store()` (agregar un pago desde `sale/edit.vue`) y
+`AdvanceController::store()` (~209). `sale_payments.amount` es `double`; el payload de Ventas
+trae `method_payment`, `amount`, `date_payment` por pago.
 
-## Fuera de alcance
+## El servicio (contrato fijo: lo usan los tests escritos y T-011)
+`app/Services/Cobro/CobroVentaService.php`:
+```php
+// Antes de la transacción. Cada pago de entrada: method_payment (code), amount | monto_pagado,
+// moneda_pago? (default: la de la venta), tipo_cambio? (obligatorio si la moneda difiere),
+// nro_operacion?, date_payment? (default HoraPeru::hoyTexto()).
+// Devuelve cada pago con: method_payment, moneda_pago, monto_pagado, tipo_cambio,
+// amount (equivalente en la moneda de la venta, 2 decimales), nro_operacion, date_payment.
+// 422 si: método inexistente/inactivo, método no permitido en esa moneda, monto <= 0,
+// moneda fuera de PEN/USD, moneda distinta sin tipo de cambio, tipo de cambio fuera de (0, 20].
+public function prepararPagos(array $pagos, string $monedaVenta): array
+
+// Compara lo cobrado (suma de amount, en centavos) con el saldo.
+// exacto=false (Ventas retail): puede faltar (pago parcial); pasarse → 422 (mensaje de hoy:
+//   "La suma de pagos (S/ …) supera el total a pagar de la venta (S/ …).").
+// exacto=true (Agencia, contado): lo cobrado tiene que cubrir el saldo; el exceso solo se acepta
+//   como vuelto si hay algún pago en efectivo (payment_methods.affects_cash_count) y no supera
+//   lo pagado en efectivo (en equivalente). Falta → 422.
+// Devuelve null o ['monto' => float, 'moneda' => 'PEN'|'USD']. Vuelto en la moneda de la venta
+// por defecto; en otra moneda ($monedaVuelto), se convierte con el tipo de cambio del pago en
+// efectivo en esa moneda (si no hay ninguno → 422).
+public function validarContraSaldo(array $pagosPreparados, float $saldo, string $monedaVenta, bool $exacto, ?string $monedaVuelto = null): ?array
+
+// Sesión de caja abierta del usuario; si no hay → 422 "Abre tu caja para cobrar."
+public function sesionAbierta(User $usuario): CashSession
+
+// Dentro de la transacción: un sale_payments por pago (con las columnas nuevas) y un
+// cash_movement 'sale_payment' por pago EN LA MONEDA Y MONTO DEL PAGO (currency = moneda_pago,
+// amount = monto_pagado). Con vuelto: guarda sales.vuelto_monto/vuelto_moneda y un cash_movement
+// 'sale_change', direction 'out', método EFECTIVO, en la moneda del vuelto.
+public function registrar(Sale $venta, array $pagosPreparados, CashSession $sesion, User $usuario, ?array $vuelto = null): void
+```
+**Tipo de cambio = soles por dólar, siempre.** Venta en soles pagada en dólares: equivalente =
+monto × tc; venta en dólares pagada en soles: monto ÷ tc. Un solo punto de conversión y redondeo
+(este servicio), comparando en centavos.
+
+## Antes de empezar (obligatorio)
+1. Leer `CLAUDE.md` (raíz) y `docs/proceso.md`. Comentarios y mensajes en español.
+2. `git checkout main && git checkout -b feat/T-010-servicio-cobro`
+3. Tests de la parte 1 ya escritos: `tests/Feature/Cobro/CobroVentaServiceTest.php`. **No
+   cambiarlos** para que pasen; si uno parece incorrecto, para y anótalo en "Desviaciones".
+4. **No correr** `composer install`/`composer update`. No correr dos `php artisan test` completos a la vez.
+5. Migraciones nuevas en `tenant/core/`: aplicarlas a la base de tests con
+   `DB_DATABASE=sistemafe_test_migrations php artisan migrate --path=database/migrations/tenant/core/<archivo>.php --force`
+   y a los tenants locales con `php artisan tenants:migrate-verticales` (**nunca** `tenants:migrate` a secas).
+6. Fechas: solo `HoraPeru`; nunca `now()`/`today()` para fechas de negocio (hay un test que falla).
+
+## Parte 1 — backend (commit 1)
+
+**1. Migraciones** (`tenant/core/`, fecha `2026_10_29_…`, comentario de cabecera como las demás):
+- `sale_payments`: `nro_operacion` string(50) nullable, `moneda_pago` string(3), `monto_pagado`
+  decimal(12,2), `tipo_cambio` decimal(10,4). Completar los ya guardados **en la misma migración**
+  (dato del mismo tenant, sin catálogo externo): `moneda_pago` = moneda de la venta normalizada
+  (`'USD'`, `'$'`, `'US$'` → `USD`; lo demás → `PEN`), `monto_pagado` = `amount`, `tipo_cambio` = 1.
+  Después de completar, `moneda_pago`/`monto_pagado`/`tipo_cambio` quedan not null.
+- `payment_methods.monedas` json, default `["PEN","USD"]`; `YAPE` y `PLIN` (por `code`) → `["PEN"]`.
+- `sales.vuelto_monto` decimal(12,2) nullable, `sales.vuelto_moneda` string(3) nullable.
+- Modelos: `$fillable`/`$casts` en `SalePayment` (también quitar `user_id` de `$fillable`: la
+  columna no existe), `PaymentMethod` (`monedas` → `array`), `Sale`.
+
+**2. `CobroVentaService`** con el contrato de arriba.
+
+**3. `SaleController` usa el servicio, sin cambiar su comportamiento:**
+- `store()`/`update()`: `prepararPagos()` + `validarContraSaldo(…, exacto: false)` reemplazan a
+  `validarPagosPayload()` (saldo = total − adelantos aplicados, como hoy); `sesionAbierta()`
+  reemplaza a `resolverSesionCajaAbierta()` cuando hay pagos; `registrar()` reemplaza al alta de
+  `SalePayment` + `crearCashMovementsPorPagos()`. Las validaciones siguen **antes** de
+  `DB::beginTransaction()` (ver el comentario de `prepararSincronizacionCaja()` sobre el
+  `catch(\Throwable)`). Borrar los métodos privados que queden sin uso.
+- `update()` conserva `nro_operacion` (viene en el payload de cada pago, R5).
+- `prepararSincronizacionCaja()`: la firma compara `método|moneda|monto_pagado` del pago con
+  `método|currency|amount` del movimiento (hoy compara `amount`, que deja de coincidir cuando la
+  moneda difiere).
+- `movimientosCajaActivos()`: incluir también `sale_change` para que eliminar una venta (T-008)
+  revierta el vuelto. La firma de `update()` sigue mirando solo los `sale_payment` (Ventas no
+  tiene vuelto).
+- El mensaje sin caja pasa a ser el del servicio ("Abre tu caja para cobrar."): ningún test
+  depende del texto viejo (verificado).
+
+**4. Los otros dos lugares que escriben `sale_payments`** llenan las columnas nuevas (moneda de
+la venta, `monto_pagado` = `amount`, `tipo_cambio` = 1): `SalePaymentController::store()`
+(acepta además `nro_operacion`, max 50) y `AdvanceController::store()` (su `payment_reference`
+ya existente va también a `nro_operacion`).
+
+**5. `PaymentMethodController`** (`store`/`update`): acepta `monedas` (arreglo no vacío, valores en
+`PEN`/`USD`, sin repetir). Sin permisos nuevos.
+
+**6. Tests que agrega Sonnet** (archivo nuevo `tests/Feature/Cobro/T010VentasCobroTest.php`,
+armado de venta copiado de `T009MonedaCajaTest::payloadVentaNvConPago()`):
+- **CA1**: venta con pago Yape y `nro_operacion='123456'` lo guarda; `update()` con los mismos
+  pagos lo conserva y **no** crea movimientos de caja nuevos (firma igual).
+- **CA2**: la migración completa los pagos viejos (insertar un `sale_payments` sin las columnas
+  nuevas antes no es posible después de migrar: probar con una venta en USD creada vía factory +
+  `DB::table('sale_payments')->insert` con solo las columnas viejas y luego correr el bloque de
+  completado — o verificarlo en `umbo` local y anotarlo en "Resultado").
+- **CA8**: `payment_methods`: `YAPE`/`PLIN` quedan en `["PEN"]`; `update` con `monedas` vacío → 422.
+- Eliminar una venta con vuelto (factory + `registrar()` con vuelto + `destroy()`) corrige también
+  el movimiento `sale_change`.
+
+Verificar (`php artisan test --filter="Cobro|Sale|Cash|Advance"` y la suite completa) y hacer
+**commit 1**: `feat(ventas): servicio compartido de cobro con n.º de operación y moneda de pago (T-010)`.
+
+## Parte 2 — pantallas (commit 2)
+- `sale/register.vue` y `sale/edit.vue`: campo **N.º de operación** (opcional, max 50) junto a
+  método/monto/fecha al agregar un pago; columna en la tabla de pagos; se envía en `payments[]`.
+  En `edit.vue`, el alta inmediata (`httpClient.post('sale_payments', …)`) también lo envía, y al
+  guardar la venta cada pago reenvía su `nro_operacion`.
+- `cash/payment-methods.vue`: en el formulario, casillas **Soles** / **Dólares** (al menos una) y
+  la columna "Monedas" en la tabla.
+- Estilo: el de Ventas (inputs `-sm`, cards con `card-header`), ver `feedback_estilo_ui_como_agencia_y_ventas`.
+- `npm run type-check` (46 errores preexistentes; ninguno nuevo) y `npm run build`.
+- Prueba funcional en `umbo` local (o `sandbox`): registrar una venta con Yape + n.º de operación,
+  editarla sin tocar pagos (se conserva y la caja no cambia), agregar un pago con n.º de operación
+  desde editar; en Formas de pago, Yape solo en soles.
+
+Verificar y hacer **commit 2**: `feat(ventas): n.º de operación en los pagos y monedas por forma de pago (T-010)`.
+
+## Fuera de alcance (no tocar)
 - Moneda de pago distinta y vuelto **en la pantalla de Ventas** (el servicio lo soporta; la UI de
   retail queda para después).
 - Agencia (T-011), PDF (T-014), caja por moneda (T-013).
-
-## Archivos probables
-- `api-sistema-fe/app/Http/Controllers/Sale/SaleController.php`
-- `api-sistema-fe/app/Services/Cobro/CobroVentaService.php` (nuevo)
-- `api-sistema-fe/app/Models/Sale/SalePayment.php`, `app/Models/Cash/PaymentMethod.php`
-- `api-sistema-fe/app/Http/Controllers/Cash/PaymentMethodController.php`
-- `admin-start-kit/src/views/sale/register.vue`, `edit.vue`, `cash/payment-methods.vue`
+- `SalePaymentController` (agregar/quitar un pago desde editar) no toca la caja: el movimiento
+  recién se crea al guardar la venta. Ya pasaba antes; está en "Por analizar" del backlog.
 
 ## Criterios de aceptación
-- [ ] **CA1** — Registrar una venta en Ventas con un pago Yape y `nro_operacion='123456'` lo guarda;
-  editar la venta sin tocar los pagos lo conserva. → test nuevo
-- [ ] **CA2** — Pagos ya existentes quedan con `moneda_pago`/`monto_pagado`/`tipo_cambio` coherentes
-  tras la migración. → test de migración o verificación en `umbo` local
-- [ ] **CA3** — Servicio: venta S/ 3,750 pagada con US$ 1,000 a 3.75 → `sale_payments.amount=3750`,
-  `monto_pagado=1000`, `moneda_pago='USD'`; movimiento de caja US$ 1,000 en `USD`. → test unitario
-- [ ] **CA4** — Servicio: Yape en USD → rechazado (método no permitido en esa moneda). → test
-- [ ] **CA5** — Servicio: pago de más con efectivo → vuelto guardado en la venta y movimiento de
-  salida; pago de más solo con Yape → rechazado; vuelto mayor que lo pagado en efectivo → rechazado. → test
-- [ ] **CA6** — Sin caja abierta → 422 "Abre tu caja para cobrar". → test
-- [ ] **CA7** — Todos los tests existentes de Ventas y Caja siguen en verde sin cambiar lo que esperan.
-- [ ] **CA8** — Formas de pago: Yape/Plin nacen solo en soles; se puede editar. → test + pantalla
+- [ ] **CA1** — Venta con Yape y `nro_operacion='123456'` lo guarda; editar sin tocar pagos lo conserva y no mueve la caja. → test (Sonnet)
+- [ ] **CA2** — Pagos ya existentes quedan con `moneda_pago`/`monto_pagado`/`tipo_cambio` coherentes. → test o verificación local (Sonnet)
+- [ ] **CA3** — S/ 3,750 pagado con US$ 1,000 a 3.75 → `amount=3750`, `monto_pagado=1000`, `moneda_pago='USD'`; caja US$ 1,000 en `USD`. → tests `test_ca3_…` (Opus)
+- [ ] **CA4** — Yape en USD → 422. → test `test_ca4_…` (Opus)
+- [ ] **CA5** — Pago de más en efectivo → vuelto en la venta + salida de caja; de más solo con Yape → 422; vuelto mayor que el efectivo → 422. → tests `test_ca5_…` (Opus)
+- [ ] **CA6** — Sin caja abierta → 422 "Abre tu caja para cobrar.". → test `test_ca6_…` (Opus)
+- [ ] **CA7** — Los tests existentes de Ventas, Caja y Adelantos siguen en verde sin cambiar lo que esperan.
+- [ ] **CA8** — Yape/Plin nacen solo en soles; editable; `monedas` vacío → 422. → test (Sonnet) + pantalla
 
 ## Seguridad y correctitud
-- [ ] Permisos: editar formas de pago usa el permiso ya existente del catálogo de Caja
+- [ ] Permisos: formas de pago usa la ruta y permiso que ya tiene; sin rutas nuevas
 - [ ] Aislamiento de tenant: no aplica
-- [ ] Validación de entrada: `nro_operacion` texto corto; `moneda_pago` en (PEN, USD); tipo de cambio > 0 y con tope razonable
-- [ ] Concurrencia: no aplica (la venta es nueva o ya está bloqueada en `update()`)
+- [ ] Validación de entrada: `nro_operacion` ≤ 50; `moneda_pago` en (PEN, USD); tipo de cambio en (0, 20]
+- [ ] Concurrencia: no aplica (venta nueva, o ya bloqueada en `update()`)
 - [ ] Dinero: un solo punto de conversión y redondeo (el servicio); comparar en centavos
-- [ ] Fechas con `HoraPeru`: `date_payment` con `HoraPeru::hoyTexto()` como hoy
+- [ ] Fechas con `HoraPeru`: `date_payment` por defecto `HoraPeru::hoyTexto()`
 - [ ] Tributario: no aplica (la moneda del comprobante no cambia)
 - [ ] `v-html`: no aplica
-- [ ] Migraciones: nuevas en `tenant/core/`; `tenants:migrate-verticales`
+- [ ] Migraciones: 3 nuevas en `tenant/core/`; `tenants:migrate-verticales`
 
 ## Cómo verificar
 ```
-php artisan test --filter=Cobro
-php artisan test   # suite completa, contra PostgreSQL
-cd admin-start-kit && npm run type-check && npm run build
+cd api-sistema-fe
+php artisan tenants:migrate-verticales
+php artisan test --filter="Cobro|Sale|Cash|Advance"
+php artisan test        # suite completa; intermitente conocido: Fila13Fase1cFacturacionTest::descuento_del_combo… (ver backlog)
+cd ../admin-start-kit && npm run type-check && npm run build
 ```
-Prueba funcional en `umbo` local: registrar y editar una venta con n.º de operación.
+
+## Al terminar
+Llenar "Resultado" (salida de los comandos, desviaciones, hallazgos). Commits con `Co-Authored-By:` de tu sesión.
+**No** unir a `main` ni pushear: lo revisa Opus.
 
 ---
 
