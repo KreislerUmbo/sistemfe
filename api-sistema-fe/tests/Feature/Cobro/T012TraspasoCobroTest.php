@@ -225,6 +225,31 @@ class T012TraspasoCobroTest extends TestCase
         $this->assertEquals(200.0, $this->disponible($e)[$v1->id]['disponible']);
     }
 
+    // Revisión: venta pagada en parte. La NC baja primero la deuda; solo lo pagado de más es traspasable.
+    public function test_venta_pagada_en_parte_solo_traspasa_lo_que_excede_la_deuda(): void
+    {
+        $e = $this->escenario(500);
+        $v1 = $this->facturar($e, [
+            'condicion_pago' => 'credito',
+            'cronograma' => [[
+                'numero_cuota' => 1, 'monto_programado' => 500,
+                'fecha_vencimiento' => \Carbon\Carbon::parse(HoraPeru::hoyTexto())->addDays(30)->toDateString(),
+            ]],
+        ]);
+        SalePayment::create([
+            'sale_id' => $v1->id, 'method_payment' => 'EFECTIVO', 'amount' => 100,
+            'date_payment' => HoraPeru::hoyTexto(), 'moneda_pago' => 'PEN', 'monto_pagado' => 100, 'tipo_cambio' => 1,
+        ]);
+
+        // Debe 500 - 200 = 300 y pagó 100: nada a favor.
+        $this->nota($v1, 200, 'parcial');
+        $this->assertSame([], $this->disponible($e));
+
+        // Con NC por el total, los 100 pagados quedan a favor.
+        $this->nota($v1, 300, 'parcial');
+        $this->assertEquals(100.0, $this->disponible($e)[$v1->id]['disponible']);
+    }
+
     // CA3
     public function test_ca3_traspaso_mayor_al_disponible_es_422_y_no_deja_nada(): void
     {

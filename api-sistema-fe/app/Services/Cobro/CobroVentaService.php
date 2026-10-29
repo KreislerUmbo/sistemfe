@@ -161,7 +161,8 @@ class CobroVentaService
     /**
      * T-012 — lo que se puede traspasar al comprobante nuevo de una reserva: por cada venta de
      * la MISMA reserva y MISMA moneda, lo pagado (todos sus `sale_payments`, incluidos traspasos
-     * que ella recibió) acotado al monto de sus NC aceptadas, menos lo ya traspasado desde ella.
+     * que ella recibió) que excede lo que aún se debe tras sus NC aceptadas, menos lo ya
+     * traspasado desde ella.
      * Las ventas se reconocen por sale_detail_items → reserva_items, porque una NC total borra
      * su fila de reserva_ventas. $bloquear (dentro de la transacción) toma lockForUpdate de las
      * ventas de origen: dos facturas a la vez no usan el mismo saldo.
@@ -198,7 +199,11 @@ class CobroVentaService
             $pagado = $this->centavos((float) SalePayment::where('sale_id', $venta->id)->sum('amount'));
             $traspasado = $this->centavos((float) SalePayment::where('traspasado_de_sale_id', $venta->id)->sum('amount'));
 
-            $disponible = max(0, min($pagado, $acreditado) - $traspasado);
+            // A favor del cliente = lo pagado menos lo que todavía debe tras sus NC. Pagada
+            // completa da lo mismo que min(pagado, NC); pagada en parte, la NC baja la deuda
+            // primero (500 con 100 pagados y NC de 200: debe 300, nada a favor).
+            $total = $this->centavos((float) $venta->total);
+            $disponible = max(0, $pagado - max(0, $total - $acreditado) - $traspasado);
             if ($disponible > 0) {
                 $disponibles[$venta->id] = [
                     'sale_id' => $venta->id,

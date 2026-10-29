@@ -406,7 +406,7 @@ class ReservaFacturacionController extends Controller
             'pagos.*.nro_operacion' => 'nullable|string|max:50',
             'vuelto_moneda' => 'nullable|string|in:PEN,USD',
             // T-012: traspaso de lo ya cobrado en otro comprobante de la misma reserva (tras una NC).
-            'traspasos' => 'nullable|array',
+            'traspasos' => 'nullable|array|max:20',
             'traspasos.*.sale_id' => 'required|integer',
             'traspasos.*.monto' => 'required|numeric|gt:0',
         ]);
