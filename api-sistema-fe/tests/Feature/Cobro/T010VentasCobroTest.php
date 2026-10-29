@@ -175,4 +175,19 @@ final class T010VentasCobroTest extends CreditosTestCase
         $this->assertSame(0, $vivos, 'el cobro y el vuelto quedan corregidos');
         $this->assertSame(2, CashMovement::where('type', 'correction')->where('cash_session_id', $sesion->id)->count());
     }
+
+    // Revisión Opus: en un tenant nuevo la migración corre antes de que exista Yape; es el
+    // seeder quien lo crea, y tiene que crearlo solo en soles sin pisar lo que el tenant cambie.
+    public function test_el_seeder_crea_yape_solo_en_soles_y_no_pisa_lo_editado(): void
+    {
+        PaymentMethod::where('code', 'YAPE')->update(['code' => 'YAPE-VIEJO-' . uniqid()]);
+
+        (new \Database\Seeders\PaymentMethodSeeder())->run();
+        $yape = PaymentMethod::where('code', 'YAPE')->sole();
+        $this->assertSame(['PEN'], $yape->monedas);
+
+        $yape->update(['monedas' => ['PEN', 'USD']]);
+        (new \Database\Seeders\PaymentMethodSeeder())->run();
+        $this->assertSame(['PEN', 'USD'], $yape->fresh()->monedas);
+    }
 }

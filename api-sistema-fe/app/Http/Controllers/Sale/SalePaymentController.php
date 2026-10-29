@@ -72,7 +72,7 @@ class SalePaymentController extends Controller
             "date_payment" => $request->date_payment,
             // T-010: este flujo cobra en la moneda de la venta.
             "nro_operacion" => $nroOperacion,
-            "moneda_pago" => CashMovement::normalizarMoneda($sale->currency) ?? 'PEN',
+            "moneda_pago" => CashMovement::monedaOFalla($sale->currency),
             "monto_pagado" => $request->amount,
             "tipo_cambio" => 1,
         ]);

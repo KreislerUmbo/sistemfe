@@ -207,6 +207,20 @@ Llenar "Resultado" (salida de los comandos, desviaciones, hallazgos). Commits co
   quedó como `PEN` antes de T-009 no coincide con el nuevo `USD` → al editar esa venta se generaría una corrección. Correr
   `caja:completar-moneda` en producción antes de desplegar esto evita ese caso.
 
+- **Revisión (Opus, 29-oct-2026):** sin cambios de fondo. Dos ajustes:
+  - `PaymentMethodSeeder`: en un tenant nuevo la migración corre antes de que existan Yape/Plin y
+    el seeder los creaba con el default (soles y dólares). Ahora los crea solo en soles; re-correrlo
+    no pisa lo que el tenant edite. Test nuevo en `T010VentasCobroTest`.
+  - `SalePaymentController::store()`: `monedaOFalla()` en vez de `?? 'PEN'` (sin caer en soles en silencio).
+  - Pantallas revisadas en agencia-demo: Formas de pago (columna y casillas; Yape/Plin solo soles) y
+    el campo "N.º de operación" en Registrar venta. No se registró una venta real.
+  - Suite completa 1621 en verde + el intermitente conocido (`Fila13Fase1c…`, línea 304).
+  - **Antes de desplegar:** correr `caja:completar-moneda` (T-009) en producción, porque la firma de
+    `update()` ahora compara la moneda (ver la nota de Sonnet arriba).
+  - Comportamiento nuevo a tener en cuenta: una venta en USD ya no acepta un pago con Yape/Plin
+    (422 "no acepta pagos en dólares"); y si al editar se cambia la moneda de la venta con pagos ya
+    cargados, esos pagos quedan en la moneda vieja y piden tipo de cambio.
+
 ## Hallazgos fuera de alcance
 - Dos errores de tipado de `type-check` ya conocidos siguen (46); no se tocaron.
 - `SalePaymentController::destroy()` no corrige la caja al borrar un pago (ya estaba en "Por analizar").

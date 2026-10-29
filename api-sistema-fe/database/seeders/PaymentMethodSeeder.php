@@ -25,16 +25,20 @@ class PaymentMethodSeeder extends Seeder
 {
     public function run(): void
     {
+        // monedas (T-010): Yape y Plin solo existen en soles. Se fija solo al crear: como
+        // 'is_active', es configuración del tenant y re-correr el seeder no la pisa. (La
+        // migración que agrega la columna corrige los que ya existían; en un tenant nuevo
+        // corre antes que este seeder y no encuentra ninguno.)
         $metodos = [
-            ['code' => 'EFECTIVO', 'name' => '💵 Efectivo', 'sort_order' => 1, 'affects_cash_count' => true],
-            ['code' => 'TRANSFERENCIA', 'name' => '🏦 Transferencia', 'sort_order' => 2, 'affects_cash_count' => false],
-            ['code' => 'YAPE', 'name' => '📱 Yape', 'sort_order' => 3, 'affects_cash_count' => false],
-            ['code' => 'PLIN', 'name' => '📱 Plin', 'sort_order' => 4, 'affects_cash_count' => false],
-            ['code' => 'TARJETA DE CREDITO', 'name' => '💳 Tarjeta de Crédito', 'sort_order' => 5, 'affects_cash_count' => false],
+            ['code' => 'EFECTIVO', 'name' => '💵 Efectivo', 'sort_order' => 1, 'affects_cash_count' => true, 'monedas' => ['PEN', 'USD']],
+            ['code' => 'TRANSFERENCIA', 'name' => '🏦 Transferencia', 'sort_order' => 2, 'affects_cash_count' => false, 'monedas' => ['PEN', 'USD']],
+            ['code' => 'YAPE', 'name' => '📱 Yape', 'sort_order' => 3, 'affects_cash_count' => false, 'monedas' => ['PEN']],
+            ['code' => 'PLIN', 'name' => '📱 Plin', 'sort_order' => 4, 'affects_cash_count' => false, 'monedas' => ['PEN']],
+            ['code' => 'TARJETA DE CREDITO', 'name' => '💳 Tarjeta de Crédito', 'sort_order' => 5, 'affects_cash_count' => false, 'monedas' => ['PEN', 'USD']],
         ];
 
         foreach ($metodos as $metodo) {
-            PaymentMethod::updateOrCreate(
+            $fila = PaymentMethod::updateOrCreate(
                 ['code' => $metodo['code']],
                 [
                     'name' => $metodo['name'],
@@ -42,6 +46,9 @@ class PaymentMethodSeeder extends Seeder
                     'affects_cash_count' => $metodo['affects_cash_count'],
                 ]
             );
+            if ($fila->wasRecentlyCreated) {
+                $fila->update(['monedas' => $metodo['monedas']]);
+            }
         }
     }
 }
