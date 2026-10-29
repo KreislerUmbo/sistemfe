@@ -256,6 +256,31 @@
                             <td>{{ $esPreview ? 'ESPERADO (EN VIVO)' : 'EFECTIVO ESPERADO' }}</td>
                             <td>: S/ {{ number_format($sessionData['expected_cash_live'], 2) }}</td>
                         </tr>
+                        @php
+                            // T-013: las líneas en dólares solo salen si la sesión tuvo dólares
+                            // (los cierres anteriores a T-013 quedan como estaban).
+                            // Cierre anterior con dólares: en vez de líneas US$ en 0, la nota de abajo.
+                            $tieneUsd = !$sessionData['esperado_mezclado'] && ((float) $sessionData['opening_amount_usd'] > 0
+                                || collect($sessionData['movements'])->contains(fn ($m) => $m->currency === 'USD'));
+                        @endphp
+                        @if ($sessionData['esperado_mezclado'])
+                            <tr>
+                                <td>NOTA</td>
+                                <td>: Cierre anterior a la separación por moneda; el esperado sumó S/ y US$.
+                                    Por moneda: S/ {{ number_format($sessionData['esperado_referencia']['PEN'], 2) }}
+                                    y US$ {{ number_format($sessionData['esperado_referencia']['USD'], 2) }} (referencia).</td>
+                            </tr>
+                        @endif
+                        @if ($tieneUsd)
+                            <tr>
+                                <td>FONDO INICIAL US$</td>
+                                <td>: US$ {{ number_format($sessionData['opening_amount_usd'], 2) }}</td>
+                            </tr>
+                            <tr>
+                                <td>{{ $esPreview ? 'ESPERADO US$ (EN VIVO)' : 'ESPERADO US$' }}</td>
+                                <td>: US$ {{ number_format($sessionData['expected_cash_usd_live'], 2) }}</td>
+                            </tr>
+                        @endif
                         @unless ($esPreview)
                             <tr>
                                 <td>EFECTIVO CONTADO</td>
@@ -265,6 +290,16 @@
                                 <td>DIFERENCIA</td>
                                 <td>: S/ {{ number_format($sessionData['difference'], 2) }}</td>
                             </tr>
+                            @if ($tieneUsd)
+                                <tr>
+                                    <td>CONTADO US$</td>
+                                    <td>: US$ {{ number_format($sessionData['counted_cash_usd'] ?? 0, 2) }}</td>
+                                </tr>
+                                <tr>
+                                    <td>DIFERENCIA US$</td>
+                                    <td>: US$ {{ number_format($sessionData['difference_usd'] ?? 0, 2) }}</td>
+                                </tr>
+                            @endif
                             @if ($sessionData['difference_reason'])
                                 <tr>
                                     <td>MOTIVO</td>
@@ -293,7 +328,7 @@
                 @foreach ($sessionData['totals_by_payment_method'] as $totalMetodo)
                     <tr>
                         <td>{{ $totalMetodo['payment_method_name'] }}</td>
-                        <td class="right">S/ {{ number_format($totalMetodo['total'], 2) }}</td>
+                        <td class="right">{{ $totalMetodo['currency'] === 'USD' ? 'US$' : 'S/' }} {{ number_format($totalMetodo['total'], 2) }}</td>
                     </tr>
                 @endforeach
             </tbody>
@@ -323,7 +358,7 @@
                         <td>{{ $movimiento->type }}</td>
                         <td>{{ $movimiento->paymentMethod->name ?? '-' }}</td>
                         <td class="right">
-                            {{ $movimiento->direction === 'in' ? '+' : '-' }}{{ number_format($movimiento->amount, 2) }}
+                            {{ $movimiento->direction === 'in' ? '+' : '-' }}{{ $movimiento->currency === 'USD' ? 'US$' : 'S/' }} {{ number_format($movimiento->amount, 2) }}
                         </td>
                         <td>{{ $movimiento->status }}</td>
                         <td>
@@ -355,9 +390,10 @@
                 <tbody>
                     @foreach ($sessionData['denominations'] as $denominacion)
                         <tr>
-                            <td>S/ {{ number_format($denominacion->denomination, 2) }}</td>
+                            @php $simDen = $denominacion->currency === 'USD' ? 'US$' : 'S/'; @endphp
+                            <td>{{ $simDen }} {{ number_format($denominacion->denomination, 2) }}</td>
                             <td class="right">{{ $denominacion->quantity }}</td>
-                            <td class="right">S/ {{ number_format($denominacion->subtotal, 2) }}</td>
+                            <td class="right">{{ $simDen }} {{ number_format($denominacion->subtotal, 2) }}</td>
                         </tr>
                     @endforeach
                 </tbody>

@@ -22,6 +22,7 @@ class CashSession extends Model
         "opened_by",
         "closed_by",
         "opening_amount",
+        "opening_amount_usd",
         "opening_amount_adjusted",
         "opened_at",
         "closed_at",
@@ -29,6 +30,9 @@ class CashSession extends Model
         "expected_cash",
         "counted_cash",
         "difference",
+        "expected_cash_usd",
+        "counted_cash_usd",
+        "difference_usd",
         "difference_reason",
         "closing_notes",
         "shift_label",
@@ -36,12 +40,16 @@ class CashSession extends Model
 
     protected $casts = [
         "opening_amount" => "decimal:2",
+        "opening_amount_usd" => "decimal:2",
         "opening_amount_adjusted" => "boolean",
         "opened_at" => "datetime",
         "closed_at" => "datetime",
         "expected_cash" => "decimal:2",
         "counted_cash" => "decimal:2",
         "difference" => "decimal:2",
+        "expected_cash_usd" => "decimal:2",
+        "counted_cash_usd" => "decimal:2",
+        "difference_usd" => "decimal:2",
     ];
 
     public function cashRegister()

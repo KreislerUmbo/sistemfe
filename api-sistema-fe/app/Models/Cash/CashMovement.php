@@ -27,6 +27,8 @@ class CashMovement extends Model
         "direction",
         "amount",
         "currency",
+        "exchange_rate",
+        "linked_movement_id",
         "reference_type",
         "reference_id",
         "concept_id",
@@ -45,6 +47,7 @@ class CashMovement extends Model
 
     protected $casts = [
         "amount" => "decimal:2",
+        "exchange_rate" => "decimal:4",
         "corrected_at" => "datetime",
     ];
 

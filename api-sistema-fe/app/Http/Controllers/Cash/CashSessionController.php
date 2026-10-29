@@ -91,6 +91,7 @@ class CashSessionController extends Controller
         $request->validate([
             'cash_register_id' => 'required|integer|exists:cash_registers,id',
             'opening_amount' => 'required|numeric|min:0',
+            'opening_amount_usd' => 'nullable|numeric|min:0',
         ]);
 
         $user = auth('api')->user();
@@ -118,6 +119,7 @@ class CashSessionController extends Controller
             }
 
             $openingAmount = round((float) $request->opening_amount, 2);
+            $openingAmountUsd = round((float) $request->input('opening_amount_usd', 0), 2);
             $adjusted = abs($openingAmount - (float) $register->default_opening_amount) > 0.005;
 
             try {
@@ -125,6 +127,7 @@ class CashSessionController extends Controller
                     'cash_register_id' => $register->id,
                     'opened_by' => $user->id,
                     'opening_amount' => $openingAmount,
+                    'opening_amount_usd' => $openingAmountUsd,
                     'opening_amount_adjusted' => $adjusted,
                     'opened_at' => now(),
                     'status' => 'open',
@@ -154,6 +157,20 @@ class CashSessionController extends Controller
                 'created_by' => $user->id,
             ]);
 
+            // T-013: fondo de apertura en dólares (opcional); en 0 no genera movimiento.
+            if ($openingAmountUsd > 0) {
+                CashMovement::create([
+                    'cash_session_id' => $nuevaSesion->id,
+                    'type' => 'opening_fund',
+                    'payment_method_id' => $efectivo->id,
+                    'direction' => 'in',
+                    'amount' => $openingAmountUsd,
+                    'currency' => 'USD',
+                    'status' => 'confirmed',
+                    'created_by' => $user->id,
+                ]);
+            }
+
             return $nuevaSesion;
         });
 
@@ -176,11 +193,13 @@ class CashSessionController extends Controller
         $request->validate([
             'cash_session_id' => 'nullable|integer|exists:cash_sessions,id',
             'counted_cash' => 'required|numeric|min:0',
+            'counted_cash_usd' => 'nullable|numeric|min:0',
             'difference_reason' => 'nullable|string',
             'closing_notes' => 'nullable|string',
             'denominations' => 'nullable|array',
             'denominations.*.denomination' => 'required_with:denominations|numeric|min:0',
             'denominations.*.quantity' => 'required_with:denominations|integer|min:0',
+            'denominations.*.currency' => 'nullable|in:PEN,USD',
         ]);
 
         $user = auth('api')->user();
@@ -204,31 +223,43 @@ class CashSessionController extends Controller
 
             $company = Company::first();
 
-            $expectedCash = $this->expectedCashCalculator->compute($sesion);
+            // T-013: esperado, contado y diferencia por moneda; nunca se suman entre sí.
+            $esperado = $this->expectedCashCalculator->computePorMoneda($sesion);
 
-            if ($expectedCash < 0) {
+            if ($esperado['PEN'] < 0 || $esperado['USD'] < 0) {
                 throw new HttpException(422, 'El efectivo esperado no puede ser negativo — revisa los movimientos de la sesión.');
             }
 
-            $countedCash = round((float) $request->counted_cash, 2);
-            $difference = round($countedCash - $expectedCash, 2);
+            $contado = [
+                'PEN' => round((float) $request->counted_cash, 2),
+                'USD' => round((float) $request->input('counted_cash_usd', 0), 2),
+            ];
+            $diferencia = [
+                'PEN' => round($contado['PEN'] - $esperado['PEN'], 2),
+                'USD' => round($contado['USD'] - $esperado['USD'], 2),
+            ];
             $tolerance = (float) ($company?->difference_tolerance ?? 2.00);
 
-            if (abs($difference) > $tolerance && !$request->filled('difference_reason')) {
-                throw new HttpException(
-                    422,
-                    'La diferencia (S/ ' . number_format($difference, 2) . ') supera la tolerancia ' .
-                    '(S/ ' . number_format($tolerance, 2) . ') — se requiere una justificación.'
-                );
+            foreach (['PEN' => 'S/', 'USD' => 'US$'] as $moneda => $simbolo) {
+                if (abs($diferencia[$moneda]) > $tolerance && !$request->filled('difference_reason')) {
+                    throw new HttpException(
+                        422,
+                        'La diferencia (' . $simbolo . ' ' . number_format($diferencia[$moneda], 2) . ') supera la tolerancia ' .
+                        '(' . $simbolo . ' ' . number_format($tolerance, 2) . ') — se requiere una justificación.'
+                    );
+                }
             }
 
             $sesion->update([
                 'status' => 'closed',
                 'closed_by' => $user->id,
                 'closed_at' => now(),
-                'expected_cash' => round($expectedCash, 2),
-                'counted_cash' => $countedCash,
-                'difference' => $difference,
+                'expected_cash' => round($esperado['PEN'], 2),
+                'counted_cash' => $contado['PEN'],
+                'difference' => $diferencia['PEN'],
+                'expected_cash_usd' => round($esperado['USD'], 2),
+                'counted_cash_usd' => $contado['USD'],
+                'difference_usd' => $diferencia['USD'],
                 'difference_reason' => $request->difference_reason,
                 'closing_notes' => $request->closing_notes,
             ]);
@@ -236,6 +267,7 @@ class CashSessionController extends Controller
             foreach ($request->input('denominations', []) as $den) {
                 CashSessionDenomination::create([
                     'cash_session_id' => $sesion->id,
+                    'currency' => $den['currency'] ?? 'PEN',
                     'denomination' => $den['denomination'],
                     'quantity' => $den['quantity'],
                     'subtotal' => round($den['denomination'] * $den['quantity'], 2),
@@ -507,7 +539,7 @@ class CashSessionController extends Controller
     {
         return $movimientos
             ->where('status', 'confirmed')
-            ->groupBy('payment_method_id')
+            ->groupBy(fn ($m) => $m->payment_method_id . '|' . $m->currency) // T-013: por método Y moneda
             ->map(function ($movs) {
                 $paymentMethod = $movs->first()->paymentMethod;
                 $neto = $movs->reduce(function ($carry, $movimiento) {
@@ -518,6 +550,7 @@ class CashSessionController extends Controller
                     'payment_method_id' => $paymentMethod->id,
                     'payment_method_code' => $paymentMethod->code,
                     'payment_method_name' => $paymentMethod->name,
+                    'currency' => $movs->first()->currency,
                     'total' => round($neto, 2),
                 ];
             })
@@ -532,12 +565,16 @@ class CashSessionController extends Controller
             'opened_by_user' => $session->openedByUser,
             'closed_by_user' => $session->closedByUser,
             'opening_amount' => $session->opening_amount,
+            'opening_amount_usd' => $session->opening_amount_usd,
             'opened_at' => $session->opened_at,
             'closed_at' => $session->closed_at,
             'status' => $session->status,
             'expected_cash' => $session->expected_cash,
+            'expected_cash_usd' => $session->expected_cash_usd,
             'counted_cash' => $session->counted_cash,
+            'counted_cash_usd' => $session->counted_cash_usd,
             'difference' => $session->difference,
+            'difference_usd' => $session->difference_usd,
         ];
     }
 
@@ -573,9 +610,19 @@ class CashSessionController extends Controller
         // verdad). Para una sesión ya cerrada, coincide con lo persistido;
         // para una abierta, es el "corte X" / lo que vería el modo no-ciego
         // antes de confirmar el cierre.
-        $expectedCashLive = $session->status === 'closed'
-            ? (float) $session->expected_cash
-            : $this->expectedCashCalculator->compute($session);
+        // Una sesión cerrada antes de T-013 no tiene esperado en dólares: se muestra 0, no se recalcula.
+        $expectedLive = $session->status === 'closed'
+            ? ['PEN' => (float) $session->expected_cash, 'USD' => (float) $session->expected_cash_usd]
+            : $this->expectedCashCalculator->computePorMoneda($session);
+
+        // Cierre anterior a T-013 con movimientos en dólares: su expected_cash sumó S/ y US$ juntos.
+        // No se recalcula ni se guarda nada; se marca y se da el esperado por moneda solo como referencia.
+        $esperadoMezclado = $session->status === 'closed'
+            && $session->expected_cash_usd === null
+            && $session->cashMovements->contains(fn ($m) => $m->currency === 'USD');
+        $esperadoReferencia = $esperadoMezclado
+            ? array_map(fn ($v) => round($v, 2), $this->expectedCashCalculator->computePorMoneda($session))
+            : null;
 
         return [
             'id' => $session->id,
@@ -583,14 +630,21 @@ class CashSessionController extends Controller
             'opened_by_user' => $session->openedByUser,
             'closed_by_user' => $session->closedByUser,
             'opening_amount' => $session->opening_amount,
+            'opening_amount_usd' => $session->opening_amount_usd,
             'opening_amount_adjusted' => $session->opening_amount_adjusted,
             'opened_at' => $session->opened_at,
             'closed_at' => $session->closed_at,
             'status' => $session->status,
             'expected_cash' => $session->expected_cash,
-            'expected_cash_live' => round($expectedCashLive, 2),
+            'expected_cash_live' => round($expectedLive['PEN'], 2),
+            'expected_cash_usd' => $session->expected_cash_usd,
+            'expected_cash_usd_live' => round($expectedLive['USD'], 2),
+            'esperado_mezclado' => $esperadoMezclado,
+            'esperado_referencia' => $esperadoReferencia,
             'counted_cash' => $session->counted_cash,
+            'counted_cash_usd' => $session->counted_cash_usd,
             'difference' => $session->difference,
+            'difference_usd' => $session->difference_usd,
             'difference_reason' => $session->difference_reason,
             'closing_notes' => $session->closing_notes,
             'movements' => $session->cashMovements,

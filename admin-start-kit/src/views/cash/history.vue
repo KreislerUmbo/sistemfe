@@ -104,10 +104,22 @@
                             <td>{{ s.cash_register.branch?.name ?? '-' }}</td>
                             <td>{{ s.cash_register.name }}</td>
                             <td>{{ s.opened_by_user.name }}</td>
-                            <td class="text-end">S/ {{ Number(s.opening_amount).toFixed(2) }}</td>
-                            <td class="text-end">{{ s.expected_cash !== null ? `S/ ${Number(s.expected_cash).toFixed(2)}` : '—' }}</td>
-                            <td class="text-end">{{ s.counted_cash !== null ? `S/ ${Number(s.counted_cash).toFixed(2)}` : '—' }}</td>
-                            <td class="text-end">{{ s.difference !== null ? `S/ ${Number(s.difference).toFixed(2)}` : '—' }}</td>
+                            <td class="text-end">
+                                S/ {{ Number(s.opening_amount).toFixed(2) }}
+                                <div v-if="resumenTieneUsd(s)">US$ {{ Number(s.opening_amount_usd).toFixed(2) }}</div>
+                            </td>
+                            <td class="text-end">
+                                {{ s.expected_cash !== null ? `S/ ${Number(s.expected_cash).toFixed(2)}` : '—' }}
+                                <div v-if="resumenTieneUsd(s) && s.expected_cash_usd !== null">US$ {{ Number(s.expected_cash_usd).toFixed(2) }}</div>
+                            </td>
+                            <td class="text-end">
+                                {{ s.counted_cash !== null ? `S/ ${Number(s.counted_cash).toFixed(2)}` : '—' }}
+                                <div v-if="resumenTieneUsd(s) && s.counted_cash_usd !== null">US$ {{ Number(s.counted_cash_usd).toFixed(2) }}</div>
+                            </td>
+                            <td class="text-end">
+                                {{ s.difference !== null ? `S/ ${Number(s.difference).toFixed(2)}` : '—' }}
+                                <div v-if="resumenTieneUsd(s) && s.difference_usd !== null">US$ {{ Number(s.difference_usd).toFixed(2) }}</div>
+                            </td>
                             <td>
                                 <span class="badge" :class="s.status === 'open' ? 'bg-warning text-dark' : 'bg-success'">
                                     {{ s.status === 'open' ? 'Abierta' : 'Cerrada' }}
@@ -156,8 +168,32 @@
                             <td class="text-muted">Diferencia</td>
                             <td class="text-end fw-semibold">S/ {{ Number(detalle.difference ?? 0).toFixed(2) }}</td>
                         </tr>
+                        <template v-if="detalleTieneUsd && !detalle.esperado_mezclado">
+                            <tr>
+                                <td class="text-muted">Fondo inicial US$</td>
+                                <td class="text-end fw-semibold">US$ {{ Number(detalle.opening_amount_usd).toFixed(2) }}</td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted">Esperado US$</td>
+                                <td class="text-end fw-semibold">US$ {{ detalle.expected_cash_usd_live.toFixed(2) }}</td>
+                            </tr>
+                            <tr v-if="detalle.status === 'closed'">
+                                <td class="text-muted">Contado US$</td>
+                                <td class="text-end fw-semibold">US$ {{ Number(detalle.counted_cash_usd ?? 0).toFixed(2) }}</td>
+                            </tr>
+                            <tr v-if="detalle.status === 'closed'">
+                                <td class="text-muted">Diferencia US$</td>
+                                <td class="text-end fw-semibold">US$ {{ Number(detalle.difference_usd ?? 0).toFixed(2) }}</td>
+                            </tr>
+                        </template>
                     </tbody>
                 </table>
+
+                <div v-if="detalle.esperado_mezclado && detalle.esperado_referencia" class="alert alert-info py-2 mb-3">
+                    Cierre anterior a la separación por moneda: el esperado guardado sumó soles y dólares juntos.
+                    Por moneda sería S/ {{ detalle.esperado_referencia.PEN.toFixed(2) }} y
+                    US$ {{ detalle.esperado_referencia.USD.toFixed(2) }} (solo referencia, el cierre no se recalcula).
+                </div>
 
                 <div v-if="detalle.difference_reason" class="alert alert-warning py-2 mb-3">
                     <strong>Motivo de diferencia:</strong> {{ detalle.difference_reason }}
@@ -172,9 +208,9 @@
                         <b-tr v-if="!detalle.totals_by_payment_method.length">
                             <b-td colspan="2" class="text-center text-muted">Sin movimientos</b-td>
                         </b-tr>
-                        <b-tr v-for="t in detalle.totals_by_payment_method" :key="t.payment_method_id">
+                        <b-tr v-for="t in detalle.totals_by_payment_method" :key="`${t.payment_method_id}-${t.currency}`">
                             <b-td>{{ t.payment_method_name }}</b-td>
-                            <b-td>S/ {{ t.total.toFixed(2) }}</b-td>
+                            <b-td>{{ t.currency === 'USD' ? 'US$' : 'S/' }} {{ t.total.toFixed(2) }}</b-td>
                         </b-tr>
                     </b-tbody>
                 </b-table-simple>
@@ -193,7 +229,7 @@
                         <b-tr v-for="m in detalle.movements" :key="m.id">
                             <b-td>{{ etiquetaTipoMovimiento(m.type) }}</b-td>
                             <b-td>{{ m.payment_method?.name ?? '-' }}</b-td>
-                            <b-td>{{ m.direction === 'in' ? '+' : '-' }}{{ Number(m.amount).toFixed(2) }}</b-td>
+                            <b-td>{{ m.direction === 'in' ? '+' : '-' }}{{ m.currency === 'USD' ? 'US$' : 'S/' }} {{ Number(m.amount).toFixed(2) }}</b-td>
                             <b-td>{{ m.status }}</b-td>
                             <b-td>{{ m.description ?? m.concept?.name ?? '-' }}</b-td>
                         </b-tr>
@@ -336,6 +372,15 @@ onMounted(() => {
 const showDetailModal = ref(false);
 const loadingDetail = ref(false);
 const detalle = ref<CashSessionDetail | null>(null);
+
+// T-013: las líneas en US$ solo salen si la sesión tuvo dólares (cierres anteriores quedan como estaban).
+const resumenTieneUsd = (s: CashSessionSummary) =>
+    Number(s.opening_amount_usd) > 0 || Number(s.expected_cash_usd ?? 0) !== 0 || Number(s.counted_cash_usd ?? 0) !== 0;
+const detalleTieneUsd = computed(() =>
+    !!detalle.value && (Number(detalle.value.opening_amount_usd) > 0
+        || detalle.value.expected_cash_usd_live !== 0
+        || detalle.value.movements.some((m) => m.currency === 'USD'))
+);
 const downloadingPdf = ref(false);
 
 async function abrirDetalle(id: number) {

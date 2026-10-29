@@ -35,11 +35,29 @@ el dinero ya cobrado **pasa al comprobante nuevo**.
 - Traspaso fuera de Agencia (retail).
 
 ## Archivos probables
-- `api-sistema-fe/app/Http/Controllers/AgenciaViajes/ReservaFacturacionController.php`
-- `api-sistema-fe/app/Models/AgenciaViajes/ReservaVenta.php` (si el cálculo vive cerca de
-  `itemIdsFacturados()`) o un método en `CobroVentaService`
-- `api-sistema-fe/app/Http/Controllers/Sale/NotaElectronicaController.php` (solo leer: cómo se marca la NC aceptada)
-- Los dos modales de facturar
+Leer por rango o con `grep`, no enteros (el controlador tiene ~1800 líneas). Líneas al 29-oct.
+- `api-sistema-fe/app/Http/Controllers/AgenciaViajes/ReservaFacturacionController.php`:
+  - `prepararFactura()` (l. 172): el bloque de cobro de T-011 está en l. ~323 (`cobro_habilitado`);
+    ahí se agregan los saldos traspasables.
+  - `store()` (l. 342): validación de `pagos.*` en l. ~395; `prepararPagos()`/`sesionAbierta()` en
+    l. ~491-507; `lockForUpdate()` de la reserva en l. ~534; saldo a cobrar, `validarContraSaldo()`
+    y `registrar()` en l. ~750-761. Ahí entran `traspasos[]`.
+- `api-sistema-fe/app/Services/Cobro/CobroVentaService.php`: `validarContraSaldo()` (l. 102),
+  `guardarPagos()` (l. 200), `crearMovimientos()` (l. 217), `centavos()` (l. 235). El traspaso
+  guarda `sale_payment` pero **no** pasa por `crearMovimientos()`.
+- Cálculo del disponible: método nuevo en `CobroVentaService` (o junto a
+  `ReservaVenta::itemIdsFacturados()`, l. 61 de `app/Models/AgenciaViajes/ReservaVenta.php`).
+- NC aceptada: `notes.status = 'aceptado'` y `tipo_doc = '07'` (ver
+  `NotaElectronicaController.php` l. ~662, solo leer).
+- Migración: `database/migrations/tenant/core/`; el último cambio a `sale_payments` es
+  `2026_10_29_100000_add_nro_operacion_y_moneda_pago_to_sale_payments_table.php` (T-011).
+- Frontend: `admin-start-kit/src/components/AgenciaViajes/CobroFacturaCampos.vue` (bloque "Cobro"
+  de T-011), usado por `FacturarReservaSimpleModal.vue` y `FacturarReservaEspecialModal.vue`.
+- Tests: tomar como base `tests/Feature/Cobro/T011CobroFacturarReservaTest.php` (arma reserva,
+  caja y cobro); test nuevo `tests/Feature/Cobro/T012TraspasoCobroTest.php`.
+
+**Rama:** crearla desde `main` **después** de unir T-013 (cambia el cálculo de caja por moneda que
+usa CA1).
 
 ## Criterios de aceptación
 - [ ] **CA1** — Factura S/ 500 cobrada → NC total aceptada → nueva factura S/ 500 con traspaso de

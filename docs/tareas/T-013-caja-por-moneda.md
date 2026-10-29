@@ -75,9 +75,38 @@ cd admin-start-kit && npm run type-check && npm run build
 ---
 
 ## Resultado
-- **Commits:**
-- **Tests:**
+Se partió en B1 (esta rama) y B2 (T-013b), acordado con el usuario.
+- **Modelo acordado:** columnas `*_usd` en `cash_sessions` (las actuales pasan a ser soles, cierres viejos intactos);
+  `cash_movements.exchange_rate` + `linked_movement_id` (cambio de moneda, `type='currency_exchange'`);
+  `cash_session_denominations.currency`. Migración `2026_10_29_100000_add_currency_columns_to_cash_tables`.
+- **Hecho en B1:** `ExpectedCashCalculator::computePorMoneda()`; apertura con fondo en US$; cierre con contado,
+  esperado y diferencia por moneda (motivo obligatorio si cualquiera pasa la tolerancia); conteo de billetes por
+  moneda; `POST cash/currency-exchange` (permiso `cash.open_session`, igual que los manuales, con lock de la
+  sesión); movimientos manuales con moneda y "no negativo" por moneda; `totals_by_payment_method` por método y
+  moneda; `session.vue` (apertura, cierre, cambio, manuales, tabla de movimientos y totales).
+- **Commits:** ver `git log feat/T-013-caja-por-moneda`.
+- **Tests:** `tests/Feature/Cash/T013CajaPorMonedaTest.php` (CA1, CA2, CA3, validaciones, permiso, apertura US$).
+  Suite completa: 1650 pasan, 1 falla: `Fila13Fase1cFacturacionTest` (intermitente conocido, ajeno).
+  CA5: tests de Créditos en verde. `type-check` sin errores nuevos en Caja (46 previos en otros archivos, mismos
+  con y sin cambios); `vite build` OK. Test DB migrada con `migrate --path` a `sistemafe_test_migrations`.
+- **B2 (hecho):** `history.vue` (lista y detalle con líneas US$ solo si la sesión tuvo dólares), `dashboard.vue`
+  (el cierre pide también el contado en US$; sin eso toda sesión con dólares cerraría con diferencia negativa),
+  PDF individual y de rango (líneas US$, totales y billetes rotulados con la moneda), Excel con columna "Moneda".
+  Tests: `T013bReportesPorMonedaTest` (CA4: sesión cerrada antes de T-013 se abre y su PDF sale; PDF con dólares;
+  Excel). `--filter="Cash|Credito|T013"`: 440 pasan; `type-check` sin errores nuevos en Caja; `vite build` OK.
+- **Correcciones de la revisión (29-oct):** (1) un cierre anterior a T-013 con movimientos en US$ (marcados por
+  T-009) guardó un `expected_cash` que sumaba S/ y US$; ahora se marca `esperado_mezclado` y el historial y el PDF
+  individual muestran una nota con el esperado por moneda como referencia (no se recalcula ni se guarda); el PDF de
+  rango lo rotula "(incluye US$)" en vez de líneas US$ en 0. (2) Tipo de cambio mínimo 0.0001: uno menor redondeaba
+  a 0 y el cambio S/ → US$ daba error 500. Tests: `--filter="Cash|Credito|T013"` 441 pasan.
 - **Desviaciones de la tarea y por qué:**
+  - **CA6 sin hacer:** la prueba funcional en pantalla real (abrir, mover en dos monedas, cambiar, cerrar, ver PDF y
+    Excel) no la hice; los PDF solo se comprobaron por test (renderizan), no a la vista con Ghostscript. Falta antes
+    de desplegar T-011 con dólares. La suite completa no se volvió a correr tras B2 (sí tras B1).
+  - `cash_session_totals` no se tocó: ninguna parte del código la llena (tabla sin uso); no se agregó moneda.
+  - Un cambio de moneda no se edita ni elimina desde movimientos manuales (corregirlo = tarea aparte).
+  - Tolerancia de diferencia: el mismo número se aplica a soles y a dólares (confirmado por el usuario el 29-oct: se queda así).
 
 ## Hallazgos fuera de alcance
--
+- `cash_session_totals` / modelo `CashSessionTotal` sin uso: candidatos a retirar.
+- No se puede corregir un cambio de moneda (sus dos movimientos enlazados); decidir si hace falta.

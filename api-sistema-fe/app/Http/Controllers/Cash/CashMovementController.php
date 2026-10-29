@@ -44,6 +44,7 @@ class CashMovementController extends Controller
             'type'                  => 'required|string|in:manual_income,manual_expense',
             'payment_method_id'     => 'required|integer',
             'amount'                => 'required|numeric|min:0.01',
+            'currency'              => 'nullable|string|in:PEN,USD',
             'concept_id'            => 'required|integer',
             'description'           => 'required|string|min:1',
             'counterparty_type'     => 'nullable|string|in:cliente,proveedor,empleado,socio,otro',
@@ -53,6 +54,7 @@ class CashMovementController extends Controller
             'attachment'            => ArchivoSubido::imagenOPdf(),
         ]);
 
+        $moneda    = $request->input('currency', 'PEN');
         $tipo      = $request->type;
         $sesion    = $this->resolverSesionCajaPropia();
         $concepto  = $this->resolverConcepto($request->concept_id, $tipo);
@@ -78,7 +80,7 @@ class CashMovementController extends Controller
         // aprobarse (Paso 2), no debe bloquear su propia creación.
         if ($status === 'confirmed') {
             $this->validarNoNegativo($sesion, [
-                ['metodo' => $metodo, 'direction' => $direccion, 'amount' => $amount],
+                ['metodo' => $metodo, 'direction' => $direccion, 'amount' => $amount, 'currency' => $moneda],
             ]);
         }
 
@@ -93,7 +95,7 @@ class CashMovementController extends Controller
             'payment_method_id' => $metodo->id,
             'direction'         => $direccion,
             'amount'            => $amount,
-            'currency'          => 'PEN', // T-009: el formulario aún no pide moneda (T-013)
+            'currency'          => $moneda,
             'concept_id'        => $concepto->id,
             'description'       => $request->description,
             'counterparty_type'     => $contraparte['counterparty_type'],
@@ -114,6 +116,77 @@ class CashMovementController extends Controller
         ]);
     }
 
+    // ── Cambio de moneda (T-013) ─────────────────────────────────────
+    // Sale una moneda y entra la otra, en efectivo, como dos movimientos enlazados
+    // (linked_movement_id). exchange_rate = soles por dólar. No se edita ni se elimina
+    // desde la pantalla de movimientos manuales (prepararCorreccion solo admite manuales).
+    public function currencyExchange(Request $request)
+    {
+        $request->validate([
+            'from_currency' => 'required|string|in:PEN,USD',
+            'to_currency'   => 'required|string|in:PEN,USD|different:from_currency',
+            'amount'        => 'required|numeric|min:0.01',
+            // Mínimo 0.0001: se guarda con 4 decimales; uno menor redondearía a 0 (división por cero).
+            'exchange_rate' => 'required|numeric|min:0.0001',
+            'description'   => 'nullable|string',
+        ]);
+
+        $sesion = $this->resolverSesionCajaPropia();
+        $efectivo = PaymentMethod::where('code', 'EFECTIVO')->first();
+
+        if (!$efectivo) {
+            throw new HttpException(500, 'No se encontró el método de pago EFECTIVO — revisa PaymentMethodSeeder.');
+        }
+
+        $origen  = $request->from_currency;
+        $destino = $request->to_currency;
+        $salida  = round((float) $request->amount, 2);
+        $tc      = round((float) $request->exchange_rate, 4);
+        $entrada = $origen === 'USD' ? round($salida * $tc, 2) : round($salida / $tc, 2);
+
+        if ($entrada < 0.01) {
+            throw new HttpException(422, 'El monto a recibir es demasiado pequeño con ese tipo de cambio.');
+        }
+
+        $userId = auth('api')->user()->id;
+        $descripcion = $request->input('description')
+            ?: "Cambio de moneda: {$origen} {$salida} → {$destino} {$entrada} (T.C. {$tc})";
+
+        $movimientos = DB::transaction(function () use ($sesion, $efectivo, $origen, $destino, $salida, $entrada, $tc, $userId, $descripcion) {
+            // Bloquea la sesión para que dos cambios simultáneos no validen contra el mismo saldo.
+            $sesion = CashSession::where('id', $sesion->id)->lockForUpdate()->first();
+
+            $this->validarNoNegativo($sesion, [
+                ['metodo' => $efectivo, 'direction' => 'out', 'amount' => $salida, 'currency' => $origen],
+            ]);
+
+            $base = [
+                'cash_session_id'   => $sesion->id,
+                'type'              => 'currency_exchange',
+                'payment_method_id' => $efectivo->id,
+                'exchange_rate'     => $tc,
+                'description'       => $descripcion,
+                'status'            => 'confirmed',
+                'created_by'        => $userId,
+            ];
+
+            $out = CashMovement::create($base + ['direction' => 'out', 'amount' => $salida, 'currency' => $origen]);
+            $in  = CashMovement::create($base + [
+                'direction' => 'in', 'amount' => $entrada, 'currency' => $destino, 'linked_movement_id' => $out->id,
+            ]);
+            $out->update(['linked_movement_id' => $in->id]);
+
+            return [$out->fresh(), $in->fresh()];
+        });
+
+        return response()->json([
+            'code'     => 200,
+            'message'  => 'Cambio de moneda registrado correctamente.',
+            'movement_out' => $movimientos[0],
+            'movement_in'  => $movimientos[1],
+        ]);
+    }
+
     // ── Aprobar/rechazar un egreso pendiente ─────────────────────────
     public function approve(string $id)
     {
@@ -126,7 +199,7 @@ class CashMovementController extends Controller
         // Recién ahora se ejercita la validación de "no negativo" (Paso 1) —
         // pudo haber cambiado desde que se creó la solicitud.
         $this->validarNoNegativo($movimiento->cashSession, [
-            ['metodo' => $movimiento->paymentMethod, 'direction' => $movimiento->direction, 'amount' => (float) $movimiento->amount],
+            ['metodo' => $movimiento->paymentMethod, 'direction' => $movimiento->direction, 'amount' => (float) $movimiento->amount, 'currency' => $movimiento->currency],
         ]);
 
         $movimiento->update(['status' => 'confirmed']);
@@ -155,6 +228,7 @@ class CashMovementController extends Controller
         $request->validate([
             'payment_method_id'     => 'required|integer',
             'amount'                => 'required|numeric|min:0.01',
+            'currency'              => 'nullable|string|in:PEN,USD',
             'concept_id'            => 'required|integer',
             'description'           => 'required|string|min:1',
             'counterparty_type'     => 'nullable|string|in:cliente,proveedor,empleado,socio,otro',
@@ -164,6 +238,9 @@ class CashMovementController extends Controller
         ]);
 
         ['original' => $original, 'sesionDestino' => $sesionDestino] = $this->prepararCorreccion($id);
+
+        // Si no se manda moneda, la edición conserva la del movimiento original.
+        $moneda    = $request->input('currency', $original->currency);
 
         $tipo      = $original->type; // el tipo no cambia en una edición
         $concepto  = $this->resolverConcepto($request->concept_id, $tipo);
@@ -176,8 +253,8 @@ class CashMovementController extends Controller
         // monto) ANTES de tocar la base — evita dejar una corrección a medio
         // aplicar si el resultado daría negativo.
         $this->validarNoNegativo($sesionDestino, [
-            ['metodo' => $original->paymentMethod, 'direction' => $original->direction === 'in' ? 'out' : 'in', 'amount' => (float) $original->amount],
-            ['metodo' => $metodo, 'direction' => $direccion, 'amount' => $amount],
+            ['metodo' => $original->paymentMethod, 'direction' => $original->direction === 'in' ? 'out' : 'in', 'amount' => (float) $original->amount, 'currency' => $original->currency],
+            ['metodo' => $metodo, 'direction' => $direccion, 'amount' => $amount, 'currency' => $moneda],
         ]);
 
         DB::beginTransaction();
@@ -190,7 +267,7 @@ class CashMovementController extends Controller
                 'payment_method_id' => $metodo->id,
                 'direction'         => $direccion,
                 'amount'            => $amount,
-                'currency'          => 'PEN', // T-009: el formulario aún no pide moneda (T-013)
+                'currency'          => $moneda,
                 'concept_id'        => $concepto->id,
                 'description'       => $request->description,
                 'counterparty_type'     => $contraparte['counterparty_type'],
@@ -221,7 +298,7 @@ class CashMovementController extends Controller
         // Solo la reversión del original puede empujar a negativo acá (no
         // hay movimiento nuevo que sumar) — mismo helper, un solo efecto.
         $this->validarNoNegativo($sesionDestino, [
-            ['metodo' => $original->paymentMethod, 'direction' => $original->direction === 'in' ? 'out' : 'in', 'amount' => (float) $original->amount],
+            ['metodo' => $original->paymentMethod, 'direction' => $original->direction === 'in' ? 'out' : 'in', 'amount' => (float) $original->amount, 'currency' => $original->currency],
         ]);
 
         DB::beginTransaction();
@@ -415,20 +492,24 @@ class CashMovementController extends Controller
 
     // Simula el efecto combinado de una o más operaciones propuestas sobre
     // el efectivo esperado ANTES de persistir nada (regla de integridad #4).
-    // $efectos = [['metodo' => PaymentMethod, 'direction' => 'in'|'out', 'amount' => float], ...]
+    // $efectos = [['metodo' => PaymentMethod, 'direction' => 'in'|'out', 'amount' => float, 'currency' => 'PEN'|'USD'], ...]
+    // T-013: se proyecta cada moneda por separado.
     private function validarNoNegativo(CashSession $sesion, array $efectos): void
     {
-        $proyectado = $this->expectedCashCalculator->compute($sesion);
+        $proyectado = $this->expectedCashCalculator->computePorMoneda($sesion);
 
         foreach ($efectos as $efecto) {
             if (!$efecto['metodo']->affects_cash_count) {
                 continue;
             }
-            $proyectado += $efecto['direction'] === 'in' ? $efecto['amount'] : -$efecto['amount'];
+            $moneda = $efecto['currency'] ?? 'PEN';
+            $proyectado[$moneda] += $efecto['direction'] === 'in' ? $efecto['amount'] : -$efecto['amount'];
         }
 
-        if (round($proyectado, 2) < 0) {
-            throw new HttpException(422, 'Esta operación dejaría el efectivo esperado en negativo.');
+        foreach ($proyectado as $moneda => $total) {
+            if (round($total, 2) < 0) {
+                throw new HttpException(422, 'Esta operación dejaría el efectivo esperado en negativo (' . $moneda . ').');
+            }
         }
     }
 

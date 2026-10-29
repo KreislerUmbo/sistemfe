@@ -205,17 +205,25 @@
             </thead>
             <tbody>
                 @foreach ($sessionsConTotales as $item)
-                    @php $sesion = $item['session']; @endphp
+                    @php
+                        $sesion = $item['session'];
+                        // T-013: segunda línea en US$ solo si la sesión tuvo dólares.
+                        $tuvoUsd = (float) $sesion->opening_amount_usd > 0
+                            || $sesion->cashMovements->contains(fn ($m) => $m->currency === 'USD');
+                        // Cierre anterior a T-013 con dólares: su esperado sumó S/ y US$; se marca, no se recalcula.
+                        $mezclado = $tuvoUsd && $sesion->status === 'closed' && $sesion->expected_cash_usd === null;
+                        $usd = $tuvoUsd && !$mezclado;
+                    @endphp
                     <tr>
                         <td>{{ \App\Services\HoraPeru::deUtc($sesion->opened_at)->format('d/m/Y H:i') }}</td>
                         <td>{{ $sesion->closed_at ? \App\Services\HoraPeru::deUtc($sesion->closed_at)->format('d/m/Y H:i') : '—' }}</td>
                         <td>{{ $sesion->cashRegister->branch->name ?? '-' }}</td>
                         <td>{{ $sesion->cashRegister->name ?? '-' }}</td>
                         <td>{{ $sesion->openedByUser->name ?? '-' }}</td>
-                        <td class="right">{{ number_format($sesion->opening_amount, 2) }}</td>
-                        <td class="right">{{ number_format($sesion->expected_cash ?? 0, 2) }}</td>
-                        <td class="right">{{ number_format($sesion->counted_cash ?? 0, 2) }}</td>
-                        <td class="right">{{ number_format($sesion->difference ?? 0, 2) }}</td>
+                        <td class="right">S/ {{ number_format($sesion->opening_amount, 2) }}@if ($usd)<br>US$ {{ number_format($sesion->opening_amount_usd, 2) }}@endif</td>
+                        <td class="right">S/ {{ number_format($sesion->expected_cash ?? 0, 2) }}@if ($mezclado)<br><small>(incluye US$)</small>@endif @if ($usd)<br>US$ {{ number_format($sesion->expected_cash_usd ?? 0, 2) }}@endif</td>
+                        <td class="right">S/ {{ number_format($sesion->counted_cash ?? 0, 2) }}@if ($usd)<br>US$ {{ number_format($sesion->counted_cash_usd ?? 0, 2) }}@endif</td>
+                        <td class="right">S/ {{ number_format($sesion->difference ?? 0, 2) }}@if ($usd)<br>US$ {{ number_format($sesion->difference_usd ?? 0, 2) }}@endif</td>
                         <td class="{{ $sesion->status === 'open' ? 'estado-abierta' : '' }}">
                             {{ $sesion->status === 'open' ? 'ABIERTA' : 'CERRADA' }}
                         </td>
@@ -244,7 +252,7 @@
                 @forelse ($totalesGenerales as $totalMetodo)
                     <tr>
                         <td>{{ $totalMetodo['payment_method_name'] }}</td>
-                        <td class="right">S/ {{ number_format($totalMetodo['total'], 2) }}</td>
+                        <td class="right">{{ $totalMetodo['currency'] === 'USD' ? 'US$' : 'S/' }} {{ number_format($totalMetodo['total'], 2) }}</td>
                     </tr>
                 @empty
                     <tr>
