@@ -174,9 +174,39 @@ Llenar "Resultado" (salida de los comandos, desviaciones, hallazgos). Commits co
 ---
 
 ## Resultado
-- **Commits:**
-- **Tests:**
+- **Commits:** `da66d87` (parte 1), `279f7d7` (parte 2), `39500cc` (parte 3, bloque de cobro en los modales), en
+  `feat/T-011-cobro-contado-reserva`. Sin unir ni pushear.
+- **Tests:** suite completa backend **1622 en verde** tras la parte 1 (el intermitente `descuento del combo` falló en una
+  corrida intermedia y pasó en la completa). `T011CobroFacturarReservaTest`: 11/11 (CA1-CA10 + vista previa). Frontend:
+  `npm run build` OK; `type-check` 46 errores, los mismos de antes (ninguno nuevo).
+  **CA12 (prueba en `agencia-demo`) no la hice**: es de Opus según la tarea; la pantalla no se probó en navegador.
 - **Desviaciones de la tarea y por qué:**
+  - **3 tests existentes no usan `facturarCobrando`**: `facturar_sin_anticipos_se_comporta_igual_que_antes` y
+    `facturar_especial_con_advance_applications_explicito` (`ReservaAnticipoTest`) y
+    `store_ignora_anticipo_en_otra_moneda_al_facturar_con_override_de_moneda` (`ReservaFacturacionTest`). Sus aserciones
+    describen una venta *pendiente de cobro* (`debt>0`, `state_payment=1`, `paid_out` = solo el anticipo / 0), que es justo
+    lo que cambia al cobrar. Sin tocar ninguna aserción: llaman a `store()` directo con
+    `config(['agencia.cobro_al_facturar' => false])` al inicio (el comportamiento "como hoy" del interruptor).
+  - Los tests de `ReservaEstadoFacturacionTest`, `ReservaPolicyAccionesTest` y `Fila13Fase1bTourCotizacionTest` no llaman a
+    `store()` de facturación como venta (solo `prepararFactura()` o esperan bloqueo), así que no cambiaron.
+  - En `Fila13Fase1cFacturacionTest` también se cambiaron las llamadas hechas con `$controller->store(...)` y el helper
+    `facturar()`, no solo `app(...)->store(...)`.
+  - Cobro en el frontend: lógica pura en `helpers/cobroFactura.ts` (separada del componente) para no duplicarla en los dos modales.
+- **Ojo para la revisión:** al cambiar de condición contado→crédito el bloque de cobro se oculta pero las filas quedan en
+  memoria; `payloadCobro()` no las envía si la condición no es contado. El vuelto se ofrece en las monedas de los pagos en
+  efectivo; el 422 del backend manda si no calza.
+
+- **Revisión (Opus, 29-oct-2026):** sin cambios de fondo. Un ajuste, por un error de la propia tarea:
+  el interruptor nacía con default `true`, y producción no tiene la variable en su `.env` — el próximo
+  despliegue lo habría encendido solo, con dólares, antes de T-013. Ahora el default es `false`
+  (`config/agencia.php`, `.env.example`); los tests lo encienden en `phpunit.xml` y el `.env` local
+  lo tiene en `true`. Tests de facturación: 374 en verde + el intermitente conocido.
+  **CA12 en agencia-demo:** reserva 27 (S/ 600, 2 pasajeros), "Facturar" simple al contado con S/ 200
+  efectivo + S/ 400 Yape (n.º 555111; la fila de Yape solo ofrece soles) → "Reserva facturada y
+  cobrada. (serie B001)"; venta pagada (`state_payment=3`, `debt=0`), 2 `sale_payments` con el n.º,
+  2 movimientos en la caja del admin. Después se eliminó la venta (`destroy`): la reserva quedó libre
+  y la caja corregida. La guardia tributaria bloqueó la reserva 28 (Amazonía sin confirmar), como debe.
 
 ## Hallazgos fuera de alcance
--
+- `FacturarReservaSimpleModal` mostraba "La venta se crea pendiente de cobro…" fijo; ahora depende de si se cobra ahora.
+- `PrecioPorPasajeroTest` (cama adicional, 2 tests) ya fallaba en `main` en T-009/T-010; esta vez pasó la suite completa.

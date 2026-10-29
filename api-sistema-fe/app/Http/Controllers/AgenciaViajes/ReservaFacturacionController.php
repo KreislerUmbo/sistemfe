@@ -17,6 +17,7 @@ use App\Models\Sale\SaleDetail;
 use App\Services\AdvanceApplicationService;
 use App\Services\AgenciaViajes\PriceEngineService;
 use App\Services\AgenciaViajes\TourLineaService;
+use App\Services\Cobro\CobroVentaService;
 use App\Services\CronogramaCreditoValidator;
 use App\Services\SerieComprobanteService;
 use App\Services\TipoCambio\TipoCambioSunatResolver;
@@ -158,7 +159,8 @@ class ReservaFacturacionController extends Controller
         private SerieComprobanteService $serieComprobanteService,
         private AdvanceApplicationService $advanceApplicationService,
         private PriceEngineService $priceEngineService,
-        private TipoCambioSunatResolver $tipoCambioSunatResolver
+        private TipoCambioSunatResolver $tipoCambioSunatResolver,
+        private CobroVentaService $cobro
     ) {
     }
 
@@ -318,6 +320,18 @@ class ReservaFacturacionController extends Controller
             'anticipos_disponibles' => $anticiposDisponibles,
             'anticipo_que_se_aplica' => $anticipoQueSeAplica,
             'saldo_a_cobrar' => round(max(0, $total - $anticipoQueSeAplica), 2),
+            // T-011: lo que el modal necesita para el bloque de cobro al contado.
+            'cobro_habilitado' => (bool) config('agencia.cobro_al_facturar'),
+            'caja_abierta' => \App\Models\Cash\CashSession::where('opened_by', auth('api')->id())->where('status', 'open')->exists(),
+            'formas_pago' => \App\Models\Cash\PaymentMethod::where('is_active', true)
+                ->orderBy('sort_order')->orderBy('id')->get()
+                ->map(fn ($m) => [
+                    'code' => $m->code,
+                    'name' => $m->name,
+                    'monedas' => $m->monedas ?? ['PEN', 'USD'],
+                    'affects_cash_count' => (bool) $m->affects_cash_count,
+                ])->values(),
+            'tipo_cambio_dia' => $this->tipoCambioSunatResolver->resolverParaFecha(\App\Services\HoraPeru::ahora())?->venta,
             'subtotal' => $subtotalTotal,
             'igv' => $igvTotal,
             'total' => $total,
@@ -378,6 +392,15 @@ class ReservaFacturacionController extends Controller
             // crédito con cuotas sobre el saldo que queda tras los anticipos.
             'condicion_pago' => 'nullable|string|in:contado,credito',
             'cronograma' => 'nullable|array',
+            // Cobro al contado al facturar (T-011): pagos mixtos, cada uno con su moneda;
+            // CobroVentaService::prepararPagos() valida método, moneda y tipo de cambio.
+            'pagos' => 'nullable|array',
+            'pagos.*.method_payment' => 'required|string|max:50',
+            'pagos.*.moneda_pago' => 'nullable|string|in:PEN,USD',
+            'pagos.*.monto_pagado' => 'required|numeric|gt:0',
+            'pagos.*.tipo_cambio' => 'nullable|numeric|gt:0',
+            'pagos.*.nro_operacion' => 'nullable|string|max:50',
+            'vuelto_moneda' => 'nullable|string|in:PEN,USD',
         ]);
 
         if ($validator->fails()) {
@@ -464,8 +487,27 @@ class ReservaFacturacionController extends Controller
         $condicionPago = $validado['condicion_pago'] ?? 'contado';
         $cronograma = $validado['cronograma'] ?? [];
 
+        // Cobro al contado (T-011): lo que no depende del total se valida antes de la transacción.
+        $pagosPreparados = [];
+        $sesionCobro = null;
+        $monedaVuelto = $validado['vuelto_moneda'] ?? null;
+        if (! empty($validado['pagos'])) {
+            if (! config('agencia.cobro_al_facturar')) {
+                throw new HttpException(422, 'El cobro al facturar todavía no está habilitado.');
+            }
+            if ($condicionPago === 'credito') {
+                throw new HttpException(422, 'A crédito no se cobra al facturar: el cobro se registra en Cuentas por Cobrar.');
+            }
+            $pagosPreparados = $this->cobro->prepararPagos($validado['pagos'], $moneda);
+            $sesionCobro = $this->cobro->sesionAbierta($usuario);
+        }
+
         try {
-            [$venta, $lineas] = DB::transaction(function () use (
+            [$venta, $lineas, $cobrado] = DB::transaction(function () use (
+                $pagosPreparados,
+                $sesionCobro,
+                $monedaVuelto,
+                $moneda,
                 $reserva,
                 $gruposPorCategoria,
                 $productosPlaceholder,
@@ -701,6 +743,32 @@ class ReservaFacturacionController extends Controller
                     ]);
                 }
 
+                // Cobro al contado (T-011): lo que queda tras los anticipos se cobra aquí,
+                // bajo el lock de la reserva. Si no calza, el 422 del servicio dice cuánto se
+                // cobró y cuánto era (el saldo pudo cambiar). Rollback deja todo como estaba.
+                $cobrado = false;
+                if ($condicionPago === 'contado' && config('agencia.cobro_al_facturar')) {
+                    $saldoACobrar = round((float) $venta->total, 2);
+                    $simbolo = $moneda === 'USD' ? 'US$' : 'S/';
+                    if ($saldoACobrar > 0 && ! $pagosPreparados) {
+                        throw new HttpException(422, "Al contado registra el cobro: falta {$simbolo} " . number_format($saldoACobrar, 2) . '.');
+                    }
+                    if ($saldoACobrar <= 0 && $pagosPreparados) {
+                        throw new HttpException(422, 'Los anticipos cubren todo el comprobante: no hay nada que cobrar.');
+                    }
+                    if ($saldoACobrar > 0) {
+                        $vuelto = $this->cobro->validarContraSaldo($pagosPreparados, $saldoACobrar, $moneda, exacto: true, monedaVuelto: $monedaVuelto);
+                        $this->cobro->registrar($venta, $pagosPreparados, $sesionCobro, $usuario, $vuelto);
+                        $venta->update([
+                            'state_payment' => 3,
+                            'debt' => 0,
+                            'saldo_pendiente' => 0,
+                            'paid_out' => round((float) $venta->paid_out + $saldoACobrar, 2),
+                        ]);
+                        $cobrado = true;
+                    }
+                }
+
                 // Crédito (fila F5, 24-oct-2026): "contado" ante SUNAT declara
                 // pago al emitir; si el cliente paga después, la factura va a
                 // crédito con sus cuotas (viajan en el XML; el cobro se sigue
@@ -743,7 +811,7 @@ class ReservaFacturacionController extends Controller
                     'partes_tour' => $partesTourBajoLock ?: null,
                 ]);
 
-                return [$venta, $lineas];
+                return [$venta, $lineas, $cobrado];
             });
         } catch (HttpException $e) {
             throw $e;
@@ -753,7 +821,9 @@ class ReservaFacturacionController extends Controller
 
         return response()->json([
             'code' => 200,
-            'message' => 'Reserva facturada correctamente. La venta queda pendiente de cobro.',
+            'message' => $cobrado
+                ? 'Reserva facturada y cobrada.'
+                : 'Reserva facturada correctamente. La venta queda pendiente de cobro.',
             'sale_id' => $venta->id,
             'serie' => $venta->serie,
             'lineas' => count($lineas),

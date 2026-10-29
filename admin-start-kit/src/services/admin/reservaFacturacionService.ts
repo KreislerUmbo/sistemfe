@@ -45,6 +45,16 @@ export type FacturarReservaPayload = {
   // exige cronograma que sume exacto el saldo a cobrar (saldo_a_cobrar).
   condicion_pago?: 'contado' | 'credito'
   cronograma?: Array<{ numero_cuota: number; monto_programado: number; fecha_vencimiento: string }>
+  // Cobro al contado al facturar (T-011): pagos mixtos, cada uno con su moneda; el vuelto se da en
+  // vuelto_moneda (por defecto la de la venta).
+  pagos?: Array<{
+    method_payment: string
+    moneda_pago?: 'PEN' | 'USD'
+    monto_pagado: number
+    tipo_cambio?: number
+    nro_operacion?: string
+  }>
+  vuelto_moneda?: 'PEN' | 'USD'
 }
 
 export type FacturarReservaResponse = {
@@ -162,6 +172,11 @@ export type PrepararFacturaResponse = {
   // por cobrar, con la misma regla que la emisión (las cuotas suman esto).
   anticipo_que_se_aplica?: number
   saldo_a_cobrar?: number
+  // T-011: bloque de cobro al contado. cobro_habilitado=false (interruptor del servidor) oculta el bloque.
+  cobro_habilitado?: boolean
+  caja_abierta?: boolean
+  formas_pago?: Array<{ code: string; name: string; monedas: Array<'PEN' | 'USD'>; affects_cash_count: boolean }>
+  tipo_cambio_dia?: number | null
 }
 
 export const reservaFacturacionService = {
