@@ -105,7 +105,7 @@ Se partió en B1 (esta rama) y B2 (T-013b), acordado con el usuario.
     de desplegar T-011 con dólares. La suite completa no se volvió a correr tras B2 (sí tras B1).
   - `cash_session_totals` no se tocó: ninguna parte del código la llena (tabla sin uso); no se agregó moneda.
   - Un cambio de moneda no se edita ni elimina desde movimientos manuales (corregirlo = tarea aparte).
-  - Tolerancia de diferencia: el mismo número se aplica a soles y a dólares.
+  - Tolerancia de diferencia: el mismo número se aplica a soles y a dólares (confirmado por el usuario el 29-oct: se queda así).
 
 ## Hallazgos fuera de alcance
 - `cash_session_totals` / modelo `CashSessionTotal` sin uso: candidatos a retirar.
