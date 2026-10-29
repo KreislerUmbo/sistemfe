@@ -42,8 +42,20 @@ class PaymentMethodController extends Controller
         ]);
     }
 
+    // T-010: monedas en que se acepta la forma de pago; al menos una, sin repetir.
+    private function validarMonedas(Request $request): void
+    {
+        if ($request->has('monedas')) {
+            $request->validate([
+                'monedas' => 'array|min:1',
+                'monedas.*' => 'in:PEN,USD|distinct',
+            ], ['monedas.min' => 'Elige al menos una moneda.']);
+        }
+    }
+
     public function store(Request $request)
     {
+        $this->validarMonedas($request);
         $exists = PaymentMethod::whereRaw('LOWER(code) = ?', [strtolower(trim($request->code))])->first();
         if ($exists) {
             return response()->json([
@@ -52,7 +64,7 @@ class PaymentMethodController extends Controller
             ]);
         }
 
-        $paymentMethod = PaymentMethod::create($request->only('code', 'name', 'is_active', 'sort_order'));
+        $paymentMethod = PaymentMethod::create($request->only('code', 'name', 'is_active', 'sort_order', 'monedas'));
 
         return response()->json([
             'code' => 200,
@@ -63,6 +75,7 @@ class PaymentMethodController extends Controller
 
     public function update(Request $request, string $id)
     {
+        $this->validarMonedas($request);
         $exists = PaymentMethod::where('id', '<>', $id)
             ->whereRaw('LOWER(code) = ?', [strtolower(trim($request->code))])
             ->first();
@@ -74,7 +87,7 @@ class PaymentMethodController extends Controller
         }
 
         $paymentMethod = PaymentMethod::findOrFail($id);
-        $paymentMethod->update($request->only('code', 'name', 'is_active', 'sort_order'));
+        $paymentMethod->update($request->only('code', 'name', 'is_active', 'sort_order', 'monedas'));
 
         return response()->json([
             'code' => 200,

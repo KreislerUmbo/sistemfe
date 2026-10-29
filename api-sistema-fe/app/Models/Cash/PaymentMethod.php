@@ -20,10 +20,12 @@ class PaymentMethod extends Model
         "is_active",
         "sort_order",
         "affects_cash_count",
+        "monedas",
     ];
 
     protected $casts = [
         "is_active" => "boolean",
         "affects_cash_count" => "boolean",
+        "monedas" => "array",
     ];
 }
