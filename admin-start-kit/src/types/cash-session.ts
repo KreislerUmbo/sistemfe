@@ -53,6 +53,9 @@ export type CashMovement = {
     payment_method?: { id: number; code: string; name: string };
     direction: 'in' | 'out';
     amount: string | number;
+    // T-013: 'PEN' | 'USD'; exchange_rate (soles por dólar) solo en un cambio de moneda.
+    currency: 'PEN' | 'USD';
+    exchange_rate?: string | number | null;
     reference_type: string | null;
     reference_id: number | null;
     concept_id: number | null;
@@ -81,6 +84,7 @@ export type CashMovementPayload = {
     type?: 'manual_income' | 'manual_expense';
     payment_method_id: number;
     amount: number;
+    currency?: 'PEN' | 'USD';
     concept_id: number;
     description: string;
     counterparty_type?: 'cliente' | 'proveedor' | 'empleado' | 'socio' | 'otro' | null;
@@ -103,6 +107,7 @@ export type CounterpartySearchResult = {
 
 export type CashSessionDenomination = {
     id: number;
+    currency: 'PEN' | 'USD';
     denomination: string | number;
     quantity: number;
     subtotal: string | number;
@@ -112,6 +117,7 @@ export type PaymentMethodTotal = {
     payment_method_id: number;
     payment_method_code: string;
     payment_method_name: string;
+    currency: 'PEN' | 'USD';
     total: number;
 };
 
@@ -121,6 +127,7 @@ export type CashSessionDetail = {
     opened_by_user: SessionUser;
     closed_by_user: SessionUser | null;
     opening_amount: string | number;
+    opening_amount_usd: string | number;
     opening_amount_adjusted: boolean;
     opened_at: string;
     closed_at: string | null;
@@ -129,8 +136,13 @@ export type CashSessionDetail = {
     // Vista previa en vivo (no persistida) — usar esta para mostrar el
     // "corte X" o el esperado en modo no-ciego antes de confirmar el cierre.
     expected_cash_live: number;
+    // T-013: dólares (las columnas sin sufijo son soles). Cierres anteriores: null.
+    expected_cash_usd: string | number | null;
+    expected_cash_usd_live: number;
     counted_cash: string | number | null;
+    counted_cash_usd: string | number | null;
     difference: string | number | null;
+    difference_usd: string | number | null;
     difference_reason: string | null;
     closing_notes: string | null;
     movements: CashMovement[];
@@ -167,12 +179,16 @@ export type CashSessionSummary = {
     opened_by_user: SessionUser;
     closed_by_user: SessionUser | null;
     opening_amount: string | number;
+    opening_amount_usd: string | number;
     opened_at: string;
     closed_at: string | null;
     status: 'open' | 'closed';
     expected_cash: string | number | null;
+    expected_cash_usd: string | number | null;
     counted_cash: string | number | null;
+    counted_cash_usd: string | number | null;
     difference: string | number | null;
+    difference_usd: string | number | null;
 };
 
 export type CashSessionsListResponse = {

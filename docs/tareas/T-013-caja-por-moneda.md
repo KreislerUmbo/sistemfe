@@ -75,9 +75,28 @@ cd admin-start-kit && npm run type-check && npm run build
 ---
 
 ## Resultado
-- **Commits:**
-- **Tests:**
+Se partió en B1 (esta rama) y B2 (T-013b), acordado con el usuario.
+- **Modelo acordado:** columnas `*_usd` en `cash_sessions` (las actuales pasan a ser soles, cierres viejos intactos);
+  `cash_movements.exchange_rate` + `linked_movement_id` (cambio de moneda, `type='currency_exchange'`);
+  `cash_session_denominations.currency`. Migración `2026_10_29_100000_add_currency_columns_to_cash_tables`.
+- **Hecho en B1:** `ExpectedCashCalculator::computePorMoneda()`; apertura con fondo en US$; cierre con contado,
+  esperado y diferencia por moneda (motivo obligatorio si cualquiera pasa la tolerancia); conteo de billetes por
+  moneda; `POST cash/currency-exchange` (permiso `cash.open_session`, igual que los manuales, con lock de la
+  sesión); movimientos manuales con moneda y "no negativo" por moneda; `totals_by_payment_method` por método y
+  moneda; `session.vue` (apertura, cierre, cambio, manuales, tabla de movimientos y totales).
+- **Commits:** ver `git log feat/T-013-caja-por-moneda`.
+- **Tests:** `tests/Feature/Cash/T013CajaPorMonedaTest.php` (CA1, CA2, CA3, validaciones, permiso, apertura US$).
+  Suite completa: 1650 pasan, 1 falla: `Fila13Fase1cFacturacionTest` (intermitente conocido, ajeno).
+  CA5: tests de Créditos en verde. `type-check` sin errores nuevos en Caja (46 previos en otros archivos, mismos
+  con y sin cambios); `vite build` OK. Test DB migrada con `migrate --path` a `sistemafe_test_migrations`.
 - **Desviaciones de la tarea y por qué:**
+  - Falta B2: `history.vue`, `dashboard.vue`, PDF `cash_cierre_individual`/`rango`, `CashMovementsExport`, y CA4/CA6
+    (prueba funcional en pantalla real, no hecha). Hasta B2, los PDF muestran por separado cada método/moneda pero
+    sin rotular la moneda: **no desplegar T-011 con dólares**.
+  - `cash_session_totals` no se tocó: ninguna parte del código la llena (tabla sin uso); no se agregó moneda.
+  - Un cambio de moneda no se edita ni elimina desde movimientos manuales (corregirlo = tarea aparte).
+  - Tolerancia de diferencia: el mismo número se aplica a soles y a dólares.
 
 ## Hallazgos fuera de alcance
--
+- `cash_session_totals` / modelo `CashSessionTotal` sin uso: candidatos a retirar.
+- No se puede corregir un cambio de moneda (sus dos movimientos enlazados); decidir si hace falta.

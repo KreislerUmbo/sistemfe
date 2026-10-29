@@ -420,6 +420,8 @@ Route::group([
     // cash.approve_expenses gatea específicamente aprobar/rechazar.
     Route::post("cash/movements", [CashMovementController::class, 'store'])
         ->middleware('permission:cash.open_session');
+    Route::post("cash/currency-exchange", [CashMovementController::class, 'currencyExchange'])
+        ->middleware('permission:cash.open_session');
     Route::put("cash/movements/{id}", [CashMovementController::class, 'update'])
         ->middleware('permission:cash.open_session');
     Route::delete("cash/movements/{id}", [CashMovementController::class, 'destroy'])

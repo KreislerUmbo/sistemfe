@@ -16,6 +16,7 @@ class CashSessionDenomination extends Model
 
     protected $fillable = [
         "cash_session_id",
+        "currency",
         "denomination",
         "quantity",
         "subtotal",

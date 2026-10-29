@@ -33,6 +33,10 @@
                                 <label class="form-label fw-semibold">Fondo de apertura (S/)</label>
                                 <b-form-input type="number" step="0.01" min="0" v-model.number="openingAmount" />
                             </div>
+                            <div class="mb-3">
+                                <label class="form-label fw-semibold">Fondo de apertura en dólares (US$, opcional)</label>
+                                <b-form-input type="number" step="0.01" min="0" v-model.number="openingAmountUsd" />
+                            </div>
 
                             <b-button variant="primary" :disabled="opening" @click="abrirCaja">
                                 <span v-if="opening" class="spinner-border spinner-border-sm me-1"></span>
@@ -58,6 +62,9 @@
                                 Cajero: {{ session.opened_by_user.name }} —
                                 Apertura: {{ formatFechaHora(session.opened_at) }} —
                                 Fondo inicial: S/ {{ Number(session.opening_amount).toFixed(2) }}
+                                <template v-if="Number(session.opening_amount_usd) > 0">
+                                    y US$ {{ Number(session.opening_amount_usd).toFixed(2) }}
+                                </template>
                                 <span v-if="session.opening_amount_adjusted" class="badge bg-warning text-dark ms-1">
                                     fondo ajustado
                                 </span>
@@ -72,6 +79,9 @@
                         <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
                             <h6 class="fw-semibold mb-0">Movimientos de la sesión</h6>
                             <div class="d-flex gap-2">
+                                <b-button variant="outline-primary" size="sm" @click="abrirModalCambio">
+                                    <i class="fas fa-exchange-alt me-1"></i> Cambiar moneda
+                                </b-button>
                                 <b-button variant="outline-success" size="sm" @click="abrirModalMovimiento('manual_income')">
                                     <i class="fas fa-arrow-down me-1"></i> Registrar ingreso
                                 </b-button>
@@ -105,7 +115,12 @@
                                             {{ m.direction === 'in' ? 'Ingreso' : 'Egreso' }}
                                         </b-badge>
                                     </b-td>
-                                    <b-td>S/ {{ Number(m.amount).toFixed(2) }}</b-td>
+                                    <b-td>
+                                        {{ simbolo(m.currency) }} {{ Number(m.amount).toFixed(2) }}
+                                        <small class="text-muted d-block" v-if="m.exchange_rate">
+                                            T.C. {{ Number(m.exchange_rate).toFixed(4) }}
+                                        </small>
+                                    </b-td>
                                     <b-td>
                                         <div v-if="m.concept">{{ m.concept.name }}</div>
                                         <small class="text-muted d-block" v-if="m.counterparty_name">
@@ -158,9 +173,9 @@
                                 <b-tr v-if="!session.totals_by_payment_method.length">
                                     <b-td colspan="2" class="text-center text-muted">Sin movimientos todavía</b-td>
                                 </b-tr>
-                                <b-tr v-for="t in session.totals_by_payment_method" :key="t.payment_method_id">
+                                <b-tr v-for="t in session.totals_by_payment_method" :key="`${t.payment_method_id}-${t.currency}`">
                                     <b-td>{{ t.payment_method_name }}</b-td>
-                                    <b-td>S/ {{ t.total.toFixed(2) }}</b-td>
+                                    <b-td>{{ simbolo(t.currency) }} {{ t.total.toFixed(2) }}</b-td>
                                 </b-tr>
                             </b-tbody>
                         </b-table-simple>
@@ -174,6 +189,7 @@
             <div v-if="session">
                 <p v-if="!session.cash_register.blind_close_resolved">
                     Efectivo esperado: <strong>S/ {{ session.expected_cash_live.toFixed(2) }}</strong>
+                    y <strong>US$ {{ session.expected_cash_usd_live.toFixed(2) }}</strong>
                 </p>
                 <p v-else class="text-muted">
                     Cierre ciego: el esperado se muestra recién después de confirmar el conteo.
@@ -184,12 +200,17 @@
                     <b-form-input type="number" step="0.01" min="0" v-model.number="countedCash" />
                 </div>
 
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Efectivo contado en dólares (US$)</label>
+                    <b-form-input type="number" step="0.01" min="0" v-model.number="countedCashUsd" />
+                </div>
+
                 <div class="mb-3" v-if="requiereMotivo">
                     <label class="form-label fw-semibold">Motivo de la diferencia (obligatorio)</label>
                     <b-form-textarea v-model="differenceReason" rows="2" />
                     <small class="text-muted">
-                        La diferencia estimada (S/ {{ diferenciaEstimada.toFixed(2) }}) supera la tolerancia
-                        (S/ {{ (status?.difference_tolerance ?? 0).toFixed(2) }}).
+                        La diferencia estimada (S/ {{ diferenciaEstimada.toFixed(2) }} / US$ {{ diferenciaEstimadaUsd.toFixed(2) }})
+                        supera la tolerancia ({{ (status?.difference_tolerance ?? 0).toFixed(2) }}).
                     </small>
                 </div>
 
@@ -204,20 +225,26 @@
                     </b-button>
                     <div v-if="showDenominations" class="mt-2 border rounded p-2">
                         <div v-for="(d, idx) in denominations" :key="idx" class="row g-2 mb-2 align-items-center">
+                            <div class="col-3">
+                                <b-form-select v-model="d.currency">
+                                    <option value="PEN">S/</option>
+                                    <option value="USD">US$</option>
+                                </b-form-select>
+                            </div>
                             <div class="col-4">
                                 <b-form-input type="number" step="0.01" min="0" placeholder="Denominación"
                                     v-model.number="d.denomination" />
                             </div>
-                            <div class="col-4">
+                            <div class="col-3">
                                 <b-form-input type="number" min="0" placeholder="Cantidad" v-model.number="d.quantity" />
                             </div>
-                            <div class="col-4">
+                            <div class="col-2">
                                 <button type="button" class="btn btn-outline-danger btn-sm" @click="denominations.splice(idx, 1)">
                                     <i class="fas fa-trash"></i>
                                 </button>
                             </div>
                         </div>
-                        <b-button size="sm" variant="outline-primary" @click="denominations.push({ denomination: 0, quantity: 0 })">
+                        <b-button size="sm" variant="outline-primary" @click="denominations.push({ currency: 'PEN', denomination: 0, quantity: 0 })">
                             + Agregar denominación
                         </b-button>
                     </div>
@@ -230,6 +257,35 @@
                         Confirmar cierre
                     </b-button>
                 </div>
+            </div>
+        </b-modal>
+
+        <!-- ── Modal de cambio de moneda (T-013) ────────────────────── -->
+        <b-modal v-model="showExchangeModal" title="Cambio de moneda" hide-footer centered>
+            <div class="mb-3">
+                <label class="form-label fw-semibold">Sale</label>
+                <b-form-select v-model="exchangeForm.from_currency" @change="exchangeForm.to_currency = exchangeForm.from_currency === 'USD' ? 'PEN' : 'USD'">
+                    <option value="USD">Dólares (US$)</option>
+                    <option value="PEN">Soles (S/)</option>
+                </b-form-select>
+            </div>
+            <div class="mb-3">
+                <label class="form-label fw-semibold">Monto que sale ({{ simbolo(exchangeForm.from_currency) }})</label>
+                <b-form-input type="number" step="0.01" min="0.01" v-model.number="exchangeForm.amount" />
+            </div>
+            <div class="mb-3">
+                <label class="form-label fw-semibold">Tipo de cambio (soles por dólar)</label>
+                <b-form-input type="number" step="0.0001" min="0.0001" v-model.number="exchangeForm.exchange_rate" />
+            </div>
+            <p class="mb-3">
+                Entra: <strong>{{ simbolo(exchangeForm.to_currency) }} {{ montoCambioEntrada.toFixed(2) }}</strong>
+            </p>
+            <div class="modal-footer">
+                <b-button variant="secondary" @click="showExchangeModal = false">Cancelar</b-button>
+                <b-button variant="primary" :disabled="savingExchange" @click="guardarCambio">
+                    <span v-if="savingExchange" class="spinner-border spinner-border-sm me-1"></span>
+                    Registrar cambio
+                </b-button>
             </div>
         </b-modal>
 
@@ -256,7 +312,15 @@
                 </div>
 
                 <div class="mb-3">
-                    <label class="form-label fw-semibold">Monto (S/)</label>
+                    <label class="form-label fw-semibold">Moneda</label>
+                    <b-form-select v-model="movementForm.currency">
+                        <option value="PEN">Soles (S/)</option>
+                        <option value="USD">Dólares (US$)</option>
+                    </b-form-select>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Monto ({{ simbolo(movementForm.currency) }})</label>
                     <b-form-input type="number" step="0.01" min="0.01" v-model.number="movementForm.amount" />
                 </div>
 
@@ -363,7 +427,10 @@ const session = computed<CashSessionDetail | null>(() => status.value?.session ?
 // ── Apertura ─────────────────────────────────────────────────────────
 const selectedRegisterId = ref<number | null>(null);
 const openingAmount = ref<number>(0);
+const openingAmountUsd = ref<number>(0);
 const opening = ref(false);
+
+const simbolo = (moneda?: string) => (moneda === 'USD' ? 'US$' : 'S/');
 
 const onRegisterChange = () => {
     const register = availableRegisters.value.find(r => r.id === selectedRegisterId.value);
@@ -385,6 +452,7 @@ const abrirCaja = async () => {
         const res: AxiosResponse<CashOpenResponse> = await httpClient.post('cash/open', {
             cash_register_id: selectedRegisterId.value,
             opening_amount: openingAmount.value,
+            opening_amount_usd: openingAmountUsd.value || 0,
         });
         (Swal as TVueSwalInstance).fire('Listo', res.data.message, 'success');
         await cargarEstado();
@@ -398,15 +466,21 @@ const abrirCaja = async () => {
 // ── Cierre ───────────────────────────────────────────────────────────
 const showCloseModal = ref(false);
 const countedCash = ref<number>(0);
+const countedCashUsd = ref<number>(0);
 const differenceReason = ref('');
 const closingNotes = ref('');
 const showDenominations = ref(false);
-const denominations = ref<{ denomination: number; quantity: number }[]>([]);
+const denominations = ref<{ currency: 'PEN' | 'USD'; denomination: number; quantity: number }[]>([]);
 const closing = ref(false);
 
 const diferenciaEstimada = computed(() => {
     if (!session.value) return 0;
     return countedCash.value - session.value.expected_cash_live;
+});
+
+const diferenciaEstimadaUsd = computed(() => {
+    if (!session.value) return 0;
+    return (countedCashUsd.value || 0) - session.value.expected_cash_usd_live;
 });
 
 const requiereMotivo = computed(() => {
@@ -415,11 +489,13 @@ const requiereMotivo = computed(() => {
     // esta validación de frontend no puede anticiparse — queda a cargo del
     // backend en la respuesta de close(); acá solo se aplica en modo no ciego.
     if (session.value.cash_register.blind_close_resolved) return false;
-    return Math.abs(diferenciaEstimada.value) > status.value.difference_tolerance;
+    return Math.abs(diferenciaEstimada.value) > status.value.difference_tolerance
+        || Math.abs(diferenciaEstimadaUsd.value) > status.value.difference_tolerance;
 });
 
 const abrirModalCierre = () => {
     countedCash.value = 0;
+    countedCashUsd.value = 0;
     differenceReason.value = '';
     closingNotes.value = '';
     showDenominations.value = false;
@@ -437,6 +513,7 @@ const confirmarCierre = async () => {
     try {
         const res: AxiosResponse<CashCloseResponse> = await httpClient.post('cash/close', {
             counted_cash: countedCash.value,
+            counted_cash_usd: countedCashUsd.value || 0,
             difference_reason: differenceReason.value || null,
             closing_notes: closingNotes.value || null,
             denominations: showDenominations.value ? denominations.value : [],
@@ -449,7 +526,10 @@ const confirmarCierre = async () => {
             'Caja cerrada',
             `Esperado: S/ ${Number(cerrada.expected_cash).toFixed(2)} — ` +
             `Contado: S/ ${Number(cerrada.counted_cash).toFixed(2)} — ` +
-            `Diferencia: S/ ${Number(cerrada.difference).toFixed(2)}`,
+            `Diferencia: S/ ${Number(cerrada.difference).toFixed(2)} — ` +
+            `Dólares: esperado US$ ${Number(cerrada.expected_cash_usd).toFixed(2)}, ` +
+            `contado US$ ${Number(cerrada.counted_cash_usd).toFixed(2)}, ` +
+            `diferencia US$ ${Number(cerrada.difference_usd).toFixed(2)}`,
             'success'
         );
 
@@ -458,6 +538,51 @@ const confirmarCierre = async () => {
         (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo cerrar la caja.', 'error');
     } finally {
         closing.value = false;
+    }
+};
+
+// ── Cambio de moneda (T-013) ───────────────────────────────────────────
+const showExchangeModal = ref(false);
+const savingExchange = ref(false);
+const exchangeForm = ref({
+    from_currency: 'USD' as 'PEN' | 'USD',
+    to_currency: 'PEN' as 'PEN' | 'USD',
+    amount: 0,
+    exchange_rate: 0,
+});
+
+// Vista previa; el servidor es quien calcula y redondea el monto real.
+const montoCambioEntrada = computed(() => {
+    const { from_currency, amount, exchange_rate } = exchangeForm.value;
+    if (!amount || !exchange_rate) return 0;
+    return from_currency === 'USD' ? amount * exchange_rate : amount / exchange_rate;
+});
+
+const abrirModalCambio = () => {
+    exchangeForm.value = { from_currency: 'USD', to_currency: 'PEN', amount: 0, exchange_rate: 0 };
+    showExchangeModal.value = true;
+};
+
+const guardarCambio = async () => {
+    if (!exchangeForm.value.amount || exchangeForm.value.amount <= 0) {
+        (Swal as TVueSwalInstance).fire('Error', 'El monto debe ser mayor a 0.', 'error');
+        return;
+    }
+    if (!exchangeForm.value.exchange_rate || exchangeForm.value.exchange_rate <= 0) {
+        (Swal as TVueSwalInstance).fire('Error', 'El tipo de cambio debe ser mayor a 0.', 'error');
+        return;
+    }
+
+    savingExchange.value = true;
+    try {
+        const res = await httpClient.post('cash/currency-exchange', exchangeForm.value);
+        showExchangeModal.value = false;
+        (Swal as TVueSwalInstance).fire('Listo', res.data.message, 'success');
+        await cargarEstado();
+    } catch (error: any) {
+        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo registrar el cambio.', 'error');
+    } finally {
+        savingExchange.value = false;
     }
 };
 
@@ -502,6 +627,7 @@ const attachmentFile = ref<File | null>(null);
 const movementForm = ref<CashMovementPayload>({
     payment_method_id: null as unknown as number,
     amount: 0,
+    currency: 'PEN',
     concept_id: null as unknown as number,
     description: '',
     counterparty_type: null,
@@ -531,6 +657,7 @@ const resetMovementForm = () => {
     movementForm.value = {
         payment_method_id: null as unknown as number,
         amount: 0,
+        currency: 'PEN',
         concept_id: null as unknown as number,
         description: '',
         counterparty_type: null,
@@ -559,6 +686,7 @@ const abrirModalEdicion = (m: CashMovement) => {
     movementForm.value = {
         payment_method_id: m.payment_method_id,
         amount: Number(m.amount),
+        currency: m.currency,
         concept_id: m.concept_id as number,
         description: m.description ?? '',
         counterparty_type: m.counterparty_type as CashMovementPayload['counterparty_type'],
@@ -642,6 +770,7 @@ const guardarMovimiento = async () => {
     const formData = new FormData();
     formData.append('payment_method_id', String(movementForm.value.payment_method_id));
     formData.append('amount', String(movementForm.value.amount));
+    formData.append('currency', movementForm.value.currency ?? 'PEN');
     formData.append('concept_id', String(movementForm.value.concept_id));
     formData.append('description', movementForm.value.description);
 
