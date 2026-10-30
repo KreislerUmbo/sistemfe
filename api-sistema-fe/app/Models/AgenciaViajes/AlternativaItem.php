@@ -95,6 +95,8 @@ class AlternativaItem extends Model
         'item_origen_id',
         // T-003: confirmación manual de un servicio "para revisar" en una modificación.
         'revisado_en_modificacion',
+        // T-004: pasajero de la reserva al que corresponde esta penalidad.
+        'penalidad_reserva_pasajero_id',
     ];
 
     protected $casts = [

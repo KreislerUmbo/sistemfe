@@ -79,9 +79,16 @@ php artisan test
 ---
 
 ## Resultado
-- **Commits:**
-- **Tests:**
+- **Commits:** rama `feat/T-004-penalidad-pasajero-quitado` (la tarea decía `feat/T-004-penalidad-pasajero`; se usó el nombre pedido en la sesión). Ver `git log`.
+- **Tests:** `ReservaModificacionPenalidadTest` (15, CA1-CA8 + monto con decimales/negativo + 404 al borrar un ítem ajeno + 404 sin modificación); suite completa: 1718 pasan (6328 aserciones), Postgres real.
 - **Desviaciones de la tarea y por qué:**
+  - El motivo se guarda dentro de `descripcion_manual` (`Penalidad por cancelación — <pasajero>: <motivo>`): `alternativa_items` no tiene otra columna de descripción. Decidido con el usuario; al editar se reconstruye el texto. Si el pasajero no tiene nombre se usa `pasajero <id>`.
+  - Controller propio (`ReservaModificacionPenalidadController`) + `PenalidadPasajeroService` + `PenalidadPasajeroRequest` (responde `{code, message}` 422 como el resto de Agencia).
+  - La diferencia agrega dos campos por pasajero (`penalidad_alternativa_item_id`, `penalidad_sobrante_item_id`) y un bloqueo nuevo `penalidad_sobrante`. Penalidad de un pasajero facturado también cuenta como sobrante.
+  - El monto va en la moneda de la versión nueva (`moneda_costo` = moneda de la alternativa, sin conversión).
+  - **Antes de desplegar: `tenants:migrate-verticales`** (`alternativa_items.penalidad_reserva_pasajero_id`, FK con `nullOnDelete`).
 
 ## Hallazgos fuera de alcance
-- 
+- CA6 no es alcanzable hoy desde el cotizador: `actualizarPasajeros` borra la copia del pasajero quitado y volver a agregarlo crea un pasajero nuevo (`agregado`) sin `reserva_pasajero_id`, así que el quitado sigue quitado y su penalidad sigue vigente. El test re-vincula la copia a mano. Decidir en T-007/T-005 si "volver" debe restaurar el vínculo.
+- Las pantallas deben mostrar `bloqueos[].alternativa_item_id` de `penalidad_sobrante` para llevar a borrar la penalidad (T-007).
+

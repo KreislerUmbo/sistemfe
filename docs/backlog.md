@@ -40,7 +40,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 
 | ID | Módulo | Qué | Estado | Depende de | Rama / commit |
 |---|---|---|---|---|---|
-| T-004 | AGE | Modificar reserva: penalidad por pasajero quitado | por hacer | T-003 | |
+| T-004 | AGE | Modificar reserva: penalidad por pasajero quitado | en revisión | T-003 | |
 | T-005 | AGE | Modificar reserva: aplicar a la reserva | por hacer | T-003, T-004 | |
 | T-006 | AGE | Modificar reserva: PDF para el cliente | por hacer | T-003 | |
 | T-007 | AGE | Modificar reserva: pantallas | por hacer | T-005, T-006 | |
