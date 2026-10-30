@@ -67,6 +67,14 @@ qué leen. Cliente, moneda y pasajeros coinciden en la copia; el **código** de 
 cambia (`…-M1`). Anotar en "Hallazgos" cualquier lugar donde eso se vea mal; no arreglarlo
 acá sin consultar.
 
+**Nota de la revisión de T-003 (29-oct): modificaciones encadenadas.** Tras aplicar una, un
+servicio facturado sigue apuntando a la versión anterior y D-AGE-032 crea un "Ajuste" en la
+versión nueva. La siguiente modificación copiaría el servicio **y** el ajuste, y el ajuste se
+contaría dos veces en la diferencia (`ModificacionDiferenciaService` ya sube por
+`item_origen_id` para encontrar el servicio de la reserva, pero no conoce los ajustes). Decidir
+cómo se marca un ítem de ajuste para que la copia de T-002 y la diferencia de T-003 lo traten
+aparte, y cubrir con un test "aplicar dos modificaciones seguidas".
+
 ## Fuera de alcance
 - PDF (T-006) y pantallas (T-007).
 - Emitir la nota de crédito: el aplicar la exige antes, no la hace.

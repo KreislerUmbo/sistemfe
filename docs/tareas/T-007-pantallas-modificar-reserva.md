@@ -43,6 +43,12 @@ lugar donde se corrige.
 `feedback_estilo_ui_como_agencia_y_ventas`). Llamadas con `httpClient`. Llamadas
 independientes en paralelo (`Promise.all`), no en cadena.
 
+**Nota de la revisión de T-003 (29-oct):** un hotel o habitación (`tarifa_fija`) queda
+`para_revisar` apenas cambia la cantidad de pasajeros, así que una modificación con varias
+habitaciones genera varias confirmaciones. El panel debería permitir confirmarlas en bloque
+(hoy la ruta `POST …/items/{itemId}/revisado` es de a uno: o se llama en paralelo o se agrega
+una ruta para varios). Las líneas con `sin_pasajeros = true` no se confirman: llevan al ítem.
+
 ## Fuera de alcance
 - Cambios en el backend, salvo un ajuste chico de forma de respuesta. Si hace falta más,
   anotarlo en "Hallazgos".
