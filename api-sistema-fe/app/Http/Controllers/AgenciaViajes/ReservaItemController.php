@@ -5,10 +5,9 @@ namespace App\Http\Controllers\AgenciaViajes;
 use App\Http\Controllers\Controller;
 use App\Models\AgenciaViajes\Reserva;
 use App\Models\AgenciaViajes\ReservaItem;
-use App\Models\AgenciaViajes\ReservaItemPasajero;
-use App\Models\AgenciaViajes\ReservaItemVueloPasajero;
 use App\Models\AgenciaViajes\ReservaVenta;
 use App\Models\AgenciaViajes\SalidaOperativa;
+use App\Services\AgenciaViajes\ReservaItemQuitarService;
 use App\Services\AgenciaViajes\SalidaEngancheService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -170,23 +169,8 @@ class ReservaItemController extends Controller
                     throw new HttpException(422, 'No se puede quitar: este ítem ya fue facturado en una venta de esta reserva.');
                 }
 
-                // reserva_item_pasajero.reserva_item_id es FK sin
-                // cascadeOnDelete() — hay que limpiarla a mano antes de
-                // poder borrar el ítem.
-                ReservaItemPasajero::where('reserva_item_id', $itemLocked->id)->delete();
-                // Bug real (auditoría 2026-09-22): reserva_item_vuelo_pasajero
-                // (migración 2026_08_27_110000) tampoco tiene cascadeOnDelete()
-                // y quedó fuera de este limpiado desde el día que se creó —
-                // borrar un ítem con vuelo de agencia ya cargado tiraba un 500
-                // de violación de FK en vez de un mensaje claro.
-                ReservaItemVueloPasajero::where('reserva_item_id', $itemLocked->id)->delete();
-                $salidaId = $itemLocked->salida_operativa_id;
-                $itemLocked->delete();
-                // Bug real (auditoría 2026-09-22): ver
-                // SalidaOperativa::eliminarSiQuedoVacia() — borrar el
-                // último ítem enganchado a una salida la dejaba fantasma en
-                // el tablero, con 0 pasajeros.
-                SalidaOperativa::eliminarSiQuedoVacia($salidaId);
+                // La limpieza (pasajeros, vuelos, salida) vive en ReservaItemQuitarService.
+                app(ReservaItemQuitarService::class)->quitar($itemLocked);
             });
         } catch (HttpException $e) {
             return response()->json(['code' => $e->getStatusCode(), 'message' => $e->getMessage()], $e->getStatusCode());
