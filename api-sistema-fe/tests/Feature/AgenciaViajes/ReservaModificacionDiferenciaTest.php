@@ -529,6 +529,27 @@ class ReservaModificacionDiferenciaTest extends TestCase
         $this->assertSame('quitado', collect($dif['lineas'])->firstWhere('item_origen_id', $this->items['solo_carla']->id)['estado']);
     }
 
+    // Revisión de T-003: el mismo servicio, pero sin respaldo en la reserva (sincronizar-items no
+    // crea un servicio solo de pasajeros quitados). No puede salir "agregado" para todos.
+    public function test_servicio_sin_pasajeros_y_sin_servicio_en_la_reserva_no_sale_agregado(): void
+    {
+        [$reserva, $m] = $this->reservaConModificacion();
+        $reservaItem = ReservaItem::where('reserva_id', $reserva->id)
+            ->where('alternativa_item_id', $this->items['solo_carla']->id)->firstOrFail();
+        DB::table('reserva_item_pasajero')->where('reserva_item_id', $reservaItem->id)->delete();
+        $reservaItem->delete();
+        $this->cambiarPasajeros($m, [$this->reservaPasajeroId($reserva, 'carla')]);
+        $soloCarla = $this->nuevo($m, 'solo_carla');
+
+        $dif = $this->diferencia($reserva);
+        $linea = $this->linea($dif, $soloCarla);
+
+        $this->assertSame('para_revisar', $linea['estado']);
+        $this->assertTrue($linea['sin_pasajeros']);
+        $this->assertContains('servicio_sin_pasajeros', $this->tiposDeBloqueo($dif));
+        $this->assertFalse($dif['se_puede_aplicar']);
+    }
+
     // ── CA8 ────────────────────────────────────────────────────────────────────
 
     public function test_ca8_sin_cambios_todo_igual_diferencia_cero_y_nada_que_aplicar(): void

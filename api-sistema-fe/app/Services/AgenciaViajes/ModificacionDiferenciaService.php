@@ -83,10 +83,22 @@ class ModificacionDiferenciaService
             $origen = $item->item_origen_id ? $origenes->get($item->item_origen_id) : null;
             $reservaItem = $origen ? $this->reservaItemDe($origen, $reservaItemPorAlternativaItem) : null;
 
+            // Nota de la revisión de T-002: un servicio exclusivo de pasajeros que ya no están
+            // llega con pax_incluidos = [], que en el sistema significa "para todos". No se
+            // cobra a todos: la línea queda para revisar y bloquea hasta que el vendedor la
+            // asigne o la quite (confirmarla a mano no sirve, ver $linea['sin_pasajeros']).
+            $sinPasajeros = $origen
+                && is_array($item->pax_incluidos) && $item->pax_incluidos === []
+                && is_array($origen->pax_incluidos) && $origen->pax_incluidos !== [];
+
             // Sin origen (o sin servicio en la reserva que lo respalde) no hay con qué comparar:
-            // es un servicio nuevo.
+            // es un servicio nuevo. Salvo que haya quedado sin pasajeros: sincronizar-items no
+            // crea en la reserva un servicio solo de pasajeros quitados, y su copia no puede
+            // salir como "agregado para todos".
             if (! $origen || ! $reservaItem) {
-                $lineas->push($this->linea($item, 'agregado', 0, $this->centavos($item), null, false, []));
+                $lineas->push($sinPasajeros
+                    ? $this->linea($item, 'para_revisar', 0, $this->centavos($item), null, false, [], ['sin_pasajeros' => true])
+                    : $this->linea($item, 'agregado', 0, $this->centavos($item), null, false, []));
 
                 continue;
             }
@@ -97,13 +109,6 @@ class ModificacionDiferenciaService
             $nuevo = $this->centavos($item);
             $facturado = in_array($reservaItem->id, $itemsFacturados, true);
             $saleIds = $facturado ? $this->saleIdsDeItem($ventas, $reservaItem->id) : [];
-
-            // Nota de la revisión de T-002: un servicio exclusivo de pasajeros que ya no están
-            // llega con pax_incluidos = [], que en el sistema significa "para todos". No se
-            // cobra a todos: la línea queda para revisar y bloquea hasta que el vendedor la
-            // asigne o la quite (confirmarla a mano no sirve, ver $linea['sin_pasajeros']).
-            $sinPasajeros = is_array($item->pax_incluidos) && $item->pax_incluidos === []
-                && is_array($origen->pax_incluidos) && $origen->pax_incluidos !== [];
 
             $paxVendidos = $this->pasajerosQueLoUsan($origen, $pasajerosPorCotizacion);
             $paxNuevos = $this->pasajerosQueLoUsan($item, $pasajerosPorCotizacion);
