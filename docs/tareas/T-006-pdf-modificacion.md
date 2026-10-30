@@ -80,9 +80,29 @@ Generar uno real en `agencia-demo` y rasterizarlo con `gswin64c.exe` para revisa
 ---
 
 ## Resultado
-- **Commits:**
-- **Tests:**
+- **Commits:** en la rama `feat/T-006-pdf-modificacion` (ver `git log main..`).
+- **Tests:** `ReservaModificacionPdfTest`, 11 tests (CA1-CA7, el ajuste una sola vez, modificación de
+  otra reserva → 404, sin abierta → 404, descartada → 422). Suite completa: ver el aviso final.
+  CA5 verificado a la vista: PDF real de `agencia-demo` (reserva `RDKM-1026-0000001`, +75 al único
+  servicio, dentro de una transacción que se revirtió), rasterizado con Ghostscript a 80 dpi:
+  membrete con logo, tabla, resumen y pie correctos, una sola página.
 - **Desviaciones de la tarea y por qué:**
+  - La vista está en `resources/views/pdf/agencia-viajes/modificacion-reserva.blade.php`, no en
+    `pdf/agencia/…`: la carpeta real de los PDF de Agencia es `pdf/agencia-viajes/`.
+  - El nombre del servicio se vuelve a resolver desde el ítem (`resolverNombreItem(..., 'cliente')`)
+    porque la `descripcion` de la diferencia (y la guardada en `diferencia_aplicada`) es la interna,
+    con el nombre del mayorista. Si el ítem ya no existe, sale «Servicio», nunca la interna.
+  - **Saldo** (la tarea no lo define): total nuevo − anticipos recibidos (`anticipos_aplicados`),
+    en centavos. «Ya facturado» se muestra aparte, solo informativo. Es la única resta propia del
+    PDF; si se quiere otra definición (p. ej. contra lo facturado) es cambiar una línea en
+    `ModificacionPdfService::datos()`.
+  - Las penalidades salen en su sección (concepto + motivo + monto), no repetidas en la tabla de
+    cambios. Se identifican por `alternativa_items.penalidad_reserva_pasajero_id`.
+  - Una modificación descartada pide 422 (no hay diferencia que imprimir).
 
 ## Hallazgos fuera de alcance
-- 
+- `AlternativaPdfService` y `AlternativaItem::calcularTotalEfectivo()` no filtran
+  `ajuste_de_item_id` (no hay ningún uso en esos archivos): el PDF de cotización de la versión
+  vigente (`…-M1`) de una reserva con ajuste muestra y suma el «Ajuste — …» junto al servicio con
+  el precio subido, o sea, la diferencia dos veces. Confirmado por lectura del código; no probado
+  con un PDF real. Candidata a tarea nueva.

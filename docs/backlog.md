@@ -40,7 +40,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 
 | ID | Módulo | Qué | Estado | Depende de | Rama / commit |
 |---|---|---|---|---|---|
-| T-006 | AGE | Modificar reserva: PDF para el cliente | por hacer | T-003 | |
+| T-006 | AGE | Modificar reserva: PDF para el cliente | en revisión | T-003 | feat/T-006-pdf-modificacion |
 | T-072 | AGE | La cotización original sigue "reservada" tras aplicar una modificación; código de la reserva en el tablero de salidas | por hacer | T-005 | |
 | T-073 | AGE | Modificar reserva: un servicio "por persona" que no se reprecia solo (pasaje aéreo, manual, mayorista) queda "para revisar" si cambian sus pasajeros | por hacer | T-005 | |
 | T-007 | AGE | Modificar reserva: pantallas | por hacer | T-005, T-006, T-072, T-073 | |
