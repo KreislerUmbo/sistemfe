@@ -75,6 +75,17 @@ contaría dos veces en la diferencia (`ModificacionDiferenciaService` ya sube po
 cómo se marca un ítem de ajuste para que la copia de T-002 y la diferencia de T-003 lo traten
 aparte, y cubrir con un test "aplicar dos modificaciones seguidas".
 
+**Notas de la revisión de T-004 (30-oct): penalidades.** Una penalidad es un `alternativa_items`
+manual con `penalidad_reserva_pasajero_id` (FK `nullOnDelete` a `reserva_pasajeros`). Al
+quitar al pasajero en el paso 3 esa columna queda en NULL y el ítem pasa a ser un servicio
+común: crear su `reserva_item` (paso 4, "agregados") **antes** de quitar al pasajero, o no
+depender de esa columna después. La penalidad nace con `pax_incluidos = null` ("para todos"):
+al facturar por pasajero se repartiría entre los que se quedan. Decidir a quién se le imputa
+(preguntar al usuario si no está claro) y cubrirlo con un test que facture la penalidad.
+Hoy, sacar a un pasajero y volver a agregarlo en el cotizador crea uno nuevo (`agregado`) y el
+original sigue `quitado` con su penalidad vigente: no es tarea de T-005 cambiarlo, pero el
+aplicar no debe romperse en ese caso.
+
 ## Fuera de alcance
 - PDF (T-006) y pantallas (T-007).
 - Emitir la nota de crédito: el aplicar la exige antes, no la hace.

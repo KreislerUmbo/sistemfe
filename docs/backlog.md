@@ -40,7 +40,6 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 
 | ID | Módulo | Qué | Estado | Depende de | Rama / commit |
 |---|---|---|---|---|---|
-| T-004 | AGE | Modificar reserva: penalidad por pasajero quitado | en revisión | T-003 | |
 | T-005 | AGE | Modificar reserva: aplicar a la reserva | por hacer | T-003, T-004 | |
 | T-006 | AGE | Modificar reserva: PDF para el cliente | por hacer | T-003 | |
 | T-007 | AGE | Modificar reserva: pantallas | por hacer | T-005, T-006 | |
@@ -98,6 +97,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 | VEN + CAJ | Agregar o quitar un pago desde "editar venta" (`SalePaymentController` store/destroy) se guarda al instante sin tocar la caja; el movimiento recién se crea o corrige al guardar la venta. Si el usuario sale sin guardar, ese dinero queda fuera de caja (o la caja espera uno que ya no está). Ya pasaba antes de T-010 | T-010, 28-oct-2026 |
 | AGE | Mismo corte de listas que T-039 en otras pantallas: `reservas/detalle.vue` (~2292) carga `proveedorService.biblioteca()` (30 tarifas) y `guiaService.listar({ page: 1 })` (15 guías) al abrir; servicios cortan en 200 (cotizador, paquetes, store); la lista de reasignar proveedor del reporte operativo puede quedar cortada en las últimas filas de la tabla (usar `useListaFlotante`) | T-039, 28-oct-2026 |
 | AGE | IGV de la penalidad por cancelación: preguntar al contador (hoy lo elige el vendedor, D-AGE-033) | requerimiento Modificar reserva, 24-oct-2026 |
+| AGE | El descuento global de la alternativa (`AlternativaController::aplicarDescuentoGlobal()` / `aplicarDescuentoGlobalMonto()`) también rebaja la penalidad por cancelación: el monto que escribió el vendedor cambia sin aviso. Propuesta: excluir los ítems con `penalidad_reserva_pasajero_id` | T-004, 30-oct-2026 |
 | AGE | Penalidad calculada con `reglas_cancelacion` (franjas por días) | D-AGE-033 |
 | AGE | Agregar pasajero rápido en la reserva para tours por persona (después de probar Modificar reserva) | fila F4 de la hoja de ruta |
 | AGE | Enviar el PDF de modificación por correo | T-006, fuera de alcance |
@@ -164,6 +164,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 
 | ID | Módulo | Qué | Commit |
 |---|---|---|---|
+| T-004 | AGE | Modificar reserva: penalidad por pasajero quitado (`POST/PUT/DELETE reservas/{id}/modificacion/penalidades`): ítem manual de la versión nueva con monto, motivo e IGV elegidos (sin defecto); la diferencia deja de marcar `falta_penalidad` y bloquea con `penalidad_sobrante`. **Antes de desplegar: `tenants:migrate-verticales`** (`alternativa_items.penalidad_reserva_pasajero_id`). Implementada por Sonnet, revisada por Opus (arreglo: destino de la penalidad; R-AGE-06 al día). Notas para T-005 (imputación por pasajero, orden al aplicar) y T-007 (rutas y campos) | ver merge de `feat/T-004-penalidad-pasajero-quitado` |
 | T-003 | AGE | Modificar reserva: diferencia con lo vendido (`GET reservas/{id}/modificacion/diferencia`): líneas por servicio y por pasajero, totales en centavos, bloqueos con a dónde llevan y `huella`; confirmar un servicio "para revisar" (`POST …/items/{itemId}/revisado`, se pierde si el ítem o los pasajeros cambian). **Antes de desplegar: `tenants:migrate-verticales`** (`alternativa_items.revisado_en_modificacion`). Implementada por Sonnet, revisada por Opus (arreglo: servicio sin pasajeros y sin respaldo en la reserva). Notas para T-005 (modificaciones encadenadas) y T-007 (confirmar en bloque) | ver merge de `feat/T-003-diferencia-modificacion` |
 | T-002 | AGE | Modificar reserva: crear, consultar y descartar la modificación (`POST/GET/DELETE reservas/{id}/modificacion`, permiso `reservas.modificar`): cotización `origen='modificacion'` con copia de pasajeros y de la alternativa vigente. **Antes de desplegar: `tenants:migrate-verticales`** (3 migraciones) y `roles:sync-permisos-nuevos`; un rol personalizado con `reservas.editar` recibe `reservas.modificar` a mano. Solo backend: las pantallas son T-007 | ver merge de `feat/T-002-crear-modificacion` |
 | T-070 | PLA + AGE | `agencia-viajes:limpiar-operacion {tenant} [--ejecutar]`: borra la operación de prueba (cotizaciones, reservas, ventas, pagos, caja, tipo de cambio) y conserva tours, tarifas, proveedores, clientes y configuración; se niega ante tablas sin clasificar. Aplicado en agencia-demo local el 29-oct (backup en `C:/xampp/backups-sistemfe/`). **Falta en dakamu:** desplegar, backup, simular, ejecutar | ver merge de `feat/T-070-limpiar-operacion-prueba` |

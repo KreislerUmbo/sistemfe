@@ -49,6 +49,17 @@ habitaciones genera varias confirmaciones. El panel debería permitir confirmarl
 (hoy la ruta `POST …/items/{itemId}/revisado` es de a uno: o se llama en paralelo o se agrega
 una ruta para varios). Las líneas con `sin_pasajeros = true` no se confirman: llevan al ítem.
 
+**Nota de la revisión de T-004 (30-oct): penalidades.** Rutas `POST/PUT/DELETE
+reservas/{id}/modificacion/penalidades[/{itemId}]` (`{ reserva_pasajero_id, monto, motivo,
+tip_afe_igv, destino_tributario }`; el pasajero solo en POST). Cada pasajero de la diferencia
+trae `falta_penalidad`, `penalidad_alternativa_item_id` y `penalidad_sobrante_item_id`; el
+bloqueo `penalidad_sobrante` trae `alternativa_item_id` para llevar a borrarla. IGV y destino
+sin valor por defecto: el select empieza vacío. El motivo se guarda dentro de
+`descripcion_manual` (`Penalidad por cancelación — <pasajero>: <motivo>`); al editar, mostrar
+el motivo aparte (guardarlo en el formulario o recortar el prefijo) y como texto, nunca
+`v-html`. Hoy el pasajero quitado y vuelto a agregar queda como uno nuevo: si se quiere que
+"volver" recupere al original (y su penalidad sobre), decidirlo aquí.
+
 ## Fuera de alcance
 - Cambios en el backend, salvo un ajuste chico de forma de respuesta. Si hace falta más,
   anotarlo en "Hallazgos".
