@@ -91,4 +91,10 @@ php artisan test
 ## Hallazgos fuera de alcance
 - CA6 no es alcanzable hoy desde el cotizador: `actualizarPasajeros` borra la copia del pasajero quitado y volver a agregarlo crea un pasajero nuevo (`agregado`) sin `reserva_pasajero_id`, así que el quitado sigue quitado y su penalidad sigue vigente. El test re-vincula la copia a mano. Decidir en T-007/T-005 si "volver" debe restaurar el vínculo.
 - Las pantallas deben mostrar `bloqueos[].alternativa_item_id` de `penalidad_sobrante` para llevar a borrar la penalidad (T-007).
+- El descuento global de la alternativa (`AlternativaController::aplicarDescuentoGlobal()` y
+  `aplicarDescuentoGlobalMonto()`) también rebaja la penalidad: el monto que escribió el
+  vendedor cambia sin aviso. Propuesta: excluir los ítems con `penalidad_reserva_pasajero_id`.
+  Tarea aparte.
+- Para T-005: la penalidad nace con `pax_incluidos = null` ("para todos"). Al facturar por
+  pasajero se repartiría entre los que se quedan; decidir a quién se le imputa.
 

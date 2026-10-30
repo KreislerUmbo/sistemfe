@@ -55,6 +55,9 @@ class PenalidadPasajeroService
             $alternativa = $modificacion->alternativaNueva()->firstOrFail();
             $item = AlternativaItem::create([
                 'alternativa_id' => $alternativa->id,
+                // Primer destino de la alternativa, como un ítem manual del cotizador
+                // (AlternativaItemController::resolverAlternativaDestinoId()).
+                'alternativa_destino_id' => $alternativa->destinos()->value('id'),
                 'origen_tipo' => AlternativaItem::ORIGEN_MANUAL,
                 'modo_precio' => 'tarifa_fija',
                 'cantidad' => 1,

@@ -26,7 +26,9 @@ Decisiones: D-AGE-030, D-AGE-031, D-AGE-032, D-AGE-033.
   servicio con monto (≥ 0), motivo obligatorio y tratamiento de IGV elegido, sin valor por
   defecto.
 - **R-AGE-06** — No se aplica mientras haya líneas `para revisar` sin confirmar,
-  `requiere nota de crédito` sin resolver, o pasajeros quitados sin penalidad.
+  `requiere nota de crédito` sin resolver, pasajeros quitados sin penalidad, o penalidades
+  que sobran (de un pasajero que ya no se quita o que está facturado): se borran a mano, no
+  solas.
 - **R-AGE-07** — Aplicar es todo o nada: en una transacción, con lock de la reserva y la
   diferencia recalculada adentro. Si no coincide con la que vio el usuario, no se aplica y se
   avisa.

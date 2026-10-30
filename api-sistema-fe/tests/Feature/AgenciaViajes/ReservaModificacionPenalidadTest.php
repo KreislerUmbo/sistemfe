@@ -6,6 +6,7 @@ use App\Http\Controllers\AgenciaViajes\CotizacionController;
 use App\Http\Controllers\AgenciaViajes\ReservaController;
 use App\Http\Controllers\AgenciaViajes\ReservaModificacionController;
 use App\Models\AgenciaViajes\Alternativa;
+use App\Models\AgenciaViajes\AlternativaDestino;
 use App\Models\AgenciaViajes\AlternativaItem;
 use App\Models\AgenciaViajes\Cotizacion;
 use App\Models\AgenciaViajes\CotizacionPasajero;
@@ -318,6 +319,11 @@ class ReservaModificacionPenalidadTest extends TestCase
         [$reserva, $m, $beto] = $this->conBetoQuitado();
         $antes = $this->diferencia($reserva);
         $this->assertContains('falta_penalidad', $this->tiposDeBloqueo($antes));
+        $destinoNuevo = AlternativaDestino::create([
+            'alternativa_id' => $m->alternativa_nueva_id,
+            'destino_atractivo_id' => DestinoAtractivo::firstOrFail()->id,
+            'orden' => 1,
+        ]);
 
         $respuesta = $this->crearPenalidad($reserva, $beto);
 
@@ -329,6 +335,8 @@ class ReservaModificacionPenalidadTest extends TestCase
         $this->assertStringContainsString('No se presentó', $item->descripcion_manual);
         $this->assertSame(['10', 'nacional'], [$item->tip_afe_igv, $item->destino_tributario]);
         $this->assertNull($item->item_origen_id);
+        // Mismo destino que tomaría un ítem manual del cotizador (el primero de la alternativa).
+        $this->assertSame($destinoNuevo->id, (int) $item->alternativa_destino_id);
 
         // La respuesta ya trae la diferencia nueva.
         $this->assertNotContains('falta_penalidad', collect($respuesta->getData(true)['bloqueos'])->pluck('tipo')->all());
