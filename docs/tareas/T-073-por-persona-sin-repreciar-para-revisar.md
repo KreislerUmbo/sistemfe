@@ -29,12 +29,22 @@ Hoy nadie puede aplicar desde la pantalla, así que tiene que estar antes de T-0
   `tarifa_fija`). Se confirma con la ruta de siempre (`POST …/items/{itemId}/revisado`) o se
   corrige el precio en el cotizador (entonces sale `cambio_precio` / `ajuste`).
 - "Se reprecia solo" se decide en **un** lugar: extraer la condición de
-  `RecalculoPorPersonaService::recalcular()` (~84: proveedor con `proveedor_tarifa_id` y tarifa
-  existente) a un método público y usarlo desde los dos servicios. No duplicarla.
+  `RecalculoPorPersonaService::recalcular()` a un método público y usarlo desde los dos
+  servicios. No duplicarla. Hoy se reprecian solos:
+  - proveedor con `proveedor_tarifa_id` y la tarifa existente (~84-105);
+  - línea de tour (`origen_tipo = tour`) **sin** `precio_manual`.
 - Un `por_persona` que sí se reprecia y cambió de pasajeros ya sale `cambio_precio` / `ajuste`:
   no cambia.
-- Tours (`origen_tipo = tour`): `RecalculoPorPersonaService` los excluye. Verificar cómo se
-  reprecian al cambiar pasajeros; si tampoco, mismo tratamiento. Anotar lo que se encontró.
+- **Tours (verificado el 30-oct):** `recalcular()` los reprecia aparte, por unidad (combo
+  entero o carga de tour suelto), con `TourLineaService::recalcularUnidad()` (~60-78): mismos
+  precios y temporada ya cotizados, conteo de pasajeros actual. Al aplicar una modificación se
+  llama si cambió la composición (`ModificacionReservaService` ~101). **Excepción:** con
+  `precio_manual` solo actualiza el costo; el precio queda igual y vuelve como aviso "revisa el
+  precio", así que en la diferencia sale `igual`: el mismo hueco que el pasaje aéreo. Entra en
+  esta tarea: tour con `precio_manual` y distinta cantidad de pasajeros → `para_revisar`.
+  Ojo: las líneas de una carga (una por grupo de IGV) son varias filas del mismo tour; cada una
+  sale como su propia línea en la diferencia, así que "Revisado" se confirma una por una (o
+  en bloque desde T-007).
 
 ## Fuera de alcance
 - Repreciar automáticamente pasajes aéreos o ítems de mayorista.
@@ -55,6 +65,8 @@ Hoy nadie puede aplicar desde la pantalla, así que tiene que estar antes de T-0
 - [ ] **CA4** — Un `por_persona` de proveedor con tarifa se reprecia y sale `cambio_precio`,
   como hoy.
 - [ ] **CA5** — Un `por_persona` sin cambio de pasajeros sigue `igual`.
+- [ ] **CA5b** — Tour con `precio_manual` y un pasajero agregado: sus líneas salen
+  `para_revisar`; el mismo tour sin precio a mano sale `cambio_precio`, como hoy.
 - [ ] **CA6** — Los tests existentes de diferencia, penalidad y aplicar siguen en verde.
 
 ## Seguridad y correctitud
