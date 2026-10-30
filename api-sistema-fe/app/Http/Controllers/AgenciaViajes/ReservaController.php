@@ -14,12 +14,14 @@ use App\Models\AgenciaViajes\Reserva;
 use App\Models\AgenciaViajes\ReservaAnticipo;
 use App\Models\AgenciaViajes\ReservaItem;
 use App\Models\AgenciaViajes\ReservaItemPasajero;
+use App\Models\AgenciaViajes\ReservaModificacion;
 use App\Models\AgenciaViajes\ReservaPasajero;
 use App\Models\AgenciaViajes\ReservaVenta;
 use App\Models\AgenciaViajes\SalidaMayorista;
 use App\Models\AgenciaViajes\SalidaOperativa;
 use App\Models\Sale\Sale;
 use App\Services\AgenciaViajes\CodigoGeneradorService;
+use App\Services\AgenciaViajes\ReservaItemCreacionService;
 use App\Services\AgenciaViajes\SalidaEngancheService;
 use App\Services\AgenciaViajes\SalidaOperacionService;
 use App\Services\AgenciaViajes\TourLineaService;
@@ -330,11 +332,23 @@ class ReservaController extends Controller
         return in_array($alternativa->estado, ['borrador', 'enviada'], true);
     }
 
-    // Una cotización tiene como máximo una reserva activa.
+    // Una cotización tiene como máximo una reserva activa. Cuenta también la reserva que nació de
+    // esta cotización y hoy está en una versión de modificación (T-005): al aplicar, la reserva
+    // pasa a la alternativa de la cotización de modificación, pero sigue siendo la reserva de la
+    // original (y de cada modificación anterior de la cadena). Se resuelve por
+    // reserva_modificaciones aplicadas: la versión vendida de cada una vive en la cotización que
+    // reemplazó, y la cotización de la modificación es la que quedó vigente.
     private static function cotizacionTieneReservaActiva(int $cotizacionId): bool
     {
-        return Reserva::whereHas('alternativa', fn ($q) => $q->where('cotizacion_id', $cotizacionId))
-            ->where('estado', 'activa')
+        return Reserva::where('estado', 'activa')
+            ->where(function ($q) use ($cotizacionId) {
+                $q->whereHas('alternativa', fn ($a) => $a->where('cotizacion_id', $cotizacionId))
+                    ->orWhereHas('modificaciones', function ($m) use ($cotizacionId) {
+                        $m->where('estado', ReservaModificacion::ESTADO_APLICADA)
+                            ->where(fn ($x) => $x->where('cotizacion_id', $cotizacionId)
+                                ->orWhereHas('alternativaVendida', fn ($v) => $v->where('cotizacion_id', $cotizacionId)));
+                    });
+            })
             ->exists();
     }
 
@@ -599,77 +613,15 @@ class ReservaController extends Controller
         return [$reserva, $alertaCupoExcedido];
     }
 
-    // Extraído de crearReservaDesdeAlternativa() para reusar en
-    // sincronizarItems() (agregar un servicio a la cotización DESPUÉS de que
-    // la reserva ya está activa nunca se refleja solo — el staff dispara la
-    // sincronización a mano, ver sincronizarItems()).
+    // Extraído a ReservaItemCreacionService en T-005 (lo usa también "aplicar una modificación").
+    // Se usa en crearReservaDesdeAlternativa() y en sincronizarItems().
     private function crearReservaItemDesdeAlternativaItem(
         Reserva $reserva,
         AlternativaItem $alternativaItem,
         $fechaViajeDesde,
         array $mapaPasajeros
     ): ReservaItem {
-        $fechaCalculada = ($fechaViajeDesde && $alternativaItem->dia_referencial)
-            ? $fechaViajeDesde->copy()->addDays($alternativaItem->dia_referencial - 1)
-            : null;
-
-        $reservaItem = ReservaItem::create([
-            'reserva_id' => $reserva->id,
-            'alternativa_item_id' => $alternativaItem->id,
-            'proveedor_tarifa_id' => $alternativaItem->proveedor_tarifa_id,
-            // Sesión M2 — misma copia 1:1 que proveedor_tarifa_id, para no
-            // perder qué fila de la matriz hotel×habitación fijó el precio
-            // cuando el ítem no tiene ProveedorTarifa real.
-            'opcion_hotel_tarifa_id' => $alternativaItem->opcion_hotel_tarifa_id,
-            // Sesión 12h — quién opera el destino internacional de este
-            // ítem, copiado 1:1 igual que proveedor_tarifa_id. Reasignable
-            // después SOLO vía reasignarMayorista() (nunca update()
-            // genérico), ver docblock de ReservaItem::opcionMayorista().
-            'opcion_mayorista_id' => $alternativaItem->opcion_mayorista_id,
-            'fecha' => $fechaCalculada,
-            // Fase 1 del fix Cotización↔Reserva — este método es el único
-            // punto de creación de reserva_items (aceptar y sincronizar),
-            // así que todo lo que nace acá es 'auto' por definición. Un
-            // ítem solo pasa a 'manual' después, vía
-            // ReservaItemController::update().
-            'fecha_origen' => ReservaItem::FECHA_ORIGEN_AUTO,
-            // Sesión 11b4: propaga de qué tour vino el ítem (si vino de
-            // explotar un paquete_combo) para que la agrupación visual
-            // "Día 1/Día 2" sobreviva también en la reserva.
-            'tour_origen_id' => $alternativaItem->tour_origen_id,
-            // Análisis de impuestos (28-ago-2026): propaga el tratamiento
-            // tributario ya resuelto en la cotización — es lo único que
-            // ReservaFacturacionController puede usar sin volver a navegar
-            // proveedorTarifa (necesario para los orígenes manual/
-            // mayorista/guia/pasaje_aereo, que no tienen proveedor_tarifa).
-            'tip_afe_igv' => $alternativaItem->tip_afe_igv,
-            'destino_tributario' => $alternativaItem->destino_tributario,
-            // Fila 13, fase 1b (§3.9b, N14): la carga de tour (para la mezcla
-            // de IGV de la 1c y la salida de la fase 2) y la copia del costo
-            // por servicio, congelada al aceptar.
-            'carga_tour' => $alternativaItem->carga_tour,
-            'carga_combo' => $alternativaItem->carga_combo,
-            'desglose_costo_snapshot' => $alternativaItem->desglose_costo_snapshot,
-        ]);
-
-        // Proveedor compartido y, desde la fase 2a, la línea de tour: ver
-        // engancharSalidaOperativa().
-        $this->engancharSalidaOperativa($reservaItem, $alternativaItem, $fechaCalculada);
-
-        // pax_incluidos null/vacío = aplica a todos, no se crea ninguna
-        // fila (mismo criterio que pax_incluidos en alternativa_items).
-        if (! empty($alternativaItem->pax_incluidos)) {
-            foreach ($alternativaItem->pax_incluidos as $cotizacionPasajeroId) {
-                if (isset($mapaPasajeros[$cotizacionPasajeroId])) {
-                    ReservaItemPasajero::create([
-                        'reserva_item_id' => $reservaItem->id,
-                        'reserva_pasajero_id' => $mapaPasajeros[$cotizacionPasajeroId],
-                    ]);
-                }
-            }
-        }
-
-        return $reservaItem;
+        return app(ReservaItemCreacionService::class)->crear($reserva, $alternativaItem, $fechaViajeDesde, $mapaPasajeros);
     }
 
     // Enganche automático a la Salida Operativa: el criterio completo vive en
@@ -738,8 +690,10 @@ class ReservaController extends Controller
                 // bajo lock, no antes de abrir la transacción.
                 Reserva::where('id', $reserva->id)->lockForUpdate()->firstOrFail();
 
-                $alternativaItemIdsEnReserva = ReservaItem::where('reserva_id', $reserva->id)
-                    ->pluck('alternativa_item_id')->all();
+                // Incluye lo que ya está representado por una versión anterior (T-005): un
+                // servicio facturado que subió de precio sigue en la versión vendida y su
+                // versión nueva no es un servicio pendiente (si lo fuera, se facturaría dos veces).
+                $alternativaItemIdsEnReserva = ReservaItem::alternativaItemIdsYaEnLaReserva($reserva->id, $reserva->alternativa_id);
 
                 // Mismo filtro de grupos que crearReservaDesdeAlternativa()
                 // (M2) — en la práctica no debería haber grupos sin resolver
@@ -1358,7 +1312,7 @@ class ReservaController extends Controller
 
         $cotizacion = $reserva->alternativa->cotizacion;
 
-        $alternativaItemIdsEnReserva = $reserva->items->pluck('alternativa_item_id')->all();
+        $alternativaItemIdsEnReserva = ReservaItem::alternativaItemIdsYaEnLaReserva($reserva->id, $reserva->alternativa_id);
         $itemsPendientesSincronizar = AlternativaItem::where('alternativa_id', $reserva->alternativa_id)
             ->whereNotIn('id', $alternativaItemIdsEnReserva)
             ->get()

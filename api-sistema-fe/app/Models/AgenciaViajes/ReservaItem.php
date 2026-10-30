@@ -175,4 +175,36 @@ class ReservaItem extends Model
     {
         return $this->hasMany(ReservaItemVueloPasajero::class, 'reserva_item_id');
     }
+
+    /**
+     * Ids de los ítems de la alternativa vigente que la reserva ya tiene representados: los que
+     * tienen su `reserva_item` y los que descienden de uno por `item_origen_id` (T-005). Tras una
+     * modificación, un servicio facturado sigue apuntando a la versión vendida; su versión nueva
+     * (con el precio subido) está en la alternativa vigente pero NO es un servicio pendiente de
+     * sincronizar: ofrecerlo (o crearlo) lo facturaría dos veces.
+     *
+     * @return array<int, int>
+     */
+    public static function alternativaItemIdsYaEnLaReserva(int $reservaId, int $alternativaId): array
+    {
+        $enReserva = static::where('reserva_id', $reservaId)->pluck('alternativa_item_id')
+            ->map(fn ($id) => (int) $id)->all();
+
+        $cubiertos = $enReserva;
+        $conOrigen = AlternativaItem::where('alternativa_id', $alternativaId)
+            ->whereNotIn('id', $enReserva)->whereNotNull('item_origen_id')
+            ->pluck('item_origen_id', 'id');
+
+        foreach ($conOrigen as $id => $origenId) {
+            for ($saltos = 0; $origenId && $saltos < 10; $saltos++) {
+                if (in_array((int) $origenId, $enReserva, true)) {
+                    $cubiertos[] = (int) $id;
+                    break;
+                }
+                $origenId = AlternativaItem::whereKey($origenId)->value('item_origen_id');
+            }
+        }
+
+        return array_values(array_unique($cubiertos));
+    }
 }
