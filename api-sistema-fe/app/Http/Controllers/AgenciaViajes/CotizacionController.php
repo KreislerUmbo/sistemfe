@@ -401,6 +401,9 @@ class CotizacionController extends Controller
                 CotizacionPasajero::where('cotizacion_id', $cotizacion->id)->whereIn('id', $idsEliminados)->delete();
             }
 
+            // T-003: quien confirmó un servicio "para revisar" lo hizo con otros pasajeros.
+            AlternativaItem::limpiarRevisadoDeCotizacion($cotizacion->id);
+
             // El tipo (adulto/niño/infante) de un pasajero que se queda
             // también puede cambiar (ej. corregir su edad) sin que cambie
             // la cantidad total — igual afecta el reparto por tipo de
