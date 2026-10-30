@@ -24,7 +24,7 @@ use Illuminate\Database\Eloquent\Model;
 // generar) porque CodigoGeneradorService::generarParaReserva() lo usa para
 // extraer el resto del código al derivar el de la reserva (Str::after()).
 //
-// origen (09-oct-2026): 'cotizador' | 'venta_directa'. Una venta directa
+// origen (09-oct-2026): 'cotizador' | 'venta_directa' | 'modificacion' (T-002). Una venta directa
 // crea esta misma cadena como soporte interno de su reserva, pero no es una
 // cotización comercial — el listado del Cotizador y el Inicio la excluyen
 // (scopeDelCotizador()) y su reserva no deriva el código como la de una
@@ -39,6 +39,10 @@ class Cotizacion extends Model
     public const ORIGEN_COTIZADOR = 'cotizador';
 
     public const ORIGEN_VENTA_DIRECTA = 'venta_directa';
+
+    // T-002: copia editable de una reserva aceptada ("Modificar reserva", D-AGE-030). Oculta de los
+    // listados comerciales por delCotizador() y nunca se acepta por el camino normal.
+    public const ORIGEN_MODIFICACION = 'modificacion';
 
     protected $table = 'cotizaciones';
 
@@ -134,6 +138,11 @@ class Cotizacion extends Model
     public function scopeDelCotizador(Builder $query): Builder
     {
         return $query->where('origen', self::ORIGEN_COTIZADOR);
+    }
+
+    public function esModificacion(): bool
+    {
+        return $this->origen === self::ORIGEN_MODIFICACION;
     }
 
     public function esVentaDirecta(): bool

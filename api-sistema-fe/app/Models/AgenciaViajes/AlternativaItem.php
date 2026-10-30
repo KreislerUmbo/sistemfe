@@ -91,6 +91,8 @@ class AlternativaItem extends Model
         'temporada_id',
         'desglose_costo_snapshot',
         'precio_manual',
+        // T-002 (Modificar reserva): ítem de la versión vendida del que se copió este.
+        'item_origen_id',
     ];
 
     protected $casts = [

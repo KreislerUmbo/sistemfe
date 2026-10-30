@@ -138,9 +138,43 @@ php artisan tenants:migrate-verticales   # en local, y probar con una reserva de
 ---
 
 ## Resultado
-- **Commits:**
-- **Tests:**
+- **Commits:** en la rama `feat/T-002-crear-modificacion` (`git log main..`).
+- **Tests:** `ReservaModificacionCrearTest` (16 tests, cubre CA1–CA9; el del lock usa dos
+  conexiones). `AlternativaDuplicarPreservaCamposTest` en verde (CA10). Suite completa corrida
+  antes de la última limpieza: 1680 pasan, 3 fallaban por filas que mi test del lock dejó
+  guardadas en `sistemafe_test_migrations` (proveedor, servicio, destino); ya se limpiaron y el
+  test las borra. Esos 3 y los de Alternativa/Matriz/Limpiar pasan después; **no repetí la suite
+  completa tras ese arreglo**. Migraciones probadas con `down()` y aplicadas a la base de pruebas
+  y a agencia-demo; flujo crear/segunda/descartar probado sobre la reserva 29 de agencia-demo
+  (revertido, sin dejar datos). Permiso sincronizado en agencia-demo con
+  `roles:sync-permisos-nuevos` (Administrador y Supervisor).
 - **Desviaciones de la tarea y por qué:**
+  - El recálculo por persona se extrajo del `CotizacionController` a `RecalculoPorPersonaService`
+    (era privado); el controller delega. Igual `derivarTipoPax`/`umbralesEdad`.
+  - `ReservaController::filtrarItemsParaReserva()` pasó de `private` a `public static`.
+  - Se recalcula si cambia la cantidad **o el reparto por tipo** (adulto/niño/infante), no solo
+    la cantidad: quitar un niño y agregar un adulto deja la misma cantidad y otro precio.
+  - `vendedor_id` de la cotización de modificación = quien la abre (no el de la original), para
+    que `CotizacionPolicy` le deje editarla en el cotizador.
+  - Reserva sin código (anteriores al módulo de códigos): la modificación se llama `RES-<id>-M<n>`.
+  - "Validación" de `alternativas.estado = reemplazada`: el PUT genérico no la admite como entrada
+    y rechaza cambiar el estado de una ya reemplazada.
+  - Edad estimada de un pasajero sin vínculo ni fecha de nacimiento: infante 1, niño
+    `edad_max_infante+1`, adulto 30 (siempre dentro del tipo según los umbrales).
+  - `reserva_modificaciones` agregada a `LimpiarOperacionPrueba::TABLAS_A_BORRAR` (el comando
+    frena con tablas sin clasificar).
+  - `reservas.modificar` no está en `PermissionsDemoSeeder` (ahí no existe `reservas.editar`).
+    `roles:sync-permisos-nuevos` solo toca los roles base por nombre: un rol personalizado con
+    `reservas.editar` no recibe el permiso, hay que dárselo a mano.
 
 ## Hallazgos fuera de alcance
-- 
+- `CotizacionController::destroy()` y `AlternativaController::destroy()` sobre una cotización o
+  alternativa de modificación chocan con la FK de `reserva_modificaciones` (500 en vez de 422).
+- Siguen disponibles sobre la cotización de modificación: crear/duplicar más alternativas,
+  enviarla por correo y su PDF comercial (T-006/T-007 deben decidirlo).
+- Los conteos "en uso" de `ProveedorTarifaController`/`GuiaTarifaController` cuentan también los
+  ítems copiados en modificaciones (no filtran por `origen`).
+- Listados revisados: `CotizacionController::index()` y `DashboardService::cotizaciones()` usan
+  `delCotizador()`; no encontré otro listado de cotizaciones sin ese filtro.
+- Si el usuario que abre la modificación no tiene `cotizaciones.ver_todas`, solo ve las suyas:
+  como la abre él, la ve; pero otro con `reservas.modificar` sin `ver_todas` no la vería.
