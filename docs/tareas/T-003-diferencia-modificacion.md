@@ -58,6 +58,14 @@ marca; verificar en qué endpoints del cotizador hace falta).
 
 **Ruta:** `GET reservas/{id}/modificacion/diferencia`, con el mismo permiso y Policy que T-002.
 
+**Nota de la revisión de T-002 (29-oct):** un servicio exclusivo de pasajeros que ya se
+quitaron de la reserva llega a la copia con `pax_incluidos = []`, que en el sistema significa
+"para todos" (en la reserva pasa lo mismo: `QuitarPasajeroReservaService` borra sus
+`reserva_item_pasajeros` y el servicio queda sin asignar). La copia lo marca en
+`items_para_revisar`. La diferencia no debe cobrarlo a todos: tratarlo a propósito (p. ej. una
+línea `para_revisar` que bloquea aplicar hasta que el vendedor lo asigne o lo quite) y cubrirlo
+con un test.
+
 ## Fuera de alcance
 - Crear penalidades o ajustes (T-004/T-005); acá solo se informan.
 - Aplicar o modificar la reserva.

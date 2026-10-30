@@ -40,7 +40,6 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 
 | ID | Módulo | Qué | Estado | Depende de | Rama / commit |
 |---|---|---|---|---|---|
-| T-002 | AGE | Modificar reserva: crear y descartar la modificación (cotización propia + copia) | en revisión | — | `feat/T-002-crear-modificacion` |
 | T-003 | AGE | Modificar reserva: calcular la diferencia con lo vendido | por hacer | T-002 | |
 | T-004 | AGE | Modificar reserva: penalidad por pasajero quitado | por hacer | T-003 | |
 | T-005 | AGE | Modificar reserva: aplicar a la reserva | por hacer | T-003, T-004 | |
@@ -166,6 +165,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 
 | ID | Módulo | Qué | Commit |
 |---|---|---|---|
+| T-002 | AGE | Modificar reserva: crear, consultar y descartar la modificación (`POST/GET/DELETE reservas/{id}/modificacion`, permiso `reservas.modificar`): cotización `origen='modificacion'` con copia de pasajeros y de la alternativa vigente. **Antes de desplegar: `tenants:migrate-verticales`** (3 migraciones) y `roles:sync-permisos-nuevos`; un rol personalizado con `reservas.editar` recibe `reservas.modificar` a mano. Solo backend: las pantallas son T-007 | ver merge de `feat/T-002-crear-modificacion` |
 | T-070 | PLA + AGE | `agencia-viajes:limpiar-operacion {tenant} [--ejecutar]`: borra la operación de prueba (cotizaciones, reservas, ventas, pagos, caja, tipo de cambio) y conserva tours, tarifas, proveedores, clientes y configuración; se niega ante tablas sin clasificar. Aplicado en agencia-demo local el 29-oct (backup en `C:/xampp/backups-sistemfe/`). **Falta en dakamu:** desplegar, backup, simular, ejecutar | ver merge de `feat/T-070-limpiar-operacion-prueba` |
 | T-013 | CAJ | Caja por moneda: apertura, cierre (contado, esperado y diferencia en S/ y US$), cambio de moneda (`POST cash/currency-exchange`), historial, dashboard, PDF y Excel separados por moneda; cierres viejos con dólares marcados como mezclados. **Antes de desplegar: `tenants:migrate-verticales`** (columnas `*_usd`); habilita T-011 con dólares; implementada por Sonnet, revisada por Opus, cierre probado a mano por el usuario. Fuera de alcance: retirar `cash_session_totals` (sin uso) y decidir cómo corregir un cambio de moneda | ver merge de `feat/T-013-caja-por-moneda` |
 | T-014 | VEN | El bloque "FORMA DE PAGO" del PDF (A4 y ticket) muestra el nombre de la forma de pago sin emoji, el n.º de operación, lo entregado en su moneda con T.C. y el vuelto (`Sale::pagosImpresos()`/`vueltoImpreso()`); implementada por Sonnet, revisada por Opus con verificación visual (Ghostscript) | ver merge de `feat/T-014-pdf-forma-de-pago` |
