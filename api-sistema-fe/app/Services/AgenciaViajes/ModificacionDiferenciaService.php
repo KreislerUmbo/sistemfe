@@ -42,7 +42,7 @@ class ModificacionDiferenciaService
         );
 
         $lineas = $this->lineasDeServicios($reserva, $itemsNuevos, $ventas, $itemsFacturados);
-        $pasajeros = $this->pasajeros($reserva, $modificacion, $ventas, $pasajerosFacturados);
+        $pasajeros = $this->pasajeros($reserva, $modificacion, $ventas, $pasajerosFacturados, $itemsNuevos);
         $bloqueos = $this->bloqueos($lineas, $pasajeros);
         $totales = $this->totales($reserva, $lineas);
 
@@ -251,8 +251,13 @@ class ModificacionDiferenciaService
     // ── Pasajeros ──────────────────────────────────────────────────────────────
 
     /** @return Collection<int, array<string, mixed>> */
-    private function pasajeros(Reserva $reserva, ReservaModificacion $modificacion, Collection $ventas, array $pasajerosFacturados): Collection
+    private function pasajeros(Reserva $reserva, ReservaModificacion $modificacion, Collection $ventas, array $pasajerosFacturados, Collection $itemsNuevos): Collection
     {
+        // Penalidades de la versión nueva (T-004), por el pasajero de la reserva al que
+        // corresponden. Solo una por pasajero (lo asegura PenalidadPasajeroService).
+        $penalidades = $itemsNuevos->whereNotNull('penalidad_reserva_pasajero_id')
+            ->keyBy(fn (AlternativaItem $i) => (int) $i->penalidad_reserva_pasajero_id);
+
         $copias = CotizacionPasajero::where('cotizacion_id', $modificacion->cotizacion_id)->orderBy('id')->get();
         $deLaReserva = ReservaPasajero::where('reserva_id', $reserva->id)->orderBy('id')->get();
         $conCopia = $copias->pluck('reserva_pasajero_id')->filter()->map(fn ($id) => (int) $id)->all();
@@ -270,6 +275,11 @@ class ModificacionDiferenciaService
                 'facturado' => false,
                 'sale_ids' => [],
                 'falta_penalidad' => false,
+                // El pasajero sigue en la modificación: su penalidad ya no vale (R-AGE-05).
+                'penalidad_alternativa_item_id' => null,
+                'penalidad_sobrante_item_id' => $copia->reserva_pasajero_id
+                    ? $penalidades->get((int) $copia->reserva_pasajero_id)?->id
+                    : null,
             ]);
         }
 
@@ -279,6 +289,7 @@ class ModificacionDiferenciaService
             }
 
             $facturado = in_array($pasajero->id, $pasajerosFacturados, true);
+            $penalidad = $penalidades->get($pasajero->id);
             $filas->push([
                 'clave' => 'pasajero:'.$pasajero->id,
                 'estado' => $facturado ? 'requiere_nota_credito' : 'quitado',
@@ -291,9 +302,11 @@ class ModificacionDiferenciaService
                     ? $ventas->filter(fn (ReservaVenta $rv) => in_array($pasajero->id, array_map('intval', $rv->reserva_pasajero_ids ?? []), true))
                         ->pluck('sale_id')->map(fn ($id) => (int) $id)->unique()->values()->all()
                     : [],
-                // Un pasajero no facturado que se quita necesita su penalidad (R-AGE-05). La
-                // crea T-004: hasta entonces siempre falta.
-                'falta_penalidad' => ! $facturado,
+                // Un pasajero no facturado que se quita necesita su penalidad (R-AGE-05).
+                'falta_penalidad' => ! $facturado && ! $penalidad,
+                'penalidad_alternativa_item_id' => ! $facturado ? $penalidad?->id : null,
+                // Un facturado no lleva penalidad: primero va la nota de crédito.
+                'penalidad_sobrante_item_id' => $facturado ? $penalidad?->id : null,
             ]);
         }
 
@@ -340,6 +353,16 @@ class ModificacionDiferenciaService
         }
 
         foreach ($pasajeros as $pasajero) {
+            if ($pasajero['penalidad_sobrante_item_id']) {
+                $bloqueos[] = [
+                    'tipo' => 'penalidad_sobrante',
+                    'mensaje' => 'La penalidad del pasajero '.($pasajero['nombre'] ?: '#'.$pasajero['reserva_pasajero_id']).' ya no corresponde: bórrala.',
+                    'alternativa_item_id' => $pasajero['penalidad_sobrante_item_id'],
+                    'sale_id' => null,
+                    'reserva_pasajero_id' => $pasajero['reserva_pasajero_id'],
+                ];
+            }
+
             if ($pasajero['estado'] === 'requiere_nota_credito') {
                 foreach ($pasajero['sale_ids'] ?: [null] as $saleId) {
                     $bloqueos[] = [

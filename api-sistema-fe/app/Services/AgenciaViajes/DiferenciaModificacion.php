@@ -9,7 +9,9 @@ namespace App\Services\AgenciaViajes;
 //            estado: igual | cambio_precio | agregado | quitado | para_revisar |
 //            requiere_nota_credito | ajuste.
 // pasajeros: igual | agregado | quitado | requiere_nota_credito (quitado y facturado);
-//            un quitado sin facturar lleva falta_penalidad = true (la penalidad la pone T-004).
+//            un quitado sin facturar lleva falta_penalidad = true mientras no tenga su penalidad
+//            (T-004: la penalidad sale como una línea `agregado`). penalidad_sobrante_item_id =
+//            la penalidad de un pasajero que ya no se quita: bloquea hasta que se borre.
 // totales:   vendido, nuevo, diferencia, ya_facturado, anticipos_aplicados.
 // bloqueos:  motivos por los que no se puede aplicar (R-AGE-06), cada uno con a dónde lleva.
 // huella:    hash estable de todo lo anterior; T-005 lo compara con el que vio el usuario.

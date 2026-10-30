@@ -35,6 +35,7 @@ use App\Http\Controllers\AgenciaViajes\ReservaFacturacionController;
 use App\Http\Controllers\AgenciaViajes\ReservaItemController;
 use App\Http\Controllers\AgenciaViajes\ReservaItemPasajeroController;
 use App\Http\Controllers\AgenciaViajes\ReservaModificacionController;
+use App\Http\Controllers\AgenciaViajes\ReservaModificacionPenalidadController;
 use App\Http\Controllers\AgenciaViajes\ReservaPasajeroController;
 use App\Http\Controllers\AgenciaViajes\SalidaOperativaController;
 use App\Http\Controllers\AgenciaViajes\SalidaServicioController;
@@ -1136,6 +1137,13 @@ Route::group([
     Route::get("reservas/{id}/modificacion/diferencia", [ReservaModificacionController::class, 'diferencia'])
         ->middleware('permission:reservas.modificar');
     Route::post("reservas/{id}/modificacion/items/{itemId}/revisado", [ReservaModificacionController::class, 'marcarRevisado'])
+        ->middleware('permission:reservas.modificar');
+    // T-004 — penalidad por quitar un pasajero (R-AGE-05): un servicio más de la versión nueva.
+    Route::post("reservas/{id}/modificacion/penalidades", [ReservaModificacionPenalidadController::class, 'store'])
+        ->middleware('permission:reservas.modificar');
+    Route::put("reservas/{id}/modificacion/penalidades/{itemId}", [ReservaModificacionPenalidadController::class, 'update'])
+        ->middleware('permission:reservas.modificar');
+    Route::delete("reservas/{id}/modificacion/penalidades/{itemId}", [ReservaModificacionPenalidadController::class, 'destroy'])
         ->middleware('permission:reservas.modificar');
 
     Route::get("reservas", [ReservaController::class, 'index'])
