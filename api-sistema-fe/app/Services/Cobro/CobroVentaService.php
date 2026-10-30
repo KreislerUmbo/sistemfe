@@ -203,6 +203,8 @@ class CobroVentaService
             // completa da lo mismo que min(pagado, NC); pagada en parte, la NC baja la deuda
             // primero (500 con 100 pagados y NC de 200: debe 300, nada a favor).
             $total = $this->centavos((float) $venta->total);
+            // `amount` guarda lo entregado con el vuelto incluido; el exceso ya salió de caja.
+            $pagado = min($pagado, $total);
             $disponible = max(0, $pagado - max(0, $total - $acreditado) - $traspasado);
             if ($disponible > 0) {
                 $disponibles[$venta->id] = [

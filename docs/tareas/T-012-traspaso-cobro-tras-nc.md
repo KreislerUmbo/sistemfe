@@ -91,7 +91,8 @@ php artisan test   # suite completa, contra PostgreSQL
 
 ## Resultado
 - **Commits:** ver `git log feat/T-012-traspaso-cobro-nc`.
-- **Tests:** `tests/Feature/Cobro/T012TraspasoCobroTest.php` (CA1–CA7 + vista previa + venta pagada en parte): 9 pasan.
+- **Tests:** `tests/Feature/Cobro/T012TraspasoCobroTest.php` (CA1–CA7 + vista previa + venta pagada en parte + vuelto): 10 pasan
+  (con T-011: 21, tras el arreglo del vuelto).
   Suite completa del backend contra PostgreSQL (29-oct, con la fórmula final del disponible):
   1672 pasan, 0 fallan. Frontend: `vue-tsc` sin errores en lo tocado (los
   errores previos son de otros archivos); `vite build` OK; Vitest nuevo `cobroFactura.test.ts` (5).
@@ -113,6 +114,10 @@ php artisan test   # suite completa, contra PostgreSQL
     traspasado`, no `min(pagado, NC)`. Dan lo mismo si el origen estaba pagado completo; pagado en
     parte (crédito o pendiente de cobro), la NC baja primero la deuda: 500 con 100 pagados y NC de
     200 → debe 300, nada a favor (con `min` ofrecía 100 que siguen cubriendo deuda).
+  - **Vuelto (revisión, 29-oct):** `sale_payments.amount` guarda lo entregado con el vuelto
+    incluido (600 por 500). Sin tope, una factura vigente ofrecía 100 y tras la NC total 600. Ahora
+    `pagado = min(pagado, total)`: el exceso ya salió de caja. Test
+    `test_el_vuelto_no_cuenta_como_disponible`.
   - **Revisión de código (29-oct), descartado tras verificar:** el modal no arrastra la decisión de
     traspaso (`CobroFacturaCampos` se vuelve a montar con cada vista previa: `v-if` del modal y
     `v-if="cargando"`); la FK `traspasado_de_sale_id` sin ON DELETE es a propósito (no se borra un
@@ -148,3 +153,8 @@ php artisan test   # suite completa, contra PostgreSQL
   - `SalePaymentController::destroy()` sobre el pago de traspaso del **destino**: baja su
     `paid_out` y el origen recupera el disponible. Es coherente (el dinero queda libre otra vez),
     sin tocar la caja.
+- **Lo cobrado a crédito no se traspasa.** Los cobros de Cuentas por Cobrar van a
+  `payment_applications` (`CreditPaymentController`), no a `sale_payments`: una factura de agencia
+  a crédito ya pagada en cuotas y anulada con NC da disponible 0 y el cliente tendría que pagar de
+  nuevo. Cumple el alcance ("pagado" = `sale_payments`); va con el pendiente de NC sobre deuda /
+  saldo a favor.

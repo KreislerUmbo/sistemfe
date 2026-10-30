@@ -367,4 +367,18 @@ class T012TraspasoCobroTest extends TestCase
 
         $this->assertSame([], $this->disponible($e));
     }
+
+    // Revisión: el vuelto se guarda dentro de `amount` (600 entregados por 500), pero ya salió de
+    // caja: no se ofrece mientras la factura sigue vigente ni infla lo traspasable tras la NC.
+    public function test_el_vuelto_no_cuenta_como_disponible(): void
+    {
+        $e = $this->escenario(500);
+        $v1 = $this->facturar($e, ['pagos' => [['method_payment' => 'EFECTIVO', 'monto_pagado' => 600]]]);
+        $this->assertEquals(100.0, (float) $v1->fresh()->vuelto_monto);
+
+        $this->assertSame([], $this->disponible($e));
+
+        $this->nota($v1, 500);
+        $this->assertEquals(500.0, $this->disponible($e)[$v1->id]['disponible']);
+    }
 }
