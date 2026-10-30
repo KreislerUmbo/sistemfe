@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Módulo** | AGE |
-| **Depende de** | T-005, T-006, T-072 |
+| **Depende de** | T-005, T-006, T-072, T-073 |
 | **Reglas** | R-AGE-01 a R-AGE-10 |
 | **Decisiones** | D-AGE-030 a D-AGE-033 |
 | **Rama** | `feat/T-007-pantallas-modificar-reserva` |
