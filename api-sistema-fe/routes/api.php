@@ -34,6 +34,7 @@ use App\Http\Controllers\AgenciaViajes\ReservaController;
 use App\Http\Controllers\AgenciaViajes\ReservaFacturacionController;
 use App\Http\Controllers\AgenciaViajes\ReservaItemController;
 use App\Http\Controllers\AgenciaViajes\ReservaItemPasajeroController;
+use App\Http\Controllers\AgenciaViajes\ReservaModificacionController;
 use App\Http\Controllers\AgenciaViajes\ReservaPasajeroController;
 use App\Http\Controllers\AgenciaViajes\SalidaOperativaController;
 use App\Http\Controllers\AgenciaViajes\SalidaServicioController;
@@ -1123,6 +1124,14 @@ Route::group([
     // ═══════════════════════════════════════════════════════════════
     Route::post("alternativas/{id}/aceptar", [ReservaController::class, 'aceptar'])
         ->middleware('permission:reservas.crear');
+    // T-002 — Modificar reserva (R-AGE-01, R-AGE-10): permiso propio + ReservaPolicy::update
+    // dentro del controller. Las tres rutas piden reservas.modificar, también la consulta.
+    Route::post("reservas/{id}/modificacion", [ReservaModificacionController::class, 'store'])
+        ->middleware('permission:reservas.modificar');
+    Route::get("reservas/{id}/modificacion", [ReservaModificacionController::class, 'show'])
+        ->middleware('permission:reservas.modificar');
+    Route::delete("reservas/{id}/modificacion", [ReservaModificacionController::class, 'destroy'])
+        ->middleware('permission:reservas.modificar');
 
     Route::get("reservas", [ReservaController::class, 'index'])
         ->middleware('permission:reservas.ver|reservas.ver_todas');

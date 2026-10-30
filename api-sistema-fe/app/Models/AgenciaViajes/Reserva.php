@@ -104,6 +104,12 @@ class Reserva extends Model
         return $this->hasMany(ReservaPasajero::class, 'reserva_id');
     }
 
+    // T-002: modificaciones de esta reserva (abierta, aplicada o descartada), la más nueva primero.
+    public function modificaciones()
+    {
+        return $this->hasMany(ReservaModificacion::class, 'reserva_id')->orderByDesc('id');
+    }
+
     public function items()
     {
         return $this->hasMany(ReservaItem::class, 'reserva_id');

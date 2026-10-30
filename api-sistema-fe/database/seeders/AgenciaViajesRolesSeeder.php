@@ -50,7 +50,7 @@ class AgenciaViajesRolesSeeder extends Seeder implements RolesCatalogProvider
         'cotizaciones.ver', 'cotizaciones.ver_todas', 'cotizaciones.crear', 'cotizaciones.editar',
         // Envío de cotizaciones por correo (plan-modulo-envio-correo-cotizacion.md, 14-oct-2026).
         'cotizaciones.enviar_correo',
-        'reservas.ver', 'reservas.ver_todas', 'reservas.crear', 'reservas.editar',
+        'reservas.ver', 'reservas.ver_todas', 'reservas.crear', 'reservas.editar', 'reservas.modificar',
         'roles.administrar',
 
         // Reusados — ya existían (agencia.* Sesión 11a-12e, o Bucket A/B
@@ -77,7 +77,7 @@ class AgenciaViajesRolesSeeder extends Seeder implements RolesCatalogProvider
     private const ROLES = [
         'Administrador de agencia' => [
             'cotizaciones.ver', 'cotizaciones.ver_todas', 'cotizaciones.crear', 'cotizaciones.editar', 'cotizaciones.enviar_correo', 'agencia.cotizaciones',
-            'reservas.ver', 'reservas.ver_todas', 'reservas.crear', 'reservas.editar', 'agencia.reservas',
+            'reservas.ver', 'reservas.ver_todas', 'reservas.crear', 'reservas.editar', 'reservas.modificar', 'agencia.reservas',
             'agencia.proveedores', 'agencia.destinos', 'agencia.temporadas', 'agencia.guias', 'agencia.paquetes', 'agencia.configuracion',
             'nota_electronica', 'list_nota_electronica',
             'cash.open_session', 'cash.view_all',
@@ -98,7 +98,7 @@ class AgenciaViajesRolesSeeder extends Seeder implements RolesCatalogProvider
         // 10-sep-2026: esa es la línea que lo distingue de Administrador).
         'Supervisor' => [
             'cotizaciones.ver', 'cotizaciones.ver_todas', 'cotizaciones.crear', 'cotizaciones.editar', 'cotizaciones.enviar_correo', 'agencia.cotizaciones',
-            'reservas.ver', 'reservas.ver_todas', 'reservas.crear', 'reservas.editar', 'agencia.reservas',
+            'reservas.ver', 'reservas.ver_todas', 'reservas.crear', 'reservas.editar', 'reservas.modificar', 'agencia.reservas',
             'agencia.proveedores', 'agencia.destinos', 'agencia.temporadas', 'agencia.guias', 'agencia.paquetes',
             'nota_electronica', 'list_nota_electronica',
             'cash.open_session', 'cash.view_all',

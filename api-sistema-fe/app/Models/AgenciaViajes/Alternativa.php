@@ -11,6 +11,10 @@ use Illuminate\Database\Eloquent\Model;
 // misma DB tenant).
 class Alternativa extends Model
 {
+    // Estado que escribe "aplicar modificación" (T-005) sobre la versión vendida: ya no es la
+    // vigente de la reserva, queda como historial. No se puede fijar desde el PUT genérico.
+    public const ESTADO_REEMPLAZADA = 'reemplazada';
+
     protected $table = 'alternativas';
 
     protected $fillable = [

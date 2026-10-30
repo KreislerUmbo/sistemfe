@@ -233,6 +233,16 @@ class ReservaController extends Controller
         $alternativa = Alternativa::findOrFail($alternativaId);
         $this->authorize('update', $alternativa->cotizacion);
 
+        // T-002: la alternativa de una modificación de reserva se aplica a la reserva que ya
+        // existe (T-005); aceptarla por este camino crearía una segunda reserva. El origen de
+        // una cotización no cambia, así que no hace falta repetir la revisión dentro del lock.
+        if ($alternativa->cotizacion->esModificacion()) {
+            return response()->json([
+                'code' => 422,
+                'message' => 'Esta alternativa es una modificación de reserva: se aplica a la reserva, no se acepta.',
+            ], 422);
+        }
+
         // Revisión rápida antes del lock: responde enseguida en el caso común.
         // La que protege de verdad se repite dentro de la transacción.
         if (! self::alternativaAceptable($alternativa)) {
@@ -451,7 +461,7 @@ class ReservaController extends Controller
     // RECHAZADAS de un grupo de M1 (grupo_opcion_id no nulo,
     // opcion_elegida=false). Compartido por crearReservaDesdeAlternativa()
     // y sincronizarItems() para no duplicar el criterio en dos lugares.
-    private static function filtrarItemsParaReserva(\Illuminate\Support\Collection $items): \Illuminate\Support\Collection
+    public static function filtrarItemsParaReserva(\Illuminate\Support\Collection $items): \Illuminate\Support\Collection
     {
         return $items->filter(fn (AlternativaItem $item) => $item->grupo_opcion_id === null || $item->opcion_elegida)->values();
     }

@@ -40,7 +40,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 
 | ID | Módulo | Qué | Estado | Depende de | Rama / commit |
 |---|---|---|---|---|---|
-| T-002 | AGE | Modificar reserva: crear y descartar la modificación (cotización propia + copia) | por hacer | — | |
+| T-002 | AGE | Modificar reserva: crear y descartar la modificación (cotización propia + copia) | en revisión | — | `feat/T-002-crear-modificacion` |
 | T-003 | AGE | Modificar reserva: calcular la diferencia con lo vendido | por hacer | T-002 | |
 | T-004 | AGE | Modificar reserva: penalidad por pasajero quitado | por hacer | T-003 | |
 | T-005 | AGE | Modificar reserva: aplicar a la reserva | por hacer | T-003, T-004 | |

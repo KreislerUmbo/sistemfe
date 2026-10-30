@@ -18,6 +18,8 @@ class CotizacionPasajero extends Model
         'cotizacion_id',
         'tipo_pax',
         'edad',
+        // T-002: pasajero de la reserva que representa (solo cotizaciones de modificación; NULL = nuevo).
+        'reserva_pasajero_id',
         // Fila 13, fase 1b (§3.3): solo cambia el precio del tour, no el IGV.
         // No es la nacionalidad.
         'residencia',
