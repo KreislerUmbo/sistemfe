@@ -92,8 +92,8 @@ php artisan test   # suite completa, contra PostgreSQL
 ## Resultado
 - **Commits:** ver `git log feat/T-012-traspaso-cobro-nc`.
 - **Tests:** `tests/Feature/Cobro/T012TraspasoCobroTest.php` (CA1–CA7 + vista previa + venta pagada en parte): 9 pasan.
-  Suite completa del backend contra PostgreSQL: 1670 pasan, 0 fallan (corrida antes de agregar el
-  test de la vista previa, que se corrió aparte). Frontend: `vue-tsc` sin errores en lo tocado (los
+  Suite completa del backend contra PostgreSQL (29-oct, con la fórmula final del disponible):
+  1672 pasan, 0 fallan. Frontend: `vue-tsc` sin errores en lo tocado (los
   errores previos son de otros archivos); `vite build` OK; Vitest nuevo `cobroFactura.test.ts` (5).
 - **Desviaciones de la tarea y por qué:**
   - **Prueba funcional en agencia-demo (29-oct, Playwright):** reserva 29 en US$: facturar con
@@ -136,5 +136,15 @@ php artisan test   # suite completa, contra PostgreSQL
 - El rótulo del origen usa `n_operacion` o serie-correlativo; mientras el comprobante no se envió a
   SUNAT no tiene correlativo y sale solo la serie ("B002"). En la práctica una NC aceptada ya tiene
   correlativo, pero el caso de prueba lo mostró así.
-- Otros lectores de `sale_payments` (Cuentas por Cobrar, reportes por forma de pago) no se revisaron
-  para ver cómo tratan filas `origen='traspaso'` (no son dinero nuevo).
+- Otros lectores de `sale_payments`, revisados (29-oct): **ninguno suma el traspaso como cobro**.
+  Caja, cierre, PDF/Excel y paneles leen `cash_movements`; Cuentas por Cobrar y los reportes usan
+  `paid_out`/`saldo_pendiente` de la venta, no la tabla de pagos. Quedan tres efectos de solo
+  lectura, sin dinero:
+  - `PaymentReceiptController::index` (historial de pagos de un cliente) lista el traspaso como un
+    `pago_venta` más, con medio de pago "TRASPASO" y su monto; no se suma, pero el cliente verá el
+    cobro original y el traspaso. Si molesta, filtrar `origen = 'traspaso'` ahí.
+  - `Sale::pagosImpresos()` (PDF) lo rotula "TRASPASO" (cae al código porque no está en
+    `payment_methods`) con su monto y fecha.
+  - `SalePaymentController::destroy()` sobre el pago de traspaso del **destino**: baja su
+    `paid_out` y el origen recupera el disponible. Es coherente (el dinero queda libre otra vez),
+    sin tocar la caja.
