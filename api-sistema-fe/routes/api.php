@@ -1132,6 +1132,11 @@ Route::group([
         ->middleware('permission:reservas.modificar');
     Route::delete("reservas/{id}/modificacion", [ReservaModificacionController::class, 'destroy'])
         ->middleware('permission:reservas.modificar');
+    // T-003 — diferencia con lo vendido y confirmación de un servicio "para revisar".
+    Route::get("reservas/{id}/modificacion/diferencia", [ReservaModificacionController::class, 'diferencia'])
+        ->middleware('permission:reservas.modificar');
+    Route::post("reservas/{id}/modificacion/items/{itemId}/revisado", [ReservaModificacionController::class, 'marcarRevisado'])
+        ->middleware('permission:reservas.modificar');
 
     Route::get("reservas", [ReservaController::class, 'index'])
         ->middleware('permission:reservas.ver|reservas.ver_todas');

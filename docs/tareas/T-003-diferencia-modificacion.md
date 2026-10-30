@@ -121,9 +121,16 @@ php artisan test
 ---
 
 ## Resultado
-- **Commits:**
-- **Tests:**
+- **Commits:** ver `git log feat/T-003-diferencia-modificacion` (un commit de código + tests; el backlog y esta sección van en el mismo).
+- **Tests:** `ReservaModificacionDiferenciaTest` 19 pasan (CA1–CA11 + servicio quitado, quitado facturado, 404/422 al confirmar, servicio de pasajero quitado, confirmación que se pierde al cambiar pasajeros). Suite completa: 1702 pasan, 6201 aserciones, contra PostgreSQL real.
 - **Desviaciones de la tarea y por qué:**
+  - `ya_facturado` = lo vendido de los servicios que están en alguna factura (misma base que `vendido`); no suma totales de `sales`, que tienen IGV y pueden estar en otra moneda. Un tour facturado a medias cuenta entero.
+  - Nota de T-002 (pasajero quitado → `pax_incluidos = []`): la línea sale `para_revisar` con `sin_pasajeros = true`, no cobra a todos, bloquea con `servicio_sin_pasajeros` y **no** se puede confirmar con `/revisado` (422); se destraba asignándola o quitándola.
+  - La marca `revisado_en_modificacion` se limpia en dos lugares: hook `updating` de `AlternativaItem` (todo guardado por el modelo) y `CotizacionController::actualizarPasajeros()` (cambio de pasajeros, que no toca los ítems). No hay otros guardados masivos de ítems que importen (`SepararGruposDuplicadosService` solo cambia `grupo_opcion_id`).
+  - Se agregó `hay_cambios`; `se_puede_aplicar = hay_cambios && sin bloqueos`.
+  - `falta_penalidad` se marca siempre para un pasajero no facturado quitado hasta que T-004 cree penalidades.
+  - Antes de correr los tests hay que aplicar la migración nueva a `sistemafe_test_migrations`; en producción, `tenants:migrate-verticales`.
 
 ## Hallazgos fuera de alcance
-- 
+- Modificaciones encadenadas: tras aplicar una, un servicio facturado sigue apuntando a la versión anterior y D-AGE-032 crea un "Ajuste" en la versión nueva; la siguiente modificación copiaría el servicio y el ajuste, y se contaría doble. La diferencia sube por `item_origen_id` para encontrar el servicio de la reserva, pero el doble conteo es de diseño de T-005.
+- Un hotel o habitación (`tarifa_fija`, para todos) queda `para_revisar` apenas se agrega un pasajero; es lo pedido, pero T-007 debería permitir confirmarlos en bloque.

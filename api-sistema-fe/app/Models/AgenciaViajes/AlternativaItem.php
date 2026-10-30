@@ -93,6 +93,8 @@ class AlternativaItem extends Model
         'precio_manual',
         // T-002 (Modificar reserva): ítem de la versión vendida del que se copió este.
         'item_origen_id',
+        // T-003: confirmación manual de un servicio "para revisar" en una modificación.
+        'revisado_en_modificacion',
     ];
 
     protected $casts = [
@@ -116,7 +118,28 @@ class AlternativaItem extends Model
         'desglose_costo_snapshot' => 'array',
         'temporada_id' => 'integer',
         'precio_manual' => 'boolean',
+        'revisado_en_modificacion' => 'datetime',
     ];
+
+    // T-003: si el ítem cambia después de confirmarse como "revisado" (precio, pasajeros,
+    // cantidad…), la confirmación se pierde. Cubre todo guardado por el modelo; los guardados
+    // masivos (query builder) y el cambio de pasajeros usan limpiarRevisadoDeCotizacion().
+    protected static function booted(): void
+    {
+        static::updating(function (self $item) {
+            if (! $item->isDirty('revisado_en_modificacion')
+                && array_diff(array_keys($item->getDirty()), ['updated_at']) !== []) {
+                $item->revisado_en_modificacion = null;
+            }
+        });
+    }
+
+    public static function limpiarRevisadoDeCotizacion(int $cotizacionId): void
+    {
+        self::whereNotNull('revisado_en_modificacion')
+            ->whereIn('alternativa_id', Alternativa::where('cotizacion_id', $cotizacionId)->select('id'))
+            ->update(['revisado_en_modificacion' => null]);
+    }
 
     protected $appends = ['total', 'total_convertido'];
 
