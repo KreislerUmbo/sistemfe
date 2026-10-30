@@ -46,7 +46,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 | T-005 | AGE | Modificar reserva: aplicar a la reserva | por hacer | T-003, T-004 | |
 | T-006 | AGE | Modificar reserva: PDF para el cliente | por hacer | T-003 | |
 | T-007 | AGE | Modificar reserva: pantallas | por hacer | T-005, T-006 | |
-| T-012 | AGE + CAJ | Traspaso del cobro tras una nota de crédito | por hacer | T-011 | |
+| T-012 | AGE + CAJ | Traspaso del cobro tras una nota de crédito | en revisión | T-011 | `feat/T-012-traspaso-cobro-nc` |
 | T-015 | PLA + AGE | Catálogo central de aerolíneas + panel central (Obs. 3) | por hacer | — | |
 | T-016 | AGE | Buscador de aerolíneas, corrección de nombres y aerolínea por defecto (Obs. 3) | por hacer | T-015 | |
 | T-017 | AGE | El cliente como primer pasajero al aceptar (Obs. 4) | por hacer | — | |
