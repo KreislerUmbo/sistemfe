@@ -30,6 +30,14 @@ cotización.
 - Logo con `StorageUrl::resolveParaPdf()` (DomPDF no carga URLs remotas).
 - Nombre de archivo: `modificacion_<codigo_reserva>_<DD-MM-YYYY>.pdf`.
 
+**Nota de la revisión de T-005 (30-oct): ajustes.** Al aplicar, el "Ajuste — <servicio>"
+(`alternativa_items.ajuste_de_item_id` no nulo) queda en la versión vigente **junto** al
+servicio con el precio subido: listar o sumar los dos cobraría la diferencia dos veces. En este
+PDF el ajuste sale de la diferencia (`diferencia_aplicada`), no de los ítems de la alternativa.
+Ojo: `AlternativaItem::calcularTotalEfectivo()` y `AlternativaPdfService` suman todos los
+ítems, ajuste incluido; si se reusan, excluir los ítems con `ajuste_de_item_id`. Anotar en
+Hallazgos si el PDF de cotización de la versión vigente (`…-M1`) también lo muestra doble.
+
 ## Fuera de alcance
 - Enviarlo por correo (después, sobre `CotizacionEnvioController`).
 - Cambiar el PDF de cotización.

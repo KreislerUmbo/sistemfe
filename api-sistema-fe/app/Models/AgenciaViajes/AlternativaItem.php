@@ -97,6 +97,8 @@ class AlternativaItem extends Model
         'revisado_en_modificacion',
         // T-004: pasajero de la reserva al que corresponde esta penalidad.
         'penalidad_reserva_pasajero_id',
+        // T-005: si es un servicio "Ajuste — <servicio>", el ítem facturado que ajusta.
+        'ajuste_de_item_id',
     ];
 
     protected $casts = [

@@ -1138,6 +1138,9 @@ Route::group([
         ->middleware('permission:reservas.modificar');
     Route::post("reservas/{id}/modificacion/items/{itemId}/revisado", [ReservaModificacionController::class, 'marcarRevisado'])
         ->middleware('permission:reservas.modificar');
+    // T-005 — aplicar la modificación a la reserva (R-AGE-07): todo o nada, bajo el lock de la reserva.
+    Route::post("reservas/{id}/modificacion/aplicar", [ReservaModificacionController::class, 'aplicar'])
+        ->middleware('permission:reservas.modificar');
     // T-004 — penalidad por quitar un pasajero (R-AGE-05): un servicio más de la versión nueva.
     Route::post("reservas/{id}/modificacion/penalidades", [ReservaModificacionPenalidadController::class, 'store'])
         ->middleware('permission:reservas.modificar');

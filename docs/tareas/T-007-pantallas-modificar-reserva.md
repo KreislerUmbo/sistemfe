@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Módulo** | AGE |
-| **Depende de** | T-005, T-006 |
+| **Depende de** | T-005, T-006, T-072 |
 | **Reglas** | R-AGE-01 a R-AGE-10 |
 | **Decisiones** | D-AGE-030 a D-AGE-033 |
 | **Rama** | `feat/T-007-pantallas-modificar-reserva` |
@@ -59,6 +59,14 @@ sin valor por defecto: el select empieza vacío. El motivo se guarda dentro de
 el motivo aparte (guardarlo en el formulario o recortar el prefijo) y como texto, nunca
 `v-html`. Hoy el pasajero quitado y vuelto a agregar queda como uno nuevo: si se quiere que
 "volver" recupere al original (y su penalidad sobre), decidirlo aquí.
+
+**Nota de la revisión de T-005 (30-oct): aplicar.** `POST reservas/{id}/modificacion/aplicar
+{ huella }` (la `huella` es la de la última diferencia mostrada). Respuestas a manejar: 422
+"la reserva cambió" (volver a pedir la diferencia), 422 con bloqueos, 422 "cambia el mayorista
+elegido" (no se puede aplicar desde aquí) y `alerta_cupo_excedido = true` en el 200. La
+penalidad y el "Ajuste" quedan en la reserva **sin pasajeros asignados**: al facturar no
+entran solos, el vendedor los suma a la factura que quiera; la pantalla de facturar debe
+dejarlo claro. Requiere T-072 hecha (la cotización original deja de verse "reservada").
 
 ## Fuera de alcance
 - Cambios en el backend, salvo un ajuste chico de forma de respuesta. Si hace falta más,

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\AgenciaViajes;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\AgenciaViajes\AplicarModificacionRequest;
 use App\Models\AgenciaViajes\AlternativaItem;
 use App\Models\AgenciaViajes\Reserva;
 use App\Models\AgenciaViajes\ReservaModificacion;
@@ -100,6 +101,32 @@ class ReservaModificacionController extends Controller
         }
 
         return response()->json(['code' => 200] + $this->diferencia->calcular($modificacion)->toArray());
+    }
+
+    // POST reservas/{id}/modificacion/aplicar { huella } — pasa la diferencia a la reserva (T-005).
+    // Lo único que viene del cliente es la huella de la diferencia que vio el usuario.
+    public function aplicar(AplicarModificacionRequest $request, string $id)
+    {
+        $reserva = Reserva::findOrFail($id);
+        $this->authorize('update', $reserva);
+
+        $modificacion = ReservaModificacion::abierta()->where('reserva_id', $reserva->id)->first();
+        if (! $modificacion) {
+            return response()->json(['code' => 404, 'message' => 'Esta reserva no tiene una modificación abierta.'], 404);
+        }
+
+        try {
+            $resultado = $this->servicio->aplicar($modificacion, $request->validated()['huella'], auth('api')->user());
+        } catch (HttpException $e) {
+            return response()->json(['code' => $e->getStatusCode(), 'message' => $e->getMessage()], $e->getStatusCode());
+        }
+
+        return response()->json([
+            'code' => 200,
+            'message' => 'Modificación aplicada a la reserva.',
+            'modificacion' => $resultado['modificacion'],
+            'alerta_cupo_excedido' => $resultado['alerta_cupo_excedido'],
+        ]);
     }
 
     // POST reservas/{id}/modificacion/items/{itemId}/revisado — el vendedor confirma a mano un

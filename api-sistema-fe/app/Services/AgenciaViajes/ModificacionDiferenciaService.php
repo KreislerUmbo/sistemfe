@@ -37,8 +37,9 @@ class ModificacionDiferenciaService
         $pasajerosFacturados = ReservaVenta::pasajeroIdsDe($ventas)->map(fn ($id) => (int) $id)->all();
 
         $alternativaNueva = $modificacion->alternativaNueva()->firstOrFail();
+        // Un servicio de ajuste (T-005) no se compara: su precio ya está dentro del ítem que ajusta.
         $itemsNuevos = ReservaController::filtrarItemsParaReserva(
-            AlternativaItem::where('alternativa_id', $alternativaNueva->id)->orderBy('id')->get()
+            AlternativaItem::where('alternativa_id', $alternativaNueva->id)->whereNull('ajuste_de_item_id')->orderBy('id')->get()
         );
 
         $lineas = $this->lineasDeServicios($reserva, $itemsNuevos, $ventas, $itemsFacturados);
@@ -71,7 +72,11 @@ class ModificacionDiferenciaService
      */
     private function lineasDeServicios(Reserva $reserva, Collection $itemsNuevos, Collection $ventas, array $itemsFacturados): Collection
     {
-        $reservaItems = ReservaItem::where('reserva_id', $reserva->id)->with('alternativaItem')->orderBy('id')->get();
+        // Los servicios de la reserva que son un "Ajuste — <servicio>" (T-005) no se comparan ni
+        // se quitan: cobran la diferencia que ya está en el precio del ítem que ajustan. Contarlos
+        // aparte sumaría esa diferencia dos veces en una modificación encadenada.
+        $reservaItems = ReservaItem::where('reserva_id', $reserva->id)->with('alternativaItem')->orderBy('id')->get()
+            ->reject(fn (ReservaItem $ri) => $ri->alternativaItem?->ajuste_de_item_id !== null)->values();
         $reservaItemPorAlternativaItem = $reservaItems->keyBy('alternativa_item_id');
         $origenes = AlternativaItem::whereIn('id', $itemsNuevos->pluck('item_origen_id')->filter())->get()->keyBy('id');
         $pasajerosPorCotizacion = [];
