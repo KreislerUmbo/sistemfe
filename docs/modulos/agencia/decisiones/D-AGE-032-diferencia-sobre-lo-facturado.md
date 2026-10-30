@@ -27,3 +27,7 @@ después, si hace falta.
 - El aviso de "requiere nota de crédito" lleva directo al comprobante.
 - El servicio de ajuste es un ítem manual de la versión nueva, con el tratamiento tributario
   del servicio que ajusta.
+- (T-005, 30-oct) El ajuste se marca con `alternativa_items.ajuste_de_item_id` (el ítem con el
+  precio subido): la copia de la modificación siguiente no lo copia y la diferencia no lo
+  compara, para no cobrarlo dos veces. Nace sin pasajeros asignados (como la penalidad): al
+  facturar, el vendedor lo suma a la factura que quiera.

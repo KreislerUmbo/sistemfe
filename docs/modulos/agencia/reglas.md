@@ -22,9 +22,12 @@ Decisiones: D-AGE-030, D-AGE-031, D-AGE-032, D-AGE-033.
 - **R-AGE-04** — Lo facturado no se modifica ni se quita al aplicar. Una línea de tour con
   cualquier parte facturada cuenta como facturada. Si su precio sube, la diferencia entra como
   servicio "Ajuste — <servicio>"; si baja, o se quita algo facturado, requiere nota de crédito.
+  El ajuste no se copia a la modificación siguiente ni entra en su diferencia (ya está en el
+  precio del servicio que ajusta).
 - **R-AGE-05** — Cada pasajero no facturado que se quita lleva exactamente una penalidad: un
   servicio con monto (≥ 0), motivo obligatorio y tratamiento de IGV elegido, sin valor por
-  defecto.
+  defecto. Al aplicar, la penalidad y el ajuste quedan en la reserva sin pasajeros asignados:
+  no entran solos en una factura, el vendedor los suma a la que quiera.
 - **R-AGE-06** — No se aplica mientras haya líneas `para revisar` sin confirmar,
   `requiere nota de crédito` sin resolver, pasajeros quitados sin penalidad, o penalidades
   que sobran (de un pasajero que ya no se quita o que está facturado): se borran a mano, no

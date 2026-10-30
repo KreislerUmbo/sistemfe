@@ -24,7 +24,7 @@ Próximo ID libre: **T-071**.
 | 1 | ~~T-064 → T-068 → T-008 → T-038 → T-026~~ hechas y desplegadas 27-oct | Todos los giros, producción: PDF de comprobantes que cambia al editar el cliente, precios del portal manipulables, caja que no se anula al eliminar una venta, monto en letras en dólares, fechas que se muestran un día antes |
 | 2 | T-054 → T-056 → T-043 → T-042 → T-001 → T-030 → T-025 → T-024 → T-027 → T-028 → T-039 | Errores de Agencia: PDF de campo con el proveedor equivocado, operación trabada tras facturar, salidas que no se ven, cambios a una alternativa aceptada, permisos del cotizador, datos cruzados entre alternativas |
 | 3 | T-009 → T-010 → T-011 → T-014 → T-013 → T-012 | Cobro y caja (orden aprobado el 25-oct). T-011 no se despliega con dólares sin T-013 |
-| 4 | T-002 → T-003 → T-004 → T-005 → T-006 → T-007 | Modificar reserva: hoy no se puede quitar un pasajero y el agregado no cambia el precio |
+| 4 | T-002 → T-003 → T-004 → T-005 → T-006 → T-072 → T-007 | Modificar reserva: hoy no se puede quitar un pasajero y el agregado no cambia el precio |
 | 5 | T-063 → T-033 → T-050 → T-051 → T-052 → T-059 → T-061 → T-053 | Menú nuevo y CRM base (T-033 antes: "Nueva consulta" crea la cotización con su alternativa) |
 | 6 | T-041 → T-040 → T-055 → T-057 → T-058 → T-044 → T-017 → T-018 | Operación diaria de Agencia |
 | 7 | T-045 → T-046 → T-047 → T-048 → T-049 | Venta directa (T-046 necesita T-017; T-048, el cobro de la ola 3) |
@@ -40,9 +40,10 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 
 | ID | Módulo | Qué | Estado | Depende de | Rama / commit |
 |---|---|---|---|---|---|
-| T-005 | AGE | Modificar reserva: aplicar a la reserva | por hacer | T-003, T-004 | |
+| T-005 | AGE | Modificar reserva: aplicar a la reserva | en revisión | T-003, T-004 | `feat/T-005-aplicar-modificacion` |
 | T-006 | AGE | Modificar reserva: PDF para el cliente | por hacer | T-003 | |
-| T-007 | AGE | Modificar reserva: pantallas | por hacer | T-005, T-006 | |
+| T-072 | AGE | La cotización original sigue "reservada" tras aplicar una modificación; código de la reserva en el tablero de salidas | por hacer | T-005 | |
+| T-007 | AGE | Modificar reserva: pantallas | por hacer | T-005, T-006, T-072 | |
 | T-012 | AGE + CAJ | Traspaso del cobro tras una nota de crédito | por hacer | T-011 | |
 | T-015 | PLA + AGE | Catálogo central de aerolíneas + panel central (Obs. 3) | por hacer | — | |
 | T-016 | AGE | Buscador de aerolíneas, corrección de nombres y aerolínea por defecto (Obs. 3) | por hacer | T-015 | |
@@ -97,6 +98,9 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 | VEN + CAJ | Agregar o quitar un pago desde "editar venta" (`SalePaymentController` store/destroy) se guarda al instante sin tocar la caja; el movimiento recién se crea o corrige al guardar la venta. Si el usuario sale sin guardar, ese dinero queda fuera de caja (o la caja espera uno que ya no está). Ya pasaba antes de T-010 | T-010, 28-oct-2026 |
 | AGE | Mismo corte de listas que T-039 en otras pantallas: `reservas/detalle.vue` (~2292) carga `proveedorService.biblioteca()` (30 tarifas) y `guiaService.listar({ page: 1 })` (15 guías) al abrir; servicios cortan en 200 (cotizador, paquetes, store); la lista de reasignar proveedor del reporte operativo puede quedar cortada en las últimas filas de la tabla (usar `useListaFlotante`) | T-039, 28-oct-2026 |
 | AGE | IGV de la penalidad por cancelación: preguntar al contador (hoy lo elige el vendedor, D-AGE-033) | requerimiento Modificar reserva, 24-oct-2026 |
+| AGE | **Antes de T-007.** Modificar reserva: un servicio "por persona" que `RecalculoPorPersonaService` no reprecia (pasaje aéreo, manual, mayorista) sale `igual` en la diferencia aunque cambie la cantidad de pasajeros; aplicar deja al pasajero nuevo sin cobrar (visto en `agencia-demo`, reserva 29). Propuesta: marcarlo `para_revisar` en `ModificacionDiferenciaService` cuando cambian los pasajeros que lo usan, como ya se hace con `tarifa_fija` | revisión T-005, 30-oct-2026 |
+| AGE | `ProveedorFiltroDestinoTest::sin filtro devuelve todos` falla a ratos en la suite completa (6 en vez de 2; pasa al repetirlo): probablemente datos que deja otro test antes en el orden | T-005, 30-oct-2026 |
+| AGE | Tras aplicar una modificación, buscar la reserva por el código de la cotización original ya no la encuentra (busca por `…-M1`) | T-005, 30-oct-2026 |
 | AGE | El descuento global de la alternativa (`AlternativaController::aplicarDescuentoGlobal()` / `aplicarDescuentoGlobalMonto()`) también rebaja la penalidad por cancelación: el monto que escribió el vendedor cambia sin aviso. Propuesta: excluir los ítems con `penalidad_reserva_pasajero_id` | T-004, 30-oct-2026 |
 | AGE | Penalidad calculada con `reglas_cancelacion` (franjas por días) | D-AGE-033 |
 | AGE | Agregar pasajero rápido en la reserva para tours por persona (después de probar Modificar reserva) | fila F4 de la hoja de ruta |

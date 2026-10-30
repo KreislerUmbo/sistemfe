@@ -196,7 +196,22 @@ aplicar y facturar. Revertir los datos al terminar.
   9. Los tests se escribieron junto con el código, no antes.
 - **Para desplegar:** correr `php artisan tenants:migrate-verticales` (la columna nueva la leen `copiar`, la diferencia y `sincronizarItems`: sin ella fallan).
 
+- **Prueba funcional (revisión, 30-oct, Opus):** en `agencia-demo` por HTTP contra Apache,
+  reserva 29 (1 adulto, un pasaje aéreo `por_persona` ya facturado). Crear la modificación →
+  agregar un adulto → diferencia → `huella` vieja da 422 → aplicar da 200: alternativa vendida
+  `reemplazada`, nueva `aceptada`, pasajero nuevo vinculado a su copia, el servicio facturado
+  sin tocar y sin aparecer como pendiente de sincronizar. Datos revertidos con
+  `C:/xampp/backups-sistemfe/tenantagencia-demo-2026-10-30-antes-prueba-T005.dump`.
+  Se vio en vivo el hallazgo de `estadoResumen()` (la original volvió a `borrador`, ver T-072)
+  y uno nuevo (abajo, el pasaje aéreo).
+
 ## Hallazgos fuera de alcance
+- **(Prueba funcional) Un servicio "por persona" que el cotizador no recalcula** (pasaje aéreo,
+  manual, mayorista: `RecalculoPorPersonaService` solo reprecia `proveedor` con tarifa) **queda
+  `igual` en la diferencia aunque cambie la cantidad de pasajeros.** El cotizador lo avisa al
+  guardar los pasajeros ("se debe repreciar manualmente"), pero la diferencia no bloquea:
+  se aplicó un adulto más con el pasaje aéreo al mismo precio y facturar al pasajero nuevo
+  da 0. Ver "Por analizar" del backlog.
 - **`Cotizacion::estadoResumen()` no cuenta la cotización original como `reservada` tras aplicar** (la vendida queda `reemplazada`): sale del conteo "reservadas/conversión" del Inicio y vuelve a `borrador`/`enviada` en el listado. Arreglo propuesto: tratar `reemplazada` como `aceptada` y mirar la reserva por `reserva_modificaciones`. No se tocó (la tarea pide no arreglar lecturas sin consultar).
 - Buscar una reserva por el código de la cotización original deja de encontrarla; el tablero de salidas y el detalle muestran el código `…-M1` (ver inventario).
 - `alternativa.total` de la versión nueva suma el ítem con el precio subido **y** el ajuste (sobrestima en el ajuste); la reserva no lo lee (suma sus servicios) y el siguiente cotizador lo recalcula al editar.
