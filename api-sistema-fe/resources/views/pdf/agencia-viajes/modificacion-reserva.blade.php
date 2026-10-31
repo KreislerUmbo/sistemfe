@@ -216,32 +216,18 @@
         <div class="seccion-titulo-mod">Resumen ({{ $moneda }})</div>
         <table class="totales">
             <tr>
-                <td>Total vendido</td>
+                <td>Total anterior</td>
                 <td class="der">{{ $m($totales['vendido']) }}</td>
             </tr>
             <tr>
                 <td>Total nuevo</td>
                 <td class="der">{{ $m($totales['nuevo']) }}</td>
             </tr>
-            <tr>
+            <tr class="fuerte">
                 <td>Diferencia</td>
                 <td class="der">{{ $m($totales['diferencia']) }}</td>
             </tr>
-            <tr>
-                <td>Ya facturado</td>
-                <td class="der">{{ $m($totales['ya_facturado']) }}</td>
-            </tr>
-            <tr>
-                <td>Anticipos recibidos</td>
-                <td class="der">{{ $m($totales['anticipos_aplicados']) }}</td>
-            </tr>
-            <tr class="fuerte">
-                <td>Saldo</td>
-                <td class="der">{{ $m($totales['saldo']) }}</td>
-            </tr>
         </table>
-
-        <div class="nota">Saldo = total nuevo menos los anticipos recibidos.</div>
 
     </div>
 

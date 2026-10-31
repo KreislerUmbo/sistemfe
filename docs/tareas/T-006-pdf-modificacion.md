@@ -92,10 +92,14 @@ Generar uno real en `agencia-demo` y rasterizarlo con `gswin64c.exe` para revisa
   - El nombre del servicio se vuelve a resolver desde el ítem (`resolverNombreItem(..., 'cliente')`)
     porque la `descripcion` de la diferencia (y la guardada en `diferencia_aplicada`) es la interna,
     con el nombre del mayorista. Si el ítem ya no existe, sale «Servicio», nunca la interna.
-  - **Saldo** (la tarea no lo define): total nuevo − anticipos recibidos (`anticipos_aplicados`),
-    en centavos. «Ya facturado» se muestra aparte, solo informativo. Es la única resta propia del
-    PDF; si se quiere otra definición (p. ej. contra lo facturado) es cambiar una línea en
-    `ModificacionPdfService::datos()`.
+  - **Resumen (revisión de Opus, 30-oct):** solo total anterior, total nuevo y diferencia. Se
+    quitaron «Saldo» (no restaba lo cobrado en facturas al contado ni por amortizaciones),
+    «Ya facturado» (un tour facturado a medias cuenta entero por R-AGE-04) y «Anticipos
+    recibidos» (no resta devoluciones): en un documento para el cliente serían cifras falsas.
+  - **Líneas (revisión de Opus):** se imprimen solo `agregado`, `quitado`,
+    `requiere_nota_credito`, `cambio_precio` y `ajuste`. Antes salía también un `para_revisar`
+    confirmado (hotel con otra cantidad de pasajeros y el mismo precio) rotulado «Por revisar»
+    con diferencia 0. Test nuevo para ese caso (12 tests).
   - Las penalidades salen en su sección (concepto + motivo + monto), no repetidas en la tabla de
     cambios. Se identifican por `alternativa_items.penalidad_reserva_pasajero_id`.
   - Una modificación descartada pide 422 (no hay diferencia que imprimir).

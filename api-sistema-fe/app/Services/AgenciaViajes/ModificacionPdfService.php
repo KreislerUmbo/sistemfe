@@ -22,8 +22,9 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
 //   diferencia es la interna (con el nombre del mayorista).
 class ModificacionPdfService
 {
-    // Lo que no cambia no se imprime.
-    private const ESTADOS_QUE_NO_SE_IMPRIMEN = ['igual'];
+    // Solo lo que cambia (T-006). Ni `igual` ni `para_revisar`: un "para revisar" confirmado
+    // (hotel con otra cantidad de pasajeros y el mismo precio) no le cambia nada al cliente.
+    private const ESTADOS_QUE_SE_IMPRIMEN = ['agregado', 'quitado', 'requiere_nota_credito', 'cambio_precio', 'ajuste'];
 
     public function __construct(
         private MembreteAgenciaPdfService $membrete,
@@ -58,7 +59,7 @@ class ModificacionPdfService
         $reserva = Reserva::findOrFail($modificacion->reserva_id);
 
         $lineas = collect($diferencia['lineas'])
-            ->reject(fn (array $l) => in_array($l['estado'], self::ESTADOS_QUE_NO_SE_IMPRIMEN, true))
+            ->filter(fn (array $l) => in_array($l['estado'], self::ESTADOS_QUE_SE_IMPRIMEN, true))
             ->map(fn (array $l) => $this->lineaParaCliente($l))
             ->values();
 
@@ -74,7 +75,14 @@ class ModificacionPdfService
                 'tipo' => $p['tipo_pax'] === 'nino' ? 'Niño' : ($p['tipo_pax'] === 'adulto' ? 'Adulto' : ucfirst((string) $p['tipo_pax'])),
             ])->values()->all();
 
-        $totales = $diferencia['totales'];
+        // Solo los totales exactos de la diferencia. Sin "ya facturado" (un tour facturado a
+        // medias cuenta entero, R-AGE-04), sin anticipos (no restan devoluciones) y sin saldo (no
+        // ve los cobros de las facturas): en un documento para el cliente serían cifras falsas.
+        $totales = [
+            'vendido' => (int) $diferencia['totales']['vendido'],
+            'nuevo' => (int) $diferencia['totales']['nuevo'],
+            'diferencia' => (int) $diferencia['totales']['diferencia'],
+        ];
         $emision = HoraPeru::ahora();
 
         return [
@@ -87,8 +95,7 @@ class ModificacionPdfService
             'lineas' => $lineas,
             'pasajeros' => $pasajeros,
             'penalidades' => $penalidades,
-            // Saldo = total nuevo menos lo que el cliente ya pagó en anticipos (centavos enteros).
-            'totales' => $totales + ['saldo' => $totales['nuevo'] - $totales['anticipos_aplicados']],
+            'totales' => $totales,
             'nombreArchivo' => 'modificacion_'.preg_replace('/[^A-Za-z0-9_-]+/', '-', (string) ($reserva->codigo ?: $reserva->id)).'_'.$emision->format('d-m-Y').'.pdf',
         ];
     }
@@ -125,7 +132,6 @@ class ModificacionPdfService
                 'quitado', 'requiere_nota_credito' => 'Quitado',
                 'ajuste' => 'Ajuste de precio',
                 'cambio_precio' => 'Cambio de precio',
-                default => 'Por revisar',
             },
             'vendido_centavos' => (int) $linea['vendido_centavos'],
             'nuevo_centavos' => (int) $linea['nuevo_centavos'],

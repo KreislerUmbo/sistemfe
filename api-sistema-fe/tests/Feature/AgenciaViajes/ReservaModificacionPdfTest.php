@@ -270,11 +270,34 @@ class ReservaModificacionPdfTest extends TestCase
         $totales = $this->diferencia($reserva)['totales'];
         $datos = app(ModificacionPdfService::class)->datos($m);
 
-        foreach ($totales as $clave => $centavos) {
-            $this->assertSame($centavos, $datos['totales'][$clave], "Total {$clave}");
+        // Solo los tres totales exactos; nada de facturado, anticipos ni saldo (cifras que no
+        // serían ciertas para el cliente).
+        $this->assertSame(['vendido', 'nuevo', 'diferencia'], array_keys($datos['totales']));
+        foreach ($datos['totales'] as $clave => $centavos) {
+            $this->assertSame($totales[$clave], $centavos, "Total {$clave}");
         }
-        $this->assertSame($totales['nuevo'] - $totales['anticipos_aplicados'], $datos['totales']['saldo']);
         $this->assertSame($totales['diferencia'], array_sum(array_column($datos['lineas'], 'diferencia_centavos')));
+    }
+
+    public function test_un_para_revisar_confirmado_sin_cambio_de_precio_no_sale_en_el_pdf(): void
+    {
+        [$reserva, $m] = $this->reservaConModificacion();
+        $this->cambiarPasajeros($m, [], [40]);
+
+        // Los tres servicios de tarifa fija quedan "para revisar" por la cantidad de pasajeros;
+        // el vendedor los confirma sin tocar el precio.
+        $paraRevisar = collect($this->diferencia($reserva)['lineas'])->where('estado', 'para_revisar');
+        $this->assertCount(3, $paraRevisar);
+        foreach ($paraRevisar as $linea) {
+            $respuesta = app(ReservaModificacionController::class)->marcarRevisado((string) $reserva->id, (string) $linea['alternativa_item_id']);
+            $this->assertSame(200, $respuesta->getStatusCode(), $respuesta->getContent());
+        }
+
+        $datos = app(ModificacionPdfService::class)->datos($m);
+
+        $this->assertSame([], $datos['lineas']);
+        $this->assertSame(['Agregado'], array_column($datos['pasajeros'], 'accion'));
+        $this->assertSame(0, $datos['totales']['diferencia']);
     }
 
     // ── CA4 ────────────────────────────────────────────────────────────────────
