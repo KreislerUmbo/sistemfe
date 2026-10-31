@@ -8,7 +8,7 @@
 
 Cada línea: ID · qué · estado · depende de · rama o commit. El detalle está en
 `docs/tareas/T-…md` (se borra al cerrar; para una tarea hecha, el commit es la referencia).
-Próximo ID libre: **T-076**.
+Próximo ID libre: **T-077**.
 
 ## Orden de construcción (27-oct-2026)
 
@@ -43,6 +43,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 | T-007 | AGE | Modificar reserva: pantallas | en revisión | T-005, T-006, T-072, T-073 | |
 | T-074 | AGE | Cotización reservada: alternativa elegida a la vista (lienzo y listado), lienzo en solo lectura y «Ver detalle» del pasaje aéreo y del ítem manual | por hacer | T-007 | |
 | T-075 | AGE | Un pasaje aéreo nunca se queda sin pasajeros: impedir borrar al último pasajero de un boleto en la cotización; en la copia de una modificación, sin `[]` (revisión de T-007) | por hacer | T-007 | |
+| T-076 | AGE | Pasaje aéreo: cargos y fee por pasajero (sin cambiar el precio de los ya guardados), «ya tiene pasaje» junto a cada pasajero, sin el check de TUA ni el cargo «Fee agencia» | por hacer | T-007 | |
 | T-012 | AGE + CAJ | Traspaso del cobro tras una nota de crédito | por hacer | T-011 | |
 | T-015 | PLA + AGE | Catálogo central de aerolíneas + panel central (Obs. 3) | por hacer | — | |
 | T-016 | AGE | Buscador de aerolíneas, corrección de nombres y aerolínea por defecto (Obs. 3) | por hacer | T-015 | |
@@ -125,6 +126,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 | PLA | **Obs. 14 — Módulo de uso del sistema** (solo UmboSystem; qué se usa, dónde se traban, qué es lento): **en espera** hasta avanzar las tareas pendientes, por decisión del usuario | `docs/requerimientos/observaciones-pruebas-usuario.md` §14, 27-oct-2026 |
 | CAJ + NOT | Devolver dinero al cliente por una NC sin volver a facturar (hoy la NC no mueve la caja en ningún giro) | revisión de fallos de las observaciones, 25-oct-2026 |
 | AGE | **Ley de la Amazonía (fila F2), lo que queda:** interruptor "la empresa cumple la Ley de la Amazonía" (hoy cualquier agencia puede marcar exonerado) y expediente de sustento por reserva (itinerario + pasajeros + órdenes de servicio). Junto con la obs. 10 (contador) | `plan-hoja-de-ruta-ejecucion.md` fila F2, 23-oct-2026 |
+| AGE | **IGV del pasaje aéreo:** el recuadro «Análisis de impuestos» de `PasajeAereoForm.vue` calcula el IGV sobre todo el precio de venta (tarifa + cargos + fee), y según el plan solo el fee es gravable. Verificar cómo lo factura la reserva. Ver con el contador, junto con la obs. 10 | revisión del formulario de pasaje aéreo, 31-oct-2026 |
 | VEN | Comunicación de baja a SUNAT sin conectar a ningún flujo (verificado 27-oct: no hay uso en `app/` ni rutas) | `CLAUDE.md`, Ventas |
 | VEN | Archivo de depuración del XML con nombre fijo: `FacturacionElectronicaController` escribe `debug_xml.xml` en cada envío (choque entre ventas simultáneas, y entre tenants si el disco no está particionado) — verificado 27-oct | `CLAUDE.md`, multitenancy §4 |
 | VEN | `controla_stock` del producto ignorado: `SaleController` descuenta stock siempre (verificado 27-oct) | `TODO.md`, Sesión 9a |
