@@ -30,11 +30,8 @@
             </div>
         </div>
 
-        <!-- ¿A quiénes aplica? — antes este form siempre mandaba pax_incluidos
-             null (todos los pasajeros de la cotización, sin excepción), sin
-             ninguna forma de excluir a alguien. Mismo patrón que ya usa
-             ItemManualForm.vue: si quedan TODOS tildados se manda null
-             (semánticamente "todos"), si es un subconjunto se manda la lista. -->
+        <!-- ¿A quiénes aplica? — se manda siempre la lista de los tildados
+             (T-007: un boleto por persona, nunca null = "todos"). -->
         <div v-if="pasajeros && pasajeros.length" class="mb-2">
             <span class="small text-secondary d-block mb-1">¿A quiénes aplica?</span>
             <div class="form-check form-check-inline small" v-for="p in pasajeros" :key="p.id">
@@ -297,6 +294,15 @@ watch(() => props.itemExistente, () => {
     resetearCampos();
     if (props.itemExistente) recalcular();
 }, { immediate: true });
+
+// Si se editan los pasajeros con el form abierto, se sueltan los que ya no
+// existen (si no, el backend responde 422 por un id borrado).
+watch(() => props.pasajeros, (pasajeros) => {
+    const vigentes = new Set((pasajeros ?? []).map((p) => p.id));
+    if (paxSeleccionados.value.some((id) => !vigentes.has(id))) {
+        paxSeleccionados.value = paxSeleccionados.value.filter((id) => vigentes.has(id));
+    }
+});
 
 watch([form, paxSeleccionados], () => {
     clearTimeout(debounceTimeout);
