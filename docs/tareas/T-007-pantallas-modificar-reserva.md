@@ -143,9 +143,18 @@ Y el recorrido con Playwright contra `agencia-demo` (memoria
 ---
 
 ## Resultado
-- **Commits:**
-- **Tests:**
+- **Commits:** rama `feat/T-007-pantallas-modificar-reserva` (ver `git log`).
+- **Tests:** `npm run build` sin errores; Vitest del composable (4 en verde: composición, monto, motivo); `vue-tsc` sin errores en los archivos tocados. `npm run type-check` (`vue-tsc --build --force`) ya falla en 19 archivos que esta tarea no toca (portal, recursos, users, sale…). Backend: ReservaModificacionCrearTest, EscopablePorVendedorTest y ReservaAnticipoTest en verde (33).
+  Playwright contra agencia-demo (reserva 29): CA2 (crear, agregar pasajero, composición «1 adulto → 2 adultos», PDF, aplicar, historial), CA3 (quitar pasajero → bloqueo → penalidad con selects vacíos → aplicar; un motivo con HTML se ve como texto; editar precarga), CA4 (resalta el ítem; «Revisado» / «Confirmar todas» saca el bloqueo), CA5 (segunda pestaña: «La reserva cambió», recarga y queda de solo lectura), CA6 (descartar). CA8: respaldo con pg_dump, restaurado y conteos iguales. CA1 solo por código (`puedeModificar` = reserva activa + `reservas.modificar`): la demo no tiene reserva cancelada ni un usuario sin permiso.
 - **Desviaciones de la tarea y por qué:**
+  - Ajuste de backend (forma de respuesta): `GET reservas/{id}` trae `modificacion_abierta` y `modificaciones_aplicadas` (solo con `reservas.modificar`), y `GET cotizaciones/{id}` trae `modificacion` (reserva y estado) si la cotización es de modificación. Sin eso el cotizador no sabía a qué reserva volver y la reserva no podía listar el historial.
+  - Componentes en `components/AgenciaViajes/` (la carpeta que ya existe, no `agencia-viajes`); composable en `composables/agencia-viajes/`; se agregó `services/admin/reservaModificacionService.ts`.
+  - Confirmar en bloque: llamadas en paralelo a la ruta de a uno y una sola recarga de la diferencia; no se agregó ruta.
+  - El aviso de edad estimada y el mensaje de éxito/cupo viajan entre pantallas por `sessionStorage` (esa respuesta solo existe en el momento de crear/aplicar).
+  - `components.d.ts` se regeneró solo con los dos componentes nuevos.
+  - Un pasajero quitado y vuelto a agregar sigue siendo uno nuevo (no se decidió recuperar al original).
 
 ## Hallazgos fuera de alcance
-- 
+- Tras aplicar una modificación con penalidad, la reserva queda con «Servicios: 1 pendiente(s)» y la penalidad sin pasajeros (R-AGE-05); la pantalla de facturar todavía no lo explica, como pedía la nota de T-005.
+- Un pasajero sin nombre cargado sale como «pasajero #35» en el bloqueo y en el texto de la penalidad.
+- El aviso «Pasajeros actualizados» del cotizador repite «(modificación)» en el nombre de la alternativa desde la segunda modificación.

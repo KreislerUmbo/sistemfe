@@ -1408,6 +1408,10 @@ class ReservaController extends Controller
             // extra).
             'facturacion_habilitada_tenant' => (bool) tenant('facturacion_habilitada'),
             'facturacion_externa_editable' => $reserva->ventas->isEmpty(),
+            // T-007: "Modificar reserva". Solo para quien tiene el permiso (las rutas de la
+            // modificación lo exigen igual): la abierta y el historial de las aplicadas.
+            'modificacion_abierta' => $this->modificacionAbiertaParaPantalla($reserva),
+            'modificaciones_aplicadas' => $this->modificacionesAplicadasParaPantalla($reserva),
             'cabecera' => [
                 'cliente' => $cotizacion->cliente,
                 'destino' => $cotizacion->destino,
@@ -1427,6 +1431,36 @@ class ReservaController extends Controller
                 'codigo' => $reserva->codigo ?? $cotizacion->codigo,
             ],
         ];
+    }
+
+    private function modificacionAbiertaParaPantalla(Reserva $reserva): ?array
+    {
+        if (! auth('api')->user()?->can('reservas.modificar')) {
+            return null;
+        }
+
+        $abierta = ReservaModificacion::abierta()->where('reserva_id', $reserva->id)->first();
+
+        return $abierta ? ['id' => $abierta->id, 'cotizacion_id' => $abierta->cotizacion_id] : null;
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    private function modificacionesAplicadasParaPantalla(Reserva $reserva): array
+    {
+        if (! auth('api')->user()?->can('reservas.modificar')) {
+            return [];
+        }
+
+        $aplicadas = ReservaModificacion::where('reserva_id', $reserva->id)
+            ->where('estado', ReservaModificacion::ESTADO_APLICADA)->orderByDesc('id')->get();
+        $usuarios = \App\Models\User::whereIn('id', $aplicadas->pluck('aplicado_por')->filter())->pluck('name', 'id');
+
+        return $aplicadas->map(fn (ReservaModificacion $m) => [
+            'id' => $m->id,
+            'aplicado_en' => $m->aplicado_en?->toIso8601String(),
+            'aplicado_por' => $usuarios[$m->aplicado_por] ?? null,
+            'diferencia_centavos' => $m->diferencia_aplicada['totales']['diferencia'] ?? null,
+        ])->values()->all();
     }
 
     // Mismo criterio que etiquetaItem() en cotizador/editar.vue (Sesión

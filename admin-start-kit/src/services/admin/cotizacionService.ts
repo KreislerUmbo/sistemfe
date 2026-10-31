@@ -17,7 +17,8 @@ export const cotizacionService = {
   },
   async obtener(id: number) {
     const response = await httpClient.get(`/cotizaciones/${id}`)
-    return response.data as { cotizacion: Cotizacion }
+    // modificacion: solo si es una cotización de modificación de reserva (T-007).
+    return response.data as { cotizacion: Cotizacion; modificacion?: { id: number; estado: 'abierta' | 'aplicada' | 'descartada'; reserva_id: number; reserva_codigo: string | null } | null }
   },
   async crear(data: {
     cliente_id: number

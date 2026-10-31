@@ -411,6 +411,8 @@ export type TemporadaDesactualizada = {
 export type AlternativaItem = {
   id: number;
   alternativa_id: number;
+  // T-005/T-072: un "Ajuste — <servicio>" apunta al ítem que ajusta; no se suma en el total.
+  ajuste_de_item_id?: number | null;
   // Sesión 12c/12f-1 — nullable: solo los ítems creados desde 12c en
   // adelante (o clonados por duplicar()) lo tienen resuelto.
   alternativa_destino_id?: number | null;
@@ -1223,6 +1225,9 @@ export type ReservaCabecera = {
 
 export type ReservaDetalleResponse = {
   code?: number;
+  // T-007: solo vienen con el permiso reservas.modificar.
+  modificacion_abierta?: { id: number; cotizacion_id: number } | null;
+  modificaciones_aplicadas?: Array<{ id: number; aplicado_en: string | null; aplicado_por: string | null; diferencia_centavos: number | null }>;
   message?: string;
   reserva: Reserva;
   resumen: ReservaResumenItem[];
