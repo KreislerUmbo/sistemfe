@@ -276,8 +276,6 @@ const resetearCampos = () => {
     }
 };
 
-watch(() => props.itemExistente, resetearCampos, { immediate: true });
-
 const recalcular = async () => {
     calculando.value = true;
     try {
@@ -292,6 +290,13 @@ const recalcular = async () => {
         calculando.value = false;
     }
 };
+
+// Al editar, el form se monta con el ítem ya cargado: resetearCampos() lo llena
+// antes de que exista el watch de abajo, así que el total se pide acá.
+watch(() => props.itemExistente, () => {
+    resetearCampos();
+    if (props.itemExistente) recalcular();
+}, { immediate: true });
 
 watch([form, paxSeleccionados], () => {
     clearTimeout(debounceTimeout);
