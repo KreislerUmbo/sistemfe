@@ -30,6 +30,21 @@ T-007.
   (`whereHas` sobre `estado = 'aceptada'`) además de `estadoResumen()`; si es así, mismo criterio.
 - Tablero de salidas: código de la reserva = `reserva.codigo` con fallback al de la cotización,
   igual que `ReporteOperativoController` (~224, ~469).
+- **Ajuste sumado dos veces (hallazgo de T-006, 30-oct).** Tras aplicar con un ajuste, la
+  versión vigente tiene el servicio facturado con el precio nuevo **y** el «Ajuste — …»
+  (`alternativa_items.ajuste_de_item_id` no nulo), que ya está dentro de ese precio. Todo lo que
+  suma los ítems de una alternativa cuenta la diferencia dos veces. La reserva está bien (su
+  servicio facturado sigue al precio viejo + el ajuste): no tocarla. Excluir los ítems con
+  `ajuste_de_item_id` en:
+  - `AlternativaItem::calcularTotalEfectivo()` (de ahí sale `alternativas.total`, vía
+    `AlternativaController` ~358, `AlternativaItemController` ~1787, `OpcionHotelController`
+    ~348, `OpcionMayoristaController` ~267, `PenalidadPasajeroService` ~123);
+  - `AlternativaPdfService` (~173: `totalOriginal` suma `$alternativa->items` aparte, y la
+    lista de servicios del PDF de cotización);
+  - revisar si `crearAjuste()` de `ModificacionReservaService` actualiza `alternativas.total`
+    al crear el ajuste, y dejarlo en el total correcto.
+  Buscar con `grep` otros `->items` que sumen precio (listado, Inicio, `Alternativa::total`) y
+  anotar lo que se encontró.
 
 ## Fuera de alcance
 - Que buscar una reserva por el código de la cotización original la encuentre (hallazgo de
@@ -53,13 +68,18 @@ T-007.
 - [ ] **CA4** — El tablero de salidas muestra el código propio de la reserva; sin código propio,
   el de la cotización.
 - [ ] **CA5** — El listado de cotizaciones no agrega consultas por fila (contar queries en el test).
+- [ ] **CA6** — Tras aplicar con un ajuste (servicio facturado que sube de 100 a 130): el total
+  de la alternativa vigente es 130, no 160, y el PDF de su cotización lista el servicio una vez
+  con 130 y suma 130.
+- [ ] **CA7** — El total de la reserva no cambia (servicio a 100 + ajuste 30) y facturar el
+  ajuste sigue funcionando.
 
 ## Seguridad y correctitud
 - [ ] Permisos / Policy en rutas nuevas: no aplica (sin rutas nuevas)
 - [ ] Aislamiento de tenant: no aplica
 - [ ] Validación de entrada / archivos: no aplica
 - [ ] Concurrencia (`lockForUpdate`): no aplica (solo lectura)
-- [ ] Dinero en centavos: no aplica
+- [ ] Dinero en centavos: el total de la alternativa sin el ajuste; la reserva no cambia
 - [ ] Fechas con `HoraPeru`: no aplica
 - [ ] Tributario sin fallback silencioso: no aplica
 - [ ] Sin `v-html` sin sanitizar: no aplica

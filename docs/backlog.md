@@ -40,7 +40,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 
 | ID | Módulo | Qué | Estado | Depende de | Rama / commit |
 |---|---|---|---|---|---|
-| T-072 | AGE | La cotización original sigue "reservada" tras aplicar una modificación; código de la reserva en el tablero de salidas | por hacer | T-005 | |
+| T-072 | AGE | La cotización original sigue "reservada" tras aplicar una modificación; código de la reserva en el tablero de salidas; el ajuste no se suma dos veces en el total de la versión vigente | por hacer | T-005 | |
 | T-073 | AGE | Modificar reserva: un servicio "por persona" que no se reprecia solo (pasaje aéreo, manual, mayorista) queda "para revisar" si cambian sus pasajeros | por hacer | T-005 | |
 | T-007 | AGE | Modificar reserva: pantallas | por hacer | T-005, T-006, T-072, T-073 | |
 | T-012 | AGE + CAJ | Traspaso del cobro tras una nota de crédito | por hacer | T-011 | |
@@ -90,7 +90,6 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 
 | Módulo | Qué | Origen |
 |---|---|---|
-| AGE | **Antes de T-007.** Tras aplicar una modificación con ajuste, la versión vigente tiene el servicio facturado con el precio nuevo **y** el «Ajuste — …»: `AlternativaItem::calcularTotalEfectivo()` y `AlternativaPdfService` suman los dos (la diferencia dos veces) en el total del cotizador y el PDF de la cotización `…-M1`. La reserva está bien. Propuesta: excluir `ajuste_de_item_id` en esas sumas | T-006, 30-oct-2026 |
 | AGE | Saldo real de una reserva (estado de cuenta): total vigente − anticipos netos de devoluciones − cobros de sus facturas (contado y amortizaciones) + notas de crédito, en una sola función. Hoy no existe; por eso el PDF de modificación no muestra saldo, y `totales.ya_facturado` / `anticipos_aplicados` de la diferencia son aproximados (tour a medias cuenta entero; sin devoluciones) | revisión T-006, 30-oct-2026 |
 | AGE | `AlternativaItemController::destroy()` y `eliminarCarga()` no rechazan una alternativa aceptada (solo miran si hay reserva); `moverBloque()` mueve el tour clásico en todos los días, no solo el visible | T-027, 28-oct-2026 |
 | AGE | `Fila13Fase1cFacturacionTest::descuento_del_combo_se_reparte_entre_los_grupos` falla a ratos (≈1 de 4, también corriendo solo): `partes_tour` sale `[180, 90]` en vez de `[90, 180]`. El combo (`orden`) y los ítems de la reserva (`orderBy('id')`) ya van ordenados; el desorden entra en otro punto del armado de las partes. Revisar si el orden de las líneas del comprobante también varía | T-024, 28-oct-2026 |
