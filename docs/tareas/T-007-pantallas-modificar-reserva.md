@@ -68,6 +68,13 @@ penalidad y el "Ajuste" quedan en la reserva **sin pasajeros asignados**: al fac
 entran solos, el vendedor los suma a la factura que quiera; la pantalla de facturar debe
 dejarlo claro. Requiere T-072 hecha (la cotización original deja de verse "reservada").
 
+**Nota de la revisión de T-006 (30-oct): totales.** De `totales` de la diferencia, mostrar
+solo `vendido`, `nuevo` y `diferencia`. `ya_facturado` (un tour facturado a medias cuenta
+entero) y `anticipos_aplicados` (no resta devoluciones) son aproximados: no mostrarlos como
+cifras al vendedor, ni calcular un saldo en el navegador. El saldo real está en "Por analizar".
+El PDF es `GET reservas/{id}/modificacion/pdf[?modificacion_id=]` (descarga; para una aplicada,
+el historial pasa `modificacion_id`).
+
 ## Fuera de alcance
 - Cambios en el backend, salvo un ajuste chico de forma de respuesta. Si hace falta más,
   anotarlo en "Hallazgos".

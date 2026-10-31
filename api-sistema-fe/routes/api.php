@@ -1138,6 +1138,9 @@ Route::group([
         ->middleware('permission:reservas.modificar');
     Route::post("reservas/{id}/modificacion/items/{itemId}/revisado", [ReservaModificacionController::class, 'marcarRevisado'])
         ->middleware('permission:reservas.modificar');
+    // T-006 — PDF de la modificación para el cliente (R-AGE-09).
+    Route::get("reservas/{id}/modificacion/pdf", [ReservaModificacionController::class, 'pdf'])
+        ->middleware('permission:reservas.modificar');
     // T-005 — aplicar la modificación a la reserva (R-AGE-07): todo o nada, bajo el lock de la reserva.
     Route::post("reservas/{id}/modificacion/aplicar", [ReservaModificacionController::class, 'aplicar'])
         ->middleware('permission:reservas.modificar');

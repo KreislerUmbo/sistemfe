@@ -8,7 +8,9 @@ use App\Models\AgenciaViajes\AlternativaItem;
 use App\Models\AgenciaViajes\Reserva;
 use App\Models\AgenciaViajes\ReservaModificacion;
 use App\Services\AgenciaViajes\ModificacionDiferenciaService;
+use App\Services\AgenciaViajes\ModificacionPdfService;
 use App\Services\AgenciaViajes\ModificacionReservaService;
+use Illuminate\Http\Request;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
 // "Modificar reserva": crear, consultar y descartar la modificación abierta de una reserva
@@ -101,6 +103,28 @@ class ReservaModificacionController extends Controller
         }
 
         return response()->json(['code' => 200] + $this->diferencia->calcular($modificacion)->toArray());
+    }
+
+    // GET reservas/{id}/modificacion/pdf[?modificacion_id=] — PDF para el cliente (T-006; R-AGE-09).
+    // Sin parámetro, la abierta; con modificacion_id, una de ESTA reserva (aplicada: lo que se aplicó).
+    public function pdf(Request $request, string $id, ModificacionPdfService $pdf)
+    {
+        $reserva = Reserva::findOrFail($id);
+        $this->authorize('update', $reserva);
+
+        $idPedido = $request->query('modificacion_id');
+        $modificacion = $idPedido !== null && $idPedido !== ''
+            ? ReservaModificacion::where('reserva_id', $reserva->id)->find($idPedido)
+            : ReservaModificacion::abierta()->where('reserva_id', $reserva->id)->first();
+        if (! $modificacion) {
+            return response()->json(['code' => 404, 'message' => 'No se encontró la modificación de esta reserva.'], 404);
+        }
+
+        try {
+            return $pdf->generar($modificacion);
+        } catch (HttpException $e) {
+            return response()->json(['code' => $e->getStatusCode(), 'message' => $e->getMessage()], $e->getStatusCode());
+        }
     }
 
     // POST reservas/{id}/modificacion/aplicar { huella } — pasa la diferencia a la reserva (T-005).
