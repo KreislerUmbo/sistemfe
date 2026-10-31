@@ -89,9 +89,24 @@ php artisan test
 ---
 
 ## Resultado
-- **Commits:**
-- **Tests:**
-- **Desviaciones de la tarea y por qué:**
+- **Commits:** ver `git log fix/T-073-por-persona-sin-repreciar` (un commit de código + tests).
+- **Tests:** 8 nuevos en `ReservaModificacionDiferenciaTest` (CA1, CA2, CA3, CA4, CA5, CA5b con
+  tour a mano y con tour real, tarifa borrada) y 1 en `ReservaModificacionAplicarTest` (pasaje
+  facturado como la reserva 29: aplicar responde 422; subido el precio, se aplica con ajuste).
+  Sin el cambio de código fallan 5 de los 8 de diferencia (los otros 3 son los que ya andaban:
+  CA4, CA5 y tour sin precio a mano). Suite completa: ver mensaje de entrega.
+- **Cómo quedó:** `RecalculoPorPersonaService::seRepreciaSolo($item)` es la única regla (proveedor
+  con tarifa existente y pasajeros asignados; tour cuya unidad no tiene `precio_manual`);
+  `recalcular()` usa los mismos métodos (`motivoSinRepreciar`, `tourSeRepreciaSolo`) para sus
+  avisos y `ModificacionDiferenciaService::lineasDeServicios()` la consulta. Si el ítem es
+  `tarifa_fija` o `por_persona` que no se reprecia solo, y cambia la cantidad de pasajeros con el
+  mismo precio, queda `para_revisar` con `pasajeros_vendidos`/`pasajeros_nuevos`.
+- **Desviaciones de la tarea y por qué:** además del pasaje/manual/mayorista, entran como "para
+  revisar" un proveedor cuya tarifa ya no existe o sin pasajeros asignados, porque
+  `recalcular()` tampoco los reprecia (misma regla, un solo lugar). Un tour sin `carga_tour`
+  (anterior al modo nuevo) tampoco se reprecia: también queda "para revisar".
 
 ## Hallazgos fuera de alcance
--
+- La comparación es por **cantidad** de pasajeros. Si se cambia un adulto por un niño (misma
+  cantidad) en un servicio por persona que no se reprecia solo, sigue saliendo `igual` aunque la
+  tarifa sea distinta. Habría que comparar por tipo de pasajero; no se tocó.

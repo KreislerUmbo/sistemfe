@@ -6,6 +6,7 @@ use App\Models\AgenciaViajes\AlternativaItem;
 use App\Models\AgenciaViajes\ConfiguracionAgencia;
 use App\Models\AgenciaViajes\Cotizacion;
 use App\Models\AgenciaViajes\CotizacionPasajero;
+use Illuminate\Support\Collection;
 
 // Reprecia los ítems "por persona" de una cotización contra su lista actual de
 // pasajeros. Antes vivía privado en CotizacionController (actualizarPasajeros());
@@ -67,7 +68,7 @@ class RecalculoPorPersonaService
                     $itemsRecalculados += $lineas->count();
                     $huboCambio = true;
                 }
-                if ($resultado['precio_manual']) {
+                if (! $this->tourSeRepreciaSolo($lineas)) {
                     $itemsParaRevisar[] = [
                         'alternativa_item_id' => $lineas->first()->id,
                         'alternativa_id' => $alternativa->id,
@@ -81,38 +82,17 @@ class RecalculoPorPersonaService
                 // Único caso de alta confianza: origen_tipo=proveedor con
                 // una proveedor_tarifa real detrás — mismo cálculo exacto
                 // que AlternativaItemController::crearItemProveedor().
-                if ($item->origen_tipo !== AlternativaItem::ORIGEN_PROVEEDOR || ! $item->proveedor_tarifa_id) {
+                if ($motivo = $this->motivoSinRepreciar($item)) {
                     $itemsParaRevisar[] = [
                         'alternativa_item_id' => $item->id,
                         'alternativa_id' => $alternativa->id,
                         'alternativa_nombre' => $alternativa->nombre,
-                        'motivo' => $item->origen_tipo === AlternativaItem::ORIGEN_PROVEEDOR
-                            ? 'Ítem "por persona" sin proveedor_tarifa real detrás — no se puede repreciar automáticamente.'
-                            : 'Ítem "por persona" de origen ' . $item->origen_tipo . ' — se debe repreciar manualmente.',
+                        'motivo' => $motivo,
                     ];
                     continue;
                 }
 
                 $tarifa = $item->proveedorTarifa;
-                if (! $tarifa) {
-                    $itemsParaRevisar[] = [
-                        'alternativa_item_id' => $item->id,
-                        'alternativa_id' => $alternativa->id,
-                        'alternativa_nombre' => $alternativa->nombre,
-                        'motivo' => 'La tarifa de proveedor original de este ítem ya no existe — no se puede repreciar automáticamente.',
-                    ];
-                    continue;
-                }
-
-                if (is_array($item->pax_incluidos) && count($item->pax_incluidos) === 0) {
-                    $itemsParaRevisar[] = [
-                        'alternativa_item_id' => $item->id,
-                        'alternativa_id' => $alternativa->id,
-                        'alternativa_nombre' => $alternativa->nombre,
-                        'motivo' => 'Todos los pasajeros asignados a este ítem fueron eliminados — revisar a quién aplica ahora.',
-                    ];
-                    continue;
-                }
 
                 $conteo = $this->contarPasajerosPorTipo($alternativa->cotizacion_id, $item->pax_incluidos);
                 $nuevoPrecioVentaSnapshot = round(
@@ -169,6 +149,60 @@ class RecalculoPorPersonaService
         }
 
         return [$itemsRecalculados, $itemsParaRevisar];
+    }
+
+    // ── Qué se reprecia solo ────────────────────────────────────────────────
+    // Única definición (T-073). La usan recalcular() y la diferencia de "Modificar reserva"
+    // (ModificacionDiferenciaService): lo que NO se reprecia solo, si cambian sus pasajeros,
+    // queda "para revisar" en vez de salir "igual" con el mismo precio.
+    //  - proveedor con su tarifa existente (y con pasajeros asignados);
+    //  - línea de tour sin precio a mano en toda su unidad (combo o carga).
+
+    public function seRepreciaSolo(AlternativaItem $item): bool
+    {
+        if ($item->modo_precio !== 'por_persona') {
+            return false;
+        }
+
+        if ($item->origen_tipo === AlternativaItem::ORIGEN_TOUR) {
+            if (! $item->carga_tour) {
+                return false;
+            }
+
+            $unidad = $this->tourLinea->unidades(
+                AlternativaItem::where('alternativa_id', $item->alternativa_id)->whereNotNull('carga_tour')->get()
+            )->first(fn (Collection $lineas) => $lineas->contains('id', $item->id));
+
+            return $unidad !== null && $this->tourSeRepreciaSolo($unidad);
+        }
+
+        return $this->motivoSinRepreciar($item) === null;
+    }
+
+    // Una unidad de tour se reprecia sola salvo que el vendedor fijara el precio a mano en
+    // alguna de sus líneas (entonces solo se actualiza el costo).
+    public function tourSeRepreciaSolo(Collection $lineas): bool
+    {
+        return ! $lineas->contains(fn (AlternativaItem $i) => $i->precio_manual);
+    }
+
+    // Por qué un ítem por persona que no es tour no se reprecia solo (null = sí se reprecia).
+    private function motivoSinRepreciar(AlternativaItem $item): ?string
+    {
+        if ($item->origen_tipo !== AlternativaItem::ORIGEN_PROVEEDOR) {
+            return 'Ítem "por persona" de origen '.$item->origen_tipo.' — se debe repreciar manualmente.';
+        }
+        if (! $item->proveedor_tarifa_id) {
+            return 'Ítem "por persona" sin proveedor_tarifa real detrás — no se puede repreciar automáticamente.';
+        }
+        if (! $item->proveedorTarifa) {
+            return 'La tarifa de proveedor original de este ítem ya no existe — no se puede repreciar automáticamente.';
+        }
+        if (is_array($item->pax_incluidos) && count($item->pax_incluidos) === 0) {
+            return 'Todos los pasajeros asignados a este ítem fueron eliminados — revisar a quién aplica ahora.';
+        }
+
+        return null;
     }
 
     private function contarPasajerosPorTipo(int $cotizacionId, ?array $paxIncluidosIds): array

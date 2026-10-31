@@ -2,15 +2,20 @@
 
 namespace Tests\Feature\AgenciaViajes;
 
+use App\Http\Controllers\AgenciaViajes\AlternativaItemController;
 use App\Http\Controllers\AgenciaViajes\CotizacionController;
 use App\Http\Controllers\AgenciaViajes\ReservaController;
 use App\Http\Controllers\AgenciaViajes\ReservaModificacionController;
 use App\Models\AgenciaViajes\Alternativa;
+use App\Models\AgenciaViajes\AlternativaDestino;
 use App\Models\AgenciaViajes\AlternativaItem;
+use App\Models\AgenciaViajes\ConfiguracionAgencia;
 use App\Models\AgenciaViajes\Cotizacion;
 use App\Models\AgenciaViajes\CotizacionPasajero;
 use App\Models\AgenciaViajes\DestinoAtractivo;
 use App\Models\AgenciaViajes\DestinoServicio;
+use App\Models\AgenciaViajes\PaquetePlantilla;
+use App\Models\AgenciaViajes\PaquetePlantillaItem;
 use App\Models\AgenciaViajes\Proveedor;
 use App\Models\AgenciaViajes\ProveedorServicio;
 use App\Models\AgenciaViajes\ProveedorTarifa;
@@ -19,6 +24,7 @@ use App\Models\AgenciaViajes\ReservaItem;
 use App\Models\AgenciaViajes\ReservaModificacion;
 use App\Models\AgenciaViajes\ReservaVenta;
 use App\Models\AgenciaViajes\Servicio;
+use App\Models\AgenciaViajes\TourItinerarioItem;
 use App\Models\Sale\Sale;
 use App\Models\User;
 use Illuminate\Http\Request;
@@ -125,7 +131,8 @@ class ReservaModificacionDiferenciaTest extends TestCase
     //  hotel       exonerado (Amazonía) = 300
     // Con $conTour, además un tour precio-a-mano repartido en 2 líneas de IGV (100,01 gravado
     // + 50,02 exonerado): no se combina con cambios de pasajeros (no hay tour real que repreciar).
-    private function reservaConTresPasajeros(bool $conTour = false): Reserva
+    // $extras (T-073): 'pasaje', 'tour_real', 'tour_manual' — ver más abajo.
+    private function reservaConTresPasajeros(bool $conTour = false, array $extras = []): Reserva
     {
         $clienteId = DB::table('clients')->insertGetId([
             'type_document' => 'DNI', 'n_document' => (string) random_int(10000000, 99999999),
@@ -176,10 +183,64 @@ class ReservaModificacionDiferenciaTest extends TestCase
             }
         }
 
+        // T-073 — Pasaje aéreo: por persona, manual (nadie lo reprecia solo), 3 × 200 = 600.
+        if (in_array('pasaje', $extras, true)) {
+            $this->items['pasaje'] = $this->item($alternativa, [
+                'descripcion_manual' => 'Pasaje aéreo', 'modo_precio' => 'por_persona', 'pax_incluidos' => null,
+                'precio_venta_snapshot' => 600, 'precio_convertido' => 600,
+            ]);
+        }
+        // T-073 — Tour real (dos grupos de IGV, 150 por adulto): 'tour_real' reprecia solo;
+        // 'tour_manual' con el precio fijado a mano (300 en total para el único adulto que hay).
+        foreach (['tour_real', 'tour_manual'] as $variante) {
+            if (in_array($variante, $extras, true)) {
+                $this->cargarTourReal($alternativa, $variante === 'tour_manual');
+            }
+        }
+
         $respuesta = app(ReservaController::class)->aceptar(new Request(), (string) $alternativa->id);
         $this->assertSame(200, $respuesta->getStatusCode(), $respuesta->getContent());
 
         return Reserva::where('alternativa_id', $alternativa->id)->firstOrFail();
+    }
+
+    // Tour de venta con 100 por adulto y dos servicios incluidos (uno exonerado, otro gravado):
+    // se carga con el endpoint real y queda una línea por grupo de IGV.
+    private function cargarTourReal(Alternativa $alternativa, bool $precioManual): void
+    {
+        ConfiguracionAgencia::first()->update([
+            'modo_tours' => ConfiguracionAgencia::MODO_TOURS_NUEVO,
+            'tip_afe_igv_default' => '20', 'destino_tributario_default' => 'amazonia',
+        ]);
+        $destino = DestinoAtractivo::first() ?? DestinoAtractivo::create(['nombre' => 'Alto Mayo', 'tipo' => 'zona']);
+        AlternativaDestino::firstOrCreate(['alternativa_id' => $alternativa->id, 'destino_atractivo_id' => $destino->id], ['orden' => 1]);
+
+        $tour = PaquetePlantilla::create([
+            'categoria' => 'local', 'tipo' => PaquetePlantilla::TIPO_TOUR_SIMPLE, 'nombre' => 'Laguna Azul Full Day',
+            'destino_atractivo_id' => $destino->id, 'duracion_horas' => 10,
+            'precio_venta_final' => 100, 'precio_venta_nino' => null, 'costo_estimado_persona' => null,
+        ]);
+        TourItinerarioItem::create(['tour_id' => $tour->id, 'dia_relativo' => 1, 'orden' => 1, 'destino_atractivo_id' => $destino->id, 'descripcion' => 'Día 1']);
+        foreach ([['Bote', 60, '20', 'amazonia'], ['Transporte', 20, '10', 'nacional']] as $orden => [$nombre, $costo, $igv, $destinoTributario]) {
+            $servicio = Servicio::create(['nombre' => $nombre.' '.uniqid()]);
+            PaquetePlantillaItem::create([
+                'paquete_plantilla_id' => $tour->id,
+                'destino_servicio_id' => DestinoServicio::create(['destino_atractivo_id' => $destino->id, 'servicio_id' => $servicio->id])->id,
+                'costo_estimado_persona' => $costo, 'tip_afe_igv' => $igv, 'destino_tributario' => $destinoTributario, 'orden' => $orden + 1,
+            ]);
+        }
+
+        $controller = app(AlternativaItemController::class);
+        $respuesta = $controller->desdePlantilla(new Request(['paquete_plantilla_id' => $tour->id, 'dia_referencial' => 1]), (string) $alternativa->id);
+        $this->assertSame(200, $respuesta->getStatusCode(), $respuesta->getContent());
+
+        $lineas = AlternativaItem::where('alternativa_id', $alternativa->id)->where('origen_tipo', AlternativaItem::ORIGEN_TOUR)->orderBy('id')->get();
+        $this->assertCount(2, $lineas);
+        $this->items[$precioManual ? 'tour_manual_a' : 'tour_real_a'] = $lineas[0];
+        $this->items[$precioManual ? 'tour_manual_b' : 'tour_real_b'] = $lineas[1];
+        if ($precioManual) {
+            $controller->precioCarga(new Request(['precio' => 120]), (string) $alternativa->id, $lineas[0]->carga_tour);
+        }
     }
 
     private function abrir(Reserva $reserva): ReservaModificacion
@@ -191,9 +252,9 @@ class ReservaModificacionDiferenciaTest extends TestCase
     }
 
     // Reserva con la modificación ya abierta.
-    private function reservaConModificacion(bool $conTour = false): array
+    private function reservaConModificacion(bool $conTour = false, array $extras = []): array
     {
-        $reserva = $this->reservaConTresPasajeros($conTour);
+        $reserva = $this->reservaConTresPasajeros($conTour, $extras);
 
         return [$reserva, $this->abrir($reserva)];
     }
@@ -567,6 +628,144 @@ class ReservaModificacionDiferenciaTest extends TestCase
         $this->assertSame([], $dif['bloqueos']);
         $this->assertFalse($dif['hay_cambios']);
         $this->assertFalse($dif['se_puede_aplicar']);
+    }
+
+    // ── T-073: por persona que no se reprecia solo ──────────────────────────────
+
+    public function test_t073_ca1_pasaje_aereo_por_persona_con_un_pasajero_agregado_queda_para_revisar_y_bloquea(): void
+    {
+        [$reserva, $m] = $this->reservaConModificacion(false, ['pasaje']);
+        $this->cambiarPasajeros($m, [], [28]);
+
+        $dif = $this->diferencia($reserva);
+
+        $pasaje = $this->linea($dif, $this->nuevo($m, 'pasaje'));
+        $this->assertSame('para_revisar', $pasaje['estado']);
+        $this->assertSame(0, $pasaje['diferencia_centavos']);
+        $this->assertSame([3, 4], [$pasaje['pasajeros_vendidos'], $pasaje['pasajeros_nuevos']]);
+        $this->assertFalse($pasaje['revisado']);
+        $this->assertContains($this->nuevo($m, 'pasaje')->id, collect($dif['bloqueos'])->where('tipo', 'para_revisar')->pluck('alternativa_item_id')->all());
+        $this->assertFalse($dif['se_puede_aplicar']);
+    }
+
+    public function test_t073_ca2_el_mismo_caso_con_el_pasaje_facturado_tambien_queda_para_revisar_y_si_sube_sale_ajuste(): void
+    {
+        [$reserva, $m] = $this->reservaConModificacion(false, ['pasaje']);
+        $todos = collect(['ana', 'beto', 'carla'])->map(fn ($c) => $this->reservaPasajeroId($reserva, $c))->all();
+        $this->facturar($reserva, ['pasaje'], $todos);
+        $this->cambiarPasajeros($m, [], [28]);
+
+        $pasaje = $this->linea($this->diferencia($reserva), $this->nuevo($m, 'pasaje'));
+        $this->assertTrue($pasaje['facturado']);
+        $this->assertSame('para_revisar', $pasaje['estado']);
+        $this->assertSame([3, 4], [$pasaje['pasajeros_vendidos'], $pasaje['pasajeros_nuevos']]);
+        $this->assertFalse($this->diferencia($reserva)['se_puede_aplicar']);
+
+        // El vendedor corrige el precio en el cotizador (el cuarto pasaje): entonces es un ajuste.
+        $this->nuevo($m, 'pasaje')->update(['precio_venta_snapshot' => 800, 'precio_convertido' => 800]);
+        $pasaje = $this->linea($this->diferencia($reserva), $this->nuevo($m, 'pasaje'));
+        $this->assertSame('ajuste', $pasaje['estado']);
+        $this->assertSame(20000, $pasaje['diferencia_centavos']);
+    }
+
+    public function test_t073_ca3_revisado_lo_saca_de_los_bloqueos_y_si_cambian_otra_vez_los_pasajeros_vuelve_a_bloquear(): void
+    {
+        [$reserva, $m] = $this->reservaConModificacion(false, ['pasaje']);
+        $this->cambiarPasajeros($m, [], [28]);
+        $pasaje = $this->nuevo($m, 'pasaje');
+
+        $respuesta = app(ReservaModificacionController::class)->marcarRevisado((string) $reserva->id, (string) $pasaje->id);
+        $this->assertSame(200, $respuesta->getStatusCode(), $respuesta->getContent());
+        $dif = $this->diferencia($reserva);
+        $this->assertTrue($this->linea($dif, $pasaje)['revisado']);
+        $this->assertNotContains($pasaje->id, collect($dif['bloqueos'])->where('tipo', 'para_revisar')->pluck('alternativa_item_id')->all());
+
+        $this->cambiarPasajeros($m, [], [5]);
+
+        $this->assertNull($pasaje->fresh()->revisado_en_modificacion);
+        $dif = $this->diferencia($reserva);
+        $this->assertSame([3, 5], [$this->linea($dif, $pasaje)['pasajeros_vendidos'], $this->linea($dif, $pasaje)['pasajeros_nuevos']]);
+        $this->assertContains($pasaje->id, collect($dif['bloqueos'])->where('tipo', 'para_revisar')->pluck('alternativa_item_id')->all());
+    }
+
+    public function test_t073_ca4_por_persona_de_proveedor_con_tarifa_se_reprecia_y_no_queda_para_revisar(): void
+    {
+        [$reserva, $m] = $this->reservaConModificacion(false, ['pasaje']);
+        $this->cambiarPasajeros($m, [], [28]);
+
+        $traslado = $this->linea($this->diferencia($reserva), $this->nuevo($m, 'traslado'));
+
+        $this->assertSame('cambio_precio', $traslado['estado']);
+        $this->assertSame(10000, $traslado['diferencia_centavos']);
+        $this->assertNull($traslado['pasajeros_vendidos']);
+    }
+
+    public function test_t073_ca5_por_persona_sin_cambio_de_pasajeros_sigue_igual(): void
+    {
+        [$reserva, $m] = $this->reservaConModificacion(false, ['pasaje']);
+        // Cambia un precio que no depende de pasajeros, para que haya modificación en curso.
+        $this->nuevo($m, 'hotel')->update(['precio_venta_snapshot' => 310, 'precio_convertido' => 310]);
+
+        $dif = $this->diferencia($reserva);
+
+        $this->assertSame('igual', $this->linea($dif, $this->nuevo($m, 'pasaje'))['estado']);
+        $this->assertNotContains($this->nuevo($m, 'pasaje')->id, collect($dif['bloqueos'])->pluck('alternativa_item_id')->all());
+    }
+
+    public function test_t073_por_persona_con_la_tarifa_borrada_deja_de_repreciarse_y_queda_para_revisar(): void
+    {
+        [$reserva, $m] = $this->reservaConModificacion();
+        $nuevo = $this->nuevo($m, 'traslado');
+        // Sin tarifa detrás, recalcular() no lo toca: el precio no se mueve y no puede salir "igual".
+        DB::table('alternativa_items')->where('id', $nuevo->id)->update(['proveedor_tarifa_id' => null]);
+        $this->cambiarPasajeros($m, [], [28]);
+
+        $traslado = $this->linea($this->diferencia($reserva), $nuevo->fresh());
+
+        $this->assertSame('para_revisar', $traslado['estado']);
+        $this->assertSame([3, 4], [$traslado['pasajeros_vendidos'], $traslado['pasajeros_nuevos']]);
+    }
+
+    public function test_t073_ca5b_tour_con_precio_a_mano_y_un_pasajero_agregado_deja_sus_lineas_para_revisar(): void
+    {
+        [$reserva, $m] = $this->reservaConModificacion(false, ['tour_manual']);
+        $this->cambiarPasajeros($m, [], [28]);
+
+        $dif = $this->diferencia($reserva);
+
+        $a = $this->linea($dif, $this->nuevo($m, 'tour_manual_a'));
+        $b = $this->linea($dif, $this->nuevo($m, 'tour_manual_b'));
+        foreach ([$a, $b] as $linea) {
+            $this->assertSame('para_revisar', $linea['estado']);
+            $this->assertSame(0, $linea['diferencia_centavos']);
+            $this->assertSame([3, 4], [$linea['pasajeros_vendidos'], $linea['pasajeros_nuevos']]);
+        }
+        // Cada línea de IGV es su propio bloqueo.
+        $bloqueados = collect($dif['bloqueos'])->where('tipo', 'para_revisar')->pluck('alternativa_item_id')->all();
+        $this->assertContains($a['alternativa_item_id'], $bloqueados);
+        $this->assertContains($b['alternativa_item_id'], $bloqueados);
+
+        // Se confirman una por una.
+        $controller = app(ReservaModificacionController::class);
+        $controller->marcarRevisado((string) $reserva->id, (string) $a['alternativa_item_id']);
+        $bloqueados = collect($this->diferencia($reserva)['bloqueos'])->where('tipo', 'para_revisar')->pluck('alternativa_item_id')->all();
+        $this->assertNotContains($a['alternativa_item_id'], $bloqueados);
+        $this->assertContains($b['alternativa_item_id'], $bloqueados);
+    }
+
+    public function test_t073_ca5b_el_mismo_tour_sin_precio_a_mano_se_reprecia_y_sale_cambio_de_precio(): void
+    {
+        [$reserva, $m] = $this->reservaConModificacion(false, ['tour_real']);
+        $this->cambiarPasajeros($m, [], [28]);
+
+        $dif = $this->diferencia($reserva);
+
+        $lineas = [$this->linea($dif, $this->nuevo($m, 'tour_real_a')), $this->linea($dif, $this->nuevo($m, 'tour_real_b'))];
+        foreach ($lineas as $linea) {
+            $this->assertSame('cambio_precio', $linea['estado']);
+            $this->assertNull($linea['pasajeros_vendidos']);
+        }
+        $this->assertSame(10000, array_sum(array_column($lineas, 'diferencia_centavos'))); // un adulto más: 100,00
     }
 
     // ── CA9 ────────────────────────────────────────────────────────────────────

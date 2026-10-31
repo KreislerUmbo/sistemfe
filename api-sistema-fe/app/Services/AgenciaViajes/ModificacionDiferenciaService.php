@@ -24,6 +24,10 @@ use Illuminate\Support\Collection;
 // cuadra al céntimo con los totales.
 class ModificacionDiferenciaService
 {
+    public function __construct(private RecalculoPorPersonaService $recalculoPorPersona)
+    {
+    }
+
     public function calcular(ReservaModificacion $modificacion): DiferenciaModificacion
     {
         $reserva = Reserva::findOrFail($modificacion->reserva_id);
@@ -118,6 +122,13 @@ class ModificacionDiferenciaService
             $paxVendidos = $this->pasajerosQueLoUsan($origen, $pasajerosPorCotizacion);
             $paxNuevos = $this->pasajerosQueLoUsan($item, $pasajerosPorCotizacion);
 
+            // Su precio depende de cuántos pasajeros lo usan y nadie lo reprecia solo: si la
+            // cantidad cambia y el precio no, no puede salir "igual" (se cobraría de menos o
+            // de más sin que nadie lo vea). Tarifa fija, o por persona que no se reprecia
+            // sola (RecalculoPorPersonaService::seRepreciaSolo, T-073).
+            $dependeDePasajeros = $item->modo_precio === 'tarifa_fija'
+                || ($item->modo_precio === 'por_persona' && ! $this->recalculoPorPersona->seRepreciaSolo($item));
+
             if ($sinPasajeros) {
                 $estado = 'para_revisar';
             } elseif ($nuevo !== $vendido) {
@@ -126,7 +137,7 @@ class ModificacionDiferenciaService
                     $nuevo > $vendido => 'ajuste',
                     default => 'requiere_nota_credito',
                 };
-            } elseif ($item->modo_precio === 'tarifa_fija' && $paxNuevos !== $paxVendidos) {
+            } elseif ($dependeDePasajeros && $paxNuevos !== $paxVendidos) {
                 $estado = 'para_revisar';
             } else {
                 $estado = 'igual';
@@ -134,8 +145,8 @@ class ModificacionDiferenciaService
 
             $lineas->push($this->linea($item, $estado, $vendido, $nuevo, $reservaItem, $facturado, $saleIds, [
                 'sin_pasajeros' => $sinPasajeros,
-                'pasajeros_vendidos' => $item->modo_precio === 'tarifa_fija' ? $paxVendidos : null,
-                'pasajeros_nuevos' => $item->modo_precio === 'tarifa_fija' ? $paxNuevos : null,
+                'pasajeros_vendidos' => $dependeDePasajeros ? $paxVendidos : null,
+                'pasajeros_nuevos' => $dependeDePasajeros ? $paxNuevos : null,
                 'revisado' => $estado === 'para_revisar' && ! $sinPasajeros && $item->revisado_en_modificacion !== null,
             ]));
         }
