@@ -18,7 +18,10 @@ Decisiones: D-AGE-030, D-AGE-031, D-AGE-032, D-AGE-033.
   listados comerciales ni se puede aceptar por el camino normal.
 - **R-AGE-03** — La versión vendida no se edita nunca. La diferencia se calcula por línea y
   por pasajero, comparando la versión vigente con la nueva: `agregado`, `quitado`,
-  `cambió de precio`, `igual`, `para revisar`, `requiere nota de crédito`.
+  `cambió de precio`, `igual`, `para revisar`, `requiere nota de crédito`. Un servicio cuyo
+  precio depende de los pasajeros (tarifa fija, o por persona que no se reprecia solo: todo
+  salvo proveedor con tarifa y tour sin precio a mano) con otra cantidad o tipo de pasajeros
+  (adulto / niño / infante) y el mismo precio queda `para revisar`, nunca `igual`.
 - **R-AGE-04** — Lo facturado no se modifica ni se quita al aplicar. Una línea de tour con
   cualquier parte facturada cuenta como facturada. Si su precio sube, la diferencia entra como
   servicio "Ajuste — <servicio>"; si baja, o se quita algo facturado, requiere nota de crédito.

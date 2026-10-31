@@ -212,6 +212,14 @@ class ReservaModificacionAplicarTest extends TestCase
             'tip_afe_igv' => '20', 'destino_tributario' => 'amazonia',
         ]);
 
+        // T-073 — Pasaje aéreo por persona, manual: nadie lo reprecia solo (3 × 200 = 600).
+        if (! empty($opciones['pasaje'])) {
+            $this->items['pasaje'] = $this->item($alternativa, [
+                'descripcion_manual' => 'Pasaje aéreo', 'modo_precio' => 'por_persona', 'pax_incluidos' => null,
+                'precio_venta_snapshot' => 600, 'precio_convertido' => 600,
+            ]);
+        }
+
         if (! empty($opciones['salida'])) {
             $this->tarifaCompartida = $this->crearTarifa(120, 120, 'compartido');
             $this->items['excursion'] = $this->item($alternativa, [
@@ -899,6 +907,38 @@ class ReservaModificacionAplicarTest extends TestCase
         $this->assertSame(422, $respuesta->getStatusCode());
         $this->assertStringContainsString('penalidad', $respuesta->getData(true)['message']);
         $this->assertEquals($antes, $this->foto($reserva, $m));
+    }
+
+    // T-073 — Como la reserva 29 de agencia-demo: pasaje aéreo por persona ya facturado y se
+    // agrega un adulto. Antes salía "igual", se aplicaba sin avisar y el pasajero nuevo viajaba
+    // sin cobrarse. Ahora bloquea; con el precio corregido en el cotizador se aplica como ajuste.
+    public function test_t073_pasaje_facturado_con_un_pasajero_agregado_no_se_aplica_hasta_revisarlo(): void
+    {
+        [$reserva, $m] = $this->reservaConModificacion(['pasaje' => true]);
+        $todos = collect(['ana', 'beto', 'carla'])->map(fn ($c) => $this->reservaPasajeroId($reserva, $c))->all();
+        $this->facturar($reserva, ['pasaje'], $todos);
+        $this->cambiarPasajeros($m, [], [30]);
+        // El vendedor confirma las tarifas fijas (habitación, hotel…), pero no el pasaje.
+        foreach ($this->diferencia($reserva)['lineas'] as $linea) {
+            if ($linea['estado'] === 'para_revisar' && $linea['alternativa_item_id'] !== $this->nuevo($m, 'pasaje')->id) {
+                app(ReservaModificacionController::class)->marcarRevisado((string) $reserva->id, (string) $linea['alternativa_item_id']);
+            }
+        }
+        $antes = $this->foto($reserva, $m);
+
+        $respuesta = $this->aplicar($reserva);
+
+        $this->assertSame(422, $respuesta->getStatusCode());
+        $this->assertStringContainsString('Pasaje aéreo', $respuesta->getData(true)['message']);
+        $this->assertEquals($antes, $this->foto($reserva, $m));
+
+        // El vendedor sube el precio del pasaje (4 × 200): se aplica y el cuarto se cobra como ajuste.
+        $this->cambiarPrecio($this->nuevo($m, 'pasaje'), 800);
+        $cuerpo = $this->aplicarOk($reserva);
+        $this->assertSame('aplicada', $cuerpo['modificacion']['estado']);
+        $ajuste = AlternativaItem::where('alternativa_id', $m->alternativa_nueva_id)->where('ajuste_de_item_id', $this->nuevo($m, 'pasaje')->id)->first();
+        $this->assertNotNull($ajuste);
+        $this->assertSame(20000, (int) round((float) $ajuste->precio_convertido * 100));
     }
 
     public function test_ca8_sin_cambios_responde_422_y_no_cambia_nada(): void

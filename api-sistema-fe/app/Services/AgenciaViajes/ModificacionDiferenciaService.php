@@ -3,6 +3,7 @@
 namespace App\Services\AgenciaViajes;
 
 use App\Http\Controllers\AgenciaViajes\ReservaController;
+use App\Models\AgenciaViajes\Alternativa;
 use App\Models\AgenciaViajes\AlternativaItem;
 use App\Models\AgenciaViajes\CotizacionPasajero;
 use App\Models\AgenciaViajes\Reserva;
@@ -24,6 +25,10 @@ use Illuminate\Support\Collection;
 // cuadra al céntimo con los totales.
 class ModificacionDiferenciaService
 {
+    public function __construct(private RecalculoPorPersonaService $recalculoPorPersona)
+    {
+    }
+
     public function calcular(ReservaModificacion $modificacion): DiferenciaModificacion
     {
         $reserva = Reserva::findOrFail($modificacion->reserva_id);
@@ -115,8 +120,15 @@ class ModificacionDiferenciaService
             $facturado = in_array($reservaItem->id, $itemsFacturados, true);
             $saleIds = $facturado ? $this->saleIdsDeItem($ventas, $reservaItem->id) : [];
 
-            $paxVendidos = $this->pasajerosQueLoUsan($origen, $pasajerosPorCotizacion);
-            $paxNuevos = $this->pasajerosQueLoUsan($item, $pasajerosPorCotizacion);
+            $composicionVendida = $this->composicion($origen, $pasajerosPorCotizacion);
+            $composicionNueva = $this->composicion($item, $pasajerosPorCotizacion);
+
+            // Su precio depende de quiénes lo usan y nadie lo reprecia solo: si cambia la
+            // cantidad o el tipo de pasajeros (un adulto por un niño) y el precio no, no puede
+            // salir "igual" (se cobraría de menos o de más sin que nadie lo vea). Tarifa fija, o por persona que no se reprecia
+            // sola (RecalculoPorPersonaService::seRepreciaSolo, T-073).
+            $dependeDePasajeros = $item->modo_precio === 'tarifa_fija'
+                || ($item->modo_precio === 'por_persona' && ! $this->recalculoPorPersona->seRepreciaSolo($item));
 
             if ($sinPasajeros) {
                 $estado = 'para_revisar';
@@ -126,7 +138,7 @@ class ModificacionDiferenciaService
                     $nuevo > $vendido => 'ajuste',
                     default => 'requiere_nota_credito',
                 };
-            } elseif ($item->modo_precio === 'tarifa_fija' && $paxNuevos !== $paxVendidos) {
+            } elseif ($dependeDePasajeros && $composicionNueva !== $composicionVendida) {
                 $estado = 'para_revisar';
             } else {
                 $estado = 'igual';
@@ -134,8 +146,11 @@ class ModificacionDiferenciaService
 
             $lineas->push($this->linea($item, $estado, $vendido, $nuevo, $reservaItem, $facturado, $saleIds, [
                 'sin_pasajeros' => $sinPasajeros,
-                'pasajeros_vendidos' => $item->modo_precio === 'tarifa_fija' ? $paxVendidos : null,
-                'pasajeros_nuevos' => $item->modo_precio === 'tarifa_fija' ? $paxNuevos : null,
+                'pasajeros_vendidos' => $dependeDePasajeros ? array_sum($composicionVendida) : null,
+                'pasajeros_nuevos' => $dependeDePasajeros ? array_sum($composicionNueva) : null,
+                // Por tipo (['adulto' => 2, 'nino' => 1]): explica un "para revisar" con la misma cantidad.
+                'composicion_vendida' => $dependeDePasajeros ? $composicionVendida : null,
+                'composicion_nueva' => $dependeDePasajeros ? $composicionNueva : null,
                 'revisado' => $estado === 'para_revisar' && ! $sinPasajeros && $item->revisado_en_modificacion !== null,
             ]));
         }
@@ -167,6 +182,8 @@ class ModificacionDiferenciaService
                 'sin_pasajeros' => false,
                 'pasajeros_vendidos' => null,
                 'pasajeros_nuevos' => null,
+                'composicion_vendida' => null,
+                'composicion_nueva' => null,
                 'revisado' => false,
             ]);
         }
@@ -191,17 +208,26 @@ class ModificacionDiferenciaService
         return null;
     }
 
-    // Cuántos pasajeros usan el servicio: los asignados, o todos los de su cotización si
-    // pax_incluidos es null.
-    private function pasajerosQueLoUsan(AlternativaItem $item, array &$cache): int
+    // Quiénes usan el servicio, contados por tipo (adulto / niño / infante): los asignados, o
+    // todos los de su cotización si pax_incluidos es null. Se compara la composición y no solo
+    // la cantidad: cambiar un adulto por un niño también cambia lo que cuesta (T-073). Un id
+    // asignado que ya no existe cuenta como 'sin_tipo', igual que antes contaba en la cantidad.
+    /** @return array<string, int> */
+    private function composicion(AlternativaItem $item, array &$cache): array
     {
-        if (is_array($item->pax_incluidos)) {
-            return count($item->pax_incluidos);
+        $tipos = $cache[$item->alternativa_id] ??= CotizacionPasajero::where(
+            'cotizacion_id', Alternativa::whereKey($item->alternativa_id)->value('cotizacion_id')
+        )->pluck('tipo_pax', 'id')->all();
+
+        $ids = is_array($item->pax_incluidos) ? $item->pax_incluidos : array_keys($tipos);
+        $composicion = [];
+        foreach ($ids as $id) {
+            $tipo = $tipos[(int) $id] ?? 'sin_tipo';
+            $composicion[$tipo] = ($composicion[$tipo] ?? 0) + 1;
         }
+        ksort($composicion);
 
-        $cotizacionId = (int) $item->alternativa()->value('cotizacion_id');
-
-        return $cache[$cotizacionId] ??= CotizacionPasajero::where('cotizacion_id', $cotizacionId)->count();
+        return $composicion;
     }
 
     /**
@@ -215,6 +241,8 @@ class ModificacionDiferenciaService
             'sin_pasajeros' => false,
             'pasajeros_vendidos' => null,
             'pasajeros_nuevos' => null,
+            'composicion_vendida' => null,
+            'composicion_nueva' => null,
             'revisado' => false,
         ] + [
             'clave' => 'item:'.$item->id,

@@ -40,7 +40,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 
 | ID | Módulo | Qué | Estado | Depende de | Rama / commit |
 |---|---|---|---|---|---|
-| T-073 | AGE | Modificar reserva: un servicio "por persona" que no se reprecia solo (pasaje aéreo, manual, mayorista) queda "para revisar" si cambian sus pasajeros | por hacer | T-005 | |
+| T-073 | AGE | Modificar reserva: un servicio "por persona" que no se reprecia solo (pasaje aéreo, manual, mayorista) queda "para revisar" si cambian sus pasajeros | en revisión | T-005 | |
 | T-007 | AGE | Modificar reserva: pantallas | por hacer | T-005, T-006, T-072, T-073 | |
 | T-012 | AGE + CAJ | Traspaso del cobro tras una nota de crédito | por hacer | T-011 | |
 | T-015 | PLA + AGE | Catálogo central de aerolíneas + panel central (Obs. 3) | por hacer | — | |
