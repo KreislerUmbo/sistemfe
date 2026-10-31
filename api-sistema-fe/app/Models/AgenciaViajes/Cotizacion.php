@@ -86,13 +86,16 @@ class Cotizacion extends Model
         return $this->hasMany(Alternativa::class, 'cotizacion_id');
     }
 
+    // Lo que estadoResumen() lee; precargarlo en los listados evita una consulta por fila.
+    public const RELACIONES_ESTADO_RESUMEN = ['alternativas.reserva', 'alternativas.modificacionAplicada.reserva'];
+
     // Taxonomía de estados del listado (09-sep-2026, pedido del usuario:
     // "vamos analizando los estados de las cotizaciones") — Cotizacion NO
     // tiene columna 'estado' propia (vive en cada Alternativa, hasta 5 por
     // cotización, más el estado de la Reserva una vez que alguna se acepta).
     // Este método DERIVA un único estado resumen para mostrar en el
     // listado, sin duplicar esa fuente de verdad en una columna nueva.
-    // Requiere 'alternativas.reserva' precargado (ver
+    // Requiere RELACIONES_ESTADO_RESUMEN precargado (ver
     // CotizacionController::index()) — si no vino cargado, dispara el
     // lazy-load normal de Eloquent (aceptable fuera de listados masivos).
     //
@@ -108,9 +111,6 @@ class Cotizacion extends Model
     // 'enviada' ya pasaron su fecha_vencimiento — mientras quede una
     // vigente, la cotización sigue mostrándose como 'enviada' (todavía hay
     // una propuesta viva sobre la mesa).
-    // Lo que estadoResumen() lee; precargarlo en los listados evita una consulta por fila.
-    public const RELACIONES_ESTADO_RESUMEN = ['alternativas.reserva', 'alternativas.modificacionAplicada.reserva'];
-
     public function estadoResumen(): string
     {
         $alternativas = $this->alternativas;
