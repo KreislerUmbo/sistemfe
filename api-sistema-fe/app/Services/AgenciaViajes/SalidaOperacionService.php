@@ -157,7 +157,7 @@ class SalidaOperacionService
                     'chofer' => $v->chofer_nombre,
                     'capacidad' => $v->capacidad,
                     'reservas' => $suyas->map(fn ($r) => [
-                        'codigo' => $r->alternativa?->cotizacion?->codigo ?? "#{$r->id}",
+                        'codigo' => $r->codigo ?? $r->alternativa?->cotizacion?->codigo ?? "#{$r->id}",
                         'titular' => $r->alternativa?->cotizacion?->cliente?->full_name,
                         'pasajeros' => $this->ocupan($r->pasajeros),
                         'infantes' => $r->pasajeros->where('tipo_pax', 'infante')->count(),

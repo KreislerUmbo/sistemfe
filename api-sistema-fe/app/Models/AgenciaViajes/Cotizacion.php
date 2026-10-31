@@ -108,6 +108,9 @@ class Cotizacion extends Model
     // 'enviada' ya pasaron su fecha_vencimiento — mientras quede una
     // vigente, la cotización sigue mostrándose como 'enviada' (todavía hay
     // una propuesta viva sobre la mesa).
+    // Lo que estadoResumen() lee; precargarlo en los listados evita una consulta por fila.
+    public const RELACIONES_ESTADO_RESUMEN = ['alternativas.reserva', 'alternativas.modificacionAplicada.reserva'];
+
     public function estadoResumen(): string
     {
         $alternativas = $this->alternativas;
@@ -119,6 +122,14 @@ class Cotizacion extends Model
         $aceptada = $alternativas->firstWhere('estado', 'aceptada');
         if ($aceptada) {
             return $aceptada->reserva && $aceptada->reserva->estado === 'cancelada' ? 'anulada' : 'reservada';
+        }
+
+        // T-072: tras aplicar una modificación la versión vendida queda 'reemplazada' y la reserva
+        // ya apunta a la de la cotización de modificación; la original sigue siendo la cotización
+        // de esa reserva (se llega por reserva_modificaciones.alternativa_vendida_id).
+        $reemplazada = $alternativas->firstWhere('estado', Alternativa::ESTADO_REEMPLAZADA);
+        if ($reemplazada) {
+            return $reemplazada->modificacionAplicada?->reserva?->estado === 'cancelada' ? 'anulada' : 'reservada';
         }
 
         $enviadas = $alternativas->where('estado', 'enviada');

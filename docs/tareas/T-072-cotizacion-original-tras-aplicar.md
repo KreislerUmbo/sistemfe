@@ -87,16 +87,45 @@ T-007.
 
 ## Cómo verificar
 ```
-php artisan test --filter=CotizacionOriginalTrasAplicar
+php artisan test --filter=cotizacion_original_tras_aplicar
 php artisan test
 ```
 
 ---
 
 ## Resultado
-- **Commits:**
-- **Tests:**
+- **Commits:** rama `fix/T-072-cotizacion-original-tras-aplicar` (un commit; ver `git log`).
+- **Tests:** 8 nuevos en `ReservaModificacionAplicarTest` (`--filter=cotizacion_original_tras_aplicar`),
+  CA1 a CA7. Sin el arreglo fallan 6 (CA5 y CA7 son guardas: pasan antes y después). Suite
+  completa: 1761 pasaron, 0 fallaron.
+- **Cómo quedó:**
+  - `Alternativa::modificacionAplicada()` (nueva) llega a la reserva por
+    `reserva_modificaciones.alternativa_vendida_id`; `Cotizacion::estadoResumen()` la usa con la
+    alternativa `reemplazada` (`reservada`, o `anulada` si la reserva está cancelada).
+    `Cotizacion::RELACIONES_ESTADO_RESUMEN` es la precarga única que usan el listado y el Inicio.
+    El filtro SQL `?estado=` del listado es por el estado literal de la alternativa y no cambia;
+    `?estado_resumen=` ya pasa por `estadoResumen()` y queda bien.
+  - Tablero de salidas (`SalidaOperativaController` y `SalidaOperacionService`): `reserva.codigo`
+    con la cotización como respaldo.
+  - Ajuste: `AlternativaItem::calcularTotalEfectivo()` ignora los ítems con `ajuste_de_item_id`
+    (cubre `alternativas.total` en todos sus llamadores) y `AlternativaPdfService` los saca de
+    `items` antes de armar el PDF (evita el servicio listado dos veces y un "descuento" falso de 50).
 - **Desviaciones de la tarea y por qué:**
+  - `crearAjuste()` no necesita tocar `alternativas.total`: el total guardado ya es el correcto
+    (el ajuste se crea después de fijar el precio nuevo) y ahora cualquier recálculo lo excluye.
+  - CA5 compara las consultas con 1 y con 3 filas **sin contar las de `alternativa_items`**: esas
+    son un N+1 que ya existía (ver Hallazgos), no lo agrega esta tarea.
+  - El filtro de "Cómo verificar" cambió a `cotizacion_original_tras_aplicar` porque los tests
+    viven en la clase existente (reusan su escenario) y los nombres van en snake_case.
 
 ## Hallazgos fuera de alcance
--
+- **N+1 previo en el listado de cotizaciones:** `Alternativa::$appends = ['tiene_grupos_sin_resolver']`
+  lee `items` de cada alternativa al serializar → una consulta a `alternativa_items` por alternativa
+  en `CotizacionController::index()`. Arreglo posible: precargar `alternativas.items` o no apendear
+  el atributo en el listado.
+- `AlternativaController::aplicarDescuentoGlobal()` (~273) recorre todos los ítems, ajustes incluidos,
+  y les pone `descuento_pct`: cambiaría el monto del ajuste que cobra la reserva. Hoy no se alcanza
+  (una alternativa `aceptada` no se edita), pero conviene excluir `ajuste_de_item_id` ahí también.
+- Revisados y sin cambio: `ReservaController` (~1311, suma los ítems de la **reserva**, correcto),
+  `RecalculoPorPersonaService` y `TourLineaService` (solo ítems por persona / de tour; el ajuste es
+  tarifa fija manual).

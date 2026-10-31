@@ -93,6 +93,10 @@ class AlternativaPdfService
             'items.tourOrigen',
         ])->findOrFail($id);
 
+        // T-072 (R-AGE-04): el "Ajuste — <servicio>" ya está dentro del precio del servicio que
+        // ajusta en la versión vigente; listarlo o sumarlo contaría la diferencia dos veces.
+        $alternativa->setRelation('items', $alternativa->items->whereNull('ajuste_de_item_id')->values());
+
         $this->validarGruposResueltos($alternativa);
 
         $config = \App\Models\AgenciaViajes\ConfiguracionAgencia::first();

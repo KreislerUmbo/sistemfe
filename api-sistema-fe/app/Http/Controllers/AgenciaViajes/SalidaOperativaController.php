@@ -609,7 +609,7 @@ class SalidaOperativaController extends Controller
         if ($detalle) {
             $base['reservas'] = $reservasUnicas->map(fn ($r) => [
                 'id' => $r->id,
-                'codigo' => $r->alternativa?->cotizacion?->codigo,
+                'codigo' => $r->codigo ?? $r->alternativa?->cotizacion?->codigo,
                 'cliente' => $r->alternativa?->cotizacion?->cliente?->full_name,
                 'total_pax' => $r->pasajeros->count(),
             ])->values();
@@ -617,7 +617,7 @@ class SalidaOperativaController extends Controller
             $base['pasajeros'] = $reservasUnicas->flatMap(fn ($r) => $r->pasajeros->map(fn ($p) => [
                 'id' => $p->id,
                 'reserva_id' => $r->id,
-                'reserva_codigo' => $r->alternativa?->cotizacion?->codigo,
+                'reserva_codigo' => $r->codigo ?? $r->alternativa?->cotizacion?->codigo,
                 'nombre' => $p->nombre ?? $p->pasajeroCatalogo?->nombre,
                 'documento' => $p->documento,
                 'tipo_pax' => $p->tipo_pax,
