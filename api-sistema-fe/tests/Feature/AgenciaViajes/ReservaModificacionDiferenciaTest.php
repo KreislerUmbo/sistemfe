@@ -688,6 +688,35 @@ class ReservaModificacionDiferenciaTest extends TestCase
         $this->assertContains($pasaje->id, collect($dif['bloqueos'])->where('tipo', 'para_revisar')->pluck('alternativa_item_id')->all());
     }
 
+    // Revisión de T-073: misma cantidad, otro tipo (la niña pasa a adulta). Con solo contar
+    // pasajeros el pasaje salía "igual" y se aplicaba sin revisar un precio que cambia.
+    public function test_t073_cambiar_un_nino_por_un_adulto_con_la_misma_cantidad_tambien_queda_para_revisar(): void
+    {
+        [$reserva, $m] = $this->reservaConModificacion(false, ['pasaje']);
+        $lista = CotizacionPasajero::where('cotizacion_id', $m->cotizacion_id)->orderBy('id')->get()
+            ->map(fn (CotizacionPasajero $c) => [
+                'id' => $c->id,
+                'edad' => $c->reserva_pasajero_id === $this->reservaPasajeroId($reserva, 'carla') ? 30 : $c->edad,
+            ])->all();
+        $respuesta = app(CotizacionController::class)->actualizarPasajeros(
+            Request::create('/', 'PUT', ['pasajeros' => $lista]),
+            (string) $m->cotizacion_id
+        );
+        $this->assertSame(200, $respuesta->getStatusCode(), $respuesta->getContent());
+
+        $dif = $this->diferencia($reserva);
+
+        $pasaje = $this->linea($dif, $this->nuevo($m, 'pasaje'));
+        $this->assertSame('para_revisar', $pasaje['estado']);
+        $this->assertSame([3, 3], [$pasaje['pasajeros_vendidos'], $pasaje['pasajeros_nuevos']]);
+        $this->assertSame(['adulto' => 2, 'nino' => 1], $pasaje['composicion_vendida']);
+        $this->assertSame(['adulto' => 3], $pasaje['composicion_nueva']);
+        $this->assertFalse($dif['se_puede_aplicar']);
+
+        // El traslado de proveedor con tarifa se reprecia solo (de niño a adulto): cambio de precio.
+        $this->assertSame('cambio_precio', $this->linea($dif, $this->nuevo($m, 'traslado'))['estado']);
+    }
+
     public function test_t073_ca4_por_persona_de_proveedor_con_tarifa_se_reprecia_y_no_queda_para_revisar(): void
     {
         [$reserva, $m] = $this->reservaConModificacion(false, ['pasaje']);

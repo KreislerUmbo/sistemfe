@@ -75,6 +75,14 @@ cifras al vendedor, ni calcular un saldo en el navegador. El saldo real está en
 El PDF es `GET reservas/{id}/modificacion/pdf[?modificacion_id=]` (descarga; para una aplicada,
 el historial pasa `modificacion_id`).
 
+**Nota de la revisión de T-073 (30-oct): "para revisar" por pasajeros.** Ahora también
+quedan `para_revisar` el pasaje aéreo, los servicios manuales y de mayorista "por persona" y el
+tour con precio a mano cuando cambian sus pasajeros, y cualquier servicio que dependa de ellos
+cuando cambia el **tipo** (un adulto por un niño) aunque la cantidad sea la misma. La línea trae
+`composicion_vendida` / `composicion_nueva` (`{"adulto": 2, "nino": 1}`): mostrarla ("2 adultos
+y 1 niño → 3 adultos"), porque con la misma cantidad el vendedor no ve por qué se le pide
+revisar. Habrá más confirmaciones por modificación: refuerza la confirmación en bloque.
+
 **Nota de la revisión de T-072 (30-oct): el ajuste en el cotizador.** El backend ya no suma
 el «Ajuste — …» (`ajuste_de_item_id` no nulo) en el total de una alternativa, pero
 `totalEfectivoLocal()` de `cotizador/editar.vue` (~3727) suma en el navegador todos los ítems:

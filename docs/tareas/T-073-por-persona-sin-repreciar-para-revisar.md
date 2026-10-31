@@ -106,7 +106,16 @@ php artisan test
   `recalcular()` tampoco los reprecia (misma regla, un solo lugar). Un tour sin `carga_tour`
   (anterior al modo nuevo) tampoco se reprecia: también queda "para revisar".
 
+- **Revisión de Opus (30-oct):** el hallazgo de "solo cantidad" se resolvió aquí, porque es
+  el mismo agujero de dinero: la diferencia compara la **composición** por tipo (adulto / niño /
+  infante, `ModificacionDiferenciaService::composicion()`), no solo la cantidad. Cambiar un
+  adulto por un niño también deja la línea `para_revisar`; la línea trae además
+  `composicion_vendida` / `composicion_nueva` para explicarlo. Test nuevo (niña que pasa a
+  adulta, misma cantidad). Prueba funcional en `agencia-demo` (reserva 29, +1 adulto): el
+  pasaje Latam facturado sale `para_revisar` 1 → 2 y aplicar responde 422; datos restaurados
+  del respaldo.
+
 ## Hallazgos fuera de alcance
-- La comparación es por **cantidad** de pasajeros. Si se cambia un adulto por un niño (misma
-  cantidad) en un servicio por persona que no se reprecia solo, sigue saliendo `igual` aunque la
-  tarifa sea distinta. Habría que comparar por tipo de pasajero; no se tocó.
+- Residencia (nacional / extranjero) no entra en la composición: un servicio manual con precio
+  distinto para extranjeros no se marca si solo cambia la residencia. Los tours, que sí la usan,
+  se reprecian solos.
