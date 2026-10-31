@@ -3,9 +3,11 @@
 namespace Tests\Feature\AgenciaViajes;
 
 use App\Http\Controllers\AgenciaViajes\CotizacionController;
+use App\Http\Controllers\AgenciaViajes\AlternativaController;
 use App\Http\Controllers\AgenciaViajes\ReservaController;
 use App\Http\Controllers\AgenciaViajes\ReservaFacturacionController;
 use App\Http\Controllers\AgenciaViajes\ReservaModificacionController;
+use App\Http\Controllers\AgenciaViajes\SalidaOperativaController;
 use App\Http\Requests\AgenciaViajes\AplicarModificacionRequest;
 use App\Models\AgenciaViajes\Alternativa;
 use App\Models\AgenciaViajes\AlternativaItem;
@@ -27,6 +29,7 @@ use App\Models\AgenciaViajes\ReservaPasajero;
 use App\Models\AgenciaViajes\ReservaVenta;
 use App\Models\AgenciaViajes\SalidaMayorista;
 use App\Models\AgenciaViajes\SalidaOperativa;
+use App\Models\AgenciaViajes\SalidaVehiculo;
 use App\Models\AgenciaViajes\Servicio;
 use App\Models\Cash\Branch;
 use App\Models\Client\Client;
@@ -34,13 +37,17 @@ use App\Models\Sale\Sale;
 use App\Models\Sale\SerieComprobante;
 use App\Models\User;
 use App\Services\AgenciaViajes\PenalidadPasajeroService;
+use App\Services\AgenciaViajes\AlternativaPdfService;
 use App\Services\AgenciaViajes\QuitarPasajeroReservaService;
+use App\Services\AgenciaViajes\SalidaOperacionService;
+use App\Services\Dashboard\DashboardService;
 use Carbon\Carbon;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\View;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
@@ -987,6 +994,190 @@ class ReservaModificacionAplicarTest extends TestCase
         ]);
 
         $this->assertSame(200, app(ReservaController::class)->aceptar(new Request(), (string) $otra->id)->getStatusCode());
+    }
+
+    // ── T-072: la cotización original tras aplicar, el código en el tablero y el ajuste ────────
+
+    // La cotización de la versión vendida (la original) de una modificación.
+    private function cotizacionOriginal(ReservaModificacion $m): Cotizacion
+    {
+        return Cotizacion::with(Cotizacion::RELACIONES_ESTADO_RESUMEN)
+            ->findOrFail(Alternativa::findOrFail($m->alternativa_vendida_id)->cotizacion_id);
+    }
+
+    private function reservadasDelInicio(): int
+    {
+        $metodo = new \ReflectionMethod(DashboardService::class, 'cotizaciones');
+        $metodo->setAccessible(true);
+
+        return $metodo->invoke(app(DashboardService::class), \App\Services\HoraPeru::hoy()->toImmutable())['reservadas'];
+    }
+
+    public function test_cotizacion_original_tras_aplicar_ca1_sigue_reservada_en_el_listado_y_en_el_inicio(): void
+    {
+        [$reserva, $m] = $this->reservaConModificacion();
+        $original = $this->cotizacionOriginal($m);
+        $this->assertSame('reservada', $original->estadoResumen());
+        $reservadasAntes = $this->reservadasDelInicio();
+
+        $this->cambiarPrecio($this->nuevo($m, 'habitacion'), 230);
+        $this->aplicarOk($reserva);
+
+        $this->assertSame(Alternativa::ESTADO_REEMPLAZADA, Alternativa::find($m->alternativa_vendida_id)->estado);
+        $this->assertSame('reservada', $this->cotizacionOriginal($m)->estadoResumen());
+        $this->assertSame($reservadasAntes, $this->reservadasDelInicio(), 'la original sigue contando en "reservadas" del Inicio');
+
+        $fila = collect(app(CotizacionController::class)->index(Request::create('/', 'GET', ['per_page' => 100]))->getData(true)['cotizaciones'])
+            ->firstWhere('id', $original->id);
+        $this->assertSame('reservada', $fila['estado_resumen']);
+
+        $filtradas = app(CotizacionController::class)->index(Request::create('/', 'GET', ['estado_resumen' => 'reservada', 'per_page' => 100]))->getData(true)['cotizaciones'];
+        $this->assertContains($original->id, collect($filtradas)->pluck('id')->all());
+    }
+
+    public function test_cotizacion_original_tras_aplicar_ca2_con_la_reserva_cancelada_sale_anulada(): void
+    {
+        [$reserva, $m] = $this->reservaConModificacion();
+        $this->cambiarPrecio($this->nuevo($m, 'habitacion'), 230);
+        $this->aplicarOk($reserva);
+
+        $reserva->refresh()->update(['estado' => 'cancelada']);
+
+        $this->assertSame('anulada', $this->cotizacionOriginal($m)->estadoResumen());
+    }
+
+    public function test_cotizacion_original_tras_aplicar_ca3_con_dos_modificaciones_sigue_reservada(): void
+    {
+        [$reserva, $m1] = $this->reservaConModificacion();
+        $this->cambiarPrecio($this->nuevo($m1, 'habitacion'), 230);
+        $this->aplicarOk($reserva);
+
+        $m2 = $this->abrir($reserva);
+        $habitacionM2 = AlternativaItem::where('alternativa_id', $m2->alternativa_nueva_id)->where('descripcion_manual', 'Habitación doble')->firstOrFail();
+        $this->cambiarPrecio($habitacionM2, 260);
+        $this->aplicarOk($reserva);
+
+        $this->assertSame('reservada', $this->cotizacionOriginal($m1)->estadoResumen());
+        $reserva->refresh()->update(['estado' => 'cancelada']);
+        $this->assertSame('anulada', $this->cotizacionOriginal($m1)->estadoResumen());
+    }
+
+    public function test_cotizacion_original_tras_aplicar_ca5_el_listado_no_agrega_consultas_por_fila(): void
+    {
+        [$reserva, $m] = $this->reservaConModificacion();
+        $this->cambiarPrecio($this->nuevo($m, 'habitacion'), 230);
+        $this->aplicarOk($reserva);
+        // Más cotizaciones reemplazadas y reservadas en la misma página.
+        for ($i = 0; $i < 2; $i++) {
+            [$otra, $otraM] = $this->reservaConModificacion();
+            $this->cambiarPrecio($this->nuevo($otraM, 'habitacion'), 230);
+            $this->aplicarOk($otra);
+        }
+
+        $consultas = function (int $porPagina): int {
+            DB::flushQueryLog();
+            DB::enableQueryLog();
+            $filas = app(CotizacionController::class)->index(Request::create('/', 'GET', ['per_page' => $porPagina]))->getData(true)['cotizaciones'];
+            // Sin las de alternativa_items: esas las dispara, una por alternativa, el atributo
+            // tiene_grupos_sin_resolver al serializar (anterior a T-072, ver Hallazgos de la tarea).
+            $total = collect(DB::getQueryLog())->reject(fn ($q) => str_contains($q['query'], 'from "alternativa_items"'))->count();
+            DB::disableQueryLog();
+            $this->assertCount($porPagina, $filas);
+
+            return $total;
+        };
+
+        $this->assertGreaterThanOrEqual(3, Cotizacion::delCotizador()->count());
+        $consultas(1); // calienta permisos y cachés: lo que se compara es lo que escala con las filas
+        $this->assertSame($consultas(1), $consultas(3), 'las mismas consultas con 1 fila que con 3');
+    }
+
+    public function test_cotizacion_original_tras_aplicar_ca4_el_tablero_de_salidas_muestra_el_codigo_de_la_reserva(): void
+    {
+        [$reserva, $m] = $this->reservaConModificacion(['salida' => true]);
+        $this->cambiarPrecio($this->nuevo($m, 'excursion'), 150);
+        $this->aplicarOk($reserva);
+        $reserva->refresh();
+        $salidaId = ReservaItem::where('reserva_id', $reserva->id)->whereNotNull('salida_operativa_id')->value('salida_operativa_id');
+        $this->assertNotNull($salidaId);
+        $this->assertNotNull($reserva->codigo);
+        $this->assertStringEndsWith('-M1', $reserva->alternativa->cotizacion->codigo);
+
+        $salida = app(SalidaOperativaController::class)->show((string) $salidaId)->getData(true);
+        $this->assertSame($reserva->codigo, $salida['reservas'][0]['codigo']);
+        $this->assertSame($reserva->codigo, $salida['pasajeros'][0]['reserva_codigo']);
+
+        // La orden de servicio (vehículo): mismo criterio.
+        $vehiculo = SalidaVehiculo::create(['salida_operativa_id' => $salidaId, 'proveedor_id' => Proveedor::first()->id, 'descripcion' => 'Van', 'capacidad' => 10]);
+        $vehiculo->reservas()->attach($reserva->id);
+        $ordenes = app(SalidaOperacionService::class)->ordenes(SalidaOperativa::findOrFail($salidaId));
+        $this->assertSame($reserva->codigo, $ordenes[0]['vehiculos'][0]['reservas'][0]['codigo']);
+
+        // Sin código propio (reserva anterior al módulo de códigos): el de la cotización.
+        $reserva->update(['codigo' => null]);
+        $salida = app(SalidaOperativaController::class)->show((string) $salidaId)->getData(true);
+        $this->assertSame($reserva->fresh()->alternativa->cotizacion->codigo, $salida['reservas'][0]['codigo']);
+    }
+
+    // Servicio facturado (hotel) que sube de 300 a 350: la versión vigente tiene el hotel a 350 y el
+    // "Ajuste" de 50, que ya está dentro de esos 350.
+    private function aplicarConAjusteDelHotel(): array
+    {
+        [$reserva, $m] = $this->reservaConModificacion();
+        $this->facturar($reserva, ['hotel']);
+        $this->cambiarPrecio($this->nuevo($m, 'hotel'), 350);
+        $this->aplicarOk($reserva);
+
+        return [$reserva, $m, Alternativa::findOrFail($m->alternativa_nueva_id)];
+    }
+
+    public function test_cotizacion_original_tras_aplicar_ca6_el_ajuste_no_se_suma_al_total_de_la_version_vigente(): void
+    {
+        [, , $vigente] = $this->aplicarConAjusteDelHotel();
+
+        $items = $vigente->items()->get();
+        $this->assertSame(1, $items->whereNotNull('ajuste_de_item_id')->count());
+        // 250 + 200 + 80 + 350 del hotel; el ajuste de 50 no suma (con él serían 930).
+        $this->assertSame(88000, (int) round(AlternativaItem::calcularTotalEfectivo($items)['total'] * 100));
+
+        // Y lo que se guarda en alternativas.total por el camino real de recalcular.
+        app(AlternativaController::class)->aplicarDescuentoGlobal($vigente, 0);
+        $this->assertSame(88000, (int) round((float) $vigente->fresh()->total * 100));
+    }
+
+    public function test_cotizacion_original_tras_aplicar_ca6_el_pdf_lista_el_servicio_una_vez_y_suma_el_total_sin_el_ajuste(): void
+    {
+        [, , $vigente] = $this->aplicarConAjusteDelHotel();
+        $vigente->update(['total' => 880]);
+
+        $datos = null;
+        View::composer('pdf.agencia-viajes.alternativa', function ($vista) use (&$datos) {
+            $datos = $vista->getData();
+        });
+        $pdf = app(AlternativaPdfService::class)->contenido((string) $vigente->id);
+
+        $this->assertNotEmpty($pdf['bytes']);
+        $this->assertNotNull($datos);
+        $this->assertSame(0, $datos['alternativa']->items->whereNotNull('ajuste_de_item_id')->count(), 'el ajuste no sale como servicio');
+        $this->assertSame(1, $datos['alternativa']->items->where('descripcion_manual', 'Hotel')->count());
+        $this->assertEquals(880.0, $datos['totalOriginal']);
+        $this->assertEquals(880.0, $datos['total']);
+        $this->assertFalse($datos['hayDescuento'], 'no inventa un descuento de 50');
+    }
+
+    public function test_cotizacion_original_tras_aplicar_ca7_el_total_de_la_reserva_no_cambia_y_el_ajuste_sigue_facturable(): void
+    {
+        [$reserva, $m] = $this->reservaConModificacion();
+        $this->facturar($reserva, ['hotel']);
+        $this->cambiarPrecio($this->nuevo($m, 'hotel'), 350);
+        $this->aplicarOk($reserva);
+
+        // Servicio facturado a 300 + ajuste de 50 + el resto: lo mismo que antes del cambio.
+        $this->assertSame(83000 + 5000, $this->totalDeLaReserva($reserva));
+        $ajuste = ReservaItem::where('reserva_id', $reserva->id)
+            ->whereHas('alternativaItem', fn ($q) => $q->whereNotNull('ajuste_de_item_id'))->firstOrFail();
+        $this->assertFalse(ReservaVenta::itemIdsFacturados($reserva->id)->contains($ajuste->id));
+        $this->assertSame(5000, (int) round((float) $ajuste->alternativaItem->total_convertido * 100));
     }
 
     // ── CA11 ───────────────────────────────────────────────────────────────────

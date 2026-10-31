@@ -75,6 +75,14 @@ cifras al vendedor, ni calcular un saldo en el navegador. El saldo real está en
 El PDF es `GET reservas/{id}/modificacion/pdf[?modificacion_id=]` (descarga; para una aplicada,
 el historial pasa `modificacion_id`).
 
+**Nota de la revisión de T-072 (30-oct): el ajuste en el cotizador.** El backend ya no suma
+el «Ajuste — …» (`ajuste_de_item_id` no nulo) en el total de una alternativa, pero
+`totalEfectivoLocal()` de `cotizador/editar.vue` (~3727) suma en el navegador todos los ítems:
+abrir la cotización `…-M1` de una reserva con ajuste mostraría la diferencia dos veces.
+Excluirlo ahí (mismo criterio que `AlternativaItem::calcularTotalEfectivo()`) y no listarlo
+en el lienzo como un servicio más (o mostrarlo aparte, sin sumar). Revisar otras sumas de
+`total_convertido` en esa pantalla.
+
 ## Fuera de alcance
 - Cambios en el backend, salvo un ajuste chico de forma de respuesta. Si hace falta más,
   anotarlo en "Hallazgos".

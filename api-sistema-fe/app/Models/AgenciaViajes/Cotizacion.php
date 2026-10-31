@@ -86,13 +86,16 @@ class Cotizacion extends Model
         return $this->hasMany(Alternativa::class, 'cotizacion_id');
     }
 
+    // Lo que estadoResumen() lee; precargarlo en los listados evita una consulta por fila.
+    public const RELACIONES_ESTADO_RESUMEN = ['alternativas.reserva', 'alternativas.modificacionAplicada.reserva'];
+
     // Taxonomía de estados del listado (09-sep-2026, pedido del usuario:
     // "vamos analizando los estados de las cotizaciones") — Cotizacion NO
     // tiene columna 'estado' propia (vive en cada Alternativa, hasta 5 por
     // cotización, más el estado de la Reserva una vez que alguna se acepta).
     // Este método DERIVA un único estado resumen para mostrar en el
     // listado, sin duplicar esa fuente de verdad en una columna nueva.
-    // Requiere 'alternativas.reserva' precargado (ver
+    // Requiere RELACIONES_ESTADO_RESUMEN precargado (ver
     // CotizacionController::index()) — si no vino cargado, dispara el
     // lazy-load normal de Eloquent (aceptable fuera de listados masivos).
     //
@@ -119,6 +122,14 @@ class Cotizacion extends Model
         $aceptada = $alternativas->firstWhere('estado', 'aceptada');
         if ($aceptada) {
             return $aceptada->reserva && $aceptada->reserva->estado === 'cancelada' ? 'anulada' : 'reservada';
+        }
+
+        // T-072: tras aplicar una modificación la versión vendida queda 'reemplazada' y la reserva
+        // ya apunta a la de la cotización de modificación; la original sigue siendo la cotización
+        // de esa reserva (se llega por reserva_modificaciones.alternativa_vendida_id).
+        $reemplazada = $alternativas->firstWhere('estado', Alternativa::ESTADO_REEMPLAZADA);
+        if ($reemplazada) {
+            return $reemplazada->modificacionAplicada?->reserva?->estado === 'cancelada' ? 'anulada' : 'reservada';
         }
 
         $enviadas = $alternativas->where('estado', 'enviada');

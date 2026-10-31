@@ -42,7 +42,7 @@ class CotizacionController extends Controller
         // donde corresponde (el listado), nunca en show()/acciones internas.
         // delCotizador() — la cotización de soporte de una venta directa no
         // es una cotización comercial (ver Cotizacion::$origen).
-        $query = Cotizacion::propias()->delCotizador()->with(['cliente', 'alternativas.reserva'])->withCount('alternativas');
+        $query = Cotizacion::propias()->delCotizador()->with(array_merge(['cliente'], Cotizacion::RELACIONES_ESTADO_RESUMEN))->withCount('alternativas');
 
         if ($request->filled('search')) {
             $search = $request->get('search');

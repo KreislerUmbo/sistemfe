@@ -40,7 +40,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 
 | ID | Módulo | Qué | Estado | Depende de | Rama / commit |
 |---|---|---|---|---|---|
-| T-072 | AGE | La cotización original sigue "reservada" tras aplicar una modificación; código de la reserva en el tablero de salidas; el ajuste no se suma dos veces en el total de la versión vigente | por hacer | T-005 | |
+| T-072 | AGE | La cotización original sigue "reservada" tras aplicar una modificación; código de la reserva en el tablero de salidas; el ajuste no se suma dos veces en el total de la versión vigente | en revisión | T-005 | |
 | T-073 | AGE | Modificar reserva: un servicio "por persona" que no se reprecia solo (pasaje aéreo, manual, mayorista) queda "para revisar" si cambian sus pasajeros | por hacer | T-005 | |
 | T-007 | AGE | Modificar reserva: pantallas | por hacer | T-005, T-006, T-072, T-073 | |
 | T-012 | AGE + CAJ | Traspaso del cobro tras una nota de crédito | por hacer | T-011 | |
@@ -91,6 +91,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 | Módulo | Qué | Origen |
 |---|---|---|
 | AGE | Saldo real de una reserva (estado de cuenta): total vigente − anticipos netos de devoluciones − cobros de sus facturas (contado y amortizaciones) + notas de crédito, en una sola función. Hoy no existe; por eso el PDF de modificación no muestra saldo, y `totales.ya_facturado` / `anticipos_aplicados` de la diferencia son aproximados (tour a medias cuenta entero; sin devoluciones) | revisión T-006, 30-oct-2026 |
+| AGE | N+1 en el listado de cotizaciones: `Alternativa::$appends = ['tiene_grupos_sin_resolver']` lee `items` de cada alternativa al serializar (una consulta por alternativa en `CotizacionController::index()`). Precargar `alternativas.items` o no apendear el atributo en el listado | T-072, 30-oct-2026 |
 | AGE | `AlternativaItemController::destroy()` y `eliminarCarga()` no rechazan una alternativa aceptada (solo miran si hay reserva); `moverBloque()` mueve el tour clásico en todos los días, no solo el visible | T-027, 28-oct-2026 |
 | AGE | `Fila13Fase1cFacturacionTest::descuento_del_combo_se_reparte_entre_los_grupos` falla a ratos (≈1 de 4, también corriendo solo): `partes_tour` sale `[180, 90]` en vez de `[90, 180]`. El combo (`orden`) y los ítems de la reserva (`orderBy('id')`) ya van ordenados; el desorden entra en otro punto del armado de las partes. Revisar si el orden de las líneas del comprobante también varía | T-024, 28-oct-2026 |
 | AGE | Tarifas de guía: `GuiaTarifaController::update()` versiona como lo hacía proveedores antes de T-028 — cierra la vieja con `vigente_hasta = hoy` (dos vigentes ese día), toma el `vigente_desde` original del formulario, no guarda `version_anterior_id`, no revisa si ya fue reemplazada y los tours (`guia_tarifa_id`) siguen con el precio viejo. Repetir el patrón de T-028 | T-028, 28-oct-2026 |
@@ -100,7 +101,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 | AGE | IGV de la penalidad por cancelación: preguntar al contador (hoy lo elige el vendedor, D-AGE-033) | requerimiento Modificar reserva, 24-oct-2026 |
 | AGE | `ProveedorFiltroDestinoTest::sin filtro devuelve todos` falla a ratos en la suite completa (6 en vez de 2; pasa al repetirlo): probablemente datos que deja otro test antes en el orden | T-005, 30-oct-2026 |
 | AGE | Tras aplicar una modificación, buscar la reserva por el código de la cotización original ya no la encuentra (busca por `…-M1`) | T-005, 30-oct-2026 |
-| AGE | El descuento global de la alternativa (`AlternativaController::aplicarDescuentoGlobal()` / `aplicarDescuentoGlobalMonto()`) también rebaja la penalidad por cancelación: el monto que escribió el vendedor cambia sin aviso. Propuesta: excluir los ítems con `penalidad_reserva_pasajero_id` | T-004, 30-oct-2026 |
+| AGE | El descuento global de la alternativa (`AlternativaController::aplicarDescuentoGlobal()` / `aplicarDescuentoGlobalMonto()`) también rebaja la penalidad por cancelación (el monto que escribió el vendedor cambia sin aviso) y el «Ajuste — …» (`ajuste_de_item_id`, cambiaría lo que cobra la reserva; hoy no se alcanza porque una alternativa aceptada no se edita). Propuesta: excluir los ítems con `penalidad_reserva_pasajero_id` y `ajuste_de_item_id` | T-004 y T-072, 30-oct-2026 |
 | AGE | Penalidad calculada con `reglas_cancelacion` (franjas por días) | D-AGE-033 |
 | AGE | Agregar pasajero rápido en la reserva para tours por persona (después de probar Modificar reserva) | fila F4 de la hoja de ruta |
 | AGE | Enviar el PDF de modificación por correo | T-006, fuera de alcance |

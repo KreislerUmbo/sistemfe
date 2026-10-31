@@ -103,6 +103,14 @@ class Alternativa extends Model
         return $this->hasOne(Reserva::class, 'alternativa_id');
     }
 
+    // T-072 — la modificación aplicada que reemplazó a esta versión (solo existe si la alternativa
+    // quedó 'reemplazada'). Es el único camino a la reserva: la reserva ya apunta a la versión nueva.
+    public function modificacionAplicada()
+    {
+        return $this->hasOne(ReservaModificacion::class, 'alternativa_vendida_id')
+            ->where('estado', ReservaModificacion::ESTADO_APLICADA);
+    }
+
     // orderBy('id') explícito: sin esto, Postgres no garantiza el orden de
     // fila sin ORDER BY, y un UPDATE (ej. editar precio) puede reubicar
     // físicamente la fila — el ítem "saltaba" de posición en el lienzo del

@@ -312,8 +312,14 @@ class AlternativaItem extends Model
     // corrupto que aceptar() bloquea, pero puede existir transitoriamente
     // antes de resolverse) se toma la primera — el guard es lo que
     // realmente impide que esto llegue a producción, no este cálculo.
+    //
+    // T-072 (R-AGE-04): los ítems "Ajuste — …" (ajuste_de_item_id) no suman: su monto ya está
+    // dentro del precio del servicio que ajustan en la versión vigente (solo la reserva los
+    // cobra aparte, porque su servicio facturado sigue al precio viejo).
     public static function calcularTotalEfectivo(\Illuminate\Support\Collection $items): array
     {
+        $items = $items->whereNull('ajuste_de_item_id')->values();
+
         ['sinGrupo' => $sinGrupo, 'grupos' => $grupos] = self::agruparPorGrupoOpcion($items);
 
         $total = (float) $sinGrupo->sum(fn (self $item) => $item->total_convertido);
