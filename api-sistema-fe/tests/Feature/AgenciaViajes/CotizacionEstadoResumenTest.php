@@ -147,4 +147,18 @@ class CotizacionEstadoResumenTest extends TestCase
 
         $this->assertSame('descartada', $cotizacion->fresh('alternativas.reserva')->estadoResumen());
     }
+
+    // Reporte del usuario (31-oct-2026): al agregar un hotel a la alternativa 2 se recalcula su
+    // total y la pestaña pasaba a ser la 1. Las alternativas salen siempre en orden de alta.
+    public function test_las_alternativas_mantienen_su_orden_aunque_se_actualice_una(): void
+    {
+        $cotizacion = $this->crearCotizacion();
+        $primera = $this->crearAlternativa($cotizacion, 'borrador');
+        $segunda = $this->crearAlternativa($cotizacion, 'borrador');
+
+        // El UPDATE deja la fila nueva al final de la tabla: sin ORDER BY, la primera salía segunda.
+        $primera->update(['total' => 300]);
+
+        $this->assertSame([$primera->id, $segunda->id], $cotizacion->fresh('alternativas')->alternativas->pluck('id')->all());
+    }
 }
