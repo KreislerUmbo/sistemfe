@@ -8,7 +8,7 @@
 
 Cada línea: ID · qué · estado · depende de · rama o commit. El detalle está en
 `docs/tareas/T-…md` (se borra al cerrar; para una tarea hecha, el commit es la referencia).
-Próximo ID libre: **T-074**.
+Próximo ID libre: **T-075**.
 
 ## Orden de construcción (27-oct-2026)
 
@@ -41,6 +41,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 | ID | Módulo | Qué | Estado | Depende de | Rama / commit |
 |---|---|---|---|---|---|
 | T-007 | AGE | Modificar reserva: pantallas | en revisión | T-005, T-006, T-072, T-073 | |
+| T-074 | AGE | Cotización reservada: alternativa elegida a la vista (lienzo y listado), lienzo en solo lectura y «Ver detalle» del pasaje aéreo y del ítem manual | por hacer | T-007 | |
 | T-012 | AGE + CAJ | Traspaso del cobro tras una nota de crédito | por hacer | T-011 | |
 | T-015 | PLA + AGE | Catálogo central de aerolíneas + panel central (Obs. 3) | por hacer | — | |
 | T-016 | AGE | Buscador de aerolíneas, corrección de nombres y aerolínea por defecto (Obs. 3) | por hacer | T-015 | |
@@ -88,6 +89,10 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 
 | Módulo | Qué | Origen |
 |---|---|---|
+| AGE | Facturar una reserva con penalidad o «Ajuste» de una modificación: quedan sin pasajeros (R-AGE-05), la reserva muestra «Servicios: 1 pendiente(s)» y la pantalla de facturar no explica que hay que sumarlos a mano a una factura (lo pedía la nota de T-005) | T-007, 30-oct-2026 |
+| AGE | Modificar reserva: un pasajero sin nombre sale como «pasajero #35» en el bloqueo y en el texto de la penalidad; usar el tipo y el orden («Adulto 2») | T-007, 30-oct-2026 |
+| AGE | Modificar reserva: el aviso «Pasajeros actualizados» del cotizador repite «(modificación)» en el nombre de la alternativa desde la segunda modificación | T-007, 30-oct-2026 |
+| AGE | Inyección de HTML en el cotizador: `guardarPasajeros()` (`cotizador/editar.vue`) arma el Swal con `html:` metiendo `alternativa_nombre` y `motivo` sin escapar; el nombre de la alternativa lo escribe el usuario. Escapar o pasar a texto | revisión T-007, 30-oct-2026 |
 | AGE | Saldo real de una reserva (estado de cuenta): total vigente − anticipos netos de devoluciones − cobros de sus facturas (contado y amortizaciones) + notas de crédito, en una sola función. Hoy no existe; por eso el PDF de modificación no muestra saldo, y `totales.ya_facturado` / `anticipos_aplicados` de la diferencia son aproximados (tour a medias cuenta entero; sin devoluciones) | revisión T-006, 30-oct-2026 |
 | AGE | N+1 en el listado de cotizaciones: `Alternativa::$appends = ['tiene_grupos_sin_resolver']` lee `items` de cada alternativa al serializar (una consulta por alternativa en `CotizacionController::index()`). Precargar `alternativas.items` o no apendear el atributo en el listado | T-072, 30-oct-2026 |
 | AGE | `AlternativaItemController::destroy()` y `eliminarCarga()` no rechazan una alternativa aceptada (solo miran si hay reserva); `moverBloque()` mueve el tour clásico en todos los días, no solo el visible | T-027, 28-oct-2026 |

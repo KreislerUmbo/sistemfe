@@ -486,6 +486,44 @@ class ReservaModificacionCrearTest extends TestCase
         $this->assertSame($abierta['cotizacion_id'], $respuesta->getData(true)['cotizacion_id']);
     }
 
+    // ── T-007: forma de respuesta para las pantallas ───────────────────────────
+
+    public function test_t007_el_detalle_de_la_reserva_trae_la_abierta_solo_con_reservas_modificar(): void
+    {
+        $reserva = $this->reservaConTresPasajeros();
+        $abierta = $this->crear($reserva)->getData(true);
+
+        $con = app(ReservaController::class)->show((string) $reserva->id)->getData(true);
+        $this->assertSame(
+            ['id' => $abierta['modificacion']['id'], 'cotizacion_id' => $abierta['cotizacion_id']],
+            $con['modificacion_abierta']
+        );
+        $this->assertSame([], $con['modificaciones_aplicadas']);
+
+        // Ve todas las reservas pero no tiene reservas.modificar: la reserva se ve, la modificación no.
+        $this->verTodasLasReservas();
+        $sin = app(ReservaController::class)->show((string) $reserva->id)->getData(true);
+        $this->assertNull($sin['modificacion_abierta']);
+        $this->assertSame([], $sin['modificaciones_aplicadas']);
+    }
+
+    public function test_t007_el_show_de_la_cotizacion_dice_a_que_reserva_pertenece_la_modificacion(): void
+    {
+        $reserva = $this->reservaConTresPasajeros();
+        $abierta = $this->crear($reserva)->getData(true);
+
+        $deModificacion = app(CotizacionController::class)->show((string) $abierta['cotizacion_id'])->getData(true);
+        $this->assertSame([
+            'id' => $abierta['modificacion']['id'],
+            'estado' => 'abierta',
+            'reserva_id' => $reserva->id,
+            'reserva_codigo' => $reserva->codigo,
+        ], $deModificacion['modificacion']);
+
+        $original = app(CotizacionController::class)->show((string) $reserva->alternativa->cotizacion_id)->getData(true);
+        $this->assertNull($original['modificacion']);
+    }
+
     // ── CA7 ────────────────────────────────────────────────────────────────────
 
     public function test_ca7_aceptar_la_alternativa_de_una_modificacion_responde_422_y_no_crea_reserva(): void
