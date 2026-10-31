@@ -142,7 +142,7 @@
             </div>
         </div>
 
-        <button class="btn btn-primary btn-sm w-100" @click="agregar" :disabled="!form.aerolinea || !form.tarifa_base_adulto || guardando">
+        <button class="btn btn-primary btn-sm w-100" @click="agregar" :disabled="!form.aerolinea || !form.tarifa_base_adulto || guardando || (!!pasajeros?.length && !paxSeleccionados.length)">
             <span v-if="guardando" class="spinner-border spinner-border-sm me-1"></span>
             <i v-else class="fas fa-plus me-1"></i>{{ props.itemExistente ? 'Guardar cambios' : 'Agregar pasaje aéreo' }}
         </button>
@@ -223,12 +223,17 @@ const quitarCargo = (idx: number) => {
     form.cargos.splice(idx, 1);
 };
 
-// Mismo criterio que ItemManualForm.vue: todos tildados = null (semántica
-// "aplica a todos", no una lista redundante que además desincroniza si
-// después se agrega un pasajero nuevo a la cotización).
-const paxIncluidosParaEnviar = () => {
-    const total = props.pasajeros?.length ?? 0;
-    return paxSeleccionados.value.length && paxSeleccionados.value.length < total ? paxSeleccionados.value : null;
+// T-007: un pasaje aéreo es un boleto por persona — se manda siempre la lista,
+// nunca null ("todos"), para que un pasajero agregado después no quede dentro
+// de un boleto que no se le cobró.
+const paxIncluidosParaEnviar = () => (paxSeleccionados.value.length ? [...paxSeleccionados.value] : null);
+
+// Pasaje nuevo: en una modificación de reserva, solo los pasajeros que se agregan
+// (los que ya viajaban tienen su boleto); en el resto, todos.
+const paxPorDefecto = () => {
+    const pasajeros = props.pasajeros ?? [];
+    const nuevos = pasajeros.filter((p) => !p.reserva_pasajero_id);
+    return (nuevos.length && nuevos.length < pasajeros.length ? nuevos : pasajeros).map((p) => p.id);
 };
 
 const resetearCampos = () => {
@@ -265,7 +270,7 @@ const resetearCampos = () => {
         form.fee_agencia_monto = 0;
         form.tip_afe_igv = props.tipAfeIgvDefault ?? '10';
         form.destino_tributario = props.destinoTributarioDefault ?? 'nacional';
-        paxSeleccionados.value = (props.pasajeros ?? []).map((p) => p.id);
+        paxSeleccionados.value = paxPorDefecto();
         vigenciaFecha.value = '';
         vigenciaHora.value = '';
     }

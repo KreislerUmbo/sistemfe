@@ -298,6 +298,8 @@ export type CotizacionPasajero = {
   edad: number;
   // Fila 13, fase 1b (§3.3): solo cambia el precio del tour. No es la nacionalidad.
   residencia?: 'nacional' | 'extranjero';
+  // T-002: pasajero de la reserva que representa (solo en una modificación; null = nuevo).
+  reserva_pasajero_id?: number | null;
 };
 
 export type Cotizacion = {

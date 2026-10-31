@@ -153,6 +153,7 @@ Y el recorrido con Playwright contra `agencia-demo` (memoria
   - El aviso de edad estimada y el mensaje de éxito/cupo viajan entre pantallas por `sessionStorage` (esa respuesta solo existe en el momento de crear/aplicar).
   - `components.d.ts` se regeneró solo con los dos componentes nuevos.
   - Un pasajero quitado y vuelto a agregar sigue siendo uno nuevo (no se decidió recuperar al original).
+  - Sub-fase de la prueba del usuario (31-oct): el pasaje aéreo guardaba `pax_incluidos = null` («todos»), así que al agregar un adulto el boleto vendido lo absorbía (2 pasajeros, precio de 1) y el boleto nuevo se cobraba por todos. Ahora el pasaje aéreo guarda siempre su lista de pasajeros; al crear la modificación, la copia queda con los pasajeros que lo tenían en la reserva; el formulario marca por defecto solo a los nuevos. Test: `test_t007_pasaje_aereo_vendido_no_cubre_al_pasajero_agregado_y_su_boleto_se_cobra_aparte`.
 
 ## Hallazgos fuera de alcance
 (Pasados a «Por analizar» de `docs/backlog.md` en la revisión, más uno de la revisión: `html:` sin escapar en `guardarPasajeros()`.)

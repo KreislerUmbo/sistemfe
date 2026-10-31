@@ -93,7 +93,7 @@ class ModificacionReservaService
 
         [$mapaPasajeros, $edadEstimada] = $this->copiarPasajeros($reserva, $cotizacion);
 
-        [$nueva, $mapaItems] = $this->copiarAlternativa($vendida, $cotizacion, $mapaPasajeros['cotizacion_pasajero']);
+        [$nueva, $mapaItems] = $this->copiarAlternativa($vendida, $cotizacion, $mapaPasajeros['cotizacion_pasajero'], $mapaPasajeros['reserva_pasajero']);
 
         // Si la composición de pasajeros cambió respecto de lo vendido, los servicios por
         // persona (y las líneas de tour) se reprecian con el mismo código del cotizador.
@@ -526,9 +526,10 @@ class ModificacionReservaService
      * No recalcula precios: solo los copia.
      *
      * @param  array<int,int>  $mapaPasajeros  cotizacion_pasajero_id vendido => id de la copia
+     * @param  array<int,int>  $mapaReservaPasajeros  reserva_pasajero_id => id de la copia
      * @return array{0: Alternativa, 1: array<int, \App\Models\AgenciaViajes\AlternativaItem>}
      */
-    private function copiarAlternativa(Alternativa $vendida, Cotizacion $cotizacion, array $mapaPasajeros): array
+    private function copiarAlternativa(Alternativa $vendida, Cotizacion $cotizacion, array $mapaPasajeros, array $mapaReservaPasajeros): array
     {
         // Un servicio de ajuste (T-005) no se copia: lo cobrado ya está en el precio del ítem que
         // ajusta. Copiarlo lo contaría dos veces en la diferencia.
@@ -552,12 +553,29 @@ class ModificacionReservaService
                     fn ($id) => $mapaPasajeros[(int) $id] ?? null,
                     $item->pax_incluidos
                 )));
+            } elseif ($item->origen_tipo === AlternativaItem::ORIGEN_PASAJE_AEREO) {
+                // Salvo el pasaje aéreo (T-007): es un boleto por persona y cubre a los pasajeros
+                // que ya lo tenían en la reserva, no a los que se agreguen en la modificación.
+                $cambios['pax_incluidos'] = $this->pasajerosDelBoleto($item, $mapaReservaPasajeros);
             }
 
             $copia->update($cambios);
         }
 
         return [$nueva, $itemsClonados];
+    }
+
+    // Copias de los pasajeros asignados al servicio del pasaje en la reserva; sin asignaciones,
+    // todos los copiados (lo que significaba el null al vender).
+    private function pasajerosDelBoleto(AlternativaItem $item, array $mapaReservaPasajeros): array
+    {
+        $reservaItemId = ReservaItem::where('alternativa_item_id', $item->id)->value('id');
+        $asignados = $reservaItemId
+            ? ReservaItemPasajero::where('reserva_item_id', $reservaItemId)->pluck('reserva_pasajero_id')
+                ->map(fn ($id) => $mapaReservaPasajeros[(int) $id] ?? null)->filter()->values()->all()
+            : [];
+
+        return $asignados ?: array_values($mapaReservaPasajeros);
     }
 
     // ¿Cambió la cantidad de pasajeros o su reparto por tipo respecto de la cotización vendida?

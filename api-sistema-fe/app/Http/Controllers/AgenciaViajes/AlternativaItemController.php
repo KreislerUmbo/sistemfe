@@ -1492,6 +1492,12 @@ class AlternativaItemController extends Controller
         $validado['tarifa_valida_hasta'] = \App\Services\HoraPeru::aUtc($validado['tarifa_valida_hasta'] ?? null);
         // 29-ago-2026 — capitalización tipo título, solo hacia adelante.
         $validado['aerolinea'] = \App\Services\TextoFormatoService::capitalizarNombrePropio($validado['aerolinea']);
+        // T-007: un pasaje aéreo es un boleto por persona y guarda a quiénes cubre. Con null
+        // ("todos") un pasajero agregado después quedaba dentro de un boleto que no se le cobró.
+        if (empty($validado['pax_incluidos'])) {
+            $validado['pax_incluidos'] = CotizacionPasajero::where('cotizacion_id', $alternativa->cotizacion_id)
+                ->orderBy('id')->pluck('id')->all() ?: null;
+        }
 
         return $validado;
     }
