@@ -24,7 +24,7 @@ Próximo ID libre: **T-074**.
 | 1 | ~~T-064 → T-068 → T-008 → T-038 → T-026~~ hechas y desplegadas 27-oct | Todos los giros, producción: PDF de comprobantes que cambia al editar el cliente, precios del portal manipulables, caja que no se anula al eliminar una venta, monto en letras en dólares, fechas que se muestran un día antes |
 | 2 | ~~T-054 → T-056 → T-043 → T-042 → T-001 → T-030 → T-025 → T-024 → T-027 → T-028 → T-039~~ hechas | Errores de Agencia: PDF de campo con el proveedor equivocado, operación trabada tras facturar, salidas que no se ven, cambios a una alternativa aceptada, permisos del cotizador, datos cruzados entre alternativas |
 | 3 | ~~T-009 → T-010 → T-011 → T-014 → T-013~~ hechas → T-012 | Cobro y caja (orden aprobado el 25-oct). T-011 no se despliega con dólares sin T-013 |
-| 4 | ~~T-002 → T-003 → T-004 → T-005 → T-006 → T-072~~ hechas → T-073 → T-007 | Modificar reserva: hoy no se puede quitar un pasajero y el agregado no cambia el precio |
+| 4 | ~~T-002 → T-003 → T-004 → T-005 → T-006 → T-072 → T-073~~ hechas → T-007 | Modificar reserva: hoy no se puede quitar un pasajero y el agregado no cambia el precio |
 | 5 | T-063 → T-033 → T-050 → T-051 → T-052 → T-059 → T-061 → T-053 | Menú nuevo y CRM base (T-033 antes: "Nueva consulta" crea la cotización con su alternativa) |
 | 6 | T-041 → T-040 → T-055 → T-057 → T-058 → T-044 → T-017 → T-018 | Operación diaria de Agencia |
 | 7 | T-045 → T-046 → T-047 → T-048 → T-049 | Venta directa (T-046 necesita T-017; T-048, el cobro de la ola 3) |
@@ -40,7 +40,6 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 
 | ID | Módulo | Qué | Estado | Depende de | Rama / commit |
 |---|---|---|---|---|---|
-| T-073 | AGE | Modificar reserva: un servicio "por persona" que no se reprecia solo (pasaje aéreo, manual, mayorista) queda "para revisar" si cambian sus pasajeros | en revisión | T-005 | |
 | T-007 | AGE | Modificar reserva: pantallas | por hacer | T-005, T-006, T-072, T-073 | |
 | T-012 | AGE + CAJ | Traspaso del cobro tras una nota de crédito | por hacer | T-011 | |
 | T-015 | PLA + AGE | Catálogo central de aerolíneas + panel central (Obs. 3) | por hacer | — | |
@@ -167,6 +166,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 
 | ID | Módulo | Qué | Commit |
 |---|---|---|---|
+| T-073 | AGE | Modificar reserva: un servicio cuyo precio depende de los pasajeros y no se reprecia solo (pasaje aéreo, manual, mayorista, tour con precio a mano; regla única `RecalculoPorPersonaService::seRepreciaSolo()`) queda "para revisar" si cambia la cantidad **o el tipo** de pasajeros (`composicion_vendida`/`composicion_nueva`). Implementada por Sonnet, revisada por Opus (arreglo: comparar por tipo, no solo cantidad) con prueba en `agencia-demo` (reserva 29: aplicar responde 422). Nota para T-007 | ver merge de `fix/T-073-por-persona-sin-repreciar` |
 | T-072 | AGE | Tras aplicar una modificación: la cotización original sigue "reservada" (o "anulada"), en listado, filtro e Inicio (`Alternativa::modificacionAplicada`, `Cotizacion::RELACIONES_ESTADO_RESUMEN`); el tablero de salidas muestra `reserva.codigo`; el "Ajuste — …" no se suma en el total de la alternativa ni en el PDF de cotización (la reserva no cambia). Implementada por Sonnet, revisada por Opus. Nota para T-007 (el cotizador suma el ajuste en el navegador) | ver merge de `fix/T-072-cotizacion-original-tras-aplicar` |
 | T-006 | AGE | Modificar reserva: PDF para el cliente (`GET reservas/{id}/modificacion/pdf[?modificacion_id=]`, permiso `reservas.modificar`): solo lo que cambia, pasajeros agregados y quitados, penalidades con motivo, nombres sin el mayorista; para una aplicada, lo que se aplicó (`diferencia_aplicada`). Resumen solo con total anterior, nuevo y diferencia. Implementada por Sonnet, revisada por Opus (arreglos: un "para revisar" confirmado salía como "Por revisar"; se quitaron saldo, ya facturado y anticipos por no ser cifras ciertas). Notas para T-007 (qué totales mostrar) | ver merge de `feat/T-006-pdf-modificacion` |
 | T-005 | AGE | Modificar reserva: aplicar (`POST reservas/{id}/modificacion/aplicar { huella }`, permiso `reservas.modificar`): en una transacción con lock de la reserva y la diferencia recalculada adentro; pasajeros nuevos y quitados, servicios no facturados al precio nuevo, lo facturado intacto, "Ajuste — <servicio>" si sube algo facturado (`alternativa_items.ajuste_de_item_id`), versión vendida `reemplazada`. Penalidad y ajuste quedan sin pasajeros asignados. **Antes de desplegar: `tenants:migrate-verticales`** (`alternativa_items.ajuste_de_item_id`). Implementada por Sonnet, revisada por Opus con prueba funcional en `agencia-demo`: salieron T-072 (cotización original tras aplicar) y T-073 (pasaje aéreo sin cobrar al pasajero nuevo) | ver merge de `feat/T-005-aplicar-modificacion` |
