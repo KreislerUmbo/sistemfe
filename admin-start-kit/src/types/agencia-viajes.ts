@@ -968,9 +968,11 @@ export type ReservaItem = {
   // Vuelo vendido por la AGENCIA, por pasajero (corrección 2026-08-27 —
   // tabla propia ReservaItemVueloPasajero, sin relación con el checkbox
   // del tab Asignación pasajero↔ítem — ver docblock del modelo en el
-  // backend para el bug real que motivó separarla). Aplica a TODOS los
-  // pasajeros de la reserva por igual, no depende de ningún vínculo.
+  // backend para el bug real que motivó separarla). Los datos no dependen del
+  // vínculo; qué pasajeros ven el bloque sí (ver vuelosAgenciaDe() en detalle.vue).
   vuelo_pasajeros?: ReservaItemVueloPasajero[];
+  // reserva_item_pasajero: a quiénes cubre el servicio (vacío = a todos).
+  pasajeros?: Array<{ id: number }>;
   // Sesión 12h — mayorista que REALMENTE opera este ítem hoy (puede
   // diferir de alternativa_item?.opcion_mayorista si ya se reasignó vía
   // POST reservas/{id}/reasignar-mayorista). null en ítems que no son

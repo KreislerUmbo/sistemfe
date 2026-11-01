@@ -355,14 +355,15 @@
                                 </div>
 
                                 <!-- Vuelo con la AGENCIA — distinto del bloque de arriba (por cuenta
-                                     propia). Un bloque por cada pasaje aéreo real de la reserva,
-                                     siempre visible para todos los pasajeros (no depende del checkbox
-                                     del tab Asignación — ver corrección 2026-08-27 en el backend). -->
-                                <div v-if="itemsVueloAgencia.length > 0" class="border-top pt-3 mt-3">
+                                     propia). Un bloque por cada pasaje aéreo que cubre a ESTE pasajero
+                                     (T-007: un boleto es por persona); sus datos viven en su propia
+                                     tabla, ver corrección 2026-08-27 en el backend. -->
+                                <div v-if="vuelosAgenciaDe(p).length > 0" class="border-top pt-3 mt-3">
                                     <small class="text-muted d-block mb-2"><i class="fas fa-plane-departure me-1"></i>Vuelo(s) vendido(s) por la agencia.</small>
-                                    <div v-for="it in itemsVueloAgencia" :key="it.id" class="mb-3">
+                                    <div v-for="it in vuelosAgenciaDe(p)" :key="it.id" class="mb-3">
                                         <p class="small fw-semibold mb-2">
                                             {{ nombreItem(it) }}
+                                            <span v-if="it.alternativa_item?.cotizacion_pasaje_aereo?.itinerario" class="text-muted fw-normal">· {{ it.alternativa_item.cotizacion_pasaje_aereo.itinerario }}</span>
                                             <span v-if="itemsFacturadosIds.includes(it.id)" class="badge bg-success-subtle text-success border ms-2">Facturado</span>
                                         </p>
                                         <div class="row g-2">
@@ -1462,13 +1463,28 @@ const guardarPax = async (p: ReservaPasajero) => {
 // corrección 2026-08-27 tras un bug real: la primera versión lo guardaba en
 // reserva_item_pasajero, la MISMA fila que edita el checkbox del tab
 // Asignación — desmarcar un pasajero ahí borraba el vuelo ya cargado). Se
-// aplica a TODOS los pasajeros de la reserva por igual, sin depender de
-// ningún checkbox/vínculo. Se muestra en el tab Pasajeros (no en Ítems, que
-// solo da un resumen de solo lectura) porque es la pregunta que se hace el
-// vendedor por persona, no por servicio — decidido con el usuario.
+// muestra en el tab Pasajeros (no en Ítems, que solo da un resumen de solo
+// lectura) porque es la pregunta que se hace el vendedor por persona, no por
+// servicio — decidido con el usuario.
 const itemsVueloAgencia = computed(() =>
     (reserva.value?.items ?? []).filter((it) => it.alternativa_item?.origen_tipo === 'pasaje_aereo')
 );
+
+// A quiénes cubre un servicio: la asignación recién editada en el tab Asignación si
+// ya se cargó, si no la que trajo la reserva. Sin nadie asignado = a todos.
+const pasajeroIdsDelItem = (it: ReservaItem): number[] =>
+    asignacionesPorItem.value[it.id]
+        ? asignacionesPorItem.value[it.id].map((a) => a.reserva_pasajero_id)
+        : (it.pasajeros ?? []).map((p) => p.id);
+
+const cubreAPasajero = (it: ReservaItem, p: ReservaPasajero) => {
+    const ids = pasajeroIdsDelItem(it);
+    return ids.length === 0 || ids.includes(p.id);
+};
+
+// Antes salían todos los pasajes a todos los pasajeros: con dos boletos de la
+// misma aerolínea, cada pasajero veía dos bloques iguales.
+const vuelosAgenciaDe = (p: ReservaPasajero) => itemsVueloAgencia.value.filter((it) => cubreAPasajero(it, p));
 
 const aerolineaCotizada = (it: ReservaItem) => it.alternativa_item?.cotizacion_pasaje_aereo?.aerolinea ?? null;
 
@@ -1675,12 +1691,13 @@ const badgeTratamientoTributario = (it: ReservaItem): { texto: string; clase: st
 
 // Resumen de solo lectura para el tab Ítems (auditoría de UX/funcionalidad
 // 2026-08-27) — la edición real del vuelo de agencia vive en el tab
-// Pasajeros (ver itemsVueloAgencia() más abajo), acá solo se cuenta cuántos
-// de los pasajeros aplicables ya tienen al menos un número de vuelo cargado.
+// Pasajeros (ver vuelosAgenciaDe()), acá solo se cuenta cuántos de los
+// pasajeros que cubre el boleto ya tienen al menos un número de vuelo cargado.
 const resumenVueloAgencia = (it: ReservaItem) => {
-    const total = reserva.value?.pasajeros?.length ?? 0;
-    const confirmados = (it.vuelo_pasajeros ?? []).filter((vp) => vp.vuelo_numero_ida || vp.vuelo_numero_vuelta).length;
-    return { confirmados, total };
+    const cubiertos = (reserva.value?.pasajeros ?? []).filter((p) => cubreAPasajero(it, p)).map((p) => p.id);
+    const confirmados = (it.vuelo_pasajeros ?? [])
+        .filter((vp) => cubiertos.includes(vp.reserva_pasajero_id) && (vp.vuelo_numero_ida || vp.vuelo_numero_vuelta)).length;
+    return { confirmados, total: cubiertos.length };
 };
 
 // Sesión pendiente-11e-groundwork — Proveedor solo aplica a origen_tipo
