@@ -106,13 +106,20 @@ class PenalidadPasajeroService
 
         return [
             // El motivo viaja en el mismo texto que el nombre: no hay otra columna de descripción.
-            'descripcion_manual' => 'Penalidad por cancelación — '.($pasajero->nombre ?: 'pasajero '.$pasajero->id).': '.trim($datos['motivo']),
+            'descripcion_manual' => 'Penalidad por cancelación — '.($pasajero->nombre ?: 'pasajero '.$this->numeroEnLaReserva($pasajero)).': '.trim($datos['motivo']),
             'moneda_costo' => $moneda,
             'precio_venta_snapshot' => $monto,
             'precio_convertido' => $monto,
             'tip_afe_igv' => $datos['tip_afe_igv'],
             'destino_tributario' => $datos['destino_tributario'],
         ];
+    }
+
+    // Sin nombre, el pasajero se nombra por su lugar en la reserva (en orden de alta), no por su
+    // id: el texto llega al comprobante del cliente.
+    private function numeroEnLaReserva(ReservaPasajero $pasajero): int
+    {
+        return ReservaPasajero::where('reserva_id', $pasajero->reserva_id)->where('id', '<=', $pasajero->id)->count();
     }
 
     // Mismo cálculo que AlternativaItemController::recalcularTotalAlternativa().

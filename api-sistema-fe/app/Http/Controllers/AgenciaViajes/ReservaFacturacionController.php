@@ -1682,14 +1682,14 @@ class ReservaFacturacionController extends Controller
             // SaleDetail::descripcionParaSunat()): el texto del vendedor si
             // lo escribió (p. ej. "Tours en vacaciones al Alto Mayo y Sauce");
             // si no, cada servicio con su fecha (24-oct-2026, pedido del usuario),
-            // en el orden del viaje.
+            // en el orden del viaje. Un servicio sin fecha (p. ej. una penalidad)
+            // va solo con su nombre: "(sin fecha)" no le dice nada al cliente.
             $descripcionDetalle = filled($textoPersonalizado)
                 ? trim($textoPersonalizado)
-                : $items->sortBy(fn (ReservaItem $it) => [$it->fecha?->toDateString() ?? '9999-12-31', $it->id])->map(fn (ReservaItem $it) => sprintf(
-                    '%s (%s)',
-                    self::nombreEnComprobante($it),
-                    $it->fecha?->format('d/m/Y') ?? 'sin fecha'
-                ))->unique()->implode('; ');
+                : $items->sortBy(fn (ReservaItem $it) => [$it->fecha?->toDateString() ?? '9999-12-31', $it->id])->map(fn (ReservaItem $it) => $it->fecha
+                    ? sprintf('%s (%s)', self::nombreEnComprobante($it), $it->fecha->format('d/m/Y'))
+                    : self::nombreEnComprobante($it)
+                )->unique()->implode('; ');
 
             $subtotalTotal += $subtotalLinea;
             $igvTotal += $igvLinea;

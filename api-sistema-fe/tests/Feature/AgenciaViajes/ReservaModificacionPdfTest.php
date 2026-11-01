@@ -368,6 +368,29 @@ class ReservaModificacionPdfTest extends TestCase
         $this->assertSame(200, $respuesta->getStatusCode());
     }
 
+    // Al aplicar se borra el pasajero quitado y su penalidad pierde penalidad_reserva_pasajero_id
+    // (nullOnDelete): el PDF de la aplicada la reconoce por la foto de la diferencia.
+    public function test_en_una_aplicada_la_penalidad_del_pasajero_quitado_sigue_en_su_seccion(): void
+    {
+        [$reserva, $m] = $this->reservaConModificacion();
+        $carla = $this->reservaPasajeroId($reserva, 'carla');
+        $this->cambiarPasajeros($m, [$carla], []);
+        $penalidad = $this->penalidad($m, $carla);
+        foreach (collect($this->diferencia($reserva)['lineas'])->where('estado', 'para_revisar') as $linea) {
+            app(ReservaModificacionController::class)->marcarRevisado((string) $reserva->id, (string) $linea['alternativa_item_id']);
+        }
+        $this->aplicar($reserva);
+
+        $m = $m->fresh();
+        $this->assertNull($penalidad->fresh()->penalidad_reserva_pasajero_id);
+
+        $datos = app(ModificacionPdfService::class)->datos($m);
+        $this->assertCount(1, $datos['penalidades']);
+        $this->assertStringContainsString('No se presentó', $datos['penalidades'][0]['descripcion']);
+        $this->assertSame([], collect($datos['lineas'])->filter(fn ($l) => $l['es_penalidad'])->all());
+        $this->assertStringNotContainsString('No se presentó', json_encode($datos['lineas'], JSON_UNESCAPED_UNICODE));
+    }
+
     public function test_el_ajuste_de_un_servicio_facturado_sale_una_sola_vez(): void
     {
         [$reserva, $m] = $this->reservaConModificacion();
