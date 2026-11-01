@@ -8,7 +8,7 @@
 
 Cada línea: ID · qué · estado · depende de · rama o commit. El detalle está en
 `docs/tareas/T-…md` (se borra al cerrar; para una tarea hecha, el commit es la referencia).
-Próximo ID libre: **T-077**.
+Próximo ID libre: **T-078**.
 
 ## Orden de construcción (27-oct-2026)
 
@@ -44,6 +44,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 | T-074 | AGE | Cotización reservada: alternativa elegida a la vista (lienzo y listado), lienzo en solo lectura y «Ver detalle» del pasaje aéreo y del ítem manual | por hacer | T-007 | |
 | T-075 | AGE | Un pasaje aéreo nunca se queda sin pasajeros: impedir borrar al último pasajero de un boleto en la cotización (la modificación ya bloquea con `sin_pasajeros`; solo un test) (revisión de T-007) | por hacer | T-007 | |
 | T-076 | AGE | Pasaje aéreo: cargos y fee por pasajero (sin cambiar el precio de los ya guardados), «ya tiene pasaje» junto a cada pasajero | por hacer | T-007 | |
+| T-077 | AGE | Vuelo propio del pasajero en un solo texto, como observación en el reporte operativo (el vuelo de la agencia no cambia) | por hacer | — | |
 | T-012 | AGE + CAJ | Traspaso del cobro tras una nota de crédito | por hacer | T-011 | |
 | T-015 | PLA + AGE | Catálogo central de aerolíneas + panel central (Obs. 3) | por hacer | — | |
 | T-016 | AGE | Buscador de aerolíneas, corrección de nombres y aerolínea por defecto (Obs. 3) | por hacer | T-015 | |
