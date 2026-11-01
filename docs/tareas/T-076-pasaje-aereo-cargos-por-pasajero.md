@@ -37,10 +37,11 @@ formulario tiene dos campos sin función real:
   marcan por defecto solo los que aún no tienen pasaje (si todos tienen, todos). Se combina con
   el criterio de T-007 para modificaciones (`paxPorDefecto()`: solo los pasajeros nuevos). Sin
   alertas ni bloqueos.
-- **Quitar del formulario:** el check «TUA incluida en la tarifa» (la columna se queda, sin
-  migración) y la opción «Fee agencia» del selector de cargos. Un pasaje viejo con un cargo
-  `fee_agencia` se sigue leyendo y calculando igual. Antes, contar en dakamu cuántos cargos
-  `fee_agencia` hay.
+- ~~Quitar del formulario el check de TUA y la opción «Fee agencia»; moneda por defecto en
+  dólares~~: hecho antes de esta tarea, en la rama de T-007 (01-nov-2026). La opción «Fee agencia»
+  solo aparece en un cargo viejo que ya la tiene. Queda: la validación del backend sigue aceptando
+  `fee_agencia` (no tocar) y, si se quiere sacar del todo, contar antes los cargos `fee_agencia`
+  en dakamu.
 - Etiquetas: «monto por pasajero» en cargos y fee; el resumen muestra cuántos pasajeros se
   están cobrando.
 
@@ -65,7 +66,7 @@ formulario tiene dos campos sin función real:
 - [ ] **CA3** — Pasaje guardado antes de T-076 → al recalcular o abrirlo, mismo costo y venta que antes. → test
 - [ ] **CA4** — Duplicar una alternativa o crear una modificación copia la marca y el cálculo no cambia. → test
 - [ ] **CA5** — Alternativa con un pasaje para Adulto 1 → al abrir un pasaje nuevo, Adulto 1 dice «ya tiene pasaje …» y solo Adulto 2 sale marcado. → prueba a mano
-- [ ] **CA6** — El formulario no muestra el check de TUA ni la opción «Fee agencia». Un pasaje viejo con un cargo `fee_agencia` se abre y se guarda sin error. → test + a mano
+- [x] **CA6** — Sin el check de TUA ni la opción «Fee agencia» en cargos nuevos: hecho en la rama de T-007. Verificar que un pasaje viejo con un cargo `fee_agencia` se abre y se guarda sin error.
 
 ## Seguridad y correctitud
 - [ ] Permisos / Policy en rutas nuevas: no aplica (sin rutas nuevas)

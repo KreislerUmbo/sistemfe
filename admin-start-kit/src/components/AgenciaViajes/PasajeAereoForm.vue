@@ -66,7 +66,9 @@
                 <select class="form-select form-select-sm" v-model="cargo.tipo">
                     <option value="impuesto">Impuesto</option>
                     <option value="tasa_aeropuerto">Tasa aeropuerto</option>
-                    <option value="fee_agencia">Fee agencia</option>
+                    <!-- El fee va en su campo de abajo (como cargo salía con ganancia cero);
+                         solo se muestra para no vaciar el de un pasaje viejo. -->
+                    <option v-if="cargo.tipo === 'fee_agencia'" value="fee_agencia">Fee agencia</option>
                 </select>
             </div>
             <div class="col-3">
@@ -80,13 +82,9 @@
             <i class="fas fa-plus me-1"></i>Agregar cargo
         </button>
 
+        <!-- Sin el check "TUA incluida en la tarifa": no entraba en el cálculo ni en el PDF;
+             si la TUA va aparte, se agrega como cargo. El valor de un pasaje viejo se conserva. -->
         <div class="row g-2 mb-2 align-items-end">
-            <div class="col-6">
-                <div class="form-check">
-                    <input class="form-check-input" type="checkbox" id="tua-incluida" v-model="form.tua_incluida_en_tarifa">
-                    <label class="form-check-label small" for="tua-incluida">TUA incluida en la tarifa</label>
-                </div>
-            </div>
             <div class="col-6">
                 <label class="form-label mb-1 small fw-semibold text-secondary">Fee de agencia</label>
                 <input type="number" step="0.01" class="form-control form-control-sm" v-model.number="form.fee_agencia_monto">
@@ -189,7 +187,7 @@ const emit = defineEmits<{
 const form = reactive({
     aerolinea: '',
     itinerario: '',
-    moneda: 'PEN' as 'PEN' | 'USD',
+    moneda: 'USD' as 'PEN' | 'USD',
     tarifa_base_adulto: 0,
     tarifa_base_nino: 0,
     tarifa_base_infante: 0,
@@ -258,7 +256,7 @@ const resetearCampos = () => {
     } else {
         form.aerolinea = '';
         form.itinerario = '';
-        form.moneda = 'PEN';
+        form.moneda = 'USD';
         form.tarifa_base_adulto = 0;
         form.tarifa_base_nino = 0;
         form.tarifa_base_infante = 0;
