@@ -70,7 +70,7 @@
                             <CobroFacturaCampos v-model:pagos="pagosCobro" v-model:vuelto-moneda="vueltoMoneda"
                                 :habilitado="cobroHabilitado" :condicion="condicionPago" :saldo="saldoACobrar"
                                 :moneda="opciones.moneda" :formas-pago="formasPago" :tipo-cambio-dia="preview.tipo_cambio_dia ?? null"
-                                :caja-abierta="cajaAbierta" />
+                                :caja-abierta="cajaAbierta" v-model:traspasos="traspasosCobro" :traspasos-disponibles="traspasosDisponibles" />
                             <div class="row g-2 mb-2">
                                 <div class="col-6">
                                     <label class="form-label small fw-semibold text-secondary">Tipo de comprobante</label>
@@ -117,7 +117,7 @@ import { computed, onMounted, ref, toRef, watch } from 'vue';
 import OpcionesFacturacionCampos from '@/components/AgenciaViajes/OpcionesFacturacionCampos.vue';
 import CondicionPagoCampos from '@/components/AgenciaViajes/CondicionPagoCampos.vue';
 import CobroFacturaCampos from '@/components/AgenciaViajes/CobroFacturaCampos.vue';
-import { payloadCobro, validarCobro, diferencia, type FilaCobro, type FormaPagoCobro, type MonedaCobro } from '@/helpers/cobroFactura';
+import { payloadCobro, validarCobro, diferencia, totalTraspasado, type FilaCobro, type FilaTraspaso, type FormaPagoCobro, type MonedaCobro, type TraspasoDisponible } from '@/helpers/cobroFactura';
 import type { CuotaCronograma } from '@/components/CronogramaCuotasCampos.vue';
 import { validarCondicionPago, payloadCondicionPago, type CondicionPago } from '@/helpers/condicionPago';
 import { hoyPeru } from '@/helpers/fecha';
@@ -158,11 +158,15 @@ const saldoACobrar = computed(() => preview.value?.saldo_a_cobrar ?? Number(prev
 // Cobro al contado (T-011): el bloque aparece solo si el servidor lo habilita y es contado con saldo.
 const pagosCobro = ref<FilaCobro[]>([]);
 const vueltoMoneda = ref<MonedaCobro>(props.moneda);
+// T-012: cobro de un comprobante anulado con NC que se usa en esta factura.
+const traspasosCobro = ref<FilaTraspaso[]>([]);
+const traspasosDisponibles = computed<TraspasoDisponible[]>(() => (preview.value?.traspasos_disponibles ?? []) as TraspasoDisponible[]);
 const cobroHabilitado = computed(() => preview.value?.cobro_habilitado ?? false);
 const cajaAbierta = computed(() => preview.value?.caja_abierta ?? false);
 const formasPago = computed<FormaPagoCobro[]>(() => (preview.value?.formas_pago ?? []) as FormaPagoCobro[]);
 const cobraAhora = computed(() => cobroHabilitado.value && condicionPago.value === 'contado' && saldoACobrar.value > 0);
-const sinCajaParaCobrar = computed(() => cobraAhora.value && !cajaAbierta.value);
+// Si lo traspasado cubre todo, no hay pagos nuevos y no hace falta caja.
+const sinCajaParaCobrar = computed(() => cobraAhora.value && !cajaAbierta.value && pagosCobro.value.length > 0);
 
 // Factura ('01') exige RUC (catálogo 06 SUNAT, '6'); el backend también lo valida.
 const clienteTieneRuc = computed(() => props.cabecera?.cliente?.cod_tipo_doc_sunat === '6');
@@ -199,7 +203,7 @@ watch(tipoComprobante, refrescarPreview);
 const confirmar = async () => {
     if (!props.cabecera?.cliente?.id) return;
     const error = opciones.validar() ?? validarCondicionPago(condicionPago.value, cronograma.value, saldoACobrar.value)
-        ?? (cobraAhora.value ? validarCobro(pagosCobro.value, saldoACobrar.value, opciones.moneda as MonedaCobro, formasPago.value) : null);
+        ?? (cobraAhora.value ? validarCobro(pagosCobro.value, saldoACobrar.value, opciones.moneda as MonedaCobro, formasPago.value, traspasosCobro.value) : null);
     if (error) {
         toast.error(error);
         return;
@@ -214,7 +218,8 @@ const confirmar = async () => {
             ...opciones.payload(),
             ...payloadCondicionPago(condicionPago.value, cronograma.value),
             ...payloadCobro(condicionPago.value, saldoACobrar.value, cobroHabilitado.value, pagosCobro.value, vueltoMoneda.value,
-                Math.max(0, -diferencia(pagosCobro.value, saldoACobrar.value, opciones.moneda as MonedaCobro))),
+                Math.max(0, -diferencia(pagosCobro.value, saldoACobrar.value, opciones.moneda as MonedaCobro, totalTraspasado(traspasosCobro.value))),
+                traspasosCobro.value),
         });
         toast.success(`${res.message} (serie ${res.serie})`);
         emit('cerrar');

@@ -90,9 +90,71 @@ php artisan test   # suite completa, contra PostgreSQL
 ---
 
 ## Resultado
-- **Commits:**
-- **Tests:**
+- **Commits:** ver `git log feat/T-012-traspaso-cobro-nc`.
+- **Tests:** `tests/Feature/Cobro/T012TraspasoCobroTest.php` (CA1–CA7 + vista previa + venta pagada en parte + vuelto): 10 pasan
+  (con T-011: 21, tras el arreglo del vuelto).
+  Suite completa del backend contra PostgreSQL (29-oct, con la fórmula final del disponible):
+  1672 pasan, 0 fallan. Frontend: `vue-tsc` sin errores en lo tocado (los
+  errores previos son de otros archivos); `vite build` OK; Vitest nuevo `cobroFactura.test.ts` (5).
 - **Desviaciones de la tarea y por qué:**
+  - **Prueba funcional en agencia-demo (29-oct, Playwright):** reserva 29 en US$: facturar con
+    cobro en efectivo (venta 19, 1 movimiento de caja) → NC total aceptada → "Facturar" muestra
+    "Usar lo cobrado en B002 (disponible US$ 424.00)" marcado y con 424 → emitir: venta 20 pagada
+    con un pago `TRASPASO` de 424 desde la venta 19 y **0 movimientos de caja**. La NC aceptada se
+    insertó directo en la base del demo (no hay SUNAT en local) y se llamó a
+    `liberarPorNotaDeCredito()`. Quedan en agencia-demo la reserva 29, las ventas 19-20, esa NC y
+    una caja abierta de admin@agencia-demo.test.
+  - **Reserva de la venta de origen:** una NC total borra su fila de `reserva_ventas`, así que
+    "misma reserva" se reconoce por `sale_detail_items → reserva_items.reserva_id` (sobrevive a la NC).
+  - **"Pagado" del origen** = todos sus `sale_payments`, incluidos traspasos que ella recibió
+    (permite encadenar corrección tras corrección); el dinero no se cuenta dos veces porque lo que
+    ya salió se resta (`traspasado_de_sale_id`). Interpretación mía del texto "sin contar traspasos…
+    dos veces"; si se quería otra, cambia una línea en `disponiblesParaTraspasar()`.
+  - **Fórmula del disponible (revisión, 29-oct):** `max(0, pagado − (total − NC aceptadas)) −
+    traspasado`, no `min(pagado, NC)`. Dan lo mismo si el origen estaba pagado completo; pagado en
+    parte (crédito o pendiente de cobro), la NC baja primero la deuda: 500 con 100 pagados y NC de
+    200 → debe 300, nada a favor (con `min` ofrecía 100 que siguen cubriendo deuda).
+  - **Vuelto (revisión, 29-oct):** `sale_payments.amount` guarda lo entregado con el vuelto
+    incluido (600 por 500). Sin tope, una factura vigente ofrecía 100 y tras la NC total 600. Ahora
+    `pagado = min(pagado, total)`: el exceso ya salió de caja. Test
+    `test_el_vuelto_no_cuenta_como_disponible`.
+  - **Revisión de código (29-oct), descartado tras verificar:** el modal no arrastra la decisión de
+    traspaso (`CobroFacturaCampos` se vuelve a montar con cada vista previa: `v-if` del modal y
+    `v-if="cargando"`); la FK `traspasado_de_sale_id` sin ON DELETE es a propósito (no se borra un
+    origen cuyo dinero ya pasó a otra venta; `LimpiarOperacionPrueba` borra `sale_payments` antes
+    que `sales`); `SaleController::update()` no llega a estas ventas (destino con `reserva_ventas`,
+    origen ya enviado a SUNAT); anular el destino con NC no pierde el dinero: pasa a ser origen
+    (cubierto por CA4). `traspasos[]` quedó con `max:20`.
+  - `method_payment` del traspaso se guarda como `'TRASPASO'` (columna de texto libre).
+  - El frontend propone usar todo lo traspasable (hasta el saldo) sin que el usuario lo marque, para
+    evitar cobrar dos veces; puede destildarlo o editar el monto.
+  - Migración `2026_10_30_100000_…` aplicada a la base de tests y a los tenants locales con
+    `tenants:migrate-verticales`; falta en producción al desplegar.
 
 ## Hallazgos fuera de alcance
--
+- `SaleController::update()` borra y recrea los `sale_payments`. Hoy no alcanza a ventas con
+  traspaso (ver Desviaciones), pero si se afloja alguno de sus candados, perdería `origen` y
+  `traspasado_de_sale_id` (relacionado con R5).
+- `SalePaymentController::destroy()` puede borrar un pago de la venta de origen después de
+  traspasarlo: el destino queda con un traspaso de dinero que ya no figura en el origen. Bloquearlo
+  si lo traspasado desde ella (`traspasado_de_sale_id`) supera lo que le quedaría pagado.
+- El rótulo del origen usa `n_operacion` o serie-correlativo; mientras el comprobante no se envió a
+  SUNAT no tiene correlativo y sale solo la serie ("B002"). En la práctica una NC aceptada ya tiene
+  correlativo, pero el caso de prueba lo mostró así.
+- Otros lectores de `sale_payments`, revisados (29-oct): **ninguno suma el traspaso como cobro**.
+  Caja, cierre, PDF/Excel y paneles leen `cash_movements`; Cuentas por Cobrar y los reportes usan
+  `paid_out`/`saldo_pendiente` de la venta, no la tabla de pagos. Quedan tres efectos de solo
+  lectura, sin dinero:
+  - `PaymentReceiptController::index` (historial de pagos de un cliente) lista el traspaso como un
+    `pago_venta` más, con medio de pago "TRASPASO" y su monto; no se suma, pero el cliente verá el
+    cobro original y el traspaso. Si molesta, filtrar `origen = 'traspaso'` ahí.
+  - `Sale::pagosImpresos()` (PDF) lo rotula "TRASPASO" (cae al código porque no está en
+    `payment_methods`) con su monto y fecha.
+  - `SalePaymentController::destroy()` sobre el pago de traspaso del **destino**: baja su
+    `paid_out` y el origen recupera el disponible. Es coherente (el dinero queda libre otra vez),
+    sin tocar la caja.
+- **Lo cobrado a crédito no se traspasa.** Los cobros de Cuentas por Cobrar van a
+  `payment_applications` (`CreditPaymentController`), no a `sale_payments`: una factura de agencia
+  a crédito ya pagada en cuotas y anulada con NC da disponible 0 y el cliente tendría que pagar de
+  nuevo. Cumple el alcance ("pagado" = `sale_payments`); va con el pendiente de NC sobre deuda /
+  saldo a favor.

@@ -45,7 +45,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 | T-075 | AGE | Un pasaje aéreo nunca se queda sin pasajeros: impedir borrar al último pasajero de un boleto en la cotización (la modificación ya bloquea con `sin_pasajeros`; solo un test) (revisión de T-007) | por hacer | T-007 | |
 | T-076 | AGE | Pasaje aéreo: cargos y fee por pasajero (sin cambiar el precio de los ya guardados), «ya tiene pasaje» junto a cada pasajero | por hacer | T-007 | |
 | T-077 | AGE | Vuelo propio del pasajero en un solo texto, como observación en el reporte operativo (el vuelo de la agencia no cambia) | por hacer | — | |
-| T-012 | AGE + CAJ | Traspaso del cobro tras una nota de crédito | por hacer | T-011 | |
+| T-012 | AGE + CAJ | Traspaso del cobro tras una nota de crédito | en revisión | T-011 | `feat/T-012-traspaso-cobro-nc` |
 | T-015 | PLA + AGE | Catálogo central de aerolíneas + panel central (Obs. 3) | por hacer | — | |
 | T-016 | AGE | Buscador de aerolíneas, corrección de nombres y aerolínea por defecto (Obs. 3) | por hacer | T-015 | |
 | T-017 | AGE | El cliente como primer pasajero al aceptar (Obs. 4) | por hacer | — | |

@@ -10,6 +10,26 @@
                 <router-link to="/caja" target="_blank" class="ms-1">Ir a Caja</router-link>
             </div>
 
+            <!-- T-012: cobro ya hecho en un comprobante anulado con NC de esta misma reserva -->
+            <div v-for="d in traspasosDisponibles" :key="d.sale_id" class="border rounded p-2 mb-2 bg-body-tertiary">
+                <div class="row g-2 align-items-center">
+                    <div class="col">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" :id="`traspaso-${d.sale_id}`"
+                                :checked="!!traspasoDe(d.sale_id)" @change="alternarTraspaso(d, ($event.target as HTMLInputElement).checked)" />
+                            <label class="form-check-label small" :for="`traspaso-${d.sale_id}`">
+                                Usar lo cobrado en <strong>{{ d.comprobante }}</strong> (disponible {{ simbolo }} {{ d.disponible.toFixed(2) }})
+                            </label>
+                        </div>
+                    </div>
+                    <div class="col-5 col-md-3" v-if="traspasoDe(d.sale_id)">
+                        <input type="number" min="0" :max="d.disponible" step="0.01" class="form-control form-control-sm"
+                            :value="traspasoDe(d.sale_id)!.monto" @input="editarTraspaso(d, $event)" />
+                    </div>
+                </div>
+                <div class="small text-muted mt-1">El dinero ya entró a caja con ese comprobante: no se vuelve a registrar.</div>
+            </div>
+
             <div v-for="(fila, i) in pagos" :key="i" class="border rounded p-2 mb-2">
                 <div class="row g-2 align-items-end">
                     <div class="col-6 col-md-3">
@@ -42,7 +62,7 @@
                             placeholder="Opcional" />
                     </div>
                     <div class="col-auto">
-                        <button type="button" class="btn btn-outline-danger btn-sm py-0 px-2" :disabled="pagos.length === 1"
+                        <button type="button" class="btn btn-outline-danger btn-sm py-0 px-2" :disabled="pagos.length === 1 && traspasado <= 0"
                             @click="quitar(i)"><i class="fas fa-trash-alt small"></i></button>
                     </div>
                 </div>
@@ -60,6 +80,7 @@
             </button>
 
             <div class="mt-2 small">
+                <div v-if="traspasado > 0">Traspasado: <strong>{{ simbolo }} {{ traspasado.toFixed(2) }}</strong></div>
                 <div>Total cobrado: <strong>{{ simbolo }} {{ cobrado.toFixed(2) }}</strong></div>
                 <div v-if="dif > 0" class="text-danger">Falta: <strong>{{ simbolo }} {{ dif.toFixed(2) }}</strong></div>
                 <div v-else-if="dif < 0" class="text-success-emphasis">
@@ -83,8 +104,8 @@
 // el backend (CobroVentaService) decide. Ver helpers/cobroFactura.ts.
 import { computed, ref, watch } from 'vue';
 import {
-    diferencia, equivalenteFila, filaNueva, monedasDeVuelto, totalCobrado, vueltoEn,
-    type FilaCobro, type FormaPagoCobro, type MonedaCobro,
+    diferencia, equivalenteFila, filaNueva, monedasDeVuelto, totalCobrado, totalTraspasado, vueltoEn,
+    type FilaCobro, type FilaTraspaso, type FormaPagoCobro, type MonedaCobro, type TraspasoDisponible,
 } from '@/helpers/cobroFactura';
 
 const props = defineProps<{
@@ -95,17 +116,22 @@ const props = defineProps<{
     formasPago: FormaPagoCobro[];
     tipoCambioDia: number | null;
     cajaAbierta: boolean;
+    traspasosDisponibles?: TraspasoDisponible[];
 }>();
 
 const pagos = defineModel<FilaCobro[]>('pagos', { required: true });
 const vueltoMoneda = defineModel<MonedaCobro>('vueltoMoneda', { required: true });
+const traspasos = defineModel<FilaTraspaso[]>('traspasos', { default: () => [] });
 
 const tocado = ref(false);
 const simbolo = computed(() => (props.moneda === 'USD' ? 'US$' : 'S/'));
 const visible = computed(() => props.habilitado && props.condicion === 'contado' && props.saldo > 0);
 
-const cobrado = computed(() => totalCobrado(pagos.value, props.moneda));
-const dif = computed(() => diferencia(pagos.value, props.saldo, props.moneda));
+const traspasado = computed(() => totalTraspasado(traspasos.value));
+// Lo que falta pagar con dinero nuevo.
+const porPagar = computed(() => Math.max(0, Math.round((props.saldo - traspasado.value) * 100) / 100));
+const cobrado = computed(() => totalCobrado(pagos.value, props.moneda) + traspasado.value);
+const dif = computed(() => diferencia(pagos.value, props.saldo, props.moneda, traspasado.value));
 const opcionesVuelto = computed(() => monedasDeVuelto(pagos.value, props.moneda, props.formasPago));
 const vueltoMostrado = computed(() => {
     const monto = vueltoEn(-dif.value, vueltoMoneda.value, props.moneda, pagos.value, props.formasPago);
@@ -115,13 +141,51 @@ const vueltoMostrado = computed(() => {
 
 // Una fila de efectivo en la moneda de la venta por el saldo completo (el caso más común).
 // Mientras el usuario no toque el monto, sigue al saldo.
-watch(() => [visible.value, props.saldo, props.formasPago.length] as const, () => {
+watch(() => [visible.value, porPagar.value, props.formasPago.length] as const, () => {
     if (!visible.value || props.formasPago.length === 0) return;
-    if (pagos.value.length === 0) {
-        pagos.value = [filaNueva(props.formasPago, props.moneda, props.saldo, props.tipoCambioDia)];
+    if (!tocado.value && porPagar.value <= 0 && traspasado.value > 0) {
+        pagos.value = [];
+    } else if (pagos.value.length === 0 && porPagar.value > 0) {
+        pagos.value = [filaNueva(props.formasPago, props.moneda, porPagar.value, props.tipoCambioDia)];
     } else if (!tocado.value && pagos.value.length === 1) {
-        pagos.value[0].monto_pagado = props.saldo;
+        pagos.value[0].monto_pagado = porPagar.value;
     }
+}, { immediate: true });
+
+// T-012: mientras el usuario no decida, se propone usar todo lo traspasable (hasta el saldo): es lo
+// que evita cobrar dos veces. Tildar/destildar o editar el monto es decisión suya y no se pisa.
+const eligioTraspaso = ref(false);
+const traspasoDe = (saleId: number) => traspasos.value.find((t) => t.sale_id === saleId);
+const restanteParaTraspaso = (salvo: number | null) => {
+    const otros = traspasos.value.filter((t) => t.sale_id !== salvo).reduce((s, t) => s + Number(t.monto), 0);
+    return Math.max(0, Math.round((props.saldo - otros) * 100) / 100);
+};
+const alternarTraspaso = (d: TraspasoDisponible, marcado: boolean) => {
+    eligioTraspaso.value = true;
+    tocado.value = false;
+    if (!marcado) {
+        traspasos.value = traspasos.value.filter((t) => t.sale_id !== d.sale_id);
+        return;
+    }
+    traspasos.value = [...traspasos.value, { sale_id: d.sale_id, monto: Math.min(d.disponible, restanteParaTraspaso(null)) }];
+};
+const editarTraspaso = (d: TraspasoDisponible, evento: Event) => {
+    eligioTraspaso.value = true;
+    tocado.value = false;
+    const valor = Math.min(Number((evento.target as HTMLInputElement).value) || 0, d.disponible);
+    traspasos.value = traspasos.value.map((t) => (t.sale_id === d.sale_id ? { ...t, monto: valor } : t));
+};
+watch(() => [props.traspasosDisponibles, visible.value, props.saldo] as const, () => {
+    const disponibles = props.traspasosDisponibles ?? [];
+    // Lo que ya no se ofrece (cambió la moneda o la selección) deja de estar elegido.
+    traspasos.value = traspasos.value.filter((t) => disponibles.some((d) => d.sale_id === t.sale_id));
+    if (!visible.value || eligioTraspaso.value) return;
+    let restante = props.saldo;
+    traspasos.value = disponibles.map((d) => {
+        const monto = Math.min(d.disponible, Math.max(0, restante));
+        restante = Math.round((restante - monto) * 100) / 100;
+        return { sale_id: d.sale_id, monto };
+    }).filter((t) => t.monto > 0);
 }, { immediate: true });
 
 watch(opcionesVuelto, (opciones) => {

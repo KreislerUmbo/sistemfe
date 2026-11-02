@@ -174,6 +174,8 @@ export type PrepararFacturaResponse = {
   saldo_a_cobrar?: number
   // T-011: bloque de cobro al contado. cobro_habilitado=false (interruptor del servidor) oculta el bloque.
   cobro_habilitado?: boolean
+  // T-012: cobro de comprobantes anulados con NC (misma reserva y moneda) que se puede usar en esta factura.
+  traspasos_disponibles?: { sale_id: number; comprobante: string; disponible: number }[]
   caja_abierta?: boolean
   formas_pago?: Array<{ code: string; name: string; monedas: Array<'PEN' | 'USD'>; affects_cash_count: boolean }>
   tipo_cambio_dia?: number | null
