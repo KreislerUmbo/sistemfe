@@ -24,9 +24,10 @@ Próximo ID libre: **T-078**.
 | 1 | ~~T-064 → T-068 → T-008 → T-038 → T-026~~ hechas y desplegadas 27-oct | Todos los giros, producción: PDF de comprobantes que cambia al editar el cliente, precios del portal manipulables, caja que no se anula al eliminar una venta, monto en letras en dólares, fechas que se muestran un día antes |
 | 2 | ~~T-054 → T-056 → T-043 → T-042 → T-001 → T-030 → T-025 → T-024 → T-027 → T-028 → T-039~~ hechas | Errores de Agencia: PDF de campo con el proveedor equivocado, operación trabada tras facturar, salidas que no se ven, cambios a una alternativa aceptada, permisos del cotizador, datos cruzados entre alternativas |
 | 3 | ~~T-009 → T-010 → T-011 → T-014 → T-013~~ hechas → T-012 | Cobro y caja (orden aprobado el 25-oct). T-011 no se despliega con dólares sin T-013 |
-| 4 | ~~T-002 → T-003 → T-004 → T-005 → T-006 → T-072 → T-073~~ hechas → T-007 | Modificar reserva: hoy no se puede quitar un pasajero y el agregado no cambia el precio |
+| 4 | ~~T-002 → T-003 → T-004 → T-005 → T-006 → T-072 → T-073 → T-007~~ hechas | Modificar reserva: hoy no se puede quitar un pasajero y el agregado no cambia el precio |
+| 4b | T-076 → T-075 → T-074 | Salió de la prueba de Modificar reserva (01-nov): el pasaje aéreo cobra cargos y fee una sola vez por boleto (precio de venta mal con 2 o más pasajeros), un boleto que se queda sin pasajeros, la cotización reservada editable |
 | 5 | T-063 → T-033 → T-050 → T-051 → T-052 → T-059 → T-061 → T-053 | Menú nuevo y CRM base (T-033 antes: "Nueva consulta" crea la cotización con su alternativa) |
-| 6 | T-041 → T-040 → T-055 → T-057 → T-058 → T-044 → T-017 → T-018 | Operación diaria de Agencia |
+| 6 | T-041 → T-040 → T-055 → T-057 → T-058 → T-077 → T-044 → T-017 → T-018 | Operación diaria de Agencia |
 | 7 | T-045 → T-046 → T-047 → T-048 → T-049 | Venta directa (T-046 necesita T-017; T-048, el cobro de la ola 3) |
 | 8 | T-032 → T-034 → T-019 → T-035 → T-036 → T-031 → T-022 → T-020 → T-021 → T-023 → T-037 → T-015 → T-016 | Cotizador más rápido y claro, PDF de cotización, aerolíneas |
 | 9 | T-060 → T-062 → T-065 | Completar CRM y clientes |
@@ -40,7 +41,6 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 
 | ID | Módulo | Qué | Estado | Depende de | Rama / commit |
 |---|---|---|---|---|---|
-| T-007 | AGE | Modificar reserva: pantallas | en revisión | T-005, T-006, T-072, T-073 | |
 | T-074 | AGE | Cotización reservada: alternativa elegida a la vista (lienzo y listado), lienzo en solo lectura y «Ver detalle» del pasaje aéreo y del ítem manual | por hacer | T-007 | |
 | T-075 | AGE | Un pasaje aéreo nunca se queda sin pasajeros: impedir borrar al último pasajero de un boleto en la cotización (la modificación ya bloquea con `sin_pasajeros`; solo un test) (revisión de T-007) | por hacer | T-007 | |
 | T-076 | AGE | Pasaje aéreo: cargos y fee por pasajero (sin cambiar el precio de los ya guardados), «ya tiene pasaje» junto a cada pasajero | por hacer | T-007 | |
@@ -177,6 +177,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 
 | ID | Módulo | Qué | Commit |
 |---|---|---|---|
+| T-007 | AGE | Modificar reserva: pantallas. Crear la modificación desde la reserva, editarla en el cotizador, ver la diferencia y sus bloqueos (pasajero quitado → penalidad, «para revisar»), PDF, aplicar y descartar, historial en la reserva. En la prueba del usuario (31-oct y 01-nov) se corrigió: el pasaje aéreo guarda siempre su lista de pasajeros; totales del pasaje al editar; la penalidad de una aplicada en su sección del PDF; «pasajero N» y sin «(sin fecha)» en el comprobante; en Pasajeros de la reserva, cada pasajero ve solo sus vuelos; formulario de pasaje sin el check de TUA ni el cargo «Fee agencia», en dólares. Implementada por Sonnet, revisada por Opus. Salieron T-074 a T-077. Sin migraciones | ver merge de `feat/T-007-pantallas-modificar-reserva` |
 | T-073 | AGE | Modificar reserva: un servicio cuyo precio depende de los pasajeros y no se reprecia solo (pasaje aéreo, manual, mayorista, tour con precio a mano; regla única `RecalculoPorPersonaService::seRepreciaSolo()`) queda "para revisar" si cambia la cantidad **o el tipo** de pasajeros (`composicion_vendida`/`composicion_nueva`). Implementada por Sonnet, revisada por Opus (arreglo: comparar por tipo, no solo cantidad) con prueba en `agencia-demo` (reserva 29: aplicar responde 422). Nota para T-007 | ver merge de `fix/T-073-por-persona-sin-repreciar` |
 | T-072 | AGE | Tras aplicar una modificación: la cotización original sigue "reservada" (o "anulada"), en listado, filtro e Inicio (`Alternativa::modificacionAplicada`, `Cotizacion::RELACIONES_ESTADO_RESUMEN`); el tablero de salidas muestra `reserva.codigo`; el "Ajuste — …" no se suma en el total de la alternativa ni en el PDF de cotización (la reserva no cambia). Implementada por Sonnet, revisada por Opus. Nota para T-007 (el cotizador suma el ajuste en el navegador) | ver merge de `fix/T-072-cotizacion-original-tras-aplicar` |
 | T-006 | AGE | Modificar reserva: PDF para el cliente (`GET reservas/{id}/modificacion/pdf[?modificacion_id=]`, permiso `reservas.modificar`): solo lo que cambia, pasajeros agregados y quitados, penalidades con motivo, nombres sin el mayorista; para una aplicada, lo que se aplicó (`diferencia_aplicada`). Resumen solo con total anterior, nuevo y diferencia. Implementada por Sonnet, revisada por Opus (arreglos: un "para revisar" confirmado salía como "Por revisar"; se quitaron saldo, ya facturado y anticipos por no ser cifras ciertas). Notas para T-007 (qué totales mostrar) | ver merge de `feat/T-006-pdf-modificacion` |
