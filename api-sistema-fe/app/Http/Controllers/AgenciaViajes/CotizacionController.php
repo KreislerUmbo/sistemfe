@@ -384,6 +384,11 @@ class CotizacionController extends Controller
         $idsEnPayload = collect($pasajerosPayload)->pluck('id')->filter()->map(fn ($v) => (int) $v)->all();
         $idsEliminados = array_values(array_diff($idsExistentes, $idsEnPayload));
 
+        // T-075: un pasaje aéreo no se queda sin pasajeros ([] se lee como "todos").
+        if ($mensaje = $this->pasajesQueQuedanSinPasajeros($cotizacion, $idsExistentes, $idsEliminados)) {
+            return response()->json(['code' => 422, 'message' => $mensaje], 422);
+        }
+
         [$itemsRecalculados, $itemsParaRevisar] = DB::transaction(function () use (
             $cotizacion,
             $pasajerosPayload,
@@ -434,6 +439,46 @@ class CotizacionController extends Controller
             'items_recalculados' => $itemsRecalculados,
             'items_para_revisar' => $itemsParaRevisar,
         ]);
+    }
+
+    // T-075 (decisión del usuario, 31-oct): no se borra al último pasajero de un pasaje aéreo.
+    // limpiarPaxIncluidosEliminados() lo dejaría con [], que varios servicios leen como "todos":
+    // el boleto pasaría a cubrir a todos con el precio que tenía. Devuelve el mensaje para el
+    // vendedor, o null si se puede guardar. Las alternativas descartadas o reemplazadas no cuentan.
+    private function pasajesQueQuedanSinPasajeros(Cotizacion $cotizacion, array $idsExistentes, array $idsEliminados): ?string
+    {
+        if ($idsEliminados === []) {
+            return null;
+        }
+
+        $pasajes = AlternativaItem::with(['alternativa', 'cotizacionPasajeAereo'])
+            ->whereHas('alternativa', fn ($q) => $q->where('cotizacion_id', $cotizacion->id)
+                ->whereNotIn('estado', ['descartada', 'reemplazada']))
+            ->where('origen_tipo', AlternativaItem::ORIGEN_PASAJE_AEREO)
+            ->whereNotNull('pax_incluidos')
+            ->orderBy('id')
+            ->get()
+            ->filter(fn (AlternativaItem $item) => $item->pax_incluidos !== []
+                && array_diff($item->pax_incluidos, $idsEliminados) === []);
+
+        if ($pasajes->isEmpty()) {
+            return null;
+        }
+
+        // Los pasajeros de la cotización no tienen nombre: se nombran por su lugar en la lista.
+        sort($idsExistentes);
+        $tipos = CotizacionPasajero::whereIn('id', $idsEliminados)->pluck('tipo_pax', 'id');
+        $nombrePasajero = fn ($id) => 'pasajero '.(array_search((int) $id, $idsExistentes, true) + 1)
+            .' ('.($tipos[$id] ?? 'pasajero').')';
+
+        $detalle = $pasajes->map(fn (AlternativaItem $item) => sprintf(
+            'el pasaje %s de «%s» es de %s',
+            $item->cotizacionPasajeAereo?->aerolinea ?? 'aéreo',
+            $item->alternativa->nombre,
+            collect($item->pax_incluidos)->map($nombrePasajero)->implode(' y ')
+        ))->implode('; ');
+
+        return "No se puede quitar a ese pasajero: {$detalle}. Primero pasa el boleto a otro pasajero o quita el pasaje.";
     }
 
     // Saca los ids eliminados de cualquier pax_incluidos que los tuviera

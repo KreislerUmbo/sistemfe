@@ -42,7 +42,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 | ID | Módulo | Qué | Estado | Depende de | Rama / commit |
 |---|---|---|---|---|---|
 | T-074 | AGE | Cotización reservada: alternativa elegida a la vista (lienzo y listado), lienzo en solo lectura y «Ver detalle» del pasaje aéreo y del ítem manual | por hacer | T-007 | |
-| T-075 | AGE | Un pasaje aéreo nunca se queda sin pasajeros: impedir borrar al último pasajero de un boleto en la cotización (la modificación ya bloquea con `sin_pasajeros`; solo un test) (revisión de T-007) | por hacer | T-007 | |
+| T-075 | AGE | Un pasaje aéreo nunca se queda sin pasajeros: impedir borrar al último pasajero de un boleto en la cotización (la modificación ya bloquea con `sin_pasajeros`; solo un test) (revisión de T-007) | en revisión | T-007 | `fix/T-075-boleto-sin-pasajeros` |
 | T-076 | AGE | Pasaje aéreo: cargos y fee por pasajero (sin cambiar el precio de los ya guardados), «ya tiene pasaje» junto a cada pasajero | por hacer | T-007 | |
 | T-077 | AGE | Vuelo propio del pasajero en un solo texto, como observación en el reporte operativo (el vuelo de la agencia no cambia) | por hacer | — | |
 | T-015 | PLA + AGE | Catálogo central de aerolíneas + panel central (Obs. 3) | por hacer | — | |

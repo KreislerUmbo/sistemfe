@@ -4,6 +4,7 @@ namespace Tests\Feature\AgenciaViajes;
 
 use Tests\Feature\AgenciaViajes\Concerns\ConAccesoATodasLasReservas;
 use App\Http\Controllers\AgenciaViajes\AlternativaItemController;
+use App\Http\Controllers\AgenciaViajes\CotizacionController;
 use App\Models\AgenciaViajes\Alternativa;
 use App\Models\AgenciaViajes\AlternativaItem;
 use App\Models\AgenciaViajes\CotizacionPasajero;
@@ -211,5 +212,82 @@ class AlternativaItemPasajeAereoTest extends TestCase
         $response = app(AlternativaItemController::class)->actualizarPasajeAereo(new Request($this->payloadBase()), (string) $creado['id']);
 
         $this->assertSame(422, $response->getStatusCode());
+    }
+    public function test_editar_sin_pax_incluidos_cubre_a_todos_nunca_queda_vacio(): void
+    {
+        $f = $this->crearAlternativaConFamilia();
+        $payload = $this->payloadBase();
+        $payload['pax_incluidos'] = [$f['adulto1']->id];
+        $creado = app(AlternativaItemController::class)->store(new Request($payload), (string) $f['alternativa']->id)
+            ->getData(true)['alternativa_item'];
+
+        $payload['pax_incluidos'] = [];
+        $response = app(AlternativaItemController::class)->actualizarPasajeAereo(new Request($payload), (string) $creado['id']);
+
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertCount(5, AlternativaItem::findOrFail($creado['id'])->pax_incluidos);
+    }
+
+    // ── T-075: un pasaje aéreo nunca se queda sin pasajeros ──────────────────
+
+    /** Lista para actualizarPasajeros(): todos los pasajeros de la cotización salvo $quitar. */
+    private function pasajerosSin(array $f, array $quitar): array
+    {
+        return CotizacionPasajero::where('cotizacion_id', $f['alternativa']->cotizacion_id)->orderBy('id')->get()
+            ->reject(fn ($p) => in_array($p->id, $quitar, true))
+            ->map(fn ($p) => ['id' => $p->id, 'edad' => $p->edad])->values()->all();
+    }
+
+    private function guardarPasajeros(array $f, array $quitar)
+    {
+        return app(CotizacionController::class)->actualizarPasajeros(
+            new Request(['pasajeros' => $this->pasajerosSin($f, $quitar)]),
+            (string) $f['alternativa']->cotizacion_id
+        );
+    }
+
+    private function pasajeSolo(array $f, array $paxIds): AlternativaItem
+    {
+        $payload = $this->payloadBase();
+        $payload['pax_incluidos'] = $paxIds;
+
+        return AlternativaItem::findOrFail(app(AlternativaItemController::class)
+            ->store(new Request($payload), (string) $f['alternativa']->id)->getData(true)['alternativa_item']['id']);
+    }
+
+    public function test_t075_borrar_al_unico_pasajero_de_un_pasaje_responde_422_y_no_toca_nada(): void
+    {
+        $f = $this->crearAlternativaConFamilia();
+        $pasaje = $this->pasajeSolo($f, [$f['adulto2']->id]);
+
+        $response = $this->guardarPasajeros($f, [$f['adulto2']->id]);
+
+        $this->assertSame(422, $response->getStatusCode());
+        $mensaje = $response->getData(true)['message'];
+        $this->assertStringContainsString('Latam', $mensaje);
+        $this->assertStringContainsString('Alternativa 1', $mensaje);
+        $this->assertStringContainsString('pasajero 2 (adulto)', $mensaje);
+        $this->assertSame(5, CotizacionPasajero::where('cotizacion_id', $f['alternativa']->cotizacion_id)->count());
+        $this->assertSame([$f['adulto2']->id], $pasaje->fresh()->pax_incluidos);
+    }
+
+    public function test_t075_si_al_pasaje_le_queda_otro_pasajero_se_guarda_y_lo_conserva(): void
+    {
+        $f = $this->crearAlternativaConFamilia();
+        $pasaje = $this->pasajeSolo($f, [$f['adulto1']->id, $f['adulto2']->id]);
+
+        $response = $this->guardarPasajeros($f, [$f['adulto2']->id]);
+
+        $this->assertSame(200, $response->getStatusCode(), json_encode($response->getData(true)));
+        $this->assertSame([$f['adulto1']->id], $pasaje->fresh()->pax_incluidos);
+    }
+
+    public function test_t075_un_pasaje_de_una_alternativa_descartada_no_bloquea(): void
+    {
+        $f = $this->crearAlternativaConFamilia();
+        $this->pasajeSolo($f, [$f['adulto2']->id]);
+        $f['alternativa']->update(['estado' => 'descartada']);
+
+        $this->assertSame(200, $this->guardarPasajeros($f, [$f['adulto2']->id])->getStatusCode());
     }
 }
