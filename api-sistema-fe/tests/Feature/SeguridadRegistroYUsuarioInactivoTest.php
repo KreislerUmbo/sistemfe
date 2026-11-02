@@ -123,7 +123,9 @@ class SeguridadRegistroYUsuarioInactivoTest extends TestCase
 
         $this->postJson($this->url($tenant, 'auth/login'), ['email' => $activo->email, 'password' => 'password'])
             ->assertOk()
-            ->assertJsonStructure(['access_token']);
+            ->assertJsonStructure(['access_token'])
+            // T-079: la pantalla necesita el id para reconocer lo propio (Créditos: anular el pago propio).
+            ->assertJsonPath('user.id', $activo->id);
 
         $this->postJson($this->url($tenant, 'auth/login'), ['email' => $inactivo->email, 'password' => 'password'])
             ->assertStatus(403)

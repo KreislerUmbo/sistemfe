@@ -8,7 +8,7 @@
 
 Cada línea: ID · qué · estado · depende de · rama o commit. El detalle está en
 `docs/tareas/T-…md` (se borra al cerrar; para una tarea hecha, el commit es la referencia).
-Próximo ID libre: **T-079**.
+Próximo ID libre: **T-080**.
 
 ## Orden de construcción (27-oct-2026)
 
@@ -41,6 +41,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 
 | ID | Módulo | Qué | Estado | Depende de | Rama / commit |
 |---|---|---|---|---|---|
+| T-079 | PLA + CRE + CAJ | El login devuelve el `id` del usuario: Créditos (anular el pago propio) y Caja (cerrar la caja propia desde el Dashboard) no reconocían lo propio. Hallazgo de T-051 | en revisión | — | `fix/T-079-login-id-usuario` |
 | T-077 | AGE | Vuelo propio del pasajero en un solo texto, como observación en el reporte operativo (el vuelo de la agencia no cambia) | por hacer | — | |
 | T-015 | PLA + AGE | Catálogo central de aerolíneas + panel central (Obs. 3) | por hacer | — | |
 | T-016 | AGE | Buscador de aerolíneas, corrección de nombres y aerolínea por defecto (Obs. 3) | por hacer | T-015 | |

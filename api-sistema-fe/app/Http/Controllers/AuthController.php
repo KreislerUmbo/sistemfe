@@ -89,6 +89,10 @@ class AuthController extends Controller
             'token_type' => 'bearer',
             'expires_in' => auth('api')->factory()->getTTL() * 60,
             "user" => [
+                // T-079: sin el id, la pantalla no reconoce lo propio del usuario (Créditos:
+                // usePermisosCredito().usuarioId valía siempre 0 y puedeAnularPago() nunca veía un
+                // pago como suyo).
+                "id" => auth('api')->id(),
                 "fullname" => auth('api')->user()->name,
                 "email" => auth('api')->user()->email,
                 "avatar" => StorageUrl::resolve(auth('api')->user()->avatar),
