@@ -1,6 +1,6 @@
 # Recorrido: usar lo ya cobrado al volver a facturar tras una nota de crédito (T-012)
 
-29-oct-2026, tarea **T-012** (`docs/tareas/T-012-traspaso-cobro-tras-nc.md`), revisión de fallos R2.
+29-oct-2026, tarea **T-012** (unida a main en `7df0bcd`; la tarea se borró al cerrar, git la conserva), revisión de fallos R2.
 Se apoya en el cobro al facturar de T-011 y en la caja por moneda de T-013.
 
 ---
