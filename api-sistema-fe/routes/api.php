@@ -11,6 +11,7 @@ use App\Http\Controllers\AgenciaViajes\ConfiguracionAgenciaController;
 use App\Http\Controllers\AgenciaViajes\ConfiguracionAgenciaPdfController;
 use App\Http\Controllers\AgenciaViajes\ConfiguracionCodigosController;
 use App\Http\Controllers\AgenciaViajes\ConfiguracionCorreoController;
+use App\Http\Controllers\AgenciaViajes\CotizacionActividadController;
 use App\Http\Controllers\AgenciaViajes\CotizacionEnvioController;
 use App\Http\Controllers\AgenciaViajes\ContenidoTourController;
 use App\Http\Controllers\AgenciaViajes\CotizacionController;
@@ -65,6 +66,7 @@ use App\Http\Controllers\Central\TenantRestoreController;
 use App\Http\Controllers\Central\TenantSubscriptionController;
 use App\Http\Controllers\Central\TenantSunatController;
 use App\Http\Controllers\Client\ClientController;
+use App\Http\Controllers\Client\CrmActividadController;
 use App\Http\Controllers\Client\CompanyController;
 use App\Http\Controllers\CommercialQuote\CommercialQuoteAnticipoController;
 use App\Http\Controllers\CommercialQuote\CommercialQuoteController;
@@ -500,6 +502,10 @@ Route::group([
     // 04c: restaurar un cliente eliminado cuando se intenta registrar su mismo documento.
     Route::post("clients/{id}/restaurar", [ClientController::class, 'restore'])->whereNumber('id')
         ->middleware('permission:register_client');
+    // T-050 (CRM C1): "Anotar contacto". Desde la ficha pide edit_client; desde una
+    // cotización, cotizaciones.editar + CotizacionPolicy (lo resuelve el controller).
+    Route::post("clients/{id}/actividades", [CrmActividadController::class, 'store'])->whereNumber('id')
+        ->middleware('permission:edit_client|cotizaciones.editar');
     Route::resource("clients", ClientController::class)
         ->middlewareFor('store', 'permission:register_client')
         ->middlewareFor('update', 'permission:edit_client')
@@ -972,7 +978,12 @@ Route::group([
         ->middleware('permission:cotizaciones.enviar_correo');
     Route::post("alternativas/{id}/enviar-correo", [CotizacionEnvioController::class, 'enviar'])
         ->middleware(['permission:cotizaciones.enviar_correo', 'throttle:10,1']);
-    Route::get("alternativas/{id}/envios-correo", [CotizacionEnvioController::class, 'historial'])
+    // T-050 (CRM C1): enviar por WhatsApp u otro medio = editar la cotización
+    // (CotizacionPolicy::update en el controller). El historial de la cotización
+    // reemplaza a la lista de envíos por correo.
+    Route::post("alternativas/{id}/marcar-enviada", [CotizacionActividadController::class, 'marcarEnviada'])
+        ->middleware('permission:cotizaciones.editar');
+    Route::get("cotizaciones/{id}/actividades", [CotizacionActividadController::class, 'index'])
         ->middleware('permission:cotizaciones.ver|cotizaciones.ver_todas');
 
     Route::post("alternativas/{id}/items", [AlternativaItemController::class, 'store'])

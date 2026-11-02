@@ -24,6 +24,9 @@ está repartido entre cotizaciones, reservas y ventas, y las preferencias no se 
   - **Línea de tiempo**: consultas y cotizaciones (con estado y resultado), reservas, comprobantes
     y pagos, actividades y acciones (hechas y pendientes), en orden de fecha, con enlaces. Paginada
     (20 por vez). Filtro por tipo.
+  - **"Anotar contacto"** junto a la línea de tiempo: el componente `Clientes/AnotarContacto.vue` y
+    `POST clients/{id}/actividades` sin referencia (permiso `edit_client`) ya existen desde T-050;
+    se sacó de la ficha hasta tener dónde ver lo anotado.
   - Resumen arriba: cotizaciones (ganadas / perdidas), viajes realizados, total comprado, último
     viaje.
 - Al crear una cotización para un cliente con perfil, el editor muestra sus preferencias en un

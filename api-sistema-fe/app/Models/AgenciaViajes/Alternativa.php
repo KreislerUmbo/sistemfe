@@ -2,6 +2,7 @@
 
 namespace App\Models\AgenciaViajes;
 
+use App\Models\Client\CrmActividad;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 
@@ -86,6 +87,22 @@ class Alternativa extends Model
         }
 
         return $campos;
+    }
+
+    // T-050 — cada envío al cliente (correo, WhatsApp u otro medio) deja una actividad en el
+    // historial del cliente, también al reenviar.
+    public function registrarEnvio(string $canal, ?string $nota = null): CrmActividad
+    {
+        return CrmActividad::create([
+            'cliente_id' => $this->cotizacion->cliente_id,
+            'referencia_tipo' => CrmActividad::REFERENCIA_COTIZACION,
+            'referencia_id' => $this->cotizacion_id,
+            'alternativa_id' => $this->id,
+            'tipo' => CrmActividad::TIPO_ENVIO,
+            'canal' => $canal,
+            'nota' => $nota,
+            'usuario_id' => auth('api')->id(),
+        ]);
     }
 
     public function cotizacion()

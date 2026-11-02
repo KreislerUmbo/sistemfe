@@ -797,8 +797,11 @@
                                 <span v-if="descargandoCondiciones" class="spinner-border spinner-border-sm me-1"></span>
                                 <i v-else class="fas fa-file-contract me-1"></i>Descargar condiciones generales
                             </button>
-                            <EnviarCorreoCotizacion v-if="!modificacionInfo" :alternativa-id="alternativaActiva.id" :alternativa-nombre="alternativaActiva.nombre"
-                                @enviada="onAlternativaEnviadaPorCorreo" />
+                            <EnviarAlternativa v-if="!modificacionInfo" :alternativa="alternativaActiva" :cliente="cotizacion?.cliente ?? null"
+                                :destino="cotizacion?.destino ?? ''" :total="totalLocal" :descargar-pdf="descargarPdfAlternativa"
+                                @enviada="onAlternativaEnviada" @registrada="historialRef?.recargar()" />
+                            <HistorialActividadesCotizacion v-if="cotizacion" ref="historialRef" :cotizacion-id="cotizacion.id"
+                                :cliente-id="cotizacion.cliente_id ?? null" />
                         </div>
                     </div>
                 </div>
@@ -1399,7 +1402,8 @@ import PromoverProveedorModal from '@/components/AgenciaViajes/PromoverProveedor
 import PromoverHotelProveedorModal from '@/components/AgenciaViajes/PromoverHotelProveedorModal.vue';
 import DestinoTreeSelect from '@/components/AgenciaViajes/DestinoTreeSelect.vue';
 import CalculadoraTipoCambioModal from '@/components/AgenciaViajes/CalculadoraTipoCambioModal.vue';
-import EnviarCorreoCotizacion from '@/components/AgenciaViajes/EnviarCorreoCotizacion.vue';
+import EnviarAlternativa from '@/components/AgenciaViajes/EnviarAlternativa.vue';
+import HistorialActividadesCotizacion from '@/components/AgenciaViajes/HistorialActividadesCotizacion.vue';
 import ModificacionDiferenciaPanel from '@/components/AgenciaViajes/ModificacionDiferenciaPanel.vue';
 import PenalidadPasajeroModal from '@/components/AgenciaViajes/PenalidadPasajeroModal.vue';
 import { useModificacionReserva, mensajeDeError, centavosATexto, motivoDePenalidad, textoMonto } from '@/composables/agencia-viajes/useModificacionReserva';
@@ -1886,11 +1890,13 @@ const cargarCotizacion = async () => {
     if (modificacionInfo.value?.estado === 'abierta') void modificacion.cargar();
 };
 
-// Envío por correo (EnviarCorreoCotizacion.vue): el backend puede haberla
-// pasado de borrador a enviada; se refleja sin recargar toda la cotización.
-const onAlternativaEnviadaPorCorreo = (estado: string) => {
+// Envío al cliente (EnviarAlternativa.vue, T-050: correo, WhatsApp u otro medio): el backend
+// puede haberla pasado de borrador a enviada; se refleja sin recargar toda la cotización.
+const historialRef = ref<InstanceType<typeof HistorialActividadesCotizacion> | null>(null);
+const onAlternativaEnviada = (estado: string, fechaVencimiento?: string | null) => {
     const alternativa = cotizacion.value?.alternativas?.find((a: any) => a.id === alternativaActivaId.value);
     if (alternativa && estado) alternativa.estado = estado as typeof alternativa.estado;
+    if (alternativa && fechaVencimiento !== undefined) alternativa.fecha_vencimiento = fechaVencimiento;
 };
 
 const seleccionarAlternativa = (id: number) => {
@@ -2088,14 +2094,17 @@ const leerMensajeErrorBlob = async (error: any, fallback: string): Promise<strin
     return error?.response?.data?.message ?? fallback;
 };
 
-const descargarPdfAlternativa = async () => {
-    if (!alternativaActiva.value) return;
+// T-050: devuelve si se descargó (el envío por WhatsApp no sigue sin el PDF).
+const descargarPdfAlternativa = async (): Promise<boolean> => {
+    if (!alternativaActiva.value) return false;
     descargandoPdf.value = true;
     try {
         await descargarArchivo(`/alternativas/${alternativaActiva.value.id}/pdf`, `cotizacion-${alternativaActiva.value.nombre}.pdf`);
+        return true;
     } catch (error: any) {
         const mensaje = await leerMensajeErrorBlob(error, 'No se pudo generar el PDF');
         (Swal as TVueSwalInstance).fire('No se pudo generar el PDF', mensaje, 'warning');
+        return false;
     } finally {
         descargandoPdf.value = false;
     }

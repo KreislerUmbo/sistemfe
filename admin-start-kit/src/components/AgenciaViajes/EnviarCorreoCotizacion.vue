@@ -1,34 +1,8 @@
 <template>
     <!-- Envío de la alternativa por correo al cliente (plan-modulo-envio-correo-cotizacion.md §4).
-         Solo aparece si el usuario tiene el permiso y la función está habilitada para la empresa. -->
-    <template v-if="puedeEnviar && habilitado">
-        <button class="btn btn-outline-primary btn-sm w-100" :disabled="preparando" @click="abrir">
-            <span v-if="preparando" class="spinner-border spinner-border-sm me-1"></span>
-            <i v-else class="fas fa-paper-plane me-1"></i>Enviar por correo
-        </button>
-    </template>
-
-    <div v-if="puedeVerHistorial && envios.length > 0" class="small">
-        <a href="#" class="text-muted text-decoration-none" @click.prevent="historialAbierto = !historialAbierto">
-            <i class="fas me-1" :class="historialAbierto ? 'fa-chevron-down' : 'fa-chevron-right'"></i>
-            Envíos por correo ({{ envios.length }})
-        </a>
-        <ul v-if="historialAbierto" class="list-unstyled mt-2 mb-0">
-            <li v-for="envio in envios" :key="envio.id" class="border-start border-2 ps-2 mb-2"
-                :class="envio.estado === 'enviado' ? 'border-success' : 'border-danger'">
-                <div class="d-flex justify-content-between gap-2">
-                    <span>{{ formatFechaHora(envio.fecha) }}</span>
-                    <span class="badge" :class="envio.estado === 'enviado' ? 'bg-success-subtle text-success' : 'bg-danger-subtle text-danger'">
-                        {{ envio.estado === 'enviado' ? 'Enviado' : 'Falló' }}
-                    </span>
-                </div>
-                <div class="text-muted text-break">Para: {{ envio.para.join(', ') }}</div>
-                <div v-if="envio.usuario" class="text-muted">Por: {{ envio.usuario }}</div>
-                <div v-if="envio.error" class="text-danger text-break">{{ envio.error }}</div>
-            </li>
-        </ul>
-    </div>
-
+         T-050: solo el modal; lo abre la opción "Por correo" de EnviarAlternativa.vue, que la muestra
+         si `disponible` (permiso + función habilitada para la empresa). El historial de envíos
+         pasó a HistorialActividadesCotizacion.vue. -->
     <Teleport to="body">
         <div v-if="modalAbierto" class="modal fade show d-block" tabindex="-1" style="background:rgba(0,0,0,.5)">
             <div class="modal-dialog modal-lg modal-dialog-scrollable">
@@ -103,8 +77,7 @@ import { computed, reactive, ref, watch } from 'vue';
 import Swal from 'sweetalert2/dist/sweetalert2.js';
 import { useAuthStore } from '@/stores/auth';
 import { useToast } from '@/composables/useToast';
-import { formatFechaHora } from '@/helpers/fecha';
-import { correoCotizacionService, type BorradorEnvio, type EnvioCorreo } from '@/services/admin/correoCotizacionService';
+import { correoCotizacionService, type BorradorEnvio } from '@/services/admin/correoCotizacionService';
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
 
@@ -115,20 +88,19 @@ const props = defineProps<{
 
 const emit = defineEmits<{
     (e: 'enviada', estado: string): void;
+    // Exitoso o fallido: el historial de la cotización se vuelve a pedir.
+    (e: 'intentado'): void;
 }>();
 
 const auth = useAuthStore();
 const toast = useToast();
 
 const puedeEnviar = computed(() => auth.isPermitedRoute('cotizaciones.enviar_correo'));
-const puedeVerHistorial = computed(() => auth.isPermitedRoute('cotizaciones.ver|cotizaciones.ver_todas'));
 
 // El interruptor por empresa se consulta una sola vez por sesión de la pantalla.
 const habilitado = ref(false);
 let estadoConsultado = false;
-
-const envios = ref<EnvioCorreo[]>([]);
-const historialAbierto = ref(false);
+const disponible = computed(() => puedeEnviar.value && habilitado.value);
 
 const modalAbierto = ref(false);
 const preparando = ref(false);
@@ -163,15 +135,6 @@ const consultarEstado = async () => {
         habilitado.value = (await correoCotizacionService.estado()).habilitado;
     } catch {
         habilitado.value = false;
-    }
-};
-
-const cargarHistorial = async () => {
-    if (!puedeVerHistorial.value || !props.alternativaId) return;
-    try {
-        envios.value = await correoCotizacionService.historial(props.alternativaId);
-    } catch {
-        envios.value = [];
     }
 };
 
@@ -215,19 +178,16 @@ const enviar = async () => {
         modalAbierto.value = false;
         toast.success(resultado.message);
         emit('enviada', resultado.estado_alternativa);
-        historialAbierto.value = true;
     } catch (error: any) {
         (Swal as TVueSwalInstance).fire('No se envió el correo', mensajeError(error, 'Intenta de nuevo en unos minutos.'), 'warning');
     } finally {
         enviando.value = false;
         // También un fallo queda en el historial.
-        await cargarHistorial();
+        emit('intentado');
     }
 };
 
-watch(() => props.alternativaId, () => {
-    historialAbierto.value = false;
-    consultarEstado();
-    cargarHistorial();
-}, { immediate: true });
+watch(() => props.alternativaId, consultarEstado, { immediate: true });
+
+defineExpose({ disponible, preparando, abrir });
 </script>
