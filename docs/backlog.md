@@ -86,6 +86,8 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 
 | Módulo | Qué | Origen |
 |---|---|---|
+| POR | Portal, página de Sistemas: con el plan anual muestra «Facturado S/ undefined al año»; `views/portal/Sistemas.vue:120` usa `sistema.precioAnualTotal`, que no existe (los planes tienen `precioAnual`). Arreglo de una línea; decidir si es el total anual o el precio mensual del plan anual | `type-check`, 02-nov-2026 |
+| TRA | Limpiar los 46 errores de `npm run type-check` (admin-start-kit) para dejarlo en cero y que un error nuevo se note: 17 en Manuales y videos (`views/recursos/`, listas sin tipo), 11 en el portal, 7 restos del template Rizz (`helpers/fake-backend.ts`, `router/index.ts`), 7 de «puede venir vacío» (empresa, ventas, paquetes y tours de Agencia), 4 de subida de imágenes (usuarios, categorías, productos). Revisar `views/sale/index.vue:443` (compara id texto con número: el chip «Categoría» del filtro podría no salir) | `type-check`, 02-nov-2026 |
 | AGE | Errores de validación en inglés en los demás controllers de Agencia (p. ej. `AlternativaItemController`, `ConfiguracionAgenciaController`): aplicarles el trait `ValidaEnEspanol` de T-033 | T-033, 02-nov-2026 |
 | AGE | «+ Nueva» alternativa prellena «Valor nuevo» con la sugerencia SUNAT, así que cada alternativa registra un `TipoCambioAgencia` aunque ya haya uno igual del día; con el orden de T-033 ese prellenado ya no hace falta | T-033, 02-nov-2026 |
 | AGE | Facturar una reserva con penalidad o «Ajuste» de una modificación: quedan sin pasajeros (R-AGE-05), la reserva muestra «Servicios: 1 pendiente(s)» y la pantalla de facturar no explica que hay que sumarlos a mano a una factura (lo pedía la nota de T-005) | T-007, 30-oct-2026 |
