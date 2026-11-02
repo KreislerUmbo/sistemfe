@@ -6,6 +6,9 @@ use App\Http\Controllers\AgenciaViajes\CotizacionActividadController;
 use App\Http\Controllers\AgenciaViajes\CotizacionEnvioController;
 use App\Http\Controllers\AgenciaViajes\ReservaController;
 use App\Http\Controllers\Client\CrmAccionController;
+use App\Http\Controllers\Client\CrmPendientesController;
+use App\Services\Dashboard\DashboardService;
+use App\Services\Tenancy\GiroActual;
 use App\Models\AgenciaViajes\Alternativa;
 use App\Models\AgenciaViajes\ConfiguracionAgencia;
 use App\Models\AgenciaViajes\Reserva;
@@ -186,6 +189,7 @@ class CrmAccionTest extends TestCase
         $datos = $this->controller()->opciones()->getData(true);
 
         $this->assertSame(3, $datos['dias_proximo_contacto']);
+        $this->assertSame(auth('api')->id(), $datos['usuario_id']);
         $this->assertNotContains($inactivo->id, array_column($datos['responsables'], 'id'));
         $this->assertContains('llamar', array_column($datos['tipos'], 'valor'));
     }
@@ -450,5 +454,79 @@ class CrmAccionTest extends TestCase
 
         $accion->update(['hecha_en' => now()]);
         $this->assertSame(422, $this->controller()->update(new Request(['fecha' => '2026-11-05']), (string) $accion->id)->getStatusCode());
+    }
+
+    // ── CA4: "Mis pendientes de hoy" y la bandeja de Seguimiento ─────
+
+    /** Acciones de $yo y de otro en distintas fechas; devuelve [ids por nombre]. */
+    private function pendientesVariados(User $yo, User $otro): array
+    {
+        $alternativa = $this->alternativa($yo->id);
+
+        return [
+            'manana' => $this->accion($alternativa, $yo, '2026-11-03')->id,
+            'hoy' => $this->accion($alternativa, $yo, self::HOY)->id,
+            'atrasada' => $this->accion($alternativa, $yo, '2026-10-28', ['tipo' => 'cobrar_saldo'])->id,
+            'lejana' => $this->accion($alternativa, $yo, '2026-11-20')->id,
+            'hecha' => $this->accion($alternativa, $yo, '2026-10-30', ['hecha_en' => now()])->id,
+            'de_otro' => $this->accion($alternativa, $otro, self::HOY)->id,
+        ];
+    }
+
+    public function test_mis_pendientes_de_hoy_en_inicio_solo_las_del_usuario_hasta_hoy_atrasadas_primero(): void
+    {
+        $this->app->instance(GiroActual::class, new GiroActual('agencia_viajes'));
+        $yo = $this->usuario();
+        $ids = $this->pendientesVariados($yo, $this->usuario(sesion: false));
+
+        $bloque = app(DashboardService::class)->inicio($yo->fresh())['bloques']['pendientes'];
+
+        $this->assertSame(["crm-{$ids['atrasada']}", "crm-{$ids['hoy']}"], array_column($bloque['filas'], 'id'));
+        $this->assertSame(['atrasadas', 'hoy'], array_column($bloque['filas'], 'bloque'));
+        $this->assertSame('crm', $bloque['filas'][0]['fuente']);
+        $this->assertSame('Ana Pérez', $bloque['filas'][0]['cliente']['nombre']);
+        $this->assertSame('cotizacion', $bloque['filas'][0]['referencia']['tipo']);
+        $this->assertStringStartsWith('CDKM-', $bloque['filas'][0]['referencia']['codigo']);
+        $this->assertTrue($bloque['filas'][0]['accion']['puede_gestionar']);
+        $this->assertFalse($bloque['puede_ver_todos']);
+    }
+
+    public function test_seguimiento_trae_las_propias_en_tres_bloques_hasta_siete_dias(): void
+    {
+        $yo = $this->usuario();
+        $ids = $this->pendientesVariados($yo, $this->usuario(sesion: false));
+
+        $datos = app(CrmPendientesController::class)->index(new Request())->getData(true);
+
+        $this->assertSame(self::HOY, $datos['hoy']);
+        $this->assertSame('2026-11-09', $datos['hasta']);
+        $this->assertSame(
+            ["crm-{$ids['atrasada']}", "crm-{$ids['hoy']}", "crm-{$ids['manana']}"],
+            array_column($datos['filas'], 'id'),
+        );
+        $this->assertSame(['atrasadas', 'hoy', 'proximos'], array_column($datos['filas'], 'bloque'));
+
+        $cobrar = app(CrmPendientesController::class)->index(new Request(['tipo' => 'cobrar_saldo']))->getData(true);
+        $this->assertSame(["crm-{$ids['atrasada']}"], array_column($cobrar['filas'], 'id'));
+    }
+
+    public function test_de_todos_o_de_otro_responsable_solo_con_ver_todas(): void
+    {
+        $otro = $this->usuario(sesion: false);
+        $yo = $this->usuario();
+        $ids = $this->pendientesVariados($yo, $otro);
+        $controller = app(CrmPendientesController::class);
+
+        $this->assertSame(403, $this->codigo(fn () => $controller->index(new Request(['ambito' => 'todos']))));
+        $this->assertSame(403, $this->codigo(fn () => $controller->index(new Request(['ambito' => 'todos', 'responsable_id' => $otro->id]))));
+
+        $this->actuarComo($this->usuario(['cotizaciones.ver_todas'], sesion: false));
+        $todos = $controller->index(new Request(['ambito' => 'todos']))->getData(true);
+        $this->assertContains("crm-{$ids['de_otro']}", array_column($todos['filas'], 'id'));
+        $this->assertCount(4, $todos['filas']);
+        $this->assertTrue($todos['puede_ver_todos']);
+
+        $delOtro = $controller->index(new Request(['ambito' => 'todos', 'responsable_id' => $otro->id]))->getData(true);
+        $this->assertSame(["crm-{$ids['de_otro']}"], array_column($delOtro['filas'], 'id'));
     }
 }

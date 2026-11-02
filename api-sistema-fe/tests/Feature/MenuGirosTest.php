@@ -102,12 +102,12 @@ class MenuGirosTest extends TestCase
         $this->assertSame($this->fixture('menu_creditos'), $this->arbol($this->superAdmin(), 'creditos', 't-menu-creditos'));
     }
 
-    // CA1 — el árbol aprobado en la obs. 17 (sin Seguimiento ni Reportes comerciales: los agregan T-051 y T-062).
+    // CA1 — el árbol aprobado en la obs. 17 (Seguimiento desde T-051; Reportes comerciales lo agrega T-062).
     public function test_agencia_ve_el_arbol_de_la_obs_17(): void
     {
         $esperado = [
             'Inicio',
-            ['VENTAS' => ['Clientes', 'Cotizaciones', 'Venta directa']],
+            ['VENTAS' => ['Seguimiento', 'Clientes', 'Cotizaciones', 'Venta directa']],
             ['VIAJES' => ['Reservas', 'Salidas operativas', 'Reporte operativo']],
             ['FINANZAS' => [
                 ['Comprobantes' => ['Mis ventas', 'Notas de crédito/débito']],
@@ -149,7 +149,7 @@ class MenuGirosTest extends TestCase
 
         $this->assertSame([
             'Inicio',
-            ['VENTAS' => ['Clientes', 'Cotizaciones', 'Venta directa']],
+            ['VENTAS' => ['Seguimiento', 'Clientes', 'Cotizaciones', 'Venta directa']],
             ['VIAJES' => ['Reservas', 'Salidas operativas', 'Reporte operativo']],
             ['FINANZAS' => [['Caja' => ['Turno activo']]]],
             ['AYUDA' => ['Manuales y videos']],

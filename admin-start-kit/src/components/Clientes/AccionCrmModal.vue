@@ -73,7 +73,6 @@
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue';
 import CampoFecha from '@/components/CampoFecha.vue';
-import { useAuthStore } from '@/stores/auth';
 import { useToast } from '@/composables/useToast';
 import { formatDiaCorto, hoyPeru } from '@/helpers/fecha';
 import { TIPOS_CONTACTO, type TipoContactoManual } from '@/services/admin/crmActividadService';
@@ -86,7 +85,6 @@ type Modo = 'agendar' | 'hecha' | 'reprogramar';
 
 const emit = defineEmits<{ (e: 'guardado'): void }>();
 
-const auth = useAuthStore();
 const toast = useToast();
 const hoy = hoyPeru();
 
@@ -136,7 +134,7 @@ const cargarOpciones = async (): Promise<boolean> => {
 const reiniciarNueva = (base?: Partial<NuevaAccion>) => {
     nueva.tipo = base?.tipo ?? 'llamar';
     nueva.fecha = base?.fecha ?? fechaPropuesta(opciones.value?.dias_proximo_contacto ?? 2);
-    nueva.responsable_id = base?.responsable_id ?? Number(auth.user?.id ?? 0);
+    nueva.responsable_id = base?.responsable_id ?? opciones.value?.usuario_id ?? 0;
     nueva.descripcion = base?.descripcion ?? '';
 };
 

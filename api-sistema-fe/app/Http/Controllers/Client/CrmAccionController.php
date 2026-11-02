@@ -37,6 +37,9 @@ class CrmAccionController extends Controller
             : null;
 
         return response()->json([
+            // El usuario del login guardado en el navegador no trae su id: la pantalla lo toma de
+            // acá para proponer "a nombre de quien envía".
+            'usuario_id' => auth('api')->id(),
             'dias_proximo_contacto' => $dias ?? self::DIAS_PROXIMO_CONTACTO_DEFECTO,
             'tipos' => collect(CrmAccion::TIPOS)->map(fn ($etiqueta, $valor) => ['valor' => $valor, 'etiqueta' => $etiqueta])->values(),
             'responsables' => User::query()
@@ -75,7 +78,7 @@ class CrmAccionController extends Controller
         }
 
         $acciones = $consulta->orderBy('fecha')->orderBy('id')->get()
-            ->map(fn (CrmAccion $a) => $this->fila($a, $usuario));
+            ->map(fn (CrmAccion $a) => $this->acciones->presentar($a, $usuario));
 
         return response()->json(['acciones' => $acciones]);
     }
@@ -191,25 +194,8 @@ class CrmAccionController extends Controller
         ]);
     }
 
-    /** @return array<string, mixed> */
-    private function fila(CrmAccion $accion, User $usuario): array
-    {
-        return [
-            'id' => $accion->id,
-            'cliente_id' => $accion->cliente_id,
-            'referencia_tipo' => $accion->referencia_tipo,
-            'referencia_id' => $accion->referencia_id,
-            'tipo' => $accion->tipo,
-            'tipo_etiqueta' => $accion->etiquetaTipo(),
-            'descripcion' => $accion->descripcion,
-            'fecha' => $accion->fecha->toDateString(),
-            'responsable' => ['id' => $accion->responsable_id, 'nombre' => self::nombre($accion->responsable)],
-            'puede_gestionar' => $this->acciones->puedeGestionar($usuario, $accion),
-        ];
-    }
-
     private static function nombre(?User $usuario): string
     {
-        return trim(($usuario?->name ?? '') . ' ' . ($usuario?->surname ?? ''));
+        return AccionesCrm::nombreUsuario($usuario);
     }
 }

@@ -228,7 +228,7 @@ final class DashboardTest extends CreditosTestCase
         $this->app->instance(GiroActual::class, new GiroActual('agencia_viajes'));
         $this->app->forgetInstance(DashboardService::class);
         $agencia = $this->inicio($this->usuario(['list_sale', 'cotizaciones.ver_todas', 'reservas.ver_todas']));
-        $this->assertSame(['ventas', 'ventas_dias', 'sunat', 'por_cobrar', 'cotizaciones', 'proximos'], array_keys($agencia['bloques']));
+        $this->assertSame(['ventas', 'ventas_dias', 'sunat', 'por_cobrar', 'cotizaciones', 'pendientes', 'proximos'], array_keys($agencia['bloques']));
         $this->assertSame('agencia_viajes', $agencia['giro']);
     }
 }

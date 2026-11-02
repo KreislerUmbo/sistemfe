@@ -174,6 +174,33 @@ class AccionesCrm
         });
     }
 
+    /**
+     * Una acción pendiente como la ve la pantalla (cotización, reserva, ficha, bandeja).
+     * Necesita la relación responsable cargada.
+     *
+     * @return array<string, mixed>
+     */
+    public function presentar(CrmAccion $accion, User $usuario): array
+    {
+        return [
+            'id' => $accion->id,
+            'cliente_id' => $accion->cliente_id,
+            'referencia_tipo' => $accion->referencia_tipo,
+            'referencia_id' => $accion->referencia_id,
+            'tipo' => $accion->tipo,
+            'tipo_etiqueta' => $accion->etiquetaTipo(),
+            'descripcion' => $accion->descripcion,
+            'fecha' => $accion->fecha->toDateString(),
+            'responsable' => ['id' => $accion->responsable_id, 'nombre' => self::nombreUsuario($accion->responsable)],
+            'puede_gestionar' => $this->puedeGestionar($usuario, $accion),
+        ];
+    }
+
+    public static function nombreUsuario(?User $usuario): string
+    {
+        return trim(($usuario?->name ?? '') . ' ' . ($usuario?->surname ?? ''));
+    }
+
     public function puedeGestionar(User $usuario, CrmAccion $accion): bool
     {
         if ((int) $accion->responsable_id === (int) $usuario->id) {

@@ -14,6 +14,11 @@
                     </h5>
                     <h5 v-else class="fw-bold mb-1"><i class="fas fa-route me-2 text-primary"></i>Cotización {{ cotizacion.codigo }}</h5>
                     <div class="fw-semibold text-dark mb-2"><i class="fas fa-user me-2 text-muted" style="font-size:12px"></i>{{ cotizacion.cliente?.full_name ?? 'Sin cliente' }}</div>
+                    <!-- T-051: la próxima acción pendiente de la cotización (la lista está en el panel de la alternativa). -->
+                    <div v-if="proximaAccion" class="small mb-2" :class="proximaAccion.fecha < hoyPeru() ? 'text-danger' : 'text-muted'">
+                        <i class="fas fa-tasks me-1"></i>Próxima acción: {{ proximaAccion.tipo_etiqueta.toLowerCase() }} el
+                        {{ formatDiaCorto(proximaAccion.fecha) }} ({{ proximaAccion.responsable.nombre.split(' ')[0] }})
+                    </div>
                 </div>
                 <router-link v-if="modificacionInfo" :to="`/agencia-viajes/reservas/${modificacionInfo.reserva_id}`" class="btn btn-outline-secondary btn-sm">
                     <i class="fas fa-arrow-left me-2"></i>Volver a la reserva
@@ -1426,7 +1431,7 @@ import { servicioService } from '@/services/admin/servicioService';
 import { bibliotecaCotizadorService, type BibliotecaTipo } from '@/services/admin/bibliotecaCotizadorService';
 import { reservaService } from '@/services/admin/reservaService';
 import { useAgenciaViajesCatalogosStore } from '@/stores/agenciaViajesCatalogos';
-import { formatFecha, formatFechaHora, sumarDiasISO } from '@/helpers/fecha';
+import { formatDiaCorto, formatFecha, formatFechaHora, hoyPeru, sumarDiasISO } from '@/helpers/fecha';
 import { guiaService } from '@/services/admin/guiaService';
 import { tipoCambioAgenciaService } from '@/services/admin/tipoCambioAgenciaService';
 import type { Cotizacion, Alternativa, AlternativaItem, ProveedorTarifa, OpcionMayorista, OpcionMayoristaTour, OpcionMayoristaOpcional, OpcionHotelTarifa, Proveedor, ProveedorTipo, BibliotecaResultado, ConfiguracionAgencia, DestinoServicio, GuiaTarifa, Servicio, TipAfeIgv, DestinoTributario, TemporadaDesactualizada } from '@/types/agencia-viajes';
@@ -1899,6 +1904,7 @@ const cargarCotizacion = async () => {
 const historialRef = ref<InstanceType<typeof HistorialActividadesCotizacion> | null>(null);
 // T-051: próximas acciones de la cotización (la llamada propuesta al enviar, las agendadas).
 const accionesRef = ref<InstanceType<typeof AccionesPendientes> | null>(null);
+const proximaAccion = computed(() => accionesRef.value?.proxima ?? null);
 const onAlternativaEnviada = (estado: string, fechaVencimiento?: string | null) => {
     const alternativa = cotizacion.value?.alternativas?.find((a: any) => a.id === alternativaActivaId.value);
     if (alternativa && estado) alternativa.estado = estado as typeof alternativa.estado;

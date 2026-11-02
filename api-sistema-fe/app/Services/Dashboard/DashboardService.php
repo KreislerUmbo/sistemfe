@@ -12,6 +12,7 @@ use App\Models\Sale\Sale;
 use App\Models\User;
 use App\Services\AgenciaViajes\AsignacionOperativa;
 use App\Services\Creditos\Dinero;
+use App\Services\Crm\BandejaPendientes;
 use App\Services\CreditSummaryCalculator;
 use App\Services\Tenancy\GiroActual;
 use Carbon\CarbonImmutable;
@@ -42,6 +43,7 @@ class DashboardService
     public function __construct(
         private readonly GiroActual $giro,
         private readonly CreditSummaryCalculator $creditos,
+        private readonly BandejaPendientes $bandeja,
     ) {
     }
 
@@ -63,6 +65,7 @@ class DashboardService
         }
         if ($agencia && $usuario->canAny(['cotizaciones.ver', 'cotizaciones.ver_todas'])) {
             $bloques['cotizaciones'] = $this->cotizaciones($hoy);
+            $bloques['pendientes'] = $this->pendientes($usuario, $hoy);
         }
         if ($agencia && $usuario->canAny(['reservas.ver', 'reservas.ver_todas'])) {
             $bloques['proximos'] = $this->proximos($hoy);
@@ -303,6 +306,21 @@ class DashboardService
     }
 
     // ── Agencia de viajes ──
+
+    /**
+     * T-051 (CRM C2) — "Mis pendientes de hoy": las acciones del usuario con fecha hasta hoy, las
+     * atrasadas primero (la misma bandeja que la pantalla Seguimiento). "De todos" lo pide la
+     * pantalla a crm/pendientes; acá solo se informa si el usuario puede.
+     *
+     * @return array<string, mixed>
+     */
+    private function pendientes(User $usuario, CarbonImmutable $hoy): array
+    {
+        return [
+            'filas' => $this->bandeja->filas($usuario, $hoy, $hoy, ['responsable_id' => $usuario->id]),
+            'puede_ver_todos' => $usuario->can('cotizaciones.ver_todas'),
+        ];
+    }
 
     /**
      * Cotizaciones creadas este mes (las propias si el usuario no ve todas) por estado resumido,

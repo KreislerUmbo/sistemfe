@@ -37,7 +37,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
 import CampoFecha from '@/components/CampoFecha.vue';
-import { useAuthStore } from '@/stores/auth';
 import { formatDiaCorto, hoyPeru } from '@/helpers/fecha';
 import { crmAccionService, fechaPropuesta, type OpcionesAcciones, type ProximaAccion } from '@/services/admin/crmAccionService';
 
@@ -48,20 +47,20 @@ withDefaults(defineProps<{
 
 const modelo = defineModel<ProximaAccion>({ default: null });
 
-const auth = useAuthStore();
 const opciones = ref<OpcionesAcciones | null>(null);
 const editando = ref(false);
 const hoy = hoyPeru();
 
 const nombreResponsable = computed(() => {
     const id = modelo.value?.responsable_id;
-    if (id === auth.user?.id) return 'tú';
+    if (id === opciones.value?.usuario_id) return 'tú';
     return opciones.value?.responsables.find((r) => r.id === id)?.nombre ?? '…';
 });
 
 const proponer = () => {
-    if (!auth.user?.id) return;
-    modelo.value = { fecha: fechaPropuesta(opciones.value?.dias_proximo_contacto ?? 2), responsable_id: auth.user.id };
+    const yo = opciones.value?.usuario_id;
+    if (!yo) return;
+    modelo.value = { fecha: fechaPropuesta(opciones.value?.dias_proximo_contacto ?? 2), responsable_id: yo };
 };
 
 onMounted(async () => {

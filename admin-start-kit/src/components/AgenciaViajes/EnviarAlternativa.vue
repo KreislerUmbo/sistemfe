@@ -116,17 +116,17 @@ let propuestaArmada = false;
 const armarPropuesta = async () => {
     if (propuestaArmada) return;
     propuestaArmada = true;
-    if (props.hayAccionesPendientes || !auth.user?.id) {
+    if (props.hayAccionesPendientes) {
         proximaAccion.value = null;
         return;
     }
-    let dias = 2;
     try {
-        dias = (await crmAccionService.opciones()).dias_proximo_contacto;
+        const opciones = await crmAccionService.opciones();
+        proximaAccion.value = { fecha: fechaPropuesta(opciones.dias_proximo_contacto), responsable_id: opciones.usuario_id };
     } catch {
-        // Sin opciones se propone igual con el valor por defecto.
+        // Sin opciones no se sabe a nombre de quién: se envía sin proponer (no es obligatoria).
+        proximaAccion.value = null;
     }
-    proximaAccion.value = { fecha: fechaPropuesta(dias), responsable_id: Number(auth.user.id) };
 };
 
 const olvidarPropuesta = () => {

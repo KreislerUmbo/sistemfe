@@ -68,6 +68,7 @@ use App\Http\Controllers\Central\TenantSunatController;
 use App\Http\Controllers\Client\ClientController;
 use App\Http\Controllers\Client\CrmActividadController;
 use App\Http\Controllers\Client\CrmAccionController;
+use App\Http\Controllers\Client\CrmPendientesController;
 use App\Http\Controllers\Client\CompanyController;
 use App\Http\Controllers\CommercialQuote\CommercialQuoteAnticipoController;
 use App\Http\Controllers\CommercialQuote\CommercialQuoteController;
@@ -522,6 +523,10 @@ Route::group([
         ->middleware('permission:list_client|edit_client|cotizaciones.ver|cotizaciones.ver_todas|reservas.ver|reservas.ver_todas');
     Route::post("crm-acciones/{id}/hecha", [CrmAccionController::class, 'marcarHecha'])->whereNumber('id')
         ->middleware('permission:list_client|edit_client|cotizaciones.ver|cotizaciones.ver_todas|reservas.ver|reservas.ver_todas');
+    // T-051: bandeja de pendientes (pantalla Seguimiento, mismo permiso que Cotizaciones).
+    // "De todos" o de otro responsable: cotizaciones.ver_todas (en el controller).
+    Route::get("crm/pendientes", [CrmPendientesController::class, 'index'])
+        ->middleware('permission:cotizaciones.ver|cotizaciones.ver_todas');
     Route::resource("clients", ClientController::class)
         ->middlewareFor('store', 'permission:register_client')
         ->middlewareFor('update', 'permission:edit_client')
