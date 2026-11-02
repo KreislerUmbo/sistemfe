@@ -85,7 +85,6 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 
 | Módulo | Qué | Origen |
 |---|---|---|
-| AGE | Enviar una cotización por correo autoriza con `CotizacionPolicy::view` (WhatsApp y otro medio piden `update`); desde T-051 ese envío además crea la acción «Llamar». Decidir si enviar equivale a editar | hallazgo de T-051, 02-nov-2026 |
 | POR | Portal, página de Sistemas: con el plan anual muestra «Facturado S/ undefined al año»; `views/portal/Sistemas.vue:120` usa `sistema.precioAnualTotal`, que no existe (los planes tienen `precioAnual`). Arreglo de una línea; decidir si es el total anual o el precio mensual del plan anual | `type-check`, 02-nov-2026 |
 | TRA | Limpiar los 46 errores de `npm run type-check` (admin-start-kit) para dejarlo en cero y que un error nuevo se note: 17 en Manuales y videos (`views/recursos/`, listas sin tipo), 11 en el portal, 7 restos del template Rizz (`helpers/fake-backend.ts`, `router/index.ts`), 7 de «puede venir vacío» (empresa, ventas, paquetes y tours de Agencia), 4 de subida de imágenes (usuarios, categorías, productos). Revisar `views/sale/index.vue:443` (compara id texto con número: el chip «Categoría» del filtro podría no salir) | `type-check`, 02-nov-2026 |
 | CLI | `POST clients/{id}/actividades` con `referencia_tipo=cotizacion` en un tenant sin Agencia da 500 (no existe `cotizaciones`) en vez de 422; hoy ninguna pantalla lo envía | T-050, 02-nov-2026 |
