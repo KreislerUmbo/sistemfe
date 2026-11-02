@@ -8,7 +8,7 @@
 
 Cada línea: ID · qué · estado · depende de · rama o commit. El detalle está en
 `docs/tareas/T-…md` (se borra al cerrar; para una tarea hecha, el commit es la referencia).
-Próximo ID libre: **T-078**.
+Próximo ID libre: **T-079**.
 
 ## Orden de construcción (27-oct-2026)
 
@@ -26,7 +26,7 @@ Próximo ID libre: **T-078**.
 | 3 | ~~T-009 → T-010 → T-011 → T-014 → T-013 → T-012~~ hechas | Cobro y caja (orden aprobado el 25-oct). T-011 no se despliega con dólares sin T-013 |
 | 4 | ~~T-002 → T-003 → T-004 → T-005 → T-006 → T-072 → T-073 → T-007~~ hechas | Modificar reserva: hoy no se puede quitar un pasajero y el agregado no cambia el precio |
 | 4b | ~~T-076 → T-075 → T-074~~ hechas 01-nov (recorrido 19) | Salió de la prueba de Modificar reserva (01-nov): el pasaje aéreo cobra cargos y fee una sola vez por boleto (precio de venta mal con 2 o más pasajeros), un boleto que se queda sin pasajeros, la cotización reservada editable |
-| 5 | T-063 → T-033 → T-050 → T-051 → T-052 → T-059 → T-061 → T-053 | Menú nuevo y CRM base (T-033 antes: "Nueva consulta" crea la cotización con su alternativa) |
+| 5 | ~~T-063~~ hecha → T-078 → T-033 → T-050 → T-051 → T-052 → T-059 → T-061 → T-053 | Menú nuevo y CRM base (T-033 antes: "Nueva consulta" crea la cotización con su alternativa) |
 | 6 | T-041 → T-040 → T-055 → T-057 → T-058 → T-077 → T-044 → T-017 → T-018 | Operación diaria de Agencia |
 | 7 | T-045 → T-046 → T-047 → T-048 → T-049 | Venta directa (T-046 necesita T-017; T-048, el cobro de la ola 3) |
 | 8 | T-032 → T-034 → T-019 → T-035 → T-036 → T-031 → T-022 → T-020 → T-021 → T-023 → T-037 → T-015 → T-016 | Cotizador más rápido y claro, PDF de cotización, aerolíneas |
@@ -78,7 +78,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 | T-060 | CLI + AGE | CRM C5: la ficha del cliente con preferencias del viajero y línea de tiempo | por hacer | T-050, T-051 | |
 | T-061 | CLI + AGE | CRM: pasar el trabajo abierto de un usuario que se va | por hacer | T-051 | |
 | T-062 | AGE | CRM C6b: reportes de conversión, origen, vendedor y motivos | por hacer | T-052, T-059 | |
-| T-063 | PLA + AGE | Menú de Agencia por tareas del negocio (Ventas, Viajes, Finanzas, Catálogos, Administración) | por hacer | — | |
+| T-078 | AGE + PLA | Roles de Agencia (los 4 del seeder) sin `list_client`, `list_advance` ni `register_recurso`: con el menú de T-063 no ven Clientes, Anticipos ni Manuales; el dueño no puede dárselos (`EscaladaPermisos`). Agregarlos en `AgenciaViajesRolesSeeder` y aplicarlo a dakamu. Reparto por rol: confirmar con el usuario | por hacer | T-063 | |
 | T-065 | CLI + VEN | Varias direcciones por cliente y elegir la dirección al emitir (H61) | por hacer | T-064 | |
 
 ## Por analizar
@@ -177,6 +177,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 
 | ID | Módulo | Qué | Commit |
 |---|---|---|---|
+| T-063 | PLA + AGE | Menú de Agencia por tareas del negocio (obs. 17): grupos VENTAS, VIAJES, FINANZAS, CATÁLOGOS, ADMINISTRACIÓN y AYUDA en `MenuItemsSeeder::menuAgencia()`; los grupos de retail llevan `agencia_viajes` en `giros_excluidos`; las pantallas comunes son ítems `ag_*` con la misma ruta y permiso. Retail y créditos sin cambios (foto JSON del árbol en `tests/Fixtures/menu_*.json`, `MenuGirosTest`). «Nueva Venta» oculta en Mis ventas de agencia. **Al desplegar:** `deploy.sh` paso 7 corre el seeder y limpia la caché del menú; revisar que no avise falla. Solo cambia dakamu. Implementada por Sonnet (Playwright), revisada por Opus; retail probado por el usuario. Salió T-078 | ver merge de `feat/T-063-menu-agencia` |
 | T-074 | AGE | Cotización reservada en solo lectura: la pestaña dice «Reservada · código» (o «Reemplazada · código», con la reserva que la reemplazó) y enlaza a la reserva; el listado muestra la alternativa y el código (`Cotizacion::alternativaReservada()`, sin consultas extra); un único computed `alternativaSoloLectura` en `cotizador/editar.vue` bloquea precio, descuentos, agregar, eliminar y mover (no en el borrador de una modificación); «Ver detalle» del pasaje aéreo y del ítem manual con la prop `soloLectura`. Implementada por Sonnet (Playwright en agencia-demo), revisada por Opus; CA5 y el ítem manual probados por el usuario. Sin migraciones | ver merge de `feat/T-074-cotizacion-reservada-solo-lectura` |
 | T-075 | AGE | Un pasaje aéreo nunca se queda sin pasajeros: borrar en la cotización (o en la copia de una modificación) al único pasajero de un boleto responde 422 sin tocar nada y nombra el boleto (`CotizacionController::pasajesQueQuedanSinPasajeros()`); las alternativas descartadas o reemplazadas y los pasajes viejos con `[]` no bloquean. CA3 sin test nuevo: el caso ya no se alcanza (respaldo `sin_pasajeros` con su test). Prueba básica del usuario en agencia-demo; la seguirá revisando con más casos. Sin migraciones | ver merge de `fix/T-075-boleto-sin-pasajeros` |
 | T-076 | AGE | Pasaje aéreo: cargos y fee **por pasajero** (un cargo con «no aplica a infantes» va solo por adultos y niños; el infante paga fee). Los pasajes guardados antes no cambian de precio: la marca `cotizacion_pasaje_aereo.montos_por_pasajero` (false en los existentes) decide la fórmula; al editar uno viejo, el check «Calcular por pasajero» lo pasa a la nueva (hay que volver a cargar los montos). «Ya tiene pasaje <aerolínea>» junto a cada pasajero; un pasaje nuevo marca solo a quienes aún no tienen. **Antes de desplegar: `tenants:migrate-verticales`** (`cotizacion_pasaje_aereo.montos_por_pasajero`). Implementada por Sonnet (prueba en agencia-demo con Playwright), revisada por Opus | ver merge de `feat/T-076-pasaje-aereo-por-pasajero` |
