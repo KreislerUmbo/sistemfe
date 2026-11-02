@@ -318,6 +318,8 @@ export type Cotizacion = {
   // backend), no una columna real: Cotizacion no tiene 'estado' propio,
   // vive en cada Alternativa + la Reserva una vez aceptada. Solo viene en
   // CotizacionController::index(); no asumir que otros endpoints lo traen.
+  // T-074 — alternativa reservada y código de su reserva (solo en el listado).
+  alternativa_reservada?: { nombre: string; reserva_id: number | null; reserva_codigo: string | null } | null;
   estado_resumen?: 'borrador' | 'enviada' | 'vencida' | 'reservada' | 'anulada' | 'descartada';
 };
 
@@ -337,7 +339,7 @@ export type Alternativa = {
   id: number;
   cotizacion_id: number;
   nombre: string;
-  estado: 'borrador' | 'enviada' | 'aceptada' | 'descartada';
+  estado: 'borrador' | 'enviada' | 'aceptada' | 'descartada' | 'reemplazada';
   moneda_cotizacion: 'PEN' | 'USD';
   tipo_cambio_aplicado: number;
   tipo_cambio_origen: 'dia' | 'agencia';
@@ -349,6 +351,9 @@ export type Alternativa = {
   // Sesión 12b/12f-1 — siempre al menos 1 (backfill + store()/duplicar()
   // ya garantizan esto), ordenado por orden/id desde el backend.
   destinos?: AlternativaDestino[];
+  // T-074 — reserva de la alternativa aceptada, o la que la reemplazó (modificacion_aplicada.reserva).
+  reserva?: { id: number; codigo: string | null } | null;
+  modificacion_aplicada?: { reserva?: { id: number; codigo: string | null } | null } | null;
 };
 
 // Sesión 12b — registro liviano por destino de un viaje (§7.1 de la

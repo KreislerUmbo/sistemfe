@@ -176,7 +176,14 @@
                 style="cursor:pointer" @click="seleccionarAlternativa(alt.id)">
                 <span>
                     {{ alt.nombre }} · {{ alt.moneda_cotizacion }} {{ Number(alt.total).toFixed(0) }}
-                    <span v-if="alt.estado === 'aceptada'" class="ms-1"><i class="fas fa-check-circle"></i></span>
+                    <span v-if="alt.estado === 'aceptada' || alt.estado === 'reemplazada'" class="ms-1">
+                        <i class="fas fa-check-circle"></i>
+                        <template v-if="reservaDeAlternativa(alt)">
+                            {{ alt.estado === 'reemplazada' ? 'Reemplazada' : 'Reservada' }} ·
+                            <router-link :to="`/agencia-viajes/reservas/${reservaDeAlternativa(alt)!.id}`" class="text-reset fw-semibold" @click.stop>{{ reservaDeAlternativa(alt)!.codigo ?? `#${reservaDeAlternativa(alt)!.id}` }}</router-link>
+                        </template>
+                        <template v-else>{{ alt.estado === 'reemplazada' ? 'Reemplazada' : 'Reservada' }}</template>
+                    </span>
                     <span v-else-if="alt.estado === 'descartada'" class="ms-1 opacity-50"><i class="fas fa-times-circle"></i></span>
                 </span>
                 <i v-if="alt.id === alternativaActivaId" class="fas fa-pen alt-pill-edit" title="Renombrar esta alternativa" @click.stop="renombrarAlternativa(alt)"></i>
@@ -284,21 +291,31 @@
             <!-- ═══ LIENZO ═══ -->
             <div class="col-12 col-lg-8">
                 <div class="d-flex align-items-center gap-2 mb-2 flex-wrap">
-                    <button class="btn btn-primary btn-sm" @click="abrirDrawerBiblioteca">
+                    <button v-if="!alternativaSoloLectura" class="btn btn-primary btn-sm" @click="abrirDrawerBiblioteca">
                         <i class="fas fa-plus me-1"></i>Agregar servicio
                     </button>
-                    <button v-if="!mostrarTabsDia" class="btn btn-link btn-sm text-decoration-none" @click="agregarDia">
+                    <button v-if="!mostrarTabsDia && !alternativaSoloLectura" class="btn btn-link btn-sm text-decoration-none" @click="agregarDia">
                         <i class="fas fa-calendar-plus me-1"></i>Agregar otro día
                     </button>
-                    <button class="btn btn-outline-secondary btn-sm ms-auto" @click="toggleFormPasajeAereo">
+                    <button v-if="!alternativaSoloLectura" class="btn btn-outline-secondary btn-sm ms-auto" @click="toggleFormPasajeAereo">
                         <i class="fas fa-plane me-1"></i>{{ mostrarFormPasajeAereo ? 'Cerrar' : 'Pasaje aéreo suelto' }}
                     </button>
                 </div>
 
+                <div v-if="alternativaSoloLectura && alternativaActiva" class="alert alert-info py-2 small mb-2">
+                    <i class="fas fa-lock me-1"></i>Alternativa reservada: para cambiarla usa Modificar reserva
+                    <template v-if="reservaDeAlternativa(alternativaActiva)">
+                        — <router-link :to="`/agencia-viajes/reservas/${reservaDeAlternativa(alternativaActiva)!.id}`">{{ reservaDeAlternativa(alternativaActiva)!.codigo ?? `reserva #${reservaDeAlternativa(alternativaActiva)!.id}` }}</router-link>
+                    </template>.
+                </div>
+
                 <div v-if="mostrarFormPasajeAereo" class="border rounded p-2 mb-2">
+                    <div v-if="itemPasajeAereoEnEdicion && formPasajeSoloLectura" class="d-flex justify-content-end mb-1">
+                        <button type="button" class="btn btn-link btn-sm p-0" @click="toggleFormPasajeAereo"><i class="fas fa-times me-1"></i>Cerrar</button>
+                    </div>
                     <PasajeAereoForm :alternativa-id="alternativaActiva.id" :dia-activo="diaActivoParaAgregar"
                         :alternativa-destino-id="destinoActivoId"
-                        :pasajeros="cotizacion?.pasajeros ?? []" :item-existente="itemPasajeAereoEnEdicion"
+                        :pasajeros="cotizacion?.pasajeros ?? []" :item-existente="itemPasajeAereoEnEdicion" :solo-lectura="formPasajeSoloLectura"
                         :items-alternativa="alternativaActiva.items ?? []"
                         :tip-afe-igv-default="configAgencia?.tip_afe_igv_default"
                         :destino-tributario-default="configAgencia?.destino_tributario_default"
@@ -422,12 +439,12 @@
                             <div v-if="bloque.tourOrigenId && !bloque.carga" class="d-flex justify-content-between align-items-center mb-1">
                                 <span class="small fw-semibold text-dark"><i class="fas fa-route me-1 text-primary"></i>{{ bloque.tourNombre ?? 'Tour' }}</span>
                                 <span class="d-flex align-items-center gap-2">
-                                    <select v-if="mostrarTabsDia" class="form-select form-select-sm" style="width:auto;font-size:11px" :value="diaActivo" @change="onMoverBloque(bloque, $event)">
+                                    <select v-if="mostrarTabsDia && !alternativaSoloLectura" class="form-select form-select-sm" style="width:auto;font-size:11px" :value="diaActivo" @change="onMoverBloque(bloque, $event)">
                                         <option v-for="d in diasCreados" :key="d" :value="d">Mover a Día {{ d }}</option>
                                         <option :value="diaSiguiente">Mover a Día {{ diaSiguiente }} (nuevo)</option>
                                     </select>
                                     <span v-if="eliminandoBloqueId === bloque.tourOrigenId" class="spinner-border spinner-border-sm text-danger"></span>
-                                    <i v-else class="fas fa-trash text-danger" style="cursor:pointer" title="Eliminar todo el tour" @click="eliminarBloque(bloque)"></i>
+                                    <i v-else-if="!alternativaSoloLectura" class="fas fa-trash text-danger" style="cursor:pointer" title="Eliminar todo el tour" @click="eliminarBloque(bloque)"></i>
                                 </span>
                             </div>
 
@@ -446,7 +463,7 @@
                                             <i class="fas fa-triangle-exclamation me-1"></i>Sin resolver
                                         </span>
                                         <span v-if="eliminandoGrupoId === fila.grupoId" class="spinner-border spinner-border-sm text-danger"></span>
-                                        <i v-else class="fas fa-trash text-danger" style="cursor:pointer;font-size:11px" title="Eliminar todo este bloque" @click="eliminarGrupoLienzo(fila)"></i>
+                                        <i v-else-if="!alternativaSoloLectura" class="fas fa-trash text-danger" style="cursor:pointer;font-size:11px" title="Eliminar todo este bloque" @click="eliminarGrupoLienzo(fila)"></i>
                                     </span>
                                 </div>
                                 <div v-for="it in fila.items" :key="it.id" class="d-flex justify-content-between align-items-center py-1 border-top" :data-item-id="it.id" :class="[{ 'opacity-50': !it.opcion_elegida }, claseResaltado([it.id])]">
@@ -456,11 +473,11 @@
                                     </span>
                                     <span class="d-flex align-items-center gap-2">
                                         <span v-if="it.opcion_elegida" class="badge bg-success-subtle text-success" style="font-size:10px"><i class="fas fa-check me-1"></i>Elegida</span>
-                                        <button v-else class="btn btn-sm btn-outline-success py-0" style="font-size:11px" @click="elegirGrupoDesdeLienzo(it)" :disabled="eligiendoGrupoItemId === it.id">
+                                        <button v-else-if="!alternativaSoloLectura" class="btn btn-sm btn-outline-success py-0" style="font-size:11px" @click="elegirGrupoDesdeLienzo(it)" :disabled="eligiendoGrupoItemId === it.id">
                                             <span v-if="eligiendoGrupoItemId === it.id" class="spinner-border spinner-border-sm"></span><span v-else>Marcar como elegida</span>
                                         </button>
                                         <span v-if="eliminandoItemId === it.id" class="spinner-border spinner-border-sm text-danger"></span>
-                                        <i v-else class="fas fa-times text-danger" style="cursor:pointer" title="Eliminar" @click="eliminarItem(it)"></i>
+                                        <i v-else-if="!alternativaSoloLectura" class="fas fa-times text-danger" style="cursor:pointer" title="Eliminar" @click="eliminarItem(it)"></i>
                                     </span>
                                 </div>
                                 <!-- Pedido del usuario (05-sep-2026): el itinerario incluido
@@ -486,7 +503,7 @@
                                             @click="confirmarRevisados([fila.item.id])">Revisado</button>
                                     </span>
                                     <span v-if="eliminandoItemId === fila.item.id" class="spinner-border spinner-border-sm text-danger flex-shrink-0"></span>
-                                    <i v-else class="fas fa-times text-danger flex-shrink-0" style="cursor:pointer" title="Eliminar" @click="eliminarItem(fila.item)"></i>
+                                    <i v-else-if="!alternativaSoloLectura" class="fas fa-times text-danger flex-shrink-0" style="cursor:pointer" title="Eliminar" @click="eliminarItem(fila.item)"></i>
                                 </div>
 
                                 <!-- Análisis de impuestos (28-ago-2026) — badge de tratamiento
@@ -518,12 +535,12 @@
                                             <i class="fas fa-arrow-up-right-from-square me-1"></i>Promover a proveedor
                                         </a>
                                     </template>
-                                    <a v-if="!fila.item.reserva_item" href="#" style="font-size:11px" class="text-secondary" @click.prevent="abrirEdicionManual(fila.item)">
+                                    <a v-if="!fila.item.reserva_item && !alternativaSoloLectura" href="#" style="font-size:11px" class="text-secondary" @click.prevent="abrirEdicionManual(fila.item)">
                                         <i class="fas fa-pencil me-1"></i>Editar
                                     </a>
-                                    <span v-else class="text-muted fst-italic" style="font-size:11px" title="Cancelá la reserva primero si necesitás corregirlo">
-                                        <i class="fas fa-lock me-1"></i>No editable — ya tiene una reserva generada
-                                    </span>
+                                    <a v-else href="#" style="font-size:11px" class="text-secondary" title="Ya tiene una reserva generada: solo se puede consultar" @click.prevent="abrirEdicionManual(fila.item)">
+                                        <i class="fas fa-eye me-1"></i>Ver detalle
+                                    </a>
                                 </div>
 
                                 <div v-if="desglosePasajerosTexto(fila.item)" class="text-muted mt-1" style="font-size:11px">
@@ -541,12 +558,12 @@
                                             <i class="far fa-clock me-1"></i>Tarifa válida hasta {{ formatFechaHora(fila.item.cotizacion_pasaje_aereo.tarifa_valida_hasta) }}
                                         </span>
                                     </template>
-                                    <a v-if="!fila.item.reserva_item" href="#" class="text-secondary" @click.prevent="abrirEdicionPasajeAereo(fila.item)">
+                                    <a v-if="!fila.item.reserva_item && !alternativaSoloLectura" href="#" class="text-secondary" @click.prevent="abrirEdicionPasajeAereo(fila.item)">
                                         <i class="fas fa-pencil me-1"></i>Editar
                                     </a>
-                                    <span v-else class="fst-italic" title="Cancelá la reserva primero si necesitás corregirlo">
-                                        <i class="fas fa-lock me-1"></i>No editable — ya tiene una reserva generada
-                                    </span>
+                                    <a v-else href="#" class="text-secondary" title="Ya tiene una reserva generada: solo se puede consultar" @click.prevent="abrirEdicionPasajeAereo(fila.item)">
+                                        <i class="fas fa-eye me-1"></i>Ver detalle
+                                    </a>
                                 </div>
 
                                 <div class="d-flex align-items-center flex-wrap gap-2 mt-2">
@@ -558,7 +575,7 @@
                                             <input type="number" step="0.01" class="form-control"
                                                 style="max-width:110px"
                                                 :class="{ 'border-danger text-danger': alertasPiso[fila.item.id] }"
-                                                v-model.number="edicionItems[fila.item.id].precio_convertido" @input="onEditarPrecio(fila.item)">
+                                                v-model.number="edicionItems[fila.item.id].precio_convertido" :disabled="alternativaSoloLectura" @input="onEditarPrecio(fila.item)">
                                         </div>
                                     </div>
                                     <div v-else-if="configAgencia?.modo_descuento_item === 'monto'" class="d-flex flex-column">
@@ -568,7 +585,7 @@
                                             <input type="number" step="0.01" min="0" class="form-control"
                                                 style="max-width:110px"
                                                 :class="{ 'border-danger text-danger': alertasPiso[fila.item.id] }"
-                                                v-model.number="edicionItems[fila.item.id].monto_descuento" @input="onEditarMontoDescuentoItem(fila.item)">
+                                                v-model.number="edicionItems[fila.item.id].monto_descuento" :disabled="alternativaSoloLectura" @input="onEditarMontoDescuentoItem(fila.item)">
                                         </div>
                                     </div>
                                     <div v-else class="d-flex flex-column">
@@ -577,7 +594,7 @@
                                             <input type="number" step="0.01" min="0" max="100" class="form-control"
                                                 style="max-width:80px"
                                                 :class="{ 'border-danger text-danger': alertasPiso[fila.item.id] }"
-                                                v-model.number="edicionItems[fila.item.id].descuento_pct" @input="onEditarDescuentoPct(fila.item)">
+                                                v-model.number="edicionItems[fila.item.id].descuento_pct" :disabled="alternativaSoloLectura" @input="onEditarDescuentoPct(fila.item)">
                                             <span class="input-group-text">%</span>
                                         </div>
                                     </div>
@@ -589,7 +606,7 @@
                                         class="badge bg-light text-dark border" style="font-size:10px">
                                         -{{ Number(edicionItems[fila.item.id].descuento_pct).toFixed(0) }}%
                                     </span>
-                                    <select v-if="!bloque.tourOrigenId && mostrarTabsDia" class="form-select form-select-sm ms-auto" style="width:auto;font-size:11px" :value="fila.item.dia_referencial ?? ''" @change="onReasignarDiaItem(fila.item, $event)">
+                                    <select v-if="!bloque.tourOrigenId && mostrarTabsDia" :disabled="alternativaSoloLectura" class="form-select form-select-sm ms-auto" style="width:auto;font-size:11px" :value="fila.item.dia_referencial ?? ''" @change="onReasignarDiaItem(fila.item, $event)">
                                         <option value="" disabled>Sin día</option>
                                         <option v-for="d in diasCreados" :key="d" :value="d">Día {{ d }}</option>
                                     </select>
@@ -710,13 +727,13 @@
                                 <div class="input-group input-group-sm" style="max-width:160px">
                                     <span class="input-group-text">{{ alternativaActiva.moneda_cotizacion }}</span>
                                     <input type="number" min="0" class="form-control"
-                                        v-model.number="descuentoGlobalMontoLocal" @change="onEditarDescuentoGlobalMonto">
+                                        v-model.number="descuentoGlobalMontoLocal" :disabled="alternativaSoloLectura" @change="onEditarDescuentoGlobalMonto">
                                 </div>
                             </template>
                             <template v-else>
                                 <div class="input-group input-group-sm" style="max-width:160px">
                                     <input type="number" min="0" max="100" class="form-control"
-                                        v-model.number="descuentoGlobalLocal" @change="onEditarDescuentoGlobal">
+                                        v-model.number="descuentoGlobalLocal" :disabled="alternativaSoloLectura" @change="onEditarDescuentoGlobal">
                                     <span class="input-group-text">%</span>
                                 </div>
                             </template>
@@ -1322,7 +1339,7 @@
                         <template v-else-if="pasoDrawer === 'manual' && alternativaActiva">
                             <ItemManualForm :alternativa-id="alternativaActiva.id" :dia-activo="diaActivoParaAgregar"
                                 :alternativa-destino-id="destinoActivoId"
-                                :pasajeros="cotizacion?.pasajeros ?? []" :item-existente="itemManualEnEdicion"
+                                :pasajeros="cotizacion?.pasajeros ?? []" :item-existente="itemManualEnEdicion" :solo-lectura="formManualSoloLectura"
                                 :tip-afe-igv-default="configAgencia?.tip_afe_igv_default"
                                 :destino-tributario-default="configAgencia?.destino_tributario_default"
                                 @agregado="onServicioSueltoAgregado" @actualizado="onServicioSueltoActualizado" />
@@ -1778,6 +1795,17 @@ const guardarCabecera = async () => {
 // creada. El backend ahora bloquea el guardado si ya hay una alternativa
 // aceptada (reserva real generada) — hayAlternativaAceptada refleja el
 // mismo candado acá para no dejar el ícono habilitado sin sentido.
+// T-074 — la alternativa reservada (aceptada, o reemplazada por una modificación) no se toca desde
+// el lienzo: solo cambia por Modificar reserva, que trabaja sobre una versión nueva en borrador.
+// La versión borrador de una modificación abierta sí es editable. El backend ya lo bloquea.
+const alternativaSoloLectura = computed(() =>
+    ['aceptada', 'reemplazada'].includes(alternativaActiva.value?.estado ?? '') && modificacionInfo.value?.estado !== 'abierta');
+
+// Reserva a la que enlaza la pestaña de una alternativa: la suya si está aceptada, o la que la
+// reemplazó (modificacionAplicada.reserva) si quedó 'reemplazada'.
+const reservaDeAlternativa = (alt: Alternativa) =>
+    (alt.estado === 'reemplazada' ? alt.modificacion_aplicada?.reserva : alt.reserva) ?? null;
+
 const hayAlternativaAceptada = computed(() => (cotizacion.value?.alternativas ?? []).some((a) => a.estado === 'aceptada'));
 
 const editandoPasajeros = ref(false);
@@ -2338,7 +2366,7 @@ const agruparPorTour = (items: AlternativaItem[]): BloqueItem[] => {
 
 // ── Línea de tour (fila 13, fase 1b) ─────────────────────────────────────
 const lineaTourBloqueada = (bloque: BloqueItem) =>
-    alternativaActiva.value?.estado === 'aceptada' || bloque.items.some((i) => !!i.reserva_item);
+    alternativaSoloLectura.value || bloque.items.some((i) => !!i.reserva_item);
 
 // Temporada aplicada a la carga (null = precio base).
 const temporadaDeCarga = (bloque: BloqueItem) => bloque.items[0]?.tour_linea?.temporada_nombre ?? null;
@@ -3761,6 +3789,10 @@ const itemManualEnEdicion = ref<AlternativaItem | null>(null);
 // por drawerBibliotecaAbierto (línea ~411) — asignar solo
 // itemManualEnEdicion/mostrarFormManual no lo abría, el link "Editar" no
 // hacía nada visible. Mismo criterio que abrirDrawerBiblioteca().
+// «Ver detalle» de un ítem ya reservado abre el mismo formulario con los campos deshabilitados.
+const formManualSoloLectura = computed(() => alternativaSoloLectura.value || !!itemManualEnEdicion.value?.reserva_item);
+const formPasajeSoloLectura = computed(() => alternativaSoloLectura.value || !!itemPasajeAereoEnEdicion.value?.reserva_item);
+
 const abrirEdicionManual = (item: AlternativaItem) => {
     itemManualEnEdicion.value = item;
     mostrarFormManual.value = true;

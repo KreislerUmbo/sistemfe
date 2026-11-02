@@ -149,6 +149,26 @@ class Cotizacion extends Model
         return 'borrador';
     }
 
+    // T-074 — la alternativa que se reservó (aceptada, o reemplazada por una modificación) y el
+    // código de su reserva, para mostrarlos junto al estado del listado. Null si no hay reserva.
+    // Requiere RELACIONES_ESTADO_RESUMEN precargado, igual que estadoResumen().
+    public function alternativaReservada(): ?array
+    {
+        $alternativa = $this->alternativas->firstWhere('estado', 'aceptada')
+            ?? $this->alternativas->firstWhere('estado', Alternativa::ESTADO_REEMPLAZADA);
+        if (! $alternativa) {
+            return null;
+        }
+
+        $reserva = $alternativa->estado === 'aceptada' ? $alternativa->reserva : $alternativa->modificacionAplicada?->reserva;
+
+        return [
+            'nombre' => $alternativa->nombre,
+            'reserva_id' => $reserva?->id,
+            'reserva_codigo' => $reserva?->codigo,
+        ];
+    }
+
     public function scopeDelCotizador(Builder $query): Builder
     {
         return $query->where('origen', self::ORIGEN_COTIZADOR);

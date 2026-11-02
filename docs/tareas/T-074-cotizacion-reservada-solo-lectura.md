@@ -103,9 +103,14 @@ probar cada CA; luego abrir «Modificar reserva» desde la reserva y comprobar C
 ---
 
 ## Resultado
-- **Commits:**
-- **Tests:**
+- **Commits:** rama `feat/T-074-cotizacion-reservada-solo-lectura` (un commit).
+- **Tests:** `CotizacionEstadoResumenTest` (12 verdes; 2 nuevos para CA3: nombre y código de la reserva con 0 consultas extra, y null sin reserva). Suite completa: 1799 verdes y 1 roja, la intermitente conocida de `Fila13Fase1cFacturacionTest` (línea 306, combo). `vue-tsc`: sin errores en los archivos tocados (los que hay vienen de antes, en portal/rutas/fake-backend). Prueba en `agencia-demo` con Playwright: CA1 (cotización 62, pestaña «Reservada · RDKM-1026-0000002» enlaza a la reserva 30), CA2 (cotización 66, pestaña «Reemplazada · RDKM-1126-0000003»), CA3 (listado), CA4 y CA6 (pasaje aéreo en «Ver detalle»: `<fieldset disabled>`, 0 campos habilitados, sin botón de guardar). **CA5 sin probar en pantalla** (habría que crear una modificación abierta en los datos de la demo): se cumple por el computed, que no aplica si `modificacionInfo.estado === 'abierta'`. `ItemManualForm` («Ver detalle» de un ítem manual) no se abrió en pantalla: lleva el mismo cambio que el de pasaje aéreo.
 - **Desviaciones de la tarea y por qué:**
+  - `CotizacionController::show()` también precarga `RELACIONES_ESTADO_RESUMEN` (la tarea solo mencionaba `index()`): sin eso la pestaña no tiene la reserva a la que enlazar.
+  - Método nuevo `Cotizacion::alternativaReservada()` y campo `alternativa_reservada` en el listado.
+  - En una alternativa `reemplazada` los ítems no tienen `reserva_item` (la reserva apunta a la versión nueva), así que «Ver detalle» sale por `alternativaSoloLectura` además de por `reserva_item`; no solo cuando el ítem tiene reserva.
+  - Los selects de "Mover a Día" de los bloques de tour y la lista de días de un ítem se ocultan/deshabilitan con el mismo computed.
 
 ## Hallazgos fuera de alcance
-- 
+- El botón «Aceptado por cliente» sigue visible en una alternativa `reemplazada` (cotización 66, pestaña Sky); el backend lo rechazará pero la pantalla no lo explica.
+- El ícono de eliminar la alternativa (en su pestaña) sigue visible en una alternativa reservada o reemplazada.

@@ -111,6 +111,9 @@ class CotizacionController extends Controller
 
         $cotizaciones->getCollection()->transform(function (Cotizacion $c) {
             $c->estado_resumen = $c->estadoResumen();
+            // T-074 — qué alternativa se reservó y con qué código, con las relaciones ya
+            // precargadas (sin consultas extra por fila).
+            $c->alternativa_reservada = $c->alternativaReservada();
 
             return $c;
         });
@@ -243,6 +246,8 @@ class CotizacionController extends Controller
             // 12f-2), pero tiene que estar disponible para esa sesión sin
             // volver a tocar este endpoint.
             'alternativas.destinos.destinoAtractivo',
+            // T-074 — la pestaña de la alternativa reservada (o reemplazada) enlaza a su reserva.
+            ...Cotizacion::RELACIONES_ESTADO_RESUMEN,
         ])->findOrFail($id);
 
         // Fase 1b (§3.3, advertencia 1) — segunda barrera explícita,
