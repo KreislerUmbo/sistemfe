@@ -149,10 +149,69 @@ class MenuGirosTest extends TestCase
 
         $this->assertSame([
             'Inicio',
-            ['VENTAS' => ['Cotizaciones', 'Venta directa']],
+            ['VENTAS' => ['Clientes', 'Cotizaciones', 'Venta directa']],
             ['VIAJES' => ['Reservas', 'Salidas operativas', 'Reporte operativo']],
             ['FINANZAS' => [['Caja' => ['Turno activo']]]],
+            ['AYUDA' => ['Manuales y videos']],
         ], $arbol);
+    }
+
+    // T-078 CA1 — el reparto por rol de Clientes, Anticipos y Manuales.
+    public function test_t078_cada_rol_de_agencia_recibe_sus_permisos_de_clientes_anticipos_y_manuales(): void
+    {
+        (new AgenciaViajesRolesSeeder())->run();
+
+        $esperado = [
+            'Administrador de agencia' => ['register_client', 'list_client', 'edit_client', 'list_advance', 'register_advance', 'refund_advance', 'register_recurso'],
+            'Supervisor' => ['register_client', 'list_client', 'edit_client', 'list_advance', 'register_recurso'],
+            'Vendedor de agencia' => ['register_client', 'list_client', 'edit_client', 'register_recurso'],
+            'Contador' => ['list_client', 'list_advance', 'register_recurso'],
+        ];
+        $todos = ['register_client', 'list_client', 'edit_client', 'delete_client', 'list_advance', 'register_advance', 'refund_advance', 'register_recurso'];
+
+        foreach ($esperado as $rol => $permisos) {
+            $tiene = Role::findByName($rol, 'api')->permissions()->pluck('name')->all();
+            foreach ($todos as $permiso) {
+                $this->assertSame(in_array($permiso, $permisos, true), in_array($permiso, $tiene, true), "{$rol}: {$permiso}");
+            }
+        }
+    }
+
+    // T-078 CA2 y CA3 — aditivo e idempotente.
+    public function test_t078_el_seeder_conserva_lo_que_el_dueno_agrego_y_no_duplica(): void
+    {
+        (new AgenciaViajesRolesSeeder())->run();
+        $vendedor = Role::findByName('Vendedor de agencia', 'api');
+        $vendedor->givePermissionTo(Permission::firstOrCreate(['guard_name' => 'api', 'name' => 'delete_client']));
+        $antes = $vendedor->permissions()->count();
+
+        (new AgenciaViajesRolesSeeder())->run();
+
+        $vendedor = Role::findByName('Vendedor de agencia', 'api');
+        $this->assertTrue($vendedor->hasPermissionTo('delete_client'));
+        $this->assertSame($antes, $vendedor->permissions()->count());
+        $this->assertSame(1, Permission::where('guard_name', 'api')->where('name', 'list_advance')->count());
+    }
+
+    // T-078 CA4 — con el menú de T-063, un usuario de rol (no Super-Admin) ve esas secciones.
+    public function test_t078_administrador_de_agencia_ve_clientes_anticipos_y_manuales_y_el_vendedor_clientes(): void
+    {
+        (new AgenciaViajesRolesSeeder())->run();
+        $admin = User::factory()->create();
+        $admin->assignRole('Administrador de agencia');
+        $vendedor = User::factory()->create();
+        $vendedor->assignRole('Vendedor de agencia');
+
+        $hojas = fn (array $nodos) => collect($this->etiquetas($nodos))->flatten()->all();
+
+        $deAdmin = $hojas($this->arbol($admin->fresh(), 'agencia_viajes', 't-menu-agencia'));
+        foreach (['Clientes', 'Anticipos', 'Manuales y videos'] as $item) {
+            $this->assertContains($item, $deAdmin);
+        }
+
+        $deVendedor = $hojas($this->arbol($vendedor->fresh(), 'agencia_viajes', 't-menu-agencia'));
+        $this->assertContains('Clientes', $deVendedor);
+        $this->assertNotContains('Anticipos', $deVendedor);
     }
 
     // CA4

@@ -51,22 +51,22 @@ por tenant. Por eso va al seeder, que es la fuente de verdad de los roles de Age
 - `api-sistema-fe/routes/api.php` → permisos de clientes y anticipos (solo lectura)
 
 ## Criterios de aceptación
-- [ ] **CA1** — Correr el seeder en un tenant de agencia → cada rol tiene los permisos de la tabla. → test
-- [ ] **CA2** — Un permiso que el dueño agregó a mano a un rol se conserva al volver a correr el seeder (no hay `syncPermissions`). → test
-- [ ] **CA3** — Correrlo dos veces no duplica nada. → test
-- [ ] **CA4** — Con el menú de T-063, un Administrador de agencia (no Super-Admin) ve Clientes, Anticipos y Manuales; un Vendedor ve Clientes. → test del menú (`MenuGirosTest`) + prueba en agencia-demo con un usuario de ese rol
-- [ ] **CA5** — Retail y créditos: sin cambios en sus roles. → test o verificación
+- [x] **CA1** — Correr el seeder en un tenant de agencia → cada rol tiene los permisos de la tabla. → test
+- [x] **CA2** — Un permiso que el dueño agregó a mano a un rol se conserva al volver a correr el seeder (no hay `syncPermissions`). → test
+- [x] **CA3** — Correrlo dos veces no duplica nada. → test
+- [x] **CA4** — Con el menú de T-063, un Administrador de agencia (no Super-Admin) ve Clientes, Anticipos y Manuales; un Vendedor ve Clientes. → test del menú (`MenuGirosTest`) + prueba en agencia-demo con un usuario de ese rol
+- [x] **CA5** — Retail y créditos: sin cambios en sus roles. → test o verificación
 
 ## Seguridad y correctitud
-- [ ] Permisos / Policy en rutas nuevas: no hay rutas nuevas; revisar que ningún rol reciba más de lo que su trabajo pide
-- [ ] Aislamiento de tenant: roles por tenant; el backfill corre solo en tenants de giro agencia
-- [ ] Validación de entrada / archivos: no aplica
-- [ ] Concurrencia (`lockForUpdate`): no aplica
-- [ ] Dinero en centavos: no aplica
-- [ ] Fechas con `HoraPeru`: no aplica
-- [ ] Tributario sin fallback silencioso: no aplica
-- [ ] Sin `v-html` sin sanitizar: no aplica
-- [ ] Migraciones nuevas + `tenants:migrate-verticales`: no aplica (seeder); comando de producción anotado
+- [x] Permisos / Policy en rutas nuevas: no hay rutas nuevas; revisar que ningún rol reciba más de lo que su trabajo pide
+- [x] Aislamiento de tenant: roles por tenant; el backfill corre solo en tenants de giro agencia
+- [x] Validación de entrada / archivos: no aplica
+- [x] Concurrencia (`lockForUpdate`): no aplica
+- [x] Dinero en centavos: no aplica
+- [x] Fechas con `HoraPeru`: no aplica
+- [x] Tributario sin fallback silencioso: no aplica
+- [x] Sin `v-html` sin sanitizar: no aplica
+- [x] Migraciones nuevas + `tenants:migrate-verticales`: no aplica (seeder); comando de producción anotado
 
 ## Cómo verificar
 ```
@@ -77,9 +77,40 @@ php artisan test   # suite completa, contra PostgreSQL
 ---
 
 ## Resultado
-- **Commits:**
-- **Tests:**
+- **Commits:** `e020bee` (rama `fix/T-078-roles-agencia-permisos`, unida a `main`).
+- **Tests:** `MenuGirosTest` con 3 tests nuevos (CA1 reparto por rol, CA2+CA3 aditivo/idempotente, CA4 menú de
+  Administrador y Vendedor sin ser Super-Admin) y el test del Vendedor actualizado (ahora ve Clientes y Ayuda).
+  Suite completa: 1809 verdes, 1 falla en `Fila13Fase1cFacturacionTest` (orden de un arreglo; la intermitencia
+  conocida de ese archivo) — vuelta a correr sola, pasa 32/32. CA5: los fixtures de retail y créditos de
+  `MenuGirosTest` siguen verdes y el seeder solo toca los 4 roles de Agencia.
+  **CA4 en agencia-demo** (API real vía Apache): usuarios `t078-admin@…` (Administrador de agencia) y `t078-vend@…`
+  (Vendedor de agencia), ninguno Super-Admin. El Administrador ve Clientes, Anticipos y Manuales y videos; el
+  Vendedor ve Clientes y Manuales y videos (sin Anticipos). Usuarios borrados al terminar (0 restantes).
 - **Desviaciones de la tarea y por qué:**
+  - Permisos de Anticipos confirmados en `routes/api.php` y `routes.ts`: `list_advance` (lista/detalle),
+    `register_advance` (crear y «corregir») y `refund_advance` (reembolsar). La tabla no mencionaba
+    `refund_advance`; el usuario decidió (01-nov-2026): **solo Administrador de agencia**. Por eso el
+    Administrador recibe `list_advance`, `register_advance` y `refund_advance`; Supervisor y Contador solo `list_advance`.
+  - Se pidió y se dio `register_recurso` (no `list_recurso`): es lo que usan el menú y la ruta `recurso.manual`.
+    `list_recurso` y `delete_client` no se dan a nadie.
+  - El seeder también declara en `PERMISOS` los permisos nuevos (`firstOrCreate`) para que existan en tenants viejos.
+- **Aplicar en producción (solo dakamu, único tenant de agencia):**
+  ```
+  cd /var/www/html/sistemfe/api-sistema-fe
+  php artisan permisos:backfill-fase1b-agencia-viajes dakamu
+  ```
+  Corre `AgenciaViajesRolesSeeder` (solo agrega, nunca quita) y es idempotente; el segundo paso del comando
+  (roles ajenos al catálogo con permiso plano) ya se aplicó antes y no cambia nada. **No correrlo en
+  market ni credishirley.**
+  **Caché del menú** (24 h de TTL; el seeder no la invalida): limpiarla con
+  ```
+  php artisan tenants:run cache:clear --tenants=dakamu
+  ```
+  o, si no limpia la tabla del tenant, el equivalente exacto que usé en agencia-demo:
+  `App\Models\Tenant::find('dakamu')->run(fn () => app(App\Services\MenuResolver::class)->invalidarTenantActivo());`
+  (en `php artisan tinker`). Los usuarios ven el cambio al recargar.
+  **Revisar al desplegar** qué rol tiene el usuario dueño de dakamu: si es un rol propio (no de los 4),
+  ese rol lo ajusta el Super-Admin a mano; el seeder no lo toca.
 
 ## Hallazgos fuera de alcance
--
+- `refund_advance` quedó solo en Administrador; si Supervisor debe reembolsar, es un cambio de una línea.

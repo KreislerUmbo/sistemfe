@@ -61,6 +61,10 @@ class AgenciaViajesRolesSeeder extends Seeder implements RolesCatalogProvider
         'nota_electronica', 'list_nota_electronica',
         'cash.open_session', 'cash.view_all',
         'list_sale',
+        // T-078 — Clientes, Anticipos y Manuales y videos (el menú de T-063 los gatea con estos).
+        'register_client', 'list_client', 'edit_client',
+        'list_advance', 'register_advance', 'refund_advance',
+        'register_recurso',
         'register_role', 'edit_role', 'delete_role', 'list_role',
         'register_user', 'edit_user', 'delete_user', 'list_user',
         'company',
@@ -82,6 +86,9 @@ class AgenciaViajesRolesSeeder extends Seeder implements RolesCatalogProvider
             'nota_electronica', 'list_nota_electronica',
             'cash.open_session', 'cash.view_all',
             'list_sale',
+            'register_client', 'list_client', 'edit_client',
+            'list_advance', 'register_advance', 'refund_advance',
+            'register_recurso',
             'roles.administrar',
             'register_role', 'edit_role', 'delete_role', 'list_role',
             'register_user', 'edit_user', 'delete_user', 'list_user',
@@ -103,6 +110,9 @@ class AgenciaViajesRolesSeeder extends Seeder implements RolesCatalogProvider
             'nota_electronica', 'list_nota_electronica',
             'cash.open_session', 'cash.view_all',
             'list_sale',
+            'register_client', 'list_client', 'edit_client',
+            'list_advance',
+            'register_recurso',
         ],
         // Alcance propio (§3.3: sin ver_todas, EscopablePorVendedor lo
         // limita a sus propias filas). SIN reservas.editar a propósito —
@@ -113,6 +123,8 @@ class AgenciaViajesRolesSeeder extends Seeder implements RolesCatalogProvider
             'cotizaciones.ver', 'cotizaciones.crear', 'cotizaciones.editar', 'cotizaciones.enviar_correo', 'agencia.cotizaciones',
             'reservas.ver', 'reservas.crear', 'agencia.reservas',
             'cash.open_session',
+            'register_client', 'list_client', 'edit_client',
+            'register_recurso',
         ],
         // Solo lectura de Cotizaciones/Reservas (ver_todas, sin crear/
         // editar) + NC/ND + Caja consolidada + Ventas — "opera lo fiscal/
@@ -123,6 +135,9 @@ class AgenciaViajesRolesSeeder extends Seeder implements RolesCatalogProvider
             'nota_electronica', 'list_nota_electronica',
             'cash.view_all',
             'list_sale',
+            'list_client',
+            'list_advance',
+            'register_recurso',
         ],
     ];
 
