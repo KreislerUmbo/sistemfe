@@ -312,7 +312,7 @@ export type Cotizacion = {
   destino: string;
   fecha_viaje_desde?: string | null;
   fecha_viaje_hasta?: string | null;
-  cliente?: { id: number; full_name: string; n_document?: string };
+  cliente?: { id: number; full_name: string; n_document?: string; phone?: string | null };
   pasajeros?: CotizacionPasajero[];
   alternativas?: Alternativa[];
   alternativas_count?: number;

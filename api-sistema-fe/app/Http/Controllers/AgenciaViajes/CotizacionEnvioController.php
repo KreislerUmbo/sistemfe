@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Mail\AgenciaViajes\CotizacionClienteMail;
 use App\Models\AgenciaViajes\Alternativa;
 use App\Models\AgenciaViajes\CotizacionEnvio;
+use App\Models\Client\CrmActividad;
 use App\Services\AgenciaViajes\AlternativaPdfService;
 use App\Services\AgenciaViajes\CondicionesGeneralesPdfService;
 use App\Services\AgenciaViajes\CorreoAgenciaService;
@@ -61,31 +62,8 @@ class CotizacionEnvioController extends Controller
         ]);
     }
 
-    // GET alternativas/{id}/envios-correo — historial debajo de la alternativa.
-    public function historial(string $id): JsonResponse
-    {
-        $alternativa = Alternativa::with('cotizacion')->findOrFail($id);
-        $this->authorize('view', $alternativa->cotizacion);
-
-        $envios = CotizacionEnvio::with('usuario:id,name,surname')
-            ->where('alternativa_id', $alternativa->id)
-            ->orderByDesc('id')
-            ->get()
-            ->map(fn (CotizacionEnvio $e) => [
-                'id' => $e->id,
-                'fecha' => $e->created_at,
-                'usuario' => trim(($e->usuario?->name ?? '') . ' ' . ($e->usuario?->surname ?? '')),
-                'para' => $e->para,
-                'cc' => $e->cc ?? [],
-                'remitente' => $e->remitente,
-                'asunto' => $e->asunto,
-                'adjuntos' => collect($e->adjuntos ?? [])->pluck('nombre')->all(),
-                'estado' => $e->estado,
-                'error' => $e->error,
-            ]);
-
-        return response()->json(['envios' => $envios]);
-    }
+    // El historial de envíos ya no vive acá: lo muestra el historial de la cotización
+    // (CotizacionActividadController::index(), T-050), con los fallidos incluidos.
 
     // POST alternativas/{id}/enviar-correo
     public function enviar(Request $request, string $id): JsonResponse
@@ -208,6 +186,10 @@ class CotizacionEnvioController extends Controller
         if ($datos['marcar_enviada'] && $alternativa->estado === 'borrador') {
             $alternativa->update(['estado' => 'enviada'] + $alternativa->camposAlMarcarEnviada());
         }
+
+        // T-050: el correo que salió queda en el historial del cliente (el fallido no: sigue
+        // solo en cotizacion_envios, y el historial del cotizador lo muestra desde ahí).
+        $alternativa->registrarEnvio(CrmActividad::CANAL_CORREO, 'Para: ' . implode(', ', $para));
 
         return response()->json([
             'code' => 200,

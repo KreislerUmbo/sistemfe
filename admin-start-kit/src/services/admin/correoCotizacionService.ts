@@ -27,19 +27,6 @@ export type BorradorEnvio = EstadoCorreo & {
   puede_marcar_enviada: boolean
 }
 
-export type EnvioCorreo = {
-  id: number
-  fecha: string
-  usuario: string
-  para: string[]
-  cc: string[]
-  remitente: string
-  asunto: string
-  adjuntos: string[]
-  estado: 'enviado' | 'fallido'
-  error: string | null
-}
-
 export type ConfiguracionCorreo = {
   remitente_nombre: string | null
   remitente_local: string | null
@@ -79,10 +66,6 @@ export const correoCotizacionService = {
   }) {
     const response = await httpClient.post(`/alternativas/${alternativaId}/enviar-correo`, data)
     return response.data as { message: string; estado_alternativa: string; enviados_hoy: number }
-  },
-  async historial(alternativaId: number) {
-    const response = await httpClient.get(`/alternativas/${alternativaId}/envios-correo`)
-    return (response.data.envios ?? []) as EnvioCorreo[]
   },
   async configuracion() {
     const response = await httpClient.get('/configuracion-correo')

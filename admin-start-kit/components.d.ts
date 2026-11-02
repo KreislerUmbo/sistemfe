@@ -8,6 +8,7 @@ export {}
 declare module 'vue' {
   export interface GlobalComponents {
     AccionesCredito: typeof import('./src/components/Creditos/AccionesCredito.vue')['default']
+    AnotarContacto: typeof import('./src/components/Clientes/AnotarContacto.vue')['default']
     ApexChart: typeof import('./src/components/ApexChart.vue')['default']
     AppMenu: typeof import('./src/components/AppMenu/index.vue')['default']
     AuthModal: typeof import('./src/components/portal/AuthModal.vue')['default']
@@ -87,6 +88,7 @@ declare module 'vue' {
     DocumentosCredito: typeof import('./src/components/Creditos/DocumentosCredito.vue')['default']
     DropDown: typeof import('./src/components/DropDown.vue')['default']
     EncabezadoCredito: typeof import('./src/components/Creditos/EncabezadoCredito.vue')['default']
+    EnviarAlternativa: typeof import('./src/components/AgenciaViajes/EnviarAlternativa.vue')['default']
     EnviarCorreoCotizacion: typeof import('./src/components/AgenciaViajes/EnviarCorreoCotizacion.vue')['default']
     FacturarReservaEspecialModal: typeof import('./src/components/AgenciaViajes/FacturarReservaEspecialModal.vue')['default']
     FacturarReservaSimpleModal: typeof import('./src/components/AgenciaViajes/FacturarReservaSimpleModal.vue')['default']
@@ -98,6 +100,7 @@ declare module 'vue' {
     GuiaBuscador: typeof import('./src/components/AgenciaViajes/GuiaBuscador.vue')['default']
     HabitacionMatrixPicker: typeof import('./src/components/AgenciaViajes/HabitacionMatrixPicker.vue')['default']
     HeroPortal: typeof import('./src/components/portal/HeroPortal.vue')['default']
+    HistorialActividadesCotizacion: typeof import('./src/components/AgenciaViajes/HistorialActividadesCotizacion.vue')['default']
     HistorialCredito: typeof import('./src/components/Creditos/HistorialCredito.vue')['default']
     InputMask: typeof import('./src/components/InputMask.vue')['default']
     ItemManualForm: typeof import('./src/components/AgenciaViajes/ItemManualForm.vue')['default']
