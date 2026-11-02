@@ -51,22 +51,22 @@ por tenant. Por eso va al seeder, que es la fuente de verdad de los roles de Age
 - `api-sistema-fe/routes/api.php` → permisos de clientes y anticipos (solo lectura)
 
 ## Criterios de aceptación
-- [ ] **CA1** — Correr el seeder en un tenant de agencia → cada rol tiene los permisos de la tabla. → test
-- [ ] **CA2** — Un permiso que el dueño agregó a mano a un rol se conserva al volver a correr el seeder (no hay `syncPermissions`). → test
-- [ ] **CA3** — Correrlo dos veces no duplica nada. → test
-- [ ] **CA4** — Con el menú de T-063, un Administrador de agencia (no Super-Admin) ve Clientes, Anticipos y Manuales; un Vendedor ve Clientes. → test del menú (`MenuGirosTest`) + prueba en agencia-demo con un usuario de ese rol
-- [ ] **CA5** — Retail y créditos: sin cambios en sus roles. → test o verificación
+- [x] **CA1** — Correr el seeder en un tenant de agencia → cada rol tiene los permisos de la tabla. → test
+- [x] **CA2** — Un permiso que el dueño agregó a mano a un rol se conserva al volver a correr el seeder (no hay `syncPermissions`). → test
+- [x] **CA3** — Correrlo dos veces no duplica nada. → test
+- [x] **CA4** — Con el menú de T-063, un Administrador de agencia (no Super-Admin) ve Clientes, Anticipos y Manuales; un Vendedor ve Clientes. → test del menú (`MenuGirosTest`) + prueba en agencia-demo con un usuario de ese rol
+- [x] **CA5** — Retail y créditos: sin cambios en sus roles. → test o verificación
 
 ## Seguridad y correctitud
-- [ ] Permisos / Policy en rutas nuevas: no hay rutas nuevas; revisar que ningún rol reciba más de lo que su trabajo pide
-- [ ] Aislamiento de tenant: roles por tenant; el backfill corre solo en tenants de giro agencia
-- [ ] Validación de entrada / archivos: no aplica
-- [ ] Concurrencia (`lockForUpdate`): no aplica
-- [ ] Dinero en centavos: no aplica
-- [ ] Fechas con `HoraPeru`: no aplica
-- [ ] Tributario sin fallback silencioso: no aplica
-- [ ] Sin `v-html` sin sanitizar: no aplica
-- [ ] Migraciones nuevas + `tenants:migrate-verticales`: no aplica (seeder); comando de producción anotado
+- [x] Permisos / Policy en rutas nuevas: no hay rutas nuevas; revisar que ningún rol reciba más de lo que su trabajo pide
+- [x] Aislamiento de tenant: roles por tenant; el backfill corre solo en tenants de giro agencia
+- [x] Validación de entrada / archivos: no aplica
+- [x] Concurrencia (`lockForUpdate`): no aplica
+- [x] Dinero en centavos: no aplica
+- [x] Fechas con `HoraPeru`: no aplica
+- [x] Tributario sin fallback silencioso: no aplica
+- [x] Sin `v-html` sin sanitizar: no aplica
+- [x] Migraciones nuevas + `tenants:migrate-verticales`: no aplica (seeder); comando de producción anotado
 
 ## Cómo verificar
 ```
@@ -77,7 +77,7 @@ php artisan test   # suite completa, contra PostgreSQL
 ---
 
 ## Resultado
-- **Commits:** rama `fix/T-078-roles-agencia-permisos` (ver `git log`).
+- **Commits:** `e020bee` (rama `fix/T-078-roles-agencia-permisos`, unida a `main`).
 - **Tests:** `MenuGirosTest` con 3 tests nuevos (CA1 reparto por rol, CA2+CA3 aditivo/idempotente, CA4 menú de
   Administrador y Vendedor sin ser Super-Admin) y el test del Vendedor actualizado (ahora ve Clientes y Ayuda).
   Suite completa: 1809 verdes, 1 falla en `Fila13Fase1cFacturacionTest` (orden de un arreglo; la intermitencia
