@@ -41,8 +41,20 @@ cotización o reserva.
 ## Archivos probables
 - migración nueva en `api-sistema-fe/database/migrations/tenant/core/`
 - `api-sistema-fe/app/Models/Client/CrmActividad.php` (nuevo) + controller nuevo
-- `api-sistema-fe/app/Http/Controllers/AgenciaViajes/CotizacionEnvioController.php`, `AlternativaController.php`
-- `admin-start-kit/src/views/agencia-viajes/cotizador/editar.vue`, `components/AgenciaViajes/EnviarCorreoCotizacion.vue`
+- `api-sistema-fe/app/Http/Controllers/AgenciaViajes/CotizacionEnvioController.php` → `historial()` (~65),
+  `enviar()` (~91; el envío exitoso marca la alternativa ~209: ahí va la actividad `envio`/`correo`)
+- `api-sistema-fe/app/Models/AgenciaViajes/Alternativa.php` → `camposAlMarcarEnviada()` (~72, solo usar)
+- `api-sistema-fe/app/Http/Controllers/AgenciaViajes/AlternativaController.php` → `update()` marca
+  `enviada` (~212): mismo criterio para `marcarEnviada()`
+- `api-sistema-fe/routes/api.php` → rutas de envío por correo (~969-975); la ruta de la ficha sigue el
+  prefijo existente `clients/{id}/actividades`
+- `admin-start-kit/src/views/agencia-viajes/cotizador/editar.vue` (no leerlo entero): `<EnviarCorreoCotizacion>`
+  ~800, import ~1402, comentario del envío ~1889; el resto con `grep`
+- `admin-start-kit/src/components/AgenciaViajes/EnviarCorreoCotizacion.vue` (233 líneas)
+- `admin-start-kit/src/views/clients/ficha.vue` (481 líneas): las secciones se deciden por
+  `contexto` (`GET clients/contexto` devuelve `giro`); **"Anotar contacto" solo con
+  `contexto.giro === 'agencia_viajes'`** (obs. 16: el CRM es solo Agencia por ahora; la tabla va en
+  core para no cerrarle la puerta a otros giros)
 
 ## Criterios de aceptación
 - [ ] **CA1** — "Ya la envié por otro medio" en borrador → enviada, `fecha_envio`, vencimiento (si hay días configurados) y una actividad. → test
