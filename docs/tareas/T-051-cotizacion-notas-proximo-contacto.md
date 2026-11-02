@@ -110,9 +110,65 @@ cd admin-start-kit && npm run type-check
 ---
 
 ## Resultado
-- **Commits:**
-- **Tests:** (nuevos / suite completa)
+- **Commits:** `80251b3` parte 1 (tabla, propuesta al enviar, agendar / hecha / reprogramar, cierre al
+  aceptar: CA1, CA2, CA3, CA5) · `74d0c14` parte 2 (bandeja «Mis pendientes de hoy», cabecera
+  «Próxima acción», pantalla Seguimiento y su menú: CA4).
+- **Tests:** nuevos en `tests/Feature/AgenciaViajes/CrmAccionTest.php` (19, con el reloj a las 21:00
+  de Lima para probar HoraPeru): CA1 `test_whatsapp_con_la_propuesta_…`, `test_correo_con_la_propuesta_…`,
+  `test_la_propuesta_acepta_hoy_peru_…`; CA2 `test_enviar_quitando_la_propuesta_…`; CA3
+  `test_aceptar_la_cotizacion_cierra_…`, `test_aceptar_sin_acciones_pendientes_…`; CA4
+  `test_mis_pendientes_de_hoy_en_inicio_…`, `test_seguimiento_trae_las_propias_…`,
+  `test_de_todos_o_de_otro_responsable_…`; CA5 `test_marcar_hecha_con_resultado_…`; más permisos,
+  validación y reprogramar. Ajustados: `MenuGirosTest` (Seguimiento en VENTAS) y `DashboardTest`
+  (bloque `pendientes`). Vitest: `formatDiaCorto` en `helpers/fecha.test.ts` (170/170).
+  Suite completa: 1851 pasan y 1 falla, el intermitente conocido `Fila13Fase1cFacturacionTest::descuento_del_combo…`, que pasa al correrlo solo (32/32, dos veces). `type-check`: 46 errores, todos previos (en `main` con los mismos archivos
+  hay más); ninguno en archivos tocados. `build` OK.
+- **Prueba funcional (CA6)** en agencia-demo con Playwright, cotización `CDKM-1126-0000003` (id 66),
+  alternativa «Test Avianca 3»: el panel «Enviar al cliente» propone «llamar el mié 04/11 (tú)»;
+  «otro medio» la crea y aparece la cabecera «Próxima acción»; «Agendar acción» (cobrar saldo hoy);
+  «Hecha» con resultado + siguiente (actividad `llamada` y nueva acción); Inicio muestra solo la de
+  hoy y «De todos»; Seguimiento con los tres bloques, «Reprogramar» desde la fila; la tarjeta aparece
+  en la reserva 31 y en la ficha del cliente 10. **Datos de prueba que quedaron en agencia-demo:**
+  `crm_acciones` 1-3 y `crm_actividades` 5-6 (cliente 10, cotización 66); borrarlos si molestan.
 - **Desviaciones de la tarea y por qué:**
+  - La propuesta «Llamar en N días» vive en el panel «Enviar al cliente» (una línea sobre los tres
+    medios, editable o quitable) y se repite en el modal del correo: el envío por WhatsApp no tiene
+    paso propio. Decidido con el usuario.
+  - Marcar hecha / reprogramar: su responsable siempre, o quien puede editar la referencia
+    (CotizacionPolicy / ReservaPolicy; sin referencia, `edit_client`). Decidido con el usuario.
+  - Si la cotización ya tiene una acción pendiente, al reenviar no se propone otra (evita duplicar
+    llamadas; se puede agendar a mano desde la misma línea).
+  - Al aceptar, la actividad `estado` se escribe solo si se cerró alguna acción (sin acciones no hay
+    nada que contar).
+  - `GET crm/acciones/opciones` devuelve `usuario_id`: el usuario que el login guarda en el navegador
+    no trae su `id` (ver hallazgos), y la propuesta tiene que ir «a nombre de quien envía».
+  - En Inicio, «hoy» sale del `$hoy` que `DashboardService::inicio()` ya calcula en hora de Lima (mismo
+    día que `HoraPeru::hoy()`), para respetar el reloj inyectable del servicio; el endpoint de la
+    bandeja usa `HoraPeru::hoyTexto()`.
+  - Las pestañas por origen («Mis acciones» · «Operación») aparecen solo cuando la bandeja trae más de
+    una `fuente`; hoy solo hay `crm`, así que no se muestran pestañas vacías.
+  - La tarjeta de acciones en la ficha del cliente se muestra solo en Agencia (obs. 16, respuesta 5).
+
+- **Revisión de Opus (02-nov):** el caché de `crmAccionService.opciones()` (una consulta por carga de la
+  app) guardaba el `usuario_id` de la sesión, y el logout no recarga la página: quien entraba
+  después en la misma pestaña proponía las llamadas a nombre del anterior (y la pantalla decía «tú»).
+  Se vacía con `olvidarOpciones()` en `auth.removeSession()` y al guardar la Configuración de
+  agencia (`dias_proximo_contacto`). El login sin `id` pasó a T-079 (rama
+  `fix/T-079-login-id-usuario`). El envío por correo con `view` se
+  descartó: `CotizacionPolicy::view` y `update` son la misma regla; solo difiere el permiso de
+  ruta (`enviar_correo`, propio a propósito), y los roles estándar tienen los dos.
 
 ## Hallazgos fuera de alcance
-- 
+- **El usuario guardado al iniciar sesión no tiene `id`** (`localStorage.user`: fullname, email,
+  avatar, role, permissions…). `usePermisosCredito().usuarioId` vale siempre 0, así que en
+  `views/creditos/detalle.vue` `puedeAnularPago(p.registrado_por, usuarioId, …)` nunca reconoce un pago
+  propio. Revisar qué devuelve el login y si Créditos depende de eso.
+- **HMR de Vite falla al recargar componentes** con `ReferenceError: Cannot access 'PortalLayout'
+  before initialization` en `router/routes.ts`: los cambios no se ven hasta una recarga completa (y a
+  veces ni así, hubo que tocar el archivo). Solo afecta al desarrollo.
+- `CotizacionEnvioController::enviar()` autoriza con `CotizacionPolicy::view` (no `update`), así que
+  quien solo puede ver una cotización y tiene `cotizaciones.enviar_correo` también deja la acción
+  propuesta. Es coherente con el envío actual, pero conviene decidir si enviar = editar, como en
+  WhatsApp / otro medio.
+- El 500 transitorio de Apache (memoria «fe_sendauth no password») apareció una vez en
+  `GET crm/acciones` durante la prueba; al reintentar respondió 200.

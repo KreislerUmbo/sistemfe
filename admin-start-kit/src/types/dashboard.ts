@@ -1,6 +1,8 @@
 // Inicio con datos reales (GET /dashboard, DashboardService). Montos como texto decimal por
 // moneda, ya sumados por el backend; cada bloque llega solo si el giro y los permisos lo permiten.
 
+import type { FilaBandeja } from '@/services/admin/crmAccionService'
+
 export interface ResumenVentas {
   moneda: string
   bruto: string
@@ -45,6 +47,8 @@ export interface BloquesDashboard {
     sin_stock_lista: { id: number; producto: string; stock: number }[]
   }
   cotizaciones?: { creadas: number; reservadas: number; enviadas: number; borrador: number; conversion: string }
+  // T-051: "Mis pendientes de hoy" (bandeja de pendientes, fuente crm por ahora).
+  pendientes?: { filas: FilaBandeja[]; puede_ver_todos: boolean }
   proximos?: {
     hasta: string
     viajes: { id: number; codigo: string | null; cliente: string | null; desde: string | null; hasta: string | null; pasajeros: number }[]

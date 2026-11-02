@@ -7,7 +7,9 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
+    AccionCrmModal: typeof import('./src/components/Clientes/AccionCrmModal.vue')['default']
     AccionesCredito: typeof import('./src/components/Creditos/AccionesCredito.vue')['default']
+    AccionesPendientes: typeof import('./src/components/Clientes/AccionesPendientes.vue')['default']
     AnotarContacto: typeof import('./src/components/Clientes/AnotarContacto.vue')['default']
     ApexChart: typeof import('./src/components/ApexChart.vue')['default']
     AppMenu: typeof import('./src/components/AppMenu/index.vue')['default']
@@ -106,6 +108,7 @@ declare module 'vue' {
     ItemManualForm: typeof import('./src/components/AgenciaViajes/ItemManualForm.vue')['default']
     JsVectorMap: typeof import('./src/components/JsVectorMap.vue')['default']
     JustGage: typeof import('./src/components/JustGage.vue')['default']
+    ListaPendientes: typeof import('./src/components/Clientes/ListaPendientes.vue')['default']
     LogoBox: typeof import('./src/components/LogoBox.vue')['default']
     MapaUbicacion: typeof import('./src/components/Clientes/MapaUbicacion.vue')['default']
     MargenEnVivo: typeof import('./src/components/AgenciaViajes/MargenEnVivo.vue')['default']
@@ -113,6 +116,7 @@ declare module 'vue' {
     MenuItemLink: typeof import('./src/components/AppMenu/MenuItemLink.vue')['default']
     MenuItemWithChildren: typeof import('./src/components/AppMenu/MenuItemWithChildren.vue')['default']
     MiCreditoCliente: typeof import('./src/components/Creditos/MiCreditoCliente.vue')['default']
+    MisPendientesHoy: typeof import('./src/components/Clientes/MisPendientesHoy.vue')['default']
     ModificacionDiferenciaPanel: typeof import('./src/components/AgenciaViajes/ModificacionDiferenciaPanel.vue')['default']
     NavbarPortal: typeof import('./src/components/portal/NavbarPortal.vue')['default']
     OpcionesFacturacionCampos: typeof import('./src/components/AgenciaViajes/OpcionesFacturacionCampos.vue')['default']
@@ -126,6 +130,7 @@ declare module 'vue' {
     PromoverHotelProveedorModal: typeof import('./src/components/AgenciaViajes/PromoverHotelProveedorModal.vue')['default']
     PromoverProveedorModal: typeof import('./src/components/AgenciaViajes/PromoverProveedorModal.vue')['default']
     ProveedorBuscador: typeof import('./src/components/AgenciaViajes/ProveedorBuscador.vue')['default']
+    ProximaAccionPropuesta: typeof import('./src/components/Clientes/ProximaAccionPropuesta.vue')['default']
     ResumenCronograma: typeof import('./src/components/Creditos/ResumenCronograma.vue')['default']
     RichTextEditor: typeof import('./src/components/RichTextEditor.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']

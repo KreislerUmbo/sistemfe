@@ -2,6 +2,7 @@
 // (plan-modulo-envio-correo-cotizacion.md). Cotizador y sección "Correo" de
 // Configuración de Agencia.
 import httpClient from '@/helpers/http-client'
+import type { ProximaAccion } from '@/services/admin/crmAccionService'
 
 export type RemitenteCorreo = {
   email: string
@@ -63,6 +64,8 @@ export const correoCotizacionService = {
     adjuntar_cotizacion: boolean
     adjuntar_condiciones: boolean
     marcar_enviada: boolean
+    // T-051: la llamada propuesta (null = quitada).
+    proxima_accion?: ProximaAccion
   }) {
     const response = await httpClient.post(`/alternativas/${alternativaId}/enviar-correo`, data)
     return response.data as { message: string; estado_alternativa: string; enviados_hoy: number }

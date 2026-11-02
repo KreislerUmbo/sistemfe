@@ -9,6 +9,7 @@ use App\Models\AgenciaViajes\Alternativa;
 use App\Models\AgenciaViajes\Cotizacion;
 use App\Models\AgenciaViajes\CotizacionEnvio;
 use App\Models\Client\CrmActividad;
+use App\Services\Crm\AccionesCrm;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -25,6 +26,10 @@ class CotizacionActividadController extends Controller
     // reemplazada quedaron fuera de la oferta.
     private const ESTADOS_SIN_ENVIO = ['aceptada', 'descartada', Alternativa::ESTADO_REEMPLAZADA];
 
+    public function __construct(private readonly AccionesCrm $acciones)
+    {
+    }
+
     // POST alternativas/{id}/marcar-enviada — WhatsApp o "ya la envié por otro medio".
     // En borrador la pasa a enviada (mismo criterio que AlternativaController::update());
     // ya enviada, solo deja otra actividad: la fecha de envío no cambia.
@@ -36,7 +41,11 @@ class CotizacionActividadController extends Controller
         $validator = $this->validadorEs($request->all(), [
             'canal' => 'required|in:' . CrmActividad::CANAL_WHATSAPP . ',' . CrmActividad::CANAL_OTRO,
             'nota' => 'nullable|string|max:' . CrmActividad::NOTA_MAX,
+            // T-051: la próxima acción propuesta ("Llamar en N días"); null = el vendedor la quitó.
+            'proxima_accion' => 'nullable|array',
+            ...AccionesCrm::reglas('proxima_accion.', false),
         ], ['canal' => 'medio de envío', 'nota' => 'nota']);
+        $validator->setCustomMessages(AccionesCrm::mensajes('proxima_accion.'));
 
         if ($validator->fails()) {
             return $this->respuestaValidacionEs($validator);
@@ -57,6 +66,7 @@ class CotizacionActividadController extends Controller
                 $alternativa->update(['estado' => 'enviada'] + $alternativa->camposAlMarcarEnviada());
             }
             $alternativa->registrarEnvio($datos['canal'], $nota !== '' ? $nota : null);
+            $this->acciones->crearAlEnviar($alternativa, $datos['proxima_accion'] ?? null);
         });
 
         $alternativa->refresh();

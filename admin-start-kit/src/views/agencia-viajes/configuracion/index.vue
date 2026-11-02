@@ -139,6 +139,12 @@
                                     <label class="form-label mb-1 small fw-semibold text-secondary">Días cotización estancada</label>
                                     <input type="number" class="form-control form-control-sm" v-model.number="form.dias_cotizacion_estancada">
                                 </div>
+                                <!-- T-051 (CRM C2): al enviar una cotización se propone "Llamar en N días". -->
+                                <div class="col-6 col-md-3">
+                                    <label class="form-label mb-1 small fw-semibold text-secondary">Días para volver a contactar</label>
+                                    <input type="number" min="1" max="365" class="form-control form-control-sm" v-model.number="form.dias_proximo_contacto">
+                                    <small class="text-muted d-block mt-1">Al enviar una cotización se propone llamar al cliente en estos días; se puede cambiar o quitar.</small>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -623,6 +629,7 @@ import { cuentaBancariaService } from '@/services/admin/cuentaBancariaService';
 import { configuracionAgenciaPdfService, type ConfiguracionAgenciaPdf, type AfiliacionTurismoOpcion } from '@/services/admin/configuracionAgenciaPdfService';
 import { useAgenciaViajesCatalogosStore } from '@/stores/agenciaViajesCatalogos';
 import { useAuthStore } from '@/stores/auth';
+import { crmAccionService } from '@/services/admin/crmAccionService';
 import type { ConfiguracionAgencia, CuentaBancaria } from '@/types/agencia-viajes';
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
@@ -676,6 +683,7 @@ const form = ref<ConfiguracionAgencia>({
     tip_afe_igv_default: '10',
     destino_tributario_default: 'nacional',
     moneda_cotizacion_default: 'PEN',
+    dias_proximo_contacto: 2,
 });
 
 const cuentasBancarias = ref<CuentaBancaria[]>([]);
@@ -780,6 +788,8 @@ const guardar = async () => {
         // sirviendo el margen_minimo/etc. viejo desde el cache compartido
         // (TTL 60s) hasta que expire solo — ver agenciaViajesCatalogos.ts.
         useAgenciaViajesCatalogosStore().invalidarConfigAgencia();
+        // T-051: ídem con dias_proximo_contacto, que la propuesta "Llamar en N días" guarda en caché.
+        crmAccionService.olvidarOpciones();
         (Swal as TVueSwalInstance).fire('Listo', res.message, 'success');
     } catch (error: any) {
         (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo guardar', 'error');

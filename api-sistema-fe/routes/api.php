@@ -67,6 +67,8 @@ use App\Http\Controllers\Central\TenantSubscriptionController;
 use App\Http\Controllers\Central\TenantSunatController;
 use App\Http\Controllers\Client\ClientController;
 use App\Http\Controllers\Client\CrmActividadController;
+use App\Http\Controllers\Client\CrmAccionController;
+use App\Http\Controllers\Client\CrmPendientesController;
 use App\Http\Controllers\Client\CompanyController;
 use App\Http\Controllers\CommercialQuote\CommercialQuoteAnticipoController;
 use App\Http\Controllers\CommercialQuote\CommercialQuoteController;
@@ -504,8 +506,27 @@ Route::group([
         ->middleware('permission:register_client');
     // T-050 (CRM C1): "Anotar contacto". Desde la ficha pide edit_client; desde una
     // cotización, cotizaciones.editar + CotizacionPolicy (lo resuelve el controller).
+    // T-051: también desde una reserva (reservas.editar + ReservaPolicy).
     Route::post("clients/{id}/actividades", [CrmActividadController::class, 'store'])->whereNumber('id')
-        ->middleware('permission:edit_client|cotizaciones.editar');
+        ->middleware('permission:edit_client|cotizaciones.editar|reservas.editar');
+    // T-051 (CRM C2): próximas acciones. La ruta pide alguno de los permisos de las pantallas
+    // desde las que se agenda (ficha, cotización, reserva); el controller resuelve la Policy de
+    // la referencia o, sin referencia, edit_client. Marcar hecha y reprogramar: su responsable
+    // o quien puede editar la referencia (AccionesCrm::puedeGestionar()).
+    Route::get("crm/acciones/opciones", [CrmAccionController::class, 'opciones'])
+        ->middleware('permission:list_client|edit_client|cotizaciones.ver|cotizaciones.ver_todas|reservas.ver|reservas.ver_todas');
+    Route::get("crm/acciones", [CrmAccionController::class, 'index'])
+        ->middleware('permission:list_client|edit_client|cotizaciones.ver|cotizaciones.ver_todas|reservas.ver|reservas.ver_todas');
+    Route::post("clients/{id}/acciones", [CrmAccionController::class, 'store'])->whereNumber('id')
+        ->middleware('permission:edit_client|cotizaciones.editar|reservas.editar');
+    Route::put("crm-acciones/{id}", [CrmAccionController::class, 'update'])->whereNumber('id')
+        ->middleware('permission:list_client|edit_client|cotizaciones.ver|cotizaciones.ver_todas|reservas.ver|reservas.ver_todas');
+    Route::post("crm-acciones/{id}/hecha", [CrmAccionController::class, 'marcarHecha'])->whereNumber('id')
+        ->middleware('permission:list_client|edit_client|cotizaciones.ver|cotizaciones.ver_todas|reservas.ver|reservas.ver_todas');
+    // T-051: bandeja de pendientes (pantalla Seguimiento, mismo permiso que Cotizaciones).
+    // "De todos" o de otro responsable: cotizaciones.ver_todas (en el controller).
+    Route::get("crm/pendientes", [CrmPendientesController::class, 'index'])
+        ->middleware('permission:cotizaciones.ver|cotizaciones.ver_todas');
     Route::resource("clients", ClientController::class)
         ->middlewareFor('store', 'permission:register_client')
         ->middlewareFor('update', 'permission:edit_client')

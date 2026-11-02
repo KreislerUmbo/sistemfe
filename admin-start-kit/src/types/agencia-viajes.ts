@@ -253,6 +253,8 @@ export type ConfiguracionAgencia = {
   modo_tours?: 'clasico' | 'nuevo';
   // T-033: moneda de la primera alternativa en Nueva cotización.
   moneda_cotizacion_default?: 'PEN' | 'USD';
+  // T-051 — días para la próxima acción propuesta al enviar ("Llamar en N días").
+  dias_proximo_contacto?: number;
 };
 
 export type TipAfeIgv = '10' | '20' | '30';

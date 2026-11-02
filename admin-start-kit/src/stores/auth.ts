@@ -5,6 +5,7 @@ import type { User } from "@/types/auth";
 import { ref } from "vue";
 import httpClient from "@/helpers/http-client";
 import { useMenuStore } from "@/stores/menu";
+import { crmAccionService } from "@/services/admin/crmAccionService";
 
 export const useAuthStore = defineStore("auth_store", () => {
   const user = ref(localStorage.getItem("user") ? JSON.parse(localStorage.getItem("user") || '') : null);//useSessionStorage<string | null>("RIZZ_VUE_USER", null);
@@ -38,6 +39,8 @@ export const useAuthStore = defineStore("auth_store", () => {
     // la pestaña — ensureLoaded() no volvería a pedirlo porque loaded
     // seguiría en true.
     useMenuStore().clear();
+    // T-051: mismo motivo — las opciones del CRM traen el usuario_id del que salió.
+    crmAccionService.olvidarOpciones();
     setTimeout(() => {
       router.push("/auth/sign-in");
     }, 25);

@@ -35,6 +35,8 @@ class ConfiguracionAgencia extends Model
         'dias_aviso_pago_proveedor',
         'dias_cotizacion_estancada',
         'dias_aviso_vencimiento_cotizacion',
+        // T-051 (CRM C2) — al enviar, se propone "Llamar en N días".
+        'dias_proximo_contacto',
         // Sesión 11i — descuento configurable por agencia (% o monto), por
         // ítem del lienzo y global del resumen del cotizador.
         'permitir_descuento_item',

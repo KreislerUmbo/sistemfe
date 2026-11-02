@@ -150,7 +150,7 @@ class MenuItemsSeeder extends Seeder
      * (codigo 'agencia.*') conservan su código y se mueven de grupo; las pantallas comunes
      * (Clientes, Mis ventas, Caja, Empresa, Usuarios…) son ítems nuevos 'ag_*' con la misma
      * ruta y el mismo permiso que el original, solo para el giro agencia_viajes.
-     * Seguimiento y Reportes comerciales (VENTAS) los agregan T-051 y T-062 cuando existan sus rutas.
+     * Seguimiento (VENTAS) lo agregó T-051; Reportes comerciales lo agrega T-062 cuando exista su ruta.
      */
     private function menuAgencia(): void
     {
@@ -160,6 +160,8 @@ class MenuItemsSeeder extends Seeder
         $this->item('agencia', null, $g, 'grupo', 'Agencia de viajes', 'iconoir-airplane', null, null, 6, self::SIN_AGENCIA);
 
         $ventas = $this->item('ag_ventas', null, $g, 'grupo', 'VENTAS', 'iconoir-shop', null, null, 2);
+        // T-051: bandeja de pendientes (acciones del CRM; después, los de operación de 11f).
+        $this->item('agencia.seguimiento', $ventas, $g, 'enlace', 'Seguimiento', null, 'agencia.seguimiento', 'agencia.cotizaciones', 1);
         $this->item('ag_ventas.clientes', $ventas, $g, 'enlace', 'Clientes', null, 'clients.index', 'list_client', 2);
         $this->item('agencia.cotizador', $ventas, $g, 'enlace', 'Cotizaciones', null, 'agencia.cotizador.index', 'agencia.cotizaciones', 3);
         $this->item('agencia.venta_directa', $ventas, $g, 'enlace', 'Venta directa', null, 'agencia.ventaDirecta', 'agencia.reservas', 4);

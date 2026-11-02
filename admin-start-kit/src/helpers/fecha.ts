@@ -76,3 +76,17 @@ export function partesFechaHoraPeru(f?: string | null): { fecha: string; hora: s
   const p = Object.fromEntries(formatoPeru.formatToParts(d).map((x) => [x.type, x.value]));
   return { fecha: `${p.year}-${p.month}-${p.day}`, hora: `${p.hour}:${p.minute}` };
 }
+
+const DIAS_SEMANA = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
+
+/**
+ * T-051 — fecha de negocio "YYYY-MM-DD" como "jue 05/11" (próximas acciones del CRM). Aritmética
+ * de calendario pura, como sumarDiasISO(): sin zona horaria.
+ */
+export function formatDiaCorto(ymd?: string | null): string {
+  const fecha = soloFechaISO(ymd);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return '';
+  const [a, m, d] = fecha.split('-').map(Number);
+  const dia = DIAS_SEMANA[new Date(Date.UTC(a, m - 1, d)).getUTCDay()];
+  return `${dia} ${String(d).padStart(2, '0')}/${String(m).padStart(2, '0')}`;
+}

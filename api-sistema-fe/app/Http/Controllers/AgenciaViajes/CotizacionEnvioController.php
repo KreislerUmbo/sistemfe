@@ -10,6 +10,7 @@ use App\Models\Client\CrmActividad;
 use App\Services\AgenciaViajes\AlternativaPdfService;
 use App\Services\AgenciaViajes\CondicionesGeneralesPdfService;
 use App\Services\AgenciaViajes\CorreoAgenciaService;
+use App\Services\Crm\AccionesCrm;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -33,6 +34,7 @@ class CotizacionEnvioController extends Controller
         private CorreoAgenciaService $correo,
         private AlternativaPdfService $alternativaPdf,
         private CondicionesGeneralesPdfService $condicionesPdf,
+        private AccionesCrm $acciones,
     ) {
     }
 
@@ -88,6 +90,9 @@ class CotizacionEnvioController extends Controller
             'adjuntar_cotizacion' => 'required|boolean',
             'adjuntar_condiciones' => 'required|boolean',
             'marcar_enviada' => 'required|boolean',
+            // T-051: la próxima acción propuesta ("Llamar en N días"); null = el vendedor la quitó.
+            'proxima_accion' => 'nullable|array',
+            ...AccionesCrm::reglas('proxima_accion.', false),
         ], [
             'para.required' => 'Indica al menos un destinatario.',
             'para.max' => 'Máximo ' . self::MAX_DESTINATARIOS . ' destinatarios.',
@@ -95,6 +100,7 @@ class CotizacionEnvioController extends Controller
             'cc.max' => 'Máximo ' . self::MAX_DESTINATARIOS . ' direcciones en copia.',
             'cc.*.email' => 'Revisa los correos en copia: alguno no es válido.',
             'asunto.required' => 'El asunto es obligatorio.',
+            ...AccionesCrm::mensajes('proxima_accion.'),
         ]);
 
         if ($validator->fails()) {
@@ -190,6 +196,7 @@ class CotizacionEnvioController extends Controller
         // T-050: el correo que salió queda en el historial del cliente (el fallido no: sigue
         // solo en cotizacion_envios, y el historial del cotizador lo muestra desde ahí).
         $alternativa->registrarEnvio(CrmActividad::CANAL_CORREO, 'Para: ' . implode(', ', $para));
+        $this->acciones->crearAlEnviar($alternativa, $datos['proxima_accion'] ?? null);
 
         return response()->json([
             'code' => 200,

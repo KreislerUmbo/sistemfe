@@ -910,6 +910,17 @@ const comercialRoutes = [
     },
     component: () => import("@/views/agencia-viajes/cotizador/nueva.vue"),
   },
+  // T-051 (CRM C2): bandeja de pendientes, mismo permiso que Cotizaciones.
+  {
+    path: "/agencia-viajes/seguimiento",
+    name: "agencia.seguimiento",
+    meta: {
+      title: setTitle("Seguimiento"),
+      authRequired: true,
+      permission: 'agencia.cotizaciones',
+    },
+    component: () => import("@/views/agencia-viajes/seguimiento/index.vue"),
+  },
   {
     path: "/agencia-viajes/cotizador/:id",
     name: "agencia.cotizador.editar",

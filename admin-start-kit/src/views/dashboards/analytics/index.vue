@@ -25,6 +25,13 @@
     </div>
 
     <template v-if="b">
+      <!-- T-051 (CRM C2, agencia): lo que toca hacer hoy va primero. -->
+      <div v-if="b.pendientes" class="row g-3 mb-3">
+        <div class="col-12">
+          <MisPendientesHoy :inicial="b.pendientes" />
+        </div>
+      </div>
+
       <!-- Indicadores -->
       <div v-if="b.ventas || b.por_cobrar || b.sunat" class="row g-3 mb-3 cifra">
         <div v-if="b.ventas" class="col-12 col-sm-6 col-xl-3">
@@ -281,6 +288,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import DefaultLayout from '@/layouts/DefaultLayout.vue'
 import ApexChart from '@/components/ApexChart.vue'
+import MisPendientesHoy from '@/components/Clientes/MisPendientesHoy.vue'
 import { dashboardService } from '@/services/admin/dashboardService'
 import { useAuthStore } from '@/stores/auth'
 import { useLayoutStore } from '@/stores/layout'
