@@ -89,9 +89,25 @@ Prueba a mano en `agencia-demo`: cotización de 2 adultos, un pasaje para uno y 
 ---
 
 ## Resultado
-- **Commits:**
-- **Tests:**
+- **Commits:** rama `feat/T-076-pasaje-aereo-por-pasajero` (un commit).
+- **Tests:** `PasajeAereoPorPasajeroTest` (CA1, CA2, CA3, CA4, CA6 + infante sin la marca + pasar un
+  pasaje anterior a la fórmula nueva). Suite completa contra PostgreSQL: 1794 pruebas en verde.
+  `AlternativaItemPasajeAereoTest`: 4 valores esperados cambiaron (el fee de 300 ahora va × pasajeros).
+  CA5 y la fórmula de un pasaje viejo, probados en `agencia-demo` (cotización CDKM-1126-0000003, con
+  Playwright): el pasaje anterior sigue en USD 645 y dice «monto totalizado para el grupo»; con
+  un pasaje de Avianca para Adulto 1, el nuevo muestra «ya tiene pasaje Avianca» y marca solo a
+  Adulto 2. La alternativa de prueba se borró.
 - **Desviaciones de la tarea y por qué:**
+  - Respuesta del usuario: el infante **sí** paga el fee.
+  - Pasar un pasaje anterior a la fórmula nueva: lo decide el vendedor con un check «Calcular por
+    pasajero» que solo aparece al editar un pasaje anterior; hay que volver a cargar los montos
+    (los guardados son del grupo). Sin el check, conserva su fórmula.
+  - Se guarda el monto por pasajero en `cargos` (no el multiplicado); el costo/venta guardados sí
+    son los totales.
+  - El PDF no muestra los cargos: no se tocó.
+  - Migración aplicada en `agencia-demo` y en `sistemafe_test_migrations`; falta correr
+    `tenants:migrate-verticales` en producción al desplegar.
 
 ## Hallazgos fuera de alcance
--
+- Al editar un pasaje y luego tocar «Nueva» alternativa sin cerrar el formulario, el formulario queda
+  en modo edición del pasaje anterior (`itemPasajeAereoEnEdicion` no se limpia al cambiar de alternativa).

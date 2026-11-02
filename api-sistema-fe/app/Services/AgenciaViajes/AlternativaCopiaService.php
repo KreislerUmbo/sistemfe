@@ -183,6 +183,7 @@ class AlternativaCopiaService
                         'cargos' => $pasaje->cargos,
                         'tua_incluida_en_tarifa' => $pasaje->tua_incluida_en_tarifa,
                         'fee_agencia_monto' => $pasaje->fee_agencia_monto,
+                        'montos_por_pasajero' => $pasaje->montos_por_pasajero,
                         'tip_afe_igv' => $pasaje->tip_afe_igv,
                         'fecha_cotizado' => $pasaje->fecha_cotizado,
                         'tarifa_valida_hasta' => $pasaje->tarifa_valida_hasta,
