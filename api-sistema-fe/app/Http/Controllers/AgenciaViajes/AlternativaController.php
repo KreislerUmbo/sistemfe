@@ -14,12 +14,12 @@ use App\Models\AgenciaViajes\OpcionHotelTarifa;
 use App\Models\AgenciaViajes\OpcionMayorista;
 use App\Models\AgenciaViajes\OpcionMayoristaOpcional;
 use App\Models\AgenciaViajes\Reserva;
-use App\Models\AgenciaViajes\TipoCambioAgencia;
+use App\Http\Controllers\Concerns\ValidaEnEspanol;
 use App\Services\AgenciaViajes\AlternativaCopiaService;
+use App\Services\AgenciaViajes\AlternativaCreacionException;
+use App\Services\AgenciaViajes\AlternativaCreacionService;
 use App\Services\AgenciaViajes\AlternativaPdfService;
 use App\Services\AgenciaViajes\PriceEngineService;
-use App\Services\TipoCambio\TipoCambioSanityService;
-use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -29,14 +29,27 @@ use Illuminate\Support\Facades\Validator;
 class AlternativaController extends Controller
 {
     use AutorizaCotizacion;
+    use ValidaEnEspanol;
 
-    private const MAX_ALTERNATIVAS_POR_COTIZACION = 5;
+    private const MAX_ALTERNATIVAS_POR_COTIZACION = AlternativaCreacionService::MAX_ALTERNATIVAS_POR_COTIZACION;
+
+    // T-033 (R7) — nombre legible de cada campo en los mensajes de validación.
+    private const ATRIBUTOS = [
+        'nombre' => 'nombre',
+        'moneda_cotizacion' => 'moneda',
+        'tipo_cambio_origen' => 'origen del tipo de cambio',
+        'tipo_cambio_valor' => 'tipo de cambio',
+        'tipo_cambio_confirmado' => 'confirmación del tipo de cambio',
+        'estado' => 'estado',
+        'descuento_global_pct' => 'descuento global (%)',
+        'descuento_global_monto' => 'descuento global',
+    ];
 
     public function __construct(
         private PriceEngineService $priceEngine,
         private AlternativaPdfService $alternativaPdfService,
-        private TipoCambioSanityService $tipoCambioSanity,
         private AlternativaCopiaService $alternativaCopia,
+        private AlternativaCreacionService $alternativaCreacion,
     ) {
     }
 
@@ -45,8 +58,9 @@ class AlternativaController extends Controller
         $cotizacion = Cotizacion::findOrFail($cotizacionId);
         $this->autorizarCotizacion('update', $cotizacion);
 
-        $validator = Validator::make($request->all(), [
-            'nombre' => 'required|string|max:100',
+        $validator = $this->validadorEs($request->all(), [
+            // T-033: vacío = "Alternativa {letra}" sugerida, en vez de error.
+            'nombre' => 'nullable|string|max:100',
             'moneda_cotizacion' => 'required|in:PEN,USD',
             'tipo_cambio_origen' => 'required|in:dia,agencia',
             // Opcional: si se manda, registra un tipo_cambio_agencia NUEVO con
@@ -56,58 +70,27 @@ class AlternativaController extends Controller
             // Segundo paso consciente si tipo_cambio_valor cae fuera del
             // rango de sanidad (2.0-6.0 USD/PEN) — ver TipoCambioSanityService.
             'tipo_cambio_confirmado' => 'nullable|boolean',
-        ]);
+        ], self::ATRIBUTOS);
 
         if ($validator->fails()) {
-            return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
-        }
-
-        if ($cotizacion->alternativas()->count() >= self::MAX_ALTERNATIVAS_POR_COTIZACION) {
-            return response()->json([
-                'code' => 422,
-                'message' => 'Esta cotización ya tiene el máximo de ' . self::MAX_ALTERNATIVAS_POR_COTIZACION . ' alternativas permitidas.',
-            ], 422);
+            return $this->respuestaValidacionEs($validator);
         }
 
         $validado = $validator->validated();
 
-        $tipoCambio = $this->resolverTipoCambio($validado['tipo_cambio_origen'], $validado['tipo_cambio_valor'] ?? null, $request, $validado['tipo_cambio_confirmado'] ?? false);
-        if ($tipoCambio instanceof JsonResponse) {
-            return $tipoCambio;
+        try {
+            $alternativa = $this->alternativaCreacion->crear(
+                $cotizacion,
+                $validado['nombre'] ?? null,
+                $validado['moneda_cotizacion'],
+                $validado['tipo_cambio_origen'],
+                isset($validado['tipo_cambio_valor']) ? (float) $validado['tipo_cambio_valor'] : null,
+                (bool) ($validado['tipo_cambio_confirmado'] ?? false),
+                $request->user()?->id ?? auth()->id(),
+            );
+        } catch (AlternativaCreacionException $e) {
+            return response()->json(['code' => 422, 'message' => $e->getMessage()] + $e->extra, 422);
         }
-
-        $letra = chr(65 + $cotizacion->alternativas()->count()); // A, B, C...
-
-        $alternativa = DB::transaction(function () use ($cotizacion, $validado, $tipoCambio, $letra) {
-            $alternativa = Alternativa::create([
-                'cotizacion_id' => $cotizacion->id,
-                // 29-ago-2026 — capitalización tipo título solo cuando el
-                // usuario tipeó algo; el fallback autogenerado ya está bien
-                // formado, no hace falta pasarlo por la función.
-                'nombre' => $validado['nombre'] ? \App\Services\TextoFormatoService::capitalizarNombrePropio($validado['nombre']) : "Alternativa {$letra}",
-                'estado' => 'borrador',
-                'moneda_cotizacion' => $validado['moneda_cotizacion'],
-                'tipo_cambio_aplicado' => $tipoCambio->valor,
-                'tipo_cambio_origen' => $validado['tipo_cambio_origen'],
-                'total' => 0,
-            ]);
-
-            // Sesión 12c (auditoria-arquitectonica-agencia-viajes.md §7/FASE
-            // 2) — toda alternativa nace con exactamente 1 destino, igual
-            // que el backfill de 12b dejó a las históricas. Sin esto, una
-            // alternativa creada de acá en adelante quedaría con 0 filas en
-            // alternativa_destinos, rompiendo esa garantía.
-            AlternativaDestino::create([
-                'alternativa_id' => $alternativa->id,
-                'destino_atractivo_id' => AlternativaDestino::resolverDestinoAtractivoId($cotizacion->destino),
-                'destino_texto' => $cotizacion->destino,
-                'orden' => 1,
-                'fecha_inicio' => $cotizacion->fecha_viaje_desde,
-                'fecha_fin' => $cotizacion->fecha_viaje_hasta,
-            ]);
-
-            return $alternativa;
-        });
 
         return response()->json([
             'code' => 200,
@@ -121,8 +104,10 @@ class AlternativaController extends Controller
         $alternativa = Alternativa::findOrFail($id);
         $this->autorizarCotizacion('update', $alternativa);
 
-        $validator = Validator::make($request->all(), [
+        $validator = $this->validadorEs($request->all(), [
             'nombre' => 'nullable|string|max:100',
+            // T-033 — cambiar la moneda solo sin servicios (ver más abajo).
+            'moneda_cotizacion' => 'nullable|in:PEN,USD',
             'estado' => 'nullable|in:borrador,enviada,aceptada,descartada',
             'descuento_global_pct' => 'nullable|numeric|min:0|max:100',
             // Sesión 11i — alternativa al de arriba cuando configuracion_agencia.
@@ -131,10 +116,10 @@ class AlternativaController extends Controller
             // el modo configurado) — no se valida la exclusión mutua acá
             // porque no hay forma de que ambos lleguen juntos desde la UI.
             'descuento_global_monto' => 'nullable|numeric|min:0',
-        ]);
+        ], self::ATRIBUTOS);
 
         if ($validator->fails()) {
-            return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
+            return $this->respuestaValidacionEs($validator);
         }
 
         $validado = array_filter($validator->validated(), fn ($v) => $v !== null);
@@ -142,6 +127,19 @@ class AlternativaController extends Controller
         // payload (array_filter ya sacó los null, así que isset alcanza).
         if (isset($validado['nombre'])) {
             $validado['nombre'] = \App\Services\TextoFormatoService::capitalizarNombrePropio($validado['nombre']);
+        }
+
+        // T-033 — la moneda se cambia solo mientras no haya servicios: con servicios habría que
+        // convertir sus precios (fuera de alcance). La misma moneda no es un cambio.
+        $cambiaMoneda = isset($validado['moneda_cotizacion']) && $validado['moneda_cotizacion'] !== $alternativa->moneda_cotizacion;
+        if (! $cambiaMoneda) {
+            unset($validado['moneda_cotizacion']);
+        } elseif ($alternativa->items()->exists()) {
+            return response()->json([
+                'code' => 422,
+                'message' => "Esta alternativa ya tiene servicios: su moneda no se puede cambiar. Quita los servicios o crea otra alternativa en {$validado['moneda_cotizacion']}.",
+                'errors' => ['moneda_cotizacion' => ["Quita los servicios o crea otra alternativa en {$validado['moneda_cotizacion']}."]],
+            ], 422);
         }
 
         // Bug real (07-sep-2026, auditoría de mantenibilidad 05-sep-2026):
@@ -198,6 +196,17 @@ class AlternativaController extends Controller
         }
 
         $lineasFueraDePiso = [];
+
+        // T-033 — moneda nueva con el tipo de cambio del día (mismo orden que al crear).
+        if ($cambiaMoneda) {
+            try {
+                $tipoCambio = $this->alternativaCreacion->resolverTipoCambio('dia', null, $request->user()?->id ?? auth()->id());
+            } catch (AlternativaCreacionException $e) {
+                return response()->json(['code' => 422, 'message' => $e->getMessage()] + $e->extra, 422);
+            }
+            $validado['tipo_cambio_aplicado'] = $tipoCambio->valor;
+            $validado['tipo_cambio_origen'] = 'dia';
+        }
 
         DB::transaction(function () use ($alternativa, $validado, &$lineasFueraDePiso) {
             if (($validado['estado'] ?? null) === 'enviada') {
@@ -551,36 +560,5 @@ class AlternativaController extends Controller
         Alternativa::where('cotizacion_id', $alternativa->cotizacion_id)
             ->where('id', '!=', $alternativa->id)
             ->update(['estado' => 'descartada']);
-    }
-
-    private function resolverTipoCambio(string $origen, ?float $valorNuevo, Request $request, bool $confirmado = false): TipoCambioAgencia|JsonResponse
-    {
-        if ($valorNuevo !== null) {
-            if (! $this->tipoCambioSanity->esRazonable($valorNuevo) && ! $confirmado) {
-                return response()->json([
-                    'code' => 422,
-                    'message' => "El valor {$valorNuevo} está fuera del rango esperado para USD/PEN (" . TipoCambioSanityService::RANGO_MINIMO . '-' . TipoCambioSanityService::RANGO_MAXIMO . '). Si es correcto, reenviá con tipo_cambio_confirmado=true.',
-                    'requiere_confirmacion' => true,
-                ], 422);
-            }
-
-            return TipoCambioAgencia::create([
-                'fecha' => \App\Services\HoraPeru::hoyTexto(),
-                'origen' => $origen,
-                'valor' => $valorNuevo,
-                'registrado_por' => $request->user()->id,
-            ]);
-        }
-
-        $ultimo = TipoCambioAgencia::where('origen', $origen)->orderByDesc('fecha')->orderByDesc('id')->first();
-
-        if (! $ultimo) {
-            return response()->json([
-                'code' => 422,
-                'message' => "No hay ningún tipo de cambio '{$origen}' registrado todavía — indicá tipo_cambio_valor para registrar uno nuevo.",
-            ], 422);
-        }
-
-        return $ultimo;
     }
 }

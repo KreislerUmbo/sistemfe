@@ -54,7 +54,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 | T-029 | AGE | Tour clásico desde plantilla: cada servicio nace con su tratamiento tributario; costo sin infantes (H18, H19) | bloqueada: espera la decisión de la obs. 10 (tributario deducido por reglas) y al contador | — | |
 | T-031 | AGE | Servicio de tour sin precio de niño: el niño paga como adulto; hoteles no cambian (H7) | por hacer | — | |
 | T-032 | AGE | Cotizador: actualizar solo lo que cambió + indicadores de carga (R5, R4, H13) | por hacer | — | |
-| T-033 | AGE | La primera alternativa nace con la cotización; nombre y moneda editables; errores en español (R1, R7, H23, H24) | en curso | — | `feat/T-033-alternativa-automatica` |
+| T-033 | AGE | La primera alternativa nace con la cotización; nombre y moneda editables; errores en español (R1, R7, H23, H24) | en revisión | — | `feat/T-033-alternativa-automatica` |
 | T-034 | AGE | Hotel: noches calculadas y ocupantes marcados por defecto (R2) | por hacer | — | |
 | T-035 | AGE | Biblioteca filtrada por el destino activo; sin tours "solo itinerario" en Local (R3) | por hacer | — | |
 | T-036 | AGE | Mayorista: etiquetas, primera opción elegida sola, "solo adultos" a la vista (R6, H22) | por hacer | — | |

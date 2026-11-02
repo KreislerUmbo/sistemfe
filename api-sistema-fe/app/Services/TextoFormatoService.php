@@ -56,6 +56,7 @@ class TextoFormatoService
 
         $palabras = explode(' ', $texto);
         $resultado = [];
+        $ultimo = count($palabras) - 1;
 
         foreach ($palabras as $indice => $palabra) {
             if ($palabra === '') {
@@ -65,7 +66,9 @@ class TextoFormatoService
             $palabraMinuscula = mb_strtolower($palabra, 'UTF-8');
             $esConector = in_array($palabraMinuscula, self::CONECTORES, true);
 
-            if ($esConector && $indice !== 0) {
+            // T-033 (H24) — una letra suelta al final es una etiqueta ("Alternativa A",
+            // "Opción E"), no el conector "a"/"e"/"o"/"u"/"y": un conector nunca cierra el texto.
+            if ($esConector && $indice !== 0 && ! ($indice === $ultimo && mb_strlen($palabraMinuscula, 'UTF-8') === 1)) {
                 $resultado[] = $palabraMinuscula;
                 continue;
             }

@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\Validator;
 
 // Calculadora de conversión de moneda (07-sep-2026, pedido del usuario) —
 // hasta ahora TipoCambioAgencia solo se leía/escribía desde adentro de
-// AlternativaController::resolverTipoCambio() (privado, solo al crear una
+// AlternativaCreacionService::resolverTipoCambio() (solo al crear una
 // alternativa). El vendedor no tenía forma de consultar "¿cuál es el
 // último tipo de cambio que registré?" fuera de ese momento puntual — el
 // hallazgo real que motivó esto: una alternativa quedó con tipo_cambio_

@@ -26,6 +26,11 @@ export const cotizacionService = {
     fecha_viaje_desde?: string | null
     fecha_viaje_hasta?: string | null
     pasajeros: Array<{ edad: number }>
+    // T-033 — la primera alternativa nace con la cotización.
+    alternativa_nombre?: string | null
+    moneda_cotizacion?: 'PEN' | 'USD'
+    tipo_cambio_valor?: number | null
+    tipo_cambio_confirmado?: boolean
   }) {
     const response = await httpClient.post('/cotizaciones', data)
     return response.data

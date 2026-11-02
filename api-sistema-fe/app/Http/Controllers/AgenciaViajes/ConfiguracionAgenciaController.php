@@ -39,6 +39,7 @@ class ConfiguracionAgenciaController extends Controller
         'tip_afe_igv_default' => '10',
         'destino_tributario_default' => 'nacional',
         'modo_tours' => 'clasico',
+        'moneda_cotizacion_default' => 'PEN',
     ];
 
     public function show()
@@ -74,6 +75,8 @@ class ConfiguracionAgenciaController extends Controller
             'condiciones_generales_servicio' => 'nullable|string',
             'tip_afe_igv_default' => 'required|string|in:10,20,30',
             'destino_tributario_default' => 'required|string|in:amazonia,nacional,extranjero',
+            // T-033 — opcional: sin el campo, se conserva el que había.
+            'moneda_cotizacion_default' => 'sometimes|required|in:PEN,USD',
         ]);
 
         if ($validator->fails()) {

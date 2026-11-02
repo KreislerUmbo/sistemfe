@@ -107,6 +107,15 @@
                                     <input type="number" step="0.01" min="0" class="form-control form-control-sm" v-model.number="form.margen_minimo_aceptable_pct">
                                     <small class="text-muted d-block mt-1">Usado en el tab "Incluye" de un tour para marcar en rojo el margen resultante bajo este umbral.</small>
                                 </div>
+                                <!-- T-033: moneda prellenada de la primera propuesta en Nueva cotización. -->
+                                <div class="col-6 col-md-3">
+                                    <label class="form-label mb-1 small fw-semibold text-secondary">Moneda de cotización por defecto</label>
+                                    <select class="form-select form-select-sm" v-model="form.moneda_cotizacion_default">
+                                        <option value="PEN">Soles (PEN)</option>
+                                        <option value="USD">Dólares (USD)</option>
+                                    </select>
+                                    <small class="text-muted d-block mt-1">Se prellena al crear una cotización; se puede cambiar en cada una.</small>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -666,6 +675,7 @@ const form = ref<ConfiguracionAgencia>({
     condiciones_generales_servicio: null,
     tip_afe_igv_default: '10',
     destino_tributario_default: 'nacional',
+    moneda_cotizacion_default: 'PEN',
 });
 
 const cuentasBancarias = ref<CuentaBancaria[]>([]);

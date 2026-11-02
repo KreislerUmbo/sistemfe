@@ -101,9 +101,53 @@ cd admin-start-kit && npm run type-check && npm run build
 ---
 
 ## Resultado
-- **Commits:**
+- **Commits:** ver `git log main..feat/T-033-alternativa-automatica` (un commit: `feat(agencia): …(T-033)`).
 - **Tests:**
+  - `tests/Feature/AgenciaViajes/AlternativaAutomaticaTest.php` (nuevo, 9 tests): CA1, CA2, CA3,
+    CA5, CA8 (los tres caminos del tipo de cambio + fuera de rango con confirmación) y CA6 del lado
+    del backend (mensaje en español y `errors` por campo).
+  - `tests/Unit/TextoFormatoServiceTest.php`: CA4 (2 tests nuevos).
+  - `--filter="Cotizacion|Alternativa|TextoFormato|Capitalizacion|Sesion12c|ConfiguracionAgencia"`:
+    225 verdes. Suite completa contra PostgreSQL: 1821 verdes (7137 aserciones).
+  - Frontend: `type-check` con los mismos 46 errores que `main` (todos ajenos: portal,
+    fake-backend, router); ninguno en archivos de esta tarea. `build` ok.
+  - Prueba funcional (Playwright, agencia-demo): Nueva cotización muestra «Propuesta» con
+    "Alternativa A" y la moneda de Configuración; «Crear» vacío muestra los 3 errores junto a cada
+    campo, sin ventana; con cliente/destino/pasajero, nombre "opción económica" y USD → abre el
+    cotizador con la pastilla "Opción Económica · USD"; el selector de moneda la pasa a PEN; "+ Nueva"
+    muestra placeholder "Alternativa B" y con el nombre vacío crea "Alternativa B". Queda en
+    agencia-demo la cotización de prueba CDKM-1126-0000005 (id 73).
+- **Regla de H24 (exacta):** en `capitalizarNombrePropio()`, un conector se deja en minúscula salvo
+  que sea la primera palabra **o** sea la última palabra **y** tenga una sola letra
+  ("Alternativa A", "Opción E", "Lima y Cusco" → la "y" sigue en minúscula porque no es la última).
 - **Desviaciones de la tarea y por qué:**
+  - Campos de `POST cotizaciones` para la propuesta: `alternativa_nombre`, `moneda_cotizacion`,
+    `tipo_cambio_valor`, `tipo_cambio_confirmado`; todos opcionales (vacíos = "Alternativa A" y
+    `moneda_cotizacion_default`). El origen siempre es `dia`.
+  - El paso 2 (SUNAT) solo se aplica con origen `dia` (un TC "de la agencia" no sale de SUNAT); con
+    `agencia` sin ninguno registrado sigue el 422 pidiendo el valor. El `TipoCambioAgencia`
+    registrado desde SUNAT lleva la **fecha de SUNAT** (si hoy no publicó, la del último día hábil),
+    no la de hoy.
+  - Nombre sugerido: la letra por cantidad de alternativas, saltando las ya usadas por nombre (si se
+    borró la B y quedan A y C, la tercera no repite "Alternativa C": sale "Alternativa D"). El
+    frontend replica la misma regla para el placeholder.
+  - Cambiar moneda con `PUT alternativas/{id}`: resuelve el tipo de cambio **antes** de la
+    transacción del update (si se registra el de SUNAT, es un dato válido aunque el update falle).
+    Mandar la misma moneda no es un cambio (no bloquea renombrar una alternativa con servicios).
+  - Selector de moneda: va dentro de la pastilla activa (junto al lápiz de renombrar), oculto en
+    cotizaciones de modificación de reserva. Su error (422 con servicios) se muestra como toast: no
+    es un formulario.
+  - R7: el proyecto no tiene `lang/` (locale `en`), así que se agregó el trait
+    `Concerns\ValidaEnEspanol` (mensajes de las reglas usadas + nombres legibles por campo), aplicado
+    a los 5 validadores de `AlternativaController` y `CotizacionController`. Los 422 llevan además
+    `errors` por campo. `ConfiguracionAgenciaController` no se tocó en esto.
+  - `AlternativaController::resolverTipoCambio()` (privado) se movió a
+    `AlternativaCreacionService::resolverTipoCambio()`; el tope de 5 alternativas también vive ahí.
 
 ## Hallazgos fuera de alcance
--
+- Siguen en inglés los mensajes de validación de los demás controllers de Agencia (p. ej.
+  `AlternativaItemController`, `ConfiguracionAgenciaController`): el trait `ValidaEnEspanol` se
+  puede reusar.
+- El form "+ Nueva" de `editar.vue` prellena «Valor nuevo» con la sugerencia SUNAT, así que cada
+  alternativa nueva registra un `TipoCambioAgencia` aunque ya haya uno del día igual. Comportamiento
+  previo a esta tarea; con el orden nuevo ese prellenado ya no hace falta.

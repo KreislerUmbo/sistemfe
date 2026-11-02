@@ -60,6 +60,8 @@ class ConfiguracionAgencia extends Model
         // escribe; solo ConfiguracionAgenciaController::actualizarModoTours()
         // (Super-Admin).
         'modo_tours',
+        // T-033: moneda de la "Alternativa A" automática de Nueva cotización.
+        'moneda_cotizacion_default',
     ];
 
     protected $casts = [
