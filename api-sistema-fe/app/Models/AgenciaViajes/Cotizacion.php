@@ -24,7 +24,7 @@ use Illuminate\Database\Eloquent\Model;
 // generar) porque CodigoGeneradorService::generarParaReserva() lo usa para
 // extraer el resto del código al derivar el de la reserva (Str::after()).
 //
-// origen (09-oct-2026): 'cotizador' | 'venta_directa'. Una venta directa
+// origen (09-oct-2026): 'cotizador' | 'venta_directa' | 'modificacion' (T-002). Una venta directa
 // crea esta misma cadena como soporte interno de su reserva, pero no es una
 // cotización comercial — el listado del Cotizador y el Inicio la excluyen
 // (scopeDelCotizador()) y su reserva no deriva el código como la de una
@@ -39,6 +39,10 @@ class Cotizacion extends Model
     public const ORIGEN_COTIZADOR = 'cotizador';
 
     public const ORIGEN_VENTA_DIRECTA = 'venta_directa';
+
+    // T-002: copia editable de una reserva aceptada ("Modificar reserva", D-AGE-030). Oculta de los
+    // listados comerciales por delCotizador() y nunca se acepta por el camino normal.
+    public const ORIGEN_MODIFICACION = 'modificacion';
 
     protected $table = 'cotizaciones';
 
@@ -77,10 +81,16 @@ class Cotizacion extends Model
         return $this->hasMany(CotizacionPasajero::class, 'cotizacion_id');
     }
 
+    // orderBy('id'): sin esto Postgres no garantiza el orden, y un UPDATE (ej. recalcular el
+    // total al agregar un hotel) reubicaba la alternativa: la pestaña 2 pasaba a ser la 1
+    // (reporte del usuario 31-oct-2026; mismo bug que Alternativa::items()).
     public function alternativas()
     {
-        return $this->hasMany(Alternativa::class, 'cotizacion_id');
+        return $this->hasMany(Alternativa::class, 'cotizacion_id')->orderBy('id');
     }
+
+    // Lo que estadoResumen() lee; precargarlo en los listados evita una consulta por fila.
+    public const RELACIONES_ESTADO_RESUMEN = ['alternativas.reserva', 'alternativas.modificacionAplicada.reserva'];
 
     // Taxonomía de estados del listado (09-sep-2026, pedido del usuario:
     // "vamos analizando los estados de las cotizaciones") — Cotizacion NO
@@ -88,7 +98,7 @@ class Cotizacion extends Model
     // cotización, más el estado de la Reserva una vez que alguna se acepta).
     // Este método DERIVA un único estado resumen para mostrar en el
     // listado, sin duplicar esa fuente de verdad en una columna nueva.
-    // Requiere 'alternativas.reserva' precargado (ver
+    // Requiere RELACIONES_ESTADO_RESUMEN precargado (ver
     // CotizacionController::index()) — si no vino cargado, dispara el
     // lazy-load normal de Eloquent (aceptable fuera de listados masivos).
     //
@@ -117,6 +127,14 @@ class Cotizacion extends Model
             return $aceptada->reserva && $aceptada->reserva->estado === 'cancelada' ? 'anulada' : 'reservada';
         }
 
+        // T-072: tras aplicar una modificación la versión vendida queda 'reemplazada' y la reserva
+        // ya apunta a la de la cotización de modificación; la original sigue siendo la cotización
+        // de esa reserva (se llega por reserva_modificaciones.alternativa_vendida_id).
+        $reemplazada = $alternativas->firstWhere('estado', Alternativa::ESTADO_REEMPLAZADA);
+        if ($reemplazada) {
+            return $reemplazada->modificacionAplicada?->reserva?->estado === 'cancelada' ? 'anulada' : 'reservada';
+        }
+
         $enviadas = $alternativas->where('estado', 'enviada');
         if ($enviadas->isNotEmpty()) {
             $todasVencidas = $enviadas->every(fn (Alternativa $a) => $a->fecha_vencimiento && $a->fecha_vencimiento->isPast());
@@ -134,6 +152,11 @@ class Cotizacion extends Model
     public function scopeDelCotizador(Builder $query): Builder
     {
         return $query->where('origen', self::ORIGEN_COTIZADOR);
+    }
+
+    public function esModificacion(): bool
+    {
+        return $this->origen === self::ORIGEN_MODIFICACION;
     }
 
     public function esVentaDirecta(): bool

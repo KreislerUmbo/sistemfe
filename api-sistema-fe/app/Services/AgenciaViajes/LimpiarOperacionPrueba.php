@@ -33,7 +33,7 @@ class LimpiarOperacionPrueba
         // Reservas y salidas
         'salida_vehiculo_reservas', 'salida_vehiculos', 'salida_servicios',
         'reserva_item_vuelo_pasajero', 'reserva_item_pasajero', 'reserva_items',
-        'salidas_operativas', 'reserva_pasajeros', 'reserva',
+        'salidas_operativas', 'reserva_modificaciones', 'reserva_pasajeros', 'reserva',
         // Cotizador
         'cotizacion_envios', 'cotizacion_pasaje_aereo', 'alternativa_items',
         'opciones_hotel_tarifas', 'opciones_hotel', 'opcion_mayorista_opcionales',

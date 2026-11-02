@@ -18,15 +18,23 @@ Decisiones: D-AGE-030, D-AGE-031, D-AGE-032, D-AGE-033.
   listados comerciales ni se puede aceptar por el camino normal.
 - **R-AGE-03** — La versión vendida no se edita nunca. La diferencia se calcula por línea y
   por pasajero, comparando la versión vigente con la nueva: `agregado`, `quitado`,
-  `cambió de precio`, `igual`, `para revisar`, `requiere nota de crédito`.
+  `cambió de precio`, `igual`, `para revisar`, `requiere nota de crédito`. Un servicio cuyo
+  precio depende de los pasajeros (tarifa fija, o por persona que no se reprecia solo: todo
+  salvo proveedor con tarifa y tour sin precio a mano) con otra cantidad o tipo de pasajeros
+  (adulto / niño / infante) y el mismo precio queda `para revisar`, nunca `igual`.
 - **R-AGE-04** — Lo facturado no se modifica ni se quita al aplicar. Una línea de tour con
   cualquier parte facturada cuenta como facturada. Si su precio sube, la diferencia entra como
   servicio "Ajuste — <servicio>"; si baja, o se quita algo facturado, requiere nota de crédito.
+  El ajuste no se copia a la modificación siguiente ni entra en su diferencia (ya está en el
+  precio del servicio que ajusta).
 - **R-AGE-05** — Cada pasajero no facturado que se quita lleva exactamente una penalidad: un
   servicio con monto (≥ 0), motivo obligatorio y tratamiento de IGV elegido, sin valor por
-  defecto.
+  defecto. Al aplicar, la penalidad y el ajuste quedan en la reserva sin pasajeros asignados:
+  no entran solos en una factura, el vendedor los suma a la que quiera.
 - **R-AGE-06** — No se aplica mientras haya líneas `para revisar` sin confirmar,
-  `requiere nota de crédito` sin resolver, o pasajeros quitados sin penalidad.
+  `requiere nota de crédito` sin resolver, pasajeros quitados sin penalidad, o penalidades
+  que sobran (de un pasajero que ya no se quita o que está facturado): se borran a mano, no
+  solas.
 - **R-AGE-07** — Aplicar es todo o nada: en una transacción, con lock de la reserva y la
   diferencia recalculada adentro. Si no coincide con la que vio el usuario, no se aplica y se
   avisa.

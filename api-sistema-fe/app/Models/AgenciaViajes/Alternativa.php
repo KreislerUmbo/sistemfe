@@ -11,6 +11,10 @@ use Illuminate\Database\Eloquent\Model;
 // misma DB tenant).
 class Alternativa extends Model
 {
+    // Estado que escribe "aplicar modificación" (T-005) sobre la versión vendida: ya no es la
+    // vigente de la reserva, queda como historial. No se puede fijar desde el PUT genérico.
+    public const ESTADO_REEMPLAZADA = 'reemplazada';
+
     protected $table = 'alternativas';
 
     protected $fillable = [
@@ -97,6 +101,14 @@ class Alternativa extends Model
     public function reserva()
     {
         return $this->hasOne(Reserva::class, 'alternativa_id');
+    }
+
+    // T-072 — la modificación aplicada que reemplazó a esta versión (solo existe si la alternativa
+    // quedó 'reemplazada'). Es el único camino a la reserva: la reserva ya apunta a la versión nueva.
+    public function modificacionAplicada()
+    {
+        return $this->hasOne(ReservaModificacion::class, 'alternativa_vendida_id')
+            ->where('estado', ReservaModificacion::ESTADO_APLICADA);
     }
 
     // orderBy('id') explícito: sin esto, Postgres no garantiza el orden de

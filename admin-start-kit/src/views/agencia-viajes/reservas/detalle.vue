@@ -39,6 +39,10 @@
                 <button v-if="reserva.estado === 'activa'" class="btn btn-outline-success btn-sm" @click="abrirModalAnticipo">
                     <i class="fas fa-hand-holding-usd me-1"></i>Cobrar anticipo
                 </button>
+                <button v-if="puedeModificar" class="btn btn-primary btn-sm" :disabled="iniciandoModificacion" @click="iniciarModificacion">
+                    <span v-if="iniciandoModificacion" class="spinner-border spinner-border-sm me-1"></span>
+                    <i v-else class="fas fa-pen-to-square me-1"></i>Modificar reserva
+                </button>
                 <button v-if="reserva.estado === 'activa'" class="btn btn-outline-primary btn-sm" @click="abrirModalReprogramar">
                     <i class="fas fa-calendar-days me-1"></i>Reprogramar viaje
                 </button>
@@ -52,6 +56,16 @@
                     <i class="fas fa-ban me-1"></i>Cancelar reserva
                 </button>
             </div>
+        </div>
+
+        <div v-if="puedeModificar && modificacionAbierta" class="alert alert-info d-flex justify-content-between align-items-center gap-2 mb-3 py-2">
+            <span><i class="fas fa-pen-to-square me-2"></i>Hay una modificación de esta reserva en curso. La reserva no cambia hasta que la apliques.</span>
+            <span class="d-flex gap-2">
+                <button class="btn btn-sm btn-primary" @click="iniciarModificacion">Continuar modificación</button>
+                <button class="btn btn-sm btn-outline-danger" :disabled="descartandoModificacion" @click="descartarModificacionAbierta">
+                    <span v-if="descartandoModificacion" class="spinner-border spinner-border-sm me-1"></span>Descartar
+                </button>
+            </span>
         </div>
 
         <div v-if="reserva?.facturacion_externa" class="alert alert-secondary d-flex justify-content-between align-items-center mb-3 py-2">
@@ -143,6 +157,32 @@
              múltiple por sub-grupo de pasajeros/cliente). estado_sunat
              distingue un borrador nunca enviado o rechazado de uno
              realmente aceptado (ver EstadoFacturacionReserva). -->
+        <div v-if="modificacionesAplicadas.length > 0" class="card border-0 shadow-sm mb-3">
+            <div class="card-header bg-white py-2">
+                <h6 class="fw-semibold mb-0"><i class="fas fa-clock-rotate-left me-1 text-primary"></i>Modificaciones aplicadas</h6>
+            </div>
+            <div class="card-body py-2">
+                <table class="table table-sm mb-0 align-middle">
+                    <thead class="table-light">
+                        <tr><th>Cuándo</th><th>Quién</th><th class="text-end">Diferencia</th><th></th></tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="m in modificacionesAplicadas" :key="m.id">
+                            <td>{{ formatFechaHora(m.aplicado_en) }}</td>
+                            <td>{{ m.aplicado_por ?? '—' }}</td>
+                            <td class="text-end">{{ m.diferencia_centavos === null ? '—' : textoMonto(m.diferencia_centavos, moneda) }}</td>
+                            <td class="text-end">
+                                <button class="btn btn-sm btn-outline-secondary" :disabled="descargandoPdfModificacionId === m.id" @click="descargarPdfModificacion(m.id)">
+                                    <span v-if="descargandoPdfModificacionId === m.id" class="spinner-border spinner-border-sm me-1"></span>
+                                    <i v-else class="fas fa-file-pdf me-1"></i>PDF
+                                </button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
         <div v-if="comprobantes.length > 0" class="card border-0 shadow-sm mb-3">
             <div class="card-body py-2">
                 <h6 class="fw-semibold mb-2"><i class="fas fa-file-invoice me-1 text-primary"></i>Comprobantes emitidos</h6>
@@ -225,9 +265,14 @@
                                     </span>
                                     <!-- F4 etapa 1 (23-oct-2026): quitar un pasajero cambia el precio y
                                          puede llevar penalidad; se hará desde "Modificar reserva". -->
-                                    <span v-if="reserva.estado === 'activa' && (reserva.pasajeros?.length ?? 0) > 1"
+                                    <button v-if="puedeModificar && (reserva.pasajeros?.length ?? 0) > 1" type="button" class="btn btn-link btn-sm p-0 text-muted"
+                                        title="Quitar un pasajero cambia el precio y puede llevar una penalidad. Se hace desde «Modificar reserva»: clic para ir ahí."
+                                        :disabled="iniciandoModificacion" @click="iniciarModificacion">
+                                        <i class="fas fa-user-minus"></i>
+                                    </button>
+                                    <span v-else-if="reserva.estado === 'activa' && (reserva.pasajeros?.length ?? 0) > 1"
                                         class="text-muted small" style="cursor: help"
-                                        title="Quitar un pasajero cambia el precio y puede llevar una penalidad según los términos y condiciones. Se hará desde «Modificar reserva» (en construcción).">
+                                        title="Quitar un pasajero cambia el precio y puede llevar una penalidad. Se hace desde «Modificar reserva» (requiere el permiso reservas.modificar).">
                                         <i class="fas fa-user-minus opacity-50"></i>
                                     </span>
                                 </span>
@@ -310,14 +355,15 @@
                                 </div>
 
                                 <!-- Vuelo con la AGENCIA — distinto del bloque de arriba (por cuenta
-                                     propia). Un bloque por cada pasaje aéreo real de la reserva,
-                                     siempre visible para todos los pasajeros (no depende del checkbox
-                                     del tab Asignación — ver corrección 2026-08-27 en el backend). -->
-                                <div v-if="itemsVueloAgencia.length > 0" class="border-top pt-3 mt-3">
+                                     propia). Un bloque por cada pasaje aéreo que cubre a ESTE pasajero
+                                     (T-007: un boleto es por persona); sus datos viven en su propia
+                                     tabla, ver corrección 2026-08-27 en el backend. -->
+                                <div v-if="vuelosAgenciaDe(p).length > 0" class="border-top pt-3 mt-3">
                                     <small class="text-muted d-block mb-2"><i class="fas fa-plane-departure me-1"></i>Vuelo(s) vendido(s) por la agencia.</small>
-                                    <div v-for="it in itemsVueloAgencia" :key="it.id" class="mb-3">
+                                    <div v-for="it in vuelosAgenciaDe(p)" :key="it.id" class="mb-3">
                                         <p class="small fw-semibold mb-2">
                                             {{ nombreItem(it) }}
+                                            <span v-if="it.alternativa_item?.cotizacion_pasaje_aereo?.itinerario" class="text-muted fw-normal">· {{ it.alternativa_item.cotizacion_pasaje_aereo.itinerario }}</span>
                                             <span v-if="itemsFacturadosIds.includes(it.id)" class="badge bg-success-subtle text-success border ms-2">Facturado</span>
                                         </p>
                                         <div class="row g-2">
@@ -1026,7 +1072,7 @@ import { etiquetaTipoPax } from '@/helpers/reservaPasajero';
 import CampoHora from '@/components/CampoHora.vue';
 import CampoFecha from '@/components/CampoFecha.vue';
 import { ref, reactive, computed, onMounted } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import httpClient from '@/helpers/http-client';
 import ClientFormQuick from '@/components/Sales/ClientFormQuick.vue';
@@ -1043,18 +1089,23 @@ import { opcionMayoristaService } from '@/services/admin/opcionMayoristaService'
 import Swal from 'sweetalert2/dist/sweetalert2.js';
 import { useToast } from '@/composables/useToast';
 import { useAgenciaViajesCatalogosStore } from '@/stores/agenciaViajesCatalogos';
-import { formatFecha } from '@/helpers/fecha';
+import { formatFecha, formatFechaHora } from '@/helpers/fecha';
+import { useAuthStore } from '@/stores/auth';
+import { reservaModificacionService } from '@/services/admin/reservaModificacionService';
+import { mensajeDeError, textoMonto } from '@/composables/agencia-viajes/useModificacionReserva';
 import { imprimirComprobante } from '@/composables/usePrintComprobante';
 import type {
     Reserva, ReservaPasajero, ReservaItem, ReservaResumenItem, ReservaCabecera,
     PasajeroCatalogo, ProveedorTarifa, Guia, MotivoCancelacion, AnticipoReserva, OpcionMayorista, OpcionHotelTarifa,
-    ComprobanteReserva,
+    ComprobanteReserva, ReservaDetalleResponse,
 } from '@/types/agencia-viajes';
 import type { PaymentMethod, PaymentMethods } from '@/types/cash';
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
 
 const route = useRoute();
+const router = useRouter();
+const auth = useAuthStore();
 const reservaId = Number(route.params.id);
 const toast = useToast();
 
@@ -1201,6 +1252,90 @@ const cargarReserva = async () => {
     anticipos.value = res.anticipos ?? [];
     totalAnticiposDisponibles.value = res.total_anticipos_disponibles ?? 0;
     comprobantes.value = res.comprobantes ?? [];
+    modificacionAbierta.value = res.modificacion_abierta ?? null;
+    modificacionesAplicadas.value = res.modificaciones_aplicadas ?? [];
+};
+
+// ── T-007: Modificar reserva ──────────────────────────────────────────
+// El botón se oculta sin permiso; la protección real es del backend (reservas.modificar).
+const modificacionAbierta = ref<NonNullable<ReservaDetalleResponse['modificacion_abierta']> | null>(null);
+const modificacionesAplicadas = ref<NonNullable<ReservaDetalleResponse['modificaciones_aplicadas']>>([]);
+const puedeModificar = computed(() => reserva.value?.estado === 'activa' && auth.isPermitedRoute('reservas.modificar'));
+const iniciandoModificacion = ref(false);
+const descartandoModificacion = ref(false);
+const descargandoPdfModificacionId = ref<number | null>(null);
+
+// Crea la modificación (o abre la que ya está abierta) y va al cotizador.
+const iniciarModificacion = async () => {
+    if (modificacionAbierta.value) {
+        router.push(`/agencia-viajes/cotizador/${modificacionAbierta.value.cotizacion_id}`);
+        return;
+    }
+    iniciandoModificacion.value = true;
+    try {
+        const res = await reservaModificacionService.crear(reservaId);
+        if (res.pasajeros_edad_estimada?.length) {
+            try { sessionStorage.setItem(`modificacion-edad-estimada-${res.cotizacion_id}`, JSON.stringify(res.pasajeros_edad_estimada)); } catch { /* sin storage: sin aviso */ }
+        }
+        router.push(`/agencia-viajes/cotizador/${res.cotizacion_id}`);
+    } catch (error: any) {
+        toast.error(error.response?.data?.message ?? 'No se pudo abrir la modificación');
+        await cargarReserva();
+    } finally {
+        iniciandoModificacion.value = false;
+    }
+};
+
+const descartarModificacionAbierta = async () => {
+    const confirmacion = await (Swal as TVueSwalInstance).fire({
+        title: '¿Descartar la modificación?', text: 'La reserva no cambia. Se pierde lo que se armó en esa versión.', icon: 'warning',
+        showCancelButton: true, confirmButtonText: 'Sí, descartar', cancelButtonText: 'Cancelar',
+    });
+    if (!confirmacion.isConfirmed) return;
+    descartandoModificacion.value = true;
+    try {
+        const res = await reservaModificacionService.descartar(reservaId);
+        toast.success(res.message);
+    } catch (error: any) {
+        toast.error(error.response?.data?.message ?? 'No se pudo descartar la modificación');
+    } finally {
+        descartandoModificacion.value = false;
+        await cargarReserva();
+    }
+};
+
+const descargarPdfModificacion = async (modificacionId: number) => {
+    descargandoPdfModificacionId.value = modificacionId;
+    try {
+        const blob = await reservaModificacionService.pdf(reservaId, modificacionId);
+        const blobUrl = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = blobUrl;
+        link.setAttribute('download', `modificacion-${cabecera.value?.codigo ?? reservaId}-${modificacionId}.pdf`);
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(blobUrl);
+    } catch (error: any) {
+        toast.error(await mensajeDeError(error, 'No se pudo generar el PDF'));
+    } finally {
+        descargandoPdfModificacionId.value = null;
+    }
+};
+
+// Al volver del cotizador (aplicar o descartar) se muestra el resultado y la alerta de cupo.
+const mostrarResultadoModificacion = async () => {
+    let datos: { mensaje: string; alerta_cupo_excedido?: boolean } | null = null;
+    try {
+        const clave = `modificacion-resultado-${reservaId}`;
+        const guardado = sessionStorage.getItem(clave);
+        if (guardado) { datos = JSON.parse(guardado); sessionStorage.removeItem(clave); }
+    } catch { /* sin storage: sin mensaje */ }
+    if (!datos) return;
+    toast.success(datos.mensaje);
+    if (datos.alerta_cupo_excedido) {
+        await (Swal as TVueSwalInstance).fire('Cupo excedido', 'La salida de mayorista elegida ya superó su cupo total — la modificación se aplicó igual, es solo un aviso.', 'warning');
+    }
 };
 
 const sincronizarItems = async () => {
@@ -1328,13 +1463,28 @@ const guardarPax = async (p: ReservaPasajero) => {
 // corrección 2026-08-27 tras un bug real: la primera versión lo guardaba en
 // reserva_item_pasajero, la MISMA fila que edita el checkbox del tab
 // Asignación — desmarcar un pasajero ahí borraba el vuelo ya cargado). Se
-// aplica a TODOS los pasajeros de la reserva por igual, sin depender de
-// ningún checkbox/vínculo. Se muestra en el tab Pasajeros (no en Ítems, que
-// solo da un resumen de solo lectura) porque es la pregunta que se hace el
-// vendedor por persona, no por servicio — decidido con el usuario.
+// muestra en el tab Pasajeros (no en Ítems, que solo da un resumen de solo
+// lectura) porque es la pregunta que se hace el vendedor por persona, no por
+// servicio — decidido con el usuario.
 const itemsVueloAgencia = computed(() =>
     (reserva.value?.items ?? []).filter((it) => it.alternativa_item?.origen_tipo === 'pasaje_aereo')
 );
+
+// A quiénes cubre un servicio: la asignación recién editada en el tab Asignación si
+// ya se cargó, si no la que trajo la reserva. Sin nadie asignado = a todos.
+const pasajeroIdsDelItem = (it: ReservaItem): number[] =>
+    asignacionesPorItem.value[it.id]
+        ? asignacionesPorItem.value[it.id].map((a) => a.reserva_pasajero_id)
+        : (it.pasajeros ?? []).map((p) => p.id);
+
+const cubreAPasajero = (it: ReservaItem, p: ReservaPasajero) => {
+    const ids = pasajeroIdsDelItem(it);
+    return ids.length === 0 || ids.includes(p.id);
+};
+
+// Antes salían todos los pasajes a todos los pasajeros: con dos boletos de la
+// misma aerolínea, cada pasajero veía dos bloques iguales.
+const vuelosAgenciaDe = (p: ReservaPasajero) => itemsVueloAgencia.value.filter((it) => cubreAPasajero(it, p));
 
 const aerolineaCotizada = (it: ReservaItem) => it.alternativa_item?.cotizacion_pasaje_aereo?.aerolinea ?? null;
 
@@ -1541,12 +1691,13 @@ const badgeTratamientoTributario = (it: ReservaItem): { texto: string; clase: st
 
 // Resumen de solo lectura para el tab Ítems (auditoría de UX/funcionalidad
 // 2026-08-27) — la edición real del vuelo de agencia vive en el tab
-// Pasajeros (ver itemsVueloAgencia() más abajo), acá solo se cuenta cuántos
-// de los pasajeros aplicables ya tienen al menos un número de vuelo cargado.
+// Pasajeros (ver vuelosAgenciaDe()), acá solo se cuenta cuántos de los
+// pasajeros que cubre el boleto ya tienen al menos un número de vuelo cargado.
 const resumenVueloAgencia = (it: ReservaItem) => {
-    const total = reserva.value?.pasajeros?.length ?? 0;
-    const confirmados = (it.vuelo_pasajeros ?? []).filter((vp) => vp.vuelo_numero_ida || vp.vuelo_numero_vuelta).length;
-    return { confirmados, total };
+    const cubiertos = (reserva.value?.pasajeros ?? []).filter((p) => cubreAPasajero(it, p)).map((p) => p.id);
+    const confirmados = (it.vuelo_pasajeros ?? [])
+        .filter((vp) => cubiertos.includes(vp.reserva_pasajero_id) && (vp.vuelo_numero_ida || vp.vuelo_numero_vuelta)).length;
+    return { confirmados, total: cubiertos.length };
 };
 
 // Sesión pendiente-11e-groundwork — Proveedor solo aplica a origen_tipo
@@ -2288,6 +2439,7 @@ const guardarFacturacionExterna = async (marcar: boolean) => {
 
 onMounted(async () => {
     await cargarReserva();
+    void mostrarResultadoModificacion();
     const [bib, gs] = await Promise.all([
         proveedorService.biblioteca(),
         guiaService.listar({ page: 1 }),

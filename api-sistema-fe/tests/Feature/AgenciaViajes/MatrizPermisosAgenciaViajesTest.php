@@ -167,6 +167,7 @@ class MatrizPermisosAgenciaViajesTest extends TestCase
             'reservas.ver_todas' => ['Administrador de agencia', 'Supervisor', 'Contador'],
             'reservas.crear' => ['Administrador de agencia', 'Supervisor', 'Vendedor de agencia'],
             'reservas.editar' => ['Administrador de agencia', 'Supervisor'], // Vendedor NO (§3.2)
+            'reservas.modificar' => ['Administrador de agencia', 'Supervisor'], // T-002, R-AGE-10
             // Notas de Crédito/Débito — sin roles.administrar, Vendedor no las toca (§3.2)
             'nota_electronica' => ['Administrador de agencia', 'Supervisor', 'Contador'],
             // Caja

@@ -315,7 +315,7 @@ class DashboardService
         $estados = Cotizacion::propias()
             ->delCotizador()
             ->whereBetween('created_at', [$hoy->startOfMonth()->utc(), $hoy->endOfDay()->utc()])
-            ->with('alternativas.reserva')
+            ->with(Cotizacion::RELACIONES_ESTADO_RESUMEN)
             ->get()
             ->map(static fn (Cotizacion $c): string => $c->estadoResumen())
             ->countBy();

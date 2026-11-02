@@ -91,6 +91,14 @@ class AlternativaItem extends Model
         'temporada_id',
         'desglose_costo_snapshot',
         'precio_manual',
+        // T-002 (Modificar reserva): ítem de la versión vendida del que se copió este.
+        'item_origen_id',
+        // T-003: confirmación manual de un servicio "para revisar" en una modificación.
+        'revisado_en_modificacion',
+        // T-004: pasajero de la reserva al que corresponde esta penalidad.
+        'penalidad_reserva_pasajero_id',
+        // T-005: si es un servicio "Ajuste — <servicio>", el ítem facturado que ajusta.
+        'ajuste_de_item_id',
     ];
 
     protected $casts = [
@@ -114,7 +122,28 @@ class AlternativaItem extends Model
         'desglose_costo_snapshot' => 'array',
         'temporada_id' => 'integer',
         'precio_manual' => 'boolean',
+        'revisado_en_modificacion' => 'datetime',
     ];
+
+    // T-003: si el ítem cambia después de confirmarse como "revisado" (precio, pasajeros,
+    // cantidad…), la confirmación se pierde. Cubre todo guardado por el modelo; los guardados
+    // masivos (query builder) y el cambio de pasajeros usan limpiarRevisadoDeCotizacion().
+    protected static function booted(): void
+    {
+        static::updating(function (self $item) {
+            if (! $item->isDirty('revisado_en_modificacion')
+                && array_diff(array_keys($item->getDirty()), ['updated_at']) !== []) {
+                $item->revisado_en_modificacion = null;
+            }
+        });
+    }
+
+    public static function limpiarRevisadoDeCotizacion(int $cotizacionId): void
+    {
+        self::whereNotNull('revisado_en_modificacion')
+            ->whereIn('alternativa_id', Alternativa::where('cotizacion_id', $cotizacionId)->select('id'))
+            ->update(['revisado_en_modificacion' => null]);
+    }
 
     protected $appends = ['total', 'total_convertido'];
 
@@ -283,8 +312,14 @@ class AlternativaItem extends Model
     // corrupto que aceptar() bloquea, pero puede existir transitoriamente
     // antes de resolverse) se toma la primera — el guard es lo que
     // realmente impide que esto llegue a producción, no este cálculo.
+    //
+    // T-072 (R-AGE-04): los ítems "Ajuste — …" (ajuste_de_item_id) no suman: su monto ya está
+    // dentro del precio del servicio que ajustan en la versión vigente (solo la reserva los
+    // cobra aparte, porque su servicio facturado sigue al precio viejo).
     public static function calcularTotalEfectivo(\Illuminate\Support\Collection $items): array
     {
+        $items = $items->whereNull('ajuste_de_item_id')->values();
+
         ['sinGrupo' => $sinGrupo, 'grupos' => $grupos] = self::agruparPorGrupoOpcion($items);
 
         $total = (float) $sinGrupo->sum(fn (self $item) => $item->total_convertido);

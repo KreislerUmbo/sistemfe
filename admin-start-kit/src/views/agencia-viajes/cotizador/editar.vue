@@ -8,10 +8,17 @@
         <div v-if="cotizacion" class="mb-3">
             <div class="d-flex align-items-start justify-content-between flex-wrap gap-2">
                 <div>
-                    <h5 class="fw-bold mb-1"><i class="fas fa-route me-2 text-primary"></i>Cotización {{ cotizacion.codigo }}</h5>
+                    <h5 v-if="modificacionInfo" class="fw-bold mb-1">
+                        <i class="fas fa-pen-to-square me-2 text-primary"></i>Modificación de la reserva {{ modificacionInfo.reserva_codigo ?? `#${modificacionInfo.reserva_id}` }}
+                        <span v-if="modificacionInfo.estado !== 'abierta'" class="badge bg-secondary ms-2">{{ modificacionInfo.estado === 'aplicada' ? 'Aplicada' : 'Descartada' }}</span>
+                    </h5>
+                    <h5 v-else class="fw-bold mb-1"><i class="fas fa-route me-2 text-primary"></i>Cotización {{ cotizacion.codigo }}</h5>
                     <div class="fw-semibold text-dark mb-2"><i class="fas fa-user me-2 text-muted" style="font-size:12px"></i>{{ cotizacion.cliente?.full_name ?? 'Sin cliente' }}</div>
                 </div>
-                <router-link to="/agencia-viajes/cotizador" class="btn btn-outline-secondary btn-sm">
+                <router-link v-if="modificacionInfo" :to="`/agencia-viajes/reservas/${modificacionInfo.reserva_id}`" class="btn btn-outline-secondary btn-sm">
+                    <i class="fas fa-arrow-left me-2"></i>Volver a la reserva
+                </router-link>
+                <router-link v-else to="/agencia-viajes/cotizador" class="btn btn-outline-secondary btn-sm">
                     <i class="fas fa-arrow-left me-2"></i>Volver
                 </router-link>
             </div>
@@ -24,6 +31,28 @@
                 <i v-else class="fas fa-user-lock text-muted" style="font-size:12px" title="Esta cotización ya tiene una alternativa aceptada (con reserva generada) — los pasajeros ya no se pueden modificar desde acá."></i>
             </div>
         </div>
+
+        <!-- T-007 — modificación de reserva: aviso de edades estimadas, panel de diferencia. -->
+        <div v-if="avisoEdadEstimada.length" class="alert alert-warning py-2 px-3 small mb-3 d-flex justify-content-between gap-2">
+            <span>
+                <i class="fas fa-triangle-exclamation me-1"></i><strong>Edad estimada:</strong>
+                estos pasajeros de la reserva no tienen fecha de nacimiento; se usó una edad según su tipo. Corrígela si cambia el precio:
+                <span v-for="(p, i) in avisoEdadEstimada" :key="p.reserva_pasajero_id">{{ i > 0 ? ', ' : ' ' }}{{ p.nombre || 'Pasajero' }} ({{ p.edad_estimada }} años)</span>.
+            </span>
+            <button class="btn-close" @click="avisoEdadEstimada = []"></button>
+        </div>
+        <div v-if="modificacionInfo && modificacionInfo.estado !== 'abierta'" class="alert alert-secondary py-2 small mb-3">
+            Esta modificación ya está {{ modificacionInfo.estado === 'aplicada' ? 'aplicada a la reserva' : 'descartada' }}: solo se puede consultar.
+        </div>
+        <ModificacionDiferenciaPanel v-if="modificacionInfo?.estado === 'abierta'"
+            :diferencia="modificacion.diferencia.value" :cargando="modificacion.cargando.value" :error="modificacion.error.value"
+            :procesando="procesandoModificacion" :descargando-pdf="descargandoPdfModificacion"
+            @refrescar="modificacion.cargar()" @pdf="descargarPdfModificacion" @descartar="descartarModificacion" @aplicar="aplicarModificacion"
+            @ir-a-item="irAItem" @confirmar="confirmarRevisados" @abrir-comprobante="abrirComprobanteBloqueo"
+            @abrir-penalidad="abrirPenalidad" @borrar-penalidad="borrarPenalidad" />
+        <PenalidadPasajeroModal v-if="penalidadPasajero" :pasajero="penalidadPasajero" :moneda="modificacion.diferencia.value?.moneda ?? ''"
+            :guardando="guardandoPenalidad" :error-mensaje="errorPenalidad" :inicial="penalidadInicial"
+            @cerrar="penalidadPasajero = null" @guardar="guardarPenalidad" />
 
         <!-- Agregar/quitar pasajeros — gap real: el endpoint existía en el
              backend desde Sesión 7a pero nunca tuvo control en pantalla.
@@ -156,7 +185,7 @@
             </span>
             <!-- Punto F — siempre visible; deshabilitado con motivo al llegar al tope,
                  en vez de desaparecer sin explicación. -->
-            <span class="badge rounded-pill px-3 py-2"
+            <span v-if="!modificacionInfo" class="badge rounded-pill px-3 py-2"
                 :class="alcanzoLimiteAlternativas ? 'bg-light text-muted border opacity-50' : 'bg-light text-dark border'"
                 :style="alcanzoLimiteAlternativas ? 'cursor:not-allowed;border-style:dashed' : 'cursor:pointer;border-style:dashed'"
                 :title="alcanzoLimiteAlternativas ? 'Máximo 5 alternativas por cotización' : ''"
@@ -329,8 +358,8 @@
                             Agregá un servicio con el botón de arriba
                         </div>
 
-                        <div v-for="bloque in bloquesLienzo" :key="bloque.clave" class="mb-3"
-                            :class="{ 'border-start border-3 border-primary bg-light-subtle rounded-2 p-2': bloque.tourOrigenId }">
+                        <div v-for="bloque in bloquesLienzo" :key="bloque.clave" class="mb-3" :data-item-id="bloque.carga ? bloque.items.map((i) => i.id).join(' ') : null"
+                            :class="[{ 'border-start border-3 border-primary bg-light-subtle rounded-2 p-2': bloque.tourOrigenId }, bloque.carga ? claseResaltado(bloque.items.map((i) => i.id)) : null]">
                             <!-- Fila 13, fase 1b — línea de tour (modo nuevo): una carga =
                                  un tour, con una línea por grupo de IGV. Precio del tour
                                  completo editable; se mueve y se quita entera. -->
@@ -419,7 +448,7 @@
                                         <i v-else class="fas fa-trash text-danger" style="cursor:pointer;font-size:11px" title="Eliminar todo este bloque" @click="eliminarGrupoLienzo(fila)"></i>
                                     </span>
                                 </div>
-                                <div v-for="it in fila.items" :key="it.id" class="d-flex justify-content-between align-items-center py-1 border-top" :class="{ 'opacity-50': !it.opcion_elegida }">
+                                <div v-for="it in fila.items" :key="it.id" class="d-flex justify-content-between align-items-center py-1 border-top" :data-item-id="it.id" :class="[{ 'opacity-50': !it.opcion_elegida }, claseResaltado([it.id])]">
                                     <span>
                                         <i class="fas fa-bed me-1 text-primary"></i>{{ etiquetaItem(it) }}
                                         <span class="text-muted"> — {{ alternativaActiva.moneda_cotizacion }} {{ Number(it.precio_convertido).toFixed(2) }}</span>
@@ -445,12 +474,15 @@
                                 </div>
                             </div>
 
-                            <div v-else class="canvas-item border rounded p-2 mb-2 small">
+                            <div v-else class="canvas-item border rounded p-2 mb-2 small" :data-item-id="fila.item.id" :class="claseResaltado([fila.item.id])">
                                 <div class="d-flex justify-content-between align-items-start gap-2">
                                     <span class="canvas-item-nombre">
                                         <i class="fas me-2 text-primary" :class="iconoItem(fila.item)"></i>
                                         {{ etiquetaItem(fila.item) }}
                                         <span v-if="fila.item.cantidad > 1 && fila.item.modo_precio === 'tarifa_fija'" class="text-muted"> × {{ fila.item.cantidad }}</span>
+                                        <span v-if="idsParaRevisar.has(fila.item.id)" class="badge bg-warning text-dark ms-2" style="font-size:10px">Para revisar</span>
+                                        <button v-if="idsParaRevisarConfirmables.has(fila.item.id)" type="button" class="btn btn-primary btn-sm py-0 ms-1" style="font-size:11px"
+                                            @click="confirmarRevisados([fila.item.id])">Revisado</button>
                                     </span>
                                     <span v-if="eliminandoItemId === fila.item.id" class="spinner-border spinner-border-sm text-danger flex-shrink-0"></span>
                                     <i v-else class="fas fa-times text-danger flex-shrink-0" style="cursor:pointer" title="Eliminar" @click="eliminarItem(fila.item)"></i>
@@ -697,6 +729,13 @@
                             <span class="small text-secondary">Total {{ resumenPaxTotal }}</span>
                             <span class="fs-4 fw-semibold">{{ alternativaActiva.moneda_cotizacion }} {{ totalLocal.toFixed(2) }}</span>
                         </div>
+                        <div v-if="itemsAjuste.length" class="small text-muted mt-2">
+                            <div class="fw-semibold">Ajuste — no se suma: ya está en el precio del servicio</div>
+                            <div v-for="a in itemsAjuste" :key="a.id" class="d-flex justify-content-between gap-2">
+                                <span>{{ etiquetaItem(a) }}</span>
+                                <span class="text-nowrap">{{ alternativaActiva.moneda_cotizacion }} {{ totalConvertidoLocal(a).toFixed(2) }}</span>
+                            </div>
+                        </div>
                         <div class="text-end">
                             <a href="#" class="small" @click.prevent="mostrarCalculadoraTipoCambio = true">
                                 Convertir a {{ alternativaActiva.moneda_cotizacion === 'USD' ? 'soles' : 'dólares' }}
@@ -704,7 +743,7 @@
                         </div>
 
                         <div class="mt-3 d-flex flex-column gap-2">
-                            <template v-if="alternativaActiva.estado !== 'aceptada'">
+                            <template v-if="alternativaActiva.estado !== 'aceptada' && !modificacionInfo">
                                 <button class="btn btn-success btn-sm w-100" @click="marcarAceptada" :disabled="(alternativaActiva.items?.length ?? 0) === 0 || marcandoAceptada">
                                     <span v-if="marcandoAceptada" class="spinner-border spinner-border-sm me-1"></span>
                                     <i v-else class="fas fa-check me-1"></i>Aceptado por cliente
@@ -714,7 +753,7 @@
                                 </small>
                             </template>
 
-                            <button class="btn btn-outline-primary btn-sm w-100" @click="duplicarAlternativa"
+                            <button v-if="!modificacionInfo" class="btn btn-outline-primary btn-sm w-100" @click="duplicarAlternativa"
                                 :disabled="duplicando || alcanzoLimiteAlternativas" :title="alcanzoLimiteAlternativas ? 'Máximo 5 alternativas por cotización' : ''">
                                 <span v-if="duplicando" class="spinner-border spinner-border-sm me-1"></span>
                                 <i v-else class="fas fa-copy me-1"></i>Duplicar alternativa
@@ -728,7 +767,7 @@
                                 <span v-if="descargandoCondiciones" class="spinner-border spinner-border-sm me-1"></span>
                                 <i v-else class="fas fa-file-contract me-1"></i>Descargar condiciones generales
                             </button>
-                            <EnviarCorreoCotizacion :alternativa-id="alternativaActiva.id" :alternativa-nombre="alternativaActiva.nombre"
+                            <EnviarCorreoCotizacion v-if="!modificacionInfo" :alternativa-id="alternativaActiva.id" :alternativa-nombre="alternativaActiva.nombre"
                                 @enviada="onAlternativaEnviadaPorCorreo" />
                         </div>
                     </div>
@@ -1312,7 +1351,7 @@
 <script setup lang="ts">
 import { destinoParaIgvAgencia, IGV_EXONERADO } from '@/helpers/tratamientoTributarioAgencia';
 import CampoFecha from '@/components/CampoFecha.vue';
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import { useLayoutStore } from '@/stores/layout';
@@ -1331,6 +1370,11 @@ import PromoverHotelProveedorModal from '@/components/AgenciaViajes/PromoverHote
 import DestinoTreeSelect from '@/components/AgenciaViajes/DestinoTreeSelect.vue';
 import CalculadoraTipoCambioModal from '@/components/AgenciaViajes/CalculadoraTipoCambioModal.vue';
 import EnviarCorreoCotizacion from '@/components/AgenciaViajes/EnviarCorreoCotizacion.vue';
+import ModificacionDiferenciaPanel from '@/components/AgenciaViajes/ModificacionDiferenciaPanel.vue';
+import PenalidadPasajeroModal from '@/components/AgenciaViajes/PenalidadPasajeroModal.vue';
+import { useModificacionReserva, mensajeDeError, centavosATexto, motivoDePenalidad, textoMonto } from '@/composables/agencia-viajes/useModificacionReserva';
+import { reservaModificacionService, type PenalidadPayload, type PasajeroEdadEstimada } from '@/services/admin/reservaModificacionService';
+import { imprimirComprobante } from '@/composables/usePrintComprobante';
 import ClientFormQuick from '@/components/Sales/ClientFormQuick.vue';
 import { useToast } from '@/composables/useToast';
 import { cotizacionService } from '@/services/admin/cotizacionService';
@@ -1387,6 +1431,192 @@ const configAgencia = ref<ConfiguracionAgencia | null>(null);
 const alternativaActiva = computed<Alternativa | null>(() =>
     cotizacion.value?.alternativas?.find((a) => a.id === alternativaActivaId.value) ?? null
 );
+
+// Los «Ajuste — …» (T-005/T-072) no se suman ni se listan en el lienzo: el precio ya está en el
+// servicio que ajustan. Se muestran aparte, sin sumar (itemsAjuste).
+const itemsSinAjuste = computed(() => (alternativaActiva.value?.items ?? []).filter((i) => !i.ajuste_de_item_id));
+const itemsAjuste = computed(() => (alternativaActiva.value?.items ?? []).filter((i) => !!i.ajuste_de_item_id));
+
+// ── T-007: modificación de reserva ───────────────────────────────────
+// La cotización de una modificación (origen='modificacion') trabaja con el panel «Diferencia».
+// El panel solo muestra lo que calcula el backend; aplicar manda la huella que se vio.
+const modificacionInfo = ref<{ id: number; estado: 'abierta' | 'aplicada' | 'descartada'; reserva_id: number; reserva_codigo: string | null } | null>(null);
+const reservaIdModificacion = computed(() => modificacionInfo.value?.reserva_id ?? null);
+const modificacion = useModificacionReserva(reservaIdModificacion);
+const avisoEdadEstimada = ref<PasajeroEdadEstimada[]>([]);
+const procesandoModificacion = ref(false);
+const descargandoPdfModificacion = ref(false);
+
+const idsParaRevisar = computed(() => new Set(
+    (modificacion.diferencia.value?.bloqueos ?? [])
+        .filter((b) => (b.tipo === 'para_revisar' || b.tipo === 'servicio_sin_pasajeros') && b.alternativa_item_id)
+        .map((b) => b.alternativa_item_id as number)
+));
+// «Revisado» solo donde el backend deja confirmar (las «sin pasajeros» se arreglan en el lienzo).
+const idsParaRevisarConfirmables = computed(() => new Set(
+    (modificacion.diferencia.value?.bloqueos ?? [])
+        .filter((b) => b.tipo === 'para_revisar' && b.alternativa_item_id)
+        .map((b) => b.alternativa_item_id as number)
+));
+
+const itemResaltadoId = ref<number | null>(null);
+const claseResaltado = (ids: number[]) => ({
+    'border-warning bg-warning-subtle': ids.some((id) => idsParaRevisar.value.has(id)),
+    'resaltado-item': itemResaltadoId.value !== null && ids.includes(itemResaltadoId.value),
+});
+
+// Lleva al ítem: cambia al destino y día donde está, lo resalta unos segundos y hace scroll.
+const irAItem = async (id: number) => {
+    const item = itemsSinAjuste.value.find((i) => i.id === id);
+    if (!item) return;
+    if (mostrarChipsDestino.value) destinoActivoId.value = item.alternativa_destino_id ?? alternativaDestinos.value[0]?.id ?? null;
+    if (mostrarTabsDia.value) diaActivo.value = item.dia_referencial ?? 0;
+    itemResaltadoId.value = id;
+    await nextTick();
+    document.querySelector(`[data-item-id~="${id}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setTimeout(() => { if (itemResaltadoId.value === id) itemResaltadoId.value = null; }, 3000);
+};
+
+const confirmarRevisados = async (ids: number[]) => {
+    try {
+        await modificacion.confirmarRevisados(ids);
+    } catch (error: any) {
+        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo confirmar', 'error');
+        await modificacion.cargar();
+    }
+};
+
+const abrirComprobanteBloqueo = (saleId: number) => { void imprimirComprobante(saleId); };
+
+// Penalidad por pasajero quitado (R-AGE-05): IGV y destino empiezan vacíos.
+const penalidadPasajero = ref<{ reserva_pasajero_id: number; nombre: string | null } | null>(null);
+const penalidadItemId = ref<number | null>(null);
+const penalidadInicial = ref<{ monto: string; motivo: string; tip_afe_igv: string | null; destino_tributario: string | null } | null>(null);
+const guardandoPenalidad = ref(false);
+const errorPenalidad = ref<string | null>(null);
+
+const abrirPenalidad = (reservaPasajeroId: number) => {
+    const dif = modificacion.diferencia.value;
+    const pasajero = dif?.pasajeros.find((p) => p.reserva_pasajero_id === reservaPasajeroId);
+    if (!dif || !pasajero) return;
+    const linea = pasajero.penalidad_alternativa_item_id
+        ? dif.lineas.find((l) => l.alternativa_item_id === pasajero.penalidad_alternativa_item_id)
+        : undefined;
+    penalidadItemId.value = pasajero.penalidad_alternativa_item_id;
+    penalidadInicial.value = linea
+        ? { monto: centavosATexto(linea.nuevo_centavos), motivo: motivoDePenalidad(linea.descripcion), tip_afe_igv: linea.tip_afe_igv, destino_tributario: linea.destino_tributario }
+        : null;
+    errorPenalidad.value = null;
+    penalidadPasajero.value = { reserva_pasajero_id: reservaPasajeroId, nombre: pasajero.nombre };
+};
+
+const guardarPenalidad = async (payload: PenalidadPayload) => {
+    if (!penalidadPasajero.value) return;
+    guardandoPenalidad.value = true;
+    errorPenalidad.value = null;
+    try {
+        await modificacion.guardarPenalidad(penalidadPasajero.value.reserva_pasajero_id, payload, penalidadItemId.value);
+        penalidadPasajero.value = null;
+        await cargarCotizacion();
+    } catch (error: any) {
+        errorPenalidad.value = error.response?.data?.message ?? 'No se pudo guardar la penalidad';
+    } finally {
+        guardandoPenalidad.value = false;
+    }
+};
+
+const borrarPenalidad = async (itemId: number) => {
+    const confirmacion = await (Swal as TVueSwalInstance).fire({ title: '¿Borrar la penalidad?', icon: 'question', showCancelButton: true, confirmButtonText: 'Sí, borrar', cancelButtonText: 'Cancelar' });
+    if (!confirmacion.isConfirmed) return;
+    try {
+        await modificacion.borrarPenalidad(itemId);
+        await cargarCotizacion();
+    } catch (error: any) {
+        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo borrar la penalidad', 'error');
+    }
+};
+
+const descargarPdfModificacion = async () => {
+    if (!modificacionInfo.value) return;
+    descargandoPdfModificacion.value = true;
+    try {
+        const blob = await reservaModificacionService.pdf(modificacionInfo.value.reserva_id);
+        const blobUrl = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = blobUrl;
+        link.setAttribute('download', `modificacion-${modificacionInfo.value.reserva_codigo ?? modificacionInfo.value.reserva_id}.pdf`);
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(blobUrl);
+    } catch (error: any) {
+        (Swal as TVueSwalInstance).fire('No se pudo generar el PDF', await mensajeDeError(error, 'No se pudo generar el PDF'), 'warning');
+    } finally {
+        descargandoPdfModificacion.value = false;
+    }
+};
+
+// Mensaje para la reserva (se muestra al volver): aplicar, descartar.
+const dejarMensajeParaReserva = (reservaId: number, datos: { mensaje: string; alerta_cupo_excedido?: boolean }) => {
+    try { sessionStorage.setItem(`modificacion-resultado-${reservaId}`, JSON.stringify(datos)); } catch { /* sin storage: no se muestra el mensaje */ }
+};
+
+const descartarModificacion = async () => {
+    if (!modificacionInfo.value) return;
+    const reservaId = modificacionInfo.value.reserva_id;
+    const confirmacion = await (Swal as TVueSwalInstance).fire({
+        title: '¿Descartar la modificación?', text: 'La reserva no cambia. Se pierde lo que armaste en esta versión.', icon: 'warning',
+        showCancelButton: true, confirmButtonText: 'Sí, descartar', cancelButtonText: 'Seguir editando',
+    });
+    if (!confirmacion.isConfirmed) return;
+    procesandoModificacion.value = true;
+    try {
+        const res = await reservaModificacionService.descartar(reservaId);
+        dejarMensajeParaReserva(reservaId, { mensaje: res.message });
+        router.push(`/agencia-viajes/reservas/${reservaId}`);
+    } catch (error: any) {
+        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo descartar', 'error');
+        await cargarCotizacion();
+    } finally {
+        procesandoModificacion.value = false;
+    }
+};
+
+const aplicarModificacion = async () => {
+    const dif = modificacion.diferencia.value;
+    if (!modificacionInfo.value || !dif) return;
+    const reservaId = modificacionInfo.value.reserva_id;
+    const confirmacion = await (Swal as TVueSwalInstance).fire({
+        title: '¿Aplicar a la reserva?',
+        text: `Diferencia: ${textoMonto(dif.totales.diferencia, dif.moneda)}. La reserva pasa a la versión nueva y no se puede deshacer.`,
+        icon: 'question', showCancelButton: true, confirmButtonText: 'Sí, aplicar', cancelButtonText: 'Cancelar',
+    });
+    if (!confirmacion.isConfirmed) return;
+    procesandoModificacion.value = true;
+    try {
+        const res = await modificacion.aplicar();
+        dejarMensajeParaReserva(reservaId, { mensaje: res.message, alerta_cupo_excedido: res.alerta_cupo_excedido });
+        router.push(`/agencia-viajes/reservas/${reservaId}`);
+    } catch (error: any) {
+        const mensaje: string = error.response?.data?.message ?? 'No se pudo aplicar la modificación';
+        const estado = error.response?.status;
+        if (estado === 404 || mensaje.startsWith('Esta modificación ya no está abierta')) {
+            // Se aplicó o descartó en otra pestaña: se recarga para ver el estado real.
+            await (Swal as TVueSwalInstance).fire('La reserva cambió', 'Esta modificación ya no está abierta (se aplicó o descartó en otro lugar).', 'warning');
+            await cargarCotizacion();
+        } else if (mensaje.startsWith('La reserva cambió')) {
+            await modificacion.cargar();
+            await (Swal as TVueSwalInstance).fire('La reserva cambió', `${mensaje} Ya se volvió a calcular la diferencia.`, 'warning');
+        } else if (mensaje.includes('cambia el mayorista')) {
+            await (Swal as TVueSwalInstance).fire('No se puede aplicar desde aquí', mensaje, 'warning');
+        } else {
+            await modificacion.cargar();
+            await (Swal as TVueSwalInstance).fire('No se pudo aplicar', mensaje, 'warning');
+        }
+    } finally {
+        procesandoModificacion.value = false;
+    }
+};
 
 // Punto F — el "+ Nueva" y "Duplicar alternativa" comparten el mismo tope.
 const alcanzoLimiteAlternativas = computed(() => (cotizacion.value?.alternativas?.length ?? 0) >= 5);
@@ -1603,6 +1833,7 @@ const guardarPasajeros = async () => {
 const cargarCotizacion = async () => {
     const res = await cotizacionService.obtener(cotizacionId);
     cotizacion.value = res.cotizacion;
+    modificacionInfo.value = res.modificacion ?? null;
     if (!alternativaActivaId.value && cotizacion.value.alternativas?.length) {
         alternativaActivaId.value = cotizacion.value.alternativas[0].id;
     }
@@ -1610,6 +1841,8 @@ const cargarCotizacion = async () => {
     resolverDestinoActivo();
     cargarTemporadasTours();
     inicializarDias();
+    // T-007: cada vez que se guarda algo, la diferencia se vuelve a pedir (sin frenar la pantalla).
+    if (modificacionInfo.value?.estado === 'abierta') void modificacion.cargar();
 };
 
 // Envío por correo (EnviarCorreoCotizacion.vue): el backend puede haberla
@@ -1905,7 +2138,7 @@ const resolverDestinoActivo = () => {
 // 12f-1, cada vez más raros) se trata como perteneciente al PRIMER
 // destino — nunca se oculta un ítem real por no tener el campo resuelto.
 const itemsDelDestinoActivo = computed(() => {
-    const items = alternativaActiva.value?.items ?? [];
+    const items = itemsSinAjuste.value;
     if (!mostrarChipsDestino.value) return items;
     const primerDestinoId = alternativaDestinos.value[0]?.id ?? null;
     return items.filter((i) => (i.alternativa_destino_id ?? primerDestinoId) === destinoActivoId.value);
@@ -2284,7 +2517,7 @@ const bloquesLienzo = computed<BloqueItem[]>(() => agruparPorTour(itemsVisiblesL
 // Sin chips (1 destino), el panel de precio sigue mostrando TODOS los
 // ítems de la alternativa agrupados por tour, sin el nivel extra — cero
 // cambio visual respecto a antes de 12f-2.
-const gruposPrecioPanel = computed<BloqueItem[]>(() => agruparPorTour(alternativaActiva.value?.items ?? []));
+const gruposPrecioPanel = computed<BloqueItem[]>(() => agruparPorTour(itemsSinAjuste.value));
 
 // Sesión 12f-2, §7.1 punto 4 — "subtotal colapsable por destino, además
 // del total general". Solo se usa (en el template) cuando
@@ -2295,7 +2528,7 @@ type BloqueDestino = { destinoId: number; destinoTexto: string; subtotal: number
 const gruposPrecioPorDestino = computed<BloqueDestino[]>(() => {
     const primerDestinoId = alternativaDestinos.value[0]?.id ?? null;
     return alternativaDestinos.value.map((destino) => {
-        const items = (alternativaActiva.value?.items ?? []).filter((i) => (i.alternativa_destino_id ?? primerDestinoId) === destino.id);
+        const items = (itemsSinAjuste.value).filter((i) => (i.alternativa_destino_id ?? primerDestinoId) === destino.id);
         return {
             destinoId: destino.id,
             destinoTexto: destino.destino_texto,
@@ -2613,7 +2846,7 @@ const calcularVistaPreviaCombo = (idsTourOrigen: Set<number>) => {
     if (idsTourOrigen.size < 2) return null;
 
     const grupos = new Map<number, { tourOrigenId: number; dia: number; nombre: string; total: number }>();
-    for (const item of alternativaActiva.value?.items ?? []) {
+    for (const item of itemsSinAjuste.value) {
         if (!item.tour_origen_id || !idsTourOrigen.has(item.tour_origen_id)) continue;
         const existente = grupos.get(item.tour_origen_id);
         if (existente) {
@@ -2668,7 +2901,7 @@ const modoPrecioPendiente = ref<{ id: number; nombre: string } | null>(null);
 // explícita): si hubiera más de un grupo abierto para el mismo día, se
 // toma el primero encontrado.
 const grupoHotelAbiertoDiaActivo = computed<{ id: string; hoteles: number; cantidad: number } | null>(() => {
-    const itemsHotelDelDia = (alternativaActiva.value?.items ?? []).filter((item) =>
+    const itemsHotelDelDia = (itemsSinAjuste.value).filter((item) =>
         item.origen_tipo === 'proveedor'
         && !!item.grupo_opcion_id
         && item.dia_referencial === diaActivoParaAgregar.value
@@ -3683,7 +3916,7 @@ const precioListaConvertidoDe = (item: AlternativaItem) => {
 };
 
 const inicializarEdicionItems = () => {
-    (alternativaActiva.value?.items ?? []).forEach((item) => {
+    (itemsSinAjuste.value).forEach((item) => {
         const precioConvertido = Number(item.precio_convertido);
         const precioLista = precioListaConvertidoDe(item);
         edicionItems.value[item.id] = {
@@ -3722,7 +3955,10 @@ const totalConvertidoLocal = (item: AlternativaItem) => {
 // igual que hace `Alternativa.tieneGruposSinResolver()`. Un solo helper
 // compartido por subtotalGrupo() (subtotal por tour/bloque en el panel) y
 // totalLocal() (total general) para no repetir la regla dos veces.
-const totalEfectivoLocal = (items: AlternativaItem[]): number => {
+const totalEfectivoLocal = (todos: AlternativaItem[]): number => {
+    // T-072: el «Ajuste — …» (ajuste_de_item_id) ya está dentro del precio del servicio que ajusta;
+    // mismo criterio que AlternativaItem::calcularTotalEfectivo() del backend.
+    const items = todos.filter((item) => !item.ajuste_de_item_id);
     const sinGrupo = items.filter((item) => !item.grupo_opcion_id);
     const grupos = new Map<string, AlternativaItem[]>();
     for (const item of items) {
@@ -3769,7 +4005,7 @@ const filasResumen = (items: AlternativaItem[]): AlternativaItem[] => {
     return [...sueltos, ...representantes];
 };
 
-const totalLocal = computed(() => totalEfectivoLocal(alternativaActiva.value?.items ?? []));
+const totalLocal = computed(() => totalEfectivoLocal(itemsSinAjuste.value));
 
 // ── Descuento global (Parte B, punto 3.1 del plan de dominio) — reparte el
 // % a CADA alternativa_item respetando su piso individual
@@ -3825,7 +4061,7 @@ const sumaPreciosListaLocal = (items: AlternativaItem[]): number => {
 const calcularMontoGlobalEquivalente = () => {
     const pct = Number(alternativaActiva.value?.descuento_global_pct ?? 0);
     if (!pct) return 0;
-    const sumaListaTotal = sumaPreciosListaLocal(alternativaActiva.value?.items ?? []);
+    const sumaListaTotal = sumaPreciosListaLocal(itemsSinAjuste.value);
     return Math.round(sumaListaTotal * (pct / 100) * 100) / 100;
 };
 
@@ -4160,6 +4396,12 @@ onMounted(async () => {
         tipoHotelId.value = tiposList.find((t) => t.slug === 'alojamiento-hoteles')?.id ?? null;
 
         await Promise.all([cargarCotizacion(), cargarBiblioteca()]);
+        // T-007: el aviso de edades estimadas llega en la respuesta de crear la modificación.
+        try {
+            const clave = `modificacion-edad-estimada-${cotizacionId}`;
+            const guardado = sessionStorage.getItem(clave);
+            if (guardado) { avisoEdadEstimada.value = JSON.parse(guardado); sessionStorage.removeItem(clave); }
+        } catch { /* sin storage: sin aviso */ }
     } catch (error: any) {
         (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo cargar la cotización.', 'error');
     } finally {
@@ -4176,6 +4418,7 @@ onUnmounted(() => {
 .price-panel { position: sticky; top: 1rem; }
 .lib-item:hover { background: #eef2ff; border-color: #6366f1 !important; }
 .canvas-item-nombre { white-space: normal; word-break: break-word; }
+.resaltado-item { box-shadow: 0 0 0 3px rgba(255, 193, 7, .6); transition: box-shadow .3s; }
 
 /* Tacho de la alternativa activa — oculto hasta hover del pill, para no
    saturar la fila cuando hay varias alternativas (Parte B). */
