@@ -1,0 +1,226 @@
+[
+    {
+        "codigo": "dashboard",
+        "label": "Inicio",
+        "icono": "iconoir-home-simple",
+        "ruta": "dashboards.analytics",
+        "hijos": []
+    },
+    {
+        "codigo": "admin_portal",
+        "label": "Portal web",
+        "icono": "iconoir-app-window",
+        "ruta": null,
+        "hijos": [
+            {
+                "codigo": "admin_portal.categorias_sistemas",
+                "label": "Categorías de sistemas",
+                "icono": "iconoir-label",
+                "ruta": "system_categories.index",
+                "hijos": []
+            },
+            {
+                "codigo": "admin_portal.sistemas",
+                "label": "Sistemas",
+                "icono": "iconoir-multiple-pages-empty",
+                "ruta": "systems.index",
+                "hijos": []
+            }
+        ]
+    },
+    {
+        "codigo": "access",
+        "label": "Accesos",
+        "icono": "iconoir-lock",
+        "ruta": null,
+        "hijos": [
+            {
+                "codigo": "access.roles",
+                "label": "Roles y permisos",
+                "icono": "iconoir-shield-check",
+                "ruta": "access.roles",
+                "hijos": []
+            },
+            {
+                "codigo": "access.usuarios",
+                "label": "Usuarios",
+                "icono": "iconoir-group",
+                "ruta": "access.users",
+                "hijos": []
+            }
+        ]
+    },
+    {
+        "codigo": "comercial",
+        "label": "Comercial",
+        "icono": "iconoir-shop",
+        "ruta": null,
+        "hijos": [
+            {
+                "codigo": "comercial.categorias",
+                "label": "Categorías",
+                "icono": "iconoir-label",
+                "ruta": "categories.index",
+                "hijos": []
+            },
+            {
+                "codigo": "comercial.productos",
+                "label": "Productos",
+                "icono": "iconoir-box-iso",
+                "ruta": "product.index",
+                "hijos": []
+            },
+            {
+                "codigo": "comercial.clientes",
+                "label": "Clientes",
+                "icono": "iconoir-user",
+                "ruta": "clients.index",
+                "hijos": []
+            },
+            {
+                "codigo": "comercial.ventas",
+                "label": "Ventas",
+                "icono": "iconoir-cart",
+                "ruta": null,
+                "hijos": [
+                    {
+                        "codigo": "comercial.ventas_mis_ventas",
+                        "label": "Mis ventas",
+                        "icono": null,
+                        "ruta": "sale.list",
+                        "hijos": []
+                    },
+                    {
+                        "codigo": "comercial.ventas_nc_nd",
+                        "label": "Notas de crédito/débito",
+                        "icono": null,
+                        "ruta": "nota.list",
+                        "hijos": []
+                    },
+                    {
+                        "codigo": "comercial.ventas_anticipos",
+                        "label": "Emitir anticipos",
+                        "icono": null,
+                        "ruta": "advances.index",
+                        "hijos": []
+                    },
+                    {
+                        "codigo": "comercial.ventas_por_cobrar",
+                        "label": "Ventas por cobrar",
+                        "icono": null,
+                        "ruta": "credit_receivables.index",
+                        "hijos": []
+                    },
+                    {
+                        "codigo": "comercial.ventas_cotiz_comerciales",
+                        "label": "Cotizaciones comerciales",
+                        "icono": null,
+                        "ruta": "commercial-quotes.index",
+                        "hijos": []
+                    }
+                ]
+            }
+        ]
+    },
+    {
+        "codigo": "caja",
+        "label": "Caja",
+        "icono": "iconoir-cash",
+        "ruta": null,
+        "hijos": [
+            {
+                "codigo": "caja.turno_activo",
+                "label": "Turno activo",
+                "icono": null,
+                "ruta": "cash.session",
+                "hijos": []
+            },
+            {
+                "codigo": "caja.historial",
+                "label": "Historial y reportes",
+                "icono": null,
+                "ruta": "cash.dashboard",
+                "hijos": []
+            }
+        ]
+    },
+    {
+        "codigo": "configuraciones",
+        "label": "Configuración",
+        "icono": "iconoir-settings",
+        "ruta": null,
+        "hijos": [
+            {
+                "codigo": "configuraciones.empresa",
+                "label": "Datos de la empresa",
+                "icono": null,
+                "ruta": "company.index",
+                "hijos": []
+            },
+            {
+                "codigo": "configuraciones.sucursales",
+                "label": "Sucursales",
+                "icono": null,
+                "ruta": "branches.index",
+                "hijos": []
+            },
+            {
+                "codigo": "configuraciones.cajas",
+                "label": "Cajas",
+                "icono": null,
+                "ruta": "cash-registers.index",
+                "hijos": []
+            },
+            {
+                "codigo": "configuraciones.metodos_pago",
+                "label": "Métodos de pago",
+                "icono": null,
+                "ruta": "payment-methods.index",
+                "hijos": []
+            },
+            {
+                "codigo": "configuraciones.series",
+                "label": "Series de comprobantes",
+                "icono": null,
+                "ruta": "series-comprobante.index",
+                "hijos": []
+            },
+            {
+                "codigo": "configuraciones.proveedores",
+                "label": "Proveedores de gastos",
+                "icono": null,
+                "ruta": "suppliers.index",
+                "hijos": []
+            },
+            {
+                "codigo": "configuraciones.conceptos_caja",
+                "label": "Conceptos de caja",
+                "icono": null,
+                "ruta": "cash-concepts.index",
+                "hijos": []
+            }
+        ]
+    },
+    {
+        "codigo": "recursos_cliente",
+        "label": "Capacitación",
+        "icono": "iconoir-book-stack",
+        "ruta": null,
+        "hijos": [
+            {
+                "codigo": "recursos_cliente.listar",
+                "label": "Administrar recursos",
+                "icono": null,
+                "ruta": "recursos.index",
+                "hijos": []
+            },
+            {
+                "codigo": "recursos_cliente.manual",
+                "label": "Manuales y videos",
+                "icono": null,
+                "ruta": "recurso.manual",
+                "hijos": []
+            }
+        ]
+    }
+]

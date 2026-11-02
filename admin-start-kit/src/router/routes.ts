@@ -761,7 +761,7 @@ const comercialRoutes = [
     path: "/agencia-viajes/destinos",
     name: "agencia.destinos.index",
     meta: {
-      title: setTitle("Destinos y Atractivos"),
+      title: setTitle("Destinos"),
       authRequired: true,
       permission: 'agencia.destinos',
     },
@@ -801,7 +801,7 @@ const comercialRoutes = [
     path: "/agencia-viajes/guias",
     name: "agencia.guias.index",
     meta: {
-      title: setTitle("Guías Turísticos"),
+      title: setTitle("Guías"),
       authRequired: true,
       permission: 'agencia.guias',
     },
@@ -821,7 +821,7 @@ const comercialRoutes = [
     path: "/agencia-viajes/paquetes",
     name: "agencia.paquetes.index",
     meta: {
-      title: setTitle("Paquetes / Tours"),
+      title: setTitle("Tours y paquetes"),
       authRequired: true,
       permission: 'agencia.paquetes',
     },

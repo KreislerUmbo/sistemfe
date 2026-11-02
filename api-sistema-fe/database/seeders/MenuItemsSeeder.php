@@ -59,6 +59,13 @@ class MenuItemsSeeder extends Seeder
      */
     private const SIN_CREDITOS = ['creditos'];
 
+    /**
+     * T-063: Agencia arma su propio menú por tareas (menuAgencia()). Los grupos genéricos de
+     * retail (Comercial, Caja, Configuración, Accesos, Capacitación, Portal web) no se muestran
+     * en ese giro; sus pantallas comunes reaparecen como ítems propios con la misma ruta y permiso.
+     */
+    private const SIN_AGENCIA = ['agencia_viajes'];
+
     public function run(): void
     {
         // giro=null → visible para cualquier giro (MenuResolver: "giro IS
@@ -69,15 +76,15 @@ class MenuItemsSeeder extends Seeder
 
         // Portal web edita el catálogo central: solo el tenant dueño de la plataforma
         // (config/plataforma.php). Ocultar el grupo oculta también sus hijos.
-        $adminPortal = $this->item('admin_portal', null, null, 'grupo', 'Portal web', 'iconoir-app-window', null, null, 2, soloPlataforma: true);
+        $adminPortal = $this->item('admin_portal', null, null, 'grupo', 'Portal web', 'iconoir-app-window', null, null, 2, self::SIN_AGENCIA, soloPlataforma: true);
         $this->item('admin_portal.categorias_sistemas', $adminPortal, null, 'enlace', 'Categorías de sistemas', 'iconoir-label', 'system_categories.index', 'list_categorie_system', 1);
         $this->item('admin_portal.sistemas', $adminPortal, null, 'enlace', 'Sistemas', 'iconoir-multiple-pages-empty', 'systems.index', 'list_system', 2);
 
-        $access = $this->item('access', null, null, 'grupo', 'Accesos', 'iconoir-lock', null, null, 3);
+        $access = $this->item('access', null, null, 'grupo', 'Accesos', 'iconoir-lock', null, null, 3, self::SIN_AGENCIA);
         $this->item('access.roles', $access, null, 'enlace', 'Roles y permisos', 'iconoir-shield-check', 'access.roles', 'list_role', 1);
         $this->item('access.usuarios', $access, null, 'enlace', 'Usuarios', 'iconoir-group', 'access.users', 'list_user', 2);
 
-        $comercial = $this->item('comercial', null, null, 'grupo', 'Comercial', 'iconoir-shop', null, null, 4);
+        $comercial = $this->item('comercial', null, null, 'grupo', 'Comercial', 'iconoir-shop', null, null, 4, self::SIN_AGENCIA);
         $this->item('comercial.categorias', $comercial, null, 'enlace', 'Categorías', 'iconoir-label', 'categories.index', 'list_categorie', 1, self::SIN_CREDITOS);
         $this->item('comercial.productos', $comercial, null, 'enlace', 'Productos', 'iconoir-box-iso', 'product.index', 'list_product', 2, self::SIN_CREDITOS);
         $this->item('comercial.clientes', $comercial, null, 'enlace', 'Clientes', 'iconoir-user', 'clients.index', 'list_client', 3);
@@ -92,23 +99,11 @@ class MenuItemsSeeder extends Seeder
         // "Caja"/"Agencia de Viajes"/"Configuraciones"/"Recursos Cliente" ya eran grupos
         // reales de primer nivel en el frontend viejo (ver corrección del comentario de
         // arriba) — su ícono va acá, no en ninguno de sus hijos.
-        $caja = $this->item('caja', null, null, 'grupo', 'Caja', 'iconoir-cash', null, null, 5);
+        $caja = $this->item('caja', null, null, 'grupo', 'Caja', 'iconoir-cash', null, null, 5, self::SIN_AGENCIA);
         $this->item('caja.turno_activo', $caja, null, 'enlace', 'Turno activo', null, 'cash.session', 'cash.open_session', 1);
         $this->item('caja.historial', $caja, null, 'enlace', 'Historial y reportes', null, 'cash.dashboard', 'cash.view_all', 2);
 
-        $agencia = $this->item('agencia', null, 'agencia_viajes', 'grupo', 'Agencia de viajes', 'iconoir-airplane', null, null, 6);
-        $this->item('agencia.cotizador', $agencia, 'agencia_viajes', 'enlace', 'Cotizador', null, 'agencia.cotizador.index', 'agencia.cotizaciones', 1);
-        $this->item('agencia.reservas', $agencia, 'agencia_viajes', 'enlace', 'Reservas', null, 'agencia.reservas.index', 'agencia.reservas', 2);
-        $this->item('agencia.reporte_operativo', $agencia, 'agencia_viajes', 'enlace', 'Reporte operativo', null, 'agencia.reporteOperativo.index', 'agencia.reservas', 3);
-        $this->item('agencia.salidas_operativas', $agencia, 'agencia_viajes', 'enlace', 'Salidas operativas', null, 'agencia.salidas.index', 'agencia.reservas', 4);
-        $this->item('agencia.venta_directa', $agencia, 'agencia_viajes', 'enlace', 'Venta directa', null, 'agencia.ventaDirecta', 'agencia.reservas', 5);
-        $this->item('agencia.proveedores', $agencia, 'agencia_viajes', 'enlace', 'Proveedores', null, 'agencia.proveedores.index', 'agencia.proveedores', 6);
-        $this->item('agencia.destinos', $agencia, 'agencia_viajes', 'enlace', 'Destinos y atractivos', null, 'agencia.destinos.index', 'agencia.destinos', 7);
-        $this->item('agencia.temporadas', $agencia, 'agencia_viajes', 'enlace', 'Temporadas', null, 'agencia.temporadas.index', 'agencia.temporadas', 8);
-        $this->item('agencia.guias', $agencia, 'agencia_viajes', 'enlace', 'Guías turísticos', null, 'agencia.guias.index', 'agencia.guias', 9);
-        $this->item('agencia.paquetes', $agencia, 'agencia_viajes', 'enlace', 'Paquetes y tours', null, 'agencia.paquetes.index', 'agencia.paquetes', 10);
-        $this->item('agencia.configuracion', $agencia, 'agencia_viajes', 'enlace', 'Config. de la Agencia', null, 'agencia.configuracion.index', 'agencia.configuracion', 11);
-        $this->item('agencia.configuracion_codigos', $agencia, 'agencia_viajes', 'enlace', 'Códigos y numeración', null, 'agencia.configuracion.codigos', 'agencia.configuracion', 12);
+        $this->menuAgencia();
 
         // Módulo Créditos (04-frontend "Además"): solo para el giro 'creditos'.
         $creditos = $this->item('creditos', null, 'creditos', 'grupo', 'Créditos', 'iconoir-hand-cash', null, null, 6);
@@ -121,7 +116,7 @@ class MenuItemsSeeder extends Seeder
         $this->item('creditos.agenda', $creditos, 'creditos', 'enlace', 'Agenda de cobranza', null, 'creditos.agenda', 'creditos.cobrar', 6);
         $this->item('creditos.reportes', $creditos, 'creditos', 'enlace', 'Reportes', null, 'creditos.reportes', 'creditos.reportes', 7);
 
-        $config = $this->item('configuraciones', null, null, 'grupo', 'Configuración', 'iconoir-settings', null, null, 7);
+        $config = $this->item('configuraciones', null, null, 'grupo', 'Configuración', 'iconoir-settings', null, null, 7, self::SIN_AGENCIA);
         $this->item('configuraciones.empresa', $config, null, 'enlace', 'Datos de la empresa', null, 'company.index', 'company', 1);
         $this->item('configuraciones.sucursales', $config, null, 'enlace', 'Sucursales', null, 'branches.index', 'list_branch', 2);
         $this->item('configuraciones.cajas', $config, null, 'enlace', 'Cajas', null, 'cash-registers.index', 'list_cash_register', 3);
@@ -130,7 +125,7 @@ class MenuItemsSeeder extends Seeder
         $this->item('configuraciones.proveedores', $config, null, 'enlace', 'Proveedores de gastos', null, 'suppliers.index', 'list_supplier', 6);
         $this->item('configuraciones.conceptos_caja', $config, null, 'enlace', 'Conceptos de caja', null, 'cash-concepts.index', 'list_cash_concept', 7);
 
-        $recursos = $this->item('recursos_cliente', null, null, 'grupo', 'Capacitación', 'iconoir-book-stack', null, null, 8);
+        $recursos = $this->item('recursos_cliente', null, null, 'grupo', 'Capacitación', 'iconoir-book-stack', null, null, 8, self::SIN_AGENCIA);
         // Administrar el contenido es de la plataforma; verlo ("Manuales y videos") es de todos.
         $this->item('recursos_cliente.listar', $recursos, null, 'enlace', 'Administrar recursos', null, 'recursos.index', 'list_recurso', 1, soloPlataforma: true);
         // Reusa register_recurso — mismo criterio que el menú viejo, sin permiso propio.
@@ -147,6 +142,72 @@ class MenuItemsSeeder extends Seeder
             'comercial.productos_listar',
             'recursos_cliente.registrar',
         ])->update(['activo' => false]);
+    }
+
+    /**
+     * T-063 — menú de Agencia por tareas del negocio (obs. 17 de
+     * docs/requerimientos/observaciones-pruebas-usuario.md). Los ítems propios de Agencia
+     * (codigo 'agencia.*') conservan su código y se mueven de grupo; las pantallas comunes
+     * (Clientes, Mis ventas, Caja, Empresa, Usuarios…) son ítems nuevos 'ag_*' con la misma
+     * ruta y el mismo permiso que el original, solo para el giro agencia_viajes.
+     * Seguimiento y Reportes comerciales (VENTAS) los agregan T-051 y T-062 cuando existan sus rutas.
+     */
+    private function menuAgencia(): void
+    {
+        $g = 'agencia_viajes';
+
+        // Grupo viejo "Agencia de viajes": ya no se muestra; sus hijos se mueven abajo.
+        $this->item('agencia', null, $g, 'grupo', 'Agencia de viajes', 'iconoir-airplane', null, null, 6, self::SIN_AGENCIA);
+
+        $ventas = $this->item('ag_ventas', null, $g, 'grupo', 'VENTAS', 'iconoir-shop', null, null, 2);
+        $this->item('ag_ventas.clientes', $ventas, $g, 'enlace', 'Clientes', null, 'clients.index', 'list_client', 2);
+        $this->item('agencia.cotizador', $ventas, $g, 'enlace', 'Cotizaciones', null, 'agencia.cotizador.index', 'agencia.cotizaciones', 3);
+        $this->item('agencia.venta_directa', $ventas, $g, 'enlace', 'Venta directa', null, 'agencia.ventaDirecta', 'agencia.reservas', 4);
+
+        $viajes = $this->item('ag_viajes', null, $g, 'grupo', 'VIAJES', 'iconoir-airplane', null, null, 3);
+        $this->item('agencia.reservas', $viajes, $g, 'enlace', 'Reservas', null, 'agencia.reservas.index', 'agencia.reservas', 1);
+        $this->item('agencia.salidas_operativas', $viajes, $g, 'enlace', 'Salidas operativas', null, 'agencia.salidas.index', 'agencia.reservas', 2);
+        $this->item('agencia.reporte_operativo', $viajes, $g, 'enlace', 'Reporte operativo', null, 'agencia.reporteOperativo.index', 'agencia.reservas', 3);
+
+        $finanzas = $this->item('ag_finanzas', null, $g, 'grupo', 'FINANZAS', 'iconoir-cash', null, null, 4);
+        $comprobantes = $this->item('ag_finanzas.comprobantes', $finanzas, $g, 'grupo', 'Comprobantes', null, null, null, 1);
+        $this->item('ag_finanzas.mis_ventas', $comprobantes, $g, 'enlace', 'Mis ventas', null, 'sale.list', 'list_sale', 1);
+        $this->item('ag_finanzas.nc_nd', $comprobantes, $g, 'enlace', 'Notas de crédito/débito', null, 'nota.list', 'list_nota_electronica', 2);
+        $cobros = $this->item('ag_finanzas.cobros', $finanzas, $g, 'grupo', 'Cobros y anticipos', null, null, null, 2);
+        $this->item('ag_finanzas.por_cobrar', $cobros, $g, 'enlace', 'Ventas por cobrar', null, 'credit_receivables.index', 'list_sale', 1);
+        $this->item('ag_finanzas.anticipos', $cobros, $g, 'enlace', 'Anticipos', null, 'advances.index', 'list_advance', 2);
+        $caja = $this->item('ag_finanzas.caja', $finanzas, $g, 'grupo', 'Caja', null, null, null, 3);
+        $this->item('ag_finanzas.turno_activo', $caja, $g, 'enlace', 'Turno activo', null, 'cash.session', 'cash.open_session', 1);
+        $this->item('ag_finanzas.historial', $caja, $g, 'enlace', 'Historial y reportes', null, 'cash.dashboard', 'cash.view_all', 2);
+
+        $catalogos = $this->item('ag_catalogos', null, $g, 'grupo', 'CATÁLOGOS', 'iconoir-book-stack', null, null, 5);
+        $this->item('agencia.paquetes', $catalogos, $g, 'enlace', 'Tours y paquetes', null, 'agencia.paquetes.index', 'agencia.paquetes', 1);
+        $this->item('agencia.proveedores', $catalogos, $g, 'enlace', 'Proveedores', null, 'agencia.proveedores.index', 'agencia.proveedores', 2);
+        $this->item('agencia.destinos', $catalogos, $g, 'enlace', 'Destinos', null, 'agencia.destinos.index', 'agencia.destinos', 3);
+        $this->item('agencia.guias', $catalogos, $g, 'enlace', 'Guías', null, 'agencia.guias.index', 'agencia.guias', 4);
+        $this->item('agencia.temporadas', $catalogos, $g, 'enlace', 'Temporadas', null, 'agencia.temporadas.index', 'agencia.temporadas', 5);
+
+        $admin = $this->item('ag_admin', null, $g, 'grupo', 'ADMINISTRACIÓN', 'iconoir-settings', null, null, 6);
+        $this->item('agencia.configuracion', $admin, $g, 'enlace', 'Configuración de agencia', null, 'agencia.configuracion.index', 'agencia.configuracion', 1);
+        $empresa = $this->item('ag_admin.empresa', $admin, $g, 'grupo', 'Empresa y sucursales', null, null, null, 2);
+        $this->item('ag_admin.empresa_datos', $empresa, $g, 'enlace', 'Datos de la empresa', null, 'company.index', 'company', 1);
+        $this->item('ag_admin.sucursales', $empresa, $g, 'enlace', 'Sucursales', null, 'branches.index', 'list_branch', 2);
+        $cajaConfig = $this->item('ag_admin.caja', $admin, $g, 'grupo', 'Configuración de caja', null, null, null, 3);
+        $this->item('ag_admin.cajas', $cajaConfig, $g, 'enlace', 'Cajas', null, 'cash-registers.index', 'list_cash_register', 1);
+        $this->item('ag_admin.metodos_pago', $cajaConfig, $g, 'enlace', 'Métodos de pago', null, 'payment-methods.index', 'list_payment_method', 2);
+        $this->item('ag_admin.conceptos_caja', $cajaConfig, $g, 'enlace', 'Conceptos de caja', null, 'cash-concepts.index', 'list_cash_concept', 3);
+        // Caja busca aquí la contraparte de los egresos; sale con la tabla única de proveedores (Compras).
+        $this->item('ag_admin.proveedores_gastos', $cajaConfig, $g, 'enlace', 'Proveedores de gastos', null, 'suppliers.index', 'list_supplier', 4);
+        $series = $this->item('ag_admin.series', $admin, $g, 'grupo', 'Series y numeración', null, null, null, 4);
+        $this->item('ag_admin.series_comprobantes', $series, $g, 'enlace', 'Series de comprobantes', null, 'series-comprobante.index', 'list_serie_comprobante', 1);
+        $this->item('agencia.configuracion_codigos', $series, $g, 'enlace', 'Códigos de agencia', null, 'agencia.configuracion.codigos', 'agencia.configuracion', 2);
+        $accesos = $this->item('ag_admin.accesos', $admin, $g, 'grupo', 'Usuarios y permisos', null, null, null, 5);
+        $this->item('ag_admin.usuarios', $accesos, $g, 'enlace', 'Usuarios', null, 'access.users', 'list_user', 1);
+        $this->item('ag_admin.roles', $accesos, $g, 'enlace', 'Roles y permisos', null, 'access.roles', 'list_role', 2);
+
+        $ayuda = $this->item('ag_ayuda', null, $g, 'grupo', 'AYUDA', 'iconoir-help-circle', null, null, 7);
+        // Reusa register_recurso, igual que el original (recursos_cliente.manual).
+        $this->item('ag_ayuda.manual', $ayuda, $g, 'enlace', 'Manuales y videos', null, 'recurso.manual', 'register_recurso', 1);
     }
 
     private function item(

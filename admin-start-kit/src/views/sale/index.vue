@@ -14,7 +14,8 @@
                     {{ totalPages }} registro(s) encontrado(s)
                 </small>
             </div>
-            <router-link to="/sale/register" class="btn btn-primary fw-semibold shadow-sm">
+            <!-- Agencia no vende productos de retail: factura desde reservas y Venta directa (T-063). -->
+            <router-link v-if="menu.loaded && !esAgencia" to="/sale/register" class="btn btn-primary fw-semibold shadow-sm">
                 <i class="fas fa-plus me-2"></i>Nueva Venta
             </router-link>
         </div>
@@ -391,8 +392,13 @@ import httpClient from "@/helpers/http-client";
 import router from "@/router";
 import { descargarArchivoSunat, imprimirComprobante } from "@/composables/usePrintComprobante";
 import { useAuthStore } from "@/stores/auth";
+import { useMenuStore } from "@/stores/menu";
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
+
+// El giro se reconoce por el menú propio de Agencia (MenuItemsSeeder::menuAgencia).
+const menu = useMenuStore();
+const esAgencia = computed(() => menu.tieneCodigo("ag_finanzas.mis_ventas"));
 
 // ── Estado de UI ──────────────────────────────────────────────────
 const sale_list = ref<Sale[]>([]);
@@ -776,6 +782,7 @@ const clonarVenta = (sale: Sale) => {
 
 // ── Lifecycle ─────────────────────────────────────────────────────
 onMounted(() => {
+    menu.ensureLoaded();
     list();
     config();
 });

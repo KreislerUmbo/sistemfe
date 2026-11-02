@@ -1,0 +1,190 @@
+[
+    {
+        "codigo": "creditos_panel",
+        "label": "Panel",
+        "icono": "iconoir-home-simple",
+        "ruta": "creditos.panel",
+        "hijos": []
+    },
+    {
+        "codigo": "access",
+        "label": "Accesos",
+        "icono": "iconoir-lock",
+        "ruta": null,
+        "hijos": [
+            {
+                "codigo": "access.roles",
+                "label": "Roles y permisos",
+                "icono": "iconoir-shield-check",
+                "ruta": "access.roles",
+                "hijos": []
+            },
+            {
+                "codigo": "access.usuarios",
+                "label": "Usuarios",
+                "icono": "iconoir-group",
+                "ruta": "access.users",
+                "hijos": []
+            }
+        ]
+    },
+    {
+        "codigo": "comercial",
+        "label": "Comercial",
+        "icono": "iconoir-shop",
+        "ruta": null,
+        "hijos": [
+            {
+                "codigo": "comercial.clientes",
+                "label": "Clientes",
+                "icono": "iconoir-user",
+                "ruta": "clients.index",
+                "hijos": []
+            }
+        ]
+    },
+    {
+        "codigo": "caja",
+        "label": "Caja",
+        "icono": "iconoir-cash",
+        "ruta": null,
+        "hijos": [
+            {
+                "codigo": "caja.turno_activo",
+                "label": "Turno activo",
+                "icono": null,
+                "ruta": "cash.session",
+                "hijos": []
+            },
+            {
+                "codigo": "caja.historial",
+                "label": "Historial y reportes",
+                "icono": null,
+                "ruta": "cash.dashboard",
+                "hijos": []
+            }
+        ]
+    },
+    {
+        "codigo": "creditos",
+        "label": "Créditos",
+        "icono": "iconoir-hand-cash",
+        "ruta": null,
+        "hijos": [
+            {
+                "codigo": "creditos.cobranza",
+                "label": "Cobranza del día",
+                "icono": null,
+                "ruta": "creditos.cobranza",
+                "hijos": []
+            },
+            {
+                "codigo": "creditos.listado",
+                "label": "Listado de Créditos",
+                "icono": null,
+                "ruta": "creditos.index",
+                "hijos": []
+            },
+            {
+                "codigo": "creditos.nuevo",
+                "label": "Nuevo crédito",
+                "icono": null,
+                "ruta": "creditos.nuevo",
+                "hijos": []
+            },
+            {
+                "codigo": "creditos.migrar",
+                "label": "Registrar crédito antiguo",
+                "icono": null,
+                "ruta": "creditos.migrar",
+                "hijos": []
+            },
+            {
+                "codigo": "creditos.agenda",
+                "label": "Agenda de cobranza",
+                "icono": null,
+                "ruta": "creditos.agenda",
+                "hijos": []
+            },
+            {
+                "codigo": "creditos.reportes",
+                "label": "Reportes",
+                "icono": null,
+                "ruta": "creditos.reportes",
+                "hijos": []
+            },
+            {
+                "codigo": "creditos.configuracion",
+                "label": "Configuración de créditos",
+                "icono": null,
+                "ruta": "creditos.configuracion",
+                "hijos": []
+            }
+        ]
+    },
+    {
+        "codigo": "configuraciones",
+        "label": "Configuración",
+        "icono": "iconoir-settings",
+        "ruta": null,
+        "hijos": [
+            {
+                "codigo": "configuraciones.empresa",
+                "label": "Datos de la empresa",
+                "icono": null,
+                "ruta": "company.index",
+                "hijos": []
+            },
+            {
+                "codigo": "configuraciones.sucursales",
+                "label": "Sucursales",
+                "icono": null,
+                "ruta": "branches.index",
+                "hijos": []
+            },
+            {
+                "codigo": "configuraciones.cajas",
+                "label": "Cajas",
+                "icono": null,
+                "ruta": "cash-registers.index",
+                "hijos": []
+            },
+            {
+                "codigo": "configuraciones.metodos_pago",
+                "label": "Métodos de pago",
+                "icono": null,
+                "ruta": "payment-methods.index",
+                "hijos": []
+            },
+            {
+                "codigo": "configuraciones.proveedores",
+                "label": "Proveedores de gastos",
+                "icono": null,
+                "ruta": "suppliers.index",
+                "hijos": []
+            },
+            {
+                "codigo": "configuraciones.conceptos_caja",
+                "label": "Conceptos de caja",
+                "icono": null,
+                "ruta": "cash-concepts.index",
+                "hijos": []
+            }
+        ]
+    },
+    {
+        "codigo": "recursos_cliente",
+        "label": "Capacitación",
+        "icono": "iconoir-book-stack",
+        "ruta": null,
+        "hijos": [
+            {
+                "codigo": "recursos_cliente.manual",
+                "label": "Manuales y videos",
+                "icono": null,
+                "ruta": "recurso.manual",
+                "hijos": []
+            }
+        ]
+    }
+]

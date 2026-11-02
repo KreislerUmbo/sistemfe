@@ -304,10 +304,10 @@ class CreditosDatosTest extends TestCase
             'comercial.ventas_mis_ventas', 'comercial.ventas_nc_nd', 'configuraciones.series', 'agencia'] as $oculto) {
             $this->assertNotContains($oculto, $creditos);
         }
-        // Agencia no cambia: sigue viendo Ventas y Series, y no ve Créditos.
+        // Agencia no ve Créditos y sigue teniendo Mis ventas y Series, ahora en su menú propio (T-063).
         $this->assertNotContains('creditos', $agencia);
-        $this->assertContains('comercial.ventas_mis_ventas', $agencia);
-        $this->assertContains('configuraciones.series', $agencia);
+        $this->assertContains('ag_finanzas.mis_ventas', $agencia);
+        $this->assertContains('ag_admin.series_comprobantes', $agencia);
     }
 
     /** @return list<string> códigos de todo el árbol, aplanado */

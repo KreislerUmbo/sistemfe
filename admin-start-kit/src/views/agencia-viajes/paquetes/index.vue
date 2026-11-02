@@ -4,7 +4,7 @@
             <div>
                 <h5 class="fw-bold mb-0 text-dark">
                     <i class="fas fa-suitcase-rolling me-2 text-primary"></i>
-                    Paquetes / Tours
+                    Tours y paquetes
                 </h5>
                 <small class="text-muted">{{ totalPages }} registro(s) encontrado(s)</small>
             </div>

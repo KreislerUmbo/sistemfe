@@ -4,7 +4,7 @@
             <div>
                 <h5 class="fw-bold mb-0 text-dark">
                     <i class="fas fa-map-marked-alt me-2 text-primary"></i>
-                    Destinos y Atractivos
+                    Destinos
                 </h5>
                 <small class="text-muted">Árbol de zonas, lugares y atractivos</small>
             </div>

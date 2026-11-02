@@ -88,5 +88,12 @@ export const useMenuStore = defineStore("menu_store", () => {
     return buscar(items.value);
   };
 
-  return { items, loaded, fetch, ensureLoaded, clear, tieneRuta };
+  /** ¿Hay un ítem con este código (en cualquier nivel)? Sirve para saber el giro por su menú propio. */
+  const tieneCodigo = (codigo: string): boolean => {
+    const buscar = (nodos: MenuItemType[]): boolean =>
+      nodos.some((n) => n.key === codigo || (n.children ? buscar(n.children) : false));
+    return buscar(items.value);
+  };
+
+  return { items, loaded, fetch, ensureLoaded, clear, tieneRuta, tieneCodigo };
 });
