@@ -30,6 +30,22 @@ class TextoFormatoServiceTest extends TestCase
         $this->assertSame('La Casa Grande', TextoFormatoService::capitalizarNombrePropio('la casa grande'));
     }
 
+    // T-033 (H24) — CA4: la letra suelta al final es una etiqueta, no un conector.
+    public function test_letra_suelta_al_final_queda_en_mayuscula(): void
+    {
+        $this->assertSame('Alternativa A', TextoFormatoService::capitalizarNombrePropio('Alternativa A'));
+        $this->assertSame('Alternativa A', TextoFormatoService::capitalizarNombrePropio('alternativa a'));
+        $this->assertSame('Opción E', TextoFormatoService::capitalizarNombrePropio('opción e'));
+        $this->assertSame('Opción B', TextoFormatoService::capitalizarNombrePropio('opción b'));
+    }
+
+    public function test_conector_de_una_letra_en_medio_sigue_en_minuscula(): void
+    {
+        $this->assertSame('Viaje a Cusco', TextoFormatoService::capitalizarNombrePropio('viaje a cusco'));
+        $this->assertSame('Lima y Cusco', TextoFormatoService::capitalizarNombrePropio('LIMA Y CUSCO'));
+        $this->assertSame('A', TextoFormatoService::capitalizarNombrePropio('a'));
+    }
+
     public function test_recorta_espacios_al_inicio_y_final(): void
     {
         $this->assertSame('Hotel Rioja', TextoFormatoService::capitalizarNombrePropio('  hotel rioja  '));

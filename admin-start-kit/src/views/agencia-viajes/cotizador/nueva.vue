@@ -22,8 +22,8 @@
                 <div class="row g-3">
                     <div class="col-12 col-md-6 position-relative">
                         <label class="form-label mb-1 small fw-semibold text-secondary">Cliente</label>
-                        <div class="input-group input-group-sm">
-                            <input type="text" class="form-control" v-model="clientSearchText"
+                        <div class="input-group input-group-sm" :class="{ 'has-validation': errores.cliente_id }">
+                            <input type="text" class="form-control" :class="{ 'is-invalid': errores.cliente_id }" v-model="clientSearchText"
                                 placeholder="Buscar por DNI, RUC o nombre..." @input="onClientSearchInput"
                                 @focus="showClientSuggestions = true" @blur="onClientSearchBlur" autocomplete="off">
                             <button v-if="clienteSeleccionado" class="btn btn-outline-primary" type="button" title="Editar datos del cliente" @click="abrirEdicionCliente">
@@ -35,6 +35,7 @@
                             <button class="btn btn-outline-primary" type="button" @click="abrirNuevoCliente">
                                 <i class="fas fa-user-plus"></i>
                             </button>
+                            <div v-if="errores.cliente_id" class="invalid-feedback">{{ errores.cliente_id }}</div>
                         </div>
                         <div v-if="showClientSuggestions && clientSuggestions.length > 0 && !clienteSeleccionado"
                             class="list-group mt-1 position-absolute"
@@ -52,6 +53,7 @@
                     <div class="col-12 col-md-4">
                         <label class="form-label mb-1 small fw-semibold text-secondary">Destino</label>
                         <DestinoTreeSelect v-model="destinoId" @update:label="destinoTexto = $event" />
+                        <div v-if="errores.destino" class="invalid-feedback d-block">{{ errores.destino }}</div>
                     </div>
 
                     <div class="col-12 col-md-2">
@@ -61,6 +63,7 @@
                     <div class="col-12 col-md-2">
                         <label class="form-label mb-1 small fw-semibold text-secondary">Fecha hasta</label>
                         <CampoFecha v-model="fechaViajeHasta" :disabled="sinFechaExacta" />
+                        <div v-if="errores.fecha_viaje_hasta" class="invalid-feedback d-block">{{ errores.fecha_viaje_hasta }}</div>
                     </div>
                     <div class="col-12 col-md-8 d-flex align-items-end">
                         <div class="form-check">
@@ -85,7 +88,8 @@
                     <button class="btn btn-sm btn-outline-primary" @click="agregarPax(8, cantidadAAgregar)"><i class="fas fa-plus me-1"></i>Niño(s)</button>
                     <button class="btn btn-sm btn-outline-primary" @click="agregarPax(1, cantidadAAgregar)"><i class="fas fa-plus me-1"></i>Infante(s)</button>
                 </div>
-                <div v-if="pasajeros.length === 0" class="text-muted small fst-italic mb-2">Agregá al menos un pasajero.</div>
+                <div v-if="errores.pasajeros" class="invalid-feedback d-block mb-2">{{ errores.pasajeros }}</div>
+                <div v-else-if="pasajeros.length === 0" class="text-muted small fst-italic mb-2">Agrega al menos un pasajero.</div>
                 <div class="d-flex flex-column gap-2">
                     <div v-for="(pax, idx) in pasajeros" :key="idx" class="d-flex align-items-center gap-2 border rounded p-2 small">
                         <span class="badge" :class="tipoPorEdad(pax.edad).clase" style="min-width:70px">{{ tipoPorEdad(pax.edad).label }}</span>
@@ -103,6 +107,44 @@
             </div>
         </div>
 
+        <!-- T-033: la primera alternativa nace con la cotización. El nombre es el título que ve
+             el cliente; el tipo de cambio sale solo y se pide acá solo si no hay ninguno. -->
+        <div class="card border-0 shadow-sm mb-3">
+            <div class="card-header bg-white border-bottom d-flex align-items-center gap-2 py-2">
+                <span class="badge bg-primary rounded-pill">3</span>
+                <span class="fw-semibold text-dark">Propuesta</span>
+                <small class="text-muted">(después puedes agregar otras alternativas)</small>
+            </div>
+            <div class="card-body py-3">
+                <div class="row g-3">
+                    <div class="col-12 col-md-6">
+                        <label class="form-label mb-1 small fw-semibold text-secondary">Nombre</label>
+                        <input type="text" class="form-control form-control-sm" :class="{ 'is-invalid': errores.alternativa_nombre }"
+                            v-model="alternativaNombre" maxlength="100" placeholder="Alternativa A">
+                        <div v-if="errores.alternativa_nombre" class="invalid-feedback">{{ errores.alternativa_nombre }}</div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <label class="form-label mb-1 small fw-semibold text-secondary">Moneda</label>
+                        <select class="form-select form-select-sm" :class="{ 'is-invalid': errores.moneda_cotizacion }" v-model="monedaCotizacion">
+                            <option value="PEN">Soles (PEN)</option>
+                            <option value="USD">Dólares (USD)</option>
+                        </select>
+                        <div v-if="errores.moneda_cotizacion" class="invalid-feedback">{{ errores.moneda_cotizacion }}</div>
+                    </div>
+                    <div v-if="pedirTipoCambio" class="col-6 col-md-3">
+                        <label class="form-label mb-1 small fw-semibold text-secondary">Tipo de cambio del día</label>
+                        <input type="number" step="0.0001" min="0" class="form-control form-control-sm" :class="{ 'is-invalid': errores.tipo_cambio_valor }"
+                            v-model.number="tipoCambioValor" placeholder="Ej. 3.75" @input="tipoCambioConfirmado = false">
+                        <div v-if="errores.tipo_cambio_valor" class="invalid-feedback">{{ errores.tipo_cambio_valor }}</div>
+                        <div v-if="tipoCambioRequiereConfirmacion" class="form-check mt-1">
+                            <input class="form-check-input" type="checkbox" id="tc-confirmado" v-model="tipoCambioConfirmado">
+                            <label class="form-check-label small" for="tc-confirmado">El valor es correcto</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div class="d-flex justify-content-end mb-4">
             <button class="btn btn-primary fw-semibold" @click="crear" :disabled="creando">
                 <span v-if="creando" class="spinner-border spinner-border-sm me-2"></span>
@@ -110,6 +152,7 @@
                 Crear cotización y empezar a armar
             </button>
         </div>
+        <div v-if="errores.general" class="alert alert-danger py-2 small">{{ errores.general }}</div>
 
         <div class="modal fade" tabindex="-1" :class="{ show: showQuickClientModal, 'd-block': showQuickClientModal }"
             style="background:rgba(0,0,0,.5)" v-if="showQuickClientModal">
@@ -132,17 +175,15 @@
 
 <script setup lang="ts">
 import CampoFecha from '@/components/CampoFecha.vue';
-import { ref } from 'vue';
+import { onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';
-import Swal from 'sweetalert2/dist/sweetalert2.js';
 import httpClient from '@/helpers/http-client';
 import ClientFormQuick from '@/components/Sales/ClientFormQuick.vue';
 import DestinoTreeSelect from '@/components/AgenciaViajes/DestinoTreeSelect.vue';
 import { cotizacionService } from '@/services/admin/cotizacionService';
+import { configuracionAgenciaService } from '@/services/admin/configuracionAgenciaService';
 import type { Client } from '@/types/clients';
-
-type TVueSwalInstance = typeof Swal & typeof Swal.fire;
 
 const router = useRouter();
 
@@ -164,6 +205,24 @@ const sinFechaExacta = ref<boolean>(false);
 const pasajeros = ref<Array<{ edad: number; residencia: 'nacional' | 'extranjero' }>>([]);
 const creando = ref<boolean>(false);
 const cantidadAAgregar = ref<number>(1);
+
+// T-033 — primera alternativa ("Propuesta") y errores junto a cada campo (R7).
+const alternativaNombre = ref<string>('Alternativa A');
+const monedaCotizacion = ref<'PEN' | 'USD'>('PEN');
+const pedirTipoCambio = ref<boolean>(false);
+const tipoCambioValor = ref<number | null>(null);
+const tipoCambioRequiereConfirmacion = ref<boolean>(false);
+const tipoCambioConfirmado = ref<boolean>(false);
+const errores = ref<Record<string, string>>({});
+
+onMounted(async () => {
+    try {
+        const res = await configuracionAgenciaService.obtener();
+        monedaCotizacion.value = res.configuracion_agencia.moneda_cotizacion_default ?? 'PEN';
+    } catch {
+        // Sin configuración se queda en PEN: igual se puede elegir a mano.
+    }
+});
 
 const onClientSearchInput = () => {
     clearTimeout(clientSearchTimeout);
@@ -231,18 +290,13 @@ const agregarPax = (edadSugerida: number, cantidad: number = 1) => {
 };
 
 const crear = async () => {
-    if (!clienteSeleccionado.value) {
-        (Swal as TVueSwalInstance).fire('Error', 'Seleccioná un cliente.', 'error');
-        return;
-    }
-    if (!destinoTexto.value.trim()) {
-        (Swal as TVueSwalInstance).fire('Error', 'Seleccioná un destino.', 'error');
-        return;
-    }
-    if (pasajeros.value.length === 0) {
-        (Swal as TVueSwalInstance).fire('Error', 'Agregá al menos un pasajero.', 'error');
-        return;
-    }
+    const faltan: Record<string, string> = {};
+    if (!clienteSeleccionado.value) faltan.cliente_id = 'Selecciona un cliente.';
+    if (!destinoTexto.value.trim()) faltan.destino = 'Selecciona un destino.';
+    if (pasajeros.value.length === 0) faltan.pasajeros = 'Agrega al menos un pasajero.';
+    if (pedirTipoCambio.value && !(Number(tipoCambioValor.value) > 0)) faltan.tipo_cambio_valor = 'Escribe el tipo de cambio del día.';
+    errores.value = faltan;
+    if (Object.keys(faltan).length > 0 || !clienteSeleccionado.value) return;
 
     creando.value = true;
     try {
@@ -252,11 +306,28 @@ const crear = async () => {
             fecha_viaje_desde: sinFechaExacta.value ? null : (fechaViajeDesde.value || null),
             fecha_viaje_hasta: sinFechaExacta.value ? null : (fechaViajeHasta.value || null),
             pasajeros: pasajeros.value,
+            alternativa_nombre: alternativaNombre.value.trim() || null,
+            moneda_cotizacion: monedaCotizacion.value,
+            tipo_cambio_valor: pedirTipoCambio.value ? tipoCambioValor.value : null,
+            tipo_cambio_confirmado: pedirTipoCambio.value && tipoCambioConfirmado.value,
         });
 
         router.push(`/agencia-viajes/cotizador/${res.cotizacion.id}`);
     } catch (error: any) {
-        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo crear la cotización', 'error');
+        const data = error.response?.data ?? {};
+        if (data.requiere_tipo_cambio) {
+            // Sin tipo de cambio registrado ni de SUNAT (o fuera de rango): se pide acá.
+            pedirTipoCambio.value = true;
+            tipoCambioRequiereConfirmacion.value = !!data.requiere_confirmacion;
+            errores.value = { tipo_cambio_valor: data.message };
+        } else if (data.errors) {
+            // 'pasajeros.0.edad' → se muestra en el bloque de pasajeros.
+            errores.value = Object.fromEntries(
+                Object.entries(data.errors as Record<string, string[]>).map(([campo, msgs]) => [campo.split('.')[0], msgs[0]])
+            );
+        } else {
+            errores.value = { general: data.message ?? 'No se pudo crear la cotización' };
+        }
     } finally {
         creando.value = false;
     }

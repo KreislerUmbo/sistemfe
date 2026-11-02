@@ -2,14 +2,18 @@
 
 namespace App\Http\Controllers\AgenciaViajes;
 
+use App\Http\Controllers\Concerns\ValidaEnEspanol;
 use App\Http\Controllers\Controller;
 use App\Models\AgenciaViajes\Alternativa;
 use App\Models\AgenciaViajes\AlternativaItem;
 use App\Models\AgenciaViajes\Cotizacion;
 use App\Models\AgenciaViajes\CotizacionPasajero;
 use App\Models\AgenciaViajes\Reserva;
+use App\Models\AgenciaViajes\ConfiguracionAgencia;
 use App\Models\AgenciaViajes\ConfiguracionCodigo;
 use App\Models\Client\Client;
+use App\Services\AgenciaViajes\AlternativaCreacionException;
+use App\Services\AgenciaViajes\AlternativaCreacionService;
 use App\Services\AgenciaViajes\CodigoGeneradorService;
 use App\Services\AgenciaViajes\RecalculoPorPersonaService;
 use App\Services\AgenciaViajes\TourLineaService;
@@ -24,10 +28,29 @@ use Illuminate\Support\Facades\Validator;
 // caller envuelve en transacción — por eso store() abre una).
 class CotizacionController extends Controller
 {
+    use ValidaEnEspanol;
+
+    // T-033 (R7) — nombre legible de cada campo en los mensajes de validación.
+    private const ATRIBUTOS = [
+        'cliente_id' => 'cliente',
+        'destino' => 'destino',
+        'fecha_viaje_desde' => 'fecha de inicio del viaje',
+        'fecha_viaje_hasta' => 'fecha de fin del viaje',
+        'pasajeros' => 'pasajeros',
+        'pasajeros.*.id' => 'pasajero',
+        'pasajeros.*.edad' => 'edad del pasajero',
+        'pasajeros.*.residencia' => 'residencia del pasajero',
+        'alternativa_nombre' => 'nombre de la propuesta',
+        'moneda_cotizacion' => 'moneda',
+        'tipo_cambio_valor' => 'tipo de cambio',
+        'tipo_cambio_confirmado' => 'confirmación del tipo de cambio',
+    ];
+
     public function __construct(
         private RecalculoPorPersonaService $recalculoPorPersona,
         private CodigoGeneradorService $codigoGenerador,
         private TourLineaService $tourLinea,
+        private AlternativaCreacionService $alternativaCreacion,
     ) {
     }
 
@@ -127,7 +150,7 @@ class CotizacionController extends Controller
 
     public function store(Request $request)
     {
-        $validator = Validator::make($request->all(), [
+        $validator = $this->validadorEs($request->all(), [
             'cliente_id' => 'required|integer|exists:clients,id',
             'destino' => 'required|string|max:250',
             'fecha_viaje_desde' => 'nullable|date',
@@ -136,52 +159,80 @@ class CotizacionController extends Controller
             'pasajeros.*.edad' => 'required|integer|min:0|max:120',
             // Fila 13, fase 1b (§3.3): vacío = nacional.
             'pasajeros.*.residencia' => 'nullable|in:nacional,extranjero',
-        ]);
+            // T-033 — la primera alternativa nace con la cotización. Vacíos = "Alternativa A" y la
+            // moneda por defecto de la agencia. El tipo de cambio es el del día; tipo_cambio_valor
+            // solo cuando no hay ninguno registrado ni de SUNAT (la pantalla lo pide tras el 422).
+            'alternativa_nombre' => 'nullable|string|max:100',
+            'moneda_cotizacion' => 'nullable|in:PEN,USD',
+            'tipo_cambio_valor' => 'nullable|numeric|min:0',
+            'tipo_cambio_confirmado' => 'nullable|boolean',
+        ], self::ATRIBUTOS);
 
         if ($validator->fails()) {
-            return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
+            return $this->respuestaValidacionEs($validator);
         }
 
         $validado = $validator->validated();
         [$edadMaxInfante, $edadMaxNino] = $this->umbralesEdad();
+        $moneda = $validado['moneda_cotizacion'] ?? (ConfiguracionAgencia::first()?->moneda_cotizacion_default ?: 'PEN');
+        $usuarioId = $request->user()?->id ?? auth()->id();
 
-        $cotizacion = DB::transaction(function () use ($validado, $edadMaxInfante, $edadMaxNino) {
-            $codigo = $this->codigoGenerador->generar('cotizacion');
-            $prefijo = ConfiguracionCodigo::where('tipo', 'cotizacion')->value('prefijo');
+        try {
+            $cotizacion = DB::transaction(fn () => $this->crearCotizacionConAlternativa($validado, $moneda, $usuarioId, $edadMaxInfante, $edadMaxNino));
+        } catch (AlternativaCreacionException $e) {
+            // La transacción ya deshizo la cotización: nada a medias.
+            return response()->json(['code' => 422, 'message' => $e->getMessage()] + $e->extra, 422);
+        }
 
-            $cotizacion = Cotizacion::create([
-                'cliente_id' => $validado['cliente_id'],
-                'codigo_prefijo' => $prefijo,
-                'codigo' => $codigo,
-                // Fase 1b (§3.3) — dueño real para el scope de fila
-                // (EscopablePorVendedor). auth()->id() puede ser null en
-                // contexto de consola/tinker (nunca en una request real,
-                // que ya pasó auth:api) — nullable acepta ambos casos.
-                'vendedor_id' => auth()->id(),
-                'destino' => $validado['destino'],
-                'fecha_viaje_desde' => $validado['fecha_viaje_desde'] ?? null,
-                'fecha_viaje_hasta' => $validado['fecha_viaje_hasta'] ?? null,
-            ]);
-
-            foreach ($validado['pasajeros'] as $pax) {
-                CotizacionPasajero::create([
-                    'cotizacion_id' => $cotizacion->id,
-                    'edad' => $pax['edad'],
-                    'tipo_pax' => $this->derivarTipoPax((int) $pax['edad'], $edadMaxInfante, $edadMaxNino),
-                    'residencia' => $pax['residencia'] ?? CotizacionPasajero::RESIDENCIA_NACIONAL,
-                ]);
-            }
-
-            return $cotizacion;
-        });
-
-        $cotizacion->load('pasajeros', 'cliente');
+        $cotizacion->load('pasajeros', 'cliente', 'alternativas');
 
         return response()->json([
             'code' => 200,
             'message' => 'Cotización creada correctamente',
             'cotizacion' => $cotizacion,
         ]);
+    }
+
+    // T-033 — cuerpo de store(), dentro de su transacción: cabecera, pasajeros y "Alternativa A".
+    private function crearCotizacionConAlternativa(array $validado, string $moneda, ?int $usuarioId, int $edadMaxInfante, int $edadMaxNino): Cotizacion
+    {
+        $codigo = $this->codigoGenerador->generar('cotizacion');
+        $prefijo = ConfiguracionCodigo::where('tipo', 'cotizacion')->value('prefijo');
+
+        $cotizacion = Cotizacion::create([
+            'cliente_id' => $validado['cliente_id'],
+            'codigo_prefijo' => $prefijo,
+            'codigo' => $codigo,
+            // Fase 1b (§3.3) — dueño real para el scope de fila
+            // (EscopablePorVendedor). auth()->id() puede ser null en
+            // contexto de consola/tinker (nunca en una request real,
+            // que ya pasó auth:api) — nullable acepta ambos casos.
+            'vendedor_id' => auth()->id(),
+            'destino' => $validado['destino'],
+            'fecha_viaje_desde' => $validado['fecha_viaje_desde'] ?? null,
+            'fecha_viaje_hasta' => $validado['fecha_viaje_hasta'] ?? null,
+        ]);
+
+        foreach ($validado['pasajeros'] as $pax) {
+            CotizacionPasajero::create([
+                'cotizacion_id' => $cotizacion->id,
+                'edad' => $pax['edad'],
+                'tipo_pax' => $this->derivarTipoPax((int) $pax['edad'], $edadMaxInfante, $edadMaxNino),
+                'residencia' => $pax['residencia'] ?? CotizacionPasajero::RESIDENCIA_NACIONAL,
+            ]);
+        }
+
+        $this->alternativaCreacion->crear(
+            $cotizacion,
+            $validado['alternativa_nombre'] ?? null,
+            $moneda,
+            'dia',
+            isset($validado['tipo_cambio_valor']) ? (float) $validado['tipo_cambio_valor'] : null,
+            (bool) ($validado['tipo_cambio_confirmado'] ?? false),
+            $usuarioId,
+        );
+
+        return $cotizacion;
     }
 
     public function show(string $id)
@@ -286,15 +337,15 @@ class CotizacionController extends Controller
         // Fase 1b (§3.3, advertencia 1) — segunda barrera explícita.
         $this->authorize('update', $cotizacion);
 
-        $validator = Validator::make($request->all(), [
+        $validator = $this->validadorEs($request->all(), [
             'cliente_id' => 'required|integer|exists:clients,id',
             'destino' => 'required|string|max:250',
             'fecha_viaje_desde' => 'nullable|date',
             'fecha_viaje_hasta' => 'nullable|date|after_or_equal:fecha_viaje_desde',
-        ]);
+        ], self::ATRIBUTOS);
 
         if ($validator->fails()) {
-            return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
+            return $this->respuestaValidacionEs($validator);
         }
 
         $fechaAntes = $cotizacion->fecha_viaje_desde?->toDateString();
@@ -353,16 +404,16 @@ class CotizacionController extends Controller
         // T-025 (H2): mismo criterio que update().
         $this->authorize('update', $cotizacion);
 
-        $validator = Validator::make($request->all(), [
+        $validator = $this->validadorEs($request->all(), [
             'pasajeros' => 'required|array|min:1',
             'pasajeros.*.id' => 'nullable|integer|exists:cotizacion_pasajeros,id',
             'pasajeros.*.edad' => 'required|integer|min:0|max:120',
             // Fila 13, fase 1b (§3.3): vacío = se conserva (o nacional si es nuevo).
             'pasajeros.*.residencia' => 'nullable|in:nacional,extranjero',
-        ]);
+        ], self::ATRIBUTOS);
 
         if ($validator->fails()) {
-            return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
+            return $this->respuestaValidacionEs($validator);
         }
 
         // Una alternativa 'aceptada' ya generó una reserva real —

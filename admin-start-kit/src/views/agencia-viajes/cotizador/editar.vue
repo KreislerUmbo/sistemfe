@@ -187,6 +187,14 @@
                     <span v-else-if="alt.estado === 'descartada'" class="ms-1 opacity-50"><i class="fas fa-times-circle"></i></span>
                 </span>
                 <i v-if="alt.id === alternativaActivaId" class="fas fa-pen alt-pill-edit" title="Renombrar esta alternativa" @click.stop="renombrarAlternativa(alt)"></i>
+                <!-- T-033: la moneda se cambia solo mientras la alternativa no tenga servicios. -->
+                <select v-if="alt.id === alternativaActivaId && !modificacionInfo && !alternativaSoloLectura" class="form-select form-select-sm py-0 ps-2 pe-4 w-auto"
+                    style="font-size:.75rem" :value="alt.moneda_cotizacion" :disabled="(alt.items?.length ?? 0) > 0 || cambiandoMoneda"
+                    :title="(alt.items?.length ?? 0) > 0 ? 'Con servicios no se cambia la moneda: quítalos o crea otra alternativa' : 'Moneda de la alternativa'"
+                    @click.stop @change="cambiarMonedaAlternativa(alt, ($event.target as HTMLSelectElement).value as 'PEN' | 'USD')">
+                    <option value="PEN">PEN</option>
+                    <option value="USD">USD</option>
+                </select>
                 <span v-if="alt.id === alternativaActivaId && eliminandoAlternativa" class="spinner-border spinner-border-sm alt-pill-delete" style="opacity:1"></span>
                 <i v-else-if="alt.id === alternativaActivaId" class="fas fa-trash alt-pill-delete" title="Eliminar esta alternativa" @click.stop="eliminarAlternativa"></i>
             </span>
@@ -207,11 +215,13 @@
                 <div class="row g-2 align-items-end">
                     <div class="col-6 col-md-3">
                         <label class="form-label mb-1 small fw-semibold text-secondary">Nombre</label>
-                        <input type="text" class="form-control form-control-sm" v-model="formAlternativa.nombre" placeholder="Alternativa B">
+                        <input type="text" class="form-control form-control-sm" :class="{ 'is-invalid': erroresAlternativa.nombre }"
+                            v-model="formAlternativa.nombre" :placeholder="nombreSugeridoAlternativa">
+                        <div v-if="erroresAlternativa.nombre" class="invalid-feedback">{{ erroresAlternativa.nombre }}</div>
                     </div>
                     <div class="col-6 col-md-2">
                         <label class="form-label mb-1 small fw-semibold text-secondary">Moneda</label>
-                        <select class="form-select form-select-sm" v-model="formAlternativa.moneda_cotizacion">
+                        <select class="form-select form-select-sm" :class="{ 'is-invalid': erroresAlternativa.moneda_cotizacion }" v-model="formAlternativa.moneda_cotizacion">
                             <option value="PEN">Soles</option>
                             <option value="USD">Dólares</option>
                         </select>
@@ -225,7 +235,8 @@
                     </div>
                     <div class="col-6 col-md-2">
                         <label class="form-label mb-1 small fw-semibold text-secondary">Valor nuevo (opcional)</label>
-                        <input type="number" step="0.0001" class="form-control form-control-sm" v-model.number="formAlternativa.tipo_cambio_valor">
+                        <input type="number" step="0.0001" class="form-control form-control-sm" :class="{ 'is-invalid': erroresAlternativa.tipo_cambio_valor }" v-model.number="formAlternativa.tipo_cambio_valor">
+                        <div v-if="erroresAlternativa.tipo_cambio_valor" class="invalid-feedback">{{ erroresAlternativa.tipo_cambio_valor }}</div>
                         <small v-if="sugerenciaTipoCambioSunat && formAlternativa.tipo_cambio_origen === 'dia'" class="text-muted d-block">
                             Sugerido SUNAT ({{ sugerenciaTipoCambioSunat.fecha }}): {{ sugerenciaTipoCambioSunat.valor }}
                         </small>
@@ -237,6 +248,7 @@
                         <button class="btn btn-outline-secondary btn-sm" @click="mostrarFormAlternativa = false"><i class="fas fa-times"></i></button>
                     </div>
                 </div>
+                <div v-if="erroresAlternativa.general" class="text-danger small mt-2">{{ erroresAlternativa.general }}</div>
             </div>
         </div>
 
@@ -1914,12 +1926,28 @@ watch(() => formAlternativa.value.tipo_cambio_origen, (origen) => {
     }
 });
 
+// T-033 — mismo criterio que AlternativaCreacionService::nombreSugerido(): la letra por cantidad,
+// saltando las ya usadas. Si el nombre queda vacío, el backend usa este mismo.
+const nombreSugeridoAlternativa = computed(() => {
+    const usados = (cotizacion.value?.alternativas ?? []).map((a) => a.nombre.trim().toLowerCase());
+    for (let i = usados.length; i < 26; i++) {
+        const nombre = `Alternativa ${String.fromCharCode(65 + i)}`;
+        if (!usados.includes(nombre.toLowerCase())) return nombre;
+    }
+    return `Alternativa ${usados.length + 1}`;
+});
+// T-033 (R7) — errores del form "+ Nueva" junto a cada campo, no en ventana.
+const erroresAlternativa = ref<Record<string, string>>({});
+watch(mostrarFormAlternativa, () => { erroresAlternativa.value = {}; });
+
 const creandoAlternativa = ref(false);
 const crearAlternativa = async (confirmado = false) => {
     creandoAlternativa.value = true;
+    erroresAlternativa.value = {};
     try {
         const res = await alternativaService.crear(cotizacionId, { ...formAlternativa.value, tipo_cambio_confirmado: confirmado });
         mostrarFormAlternativa.value = false;
+        formAlternativa.value.nombre = '';
         await cargarCotizacion();
         alternativaActivaId.value = res.alternativa.id;
     } catch (error: any) {
@@ -1941,9 +1969,36 @@ const crearAlternativa = async (confirmado = false) => {
             }
             return;
         }
-        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo crear', 'error');
+        const data = error.response?.data ?? {};
+        if (data.errors) {
+            erroresAlternativa.value = Object.fromEntries(
+                Object.entries(data.errors as Record<string, string[]>).map(([campo, msgs]) => [campo, msgs[0]])
+            );
+        } else if (data.requiere_tipo_cambio) {
+            erroresAlternativa.value = { tipo_cambio_valor: data.message };
+        } else {
+            erroresAlternativa.value = { general: data.message ?? 'No se pudo crear' };
+        }
     } finally {
         creandoAlternativa.value = false;
+    }
+};
+
+// T-033 — cambiar la moneda de la alternativa activa (solo sin servicios; el backend lo vuelve a
+// comprobar y toma el tipo de cambio del día).
+const cambiandoMoneda = ref(false);
+const cambiarMonedaAlternativa = async (alt: Alternativa, moneda: 'PEN' | 'USD') => {
+    if (moneda === alt.moneda_cotizacion) return;
+    cambiandoMoneda.value = true;
+    try {
+        await alternativaService.actualizar(alt.id, { moneda_cotizacion: moneda });
+        await cargarCotizacion();
+        toast.success(`Moneda cambiada a ${moneda}`);
+    } catch (error: any) {
+        await cargarCotizacion();
+        toast.error(error.response?.data?.message ?? 'No se pudo cambiar la moneda');
+    } finally {
+        cambiandoMoneda.value = false;
     }
 };
 

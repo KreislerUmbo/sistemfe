@@ -251,6 +251,8 @@ export type ConfiguracionAgencia = {
   // Fila 13, fase 1b (§5b): cómo se carga un tour en la cotización. Solo lo
   // cambia el Super-Admin (PUT configuracion-agencia/modo-tours).
   modo_tours?: 'clasico' | 'nuevo';
+  // T-033: moneda de la primera alternativa en Nueva cotización.
+  moneda_cotizacion_default?: 'PEN' | 'USD';
 };
 
 export type TipAfeIgv = '10' | '20' | '30';
