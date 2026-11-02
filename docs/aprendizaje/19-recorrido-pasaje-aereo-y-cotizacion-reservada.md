@@ -1,7 +1,7 @@
 # Recorrido: pasaje aéreo por pasajero y cotización reservada en solo lectura (ola 4b)
 
-01-nov-2026, tareas **T-076**, **T-075** y **T-074** (unidas a main en `f546b57`, `2792202` y el
-merge de `feat/T-074-cotizacion-reservada-solo-lectura`; las tareas se borraron al cerrar, git las
+01-nov-2026, tareas **T-076**, **T-075** y **T-074** (unidas a main en `f546b57`, `2792202` y
+`45cc778`; las tareas se borraron al cerrar, git las
 conserva). Salieron de la prueba de «Modificar reserva» (T-007).
 
 Las tres tocan la misma pantalla, el **cotizador** (`cotizador/editar.vue`), y dos de ellas el
