@@ -145,9 +145,22 @@ const porWhatsapp = async () => {
         }
         const resultado = await marcarEnviada('whatsapp');
         const enlace = enlaceWhatsappConTexto(telefonoCliente.value, textoWhatsapp(resultado.fecha_vencimiento));
-        if (ventana) ventana.location.href = enlace;
-        else window.open(enlace, '_blank', 'noopener');
-        toast.success('PDF descargado: adjúntalo en el chat de WhatsApp.');
+        if (ventana) {
+            ventana.location.href = enlace;
+            toast.success('PDF descargado: adjúntalo en el chat de WhatsApp.');
+            return;
+        }
+        // El navegador bloqueó la pestaña: otro window.open después del await también se
+        // bloquearía. Se abre con el clic del vendedor en el aviso.
+        const respuesta = await (Swal as TVueSwalInstance).fire({
+            title: 'PDF descargado',
+            text: 'El navegador bloqueó la pestaña de WhatsApp. Ábrela desde acá y adjunta el PDF en el chat.',
+            icon: 'info',
+            confirmButtonText: 'Abrir WhatsApp',
+            showCancelButton: true,
+            cancelButtonText: 'Cerrar',
+        });
+        if (respuesta.isConfirmed) window.open(enlace, '_blank', 'noopener');
     } catch (error: any) {
         ventana?.close();
         (Swal as TVueSwalInstance).fire('No se pudo enviar por WhatsApp', mensajeError(error, 'Intenta de nuevo.'), 'warning');

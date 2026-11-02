@@ -241,14 +241,6 @@
               :to="{ name: 'creditos.nuevo', query: { cliente: clienteId } }">
               <i class="fas fa-plus me-2"></i>Nuevo crédito para este cliente
             </router-link>
-            <!-- T-050 (CRM C1): el CRM es solo de Agencia por ahora (obs. 16). La línea de tiempo llega con T-060. -->
-            <div v-if="contexto.giro === 'agencia_viajes' && clienteId && puede('edit_client')" class="card border-0 shadow-sm mb-0">
-              <div class="card-body">
-                <p class="fw-bold mb-1">Contacto con el cliente</p>
-                <p class="small text-muted mb-2">Anota una llamada, un WhatsApp, una visita o una nota.</p>
-                <AnotarContacto :cliente-id="clienteId" />
-              </div>
-            </div>
           </div>
         </div>
       </div>
@@ -280,7 +272,6 @@ import ClienteDatosBase from '@/components/Clientes/ClienteDatosBase.vue'
 import MapaUbicacion, { type Coordenadas } from '@/components/Clientes/MapaUbicacion.vue'
 import DocumentosCliente from '@/components/Clientes/DocumentosCliente.vue'
 import SaldoAFavorCliente from '@/components/Clientes/SaldoAFavorCliente.vue'
-import AnotarContacto from '@/components/Clientes/AnotarContacto.vue'
 import { useToast } from '@/composables/useToast'
 import { usePermisosCredito } from '@/composables/creditos/usePermisosCredito'
 import { interpretarErrorCredito } from '@/composables/creditos/errorCredito'

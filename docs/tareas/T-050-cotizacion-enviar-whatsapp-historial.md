@@ -117,6 +117,11 @@ cd admin-start-kit && npm run type-check
     `EnviarAlternativa.vue`. WhatsApp y otro medio se ofrecen solo con la alternativa en
     borrador/enviada; el correo mantiene su regla anterior.
   - El enlace a WhatsApp reutiliza `enlaceWhatsappConTexto()` de `helpers/creditos/documentos.ts`.
+  - **En revisión (02-nov-2026): «Anotar contacto» salió de la ficha del cliente.** Lo anotado ahí
+    no tenía referencia y no se veía en ninguna pantalla hasta la línea de tiempo; vuelve con T-060
+    (anotado en su alcance). El endpoint sin referencia y su test quedan. Desde el cotizador sigue.
+  - **En revisión:** si el navegador bloquea la pestaña de WhatsApp, un aviso ofrece «Abrir
+    WhatsApp» (con el clic del vendedor) en vez de un segundo `window.open` que también se bloqueaba.
 
 ## Hallazgos fuera de alcance
 - `sistemafe_test_migrations` tenía pendiente `2026_10_09_100000_migrar_fechas_lima_a_utc`; se
