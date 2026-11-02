@@ -107,7 +107,11 @@ export function validarCobro(
 export function payloadCobro(
   condicion: CondicionPago, saldo: number, habilitado: boolean, filas: FilaCobro[], vueltoMoneda: MonedaCobro, exceso: number,
   traspasos: FilaTraspaso[] = []
-) {
+): {
+  traspasos?: Array<{ sale_id: number; monto: number }>;
+  pagos?: Array<{ method_payment: string; moneda_pago: MonedaCobro; monto_pagado: number; tipo_cambio?: number; nro_operacion?: string }>;
+  vuelto_moneda?: MonedaCobro;
+} {
   if (!habilitado || condicion !== 'contado' || saldo <= 0) return {};
   return {
     ...(traspasos.length ? { traspasos: traspasos.map((t) => ({ sale_id: t.sale_id, monto: Number(t.monto) })) } : {}),
