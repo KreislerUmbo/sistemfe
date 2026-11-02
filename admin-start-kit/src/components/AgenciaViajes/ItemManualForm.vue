@@ -1,5 +1,7 @@
 <template>
     <div class="item-manual-form">
+        <!-- T-074: soloLectura deshabilita todos los campos y oculta el botón de guardar. -->
+        <fieldset :disabled="soloLectura" class="border-0 p-0 m-0" style="min-width:0">
         <div class="mb-2">
             <label class="form-label mb-1 small fw-semibold text-secondary">Descripción</label>
             <input type="text" class="form-control form-control-sm" v-model="descripcion"
@@ -83,10 +85,11 @@
         <small class="text-muted d-block mb-2">
             <i class="fas fa-info-circle me-1"></i>Sin validación de piso — no hay tarifa de proveedor de la que derivarlo.
         </small>
-        <button class="btn btn-primary btn-sm w-100" @click="agregar" :disabled="!puedeGuardar || guardando">
+        <button v-if="!soloLectura" class="btn btn-primary btn-sm w-100" @click="agregar" :disabled="!puedeGuardar || guardando">
             <span v-if="guardando" class="spinner-border spinner-border-sm me-1"></span>
             <i v-else class="fas fa-plus me-1"></i>{{ props.itemExistente ? 'Guardar cambios' : 'Agregar ítem manual' }}
         </button>
+        </fieldset>
     </div>
 </template>
 
@@ -111,6 +114,8 @@ const props = defineProps<{
     alternativaDestinoId?: number | null;
     pasajeros?: CotizacionPasajero[];
     itemExistente?: AlternativaItem | null;
+    // T-074: ver el detalle de un ítem ya reservado, sin poder cambiarlo.
+    soloLectura?: boolean;
     // Análisis de impuestos (28-ago-2026) — default de configuracion_agencia,
     // solo para prellenar; el vendedor lo puede cambiar antes de guardar.
     tipAfeIgvDefault?: TipAfeIgv;

@@ -148,6 +148,38 @@ class CotizacionEstadoResumenTest extends TestCase
         $this->assertSame('descartada', $cotizacion->fresh('alternativas.reserva')->estadoResumen());
     }
 
+    // T-074 (CA3) — el listado dice qué alternativa se reservó y con qué código, sin consultas
+    // extra por fila: las relaciones de RELACIONES_ESTADO_RESUMEN ya vienen precargadas.
+    public function test_alternativa_reservada_trae_nombre_y_codigo_sin_consultas_extra(): void
+    {
+        $cotizacion = $this->crearCotizacion();
+        $aceptada = $this->crearAlternativa($cotizacion, 'aceptada');
+        $aceptada->update(['nombre' => 'Opción Selva']);
+        $this->crearAlternativa($cotizacion, 'descartada');
+        $reserva = Reserva::create(['alternativa_id' => $aceptada->id, 'estado' => 'activa']);
+
+        $cargada = Cotizacion::with(Cotizacion::RELACIONES_ESTADO_RESUMEN)->findOrFail($cotizacion->id);
+        DB::enableQueryLog();
+        $datos = $cargada->alternativaReservada();
+        $consultas = count(DB::getQueryLog());
+        DB::disableQueryLog();
+
+        $this->assertSame(0, $consultas);
+        $this->assertSame('Opción Selva', $datos['nombre']);
+        $this->assertSame($reserva->id, $datos['reserva_id']);
+        $this->assertSame($reserva->codigo, $datos['reserva_codigo']);
+    }
+
+    public function test_alternativa_reservada_es_null_sin_reserva(): void
+    {
+        $cotizacion = $this->crearCotizacion();
+        $this->crearAlternativa($cotizacion, 'enviada', now()->addDay());
+
+        $cargada = Cotizacion::with(Cotizacion::RELACIONES_ESTADO_RESUMEN)->findOrFail($cotizacion->id);
+
+        $this->assertNull($cargada->alternativaReservada());
+    }
+
     // Reporte del usuario (31-oct-2026): al agregar un hotel a la alternativa 2 se recalcula su
     // total y la pestaña pasaba a ser la 1. Las alternativas salen siempre en orden de alta.
     public function test_las_alternativas_mantienen_su_orden_aunque_se_actualice_una(): void

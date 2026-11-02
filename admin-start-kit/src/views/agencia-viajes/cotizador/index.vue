@@ -84,6 +84,12 @@
                                     <span class="badge rounded-pill" :class="badgeEstado(cotizacion.estado_resumen).clase">
                                         {{ badgeEstado(cotizacion.estado_resumen).texto }}
                                     </span>
+                                    <div v-if="cotizacion.alternativa_reservada" class="small text-muted mt-1">
+                                        {{ cotizacion.alternativa_reservada.nombre }}
+                                        <template v-if="cotizacion.alternativa_reservada.reserva_id"> ·
+                                            <router-link :to="`/agencia-viajes/reservas/${cotizacion.alternativa_reservada.reserva_id}`">{{ cotizacion.alternativa_reservada.reserva_codigo ?? `#${cotizacion.alternativa_reservada.reserva_id}` }}</router-link>
+                                        </template>
+                                    </div>
                                 </td>
                                 <td class="text-center">{{ cotizacion.alternativas_count ?? 0 }}</td>
                                 <td class="text-center pe-3">

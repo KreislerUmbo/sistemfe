@@ -1,5 +1,7 @@
 <template>
     <div class="pasaje-aereo-form">
+        <!-- T-074: soloLectura deshabilita todos los campos y oculta el botón de guardar. -->
+        <fieldset :disabled="soloLectura" class="border-0 p-0 m-0" style="min-width:0">
         <div class="row g-2 mb-2">
             <div class="col-6">
                 <label class="form-label mb-1 small fw-semibold text-secondary">Aerolínea</label>
@@ -157,10 +159,11 @@
             </div>
         </div>
 
-        <button class="btn btn-primary btn-sm w-100" @click="agregar" :disabled="!form.aerolinea || !form.tarifa_base_adulto || guardando || (!!pasajeros?.length && !paxSeleccionados.length)">
+        <button v-if="!soloLectura" class="btn btn-primary btn-sm w-100" @click="agregar" :disabled="!form.aerolinea || !form.tarifa_base_adulto || guardando || (!!pasajeros?.length && !paxSeleccionados.length)">
             <span v-if="guardando" class="spinner-border spinner-border-sm me-1"></span>
             <i v-else class="fas fa-plus me-1"></i>{{ props.itemExistente ? 'Guardar cambios' : 'Agregar pasaje aéreo' }}
         </button>
+        </fieldset>
     </div>
 </template>
 
@@ -196,6 +199,8 @@ const props = defineProps<{
     // T-076: ítems de la alternativa, para avisar qué pasajero ya tiene pasaje en otra aerolínea.
     itemsAlternativa?: AlternativaItem[];
     itemExistente?: AlternativaItem | null;
+    // T-074: ver el detalle de un ítem ya reservado, sin poder cambiarlo.
+    soloLectura?: boolean;
     // Análisis de impuestos (28-ago-2026) — default de configuracion_agencia,
     // solo para prellenar; editable antes de guardar.
     tipAfeIgvDefault?: TipAfeIgv;
