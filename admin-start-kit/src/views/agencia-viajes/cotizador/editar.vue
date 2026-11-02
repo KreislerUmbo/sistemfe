@@ -299,6 +299,7 @@
                     <PasajeAereoForm :alternativa-id="alternativaActiva.id" :dia-activo="diaActivoParaAgregar"
                         :alternativa-destino-id="destinoActivoId"
                         :pasajeros="cotizacion?.pasajeros ?? []" :item-existente="itemPasajeAereoEnEdicion"
+                        :items-alternativa="alternativaActiva.items ?? []"
                         :tip-afe-igv-default="configAgencia?.tip_afe_igv_default"
                         :destino-tributario-default="configAgencia?.destino_tributario_default"
                         @agregado="onPasajeAereoAgregado" @actualizado="onPasajeAereoActualizado" />

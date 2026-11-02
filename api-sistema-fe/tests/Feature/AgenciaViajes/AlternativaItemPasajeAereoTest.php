@@ -104,10 +104,10 @@ class AlternativaItemPasajeAereoTest extends TestCase
         );
         $body = $response->getData(true);
 
-        // 2 adultos*500 + 2 niños*450 + 1 infante*200 = 1000+900+200 = 2100, + fee 300 = 2400.
+        // 2 adultos*500 + 2 niños*450 + 1 infante*200 = 2100; fee 300 × 5 pasajeros (T-076) = 1500 → venta 3600.
         $this->assertSame(200, $response->getStatusCode());
         $this->assertEquals(2100.0, (float) $body['alternativa_item']['costo_snapshot']);
-        $this->assertEquals(2400.0, (float) $body['alternativa_item']['precio_venta_snapshot']);
+        $this->assertEquals(3600.0, (float) $body['alternativa_item']['precio_venta_snapshot']);
         // T-007: un boleto es por persona — guarda la lista, no null ("todos los que haya después").
         $this->assertSame(
             [$f['adulto1']->id, $f['adulto2']->id, $f['nino1']->id, $f['nino2']->id, $f['infante']->id],
@@ -132,9 +132,9 @@ class AlternativaItemPasajeAereoTest extends TestCase
         $response = app(AlternativaItemController::class)->store(new Request($payload), (string) $f['alternativa']->id);
         $body = $response->getData(true);
 
-        // 2 adultos*500 + 1 niño*450 + 0 infantes = 1000+450 = 1450, + fee 300 = 1750.
+        // 1450 de tarifas; fee 300 × 3 pasajeros = 900 → venta 2350.
         $this->assertEquals(1450.0, (float) $body['alternativa_item']['costo_snapshot']);
-        $this->assertEquals(1750.0, (float) $body['alternativa_item']['precio_venta_snapshot']);
+        $this->assertEquals(2350.0, (float) $body['alternativa_item']['precio_venta_snapshot']);
         $this->assertSame([$f['adulto1']->id, $f['adulto2']->id, $f['nino1']->id], $body['alternativa_item']['pax_incluidos']);
     }
 
@@ -148,9 +148,9 @@ class AlternativaItemPasajeAereoTest extends TestCase
         $response = app(AlternativaItemController::class)->store(new Request($payload), (string) $f['alternativa']->id);
         $body = $response->getData(true);
 
-        // 1 adulto*500 + 1 infante*200 = 700, + fee 300 = 1000.
+        // 700 de tarifas; fee 300 × 2 pasajeros (el infante paga fee) = 600 → venta 1300.
         $this->assertEquals(700.0, (float) $body['alternativa_item']['costo_snapshot']);
-        $this->assertEquals(1000.0, (float) $body['alternativa_item']['precio_venta_snapshot']);
+        $this->assertEquals(1300.0, (float) $body['alternativa_item']['precio_venta_snapshot']);
     }
 
     public function test_actualizar_pasaje_aereo_recalcula_y_persiste_en_ambas_tablas(): void
@@ -168,9 +168,9 @@ class AlternativaItemPasajeAereoTest extends TestCase
         $body = $response->getData(true);
 
         $this->assertSame(200, $response->getStatusCode());
-        // 2 adultos*500 + 1 niño*470 = 1470, + fee 300 = 1770.
+        // 1470 de tarifas; fee 300 × 3 pasajeros = 900 → venta 2370.
         $this->assertEquals(1470.0, (float) $body['alternativa_item']['costo_snapshot']);
-        $this->assertEquals(1770.0, (float) $body['alternativa_item']['precio_venta_snapshot']);
+        $this->assertEquals(2370.0, (float) $body['alternativa_item']['precio_venta_snapshot']);
 
         $cotizacionPasajeAereo = DB::table('cotizacion_pasaje_aereo')->where('alternativa_item_id', $creado['id'])->first();
         $this->assertEquals(470.0, (float) $cotizacionPasajeAereo->tarifa_base_nino);
