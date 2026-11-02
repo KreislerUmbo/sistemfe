@@ -66,7 +66,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 | T-047 | AGE | Venta directa: vender un tour del catálogo, enganchado a la salida del día (H41) | por hacer | T-045, T-046 | |
 | T-048 | AGE + CAJ | Venta directa: "Crear y cobrar" en un solo paso (H45) | por hacer | T-011 | |
 | T-049 | AGE | Venta directa: varias líneas en la misma venta y destino del árbol (H46, H47) | por hacer | T-047 | |
-| T-050 | CLI + AGE | CRM C1: historial de actividades del cliente y "Enviar" la cotización (H48, H49) | en curso | — | `feat/T-050-crm-actividades` |
+| T-050 | CLI + AGE | CRM C1: historial de actividades del cliente y "Enviar" la cotización (H48, H49) | en revisión | — | `feat/T-050-crm-actividades` |
 | T-051 | CLI + AGE | CRM C2: próximas acciones, "Mis pendientes de hoy" y pantalla Seguimiento (H50) | por hacer | T-050 | |
 | T-052 | AGE | CRM C3: por qué se ganó o se perdió la venta (H51) | por hacer | T-050 | |
 | T-053 | AGE | CRM C6a: listado de cotizaciones con el seguimiento a la vista (H52) | por hacer | T-051, T-052 | |
