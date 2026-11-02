@@ -47,7 +47,10 @@ export type ContextoAcciones =
 /** Fecha propuesta: hoy en Perú + los días configurados. */
 export const fechaPropuesta = (dias: number, hoy: string = hoyPeru()): string => sumarDiasISO(hoy, dias)
 
-// Las opciones (días, tipos, usuarios activos) cambian poco: una consulta por carga de la app.
+// Las opciones (días, tipos, usuarios activos) cambian poco: una consulta por sesión. Traen el
+// usuario_id de la sesión, así que se olvidan al cerrar sesión (el logout no recarga la página:
+// sin esto, quien entra después proponía las llamadas a nombre del anterior) y al guardar la
+// Configuración de agencia (dias_proximo_contacto).
 let opcionesEnCurso: Promise<OpcionesAcciones> | null = null
 
 export const crmAccionService = {
@@ -59,6 +62,9 @@ export const crmAccionService = {
         throw error
       })
     return opcionesEnCurso
+  },
+  olvidarOpciones() {
+    opcionesEnCurso = null
   },
   async pendientes(contexto: ContextoAcciones) {
     const response = await httpClient.get('/crm/acciones', { params: contexto })

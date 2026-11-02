@@ -629,6 +629,7 @@ import { cuentaBancariaService } from '@/services/admin/cuentaBancariaService';
 import { configuracionAgenciaPdfService, type ConfiguracionAgenciaPdf, type AfiliacionTurismoOpcion } from '@/services/admin/configuracionAgenciaPdfService';
 import { useAgenciaViajesCatalogosStore } from '@/stores/agenciaViajesCatalogos';
 import { useAuthStore } from '@/stores/auth';
+import { crmAccionService } from '@/services/admin/crmAccionService';
 import type { ConfiguracionAgencia, CuentaBancaria } from '@/types/agencia-viajes';
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
@@ -787,6 +788,8 @@ const guardar = async () => {
         // sirviendo el margen_minimo/etc. viejo desde el cache compartido
         // (TTL 60s) hasta que expire solo — ver agenciaViajesCatalogos.ts.
         useAgenciaViajesCatalogosStore().invalidarConfigAgencia();
+        // T-051: ídem con dias_proximo_contacto, que la propuesta "Llamar en N días" guarda en caché.
+        crmAccionService.olvidarOpciones();
         (Swal as TVueSwalInstance).fire('Listo', res.message, 'success');
     } catch (error: any) {
         (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo guardar', 'error');
