@@ -40,6 +40,7 @@ class ConfiguracionAgenciaController extends Controller
         'destino_tributario_default' => 'nacional',
         'modo_tours' => 'clasico',
         'moneda_cotizacion_default' => 'PEN',
+        'dias_proximo_contacto' => 2,
     ];
 
     public function show()
@@ -77,6 +78,8 @@ class ConfiguracionAgenciaController extends Controller
             'destino_tributario_default' => 'required|string|in:amazonia,nacional,extranjero',
             // T-033 — opcional: sin el campo, se conserva el que había.
             'moneda_cotizacion_default' => 'sometimes|required|in:PEN,USD',
+            // T-051 — opcional, mismo criterio.
+            'dias_proximo_contacto' => 'sometimes|required|integer|min:1|max:365',
         ]);
 
         if ($validator->fails()) {

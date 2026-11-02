@@ -139,6 +139,12 @@
                                     <label class="form-label mb-1 small fw-semibold text-secondary">Días cotización estancada</label>
                                     <input type="number" class="form-control form-control-sm" v-model.number="form.dias_cotizacion_estancada">
                                 </div>
+                                <!-- T-051 (CRM C2): al enviar una cotización se propone "Llamar en N días". -->
+                                <div class="col-6 col-md-3">
+                                    <label class="form-label mb-1 small fw-semibold text-secondary">Días para volver a contactar</label>
+                                    <input type="number" min="1" max="365" class="form-control form-control-sm" v-model.number="form.dias_proximo_contacto">
+                                    <small class="text-muted d-block mt-1">Al enviar una cotización se propone llamar al cliente en estos días; se puede cambiar o quitar.</small>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -676,6 +682,7 @@ const form = ref<ConfiguracionAgencia>({
     tip_afe_igv_default: '10',
     destino_tributario_default: 'nacional',
     moneda_cotizacion_default: 'PEN',
+    dias_proximo_contacto: 2,
 });
 
 const cuentasBancarias = ref<CuentaBancaria[]>([]);

@@ -10,6 +10,7 @@ use App\Models\AgenciaViajes\Cotizacion;
 use App\Models\AgenciaViajes\CotizacionPasajero;
 use App\Models\AgenciaViajes\ProveedorTarifa;
 use App\Services\AgenciaViajes\CodigoGeneradorService;
+use App\Services\Crm\AccionesCrm;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -122,6 +123,7 @@ class VentaDirectaController extends Controller
 
                 $alternativa->update(['estado' => 'aceptada']);
                 AlternativaController::descartarOtras($alternativa); // no-op acá (única alternativa) — mismo criterio de reuso que ReservaController::aceptar()
+                app(AccionesCrm::class)->cerrarPendientesDeCotizacion($alternativa->cotizacion_id, 'Cotización aceptada'); // T-051: ídem, no-op en una cotización recién creada
 
                 [$reserva, $alertaCupoExcedido] = app(ReservaController::class)
                     ->crearReservaDesdeAlternativa($alternativa->fresh());

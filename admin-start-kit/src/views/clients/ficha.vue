@@ -241,6 +241,12 @@
               :to="{ name: 'creditos.nuevo', query: { cliente: clienteId } }">
               <i class="fas fa-plus me-2"></i>Nuevo crédito para este cliente
             </router-link>
+            <!-- T-051 (CRM C2, solo Agencia por ahora): todas las acciones pendientes del cliente. -->
+            <div v-if="contexto.giro === 'agencia_viajes' && clienteId" class="card border-0 shadow-sm mb-0">
+              <div class="card-body py-2">
+                <AccionesPendientes :cliente-id="clienteId" />
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -272,6 +278,7 @@ import ClienteDatosBase from '@/components/Clientes/ClienteDatosBase.vue'
 import MapaUbicacion, { type Coordenadas } from '@/components/Clientes/MapaUbicacion.vue'
 import DocumentosCliente from '@/components/Clientes/DocumentosCliente.vue'
 import SaldoAFavorCliente from '@/components/Clientes/SaldoAFavorCliente.vue'
+import AccionesPendientes from '@/components/Clientes/AccionesPendientes.vue'
 import { useToast } from '@/composables/useToast'
 import { usePermisosCredito } from '@/composables/creditos/usePermisosCredito'
 import { interpretarErrorCredito } from '@/composables/creditos/errorCredito'

@@ -799,7 +799,10 @@
                             </button>
                             <EnviarAlternativa v-if="!modificacionInfo" :alternativa="alternativaActiva" :cliente="cotizacion?.cliente ?? null"
                                 :destino="cotizacion?.destino ?? ''" :total="totalLocal" :descargar-pdf="descargarPdfAlternativa"
-                                @enviada="onAlternativaEnviada" @registrada="historialRef?.recargar()" />
+                                :hay-acciones-pendientes="(accionesRef?.cantidad ?? 0) > 0"
+                                @enviada="onAlternativaEnviada" @registrada="historialRef?.recargar(); accionesRef?.recargar()" />
+                            <AccionesPendientes v-if="cotizacion?.cliente_id" ref="accionesRef" :cliente-id="cotizacion.cliente_id"
+                                referencia-tipo="cotizacion" :referencia-id="cotizacion.id" @cambio="historialRef?.recargar()" />
                             <HistorialActividadesCotizacion v-if="cotizacion" ref="historialRef" :cotizacion-id="cotizacion.id"
                                 :cliente-id="cotizacion.cliente_id ?? null" />
                         </div>
@@ -1404,6 +1407,7 @@ import DestinoTreeSelect from '@/components/AgenciaViajes/DestinoTreeSelect.vue'
 import CalculadoraTipoCambioModal from '@/components/AgenciaViajes/CalculadoraTipoCambioModal.vue';
 import EnviarAlternativa from '@/components/AgenciaViajes/EnviarAlternativa.vue';
 import HistorialActividadesCotizacion from '@/components/AgenciaViajes/HistorialActividadesCotizacion.vue';
+import AccionesPendientes from '@/components/Clientes/AccionesPendientes.vue';
 import ModificacionDiferenciaPanel from '@/components/AgenciaViajes/ModificacionDiferenciaPanel.vue';
 import PenalidadPasajeroModal from '@/components/AgenciaViajes/PenalidadPasajeroModal.vue';
 import { useModificacionReserva, mensajeDeError, centavosATexto, motivoDePenalidad, textoMonto } from '@/composables/agencia-viajes/useModificacionReserva';
@@ -1893,6 +1897,8 @@ const cargarCotizacion = async () => {
 // Envío al cliente (EnviarAlternativa.vue, T-050: correo, WhatsApp u otro medio): el backend
 // puede haberla pasado de borrador a enviada; se refleja sin recargar toda la cotización.
 const historialRef = ref<InstanceType<typeof HistorialActividadesCotizacion> | null>(null);
+// T-051: próximas acciones de la cotización (la llamada propuesta al enviar, las agendadas).
+const accionesRef = ref<InstanceType<typeof AccionesPendientes> | null>(null);
 const onAlternativaEnviada = (estado: string, fechaVencimiento?: string | null) => {
     const alternativa = cotizacion.value?.alternativas?.find((a: any) => a.id === alternativaActivaId.value);
     if (alternativa && estado) alternativa.estado = estado as typeof alternativa.estado;

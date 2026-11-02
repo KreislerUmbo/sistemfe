@@ -12,6 +12,8 @@
             <i class="fas ms-1" :class="opcionesAbiertas ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
         </button>
         <div v-if="opcionesAbiertas" class="list-group list-group-flush border rounded small">
+            <!-- T-051: la llamada que se agenda al enviar, por cualquiera de los tres medios. -->
+            <ProximaAccionPropuesta v-model="proximaAccion" />
             <button v-if="correoDisponible" type="button" class="list-group-item list-group-item-action py-2" :disabled="ocupado" @click="porCorreo">
                 <i class="fas fa-envelope me-2 text-primary"></i>Por correo
             </button>
@@ -27,8 +29,8 @@
         </div>
     </template>
 
-    <EnviarCorreoCotizacion ref="correoRef" :alternativa-id="alternativa.id" :alternativa-nombre="alternativa.nombre"
-        @enviada="(estado) => emit('enviada', estado)" @intentado="emit('registrada')" />
+    <EnviarCorreoCotizacion ref="correoRef" v-model:proxima-accion="proximaAccion" :alternativa-id="alternativa.id"
+        :alternativa-nombre="alternativa.nombre" @enviada="alEnviarPorCorreo" @intentado="emit('registrada')" />
 
     <Teleport to="body">
         <div v-if="otroMedioAbierto" class="modal fade show d-block" tabindex="-1" style="background:rgba(0,0,0,.5)">
@@ -65,6 +67,8 @@ import { useToast } from '@/composables/useToast';
 import { formatFechaHora } from '@/helpers/fecha';
 import { enlaceWhatsappConTexto } from '@/helpers/creditos/documentos';
 import { crmActividadService } from '@/services/admin/crmActividadService';
+import { crmAccionService, fechaPropuesta, type ProximaAccion } from '@/services/admin/crmAccionService';
+import ProximaAccionPropuesta from '@/components/Clientes/ProximaAccionPropuesta.vue';
 import type { Alternativa } from '@/types/agencia-viajes';
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
@@ -76,6 +80,8 @@ const props = defineProps<{
     total: number;
     /** Descarga el PDF de la alternativa; false si no se pudo (el padre ya avisó por qué). */
     descargarPdf: () => Promise<boolean>;
+    /** T-051: la cotización ya tiene una acción pendiente; al reenviar no se propone otra. */
+    hayAccionesPendientes?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -102,15 +108,53 @@ const otroMedioAbierto = ref(false);
 const notaOtroMedio = ref('');
 const ocupado = computed(() => marcando.value || Boolean(correoRef.value?.preparando));
 
-watch(() => props.alternativa.id, () => { opcionesAbiertas.value = false; });
+// T-051: "Llamar en N días" a nombre de quien envía. Se arma al abrir el panel y se conserva lo
+// que el vendedor cambió hasta que el envío sale; después, el próximo envío vuelve a proponer.
+const proximaAccion = ref<ProximaAccion>(null);
+let propuestaArmada = false;
+
+const armarPropuesta = async () => {
+    if (propuestaArmada) return;
+    propuestaArmada = true;
+    if (props.hayAccionesPendientes || !auth.user?.id) {
+        proximaAccion.value = null;
+        return;
+    }
+    let dias = 2;
+    try {
+        dias = (await crmAccionService.opciones()).dias_proximo_contacto;
+    } catch {
+        // Sin opciones se propone igual con el valor por defecto.
+    }
+    proximaAccion.value = { fecha: fechaPropuesta(dias), responsable_id: Number(auth.user.id) };
+};
+
+const olvidarPropuesta = () => {
+    propuestaArmada = false;
+    proximaAccion.value = null;
+};
+
+watch(opcionesAbiertas, (abierto) => { if (abierto) armarPropuesta(); });
+watch(() => props.alternativa.id, () => {
+    opcionesAbiertas.value = false;
+    olvidarPropuesta();
+});
 
 const mensajeError = (error: any, fallback: string): string => error?.response?.data?.message ?? fallback;
 
 const marcarEnviada = async (canal: 'whatsapp' | 'otro', nota?: string) => {
-    const resultado = await crmActividadService.marcarEnviada(props.alternativa.id, { canal, nota: nota || null });
+    const resultado = await crmActividadService.marcarEnviada(props.alternativa.id, {
+        canal, nota: nota || null, proxima_accion: proximaAccion.value,
+    });
+    olvidarPropuesta();
     emit('enviada', resultado.estado_alternativa, resultado.fecha_vencimiento);
     emit('registrada');
     return resultado;
+};
+
+const alEnviarPorCorreo = (estado: string) => {
+    olvidarPropuesta();
+    emit('enviada', estado);
 };
 
 const porCorreo = () => {

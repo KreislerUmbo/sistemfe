@@ -55,6 +55,11 @@
                             <label class="form-check-label small" for="marcarEnviada">Marcar la alternativa como enviada</label>
                         </div>
 
+                        <!-- T-051: la misma llamada propuesta del panel «Enviar al cliente». -->
+                        <div class="border rounded mt-3">
+                            <ProximaAccionPropuesta v-model="proximaAccion" estatico />
+                        </div>
+
                         <div class="text-muted small mt-3">
                             Envíos de hoy: {{ borrador.enviados_hoy }} de {{ borrador.limite_diario }}.
                         </div>
@@ -78,6 +83,8 @@ import Swal from 'sweetalert2/dist/sweetalert2.js';
 import { useAuthStore } from '@/stores/auth';
 import { useToast } from '@/composables/useToast';
 import { correoCotizacionService, type BorradorEnvio } from '@/services/admin/correoCotizacionService';
+import ProximaAccionPropuesta from '@/components/Clientes/ProximaAccionPropuesta.vue';
+import type { ProximaAccion } from '@/services/admin/crmAccionService';
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
 
@@ -85,6 +92,9 @@ const props = defineProps<{
     alternativaId: number;
     alternativaNombre: string;
 }>();
+
+// T-051: la llamada propuesta la decide EnviarAlternativa.vue; acá se ve y se puede cambiar.
+const proximaAccion = defineModel<ProximaAccion>('proximaAccion', { default: null });
 
 const emit = defineEmits<{
     (e: 'enviada', estado: string): void;
@@ -174,6 +184,7 @@ const enviar = async () => {
             adjuntar_cotizacion: form.adjuntar_cotizacion,
             adjuntar_condiciones: form.adjuntar_condiciones,
             marcar_enviada: borrador.value?.puede_marcar_enviada ? form.marcar_enviada : false,
+            proxima_accion: proximaAccion.value,
         });
         modalAbierto.value = false;
         toast.success(resultado.message);

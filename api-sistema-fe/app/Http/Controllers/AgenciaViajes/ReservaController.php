@@ -25,6 +25,7 @@ use App\Services\AgenciaViajes\ReservaItemCreacionService;
 use App\Services\AgenciaViajes\SalidaEngancheService;
 use App\Services\AgenciaViajes\SalidaOperacionService;
 use App\Services\AgenciaViajes\TourLineaService;
+use App\Services\Crm\AccionesCrm;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -311,6 +312,8 @@ class ReservaController extends Controller
 
                 $alternativaBloqueada->update(['estado' => 'aceptada']);
                 AlternativaController::descartarOtras($alternativaBloqueada);
+                // T-051: las acciones pendientes de la cotización ya no tienen sentido.
+                app(AccionesCrm::class)->cerrarPendientesDeCotizacion($alternativaBloqueada->cotizacion_id, 'Cotización aceptada');
 
                 return $this->crearReservaDesdeAlternativa($alternativaBloqueada->fresh(), $pasajeroCatalogoIds);
             });

@@ -2,6 +2,7 @@
 // cliente. "Enviar" la alternativa por WhatsApp u otro medio, "Anotar contacto" y el
 // historial de una cotización. El envío por correo sigue en correoCotizacionService.
 import httpClient from '@/helpers/http-client'
+import type { ProximaAccion } from '@/services/admin/crmAccionService'
 
 export type TipoActividad = 'envio' | 'llamada' | 'whatsapp' | 'visita' | 'nota' | 'estado'
 export type TipoContactoManual = 'llamada' | 'whatsapp' | 'visita' | 'nota'
@@ -28,7 +29,8 @@ export const TIPOS_CONTACTO: { valor: TipoContactoManual; etiqueta: string }[] =
 ]
 
 export const crmActividadService = {
-  async marcarEnviada(alternativaId: number, data: { canal: 'whatsapp' | 'otro'; nota?: string | null }) {
+  // T-051: proxima_accion = la llamada propuesta (null = quitada).
+  async marcarEnviada(alternativaId: number, data: { canal: 'whatsapp' | 'otro'; nota?: string | null; proxima_accion?: ProximaAccion }) {
     const response = await httpClient.post(`/alternativas/${alternativaId}/marcar-enviada`, data)
     return response.data as {
       message: string

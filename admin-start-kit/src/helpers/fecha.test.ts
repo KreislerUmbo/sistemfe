@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatFechaHora, hoyPeru, soloFechaISO, sumarDiasISO } from './fecha'
+import { formatDiaCorto, formatFechaHora, hoyPeru, soloFechaISO, sumarDiasISO } from './fecha'
 
 // Regla única de fechas (08-oct-2026): todo se muestra en hora de Perú, sin depender de la
 // zona horaria de la PC. Los casos van de 19:00 a 24:00 de Perú, donde UTC ya es el día siguiente.
@@ -54,5 +54,18 @@ describe('soloFechaISO', () => {
     expect(soloFechaISO('')).toBe('')
     expect(soloFechaISO(null)).toBe('')
     expect(soloFechaISO(undefined)).toBe('')
+  })
+})
+
+describe('formatDiaCorto', () => {
+  it('muestra el día de la semana y dd/mm de una fecha de negocio', () => {
+    expect(formatDiaCorto('2026-10-30')).toBe('vie 30/10')
+    expect(formatDiaCorto('2026-11-05')).toBe('jue 05/11')
+    expect(formatDiaCorto('2026-11-08T00:00:00.000000Z')).toBe('dom 08/11')
+  })
+
+  it('sin fecha válida queda vacío', () => {
+    expect(formatDiaCorto(null)).toBe('')
+    expect(formatDiaCorto('mañana')).toBe('')
   })
 })

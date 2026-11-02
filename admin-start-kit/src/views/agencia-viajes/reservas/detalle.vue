@@ -109,6 +109,13 @@
             <button class="btn-close" @click="avisosTemporadaReprogramacion = []"></button>
         </div>
 
+        <!-- T-051 (CRM C2): próximas acciones de la reserva (cobrar el saldo, llamar antes del viaje…). -->
+        <div v-if="reserva && cabecera?.cliente?.id" class="card border-0 shadow-sm mb-3">
+            <div class="card-body py-2">
+                <AccionesPendientes :cliente-id="cabecera.cliente.id" referencia-tipo="reserva" :referencia-id="reserva.id" />
+            </div>
+        </div>
+
         <!-- Anticipos recibidos (Tier 0 — conexión Adelantos↔Reservas,
              2026-08-21): visible solo si el cliente ya pagó algo hacia esta
              reserva. El comprobante propio de cada anticipo se maneja desde
@@ -1079,6 +1086,7 @@ import ClientFormQuick from '@/components/Sales/ClientFormQuick.vue';
 import ClienteComprobanteSelector, { type ClienteComprobante } from '@/components/AgenciaViajes/ClienteComprobanteSelector.vue';
 import FacturarReservaSimpleModal from '@/components/AgenciaViajes/FacturarReservaSimpleModal.vue';
 import FacturarReservaEspecialModal from '@/components/AgenciaViajes/FacturarReservaEspecialModal.vue';
+import AccionesPendientes from '@/components/Clientes/AccionesPendientes.vue';
 import { reservaService } from '@/services/admin/reservaService';
 import { reservaAnticipoService } from '@/services/admin/reservaAnticipoService';
 import { reservaPasajeroService } from '@/services/admin/reservaPasajeroService';
