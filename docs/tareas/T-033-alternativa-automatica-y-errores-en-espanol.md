@@ -5,7 +5,7 @@
 | **Módulo** | AGE |
 | **Depende de** | ninguna |
 | **Reglas** | — |
-| **Decisiones** | `docs/requerimientos/observaciones-pruebas-usuario.md` → obs. 9, R1 y R7 (aprobadas 26-oct-2026: el nombre es el título que ve el cliente y la moneda se tienen que poder cambiar); H23, H24 |
+| **Decisiones** | `docs/requerimientos/observaciones-pruebas-usuario.md` → obs. 9, R1 y R7 (aprobadas 26-oct-2026: el nombre es el título que ve el cliente y la moneda se tienen que poder cambiar); H23, H24. Del usuario, 01-nov-2026: tipo de cambio de la alternativa automática = último registrado, luego SUNAT del día, luego pedirlo (ver Alcance) |
 | **Rama** | `feat/T-033-alternativa-automatica` |
 
 ## Contexto
@@ -19,10 +19,21 @@ dólares" es solo una calculadora).
 ## Alcance
 - **Nueva cotización (`cotizador/nueva.vue`):** bloque "Propuesta" con **Nombre** (prellenado
   "Alternativa A", editable: es el título que ve el cliente) y **Moneda** (prellenada con la moneda
-  por defecto de la agencia). El tipo de cambio se toma solo: el del día (sugerencia SUNAT) para
-  `tipo_cambio_origen='dia'`. `CotizacionController::store()` crea la cotización **y** su primera
+  por defecto de la agencia). El tipo de cambio se toma solo, con `tipo_cambio_origen='dia'`
+  (ver el punto siguiente). `CotizacionController::store()` crea la cotización **y** su primera
   alternativa en la misma transacción, reusando la lógica de `AlternativaController::store()`
   (extraerla a un servicio; no duplicarla, incluido el `AlternativaDestino` inicial).
+- **Tipo de cambio de la alternativa automática** (decisión del usuario, 01-nov-2026). Hoy
+  `AlternativaController::resolverTipoCambio()` (~línea 556) toma el último `TipoCambioAgencia`
+  con ese origen y, si no hay ninguno, responde 422: con la alternativa automática eso trabaría
+  crear la cotización. Orden nuevo, dentro del servicio extraído:
+  1. el último `TipoCambioAgencia` con origen `dia` (como hoy);
+  2. si no hay ninguno: `TipoCambioSunatResolver::resolverParaFecha(HoraPeru::hoy())`, valor
+     `venta`, registrado como `TipoCambioAgencia` nuevo (origen `dia`, `registrado_por` = usuario);
+  3. si tampoco hay SUNAT: 422 claro y **Nueva cotización muestra el campo de tipo de cambio**
+     para escribirlo (`tipo_cambio_valor`, con el mismo control de rango y
+     `tipo_cambio_confirmado`). No se crea nada a medias: cotización y alternativa, o ninguna.
+  "+ Nueva" alternativa usa el mismo orden.
 - `configuracion_agencia.moneda_cotizacion_default` (PEN por defecto) + campo en Configuración de
   Agencia.
 - **Cambiar la moneda después:** `PUT alternativas/{id}` acepta `moneda_cotizacion` (con el tipo
@@ -42,11 +53,20 @@ dólares" es solo una calculadora).
 - Errores de otros módulos (anotar en "Hallazgos" si se ven en inglés).
 
 ## Archivos probables
-- `api-sistema-fe/app/Http/Controllers/AgenciaViajes/CotizacionController.php`, `AlternativaController.php`
-- `api-sistema-fe/app/Services/AgenciaViajes/` (servicio nuevo para crear alternativa)
-- `api-sistema-fe/app/Services/TextoFormatoService.php`
-- migración `configuracion_agencia` en `verticals/agencia-viajes/`, `ConfiguracionAgenciaController.php`
-- `admin-start-kit/src/views/agencia-viajes/cotizador/nueva.vue`, `editar.vue`, pantalla de Configuración de Agencia
+- `api-sistema-fe/app/Http/Controllers/AgenciaViajes/AlternativaController.php` → `store()` (~43-117,
+  incluye el `AlternativaDestino` inicial), `update()` (~119), `resolverTipoCambio()` (~556)
+- `api-sistema-fe/app/Http/Controllers/AgenciaViajes/CotizacionController.php` → `store()` (~128, su
+  `DB::transaction` ~148)
+- `api-sistema-fe/app/Services/AgenciaViajes/` → servicio nuevo para crear alternativa
+- `api-sistema-fe/app/Services/TipoCambio/TipoCambioSunatResolver.php` → `resolverParaFecha()` (solo usar)
+- `api-sistema-fe/app/Services/TextoFormatoService.php` → conectores (~32), `capitalizarNombrePropio()` (~43)
+- migración nueva en `database/migrations/tenant/verticals/agencia-viajes/`;
+  `ConfiguracionAgenciaController.php` → `show()` (~44), `update()` (~53)
+- `admin-start-kit/src/views/agencia-viajes/cotizador/nueva.vue` (264 líneas)
+- `admin-start-kit/src/views/agencia-viajes/cotizador/editar.vue` (4479 líneas: **no leerlo entero**):
+  formulario de alternativa ~200-240 (placeholder "Alternativa B" ~210), `crearAlternativa()` ~1918,
+  renombrar ~1957; buscar el resto con `grep`
+- `admin-start-kit/src/views/agencia-viajes/configuracion/index.vue`
 
 ## Criterios de aceptación
 - [ ] **CA1** — Crear una cotización deja ya la "Alternativa A" en la moneda por defecto, con su destino; la pantalla abre lista para agregar servicios. → test + prueba funcional
@@ -55,6 +75,9 @@ dólares" es solo una calculadora).
 - [ ] **CA4** — "Alternativa A" se guarda "Alternativa A"; "viaje a cusco" sigue saliendo "Viaje a Cusco". → test de `TextoFormatoService`
 - [ ] **CA5** — "+ Nueva" con nombre vacío crea "Alternativa B" (si ya hay una). → test
 - [ ] **CA6** — Error de validación en español y junto al campo. → prueba funcional
+- [ ] **CA8** — Tipo de cambio: con uno `dia` registrado, se usa ese; sin ninguno y con SUNAT, se usa
+  el `venta` de SUNAT y queda registrado; sin ninguno y sin SUNAT, 422 y no se crea ni la cotización
+  ni la alternativa; reenviando con `tipo_cambio_valor`, se crean las dos. → test
 - [ ] **CA7** — Suite completa en verde; `type-check` y `build` sin errores.
 
 ## Seguridad y correctitud
