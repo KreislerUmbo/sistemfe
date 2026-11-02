@@ -153,8 +153,8 @@ cd admin-start-kit && npm run type-check
   app) guardaba el `usuario_id` de la sesión, y el logout no recarga la página: quien entraba
   después en la misma pestaña proponía las llamadas a nombre del anterior (y la pantalla decía «tú»).
   Se vacía con `olvidarOpciones()` en `auth.removeSession()` y al guardar la Configuración de
-  agencia (`dias_proximo_contacto`). Los hallazgos del login sin `id` y del envío por correo con
-  `view` pasaron a «Por analizar» del backlog.
+  agencia (`dias_proximo_contacto`). El login sin `id` pasó a T-079 (rama
+  `fix/T-079-login-id-usuario`); el envío por correo con `view`, a «Por analizar» del backlog.
 
 ## Hallazgos fuera de alcance
 - **El usuario guardado al iniciar sesión no tiene `id`** (`localStorage.user`: fullname, email,
