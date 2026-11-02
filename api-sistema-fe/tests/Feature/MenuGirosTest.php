@@ -1,0 +1,102 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Models\Tenant;
+use App\Models\User;
+use App\Services\MenuResolver;
+use Database\Seeders\MenuItemsSeeder;
+use Illuminate\Support\Facades\DB;
+use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
+use Spatie\Permission\PermissionRegistrar;
+use Tests\TestCase;
+
+// T-063 — el menú real (MenuItemsSeeder) por giro. Retail y Créditos se comparan contra una foto
+// del árbol tomada ANTES de reordenar Agencia (tests/Fixtures/menu_*.json); Agencia contra el
+// árbol aprobado en la obs. 17 de docs/requerimientos/observaciones-pruebas-usuario.md.
+class MenuGirosTest extends TestCase
+{
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        config([
+            'database.default' => 'pgsql',
+            'database.connections.pgsql.host' => env('DB_HOST', '127.0.0.1'),
+            'database.connections.pgsql.port' => env('DB_PORT', '5432'),
+            'database.connections.pgsql.database' => 'sistemafe_test_migrations',
+            'database.connections.pgsql.username' => env('DB_USERNAME', 'root'),
+            'database.connections.pgsql.password' => env('DB_PASSWORD', ''),
+            'database.connections.central.database' => 'sistemafe_test_migrations',
+            'cache.default' => 'array',
+            'plataforma.tenants' => ['t-menu-plataforma'],
+        ]);
+        DB::purge('pgsql');
+        DB::purge('central');
+        app('cache')->forgetDriver();
+        DB::beginTransaction();
+        DB::connection('central')->beginTransaction();
+        app()[PermissionRegistrar::class]->forgetCachedPermissions();
+
+        if (! DB::table('roles')->where('id', 1)->exists()) {
+            DB::table('roles')->insert(['id' => 1, 'name' => 'test-role-default', 'guard_name' => 'api', 'created_at' => now(), 'updated_at' => now()]);
+            DB::statement("SELECT setval(pg_get_serial_sequence('roles','id'), (SELECT MAX(id) FROM roles))");
+        }
+
+        (new MenuItemsSeeder())->run();
+    }
+
+    protected function tearDown(): void
+    {
+        DB::rollBack();
+        DB::connection('central')->rollBack();
+        parent::tearDown();
+    }
+
+    protected function superAdmin(): User
+    {
+        $rol = Role::firstOrCreate(['guard_name' => 'api', 'name' => 'Super-Admin']);
+        $user = User::factory()->create();
+        $user->assignRole($rol);
+
+        return $user->fresh();
+    }
+
+    protected function arbol(User $user, string $giro, string $tenantId): array
+    {
+        return (new MenuResolver())->paraUsuario($user, Tenant::make(['id' => $tenantId, 'giro' => $giro]));
+    }
+
+    /** Árbol reducido a "Etiqueta" / [hijos] para leerlo y compararlo como el de la obs. 17. */
+    protected function etiquetas(array $nodos): array
+    {
+        $lista = [];
+        foreach ($nodos as $nodo) {
+            $lista[] = $nodo['hijos'] === [] ? $nodo['label'] : [$nodo['label'] => $this->etiquetas($nodo['hijos'])];
+        }
+
+        return $lista;
+    }
+
+    protected function fixture(string $nombre): array
+    {
+        return json_decode(file_get_contents(base_path("tests/Fixtures/{$nombre}.json")), true, 512, JSON_THROW_ON_ERROR);
+    }
+
+    // CA3
+    public function test_retail_conserva_el_arbol_de_antes(): void
+    {
+        $this->assertSame($this->fixture('menu_retail'), $this->arbol($this->superAdmin(), 'retail', 't-menu-retail'));
+    }
+
+    public function test_retail_en_el_tenant_plataforma_conserva_el_arbol_de_antes(): void
+    {
+        $this->assertSame($this->fixture('menu_retail_plataforma'), $this->arbol($this->superAdmin(), 'retail', 't-menu-plataforma'));
+    }
+
+    public function test_creditos_conserva_el_arbol_de_antes(): void
+    {
+        $this->assertSame($this->fixture('menu_creditos'), $this->arbol($this->superAdmin(), 'creditos', 't-menu-creditos'));
+    }
+}
