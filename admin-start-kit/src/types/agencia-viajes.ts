@@ -538,9 +538,12 @@ export type CotizacionPasajeAereo = {
   tarifa_base_adulto: number;
   tarifa_base_nino?: number | null;
   tarifa_base_infante?: number | null;
-  cargos: Array<{ codigo?: string; nombre: string; monto: number; tipo?: 'impuesto' | 'tasa_aeropuerto' | 'fee_agencia' }>;
+  // T-076: con montos_por_pasajero, cada cargo es por pasajero (no_aplica_infante lo excluye de los infantes).
+  cargos: Array<{ codigo?: string; nombre: string; monto: number; tipo?: 'impuesto' | 'tasa_aeropuerto' | 'fee_agencia'; no_aplica_infante?: boolean }>;
   tua_incluida_en_tarifa: boolean;
   fee_agencia_monto: number;
+  // false = pasaje anterior a T-076: cargos y fee son montos del grupo, se suman una vez.
+  montos_por_pasajero: boolean;
   tip_afe_igv?: string | null;
   fecha_cotizado: string;
   // Vigencia de la tarifa aérea (09-oct-2026) — instante UTC (ISO con Z), null si no se cargó.

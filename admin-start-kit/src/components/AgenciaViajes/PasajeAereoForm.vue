@@ -37,6 +37,7 @@
             <div class="form-check form-check-inline small" v-for="p in pasajeros" :key="p.id">
                 <input class="form-check-input" type="checkbox" :id="`pasaje-aereo-pax-${p.id}`" :value="p.id" v-model="paxSeleccionados">
                 <label class="form-check-label" :for="`pasaje-aereo-pax-${p.id}`">{{ p.tipo_pax }} ({{ p.edad }} años)</label>
+                <span v-if="aerolineasPorPasajero.get(p.id)" class="text-muted ms-1">— ya tiene pasaje {{ aerolineasPorPasajero.get(p.id) }}</span>
             </div>
         </div>
 
@@ -56,10 +57,19 @@
         </div>
 
         <label class="form-label mb-1 small fw-semibold text-secondary d-block">
-            Cargos (impuestos, tasas, TUA...) <span class="text-muted fw-normal">— monto ya totalizado para el grupo</span>
+            Cargos (impuestos, tasas, TUA...)
+            <span class="text-muted fw-normal">— {{ form.montos_por_pasajero ? 'monto por pasajero' : 'monto totalizado para el grupo' }}</span>
         </label>
+        <!-- Pasaje anterior a T-076: sus montos son del grupo y se suman una vez. Mantiene esa fórmula
+             hasta que el vendedor pida pasarlo a montos por pasajero (hay que volver a cargar los montos). -->
+        <div v-if="props.itemExistente && !props.itemExistente.cotizacion_pasaje_aereo?.montos_por_pasajero" class="form-check small mb-1">
+            <input class="form-check-input" type="checkbox" id="pasaje-aereo-por-pasajero" v-model="form.montos_por_pasajero">
+            <label class="form-check-label" for="pasaje-aereo-por-pasajero">
+                Calcular por pasajero (cargar de nuevo los montos de cada cargo y del fee, por pasajero)
+            </label>
+        </div>
         <div v-for="(cargo, idx) in form.cargos" :key="idx" class="row g-1 mb-1 align-items-center">
-            <div class="col-5">
+            <div :class="form.montos_por_pasajero ? 'col-4' : 'col-5'">
                 <input type="text" class="form-control form-control-sm" v-model="cargo.nombre" placeholder="Nombre (ej. TUA internacional)">
             </div>
             <div class="col-3">
@@ -71,8 +81,11 @@
                     <option v-if="cargo.tipo === 'fee_agencia'" value="fee_agencia">Fee agencia</option>
                 </select>
             </div>
-            <div class="col-3">
+            <div :class="form.montos_por_pasajero ? 'col-2' : 'col-3'">
                 <input type="number" step="0.01" class="form-control form-control-sm" v-model.number="cargo.monto">
+            </div>
+            <div v-if="form.montos_por_pasajero" class="col-1 text-center">
+                <input class="form-check-input" type="checkbox" v-model="cargo.no_aplica_infante" title="No aplica a infantes">
             </div>
             <div class="col-1">
                 <button class="btn btn-sm btn-outline-danger" type="button" @click="quitarCargo(idx)"><i class="fas fa-times"></i></button>
@@ -84,9 +97,12 @@
 
         <!-- Sin el check "TUA incluida en la tarifa": no entraba en el cálculo ni en el PDF;
              si la TUA va aparte, se agrega como cargo. El valor de un pasaje viejo se conserva. -->
+        <div v-if="form.montos_por_pasajero && form.cargos.length" class="small text-muted mb-1">
+            El check de cada cargo es «no aplica a infantes».
+        </div>
         <div class="row g-2 mb-2 align-items-end">
             <div class="col-6">
-                <label class="form-label mb-1 small fw-semibold text-secondary">Fee de agencia</label>
+                <label class="form-label mb-1 small fw-semibold text-secondary">Fee de agencia{{ form.montos_por_pasajero ? ' (por pasajero)' : '' }}</label>
                 <input type="number" step="0.01" class="form-control form-control-sm" v-model.number="form.fee_agencia_monto">
             </div>
         </div>
@@ -112,6 +128,10 @@
         </div>
 
         <div class="card bg-light border-0 p-2 mb-2">
+            <div v-if="form.montos_por_pasajero" class="small text-muted mb-1">
+                Cargos y fee de {{ paxSeleccionados.length }} pasajero{{ paxSeleccionados.length === 1 ? '' : 's' }}
+                <template v-if="infantesMarcados">({{ infantesMarcados }} infante{{ infantesMarcados === 1 ? '' : 's' }}: sin los cargos marcados)</template>
+            </div>
             <div class="d-flex justify-content-between small">
                 <span class="text-muted">Costo total</span>
                 <span v-if="calculando" class="spinner-border spinner-border-sm"></span>
@@ -173,6 +193,8 @@ const props = defineProps<{
     // efecto al crear (no al editar).
     alternativaDestinoId?: number | null;
     pasajeros?: CotizacionPasajero[];
+    // T-076: ítems de la alternativa, para avisar qué pasajero ya tiene pasaje en otra aerolínea.
+    itemsAlternativa?: AlternativaItem[];
     itemExistente?: AlternativaItem | null;
     // Análisis de impuestos (28-ago-2026) — default de configuracion_agencia,
     // solo para prellenar; editable antes de guardar.
@@ -191,9 +213,11 @@ const form = reactive({
     tarifa_base_adulto: 0,
     tarifa_base_nino: 0,
     tarifa_base_infante: 0,
-    cargos: [] as Array<{ nombre: string; monto: number; tipo: string }>,
+    cargos: [] as Array<{ nombre: string; monto: number; tipo: string; no_aplica_infante: boolean }>,
     tua_incluida_en_tarifa: false,
     fee_agencia_monto: 0,
+    // T-076: los pasajes nuevos van por pasajero; uno anterior conserva su fórmula (false).
+    montos_por_pasajero: true,
     tip_afe_igv: '10' as TipAfeIgv,
     destino_tributario: 'nacional' as DestinoTributario,
 });
@@ -211,7 +235,7 @@ const desglose = computed(() => desglosarPrecioFinal(preview.value?.venta_total 
 let debounceTimeout: any = null;
 
 const agregarCargo = () => {
-    form.cargos.push({ nombre: '', monto: 0, tipo: 'impuesto' });
+    form.cargos.push({ nombre: '', monto: 0, tipo: 'impuesto', no_aplica_infante: false });
 };
 
 const quitarCargo = (idx: number) => {
@@ -223,12 +247,36 @@ const quitarCargo = (idx: number) => {
 // de un boleto que no se le cobró.
 const paxIncluidosParaEnviar = () => (paxSeleccionados.value.length ? [...paxSeleccionados.value] : null);
 
+// T-076: aerolíneas de los OTROS pasajes aéreos de la alternativa, por pasajero. Un pasaje con
+// pax_incluidos vacío cubre a todos. Solo se muestra: repetir pasajero no se bloquea.
+const aerolineasPorPasajero = computed(() => {
+    const porPasajero = new Map<number, string[]>();
+    for (const item of props.itemsAlternativa ?? []) {
+        if (item.origen_tipo !== 'pasaje_aereo' || item.id === props.itemExistente?.id) continue;
+        const aerolinea = item.cotizacion_pasaje_aereo?.aerolinea;
+        if (!aerolinea) continue;
+        const cubiertos = item.pax_incluidos?.length ? item.pax_incluidos : (props.pasajeros ?? []).map((p) => p.id);
+        for (const id of cubiertos) {
+            const previas = porPasajero.get(id) ?? [];
+            if (!previas.includes(aerolinea)) porPasajero.set(id, [...previas, aerolinea]);
+        }
+    }
+    return new Map([...porPasajero].map(([id, aerolineas]) => [id, aerolineas.join(', ')]));
+});
+
+const infantesMarcados = computed(
+    () => (props.pasajeros ?? []).filter((p) => p.tipo_pax === 'infante' && paxSeleccionados.value.includes(p.id)).length,
+);
+
 // Pasaje nuevo: en una modificación de reserva, solo los pasajeros que se agregan
-// (los que ya viajaban tienen su boleto); en el resto, todos.
+// (los que ya viajaban tienen su boleto); en el resto, todos. Además (T-076), de esos
+// solo los que aún no tienen pasaje en la alternativa; si todos ya tienen, todos.
 const paxPorDefecto = () => {
     const pasajeros = props.pasajeros ?? [];
     const nuevos = pasajeros.filter((p) => !p.reserva_pasajero_id);
-    return (nuevos.length && nuevos.length < pasajeros.length ? nuevos : pasajeros).map((p) => p.id);
+    const base = nuevos.length && nuevos.length < pasajeros.length ? nuevos : pasajeros;
+    const sinPasaje = base.filter((p) => !aerolineasPorPasajero.value.has(p.id));
+    return (sinPasaje.length ? sinPasaje : base).map((p) => p.id);
 };
 
 const resetearCampos = () => {
@@ -242,9 +290,10 @@ const resetearCampos = () => {
         form.tarifa_base_adulto = Number(cpa.tarifa_base_adulto);
         form.tarifa_base_nino = Number(cpa.tarifa_base_nino ?? 0);
         form.tarifa_base_infante = Number(cpa.tarifa_base_infante ?? 0);
-        form.cargos = (cpa.cargos ?? []).map((c) => ({ nombre: c.nombre, monto: Number(c.monto), tipo: c.tipo ?? 'impuesto' }));
+        form.cargos = (cpa.cargos ?? []).map((c) => ({ nombre: c.nombre, monto: Number(c.monto), tipo: c.tipo ?? 'impuesto', no_aplica_infante: !!c.no_aplica_infante }));
         form.tua_incluida_en_tarifa = cpa.tua_incluida_en_tarifa;
         form.fee_agencia_monto = Number(cpa.fee_agencia_monto);
+        form.montos_por_pasajero = !!cpa.montos_por_pasajero;
         form.tip_afe_igv = (cpa.tip_afe_igv as TipAfeIgv | null) ?? props.tipAfeIgvDefault ?? '10';
         form.destino_tributario = item.destino_tributario ?? props.destinoTributarioDefault ?? 'nacional';
         paxSeleccionados.value = item.pax_incluidos && item.pax_incluidos.length
@@ -263,6 +312,7 @@ const resetearCampos = () => {
         form.cargos = [];
         form.tua_incluida_en_tarifa = false;
         form.fee_agencia_monto = 0;
+        form.montos_por_pasajero = true;
         form.tip_afe_igv = props.tipAfeIgvDefault ?? '10';
         form.destino_tributario = props.destinoTributarioDefault ?? 'nacional';
         paxSeleccionados.value = paxPorDefecto();

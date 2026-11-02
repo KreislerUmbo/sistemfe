@@ -1354,6 +1354,8 @@ class AlternativaItemController extends Controller
         if ($validado instanceof JsonResponse) {
             return $validado;
         }
+        // T-076: un pasaje anterior mantiene su fórmula salvo que el vendedor pida pasarlo a la nueva.
+        $validado['montos_por_pasajero'] ??= (bool) $item->cotizacionPasajeAereo->montos_por_pasajero;
         $resultado = $this->calcularPasajeAereo($alternativa, $validado);
         // Si no manda valor nuevo, conserva el que ya tenía el ítem (mismo
         // criterio que actualizarManual() — el default de agencia solo
@@ -1382,6 +1384,7 @@ class AlternativaItemController extends Controller
                 'cargos' => $validado['cargos'] ?? [],
                 'tua_incluida_en_tarifa' => $validado['tua_incluida_en_tarifa'] ?? false,
                 'fee_agencia_monto' => $validado['fee_agencia_monto'] ?? 0,
+                'montos_por_pasajero' => $validado['montos_por_pasajero'],
                 'tip_afe_igv' => $validado['tip_afe_igv'] ?? null,
                 'tarifa_valida_hasta' => $validado['tarifa_valida_hasta'],
                 'costo_total' => $resultado['costo_total'],
@@ -1434,6 +1437,7 @@ class AlternativaItemController extends Controller
                 'cargos' => $validado['cargos'] ?? [],
                 'tua_incluida_en_tarifa' => $validado['tua_incluida_en_tarifa'] ?? false,
                 'fee_agencia_monto' => $validado['fee_agencia_monto'] ?? 0,
+                'montos_por_pasajero' => $validado['montos_por_pasajero'] ?? true,
                 'tip_afe_igv' => $validado['tip_afe_igv'] ?? null,
                 'fecha_cotizado' => now(),
                 'tarifa_valida_hasta' => $validado['tarifa_valida_hasta'],
@@ -1463,6 +1467,11 @@ class AlternativaItemController extends Controller
             'cargos.*.nombre' => 'required_with:cargos|string',
             'cargos.*.monto' => 'required_with:cargos|numeric',
             'cargos.*.tipo' => 'nullable|in:impuesto,tasa_aeropuerto,fee_agencia',
+            // T-076: el cargo no se cobra a los infantes (solo con montos por pasajero).
+            'cargos.*.no_aplica_infante' => 'nullable|boolean',
+            // T-076: true = cargos y fee por pasajero. Sin valor: los pasajes nuevos nacen con
+            // true y la edición de uno existente conserva su fórmula (ver actualizarPasajeAereo()).
+            'montos_por_pasajero' => 'nullable|boolean',
             'tua_incluida_en_tarifa' => 'nullable|boolean',
             'fee_agencia_monto' => 'nullable|numeric|min:0',
             // Este campo queda EXCLUSIVAMENTE sobre fee_agencia_monto
@@ -1507,21 +1516,36 @@ class AlternativaItemController extends Controller
         $conteo = $this->contarPasajerosPorTipo($alternativa->cotizacion_id, $validado['pax_incluidos'] ?? null);
 
         // tarifa_base_* se reparte por tipo de pasajero, igual que el
-        // reparto por_persona de proveedor_tarifas (§3). Los montos de
-        // `cargos` los carga el vendedor YA totalizados para el grupo (no
-        // se vuelven a multiplicar acá — ver PasajeAereoForm.vue).
+        // reparto por_persona de proveedor_tarifas (§3).
         $costoBaseTarifas = $conteo['adulto'] * (float) $validado['tarifa_base_adulto']
             + $conteo['nino'] * (float) ($validado['tarifa_base_nino'] ?? 0)
             + $conteo['infante'] * (float) ($validado['tarifa_base_infante'] ?? 0);
+
+        $cargos = $validado['cargos'] ?? [];
+        $fee = (float) ($validado['fee_agencia_monto'] ?? 0);
+
+        // T-076: cargos y fee son POR PASAJERO. Un cargo con «no aplica a infantes» se multiplica
+        // solo por adultos y niños; el fee, por todos los marcados (el infante paga fee). Un
+        // pasaje anterior (montos_por_pasajero=false) conserva su fórmula: montos del grupo, una vez.
+        if ($validado['montos_por_pasajero'] ?? true) {
+            $total = $conteo['adulto'] + $conteo['nino'] + $conteo['infante'];
+            $sinInfantes = $conteo['adulto'] + $conteo['nino'];
+            $cargos = array_map(function (array $cargo) use ($total, $sinInfantes) {
+                $cargo['monto'] = (float) $cargo['monto'] * (! empty($cargo['no_aplica_infante']) ? $sinInfantes : $total);
+
+                return $cargo;
+            }, $cargos);
+            $fee *= $total;
+        }
 
         // fee_agencia_monto es lo único que la agencia realmente vende
         // (§2.5) — se modela como margen 'fijo' del motor de precios, no
         // como un cargo más (los cargos son pass-through de terceros).
         return $this->priceEngine->calcular(
             costoBase: $costoBaseTarifas,
-            cargos: $validado['cargos'] ?? [],
+            cargos: $cargos,
             margenTipo: 'fijo',
-            margenValor: (float) ($validado['fee_agencia_monto'] ?? 0),
+            margenValor: $fee,
             descuentoMaximoPct: null,
             margenMinimoPct: null,
         );
