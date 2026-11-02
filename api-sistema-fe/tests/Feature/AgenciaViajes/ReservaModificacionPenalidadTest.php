@@ -331,7 +331,8 @@ class ReservaModificacionPenalidadTest extends TestCase
         $item = AlternativaItem::where('alternativa_id', $m->alternativa_nueva_id)
             ->where('penalidad_reserva_pasajero_id', $beto)->firstOrFail();
         $this->assertSame(AlternativaItem::ORIGEN_MANUAL, $item->origen_tipo);
-        $this->assertStringStartsWith('Penalidad por cancelación — ', $item->descripcion_manual);
+        // Beto no tiene nombre: se lo nombra por su lugar en la reserva, no por su id.
+        $this->assertStringStartsWith('Penalidad por cancelación — pasajero 2: ', $item->descripcion_manual);
         $this->assertStringContainsString('No se presentó', $item->descripcion_manual);
         $this->assertSame(['10', 'nacional'], [$item->tip_afe_igv, $item->destino_tributario]);
         $this->assertNull($item->item_origen_id);

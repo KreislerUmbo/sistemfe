@@ -249,7 +249,20 @@ class CotizacionController extends Controller
         // independiente del Global Scope (EscopablePorVendedor).
         $this->authorize('view', $cotizacion);
 
-        return response()->json(['cotizacion' => $cotizacion]);
+        // T-007: una cotización de modificación dice a qué reserva pertenece (enlace de vuelta y
+        // panel de diferencia). Solo se lee; la cotización no cambia.
+        $modificacion = null;
+        if ($cotizacion->esModificacion()) {
+            $m = \App\Models\AgenciaViajes\ReservaModificacion::with('reserva')->where('cotizacion_id', $cotizacion->id)->first();
+            $modificacion = $m ? [
+                'id' => $m->id,
+                'estado' => $m->estado,
+                'reserva_id' => $m->reserva_id,
+                'reserva_codigo' => $m->reserva?->codigo,
+            ] : null;
+        }
+
+        return response()->json(['cotizacion' => $cotizacion, 'modificacion' => $modificacion]);
     }
 
     // Corregir cliente/destino/fechas después de crear la cotización —

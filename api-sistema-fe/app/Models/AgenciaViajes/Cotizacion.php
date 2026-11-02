@@ -81,9 +81,12 @@ class Cotizacion extends Model
         return $this->hasMany(CotizacionPasajero::class, 'cotizacion_id');
     }
 
+    // orderBy('id'): sin esto Postgres no garantiza el orden, y un UPDATE (ej. recalcular el
+    // total al agregar un hotel) reubicaba la alternativa: la pestaña 2 pasaba a ser la 1
+    // (reporte del usuario 31-oct-2026; mismo bug que Alternativa::items()).
     public function alternativas()
     {
-        return $this->hasMany(Alternativa::class, 'cotizacion_id');
+        return $this->hasMany(Alternativa::class, 'cotizacion_id')->orderBy('id');
     }
 
     // Lo que estadoResumen() lee; precargarlo en los listados evita una consulta por fila.

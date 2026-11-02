@@ -513,6 +513,27 @@ class ReservaModificacionAplicarTest extends TestCase
         $this->assertSame(63000, (int) round((float) $sale->total * 100));
     }
 
+    // T-007: el historial del detalle de la reserva lista la aplicada con quién, cuándo y la diferencia.
+    public function test_t007_el_detalle_de_la_reserva_lista_la_modificacion_aplicada(): void
+    {
+        [$reserva, $m] = $this->reservaConModificacion();
+        $this->cambiarPasajeros($m, [], [30]);
+        $this->aplicarOk($reserva);
+
+        $detalle = app(ReservaController::class)->show((string) $reserva->id)->getData(true);
+
+        $this->assertNull($detalle['modificacion_abierta']);
+        $this->assertCount(1, $detalle['modificaciones_aplicadas']);
+        $aplicada = $detalle['modificaciones_aplicadas'][0];
+        $this->assertSame($m->id, $aplicada['id']);
+        $this->assertSame($this->usuario->name, $aplicada['aplicado_por']);
+        $this->assertSame(10000, $aplicada['diferencia_centavos']);
+        $this->assertNotNull($aplicada['aplicado_en']);
+
+        $cotizacion = app(CotizacionController::class)->show((string) $m->cotizacion_id)->getData(true);
+        $this->assertSame('aplicada', $cotizacion['modificacion']['estado']);
+    }
+
     // ── CA2 ────────────────────────────────────────────────────────────────────
 
     public function test_ca2_quitar_un_pasajero_con_penalidad_lo_saca_y_la_penalidad_queda_como_servicio_facturable(): void

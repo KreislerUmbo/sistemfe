@@ -108,7 +108,15 @@ class AlternativaItemPasajeAereoTest extends TestCase
         $this->assertSame(200, $response->getStatusCode());
         $this->assertEquals(2100.0, (float) $body['alternativa_item']['costo_snapshot']);
         $this->assertEquals(2400.0, (float) $body['alternativa_item']['precio_venta_snapshot']);
-        $this->assertNull($body['alternativa_item']['pax_incluidos']);
+        // T-007: un boleto es por persona — guarda la lista, no null ("todos los que haya después").
+        $this->assertSame(
+            [$f['adulto1']->id, $f['adulto2']->id, $f['nino1']->id, $f['nino2']->id, $f['infante']->id],
+            $body['alternativa_item']['pax_incluidos']
+        );
+
+        // Un pasajero agregado después no queda dentro de ese boleto.
+        CotizacionPasajero::create(['cotizacion_id' => $f['alternativa']->cotizacion_id, 'tipo_pax' => 'adulto', 'edad' => 40]);
+        $this->assertCount(5, AlternativaItem::findOrFail($body['alternativa_item']['id'])->pax_incluidos);
     }
 
     // Reproduce el caso real que motivó esta sesión: excluir a UNO de los 2

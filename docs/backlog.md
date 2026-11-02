@@ -8,7 +8,7 @@
 
 Cada línea: ID · qué · estado · depende de · rama o commit. El detalle está en
 `docs/tareas/T-…md` (se borra al cerrar; para una tarea hecha, el commit es la referencia).
-Próximo ID libre: **T-074**.
+Próximo ID libre: **T-078**.
 
 ## Orden de construcción (27-oct-2026)
 
@@ -40,7 +40,11 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 
 | ID | Módulo | Qué | Estado | Depende de | Rama / commit |
 |---|---|---|---|---|---|
-| T-007 | AGE | Modificar reserva: pantallas | por hacer | T-005, T-006, T-072, T-073 | |
+| T-007 | AGE | Modificar reserva: pantallas | en revisión | T-005, T-006, T-072, T-073 | |
+| T-074 | AGE | Cotización reservada: alternativa elegida a la vista (lienzo y listado), lienzo en solo lectura y «Ver detalle» del pasaje aéreo y del ítem manual | por hacer | T-007 | |
+| T-075 | AGE | Un pasaje aéreo nunca se queda sin pasajeros: impedir borrar al último pasajero de un boleto en la cotización (la modificación ya bloquea con `sin_pasajeros`; solo un test) (revisión de T-007) | por hacer | T-007 | |
+| T-076 | AGE | Pasaje aéreo: cargos y fee por pasajero (sin cambiar el precio de los ya guardados), «ya tiene pasaje» junto a cada pasajero | por hacer | T-007 | |
+| T-077 | AGE | Vuelo propio del pasajero en un solo texto, como observación en el reporte operativo (el vuelo de la agencia no cambia) | por hacer | — | |
 | T-012 | AGE + CAJ | Traspaso del cobro tras una nota de crédito | por hacer | T-011 | |
 | T-015 | PLA + AGE | Catálogo central de aerolíneas + panel central (Obs. 3) | por hacer | — | |
 | T-016 | AGE | Buscador de aerolíneas, corrección de nombres y aerolínea por defecto (Obs. 3) | por hacer | T-015 | |
@@ -88,6 +92,10 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 
 | Módulo | Qué | Origen |
 |---|---|---|
+| AGE | Facturar una reserva con penalidad o «Ajuste» de una modificación: quedan sin pasajeros (R-AGE-05), la reserva muestra «Servicios: 1 pendiente(s)» y la pantalla de facturar no explica que hay que sumarlos a mano a una factura (lo pedía la nota de T-005) | T-007, 30-oct-2026 |
+| AGE | Modificar reserva: un pasajero sin nombre sale como «pasajero #35» en el bloqueo y en el texto de la penalidad; usar el tipo y el orden («Adulto 2») | T-007, 30-oct-2026 |
+| AGE | Modificar reserva: el aviso «Pasajeros actualizados» del cotizador repite «(modificación)» en el nombre de la alternativa desde la segunda modificación | T-007, 30-oct-2026 |
+| AGE | Inyección de HTML en el cotizador: `guardarPasajeros()` (`cotizador/editar.vue`) arma el Swal con `html:` metiendo `alternativa_nombre` y `motivo` sin escapar; el nombre de la alternativa lo escribe el usuario. Escapar o pasar a texto | revisión T-007, 30-oct-2026 |
 | AGE | Saldo real de una reserva (estado de cuenta): total vigente − anticipos netos de devoluciones − cobros de sus facturas (contado y amortizaciones) + notas de crédito, en una sola función. Hoy no existe; por eso el PDF de modificación no muestra saldo, y `totales.ya_facturado` / `anticipos_aplicados` de la diferencia son aproximados (tour a medias cuenta entero; sin devoluciones) | revisión T-006, 30-oct-2026 |
 | AGE | N+1 en el listado de cotizaciones: `Alternativa::$appends = ['tiene_grupos_sin_resolver']` lee `items` de cada alternativa al serializar (una consulta por alternativa en `CotizacionController::index()`). Precargar `alternativas.items` o no apendear el atributo en el listado | T-072, 30-oct-2026 |
 | AGE | `AlternativaItemController::destroy()` y `eliminarCarga()` no rechazan una alternativa aceptada (solo miran si hay reserva); `moverBloque()` mueve el tour clásico en todos los días, no solo el visible | T-027, 28-oct-2026 |
@@ -119,6 +127,9 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 | PLA | **Obs. 14 — Módulo de uso del sistema** (solo UmboSystem; qué se usa, dónde se traban, qué es lento): **en espera** hasta avanzar las tareas pendientes, por decisión del usuario | `docs/requerimientos/observaciones-pruebas-usuario.md` §14, 27-oct-2026 |
 | CAJ + NOT | Devolver dinero al cliente por una NC sin volver a facturar (hoy la NC no mueve la caja en ningún giro) | revisión de fallos de las observaciones, 25-oct-2026 |
 | AGE | **Ley de la Amazonía (fila F2), lo que queda:** interruptor "la empresa cumple la Ley de la Amazonía" (hoy cualquier agencia puede marcar exonerado) y expediente de sustento por reserva (itinerario + pasajeros + órdenes de servicio). Junto con la obs. 10 (contador) | `plan-hoja-de-ruta-ejecucion.md` fila F2, 23-oct-2026 |
+| AGE | **IGV del pasaje aéreo:** el recuadro «Análisis de impuestos» de `PasajeAereoForm.vue` calcula el IGV sobre todo el precio de venta (tarifa + cargos + fee), y según el plan solo el fee es gravable. Verificar cómo lo factura la reserva. Ver con el contador, junto con la obs. 10 | revisión del formulario de pasaje aéreo, 31-oct-2026 |
+| VEN + NOT | **Envío automático a SUNAT por cron** (hoy solo manual, a propósito, para revisar antes de emitir; no hay comando ni campo en `SunatConfig`). Preguntas: (1) ¿envía todo lo pendiente o solo lo de días anteriores, para no saltarse la revisión del día?; (2) ¿hora fija o configurable por tenant (patrón de `creditos:aviso-cobranza-dia`, cada 15 min)?; (3) qué documentos: factura, boleta, NC, ND, nunca Nota de Venta (`Sale::scopeSoloDocumentosFiscales()`); (4) rechazo o sin respuesta: ¿reintenta en la próxima corrida, a quién avisa, dónde se ve el resultado?; (5) ¿se activa o desactiva por empresa? | pedido del usuario, 01-nov-2026 |
+| AGE | **Comprobante de un servicio suelto atado a otro pasajero:** al facturar un servicio sin pasajeros (penalidad, ajuste) se reenvía un pasajero ya facturado (`pasajeroIdsParaFacturar()`), y queda en `reserva_ventas.reserva_pasajero_ids`. Si después se quita a ese pasajero, la modificación pide la nota de crédito también de ese comprobante (ej. agencia-demo: la penalidad del pasajero 35, B002-3, quedó atada al 34). Decidir si esos comprobantes no deben contar como «facturado» del pasajero | prueba de T-007 en agencia-demo, 01-nov-2026 |
 | VEN | Comunicación de baja a SUNAT sin conectar a ningún flujo (verificado 27-oct: no hay uso en `app/` ni rutas) | `CLAUDE.md`, Ventas |
 | VEN | Archivo de depuración del XML con nombre fijo: `FacturacionElectronicaController` escribe `debug_xml.xml` en cada envío (choque entre ventas simultáneas, y entre tenants si el disco no está particionado) — verificado 27-oct | `CLAUDE.md`, multitenancy §4 |
 | VEN | `controla_stock` del producto ignorado: `SaleController` descuenta stock siempre (verificado 27-oct) | `TODO.md`, Sesión 9a |

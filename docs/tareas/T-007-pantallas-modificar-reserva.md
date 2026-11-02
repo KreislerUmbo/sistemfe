@@ -143,9 +143,20 @@ Y el recorrido con Playwright contra `agencia-demo` (memoria
 ---
 
 ## Resultado
-- **Commits:**
-- **Tests:**
+- **Commits:** rama `feat/T-007-pantallas-modificar-reserva` (ver `git log`).
+- **Tests:** `npm run build` sin errores; Vitest del composable (4 en verde: composición, monto, motivo); `vue-tsc` sin errores en los archivos tocados. `npm run type-check` (`vue-tsc --build --force`) ya falla en 19 archivos que esta tarea no toca (portal, recursos, users, sale…). Backend: ReservaModificacionCrearTest, EscopablePorVendedorTest y ReservaAnticipoTest en verde (33). En la revisión se agregaron 3 tests de la forma de respuesta (`test_t007_*` en ReservaModificacionCrearTest y ReservaModificacionAplicarTest): `modificacion_abierta`/`modificaciones_aplicadas` solo con `reservas.modificar` (lado backend de CA1), historial con quién y diferencia, y `modificacion` en el show de la cotización.
+  Playwright contra agencia-demo (reserva 29): CA2 (crear, agregar pasajero, composición «1 adulto → 2 adultos», PDF, aplicar, historial), CA3 (quitar pasajero → bloqueo → penalidad con selects vacíos → aplicar; un motivo con HTML se ve como texto; editar precarga), CA4 (resalta el ítem; «Revisado» / «Confirmar todas» saca el bloqueo), CA5 (segunda pestaña: «La reserva cambió», recarga y queda de solo lectura), CA6 (descartar). CA8: respaldo con pg_dump, restaurado y conteos iguales. CA1 solo por código (`puedeModificar` = reserva activa + `reservas.modificar`): la demo no tiene reserva cancelada ni un usuario sin permiso. En la revisión (30-oct) el usuario aceptó CA1 así: test del backend (`test_t007_el_detalle_de_la_reserva_trae_la_abierta_solo_con_reservas_modificar`) + revisión del código; el backend además rechaza crear sin permiso o sobre una reserva cancelada (tests de T-002). El usuario la prueba a mano.
 - **Desviaciones de la tarea y por qué:**
+  - Ajuste de backend (forma de respuesta): `GET reservas/{id}` trae `modificacion_abierta` y `modificaciones_aplicadas` (solo con `reservas.modificar`), y `GET cotizaciones/{id}` trae `modificacion` (reserva y estado) si la cotización es de modificación. Sin eso el cotizador no sabía a qué reserva volver y la reserva no podía listar el historial.
+  - Componentes en `components/AgenciaViajes/` (la carpeta que ya existe, no `agencia-viajes`); composable en `composables/agencia-viajes/`; se agregó `services/admin/reservaModificacionService.ts`.
+  - Confirmar en bloque: llamadas en paralelo a la ruta de a uno y una sola recarga de la diferencia; no se agregó ruta.
+  - El aviso de edad estimada y el mensaje de éxito/cupo viajan entre pantallas por `sessionStorage` (esa respuesta solo existe en el momento de crear/aplicar).
+  - `components.d.ts` se regeneró solo con los dos componentes nuevos.
+  - Un pasajero quitado y vuelto a agregar sigue siendo uno nuevo (no se decidió recuperar al original).
+  - Sub-fase de la prueba del usuario (31-oct): el pasaje aéreo guardaba `pax_incluidos = null` («todos»), así que al agregar un adulto el boleto vendido lo absorbía (2 pasajeros, precio de 1) y el boleto nuevo se cobraba por todos. Ahora el pasaje aéreo guarda siempre su lista de pasajeros; al crear la modificación, la copia queda con los pasajeros que lo tenían en la reserva; el formulario marca por defecto solo a los nuevos. Test: `test_t007_pasaje_aereo_vendido_no_cubre_al_pasajero_agregado_y_su_boleto_se_cobra_aparte`.
 
 ## Hallazgos fuera de alcance
-- 
+(Pasados a «Por analizar» de `docs/backlog.md` en la revisión, más uno de la revisión: `html:` sin escapar en `guardarPasajeros()`.)
+- Tras aplicar una modificación con penalidad, la reserva queda con «Servicios: 1 pendiente(s)» y la penalidad sin pasajeros (R-AGE-05); la pantalla de facturar todavía no lo explica, como pedía la nota de T-005.
+- Un pasajero sin nombre cargado sale como «pasajero #35» en el bloqueo y en el texto de la penalidad.
+- El aviso «Pasajeros actualizados» del cotizador repite «(modificación)» en el nombre de la alternativa desde la segunda modificación.

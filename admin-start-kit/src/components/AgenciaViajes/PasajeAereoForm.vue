@@ -30,11 +30,8 @@
             </div>
         </div>
 
-        <!-- ¿A quiénes aplica? — antes este form siempre mandaba pax_incluidos
-             null (todos los pasajeros de la cotización, sin excepción), sin
-             ninguna forma de excluir a alguien. Mismo patrón que ya usa
-             ItemManualForm.vue: si quedan TODOS tildados se manda null
-             (semánticamente "todos"), si es un subconjunto se manda la lista. -->
+        <!-- ¿A quiénes aplica? — se manda siempre la lista de los tildados
+             (T-007: un boleto por persona, nunca null = "todos"). -->
         <div v-if="pasajeros && pasajeros.length" class="mb-2">
             <span class="small text-secondary d-block mb-1">¿A quiénes aplica?</span>
             <div class="form-check form-check-inline small" v-for="p in pasajeros" :key="p.id">
@@ -69,7 +66,9 @@
                 <select class="form-select form-select-sm" v-model="cargo.tipo">
                     <option value="impuesto">Impuesto</option>
                     <option value="tasa_aeropuerto">Tasa aeropuerto</option>
-                    <option value="fee_agencia">Fee agencia</option>
+                    <!-- El fee va en su campo de abajo (como cargo salía con ganancia cero);
+                         solo se muestra para no vaciar el de un pasaje viejo. -->
+                    <option v-if="cargo.tipo === 'fee_agencia'" value="fee_agencia">Fee agencia</option>
                 </select>
             </div>
             <div class="col-3">
@@ -83,13 +82,9 @@
             <i class="fas fa-plus me-1"></i>Agregar cargo
         </button>
 
+        <!-- Sin el check "TUA incluida en la tarifa": no entraba en el cálculo ni en el PDF;
+             si la TUA va aparte, se agrega como cargo. El valor de un pasaje viejo se conserva. -->
         <div class="row g-2 mb-2 align-items-end">
-            <div class="col-6">
-                <div class="form-check">
-                    <input class="form-check-input" type="checkbox" id="tua-incluida" v-model="form.tua_incluida_en_tarifa">
-                    <label class="form-check-label small" for="tua-incluida">TUA incluida en la tarifa</label>
-                </div>
-            </div>
             <div class="col-6">
                 <label class="form-label mb-1 small fw-semibold text-secondary">Fee de agencia</label>
                 <input type="number" step="0.01" class="form-control form-control-sm" v-model.number="form.fee_agencia_monto">
@@ -142,7 +137,7 @@
             </div>
         </div>
 
-        <button class="btn btn-primary btn-sm w-100" @click="agregar" :disabled="!form.aerolinea || !form.tarifa_base_adulto || guardando">
+        <button class="btn btn-primary btn-sm w-100" @click="agregar" :disabled="!form.aerolinea || !form.tarifa_base_adulto || guardando || (!!pasajeros?.length && !paxSeleccionados.length)">
             <span v-if="guardando" class="spinner-border spinner-border-sm me-1"></span>
             <i v-else class="fas fa-plus me-1"></i>{{ props.itemExistente ? 'Guardar cambios' : 'Agregar pasaje aéreo' }}
         </button>
@@ -192,7 +187,7 @@ const emit = defineEmits<{
 const form = reactive({
     aerolinea: '',
     itinerario: '',
-    moneda: 'PEN' as 'PEN' | 'USD',
+    moneda: 'USD' as 'PEN' | 'USD',
     tarifa_base_adulto: 0,
     tarifa_base_nino: 0,
     tarifa_base_infante: 0,
@@ -223,12 +218,17 @@ const quitarCargo = (idx: number) => {
     form.cargos.splice(idx, 1);
 };
 
-// Mismo criterio que ItemManualForm.vue: todos tildados = null (semántica
-// "aplica a todos", no una lista redundante que además desincroniza si
-// después se agrega un pasajero nuevo a la cotización).
-const paxIncluidosParaEnviar = () => {
-    const total = props.pasajeros?.length ?? 0;
-    return paxSeleccionados.value.length && paxSeleccionados.value.length < total ? paxSeleccionados.value : null;
+// T-007: un pasaje aéreo es un boleto por persona — se manda siempre la lista,
+// nunca null ("todos"), para que un pasajero agregado después no quede dentro
+// de un boleto que no se le cobró.
+const paxIncluidosParaEnviar = () => (paxSeleccionados.value.length ? [...paxSeleccionados.value] : null);
+
+// Pasaje nuevo: en una modificación de reserva, solo los pasajeros que se agregan
+// (los que ya viajaban tienen su boleto); en el resto, todos.
+const paxPorDefecto = () => {
+    const pasajeros = props.pasajeros ?? [];
+    const nuevos = pasajeros.filter((p) => !p.reserva_pasajero_id);
+    return (nuevos.length && nuevos.length < pasajeros.length ? nuevos : pasajeros).map((p) => p.id);
 };
 
 const resetearCampos = () => {
@@ -256,7 +256,7 @@ const resetearCampos = () => {
     } else {
         form.aerolinea = '';
         form.itinerario = '';
-        form.moneda = 'PEN';
+        form.moneda = 'USD';
         form.tarifa_base_adulto = 0;
         form.tarifa_base_nino = 0;
         form.tarifa_base_infante = 0;
@@ -265,13 +265,11 @@ const resetearCampos = () => {
         form.fee_agencia_monto = 0;
         form.tip_afe_igv = props.tipAfeIgvDefault ?? '10';
         form.destino_tributario = props.destinoTributarioDefault ?? 'nacional';
-        paxSeleccionados.value = (props.pasajeros ?? []).map((p) => p.id);
+        paxSeleccionados.value = paxPorDefecto();
         vigenciaFecha.value = '';
         vigenciaHora.value = '';
     }
 };
-
-watch(() => props.itemExistente, resetearCampos, { immediate: true });
 
 const recalcular = async () => {
     calculando.value = true;
@@ -287,6 +285,22 @@ const recalcular = async () => {
         calculando.value = false;
     }
 };
+
+// Al editar, el form se monta con el ítem ya cargado: resetearCampos() lo llena
+// antes de que exista el watch de abajo, así que el total se pide acá.
+watch(() => props.itemExistente, () => {
+    resetearCampos();
+    if (props.itemExistente) recalcular();
+}, { immediate: true });
+
+// Si se editan los pasajeros con el form abierto, se sueltan los que ya no
+// existen (si no, el backend responde 422 por un id borrado).
+watch(() => props.pasajeros, (pasajeros) => {
+    const vigentes = new Set((pasajeros ?? []).map((p) => p.id));
+    if (paxSeleccionados.value.some((id) => !vigentes.has(id))) {
+        paxSeleccionados.value = paxSeleccionados.value.filter((id) => vigentes.has(id));
+    }
+});
 
 watch([form, paxSeleccionados], () => {
     clearTimeout(debounceTimeout);

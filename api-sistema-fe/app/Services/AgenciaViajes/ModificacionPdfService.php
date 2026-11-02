@@ -58,9 +58,15 @@ class ModificacionPdfService
         $diferencia = $this->diferenciaDe($modificacion);
         $reserva = Reserva::findOrFail($modificacion->reserva_id);
 
+        // Las penalidades se reconocen por la diferencia: al aplicar se borra el pasajero quitado y
+        // su penalidad pierde penalidad_reserva_pasajero_id (nullOnDelete).
+        $idsPenalidad = collect($diferencia['pasajeros'] ?? [])
+            ->flatMap(fn (array $p) => [$p['penalidad_alternativa_item_id'] ?? null, $p['penalidad_sobrante_item_id'] ?? null])
+            ->filter()->map(fn ($id) => (int) $id)->all();
+
         $lineas = collect($diferencia['lineas'])
             ->filter(fn (array $l) => in_array($l['estado'], self::ESTADOS_QUE_SE_IMPRIMEN, true))
-            ->map(fn (array $l) => $this->lineaParaCliente($l))
+            ->map(fn (array $l) => $this->lineaParaCliente($l, $idsPenalidad))
             ->values();
 
         // Las penalidades salen en su propia sección, con el motivo; no en la tabla de cambios.
@@ -118,7 +124,7 @@ class ModificacionPdfService
      * @param  array<string, mixed>  $linea
      * @return array<string, mixed>
      */
-    private function lineaParaCliente(array $linea): array
+    private function lineaParaCliente(array $linea, array $idsPenalidad = []): array
     {
         // El ítem de la versión nueva, o el que se vendió si la línea es un servicio quitado.
         $item = AlternativaItem::find($linea['alternativa_item_id'] ?? $linea['item_origen_id'] ?? 0);
@@ -136,7 +142,7 @@ class ModificacionPdfService
             'vendido_centavos' => (int) $linea['vendido_centavos'],
             'nuevo_centavos' => (int) $linea['nuevo_centavos'],
             'diferencia_centavos' => (int) $linea['diferencia_centavos'],
-            'es_penalidad' => $item?->penalidad_reserva_pasajero_id !== null,
+            'es_penalidad' => $item !== null && ($item->penalidad_reserva_pasajero_id !== null || in_array($item->id, $idsPenalidad, true)),
         ];
     }
 

@@ -190,6 +190,13 @@ class ReservaModificacionDiferenciaTest extends TestCase
                 'precio_venta_snapshot' => 600, 'precio_convertido' => 600,
             ]);
         }
+        // T-007 — Pasaje aéreo real vendido como antes (pax_incluidos null = "todos"), 3 × 200.
+        if (in_array('pasaje_aereo', $extras, true)) {
+            $this->items['pasaje_aereo'] = $this->item($alternativa, [
+                'origen_tipo' => AlternativaItem::ORIGEN_PASAJE_AEREO, 'modo_precio' => 'por_persona',
+                'pax_incluidos' => null, 'precio_venta_snapshot' => 600, 'precio_convertido' => 600,
+            ]);
+        }
         // T-073 — Tour real (dos grupos de IGV, 150 por adulto): 'tour_real' reprecia solo;
         // 'tour_manual' con el precio fijado a mano (300 en total para el único adulto que hay).
         foreach (['tour_real', 'tour_manual'] as $variante) {
@@ -715,6 +722,34 @@ class ReservaModificacionDiferenciaTest extends TestCase
 
         // El traslado de proveedor con tarifa se reprecia solo (de niño a adulto): cambio de precio.
         $this->assertSame('cambio_precio', $this->linea($dif, $this->nuevo($m, 'traslado'))['estado']);
+    }
+
+    // T-007 (prueba del usuario): el pasaje aéreo vendido "para todos" absorbía al pasajero
+    // agregado (2 pasajeros, precio de 1) y el boleto nuevo salía por todos. Ahora el vendido
+    // sigue igual con sus pasajeros y el boleto nuevo se cobra solo por el agregado.
+    public function test_t007_pasaje_aereo_vendido_no_cubre_al_pasajero_agregado_y_su_boleto_se_cobra_aparte(): void
+    {
+        [$reserva, $m] = $this->reservaConModificacion(false, ['pasaje_aereo']);
+        $vendido = $this->nuevo($m, 'pasaje_aereo');
+        $copias = CotizacionPasajero::where('cotizacion_id', $m->cotizacion_id)->orderBy('id')->pluck('id')->all();
+        $this->assertSame($copias, $vendido->pax_incluidos);
+
+        $this->cambiarPasajeros($m, [], [28]);
+        $agregado = CotizacionPasajero::where('cotizacion_id', $m->cotizacion_id)->whereNull('reserva_pasajero_id')->firstOrFail();
+
+        $respuesta = app(AlternativaItemController::class)->store(new Request([
+            'origen_tipo' => 'pasaje_aereo', 'aerolinea' => 'LATAM', 'moneda' => 'PEN',
+            'tarifa_base_adulto' => 200, 'pax_incluidos' => [$agregado->id], 'dia_referencial' => 1,
+        ]), (string) $m->alternativa_nueva_id);
+        $this->assertSame(200, $respuesta->getStatusCode(), $respuesta->getContent());
+        $boleto = AlternativaItem::findOrFail($respuesta->getData(true)['alternativa_item']['id']);
+
+        $dif = $this->diferencia($reserva);
+
+        $this->assertSame('igual', $this->linea($dif, $vendido)['estado']);
+        $this->assertNotContains($vendido->id, collect($dif['bloqueos'])->pluck('alternativa_item_id')->all());
+        $this->assertSame('agregado', $this->linea($dif, $boleto)['estado']);
+        $this->assertSame(20000, $this->linea($dif, $boleto)['diferencia_centavos']);
     }
 
     public function test_t073_ca4_por_persona_de_proveedor_con_tarifa_se_reprecia_y_no_queda_para_revisar(): void
