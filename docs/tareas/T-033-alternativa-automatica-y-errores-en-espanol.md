@@ -69,27 +69,27 @@ dólares" es solo una calculadora).
 - `admin-start-kit/src/views/agencia-viajes/configuracion/index.vue`
 
 ## Criterios de aceptación
-- [ ] **CA1** — Crear una cotización deja ya la "Alternativa A" en la moneda por defecto, con su destino; la pantalla abre lista para agregar servicios. → test + prueba funcional
-- [ ] **CA2** — Escribir otro nombre y moneda en la nueva cotización los respeta. → test
-- [ ] **CA3** — Cambiar la moneda de una alternativa sin servicios → ok; con servicios → 422. → test
-- [ ] **CA4** — "Alternativa A" se guarda "Alternativa A"; "viaje a cusco" sigue saliendo "Viaje a Cusco". → test de `TextoFormatoService`
-- [ ] **CA5** — "+ Nueva" con nombre vacío crea "Alternativa B" (si ya hay una). → test
-- [ ] **CA6** — Error de validación en español y junto al campo. → prueba funcional
-- [ ] **CA8** — Tipo de cambio: con uno `dia` registrado, se usa ese; sin ninguno y con SUNAT, se usa
+- [x] **CA1** — Crear una cotización deja ya la "Alternativa A" en la moneda por defecto, con su destino; la pantalla abre lista para agregar servicios. → test + prueba funcional
+- [x] **CA2** — Escribir otro nombre y moneda en la nueva cotización los respeta. → test
+- [x] **CA3** — Cambiar la moneda de una alternativa sin servicios → ok; con servicios → 422. → test
+- [x] **CA4** — "Alternativa A" se guarda "Alternativa A"; "viaje a cusco" sigue saliendo "Viaje a Cusco". → test de `TextoFormatoService`
+- [x] **CA5** — "+ Nueva" con nombre vacío crea "Alternativa B" (si ya hay una). → test
+- [x] **CA6** — Error de validación en español y junto al campo. → prueba funcional
+- [x] **CA8** — Tipo de cambio: con uno `dia` registrado, se usa ese; sin ninguno y con SUNAT, se usa
   el `venta` de SUNAT y queda registrado; sin ninguno y sin SUNAT, 422 y no se crea ni la cotización
   ni la alternativa; reenviando con `tipo_cambio_valor`, se crean las dos. → test
-- [ ] **CA7** — Suite completa en verde; `type-check` y `build` sin errores.
+- [x] **CA7** — Suite completa en verde; `type-check` y `build` sin errores.
 
 ## Seguridad y correctitud
-- [ ] Permisos: crear cotización ya exige `cotizaciones.crear`
-- [ ] Aislamiento de tenant: no aplica
-- [ ] Validación de entrada: moneda en (PEN, USD)
-- [ ] Concurrencia: cotización + alternativa en la misma transacción
-- [ ] Dinero: no aplica (sin servicios al cambiar moneda)
-- [ ] Fechas con `HoraPeru`: tipo de cambio "del día" con `HoraPeru`
-- [ ] Tributario: no aplica
-- [ ] `v-html`: no aplica
-- [ ] Migraciones: nueva en `verticals/agencia-viajes/`; `tenants:migrate-verticales`
+- [x] Permisos: crear cotización ya exige `cotizaciones.crear`
+- [x] Aislamiento de tenant: no aplica
+- [x] Validación de entrada: moneda en (PEN, USD)
+- [x] Concurrencia: cotización + alternativa en la misma transacción
+- [x] Dinero: no aplica (sin servicios al cambiar moneda)
+- [x] Fechas con `HoraPeru`: tipo de cambio "del día" con `HoraPeru`
+- [x] Tributario: no aplica
+- [x] `v-html`: no aplica
+- [x] Migraciones: nueva en `verticals/agencia-viajes/`; `tenants:migrate-verticales`
 
 ## Cómo verificar
 ```
@@ -101,7 +101,7 @@ cd admin-start-kit && npm run type-check && npm run build
 ---
 
 ## Resultado
-- **Commits:** ver `git log main..feat/T-033-alternativa-automatica` (un commit: `feat(agencia): …(T-033)`).
+- **Commits:** `4f29161` (Sonnet) y el ajuste de la revisión (selector de moneda oculto en solo lectura; textos de `nueva.vue` con «tú»), rama `feat/T-033-alternativa-automatica`, unida a `main`.
 - **Tests:**
   - `tests/Feature/AgenciaViajes/AlternativaAutomaticaTest.php` (nuevo, 9 tests): CA1, CA2, CA3,
     CA5, CA8 (los tres caminos del tipo de cambio + fuera de rango con confirmación) y CA6 del lado

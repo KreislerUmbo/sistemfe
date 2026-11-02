@@ -188,7 +188,7 @@
                 </span>
                 <i v-if="alt.id === alternativaActivaId" class="fas fa-pen alt-pill-edit" title="Renombrar esta alternativa" @click.stop="renombrarAlternativa(alt)"></i>
                 <!-- T-033: la moneda se cambia solo mientras la alternativa no tenga servicios. -->
-                <select v-if="alt.id === alternativaActivaId && !modificacionInfo" class="form-select form-select-sm py-0 ps-2 pe-4 w-auto"
+                <select v-if="alt.id === alternativaActivaId && !modificacionInfo && !alternativaSoloLectura" class="form-select form-select-sm py-0 ps-2 pe-4 w-auto"
                     style="font-size:.75rem" :value="alt.moneda_cotizacion" :disabled="(alt.items?.length ?? 0) > 0 || cambiandoMoneda"
                     :title="(alt.items?.length ?? 0) > 0 ? 'Con servicios no se cambia la moneda: quítalos o crea otra alternativa' : 'Moneda de la alternativa'"
                     @click.stop @change="cambiarMonedaAlternativa(alt, ($event.target as HTMLSelectElement).value as 'PEN' | 'USD')">

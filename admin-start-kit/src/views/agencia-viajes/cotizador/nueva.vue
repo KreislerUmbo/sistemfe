@@ -89,7 +89,7 @@
                     <button class="btn btn-sm btn-outline-primary" @click="agregarPax(1, cantidadAAgregar)"><i class="fas fa-plus me-1"></i>Infante(s)</button>
                 </div>
                 <div v-if="errores.pasajeros" class="invalid-feedback d-block mb-2">{{ errores.pasajeros }}</div>
-                <div v-else-if="pasajeros.length === 0" class="text-muted small fst-italic mb-2">Agregá al menos un pasajero.</div>
+                <div v-else-if="pasajeros.length === 0" class="text-muted small fst-italic mb-2">Agrega al menos un pasajero.</div>
                 <div class="d-flex flex-column gap-2">
                     <div v-for="(pax, idx) in pasajeros" :key="idx" class="d-flex align-items-center gap-2 border rounded p-2 small">
                         <span class="badge" :class="tipoPorEdad(pax.edad).clase" style="min-width:70px">{{ tipoPorEdad(pax.edad).label }}</span>
@@ -113,7 +113,7 @@
             <div class="card-header bg-white border-bottom d-flex align-items-center gap-2 py-2">
                 <span class="badge bg-primary rounded-pill">3</span>
                 <span class="fw-semibold text-dark">Propuesta</span>
-                <small class="text-muted">(después podés agregar otras alternativas)</small>
+                <small class="text-muted">(después puedes agregar otras alternativas)</small>
             </div>
             <div class="card-body py-3">
                 <div class="row g-3">
@@ -291,10 +291,10 @@ const agregarPax = (edadSugerida: number, cantidad: number = 1) => {
 
 const crear = async () => {
     const faltan: Record<string, string> = {};
-    if (!clienteSeleccionado.value) faltan.cliente_id = 'Seleccioná un cliente.';
-    if (!destinoTexto.value.trim()) faltan.destino = 'Seleccioná un destino.';
-    if (pasajeros.value.length === 0) faltan.pasajeros = 'Agregá al menos un pasajero.';
-    if (pedirTipoCambio.value && !(Number(tipoCambioValor.value) > 0)) faltan.tipo_cambio_valor = 'Escribí el tipo de cambio del día.';
+    if (!clienteSeleccionado.value) faltan.cliente_id = 'Selecciona un cliente.';
+    if (!destinoTexto.value.trim()) faltan.destino = 'Selecciona un destino.';
+    if (pasajeros.value.length === 0) faltan.pasajeros = 'Agrega al menos un pasajero.';
+    if (pedirTipoCambio.value && !(Number(tipoCambioValor.value) > 0)) faltan.tipo_cambio_valor = 'Escribe el tipo de cambio del día.';
     errores.value = faltan;
     if (Object.keys(faltan).length > 0 || !clienteSeleccionado.value) return;
 
