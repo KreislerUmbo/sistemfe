@@ -11,7 +11,7 @@
                 </small>
             </div>
             <router-link to="/agencia-viajes/paquetes" class="btn btn-outline-secondary btn-sm">
-                <i class="fas fa-arrow-left me-1"></i>Volver a Paquetes / Tours
+                <i class="fas fa-arrow-left me-1"></i>Volver a Tours y paquetes
             </router-link>
         </div>
 

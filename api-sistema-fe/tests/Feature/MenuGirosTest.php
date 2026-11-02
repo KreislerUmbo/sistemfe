@@ -5,6 +5,8 @@ namespace Tests\Feature;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\MenuResolver;
+use App\Models\Central\MenuItem;
+use Database\Seeders\AgenciaViajesRolesSeeder;
 use Database\Seeders\MenuItemsSeeder;
 use Illuminate\Support\Facades\DB;
 use Spatie\Permission\Models\Permission;
@@ -98,5 +100,70 @@ class MenuGirosTest extends TestCase
     public function test_creditos_conserva_el_arbol_de_antes(): void
     {
         $this->assertSame($this->fixture('menu_creditos'), $this->arbol($this->superAdmin(), 'creditos', 't-menu-creditos'));
+    }
+
+    // CA1 — el árbol aprobado en la obs. 17 (sin Seguimiento ni Reportes comerciales: los agregan T-051 y T-062).
+    public function test_agencia_ve_el_arbol_de_la_obs_17(): void
+    {
+        $esperado = [
+            'Inicio',
+            ['VENTAS' => ['Clientes', 'Cotizaciones', 'Venta directa']],
+            ['VIAJES' => ['Reservas', 'Salidas operativas', 'Reporte operativo']],
+            ['FINANZAS' => [
+                ['Comprobantes' => ['Mis ventas', 'Notas de crédito/débito']],
+                ['Cobros y anticipos' => ['Ventas por cobrar', 'Anticipos']],
+                ['Caja' => ['Turno activo', 'Historial y reportes']],
+            ]],
+            ['CATÁLOGOS' => ['Tours y paquetes', 'Proveedores', 'Destinos', 'Guías', 'Temporadas']],
+            ['ADMINISTRACIÓN' => [
+                'Configuración de agencia',
+                ['Empresa y sucursales' => ['Datos de la empresa', 'Sucursales']],
+                ['Configuración de caja' => ['Cajas', 'Métodos de pago', 'Conceptos de caja', 'Proveedores de gastos']],
+                ['Series y numeración' => ['Series de comprobantes', 'Códigos de agencia']],
+                ['Usuarios y permisos' => ['Usuarios', 'Roles y permisos']],
+            ]],
+            ['AYUDA' => ['Manuales y videos']],
+        ];
+
+        $this->assertSame($esperado, $this->etiquetas($this->arbol($this->superAdmin(), 'agencia_viajes', 't-menu-agencia')));
+    }
+
+    // Aunque el tenant de agencia fuera el de la plataforma, no vuelven los grupos de retail.
+    public function test_agencia_no_muestra_los_grupos_de_retail_ni_en_el_tenant_plataforma(): void
+    {
+        $raiz = array_column($this->arbol($this->superAdmin(), 'agencia_viajes', 't-menu-plataforma'), 'label');
+
+        foreach (['Comercial', 'Caja', 'Configuración', 'Accesos', 'Capacitación', 'Portal web', 'Agencia de viajes'] as $oculto) {
+            $this->assertNotContains($oculto, $raiz);
+        }
+    }
+
+    // CA2 — el vendedor ve solo lo que sus permisos permiten; los grupos sin hijos visibles desaparecen.
+    public function test_vendedor_de_agencia_ve_ventas_viajes_y_su_caja_sin_grupos_vacios(): void
+    {
+        (new AgenciaViajesRolesSeeder())->run();
+        $vendedor = User::factory()->create();
+        $vendedor->assignRole('Vendedor de agencia');
+
+        $arbol = $this->etiquetas($this->arbol($vendedor->fresh(), 'agencia_viajes', 't-menu-agencia'));
+
+        $this->assertSame([
+            'Inicio',
+            ['VENTAS' => ['Cotizaciones', 'Venta directa']],
+            ['VIAJES' => ['Reservas', 'Salidas operativas', 'Reporte operativo']],
+            ['FINANZAS' => [['Caja' => ['Turno activo']]]],
+        ], $arbol);
+    }
+
+    // CA4
+    public function test_el_seeder_es_idempotente(): void
+    {
+        $columnas = ['codigo', 'parent_id', 'label', 'orden', 'giros_excluidos'];
+        $antes = MenuItem::orderBy('codigo')->get($columnas)->toArray();
+
+        (new MenuItemsSeeder())->run();
+
+        $this->assertSame($antes, MenuItem::orderBy('codigo')->get($columnas)->toArray());
+        $this->assertSame(MenuItem::count(), MenuItem::distinct('codigo')->count('codigo'));
     }
 }
