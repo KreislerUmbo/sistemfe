@@ -78,7 +78,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 | T-060 | CLI + AGE | CRM C5: la ficha del cliente con preferencias del viajero y línea de tiempo | por hacer | T-050, T-051 | |
 | T-061 | CLI + AGE | CRM: pasar el trabajo abierto de un usuario que se va | por hacer | T-051 | |
 | T-062 | AGE | CRM C6b: reportes de conversión, origen, vendedor y motivos | por hacer | T-052, T-059 | |
-| T-078 | AGE + PLA | Roles de Agencia (los 4 del seeder) sin `list_client`, `list_advance` ni `register_recurso`: con el menú de T-063 no ven Clientes, Anticipos ni Manuales; el dueño no puede dárselos (`EscaladaPermisos`). Agregarlos en `AgenciaViajesRolesSeeder` y aplicarlo a dakamu. Reparto por rol: confirmar con el usuario | por hacer | T-063 | |
+| T-078 | AGE + PLA | Roles de Agencia (los 4 del seeder) sin `list_client`, `list_advance` ni `register_recurso`: con el menú de T-063 no ven Clientes, Anticipos ni Manuales; el dueño no puede dárselos (`EscaladaPermisos`). Agregarlos en `AgenciaViajesRolesSeeder` y aplicarlo a dakamu. Reparto por rol confirmado (01-nov) | por hacer | T-063 | |
 | T-065 | CLI + VEN | Varias direcciones por cliente y elegir la dirección al emitir (H61) | por hacer | T-064 | |
 
 ## Por analizar

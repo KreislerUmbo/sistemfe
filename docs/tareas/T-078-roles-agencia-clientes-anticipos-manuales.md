@@ -5,7 +5,7 @@
 | **Módulo** | AGE + PLA |
 | **Depende de** | T-063 (menú de Agencia) |
 | **Reglas** | — |
-| **Decisiones** | Del usuario, 01-nov-2026: abrir tarea (no dejarlo en «Por analizar»). Reparto por rol: **propuesta, confirmar con el usuario antes de construir** (ver Alcance) |
+| **Decisiones** | Del usuario, 01-nov-2026: abrir tarea (no dejarlo en «Por analizar»); reparto por rol de la tabla de Alcance **confirmado**; `delete_client` para nadie |
 | **Rama** | `fix/T-078-roles-agencia-permisos` |
 
 ## Contexto
@@ -20,7 +20,7 @@ El dueño del negocio **no puede arreglarlo solo** desde Accesos → Roles y per
 por tenant. Por eso va al seeder, que es la fuente de verdad de los roles de Agencia.
 
 ## Alcance
-- `AgenciaViajesRolesSeeder::roles()`: agregar los permisos según este reparto (propuesta):
+- `AgenciaViajesRolesSeeder::roles()`: agregar los permisos según este reparto (confirmado por el usuario):
 
   | Rol | Agrega |
   |---|---|
