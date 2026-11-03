@@ -72,7 +72,7 @@ class DashboardService
             $bloques['proximos'] = $this->proximos($hoy);
         }
         if ($agencia && $usuario->can('edit_user')) {
-            $bloques['trabajo_sin_dueno'] = $this->trabajoSinDueno();
+            $bloques['trabajo_sin_dueno'] = $this->trabajoSinDueno($usuario->hasRole('Super-Admin'));
         }
 
         return [
@@ -328,11 +328,13 @@ class DashboardService
 
     /**
      * T-061: usuarios inactivos o eliminados que todavía tienen cotizaciones abiertas o acciones
-     * pendientes a su nombre (nadie las ve en sus pendientes). Una sola consulta agrupada.
+     * pendientes a su nombre (nadie las ve en sus pendientes). Una sola consulta agrupada. Un
+     * Super-Admin solo se le muestra a otro Super-Admin: a los demás el traspaso les respondería
+     * 403 (TraspasoTrabajoController::traspasar()).
      *
      * @return list<array<string, mixed>>
      */
-    private function trabajoSinDueno(): array
+    private function trabajoSinDueno(bool $conSuperAdmin): array
     {
         $cotizaciones = Cotizacion::abiertas()->toBase()
             ->selectRaw('vendedor_id as usuario_id, count(*) as cotizaciones, 0 as acciones')
@@ -345,6 +347,11 @@ class DashboardService
         return DB::query()->fromSub($cotizaciones->unionAll($acciones), 'abierto')
             ->join('users', 'users.id', '=', 'abierto.usuario_id')
             ->where(static fn (QueryBuilder $q) => $q->where('users.state', User::STATE_INACTIVO)->orWhereNotNull('users.deleted_at'))
+            ->when(! $conSuperAdmin, static fn (QueryBuilder $q) => $q->whereNotExists(static fn (QueryBuilder $r) => $r
+                ->from('model_has_roles')->join('roles', 'roles.id', '=', 'model_has_roles.role_id')
+                ->whereColumn('model_has_roles.model_id', 'users.id')
+                ->where('model_has_roles.model_type', (new User())->getMorphClass())
+                ->where('roles.name', 'Super-Admin')))
             ->groupBy('users.id', 'users.name', 'users.surname', 'users.deleted_at')
             ->orderBy('users.name')->orderBy('users.id')
             ->selectRaw('users.id, users.name, users.surname, users.deleted_at,

@@ -237,6 +237,20 @@ class TraspasoTrabajoTest extends TestCase
         $this->assertArrayNotHasKey('trabajo_sin_dueno', $this->inicio($this->admin));
     }
 
+    public function test_aviso_no_muestra_un_super_admin_a_quien_no_lo_es(): void
+    {
+        Role::firstOrCreate(['guard_name' => 'api', 'name' => 'Super-Admin']);
+        $soporte = $this->usuario('Soporte Umbo', extra: ['state' => User::STATE_INACTIVO]);
+        $soporte->assignRole('Super-Admin');
+        $this->cotizacion($soporte, $this->cliente());
+
+        $this->assertNotContains($soporte->id, collect($this->inicio($this->admin)['trabajo_sin_dueno'])->pluck('usuario_id'));
+
+        $otroSoporte = $this->usuario('Soporte Dos', ['edit_user']);
+        $otroSoporte->assignRole('Super-Admin');
+        $this->assertContains($soporte->id, collect($this->inicio($otroSoporte)['trabajo_sin_dueno'])->pluck('usuario_id'));
+    }
+
     // ── CA4: rechazos ────────────────────────────────────────────────
 
     public function test_destino_invalido_u_origen_sin_trabajo_da_422(): void

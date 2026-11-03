@@ -169,6 +169,12 @@ Crear un usuario vendedor de prueba para desactivarlo; no desactivar usuarios ex
     de Eloquent). No hace falta `lockForUpdate`: la condición se re-evalúa fila a fila en el
     propio UPDATE.
   - El aviso de Inicio vacío no cuenta como bloque para el mensaje «Bienvenido» (`sinBloques`).
+  - Ajustes de la revisión: la oferta al guardar solo sale si el usuario **pasa** a Inactivo (ya
+    inactivo → no se repregunta; para eso está el aviso de Inicio); el aviso de Inicio no muestra
+    un Super-Admin a quien no lo es (el traspaso le daría 403; test
+    `test_aviso_no_muestra_un_super_admin_a_quien_no_lo_es`); y el comentario de
+    `traspasar()` aclara que una aceptación confirmada en el mismo instante que el UPDATE puede no
+    verse (READ COMMITTED), ventana aceptada.
   - Al desactivar, el título del aviso es fijo («Usuario guardado»): el mensaje del backend al
     editar dice «Usuario creado con exito» (ver Hallazgos).
 

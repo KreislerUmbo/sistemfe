@@ -50,8 +50,10 @@ class TraspasoTrabajoService
 
     /**
      * Todo en una transacción. La condición de «abierta» y de «pendiente» va dentro de cada
-     * UPDATE (no en una lista de ids leída antes): si mientras tanto alguien acepta una cotización
-     * o marca hecha una acción, el UPDATE ya no la toca.
+     * UPDATE (no en una lista de ids leída antes): si alguien aceptó una cotización o marcó hecha
+     * una acción antes de que corra el UPDATE, ya no la toca. Una aceptación que se confirma en el
+     * mismo instante puede no verse (READ COMMITTED: el EXISTS usa la foto del inicio de la
+     * sentencia); la ventana es de milisegundos y no justifica bloquear las alternativas.
      *
      * @return array{cotizaciones: int, acciones: int, clientes: int}
      */

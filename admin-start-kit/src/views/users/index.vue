@@ -508,8 +508,9 @@ const store = async () => {
                 "warning",
             );
         } else {
-            // T-061: guardado como Inactivo → se ofrece pasar su trabajo (antes de que el cierre limpie el form).
-            const desactivado = user_selected.value && Number(state.value) === 2
+            // T-061: recién pasado a Inactivo → se ofrece pasar su trabajo (antes de que el cierre limpie el form).
+            // Si ya estaba inactivo no se vuelve a preguntar: para eso está el aviso de Inicio.
+            const desactivado = user_selected.value && Number(state.value) === 2 && Number(user_selected.value.state) !== 2
                 ? { id: user_selected.value.id, nombre: `${name.value} ${surname.value}`.trim() } : null;
 
             ModalRegisterUser.value = false; // Cerrar el modal
