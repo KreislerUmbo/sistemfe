@@ -324,7 +324,14 @@ export type Cotizacion = {
   // CotizacionController::index(); no asumir que otros endpoints lo traen.
   // T-074 — alternativa reservada y código de su reserva (solo en el listado).
   alternativa_reservada?: { nombre: string; reserva_id: number | null; reserva_codigo: string | null } | null;
-  estado_resumen?: 'borrador' | 'enviada' | 'vencida' | 'reservada' | 'anulada' | 'descartada';
+  estado_resumen?: 'borrador' | 'enviada' | 'vencida' | 'reservada' | 'anulada' | 'descartada' | 'perdida';
+  // T-052 (CRM C3) — motivo de la pérdida o, opcional, de la ganancia; perdida_en (UTC) dice si
+  // está cerrada como perdida. resultado_motivo y perdida_por (objeto) solo vienen en show().
+  resultado_motivo_id?: number | null;
+  resultado_detalle?: string | null;
+  perdida_en?: string | null;
+  resultado_motivo?: { id: number; nombre: string; tipo: 'ganada' | 'perdida' } | null;
+  perdida_por?: { id: number; name: string; surname?: string | null } | null;
 };
 
 export type Cotizaciones = {

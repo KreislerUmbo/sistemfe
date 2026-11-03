@@ -19,14 +19,34 @@
                         <i class="fas fa-tasks me-1"></i>Próxima acción: {{ proximaAccion.tipo_etiqueta.toLowerCase() }} el
                         {{ formatDiaCorto(proximaAccion.fecha) }} ({{ proximaAccion.responsable.nombre.split(' ')[0] }})
                     </div>
+                    <!-- T-052: cerrada como perdida (motivo y detalle como texto, nunca v-html). -->
+                    <div v-if="cotizacionPerdida" class="small text-danger mb-2">
+                        <i class="fas fa-circle-xmark me-1"></i>Perdida: {{ cotizacion.resultado_motivo?.nombre ?? 'sin motivo' }}<template v-if="cotizacion.resultado_detalle"> — {{ cotizacion.resultado_detalle }}</template>
+                        · {{ formatFechaHora(cotizacion.perdida_en) }}<template v-if="cotizacion.perdida_por"> ({{ cotizacion.perdida_por.name }})</template>
+                    </div>
                 </div>
-                <router-link v-if="modificacionInfo" :to="`/agencia-viajes/reservas/${modificacionInfo.reserva_id}`" class="btn btn-outline-secondary btn-sm">
-                    <i class="fas fa-arrow-left me-2"></i>Volver a la reserva
-                </router-link>
-                <router-link v-else to="/agencia-viajes/cotizador" class="btn btn-outline-secondary btn-sm">
-                    <i class="fas fa-arrow-left me-2"></i>Volver
-                </router-link>
+                <div class="d-flex flex-wrap gap-2">
+                    <template v-if="puedeCambiarResultado">
+                        <button v-if="cotizacionPerdida" class="btn btn-outline-primary btn-sm" :disabled="reabriendo" @click="reabrirCotizacion">
+                            <span v-if="reabriendo" class="spinner-border spinner-border-sm me-1"></span>
+                            <i v-else class="fas fa-rotate-left me-1"></i>Reabrir
+                        </button>
+                        <button v-else class="btn btn-outline-danger btn-sm" @click="cerrandoComoPerdida = true">
+                            <i class="fas fa-circle-xmark me-1"></i>Cerrar como perdida
+                        </button>
+                    </template>
+                    <router-link v-if="modificacionInfo" :to="`/agencia-viajes/reservas/${modificacionInfo.reserva_id}`" class="btn btn-outline-secondary btn-sm">
+                        <i class="fas fa-arrow-left me-2"></i>Volver a la reserva
+                    </router-link>
+                    <router-link v-else to="/agencia-viajes/cotizador" class="btn btn-outline-secondary btn-sm">
+                        <i class="fas fa-arrow-left me-2"></i>Volver
+                    </router-link>
+                </div>
             </div>
+            <CerrarComoPerdidaModal v-if="cerrandoComoPerdida" :cotizacion-id="cotizacion.id" :codigo="cotizacion.codigo"
+                @cerrar="cerrandoComoPerdida = false" @cerrada="onResultadoCambiado('Cotización cerrada como perdida.')" />
+            <AceptarAlternativaModal v-if="aceptandoAlternativa && alternativaActiva" :alternativa-nombre="alternativaActiva.nombre"
+                :procesando="marcandoAceptada" @cerrar="aceptandoAlternativa = false" @confirmar="confirmarAceptada" />
             <div class="d-flex flex-wrap align-items-center gap-2">
                 <span class="badge bg-light text-dark border fw-normal"><i class="fas fa-map-marker-alt me-1 text-primary"></i>{{ cotizacion.destino }}</span>
                 <span class="badge bg-light text-dark border fw-normal"><i class="fas fa-calendar me-1 text-primary"></i>{{ textoFechasViaje }}</span>
@@ -205,7 +225,7 @@
             </span>
             <!-- Punto F — siempre visible; deshabilitado con motivo al llegar al tope,
                  en vez de desaparecer sin explicación. -->
-            <span v-if="!modificacionInfo" class="badge rounded-pill px-3 py-2"
+            <span v-if="!modificacionInfo && !cotizacionPerdida" class="badge rounded-pill px-3 py-2"
                 :class="alcanzoLimiteAlternativas ? 'bg-light text-muted border opacity-50' : 'bg-light text-dark border'"
                 :style="alcanzoLimiteAlternativas ? 'cursor:not-allowed;border-style:dashed' : 'cursor:pointer;border-style:dashed'"
                 :title="alcanzoLimiteAlternativas ? 'Máximo 5 alternativas por cotización' : ''"
@@ -778,7 +798,7 @@
                         </div>
 
                         <div class="mt-3 d-flex flex-column gap-2">
-                            <template v-if="alternativaActiva.estado !== 'aceptada' && !modificacionInfo">
+                            <template v-if="alternativaActiva.estado !== 'aceptada' && !modificacionInfo && !cotizacionPerdida">
                                 <button class="btn btn-success btn-sm w-100" @click="marcarAceptada" :disabled="(alternativaActiva.items?.length ?? 0) === 0 || marcandoAceptada">
                                     <span v-if="marcandoAceptada" class="spinner-border spinner-border-sm me-1"></span>
                                     <i v-else class="fas fa-check me-1"></i>Aceptado por cliente
@@ -788,7 +808,7 @@
                                 </small>
                             </template>
 
-                            <button v-if="!modificacionInfo" class="btn btn-outline-primary btn-sm w-100" @click="duplicarAlternativa"
+                            <button v-if="!modificacionInfo && !cotizacionPerdida" class="btn btn-outline-primary btn-sm w-100" @click="duplicarAlternativa"
                                 :disabled="duplicando || alcanzoLimiteAlternativas" :title="alcanzoLimiteAlternativas ? 'Máximo 5 alternativas por cotización' : ''">
                                 <span v-if="duplicando" class="spinner-border spinner-border-sm me-1"></span>
                                 <i v-else class="fas fa-copy me-1"></i>Duplicar alternativa
@@ -1413,6 +1433,8 @@ import CalculadoraTipoCambioModal from '@/components/AgenciaViajes/CalculadoraTi
 import EnviarAlternativa from '@/components/AgenciaViajes/EnviarAlternativa.vue';
 import HistorialActividadesCotizacion from '@/components/AgenciaViajes/HistorialActividadesCotizacion.vue';
 import AccionesPendientes from '@/components/Clientes/AccionesPendientes.vue';
+import CerrarComoPerdidaModal from '@/components/AgenciaViajes/CerrarComoPerdidaModal.vue';
+import AceptarAlternativaModal from '@/components/AgenciaViajes/AceptarAlternativaModal.vue';
 import ModificacionDiferenciaPanel from '@/components/AgenciaViajes/ModificacionDiferenciaPanel.vue';
 import PenalidadPasajeroModal from '@/components/AgenciaViajes/PenalidadPasajeroModal.vue';
 import { useModificacionReserva, mensajeDeError, centavosATexto, motivoDePenalidad, textoMonto } from '@/composables/agencia-viajes/useModificacionReserva';
@@ -1905,6 +1927,35 @@ const historialRef = ref<InstanceType<typeof HistorialActividadesCotizacion> | n
 // T-051: próximas acciones de la cotización (la llamada propuesta al enviar, las agendadas).
 const accionesRef = ref<InstanceType<typeof AccionesPendientes> | null>(null);
 const proximaAccion = computed(() => accionesRef.value?.proxima ?? null);
+// T-052 (CRM C3): «Cerrar como perdida» / «Reabrir». No aplica a una modificación de reserva ni a
+// una cotización ya vendida (aceptada o reemplazada); el backend lo vuelve a revisar.
+const cotizacionPerdida = computed(() => !!cotizacion.value?.perdida_en);
+const puedeCambiarResultado = computed(() => !modificacionInfo.value
+    && !(cotizacion.value?.alternativas ?? []).some((a) => ['aceptada', 'reemplazada'].includes(a.estado)));
+const cerrandoComoPerdida = ref(false);
+const reabriendo = ref(false);
+
+const onResultadoCambiado = async (mensaje: string) => {
+    cerrandoComoPerdida.value = false;
+    await cargarCotizacion();
+    historialRef.value?.recargar();
+    accionesRef.value?.recargar();
+    toast.success(mensaje);
+};
+
+const reabrirCotizacion = async () => {
+    if (!cotizacion.value) return;
+    reabriendo.value = true;
+    try {
+        await cotizacionService.reabrir(cotizacion.value.id);
+        await onResultadoCambiado('Cotización reabierta: las alternativas volvieron a su estado.');
+    } catch (error: any) {
+        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo reabrir la cotización', 'error');
+    } finally {
+        reabriendo.value = false;
+    }
+};
+
 const onAlternativaEnviada = (estado: string, fechaVencimiento?: string | null) => {
     const alternativa = cotizacion.value?.alternativas?.find((a: any) => a.id === alternativaActivaId.value);
     if (alternativa && estado) alternativa.estado = estado as typeof alternativa.estado;
@@ -2145,22 +2196,21 @@ const marcandoAceptada = ref(false);
 // resto de acciones destructivas/irreversibles del cotizador, que sí
 // confirman antes. Aceptar es igual de irreversible (crea una Reserva
 // real, descarta las demás alternativas) — mismo criterio.
-const marcarAceptada = async () => {
+// T-052: la confirmación es un modal propio (AceptarAlternativaModal) con la pregunta opcional
+// «¿Qué decidió la venta?».
+const aceptandoAlternativa = ref(false);
+const marcarAceptada = () => {
     if (!alternativaActiva.value) return;
+    aceptandoAlternativa.value = true;
+};
 
-    const confirmacion = await (Swal as TVueSwalInstance).fire({
-        title: '¿Aceptar esta alternativa?',
-        text: 'Se genera una reserva y se descartan las demás alternativas de esta cotización — no se puede deshacer.',
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonText: 'Sí, aceptar',
-        cancelButtonText: 'Cancelar',
-    });
-    if (!confirmacion.isConfirmed) return;
+const confirmarAceptada = async (resultado: { resultado_motivo_id: number | null; resultado_detalle: string | null }) => {
+    if (!alternativaActiva.value) return;
 
     marcandoAceptada.value = true;
     try {
-        const res = await reservaService.aceptarAlternativa(alternativaActiva.value.id);
+        const res = await reservaService.aceptarAlternativa(alternativaActiva.value.id, undefined, resultado);
+        aceptandoAlternativa.value = false;
         if (res.alerta_cupo_excedido) {
             await (Swal as TVueSwalInstance).fire('Cupo excedido', 'La salida de mayorista elegida ya superó su cupo total — la reserva se creó igual, es solo un aviso.', 'warning');
         }

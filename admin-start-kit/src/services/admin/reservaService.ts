@@ -26,9 +26,15 @@ export const reservaService = {
   // Aceptar una alternativa (AlternativaController::update() en 11b ya NO
   // dispara esto — este es el endpoint nuevo de 11c). pasajeroCatalogoIds
   // es opcional y alineado por orden con cotizacion_pasajeros.
-  async aceptarAlternativa(alternativaId: number, pasajeroCatalogoIds?: Array<number | null>) {
+  // T-052: resultado = por qué se ganó (opcional, motivo de tipo 'ganada').
+  async aceptarAlternativa(
+    alternativaId: number,
+    pasajeroCatalogoIds?: Array<number | null>,
+    resultado?: { resultado_motivo_id: number | null; resultado_detalle?: string | null }
+  ) {
     const response = await httpClient.post(`/alternativas/${alternativaId}/aceptar`, {
-      pasajero_catalogo_ids: pasajeroCatalogoIds ?? []
+      pasajero_catalogo_ids: pasajeroCatalogoIds ?? [],
+      ...(resultado ?? {})
     })
     return response.data as ReservaDetalleResponse & { code: number; message: string }
   },

@@ -214,6 +214,7 @@
               <div class="fs-4 fw-bold mt-1">{{ b.cotizaciones.creadas }}</div>
               <small class="text-muted d-block">{{ b.cotizaciones.reservadas }} reservada(s) · {{ b.cotizaciones.conversion }} % de conversión</small>
               <small class="text-muted d-block">{{ b.cotizaciones.enviadas }} enviada(s) esperando respuesta · {{ b.cotizaciones.borrador }} en borrador</small>
+              <small v-if="b.cotizaciones.perdidas" class="text-muted d-block">{{ b.cotizaciones.perdidas }} perdida(s)</small>
             </div>
           </router-link>
         </div>
