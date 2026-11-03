@@ -798,7 +798,9 @@
                         </div>
 
                         <div class="mt-3 d-flex flex-column gap-2">
-                            <template v-if="alternativaActiva.estado !== 'aceptada' && !modificacionInfo && !cotizacionPerdida">
+                            <!-- Solo en borrador o enviada, la misma regla que ReservaController::alternativaAceptable():
+                                 una descartada o reemplazada respondía 422. -->
+                            <template v-if="['borrador', 'enviada'].includes(alternativaActiva.estado) && !modificacionInfo && !cotizacionPerdida">
                                 <button class="btn btn-success btn-sm w-100" @click="marcarAceptada" :disabled="(alternativaActiva.items?.length ?? 0) === 0 || marcandoAceptada">
                                     <span v-if="marcandoAceptada" class="spinner-border spinner-border-sm me-1"></span>
                                     <i v-else class="fas fa-check me-1"></i>Aceptado por cliente
@@ -837,7 +839,9 @@
         </div>
 
         <div v-else-if="cotizacion" class="text-center text-muted py-5">
-            Esta cotización todavía no tiene alternativas — creá la primera con el botón "+ Nueva" de arriba.
+            <!-- T-052: perdida, "+ Nueva" no se muestra (el backend responde 422). -->
+            <template v-if="cotizacionPerdida">Esta cotización está cerrada como perdida y no tiene alternativas — reábrela para crear la primera.</template>
+            <template v-else>Esta cotización todavía no tiene alternativas — creá la primera con el botón "+ Nueva" de arriba.</template>
         </div>
 
         <!-- ═══ DRAWER — biblioteca / comparador de mayoristas (Punto A) ═══ -->

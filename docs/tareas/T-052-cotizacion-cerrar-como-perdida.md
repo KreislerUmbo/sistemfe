@@ -160,8 +160,12 @@ Prueba funcional: agencia-demo, `admin@agencia-demo.test` (memoria `reference_ag
 
 ## Hallazgos fuera de alcance
 - `type-check` en `main` da **47** errores, no 46 (comparado por archivo: T-052 no agrega ninguno).
-- `editar.vue`: «Aceptado por cliente» ya se mostraba antes de T-052 en alternativas
-  `descartada`/`reemplazada` (condición `estado !== 'aceptada'`); el backend responde 422.
-- `editar.vue` (~250): el botón de crear la primera alternativa (cotización sin alternativas) sigue
-  visible cuando está perdida; el backend responde 422 «Reabre la cotización primero».
+- ~~`editar.vue`: «Aceptado por cliente» se mostraba en alternativas `descartada`/`reemplazada`~~
+  → arreglado en la revisión de Opus: solo en `borrador`/`enviada`, la regla de
+  `ReservaController::alternativaAceptable()`.
+- ~~`editar.vue`: cotización perdida sin alternativas~~ → «+ Nueva» ya estaba oculto; el texto vacío
+  invitaba a usarlo. Arreglado en la revisión: pide reabrirla.
+- Carrera sin arreglar (muy improbable): «otro medio» (`CotizacionActividadController`) pasa la
+  alternativa a `enviada` sin bloquear la cotización; si coincide con «Cerrar como perdida» puede
+  quedar una alternativa enviada en una cotización perdida.
 - Datos de agencia-demo: la prueba funcional dejó CDKM-1126-0000004 aceptada con la reserva 32.
