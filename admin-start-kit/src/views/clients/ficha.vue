@@ -241,6 +241,20 @@
               :to="{ name: 'creditos.nuevo', query: { cliente: clienteId } }">
               <i class="fas fa-plus me-2"></i>Nuevo crédito para este cliente
             </router-link>
+            <!-- T-059 (CRM C4, solo Agencia): origen del primer contacto. Lo llena la primera consulta
+                 con origen; acá se corrige. Viaja con «Guardar cambios». -->
+            <div v-if="contexto.giro === 'agencia_viajes' && origenes.length" class="card border-0 shadow-sm mb-0">
+              <div class="card-body py-2">
+                <label class="form-label mb-1 small fw-semibold text-secondary" for="ficha-origen">¿Por dónde llegó?</label>
+                <select id="ficha-origen" v-model="origenContactoId" class="form-select form-select-sm"
+                  :class="{ 'is-invalid': errores.origen_contacto_id }" :disabled="!puedeEditar">
+                  <option :value="null">Sin indicar</option>
+                  <option v-for="o in origenesVisibles" :key="o.id" :value="o.id">{{ o.nombre }}{{ o.activo ? '' : ' (desactivado)' }}</option>
+                </select>
+                <div v-if="errores.origen_contacto_id" class="invalid-feedback">{{ errores.origen_contacto_id }}</div>
+                <div class="form-text small">El de su primer contacto; cada cotización guarda el suyo.</div>
+              </div>
+            </div>
             <!-- T-051 (CRM C2, solo Agencia por ahora): todas las acciones pendientes del cliente. -->
             <div v-if="contexto.giro === 'agencia_viajes' && clienteId" class="card border-0 shadow-sm mb-0">
               <div class="card-body py-2">
@@ -284,6 +298,7 @@ import { usePermisosCredito } from '@/composables/creditos/usePermisosCredito'
 import { interpretarErrorCredito } from '@/composables/creditos/errorCredito'
 import { clienteService, type ContextoCliente } from '@/services/admin/clienteService'
 import { creditoService } from '@/services/admin/creditoService'
+import { crmOrigenContactoService, type OrigenContacto } from '@/services/admin/crmOrigenContactoService'
 import { guardarCliente } from '@/helpers/clientes/guardarCliente'
 import { aPayload, erroresDeValidacion, formDesdeCliente, formVacio, nombreCompleto, type FormCliente } from '@/helpers/clientes/formCliente'
 import { formatoFecha, formatoSoles } from '@/helpers/creditos/formato'
@@ -326,6 +341,11 @@ const erroresLimites = ref<Record<string, string>>({})
 const guardandoLimites = ref(false)
 const creditos = ref<FilaCredito[]>([])
 const documentos = ref<InstanceType<typeof DocumentosCliente> | null>(null)
+// T-059 — origen del primer contacto (Agencia). Sin la lista (sin permiso) no se muestra ni se envía.
+const origenes = ref<OrigenContacto[]>([])
+const origenContactoId = ref<number | null>(null)
+/** Los activos y, si el cliente tiene uno desactivado, también ese. */
+const origenesVisibles = computed(() => origenes.value.filter((o) => o.activo || o.id === origenContactoId.value))
 
 const puedeEditar = computed(() => puede(clienteId.value ? 'edit_client' : 'register_client'))
 const asesorCobra = computed(() => cartera.asesor_cobra)
@@ -372,10 +392,15 @@ async function cargar() {
       tareas.push(clienteService.obtener(clienteId.value).then((c) => {
         form.value = formDesdeCliente(c)
         datosCliente.value = { state: Number(c.state) }
+        origenContactoId.value = c.origen_contacto_id ?? null
       }))
       if (contexto.value.creditos) tareas.push(cargarCreditos())
     } else {
       form.value = formVacio()
+      origenContactoId.value = null
+    }
+    if (contexto.value.giro === 'agencia_viajes') {
+      tareas.push(crmOrigenContactoService.listar().then((r) => { origenes.value = r.origenes }).catch(() => undefined))
     }
     if (contexto.value.creditos && puede('creditos.cartera.asignar')) {
       tareas.push(creditoService.usuariosCartera().then((u) => { usuarios.value = u }))
@@ -406,6 +431,7 @@ async function guardar() {
   try {
     const payload = aPayload(form.value, { tributarios: !contexto.value.creditos })
     if (!clienteId.value && contexto.value.creditos && cartera.asesor_id) payload.asesor_id = cartera.asesor_id
+    if (contexto.value.giro === 'agencia_viajes' && origenes.value.length) payload.origen_contacto_id = origenContactoId.value
 
     const resultado = await guardarCliente<{ id: number }>(payload, clienteId.value)
     if (!resultado.ok) return

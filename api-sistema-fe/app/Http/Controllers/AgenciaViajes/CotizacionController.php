@@ -9,18 +9,16 @@ use App\Models\AgenciaViajes\AlternativaItem;
 use App\Models\AgenciaViajes\Cotizacion;
 use App\Models\AgenciaViajes\CotizacionPasajero;
 use App\Models\AgenciaViajes\Reserva;
-use App\Models\AgenciaViajes\ConfiguracionAgencia;
-use App\Models\AgenciaViajes\ConfiguracionCodigo;
 use App\Models\Client\Client;
 use App\Services\AgenciaViajes\AlternativaCreacionException;
-use App\Services\AgenciaViajes\AlternativaCreacionService;
-use App\Services\AgenciaViajes\CodigoGeneradorService;
+use App\Services\AgenciaViajes\CotizacionCreacionService;
 use App\Services\AgenciaViajes\RecalculoPorPersonaService;
 use App\Services\AgenciaViajes\TourLineaService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
 
 // Header de cotización — plan-modulo-cotizaciones-reservas.md §3.1. El
 // código ({prefijo}-{año}-{correlativo}) lo genera el propio modelo
@@ -44,13 +42,13 @@ class CotizacionController extends Controller
         'moneda_cotizacion' => 'moneda',
         'tipo_cambio_valor' => 'tipo de cambio',
         'tipo_cambio_confirmado' => 'confirmación del tipo de cambio',
+        'origen_contacto_id' => 'origen del contacto',
     ];
 
     public function __construct(
         private RecalculoPorPersonaService $recalculoPorPersona,
-        private CodigoGeneradorService $codigoGenerador,
         private TourLineaService $tourLinea,
-        private AlternativaCreacionService $alternativaCreacion,
+        private CotizacionCreacionService $cotizacionCreacion,
     ) {
     }
 
@@ -65,7 +63,12 @@ class CotizacionController extends Controller
         // donde corresponde (el listado), nunca en show()/acciones internas.
         // delCotizador() — la cotización de soporte de una venta directa no
         // es una cotización comercial (ver Cotizacion::$origen).
-        $query = Cotizacion::propias()->delCotizador()->with(array_merge(['cliente'], Cotizacion::RELACIONES_ESTADO_RESUMEN))->withCount('alternativas');
+        // T-059 — origenContacto: columna «Origen» del listado.
+        $query = Cotizacion::propias()->delCotizador()->with(array_merge(['cliente', 'origenContacto:id,nombre'], Cotizacion::RELACIONES_ESTADO_RESUMEN))->withCount('alternativas');
+
+        if ($request->filled('origen_contacto_id')) {
+            $query->where('origen_contacto_id', (int) $request->get('origen_contacto_id'));
+        }
 
         if ($request->filled('search')) {
             $search = $request->get('search');
@@ -166,19 +169,19 @@ class CotizacionController extends Controller
             'moneda_cotizacion' => 'nullable|in:PEN,USD',
             'tipo_cambio_valor' => 'nullable|numeric|min:0',
             'tipo_cambio_confirmado' => 'nullable|boolean',
+            // T-059 — opcional; solo un origen activo.
+            'origen_contacto_id' => ['nullable', 'integer', Rule::exists('crm_origenes_contacto', 'id')->where('activo', true)],
         ], self::ATRIBUTOS);
 
         if ($validator->fails()) {
             return $this->respuestaValidacionEs($validator);
         }
 
-        $validado = $validator->validated();
-        [$edadMaxInfante, $edadMaxNino] = $this->umbralesEdad();
-        $moneda = $validado['moneda_cotizacion'] ?? (ConfiguracionAgencia::first()?->moneda_cotizacion_default ?: 'PEN');
         $usuarioId = $request->user()?->id ?? auth()->id();
 
         try {
-            $cotizacion = DB::transaction(fn () => $this->crearCotizacionConAlternativa($validado, $moneda, $usuarioId, $edadMaxInfante, $edadMaxNino));
+            // T-059 — el mismo camino que «Nueva consulta» (CotizacionCreacionService).
+            $cotizacion = $this->cotizacionCreacion->crear($validator->validated(), $usuarioId);
         } catch (AlternativaCreacionException $e) {
             // La transacción ya deshizo la cotización: nada a medias.
             return response()->json(['code' => 422, 'message' => $e->getMessage()] + $e->extra, 422);
@@ -191,48 +194,6 @@ class CotizacionController extends Controller
             'message' => 'Cotización creada correctamente',
             'cotizacion' => $cotizacion,
         ]);
-    }
-
-    // T-033 — cuerpo de store(), dentro de su transacción: cabecera, pasajeros y "Alternativa A".
-    private function crearCotizacionConAlternativa(array $validado, string $moneda, ?int $usuarioId, int $edadMaxInfante, int $edadMaxNino): Cotizacion
-    {
-        $codigo = $this->codigoGenerador->generar('cotizacion');
-        $prefijo = ConfiguracionCodigo::where('tipo', 'cotizacion')->value('prefijo');
-
-        $cotizacion = Cotizacion::create([
-            'cliente_id' => $validado['cliente_id'],
-            'codigo_prefijo' => $prefijo,
-            'codigo' => $codigo,
-            // Fase 1b (§3.3) — dueño real para el scope de fila
-            // (EscopablePorVendedor). auth()->id() puede ser null en
-            // contexto de consola/tinker (nunca en una request real,
-            // que ya pasó auth:api) — nullable acepta ambos casos.
-            'vendedor_id' => auth()->id(),
-            'destino' => $validado['destino'],
-            'fecha_viaje_desde' => $validado['fecha_viaje_desde'] ?? null,
-            'fecha_viaje_hasta' => $validado['fecha_viaje_hasta'] ?? null,
-        ]);
-
-        foreach ($validado['pasajeros'] as $pax) {
-            CotizacionPasajero::create([
-                'cotizacion_id' => $cotizacion->id,
-                'edad' => $pax['edad'],
-                'tipo_pax' => $this->derivarTipoPax((int) $pax['edad'], $edadMaxInfante, $edadMaxNino),
-                'residencia' => $pax['residencia'] ?? CotizacionPasajero::RESIDENCIA_NACIONAL,
-            ]);
-        }
-
-        $this->alternativaCreacion->crear(
-            $cotizacion,
-            $validado['alternativa_nombre'] ?? null,
-            $moneda,
-            'dia',
-            isset($validado['tipo_cambio_valor']) ? (float) $validado['tipo_cambio_valor'] : null,
-            (bool) ($validado['tipo_cambio_confirmado'] ?? false),
-            $usuarioId,
-        );
-
-        return $cotizacion;
     }
 
     public function show(string $id)

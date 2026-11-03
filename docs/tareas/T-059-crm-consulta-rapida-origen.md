@@ -169,9 +169,54 @@ Prueba funcional: agencia-demo, `admin@agencia-demo.test` (memoria `reference_ag
 ---
 
 ## Resultado
-- **Commits:**
-- **Tests:** (nuevos / suite completa)
+- **Commits:** `34c6f3e` backend (migraciones, `CotizacionCreacionService`, `ConsultaController`,
+  `CrmOrigenContactoController`, ficha y listado), `66e13f6` frontend, y el de docs.
+- **Tests:** `tests/Feature/AgenciaViajes/ConsultaOrigenContactoTest.php` (14 tests, 97 aserciones:
+  CA1-CA6, validaciones, ficha, catálogo, `ultimo_del_usuario`, permisos de rutas);
+  `AlternativaAutomaticaTest` (store de T-033) sigue verde sin cambios. Vitest:
+  `helpers/clientes/coincidencias.test.ts` (3). Suite completa contra Postgres: 1877 pasan (7462 aserciones), sin fallos (tampoco el intermitente conocido). `type-check`: 47
+  (base, sin nuevos); Vitest 173/173; `build` OK. Migraciones: `down()` probado en
+  `sistemafe_test_migrations` (rollback de las 3 y vuelta a subir); aplicadas con
+  `tenants:migrate-verticales` (core en todos los tenants, la de cotizaciones en agencia-demo).
+- **Prueba funcional (Playwright, agencia-demo, `admin@agencia-demo.test`):**
+  1. Ficha del cliente 10 (ROXANA…): teléfono `987654321` y origen «Instagram»; se guarda y al
+     recargar sigue «Instagram».
+  2. «Nueva consulta» desde el listado: «Prueba T059 Consulta Nueva», `955 444 333`, Facebook,
+     Tarapoto, 2 pasajeros, nota y casilla → cliente 31 SND con Facebook, `CDKM-1126-0000007` (id 75)
+     con «Alternativa A», 2 adultos de 30 nacionales, nota y «Enviar cotización · lun 02/11» visible en
+     la cabecera del cotizador.
+  3. «Nueva consulta» desde el Inicio escribiendo `987 654 321`: propone «¿Es ROXANA… · 987654321?»;
+     el origen venía en Facebook (el último del usuario); elegida la clienta y origen «Recomendación»
+     → `CDKM-1126-0000008` (id 76) del cliente 10, sin cliente nuevo; la clienta conserva «Instagram».
+  4. Listado: columna «Origen» y filtro «Facebook» → solo `CDKM-1126-0000007`. Sin errores de consola.
+     La sección 15 «Orígenes de contacto» de Configuración muestra las 10 filas base.
 - **Desviaciones de la tarea y por qué:**
+  - Único sin mayúsculas también en la base (índice `LOWER(nombre)`), además de la validación en PHP.
+  - Coincidencias por teléfono: los últimos 9 dígitos de lo escrito, **contenidos** en los dígitos del
+    guardado (desde 6 dígitos), para que proponga mientras se escribe; con 9 dígitos equivale a
+    comparar los últimos 9.
+  - `nombre` es obligatorio también con `cliente_id` (el modal manda el nombre del cliente elegido).
+    Con cliente elegido no se le cambia el teléfono.
+  - `ClientResource` devuelve `origen_contacto_id` (la ficha lo necesita). La ficha muestra el
+    selector también al registrar un cliente nuevo en Agencia, y lista el desactivado solo si es el
+    que tiene el cliente.
+  - En el Inicio la tarjeta de cotizaciones era un `router-link` entero: queda una tarjeta con el
+    cuerpo como enlace y el botón al pie (un botón dentro de un enlace no es válido).
+  - El botón «Nueva consulta» se muestra solo con `cotizaciones.crear`; sin `register_client` el
+    modal avisa y solo deja usar un cliente que ya existe.
+  - `CotizacionController` ya no inyecta `CodigoGeneradorService` ni `AlternativaCreacionService`
+    (los usa el servicio nuevo).
 
 ## Hallazgos fuera de alcance
--
+- ~~`GET crm-origenes-contacto` solo con `agencia.configuracion|cotizaciones.crear`~~ → arreglado en
+  la revisión de Opus: la lectura se abre también a `cotizaciones.ver`, `cotizaciones.ver_todas`,
+  `register_client` y `edit_client` (filtro del listado y selector de la ficha).
+- ~~Dos altas simultáneas del mismo origen dan 500~~ → arreglado en la revisión: el choque con el
+  índice único (23505) responde 422 «Ya existe un origen con ese nombre», en el alta y al renombrar
+  (`test_alta_simultanea_del_mismo_origen_responde_422_y_no_500`). El catálogo de motivos de T-052
+  no tiene índice: ahí la carrera deja dos filas iguales, sin error.
+- El botón «Nueva Cotización» del listado se muestra sin mirar `cotizaciones.crear` (anterior a
+  T-059).
+- «Nueva consulta» crea el cliente SND sin la confirmación de «nombre ya registrado» que hace
+  `ClientController::store()` (409): las coincidencias la reemplazan, pero si el usuario las ignora
+  quedan dos clientes con el mismo nombre.

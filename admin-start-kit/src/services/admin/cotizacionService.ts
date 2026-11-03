@@ -9,6 +9,7 @@ export const cotizacionService = {
     search?: string
     estado?: string
     estado_resumen?: string
+    origen_contacto_id?: number
     fecha_desde?: string
     fecha_hasta?: string
   } = {}) {
@@ -31,6 +32,8 @@ export const cotizacionService = {
     moneda_cotizacion?: 'PEN' | 'USD'
     tipo_cambio_valor?: number | null
     tipo_cambio_confirmado?: boolean
+    // T-059 — por dónde llegó la consulta (opcional).
+    origen_contacto_id?: number | null
   }) {
     const response = await httpClient.post('/cotizaciones', data)
     return response.data

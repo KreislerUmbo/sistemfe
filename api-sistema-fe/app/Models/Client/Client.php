@@ -46,6 +46,9 @@ class Client extends Authenticatable implements JWTSubject
         "regimen_tributario",
         "es_agente_retencion",
 
+        // T-059 (CRM C4): origen del primer contacto (crm_origenes_contacto).
+        "origen_contacto_id",
+
         "saldo_a_favor", // Módulo Amortizaciones — plan-modulo-amortizaciones.md §2.6
     ];
     protected $hidden = ['password', 'remember_token']; //ocultar la contraseña

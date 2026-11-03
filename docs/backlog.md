@@ -71,7 +71,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 | T-055 | AGE | Reporte operativo: el hotel en cada noche de la estadía (H54) | por hacer | T-054 | |
 | T-057 | AGE | Reporte operativo: el tour muestra su salida, guía, vehículo y por qué está pendiente (H57) | por hacer | — | |
 | T-058 | AGE | Reporte operativo: "Mañana", búsqueda, check-in a todos, filtros recordados y rango controlado (H58, H59) | por hacer | T-041 | |
-| T-059 | CLI + AGE | CRM C4: "Nueva consulta" y origen de contacto | por hacer | T-050, T-033 | |
+| T-059 | CLI + AGE | CRM C4: "Nueva consulta" y origen de contacto | en revisión | T-050, T-033 | |
 | T-060 | CLI + AGE | CRM C5: la ficha del cliente con preferencias del viajero y línea de tiempo | por hacer | T-050, T-051 | |
 | T-061 | CLI + AGE | CRM: pasar el trabajo abierto de un usuario que se va | por hacer | T-051 | |
 | T-062 | AGE | CRM C6b: reportes de conversión, origen, vendedor y motivos | por hacer | T-052, T-059 | |

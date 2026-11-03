@@ -34,6 +34,8 @@ export type Client = {
     address:string,
     gender:string,
     created_at:string,
+    /** T-059 (CRM C4): origen del primer contacto (crm_origenes_contacto). */
+    origen_contacto_id?: number | null,
     /** Solo en el giro Créditos (Fase 4c): asesor vigente, situación y requisitos de ficha que faltan. */
     credito?: { asesor: string | null; situacion: 'al_dia' | 'atrasado' | 'bloqueado' | 'sin_creditos'; ficha_faltante: number } | null
 }
