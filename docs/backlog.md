@@ -42,7 +42,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 
 | ID | Módulo | Qué | Estado | Depende de | Rama / commit |
 |---|---|---|---|---|---|
-| T-081 | PLA | Rol «Propietario» para el dueño de cada tenant (todos los permisos de su giro, sincronizado en cada deploy, protegido, al menos uno activo) y cuenta de soporte Umbo aparte como Super-Admin | por hacer | — | `feat/T-081-rol-propietario` |
+| T-081 | PLA | Rol «Propietario» para el dueño de cada tenant (todos los permisos de su giro, sincronizado en cada deploy, protegido, al menos uno activo) y cuenta de soporte Umbo aparte como Super-Admin | en revisión | — | `feat/T-081-rol-propietario` |
 | T-077 | AGE | Vuelo propio del pasajero en un solo texto, como observación en el reporte operativo (el vuelo de la agencia no cambia) | por hacer | — | |
 | T-015 | PLA + AGE | Catálogo central de aerolíneas + panel central (Obs. 3) | por hacer | — | |
 | T-016 | AGE | Buscador de aerolíneas, corrección de nombres y aerolínea por defecto (Obs. 3) | por hacer | T-015 | |

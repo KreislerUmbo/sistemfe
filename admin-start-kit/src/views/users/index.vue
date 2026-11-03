@@ -70,7 +70,7 @@
                                     {{ formatFechaHora(user.created_at) }}
                                 </b-td>
                                 <b-td class="text-end">
-                                    <!-- Un Super-Admin solo lo gestiona otro Super-Admin (el backend también lo exige). -->
+                                    <!-- Un Super-Admin solo lo gestiona otro Super-Admin; un Propietario, un Super-Admin u otro Propietario (el backend también lo exige). -->
                                     <template v-if="puedeGestionar(user)">
                                         <a href="#" @click="editUser(user)"><i
                                                 class="las la-pen text-secondary fs-22"></i></a>{{ " " }}
@@ -81,7 +81,7 @@
                                             @click.prevent="abrirTraspaso(user.id, user.full_name)"><i
                                                 class="las la-people-carry text-secondary fs-22"></i></a></template>
                                     </template>
-                                    <span v-else class="badge bg-secondary-subtle text-secondary" title="Solo un Super-Admin puede modificarlo">Protegido</span>
+                                    <span v-else class="badge bg-secondary-subtle text-secondary" :title="motivoProtegido(user)">Protegido</span>
                                 </b-td>
                             </b-tr>
 
@@ -336,8 +336,17 @@ const ofrecerTraspaso = async (id: number, nombre: string, hecho: string): Promi
 };
 
 // 07-oct-2026: el Super-Admin (soporte de UmboSystem) no se edita ni se elimina desde otro rol.
+// T-081: al Propietario (el dueño) solo lo gestionan un Super-Admin u otro Propietario.
 const actorEsSuperAdmin = computed(() => useAuthStore().user?.role?.name === 'Super-Admin');
-const puedeGestionar = (user: User): boolean => actorEsSuperAdmin.value || user.role?.name !== 'Super-Admin';
+const actorEsPropietario = computed(() => useAuthStore().user?.role?.name === 'Propietario');
+const puedeGestionar = (user: User): boolean => {
+    if (actorEsSuperAdmin.value) return true;
+    if (user.role?.name === 'Super-Admin') return false;
+    return user.role?.name !== 'Propietario' || actorEsPropietario.value;
+};
+const motivoProtegido = (user: User): string => user.role?.name === 'Super-Admin'
+    ? 'Solo un Super-Admin puede modificarlo'
+    : 'Solo un Super-Admin o un Propietario puede modificarlo';
 const user_selected = ref<User | undefined>(undefined);
 const themeColor = ref<string>('primary');
 

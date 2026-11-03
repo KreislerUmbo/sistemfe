@@ -24,6 +24,8 @@ use App\Models\Sale\Sale;
 use App\Models\SunatConfig;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\Roles\CuentaSoporte;
+use App\Services\Roles\RolPropietario;
 use Database\Seeders\AgenciaViajesRolesSeeder;
 use Database\Seeders\CashConceptSeeder;
 use Database\Seeders\CreditosRolesSeeder;
@@ -182,15 +184,23 @@ class TenantProvisioningService
                     'is_active' => true,
                 ]);
 
-                $role = Role::where('name', 'Super-Admin')->where('guard_name', 'api')->first();
+                // T-081: el dueño es Propietario (todos los permisos del tenant, asignados de
+                // verdad), no Super-Admin: ese rol es la cuenta de soporte de UmboSystem, que se
+                // crea aparte. Se sincroniza al final, cuando ya existen todos los permisos del
+                // giro (seeders de arriba). role_id explícito: la columna tiene default(1).
+                RolPropietario::sincronizar();
+                $role = Role::where('name', RolPropietario::NOMBRE)->where('guard_name', 'api')->first();
 
                 $admin = User::create([
                     'name' => $adminName,
                     'email' => $adminEmail,
                     'password' => $adminPassword,
+                    'role_id' => $role->id,
                 ]);
 
                 $admin->assignRole($role);
+
+                CuentaSoporte::asegurar();
             });
         } catch (\Throwable $e) {
             $this->rollback($tenant);

@@ -202,9 +202,9 @@ export const useTenantsStore = defineStore('tenants', () => {
     }
   };
 
-  // Restablecer el password del admin (rol Super-Admin) del tenant — antes solo por
-  // tinker. admin_email solo hace falta si el tenant tiene más de un Super-Admin (el
-  // backend responde 422 con la lista de candidatos en ese caso).
+  // Restablecer el password del propietario (o soporte) del tenant — antes solo por
+  // tinker. Sin admin_email va al propietario (T-081); si hay más de un candidato, el
+  // backend responde 422 con la lista de candidatos.
   const resettingPassword = ref(false);
   const resetPasswordError = ref<string | null>(null);
 

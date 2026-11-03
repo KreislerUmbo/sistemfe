@@ -122,39 +122,39 @@ giro queda para otra tarea (ver «Fuera de alcance»).
 - `admin-start-kit/src/views/users/index.vue`, `views/roles/index.vue`; `central-panel/src/views/TenantDetailView.vue`, `stores/tenants.ts` (ver tabla).
 
 ## Criterios de aceptación
-- [ ] **CA1** — Alta de un tenant de cada giro (retail, agencia_viajes, creditos): el dueño tiene
+- [x] **CA1** — Alta de un tenant de cada giro (retail, agencia_viajes, creditos): el dueño tiene
   el rol Propietario y **todos** los permisos del tenant (comparar con `Permission::count()`), no
   es Super-Admin, y existe `soporte@umbosystem.com` como Super-Admin. → test
-- [ ] **CA2** — Se crea un permiso nuevo y se corre `roles:sync-propietario`: el Propietario lo
+- [x] **CA2** — Se crea un permiso nuevo y se corre `roles:sync-propietario`: el Propietario lo
   recibe; los demás roles no cambian; correrlo dos veces no cambia nada. Un permiso en
   `PERMISOS_SOLO_SOPORTE` se le quita. → test
-- [ ] **CA3** — Un Administrador (sin rol Propietario) no puede editar, desactivar, eliminar ni
+- [x] **CA3** — Un Administrador (sin rol Propietario) no puede editar, desactivar, eliminar ni
   asignar el rol Propietario → 403. Un Propietario sí puede nombrar a otro Propietario. → test
-- [ ] **CA4** — Último Propietario activo: cambiarle el rol, ponerlo Inactivo o eliminarlo → 422,
+- [x] **CA4** — Último Propietario activo: cambiarle el rol, ponerlo Inactivo o eliminarlo → 422,
   también si lo intenta un Super-Admin o él mismo. Con dos Propietarios, se puede quitar uno. → test
-- [ ] **CA5** — El rol Propietario no se edita ni se elimina desde Roles → 403/422 como Super-Admin. → test
-- [ ] **CA6** — `roles:asignar-propietario dakamu dueno@x.com --simular` no escribe nada y dice
+- [x] **CA5** — El rol Propietario no se edita ni se elimina desde Roles → 403/422 como Super-Admin. → test
+- [x] **CA6** — `roles:asignar-propietario dakamu dueno@x.com --simular` no escribe nada y dice
   qué haría; sin `--simular` el usuario pasa de Super-Admin a Propietario, se crea la cuenta de
   soporte, y una segunda corrida no cambia nada. Usuario inexistente o eliminado → error. → test
-- [ ] **CA7** — Restablecer contraseña desde el panel: tenant con un Propietario → a él; con
+- [x] **CA7** — Restablecer contraseña desde el panel: tenant con un Propietario → a él; con
   `admin_email` de la cuenta de soporte → a ella; tenant sin Propietario → al Super-Admin, como
   hoy. → test
-- [ ] **CA8** — Prueba funcional en agencia-demo (local): migrar al admin con
+- [x] **CA8** — Prueba funcional en agencia-demo (local): migrar al admin con
   `roles:asignar-propietario`, entrar como Propietario y recorrer Inicio, Cotizador, Reservas,
   Caja, Ventas y Configuración sin ningún 403; en Usuarios, un Administrador ve «Protegido» al
   Propietario. Suite completa en verde; `type-check` sin errores nuevos (base 47) en admin-start-kit
   y central-panel.
 
 ## Seguridad y correctitud
-- [ ] Permisos / Policy en rutas nuevas: no hay rutas nuevas; las protecciones van en `UserController`/`RoleController`
-- [ ] Aislamiento de tenant: los comandos corren cada tenant con `$tenant->run()`; el rol y la cuenta de soporte son por tenant
-- [ ] Validación de entrada / archivos: el comando valida tenant y correo
-- [ ] Concurrencia (`lockForUpdate`): «al menos un Propietario» se comprueba dentro de la transacción del cambio, con lock de los usuarios Propietario
-- [ ] Dinero en centavos: no aplica
-- [ ] Fechas con `HoraPeru`: no aplica
-- [ ] Tributario sin fallback silencioso: no aplica
-- [ ] Sin `v-html` sin sanitizar: no aplica
-- [ ] Migraciones nuevas + `tenants:migrate-verticales`: no aplica (roles y permisos por seeder/comando, sin columnas nuevas)
+- [x] Permisos / Policy en rutas nuevas: no hay rutas nuevas; las protecciones van en `UserController`/`RoleController`
+- [x] Aislamiento de tenant: los comandos corren cada tenant con `$tenant->run()`; el rol y la cuenta de soporte son por tenant
+- [x] Validación de entrada / archivos: el comando valida tenant y correo
+- [x] Concurrencia (`lockForUpdate`): «al menos un Propietario» se comprueba dentro de la transacción del cambio, con lock de los usuarios Propietario
+- [x] Dinero en centavos: no aplica
+- [x] Fechas con `HoraPeru`: no aplica
+- [x] Tributario sin fallback silencioso: no aplica
+- [x] Sin `v-html` sin sanitizar: no aplica
+- [x] Migraciones nuevas + `tenants:migrate-verticales`: no aplica (roles y permisos por seeder/comando, sin columnas nuevas)
 
 ## Cómo verificar
 ```
@@ -175,9 +175,57 @@ solo si lo decide. Luego restablecer la contraseña de soporte desde el panel pa
 ---
 
 ## Resultado
-- **Commits:**
-- **Tests:** (nuevos / suite completa)
+- **Commits:** en la rama `feat/T-081-rol-propietario` (`git log main..feat/T-081-rol-propietario`).
+- **Tests:**
+  - Nuevos: `tests/Feature/RolPropietarioTest.php` (7 tests: CA2 lógica, CA3, CA4, CA5) y
+    `tests/Feature/RolPropietarioTenantTest.php` (4 tests con tenants físicos: CA1 los tres giros,
+    CA2 el comando, CA6, CA7).
+  - Filtro de la tarea (+ `SuperAdmin|MatrizPermisos|EscopablePorVendedor`): 144 en verde.
+  - Suite completa (PostgreSQL real): 1914 en verde (7692 aserciones).
+  - admin-start-kit `type-check`: 47 errores (la base, ninguno nuevo). central-panel `vue-tsc -b`:
+    sin errores. Vitest no se corrió: no se tocó lógica con tests.
+  - CA8 (agencia-demo local, Playwright): `roles:sync-propietario --tenant=agencia-demo` (+128),
+    `roles:asignar-propietario agencia-demo admin@agencia-demo.test --simular` (dijo qué haría),
+    sin `--simular` (hecho), segunda corrida «Nada que hacer». Como Propietario: 34 rutas del menú
+    (Inicio, Seguimiento, Cotizador y una cotización, Reservas y una reserva, Salidas, Ventas,
+    Notas, Cuentas por cobrar, Adelantos, Caja, catálogos de Agencia, Configuración, Usuarios,
+    Roles, Manual…) sin ningún 403 ni redirección; en Roles, Propietario sin editar/eliminar con
+    «Lo administra el sistema»; en Usuarios ve «Protegido» a los Super-Admin. Con un usuario
+    temporal «Administrador de agencia» (creado y borrado para la prueba): ve «Protegido» al
+    Propietario y el selector no le ofrece Propietario ni Super-Admin.
+  - **Estado local que queda:** en agencia-demo, `admin@agencia-demo.test` ya es Propietario y
+    existe `soporte@umbosystem.com` (Super-Admin, contraseña aleatoria).
 - **Desviaciones de la tarea y por qué:**
+  - `RolPropietario::sincronizar()` devuelve `{agregados, quitados}` en vez de `void` (el comando
+    imprime cuántos), y recibe la lista de solo soporte como parámetro con
+    `PERMISOS_SOLO_SOPORTE` por defecto, para probar CA2 sin tocar la constante.
+  - Tests en dos archivos: los de tenant físico no pueden ir en la transacción que usan los de
+    controlador.
+  - La cuenta de soporte vive en su propia clase, `app/Services/Roles/CuentaSoporte.php` (la usan
+    el alta y `roles:asignar-propietario`).
+  - `users.role_id` se fija explícito (dueño → Propietario, soporte → Super-Admin): la columna tiene
+    `default(1)` y la pantalla Usuarios y el login leen el rol de ahí. Por eso
+    `roles:asignar-propietario` reemplaza el rol de `role_id` además de Super-Admin (el usuario queda
+    con un solo rol, como lo maneja la pantalla Usuarios); la simulación lo dice.
+  - Un Propietario inactivo no cuenta como «otro activo»: con el dueño como único activo, no se le
+    puede quitar aunque exista otro Propietario inactivo.
+  - `roles:asignar-propietario` se niega con `soporte@umbosystem.com`; `roles:sync-propietario
+    --tenant=x` falla si el tenant no existe.
+- **Para desplegar:** `deploy.sh` (paso 7) corre `roles:sync-propietario` en todos los tenants no
+  archivados. Después, por tenant: `roles:asignar-propietario dakamu dakamu@gmail.com --simular`,
+  revisar, y sin `--simular`; lo mismo en credishirley con el correo de su dueño — **ese dueño
+  empezará a recibir los avisos de cobranza** (`AvisoCobranzaService` solo excluye al Super-Admin);
+  market solo si se decide. Luego restablecer la contraseña de `soporte@umbosystem.com` desde el
+  Panel Superadmin (con ese correo en «Email del admin») para tener acceso. Revisar también si el
+  tenant tiene **otros** Super-Admin además del dueño: el comando solo migra al que se le indica.
 
 ## Hallazgos fuera de alcance
--
+- `users.role_id` tiene `default(1)` (`2026_07_13_090100_fix_users_add_missing_columns.php`): un
+  usuario creado sin `role_id` aparece con el rol id 1 (Super-Admin en los tenants provisionados)
+  en la pantalla Usuarios y en el login, aunque su rol de Spatie sea otro. Así nacían los dueños
+  hasta T-081; cualquier otro `User::create` sin `role_id` repite el problema.
+- El Manual (`/recursos/manual`) pide `GET api/recursos/publicos`, que no existe: cae en
+  `recursos/{id}` y responde 500 («sintaxis no válida para tipo bigint: publicos»). Visto en
+  agencia-demo durante CA8.
+- agencia-demo (local) tiene otro Super-Admin, `test.perfil.agencia@sandbox.local`, sobrante de
+  pruebas; no se tocó.
