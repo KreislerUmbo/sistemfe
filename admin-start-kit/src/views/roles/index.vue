@@ -291,7 +291,11 @@ onMounted(() => {
                                     <b-td>
                                         {{ formatFechaHora(role.created_at) }}
                                     </b-td>
-                                    <b-td class="text-end" v-if="role.id != '1'">
+                                    <!-- T-081: el rol Propietario no se edita ni se elimina (el backend también lo exige). -->
+                                    <b-td class="text-end" v-if="role.name === 'Propietario'">
+                                        <span class="badge bg-secondary-subtle text-secondary">Lo administra el sistema: tiene todos los permisos</span>
+                                    </b-td>
+                                    <b-td class="text-end" v-else-if="role.id != '1'">
                                         <a href="#" @click="editRole(role)"><i
                                                 class="las la-pen text-secondary fs-22"></i></a>{{ " " }}
                                         <a href="#" @click="removeRole(role)"><i

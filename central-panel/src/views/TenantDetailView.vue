@@ -91,9 +91,9 @@ async function onSaveEdit() {
 }
 
 // Restablecer password del admin — sección separada del formulario de edición de
-// arriba a propósito (acción sensible, más fácil de auditar sola). admin_email solo
-// hace falta si el tenant tiene más de un Super-Admin (el backend avisa con 422 y
-// lista los candidatos si hace falta).
+// arriba a propósito (acción sensible, más fácil de auditar sola). Sin admin_email va
+// al propietario (T-081); con el correo de soporte, a la cuenta de soporte. Si hay más
+// de un candidato, el backend avisa con 422 y lista los candidatos.
 const showResetPasswordForm = ref(false);
 const resetPasswordForm = reactive({ admin_email: '', new_password: '' });
 const resetPasswordSuccess = ref(false);
@@ -341,8 +341,9 @@ const domainsText = computed(() =>
         <div class="card-body">
           <h2 class="h6">Restablecer password del administrador</h2>
           <p class="text-muted small">
-            Busca el usuario con rol Super-Admin dentro de este tenant. Si hay más de
-            uno, especificá el email — el backend lista los candidatos si hace falta.
+            Busca al propietario (o soporte) dentro de este tenant. Sin email va al
+            propietario; para la cuenta de soporte, escribí soporte@umbosystem.com. Si hay
+            más de un candidato, el backend los lista.
           </p>
           <form class="row g-3" @submit.prevent="onSaveResetPassword">
             <div class="col-md-6">
@@ -351,7 +352,7 @@ const domainsText = computed(() =>
                 v-model="resetPasswordForm.admin_email"
                 type="email"
                 class="form-control"
-                placeholder="solo si hay más de un Super-Admin"
+                placeholder="vacío = propietario; o el correo del propietario o soporte"
               />
             </div>
             <div class="col-md-6">

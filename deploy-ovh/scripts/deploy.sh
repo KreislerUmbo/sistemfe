@@ -85,6 +85,11 @@ echo ">> [7/11] Catálogos sembrados (seeders idempotentes) + caché del menú"
 php artisan db:seed --class=MenuItemsSeeder --force || \
   echo "   !! ADVERTENCIA: MenuItemsSeeder falló — el menú lateral puede quedar" \
        "vacío o desactualizado. Corre a mano: php artisan db:seed --class=MenuItemsSeeder --force"
+# T-081: el rol Propietario (el dueño de cada tenant) recibe los permisos nuevos de esta release.
+# Idempotente; solo toca ese rol. Va antes de limpiar el caché del menú.
+php artisan roles:sync-propietario || \
+  echo "   !! ADVERTENCIA: roles:sync-propietario falló — los dueños no verán las funciones" \
+       "nuevas. Corre a mano: php artisan roles:sync-propietario"
 # El resultado de GET /me/menu se cachea hasta 24 h por usuario (un menú vacío
 # o viejo se queda pegado). Se limpia el caché central y el de cada tenant.
 php artisan cache:clear || true

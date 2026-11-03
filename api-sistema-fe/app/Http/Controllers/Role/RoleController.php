@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Role;
 
 use App\Http\Controllers\Controller;
 use App\Services\EscaladaPermisos;
+use App\Services\Roles\RolPropietario;
 use Illuminate\Http\Request;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
@@ -124,10 +125,11 @@ class RoleController extends Controller
         // Fase 2a (plan-modulo-menus-y-roles.md §5) — Super-Admin es un rol
         // técnico protegido: no se puede renombrar ni reconfigurar sus
         // permisos vía este endpoint, sin excepción.
-        if ($role->name === 'Super-Admin') {
+        // T-081: el rol Propietario tampoco — sus permisos los decide roles:sync-propietario.
+        if (in_array($role->name, ['Super-Admin', RolPropietario::NOMBRE], true)) {
             return response()->json([
                 "code" => 422,
-                "message" => "El rol Super-Admin no se puede editar.",
+                "message" => "El rol {$role->name} no se puede editar.",
             ], 422);
         }
 
@@ -187,10 +189,11 @@ class RoleController extends Controller
 
         // Fase 2a (plan-modulo-menus-y-roles.md §5) — Super-Admin es un rol
         // técnico protegido: no se puede eliminar.
-        if ($role->name === 'Super-Admin') {
+        // T-081: el rol Propietario tampoco (lo administra el sistema).
+        if (in_array($role->name, ['Super-Admin', RolPropietario::NOMBRE], true)) {
             return response()->json([
                 "code" => 422,
-                "message" => "El rol Super-Admin no se puede eliminar.",
+                "message" => "El rol {$role->name} no se puede eliminar.",
             ], 422);
         }
 

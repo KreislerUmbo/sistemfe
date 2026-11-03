@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\AuditLogger;
+use App\Services\Roles\RolPropietario;
 use App\Services\TenantProvisioningService;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -134,11 +135,13 @@ class TenantAdminController extends Controller
         return response()->json(['tenant' => $this->serialize($tenant->fresh('domains'))]);
     }
 
-    // Restablecer el password del usuario administrador del tenant (rol Super-Admin,
-    // guard 'api', dentro de la base física del tenant) — antes la única vía era
-    // tinker/SQL manual. Acción separada de update() a propósito (más fácil de
-    // auditar), ver el documento arriba. admin_email es opcional: solo hace falta si
-    // el tenant tiene más de un usuario con rol Super-Admin (ambiguo sin él).
+    // Restablecer el password del usuario administrador del tenant (guard 'api', dentro
+    // de la base física del tenant) — antes la única vía era tinker/SQL manual. Acción
+    // separada de update() a propósito (más fácil de auditar), ver el documento arriba.
+    // T-081: candidatos = Propietarios y Super-Admin (la cuenta de soporte). Sin
+    // admin_email va al Propietario si hay uno solo; si el tenant aún no tiene
+    // Propietario (sin migrar), al Super-Admin como antes. Con admin_email, a ese
+    // usuario si es Propietario o Super-Admin. Varios candidatos sin admin_email → 422.
     public function resetAdminPassword(Request $request, string $id)
     {
         $tenant = $this->resolveTenant($id);
@@ -155,21 +158,24 @@ class TenantAdminController extends Controller
             // nombre del scope — llamado estáticamente revienta con "Non-static method
             // ... cannot be called statically" (bug real, encontrado al verificar este
             // endpoint contra un tenant descartable, no solo por lectura de código).
-            $query = User::whereHas('roles', fn ($q) => $q->where('name', 'Super-Admin'));
+            $conRol = fn (array $roles) => User::whereHas('roles', fn ($q) => $q->whereIn('name', $roles));
 
             if (! empty($data['admin_email'])) {
-                $query->where('email', $data['admin_email']);
+                $admins = $conRol([RolPropietario::NOMBRE, 'Super-Admin'])->where('email', $data['admin_email'])->get();
+            } else {
+                $admins = $conRol([RolPropietario::NOMBRE])->get();
+                if ($admins->isEmpty()) {
+                    $admins = $conRol(['Super-Admin'])->get();
+                }
             }
 
-            $admins = $query->get();
-
             if ($admins->isEmpty()) {
-                return ['error' => 'No se encontró ningún usuario con rol Super-Admin en este tenant.'];
+                return ['error' => 'No se encontró ningún usuario Propietario o Super-Admin en este tenant con esos datos.'];
             }
 
             if ($admins->count() > 1) {
                 return [
-                    'error' => 'Hay más de un usuario con rol Super-Admin en este tenant — '
+                    'error' => 'Hay más de un candidato (propietario o soporte) en este tenant — '
                         . 'especificá admin_email. Candidatos: ' . $admins->pluck('email')->implode(', ') . '.',
                 ];
             }

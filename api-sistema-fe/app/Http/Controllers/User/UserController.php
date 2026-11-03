@@ -9,6 +9,7 @@ use App\Http\Resources\User\UserResource;
 use App\Models\User;
 use App\Services\Creditos\ClienteCreditoService;
 use App\Services\EscaladaPermisos;
+use App\Services\Roles\RolPropietario;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -43,8 +44,12 @@ class UserController extends Controller
             ->orderBy("id", "desc")
             ->paginate(10);
             
-        // Quien no es Super-Admin no ve ese rol en el catálogo (no lo puede asignar).
-        $roles = Role::all()->when(! $this->actorEsSuperAdmin(), fn ($c) => $c->reject(fn (Role $r): bool => $r->name === self::SUPER_ADMIN));
+        // Quien no es Super-Admin no ve ese rol en el catálogo (no lo puede asignar); el rol
+        // Propietario (T-081), solo lo ven un Super-Admin o un Propietario.
+        $roles = Role::all()
+            ->when(! $this->actorEsSuperAdmin(), fn ($c) => $c->reject(fn (Role $r): bool => $r->name === self::SUPER_ADMIN))
+            ->when(! $this->actorEsSuperAdmin() && ! RolPropietario::es(auth('api')->user()), fn ($c) => $c->reject(fn (Role $r): bool => $r->name === RolPropietario::NOMBRE))
+            ->values();
 
         return response()->json([
             "total" => $users->total(),
@@ -156,15 +161,37 @@ class UserController extends Controller
             ? [...$request->except('password'), 'password' => bcrypt($request->password)]
             : $request->except('password');
 
-        if ($user->role_id != $request->role_id) {
-            $role_current = Role::find($user->role_id);
-            $user->removeRole($role_current);
-
-            $role_new = Role::find($request->role_id);
-            $user->assignRole($role_new);
+        // Sin role_id en el pedido el rol no cambia: antes se le quitaba el actual y no se le daba
+        // ninguno (assignRole(null) no hace nada), y así se saltaba la regla del último Propietario.
+        $cambiaRol = $request->filled('role_id') && (int) $request->role_id !== (int) $user->role_id;
+        if (! $request->filled('role_id')) {
+            unset($datos['role_id']);
         }
 
-        $user->update($datos);
+        $rechazo = DB::transaction(function () use ($request, $user, $datos, $cambiaRol): ?JsonResponse {
+            // T-081: cambiarle el rol o ponerlo Inactivo al último Propietario dejaría el tenant
+            // sin dueño. Rige también para un Super-Admin y para él mismo.
+            $quitaRol = $cambiaRol && Role::whereKey($request->role_id)->value('name') !== RolPropietario::NOMBRE;
+            $desactiva = (int) $request->input('state') === User::STATE_INACTIVO && (int) $user->state !== User::STATE_INACTIVO;
+            if (($quitaRol || $desactiva) && ($rechazo = $this->rechazoUltimoPropietario($user))) {
+                return $rechazo;
+            }
+
+            if ($cambiaRol) {
+                $role_current = Role::find($user->role_id);
+                $user->removeRole($role_current);
+
+                $role_new = Role::find($request->role_id);
+                $user->assignRole($role_new);
+            }
+
+            $user->update($datos);
+
+            return null;
+        });
+        if ($rechazo) {
+            return $rechazo;
+        }
 
         return response()->json([
             "code" => 200,
@@ -234,10 +261,20 @@ class UserController extends Controller
         if ($aviso = $this->avisoCartera($user)) {
             return response()->json(['code' => 405, 'message' => $aviso]);
         }
+        $rechazo = DB::transaction(function () use ($user): ?JsonResponse {
+            if ($rechazo = $this->rechazoUltimoPropietario($user)) {
+                return $rechazo;
+            }
+            $user->delete();
+
+            return null;
+        });
+        if ($rechazo) {
+            return $rechazo;
+        }
         if ($user->avatar && Storage::disk('public')->exists($user->avatar)) {
             Storage::disk('public')->delete($user->avatar);
         }
-        $user->delete();
         return response()->json([
             "code" => 200,
             "message" => "Usuario eliminado con exito"
@@ -252,6 +289,7 @@ class UserController extends Controller
     /**
      * Rechazo (403) si quien opera no es Super-Admin y pretende:
      * - asignar el rol Super-Admin o tocar a un usuario que ya lo tiene;
+     * - sin ser Propietario, asignar el rol Propietario o tocar a un Propietario (T-081);
      * - con $controlTotal (editar/eliminar): tocar a un usuario con permisos que él no tiene
      *   (ej. cambiarle la contraseña a un Administrador para entrar como él). permisosDirectos()
      *   no lo exige a propósito: ahí solo cuenta lo que se AGREGA, quitar no es escalar;
@@ -270,6 +308,15 @@ class UserController extends Controller
         if ($request?->filled('role_id') && Role::whereKey($request->role_id)->value('name') === self::SUPER_ADMIN) {
             return response()->json(['code' => 403, 'message' => 'Solo un Super-Admin puede asignar el rol Super-Admin.'], 403);
         }
+        // T-081: al Propietario (el dueño) solo lo tocan un Super-Admin u otro Propietario.
+        if (! RolPropietario::es(auth('api')->user())) {
+            if (RolPropietario::es($objetivo)) {
+                return response()->json(['code' => 403, 'message' => 'Solo un Super-Admin o un Propietario puede modificar o eliminar a un Propietario.'], 403);
+            }
+            if ($request?->filled('role_id') && Role::whereKey($request->role_id)->value('name') === RolPropietario::NOMBRE) {
+                return response()->json(['code' => 403, 'message' => 'Solo un Super-Admin o un Propietario puede asignar el rol Propietario.'], 403);
+            }
+        }
         if ($controlTotal && $objetivo && ($faltan = EscaladaPermisos::faltantes($objetivo->getAllPermissions()->pluck('name')))) {
             return response()->json(['code' => 403, 'message' => EscaladaPermisos::mensaje('modificar a este usuario', $faltan)], 403);
         }
@@ -281,6 +328,19 @@ class UserController extends Controller
         }
 
         return null;
+    }
+
+    /**
+     * T-081: 422 si $objetivo es Propietario y no queda otro activo. Llamarla dentro de la
+     * transacción del cambio (quedaOtroActivo() bloquea las filas de los Propietarios).
+     */
+    private function rechazoUltimoPropietario(User $objetivo): ?JsonResponse
+    {
+        if (! RolPropietario::es($objetivo) || RolPropietario::quedaOtroActivo($objetivo)) {
+            return null;
+        }
+
+        return response()->json(['code' => 422, 'message' => 'Es el único propietario: nombra a otro antes.'], 422);
     }
 
     /** Créditos (04c.1): mensaje si el usuario tiene clientes en su cartera; null si no tiene. */
