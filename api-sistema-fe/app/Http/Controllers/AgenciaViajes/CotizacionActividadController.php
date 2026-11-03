@@ -10,6 +10,8 @@ use App\Models\AgenciaViajes\Cotizacion;
 use App\Models\AgenciaViajes\CotizacionEnvio;
 use App\Models\Client\CrmActividad;
 use App\Services\Crm\AccionesCrm;
+use App\Services\HoraPeru;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -77,6 +79,60 @@ class CotizacionActividadController extends Controller
             'estado_alternativa' => $alternativa->estado,
             'fecha_envio' => $alternativa->fecha_envio,
             'fecha_vencimiento' => $alternativa->fecha_vencimiento,
+        ]);
+    }
+
+    // POST alternativas/{id}/extender-vigencia — T-053: nueva fecha de vencimiento de una enviada
+    // (vigente o vencida), desde hoy en adelante. No cambia el estado: deja de verse «vencida»
+    // porque estadoResumen() compara fecha_vencimiento con el ahora. Queda en el historial.
+    public function extenderVigencia(Request $request, string $id): JsonResponse
+    {
+        $alternativa = Alternativa::with('cotizacion')->findOrFail($id);
+        $this->autorizarCotizacion('update', $alternativa);
+
+        $validator = $this->validadorEs($request->all(), [
+            'fecha' => 'required|date_format:Y-m-d|after_or_equal:' . HoraPeru::hoyTexto(),
+        ], ['fecha' => 'nueva fecha de vencimiento']);
+        $validator->setCustomMessages(['fecha.after_or_equal' => 'La nueva fecha de vencimiento no puede ser anterior a hoy.']);
+
+        if ($validator->fails()) {
+            return $this->respuestaValidacionEs($validator);
+        }
+
+        $cotizacion = $alternativa->cotizacion;
+        $motivo = match (true) {
+            $cotizacion->origen !== Cotizacion::ORIGEN_COTIZADOR => 'La vigencia solo se extiende en una cotización del Cotizador.',
+            $cotizacion->estaPerdida() => 'La cotización está cerrada como perdida: reábrela para extender la vigencia.',
+            $alternativa->estado !== 'enviada' => "Esta alternativa está {$alternativa->estado}: solo se extiende la vigencia de una enviada.",
+            default => null,
+        };
+        if ($motivo) {
+            return response()->json(['code' => 422, 'message' => $motivo], 422);
+        }
+
+        $fecha = $validator->validated()['fecha'];
+        $anterior = $alternativa->fecha_vencimiento
+            ? HoraPeru::deUtc($alternativa->fecha_vencimiento)->subSecond()->format('d/m/Y')
+            : 'no tenía';
+        $nueva = CarbonImmutable::parse($fecha)->format('d/m/Y');
+
+        DB::transaction(function () use ($alternativa, $cotizacion, $fecha, $anterior, $nueva) {
+            $alternativa->update(['fecha_vencimiento' => HoraPeru::finDiaUtc($fecha)]);
+            CrmActividad::create([
+                'cliente_id' => $cotizacion->cliente_id,
+                'tipo' => CrmActividad::TIPO_ESTADO,
+                'referencia_tipo' => CrmActividad::REFERENCIA_COTIZACION,
+                'referencia_id' => $cotizacion->id,
+                'alternativa_id' => $alternativa->id,
+                'nota' => "Vigencia de «{$alternativa->nombre}» extendida hasta el {$nueva} (antes: {$anterior})",
+                'usuario_id' => auth('api')->id(),
+            ]);
+        });
+
+        return response()->json([
+            'code' => 200,
+            'message' => "Vigencia extendida hasta el {$nueva}.",
+            'fecha_vencimiento' => $alternativa->fresh()->fecha_vencimiento,
         ]);
     }
 

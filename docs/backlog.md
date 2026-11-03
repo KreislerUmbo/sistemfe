@@ -67,7 +67,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 | T-047 | AGE | Venta directa: vender un tour del catálogo, enganchado a la salida del día (H41) | por hacer | T-045, T-046 | |
 | T-048 | AGE + CAJ | Venta directa: "Crear y cobrar" en un solo paso (H45) | por hacer | T-011 | |
 | T-049 | AGE | Venta directa: varias líneas en la misma venta y destino del árbol (H46, H47) | por hacer | T-047 | |
-| T-053 | AGE | CRM C6a: listado de cotizaciones con el seguimiento a la vista (H52) | por hacer | T-051, T-052 | `feat/T-053-cotizaciones-por-seguir` |
+| T-053 | AGE | CRM C6a: listado de cotizaciones con el seguimiento a la vista (H52) | en revisión | T-051, T-052 | `feat/T-053-cotizaciones-por-seguir` |
 | T-055 | AGE | Reporte operativo: el hotel en cada noche de la estadía (H54) | por hacer | T-054 | |
 | T-057 | AGE | Reporte operativo: el tour muestra su salida, guía, vehículo y por qué está pendiente (H57) | por hacer | — | |
 | T-058 | AGE | Reporte operativo: "Mañana", búsqueda, check-in a todos, filtros recordados y rango controlado (H58, H59) | por hacer | T-041 | |

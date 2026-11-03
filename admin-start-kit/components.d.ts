@@ -94,6 +94,7 @@ declare module 'vue' {
     EncabezadoCredito: typeof import('./src/components/Creditos/EncabezadoCredito.vue')['default']
     EnviarAlternativa: typeof import('./src/components/AgenciaViajes/EnviarAlternativa.vue')['default']
     EnviarCorreoCotizacion: typeof import('./src/components/AgenciaViajes/EnviarCorreoCotizacion.vue')['default']
+    ExtenderVigenciaModal: typeof import('./src/components/AgenciaViajes/ExtenderVigenciaModal.vue')['default']
     FacturarReservaEspecialModal: typeof import('./src/components/AgenciaViajes/FacturarReservaEspecialModal.vue')['default']
     FacturarReservaSimpleModal: typeof import('./src/components/AgenciaViajes/FacturarReservaSimpleModal.vue')['default']
     FeriadosCredito: typeof import('./src/components/Creditos/FeriadosCredito.vue')['default']

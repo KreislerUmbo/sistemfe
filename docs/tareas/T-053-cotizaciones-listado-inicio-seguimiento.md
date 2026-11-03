@@ -186,9 +186,46 @@ agencia»). Crear los datos de prueba con prefijo `T053-` y anotarlos en el Resu
 ---
 
 ## Resultado
-- **Commits:**
-- **Tests:** (nuevos / suite completa)
+- **Commits:** ver `git log main..feat/T-053-cotizaciones-por-seguir` (un commit `feat(agencia): … (T-053)`).
+- **Tests:** nuevos en `tests/Feature/AgenciaViajes/SeguimientoCotizacionTest.php` (15 tests:
+  CA1, CA2 y orden mezclado, CA3 en 4 tests con «hoy» fijo y cruce de medianoche, seguimiento en el
+  listado, CA4 con `DB::enableQueryLog()`, CA5 en 4 tests, CA6, configuración). El filtro de
+  «Cómo verificar»: 51 tests en verde. Suite completa: 1902 en verde y 1 falla, el intermitente
+  conocido `Fila13Fase1cFacturacionTest::descuento_del_combo…`, que pasa al correrlo solo (32/32). Frontend: `type-check` con 47
+  errores (la base, ninguno en archivos tocados); Vitest 175/175.
+- **Prueba funcional (CA7, agencia-demo, 02-nov-2026 ~21:50 Perú):**
+  - Como «T061 Destino» (vendedor sin `ver_todas`): «Por seguir hoy» muestra solo `T061-PRUEBA-1`,
+    «Llamar hoy (T061)» en rojo.
+  - Como admin: `?por_seguir=1` arranca con el botón activo; la cotización vencida sale primero
+    («Enviada hace 10 días · Vencida hace 3 días», en rojo). En el editor: «Vencida el 30/10» en
+    rojo → «Extender vigencia» propone 17/11 (hoy + 15 días de vigencia) → «Vigente hasta el
+    17/11», historial «Vigencia de «Alternativa A» extendida hasta el 17/11/2026 (antes:
+    30/10/2026)»; la cotización pasa a «Enviada» y sale del filtro.
+  - Configuración: días de aviso 15 → guarda y la cotización vuelve al filtro con «Vence en 15
+    días»; se dejó otra vez en 2.
+  - **Datos de prueba creados en agencia-demo:** cotización `T053-PRUEBA-1` (id 82, vendedor admin)
+    con «Alternativa A» (id 115, enviada, vigente hasta el 17/11/2026) y su actividad de historial;
+    clientes «T053 Cliente Vencida» ids **33** (el de la cotización) y **34** (huérfano, quedó de un
+    intento fallido del script; se puede borrar).
 - **Desviaciones de la tarea y por qué:**
+  1. **Día del vencimiento = día Perú de `fecha_vencimiento − 1 segundo`** (backend, `ORDER BY` y
+     editor). La tarea pide guardar `finDiaUtc($fecha)` (inicio del día siguiente, límite
+     exclusivo) y a la vez comparar `deUtc($instante)->startOfDay()`: juntas, «vigente hasta el
+     10/11» se leería como «vence el 11/11». Con el segundo menos, las dos reglas quedan
+     coherentes; el filtro (`<= finDiaUtc(hoy + N)`) ya era coherente con esto.
+  2. **CA4: el listado ya no serializa `tiene_grupos_sin_resolver` en las alternativas**
+     (`setAppends([])` en `index()`). Era un N+1 previo (una consulta de ítems por alternativa) que
+     impedía cumplir CA4; el listado no lo usa. Aprobado por el usuario al construir.
+  3. **Descartada con acción pendiente muestra la acción** («Llamar hoy (Ana)»). La tabla dice
+     «sin texto», pero esa cotización es abierta y entra en «Por seguir hoy» por la acción: con la
+     columna vacía no se sabría por qué está en el filtro. Sin acción, sigue sin texto.
+  4. `dias_aviso_vencimiento_cotizacion` se valida `sometimes|required|integer|min:0|max:60`
+     (con `sometimes`, como `dias_proximo_contacto` de T-051), para no romper a quien guarda la
+     configuración sin el campo.
+  5. «atrasada 1 día» en singular; con 2 o más, «atrasada N días».
 
 ## Hallazgos fuera de alcance
--
+- `Cotizacion::alternativas` se serializa entera en el listado (todas las columnas de cada
+  alternativa) aunque la pantalla solo usa `alternativas_count`; se podría acotar el `select`.
+- `php artisan tinker <archivo>` incluye el archivo y luego abre la consola interactiva: en este
+  entorno se queda colgado. Para scripts usar `tinker --execute="require '…';"`.

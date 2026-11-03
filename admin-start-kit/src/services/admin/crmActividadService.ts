@@ -39,6 +39,11 @@ export const crmActividadService = {
       fecha_vencimiento: string | null
     }
   },
+  // T-053: nueva fecha de vencimiento (YYYY-MM-DD, desde hoy) de una alternativa enviada.
+  async extenderVigencia(alternativaId: number, fecha: string) {
+    const response = await httpClient.post(`/alternativas/${alternativaId}/extender-vigencia`, { fecha })
+    return response.data as { message: string; fecha_vencimiento: string }
+  },
   async anotar(clienteId: number, data: {
     tipo: TipoContactoManual
     nota?: string | null

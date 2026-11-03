@@ -1036,6 +1036,9 @@ Route::group([
     // reemplaza a la lista de envíos por correo.
     Route::post("alternativas/{id}/marcar-enviada", [CotizacionActividadController::class, 'marcarEnviada'])
         ->middleware('permission:cotizaciones.editar');
+    // T-053 (CRM C6a): extender la vigencia de una alternativa enviada (CotizacionPolicy::update en el controller).
+    Route::post("alternativas/{id}/extender-vigencia", [CotizacionActividadController::class, 'extenderVigencia'])
+        ->middleware('permission:cotizaciones.editar');
     Route::get("cotizaciones/{id}/actividades", [CotizacionActividadController::class, 'index'])
         ->middleware('permission:cotizaciones.ver|cotizaciones.ver_todas');
     // T-052 (CRM C3): cerrar como perdida / reabrir (CotizacionPolicy::update en el controller).

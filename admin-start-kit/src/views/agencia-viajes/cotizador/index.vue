@@ -23,7 +23,7 @@
         <div class="card border-0 shadow-sm mb-3">
             <div class="card-body">
                 <div class="row g-2">
-                    <div class="col-12 col-md-3">
+                    <div class="col-12 col-md-2">
                         <div class="input-group input-group-sm">
                             <input type="text" class="form-control" placeholder="Buscar por código, destino o cliente..." v-model="search" @keyup.enter="buscar">
                             <button class="btn btn-primary" @click="buscar"><i class="fas fa-search"></i></button>
@@ -54,8 +54,13 @@
                     <div class="col-6 col-md-2">
                         <CampoFecha etiqueta="Viaje hasta" placeholder="Viaje hasta" v-model="fechaHasta" @update:model-value="buscar" />
                     </div>
-                    <div class="col-6 col-md-1">
-                        <button class="btn btn-outline-secondary btn-sm w-100" title="Limpiar filtros" @click="limpiarFiltros">
+                    <div class="col-12 col-md-2 d-flex gap-2">
+                        <!-- T-053: acciones para hoy o atrasadas y alternativas por vencer o vencidas. -->
+                        <button type="button" class="btn btn-sm flex-grow-1 text-nowrap" :class="porSeguir ? 'btn-danger' : 'btn-outline-danger'"
+                            :aria-pressed="porSeguir" @click="porSeguir = !porSeguir; buscar()">
+                            <i class="fas fa-bell me-1"></i>Por seguir hoy
+                        </button>
+                        <button class="btn btn-outline-secondary btn-sm" title="Limpiar filtros" @click="limpiarFiltros">
                             <i class="fas fa-eraser"></i>
                         </button>
                     </div>
@@ -75,16 +80,19 @@
                                 <th>Origen</th>
                                 <th>Fechas del viaje</th>
                                 <th class="text-center">Estado</th>
+                                <th>Seguimiento</th>
                                 <th class="text-center">Alternativas</th>
                                 <th class="text-center pe-3">Acciones</th>
                             </tr>
                         </thead>
                         <tbody>
                             <tr v-if="loading">
-                                <td colspan="8" class="text-center py-5 text-muted"><div class="spinner-border spinner-border-sm me-2"></div>Cargando...</td>
+                                <td colspan="9" class="text-center py-5 text-muted"><div class="spinner-border spinner-border-sm me-2"></div>Cargando...</td>
                             </tr>
                             <tr v-else-if="cotizaciones.length === 0">
-                                <td colspan="8" class="text-center py-5 text-muted fst-italic">Sin cotizaciones registradas.</td>
+                                <td colspan="9" class="text-center py-5 text-muted fst-italic">
+                                    {{ porSeguir ? 'Nada por seguir hoy.' : 'Sin cotizaciones registradas.' }}
+                                </td>
                             </tr>
                             <tr v-for="cotizacion in cotizaciones" :key="cotizacion.id">
                                 <td class="ps-3 fw-semibold">{{ cotizacion.codigo }}</td>
@@ -110,6 +118,9 @@
                                             <router-link :to="`/agencia-viajes/reservas/${cotizacion.alternativa_reservada.reserva_id}`">{{ cotizacion.alternativa_reservada.reserva_codigo ?? `#${cotizacion.alternativa_reservada.reserva_id}` }}</router-link>
                                         </template>
                                     </div>
+                                </td>
+                                <td class="small" :class="cotizacion.seguimiento?.urgente ? 'text-danger' : 'text-muted'">
+                                    {{ cotizacion.seguimiento?.texto }}
                                 </td>
                                 <td class="text-center">{{ cotizacion.alternativas_count ?? 0 }}</td>
                                 <td class="text-center pe-3">
@@ -154,6 +165,7 @@
 <script setup lang="ts">
 import CampoFecha from '@/components/CampoFecha.vue';
 import { ref, computed, onMounted } from 'vue';
+import { useRoute } from 'vue-router';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import Swal from 'sweetalert2/dist/sweetalert2.js';
 import { cotizacionService } from '@/services/admin/cotizacionService';
@@ -191,6 +203,8 @@ const mostrarConsulta = ref<boolean>(false);
 const puedeCrear = useAuthStore().isPermitedRoute('cotizaciones.crear');
 const fechaDesde = ref<string>('');
 const fechaHasta = ref<string>('');
+// T-053 — «Por seguir hoy»; un enlace con ?por_seguir=1 lo abre activo.
+const porSeguir = ref<boolean>(useRoute().query.por_seguir === '1');
 const total = ref<number>(0);
 const paginate = ref<number>(15);
 const page = ref<number>(1);
@@ -209,6 +223,7 @@ const list = async () => {
             origen_contacto_id: origenContactoId.value ?? undefined,
             fecha_desde: fechaDesde.value || undefined,
             fecha_hasta: fechaHasta.value || undefined,
+            por_seguir: porSeguir.value ? 1 : undefined,
         });
         cotizaciones.value = res.cotizaciones;
         total.value = res.total;
@@ -238,6 +253,7 @@ const limpiarFiltros = () => {
     origenContactoId.value = null;
     fechaDesde.value = '';
     fechaHasta.value = '';
+    porSeguir.value = false;
     buscar();
 };
 
