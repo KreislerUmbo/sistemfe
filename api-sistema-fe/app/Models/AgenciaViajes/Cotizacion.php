@@ -3,6 +3,7 @@
 namespace App\Models\AgenciaViajes;
 
 use App\Models\Client\Client;
+use App\Models\Client\CrmOrigenContacto;
 use App\Models\Concerns\EscopablePorVendedor;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
@@ -65,6 +66,8 @@ class Cotizacion extends Model
         'resultado_detalle',
         'perdida_en',
         'perdida_por',
+        // T-059 (CRM C4): por dónde llegó esta consulta.
+        'origen_contacto_id',
     ];
 
     protected $casts = [
@@ -81,6 +84,12 @@ class Cotizacion extends Model
     public function vendedor()
     {
         return $this->belongsTo(User::class, 'vendedor_id');
+    }
+
+    // T-059 (CRM C4) — catálogo de core, en la misma base del tenant.
+    public function origenContacto()
+    {
+        return $this->belongsTo(CrmOrigenContacto::class, 'origen_contacto_id');
     }
 
     public function resultadoMotivo()

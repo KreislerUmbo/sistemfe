@@ -12,6 +12,7 @@ use App\Http\Controllers\AgenciaViajes\ConfiguracionAgenciaPdfController;
 use App\Http\Controllers\AgenciaViajes\ConfiguracionCodigosController;
 use App\Http\Controllers\AgenciaViajes\ConfiguracionCorreoController;
 use App\Http\Controllers\AgenciaViajes\CotizacionActividadController;
+use App\Http\Controllers\AgenciaViajes\ConsultaController;
 use App\Http\Controllers\AgenciaViajes\CotizacionEnvioController;
 use App\Http\Controllers\AgenciaViajes\ContenidoTourController;
 use App\Http\Controllers\AgenciaViajes\CotizacionController;
@@ -71,6 +72,7 @@ use App\Http\Controllers\Client\ClientController;
 use App\Http\Controllers\Client\CrmActividadController;
 use App\Http\Controllers\Client\CrmAccionController;
 use App\Http\Controllers\Client\CrmPendientesController;
+use App\Http\Controllers\Client\CrmOrigenContactoController;
 use App\Http\Controllers\Client\CompanyController;
 use App\Http\Controllers\CommercialQuote\CommercialQuoteAnticipoController;
 use App\Http\Controllers\CommercialQuote\CommercialQuoteController;
@@ -828,6 +830,14 @@ Route::group([
         ->middleware('permission:agencia.configuracion');
     Route::put("crm-motivos-resultado/{id}", [CrmMotivoResultadoController::class, 'update'])
         ->middleware('permission:agencia.configuracion');
+    // T-059 (CRM C4): orígenes de contacto (catálogo de core). Sin DELETE: se desactivan. La lectura
+    // la usan también «Nueva cotización» y «Nueva consulta».
+    Route::get("crm-origenes-contacto", [CrmOrigenContactoController::class, 'index'])
+        ->middleware('permission:agencia.configuracion|cotizaciones.crear');
+    Route::post("crm-origenes-contacto", [CrmOrigenContactoController::class, 'store'])
+        ->middleware('permission:agencia.configuracion');
+    Route::put("crm-origenes-contacto/{id}", [CrmOrigenContactoController::class, 'update'])
+        ->middleware('permission:agencia.configuracion');
 
     // Envío de cotizaciones por correo (plan-modulo-envio-correo-cotizacion.md
     // §3.2) — sección "Correo" de Configuración de Agencia.
@@ -976,6 +986,11 @@ Route::group([
     Route::get("cotizaciones", [CotizacionController::class, 'index'])
         ->middleware('permission:cotizaciones.ver|cotizaciones.ver_todas');
     Route::post("cotizaciones", [CotizacionController::class, 'store'])
+        ->middleware('permission:cotizaciones.crear');
+    // T-059 (CRM C4): «Nueva consulta». Crear el cliente exige además register_client (en el controller).
+    Route::get("crm/consultas/coincidencias", [ConsultaController::class, 'coincidencias'])
+        ->middleware('permission:cotizaciones.crear');
+    Route::post("crm/consultas", [ConsultaController::class, 'store'])
         ->middleware('permission:cotizaciones.crear');
     Route::get("cotizaciones/{id}", [CotizacionController::class, 'show'])
         ->middleware('permission:cotizaciones.ver|cotizaciones.ver_todas');

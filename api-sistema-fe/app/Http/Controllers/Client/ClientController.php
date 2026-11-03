@@ -152,6 +152,8 @@ class ClientController extends Controller
             'state',
             'regimen_tributario',
             'es_agente_retencion',
+            // T-059 (CRM C4): origen del primer contacto, corregible en la ficha (Agencia).
+            'origen_contacto_id',
         ];
     }
 

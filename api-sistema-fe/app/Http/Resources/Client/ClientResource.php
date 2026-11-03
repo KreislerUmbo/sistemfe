@@ -45,6 +45,8 @@ class ClientResource extends JsonResource
             "cod_tipo_doc_sunat" => $this->cod_tipo_doc_sunat ?? '0',
             "regimen_tributario" => $this->regimen_tributario ?? 'SIN REGIMEN',
             "es_agente_retencion" => (bool) $this->es_agente_retencion,
+            // T-059 (CRM C4): origen del primer contacto.
+            "origen_contacto_id" => $this->origen_contacto_id,
             // Se guarda en UTC; se envía ya en hora de Perú.
             'created_at' => \App\Services\HoraPeru::deUtc($this->resource->created_at)?->format("Y-m-d h:i A"),
         ];

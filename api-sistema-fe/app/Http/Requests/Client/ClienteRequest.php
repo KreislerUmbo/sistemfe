@@ -85,6 +85,8 @@ class ClienteRequest extends FormRequest
             'regimen_tributario' => ['nullable', 'string', 'max:20'],
             'es_agente_retencion' => ['nullable', 'boolean'],
             'es_amazonia' => ['nullable', 'boolean'],
+            // T-059 (CRM C4): puede quedar uno desactivado si el cliente ya lo tenía.
+            'origen_contacto_id' => ['nullable', 'integer', 'exists:crm_origenes_contacto,id'],
             // Cliente sin documento con un nombre ya registrado: se guarda solo si se confirma.
             'confirmar_nombre_repetido' => ['nullable', 'boolean'],
             // Créditos: asesor elegido al registrar (solo con creditos.cartera.asignar).
@@ -116,6 +118,7 @@ class ClienteRequest extends FormRequest
             'type_document.in' => 'Elige un tipo de documento válido.',
             'phone.regex' => 'El teléfono solo puede tener números, espacios, +, - y paréntesis.',
             'birth_date.before' => 'La fecha de nacimiento debe ser anterior a hoy.',
+            'origen_contacto_id.exists' => 'Ese origen de contacto no existe.',
             'required' => 'Completa :attribute.',
             'email' => 'El correo no es válido.',
             'max' => ':attribute es demasiado largo.',
