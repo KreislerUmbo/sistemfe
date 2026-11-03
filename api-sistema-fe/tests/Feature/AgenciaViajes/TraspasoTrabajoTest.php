@@ -273,6 +273,7 @@ class TraspasoTrabajoTest extends TestCase
         $soporte->assignRole('Super-Admin');
 
         $ids = fn () => collect(app(TraspasoTrabajoController::class)->resumen((string) $ana->id)->getData(true)['destinos'])->pluck('id');
+        $this->assertSame(['id' => $ana->id, 'nombre' => 'Ana Pérez'], app(TraspasoTrabajoController::class)->resumen((string) $ana->id)->getData(true)['usuario']);
         $this->assertTrue($ids()->contains($luis->id));
         $this->assertEmpty($ids()->intersect([$ana->id, $inactivo->id, $eliminado->id, $sinEditar->id, $soporte->id]));
 

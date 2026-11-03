@@ -76,6 +76,10 @@
                                                 class="las la-pen text-secondary fs-22"></i></a>{{ " " }}
                                         <a href="#" @click="removeUser(user)"><i
                                                 class="las la-trash-alt text-secondary fs-22"></i></a>
+                                        <!-- T-061 (Agencia): sus cotizaciones abiertas y acciones pendientes a otro usuario. -->
+                                        <template v-if="esAgencia">{{ " " }}<a href="#" title="Pasar su trabajo a…" aria-label="Pasar su trabajo"
+                                            @click.prevent="abrirTraspaso(user.id, user.full_name)"><i
+                                                class="las la-people-carry text-secondary fs-22"></i></a></template>
                                     </template>
                                     <span v-else class="badge bg-secondary-subtle text-secondary" title="Solo un Super-Admin puede modificarlo">Protegido</span>
                                 </b-td>
@@ -265,6 +269,9 @@
             </b-tab>
             </b-tabs>
         </b-modal>
+
+        <TraspasoTrabajoModal v-if="traspaso" :usuario-id="traspaso.id" :nombre="traspaso.nombre"
+            @cerrar="cerrarTraspaso" @hecho="cerrarTraspaso" />
     </DefaultLayout>
 </template>
 
@@ -279,11 +286,54 @@ import { construirCatalogoCompleto } from '@/helpers/permisos';
 import { computed, onMounted, ref, watch } from 'vue';
 import { formatFechaHora } from '@/helpers/fecha';
 import { useAuthStore } from '@/stores/auth';
+import { useRoute, useRouter } from 'vue-router';
+import TraspasoTrabajoModal from '@/components/Usuarios/TraspasoTrabajoModal.vue';
+import { clienteService } from '@/services/admin/clienteService';
+import { textoTrabajo, tieneTrabajo, traspasoTrabajoService } from '@/services/admin/traspasoTrabajoService';
 
 import Swal from "sweetalert2/dist/sweetalert2.js";
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
 
 const users = ref<User[]>([]);
+
+// T-061 (CRM, solo Agencia): «Pasar su trabajo a…». Se ofrece al desactivar o eliminar a alguien
+// con trabajo abierto (sin obligar) y se abre desde el aviso de Inicio con ?traspasar=<id>.
+const route = useRoute();
+const router = useRouter();
+const esAgencia = ref(false);
+const traspaso = ref<{ id: number; nombre?: string } | null>(null);
+const abrirTraspaso = (id: number, nombre?: string) => {
+    traspaso.value = { id, nombre };
+};
+const cerrarTraspaso = () => {
+    traspaso.value = null;
+    if (route.query.traspasar) {
+        router.replace({ query: { ...route.query, traspasar: undefined } });
+    }
+};
+/** Si tiene trabajo abierto, pregunta si pasarlo ahora; true si preguntó (el aviso de éxito va dentro). */
+const ofrecerTraspaso = async (id: number, nombre: string, hecho: string): Promise<boolean> => {
+    if (!esAgencia.value) return false;
+    let trabajo;
+    try {
+        trabajo = (await traspasoTrabajoService.resumen(id)).data;
+    } catch {
+        return false;
+    }
+    if (!tieneTrabajo(trabajo)) return false;
+    const respuesta = await (Swal as TVueSwalInstance).fire({
+        title: hecho,
+        text: `${nombre} tiene ${textoTrabajo(trabajo)}. ¿Pasar su trabajo ahora?`,
+        icon: "question",
+        showCancelButton: true,
+        confirmButtonText: "Pasar su trabajo",
+        cancelButtonText: "Ahora no",
+    });
+    if (respuesta.isConfirmed) {
+        abrirTraspaso(id, nombre);
+    }
+    return true;
+};
 
 // 07-oct-2026: el Super-Admin (soporte de UmboSystem) no se edita ni se elimina desde otro rol.
 const actorEsSuperAdmin = computed(() => useAuthStore().user?.role?.name === 'Super-Admin');
@@ -458,6 +508,9 @@ const store = async () => {
                 "warning",
             );
         } else {
+            // T-061: guardado como Inactivo → se ofrece pasar su trabajo (antes de que el cierre limpie el form).
+            const desactivado = user_selected.value && Number(state.value) === 2
+                ? { id: user_selected.value.id, nombre: `${name.value} ${surname.value}`.trim() } : null;
 
             ModalRegisterUser.value = false; // Cerrar el modal
 
@@ -479,11 +532,13 @@ const store = async () => {
                 }
             }
 
-            (Swal as TVueSwalInstance).fire(
-                "Felicitaciones!",
-                res.data.message,
-                "success",
-            );
+            if (!desactivado || !(await ofrecerTraspaso(desactivado.id, desactivado.nombre, String(res.data.message)))) {
+                (Swal as TVueSwalInstance).fire(
+                    "Felicitaciones!",
+                    res.data.message,
+                    "success",
+                );
+            }
 
             reset();
 
@@ -590,14 +645,17 @@ const removeUser = (user: User) => {
                         return;
                     }
 
-                    (Swal as TVueSwalInstance).fire(
-                        "Felicitaciones!",
-                        "El usuario '" + user.name + "' ha sido eliminado con éxito.",
-                        "success",
-                    );
                     let INDEX = users.value.findIndex((usr) => usr.id == user.id); //buscar el índice del usuario eliminado
                     if (INDEX != -1) { //si se encuentra el usuario en la lista
                         users.value.splice(INDEX, 1); //eliminar el usuario de la lista
+                    }
+                    // T-061: si deja trabajo abierto, se ofrece pasarlo (sin obligar).
+                    if (!(await ofrecerTraspaso(user.id, user.full_name, "Usuario eliminado"))) {
+                        (Swal as TVueSwalInstance).fire(
+                            "Felicitaciones!",
+                            "El usuario '" + user.name + "' ha sido eliminado con éxito.",
+                            "success",
+                        );
                     }
 
                 }
@@ -619,9 +677,18 @@ const cargarBranches = async () => {
     }
 };
 
-onMounted(() => {
+onMounted(async () => {
     list();
     cargarBranches();
+    try {
+        esAgencia.value = (await clienteService.contexto()).giro === 'agencia_viajes';
+    } catch {
+        esAgencia.value = false;
+    }
+    const desdeInicio = Number(route.query.traspasar);
+    if (esAgencia.value && desdeInicio > 0) {
+        abrirTraspaso(desdeInicio);
+    }
 });
 
 watch(ModalRegisterUser, (value) => {

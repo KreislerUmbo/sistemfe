@@ -154,6 +154,7 @@ declare module 'vue' {
     TourPreciosTemporada: typeof import('./src/components/AgenciaViajes/TourPreciosTemporada.vue')['default']
     TourPrecioVentaCampos: typeof import('./src/components/AgenciaViajes/TourPrecioVentaCampos.vue')['default']
     TraspasoCartera: typeof import('./src/components/Clientes/TraspasoCartera.vue')['default']
+    TraspasoTrabajoModal: typeof import('./src/components/Usuarios/TraspasoTrabajoModal.vue')['default']
     UIComponentCard: typeof import('./src/components/UIComponentCard.vue')['default']
   }
   export interface ComponentCustomProperties {

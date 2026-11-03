@@ -34,8 +34,10 @@ class TraspasoTrabajoController extends Controller
         $usuario = User::withTrashed()->findOrFail($id);
 
         return response()->json([
+            // El nombre, para el modal abierto desde Inicio (un eliminado no figura en el listado).
+            'usuario' => ['id' => $usuario->id, 'nombre' => trim($usuario->name . ' ' . $usuario->surname)],
             'data' => $this->traspaso->resumen($usuario->id),
-            'destinos' => $this->traspaso->destinos($usuario->id, auth('api')->user()->hasRole(self::SUPER_ADMIN)),
+            'destinos' => $this->traspaso->destinos($usuario->id, $this->actor()->hasRole(self::SUPER_ADMIN)),
         ]);
     }
 
@@ -54,12 +56,18 @@ class TraspasoTrabajoController extends Controller
         $hacia = User::withTrashed()->findOrFail((int) $request->input('hacia_usuario_id'));
 
         // Como UserController::protegerPrivilegios(): solo un Super-Admin toca a otro Super-Admin.
-        $actor = auth('api')->user();
+        $actor = $this->actor();
         if (! $actor->hasRole(self::SUPER_ADMIN) && ($desde->hasRole(self::SUPER_ADMIN) || $hacia->hasRole(self::SUPER_ADMIN))) {
             throw new HttpException(403, 'Solo un Super-Admin puede pasar el trabajo de o a un usuario Super-Admin.');
         }
 
         return response()->json(['data' => $this->traspaso->traspasar($desde->id, $hacia, $actor)]);
+    }
+
+    private function actor(): User
+    {
+        /** @var User */
+        return auth('api')->user();
     }
 
     private function soloAgencia(): void

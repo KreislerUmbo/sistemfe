@@ -32,6 +32,28 @@
         </div>
       </div>
 
+      <!-- T-061: trabajo abierto a nombre de quien ya no está (nadie lo ve en sus pendientes). -->
+      <div v-if="b.trabajo_sin_dueno?.length" class="row g-3 mb-3">
+        <div class="col-12">
+          <div class="card border-0 shadow-sm mb-0">
+            <div class="card-header bg-white py-2">
+              <h6 class="card-title mb-0"><i class="fas fa-user-clock me-1 text-warning"></i>Trabajo sin dueño</h6>
+            </div>
+            <div class="card-body py-1">
+              <div v-for="t in b.trabajo_sin_dueno" :key="t.usuario_id"
+                class="d-flex justify-content-between align-items-center gap-2 py-2 border-bottom flex-wrap">
+                <span class="small">
+                  <strong>{{ t.nombre }}</strong> ({{ t.estado === 'eliminado' ? 'eliminado' : 'inactivo' }}) tiene {{ textoTrabajo(t) }}
+                </span>
+                <router-link :to="{ name: 'access.users', query: { traspasar: t.usuario_id } }" class="btn btn-outline-primary btn-sm">
+                  <i class="fas fa-people-arrows me-1"></i>Pasar su trabajo
+                </router-link>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Indicadores -->
       <div v-if="b.ventas || b.por_cobrar || b.sunat" class="row g-3 mb-3 cifra">
         <div v-if="b.ventas" class="col-12 col-sm-6 col-xl-3">
@@ -303,6 +325,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useLayoutStore } from '@/stores/layout'
 import { fechaTexto, formatoMoneda, textoVariacion } from '@/helpers/dashboard'
 import { formatoFecha } from '@/helpers/creditos/formato'
+import { textoTrabajo } from '@/services/admin/traspasoTrabajoService'
 import type { ApexChartType } from '@/types'
 import type { CashDashboardResponse } from '@/types/cash-session'
 import type { Dashboard } from '@/types/dashboard'
@@ -320,7 +343,9 @@ const monedaGrafico = ref('PEN')
 const mostrarConsulta = ref(false)
 
 const b = computed(() => datos.value?.bloques ?? null)
-const sinBloques = computed(() => !b.value || (!Object.keys(b.value).length && !cajas.value))
+// Un aviso de trabajo sin dueño vacío (T-061) no cuenta como contenido.
+const sinBloques = computed(() => !b.value
+  || (!Object.keys(b.value).some((k) => k !== 'trabajo_sin_dueno' || b.value?.trabajo_sin_dueno?.length) && !cajas.value))
 // Comprobantes y notas por atender: "Al día" solo si no queda nada de ninguno.
 const totalSunat = computed(() => {
   const s = b.value?.sunat
