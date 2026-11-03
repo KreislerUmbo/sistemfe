@@ -1312,15 +1312,14 @@ Route::group([
     Route::delete("reserva-item-pasajero/{id}", [ReservaItemPasajeroController::class, 'destroy'])
         ->middleware('permission:reservas.editar');
     // Sesión 11d — check-in del reporte operativo. Distinto de store()/destroy() de
-    // arriba (esos son la asignación pasajero↔ítem propiamente dicha): acá el vínculo
-    // puede no existir todavía y se crea recién al marcar (firstOrCreate en el
-    // controller), porque la mayoría de reserva_items no tiene vinculo_especifico.
+    // arriba (esos son la asignación pasajero↔ítem propiamente dicha): el check-in
+    // vive en su propia tabla y nunca crea ni borra asignaciones (T-041).
     Route::post("reserva-items/{id}/pasajeros/{pasajeroId}/checkin", [ReservaItemPasajeroController::class, 'checkin'])
         ->middleware('permission:reservas.editar');
     // Auditoría de UX/funcionalidad del módulo (2026-08-27) — vuelo
     // vendido por la AGENCIA (distinto de reserva_pasajeros.vuelo_*, que
     // es el vuelo por cuenta propia del pasajero). Mismo shape de ruta y
-    // mismo criterio de materialización que checkin() arriba.
+    // tabla propia, igual que checkin() arriba.
     Route::put("reserva-items/{id}/pasajeros/{pasajeroId}/vuelo", [ReservaItemPasajeroController::class, 'actualizarVuelo'])
         ->middleware('permission:reservas.editar');
 

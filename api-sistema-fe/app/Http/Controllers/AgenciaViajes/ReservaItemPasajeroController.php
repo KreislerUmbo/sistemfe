@@ -5,6 +5,7 @@ namespace App\Http\Controllers\AgenciaViajes;
 use App\Http\Controllers\Controller;
 use App\Models\AgenciaViajes\AlternativaItem;
 use App\Models\AgenciaViajes\ReservaItem;
+use App\Models\AgenciaViajes\ReservaItemCheckin;
 use App\Models\AgenciaViajes\ReservaItemPasajero;
 use App\Models\AgenciaViajes\ReservaItemVueloPasajero;
 use App\Models\AgenciaViajes\ReservaPasajero;
@@ -86,10 +87,9 @@ class ReservaItemPasajeroController extends Controller
     }
 
     // Check-in del reporte operativo (Sesión 11d, plan-modulo-cotizaciones-reservas.md
-    // §8) — a diferencia de store()/destroy() (asignación pasajero↔ítem propiamente
-    // dicha), acá el vínculo puede no existir todavía: la mayoría de reserva_items no
-    // tiene vinculo_especifico (cae a "aplica a todos los pasajeros" en el reporte),
-    // así que marcar check-in ahí crea el vínculo puntual recién en este momento.
+    // §8). Vive en su propia tabla (T-041, H30): marcar crea la fila de
+    // reserva_item_checkins, desmarcar la borra, y la asignación pasajero↔ítem
+    // (reserva_item_pasajero, que usa la facturación por grupos) no se toca nunca.
     // Sin bloqueo por itemYaFacturado(): el check-in es operativo, no toca nada
     // financiero.
     public function checkin(Request $request, string $reservaItemId, string $pasajeroId)
@@ -109,6 +109,16 @@ class ReservaItemPasajeroController extends Controller
             ], 422);
         }
 
+        // Viaja en el servicio: el asignado, o cualquiera si el servicio no tiene
+        // asignación ("para todos"), mismo criterio que
+        // ReporteOperativoController::resolverPasajerosDelItem().
+        if ($item->pasajeros->isNotEmpty() && ! $item->pasajeros->contains('id', $pasajero->id)) {
+            return response()->json([
+                'code' => 422,
+                'message' => 'Ese pasajero no está asignado a este servicio.',
+            ], 422);
+        }
+
         $validator = Validator::make($request->all(), [
             'checkin_realizado' => 'required|boolean',
         ]);
@@ -117,37 +127,21 @@ class ReservaItemPasajeroController extends Controller
             return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
         }
 
-        $checkinRealizado = $validator->validated()['checkin_realizado'];
+        $clave = ['reserva_item_id' => $item->id, 'reserva_pasajero_id' => $pasajero->id];
 
-        // Si el ítem todavía NO tiene ningún vínculo específico, resolverPasajerosDelItem()
-        // (ReporteOperativoController) lo trata como "aplica a TODOS los pasajeros de la
-        // reserva" (tour grupal). Crear acá el vínculo de un solo pasajero lo "promovería"
-        // en silencio a vínculo específico, excluyendo al resto la próxima vez que se
-        // cargue el reporte. Para preservar "aplica a todos" en la práctica, la primera vez
-        // que se marca check-in sobre un ítem así se materializan los vínculos de TODOS los
-        // pasajeros de la reserva (sin marcar check-in en los demás).
-        if ($item->pasajeros->isEmpty()) {
-            foreach ($item->reserva->pasajeros as $otroPasajero) {
-                ReservaItemPasajero::firstOrCreate([
-                    'reserva_item_id' => $item->id,
-                    'reserva_pasajero_id' => $otroPasajero->id,
-                ]);
-            }
+        if ($validator->validated()['checkin_realizado']) {
+            // createOrFirst: con el doble clic, el índice único frena la segunda
+            // fila y se devuelve la primera (sin 500).
+            $checkin = ReservaItemCheckin::createOrFirst($clave, ['checkin_hora' => now()]);
+        } else {
+            ReservaItemCheckin::where($clave)->delete();
+            $checkin = null;
         }
-
-        $asignacion = ReservaItemPasajero::firstOrCreate([
-            'reserva_item_id' => $item->id,
-            'reserva_pasajero_id' => $pasajero->id,
-        ]);
-        $asignacion->update([
-            'checkin_realizado' => $checkinRealizado,
-            'checkin_hora' => $checkinRealizado ? now() : null,
-        ]);
 
         return response()->json([
             'code' => 200,
             'message' => 'Check-in actualizado correctamente',
-            'reserva_item_pasajero' => $asignacion,
+            'reserva_item_checkin' => $checkin,
         ]);
     }
 

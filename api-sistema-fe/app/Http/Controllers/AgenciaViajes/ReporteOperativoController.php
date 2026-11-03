@@ -6,7 +6,7 @@ use App\Exports\ReporteOperativoExport;
 use App\Http\Controllers\Controller;
 use App\Models\AgenciaViajes\AlternativaItem;
 use App\Models\AgenciaViajes\ReservaItem;
-use App\Models\AgenciaViajes\ReservaItemPasajero;
+use App\Models\AgenciaViajes\ReservaItemCheckin;
 use App\Models\AgenciaViajes\ReservaPasajero;
 use App\Models\Company;
 use App\Services\AgenciaViajes\AsignacionOperativa;
@@ -339,12 +339,11 @@ class ReporteOperativoController extends Controller
             ->values();
 
         // Mapa de check-in existente, cargado en una sola query — evita N+1 dentro del
-        // loop de abajo. La mayoría de reserva_items no tiene vinculo_especifico, así
-        // que este mapa también cubre filas "aplica a todos los pasajeros" (sin fila
-        // propia todavía, se resuelve como sin check-in).
-        $checkins = ReservaItemPasajero::whereIn('reserva_item_id', $items->pluck('id'))
+        // loop de abajo. Tabla propia (T-041): no depende de la asignación, así que
+        // cubre igual los servicios "para todos los pasajeros".
+        $checkins = ReservaItemCheckin::whereIn('reserva_item_id', $items->pluck('id'))
             ->get()
-            ->keyBy(fn (ReservaItemPasajero $r) => $r->reserva_item_id . '_' . $r->reserva_pasajero_id);
+            ->keyBy(fn (ReservaItemCheckin $r) => $r->reserva_item_id . '_' . $r->reserva_pasajero_id);
 
         $filas = [];
         $totalSinGuia = 0;
@@ -444,7 +443,7 @@ class ReporteOperativoController extends Controller
         return $item->reserva->pasajeros;
     }
 
-    private function armarFila(ReservaItem $item, ReservaPasajero $pasajero, bool $sinGuia, bool $vinculoEspecifico, ?ReservaItemPasajero $checkin): array
+    private function armarFila(ReservaItem $item, ReservaPasajero $pasajero, bool $sinGuia, bool $vinculoEspecifico, ?ReservaItemCheckin $checkin): array
     {
         $alternativaItem = $item->alternativaItem;
         // T-054: proveedor y hotel del ítem de la reserva, no los cotizados
@@ -455,7 +454,7 @@ class ReporteOperativoController extends Controller
         return [
             'reserva_id' => $item->reserva_id,
             'reserva_item_id' => $item->id,
-            'checkin_realizado' => (bool) $checkin?->checkin_realizado,
+            'checkin_realizado' => $checkin !== null,
             'checkin_hora' => optional($checkin?->checkin_hora)->toDateTimeString(),
             // Sesión 11d — el frontend lo necesita para decidir qué acción de
             // reasignación mostrar inline: 'guia' resuelve con el select de guías

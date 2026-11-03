@@ -32,7 +32,7 @@ class LimpiarOperacionPrueba
         'cash_session_totals', 'cash_session_denominations', 'cash_movements', 'cash_sessions',
         // Reservas y salidas
         'salida_vehiculo_reservas', 'salida_vehiculos', 'salida_servicios',
-        'reserva_item_vuelo_pasajero', 'reserva_item_pasajero', 'reserva_items',
+        'reserva_item_vuelo_pasajero', 'reserva_item_checkins', 'reserva_item_pasajero', 'reserva_items',
         'salidas_operativas', 'reserva_modificaciones', 'reserva_pasajeros', 'reserva',
         // Cotizador
         'cotizacion_envios', 'cotizacion_pasaje_aereo', 'alternativa_items',

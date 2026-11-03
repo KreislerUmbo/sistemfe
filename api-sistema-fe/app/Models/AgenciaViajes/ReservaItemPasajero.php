@@ -7,7 +7,8 @@ use Illuminate\Database\Eloquent\Model;
 // Tabla puente: qué pasajero específico va en qué ítem/actividad —
 // plan-modulo-cotizaciones-reservas.md §4. Tenant (sin CentralConnection).
 // Ambas FK son reales dentro de la misma DB tenant, así que llevan
-// belongsTo.
+// belongsTo. El check-in NO va acá: tabla propia ReservaItemCheckin (T-041);
+// las columnas viejas checkin_realizado/checkin_hora quedan sin uso.
 class ReservaItemPasajero extends Model
 {
     protected $table = 'reserva_item_pasajero';
@@ -15,13 +16,6 @@ class ReservaItemPasajero extends Model
     protected $fillable = [
         'reserva_item_id',
         'reserva_pasajero_id',
-        'checkin_realizado',
-        'checkin_hora',
-    ];
-
-    protected $casts = [
-        'checkin_realizado' => 'boolean',
-        'checkin_hora' => 'datetime',
     ];
 
     public function reservaItem()

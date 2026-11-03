@@ -75,9 +75,49 @@ cd admin-start-kit && npm run type-check
 ---
 
 ## Resultado
-- **Commits:**
-- **Tests:** (nuevos / suite completa)
+- **Commits:** `fix(agencia): el check-in en su propia tabla, no cambia la asignación ni la facturación (T-041)` en `fix/T-041-checkin-propio`.
+- **Qué cambió:**
+  - Tabla `reserva_item_checkins` (`2026_11_03_200000`, FK con cascada a ítem y pasajero, única por par)
+    y copia de datos aparte (`2026_11_03_200100`, `INSERT … ON CONFLICT DO NOTHING`, idempotente; la
+    hora vacía cae a `updated_at`). Modelo `ReservaItemCheckin`.
+  - `ReservaItemPasajeroController::checkin()`: marcar = `createOrFirst` (el índice único frena el
+    doble clic sin 500), desmarcar = borrar la fila; pasajero no asignado a un servicio con
+    asignación → 422. Ya no crea asignaciones. Responde `reserva_item_checkin` (antes
+    `reserva_item_pasajero`; el frontend no lo lee).
+  - `ReporteOperativoController` lee la tabla nueva; Excel y PDF salen de la misma fila armada, sin
+    cambios propios.
+  - `ReservaItemPasajero` sin `checkin_*` en `fillable`/`casts`; tipo TS `ReservaItemPasajero` igual.
+  - `LimpiarOperacionPrueba`: la tabla nueva entra en `TABLAS_A_BORRAR` (si no, el comando frena).
+  - `TenantProvisioningService`: solo el docblock (cobertura transitiva por FK NOT NULL).
+  - `ReservaItemQuitarService`/`QuitarPasajeroReservaService` sin cambios: la cascada limpia.
+  - Backlog: línea en «Por analizar» para quitar las columnas viejas tras producción.
+- **Tests:** `ReporteOperativoCheckinTest` reescrito (12): CA1 ×2 (sin asignación + la vista previa de
+  facturación lo ofrece en `items_sin_asignar_disponibles`, no en pendientes), CA2 ×2, CA3, doble
+  marcado, otra reserva, reserva no activa, reporte, CA4 (corre la migración de copia dos veces),
+  CA6 (quitar servicio), quitar pasajero (vía `QuitarPasajeroReservaService`).
+  `ReservaModificacionAplicarTest::ca4` adaptado a la tabla nueva. Filtro de la tarea + relacionados:
+  134 en verde. **Suite completa contra PostgreSQL: 1908 pasan, 1 falla** —
+  `ProveedorFiltroDestinoTest::sin filtro devuelve todos`, el intermitente ya anotado en «Por
+  analizar»; repetido solo, pasa (4/4). `type-check`: 47 errores, igual que la base.
+- **Migraciones:** aplicadas a `sistemafe_test_migrations` por archivo (con `down()` probado) y con
+  `tenants:migrate-verticales` (agencia-demo; no tenía check-ins viejos que copiar).
+- **Prueba funcional (CA5)** en agencia-demo como admin@agencia-demo.test: reserva
+  RDKM-1026-0000002, tour del 06-nov sin asignación, 2 pasajeros. Marcar a KREISLER → «1/6
+  check-in», queda tras recargar, Rosa sigue en el tour; en la base una fila en
+  `reserva_item_checkins` (hora UTC) y 0 asignaciones del ítem. Excel (hojas «Vista operativa» y
+  «Datos») y PDF (texto vía Ghostscript): Sí para Kreisler, No para Rosa. Desmarcado al final:
+  agencia-demo quedó como estaba.
 - **Desviaciones de la tarea y por qué:**
+  - Dos migraciones en vez de una: la copia de datos aparte se puede probar sola (CA4) y repetir.
+  - Quitar un pasajero se probó con `QuitarPasajeroReservaService`: `ReservaPasajeroController::destroy()`
+    hoy responde siempre 422 (se quita desde «Modificar reserva»).
+  - `checkin_hora` no se muestra en ninguna pantalla ni export (solo viaja en el JSON, como antes);
+    no se agregó.
 
 ## Hallazgos fuera de alcance
-- 
+- Un check-in queda guardado si después se desasigna a ese pasajero del servicio (antes se perdía
+  con la fila de asignación). No se ve en el reporte (solo salen los que viajan) y reaparece si se
+  lo vuelve a asignar. Decidir si al desasignar hay que borrarlo.
+- Las asignaciones «para todos» que creó el check-in viejo siguen (opción a). Los servicios así
+  siguen saliendo como «pendiente: faltan pasajeros» al facturar por grupos hasta que alguien las
+  quite a mano en la pestaña Asignación.
