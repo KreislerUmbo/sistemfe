@@ -13,7 +13,10 @@ use App\Models\Client\Client;
 use App\Services\AgenciaViajes\AlternativaCreacionException;
 use App\Services\AgenciaViajes\CotizacionCreacionService;
 use App\Services\AgenciaViajes\RecalculoPorPersonaService;
+use App\Services\AgenciaViajes\SeguimientoCotizacion;
 use App\Services\AgenciaViajes\TourLineaService;
+use App\Services\HoraPeru;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -49,6 +52,7 @@ class CotizacionController extends Controller
         private RecalculoPorPersonaService $recalculoPorPersona,
         private TourLineaService $tourLinea,
         private CotizacionCreacionService $cotizacionCreacion,
+        private SeguimientoCotizacion $seguimiento,
     ) {
     }
 
@@ -64,7 +68,8 @@ class CotizacionController extends Controller
         // delCotizador() — la cotización de soporte de una venta directa no
         // es una cotización comercial (ver Cotizacion::$origen).
         // T-059 — origenContacto: columna «Origen» del listado.
-        $query = Cotizacion::propias()->delCotizador()->with(array_merge(['cliente', 'origenContacto:id,nombre'], Cotizacion::RELACIONES_ESTADO_RESUMEN))->withCount('alternativas');
+        // T-053 — resultadoMotivo: «Perdida: Precio» en la columna «Seguimiento».
+        $query = Cotizacion::propias()->delCotizador()->with(array_merge(['cliente', 'origenContacto:id,nombre', 'resultadoMotivo:id,nombre'],Cotizacion::RELACIONES_ESTADO_RESUMEN))->withCount('alternativas');
 
         if ($request->filled('origen_contacto_id')) {
             $query->where('origen_contacto_id', (int) $request->get('origen_contacto_id'));
@@ -133,6 +138,14 @@ class CotizacionController extends Controller
         // un paginate() gigante.
         $perPage = min(100, max(1, (int) $request->get('per_page', 15)));
 
+        // T-053 — «Por seguir hoy»: en SQL para que pagine bien; su orden (lo más atrasado
+        // primero) va antes del id desc.
+        $hoy = CarbonImmutable::parse(HoraPeru::hoyTexto());
+        $diasAviso = $this->seguimiento->diasAviso();
+        if ($request->boolean('por_seguir')) {
+            $this->seguimiento->aplicarFiltroPorSeguir($query, $hoy->toDateString(), $diasAviso);
+        }
+
         $cotizaciones = $query->orderByDesc('id')->paginate($perPage);
 
         $cotizaciones->getCollection()->transform(function (Cotizacion $c) {
@@ -140,9 +153,14 @@ class CotizacionController extends Controller
             // T-074 — qué alternativa se reservó y con qué código, con las relaciones ya
             // precargadas (sin consultas extra por fila).
             $c->alternativa_reservada = $c->alternativaReservada();
+            // T-053 (CA4) — tiene_grupos_sin_resolver carga los ítems de cada alternativa (una
+            // consulta por alternativa) y el listado no lo usa.
+            $c->alternativas->each->setAppends([]);
 
             return $c;
         });
+        // T-053 — columna «Seguimiento», con una sola consulta de acciones para toda la página.
+        $this->seguimiento->paraPagina($cotizaciones->getCollection(), $hoy, $diasAviso);
 
         return response()->json([
             'total' => $cotizaciones->total(),

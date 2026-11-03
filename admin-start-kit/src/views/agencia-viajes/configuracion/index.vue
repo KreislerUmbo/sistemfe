@@ -90,6 +90,12 @@
                                     <label class="form-label mb-1 small fw-semibold text-secondary">Días vigencia cotización</label>
                                     <input type="number" class="form-control form-control-sm" v-model.number="form.dias_vigencia_cotizacion" placeholder="Sin límite">
                                 </div>
+                                <!-- T-053: «Vence en N días» en el listado y el filtro «Por seguir hoy». -->
+                                <div class="col-6 col-md-3">
+                                    <label class="form-label mb-1 small fw-semibold text-secondary">Días de aviso antes del vencimiento</label>
+                                    <input type="number" min="0" max="60" class="form-control form-control-sm" v-model.number="form.dias_aviso_vencimiento_cotizacion">
+                                    <small class="text-muted d-block mt-1">Con cuántos días de anticipación una cotización enviada aparece «Por seguir hoy».</small>
+                                </div>
                                 <div class="col-6 col-md-3">
                                     <label class="form-label mb-1 small fw-semibold text-secondary">Días limpieza alt. descartadas</label>
                                     <input type="number" class="form-control form-control-sm" v-model.number="form.dias_limpieza_alternativas_descartadas" placeholder="Sin límite">
@@ -688,6 +694,7 @@ const form = ref<ConfiguracionAgencia>({
     destino_tributario_default: 'nacional',
     moneda_cotizacion_default: 'PEN',
     dias_proximo_contacto: 2,
+    dias_aviso_vencimiento_cotizacion: 2,
 });
 
 const cuentasBancarias = ref<CuentaBancaria[]>([]);

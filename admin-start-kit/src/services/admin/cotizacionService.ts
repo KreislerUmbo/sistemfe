@@ -12,6 +12,8 @@ export const cotizacionService = {
     origen_contacto_id?: number
     fecha_desde?: string
     fecha_hasta?: string
+    // T-053: «Por seguir hoy».
+    por_seguir?: 1
   } = {}) {
     const response = await httpClient.get('/cotizaciones', { params })
     return response.data as { total: number; paginate: number; cotizaciones: Cotizacion[] }

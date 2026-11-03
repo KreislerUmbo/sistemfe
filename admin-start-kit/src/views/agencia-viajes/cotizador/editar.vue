@@ -824,6 +824,19 @@
                                 <span v-if="descargandoCondiciones" class="spinner-border spinner-border-sm me-1"></span>
                                 <i v-else class="fas fa-file-contract me-1"></i>Descargar condiciones generales
                             </button>
+                            <!-- T-053: vigencia de la enviada y «Extender vigencia» (vigente o vencida). -->
+                            <div v-if="alternativaActiva.estado === 'enviada' && !modificacionInfo && !cotizacionPerdida"
+                                class="d-flex align-items-center justify-content-between gap-2 small">
+                                <span v-if="vigenciaActiva" :class="vigenciaActiva.vencida ? 'text-danger' : 'text-muted'">
+                                    <i class="fas fa-hourglass-half me-1"></i>{{ vigenciaActiva.vencida ? 'Vencida el' : 'Vigente hasta el' }} {{ vigenciaActiva.dia }}
+                                </span>
+                                <span v-else class="text-muted"><i class="fas fa-hourglass-half me-1"></i>Sin fecha de vencimiento</span>
+                                <button type="button" class="btn btn-outline-primary btn-sm text-nowrap" @click="extendiendoVigencia = true">
+                                    <i class="fas fa-calendar-plus me-1"></i>Extender vigencia
+                                </button>
+                            </div>
+                            <ExtenderVigenciaModal v-if="extendiendoVigencia" :alternativa-id="alternativaActiva.id" :nombre="alternativaActiva.nombre"
+                                :dias-vigencia="configAgencia?.dias_vigencia_cotizacion" @cerrar="extendiendoVigencia = false" @extendida="onVigenciaExtendida" />
                             <EnviarAlternativa v-if="!modificacionInfo" :alternativa="alternativaActiva" :cliente="cotizacion?.cliente ?? null"
                                 :destino="cotizacion?.destino ?? ''" :total="totalLocal" :descargar-pdf="descargarPdfAlternativa"
                                 :hay-acciones-pendientes="(accionesRef?.cantidad ?? 0) > 0"
@@ -1438,6 +1451,7 @@ import EnviarAlternativa from '@/components/AgenciaViajes/EnviarAlternativa.vue'
 import HistorialActividadesCotizacion from '@/components/AgenciaViajes/HistorialActividadesCotizacion.vue';
 import AccionesPendientes from '@/components/Clientes/AccionesPendientes.vue';
 import CerrarComoPerdidaModal from '@/components/AgenciaViajes/CerrarComoPerdidaModal.vue';
+import ExtenderVigenciaModal from '@/components/AgenciaViajes/ExtenderVigenciaModal.vue';
 import AceptarAlternativaModal from '@/components/AgenciaViajes/AceptarAlternativaModal.vue';
 import ModificacionDiferenciaPanel from '@/components/AgenciaViajes/ModificacionDiferenciaPanel.vue';
 import PenalidadPasajeroModal from '@/components/AgenciaViajes/PenalidadPasajeroModal.vue';
@@ -1457,7 +1471,7 @@ import { servicioService } from '@/services/admin/servicioService';
 import { bibliotecaCotizadorService, type BibliotecaTipo } from '@/services/admin/bibliotecaCotizadorService';
 import { reservaService } from '@/services/admin/reservaService';
 import { useAgenciaViajesCatalogosStore } from '@/stores/agenciaViajesCatalogos';
-import { formatDiaCorto, formatFecha, formatFechaHora, hoyPeru, sumarDiasISO } from '@/helpers/fecha';
+import { formatDiaCorto, formatFecha, formatFechaHora, hoyPeru, partesFechaHoraPeru, sumarDiasISO } from '@/helpers/fecha';
 import { guiaService } from '@/services/admin/guiaService';
 import { tipoCambioAgenciaService } from '@/services/admin/tipoCambioAgenciaService';
 import type { Cotizacion, Alternativa, AlternativaItem, ProveedorTarifa, OpcionMayorista, OpcionMayoristaTour, OpcionMayoristaOpcional, OpcionHotelTarifa, Proveedor, ProveedorTipo, BibliotecaResultado, ConfiguracionAgencia, DestinoServicio, GuiaTarifa, Servicio, TipAfeIgv, DestinoTributario, TemporadaDesactualizada } from '@/types/agencia-viajes';
@@ -1964,6 +1978,24 @@ const onAlternativaEnviada = (estado: string, fechaVencimiento?: string | null) 
     const alternativa = cotizacion.value?.alternativas?.find((a: any) => a.id === alternativaActivaId.value);
     if (alternativa && estado) alternativa.estado = estado as typeof alternativa.estado;
     if (alternativa && fechaVencimiento !== undefined) alternativa.fecha_vencimiento = fechaVencimiento;
+};
+
+// T-053 — «Vigente hasta el 10/11» / «Vencida el 03/11». Extender guarda el inicio del día
+// siguiente en Perú (vigente todo el día elegido): el día que se muestra es el del segundo anterior.
+const vigenciaActiva = computed(() => {
+    const vence = alternativaActiva.value?.fecha_vencimiento;
+    const instante = vence ? Date.parse(vence) : NaN;
+    if (isNaN(instante)) return null;
+    const { fecha } = partesFechaHoraPeru(new Date(instante - 1000).toISOString());
+    return { dia: formatFecha(fecha).slice(0, 5), vencida: instante <= Date.now() };
+});
+const extendiendoVigencia = ref(false);
+
+const onVigenciaExtendida = (fechaVencimiento: string, mensaje: string) => {
+    extendiendoVigencia.value = false;
+    onAlternativaEnviada('enviada', fechaVencimiento);
+    historialRef.value?.recargar();
+    toast.success(mensaje);
 };
 
 const seleccionarAlternativa = (id: number) => {

@@ -41,6 +41,7 @@ class ConfiguracionAgenciaController extends Controller
         'modo_tours' => 'clasico',
         'moneda_cotizacion_default' => 'PEN',
         'dias_proximo_contacto' => 2,
+        'dias_aviso_vencimiento_cotizacion' => 2,
     ];
 
     public function show()
@@ -80,6 +81,8 @@ class ConfiguracionAgenciaController extends Controller
             'moneda_cotizacion_default' => 'sometimes|required|in:PEN,USD',
             // T-051 — opcional, mismo criterio.
             'dias_proximo_contacto' => 'sometimes|required|integer|min:1|max:365',
+            // T-053 — «Vence en N días» y el filtro «Por seguir hoy». Opcional, mismo criterio.
+            'dias_aviso_vencimiento_cotizacion' => 'sometimes|required|integer|min:0|max:60',
         ]);
 
         if ($validator->fails()) {

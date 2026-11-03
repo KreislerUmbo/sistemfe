@@ -255,6 +255,8 @@ export type ConfiguracionAgencia = {
   moneda_cotizacion_default?: 'PEN' | 'USD';
   // T-051 — días para la próxima acción propuesta al enviar ("Llamar en N días").
   dias_proximo_contacto?: number;
+  // T-053 — «Vence en N días» del listado y filtro «Por seguir hoy».
+  dias_aviso_vencimiento_cotizacion?: number;
 };
 
 export type TipAfeIgv = '10' | '20' | '30';
@@ -325,6 +327,9 @@ export type Cotizacion = {
   // T-074 — alternativa reservada y código de su reserva (solo en el listado).
   alternativa_reservada?: { nombre: string; reserva_id: number | null; reserva_codigo: string | null } | null;
   estado_resumen?: 'borrador' | 'enviada' | 'vencida' | 'reservada' | 'anulada' | 'descartada' | 'perdida';
+  // T-053 (CRM C6a) — columna «Seguimiento» del listado («Enviada hace 3 días · Vence mañana ·
+  // llamar hoy (Ana)»), calculada en SeguimientoCotizacion. urgente = algo para hoy o atrasado.
+  seguimiento?: { texto: string; urgente: boolean };
   // T-052 (CRM C3) — motivo de la pérdida o, opcional, de la ganancia; perdida_en (UTC) dice si
   // está cerrada como perdida. resultado_motivo y perdida_por (objeto) solo vienen en show().
   resultado_motivo_id?: number | null;
