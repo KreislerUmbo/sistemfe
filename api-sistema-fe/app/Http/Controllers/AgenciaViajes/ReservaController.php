@@ -7,6 +7,7 @@ use App\Models\AgenciaViajes\Alternativa;
 use App\Models\AgenciaViajes\AlternativaItem;
 use App\Models\AgenciaViajes\Cotizacion;
 use App\Models\AgenciaViajes\CotizacionPasajero;
+use App\Models\AgenciaViajes\CrmMotivoResultado;
 use App\Models\AgenciaViajes\OpcionHotelTarifa;
 use App\Models\AgenciaViajes\OpcionMayorista;
 use App\Models\AgenciaViajes\ProveedorTarifa;
@@ -22,6 +23,7 @@ use App\Models\AgenciaViajes\SalidaOperativa;
 use App\Models\Sale\Sale;
 use App\Services\AgenciaViajes\CodigoGeneradorService;
 use App\Services\AgenciaViajes\ReservaItemCreacionService;
+use App\Services\AgenciaViajes\ResultadoCotizacionService;
 use App\Services\AgenciaViajes\SalidaEngancheService;
 use App\Services\AgenciaViajes\SalidaOperacionService;
 use App\Services\AgenciaViajes\TourLineaService;
@@ -246,6 +248,21 @@ class ReservaController extends Controller
             ], 422);
         }
 
+        // T-052 (CRM C3): por qué se ganó, opcional. Si viene, un motivo activo de tipo 'ganada';
+        // el detalle no se exige ni con «Otro» (ayudas sin fricción).
+        $validator = Validator::make($request->all(), [
+            'resultado_motivo_id' => ['nullable', 'integer', ResultadoCotizacionService::reglaMotivo(CrmMotivoResultado::TIPO_GANADA)],
+            'resultado_detalle' => 'nullable|string|max:' . CrmMotivoResultado::DETALLE_MAX,
+        ], [
+            'resultado_motivo_id.exists' => 'El motivo elegido no está disponible.',
+            'resultado_detalle.max' => 'El detalle no puede tener más de ' . CrmMotivoResultado::DETALLE_MAX . ' caracteres.',
+        ]);
+        if ($validator->fails()) {
+            return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
+        }
+        $motivoGanadaId = $request->input('resultado_motivo_id');
+        $detalleGanada = $motivoGanadaId ? (trim((string) $request->input('resultado_detalle', '')) ?: null) : null;
+
         // Revisión rápida antes del lock: responde enseguida en el caso común.
         // La que protege de verdad se repite dentro de la transacción.
         if (! self::alternativaAceptable($alternativa)) {
@@ -289,7 +306,7 @@ class ReservaController extends Controller
         $pasajeroCatalogoIds = $request->input('pasajero_catalogo_ids', []);
 
         try {
-            [$reserva, $alertaCupoExcedido] = DB::transaction(function () use ($alternativa, $pasajeroCatalogoIds) {
+            [$reserva, $alertaCupoExcedido] = DB::transaction(function () use ($alternativa, $pasajeroCatalogoIds, $motivoGanadaId, $detalleGanada) {
                 // Doble aceptación (revisión del usuario, 23-oct-2026; mismo
                 // criterio que la auditoría F3 de la hoja de ruta): la regla es
                 // UNA reserva activa por COTIZACIÓN, no por alternativa. Por eso
@@ -298,7 +315,7 @@ class ReservaController extends Controller
                 // CodigoGeneradorService::generarParaReserva() bloquea la misma
                 // fila más adelante, en esta misma transacción: mismo orden, sin
                 // riesgo de que dos operaciones se esperen entre sí.
-                Cotizacion::where('id', $alternativa->cotizacion_id)->lockForUpdate()->firstOrFail();
+                $cotizacionBloqueada = Cotizacion::where('id', $alternativa->cotizacion_id)->lockForUpdate()->firstOrFail();
 
                 // Con el lock tomado se vuelve a leer y a revisar: mientras
                 // esperaba, la otra aceptación pudo aceptar o descartar esta.
@@ -314,6 +331,10 @@ class ReservaController extends Controller
                 AlternativaController::descartarOtras($alternativaBloqueada);
                 // T-051: las acciones pendientes de la cotización ya no tienen sentido.
                 app(AccionesCrm::class)->cerrarPendientesDeCotizacion($alternativaBloqueada->cotizacion_id, 'Cotización aceptada');
+                // T-052: el motivo de ganancia, si el vendedor eligió uno.
+                if ($motivoGanadaId) {
+                    $cotizacionBloqueada->update(['resultado_motivo_id' => $motivoGanadaId, 'resultado_detalle' => $detalleGanada]);
+                }
 
                 return $this->crearReservaDesdeAlternativa($alternativaBloqueada->fresh(), $pasajeroCatalogoIds);
             });
