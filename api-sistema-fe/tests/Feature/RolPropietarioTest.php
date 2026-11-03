@@ -164,6 +164,22 @@ final class RolPropietarioTest extends CreditosTestCase
         $this->assertSame(200, $this->como($this->duenio)->update(new Request($this->usuarioPedido($this->duenio, $this->propietarioRol->id)), (string) $this->duenio->id)->getData(true)['code']);
     }
 
+    // CA4 — un pedido sin role_id no cambia el rol (antes le quitaba el actual sin pasar por el 422).
+    public function test_editar_sin_role_id_no_le_quita_el_rol_al_propietario(): void
+    {
+        $pedido = $this->usuarioPedido($this->duenio, $this->propietarioRol->id);
+        unset($pedido['role_id']);
+        $pedido['name'] = 'Nombre nuevo';
+
+        $respuesta = $this->como($this->super)->update(new Request($pedido), (string) $this->duenio->id);
+
+        $this->assertSame(200, $respuesta->getData(true)['code']);
+        $duenio = $this->duenio->fresh();
+        $this->assertSame('Nombre nuevo', $duenio->name);
+        $this->assertTrue($duenio->hasRole(RolPropietario::NOMBRE));
+        $this->assertSame((int) $this->propietarioRol->id, (int) $duenio->role_id);
+    }
+
     // CA4
     public function test_con_dos_propietarios_se_puede_quitar_uno(): void
     {

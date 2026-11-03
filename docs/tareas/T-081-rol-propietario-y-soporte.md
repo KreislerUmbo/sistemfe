@@ -211,6 +211,10 @@ solo si lo decide. Luego restablecer la contraseña de soporte desde el panel pa
     puede quitar aunque exista otro Propietario inactivo.
   - `roles:asignar-propietario` se niega con `soporte@umbosystem.com`; `roles:sync-propietario
     --tenant=x` falla si el tenant no existe.
+  - De la revisión (03-nov): `UserController::update()` solo cambia el rol si el pedido trae
+    `role_id`. Sin él le quitaba el rol actual y no le daba ninguno (`assignRole(null)` no hace
+    nada), y así el último Propietario perdía el rol sin pasar por el 422. Test
+    `test_editar_sin_role_id_no_le_quita_el_rol_al_propietario`.
 - **Para desplegar:** `deploy.sh` (paso 7) corre `roles:sync-propietario` en todos los tenants no
   archivados. Después, por tenant: `roles:asignar-propietario dakamu dakamu@gmail.com --simular`,
   revisar, y sin `--simular`; lo mismo en credishirley con el correo de su dueño — **ese dueño

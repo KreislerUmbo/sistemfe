@@ -161,17 +161,23 @@ class UserController extends Controller
             ? [...$request->except('password'), 'password' => bcrypt($request->password)]
             : $request->except('password');
 
-        $rechazo = DB::transaction(function () use ($request, $user, $datos): ?JsonResponse {
+        // Sin role_id en el pedido el rol no cambia: antes se le quitaba el actual y no se le daba
+        // ninguno (assignRole(null) no hace nada), y así se saltaba la regla del último Propietario.
+        $cambiaRol = $request->filled('role_id') && (int) $request->role_id !== (int) $user->role_id;
+        if (! $request->filled('role_id')) {
+            unset($datos['role_id']);
+        }
+
+        $rechazo = DB::transaction(function () use ($request, $user, $datos, $cambiaRol): ?JsonResponse {
             // T-081: cambiarle el rol o ponerlo Inactivo al último Propietario dejaría el tenant
             // sin dueño. Rige también para un Super-Admin y para él mismo.
-            $quitaRol = $request->filled('role_id') && (int) $request->role_id !== (int) $user->role_id
-                && Role::whereKey($request->role_id)->value('name') !== RolPropietario::NOMBRE;
+            $quitaRol = $cambiaRol && Role::whereKey($request->role_id)->value('name') !== RolPropietario::NOMBRE;
             $desactiva = (int) $request->input('state') === User::STATE_INACTIVO && (int) $user->state !== User::STATE_INACTIVO;
             if (($quitaRol || $desactiva) && ($rechazo = $this->rechazoUltimoPropietario($user))) {
                 return $rechazo;
             }
 
-            if ($user->role_id != $request->role_id) {
+            if ($cambiaRol) {
                 $role_current = Role::find($user->role_id);
                 $user->removeRole($role_current);
 
