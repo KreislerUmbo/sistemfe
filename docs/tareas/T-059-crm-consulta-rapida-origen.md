@@ -208,12 +208,13 @@ Prueba funcional: agencia-demo, `admin@agencia-demo.test` (memoria `reference_ag
     (los usa el servicio nuevo).
 
 ## Hallazgos fuera de alcance
-- `GET crm-origenes-contacto` pide `agencia.configuracion|cotizaciones.crear` (lo fija la tarea): un
-  usuario que solo ve cotizaciones (`cotizaciones.ver`/`ver_todas`) no carga la lista del filtro por
-  origen (queda «Todos los orígenes»), y quien edita clientes sin esos permisos no ve el selector de
-  la ficha. Si molesta, abrir la lectura a `cotizaciones.ver|cotizaciones.ver_todas|edit_client`.
-- Dos altas simultáneas del mismo origen: la segunda choca con el índice único y da 500 en vez de
-  422 (improbable; el catálogo de motivos de T-052 tiene la misma carrera sin índice).
+- ~~`GET crm-origenes-contacto` solo con `agencia.configuracion|cotizaciones.crear`~~ → arreglado en
+  la revisión de Opus: la lectura se abre también a `cotizaciones.ver`, `cotizaciones.ver_todas`,
+  `register_client` y `edit_client` (filtro del listado y selector de la ficha).
+- ~~Dos altas simultáneas del mismo origen dan 500~~ → arreglado en la revisión: el choque con el
+  índice único (23505) responde 422 «Ya existe un origen con ese nombre», en el alta y al renombrar
+  (`test_alta_simultanea_del_mismo_origen_responde_422_y_no_500`). El catálogo de motivos de T-052
+  no tiene índice: ahí la carrera deja dos filas iguales, sin error.
 - El botón «Nueva Cotización» del listado se muestra sin mirar `cotizaciones.crear` (anterior a
   T-059).
 - «Nueva consulta» crea el cliente SND sin la confirmación de «nombre ya registrado» que hace

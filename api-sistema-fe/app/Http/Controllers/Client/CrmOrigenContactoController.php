@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Client\CrmOrigenContacto;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -48,11 +49,15 @@ class CrmOrigenContactoController extends Controller
             return $error;
         }
 
-        $origen = DB::transaction(fn () => CrmOrigenContacto::create([
-            'nombre' => $nombre,
-            'activo' => true,
-            'orden' => (int) CrmOrigenContacto::max('orden') + 1,
-        ]));
+        try {
+            $origen = DB::transaction(fn () => CrmOrigenContacto::create([
+                'nombre' => $nombre,
+                'activo' => true,
+                'orden' => (int) CrmOrigenContacto::max('orden') + 1,
+            ]));
+        } catch (QueryException $e) {
+            return $this->nombreDuplicado($e) ?? throw $e;
+        }
 
         return response()->json(['code' => 200, 'message' => 'Origen agregado.', 'origen' => $origen->fresh()]);
     }
@@ -81,7 +86,11 @@ class CrmOrigenContactoController extends Controller
             return $error;
         }
 
-        $origen->update($datos);
+        try {
+            DB::transaction(fn () => $origen->update($datos));
+        } catch (QueryException $e) {
+            return $this->nombreDuplicado($e) ?? throw $e;
+        }
 
         return response()->json(['code' => 200, 'message' => 'Origen actualizado.', 'origen' => $origen->fresh()]);
     }
@@ -92,10 +101,22 @@ class CrmOrigenContactoController extends Controller
             ->when($exceptoId, fn ($q) => $q->whereKeyNot($exceptoId))
             ->exists();
 
-        if (! $existe) {
+        return $existe ? $this->respuestaNombreRepetido() : null;
+    }
+
+    // Dos altas o renombres simultáneos con el mismo nombre: los dos pasan nombreRepetido() y el
+    // segundo choca con el índice único (23505 = unique_violation de Postgres). Sin esto, un 500.
+    private function nombreDuplicado(QueryException $e): ?JsonResponse
+    {
+        if (($e->errorInfo[0] ?? null) !== '23505' || ! str_contains($e->getMessage(), 'crm_origenes_contacto_nombre_unico')) {
             return null;
         }
 
+        return $this->respuestaNombreRepetido();
+    }
+
+    private function respuestaNombreRepetido(): JsonResponse
+    {
         $mensaje = 'Ya existe un origen con ese nombre.';
 
         return response()->json(['code' => 422, 'message' => $mensaje, 'errors' => ['nombre' => [$mensaje]]], 422);

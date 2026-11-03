@@ -831,9 +831,10 @@ Route::group([
     Route::put("crm-motivos-resultado/{id}", [CrmMotivoResultadoController::class, 'update'])
         ->middleware('permission:agencia.configuracion');
     // T-059 (CRM C4): orígenes de contacto (catálogo de core). Sin DELETE: se desactivan. La lectura
-    // la usan también «Nueva cotización» y «Nueva consulta».
+    // la usan también «Nueva cotización», «Nueva consulta», el filtro del listado (quien solo ve
+    // cotizaciones) y la ficha del cliente (quien registra o edita clientes).
     Route::get("crm-origenes-contacto", [CrmOrigenContactoController::class, 'index'])
-        ->middleware('permission:agencia.configuracion|cotizaciones.crear');
+        ->middleware('permission:agencia.configuracion|cotizaciones.crear|cotizaciones.ver|cotizaciones.ver_todas|register_client|edit_client');
     Route::post("crm-origenes-contacto", [CrmOrigenContactoController::class, 'store'])
         ->middleware('permission:agencia.configuracion');
     Route::put("crm-origenes-contacto/{id}", [CrmOrigenContactoController::class, 'update'])

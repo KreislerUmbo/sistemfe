@@ -385,6 +385,25 @@ class ConsultaOrigenContactoTest extends TestCase
         $this->assertSame(200, $this->codigoHttp(fn () => $this->consulta(['cliente_id' => $existente->id])));
     }
 
+    // Revisión de T-059: dos altas simultáneas del mismo nombre pasan las dos nombreRepetido(); la
+    // segunda choca con el índice único. Se simula insertando el «otro» justo antes de guardar.
+    public function test_alta_simultanea_del_mismo_origen_responde_422_y_no_500(): void
+    {
+        $this->usuario(['agencia.configuracion']);
+        CrmOrigenContacto::creating(function (CrmOrigenContacto $origen) {
+            if ($origen->nombre === 'Feria') {
+                DB::table('crm_origenes_contacto')->insert(['nombre' => 'feria', 'activo' => true, 'orden' => 99, 'created_at' => now(), 'updated_at' => now()]);
+            }
+        });
+
+        $respuesta = $this->catalogo()->store(new Request(['nombre' => 'Feria']));
+
+        $this->assertSame(422, $respuesta->getStatusCode());
+        $this->assertSame('Ya existe un origen con ese nombre.', $respuesta->getData(true)['message']);
+        // La base sigue usable después del choque (la transacción del alta se deshizo sola).
+        $this->assertSame(10, CrmOrigenContacto::count());
+    }
+
     public function test_rutas_con_sus_permisos_y_sin_delete(): void
     {
         $rutas = collect(Route::getRoutes()->getRoutes());
@@ -396,7 +415,7 @@ class ConsultaOrigenContactoTest extends TestCase
         };
 
         $this->assertFalse($rutas->contains(fn ($r) => str_contains($r->uri(), 'crm-origenes-contacto') && in_array('DELETE', $r->methods(), true)));
-        $this->assertSame('permission:agencia.configuracion|cotizaciones.crear', $permiso('GET', 'crm-origenes-contacto'));
+        $this->assertSame('permission:agencia.configuracion|cotizaciones.crear|cotizaciones.ver|cotizaciones.ver_todas|register_client|edit_client', $permiso('GET', 'crm-origenes-contacto'));
         $this->assertSame('permission:agencia.configuracion', $permiso('POST', 'crm-origenes-contacto'));
         $this->assertSame('permission:agencia.configuracion', $permiso('PUT', 'crm-origenes-contacto/{id}'));
         $this->assertSame('permission:cotizaciones.crear', $permiso('GET', 'crm/consultas/coincidencias'));
