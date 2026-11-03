@@ -332,6 +332,9 @@ export type Cotizacion = {
   perdida_en?: string | null;
   resultado_motivo?: { id: number; nombre: string; tipo: 'ganada' | 'perdida' } | null;
   perdida_por?: { id: number; name: string; surname?: string | null } | null;
+  // T-059 (CRM C4): por dónde llegó la consulta. origen_contacto solo viene en el listado.
+  origen_contacto_id?: number | null;
+  origen_contacto?: { id: number; nombre: string } | null;
 };
 
 export type Cotizaciones = {

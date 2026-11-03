@@ -208,15 +208,22 @@
       <!-- Agencia: cotizaciones y próximos días -->
       <div v-if="b.cotizaciones || b.proximos" class="row g-3 mb-3">
         <div v-if="b.cotizaciones" class="col-12 col-lg-4">
-          <router-link :to="{ name: 'agencia.cotizador.index' }" class="card border-0 shadow-sm h-100 mb-0 text-reset tarjeta-enlace">
-            <div class="card-body cifra">
+          <div class="card border-0 shadow-sm h-100 mb-0 tarjeta-enlace">
+            <router-link :to="{ name: 'agencia.cotizador.index' }" class="card-body cifra text-reset d-block">
               <small class="text-muted text-uppercase fw-semibold">Cotizaciones del mes</small>
               <div class="fs-4 fw-bold mt-1">{{ b.cotizaciones.creadas }}</div>
               <small class="text-muted d-block">{{ b.cotizaciones.reservadas }} reservada(s) · {{ b.cotizaciones.conversion }} % de conversión</small>
               <small class="text-muted d-block">{{ b.cotizaciones.enviadas }} enviada(s) esperando respuesta · {{ b.cotizaciones.borrador }} en borrador</small>
               <small v-if="b.cotizaciones.perdidas" class="text-muted d-block">{{ b.cotizaciones.perdidas }} perdida(s)</small>
+            </router-link>
+            <!-- T-059: registrar a alguien que pregunta sin salir del Inicio. -->
+            <div v-if="auth.isPermitedRoute('cotizaciones.crear')" class="card-footer bg-transparent border-0 pt-0">
+              <button type="button" class="btn btn-sm btn-outline-primary" @click="mostrarConsulta = true">
+                <i class="fas fa-comment-dots me-1"></i>Nueva consulta
+              </button>
             </div>
-          </router-link>
+          </div>
+          <NuevaConsultaModal v-if="mostrarConsulta" @cerrar="mostrarConsulta = false" />
         </div>
         <div v-if="b.proximos" class="col-12" :class="b.cotizaciones ? 'col-lg-8' : ''">
           <div class="card border-0 shadow-sm h-100 mb-0">
@@ -290,6 +297,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import DefaultLayout from '@/layouts/DefaultLayout.vue'
 import ApexChart from '@/components/ApexChart.vue'
 import MisPendientesHoy from '@/components/Clientes/MisPendientesHoy.vue'
+import NuevaConsultaModal from '@/components/AgenciaViajes/NuevaConsultaModal.vue'
 import { dashboardService } from '@/services/admin/dashboardService'
 import { useAuthStore } from '@/stores/auth'
 import { useLayoutStore } from '@/stores/layout'
@@ -308,6 +316,8 @@ const cargando = ref(false)
 const error = ref(false)
 const verTabla = ref(false)
 const monedaGrafico = ref('PEN')
+// T-059 — «Nueva consulta» desde el bloque de cotizaciones (Agencia).
+const mostrarConsulta = ref(false)
 
 const b = computed(() => datos.value?.bloques ?? null)
 const sinBloques = computed(() => !b.value || (!Object.keys(b.value).length && !cajas.value))

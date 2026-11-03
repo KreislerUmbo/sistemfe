@@ -8,15 +8,22 @@
                 </h5>
                 <small class="text-muted">{{ total }} registro(s) encontrado(s)</small>
             </div>
-            <router-link to="/agencia-viajes/cotizador/nueva" class="btn btn-primary fw-semibold shadow-sm">
-                <i class="fas fa-plus me-2"></i>Nueva Cotización
-            </router-link>
+            <div class="d-flex gap-2">
+                <!-- T-059: registrar en un paso a alguien que pregunta. -->
+                <button v-if="puedeCrear" type="button" class="btn btn-outline-primary fw-semibold" @click="mostrarConsulta = true">
+                    <i class="fas fa-comment-dots me-2"></i>Nueva consulta
+                </button>
+                <router-link to="/agencia-viajes/cotizador/nueva" class="btn btn-primary fw-semibold shadow-sm">
+                    <i class="fas fa-plus me-2"></i>Nueva Cotización
+                </router-link>
+            </div>
         </div>
+        <NuevaConsultaModal v-if="mostrarConsulta" @cerrar="mostrarConsulta = false" />
 
         <div class="card border-0 shadow-sm mb-3">
             <div class="card-body">
                 <div class="row g-2">
-                    <div class="col-12 col-md-5">
+                    <div class="col-12 col-md-3">
                         <div class="input-group input-group-sm">
                             <input type="text" class="form-control" placeholder="Buscar por código, destino o cliente..." v-model="search" @keyup.enter="buscar">
                             <button class="btn btn-primary" @click="buscar"><i class="fas fa-search"></i></button>
@@ -32,6 +39,13 @@
                             <option value="vencida">Vencida</option>
                             <option value="descartada">Descartada</option>
                             <option value="perdida">Perdida</option>
+                        </select>
+                    </div>
+                    <!-- T-059: todos los orígenes (también los desactivados: hay cotizaciones con ellos). -->
+                    <div class="col-6 col-md-2">
+                        <select class="form-select form-select-sm" v-model="origenContactoId" aria-label="Origen" @change="buscar">
+                            <option :value="null">Todos los orígenes</option>
+                            <option v-for="o in origenes" :key="o.id" :value="o.id">{{ o.nombre }}</option>
                         </select>
                     </div>
                     <div class="col-6 col-md-2">
@@ -58,6 +72,7 @@
                                 <th class="ps-3">Código</th>
                                 <th>Cliente</th>
                                 <th>Destino</th>
+                                <th>Origen</th>
                                 <th>Fechas del viaje</th>
                                 <th class="text-center">Estado</th>
                                 <th class="text-center">Alternativas</th>
@@ -66,15 +81,19 @@
                         </thead>
                         <tbody>
                             <tr v-if="loading">
-                                <td colspan="7" class="text-center py-5 text-muted"><div class="spinner-border spinner-border-sm me-2"></div>Cargando...</td>
+                                <td colspan="8" class="text-center py-5 text-muted"><div class="spinner-border spinner-border-sm me-2"></div>Cargando...</td>
                             </tr>
                             <tr v-else-if="cotizaciones.length === 0">
-                                <td colspan="7" class="text-center py-5 text-muted fst-italic">Sin cotizaciones registradas.</td>
+                                <td colspan="8" class="text-center py-5 text-muted fst-italic">Sin cotizaciones registradas.</td>
                             </tr>
                             <tr v-for="cotizacion in cotizaciones" :key="cotizacion.id">
                                 <td class="ps-3 fw-semibold">{{ cotizacion.codigo }}</td>
                                 <td>{{ cotizacion.cliente?.full_name }}</td>
                                 <td>{{ cotizacion.destino }}</td>
+                                <td class="small">
+                                    <span v-if="cotizacion.origen_contacto">{{ cotizacion.origen_contacto.nombre }}</span>
+                                    <span v-else class="text-muted">—</span>
+                                </td>
                                 <td class="small">
                                     <span v-if="cotizacion.fecha_viaje_desde">
                                         {{ formatFecha(cotizacion.fecha_viaje_desde) }} — {{ formatFecha(cotizacion.fecha_viaje_hasta) }}
@@ -138,6 +157,9 @@ import { ref, computed, onMounted } from 'vue';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import Swal from 'sweetalert2/dist/sweetalert2.js';
 import { cotizacionService } from '@/services/admin/cotizacionService';
+import { crmOrigenContactoService, type OrigenContacto } from '@/services/admin/crmOrigenContactoService';
+import NuevaConsultaModal from '@/components/AgenciaViajes/NuevaConsultaModal.vue';
+import { useAuthStore } from '@/stores/auth';
 import type { Cotizacion } from '@/types/agencia-viajes';
 import { formatFecha } from '@/helpers/fecha';
 
@@ -162,6 +184,11 @@ const badgeEstado = (estado?: Cotizacion['estado_resumen']) => {
 const cotizaciones = ref<Cotizacion[]>([]);
 const search = ref<string>('');
 const estadoResumen = ref<string>('');
+// T-059 — filtro por origen y «Nueva consulta».
+const origenes = ref<OrigenContacto[]>([]);
+const origenContactoId = ref<number | null>(null);
+const mostrarConsulta = ref<boolean>(false);
+const puedeCrear = useAuthStore().isPermitedRoute('cotizaciones.crear');
 const fechaDesde = ref<string>('');
 const fechaHasta = ref<string>('');
 const total = ref<number>(0);
@@ -179,6 +206,7 @@ const list = async () => {
             per_page: paginate.value,
             search: search.value || undefined,
             estado_resumen: estadoResumen.value || undefined,
+            origen_contacto_id: origenContactoId.value ?? undefined,
             fecha_desde: fechaDesde.value || undefined,
             fecha_hasta: fechaHasta.value || undefined,
         });
@@ -207,6 +235,7 @@ const irAPagina = (nuevaPagina: number) => {
 const limpiarFiltros = () => {
     search.value = '';
     estadoResumen.value = '';
+    origenContactoId.value = null;
     fechaDesde.value = '';
     fechaHasta.value = '';
     buscar();
@@ -238,5 +267,9 @@ const eliminarCotizacion = async (cotizacion: Cotizacion) => {
     }
 };
 
-onMounted(() => list());
+onMounted(() => Promise.all([
+    list(),
+    // Sin la lista el filtro solo ofrece «Todos los orígenes».
+    crmOrigenContactoService.listar().then((res) => { origenes.value = res.origenes; }).catch(() => undefined),
+]));
 </script>

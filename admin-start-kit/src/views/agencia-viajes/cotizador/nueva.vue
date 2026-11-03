@@ -65,11 +65,20 @@
                         <CampoFecha v-model="fechaViajeHasta" :disabled="sinFechaExacta" />
                         <div v-if="errores.fecha_viaje_hasta" class="invalid-feedback d-block">{{ errores.fecha_viaje_hasta }}</div>
                     </div>
-                    <div class="col-12 col-md-8 d-flex align-items-end">
+                    <div class="col-12 col-md-4 d-flex align-items-end">
                         <div class="form-check">
                             <input class="form-check-input" type="checkbox" id="sin-fecha-exacta" v-model="sinFechaExacta">
                             <label class="form-check-label small text-muted" for="sin-fecha-exacta">Todavía no tiene fecha exacta</label>
                         </div>
+                    </div>
+                    <!-- T-059: opcional; por defecto el último que usó este usuario. -->
+                    <div class="col-12 col-md-4">
+                        <label class="form-label mb-1 small fw-semibold text-secondary" for="nueva-origen">¿Por dónde llegó?</label>
+                        <select id="nueva-origen" class="form-select form-select-sm" :class="{ 'is-invalid': errores.origen_contacto_id }" v-model="origenContactoId">
+                            <option :value="null">Sin indicar</option>
+                            <option v-for="o in origenes" :key="o.id" :value="o.id">{{ o.nombre }}</option>
+                        </select>
+                        <div v-if="errores.origen_contacto_id" class="invalid-feedback">{{ errores.origen_contacto_id }}</div>
                     </div>
                 </div>
             </div>
@@ -183,6 +192,7 @@ import ClientFormQuick from '@/components/Sales/ClientFormQuick.vue';
 import DestinoTreeSelect from '@/components/AgenciaViajes/DestinoTreeSelect.vue';
 import { cotizacionService } from '@/services/admin/cotizacionService';
 import { configuracionAgenciaService } from '@/services/admin/configuracionAgenciaService';
+import { crmOrigenContactoService, type OrigenContacto } from '@/services/admin/crmOrigenContactoService';
 import type { Client } from '@/types/clients';
 
 const router = useRouter();
@@ -214,14 +224,21 @@ const tipoCambioValor = ref<number | null>(null);
 const tipoCambioRequiereConfirmacion = ref<boolean>(false);
 const tipoCambioConfirmado = ref<boolean>(false);
 const errores = ref<Record<string, string>>({});
+// T-059 — origen del contacto (opcional).
+const origenes = ref<OrigenContacto[]>([]);
+const origenContactoId = ref<number | null>(null);
 
 onMounted(async () => {
-    try {
-        const res = await configuracionAgenciaService.obtener();
-        monedaCotizacion.value = res.configuracion_agencia.moneda_cotizacion_default ?? 'PEN';
-    } catch {
-        // Sin configuración se queda en PEN: igual se puede elegir a mano.
-    }
+    await Promise.all([
+        configuracionAgenciaService.obtener()
+            .then((res) => { monedaCotizacion.value = res.configuracion_agencia.moneda_cotizacion_default ?? 'PEN'; })
+            // Sin configuración se queda en PEN: igual se puede elegir a mano.
+            .catch(() => undefined),
+        crmOrigenContactoService.listar({ solo_activos: true })
+            .then((res) => { origenes.value = res.origenes; origenContactoId.value = res.ultimo_del_usuario; })
+            // Sin la lista el origen queda «Sin indicar»: es opcional.
+            .catch(() => undefined),
+    ]);
 });
 
 const onClientSearchInput = () => {
@@ -310,6 +327,7 @@ const crear = async () => {
             moneda_cotizacion: monedaCotizacion.value,
             tipo_cambio_valor: pedirTipoCambio.value ? tipoCambioValor.value : null,
             tipo_cambio_confirmado: pedirTipoCambio.value && tipoCambioConfirmado.value,
+            origen_contacto_id: origenContactoId.value,
         });
 
         router.push(`/agencia-viajes/cotizador/${res.cotizacion.id}`);
