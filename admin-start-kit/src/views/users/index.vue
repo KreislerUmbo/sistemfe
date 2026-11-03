@@ -532,7 +532,7 @@ const store = async () => {
                 }
             }
 
-            if (!desactivado || !(await ofrecerTraspaso(desactivado.id, desactivado.nombre, String(res.data.message)))) {
+            if (!desactivado || !(await ofrecerTraspaso(desactivado.id, desactivado.nombre, "Usuario guardado"))) {
                 (Swal as TVueSwalInstance).fire(
                     "Felicitaciones!",
                     res.data.message,
