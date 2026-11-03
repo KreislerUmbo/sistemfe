@@ -1142,8 +1142,6 @@ export type ReservaItemPasajero = {
   reserva_item_id: number;
   reserva_pasajero_id: number;
   reserva_pasajero?: ReservaPasajero;
-  checkin_realizado?: boolean;
-  checkin_hora?: string | null;
 };
 
 // Estado de facturación REAL de la reserva (2026-09-22) — solo cuenta un

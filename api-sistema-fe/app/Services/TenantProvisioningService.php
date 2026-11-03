@@ -524,7 +524,10 @@ class TenantProvisioningService
      * - reserva_item_pasajero (Sesión 10, columnas checkin_realizado/checkin_hora) no
      *   cambia nada acá: son columnas nuevas sobre una tabla ya cubierta transitivamente
      *   desde Sesión 8a (vía reserva_item_id/reserva_pasajero_id, ambas NOT NULL) — un
-     *   ALTER TABLE no agrega ninguna raíz nueva.
+     *   ALTER TABLE no agrega ninguna raíz nueva. Esas columnas quedaron sin uso (T-041).
+     * - reserva_item_checkins (T-041, el check-in en tabla propia) NO necesita chequeo
+     *   propio: reserva_item_id y reserva_pasajero_id son NOT NULL → misma cobertura
+     *   transitiva que reserva_item_pasajero.
      * - tipos_recordatorio (Sesión 10) SÍ necesita chequeo propio: sin ninguna FK (es el
      *   catálogo en sí), carga inicial vía TipoRecordatorioSeeder (standalone, mismo
      *   criterio que ReglaCancelacionSeeder — NO corre en tenants:provision), así que

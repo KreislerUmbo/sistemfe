@@ -11,8 +11,7 @@ use Illuminate\Database\Eloquent\Model;
 // reporte sin ninguna relación con el vuelo — compartir la fila fue el bug
 // real encontrado en pruebas: desmarcar un pasajero en Asignación borraba
 // el vuelo ya cargado). Cada fila es independiente por (reserva_item,
-// reserva_pasajero) — sin necesidad de "materializar a todos primero" como
-// sí requiere reserva_item_pasajero.checkin_*.
+// reserva_pasajero), igual que el check-in (ReservaItemCheckin, T-041).
 //
 // Sin cast 'date' en vuelo_fecha_ida/vuelta a propósito — mismo criterio
 // que ReservaPasajero.vuelo_fecha_ida/vuelta (sin cast ahí tampoco): así

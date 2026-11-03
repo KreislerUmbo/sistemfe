@@ -23,6 +23,7 @@ use App\Models\AgenciaViajes\ProveedorServicio;
 use App\Models\AgenciaViajes\ProveedorTarifa;
 use App\Models\AgenciaViajes\Reserva;
 use App\Models\AgenciaViajes\ReservaItem;
+use App\Models\AgenciaViajes\ReservaItemCheckin;
 use App\Models\AgenciaViajes\ReservaItemPasajero;
 use App\Models\AgenciaViajes\ReservaModificacion;
 use App\Models\AgenciaViajes\ReservaPasajero;
@@ -657,8 +658,7 @@ class ReservaModificacionAplicarTest extends TestCase
         ]);
         // Check-in de Carla en el taller; en la versión nueva se suma el pasajero nuevo al taller.
         $taller = $this->ri($reserva, 'solo_carla');
-        ReservaItemPasajero::where('reserva_item_id', $taller->id)->where('reserva_pasajero_id', $carla)
-            ->update(['checkin_realizado' => true, 'checkin_hora' => now()]);
+        ReservaItemCheckin::create(['reserva_item_id' => $taller->id, 'reserva_pasajero_id' => $carla, 'checkin_hora' => now()]);
 
         $this->cambiarPasajeros($m, [], [30]);
         $copiaNueva = CotizacionPasajero::where('cotizacion_id', $m->cotizacion_id)->whereNull('reserva_pasajero_id')->firstOrFail();
@@ -675,9 +675,10 @@ class ReservaModificacionAplicarTest extends TestCase
         $this->assertSame('20', $traslado->tip_afe_igv);
         $this->assertSame('amazonia', $traslado->destino_tributario);
 
-        $filaCarla = ReservaItemPasajero::where('reserva_item_id', $taller->id)->where('reserva_pasajero_id', $carla)->firstOrFail();
-        $this->assertTrue($filaCarla->checkin_realizado, 'el check-in de quien sigue en el servicio no se pierde');
-        $this->assertNotNull($filaCarla->checkin_hora);
+        $this->assertTrue(
+            ReservaItemCheckin::where('reserva_item_id', $taller->id)->where('reserva_pasajero_id', $carla)->exists(),
+            'el check-in de quien sigue en el servicio no se pierde'
+        );
         $this->assertSame(2, ReservaItemPasajero::where('reserva_item_id', $taller->id)->count(), 'el pasajero nuevo entra al taller');
 
         $pasajeroAna = ReservaPasajero::findOrFail($ana);
