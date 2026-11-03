@@ -28,9 +28,13 @@ class SeguimientoCotizacion
         return (int) (ConfiguracionAgencia::value('dias_aviso_vencimiento_cotizacion') ?? 2);
     }
 
-    // Cotizaciones abiertas con una acción pendiente para hoy o atrasada, o con una alternativa
-    // enviada que vence dentro de $diasAviso días (o ya venció). Lo más urgente primero; el
-    // controller desempata por id desc.
+    // Cotizaciones abiertas con una acción pendiente para hoy o atrasada, o cuya última vigencia
+    // vence dentro de $diasAviso días (o ya venció). Lo más urgente primero; el controller
+    // desempata por id desc.
+    //
+    // La vigencia es la de la cotización, no la de cada alternativa (revisión de T-053): mientras
+    // quede una enviada vigente hay una propuesta viva, como en Cotizacion::estadoResumen(). Por eso
+    // se mira la última fecha_vencimiento entre las enviadas, y ninguna si alguna no tiene.
     public function aplicarFiltroPorSeguir(Builder $query, string $hoy, int $diasAviso): void
     {
         $limiteVencimiento = HoraPeru::finDiaUtc(CarbonImmutable::parse($hoy)->addDays($diasAviso)->toDateString());
@@ -38,18 +42,20 @@ class SeguimientoCotizacion
         $query->abiertas()
             ->where(function (Builder $q) use ($hoy, $limiteVencimiento) {
                 $q->whereExists(fn ($s) => $this->accionesPendientes($s)->where('crm_acciones.fecha', '<=', $hoy))
-                    ->orWhereExists(fn ($s) => $this->enviadasConVencimiento($s)->where('alternativas.fecha_vencimiento', '<=', $limiteVencimiento));
+                    ->orWhere(fn ($s) => $this->ultimaVigencia($s, 'alternativas.fecha_vencimiento'), '<=', $limiteVencimiento);
             });
 
-        // LEAST ignora los NULL: la fecha de la acción pendiente más vieja o el día Perú del
-        // vencimiento más próximo, la que sea menor.
+        // LEAST ignora los NULL: la fecha de la acción pendiente más vieja o el día Perú de la
+        // última vigencia, la que sea menor.
         $accionMasVieja = $this->accionesPendientes($query->getQuery()->newQuery())->selectRaw('MIN(crm_acciones.fecha)');
-        $vencimientoMasProximo = $this->enviadasConVencimiento($query->getQuery()->newQuery())
-            ->selectRaw("MIN(((alternativas.fecha_vencimiento - interval '1 second') AT TIME ZONE 'UTC' AT TIME ZONE '" . HoraPeru::ZONA . "')::date)");
+        $diaUltimaVigencia = $this->ultimaVigencia(
+            $query->getQuery()->newQuery(),
+            "((alternativas.fecha_vencimiento - interval '1 second') AT TIME ZONE 'UTC' AT TIME ZONE '" . HoraPeru::ZONA . "')::date",
+        );
 
         $query->orderByRaw(
-            "LEAST(({$accionMasVieja->toSql()}), ({$vencimientoMasProximo->toSql()})) ASC",
-            array_merge($accionMasVieja->getBindings(), $vencimientoMasProximo->getBindings())
+            "LEAST(({$accionMasVieja->toSql()}), ({$diaUltimaVigencia->toSql()})) ASC",
+            array_merge($accionMasVieja->getBindings(), $diaUltimaVigencia->getBindings())
         );
     }
 
@@ -109,30 +115,26 @@ class SeguimientoCotizacion
             };
         }
 
-        $diasVencimiento = $enviadas
-            ->filter(fn (Alternativa $a) => $a->fecha_vencimiento !== null)
-            ->map(fn (Alternativa $a) => [
-                'vencida' => $a->fecha_vencimiento->isPast(),
-                'dias' => $this->diasEntre($hoy, $this->diaVencimiento($a)),
-            ]);
-        if ($diasVencimiento->contains(fn ($v) => $v['dias'] <= 0)) {
-            $urgente = true;
-        }
-
-        if ($estado === 'vencida') {
-            $dias = -$diasVencimiento->max('dias');
-            $partes[] = match ($dias) {
-                0 => 'Vencida hoy',
-                1 => 'Vencida ayer',
-                default => "Vencida hace {$dias} días",
-            };
-        } else {
-            $proxima = $diasVencimiento->where('vencida', false)->min('dias');
-            if ($proxima !== null && $proxima <= $diasAviso) {
-                $partes[] = match ($proxima) {
+        // La vigencia de la cotización es la última entre sus enviadas (ver aplicarFiltroPorSeguir()):
+        // una alternativa vieja vencida no cuenta mientras otra siga vigente.
+        $ultima = $enviadas->isNotEmpty() && $enviadas->every(fn (Alternativa $a) => $a->fecha_vencimiento !== null)
+            ? $enviadas->sortByDesc(fn (Alternativa $a) => $a->fecha_vencimiento->getTimestamp())->first()
+            : null;
+        if ($ultima) {
+            $dias = $this->diasEntre($hoy, $this->diaVencimiento($ultima));
+            if ($estado === 'vencida') {
+                $urgente = true;
+                $partes[] = match (-$dias) {
+                    0 => 'Vencida hoy',
+                    1 => 'Vencida ayer',
+                    default => 'Vencida hace ' . (-$dias) . ' días',
+                };
+            } elseif ($dias <= $diasAviso) {
+                $urgente = $urgente || $dias <= 0;
+                $partes[] = match ($dias) {
                     0 => 'Vence hoy',
                     1 => 'Vence mañana',
-                    default => "Vence en {$proxima} días",
+                    default => "Vence en {$dias} días",
                 };
             }
         }
@@ -200,11 +202,13 @@ class SeguimientoCotizacion
             ->whereNull('crm_acciones.hecha_en');
     }
 
-    private function enviadasConVencimiento($query)
+    // MAX($expresion) sobre las enviadas de la cotización; NULL si no hay enviadas o si alguna no
+    // tiene fecha_vencimiento (sin vigencia configurada no vence).
+    private function ultimaVigencia($query, string $expresion)
     {
         return $query->from('alternativas')
             ->whereColumn('alternativas.cotizacion_id', 'cotizaciones.id')
             ->where('alternativas.estado', 'enviada')
-            ->whereNotNull('alternativas.fecha_vencimiento');
+            ->selectRaw("CASE WHEN bool_or(alternativas.fecha_vencimiento IS NULL) THEN NULL ELSE MAX({$expresion}) END");
     }
 }

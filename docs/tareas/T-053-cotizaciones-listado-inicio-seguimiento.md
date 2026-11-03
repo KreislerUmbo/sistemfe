@@ -223,6 +223,14 @@ agencia»). Crear los datos de prueba con prefijo `T053-` y anotarlos en el Resu
      (con `sometimes`, como `dias_proximo_contacto` de T-051), para no romper a quien guarda la
      configuración sin el campo.
   5. «atrasada 1 día» en singular; con 2 o más, «atrasada N días».
+  6. **Ajuste de la revisión (Opus): la vigencia es la de la cotización, no la de cada
+     alternativa.** La regla «incluidas las ya vencidas» de la tarea miraba cada enviada por
+     separado: con la A vencida y la B reenviada vigente por 15 días, la cotización figuraba
+     «Enviada» (`estadoResumen()`) pero quedaba para siempre en «Por seguir hoy» y en rojo sin decir
+     por qué. Ahora filtro, orden, texto y `urgente` miran la **última** `fecha_vencimiento` entre
+     las enviadas (ninguna si alguna no tiene): `SeguimientoCotizacion::ultimaVigencia()`. Tests:
+     caso nuevo en CA2 y los de varias enviadas en `test_textos_de_envio_y_vencimiento`. El editor
+     sigue mostrando la vigencia de la alternativa activa.
 
 ## Hallazgos fuera de alcance
 - `Cotizacion::alternativas` se serializa entera en el listado (todas las columnas de cada

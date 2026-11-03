@@ -198,6 +198,10 @@ class SeguimientoCotizacionTest extends TestCase
         $this->alternativa($vencidaHaceDiez, 'enviada', $this->vence('2026-10-24'));
         $sinVigencia = $this->cotizacion();
         $this->alternativa($sinVigencia, 'enviada', ['fecha_envio' => '2026-10-30 15:00:00']);
+        // Revisión: la A venció, pero la B reenviada sigue vigente lejos → hay propuesta viva.
+        $conOtraVigente = $this->cotizacion();
+        $this->alternativa($conOtraVigente, 'enviada', $this->vence('2026-10-24'));
+        $this->alternativa($conOtraVigente, 'enviada', $this->vence('2026-11-20'));
 
         $ganada = $this->cotizacion();
         $this->alternativa($ganada, 'aceptada');
@@ -208,7 +212,7 @@ class SeguimientoCotizacionTest extends TestCase
         $ventaDirecta = $this->cotizacion(['origen' => Cotizacion::ORIGEN_VENTA_DIRECTA]);
         $this->accion($ventaDirecta, '2026-10-30');
 
-        $ids = [$pasadoManana->id, $enTres->id, $vencidaHaceDiez->id, $sinVigencia->id, $ganada->id, $perdida->id, $ventaDirecta->id];
+        $ids = [$pasadoManana->id, $enTres->id, $vencidaHaceDiez->id, $sinVigencia->id, $conOtraVigente->id, $ganada->id, $perdida->id, $ventaDirecta->id];
         $this->assertSame([$vencidaHaceDiez->id, $pasadoManana->id], $this->porSeguir($ids));
 
         // Con 3 días de aviso entra la que vence en 3 días.
@@ -311,12 +315,24 @@ class SeguimientoCotizacionTest extends TestCase
         $this->assertSame(['texto' => 'Enviada hace 5 días', 'urgente' => false],
             $this->texto($this->enMemoria([$this->enviada('2026-10-29 15:00:00')])));
 
-        // La envío más reciente y la vigente que vence primero.
-        $this->assertSame(['texto' => 'Enviada ayer · Vence mañana', 'urgente' => true],
+        // El envío más reciente y la ÚLTIMA vigencia (revisión): mientras una siga vigente lejos,
+        // ni la que vence mañana ni la ya vencida cuentan ni la ponen en rojo.
+        $this->assertSame(['texto' => 'Enviada ayer', 'urgente' => false],
             $this->texto($this->enMemoria([
                 $this->enviada('2026-10-25 15:00:00', '2026-11-04'),
                 $this->enviada('2026-11-02 15:00:00', '2026-11-20'),
                 $this->enviada('2026-10-20 15:00:00', '2026-11-01'),
+            ])));
+        $this->assertSame(['texto' => 'Enviada ayer · Vence en 2 días', 'urgente' => false],
+            $this->texto($this->enMemoria([
+                $this->enviada('2026-10-20 15:00:00', '2026-11-01'),
+                $this->enviada('2026-11-02 15:00:00', '2026-11-05'),
+            ])));
+        // Una enviada sin vigencia: la cotización no vence.
+        $this->assertSame(['texto' => 'Enviada ayer', 'urgente' => false],
+            $this->texto($this->enMemoria([
+                $this->enviada('2026-10-20 15:00:00', '2026-11-01'),
+                $this->enviada('2026-11-02 15:00:00'),
             ])));
 
         // Todas vencidas: el vencimiento más reciente.
