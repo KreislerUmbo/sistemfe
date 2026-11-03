@@ -204,10 +204,14 @@ final class DashboardTest extends CreditosTestCase
         $alternativa($cotizacion('T-3', '2026-10-06'), 'enviada');
         $cotizacion('T-4', '2026-10-07');                                                                  // borrador
         $reserva($alternativa($cotizacion('T-5', '2026-09-20'), 'aceptada'), 'activa', '2026-10-30');      // mes anterior y fuera de 7 días
+        // T-052: perdida con su alternativa descartada; no cuenta como enviada ni borrador.
+        $perdida = $cotizacion('T-6', '2026-10-08');
+        DB::table('cotizaciones')->where('id', $perdida)->update(['perdida_en' => now()]);
+        $alternativa($perdida, 'descartada');
 
         $bloques = $this->inicio($this->usuario(['cotizaciones.ver_todas', 'reservas.ver_todas']))['bloques'];
 
-        $this->assertSame(['creadas' => 4, 'reservadas' => 1, 'enviadas' => 1, 'borrador' => 1, 'conversion' => '25.0'], $bloques['cotizaciones']);
+        $this->assertSame(['creadas' => 5, 'reservadas' => 1, 'enviadas' => 1, 'borrador' => 1, 'perdidas' => 1, 'conversion' => '20.0'], $bloques['cotizaciones']);
         $this->assertSame(1, $bloques['proximos']['viajes_total']);
         $this->assertSame([$proxima, '2026-10-18', 2], [
             $bloques['proximos']['viajes'][0]['id'], $bloques['proximos']['viajes'][0]['desde'], $bloques['proximos']['viajes'][0]['pasajeros'],

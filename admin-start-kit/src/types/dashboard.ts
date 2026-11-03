@@ -46,7 +46,7 @@ export interface BloquesDashboard {
     sin_stock: number
     sin_stock_lista: { id: number; producto: string; stock: number }[]
   }
-  cotizaciones?: { creadas: number; reservadas: number; enviadas: number; borrador: number; conversion: string }
+  cotizaciones?: { creadas: number; reservadas: number; enviadas: number; borrador: number; perdidas: number; conversion: string }
   // T-051: "Mis pendientes de hoy" (bandeja de pendientes, fuente crm por ahora).
   pendientes?: { filas: FilaBandeja[]; puede_ver_todos: boolean }
   proximos?: {

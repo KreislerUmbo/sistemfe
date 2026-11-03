@@ -8,7 +8,7 @@
 
 Cada línea: ID · qué · estado · depende de · rama o commit. El detalle está en
 `docs/tareas/T-…md` (se borra al cerrar; para una tarea hecha, el commit es la referencia).
-Próximo ID libre: **T-080**.
+Próximo ID libre: **T-081**.
 
 ## Orden de construcción (27-oct-2026)
 
@@ -29,7 +29,7 @@ Próximo ID libre: **T-080**.
 | 5 | ~~T-063 → T-078 → T-033 → T-050 → T-051~~ hechas → T-052 → T-059 → T-061 → T-053 | Menú nuevo y CRM base (T-033 antes: "Nueva consulta" crea la cotización con su alternativa) |
 | 6 | T-041 → T-040 → T-055 → T-057 → T-058 → T-077 → T-044 → T-017 → T-018 | Operación diaria de Agencia |
 | 7 | T-045 → T-046 → T-047 → T-048 → T-049 | Venta directa (T-046 necesita T-017; T-048, el cobro de la ola 3) |
-| 8 | T-032 → T-034 → T-019 → T-035 → T-036 → T-031 → T-022 → T-020 → T-021 → T-023 → T-037 → T-015 → T-016 | Cotizador más rápido y claro, PDF de cotización, aerolíneas |
+| 8 | T-032 → T-034 → T-019 → T-035 → T-036 → T-031 → T-022 → T-020 → T-021 → T-023 → T-037 → T-015 → T-016 → T-080 | Cotizador más rápido y claro, PDF de cotización, aerolíneas |
 | 9 | T-060 → T-062 → T-065 | Completar CRM y clientes |
 | — | T-029 | Bloqueada: espera al contador (obs. 10) |
 
@@ -58,6 +58,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 | T-035 | AGE | Biblioteca filtrada por el destino activo; sin tours "solo itinerario" en Local (R3) | por hacer | — | |
 | T-036 | AGE | Mayorista: etiquetas, primera opción elegida sola, "solo adultos" a la vista (R6, H22) | por hacer | — | |
 | T-037 | AGE | PDF: nombre de archivo con código y cliente; rótulo correcto de la tabla de hoteles (R8, H20) | por hacer | — | |
+| T-080 | AGE | Cotizador: la alternativa reservada se distingue a simple vista (indicador en la esquina, como el contador de NC de Ventas) y se abre por defecto al entrar | por hacer | — | |
 | T-040 | AGE | Avisos a proveedores también al reprogramar, quitar un servicio, agregar un pasajero o cancelar la salida (H29, H37) | por hacer | — | |
 | T-041 | AGE | El check-in en su propia tabla: no cambia la asignación ni la facturación (H30) | por hacer | — | |
 | T-044 | AGE | Aviso cuando un guía o un chofer ya tiene otra salida ese día (H38) | por hacer | — | |
@@ -66,7 +67,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 | T-047 | AGE | Venta directa: vender un tour del catálogo, enganchado a la salida del día (H41) | por hacer | T-045, T-046 | |
 | T-048 | AGE + CAJ | Venta directa: "Crear y cobrar" en un solo paso (H45) | por hacer | T-011 | |
 | T-049 | AGE | Venta directa: varias líneas en la misma venta y destino del árbol (H46, H47) | por hacer | T-047 | |
-| T-052 | AGE | CRM C3: por qué se ganó o se perdió la venta (H51) | por hacer | T-050 | |
+| T-052 | AGE | CRM C3: por qué se ganó o se perdió la venta (H51) | en revisión | T-050 | |
 | T-053 | AGE | CRM C6a: listado de cotizaciones con el seguimiento a la vista (H52) | por hacer | T-051, T-052 | |
 | T-055 | AGE | Reporte operativo: el hotel en cada noche de la estadía (H54) | por hacer | T-054 | |
 | T-057 | AGE | Reporte operativo: el tour muestra su salida, guía, vehículo y por qué está pendiente (H57) | por hacer | — | |

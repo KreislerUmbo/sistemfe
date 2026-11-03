@@ -33,6 +33,10 @@ class AlternativaController extends Controller
 
     private const MAX_ALTERNATIVAS_POR_COTIZACION = AlternativaCreacionService::MAX_ALTERNATIVAS_POR_COTIZACION;
 
+    // T-052: una cotización perdida no recibe alternativas nuevas (enviar y aceptar ya quedan
+    // bloqueados porque todas sus alternativas están descartadas).
+    private const MENSAJE_COTIZACION_PERDIDA = 'Esta cotización está cerrada como perdida. Reabre la cotización primero.';
+
     // T-033 (R7) — nombre legible de cada campo en los mensajes de validación.
     private const ATRIBUTOS = [
         'nombre' => 'nombre',
@@ -57,6 +61,10 @@ class AlternativaController extends Controller
     {
         $cotizacion = Cotizacion::findOrFail($cotizacionId);
         $this->autorizarCotizacion('update', $cotizacion);
+
+        if ($cotizacion->estaPerdida()) {
+            return response()->json(['code' => 422, 'message' => self::MENSAJE_COTIZACION_PERDIDA], 422);
+        }
 
         $validator = $this->validadorEs($request->all(), [
             // T-033: vacío = "Alternativa {letra}" sugerida, en vez de error.
@@ -520,6 +528,10 @@ class AlternativaController extends Controller
     {
         $original = Alternativa::findOrFail($id);
         $this->autorizarCotizacion('update', $original);
+
+        if ($original->cotizacion->estaPerdida()) {
+            return response()->json(['code' => 422, 'message' => self::MENSAJE_COTIZACION_PERDIDA], 422);
+        }
 
         if ($original->cotizacion->alternativas()->count() >= self::MAX_ALTERNATIVAS_POR_COTIZACION) {
             return response()->json([

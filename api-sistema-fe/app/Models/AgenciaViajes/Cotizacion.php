@@ -59,11 +59,18 @@ class Cotizacion extends Model
         'destino',
         'fecha_viaje_desde',
         'fecha_viaje_hasta',
+        // T-052 (CRM C3): motivo de la pérdida o, opcional, de la ganancia; los escriben
+        // ResultadoCotizacionService y ReservaController::aceptar().
+        'resultado_motivo_id',
+        'resultado_detalle',
+        'perdida_en',
+        'perdida_por',
     ];
 
     protected $casts = [
         'fecha_viaje_desde' => 'date',
         'fecha_viaje_hasta' => 'date',
+        'perdida_en' => 'datetime',
     ];
 
     public function cliente()
@@ -74,6 +81,17 @@ class Cotizacion extends Model
     public function vendedor()
     {
         return $this->belongsTo(User::class, 'vendedor_id');
+    }
+
+    public function resultadoMotivo()
+    {
+        return $this->belongsTo(CrmMotivoResultado::class, 'resultado_motivo_id');
+    }
+
+    // Quién la cerró como perdida. Serializada como 'perdida_por' (pisa el id de la columna).
+    public function perdidaPor()
+    {
+        return $this->belongsTo(User::class, 'perdida_por');
     }
 
     public function pasajeros()
@@ -114,8 +132,17 @@ class Cotizacion extends Model
     // 'enviada' ya pasaron su fecha_vencimiento — mientras quede una
     // vigente, la cotización sigue mostrándose como 'enviada' (todavía hay
     // una propuesta viva sobre la mesa).
+    //
+    // 'perdida' (T-052): la cerró el vendedor con «Cerrar como perdida». Va primero: sus
+    // alternativas quedaron descartadas, y una cotización con alternativa aceptada o reemplazada
+    // no se puede cerrar como perdida (ResultadoCotizacionService), así que no compite con
+    // 'reservada'/'anulada'.
     public function estadoResumen(): string
     {
+        if ($this->estaPerdida()) {
+            return 'perdida';
+        }
+
         $alternativas = $this->alternativas;
 
         if ($alternativas->isEmpty()) {
@@ -172,6 +199,11 @@ class Cotizacion extends Model
     public function scopeDelCotizador(Builder $query): Builder
     {
         return $query->where('origen', self::ORIGEN_COTIZADOR);
+    }
+
+    public function estaPerdida(): bool
+    {
+        return $this->perdida_en !== null;
     }
 
     public function esModificacion(): bool

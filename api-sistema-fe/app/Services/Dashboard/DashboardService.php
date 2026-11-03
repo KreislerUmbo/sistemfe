@@ -344,6 +344,8 @@ class DashboardService
             'reservadas' => $estados->get('reservada', 0),
             'enviadas' => $estados->get('enviada', 0),
             'borrador' => $estados->get('borrador', 0),
+            // T-052: cerradas como perdidas (estadoResumen() ya no las cuenta como enviadas ni borrador).
+            'perdidas' => $estados->get('perdida', 0),
             'conversion' => self::porcentaje($estados->get('reservada', 0), $creadas),
         ];
     }

@@ -299,6 +299,9 @@ class CotizacionController extends Controller
             'alternativas.destinos.destinoAtractivo',
             // T-074 — la pestaña de la alternativa reservada (o reemplazada) enlaza a su reserva.
             ...Cotizacion::RELACIONES_ESTADO_RESUMEN,
+            // T-052 — el aviso «Perdida: <motivo> · <fecha> (<quién>)» de la cabecera.
+            'resultadoMotivo:id,nombre,tipo',
+            'perdidaPor:id,name,surname',
         ])->findOrFail($id);
 
         // Fase 1b (§3.3, advertencia 1) — segunda barrera explícita,

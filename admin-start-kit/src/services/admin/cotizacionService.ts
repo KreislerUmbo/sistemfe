@@ -66,5 +66,14 @@ export const cotizacionService = {
   async eliminar(id: number) {
     const response = await httpClient.delete(`/cotizaciones/${id}`)
     return response.data as { code: number; message: string }
+  },
+  // T-052 (CRM C3): descarta las alternativas abiertas; «Reabrir» las devuelve a su estado.
+  async cerrarComoPerdida(id: number, data: { motivo_id: number; detalle?: string | null }) {
+    const response = await httpClient.post(`/cotizaciones/${id}/perdida`, data)
+    return response.data as { code: number; message: string }
+  },
+  async reabrir(id: number) {
+    const response = await httpClient.post(`/cotizaciones/${id}/reabrir`)
+    return response.data as { code: number; message: string }
   }
 }

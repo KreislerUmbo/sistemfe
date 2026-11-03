@@ -130,9 +130,42 @@ Prueba funcional: agencia-demo, `admin@agencia-demo.test` (memoria `reference_ag
 ---
 
 ## Resultado
-- **Commits:**
-- **Tests:** (nuevos / suite completa)
+- **Commits:** `d9f6ef3` (backend: migraciones, modelo, servicio, controllers, rutas, tests),
+  `93688ec` (frontend: modales, cabecera, listado, Inicio, Configuración).
+- **Tests:** nuevo `tests/Feature/AgenciaViajes/CotizacionResultadoTest.php` (11 tests: CA1 ×2,
+  CA2 ×2 con Policy, CA3, CA4 ×2, CA5 ×3 con rutas sin DELETE y sus permisos, CA6).
+  `DashboardTest::test_agencia_cotizaciones_del_mes_y_viajes_proximos` ampliado con una perdida
+  (`perdidas`). Suite completa: 1862 verdes, 1 roja = el intermitente conocido
+  `Fila13Fase1cFacturacionTest::descuento_del_combo…` (aislado pasa). Frontend: `type-check` sin
+  errores nuevos (ver hallazgos: la base es 47, no 46), Vitest 170/170, `build` OK.
+- **CA7 (Playwright, agencia-demo, CDKM-1126-0000004):** cerrar con «Otro» (el botón queda
+  deshabilitado sin detalle) → aviso «Perdida: Otro — … · 02/11/2026 19:14 (Admin Agencia)», la
+  acción pendiente «Llamar» se cerró y el historial muestra las dos actividades; se ocultan
+  aceptar / duplicar / nueva. Listado: filtro «Perdida» trae solo esa, badge rojo suave. Reabrir →
+  alternativa otra vez «enviada» con las mismas fechas de envío y vencimiento. Aceptar con
+  «Rapidez de respuesta» → reserva 32, motivo guardado, estado «reservada». Configuración: sección 14
+  con los dos catálogos.
+- **Migraciones:** aplicadas con `tenants:migrate-verticales` (agencia-demo) y por archivo a
+  `sistemafe_test_migrations`; `down()` probado.
 - **Desviaciones de la tarea y por qué:**
+  - Un motivo nuevo se ubica justo antes de «Otro» (la tarea no lo decía; así «Otro» sigue último).
+  - Catálogo con `unique(tipo, nombre)` y control sin distinguir mayúsculas: dos «Precio» en el
+    mismo tipo harían ambiguo el reporte de T-062.
+  - `aceptar()` acepta también `resultado_detalle` (opcional, solo se guarda con motivo): la tarea
+    pide detalle opcional con «Otro» al ganar.
+  - Perdida, el frontend oculta «Aceptado por cliente», «Duplicar» y «+ Nueva» (el backend ya los
+    rechaza; ocultarlos evita un 422 sin sentido).
+  - `perdidaPor` se serializa como `perdida_por` y pisa el id de la columna en `show()` (es como lo
+    pide la tarea); el tipo TS lo declara como objeto.
 
 ## Hallazgos fuera de alcance
--
+- `type-check` en `main` da **47** errores, no 46 (comparado por archivo: T-052 no agrega ninguno).
+- ~~`editar.vue`: «Aceptado por cliente» se mostraba en alternativas `descartada`/`reemplazada`~~
+  → arreglado en la revisión de Opus: solo en `borrador`/`enviada`, la regla de
+  `ReservaController::alternativaAceptable()`.
+- ~~`editar.vue`: cotización perdida sin alternativas~~ → «+ Nueva» ya estaba oculto; el texto vacío
+  invitaba a usarlo. Arreglado en la revisión: pide reabrirla.
+- Carrera sin arreglar (muy improbable): «otro medio» (`CotizacionActividadController`) pasa la
+  alternativa a `enviada` sin bloquear la cotización; si coincide con «Cerrar como perdida» puede
+  quedar una alternativa enviada en una cotización perdida.
+- Datos de agencia-demo: la prueba funcional dejó CDKM-1126-0000004 aceptada con la reserva 32.

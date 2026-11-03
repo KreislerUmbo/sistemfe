@@ -31,6 +31,7 @@
                             <option value="anulada">Anulada</option>
                             <option value="vencida">Vencida</option>
                             <option value="descartada">Descartada</option>
+                            <option value="perdida">Perdida</option>
                         </select>
                     </div>
                     <div class="col-6 col-md-2">
@@ -152,6 +153,8 @@ const badgeEstado = (estado?: Cotizacion['estado_resumen']) => {
         case 'vencida': return { texto: 'Vencida', clase: 'bg-warning text-dark' };
         case 'enviada': return { texto: 'Enviada', clase: 'bg-info text-dark' };
         case 'descartada': return { texto: 'Descartada', clase: 'bg-dark' };
+        // T-052: cerrada como perdida desde el cotizador.
+        case 'perdida': return { texto: 'Perdida', clase: 'bg-danger-subtle text-danger' };
         default: return { texto: 'Borrador', clase: 'bg-secondary' };
     }
 };

@@ -15,6 +15,8 @@ use App\Http\Controllers\AgenciaViajes\CotizacionActividadController;
 use App\Http\Controllers\AgenciaViajes\CotizacionEnvioController;
 use App\Http\Controllers\AgenciaViajes\ContenidoTourController;
 use App\Http\Controllers\AgenciaViajes\CotizacionController;
+use App\Http\Controllers\AgenciaViajes\CotizacionResultadoController;
+use App\Http\Controllers\AgenciaViajes\CrmMotivoResultadoController;
 use App\Http\Controllers\AgenciaViajes\CuentaBancariaController;
 use App\Http\Controllers\AgenciaViajes\DestinoAtractivoController;
 use App\Http\Controllers\AgenciaViajes\DestinoServicioController;
@@ -818,6 +820,14 @@ Route::group([
     // Super-Admin (soporte), validado en el controller además del permiso.
     Route::put("configuracion-agencia/modo-tours", [ConfiguracionAgenciaController::class, 'actualizarModoTours'])
         ->middleware('permission:agencia.configuracion');
+    // T-052 (CRM C3): motivos de venta ganada / perdida. Sin DELETE: se desactivan. La lectura la
+    // usan también los modales del cotizador.
+    Route::get("crm-motivos-resultado", [CrmMotivoResultadoController::class, 'index'])
+        ->middleware('permission:agencia.configuracion|cotizaciones.editar');
+    Route::post("crm-motivos-resultado", [CrmMotivoResultadoController::class, 'store'])
+        ->middleware('permission:agencia.configuracion');
+    Route::put("crm-motivos-resultado/{id}", [CrmMotivoResultadoController::class, 'update'])
+        ->middleware('permission:agencia.configuracion');
 
     // Envío de cotizaciones por correo (plan-modulo-envio-correo-cotizacion.md
     // §3.2) — sección "Correo" de Configuración de Agencia.
@@ -1006,6 +1016,11 @@ Route::group([
         ->middleware('permission:cotizaciones.editar');
     Route::get("cotizaciones/{id}/actividades", [CotizacionActividadController::class, 'index'])
         ->middleware('permission:cotizaciones.ver|cotizaciones.ver_todas');
+    // T-052 (CRM C3): cerrar como perdida / reabrir (CotizacionPolicy::update en el controller).
+    Route::post("cotizaciones/{id}/perdida", [CotizacionResultadoController::class, 'cerrarComoPerdida'])
+        ->middleware('permission:cotizaciones.editar');
+    Route::post("cotizaciones/{id}/reabrir", [CotizacionResultadoController::class, 'reabrir'])
+        ->middleware('permission:cotizaciones.editar');
 
     Route::post("alternativas/{id}/items", [AlternativaItemController::class, 'store'])
         ->middleware('permission:cotizaciones.crear');
