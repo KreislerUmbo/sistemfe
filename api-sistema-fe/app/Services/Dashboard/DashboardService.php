@@ -8,6 +8,7 @@ use App\Http\Controllers\Advance\AdvanceController;
 use App\Models\AgenciaViajes\Cotizacion;
 use App\Models\AgenciaViajes\Reserva;
 use App\Models\AgenciaViajes\SalidaOperativa;
+use App\Models\Client\CrmAccion;
 use App\Models\Sale\Sale;
 use App\Models\User;
 use App\Services\AgenciaViajes\AsignacionOperativa;
@@ -69,6 +70,9 @@ class DashboardService
         }
         if ($agencia && $usuario->canAny(['reservas.ver', 'reservas.ver_todas'])) {
             $bloques['proximos'] = $this->proximos($hoy);
+        }
+        if ($agencia && $usuario->can('edit_user')) {
+            $bloques['trabajo_sin_dueno'] = $this->trabajoSinDueno();
         }
 
         return [
@@ -320,6 +324,39 @@ class DashboardService
             'filas' => $this->bandeja->filas($usuario, $hoy, $hoy, ['responsable_id' => $usuario->id]),
             'puede_ver_todos' => $usuario->can('cotizaciones.ver_todas'),
         ];
+    }
+
+    /**
+     * T-061: usuarios inactivos o eliminados que todavía tienen cotizaciones abiertas o acciones
+     * pendientes a su nombre (nadie las ve en sus pendientes). Una sola consulta agrupada.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function trabajoSinDueno(): array
+    {
+        $cotizaciones = Cotizacion::abiertas()->toBase()
+            ->selectRaw('vendedor_id as usuario_id, count(*) as cotizaciones, 0 as acciones')
+            ->whereNotNull('vendedor_id')
+            ->groupBy('vendedor_id');
+        $acciones = CrmAccion::pendientes()->toBase()
+            ->selectRaw('responsable_id as usuario_id, 0 as cotizaciones, count(*) as acciones')
+            ->groupBy('responsable_id');
+
+        return DB::query()->fromSub($cotizaciones->unionAll($acciones), 'abierto')
+            ->join('users', 'users.id', '=', 'abierto.usuario_id')
+            ->where(static fn (QueryBuilder $q) => $q->where('users.state', User::STATE_INACTIVO)->orWhereNotNull('users.deleted_at'))
+            ->groupBy('users.id', 'users.name', 'users.surname', 'users.deleted_at')
+            ->orderBy('users.name')->orderBy('users.id')
+            ->selectRaw('users.id, users.name, users.surname, users.deleted_at,
+                sum(abierto.cotizaciones)::int as cotizaciones, sum(abierto.acciones)::int as acciones')
+            ->get()
+            ->map(static fn (object $u): array => [
+                'usuario_id' => (int) $u->id,
+                'nombre' => trim($u->name . ' ' . $u->surname),
+                'estado' => $u->deleted_at !== null ? 'eliminado' : 'inactivo',
+                'cotizaciones' => (int) $u->cotizaciones,
+                'acciones' => (int) $u->acciones,
+            ])->all();
     }
 
     /**

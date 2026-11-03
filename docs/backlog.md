@@ -72,7 +72,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 | T-057 | AGE | Reporte operativo: el tour muestra su salida, guía, vehículo y por qué está pendiente (H57) | por hacer | — | |
 | T-058 | AGE | Reporte operativo: "Mañana", búsqueda, check-in a todos, filtros recordados y rango controlado (H58, H59) | por hacer | T-041 | |
 | T-060 | CLI + AGE | CRM C5: la ficha del cliente con preferencias del viajero y línea de tiempo | por hacer | T-050, T-051 | |
-| T-061 | CLI + AGE | CRM: pasar el trabajo abierto de un usuario que se va | por hacer | T-051 | |
+| T-061 | CLI + AGE | CRM: pasar el trabajo abierto de un usuario que se va | en curso | T-051 | `feat/T-061-crm-traspaso-usuario` |
 | T-062 | AGE | CRM C6b: reportes de conversión, origen, vendedor y motivos | por hacer | T-052, T-059 | |
 | T-065 | CLI + VEN | Varias direcciones por cliente y elegir la dirección al emitir (H61) | por hacer | T-064 | |
 

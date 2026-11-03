@@ -210,6 +210,15 @@ class Cotizacion extends Model
         return $query->where('origen', self::ORIGEN_COTIZADOR);
     }
 
+    // T-061 — abierta: del Cotizador, no perdida y sin alternativa aceptada ni reemplazada (las
+    // vencidas cuentan: se pueden reenviar). Todo en el WHERE, para usarla dentro de un UPDATE.
+    public function scopeAbiertas(Builder $query): Builder
+    {
+        return $query->delCotizador()
+            ->whereNull('perdida_en')
+            ->whereDoesntHave('alternativas', fn (Builder $q) => $q->whereIn('estado', ['aceptada', Alternativa::ESTADO_REEMPLAZADA]));
+    }
+
     public function estaPerdida(): bool
     {
         return $this->perdida_en !== null;
