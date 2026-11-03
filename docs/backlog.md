@@ -8,7 +8,7 @@
 
 Cada línea: ID · qué · estado · depende de · rama o commit. El detalle está en
 `docs/tareas/T-…md` (se borra al cerrar; para una tarea hecha, el commit es la referencia).
-Próximo ID libre: **T-081**.
+Próximo ID libre: **T-082**.
 
 ## Orden de construcción (27-oct-2026)
 
@@ -27,6 +27,7 @@ Próximo ID libre: **T-081**.
 | 4 | ~~T-002 → T-003 → T-004 → T-005 → T-006 → T-072 → T-073 → T-007~~ hechas | Modificar reserva: hoy no se puede quitar un pasajero y el agregado no cambia el precio |
 | 4b | ~~T-076 → T-075 → T-074~~ hechas 01-nov (recorrido 19) | Salió de la prueba de Modificar reserva (01-nov): el pasaje aéreo cobra cargos y fee una sola vez por boleto (precio de venta mal con 2 o más pasajeros), un boleto que se queda sin pasajeros, la cotización reservada editable |
 | 5 | ~~T-063 → T-078 → T-033 → T-050 → T-051 → T-052 → T-059 → T-061 → T-053~~ hechas 03-nov (recorridos 20 a 25) | Menú nuevo y CRM base (T-033 antes: "Nueva consulta" crea la cotización con su alternativa) |
+| 5b | T-081 | Va antes de la ola 6 (03-nov): cada tenant nace con el dueño como Super-Admin, que es la cuenta de soporte; afecta a todos los giros y a cada alta nueva |
 | 6 | T-041 → T-040 → T-055 → T-057 → T-058 → T-077 → T-044 → T-017 → T-018 | Operación diaria de Agencia |
 | 7 | T-045 → T-046 → T-047 → T-048 → T-049 | Venta directa (T-046 necesita T-017; T-048, el cobro de la ola 3) |
 | 8 | T-032 → T-034 → T-019 → T-035 → T-036 → T-031 → T-022 → T-020 → T-021 → T-023 → T-037 → T-015 → T-016 → T-080 | Cotizador más rápido y claro, PDF de cotización, aerolíneas |
@@ -41,6 +42,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 
 | ID | Módulo | Qué | Estado | Depende de | Rama / commit |
 |---|---|---|---|---|---|
+| T-081 | PLA | Rol «Propietario» para el dueño de cada tenant (todos los permisos de su giro, sincronizado en cada deploy, protegido, al menos uno activo) y cuenta de soporte Umbo aparte como Super-Admin | por hacer | — | `feat/T-081-rol-propietario` |
 | T-077 | AGE | Vuelo propio del pasajero en un solo texto, como observación en el reporte operativo (el vuelo de la agencia no cambia) | por hacer | — | |
 | T-015 | PLA + AGE | Catálogo central de aerolíneas + panel central (Obs. 3) | por hacer | — | |
 | T-016 | AGE | Buscador de aerolíneas, corrección de nombres y aerolínea por defecto (Obs. 3) | por hacer | T-015 | |
@@ -81,6 +83,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 
 | Módulo | Qué | Origen |
 |---|---|---|
+| PLA | Unificar el rol «Administrador» por giro (hoy «Administrador de agencia», «Administrador de créditos» y ninguno en retail; dakamu usa «Admin Empresario», hecho a mano y sin permisos de Agencia). Va después de T-081: el Propietario crea al Administrador y los demás roles | Conversación con el usuario, 03-nov-2026 |
 | PLA | **Para después de las olas (cuando se cierre el proyecto actual):** archivos fuera del disco del sistema. Hoy `public` (fotos, logos, PDF, XML) y `private` (certificados) son discos locales en `storage/tenant{id}/` (03-nov: 74 MB, 29 GB libres). **Camino de fondo:** almacenamiento S3 (preferido OVH Object Storage, misma región; o Backblaze B2, ya en uso para respaldos): instalar `league/flysystem-aws-s3-v3` (no con `composer install` local, ver memoria de Composer con PHP 8.2), disco `public` como S3 y activar `'s3'` en `config/tenancy.php` → `filesystem.disks`, adaptar `StorageUrl::resolve()` (URL del bucket o firmada), revisar los 11 usos de ruta local (`->path()`/`storage_path()`: DomPDF vía `resolveParaPdf()`, `MembreteAgenciaPdfService`, `PdfFontService`, `ImagenRecorteService`, `TenantBackupService`/`TenantRestoreService`), dejar `private` (certificados SUNAT, Greenter) en disco local y copiar lo existente con `rclone`. Videos: subida directa al bucket con URL firmada, sin pasar por PHP. **Salida de emergencia** si el disco se llena antes: disco adicional OVH montado y `storage/` movido con enlace simbólico (sin cambiar código) | Conversación con el usuario, 03-nov-2026 |
 | POR | Portal, página de Sistemas: con el plan anual muestra «Facturado S/ undefined al año»; `views/portal/Sistemas.vue:120` usa `sistema.precioAnualTotal`, que no existe (los planes tienen `precioAnual`). Arreglo de una línea; decidir si es el total anual o el precio mensual del plan anual | `type-check`, 02-nov-2026 |
 | TRA | Limpiar los 46 errores de `npm run type-check` (admin-start-kit) para dejarlo en cero y que un error nuevo se note: 17 en Manuales y videos (`views/recursos/`, listas sin tipo), 11 en el portal, 7 restos del template Rizz (`helpers/fake-backend.ts`, `router/index.ts`), 7 de «puede venir vacío» (empresa, ventas, paquetes y tours de Agencia), 4 de subida de imágenes (usuarios, categorías, productos). Revisar `views/sale/index.vue:443` (compara id texto con número: el chip «Categoría» del filtro podría no salir) | `type-check`, 02-nov-2026 |
