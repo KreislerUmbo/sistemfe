@@ -43,7 +43,10 @@ subdominio, una base Postgres por tenant + `db_tenant_central`).
 - Guardar una venta **no** la envía a SUNAT (envío manual, a propósito). Nota de Venta = documento
   interno, nunca pasa por `enviarSunat()`. Reportes SUNAT/PLE: `Sale::scopeSoloDocumentosFiscales()`,
   nunca inferir por prefijo de serie.
-- El Super-Admin es soporte de UmboSystem; los dueños usan el rol Administrador.
+- El Super-Admin es soporte de UmboSystem (`soporte@umbosystem.com` en cada tenant); el dueño usa
+  el rol **Propietario** (`RolPropietario`: todos los permisos asignados de verdad, sincronizados en
+  cada deploy con `roles:sync-propietario`; siempre queda al menos uno activo). Nunca dar
+  Super-Admin a un dueño.
 
 ## Convenciones
 - Comentarios, mensajes y respuestas en **español**.
