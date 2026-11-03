@@ -100,32 +100,32 @@ el cliente se queda sin seguimiento. Créditos ya resolvió lo mismo para su car
 - `types/dashboard.ts`: el bloque nuevo.
 
 ## Criterios de aceptación
-- [ ] **CA1** — Ana con 2 cotizaciones abiertas (una vencida), 1 ganada, 1 perdida y 3 acciones
+- [x] **CA1** — Ana con 2 cotizaciones abiertas (una vencida), 1 ganada, 1 perdida y 3 acciones
   pendientes (una de una reserva) + 1 hecha → traspaso a Luis: las 2 abiertas y las 3 pendientes
   pasan; la ganada, la perdida y la hecha siguen de Ana. → test
-- [ ] **CA2** — Una actividad `estado` por cliente afectado, con nombres y cantidades; un cliente con
+- [x] **CA2** — Una actividad `estado` por cliente afectado, con nombres y cantidades; un cliente con
   2 cotizaciones recibe una sola. → test
-- [ ] **CA3** — Usuario inactivo o eliminado con trabajo abierto → aviso en Inicio para quien tiene
+- [x] **CA3** — Usuario inactivo o eliminado con trabajo abierto → aviso en Inicio para quien tiene
   `edit_user` en Agencia; sin trabajo, sin `edit_user` o en otro giro → sin aviso. → test
-- [ ] **CA4** — Destino inactivo, eliminado, igual al origen o sin `cotizaciones.editar` → 422;
+- [x] **CA4** — Destino inactivo, eliminado, igual al origen o sin `cotizaciones.editar` → 422;
   origen sin nada abierto → 422; sin `edit_user` → 403 (ruta); Super-Admin protegido → 403. → test
-- [ ] **CA5** — Cotización de modificación de reserva y de venta directa no cuentan ni pasan. → test
-- [ ] **CA6** — Prueba funcional en agencia-demo: desactivar un usuario con trabajo → se ofrece el
+- [x] **CA5** — Cotización de modificación de reserva y de venta directa no cuentan ni pasan. → test
+- [x] **CA6** — Prueba funcional en agencia-demo: desactivar un usuario con trabajo → se ofrece el
   traspaso; «Ahora no» → aviso en Inicio → desde el aviso, traspasar; el destino ve las
   cotizaciones en su listado y las acciones en «Mis pendientes de hoy». Suite completa en verde;
   `type-check` sin errores nuevos (base 47).
 
 ## Seguridad y correctitud
-- [ ] Permisos / Policy en rutas nuevas: `edit_user` en la ruta; Super-Admin protegido como en
+- [x] Permisos / Policy en rutas nuevas: `edit_user` en la ruta; Super-Admin protegido como en
   `UserController`
-- [ ] Aislamiento de tenant: tablas del tenant
-- [ ] Validación de entrada / archivos: destino distinto, activo, no eliminado y con `cotizaciones.editar`
-- [ ] Concurrencia (`lockForUpdate`): transacción única; la condición de «abierta» dentro del `UPDATE`
-- [ ] Dinero en centavos: no aplica
-- [ ] Fechas con `HoraPeru`: no aplica (las actividades usan `created_at` UTC)
-- [ ] Tributario sin fallback silencioso: no aplica
-- [ ] Sin `v-html` sin sanitizar: nombres como texto
-- [ ] Migraciones nuevas + `tenants:migrate-verticales`: no aplica (sin migraciones)
+- [x] Aislamiento de tenant: tablas del tenant
+- [x] Validación de entrada / archivos: destino distinto, activo, no eliminado y con `cotizaciones.editar`
+- [x] Concurrencia (`lockForUpdate`): transacción única; la condición de «abierta» dentro del `UPDATE`
+- [x] Dinero en centavos: no aplica
+- [x] Fechas con `HoraPeru`: no aplica (las actividades usan `created_at` UTC)
+- [x] Tributario sin fallback silencioso: no aplica
+- [x] Sin `v-html` sin sanitizar: nombres como texto
+- [x] Migraciones nuevas + `tenants:migrate-verticales`: no aplica (sin migraciones)
 
 ## Cómo verificar
 ```
@@ -138,9 +138,52 @@ Crear un usuario vendedor de prueba para desactivarlo; no desactivar usuarios ex
 ---
 
 ## Resultado
-- **Commits:**
-- **Tests:** (nuevos / suite completa)
+- **Commits:** `a9ca0ac` (backend), `cda20ba` (frontend), y el de cierre con esta sección y el
+  título del aviso al desactivar.
+- **Tests:** nuevos `tests/Feature/AgenciaViajes/TraspasoTrabajoTest.php` (9 tests, 53
+  aserciones: CA1, CA2, CA3, CA4 en tres tests, CA5, destinos del selector, 404 fuera de Agencia)
+  y `traspasoTrabajoService.test.ts` (Vitest, texto de cantidades). Suite completa del backend:
+  **1887 passed**, sin fallas (corrió con el commit `a9ca0ac`; los cambios posteriores del
+  controller —nombre del usuario en el GET y helper `actor()`— se verificaron con el filtro
+  `TraspasoTrabajoTest`). Frontend: `type-check` 47 (la base), Vitest 175 passed, build OK.
+- **Prueba funcional (CA6, Playwright, agencia-demo):** se crearon «T061 Vendedor» (id 11) y
+  «T061 Destino» (id 12), ambos «Vendedor de agencia»; se le cargaron a 11 por tinker 2
+  cotizaciones (`T061-PRUEBA-1`/`-2`, ids 77 y 78, clientes 1 y 3) y 1 acción pendiente de hoy
+  (id 6). Desactivar a 11 → «T061 Vendedor tiene 2 cotizaciones abiertas y 1 acción pendiente.
+  ¿Pasar su trabajo ahora?» → «Ahora no» (quedó Inactivo) → Inicio mostró «Trabajo sin dueño»
+  con el enlace `/users?traspasar=11` → el modal se abrió solo, con destinos «Admin General» y
+  «T061 Destino», botón deshabilitado sin destino → traspaso a 12, toast y la URL sin el
+  parámetro. Entrando como 12: la acción en «Mis pendientes de hoy» y las 2 cotizaciones en su
+  listado. En la base: actividades 13 («…: 1 cotización y 1 acción», cliente 1) y 14 («…: 1
+  cotización», cliente 3). No se probó a mano el camino «eliminar → se ofrece» (mismo
+  `ofrecerTraspaso()` que al desactivar). `admin@agencia-demo.test` es Super-Admin, así que la
+  protección de Super-Admin solo la cubren los tests.
 - **Desviaciones de la tarea y por qué:**
+  - `GET users/{id}/trabajo-abierto` devuelve, además del resumen (`data`), `usuario`
+    `{id, nombre}` (desde Inicio llega solo el id y un eliminado no figura en el listado) y
+    `destinos` (activos, no eliminados, con `cotizaciones.editar`, sin el origen; un Super-Admin
+    solo se le ofrece a otro Super-Admin). No había un endpoint de usuarios con ese filtro y así el
+    selector no ofrece a quien el POST rechazaría.
+  - Para saber qué filas cambiaron sin leer los ids antes, cada `UPDATE` lleva `RETURNING id,
+    cliente_id` (`TraspasoTrabajoService::actualizarDevolviendo()`, compila el WHERE del builder
+    de Eloquent). No hace falta `lockForUpdate`: la condición se re-evalúa fila a fila en el
+    propio UPDATE.
+  - El aviso de Inicio vacío no cuenta como bloque para el mensaje «Bienvenido» (`sinBloques`).
+  - Ajustes de la revisión: la oferta al guardar solo sale si el usuario **pasa** a Inactivo (ya
+    inactivo → no se repregunta; para eso está el aviso de Inicio); el aviso de Inicio no muestra
+    un Super-Admin a quien no lo es (el traspaso le daría 403; test
+    `test_aviso_no_muestra_un_super_admin_a_quien_no_lo_es`); y el comentario de
+    `traspasar()` aclara que una aceptación confirmada en el mismo instante que el UPDATE puede no
+    verse (READ COMMITTED), ventana aceptada.
+  - Al desactivar, el título del aviso es fijo («Usuario guardado»): el mensaje del backend al
+    editar dice «Usuario creado con exito» (ver Hallazgos).
 
 ## Hallazgos fuera de alcance
--
+- `UserController::update()` responde «Usuario creado con exito» también al editar.
+- El selector de destinos usa `User::permission('cotizaciones.editar')` (Spatie): un Super-Admin
+  cuyo rol no tenga ese permiso explícito (lo tiene por `Gate::before`) no aparece, aunque el POST
+  sí lo aceptaría. En agencia-demo, «Admin Agencia Demo» no figura como destino.
+- El botón «Pasar su trabajo» depende de `GET clients/contexto`, que exige
+  `list_client|register_client|edit_client`: quien tenga `edit_user` sin ninguno de esos no ve el
+  botón ni recibe la oferta al desactivar (el aviso de Inicio sí le aparece, y su enlace abre el
+  modal solo si el contexto carga).

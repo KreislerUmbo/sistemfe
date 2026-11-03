@@ -36,6 +36,14 @@ export interface PendienteSunat {
   error: string | null
 }
 
+export interface TrabajoSinDueno {
+  usuario_id: number
+  nombre: string
+  estado: 'inactivo' | 'eliminado'
+  cotizaciones: number
+  acciones: number
+}
+
 export interface BloquesDashboard {
   ventas?: { hoy: ResumenVentas[]; mes: ResumenVentasMes[]; periodo_mes: RangoFechas; periodo_anterior: RangoFechas }
   ventas_dias?: { monedas: string[]; dias: { fecha: string; montos: Record<string, string> }[] }
@@ -49,6 +57,8 @@ export interface BloquesDashboard {
   cotizaciones?: { creadas: number; reservadas: number; enviadas: number; borrador: number; perdidas: number; conversion: string }
   // T-051: "Mis pendientes de hoy" (bandeja de pendientes, fuente crm por ahora).
   pendientes?: { filas: FilaBandeja[]; puede_ver_todos: boolean }
+  // T-061: usuarios inactivos o eliminados con trabajo abierto a su nombre (agencia, edit_user).
+  trabajo_sin_dueno?: TrabajoSinDueno[]
   proximos?: {
     hasta: string
     viajes: { id: number; codigo: string | null; cliente: string | null; desde: string | null; hasta: string | null; pasajeros: number }[]

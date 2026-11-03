@@ -49,6 +49,7 @@ use App\Http\Controllers\AgenciaViajes\TemporadaController;
 use App\Http\Controllers\AgenciaViajes\TemporadaOcurrenciaController;
 use App\Http\Controllers\AgenciaViajes\TipoCambioAgenciaController;
 use App\Http\Controllers\AgenciaViajes\TourItinerarioItemController;
+use App\Http\Controllers\AgenciaViajes\TraspasoTrabajoController;
 use App\Http\Controllers\AgenciaViajes\VentaDirectaController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\Cash\BranchController;
@@ -352,6 +353,11 @@ Route::group([
     // usuario, además del rol. Mismo permiso que editar el resto de un
     // usuario (edit_user) — no se crea un permiso nuevo solo para esto.
     Route::put('users/{id}/permisos', [UserController::class, 'permisosDirectos'])
+        ->middleware('permission:edit_user');
+    // T-061 (CRM): pasar el trabajo abierto de un usuario que se va. Solo Agencia (404 en otro giro).
+    Route::get('users/{id}/trabajo-abierto', [TraspasoTrabajoController::class, 'resumen'])->whereNumber('id')
+        ->middleware('permission:edit_user');
+    Route::post('users/{id}/traspasar-trabajo', [TraspasoTrabajoController::class, 'traspasar'])->whereNumber('id')
         ->middleware('permission:edit_user');
 
     //categories
