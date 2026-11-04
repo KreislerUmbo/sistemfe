@@ -142,10 +142,13 @@
                                             <div v-if="fila.motivo_pendiente" class="text-warning" style="font-size:11px"><i class="fas fa-exclamation-triangle me-1"></i>{{ fila.motivo_pendiente }}</div>
                                         </div>
                                         <!-- Caso guía (origen_tipo='guia') sin salida — poco frecuente en la práctica. -->
-                                        <GuiaBuscador v-else-if="fila.origen_tipo === 'guia'" :key="`${fila.reserva_item_id}-${rearmarBuscadorGuia}`"
-                                            :model-value="fila.guia?.id ?? null" :nombre-actual="fila.guia?.nombre ?? null"
-                                            placeholder="Sin asignar" texto-quitar="Sin asignar" @elegido="(g) => guardarGuia(fila, g)" />
-                                        <div v-if="fila.motivo_pendiente" class="text-warning" style="font-size:11px"><i class="fas fa-exclamation-triangle me-1"></i>{{ fila.motivo_pendiente }}</div>
+                                        <!-- En un <template> para no cortar la cadena v-if/v-else-if con el aviso. -->
+                                        <template v-else-if="fila.origen_tipo === 'guia'">
+                                            <GuiaBuscador :key="`${fila.reserva_item_id}-${rearmarBuscadorGuia}`"
+                                                :model-value="fila.guia?.id ?? null" :nombre-actual="fila.guia?.nombre ?? null"
+                                                placeholder="Sin asignar" texto-quitar="Sin asignar" @elegido="(g) => guardarGuia(fila, g)" />
+                                            <div v-if="fila.motivo_pendiente" class="text-warning" style="font-size:11px"><i class="fas fa-exclamation-triangle me-1"></i>{{ fila.motivo_pendiente }}</div>
+                                        </template>
                                         <!-- Fila 13, fase 1b — tour cargado como una sola línea (modo nuevo):
                                              no tiene proveedor ni guía por servicio; su operación (vehículo,
                                              guía, proveedores) será la de su salida, en la fase 2. -->

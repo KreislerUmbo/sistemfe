@@ -120,7 +120,6 @@ class AsignacionOperativa
         return null;
     }
 
-
     /** @var array<int, bool> tour_id => lleva guía (cache por petición) */
     private static array $tourLlevaGuia = [];
 
