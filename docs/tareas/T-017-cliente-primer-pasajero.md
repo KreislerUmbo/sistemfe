@@ -109,9 +109,34 @@ Prueba funcional en `agencia-demo`: aceptar una cotización de un cliente con DN
 ---
 
 ## Resultado
-- **Commits:**
-- **Tests:**
+- **Commits:** ver `git log feat/T-017-cliente-primer-pasajero` (un commit). El trabajo nació mezclado con el reporte operativo y con las tarifas de guía (otra sesión en la misma carpeta); el 04-nov se separó en `fix/reporte-operativo-observaciones` y `fix/guia-tarifas-versionadas` (respaldo: `respaldo/T-017-mezclada`).
+- **Tests:** `T017ClientePrimerPasajeroTest`, 14 tests (CA1-CA6, CA8-CA11, más «primer lugar elegido → siguiente
+  adulto libre», «ficha con otro cliente_id sin cambiarlo» y Venta Directa sin pasajero por defecto). CA7: la
+  suite completa pasa, incluidos `VentaDirectaBloque1Test` y `VentaDirectaReservaFechaTest`. Suite completa:
+  1990 pasan; en las corridas con la base sucia aparecían fallos de otros archivos que pasan solos (ver Hallazgos).
+  **No hice la prueba funcional en agencia-demo**: el MCP de Playwright no conectó en esta sesión.
 - **Desviaciones de la tarea y por qué:**
+  - `crearReservaDesdeAlternativa()` recibe el pasajero por defecto como **función** (`?\Closure`), no como
+    arreglo ya resuelto: así la ficha del cliente se crea solo si hay un adulto libre donde ponerlo (con solo
+    niños no queda una ficha sin uso). Venta Directa no la pasa y todo sigue igual.
+  - Lugar del cliente: pregunté y el usuario confirmó «primer adulto **libre**» (si el vendedor eligió al
+    primer adulto, el cliente va al siguiente adulto sin elegir; si no hay ninguno, no se carga).
+  - El servicio tiene además `datosDePasajero(Client)` (nombre/tipo/documento o null); `desdeCliente()` lo usa.
+    Bloquea la fila del cliente (`lockForUpdate`) para que dos aceptaciones del mismo cliente no creen dos fichas (CA11).
+  - Tests ajenos tocados (solo su limpieza): `ReservaAceptarConcurrencyTest`, `ReservaModificacionAplicarTest` y
+    `ReservaModificacionCrearTest` hacen commit real y borran el cliente a mano; ahora aceptar crea una ficha
+    con FK a `clients`, así que borran antes la ficha y sus documentos. Sin eso fallaban y dejaban basura.
+  - Efecto de la corrección de `sincronizarCatalogo()`: corregir el **número** de documento de un pasajero que
+    ya tenía ficha ya no cambia el número de esa ficha, sino que apunta a otra ficha (nueva o la de ese número).
+    Es lo que pide la tarea; la ficha vieja con el número mal escrito queda en el catálogo.
 
 ## Hallazgos fuera de alcance
--
+- La migración `2026_07_28_150100` comenta `tipo_documento` como `'dni' | 'pasaporte' | …` pero el sistema usa
+  `DNI`/`CE`/`PAS` en mayúscula. No se edita (regla de migraciones); corregir el comentario en `reglas.md`.
+- Dos clientes con el mismo documento: la ficha queda con el primer `cliente_id` y el segundo cliente la reusa
+  sin cambiarlo (comportamiento pedido). Hoy ningún dato real lo provoca.
+- Los tests de lock (`DB::commit()` real) dejan en la base de pruebas usuarios, roles, permisos, proveedores y
+  clientes si su `finally` falla a medias, y eso hace fallar a otros tests (`PermissionAlreadyExists`, conteos de
+  `ProveedorFiltroDestinoTest`). Conviene una tarea para que limpien con un solo helper.
+- Si se edita el documento de un cliente que ya tiene ficha, la siguiente aceptación encuentra la ficha por `cliente_id` (documento viejo) pero el pasajero nace con el documento nuevo; al primer guardado, `sincronizarCatalogo()` lo pasa a una ficha nueva sin `cliente_id`. Caso raro (revisión, 04-nov-2026).
+- `sincronizarCatalogo()` compara contra el primer documento de la ficha y, en la rama de actualizar, pisa `documentos()->first()`. Hoy cada ficha tiene un solo documento; si T-018 permite varios, revisarlo.

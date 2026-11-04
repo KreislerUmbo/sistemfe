@@ -146,6 +146,9 @@ class ReservaAceptarConcurrencyTest extends TestCase
             Reserva::where('alternativa_id', $alternativa->id)->delete();
             Alternativa::whereKey($alternativa->id)->delete();
             DB::table('cotizaciones')->where('id', $alternativa->cotizacion_id)->delete();
+            // T-017: aceptar() crea la ficha de pasajero del cliente; la FK impide borrar el cliente sin ella.
+            DB::table('pasajero_documentos')->whereIn('pasajero_catalogo_id', DB::table('pasajeros_catalogo')->where('cliente_id', $clienteId)->pluck('id'))->delete();
+            DB::table('pasajeros_catalogo')->where('cliente_id', $clienteId)->delete();
             DB::table('clients')->where('id', $clienteId)->delete();
             $this->borrarUsuarioDeSetUp();
             DB::table('permissions')->whereNotIn('id', $permisosQueYaEstaban)->delete();

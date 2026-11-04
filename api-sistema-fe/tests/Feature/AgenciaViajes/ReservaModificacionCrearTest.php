@@ -390,6 +390,9 @@ class ReservaModificacionCrearTest extends TestCase
         DB::table('alternativas')->whereIn('id', $alternativas)->delete();
         DB::table('cotizacion_pasajeros')->whereIn('cotizacion_id', $cotizaciones)->delete();
         DB::table('cotizaciones')->whereIn('id', $cotizaciones)->delete();
+        // T-017: aceptar() crea la ficha de pasajero del cliente; la FK impide borrar el cliente sin ella.
+        DB::table('pasajero_documentos')->whereIn('pasajero_catalogo_id', DB::table('pasajeros_catalogo')->where('cliente_id', $clienteId)->pluck('id'))->delete();
+        DB::table('pasajeros_catalogo')->where('cliente_id', $clienteId)->delete();
         DB::table('clients')->where('id', $clienteId)->delete();
 
         // Catálogo que creó crearTarifa(): también quedó guardado por el commit.

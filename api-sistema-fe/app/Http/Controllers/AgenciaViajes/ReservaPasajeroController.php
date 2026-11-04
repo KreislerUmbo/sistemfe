@@ -151,6 +151,16 @@ class ReservaPasajeroController extends Controller
             ? PasajeroCatalogo::find($pasajero->pasajero_catalogo_id)
             : null;
 
+        // T-017: si el documento del pasajero ya no es el de su ficha, el vendedor
+        // escribió a OTRA persona (el frontend deja el pasajero_catalogo_id anterior).
+        // Esa ficha no se toca: se busca la del nuevo documento o se crea una (sin cliente_id).
+        if ($catalogo) {
+            $documentoDeLaFicha = $catalogo->documentos()->orderBy('id')->value('numero_documento');
+            if ($documentoDeLaFicha !== null && $documentoDeLaFicha !== $pasajero->documento) {
+                $catalogo = null;
+            }
+        }
+
         if (!$catalogo) {
             $documentoExistente = PasajeroDocumento::where('numero_documento', $pasajero->documento)->first();
             $catalogo = $documentoExistente?->pasajeroCatalogo;

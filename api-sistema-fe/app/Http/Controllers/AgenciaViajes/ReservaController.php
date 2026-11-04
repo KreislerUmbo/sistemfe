@@ -22,6 +22,7 @@ use App\Models\AgenciaViajes\SalidaMayorista;
 use App\Models\AgenciaViajes\SalidaOperativa;
 use App\Models\Sale\Sale;
 use App\Services\AgenciaViajes\CodigoGeneradorService;
+use App\Services\AgenciaViajes\PasajeroCatalogoService;
 use App\Services\AgenciaViajes\ReservaItemCreacionService;
 use App\Services\AgenciaViajes\ResultadoCotizacionService;
 use App\Services\AgenciaViajes\SalidaEngancheService;
@@ -336,7 +337,23 @@ class ReservaController extends Controller
                     $cotizacionBloqueada->update(['resultado_motivo_id' => $motivoGanadaId, 'resultado_detalle' => $detalleGanada]);
                 }
 
-                return $this->crearReservaDesdeAlternativa($alternativaBloqueada->fresh(), $pasajeroCatalogoIds);
+                // T-017: el cliente que cotiza viaja casi siempre. Se resuelve su ficha solo si
+                // la creación encuentra un lugar donde ponerlo (evita fichas sin uso).
+                $cotizacionAceptada = $alternativaBloqueada->cotizacion;
+                $cliente = $cotizacionAceptada->cliente;
+                $pasajeroPorDefecto = $cliente ? function () use ($cliente): ?array {
+                    $servicio = app(PasajeroCatalogoService::class);
+                    $datos = $servicio->datosDePasajero($cliente);
+                    $ficha = $datos ? $servicio->desdeCliente($cliente) : null;
+
+                    return $ficha ? [
+                        'nombre' => $datos['nombre'],
+                        'documento' => $datos['documento'],
+                        'pasajero_catalogo_id' => $ficha->id,
+                    ] : null;
+                } : null;
+
+                return $this->crearReservaDesdeAlternativa($alternativaBloqueada->fresh(), $pasajeroCatalogoIds, $pasajeroPorDefecto);
             });
         } catch (HttpException $e) {
             return response()->json(['code' => $e->getStatusCode(), 'message' => $e->getMessage()], $e->getStatusCode());
@@ -548,7 +565,12 @@ class ReservaController extends Controller
     // reserva/reserva_pasajeros/reserva_items desde una alternativa YA
     // marcada 'aceptada' (el caller decide cuándo/cómo llegó a ese estado).
     // No abre su propia transacción — el caller ya está dentro de una.
-    public function crearReservaDesdeAlternativa(Alternativa $alternativa, array $pasajeroCatalogoIds = []): array
+    //
+    // $pasajeroPorDefecto (T-017, solo lo pasa aceptar()): función que devuelve
+    // ['nombre','documento','pasajero_catalogo_id'] del cliente que cotiza, o null.
+    // Va al primer adulto cuyo lugar el vendedor no eligió, y se llama solo si hay
+    // ese lugar. Sin él (Venta Directa) el comportamiento es el de siempre.
+    public function crearReservaDesdeAlternativa(Alternativa $alternativa, array $pasajeroCatalogoIds = [], ?\Closure $pasajeroPorDefecto = null): array
     {
         $opcionElegida = $alternativa->opcionMayoristaElegida;
 
@@ -582,14 +604,37 @@ class ReservaController extends Controller
         // desde Sesión 8a pero nunca se llenaba.
         $mapaPasajeros = [];
 
+        // T-017: primer adulto (orden id) sin pasajero elegido por el vendedor.
+        $datosPorDefecto = null;
+        $indiceDelCliente = null;
+        if ($pasajeroPorDefecto) {
+            foreach ($cotizacionPasajeros as $index => $candidato) {
+                if ($candidato->tipo_pax === 'adulto' && empty($pasajeroCatalogoIds[$index])) {
+                    $indiceDelCliente = $index;
+                    break;
+                }
+            }
+            if ($indiceDelCliente !== null) {
+                $datosPorDefecto = $pasajeroPorDefecto();
+                // Si el vendedor ya eligió al propio cliente en otro lugar, no se repite.
+                if ($datosPorDefecto && in_array($datosPorDefecto['pasajero_catalogo_id'], array_map('intval', array_filter($pasajeroCatalogoIds)), true)) {
+                    $datosPorDefecto = null;
+                }
+            }
+        }
+
         foreach ($cotizacionPasajeros as $index => $cotizacionPasajero) {
+            $esElDelCliente = $datosPorDefecto && $index === $indiceDelCliente;
+
             $reservaPasajero = ReservaPasajero::create([
                 'reserva_id' => $reserva->id,
                 'cotizacion_pasajero_id' => $cotizacionPasajero->id,
                 'tipo_pax' => $cotizacionPasajero->tipo_pax,
                 // Fila 13, 1c: para la parte de cada pasajero en la línea de tour.
                 'residencia' => $cotizacionPasajero->residencia,
-                'pasajero_catalogo_id' => $pasajeroCatalogoIds[$index] ?? null,
+                'nombre' => $esElDelCliente ? $datosPorDefecto['nombre'] : null,
+                'documento' => $esElDelCliente ? $datosPorDefecto['documento'] : null,
+                'pasajero_catalogo_id' => $esElDelCliente ? $datosPorDefecto['pasajero_catalogo_id'] : ($pasajeroCatalogoIds[$index] ?? null),
             ]);
             $mapaPasajeros[$cotizacionPasajero->id] = $reservaPasajero->id;
         }
