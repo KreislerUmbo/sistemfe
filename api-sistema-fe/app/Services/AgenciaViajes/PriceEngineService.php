@@ -2,6 +2,9 @@
 
 namespace App\Services\AgenciaViajes;
 
+use App\Models\AgenciaViajes\ProveedorTarifa;
+use App\Services\HoraPeru;
+
 // Motor de precios único del vertical — plan-modulo-cotizaciones-reservas.md
 // §2.5. Servicio de dominio puro (sin Request/Response), para que sea
 // testeable y reusable entre AlternativaItemController (proveedor/
@@ -182,6 +185,61 @@ class PriceEngineService
         $descuento = $descuentoTipo === 'monto' ? $descuentoValor : $ventaBruta * ($descuentoValor / 100);
 
         return round($ventaBruta - $descuento, 2);
+    }
+
+    // T-045 — motivo por el que una tarifa de proveedor no se puede usar en
+    // un ítem NUEVO (null = se puede). Antes vivía en crearItemProveedor();
+    // ahora lo comparte con la vista previa de Venta directa para que ambos
+    // respondan el mismo mensaje.
+    public function motivoTarifaNoUsable(ProveedorTarifa $tarifa): ?string
+    {
+        if (! $tarifa->activo) {
+            return 'Esta tarifa fue retirada del catálogo activo — no se puede usar en un ítem nuevo.';
+        }
+
+        // T-028: una versión vieja (cerrada) o futura no se cotiza; hay que
+        // usar la versión vigente.
+        if (! $tarifa->estaVigente()) {
+            return $tarifa->vigente_desde->toDateString() > HoraPeru::hoyTexto()
+                ? 'Esta tarifa todavía no está vigente (desde '.$tarifa->vigente_desde->format('d/m/Y').').'
+                : 'Esta tarifa ya no está vigente: usa la versión actual.';
+        }
+
+        return null;
+    }
+
+    // T-045 — fórmula única de venta/costo de una línea de tarifa de
+    // proveedor (antes inline en AlternativaItemController::
+    // crearItemProveedor()). $conteo = ['adulto'=>n,'nino'=>n,'infante'=>n].
+    // Devuelve el precio de venta y el costo del snapshot SIN camas
+    // adicionales (esas las suma quien las use).
+    //  - por_persona: venta = Σ conteo × precio por tipo (vacío = 0); costo
+    //    = total de la línea sin infantes (E2, fila 13).
+    //  - tarifa_fija: un solo precio, el del adulto; costo unitario.
+    public function ventaYCostoDeTarifa(ProveedorTarifa $tarifa, array $conteo, string $modoPrecio): array
+    {
+        $costo = (float) $tarifa->precio_costo;
+
+        if ($modoPrecio === 'por_persona') {
+            return [
+                'venta' => $conteo['adulto'] * (float) $tarifa->precio_venta_adulto
+                    + $conteo['nino'] * (float) ($tarifa->precio_venta_nino ?? 0)
+                    + $conteo['infante'] * (float) ($tarifa->precio_venta_infante ?? 0),
+                'costo' => round($costo * ($conteo['adulto'] + $conteo['nino']), 2),
+            ];
+        }
+
+        return ['venta' => (float) $tarifa->precio_venta_adulto, 'costo' => $costo];
+    }
+
+    // T-045 — total de una línea: lo mismo que AlternativaItem::
+    // getTotalConvertidoAttribute() (por persona ignora la cantidad) sobre
+    // el precio ya convertido/redondeado como lo guarda el ítem.
+    public function totalDeLinea(float $precioVenta, string $monedaOrigen, string $monedaDestino, float $tipoCambio, string $modoPrecio, int $cantidad): float
+    {
+        $unitario = $this->convertirMoneda($precioVenta, $monedaOrigen, $monedaDestino, $tipoCambio);
+
+        return $modoPrecio === 'tarifa_fija' ? $unitario * $cantidad : $unitario;
     }
 
     // tipo_cambio_agencia.valor = cuántos PEN equivalen a 1 USD (cotización

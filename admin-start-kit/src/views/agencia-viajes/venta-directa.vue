@@ -50,7 +50,11 @@
                     </div>
                     <div class="col-12 col-md-4">
                         <label class="form-label mb-1 small fw-semibold text-secondary">Fecha del servicio</label>
-                        <CampoFecha v-model="fechaServicio" />
+                        <div class="d-flex gap-2">
+                            <CampoFecha v-model="fechaServicio" />
+                            <button type="button" class="btn btn-sm btn-outline-secondary text-nowrap" @click="fechaServicio = hoyPeru()">Hoy</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary text-nowrap" @click="fechaServicio = sumarDiasISO(hoyPeru(), 1)">Mañana</button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -120,16 +124,32 @@
                         </div>
                         <div v-else class="small text-muted mt-1">Ninguna tarifa seleccionada todavía.</div>
                     </div>
-                    <div class="col-6">
-                        <label class="form-label small text-secondary mb-1">Modo de precio</label>
-                        <select class="form-select form-select-sm" v-model="modoPrecio">
-                            <option value="tarifa_fija">Tarifa fija (ej. hotel por habitación)</option>
-                            <option value="por_persona">Por persona (adulto/niño/infante)</option>
-                        </select>
-                    </div>
-                    <div class="col-6">
-                        <label class="form-label small text-secondary mb-1">Cantidad</label>
-                        <input type="number" min="1" class="form-control form-control-sm" v-model.number="cantidad">
+                    <div v-if="tarifaSeleccionada" class="col-12">
+                        <label class="form-label small text-secondary mb-1">¿Cómo se cobra? <span class="text-danger">*</span></label>
+                        <div v-if="vistaPreviaError" class="alert alert-warning py-2 px-3 mb-0 small">{{ vistaPreviaError }}</div>
+                        <div v-else-if="!vistaPrevia" class="small text-muted">
+                            <span class="spinner-border spinner-border-sm me-1"></span>Calculando…
+                        </div>
+                        <div v-else class="row g-2">
+                            <div class="col-12 col-md-6">
+                                <label class="border rounded p-2 d-block h-100" :class="{ 'border-primary bg-primary-subtle': modoPrecio === 'por_persona' }" style="cursor:pointer">
+                                    <input type="radio" class="form-check-input me-2" value="por_persona" v-model="modoPrecio">
+                                    <span class="fw-semibold">Por persona ({{ pax.length }} pasajero{{ pax.length === 1 ? '' : 's' }}): {{ dinero(vistaPrevia.por_persona.total, vistaPrevia.moneda) }}</span>
+                                    <div class="small text-muted mt-1">{{ textoDesglose }}</div>
+                                </label>
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label class="border rounded p-2 d-block h-100" :class="{ 'border-primary bg-primary-subtle': modoPrecio === 'tarifa_fija' }" style="cursor:pointer">
+                                    <input type="radio" class="form-check-input me-2" value="tarifa_fija" v-model="modoPrecio">
+                                    <span class="fw-semibold">Por unidad (cantidad {{ cantidad }}): {{ dinero(vistaPrevia.tarifa_fija.total, vistaPrevia.moneda) }}</span>
+                                    <div class="d-flex align-items-center gap-2 small text-muted mt-1">
+                                        {{ dinero(vistaPrevia.tarifa_fija.precio_unitario, vistaPrevia.moneda) }} ×
+                                        <input type="number" min="1" class="form-control form-control-sm" style="max-width:80px" v-model.number="cantidad"
+                                            @focus="modoPrecio = 'tarifa_fija'" aria-label="Cantidad">
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -165,7 +185,7 @@
             <button class="btn btn-primary fw-semibold" @click="crear" :disabled="creando">
                 <span v-if="creando" class="spinner-border spinner-border-sm me-2"></span>
                 <i v-else class="fas fa-check me-2"></i>
-                Crear venta directa
+                Crear venta directa<template v-if="totalEnVivo"> · {{ totalEnVivo }}</template>
             </button>
         </div>
 
@@ -188,14 +208,15 @@
 
 <script setup lang="ts">
 import CampoFecha from '@/components/CampoFecha.vue';
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
+import { hoyPeru, sumarDiasISO } from '@/helpers/fecha';
 import { useRouter } from 'vue-router';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import Swal from 'sweetalert2/dist/sweetalert2.js';
 import httpClient from '@/helpers/http-client';
 import ClientFormQuick from '@/components/Sales/ClientFormQuick.vue';
 import { proveedorService } from '@/services/admin/proveedorService';
-import { ventaDirectaService } from '@/services/admin/ventaDirectaService';
+import { ventaDirectaService, type TipoPaxVistaPrevia, type VistaPreviaVentaDirecta } from '@/services/admin/ventaDirectaService';
 import type { Client } from '@/types/clients';
 import type { ProveedorTarifa } from '@/types/agencia-viajes';
 
@@ -211,7 +232,7 @@ const showQuickClientModal = ref<boolean>(false);
 let clientSearchTimeout: any = null;
 
 const destino = ref<string>('');
-const fechaServicio = ref<string>('');
+const fechaServicio = ref<string>(hoyPeru()); // T-045: obligatoria, por defecto hoy en Perú
 const pax = ref<Array<{ edad: number }>>([]);
 const creando = ref<boolean>(false);
 
@@ -220,11 +241,72 @@ const origenTipo = ref<'proveedor' | 'manual'>('proveedor');
 const bibliotecaSearch = ref('');
 const bibliotecaTarifas = ref<ProveedorTarifa[]>([]);
 const proveedorTarifaId = ref<number | null>(null);
-const modoPrecio = ref<'por_persona' | 'tarifa_fija'>('tarifa_fija');
+// T-045: sin valor por defecto; el vendedor elige viendo los dos totales.
+const modoPrecio = ref<'por_persona' | 'tarifa_fija' | null>(null);
 const cantidad = ref<number>(1);
 let bibliotecaTimeout: any = null;
 
 const tarifaSeleccionada = computed(() => bibliotecaTarifas.value.find((t) => t.id === proveedorTarifaId.value) ?? null);
+
+// ── T-045: total en vivo ──────────────────────────────────────────────
+// El backend clasifica a los pasajeros por edad (ConfiguracionAgencia, que
+// un vendedor no puede leer), así que el total de una tarifa sale del
+// endpoint de vista previa. Concepto libre se calcula acá.
+const vistaPrevia = ref<VistaPreviaVentaDirecta | null>(null);
+const vistaPreviaError = ref<string>('');
+let vistaPreviaTimeout: any = null;
+let vistaPreviaSeq = 0; // descarta respuestas viejas
+
+const dinero = (monto: number, moneda: 'PEN' | 'USD') =>
+    `${moneda === 'USD' ? 'US$' : 'S/'} ${monto.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+const paxValidos = computed(() => pax.value.length > 0 && pax.value.every((p) => Number.isInteger(p.edad) && p.edad >= 0 && p.edad <= 120));
+
+const pedirVistaPrevia = () => {
+    clearTimeout(vistaPreviaTimeout);
+    const seq = ++vistaPreviaSeq; // invalida lo que esté en vuelo
+    vistaPreviaError.value = '';
+    if (origenTipo.value !== 'proveedor' || !proveedorTarifaId.value || !paxValidos.value || !Number.isInteger(cantidad.value) || cantidad.value < 1) {
+        vistaPrevia.value = null;
+        return;
+    }
+    const tarifaId = proveedorTarifaId.value;
+    vistaPreviaTimeout = setTimeout(async () => {
+        try {
+            const res = await ventaDirectaService.vistaPrevia({ pax: pax.value, proveedor_tarifa_id: tarifaId, cantidad: cantidad.value });
+            if (seq === vistaPreviaSeq) vistaPrevia.value = res;
+        } catch (error: any) {
+            if (seq !== vistaPreviaSeq) return;
+            vistaPrevia.value = null;
+            vistaPreviaError.value = error.response?.data?.message ?? 'No se pudo calcular el total.';
+        }
+    }, 300);
+};
+
+// Al cambiar de tarifa el modo vuelve a "sin elegir".
+watch(proveedorTarifaId, () => { modoPrecio.value = null; vistaPrevia.value = null; });
+watch([proveedorTarifaId, cantidad, () => pax.value.map((p) => p.edad).join(','), origenTipo], pedirVistaPrevia);
+
+const textoDesglose = computed(() => {
+    if (!vistaPrevia.value) return '';
+    const etiquetas: Record<TipoPaxVistaPrevia, [string, string]> = { adulto: ['adulto', 'adultos'], nino: ['niño', 'niños'], infante: ['infante', 'infantes'] };
+    return (Object.keys(etiquetas) as TipoPaxVistaPrevia[])
+        .filter((t) => vistaPrevia.value!.por_persona.desglose[t].cantidad > 0)
+        .map((t) => {
+            const { cantidad: n, precio } = vistaPrevia.value!.por_persona.desglose[t];
+            return `${n} ${etiquetas[t][n === 1 ? 0 : 1]} × ${precio}`;
+        })
+        .join(' + ');
+});
+
+const totalEnVivo = computed<string>(() => {
+    if (origenTipo.value === 'manual') {
+        if (precioVentaSnapshot.value === null || !cantidadManual.value || cantidadManual.value < 1) return '';
+        return dinero(Math.round(precioVentaSnapshot.value * 100) / 100 * cantidadManual.value, monedaCosto.value);
+    }
+    if (!vistaPrevia.value || !modoPrecio.value) return '';
+    return dinero(vistaPrevia.value[modoPrecio.value].total, vistaPrevia.value.moneda);
+});
 
 const descripcionManual = ref('');
 const precioVentaSnapshot = ref<number | null>(null);
@@ -280,7 +362,9 @@ const crear = async () => {
     if (!clienteSeleccionado.value) { (Swal as TVueSwalInstance).fire('Error', 'Seleccioná un cliente.', 'error'); return; }
     if (!destino.value.trim()) { (Swal as TVueSwalInstance).fire('Error', 'Ingresá un destino.', 'error'); return; }
     if (pax.value.length === 0) { (Swal as TVueSwalInstance).fire('Error', 'Agregá al menos un pasajero.', 'error'); return; }
+    if (!fechaServicio.value) { (Swal as TVueSwalInstance).fire('Error', 'Indica la fecha del servicio.', 'error'); return; }
     if (origenTipo.value === 'proveedor' && !proveedorTarifaId.value) { (Swal as TVueSwalInstance).fire('Error', 'Seleccioná una tarifa del catálogo.', 'error'); return; }
+    if (origenTipo.value === 'proveedor' && !modoPrecio.value) { (Swal as TVueSwalInstance).fire('Error', 'Elige cómo se cobra: por persona o por unidad.', 'error'); return; }
     if (origenTipo.value === 'manual' && (!descripcionManual.value.trim() || !precioVentaSnapshot.value)) { (Swal as TVueSwalInstance).fire('Error', 'Completá la descripción y el precio.', 'error'); return; }
     if (origenTipo.value === 'manual' && (costoSnapshot.value === null || costoSnapshot.value < 0 || !cantidadManual.value || cantidadManual.value < 1)) { (Swal as TVueSwalInstance).fire('Error', 'Revisá el costo (0 o más) y la cantidad (1 o más).', 'error'); return; }
 
@@ -289,11 +373,11 @@ const crear = async () => {
         const res = await ventaDirectaService.crear({
             cliente_id: clienteSeleccionado.value.id,
             destino: destino.value.trim(),
-            fecha_servicio: fechaServicio.value || null,
+            fecha_servicio: fechaServicio.value,
             origen_tipo: origenTipo.value,
             pax: pax.value,
             ...(origenTipo.value === 'proveedor'
-                ? { proveedor_tarifa_id: proveedorTarifaId.value!, modo_precio: modoPrecio.value, cantidad: cantidad.value }
+                ? { proveedor_tarifa_id: proveedorTarifaId.value!, modo_precio: modoPrecio.value!, cantidad: modoPrecio.value === 'por_persona' ? 1 : cantidad.value }
                 : { descripcion_manual: descripcionManual.value.trim(), costo_snapshot: costoSnapshot.value!, precio_venta_snapshot: precioVentaSnapshot.value!, cantidad: cantidadManual.value, moneda_costo: monedaCosto.value }),
         });
 

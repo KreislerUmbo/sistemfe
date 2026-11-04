@@ -92,9 +92,14 @@ cd admin-start-kit && npm run type-check
 ---
 
 ## Resultado
-- **Commits:**
-- **Tests:** (nuevos / suite completa)
+- **Commits:** rama `feat/T-045-venta-directa-total-fecha` — `docs: T-045 verificada…` + el commit de la construcción (ver `git log`).
+- **Tests:** 5 nuevos en `VentaDirectaVistaPreviaTest` (CA2 PEN y USD con niño/infante, CA4b desglose con precio vacío = 0, CA2b no crea nada, tarifa retirada/futura → 422, ruta con `reservas.crear`); `VentaDirectaBloque1Test`: CA3 reemplaza al viejo test y el de costo recibe `fecha_servicio`. `--filter=VentaDirecta`: 13 en verde. Suite `tests/Feature/AgenciaViajes` + `tests/Unit`: 1280 en verde y 1 rojo, el intermitente conocido `Fila13Fase1cFacturacionTest::descuento del combo…`, que pasa solo (32/32). Suite del cotizador sin tocar asserts. `type-check`: sin errores en los archivos tocados (los que hay son previos, en otros archivos).
+- **Prueba funcional (agencia-demo, Playwright):** CA4 hoy = 2026-11-04 y «Mañana» = 2026-11-05. CA1 tarifa S/ 30 con 4 pasajeros: «Por persona S/ 120.00», «Por unidad S/ 30.00»; el botón dice «Crear venta directa · S/ 120.00» / «· S/ 30.00» según el modo, y sin elegir no trae total. CA4b tarifa sin precio de niño, 1 adulto + 1 niño: «1 adulto × 90 + 1 niño × 0». Tarifa en USD muestra «US$». No se creó ninguna venta real.
 - **Desviaciones de la tarea y por qué:**
+  - La fórmula salió a tres métodos de `PriceEngineService` (`motivoTarifaNoUsable`, `ventaYCostoDeTarifa`, `totalDeLinea`) y no a uno: el chequeo de activo/vigente también se comparte para que el 422 sea el mismo mensaje. La cama adicional sigue en `crearItemProveedor()` (la venta directa no la usa).
+  - Agregué un botón «Hoy» junto a «Mañana» (la tarea pedía solo «Mañana»), útil si se cambió la fecha.
+  - La cantidad está dentro de la tarjeta «Por unidad» (no en un campo aparte), porque el total de esa opción depende de ella antes de elegir el modo.
+  - No probé de punta a punta en el navegador crear la venta (no quise dejar datos en agencia-demo); la coincidencia vista previa = reserva creada la cubre el test CA2.
 
 ## Hallazgos fuera de alcance
 - (verificación, 04-nov-2026) Precio de niño/infante vacío = 0 en "por persona": pasado a "Por analizar" del backlog.
