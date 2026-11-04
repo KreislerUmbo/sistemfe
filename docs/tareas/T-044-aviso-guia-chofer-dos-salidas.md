@@ -61,9 +61,15 @@ cd admin-start-kit && npm run type-check
 ---
 
 ## Resultado
-- **Commits:**
-- **Tests:** (nuevos / suite completa)
+- **Commits:** uno solo en `feat/T-044-aviso-guia-chofer` (sin unir a `main`).
+- **Tests:** 10 nuevos en `T044AvisoGuiaChoferTest` (CA1-CA4 + sin teléfono, teléfonos distintos, misma salida, guía de vehículo, sin hora, actualizar sin cambios, y el campo del tablero). `--filter=Salida`: 57 verdes. `--filter=AgenciaViajes`: 1042 verdes (4361 aserciones); el intermitente Fila13Fase1c no falló. `type-check`: 47 errores antes, 47 después (ninguno en los archivos tocados). Falta `build`.
+- **CA5 (tablero):** probado solo por API (`show()` devuelve `aviso_guia_repetido`). La prueba en navegador NO se hizo: el MCP de Playwright no conectó ("Connection closed"). Falta mirar a mano en agencia-demo.
 - **Desviaciones de la tarea y por qué:**
+  - Servicio nuevo `CruceSalidasService` (la lógica la comparten los dos controllers y el tablero).
+  - El aviso solo sale si el guía o el teléfono del chofer **cambiaron** en ese guardado (si no, cada edición de otro campo repetiría el toast). Al crear un vehículo se evalúa todo.
+  - Tablero: la marca solo cubre al guía (el del encabezado y el de sus vehículos), como pide el alcance; el chofer se avisa solo en el toast.
+  - Al asignar un guía en el tablero se marca esa fila; la otra salida se marca al recargar la lista.
 
 ## Hallazgos fuera de alcance
-- 
+- Reprogramar una salida/reserva a un día donde el guía o el chofer ya está ocupado no avisa (solo se avisa al asignar).
+- `aviso_guia_repetido` hace 2 consultas por salida en el listado (20 por página): aceptable hoy; si crece, precalcular por fecha.

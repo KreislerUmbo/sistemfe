@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\AgenciaViajes\Reserva;
 use App\Models\AgenciaViajes\SalidaOperativa;
 use App\Models\AgenciaViajes\SalidaVehiculo;
+use App\Services\AgenciaViajes\CruceSalidasService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -41,6 +42,17 @@ class SalidaVehiculoController extends Controller
             ->all();
     }
 
+    /** @return array<int, string> */
+    private function avisosDeCruce(SalidaOperativa $salida, SalidaVehiculo $vehiculo, bool $guia = true, bool $chofer = true): array
+    {
+        $cruce = app(CruceSalidasService::class);
+
+        return array_merge(
+            $guia ? $cruce->avisosGuia($salida, $vehiculo->guia_id) : [],
+            $chofer ? $cruce->avisosChofer($salida, $vehiculo->chofer_telefono, $vehiculo->chofer_nombre) : []
+        );
+    }
+
     // POST salidas-operativas/{id}/vehiculos
     public function store(Request $request, string $salidaId)
     {
@@ -67,7 +79,10 @@ class SalidaVehiculoController extends Controller
             $vehiculo->reservas()->sync($this->reservasActivasDe($salida));
         }
 
-        return response()->json(['code' => 200, 'message' => 'Vehículo agregado.', 'vehiculo' => $vehiculo]);
+        // T-044 (H38): solo avisa, nunca bloquea.
+        $avisos = $this->avisosDeCruce($salida, $vehiculo);
+
+        return response()->json(['code' => 200, 'message' => 'Vehículo agregado.', 'vehiculo' => $vehiculo, 'avisos' => $avisos]);
     }
 
     // PUT salida-vehiculos/{id}
@@ -84,9 +99,19 @@ class SalidaVehiculoController extends Controller
             return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
         }
 
+        $guiaAntes = $vehiculo->guia_id;
+        $telefonoAntes = CruceSalidasService::normalizarTelefono($vehiculo->chofer_telefono);
         $vehiculo->update($validator->validated());
 
-        return response()->json(['code' => 200, 'message' => 'Vehículo actualizado.', 'vehiculo' => $vehiculo->fresh()]);
+        // T-044 (H38): solo avisa, y solo por lo que cambió en este guardado.
+        $avisos = $this->avisosDeCruce(
+            $vehiculo->salida,
+            $vehiculo,
+            $vehiculo->guia_id !== $guiaAntes,
+            CruceSalidasService::normalizarTelefono($vehiculo->chofer_telefono) !== $telefonoAntes
+        );
+
+        return response()->json(['code' => 200, 'message' => 'Vehículo actualizado.', 'vehiculo' => $vehiculo->fresh(), 'avisos' => $avisos]);
     }
 
     // DELETE salida-vehiculos/{id} — sus reservas quedan sin vehículo.
