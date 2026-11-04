@@ -57,6 +57,14 @@ class AsignacionOperativa
      */
     public static function sinAsignar(ReservaItem $item): bool
     {
+        return self::motivoSinAsignar($item) !== null;
+    }
+
+    /**
+     * T-057: por qué el ítem cuenta como "sin asignar", o null si está asignado.
+     */
+    public static function motivoSinAsignar(ReservaItem $item): ?string
+    {
         $origenTipo = $item->alternativaItem?->origen_tipo;
 
         // Fila 13, fase 2a: la línea de tour no tiene guía ni proveedor
@@ -68,21 +76,31 @@ class AsignacionOperativa
         // tours sin transporte.
         if ($origenTipo === AlternativaItem::ORIGEN_TOUR) {
             $salida = $item->salidaOperativa;
-            if (! $salida || $salida->estado === SalidaOperativa::ESTADO_CANCELADA) {
-                return true;
+            if (! $salida) {
+                return 'Sin salida';
+            }
+
+            if ($salida->estado === SalidaOperativa::ESTADO_CANCELADA) {
+                return 'Salida cancelada';
             }
 
             if (! self::guiaEfectivo($item) && self::tourLlevaGuia($item->tour_origen_id)) {
-                return true;
+                return 'Sin guía';
             }
 
-            return $salida->servicios->contains(fn ($servicio) => $servicio->proveedor_id === null);
+            $servicio = $salida->servicios->first(fn ($s) => $s->proveedor_id === null);
+
+            return $servicio ? 'Servicio sin proveedor: '.$servicio->nombre : null;
         }
 
         if ($origenTipo === AlternativaItem::ORIGEN_GUIA) {
             $guia = self::guiaEfectivo($item);
 
-            return ! $guia || (bool) $guia->es_referencial;
+            if (! $guia) {
+                return 'Sin guía';
+            }
+
+            return $guia->es_referencial ? 'Guía referencial' : null;
         }
 
         // T-054: el proveedor real es el del ítem de la reserva (lo cambian
@@ -91,14 +109,17 @@ class AsignacionOperativa
         // asignado aunque no tenga tarifa de catálogo.
         if ($origenTipo === AlternativaItem::ORIGEN_PROVEEDOR) {
             if (! $item->proveedor_tarifa_id) {
-                return ! $item->opcion_hotel_tarifa_id;
+                return $item->opcion_hotel_tarifa_id ? null : 'Sin proveedor';
             }
 
-            return (bool) $item->proveedorTarifa?->proveedorServicio?->proveedor?->es_referencial;
+            return $item->proveedorTarifa?->proveedorServicio?->proveedor?->es_referencial
+                ? 'Proveedor referencial'
+                : null;
         }
 
-        return false;
+        return null;
     }
+
 
     /** @var array<int, bool> tour_id => lleva guía (cache por petición) */
     private static array $tourLlevaGuia = [];

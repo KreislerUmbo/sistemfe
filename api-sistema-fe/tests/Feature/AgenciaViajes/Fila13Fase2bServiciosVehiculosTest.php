@@ -109,9 +109,12 @@ class Fila13Fase2bServiciosVehiculosTest extends TestCase
         $item = fn () => ReservaItem::with(['salidaOperativa.servicios', 'alternativaItem'])->where('reserva_id', $reserva->id)->first();
 
         $this->assertTrue(AsignacionOperativa::sinAsignar($item()));
+        // T-057 CA2: el motivo nombra el servicio sin proveedor.
+        $this->assertSame('Servicio sin proveedor: '.$item()->salidaOperativa->servicios->first()->nombre, AsignacionOperativa::motivoSinAsignar($item()));
 
         SalidaServicio::where('salida_operativa_id', $this->salidaDe($reserva)->id)->update(['proveedor_id' => $this->proveedor()->id]);
         $this->assertFalse(AsignacionOperativa::sinAsignar($item()));
+        $this->assertNull(AsignacionOperativa::motivoSinAsignar($item()));
     }
 
     // ═══════════════════════════════════════════════════════════════

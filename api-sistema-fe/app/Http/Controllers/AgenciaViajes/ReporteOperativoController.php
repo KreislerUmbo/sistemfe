@@ -649,6 +649,8 @@ class ReporteOperativoController extends Controller
                 'es_referencial' => (bool) $guiaEfectivo->es_referencial,
             ] : null,
             'sin_guia' => $sinGuia,
+            // T-057: por qué cuenta como pendiente (null si está asignado).
+            'motivo_pendiente' => $sinGuia ? AsignacionOperativa::motivoSinAsignar($item) : null,
             'vinculo_especifico' => $vinculoEspecifico,
             // El frontend necesita esto para bloquear la edición directa de guía: si
             // el ítem está enganchado a una Salida Operativa, el guía se cambia desde

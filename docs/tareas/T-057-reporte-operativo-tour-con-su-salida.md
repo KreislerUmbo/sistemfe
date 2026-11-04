@@ -57,9 +57,10 @@ cd admin-start-kit && npm run type-check
 ---
 
 ## Resultado
-- **Commits:**
-- **Tests:** (nuevos / suite completa)
-- **Desviaciones de la tarea y por qué:**
+- **Commits:** ver `git log feat/T-057-reporte-tour-salida` (un commit).
+- **Tests:** nuevos: `test_motivo_pendiente_de_un_tour_con_salida_cancelada` (CA1, incluye la fila de `ReporteOperativoController::index`) y ampliación de `test_un_servicio_sin_proveedor_deja_el_tour_sin_asignar` (CA2, y `null` cuando ya está asignado). Filtro de la tarea (`Fila13Fase2|ReporteOperativo|Dashboard|AsignacionOperativa`): 81 pasan. Vertical completo (`--filter=AgenciaViajes`): 1016 pasan y 1 falla, `Fila13Fase1cFacturacionTest` (el intermitente conocido de CLAUDE.md, ajeno a esta tarea). Suite completa del backend: no corrida. `type-check`: 47 errores, todos preexistentes (p. ej. `fake-backend.ts`); ninguno en los archivos tocados.
+- **Prueba funcional (CA4):** NO hecha en el navegador; falta verla en agencia-demo (fila de tour con guía, vehículo, "Ver salida" y motivo en ámbar).
+- **Desviaciones de la tarea y por qué:** (1) Guía: la tarea solo da textos para proveedor; usé "Sin guía" y "Guía referencial" por analogía. (2) El motivo también se muestra en la fila de guía vía salida (la tarea decía solo tour/proveedor/guía sin salida). (3) Si un tour tiene varios servicios sin proveedor, el motivo nombra solo el primero. (4) Al cambiar el guía inline se actualiza `motivo_pendiente` en el cliente; al cambiar proveedor la pantalla ya recargaba.
 
 ## Hallazgos fuera de alcance
-- 
+- Las filas sintéticas (noches de hotel, vuelos) no llevan `motivo_pendiente` (el campo es opcional en el tipo).

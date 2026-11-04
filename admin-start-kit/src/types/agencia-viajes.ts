@@ -1343,6 +1343,8 @@ export type ReporteOperativoFila = {
   hora: string | null;
   guia: { id: number; nombre: string; es_referencial: boolean } | null;
   sin_guia: boolean;
+  // T-057: por qué la fila está pendiente de asignar (null si no lo está).
+  motivo_pendiente?: string | null;
   vinculo_especifico: boolean;
   // Si está seteado, el guía mostrado arriba viene de la Salida Operativa (compartida
   // con otras reservas) — el reporte NO debe permitir editarlo directamente acá, mismo
