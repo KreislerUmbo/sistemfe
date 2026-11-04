@@ -1772,6 +1772,8 @@ const guardarHoraDeTarjeta = async (it: ReservaItem) => {
 };
 
 // T-042: aviso (sin bloquear) cuando un servicio quedó en una salida cancelada.
+// Va después de avisarProveedores(): comparten la instancia de SweetAlert y el
+// cuadro cerraría este toast apenas aparece.
 const avisarSalidasCanceladas = (avisos?: string[]) => {
     (avisos ?? []).forEach((aviso) => toast.warning(aviso));
 };
@@ -1785,8 +1787,8 @@ const guardarItem = async (it: ReservaItem) => {
             hora: it.hora ?? null,
         });
         toast.success('Servicio actualizado');
-        avisarSalidasCanceladas(res?.avisos_salida_cancelada);
         await avisarProveedores(res?.avisos_salidas);
+        avisarSalidasCanceladas(res?.avisos_salida_cancelada);
     } catch (error: any) {
         toast.error(error.response?.data?.message ?? 'No se pudo actualizar el servicio');
     }
@@ -1977,8 +1979,8 @@ const confirmarReprogramacion = async () => {
         avisosTemporadaReprogramacion.value = res.avisos_temporada ?? [];
         mostrarModalReprogramar.value = false;
         toast.success(res.message);
-        avisarSalidasCanceladas(res.avisos_salida_cancelada);
         await avisarProveedores(res.avisos_salidas);
+        avisarSalidasCanceladas(res.avisos_salida_cancelada);
     } catch (error: any) {
         toast.error(error.response?.data?.message ?? 'No se pudo reprogramar la reserva');
     } finally {

@@ -123,15 +123,17 @@ cd admin-start-kit && npm run type-check
     caerían los servicios (`fotosDondeCaeria()`).
   - El cuadro vive en `helpers/avisosProveedores.ts` (no en una función de `detalle.vue`) porque
     también lo usa el tablero. Tiene que usar la instancia `sweetalert2/dist/sweetalert2.js`: con
-    `sweetalert2` a secas el temporizador del toast de éxito lo cerraba a los ~3 s.
+    `sweetalert2` a secas el temporizador del toast de éxito lo cerraba a los ~3 s. Por compartir
+    la instancia, el cuadro cerraba el toast de "salida cancelada" (T-042): ese aviso va después
+    del cuadro (corregido en la revisión).
 
 ## Hallazgos fuera de alcance
-- **Vehículo:** reprogramar, quitar un servicio y «Modificar reserva» no borran la fila de
-  `salida_vehiculo_reservas` de la salida que la reserva deja (solo `cancelar()` lo hace). El aviso
-  sale bien (la foto solo cuenta reservas enganchadas a la salida), pero la fila queda: si la
-  reserva vuelve a esa salida, reaparece sola en el vehículo.
-- **Reasignar proveedor del ítem vs. proveedor de la salida:** si en la ficha se cambia el proveedor
-  de un servicio enganchado, la salida sigue mostrando (y avisando a) el proveedor de su
-  `salida_servicio`. No hay aviso al proveedor que sale ni al que entra.
+- **Vehículo:** reprogramar, quitar un servicio y «Modificar reserva» no borraban la fila de
+  `salida_vehiculo_reservas` de la salida que la reserva deja → T-082.
+- **Reasignar proveedor del ítem vs. proveedor de la salida:** revisado (03-nov) y no se da. La
+  ficha solo muestra el selector de proveedor en ítems `origen_tipo='proveedor'`; lo que se
+  engancha a las salidas son líneas de tour, cuyo proveedor se elige en la salida. Un ítem
+  `proveedor` compartido enganchado no está en `salida_servicios` ni en las órdenes: su proveedor
+  es el del ítem y se cambia en la ficha. Sin tarea.
 - `ProveedorFiltroDestinoTest::sin filtro devuelve todos` es intermitente: falló en una corrida completa y pasó en la siguiente
   (probablemente depende del orden o de datos que otro test deja sin revertir).
