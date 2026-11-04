@@ -921,6 +921,9 @@ class ReservaModificacionAplicarTest extends TestCase
             Alternativa::whereKey($alternativaId)->delete();
             CotizacionPasajero::where('cotizacion_id', $cotizacionId)->delete();
             DB::table('cotizaciones')->where('id', $cotizacionId)->delete();
+            // T-017: aceptar() crea la ficha de pasajero del cliente; la FK impide borrar el cliente sin ella.
+            DB::table('pasajero_documentos')->whereIn('pasajero_catalogo_id', DB::table('pasajeros_catalogo')->where('cliente_id', $clienteId)->pluck('id'))->delete();
+            DB::table('pasajeros_catalogo')->where('cliente_id', $clienteId)->delete();
             DB::table('clients')->where('id', $clienteId)->delete();
             $nuevasTarifas = ProveedorTarifa::whereNotIn('id', $tarifaIds)->get();
             foreach ($nuevasTarifas as $tarifa) {
@@ -1173,9 +1176,9 @@ class ReservaModificacionAplicarTest extends TestCase
             DB::flushQueryLog();
             DB::enableQueryLog();
             $filas = app(CotizacionController::class)->index(Request::create('/', 'GET', ['per_page' => $porPagina]))->getData(true)['cotizaciones'];
-            // Sin las de alternativa_items: esas las dispara, una por alternativa, el atributo
-            // tiene_grupos_sin_resolver al serializar (anterior a T-072, ver Hallazgos de la tarea).
-            $total = collect(DB::getQueryLog())->reject(fn ($q) => str_contains($q['query'], 'from "alternativa_items"'))->count();
+            // Se cuentan todas, también las de alternativa_items: el listado ya no serializa
+            // tiene_grupos_sin_resolver (que cargaba los ítems de cada alternativa, T-053).
+            $total = count(DB::getQueryLog());
             DB::disableQueryLog();
             $this->assertCount($porPagina, $filas);
 
