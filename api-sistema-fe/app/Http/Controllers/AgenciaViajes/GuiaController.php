@@ -57,13 +57,15 @@ class GuiaController extends Controller
     // guiaTarifas acá alimenta el picker de cotizador/editar.vue y
     // paquetes/detalle.vue (agregar ítem de guía) — filtra 'activo' igual
     // que ProveedorTarifaController::biblioteca() (29-ago-2026, tarifas
-    // desactivadas no se ofrecen para ítems nuevos). guias/detalle.vue
+    // desactivadas no se ofrecen para ítems nuevos) y solo la versión vigente
+    // hoy (como las de proveedores desde T-028: una versión cerrada o
+    // programada no se cotiza). guias/detalle.vue
     // (la pantalla de gestión) NO usa este listado — pide sus propias
     // tarifas aparte vía GuiaTarifaController::index(), que sigue
     // mostrando todo (activas e inactivas, con badge).
     public function show(string $id)
     {
-        $guia = Guia::with(['guiaTarifas' => fn ($q) => $q->where('activo', true)->with('destino')])->findOrFail($id);
+        $guia = Guia::with(['guiaTarifas' => fn ($q) => $q->vigentes()->with('destino')])->findOrFail($id);
 
         return response()->json(['guia' => $guia]);
     }

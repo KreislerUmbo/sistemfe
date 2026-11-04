@@ -2,6 +2,8 @@
 
 namespace App\Models\AgenciaViajes;
 
+use App\Services\HoraPeru;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
 // plan-modulo-cotizaciones-reservas.md §5.3. Tenant (sin CentralConnection).
@@ -28,6 +30,8 @@ class GuiaTarifa extends Model
         'moneda',
         'vigente_desde',
         'vigente_hasta',
+        // Versión a la que reemplaza esta tarifa (mismo criterio que ProveedorTarifa, T-028).
+        'version_anterior_id',
     ];
 
     protected $casts = [
@@ -37,6 +41,27 @@ class GuiaTarifa extends Model
         'vigente_desde' => 'date',
         'vigente_hasta' => 'date',
     ];
+
+    // Única definición de "vigente hoy" (activa y dentro de su rango); la misma regla
+    // que ProveedorTarifa::scopeVigentes().
+    public function scopeVigentes(Builder $query, ?string $dia = null): Builder
+    {
+        $dia ??= HoraPeru::hoyTexto();
+
+        return $query->where('activo', true)
+            ->where('vigente_desde', '<=', $dia)
+            ->where(fn ($q) => $q->whereNull('vigente_hasta')->orWhere('vigente_hasta', '>=', $dia));
+    }
+
+    // La misma regla de scopeVigentes(), para validar una sola fila.
+    public function estaVigente(?string $dia = null): bool
+    {
+        $dia ??= HoraPeru::hoyTexto();
+
+        return $this->activo
+            && $this->vigente_desde->toDateString() <= $dia
+            && ($this->vigente_hasta === null || $this->vigente_hasta->toDateString() >= $dia);
+    }
 
     public function guia()
     {

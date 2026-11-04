@@ -95,7 +95,7 @@
                                 <td>{{ tarifa.modalidad === 'dia_local' ? 'Día local' : 'Grupo multidía' }}</td>
                                 <td class="text-end">{{ tarifa.moneda }} {{ tarifa.costo_diario }}</td>
                                 <td class="text-center small">
-                                    <span class="badge d-block mb-1" :class="tarifa.activo ? 'bg-success' : 'bg-secondary'">{{ tarifa.activo ? 'Activa' : 'Inactiva' }}</span>
+                                    <span class="badge d-block mb-1" :class="estadoVigencia(tarifa).clase">{{ estadoVigencia(tarifa).label }}</span>
                                     {{ formatFecha(tarifa.vigente_desde) }} — {{ tarifa.vigente_hasta ? formatFecha(tarifa.vigente_hasta) : 'indefinido' }}
                                 </td>
                                 <td class="text-center pe-3">
@@ -153,6 +153,18 @@ const formTarifa = ref(formTarifaVacio());
 // diferencia de proveedores/detalle.vue, que usa un modal aparte — acá no
 // hacía falta esa infraestructura, el form ya vive arriba de la tabla).
 const tarifaEditando = ref<GuiaTarifa | null>(null);
+
+// Igual que proveedores/detalle.vue: cada versión de una tarifa dice si hoy es la que se cotiza.
+const estadoVigencia = (tarifa: GuiaTarifa): { label: string; clase: string } => {
+    if (!tarifa.activo) return { label: 'Inactiva', clase: 'bg-secondary' };
+    const hoy = hoyPeru();
+    // La API manda las fechas como "2026-10-28T00:00:00.000000Z": se compara solo el día.
+    const desde = tarifa.vigente_desde?.slice(0, 10) ?? '';
+    const hasta = tarifa.vigente_hasta?.slice(0, 10) ?? null;
+    if (hasta && hasta < hoy) return { label: 'Vencida', clase: 'bg-secondary' };
+    if (desde > hoy) return { label: 'Programada', clase: 'bg-info' };
+    return { label: 'Vigente hoy', clase: 'bg-success' };
+};
 
 const cargar = async () => {
     const res = await guiaService.obtener(guiaId.value);

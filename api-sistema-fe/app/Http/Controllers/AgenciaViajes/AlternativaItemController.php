@@ -1273,6 +1273,16 @@ class AlternativaItemController extends Controller
             ], 422);
         }
 
+        // Como en crearItemProveedor() (T-028): una versión vieja (cerrada) o futura
+        // no se cotiza; hay que usar la versión vigente.
+        if (! $guiaTarifa->estaVigente()) {
+            $mensaje = $guiaTarifa->vigente_desde->toDateString() > \App\Services\HoraPeru::hoyTexto()
+                ? 'Esta tarifa todavía no está vigente (desde '.$guiaTarifa->vigente_desde->format('d/m/Y').').'
+                : 'Esta tarifa ya no está vigente: usa la versión actual.';
+
+            return response()->json(['code' => 422, 'message' => $mensaje], 422);
+        }
+
         $calculo = $this->priceEngine->calcular(
             (float) $guiaTarifa->costo_diario,
             [],
