@@ -88,7 +88,7 @@ class ReporteOperativoDatosSheet implements FromArray, WithStyles, WithTitle
         return [
             $fila['fecha'],
             $fila['hora'],
-            $fila['pasajero']['nombre'],
+            $fila['pasajero']['etiqueta'],
             $fila['pasajero']['documento'],
             $fila['pasajero']['tipo_pax'],
             $fila['servicio'],

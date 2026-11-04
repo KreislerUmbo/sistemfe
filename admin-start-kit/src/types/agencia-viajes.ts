@@ -1313,6 +1313,8 @@ export type ReporteOperativoFila = {
   pasajero: {
     id: number;
     nombre?: string | null;
+    // Nombre, o «Sin nombre · Adulto 2» si la reserva aún no lo tiene (lo arma el backend).
+    etiqueta: string;
     documento?: string | null;
     tipo_pax?: string | null;
     alimentacion_especial?: string | null;

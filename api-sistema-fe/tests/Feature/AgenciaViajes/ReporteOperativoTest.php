@@ -424,7 +424,64 @@ class ReporteOperativoTest extends TestCase
         $opciones = app(ReporteOperativoController::class)->filtrosDisponibles(new Request([
             'fecha_desde' => '2026-09-01', 'fecha_hasta' => '2026-09-01',
         ]))->getData(true);
-        $this->assertContains('Hotel Nuevo SAC', array_column($opciones['hoteles'], 'nombre'), 'el selector lista el hotel real');
+        $nombres = array_column($opciones['hoteles'], 'nombre');
+        $this->assertContains('Hotel Nuevo', $nombres, 'el selector lista el hotel real con el mismo nombre que la tabla');
+        $this->assertNotContains('Hotel Nuevo SAC', $nombres);
+    }
+
+    // Observación de T-054: el selector mostraba la razón social y la tabla el nombre comercial.
+    public function test_selector_de_hoteles_cae_a_la_razon_social_si_no_hay_nombre_comercial(): void
+    {
+        $f = $this->crearReservaConItems();
+        $tarifaId = $this->tarifaHotelNuevo();
+        DB::table('proveedores')->where('razon_social', 'Hotel Nuevo SAC')->update(['nombre_comercial' => null]);
+        $f['riProveedorAsignado']->update(['proveedor_tarifa_id' => $tarifaId]);
+
+        $opciones = app(ReporteOperativoController::class)->filtrosDisponibles(new Request([
+            'fecha_desde' => '2026-09-01', 'fecha_hasta' => '2026-09-01',
+        ]))->getData(true);
+
+        $this->assertContains('Hotel Nuevo SAC', array_column($opciones['hoteles'], 'nombre'));
+        $this->assertSame('Hotel Nuevo SAC', $this->filaDe($this->reporteDel1(), $f['riProveedorAsignado']->id)['hotel']);
+    }
+
+    // Observación de T-058: un pasajero sin nombre sale como «Adulto 2» y se puede buscar así.
+    public function test_pasajero_sin_nombre_sale_como_tipo_y_orden_y_se_busca_por_eso(): void
+    {
+        $f = $this->crearReservaConItems();
+        $f['pasajero2']->update(['nombre' => null, 'documento' => null, 'tipo_pax' => 'adulto']);
+        $f['pasajero1']->update(['tipo_pax' => 'adulto']);
+
+        $body = $this->reporteDel1();
+        $fila = collect($body['filas'])->first(fn ($x) => $x['pasajero']['id'] === $f['pasajero2']->id);
+        $this->assertSame('Sin nombre · Adulto 2', $fila['pasajero']['etiqueta']);
+        $this->assertSame('Pasajero Uno', collect($body['filas'])->first(fn ($x) => $x['pasajero']['id'] === $f['pasajero1']->id)['pasajero']['etiqueta']);
+
+        $buscado = $this->reporteDel1(['q' => 'adulto 2']);
+        $ids = array_unique(array_map(fn ($x) => $x['pasajero']['id'], $buscado['filas']));
+        $this->assertSame([$f['pasajero2']->id], array_values($ids));
+
+        // «sin nombre» lista a todos los pasajeros con el dato por completar.
+        $sinNombre = $this->reporteDel1(['q' => 'sin nombre']);
+        $this->assertSame([$f['pasajero2']->id], array_values(array_unique(array_map(fn ($x) => $x['pasajero']['id'], $sinNombre['filas']))));
+    }
+
+    // Observación de T-077: la hora del vuelo de la agencia sale «14:00», no «14:00:00».
+    public function test_hora_del_vuelo_de_la_agencia_sale_sin_segundos(): void
+    {
+        $f = $this->crearReservaConItems();
+        \App\Models\AgenciaViajes\ReservaItemVueloPasajero::create([
+            'reserva_item_id' => $f['riGuia']->id, 'reserva_pasajero_id' => $f['pasajero1']->id,
+            'vuelo_numero_ida' => 'LA2203', 'vuelo_fecha_ida' => '2026-09-01', 'vuelo_hora_ida' => '14:00:00',
+            'vuelo_numero_vuelta' => 'LA2204', 'vuelo_fecha_vuelta' => '2026-09-03', 'vuelo_hora_vuelta' => '19:10:00',
+        ]);
+
+        $fila = collect($this->reporteDel1()['filas'])->first(
+            fn ($x) => $x['reserva_item_id'] === $f['riGuia']->id && $x['pasajero']['id'] === $f['pasajero1']->id
+        );
+
+        $this->assertSame('14:00', $fila['vuelo_agencia_ida']['hora']);
+        $this->assertSame('19:10', $fila['vuelo_agencia_vuelta']['hora']);
     }
 
     public function test_filtro_por_servicio_incluye_el_item_sin_proveedor(): void
