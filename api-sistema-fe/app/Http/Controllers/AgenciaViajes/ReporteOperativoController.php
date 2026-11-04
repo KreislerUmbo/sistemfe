@@ -195,14 +195,21 @@ class ReporteOperativoController extends Controller
         $hoteles = Proveedor::whereIn('id', ProveedorServicio::whereIn(
             'id',
             ProveedorTarifa::whereIn('id', $tarifasReales)->whereNotNull('tipo_habitacion')->select('proveedor_servicio_id')
-        )->select('proveedor_id'))->orderBy('razon_social')->get(['id', 'razon_social']);
+        )->select('proveedor_id'))->get(['id', 'razon_social', 'nombre_comercial']);
+
+        // Mismo nombre que ve el usuario en la tabla (nombreProveedor()): el comercial,
+        // con la razón social como respaldo. Se ordena ya con ese nombre.
+        $hoteles = $hoteles
+            ->map(fn ($p) => ['id' => $p->id, 'nombre' => $this->nombreProveedor($p)])
+            ->sortBy('nombre', SORT_NATURAL | SORT_FLAG_CASE)
+            ->values();
 
         return response()->json([
             'code' => 200,
             'destinos' => $destinos->map(fn ($d) => ['id' => $d->id, 'nombre' => $d->nombre])->values(),
             'servicios' => $servicios->map(fn ($s) => ['id' => $s->id, 'nombre' => $s->nombre])->values(),
             'tours' => $tours->map(fn ($t) => ['id' => $t->id, 'nombre' => $t->nombre, 'codigo' => $t->codigo])->values(),
-            'hoteles' => $hoteles->map(fn ($p) => ['id' => $p->id, 'nombre' => $p->razon_social])->values(),
+            'hoteles' => $hoteles,
         ]);
     }
 
@@ -498,6 +505,7 @@ class ReporteOperativoController extends Controller
             foreach ($pasajeros as $pasajero) {
                 if ($q !== null && ! $coincideReserva
                     && ! $this->contieneTexto($pasajero->nombre, $q)
+                    && ! $this->contieneTexto($this->etiquetaPasajero($pasajero, $item), $q)
                     && ! $this->contieneTexto($pasajero->documento, $q)) {
                     continue;
                 }
@@ -589,6 +597,41 @@ class ReporteOperativoController extends Controller
         return $proveedor->nombre_comercial ?: $proveedor->razon_social;
     }
 
+    // Las columnas `time` de Postgres llegan como «14:00:00»; el reporte muestra «14:00»
+    // (igual que la hora del ítem y la salida del hotel).
+    private function horaCorta(?string $hora): ?string
+    {
+        return $hora ? substr($hora, 0, 5) : null;
+    }
+
+    // Nombre del pasajero; si falta, «Sin nombre · Adulto 2» (o «Niño 1» / «Infante 1»): avisa
+    // que falta el dato y dice cuál es (tipo + posición entre los de su mismo tipo en la
+    // reserva, por id, estable). Sin tipo: «Sin nombre · Pasajero N».
+    private function etiquetaPasajero(ReservaPasajero $pasajero, ReservaItem $item): string
+    {
+        $nombre = trim((string) $pasajero->nombre);
+        if ($nombre !== '') {
+            return $nombre;
+        }
+
+        $tipo = $pasajero->tipo_pax;
+        $mismos = $item->reserva->pasajeros
+            ->filter(fn (ReservaPasajero $p) => $p->tipo_pax === $tipo)
+            ->sortBy('id')
+            ->values();
+        $posicion = $mismos->search(fn (ReservaPasajero $p) => $p->id === $pasajero->id);
+        $numero = $posicion === false ? 1 : $posicion + 1;
+
+        $titulo = match ($tipo) {
+            'adulto' => 'Adulto',
+            'nino' => 'Niño',
+            'infante' => 'Infante',
+            default => 'Pasajero',
+        };
+
+        return "Sin nombre · {$titulo} {$numero}";
+    }
+
     /**
      * @return \Illuminate\Support\Collection<int, ReservaPasajero>
      */
@@ -627,6 +670,9 @@ class ReporteOperativoController extends Controller
             'pasajero' => [
                 'id' => $pasajero->id,
                 'nombre' => $pasajero->nombre,
+                // Un pasajero sin nombre se muestra y se busca como «Sin nombre · Adulto 2» (tipo + orden
+                // dentro de su reserva), no como «Pasajero {id}».
+                'etiqueta' => $this->etiquetaPasajero($pasajero, $item),
                 'documento' => $pasajero->documento,
                 'tipo_pax' => $pasajero->tipo_pax,
                 'alimentacion_especial' => $pasajero->alimentacion_especial,
@@ -647,13 +693,13 @@ class ReporteOperativoController extends Controller
                 'numero' => $vueloAgencia->vuelo_numero_ida,
                 'aerolinea' => $vueloAgencia->vuelo_aerolinea_confirmada ?? $alternativaItem?->cotizacionPasajeAereo?->aerolinea,
                 'fecha' => $vueloAgencia->vuelo_fecha_ida,
-                'hora' => $vueloAgencia->vuelo_hora_ida,
+                'hora' => $this->horaCorta($vueloAgencia->vuelo_hora_ida),
             ] : null,
             'vuelo_agencia_vuelta' => $vueloAgencia && $vueloAgencia->vuelo_numero_vuelta ? [
                 'numero' => $vueloAgencia->vuelo_numero_vuelta,
                 'aerolinea' => $vueloAgencia->vuelo_aerolinea_confirmada ?? $alternativaItem?->cotizacionPasajeAereo?->aerolinea,
                 'fecha' => $vueloAgencia->vuelo_fecha_vuelta,
-                'hora' => $vueloAgencia->vuelo_hora_vuelta,
+                'hora' => $this->horaCorta($vueloAgencia->vuelo_hora_vuelta),
             ] : null,
             // Línea de tour (fila 13, fase 1b): el nombre del tour, sin el
             // "(gravado)/(exonerado)" de facturación (acá es una sola fila).
@@ -775,7 +821,11 @@ class ReporteOperativoController extends Controller
                         // vacío, ver docblock del modelo) ya existía antes, pero acá
                         // se nota mucho más. Fallback visible con el número de
                         // reserva para que quede claro qué completar en Reservas.
-                        'nombre_display' => $nombre !== '' ? $nombre : "Pasajero sin datos (reserva #{$fila['reserva_id']})",
+                        // Sin nombre: «Sin nombre · Adulto 2 · CODIGO» (el código distingue a dos «Adulto 2»
+                        // de reservas distintas en el mismo bloque).
+                        'nombre_display' => $nombre !== ''
+                            ? $nombre
+                            : $fila['pasajero']['etiqueta'] . ' · ' . ($fila['codigo_reserva'] ?? "reserva #{$fila['reserva_id']}"),
                     ],
                     'filas' => [],
                 ];
@@ -813,8 +863,8 @@ class ReporteOperativoController extends Controller
                 unset($grupo['_guia_via_salida'], $grupo['_vehiculo_via_salida'], $grupo['_guia_directo']);
 
                 usort($grupo['pasajeros'], fn (array $a, array $b) => strcmp(
-                    $a['pasajero']['nombre'] ?? '',
-                    $b['pasajero']['nombre'] ?? ''
+                    $a['pasajero']['etiqueta'] ?? '',
+                    $b['pasajero']['etiqueta'] ?? ''
                 ));
 
                 foreach ($grupo['pasajeros'] as &$pax) {

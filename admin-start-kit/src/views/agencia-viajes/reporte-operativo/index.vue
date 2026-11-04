@@ -104,13 +104,13 @@
                 <!-- T-058: un botón por servicio del día; marca a todos sus pasajeros de una vez. -->
                 <div v-if="grupo.servicios.length" class="d-flex flex-wrap gap-2 mt-2">
                     <template v-for="serv in grupo.servicios" :key="serv.key">
-                        <button v-if="serv.pendientes.length" type="button" class="btn btn-outline-success btn-sm fw-normal"
+                        <button v-if="serv.pendientes.length && puedeMarcarCheckin" type="button" class="btn btn-outline-success btn-sm fw-normal"
                             :disabled="checkinMasivoEnCurso === serv.key" @click="checkinATodos(serv)">
                             <span v-if="checkinMasivoEnCurso === serv.key" class="spinner-border spinner-border-sm me-1"></span>
                             <i v-else class="fas fa-check-double me-1"></i>
                             Check-in a todos · {{ serv.nombre }} ({{ serv.pendientes.length }})
                         </button>
-                        <span v-else class="badge bg-success-subtle text-success-emphasis border border-success-subtle fw-normal align-self-center">
+                        <span v-else-if="!serv.pendientes.length" class="badge bg-success-subtle text-success-emphasis border border-success-subtle fw-normal align-self-center">
                             <i class="fas fa-check me-1"></i>{{ serv.nombre }}: todos con check-in
                         </span>
                     </template>
@@ -139,7 +139,7 @@
                                 <tr v-for="(fila, i) in cluster.filas" :key="fila.reserva_item_id + '-' + fila.pasajero.id">
                                     <td v-if="i === 0" class="ps-3" :rowspan="cluster.filas.length">
                                         <router-link :to="`/agencia-viajes/reservas/${fila.reserva_id}`" class="text-decoration-none">
-                                            {{ fila.pasajero.nombre || ('Pasajero ' + fila.pasajero.id) }}
+                                            <span :class="fila.pasajero.nombre?.trim() ? '' : 'text-muted fst-italic'">{{ fila.pasajero.etiqueta }}</span>
                                         </router-link>
                                         <div v-if="fila.codigo_reserva" class="small text-muted">{{ fila.codigo_reserva }}</div>
                                     </td>
@@ -230,6 +230,7 @@
                                     </td>
                                     <td class="text-center pe-3">
                                         <input v-if="!fila.es_noche_hotel" type="checkbox" class="form-check-input" :checked="fila.checkin_realizado"
+                                            :disabled="!puedeMarcarCheckin" :title="puedeMarcarCheckin ? '' : 'No tienes permiso para marcar el check-in'"
                                             @change="toggleCheckin(fila, valorCheckbox($event))">
                                     </td>
                                 </tr>
@@ -252,10 +253,14 @@ import { reservaItemService } from '@/services/admin/reservaItemService';
 import GuiaBuscador from '@/components/AgenciaViajes/GuiaBuscador.vue';
 import { proveedorService } from '@/services/admin/proveedorService';
 import { useToast } from '@/composables/useToast';
+import { useAuthStore } from '@/stores/auth';
 import { formatFecha, hoyPeru, sumarDiasISO } from '@/helpers/fecha';
 import type { Guia, ProveedorTarifa, ReporteOperativoFila, ReporteOperativoFiltrosDisponibles } from '@/types/agencia-viajes';
 
 const toast = useToast();
+// Marcar check-in (individual o a todos) exige `reservas.editar`; con solo `reservas.ver`
+// el servidor responde 403, así que ni se ofrece.
+const puedeMarcarCheckin = useAuthStore().isPermitedRoute('reservas.editar');
 const route = useRoute();
 const router = useRouter();
 
@@ -404,10 +409,17 @@ const filasPorFecha = computed(() => {
 
         // Noches y salida de hotel no son servicios: sin check-in, sin botón.
         if (!fila.es_noche_hotel) {
-            const key = fila.tour_origen_id ? `tour-${fila.tour_origen_id}` : `servicio-${fila.servicio ?? 'sin-nombre'}`;
+            // Un tour es uno solo por su plantilla. Un servicio suelto se distingue por su
+            // catálogo, su nombre y su hora: dos servicios con el mismo nombre a distinta
+            // hora ya no comparten botón (el mismo servicio de varias reservas sí).
+            const key = fila.tour_origen_id
+                ? `tour-${fila.tour_origen_id}`
+                : `servicio-${fila.servicio_id ?? 0}-${fila.servicio ?? 'sin-nombre'}-${fila.hora ?? ''}`;
             let servicio = grupo.servicios.find((s) => s.key === key);
             if (!servicio) {
-                servicio = { key, nombre: fila.tour_origen_nombre ?? fila.servicio ?? 'Servicio', pendientes: [] };
+                const base = fila.tour_origen_nombre ?? fila.servicio ?? 'Servicio';
+                // Con hora, se muestra para distinguir dos servicios del mismo nombre.
+                servicio = { key, nombre: !fila.tour_origen_id && fila.hora ? `${base} (${fila.hora})` : base, pendientes: [] };
                 grupo.servicios.push(servicio);
             }
             if (!fila.checkin_realizado) servicio.pendientes.push(fila);
@@ -415,7 +427,7 @@ const filasPorFecha = computed(() => {
     }
 
     for (const grupo of grupos) {
-        grupo.pasajeros.sort((a, b) => (a.pasajero.nombre ?? '').localeCompare(b.pasajero.nombre ?? ''));
+        grupo.pasajeros.sort((a, b) => a.pasajero.etiqueta.localeCompare(b.pasajero.etiqueta));
         for (const cluster of grupo.pasajeros) {
             cluster.filas.sort((a, b) => (a.hora ?? '').localeCompare(b.hora ?? ''));
         }
