@@ -206,4 +206,22 @@ class Fila13Fase2aSalidasTest extends TestCase
         $sinGuia->salidaOperativa->update(['estado' => SalidaOperativa::ESTADO_CANCELADA]);
         $this->assertTrue(AsignacionOperativa::sinAsignar($sinGuia->fresh(['salidaOperativa', 'alternativaItem'])));
     }
+
+    // T-057 CA1: el motivo de la salida cancelada (y sin salida) llega a la fila.
+    public function test_motivo_pendiente_de_un_tour_con_salida_cancelada(): void
+    {
+        $item = ReservaItem::with('salidaOperativa', 'alternativaItem')
+            ->where('reserva_id', $this->reservaConTour($this->crearTour(), [['adulto', 40]])->id)->first();
+        $this->assertNull(AsignacionOperativa::motivoSinAsignar($item));
+
+        $item->salidaOperativa->update(['estado' => SalidaOperativa::ESTADO_CANCELADA]);
+        $item = $item->fresh(['salidaOperativa', 'alternativaItem']);
+        $this->assertSame('Salida cancelada', AsignacionOperativa::motivoSinAsignar($item));
+
+        $respuesta = app(\App\Http\Controllers\AgenciaViajes\ReporteOperativoController::class)
+            ->index(new \Illuminate\Http\Request(['fecha_desde' => $item->fecha->toDateString(), 'fecha_hasta' => $item->fecha->toDateString()]))
+            ->getData(true);
+        $fila = collect($respuesta['filas'])->firstWhere('reserva_item_id', $item->id);
+        $this->assertSame('Salida cancelada', $fila['motivo_pendiente']);
+    }
 }

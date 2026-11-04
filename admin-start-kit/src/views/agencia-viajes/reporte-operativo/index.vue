@@ -139,17 +139,28 @@
                                             <router-link :to="`/agencia-viajes/salidas/${fila.salida_operativa_id}`" class="d-block text-decoration-none" style="font-size:11px">
                                                 <i class="fas fa-link me-1"></i>Vía salida operativa
                                             </router-link>
+                                            <div v-if="fila.motivo_pendiente" class="text-warning" style="font-size:11px"><i class="fas fa-exclamation-triangle me-1"></i>{{ fila.motivo_pendiente }}</div>
                                         </div>
                                         <!-- Caso guía (origen_tipo='guia') sin salida — poco frecuente en la práctica. -->
-                                        <GuiaBuscador v-else-if="fila.origen_tipo === 'guia'" :key="`${fila.reserva_item_id}-${rearmarBuscadorGuia}`"
-                                            :model-value="fila.guia?.id ?? null" :nombre-actual="fila.guia?.nombre ?? null"
-                                            placeholder="Sin asignar" texto-quitar="Sin asignar" @elegido="(g) => guardarGuia(fila, g)" />
+                                        <!-- En un <template> para no cortar la cadena v-if/v-else-if con el aviso. -->
+                                        <template v-else-if="fila.origen_tipo === 'guia'">
+                                            <GuiaBuscador :key="`${fila.reserva_item_id}-${rearmarBuscadorGuia}`"
+                                                :model-value="fila.guia?.id ?? null" :nombre-actual="fila.guia?.nombre ?? null"
+                                                placeholder="Sin asignar" texto-quitar="Sin asignar" @elegido="(g) => guardarGuia(fila, g)" />
+                                            <div v-if="fila.motivo_pendiente" class="text-warning" style="font-size:11px"><i class="fas fa-exclamation-triangle me-1"></i>{{ fila.motivo_pendiente }}</div>
+                                        </template>
                                         <!-- Fila 13, fase 1b — tour cargado como una sola línea (modo nuevo):
                                              no tiene proveedor ni guía por servicio; su operación (vehículo,
                                              guía, proveedores) será la de su salida, en la fase 2. -->
-                                        <span v-else-if="fila.origen_tipo === 'tour'" class="small text-muted">
-                                            <i class="fas fa-route me-1"></i>Tour completo
-                                        </span>
+                                        <div v-else-if="fila.origen_tipo === 'tour'" class="small">
+                                            <div class="text-muted"><i class="fas fa-route me-1"></i>Tour completo</div>
+                                            <div :class="fila.guia ? '' : 'text-muted fst-italic'"><i class="fas fa-user me-1 text-muted"></i>{{ fila.guia?.nombre ?? 'Sin guía' }}</div>
+                                            <div v-if="fila.salida_vehiculo" class="text-muted" style="font-size:11px"><i class="fas fa-bus me-1"></i>{{ fila.salida_vehiculo }}</div>
+                                            <router-link v-if="fila.salida_operativa_id" :to="`/agencia-viajes/salidas/${fila.salida_operativa_id}`" class="d-block text-decoration-none" style="font-size:11px">
+                                                <i class="fas fa-link me-1"></i>Ver salida
+                                            </router-link>
+                                            <div v-if="fila.motivo_pendiente" class="text-warning" style="font-size:11px"><i class="fas fa-exclamation-triangle me-1"></i>{{ fila.motivo_pendiente }}</div>
+                                        </div>
                                         <!-- Caso proveedor (origen_tipo='proveedor') — el caso real más común. Mismo
                                              buscador inline que reservas/detalle.vue, no un <select> nativo porque la
                                              biblioteca de tarifas puede ser larga. -->
@@ -178,6 +189,7 @@
                                                     <div v-else-if="tarifasProveedor.length === 0" class="list-group-item small text-muted py-1">Sin resultados</div>
                                                 </div>
                                             </div>
+                                            <div v-if="fila.motivo_pendiente" class="text-warning" style="font-size:11px"><i class="fas fa-exclamation-triangle me-1"></i>{{ fila.motivo_pendiente }}</div>
                                         </template>
                                         <span v-else class="text-muted small">—</span>
                                     </td>
@@ -396,6 +408,7 @@ const guardarGuia = async (fila: ReporteOperativoFila, nuevoGuia: Guia | null) =
             if (f.reserva_item_id === fila.reserva_item_id) {
                 f.guia = nuevoGuia ? { id: nuevoGuia.id, nombre: nuevoGuia.nombre, es_referencial: !!nuevoGuia.es_referencial } : null;
                 f.sin_guia = sinGuia;
+                f.motivo_pendiente = !nuevoGuia ? 'Sin guía' : (sinGuia ? 'Guía referencial' : null);
             }
         }
         totalSinGuia.value = filas.value.filter((f) => f.sin_guia).length;
