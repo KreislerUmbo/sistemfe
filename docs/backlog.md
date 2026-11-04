@@ -8,7 +8,7 @@
 
 Cada línea: ID · qué · estado · depende de · rama o commit. El detalle está en
 `docs/tareas/T-…md` (se borra al cerrar; para una tarea hecha, el commit es la referencia).
-Próximo ID libre: **T-083**.
+Próximo ID libre: **T-084**.
 
 ## Orden de construcción (27-oct-2026)
 
@@ -42,7 +42,8 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 
 | ID | Módulo | Qué | Estado | Depende de | Rama / commit |
 |---|---|---|---|---|---|
-| T-077 | AGE | Vuelo propio del pasajero en un solo texto, como observación en el reporte operativo (el vuelo de la agencia no cambia) | por hacer | — | |
+| T-077 | AGE | Vuelo propio del pasajero en un solo texto, como observación en el reporte operativo (el vuelo de la agencia no cambia); borra las 6 columnas viejas de `reserva_pasajeros` | por hacer | — | |
+| T-083 | TRA | Inventario y limpieza de columnas y tablas sin uso en las bases tenant: por cada una, quién la usa (código, PDF, Excel, seeders) y cuántos datos tiene en producción; decidir borrar, migrar o dejar; borrar por módulo en tandas chicas con sus tests. Conocidas: `cronograma_pago_proveedor`/`pago_proveedor` (esperan a Compras), `sv_facturacion` (histórico), `state_sale` de cotizaciones. Sin archivo de tarea todavía: primero el inventario | por analizar | — | |
 | T-015 | PLA + AGE | Catálogo central de aerolíneas + panel central (Obs. 3) | por hacer | — | |
 | T-016 | AGE | Buscador de aerolíneas, corrección de nombres y aerolínea por defecto (Obs. 3) | por hacer | T-015 | |
 | T-017 | AGE | El cliente como primer pasajero al aceptar (Obs. 4) | por hacer | — | |

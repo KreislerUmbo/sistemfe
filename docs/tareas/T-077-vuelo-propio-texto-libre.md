@@ -5,7 +5,7 @@
 | **Módulo** | AGE |
 | **Depende de** | ninguna |
 | **Reglas** | — |
-| **Decisiones** | Del usuario, 01-nov-2026: el vuelo que el pasajero compró por su cuenta es un dato para avisarle, no un servicio de la agencia. Va en un texto corto y sale como observación del pasajero en todas sus filas del reporte operativo (opción A). El vuelo que vende la agencia (`reserva_item_vuelo_pasajero`) no cambia. dakamu no tiene datos de vuelo propio (lo confirmó el usuario): no hace falta migrar datos |
+| **Decisiones** | Del usuario, 01-nov-2026: el vuelo que el pasajero compró por su cuenta es un dato para avisarle, no un servicio de la agencia. Va en un texto corto y sale como observación del pasajero en todas sus filas del reporte operativo (opción A). El vuelo que vende la agencia (`reserva_item_vuelo_pasajero`) no cambia. dakamu no tiene datos de vuelo propio (lo confirmó el usuario): no hace falta migrar datos. 04-nov-2026: las 6 columnas viejas **se borran** en esta misma tarea (no quedan campos basura); la limpieza general de columnas sin uso va aparte, en T-083 |
 | **Rama** | `feat/T-077-vuelo-propio-texto` |
 
 ## Contexto
@@ -16,8 +16,20 @@ que es el vuelo que vende la agencia. Hoy el reporte operativo arma con ellos fi
 tiene 6 columnas.
 
 ## Alcance
-- **Migración nueva** (`verticals/agencia-viajes`): `reserva_pasajeros.vuelo_propio` text,
-  nullable. Las 6 columnas viejas se quedan sin usar (no se borran ni se editan migraciones).
+- **Migración nueva** (`verticals/agencia-viajes`), sin editar las viejas:
+  1. agrega `reserva_pasajeros.vuelo_propio` text, nullable;
+  2. si algún pasajero tiene datos en las columnas viejas, los copia a `vuelo_propio` armando el
+     texto (aerolínea, fecha y hora de ida · de vuelta) — no se pierde nada aunque un tenant tenga datos;
+  3. borra las 6 columnas viejas de `reserva_pasajeros`: `vuelo_aerolinea_ida`, `vuelo_fecha_ida`,
+     `vuelo_hora_ida`, `vuelo_aerolinea_vuelta`, `vuelo_fecha_vuelta`, `vuelo_hora_vuelta`.
+  `down()` vuelve a crear las 6 columnas (vacías) y quita `vuelo_propio`.
+- **Cuidado con los nombres repetidos:** `vuelo_ida`/`vuelo_vuelta` y parecidos existen también en
+  `paquetes_plantilla`, `opcion_mayorista`, `cotizacion_pasaje_aereo` y `reserva_item_vuelo_pasajero`
+  (vuelo de la agencia). Esos **no se tocan**. Revisar cada uso de `vuelo_*` uno por uno; nada de
+  buscar y reemplazar.
+- **Sin usos al terminar:** ningún archivo de `app/`, `resources/`, `admin-start-kit/src/` ni tests
+  lee o escribe las 6 columnas de `reserva_pasajeros` (incluye `$fillable`, casts, `select`, PDFs,
+  Excel, copias de reserva). El deploy corre la migración junto con el código: un uso olvidado da 500.
 - **Pantalla** (`reservas/detalle.vue`, bloque «Completar solo si el pasajero ya tiene su propio
   vuelo…»): los 6 campos pasan a ser un solo texto corto (input o textarea de 2 líneas), con un
   placeholder de ejemplo: «LATAM LA2203, llega 30/10 08:40 · regresa 02/11 19:10». El texto de
@@ -34,7 +46,7 @@ tiene 6 columnas.
 
 ## Fuera de alcance
 - El vuelo que vende la agencia (`reserva_item_vuelo_pasajero`, «Vuelo ida/vuelta (agencia)»).
-- Borrar las 6 columnas viejas: en otra tarea, cuando se confirme que no se usan.
+- Limpiar otras columnas sin uso del sistema: T-083.
 - El catálogo de pasajeros (`pasajeros_catalogo`): el vuelo es de esta reserva, no de la persona.
 
 ## Dónde tocar
@@ -53,6 +65,12 @@ tiene 6 columnas.
 - [ ] **CA3** — Un pasaje de la agencia con su vuelo confirmado sigue saliendo como fila «Vuelo ida (agencia)» en su fecha. → test existente en verde
 - [ ] **CA4** — El Excel tiene la columna nueva y no las 6 viejas. → test
 - [ ] **CA5** — En pantalla, el bloque de vuelo propio es un solo campo, con el de la agencia igual que antes. → a mano en `agencia-demo`
+- [ ] **CA6** — La migración copia a `vuelo_propio` un pasajero con datos en las columnas viejas y después las borra: `Schema::hasColumn('reserva_pasajeros', 'vuelo_aerolinea_ida')` es falso. → test
+- [ ] **CA7** — `grep` de las 6 columnas en `app/`, `resources/`, `admin-start-kit/src/` y `tests/` no encuentra usos sobre `reserva_pasajeros` (anotar el comando y su salida en «Resultado»). → verificación
+
+## Antes de desplegar
+Contar en producción, por cada tenant de agencia, los pasajeros con alguna de las 6 columnas
+llenas, y anotarlo aquí. Con datos, la migración los copia; igual conviene saberlo.
 
 ## Seguridad y correctitud
 - [ ] Permisos / Policy en rutas nuevas: no aplica (sin rutas nuevas; `ReservaPolicy` como hoy)
