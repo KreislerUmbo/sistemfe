@@ -615,7 +615,7 @@ const checkinATodos = async (servicio: ServicioDelDia) => {
     }
 };
 
-const valorCheckbox =(event: Event): boolean => (event.target as HTMLInputElement).checked;
+const valorCheckbox = (event: Event): boolean => (event.target as HTMLInputElement).checked;
 
 // ── Exportar PDF (URL firmada) / Excel (descarga directa) ───────────────────
 const exportingPdf = ref(false);
