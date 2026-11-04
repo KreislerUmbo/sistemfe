@@ -951,11 +951,15 @@ export type ReservaPasajero = {
   vuelo_propio?: string | null;
   pasajero_catalogo_id?: number | null;
   pasajero_catalogo?: PasajeroCatalogo | null;
+  // T-018: solo en pantalla (no es columna). Cliente elegido en el buscador; se manda al guardar.
+  cliente_id?: number | null;
 };
 
 export type PasajeroCatalogo = {
-  id: number;
+  // null = resultado de origen 'cliente' que todavía no tiene ficha (T-018)
+  id: number | null;
   cliente_id?: number | null;
+  origen?: 'pasajero' | 'cliente';
   nombre: string;
   nacionalidad?: string | null;
   fecha_nacimiento?: string | null;
