@@ -206,6 +206,29 @@ class ReporteOperativoHotelNochesTest extends TestCase
         $this->assertSame('Salida del hotel', $salida['servicio']);
         $this->assertSame('11:00', $salida['hora']);
         $this->assertSame('Estadía · noche 2 de 3', $dias[1]['grupos'][0]['pasajeros'][0]['filas'][0]['servicio']);
+        // Sin check-in: el PDF/Excel muestran "—", no "No".
+        $this->assertNull($salida['checkin']);
+        $this->assertNull($dias[1]['grupos'][0]['pasajeros'][0]['filas'][0]['checkin']);
+        $this->assertFalse($dias[0]['grupos'][0]['pasajeros'][0]['filas'][0]['checkin']);
+    }
+
+    public function test_las_filas_salen_ordenadas_por_fecha_con_las_noches_intercaladas(): void
+    {
+        $f = $this->crearEstadia();
+        // Segunda estadía (1 noche) del mismo pasajero con entrada el 12: es fila real
+        // y antes llegaba antes que las noches 11 y 12 de la primera.
+        $item2 = AlternativaItem::find($f['ri']->alternativa_item_id)->replicate();
+        $item2->cantidad = 1;
+        $item2->save();
+        $ri2 = $f['ri']->replicate();
+        $ri2->alternativa_item_id = $item2->id;
+        $ri2->fecha = '2026-11-12';
+        $ri2->save();
+
+        $body = $this->reporte(['fecha_desde' => '2026-11-10', 'fecha_hasta' => '2026-11-13']);
+
+        $fechas = array_values(array_unique(array_column($body['filas'], 'fecha')));
+        $this->assertSame(['2026-11-10', '2026-11-11', '2026-11-12', '2026-11-13'], $fechas);
     }
 
     public function test_pdf_se_genera_con_las_noches(): void

@@ -466,7 +466,7 @@ class ReporteOperativoController extends Controller
             'fecha_hasta' => $fechaHasta->toDateString(),
             'total_items' => count($filas),
             'total_sin_guia' => $totalSinGuia,
-            'filas' => array_merge($filas, $filasNoches),
+            'filas' => $this->ordenarPorFecha(array_merge($filas, $filasNoches)),
         ];
     }
 
@@ -475,6 +475,16 @@ class ReporteOperativoController extends Controller
     // 'incluyendo es_referencial' (fila 11e): un guía/proveedor referencial es un
     // placeholder, no una asignación confirmada — cuenta igual como pendiente.
     // Criterio compartido con el Inicio (AsignacionOperativa::sinAsignar).
+    // T-055: las noches/salidas van después de las filas reales; la pantalla arma
+    // los días en el orden en que llegan, así que se reordena por fecha (usort es
+    // estable: dentro de un día se conserva el orden por hora de la consulta).
+    private function ordenarPorFecha(array $filas): array
+    {
+        usort($filas, fn (array $a, array $b) => strcmp($a['fecha'] ?? '', $b['fecha'] ?? ''));
+
+        return $filas;
+    }
+
     private function itemSinAsignacionOperativa(ReservaItem $item): bool
     {
         return AsignacionOperativa::sinAsignar($item);
@@ -737,7 +747,8 @@ class ReporteOperativoController extends Controller
                 // redundante.
                 'guia' => $esTour ? null : $fila['guia'],
                 'sin_guia' => $esTour ? false : $fila['sin_guia'],
-                'checkin' => $fila['checkin_realizado'],
+                // T-055: noche/salida de hotel no tiene check-in ("—", no "No").
+                'checkin' => ($fila['es_noche_hotel'] ?? false) ? null : $fila['checkin_realizado'],
                 'es_salida_hotel' => $fila['es_salida_hotel'] ?? false,
                 'reserva_id' => $fila['reserva_id'],
             ];
