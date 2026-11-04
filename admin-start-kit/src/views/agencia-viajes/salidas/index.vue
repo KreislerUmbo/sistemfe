@@ -78,6 +78,9 @@
                                     <!-- T-039: buscador contra el servidor (antes, select con los primeros 15 guías). -->
                                     <GuiaBuscador :key="`${s.id}-${rearmarBuscadorGuia}`" :model-value="s.guia_id" :nombre-actual="s.guia?.nombre ?? null"
                                         placeholder="Sin asignar" texto-quitar="Sin asignar" @elegido="(g) => guardarGuia(s, g)" />
+                                    <div v-if="s.aviso_guia_repetido" class="small text-warning-emphasis mt-1" :title="s.aviso_guia_repetido">
+                                        <i class="fas fa-user-clock me-1"></i>Guía repetido ese día
+                                    </div>
                                     <div v-if="faltaGuia(s)" class="small text-warning-emphasis mt-1">
                                         <i class="fas fa-triangle-exclamation me-1"></i>Falta guía
                                     </div>
@@ -374,10 +377,16 @@ const rearmarBuscadorGuia = ref(0);
 const guardarGuia = async (s: SalidaOperativa, guia: Guia | null) => {
     const guiaId = guia?.id ?? null;
     try {
-        await salidaOperativaService.actualizar(s.id, { guia_id: guiaId });
+        const res = await salidaOperativaService.actualizar(s.id, { guia_id: guiaId });
         s.guia_id = guiaId;
         s.guia = guia;
+        // T-044 (H38): solo avisa, sin pedir confirmación.
+        const avisos: string[] = res?.avisos ?? [];
+        // La marca la calcula el servidor completa (guía de la salida y de sus
+        // vehículos); "avisos" solo habla del guía recién elegido.
+        s.aviso_guia_repetido = res?.salida?.aviso_guia_repetido ?? null;
         toast.success('Guía actualizado');
+        avisos.forEach((a) => toast.warning(a));
     } catch (error: any) {
         toast.error(error.response?.data?.message ?? 'No se pudo actualizar el guía');
         // El buscador ya muestra el guía elegido: se rearma para volver al guardado.

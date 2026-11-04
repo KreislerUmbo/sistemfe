@@ -10,6 +10,7 @@ use App\Models\AgenciaViajes\SalidaOperativa;
 use App\Models\AgenciaViajes\SalidaServicio;
 use App\Models\AgenciaViajes\SalidaVehiculo;
 use App\Models\Company;
+use App\Services\AgenciaViajes\CruceSalidasService;
 use App\Services\AgenciaViajes\SalidaEngancheService;
 use App\Services\AgenciaViajes\SalidaOperacionService;
 use App\Services\HoraPeru;
@@ -48,6 +49,15 @@ class SalidaOperativaController extends Controller
         'vehiculos.guia',
         'vehiculos.reservas',
     ];
+
+    // T-044: una sola instancia por request, para que el listado lea las
+    // salidas de cada fecha una vez (el servicio las guarda por fecha).
+    private ?CruceSalidasService $cruce = null;
+
+    private function cruce(): CruceSalidasService
+    {
+        return $this->cruce ??= app(CruceSalidasService::class);
+    }
 
     public function index(Request $request)
     {
@@ -100,7 +110,13 @@ class SalidaOperativaController extends Controller
         $salida->update($validator->validated());
         $salida->load(self::RELACIONES);
 
-        return response()->json(['code' => 200, 'message' => 'Salida actualizada', 'salida' => $this->resumenSalida($salida, true)]);
+        // T-044 (H38): solo un aviso, nunca bloquea. Avisa si el guía cambió;
+        // wasChanged() compara como Eloquent ("5" y 5 son el mismo guía).
+        $avisos = $salida->wasChanged('guia_id')
+            ? $this->cruce()->avisosGuia($salida, $salida->guia_id)
+            : [];
+
+        return response()->json(['code' => 200, 'message' => 'Salida actualizada', 'salida' => $this->resumenSalida($salida, true), 'avisos' => $avisos]);
     }
 
     public function cancelar(string $id)
@@ -578,6 +594,8 @@ class SalidaOperativaController extends Controller
             'lugar_recojo' => $s->lugar_recojo,
             'guia_id' => $s->guia_id,
             'guia' => $s->guia,
+            // T-044: el guía (de la salida o de un vehículo) ya está en otra salida del día.
+            'aviso_guia_repetido' => $this->cruce()->avisoGuiaRepetido($s),
             'cupo_maximo' => $s->cupo_maximo,
             'vehiculo_descripcion' => $s->vehiculo_descripcion,
             'estado' => $s->estado,

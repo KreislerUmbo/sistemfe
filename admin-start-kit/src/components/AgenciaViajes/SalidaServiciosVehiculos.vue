@@ -196,11 +196,13 @@ const numero = (e: Event) => {
 };
 
 // Ejecuta una llamada, avisa el resultado y pide al padre recargar la salida.
-const ejecutar = async (llamada: () => Promise<{ message?: string }>, silencioso = false) => {
+const ejecutar = async (llamada: () => Promise<{ message?: string; avisos?: string[] }>, silencioso = false) => {
     ocupado.value = true;
     try {
         const res = await llamada();
         if (!silencioso && res?.message) toast.success(res.message);
+        // T-044 (H38): guía o chofer ya en otra salida del día; solo avisa.
+        res?.avisos?.forEach((a) => toast.warning(a));
         emit('cambio');
     } catch (error: any) {
         toast.error(error.response?.data?.message ?? 'No se pudo guardar el cambio');

@@ -1058,6 +1058,8 @@ export type SalidaOperativa = {
   hora?: string | null;
   guia_id: number | null;
   guia?: Guia | null;
+  // T-044: texto del aviso cuando el guía ya está en otra salida del mismo día.
+  aviso_guia_repetido?: string | null;
   cupo_maximo?: number | null;
   vehiculo_descripcion?: string | null;
   // Fila 13, fase 2c: nace con el lugar de recojo del tour; editable.
