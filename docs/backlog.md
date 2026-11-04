@@ -60,7 +60,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 | T-036 | AGE | Mayorista: etiquetas, primera opción elegida sola, "solo adultos" a la vista (R6, H22) | por hacer | — | |
 | T-037 | AGE | PDF: nombre de archivo con código y cliente; rótulo correcto de la tabla de hoteles (R8, H20) | por hacer | — | |
 | T-080 | AGE | Cotizador: la alternativa reservada se distingue a simple vista (indicador en la esquina, como el contador de NC de Ventas) y se abre por defecto al entrar | por hacer | — | |
-| T-040 | AGE | Avisos a proveedores también al reprogramar, quitar un servicio, agregar un pasajero o cancelar la salida (H29, H37) | por hacer | — | |
+| T-040 | AGE | Avisos a proveedores también al reprogramar, quitar un servicio, agregar un pasajero o cancelar la salida (H29, H37) | en revisión | — | rama `feat/T-040-avisos-salidas` |
 | T-044 | AGE | Aviso cuando un guía o un chofer ya tiene otra salida ese día (H38) | por hacer | — | |
 | T-045 | AGE | Venta directa: total en vivo, modo de precio claro y fecha por defecto hoy (H42, H44) | por hacer | — | |
 | T-046 | AGE | Venta directa: pasajeros rápidos con residencia y el cliente como primer pasajero (H43) | por hacer | T-017 | |
