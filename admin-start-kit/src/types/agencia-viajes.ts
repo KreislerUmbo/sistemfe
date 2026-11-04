@@ -947,12 +947,8 @@ export type ReservaPasajero = {
   alimentacion_especial?: string | null;
   // texto libre (no booleano) — permite decir QUÉ discapacidad, no solo sí/no
   discapacidad?: string | null;
-  vuelo_aerolinea_ida?: string | null;
-  vuelo_fecha_ida?: string | null;
-  vuelo_hora_ida?: string | null;
-  vuelo_aerolinea_vuelta?: string | null;
-  vuelo_fecha_vuelta?: string | null;
-  vuelo_hora_vuelta?: string | null;
+  // T-077: vuelo que el pasajero compró por su cuenta, en un solo texto (solo para avisarle).
+  vuelo_propio?: string | null;
   pasajero_catalogo_id?: number | null;
   pasajero_catalogo?: PasajeroCatalogo | null;
 };
@@ -1319,16 +1315,13 @@ export type ReporteOperativoFila = {
     tipo_pax?: string | null;
     alimentacion_especial?: string | null;
     discapacidad?: string | null;
+    // T-077: vuelo propio como observación del pasajero (texto libre).
+    vuelo_propio?: string | null;
   };
-  // Vuelo por CUENTA PROPIA del pasajero (informativo, se pega a cualquier
-  // fila de este pasajero sin relación con el ítem — no cambia con esta
-  // auditoría).
-  vuelo_ida: { aerolinea: string; fecha: string | null; hora: string | null } | null;
-  vuelo_vuelta: { aerolinea: string; fecha: string | null; hora: string | null } | null;
   // Vuelo vendido por la AGENCIA (auditoría de UX/funcionalidad 2026-08-27)
   // — solo viene poblado en la fila del ítem que ES el pasaje aéreo
-  // cotizado (origen_tipo='pasaje_aereo'), nunca se mezcla con vuelo_ida/
-  // vuelta de arriba.
+  // cotizado (origen_tipo='pasaje_aereo'), (el vuelo propio
+  // del pasajero va en pasajero.vuelo_propio).
   vuelo_agencia_ida?: { numero: string; aerolinea: string | null; fecha: string | null; hora: string | null } | null;
   vuelo_agencia_vuelta?: { numero: string; aerolinea: string | null; fecha: string | null; hora: string | null } | null;
   origen_tipo?: OrigenItem | null;

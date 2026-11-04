@@ -95,9 +95,10 @@ operativo del rango del viaje y exportar el Excel.
 ---
 
 ## Resultado
-- **Commits:**
-- **Tests:**
-- **Desviaciones de la tarea y por qué:**
+- **Commits:** en la rama `feat/T-077-vuelo-propio-texto` (ver `git log`).
+- **Tests:** CA1, CA2, CA4 y CA6 con tests nuevos en `ReporteOperativoTest`; ajustados `ReporteOperativoTest` y `ReservaItemPasajeroVueloTest` (`ReservaQuitarItemsPasajerosTest` solo usa el vuelo de la agencia: no cambió). Suite completa: 1958 pasan, 1 falla (`Fila13Fase1cFacturacionTest`, el intermitente conocido del combo). Migración aplicada a `sistemafe_test_migrations` y a los tenants de dev. CA3 en verde (test existente). CA5 (a mano en `agencia-demo`) sin probar todavía; `vue-tsc` sin errores en los archivos tocados.
+- **CA7 (grep):** las 6 columnas de `reserva_pasajeros` ya no se usan en `app/`, `resources/`, `admin-start-kit/src/` ni `tests/`, salvo el test de la migración (CA6, a propósito). Quedan los mismos nombres solo en `reserva_item_vuelo_pasajero` (vuelo de la agencia), que no se toca.
+- **Desviaciones de la tarea y por qué:** columna única «Vuelo propio» (no se mezcló en «Observaciones»). El texto de la migración queda como «Ida: LATAM 30/10 08:40 · Vuelta: Sky 02/11 19:10».
 
 ## Hallazgos fuera de alcance
 -

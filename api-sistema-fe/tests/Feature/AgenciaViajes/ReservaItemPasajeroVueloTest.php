@@ -245,7 +245,7 @@ class ReservaItemPasajeroVueloTest extends TestCase
         $f = $this->crearReservaConPasajeAereo();
 
         $f['pasajero1']->update([
-            'vuelo_aerolinea_ida' => 'Sky (propio)', 'vuelo_fecha_ida' => '2026-09-01', 'vuelo_hora_ida' => '05:00',
+            'vuelo_propio' => 'Sky (propio) 01/09 05:00',
         ]);
 
         app(ReservaItemPasajeroController::class)->actualizarVuelo(
@@ -265,7 +265,7 @@ class ReservaItemPasajeroVueloTest extends TestCase
         $this->assertNotNull($filaVuelo);
         $this->assertSame('LA2050', $filaVuelo['vuelo_agencia_ida']['numero']);
         $this->assertSame('2026-09-01', $filaVuelo['vuelo_agencia_ida']['fecha']);
-        $this->assertSame('Sky (propio)', $filaVuelo['vuelo_ida']['aerolinea'], 'el vuelo propio sigue intacto, sin pisarse con el de agencia');
+        $this->assertSame('Sky (propio) 01/09 05:00', $filaVuelo['pasajero']['vuelo_propio'], 'el vuelo propio sigue intacto, sin pisarse con el de agencia');
 
         // La fila del pasajero2 en el mismo ítem no tiene vuelo de agencia
         // cargado (nunca se editó) — no hereda el de pasajero1.
@@ -280,6 +280,6 @@ class ReservaItemPasajeroVueloTest extends TestCase
             ->first(fn ($fila) => $fila['reserva_item_id'] === $f['riManual']->id && $fila['pasajero']['id'] === $f['pasajero1']->id);
         $this->assertNotNull($filaManual);
         $this->assertNull($filaManual['vuelo_agencia_ida'], 'vuelo_agencia_ida no debe aparecer en una fila que no es el ítem de vuelo');
-        $this->assertSame('Sky (propio)', $filaManual['vuelo_ida']['aerolinea'], 'vuelo propio sí se pega a cualquier fila del pasajero, ese comportamiento no cambió');
+        $this->assertSame('Sky (propio) 01/09 05:00', $filaManual['pasajero']['vuelo_propio'], 'vuelo propio sí se pega a cualquier fila del pasajero, ese comportamiento no cambió');
     }
 }

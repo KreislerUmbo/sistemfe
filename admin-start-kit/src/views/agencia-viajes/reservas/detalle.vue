@@ -333,31 +333,10 @@
                                         <input type="text" class="form-control form-control-sm" placeholder="Ninguna" v-model="p.discapacidad">
                                     </div>
                                     <div class="col-12">
-                                        <small class="text-muted d-block mb-2"><i class="fas fa-plane me-1"></i>Completar solo si el pasajero ya tiene su propio vuelo comprado por su cuenta (no es el pasaje que vende la agencia).</small>
-                                    </div>
-                                    <div class="col-md-4">
-                                        <label class="form-label small text-secondary mb-1">Vuelo ida — aerolínea</label>
-                                        <input type="text" class="form-control form-control-sm" placeholder="Ej. LA2203" v-model="p.vuelo_aerolinea_ida">
-                                    </div>
-                                    <div class="col-md-4">
-                                        <label class="form-label small text-secondary mb-1">Vuelo ida — fecha</label>
-                                        <CampoFecha v-model="p.vuelo_fecha_ida" />
-                                    </div>
-                                    <div class="col-md-4">
-                                        <label class="form-label small text-secondary mb-1">Vuelo ida — hora</label>
-                                        <CampoHora v-model="p.vuelo_hora_ida" />
-                                    </div>
-                                    <div class="col-md-4">
-                                        <label class="form-label small text-secondary mb-1">Vuelo vuelta — aerolínea</label>
-                                        <input type="text" class="form-control form-control-sm" placeholder="Ej. LA2204" v-model="p.vuelo_aerolinea_vuelta">
-                                    </div>
-                                    <div class="col-md-4">
-                                        <label class="form-label small text-secondary mb-1">Vuelo vuelta — fecha</label>
-                                        <CampoFecha v-model="p.vuelo_fecha_vuelta" />
-                                    </div>
-                                    <div class="col-md-4">
-                                        <label class="form-label small text-secondary mb-1">Vuelo vuelta — hora</label>
-                                        <CampoHora v-model="p.vuelo_hora_vuelta" />
+                                        <label class="form-label small text-secondary mb-1"><i class="fas fa-plane me-1"></i>Vuelo propio del pasajero</label>
+                                        <textarea class="form-control form-control-sm" rows="2" maxlength="500"
+                                            placeholder="Ej. LATAM LA2203, llega 30/10 08:40 · regresa 02/11 19:10" v-model="p.vuelo_propio"></textarea>
+                                        <small class="text-muted">Solo si el pasajero compró su vuelo por su cuenta (no es el pasaje que vende la agencia). Es solo para avisarle: sale como observación en el reporte operativo.</small>
                                     </div>
                                 </div>
 
@@ -1455,8 +1434,7 @@ const guardarPax = async (p: ReservaPasajero) => {
         const res = await reservaPasajeroService.actualizar(p.id, {
             nombre: p.nombre, documento: p.documento, nacionalidad: p.nacionalidad,
             alimentacion_especial: p.alimentacion_especial, discapacidad: p.discapacidad,
-            vuelo_aerolinea_ida: p.vuelo_aerolinea_ida, vuelo_fecha_ida: p.vuelo_fecha_ida, vuelo_hora_ida: p.vuelo_hora_ida,
-            vuelo_aerolinea_vuelta: p.vuelo_aerolinea_vuelta, vuelo_fecha_vuelta: p.vuelo_fecha_vuelta, vuelo_hora_vuelta: p.vuelo_hora_vuelta,
+            vuelo_propio: p.vuelo_propio,
             pasajero_catalogo_id: p.pasajero_catalogo_id,
         });
         Object.assign(p, res.reserva_pasajero);

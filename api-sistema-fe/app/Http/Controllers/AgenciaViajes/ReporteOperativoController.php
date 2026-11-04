@@ -417,8 +417,6 @@ class ReporteOperativoController extends Controller
             'salida_vehiculo' => null,
             'tour_origen_id' => null,
             'tour_origen_nombre' => null,
-            'vuelo_ida' => null,
-            'vuelo_vuelta' => null,
             'vuelo_agencia_ida' => null,
             'vuelo_agencia_vuelta' => null,
             'proveedor' => null,
@@ -633,21 +631,9 @@ class ReporteOperativoController extends Controller
                 'tipo_pax' => $pasajero->tipo_pax,
                 'alimentacion_especial' => $pasajero->alimentacion_especial,
                 'discapacidad' => $pasajero->discapacidad,
+                // T-077: vuelo propio como observación del pasajero (texto libre).
+                'vuelo_propio' => $pasajero->vuelo_propio,
             ],
-            // Vuelo por CUENTA PROPIA del pasajero (informativo, sin relación
-            // con ningún reserva_item real — se pega igual a cualquier fila
-            // de este pasajero, sea hotel/tour/lo que sea, mismo criterio de
-            // siempre). Distinto de vuelo_agencia_ida/vuelta más abajo.
-            'vuelo_ida' => $pasajero->vuelo_aerolinea_ida ? [
-                'aerolinea' => $pasajero->vuelo_aerolinea_ida,
-                'fecha' => optional($pasajero->vuelo_fecha_ida)->toDateString(),
-                'hora' => $pasajero->vuelo_hora_ida,
-            ] : null,
-            'vuelo_vuelta' => $pasajero->vuelo_aerolinea_vuelta ? [
-                'aerolinea' => $pasajero->vuelo_aerolinea_vuelta,
-                'fecha' => optional($pasajero->vuelo_fecha_vuelta)->toDateString(),
-                'hora' => $pasajero->vuelo_hora_vuelta,
-            ] : null,
             // Vuelo vendido por la AGENCIA — tabla propia
             // (ReservaItemVueloPasajero, corrección 2026-08-27 tras un bug
             // real: compartir fila con reserva_item_pasajero hacía que el
@@ -925,9 +911,8 @@ class ReporteOperativoController extends Controller
     // Vuelo deja de vivir en columnas y pasa a ser una fila de servicio más
     // ("Vuelo ida"/"Vuelta", propio o (agencia)), ubicada en la fecha REAL del
     // vuelo — no en la fecha del reserva_item que la trae. Reutiliza los datos ya
-    // resueltos en cada $fila (vuelo_ida/vuelo_vuelta = propio del pasajero;
-    // vuelo_agencia_ida/vuelta = vendido por la agencia, solo en la fila del ítem
-    // pasaje_aereo) sin ninguna query nueva.
+    // resueltos en cada $fila (vuelo_agencia_ida/vuelta = vendido por la agencia,
+    // solo en la fila del ítem pasaje_aereo) sin ninguna query nueva.
     //
     // El ítem pasaje_aereo en sí (origen_tipo=ORIGEN_PASAJE_AEREO) se EXCLUYE de
     // las filas normales: su única función pasa a ser aportar los datos de la
@@ -954,25 +939,8 @@ class ReporteOperativoController extends Controller
             }
         }
 
-        // Vuelo propio del pasajero: es informativo del PASAJERO, no de un
-        // reserva_item — mismo dato repetido en todas sus filas, se toma de
-        // cualquiera de ellas una sola vez por pasajero (sin checkin, no hay
-        // ítem real detrás).
-        $pasajerosVistos = [];
-        foreach ($filas as $fila) {
-            $pasajeroId = $fila['pasajero']['id'];
-            if (isset($pasajerosVistos[$pasajeroId])) {
-                continue;
-            }
-            $pasajerosVistos[$pasajeroId] = true;
-
-            if ($fila['vuelo_ida']) {
-                $filasVuelo[] = $this->filaSinteticaVuelo($fila, 'Vuelo ida', $fila['vuelo_ida'], null);
-            }
-            if ($fila['vuelo_vuelta']) {
-                $filasVuelo[] = $this->filaSinteticaVuelo($fila, 'Vuelo vuelta', $fila['vuelo_vuelta'], null);
-            }
-        }
+        // T-077: el vuelo propio del pasajero ya no genera filas sintéticas;
+        // sale como observación (pasajero.vuelo_propio) en todas sus filas.
 
         $fechaDesdeSoloFecha = $fechaDesde->copy()->startOfDay();
         $fechaHastaSoloFecha = $fechaHasta->copy()->startOfDay();

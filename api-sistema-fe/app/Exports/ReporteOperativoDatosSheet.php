@@ -67,12 +67,7 @@ class ReporteOperativoDatosSheet implements FromArray, WithStyles, WithTitle
             'Tipo de asignación',
             'Alimentación especial',
             'Discapacidad',
-            'Vuelo ida (propio) - aerolínea',
-            'Vuelo ida (propio) - fecha',
-            'Vuelo ida (propio) - hora',
-            'Vuelo vuelta (propio) - aerolínea',
-            'Vuelo vuelta (propio) - fecha',
-            'Vuelo vuelta (propio) - hora',
+            'Vuelo propio',
             // Vuelo vendido por la agencia (auditoría de UX/funcionalidad
             // 2026-08-27) — solo poblado en la fila del pasaje aéreo
             // cotizado, nunca se mezcla con las columnas "(propio)" de arriba.
@@ -104,12 +99,7 @@ class ReporteOperativoDatosSheet implements FromArray, WithStyles, WithTitle
             $fila['origen_tipo'] ?? '',
             $fila['pasajero']['alimentacion_especial'],
             $fila['pasajero']['discapacidad'],
-            $fila['vuelo_ida']['aerolinea'] ?? '',
-            $fila['vuelo_ida']['fecha'] ?? '',
-            $fila['vuelo_ida']['hora'] ?? '',
-            $fila['vuelo_vuelta']['aerolinea'] ?? '',
-            $fila['vuelo_vuelta']['fecha'] ?? '',
-            $fila['vuelo_vuelta']['hora'] ?? '',
+            $fila['pasajero']['vuelo_propio'] ?? '',
             $fila['vuelo_agencia_ida']['numero'] ?? '',
             $fila['vuelo_agencia_ida']['aerolinea'] ?? '',
             $fila['vuelo_agencia_ida']['fecha'] ?? '',
