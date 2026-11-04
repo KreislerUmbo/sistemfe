@@ -230,7 +230,7 @@ class ReporteOperativoController extends Controller
                 // (reasignar proveedor/hotel escribe aquí, no en la cotización).
                 'proveedorTarifa.proveedorServicio.destinoServicio.destinoAtractivo',
                 'proveedorTarifa.proveedorServicio.destinoServicio.servicio',
-                'proveedorTarifa.proveedorServicio.proveedor',
+                'proveedorTarifa.proveedorServicio.proveedor.alojamientoDetalle',
                 'opcionHotelTarifa.opcionHotel',
                 'tourOrigen.destinoAtractivo',
                 'guia',
@@ -323,6 +323,89 @@ class ReporteOperativoController extends Controller
         return null;
     }
 
+    // T-055: noches de una estadía. Salen de alternativa_item.cantidad, que en un
+    // hotel de catálogo o de matriz (origen 'proveedor', real o no registrado) es el
+    // stepper "Noches" del cotizador; en un mayorista es "adultos", por eso se excluye.
+    private function nochesDeEstadia(ReservaItem $item): int
+    {
+        if ($item->alternativaItem?->origen_tipo !== AlternativaItem::ORIGEN_PROVEEDOR || $this->hotelDelItem($item) === null) {
+            return 0;
+        }
+
+        return max(0, (int) $item->alternativaItem->cantidad);
+    }
+
+    // Estadías con entrada hasta 30 días antes de "Desde" (la salida es fecha +
+    // noches; las que no llegan al rango no generan filas). Mismos filtros de
+    // dimensión que el reporte.
+    private function itemsEstadiaPrevia(Carbon $fechaDesde, Request $request): Builder
+    {
+        $query = $this->queryItemsDelRango($fechaDesde->copy()->subDays(30), $fechaDesde->copy()->subDay())
+            ->whereHas('alternativaItem', fn ($q) => $q
+                ->where('origen_tipo', AlternativaItem::ORIGEN_PROVEEDOR)
+                ->where('cantidad', '>=', 1))
+            ->where(fn ($q) => $q->whereNotNull('opcion_hotel_tarifa_id')
+                ->orWhereHas('proveedorTarifa', fn ($q2) => $q2->whereNotNull('tipo_habitacion')));
+        $this->aplicarFiltrosDimension($query, $request);
+
+        return $query;
+    }
+
+    // T-055: filas "Hotel" de las noches 2..N y la fila "Salida del hotel" (fecha +
+    // noches), derivadas de la fila de entrada; solo las que caen en el rango. No son
+    // servicios reales: sin check-in, sin guía, origen_tipo 'hotel_noche'.
+    private function filasNochesHotel(ReservaItem $item, array $filaEntrada, Carbon $fechaDesde, Carbon $fechaHasta): array
+    {
+        $noches = $this->nochesDeEstadia($item);
+        if ($noches < 1 || ! $item->fecha) {
+            return [];
+        }
+
+        $checkout = $item->proveedorTarifa?->proveedorServicio?->proveedor?->alojamientoDetalle?->hora_checkout;
+        $entrada = Carbon::parse($item->fecha)->startOfDay();
+        $desde = $fechaDesde->copy()->startOfDay();
+        $hasta = $fechaHasta->copy()->startOfDay();
+
+        $base = array_merge($filaEntrada, [
+            'origen_tipo' => 'hotel_noche',
+            'checkin_realizado' => false,
+            'checkin_hora' => null,
+            'sin_guia' => false,
+            'guia' => null,
+            'salida_operativa_id' => null,
+            'salida_vehiculo' => null,
+            'tour_origen_id' => null,
+            'tour_origen_nombre' => null,
+            'vuelo_ida' => null,
+            'vuelo_vuelta' => null,
+            'vuelo_agencia_ida' => null,
+            'vuelo_agencia_vuelta' => null,
+            'proveedor' => null,
+            'es_noche_hotel' => true,
+            // Texto del hotel (con tipo de habitación) para la columna Hotel del PDF/Excel.
+            'servicio_hotel' => $filaEntrada['servicio'],
+            'es_salida_hotel' => false,
+        ]);
+
+        $filas = [];
+        for ($n = 1; $n <= $noches; $n++) {
+            $dia = $entrada->copy()->addDays($n);
+            if ($dia->lt($desde) || $dia->gt($hasta)) {
+                continue;
+            }
+
+            $esSalida = $n === $noches;
+            $filas[] = array_merge($base, [
+                'fecha' => $dia->toDateString(),
+                'hora' => $esSalida && $checkout ? substr((string) $checkout, 0, 5) : null,
+                'servicio' => $esSalida ? 'Salida del hotel' : 'Estadía · noche ' . ($n + 1) . ' de ' . $noches,
+                'es_salida_hotel' => $esSalida,
+            ]);
+        }
+
+        return $filas;
+    }
+
     private function obtenerFilas(Request $request): array
     {
         [$fechaDesde, $fechaHasta] = $this->resolverRangoFechas($request);
@@ -346,24 +429,35 @@ class ReporteOperativoController extends Controller
             ->keyBy(fn (ReservaItemCheckin $r) => $r->reserva_item_id . '_' . $r->reserva_pasajero_id);
 
         $filas = [];
+        $filasNoches = [];
         $totalSinGuia = 0;
 
-        foreach ($items as $item) {
+        // T-055: estadías que entraron hasta 30 días antes de "Desde" y siguen
+        // dentro del rango: solo aportan sus noches, no su fila de entrada.
+        $previos = $this->itemsEstadiaPrevia($fechaDesde, $request)->get();
+
+        foreach ($items->concat($previos) as $item) {
             $sinGuia = $this->itemSinAsignacionOperativa($item);
             if ($soloPendienteAsignar && ! $sinGuia) {
                 continue;
             }
 
+            $esPrevio = $previos->contains($item);
+
             $pasajeros = $this->resolverPasajerosDelItem($item);
             $vinculoEspecifico = $item->pasajeros->isNotEmpty();
 
             foreach ($pasajeros as $pasajero) {
-                if ($sinGuia) {
+                if ($sinGuia && ! $esPrevio) {
                     $totalSinGuia++;
                 }
 
                 $checkin = $checkins->get($item->id . '_' . $pasajero->id);
-                $filas[] = $this->armarFila($item, $pasajero, $sinGuia, $vinculoEspecifico, $checkin);
+                $fila = $this->armarFila($item, $pasajero, $sinGuia, $vinculoEspecifico, $checkin);
+                if (! $esPrevio) {
+                    $filas[] = $fila;
+                }
+                array_push($filasNoches, ...$this->filasNochesHotel($item, $fila, $fechaDesde, $fechaHasta));
             }
         }
 
@@ -372,7 +466,7 @@ class ReporteOperativoController extends Controller
             'fecha_hasta' => $fechaHasta->toDateString(),
             'total_items' => count($filas),
             'total_sin_guia' => $totalSinGuia,
-            'filas' => $filas,
+            'filas' => array_merge($filas, $filasNoches),
         ];
     }
 
@@ -644,6 +738,7 @@ class ReporteOperativoController extends Controller
                 'guia' => $esTour ? null : $fila['guia'],
                 'sin_guia' => $esTour ? false : $fila['sin_guia'],
                 'checkin' => $fila['checkin_realizado'],
+                'es_salida_hotel' => $fila['es_salida_hotel'] ?? false,
                 'reserva_id' => $fila['reserva_id'],
             ];
 
@@ -717,7 +812,12 @@ class ReporteOperativoController extends Controller
             foreach (array_keys($dia['grupos'][self::GRUPO_ALOJAMIENTO]['pasajeros']) as $pasajeroId) {
                 $reservasHotelEseDia = count($hotelDelDia[$fecha . '_' . $pasajeroId]['reserva_item_ids'] ?? []);
 
-                if (isset($pasajerosEnOtroGrupo[$pasajeroId]) && $reservasHotelEseDia <= 1) {
+                // T-055: "Salida del hotel" no es duplicado de la columna Hotel: lleva la
+                // hora de checkout y es el aviso de que ese día se deja el hotel.
+                $tieneSalida = collect($dia['grupos'][self::GRUPO_ALOJAMIENTO]['pasajeros'][$pasajeroId]['filas'])
+                    ->contains(fn (array $f) => $f['es_salida_hotel']);
+
+                if (isset($pasajerosEnOtroGrupo[$pasajeroId]) && $reservasHotelEseDia <= 1 && ! $tieneSalida) {
                     unset($dia['grupos'][self::GRUPO_ALOJAMIENTO]['pasajeros'][$pasajeroId]);
                 }
             }
@@ -746,7 +846,7 @@ class ReporteOperativoController extends Controller
             }
 
             $key = $fila['fecha'] . '_' . $fila['pasajero']['id'];
-            $mapa[$key] ??= ['texto' => $fila['servicio'], 'reserva_item_ids' => []];
+            $mapa[$key] ??= ['texto' => $fila['servicio_hotel'] ?? $fila['servicio'], 'reserva_item_ids' => []];
             $mapa[$key]['reserva_item_ids'][$fila['reserva_item_id']] = true;
         }
 

@@ -60,9 +60,13 @@ php artisan test --filter=ReporteOperativo
 ---
 
 ## Resultado
-- **Commits:**
-- **Tests:** (nuevos / suite completa)
+- **Commits:** ver `git log feat/T-055-reporte-hotel-noches`
+- **Tests:** 8 nuevos en `ReporteOperativoHotelNochesTest` (CA1-CA3, filtro por hotel, estadía previa y posterior, vista agrupada de PDF/Excel, PDF); `--filter=ReporteOperativo` 41 verdes; suite `tests/Feature/AgenciaViajes` 1014 verdes (corrida antes de añadir el test de la vista agrupada, que pasó por separado). `type-check` del frontend sin errores. No corrí la suite completa del backend ni la prueba visual de PDF/Excel en agencia-demo (CA4 solo cubierto por test de la vista agrupada).
 - **Desviaciones de la tarea y por qué:**
+  - **Criterio de noches:** `alternativa_item.cantidad` del ítem cotizado (la reserva no tiene `cantidad`). Es el stepper "Noches" tanto en hotel de catálogo como de matriz/ad-hoc (`origen_tipo=proveedor`); en mayorista `cantidad` son adultos, por eso se excluye. Solo cuenta si el ítem es un hotel (`hotelDelItem()`).
+  - **Pantalla:** las noches 2..N y la salida son filas derivadas (`origen_tipo=hotel_noche`, `es_noche_hotel`/`es_salida_hotel`) dentro de `filas`, sin check-in ni guía; no cuentan en `total_items` ni en el contador x/y de `index.vue` (se agregó `filasReales`).
+  - Estadías previas: consulta aparte (`itemsEstadiaPrevia()`) con ventana de 30 días y los mismos filtros de dimensión; solo aportan noches/salida, no su fila de entrada. `AsignacionOperativa::itemsDelRango()` no se tocó.
+  - La fila de salida no se suprime en `suprimirAlojamientoDuplicado()` (lleva la hora de checkout). La hora sale solo de hoteles de catálogo (`alojamientoDetalle`); un hotel no registrado no tiene hora.
 
 ## Hallazgos fuera de alcance
-- 
+- Ninguno.

@@ -1308,6 +1308,9 @@ export type ReporteOperativoFila = {
   reserva_item_id: number;
   checkin_realizado: boolean;
   checkin_hora: string | null;
+  // T-055: fila derivada de una estadía (noche 2..N o "Salida del hotel"); no es un servicio real.
+  es_noche_hotel?: boolean;
+  es_salida_hotel?: boolean;
   codigo_reserva?: string | null;
   pasajero: {
     id: number;
