@@ -128,8 +128,7 @@
                                 <th>Hotel</th>
                                 <th>Asignación</th>
                                 <th>Alimentación / discapacidad</th>
-                                <th title="Vuelo que el pasajero compró por su cuenta, ajeno a la agencia">Vuelo ida (propio)</th>
-                                <th title="Vuelo que el pasajero compró por su cuenta, ajeno a la agencia">Vuelo vuelta (propio)</th>
+                                <th title="Vuelo que el pasajero compró por su cuenta, ajeno a la agencia">Vuelo propio</th>
                                 <th title="Vuelo vendido por la agencia — solo en la fila del pasaje aéreo cotizado">Vuelo ida (agencia)</th>
                                 <th title="Vuelo vendido por la agencia — solo en la fila del pasaje aéreo cotizado">Vuelo vuelta (agencia)</th>
                                 <th class="text-center pe-3">Check-in</th>
@@ -218,11 +217,7 @@
                                         <div v-if="fila.pasajero.discapacidad" class="text-warning">{{ fila.pasajero.discapacidad }}</div>
                                     </td>
                                     <td v-if="i === 0" :rowspan="cluster.filas.length" class="small">
-                                        <span v-if="fila.vuelo_ida">{{ fila.vuelo_ida.aerolinea }}<br>{{ fila.vuelo_ida.fecha }} {{ fila.vuelo_ida.hora }}</span>
-                                        <span v-else class="text-muted">—</span>
-                                    </td>
-                                    <td v-if="i === 0" :rowspan="cluster.filas.length" class="small">
-                                        <span v-if="fila.vuelo_vuelta">{{ fila.vuelo_vuelta.aerolinea }}<br>{{ fila.vuelo_vuelta.fecha }} {{ fila.vuelo_vuelta.hora }}</span>
+                                        <span v-if="fila.pasajero.vuelo_propio">{{ fila.pasajero.vuelo_propio }}</span>
                                         <span v-else class="text-muted">—</span>
                                     </td>
                                     <td class="small">

@@ -235,6 +235,10 @@
                                             @if ($pax['pasajero']['discapacidad'])
                                                 <br><span style="color:#b45309;">Discapacidad: {{ $pax['pasajero']['discapacidad'] }}</span>
                                             @endif
+                                            {{-- T-077: vuelo propio del pasajero, solo para avisarle. --}}
+                                            @if (! empty($pax['pasajero']['vuelo_propio']))
+                                                <br>Vuelo propio: {{ $pax['pasajero']['vuelo_propio'] }}
+                                            @endif
                                         </td>
                                     @endif
                                     <td>{{ $filaServicio['hora'] }}</td>

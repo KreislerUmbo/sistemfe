@@ -174,7 +174,7 @@ class ReporteOperativoTest extends TestCase
         $pasajero1->update([
             'nombre' => 'Pasajero Uno', 'documento' => '11111111',
             'alimentacion_especial' => 'Vegetariano', 'discapacidad' => 'Silla de ruedas',
-            'vuelo_aerolinea_ida' => 'LATAM', 'vuelo_fecha_ida' => '2026-09-01', 'vuelo_hora_ida' => '08:00',
+            'vuelo_propio' => 'LATAM LA2203, llega 01/09 08:00',
         ]);
         $pasajero2->update(['nombre' => 'Pasajero Dos', 'documento' => '22222222']);
 
@@ -223,8 +223,7 @@ class ReporteOperativoTest extends TestCase
         $this->assertSame('Pasajero Uno', $filas[0]['pasajero']['nombre']);
         $this->assertSame('Vegetariano', $filas[0]['pasajero']['alimentacion_especial']);
         $this->assertSame('Silla de ruedas', $filas[0]['pasajero']['discapacidad']);
-        $this->assertSame('LATAM', $filas[0]['vuelo_ida']['aerolinea']);
-        $this->assertNull($filas[0]['vuelo_vuelta']);
+        $this->assertSame('LATAM LA2203, llega 01/09 08:00', $filas[0]['pasajero']['vuelo_propio']);
     }
 
     // Mejora post-11d — reasignación de proveedor inline: el reporte necesita el
@@ -437,5 +436,122 @@ class ReporteOperativoTest extends TestCase
 
         $this->assertContains($f['riProveedorSinAsignar']->id, $ids);
         $this->assertContains($f['riProveedorAsignado']->id, $ids);
+    }
+
+    // T-077 (CA1) — el vuelo propio es un texto libre que se guarda tal cual.
+    public function test_guardar_pasajero_con_vuelo_propio_lo_guarda_como_texto(): void
+    {
+        $f = $this->crearReservaConItems();
+
+        $response = app(\App\Http\Controllers\AgenciaViajes\ReservaPasajeroController::class)->update(
+            new Request(['vuelo_propio' => 'LATAM LA2203, llega 30/10 08:40']),
+            (string) $f['pasajero2']->id
+        );
+
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertSame('LATAM LA2203, llega 30/10 08:40', $f['pasajero2']->fresh()->vuelo_propio);
+    }
+
+    // T-077 (CA2) — el texto sale en todas las filas del pasajero y ya no hay
+    // filas sintéticas «Vuelo ida» / «Vuelo vuelta» del vuelo propio.
+    public function test_vuelo_propio_sale_en_todas_las_filas_del_pasajero_sin_filas_sinteticas(): void
+    {
+        $f = $this->crearReservaConItems();
+        $f['pasajero1']->update(['vuelo_propio' => 'LATAM LA2203, llega 01/09 08:40 · regresa 03/09 19:10']);
+
+        $body = app(ReporteOperativoController::class)->index(new Request([
+            'fecha_desde' => '2026-09-01', 'fecha_hasta' => '2026-09-03',
+        ]))->getData(true);
+
+        $filasP1 = array_values(array_filter($body['filas'], fn ($fila) => $fila['pasajero']['id'] === $f['pasajero1']->id));
+        $this->assertGreaterThan(1, count($filasP1));
+        foreach ($filasP1 as $fila) {
+            $this->assertSame('LATAM LA2203, llega 01/09 08:40 · regresa 03/09 19:10', $fila['pasajero']['vuelo_propio']);
+        }
+
+        $servicios = array_column($body['filas'], 'servicio');
+        $this->assertNotContains('Vuelo ida', $servicios);
+        $this->assertNotContains('Vuelo vuelta', $servicios);
+    }
+
+    // T-077 (CA4) — el Excel tiene la columna nueva y no las 6 viejas.
+    public function test_excel_tiene_columna_vuelo_propio_y_no_las_seis_viejas(): void
+    {
+        $f = $this->crearReservaConItems();
+        $f['pasajero1']->update(['vuelo_propio' => 'LATAM LA2203']);
+
+        $body = app(ReporteOperativoController::class)->index(new Request([
+            'fecha_desde' => '2026-09-01', 'fecha_hasta' => '2026-09-01',
+        ]))->getData(true);
+
+        $hoja = new \App\Exports\ReporteOperativoDatosSheet(
+            collect($body['filas']), '2026-09-01', '2026-09-01', 'Test', \Illuminate\Support\Carbon::now()
+        );
+        $matriz = $hoja->array();
+        $encabezados = $matriz[4];
+
+        $this->assertContains('Vuelo propio', $encabezados);
+        $this->assertCount(0, array_filter($encabezados, fn ($h) => str_contains($h, '(propio)')));
+
+        $indice = array_search('Vuelo propio', $encabezados, true);
+        $valores = array_column(array_slice($matriz, 5), $indice);
+        $this->assertContains('LATAM LA2203', $valores);
+    }
+
+    // T-077 (revisión) — el PDF y la hoja «Vista operativa» (lo que se reparte al
+    // equipo de campo) también muestran el vuelo propio; antes llegaba como filas
+    // sintéticas, que se quitaron.
+    public function test_pdf_y_vista_operativa_muestran_el_vuelo_propio(): void
+    {
+        $f = $this->crearReservaConItems();
+        $f['pasajero1']->update(['vuelo_propio' => 'LATAM LA2203']);
+
+        $controller = app(ReporteOperativoController::class);
+        $body = $controller->index(new Request([
+            'fecha_desde' => '2026-09-01', 'fecha_hasta' => '2026-09-01',
+        ]))->getData(true);
+        $metodo = new \ReflectionMethod($controller, 'armarVistaAgrupada');
+        $dias = $metodo->invoke($controller, $body['filas'], \Illuminate\Support\Carbon::parse('2026-09-01'), \Illuminate\Support\Carbon::parse('2026-09-01'));
+
+        $html = view('pdf.agencia-viajes.reporte-operativo', [
+            'dias' => $dias, 'fechaDesde' => '2026-09-01', 'fechaHasta' => '2026-09-01',
+            'empresa' => null, 'logoUrl' => null, 'generadoPor' => 'Test', 'generadoEn' => '01/09/2026 08:00',
+        ])->render();
+        $this->assertStringContainsString('Vuelo propio: LATAM LA2203', $html);
+
+        $hoja = new \App\Exports\ReporteOperativoVistaOperativaSheet(
+            $dias, '2026-09-01', '2026-09-01', 'Test', \Illuminate\Support\Carbon::now()
+        );
+        $matriz = $hoja->array();
+        $indice = array_search('Vuelo propio', $matriz[4], true);
+        $this->assertNotFalse($indice);
+        $this->assertContains('LATAM LA2203', array_column(array_slice($matriz, 5), $indice));
+    }
+
+    // T-077 (CA6) — la migración copia a vuelo_propio lo que haya en las
+    // columnas viejas y después las borra. Postgres admite DDL dentro de la
+    // transacción del test, así que se vuelve atrás (down) y se vuelve a subir (up).
+    public function test_migracion_copia_las_columnas_viejas_a_vuelo_propio_y_las_borra(): void
+    {
+        $f = $this->crearReservaConItems();
+        $migracion = require database_path('migrations/tenant/verticals/agencia-viajes/2026_11_04_100000_vuelo_propio_texto_en_reserva_pasajeros.php');
+
+        $this->assertFalse(\Illuminate\Support\Facades\Schema::hasColumn('reserva_pasajeros', 'vuelo_aerolinea_ida'));
+
+        $migracion->down();
+        $this->assertTrue(\Illuminate\Support\Facades\Schema::hasColumn('reserva_pasajeros', 'vuelo_aerolinea_ida'));
+
+        DB::table('reserva_pasajeros')->where('id', $f['pasajero1']->id)->update([
+            'vuelo_aerolinea_ida' => 'LATAM LA2203', 'vuelo_fecha_ida' => '2026-10-30', 'vuelo_hora_ida' => '08:40:00',
+            'vuelo_aerolinea_vuelta' => 'Sky', 'vuelo_fecha_vuelta' => '2026-11-02', 'vuelo_hora_vuelta' => '19:10:00',
+        ]);
+
+        $migracion->up();
+
+        $this->assertFalse(\Illuminate\Support\Facades\Schema::hasColumn('reserva_pasajeros', 'vuelo_aerolinea_ida'));
+        $this->assertFalse(\Illuminate\Support\Facades\Schema::hasColumn('reserva_pasajeros', 'vuelo_hora_vuelta'));
+        $texto = DB::table('reserva_pasajeros')->where('id', $f['pasajero1']->id)->value('vuelo_propio');
+        $this->assertSame('Ida: LATAM LA2203 30/10 08:40 · Vuelta: Sky 02/11 19:10', $texto);
+        $this->assertNull(DB::table('reserva_pasajeros')->where('id', $f['pasajero2']->id)->value('vuelo_propio'));
     }
 }

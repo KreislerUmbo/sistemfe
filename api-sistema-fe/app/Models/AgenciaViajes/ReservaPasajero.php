@@ -31,12 +31,8 @@ class ReservaPasajero extends Model
         'nacionalidad',
         'alimentacion_especial',
         'discapacidad',
-        'vuelo_aerolinea_ida',
-        'vuelo_fecha_ida',
-        'vuelo_hora_ida',
-        'vuelo_aerolinea_vuelta',
-        'vuelo_fecha_vuelta',
-        'vuelo_hora_vuelta',
+        // T-077: vuelo que el pasajero compró por su cuenta, en un solo texto.
+        'vuelo_propio',
         'pasajero_catalogo_id',
     ];
 
