@@ -1328,6 +1328,9 @@ Route::group([
 
     Route::post("venta-directa", [VentaDirectaController::class, 'store'])
         ->middleware('permission:reservas.crear');
+    // T-045 — total en vivo; no guarda nada.
+    Route::post("venta-directa/vista-previa", [VentaDirectaController::class, 'vistaPrevia'])
+        ->middleware('permission:reservas.crear');
 
     // Tablero de despacho — agrupa reserva_items de distintas reservas
     // que comparten tour_origen_id + fecha (ver SalidaOperativa).

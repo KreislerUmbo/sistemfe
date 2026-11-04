@@ -992,42 +992,27 @@ class AlternativaItemController extends Controller
         // desactivado (ej. de una pestaña vieja) igual se podía usar. No
         // aplica a ítems ya existentes (el precio ya está congelado, no se
         // re-valida al editar cantidad/pax_incluidos de un ítem viejo).
-        if ($tarifa && ! $tarifa->activo) {
-            return response()->json([
-                'code' => 422,
-                'message' => 'Esta tarifa fue retirada del catálogo activo — no se puede usar en un ítem nuevo.',
-            ], 422);
-        }
-
-        // T-028: una versión vieja (cerrada) o futura no se cotiza; hay que
-        // usar la versión vigente.
-        if ($tarifa && ! $tarifa->estaVigente()) {
-            $mensaje = $tarifa->vigente_desde->toDateString() > \App\Services\HoraPeru::hoyTexto()
-                ? 'Esta tarifa todavía no está vigente (desde '.$tarifa->vigente_desde->format('d/m/Y').').'
-                : 'Esta tarifa ya no está vigente: usa la versión actual.';
-
-            return response()->json(['code' => 422, 'message' => $mensaje], 422);
+        // T-045: el motivo (retirada / fuera de vigencia) vive en
+        // PriceEngineService, compartido con la vista previa de Venta directa.
+        $motivoNoUsable = $tarifa ? $this->priceEngine->motivoTarifaNoUsable($tarifa) : null;
+        if ($motivoNoUsable) {
+            return response()->json(['code' => 422, 'message' => $motivoNoUsable], 422);
         }
 
         if ($tarifa) {
             $monedaCosto = $tarifa->moneda;
-            $costoSnapshot = (float) $tarifa->precio_costo;
 
-            if ($validado['modo_precio'] === 'por_persona') {
-                $conteo = $this->contarPasajerosPorTipo($alternativa->cotizacion_id, $paxIncluidos);
-                $precioVentaSnapshot = $conteo['adulto'] * (float) $tarifa->precio_venta_adulto
-                    + $conteo['nino'] * (float) ($tarifa->precio_venta_nino ?? 0)
-                    + $conteo['infante'] * (float) ($tarifa->precio_venta_infante ?? 0);
-                // E2 (fila 13, fase 1b; decisión del usuario 14-oct-2026): el
-                // costo de una línea por persona es el TOTAL de la línea, sin
-                // infantes — antes guardaba el de una sola persona, mientras la
-                // reserva y el piso lo leían como total.
-                $costoSnapshot = round($costoSnapshot * ($conteo['adulto'] + $conteo['nino']), 2);
-            } else {
+            // T-045: fórmula única en PriceEngineService (E2, fila 13: el
+            // costo por persona es el TOTAL de la línea, sin infantes).
+            $conteo = $validado['modo_precio'] === 'por_persona'
+                ? $this->contarPasajerosPorTipo($alternativa->cotizacion_id, $paxIncluidos)
+                : ['adulto' => 0, 'nino' => 0, 'infante' => 0];
+            ['venta' => $precioVentaSnapshot, 'costo' => $costoSnapshot] = $this->priceEngine
+                ->ventaYCostoDeTarifa($tarifa, $conteo, $validado['modo_precio']);
+
+            if ($validado['modo_precio'] !== 'por_persona') {
                 // tarifa_fija (hotel por habitación, transporte privado por vehículo):
                 // un solo precio, no diferenciado por tipo de pasajero.
-                $precioVentaSnapshot = (float) $tarifa->precio_venta_adulto;
-
                 $camasAdicionales = $validado['camas_adicionales_nino'] ?? 0;
                 if ($camasAdicionales > 0) {
                     $resultadoCama = $this->aplicarCamaAdicional($alternativa, $tarifa, $paxIncluidos, $camasAdicionales);

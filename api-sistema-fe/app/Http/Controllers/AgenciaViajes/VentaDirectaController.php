@@ -10,6 +10,7 @@ use App\Models\AgenciaViajes\Cotizacion;
 use App\Models\AgenciaViajes\CotizacionPasajero;
 use App\Models\AgenciaViajes\ProveedorTarifa;
 use App\Services\AgenciaViajes\CodigoGeneradorService;
+use App\Services\AgenciaViajes\PriceEngineService;
 use App\Services\Crm\AccionesCrm;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -36,7 +37,9 @@ class VentaDirectaController extends Controller
         $validator = Validator::make($request->all(), [
             'cliente_id' => 'required|integer|exists:clients,id',
             'destino' => 'required|string|max:250',
-            'fecha_servicio' => 'nullable|date',
+            // T-045: obligatoria (sin fecha el servicio no sale en el Reporte
+            // operativo). Se acepta una fecha pasada: venta cargada tarde.
+            'fecha_servicio' => 'required|date',
             'origen_tipo' => 'required|in:proveedor,manual',
             'pax' => 'required|array|min:1',
             'pax.*.edad' => 'required|integer|min:0|max:120',
@@ -152,6 +155,71 @@ class VentaDirectaController extends Controller
             'reserva' => $reserva,
             'alternativa' => $alternativa,
             'alerta_cupo_excedido' => $alertaCupoExcedido,
+        ]);
+    }
+
+    // T-045 — total en vivo de Venta directa para una tarifa de proveedor.
+    // NO guarda nada (ni cotización, ni correlativo, ni lock). Vive en el
+    // backend porque clasificar a los pasajeros por edad exige
+    // ConfiguracionAgencia, que un vendedor no puede leer. Devuelve las dos
+    // opciones (por persona / por unidad) en la moneda de la tarifa, con la
+    // misma fórmula que crearItemProveedor() (PriceEngineService).
+    public function vistaPrevia(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'pax' => 'required|array|min:1',
+            'pax.*.edad' => 'required|integer|min:0|max:120',
+            'proveedor_tarifa_id' => 'required|integer|exists:proveedor_tarifas,id',
+            'cantidad' => 'nullable|integer|min:1',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
+        }
+
+        $validado = $validator->validated();
+        $tarifa = ProveedorTarifa::findOrFail($validado['proveedor_tarifa_id']);
+        $motor = app(PriceEngineService::class);
+
+        if ($motivo = $motor->motivoTarifaNoUsable($tarifa)) {
+            return response()->json(['code' => 422, 'message' => $motivo], 422);
+        }
+
+        [$edadMaxInfante, $edadMaxNino] = $this->umbralesEdad();
+        $conteo = ['adulto' => 0, 'nino' => 0, 'infante' => 0];
+        foreach ($validado['pax'] as $pax) {
+            $conteo[$this->derivarTipoPax((int) $pax['edad'], $edadMaxInfante, $edadMaxNino)]++;
+        }
+
+        $cantidad = $validado['cantidad'] ?? 1;
+        $moneda = $tarifa->moneda;
+
+        $ventaPorPersona = $motor->ventaYCostoDeTarifa($tarifa, $conteo, 'por_persona')['venta'];
+        $ventaFija = $motor->ventaYCostoDeTarifa($tarifa, $conteo, 'tarifa_fija')['venta'];
+
+        $precios = [
+            'adulto' => (float) $tarifa->precio_venta_adulto,
+            'nino' => (float) ($tarifa->precio_venta_nino ?? 0),
+            'infante' => (float) ($tarifa->precio_venta_infante ?? 0),
+        ];
+        $desglose = [];
+        foreach ($conteo as $tipo => $n) {
+            $desglose[$tipo] = ['cantidad' => $n, 'precio' => $precios[$tipo]];
+        }
+
+        return response()->json([
+            'code' => 200,
+            'moneda' => $moneda,
+            'por_persona' => [
+                // cantidad no interviene en por persona (igual que getTotalConvertidoAttribute()).
+                'total' => $motor->totalDeLinea($ventaPorPersona, $moneda, $moneda, 1, 'por_persona', 1),
+                'desglose' => $desglose,
+            ],
+            'tarifa_fija' => [
+                'total' => $motor->totalDeLinea($ventaFija, $moneda, $moneda, 1, 'tarifa_fija', $cantidad),
+                'precio_unitario' => round($ventaFija, 2),
+                'cantidad' => $cantidad,
+            ],
         ]);
     }
 

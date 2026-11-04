@@ -131,6 +131,7 @@ class VentaDirectaBloque1Test extends TestCase
         $body = app(VentaDirectaController::class)->store(new Request([
             'cliente_id' => $this->crearCliente(),
             'destino' => 'Tarapoto',
+            'fecha_servicio' => '2026-10-20', // T-045: obligatoria; este test prueba el costo, no la fecha
             'origen_tipo' => 'manual',
             'pax' => [['edad' => 30]],
             'descripcion_manual' => 'Traslado',
@@ -151,12 +152,15 @@ class VentaDirectaBloque1Test extends TestCase
         $this->assertSame('2026-10-20', $reservaItem->fecha?->toDateString());
     }
 
-    public function test_sin_fecha_de_servicio_el_item_queda_sin_fecha(): void
+    // T-045 CA3 — reemplaza al viejo "sin fecha el ítem queda sin fecha".
+    public function test_sin_fecha_de_servicio_responde_422(): void
     {
+        $antes = Cotizacion::count();
         $body = $this->ventaDirectaProveedor($this->crearCliente(), $this->crearProveedorTarifa(), null);
 
-        $this->assertSame(200, $body['code'], $body['message'] ?? '');
-        $this->assertNull(ReservaItem::where('reserva_id', $body['reserva']['id'])->sole()->fecha);
+        $this->assertSame(422, $body['code']);
+        $this->assertStringContainsString('fecha', mb_strtolower($body['message']));
+        $this->assertSame($antes, Cotizacion::count());
     }
 
     public function test_la_reserva_de_venta_directa_no_choca_con_la_de_una_cotizacion_del_mismo_correlativo(): void
