@@ -5,6 +5,13 @@ namespace App\Http\Controllers\AgenciaViajes;
 use App\Exports\ReporteOperativoExport;
 use App\Http\Controllers\Controller;
 use App\Models\AgenciaViajes\AlternativaItem;
+use App\Models\AgenciaViajes\DestinoAtractivo;
+use App\Models\AgenciaViajes\DestinoServicio;
+use App\Models\AgenciaViajes\PaquetePlantilla;
+use App\Models\AgenciaViajes\Proveedor;
+use App\Models\AgenciaViajes\ProveedorServicio;
+use App\Models\AgenciaViajes\ProveedorTarifa;
+use App\Models\AgenciaViajes\Servicio;
 use App\Models\AgenciaViajes\ReservaItem;
 use App\Models\AgenciaViajes\ReservaItemCheckin;
 use App\Models\AgenciaViajes\ReservaPasajero;
@@ -15,7 +22,9 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\URL;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Maatwebsite\Excel\Facades\Excel;
 
 // Sesión 11e (plan-hoja-de-ruta-ejecucion.md) — plan-modulo-cotizaciones-reservas.md §8.
@@ -31,6 +40,9 @@ use Maatwebsite\Excel\Facades\Excel;
 // grupal no se reparte por persona) — ver resolverPasajerosDelItem().
 class ReporteOperativoController extends Controller
 {
+    // T-058: tope del rango (días incluidos); un rango largo trae todo y cuelga la pantalla.
+    private const MAX_DIAS_RANGO = 31;
+
     public function index(Request $request)
     {
         return response()->json(['code' => 200] + $this->obtenerFilas($request));
@@ -42,15 +54,14 @@ class ReporteOperativoController extends Controller
     // (self::pdf()) va firmada en vez de detrás de auth:api.
     public function pdfSignedUrl(Request $request)
     {
-        $request->validate([
-            'fecha_desde' => 'nullable|date',
-            'fecha_hasta' => 'nullable|date',
-        ]);
+        // T-058: mismo rango validado que el reporte (422 aquí, no al abrir la URL firmada).
+        $this->resolverRangoFechas($request);
 
         $params = array_filter([
             'fecha_desde' => $request->input('fecha_desde'),
             'fecha_hasta' => $request->input('fecha_hasta'),
             'pendiente_asignar' => $request->boolean('pendiente_asignar') ? '1' : null,
+            'q' => $request->input('q'),
             'destino_atractivo_id' => $request->input('destino_atractivo_id'),
             'servicio_id' => $request->input('servicio_id'),
             'tour_id' => $request->input('tour_id'),
@@ -155,44 +166,43 @@ class ReporteOperativoController extends Controller
     {
         [$fechaDesde, $fechaHasta] = $this->resolverRangoFechas($request);
 
-        $items = $this->queryItemsDelRango($fechaDesde, $fechaHasta)->get();
+        // T-058: consultas de ids distintos en vez de cargar los ítems con todas sus
+        // relaciones. Mismo origen que las filas: tarifa real del ítem de la reserva
+        // y, si se le quitó el proveedor, la cotizada (tarifaDelServicio()).
+        $base = fn () => AsignacionOperativa::itemsDelRango($fechaDesde->toDateString(), $fechaHasta->toDateString());
 
-        // T-054: mismo origen que las filas (tarifa real de la reserva).
-        $destinos = $items
-            ->map(fn (ReservaItem $i) => $this->tarifaDelServicio($i)?->proveedorServicio?->destinoServicio?->destinoAtractivo)
-            ->filter()
-            ->unique('id')
-            ->values()
-            ->map(fn ($d) => ['id' => $d->id, 'nombre' => $d->nombre]);
+        $tarifasReales = $base()->whereNotNull('proveedor_tarifa_id')->distinct()->pluck('proveedor_tarifa_id');
+        $tarifasCotizadas = AlternativaItem::whereIn(
+            'id',
+            $base()->whereNull('proveedor_tarifa_id')->whereNotNull('alternativa_item_id')->select('alternativa_item_id')
+        )->whereNotNull('proveedor_tarifa_id')->distinct()->pluck('proveedor_tarifa_id');
 
-        $servicios = $items
-            ->map(fn (ReservaItem $i) => $this->tarifaDelServicio($i)?->proveedorServicio?->destinoServicio?->servicio)
-            ->filter()
-            ->unique('id')
-            ->values()
-            ->map(fn ($s) => ['id' => $s->id, 'nombre' => $s->nombre]);
+        $tarifaIds = $tarifasReales->merge($tarifasCotizadas)->unique()->values();
+        $destinoServicioIds = DestinoServicio::whereIn('id', ProveedorServicio::whereIn(
+            'id',
+            ProveedorTarifa::whereIn('id', $tarifaIds)->select('proveedor_servicio_id')
+        )->select('destino_servicio_id'))->select('id');
 
-        $tours = $items
-            ->map(fn (ReservaItem $i) => $i->tourOrigen)
-            ->filter()
-            ->unique('id')
-            ->values()
-            ->map(fn ($t) => ['id' => $t->id, 'nombre' => $t->nombre, 'codigo' => $t->codigo]);
+        $destinos = DestinoAtractivo::whereIn('id', DestinoServicio::whereIn('id', $destinoServicioIds)->select('destino_atractivo_id'))
+            ->orderBy('nombre')->get(['id', 'nombre']);
+        $servicios = Servicio::whereIn('id', DestinoServicio::whereIn('id', $destinoServicioIds)->select('servicio_id'))
+            ->orderBy('nombre')->get(['id', 'nombre']);
 
-        $hoteles = $items
-            ->filter(fn (ReservaItem $i) => (bool) $this->tarifaReal($i)?->tipo_habitacion)
-            ->map(fn (ReservaItem $i) => $this->tarifaReal($i)->proveedorServicio?->proveedor)
-            ->filter()
-            ->unique('id')
-            ->values()
-            ->map(fn ($p) => ['id' => $p->id, 'nombre' => $p->razon_social]);
+        $tours = PaquetePlantilla::whereIn('id', $base()->whereNotNull('tour_origen_id')->select('tour_origen_id'))
+            ->orderBy('nombre')->get(['id', 'nombre', 'codigo']);
+
+        // Hotel de catálogo: solo la tarifa real con tipo de habitación.
+        $hoteles = Proveedor::whereIn('id', ProveedorServicio::whereIn(
+            'id',
+            ProveedorTarifa::whereIn('id', $tarifasReales)->whereNotNull('tipo_habitacion')->select('proveedor_servicio_id')
+        )->select('proveedor_id'))->orderBy('razon_social')->get(['id', 'razon_social']);
 
         return response()->json([
             'code' => 200,
-            'destinos' => $destinos->values(),
-            'servicios' => $servicios->values(),
-            'tours' => $tours->values(),
-            'hoteles' => $hoteles->values(),
+            'destinos' => $destinos->map(fn ($d) => ['id' => $d->id, 'nombre' => $d->nombre])->values(),
+            'servicios' => $servicios->map(fn ($s) => ['id' => $s->id, 'nombre' => $s->nombre])->values(),
+            'tours' => $tours->map(fn ($t) => ['id' => $t->id, 'nombre' => $t->nombre, 'codigo' => $t->codigo])->values(),
+            'hoteles' => $hoteles->map(fn ($p) => ['id' => $p->id, 'nombre' => $p->razon_social])->values(),
         ]);
     }
 
@@ -201,6 +211,17 @@ class ReporteOperativoController extends Controller
      */
     private function resolverRangoFechas(Request $request): array
     {
+        // T-058: fecha inválida o rango imposible → 422 con mensaje (antes, 500 o vacío en silencio).
+        Validator::make($request->all(), [
+            'fecha_desde' => 'nullable|date',
+            'fecha_hasta' => 'nullable|date',
+            'q' => 'nullable|string|max:100',
+        ], [
+            'fecha_desde.date' => 'La fecha "Desde" no es válida.',
+            'fecha_hasta.date' => 'La fecha "Hasta" no es válida.',
+            'q.max' => 'La búsqueda admite hasta 100 caracteres.',
+        ])->validate();
+
         $fechaDesde = $request->filled('fecha_desde')
             ? Carbon::parse($request->input('fecha_desde'))->startOfDay()
             : \App\Services\HoraPeru::hoy();
@@ -208,7 +229,27 @@ class ReporteOperativoController extends Controller
             ? Carbon::parse($request->input('fecha_hasta'))->startOfDay()
             : $fechaDesde->copy();
 
+        if ($fechaHasta->lt($fechaDesde)) {
+            throw ValidationException::withMessages(['fecha_hasta' => 'La fecha "Hasta" no puede ser anterior a "Desde".']);
+        }
+        if ($fechaDesde->diffInDays($fechaHasta, true) > self::MAX_DIAS_RANGO - 1) {
+            throw ValidationException::withMessages(['fecha_hasta' => 'El rango no puede superar los ' . self::MAX_DIAS_RANGO . ' días.']);
+        }
+
         return [$fechaDesde, $fechaHasta];
+    }
+
+    // T-058: texto de búsqueda normalizado (sin tildes, minúsculas) o null.
+    private function textoBusqueda(Request $request): ?string
+    {
+        $q = trim((string) $request->input('q', ''));
+
+        return $q === '' ? null : Str::lower(Str::ascii($q));
+    }
+
+    private function contieneTexto(?string $valor, string $q): bool
+    {
+        return $valor !== null && str_contains(Str::lower(Str::ascii($valor)), $q);
     }
 
     // Query base compartida entre obtenerFilas() (reporte real, con los 4 filtros de
@@ -410,6 +451,7 @@ class ReporteOperativoController extends Controller
     {
         [$fechaDesde, $fechaHasta] = $this->resolverRangoFechas($request);
         $soloPendienteAsignar = $request->boolean('pendiente_asignar');
+        $q = $this->textoBusqueda($request);
 
         $query = $this->queryItemsDelRango($fechaDesde, $fechaHasta);
         $this->aplicarFiltrosDimension($query, $request);
@@ -447,7 +489,21 @@ class ReporteOperativoController extends Controller
             $pasajeros = $this->resolverPasajerosDelItem($item);
             $vinculoEspecifico = $item->pasajeros->isNotEmpty();
 
+            // T-058: búsqueda por pasajero, documento o código de reserva. Se filtra aquí,
+            // antes de armar la fila, así las noches de hotel (derivadas de la fila de
+            // entrada) siguen al pasajero: si coincide se ven, si no, no.
+            $coincideReserva = $q !== null && $this->contieneTexto(
+                $item->reserva->codigo ?? $item->reserva->alternativa?->cotizacion?->codigo,
+                $q
+            );
+
             foreach ($pasajeros as $pasajero) {
+                if ($q !== null && ! $coincideReserva
+                    && ! $this->contieneTexto($pasajero->nombre, $q)
+                    && ! $this->contieneTexto($pasajero->documento, $q)) {
+                    continue;
+                }
+
                 if ($sinGuia && ! $esPrevio) {
                     $totalSinGuia++;
                 }

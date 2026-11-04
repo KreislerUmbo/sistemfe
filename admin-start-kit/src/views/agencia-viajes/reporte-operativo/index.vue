@@ -6,8 +6,8 @@
                     <i class="fas fa-clipboard-list me-2 text-primary"></i>
                     Reporte Operativo
                     <span v-if="totalSinGuia > 0" class="badge bg-warning text-dark ms-2">{{ totalSinGuia }} sin asignar</span>
-                    <span v-if="filasReales.length > 0" class="badge ms-2" :class="checkinsCompletados === filasReales.length ? 'bg-success' : 'bg-info-subtle text-info-emphasis border border-info-subtle'">
-                        <i class="fas fa-check me-1"></i>{{ checkinsCompletados }}/{{ filasReales.length }} check-in
+                    <span v-if="totalPasajeros > 0" class="badge ms-2" :class="pasajerosConCheckin === totalPasajeros ? 'bg-success' : 'bg-info-subtle text-info-emphasis border border-info-subtle'">
+                        <i class="fas fa-check me-1"></i>{{ pasajerosConCheckin }}/{{ totalPasajeros }} pasajeros con check-in
                     </span>
                 </h5>
                 <small class="text-muted">{{ filasReales.length }} registro(s) en el rango seleccionado</small>
@@ -34,11 +34,12 @@
                     </div>
                     <div class="col-6 col-md-2">
                         <label class="form-label mb-1 small fw-semibold text-secondary">Hasta</label>
-                        <CampoFecha v-model="filtros.fecha_hasta" />
+                        <CampoFecha v-model="filtros.fecha_hasta" :min="filtros.fecha_desde || undefined" :max="hastaMaximo" />
                     </div>
                     <div class="col-auto">
                         <div class="btn-group btn-group-sm">
                             <button type="button" class="btn btn-outline-primary" @click="irAHoy">Hoy</button>
+                            <button type="button" class="btn btn-outline-primary" @click="irAManana">Mañana</button>
                             <button type="button" class="btn btn-outline-primary" @click="irAEstaSemana">Esta semana</button>
                         </div>
                     </div>
@@ -70,6 +71,11 @@
                             <option v-for="s in filtrosDisponibles.servicios" :key="s.id" :value="s.id">{{ s.nombre }}</option>
                         </select>
                     </div>
+                    <div class="col-12 col-md-3">
+                        <label class="form-label mb-1 small fw-semibold text-secondary">Buscar</label>
+                        <input id="busquedaReporte" type="search" class="form-control form-control-sm" v-model="filtros.q" maxlength="100"
+                            placeholder="Pasajero, documento o código de reserva" @input="buscarConPausa" @keyup.enter="buscar">
+                    </div>
                     <div class="col-auto">
                         <div class="form-check">
                             <input type="checkbox" class="form-check-input" id="pendienteAsignar" v-model="filtros.pendiente_asignar" @change="cargar">
@@ -95,6 +101,20 @@
         <div v-else class="card border-0 shadow-sm mb-3" v-for="grupo in filasPorFecha" :key="grupo.fecha">
             <div class="card-header bg-light fw-semibold">
                 {{ formatFecha(grupo.fecha) }}
+                <!-- T-058: un botón por servicio del día; marca a todos sus pasajeros de una vez. -->
+                <div v-if="grupo.servicios.length" class="d-flex flex-wrap gap-2 mt-2">
+                    <template v-for="serv in grupo.servicios" :key="serv.key">
+                        <button v-if="serv.pendientes.length" type="button" class="btn btn-outline-success btn-sm fw-normal"
+                            :disabled="checkinMasivoEnCurso === serv.key" @click="checkinATodos(serv)">
+                            <span v-if="checkinMasivoEnCurso === serv.key" class="spinner-border spinner-border-sm me-1"></span>
+                            <i v-else class="fas fa-check-double me-1"></i>
+                            Check-in a todos · {{ serv.nombre }} ({{ serv.pendientes.length }})
+                        </button>
+                        <span v-else class="badge bg-success-subtle text-success-emphasis border border-success-subtle fw-normal align-self-center">
+                            <i class="fas fa-check me-1"></i>{{ serv.nombre }}: todos con check-in
+                        </span>
+                    </template>
+                </div>
             </div>
             <div class="card-body p-0">
                 <div class="table-responsive">
@@ -229,7 +249,8 @@
 
 <script setup lang="ts">
 import CampoFecha from '@/components/CampoFecha.vue';
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import { reporteOperativoService } from '@/services/admin/reporteOperativoService';
 import { reservaItemService } from '@/services/admin/reservaItemService';
@@ -240,19 +261,45 @@ import { formatFecha, hoyPeru, sumarDiasISO } from '@/helpers/fecha';
 import type { Guia, ProveedorTarifa, ReporteOperativoFila, ReporteOperativoFiltrosDisponibles } from '@/types/agencia-viajes';
 
 const toast = useToast();
+const route = useRoute();
+const router = useRouter();
+
+// T-058: los filtros viven en la URL (query de la ruta): al ir a una reserva y volver, la
+// pantalla se arma con lo mismo que se estaba viendo.
+const textoQuery = (clave: string): string => {
+    const v = route.query[clave];
+    return typeof v === 'string' ? v : '';
+};
+const fechaQuery = (clave: string): string => {
+    const v = textoQuery(clave);
+    return /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : '';
+};
+const idQuery = (clave: string): number | null => {
+    const n = Number(textoQuery(clave));
+    return Number.isInteger(n) && n > 0 ? n : null;
+};
 
 const filtros = ref<{
-    fecha_desde: string; fecha_hasta: string; pendiente_asignar: boolean;
+    fecha_desde: string; fecha_hasta: string; pendiente_asignar: boolean; q: string;
     destino_atractivo_id: number | null; tour_id: number | null;
     hotel_proveedor_id: number | null; servicio_id: number | null;
 }>({
-    fecha_desde: hoyISO(),
-    fecha_hasta: hoyISO(),
-    pendiente_asignar: false,
-    destino_atractivo_id: null,
-    tour_id: null,
-    hotel_proveedor_id: null,
-    servicio_id: null,
+    fecha_desde: fechaQuery('fecha_desde') || hoyISO(),
+    fecha_hasta: fechaQuery('fecha_hasta') || fechaQuery('fecha_desde') || hoyISO(),
+    pendiente_asignar: textoQuery('pendiente_asignar') === '1',
+    q: textoQuery('q').slice(0, 100),
+    destino_atractivo_id: idQuery('destino_atractivo_id'),
+    tour_id: idQuery('tour_id'),
+    hotel_proveedor_id: idQuery('hotel_proveedor_id'),
+    servicio_id: idQuery('servicio_id'),
+});
+
+// "Hasta" nunca antes de "Desde" ni más de 30 días después (rango máximo de 31 días del servidor).
+const hastaMaximo = computed(() => (filtros.value.fecha_desde ? sumarDiasISO(filtros.value.fecha_desde, 30) : undefined));
+watch(() => filtros.value.fecha_desde, (desde) => {
+    if (!desde) return;
+    if (!filtros.value.fecha_hasta || filtros.value.fecha_hasta < desde) filtros.value.fecha_hasta = desde;
+    else if (filtros.value.fecha_hasta > sumarDiasISO(desde, 30)) filtros.value.fecha_hasta = sumarDiasISO(desde, 30);
 });
 
 const filas = ref<ReporteOperativoFila[]>([]);
@@ -298,6 +345,14 @@ const irAHoy = () => {
     buscar();
 };
 
+const irAManana = () => {
+    const manana = sumarDias(hoyISO(), 1);
+    filtros.value.fecha_desde = manana;
+    filtros.value.fecha_hasta = manana;
+    limpiarFiltrosDimension();
+    buscar();
+};
+
 const irAEstaSemana = () => {
     filtros.value.fecha_desde = hoyISO();
     filtros.value.fecha_hasta = sumarDias(hoyISO(), 6);
@@ -310,7 +365,11 @@ const irAEstaSemana = () => {
 // visible fila por fila.
 // T-055: las filas de noche/salida de hotel no son servicios: no cuentan ni tienen check-in.
 const filasReales = computed(() => filas.value.filter((f) => !f.es_noche_hotel));
-const checkinsCompletados = computed(() => filasReales.value.filter((f) => f.checkin_realizado).length);
+// T-058: el contador es por pasajero distinto, no por fila: con 2 pasajeros y 3 servicios
+// cada uno, "1/2" es que uno de ellos ya tiene check-in (en alguno de sus servicios).
+// El id del pasajero es por reserva, así que no se mezclan entre reservas.
+const totalPasajeros = computed(() => new Set(filasReales.value.map((f) => f.pasajero.id)).size);
+const pasajerosConCheckin = computed(() => new Set(filasReales.value.filter((f) => f.checkin_realizado).map((f) => f.pasajero.id)).size);
 
 // Un solo reporte con selector de rango (plan-modulo-cotizaciones-reservas.md §8) —
 // no dos pantallas separadas para uso diario vs. planificación.
@@ -324,9 +383,11 @@ const checkinsCompletados = computed(() => filasReales.value.filter((f) => f.che
 // sueltos": esta pantalla sigue siendo la vista de trabajo diaria con los 4
 // filtros de dimensión, no el documento para repartir en campo.
 type PasajeroCluster = { pasajero: ReporteOperativoFila['pasajero']; filas: ReporteOperativoFila[] };
+// T-058: servicio del día para "Check-in a todos"; `pendientes` = filas aún sin check-in.
+type ServicioDelDia = { key: string; nombre: string; pendientes: ReporteOperativoFila[] };
 
 const filasPorFecha = computed(() => {
-    const grupos: { fecha: string; pasajeros: PasajeroCluster[] }[] = [];
+    const grupos: { fecha: string; pasajeros: PasajeroCluster[]; servicios: ServicioDelDia[] }[] = [];
     const indiceFecha = new Map<string, number>();
     const indicePasajeroPorFecha = new Map<string, Map<number, number>>();
 
@@ -334,7 +395,7 @@ const filasPorFecha = computed(() => {
         const keyFecha = fila.fecha ?? 'sin-fecha';
         if (!indiceFecha.has(keyFecha)) {
             indiceFecha.set(keyFecha, grupos.length);
-            grupos.push({ fecha: keyFecha, pasajeros: [] });
+            grupos.push({ fecha: keyFecha, pasajeros: [], servicios: [] });
             indicePasajeroPorFecha.set(keyFecha, new Map());
         }
         const grupo = grupos[indiceFecha.get(keyFecha)!];
@@ -345,6 +406,17 @@ const filasPorFecha = computed(() => {
             grupo.pasajeros.push({ pasajero: fila.pasajero, filas: [] });
         }
         grupo.pasajeros[indicePasajero.get(fila.pasajero.id)!].filas.push(fila);
+
+        // Noches y salida de hotel no son servicios: sin check-in, sin botón.
+        if (!fila.es_noche_hotel) {
+            const key = fila.tour_origen_id ? `tour-${fila.tour_origen_id}` : `servicio-${fila.servicio ?? 'sin-nombre'}`;
+            let servicio = grupo.servicios.find((s) => s.key === key);
+            if (!servicio) {
+                servicio = { key, nombre: fila.tour_origen_nombre ?? fila.servicio ?? 'Servicio', pendientes: [] };
+                grupo.servicios.push(servicio);
+            }
+            if (!fila.checkin_realizado) servicio.pendientes.push(fila);
+        }
     }
 
     for (const grupo of grupos) {
@@ -361,31 +433,62 @@ const filtrosParaApi = () => ({
     fecha_desde: filtros.value.fecha_desde,
     fecha_hasta: filtros.value.fecha_hasta,
     pendiente_asignar: filtros.value.pendiente_asignar || undefined,
+    q: filtros.value.q.trim() || undefined,
     destino_atractivo_id: filtros.value.destino_atractivo_id ?? undefined,
     tour_id: filtros.value.tour_id ?? undefined,
     hotel_proveedor_id: filtros.value.hotel_proveedor_id ?? undefined,
     servicio_id: filtros.value.servicio_id ?? undefined,
 });
 
+// Deja los filtros vigentes en la URL (sin sumar entradas al historial).
+const recordarFiltrosEnUrl = () => {
+    const query: Record<string, string> = {};
+    for (const [clave, valor] of Object.entries(filtrosParaApi())) {
+        if (valor !== undefined && valor !== null && valor !== '') query[clave] = valor === true ? '1' : String(valor);
+    }
+    router.replace({ query });
+};
+
+// Mensaje del 422 (rango inválido, búsqueda larga…) o uno genérico; el Excel llega como Blob.
+const mensajeDeError = async (e: any, porDefecto: string): Promise<string> => {
+    let data = e?.response?.data;
+    if (data instanceof Blob) {
+        try { data = JSON.parse(await data.text()); } catch { data = null; }
+    }
+    return data?.message ?? porDefecto;
+};
+
 const cargar = async () => {
     loading.value = true;
+    recordarFiltrosEnUrl();
     try {
         const res = await reporteOperativoService.obtener(filtrosParaApi());
         filas.value = res.filas;
         totalSinGuia.value = res.total_sin_guia;
     } catch (e: any) {
-        toast.error(e.response?.data?.message ?? 'No se pudo cargar el reporte.');
+        toast.error(await mensajeDeError(e, 'No se pudo cargar el reporte.'));
     } finally {
         loading.value = false;
     }
 };
 
 const cargarFiltrosDisponibles = async () => {
-    const res = await reporteOperativoService.filtrosDisponibles({
-        fecha_desde: filtros.value.fecha_desde,
-        fecha_hasta: filtros.value.fecha_hasta,
-    });
-    filtrosDisponibles.value = { destinos: res.destinos, servicios: res.servicios, tours: res.tours, hoteles: res.hoteles };
+    try {
+        const res = await reporteOperativoService.filtrosDisponibles({
+            fecha_desde: filtros.value.fecha_desde,
+            fecha_hasta: filtros.value.fecha_hasta,
+        });
+        filtrosDisponibles.value = { destinos: res.destinos, servicios: res.servicios, tours: res.tours, hoteles: res.hoteles };
+    } catch {
+        // Mismo rango que cargar(), que ya avisa el motivo: no repetir el aviso.
+    }
+};
+
+// Búsqueda mientras se escribe, con pausa para no pedir en cada tecla.
+let pausaBusqueda: ReturnType<typeof setTimeout> | null = null;
+const buscarConPausa = () => {
+    if (pausaBusqueda) clearTimeout(pausaBusqueda);
+    pausaBusqueda = setTimeout(cargar, 350);
 };
 
 // Botón "Buscar" (o Hoy/Esta semana): el rango de fecha pudo haber cambiado, así que
@@ -485,6 +588,33 @@ const toggleCheckin = async (fila: ReporteOperativoFila, marcado: boolean) => {
     }
 };
 
+// T-058: marca a todos los pasajeros pendientes de un servicio y día en una sola petición.
+const checkinMasivoEnCurso = ref<string | null>(null);
+const checkinATodos = async (servicio: ServicioDelDia) => {
+    const filasAMarcar = [...servicio.pendientes];
+    checkinMasivoEnCurso.value = servicio.key;
+    try {
+        const res = await reporteOperativoService.checkinMasivo(
+            filasAMarcar.map((f) => ({ reserva_item_id: f.reserva_item_id, reserva_pasajero_id: f.pasajero.id }))
+        );
+        if (res.omitidos > 0) {
+            // Alguno no corresponde (reserva ya no activa…): se vuelve a leer para mostrar lo real.
+            toast.warning(`${res.marcados} marcado(s); ${res.omitidos} no se pudieron marcar.`);
+            await cargar();
+        } else {
+            const ahora = new Date().toISOString();
+            for (const f of filasAMarcar) {
+                f.checkin_realizado = true;
+                f.checkin_hora = ahora;
+            }
+        }
+    } catch (e: any) {
+        toast.error(await mensajeDeError(e, 'No se pudo marcar el check-in.'));
+    } finally {
+        checkinMasivoEnCurso.value = null;
+    }
+};
+
 const valorCheckbox = (event: Event): boolean => (event.target as HTMLInputElement).checked;
 
 // ── Exportar PDF (URL firmada) / Excel (descarga directa) ───────────────────
@@ -495,7 +625,7 @@ const exportarPdf = async () => {
         const { url } = await reporteOperativoService.pdfUrl(filtrosParaApi());
         window.open(url, '_blank');
     } catch (e: any) {
-        toast.error(e.response?.data?.message ?? 'No se pudo generar el PDF.');
+        toast.error(await mensajeDeError(e, 'No se pudo generar el PDF.'));
     } finally {
         exportingPdf.value = false;
     }
@@ -515,7 +645,7 @@ const exportarExcel = async () => {
         link.remove();
         window.URL.revokeObjectURL(url);
     } catch (e: any) {
-        toast.error('No se pudo generar el Excel.');
+        toast.error(await mensajeDeError(e, 'No se pudo generar el Excel.'));
     } finally {
         exportingExcel.value = false;
     }

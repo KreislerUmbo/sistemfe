@@ -11,6 +11,7 @@ use App\Models\AgenciaViajes\ReservaItemVueloPasajero;
 use App\Models\AgenciaViajes\ReservaPasajero;
 use App\Models\AgenciaViajes\ReservaVenta;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 
 // Tabla puente: qué pasajero específico va en qué ítem/actividad —
@@ -142,6 +143,74 @@ class ReservaItemPasajeroController extends Controller
             'code' => 200,
             'message' => 'Check-in actualizado correctamente',
             'reserva_item_checkin' => $checkin,
+        ]);
+    }
+
+    // T-058 — "Check-in a todos" del reporte operativo: marca de una vez los pares
+    // (ítem, pasajero) de un servicio y día. Mismas reglas que checkin(), por cada
+    // par; se autoriza (ReservaPolicy::update) CADA reserva afectada y, si alguna
+    // se niega, no se marca nada. Los pares que no corresponden (reserva no activa,
+    // pasajero ajeno o no asignado al servicio) se omiten y se cuentan en la respuesta.
+    public function checkinMasivo(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'checkins' => 'required|array|min:1|max:500',
+            'checkins.*.reserva_item_id' => 'required|integer',
+            'checkins.*.reserva_pasajero_id' => 'required|integer',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
+        }
+
+        $pares = collect($validator->validated()['checkins']);
+        $items = ReservaItem::with(['reserva', 'pasajeros'])
+            ->whereIn('id', $pares->pluck('reserva_item_id')->unique())
+            ->get()
+            ->keyBy('id');
+
+        if ($items->count() !== $pares->pluck('reserva_item_id')->unique()->count()) {
+            return response()->json(['code' => 422, 'message' => 'Alguno de los servicios ya no existe.'], 422);
+        }
+
+        foreach ($items->pluck('reserva')->unique('id') as $reserva) {
+            $this->authorize('update', $reserva);
+        }
+
+        $pasajeros = ReservaPasajero::whereIn('id', $pares->pluck('reserva_pasajero_id')->unique())->get()->keyBy('id');
+
+        $marcados = 0;
+        $omitidos = 0;
+
+        DB::transaction(function () use ($pares, $items, $pasajeros, &$marcados, &$omitidos) {
+            foreach ($pares as $par) {
+                $item = $items[$par['reserva_item_id']];
+                $pasajero = $pasajeros->get($par['reserva_pasajero_id']);
+
+                $viaja = $pasajero
+                    && $item->reserva->estado === 'activa'
+                    && $pasajero->reserva_id === $item->reserva_id
+                    && ($item->pasajeros->isEmpty() || $item->pasajeros->contains('id', $pasajero->id));
+
+                if (! $viaja) {
+                    $omitidos++;
+                    continue;
+                }
+
+                // createOrFirst: los que ya tenían check-in se conservan (con su hora).
+                ReservaItemCheckin::createOrFirst(
+                    ['reserva_item_id' => $item->id, 'reserva_pasajero_id' => $pasajero->id],
+                    ['checkin_hora' => now()]
+                );
+                $marcados++;
+            }
+        });
+
+        return response()->json([
+            'code' => 200,
+            'message' => 'Check-in actualizado correctamente',
+            'marcados' => $marcados,
+            'omitidos' => $omitidos,
         ]);
     }
 

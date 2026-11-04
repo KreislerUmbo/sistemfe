@@ -136,6 +136,20 @@ class ReporteOperativoHotelNochesTest extends TestCase
         $this->assertSame(1, $body['total_items']);
     }
 
+    // T-058: la búsqueda q sigue al pasajero también en las noches derivadas.
+    public function test_q_filtra_las_noches_igual_que_a_las_demas_filas(): void
+    {
+        $f = $this->crearEstadia();
+        $f['ri']->reserva->pasajeros()->first()->update(['nombre' => 'Rosa Valdivia']);
+        $rango = ['fecha_desde' => '2026-11-10', 'fecha_hasta' => '2026-11-14'];
+
+        $coincide = $this->porFecha($this->reporte($rango + ['q' => 'valdivia']), $f['ri']->id);
+        $this->assertSame(['2026-11-10', '2026-11-11', '2026-11-12', '2026-11-13'], array_keys($coincide));
+
+        $noCoincide = $this->reporte($rango + ['q' => 'otra persona']);
+        $this->assertSame([], $this->porFecha($noCoincide, $f['ri']->id));
+        $this->assertSame(0, $noCoincide['total_items']);
+    }
     public function test_ca2_estadia_que_entro_antes_del_rango_aparece_dentro_de_el(): void
     {
         $f = $this->crearEstadia();

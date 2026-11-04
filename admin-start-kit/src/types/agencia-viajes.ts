@@ -1351,6 +1351,9 @@ export type ReporteOperativoFila = {
   // criterio que reservas/detalle.vue.
   salida_operativa_id?: number | null;
   salida_vehiculo?: string | null;
+  // Línea de tour: agrupa el servicio del día para "Check-in a todos" (T-058).
+  tour_origen_id?: number | null;
+  tour_origen_nombre?: string | null;
 };
 
 export type ReporteOperativoResponse = {
