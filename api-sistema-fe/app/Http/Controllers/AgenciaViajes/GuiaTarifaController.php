@@ -7,8 +7,11 @@ use App\Models\AgenciaViajes\AlternativaItem;
 use App\Models\AgenciaViajes\Guia;
 use App\Models\AgenciaViajes\GuiaTarifa;
 use App\Models\AgenciaViajes\PaquetePlantillaItem;
+use App\Services\HoraPeru;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 
 // plan-modulo-cotizaciones-reservas.md §5.3 — versionado igual que
@@ -73,21 +76,75 @@ class GuiaTarifaController extends Controller
             || PaquetePlantillaItem::where('guia_tarifa_id', $tarifaActual->id)->exists();
 
         if ($tieneUso) {
-            $tarifaActual->update(['vigente_hasta' => \App\Services\HoraPeru::hoyTexto()]);
+            // Mismo versionado que ProveedorTarifaController::update() (T-028): la nueva
+            // empieza hoy (o en la fecha futura que se pida, precio programado); el
+            // vigente_desde viejo que manda el formulario no cuenta. La vieja se cierra la
+            // víspera: nunca quedan dos versiones vigentes el mismo día.
+            $hoy = HoraPeru::hoyTexto();
+            $desdeNueva = ! empty($validado['vigente_desde']) && Carbon::parse($validado['vigente_desde'])->toDateString() > $hoy
+                ? Carbon::parse($validado['vigente_desde'])->toDateString()
+                : $hoy;
 
-            $validado['guia_id'] = $tarifaActual->guia_id;
-            $validado['vigente_desde'] = $validado['vigente_desde'] ?? \App\Services\HoraPeru::hoyTexto();
-            // La nueva versión hereda el estado activo/inactivo de la que
-            // reemplaza — editar el precio de una tarifa desactivada no
-            // debe reactivarla en silencio, eso requiere un activar()
-            // explícito.
-            $validado['activo'] = $tarifaActual->activo;
-            $nueva = GuiaTarifa::create($validado);
+            if (! empty($validado['vigente_hasta']) && Carbon::parse($validado['vigente_hasta'])->toDateString() < $desdeNueva) {
+                return response()->json([
+                    'code' => 422,
+                    'message' => 'La fecha de fin no puede ser anterior al inicio de la nueva versión ('.Carbon::parse($desdeNueva)->format('d/m/Y').').',
+                ], 422);
+            }
+
+            $resultado = DB::transaction(function () use ($tarifaActual, $validado, $desdeNueva) {
+                $vieja = GuiaTarifa::lockForUpdate()->findOrFail($tarifaActual->id);
+
+                // Una versión ya reemplazada no se vuelve a reemplazar (doble clic, o
+                // editar una fila "Vencida" del historial): quedarían dos versiones
+                // vigentes y los tours en la primera.
+                if (GuiaTarifa::where('version_anterior_id', $vieja->id)->exists()) {
+                    return null;
+                }
+
+                // Se cierra la víspera, sin estirar una que ya vencía antes. Si queda
+                // antes de su vigente_desde, el rango vacío significa "nunca vigente" y
+                // vigentes() la excluye.
+                $hasta = Carbon::parse($desdeNueva)->subDay()->toDateString();
+                if ($vieja->vigente_hasta === null || $vieja->vigente_hasta->toDateString() > $hasta) {
+                    $vieja->update(['vigente_hasta' => $hasta]);
+                }
+
+                $validado['guia_id'] = $vieja->guia_id;
+                $validado['vigente_desde'] = $desdeNueva;
+                $validado['version_anterior_id'] = $vieja->id;
+                // La nueva versión hereda el estado activo/inactivo de la que
+                // reemplaza — editar el precio de una tarifa desactivada no
+                // debe reactivarla en silencio, eso requiere un activar()
+                // explícito.
+                $validado['activo'] = $vieja->activo;
+                $nueva = GuiaTarifa::create($validado);
+
+                // Los tours (plantillas) cotizan con la versión vigente;
+                // alternativa_items conserva su precio congelado.
+                $tours = PaquetePlantillaItem::where('guia_tarifa_id', $vieja->id)
+                    ->update(['guia_tarifa_id' => $nueva->id]);
+
+                return [$nueva, $tours];
+            });
+
+            if ($resultado === null) {
+                return response()->json([
+                    'code' => 422,
+                    'message' => 'Esta versión de la tarifa ya fue reemplazada: edita la versión vigente.',
+                ], 422);
+            }
+            [$nueva, $tours] = $resultado;
             $nueva->load('destino');
+
+            $mensaje = 'Esta tarifa ya se usó en una cotización/plantilla — se cerró la versión anterior y se creó una nueva.';
+            if ($tours > 0) {
+                $mensaje .= " {$tours} tour(s) pasan a usar el precio nuevo.";
+            }
 
             return response()->json([
                 'code' => 200,
-                'message' => 'Esta tarifa ya se usó en una cotización/plantilla — se cerró la versión anterior y se creó una nueva.',
+                'message' => $mensaje,
                 'guia_tarifa' => $nueva,
                 'version_anterior_id' => $tarifaActual->id,
             ]);

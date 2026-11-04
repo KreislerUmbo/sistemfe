@@ -221,7 +221,8 @@
                     <option value="USD">USD</option>
                 </select>
                 <span v-if="alt.id === alternativaActivaId && eliminandoAlternativa" class="spinner-border spinner-border-sm alt-pill-delete" style="opacity:1"></span>
-                <i v-else-if="alt.id === alternativaActivaId" class="fas fa-trash alt-pill-delete" title="Eliminar esta alternativa" @click.stop="eliminarAlternativa"></i>
+                <!-- Una alternativa reservada o reemplazada ya generó su reserva: el servidor no la elimina. -->
+                <i v-else-if="alt.id === alternativaActivaId && !['aceptada', 'reemplazada'].includes(alt.estado)" class="fas fa-trash alt-pill-delete" title="Eliminar esta alternativa" @click.stop="eliminarAlternativa"></i>
             </span>
             <!-- Punto F — siempre visible; deshabilitado con motivo al llegar al tope,
                  en vez de desaparecer sin explicación. -->
@@ -1118,7 +1119,7 @@
                                     :class="{ 'border-success border-2': op.estado === 'elegida', 'opacity-50': op.estado === 'descartada' }">
                                     <div class="d-flex justify-content-between align-items-start">
                                         <strong>{{ op.proveedor?.nombre_comercial ?? op.proveedor?.razon_social }}</strong>
-                                        <div class="d-flex gap-2">
+                                        <div v-if="!alternativaSoloLectura" class="d-flex gap-2">
                                             <i class="fas fa-pen text-muted" style="cursor:pointer;font-size:11px" title="Editar esta opción" @click="abrirFormEditarOpcionMayorista(op)"></i>
                                             <i v-if="eliminandoOpcionMayoristaId !== op.id" class="fas fa-trash text-muted" style="cursor:pointer;font-size:11px" title="Eliminar esta opción (borra hoteles/opcionales/tours vinculados)" @click="eliminarOpcionMayorista(op)"></i>
                                             <span v-else class="spinner-border spinner-border-sm" style="width:11px;height:11px"></span>
@@ -1140,14 +1141,14 @@
                                             <button class="btn btn-sm btn-outline-secondary" @click="verTours(op)">
                                                 Tours<span v-if="op.tours?.length" class="badge bg-light text-dark border ms-1">{{ op.tours.length }}</span>
                                             </button>
-                                            <button v-if="op.estado !== 'elegida'" class="btn btn-sm btn-outline-success" @click="elegirOpcion(op)" :disabled="eligiendoOpcionId === op.id">
+                                            <button v-if="op.estado !== 'elegida' && !alternativaSoloLectura" class="btn btn-sm btn-outline-success" @click="elegirOpcion(op)" :disabled="eligiendoOpcionId === op.id">
                                                 <span v-if="eligiendoOpcionId === op.id" class="spinner-border spinner-border-sm"></span><span v-else>Elegir mayorista</span>
                                             </button>
-                                            <button class="btn btn-sm btn-outline-secondary" @click="descartarOpcion(op)" :disabled="descartandoOpcionId === op.id" title="Descartar esta opción">
+                                            <button v-if="!alternativaSoloLectura" class="btn btn-sm btn-outline-secondary" @click="descartarOpcion(op)" :disabled="descartandoOpcionId === op.id" title="Descartar esta opción">
                                                 <span v-if="descartandoOpcionId === op.id" class="spinner-border spinner-border-sm"></span><i v-else class="fas fa-ban"></i>
                                             </button>
                                         </div>
-                                        <button v-else class="btn btn-sm btn-outline-secondary" @click="reactivarOpcion(op)" :disabled="reactivandoOpcionId === op.id">
+                                        <button v-else-if="!alternativaSoloLectura" class="btn btn-sm btn-outline-secondary" @click="reactivarOpcion(op)" :disabled="reactivandoOpcionId === op.id">
                                             <span v-if="reactivandoOpcionId === op.id" class="spinner-border spinner-border-sm"></span><span v-else>Reactivar</span>
                                         </button>
                                     </div>
@@ -1157,7 +1158,7 @@
                                         class="mt-2 border-top pt-2"
                                         @actualizado="onOpcionMayoristaGuardada" @cancelar="opcionMayoristaEnEdicionId = null" />
                                     <div v-if="opcionHotelesActivaId === op.id" class="mt-2 border-top pt-2">
-                                        <div v-if="op.estado !== 'elegida'" class="text-muted small fst-italic mb-1">Marcá esta opción como elegida para poder confirmar una habitación (podés seguir cargando hoteles mientras tanto).</div>
+                                        <div v-if="op.estado !== 'elegida' && !alternativaSoloLectura" class="text-muted small fst-italic mb-1">Marcá esta opción como elegida para poder confirmar una habitación (podés seguir cargando hoteles mientras tanto).</div>
                                         <!-- 04-sep-2026 — una sola vez arriba de todo, en vez de metida
                                              solo en el form de "crear hotel nuevo" (ahí el usuario la veía
                                              al crear, pero no al editar/agregar un tipo de habitación desde
@@ -1175,9 +1176,9 @@
                                         <HabitacionMatrixPicker
                                             :tarifas="tarifasHotelPlanas(op)" :moneda="op.moneda"
                                             cantidad-label="Adultos" :cantidad-default="cantidadAdultosCotizacion"
-                                            :deshabilitar-confirmar="op.estado !== 'elegida'"
-                                            motivo-deshabilitado="Marcá esta opción como elegida para poder confirmar una habitación"
-                                            permitir-gestion-hoteles
+                                            :deshabilitar-confirmar="op.estado !== 'elegida' || alternativaSoloLectura"
+                                            :motivo-deshabilitado="alternativaSoloLectura ? 'Esta alternativa ya está reservada: los cambios se hacen con Modificar reserva' : 'Marcá esta opción como elegida para poder confirmar una habitación'"
+                                            :permitir-gestion-hoteles="!alternativaSoloLectura"
                                             @seleccionar="({ id, cantidad }) => agregarItemMayorista(op, id, cantidad)"
                                             @agregar-grupo="({ ids }) => agregarGrupoMayorista(op, ids)"
                                             @guardar-hotel="onGuardarHotelMatrix"
@@ -1189,10 +1190,10 @@
                                             @eliminar-tarifa="onEliminarTarifaMatrix"
                                             @agregar-tarifa="onAgregarTarifaMatrix" />
 
-                                        <button class="btn btn-sm btn-outline-secondary w-100 mt-2" @click="mostrarFormHotel = mostrarFormHotel === op.id ? null : op.id">
+                                        <button v-if="!alternativaSoloLectura" class="btn btn-sm btn-outline-secondary w-100 mt-2" @click="mostrarFormHotel = mostrarFormHotel === op.id ? null : op.id">
                                             <i class="fas fa-plus me-1"></i>Agregar hotel a esta opción
                                         </button>
-                                        <div v-if="mostrarFormHotel === op.id" class="border rounded p-2 mt-2">
+                                        <div v-if="mostrarFormHotel === op.id && !alternativaSoloLectura" class="border rounded p-2 mt-2">
                                             <label class="form-label mb-1 small text-secondary">Nombre del hotel</label>
                                             <input type="text" class="form-control form-control-sm mb-1" placeholder="Nombre del hotel" v-model="formHotel.nombre_hotel">
                                             <label class="form-label mb-1 small text-secondary">Proveedor</label>
@@ -1263,16 +1264,18 @@
                                                 </div>
                                                 <div class="d-flex align-items-start gap-2 text-nowrap">
                                                     <span>{{ opl.moneda }} {{ Number(opl.precio_por_persona).toFixed(2) }} /pax</span>
-                                                    <i class="fas fa-pen text-muted" style="cursor:pointer;font-size:11px" title="Editar" @click="abrirEdicionOpcional(opl)"></i>
-                                                    <i v-if="eliminandoOpcionalId !== opl.id" class="fas fa-trash text-muted" style="cursor:pointer;font-size:11px" title="Eliminar" @click="eliminarOpcionalCargado(opl)"></i>
-                                                    <span v-else class="spinner-border spinner-border-sm" style="width:11px;height:11px"></span>
+                                                    <template v-if="!alternativaSoloLectura">
+                                                        <i class="fas fa-pen text-muted" style="cursor:pointer;font-size:11px" title="Editar" @click="abrirEdicionOpcional(opl)"></i>
+                                                        <i v-if="eliminandoOpcionalId !== opl.id" class="fas fa-trash text-muted" style="cursor:pointer;font-size:11px" title="Eliminar" @click="eliminarOpcionalCargado(opl)"></i>
+                                                        <span v-else class="spinner-border spinner-border-sm" style="width:11px;height:11px"></span>
+                                                    </template>
                                                 </div>
                                             </div>
                                             <!-- Hueco real cerrado (07-sep-2026): hasta ahora un opcional
                                                  solo era info de referencia en el PDF, sin forma de que el
                                                  cliente lo elija de verdad y sume al total. Mismo criterio
                                                  "por persona" que ya usa el hotel de la matriz mayorista. -->
-                                            <button class="btn btn-sm btn-outline-success w-100 mt-1"
+                                            <button v-if="!alternativaSoloLectura" class="btn btn-sm btn-outline-success w-100 mt-1"
                                                 :disabled="agregandoOpcionalAlLienzoId === opl.id || op.estado !== 'elegida'"
                                                 :title="op.estado !== 'elegida' ? 'Marcá esta opción como elegida para poder agregar sus opcionales' : ''"
                                                 @click="agregarOpcionalAlLienzo(op, opl)">
@@ -1303,10 +1306,10 @@
                                                 </button>
                                             </div>
                                         </div>
-                                        <button class="btn btn-sm btn-outline-secondary w-100 mt-1" @click="mostrarFormOpcional = mostrarFormOpcional === op.id ? null : op.id">
+                                        <button v-if="!alternativaSoloLectura" class="btn btn-sm btn-outline-secondary w-100 mt-1" @click="mostrarFormOpcional = mostrarFormOpcional === op.id ? null : op.id">
                                             <i class="fas fa-plus me-1"></i>Agregar opcional
                                         </button>
-                                        <div v-if="mostrarFormOpcional === op.id" class="border rounded p-2 mt-2">
+                                        <div v-if="mostrarFormOpcional === op.id && !alternativaSoloLectura" class="border rounded p-2 mt-2">
                                             <input type="text" class="form-control form-control-sm mb-1" placeholder="Nombre (ej. Isla de Taboga - Full Day)" v-model="formOpcional.nombre">
                                             <div class="row g-1 mb-1">
                                                 <div class="col-8">
@@ -1337,7 +1340,7 @@
                                         <div v-if="!op.tours?.length" class="text-muted small fst-italic mb-2">Sin tours incluidos todavía — con itinerario real, salen en la sección "Itinerario" del PDF.</div>
                                         <div v-for="t in op.tours" :key="t.id" class="d-flex justify-content-between align-items-center border rounded p-2 mb-1">
                                             <span><span class="badge bg-light text-dark border me-1">Día {{ t.orden }}</span>{{ t.paquete_plantilla?.nombre ?? t.nombre }}</span>
-                                            <div class="d-flex gap-2">
+                                            <div v-if="!alternativaSoloLectura" class="d-flex gap-2">
                                                 <i class="fas fa-pen text-muted" style="cursor:pointer;font-size:11px" title="Editar este tour" @click="abrirEdicionTour(t)"></i>
                                                 <i class="fas fa-times text-muted" style="cursor:pointer" title="Quitar este tour" @click="quitarTourIncluido(t, op)"></i>
                                             </div>
@@ -1346,7 +1349,7 @@
                                             :opcion-mayorista-id="op.id" :destino-atractivo-id="destinoAtractivoIdActivo"
                                             :dia-sugerido="0" :tour-existente="op.tours?.find((t) => t.id === tourEnEdicionId) ?? null" class="mt-2 mb-2"
                                             @actualizado="onTourIncluidoActualizado" @cancelar="tourEnEdicionId = null" />
-                                        <button class="btn btn-sm btn-outline-secondary w-100 mt-1" @click="mostrarFormTourIncluido = mostrarFormTourIncluido === op.id ? null : op.id; tourEnEdicionId = null">
+                                        <button v-if="!alternativaSoloLectura" class="btn btn-sm btn-outline-secondary w-100 mt-1" @click="mostrarFormTourIncluido = mostrarFormTourIncluido === op.id ? null : op.id; tourEnEdicionId = null">
                                             <i class="fas fa-plus me-1"></i>Agregar tour nuevo
                                         </button>
                                         <TourIncluidoForm v-if="mostrarFormTourIncluido === op.id"
@@ -1355,10 +1358,10 @@
                                             @agregado="(t) => onTourIncluidoAgregado(op, t)" @cancelar="mostrarFormTourIncluido = null" />
                                     </div>
                                 </div>
-                                <button class="btn btn-outline-primary btn-sm w-100" @click="mostrarFormMayorista = !mostrarFormMayorista; opcionMayoristaEnEdicionId = null">
+                                <button v-if="!alternativaSoloLectura" class="btn btn-outline-primary btn-sm w-100" @click="mostrarFormMayorista = !mostrarFormMayorista; opcionMayoristaEnEdicionId = null">
                                     <i class="fas fa-plus me-1"></i>Agregar cotización de mayorista
                                 </button>
-                                <OpcionMayoristaForm v-if="mostrarFormMayorista"
+                                <OpcionMayoristaForm v-if="mostrarFormMayorista && !alternativaSoloLectura"
                                     :alternativa-id="alternativaActiva!.id" :destino-activo-id="destinoActivoId"
                                     :opcion-existente="null" :tipo-mayorista-id="tipoMayoristaId"
                                     @agregado="onOpcionMayoristaGuardada" @cancelar="mostrarFormMayorista = false" />
