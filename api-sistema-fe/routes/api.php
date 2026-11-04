@@ -1237,6 +1237,9 @@ Route::group([
         ->middleware('permission:reservas.ver|reservas.ver_todas');
     Route::get("reporte-operativo/export", [ReporteOperativoController::class, 'export'])
         ->middleware('permission:reservas.ver|reservas.ver_todas');
+    // T-058 — "Check-in a todos" por servicio y día (mismo permiso que el check-in individual).
+    Route::post("reporte-operativo/checkin-masivo", [ReservaItemPasajeroController::class, 'checkinMasivo'])
+        ->middleware('permission:reservas.editar');
     Route::get("reporte-operativo/filtros", [ReporteOperativoController::class, 'filtrosDisponibles'])
         ->middleware('permission:reservas.ver|reservas.ver_todas');
     Route::put("reservas/{id}/cancelar", [ReservaController::class, 'cancelar'])

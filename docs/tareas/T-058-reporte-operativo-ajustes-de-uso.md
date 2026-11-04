@@ -62,9 +62,36 @@ cd admin-start-kit && npm run type-check
 ---
 
 ## Resultado
-- **Commits:**
-- **Tests:** (nuevos / suite completa)
+- **Commits:** ver `git log feat/T-058-reporte-ajustes` (un commit: `feat(AGE): … (T-058)`).
+- **Tests:** 7 nuevos en `ReporteOperativoAjustesUsoTest` (q por nombre/documento/código, q > 100, rango
+  40 días / fecha inválida / hasta < desde en `index`, `pdfSignedUrl`, `export` y `filtrosDisponibles`,
+  borde 31/32 días, opciones de filtros, check-in a todos de 4 pasajeros, pares ajenos omitidos, 403 sin
+  permiso sin marcar nada, lista obligatoria) + 1 en `ReporteOperativoHotelNochesTest` (q sigue al pasajero
+  en las noches). `--filter="ReporteOperativo|Dashboard|AsignacionOperativa"`: 60 verdes.
+  `--filter=AgenciaViajes`: 1026 verdes, 1 roja = el intermitente conocido `Fila13Fase1cFacturacionTest`.
+  `type-check`: 47 errores antes y después (ninguno en los archivos tocados).
+- **Navegador (Playwright, agencia-demo):** CA4 ✔ (con `q=aldana` y rango, ir a la reserva y volver
+  conserva fechas, búsqueda y resultado; los filtros viven en la query de la URL). CA5 ✔ (5 pasajeros,
+  uno con un check-in → "1/5 pasajeros con check-in", no "1/13"). "Mañana" ✔ (04→05-nov). "Check-in a todos"
+  ✔ (marca los pendientes del servicio, persiste al recargar; se revirtió a mano, la base quedó sin
+  check-ins). Rango de 59 días por URL → aviso "El rango no puede superar los 31 días." (422 como mensaje).
 - **Desviaciones de la tarea y por qué:**
+  - Endpoint nuevo `POST reporte-operativo/checkin-masivo` (en `ReservaItemPasajeroController::checkinMasivo`,
+    permiso `reservas.editar`): recibe los pares (ítem, pasajero) que muestra la pantalla, no el id del
+    servicio, para que respete la búsqueda activa. Se autoriza `ReservaPolicy::update` por cada reserva;
+    si alguna se niega no se marca nada. Reserva no activa / pasajero ajeno o no asignado → se omite y se
+    cuenta en `omitidos` (la pantalla avisa y recarga).
+  - La pantalla agrupaba por fecha → pasajero, sin "grupo de servicio": el botón vive en la cabecera de cada
+    día, uno por servicio (tour, o nombre del servicio). Noches/salida de hotel no entran.
+  - "Pasajero con check-in" = tiene check-in en al menos uno de sus servicios del rango.
+  - Máximo 31 días = 31 días incluidos (hasta − desde ≤ 30); la pantalla limita "Hasta" a desde+30.
+  - `q` busca sin tildes ni mayúsculas; si coincide el código de reserva salen todos sus pasajeros.
+  - `filtrosDisponibles` usa subconsultas `whereIn … select distinct` sobre ids (sin cargar ítems); no se
+    tocó `itemsDelRango()` ni `sinAsignar()`.
+  - Excel con 422: el error llega como Blob; se lee para mostrar el mensaje real.
+- **No probé:** PDF/Excel descargados con `q` en el navegador (sí por test el 422 de `pdfSignedUrl`/`export`;
+  `q` viaja en la URL firmada pero no abrí el PDF); el 403 de "Check-in a todos" desde la pantalla (solo test).
 
 ## Hallazgos fuera de alcance
-- 
+- Pasajeros sin nombre se muestran como "Pasajero {id}" y la búsqueda por nombre no los encuentra (solo
+  por documento o código de reserva).

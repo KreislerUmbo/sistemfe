@@ -9,6 +9,8 @@ export type ReporteOperativoFiltros = {
   fecha_desde?: string
   fecha_hasta?: string
   pendiente_asignar?: boolean
+  // T-058: nombre o documento del pasajero, o código de reserva (máx. 100).
+  q?: string
   // Mejoras post-11d: destino/tour/hotel/servicio, todos opcionales, combinables entre sí.
   destino_atractivo_id?: number
   servicio_id?: number
@@ -48,5 +50,11 @@ export const reporteOperativoService = {
       { checkin_realizado }
     )
     return response.data
+  },
+
+  // T-058: "Check-in a todos" de un servicio y día, en una sola petición.
+  async checkinMasivo(checkins: { reserva_item_id: number; reserva_pasajero_id: number }[]) {
+    const response = await httpClient.post('/reporte-operativo/checkin-masivo', { checkins })
+    return response.data as { code: number; marcados: number; omitidos: number }
   },
 }
