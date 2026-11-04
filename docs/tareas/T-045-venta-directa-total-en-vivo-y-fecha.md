@@ -99,6 +99,11 @@ cd admin-start-kit && npm run type-check
   - La fórmula salió a tres métodos de `PriceEngineService` (`motivoTarifaNoUsable`, `ventaYCostoDeTarifa`, `totalDeLinea`) y no a uno: el chequeo de activo/vigente también se comparte para que el 422 sea el mismo mensaje. La cama adicional sigue en `crearItemProveedor()` (la venta directa no la usa).
   - Agregué un botón «Hoy» junto a «Mañana» (la tarea pedía solo «Mañana»), útil si se cambió la fecha.
   - La cantidad está dentro de la tarjeta «Por unidad» (no en un campo aparte), porque el total de esa opción depende de ella antes de elegir el modo.
+  - Revisión (etapa 7): mientras se recalcula (debounce o pedido en vuelo) o con datos inválidos,
+    los montos se ocultan («…») y «Crear» queda deshabilitado, para no crear con un total distinto
+    al que se ve. Sin pasajeros, con una edad vacía o con una cantidad inválida se muestra el motivo
+    en lugar del spinner sin fin. Al cambiar de tarifa, la cantidad vuelve a 1. Verificado con
+    Playwright (4→5 adultos: el botón pierde el total al instante y vuelve con S/ 1,750.00).
   - No probé de punta a punta en el navegador crear la venta (no quise dejar datos en agencia-demo); la coincidencia vista previa = reserva creada la cubre el test CA2.
 
 ## Hallazgos fuera de alcance

@@ -127,21 +127,24 @@
                     <div v-if="tarifaSeleccionada" class="col-12">
                         <label class="form-label small text-secondary mb-1">¿Cómo se cobra? <span class="text-danger">*</span></label>
                         <div v-if="vistaPreviaError" class="alert alert-warning py-2 px-3 mb-0 small">{{ vistaPreviaError }}</div>
-                        <div v-else-if="!vistaPrevia" class="small text-muted">
+                        <div v-else-if="motivoSinCalculo" class="small text-warning-emphasis mb-2">
+                            <i class="fas fa-circle-info me-1"></i>{{ motivoSinCalculo }}
+                        </div>
+                        <div v-if="!vistaPreviaError && !vistaPrevia && !motivoSinCalculo" class="small text-muted">
                             <span class="spinner-border spinner-border-sm me-1"></span>Calculando…
                         </div>
-                        <div v-else class="row g-2">
+                        <div v-else-if="!vistaPreviaError && vistaPrevia" class="row g-2">
                             <div class="col-12 col-md-6">
                                 <label class="border rounded p-2 d-block h-100" :class="{ 'border-primary bg-primary-subtle': modoPrecio === 'por_persona' }" style="cursor:pointer">
                                     <input type="radio" class="form-check-input me-2" value="por_persona" v-model="modoPrecio">
-                                    <span class="fw-semibold">Por persona ({{ pax.length }} pasajero{{ pax.length === 1 ? '' : 's' }}): {{ dinero(vistaPrevia.por_persona.total, vistaPrevia.moneda) }}</span>
-                                    <div class="small text-muted mt-1">{{ textoDesglose }}</div>
+                                    <span class="fw-semibold">Por persona ({{ pax.length }} pasajero{{ pax.length === 1 ? '' : 's' }}): {{ totalesAlDia ? dinero(vistaPrevia.por_persona.total, vistaPrevia.moneda) : '…' }}</span>
+                                    <div class="small text-muted mt-1">{{ totalesAlDia ? textoDesglose : 'Calculando…' }}</div>
                                 </label>
                             </div>
                             <div class="col-12 col-md-6">
                                 <label class="border rounded p-2 d-block h-100" :class="{ 'border-primary bg-primary-subtle': modoPrecio === 'tarifa_fija' }" style="cursor:pointer">
                                     <input type="radio" class="form-check-input me-2" value="tarifa_fija" v-model="modoPrecio">
-                                    <span class="fw-semibold">Por unidad (cantidad {{ cantidad }}): {{ dinero(vistaPrevia.tarifa_fija.total, vistaPrevia.moneda) }}</span>
+                                    <span class="fw-semibold">Por unidad (cantidad {{ cantidad }}): {{ totalesAlDia ? dinero(vistaPrevia.tarifa_fija.total, vistaPrevia.moneda) : '…' }}</span>
                                     <div class="d-flex align-items-center gap-2 small text-muted mt-1">
                                         {{ dinero(vistaPrevia.tarifa_fija.precio_unitario, vistaPrevia.moneda) }} ×
                                         <input type="number" min="1" class="form-control form-control-sm" style="max-width:80px" v-model.number="cantidad"
@@ -182,7 +185,7 @@
         </div>
 
         <div class="d-flex justify-content-end mb-4">
-            <button class="btn btn-primary fw-semibold" @click="crear" :disabled="creando">
+            <button class="btn btn-primary fw-semibold" @click="crear" :disabled="creando || totalPendiente">
                 <span v-if="creando" class="spinner-border spinner-border-sm me-2"></span>
                 <i v-else class="fas fa-check me-2"></i>
                 Crear venta directa<template v-if="totalEnVivo"> · {{ totalEnVivo }}</template>
@@ -262,14 +265,33 @@ const dinero = (monto: number, moneda: 'PEN' | 'USD') =>
 
 const paxValidos = computed(() => pax.value.length > 0 && pax.value.every((p) => Number.isInteger(p.edad) && p.edad >= 0 && p.edad <= 120));
 
+// Por qué no se puede calcular todavía (se muestra en lugar de un spinner sin fin).
+const motivoSinCalculo = computed<string>(() => {
+    if (pax.value.length === 0) return 'Agrega al menos un pasajero para ver el total.';
+    if (!paxValidos.value) return 'Revisa las edades de los pasajeros (de 0 a 120).';
+    if (!Number.isInteger(cantidad.value) || cantidad.value < 1) return 'La cantidad debe ser 1 o más.';
+    return '';
+});
+
+// Hay un cálculo en espera (debounce) o en vuelo: los totales en pantalla
+// pueden ser de los datos anteriores.
+const calculando = ref<boolean>(false);
+
+// Los totales corresponden a lo que está en pantalla ahora mismo.
+const totalesAlDia = computed<boolean>(() => !!vistaPrevia.value && !calculando.value && !motivoSinCalculo.value);
+
 const pedirVistaPrevia = () => {
     clearTimeout(vistaPreviaTimeout);
     const seq = ++vistaPreviaSeq; // invalida lo que esté en vuelo
     vistaPreviaError.value = '';
-    if (origenTipo.value !== 'proveedor' || !proveedorTarifaId.value || !paxValidos.value || !Number.isInteger(cantidad.value) || cantidad.value < 1) {
-        vistaPrevia.value = null;
+    // Con datos inválidos se conserva la vista previa anterior (las tarjetas
+    // siguen visibles para poder corregir la cantidad), pero sin mostrar sus
+    // montos: totalesAlDia queda en false por motivoSinCalculo.
+    if (origenTipo.value !== 'proveedor' || !proveedorTarifaId.value || motivoSinCalculo.value) {
+        calculando.value = false;
         return;
     }
+    calculando.value = true;
     const tarifaId = proveedorTarifaId.value;
     vistaPreviaTimeout = setTimeout(async () => {
         try {
@@ -279,12 +301,14 @@ const pedirVistaPrevia = () => {
             if (seq !== vistaPreviaSeq) return;
             vistaPrevia.value = null;
             vistaPreviaError.value = error.response?.data?.message ?? 'No se pudo calcular el total.';
+        } finally {
+            if (seq === vistaPreviaSeq) calculando.value = false;
         }
     }, 300);
 };
 
-// Al cambiar de tarifa el modo vuelve a "sin elegir".
-watch(proveedorTarifaId, () => { modoPrecio.value = null; vistaPrevia.value = null; });
+// Al cambiar de tarifa el modo vuelve a "sin elegir" y la cantidad a 1.
+watch(proveedorTarifaId, () => { modoPrecio.value = null; vistaPrevia.value = null; cantidad.value = 1; });
 watch([proveedorTarifaId, cantidad, () => pax.value.map((p) => p.edad).join(','), origenTipo], pedirVistaPrevia);
 
 const textoDesglose = computed(() => {
@@ -304,9 +328,13 @@ const totalEnVivo = computed<string>(() => {
         if (precioVentaSnapshot.value === null || !cantidadManual.value || cantidadManual.value < 1) return '';
         return dinero(Math.round(precioVentaSnapshot.value * 100) / 100 * cantidadManual.value, monedaCosto.value);
     }
-    if (!vistaPrevia.value || !modoPrecio.value) return '';
-    return dinero(vistaPrevia.value[modoPrecio.value].total, vistaPrevia.value.moneda);
+    if (!totalesAlDia.value || !modoPrecio.value) return '';
+    return dinero(vistaPrevia.value![modoPrecio.value].total, vistaPrevia.value!.moneda);
 });
+
+// Tarifa de proveedor con el total sin confirmar: no se deja crear, para no
+// cobrar un monto distinto al que se ve (H42).
+const totalPendiente = computed<boolean>(() => origenTipo.value === 'proveedor' && !!proveedorTarifaId.value && !totalesAlDia.value);
 
 const descripcionManual = ref('');
 const precioVentaSnapshot = ref<number | null>(null);
