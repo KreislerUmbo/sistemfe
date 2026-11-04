@@ -18,16 +18,16 @@ use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 // esta usa mergeCells, así que Ordenar/Autofiltro de Excel no se comportan bien
 // acá (limitación conocida y aceptada: es la hoja para imprimir/repartir).
 //
-// Última columna, letra 'K' — si se agregan/quitan columnas de ENCABEZADOS()
+// Última columna, letra 'L' — si se agregan/quitan columnas de ENCABEZADOS()
 // hay que actualizar ULTIMA_COLUMNA junto con el resto de este archivo.
 class ReporteOperativoVistaOperativaSheet implements FromArray, WithStyles, WithTitle
 {
-    private const ULTIMA_COLUMNA = 'K';
+    private const ULTIMA_COLUMNA = 'L';
 
-    /** @var array<int, string> filas cuyo rango A:K debe fusionarse (encabezado de fecha) */
+    /** @var array<int, string> filas cuyo rango A:L debe fusionarse (encabezado de fecha) */
     private array $filasFecha = [];
 
-    /** @var array<int, string> filas cuyo rango A:K debe fusionarse (encabezado de grupo) */
+    /** @var array<int, string> filas cuyo rango A:L debe fusionarse (encabezado de grupo) */
     private array $filasGrupo = [];
 
     /** @var array<int, true> filas de grupo cuyo guía quedó "Sin asignar" (resaltar) */
@@ -89,6 +89,8 @@ class ReporteOperativoVistaOperativaSheet implements FromArray, WithStyles, With
                             $primeraFila ? ($pax['pasajero']['hotel_del_dia'] ?? '') : null,
                             $primeraFila ? ($pax['pasajero']['alimentacion_especial'] ?? '') : null,
                             $primeraFila ? ($pax['pasajero']['discapacidad'] ?? '') : null,
+                            // T-077: vuelo propio del pasajero (texto libre, solo para avisarle).
+                            $primeraFila ? ($pax['pasajero']['vuelo_propio'] ?? '') : null,
                             $servicioFila['hora'],
                             $servicioFila['servicio'],
                             $servicioFila['destino'],
@@ -101,7 +103,7 @@ class ReporteOperativoVistaOperativaSheet implements FromArray, WithStyles, With
 
                     $finBloque = $fila - 1;
                     if ($finBloque > $inicioBloque) {
-                        foreach (['A', 'B', 'C', 'D', 'E', 'F'] as $columna) {
+                        foreach (['A', 'B', 'C', 'D', 'E', 'F', 'G'] as $columna) {
                             $this->rangosPasajero[] = "{$columna}{$inicioBloque}:{$columna}{$finBloque}";
                         }
                     }
@@ -121,6 +123,7 @@ class ReporteOperativoVistaOperativaSheet implements FromArray, WithStyles, With
             'Hotel',
             'Alimentación especial',
             'Discapacidad',
+            'Vuelo propio',
             'Hora',
             'Servicio',
             'Destino',

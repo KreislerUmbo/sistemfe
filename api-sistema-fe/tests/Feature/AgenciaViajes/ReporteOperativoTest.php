@@ -498,6 +498,36 @@ class ReporteOperativoTest extends TestCase
         $this->assertContains('LATAM LA2203', $valores);
     }
 
+    // T-077 (revisión) — el PDF y la hoja «Vista operativa» (lo que se reparte al
+    // equipo de campo) también muestran el vuelo propio; antes llegaba como filas
+    // sintéticas, que se quitaron.
+    public function test_pdf_y_vista_operativa_muestran_el_vuelo_propio(): void
+    {
+        $f = $this->crearReservaConItems();
+        $f['pasajero1']->update(['vuelo_propio' => 'LATAM LA2203']);
+
+        $controller = app(ReporteOperativoController::class);
+        $body = $controller->index(new Request([
+            'fecha_desde' => '2026-09-01', 'fecha_hasta' => '2026-09-01',
+        ]))->getData(true);
+        $metodo = new \ReflectionMethod($controller, 'armarVistaAgrupada');
+        $dias = $metodo->invoke($controller, $body['filas'], \Illuminate\Support\Carbon::parse('2026-09-01'), \Illuminate\Support\Carbon::parse('2026-09-01'));
+
+        $html = view('pdf.agencia-viajes.reporte-operativo', [
+            'dias' => $dias, 'fechaDesde' => '2026-09-01', 'fechaHasta' => '2026-09-01',
+            'empresa' => null, 'logoUrl' => null, 'generadoPor' => 'Test', 'generadoEn' => '01/09/2026 08:00',
+        ])->render();
+        $this->assertStringContainsString('Vuelo propio: LATAM LA2203', $html);
+
+        $hoja = new \App\Exports\ReporteOperativoVistaOperativaSheet(
+            $dias, '2026-09-01', '2026-09-01', 'Test', \Illuminate\Support\Carbon::now()
+        );
+        $matriz = $hoja->array();
+        $indice = array_search('Vuelo propio', $matriz[4], true);
+        $this->assertNotFalse($indice);
+        $this->assertContains('LATAM LA2203', array_column(array_slice($matriz, 5), $indice));
+    }
+
     // T-077 (CA6) — la migración copia a vuelo_propio lo que haya en las
     // columnas viejas y después las borra. Postgres admite DDL dentro de la
     // transacción del test, así que se vuelve atrás (down) y se vuelve a subir (up).

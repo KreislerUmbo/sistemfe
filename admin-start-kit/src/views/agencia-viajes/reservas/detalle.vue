@@ -1221,8 +1221,7 @@ const cargarReserva = async () => {
     // es necesario para que se vea.
     // vuelo_pasajeros (vuelo de agencia) NO necesita el mismo truncado: su
     // modelo (ReservaItemVueloPasajero) a propósito no tiene cast 'date' en
-    // vuelo_fecha_ida/vuelta (mismo criterio que ReservaPasajero.vuelo_fecha_
-    // ida/vuelta), así que ya llega como 'YYYY-MM-DD' plano desde Postgres.
+    // vuelo_fecha_ida/vuelta, así que ya llega como 'YYYY-MM-DD' plano desde Postgres.
     res.reserva.items?.forEach((it) => {
         if (it.fecha) it.fecha = it.fecha.substring(0, 10);
     });

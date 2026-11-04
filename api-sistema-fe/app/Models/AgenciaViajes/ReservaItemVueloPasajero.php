@@ -13,8 +13,7 @@ use Illuminate\Database\Eloquent\Model;
 // el vuelo ya cargado). Cada fila es independiente por (reserva_item,
 // reserva_pasajero), igual que el check-in (ReservaItemCheckin, T-041).
 //
-// Sin cast 'date' en vuelo_fecha_ida/vuelta a propósito — mismo criterio
-// que ReservaPasajero.vuelo_fecha_ida/vuelta (sin cast ahí tampoco): así
+// Sin cast 'date' en vuelo_fecha_ida/vuelta a propósito: así
 // llega como string plano 'Y-m-d' desde Postgres, sin el problema de
 // timestamp ISO completo que si tuviera cast 'date' rompería <input
 // type="date"> en el frontend sin truncar a mano (mismo bug ya documentado

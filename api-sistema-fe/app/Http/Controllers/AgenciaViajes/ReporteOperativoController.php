@@ -639,8 +639,8 @@ class ReporteOperativoController extends Controller
             // real: compartir fila con reserva_item_pasajero hacía que el
             // checkbox de Asignación pudiera borrar el vuelo ya cargado).
             // Solo se llena en la fila del ítem que efectivamente ES el
-            // pasaje aéreo cotizado, nunca se mezcla con vuelo_ida/vuelta de
-            // arriba. $item->vueloPasajeros ya viene eager-loaded desde
+            // pasaje aéreo cotizado, nunca se mezcla con el vuelo propio
+            // (pasajero.vuelo_propio). $item->vueloPasajeros ya viene eager-loaded desde
             // queryItemsDelRango(), sin query nueva acá.
             'vuelo_agencia_ida' => ($vueloAgencia = $item->vueloPasajeros->firstWhere('reserva_pasajero_id', $pasajero->id))
                 && $vueloAgencia->vuelo_numero_ida ? [
