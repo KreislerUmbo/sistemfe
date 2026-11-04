@@ -168,7 +168,7 @@ return match (true) {
 `match (true)` toma el **primer** brazo verdadero, de arriba abajo: por eso el caso más completo va
 primero. El `(bool)` hace falta porque `match` compara con `===` y `'Alto Mayo' === true` es falso.
 
-### 3.7 Lo que queda pendiente (anotado en la tarea)
+### 3.7 Lo que queda pendiente («Por analizar» del backlog)
 
 - La **otra** salida no se marca hasta recargar la lista (solo se actualiza la fila que tocaste).
 - Reprogramar una salida a un día ocupado no avisa: el aviso solo sale al **asignar**.
