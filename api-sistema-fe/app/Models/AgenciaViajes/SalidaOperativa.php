@@ -3,6 +3,7 @@
 namespace App\Models\AgenciaViajes;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\DB;
 
 // Agrupa reserva_items de distintas reservas que comparten
 // tour_origen_id + fecha y son modalidad='compartido' — ver comentario
@@ -124,11 +125,19 @@ class SalidaOperativa extends Model
         return "La salida de {$tour} del {$this->fecha->format('d/m/Y')} está cancelada: reactívala desde Salidas o reprograma la reserva.";
     }
 
+    // Se llama cada vez que un ítem deja la salida. T-082: una reserva que ya no
+    // tiene ningún ítem en la salida sale también de sus vehículos (antes la
+    // fila quedaba y, si la reserva volvía, reaparecía sola en el vehículo).
     public static function eliminarSiQuedoVacia(?int $salidaId): void
     {
         if ($salidaId === null) {
             return;
         }
+
+        DB::table('salida_vehiculo_reservas')
+            ->whereIn('salida_vehiculo_id', SalidaVehiculo::where('salida_operativa_id', $salidaId)->select('id'))
+            ->whereNotIn('reserva_id', ReservaItem::where('salida_operativa_id', $salidaId)->select('reserva_id'))
+            ->delete();
 
         $salida = self::withCount('reservaItems')->find($salidaId);
         if ($salida && $salida->reserva_items_count === 0) {

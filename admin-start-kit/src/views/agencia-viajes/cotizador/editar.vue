@@ -1476,6 +1476,7 @@ import { guiaService } from '@/services/admin/guiaService';
 import { tipoCambioAgenciaService } from '@/services/admin/tipoCambioAgenciaService';
 import type { Cotizacion, Alternativa, AlternativaItem, ProveedorTarifa, OpcionMayorista, OpcionMayoristaTour, OpcionMayoristaOpcional, OpcionHotelTarifa, Proveedor, ProveedorTipo, BibliotecaResultado, ConfiguracionAgencia, DestinoServicio, GuiaTarifa, Servicio, TipAfeIgv, DestinoTributario, TemporadaDesactualizada } from '@/types/agencia-viajes';
 import type { Client } from '@/types/clients';
+import type { AvisoSalida } from '@/helpers/avisosProveedores';
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
 
@@ -1640,7 +1641,7 @@ const descargarPdfModificacion = async () => {
 };
 
 // Mensaje para la reserva (se muestra al volver): aplicar, descartar.
-const dejarMensajeParaReserva = (reservaId: number, datos: { mensaje: string; alerta_cupo_excedido?: boolean }) => {
+const dejarMensajeParaReserva = (reservaId: number, datos: { mensaje: string; alerta_cupo_excedido?: boolean; avisos_salidas?: AvisoSalida[] }) => {
     try { sessionStorage.setItem(`modificacion-resultado-${reservaId}`, JSON.stringify(datos)); } catch { /* sin storage: no se muestra el mensaje */ }
 };
 
@@ -1678,7 +1679,7 @@ const aplicarModificacion = async () => {
     procesandoModificacion.value = true;
     try {
         const res = await modificacion.aplicar();
-        dejarMensajeParaReserva(reservaId, { mensaje: res.message, alerta_cupo_excedido: res.alerta_cupo_excedido });
+        dejarMensajeParaReserva(reservaId, { mensaje: res.message, alerta_cupo_excedido: res.alerta_cupo_excedido, avisos_salidas: res.avisos_salidas });
         router.push(`/agencia-viajes/reservas/${reservaId}`);
     } catch (error: any) {
         const mensaje: string = error.response?.data?.message ?? 'No se pudo aplicar la modificación';

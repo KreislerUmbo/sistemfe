@@ -4,6 +4,7 @@ namespace App\Services\AgenciaViajes;
 
 use App\Models\AgenciaViajes\CotizacionPasajero;
 use App\Models\AgenciaViajes\Proveedor;
+use App\Models\AgenciaViajes\ReservaItem;
 use App\Models\AgenciaViajes\SalidaOperativa;
 use App\Models\AgenciaViajes\SalidaServicio;
 use App\Models\AgenciaViajes\SalidaVehiculo;
@@ -18,6 +19,10 @@ use Illuminate\Support\Collection;
 // - avisos(): compara la foto de antes con la de después de un cambio
 //   (cancelar una reserva, reprogramar la salida) y redacta qué ajustar con
 //   cada proveedor ("El Mirador (Almuerzo): ahora son 6, no 9").
+// - fotosDeReserva()/fotosDondeCaeria()/avisosSalidas() (T-040): lo mismo
+//   para cualquier acción sobre una reserva (cancelar, reprogramar, quitar un
+//   servicio, agregar un pasajero, «Modificar reserva»): foto antes, cambio,
+//   y la respuesta avisos_salidas.
 // - ordenes(): la orden de servicio de cada proveedor, con el texto listo
 //   para WhatsApp. Datos mínimos (Ley 29733): restaurante y entradas reciben
 //   cantidades y alimentación especial sin nombres; el transportista, por
@@ -73,6 +78,113 @@ class SalidaOperacionService
     }
 
     /**
+     * Fotos de las salidas a las que hoy están enganchados los servicios de la
+     * reserva (o solo los indicados), por id de salida.
+     *
+     * @param  array<int, int>|null  $reservaItemIds
+     * @return array<int, array>
+     */
+    public function fotosDeReserva(int $reservaId, ?array $reservaItemIds = null): array
+    {
+        return $this->fotos($this->salidasDeReserva($reservaId, $reservaItemIds));
+    }
+
+    /**
+     * Fotos de las salidas que ya existen donde caerían servicios con esta
+     * fecha: el "antes" de una salida a la que la reserva se va a sumar (sin
+     * él, se avisaría como si la salida fuera nueva).
+     *
+     * @param  iterable<array{0: ?int, 1: mixed}>  $destinos  pares [tour_origen_id, fecha]
+     * @return array<int, array>
+     */
+    public function fotosDondeCaeria(iterable $destinos): array
+    {
+        $claves = collect($destinos)->filter(fn ($d) => $d[0] && $d[1])
+            ->map(fn ($d) => $d[0].'|'.\Carbon\Carbon::parse($d[1])->toDateString())->unique();
+        if ($claves->isEmpty()) {
+            return [];
+        }
+
+        $ids = SalidaOperativa::whereIn('tour_origen_id', $claves->map(fn ($c) => (int) explode('|', $c)[0])->unique()->values())
+            ->whereIn('fecha', $claves->map(fn ($c) => explode('|', $c)[1])->unique()->values())
+            ->get(['id', 'tour_origen_id', 'fecha'])
+            ->filter(fn (SalidaOperativa $s) => $claves->contains($s->tour_origen_id.'|'.$s->fecha->toDateString()))
+            ->pluck('id');
+
+        return $this->fotos($ids);
+    }
+
+    /**
+     * Salidas enganchadas a los servicios de la reserva.
+     *
+     * @param  array<int, int>|null  $reservaItemIds
+     * @return Collection<int, int>
+     */
+    public function salidasDeReserva(int $reservaId, ?array $reservaItemIds = null): Collection
+    {
+        return ReservaItem::where('reserva_id', $reservaId)
+            ->when($reservaItemIds !== null, fn ($q) => $q->whereIn('id', $reservaItemIds))
+            ->whereNotNull('salida_operativa_id')
+            ->distinct()->pluck('salida_operativa_id')
+            ->map(fn ($id) => (int) $id);
+    }
+
+    /**
+     * avisos_salidas de una acción: compara cada foto de antes con la salida
+     * ahora, y suma las salidas donde la reserva cayó sin foto previa (nacieron
+     * en la operación). Una salida sin cambios no aparece.
+     *
+     * @param  array<int, array>  $fotosAntes
+     * @param  iterable<int>  $salidaIdsDespues
+     * @return array<int, array{salida_id: int, tour: string, fecha: string, avisos: array<int, string>}>
+     */
+    public function avisosSalidas(array $fotosAntes, iterable $salidaIdsDespues = []): array
+    {
+        return collect(array_keys($fotosAntes))->merge($salidaIdsDespues)
+            ->map(fn ($id) => (int) $id)->unique()
+            ->map(function (int $id) use ($fotosAntes) {
+                $antes = $fotosAntes[$id] ?? null;
+                $despues = $this->foto($id);
+                $foto = $antes ?? $despues;
+                if (! $foto) {
+                    return null;
+                }
+
+                return [
+                    'salida_id' => $id,
+                    'tour' => $foto['tour'],
+                    'fecha' => $foto['fecha'],
+                    'avisos' => $antes ? $this->avisos($antes, $despues) : $this->avisosSalidaNueva($despues),
+                ];
+            })
+            ->filter(fn ($s) => $s && $s['avisos'] !== [])->values()->all();
+    }
+
+    /**
+     * "La salida del … ya no va" para cada proveedor con servicio o vehículo.
+     * También la usa la salida cancelada (H37): no se borra, así que
+     * avisos($antes, $despues) no lo detecta.
+     *
+     * @return array<int, string>
+     */
+    public function avisosYaNoVa(array $antes): array
+    {
+        $avisos = [];
+        foreach ($antes['servicios'] as $sv) {
+            if ($sv['proveedor']) {
+                $avisos[] = "{$sv['proveedor']} ({$sv['nombre']}): la salida del {$antes['fecha']} ya no va.";
+            }
+        }
+        foreach ($antes['vehiculos'] as $v) {
+            if ($v['proveedor']) {
+                $avisos[] = "{$v['proveedor']} ({$v['nombre']}): la salida del {$antes['fecha']} ya no va.";
+            }
+        }
+
+        return $avisos;
+    }
+
+    /**
      * Qué ajustar con cada proveedor después de un cambio.
      *
      * @return array<int, string>
@@ -82,24 +194,21 @@ class SalidaOperacionService
         $avisos = [];
 
         if ($despues === null) {
-            foreach ($antes['servicios'] as $sv) {
-                if ($sv['proveedor']) {
-                    $avisos[] = "{$sv['proveedor']} ({$sv['nombre']}): la salida del {$antes['fecha']} ya no va.";
-                }
-            }
-            foreach ($antes['vehiculos'] as $v) {
-                if ($v['proveedor']) {
-                    $avisos[] = "{$v['proveedor']} ({$v['nombre']}): la salida del {$antes['fecha']} ya no va.";
-                }
-            }
-
-            return $avisos ?: ["La salida del {$antes['fecha']} quedó sin pasajeros y se eliminó."];
+            return $this->avisosYaNoVa($antes) ?: ["La salida del {$antes['fecha']} quedó sin pasajeros y se eliminó."];
         }
 
         foreach ($antes['servicios'] as $id => $sv) {
             $ahora = $despues['servicios'][$id] ?? null;
             if ($ahora && $sv['proveedor'] && $ahora['cantidad'] !== $sv['cantidad']) {
                 $avisos[] = "{$sv['proveedor']} ({$sv['nombre']}): ahora son {$ahora['cantidad']}, no {$sv['cantidad']}.";
+            }
+        }
+
+        // T-040: servicios que la salida sumó con el cambio (el primer tour que
+        // se engancha arma la lista desde el Incluye).
+        foreach (array_diff_key($despues['servicios'], $antes['servicios']) as $sv) {
+            if ($sv['proveedor']) {
+                $avisos[] = "{$sv['proveedor']} ({$sv['nombre']}): se suma a la salida del {$despues['fecha']}, son {$sv['cantidad']}. Hay que reservar.";
             }
         }
 
@@ -120,6 +229,34 @@ class SalidaOperacionService
         }
 
         return $avisos;
+    }
+
+    /**
+     * La salida nació con la operación: cada proveedor la tiene que reservar.
+     *
+     * @return array<int, string>
+     */
+    private function avisosSalidaNueva(array $despues): array
+    {
+        $avisos = [];
+        foreach ($despues['servicios'] as $sv) {
+            if ($sv['proveedor']) {
+                $avisos[] = "{$sv['proveedor']} ({$sv['nombre']}): salida nueva del {$despues['fecha']}, son {$sv['cantidad']}. Hay que reservar.";
+            }
+        }
+
+        return $avisos;
+    }
+
+    /**
+     * @param  iterable<int>  $salidaIds
+     * @return array<int, array>
+     */
+    private function fotos(iterable $salidaIds): array
+    {
+        return collect($salidaIds)->unique()
+            ->mapWithKeys(fn ($id) => [(int) $id => $this->foto((int) $id)])
+            ->filter()->all();
     }
 
     /**

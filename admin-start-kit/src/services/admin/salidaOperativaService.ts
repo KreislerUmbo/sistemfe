@@ -29,7 +29,8 @@ export const salidaOperativaService = {
   },
   async cancelar(id: number) {
     const response = await httpClient.put(`/salidas-operativas/${id}/cancelar`)
-    return response.data
+    // T-040 (H37): "la salida del … ya no va" para cada proveedor.
+    return response.data as { code: number; message: string; avisos: string[] }
   },
   // Fila 13, fase 2a (D9): avanza o retrocede un paso (programada ⇄ confirmada ⇄ realizada).
   async cambiarEstado(id: number, estado: 'programada' | 'confirmada' | 'realizada') {

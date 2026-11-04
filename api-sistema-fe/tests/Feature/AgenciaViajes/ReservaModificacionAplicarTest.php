@@ -30,6 +30,7 @@ use App\Models\AgenciaViajes\ReservaPasajero;
 use App\Models\AgenciaViajes\ReservaVenta;
 use App\Models\AgenciaViajes\SalidaMayorista;
 use App\Models\AgenciaViajes\SalidaOperativa;
+use App\Models\AgenciaViajes\SalidaServicio;
 use App\Models\AgenciaViajes\SalidaVehiculo;
 use App\Models\AgenciaViajes\Servicio;
 use App\Models\Cash\Branch;
@@ -714,6 +715,38 @@ class ReservaModificacionAplicarTest extends TestCase
         $this->assertNull(ReservaItem::find($excursion->id), 'la excursión salió de la reserva');
         $this->assertNotNull(SalidaOperativa::find($salidaId), 'la salida sigue existiendo');
         $this->assertSame($salidaId, $otra->fresh()->salida_operativa_id, 'la otra reserva no cambia');
+    }
+
+    // ── T-040 (CA3c, CA4): avisos a los proveedores de las salidas ────────────
+
+    public function test_t040_quitar_un_pasajero_avisa_a_cada_salida_de_la_reserva(): void
+    {
+        [$reserva, $m] = $this->reservaConModificacion(['salida' => true]);
+        $salidaId = $this->ri($reserva, 'excursion')->salida_operativa_id;
+        $proveedor = Proveedor::create(['razon_social' => 'El Mirador '.uniqid(), 'nombre_comercial' => 'El Mirador', 'estado' => true]);
+        SalidaServicio::create(['salida_operativa_id' => $salidaId, 'nombre' => 'Almuerzo', 'proveedor_id' => $proveedor->id]);
+        $beto = $this->reservaPasajeroId($reserva, 'beto');
+        $this->cambiarPasajeros($m, [$beto]);
+        $this->penalidad($m, $beto);
+
+        $respuesta = $this->aplicarOk($reserva);
+
+        $this->assertSame([[
+            'salida_id' => $salidaId,
+            'tour' => 'Alto Mayo Full Day',
+            'fecha' => '10/11/2026',
+            'avisos' => ['El Mirador (Almuerzo): ahora son 2, no 3.'],
+        ]], $respuesta['avisos_salidas']);
+    }
+
+    public function test_t040_sin_salidas_aplicar_no_trae_avisos(): void
+    {
+        [$reserva, $m] = $this->reservaConModificacion();
+        $beto = $this->reservaPasajeroId($reserva, 'beto');
+        $this->cambiarPasajeros($m, [$beto]);
+        $this->penalidad($m, $beto);
+
+        $this->assertSame([], $this->aplicarOk($reserva)['avisos_salidas']);
     }
 
     // ── CA6 ────────────────────────────────────────────────────────────────────

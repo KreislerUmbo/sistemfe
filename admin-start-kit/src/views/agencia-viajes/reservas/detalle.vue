@@ -1102,6 +1102,7 @@ import { useAuthStore } from '@/stores/auth';
 import { reservaModificacionService } from '@/services/admin/reservaModificacionService';
 import { mensajeDeError, textoMonto } from '@/composables/agencia-viajes/useModificacionReserva';
 import { imprimirComprobante } from '@/composables/usePrintComprobante';
+import { avisarProveedores, type AvisoSalida } from '@/helpers/avisosProveedores';
 import type {
     Reserva, ReservaPasajero, ReservaItem, ReservaResumenItem, ReservaCabecera,
     PasajeroCatalogo, ProveedorTarifa, Guia, MotivoCancelacion, AnticipoReserva, OpcionMayorista, OpcionHotelTarifa,
@@ -1333,7 +1334,7 @@ const descargarPdfModificacion = async (modificacionId: number) => {
 
 // Al volver del cotizador (aplicar o descartar) se muestra el resultado y la alerta de cupo.
 const mostrarResultadoModificacion = async () => {
-    let datos: { mensaje: string; alerta_cupo_excedido?: boolean } | null = null;
+    let datos: { mensaje: string; alerta_cupo_excedido?: boolean; avisos_salidas?: AvisoSalida[] } | null = null;
     try {
         const clave = `modificacion-resultado-${reservaId}`;
         const guardado = sessionStorage.getItem(clave);
@@ -1344,6 +1345,8 @@ const mostrarResultadoModificacion = async () => {
     if (datos.alerta_cupo_excedido) {
         await (Swal as TVueSwalInstance).fire('Cupo excedido', 'La salida de mayorista elegida ya superó su cupo total — la modificación se aplicó igual, es solo un aviso.', 'warning');
     }
+    // T-040: qué cambió en las salidas con la modificación.
+    await avisarProveedores(datos.avisos_salidas);
 };
 
 const sincronizarItems = async () => {
@@ -1769,6 +1772,8 @@ const guardarHoraDeTarjeta = async (it: ReservaItem) => {
 };
 
 // T-042: aviso (sin bloquear) cuando un servicio quedó en una salida cancelada.
+// Va después de avisarProveedores(): comparten la instancia de SweetAlert y el
+// cuadro cerraría este toast apenas aparece.
 const avisarSalidasCanceladas = (avisos?: string[]) => {
     (avisos ?? []).forEach((aviso) => toast.warning(aviso));
 };
@@ -1782,6 +1787,7 @@ const guardarItem = async (it: ReservaItem) => {
             hora: it.hora ?? null,
         });
         toast.success('Servicio actualizado');
+        await avisarProveedores(res?.avisos_salidas);
         avisarSalidasCanceladas(res?.avisos_salida_cancelada);
     } catch (error: any) {
         toast.error(error.response?.data?.message ?? 'No se pudo actualizar el servicio');
@@ -1809,12 +1815,16 @@ const quitarItem = async (it: ReservaItem) => {
 
     eliminandoItemId.value = it.id;
     try {
-        // Fila 13: un tour con varias líneas de IGV se quita entero.
+        // Fila 13: un tour con varias líneas de IGV se quita entero. La
+        // salida cambia recién al quitar la última línea: se juntan los avisos.
+        const avisos: AvisoSalida[] = [];
         for (const linea of lineasDeTarjeta(it)) {
-            await reservaItemService.eliminar(linea.id);
+            const res = await reservaItemService.eliminar(linea.id);
+            avisos.push(...(res.avisos_salidas ?? []));
         }
         toast.success('Servicio quitado de la reserva');
         await cargarReserva();
+        await avisarProveedores(avisos);
     } catch (error: any) {
         toast.error(error.response?.data?.message ?? 'No se pudo quitar el servicio');
     } finally {
@@ -1925,17 +1935,7 @@ const confirmarCancelacion = async () => {
         await cargarReserva();
         toast.success('Reserva cancelada correctamente');
         // Fila 13, fase 2c (D15): qué ajustar con los proveedores de sus salidas.
-        const avisosSalidas: { tour: string; fecha: string; avisos: string[] }[] = res.avisos_salidas ?? [];
-        if (avisosSalidas.length > 0) {
-            const escapar = (t: string) => t.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string));
-            await (Swal as TVueSwalInstance).fire({
-                title: 'Avisa a los proveedores',
-                icon: 'info',
-                html: '<div class="text-start small">' + avisosSalidas.map((s) =>
-                    `<strong>${escapar(s.tour)} · ${escapar(s.fecha)}</strong><ul class="mt-1">`
-                    + s.avisos.map((a) => `<li>${escapar(a)}</li>`).join('') + '</ul>').join('') + '</div>',
-            });
-        }
+        await avisarProveedores(res.avisos_salidas);
     } catch (error: any) {
         toast.error(error.response?.data?.message ?? 'No se pudo cancelar la reserva');
     } finally {
@@ -1979,6 +1979,7 @@ const confirmarReprogramacion = async () => {
         avisosTemporadaReprogramacion.value = res.avisos_temporada ?? [];
         mostrarModalReprogramar.value = false;
         toast.success(res.message);
+        await avisarProveedores(res.avisos_salidas);
         avisarSalidasCanceladas(res.avisos_salida_cancelada);
     } catch (error: any) {
         toast.error(error.response?.data?.message ?? 'No se pudo reprogramar la reserva');
