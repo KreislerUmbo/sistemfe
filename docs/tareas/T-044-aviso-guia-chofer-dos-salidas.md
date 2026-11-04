@@ -70,6 +70,15 @@ cd admin-start-kit && npm run type-check
   - Tablero: la marca solo cubre al guía (el del encabezado y el de sus vehículos), como pide el alcance; el chofer se avisa solo en el toast.
   - Al asignar un guía en el tablero se marca esa fila; la otra salida se marca al recargar la lista.
 
+- **Revisión (04-nov):** tres correcciones y 3 tests nuevos (13 en total):
+  - Una salida cancelada o realizada ya no se marca en el tablero ni avisa al asignarle guía o chofer (antes solo se filtraba "la otra").
+  - El tablero toma la marca de `salida.aviso_guia_repetido` de la respuesta, no de `avisos[0]`: cambiar el guía principal ya no borra la marca de un guía de vehículo repetido.
+  - "Cambió el guía" con `wasChanged('guia_id')` en vez de `!==` (un `"5"` de texto avisaba de nuevo).
+  - El listado lee las salidas en curso de cada fecha **una vez** (el servicio las guarda por fecha, y el controller usa una sola instancia por request); antes era una lectura (más tours y vehículos) por fila y por guía.
+  - Texto del aviso: el tour y la hora van cada uno si existe ("… de Alto Mayo de ese día", "… otra salida a las 08:00 ese día"). **Desviación del Alcance**, que pedía el texto genérico si faltaba uno de los dos: se perdía un dato que sí estaba.
+  - 14 tests en `T044AvisoGuiaChoferTest`. `--filter=Salida`: 58 verdes. `type-check`: 47, igual que antes.
+- **Recorrido:** `docs/aprendizaje/33-recorrido-aviso-guia-chofer-repetido.md`.
+
 ## Hallazgos fuera de alcance
 - Reprogramar una salida/reserva a un día donde el guía o el chofer ya está ocupado no avisa (solo se avisa al asignar).
-- `aviso_guia_repetido` hace 2 consultas por salida en el listado (20 por página): aceptable hoy; si crece, precalcular por fecha.
+- ~~`aviso_guia_repetido` hacía 3-4 consultas por guía de cada fila~~: resuelto en la revisión (una lectura por fecha).

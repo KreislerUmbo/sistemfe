@@ -99,7 +99,6 @@ class SalidaVehiculoController extends Controller
             return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
         }
 
-        $guiaAntes = $vehiculo->guia_id;
         $telefonoAntes = CruceSalidasService::normalizarTelefono($vehiculo->chofer_telefono);
         $vehiculo->update($validator->validated());
 
@@ -107,7 +106,7 @@ class SalidaVehiculoController extends Controller
         $avisos = $this->avisosDeCruce(
             $vehiculo->salida,
             $vehiculo,
-            $vehiculo->guia_id !== $guiaAntes,
+            $vehiculo->wasChanged('guia_id'),
             CruceSalidasService::normalizarTelefono($vehiculo->chofer_telefono) !== $telefonoAntes
         );
 

@@ -382,7 +382,9 @@ const guardarGuia = async (s: SalidaOperativa, guia: Guia | null) => {
         s.guia = guia;
         // T-044 (H38): solo avisa, sin pedir confirmación.
         const avisos: string[] = res?.avisos ?? [];
-        s.aviso_guia_repetido = avisos[0] ?? null;
+        // La marca la calcula el servidor completa (guía de la salida y de sus
+        // vehículos); "avisos" solo habla del guía recién elegido.
+        s.aviso_guia_repetido = res?.salida?.aviso_guia_repetido ?? null;
         toast.success('Guía actualizado');
         avisos.forEach((a) => toast.warning(a));
     } catch (error: any) {

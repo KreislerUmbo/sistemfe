@@ -25,35 +25,69 @@ class CruceSalidasService
         return $digitos === '' ? null : $digitos;
     }
 
+    /**
+     * Una salida cancelada o realizada no avisa ni se marca en el tablero: ya
+     * no compite por el guía ni por el chofer (tampoco cuenta como "la otra").
+     */
+    private function enCurso(SalidaOperativa $salida): bool
+    {
+        return in_array($salida->estado, SalidaOperativa::ESTADOS_EN_CURSO, true);
+    }
+
+    /**
+     * Salidas en curso ya leídas, por fecha. El listado del tablero pregunta
+     * por muchas salidas del mismo día: así la base se lee una vez por fecha
+     * y no una vez por fila y por guía. Vive lo que vive esta instancia (un
+     * request): quien quiera aprovecharlo usa la misma instancia en todo el
+     * listado.
+     *
+     * @var array<string, Collection<int, SalidaOperativa>>
+     */
+    private array $salidasPorFecha = [];
+
+    /** @var array<int, string|null> nombre de cada guía ya leído */
+    private array $nombresGuia = [];
+
     /** @return Collection<int, SalidaOperativa> otras salidas en curso del mismo día */
     private function otrasDelDia(SalidaOperativa $salida): Collection
     {
-        return SalidaOperativa::enCurso()
-            ->where('fecha', $salida->fecha->toDateString())
-            ->where('id', '!=', $salida->id)
+        $fecha = $salida->fecha->toDateString();
+        $this->salidasPorFecha[$fecha] ??= SalidaOperativa::enCurso()
+            ->where('fecha', $fecha)
             ->with(['tourOrigen', 'vehiculos'])
             ->orderBy('hora')
             ->get();
+
+        return $this->salidasPorFecha[$fecha]->where('id', '!=', $salida->id)->values();
     }
 
-    private function donde(string $quien, ?SalidaOperativa $otra): string
+    private function nombreGuia(int $guiaId): string
     {
-        if (! $otra) {
-            return '';
-        }
-        $hora = $otra->hora ? substr((string) $otra->hora, 0, 5) : null;
-        $tour = $otra->tourOrigen?->nombre;
-        if (! $hora || ! $tour) {
-            return "{$quien} ya tiene otra salida ese día.";
+        if (! array_key_exists($guiaId, $this->nombresGuia)) {
+            $this->nombresGuia[$guiaId] = Guia::whereKey($guiaId)->value('nombre');
         }
 
-        return "{$quien} ya está en la salida de {$tour} de las {$hora} de ese día.";
+        return $this->nombresGuia[$guiaId] ?? 'El guía';
+    }
+
+    // Arma el texto con lo que haya: el tour y la hora van cada uno si existe.
+    private function donde(string $quien, SalidaOperativa $otra): string
+    {
+        $hora = $otra->hora ? substr((string) $otra->hora, 0, 5) : null;
+        $tour = $otra->tourOrigen?->nombre;
+
+        return match (true) {
+            $tour && $hora => "{$quien} ya está en la salida de {$tour} de las {$hora} de ese día.",
+            (bool) $tour => "{$quien} ya está en la salida de {$tour} de ese día.",
+            (bool) $hora => "{$quien} ya tiene otra salida a las {$hora} ese día.",
+            default => "{$quien} ya tiene otra salida ese día.",
+        };
     }
 
     /** @return array<int, string> */
     public function avisosGuia(SalidaOperativa $salida, ?int $guiaId): array
     {
-        if (! $guiaId) {
+        if (! $guiaId || ! $this->enCurso($salida)) {
             return [];
         }
         $otra = $this->otrasDelDia($salida)->first(
@@ -62,16 +96,14 @@ class CruceSalidasService
         if (! $otra) {
             return [];
         }
-        $nombre = Guia::whereKey($guiaId)->value('nombre') ?? 'El guía';
-
-        return [$this->donde($nombre, $otra)];
+        return [$this->donde($this->nombreGuia($guiaId), $otra)];
     }
 
     /** @return array<int, string> */
     public function avisosChofer(SalidaOperativa $salida, ?string $telefono, ?string $nombre): array
     {
         $buscado = self::normalizarTelefono($telefono);
-        if ($buscado === null) {
+        if ($buscado === null || ! $this->enCurso($salida)) {
             return [];
         }
         $otra = $this->otrasDelDia($salida)->first(

@@ -50,6 +50,15 @@ class SalidaOperativaController extends Controller
         'vehiculos.reservas',
     ];
 
+    // T-044: una sola instancia por request, para que el listado lea las
+    // salidas de cada fecha una vez (el servicio las guarda por fecha).
+    private ?CruceSalidasService $cruce = null;
+
+    private function cruce(): CruceSalidasService
+    {
+        return $this->cruce ??= app(CruceSalidasService::class);
+    }
+
     public function index(Request $request)
     {
         $query = SalidaOperativa::with(self::RELACIONES);
@@ -98,13 +107,13 @@ class SalidaOperativaController extends Controller
             return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
         }
 
-        $guiaAntes = $salida->guia_id;
         $salida->update($validator->validated());
         $salida->load(self::RELACIONES);
 
-        // T-044 (H38): solo un aviso, nunca bloquea. Avisa si el guía cambió.
-        $avisos = $salida->guia_id !== $guiaAntes
-            ? app(CruceSalidasService::class)->avisosGuia($salida, $salida->guia_id)
+        // T-044 (H38): solo un aviso, nunca bloquea. Avisa si el guía cambió;
+        // wasChanged() compara como Eloquent ("5" y 5 son el mismo guía).
+        $avisos = $salida->wasChanged('guia_id')
+            ? $this->cruce()->avisosGuia($salida, $salida->guia_id)
             : [];
 
         return response()->json(['code' => 200, 'message' => 'Salida actualizada', 'salida' => $this->resumenSalida($salida, true), 'avisos' => $avisos]);
@@ -586,7 +595,7 @@ class SalidaOperativaController extends Controller
             'guia_id' => $s->guia_id,
             'guia' => $s->guia,
             // T-044: el guía (de la salida o de un vehículo) ya está en otra salida del día.
-            'aviso_guia_repetido' => app(CruceSalidasService::class)->avisoGuiaRepetido($s),
+            'aviso_guia_repetido' => $this->cruce()->avisoGuiaRepetido($s),
             'cupo_maximo' => $s->cupo_maximo,
             'vehiculo_descripcion' => $s->vehiculo_descripcion,
             'estado' => $s->estado,

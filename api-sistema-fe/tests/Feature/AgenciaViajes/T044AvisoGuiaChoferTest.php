@@ -8,6 +8,7 @@ use App\Models\AgenciaViajes\Guia;
 use App\Models\AgenciaViajes\SalidaOperativa;
 use App\Models\AgenciaViajes\SalidaVehiculo;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Tests\Feature\AgenciaViajes\Concerns\SalidasFixtures;
 use Tests\TestCase;
 
@@ -56,7 +57,8 @@ class T044AvisoGuiaChoferTest extends TestCase
     }
 
     // CA1 — el guía de un vehículo también cuenta; sin hora, texto genérico.
-    public function test_guia_de_un_vehiculo_cuenta_y_sin_hora_el_texto_es_generico(): void
+    // Revisión: el texto usa el tour y la hora cada uno si existe.
+    public function test_guia_de_un_vehiculo_cuenta_y_sin_hora_nombra_el_tour(): void
     {
         $guia = $this->guia();
         $otra = $this->salida('Alto Mayo', hora: null);
@@ -64,7 +66,29 @@ class T044AvisoGuiaChoferTest extends TestCase
 
         $respuesta = $this->asignarGuia($this->salida('Laguna Azul'), $guia);
 
-        $this->assertSame(['Juan Pérez ya tiene otra salida ese día.'], $respuesta['avisos']);
+        $this->assertSame(['Juan Pérez ya está en la salida de Alto Mayo de ese día.'], $respuesta['avisos']);
+    }
+
+    // Revisión: el listado lee las salidas de una fecha una sola vez, no una
+    // vez por fila; y aun así marca bien a cada fila.
+    public function test_el_listado_lee_cada_fecha_una_sola_vez(): void
+    {
+        $guia = $this->guia();
+        $salidas = collect(['Alto Mayo', 'Laguna Azul', 'Cusco', 'Tarapoto'])
+            ->map(fn (string $tour) => $this->salida($tour));
+        $salidas->each(fn (SalidaOperativa $s) => $this->asignarGuia($s, $guia));
+
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+        $datos = app(SalidaOperativaController::class)
+            ->index(new Request(['fecha_desde' => '2026-11-10', 'fecha_hasta' => '2026-11-10']))->getData(true);
+        $lecturasDelDia = collect(DB::getQueryLog())
+            ->filter(fn (array $q) => str_contains($q['query'], 'from "salidas_operativas"') && str_contains($q['query'], '"estado" in'))
+            ->count();
+        DB::disableQueryLog();
+
+        $this->assertSame(1, $lecturasDelDia);
+        $this->assertCount(4, array_filter(array_column($datos['salidas'],'aviso_guia_repetido')));
     }
 
     public function test_guia_en_un_vehiculo_avisa_al_asignarlo(): void
@@ -165,5 +189,54 @@ class T044AvisoGuiaChoferTest extends TestCase
         $show = app(SalidaOperativaController::class)->show((string) $segunda->id)->getData(true);
 
         $this->assertSame('Juan Pérez ya está en la salida de Alto Mayo de las 08:00 de ese día.', $show['aviso_guia_repetido']);
+    }
+
+    // Revisión: una salida cancelada o realizada no se marca ni avisa, aunque
+    // comparta guía o chofer con una activa del mismo día.
+    public function test_salida_cancelada_no_se_marca_ni_avisa(): void
+    {
+        $guia = $this->guia();
+        $activa = $this->salida('Alto Mayo');
+        $this->asignarGuia($activa, $guia);
+        $this->vehiculoConChofer($activa, '987654321');
+        $cancelada = $this->salida('Laguna Azul');
+        $this->asignarGuia($cancelada, $guia);
+        $cancelada->update(['estado' => SalidaOperativa::ESTADO_CANCELADA]);
+
+        $show = app(SalidaOperativaController::class)->show((string) $cancelada->id)->getData(true);
+        $this->assertNull($show['aviso_guia_repetido']);
+
+        $realizada = $this->salida('Cusco', estado: SalidaOperativa::ESTADO_REALIZADA);
+        $this->assertSame([], $this->asignarGuia($realizada, $guia)['avisos']);
+        $chofer = app(SalidaVehiculoController::class)->store(new Request(['chofer_telefono' => '987654321']), (string) $realizada->id)->getData(true);
+        $this->assertSame([], $chofer['avisos']);
+    }
+
+    // Revisión: la respuesta trae la marca completa del tablero. Cambiar el guía
+    // principal no la borra si el guía de un vehículo sigue repetido.
+    public function test_cambiar_el_guia_principal_no_borra_la_marca_del_vehiculo(): void
+    {
+        $repetido = $this->guia();
+        $this->asignarGuia($this->salida('Alto Mayo'), $repetido);
+        $salida = $this->salida('Laguna Azul');
+        SalidaVehiculo::create(['salida_operativa_id' => $salida->id, 'descripcion' => 'Van', 'guia_id' => $repetido->id]);
+
+        $respuesta = $this->asignarGuia($salida, $this->guia('Otro'));
+
+        $this->assertSame([], $respuesta['avisos']);
+        $this->assertSame('Juan Pérez ya está en la salida de Alto Mayo de las 08:00 de ese día.', $respuesta['salida']['aviso_guia_repetido']);
+    }
+
+    // Revisión: el mismo guía mandado como texto ("5") no cuenta como cambio.
+    public function test_reenviar_el_mismo_guia_como_texto_no_vuelve_a_avisar(): void
+    {
+        $guia = $this->guia();
+        $this->asignarGuia($this->salida('Alto Mayo'), $guia);
+        $salida = $this->salida('Laguna Azul');
+        $this->asignarGuia($salida, $guia);
+
+        $respuesta = app(SalidaOperativaController::class)->update(new Request(['guia_id' => (string) $guia->id]), (string) $salida->id)->getData(true);
+
+        $this->assertSame([], $respuesta['avisos']);
     }
 }
