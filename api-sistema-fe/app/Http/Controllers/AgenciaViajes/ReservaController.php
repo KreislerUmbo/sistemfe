@@ -668,6 +668,30 @@ class ReservaController extends Controller
             && collect($item->pax_incluidos)->every(fn ($id) => ! isset($mapaPasajeros[$id]));
     }
 
+    // Servicios de la alternativa que la reserva todavía no tiene. Un solo
+    // criterio para el aviso del detalle y para sincronizarItems() (T-084):
+    // antes el aviso no filtraba y mostraba como "nuevo" algo que el botón
+    // nunca iba a crear. Devuelve [pendientes, omitidos]:
+    // - Incluye como ya presente lo representado por una versión anterior (T-005):
+    //   un servicio facturado que subió de precio sigue en la versión vendida.
+    // - Descarta las opciones no elegidas de un grupo (M2, filtrarItemsParaReserva()).
+    // - Omite lo que es solo para pasajeros ya quitados (F4 etapa 1).
+    private static function itemsPendientesDeSincronizar(Reserva $reserva, array $mapaPasajeros): array
+    {
+        $alternativaItemIdsEnReserva = ReservaItem::alternativaItemIdsYaEnLaReserva($reserva->id, $reserva->alternativa_id);
+
+        $candidatos = self::filtrarItemsParaReserva(
+            AlternativaItem::where('alternativa_id', $reserva->alternativa_id)
+                ->whereNotIn('id', $alternativaItemIdsEnReserva)
+                ->get()
+        );
+
+        [$omitidos, $pendientes] = $candidatos
+            ->partition(fn (AlternativaItem $item) => self::soloParaPasajerosQuitados($item, $mapaPasajeros));
+
+        return [$pendientes->values(), $omitidos->values()];
+    }
+
     // POST reservas/{id}/sincronizar-items — Opción C acordada: nunca
     // automático. Crea los reserva_items que falten para alternativa_items
     // agregados a la cotización DESPUÉS de que la reserva ya estaba activa.
@@ -704,26 +728,7 @@ class ReservaController extends Controller
                 // bajo lock, no antes de abrir la transacción.
                 Reserva::where('id', $reserva->id)->lockForUpdate()->firstOrFail();
 
-                // Incluye lo que ya está representado por una versión anterior (T-005): un
-                // servicio facturado que subió de precio sigue en la versión vendida y su
-                // versión nueva no es un servicio pendiente (si lo fuera, se facturaría dos veces).
-                $alternativaItemIdsEnReserva = ReservaItem::alternativaItemIdsYaEnLaReserva($reserva->id, $reserva->alternativa_id);
-
-                // Mismo filtro de grupos que crearReservaDesdeAlternativa()
-                // (M2) — en la práctica no debería haber grupos sin resolver
-                // acá (la alternativa queda congelada al aceptar, mismo
-                // criterio que el resto del sistema), pero se aplica igual
-                // por si un grupo quedó resuelto DESPUÉS de aceptar y nunca
-                // se sincronizó.
-                $itemsPendientes = self::filtrarItemsParaReserva(
-                    AlternativaItem::where('alternativa_id', $reserva->alternativa_id)
-                        ->whereNotIn('id', $alternativaItemIdsEnReserva)
-                        ->get()
-                );
-
-                // F4 etapa 1: lo que es solo para pasajeros ya quitados no entra.
-                [$omitidos, $itemsPendientes] = $itemsPendientes
-                    ->partition(fn (AlternativaItem $item) => self::soloParaPasajerosQuitados($item, $mapaPasajeros));
+                [$itemsPendientes, $omitidos] = self::itemsPendientesDeSincronizar($reserva, $mapaPasajeros);
                 $nombresOmitidos = $omitidos->map(fn (AlternativaItem $item) => self::resolverNombreItem($item))->values()->all();
 
                 if ($itemsPendientes->isEmpty()) {
@@ -1337,10 +1342,10 @@ class ReservaController extends Controller
 
         $cotizacion = $reserva->alternativa->cotizacion;
 
-        $alternativaItemIdsEnReserva = ReservaItem::alternativaItemIdsYaEnLaReserva($reserva->id, $reserva->alternativa_id);
-        $itemsPendientesSincronizar = AlternativaItem::where('alternativa_id', $reserva->alternativa_id)
-            ->whereNotIn('id', $alternativaItemIdsEnReserva)
-            ->get()
+        // T-084: mismo criterio que el botón Sincronizar; solo se avisa lo que
+        // el botón de verdad va a crear.
+        [$itemsPendientesSincronizar] = self::itemsPendientesDeSincronizar($reserva, $this->reconstruirMapaPasajeros($reserva));
+        $itemsPendientesSincronizar = $itemsPendientesSincronizar
             ->map(fn (AlternativaItem $i) => ['id' => $i->id, 'nombre' => self::resolverNombreItem($i)])
             ->values();
 

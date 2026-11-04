@@ -13,6 +13,7 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
@@ -176,12 +177,21 @@ class ReservaSincronizarItemsTest extends TestCase
             'precio_convertido' => 8,
         ]);
 
-        // Fase 1b (§3.3) — show() ahora exige un usuario autenticado
-        // (CotizacionPolicy/ReservaPolicy). Este archivo nunca autenticaba
-        // ninguno (no hacía falta hasta ahora) — Super-Admin bypasea el
-        // scope de fila igual que bypasea todo lo demás (Gate::before()).
-        // users.role_id (legacy) exige una fila real en roles — este
-        // archivo nunca la sembró porque nunca había creado un User.
+        $this->autenticarSuperAdmin();
+
+        $response = app(ReservaController::class)->show((string) $reserva->id);
+        $body = $response->getData(true);
+
+        $this->assertCount(1, $body['items_pendientes_sincronizar']);
+        $this->assertSame('Ítem pendiente', $body['items_pendientes_sincronizar'][0]['nombre']);
+    }
+
+    // Fase 1b (§3.3) — show() exige un usuario autenticado
+    // (CotizacionPolicy/ReservaPolicy) — Super-Admin bypasea el scope de
+    // fila igual que bypasea todo lo demás (Gate::before()).
+    // users.role_id (legacy) exige una fila real en roles.
+    private function autenticarSuperAdmin(): void
+    {
         if (! DB::table('roles')->where('id', 1)->exists()) {
             DB::table('roles')->insert([
                 'id' => 1, 'name' => 'test-role-default', 'guard_name' => 'api',
@@ -193,12 +203,67 @@ class ReservaSincronizarItemsTest extends TestCase
         $admin = User::factory()->create();
         $admin->assignRole($role);
         $this->verTodasLasReservas($admin);
+    }
 
-        $response = app(ReservaController::class)->show((string) $reserva->id);
-        $body = $response->getData(true);
+    private function agregarItemDespuesDeAceptar(Reserva $reserva, string $nombre, array $extra = []): AlternativaItem
+    {
+        return AlternativaItem::create(array_merge([
+            'alternativa_id' => $reserva->alternativa_id,
+            'origen_tipo' => 'manual',
+            'descripcion_manual' => $nombre,
+            'modo_precio' => 'tarifa_fija',
+            'cantidad' => 1,
+            'moneda_costo' => 'PEN',
+            'costo_snapshot' => 5,
+            'precio_venta_snapshot' => 8,
+            'precio_convertido' => 8,
+        ], $extra));
+    }
 
-        $this->assertCount(1, $body['items_pendientes_sincronizar']);
-        $this->assertSame('Ítem pendiente', $body['items_pendientes_sincronizar'][0]['nombre']);
+    // T-084: la reserva RDKM-1126-0000004 (agencia-demo) avisaba "1 servicio
+    // nuevo" por la opción NO elegida de un grupo de hoteles, y el botón
+    // respondía "No hay ítems pendientes". El aviso usa ahora el mismo
+    // criterio que el botón.
+    public function test_detalle_no_avisa_la_opcion_no_elegida_de_un_grupo(): void
+    {
+        $reserva = $this->crearReservaActivaConUnItem();
+        $this->agregarItemDespuesDeAceptar($reserva, 'Hotel descartado', [
+            'grupo_opcion_id' => (string) Str::uuid(),
+            'opcion_elegida' => false,
+        ]);
+
+        $this->autenticarSuperAdmin();
+        $body = app(ReservaController::class)->show((string) $reserva->id)->getData(true);
+
+        $this->assertSame([], $body['items_pendientes_sincronizar']);
+        $this->assertSame(422, app(ReservaController::class)->sincronizarItems((string) $reserva->id)->getStatusCode());
+    }
+
+    public function test_detalle_no_avisa_un_servicio_solo_para_pasajeros_quitados(): void
+    {
+        $reserva = $this->crearReservaActivaConUnItem();
+        $this->agregarItemDespuesDeAceptar($reserva, 'Solo para un pasajero que ya no está', [
+            'pax_incluidos' => [999999],
+        ]);
+
+        $this->autenticarSuperAdmin();
+        $body = app(ReservaController::class)->show((string) $reserva->id)->getData(true);
+
+        $this->assertSame([], $body['items_pendientes_sincronizar']);
+    }
+
+    public function test_detalle_sigue_avisando_la_opcion_elegida_de_un_grupo(): void
+    {
+        $reserva = $this->crearReservaActivaConUnItem();
+        $this->agregarItemDespuesDeAceptar($reserva, 'Hotel elegido', [
+            'grupo_opcion_id' => (string) Str::uuid(),
+            'opcion_elegida' => true,
+        ]);
+
+        $this->autenticarSuperAdmin();
+        $body = app(ReservaController::class)->show((string) $reserva->id)->getData(true);
+
+        $this->assertSame(['Hotel elegido'], array_column($body['items_pendientes_sincronizar'], 'nombre'));
     }
 
     // Regresión Fase 1 (§3.2 del brief): un ítem sincronizado DESPUÉS de
