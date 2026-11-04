@@ -118,7 +118,8 @@ class ReporteOperativoDatosSheet implements FromArray, WithStyles, WithTitle
             $fila['vuelo_agencia_vuelta']['aerolinea'] ?? '',
             $fila['vuelo_agencia_vuelta']['fecha'] ?? '',
             $fila['vuelo_agencia_vuelta']['hora'] ?? '',
-            $fila['checkin_realizado'] ? 'Sí' : 'No',
+            // T-055: noche/salida de hotel no tiene check-in.
+            ($fila['es_noche_hotel'] ?? false) ? '—' : ($fila['checkin_realizado'] ? 'Sí' : 'No'),
         ];
     }
 

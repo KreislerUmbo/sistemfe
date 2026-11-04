@@ -6,11 +6,11 @@
                     <i class="fas fa-clipboard-list me-2 text-primary"></i>
                     Reporte Operativo
                     <span v-if="totalSinGuia > 0" class="badge bg-warning text-dark ms-2">{{ totalSinGuia }} sin asignar</span>
-                    <span v-if="filas.length > 0" class="badge ms-2" :class="checkinsCompletados === filas.length ? 'bg-success' : 'bg-info-subtle text-info-emphasis border border-info-subtle'">
-                        <i class="fas fa-check me-1"></i>{{ checkinsCompletados }}/{{ filas.length }} check-in
+                    <span v-if="filasReales.length > 0" class="badge ms-2" :class="checkinsCompletados === filasReales.length ? 'bg-success' : 'bg-info-subtle text-info-emphasis border border-info-subtle'">
+                        <i class="fas fa-check me-1"></i>{{ checkinsCompletados }}/{{ filasReales.length }} check-in
                     </span>
                 </h5>
-                <small class="text-muted">{{ filas.length }} registro(s) en el rango seleccionado</small>
+                <small class="text-muted">{{ filasReales.length }} registro(s) en el rango seleccionado</small>
             </div>
             <div class="d-flex gap-2">
                 <button type="button" class="btn btn-outline-secondary btn-sm" :disabled="exportingPdf" @click="exportarPdf">
@@ -202,7 +202,7 @@
                                         <span v-else class="text-muted">—</span>
                                     </td>
                                     <td class="text-center pe-3">
-                                        <input type="checkbox" class="form-check-input" :checked="fila.checkin_realizado"
+                                        <input v-if="!fila.es_noche_hotel" type="checkbox" class="form-check-input" :checked="fila.checkin_realizado"
                                             @change="toggleCheckin(fila, valorCheckbox($event))">
                                     </td>
                                 </tr>
@@ -296,7 +296,9 @@ const irAEstaSemana = () => {
 // Resumen de progreso del check-in del rango cargado — el dato que más le importa a
 // un coordinador el día del tour ("¿cuánta gente falta confirmar?"), antes solo
 // visible fila por fila.
-const checkinsCompletados = computed(() => filas.value.filter((f) => f.checkin_realizado).length);
+// T-055: las filas de noche/salida de hotel no son servicios: no cuentan ni tienen check-in.
+const filasReales = computed(() => filas.value.filter((f) => !f.es_noche_hotel));
+const checkinsCompletados = computed(() => filasReales.value.filter((f) => f.checkin_realizado).length);
 
 // Un solo reporte con selector de rango (plan-modulo-cotizaciones-reservas.md §8) —
 // no dos pantallas separadas para uso diario vs. planificación.
