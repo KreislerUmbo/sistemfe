@@ -9,6 +9,7 @@ use App\Models\AgenciaViajes\ReservaVenta;
 use App\Models\AgenciaViajes\SalidaOperativa;
 use App\Services\AgenciaViajes\ReservaItemQuitarService;
 use App\Services\AgenciaViajes\SalidaEngancheService;
+use App\Services\AgenciaViajes\SalidaOperacionService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -67,6 +68,15 @@ class ReservaItemController extends Controller
             $validado['fecha_origen'] = ReservaItem::FECHA_ORIGEN_MANUAL;
         }
 
+        // T-040: cambiar la fecha de un servicio enganchado mueve pasajeros
+        // de una salida a otra, como reprogramar la reserva.
+        $operacion = app(SalidaOperacionService::class);
+        $fotosAntes = [];
+        if ($cambiaFecha) {
+            $fotosAntes = $operacion->fotosDeReserva($reserva->id, [$item->id])
+                + $operacion->fotosDondeCaeria([[$item->alternativaItem?->tour_origen_id, $validado['fecha']]]);
+        }
+
         if (! $cambiaFecha) {
             $item->update($validado);
         } else {
@@ -95,6 +105,7 @@ class ReservaItemController extends Controller
             'reserva_item' => $item->fresh(['alternativaItem', 'guia', 'proveedorTarifa']),
             // T-042: con la fecha nueva pudo caer en una salida cancelada.
             'avisos_salida_cancelada' => $cambiaFecha ? SalidaOperativa::avisosCanceladas($reserva->id) : [],
+            'avisos_salidas' => $cambiaFecha ? $operacion->avisosSalidas($fotosAntes, $operacion->salidasDeReserva($reserva->id, [$item->id])) : [],
         ]);
     }
 
@@ -146,6 +157,10 @@ class ReservaItemController extends Controller
             ], 422);
         }
 
+        // T-040 (H29): la salida del servicio quitado pierde sus pasajeros.
+        $operacion = app(SalidaOperacionService::class);
+        $fotosAntes = $operacion->fotosDeReserva($reserva->id, [$item->id]);
+
         try {
             DB::transaction(function () use ($item, $reserva) {
                 // Re-chequeo bajo lock: mismo criterio que
@@ -176,6 +191,10 @@ class ReservaItemController extends Controller
             return response()->json(['code' => $e->getStatusCode(), 'message' => $e->getMessage()], $e->getStatusCode());
         }
 
-        return response()->json(['code' => 200, 'message' => 'Ítem quitado de la reserva correctamente.']);
+        return response()->json([
+            'code' => 200,
+            'message' => 'Ítem quitado de la reserva correctamente.',
+            'avisos_salidas' => $operacion->avisosSalidas($fotosAntes),
+        ]);
     }
 }

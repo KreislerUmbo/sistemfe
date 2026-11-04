@@ -2,6 +2,7 @@
 // Rutas de ReservaModificacionController / ReservaModificacionPenalidadController (permiso
 // reservas.modificar). Los tipos de la diferencia son los de DiferenciaModificacion::toArray().
 import httpClient from '@/helpers/http-client'
+import type { AvisoSalida } from '@/helpers/avisosProveedores'
 
 export type EstadoLineaDiferencia =
   | 'igual' | 'agregado' | 'quitado' | 'cambio_precio' | 'para_revisar' | 'requiere_nota_credito' | 'ajuste'
@@ -100,7 +101,7 @@ export const reservaModificacionService = {
   },
   async aplicar(reservaId: number, huella: string) {
     const r = await httpClient.post(`/reservas/${reservaId}/modificacion/aplicar`, { huella })
-    return r.data as { code: number; message: string; alerta_cupo_excedido: boolean }
+    return r.data as { code: number; message: string; alerta_cupo_excedido: boolean; avisos_salidas: AvisoSalida[] }
   },
   async crearPenalidad(reservaId: number, reservaPasajeroId: number, payload: PenalidadPayload) {
     const r = await httpClient.post(`/reservas/${reservaId}/modificacion/penalidades`, { reserva_pasajero_id: reservaPasajeroId, ...payload })

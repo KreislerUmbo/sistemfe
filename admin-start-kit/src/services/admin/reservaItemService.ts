@@ -1,6 +1,7 @@
 // src/services/admin/reservaItemService.ts — Sesión 11c (reserva y pasajeros)
 import httpClient from '@/helpers/http-client'
 import type { ReservaItem, ReservaItemPasajero, ReservaItemVueloPasajero } from '@/types/agencia-viajes'
+import type { AvisoSalida } from '@/helpers/avisosProveedores'
 
 export type ActualizarVueloPayload = {
   vuelo_numero_ida?: string | null
@@ -15,7 +16,7 @@ export type ActualizarVueloPayload = {
 export const reservaItemService = {
   async actualizar(id: number, data: { guia_id?: number | null; proveedor_tarifa_id?: number | null; fecha?: string | null; hora?: string | null }) {
     const response = await httpClient.put(`/reserva-items/${id}`, data)
-    return response.data as { code: number; message: string; reserva_item: ReservaItem; avisos_salida_cancelada?: string[] }
+    return response.data as { code: number; message: string; reserva_item: ReservaItem; avisos_salida_cancelada?: string[]; avisos_salidas?: AvisoSalida[] }
   },
 
   // ── Asignación pasajero↔ítem (reserva_item_pasajero) ──────────────────
@@ -37,7 +38,7 @@ export const reservaItemService = {
   // botón que lo llamara).
   async eliminar(id: number) {
     const response = await httpClient.delete(`/reserva-items/${id}`)
-    return response.data as { code: number; message: string }
+    return response.data as { code: number; message: string; avisos_salidas?: AvisoSalida[] }
   },
 
   // Vuelo vendido por la AGENCIA (corrección 2026-08-27 — tabla propia

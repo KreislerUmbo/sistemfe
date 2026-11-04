@@ -10,6 +10,7 @@ use App\Models\AgenciaViajes\ReservaModificacion;
 use App\Services\AgenciaViajes\ModificacionDiferenciaService;
 use App\Services\AgenciaViajes\ModificacionPdfService;
 use App\Services\AgenciaViajes\ModificacionReservaService;
+use App\Services\AgenciaViajes\SalidaOperacionService;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
@@ -21,6 +22,7 @@ class ReservaModificacionController extends Controller
     public function __construct(
         private ModificacionReservaService $servicio,
         private ModificacionDiferenciaService $diferencia,
+        private SalidaOperacionService $operacion,
     ) {
     }
 
@@ -139,6 +141,16 @@ class ReservaModificacionController extends Controller
             return response()->json(['code' => 404, 'message' => 'Esta reserva no tiene una modificación abierta.'], 404);
         }
 
+        // T-040: agrega y quita pasajeros y servicios. Foto de las salidas de la
+        // reserva y de las que ya existen donde caerían los servicios de la
+        // versión nueva (un servicio nuevo puede sumarse a otra salida).
+        $desde = $reserva->fecha_viaje_desde;
+        $fotosAntes = $this->operacion->fotosDeReserva($reserva->id) + $this->operacion->fotosDondeCaeria(
+            AlternativaItem::where('alternativa_id', $modificacion->alternativa_nueva_id)
+                ->whereNotNull('tour_origen_id')->whereNotNull('dia_referencial')->get()
+                ->map(fn (AlternativaItem $i) => [$i->tour_origen_id, $desde?->copy()->addDays($i->dia_referencial - 1)])
+        );
+
         try {
             $resultado = $this->servicio->aplicar($modificacion, $request->validated()['huella'], auth('api')->user());
         } catch (HttpException $e) {
@@ -150,6 +162,7 @@ class ReservaModificacionController extends Controller
             'message' => 'Modificación aplicada a la reserva.',
             'modificacion' => $resultado['modificacion'],
             'alerta_cupo_excedido' => $resultado['alerta_cupo_excedido'],
+            'avisos_salidas' => $this->operacion->avisosSalidas($fotosAntes, $this->operacion->salidasDeReserva($reserva->id)),
         ]);
     }
 

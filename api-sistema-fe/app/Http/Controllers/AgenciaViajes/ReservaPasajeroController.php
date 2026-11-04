@@ -8,6 +8,7 @@ use App\Models\AgenciaViajes\PasajeroDocumento;
 use App\Models\AgenciaViajes\Reserva;
 use App\Models\AgenciaViajes\ReservaPasajero;
 use App\Models\AgenciaViajes\SalidaMayorista;
+use App\Services\AgenciaViajes\SalidaOperacionService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -47,6 +48,10 @@ class ReservaPasajeroController extends Controller
         }
 
         $validado = $validator->validated();
+
+        // T-040 (H29): las salidas de la reserva ganan un pasajero.
+        $operacion = app(SalidaOperacionService::class);
+        $fotosAntes = $operacion->fotosDeReserva($reserva->id);
 
         [$pasajero, $alertaCupoExcedido] = DB::transaction(function () use ($reserva, $validado) {
             $reservaLocked = Reserva::where('id', $reserva->id)->lockForUpdate()->firstOrFail();
@@ -88,6 +93,7 @@ class ReservaPasajeroController extends Controller
             'message' => 'Pasajero agregado correctamente',
             'reserva_pasajero' => $pasajero->fresh(),
             'alerta_cupo_excedido' => $alertaCupoExcedido,
+            'avisos_salidas' => $operacion->avisosSalidas($fotosAntes),
         ]);
     }
 

@@ -105,6 +105,7 @@ class SalidaOperativaController extends Controller
 
     public function cancelar(string $id)
     {
+        $operacion = app(SalidaOperacionService::class);
         $salida = SalidaOperativa::findOrFail($id);
 
         if ($salida->estado === SalidaOperativa::ESTADO_REALIZADA) {
@@ -113,12 +114,21 @@ class SalidaOperativaController extends Controller
 
         $salida->update(['estado' => SalidaOperativa::ESTADO_CANCELADA]);
 
+        // T-040 (H37): cada proveedor tiene que saber que la salida ya no va.
+        // La salida no se borra, así que es la foto de ahora, con el texto de
+        // avisos($antes, null).
+        $foto = $operacion->foto($salida->id);
+
         // A propósito: NO cancela ni toca ninguna reserva enganchada. Es
         // plata de un cliente, cada una se resuelve a mano — la salida
         // cancelada queda marcada en el tablero y en cada servicio enganchado
         // de la ficha de la reserva ("Salida cancelada", T-042). Se puede
         // reactivar con cambiarEstado() (cancelada → programada).
-        return response()->json(['code' => 200, 'message' => 'Salida marcada como cancelada. Las reservas enganchadas no se modificaron — revísalas una por una.']);
+        return response()->json([
+            'code' => 200,
+            'message' => 'Salida marcada como cancelada. Las reservas enganchadas no se modificaron — revísalas una por una.',
+            'avisos' => $operacion->avisosYaNoVa($foto),
+        ]);
     }
 
     // PUT salidas-operativas/{id}/estado — fila 13, fase 2a (D9). Avanza o

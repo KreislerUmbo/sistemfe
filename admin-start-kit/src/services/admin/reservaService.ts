@@ -1,6 +1,7 @@
 // src/services/admin/reservaService.ts — Sesión 11c (reserva y pasajeros)
 import httpClient from '@/helpers/http-client'
 import type { ReservaDetalleResponse, Reservas, MotivoCancelacion, Reserva, EstadoFacturacionReserva } from '@/types/agencia-viajes'
+import type { AvisoSalida } from '@/helpers/avisosProveedores'
 
 export const reservaService = {
   async listar(params: {
@@ -66,6 +67,8 @@ export const reservaService = {
       // Fila 13, fase 1b (§3.12): tours que con la fecha nueva caen en otra
       // temporada. El precio vendido no cambia; solo se avisa.
       avisos_temporada?: string[]
+      // T-040: qué cambió en cada salida operativa (vieja y nueva).
+      avisos_salidas?: AvisoSalida[]
     }
   },
   // Sesión 12h — reasignación en vivo de OpcionMayorista en ReservaItem

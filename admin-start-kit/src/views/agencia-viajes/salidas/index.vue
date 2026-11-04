@@ -268,6 +268,7 @@ import { salidaOperativaService } from '@/services/admin/salidaOperativaService'
 import GuiaBuscador from '@/components/AgenciaViajes/GuiaBuscador.vue';
 import { useToast } from '@/composables/useToast';
 import { formatFecha, hoyPeru, sumarDiasISO } from '@/helpers/fecha';
+import { avisarProveedores } from '@/helpers/avisosProveedores';
 import type { SalidaOperativa, Guia, EstadoSalidaOperativa } from '@/types/agencia-viajes';
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
@@ -445,6 +446,7 @@ const confirmarCancelar = async (s: SalidaOperativa) => {
         toast.success(res.message);
         if (detalle.value?.id === s.id) detalle.value = null;
         await list();
+        await avisarProveedores([{ salida_id: s.id, tour: s.tour_nombre ?? 'Salida', fecha: formatFecha(s.fecha), avisos: res.avisos ?? [] }]);
     } catch (error: any) {
         toast.error(error.response?.data?.message ?? 'No se pudo cancelar la salida');
     }

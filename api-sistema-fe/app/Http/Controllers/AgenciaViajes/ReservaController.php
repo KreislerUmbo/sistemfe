@@ -410,10 +410,7 @@ class ReservaController extends Controller
         // Fila 13, fase 2c (D15): foto de cada salida antes de cancelar, para
         // avisar qué ajustar con los proveedores.
         $operacion = app(SalidaOperacionService::class);
-        $fotosAntes = ReservaItem::where('reserva_id', $reserva->id)->whereNotNull('salida_operativa_id')
-            ->distinct()->pluck('salida_operativa_id')
-            ->mapWithKeys(fn ($salidaId) => [$salidaId => $operacion->foto((int) $salidaId)])
-            ->filter();
+        $fotosAntes = $operacion->fotosDeReserva($reserva->id);
 
         try {
             DB::transaction(function () use ($reserva, $motivo) {
@@ -480,18 +477,11 @@ class ReservaController extends Controller
             return response()->json(['code' => $e->getStatusCode(), 'message' => $e->getMessage()], $e->getStatusCode());
         }
 
-        $avisosSalidas = $fotosAntes->map(fn (array $antes, $salidaId) => [
-            'salida_id' => (int) $salidaId,
-            'tour' => $antes['tour'],
-            'fecha' => $antes['fecha'],
-            'avisos' => $operacion->avisos($antes, $operacion->foto((int) $salidaId)),
-        ])->filter(fn (array $s) => $s['avisos'] !== [])->values();
-
         return response()->json([
             'code' => 200,
             'message' => 'Reserva cancelada correctamente',
             'reserva' => $reserva->fresh(),
-            'avisos_salidas' => $avisosSalidas,
+            'avisos_salidas' => $operacion->avisosSalidas($fotosAntes),
         ]);
     }
 
@@ -796,6 +786,16 @@ class ReservaController extends Controller
 
         $validado = $validator->validated();
 
+        // T-040 (H29): foto de las salidas de hoy y de las que ya existen donde
+        // caerían los servicios con la fecha nueva, para avisar a los proveedores.
+        $operacion = app(SalidaOperacionService::class);
+        $desdeNuevo = \Carbon\Carbon::parse($validado['fecha_viaje_desde']);
+        $fotosAntes = $operacion->fotosDeReserva($reserva->id) + $operacion->fotosDondeCaeria(
+            ReservaItem::with('alternativaItem')->where('reserva_id', $reserva->id)->get()
+                ->filter(fn (ReservaItem $i) => $i->alternativaItem?->tour_origen_id && $i->alternativaItem->dia_referencial !== null)
+                ->map(fn (ReservaItem $i) => [$i->alternativaItem->tour_origen_id, $desdeNuevo->copy()->addDays($i->alternativaItem->dia_referencial - 1)])
+        );
+
         $itemsNoTocados = DB::transaction(function () use ($reserva, $validado) {
             // Cierra la ventana de carrera con una facturación concurrente
             // sobre los mismos ítems — mismo patrón que store()/
@@ -931,6 +931,7 @@ class ReservaController extends Controller
                 'message' => 'Reserva reprogramada correctamente',
                 'items_no_tocados' => $itemsNoTocados,
                 'avisos_temporada' => $avisosTemporada,
+                'avisos_salidas' => $operacion->avisosSalidas($fotosAntes, $operacion->salidasDeReserva($reserva->id)),
             ],
             $this->respuestaDetalle($reserva)
         ));
