@@ -45,7 +45,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 | T-083 | TRA | Inventario y limpieza de columnas y tablas sin uso en las bases tenant: por cada una, quién la usa (código, PDF, Excel, seeders) y cuántos datos tiene en producción; decidir borrar, migrar o dejar; borrar por módulo en tandas chicas con sus tests. Conocidas: `cronograma_pago_proveedor`/`pago_proveedor` (esperan a Compras), `sv_facturacion` (histórico), `state_sale` de cotizaciones. Sin archivo de tarea todavía: primero el inventario | por analizar | — | |
 | T-015 | PLA + AGE | Catálogo central de aerolíneas + panel central (Obs. 3) | por hacer | — | |
 | T-016 | AGE | Buscador de aerolíneas, corrección de nombres y aerolínea por defecto (Obs. 3) | por hacer | T-015 | |
-| T-018 | AGE | "Buscar pasajero" también en Clientes (Obs. 5) | por hacer | T-017 | |
+| T-018 | AGE | "Buscar pasajero" también en Clientes (Obs. 5) | en revisión | T-017 | |
 | T-019 | AGE | Comparar hoteles: empezar la comparación con 1 sola habitación (Obs. 6) | por hacer | — | |
 | T-020 | AGE | Fotos de hotel con tipo (fachada / habitación) en la galería del proveedor (Obs. 7) | por hacer | — | |
 | T-021 | AGE | PDF de cotización: fotos de todos los hoteles de la alternativa (Obs. 7) | por hacer | T-020 | |

@@ -111,9 +111,17 @@ cd admin-start-kit && npm run type-check && npm run build
 ---
 
 ## Resultado
-- **Commits:**
-- **Tests:**
-- **Desviaciones de la tarea y por qué:**
+- **Commits:** rama `feat/T-018-buscar-pasajero-clientes`, un commit (`git log` de la rama).
+- **Tests:** `T018BuscarPasajeroClientesTest` (8, uno por CA1-CA5 y CA7-CA9) en verde; CA10 con los
+  tests existentes. Suite completa: ver el mensaje de cierre. Frontend: `build` OK; `type-check` con
+  47 errores previos, ninguno en `detalle.vue`, `agencia-viajes.ts` ni `reservaPasajeroService.ts`.
+- **CA6 (prueba funcional en agencia-demo): pendiente.** El MCP de Playwright no conectó
+  (`CONNECTION_CLOSED`), así que la pantalla no se probó en el navegador.
+- **Desviaciones de la tarea y por qué:** ninguna. `update()` ahora corre dentro de `DB::transaction`
+  (lo pide la decisión 4). `PasajeroCatalogo.id` pasó a `number | null` en el tipo del frontend
+  (los clientes vienen con `id: null`).
 
 ## Hallazgos fuera de alcance
--
+- Elegir un cliente cuyo documento es CE/PAS: `sincronizarCatalogo()` solo crea documentos tipo `DNI`
+  (sin verificar si ya está en «Por analizar»); con `cliente_id` la ficha nace con el tipo correcto vía `desdeCliente()`,
+  pero si luego se vuelve a sincronizar no se corrige.

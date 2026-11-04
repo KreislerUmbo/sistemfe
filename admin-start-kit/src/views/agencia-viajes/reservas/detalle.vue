@@ -303,12 +303,18 @@
                                         <div v-if="(catalogoResultados[p.id]?.length ?? 0) > 0"
                                             class="list-group position-absolute w-100 shadow-sm" style="z-index:10;max-width:60%">
                                             <button type="button" class="list-group-item list-group-item-action py-2 text-start"
-                                                v-for="c in catalogoResultados[p.id]" :key="c.id" @click="autocompletarDesdeCatalogo(p, c)">
-                                                <div class="small fw-semibold">{{ c.nombre }}</div>
+                                                v-for="c in catalogoResultados[p.id]" :key="`${c.origen}-${c.id ?? c.cliente_id}`" @click="autocompletarDesdeCatalogo(p, c)">
+                                                <div class="small fw-semibold">
+                                                    {{ c.nombre }}
+                                                    <span class="badge ms-1"
+                                                        :class="c.origen === 'cliente' ? 'bg-info-subtle text-info' : 'bg-primary-subtle text-primary'">
+                                                        {{ c.origen === 'cliente' ? 'Cliente' : 'Pasajero' }}
+                                                    </span>
+                                                </div>
                                                 <div class="small text-muted">{{ c.documentos?.[0]?.numero_documento ?? 'sin documento' }}</div>
                                             </button>
                                         </div>
-                                        <small class="text-muted">Si escribís un DNI de 8 dígitos y no está en el sistema, se busca solo en RENIEC.</small>
+                                        <small class="text-muted">Si escribes un DNI de 8 dígitos y no está en el sistema, se busca solo en RENIEC.</small>
                                     </div>
                                 </div>
                                 <div class="row g-2">
@@ -1392,7 +1398,9 @@ const autocompletarDesdeCatalogo = (p: ReservaPasajero, c: PasajeroCatalogo) => 
     p.nombre = c.nombre;
     p.nacionalidad = c.nacionalidad ?? p.nacionalidad;
     p.documento = c.documentos?.[0]?.numero_documento ?? p.documento;
+    // Cliente sin ficha: id null; la ficha se resuelve al Guardar (T-018).
     p.pasajero_catalogo_id = c.id;
+    p.cliente_id = c.origen === 'cliente' ? c.cliente_id ?? null : null;
     catalogoResultados.value[p.id] = [];
     catalogoSearch.value[p.id] = '';
     toast.success(`Datos de ${c.nombre} autocompletados desde su perfil`);
@@ -1435,8 +1443,10 @@ const guardarPax = async (p: ReservaPasajero) => {
             alimentacion_especial: p.alimentacion_especial, discapacidad: p.discapacidad,
             vuelo_propio: p.vuelo_propio,
             pasajero_catalogo_id: p.pasajero_catalogo_id,
+            cliente_id: p.cliente_id ?? null,
         });
         Object.assign(p, res.reserva_pasajero);
+        p.cliente_id = null;
         toast.success(esPasajeroCompleto(p) ? `${p.nombre} guardado — datos completos` : 'Guardado, pero faltan datos obligatorios');
     } catch (error: any) {
         toast.error(error.response?.data?.message ?? 'No se pudo guardar el pasajero');

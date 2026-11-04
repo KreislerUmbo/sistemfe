@@ -8,6 +8,8 @@ use App\Models\AgenciaViajes\PasajeroDocumento;
 use App\Models\AgenciaViajes\Reserva;
 use App\Models\AgenciaViajes\ReservaPasajero;
 use App\Models\AgenciaViajes\SalidaMayorista;
+use App\Models\Client\Client;
+use App\Services\AgenciaViajes\PasajeroCatalogoService;
 use App\Services\AgenciaViajes\SalidaOperacionService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -117,22 +119,44 @@ class ReservaPasajeroController extends Controller
             'discapacidad' => 'nullable|string',
             'vuelo_propio' => 'nullable|string|max:500',
             'pasajero_catalogo_id' => 'nullable|integer|exists:pasajeros_catalogo,id',
+            // T-018: cliente elegido en el buscador (no es columna de reserva_pasajeros)
+            'cliente_id' => 'nullable|integer|exists:clients,id',
         ]);
 
         if ($validator->fails()) {
             return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
         }
 
-        $pasajero->update($validator->validated());
+        $datos = $validator->validated();
+        $clienteId = $datos['cliente_id'] ?? null;
+        unset($datos['cliente_id']);
 
-        // El buscador de catálogo (buscarCatalogo(), abajo) filtra sobre
-        // pasajeros_catalogo — sin este sync esa tabla queda vacía para
-        // siempre y "buscar por nombre" nunca encuentra nada (bug real
-        // detectado 2026-08-17: la búsqueda no era el problema, la tabla
-        // simplemente nunca se llenaba).
-        if ($pasajero->nombre && $pasajero->documento) {
-            $this->sincronizarCatalogo($pasajero);
-        }
+        // desdeCliente() bloquea la fila del cliente: va en transacción con el resto.
+        DB::transaction(function () use ($pasajero, $datos, $clienteId) {
+            $pasajero->update($datos);
+
+            // T-018: si se eligió un cliente y el documento que se guarda es el suyo,
+            // se resuelve su ficha (reusada o creada vinculada) ANTES de sincronizar.
+            // Si el vendedor escribió a otra persona después de elegir, se ignora.
+            if ($clienteId && $pasajero->documento) {
+                $cliente = Client::find($clienteId);
+                if ($cliente && trim((string) $cliente->n_document) === trim((string) $pasajero->documento)) {
+                    $ficha = app(PasajeroCatalogoService::class)->desdeCliente($cliente);
+                    if ($ficha) {
+                        $pasajero->update(['pasajero_catalogo_id' => $ficha->id]);
+                    }
+                }
+            }
+
+            // El buscador de catálogo (buscarCatalogo(), abajo) filtra sobre
+            // pasajeros_catalogo — sin este sync esa tabla queda vacía para
+            // siempre y "buscar por nombre" nunca encuentra nada (bug real
+            // detectado 2026-08-17: la búsqueda no era el problema, la tabla
+            // simplemente nunca se llenaba).
+            if ($pasajero->nombre && $pasajero->documento) {
+                $this->sincronizarCatalogo($pasajero);
+            }
+        });
 
         return response()->json([
             'code' => 200,
@@ -213,16 +237,65 @@ class ReservaPasajeroController extends Controller
             return response()->json(['pasajeros_catalogo' => []]);
         }
 
+        $limite = 15;
+
         $pasajeros = PasajeroCatalogo::with('documentos')
             ->where(function ($q) use ($search) {
                 $q->where('nombre', 'ilike', "%{$search}%")
                     ->orWhereHas('documentos', fn ($qq) => $qq->where('numero_documento', 'ilike', "%{$search}%"));
             })
             ->orderBy('nombre')
-            ->limit(15)
-            ->get();
+            ->limit($limite)
+            ->get()
+            ->map(function (PasajeroCatalogo $p) {
+                $fila = $p->toArray();
+                $fila['origen'] = 'pasajero';
 
-        return response()->json(['pasajeros_catalogo' => $pasajeros]);
+                return $fila;
+            });
+
+        // T-018: también clientes persona sin ficha. Mismo criterio que
+        // PasajeroCatalogoService::datosDePasajero() (DNI/CE/PAS, documento real,
+        // con nombre). Un cliente ya representado por una ficha (por cliente_id o
+        // por su mismo documento) no sale: esa persona sale una vez, como pasajero.
+        $clientes = collect();
+        $faltan = $limite - $pasajeros->count();
+        if ($faltan > 0) {
+            $clientes = Client::query()
+                ->whereIn(DB::raw("upper(trim(coalesce(type_document, '')))"), ['DNI', 'CE', 'PAS'])
+                ->whereRaw("trim(coalesce(n_document, '')) not in ('', '00000000')")
+                ->whereRaw("(trim(coalesce(full_name, '')) <> '' or trim(coalesce(name, '') || ' ' || coalesce(surname, '')) <> '')")
+                ->where(function ($q) use ($search) {
+                    $q->where('full_name', 'ilike', "%{$search}%")
+                        ->orWhere('name', 'ilike', "%{$search}%")
+                        ->orWhere('surname', 'ilike', "%{$search}%")
+                        ->orWhere('n_document', 'ilike', "%{$search}%");
+                })
+                ->whereNotExists(fn ($q) => $q->select(DB::raw(1))->from('pasajeros_catalogo')
+                    ->whereColumn('pasajeros_catalogo.cliente_id', 'clients.id'))
+                ->whereNotExists(fn ($q) => $q->select(DB::raw(1))->from('pasajero_documentos')
+                    ->whereRaw('pasajero_documentos.numero_documento = trim(clients.n_document)'))
+                ->orderByRaw("coalesce(nullif(trim(full_name), ''), trim(coalesce(name, '') || ' ' || coalesce(surname, '')))")
+                ->limit($faltan)
+                ->get()
+                ->map(function (Client $c) {
+                    $datos = app(PasajeroCatalogoService::class)->datosDePasajero($c);
+
+                    return [
+                        'id' => null,
+                        'cliente_id' => $c->id,
+                        'origen' => 'cliente',
+                        'nombre' => $datos['nombre'],
+                        'nacionalidad' => null,
+                        'documentos' => [[
+                            'tipo_documento' => $datos['tipo_documento'],
+                            'numero_documento' => $datos['documento'],
+                        ]],
+                    ];
+                });
+        }
+
+        return response()->json(['pasajeros_catalogo' => $pasajeros->concat($clientes)->values()]);
     }
 
     // DELETE reserva-pasajeros/{id} — bloqueado desde F4 etapa 1 (23-oct-2026,
