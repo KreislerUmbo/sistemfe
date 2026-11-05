@@ -165,9 +165,62 @@ cd admin-start-kit && npm run type-check
 ---
 
 ## Resultado
-- **Commits:**
-- **Tests:** (nuevos / suite completa)
+- **Commits** (rama `feat/T-085-venta-directa-lineas`):
+  1. `8a56aa5` refactor: `CriterioTributarioService` extraído de `ReservaFacturacionController`.
+  2. `a7543fc` feat: `lineas[]`, moneda única, hotel por noches, `fecha_viaje_hasta`, vista previa con afectación.
+  3. `bfd507d` feat: pantalla nueva (`venta-directa.vue`, `ventaDirectaService.ts`).
+- **Tests:**
+  - Nuevos: `VentaDirectaLineasTest` (15: CA1–CA7 y límites) y `CriterioTributarioServiceTest` (6, unitario).
+  - `tests/Feature/AgenciaViajes` + `tests/Unit`: 1302 pasan, sin tocar ningún test existente
+    (CA5, CA8 y CA10 de backend). Suite completa: ver el resultado final en la conversación.
+  - Frontend: `type-check` sin errores en los archivos tocados (quedan 47 previos en otros archivos:
+    portal, `fake-backend`, rutas). Prueba funcional en agencia-demo con Playwright (ver abajo).
 - **Desviaciones de la tarea y por qué:**
+  - **Payload viejo de `vistaPrevia()`:** sin `lineas` conserva su respuesta de T-045
+    (`por_persona` / `tarifa_fija` en la raíz) en `vistaPreviaTarifaSuelta()`, para no tocar los
+    tests de T-045. La pantalla nueva ya no la usa: queda código sin consumidor (ver hallazgos).
+  - **Moneda inválida en la vista previa:** responde 422 con el motivo (mismo mensaje que `store()`),
+    no 200 con `motivo`; la pantalla ya la detecta antes de llamar.
+  - **CA1 «un solo comprobante»:** el test no emite un comprobante real (esa ruta ya tiene su
+    suite): comprueba una sola reserva, las fechas por línea y el total. Que dos líneas sin mezcla
+    tributaria no bloquean la facturación lo cubre `CriterioTributarioServiceTest` y el caso
+    «solo gravado es facturable» de la vista previa.
+  - **`AlternativaItemController::resolverTratamientoTributario()`** pasó de `private` a
+    `public static` para que la vista previa use la misma resolución (con el default de la agencia)
+    que la creación; sin cambio de comportamiento.
+  - **`requiere_confirmar_amazonia`** vale `true` si hay alguna línea Amazonía, aunque `ok` sea falso.
+  - La vista previa trata toda línea Amazonía como confirmada (la confirmación es de T-048); por eso
+    «Amazonía + gravado» da el mensaje de mezcla, igual que daría facturar esa reserva.
+  - Sin migraciones.
+  - **Filtro de destino propio del catálogo (agregado en la revisión, 05-nov):** el «Destino» de
+    arriba filtraba el catálogo y a la vez era el destino de la reserva; buscar un hotel en otro
+    lugar obligaba a cambiar el destino de la venta. Ahora el catálogo tiene su propio filtro, que
+    toma el destino de la venta al elegirlo y al abrir el catálogo, y se puede dejar en «Todos».
+    Solo pantalla. Varios destinos por venta (`alternativa_destinos`) quedan fuera: ver hallazgos.
+- **CA9 — prueba funcional hecha con Playwright en agencia-demo** (sin crear ventas, para no
+  ensuciar el demo): el catálogo carga sin escribir; con el destino «Alto Mayo» baja de ~20 a 4
+  tarifas; «Está en dólares» sale deshabilitado; la línea nueva aparece resaltada y el catálogo se
+  cierra; hotel de 2 noches desde el día 2 → «Sale el dom 08/11» y rango «del jue 05/11 al dom 08/11»;
+  cambiar la moneda a dólares muestra el mensaje de «No se mezclan monedas» y deshabilita «Crear».
 
 ## Hallazgos fuera de alcance
-- 
+- **Permiso del catálogo:** `GET proveedor-tarifas` pide `cotizaciones.ver|ver_todas` y la venta
+  directa `reservas.crear` (`routes/api.php` ~L985 y ~L1329). Un vendedor con solo el segundo ve el
+  catálogo vacío; la pantalla muestra un aviso en el 403 («Usa Concepto libre o pídelo al
+  administrador»). No se comprobó con un usuario real en agencia-demo: queda por probar a mano.
+- **Voseo en un mensaje de la facturación:** `CriterioTributarioService::MENSAJE_AMAZONIA_SIN_CONFIRMAR`
+  (y `MENSAJE_FACTURACION_NO_HABILITADA` en el controller) dicen «Confirmá», «Contactá»; se dejaron
+  igual porque la tarea pide no cambiar el comportamiento de la facturación.
+- **Código sin consumidor:** `VentaDirectaController::vistaPreviaTarifaSuelta()` (payload de T-045) y
+  el camino de payload viejo de `store()` solo los usan los tests; retirarlos cuando se decida que
+  ningún cliente externo manda ese formato.
+- **Parpadeo breve de «…» al elegir el modo de cobro:** el modo entra en la firma de la vista previa,
+  así que al marcar «por persona / por unidad» los totales se recalculan (300 ms). Se podría evitar
+  calculando el total de la línea en el front con las dos opciones ya recibidas.
+- **Nombre del hotel en la reserva:** el catálogo ahora titula los hoteles por el proveedor porque
+  su servicio siempre es «Tipo de Habitación»; vale revisar si otras pantallas tienen el mismo problema.
+- **Venta directa no crea `alternativa_destinos`** (hallado en la revisión): crea la alternativa con
+  `Alternativa::create()` sin pasar por `AlternativaCreacionService`, así que la reserva queda solo
+  con el texto de `cotizaciones.destino`. Si se quieren varios destinos por venta, deducirlos de las
+  líneas (cada tarifa ya tiene su destino) y crear una fila por destino, no un campo JSON.
+

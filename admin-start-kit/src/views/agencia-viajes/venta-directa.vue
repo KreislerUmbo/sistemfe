@@ -211,11 +211,20 @@
                             </div>
 
                             <div v-if="pestana === 'proveedor'">
-                                <input type="text" class="form-control form-control-sm mb-2" v-model="busqueda" @input="onBusqueda"
-                                    placeholder="Buscar por proveedor o servicio (opcional)">
+                                <div class="row g-2 mb-2">
+                                    <div class="col-12 col-md-6">
+                                        <!-- Filtro propio del catálogo: cambiarlo no toca el destino de la reserva. -->
+                                        <DestinoTreeSelect v-model="filtroDestinoId" @update:label="filtroDestinoTexto = $event"
+                                            placeholder="Todos los destinos" />
+                                    </div>
+                                    <div class="col-12 col-md-6">
+                                        <input type="text" class="form-control form-control-sm" v-model="busqueda" @input="onBusqueda"
+                                            placeholder="Buscar por proveedor o servicio (opcional)">
+                                    </div>
+                                </div>
                                 <div class="small text-muted mb-2">
-                                    <template v-if="destinoId">Tarifas de «{{ destinoTexto }}» y sus lugares.</template>
-                                    <template v-else>Elige un destino arriba para ver solo sus tarifas.</template>
+                                    <template v-if="filtroDestinoId">Tarifas de «{{ filtroDestinoTexto }}» y sus lugares.</template>
+                                    <template v-else>Tarifas de todos los destinos.</template>
                                 </div>
                                 <div v-if="cargandoCatalogo" class="small text-muted"><span class="spinner-border spinner-border-sm me-1"></span>Cargando…</div>
                                 <div v-else-if="errorCatalogo" class="alert alert-warning py-2 px-3 small mb-0">{{ errorCatalogo }}</div>
@@ -427,13 +436,16 @@ const quitarLinea = (i: number) => { lineas.value.splice(i, 1); if (lineas.value
 const catalogoAbierto = ref<boolean>(true); // sin líneas, viene abierto
 const pestana = ref<'proveedor' | 'libre'>('proveedor');
 const busqueda = ref('');
+// Filtro del catálogo, separado del destino de la reserva: buscar en otro lugar no cambia la venta.
+const filtroDestinoId = ref<number | null>(null);
+const filtroDestinoTexto = ref<string>('');
 const catalogo = ref<ProveedorTarifa[]>([]);
 const cargandoCatalogo = ref(false);
 const errorCatalogo = ref('');
 let catalogoTimeout: any = null;
 let catalogoSeq = 0;
 
-// Muestra resultados sin escribir; filtra por el destino elegido (el backend incluye sus descendientes).
+// Muestra resultados sin escribir; filtra por el destino del catálogo (el backend incluye sus descendientes).
 const cargarCatalogo = async () => {
     const seq = ++catalogoSeq;
     cargandoCatalogo.value = true;
@@ -441,7 +453,7 @@ const cargarCatalogo = async () => {
     try {
         const res = await proveedorService.biblioteca({
             search: busqueda.value.trim() || undefined,
-            destino_atractivo_id: destinoId.value ?? undefined,
+            destino_atractivo_id: filtroDestinoId.value ?? undefined,
         });
         if (seq === catalogoSeq) catalogo.value = res.proveedor_tarifas;
     } catch (error: any) {
@@ -455,8 +467,20 @@ const cargarCatalogo = async () => {
     }
 };
 const onBusqueda = () => { clearTimeout(catalogoTimeout); catalogoTimeout = setTimeout(cargarCatalogo, 250); };
-const abrirCatalogo = () => { catalogoAbierto.value = true; pestana.value = 'proveedor'; cargarCatalogo(); };
-watch(destinoId, () => { if (catalogoAbierto.value) cargarCatalogo(); });
+// El filtro arranca en el destino de la venta: al elegirlo arriba y cada vez que se abre el catálogo.
+const ponerFiltroEnDestinoDeLaVenta = () => {
+    filtroDestinoId.value = destinoId.value;
+    filtroDestinoTexto.value = destinoTexto.value;
+};
+const abrirCatalogo = () => {
+    catalogoAbierto.value = true;
+    pestana.value = 'proveedor';
+    const cambio = filtroDestinoId.value !== destinoId.value;
+    ponerFiltroEnDestinoDeLaVenta();
+    if (!cambio) cargarCatalogo(); // si cambió, el watch del filtro ya recarga
+};
+watch(destinoId, ponerFiltroEnDestinoDeLaVenta);
+watch(filtroDestinoId, () => { if (catalogoAbierto.value) cargarCatalogo(); });
 onMounted(cargarCatalogo);
 
 const precioCatalogo = (t: ProveedorTarifa) =>
