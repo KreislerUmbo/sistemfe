@@ -66,6 +66,12 @@ Además:
   como hoy; definirlo por servicio es la obs. 10.
 - La estructura de varias líneas se construye **primero** (T-085) y absorbe T-049; T-046, T-047 y
   T-048 llenan su parte dentro de ella.
+- **Maqueta aprobada (05-nov):** «Venta directa — rediseño B»,
+  https://claude.ai/artifact/YCcxXjFw7KM9gA32Jajf8C. Es la referencia visual de toda la pantalla:
+  cada tarea de Venta directa la sigue bloque por bloque, con el estilo del sistema (cards,
+  inputs `-sm`) en vez de sus colores. Lo que se aparte de ella se anota como desviación en la
+  tarea. (Agregado el 05-nov: T-085 y la primera versión de T-046 se construyeron leyendo solo el
+  texto de las tareas y no la siguieron; lo corrigen T-046 y T-086.)
 
 ## Consecuencias
 - Si el contador no acepta la confirmación en el resumen, T-048 vuelve a la opción 2(b) sin tocar

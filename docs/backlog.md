@@ -8,7 +8,7 @@
 
 Cada línea: ID · qué · estado · depende de · rama o commit. El detalle está en
 `docs/tareas/T-…md` (se borra al cerrar; para una tarea hecha, el commit es la referencia).
-Próximo ID libre: **T-086**.
+Próximo ID libre: **T-087**.
 
 ## Orden de construcción (27-oct-2026)
 
@@ -29,7 +29,7 @@ Próximo ID libre: **T-086**.
 | 5 | ~~T-063 → T-078 → T-033 → T-050 → T-051 → T-052 → T-059 → T-061 → T-053~~ hechas 03-nov (recorridos 20 a 25) | Menú nuevo y CRM base (T-033 antes: "Nueva consulta" crea la cotización con su alternativa) |
 | 5b | ~~T-081~~ hecha 03-nov (recorrido 27) | Va antes de la ola 6 (03-nov): cada tenant nace con el dueño como Super-Admin, que es la cuenta de soporte; afecta a todos los giros y a cada alta nueva |
 | 6 | ~~T-041~~ hecha 03-nov (recorrido 26) → ~~T-040 → T-082~~ hechas 03-nov (recorrido 28) → ~~T-055~~ hecha 03-nov (recorrido 29) → ~~T-057~~ hecha 03-nov (recorrido 30) → ~~T-058~~ hecha 04-nov (recorrido 31) → ~~T-077~~ hecha 04-nov (recorrido 32) → ~~T-044~~ hecha 04-nov (recorrido 33) → ~~T-017~~ hecha 04-nov (recorrido 34) → ~~T-018~~ hecha 04-nov (recorrido 35) | Operación diaria de Agencia |
-| 7 | ~~T-045~~ hecha 04-nov (recorrido 37) → ~~T-085~~ hecha 05-nov (recorrido 38) → T-046 → T-047 → T-048 | Venta directa, rediseño del 05-nov (D-AGE-034): primero la estructura de varias líneas (T-085, absorbe T-049), después pasajeros, tours y cobro. T-048 espera que el contador vea la confirmación de la Amazonía |
+| 7 | ~~T-045~~ hecha 04-nov (recorrido 37) → ~~T-085~~ hecha 05-nov (recorrido 38) → T-046 → T-086 → T-047 → T-048 | Venta directa, rediseño del 05-nov (D-AGE-034): primero la estructura de varias líneas (T-085, absorbe T-049), después pasajeros, tours y cobro. T-086 (05-nov) pone el bloque Servicios como la maqueta aprobada antes de que T-047 le sume «Tours». T-048 espera que el contador vea la confirmación de la Amazonía |
 | 8 | T-032 → T-034 → T-019 → T-035 → T-036 → T-031 → T-022 → T-020 → T-021 → T-023 → T-037 → T-015 → T-016 → T-080 | Cotizador más rápido y claro, PDF de cotización, aerolíneas |
 | 9 | T-060 → T-062 → T-065 | Completar CRM y clientes |
 | — | T-029 | Bloqueada: espera al contador (obs. 10) |
@@ -58,8 +58,9 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 | T-036 | AGE | Mayorista: etiquetas, primera opción elegida sola, "solo adultos" a la vista (R6, H22) | por hacer | — | |
 | T-037 | AGE | PDF: nombre de archivo con código y cliente; rótulo correcto de la tabla de hoteles (R8, H20) | por hacer | — | |
 | T-080 | AGE | Cotizador: la alternativa reservada se distingue a simple vista (indicador en la esquina, como el contador de NC de Ventas) y se abre por defecto al entrar | por hacer | — | |
-| T-046 | AGE | Venta directa: pasajeros rápidos con residencia y el cliente como primer pasajero (H43) | por hacer | T-085, T-017 | |
-| T-047 | AGE | Venta directa: vender un tour del catálogo, enganchado a la salida de su día (H41) | por hacer | T-085, T-046 | |
+| T-046 | AGE | Venta directa: pasajeros rápidos con residencia y el cliente como primer pasajero (H43) | en revisión | T-085, T-017 | `feat/T-046-venta-directa-pasajeros` |
+| T-086 | AGE | Venta directa: el bloque Servicios (catálogo en tarjetas, concepto libre en el catálogo, tarjeta de línea, noches y cantidad con contador, cobro pendiente) y la moneda como la maqueta aprobada (D-AGE-034) | por hacer | T-085, T-046 | |
+| T-047 | AGE | Venta directa: vender un tour del catálogo, enganchado a la salida de su día (H41) | por hacer | T-085, T-046, T-086 | |
 | T-048 | AGE + CAJ | Venta directa: "Crear y cobrar" con boleta o factura y la Amazonía confirmada en el resumen (H45) | por hacer | T-047, T-011 | |
 | T-060 | CLI + AGE | CRM C5: la ficha del cliente con preferencias del viajero y línea de tiempo | por hacer | T-050, T-051 | |
 | T-062 | AGE | CRM C6b: reportes de conversión, origen, vendedor y motivos | por hacer | T-052, T-059 | |
