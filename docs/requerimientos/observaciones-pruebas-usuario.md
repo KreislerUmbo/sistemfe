@@ -823,6 +823,13 @@ aceptada + reserva y lleva a la ficha de la reserva; facturar y cobrar es otro p
 **Tareas (aprobadas 27-oct-2026):** T-045 (H42, H44), T-046 (H43), T-047 (H41), T-048 (H45),
 T-049 (H46, H47). Estado en `docs/backlog.md`.
 
+**Rediseño (05-nov-2026):** al diseñar la pantalla final con las cuatro tareas juntas se
+decidieron el alcance (responde la pregunta 3: servicios sueltos de varios días sí, paquetes no),
+el hotel por noches, la confirmación de la Amazonía en el resumen y que no se emite nota de venta
+(el punto 5 de la propuesta pedía boleta / factura / nota de venta). Detalle y motivos en
+`docs/modulos/agencia/decisiones/D-AGE-034-venta-directa-alcance-y-cobro.md`. T-049 se absorbió en
+T-085, que se construye primero.
+
 ### 13. Seguimiento de cotizaciones: el envío como un proceso visible (27-oct-2026)
 
 **Pedido del usuario:** el seguimiento de las cotizaciones; convertir el envío en un proceso

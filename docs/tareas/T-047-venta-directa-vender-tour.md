@@ -1,11 +1,11 @@
-# T-047 — Venta directa: vender un tour del catálogo, enganchado a la salida del día (H41)
+# T-047 — Venta directa: vender un tour del catálogo, enganchado a la salida de su día (H41)
 
 | | |
 |---|---|
 | **Módulo** | AGE |
-| **Depende de** | T-045, T-046 |
+| **Depende de** | T-085 (líneas y fecha por línea), T-046 (residencia) |
 | **Reglas** | D6-D18 (`plan-tours-venta-simple-costo-real.md` §6) |
-| **Decisiones** | `docs/requerimientos/observaciones-pruebas-usuario.md` → obs. 12, H41 (aprobada 27-oct-2026) |
+| **Decisiones** | `docs/requerimientos/observaciones-pruebas-usuario.md` → obs. 12, H41 (aprobada 27-oct-2026); D-AGE-034 |
 | **Rama** | `feat/T-047-venta-directa-tour` |
 
 ## Contexto
@@ -14,23 +14,28 @@ vendido en el día a día, obliga a pasar por el cotizador. Y como un servicio s
 la venta directa nunca entra en la salida operativa: no cuenta en el almuerzo ni en el vehículo.
 
 ## Alcance
-- Tercera opción en Venta directa: **Tour**, con buscador de tours del catálogo.
-- Backend: `origen_tipo='tour'` + `paquete_plantilla_id`. Agrega el tour a la alternativa con el
+- Pestaña **Tours** (la primera) en el catálogo de la pantalla de T-085: tarjetas de los tours del
+  destino elegido, sin escribir, con buscador y «Desde S/ X p/p». Un tour es una línea más
+  (etiqueta Tour), con su selector de fecha y su detalle («2 adultos nac. × 45 + 1 adulto ext. ×
+  60 + …»).
+- Backend: línea con `origen_tipo='tour'` + `paquete_plantilla_id` dentro de `lineas[]`. Agrega el tour a la alternativa con el
   **mismo camino que el cotizador** (`AlternativaItemController::desdePlantilla()`), respetando
   `modo_tours`: en `nuevo`, una línea con precio por persona, residencia y temporada de la fecha
   (`TourLineaService`); en `clasico`, como hoy en el cotizador. Nada reimplementado.
-- El destino de la cotización se toma del tour (se llena solo y se puede cambiar).
-- Al crear la reserva, los ítems del tour se enganchan a la salida del día como al aceptar una
-  cotización (`crearReservaDesdeAlternativa()`: confirmarlo con test). Si T-042 ya está hecha, la
-  respuesta trae su aviso de salida cancelada.
-- Total en vivo (T-045) con el precio del tour: vista previa con `TourLineaService::specDelTour()`
-  + `calcular()`, sin guardar.
-- Combo (varios días): 422 "Los combos se venden desde el cotizador" (pregunta 3 de la obs. 12,
-  sin decidir).
+- Si todavía no hay destino, se toma del primer tour (se llena solo y se puede cambiar).
+- La temporada sale de la **fecha de la línea** (inicio + día − 1), no de la fecha de inicio.
+- Al crear la reserva, los ítems del tour se enganchan a la salida **de su fecha** como al aceptar
+  una cotización (`crearReservaDesdeAlternativa()` → `SalidaEngancheService`: confirmarlo con
+  test). La respuesta trae el aviso de salida cancelada de T-042.
+- Total en vivo (T-045) con el precio del tour: la vista previa de T-085 calcula la línea de tour
+  con `TourLineaService::specDelTour()` + `calcular()`, sin guardar, y devuelve su afectación (un
+  tour de IGV mezclado son varias líneas de la misma carga, que sí pueden ir en un comprobante).
+- Combos (`paquete_combo`): en el catálogo se ven con el botón «Solo desde el cotizador»
+  deshabilitado (D-AGE-034). Si igual llega uno por API: 422 «Los combos se venden desde el
+  cotizador».
 
 ## Fuera de alcance
-- Paquetes de varios días y combos (pregunta 3, sin decidir).
-- Varias líneas en la misma venta (T-049).
+- Paquetes y combos (D-AGE-034).
 - Precio a mano del tour: se usa el del catálogo.
 
 ## Archivos probables

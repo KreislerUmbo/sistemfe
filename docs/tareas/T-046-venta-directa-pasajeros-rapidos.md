@@ -3,9 +3,9 @@
 | | |
 |---|---|
 | **Módulo** | AGE |
-| **Depende de** | T-017 (reutiliza `PasajeroCatalogoService::desdeCliente()`; no escribir otra forma de convertir un cliente en pasajero) |
+| **Depende de** | T-085 (la pantalla nueva) y T-017 (reutiliza `PasajeroCatalogoService::desdeCliente()`; no escribir otra forma de convertir un cliente en pasajero) |
 | **Reglas** | — |
-| **Decisiones** | `docs/requerimientos/observaciones-pruebas-usuario.md` → obs. 12, H43 (aprobada 27-oct-2026) |
+| **Decisiones** | `docs/requerimientos/observaciones-pruebas-usuario.md` → obs. 12, H43 (aprobada 27-oct-2026); D-AGE-034 |
 | **Rama** | `feat/T-046-venta-directa-pasajeros` |
 
 ## Contexto
@@ -14,13 +14,19 @@ precio de tours y entradas (`TourLineaService::conteo()`), así que sin ella T-0
 bien. Además el cliente casi siempre viaja, y hoy no se propone.
 
 ## Alcance
-- Pasajeros por **cantidad**: adultos / niños / infantes, cada grupo con nacionales y extranjeros
-  (por defecto nacional). Las edades siguen saliendo de los umbrales de la agencia
-  (`umbralesEdad()`); si hace falta la edad exacta de un niño, se puede escribir.
-- **Nombres opcionales**: "Agregar nombres" despliega una fila por pasajero (nombre, documento).
-  Se guardan en `cotizacion_pasajeros` y pasan a `reserva_pasajeros` como hoy.
+Reemplaza el bloque **2 · Pasajeros** de la pantalla de T-085. El resto de la pantalla no cambia.
+- Pasajeros por **cantidad**, con contadores − / +: adultos / niños / infantes; adultos y niños con
+  nacionales y extranjeros por separado (por defecto nacional). Bajo cada grupo, su rango de edad
+  según los umbrales de la agencia («13 años o más», «3 a 12 años», «0 a 2 años»). Las edades
+  siguen saliendo de `umbralesEdad()`; si hace falta la edad exacta de un niño, se puede escribir.
+  Ojo: hoy `GET configuracion-agencia` pide `agencia.configuracion`; los rangos tienen que llegar
+  por otro camino (por ejemplo, en la respuesta de la vista previa), no abriendo ese permiso.
+- **Nombres opcionales**: «Agregar nombres (opcional)» despliega una fila por pasajero (tipo,
+  nombre, documento). Se guardan en `cotizacion_pasajeros` y pasan a `reserva_pasajeros` como hoy.
 - Si el cliente es persona natural, se propone como primer pasajero (nombre y documento llenos,
   editable, se puede quitar).
+- El resumen muestra «2 adultos · 1 niño (1 ext.)». La vista previa de T-085 recibe la residencia
+  y la devuelve en el desglose (lo usa T-047).
 - `VentaDirectaController::store()`: acepta `residencia`, `nombre`, `documento` por pasajero (todo
   opcional; residencia por defecto nacional). Compatible con el payload actual.
 

@@ -8,7 +8,7 @@
 
 Cada línea: ID · qué · estado · depende de · rama o commit. El detalle está en
 `docs/tareas/T-…md` (se borra al cerrar; para una tarea hecha, el commit es la referencia).
-Próximo ID libre: **T-085**.
+Próximo ID libre: **T-086**.
 
 ## Orden de construcción (27-oct-2026)
 
@@ -29,7 +29,7 @@ Próximo ID libre: **T-085**.
 | 5 | ~~T-063 → T-078 → T-033 → T-050 → T-051 → T-052 → T-059 → T-061 → T-053~~ hechas 03-nov (recorridos 20 a 25) | Menú nuevo y CRM base (T-033 antes: "Nueva consulta" crea la cotización con su alternativa) |
 | 5b | ~~T-081~~ hecha 03-nov (recorrido 27) | Va antes de la ola 6 (03-nov): cada tenant nace con el dueño como Super-Admin, que es la cuenta de soporte; afecta a todos los giros y a cada alta nueva |
 | 6 | ~~T-041~~ hecha 03-nov (recorrido 26) → ~~T-040 → T-082~~ hechas 03-nov (recorrido 28) → ~~T-055~~ hecha 03-nov (recorrido 29) → ~~T-057~~ hecha 03-nov (recorrido 30) → ~~T-058~~ hecha 04-nov (recorrido 31) → ~~T-077~~ hecha 04-nov (recorrido 32) → ~~T-044~~ hecha 04-nov (recorrido 33) → ~~T-017~~ hecha 04-nov (recorrido 34) → ~~T-018~~ hecha 04-nov (recorrido 35) | Operación diaria de Agencia |
-| 7 | ~~T-045~~ hecha 04-nov (recorrido 37) → T-046 → T-047 → T-048 → T-049 | Venta directa (T-046 necesita T-017; T-048, el cobro de la ola 3) |
+| 7 | ~~T-045~~ hecha 04-nov (recorrido 37) → T-085 → T-046 → T-047 → T-048 | Venta directa, rediseño del 05-nov (D-AGE-034): primero la estructura de varias líneas (T-085, absorbe T-049), después pasajeros, tours y cobro. T-048 espera que el contador vea la confirmación de la Amazonía |
 | 8 | T-032 → T-034 → T-019 → T-035 → T-036 → T-031 → T-022 → T-020 → T-021 → T-023 → T-037 → T-015 → T-016 → T-080 | Cotizador más rápido y claro, PDF de cotización, aerolíneas |
 | 9 | T-060 → T-062 → T-065 | Completar CRM y clientes |
 | — | T-029 | Bloqueada: espera al contador (obs. 10) |
@@ -58,10 +58,10 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 | T-036 | AGE | Mayorista: etiquetas, primera opción elegida sola, "solo adultos" a la vista (R6, H22) | por hacer | — | |
 | T-037 | AGE | PDF: nombre de archivo con código y cliente; rótulo correcto de la tabla de hoteles (R8, H20) | por hacer | — | |
 | T-080 | AGE | Cotizador: la alternativa reservada se distingue a simple vista (indicador en la esquina, como el contador de NC de Ventas) y se abre por defecto al entrar | por hacer | — | |
-| T-046 | AGE | Venta directa: pasajeros rápidos con residencia y el cliente como primer pasajero (H43) | por hacer | T-017 | |
-| T-047 | AGE | Venta directa: vender un tour del catálogo, enganchado a la salida del día (H41) | por hacer | T-045, T-046 | |
-| T-048 | AGE + CAJ | Venta directa: "Crear y cobrar" en un solo paso (H45) | por hacer | T-011 | |
-| T-049 | AGE | Venta directa: varias líneas en la misma venta y destino del árbol (H46, H47) | por hacer | T-047 | |
+| T-085 | AGE | Venta directa: pantalla nueva con varias líneas, fecha por línea, hotel por noches, destino del árbol y vista previa con afectación (H46, H47; absorbe T-049) | por hacer | T-045 | |
+| T-046 | AGE | Venta directa: pasajeros rápidos con residencia y el cliente como primer pasajero (H43) | por hacer | T-085, T-017 | |
+| T-047 | AGE | Venta directa: vender un tour del catálogo, enganchado a la salida de su día (H41) | por hacer | T-085, T-046 | |
+| T-048 | AGE + CAJ | Venta directa: "Crear y cobrar" con boleta o factura y la Amazonía confirmada en el resumen (H45) | por hacer | T-047, T-011 | |
 | T-060 | CLI + AGE | CRM C5: la ficha del cliente con preferencias del viajero y línea de tiempo | por hacer | T-050, T-051 | |
 | T-062 | AGE | CRM C6b: reportes de conversión, origen, vendedor y motivos | por hacer | T-052, T-059 | |
 | T-065 | CLI + VEN | Varias direcciones por cliente y elegir la dirección al emitir (H61) | por hacer | T-064 | |
@@ -129,7 +129,6 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 | AGE | **Obs. 11 — entrada separada al cotizador** ("tours y servicios" / "paquete de mayorista"): en espera, el usuario lo decide tras evaluar a los usuarios. Ya hecho: solo el renombre de las pestañas | `docs/requerimientos/observaciones-pruebas-usuario.md` §11, 26-oct-2026 |
 | AGE | **Revisión de reservas (26-oct)** H31-H34 (H29 → T-040, H30 → T-041): reasignar mayorista no mueve el cupo (H31), reserva cancelada sin camino de vuelta, ver T-030 (H32), pasajero agregado sin residencia (H33), 500 en carrera de facturación externa (H34). Falta la prueba en vivo | `docs/requerimientos/observaciones-pruebas-usuario.md`, "Revisión de reservas" |
 | AGE | **Revisión de salidas operativas (26-oct)** H39-H40 (H35 → T-042, H36 → T-043, H37 → T-040, H38 → T-044): servicio quitado vuelve solo cuando se engancha otra reserva (H39), desenganchar sin revisiones ni ReservaPolicy (H40) | `docs/requerimientos/observaciones-pruebas-usuario.md`, "Revisión de salidas operativas" |
-| AGE | **Obs. 12 — Venta directa** (H41-H47 → T-045 a T-049): solo queda la pregunta 3, ¿vender un paquete de varios días por venta directa? (sin decidir) | `docs/requerimientos/observaciones-pruebas-usuario.md` §12, 27-oct-2026 |
 | AGE | **Obs. 13 — Seguimiento de cotizaciones** (H48-H52): absorbida por el CRM (obs. 16); queda para después el enlace para el cliente ("abrió la cotización") | `docs/requerimientos/observaciones-pruebas-usuario.md` §13, 27-oct-2026 |
 | AGE | **Obs. 15 — Reporte operativo** (H53-H59 → T-054 a T-058): H56 sin tarea, por ahora todos ven todo en solo lectura; si una agencia pide restringir, por usuario (supervisores y administradores ven todo) | `docs/requerimientos/observaciones-pruebas-usuario.md` §15, 27-oct-2026 |
 | AGE + CLI | **Obs. 16 — CRM práctico** (→ T-050 a T-053, T-059 a T-062): solo Agencia por ahora; sin responsable fijo del cliente (rotación de personal) | `docs/requerimientos/observaciones-pruebas-usuario.md` §16, 27-oct-2026 |
@@ -168,7 +167,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 | PLA | `ManualRecursoController` sube con `Storage::putFile()` al disco por defecto, que queda en la carpeta del tenant donde se navega, aunque `ManualRecurso` es central | archivo `CLAUDE.md`, storage; verificado 29-oct-2026 |
 | PLA | `TaxConfigSeeder`/`DetractionCodeSeeder` (y otros catálogos: `ProveedorTipoSeeder`…) se corren a mano; falta decidir cuándo y cómo se disparan | archivo `CLAUDE.md`, multitenancy §4; verificado 29-oct-2026 |
 | AGE | Un ítem `tarifa_fija` compartido (habitación doble) entre pasajeros que van a comprobantes distintos no tiene reparto: queda sin poder facturarse por el flujo normal (`ReservaFacturacionController`, comentario ~72) | archivo `CLAUDE.md`, facturación de reservas; verificado 29-oct-2026 |
-| AGE | Venta directa: el concepto libre no lleva tratamiento tributario (`VentaDirectaController` no lo recibe); mayorista y pasaje aéreo suelto fuera de T-049 | archivo `CLAUDE.md`, Venta Directa; verificado 29-oct-2026 |
+| AGE | Venta directa: el concepto libre no recibe tratamiento tributario (toma el de la agencia por defecto; elegirlo por servicio espera la obs. 10); mayorista y pasaje aéreo suelto fuera de T-085 | archivo `CLAUDE.md`, Venta Directa; verificado 29-oct-2026; D-AGE-034 |
 | AGE | Alta de un destino nuevo desde `DestinoTreeSelect.vue` (plan sin aprobar; antes, auditar si el mismo problema está en otros catálogos) | archivo `CLAUDE.md`, UX1; verificado 29-oct-2026 |
 | AGE | Cotizador: "Alto Mayo" repetido en la cabecera y en el chip del destino; el panel de precio no se sincroniza con el ítem en edición. Sin plan; ver en pantalla | archivo `CLAUDE.md`, UX1 |
 | AGE | Reporte operativo: ayuda que explique para qué es el check-in (el resto de esa ronda UX → T-058) | archivo `CLAUDE.md`, fila 11d |
