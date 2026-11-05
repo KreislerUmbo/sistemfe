@@ -76,10 +76,10 @@
                             </div>
                             <div class="col-12 col-md-5">
                                 <label class="form-label mb-1 small fw-semibold text-secondary">Moneda de la venta</label>
-                                <select class="form-select form-select-sm" v-model="moneda">
-                                    <option value="PEN">Soles</option>
-                                    <option value="USD">Dólares</option>
-                                </select>
+                                <div class="d-flex gap-2" role="group" aria-label="Moneda de la venta">
+                                    <button type="button" class="btn btn-sm flex-fill" :class="moneda === 'PEN' ? 'btn-primary' : 'btn-outline-secondary'" :aria-pressed="moneda === 'PEN'" @click="moneda = 'PEN'">Soles (S/)</button>
+                                    <button type="button" class="btn btn-sm flex-fill" :class="moneda === 'USD' ? 'btn-primary' : 'btn-outline-secondary'" :aria-pressed="moneda === 'USD'" @click="moneda = 'USD'">Dólares (US$)</button>
+                                </div>
                                 <div class="form-text">Todos los servicios tienen que estar en esta moneda.</div>
                             </div>
                         </div>
@@ -150,117 +150,96 @@
                     </div>
                 </div>
 
-                <!-- 3 · Servicios -->
+                <!-- 3 · Servicios (maqueta aprobada «Venta directa — rediseño B», 05-nov) -->
                 <div class="card border-0 shadow-sm mb-3">
                     <div class="card-header bg-white border-bottom py-2">
                         <span class="fw-semibold text-dark"><span class="badge bg-primary me-2">3</span>Servicios</span>
                     </div>
                     <div class="card-body py-3">
-                        <div v-if="lineas.length === 0 && !catalogoAbierto" class="text-muted small fst-italic mb-2">Agrega al menos un servicio.</div>
+                        <div v-if="lineas.length === 0" class="small text-muted mb-2">Todavía no agregaste servicios. Elige el primero:</div>
 
-                        <div class="d-flex flex-column gap-3 mb-3">
+                        <div v-if="lineas.length > 0" class="d-flex flex-column gap-2 mb-3">
                             <div v-for="(l, i) in lineas" :key="l.uid" :ref="(el) => guardarRefLinea(l.uid, el)"
-                                class="border rounded p-3 linea-servicio" :class="{ 'linea-resaltada': resaltadoUid === l.uid }">
-                                <div class="d-flex align-items-start gap-2 flex-wrap">
-                                    <div class="flex-grow-1">
-                                        <span class="badge me-2" :class="etiquetaTipo(l).clase">{{ etiquetaTipo(l).texto }}</span>
-                                        <span class="fw-semibold">{{ nombreLinea(l) }}</span>
-                                        <div v-if="l.origen === 'proveedor'" class="small text-muted">
-                                            <template v-if="l.tarifa!.tipo_habitacion">Habitación {{ l.tarifa!.tipo_habitacion }}</template>
-                                            <template v-else>{{ proveedorDe(l) }}</template>
+                                class="border rounded p-3 linea-servicio"
+                                :class="{ 'linea-resaltada': resaltadoUid === l.uid, 'linea-pendiente': esPendiente(l) }">
+                                <div class="d-flex align-items-start gap-3">
+                                    <span class="badge flex-shrink-0 text-uppercase" :class="etiquetaTipo(l).clase">{{ etiquetaTipo(l).texto }}</span>
+                                    <div class="flex-grow-1" style="min-width:0">
+                                        <div class="fw-semibold">
+                                            {{ nombreLinea(l) }}
+                                            <span v-if="resaltadoUid === l.uid" class="small fw-bold text-success ms-2">✓ Agregado</span>
                                         </div>
+                                        <div class="small text-muted">{{ subLinea(l) }}</div>
+                                        <div class="d-flex align-items-center gap-2 flex-wrap mt-1">
+                                            <i class="fas fa-calendar-days text-muted small"></i>
+                                            <select class="form-select form-select-sm w-auto py-0" v-model.number="l.dia" :aria-label="`Fecha de ${nombreLinea(l)}`">
+                                                <option v-for="d in DIAS" :key="d" :value="d">{{ esHotel(l) ? 'Entra el ' : '' }}{{ etiquetaDia(d) }}</option>
+                                            </select>
+                                            <span v-if="afectacionDe(i)" class="badge" :class="afectacionDe(i)!.clase">{{ afectacionDe(i)!.texto }}</span>
+                                        </div>
+                                        <div v-if="detalleLinea(l, i)" class="small mt-1">{{ detalleLinea(l, i) }}</div>
                                     </div>
-                                    <div class="text-end">
-                                        <div class="fw-semibold">{{ textoTotalLinea(l, i) }}</div>
-                                        <span v-if="afectacionDe(i)" class="badge" :class="afectacionDe(i)!.clase">{{ afectacionDe(i)!.texto }}</span>
-                                    </div>
-                                    <button type="button" class="btn btn-sm btn-outline-danger" @click="quitarLinea(i)" title="Quitar este servicio">
-                                        <i class="fas fa-trash"></i>
+                                    <div class="fw-bold text-nowrap">{{ textoTotalLinea(l, i) }}</div>
+                                    <button type="button" class="btn btn-sm btn-link text-muted p-1" @click="quitarLinea(i)" :aria-label="`Quitar ${nombreLinea(l)}`" title="Quitar este servicio">
+                                        <i class="fas fa-trash-can"></i>
                                     </button>
                                 </div>
 
-                                <div class="row g-2 mt-1">
-                                    <div class="col-12 col-md-5">
-                                        <label class="form-label small text-secondary mb-1">Fecha del servicio</label>
-                                        <select class="form-select form-select-sm" v-model.number="l.dia">
-                                            <option v-for="d in DIAS" :key="d" :value="d">{{ etiquetaDia(d) }}</option>
-                                        </select>
+                                <!-- Hotel: noches con contador -->
+                                <div v-if="esHotel(l)" class="d-flex align-items-center flex-wrap gap-3 mt-2">
+                                    <div class="d-flex align-items-center gap-1">
+                                        <span class="small fw-semibold me-1">Noches</span>
+                                        <button type="button" class="btn btn-sm btn-outline-secondary" :disabled="l.cantidad <= 1" aria-label="Una noche menos" @click="cambiarCantidad(l, -1)"><i class="fas fa-minus"></i></button>
+                                        <span class="fw-semibold text-center" style="min-width:1.75rem">{{ l.cantidad }}</span>
+                                        <button type="button" class="btn btn-sm btn-outline-secondary" aria-label="Una noche más" @click="cambiarCantidad(l, 1)"><i class="fas fa-plus"></i></button>
                                     </div>
+                                    <span v-if="cantidadValida(l.cantidad)" class="small text-muted">Sale el {{ formatDiaCorto(sumarDiasISO(fechaInicio, l.dia - 1 + l.cantidad)) }}</span>
+                                </div>
 
-                                    <!-- Hotel: noches -->
-                                    <template v-if="esHotel(l)">
-                                        <div class="col-6 col-md-3">
-                                            <label class="form-label small text-secondary mb-1">Noches</label>
-                                            <input type="number" min="1" class="form-control form-control-sm" v-model.number="l.cantidad">
+                                <!-- Tarifa que no es hotel: por persona / por unidad -->
+                                <div v-else-if="l.origen === 'proveedor'" class="mt-2">
+                                    <div v-if="esPendiente(l)" class="small fw-semibold text-warning-emphasis mb-1">¿Cómo se cobra? Elige una opción.</div>
+                                    <div v-if="!lineaPrevia(i)" class="small text-muted">
+                                        <span v-if="motivoSinCalculo" class="text-warning-emphasis"><i class="fas fa-circle-info me-1"></i>{{ motivoSinCalculo }}</span>
+                                        <span v-else-if="!vistaPreviaError"><span class="spinner-border spinner-border-sm me-1"></span>Calculando…</span>
+                                    </div>
+                                    <div v-else class="row g-2">
+                                        <div class="col-12 col-md-6">
+                                            <button type="button" class="opcion-cobro border rounded p-2 w-100 h-100 text-start d-flex flex-column justify-content-start" :class="{ 'opcion-elegida': l.modoPrecio === 'por_persona' }" @click="l.modoPrecio = 'por_persona'">
+                                                <span class="d-block small fw-semibold">Por persona ({{ pax.length }} pasajero{{ pax.length === 1 ? '' : 's' }}): {{ totalesAlDia ? dinero(lineaPrevia(i)!.por_persona!.total) : '…' }}</span>
+                                                <span class="d-block small text-muted">{{ totalesAlDia ? textoDesglose(lineaPrevia(i)!) : 'Calculando…' }}</span>
+                                            </button>
                                         </div>
-                                        <div class="col-6 col-md-4 d-flex align-items-end">
-                                            <span class="small text-muted pb-1">
-                                                <template v-if="Number.isInteger(l.cantidad) && l.cantidad >= 1">Sale el {{ formatDiaCorto(sumarDiasISO(fechaInicio, l.dia - 1 + l.cantidad)) }}</template>
-                                            </span>
-                                        </div>
-                                    </template>
-
-                                    <!-- Tarifa que no es hotel: por persona / por unidad -->
-                                    <div v-else-if="l.origen === 'proveedor'" class="col-12">
-                                        <label class="form-label small text-secondary mb-1">¿Cómo se cobra? <span class="text-danger">*</span></label>
-                                        <div v-if="!lineaPrevia(i)" class="small text-muted">
-                                            <span v-if="motivoSinCalculo" class="text-warning-emphasis"><i class="fas fa-circle-info me-1"></i>{{ motivoSinCalculo }}</span>
-                                            <span v-else-if="!vistaPreviaError"><span class="spinner-border spinner-border-sm me-1"></span>Calculando…</span>
-                                        </div>
-                                        <div v-else class="row g-2">
-                                            <div class="col-12 col-md-6">
-                                                <label class="border rounded p-2 d-block h-100" :class="{ 'border-primary bg-primary-subtle': l.modoPrecio === 'por_persona' }" style="cursor:pointer">
-                                                    <input type="radio" class="form-check-input me-2" value="por_persona" v-model="l.modoPrecio">
-                                                    <span class="fw-semibold">Por persona ({{ pax.length }} pasajero{{ pax.length === 1 ? '' : 's' }}): {{ totalesAlDia ? dinero(lineaPrevia(i)!.por_persona!.total) : '…' }}</span>
-                                                    <div class="small text-muted mt-1">{{ totalesAlDia ? textoDesglose(lineaPrevia(i)!) : 'Calculando…' }}</div>
-                                                </label>
-                                            </div>
-                                            <div class="col-12 col-md-6">
-                                                <label class="border rounded p-2 d-block h-100" :class="{ 'border-primary bg-primary-subtle': l.modoPrecio === 'tarifa_fija' }" style="cursor:pointer">
-                                                    <input type="radio" class="form-check-input me-2" value="tarifa_fija" v-model="l.modoPrecio">
-                                                    <span class="fw-semibold">Por unidad (cantidad {{ l.cantidad }}): {{ totalesAlDia ? dinero(lineaPrevia(i)!.tarifa_fija!.total) : '…' }}</span>
-                                                    <div class="d-flex align-items-center gap-2 small text-muted mt-1">
-                                                        {{ dinero(lineaPrevia(i)!.tarifa_fija!.precio_unitario) }} ×
-                                                        <input type="number" min="1" class="form-control form-control-sm" style="max-width:80px" v-model.number="l.cantidad"
-                                                            @focus="l.modoPrecio = 'tarifa_fija'" aria-label="Cantidad">
-                                                    </div>
-                                                </label>
+                                        <div class="col-12 col-md-6">
+                                            <div class="opcion-cobro border rounded p-2 h-100" :class="{ 'opcion-elegida': l.modoPrecio === 'tarifa_fija' }">
+                                                <button type="button" class="btn p-0 border-0 text-start w-100" @click="l.modoPrecio = 'tarifa_fija'">
+                                                    <span class="d-block small fw-semibold">Por unidad (cantidad {{ l.cantidad }}): {{ totalesAlDia ? dinero(lineaPrevia(i)!.tarifa_fija!.total) : '…' }}</span>
+                                                    <span class="d-block small text-muted">{{ dinero(lineaPrevia(i)!.tarifa_fija!.precio_unitario) }} por unidad (vehículo, habitación…)</span>
+                                                </button>
+                                                <div class="d-flex align-items-center gap-1 mt-2">
+                                                    <span class="small text-muted me-1">Cantidad</span>
+                                                    <button type="button" class="btn btn-sm btn-outline-secondary" :disabled="l.cantidad <= 1" aria-label="Una unidad menos" @click="cambiarCantidad(l, -1); l.modoPrecio = 'tarifa_fija'"><i class="fas fa-minus"></i></button>
+                                                    <span class="fw-semibold text-center" style="min-width:1.75rem">{{ l.cantidad }}</span>
+                                                    <button type="button" class="btn btn-sm btn-outline-secondary" aria-label="Una unidad más" @click="cambiarCantidad(l, 1); l.modoPrecio = 'tarifa_fija'"><i class="fas fa-plus"></i></button>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
-
-                                    <!-- Concepto libre -->
-                                    <template v-else>
-                                        <div class="col-12">
-                                            <label class="form-label small text-secondary mb-1">Descripción</label>
-                                            <input type="text" class="form-control form-control-sm" v-model="l.descripcion" placeholder="Ej. Cena show">
-                                        </div>
-                                        <div class="col-6 col-md-4">
-                                            <label class="form-label small text-secondary mb-1">Precio unitario ({{ simbolo }})</label>
-                                            <input type="number" min="0" step="0.01" class="form-control form-control-sm" v-model.number="l.precio">
-                                        </div>
-                                        <div class="col-6 col-md-4">
-                                            <label class="form-label small text-secondary mb-1">Cantidad</label>
-                                            <input type="number" min="1" class="form-control form-control-sm" v-model.number="l.cantidad">
-                                        </div>
-                                        <div class="col-12 col-md-4">
-                                            <label class="form-label small text-secondary mb-1">Costo unitario ({{ simbolo }})</label>
-                                            <input type="number" min="0" step="0.01" class="form-control form-control-sm" v-model.number="l.costo">
-                                            <div class="form-text">0 si no tiene.</div>
-                                        </div>
-                                    </template>
                                 </div>
                             </div>
                         </div>
 
                         <!-- Catálogo, en el mismo lugar -->
                         <div v-if="catalogoAbierto" class="border rounded p-3 bg-light">
-                            <div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
-                                <div class="btn-group btn-group-sm">
-                                    <button type="button" class="btn" :class="pestana === 'proveedor' ? 'btn-primary' : 'btn-outline-primary'" @click="pestana = 'proveedor'">Tarifas de proveedor</button>
-                                    <button type="button" class="btn" :class="pestana === 'libre' ? 'btn-primary' : 'btn-outline-primary'" @click="pestana = 'libre'">Concepto libre</button>
+                            <div class="d-flex align-items-center justify-content-between gap-2 mb-3 flex-wrap">
+                                <span class="fw-semibold small">¿Qué servicio agregas?</span>
+                                <div class="d-flex align-items-center gap-2">
+                                    <div class="btn-group btn-group-sm" role="tablist" aria-label="Tipo de servicio">
+                                        <button type="button" role="tab" :aria-selected="pestana === 'proveedor'" class="btn" :class="pestana === 'proveedor' ? 'btn-primary' : 'btn-outline-primary'" @click="pestana = 'proveedor'">Tarifas de proveedor</button>
+                                        <button type="button" role="tab" :aria-selected="pestana === 'libre'" class="btn" :class="pestana === 'libre' ? 'btn-primary' : 'btn-outline-primary'" @click="pestana = 'libre'">Concepto libre</button>
+                                    </div>
+                                    <button v-if="lineas.length > 0" type="button" class="btn btn-sm btn-outline-secondary" @click="catalogoAbierto = false">Cancelar</button>
                                 </div>
-                                <button v-if="lineas.length > 0" type="button" class="btn btn-sm btn-outline-secondary ms-auto" @click="catalogoAbierto = false">Cancelar</button>
                             </div>
 
                             <div v-if="pestana === 'proveedor'">
@@ -272,7 +251,7 @@
                                     </div>
                                     <div class="col-12 col-md-6">
                                         <input type="text" class="form-control form-control-sm" v-model="busqueda" @input="onBusqueda"
-                                            placeholder="Buscar por proveedor o servicio (opcional)">
+                                            placeholder="Buscar por proveedor o servicio (opcional)" aria-label="Buscar en el catálogo">
                                     </div>
                                 </div>
                                 <div class="small text-muted mb-2">
@@ -282,36 +261,54 @@
                                 <div v-if="cargandoCatalogo" class="small text-muted"><span class="spinner-border spinner-border-sm me-1"></span>Cargando…</div>
                                 <div v-else-if="errorCatalogo" class="alert alert-warning py-2 px-3 small mb-0">{{ errorCatalogo }}</div>
                                 <div v-else-if="catalogo.length === 0" class="small text-muted fst-italic">No hay tarifas para este filtro.</div>
-                                <div v-else class="list-group" style="max-height:320px;overflow-y:auto">
-                                    <div v-for="t in catalogo" :key="t.id" class="list-group-item d-flex align-items-center gap-2">
-                                        <div class="flex-grow-1 small">
-                                            <div class="fw-semibold">
-                                                {{ nombreTarifa(t) }}
-                                                <span v-if="t.tipo_habitacion" class="badge bg-info-subtle text-info-emphasis ms-1">Hotel · {{ t.tipo_habitacion }}</span>
-                                            </div>
-                                            <div v-if="!t.tipo_habitacion" class="text-muted">
-                                                {{ t.proveedor_servicio?.proveedor?.razon_social }}<span v-if="t.proveedor_servicio?.proveedor?.es_referencial"> (Referencial)</span>
+                                <div v-else class="catalogo-grilla">
+                                    <div v-for="t in catalogo" :key="t.id" class="border rounded bg-white p-2 d-flex flex-column gap-2">
+                                        <div>
+                                            <div class="fw-semibold small">{{ nombreTarifa(t) }}</div>
+                                            <div class="small text-muted">
+                                                <template v-if="t.tipo_habitacion">Hotel · {{ t.tipo_habitacion }}</template>
+                                                <template v-else>{{ t.proveedor_servicio?.proveedor?.razon_social }}<span v-if="t.proveedor_servicio?.proveedor?.es_referencial"> (Referencial)</span></template>
                                             </div>
                                         </div>
-                                        <div class="text-end small fw-semibold text-nowrap">{{ precioCatalogo(t) }}</div>
-                                        <button type="button" class="btn btn-sm text-nowrap"
-                                            :class="t.moneda === moneda ? 'btn-outline-primary' : 'btn-outline-secondary'"
-                                            :disabled="t.moneda !== moneda" @click="agregarTarifa(t)">
-                                            <template v-if="t.moneda === moneda">Agregar</template>
-                                            <template v-else>Está en {{ NOMBRE_MONEDA[t.moneda] }}</template>
-                                        </button>
+                                        <div class="d-flex align-items-center justify-content-between gap-2 mt-auto">
+                                            <span class="small">{{ precioCatalogo(t) }}</span>
+                                            <button type="button" class="btn btn-sm text-nowrap"
+                                                :class="t.moneda === moneda ? 'btn-primary' : 'btn-outline-secondary'"
+                                                :disabled="t.moneda !== moneda" @click="agregarTarifa(t)">
+                                                <template v-if="t.moneda === moneda">Agregar</template>
+                                                <template v-else>Está en {{ NOMBRE_MONEDA[t.moneda] }}</template>
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
 
-                            <div v-else>
-                                <p class="small text-muted mb-2">Un servicio que no está en el catálogo: pones la descripción, el precio y el costo. Se cobra en {{ NOMBRE_MONEDA[moneda] }}.</p>
-                                <button type="button" class="btn btn-sm btn-primary" @click="agregarLibre"><i class="fas fa-plus me-1"></i>Agregar concepto libre</button>
+                            <!-- Concepto libre: formulario dentro del catálogo -->
+                            <div v-else class="row g-2 align-items-end">
+                                <div class="col-12 col-md-4">
+                                    <label class="form-label small text-secondary mb-1" for="vd-libre-desc">Descripción</label>
+                                    <input id="vd-libre-desc" type="text" class="form-control form-control-sm" v-model="libreDesc" placeholder="Ej. Traslado aeropuerto → hotel">
+                                </div>
+                                <div class="col-6 col-md-2">
+                                    <label class="form-label small text-secondary mb-1" for="vd-libre-precio">Precio unitario ({{ simbolo }})</label>
+                                    <input id="vd-libre-precio" type="number" min="0" step="0.01" class="form-control form-control-sm" v-model.number="librePrecio">
+                                </div>
+                                <div class="col-6 col-md-2">
+                                    <label class="form-label small text-secondary mb-1" for="vd-libre-cant">Cantidad</label>
+                                    <input id="vd-libre-cant" type="number" min="1" class="form-control form-control-sm" v-model.number="libreCant">
+                                </div>
+                                <div class="col-6 col-md-2">
+                                    <label class="form-label small text-secondary mb-1" for="vd-libre-costo">Costo unitario ({{ simbolo }})</label>
+                                    <input id="vd-libre-costo" type="number" min="0" step="0.01" class="form-control form-control-sm" v-model.number="libreCosto" placeholder="0 si no tiene">
+                                </div>
+                                <div class="col-6 col-md-2">
+                                    <button type="button" class="btn btn-sm btn-primary w-100" :disabled="!libreListo" @click="agregarLibre">Agregar</button>
+                                </div>
                             </div>
                         </div>
 
-                        <button v-else type="button" class="btn btn-sm btn-outline-primary" @click="abrirCatalogo">
-                            <i class="fas fa-plus me-1"></i>Agregar servicio
+                        <button v-else type="button" class="btn btn-agregar-servicio w-100 fw-semibold" @click="abrirCatalogo">
+                            + Agregar servicio
                         </button>
                     </div>
                 </div>
@@ -610,6 +607,9 @@ const etiquetaTipo = (l: Linea) => esHotel(l)
         ? { texto: 'Proveedor', clase: 'bg-primary-subtle text-primary-emphasis' }
         : { texto: 'Libre', clase: 'bg-secondary-subtle text-secondary-emphasis' };
 const etiquetaDia = (d: number) => `${formatDiaCorto(sumarDiasISO(fechaInicio.value, d - 1))}${d === 1 ? ' (inicio)' : ` · día ${d}`}`;
+// Segunda línea de la tarjeta: el proveedor (o «Hotel · tipo de habitación»).
+const subLinea = (l: Linea) => l.origen === 'manual' ? 'Concepto libre'
+    : l.tarifa?.tipo_habitacion ? `Hotel · ${l.tarifa.tipo_habitacion}` : proveedorDe(l);
 
 const dinero = (monto: number, m: MonedaVenta = moneda.value) =>
     `${m === 'USD' ? 'US$' : 'S/'} ${monto.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -636,7 +636,32 @@ const agregarLinea = (l: Linea) => {
     resaltar(l.uid);
 };
 const agregarTarifa = (t: ProveedorTarifa) => agregarLinea(nuevaLinea({ origen: 'proveedor', tarifa: t }));
-const agregarLibre = () => agregarLinea(nuevaLinea({ origen: 'manual' }));
+
+// Concepto libre: se llena en el formulario del catálogo y la línea nace completa.
+const libreDesc = ref<string>('');
+const librePrecio = ref<number | null>(null);
+const libreCant = ref<number>(1);
+const libreCosto = ref<number | null>(0);
+const libreListo = computed<boolean>(() =>
+    libreDesc.value.trim() !== '' && typeof librePrecio.value === 'number' && librePrecio.value > 0
+    && cantidadValida(libreCant.value) && typeof libreCosto.value === 'number' && libreCosto.value >= 0);
+const agregarLibre = () => {
+    if (!libreListo.value) return;
+    agregarLinea(nuevaLinea({
+        origen: 'manual', descripcion: libreDesc.value.trim(), precio: librePrecio.value, cantidad: libreCant.value, costo: libreCosto.value ?? 0,
+    }));
+    libreDesc.value = '';
+    librePrecio.value = null;
+    libreCant.value = 1;
+    libreCosto.value = 0;
+};
+
+// Contador − / + de noches (hotel) y de unidades: nunca baja de 1.
+const cambiarCantidad = (l: Linea, delta: number) => {
+    l.cantidad = Math.max(1, (cantidadValida(l.cantidad) ? l.cantidad : 1) + delta);
+};
+// Tarifa que no es hotel y todavía sin «por persona / por unidad»: queda marcada hasta elegir.
+const esPendiente = (l: Linea) => l.origen === 'proveedor' && !esHotel(l) && !l.modoPrecio;
 const quitarLinea = (i: number) => { lineas.value.splice(i, 1); if (lineas.value.length === 0) abrirCatalogo(); };
 
 // ── Catálogo (en el mismo lugar que las líneas) ────────────────────────
@@ -804,9 +829,23 @@ const textoTotalLinea = (l: Linea, i: number, resumen = false): string => {
         if (l.precio === null || !cantidadValida(l.cantidad)) return '—';
         return dinero(Math.round(l.precio * 100) / 100 * l.cantidad);
     }
+    if (esPendiente(l)) return resumen ? 'Por elegir' : '—';
     if (!totalesAlDia.value) return vistaPrevia.value || resumen ? '…' : '';
     const total = vistaPrevia.value!.lineas[i]?.total;
     return total === null || total === undefined ? 'Por elegir' : dinero(total);
+};
+
+// Una línea de detalle bajo la fecha: «2 noches × S/ 120.00 por noche», «2 × S/ 50.00», el desglose…
+const detalleLinea = (l: Linea, i: number): string => {
+    if (l.origen === 'manual') return l.precio !== null && cantidadValida(l.cantidad) ? `${l.cantidad} × ${dinero(l.precio)}` : '';
+    if (esHotel(l)) {
+        return cantidadValida(l.cantidad)
+            ? `${l.cantidad} noche${l.cantidad === 1 ? '' : 's'} × ${dinero(Number(l.tarifa!.precio_venta_adulto), l.tarifa!.moneda)} por noche`
+            : '';
+    }
+    const lp = lineaPrevia(i);
+    if (!lp || !totalesAlDia.value || !l.modoPrecio) return '';
+    return l.modoPrecio === 'tarifa_fija' ? `${l.cantidad} × ${dinero(lp.tarifa_fija!.precio_unitario)}` : textoDesglose(lp);
 };
 
 const ETIQUETA_AFECTACION = (lp: VistaPreviaLinea) => {
@@ -934,7 +973,39 @@ const crear = async () => {
 }
 
 .linea-resaltada {
+    border-color: var(--bs-success) !important;
+    background-color: var(--bs-success-bg-subtle);
+    box-shadow: 0 0 0 1px var(--bs-success);
+}
+
+/* Cobro pendiente: la tarjeta pide una decisión (maqueta). */
+.linea-pendiente {
+    border-color: var(--bs-warning) !important;
     background-color: var(--bs-warning-bg-subtle);
-    box-shadow: 0 0 0 2px var(--bs-warning-border-subtle);
+}
+
+.opcion-cobro {
+    background: var(--bs-body-bg);
+    cursor: pointer;
+}
+
+.opcion-elegida {
+    border-color: var(--bs-primary) !important;
+    background-color: var(--bs-primary-bg-subtle);
+    box-shadow: inset 0 0 0 1px var(--bs-primary);
+}
+
+.catalogo-grilla {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+    gap: 0.5rem;
+    max-height: 340px;
+    overflow-y: auto;
+}
+
+.btn-agregar-servicio {
+    border: 1px dashed var(--bs-primary);
+    color: var(--bs-primary);
+    background: var(--bs-primary-bg-subtle);
 }
 </style>
