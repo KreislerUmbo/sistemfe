@@ -23,6 +23,15 @@ export type LineaVentaDirecta =
       cantidad: number
     }
 
+export type ResidenciaPasajero = 'nacional' | 'extranjero'
+
+export type PasajeroVentaDirecta = {
+  edad: number
+  residencia?: ResidenciaPasajero
+  nombre?: string
+  documento?: string
+}
+
 export type VentaDirectaPayload = {
   cliente_id: number
   destino: string
@@ -31,7 +40,10 @@ export type VentaDirectaPayload = {
   fecha_servicio: string
   // Una sola moneda por venta, sin conversión (D-AGE-034).
   moneda: MonedaVenta
-  pax: Array<{ edad: number }>
+  // T-046: residencia (nacional por defecto); nombre y documento solo si el vendedor los escribió.
+  pax: PasajeroVentaDirecta[]
+  // El cliente (persona natural) va de primer adulto; false si el vendedor lo quitó.
+  cliente_viaja?: boolean
   lineas: LineaVentaDirecta[]
 }
 
@@ -51,7 +63,7 @@ export type VistaPreviaLinea = {
   total: number | null
   por_persona?: {
     total: number
-    desglose: Record<TipoPaxVistaPrevia, { cantidad: number; precio: number }>
+    desglose: Record<TipoPaxVistaPrevia, { cantidad: number; precio: number; extranjeros: number }>
   }
   tarifa_fija?: { total: number; precio_unitario: number; cantidad: number }
 }
@@ -59,6 +71,8 @@ export type VistaPreviaLinea = {
 export type VistaPreviaVentaDirecta = {
   code: number
   moneda: MonedaVenta
+  // Rangos de edad de la agencia (el vendedor no puede leer la configuración).
+  umbrales: { infante_max: number; nino_max: number }
   total: number | null
   fecha_viaje_hasta: string | null
   lineas: VistaPreviaLinea[]
@@ -72,7 +86,7 @@ export const ventaDirectaService = {
     return response.data as ReservaDetalleResponse & { code: number; message: string }
   },
 
-  async vistaPrevia(data: Pick<VentaDirectaPayload, 'pax' | 'moneda' | 'lineas'> & { fecha_servicio: string }) {
+  async vistaPrevia(data: Pick<VentaDirectaPayload, 'moneda' | 'lineas'> & { pax: Array<Pick<PasajeroVentaDirecta, 'edad' | 'residencia'>> } & { fecha_servicio: string }) {
     const response = await httpClient.post('/venta-directa/vista-previa', data)
     return response.data as VistaPreviaVentaDirecta
   }
