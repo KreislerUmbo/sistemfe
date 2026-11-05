@@ -9,7 +9,13 @@ use App\Models\AgenciaViajes\ConfiguracionCodigo;
 use App\Models\AgenciaViajes\Cotizacion;
 use App\Models\AgenciaViajes\CotizacionPasajero;
 use App\Models\AgenciaViajes\DestinoAtractivo;
+use App\Models\AgenciaViajes\GuiaTarifa;
+use App\Models\AgenciaViajes\PaquetePlantilla;
 use App\Models\AgenciaViajes\ProveedorTarifa;
+use App\Models\AgenciaViajes\SalidaOperativa;
+use App\Services\AgenciaViajes\ComboExplosionService;
+use App\Services\AgenciaViajes\TourLineaException;
+use App\Services\AgenciaViajes\TourLineaService;
 use App\Services\AgenciaViajes\CodigoGeneradorService;
 use App\Models\AgenciaViajes\ReservaPasajero;
 use App\Models\Client\Client;
@@ -36,7 +42,13 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
 // cobra por noches. Un payload viejo (campos de una sola línea en la raíz)
 // sigue funcionando como una línea con día 1 y la moneda de su tarifa.
 //
-// Solo soporta origen_tipo 'proveedor' y 'manual': 'mayorista' necesita una
+// T-047: también vende un tour del catálogo (`origen_tipo='tour'` +
+// `paquete_plantilla_id`). Entra a la alternativa por el MISMO camino que el
+// cotizador (AlternativaItemController::desdePlantilla(): respeta modo_tours) y
+// al crear la reserva se engancha a la salida de su fecha como al aceptar una
+// cotización. Un combo (paquete_combo) no se vende acá (D-AGE-034).
+//
+// Soporta origen_tipo 'proveedor', 'manual' y 'tour': 'mayorista' necesita una
 // opcion_mayorista elegida de antemano y 'pasaje_aereo' su propio submodelo
 // (cotizacion_pasaje_aereo) — ninguno de los dos cabe en un atajo de un
 // solo paso. Vender uno de esos sueltos sigue pasando por el flujo completo
@@ -50,7 +62,7 @@ class VentaDirectaController extends Controller
     private const NOMBRE_MONEDA = ['PEN' => 'soles', 'USD' => 'dólares'];
 
     private const CAMPOS_LINEA = [
-        'origen_tipo', 'proveedor_tarifa_id', 'modo_precio', 'cantidad',
+        'origen_tipo', 'paquete_plantilla_id', 'proveedor_tarifa_id', 'modo_precio', 'cantidad',
         'descripcion_manual', 'precio_venta_snapshot', 'costo_snapshot', 'moneda_costo',
     ];
 
@@ -85,7 +97,8 @@ class VentaDirectaController extends Controller
         [$edadMaxInfante, $edadMaxNino] = $this->umbralesEdad();
 
         try {
-            [$lineas, $moneda] = $this->resolverLineas($validado['lineas'], $validado['moneda'] ?? null, $legacy);
+            $inicio = Carbon::parse($validado['fecha_servicio'])->startOfDay();
+            [$lineas, $moneda] = $this->resolverLineas($validado['lineas'], $validado['moneda'] ?? null, $legacy, $inicio);
 
             foreach ($lineas as $linea) {
                 if ($linea['modo_precio'] === null) {
@@ -93,7 +106,6 @@ class VentaDirectaController extends Controller
                 }
             }
 
-            $inicio = Carbon::parse($validado['fecha_servicio'])->startOfDay();
             $hasta = $this->fechaViajeHasta($lineas, $inicio);
             $destino = ! empty($validado['destino_atractivo_id'])
                 ? DestinoAtractivo::findOrFail($validado['destino_atractivo_id'])->nombre
@@ -102,7 +114,7 @@ class VentaDirectaController extends Controller
             // T-046: el cliente viaja salvo que el vendedor lo haya quitado.
             $clienteViaja = (bool) ($validado['cliente_viaja'] ?? true);
 
-            [$reserva, $alertaCupoExcedido, $alternativa] = DB::transaction(function () use ($validado, $lineas, $moneda, $inicio, $hasta, $destino, $edadMaxInfante, $edadMaxNino, $clienteViaja) {
+            [$reserva, $alertaCupoExcedido, $alternativa, $avisos] = DB::transaction(function () use ($validado, $lineas, $moneda, $inicio, $hasta, $destino, $edadMaxInfante, $edadMaxNino, $clienteViaja) {
                 $codigo = app(CodigoGeneradorService::class)->generar('venta_directa');
                 $prefijo = ConfiguracionCodigo::where('tipo', 'venta_directa')->value('prefijo');
 
@@ -150,14 +162,19 @@ class VentaDirectaController extends Controller
                 // ReservaItemCreacionService (inicio + día − 1); sin él,
                 // reserva_items.fecha queda NULL y el servicio no aparece en
                 // el Reporte Operativo ni se engancha a una Salida Operativa.
+                $avisos = [];
                 foreach ($lineas as $linea) {
-                    $itemResponse = app(AlternativaItemController::class)
-                        ->store(Request::create('/', 'POST', $linea['payload']), (string) $alternativa->id);
+                    // T-047: un tour entra por desdePlantilla() (el camino del cotizador).
+                    $itemResponse = $linea['origen_tipo'] === 'tour'
+                        ? app(AlternativaItemController::class)->desdePlantilla(Request::create('/', 'POST', $linea['payload']), (string) $alternativa->id)
+                        : app(AlternativaItemController::class)->store(Request::create('/', 'POST', $linea['payload']), (string) $alternativa->id);
                     $itemPayload = $itemResponse->getData(true);
 
                     if (($itemPayload['code'] ?? null) !== 200) {
                         abort(422, $itemPayload['message'] ?? 'No se pudo crear el ítem de la venta directa.');
                     }
+
+                    $avisos = array_merge($avisos, $itemPayload['avisos'] ?? []);
                 }
 
                 $alternativa->update(['estado' => 'aceptada']);
@@ -178,7 +195,7 @@ class VentaDirectaController extends Controller
 
                 $this->guardarNombres($reserva, $cotizacionPasajeros, $validado['pax']);
 
-                return [$reserva, $alertaCupoExcedido, $alternativa->fresh()];
+                return [$reserva, $alertaCupoExcedido, $alternativa->fresh(), $avisos];
             });
         } catch (HttpException $e) {
             // El error real lo lanzó una validación de arriba o
@@ -203,6 +220,10 @@ class VentaDirectaController extends Controller
             'reserva' => $reserva,
             'alternativa' => $alternativa,
             'alerta_cupo_excedido' => $alertaCupoExcedido,
+            // T-042: la salida del tour puede estar cancelada; la pantalla lo avisa.
+            'avisos_salida_cancelada' => SalidaOperativa::avisosCanceladas($reserva->id),
+            // T-047: avisos del tour (p. ej. sin costo estimado).
+            'avisos' => $avisos,
         ]);
     }
 
@@ -282,8 +303,10 @@ class VentaDirectaController extends Controller
         $validado = $validator->validated();
         $motor = app(PriceEngineService::class);
 
+        $inicio = ! empty($validado['fecha_servicio']) ? Carbon::parse($validado['fecha_servicio'])->startOfDay() : null;
+
         try {
-            [$lineas, $moneda] = $this->resolverLineas($validado['lineas'], $validado['moneda'] ?? null, false);
+            [$lineas, $moneda] = $this->resolverLineas($validado['lineas'], $validado['moneda'] ?? null, false, $inicio);
         } catch (HttpException $e) {
             return response()->json(['code' => $e->getStatusCode(), 'message' => $e->getMessage()], $e->getStatusCode());
         }
@@ -299,7 +322,6 @@ class VentaDirectaController extends Controller
             }
         }
 
-        $inicio = ! empty($validado['fecha_servicio']) ? Carbon::parse($validado['fecha_servicio'])->startOfDay() : null;
         $salida = [];
         $total = 0.0;
         $totalCompleto = true;
@@ -319,7 +341,9 @@ class VentaDirectaController extends Controller
                 'total' => null,
             ];
 
-            if ($linea['origen_tipo'] === 'manual') {
+            if ($linea['origen_tipo'] === 'tour') {
+                $fila = $this->vistaPreviaTour($linea, $conteo, $extranjeros) + $fila;
+            } elseif ($linea['origen_tipo'] === 'manual') {
                 $fila['total'] = $motor->totalDeLinea((float) $linea['precio_venta'], $moneda, $moneda, 1, 'tarifa_fija', $linea['cantidad']);
             } else {
                 $tarifa = $linea['tarifa'];
@@ -368,12 +392,14 @@ class VentaDirectaController extends Controller
     // confirmado, y `requiere_confirmar_amazonia` avisa que hará falta.
     private function facturable(array $lineas): array
     {
-        $neutrales = collect($lineas)->map(fn (array $l, int $i) => [
-            'id' => $i,
-            'destino' => $l['tratamiento']['destino_tributario'],
-            'carga_tour' => null, // las cargas de tour llegan con T-047
-            'confirmado' => true,
-        ]);
+        // Un tour de IGV mezclado son varias líneas de la MISMA carga (T-047): sí pueden ir juntas.
+        $neutrales = collect($lineas)->flatMap(fn (array $l, int $i) => collect($l['tratamientos'] ?? [$l['tratamiento']])
+            ->map(fn (array $t, int $g) => [
+                'id' => "{$i}.{$g}",
+                'destino' => $t['destino_tributario'],
+                'carga_tour' => $l['origen_tipo'] === 'tour' ? "tour-{$i}" : null,
+                'confirmado' => true,
+            ]))->values();
 
         $bloqueo = app(CriterioTributarioService::class)->evaluar($neutrales);
 
@@ -471,7 +497,9 @@ class VentaDirectaController extends Controller
 
         return [
             'lineas' => 'required|array|min:1|max:'.self::MAX_LINEAS,
-            'lineas.*.origen_tipo' => 'required|in:proveedor,manual',
+            'lineas.*.origen_tipo' => 'required|in:proveedor,manual,tour',
+            // T-047: validado contra la base del tenant; que sea un tour activo se revisa al resolver.
+            'lineas.*.paquete_plantilla_id' => 'required_if:lineas.*.origen_tipo,tour|integer|exists:paquetes_plantilla,id',
             'lineas.*.dia' => 'required|integer|min:1|max:'.self::MAX_DIA,
             'lineas.*.proveedor_tarifa_id' => 'required_if:lineas.*.origen_tipo,proveedor|integer|exists:proveedor_tarifas,id',
             'lineas.*.modo_precio' => ($legacy ? 'required_if:lineas.*.origen_tipo,proveedor|' : 'nullable|').'in:por_persona,tarifa_fija',
@@ -490,12 +518,18 @@ class VentaDirectaController extends Controller
     // tratamiento tributario con que se creará cada ítem. Lanza HttpException
     // 422 con el motivo si alguna línea no se puede vender. Devuelve
     // [lineas, moneda de la venta].
-    private function resolverLineas(array $lineas, ?string $monedaVenta, bool $legacy): array
+    private function resolverLineas(array $lineas, ?string $monedaVenta, bool $legacy, ?Carbon $inicio = null): array
     {
         $motor = app(PriceEngineService::class);
         $resueltas = [];
 
         foreach ($lineas as $linea) {
+            if ($linea['origen_tipo'] === 'tour') {
+                $resueltas[] = $this->resolverTour($linea, $inicio);
+
+                continue;
+            }
+
             $esProveedor = $linea['origen_tipo'] === 'proveedor';
             $cantidad = (int) ($linea['cantidad'] ?? 1);
             $item = [
@@ -571,13 +605,135 @@ class VentaDirectaController extends Controller
             if ($r['origen_tipo'] === 'manual') {
                 $r['moneda'] = $legacy ? $r['moneda'] : $moneda;
                 $r['payload']['moneda_costo'] = $r['moneda'];
-            } elseif ($r['moneda'] !== $moneda) {
-                abort(422, 'La venta es en '.self::NOMBRE_MONEDA[$moneda]." y «{$r['nombre']}» está en ".self::NOMBRE_MONEDA[$r['moneda']].'. No se mezclan monedas.');
+            } else {
+                foreach ($r['monedas'] ?? [$r['moneda']] as $monedaLinea) {
+                    if ($monedaLinea !== $moneda) {
+                        abort(422, 'La venta es en '.self::NOMBRE_MONEDA[$moneda]." y «{$r['nombre']}» está en ".self::NOMBRE_MONEDA[$monedaLinea].'. No se mezclan monedas.');
+                    }
+                }
             }
         }
         unset($r);
 
         return [$resueltas, $moneda];
+    }
+
+    // T-047 — un tour del catálogo como línea. Valida que se pueda vender acá y
+    // deja lo necesario para la vista previa. Con modo_tours='nuevo' el precio sale
+    // de TourLineaService (precio por persona, residencia y temporada de la FECHA
+    // de la línea); con 'clasico', de desarmar el tour como en el cotizador.
+    private function resolverTour(array $linea, ?Carbon $inicio): array
+    {
+        $tour = PaquetePlantilla::findOrFail($linea['paquete_plantilla_id']);
+        $dia = (int) $linea['dia'];
+
+        if ($tour->esPaqueteCombo()) {
+            abort(422, 'Los combos se venden desde el cotizador.');
+        }
+        if (! $tour->activo) {
+            abort(422, "«{$tour->nombre}» está desactivado: no se puede vender.");
+        }
+        if ($tour->esSoloItinerario()) {
+            abort(422, "«{$tour->nombre}» es un tour solo de itinerario (de mayorista): no se puede vender.");
+        }
+
+        $base = [
+            'origen_tipo' => 'tour',
+            'dia' => $dia,
+            'tour' => $tour,
+            'nombre' => $tour->nombre,
+            'es_hotel' => false,
+            'modo_precio' => 'por_persona',
+            'cantidad' => 1,
+            'dias_extra' => max(1, (int) ($tour->paqueteItinerario()->max('dia_relativo') ?? 1)) - 1,
+            'payload' => ['paquete_plantilla_id' => $tour->id, 'dia_referencial' => $dia],
+        ];
+
+        if (ConfiguracionAgencia::modoToursNuevo()) {
+            try {
+                $spec = app(TourLineaService::class)->specDelTour($tour, $inicio?->copy()->addDays($dia - 1)->toDateString());
+            } catch (TourLineaException $e) {
+                abort(422, $e->getMessage());
+            }
+            $tratamientos = array_map(fn (array $g) => ['tip_afe_igv' => $g['tip_afe_igv'], 'destino_tributario' => $g['destino_tributario']], $spec['grupos']);
+
+            return $base + ['modo' => 'nuevo', 'spec' => $spec, 'moneda' => $spec['moneda'], 'tratamiento' => $tratamientos[0], 'tratamientos' => $tratamientos];
+        }
+
+        // Clásico: el tour se desarma en sus servicios, cada uno con su tarifa y su moneda.
+        $entradas = app(ComboExplosionService::class)->explotarTourSimple($tour);
+        $monedas = [];
+        $tratamientos = [];
+        foreach ($entradas as $entrada) {
+            if ($entrada['proveedor_tarifa_id']) {
+                $tarifa = ProveedorTarifa::findOrFail($entrada['proveedor_tarifa_id']);
+                $monedas[] = $tarifa->moneda;
+                $tratamientos[] = AlternativaItemController::resolverTratamientoTributario($tarifa->tip_afe_igv, $tarifa->destino_tributario);
+            } elseif ($entrada['guia_tarifa_id'] && ($guia = GuiaTarifa::find($entrada['guia_tarifa_id']))) {
+                $monedas[] = $guia->moneda;
+                $tratamientos[] = AlternativaItemController::resolverTratamientoTributario(null, null);
+            }
+        }
+        if ($tratamientos === []) {
+            abort(422, "«{$tour->nombre}» no tiene servicios cargados: complétalo en el catálogo.");
+        }
+
+        return $base + [
+            'modo' => 'clasico', 'entradas' => $entradas, 'moneda' => $monedas[0], 'monedas' => array_values(array_unique($monedas)),
+            'tratamiento' => $tratamientos[0], 'tratamientos' => $tratamientos,
+        ];
+    }
+
+    // T-047 — total, detalle y afectación de una línea de tour, sin guardar nada.
+    // $conteo / $extranjeros: pasajeros por tipo y cuántos de ellos son extranjeros.
+    private function vistaPreviaTour(array $linea, array $conteo, array $extranjeros): array
+    {
+        $fila = [
+            'tip_afe_igv' => $linea['tratamiento']['tip_afe_igv'],
+            'destino_tributario' => $linea['tratamiento']['destino_tributario'],
+            'afectaciones' => $linea['tratamientos'],
+        ];
+
+        if ($linea['modo'] === 'clasico') {
+            return $fila + ['total' => round($this->totalTourClasico($linea['tour'], $linea['entradas'], $conteo), 2), 'tour' => ['detalle' => [], 'temporada' => null]];
+        }
+
+        $spec = $linea['spec'];
+        $porResidencia = [
+            'adulto_nac' => $conteo['adulto'] - $extranjeros['adulto'], 'adulto_ext' => $extranjeros['adulto'],
+            'nino_nac' => $conteo['nino'] - $extranjeros['nino'], 'nino_ext' => $extranjeros['nino'],
+            'infante' => $conteo['infante'],
+        ];
+        $calculo = app(TourLineaService::class)->calcular([$spec], $porResidencia, null)[0];
+
+        // «2 adultos nac. × 45 + 1 adulto ext. × 60…»: el infante figura con precio 0.
+        $detalle = [];
+        foreach (['adulto_nac' => 'adulto', 'adulto_ext' => 'adulto_ext', 'nino_nac' => 'nino', 'nino_ext' => 'nino_ext', 'infante' => null] as $grupo => $clavePrecio) {
+            if ($porResidencia[$grupo] > 0) {
+                $detalle[] = ['grupo' => $grupo, 'cantidad' => $porResidencia[$grupo], 'precio' => $clavePrecio ? $spec['precios'][$clavePrecio] : 0.0];
+            }
+        }
+
+        return $fila + ['total' => round((float) $calculo['precio'], 2), 'tour' => ['detalle' => $detalle, 'temporada' => $spec['temporada_nombre']]];
+    }
+
+    // Modo clásico: la misma cuenta que AlternativaItemController::crearItemClasicoDesdeEntrada()
+    // (un servicio compartido se cobra por pasajero real) más el ajuste de redondeo del tour.
+    private function totalTourClasico(PaquetePlantilla $tour, array $entradas, array $conteo): float
+    {
+        $total = 0.0;
+        foreach ($entradas as $entrada) {
+            if ($entrada['proveedor_tarifa_id']) {
+                $tarifa = ProveedorTarifa::findOrFail($entrada['proveedor_tarifa_id']);
+                $total += ($entrada['modalidad'] === 'compartido' && $tarifa->tipo_habitacion === null)
+                    ? $conteo['adulto'] * ($entrada['precio_venta_adulto'] ?? 0) + $conteo['nino'] * ($entrada['precio_venta_nino'] ?? 0) + $conteo['infante'] * ($entrada['precio_venta_infante'] ?? 0)
+                    : $entrada['venta'];
+            } elseif ($entrada['guia_tarifa_id'] && GuiaTarifa::find($entrada['guia_tarifa_id'])) {
+                $total += $entrada['venta'];
+            }
+        }
+
+        return $total + (float) ($tour->ajuste_redondeo ?? 0);
     }
 
     private function nombreDeTarifa(ProveedorTarifa $tarifa): string
@@ -596,7 +752,7 @@ class VentaDirectaController extends Controller
     {
         $hasta = $inicio->copy();
         foreach ($lineas as $linea) {
-            $fecha = $inicio->copy()->addDays($linea['dia'] - 1 + ($linea['es_hotel'] ? $linea['cantidad'] : 0));
+            $fecha = $inicio->copy()->addDays($linea['dia'] - 1 + ($linea['es_hotel'] ? $linea['cantidad'] : ($linea['dias_extra'] ?? 0)));
             if ($fecha->gt($hasta)) {
                 $hasta = $fecha;
             }
