@@ -187,6 +187,22 @@ class VentaDirectaPasajerosTest extends TestCase
         $this->assertSame(0, $d['infante']['extranjeros']);
     }
 
+    public function test_los_umbrales_de_edad_salen_de_la_configuracion_de_la_agencia_con_el_permiso_de_venta_directa(): void
+    {
+        DB::table('configuracion_agencia')->update(['edad_max_infante' => 3, 'edad_max_nino' => 11]);
+        if (DB::table('configuracion_agencia')->count() === 0) {
+            DB::table('configuracion_agencia')->insert(['edad_max_infante' => 3, 'edad_max_nino' => 11, 'created_at' => now(), 'updated_at' => now()]);
+        }
+
+        $r = app(VentaDirectaController::class)->umbrales()->getData(true);
+        $this->assertSame(['infante_max' => 3, 'nino_max' => 11], $r['umbrales']);
+
+        $ruta = collect(\Illuminate\Support\Facades\Route::getRoutes())
+            ->first(fn ($r) => str_ends_with($r->uri(), 'venta-directa/umbrales-edad') && in_array('GET', $r->methods(), true));
+        $this->assertNotNull($ruta);
+        $this->assertContains('permission:reservas.crear', $ruta->gatherMiddleware());
+    }
+
     private function tarifaBase(): array
     {
         $destino = DB::table('destinos_atractivos')->insertGetId(['nombre' => 'Lamas '.uniqid(), 'tipo' => 'lugar', 'created_at' => now(), 'updated_at' => now()]);

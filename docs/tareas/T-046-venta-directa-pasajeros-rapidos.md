@@ -109,6 +109,14 @@ cd admin-start-kit && npm run type-check
   - Arreglo de la revisión: los rangos llegan con la primera vista previa, casi siempre después de contar a los pasajeros.
     Un niño agregado antes nacía con edad 3 y, con un tope de infante de 3 o más, el backend lo guardaba como infante.
     Ahora, al llegar los rangos, cada niño se lleva a su rango (`watch(umbrales)` → `ajustarEdad`).
+  - Revisión del 05-nov: el bloque 2 no seguía la maqueta aprobada («Venta directa — rediseño B», 05-nov; la tarea no la
+    enlazaba). Se rehizo como la maqueta: tres tarjetas (Adultos / Niños / Infantes) con contadores Nacionales/Extranjeros
+    y el rango al lado del título; resumen en la cabecera («3 adultos · 1 niño (2 ext.)», extranjeros en total);
+    «Agregar nombres (opcional)» / «Ocultar nombres» arriba a la derecha; filas «Cliente · Adulto nacional»; bajo el
+    cliente, «Persona natural: viaja como primer pasajero.» con «No viaja» (y «Agregarlo como pasajero» para deshacer).
+    Se mantienen la edad del niño y el ✕ de la fila del cliente. Orden de envío: adultos nac., adultos ext., niños nac.…
+  - Los rangos llegan al abrir la pantalla por `GET venta-directa/umbrales-edad` (permiso `reservas.crear`, test nuevo);
+    resuelve el primer hallazgo de abajo. Verificado con Playwright en agencia-demo (sin errores en consola).
   - La vista previa agrega `extranjeros` por tipo solo en la vista con `lineas[]`; la de tarifa suelta (T-045) queda igual.
 
 ## Hallazgos fuera de alcance

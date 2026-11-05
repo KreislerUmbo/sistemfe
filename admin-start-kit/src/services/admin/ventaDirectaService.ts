@@ -86,6 +86,12 @@ export const ventaDirectaService = {
     return response.data as ReservaDetalleResponse & { code: number; message: string }
   },
 
+  // T-046: rangos de edad de la agencia para los contadores (mismo permiso que la venta directa).
+  async umbralesEdad() {
+    const response = await httpClient.get('/venta-directa/umbrales-edad')
+    return response.data as { code: number; umbrales: { infante_max: number; nino_max: number } }
+  },
+
   async vistaPrevia(data: Pick<VentaDirectaPayload, 'moneda' | 'lineas'> & { pax: Array<Pick<PasajeroVentaDirecta, 'edad' | 'residencia'>> } & { fecha_servicio: string }) {
     const response = await httpClient.post('/venta-directa/vista-previa', data)
     return response.data as VistaPreviaVentaDirecta

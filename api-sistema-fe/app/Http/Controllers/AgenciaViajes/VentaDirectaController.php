@@ -248,6 +248,19 @@ class VentaDirectaController extends Controller
     // cada una, el hotel (noches y salida) y si lo armado se podrá facturar en
     // un solo comprobante. Sin `lineas` (payload de T-045: una tarifa suelta)
     // devuelve las dos opciones de esa tarifa, como siempre.
+    // T-046 — rangos de edad de la agencia para los contadores de pasajeros («13 años o más»…).
+    // Ruta propia con el permiso de la venta directa: GET configuracion-agencia pide
+    // agencia.configuracion, que el vendedor no tiene, y la vista previa llega recién con un servicio.
+    public function umbrales()
+    {
+        [$edadMaxInfante, $edadMaxNino] = $this->umbralesEdad();
+
+        return response()->json([
+            'code' => 200,
+            'umbrales' => ['infante_max' => $edadMaxInfante, 'nino_max' => $edadMaxNino],
+        ]);
+    }
+
     public function vistaPrevia(Request $request)
     {
         if (! $request->has('lineas')) {
