@@ -431,7 +431,8 @@ class VentaDirectaController extends Controller
                 }
 
                 $nombre = $this->nombreDeTarifa($tarifa);
-                $esHotel = $tarifa->tipo_habitacion !== null;
+                // Misma señal que ReporteOperativoController::hotelDelItem() y la pantalla.
+                $esHotel = filled($tarifa->tipo_habitacion);
                 $modo = $linea['modo_precio'] ?? null;
 
                 if ($esHotel) {
