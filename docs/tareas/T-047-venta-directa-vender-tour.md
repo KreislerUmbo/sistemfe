@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Módulo** | AGE |
-| **Depende de** | T-085 (líneas y fecha por línea), T-046 (residencia) |
+| **Depende de** | T-085 (líneas y fecha por línea), T-046 (residencia), T-086 (catálogo y tarjetas como la maqueta) |
 | **Reglas** | D6-D18 (`plan-tours-venta-simple-costo-real.md` §6) |
 | **Decisiones** | `docs/requerimientos/observaciones-pruebas-usuario.md` → obs. 12, H41 (aprobada 27-oct-2026); D-AGE-034 |
 | **Rama** | `feat/T-047-venta-directa-tour` |
@@ -14,6 +14,8 @@ vendido en el día a día, obliga a pasar por el cotizador. Y como un servicio s
 la venta directa nunca entra en la salida operativa: no cuenta en el almuerzo ni en el vehículo.
 
 ## Alcance
+- Seguir la **maqueta aprobada** (enlace en D-AGE-034): pestaña, tarjetas de tour y tarjeta de la
+  línea de tour como ahí.
 - Pestaña **Tours** (la primera) en el catálogo de la pantalla de T-085: tarjetas de los tours del
   destino elegido, sin escribir, con buscador y «Desde S/ X p/p». Un tour es una línea más
   (etiqueta Tour), con su selector de fecha y su detalle («2 adultos nac. × 45 + 1 adulto ext. ×

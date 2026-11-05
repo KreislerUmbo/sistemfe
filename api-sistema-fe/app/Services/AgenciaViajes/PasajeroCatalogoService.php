@@ -4,6 +4,7 @@ namespace App\Services\AgenciaViajes;
 
 use App\Models\AgenciaViajes\PasajeroCatalogo;
 use App\Models\AgenciaViajes\PasajeroDocumento;
+use App\Models\AgenciaViajes\ReservaPasajero;
 use App\Models\Client\Client;
 use App\Services\HoraPeru;
 
@@ -78,5 +79,91 @@ class PasajeroCatalogoService
         ]);
 
         return $ficha;
+    }
+
+    // T-017 (movido de ReservaController::aceptar() en T-046): función que resuelve, solo
+    // cuando se la llama, los datos del cliente como pasajero —
+    // ['nombre','documento','pasajero_catalogo_id'] — o null si no califica. Se pasa a
+    // ReservaController::crearReservaDesdeAlternativa(), que la llama únicamente si
+    // encuentra un lugar donde ponerlo (evita fichas sin uso). Debe ejecutarse dentro de la
+    // transacción de quien crea la reserva (desdeCliente() bloquea la fila del cliente).
+    public function pasajeroPorDefecto(?Client $cliente): ?\Closure
+    {
+        if (! $cliente) {
+            return null;
+        }
+
+        return function () use ($cliente): ?array {
+            $datos = $this->datosDePasajero($cliente);
+            $ficha = $datos ? $this->desdeCliente($cliente) : null;
+
+            return $ficha ? [
+                'nombre' => $datos['nombre'],
+                'documento' => $datos['documento'],
+                'pasajero_catalogo_id' => $ficha->id,
+            ] : null;
+        };
+    }
+
+    // Crea o actualiza el perfil reutilizable en pasajeros_catalogo a partir
+    // (movido desde ReservaPasajeroController en T-046: lo usa también Venta directa)
+    // de un ReservaPasajero ya completo (nombre + documento). Si el mismo
+    // número de documento ya existe en el catálogo (cargado desde otra
+    // reserva), se reutiliza esa fila en vez de duplicarla.
+    public function sincronizarDesdeReserva(ReservaPasajero $pasajero): void
+    {
+        $catalogo = $pasajero->pasajero_catalogo_id
+            ? PasajeroCatalogo::find($pasajero->pasajero_catalogo_id)
+            : null;
+
+        // T-017: si el documento del pasajero ya no es el de su ficha, el vendedor
+        // escribió a OTRA persona (el frontend deja el pasajero_catalogo_id anterior).
+        // Esa ficha no se toca: se busca la del nuevo documento o se crea una (sin cliente_id).
+        if ($catalogo) {
+            $documentoDeLaFicha = $catalogo->documentos()->orderBy('id')->value('numero_documento');
+            if ($documentoDeLaFicha !== null && $documentoDeLaFicha !== $pasajero->documento) {
+                $catalogo = null;
+            }
+        }
+
+        if (!$catalogo) {
+            $documentoExistente = PasajeroDocumento::where('numero_documento', $pasajero->documento)->first();
+            $catalogo = $documentoExistente?->pasajeroCatalogo;
+        }
+
+        if (!$catalogo) {
+            $catalogo = PasajeroCatalogo::create([
+                'nombre' => $pasajero->nombre,
+                'nacionalidad' => $pasajero->nacionalidad,
+            ]);
+            PasajeroDocumento::create([
+                'pasajero_catalogo_id' => $catalogo->id,
+                'tipo_documento' => 'DNI', // único tipo que maneja hoy el form de reserva_pasajeros
+                'numero_documento' => $pasajero->documento,
+                'fecha_registro' => HoraPeru::hoyTexto(),
+            ]);
+        } else {
+            $catalogo->update([
+                'nombre' => $pasajero->nombre,
+                'nacionalidad' => $pasajero->nacionalidad ?? $catalogo->nacionalidad,
+            ]);
+            $documento = $catalogo->documentos()->first();
+            if ($documento) {
+                if ($documento->numero_documento !== $pasajero->documento) {
+                    $documento->update(['numero_documento' => $pasajero->documento]);
+                }
+            } else {
+                PasajeroDocumento::create([
+                    'pasajero_catalogo_id' => $catalogo->id,
+                    'tipo_documento' => 'DNI',
+                    'numero_documento' => $pasajero->documento,
+                    'fecha_registro' => HoraPeru::hoyTexto(),
+                ]);
+            }
+        }
+
+        if ($pasajero->pasajero_catalogo_id !== $catalogo->id) {
+            $pasajero->update(['pasajero_catalogo_id' => $catalogo->id]);
+        }
     }
 }

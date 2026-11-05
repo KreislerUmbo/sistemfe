@@ -13,6 +13,8 @@ Después de crear una venta directa hay que ir a la reserva, facturar y cobrar: 
 venta que se paga en el momento, en la oficina o por transferencia.
 
 ## Alcance
+- Seguir la **maqueta aprobada** (enlace en D-AGE-034): botones, bloque de cobro y casilla de la
+  Amazonía en el resumen como ahí.
 - En el resumen de la pantalla de T-085: botón **«Crear y cobrar»** arriba y el actual pasa a
   **«Crear sin cobrar»** («a crédito, si el pago llega después o para facturar desde la reserva»).
   «Crear y cobrar» aparece solo con `AGENCIA_COBRO_AL_FACTURAR` encendido.

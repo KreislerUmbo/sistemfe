@@ -84,7 +84,7 @@ class ReservaPasajeroController extends Controller
             }
 
             if ($pasajero->nombre && $pasajero->documento) {
-                $this->sincronizarCatalogo($pasajero);
+                app(PasajeroCatalogoService::class)->sincronizarDesdeReserva($pasajero);
             }
 
             return [$pasajero, $alertaCupoExcedido];
@@ -154,7 +154,7 @@ class ReservaPasajeroController extends Controller
             // detectado 2026-08-17: la búsqueda no era el problema, la tabla
             // simplemente nunca se llenaba).
             if ($pasajero->nombre && $pasajero->documento) {
-                $this->sincronizarCatalogo($pasajero);
+                app(PasajeroCatalogoService::class)->sincronizarDesdeReserva($pasajero);
             }
         });
 
@@ -163,67 +163,6 @@ class ReservaPasajeroController extends Controller
             'message' => 'Pasajero actualizado correctamente',
             'reserva_pasajero' => $pasajero->fresh(),
         ]);
-    }
-
-    // Crea o actualiza el perfil reutilizable en pasajeros_catalogo a partir
-    // de un ReservaPasajero ya completo (nombre + documento). Si el mismo
-    // número de documento ya existe en el catálogo (cargado desde otra
-    // reserva), se reutiliza esa fila en vez de duplicarla.
-    private function sincronizarCatalogo(ReservaPasajero $pasajero): void
-    {
-        $catalogo = $pasajero->pasajero_catalogo_id
-            ? PasajeroCatalogo::find($pasajero->pasajero_catalogo_id)
-            : null;
-
-        // T-017: si el documento del pasajero ya no es el de su ficha, el vendedor
-        // escribió a OTRA persona (el frontend deja el pasajero_catalogo_id anterior).
-        // Esa ficha no se toca: se busca la del nuevo documento o se crea una (sin cliente_id).
-        if ($catalogo) {
-            $documentoDeLaFicha = $catalogo->documentos()->orderBy('id')->value('numero_documento');
-            if ($documentoDeLaFicha !== null && $documentoDeLaFicha !== $pasajero->documento) {
-                $catalogo = null;
-            }
-        }
-
-        if (!$catalogo) {
-            $documentoExistente = PasajeroDocumento::where('numero_documento', $pasajero->documento)->first();
-            $catalogo = $documentoExistente?->pasajeroCatalogo;
-        }
-
-        if (!$catalogo) {
-            $catalogo = PasajeroCatalogo::create([
-                'nombre' => $pasajero->nombre,
-                'nacionalidad' => $pasajero->nacionalidad,
-            ]);
-            PasajeroDocumento::create([
-                'pasajero_catalogo_id' => $catalogo->id,
-                'tipo_documento' => 'DNI', // único tipo que maneja hoy el form de reserva_pasajeros
-                'numero_documento' => $pasajero->documento,
-                'fecha_registro' => \App\Services\HoraPeru::hoyTexto(),
-            ]);
-        } else {
-            $catalogo->update([
-                'nombre' => $pasajero->nombre,
-                'nacionalidad' => $pasajero->nacionalidad ?? $catalogo->nacionalidad,
-            ]);
-            $documento = $catalogo->documentos()->first();
-            if ($documento) {
-                if ($documento->numero_documento !== $pasajero->documento) {
-                    $documento->update(['numero_documento' => $pasajero->documento]);
-                }
-            } else {
-                PasajeroDocumento::create([
-                    'pasajero_catalogo_id' => $catalogo->id,
-                    'tipo_documento' => 'DNI',
-                    'numero_documento' => $pasajero->documento,
-                    'fecha_registro' => \App\Services\HoraPeru::hoyTexto(),
-                ]);
-            }
-        }
-
-        if ($pasajero->pasajero_catalogo_id !== $catalogo->id) {
-            $pasajero->update(['pasajero_catalogo_id' => $catalogo->id]);
-        }
     }
 
     // GET pasajeros-catalogo?search= — autocompletar desde perfiles ya

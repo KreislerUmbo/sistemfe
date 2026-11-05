@@ -50,6 +50,17 @@
                                 <div v-if="clienteSeleccionado" class="small text-success mt-1">
                                     <i class="fas fa-circle-check me-1"></i>{{ clienteSeleccionado.full_name }} ({{ clienteSeleccionado.n_document }})
                                 </div>
+                                <!-- T-046 (maqueta): el cliente persona natural viaja de primer pasajero. -->
+                                <div v-if="datosClientePasajero" class="form-text">
+                                    <template v-if="clienteViaja">
+                                        Persona natural: viaja como primer pasajero.
+                                        <button type="button" class="btn btn-link btn-sm p-0 align-baseline" @click="clienteViaja = false">No viaja</button>
+                                    </template>
+                                    <template v-else>
+                                        El cliente no viaja.
+                                        <button type="button" class="btn btn-link btn-sm p-0 align-baseline" @click="clienteViaja = true">Agregarlo como pasajero</button>
+                                    </template>
+                                </div>
                             </div>
                             <div class="col-12 col-md-6">
                                 <label class="form-label mb-1 small fw-semibold text-secondary">Destino</label>
@@ -75,23 +86,65 @@
                     </div>
                 </div>
 
-                <!-- 2 · Pasajeros (T-046 lo reemplaza) -->
+                <!-- 2 · Pasajeros (T-046): por cantidad, con residencia; nombres opcionales -->
                 <div class="card border-0 shadow-sm mb-3">
-                    <div class="card-header bg-white border-bottom py-2">
-                        <span class="fw-semibold text-dark"><span class="badge bg-primary me-2">2</span>Pasajeros</span>
+                    <!-- Maqueta aprobada «Venta directa — rediseño B» (05-nov): resumen en la cabecera y
+                         «Agregar nombres» a la derecha; tres tarjetas con sus contadores. -->
+                    <div class="card-header bg-white border-bottom py-2 d-flex align-items-center justify-content-between flex-wrap gap-2">
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="fw-semibold text-dark"><span class="badge bg-primary me-2">2</span>Pasajeros</span>
+                            <span class="badge rounded-pill bg-light text-secondary border fw-normal">{{ resumenPax || 'Sin pasajeros' }}</span>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-link p-0 fw-semibold text-decoration-none" @click="mostrarNombres = !mostrarNombres">
+                            {{ mostrarNombres ? 'Ocultar nombres' : 'Agregar nombres (opcional)' }}
+                        </button>
                     </div>
                     <div class="card-body py-3">
-                        <div class="d-flex gap-2 mb-3">
-                            <button class="btn btn-sm btn-outline-primary" @click="agregarPax(30)"><i class="fas fa-plus me-1"></i>Adulto</button>
-                            <button class="btn btn-sm btn-outline-primary" @click="agregarPax(8)"><i class="fas fa-plus me-1"></i>Niño</button>
-                            <button class="btn btn-sm btn-outline-primary" @click="agregarPax(1)"><i class="fas fa-plus me-1"></i>Infante</button>
+                        <div class="row g-2">
+                            <div v-for="t in TARJETAS" :key="t.tipo" class="col-12 col-md-4">
+                                <div class="border rounded p-2 h-100 d-flex flex-column gap-2">
+                                    <div class="d-flex align-items-baseline justify-content-between gap-2">
+                                        <span class="fw-semibold small">{{ t.etiqueta }}</span>
+                                        <span class="text-muted" style="font-size:.75rem">{{ rangoGrupo(t.tipo) }}</span>
+                                    </div>
+                                    <div v-for="g in t.grupos" :key="g.residencia" class="d-flex align-items-center justify-content-between gap-2">
+                                        <span class="small text-secondary">{{ g.etiqueta }}</span>
+                                        <div class="d-flex align-items-center gap-1">
+                                            <button type="button" class="btn btn-sm btn-outline-secondary" :disabled="cantidadGrupo(g) === 0" :aria-label="`${t.etiqueta} ${g.etiqueta}: uno menos`" @click="restarPax(g)"><i class="fas fa-minus"></i></button>
+                                            <span class="fw-semibold text-center" style="min-width:1.75rem">{{ cantidadGrupo(g) }}</span>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary" :aria-label="`${t.etiqueta} ${g.etiqueta}: uno más`" @click="sumarPax(g)"><i class="fas fa-plus"></i></button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                        <div v-if="pax.length === 0" class="text-muted small fst-italic mb-2">Agrega al menos un pasajero.</div>
-                        <div class="d-flex flex-column gap-2">
-                            <div v-for="(p, idx) in pax" :key="idx" class="d-flex align-items-center gap-2 border rounded p-2 small">
-                                <label class="text-muted mb-0">Edad</label>
-                                <input type="number" class="form-control form-control-sm" style="max-width:80px" v-model.number="p.edad" min="0" max="99">
-                                <i class="fas fa-times text-danger ms-auto" style="cursor:pointer" @click="pax.splice(idx, 1)"></i>
+                        <div v-if="pax.length === 0" class="text-muted small fst-italic mt-2">Agrega al menos un pasajero.</div>
+
+                        <div v-if="mostrarNombres && pax.length > 0" class="mt-3 d-flex flex-column gap-2">
+                            <div class="small text-muted">Opcional. Lo que no llenes se completa después en la reserva.</div>
+                            <div v-for="f in paxOrdenados" :key="f.uid" class="row g-2 align-items-center">
+                                <div class="col-12 col-md-3 small text-secondary">{{ etiquetaFila(f) }}</div>
+                                <div class="col">
+                                    <input type="text" class="form-control form-control-sm" maxlength="250" placeholder="Nombre (opcional)"
+                                        :aria-label="`Nombre de ${etiquetaFila(f)}`"
+                                        :value="valorNombre(f)" @input="f.nombre = ($event.target as HTMLInputElement).value">
+                                </div>
+                                <div class="col-5 col-md-3">
+                                    <input type="text" class="form-control form-control-sm" maxlength="50" placeholder="Documento"
+                                        :aria-label="`Documento de ${etiquetaFila(f)}`"
+                                        :value="valorDocumento(f)" @input="f.documento = ($event.target as HTMLInputElement).value">
+                                </div>
+                                <!-- Edad exacta de un niño (la tarea lo permite); el resto usa la edad de su tipo. -->
+                                <div v-if="f.tipo === 'nino'" class="col-auto">
+                                    <input type="number" class="form-control form-control-sm" style="width:70px"
+                                        v-model.number="f.edad" :min="umbrales ? umbrales.infante_max + 1 : 0" :max="umbrales?.nino_max ?? 17"
+                                        title="Edad" aria-label="Edad del niño" @change="ajustarEdad(f)">
+                                </div>
+                                <div v-if="esFilaCliente(f)" class="col-auto">
+                                    <button type="button" class="btn btn-sm btn-outline-danger" title="El cliente no viaja" aria-label="Quitar al cliente de los pasajeros" @click="clienteViaja = false">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -276,7 +329,7 @@
                             <span class="text-muted">Destino:</span> {{ destinoTexto || '—' }}
                             <div v-if="rangoFechas" class="text-muted">{{ rangoFechas }}</div>
                         </div>
-                        <div class="mb-3"><span class="text-muted">Pasajeros:</span> {{ pax.length }}</div>
+                        <div class="mb-3"><span class="text-muted">Pasajeros:</span> {{ resumenPax || '—' }}</div>
 
                         <div v-if="lineas.length > 0" class="border-top pt-2 mb-2">
                             <div v-for="(l, i) in lineas" :key="l.uid" class="d-flex justify-content-between gap-2 py-1">
@@ -369,8 +422,162 @@ const destinoTexto = ref<string>('');
 const fechaInicio = ref<string>(hoyPeru()); // T-045: obligatoria, por defecto hoy en Perú
 const moneda = ref<MonedaVenta>('PEN');
 const simbolo = computed(() => (moneda.value === 'USD' ? 'US$' : 'S/'));
-const pax = ref<Array<{ edad: number }>>([]);
 const creando = ref<boolean>(false);
+
+// ── Pasajeros (T-046) ──────────────────────────────────────────────────
+// Se piden por cantidad; cada contador crea o quita filas. La fila es la unidad que viaja al
+// backend ({edad, residencia} y, si se escribieron, nombre y documento).
+type TipoPax = TipoPaxVistaPrevia;
+type Residencia = 'nacional' | 'extranjero';
+type FilaPax = {
+    uid: number;
+    tipo: TipoPax;
+    residencia: Residencia;
+    edad: number;
+    // null = el vendedor no lo tocó (en la fila del cliente se muestra el dato del cliente).
+    nombre: string | null;
+    documento: string | null;
+};
+
+// Una tarjeta por tipo, con un contador por residencia (maqueta aprobada). Los infantes no se
+// separan por residencia: no pagan.
+type Grupo = { tipo: TipoPax; residencia: Residencia; etiqueta: string };
+const TARJETAS: Array<{ tipo: TipoPax; etiqueta: string; grupos: Grupo[] }> = [
+    { tipo: 'adulto', etiqueta: 'Adultos', grupos: [
+        { tipo: 'adulto', residencia: 'nacional', etiqueta: 'Nacionales' },
+        { tipo: 'adulto', residencia: 'extranjero', etiqueta: 'Extranjeros' },
+    ] },
+    { tipo: 'nino', etiqueta: 'Niños', grupos: [
+        { tipo: 'nino', residencia: 'nacional', etiqueta: 'Nacionales' },
+        { tipo: 'nino', residencia: 'extranjero', etiqueta: 'Extranjeros' },
+    ] },
+    { tipo: 'infante', etiqueta: 'Infantes', grupos: [
+        { tipo: 'infante', residencia: 'nacional', etiqueta: 'Infantes' },
+    ] },
+];
+const ORDEN_TIPOS: TipoPax[] = ['adulto', 'nino', 'infante'];
+const ORDEN_RESIDENCIAS: Residencia[] = ['nacional', 'extranjero'];
+
+const filas = ref<FilaPax[]>([]);
+let siguienteUidPax = 1;
+// Rangos de edad de la agencia: se piden al abrir la pantalla a venta-directa/umbrales-edad
+// (configuracion-agencia pide un permiso que el vendedor no tiene); la vista previa los repite.
+const umbrales = ref<{ infante_max: number; nino_max: number } | null>(null);
+const mostrarNombres = ref<boolean>(false);
+// El cliente (persona natural) viaja de primer adulto salvo que el vendedor lo quite.
+const clienteViaja = ref<boolean>(true);
+
+onMounted(async () => {
+    try {
+        const res = await ventaDirectaService.umbralesEdad();
+        umbrales.value = res.umbrales;
+    } catch {
+        // Sin rangos la pantalla sigue funcionando: los trae la vista previa.
+    }
+});
+
+// El orden que se manda al backend (y el de las filas de nombres): adultos nacionales, adultos
+// extranjeros, niños nacionales… — estable dentro de cada grupo. El primer adulto es el cliente.
+const paxOrdenados = computed<FilaPax[]>(() => ORDEN_TIPOS.flatMap((t) =>
+    ORDEN_RESIDENCIAS.flatMap((r) => filas.value.filter((f) => f.tipo === t && f.residencia === r))));
+// Lo que se manda a la vista previa y a crear (sin nombres: esos se agregan al crear).
+const pax = computed(() => paxOrdenados.value.map((f) => ({ edad: f.edad, residencia: f.residencia })));
+
+const cantidadGrupo = (g: { tipo: TipoPax; residencia: Residencia }) => filas.value.filter((f) => f.tipo === g.tipo && f.residencia === g.residencia).length;
+
+const edadPorDefecto = (tipo: TipoPax): number => {
+    if (tipo === 'infante') return 0;
+    if (tipo === 'nino') return (umbrales.value?.infante_max ?? 2) + 1;
+    return 30;
+};
+
+const sumarPax = (g: { tipo: TipoPax; residencia: Residencia }) => {
+    filas.value.push({ uid: siguienteUidPax++, tipo: g.tipo, residencia: g.residencia, edad: edadPorDefecto(g.tipo), nombre: null, documento: null });
+};
+
+// Quita primero una fila sin nombre, para no perder lo que el vendedor ya escribió.
+const restarPax = (g: { tipo: TipoPax; residencia: Residencia }) => {
+    const delGrupo = filas.value.filter((f) => f.tipo === g.tipo && f.residencia === g.residencia);
+    const sinDatos = [...delGrupo].reverse().find((f) => f.nombre === null && f.documento === null);
+    const quitar = sinDatos ?? delGrupo[delGrupo.length - 1];
+    if (quitar) filas.value = filas.value.filter((f) => f.uid !== quitar.uid);
+};
+
+// La edad de un niño solo se puede mover dentro de su rango (si no, el backend lo clasificaría distinto).
+const ajustarEdad = (f: FilaPax) => {
+    if (!umbrales.value || !Number.isInteger(f.edad)) return;
+    f.edad = Math.min(umbrales.value.nino_max, Math.max(umbrales.value.infante_max + 1, f.edad));
+};
+
+// Si el vendedor agrega un niño antes de que lleguen los rangos, nace con una edad supuesta (3)
+// que, con un tope de infante de 3 o más, el backend clasificaría como infante (y cobraría como
+// tal). Al llegar los rangos, se lo lleva a su rango.
+watch(umbrales, () => {
+    filas.value.filter((f) => f.tipo === 'nino').forEach(ajustarEdad);
+});
+
+const rangoGrupo = (tipo: TipoPax): string => {
+    if (!umbrales.value) return '';
+    const { infante_max: inf, nino_max: nino } = umbrales.value;
+    if (tipo === 'adulto') return `${nino + 1} años o más`;
+    if (tipo === 'nino') return inf + 1 === nino ? `${nino} años` : `${inf + 1} a ${nino} años`;
+    return `0 a ${inf} años`;
+};
+
+// «Adulto nacional», «Niño extranjero», «Infante»; la del cliente lleva «Cliente · » delante.
+const etiquetaFila = (f: FilaPax) => {
+    const tipo = { adulto: 'Adulto', nino: 'Niño', infante: 'Infante' }[f.tipo];
+    const base = f.tipo === 'infante' ? tipo : `${tipo} ${f.residencia === 'extranjero' ? 'extranjero' : 'nacional'}`;
+    return esFilaCliente(f) ? `Cliente · ${base}` : base;
+};
+
+// «3 adultos · 1 niño (1 ext.)», como la maqueta: los extranjeros se cuentan en total al final.
+const resumenPax = computed<string>(() => {
+    const nombres: Record<TipoPax, [string, string]> = { adulto: ['adulto', 'adultos'], nino: ['niño', 'niños'], infante: ['infante', 'infantes'] };
+    const partes = ORDEN_TIPOS.map((t) => {
+        const n = filas.value.filter((f) => f.tipo === t).length;
+        return n === 0 ? '' : `${n} ${nombres[t][n === 1 ? 0 : 1]}`;
+    }).filter(Boolean);
+    const ext = filas.value.filter((f) => f.residencia === 'extranjero').length;
+    return partes.length === 0 ? '' : partes.join(' · ') + (ext > 0 ? ` (${ext} ext.)` : '');
+});
+
+// El cliente como primer pasajero: solo una persona con documento real (igual que PasajeroCatalogoService).
+const datosClientePasajero = computed<{ nombre: string; documento: string } | null>(() => {
+    const c = clienteSeleccionado.value;
+    if (!c) return null;
+    const tipo = (c.type_document ?? '').trim().toUpperCase();
+    const documento = (c.n_document ?? '').trim();
+    const nombre = (c.full_name ?? '').trim();
+    if (!['DNI', 'CE', 'PAS'].includes(tipo) || documento === '' || documento === '00000000' || nombre === '') return null;
+    return { nombre, documento };
+});
+
+const filaCliente = computed<FilaPax | null>(() => (clienteViaja.value && datosClientePasajero.value ? (paxOrdenados.value.find((f) => f.tipo === 'adulto') ?? null) : null));
+const esFilaCliente = (f: FilaPax) => filaCliente.value?.uid === f.uid;
+
+const valorNombre = (f: FilaPax) => f.nombre ?? (esFilaCliente(f) ? datosClientePasajero.value!.nombre : '');
+const valorDocumento = (f: FilaPax) => f.documento ?? (esFilaCliente(f) ? datosClientePasajero.value!.documento : '');
+
+// Lo que el vendedor escribió en una fila, listo para el backend. La fila del cliente sin tocar
+// (o con los datos del cliente tal cual) no manda nada: el backend la completa con su ficha del catálogo.
+const datosEscritos = (f: FilaPax): { nombre?: string; documento?: string } => {
+    if (f.nombre === null && f.documento === null) return {};
+    const nombre = valorNombre(f).trim();
+    const documento = valorDocumento(f).trim();
+    if (esFilaCliente(f) && nombre === datosClientePasajero.value!.nombre && documento === datosClientePasajero.value!.documento) return {};
+    return { ...(nombre ? { nombre } : {}), ...(documento ? { documento } : {}) };
+};
+
+// Si el vendedor vació a mano nombre y documento de la fila del cliente, es que no viaja.
+const clienteViajaEnvio = computed<boolean>(() => {
+    const f = filaCliente.value;
+    if (!f) return clienteViaja.value;
+    const tocada = f.nombre !== null || f.documento !== null;
+    return !(tocada && valorNombre(f).trim() === "" && valorDocumento(f).trim() === "");
+});
+
+const paxParaCrear = () => paxOrdenados.value.map((f) => ({ edad: f.edad, residencia: f.residencia, ...datosEscritos(f) }));
 
 // ── Líneas ─────────────────────────────────────────────────────────────
 // Una línea es un servicio de la venta. T-047 suma el origen 'tour'.
@@ -554,7 +761,10 @@ const pedirVistaPrevia = () => {
     vistaPreviaTimeout = setTimeout(async () => {
         try {
             const res = await ventaDirectaService.vistaPrevia(datos);
-            if (seq === vistaPreviaSeq) vistaPrevia.value = res;
+            if (seq === vistaPreviaSeq) {
+                vistaPrevia.value = res;
+                umbrales.value = res.umbrales ?? umbrales.value;
+            }
         } catch (error: any) {
             if (seq !== vistaPreviaSeq) return;
             vistaPrevia.value = null;
@@ -567,7 +777,7 @@ const pedirVistaPrevia = () => {
 
 // Todo lo que cambia el cálculo en una sola firma.
 watch(
-    () => JSON.stringify([fechaInicio.value, moneda.value, pax.value.map((p) => p.edad), lineas.value.map((l) => [l.uid, l.dia, l.cantidad, l.modoPrecio, l.descripcion, l.precio, l.costo])]),
+    () => JSON.stringify([fechaInicio.value, moneda.value, pax.value.map((p) => [p.edad, p.residencia]), lineas.value.map((l) => [l.uid, l.dia, l.cantidad, l.modoPrecio, l.descripcion, l.precio, l.costo])]),
     pedirVistaPrevia,
 );
 
@@ -662,6 +872,7 @@ const buscarClientes = async () => {
 
 const seleccionarCliente = (c: Client) => {
     clienteSeleccionado.value = c;
+    clienteViaja.value = true; // T-046: un cliente nuevo vuelve a proponerse como pasajero
     clientSearchText.value = c.full_name;
     showClientSuggestions.value = false;
 };
@@ -678,8 +889,6 @@ const onClientCreated = (client: Client) => {
     showQuickClientModal.value = false;
 };
 
-const agregarPax = (edadSugerida: number) => { pax.value.push({ edad: edadSugerida }); };
-
 const crear = async () => {
     if (faltante.value || !clienteSeleccionado.value || !destinoId.value) {
         (Swal as TVueSwalInstance).fire('Error', faltante.value || 'Completa los datos de la venta.', 'error');
@@ -694,7 +903,8 @@ const crear = async () => {
             destino_atractivo_id: destinoId.value,
             fecha_servicio: fechaInicio.value,
             moneda: moneda.value,
-            pax: pax.value,
+            pax: paxParaCrear(),
+            cliente_viaja: clienteViajaEnvio.value,
             lineas: payloadLineas(),
         });
 
