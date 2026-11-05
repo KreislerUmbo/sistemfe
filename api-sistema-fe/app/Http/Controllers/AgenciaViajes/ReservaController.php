@@ -337,21 +337,10 @@ class ReservaController extends Controller
                     $cotizacionBloqueada->update(['resultado_motivo_id' => $motivoGanadaId, 'resultado_detalle' => $detalleGanada]);
                 }
 
-                // T-017: el cliente que cotiza viaja casi siempre. Se resuelve su ficha solo si
-                // la creación encuentra un lugar donde ponerlo (evita fichas sin uso).
-                $cotizacionAceptada = $alternativaBloqueada->cotizacion;
-                $cliente = $cotizacionAceptada->cliente;
-                $pasajeroPorDefecto = $cliente ? function () use ($cliente): ?array {
-                    $servicio = app(PasajeroCatalogoService::class);
-                    $datos = $servicio->datosDePasajero($cliente);
-                    $ficha = $datos ? $servicio->desdeCliente($cliente) : null;
-
-                    return $ficha ? [
-                        'nombre' => $datos['nombre'],
-                        'documento' => $datos['documento'],
-                        'pasajero_catalogo_id' => $ficha->id,
-                    ] : null;
-                } : null;
+                // T-017: el cliente que cotiza viaja casi siempre. Su ficha se resuelve solo si
+                // la creación encuentra un lugar donde ponerlo (PasajeroCatalogoService::pasajeroPorDefecto()).
+                $pasajeroPorDefecto = app(PasajeroCatalogoService::class)
+                    ->pasajeroPorDefecto($alternativaBloqueada->cotizacion->cliente);
 
                 return $this->crearReservaDesdeAlternativa($alternativaBloqueada->fresh(), $pasajeroCatalogoIds, $pasajeroPorDefecto);
             });
