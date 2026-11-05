@@ -555,10 +555,10 @@ class ReservaController extends Controller
     // marcada 'aceptada' (el caller decide cuándo/cómo llegó a ese estado).
     // No abre su propia transacción — el caller ya está dentro de una.
     //
-    // $pasajeroPorDefecto (T-017, solo lo pasa aceptar()): función que devuelve
-    // ['nombre','documento','pasajero_catalogo_id'] del cliente que cotiza, o null.
-    // Va al primer adulto cuyo lugar el vendedor no eligió, y se llama solo si hay
-    // ese lugar. Sin él (Venta Directa) el comportamiento es el de siempre.
+    // $pasajeroPorDefecto (T-017; lo pasan aceptar() y, desde T-046, VentaDirectaController::store()):
+    // función que devuelve ['nombre','documento','pasajero_catalogo_id'] del cliente, o null
+    // (PasajeroCatalogoService::pasajeroPorDefecto()). Va al primer adulto cuyo lugar el vendedor
+    // no eligió, y se llama solo si hay ese lugar. Sin él, nadie se completa.
     public function crearReservaDesdeAlternativa(Alternativa $alternativa, array $pasajeroCatalogoIds = [], ?\Closure $pasajeroPorDefecto = null): array
     {
         $opcionElegida = $alternativa->opcionMayoristaElegida;

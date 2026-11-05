@@ -106,6 +106,9 @@ cd admin-start-kit && npm run type-check
   - La pantalla no manda nombre/documento de la fila del cliente si siguen siendo los del cliente (los completa el backend con su ficha);
     si el vendedor vacía ambos campos, manda `cliente_viaja=false`.
   - Un niño tiene la edad editable dentro de su rango (en «Agregar nombres»); adultos usan 30 y infantes 0.
+  - Arreglo de la revisión: los rangos llegan con la primera vista previa, casi siempre después de contar a los pasajeros.
+    Un niño agregado antes nacía con edad 3 y, con un tope de infante de 3 o más, el backend lo guardaba como infante.
+    Ahora, al llegar los rangos, cada niño se lleva a su rango (`watch(umbrales)` → `ajustarEdad`).
   - La vista previa agrega `extranjeros` por tipo solo en la vista con `lineas[]`; la de tarifa suelta (T-045) queda igual.
 
 ## Hallazgos fuera de alcance

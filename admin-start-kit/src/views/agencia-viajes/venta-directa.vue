@@ -458,6 +458,13 @@ const ajustarEdad = (f: FilaPax) => {
     f.edad = Math.min(umbrales.value.nino_max, Math.max(umbrales.value.infante_max + 1, f.edad));
 };
 
+// Los rangos llegan con la primera vista previa, casi siempre DESPUÉS de contar a los pasajeros:
+// hasta entonces un niño nace con una edad supuesta (3) que, con un tope de infante de 3 o más,
+// el backend clasificaría como infante (y cobraría como tal). Al llegar, se los lleva a su rango.
+watch(umbrales, () => {
+    filas.value.filter((f) => f.tipo === 'nino').forEach(ajustarEdad);
+});
+
 const rangoGrupo = (tipo: TipoPax): string => {
     if (!umbrales.value) return '';
     const { infante_max: inf, nino_max: nino } = umbrales.value;
