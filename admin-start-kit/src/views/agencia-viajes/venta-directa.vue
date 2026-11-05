@@ -399,6 +399,7 @@ import DestinoTreeSelect from '@/components/AgenciaViajes/DestinoTreeSelect.vue'
 import { ref, computed, watch, nextTick, onMounted } from 'vue';
 import { hoyPeru, sumarDiasISO, formatDiaCorto } from '@/helpers/fecha';
 import { useRouter } from 'vue-router';
+import { useToast } from '@/composables/useToast';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import Swal from 'sweetalert2/dist/sweetalert2.js';
 import httpClient from '@/helpers/http-client';
@@ -419,6 +420,7 @@ import type { PaquetePlantilla, ProveedorTarifa } from '@/types/agencia-viajes';
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
 
 const router = useRouter();
+const toast = useToast();
 
 const NOMBRE_MONEDA: Record<MonedaVenta, string> = { PEN: 'soles', USD: 'dólares' };
 const DIAS = Array.from({ length: 14 }, (_, i) => i + 1);
@@ -1023,6 +1025,8 @@ const crear = async () => {
             lineas: payloadLineas(),
         });
 
+        // T-047: salida del tour cancelada (T-042) o avisos del tour, como al aceptar en el cotizador.
+        [...(res.avisos_salida_cancelada ?? []), ...(res.avisos ?? [])].forEach((aviso) => toast.warning(aviso));
         router.push(`/agencia-viajes/reservas/${res.reserva.id}`);
     } catch (error: any) {
         (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo crear la venta directa', 'error');
