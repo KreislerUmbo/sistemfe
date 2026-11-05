@@ -11,7 +11,10 @@ use App\Models\AgenciaViajes\CotizacionPasajero;
 use App\Models\AgenciaViajes\DestinoAtractivo;
 use App\Models\AgenciaViajes\ProveedorTarifa;
 use App\Services\AgenciaViajes\CodigoGeneradorService;
+use App\Models\AgenciaViajes\ReservaPasajero;
+use App\Models\Client\Client;
 use App\Services\AgenciaViajes\CriterioTributarioService;
+use App\Services\AgenciaViajes\PasajeroCatalogoService;
 use App\Services\AgenciaViajes\PriceEngineService;
 use App\Services\Crm\AccionesCrm;
 use Carbon\Carbon;
@@ -66,6 +69,12 @@ class VentaDirectaController extends Controller
             'moneda' => 'nullable|in:PEN,USD',
             'pax' => 'required|array|min:1',
             'pax.*.edad' => 'required|integer|min:0|max:120',
+            // T-046: todo opcional. Sin residencia es nacional; el nombre y el documento
+            // llegan a reserva_pasajeros (cotizacion_pasajeros no los tiene).
+            'pax.*.residencia' => 'nullable|in:'.CotizacionPasajero::RESIDENCIA_NACIONAL.','.CotizacionPasajero::RESIDENCIA_EXTRANJERO,
+            'pax.*.nombre' => 'nullable|string|max:250',
+            'pax.*.documento' => 'nullable|string|max:50',
+            'cliente_viaja' => 'nullable|boolean',
         ] + $this->reglasLineas($legacy));
 
         if ($validator->fails()) {
@@ -90,7 +99,10 @@ class VentaDirectaController extends Controller
                 ? DestinoAtractivo::findOrFail($validado['destino_atractivo_id'])->nombre
                 : $validado['destino'];
 
-            [$reserva, $alertaCupoExcedido, $alternativa] = DB::transaction(function () use ($validado, $lineas, $moneda, $inicio, $hasta, $destino, $edadMaxInfante, $edadMaxNino) {
+            // T-046: el cliente viaja salvo que el vendedor lo haya quitado.
+            $clienteViaja = (bool) ($validado['cliente_viaja'] ?? true);
+
+            [$reserva, $alertaCupoExcedido, $alternativa] = DB::transaction(function () use ($validado, $lineas, $moneda, $inicio, $hasta, $destino, $edadMaxInfante, $edadMaxNino, $clienteViaja) {
                 $codigo = app(CodigoGeneradorService::class)->generar('venta_directa');
                 $prefijo = ConfiguracionCodigo::where('tipo', 'venta_directa')->value('prefijo');
 
@@ -106,11 +118,15 @@ class VentaDirectaController extends Controller
                     'fecha_viaje_hasta' => $hasta->toDateString(),
                 ]);
 
+                // Orden de creación = orden de id: es el que usa crearReservaDesdeAlternativa()
+                // para armar reserva_pasajeros, y con él se alinean los nombres de más abajo.
+                $cotizacionPasajeros = [];
                 foreach ($validado['pax'] as $pax) {
-                    CotizacionPasajero::create([
+                    $cotizacionPasajeros[] = CotizacionPasajero::create([
                         'cotizacion_id' => $cotizacion->id,
                         'edad' => $pax['edad'],
                         'tipo_pax' => $this->derivarTipoPax((int) $pax['edad'], $edadMaxInfante, $edadMaxNino),
+                        'residencia' => $pax['residencia'] ?? CotizacionPasajero::RESIDENCIA_NACIONAL,
                     ]);
                 }
 
@@ -148,8 +164,19 @@ class VentaDirectaController extends Controller
                 AlternativaController::descartarOtras($alternativa); // no-op acá (única alternativa) — mismo criterio de reuso que ReservaController::aceptar()
                 app(AccionesCrm::class)->cerrarPendientesDeCotizacion($alternativa->cotizacion_id, 'Cotización aceptada'); // T-051: ídem, no-op en una cotización recién creada
 
+                // T-046: el cliente (persona natural) va de primer adulto, igual que al aceptar una
+                // cotización (T-017). Si el vendedor escribió a alguien en ese lugar, manda lo que
+                // escribió y la ficha del cliente no se crea.
+                $primerAdulto = collect($cotizacionPasajeros)->search(fn (CotizacionPasajero $c) => $c->tipo_pax === 'adulto');
+                $escritoEnElPrimero = $primerAdulto !== false && $this->tieneDatos($validado['pax'][$primerAdulto]);
+                $pasajeroPorDefecto = $clienteViaja && ! $escritoEnElPrimero
+                    ? app(PasajeroCatalogoService::class)->pasajeroPorDefecto(Client::find($validado['cliente_id']))
+                    : null;
+
                 [$reserva, $alertaCupoExcedido] = app(ReservaController::class)
-                    ->crearReservaDesdeAlternativa($alternativa->fresh());
+                    ->crearReservaDesdeAlternativa($alternativa->fresh(), [], $pasajeroPorDefecto);
+
+                $this->guardarNombres($reserva, $cotizacionPasajeros, $validado['pax']);
 
                 return [$reserva, $alertaCupoExcedido, $alternativa->fresh()];
             });
@@ -179,6 +206,38 @@ class VentaDirectaController extends Controller
         ]);
     }
 
+    private function tieneDatos(array $pax): bool
+    {
+        return filled($pax['nombre'] ?? null) || filled($pax['documento'] ?? null);
+    }
+
+    // T-046: los nombres opcionales van a los reserva_pasajeros recién creados (cotizacion_pasajeros
+    // no tiene nombre ni documento), alineados por su cotizacion_pasajero_id. Con nombre y documento
+    // se sincroniza el catálogo por el mismo camino que ReservaPasajeroController. Una fila sin
+    // datos queda como está (null, o el cliente si le tocó).
+    private function guardarNombres($reserva, array $cotizacionPasajeros, array $pax): void
+    {
+        $catalogo = app(PasajeroCatalogoService::class);
+
+        foreach ($cotizacionPasajeros as $i => $cotizacionPasajero) {
+            if (! $this->tieneDatos($pax[$i])) {
+                continue;
+            }
+
+            $reservaPasajero = ReservaPasajero::where('reserva_id', $reserva->id)
+                ->where('cotizacion_pasajero_id', $cotizacionPasajero->id)
+                ->firstOrFail();
+            $reservaPasajero->update([
+                'nombre' => filled($pax[$i]['nombre'] ?? null) ? trim($pax[$i]['nombre']) : null,
+                'documento' => filled($pax[$i]['documento'] ?? null) ? trim($pax[$i]['documento']) : null,
+            ]);
+
+            if ($reservaPasajero->nombre && $reservaPasajero->documento) {
+                $catalogo->sincronizarDesdeReserva($reservaPasajero);
+            }
+        }
+    }
+
     // T-045 / T-085 — total en vivo de Venta directa. NO guarda nada (ni
     // cotización, ni correlativo, ni lock). Vive en el backend porque
     // clasificar a los pasajeros por edad exige ConfiguracionAgencia, que un
@@ -200,6 +259,7 @@ class VentaDirectaController extends Controller
             'moneda' => 'nullable|in:PEN,USD',
             'pax' => 'required|array|min:1',
             'pax.*.edad' => 'required|integer|min:0|max:120',
+            'pax.*.residencia' => 'nullable|in:'.CotizacionPasajero::RESIDENCIA_NACIONAL.','.CotizacionPasajero::RESIDENCIA_EXTRANJERO,
         ] + $this->reglasLineas(false));
 
         if ($validator->fails()) {
@@ -217,8 +277,13 @@ class VentaDirectaController extends Controller
 
         [$edadMaxInfante, $edadMaxNino] = $this->umbralesEdad();
         $conteo = ['adulto' => 0, 'nino' => 0, 'infante' => 0];
+        $extranjeros = $conteo; // T-046: cuántos de cada tipo son extranjeros (lo usa T-047 para el precio del tour)
         foreach ($validado['pax'] as $pax) {
-            $conteo[$this->derivarTipoPax((int) $pax['edad'], $edadMaxInfante, $edadMaxNino)]++;
+            $tipo = $this->derivarTipoPax((int) $pax['edad'], $edadMaxInfante, $edadMaxNino);
+            $conteo[$tipo]++;
+            if (($pax['residencia'] ?? null) === CotizacionPasajero::RESIDENCIA_EXTRANJERO) {
+                $extranjeros[$tipo]++;
+            }
         }
 
         $inicio = ! empty($validado['fecha_servicio']) ? Carbon::parse($validado['fecha_servicio'])->startOfDay() : null;
@@ -252,7 +317,7 @@ class VentaDirectaController extends Controller
 
                 // Un hotel no ofrece "por persona": sale solo la tarifa fija.
                 if (! $linea['es_hotel']) {
-                    $fila['por_persona'] = ['total' => $porPersona, 'desglose' => $this->desglose($tarifa, $conteo)];
+                    $fila['por_persona'] = ['total' => $porPersona, 'desglose' => $this->desglose($tarifa, $conteo, $extranjeros)];
                 }
                 $fila['tarifa_fija'] = [
                     'total' => $fija,
@@ -274,6 +339,9 @@ class VentaDirectaController extends Controller
         return response()->json([
             'code' => 200,
             'moneda' => $moneda,
+            // T-046: los rangos de edad que la pantalla muestra bajo cada grupo. Salen acá
+            // porque GET configuracion-agencia pide un permiso que el vendedor no tiene.
+            'umbrales' => ['infante_max' => $edadMaxInfante, 'nino_max' => $edadMaxNino],
             'total' => $totalCompleto ? round($total, 2) : null,
             'fecha_viaje_hasta' => $inicio ? $this->fechaViajeHasta($lineas, $inicio)->toDateString() : null,
             'lineas' => $salida,
@@ -354,7 +422,7 @@ class VentaDirectaController extends Controller
         ]);
     }
 
-    private function desglose(ProveedorTarifa $tarifa, array $conteo): array
+    private function desglose(ProveedorTarifa $tarifa, array $conteo, ?array $extranjeros = null): array
     {
         $precios = [
             'adulto' => (float) $tarifa->precio_venta_adulto,
@@ -363,7 +431,8 @@ class VentaDirectaController extends Controller
         ];
         $desglose = [];
         foreach ($conteo as $tipo => $n) {
-            $desglose[$tipo] = ['cantidad' => $n, 'precio' => $precios[$tipo]];
+            $desglose[$tipo] = ['cantidad' => $n, 'precio' => $precios[$tipo]]
+                + ($extranjeros === null ? [] : ['extranjeros' => $extranjeros[$tipo]]);
         }
 
         return $desglose;
