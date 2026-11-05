@@ -1774,7 +1774,7 @@ class AlternativaItemController extends Controller
     // rellena con el default de la agencia (configuracion_agencia) solo lo
     // que falte. Snapshot en creación — el default de agencia NO se
     // recalcula después si cambia (mismo criterio que costo_snapshot).
-    private function resolverTratamientoTributario(?string $tipAfeIgv, ?string $destinoTributario): array
+    public static function resolverTratamientoTributario(?string $tipAfeIgv, ?string $destinoTributario): array
     {
         if ($tipAfeIgv !== null && $destinoTributario !== null) {
             return ['tip_afe_igv' => $tipAfeIgv, 'destino_tributario' => $destinoTributario];

@@ -15,6 +15,7 @@ use App\Models\Product\Product;
 use App\Models\Sale\Sale;
 use App\Models\Sale\SaleDetail;
 use App\Services\AdvanceApplicationService;
+use App\Services\AgenciaViajes\CriterioTributarioService;
 use App\Services\AgenciaViajes\PriceEngineService;
 use App\Services\AgenciaViajes\TourLineaService;
 use App\Services\Cobro\CobroVentaService;
@@ -109,32 +110,8 @@ class ReservaFacturacionController extends Controller
 
     private const DESTINO_TRIBUTARIO_DEFAULT = 'nacional';
 
-    // Fila 13, 1c: la única mezcla permitida es la de un tour con IGV
-    // mezclado (ver mezclaDentroDeUnaCargaTour()).
-    private const MENSAJE_MEZCLA_TRIBUTARIA = 'La reserva combina servicios con tratamiento tributario '
-        . 'distinto (ej. exonerado Amazonía + gravado nacional). Solo un mismo tour puede llevar los dos '
-        . 'en un comprobante; factura estos servicios en comprobantes separados o revísalo con el contador.';
-
-    // Caso 4 (mezcla) sigue sin responder — sin cambios acá, ver arriba.
-    // Caso "extranjero"/exportación (2026-09-24): sigue bloqueado sin
-    // ninguna excepción — requiere validaciones legales que este flujo no
-    // hace (cliente no domiciliado, consumo fuera del país, medios
-    // bancarizados), fuera de alcance de este fix.
-    private const MENSAJE_TRATAMIENTO_TRIBUTARIO_EXTRANJERO = 'Esta reserva incluye servicios de exportación/extranjero. '
-        . 'La facturación de estos casos está pausada — requiere validaciones legales (cliente no domiciliado, medios '
-        . 'bancarizados) que este flujo todavía no hace. Contacta a soporte.';
-
-    // Caso 3 (Amazonía) confirmado con el usuario (2026-09-24): un
-    // servicio realizado en la Amazonía está exonerado de IGV según Ley
-    // 27037, independientemente del domicilio fiscal de la agencia. Pero
-    // nunca se factura solo porque destino_tributario llegó así copiado de
-    // la proveedor_tarifa (dato que ya se encontró sospechoso al menos una
-    // vez para un producto real) — se exige que un humano lo confirme
-    // ítem por ítem primero, ver ReservaController::
-    // overrideTratamientoTributario() / ReservaItem::motivo_override_tributario.
-    private const MENSAJE_AMAZONIA_SIN_CONFIRMAR = 'Esta reserva incluye servicios de la Amazonía (exonerados de IGV '
-        . 'por Ley 27037), pero todavía no fueron confirmados uno por uno. Confirmá el tratamiento tributario de cada '
-        . 'servicio antes de poder facturarlos.';
+    // Los mensajes del guardia tributario (mezcla, extranjero, Amazonía sin
+    // confirmar) viven en CriterioTributarioService (T-085).
 
     // Facturación externa por tenant (PEGAR-EN-CLAUDE-CODE-facturacion-externa-
     // tenant.md §3.1) — doble capa: el frontend ya oculta el botón "Facturar"
@@ -1526,84 +1503,34 @@ class ReservaFacturacionController extends Controller
 
     private function detectarMezclaTributaria(Collection $items): ?array
     {
-        $destinos = $items->map(fn (ReservaItem $it) => self::resolverDestinoTributario($it))->unique()->values();
-        $itemsPorDestino = $this->mapearItemsPorTratamientoTributario($items);
+        // El criterio vive en CriterioTributarioService (lo comparte la vista
+        // previa de Venta directa, T-085); acá solo se traducen los ReservaItem
+        // a su lista neutral y se arma la estructura de bloqueo de la respuesta.
+        $bloqueo = app(CriterioTributarioService::class)->evaluar(
+            $items->map(fn (ReservaItem $it) => [
+                'id' => $it->id,
+                'destino' => self::resolverDestinoTributario($it),
+                'carga_tour' => $it->carga_tour,
+                'confirmado' => $it->motivo_override_tributario !== null,
+            ])
+        );
 
-        // 'extranjero' sigue bloqueado sin excepción (ver constante), solo o
-        // mezclado con otro destino.
-        if ($destinos->contains('extranjero')) {
-            return [
-                'bloqueado_tributario' => true,
-                'motivo' => $destinos->count() > 1 ? self::MENSAJE_MEZCLA_TRIBUTARIA : self::MENSAJE_TRATAMIENTO_TRIBUTARIO_EXTRANJERO,
-                'destinos_tributarios_detectados' => $destinos->all(),
-                'items_por_destino_tributario' => $itemsPorDestino,
-            ];
+        if ($bloqueo === null) {
+            return null;
         }
 
-        if ($destinos->count() > 1 && ! $this->mezclaDentroDeUnaCargaTour($items)) {
-            return [
-                'bloqueado_tributario' => true,
-                'motivo' => self::MENSAJE_MEZCLA_TRIBUTARIA,
-                'destinos_tributarios_detectados' => $destinos->all(),
-                'items_por_destino_tributario' => $itemsPorDestino,
-            ];
+        $respuesta = [
+            'bloqueado_tributario' => true,
+            'motivo' => $bloqueo['motivo'],
+            'destinos_tributarios_detectados' => $bloqueo['destinos'],
+            'items_por_destino_tributario' => $this->mapearItemsPorTratamientoTributario($items),
+        ];
+
+        if (isset($bloqueo['sin_confirmar_ids'])) {
+            $respuesta['items_sin_confirmar_ids'] = collect($bloqueo['sin_confirmar_ids']);
         }
 
-        // 'amazonia' se puede facturar SOLO si cada ítem Amazonía ya fue
-        // confirmado a mano (motivo_override_tributario no nulo) — ver
-        // constante MENSAJE_AMAZONIA_SIN_CONFIRMAR arriba para el porqué.
-        // Fila 13, 1c (D4): en un tour con IGV mezclado se confirma cada
-        // línea Amazonía de la carga, igual que cualquier otro ítem.
-        $sinConfirmar = $items
-            ->filter(fn (ReservaItem $it) => self::resolverDestinoTributario($it) === 'amazonia'
-                && $it->motivo_override_tributario === null)
-            ->values();
-
-        if ($sinConfirmar->isNotEmpty()) {
-            return [
-                'bloqueado_tributario' => true,
-                'motivo' => self::MENSAJE_AMAZONIA_SIN_CONFIRMAR,
-                'destinos_tributarios_detectados' => $destinos->all(),
-                'items_por_destino_tributario' => $itemsPorDestino,
-                'items_sin_confirmar_ids' => $sinConfirmar->pluck('id')->values(),
-            ];
-        }
-
-        return null;
-    }
-
-    // Fila 13, fase 1c (D1 y D5, decididas con el usuario el 14 y 16-oct-2026):
-    // un tour cuyo Incluye mezcla servicios de la Amazonía (exonerados) y de
-    // fuera (gravados) se carga como varias líneas con la misma carga_tour, y
-    // SUNAT exige cada concepto con su afectación. Esas líneas sí pueden ir
-    // juntas en un comprobante. La mezcla se permite solo si:
-    // - exactamente UNA carga_tour tiene líneas de más de un destino, y
-    // - todo lo demás del comprobante (servicios sueltos y otras cargas)
-    //   comparte un solo destino.
-    // Dos cargas mezcladas, o servicios sueltos de distinto destino, siguen
-    // bloqueados. Un combo (carga_combo) no cuenta como una sola carga (D5):
-    // cada tour del combo es su propia carga_tour.
-    private function mezclaDentroDeUnaCargaTour(Collection $items): bool
-    {
-        $cargasMezcladas = $items
-            ->filter(fn (ReservaItem $it) => $it->carga_tour !== null)
-            ->groupBy('carga_tour')
-            ->filter(fn (Collection $lineas) => $lineas
-                ->map(fn (ReservaItem $it) => self::resolverDestinoTributario($it))
-                ->unique()
-                ->count() > 1);
-
-        if ($cargasMezcladas->count() !== 1) {
-            return false;
-        }
-
-        $cargaMezclada = $cargasMezcladas->keys()->first();
-
-        return $items
-            ->reject(fn (ReservaItem $it) => $it->carga_tour === $cargaMezclada)
-            ->map(fn (ReservaItem $it) => self::resolverDestinoTributario($it))
-            ->unique()
-            ->count() <= 1;
+        return $respuesta;
     }
 
     // Destino que se guarda en sales.destino. Con una mezcla permitida (un
