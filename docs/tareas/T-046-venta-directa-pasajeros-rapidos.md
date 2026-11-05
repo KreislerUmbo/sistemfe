@@ -86,9 +86,29 @@ cd admin-start-kit && npm run type-check
 ---
 
 ## Resultado
-- **Commits:**
-- **Tests:** (nuevos / suite completa)
+- **Commits** (rama `feat/T-046-venta-directa-pasajeros`):
+  - `8e0ca33` refactor: `PasajeroCatalogoService::pasajeroPorDefecto()` (antes el cierre de `aceptar()`) y
+    `sincronizarDesdeReserva()` (antes `ReservaPasajeroController::sincronizarCatalogo()`, privado). Sin cambio de comportamiento.
+  - `b299c45` backend: `VentaDirectaController` (residencia, nombre, documento, `cliente_viaja`; umbrales y extranjeros en la vista previa).
+  - `fd0d455` frontend: bloque 2 · Pasajeros de `venta-directa.vue` y tipos de `ventaDirectaService.ts`.
+- **Tests:** 9 nuevos en `VentaDirectaPasajerosTest` (CA1, CA2, CA3b ×3, primera fila escrita a mano, CA4,
+  largos máximos, vista previa). CA3c: los 25 tests de T017/T018/ReservaPasajero pasaron sin tocarlos.
+  Suite completa: 2045 pasan, 1 falla (`Fila13Fase1cFacturacionTest`, la intermitente conocida; sola pasa 32/32).
+  `type-check`: 47 errores antes y después (ninguno en los archivos tocados). No corrí `npm run build`.
+  CA3 (prueba funcional, Playwright en agencia-demo): 2 adultos nac. + 1 adulto ext. + 1 niño ext. → resumen
+  «3 adultos (1 ext.) · 1 niño (1 ext.)»; al elegir un cliente con DNI, la primera fila de adulto sale con su nombre y documento;
+  «Quitar» deja solo las cantidades; sin errores en consola. No creé una venta real desde la pantalla.
 - **Desviaciones de la tarea y por qué:**
+  - Los nombres se alinean con `reserva_pasajeros` por `cotizacion_pasajero_id`, no por «id asc»: es el mismo orden, pero no depende de él.
+  - El cliente solo va a la primera fila de adulto si el vendedor no escribió nombre ni documento ahí; si escribió a otra persona,
+    manda lo escrito y no se crea la ficha del cliente (evita una ficha sin uso). Con `cliente_viaja` ausente es `true`, como pedía la tarea;
+    por eso un `store()` con payload viejo y cliente persona natural ahora también pone al cliente de primer adulto.
+  - La pantalla no manda nombre/documento de la fila del cliente si siguen siendo los del cliente (los completa el backend con su ficha);
+    si el vendedor vacía ambos campos, manda `cliente_viaja=false`.
+  - Un niño tiene la edad editable dentro de su rango (en «Agregar nombres»); adultos usan 30 y infantes 0.
+  - La vista previa agrega `extranjeros` por tipo solo en la vista con `lineas[]`; la de tarifa suelta (T-045) queda igual.
 
 ## Hallazgos fuera de alcance
-- 
+- Los rangos de edad («13 años o más»…) solo aparecen cuando ya hay una vista previa (necesita al menos un servicio): antes de eso el
+  contador no los muestra. Se podría resolver devolviéndolos también en otra respuesta que el vendedor sí pueda leer.
+- Los pasajeros de la venta directa siguen sin tipo de documento: `sincronizarDesdeReserva()` guarda todo como `DNI` (limitación previa del catálogo).
