@@ -83,9 +83,20 @@ una tarifa por persona, un hotel de 2 noches y un concepto libre.
 ---
 
 ## Resultado
-- **Commits:**
-- **Tests:**
+- **Commits:** uno solo en `feat/T-086-venta-directa-servicios-maqueta` (construida por Sonnet sin commitear; revisada y commiteada por Opus).
+- **Revisión (Opus, 05-nov):** prueba funcional en agencia-demo con Playwright, sin errores en consola. CA1: sin
+  servicios el catálogo abre solo en tarjetas. CA2: «Agregar» del concepto libre deshabilitado sin descripción o
+  precio; «Cena show» 2 × S/ 50.00 → S/ 100.00. CA3: Desayuno recién agregado en naranja, total «—», «Por elegir»
+  en el resumen; con «Por persona» → S/ 60.00 (2 adultos). CA4: hotel doble, 2 noches con el contador → S/ 560.00,
+  «Sale el sáb 07/11». CA5: en dólares la tarifa en soles muestra «Está en soles». Total S/ 720.00.
+  Ajustes: el archivo había quedado entero en CRLF (se volvió a LF); el texto de «Por persona» quedaba centrado
+  en vertical (ahora arriba, como «Por unidad»). El precio mayor que 0 del concepto libre es el de la maqueta.
+- **Tests:** `php artisan test --filter=VentaDirecta` → 38 pasan (153 aserciones), sin tocarlos. `npm run type-check`: ningún error en `venta-directa.vue` (los que salen son de archivos ajenos: fake-backend, portal, router). **Prueba funcional en el navegador (CA1-CA5): no hecha** — el navegador de Playwright estaba ocupado; falta que la revises en agencia-demo con la maqueta al lado.
 - **Desviaciones de la tarea y por qué:**
+  - Solo se tocó el frontend (`venta-directa.vue`); el payload y el backend quedan igual. Una línea sin elegir cobro sigue sin poder crearse (`faltante` ya lo exigía).
+  - La fecha de cada servicio sigue siendo un selector de «día del viaje» (no un `CampoFecha`), porque el dato es el número de día, no una fecha libre. Va compacto, con ícono de calendario.
+  - «Agregar» del concepto libre exige precio mayor que 0 (como la maqueta); antes se aceptaba 0.
+  - La tarjeta recién agregada se marca con el `linea-resaltada` de siempre (2,5 s), ahora con borde verde y «✓ Agregado».
 
 ## Hallazgos fuera de alcance
 -
