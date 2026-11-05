@@ -175,7 +175,7 @@
                                             <select class="form-select form-select-sm w-auto py-0" v-model.number="l.dia" :aria-label="`Fecha de ${nombreLinea(l)}`">
                                                 <option v-for="d in DIAS" :key="d" :value="d">{{ esHotel(l) ? 'Entra el ' : '' }}{{ etiquetaDia(d) }}</option>
                                             </select>
-                                            <span v-if="afectacionDe(i)" class="badge" :class="afectacionDe(i)!.clase">{{ afectacionDe(i)!.texto }}</span>
+                                            <span v-for="a in afectacionesDe(i)" :key="a.texto" class="badge" :class="a.clase">{{ a.texto }}</span>
                                         </div>
                                         <div v-if="detalleLinea(l, i)" class="small mt-1">{{ detalleLinea(l, i) }}</div>
                                     </div>
@@ -235,6 +235,7 @@
                                 <span class="fw-semibold small">¿Qué servicio agregas?</span>
                                 <div class="d-flex align-items-center gap-2">
                                     <div class="btn-group btn-group-sm" role="tablist" aria-label="Tipo de servicio">
+                                        <button type="button" role="tab" :aria-selected="pestana === 'tour'" class="btn" :class="pestana === 'tour' ? 'btn-primary' : 'btn-outline-primary'" @click="pestana = 'tour'">Tours</button>
                                         <button type="button" role="tab" :aria-selected="pestana === 'proveedor'" class="btn" :class="pestana === 'proveedor' ? 'btn-primary' : 'btn-outline-primary'" @click="pestana = 'proveedor'">Tarifas de proveedor</button>
                                         <button type="button" role="tab" :aria-selected="pestana === 'libre'" class="btn" :class="pestana === 'libre' ? 'btn-primary' : 'btn-outline-primary'" @click="pestana = 'libre'">Concepto libre</button>
                                     </div>
@@ -242,7 +243,7 @@
                                 </div>
                             </div>
 
-                            <div v-if="pestana === 'proveedor'">
+                            <div v-if="pestana !== 'libre'">
                                 <div class="row g-2 mb-2">
                                     <div class="col-12 col-md-6">
                                         <!-- Filtro propio del catálogo: cambiarlo no toca el destino de la reserva. -->
@@ -251,15 +252,31 @@
                                     </div>
                                     <div class="col-12 col-md-6">
                                         <input type="text" class="form-control form-control-sm" v-model="busqueda" @input="onBusqueda"
-                                            placeholder="Buscar por proveedor o servicio (opcional)" aria-label="Buscar en el catálogo">
+                                            :placeholder="pestana === 'tour' ? `Buscar tour${filtroDestinoTexto ? ' en ' + filtroDestinoTexto : ''}…` : 'Buscar por proveedor o servicio (opcional)'" aria-label="Buscar en el catálogo">
                                     </div>
                                 </div>
                                 <div class="small text-muted mb-2">
-                                    <template v-if="filtroDestinoId">Tarifas de «{{ filtroDestinoTexto }}» y sus lugares.</template>
-                                    <template v-else>Tarifas de todos los destinos.</template>
+                                    <template v-if="filtroDestinoId">{{ pestana === 'tour' ? 'Tours' : 'Tarifas' }} de «{{ filtroDestinoTexto }}» y sus lugares.</template>
+                                    <template v-else>{{ pestana === 'tour' ? 'Tours' : 'Tarifas' }} de todos los destinos.</template>
                                 </div>
                                 <div v-if="cargandoCatalogo" class="small text-muted"><span class="spinner-border spinner-border-sm me-1"></span>Cargando…</div>
                                 <div v-else-if="errorCatalogo" class="alert alert-warning py-2 px-3 small mb-0">{{ errorCatalogo }}</div>
+                                <div v-else-if="pestana === 'tour' && catalogoTours.length === 0" class="small text-muted fst-italic">No hay tours para este filtro.</div>
+                                <!-- Tours: tarjetas sin escribir, con «Desde S/ X p/p» (maqueta). Los combos se ven, pero se venden desde el cotizador. -->
+                                <div v-else-if="pestana === 'tour'" class="catalogo-grilla">
+                                    <div v-for="t in catalogoTours" :key="t.id" class="border rounded bg-white p-2 d-flex flex-column gap-2">
+                                        <div>
+                                            <div class="fw-semibold small">{{ t.nombre }}</div>
+                                            <div class="small text-muted">{{ t.tipo === 'paquete_combo' ? 'Combo de varios tours' : subTour(t) }}</div>
+                                        </div>
+                                        <div class="d-flex align-items-center justify-content-between gap-2 mt-auto">
+                                            <span class="small">{{ precioTour(t) }}</span>
+                                            <button type="button" class="btn btn-sm text-nowrap"
+                                                :class="estadoTour(t).puede ? 'btn-primary' : 'btn-outline-secondary'"
+                                                :disabled="!estadoTour(t).puede" @click="agregarTour(t)">{{ estadoTour(t).texto }}</button>
+                                        </div>
+                                    </div>
+                                </div>
                                 <div v-else-if="catalogo.length === 0" class="small text-muted fst-italic">No hay tarifas para este filtro.</div>
                                 <div v-else class="catalogo-grilla">
                                     <div v-for="t in catalogo" :key="t.id" class="border rounded bg-white p-2 d-flex flex-column gap-2">
@@ -387,6 +404,7 @@ import Swal from 'sweetalert2/dist/sweetalert2.js';
 import httpClient from '@/helpers/http-client';
 import ClientFormQuick from '@/components/Sales/ClientFormQuick.vue';
 import { proveedorService } from '@/services/admin/proveedorService';
+import { bibliotecaCotizadorService } from '@/services/admin/bibliotecaCotizadorService';
 import {
     ventaDirectaService,
     type LineaVentaDirecta,
@@ -396,7 +414,7 @@ import {
     type VistaPreviaVentaDirecta,
 } from '@/services/admin/ventaDirectaService';
 import type { Client } from '@/types/clients';
-import type { ProveedorTarifa } from '@/types/agencia-viajes';
+import type { PaquetePlantilla, ProveedorTarifa } from '@/types/agencia-viajes';
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
 
@@ -577,14 +595,16 @@ const clienteViajaEnvio = computed<boolean>(() => {
 const paxParaCrear = () => paxOrdenados.value.map((f) => ({ edad: f.edad, residencia: f.residencia, ...datosEscritos(f) }));
 
 // ── Líneas ─────────────────────────────────────────────────────────────
-// Una línea es un servicio de la venta. T-047 suma el origen 'tour'.
+// Una línea es un servicio de la venta: una tarifa de proveedor, un tour del catálogo (T-047) o un concepto libre.
 type Linea = {
     uid: number;
-    origen: 'proveedor' | 'manual';
+    origen: 'proveedor' | 'manual' | 'tour';
     dia: number; // día del viaje: 1 = fecha de inicio
     cantidad: number; // unidades; en un hotel, las noches
     // proveedor
     tarifa?: ProveedorTarifa;
+    // tour del catálogo
+    tour?: PaquetePlantilla;
     // T-045: sin valor por defecto; el vendedor elige viendo los dos totales.
     modoPrecio: 'por_persona' | 'tarifa_fija' | null;
     // concepto libre
@@ -599,9 +619,11 @@ let siguienteUid = 1;
 const esHotel = (l: Linea) => l.origen === 'proveedor' && !!l.tarifa?.tipo_habitacion;
 // Un hotel se nombra por el hotel (su servicio siempre es «Tipo de Habitación»).
 const nombreTarifa = (t?: ProveedorTarifa) => (t?.tipo_habitacion ? t.proveedor_servicio?.proveedor?.razon_social : t?.proveedor_servicio?.destino_servicio?.servicio?.nombre) ?? 'Servicio';
-const nombreLinea = (l: Linea) => (l.origen === 'proveedor' ? nombreTarifa(l.tarifa) : (l.descripcion.trim() || 'Concepto libre'));
+const nombreLinea = (l: Linea) => (l.origen === 'tour' ? (l.tour?.nombre ?? 'Tour') : l.origen === 'proveedor' ? nombreTarifa(l.tarifa) : (l.descripcion.trim() || 'Concepto libre'));
 const proveedorDe = (l: Linea) => l.tarifa?.proveedor_servicio?.proveedor?.razon_social ?? '';
-const etiquetaTipo = (l: Linea) => esHotel(l)
+const etiquetaTipo = (l: Linea) => l.origen === 'tour'
+    ? { texto: 'Tour', clase: 'bg-success-subtle text-success-emphasis' }
+    : esHotel(l)
     ? { texto: 'Hotel', clase: 'bg-info-subtle text-info-emphasis' }
     : l.origen === 'proveedor'
         ? { texto: 'Proveedor', clase: 'bg-primary-subtle text-primary-emphasis' }
@@ -609,6 +631,7 @@ const etiquetaTipo = (l: Linea) => esHotel(l)
 const etiquetaDia = (d: number) => `${formatDiaCorto(sumarDiasISO(fechaInicio.value, d - 1))}${d === 1 ? ' (inicio)' : ` · día ${d}`}`;
 // Segunda línea de la tarjeta: el proveedor (o «Hotel · tipo de habitación»).
 const subLinea = (l: Linea) => l.origen === 'manual' ? 'Concepto libre'
+    : l.origen === 'tour' ? `Tour · ${subTour(l.tour!)} · se engancha a la salida del día`
     : l.tarifa?.tipo_habitacion ? `Hotel · ${l.tarifa.tipo_habitacion}` : proveedorDe(l);
 
 const dinero = (monto: number, m: MonedaVenta = moneda.value) =>
@@ -636,6 +659,34 @@ const agregarLinea = (l: Linea) => {
     resaltar(l.uid);
 };
 const agregarTarifa = (t: ProveedorTarifa) => agregarLinea(nuevaLinea({ origen: 'proveedor', tarifa: t }));
+
+// Tours (T-047). «Medio día · salida 08:30»: lo que el vendedor necesita para reconocerlo.
+const subTour = (t: PaquetePlantilla): string => {
+    const horas = Number(t.duracion_horas);
+    const duracion = horas >= 24 ? `${Math.round(horas / 24)} días` : (horas > 0 ? `${horas} h` : '');
+    return [duracion, t.hora_salida ? `salida ${t.hora_salida.slice(0, 5)}` : ''].filter(Boolean).join(' · ');
+};
+const monedaDeTour = (t: PaquetePlantilla): MonedaVenta => t.moneda ?? 'PEN';
+const precioTour = (t: PaquetePlantilla) => t.tipo === 'paquete_combo' || t.precio_venta_final == null
+    ? ''
+    : `Desde ${dinero(Number(t.precio_venta_final), monedaDeTour(t))} p/p`;
+// Por qué un tour no se puede agregar (el botón lo dice, como en la maqueta).
+const estadoTour = (t: PaquetePlantilla): { puede: boolean; texto: string } => {
+    if (t.tipo === 'paquete_combo') return { puede: false, texto: 'Solo desde el cotizador' };
+    if (t.precio_venta_final == null) return { puede: false, texto: 'Sin precio' };
+    if (monedaDeTour(t) !== moneda.value) return { puede: false, texto: `Está en ${NOMBRE_MONEDA[monedaDeTour(t)]}` };
+    if (lineas.value.some((l) => l.tour?.id === t.id)) return { puede: false, texto: 'Agregado' };
+    return { puede: true, texto: 'Agregar' };
+};
+const agregarTour = (t: PaquetePlantilla) => {
+    if (!estadoTour(t).puede) return;
+    // Sin destino todavía, se toma el del primer tour (se llena solo y se puede cambiar).
+    if (!destinoId.value && t.destino_atractivo_id) {
+        destinoId.value = t.destino_atractivo_id;
+        destinoTexto.value = t.destino_atractivo?.nombre ?? '';
+    }
+    agregarLinea(nuevaLinea({ origen: 'tour', tour: t }));
+};
 
 // Concepto libre: se llena en el formulario del catálogo y la línea nace completa.
 const libreDesc = ref<string>('');
@@ -666,12 +717,14 @@ const quitarLinea = (i: number) => { lineas.value.splice(i, 1); if (lineas.value
 
 // ── Catálogo (en el mismo lugar que las líneas) ────────────────────────
 const catalogoAbierto = ref<boolean>(true); // sin líneas, viene abierto
-const pestana = ref<'proveedor' | 'libre'>('proveedor');
+const pestana = ref<'tour' | 'proveedor' | 'libre'>('tour');
 const busqueda = ref('');
 // Filtro del catálogo, separado del destino de la reserva: buscar en otro lugar no cambia la venta.
 const filtroDestinoId = ref<number | null>(null);
 const filtroDestinoTexto = ref<string>('');
 const catalogo = ref<ProveedorTarifa[]>([]);
+// Tours del destino y, al final, los combos (que solo se muestran: se venden desde el cotizador).
+const catalogoTours = ref<PaquetePlantilla[]>([]);
 const cargandoCatalogo = ref(false);
 const errorCatalogo = ref('');
 let catalogoTimeout: any = null;
@@ -683,14 +736,21 @@ const cargarCatalogo = async () => {
     cargandoCatalogo.value = true;
     errorCatalogo.value = '';
     try {
-        const res = await proveedorService.biblioteca({
-            search: busqueda.value.trim() || undefined,
-            destino_atractivo_id: filtroDestinoId.value ?? undefined,
-        });
-        if (seq === catalogoSeq) catalogo.value = res.proveedor_tarifas;
+        const filtros = { search: busqueda.value.trim() || undefined, destino_atractivo_id: filtroDestinoId.value ?? undefined };
+        const [res, tours, combos] = await Promise.all([
+            proveedorService.biblioteca(filtros),
+            bibliotecaCotizadorService.buscar({ tipo: 'tour', ...filtros }),
+            bibliotecaCotizadorService.buscar({ tipo: 'paquete', ...filtros }),
+        ]);
+        if (seq === catalogoSeq) {
+            catalogo.value = res.proveedor_tarifas;
+            // Un tour solo de itinerario (de mayorista) no se vende.
+            catalogoTours.value = [...tours.resultados, ...combos.resultados].filter((r) => r.tipo_resultado !== 'proveedor_tarifa' && r.uso !== 'solo_itinerario') as PaquetePlantilla[];
+        }
     } catch (error: any) {
         if (seq !== catalogoSeq) return;
         catalogo.value = [];
+        catalogoTours.value = [];
         errorCatalogo.value = error.response?.status === 403
             ? 'No tienes permiso para ver el catálogo de tarifas. Usa «Concepto libre» o pídelo al administrador.'
             : (error.response?.data?.message ?? 'No se pudo cargar el catálogo.');
@@ -706,7 +766,7 @@ const ponerFiltroEnDestinoDeLaVenta = () => {
 };
 const abrirCatalogo = () => {
     catalogoAbierto.value = true;
-    pestana.value = 'proveedor';
+    pestana.value = 'tour';
     const cambio = filtroDestinoId.value !== destinoId.value;
     ponerFiltroEnDestinoDeLaVenta();
     if (!cambio) cargarCatalogo(); // si cambió, el watch del filtro ya recarga
@@ -746,14 +806,17 @@ const motivoSinCalculo = computed<string>(() => {
 });
 
 // Una línea de tarifa quedó en otra moneda porque se cambió la de la venta después de agregarla.
+const monedaDeLinea = (l: Linea): MonedaVenta | null => (l.origen === 'proveedor' ? (l.tarifa?.moneda ?? null) : l.origen === 'tour' ? monedaDeTour(l.tour!) : null);
 const motivoMoneda = computed<string>(() => {
-    const l = lineas.value.find((x) => x.origen === 'proveedor' && x.tarifa && x.tarifa.moneda !== moneda.value);
+    const l = lineas.value.find((x) => monedaDeLinea(x) !== null && monedaDeLinea(x) !== moneda.value);
     return l
-        ? `La venta es en ${NOMBRE_MONEDA[moneda.value]} y «${nombreLinea(l)}» está en ${NOMBRE_MONEDA[l.tarifa!.moneda]}. No se mezclan monedas: cambia la moneda de la venta o quita esa línea.`
+        ? `La venta es en ${NOMBRE_MONEDA[moneda.value]} y «${nombreLinea(l)}» está en ${NOMBRE_MONEDA[monedaDeLinea(l)!]}. No se mezclan monedas: cambia la moneda de la venta o quita esa línea.`
         : '';
 });
 
-const payloadLineas = (): LineaVentaDirecta[] => lineas.value.map((l) => l.origen === 'proveedor'
+const payloadLineas = (): LineaVentaDirecta[] => lineas.value.map((l) => l.origen === 'tour'
+    ? { origen_tipo: 'tour', dia: l.dia, paquete_plantilla_id: l.tour!.id }
+    : l.origen === 'proveedor'
     ? {
         origen_tipo: 'proveedor', dia: l.dia, proveedor_tarifa_id: l.tarifa!.id,
         modo_precio: esHotel(l) ? 'tarifa_fija' : l.modoPrecio,
@@ -836,7 +899,17 @@ const textoTotalLinea = (l: Linea, i: number, resumen = false): string => {
 };
 
 // Una línea de detalle bajo la fecha: «2 noches × S/ 120.00 por noche», «2 × S/ 50.00», el desglose…
+const GRUPO_TOUR: Record<string, [string, string]> = {
+    adulto_nac: ['adulto nac.', 'adultos nac.'], adulto_ext: ['adulto ext.', 'adultos ext.'],
+    nino_nac: ['niño nac.', 'niños nac.'], nino_ext: ['niño ext.', 'niños ext.'], infante: ['infante', 'infantes'],
+};
 const detalleLinea = (l: Linea, i: number): string => {
+    if (l.origen === 'tour') {
+        const t = totalesAlDia.value ? vistaPrevia.value!.lineas[i]?.tour : null;
+        if (!t) return '';
+        const partes = t.detalle.map((d) => `${d.cantidad} ${GRUPO_TOUR[d.grupo][d.cantidad === 1 ? 0 : 1]} × ${d.precio}`).join(' + ');
+        return t.temporada ? `${partes} · ${t.temporada}` : partes;
+    }
     if (l.origen === 'manual') return l.precio !== null && cantidadValida(l.cantidad) ? `${l.cantidad} × ${dinero(l.precio)}` : '';
     if (esHotel(l)) {
         return cantidadValida(l.cantidad)
@@ -848,16 +921,19 @@ const detalleLinea = (l: Linea, i: number): string => {
     return l.modoPrecio === 'tarifa_fija' ? `${l.cantidad} × ${dinero(lp.tarifa_fija!.precio_unitario)}` : textoDesglose(lp);
 };
 
-const ETIQUETA_AFECTACION = (lp: VistaPreviaLinea) => {
+const ETIQUETA_AFECTACION = (lp: Pick<VistaPreviaLinea, 'destino_tributario' | 'tip_afe_igv'>) => {
     if (lp.destino_tributario === 'amazonia') return { texto: 'Exonerado · Amazonía', clase: 'bg-success-subtle text-success-emphasis' };
     if (lp.destino_tributario === 'extranjero') return { texto: 'Exportación', clase: 'bg-warning-subtle text-warning-emphasis' };
     if (lp.tip_afe_igv === '20') return { texto: 'Exonerado', clase: 'bg-success-subtle text-success-emphasis' };
     if (lp.tip_afe_igv === '30') return { texto: 'Inafecto', clase: 'bg-secondary-subtle text-secondary-emphasis' };
     return { texto: 'Gravado', clase: 'bg-light text-dark border' };
 };
-const afectacionDe = (i: number) => {
+// Un tour de IGV mezclado muestra una etiqueta por cada afectación de su carga.
+const afectacionesDe = (i: number) => {
     const lp = vistaPrevia.value?.lineas[i];
-    return totalesAlDia.value && lp ? ETIQUETA_AFECTACION(lp) : null;
+    if (!totalesAlDia.value || !lp) return [];
+    const etiquetas = (lp.afectaciones?.length ? lp.afectaciones : [lp]).map(ETIQUETA_AFECTACION);
+    return etiquetas.filter((e, k) => etiquetas.findIndex((x) => x.texto === e.texto) === k);
 };
 
 // ── Resumen ────────────────────────────────────────────────────────────

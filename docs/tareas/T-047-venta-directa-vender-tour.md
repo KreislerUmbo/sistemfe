@@ -75,9 +75,21 @@ cd admin-start-kit && npm run type-check
 ---
 
 ## Resultado
-- **Commits:**
-- **Tests:** (nuevos / suite completa)
+- **Commits:** rama `feat/T-047-venta-directa-tour` (ver `git log main..feat/T-047-venta-directa-tour`).
+- **Tests:** nuevos: `VentaDirectaTourTest` (12; CA1-CA6 + IGV mezclado, moneda, tour desactivado/sin precio, tour junto a un servicio suelto, aviso de salida cancelada). Corrida `--filter="VentaDirecta|Salida|TourLinea|Fila13|Biblioteca|Reserva"`: 548 pasan. Suite completa: no corrida (la corre quien revisa). `type-check`: 47 errores antes y 47 después, ninguno en los archivos tocados.
+- **Qué se hizo:**
+  - Backend (`VentaDirectaController`): línea `origen_tipo='tour'` + `paquete_plantilla_id` (con `exists` en la base del tenant). `store()` la agrega con `AlternativaItemController::desdePlantilla()` (respeta `modo_tours`), y la reserva sale de `crearReservaDesdeAlternativa()`: el enganche a la salida de su fecha lo hace `SalidaEngancheService`, sin código nuevo. La respuesta trae `avisos_salida_cancelada` (T-042) y `avisos` del tour.
+  - Vista previa: en `nuevo` calcula con `TourLineaService::specDelTour()` + `calcular()` (temporada de la fecha de la línea), devuelve el detalle por grupo de pasajeros, la temporada y una afectación por línea de la carga (un tour de IGV mezclado cuenta como una sola carga para `CriterioTributarioService`).
+  - Combo → 422 «Los combos se venden desde el cotizador.»; tour desactivado, solo itinerario, sin precio o en otra moneda de la venta → 422.
+  - `fecha_viaje_hasta` cuenta los días del itinerario del tour.
+  - `BibliotecaCotizadorController` ahora trae el destino del tour (para llenar el destino de la venta).
+  - Frontend (`venta-directa.vue`): pestaña **Tours** (la primera) con tarjetas, buscador y «Desde S/ X p/p»; combos con «Solo desde el cotizador» deshabilitado; línea con etiqueta Tour, fecha, afectación y detalle («2 adultos nac. × 100 + 1 adulto ext. × 150 · Temporada»); si no hay destino, se toma el del primer tour.
 - **Desviaciones de la tarea y por qué:**
+  - Modo `clasico`: la vista previa suma los servicios desarmados con una cuenta propia (`totalTourClasico()`, espejo de `crearItemClasicoDesdeEntrada()`), porque ese camino solo existe dentro de `desdePlantilla()`, que guarda. El test CA4 comprueba que total creado = total del cotizador = vista previa. En ese modo la tarjeta no muestra el desglose «× precio» ni temporada, y la afectación se toma de las tarifas del tour (el guía usa la de la agencia por defecto).
+  - Como en la maqueta, un tour ya agregado queda «Agregado» y deshabilitado: no se puede vender el mismo tour en dos días distintos desde esta pantalla (ver hallazgos).
+  - No se verificó la pantalla en el navegador (solo tests y `type-check`): queda para la revisión con prueba en agencia-demo.
 
 ## Hallazgos fuera de alcance
-- 
+- Vender el mismo tour en dos días distintos (la maqueta lo bloquea con «Agregado»): decidir si se permite.
+- La vista previa en modo `clasico` no muestra desglose ni temporada del tour.
+- `VentaDirectaController::store()` marca `Undefined method 'id'` en el IDE (`auth()->id()`): ya estaba, es solo del analizador.

@@ -58,7 +58,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 | T-036 | AGE | Mayorista: etiquetas, primera opción elegida sola, "solo adultos" a la vista (R6, H22) | por hacer | — | |
 | T-037 | AGE | PDF: nombre de archivo con código y cliente; rótulo correcto de la tabla de hoteles (R8, H20) | por hacer | — | |
 | T-080 | AGE | Cotizador: la alternativa reservada se distingue a simple vista (indicador en la esquina, como el contador de NC de Ventas) y se abre por defecto al entrar | por hacer | — | |
-| T-047 | AGE | Venta directa: vender un tour del catálogo, enganchado a la salida de su día (H41) | por hacer | T-085, T-046, T-086 | |
+| T-047 | AGE | Venta directa: vender un tour del catálogo, enganchado a la salida de su día (H41) | en revisión | T-085, T-046, T-086 | |
 | T-048 | AGE + CAJ | Venta directa: "Crear y cobrar" con boleta o factura y la Amazonía confirmada en el resumen (H45) | por hacer | T-047, T-011 | |
 | T-060 | CLI + AGE | CRM C5: la ficha del cliente con preferencias del viajero y línea de tiempo | por hacer | T-050, T-051 | |
 | T-062 | AGE | CRM C6b: reportes de conversión, origen, vendedor y motivos | por hacer | T-052, T-059 | |

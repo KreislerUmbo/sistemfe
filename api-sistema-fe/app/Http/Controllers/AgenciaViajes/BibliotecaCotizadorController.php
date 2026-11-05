@@ -62,7 +62,8 @@ class BibliotecaCotizadorController extends Controller
     // patrón (idsConDescendientes) que PaquetePlantillaController::index().
     private function buscarPaquetes(string $tipo, ?string $search, ?array $destinoIds): array
     {
-        $query = PaquetePlantilla::where('activo', true);
+        // destinoAtractivo: Venta directa (T-047) llena el destino de la venta con el del primer tour.
+        $query = PaquetePlantilla::where('activo', true)->with('destinoAtractivo:id,nombre');
 
         if ($tipo === 'tour') {
             $query->where('tipo', PaquetePlantilla::TIPO_TOUR_SIMPLE);

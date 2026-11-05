@@ -15,6 +15,12 @@ export type LineaVentaDirecta =
       cantidad: number
     }
   | {
+      // T-047: un tour del catálogo (el backend lo agrega como el cotizador).
+      origen_tipo: 'tour'
+      dia: number
+      paquete_plantilla_id: number
+    }
+  | {
       origen_tipo: 'manual'
       dia: number
       descripcion_manual: string
@@ -52,7 +58,7 @@ export type TipoPaxVistaPrevia = 'adulto' | 'nino' | 'infante'
 
 export type VistaPreviaLinea = {
   indice: number
-  origen_tipo: 'proveedor' | 'manual'
+  origen_tipo: 'proveedor' | 'manual' | 'tour'
   es_hotel: boolean
   noches: number | null
   fecha: string | null
@@ -66,6 +72,12 @@ export type VistaPreviaLinea = {
     desglose: Record<TipoPaxVistaPrevia, { cantidad: number; precio: number; extranjeros: number }>
   }
   tarifa_fija?: { total: number; precio_unitario: number; cantidad: number }
+  // T-047: un tour de IGV mezclado trae una afectación por línea de su carga.
+  afectaciones?: Array<{ tip_afe_igv: string; destino_tributario: 'nacional' | 'amazonia' | 'extranjero' }>
+  tour?: {
+    detalle: Array<{ grupo: 'adulto_nac' | 'adulto_ext' | 'nino_nac' | 'nino_ext' | 'infante'; cantidad: number; precio: number }>
+    temporada: string | null
+  }
 }
 
 export type VistaPreviaVentaDirecta = {
@@ -83,7 +95,7 @@ export type VistaPreviaVentaDirecta = {
 export const ventaDirectaService = {
   async crear(data: VentaDirectaPayload) {
     const response = await httpClient.post('/venta-directa', data)
-    return response.data as ReservaDetalleResponse & { code: number; message: string }
+    return response.data as ReservaDetalleResponse & { code: number; message: string; avisos_salida_cancelada?: string[]; avisos?: string[] }
   },
 
   // T-046: rangos de edad de la agencia para los contadores (mismo permiso que la venta directa).
