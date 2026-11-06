@@ -122,6 +122,9 @@ class ComboItemsSueltosTest extends TestCase
             'nombre' => $nombre,
             'destino_atractivo_id' => $destino->id,
             'duracion_horas' => 8,
+            // T-090: el combo suma el precio y el costo del TOUR; aquí igualan la tarifa.
+            'precio_venta_final' => (float) $tarifa->precio_venta_adulto,
+            'costo_estimado_persona' => (float) $tarifa->precio_costo,
         ]);
 
         PaquetePlantillaItem::create([

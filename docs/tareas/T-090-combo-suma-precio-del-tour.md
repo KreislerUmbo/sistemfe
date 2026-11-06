@@ -92,9 +92,24 @@ Tarapoto 3d/2n» → pestaña Datos (vista previa) y panel lateral.
 ---
 
 ## Resultado
-- **Commits:**
-- **Tests:**
+- **Commits:** ver `git log fix/T-090-combo-precio-del-tour` (un commit: `fix(agencia): el combo suma precio y costo de cada tour (T-090)`).
+- **Tests:** `PaqueteComboTest` +4 (CA1-CA4: suma 375/148, sin precio, sin costo, markup mínimo 200 → 422);
+  fallan con el código anterior y pasan con el nuevo. `ComboItemsSueltosTest` y `AjusteRedondeoTest`
+  en verde (CA5). Suite completa: 2062 pasan, 1 falla = `Fila13Fase1cFacturacionTest::descuento del combo…`
+  (intermitente conocido, ajeno a la tarea). Front: `build` en verde; `type-check` con 47 errores
+  preexistentes (`fake-backend.ts`, etc.), ninguno en `paquetes/detalle.vue` ni `types/agencia-viajes.ts`.
 - **Desviaciones de la tarea y por qué:**
+  - `totalesTour()` también lo usan `ConversionToursService` y `DiagnosticoToursService`, así que
+    quedó intacto y se creó `totalesTourEnCombo()`; `totalesCombo()` usa el nuevo.
+  - `ComboExplosionService` ahora inyecta `TourCostoEstimadoService` (sin `new` manual en el código).
+  - Fixtures de los 3 tests: el tour toma `precio_venta_final` y `costo_estimado_persona` de su
+    tarifa para que las aserciones previas no cambien.
+  - **CA6 (combo 15, agencia-demo):** venta 375 ✔ (antes 205). El costo da **158**, no 148: los datos
+    cambiaron desde que se escribió la tarea. Alto Mayo (id 3) tiene Incluye completo que suma 93
+    (el costo a mano 70 queda ignorado porque el Incluye manda), Laguna Azul 65, y Lamas (id 14)
+    no tiene costo en sus 2 servicios → suma 0 y aparece en `componentes_sin_costo`. Markup 137,34 %
+    = (375−158)/158. No se tocaron datos de la demo. Prueba visual en pantalla (Playwright) no hecha.
 
 ## Hallazgos fuera de alcance
--
+- En agencia-demo, Alto Mayo guarda un costo a mano (70) distinto del que da su Incluye (93): si es
+  error de carga, conviene revisarlo; Lamas necesita costos en sus 2 servicios para cuadrar.

@@ -123,7 +123,9 @@ class PaqueteComboTest extends TestCase
             'nombre' => $nombre,
             'destino_atractivo_id' => $destino->id,
             'duracion_horas' => 8,
-            'precio_venta_final' => $precioVentaFinal,
+            // T-090: el combo suma el precio y el costo del TOUR; por defecto igualan la tarifa.
+            'precio_venta_final' => $precioVentaFinal ?? (float) $tarifa->precio_venta_adulto,
+            'costo_estimado_persona' => (float) $tarifa->precio_costo,
         ]);
 
         PaquetePlantillaItem::create([
@@ -179,6 +181,74 @@ class PaqueteComboTest extends TestCase
         $this->assertSame(220.0, $totales['venta_neta_combo']);
         $this->assertSame(0.0, $totales['descuento_aplicado']);
         $this->assertEmpty($totales['componentes_inactivos']);
+    }
+
+    // T-090: tour cuyo Incluye (tarifa) NO coincide con su precio ni su costo.
+    private function crearTourConPrecio(string $nombre, ?float $precio, ?float $costo): PaquetePlantilla
+    {
+        $tour = $this->crearTourSimple($nombre, $this->crearProveedorTarifa(10, 60), 60.0);
+        $tour->update(['precio_venta_final' => $precio, 'costo_estimado_persona' => $costo]);
+
+        return $tour;
+    }
+
+    public function test_combo_suma_precio_y_costo_de_cada_tour(): void
+    {
+        $combo = $this->crearCombo('Paquete Clasico', [
+            $this->crearTourConPrecio('Lamas', 150, 70),
+            $this->crearTourConPrecio('Laguna Azul', 150, 65),
+            $this->crearTourConPrecio('Alto Mayo', 75, 13),
+        ]);
+
+        $totales = app(ComboExplosionService::class)->totalesCombo($combo);
+
+        $this->assertSame(375.0, $totales['venta_bruta_combo']);
+        $this->assertSame(148.0, $totales['costo_total_combo']);
+        $this->assertEmpty($totales['componentes_sin_precio']);
+        $this->assertEmpty($totales['componentes_sin_costo']);
+    }
+
+    public function test_tour_sin_precio_no_suma_y_se_avisa(): void
+    {
+        $sinPrecio = $this->crearTourConPrecio('Sin precio', null, 40);
+        $combo = $this->crearCombo('Combo', [$this->crearTourConPrecio('Con precio', 100, 50), $sinPrecio]);
+
+        $totales = app(ComboExplosionService::class)->totalesCombo($combo);
+
+        $this->assertSame(100.0, $totales['venta_bruta_combo']);
+        $this->assertSame(90.0, $totales['costo_total_combo']);
+        $this->assertSame([['id' => $sinPrecio->id, 'nombre' => 'Sin precio']], $totales['componentes_sin_precio']);
+    }
+
+    public function test_tour_sin_costo_suma_venta_con_costo_cero_y_se_avisa(): void
+    {
+        $sinCosto = $this->crearTourConPrecio('Sin costo', 80, null);
+        $combo = $this->crearCombo('Combo', [$this->crearTourConPrecio('Con costo', 100, 50), $sinCosto]);
+
+        $totales = app(ComboExplosionService::class)->totalesCombo($combo);
+
+        $this->assertSame(180.0, $totales['venta_bruta_combo']);
+        $this->assertSame(50.0, $totales['costo_total_combo']);
+        $this->assertSame([['id' => $sinCosto->id, 'nombre' => 'Sin costo']], $totales['componentes_sin_costo']);
+    }
+
+    public function test_markup_minimo_se_valida_con_precio_y_costo_de_los_tours(): void
+    {
+        // Tarifas del Incluye sumarían venta 180 / costo 30 (markup 500 %, pasaría);
+        // con 375/148 el markup es 153 % < 200 % → 422.
+        $combo = $this->crearCombo('Paquete Clasico', [
+            $this->crearTourConPrecio('Lamas', 150, 70),
+            $this->crearTourConPrecio('Laguna Azul', 150, 65),
+            $this->crearTourConPrecio('Alto Mayo', 75, 13),
+        ]);
+
+        $response = app(PaquetePlantillaController::class)->update(new Request([
+            'categoria' => $combo->categoria, 'nombre' => $combo->nombre,
+            'destino_atractivo_id' => $combo->destino_atractivo_id, 'duracion_horas' => $combo->duracion_horas,
+            'margen_minimo_pct' => 200,
+        ]), (string) $combo->id);
+
+        $this->assertSame(422, $response->getStatusCode());
     }
 
     public function test_combo_aplica_descuento_porcentaje(): void
