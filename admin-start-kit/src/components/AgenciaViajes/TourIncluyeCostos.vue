@@ -20,6 +20,12 @@
                 el guía se multiplica por los días del tour{{ calculo ? ` (${calculo.dias})` : '' }}. El IGV va por servicio, según dónde se presta.
             </p>
 
+            <div v-if="faltaMinimo" class="alert alert-warning small py-2">
+                <i class="fas fa-triangle-exclamation me-1"></i>
+                Este tour tiene servicios que se cobran por grupo ({{ serviciosPorGrupo!.join(', ') }}) y no tiene mínimo para salir:
+                la calculadora no puede repartir su costo. Indícalo en el tab Datos.
+            </div>
+
             <div v-if="filas.length === 0" class="text-muted fst-italic text-center py-3 small">
                 El tour todavía no tiene servicios en el Incluye.
             </div>
@@ -181,10 +187,14 @@ const props = defineProps<{
     paquete: PaquetePlantilla;
     items: PaquetePlantillaItem[];
     costoEstimado: TourCostoEstimado | null;
+    serviciosPorGrupo?: string[];
     margenMinimoAgencia: number | null;
     tratamientoDefault: { tip_afe_igv: string; destino_tributario: string } | null;
 }>();
 const emit = defineEmits<{ (e: 'actualizado'): void }>();
+
+// T-088: hay servicios por grupo y el tour no tiene mínimo para salir.
+const faltaMinimo = computed(() => (props.serviciosPorGrupo?.length ?? 0) > 0 && !props.paquete.pax_minimo_salida);
 
 type Fila = { item: PaquetePlantillaItem; costo: number | null; costoExt: number | null; igv: string | null; original: string };
 

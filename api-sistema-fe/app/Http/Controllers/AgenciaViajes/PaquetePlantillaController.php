@@ -92,7 +92,9 @@ class PaquetePlantillaController extends Controller
         // 1 y 100, mismo criterio que CotizacionController::index().
         $perPage = min(100, max(1, (int) $request->get('per_page', 15)));
 
-        $paquetes = $query->with('destinoAtractivo')->withCount('items')->orderByDesc('id')->paginate($perPage);
+        // T-088: el Incluye precargado alimenta `falta_minimo` sin una consulta por tour.
+        $paquetes = $query->with(['destinoAtractivo', 'items.proveedorTarifa', 'items.destinoServicio.servicio'])
+            ->withCount('items')->orderByDesc('id')->paginate($perPage);
 
         // precio_calculado: SOLO para paquete_combo — su precio no tiene
         // sentido como valor guardado (depende en vivo de los tours
@@ -104,6 +106,8 @@ class PaquetePlantillaController extends Controller
                 $paquete->setAttribute('precio_calculado', $this->comboExplosion->totalesCombo($paquete));
             }
             $paquete->setAttribute('fotos', StorageUrl::resolveMuchas($paquete->fotos ?? []));
+            $paquete->setAttribute('falta_minimo', $paquete->faltaMinimo()); // T-088
+            $paquete->unsetRelation('items'); // solo se cargó para falta_minimo; el listado no lo devuelve
 
             return $paquete;
         });
@@ -200,6 +204,8 @@ class PaquetePlantillaController extends Controller
             'paquete_plantilla' => $paquete,
             'combo' => $datosCombo,
             'costo_estimado' => $paquete->esTourSimple() ? $this->costoEstimado->costoDelTour($paquete) : null,
+            // T-088: nombres de los servicios por grupo (vacío si no aplica) para avisar en pantalla.
+            'servicios_por_grupo' => $paquete->serviciosPorGrupo(),
             'margen_minimo_agencia_pct' => $config?->margen_minimo_aceptable_pct !== null ? (float) $config->margen_minimo_aceptable_pct : null,
             'tratamiento_default' => ConfiguracionAgencia::tratamientoTributarioDefault(),
         ]);
@@ -316,6 +322,23 @@ class PaquetePlantillaController extends Controller
                 'code' => 422,
                 'message' => 'No se puede cambiar el tipo de un paquete que ya tiene ítems cargados. Eliminá los ítems primero.',
             ], 422);
+        }
+
+        // T-088 (P9): un tour de venta con servicios por grupo (vehículo privado, guía)
+        // necesita el mínimo para salir; sin él la calculadora no puede repartir el costo.
+        // Se mira el estado final (lo que llega o, si no llega, lo guardado). Desactivar un
+        // tour no lo exige: no se vende. Agregar el servicio al Incluye no bloquea (avisa).
+        if (($validado['activo'] ?? $paquete->activo) !== false) {
+            $final = (clone $paquete)->fill($validado);
+            $porGrupo = $final->serviciosPorGrupo();
+
+            if (empty($final->pax_minimo_salida) && $porGrupo->isNotEmpty()) {
+                return response()->json([
+                    'code' => 422,
+                    'message' => 'Este tour tiene servicios que se cobran por grupo ('.$porGrupo->implode(', ')
+                        .'): indica el mínimo de pasajeros para salir.',
+                ], 422);
+            }
         }
 
         // Bloqueo de desactivación (punto 10 del diseño): un tour_simple que

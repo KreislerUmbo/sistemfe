@@ -37,8 +37,9 @@
                     </select>
                 </div>
                 <div class="col-6 col-md-2">
-                    <label class="form-label mb-1 small fw-semibold text-secondary">Mínimo para salir</label>
+                    <label class="form-label mb-1 small fw-semibold text-secondary">Mínimo para salir<span v-if="minimoObligatorio" class="text-danger"> *</span></label>
                     <input type="number" min="1" class="form-control form-control-sm" v-model.number="modelo.pax_minimo_salida" placeholder="pax">
+                    <small v-if="minimoObligatorio" class="text-muted">Se usa para repartir el vehículo y el guía entre los pasajeros</small>
                 </div>
                 <div class="col-6 col-md-2">
                     <label class="form-label mb-1 small fw-semibold text-secondary">Precio adulto *</label>
@@ -129,6 +130,7 @@ const modelo = defineModel<CamposPrecioTour>({ required: true });
 
 const props = defineProps<{
     costoEstimado: TourCostoEstimado | null;
+    serviciosPorGrupo?: string[];
     margenMinimoAgencia: number | null;
     tratamientoDefault: { tip_afe_igv: string; destino_tributario: string } | null;
     esNuevo?: boolean;
@@ -142,6 +144,9 @@ const etiquetaIgv = (codigo: string) => ({ '10': 'Gravado', '20': 'Exonerado', '
 const verExtranjero = ref<boolean>(
     [modelo.value.precio_venta_adulto_ext, modelo.value.precio_venta_nino_ext, modelo.value.costo_estimado_persona_ext].some((v) => numero(v) !== null)
 );
+
+// T-088: con servicios por grupo (vehículo, guía) el mínimo para salir es obligatorio.
+const minimoObligatorio = computed(() => (props.serviciosPorGrupo?.length ?? 0) > 0);
 
 const alCambiarIgv = () => {
     if (!modelo.value.tip_afe_igv) {

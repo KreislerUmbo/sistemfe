@@ -177,4 +177,36 @@ class PaquetePlantilla extends Model
     {
         return $this->uso === self::USO_SOLO_ITINERARIO;
     }
+
+    /**
+     * Servicios del Incluye que se cobran por grupo, no por persona (T-088): una tarifa
+     * privada que no es de hotel, o un guía. Devuelve los nombres para mostrarlos.
+     * Un tour de venta con alguno necesita `pax_minimo_salida` para repartir su costo.
+     * Vacío si el tour es combo o solo itinerario (la regla no aplica).
+     *
+     * @return \Illuminate\Support\Collection<int, string>
+     */
+    public function serviciosPorGrupo(): \Illuminate\Support\Collection
+    {
+        if (! $this->esTourSimple() || $this->esSoloItinerario()) {
+            return collect();
+        }
+
+        // Si el listado ya precargó el Incluye (index()), se usa sin volver a consultar.
+        $items = $this->relationLoaded('items')
+            ? $this->items
+            : $this->items()->with(['proveedorTarifa', 'destinoServicio.servicio'])->get();
+
+        return $items
+            ->filter(fn ($item) => $item->guia_tarifa_id
+                || ($item->proveedorTarifa?->modalidad === 'privado' && $item->proveedorTarifa->tipo_habitacion === null))
+            ->map(fn ($item) => $item->guia_tarifa_id ? 'Guía' : ($item->destinoServicio?->servicio?->nombre ?? 'Servicio'))
+            ->unique()
+            ->values();
+    }
+
+    public function faltaMinimo(): bool
+    {
+        return empty($this->pax_minimo_salida) && $this->serviciosPorGrupo()->isNotEmpty();
+    }
 }

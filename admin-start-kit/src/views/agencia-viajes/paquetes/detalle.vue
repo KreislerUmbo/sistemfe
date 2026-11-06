@@ -184,7 +184,7 @@
                     <template v-if="!esCombo">
                         <b-col cols="12"><hr class="my-1"><h6 class="mb-0">Precio y venta</h6><p class="text-muted fs-13 mb-0">Precio por persona, costo estimado, IGV y uso del tour.</p></b-col>
                         <b-col cols="12">
-                            <TourPrecioVentaCampos v-model="formDatos" :costo-estimado="costoEstimado" :margen-minimo-agencia="margenMinimoAgencia"
+                            <TourPrecioVentaCampos v-model="formDatos" :costo-estimado="costoEstimado" :servicios-por-grupo="serviciosPorGrupo" :margen-minimo-agencia="margenMinimoAgencia"
                                 :tratamiento-default="tratamientoDefault" />
                         </b-col>
                     </template>
@@ -619,7 +619,7 @@
                      por persona, IGV, calculadora, servicio sin tarifa y quitar. La venta
                      de cada tarifa queda solo como referencia (la usa el modo clásico). -->
                 <div v-if="!esCombo && paquete" class="d-flex flex-column gap-3">
-                    <TourIncluyeCostos :paquete="paquete" :items="items" :costo-estimado="costoEstimado" :margen-minimo-agencia="margenMinimoAgencia"
+                    <TourIncluyeCostos :paquete="paquete" :items="items" :costo-estimado="costoEstimado" :servicios-por-grupo="serviciosPorGrupo" :margen-minimo-agencia="margenMinimoAgencia"
                         :tratamiento-default="tratamientoDefault" @actualizado="recargarCostos" />
                     <TourPreciosTemporada :paquete="paquete" @actualizado="cargarPaquete" />
                 </div>
@@ -821,6 +821,7 @@ const tabActiva = ref<'datos' | 'itinerario' | 'incluye' | 'costos'>('datos');
 // Fila 13, fase 1a — datos que show() agrega para el margen en vivo y el
 // IGV por defecto (ver TourPrecioVentaCampos/TourIncluyeCostos).
 const costoEstimado = ref<TourCostoEstimado | null>(null);
+const serviciosPorGrupo = ref<string[]>([]); // T-088
 const margenMinimoAgencia = ref<number | null>(null);
 const tratamientoDefault = ref<{ tip_afe_igv: string; destino_tributario: string } | null>(null);
 const simboloTour = computed(() => (paquete.value?.moneda === 'USD' ? 'US$' : 'S/'));
@@ -955,6 +956,7 @@ const cargarPaquete = async () => {
     paquete.value = res.paquete_plantilla;
     combo.value = res.combo;
     costoEstimado.value = res.costo_estimado ?? null;
+    serviciosPorGrupo.value = res.servicios_por_grupo ?? [];
     margenMinimoAgencia.value = res.margen_minimo_agencia_pct ?? null;
     tratamientoDefault.value = res.tratamiento_default ?? null;
     if (combo.value) {
