@@ -685,6 +685,10 @@ Para el camino B, la regla queda: **agencia que cumple el art. 2** (dato de conf
   `NotaElectronicaController::armarLeyendasNota()` solo mandan la 1000 (monto en letras). El PDF
   sí imprime un texto propio ("OPERACIÓN EXONERADA DEL IGV — LEY N° 27037"), distinto del que usan
   los negocios de la zona. Confirmar con el contador si la leyenda es obligatoria en el XML y su texto.
+**Continúa (05-nov-2026)** en `docs/requerimientos/agencia-tributario-simplificado.md`: propuesta
+concreta (una sola lista de afectación, empresa calificada en Configuración, grilla de facturar
+editable, comprobante mixto, series por afectación) y respuestas del usuario.
+
 - **H27 — Monto en letras siempre en "SOLES".** `armarLeyendas()` pasa `'SOLES'` fijo: una factura en
   dólares sale al XML con el monto en letras en soles. Las notas sí miran la moneda.
 
