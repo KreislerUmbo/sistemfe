@@ -139,12 +139,12 @@
         <div class="card border-0 shadow-sm mb-3" v-if="esMayorista">
             <div class="card-header bg-white border-bottom d-flex align-items-center gap-2 py-2">
                 <span class="badge bg-primary rounded-pill">3</span>
-                <span class="fw-semibold text-dark">Margen automático (mayorista)</span>
+                <span class="fw-semibold text-dark">Markup automático (mayorista)</span>
             </div>
             <div class="card-body py-3">
                 <div class="row g-3">
                     <div class="col-6 col-md-3">
-                        <label class="form-label mb-1 small fw-semibold text-secondary">Tipo de margen</label>
+                        <label class="form-label mb-1 small fw-semibold text-secondary">Tipo de markup</label>
                         <select class="form-select form-select-sm" v-model="form.margen_default_tipo">
                             <option :value="null">—</option>
                             <option value="porcentaje">Porcentaje</option>

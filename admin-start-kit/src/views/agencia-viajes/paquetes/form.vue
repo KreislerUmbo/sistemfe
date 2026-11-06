@@ -140,10 +140,10 @@
 
         <div class="card border-0 shadow-sm mb-3" v-if="form.tipo === 'paquete_combo'">
             <div class="card-header bg-white border-bottom py-2">
-                <span class="fw-semibold text-dark small">Descuento y margen mínimo del combo</span>
+                <span class="fw-semibold text-dark small">Descuento y markup mínimo del combo</span>
             </div>
             <div class="card-body py-3">
-                <small class="text-muted d-block mb-2">El precio final se calcula solo, sumando los tours incluidos (pestaña "Incluye") — acá solo configurás el descuento y el piso de margen protegido. Vista previa en vivo disponible en la pestaña "Datos" una vez guardado.</small>
+                <small class="text-muted d-block mb-2">El precio final se calcula solo, sumando los tours incluidos (pestaña "Incluye") — acá solo configurás el descuento y el markup mínimo protegido (utilidad sobre el costo). Vista previa en vivo disponible en la pestaña "Datos" una vez guardado.</small>
                 <div class="row g-3">
                     <div class="col-12 col-md-4">
                         <label class="form-label mb-1 small fw-semibold text-secondary">Tipo de descuento</label>
@@ -158,7 +158,7 @@
                         <input type="number" step="0.01" min="0" class="form-control form-control-sm" v-model.number="form.descuento_valor">
                     </div>
                     <div class="col-6 col-md-4">
-                        <label class="form-label mb-1 small fw-semibold text-secondary">Margen mínimo protegido (%)</label>
+                        <label class="form-label mb-1 small fw-semibold text-secondary">Markup mínimo protegido (%)</label>
                         <input type="number" step="0.01" min="0" class="form-control form-control-sm" v-model.number="form.margen_minimo_pct" placeholder="Opcional">
                     </div>
                 </div>

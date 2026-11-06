@@ -56,7 +56,7 @@
                     <small v-if="costoDesdeIncluye" class="text-muted">Suma del Incluye: {{ simbolo }} {{ fmt(costoResuelto) }}</small>
                 </div>
                 <div class="col-6 col-md-3">
-                    <label class="form-label mb-1 small fw-semibold text-secondary">Margen mínimo del tour (%)</label>
+                    <label class="form-label mb-1 small fw-semibold text-secondary">Markup mínimo del tour (%)</label>
                     <input type="number" step="0.01" min="0" class="form-control form-control-sm" v-model.number="modelo.margen_minimo_pct"
                         :placeholder="margenMinimoAgencia !== null ? `Agencia: ${margenMinimoAgencia}%` : 'Opcional'">
                 </div>

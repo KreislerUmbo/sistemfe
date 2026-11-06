@@ -109,9 +109,9 @@
                                     <input type="number" class="form-control form-control-sm" v-model.number="form.max_pax_reserva_grupo">
                                 </div>
                                 <div class="col-6 col-md-3">
-                                    <label class="form-label mb-1 small fw-semibold text-secondary">Margen mínimo aceptable (%)</label>
+                                    <label class="form-label mb-1 small fw-semibold text-secondary">Markup mínimo aceptable (%)</label>
                                     <input type="number" step="0.01" min="0" class="form-control form-control-sm" v-model.number="form.margen_minimo_aceptable_pct">
-                                    <small class="text-muted d-block mt-1">Usado en el tab "Incluye" de un tour para marcar en rojo el margen resultante bajo este umbral.</small>
+                                    <small class="text-muted d-block mt-1">Usado en el tab "Incluye" de un tour para marcar en rojo el markup (utilidad sobre el costo) bajo este umbral. Ejemplo: costo 100 y venta 125 = markup 25 % (margen sobre la venta 20 %).</small>
                                 </div>
                                 <!-- T-033: moneda prellenada de la primera propuesta en Nueva cotización. -->
                                 <div class="col-6 col-md-3">
