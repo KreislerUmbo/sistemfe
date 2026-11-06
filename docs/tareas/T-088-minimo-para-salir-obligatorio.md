@@ -94,9 +94,23 @@ guardar → mensaje; el listado muestra el badge.
 ---
 
 ## Resultado
-- **Commits:**
-- **Tests:**
+- **Commits:** rama `feat/T-088-minimo-para-salir` (ver `git log`).
+- **Tests:** `PaquetePlantillaMinimoSalidaTest` (6 tests: CA1-CA5 y el diagnóstico, CA6) en verde.
+  Suite completa del backend: 2069 pasaron. `vue-tsc`: sin errores nuevos en los archivos tocados
+  (los 47 errores previos del proyecto siguen, ajenos). **No hice el `build` ni la prueba en
+  pantalla (CA7)**: queda para la revisión.
+- **Diagnóstico en `agencia-demo`:** de 13 tours, solo el #17 «Tours a la Encañada» tiene
+  «Falta mínimo = sí» (su Incluye tiene una tarifa privada). Los demás sin mínimo no tienen
+  servicios por grupo o son combos/solo itinerario.
 - **Desviaciones de la tarea y por qué:**
+  - CA5 dice 201, pero `PaquetePlantillaItemController::store()` ya respondía 200; mantuve 200 y
+    agregué `falta_minimo` (también en `update()` del ítem).
+  - La regla se evalúa sobre el estado final (lo que llega o lo guardado) y **no se exige al
+    desactivar** (`activo=false`), para que se pueda apagar un tour viejo sin mínimo.
+  - Método nuevo `PaquetePlantilla::serviciosPorGrupo()` (devuelve nombres) y `faltaMinimo()`;
+    `show()` devuelve `servicios_por_grupo` y `index()` devuelve `falta_minimo` por tour.
+  - El nombre del servicio sale de `destinoServicio.servicio`; el guía se muestra como «Guía».
 
 ## Hallazgos fuera de alcance
--
+- `index()` calcula `falta_minimo` con una consulta por tour de la página (máx. 100): aceptable
+  hoy; si el catálogo crece, precargar los ítems.

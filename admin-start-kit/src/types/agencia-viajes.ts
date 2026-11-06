@@ -764,6 +764,7 @@ export type PaquetePlantilla = {
   // en el listado, evita un GET aparte por tour para saber cuántos ítems
   // tiene (ver bibliotecaTours en paquetes/detalle.vue).
   items_count?: number;
+  falta_minimo?: boolean;
 };
 
 export type PaquetePlantillaItem = {
@@ -833,6 +834,7 @@ export type CamposPrecioTour = {
   moneda?: 'PEN' | 'USD';
   modalidad?: 'compartido' | 'privado';
   pax_minimo_salida?: number | null;
+  falta_minimo?: boolean;
   precio_venta_final?: number | string | null;
   precio_venta_nino?: number | string | null;
   precio_venta_adulto_ext?: number | string | null;
@@ -930,6 +932,7 @@ export type PaquetePlantillaShowResponse = {
   combo: ComboDatos | null;
   // Fila 13, fase 1a — solo tour_simple (null en combo).
   costo_estimado?: TourCostoEstimado | null;
+  servicios_por_grupo?: string[];
   margen_minimo_agencia_pct?: number | null;
   tratamiento_default?: { tip_afe_igv: string; destino_tributario: string };
 };

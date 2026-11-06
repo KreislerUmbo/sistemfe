@@ -97,6 +97,8 @@
                                         {{ paquete.nombre }}
                                         <span v-if="paquete.uso === 'solo_itinerario'" class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle ms-1 fw-normal"
                                             title="Solo presta itinerario y fotos a paquetes de mayorista">Solo itinerario</span>
+                                        <span v-if="paquete.falta_minimo" class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle ms-1 fw-normal"
+                                            title="Tiene servicios por grupo (vehículo, guía) y no tiene el mínimo para salir">Falta mínimo</span>
                                     </div>
                                     <small class="text-muted" v-if="paquete.codigo">{{ paquete.codigo }}</small>
                                 </td>

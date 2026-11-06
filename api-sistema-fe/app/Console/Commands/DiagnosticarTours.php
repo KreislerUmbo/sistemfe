@@ -58,11 +58,12 @@ class DiagnosticarTours extends Command
 
             $this->info("Tenant '{$tenant->id}': ".count($filas).' tour(s)');
             $this->table(
-                ['ID', 'Código', 'Nombre', 'Tipo', 'Uso actual', 'Uso propuesto', 'Mayoristas', 'Precio', 'Costo tarifas', 'Venta tarifas', 'IGV', 'Guía', 'Privados', 'Precio prop.', 'Costo prop.'],
+                ['ID', 'Código', 'Nombre', 'Tipo', 'Uso actual', 'Uso propuesto', 'Mayoristas', 'Precio', 'Costo tarifas', 'Venta tarifas', 'IGV', 'Guía', 'Privados', 'Falta mínimo', 'Precio prop.', 'Costo prop.'],
                 array_map(fn ($f) => [
                     $f['id'], $f['codigo'], mb_strimwidth($f['nombre'], 0, 30, '…'), $f['tipo'], $f['uso_actual'], $f['uso_propuesto'],
                     $f['vinculado_mayoristas'], $f['precio_cargado'] ?? '—', $f['suma_costo_tarifas'] ?? '—', $f['suma_venta_tarifas'] ?? '—',
                     ($f['igv_tipos'] ?: '—').($f['igv_mezclado'] ? ' ⚠' : ''), $f['tiene_guia'] ? 'sí' : '', $f['tiene_privados'] ? 'sí' : '',
+                    $f['falta_minimo'] ? 'sí' : 'no',
                     $f['precio_propuesto'] ?? '—', $f['costo_propuesto'] ?? '—',
                 ], $filas)
             );

@@ -61,6 +61,7 @@ class DiagnosticoToursService
                 'igv_mezclado' => $tiposIgv->count() > 1,
                 'tiene_guia' => $items->whereNotNull('guia_tarifa_id')->isNotEmpty(),
                 'tiene_privados' => $items->contains(fn ($i) => $i->proveedorTarifa?->modalidad === 'privado'),
+                'falta_minimo' => $tour->faltaMinimo(), // T-088
                 'suma_costo_tarifas' => null,
                 'suma_venta_tarifas' => null,
                 'precio_propuesto' => null,

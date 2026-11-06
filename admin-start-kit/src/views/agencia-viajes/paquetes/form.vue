@@ -111,7 +111,7 @@
                 <span class="fw-semibold text-dark small">Precio y venta</span>
             </div>
             <div class="card-body py-3">
-                <TourPrecioVentaCampos v-model="form" :costo-estimado="costoEstimado" :margen-minimo-agencia="margenMinimoAgencia"
+                <TourPrecioVentaCampos v-model="form" :costo-estimado="costoEstimado" :servicios-por-grupo="serviciosPorGrupo" :margen-minimo-agencia="margenMinimoAgencia"
                     :tratamiento-default="tratamientoDefault" :es-nuevo="!esEdicion" />
             </div>
         </div>
@@ -260,6 +260,7 @@ const form = ref<Partial<PaquetePlantilla> & { destino_atractivo_id: number | nu
 // Fila 13, fase 1a — datos que el show() agrega para el margen en vivo
 // (ver TourPrecioVentaCampos.vue).
 const costoEstimado = ref<TourCostoEstimado | null>(null);
+const serviciosPorGrupo = ref<string[]>([]); // T-088
 const margenMinimoAgencia = ref<number | null>(null);
 const tratamientoDefault = ref<{ tip_afe_igv: string; destino_tributario: string } | null>(null);
 const precioOriginal = ref<number | null>(null);
@@ -277,6 +278,7 @@ const cargarPaquete = async () => {
         const res = await paquetePlantillaService.obtener(paqueteId.value);
         form.value = { ...res.paquete_plantilla };
         costoEstimado.value = res.costo_estimado ?? null;
+        serviciosPorGrupo.value = res.servicios_por_grupo ?? [];
         margenMinimoAgencia.value = res.margen_minimo_agencia_pct ?? null;
         tratamientoDefault.value = res.tratamiento_default ?? null;
         precioOriginal.value = numero(res.paquete_plantilla.precio_venta_final);

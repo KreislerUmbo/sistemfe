@@ -171,6 +171,8 @@ class PaquetePlantillaItemController extends Controller
             'code' => 200,
             'message' => 'Ítem agregado al paquete correctamente',
             'paquete_plantilla_item' => $item,
+            // T-088: no se bloquea agregar un servicio por grupo; se avisa que falta el mínimo.
+            'falta_minimo' => $paquete->faltaMinimo(),
         ]);
     }
 
@@ -198,6 +200,7 @@ class PaquetePlantillaItemController extends Controller
             'code' => 200,
             'message' => 'Servicio del Incluye actualizado correctamente',
             'paquete_plantilla_item' => $item,
+            'falta_minimo' => $item->paquetePlantilla->faltaMinimo(), // T-088
         ]);
     }
 
