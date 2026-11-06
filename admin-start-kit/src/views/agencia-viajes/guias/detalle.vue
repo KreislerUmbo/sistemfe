@@ -36,7 +36,7 @@
                         <input type="number" step="0.01" class="form-control form-control-sm" v-model.number="formTarifa.costo_diario">
                     </div>
                     <div class="col-6 col-md-2">
-                        <label class="form-label mb-1 small fw-semibold text-secondary">Margen</label>
+                        <label class="form-label mb-1 small fw-semibold text-secondary">Markup</label>
                         <div class="input-group input-group-sm">
                             <select class="form-select" style="max-width:90px" v-model="formTarifa.tipo_margen">
                                 <option value="porcentaje">%</option>

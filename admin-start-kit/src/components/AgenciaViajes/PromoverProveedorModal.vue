@@ -57,8 +57,8 @@
                             </div>
                         </div>
                     </div>
-                    <div class="small text-muted mb-2">
-                        Margen: <strong :class="margen < 0 ? 'text-danger' : 'text-success'">{{ item.moneda_costo }} {{ margen.toFixed(2) }}</strong>
+                    <div class="mb-2">
+                        <MargenEnVivo :moneda="item.moneda_costo" :precio="Number(form.precio_venta_adulto)" :costo="Number(form.costo)" :detalle="false" />
                     </div>
 
                     <div class="mb-3">
@@ -105,6 +105,7 @@
 import { ref, computed } from 'vue';
 import Swal from 'sweetalert2/dist/sweetalert2.js';
 import DestinoServicioPicker from '@/components/AgenciaViajes/DestinoServicioPicker.vue';
+import MargenEnVivo from '@/components/AgenciaViajes/MargenEnVivo.vue';
 import { alternativaItemService } from '@/services/admin/alternativaItemService';
 import type { AlternativaItem } from '@/types/agencia-viajes';
 
@@ -124,7 +125,6 @@ const form = ref({
 const mostrarDefaults = ref(false);
 const guardando = ref(false);
 
-const margen = computed(() => Math.round((form.value.precio_venta_adulto - form.value.costo) * 100) / 100);
 
 const puedeConfirmar = computed(() => !!form.value.razon_social.trim()
     && !!form.value.destino_servicio_id

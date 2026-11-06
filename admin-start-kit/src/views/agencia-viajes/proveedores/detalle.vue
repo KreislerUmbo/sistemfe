@@ -129,7 +129,7 @@
                                     <th v-if="esHotel">Habitación</th>
                                     <th class="text-end">Costo</th>
                                     <th class="text-end">Venta Adulto</th>
-                                    <th class="text-end">Margen</th>
+                                    <th class="text-end">Markup · Margen · Ganancia</th>
                                     <th class="text-center">Vigencia</th>
                                     <th class="text-center pe-3">Acción</th>
                                 </tr>
@@ -145,7 +145,8 @@
                                     <td class="text-end">{{ tarifa.moneda }} {{ tarifa.precio_costo }}</td>
                                     <td class="text-end">{{ tarifa.moneda }} {{ tarifa.precio_venta_adulto }}</td>
                                     <td class="text-end">
-                                        <span class="badge" :class="claseMargen(margenTarifa(tarifa))">{{ margenTarifa(tarifa).toFixed(1) }}%</span>
+                                        <MargenEnVivo :moneda="tarifa.moneda" :precio="numeroONull(tarifa.precio_venta_adulto)" :costo="numeroONull(tarifa.precio_costo)"
+                                            :margen-minimo-agencia="margenMinimoAgencia" :detalle="false" />
                                     </td>
                                     <td class="text-center small">
                                         <span class="badge d-block mb-1" :class="tarifa.activo ? 'bg-success' : 'bg-secondary'">{{ tarifa.activo ? 'Activa' : 'Inactiva' }}</span>
@@ -283,22 +284,20 @@
                                 <input type="number" step="0.01" class="form-control form-control-sm" v-model.number="formTarifa.precio_costo" @input="onEditarPrecioCosto">
                             </div>
                             <div class="col-6 col-md-4">
-                                <label class="form-label mb-1 small fw-semibold text-secondary">Margen tipo</label>
+                                <label class="form-label mb-1 small fw-semibold text-secondary">Markup (tipo)</label>
                                 <select class="form-select form-select-sm" v-model="formTarifa.margen_tipo">
                                     <option value="porcentaje">Porcentaje</option>
                                     <option value="fijo">Fijo</option>
                                 </select>
                             </div>
                             <div class="col-6 col-md-4">
-                                <label class="form-label mb-1 small fw-semibold text-secondary">Margen valor</label>
+                                <label class="form-label mb-1 small fw-semibold text-secondary">Markup (valor)</label>
                                 <input type="number" step="0.01" class="form-control form-control-sm" v-model.number="formTarifa.margen_valor" @input="recalcularDesdeMargen">
                             </div>
 
                             <div class="col-12">
-                                <div class="alert py-2 px-3 mb-0 small d-flex align-items-center gap-2" :class="margenModalPct >= MARGEN_MINIMO_ACEPTABLE_PCT ? 'alert-success' : 'alert-danger'">
-                                    <span>Margen resultante:</span>
-                                    <span class="badge" :class="claseMargen(margenModalPct)">{{ margenModalPct.toFixed(1) }}%</span>
-                                </div>
+                                <MargenEnVivo :moneda="formTarifa.moneda ?? 'PEN'" :precio="margenModalPrecio" :costo="margenModalCosto"
+                                    :margen-minimo-agencia="margenMinimoAgencia" etiqueta="Resultante" :detalle="false" />
                             </div>
 
                             <div class="col-6 col-md-4">
@@ -384,6 +383,7 @@
 import { sanearHtml } from '@/helpers/sanearHtml';
 import { destinoParaIgvAgencia, IGV_EXONERADO, NOTA_EXONERADO_AGENCIA } from '@/helpers/tratamientoTributarioAgencia';
 import CampoFecha from '@/components/CampoFecha.vue';
+import MargenEnVivo from '@/components/AgenciaViajes/MargenEnVivo.vue';
 import { ref, computed, watch, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';
@@ -430,16 +430,14 @@ const esHotel = computed(() => {
     return tipo?.slug === 'alojamiento-hoteles';
 });
 
-// ── Margen resultante (modal + tabla) ────────────────────────────────
-const MARGEN_MINIMO_ACEPTABLE_PCT = 20;
-
-const calcularMargenPct = (costo?: number | null, venta?: number | null): number => {
-    const c = Number(costo ?? 0);
-    if (c <= 0) return 0;
-    return ((Number(venta ?? 0) - c) / c) * 100;
-};
-const claseMargen = (pct: number): string => (pct >= MARGEN_MINIMO_ACEPTABLE_PCT ? 'bg-success' : 'bg-danger');
-const margenTarifa = (tarifa: ProveedorTarifa): number => calcularMargenPct(tarifa.precio_costo, tarifa.precio_venta_adulto);
+// ── Markup / margen / ganancia (modal + tabla) — T-087 ───────────────
+// Un solo mínimo: el de Configuración (margen_minimo_aceptable_pct). Sin
+// mínimo configurado no se colorea (lo decide MargenEnVivo).
+const margenMinimoAgencia = computed<number | null>(() => {
+    const v = configAgencia.value?.margen_minimo_aceptable_pct;
+    return v === null || v === undefined ? null : Number(v);
+});
+const numeroONull = (v?: number | string | null): number | null => (v === null || v === undefined || v === '' ? null : Number(v));
 
 const estadoVigencia = (tarifa: ProveedorTarifa): { label: string; clase: string } => {
     const hoy = hoyPeru();
@@ -542,7 +540,8 @@ const tabModalTarifa = ref<'comercial' | 'tributario'>('comercial');
 
 const formTarifa = ref<Partial<ProveedorTarifa>>({});
 
-const margenModalPct = computed(() => calcularMargenPct(formTarifa.value.precio_costo, formTarifa.value.precio_venta_adulto));
+const margenModalCosto = computed(() => numeroONull(formTarifa.value.precio_costo));
+const margenModalPrecio = computed(() => numeroONull(formTarifa.value.precio_venta_adulto));
 
 // tocadoNino/tocadoInfante: una vez que el usuario edita ese precio a mano,
 // el recálculo automático desde margen_valor deja de pisarlo hasta que se

@@ -120,7 +120,7 @@
                         </b-col>
                         <b-col cols="12">
                             <MargenEnVivo :moneda="simboloTour" :precio="paquete.precio_venta_final != null ? Number(paquete.precio_venta_final) : null" :costo="costoEstimado?.costo ?? null"
-                                :margen-minimo-tour="paquete.margen_minimo_pct != null ? Number(paquete.margen_minimo_pct) : null" :margen-minimo-agencia="margenMinimoAgencia" etiqueta="Margen estimado (adulto nacional)" />
+                                :margen-minimo-tour="paquete.margen_minimo_pct != null ? Number(paquete.margen_minimo_pct) : null" :margen-minimo-agencia="margenMinimoAgencia" etiqueta="Estimado (adulto nacional)" />
                         </b-col>
                     </template>
                     <!-- Fila 13, fase 1b (§5b): el ajuste de redondeo ya no se muestra en el tour simple. -->
@@ -302,7 +302,7 @@
                         <input type="number" step="0.01" min="0" class="form-control form-control-sm" v-model.number="descuentoValorLocal" @blur="guardarPrecioCombo">
                     </div>
                     <div class="col-6 col-md-3">
-                        <label class="form-label mb-1 small fw-semibold text-secondary">Margen mínimo protegido (%)</label>
+                        <label class="form-label mb-1 small fw-semibold text-secondary">Markup mínimo protegido (%)</label>
                         <input type="number" step="0.01" min="0" class="form-control form-control-sm" v-model.number="margenMinimoLocal" @blur="guardarPrecioCombo" placeholder="Opcional">
                     </div>
                     <div class="col-12 col-md-2">
@@ -312,11 +312,9 @@
                     </div>
                 </div>
 
-                <div class="mt-3 small" v-if="preview.margenResultante !== null">
-                    Margen resultante:
-                    <strong :class="margenOk ? 'text-success' : 'text-danger'">{{ preview.margenResultante.toFixed(2) }}%</strong>
-                    <span v-if="margenMinimoLocal != null" class="text-muted"> (mínimo configurado: {{ Number(margenMinimoLocal).toFixed(2) }}%)</span>
-                    <i class="fas ms-1" :class="margenOk ? 'fa-circle-check text-success' : 'fa-circle-exclamation text-danger'"></i>
+                <div class="mt-3" v-if="preview.costoTotal > 0">
+                    <MargenEnVivo moneda="S/" :precio="preview.ventaNeta" :costo="preview.costoTotal"
+                        :margen-minimo-tour="margenMinimoLocal != null ? Number(margenMinimoLocal) : null" :margen-minimo-agencia="margenMinimoAgencia" etiqueta="Resultante" />
                 </div>
             </div>
         </div>
@@ -730,8 +728,9 @@
                                 <span class="text-muted small fw-semibold">Total final</span>
                                 <span class="fs-5 fw-bold text-primary">S/ {{ preview.ventaFinal.toFixed(2) }}</span>
                             </div>
-                            <div v-if="preview.margenResultante !== null" class="small mb-2">
-                                Margen: <strong :class="margenOk ? 'text-success' : 'text-danger'">{{ preview.margenResultante.toFixed(2) }}%</strong>
+                            <div v-if="preview.costoTotal > 0" class="mb-2">
+                                <MargenEnVivo moneda="S/" :precio="preview.ventaNeta" :costo="preview.costoTotal" :detalle="false"
+                                    :margen-minimo-tour="margenMinimoLocal != null ? Number(margenMinimoLocal) : null" :margen-minimo-agencia="margenMinimoAgencia" />
                             </div>
 
                             <div class="d-flex gap-3 small text-muted border-top pt-2 mb-2">
@@ -752,7 +751,7 @@
                             </template>
 
                             <button class="btn btn-sm btn-outline-primary w-100 mt-1" @click="tabActiva = 'datos'">
-                                Editar descuento y margen <i class="fas fa-arrow-right ms-1"></i>
+                                Editar descuento y markup <i class="fas fa-arrow-right ms-1"></i>
                             </button>
                         </div>
                     </div>
@@ -1052,7 +1051,6 @@ const preview = computed(() => {
     // de redondeo — mismo criterio que PriceEngineService::calcularCombo()
     // (backend): el ajuste es cosmético sobre el total final, no una
     // decisión de rentabilidad.
-    const margenResultante = costoTotal > 0 ? Math.round(((ventaNeta - costoTotal) / costoTotal) * 100 * 100) / 100 : null;
 
     // Fix ajuste de redondeo (2026-08-18): se edita en el tab Datos
     // (formDatos.ajuste_redondeo/guardarDatos()), NO en este formulario —
@@ -1063,12 +1061,7 @@ const preview = computed(() => {
     const ajusteRedondeo = ajusteRedondeoRaw != null ? Number(ajusteRedondeoRaw) : null;
     const ventaFinal = ajusteRedondeo !== null ? Math.round((ventaNeta + ajusteRedondeo) * 100) / 100 : ventaNeta;
 
-    return { costoTotal, ventaBruta, ventaNeta, margenResultante, ajusteRedondeo, ventaFinal };
-});
-
-const margenOk = computed(() => {
-    if (preview.value.margenResultante === null || margenMinimoLocal.value == null) return true;
-    return preview.value.margenResultante >= margenMinimoLocal.value - 0.005;
+    return { costoTotal, ventaBruta, ventaNeta, ajusteRedondeo, ventaFinal };
 });
 
 const guardarPrecioCombo = async () => {
@@ -1441,7 +1434,7 @@ const itemsGuia = computed(() => items.value.filter(i => i.guia_tarifa));
 // cotizador/editar.vue. Fallback de 20 solo mientras la config está en
 // vuelo (no bloquea el render).
 const configAgencia = ref<ConfiguracionAgencia | null>(null);
-const margenMinimoAceptablePct = computed(() => configAgencia.value?.margen_minimo_aceptable_pct ?? 20);
+const margenMinimoAceptablePct = computed(() => configAgencia.value?.margen_minimo_aceptable_pct ?? null);
 
 const ventaGuiaTarifa = (gt: GuiaTarifa): number =>
     gt.tipo_margen === 'porcentaje' ? gt.costo_diario * (1 + gt.margen_valor / 100) : gt.costo_diario + gt.margen_valor;
