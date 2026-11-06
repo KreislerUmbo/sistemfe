@@ -12,10 +12,13 @@
                 Markup {{ formatPct(markup) }} · Margen {{ formatPct(margenSobreVenta) }} · Ganancia {{ moneda }} {{ formatMonto(gan) }}
             </span>
             <span v-if="detalle" class="text-muted">precio {{ moneda }} {{ precio.toFixed(2) }} − costo {{ moneda }} {{ costo.toFixed(2) }}</span>
-            <span v-if="piso !== null" class="text-muted">
-                · markup mínimo {{ piso.toFixed(1) }}% ({{ margenMinimoTour !== null ? 'del tour' : 'de la agencia' }})
+            <span v-if="piso !== null && verMinimo" class="text-muted">
+                · markup mínimo {{ piso.toFixed(1) }}% ({{ textoOrigenMinimo }})
                 <i v-if="bajoMinimo" class="fas fa-exclamation-triangle text-danger ms-1" title="Debajo del markup mínimo"></i>
             </span>
+            <!-- Modo tabla (verMinimo=false): sin el texto del mínimo en cada fila, solo el ícono con el dato en el title. -->
+            <i v-else-if="bajoMinimo" class="fas fa-exclamation-triangle text-danger"
+                :title="`Debajo del markup mínimo (${piso!.toFixed(1)}% ${textoOrigenMinimo})`"></i>
         </template>
     </div>
 </template>
@@ -37,7 +40,13 @@ const props = withDefaults(defineProps<{
     margenMinimoAgencia?: number | null;
     etiqueta?: string;
     detalle?: boolean;
-}>(), { margenMinimoTour: null, margenMinimoAgencia: null, etiqueta: '', detalle: true });
+    // false = no escribir "· markup mínimo X %" (tabla); el aviso queda como ícono.
+    verMinimo?: boolean;
+    // Cómo se nombra el mínimo propio: "del tour" o "del combo".
+    origenMinimo?: string;
+}>(), { margenMinimoTour: null, margenMinimoAgencia: null, etiqueta: '', detalle: true, verMinimo: true, origenMinimo: 'del tour' });
+
+const textoOrigenMinimo = computed(() => (props.margenMinimoTour !== null ? props.origenMinimo : 'de la agencia'));
 
 const gan = computed(() => ganancia(props.costo, props.precio));
 const markup = computed(() => markupPct(props.costo, props.precio));

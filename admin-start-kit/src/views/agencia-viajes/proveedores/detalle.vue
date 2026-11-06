@@ -146,7 +146,7 @@
                                     <td class="text-end">{{ tarifa.moneda }} {{ tarifa.precio_venta_adulto }}</td>
                                     <td class="text-end">
                                         <MargenEnVivo :moneda="tarifa.moneda" :precio="numeroONull(tarifa.precio_venta_adulto)" :costo="numeroONull(tarifa.precio_costo)"
-                                            :margen-minimo-agencia="margenMinimoAgencia" :detalle="false" />
+                                            :margen-minimo-agencia="margenMinimoAgencia" :detalle="false" :ver-minimo="false" />
                                     </td>
                                     <td class="text-center small">
                                         <span class="badge d-block mb-1" :class="tarifa.activo ? 'bg-success' : 'bg-secondary'">{{ tarifa.activo ? 'Activa' : 'Inactiva' }}</span>

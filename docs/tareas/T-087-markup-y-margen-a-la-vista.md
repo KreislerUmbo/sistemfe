@@ -112,8 +112,15 @@ Prueba funcional en `http://agencia-demo.sistemafe.test:5173`: Proveedores → u
     rojo si la ganancia es negativa.
   - En el combo se quitó `preview.margenResultante` y `margenOk` (reemplazados por el componente);
     el piso es el mínimo del combo o, si no tiene, el de la agencia.
-  - `paquetes/detalle.vue:1437` (`margenMinimoAceptablePct`, sin uso en la plantilla) pasó de
-    `?? 20` a `?? null`.
+  - **CA3, color:** debajo del mínimo la tarifa sale **amarilla** (`MargenEnVivo`: rojo = pérdida,
+    amarillo = bajo el mínimo, mismo criterio que ya tenía el tour), no roja como decía CA3.
+  - Revisión (Opus, 06-nov): `MargenEnVivo` ganó `verMinimo` (la tabla de tarifas no repite
+    "· markup mínimo X %" en cada fila: queda el ícono con el dato en el `title`) y `origenMinimo`
+    (el combo dice "del combo", no "del tour"). Se quitó de `paquetes/detalle.vue` la carga de
+    `configAgencia` y `margenMinimoAceptablePct`, que ya no tenían uso (el mínimo llega en
+    `show()`). Texto de `paquetes/form.vue:146` pasado a "markup mínimo protegido".
+  - En el combo sin mínimo propio, el aviso usa el de la agencia, pero el backend
+    (`ComboValidationService::validarMargenMinimo`) solo bloquea con el del combo: es aviso, no bloqueo.
 
 ## Hallazgos fuera de alcance
 - Costo 0 en la tarifa: antes mostraba "0 %", ahora el markup sale "—" (no se puede dividir) y el

@@ -314,7 +314,7 @@
 
                 <div class="mt-3" v-if="preview.costoTotal > 0">
                     <MargenEnVivo moneda="S/" :precio="preview.ventaNeta" :costo="preview.costoTotal"
-                        :margen-minimo-tour="margenMinimoLocal != null ? Number(margenMinimoLocal) : null" :margen-minimo-agencia="margenMinimoAgencia" etiqueta="Resultante" />
+                        :margen-minimo-tour="margenMinimoLocal != null ? Number(margenMinimoLocal) : null" :margen-minimo-agencia="margenMinimoAgencia" origen-minimo="del combo" etiqueta="Resultante" />
                 </div>
             </div>
         </div>
@@ -730,7 +730,7 @@
                             </div>
                             <div v-if="preview.costoTotal > 0" class="mb-2">
                                 <MargenEnVivo moneda="S/" :precio="preview.ventaNeta" :costo="preview.costoTotal" :detalle="false"
-                                    :margen-minimo-tour="margenMinimoLocal != null ? Number(margenMinimoLocal) : null" :margen-minimo-agencia="margenMinimoAgencia" />
+                                    :margen-minimo-tour="margenMinimoLocal != null ? Number(margenMinimoLocal) : null" :margen-minimo-agencia="margenMinimoAgencia" origen-minimo="del combo" />
                             </div>
 
                             <div class="d-flex gap-3 small text-muted border-top pt-2 mb-2">
@@ -782,13 +782,12 @@ import Swal from 'sweetalert2/dist/sweetalert2.js';
 import { paquetePlantillaService } from '@/services/admin/paquetePlantillaService';
 import { proveedorService, proveedorTipoService } from '@/services/admin/proveedorService';
 import { guiaService } from '@/services/admin/guiaService';
-import { configuracionAgenciaService } from '@/services/admin/configuracionAgenciaService';
 import { servicioService } from '@/services/admin/servicioService';
 import { formatFecha } from '@/helpers/fecha';
 import type {
     PaquetePlantilla, PaquetePlantillaItem, TourItinerarioItem,
     ProveedorTarifa, GuiaTarifa, ComboDatos, ComboItinerarioPaso, PaquetePlantillaResumen,
-    ConfiguracionAgencia, Servicio, ProveedorTipo, TourCostoEstimado, CamposPrecioTour,
+    Servicio, ProveedorTipo, TourCostoEstimado, CamposPrecioTour,
 } from '@/types/agencia-viajes';
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
@@ -1429,12 +1428,7 @@ const itemsProveedor = computed(() => items.value.filter(i => i.proveedor_tarifa
 const itemsGuia = computed(() => items.value.filter(i => i.guia_tarifa));
 
 // ── Totales de "Incluye" (tour_simple) — costo/venta/margen, en vivo ──
-// Fix 3 — margen mínimo aceptable configurable por agencia (antes
-// hardcodeado acá), mismo patrón que proveedores/detalle.vue y
-// cotizador/editar.vue. Fallback de 20 solo mientras la config está en
-// vuelo (no bloquea el render).
-const configAgencia = ref<ConfiguracionAgencia | null>(null);
-const margenMinimoAceptablePct = computed(() => configAgencia.value?.margen_minimo_aceptable_pct ?? null);
+// T-087: el markup mínimo de la agencia llega en show() (margenMinimoAgencia).
 
 const ventaGuiaTarifa = (gt: GuiaTarifa): number =>
     gt.tipo_margen === 'porcentaje' ? gt.costo_diario * (1 + gt.margen_valor / 100) : gt.costo_diario + gt.margen_valor;
@@ -1625,9 +1619,6 @@ const toggleExpandido = async (tourHijoId: number) => {
 
 onMounted(async () => {
     try {
-        // Fix 3 — carga la config de agencia en paralelo, no bloquea la carga
-        // del paquete (el margen mínimo tiene fallback de 20 mientras está en vuelo).
-        configuracionAgenciaService.obtener().then((res) => { configAgencia.value = res.configuracion_agencia; });
 
         // Sesión 11l v2 — catálogos de servicios/proveedores para los filtros
         // de la biblioteca del tab Incluye, en paralelo (no bloquean la carga).

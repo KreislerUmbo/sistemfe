@@ -143,7 +143,7 @@
                 <span class="fw-semibold text-dark small">Descuento y markup mínimo del combo</span>
             </div>
             <div class="card-body py-3">
-                <small class="text-muted d-block mb-2">El precio final se calcula solo, sumando los tours incluidos (pestaña "Incluye") — acá solo configurás el descuento y el piso de margen protegido. Vista previa en vivo disponible en la pestaña "Datos" una vez guardado.</small>
+                <small class="text-muted d-block mb-2">El precio final se calcula solo, sumando los tours incluidos (pestaña "Incluye") — acá solo configurás el descuento y el markup mínimo protegido (utilidad sobre el costo). Vista previa en vivo disponible en la pestaña "Datos" una vez guardado.</small>
                 <div class="row g-3">
                     <div class="col-12 col-md-4">
                         <label class="form-label mb-1 small fw-semibold text-secondary">Tipo de descuento</label>
