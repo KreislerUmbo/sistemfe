@@ -192,10 +192,12 @@ class PaquetePlantilla extends Model
             return collect();
         }
 
-        return $this->items()
-            ->with(['proveedorTarifa', 'destinoServicio.servicio'])
-            ->where(fn ($q) => $q->whereNotNull('guia_tarifa_id')->orWhereNotNull('proveedor_tarifa_id'))
-            ->get()
+        // Si el listado ya precargó el Incluye (index()), se usa sin volver a consultar.
+        $items = $this->relationLoaded('items')
+            ? $this->items
+            : $this->items()->with(['proveedorTarifa', 'destinoServicio.servicio'])->get();
+
+        return $items
             ->filter(fn ($item) => $item->guia_tarifa_id
                 || ($item->proveedorTarifa?->modalidad === 'privado' && $item->proveedorTarifa->tipo_habitacion === null))
             ->map(fn ($item) => $item->guia_tarifa_id ? 'Guía' : ($item->destinoServicio?->servicio?->nombre ?? 'Servicio'))

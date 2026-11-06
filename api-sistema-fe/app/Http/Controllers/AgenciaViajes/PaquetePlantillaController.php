@@ -92,7 +92,9 @@ class PaquetePlantillaController extends Controller
         // 1 y 100, mismo criterio que CotizacionController::index().
         $perPage = min(100, max(1, (int) $request->get('per_page', 15)));
 
-        $paquetes = $query->with('destinoAtractivo')->withCount('items')->orderByDesc('id')->paginate($perPage);
+        // T-088: el Incluye precargado alimenta `falta_minimo` sin una consulta por tour.
+        $paquetes = $query->with(['destinoAtractivo', 'items.proveedorTarifa', 'items.destinoServicio.servicio'])
+            ->withCount('items')->orderByDesc('id')->paginate($perPage);
 
         // precio_calculado: SOLO para paquete_combo — su precio no tiene
         // sentido como valor guardado (depende en vivo de los tours
@@ -105,6 +107,7 @@ class PaquetePlantillaController extends Controller
             }
             $paquete->setAttribute('fotos', StorageUrl::resolveMuchas($paquete->fotos ?? []));
             $paquete->setAttribute('falta_minimo', $paquete->faltaMinimo()); // T-088
+            $paquete->unsetRelation('items'); // solo se cargó para falta_minimo; el listado no lo devuelve
 
             return $paquete;
         });

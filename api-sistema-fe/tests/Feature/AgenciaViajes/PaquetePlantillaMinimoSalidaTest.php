@@ -170,6 +170,32 @@ class PaquetePlantillaMinimoSalidaTest extends TestCase
         $this->assertSame(200, $this->actualizar($tour)->status());
     }
 
+    // Decisión de la construcción: desactivar un tour viejo sin mínimo no se bloquea (no se vende).
+    public function test_desactivar_no_exige_minimo(): void
+    {
+        $tour = $this->crearTour();
+        $this->agregarTarifa($tour, $this->crearTarifa('Movilidad privada', 'privado'));
+
+        $this->assertSame(200, $this->actualizar($tour, ['activo' => false])->status());
+        $this->assertFalse($tour->fresh()->activo);
+    }
+
+    // El listado marca falta_minimo con el Incluye precargado y no lo devuelve en la respuesta.
+    public function test_listado_marca_falta_minimo_sin_devolver_el_incluye(): void
+    {
+        $sinMinimo = $this->crearTour(['nombre' => 'Sin mínimo']);
+        $this->agregarTarifa($sinMinimo, $this->crearTarifa('Movilidad privada', 'privado'));
+        $conMinimo = $this->crearTour(['nombre' => 'Con mínimo', 'pax_minimo_salida' => 4]);
+        $this->agregarTarifa($conMinimo, $this->crearTarifa('Movilidad privada', 'privado'));
+
+        $datos = app(PaquetePlantillaController::class)->index(new Request(['per_page' => 100]))->getData(true);
+        $filas = collect($datos['paquetes_plantilla'])->keyBy('id');
+
+        $this->assertTrue($filas[$sinMinimo->id]['falta_minimo']);
+        $this->assertFalse($filas[$conMinimo->id]['falta_minimo']);
+        $this->assertArrayNotHasKey('items', $filas[$sinMinimo->id]);
+    }
+
     public function test_agregar_servicio_privado_avisa(): void
     {
         $tour = $this->crearTour();

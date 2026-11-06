@@ -834,7 +834,6 @@ export type CamposPrecioTour = {
   moneda?: 'PEN' | 'USD';
   modalidad?: 'compartido' | 'privado';
   pax_minimo_salida?: number | null;
-  falta_minimo?: boolean;
   precio_venta_final?: number | string | null;
   precio_venta_nino?: number | string | null;
   precio_venta_adulto_ext?: number | string | null;
