@@ -46,8 +46,31 @@ class ComboExplosionService
     // request (sin binding singleton), así que esto nunca cruza requests.
     private array $toursDelComboCache = [];
 
-    public function __construct(private PriceEngineService $priceEngine)
+    public function __construct(
+        private PriceEngineService $priceEngine,
+        private TourCostoEstimadoService $costoEstimado,
+    ) {
+    }
+
+    /**
+     * Totales de un tour DENTRO de un combo (T-090): venta = precio de lista del tour
+     * (`precio_venta_final`, adulto nacional), costo = `TourCostoEstimadoService::costoDelTour()`,
+     * el mismo criterio con que cobra el cotizador. `totalesTour()` (suma de tarifas del Incluye)
+     * queda intacto para el tour suelto y el modo anterior.
+     *
+     * @return array{costo_total: float, venta_total: float, sin_precio: bool, sin_costo: bool}
+     */
+    public function totalesTourEnCombo(PaquetePlantilla $tour): array
     {
+        $costo = $this->costoEstimado->costoDelTour($tour)['costo'];
+        $sinPrecio = $tour->precio_venta_final === null;
+
+        return [
+            'costo_total' => round((float) ($costo ?? 0), 2),
+            'venta_total' => $sinPrecio ? 0.0 : round((float) $tour->precio_venta_final, 2),
+            'sin_precio' => $sinPrecio,
+            'sin_costo' => $costo === null,
+        ];
     }
 
     /**
@@ -115,9 +138,11 @@ class ComboExplosionService
         // mientras seguía incluido en este combo se excluye del cálculo de
         // precio (nunca rompe el total en silencio), pero se reporta acá
         // para que el frontend muestre la advertencia visible.
-        $tourTotales = $tours->filter(fn (PaquetePlantilla $tour) => $tour->activo)
-            ->map(fn (PaquetePlantilla $tour) => $this->totalesTour($tour))
-            ->all();
+        // T-090: cada tour aporta su precio de lista y su costo estimado (no las tarifas de su
+        // Incluye). Un tour sin precio no suma venta y uno sin costo suma costo 0: se avisan abajo.
+        $totalesPorTour = $tours->filter(fn (PaquetePlantilla $tour) => $tour->activo)
+            ->mapWithKeys(fn (PaquetePlantilla $tour) => [$tour->id => $this->totalesTourEnCombo($tour)]);
+        $tourTotales = $totalesPorTour->values()->all();
 
         // Fix ítems sueltos del combo (2026-08-18): un ítem agregado directo
         // al combo (proveedor_tarifa_id/guia_tarifa_id sobre el propio
@@ -160,6 +185,16 @@ class ComboExplosionService
         $toursActivos = $tours->filter(fn (PaquetePlantilla $tour) => $tour->activo);
 
         $resultado['componentes_sin_incluye'] = $toursActivos->filter(fn (PaquetePlantilla $tour) => $tour->items->count() === 0)
+            ->map(fn (PaquetePlantilla $tour) => ['id' => $tour->id, 'nombre' => $tour->nombre])
+            ->values()
+            ->all();
+
+        $resultado['componentes_sin_precio'] = $toursActivos->filter(fn (PaquetePlantilla $tour) => $totalesPorTour[$tour->id]['sin_precio'])
+            ->map(fn (PaquetePlantilla $tour) => ['id' => $tour->id, 'nombre' => $tour->nombre])
+            ->values()
+            ->all();
+
+        $resultado['componentes_sin_costo'] = $toursActivos->filter(fn (PaquetePlantilla $tour) => $totalesPorTour[$tour->id]['sin_costo'])
             ->map(fn (PaquetePlantilla $tour) => ['id' => $tour->id, 'nombre' => $tour->nombre])
             ->values()
             ->all();

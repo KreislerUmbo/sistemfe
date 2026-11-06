@@ -873,6 +873,9 @@ export type ComboPrecioCalculado = {
   // Sesión 11m — tour-hijo activo sin Incluye/Itinerario cargado (suma 0
   // en silencio en el precio, pero rompe la cotización más adelante).
   componentes_sin_incluye: Array<{ id: number; nombre: string }>;
+  // T-090 — tour sin precio de lista (no suma venta) / sin costo estimado (suma costo 0).
+  componentes_sin_precio: Array<{ id: number; nombre: string }>;
+  componentes_sin_costo: Array<{ id: number; nombre: string }>;
   componentes_sin_itinerario: Array<{ id: number; nombre: string }>;
 };
 

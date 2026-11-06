@@ -245,8 +245,18 @@
                 </div>
                 <div v-if="combo.precio_calculado.componentes_sin_incluye.length" class="alert alert-warning small mb-3">
                     <i class="fas fa-triangle-exclamation me-1"></i>
-                    {{ combo.precio_calculado.componentes_sin_incluye.length }} tour(s) sin costo cargado (Incluye vacío) — no van a sumar precio ni aparecer en las cotizaciones:
+                    {{ combo.precio_calculado.componentes_sin_incluye.length }} tour(s) sin Incluye cargado — no van a aparecer en las cotizaciones:
                     {{ combo.precio_calculado.componentes_sin_incluye.map(c => c.nombre).join(', ') }}
+                </div>
+                <div v-if="combo.precio_calculado.componentes_sin_precio.length" class="alert alert-warning small mb-3">
+                    <i class="fas fa-triangle-exclamation me-1"></i>
+                    {{ combo.precio_calculado.componentes_sin_precio.length }} tour(s) sin precio de venta — no suman al total del combo:
+                    {{ combo.precio_calculado.componentes_sin_precio.map(c => c.nombre).join(', ') }}
+                </div>
+                <div v-if="combo.precio_calculado.componentes_sin_costo.length" class="alert alert-warning small mb-3">
+                    <i class="fas fa-triangle-exclamation me-1"></i>
+                    {{ combo.precio_calculado.componentes_sin_costo.length }} tour(s) sin costo estimado — cuentan con costo 0 y el markup sale inflado:
+                    {{ combo.precio_calculado.componentes_sin_costo.map(c => c.nombre).join(', ') }}
                 </div>
                 <div v-if="combo.precio_calculado.componentes_sin_itinerario.length" class="alert alert-warning small mb-3">
                     <i class="fas fa-triangle-exclamation me-1"></i>
@@ -743,7 +753,13 @@
                                     <i class="fas fa-triangle-exclamation me-1"></i>{{ combo.precio_calculado.componentes_inactivos.length }} tour(s) desactivado(s), fuera del total.
                                 </div>
                                 <div v-if="combo.precio_calculado.componentes_sin_incluye.length" class="alert alert-warning small py-2 mb-2">
-                                    <i class="fas fa-triangle-exclamation me-1"></i>{{ combo.precio_calculado.componentes_sin_incluye.length }} tour(s) sin costo cargado.
+                                    <i class="fas fa-triangle-exclamation me-1"></i>{{ combo.precio_calculado.componentes_sin_incluye.length }} tour(s) sin Incluye cargado.
+                                </div>
+                                <div v-if="combo.precio_calculado.componentes_sin_precio.length" class="alert alert-warning small py-2 mb-2">
+                                    <i class="fas fa-triangle-exclamation me-1"></i>{{ combo.precio_calculado.componentes_sin_precio.length }} tour(s) sin precio de venta, no suman.
+                                </div>
+                                <div v-if="combo.precio_calculado.componentes_sin_costo.length" class="alert alert-warning small py-2 mb-2">
+                                    <i class="fas fa-triangle-exclamation me-1"></i>{{ combo.precio_calculado.componentes_sin_costo.length }} tour(s) sin costo estimado (cuentan 0).
                                 </div>
                                 <div v-if="combo.precio_calculado.componentes_sin_itinerario.length" class="alert alert-warning small py-2 mb-2">
                                     <i class="fas fa-triangle-exclamation me-1"></i>{{ combo.precio_calculado.componentes_sin_itinerario.length }} tour(s) sin itinerario cargado.
