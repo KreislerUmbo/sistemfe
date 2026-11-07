@@ -1059,6 +1059,22 @@ export type ReservaItemVueloPasajero = {
 // que comparten tour_origen_id + fecha (modalidad='compartido'). El guía
 // se asigna una vez acá, no por reserva. El proveedor de transporte NUNCA
 // se centraliza, sigue en reserva_items.proveedor_tarifa_id.
+// T-089: ganancia ESTIMADA de la salida (con tarifas; la real llega con Compras).
+export type GananciaSalida = {
+  moneda: string;
+  cobrado: number;
+  costo_fijo: number;
+  costo_variable: number;
+  costo_por_persona: number;
+  ganancia: number;
+  markup_pct: number | null;
+  margen_pct: number | null;
+  pasajeros: number;
+  vehiculos: number;
+  completo: boolean;
+  avisos: string[];
+};
+
 export type SalidaOperativa = {
   id: number;
   tour_origen_id: number | null;
@@ -1087,6 +1103,8 @@ export type SalidaOperativa = {
   pax_minimo?: number | null;
   pax_que_cuentan?: number;
   bajo_minimo?: boolean;
+  // T-089: solo viene con reservas.ver_todas; null si la salida no tiene tour de origen.
+  ganancia?: GananciaSalida | null;
   pasajeros?: Array<{
     id: number;
     reserva_id: number;

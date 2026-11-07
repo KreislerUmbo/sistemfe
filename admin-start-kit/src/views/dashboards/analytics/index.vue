@@ -275,6 +275,13 @@
                       <router-link :to="{ name: 'agencia.salidas.detalle', params: { id: s.id } }" class="fw-semibold text-reset">{{ s.tour ?? 'Salida' }}</router-link>
                       <span v-if="s.estado === 'confirmada'" class="badge bg-success ms-1">Confirmada</span>
                       <span v-if="s.bajo_minimo" class="badge bg-danger-subtle text-danger-emphasis ms-1">Bajo el mínimo ({{ s.minimo }})</span>
+                      <!-- T-089: solo llega con reservas.ver_todas -->
+                      <span
+                        v-if="s.ganancia"
+                        class="badge ms-1"
+                        :class="s.ganancia.ganancia < 0 ? 'bg-danger-subtle text-danger-emphasis' : 'bg-success-subtle text-success-emphasis'"
+                        :title="s.ganancia.completo ? 'Ganancia estimada con las tarifas' : 'Ganancia estimada: faltan costos en el tour'"
+                      >Ganancia est. {{ formatoMoneda(s.ganancia.ganancia, s.ganancia.moneda) }}{{ s.ganancia.completo ? '' : ' *' }}</span>
                       <small class="text-muted d-block">
                         {{ formatoFecha(s.fecha) }}{{ s.hora ? ` ${s.hora}` : '' }} · {{ s.pasajeros }}{{ s.cupo ? `/${s.cupo}` : '' }} pasajero(s)
                         · <span :class="{ 'text-danger': !s.guia }">{{ s.guia ?? 'sin guía' }}</span>
