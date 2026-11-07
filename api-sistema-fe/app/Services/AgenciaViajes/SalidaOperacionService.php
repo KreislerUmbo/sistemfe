@@ -380,7 +380,7 @@ class SalidaOperacionService
         return 'https://wa.me/'.$digitos.'?text='.rawurlencode($mensaje);
     }
 
-    private function reservasActivas(SalidaOperativa $salida): Collection
+    public function reservasActivas(SalidaOperativa $salida): Collection
     {
         return $salida->reservaItems->pluck('reserva')->filter()
             ->reject(fn ($r) => $r->estado === 'cancelada')
@@ -388,7 +388,7 @@ class SalidaOperacionService
     }
 
     // Adultos y niños: el infante no ocupa lugar ni cuenta para cantidades.
-    private function ocupan(Collection $pasajeros): int
+    public function ocupan(Collection $pasajeros): int
     {
         return $pasajeros->where('tipo_pax', '!=', 'infante')->count();
     }

@@ -13,6 +13,7 @@ use App\Models\Company;
 use App\Services\AgenciaViajes\CruceSalidasService;
 use App\Services\AgenciaViajes\SalidaEngancheService;
 use App\Services\AgenciaViajes\SalidaOperacionService;
+use App\Services\AgenciaViajes\TourCostoEstimadoService;
 use App\Services\HoraPeru;
 use App\Services\StorageUrl;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -635,6 +636,12 @@ class SalidaOperativaController extends Controller
             : $reservasUnicas->pluck('id')->diff($reservasEnVehiculo)->count();
 
         if ($detalle) {
+            // T-089: ganancia estimada. Los montos solo salen del backend si el
+            // usuario tiene reservas.ver_todas (no basta con ocultarlos en pantalla).
+            if (auth('api')->user()?->can('reservas.ver_todas')) {
+                $base['ganancia'] = app(TourCostoEstimadoService::class)->estimarSalida($s);
+            }
+
             $base['reservas'] = $reservasUnicas->map(fn ($r) => [
                 'id' => $r->id,
                 'codigo' => $r->codigo ?? $r->alternativa?->cotizacion?->codigo,
