@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Fecha** | 2026-11-05 |
-| **Estado** | aceptada (la confirmación de la Amazonía en el resumen se muestra al contador antes de construir T-048) |
+| **Estado** | aceptada; **el punto 2 (Amazonía confirmada en el resumen) lo reemplaza D-AGE-035** (07-nov-2026) |
 | **Reglas que afecta** | — (Venta directa todavía no tiene reglas propias en `reglas.md`) |
 | **Decidió** | usuario (con Claude), sobre la maqueta del rediseño (05-nov) |
 

@@ -530,12 +530,12 @@ alternativa aceptada).
 | | | **Agregar servicios, hoteles y tours desde la biblioteca, revisado el 26-oct-2026:** | |
 | H16 | **Alta** | **La matriz de habitaciones de un hotel muestra todas sus tarifas, incluidas las versiones viejas y las desactivadas.** Para abrir la matriz se usa `GET proveedor-servicios/{id}/tarifas` (`ProveedorTarifaController::index()`), que devuelve todo sin filtrar. Cada cambio de precio de una tarifa ya usada crea una versión nueva, así que la matriz muestra varias "matrimonial" con precios distintos y el vendedor puede elegir la vieja; el alta solo rechaza las desactivadas, **no las vencidas**: el precio viejo entra a la cotización. Lo mismo en "usar tarifa registrada" del hotel de un mayorista (`ProveedorController::tarifasHotel()`). Agrava H5 (que solo pasaba el día del cambio). | `clicBibliotecaItem()`, `onCambiarProveedorHotel()`, `ProveedorTarifaController::index()`, `ProveedorController::tarifasHotel()`, `AlternativaItemController::crearItemProveedor()` |
 | H17 | **Alta** | **Los tours del catálogo siguen cotizando con el precio viejo de una tarifa después de editarla.** Si la tarifa ya se usó en alguna cotización, editarla crea una versión nueva, pero las plantillas de tours (`paquete_plantilla_items.proveedor_tarifa_id`) siguen apuntando a la versión vieja (cerrada); `ComboExplosionService` lee esa. Afecta al modo clásico, el que usan todos los tenants hoy. Confirmado leyendo el código; ¿hay algún motivo para que la plantilla conserve la versión vieja? (no se encontró ninguno documentado). | `ProveedorTarifaController::update()`, `ComboExplosionService::resolverCostoVentaItem()` |
-| H18 | Media (tributario) | **Tour clásico desde plantilla: el guía y el "Ajuste de redondeo" nacen sin tratamiento tributario.** Al facturar, `resolverTipAfeIgvItem()`/`resolverDestinoTributario()` caen al fijo `'10'`/`'nacional'`, no al default de la agencia (el guía agregado suelto sí usa el default). En una agencia de la Amazonía el guía se factura gravado y la mezcla con servicios exonerados puede **bloquear la facturación**. Sin reproducir. | `AlternativaItemController::crearItemClasicoDesdeEntrada()` y el ítem de ajuste en `desdePlantilla()` |
+| H18 | Media (tributario) | **Tour clásico desde plantilla: el guía y el "Ajuste de redondeo" nacen sin tratamiento tributario.** Al facturar, `resolverTipAfeIgvItem()`/`resolverDestinoTributario()` caen al fijo `'10'`/`'nacional'`, no al default de la agencia (el guía agregado suelto sí usa el default). En una agencia de la Amazonía el guía se factura gravado y la mezcla con servicios exonerados puede **bloquear la facturación**. Sin reproducir. **07-nov:** con D-AGE-035 el guía toma el valor por defecto de la agencia (Exonerado) y P7 quita el bloqueo de mezcla: T-029 ya no espera al contador. | `AlternativaItemController::crearItemClasicoDesdeEntrada()` y el ítem de ajuste en `desdePlantilla()` |
 | H19 | Baja | Tour clásico desde plantilla, servicio compartido: el costo cuenta también a los infantes; el alta normal (y el recálculo al cambiar pasajeros) no los cuenta. El margen cambia al editar pasajeros. | `crearItemClasicoDesdeEntrada()` vs. `crearItemProveedor()` |
 | | | **Decisión del usuario sobre H7 (26-oct-2026):** en **servicios de tour**, si la tarifa no tiene precio de niño, **el niño paga como adulto** (misma regla que los tours); **en hoteles no**, porque tienen sus propias tarifas. → T-031 | |
 | | | **Encontrados en la medición en pantalla (obs. 9), 26-oct-2026:** | |
 | H20 | Media | **PDF: la tabla "Opciones de hoteles" dice "tarifa por persona"** pero en Local/Nacional muestra el total por habitación y noches (PEN 1,020 = 340 × 3). El cliente lo lee mal. Confirmado en el PDF real. | `alternativa.blade.php` (encabezado de la tabla) |
-| H21 | **Alta (tributario, decisión)** | **Un paquete internacional de mayorista nace "Exonerado · Amazonía"**: toma el tratamiento por defecto de la agencia. Un viaje a Panamá no se consume en la Amazonía (Ley 27037). Al facturar saldría exonerado. Confirmado en pantalla. Falta decidir con el contador qué tratamiento le corresponde al paquete internacional (y si cambia entre la comisión y el resto). | `AlternativaItemController::crearItemMayorista()` → `resolverTratamientoTributario()` |
+| H21 | **Alta (tributario, decisión)** | **Un paquete internacional de mayorista nace "Exonerado · Amazonía"**: toma el tratamiento por defecto de la agencia. Un viaje a Panamá no se consume en la Amazonía (Ley 27037). Al facturar saldría exonerado. Confirmado en pantalla. ~~Falta decidir con el contador~~ **Resuelto el 07-nov (D-AGE-035):** es correcto, un servicio de un tercero va exonerado aunque se consuma fuera de la zona. | `AlternativaItemController::crearItemMayorista()` → `resolverTratamientoTributario()` |
 | H22 | **Alta** | **Mayorista: el niño no se cobra.** El precio del paquete se multiplica por la cantidad de **adultos**; con 2 adultos + 1 niño el total fue USD 1,900 (950 × 2) y el panel dice "Total (2 adultos + 1 niño)". No hay precio de niño para el paquete ni aviso. Confirmado en pantalla. | `cantidadAdultosCotizacion` (editar.vue), `crearItemMayorista()` |
 | H23 | Media | Crear una alternativa sin escribir nombre: error en inglés en ventana ("The nombre field is required."); el texto de ayuda dice "Alternativa B" en la primera. → R1/R7 | `AlternativaController::store()`, `editar.vue` |
 | H24 | Baja | "Alternativa A" se guarda como "Alternativa a" (la capitalización baja la letra suelta) y el panel muestra "Alternativa Alternativa a". | `TextoFormatoService::capitalizarNombrePropio()`, panel de precio |
@@ -684,13 +684,17 @@ Para el camino B, la regla queda: **agencia que cumple el art. 2** (dato de conf
   EN LA MISMA"). `FacturacionElectronicaController::armarLeyendas()` y
   `NotaElectronicaController::armarLeyendasNota()` solo mandan la 1000 (monto en letras). El PDF
   sí imprime un texto propio ("OPERACIÓN EXONERADA DEL IGV — LEY N° 27037"), distinto del que usan
-  los negocios de la zona. Confirmar con el contador si la leyenda es obligatoria en el XML y su texto.
+  los negocios de la zona. ~~Confirmar con el contador~~ **07-nov:** va en el XML (respuesta del usuario del 05-nov); queda abierto solo el texto del PDF (C10). Es P1 de `agencia-tributario-simplificado.md`.
 **Continúa (05-nov-2026)** en `docs/requerimientos/agencia-tributario-simplificado.md`: propuesta
 concreta (una sola lista de afectación, empresa calificada en Configuración, grilla de facturar
 editable, comprobante mixto, series por afectación) y respuestas del usuario.
+**07-nov-2026:** las preguntas 1, 2, 3, 4 y 6 de arriba quedaron respondidas (D-AGE-035): decide
+**quién opera** el servicio, no dónde se consume; la agencia revende; lo de terceros y el pasaje
+completo van exonerados. La regla "servicio prestado en un destino de la Amazonía" del camino B
+queda reemplazada. La 5 (exportación) sigue para más adelante.
 
 - **H27 — Monto en letras siempre en "SOLES".** `armarLeyendas()` pasa `'SOLES'` fijo: una factura en
-  dólares sale al XML con el monto en letras en soles. Las notas sí miran la moneda.
+  dólares sale al XML con el monto en letras en soles. Las notas sí miran la moneda. **Resuelto (T-038):** `MontoEnLetras` toma la moneda (verificado el 07-nov).
 
 ### 11. Separar "servicios de la agencia" y "paquete de mayorista" (26-oct-2026)
 
@@ -750,7 +754,7 @@ cancelar/facturar y doble aceptación; el cambio de precio tras aceptar es T-001
 | H34 | Baja | **Error 500 en una carrera.** `actualizarFacturacionExterna()` lanza la excepción de "ya tiene venta" dentro de la transacción sin capturarla: con dos clics simultáneos responde 500 en vez del mensaje. | `ReservaController::actualizarFacturacionExterna()` |
 
 Además: "Corregir tratamiento tributario" de la reserva acepta combinaciones que contradicen D18
-(Amazonía + gravado, nacional + exonerado). Espera la obs. 10.
+(Amazonía + gravado, nacional + exonerado). Espera la obs. 10. **07-nov:** lo resuelve P3 (una sola lista, sin destino) de `agencia-tributario-simplificado.md`.
 
 ## AGE — Revisión de salidas operativas (26-oct-2026)
 
@@ -808,7 +812,7 @@ aceptada + reserva y lleva a la ficha de la reserva; facturar y cobrar es otro p
    "Crear" solo sigue existiendo para vender a crédito o facturar después. (H45)
 6. **Varias líneas** (tour + traslado) en la misma venta. (H46)
 7. Destino del árbol, o tomado del tour elegido. (H47)
-- El tratamiento tributario del concepto libre espera la obs. 10 (contador).
+- El tratamiento tributario del concepto libre espera la obs. 10 (contador). **07-nov:** es servicio de la agencia o de un tercero, va con el valor por defecto (Exonerado, D-AGE-035) y se corrige en la grilla (P5).
 
 **Orden sugerido:** 1-2-4 primero (lo que evita cobrar mal y lo más vendido), después 3, después 5
 (depende de T-010/T-011), y 6-7 al final.
@@ -1169,7 +1173,7 @@ buscar en los documentos y planes anteriores procesos que quedaron en el aire.
   certificados beta en el historial de git, HSTS/CSP y CORS `*`.
 - **Ley de la Amazonía (fila F2)**: interruptor "la empresa cumple la Ley de la Amazonía" (hoy
   cualquier agencia puede marcar exonerado) y expediente de sustento por reserva; se suman a la
-  obs. 10 (contador).
+  obs. 10 (contador). **07-nov:** todo en `agencia-tributario-simplificado.md` (P2 y P9); requisitos de la empresa en D-AGE-035.
 - **Ventas, todos los giros:** comunicación de baja a SUNAT sin conectar a ningún flujo; archivo
   de depuración del XML con nombre fijo (`debug_xml.xml`, choque entre ventas simultáneas);
   `controla_stock` del producto ignorado (el stock se descuenta siempre); al aceptar una NC no se

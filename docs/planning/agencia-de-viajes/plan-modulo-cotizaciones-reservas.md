@@ -1738,7 +1738,7 @@ los recordatorios pendientes de todos los vendedores en una sola vista
   de exportación, la leyenda de exoneración del PDF podría salir
   incompleta. Falta decidir: ¿se permite mezclar tratamientos distintos en
   una misma reserva (aceptando esa limitación visual), o se fuerza a
-  generar `Sale` separados cuando eso pasa?
+  generar `Sale` separados cuando eso pasa? **07-nov-2026 (D-AGE-035): se mezcla en un solo comprobante** (gravado + exonerado); la exportación sigue fuera y bloqueada.
 - **Autorización de menores de edad** (documento de viaje sin padres) —
   sin definir si entra al modelo de `pasajero_documentos` o queda fuera.
 - **Depósito no reembolsable**: cómo se marca en una reserva puntual, sin

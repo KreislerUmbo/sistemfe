@@ -5,7 +5,7 @@
 | **Módulo** | AGE |
 | **Depende de** | ninguna |
 | **Reglas** | `CLAUDE.md` → reglas tributarias; regla D18 de Agencia: **exonerado (20) = Amazonía** |
-| **Decisiones** | `docs/requerimientos/observaciones-pruebas-usuario.md` → "Revisión del flujo de cotizaciones", H18 y H19 |
+| **Decisiones** | `docs/requerimientos/observaciones-pruebas-usuario.md` → "Revisión del flujo de cotizaciones", H18 y H19; D-AGE-035 (07-nov: el guía y el ajuste van con el valor por defecto de la agencia, Exonerado en una agencia de la Amazonía) |
 | **Rama** | `fix/T-029-tributario-tour-clasico` |
 
 ## Contexto

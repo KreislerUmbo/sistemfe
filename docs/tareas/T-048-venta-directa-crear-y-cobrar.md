@@ -1,11 +1,11 @@
-# T-048 — Venta directa: "Crear y cobrar" con boleta o factura y la Amazonía confirmada en el resumen (H45)
+# T-048 — Venta directa: "Crear y cobrar" con boleta o factura (H45)
 
 | | |
 |---|---|
 | **Módulo** | AGE + CAJ |
-| **Depende de** | T-047 (la pantalla completa) y T-011 (y por ella T-010). **Antes de empezar:** que el contador haya visto la confirmación de la Amazonía en el resumen (D-AGE-034, punto 2); si no la acepta, se reescribe esta tarea |
+| **Depende de** | T-047 (la pantalla completa), T-011 (y por ella T-010) y **T-091** (comprobante mixto y sin confirmación de la Amazonía) |
 | **Reglas** | las de cobro de T-010/T-011 |
-| **Decisiones** | `docs/requerimientos/observaciones-pruebas-usuario.md` → obs. 12, H45 y respuestas 1-2 (27-oct-2026: también por transferencia; comprobante elegido cada vez); D-AGE-034 (sin nota de venta; Amazonía confirmada en el resumen) |
+| **Decisiones** | `docs/requerimientos/observaciones-pruebas-usuario.md` → obs. 12, H45 y respuestas 1-2 (27-oct-2026: también por transferencia; comprobante elegido cada vez); D-AGE-034 (sin nota de venta); `agencia-tributario-simplificado.md` §2.7, C4 y C5 (07-nov-2026: se mezclan gravadas y exoneradas; **sin confirmación de la Amazonía**, reemplaza el punto 2 de D-AGE-034) |
 | **Rama** | `feat/T-048-venta-directa-crear-cobrar` |
 
 ## Contexto
@@ -13,8 +13,8 @@ Después de crear una venta directa hay que ir a la reserva, facturar y cobrar: 
 venta que se paga en el momento, en la oficina o por transferencia.
 
 ## Alcance
-- Seguir la **maqueta aprobada** (enlace en D-AGE-034): botones, bloque de cobro y casilla de la
-  Amazonía en el resumen como ahí.
+- Seguir la **maqueta aprobada** (enlace en D-AGE-034): botones y bloque de cobro como ahí, **sin
+  la casilla de la Amazonía** (C5, 07-nov).
 - En el resumen de la pantalla de T-085: botón **«Crear y cobrar»** arriba y el actual pasa a
   **«Crear sin cobrar»** («a crédito, si el pago llega después o para facturar desde la reserva»).
   «Crear y cobrar» aparece solo con `AGENCIA_COBRO_AL_FACTURAR` encendido.
@@ -22,19 +22,12 @@ venta que se paga en el momento, en la oficina o por transferencia.
   formas de pago con Yape/Plin, moneda, n.º de operación, pago mixto, vuelto) y el **tipo de
   comprobante sin valor por defecto**: **boleta o factura**, según los permisos de emisión del
   usuario. **Sin nota de venta** (D-AGE-034: facturar una reserva solo emite 01 y 03).
-- **Afectación** (de la vista previa de T-085, `facturable`):
-  - `ok = false` (mezcla o exportación): «Crear y cobrar» deshabilitado con el motivo; «Crear sin
+- **Afectación** (de la vista previa de T-085, `facturable`, ya con P7):
+  - Cada línea muestra su afectación (Exonerado / Gravado) y el resumen, op. exoneradas, op.
+    gravadas, IGV y total. Gravadas y exoneradas van **en el mismo comprobante** (C4).
+  - **Sin confirmación de la Amazonía** ni `motivo_override_tributario` (C5).
+  - `ok = false` solo por exportación: «Crear y cobrar» deshabilitado con el motivo; «Crear sin
     cobrar» sigue habilitado.
-  - `requiere_confirmar_amazonia`: si el usuario tiene `reservas.editar`, casilla «Confirmo que
-    estos servicios se realizan en la Amazonía (exonerados de IGV, Ley 27037)»; sin marcarla,
-    «Crear y cobrar» queda deshabilitado con «Confirma la Amazonía para cobrar». Sin ese permiso,
-    no hay casilla y el motivo dice «Un usuario con permiso de editar reservas debe confirmar la
-    Amazonía».
-  - Backend: con la confirmación, cada `reserva_item` de la Amazonía guarda
-    `motivo_override_tributario` = «Confirmado en venta directa por <nombre del usuario>», con la
-    misma lógica de `ReservaController::overrideTratamientoTributario()` (extraída si hace falta,
-    nunca copiada), dentro de la misma transacción. Sin `reservas.editar` → 403 aunque el payload
-    traiga la confirmación.
 - Backend: crea la venta directa y, **en la misma transacción**, factura la reserva completa al
   contado con el cliente de la venta y registra el cobro, con la lógica de
   `ReservaFacturacionController::store()` + `CobroVentaService` (extraída a un servicio si hace
@@ -50,7 +43,8 @@ venta que se paga en el momento, en la oficina o por transferencia.
 - Cobro parcial con saldo pendiente (eso es «Crear sin cobrar» + facturar a crédito desde la
   reserva).
 - Nota de venta (D-AGE-034).
-- Emitir dos comprobantes en el mismo paso cuando hay mezcla de afectaciones.
+- Emitir dos comprobantes en el mismo paso: con la mezcla permitida (C4) no hace falta.
+- Series por afectación (P8): se usa la serie que resuelva `SerieComprobanteService` en ese momento.
 
 ## Archivos probables
 - `api-sistema-fe/app/Http/Controllers/AgenciaViajes/VentaDirectaController.php`
@@ -64,11 +58,12 @@ venta que se paga en el momento, en la oficina o por transferencia.
 - [ ] **CA4** — Lo cobrado no cubre el total, o sin caja abierta → 422 y no existe la reserva. → test
 - [ ] **CA5** — Factura a un cliente sin RUC → 422 con el mismo mensaje que al facturar una reserva. → test
 - [ ] **CA6** — Nota de venta (`00`) → 422. → test
-- [ ] **CA7** — Línea de la Amazonía con la confirmación y `reservas.editar` → venta emitida
-  exonerada y `motivo_override_tributario` guardado en el ítem; sin confirmación → 422 y no existe
-  la reserva; sin `reservas.editar` → 403 y no existe la reserva. → test
-- [ ] **CA8** — Mezcla de afectaciones → 422 con el mismo motivo que la facturación de la reserva y
-  no existe la reserva; con «Crear sin cobrar» la reserva se crea. → test
+- [ ] **CA7** — Línea exonerada (Amazonía) sin ninguna confirmación → venta emitida exonerada, con
+  la leyenda de la Amazonía si P1 ya está hecha. → test
+- [ ] **CA8** — Una línea exonerada y otra gravada → **un** comprobante con las dos líneas, op.
+  exoneradas y op. gravadas separadas, IGV solo de la gravada, total igual a lo cobrado. → test
+- [ ] **CA8b** — Exportación → 422 con el mismo motivo que la facturación de la reserva y no existe
+  la reserva; con «Crear sin cobrar» la reserva se crea. → test
 - [ ] **CA9** — `AGENCIA_COBRO_AL_FACTURAR` apagado → el botón no aparece y el endpoint responde
   422. → test + prueba funcional
 - [ ] **CA10** — De punta a punta en agencia-demo (tour + traslado, crear y cobrar con Yape,
@@ -76,7 +71,7 @@ venta que se paga en el momento, en la oficina o por transferencia.
 - [ ] **CA11** — Suite completa en verde; `type-check` sin errores nuevos.
 
 ## Seguridad y correctitud
-- [ ] Permisos / Policy en rutas nuevas: crear venta directa + facturar reserva + permiso de emisión del tipo de comprobante; confirmar la Amazonía exige `reservas.editar` también en el backend
+- [ ] Permisos / Policy en rutas nuevas: crear venta directa + facturar reserva + permiso de emisión del tipo de comprobante
 - [ ] Aislamiento de tenant: no aplica
 - [ ] Validación de entrada / archivos: las de T-011
 - [ ] Concurrencia (`lockForUpdate`): correlativo con `SerieComprobanteService`, todo en una transacción

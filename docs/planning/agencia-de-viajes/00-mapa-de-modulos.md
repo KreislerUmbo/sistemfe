@@ -72,7 +72,7 @@ Cada módulo: **qué hace** (lo que el usuario puede hacer), **pantallas** (`adm
 | Tema | Qué hace | Dónde | Requisitos |
 |---|---|---|---|
 | **Roles y permisos** | 4 roles de Agencia (Administrador, Supervisor, Vendedor, Contador); el vendedor solo ve sus cotizaciones y reservas en los listados; **cada acción sobre una reserva pasa por `ReservaPolicy`** (dueño o `reservas.ver_todas`) | `app/Policies/ReservaPolicy.php`, `CotizacionPolicy.php`, `app/Models/Concerns/EscopablePorVendedor.php`, `database/seeders/AgenciaViajesRolesSeeder.php` | `fase1b-roles-permisos.md`; hoja de ruta F3 |
-| **Tratamiento tributario** | IGV por servicio (Gravado 10, Exonerado 20, Inafecto 30); en Agencia, exonerado = Amazonía (regla D18); el XML solo lleva la leyenda 1000 | `Concerns/ExoneradoEsAmazonia` (7 modelos), `admin-start-kit/src/helpers/tratamientoTributarioAgencia.ts` | `plan-tours-venta-simple-costo-real.md` (D18); hoja de ruta F2 |
+| **Tratamiento tributario** | IGV por servicio (Gravado 10, Exonerado 20, Inafecto 30); en Agencia, exonerado = Amazonía (regla D18); el XML solo lleva la leyenda 1000 | `Concerns/ExoneradoEsAmazonia` (7 modelos), `admin-start-kit/src/helpers/tratamientoTributarioAgencia.ts` | `plan-tours-venta-simple-costo-real.md` (D18); **D-AGE-035** (07-nov: decide quién opera, comprobante mixto, sin confirmar la Amazonía); propuesta en `docs/requerimientos/agencia-tributario-simplificado.md` |
 | **Códigos y numeración** | Códigos únicos por tipo de documento (T/P/C/R/V) con contador con bloqueo | `CodigoGeneradorService` | `plan-modulo-codigos-numeracion.md` |
 | **Planes de acceso por módulo** | Qué módulos ve cada tenant según su plan (diseño reconciliado con el Panel Superadmin) | Panel Superadmin | `plan-modulo-planes-acceso.md` |
 
@@ -86,7 +86,7 @@ Cada módulo: **qué hace** (lo que el usuario puede hacer), **pantallas** (`adm
 | **Compras (fase 3)** | Comprobantes recibidos contado o crédito, pagos desde Caja o Banco, gastos sin comprobante, rendiciones, tabla única de proveedores, comisiones, SIRE | `plan-tours-venta-simple-costo-real.md` §3.7-§3.8 |
 | **Rentabilidad y registros (fases 4-5)** | Cobrado contra gastado por salida; Registro de Ventas y Compras | `plan-tours-venta-simple-costo-real.md` §3.8, §3.9 y §6 |
 | **Endoso de pasajeros (13E)** | Enviar o recibir pasajeros entre agencias | `plan-endoso-pasajeros.md` (versión 2, sin aprobar) |
-| **Ley de la Amazonía (F2)** | Interruptor "la empresa cumple la ley", leyendas 2001/2002 en PDF y XML para todos los giros, expediente de sustento | hoja de ruta, fila F2 |
+| **Ley de la Amazonía (F2)** | Interruptor "la empresa cumple la ley", leyendas 2001/2002 en PDF y XML para todos los giros, expediente de sustento | hoja de ruta, fila F2 → `docs/requerimientos/agencia-tributario-simplificado.md` (P1, P2, P9) |
 | **Recordatorios (11f) y pago a proveedor (11g)** | Motor de avisos; pagos a proveedores y mayoristas | hoja de ruta; `plan-modulo-cotizaciones-reservas.md` §4.6 |
 | **Venta directa, bloques 2-5** | Total en vivo, cobrar y emitir en el mismo paso, varias líneas | hoja de ruta (Venta Directa) |
 
