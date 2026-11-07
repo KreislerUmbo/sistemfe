@@ -200,9 +200,9 @@
                                     <div class="col-6 col-md-3"><span class="text-muted d-block">Cobrado</span>{{ formatoMoneda(detalle.ganancia.cobrado, detalle.ganancia.moneda) }}</div>
                                     <div class="col-6 col-md-3"><span class="text-muted d-block">Costo fijo</span>{{ formatoMoneda(detalle.ganancia.costo_fijo, detalle.ganancia.moneda) }}</div>
                                     <div class="col-6 col-md-3">
-                                        <span class="text-muted d-block">Costo por persona</span>
+                                        <span class="text-muted d-block">Costo variable</span>
                                         {{ formatoMoneda(detalle.ganancia.costo_variable, detalle.ganancia.moneda) }}
-                                        <small class="text-muted">({{ formatoMoneda(detalle.ganancia.costo_por_persona, detalle.ganancia.moneda) }} × {{ detalle.ganancia.pasajeros }})</small>
+                                        <small class="text-muted d-block">{{ formatoMoneda(detalle.ganancia.costo_por_persona, detalle.ganancia.moneda) }} por persona × {{ detalle.ganancia.pasajeros }} pax</small>
                                     </div>
                                     <div class="col-6 col-md-3">
                                         <span class="text-muted d-block">Ganancia</span>

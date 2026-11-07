@@ -120,4 +120,8 @@ Inicio; con un usuario sin `reservas.ver_todas` no aparecen los montos.
   a todos los pasajeros, como pide la tarea.
 - Con varios vehículos, el guía se cuenta una vez por salida; los guías por vehículo
   (`salida_vehiculos.guia_id`) no suman costo.
-- En el Inicio, la estimación hace unas 5 consultas por carga de salidas (máx. 8 salidas), no una por servicio.
+- En el Inicio, la estimación hace 1 consulta de carga para todas las salidas y unas 4 **por salida**
+  (Incluye, itinerario, temporada y tarifas): con el máximo de 8 salidas, unas 32 por carga. No es una
+  por servicio, pero tampoco está agrupada por lote. Si el Inicio se pone lento, ese es el lugar.
+- El detalle muestra «Costo variable» (total) con el unitario debajo («S/ 45 por persona × 4 pax»);
+  la tarea decía «Costo por persona», pero mostraba el total y confundía.
