@@ -35,8 +35,11 @@
 | P8 | Series por afectación × moneda | Espera **C11, C12** y la pregunta al usuario U1 |
 | P9 | Expediente de sustento por reserva | Espera **C15** |
 
-**C1 respondida (07-nov):** la afectación depende de **quién opera** el servicio, no de dónde se
-consume (ver §2.7). Cambia los valores por defecto de P2 y P4: casi todo nace Exonerado.
+**C1 en revisión (07-nov):** el contador respondió que decide **quién opera** el servicio (§2.7),
+pero la norma y los informes de SUNAT revisados apuntan a lo contrario cuando la agencia
+**revende** (§2.4b). Hasta tener sustento, P2 usa el **criterio conservador**: lo que se ejecuta
+fuera de la Amazonía nace **Gravado**. El usuario consultará a otros contadores con las preguntas
+de la parte A0 (§2.8).
 
 ### 2.2 Lo que hay hoy en el código (verificado el 05-nov-2026)
 
@@ -63,8 +66,8 @@ consume (ver §2.7). Cambia los valores por defecto de P2 y P4: casi todo nace E
   `construirLineas()`). El IGV se saca de adentro (÷ 1.18).
 - **Valor por defecto único** en Configuración (sección 9), usado para ítems manuales, de
   **mayorista**, de guía, de pasaje aéreo y para el concepto libre de Venta directa. Si está en
-  Exonerado, un paquete de mayorista a Cusco nace exonerado (H21); con la respuesta a C1 (07-nov)
-  eso es correcto.
+  Exonerado, un paquete de mayorista a Cusco nace exonerado (H21). Con el criterio conservador (§2.4b) **es un error**
+  (estuvo marcado como correcto unas horas el 07-nov). P2 lo corrige.
 - **Pasaje aéreo** (corregido el 07-nov tras releer el código): los comentarios de
   `CotizacionPasajeAereo` y de `AlternativaItemController` dicen que la afectación aplica **solo al
   fee**, pero la factura la aplica **al precio completo**: `construirLineas()` toma el
@@ -126,12 +129,64 @@ consume (ver §2.7). Cambia los valores por defecto de P2 y P4: casi todo nace E
 - **2026:** 18 % = 15.5 % IGV + 2.5 % IPM (Ley 32387). El total no cambia.
 - **Series por afectación:** son legales; es orden interno del contador, no una norma.
 
+### 2.4b Sustento legal del criterio "quién opera" (revisión del 07-nov-2026)
+
+El usuario no se sintió cómodo con revender exonerado un paquete que se ejecuta entero en Cusco
+solo porque la agencia está en Tarapoto. Lo que dicen la norma y SUNAT:
+
+| Fuente | Qué dice |
+|---|---|
+| **Ley 27037, art. 13.1** (citado en el Informe SUNAT 019-2026) | Exonera "(b) los servicios que se presten en la referida zona", y agrega que los contribuyentes "aplicarán el IGV en todas sus operaciones fuera de la Amazonía". |
+| **Reglamento, D.S. 103-99-EF, art. 2** | Requisitos concurrentes de la empresa; el (d): "Que no tenga producción fuera de la Amazonía. Tratándose de servicios, se entiende por producción la prestación de servicios en la Amazonía". Si falla uno, los beneficios **se pierden desde el mes siguiente y por el resto del ejercicio**. |
+| **Reglamento, art. 11** | Transporte: se considera prestado en la Amazonía el que "se ejecuta íntegramente en la misma". |
+| **Informe SUNAT 056-2003-SUNAT/2B0000** (consulta que incluía agencias de viajes intermediarias de pasajes) | Los servicios "deben ser realizados íntegramente en la Amazonía"; si se presta total o parcialmente fuera, no está exonerado. No importan el lugar de pago, de contrato ni el domicilio del usuario. La intermediación se analiza "en cada caso concreto". |
+| **Oficio SUNAT 114-2000** e **Informe 078-2006** | El domicilio del cliente es irrelevante; lo que cuenta es que el servicio se preste en la zona y que la empresa cumpla los requisitos. |
+
+**Lectura (no es opinión de un contador):**
+1. **Si la agencia revende** (factura el total), el servicio que vende es el hotel o el tour, y se
+   ejecuta en Cusco: **no se presta en la Amazonía → gravado**. Es lo opuesto a la respuesta del
+   07-nov.
+2. **Riesgo mayor, el requisito (d):** prestar servicios fuera podría verse como "producción fuera
+   de la Amazonía", y entonces la agencia **perdería la exoneración de todo**, también de lo local
+   (es la pregunta original C1). Ningún informe leído lo resuelve para agencias.
+3. **Si la agencia intermedia** (factura solo su comisión, el proveedor le factura al cliente), lo
+   que presta es la gestión desde Tarapoto: es el caso donde el criterio "quién opera" tiene más
+   base. SUNAT dice que se mira caso por caso.
+4. **Pasaje aéreo:** un vuelo Tarapoto–Lima no se ejecuta íntegramente en la zona. Si la agencia
+   revende el boleto, el criterio del art. 11 lo dejaría gravado (salvo lo que la Ley del IGV
+   trate aparte). Si el boleto lo emite la aerolínea al pasajero y la agencia solo factura su fee,
+   vuelve el caso 3.
+
+**Consecuencia para el sistema:** se programa el **criterio conservador** (abajo) y queda como
+**valor de Configuración**, no en el código. Si los contadores traen sustento para el otro
+criterio, se cambia el valor sin programar.
+
+**Criterio conservador (provisional, hasta las respuestas de la parte A0):**
+
+```
+¿Empresa calificada? (Amazonía + Registros Públicos de la región + MYPE o General)
+├─ No → todo Gravado (10)
+└─ Sí → por cada línea, según DÓNDE SE EJECUTA el servicio:
+     ├─ íntegramente en la Amazonía (hotel, tour, traslado en la zona)   → Exonerado (20)
+     ├─ fuera de la Amazonía, o en parte fuera (Cusco, mayorista,
+     │  internacional, pasaje aéreo revendido)                            → Gravado (10)
+     ├─ fee o comisión de la agencia                                     → según A0 (hoy: Gravado si el servicio es de fuera)
+     └─ exportación                                                       → bloqueado
+Comprobante mixto si hace falta; leyenda 2002 si hay alguna línea exonerada.
+```
+
+Fuentes: [Informe 056-2003](https://www.sunat.gob.pe/legislacion/oficios/2003/oficios/i0562003.htm),
+[Informe 078-2006](https://www.sunat.gob.pe/legislacion/oficios/2006/oficios/i0782006.htm),
+[Oficio 114-2000](https://www.sunat.gob.pe/legislacion/oficios/2000/oficios/o1142000.htm),
+[Informe 019-2026](https://www.sunat.gob.pe/legislacion/oficios/2026/informe-oficios/i000019-2026-7T0000.pdf),
+[Reglamento D.S. 103-99-EF](https://www2.congreso.gob.pe/sicr/cendocbib/con4_uibd.nsf/AB570685FEC21C1405257A1C0070C804/$FILE/2.D.S.103-99-EF_Reglamento_Tributarias.pdf).
+
 ### 2.5 Propuesta (borrador)
 
 | # | Qué | Detalle |
 |---|---|---|
 | P1 | **Leyenda en el XML** | 2002 en Agencia (servicios); en retail, 2001 o 2002 según `products.tipo_bien_servicio` (vacío ⇒ 2001); 2003 queda preparado. En facturas, boletas y NC/ND. El PDF lee lo mismo que se mandó en el XML. Todos los giros. |
-| P2 | **Configuración → Tratamiento tributario** | Se quita la lista Destino. Se agregan: ☐ *Empresa calificada en la Amazonía (Ley 27037)* + fecha de comunicación a SUNAT; **dos valores por defecto** (servicios de terceros / operados por la agencia fuera de la zona; criterio de C1, 07-nov); ☐ *Series por afectación* (con P8). Sin la empresa calificada, **Exonerado no aparece en ningún lado**. Solo lo cambia el Propietario o soporte, y queda registrado quién y cuándo. |
+| P2 | **Configuración → Tratamiento tributario** | Se quita la lista Destino. Se agregan: ☐ *Empresa calificada en la Amazonía (Ley 27037)* + fecha de comunicación a SUNAT; **dos valores por defecto** (provisional, criterio conservador de §2.4b: servicios ejecutados en la Amazonía = Exonerado / fuera de la zona, mayoristas y pasajes = Gravado; si la parte A0 da sustento al criterio "quién opera", se cambia solo el valor); ☐ *Series por afectación* (con P8). Sin la empresa calificada, **Exonerado no aparece en ningún lado**. Solo lo cambia el Propietario o soporte, y queda registrado quién y cuándo. |
 | P3 | **Ninguna lista tributaria en la cotización** | En el cotizador, ítem manual, pasaje aéreo, hotel no registrado, guía, penalidad y concepto libre de Venta directa, la línea muestra solo una **etiqueta**. Queda **una sola lista "Afectación IGV"** en la tarifa de proveedor y en Configuración: Gravado / Exonerado – Amazonía / Inafecto. `destino_tributario` se sigue llenando solo (sin migrar datos). Fuera IVAP. Exportación y gratuitos quedan ocultos. |
 | P4 | **Propuesta automática** | Valor ya guardado → valor por defecto según el tipo de ítem (locales o mayorista). Opcional para después: distrito del proveedor y zona amazónica del árbol de destinos. |
 | P5 | **Grilla de facturar con columna "Afectación"** | Casilla por línea, prellenada y editable; la fila cambiada muestra "✎ cambiado" y se guarda en `reserva_items` con usuario y fecha. Resumen a la vista: op. gravadas / exoneradas / IGV / total. "Serie a emitir" en vivo. Lo ya facturado queda bloqueado. Un solo componente para Facturar simple, Facturación especial y Venta directa. |
@@ -147,15 +202,15 @@ F004/B004 gravado USD · F005/B005 mixto PEN · F006/B006 mixto USD.
 
 Ejemplo: agencia de Tarapoto que vende Tarapoto + Cusco.
 
-> Ajustado el 07-nov con la respuesta a C1: el valor depende de quién opera el servicio.
+> Ajustado el 07-nov con el **criterio conservador** de §2.4b (provisional hasta la parte A0).
 
-1. **Configuración (una vez):** empresa calificada ☑; valores por defecto: servicios de terceros =
-   Exonerado, operados por la agencia fuera de la zona = Gravado; series por afectación ☑ (se crean
+1. **Configuración (una vez):** empresa calificada ☑; valores por defecto: servicios en la Amazonía =
+   Exonerado, fuera de la zona (mayoristas, pasajes) = Gravado; series por afectación ☑ (se crean
    las 12).
-2. **Tarifa de proveedor (una vez por tarifa):** una sola lista, prellenada con Exonerado (es un
-   tercero, aunque esté en Cusco).
+2. **Tarifa de proveedor (una vez por tarifa):** una sola lista, prellenada con Exonerado si el
+   proveedor es de la zona; se cambia a Gravado en los de fuera (Cusco, internacional).
 3. **Cotizador:** sin listas, solo etiquetas. Las líneas sin tarifa (mayorista, manual, pasaje)
-   toman el valor de terceros. Un tour propio toma Exonerado o Gravado según dónde lo opera la
+   toman el valor "fuera de la zona" (Gravado) salvo la guía y lo manual local. Un tour propio toma Exonerado o Gravado según dónde lo opera la
    agencia (C1a).
 4. **Reserva:** la afectación se copia a cada ítem. Sin "Sin confirmar" ni modal de confirmación.
 5. **Facturar:** grilla prellenada; normalmente no se toca nada. Si hay líneas exoneradas y
@@ -187,6 +242,11 @@ Ejemplo: agencia de Tarapoto que vende Tarapoto + Cusco.
 7. **Primero la versión simple** (dos valores por defecto, sin cargar datos).
 8. **Casilla de afectación en la grilla de facturar**, prellenada y editable: sí.
 
+> **En revisión (07-nov, mismo día):** las respuestas C1, C1a, C1b, C3, C7 y C8 que siguen
+> quedan **provisionales**: la norma y SUNAT apuntan a otra cosa cuando la agencia revende
+> (§2.4b). Se vuelven a preguntar, con sustento, en la parte A0 de §2.8. Las de C4 (mezcla), C5
+> (sin confirmación) y C1c no cambian.
+
 **07-nov-2026 — respuesta a C1** (la transmitió el usuario):
 > Si la agencia compra paquetes a un proveedor (en destino o fuera de la región) y se los vende a
 > su cliente, es **exonerado**, porque la agencia no opera en destino. Si la agencia **opera en
@@ -203,8 +263,8 @@ Lo que cambia:
     Exonerado si se opera en la Amazonía; **Gravado si se opera fuera**.
   - En la práctica, hoy casi todo nace Exonerado. Gravado solo aparece si la agencia opera un tour
     propio fuera de la zona.
-- **H21 deja de ser un riesgo:** que un paquete de mayorista a Cusco nazca exonerado es correcto
-  con este criterio.
+- ~~**H21 deja de ser un riesgo**~~ **(revertido el mismo día, §2.4b):** un paquete de mayorista a Cusco que nace exonerado vuelve a ser un riesgo
+  hasta las respuestas de A0.
 - **C3 queda en parte respondida:** aunque revenda (factura el total), lo de terceros va
   exonerado. Sigue abierto si en algún caso intermedia (solo fee).
 - **Riesgo a dejar por escrito:** las fuentes de SUNAT revisadas (§2.4) hablan de servicios
@@ -267,7 +327,36 @@ varias líneas (tarifa + asiento / TUA) y los valores por defecto de una empresa
 
 Versión para entregarle, sin términos del sistema: la hoja "Preguntas para el contador" (ver §3).
 
-**A. De fondo: definen todo lo demás**
+**A0. La duda de fondo, con sustento (07-nov; para los contadores que consultará el usuario)**
+
+Pedir en cada respuesta **la norma, el informe de SUNAT o la resolución del Tribunal Fiscal** en que
+se apoya.
+- **C16.** Una agencia calificada de Tarapoto vende un paquete que se ejecuta **íntegramente en
+  Cusco** (hotel y tours de proveedores de allá) y **factura el total**. ¿Va exonerado o gravado?
+  La Ley 27037 (art. 13.1) exonera los servicios "que se presten en la referida zona" y dice que
+  se aplica el IGV "en todas sus operaciones fuera de la Amazonía"; el Informe SUNAT 056-2003 pide
+  que el servicio se realice "íntegramente en la Amazonía". ¿Con qué base se sostendría el
+  exonerado?
+- **C17.** Si esas ventas se facturan **gravadas**, ¿la agencia sigue siendo "empresa ubicada en
+  la Amazonía"? El art. 2 (d) del Reglamento exige "que no tenga producción fuera de la Amazonía"
+  y, si falla, se pierden los beneficios **de todo** desde el mes siguiente y por el resto del año.
+  ¿Vender paquetes de Cusco o del extranjero cuenta como "producción fuera"?
+- **C18.** ¿Conviene que, para lo de fuera de la zona, la agencia actúe como **intermediaria**
+  (el proveedor le factura al cliente y la agencia solo factura su comisión)? ¿Esa comisión va
+  exonerada (se gestiona desde Tarapoto) o gravada? ¿Qué documentos hacen falta (contrato de
+  mandato o comisión, cómo se cobra el dinero del proveedor)?
+- **C19.** **Pasaje aéreo:** ¿la agencia revende el boleto (lo compra y factura el total) o el
+  boleto lo emite la aerolínea a nombre del pasajero y la agencia solo factura su fee? El art. 11
+  del Reglamento considera prestado en la Amazonía solo el transporte que "se ejecuta íntegramente"
+  en ella. ¿Cómo va un vuelo Tarapoto–Lima en cada caso, y cómo va el fee?
+- **C20.** **Crédito fiscal con ventas mixtas:** si la agencia tiene ventas gravadas y exoneradas,
+  ¿aplica la **prorrata** del crédito fiscal (art. 23 de la Ley del IGV) para el IGV de sus compras
+  y gastos? Cambia el costo real de cada venta (va con C14).
+- **C21.** Tour propio que sale de la Amazonía: confirmar que todo lo de adentro (también lo de terceros) va gravado (es la C1c, que el usuario ya respondió; se repite para los otros contadores).
+- **C22.** Si una empresa **fuera de la Amazonía** usara el sistema: en un pasaje aéreo, ¿la
+  **TUA** va exonerada o inafecta, y la tarifa y el asiento gravados?
+
+**A. De fondo: definen todo lo demás** *(C1, C3 y sus respuestas del 07-nov quedan provisionales hasta A0)*
 - ~~**C1.**~~ **Respondida el 07-nov** (§2.7): exonerado salvo que la agencia opere en destino.
   C1a y C1b también respondidas; la condición de régimen MYPE o General quedó en §2.7. Texto
   original: si la agencia también vende servicios **fuera de la Amazonía** (Cusco, internacional),
@@ -324,10 +413,12 @@ Versión para entregarle, sin términos del sistema: la hoja "Preguntas para el 
   P2). Las reservas sin confirmar ya no son riesgo: en producción hay una sola (07-nov).
 - **Series que faltan:** con P8 activo, si falta una serie la venta falla. Hay que crear las 12
   juntas.
-- ~~**El valor por defecto único de hoy** puede hacer nacer exonerados los ítems de mayorista.~~
-  Con la respuesta a C1 (07-nov) eso es correcto: deja de ser riesgo.
-- **El criterio de C1 no está por escrito:** si SUNAT entiende que el servicio se presta donde se
-  consume, lo vendido fuera de la zona quedaría gravado. Pedir la confirmación escrita del contador.
+- **El valor por defecto único de hoy** puede hacer nacer exonerados los ítems de mayorista (H21).
+  Con el criterio conservador (§2.4b) vuelve a ser riesgo: P2 lo corrige; conviene hacerlo pronto.
+- **El criterio de C1 no tiene sustento leído** (§2.4b): SUNAT pide que el servicio se preste
+  íntegramente en la zona. Si se factura exonerado lo de fuera y SUNAT lo discute: IGV omitido,
+  multa e intereses, y quizá la pérdida de la exoneración de todo el año (C17). Por eso P2 va con
+  el criterio conservador hasta las respuestas de A0.
 - **T-048** reescrita el 07-nov sin la casilla de la Amazonía; depende de P7. D-AGE-034 punto 2
   queda reemplazado por C4 y C5 (decisión nueva al cerrar P7).
 - ~~**Reservas con ítems "Sin confirmar"** pasan a ser facturables al quitar la confirmación (P7).~~
@@ -350,8 +441,8 @@ Versión para entregarle, sin términos del sistema: la hoja "Preguntas para el 
 
 ## 3. Resultado
 
-- **Hoja para el contador:** preguntas C1-C15 en lenguaje simple (07-nov-2026),
+- **Hoja para los contadores:** la parte A0 (C16-C22, la duda de fondo con su sustento legal) arriba, y luego C1-C15 (sin C5, que decidió el usuario); actualizada el 07-nov-2026,
   https://claude.ai/artifact/7VXN8CKdjoPesnxp6BDRSP. Sus respuestas se pasan a §2.7.
-- **Decisiones:** D-AGE-035 (07-nov-2026): quién opera decide la afectación, comprobante mixto,
-  sin confirmar la Amazonía; reemplaza el punto 2 de D-AGE-034.
+- **Decisiones:** D-AGE-035 (07-nov-2026): comprobante mixto y sin confirmar (firmes); "quién opera" (punto 1) en revisión,
+  mientras tanto criterio conservador (§2.4b); reemplaza el punto 2 de D-AGE-034.
 - **Tareas:** T-091 (P7, 07-nov-2026); T-048 reescrita sobre ella.

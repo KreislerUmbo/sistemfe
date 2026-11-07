@@ -535,7 +535,7 @@ alternativa aceptada).
 | | | **Decisión del usuario sobre H7 (26-oct-2026):** en **servicios de tour**, si la tarifa no tiene precio de niño, **el niño paga como adulto** (misma regla que los tours); **en hoteles no**, porque tienen sus propias tarifas. → T-031 | |
 | | | **Encontrados en la medición en pantalla (obs. 9), 26-oct-2026:** | |
 | H20 | Media | **PDF: la tabla "Opciones de hoteles" dice "tarifa por persona"** pero en Local/Nacional muestra el total por habitación y noches (PEN 1,020 = 340 × 3). El cliente lo lee mal. Confirmado en el PDF real. | `alternativa.blade.php` (encabezado de la tabla) |
-| H21 | **Alta (tributario, decisión)** | **Un paquete internacional de mayorista nace "Exonerado · Amazonía"**: toma el tratamiento por defecto de la agencia. Un viaje a Panamá no se consume en la Amazonía (Ley 27037). Al facturar saldría exonerado. Confirmado en pantalla. ~~Falta decidir con el contador~~ **Resuelto el 07-nov (D-AGE-035):** es correcto, un servicio de un tercero va exonerado aunque se consuma fuera de la zona. | `AlternativaItemController::crearItemMayorista()` → `resolverTratamientoTributario()` |
+| H21 | **Alta (tributario, decisión)** | **Un paquete internacional de mayorista nace "Exonerado · Amazonía"**: toma el tratamiento por defecto de la agencia. Un viaje a Panamá no se consume en la Amazonía (Ley 27037). Al facturar saldría exonerado. Confirmado en pantalla. ~~Falta decidir con el contador~~ **07-nov:** se dio por correcto con D-AGE-035 y se **revirtió el mismo día**: con el criterio conservador (`agencia-tributario-simplificado.md` §2.4b) es un error y lo corrige P2; pendiente de C16-C18. | `AlternativaItemController::crearItemMayorista()` → `resolverTratamientoTributario()` |
 | H22 | **Alta** | **Mayorista: el niño no se cobra.** El precio del paquete se multiplica por la cantidad de **adultos**; con 2 adultos + 1 niño el total fue USD 1,900 (950 × 2) y el panel dice "Total (2 adultos + 1 niño)". No hay precio de niño para el paquete ni aviso. Confirmado en pantalla. | `cantidadAdultosCotizacion` (editar.vue), `crearItemMayorista()` |
 | H23 | Media | Crear una alternativa sin escribir nombre: error en inglés en ventana ("The nombre field is required."); el texto de ayuda dice "Alternativa B" en la primera. → R1/R7 | `AlternativaController::store()`, `editar.vue` |
 | H24 | Baja | "Alternativa A" se guarda como "Alternativa a" (la capitalización baja la letra suelta) y el panel muestra "Alternativa Alternativa a". | `TextoFormatoService::capitalizarNombrePropio()`, panel de precio |
@@ -688,7 +688,7 @@ Para el camino B, la regla queda: **agencia que cumple el art. 2** (dato de conf
 **Continúa (05-nov-2026)** en `docs/requerimientos/agencia-tributario-simplificado.md`: propuesta
 concreta (una sola lista de afectación, empresa calificada en Configuración, grilla de facturar
 editable, comprobante mixto, series por afectación) y respuestas del usuario.
-**07-nov-2026:** las preguntas 1, 2, 3, 4 y 6 de arriba quedaron respondidas (D-AGE-035): decide
+**07-nov-2026 (provisional, ver §2.4b del requerimiento):** las preguntas 1, 2, 3, 4 y 6 de arriba se respondieron (D-AGE-035): decide
 **quién opera** el servicio, no dónde se consume; la agencia revende; lo de terceros y el pasaje
 completo van exonerados. La regla "servicio prestado en un destino de la Amazonía" del camino B
 queda reemplazada. La 5 (exportación) sigue para más adelante.

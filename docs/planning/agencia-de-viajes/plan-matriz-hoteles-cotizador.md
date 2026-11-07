@@ -380,7 +380,7 @@ quedó explícitamente sin diseñar. Hay 2 preguntas pendientes de
 respuesta del contador (Caso Amazonía: ¿la reventa de un servicio
 exonerado hereda la exoneración?, Caso mezcla: ¿un comprobante puede
 mezclar tratamientos o se mantienen separados?) — **este plan no las
-responde**, no es su alcance ni el conocimiento para hacerlo. **07-nov-2026 (D-AGE-035): respondidas las dos:** la reventa de un servicio de un tercero va exonerada, también un hotel internacional; y un comprobante puede mezclar gravado y exonerado.
+responde**, no es su alcance ni el conocimiento para hacerlo. **07-nov-2026 (D-AGE-035):** un comprobante puede mezclar gravado y exonerado (firme). La reventa de un hotel de fuera de la zona se dio por exonerada y quedó **en revisión** el mismo día (`agencia-tributario-simplificado.md` §2.4b): mientras tanto, gravada.
 
 **Lo que SÍ toca directamente a este plan:** `opciones_hotel_tarifas`
 (la matriz ad-hoc de Ronda 4) no tenía ninguna columna de impuesto —

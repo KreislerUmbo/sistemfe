@@ -114,10 +114,10 @@ IGV va sobre todo el precio.
    para fijar precios) y se muestran los dos.
 2. **Costo de un proveedor gravado:** ¿sin IGV (porque se recupera como crédito fiscal) o con IGV?
    Depende de si la venta es gravada o exonerada. Lo confirma el contador: es la **C14** de
-   `agencia-tributario-simplificado.md` §2.8. **07-nov, casi respondida:** como casi todo se vende
-   exonerado (D-AGE-035), el IGV que cobra el proveedor no se recupera y el costo es **con IGV**
-   (lo dijo el usuario para el pasaje aéreo). Falta que el contador lo confirme. Con eso, P4b
-   (restar el IGV) solo afecta a lo gravado, que hoy casi no existe.
+   `agencia-tributario-simplificado.md` §2.8. **07-nov:** en una venta exonerada el IGV del proveedor no
+   se recupera y el costo es **con IGV**. Pero con el criterio conservador (lo de fuera de la zona,
+   gravado; `agencia-tributario-simplificado.md` §2.4b) habrá ventas gravadas y exoneradas, y
+   entra la **prorrata del crédito fiscal** (C20). P4b espera C14 y C20.
 3. **Tour privado por debajo del mínimo:** ¿solo avisar, o bloquear la cotización?
    *Recomendado:* avisar en rojo, sin bloquear (se puede vender caro a propósito).
 4. **¿Qué tours son privados de verdad?** Revisar en el catálogo de la agencia cuántos tienen
