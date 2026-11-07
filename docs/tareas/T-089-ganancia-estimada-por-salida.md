@@ -98,9 +98,26 @@ Inicio; con un usuario sin `reservas.ver_todas` no aparecen los montos.
 ---
 
 ## Resultado
-- **Commits:**
-- **Tests:**
+- **Commits:** rama `feat/T-089-ganancia-por-salida` (backend, frontend y docs; ver `git log`).
+- **Tests:** `GananciaSalidaTest`, 8 tests (CA1-CA8), todos en verde. Suite completa del backend:
+  2079 passed. `npm run type-check`: los mismos 19 archivos con error antes y después (previos, ninguno
+  de esta tarea). CA9 (pantalla): pendiente de la prueba conjunta en `agencia-demo`.
 - **Desviaciones de la tarea y por qué:**
+  - `SalidaOperacionService::reservasActivas()` y `ocupan()` pasaron de `private` a `public` para reusarlas.
+  - `tarifaDeTemporada()` ahora acepta la fecha de vigencia (antes miraba "hoy") y delega en una versión
+    por lote (`tarifasDeTemporada()`), para no consultar una vez por servicio. Sin esa fecha la tarifa
+    vigente se evaluaba contra hoy, no contra el día de la salida.
+  - Una reserva en otra moneda no suma su cobrado, pero **sus pasajeros sí cuentan** para el costo por
+    persona (el costo es real). Eso hace la ganancia más pesimista; el aviso lo dice.
+  - Una tarifa inutilizable (hotel u otra moneda) cae al `costo_estimado_persona` del servicio; sin ese
+    costo, cuenta como «sin costo».
+  - El Inicio manda solo `{moneda, ganancia, completo}`; el desglose va solo en el detalle.
+  - Cobrado = `AlternativaItem::total_convertido` (ya con descuento), en la moneda de la alternativa.
+  - `estimarSalida()` devuelve `null` si la salida no tiene tour de origen.
 
 ## Hallazgos fuera de alcance
--
+- `costo_estimado_persona_ext` (costo del extranjero) no se usa: la estimación aplica el costo nacional
+  a todos los pasajeros, como pide la tarea.
+- Con varios vehículos, el guía se cuenta una vez por salida; los guías por vehículo
+  (`salida_vehiculos.guia_id`) no suman costo.
+- En el Inicio, la estimación hace unas 5 consultas por carga de salidas (máx. 8 salidas), no una por servicio.
