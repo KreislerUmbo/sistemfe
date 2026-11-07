@@ -297,6 +297,12 @@ class TourCostoEstimadoService
         foreach ($sinCosto as $nombre) {
             $avisos[] = "«{$nombre}» no tiene costo: no está sumado.";
         }
+        // Sin servicios en el Incluye no hay nada que costear: no es "completo"
+        // (misma regla que calcular() y costoDelTour()), si no la ganancia
+        // saldría igual a lo cobrado y en verde.
+        if ($incluye->isEmpty()) {
+            $avisos[] = 'El tour no tiene servicios en el Incluye: el costo no está sumado.';
+        }
 
         $variableTotalCts = $variableCts * $pasajeros;
         $costoCts = $fijoCts + $variableTotalCts;
@@ -314,7 +320,7 @@ class TourCostoEstimadoService
             'margen_pct' => $cobradoCts > 0 ? round($gananciaCts / $cobradoCts * 100, 2) : null,
             'pasajeros' => $pasajeros,
             'vehiculos' => $vehiculos,
-            'completo' => $sinCosto === [],
+            'completo' => $sinCosto === [] && $incluye->isNotEmpty(),
             'avisos' => $avisos,
         ];
     }

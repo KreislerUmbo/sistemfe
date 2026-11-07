@@ -101,7 +101,10 @@ Inicio; con un usuario sin `reservas.ver_todas` no aparecen los montos.
 - **Commits:** rama `feat/T-089-ganancia-por-salida` (backend, frontend y docs; ver `git log`).
 - **Tests:** `GananciaSalidaTest`, 8 tests (CA1-CA8), todos en verde. Suite completa del backend:
   2079 passed. `npm run type-check`: los mismos 19 archivos con error antes y después (previos, ninguno
-  de esta tarea). CA9 (pantalla): pendiente de la prueba conjunta en `agencia-demo`.
+  de esta tarea). CA9 (pantalla): aprobado en `agencia-demo` el 07-nov-2026. Detalle e Inicio en verde
+  (salida 49, S/ 170) y en rojo con asterisco (−S/ 180, con datos temporales: tarifa privada de 350 y
+  un servicio sin costo, borrados al terminar). Un usuario con `reservas.ver` sin `ver_todas` no
+  recibe la clave `ganancia` ni en el detalle ni en el dashboard.
 - **Desviaciones de la tarea y por qué:**
   - `SalidaOperacionService::reservasActivas()` y `ocupan()` pasaron de `private` a `public` para reusarlas.
   - `tarifaDeTemporada()` ahora acepta la fecha de vigencia (antes miraba "hoy") y delega en una versión
@@ -114,6 +117,11 @@ Inicio; con un usuario sin `reservas.ver_todas` no aparecen los montos.
   - El Inicio manda solo `{moneda, ganancia, completo}`; el desglose va solo en el detalle.
   - Cobrado = `AlternativaItem::total_convertido` (ya con descuento), en la moneda de la alternativa.
   - `estimarSalida()` devuelve `null` si la salida no tiene tour de origen.
+  - Encontrado en el CA9: un tour **sin servicios en el Incluye** daba costo 0 y `completo = true`, así
+    que la ganancia salía igual a lo cobrado y en verde (Catarata de Ahuashiyacu y Encañada en la demo).
+    Ahora `completo = false`, con el aviso «El tour no tiene servicios en el Incluye», igual que
+    `calcular()` y `costoDelTour()`. Test `test_tour_sin_incluye`. El costo escrito a mano en el
+    tour no se usa como respaldo.
 
 ## Hallazgos fuera de alcance
 - `costo_estimado_persona_ext` (costo del extranjero) no se usa: la estimación aplica el costo nacional

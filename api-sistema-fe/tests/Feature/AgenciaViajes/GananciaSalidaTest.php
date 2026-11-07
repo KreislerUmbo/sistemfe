@@ -196,6 +196,20 @@ class GananciaSalidaTest extends TestCase
         $this->assertStringContainsString($item->destinoServicio->servicio->nombre, $g['avisos'][0]);
     }
 
+    // Hallazgo del CA9: un tour sin servicios en el Incluye no es "completo"
+    // (antes la ganancia salía igual a lo cobrado y en verde).
+    public function test_tour_sin_incluye(): void
+    {
+        [$salida] = $this->salidaConCuatro();
+        $this->tour->items()->delete();
+
+        $g = $this->estimar($salida);
+
+        $this->assertEqualsWithDelta(0, $g['costo_fijo'] + $g['costo_variable'], 0.001);
+        $this->assertFalse($g['completo']);
+        $this->assertSame(['El tour no tiene servicios en el Incluye: el costo no está sumado.'], $g['avisos']);
+    }
+
     // CA7
     public function test_otra_moneda(): void
     {
