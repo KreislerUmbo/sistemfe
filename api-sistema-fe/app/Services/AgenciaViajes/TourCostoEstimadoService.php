@@ -5,7 +5,9 @@ namespace App\Services\AgenciaViajes;
 use App\Models\AgenciaViajes\PaquetePlantilla;
 use App\Models\AgenciaViajes\PaquetePlantillaItem;
 use App\Models\AgenciaViajes\ProveedorTarifa;
+use App\Models\AgenciaViajes\SalidaOperativa;
 use App\Services\HoraPeru;
+use Illuminate\Support\Collection;
 
 // Costo estimado del tour y calculadora desde tarifas — fila 13, fase 1a
 // (plan-tours-venta-simple-costo-real.md §3.1, §3.2, §3.9b, N4).
@@ -159,17 +161,174 @@ class TourCostoEstimadoService
     }
 
     // Tarifa del mismo servicio del proveedor para la temporada pedida.
-    private function tarifaDeTemporada(ProveedorTarifa $referencia, int $temporadaId): ?ProveedorTarifa
+    // $dia: fecha de negocio (Y-m-d) en la que debe estar vigente; null = hoy.
+    private function tarifaDeTemporada(ProveedorTarifa $referencia, int $temporadaId, ?string $dia = null): ?ProveedorTarifa
     {
-        return ProveedorTarifa::query()
-            ->where('proveedor_servicio_id', $referencia->proveedor_servicio_id)
-            ->where('modalidad', $referencia->modalidad)
+        return $this->tarifasDeTemporada(collect([$referencia]), $temporadaId, $dia)->get($referencia->id);
+    }
+
+    /**
+     * La misma regla de tarifaDeTemporada() para varias referencias con UNA
+     * consulta (T-089: la salida no consulta una vez por servicio).
+     *
+     * @param  Collection<int, ProveedorTarifa>  $referencias
+     * @return Collection<int, ProveedorTarifa> tarifa de la temporada, por id de la referencia
+     */
+    private function tarifasDeTemporada(Collection $referencias, int $temporadaId, ?string $dia = null): Collection
+    {
+        if ($referencias->isEmpty()) {
+            return collect();
+        }
+
+        $candidatas = ProveedorTarifa::query()
+            ->whereIn('proveedor_servicio_id', $referencias->pluck('proveedor_servicio_id')->unique()->values())
             ->whereNull('tipo_habitacion')
             ->where('temporada_id', $temporadaId)
-            ->vigentes()
+            ->vigentes($dia)
             ->orderByDesc('vigente_desde')
             ->orderByDesc('id')
-            ->first();
+            ->get();
+
+        return $referencias->mapWithKeys(fn (ProveedorTarifa $ref) => [
+            $ref->id => $candidatas->first(fn (ProveedorTarifa $t) => $t->proveedor_servicio_id === $ref->proveedor_servicio_id
+                && $t->modalidad === $ref->modalidad),
+        ])->filter();
+    }
+
+    /**
+     * Ganancia ESTIMADA de una salida (T-089, P8 a): lo cobrado a sus reservas
+     * − costos fijos (tarifas privadas × vehículos, guía × días) − costos por
+     * persona × pasajeros que ocupan asiento. Con tarifas, no con facturas: la
+     * real llega con Compras. Todo en la moneda del tour; sin IGV (P4b).
+     * Suma en centavos enteros: no hay otro redondeo que el de pasar a soles.
+     *
+     * null si la salida no tiene tour de origen (no hay Incluye que costear).
+     *
+     * @return ?array{moneda: string, cobrado: float, costo_fijo: float, costo_variable: float, costo_por_persona: float, ganancia: float, markup_pct: ?float, margen_pct: ?float, pasajeros: int, vehiculos: int, completo: bool, avisos: array<int, string>}
+     */
+    public function estimarSalida(SalidaOperativa $salida): ?array
+    {
+        $salida->loadMissing([
+            'tourOrigen',
+            'vehiculos',
+            'reservaItems.reserva.pasajeros',
+            'reservaItems.alternativaItem.alternativa',
+        ]);
+        $tour = $salida->tourOrigen;
+        if (! $tour) {
+            return null;
+        }
+
+        $moneda = $tour->moneda ?? 'PEN';
+        $avisos = [];
+
+        // ── Lo cobrado y los pasajeros (mismo criterio que el tablero) ──
+        $operacion = app(SalidaOperacionService::class);
+        $reservas = $operacion->reservasActivas($salida);
+        $idsActivas = $reservas->pluck('id');
+        $pasajeros = $operacion->ocupan($reservas->flatMap(fn ($r) => $r->pasajeros));
+
+        $cobradoCts = 0;
+        $reservasOtraMoneda = []; // moneda => [reserva_id => true]
+        foreach ($salida->reservaItems->filter(fn ($i) => $idsActivas->contains($i->reserva_id)) as $item) {
+            $alt = $item->alternativaItem;
+            $monedaItem = $alt?->alternativa?->moneda_cotizacion ?? 'PEN';
+            if ($monedaItem !== $moneda) {
+                $reservasOtraMoneda[$monedaItem][$item->reserva_id] = true;
+
+                continue;
+            }
+            $cobradoCts += $this->centavos($alt?->total_convertido ?? 0);
+        }
+        foreach ($reservasOtraMoneda as $otra => $ids) {
+            $n = count($ids);
+            $avisos[] = $n === 1
+                ? "1 reserva en {$otra} no está sumada."
+                : "{$n} reservas en {$otra} no están sumadas.";
+        }
+
+        // ── Costos del Incluye ──
+        $incluye = $tour->items()
+            ->whereNull('paquete_plantilla_hijo_id')
+            ->with(['proveedorTarifa', 'guiaTarifa', 'destinoServicio.servicio'])
+            ->orderBy('orden')
+            ->get();
+        $dias = max(1, (int) ($tour->paqueteItinerario()->max('dia_relativo') ?? 1));
+        $vehiculos = max(1, $salida->vehiculos->count());
+        $dia = $salida->fecha->toDateString();
+
+        // Tarifa de la temporada de la fecha de la salida (si el catálogo la tiene).
+        $temporadaId = app(TemporadaResolverService::class)->resolver($dia)?->temporada_id;
+        $deTemporada = $temporadaId !== null
+            ? $this->tarifasDeTemporada(
+                $incluye->pluck('proveedorTarifa')->filter()->unique('id')->values(),
+                $temporadaId,
+                $dia
+            )
+            : collect();
+
+        $fijoCts = 0;
+        $variableCts = 0; // por persona
+        $sinCosto = [];
+
+        foreach ($incluye as $item) {
+            $nombre = $item->guia_tarifa_id ? 'Guía' : ($item->destinoServicio?->servicio?->nombre ?? 'Servicio');
+            $tarifa = $item->proveedor_tarifa_id
+                ? ($deTemporada->get($item->proveedor_tarifa_id) ?? $item->proveedorTarifa)
+                : null;
+
+            if ($item->guia_tarifa_id && $item->guiaTarifa && $item->guiaTarifa->moneda === $moneda) {
+                $fijoCts += $this->centavos($item->guiaTarifa->costo_diario) * $dias;
+            } elseif ($tarifa && $tarifa->tipo_habitacion === null && $tarifa->moneda === $moneda) {
+                $costo = $this->centavos($tarifa->precio_costo);
+                if ($tarifa->modalidad === 'compartido') {
+                    $variableCts += $costo;
+                } else {
+                    $fijoCts += $costo * $vehiculos;
+                }
+            } elseif ($item->costo_estimado_persona !== null) {
+                // Sin tarifa (o una que no se puede usar: hotel, otra moneda): el costo escrito a mano.
+                $variableCts += $this->centavos($item->costo_estimado_persona);
+            } else {
+                $sinCosto[] = $nombre;
+            }
+        }
+
+        foreach ($sinCosto as $nombre) {
+            $avisos[] = "«{$nombre}» no tiene costo: no está sumado.";
+        }
+        // Sin servicios en el Incluye no hay nada que costear: no es "completo"
+        // (misma regla que calcular() y costoDelTour()), si no la ganancia
+        // saldría igual a lo cobrado y en verde.
+        if ($incluye->isEmpty()) {
+            $avisos[] = 'El tour no tiene servicios en el Incluye: el costo no está sumado.';
+        }
+
+        $variableTotalCts = $variableCts * $pasajeros;
+        $costoCts = $fijoCts + $variableTotalCts;
+        $gananciaCts = $cobradoCts - $costoCts;
+
+        return [
+            'moneda' => $moneda,
+            'cobrado' => $cobradoCts / 100,
+            'costo_fijo' => $fijoCts / 100,
+            'costo_variable' => $variableTotalCts / 100,
+            'costo_por_persona' => $variableCts / 100,
+            'ganancia' => $gananciaCts / 100,
+            // Misma fórmula que admin-start-kit/src/utils/margenes.ts (T-087).
+            'markup_pct' => $costoCts > 0 ? round($gananciaCts / $costoCts * 100, 2) : null,
+            'margen_pct' => $cobradoCts > 0 ? round($gananciaCts / $cobradoCts * 100, 2) : null,
+            'pasajeros' => $pasajeros,
+            'vehiculos' => $vehiculos,
+            'completo' => $sinCosto === [] && $incluye->isNotEmpty(),
+            'avisos' => $avisos,
+        ];
+    }
+
+    // Monto con 2 decimales → centavos enteros (los montos de la base ya tienen 2).
+    private function centavos(mixed $monto): int
+    {
+        return (int) round(((float) $monto) * 100);
     }
 
     private function sugerencia(float $costo, string $detalle, ?int $tarifaId, bool $deTemporada): array

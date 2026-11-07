@@ -12,6 +12,7 @@ use App\Models\Client\CrmAccion;
 use App\Models\Sale\Sale;
 use App\Models\User;
 use App\Services\AgenciaViajes\AsignacionOperativa;
+use App\Services\AgenciaViajes\TourCostoEstimadoService;
 use App\Services\Creditos\Dinero;
 use App\Services\Crm\BandejaPendientes;
 use App\Services\CreditSummaryCalculator;
@@ -69,7 +70,7 @@ class DashboardService
             $bloques['pendientes'] = $this->pendientes($usuario, $hoy);
         }
         if ($agencia && $usuario->canAny(['reservas.ver', 'reservas.ver_todas'])) {
-            $bloques['proximos'] = $this->proximos($hoy);
+            $bloques['proximos'] = $this->proximos($hoy, $usuario->can('reservas.ver_todas'));
         }
         if ($agencia && $usuario->can('edit_user')) {
             $bloques['trabajo_sin_dueno'] = $this->trabajoSinDueno($usuario->hasRole('Super-Admin'));
@@ -400,8 +401,10 @@ class DashboardService
      *
      * @return array<string, mixed>
      */
-    private function proximos(CarbonImmutable $hoy): array
+    private function proximos(CarbonImmutable $hoy, bool $conGanancia = false): array
     {
+        $estimador = $conGanancia ? app(TourCostoEstimadoService::class) : null;
+
         $hasta = $hoy->addDays(self::DIAS_PROXIMOS)->toDateString();
         $desde = $hoy->toDateString();
 
@@ -428,6 +431,24 @@ class DashboardService
             ->limit(self::MAXIMO_LISTA)
             ->get();
 
+        // T-089: la ganancia estimada solo se calcula (y se manda) con reservas.ver_todas.
+        // Se cargan aparte, con lo que necesita el estimador, para no tocar las
+        // relaciones recortadas de la lista de arriba.
+        $ganancias = $estimador
+            ? SalidaOperativa::with(['tourOrigen', 'vehiculos', 'reservaItems.reserva.pasajeros', 'reservaItems.alternativaItem.alternativa'])
+                ->whereIn('id', $salidas->pluck('id'))
+                ->get()
+                ->mapWithKeys(function (SalidaOperativa $s) use ($estimador): array {
+                    $g = $estimador->estimarSalida($s);
+
+                    return [$s->id => $g ? [
+                        'moneda' => $g['moneda'],
+                        'ganancia' => $g['ganancia'],
+                        'completo' => $g['completo'],
+                    ] : null];
+                })
+            : null;
+
         $sinAsignar = AsignacionOperativa::itemsDelRango($desde, $hasta)
             ->with(['alternativaItem', 'proveedorTarifa.proveedorServicio.proveedor', 'guia', 'salidaOperativa.guia', 'salidaOperativa.vehiculos.reservas', 'salidaOperativa.vehiculos.guia', 'salidaOperativa.servicios'])
             ->get()
@@ -445,7 +466,9 @@ class DashboardService
                 'pasajeros' => $r->pasajeros_count,
             ])->values()->all(),
             'viajes_total' => $viajes->count(),
-            'salidas' => $salidas->map(static fn (SalidaOperativa $s): array => [
+            'salidas' => $salidas->map(static fn (SalidaOperativa $s): array => (
+                $ganancias !== null ? ['ganancia' => $ganancias[$s->id] ?? null] : []
+            ) + [
                 'id' => $s->id,
                 'fecha' => $s->fecha->toDateString(),
                 'hora' => $s->hora ? substr((string) $s->hora, 0, 5) : null,

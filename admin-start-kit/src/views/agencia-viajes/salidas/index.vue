@@ -192,6 +192,32 @@
                             </div>
                             <div class="col-6"><strong>Reservas enganchadas:</strong> {{ detalle.total_reservas ?? 0 }}</div>
                         </div>
+                        <!-- T-089: solo llega con reservas.ver_todas -->
+                        <div v-if="detalle.ganancia" class="card border mb-3">
+                            <div class="card-header py-2"><h6 class="mb-0 small fw-semibold">Ganancia estimada</h6></div>
+                            <div class="card-body py-2 small">
+                                <div class="row g-2">
+                                    <div class="col-6 col-md-3"><span class="text-muted d-block">Cobrado</span>{{ formatoMoneda(detalle.ganancia.cobrado, detalle.ganancia.moneda) }}</div>
+                                    <div class="col-6 col-md-3"><span class="text-muted d-block">Costo fijo</span>{{ formatoMoneda(detalle.ganancia.costo_fijo, detalle.ganancia.moneda) }}</div>
+                                    <div class="col-6 col-md-3">
+                                        <span class="text-muted d-block">Costo variable</span>
+                                        {{ formatoMoneda(detalle.ganancia.costo_variable, detalle.ganancia.moneda) }}
+                                        <small class="text-muted d-block">{{ formatoMoneda(detalle.ganancia.costo_por_persona, detalle.ganancia.moneda) }} por persona × {{ detalle.ganancia.pasajeros }} pax</small>
+                                    </div>
+                                    <div class="col-6 col-md-3">
+                                        <span class="text-muted d-block">Ganancia</span>
+                                        <strong :class="detalle.ganancia.ganancia < 0 ? 'text-danger' : 'text-success'">{{ formatoMoneda(detalle.ganancia.ganancia, detalle.ganancia.moneda) }}</strong>
+                                        <small class="text-muted d-block">
+                                            Markup {{ formatPct(markupPct(costoTotalGanancia, detalle.ganancia.cobrado)) }} · Margen {{ formatPct(margenPct(costoTotalGanancia, detalle.ganancia.cobrado)) }}
+                                        </small>
+                                    </div>
+                                </div>
+                                <ul v-if="detalle.ganancia.avisos.length" class="text-warning-emphasis mt-2 mb-0 ps-3">
+                                    <li v-for="a in detalle.ganancia.avisos" :key="a">{{ a }}</li>
+                                </ul>
+                                <div class="text-muted fst-italic mt-2">Estimada con las tarifas; la real llega con Compras.</div>
+                            </div>
+                        </div>
                         <template v-if="(detalle.pasajeros ?? []).length > 0">
                             <h6 class="small fw-semibold text-secondary text-uppercase">Pasajeros</h6>
                             <div class="table-responsive mb-3">
@@ -272,6 +298,8 @@ import GuiaBuscador from '@/components/AgenciaViajes/GuiaBuscador.vue';
 import { useToast } from '@/composables/useToast';
 import { formatFecha, hoyPeru, sumarDiasISO } from '@/helpers/fecha';
 import { avisarProveedores } from '@/helpers/avisosProveedores';
+import { formatoMoneda } from '@/helpers/dashboard';
+import { formatPct, margenPct, markupPct } from '@/utils/margenes';
 import type { SalidaOperativa, Guia, EstadoSalidaOperativa } from '@/types/agencia-viajes';
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
@@ -315,6 +343,10 @@ const fechaHasta = ref<string>(sumarDiasISO(hoyPeru(), 7));
 const estado = ref<'' | EstadoSalidaOperativa>('');
 
 const detalle = ref<SalidaOperativa | null>(null);
+// T-089: markup y margen con el helper de T-087 (costo total = fijo + por persona).
+const costoTotalGanancia = computed(() => detalle.value?.ganancia
+    ? detalle.value.ganancia.costo_fijo + detalle.value.ganancia.costo_variable
+    : null);
 
 const faltaGuia = (s: SalidaOperativa) => enCurso(s) && !s.guia_id;
 
