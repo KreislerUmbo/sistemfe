@@ -2,7 +2,7 @@
 
 > **Para qué sirve:** es la puerta de entrada al vertical. Dice qué hace cada módulo, en qué
 > archivos vive y en qué documento están sus requisitos. No reemplaza a los planes: los ordena.
-> **Estado vigente de cada fila:** `plan-hoja-de-ruta-ejecucion.md`.
+> **Estado vigente de cada fila:** [`docs/backlog.md`](../../backlog.md) (único lugar con estado).
 > Creado el 23-oct-2026, verificado contra el código de la rama `feat/f1-facturacion-por-servicio`.
 > Cuando se agregue o cierre un módulo, actualizar este mapa en el mismo commit.
 
@@ -97,7 +97,7 @@ Cada módulo: **qué hace** (lo que el usuario puede hacer), **pantallas** (`adm
 | Documento | Para qué | Estado |
 |---|---|---|
 | `00-mapa-de-modulos.md` | Este mapa | vigente |
-| `plan-hoja-de-ruta-ejecucion.md` | **Estado de cada fila** (qué está hecho, qué sigue) y últimas actualizaciones | vigente — fuente del estado |
+| `docs/archivo/agencia-de-viajes/plan-hoja-de-ruta-ejecucion.md` | Hoja de ruta de las sesiones 0 a F5, con las marcas de avance que tenía hasta oct-2026 | archivo — el estado vive en `docs/backlog.md` |
 | `plan-modulo-cotizaciones-reservas.md` | **Requisitos base** de proveedores, tarifas, cotización, reserva, itinerarios, integración con ventas | vigente (referencia de diseño) |
 | `plan-tours-venta-simple-costo-real.md` | Requisitos de tours, salidas, Compras, rentabilidad; decisiones D6-D18 | vigente — en ejecución |
 | `plan-endoso-pasajeros.md` | Endoso entre agencias | diseño sin aprobar |
@@ -112,10 +112,10 @@ Cada módulo: **qué hace** (lo que el usuario puede hacer), **pantallas** (`adm
 | `pendientes-vigencia-aerea-y-calendarios.md` | Vigencia de la tarifa aérea | hecho |
 | `sincronizacion.md` | Cómo mantener sincronizados repo, Proyecto y sesiones de planificación | vigente (protocolo) |
 | `historial-archivo.md` | Historia del 25-jul al 12-ago-2026 | archivo |
-| `PEGAR-EN-CLAUDE-CODE-13-fase1a/1b/1c-*.md` | Briefs ya ejecutados | archivo — no volver a pegar |
-| `PEGAR-EN-CLAUDE-CODE-temporada-plantilla.md` | Brief reemplazado por la fila 13 | archivo — no ejecutar |
+| `docs/archivo/agencia-de-viajes/PEGAR-EN-CLAUDE-CODE-13-fase1a/1b/1c-*.md` | Briefs ya ejecutados | archivo — no volver a pegar |
+| `docs/archivo/agencia-de-viajes/PEGAR-EN-CLAUDE-CODE-temporada-plantilla.md` | Brief reemplazado por la fila 13 | archivo — no ejecutar |
 | `plan-precio-tour-por-persona.md` | Alternativa evaluada | **descartado** |
-| `plan-refactor-mayoristas-tramos.md` | Modelo de tramos | **superado** por `alternativa_destinos` |
+| `docs/archivo/agencia-de-viajes/plan-refactor-mayoristas-tramos.md` | Modelo de tramos | **superado** por `alternativa_destinos` |
 | `mockup-pdf-cotizacion.html` | Maqueta del PDF aprobada | referencia |
 
 **Manual de código (para entender y mantener):** `docs/aprendizaje/` — `02-mapa-del-sistema.md` explica cómo

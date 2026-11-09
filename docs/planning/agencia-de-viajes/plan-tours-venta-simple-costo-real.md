@@ -518,7 +518,7 @@ Nuevo, Semana Santa). `proveedor_tarifas.temporada_id` ya permite tarifas por te
 
 **Hallazgo:** al cargar un tour en la cotización, hoy **no se consulta la temporada**
 (`AlternativaItemController` y `ComboExplosionService` no la leen). Es la sospecha del brief
-`PEGAR-EN-CLAUDE-CODE-temporada-plantilla.md` (17-ago), nunca cerrada. En `agencia-demo`
+`docs/archivo/agencia-de-viajes/PEGAR-EN-CLAUDE-CODE-temporada-plantilla.md` (17-ago), nunca cerrada. En `agencia-demo`
 ninguna tarifa tiene temporada todavía (0 de 26), así que hoy no produce errores visibles, pero
 lo haría en cuanto se carguen.
 
@@ -711,9 +711,9 @@ adelante la importación SIRE (los comprobantes llegan solos y solo hay que asig
 ## 6. Fases (estimados gruesos, a afinar al empezar cada una)
 
 > **14-oct-2026:** la fase 1 se ejecuta en **dos sesiones**:
-> - **1a — el tour en el catálogo** (precio, Incluye con costo e IGV, calculadora, temporadas, uso, diagnóstico; sin tocar la cotización). Brief: `PEGAR-EN-CLAUDE-CODE-13-fase1a-tour-catalogo.md`.
-> - **1b — el tour en la cotización** (interruptor `modo_tours`, línea de tour con temporada, IGV mezclado en líneas, snapshot, residencia, recálculo al cambiar pasajeros, combos con E3, PDF C5, pestaña unificada "Incluye y costos", ajuste de redondeo fuera de la pantalla). Brief: `PEGAR-EN-CLAUDE-CODE-13-fase1b-tour-cotizacion.md` (revisado contra el código, listo).
-> - **1c — facturar la línea de tour y convertir los tours** (mezcla de IGV en un comprobante, facturación por subgrupo de pasajeros C1, conversión tour por tour). Borrador: `PEGAR-EN-CLAUDE-CODE-13-fase1c-facturacion-conversion.md`.
+> - **1a — el tour en el catálogo** (precio, Incluye con costo e IGV, calculadora, temporadas, uso, diagnóstico; sin tocar la cotización). Brief: `docs/archivo/agencia-de-viajes/PEGAR-EN-CLAUDE-CODE-13-fase1a-tour-catalogo.md`.
+> - **1b — el tour en la cotización** (interruptor `modo_tours`, línea de tour con temporada, IGV mezclado en líneas, snapshot, residencia, recálculo al cambiar pasajeros, combos con E3, PDF C5, pestaña unificada "Incluye y costos", ajuste de redondeo fuera de la pantalla). Brief: `docs/archivo/agencia-de-viajes/PEGAR-EN-CLAUDE-CODE-13-fase1b-tour-cotizacion.md` (revisado contra el código, listo).
+> - **1c — facturar la línea de tour y convertir los tours** (mezcla de IGV en un comprobante, facturación por subgrupo de pasajeros C1, conversión tour por tour). Borrador: `docs/archivo/agencia-de-viajes/PEGAR-EN-CLAUDE-CODE-13-fase1c-facturacion-conversion.md`.
 >
 > **Revisión del brief de la 1b contra el código (14-oct-2026) — hallazgos y decisiones del usuario:**
 > - `ReservaFacturacionController::detectarMezclaTributaria()` **bloquea** un comprobante con más de un destino tributario (Amazonía + nacional). N14 suponía que "ya agrupa por IGV": eso solo pasa dentro de un mismo destino. **D1:** un solo comprobante con una línea exonerada y otra gravada, permitido solo entre líneas de una misma carga de tour (se implementa en la 1c).
@@ -809,7 +809,7 @@ adelante la importación SIRE (los comprobantes llegan solos y solo hay que asig
 >
 > **Hallazgos de la 1c:**
 > 1. **IGV "exonerado fuera de la Amazonía"** (`20` + `nacional`): existe en tarifas reales de `agencia-demo` (Entrada de Lamas). Los selectores de IGV no lo ofrecían y salía en blanco; corregido en la pantalla de conversión y en la pestaña "Incluye y costos" (`TourIncluyeCostos.vue`, 1a), con aprobación del usuario.
-> 2. **Facturar por tipo de servicio a dos clientes distintos** (vuelos a un RUC, el resto a otro) funciona en el backend pero la pantalla lo bloquea después de la primera factura: anotado como fila **F1** de `plan-hoja-de-ruta-ejecucion.md` (pendiente, decisión del usuario).
+> 2. **Facturar por tipo de servicio a dos clientes distintos** (vuelos a un RUC, el resto a otro) funciona en el backend pero la pantalla lo bloquea después de la primera factura: anotado como fila **F1** de `docs/archivo/agencia-de-viajes/plan-hoja-de-ruta-ejecucion.md` (pendiente, decisión del usuario).
 > 3. Un servicio que no es tour asignado a pasajeros de dos grupos sigue sin poder facturarse por este flujo (ya documentado en el controlador); anotado dentro de F1.
 >
 > **Fase 2 — decisiones del usuario (21-oct-2026), antes de empezar:**

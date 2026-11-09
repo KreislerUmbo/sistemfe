@@ -6,7 +6,7 @@
 | **Módulo** | AGE + VEN |
 | **Pedido por** | usuario (y el contador, para las series) |
 | **Relacionado** | `agencia-precio-y-margen.md` (el margen real depende de la afectación) |
-| **Antecedentes que se juntan acá** | obs. 10 y H26 de `observaciones-pruebas-usuario.md` (26-oct); fila F2 de `plan-hoja-de-ruta-ejecucion.md` (23-oct); IGV del pasaje aéreo (31-oct); concepto libre de Venta directa (29-oct) |
+| **Antecedentes que se juntan acá** | obs. 10 y H26 de `observaciones-pruebas-usuario.md` (26-oct); fila F2 de `docs/archivo/agencia-de-viajes/plan-hoja-de-ruta-ejecucion.md` (23-oct); IGV del pasaje aéreo (31-oct); concepto libre de Venta directa (29-oct) |
 
 > Borrador vivo y **único lugar del tema tributario de Agencia**. El estado de cada cosa está solo
 > en `docs/backlog.md`. Las preguntas al contador están en §2.8, numeradas C1-C15.

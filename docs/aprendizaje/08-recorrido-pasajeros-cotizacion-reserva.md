@@ -1,7 +1,7 @@
 # Recorrido: de qué pasajero de la cotización viene cada pasajero de la reserva
 
 F4 etapa 1, 23-oct-2026. Es la primera etapa de "Modificar reserva"; el diseño completo está en
-la fila F4 de `docs/planning/agencia-de-viajes/plan-hoja-de-ruta-ejecucion.md`.
+la fila F4 de `docs/archivo/agencia-de-viajes/plan-hoja-de-ruta-ejecucion.md`.
 
 ---
 

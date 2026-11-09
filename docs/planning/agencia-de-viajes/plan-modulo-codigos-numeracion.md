@@ -6,7 +6,7 @@
 > Referencia de arquitectura base: `arquitectura-multitenant-backend_1.md`
 > **Estado: CONSTRUIDO (26-ago-2026, rama
 > `feature/modulo-12-codigos-numeracion`, fila 12 de
-> `plan-hoja-de-ruta-ejecucion.md`)** — diseño revisado y aprobado el mismo
+> `docs/archivo/agencia-de-viajes/plan-hoja-de-ruta-ejecucion.md`)** — diseño revisado y aprobado el mismo
 > día (§11/§12), implementado completo en la misma sesión: backend
 > (`CodigoGeneradorService`, `ConfiguracionCodigosController`,
 > migraciones), frontend (`configuracion/codigos.vue` con vista previa en
@@ -331,7 +331,7 @@ mencionado en la v3 original:**
 ## 12. Estado tras la revisión
 
 **Diseño aprobado, con los 3 gaps de §11 ya resueltos.** Sigue sin
-existir ninguna fila propia en `plan-hoja-de-ruta-ejecucion.md` — falta
+existir ninguna fila propia en `docs/archivo/agencia-de-viajes/plan-hoja-de-ruta-ejecucion.md` — falta
 agregarla antes de empezar a construir. Único punto realmente abierto:
 `formato_periodo` configurable vs. constante (§10, primer punto) — no
 bloquea el inicio de la implementación, se puede decidir en el momento de
@@ -347,4 +347,4 @@ construir la pantalla de configuración.
 | 14-ago-2026 | Confirmado con el usuario: sigla de agencia única y compartida entre los tres tipos, vive en los datos generales de la empresa; solo cambia la letra inicial por tipo (T/P/C). |
 | 14-ago-2026 | v3: se agrega **reserva** como cuarto tipo, diseñado como documento derivado de cotización — reusa periodo+correlativo de la cotización padre, cambia solo la letra (C→R), sin contador propio. Se agrega el caso a futuro de más de una reserva por cotización, resuelto con sufijo numérico corrido (`-2`, `-3`...) basado en un contador `cotizaciones.reservas_generadas`, sin necesidad de tocar el diseño base. Pendiente de validar contra el modelo de datos real cuando se retome el módulo de Cotizaciones/Reservas. |
 | 15-ago-2026 | Diseñado originalmente en un Proyecto de Claude aparte del repo; llevado al repo real (`docs/planning/agencia-de-viajes/`) en esta fecha, sin cambios de contenido respecto a la v3. |
-| 26-ago-2026 | Revisión de diseño contra el código real (§11/§12): 3 gaps cerrados con el usuario (Venta Directa como quinto tipo, formato nuevo sin excepción, pantallas de reserva pasan a leer el código propio). Diseño aprobado — falta agregarle fila en `plan-hoja-de-ruta-ejecucion.md` para empezar a construir. |
+| 26-ago-2026 | Revisión de diseño contra el código real (§11/§12): 3 gaps cerrados con el usuario (Venta Directa como quinto tipo, formato nuevo sin excepción, pantallas de reserva pasan a leer el código propio). Diseño aprobado — falta agregarle fila en `docs/archivo/agencia-de-viajes/plan-hoja-de-ruta-ejecucion.md` para empezar a construir. |

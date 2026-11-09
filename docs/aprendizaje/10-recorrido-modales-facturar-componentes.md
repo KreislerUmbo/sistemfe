@@ -1,7 +1,7 @@
 # Recorrido: los modales de facturar como componentes
 
 Auditoría de reserva + facturación, punto 5 (mantenimiento), 23-oct-2026. Fila F3 de
-`docs/planning/agencia-de-viajes/plan-hoja-de-ruta-ejecucion.md`.
+`docs/archivo/agencia-de-viajes/plan-hoja-de-ruta-ejecucion.md`.
 
 No cambia nada de lo que ve el usuario. Cambia **dónde vive el código**, para que sea más fácil
 de leer, de probar y de cambiar sin romper otra cosa.

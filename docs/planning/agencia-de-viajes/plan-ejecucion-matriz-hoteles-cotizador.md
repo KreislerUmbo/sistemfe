@@ -12,7 +12,7 @@
 > secuencia y se detalla lo necesario para implementar sin ambigüedad.
 >
 > **Coordinación con otros planes (estado al 01-sep-2026):**
-> - `plan-refactor-mayoristas-tramos.md` — **CERRADO, superado por
+> - `docs/archivo/agencia-de-viajes/plan-refactor-mayoristas-tramos.md` — **CERRADO, superado por
 >   `alternativa_destinos`** (decisión del usuario). Su Problema C1
 >   (mayorista visible en el PDF, `resolverNombreItemPdf()` línea 610)
 >   ya tiene diseño y brief propio, cerrado aparte de este plan:

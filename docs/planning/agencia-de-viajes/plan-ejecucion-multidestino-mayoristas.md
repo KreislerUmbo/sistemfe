@@ -5,7 +5,7 @@
 > 12a, 12b, 12c, 12d, 12e, 12f (12f-1/2/3) y 12h ya están ejecutados y mergeados a
 > `origin/main`** — commits `3d78656`/`0547123`/`b15db69`/`6db5878`/`1555996`/`5574bfe`/
 > `e375c49`/`2e6e0e4`/`a18eee6` respectivamente. Detalle real de cada uno, con tests y
-> verificación en vivo, en `plan-hoja-de-ruta-ejecucion.md` (fila 12a-12h) — esa es la fuente
+> verificación en vivo, en `docs/archivo/agencia-de-viajes/plan-hoja-de-ruta-ejecucion.md` (fila 12a-12h) — esa es la fuente
 > de verdad de estado, no la tabla de la sección 2. **Solo `12g` (limpieza final) sigue
 > pendiente**, bloqueado a propósito hasta que `12f` corra un ciclo completo de reservas en
 > producción. Este documento queda como referencia de diseño/dependencias (sigue siendo
@@ -13,7 +13,7 @@
 >
 > Este documento traduce `auditoria-arquitectonica-agencia-viajes.md`
 > (§7, §9, §9.1, §19, §23) a sesiones concretas de Claude Code, en el
-> mismo formato que usa `plan-hoja-de-ruta-ejecucion.md`. No vuelve a
+> mismo formato que usa `docs/archivo/agencia-de-viajes/plan-hoja-de-ruta-ejecucion.md`. No vuelve a
 > diseñar nada — cada decisión de diseño ya se cerró en la auditoría o
 > en la conversación de afinamiento posterior; acá solo se secuencia.
 >
@@ -37,12 +37,12 @@
 > **Reconciliado 01-sep-2026 (bloqueo levantado):** `auditoria-
 > arquitectonica-agencia-viajes.md` (la síntesis base de este plan)
 > afirmó por error que
-> `docs/planning/agencia-de-viajes/plan-refactor-mayoristas-tramos.md`
+> `docs/archivo/agencia-de-viajes/plan-refactor-mayoristas-tramos.md`
 > no existía en el proyecto — sí existía, y proponía `alternativa_tramos`
 > como diseño alternativo para el mismo problema que acá se resuelve con
 > `alternativa_destinos`. **El usuario decidió explícitamente:
 > `alternativa_destinos` es el camino — `alternativa_tramos` no se
-> construye.** `plan-refactor-mayoristas-tramos.md` quedó cerrado y
+> construye.** `docs/archivo/agencia-de-viajes/plan-refactor-mayoristas-tramos.md` quedó cerrado y
 > marcado como superado por este plan (ver su propio historial). 12a se
 > corrigió también (ver su fila) para sacarle el punto que chocaba con
 > `plan-matriz-hoteles-cotizador.md`. 12b puede avanzar sin más bloqueos
@@ -62,7 +62,7 @@
 
 Es un documento de referencia, igual que `plan-modulo-cotizaciones-reservas.md`
 lo es para las sesiones 7-11 de la hoja de ruta. Las filas nuevas de
-`plan-hoja-de-ruta-ejecucion.md` (12a-12h) apuntan acá y a los briefs
+`docs/archivo/agencia-de-viajes/plan-hoja-de-ruta-ejecucion.md` (12a-12h) apuntan acá y a los briefs
 `PEGAR-EN-CLAUDE-CODE-*.md` propios de cada sesión. El orden de la tabla
 de la sección 2 es el orden real de dependencias — no saltar filas.
 

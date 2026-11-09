@@ -364,7 +364,7 @@ mayorista, sección "Opcionales" conectada a un backend que ya existía sin ning
 `HabitacionMatrixPicker.vue` ya no dice "Noches"/default 1 en el flujo mayorista (el precio ahí
 es el paquete completo por persona) — dice "Adultos" con la cantidad real de la cotización;
 formulario de mayorista extraído a `OpcionMayoristaForm.vue` para editar inline dentro de cada
-card. Detalle completo: `docs/planning/agencia-de-viajes/plan-hoja-de-ruta-ejecucion.md` fila
+card. Detalle completo: `docs/archivo/agencia-de-viajes/plan-hoja-de-ruta-ejecucion.md` fila
 UX1. Commit `b0f6395`, mergeado y pusheado a `origin/main` (`c9ea33b`).
 **Pendiente real, diagnosticado y diferido a propósito** (decisión explícita del usuario en
 cada caso, no un olvido): alta inline de un destino inexistente en `DestinoTreeSelect.vue`
@@ -801,7 +801,7 @@ entre bases distintas):
   ningún tenant, sin importar su `giro`. Bug preexistente desde el primer vertical
   (agencia de viajes, Sesión 2) — se venía compensando con migración manual cada sesión
   (ver hallazgo real de la Sesión 11b4b en
-  `docs/planning/agencia-de-viajes/plan-hoja-de-ruta-ejecucion.md`) sin que nadie notara
+  `docs/archivo/agencia-de-viajes/plan-hoja-de-ruta-ejecucion.md`) sin que nadie notara
   que el mecanismo automático estaba roto. Distinto del camino de **provisioning
   inicial** (`TenantProvisioningService::provision()` → `migrarVertical()`), que sí
   funciona bien porque arma un `--path` explícito por tenant según su `giro` en el

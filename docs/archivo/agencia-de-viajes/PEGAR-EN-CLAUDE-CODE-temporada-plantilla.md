@@ -13,7 +13,7 @@
 > primero: `docs/planning/agencia-de-viajes/plan-modulo-cotizaciones-reservas.md`
 > §3.7 (párrafo "Requisito explícito para 11b3", agregado 17-ago-2026) y
 > §2.2/§2.5 (modelo de temporada y `PriceEngineService`), más
-> `docs/planning/agencia-de-viajes/plan-hoja-de-ruta-ejecucion.md`, filas
+> `docs/archivo/agencia-de-viajes/plan-hoja-de-ruta-ejecucion.md`, filas
 > **11b3, 11h, 11k, 11m, 11o** (son las que tocaron el flujo de "cargar
 > desde plantilla" en distintos momentos).
 
@@ -33,7 +33,7 @@ recién en la liquidación.
 
 **En ese momento se pensó que esto era prevenible porque 11b3 ("cargar
 desde plantilla") todavía no estaba construida.** Al revisar
-`plan-hoja-de-ruta-ejecucion.md` se confirmó que **eso es incorrecto**:
+`docs/archivo/agencia-de-viajes/plan-hoja-de-ruta-ejecucion.md` se confirmó que **eso es incorrecto**:
 11b3 está construida y mergeada desde el **01-ago-2026 (commit
 `5d9d152`)**, y el mismo flujo siguió evolucionando en **diez sesiones
 más** hasta el 12-ago-2026 (11h, 11i, 11j, 11k, 11l v2, 11m, 11n, 11o,

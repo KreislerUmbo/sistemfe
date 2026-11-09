@@ -1,7 +1,7 @@
 # Recorrido: nota de crédito parcial sobre un tour, cancelar mientras se factura y aceptar dos veces
 
 Auditoría de reserva + facturación, punto 2 (23-oct-2026). Fila F3 de
-`docs/planning/agencia-de-viajes/plan-hoja-de-ruta-ejecucion.md`.
+`docs/archivo/agencia-de-viajes/plan-hoja-de-ruta-ejecucion.md`.
 
 ---
 
