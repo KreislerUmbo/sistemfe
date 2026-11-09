@@ -5,7 +5,7 @@
         <div class="row g-2 mb-2">
             <div class="col-6">
                 <label class="form-label mb-1 small fw-semibold text-secondary">Aerolínea</label>
-                <input type="text" class="form-control form-control-sm" v-model="form.aerolinea" placeholder="Ej. LATAM">
+                <AerolineaSelect v-model="form.aerolinea" placeholder="Ej. LATAM" />
             </div>
             <div class="col-6">
                 <label class="form-label mb-1 small fw-semibold text-secondary">Moneda</label>
@@ -186,6 +186,7 @@ import { alternativaItemService } from '@/services/admin/alternativaItemService'
 import { desglosarPrecioFinal } from '@/utils/desglosarPrecioFinal';
 import { partesFechaHoraPeru } from '@/helpers/fecha';
 import CampoFecha from '@/components/CampoFecha.vue';
+import AerolineaSelect from '@/components/AgenciaViajes/AerolineaSelect.vue';
 import CampoHora from '@/components/CampoHora.vue';
 import type { AlternativaItem, CotizacionPasajero, TipAfeIgv, DestinoTributario } from '@/types/agencia-viajes';
 

@@ -752,9 +752,9 @@ Route::group([
     // cotizaciones o reservas (el cotizador y la reserva son donde se escribe la aerolínea).
     // Solo giro Agencia: lo corta el controller (404), no el permiso.
     Route::get("aerolineas", [AerolineaController::class, 'index'])
-        ->middleware('permission:cotizaciones.editar|reservas.editar');
+        ->middleware('permission:cotizaciones.editar|reservas.editar|agencia.paquetes');
     Route::post("aerolineas", [AerolineaController::class, 'store'])
-        ->middleware('permission:cotizaciones.editar|reservas.editar');
+        ->middleware('permission:cotizaciones.editar|reservas.editar|agencia.paquetes');
 
     Route::post("proveedores/{id}", [ProveedorController::class, 'update'])
         ->middleware('permission:agencia.proveedores');

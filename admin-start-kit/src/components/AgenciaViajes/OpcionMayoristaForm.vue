@@ -5,7 +5,7 @@
             <option value="USD">USD</option>
             <option value="PEN">PEN</option>
         </select>
-        <input type="text" class="form-control form-control-sm mb-1" placeholder="Vuelo (aerolínea)" v-model="form.vuelo_aerolinea">
+        <AerolineaSelect v-model="form.vuelo_aerolinea" class="mb-1" placeholder="Vuelo (aerolínea)" />
         <!-- Simulación Panamá (04-sep-2026) — itinerario del vuelo (fechas/
              horarios/equipaje permitido), impreso en el PDF junto a la
              aerolínea de arriba (AlternativaController::pdf(), sección
@@ -71,6 +71,7 @@ import { ref, watch } from 'vue';
 import Swal from 'sweetalert2/dist/sweetalert2.js';
 import RichTextEditor from '@/components/RichTextEditor.vue';
 import ProveedorBuscador from '@/components/AgenciaViajes/ProveedorBuscador.vue';
+import AerolineaSelect from '@/components/AgenciaViajes/AerolineaSelect.vue';
 import { opcionMayoristaService } from '@/services/admin/opcionMayoristaService';
 import { contenidoTourService } from '@/services/admin/contenidoTourService';
 import type { OpcionMayorista, ContenidoTour } from '@/types/agencia-viajes';

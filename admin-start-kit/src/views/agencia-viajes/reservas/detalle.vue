@@ -361,7 +361,7 @@
                                         <div class="row g-2">
                                             <div class="col-md-4">
                                                 <label class="form-label small text-secondary mb-1">Aerolínea confirmada</label>
-                                                <input type="text" class="form-control form-control-sm" :placeholder="aerolineaCotizada(it) ?? 'Sin definir'" v-model="vueloAgenciaForm(it, p).vuelo_aerolinea_confirmada">
+                                                <AerolineaSelect :placeholder="aerolineaCotizada(it) ?? 'Sin definir'" v-model="vueloAgenciaForm(it, p).vuelo_aerolinea_confirmada" />
                                             </div>
                                             <div class="col-md-4">
                                                 <label class="form-label small text-secondary mb-1">Vuelo ida — número</label>
@@ -1062,6 +1062,7 @@
 import { destinoParaIgvAgencia, etiquetaTipAfeIgv, IGV_EXONERADO } from '@/helpers/tratamientoTributarioAgencia';
 import { etiquetaTipoPax } from '@/helpers/reservaPasajero';
 import CampoHora from '@/components/CampoHora.vue';
+import AerolineaSelect from '@/components/AgenciaViajes/AerolineaSelect.vue';
 import CampoFecha from '@/components/CampoFecha.vue';
 import { ref, reactive, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
@@ -1504,7 +1505,8 @@ const vueloAgenciaForm = (it: ReservaItem, p: ReservaPasajero): ActualizarVueloP
             vuelo_numero_vuelta: existente?.vuelo_numero_vuelta ?? null,
             vuelo_fecha_vuelta: existente?.vuelo_fecha_vuelta ?? null,
             vuelo_hora_vuelta: existente?.vuelo_hora_vuelta ?? null,
-            vuelo_aerolinea_confirmada: existente?.vuelo_aerolinea_confirmada ?? null,
+            // T-016: sin confirmada, el campo trae la aerolínea cotizada como valor (editable).
+            vuelo_aerolinea_confirmada: existente?.vuelo_aerolinea_confirmada || aerolineaCotizada(it),
         };
     }
     return vueloAgenciaForms[key];

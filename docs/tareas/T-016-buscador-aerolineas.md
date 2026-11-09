@@ -90,9 +90,23 @@ cd admin-start-kit && npm run type-check && npm run build
 ---
 
 ## Resultado
-- **Commits:**
-- **Tests:**
+- **Commits:** ver `git log feat/T-016-buscador-aerolineas`.
+- **Tests:** `NormalizarAerolineasTest` (CA4, CA5, unidas, revertir sin pisar ediciones),
+  `AerolineaCatalogoTest` (orden por prefijo, permiso ampliado). `--simular` real en `agencia-demo`
+  lista Latam/latam → LATAM (cotizaciones, opciones de mayorista, vuelo confirmado) sin escribir.
+  `type-check`: 47 errores, los mismos que antes de la tarea (fake-backend, etc.); `build` OK.
 - **Desviaciones de la tarea y por qué:**
+  - El comando recibe el `tenant` como argumento (igual que `limpiar-operacion`), no recorre todos.
+  - `GET`/`POST aerolineas` aceptan además `agencia.paquetes`: Paquetes no usa `cotizaciones.editar`.
+  - Unir en el panel central: se eligió **solo el aviso** con el nombre del comando (no segundo plano).
+  - La búsqueda ahora prioriza las que empiezan con lo escrito.
+  - No se avisa en `AerolineaSelect` si la existente está desactivada (sigue sin decidirse; el
+    nombre se guarda igual).
+  - Prueba funcional en pantalla (Playwright) **no hecha**: pendiente en la revisión.
+  - `components.d.ts` se regeneró solo (registra el componente nuevo).
+  - Suite completa: 2111 pasan, 2 fallan; `VentaDirectaLineasTest` falló en la corrida completa y pasa aislado (con y sin estos cambios). El otro fallo no quedó registrado (salida recortada): repetir la suite en la revisión.
 
 ## Hallazgos fuera de alcance
--
+- `reserva_pasajeros.vuelo_aerolinea_ida/_vuelta` ya no existen (la migración
+  `2026_11_04_100000` los pasó a texto de vuelo propio): no había nada que reemplazar ni corregir.
+- `agencia-demo` tiene 16 pasajes cotizados con "Latam": el comando los corrige al aplicarlo.
