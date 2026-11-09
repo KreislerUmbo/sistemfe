@@ -70,3 +70,4 @@ grep -rn "PEGAR-EN-CLAUDE-CODE\|plan-refactor-mayoristas-tramos" docs CLAUDE.md 
 ## Hallazgos fuera de alcance
 - Los comentarios del código aún nombran los archivos movidos (`PEGAR-EN-CLAUDE-CODE-*` en 14 archivos de `api-sistema-fe/app`, `admin-start-kit/src` y `central-panel/src`; `plan-hoja-de-ruta-ejecucion.md` en 3 de `AgenciaViajes`). El «Cómo verificar» de esta tarea los seguirá listando; quedan para T-094/T-095/T-096 (fuera de alcance).
 - `sincronizacion.md` sigue describiendo cómo mantener al día la hoja de ruta, que ya es archivo; conviene archivarlo o reescribirlo junto con el resto de `docs/planning/agencia-de-viajes/`.
+- (Revisión) Los dos hallazgos anteriores se pasaron a «Por analizar» del backlog: T-096 ya está hecha y T-094/T-095 no cubren esos archivos. También en la revisión: la fila de `INDICE.md` seguía llamando a la hoja archivada «fuente de verdad del estado»; se reescribió como archivo.
