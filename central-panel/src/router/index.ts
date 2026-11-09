@@ -40,6 +40,11 @@ const router = createRouter({
       name: 'proveedor-tipos',
       component: () => import('@/views/ProveedorTiposView.vue'),
     },
+    {
+      path: '/aerolineas',
+      name: 'aerolineas',
+      component: () => import('@/views/AerolineasView.vue'),
+    },
   ],
 });
 
