@@ -68,9 +68,15 @@ php artisan test --filter="RutasAgenciaPermisos|PolicyFilaPorVendedor"
   - CA3: probado a mano — quitado el `authorize` de `ReservaModificacionController::store`, falla
     solo ese test; revertido.
 - **Desviaciones de la tarea y por qué:**
-  - La tarea nombra "facturación" como permiso de `reservas/*/facturar*`, pero no existe un permiso
-    así en Agencia: hoy esas rutas exigen `reservas.editar` (`preparar-factura`: `reservas.ver|ver_todas`).
-    El test fija lo que hay hoy; ver hallazgo.
+  - La tarea nombra "facturación" como permiso de `reservas/*/facturar*`. La ruta exige `reservas.editar`
+    (`preparar-factura`: `reservas.ver|ver_todas`), y el test de rutas fija eso. El permiso de
+    facturación existe pero vive dentro del controller: `emitir_factura`/`emitir_boleta` según el
+    comprobante (`ReservaFacturacionController::PERMISOS_EMISION`), cubierto por
+    `ReservaFacturacionTest::test_rechaza_sin_permiso_de_emision`.
+  - CA3: los 7 controllers con Policy que no están en `PolicyFilaPorVendedorTest` ya tienen su prueba
+    de "ajeno = 403" en su propio archivo (índice en la cabecera del test); no se duplicaron. Cada
+    escenario comprueba además que al dueño la Policy sí lo deja, para que una Policy que bloquee a
+    todos no haga pasar los tests.
   - Las Policy que existen son solo `CotizacionPolicy` y `ReservaPolicy`; "alternativa" e "ítem de
     cotización" la usan vía `autorizarCotizacion()` y "ítem/pasajero/facturación/anticipo/modificación"
     vía `ReservaPolicy`. El test de fila cubre un método por controller (10 tests) llamando al
@@ -79,5 +85,4 @@ php artisan test --filter="RutasAgenciaPermisos|PolicyFilaPorVendedor"
     `reporte-operativo-pdf` (el test además exige que lleve `signed`).
 
 ## Hallazgos fuera de alcance
-- Facturar una reserva (`POST reservas/{id}/facturar`) solo exige `reservas.editar`: no hay un permiso
-  propio de facturación. Decidir si hace falta uno (afecta roles ya creados).
+- Ninguno. (El hallazgo de un permiso de facturación faltante era un error: ver Desviaciones.)

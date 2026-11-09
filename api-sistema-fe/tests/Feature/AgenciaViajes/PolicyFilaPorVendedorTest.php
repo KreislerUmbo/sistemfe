@@ -14,6 +14,7 @@ use App\Http\Controllers\AgenciaViajes\ReservaModificacionController;
 use App\Http\Controllers\AgenciaViajes\ReservaPasajeroController;
 use App\Models\AgenciaViajes\Alternativa;
 use App\Models\AgenciaViajes\AlternativaItem;
+use App\Models\AgenciaViajes\Cotizacion;
 use App\Models\AgenciaViajes\Reserva;
 use App\Models\AgenciaViajes\ReservaItem;
 use App\Models\AgenciaViajes\ReservaPasajero;
@@ -22,6 +23,7 @@ use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
@@ -36,6 +38,15 @@ use Tests\TestCase;
 // Se llama al controller directo (como ReservaPolicyAccionesTest): ninguna ruta
 // de este proyecto pasa por el stack completo de tenancy en los tests.
 // La Policy lanza AuthorizationException, que el handler convierte en 403.
+//
+// Los otros controllers con Policy ya tienen su prueba de "ajeno = 403" en su
+// propio archivo; no se duplican acá:
+//   AlternativaDestino, OpcionMayorista, OpcionHotel → CotizacionPolicyAccionesTest
+//   CotizacionActividad          → CrmActividadCotizacionTest
+//   CotizacionEnvio              → EnvioCorreoCotizacionTest
+//   CotizacionResultado          → CotizacionResultadoTest
+//   ReservaModificacionPenalidad → ReservaModificacionPenalidadTest
+// Un controller NUEVO con Policy debe sumar su prueba aquí o en su archivo.
 class PolicyFilaPorVendedorTest extends TestCase
 {
     protected function setUp(): void
@@ -134,6 +145,14 @@ class PolicyFilaPorVendedorTest extends TestCase
         $duenio = $this->vendedor();
         $ajeno = $this->vendedor();
         $datos = $this->trabajoDe($duenio);
+
+        // Control: al dueño la Policy SÍ lo deja. Sin esto, una Policy que
+        // bloqueara a todos (ya pasó, ver el comentario de ReservaPolicy)
+        // haría pasar todos los tests de abajo.
+        $cotizacion = Cotizacion::findOrFail($datos['cotizacionId']);
+        $this->assertTrue(Gate::forUser($duenio)->allows('update', $cotizacion), 'El dueño debe poder editar su cotización.');
+        $this->assertTrue(Gate::forUser($duenio)->allows('update', $datos['reserva']), 'El dueño debe poder editar su reserva.');
+
         $this->actuarComo($ajeno);
 
         return [$datos, $ajeno];
