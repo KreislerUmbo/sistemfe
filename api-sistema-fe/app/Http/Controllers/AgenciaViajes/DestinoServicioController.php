@@ -171,7 +171,7 @@ class DestinoServicioController extends Controller
         $destino = DestinoServicio::findOrFail($request->destino_servicio_destino_id);
 
         if ($destino->id === $origen->id) {
-            return response()->json(['code' => 422, 'message' => 'No podés fusionar un servicio consigo mismo.'], 422);
+            return response()->json(['code' => 422, 'message' => 'No puedes fusionar un servicio consigo mismo.'], 422);
         }
 
         if ($destino->servicio_id !== $origen->servicio_id) {
@@ -187,7 +187,7 @@ class DestinoServicioController extends Controller
 
             return response()->json([
                 'code' => 422,
-                'message' => "No se puede fusionar automáticamente: {$nombres} ya está en ambos destinos con tarifas propias — revisalo manualmente antes de fusionar.",
+                'message' => "No se puede fusionar automáticamente: {$nombres} ya está en ambos destinos con tarifas propias — revísalo manualmente antes de fusionar.",
             ], 422);
         }
 

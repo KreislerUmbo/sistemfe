@@ -48,7 +48,7 @@ class LimpiarOperacionAgencia extends Command
             }
 
             $this->warn('Se borra de verdad. Hacer antes el backup de la base y del storage, y que nadie esté usando el sistema.');
-            if ($this->ask("Escribí el ID del tenant para confirmar ({$tenant->id})") !== $tenant->id) {
+            if ($this->ask("Escribe el ID del tenant para confirmar ({$tenant->id})") !== $tenant->id) {
                 $this->info('No coincide: no se borró nada.');
 
                 return self::FAILURE;

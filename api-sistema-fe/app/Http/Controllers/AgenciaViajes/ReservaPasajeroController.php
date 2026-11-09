@@ -4,7 +4,6 @@ namespace App\Http\Controllers\AgenciaViajes;
 
 use App\Http\Controllers\Controller;
 use App\Models\AgenciaViajes\PasajeroCatalogo;
-use App\Models\AgenciaViajes\PasajeroDocumento;
 use App\Models\AgenciaViajes\ReservaPasajero;
 use App\Models\Client\Client;
 use App\Services\AgenciaViajes\PasajeroCatalogoService;

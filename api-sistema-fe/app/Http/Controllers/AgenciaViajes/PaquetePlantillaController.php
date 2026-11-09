@@ -579,7 +579,7 @@ class PaquetePlantillaController extends Controller
 
         return response()->json([
             'code' => 200,
-            'message' => 'Tour/paquete duplicado. Revisalo y activalo cuando esté listo.',
+            'message' => 'Tour/paquete duplicado. Revísalo y actívalo cuando esté listo.',
             'paquete_plantilla' => $copia,
         ]);
     }

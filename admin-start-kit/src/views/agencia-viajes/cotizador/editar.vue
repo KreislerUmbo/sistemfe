@@ -408,7 +408,7 @@
                     <div class="card-body">
                         <div v-if="bloquesLienzo.length === 0 && mostrarTabsDia && diasDesdeCombo.has(diaActivo)" class="drop-hint text-center text-muted py-4 border rounded" style="border-style:dashed">
                             <i class="fas fa-triangle-exclamation text-warning me-1"></i>
-                            Este día no tiene ítems porque el tour de origen no tiene Incluye cargado — revisá el catálogo.
+                            Este día no tiene ítems porque el tour de origen no tiene Incluye cargado — revisa el catálogo.
                         </div>
                         <div v-else-if="bloquesLienzo.length === 0" class="drop-hint text-center text-muted py-4 border rounded" style="border-style:dashed">
                             Agregá un servicio con el botón de arriba
@@ -917,7 +917,7 @@
                                      suma a esta misma comparación (ver grupoAbierto en
                                      matrizHotelActiva). -->
                                 <div v-if="grupoHotelAbiertoDiaActivo" class="alert alert-info py-2 px-3 small mb-2 d-flex justify-content-between align-items-center">
-                                    <span><i class="fas fa-layer-group me-1"></i>Comparando {{ grupoHotelAbiertoDiaActivo.hoteles }} hotel(es) para este día — elegí otro hotel de Alojamiento para sumarlo, o terminá la comparación desde el lienzo.</span>
+                                    <span><i class="fas fa-layer-group me-1"></i>Comparando {{ grupoHotelAbiertoDiaActivo.hoteles }} hotel(es) para este día — elige otro hotel de Alojamiento para sumarlo, o termina la comparación desde el lienzo.</span>
                                 </div>
 
                                 <!-- 27-ago-2026 — mismos filtros combinables que ya tenía
@@ -1014,7 +1014,7 @@
                                     </div>
                                     <p v-if="formHotelLocal.proveedor_id" class="text-success small mb-2"><i class="fas fa-check-circle me-1"></i>Vinculado</p>
                                     <p class="text-muted fst-italic mb-2" style="font-size:11px">
-                                        Vincularlo evita cargar el mismo hotel 2 veces con nombres distintos — si ya está en Proveedores, elegilo acá en vez de dejarlo suelto.
+                                        Vincularlo evita cargar el mismo hotel 2 veces con nombres distintos — si ya está en Proveedores, elígelo acá en vez de dejarlo suelto.
                                     </p>
                                     <label class="form-label mb-1 small text-secondary">Moneda</label>
                                     <select class="form-select form-select-sm mb-1" v-model="formHotelLocal.moneda">
@@ -1158,7 +1158,7 @@
                                         class="mt-2 border-top pt-2"
                                         @actualizado="onOpcionMayoristaGuardada" @cancelar="opcionMayoristaEnEdicionId = null" />
                                     <div v-if="opcionHotelesActivaId === op.id" class="mt-2 border-top pt-2">
-                                        <div v-if="op.estado !== 'elegida' && !alternativaSoloLectura" class="text-muted small fst-italic mb-1">Marcá esta opción como elegida para poder confirmar una habitación (podés seguir cargando hoteles mientras tanto).</div>
+                                        <div v-if="op.estado !== 'elegida' && !alternativaSoloLectura" class="text-muted small fst-italic mb-1">Marca esta opción como elegida para poder confirmar una habitación (puedes seguir cargando hoteles mientras tanto).</div>
                                         <!-- 04-sep-2026 — una sola vez arriba de todo, en vez de metida
                                              solo en el form de "crear hotel nuevo" (ahí el usuario la veía
                                              al crear, pero no al editar/agregar un tipo de habitación desde
@@ -1167,7 +1167,7 @@
                                              3 lugares donde aparecen Costo/Venta acá abajo: ver precios,
                                              editar una tarifa, agregar una tarifa nueva a un hotel ya
                                              cargado, y el form de crear hotel. -->
-                                        <p class="text-muted fst-italic mb-2" style="font-size:11px">El costo/venta de cada tipo de habitación es el total del paquete por persona (aéreo + tours + hotel según este mayorista), no solo el hospedaje. Si el hotel es nuevo, no hace falta registrarle una tarifa en Proveedores para reusarlo — elegilo del selector de abajo (o dejalo "manual/referencial") y cargá este precio de paquete directo acá.</p>
+                                        <p class="text-muted fst-italic mb-2" style="font-size:11px">El costo/venta de cada tipo de habitación es el total del paquete por persona (aéreo + tours + hotel según este mayorista), no solo el hospedaje. Si el hotel es nuevo, no hace falta registrarle una tarifa en Proveedores para reusarlo — elígelo del selector de abajo (o déjalo "manual/referencial") y carga este precio de paquete directo acá.</p>
                                         <!-- 04-sep-2026 — vista unificada (hallazgo del usuario: la tabla de
                                              "elegir" y la lista de gestión de abajo mostraban los mismos
                                              hoteles dos veces, en dos formatos). permitir-gestion-hoteles
@@ -1177,7 +1177,7 @@
                                             :tarifas="tarifasHotelPlanas(op)" :moneda="op.moneda"
                                             cantidad-label="Adultos" :cantidad-default="cantidadAdultosCotizacion"
                                             :deshabilitar-confirmar="op.estado !== 'elegida' || alternativaSoloLectura"
-                                            :motivo-deshabilitado="alternativaSoloLectura ? 'Esta alternativa ya está reservada: los cambios se hacen con Modificar reserva' : 'Marcá esta opción como elegida para poder confirmar una habitación'"
+                                            :motivo-deshabilitado="alternativaSoloLectura ? 'Esta alternativa ya está reservada: los cambios se hacen con Modificar reserva' : 'Marca esta opción como elegida para poder confirmar una habitación'"
                                             :permitir-gestion-hoteles="!alternativaSoloLectura"
                                             @seleccionar="({ id, cantidad }) => agregarItemMayorista(op, id, cantidad)"
                                             @agregar-grupo="({ ids }) => agregarGrupoMayorista(op, ids)"
@@ -1277,7 +1277,7 @@
                                                  "por persona" que ya usa el hotel de la matriz mayorista. -->
                                             <button v-if="!alternativaSoloLectura" class="btn btn-sm btn-outline-success w-100 mt-1"
                                                 :disabled="agregandoOpcionalAlLienzoId === opl.id || op.estado !== 'elegida'"
-                                                :title="op.estado !== 'elegida' ? 'Marcá esta opción como elegida para poder agregar sus opcionales' : ''"
+                                                :title="op.estado !== 'elegida' ? 'Marca esta opción como elegida para poder agregar sus opcionales' : ''"
                                                 @click="agregarOpcionalAlLienzo(op, opl)">
                                                 <span v-if="agregandoOpcionalAlLienzoId === opl.id" class="spinner-border spinner-border-sm me-1"></span>
                                                 <i v-else class="fas fa-plus me-1"></i>Agregar al lienzo
@@ -1372,7 +1372,7 @@
                             <p class="small fw-semibold mb-2">{{ matrizHotelActiva.nombreProveedor }}</p>
                             <div v-if="matrizHotelActiva.grupoAbierto" class="alert alert-info py-2 px-3 small mb-2">
                                 <i class="fas fa-layer-group me-1"></i>
-                                Sumando este hotel a la comparación en curso ({{ matrizHotelActiva.grupoAbierto.hoteles }} hotel(es) ya cargado(s) para este día) — elegí 1 o más habitaciones para agregarlas a la misma comparación.
+                                Sumando este hotel a la comparación en curso ({{ matrizHotelActiva.grupoAbierto.hoteles }} hotel(es) ya cargado(s) para este día) — elige 1 o más habitaciones para agregarlas a la misma comparación.
                             </div>
                             <HabitacionMatrixPicker :tarifas="matrizHotelActiva.tarifas" :moneda="matrizHotelActiva.moneda"
                                 :pasajeros="cotizacion?.pasajeros ?? []"
@@ -2608,7 +2608,7 @@ const eliminarCargaTour = async (bloque: BloqueItem) => {
 
     const confirmacion = await (Swal as TVueSwalInstance).fire({
         title: `¿Quitar "${bloque.tourNombre ?? 'este tour'}"?`,
-        text: bloque.cargaCombo ? `Es parte del combo "${bloque.comboNombre}": podés quitar solo este tour o el combo entero.` : 'Se quita el tour de esta alternativa.',
+        text: bloque.cargaCombo ? `Es parte del combo "${bloque.comboNombre}": puedes quitar solo este tour o el combo entero.` : 'Se quita el tour de esta alternativa.',
         icon: 'warning',
         showCancelButton: true,
         showDenyButton: !!bloque.cargaCombo,
@@ -3397,7 +3397,7 @@ const onFotosHotelNuevoSeleccionadas = (event: Event) => {
     input.value = '';
     const disponibles = 3 - fotosHotelNuevo.value.length;
     if (disponibles <= 0) {
-        (Swal as TVueSwalInstance).fire('Límite alcanzado', 'Ya tenés el máximo de 3 fotos por hotel.', 'warning');
+        (Swal as TVueSwalInstance).fire('Límite alcanzado', 'Ya tienes el máximo de 3 fotos por hotel.', 'warning');
         return;
     }
     archivos.slice(0, disponibles).forEach((file) => fotosHotelNuevo.value.push({ file, previewUrl: URL.createObjectURL(file), tipoFoto: 'habitacion' }));

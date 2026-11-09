@@ -208,7 +208,7 @@
                         <div v-if="esHotel" class="alert alert-warning py-2 px-3 small mb-3">
                             <i class="fas fa-triangle-exclamation me-1"></i>
                             Esta tarifa es el precio real <strong>por noche</strong> de esta habitación — se usa en Local/Nacional y en cualquier reporte que lea este proveedor.
-                            Si el precio que tenés es el <strong>total de un paquete de mayorista</strong> (vuelo + tours + hotel), no lo cargues acá: usá "Agregar hotel a esta opción" dentro de la cotización (pestaña Internacional).
+                            Si el precio que tienes es el <strong>total de un paquete de mayorista</strong> (vuelo + tours + hotel), no lo cargues acá: usa "Agregar hotel a esta opción" dentro de la cotización (pestaña Internacional).
                         </div>
 
                         <!-- ═══ Comercial ═══ -->

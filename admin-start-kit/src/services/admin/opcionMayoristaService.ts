@@ -56,10 +56,6 @@ export const opcionMayoristaService = {
     const response = await httpClient.delete(`/opciones-mayorista/${id}`)
     return response.data
   },
-  async listarHoteles(opcionMayoristaId: number) {
-    const response = await httpClient.get(`/opciones-mayorista/${opcionMayoristaId}/hoteles`)
-    return response.data
-  },
   async crearHotel(opcionMayoristaId: number, data: {
     nombre_hotel: string
     categoria_estrellas?: number
@@ -106,10 +102,6 @@ export const opcionMayoristaService = {
     const response = await httpClient.delete(`/opciones-hotel/${hotelId}/fotos`, { data: { path } })
     return response.data
   },
-  async listarOpcionales(opcionMayoristaId: number) {
-    const response = await httpClient.get(`/opciones-mayorista/${opcionMayoristaId}/opcionales`)
-    return response.data
-  },
   async crearOpcional(opcionMayoristaId: number, data: {
     nombre: string
     precio_por_persona: number
@@ -138,10 +130,6 @@ export const opcionMayoristaService = {
   // ── Tours incluidos con itinerario real (Simulación Panamá, 04-sep-2026) ──
   // Distinto de `incluye` (texto plano): vincula un PaquetePlantilla ya
   // creado (con sus propios pasos de itinerario) a esta opción de mayorista.
-  async listarTours(opcionMayoristaId: number) {
-    const response = await httpClient.get(`/opciones-mayorista/${opcionMayoristaId}/tours`)
-    return response.data
-  },
   // Guardrail (18-sep-2026) — exactamente uno de los 2: paquete_plantilla_id
   // (tour real, comportamiento sin cambios) o nombre+descripcion (ad-hoc,
   // logística de ESTE itinerario — nunca toca el catálogo de Paquetes/Tours).

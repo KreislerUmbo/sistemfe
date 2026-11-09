@@ -15,8 +15,8 @@
             <i class="fas fa-triangle-exclamation"></i>
             <span>
                 Todavía no configuraste una sigla comercial —
-                <router-link :to="{ name: 'agencia.configuracion.index' }">configurala acá</router-link>
-                para que cada tipo te sugiera su prefijo automáticamente. Mientras tanto podés seguir editando el prefijo de cada uno a mano.
+                <router-link :to="{ name: 'agencia.configuracion.index' }">configúrala acá</router-link>
+                para que cada tipo te sugiera su prefijo automáticamente. Mientras tanto puedes seguir editando el prefijo de cada uno a mano.
             </span>
         </div>
 

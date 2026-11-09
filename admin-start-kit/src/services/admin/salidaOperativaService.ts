@@ -85,12 +85,4 @@ export const salidaOperativaService = {
     const response = await httpClient.put(`/salida-vehiculos/${vehiculoId}/reservas`, { reserva_ids: reservaIds })
     return response.data
   },
-  async adjuntarItem(salidaId: number, reservaItemId: number) {
-    const response = await httpClient.post(`/salidas-operativas/${salidaId}/adjuntar-item`, { reserva_item_id: reservaItemId })
-    return response.data
-  },
-  async desengancharItem(salidaId: number, reservaItemId: number) {
-    const response = await httpClient.delete(`/salidas-operativas/${salidaId}/items/${reservaItemId}`)
-    return response.data
-  },
 }

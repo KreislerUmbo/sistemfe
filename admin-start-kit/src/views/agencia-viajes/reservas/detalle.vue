@@ -644,8 +644,8 @@
                         <div v-if="totalAnticiposDisponibles > 0" class="alert alert-warning small mt-2 mb-0 py-2">
                             <i class="fas fa-triangle-exclamation me-1"></i>
                             Esta reserva tiene <strong>{{ moneda }} {{ totalAnticiposDisponibles.toFixed(2) }}</strong> en
-                            anticipos cobrados sin aplicar a ninguna venta. Si cancelás igual, quedarán disponibles en el
-                            módulo de Adelantos — revisá si corresponde reembolsarlos.
+                            anticipos cobrados sin aplicar a ninguna venta. Si cancelas igual, quedarán disponibles en el
+                            módulo de Adelantos — revisa si corresponde reembolsarlos.
                         </div>
                     </div>
                     <div class="modal-footer">

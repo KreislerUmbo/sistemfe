@@ -876,7 +876,7 @@ class AlternativaItemController extends Controller
         if ($item->tour_origen_id !== null) {
             return response()->json([
                 'code' => 422,
-                'message' => 'Este ítem pertenece a un bloque de tour — mové todo el bloque desde su encabezado.',
+                'message' => 'Este ítem pertenece a un bloque de tour — mueve todo el bloque desde su encabezado.',
             ], 422);
         }
 
