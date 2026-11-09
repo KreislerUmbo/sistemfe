@@ -78,9 +78,40 @@ php artisan test   # suite completa, contra PostgreSQL
 ---
 
 ## Resultado
-- **Commits:**
-- **Tests:**
+- **Commits:** en la rama `feat/T-015-catalogo-aerolineas` (backend, panel central, docs).
+- **Tests:** `php artisan test --filter=Aerolinea` → 16 pasan (CA1-CA7, carrera del único, validación,
+  regla de mayúsculas, unir con re-apuntado, reactivar). `RutasAgenciaPermisosTest` en verde y ahora
+  cubre `api/aerolineas*`. Suite completa: 2103 pasan, 1 falla (`VentaDirectaLineasTest` «ca1 dos
+  lineas en dias distintos…»): pasa sola (15/15) y también con mis cambios apartados, o sea es
+  intermitente dentro de la suite completa y no tiene relación con esta tarea. Panel central:
+  `npm run build` (incluye `vue-tsc -b`) sin errores; el panel no tiene script `type-check` aparte.
+  Pantalla real (Playwright, base dev): lista de 10, editar nombre/IATA, rechazo de nombre duplicado,
+  unir (queda «inactiva · unida a …») y desactivar. Datos de prueba borrados al terminar.
 - **Desviaciones de la tarea y por qué:**
+  - Fecha de la migración `2026_11_09_100000` (la tarea decía `2026_10_xx`, ya vencido). Se aplicó en
+    dev con `php artisan migrate --path=…`: el `migrate` a secas falla por otras migraciones (ver Hallazgos).
+  - Códigos IATA iniciales agregados a la lista (LA, H2, JA, 2I, AV, CM, AA, IB, AR; ATSA sin código
+    por no tener uno que pueda afirmar). Ajustar si el usuario quiere otros.
+  - **CA5:** se usa `GiroActual` → 404 en otro giro, el mismo mecanismo de
+    `TraspasoTrabajoController` (T-061); no se inventó un chequeo nuevo. Un permiso solo no corta a un
+    retail (el Propietario los tiene todos).
+  - **Permisos:** `GET` y `POST` con `cotizaciones.editar|reservas.editar` (no el conjunto de lectura
+    de Agencia): el buscador se usa donde se escribe la aerolínea (cotizador y reserva), que ya exigen
+    editar. Si T-016 lo necesita en una pantalla de solo lectura, se amplía el `GET`.
+  - **Regla de mayúsculas del POST:** si el nombre viene TODO en mayúsculas se respeta («LATAM», «KLM»);
+    en cualquier otro caso se aplica `TextoFormatoService` («viva air» → «Viva Air»). Si ya existe, se
+    devuelve el del catálogo, así «latam» nunca degrada a «LATAM». Está comentada en el controller.
+  - El POST responde 201 al crear y 200 con la existente; si la existente fue unida a otra devuelve la
+    vigente a la que apunta. Si la existente está solo desactivada (sin unir) también se devuelve, para
+    no duplicar: decide el Super-Admin si reactivarla.
+  - `creada_por_tenant` sin FK (informativo); `unida_a_id` sí con FK a `aerolineas`.
 
 ## Hallazgos fuera de alcance
--
+- `php artisan migrate` a secas falla en dev: hay 3 migraciones de `menu_items` pendientes en la tabla
+  `migrations` de la base por defecto aunque la tabla ya existe en central (deriva de esquema). No se
+  tocó; verificar que producción no tenga el mismo desfase antes del próximo deploy.
+- `VentaDirectaLineasTest` «ca1 dos lineas en dias distintos…» es intermitente dentro de la suite
+  completa (pasa sola).
+- El panel central no tiene script `type-check` (solo `build` con `vue-tsc -b`); `proceso.md` §3 lo pide.
+- Los tests que escriben en la conexión `central` dependen de que la base `sistemafe_test_migrations`
+  tenga las tablas centrales; `AerolineaCatalogoTest` crea `aerolineas` si falta, como otros tests centrales.
