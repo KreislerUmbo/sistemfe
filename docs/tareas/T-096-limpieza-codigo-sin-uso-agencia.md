@@ -69,8 +69,14 @@ cd admin-start-kit && npm run type-check && npm run build
 ## Resultado
 - **Commits:** 61e93dd
 - **Tests:** `php artisan test --filter=AgenciaViajes`: 1168 pasan, 1 falla (`Fila13Fase1cFacturacionTest::descuento_del_combo…`, el intermitente conocido). `type-check`: 47 errores antes y después. `build`: verde.
-- **Desviaciones de la tarea y por qué:** no se retiraron rutas ni métodos de controller (acordado con el usuario). `salidas-operativas/{id}/adjuntar-item` e `items/{id}` no las llama ninguna pantalla, pero `attachReservaItem/detachReservaItem` tienen tests de guardas (salida fantasma) que se perderían. Los GET de `opciones-mayorista/{id}/hoteles|opcionales|tours` comparten ruta `match([get,post])` con el POST que sí se usa. Por eso `RutasAgenciaPermisosTest` no cambia. Voseo: 19 mensajes corregidos en Agencia; `LimpiarOperacionAgencia` queda para T-099.
+- **Desviaciones de la tarea y por qué:** no se retiraron rutas ni métodos de controller (acordado con el usuario). `salidas-operativas/{id}/adjuntar-item` e `items/{id}` no las llama ninguna pantalla, pero `attachReservaItem/detachReservaItem` tienen tests de guardas (salida fantasma) que se perderían. Los GET de `opciones-mayorista/{id}/hoteles|opcionales|tours` comparten ruta `match([get,post])` con el POST que sí se usa. Por eso `RutasAgenciaPermisosTest` no cambia. Voseo: 19 mensajes corregidos en Agencia.
+  - **Revisión (Opus):** el `grep` de la tarea no cubría todas las formas; quedaban 6 mensajes con
+    voseo: «Contactá» (`ReservaFacturacionController`, la misma frase que «necesitás»), «configurala»
+    (`codigos.vue`), «configurás» (`paquetes/form.vue`), «cancelás» (`reservas/detalle.vue`), «hacelo»
+    (`PromoverProveedorModal.vue`) y «Escribí el ID» (`LimpiarOperacionAgencia`, que no es de T-099:
+    no se retira). Corregidos; tests de los controllers tocados y `type-check` (47) sin cambios.
 
 ## Hallazgos fuera de alcance
 - Rutas sin pantalla que las llame: `adjuntar-item`, `items/{reservaItemId}`, GET de `hoteles/opcionales/tours` y GET `temporadas/{id}/ocurrencias`. Decidir si se retiran junto con sus tests.
-- Voseo fuera de Agencia: `Central/TenantSunatController.php` (líneas 130, 210, 217, «completá»).
+- Voseo fuera de Agencia: `Central/TenantSunatController.php` (líneas 130, 210, 217, «completá») y
+  `helpers/sessionExpiryWatcher.ts:56` («si no continuás», aviso de sesión de todo el sistema).

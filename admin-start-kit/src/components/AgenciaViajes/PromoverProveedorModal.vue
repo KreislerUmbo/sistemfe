@@ -83,7 +83,7 @@
                             <div>Destino tributario: Nacional</div>
                             <div>Tipo de tarifa: Pública</div>
                             <div>Afectación IGV: 10 · Gravado</div>
-                            <div class="fst-italic mt-1">Si hace falta editar estos valores, hacelo después desde el catálogo de Proveedores.</div>
+                            <div class="fst-italic mt-1">Si hace falta editar estos valores, hazlo después desde el catálogo de Proveedores.</div>
                         </div>
                     </div>
                 </div>
