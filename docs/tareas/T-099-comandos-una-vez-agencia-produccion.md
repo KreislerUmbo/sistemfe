@@ -59,10 +59,26 @@ php artisan test --filter=AgenciaViajes
 ---
 
 ## Resultado
-- **Salidas del servidor:**
-- **Commits:**
-- **Tests:**
+- **Salidas del servidor (dakamu, 09-nov-2026, `e9d5e02`):** respaldo previo
+  `/tmp/tenantdakamu-antes-T099.dump` (1.4 MB), sin usar.
+  - `ajustes_grupo_opcion`: 0 y `ajustes_plantilla_tarifa`: 0 (nunca corrieron).
+  - `separar-grupos-duplicados --simular`: «separaría 0 grupo(s) compartido(s)».
+  - `plantillas-a-tarifa-vigente --simular`: «reapuntaría 0 ítem(s) de tour; 0 para revisar a mano».
+  - Backfill fase 1b: a los 4 roles del catálogo no les falta ningún permiso (incluidos los de
+    T-078), y el único rol ajeno con el permiso plano (`Admin Empresario`) ya tiene los 8 granulares.
+  - Ninguno se corrió de verdad: no había nada que cambiar. Las tablas `ajustes_*` siguen en 0.
+- **Commits:** ver la rama `refactor/T-099-retirar-comandos-agencia`.
+- **Tests:** `php artisan test --filter=AgenciaViajes`: 1160 pasan, 1 falla (el intermitente
+  `Fila13Fase1cFacturacionTest::descuento_del_combo…`; solo pasa). `php artisan list`: solo quedan
+  `diagnosticar-tours` y `limpiar-operacion`.
 - **Desviaciones de la tarea y por qué:**
+  - De `T024GrupoHotelesIndependienteTest` solo sale `test_ca4` (probaba el servicio); los otros 4
+    tests son del arreglo de T-024 y se quedan. `T028PlantillasATarifaVigenteTest` sale entero (solo
+    probaba el servicio).
+  - Para sincronizar roles de Agencia en un tenant existente, de ahora en adelante:
+    `php artisan roles:sync-permisos-nuevos 'Database\Seeders\AgenciaViajesRolesSeeder' --tenant=<id>`.
 
 ## Hallazgos fuera de alcance
--
+- `docs/tareas/` todavía tiene los archivos de T-024, T-028 y T-078, que están hechas (el cierre
+  manda borrarlos), y dicen que hay que correr los comandos retirados.
+- dakamu no tiene rol Propietario (último despliegue anterior a `RolPropietario`); ver T-078.

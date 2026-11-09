@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\Log;
 /**
  * Módulo Créditos (00 1.11) — proceso diario por tenant de giro 'creditos' (no archivados):
  * castigo automático al superar dias_para_castigo. Mismo patrón de recorrido que
- * DiagnosticarFechasReserva. Programado en routes/console.php en hora de Lima.
+ * DiagnosticarTours. Programado en routes/console.php en hora de Lima.
  */
 class CreditosEscalamiento extends Command
 {

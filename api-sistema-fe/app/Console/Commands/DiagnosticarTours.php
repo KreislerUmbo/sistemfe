@@ -12,8 +12,7 @@ use Illuminate\Support\Facades\Schema;
 // propuesto, precio cargado, suma de costos y ventas de sus tarifas, si
 // mezcla tipos de IGV, si tiene guía o servicios privados, si está vinculado
 // a mayoristas, y la propuesta de conversión (precio y costo) para que el
-// usuario la decida tour por tour en la sesión 1b. Mismo patrón de tenants
-// que agencia-viajes:diagnosticar-fechas-reserva.
+// usuario la decida tour por tour en la sesión 1b.
 class DiagnosticarTours extends Command
 {
     protected $signature = 'agencia-viajes:diagnosticar-tours
