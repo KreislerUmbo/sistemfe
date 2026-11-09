@@ -57,7 +57,7 @@ class ServicioController extends Controller
         if ($this->existeNombreDuplicado($validado['nombre'])) {
             return response()->json([
                 'code' => 422,
-                'message' => "Ya existe un servicio llamado \"{$validado['nombre']}\" en el catálogo — usá ese en vez de crear uno nuevo.",
+                'message' => "Ya existe un servicio llamado \"{$validado['nombre']}\" en el catálogo — usa ese en vez de crear uno nuevo.",
             ], 422);
         }
 

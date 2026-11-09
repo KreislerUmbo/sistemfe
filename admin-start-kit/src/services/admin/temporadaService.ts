@@ -23,10 +23,6 @@ export const temporadaService = {
   },
 
   // ── Ocurrencias anuales ──────────────────────────────────────────────
-  async listarOcurrencias(temporadaId: number) {
-    const response = await httpClient.get(`/temporadas/${temporadaId}/ocurrencias`)
-    return response.data as { temporada_ocurrencias: TemporadaOcurrencia[] }
-  },
   async crearOcurrencia(temporadaId: number, data: Partial<TemporadaOcurrencia>) {
     const response = await httpClient.post(`/temporadas/${temporadaId}/ocurrencias`, data)
     return response.data

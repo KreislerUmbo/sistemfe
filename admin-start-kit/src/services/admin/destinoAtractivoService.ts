@@ -7,10 +7,6 @@ export const destinoAtractivoService = {
     const response = await httpClient.get('/destinos-atractivos')
     return response.data as { destinos_atractivos: DestinoAtractivo[] }
   },
-  async listarPorTipo(tipo: 'zona' | 'lugar' | 'atractivo') {
-    const response = await httpClient.get('/destinos-atractivos', { params: { tipo } })
-    return response.data as { destinos_atractivos: DestinoAtractivo[] }
-  },
   async crear(data: FormData | Partial<DestinoAtractivo>) {
     const response = await httpClient.post('/destinos-atractivos', data, {
       headers: data instanceof FormData ? { 'Content-Type': 'multipart/form-data' } : {}

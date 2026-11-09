@@ -51,7 +51,7 @@
                         </div>
                         <div v-else class="text-muted small mt-1">
                             Ese servicio no existe en tu catálogo —
-                            <router-link to="/agencia-viajes/destinos" target="_blank">creálo primero en Servicios</router-link>.
+                            <router-link to="/agencia-viajes/destinos" target="_blank">créalo primero en Servicios</router-link>.
                         </div>
                     </template>
                 </div>

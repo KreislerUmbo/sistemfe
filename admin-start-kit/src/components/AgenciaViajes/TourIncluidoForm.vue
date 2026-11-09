@@ -65,7 +65,7 @@
             <option value="internacional">Internacional</option>
         </select>
         <p class="text-muted fst-italic mb-1" style="font-size:11px">
-            Un paquete internacional casi siempre incluye días de tours 100% nacionales (ej. "City Tour en Cusco" dentro de un paquete con vuelo a Panamá) — elegí la categoría real de ESTE tour, no la del paquete completo.
+            Un paquete internacional casi siempre incluye días de tours 100% nacionales (ej. "City Tour en Cusco" dentro de un paquete con vuelo a Panamá) — elige la categoría real de ESTE tour, no la del paquete completo.
         </p>
         </template>
         <div class="mb-1">

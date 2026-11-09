@@ -165,7 +165,7 @@ class AlternativaController extends Controller
         if (($validado['estado'] ?? null) === 'aceptada') {
             return response()->json([
                 'code' => 422,
-                'message' => 'Para aceptar una alternativa usá POST alternativas/{id}/aceptar — este endpoint no crea la reserva asociada.',
+                'message' => 'Para aceptar una alternativa usa POST alternativas/{id}/aceptar — este endpoint no crea la reserva asociada.',
             ], 422);
         }
 

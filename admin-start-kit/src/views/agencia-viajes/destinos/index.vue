@@ -115,7 +115,7 @@
                     <div class="modal-body">
                         <!-- Buscador unificado (29-ago-2026, diagnóstico UX): antes
                              "buscar existente" y "crear nuevo" eran 2 cajas separadas
-                             — un solo combobox ahora: escribís, ves los que ya existen
+                             — un solo combobox ahora: escribes, ves los que ya existen
                              para asociar directo, y "Crear '‹texto›'" siempre aparece
                              al final para el caso de que no exista todavía. -->
                         <div class="mb-3">

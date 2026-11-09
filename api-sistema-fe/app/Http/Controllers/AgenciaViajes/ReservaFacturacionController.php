@@ -121,7 +121,7 @@ class ReservaFacturacionController extends Controller
     // inicializada resuelve null, tratado igual que false (deny-by-default).
     private const MENSAJE_FACTURACION_NO_HABILITADA = 'Este tenant no tiene habilitada la facturación '
         . 'electrónica en la plataforma (modelo "solo operativo"). Contactá a soporte/tu superadmin si '
-        . 'necesitás activarla.';
+        . 'necesitas activarla.';
 
     // reserva.facturacion_externa (§3.2) es el override por-reserva: si está
     // marcada, esta reserva ya se facturó fuera de la plataforma y no debe
