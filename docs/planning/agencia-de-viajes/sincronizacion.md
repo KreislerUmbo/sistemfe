@@ -32,7 +32,7 @@ reflejaron acá.
 ## 2. Cuándo sincronizar (el gatillo)
 
 Sincronizar el Proyecto **solo cuando se cierra una fila de
-`plan-hoja-de-ruta-ejecucion.md`** (merge a `main`) y esa sesión tocó
+`docs/archivo/agencia-de-viajes/plan-hoja-de-ruta-ejecucion.md`** (merge a `main`) y esa sesión tocó
 alguno de los documentos de planificación — no en cada commit, no en
 cada sesión de Claude Code. La mayoría de los commits son código, no
 tocan los `.md` de planificación.
@@ -65,12 +65,12 @@ Cualquier sesión nueva — de Claude Code o de planificación — debe:
    `project_search` o lectura puntual — nunca releer todos los
    documentos completos "por si acaso".
 3. Para el vertical Agencia de Viajes, el punto de entrada operativo es
-   `plan-hoja-de-ruta-ejecucion.md` §0 — dice exactamente qué sección de
+   `docs/archivo/agencia-de-viajes/plan-hoja-de-ruta-ejecucion.md` §0 — dice exactamente qué sección de
    qué documento leer para la siguiente sesión pendiente.
 
 ## 5. Mantenimiento del propio protocolo
 
-Cuando `plan-hoja-de-ruta-ejecucion.md` vuelva a acumular mucho
+Cuando `docs/archivo/agencia-de-viajes/plan-hoja-de-ruta-ejecucion.md` vuelva a acumular mucho
 historial cerrado, archivar el tramo viejo en `historial-archivo.md`
 (mismo patrón usado el 18-ago-2026) y dejar en el documento principal
 solo la tabla de estado + últimas 2-3 entradas.

@@ -22,14 +22,14 @@
 >   (12h, `a18eee6`), `matriz-hoteles-m1-nucleo.md`/`matriz-hoteles-m2-trazabilidad.md`/
 >   `matriz-hoteles-m3-adhoc-local.md` (`962dcd9`/`d82d42a`/`98c4fae`) — el detalle real de
 >   cada sesión (tests, verificación en vivo, bugs encontrados) sigue en
->   `plan-hoja-de-ruta-ejecucion.md` (fila 12a-12h, fila M1-M5) y en
+>   `docs/archivo/agencia-de-viajes/plan-hoja-de-ruta-ejecucion.md` (fila 12a-12h, fila M1-M5) y en
 >   `plan-ejecucion-multidestino-mayoristas.md`/`plan-ejecucion-matriz-hoteles-cotizador.md`,
 >   ambos con su estado ya corregido para reflejar esto.
 > - `PEGAR-EN-CLAUDE-CODE-mejora-pdf-cotizacion-cliente.md` (ejecutado, commit `5b00fdd`) —
 >   el diseño (`plan-mejora-pdf-cotizacion-cliente.md`) queda activo como referencia técnica,
 >   solo se borró el brief de ejecución ya superado.
 > - `plan-hoja-de-ruta-ejecucion-1.md` — confirmado duplicado viejo (un "Guardar como"
->   accidental de una versión del 29-ago-2026 de `plan-hoja-de-ruta-ejecucion.md`, el
+>   accidental de una versión del 29-ago-2026 de `docs/archivo/agencia-de-viajes/plan-hoja-de-ruta-ejecucion.md`, el
 >   documento vigente llega hasta el 03-sep-2026) — sin contenido único, nada que preservar.
 >
 > `plan-ejecucion-multidestino-mayoristas.md` y `plan-fix-moneda-cotizador.md` NO se
@@ -45,18 +45,18 @@
 > mergeadas (fix de fechas 11r/11s, guardia tributario y facturación
 > múltiple 11u/11v) — sus archivos originales fueron **borrados**, no solo
 > resumidos, porque su contenido ya está capturado (más comprimido) en
-> `plan-hoja-de-ruta-ejecucion.md` §3 y en `CLAUDE.md`. Ver la tabla nueva
+> `docs/archivo/agencia-de-viajes/plan-hoja-de-ruta-ejecucion.md` §3 y en `CLAUDE.md`. Ver la tabla nueva
 > al final de este documento. Los que siguen activos hoy:
-> `plan-hoja-de-ruta-ejecucion.md` (punto de entrada), 
+> `docs/archivo/agencia-de-viajes/plan-hoja-de-ruta-ejecucion.md` (punto de entrada), 
 > `plan-modulo-cotizaciones-reservas.md` (todavía referenciado por filas
 > abiertas 11e/11f/11g/11d), `plan-modulo-codigos-numeracion.md` (módulo
 > 12, todavía sin construir), `plan-modulo-planes-acceso.md` (tiene
 > trabajo real marcado como pendiente, no cerrado del todo — ver su propio
 > texto, sección "Recomendación"), `sincronizacion.md`, y los 2 briefs
-> todavía sin ejecutar (`PEGAR-EN-CLAUDE-CODE-temporada-plantilla.md`,
+> todavía sin ejecutar (`docs/archivo/agencia-de-viajes/PEGAR-EN-CLAUDE-CODE-temporada-plantilla.md`,
 > `PEGAR-EN-CLAUDE-CODE-facturacion-externa-tenant.md`).
 >
-> Archivo creado el 18-ago-2026 al recortar `plan-hoja-de-ruta-ejecucion.md`
+> Archivo creado el 18-ago-2026 al recortar `docs/archivo/agencia-de-viajes/plan-hoja-de-ruta-ejecucion.md`
 > (ver esa entrada de historial en ese mismo documento). Contiene el
 > historial detallado completo de la sección 3 ("Historial de
 > actualizaciones") — incluidas las 3 entradas que en el documento
@@ -67,7 +67,7 @@
 > o memoria histórica.
 >
 > Este archivo NO se actualiza en cada sesión nueva. Solo se le agregan
-> bloques nuevos cuando el historial de `plan-hoja-de-ruta-ejecucion.md`
+> bloques nuevos cuando el historial de `docs/archivo/agencia-de-viajes/plan-hoja-de-ruta-ejecucion.md`
 > §3 vuelve a crecer demasiado y toca archivar otro tramo.
 
 | Fecha | Cambio |
@@ -103,7 +103,7 @@
 Los 4 documentos siguientes fueron **borrados** (no solo resumidos) el
 20-ago-2026, porque describían el diseño de datos original del vertical
 — todo ya construido, y ya superado como referencia por
-`plan-hoja-de-ruta-ejecucion.md` (qué se construyó realmente, con
+`docs/archivo/agencia-de-viajes/plan-hoja-de-ruta-ejecucion.md` (qué se construyó realmente, con
 commits) y `CLAUDE.md` (narrativa completa). Resumen de cada uno:
 
 - **`plan-general-vertical-agencia-viajes.md`** (275 líneas): documento
@@ -145,7 +145,7 @@ Los 4 archivos `PEGAR-EN-CLAUDE-CODE-*.md` siguientes fueron
 **borrados** — cada uno era el brief de "pegar en una sesión nueva" para
 una fila ya cerrada, mergeada y (en el caso de 11u/11v) ya pusheada a
 `origin/main`. Su narrativa completa (hallazgos, decisiones, "Estado
-real al cierre") ya está capturada en `plan-hoja-de-ruta-ejecucion.md`
+real al cierre") ya está capturada en `docs/archivo/agencia-de-viajes/plan-hoja-de-ruta-ejecucion.md`
 §3 (entradas de fecha 18/19/20-ago-2026) y en `CLAUDE.md` — no hay
 pérdida de información, solo se dejó de tener el mismo contenido
 duplicado en un tercer lugar.
@@ -169,7 +169,7 @@ ejecucion.md` §1 y §2 para el detalle de ramas).
 ## facturación externa por tenant (11w) — 12/20-ago-2026, agregado 25-ago-2026
 
 Cuatro piezas que quedaron documentadas solo en `CLAUDE.md`, sin fila propia en
-`plan-hoja-de-ruta-ejecucion.md` — movidas acá al comprimir ese documento (25-ago-2026),
+`docs/archivo/agencia-de-viajes/plan-hoja-de-ruta-ejecucion.md` — movidas acá al comprimir ese documento (25-ago-2026),
 sin pérdida de información:
 
 - **Ítem manual flexible + promover a proveedor** (Sesión 11q, 2026-08-12, commit

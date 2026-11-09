@@ -1,11 +1,11 @@
 # Brief para Claude Code — Fila 13, fase 1b: el tour en la cotización
 
-> **YA EJECUTADO** — fase 1b hecha y unida a `main` (`2f6480b`). Se conserva como registro del pedido; el estado vigente está en la fila 13 de `plan-hoja-de-ruta-ejecucion.md` y en `plan-tours-venta-simple-costo-real.md` §6. **No volver a pegar.**
+> **YA EJECUTADO** — fase 1b hecha y unida a `main` (`2f6480b`). Se conserva como registro del pedido; el estado vigente está en la fila 13 de `docs/archivo/agencia-de-viajes/plan-hoja-de-ruta-ejecucion.md` y en `plan-tours-venta-simple-costo-real.md` §6. **No volver a pegar.**
 > Pega este archivo completo al inicio de una sesión nueva de Claude Code sobre el repo real.
 > Redactado el 14-oct-2026 y **revisado con el usuario el mismo día contra el código** (listo
 > para ejecutar). La fase 1 se partió en tres sesiones: **1a** (hecha), **1b** (esta) y **1c**
 > (facturación por pasajero, mezcla de IGV en la factura y conversión de tours; borrador en
-> `PEGAR-EN-CLAUDE-CODE-13-fase1c-facturacion-conversion.md`).
+> `docs/archivo/agencia-de-viajes/PEGAR-EN-CLAUDE-CODE-13-fase1c-facturacion-conversion.md`).
 
 ## 0. Lectura obligatoria antes de tocar código
 
@@ -127,4 +127,4 @@
 ## 7. Cierre
 - Plan §6: marcar la 1b y anotar hallazgos. Hoja de ruta: fila 13 e historial.
 - Memoria: `project_precio_tour_por_persona_y_endoso`.
-- Terminar el brief de la **1c** (`PEGAR-EN-CLAUDE-CODE-13-fase1c-facturacion-conversion.md`) con lo aprendido.
+- Terminar el brief de la **1c** (`docs/archivo/agencia-de-viajes/PEGAR-EN-CLAUDE-CODE-13-fase1c-facturacion-conversion.md`) con lo aprendido.

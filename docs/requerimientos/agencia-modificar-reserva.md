@@ -8,7 +8,7 @@
 | **Estado del documento** | aprobado el 24-oct-2026; ya no se edita (ver §3) |
 
 > Primer requerimiento escrito con `docs/proceso.md` (piloto). Antecedentes: fila F4 de
-> `docs/planning/agencia-de-viajes/plan-hoja-de-ruta-ejecucion.md` (etapa 1 hecha el 23-oct:
+> `docs/archivo/agencia-de-viajes/plan-hoja-de-ruta-ejecucion.md` (etapa 1 hecha el 23-oct:
 > vínculo `reserva_pasajeros.cotizacion_pasajero_id` y "quitar pasajero" bloqueado) y
 > `plan-modulo-cotizaciones-reservas.md` §4.3.
 

@@ -1,12 +1,12 @@
 # Brief para Claude Code — Fila 13, fase 1c: facturar la línea de tour y convertir los tours
 
-> **YA EJECUTADO** — fase 1c hecha y unida a `main` (`93a7eb5`). Se conserva como registro del pedido; el estado vigente está en la fila 13 de `plan-hoja-de-ruta-ejecucion.md` y en `plan-tours-venta-simple-costo-real.md` §6. **No volver a pegar.**
+> **YA EJECUTADO** — fase 1c hecha y unida a `main` (`93a7eb5`). Se conserva como registro del pedido; el estado vigente está en la fila 13 de `docs/archivo/agencia-de-viajes/plan-hoja-de-ruta-ejecucion.md` y en `plan-tours-venta-simple-costo-real.md` §6. **No volver a pegar.**
 > Redactado el 14-oct-2026 y **completado al cerrar la 1b** (mismo día) con lo que esa sesión
 > aprendió. No ejecutar antes de que la 1b esté en `main`. Tercera y última parte de la fase 1.
 
 ## 0. Lectura obligatoria
 1. `plan-tours-venta-simple-costo-real.md`: §6 (bloques "Fase 1a — HECHA" y "Fase 1b — HECHA", con sus hallazgos), N5, N14, §3.3, §3.11 y §5c (C1).
-2. `PEGAR-EN-CLAUDE-CODE-13-fase1b-tour-cotizacion.md` §1, decisiones D1-D3.
+2. `docs/archivo/agencia-de-viajes/PEGAR-EN-CLAUDE-CODE-13-fase1b-tour-cotizacion.md` §1, decisiones D1-D3.
 3. `ReservaFacturacionController`: leer el docblock completo antes de tocarlo. Explica por qué hoy nunca se parte una línea entre dos comprobantes y cómo funciona la selección por pasajero.
 4. `TourLineaService` (1b): `calcular()`, `repartir()`, `recalcularUnidad()` y la forma de `tour_linea`.
 

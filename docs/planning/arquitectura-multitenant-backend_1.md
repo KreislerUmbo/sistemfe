@@ -62,7 +62,7 @@ nunca corre `tenant/verticals/*`, para ningún tenant, sin importar su
 --path=database/migrations/tenant/verticals/agencia-viajes --realpath`
 contra cada tenant, a mano) sin que nadie notara que el mecanismo
 automático estaba roto — confirmado real en `agencia-demo` al cerrar la
-Sesión 11b4b (ver `plan-hoja-de-ruta-ejecucion.md`).
+Sesión 11b4b (ver `docs/archivo/agencia-de-viajes/plan-hoja-de-ruta-ejecucion.md`).
 
 Es distinto del camino de **provisioning inicial**
 (`TenantProvisioningService::provision()` → `migrarVertical()`), que sí

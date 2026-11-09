@@ -1,6 +1,6 @@
 # Recorrido: condición de pago (contado o crédito) al facturar una reserva y en el PDF
 
-24-oct-2026, fila **F5** de `docs/planning/agencia-de-viajes/plan-hoja-de-ruta-ejecucion.md`.
+24-oct-2026, fila **F5** de `docs/archivo/agencia-de-viajes/plan-hoja-de-ruta-ejecucion.md`.
 
 ---
 

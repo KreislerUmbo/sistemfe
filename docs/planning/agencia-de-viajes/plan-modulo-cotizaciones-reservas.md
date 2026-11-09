@@ -5,7 +5,7 @@
 > `historial-archivo.md`).
 > Estado: **modelo de datos y motor de cotización/reserva/facturación
 > completos y en producción** (Sesiones 0-11v, ver
-> `plan-hoja-de-ruta-ejecucion.md`). Este documento sigue activo porque
+> `docs/archivo/agencia-de-viajes/plan-hoja-de-ruta-ejecucion.md`). Este documento sigue activo porque
 > las filas todavía abiertas (11e/11f/11g/11d — reporte operativo,
 > recordatorios, pago a proveedor) referencian sus secciones §4.6, §8,
 > §8bis directamente.
@@ -770,7 +770,7 @@ diseña en este documento.
 matriz de hotel, ver `plan-modulo-tours-catalogo.md` §7 (historial) y
 `TODO.md` para el detalle. **"Partir de un paquete_plantilla al armar una
 alternativa" (el párrafo de arriba) todavía NO está construido** — es la
-fila 11b3 de `plan-hoja-de-ruta-ejecucion.md`, separada a propósito
+fila 11b3 de `docs/archivo/agencia-de-viajes/plan-hoja-de-ruta-ejecucion.md`, separada a propósito
 porque no es una copia 1:1 (precio/cantidad/modo_precio se resuelven en
 vivo, e ítems de guía no tienen equivalente en `alternativa_items` hoy).
 
@@ -961,7 +961,7 @@ pagos, itinerarios funcionan igual).
 
 **Nota 20-ago-2026:** pese al nombre, "Venta directa" arma la cadena de
 cotización/reserva completa — no crea ningún `Sale` real. El nombre es
-engañoso (confirmado en la revisión que encontró el gap de §9/`plan-hoja-de-ruta-ejecucion.md` fila 11u); la facturación real de una reserva creada por esta vía pasa por el mismo endpoint nuevo de facturación (fila 11u), como cualquier otra reserva.
+engañoso (confirmado en la revisión que encontró el gap de §9/`docs/archivo/agencia-de-viajes/plan-hoja-de-ruta-ejecucion.md` fila 11u); la facturación real de una reserva creada por esta vía pasa por el mismo endpoint nuevo de facturación (fila 11u), como cualquier otra reserva.
 
 ### 4.2 Cancelación y reembolso (definido — implementación en Fase 2)
 ```
@@ -1039,7 +1039,7 @@ cliente primero**, el vendedor solo ejecuta lo que el cliente pidió:
    simultáneamente, cada una cubriendo distintos ítems.
 
 **Estado real 20-ago-2026:** estos 2 caminos siguen siendo diseño, no
-implementación — la fila 11u (`plan-hoja-de-ruta-ejecucion.md`) construye
+implementación — la fila 11u (`docs/archivo/agencia-de-viajes/plan-hoja-de-ruta-ejecucion.md`) construye
 primero el caso base (reserva sin facturar → un Sale único), y bloquea
 explícitamente el intento de facturar una reserva que ya tiene una venta
 activa, en vez de resolver estos 2 caminos como efecto colateral. Sesión
@@ -1067,7 +1067,7 @@ inventar nada nuevo:
 pagadores — confirmado con el usuario como caso **frecuente en grupos
 reales**, no un edge case (ej. grupo de 20 a Cusco: 5 boleta, 10 factura
 a una empresa, 3 a otra, cada uno con su propio texto de sustentación) —
-quedó cerrado en la fila **11v** de `plan-hoja-de-ruta-ejecucion.md`,
+quedó cerrado en la fila **11v** de `docs/archivo/agencia-de-viajes/plan-hoja-de-ruta-ejecucion.md`,
 brief en `PEGAR-EN-CLAUDE-CODE-facturar-reserva-grupo-multiples-pagadores.md`
 (ver su §7 "Estado real al cierre" para el detalle completo).
 
@@ -1348,7 +1348,7 @@ lo de dinero pasa por ahí.
 > revisión crítica: aceptar una alternativa solo crea la `reserva` — el
 > `Sale` no se genera ni se enlaza automáticamente en ningún punto del
 > flujo actual. Eso es exactamente el gap que cierra la fila 11u de
-> `plan-hoja-de-ruta-ejecucion.md` (facturación explícita, en un paso
+> `docs/archivo/agencia-de-viajes/plan-hoja-de-ruta-ejecucion.md` (facturación explícita, en un paso
 > posterior y separado, no automática al aceptar).
 
 Esto **reemplaza** lo que se había definido antes como `reserva_pagos`
@@ -1422,7 +1422,7 @@ itinerarios siguen leyendo de `reserva_items` directamente, nunca de la
 factura (la factura es solo una representación distinta de los mismos
 datos, no la fuente de verdad operativa).
 
-**Implementación real: ver `plan-hoja-de-ruta-ejecucion.md` fila 11u**
+**Implementación real: ver `docs/archivo/agencia-de-viajes/plan-hoja-de-ruta-ejecucion.md` fila 11u**
 (`GET reservas/{id}/preparar-factura` + `POST reservas/{id}/facturar`,
 brief completo en `PEGAR-EN-CLAUDE-CODE-facturar-reserva.md`).
 
@@ -1704,7 +1704,7 @@ los recordatorios pendientes de todos los vendedores en una sola vista
 
 - **[RESUELTO 20-ago-2026 — era el hallazgo más grave]** No existía
   ningún camino para facturar una reserva (§6.2/§4.3 documentados pero
-  nunca implementados). Cerrado en `plan-hoja-de-ruta-ejecucion.md` fila
+  nunca implementados). Cerrado en `docs/archivo/agencia-de-viajes/plan-hoja-de-ruta-ejecucion.md` fila
   11u (`ReservaFacturacionController::store()`, `POST
   reservas/{id}/facturar`, alcance mínimo viable: pendiente de cobro,
   solo contado, líneas agrupadas por categoría, guard anti-doble-
@@ -1712,7 +1712,7 @@ los recordatorios pendientes de todos los vendedores en una sola vista
   `agencia-demo`). **Actualizado 20-ago-2026 (mismo día, trabajo
   posterior, sin commitear todavía)**: el guardia tributario (ver punto
   siguiente) y varios pagadores (§4.4) quedaron cerrados — ver
-  `CLAUDE.md` y `plan-hoja-de-ruta-ejecucion.md` filas 11u/11v. Sigue
+  `CLAUDE.md` y `docs/archivo/agencia-de-viajes/plan-hoja-de-ruta-ejecucion.md` filas 11u/11v. Sigue
   abierto, para sesiones futuras sin número asignado todavía: los 2
   caminos de §4.3 (reserva ya facturada + servicio nuevo), aplicar
   `reserva_anticipos` automáticamente al facturar (§4.5), crédito/cuotas
@@ -1802,7 +1802,7 @@ los recordatorios pendientes de todos los vendedores en una sola vista
 
 | Fecha | Cambio |
 |---|---|
-| 20-ago-2026 | **Gap crítico encontrado en revisión externa del código ya construido (no solo lectura del plan): no existe forma de facturar una reserva.** `reserva_ventas`/`sale_detail_items` existen como tablas/modelos desde la Sesión 9, pero ningún controller las usa — `ReservaVenta` solo aparece como guard en `ReservaController::cancelar()`, `SaleController` no tiene noción de `reserva_id`, `VentaDirectaController` nunca crea un `Sale` real pese al nombre. Se agrega fila 11u a `plan-hoja-de-ruta-ejecucion.md` (prioridad inmediata, alcance mínimo viable acordado con el usuario), brief completo en `PEGAR-EN-CLAUDE-CODE-facturar-reserva.md`. Se corrigen/anotan las secciones que asumían que este flujo ya existía: §4.1 (nota sobre "Venta Directa"), §4.3 (2 caminos quedan como diseño, no implementación), §4.4 (varios pagadores fuera del alcance mínimo), §4.5 (anticipos solo informativos por ahora), §6 (corrección explícita: aceptar alternativa NO genera/enlaza un Sale hoy), §6.2 (referencia a la implementación real), §9 (entrada resuelta). |
+| 20-ago-2026 | **Gap crítico encontrado en revisión externa del código ya construido (no solo lectura del plan): no existe forma de facturar una reserva.** `reserva_ventas`/`sale_detail_items` existen como tablas/modelos desde la Sesión 9, pero ningún controller las usa — `ReservaVenta` solo aparece como guard en `ReservaController::cancelar()`, `SaleController` no tiene noción de `reserva_id`, `VentaDirectaController` nunca crea un `Sale` real pese al nombre. Se agrega fila 11u a `docs/archivo/agencia-de-viajes/plan-hoja-de-ruta-ejecucion.md` (prioridad inmediata, alcance mínimo viable acordado con el usuario), brief completo en `PEGAR-EN-CLAUDE-CODE-facturar-reserva.md`. Se corrigen/anotan las secciones que asumían que este flujo ya existía: §4.1 (nota sobre "Venta Directa"), §4.3 (2 caminos quedan como diseño, no implementación), §4.4 (varios pagadores fuera del alcance mínimo), §4.5 (anticipos solo informativos por ahora), §6 (corrección explícita: aceptar alternativa NO genera/enlaza un Sale hoy), §6.2 (referencia a la implementación real), §9 (entrada resuelta). |
 | 22-jul-2026 | Primera versión consolidada: proveedores/tarifas, alternativas, reservas, itinerarios (2 niveles), catálogo de destinos |
 | 22-jul-2026 | Sesión de maduración (parte 1): `proveedor_tarifa_id` nullable en `alternativa_items`; destino como filtro sugerido no bloqueante; flujo real de compra con mayoristas + `opcion_mayorista`; asignación de guías; plazo de limpieza configurable; moneda y tipo de cambio con historial y origen dia/agencia |
 | 22-jul-2026 | Sesión de maduración (parte 2): integración con el core de ventas existente (`Sale`/`SaleController`/Crédito/Caja/Adelantos) reemplazando `reserva_pagos`; productos genéricos por tipo de servicio con `controla_stock=false`; agrupación de líneas de factura por tipo de servicio con restricción tributaria (`tip_afe_igv`, `destino_tributario`); venta directa (atajo de flujo); cupos/capacidad (15 con vuelo / 50 grupo, advertencia no bloqueante); `salidas_mayorista` (catálogo de paquetes armados en fechas fijas); vouchers para proveedores (WhatsApp/email simples); política de cancelación/reembolso definida para Fase 2; vencimiento de cotización configurable; documentos del pasajero reutilizables por perfil con almacenamiento privado y alerta de vencimiento (default 6 meses); `paquetes_plantilla` como base para futuro portal web (proyecto aparte, próximo año) |
@@ -1822,8 +1822,8 @@ los recordatorios pendientes de todos los vendedores en una sola vista
 | 28/29-jul-2026 | **RETROFIT sobre `cotizaciones` (tabla mergeada en Sesión 7a):** `fecha_viaje_tentativa` (una sola fecha) reemplazada por `fecha_viaje_desde`/`fecha_viaje_hasta` (ambas nullable, con `after_or_equal` cuando ambas están cargadas) — el campo original no alcanzaba para cotizar con fecha de ida y vuelta conocidas. Confirmado antes de migrar: ningún tenant real (sandbox/umbo/negocio2/umbo-archivado) tenía todavía la tabla `cotizaciones` (rama sin mergear), sin datos que backfillear en la práctica — el backfill de la migración queda igual como red de seguridad. |
 | 29-jul-2026 | **Sesión 11b2 — §3.7 implementado**: CRUD admin de paquetes/tours de plantilla construido (`feature/sesion-11b2-paquetes-plantilla`), cierra el hueco que había quedado desde Sesión 6 (tablas/modelos sin API/pantalla). Se agregan a la hoja de ruta las filas 11b2 (esta) y **11b3** (conectar al cotizador — "cargar desde plantilla", todavía sin construir, con las 3 diferencias reales frente a una copia 1:1 ya documentadas ahí). Detalle completo, incluido un bug real (`codigo` sin validar `unique()`, tiraba 500 en vez de 422), en `TODO.md`. |
 | 29-jul-2026 | Confirmado con el usuario, sin cambio de estructura: el costo de un guía va mezclado dentro del precio de otro servicio (el tour que guía) — la asignación (`guia_id` en `reserva_items`, §5.3) es puramente operativa (quién opera, no qué se cobra). NO se agrega un 5to `origen_tipo='guia'` en `alternativa_items`; el guía no es un ítem cobrable con línea propia en el resumen de la reserva. Surgió al revisar un mockup de resumen de reserva que mostraba al guía como línea propia con precio — descartado. |
-| 30-jul-2026 (frontend) | **Sesión 11b4b — frontend de `paquete_combo`**: extiende `paquetes/form.vue`/`detalle.vue`/`index.vue` (no pantallas nuevas). Verificado con Playwright real contra `agencia-demo`: selector de tipo, combo con 2 tours agregados vía "Tour completo", acordeón agrupado por día con lazy-load, itinerario derivado con offset correcto, preview de precio 100% cliente (confirmado sin POST de por medio) + guardado real, bloqueo de desactivación con modal + `componentes_inactivos`, listado con badges/conteo. 0 errores de consola/red. Ver historial de `plan-hoja-de-ruta-ejecucion.md` (fila 11b4b) para el detalle completo, incluido un hallazgo real: `tenants:migrate` no corre migraciones de `tenant/verticals/`, hubo que aplicarlas a mano contra `agencia-demo` antes de poder probar. |
+| 30-jul-2026 (frontend) | **Sesión 11b4b — frontend de `paquete_combo`**: extiende `paquetes/form.vue`/`detalle.vue`/`index.vue` (no pantallas nuevas). Verificado con Playwright real contra `agencia-demo`: selector de tipo, combo con 2 tours agregados vía "Tour completo", acordeón agrupado por día con lazy-load, itinerario derivado con offset correcto, preview de precio 100% cliente (confirmado sin POST de por medio) + guardado real, bloqueo de desactivación con modal + `componentes_inactivos`, listado con badges/conteo. 0 errores de consola/red. Ver historial de `docs/archivo/agencia-de-viajes/plan-hoja-de-ruta-ejecucion.md` (fila 11b4b) para el detalle completo, incluido un hallazgo real: `tenants:migrate` no corre migraciones de `tenant/verticals/`, hubo que aplicarlas a mano contra `agencia-demo` antes de poder probar. |
 | 30-jul-2026 | **Sesión 11b4 — REEMPLAZA el diseño original de esta fila** (tabla `tours` separada + `proveedor_tarifas.tour_id`, nunca implementado). Diseño nuevo: `paquetes_plantilla.tipo` (`tour_simple`\|`paquete_combo`) — un `paquete_combo` agrupa 2+ tours_simple vía `paquete_plantilla_items.paquete_plantilla_hijo_id` (mutuamente excluyente con `proveedor_tarifa_id`/`guia_tarifa_id`, profundidad máxima combo→tour_simple→ítems). Precio/itinerario del combo calculados en vivo (`ComboExplosionService`/`PriceEngineService`), nunca guardados stale. `tour_origen_id` nuevo en `alternativa_items`/`reserva_items` para agrupación visual "Día 1/Día 2". `es_referencial` nuevo en `proveedores`/`guias`. Ver §3.7 arriba para el detalle completo, incluidos 3 gaps reales documentados ahí (reporte operativo, bloqueo de pago a proveedor, disparador de recordatorio automático — los tres referenciaban mecanismos que el prompt de esta sesión asumía ya construidos pero que no existen en el código; confirmado por grep antes de escribir nada, no implementados en esta sesión). 17/17 tests verdes (`tests/Feature/AgenciaViajes/PaqueteComboTest.php`, primer test de todo el vertical Agencia de Viajes) contra Postgres real (`sistemafe_test_migrations`, transacción por test revertida), incluidas las 6 migraciones nuevas verificadas con `migrate`+`rollback`+`migrate` real. Solo backend — frontend es sesión aparte (11b4b). |
-| 03-ago-2026 | **Sesión ad-hoc de UX, rama `feature/ux-catalogo-proveedores-tours`, mergeada a `main` (`c15890d`) — no es fila de `plan-hoja-de-ruta-ejecucion.md`.** Alcance acotado al tab "Incluye" de `tour_simple` (§3.7) — no toca `paquete_combo`, que ya tenía su propia tarjeta de precio desde 11b4b. Agrega precio visible (`precio_venta_adulto` del proveedor, o costo/margen del guía resuelto en el cliente con la misma fórmula porcentaje/fijo de `guia_tarifas`) en el picker de biblioteca y en cada línea de la lista de ítems agregados, más un bloque de totales (costo/venta/margen resultante, mismo semáforo 20% que el resto del vertical) calculado 100% en el cliente a partir de los ítems ya cargados — sin llamada nueva al backend, sin persistir nada. Suma simple entre ítems de distinta moneda (PEN/USD) sin conversión — mismo criterio ya aceptado en el "Precio del combo" de 11b4b (`preview.costoTotal`, ver arriba), no una regresión nueva. Ver `plan-modulo-proveedores.md` (historial, misma fecha) para la mitad de esta sesión que tocó el modal de tarifa. |
+| 03-ago-2026 | **Sesión ad-hoc de UX, rama `feature/ux-catalogo-proveedores-tours`, mergeada a `main` (`c15890d`) — no es fila de `docs/archivo/agencia-de-viajes/plan-hoja-de-ruta-ejecucion.md`.** Alcance acotado al tab "Incluye" de `tour_simple` (§3.7) — no toca `paquete_combo`, que ya tenía su propia tarjeta de precio desde 11b4b. Agrega precio visible (`precio_venta_adulto` del proveedor, o costo/margen del guía resuelto en el cliente con la misma fórmula porcentaje/fijo de `guia_tarifas`) en el picker de biblioteca y en cada línea de la lista de ítems agregados, más un bloque de totales (costo/venta/margen resultante, mismo semáforo 20% que el resto del vertical) calculado 100% en el cliente a partir de los ítems ya cargados — sin llamada nueva al backend, sin persistir nada. Suma simple entre ítems de distinta moneda (PEN/USD) sin conversión — mismo criterio ya aceptado en el "Precio del combo" de 11b4b (`preview.costoTotal`, ver arriba), no una regresión nueva. Ver `plan-modulo-proveedores.md` (historial, misma fecha) para la mitad de esta sesión que tocó el modal de tarifa. |
 | 14-ago-2026 | **3 gaps reales del cotizador, señalados por el usuario en conversación (rama `fix/cotizador-pasajeros-fechas-nombre-alternativa`, entregada como parche fuera de un entorno con acceso a Postgres/tenant real — pendiente de aplicar y verificar de punta a punta por el usuario antes de mergear).** (1) Aumentar/quitar pasajeros de una cotización ya creada: el endpoint `PUT cotizaciones/{id}/pasajeros` existía desde Sesión 7a pero nunca se conectó a ninguna pantalla. Al conectarlo se encontró que además borraba y recreaba TODOS los `cotizacion_pasajeros` en cada guardado (ids nuevos siempre), dejando `alternativa_items.pax_incluidos` con ids colgando en silencio — ahora es diff por id, solo toca lo que realmente cambió. También se encontró que `modo_precio='por_persona'` congela el precio al crear el ítem y nada lo recalculaba después si la cantidad de pasajeros cambiaba — ahora se recalcula automático solo para el caso de alta confianza (`origen_tipo=proveedor` con una `proveedor_tarifa` real detrás, alternativa `borrador`/`enviada`, mismo cálculo exacto que `AlternativaItemController::crearItemProveedor()`); el resto (pasaje_aereo, mayorista, guía, o un ítem sin tarifa real detrás) no se adivina, queda listado en `items_para_revisar` para reprecio manual. Bloqueado por completo si la cotización ya tiene una alternativa `aceptada` (reserva real generada — tocarla después ya no cambia la reserva, solo la desincroniza en silencio). (2) Fechas de viaje que se guardaban pero no se mostraban al reabrir el formulario de edición: el backend las devuelve como timestamp ISO completo y `<input type="date">` necesita `YYYY-MM-DD` exacto — sin el recorte el campo quedaba en blanco aunque la fecha sí estaba guardada (visible correctamente en el badge de arriba, que sí recorta bien vía `formatFecha()`). (3) Nombre de una alternativa ya creada no se podía editar: el input solo existía en el form de creación; el backend (`PUT alternativas/{id}`) ya aceptaba `nombre` desde siempre, solo faltaba el control en pantalla (ícono de lápiz en el pill, mismo patrón que el de cabecera). Del lado de reservas ya confirmadas quedó un gap real relacionado pero fuera de alcance de esta sesión, documentado en la sección 9: agregar un pasajero nuevo a una reserva ya aceptada. |
 | 17-ago-2026 | **Sesión de análisis crítico del modelo ya construido** (revisión cruzada entre el documento y el código real, no solo lectura del plan). Se agrega requisito explícito a §3.7/11b3: al cargar un ítem desde `paquete_plantilla_items`/`items_incluidos` hacia una `alternativa_items` real, debe re-resolverse la tarifa vigente por `temporada_ocurrencias` según la fecha real de viaje — no copiar literalmente el `proveedor_tarifa_id`/`guia_tarifa_id` fijo de la plantilla, que solo refleja temporada regular. Se documenta en §9 como pendiente NO prioritario (confirmado con el usuario) la generalización de `salidas_mayorista` para cubrir salidas fijas con proveedor local/nacional ya comprometido para una fecha (chárter/grupo cerrado fuera de mayoristas) — recomendación: quitarle a `salidas_mayorista` la dependencia de proveedor tipo "mayorista" en vez de crear una tabla paralela, reaprovechando `cupo_ocupado`/liberación de cupo ya resueltos ahí. |

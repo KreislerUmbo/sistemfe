@@ -6,7 +6,7 @@
 > confirma que la moneda sigue a nivel de `Alternativa` completa, no de
 > destino/tramo. Ninguno de los 5 puntos de este plan cambia por eso.
 > Puede ejecutarse ya — falta escribir el brief de sesión (no tiene
-> número asignado en `plan-hoja-de-ruta-ejecucion.md` todavía).
+> número asignado en `docs/archivo/agencia-de-viajes/plan-hoja-de-ruta-ejecucion.md` todavía).
 > **Confirmado 11-sep-2026 contra `git log`: el punto 4 (validación de
 > sanidad) ya quedó resuelto, pero NO como parte de este plan** — se
 > construyó como prerequisito del módulo nuevo "Tipo de Cambio SUNAT/SBS"
