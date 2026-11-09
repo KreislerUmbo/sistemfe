@@ -8,7 +8,7 @@
 
 Cada línea: ID · qué · estado · depende de · rama o commit. El detalle está en
 `docs/tareas/T-…md` (se borra al cerrar; para una tarea hecha, el commit es la referencia).
-Próximo ID libre: **T-092**.
+Próximo ID libre: **T-098**.
 
 ## Orden de construcción (27-oct-2026)
 
@@ -29,7 +29,9 @@ Próximo ID libre: **T-092**.
 | 5 | ~~T-063 → T-078 → T-033 → T-050 → T-051 → T-052 → T-059 → T-061 → T-053~~ hechas 03-nov (recorridos 20 a 25) | Menú nuevo y CRM base (T-033 antes: "Nueva consulta" crea la cotización con su alternativa) |
 | 5b | ~~T-081~~ hecha 03-nov (recorrido 27) | Va antes de la ola 6 (03-nov): cada tenant nace con el dueño como Super-Admin, que es la cuenta de soporte; afecta a todos los giros y a cada alta nueva |
 | 6 | ~~T-041~~ hecha 03-nov (recorrido 26) → ~~T-040 → T-082~~ hechas 03-nov (recorrido 28) → ~~T-055~~ hecha 03-nov (recorrido 29) → ~~T-057~~ hecha 03-nov (recorrido 30) → ~~T-058~~ hecha 04-nov (recorrido 31) → ~~T-077~~ hecha 04-nov (recorrido 32) → ~~T-044~~ hecha 04-nov (recorrido 33) → ~~T-017~~ hecha 04-nov (recorrido 34) → ~~T-018~~ hecha 04-nov (recorrido 35) | Operación diaria de Agencia |
+| 7a | T-092 → T-093 → T-096 → T-097 | Auditoría del vertical Agencia (09-nov): va antes de T-091. Huecos de seguridad chicos y un test que impida una ruta sin permiso, para que lo que sigue (T-091, T-048, ola 8) no los arrastre; después, limpieza de código sin uso y documentos con estado duplicado |
 | 7 | ~~T-045~~ hecha 04-nov (recorrido 37) → ~~T-085~~ hecha 05-nov (recorrido 38) → ~~T-046~~ hecha 05-nov (recorrido 39) → ~~T-086~~ hecha 05-nov (recorrido 40) → ~~T-047~~ hecha 05-nov (recorrido 41) → T-091 → T-048 | Venta directa, rediseño del 05-nov (D-AGE-034): primero la estructura de varias líneas (T-085, absorbe T-049), después pasajeros, tours y cobro. T-086 (05-nov) pone el bloque Servicios como la maqueta aprobada antes de que T-047 le sume «Tours». T-091 (comprobante mixto, D-AGE-035) va antes de T-048 |
+| 7b | T-094 → T-095 | Mantenibilidad (auditoría 05-sep, revisada el 09-nov): va después de T-048 y antes de la ola 8, porque casi toda la ola 8 cae en `cotizador/editar.vue` (4.645 líneas) y `AlternativaItemController` (1.816) y T-032 ya pide partir el estado del cotizador. `ReservaFacturacionController` (1.715) no se toca hasta cerrar T-091 y T-048 (ver «Por analizar») |
 | 8 | T-032 → T-034 → T-019 → T-035 → T-036 → T-031 → T-022 → T-020 → T-021 → T-023 → T-037 → T-015 → T-016 → T-080 | Cotizador más rápido y claro, PDF de cotización, aerolíneas |
 | 9 | T-060 → T-062 → T-065 | Completar CRM y clientes |
 | — | T-029 | Desbloqueada el 07-nov (D-AGE-035); se puede hacer junto con P2 del tributario o antes |
@@ -42,7 +44,13 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 
 | ID | Módulo | Qué | Estado | Depende de | Rama / commit |
 |---|---|---|---|---|---|
-| T-083 | TRA | Inventario y limpieza de columnas y tablas sin uso en las bases tenant: por cada una, quién la usa (código, PDF, Excel, seeders) y cuántos datos tiene en producción; decidir borrar, migrar o dejar; borrar por módulo en tandas chicas con sus tests. Conocidas: `cronograma_pago_proveedor`/`pago_proveedor` (esperan a Compras), `sv_facturacion` (histórico), `state_sale` de cotizaciones. Sin archivo de tarea todavía: primero el inventario | por analizar | — | |
+| T-083 | TRA | Inventario y limpieza de columnas y tablas sin uso en las bases tenant: por cada una, quién la usa (código, PDF, Excel, seeders) y cuántos datos tiene en producción; decidir borrar, migrar o dejar; borrar por módulo en tandas chicas con sus tests. Conocidas: `cronograma_pago_proveedor`/`pago_proveedor` (esperan a Compras), `sv_facturacion` (histórico), `state_sale` de cotizaciones. **Tanda Agencia (auditoría 09-nov, sin lectura ni escritura en el código):** `proveedores.pais_id/departamento_id/provincia_id/distrito_id`, `reserva.monto_reembolso`, `salidas_mayorista.fecha_retorno`, `pago_proveedor.referencia_documento`; tablas sin camino de escritura `reglas_cancelacion` (solo una relación en `Reserva`) y `recordatorios`/`tipos_recordatorio`/`recordatorio_snooze_config` (11f, el seeder corre al provisionar); `reserva_item_pasajero.checkin_realizado/checkin_hora` ya tiene su línea en «Por analizar» (la clave `checkin_realizado` de la API se calcula y no se toca). Sin archivo de tarea todavía: primero el inventario | por analizar | — | |
+| T-092 | AGE | Depuración de seguridad: escapar el HTML de los avisos Swal con texto del usuario (6 lugares), retirar `POST reservas/{id}/pasajeros` (se salta «Modificar reserva»; decidido el 09-nov), `->except(['create','edit'])` en 4 `Route::resource`, `orden` con lock, comodines de `ilike`, comentario desactualizado del reporte operativo | por hacer | — | |
+| T-093 | AGE + TRA | Test de barrido: toda ruta de `AgenciaViajes` exige permiso (excepción: rutas firmadas), permiso exacto por grupo sensible y 403 por vendedor sin `ver_todas` en cada controller con Policy | por hacer | T-092 | |
+| T-094 | AGE | Partir `cotizador/editar.vue` (4.645 líneas) en composables por bloque (pasajeros, ítems y biblioteca, mayorista/hoteles, envío, modificación) sin cambiar comportamiento; corregir el tipo `ChipBiblioteca`. Sin archivo de tarea todavía: primero el análisis de corte (Opus), aprobado por el usuario | por analizar | T-048 | |
+| T-095 | AGE | Sacar de `AlternativaItemController` (1.816 líneas) la creación de ítems por `origen_tipo` a servicios con tests propios, y recortar los comentarios que narran historia (el porqué queda, la historia está en `git log`). Sin archivo de tarea todavía: primero el análisis de corte | por analizar | T-094 | |
+| T-096 | AGE | Limpieza: comandos de una sola vez (confirmar antes en producción que corrieron), métodos de servicio del frontend sin llamadas y sus rutas, voseo → tuteo en los mensajes del vertical | por hacer | T-092 | |
+| T-097 | AGE | Documentos: el estado sale de `plan-hoja-de-ruta-ejecucion.md` y `00-mapa-de-modulos.md` enlaza al backlog; prompts `PEGAR-EN-CLAUDE-CODE-*` y `plan-refactor-mayoristas-tramos.md` a `docs/archivo/` | por hacer | — | |
 | T-015 | PLA + AGE | Catálogo central de aerolíneas + panel central (Obs. 3) | por hacer | — | |
 | T-016 | AGE | Buscador de aerolíneas, corrección de nombres y aerolínea por defecto (Obs. 3) | por hacer | T-015 | |
 | T-019 | AGE | Comparar hoteles: empezar la comparación con 1 sola habitación (Obs. 6) | por hacer | — | |
@@ -107,7 +115,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 | AGE | Facturar una reserva con penalidad o «Ajuste» de una modificación: quedan sin pasajeros (R-AGE-05), la reserva muestra «Servicios: 1 pendiente(s)» y la pantalla de facturar no explica que hay que sumarlos a mano a una factura (lo pedía la nota de T-005) | T-007, 30-oct-2026 |
 | AGE | Modificar reserva: un pasajero sin nombre sale como «pasajero #35» en el bloqueo y en el texto de la penalidad; usar el tipo y el orden («Adulto 2») | T-007, 30-oct-2026 |
 | AGE | Modificar reserva: el aviso «Pasajeros actualizados» del cotizador repite «(modificación)» en el nombre de la alternativa desde la segunda modificación | T-007, 30-oct-2026 |
-| AGE | Inyección de HTML en el cotizador: `guardarPasajeros()` (`cotizador/editar.vue`) arma el Swal con `html:` metiendo `alternativa_nombre` y `motivo` sin escapar; el nombre de la alternativa lo escribe el usuario. Escapar o pasar a texto | revisión T-007, 30-oct-2026 |
+| AGE | Refactor de `ReservaFacturacionController` (1.715 líneas) y `ReservaController` (1.675): después de T-091 y T-048, que los modifican; candidato a ir con la preparación de Compras | auditoría del vertical, 09-nov-2026 |
 | AGE | Saldo real de una reserva (estado de cuenta): total vigente − anticipos netos de devoluciones − cobros de sus facturas (contado y amortizaciones) + notas de crédito, en una sola función. Hoy no existe; por eso el PDF de modificación no muestra saldo, y `totales.ya_facturado` / `anticipos_aplicados` de la diferencia son aproximados (tour a medias cuenta entero; sin devoluciones) | revisión T-006, 30-oct-2026 |
 | AGE | Cotizador: con un pasaje aéreo en edición, tocar «Nueva» alternativa deja el formulario en modo edición de ese pasaje (`itemPasajeAereoEnEdicion` no se limpia al cambiar de alternativa, `cotizador/editar.vue`) | T-076, 01-nov-2026 |
 | AGE | `ReservaPasajeroController::destroy()` sigue diciendo que «Modificar reserva» está «en construcción»: ya existe (T-007). Cambiar el texto a «Usa Modificar reserva» | T-075, 01-nov-2026 |
