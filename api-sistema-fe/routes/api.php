@@ -742,7 +742,9 @@ Route::group([
 
     Route::post("proveedores/{id}", [ProveedorController::class, 'update'])
         ->middleware('permission:agencia.proveedores');
+    // T-092: sin create/edit (es una API; registrarlas daba 500 por método inexistente).
     Route::resource("proveedores", ProveedorController::class)
+        ->except(['create', 'edit'])
         ->middleware('permission:agencia.proveedores');
     Route::get("proveedores/{id}/servicios", [ProveedorServicioController::class, 'index'])
         ->middleware('permission:agencia.proveedores');
@@ -793,9 +795,11 @@ Route::group([
     Route::post("destino-servicio/{id}/fusionar", [DestinoServicioController::class, 'fusionar'])
         ->middleware('permission:agencia.destinos');
     Route::resource("servicios", ServicioController::class)
+        ->except(['create', 'edit'])
         ->middleware('permission:agencia.destinos');
 
     Route::resource("temporadas", TemporadaController::class)
+        ->except(['create', 'edit'])
         ->middleware('permission:agencia.temporadas');
     Route::get("temporadas/{id}/ocurrencias", [TemporadaOcurrenciaController::class, 'index'])
         ->middleware('permission:agencia.temporadas');
@@ -803,6 +807,7 @@ Route::group([
         ->middleware('permission:agencia.temporadas');
 
     Route::resource("guias", GuiaController::class)
+        ->except(['create', 'edit'])
         ->middleware('permission:agencia.guias');
     Route::get("guias/{id}/tarifas", [GuiaTarifaController::class, 'index'])
         ->middleware('permission:agencia.guias');
@@ -1288,13 +1293,8 @@ Route::group([
     // "proveedor-tarifas" antes de "cotizaciones/{id}").
     Route::get("pasajeros-catalogo", [ReservaPasajeroController::class, 'buscarCatalogo'])
         ->middleware('permission:reservas.ver|reservas.ver_todas');
-    // Hallazgo de auditoría 2026-09-23 (baja confianza, nunca estaba
-    // anotado como alcance diferido a propósito, a diferencia de otros
-    // gaps del módulo): no había ningún camino para sumar un pasajero de
-    // último momento a una reserva ya aceptada — solo nacían todos juntos
-    // al aceptar la alternativa.
-    Route::post("reservas/{id}/pasajeros", [ReservaPasajeroController::class, 'store'])
-        ->middleware('permission:reservas.editar');
+    // T-092: no hay POST reservas/{id}/pasajeros. Un pasajero nuevo entra por
+    // «Modificar reserva» (recalcula el precio); el alta directa no lo hacía.
     Route::put("reserva-pasajeros/{id}", [ReservaPasajeroController::class, 'update'])
         ->middleware('permission:reservas.editar');
     // Fase D del plan "Proceso de reserva: facturación + 3 fixes" (2026-08-19).

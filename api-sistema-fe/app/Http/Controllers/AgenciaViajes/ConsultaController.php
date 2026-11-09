@@ -10,6 +10,7 @@ use App\Models\Client\CrmAccion;
 use App\Models\Client\CrmActividad;
 use App\Services\AgenciaViajes\AlternativaCreacionException;
 use App\Services\AgenciaViajes\CotizacionCreacionService;
+use App\Services\BusquedaLike;
 use App\Services\HoraPeru;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -74,7 +75,7 @@ class ConsultaController extends Controller
                     $q->orWhereRaw("regexp_replace(COALESCE(phone, ''), '\\D', '', 'g') LIKE ?", ['%' . $digitos . '%']);
                 }
                 if ($porNombre) {
-                    $q->orWhere('full_name', 'ilike', '%' . $nombre . '%');
+                    $q->orWhere('full_name', 'ilike', BusquedaLike::contiene($nombre));
                 }
             })
             ->orderBy('full_name')

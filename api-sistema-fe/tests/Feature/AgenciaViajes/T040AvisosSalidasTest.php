@@ -4,7 +4,6 @@ namespace Tests\Feature\AgenciaViajes;
 
 use App\Http\Controllers\AgenciaViajes\ReservaController;
 use App\Http\Controllers\AgenciaViajes\ReservaItemController;
-use App\Http\Controllers\AgenciaViajes\ReservaPasajeroController;
 use App\Http\Controllers\AgenciaViajes\SalidaOperativaController;
 use App\Models\AgenciaViajes\Reserva;
 use App\Models\AgenciaViajes\ReservaItem;
@@ -91,24 +90,8 @@ class T040AvisosSalidasTest extends TestCase
         $this->assertSame(['El Mirador (Almuerzo): ahora son 2, no 5.'], $respuesta['avisos_salidas'][0]['avisos']);
     }
 
-    // CA3
-    public function test_agregar_un_pasajero_avisa_a_cada_salida(): void
-    {
-        [$salida, $tres, $dos] = $this->salidaCompartida();
-        $van = SalidaVehiculo::create([
-            'salida_operativa_id' => $salida->id, 'descripcion' => 'Van 14', 'capacidad' => 14,
-            'proveedor_id' => $this->proveedor('Turismo Selva')->id,
-        ]);
-        $van->reservas()->sync([$tres->id, $dos->id]);
-
-        $respuesta = app(ReservaPasajeroController::class)->store(new Request(['tipo_pax' => 'adulto']), (string) $tres->id)->getData(true);
-
-        $this->assertSame(200, $respuesta['code'], json_encode($respuesta));
-        $this->assertSame([
-            'El Mirador (Almuerzo): ahora son 6, no 5.',
-            'Turismo Selva (Van 14): ahora lleva 6 pasajero(s), no 5.',
-        ], $respuesta['avisos_salidas'][0]['avisos']);
-    }
+    // CA3 (agregar un pasajero) se retiró con T-092: el alta directa ya no existe y un
+    // pasajero nuevo entra por «Modificar reserva» (avisos en ReservaModificacionAplicarTest).
 
     // CA3b
     public function test_cancelar_la_salida_avisa_que_ya_no_va_a_cada_proveedor(): void
@@ -139,11 +122,9 @@ class T040AvisosSalidasTest extends TestCase
         SalidaOperativa::eliminarSiQuedoVacia($salidaId);
         $this->otroServicioSinSalida($item);
 
-        $agregar = app(ReservaPasajeroController::class)->store(new Request(['tipo_pax' => 'adulto']), (string) $reserva->id)->getData(true);
         $quitar = app(ReservaItemController::class)->destroy((string) $item->id)->getData(true);
         $cancelar = app(ReservaController::class)->cancelar(new Request(['motivo_cancelacion' => 'voluntaria']), (string) $reserva->id)->getData(true);
 
-        $this->assertSame([], $agregar['avisos_salidas']);
         $this->assertSame([], $quitar['avisos_salidas']);
         $this->assertSame([], $cancelar['avisos_salidas']);
     }

@@ -310,64 +310,6 @@ class ReservaQuitarItemsPasajerosTest extends TestCase
         $this->assertSame(0, ReservaItemVueloPasajero::where('reserva_pasajero_id', $pasajero1->id)->count());
     }
 
-    // ── ReservaPasajeroController::store() — agregar pasajero (2026-09-23) ──
-    // Hallazgo de auditoría (baja confianza — nunca estuvo anotado como
-    // alcance diferido a propósito, a diferencia de otros gaps del
-    // módulo): no había ningún camino para sumar un pasajero de último
-    // momento a una reserva ya aceptada.
-
-    public function test_agregar_pasajero_exitoso_crea_shell_vacio(): void
-    {
-        [$reserva] = $this->crearReservaConDosPasajerosYDosItems();
-        $totalAntes = $reserva->pasajeros()->count();
-
-        $response = app(ReservaPasajeroController::class)
-            ->store(new Request(['tipo_pax' => 'adulto']), (string) $reserva->id);
-        $body = $response->getData(true);
-
-        $this->assertSame(200, $response->getStatusCode(), json_encode($body));
-        $this->assertSame($totalAntes + 1, $reserva->pasajeros()->count());
-        $this->assertSame('adulto', $body['reserva_pasajero']['tipo_pax']);
-        $this->assertNull($body['reserva_pasajero']['nombre'], 'nace vacío, mismo criterio que al aceptar la alternativa');
-    }
-
-    public function test_agregar_pasajero_rechaza_si_reserva_no_activa(): void
-    {
-        [$reserva] = $this->crearReservaConDosPasajerosYDosItems();
-        $reserva->update(['estado' => 'cancelada']);
-
-        $response = app(ReservaPasajeroController::class)
-            ->store(new Request(['tipo_pax' => 'adulto']), (string) $reserva->id);
-
-        $this->assertSame(422, $response->getStatusCode());
-    }
-
-    public function test_agregar_pasajero_con_nombre_y_documento_sincroniza_catalogo(): void
-    {
-        [$reserva] = $this->crearReservaConDosPasajerosYDosItems();
-
-        $response = app(ReservaPasajeroController::class)->store(new Request([
-            'tipo_pax' => 'adulto', 'nombre' => 'Pasajero Nuevo', 'documento' => '55443322',
-        ]), (string) $reserva->id);
-        $body = $response->getData(true);
-
-        $this->assertSame(200, $response->getStatusCode(), json_encode($body));
-        $this->assertTrue(
-            \App\Models\AgenciaViajes\PasajeroDocumento::where('numero_documento', '55443322')->exists(),
-            'nombre+documento presentes desde el alta deben sincronizar el catálogo, mismo criterio que update()'
-        );
-    }
-
-    public function test_agregar_pasajero_rechaza_tipo_pax_invalido(): void
-    {
-        [$reserva] = $this->crearReservaConDosPasajerosYDosItems();
-
-        $response = app(ReservaPasajeroController::class)
-            ->store(new Request(['tipo_pax' => 'no-existe']), (string) $reserva->id);
-
-        $this->assertSame(422, $response->getStatusCode());
-    }
-
     // ── reserva-item-pasajeros (asignación, store()) ────────────────────
     // Bug real encontrado 2026-08-28: store() no tenía ninguno de los 2
     // guards que index()/destroy() de la misma clase ya tenían — se podía

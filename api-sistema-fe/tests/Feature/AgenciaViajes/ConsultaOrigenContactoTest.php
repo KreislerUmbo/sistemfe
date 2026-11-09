@@ -223,6 +223,19 @@ class ConsultaOrigenContactoTest extends TestCase
 
     // ── CA2: coincidencias y cliente existente ───────────────────────
 
+    // T-092 (CA6): % y _ se buscan literales, no como comodines de ilike.
+    public function test_coincidencias_por_nombre_toman_los_comodines_literales(): void
+    {
+        $this->cliente(['full_name' => 'Promo 50% Selva']);
+        $this->cliente(['full_name' => 'Promo 500 Selva']);
+        $this->cliente(['full_name' => 'Promo 5 Selva']);
+        $this->cliente(['full_name' => 'Ana_Luz Tours']);
+        $this->cliente(['full_name' => 'AnaXLuz Tours']);
+
+        $this->assertSame(['Promo 50% Selva'], $this->coincidencias(['nombre' => 'Promo 50%']));
+        $this->assertSame(['Ana_Luz Tours'], $this->coincidencias(['nombre' => 'Ana_Luz']));
+    }
+
     public function test_coincidencias_comparan_solo_digitos_del_telefono_y_nombre_desde_tres_letras(): void
     {
         $this->cliente(['full_name' => 'Ana Sin Espacios', 'phone' => '999888777']);

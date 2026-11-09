@@ -780,6 +780,7 @@
 
 <script setup lang="ts">
 import { sanearHtml } from '@/helpers/sanearHtml';
+import { escaparHtml } from '@/helpers/escaparHtml';
 import CampoHora from '@/components/CampoHora.vue';
 import ProveedorBuscador from '@/components/AgenciaViajes/ProveedorBuscador.vue';
 import GuiaBuscador from '@/components/AgenciaViajes/GuiaBuscador.vue';
@@ -997,7 +998,7 @@ const desactivar = async (forzar: boolean) => {
     } catch (error: any) {
         const combosAfectados: PaquetePlantillaResumen[] | undefined = error.response?.data?.combos_afectados;
         if (error.response?.status === 422 && combosAfectados?.length) {
-            const lista = combosAfectados.map(c => `<li><a href="/agencia-viajes/paquetes/${c.id}" target="_blank">${c.nombre}${c.codigo ? ` (${c.codigo})` : ''}</a></li>`).join('');
+            const lista = combosAfectados.map(c => `<li><a href="/agencia-viajes/paquetes/${Number(c.id)}" target="_blank">${escaparHtml(c.nombre)}${c.codigo ? ` (${escaparHtml(c.codigo)})` : ''}</a></li>`).join('');
             const result = await (Swal as TVueSwalInstance).fire({
                 title: 'Este tour está incluido en combos activos',
                 html: `<p class="text-start mb-1">No se puede desactivar en silencio — está incluido en:</p><ul class="text-start">${lista}</ul>`,

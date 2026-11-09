@@ -7,6 +7,7 @@ use App\Models\AgenciaViajes\SalidaOperativa;
 use App\Models\AgenciaViajes\SalidaServicio;
 use App\Services\AgenciaViajes\SalidaServiciosService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 
 // Servicios a reservar de una salida — fila 13, fase 2b (§3.6, D10/D11).
@@ -35,11 +36,16 @@ class SalidaServicioController extends Controller
             return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
         }
 
-        $servicio = SalidaServicio::create($validator->validated() + [
-            'salida_operativa_id' => $salida->id,
-            'estado' => SalidaServicio::ESTADO_POR_RESERVAR,
-            'orden' => (int) SalidaServicio::where('salida_operativa_id', $salida->id)->max('orden') + 1,
-        ]);
+        // T-092: lock sobre la salida para que dos altas no repitan el orden.
+        $servicio = DB::transaction(function () use ($salida, $validator) {
+            SalidaOperativa::whereKey($salida->id)->lockForUpdate()->first();
+
+            return SalidaServicio::create($validator->validated() + [
+                'salida_operativa_id' => $salida->id,
+                'estado' => SalidaServicio::ESTADO_POR_RESERVAR,
+                'orden' => (int) SalidaServicio::where('salida_operativa_id', $salida->id)->max('orden') + 1,
+            ]);
+        });
 
         return response()->json(['code' => 200, 'message' => 'Servicio agregado.', 'servicio' => $servicio->load('proveedor')]);
     }

@@ -9,6 +9,7 @@ use App\Models\AgenciaViajes\AlternativaDestino;
 use App\Models\AgenciaViajes\AlternativaItem;
 use App\Models\AgenciaViajes\OpcionMayorista;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 
 // Sesión 12f-1 (index/store) + 12f-2 (update/destroy, para los chips de
@@ -48,12 +49,18 @@ class AlternativaDestinoController extends Controller
         }
 
         $validado = $validator->validated();
-        $siguienteOrden = (int) ($alternativa->destinos()->max('orden') ?? 0) + 1;
 
-        $destino = AlternativaDestino::create($validado + [
-            'alternativa_id' => $alternativa->id,
-            'orden' => $siguienteOrden,
-        ]);
+        // T-092: el lock sobre la alternativa serializa dos altas simultáneas;
+        // sin él, las dos leían el mismo max(orden) y quedaban con el mismo orden.
+        $destino = DB::transaction(function () use ($alternativa, $validado) {
+            Alternativa::whereKey($alternativa->id)->lockForUpdate()->first();
+            $siguienteOrden = (int) ($alternativa->destinos()->max('orden') ?? 0) + 1;
+
+            return AlternativaDestino::create($validado + [
+                'alternativa_id' => $alternativa->id,
+                'orden' => $siguienteOrden,
+            ]);
+        });
 
         return response()->json(['code' => 200, 'message' => 'Destino agregado correctamente', 'alternativa_destino' => $destino]);
     }

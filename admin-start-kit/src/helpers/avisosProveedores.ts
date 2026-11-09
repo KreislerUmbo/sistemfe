@@ -4,13 +4,11 @@
 // La misma instancia que useToast(): con la de 'sweetalert2' a secas, el
 // temporizador del toast de éxito cerraba este cuadro (comparten el contenedor).
 import Swal from 'sweetalert2/dist/sweetalert2.js'
+import { escaparHtml as escapar } from './escaparHtml'
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire
 
 export type AvisoSalida = { salida_id?: number; tour: string; fecha: string; avisos: string[] }
-
-const escapar = (t: string) =>
-  t.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] as string)
 
 export const htmlAvisosProveedores = (salidas: AvisoSalida[]): string =>
   '<div class="text-start small">'

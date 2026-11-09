@@ -81,9 +81,72 @@ el nombre y recorrer los avisos del punto 1.
 ---
 
 ## Resultado
-- **Commits:**
+- **Commits:** ver `git log main..fix/T-092-depuracion-seguridad-agencia` (uno por la tarea).
+- **Qué se hizo, por punto:**
+  1. `helpers/escaparHtml.ts` (único; reemplaza las dos copias locales de `avisosProveedores.ts`
+     y `SalidaReprogramar.vue`). Se escapan: `guardarPasajeros()` (alternativa y motivo),
+     «No se tocaron» (`res.omitidas`), «Guías pendientes» (guía, tour, destino), combos afectados
+     al desactivar (nombre y código; el id va con `Number()`), fotos rechazadas en el navegador y
+     no subidas por el servidor en `destinos/form.vue` y `proveedores/form.vue` (también
+     `res.message`, que va en el mismo `html:`).
+  2. Ruta `POST reservas/{id}/pasajeros` y `ReservaPasajeroController::store()` borradas (y sus
+     `use` sin uso: `Reserva`, `SalidaMayorista`, `SalidaOperacionService`).
+  3. `->except(['create', 'edit'])` en proveedores, servicios, temporadas y guías.
+  4. `lockForUpdate()` dentro de una transacción: sobre la alternativa
+     (`AlternativaDestinoController::store()`), sobre la salida (`SalidaServicioController::store()`,
+     `SalidaVehiculoController::store()`; en vehículos entra también la decisión «es el primero»,
+     que tenía la misma carrera) y sobre las filas del tipo en `CrmMotivoResultadoController::store()`
+     (no hay padre; Postgres no permite `FOR UPDATE` con `max()`; «Otro» existe siempre).
+  5. `App\Services\BusquedaLike::contiene()/escapar()` (escapa `\`, `%`, `_`; `\` es el escape por
+     defecto de `LIKE` en Postgres). Usado en `ConsultaController::coincidencias()` y en los cinco
+     `ilike` de `ReservaPasajeroController::buscarCatalogo()`.
+  6. Frase quitada de `ReporteOperativoController::pdf()`.
 - **Tests:**
+  - Nuevo `tests/Feature/AgenciaViajes/T092DepuracionSeguridadAgenciaTest.php` (7): CA3 (ruta y
+    método no existen; `PUT reserva-pasajeros/{id}` y `pasajeros-catalogo` siguen), CA4 (las 8
+    rutas fuera y las 5 de API de cada resource siguen), CA5 (registro de consultas: el
+    `SELECT … FOR UPDATE` del padre va antes del `max("orden")` y del `INSERT`, en los cuatro
+    controllers; dos altas seguidas dan orden 1 y 2), CA6 (`BusquedaLike` y `buscarCatalogo` con
+    `50%` y `_`).
+  - `ConsultaOrigenContactoTest::test_coincidencias_por_nombre_toman_los_comodines_literales` (CA6).
+  - Vitest `helpers/escaparHtml.test.ts` (CA1); `avisosProveedores.test.ts` sigue pasando.
+  - `php artisan test --filter="T092|ConsultaOrigenContacto|ReservaPasajero|AlternativaDestino|Sesion12f1|Fila13Fase2b|T044|CotizacionResultado|Consulta"`: 96 en verde.
+    Suite completa (Postgres real): 2080 en verde y 8 fallas en la primera corrida: el
+    intermitente conocido `Fila13Fase1cFacturacionTest::descuento_del_combo…` (pasa al
+    repetirlo) y 7 que llamaban a `store()` directo, sin URL (por eso no aparecieron al buscar
+    consumidores). Se retiraron con el endpoint, como pide CA3:
+    `ReservaQuitarItemsPasajerosTest` (los 4 `test_agregar_pasajero_*`),
+    `ReservaPolicyAccionesTest::test_vendedor_no_puede_facturar_ni_cambiar_la_reserva_de_otro`
+    (solo la línea de `store()`), `T040AvisosSalidasTest::test_agregar_un_pasajero_avisa_a_cada_salida`
+    (borrado; el aviso por cambio de pasajeros lo cubre `ReservaModificacionAplicarTest`) y
+    `test_una_reserva_sin_salidas_no_trae_avisos` (solo la parte de agregar). Esos 4 archivos y
+    `Fila13Fase1c` volvieron a correr: 65 en verde. Vitest: 187 en verde. `vite build`: OK. `type-check`: 47 errores,
+    ninguno en archivos de esta tarea (ya anotados en «Por analizar», que dice 46).
+  - **Manual en agencia-demo (Playwright)**, con datos de prueba revertidos al terminar (nombres de
+    guía 4 y combo 15, ítem 98 del tour 19 y la línea 517 de la alternativa 114; el total de
+    CDKM-1126-0000009 quedó en PEN 600.00): combo llamado `<img src=x onerror=alert(2)>Paquete`
+    al desactivar «Tours a Lamas» → se ve literal, 0 `<img>` (se canceló, el tour sigue activo);
+    foto de 6 MB llamada `<img src=x onerror=alert(3)>.jpg` en destinos y proveedores → literal,
+    0 `<img>`.
 - **Desviaciones de la tarea y por qué:**
+  - CA1 en pantalla no se pudo recorrer: agencia-demo está en `modo_tours = nuevo` y ahí
+    `desdePlantilla()` devuelve `guias_pendientes` vacío (el aviso solo sale en el modo anterior).
+    Se cargó el tour con el guía `<img …>` igual y el nombre no se ejecutó en el lienzo. El escape
+    del aviso queda cubierto por el Vitest del helper y el diff.
+  - CA2 «nombre de alternativa (pasajeros)» no se recorrió en pantalla: hace falta que el
+    recálculo deje ítems «para revisar», que no se arma sin preparar precios a propósito. Cubierto
+    por el diff (mismo helper).
+  - Punto 4 se aplicó también a «es el primer vehículo» en `SalidaVehiculoController::store()`
+    (misma transacción; sin el lock dos altas simultáneas se llevaban las dos todas las reservas).
+  - El helper de `ilike` es una clase en `app/Services/` (junto a `HoraPeru`/`StorageUrl`): la
+    tarea no decía dónde.
 
 ## Hallazgos fuera de alcance
--
+- **Swal: el segundo argumento de `fire(título, texto, icono)` es HTML**, y `title:` también.
+  En `views/agencia-viajes` y `components/AgenciaViajes` hay ~147 llamadas
+  `fire('…', res.message | error.response.data.message, …)`. Si un mensaje del servidor incluye
+  un nombre escrito por un usuario, es el mismo riesgo de este punto 1. Propuesta: helper
+  `avisar(título, texto, icono)` que use `text:` y reemplazo en bloque; o revisar qué mensajes del
+  backend interpolan nombres. `SalidaReprogramar.vue` usa `title: res.message`.
+- `ReservaPasajeroController` importa `PasajeroDocumento` sin usarlo (ya estaba así).
+- `type-check` pasó de 46 a 47 errores desde el 02-nov (la línea de «Por analizar» dice 46).
