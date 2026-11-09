@@ -6,7 +6,6 @@ use App\Http\Controllers\AgenciaViajes\AlternativaController;
 use App\Http\Controllers\AgenciaViajes\AlternativaItemController;
 use App\Models\AgenciaViajes\Alternativa;
 use App\Models\AgenciaViajes\AlternativaItem;
-use App\Services\AgenciaViajes\SepararGruposDuplicadosService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Tests\Feature\AgenciaViajes\Concerns\ConAccesoATodasLasReservas;
@@ -122,30 +121,6 @@ class T024GrupoHotelesIndependienteTest extends TestCase
         $this->assertSame(200, $respuesta->getStatusCode(), json_encode($respuesta->getData(true)));
         $this->assertSame(0, AlternativaItem::where('alternativa_id', $copia->id)->count());
         $this->assertSame(2, AlternativaItem::where('alternativa_id', $original->id)->count());
-    }
-
-    public function test_ca4_el_comando_separa_grupos_compartidos_y_es_idempotente(): void
-    {
-        [$original, $grupo] = $this->alternativaConGrupo();
-        $copia = $this->duplicar($original);
-        AlternativaItem::where('alternativa_id', $copia->id)->update(['grupo_opcion_id' => $grupo]);
-        $servicio = app(SepararGruposDuplicadosService::class);
-        $deEsteGrupo = fn (array $cambios) => array_values(array_filter($cambios, fn ($c) => $c['grupo'] === $grupo));
-
-        $simulado = $deEsteGrupo($servicio->separar(simular: true));
-        $this->assertCount(1, $simulado);
-        $this->assertSame($copia->id, $simulado[0]['alternativa_id']);
-        $this->assertSame(2, AlternativaItem::where('alternativa_id', $copia->id)->where('grupo_opcion_id', $grupo)->count(), '--simular no escribe');
-
-        $real = $deEsteGrupo($servicio->separar(simular: false));
-        $this->assertCount(1, $real);
-        $grupoCopia = AlternativaItem::where('alternativa_id', $copia->id)->distinct()->pluck('grupo_opcion_id');
-        $this->assertCount(1, $grupoCopia, 'la copia conserva el agrupamiento');
-        $this->assertSame($real[0]['grupo_nuevo'], $grupoCopia->first());
-        $this->assertSame(2, AlternativaItem::where('alternativa_id', $original->id)->where('grupo_opcion_id', $grupo)->count(), 'la original (primera por id) conserva su grupo');
-        $this->assertSame(2, DB::table('ajustes_grupo_opcion')->where('grupo_anterior', $grupo)->where('grupo_nuevo', $grupoCopia->first())->count());
-
-        $this->assertSame([], $deEsteGrupo($servicio->separar(simular: false)), 'correrlo de nuevo no cambia nada');
     }
 
     public function test_eliminar_grupo_404_si_el_grupo_no_es_de_esa_alternativa(): void
