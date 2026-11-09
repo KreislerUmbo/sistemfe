@@ -1438,6 +1438,7 @@ import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import { useLayoutStore } from '@/stores/layout';
 import Swal from 'sweetalert2/dist/sweetalert2.js';
 import httpClient from '@/helpers/http-client';
+import { escaparHtml } from '@/helpers/escaparHtml';
 import RichTextEditor from '@/components/RichTextEditor.vue';
 import HabitacionMatrixPicker from '@/components/AgenciaViajes/HabitacionMatrixPicker.vue';
 import ProveedorBuscador from '@/components/AgenciaViajes/ProveedorBuscador.vue';
@@ -1910,7 +1911,7 @@ const guardarPasajeros = async () => {
         const paraRevisar: Array<{ alternativa_nombre: string; motivo: string }> = res.items_para_revisar ?? [];
 
         if (paraRevisar.length > 0) {
-            const listaHtml = paraRevisar.map((it) => `<li>${it.alternativa_nombre}: ${it.motivo}</li>`).join('');
+            const listaHtml = paraRevisar.map((it) => `<li>${escaparHtml(it.alternativa_nombre)}: ${escaparHtml(it.motivo)}</li>`).join('');
             (Swal as TVueSwalInstance).fire({
                 icon: 'warning',
                 title: 'Pasajeros actualizados',
@@ -2657,7 +2658,7 @@ const recalcularTemporadas = async () => {
             (Swal as TVueSwalInstance).fire({
                 icon: 'info',
                 title: `${res.recalculadas} tour(s) recalculado(s)`,
-                html: `<p class="text-start mb-1">No se tocaron:</p><ul class="text-start small mb-0">${res.omitidas.map((o) => `<li>${o}</li>`).join('')}</ul>`,
+                html: `<p class="text-start mb-1">No se tocaron:</p><ul class="text-start small mb-0">${res.omitidas.map((o) => `<li>${escaparHtml(o)}</li>`).join('')}</ul>`,
             });
         } else {
             toast.success('Precios por temporada recalculados');
@@ -3000,7 +3001,7 @@ const clicResultadoPlantilla = async (p: Extract<BibliotecaResultado, { tipo_res
         });
         if (res.guias_pendientes.length) {
             const lista = res.guias_pendientes
-                .map((g) => `<li>${g.guia_nombre ?? 'Guía'} — ${g.tour_origen_nombre ?? ''}${g.destino_nombre ? ` (${g.destino_nombre})` : ''}</li>`)
+                .map((g) => `<li>${escaparHtml(g.guia_nombre ?? 'Guía')} — ${escaparHtml(g.tour_origen_nombre)}${g.destino_nombre ? ` (${escaparHtml(g.destino_nombre)})` : ''}</li>`)
                 .join('');
             await (Swal as TVueSwalInstance).fire({
                 title: 'Guías pendientes de asignar',

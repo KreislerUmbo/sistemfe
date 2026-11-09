@@ -50,6 +50,9 @@ class CrmMotivoResultadoController extends Controller
         }
 
         $motivo = DB::transaction(function () use ($tipo, $nombre) {
+            // T-092: no hay fila padre; se bloquean las filas del tipo (Postgres no
+            // permite FOR UPDATE con max()). «Otro» existe siempre, así que hay qué bloquear.
+            CrmMotivoResultado::where('tipo', $tipo)->lockForUpdate()->pluck('id');
             $otro = CrmMotivoResultado::where('tipo', $tipo)->where('nombre', CrmMotivoResultado::NOMBRE_OTRO)->first();
             $orden = $otro?->orden ?? ((int) CrmMotivoResultado::where('tipo', $tipo)->max('orden') + 1);
             $otro?->update(['orden' => $orden + 1]);

@@ -121,8 +121,6 @@ class ReservaPolicyAccionesTest extends TestCase
         $this->esperarBloqueo(fn () => app(ReservaAnticipoController::class)
             ->store(new Request(['amount' => 50]), $id));
         $this->esperarBloqueo(fn () => app(ReservaPasajeroController::class)
-            ->store(new Request(['tipo_pax' => 'adulto']), $id));
-        $this->esperarBloqueo(fn () => app(ReservaPasajeroController::class)
             ->update(new Request(['nombre' => 'Cambiado']), (string) $pasajero->id));
         $this->esperarBloqueo(fn () => app(ReservaController::class)
             ->reprogramar(new Request(['fecha_viaje_desde' => '2026-12-01']), $id));

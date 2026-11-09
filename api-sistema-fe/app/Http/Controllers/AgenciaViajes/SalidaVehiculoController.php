@@ -66,18 +66,26 @@ class SalidaVehiculoController extends Controller
             return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
         }
 
-        $esElPrimero = ! SalidaVehiculo::where('salida_operativa_id', $salida->id)->exists();
+        // T-092: lock sobre la salida para que dos altas no repitan el orden
+        // (ni las dos se crean "el primero" y se llevan todas las reservas).
+        $vehiculo = DB::transaction(function () use ($salida, $validator) {
+            SalidaOperativa::whereKey($salida->id)->lockForUpdate()->first();
 
-        $vehiculo = SalidaVehiculo::create($validator->validated() + [
-            'salida_operativa_id' => $salida->id,
-            'orden' => (int) SalidaVehiculo::where('salida_operativa_id', $salida->id)->max('orden') + 1,
-        ]);
+            $esElPrimero = ! SalidaVehiculo::where('salida_operativa_id', $salida->id)->exists();
 
-        // El primer vehículo lleva, de entrada, a todas las reservas de la
-        // salida (lo normal es uno solo); con el segundo se reparten a mano.
-        if ($esElPrimero) {
-            $vehiculo->reservas()->sync($this->reservasActivasDe($salida));
-        }
+            $vehiculo = SalidaVehiculo::create($validator->validated() + [
+                'salida_operativa_id' => $salida->id,
+                'orden' => (int) SalidaVehiculo::where('salida_operativa_id', $salida->id)->max('orden') + 1,
+            ]);
+
+            // El primer vehículo lleva, de entrada, a todas las reservas de la
+            // salida (lo normal es uno solo); con el segundo se reparten a mano.
+            if ($esElPrimero) {
+                $vehiculo->reservas()->sync($this->reservasActivasDe($salida));
+            }
+
+            return $vehiculo;
+        });
 
         // T-044 (H38): solo avisa, nunca bloquea.
         $avisos = $this->avisosDeCruce($salida, $vehiculo);

@@ -280,6 +280,7 @@ import { useRoute, useRouter } from 'vue-router';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import RichTextEditor from '@/components/RichTextEditor.vue';
 import Swal from 'sweetalert2/dist/sweetalert2.js';
+import { escaparHtml } from '@/helpers/escaparHtml';
 import httpClient from '@/helpers/http-client';
 import { proveedorService, proveedorTipoService } from '@/services/admin/proveedorService';
 import { amenidadService } from '@/services/admin/amenidadService';
@@ -411,7 +412,7 @@ const onArchivosSeleccionados = (event: Event) => {
     }
 
     if (rechazadas.length > 0) {
-        (Swal as TVueSwalInstance).fire({ icon: 'warning', title: 'Algunas fotos no se agregaron', html: rechazadas.join('<br>') });
+        (Swal as TVueSwalInstance).fire({ icon: 'warning', title: 'Algunas fotos no se agregaron', html: rechazadas.map(escaparHtml).join('<br>') });
     }
 };
 
@@ -531,8 +532,8 @@ const guardar = async () => {
             : await proveedorService.crear(payload);
 
         if (res.fotos_rechazadas?.length) {
-            const detalle = res.fotos_rechazadas.map((r: { nombre: string; motivo: string }) => `${r.nombre}: ${r.motivo}`).join('<br>');
-            await (Swal as TVueSwalInstance).fire({ icon: 'warning', title: 'Guardado con observaciones', html: `${res.message}<br><br>Fotos no subidas:<br>${detalle}` });
+            const detalle = res.fotos_rechazadas.map((r: { nombre: string; motivo: string }) => `${escaparHtml(r.nombre)}: ${escaparHtml(r.motivo)}`).join('<br>');
+            await (Swal as TVueSwalInstance).fire({ icon: 'warning', title: 'Guardado con observaciones', html: `${escaparHtml(res.message)}<br><br>Fotos no subidas:<br>${detalle}` });
         } else {
             await (Swal as TVueSwalInstance).fire('Listo', res.message, 'success');
         }

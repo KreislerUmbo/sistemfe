@@ -104,9 +104,7 @@ class ReporteOperativoController extends Controller
             // NUNCA StorageUrl::resolve() dentro de un PDF — DomPDF trae
             // enable_remote=false por default, esa URL HTTP no carga (ver
             // StorageUrl::resolveParaPdf(), mismo criterio que SaleController::pdf()/
-            // NotaController::pdf()/PaymentReceiptController::pdf()). AlternativaController
-            // usa resolve() acá y tiene el mismo bug latente — fuera de alcance de esta
-            // sesión, avisado aparte.
+            // NotaController::pdf()/PaymentReceiptController::pdf()).
             'logoUrl' => StorageUrl::resolveParaPdf($empresa?->logo_horizontal),
             'generadoPor' => $request->input('generado_por', 'Sistema'),
             'generadoEn' => $request->filled('generado_en')

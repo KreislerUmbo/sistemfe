@@ -5,12 +5,10 @@ namespace App\Http\Controllers\AgenciaViajes;
 use App\Http\Controllers\Controller;
 use App\Models\AgenciaViajes\PasajeroCatalogo;
 use App\Models\AgenciaViajes\PasajeroDocumento;
-use App\Models\AgenciaViajes\Reserva;
 use App\Models\AgenciaViajes\ReservaPasajero;
-use App\Models\AgenciaViajes\SalidaMayorista;
 use App\Models\Client\Client;
 use App\Services\AgenciaViajes\PasajeroCatalogoService;
-use App\Services\AgenciaViajes\SalidaOperacionService;
+use App\Services\BusquedaLike;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -20,85 +18,10 @@ use Illuminate\Support\Facades\Validator;
 // shell nace vacío al aceptar la alternativa) — "completo" no es una
 // columna propia, el frontend lo deriva de nombre && documento, mismo
 // criterio que el prototipo.
+// T-092: ya no hay store(). Sumar un pasajero a una reserva aceptada se hace
+// con «Modificar reserva», que recalcula el precio; el alta directa no lo hacía.
 class ReservaPasajeroController extends Controller
 {
-    // Bug real (auditoría 2026-09-23): no había ningún camino para sumar
-    // un pasajero de último momento a una reserva ya aceptada — solo
-    // nacían todos juntos al aceptar la alternativa
-    // (ReservaController::crearReservaDesdeAlternativa()). Nace como
-    // "shell" (mismo criterio que ahí: nombre/documento nullable,
-    // completables después vía update()), con la opción de mandarlos de
-    // una si el vendedor ya los tiene a mano.
-    public function store(Request $request, string $id)
-    {
-        $reserva = Reserva::with('alternativa.opcionMayoristaElegida')->findOrFail($id);
-        $this->authorize('update', $reserva);
-
-        if ($reserva->estado !== 'activa') {
-            return response()->json(['code' => 422, 'message' => 'Solo se puede agregar un pasajero a una reserva activa.'], 422);
-        }
-
-        $validator = Validator::make($request->all(), [
-            'tipo_pax' => 'required|in:adulto,nino,infante',
-            'nombre' => 'nullable|string|max:250',
-            'documento' => 'nullable|string|max:50',
-            'pasajero_catalogo_id' => 'nullable|integer|exists:pasajeros_catalogo,id',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
-        }
-
-        $validado = $validator->validated();
-
-        // T-040 (H29): las salidas de la reserva ganan un pasajero.
-        $operacion = app(SalidaOperacionService::class);
-        $fotosAntes = $operacion->fotosDeReserva($reserva->id);
-
-        [$pasajero, $alertaCupoExcedido] = DB::transaction(function () use ($reserva, $validado) {
-            $reservaLocked = Reserva::where('id', $reserva->id)->lockForUpdate()->firstOrFail();
-
-            $pasajero = ReservaPasajero::create([
-                'reserva_id' => $reservaLocked->id,
-                'tipo_pax' => $validado['tipo_pax'],
-                'nombre' => $validado['nombre'] ?? null,
-                'documento' => $validado['documento'] ?? null,
-                'pasajero_catalogo_id' => $validado['pasajero_catalogo_id'] ?? null,
-            ]);
-
-            // Mismo movimiento de cupo que crearReservaDesdeAlternativa(),
-            // en reversa de destroy()/ReservaController::cancelar() —
-            // cupo_ocupado se cuenta por cantidad de pasajeros, no se
-            // puede sumar uno sin reflejarlo ahí. No bloqueante — mismo
-            // criterio que al aceptar: si excede cupo_total, se avisa, no
-            // se impide (el negocio decide a mano si el mayorista puede
-            // sumar uno más).
-            $alertaCupoExcedido = false;
-            $opcionElegida = $reservaLocked->alternativa?->opcionMayoristaElegida;
-            if ($opcionElegida && $opcionElegida->salida_mayorista_id) {
-                SalidaMayorista::where('id', $opcionElegida->salida_mayorista_id)->increment('cupo_ocupado');
-                $salida = SalidaMayorista::find($opcionElegida->salida_mayorista_id);
-                if ($salida && $salida->cupo_total !== null && $salida->cupo_ocupado > $salida->cupo_total) {
-                    $alertaCupoExcedido = true;
-                }
-            }
-
-            if ($pasajero->nombre && $pasajero->documento) {
-                app(PasajeroCatalogoService::class)->sincronizarDesdeReserva($pasajero);
-            }
-
-            return [$pasajero, $alertaCupoExcedido];
-        });
-
-        return response()->json([
-            'code' => 200,
-            'message' => 'Pasajero agregado correctamente',
-            'reserva_pasajero' => $pasajero->fresh(),
-            'alerta_cupo_excedido' => $alertaCupoExcedido,
-            'avisos_salidas' => $operacion->avisosSalidas($fotosAntes),
-        ]);
-    }
-
     public function update(Request $request, string $id)
     {
         $pasajero = ReservaPasajero::with('reserva')->findOrFail($id);
@@ -177,11 +100,13 @@ class ReservaPasajeroController extends Controller
         }
 
         $limite = 15;
+        // T-092: comodines escapados (buscar «50%» no trae todo lo que tenga «50»).
+        $patron = BusquedaLike::contiene($search);
 
         $pasajeros = PasajeroCatalogo::with('documentos')
-            ->where(function ($q) use ($search) {
-                $q->where('nombre', 'ilike', "%{$search}%")
-                    ->orWhereHas('documentos', fn ($qq) => $qq->where('numero_documento', 'ilike', "%{$search}%"));
+            ->where(function ($q) use ($patron) {
+                $q->where('nombre', 'ilike', $patron)
+                    ->orWhereHas('documentos', fn ($qq) => $qq->where('numero_documento', 'ilike', $patron));
             })
             ->orderBy('nombre')
             ->limit($limite)
@@ -204,11 +129,11 @@ class ReservaPasajeroController extends Controller
                 ->whereIn(DB::raw("upper(trim(coalesce(type_document, '')))"), ['DNI', 'CE', 'PAS'])
                 ->whereRaw("trim(coalesce(n_document, '')) not in ('', '00000000')")
                 ->whereRaw("(trim(coalesce(full_name, '')) <> '' or trim(coalesce(name, '') || ' ' || coalesce(surname, '')) <> '')")
-                ->where(function ($q) use ($search) {
-                    $q->where('full_name', 'ilike', "%{$search}%")
-                        ->orWhere('name', 'ilike', "%{$search}%")
-                        ->orWhere('surname', 'ilike', "%{$search}%")
-                        ->orWhere('n_document', 'ilike', "%{$search}%");
+                ->where(function ($q) use ($patron) {
+                    $q->where('full_name', 'ilike', $patron)
+                        ->orWhere('name', 'ilike', $patron)
+                        ->orWhere('surname', 'ilike', $patron)
+                        ->orWhere('n_document', 'ilike', $patron);
                 })
                 ->whereNotExists(fn ($q) => $q->select(DB::raw(1))->from('pasajeros_catalogo')
                     ->whereColumn('pasajeros_catalogo.cliente_id', 'clients.id'))

@@ -55,6 +55,7 @@ import Swal from 'sweetalert2/dist/sweetalert2.js';
 import CampoFecha from '@/components/CampoFecha.vue';
 import { salidaOperativaService } from '@/services/admin/salidaOperativaService';
 import { useToast } from '@/composables/useToast';
+import { escaparHtml } from '@/helpers/escaparHtml';
 import type { SalidaOperativa } from '@/types/agencia-viajes';
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
@@ -71,8 +72,6 @@ const guardando = ref(false);
 
 const reservas = computed(() => props.salida.reservas ?? []);
 
-// Escapa el texto de los avisos antes de ponerlo en el HTML del aviso final.
-const escapar = (t: string) => t.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string));
 
 const confirmar = async () => {
     const r = await (Swal as TVueSwalInstance).fire({
@@ -96,7 +95,7 @@ const confirmar = async () => {
             title: res.message,
             html: res.avisos.length
                 ? '<div class="text-start small"><strong>Avisa a los proveedores:</strong><ul class="mt-1">'
-                    + res.avisos.map((a) => `<li>${escapar(a)}</li>`).join('') + '</ul></div>'
+                    + res.avisos.map((a) => `<li>${escaparHtml(a)}</li>`).join('') + '</ul></div>'
                 : '',
             icon: 'success',
         });
