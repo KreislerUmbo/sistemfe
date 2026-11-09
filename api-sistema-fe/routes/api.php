@@ -31,6 +31,7 @@ use App\Http\Controllers\AgenciaViajes\PaquetePlantillaItemController;
 use App\Http\Controllers\AgenciaViajes\ProveedorController;
 use App\Http\Controllers\AgenciaViajes\ProveedorServicioController;
 use App\Http\Controllers\AgenciaViajes\ProveedorTarifaController;
+use App\Http\Controllers\AgenciaViajes\AerolineaController;
 use App\Http\Controllers\AgenciaViajes\ProveedorTipoConfigController;
 use App\Http\Controllers\AgenciaViajes\ReservaAnticipoController;
 use App\Http\Controllers\AgenciaViajes\ReporteOperativoController;
@@ -61,6 +62,7 @@ use App\Http\Controllers\Cash\PaymentMethodController;
 use App\Http\Controllers\Cash\SupplierController;
 use App\Http\Controllers\Central\CentralAuditLogController;
 use App\Http\Controllers\Central\CentralAuthController;
+use App\Http\Controllers\Central\AerolineaController as CentralAerolineaController;
 use App\Http\Controllers\Central\ProveedorTipoController;
 use App\Http\Controllers\Central\TenantAdminController;
 use App\Http\Controllers\Central\TenantCorreoController;
@@ -260,6 +262,12 @@ Route::prefix('central')->group(function () {
         Route::post('proveedor-tipos', [ProveedorTipoController::class, 'store']);
         Route::put('proveedor-tipos/{id}', [ProveedorTipoController::class, 'update']);
         Route::delete('proveedor-tipos/{id}', [ProveedorTipoController::class, 'destroy']);
+
+        // T-015 — catálogo común de aerolíneas: el Super-Admin edita, desactiva y une.
+        Route::get('aerolineas', [CentralAerolineaController::class, 'index']);
+        Route::put('aerolineas/{id}', [CentralAerolineaController::class, 'update']);
+        Route::delete('aerolineas/{id}', [CentralAerolineaController::class, 'destroy']);
+        Route::post('aerolineas/{id}/unir', [CentralAerolineaController::class, 'unir']);
 
         // Fase B.2.3 — generación manual de invoice de suscripción.
         Route::post('tenants/{id}/invoices', [TenantSubscriptionController::class, 'generarInvoice']);
@@ -739,6 +747,14 @@ Route::group([
     // lectura (mismo criterio que proveedor-tipos).
     Route::get("amenidades", [AmenidadController::class, 'index'])
         ->middleware('permission:agencia.proveedores');
+
+    // T-015 — catálogo común de aerolíneas (central). Buscar y agregar: quien edita
+    // cotizaciones o reservas (el cotizador y la reserva son donde se escribe la aerolínea).
+    // Solo giro Agencia: lo corta el controller (404), no el permiso.
+    Route::get("aerolineas", [AerolineaController::class, 'index'])
+        ->middleware('permission:cotizaciones.editar|reservas.editar');
+    Route::post("aerolineas", [AerolineaController::class, 'store'])
+        ->middleware('permission:cotizaciones.editar|reservas.editar');
 
     Route::post("proveedores/{id}", [ProveedorController::class, 'update'])
         ->middleware('permission:agencia.proveedores');

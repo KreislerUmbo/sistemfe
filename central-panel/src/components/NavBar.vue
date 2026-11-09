@@ -28,6 +28,9 @@ function onLogout() {
         <router-link :to="{ name: 'proveedor-tipos' }" class="nav-link">Tipos de Proveedor</router-link>
       </li>
       <li class="nav-item">
+        <router-link :to="{ name: 'aerolineas' }" class="nav-link">Aerolíneas</router-link>
+      </li>
+      <li class="nav-item">
         <router-link :to="{ name: 'audit-logs' }" class="nav-link">Auditoría</router-link>
       </li>
     </ul>
