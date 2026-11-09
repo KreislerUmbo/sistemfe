@@ -13,6 +13,17 @@ Con el catálogo listo (T-015), los campos de texto libre pasan a ser un buscado
 nombres ya guardados y, en Pasajeros, el vuelo vendido por la agencia trae cargada la aerolínea
 cotizada.
 
+**Lo que dejó T-015 (09-nov-2026), tenerlo en cuenta:**
+- Comparar nombres siempre con `Aerolinea::normalizar()` (minúsculas, sin tildes ni espacios
+  sobrantes): el comando de corrección debe usar esa misma función, no un `lower()` en SQL.
+- `GET`/`POST aerolineas` exigen `cotizaciones.editar|reservas.editar` y dan 404 fuera del giro
+  Agencia. Si el buscador va en una pantalla de solo lectura, ampliar el permiso del `GET`.
+- `POST` devuelve 201 al crear y 200 con la existente (o la vigente, si estaba unida). Si la
+  existente o su destino están **desactivados**, igual la devuelve: el campo quedaría con un nombre
+  que no sale en el buscador. Decidir si `AerolineaSelect` lo avisa o si el `POST` debe responder
+  distinto en ese caso.
+- La búsqueda ordena por nombre, sin priorizar las que empiezan con lo escrito.
+
 ## Alcance
 - Componente `AerolineaSelect.vue` (sugiere mientras se escribe, con debounce; si no existe ofrece
   "Agregar «X»" con `POST aerolineas`; guarda el **nombre** del catálogo). Estilo de los
