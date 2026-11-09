@@ -90,16 +90,18 @@ class AerolineaController extends Controller
         return response()->json(['data' => $aerolinea->only(['id', 'nombre', 'codigo_iata']), 'creada' => true], 201);
     }
 
-    // Regla de mayúsculas (simple): si el nombre viene TODO en mayúsculas se respeta tal cual
-    // (siglas y marcas como "LATAM", "ATSA", "KLM"); en cualquier otro caso ("latam", "sky
-    // airline", "Viva air") se aplica TextoFormatoService (capitalización tipo título). Si el
-    // nombre ya existe, igual se devuelve el del catálogo, así que "latam" nunca degrada a "LATAM".
+    // Regla de mayúsculas (simple): solo si el nombre viene TODO en minúsculas ("viva air") se
+    // aplica TextoFormatoService (capitalización tipo título → "Viva Air"). Si trae alguna
+    // mayúscula se respeta tal cual: siglas y marcas como "KLM", "easyJet", "JetSMART" o
+    // "KLM Royal Dutch Airlines" (TextoFormatoService las pasaría a "Easyjet", "Klm…", y en un
+    // catálogo común eso le llega a todas las agencias). Si el nombre ya existe, igual se
+    // devuelve el del catálogo, así que "latam" nunca crea otra LATAM.
     public static function formatearNombre(string $nombre): string
     {
         $nombre = trim(preg_replace('/\s+/u', ' ', $nombre));
-        $esTodoMayusculas = mb_strtoupper($nombre) === $nombre && mb_strtolower($nombre) !== $nombre;
+        $esTodoMinusculas = mb_strtolower($nombre) === $nombre;
 
-        return $esTodoMayusculas ? $nombre : TextoFormatoService::capitalizarNombrePropio($nombre);
+        return $esTodoMinusculas ? TextoFormatoService::capitalizarNombrePropio($nombre) : $nombre;
     }
 
     private function buscarPorNombre(string $normalizado): ?array

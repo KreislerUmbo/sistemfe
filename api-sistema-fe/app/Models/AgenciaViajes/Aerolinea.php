@@ -3,6 +3,7 @@
 namespace App\Models\AgenciaViajes;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Str;
 use Stancl\Tenancy\Database\Concerns\CentralConnection;
 
 // T-015 — Catálogo central de aerolíneas, común a todas las agencias (los tenants lo leen y le
@@ -27,9 +28,15 @@ class Aerolinea extends Model
         'activa' => 'boolean',
     ];
 
-    // Clave de unicidad: sin mayúsculas ni espacios sobrantes ("  LaTam " = "latam").
+    // Clave de unicidad y de búsqueda: sin mayúsculas, tildes ni espacios sobrantes
+    // ("  LaTam " = "latam", "Star Peru" = "Star Perú"). Str::ascii quita las tildes; si el nombre
+    // no tiene equivalente en ASCII (otro alfabeto) queda vacío y se usa el nombre en minúsculas.
+    // La migración create_aerolineas_table calcula lo mismo para la lista inicial: mantenerlas iguales.
     public static function normalizar(string $nombre): string
     {
-        return mb_strtolower(trim(preg_replace('/\s+/u', ' ', $nombre)));
+        $limpio = mb_strtolower(trim(preg_replace('/\s+/u', ' ', $nombre)));
+        $ascii = Str::ascii($limpio);
+
+        return $ascii !== '' ? $ascii : $limpio;
     }
 }

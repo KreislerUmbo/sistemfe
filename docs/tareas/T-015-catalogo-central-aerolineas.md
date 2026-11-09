@@ -79,7 +79,8 @@ php artisan test   # suite completa, contra PostgreSQL
 
 ## Resultado
 - **Commits:** en la rama `feat/T-015-catalogo-aerolineas` (backend, panel central, docs).
-- **Tests:** `php artisan test --filter=Aerolinea` → 16 pasan (CA1-CA7, carrera del único, validación,
+- **Tests:** `php artisan test --filter=Aerolinea` → 18 pasan tras la revisión (antes 16; se sumaron
+  tildes al buscar/agregar y al renombrar desde central) (CA1-CA7, carrera del único, validación,
   regla de mayúsculas, unir con re-apuntado, reactivar). `RutasAgenciaPermisosTest` en verde y ahora
   cubre `api/aerolineas*`. Suite completa: 2103 pasan, 1 falla (`VentaDirectaLineasTest` «ca1 dos
   lineas en dias distintos…»): pasa sola (15/15) y también con mis cambios apartados, o sea es
@@ -98,9 +99,15 @@ php artisan test   # suite completa, contra PostgreSQL
   - **Permisos:** `GET` y `POST` con `cotizaciones.editar|reservas.editar` (no el conjunto de lectura
     de Agencia): el buscador se usa donde se escribe la aerolínea (cotizador y reserva), que ya exigen
     editar. Si T-016 lo necesita en una pantalla de solo lectura, se amplía el `GET`.
-  - **Regla de mayúsculas del POST:** si el nombre viene TODO en mayúsculas se respeta («LATAM», «KLM»);
-    en cualquier otro caso se aplica `TextoFormatoService` («viva air» → «Viva Air»). Si ya existe, se
-    devuelve el del catálogo, así «latam» nunca degrada a «LATAM». Está comentada en el controller.
+  - **Regla de mayúsculas del POST** (corregida en la revisión): solo si el nombre viene TODO en
+    minúsculas se aplica `TextoFormatoService` («viva air» → «Viva Air»); con alguna mayúscula se
+    respeta tal cual («KLM», «easyJet», «KLM Royal Dutch Airlines»: `TextoFormatoService` las pasaba a
+    «Easyjet»/«Klm…» y en un catálogo común eso le llega a todas). Si ya existe, se devuelve el del
+    catálogo. Está comentada en el controller.
+  - **Normalización sin tildes** (agregada en la revisión): `Aerolinea::normalizar()` quita tildes con
+    `Str::ascii`, así «Star Peru» no duplica «Star Perú» y buscar «peru»/«aerolineas» las encuentra.
+    La migración tiene su propia copia de la función (no depende del modelo): mantenerlas iguales.
+    En dev se recalculó `nombre_normalizado` de las filas ya migradas; producción aún no la corrió.
   - El POST responde 201 al crear y 200 con la existente; si la existente fue unida a otra devuelve la
     vigente a la que apunta. Si la existente está solo desactivada (sin unir) también se devuelve, para
     no duplicar: decide el Super-Admin si reactivarla.
@@ -109,7 +116,9 @@ php artisan test   # suite completa, contra PostgreSQL
 ## Hallazgos fuera de alcance
 - `php artisan migrate` a secas falla en dev: hay 3 migraciones de `menu_items` pendientes en la tabla
   `migrations` de la base por defecto aunque la tabla ya existe en central (deriva de esquema). No se
-  tocó; verificar que producción no tenga el mismo desfase antes del próximo deploy.
+  tocó; verificar que producción no tenga el mismo desfase antes del próximo deploy
+  (`php artisan migrate:status`): `deploy.sh` corre con `set -e`, así que si `migrate --force` falla el
+  deploy se corta en el paso 5 y `aerolineas` no se crea.
 - `VentaDirectaLineasTest` «ca1 dos lineas en dias distintos…» es intermitente dentro de la suite
   completa (pasa sola).
 - El panel central no tiene script `type-check` (solo `build` con `vue-tsc -b`); `proceso.md` §3 lo pide.

@@ -179,8 +179,39 @@ class AerolineaCatalogoTest extends TestCase
     {
         $this->agregar(['nombre' => 'KLM']);
         $this->agregar(['nombre' => 'viva  air peru']);
+        $this->agregar(['nombre' => 'easyJet']);
+        $this->agregar(['nombre' => 'KLM Royal Dutch Airlines']);
+        $this->agregar(['nombre' => 'Wingo air']);
         $this->assertNotNull(Aerolinea::where('nombre', 'KLM')->first());
         $this->assertNotNull(Aerolinea::where('nombre', 'Viva Air Peru')->first());
+        // Con alguna mayúscula se respeta tal cual (no "Easyjet" ni "Klm Royal…").
+        $this->assertNotNull(Aerolinea::where('nombre', 'easyJet')->first());
+        $this->assertNotNull(Aerolinea::where('nombre', 'KLM Royal Dutch Airlines')->first());
+        $this->assertNotNull(Aerolinea::where('nombre', 'Wingo air')->first());
+    }
+
+    public function test_las_tildes_no_cuentan_ni_al_buscar_ni_al_agregar(): void
+    {
+        // La lista inicial ya viene normalizada sin tildes desde la migración.
+        $this->assertSame('star peru', Aerolinea::where('nombre', 'Star Perú')->value('nombre_normalizado'));
+
+        $this->assertContains('Star Perú', $this->nombres('peru'));
+        $this->assertContains('Star Perú', $this->nombres('perú'));
+        $this->assertContains('Aerolíneas Argentinas', $this->nombres('aerolineas'));
+
+        $antes = Aerolinea::count();
+        $respuesta = $this->agregar(['nombre' => 'star peru']);
+        $this->assertSame(200, $respuesta->getStatusCode());
+        $this->assertSame('Star Perú', $respuesta->getData(true)['data']['nombre']);
+        $this->assertSame($antes, Aerolinea::count());
+    }
+
+    public function test_central_no_deja_renombrar_a_un_nombre_que_solo_difiere_en_tildes(): void
+    {
+        $otra = $this->crear('Aerolineas Argentinas Cargo');
+
+        $this->expectException(ValidationException::class);
+        $this->central()->update(Request::create('/x', 'PUT', ['nombre' => 'Aerolineas Argentinas']), (string) $otra->id);
     }
 
     public function test_si_dos_agencias_agregan_a_la_vez_la_segunda_recibe_la_existente(): void
