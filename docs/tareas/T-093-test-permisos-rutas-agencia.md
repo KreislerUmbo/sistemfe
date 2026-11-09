@@ -59,9 +59,25 @@ php artisan test --filter="RutasAgenciaPermisos|PolicyFilaPorVendedor"
 ---
 
 ## Resultado
-- **Commits:**
-- **Tests:**
+- **Commits:** RESULTADO_COMMITS
+- **Tests:** `php artisan test --filter="RutasAgenciaPermisos|PolicyFilaPorVendedor"` → 14 pasan
+  (4 de rutas, 10 de fila). Suite completa: 2096 pasan y 1 falla, `Fila13Fase1cFacturacionTest::descuento_del_combo…` (el intermitente conocido de CLAUDE.md; sola pasa).
+  - CA1: probado a mano — quitado el `->middleware('permission:…')` de `PUT alternativa-items/{id}`
+    el test falla y nombra la ruta; revertido (sin diff en `routes/api.php`).
+  - CA2: 40 reglas de grupo; además falla si una regla deja de coincidir con alguna ruta.
+  - CA3: probado a mano — quitado el `authorize` de `ReservaModificacionController::store`, falla
+    solo ese test; revertido.
 - **Desviaciones de la tarea y por qué:**
+  - La tarea nombra "facturación" como permiso de `reservas/*/facturar*`, pero no existe un permiso
+    así en Agencia: hoy esas rutas exigen `reservas.editar` (`preparar-factura`: `reservas.ver|ver_todas`).
+    El test fija lo que hay hoy; ver hallazgo.
+  - Las Policy que existen son solo `CotizacionPolicy` y `ReservaPolicy`; "alternativa" e "ítem de
+    cotización" la usan vía `autorizarCotizacion()` y "ítem/pasajero/facturación/anticipo/modificación"
+    vía `ReservaPolicy`. El test de fila cubre un método por controller (10 tests) llamando al
+    controller directo, como `ReservaPolicyAccionesTest`.
+  - Rutas con permiso detectadas por `PermissionMiddleware` (`permission:a|b`); la única excepción es
+    `reporte-operativo-pdf` (el test además exige que lleve `signed`).
 
 ## Hallazgos fuera de alcance
--
+- Facturar una reserva (`POST reservas/{id}/facturar`) solo exige `reservas.editar`: no hay un permiso
+  propio de facturación. Decidir si hace falta uno (afecta roles ya creados).
