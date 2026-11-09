@@ -24,6 +24,11 @@ contradice el proceso. Hay además planes que ya no aplican mezclados con los vi
 4. `auditoria-arquitectonica-agencia-viajes.md` §1: el problema 3 (descuento global sobre una
    alternativa aceptada) está resuelto (T-030); anotarlo con el commit, sin reescribir el resto.
 5. Actualizar los enlaces que apunten a los archivos movidos (`grep -rn` en `docs/`, `CLAUDE.md` y comentarios del código).
+6. **Tareas hechas que no se borraron** (hallazgo de T-099): `docs/tareas/T-024-…`, `T-028-…` y
+   `T-078-…` están en «Hechas» del backlog pero su archivo sigue, y piden correr comandos que T-099
+   retiró. Antes de borrar, verificar que su fila de «Hechas» resume lo esencial y que sus
+   «Hallazgos» están en el backlog; si falta algo, sumarlo a «Por analizar». Revisar si hay otras
+   tareas hechas con archivo (comparar `ls docs/tareas/` con la sección «Hechas»).
 
 ## Fuera de alcance
 - Reescribir los planes vigentes.
@@ -39,6 +44,7 @@ contradice el proceso. Hay además planes que ya no aplican mezclados con los vi
 - [ ] **CA1** — `grep -rniE "pendiente|en curso|\[x\]" docs/planning/agencia-de-viajes/plan-hoja-de-ruta-ejecucion.md` no devuelve marcas de estado (o el archivo está en `docs/archivo/`).
 - [ ] **CA2** — Ningún enlace de `docs/` ni de `CLAUDE.md` apunta a un archivo movido.
 - [ ] **CA3** — Todo pendiente que estaba solo en la hoja de ruta quedó en el backlog.
+- [ ] **CA4** — `docs/tareas/` solo tiene archivos de tareas que no están en «Hechas».
 
 ## Seguridad y correctitud
 - [ ] Todo: no aplica (solo documentos)
