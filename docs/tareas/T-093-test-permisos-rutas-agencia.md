@@ -59,7 +59,7 @@ php artisan test --filter="RutasAgenciaPermisos|PolicyFilaPorVendedor"
 ---
 
 ## Resultado
-- **Commits:** RESULTADO_COMMITS
+- **Commits:** 2c38537 (rama test/T-093-permisos-rutas-agencia)
 - **Tests:** `php artisan test --filter="RutasAgenciaPermisos|PolicyFilaPorVendedor"` → 14 pasan
   (4 de rutas, 10 de fila). Suite completa: 2096 pasan y 1 falla, `Fila13Fase1cFacturacionTest::descuento_del_combo…` (el intermitente conocido de CLAUDE.md; sola pasa).
   - CA1: probado a mano — quitado el `->middleware('permission:…')` de `PUT alternativa-items/{id}`
