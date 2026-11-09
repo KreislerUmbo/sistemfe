@@ -1494,8 +1494,9 @@ class AlternativaItemController extends Controller
 
         $validado = $validator->validated();
         $validado['tarifa_valida_hasta'] = \App\Services\HoraPeru::aUtc($validado['tarifa_valida_hasta'] ?? null);
-        // 29-ago-2026 — capitalización tipo título, solo hacia adelante.
-        $validado['aerolinea'] = \App\Services\TextoFormatoService::capitalizarNombrePropio($validado['aerolinea']);
+        // 29-ago-2026 — capitalización tipo título, solo hacia adelante. T-016: misma regla que
+        // el catálogo común (solo si viene todo en minúsculas), para no pasar "LATAM" a "Latam".
+        $validado['aerolinea'] = AerolineaController::formatearNombre($validado['aerolinea']);
         // T-007: un pasaje aéreo es un boleto por persona y guarda a quiénes cubre. Con null
         // ("todos") un pasajero agregado después quedaba dentro de un boleto que no se le cobró.
         if (empty($validado['pax_incluidos'])) {

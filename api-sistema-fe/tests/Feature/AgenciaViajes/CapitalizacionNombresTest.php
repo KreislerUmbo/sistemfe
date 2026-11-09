@@ -189,4 +189,20 @@ class CapitalizacionNombresTest extends TestCase
         $item = $respuesta->getData(true)['alternativa_item'];
         $this->assertSame('Latam Peru', $item['cotizacion_pasaje_aereo']['aerolinea'] ?? null);
     }
+
+    // T-016: el buscador guarda el nombre del catálogo; con alguna mayúscula se respeta tal cual.
+    public function test_pasaje_aereo_respeta_mayusculas_del_catalogo(): void
+    {
+        $alternativa = $this->crearAlternativaConPasajeros();
+
+        foreach (['LATAM', 'JetSMART'] as $nombre) {
+            $respuesta = app(AlternativaItemController::class)->store(new Request([
+                'origen_tipo' => 'pasaje_aereo',
+                'aerolinea' => $nombre, 'moneda' => 'PEN', 'tarifa_base_adulto' => 350,
+            ]), (string) $alternativa->id);
+
+            $item = $respuesta->getData(true)['alternativa_item'];
+            $this->assertSame($nombre, $item['cotizacion_pasaje_aereo']['aerolinea'] ?? null);
+        }
+    }
 }

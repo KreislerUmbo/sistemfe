@@ -264,7 +264,7 @@ class AlternativaItemPasajeAereoTest extends TestCase
 
         $this->assertSame(422, $response->getStatusCode());
         $mensaje = $response->getData(true)['message'];
-        $this->assertStringContainsString('Latam', $mensaje);
+        $this->assertStringContainsString('LATAM', $mensaje); // T-016: se guarda como viene del catálogo
         $this->assertStringContainsString('Alternativa 1', $mensaje);
         $this->assertStringContainsString('pasajero 2 (adulto)', $mensaje);
         $this->assertSame(5, CotizacionPasajero::where('cotizacion_id', $f['alternativa']->cotizacion_id)->count());

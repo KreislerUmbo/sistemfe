@@ -38,7 +38,7 @@ class RutasAgenciaPermisosTest extends TestCase
         [null, 'api/proveedores*', ['agencia.proveedores']],
         [null, 'api/proveedor-servicios/*', ['agencia.proveedores']],
         [null, 'api/proveedor-tipos*', ['agencia.proveedores']],
-        [null, 'api/aerolineas*', ['cotizaciones.editar', 'reservas.editar']],
+        [null, 'api/aerolineas*', ['agencia.paquetes', 'cotizaciones.editar', 'reservas.editar']],
         [['PUT', 'PATCH', 'DELETE'], 'api/proveedor-tarifas/*', ['agencia.proveedores']],
         [null, 'api/guias*', ['agencia.guias']],
         [null, 'api/guia-tarifas/*', ['agencia.guias']],

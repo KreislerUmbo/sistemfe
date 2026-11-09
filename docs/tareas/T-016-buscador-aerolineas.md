@@ -102,9 +102,20 @@ cd admin-start-kit && npm run type-check && npm run build
   - La búsqueda ahora prioriza las que empiezan con lo escrito.
   - No se avisa en `AerolineaSelect` si la existente está desactivada (sigue sin decidirse; el
     nombre se guarda igual).
-  - Prueba funcional en pantalla (Playwright) **no hecha**: pendiente en la revisión.
+  - Prueba funcional en pantalla: hecha en la revisión (ver abajo).
   - `components.d.ts` se regeneró solo (registra el componente nuevo).
   - Suite completa: 2111 pasan, 2 fallan; `VentaDirectaLineasTest` falló en la corrida completa y pasa aislado (con y sin estos cambios). El otro fallo no quedó registrado (salida recortada): repetir la suite en la revisión.
+- **Revisión (09-nov-2026):**
+  - Suite repetida: 2112 pasan, 1 falla. `VentaDirectaLineasTest` pasó (intermitente). El fallo
+    era `RutasAgenciaPermisosTest`: esperaba el permiso viejo de `aerolineas`; se agregó
+    `agencia.paquetes` a la regla.
+  - Pantalla (agencia-demo): CA2 y CA3 OK. CA1 fallaba: el navegador mandaba "LATAM" y se guardaba
+    "Latam", porque `validarPasajeAereo()` pasaba la aerolínea por `capitalizarNombrePropio()`
+    (29-ago). Ahora usa `AerolineaController::formatearNombre()` (formato solo si viene todo en
+    minúsculas). Test nuevo `test_pasaje_aereo_respeta_mayusculas_del_catalogo`; el de T-075 esperaba
+    "Latam" y ahora "LATAM". Repetido en pantalla: guarda "LATAM". Carpeta `tests/Feature/AgenciaViajes`: 1180 pasan.
+  - Observaciones de UX (no bloquean): salir del campo sin elegir descarta lo escrito; "Agregar «X»"
+    aparece aunque haya sugerencias (riesgo de nombres a medias en el catálogo común).
 
 ## Hallazgos fuera de alcance
 - `reserva_pasajeros.vuelo_aerolinea_ida/_vuelta` ya no existen (la migración
