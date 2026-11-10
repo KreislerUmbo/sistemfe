@@ -3970,16 +3970,18 @@ const abrirDrawerBiblioteca = () => {
 // T-035 (R3): cada vez que se abre la biblioteca, el filtro vuelve al destino activo de la
 // alternativa (el chip seleccionado; sin catálogo → sin filtro). Mientras siga abierta se respeta
 // lo que el vendedor cambie. Cubre todas las formas de abrirla (botón, edición de ítem manual…).
-watch(drawerBibliotecaAbierto, (abierto) => {
+watch(drawerBibliotecaAbierto, async (abierto) => {
     if (!abierto) return;
     const destino = alternativaDestinos.value.find((d) => d.id === destinoActivoId.value);
     const nuevoId = destino?.destino_atractivo_id ?? null;
     filtroDestinoTexto.value = nuevoId ? (destino?.destino_texto ?? '') : '';
-    if (filtroDestinoId.value !== nuevoId) {
-        filtroDestinoId.value = nuevoId; // el watch del filtro recarga la lista
-    } else {
-        cargarBiblioteca();
-    }
+    filtroDestinoId.value = nuevoId;
+    // Cambiar el filtro dispara el watch de filtros, que recarga con 300 ms de espera (pensada para
+    // cuando se escribe). Al abrir no hay nada que esperar: tras nextTick ese watch ya agendó su
+    // recarga; se cancela y se carga ya, para que la banda y la lista no queden desfasadas.
+    await nextTick();
+    clearTimeout(bibliotecaTimeout);
+    cargarBiblioteca();
 });
 
 const cerrarDrawerBiblioteca = () => {
