@@ -59,7 +59,7 @@ php artisan test --filter=Pdf
 
 ## Resultado
 - **Commits:** rama `fix/T-037-pdf-nombre-y-rotulo`, un commit (ver `git log`).
-- **Tests:** 6 nuevos en `SesionM5OpcionesHotelesPdfTest` (nombre con código/cliente/alternativa,
+- **Tests:** 10 nuevos en `SesionM5OpcionesHotelesPdfTest` (nombre con código/cliente/alternativa,
   saneado de caracteres, rótulo Local/Nacional con noches y singular, mayorista, mezcla por fila).
   Filtro `Pdf|EnvioCorreoCotizacion|SesionM5`: 100 verdes. `vue-tsc --noEmit` sin errores.
   Suite completa: 2121 verdes, 1 fallo (intermitente conocido `Fila13Fase1cFacturacionTest::descuento del combo`). CA4: PDF real generado y revisado con Ghostscript:
@@ -69,8 +69,10 @@ php artisan test --filter=Pdf
     palabra de `full_name`; empresa = `name_comerc` o razón social. Cada parte se acota a 40 caracteres.
   - Se agregó `Content-Disposition` a `exposed_headers` en `config/cors.php`: sin eso el navegador
     no deja leer el nombre del servidor cuando frontend y API están en orígenes distintos (producción).
-  - CA2/CA3 se probaron sobre los datos que alimentan la vista (`opcionesHoteles()['rotulo']`) y el
-    texto real del PDF con Ghostscript, no con un test que extraiga texto del PDF (DomPDF lo comprime).
+  - CA2/CA3: además de `opcionesHoteles()['rotulo']`, 3 tests renderizan el HTML real de la
+    plantilla con los datos que arma `construir()` (capturados con `View::composer`) y verifican el
+    rótulo del título y el rótulo por fila en la mezcla. No se extrae texto del PDF (DomPDF lo comprime).
+  - Corte a 40 caracteres: se hace antes del `trim`, para no dejar un espacio antes de " - " (test propio).
   - `descargarArchivo()` también lo usa "condiciones generales": ahora respeta el nombre del servidor
     si lo manda (sin cambio visible si no).
 

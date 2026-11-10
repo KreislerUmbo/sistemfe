@@ -299,9 +299,11 @@ class AlternativaPdfService
     private function limpiarParteNombreArchivo(string $texto): string
     {
         $texto = preg_replace('/[\/\\\\:*?"<>|\x00-\x1F]+/u', ' ', $texto);
-        $texto = trim(preg_replace('/\s+/u', ' ', $texto), ' .');
+        $texto = preg_replace('/\s+/u', ' ', $texto);
 
-        return mb_substr($texto, 0, 40);
+        // Se corta ANTES del trim: si el corte cae justo tras un espacio o
+        // un punto, el trim igual lo quita ("…Selva  - Alternativa").
+        return trim(mb_substr(trim($texto), 0, 40), ' .');
     }
 
     // Si TODOS los ítems de la alternativa comparten el mismo tour_origen_id
