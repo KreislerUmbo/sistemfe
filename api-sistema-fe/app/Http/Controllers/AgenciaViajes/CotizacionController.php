@@ -271,7 +271,8 @@ class CotizacionController extends Controller
             // frontend necesita saber SIN intentar la acción si un ítem ya
             // generó una reserva (bloquea editar/eliminar). Antes el único
             // aviso era el 422 recién al intentar guardar.
-            'alternativas.items.reservaItem',
+            // T-100: con su reserva, para decir en el lienzo cuál lo tomó y si está cancelada.
+            'alternativas.items.reservaItem.reserva:id,codigo,estado',
             // Sesión 12f-1 — el frontend todavía no lee esto (llega en
             // 12f-2), pero tiene que estar disponible para esa sesión sin
             // volver a tocar este endpoint.

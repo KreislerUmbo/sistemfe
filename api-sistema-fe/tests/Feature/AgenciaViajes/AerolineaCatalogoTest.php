@@ -334,6 +334,29 @@ class AerolineaCatalogoTest extends TestCase
         $this->assertNotContains('LATAM Airlines', $this->nombres('latam'));
     }
 
+    // T-100: agregar una que soporte desactivó no la devuelve (quedaría un nombre que no sale en
+    // el buscador); tampoco si es la de destino de una unida y después se desactivó.
+    public function test_agregar_una_desactivada_responde_422_con_aviso(): void
+    {
+        $retirada = $this->crear('Retirada Air');
+        $this->central()->destroy((string) $retirada->id);
+
+        $respuesta = $this->agregar(['nombre' => 'retirada air']);
+        $this->assertSame(422, $respuesta->getStatusCode());
+        $this->assertStringContainsString('«Retirada Air» fue retirada', $respuesta->getData(true)['message']);
+
+        $vieja = $this->crear('Vieja Air');
+        $nueva = $this->crear('Nueva Air');
+        $this->unir($vieja, $nueva);
+        $this->assertSame(200, $this->agregar(['nombre' => 'vieja air'])->getStatusCode());
+
+        $this->central()->destroy((string) $nueva->id);
+        $respuesta = $this->agregar(['nombre' => 'vieja air']);
+        $this->assertSame(422, $respuesta->getStatusCode());
+        $this->assertStringContainsString('«Nueva Air»', $respuesta->getData(true)['message']);
+        $this->assertSame(1, Aerolinea::where('nombre_normalizado', 'vieja air')->count());
+    }
+
     public function test_unir_rechaza_a_si_misma_y_destino_inactivo(): void
     {
         $a = $this->crear('A Air');

@@ -53,7 +53,8 @@ class AerolineaController extends Controller
 
     // POST aerolineas — agrega; si ya existe (sin distinguir mayúsculas ni espacios) devuelve la
     // existente (200) en vez de duplicar; si dos agencias la agregan a la vez, la violación del
-    // índice único también termina devolviendo la existente.
+    // índice único también termina devolviendo la existente. Si la existente está desactivada
+    // responde 422 (T-100, ver responderExistente()).
     public function store(Request $request): JsonResponse
     {
         $this->soloAgencia();
@@ -68,7 +69,7 @@ class AerolineaController extends Controller
 
         $existente = $this->buscarPorNombre($normalizado);
         if ($existente) {
-            return response()->json(['data' => $existente, 'creada' => false]);
+            return $this->responderExistente($existente);
         }
 
         try {
@@ -88,7 +89,7 @@ class AerolineaController extends Controller
                 throw $e;
             }
 
-            return response()->json(['data' => $existente, 'creada' => false]);
+            return $this->responderExistente($existente);
         }
 
         return response()->json(['data' => $aerolinea->only(['id', 'nombre', 'codigo_iata']), 'creada' => true], 201);
@@ -108,15 +109,29 @@ class AerolineaController extends Controller
         return $esTodoMinusculas ? TextoFormatoService::capitalizarNombrePropio($nombre) : $nombre;
     }
 
-    private function buscarPorNombre(string $normalizado): ?array
+    private function buscarPorNombre(string $normalizado): ?Aerolinea
     {
-        // Si la existente está inactiva o unida a otra, se devuelve la vigente a la que apunta.
+        // Si la existente está unida a otra, se devuelve la vigente a la que apunta.
         $aerolinea = Aerolinea::where('nombre_normalizado', $normalizado)->first();
         for ($i = 0; $aerolinea && $aerolinea->unida_a_id && $i < 10; $i++) {
             $aerolinea = Aerolinea::find($aerolinea->unida_a_id);
         }
 
-        return $aerolinea?->only(['id', 'nombre', 'codigo_iata']);
+        return $aerolinea;
+    }
+
+    // T-100: una aerolínea que soporte desactivó (o la de destino de una unida, si después se
+    // desactivó) no se devuelve: el campo quedaría con un nombre que ya no sale en el buscador.
+    private function responderExistente(Aerolinea $existente): JsonResponse
+    {
+        if (! $existente->activa) {
+            return response()->json([
+                'code' => 422,
+                'message' => "«{$existente->nombre}» fue retirada del catálogo de aerolíneas. Elige otra o avisa a soporte.",
+            ], 422);
+        }
+
+        return response()->json(['data' => $existente->only(['id', 'nombre', 'codigo_iata']), 'creada' => false]);
     }
 
     private static function escaparLike(string $texto): string

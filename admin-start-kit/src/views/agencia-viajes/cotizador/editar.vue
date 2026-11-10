@@ -351,6 +351,9 @@
                     <div v-if="itemPasajeAereoEnEdicion && formPasajeSoloLectura" class="d-flex justify-content-end mb-1">
                         <button type="button" class="btn btn-link btn-sm p-0" @click="toggleFormPasajeAereo"><i class="fas fa-times me-1"></i>Cerrar</button>
                     </div>
+                    <div v-if="!alternativaSoloLectura && avisoItemReservado(itemPasajeAereoEnEdicion)" class="alert alert-info py-2 small mb-2">
+                        <i class="fas fa-lock me-1"></i>{{ avisoItemReservado(itemPasajeAereoEnEdicion) }}
+                    </div>
                     <PasajeAereoForm :alternativa-id="alternativaActiva.id" :dia-activo="diaActivoParaAgregar"
                         :alternativa-destino-id="destinoActivoId"
                         :pasajeros="cotizacion?.pasajeros ?? []" :item-existente="itemPasajeAereoEnEdicion" :solo-lectura="formPasajeSoloLectura"
@@ -1400,6 +1403,9 @@
                         </template>
 
                         <template v-else-if="pasoDrawer === 'manual' && alternativaActiva">
+                            <div v-if="!alternativaSoloLectura && avisoItemReservado(itemManualEnEdicion)" class="alert alert-info py-2 small mb-2">
+                                <i class="fas fa-lock me-1"></i>{{ avisoItemReservado(itemManualEnEdicion) }}
+                            </div>
                             <ItemManualForm :alternativa-id="alternativaActiva.id" :dia-activo="diaActivoParaAgregar"
                                 :alternativa-destino-id="destinoActivoId"
                                 :pasajeros="cotizacion?.pasajeros ?? []" :item-existente="itemManualEnEdicion" :solo-lectura="formManualSoloLectura"
@@ -3959,6 +3965,20 @@ const itemManualEnEdicion = ref<AlternativaItem | null>(null);
 // «Ver detalle» de un ítem ya reservado abre el mismo formulario con los campos deshabilitados.
 const formManualSoloLectura = computed(() => alternativaSoloLectura.value || !!itemManualEnEdicion.value?.reserva_item);
 const formPasajeSoloLectura = computed(() => alternativaSoloLectura.value || !!itemPasajeAereoEnEdicion.value?.reserva_item);
+
+// T-100 — Por qué un servicio está en solo lectura: lo tomó una reserva. Una cancelada tampoco lo
+// libera (lo lee para su historial): se cambia duplicando la alternativa. Mismo texto que
+// ReservaItem::mensajeBloqueo() en el backend.
+const avisoItemReservado = (item: AlternativaItem | null | undefined): string | null => {
+    const ri = item?.reserva_item;
+    if (!ri) return null;
+    const r = ri.reserva;
+    const codigo = r?.codigo ?? (r ? `#${r.id}` : null);
+    if (!codigo) return 'Este servicio ya tiene una reserva generada.';
+    return r?.estado === 'cancelada'
+        ? `Lo tomó la reserva ${codigo} (cancelada), que lo conserva en su historial. Para cambiarlo, duplica la alternativa.`
+        : `Lo tomó la reserva ${codigo}. Para cambiarlo, usa Modificar reserva.`;
+};
 
 const abrirEdicionManual = (item: AlternativaItem) => {
     itemManualEnEdicion.value = item;

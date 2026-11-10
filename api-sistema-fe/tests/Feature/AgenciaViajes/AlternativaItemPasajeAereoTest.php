@@ -213,6 +213,45 @@ class AlternativaItemPasajeAereoTest extends TestCase
 
         $this->assertSame(422, $response->getStatusCode());
     }
+
+    // T-100: una reserva cancelada tampoco libera el pasaje (lo lee para su historial); el mensaje
+    // dice cuál reserva lo tomó y qué hacer. Con una activa, manda a Modificar reserva.
+    public function test_pasaje_de_reserva_cancelada_sigue_bloqueado_con_mensaje_claro(): void
+    {
+        $f = $this->crearAlternativaConFamilia();
+        $creado = app(AlternativaItemController::class)->store(new Request($this->payloadBase()), (string) $f['alternativa']->id)
+            ->getData(true)['alternativa_item'];
+
+        $reservaId = DB::table('reserva')->insertGetId([
+            'alternativa_id' => $f['alternativa']->id, 'estado' => 'cancelada', 'codigo' => 'RTEST-0001',
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        ReservaItem::create(['reserva_id' => $reservaId, 'alternativa_item_id' => $creado['id'], 'fecha_origen' => 'auto']);
+
+        $editar = app(AlternativaItemController::class)->actualizarPasajeAereo(new Request($this->payloadBase()), (string) $creado['id']);
+        $this->assertSame(422, $editar->getStatusCode());
+        $this->assertSame(
+            'No se puede editar: lo tomó la reserva RTEST-0001 (cancelada), que lo conserva en su historial. Para cambiarlo, duplica la alternativa.',
+            $editar->getData(true)['message']
+        );
+
+        $eliminar = app(AlternativaItemController::class)->destroy((string) $creado['id']);
+        $this->assertSame(422, $eliminar->getStatusCode());
+        $this->assertStringStartsWith('No se puede eliminar: lo tomó la reserva RTEST-0001 (cancelada)', $eliminar->getData(true)['message']);
+        $this->assertDatabaseHas('alternativa_items', ['id' => $creado['id']]);
+
+        // Si además lo tomó una reserva activa, el mensaje habla de esa.
+        $activaId = DB::table('reserva')->insertGetId([
+            'alternativa_id' => $f['alternativa']->id, 'estado' => 'activa', 'codigo' => 'RTEST-0002',
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        ReservaItem::create(['reserva_id' => $activaId, 'alternativa_item_id' => $creado['id'], 'fecha_origen' => 'auto']);
+
+        $this->assertSame(
+            'No se puede editar: lo tomó la reserva RTEST-0002. Para cambiarlo, usa Modificar reserva.',
+            app(AlternativaItemController::class)->actualizarPasajeAereo(new Request($this->payloadBase()), (string) $creado['id'])->getData(true)['message']
+        );
+    }
     public function test_editar_sin_pax_incluidos_cubre_a_todos_nunca_queda_vacio(): void
     {
         $f = $this->crearAlternativaConFamilia();
