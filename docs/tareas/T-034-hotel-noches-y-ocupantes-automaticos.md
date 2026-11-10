@@ -58,9 +58,18 @@ cd admin-start-kit && npx vitest run src/helpers/fecha.test.ts && npm run type-c
 ---
 
 ## Resultado
-- **Commits:**
-- **Tests:**
+- **Commits:** rama `feat/T-034-hotel-noches-ocupantes` (ver `git log`). En revisión, no marcada hecha.
+- **Tests:** Vitest `fecha.test.ts` 15/15 (CA4: normal, cambio de mes, cambio de año, iguales, negativo).
+  `build` OK. `type-check`: 47 errores, **los mismos con y sin mis cambios** (fake-backend, portal,
+  rutas); ninguno en los archivos tocados.
+  **CA1–CA3 NO probados en el navegador** (sin sesión de agencia-demo en este turno): quedan
+  pendientes de prueba manual.
 - **Desviaciones de la tarea y por qué:**
+  - Prop nuevo `textoNoches` y `marcarTodosLosPasajeros` (opt-in) en el picker; mayorista no los usa.
+  - Si hay comparación abierta (`grupoAbierto`), se usa su cantidad y no se muestra el texto de noches.
+  - Con todos los pasajeros marcados, `pax_incluidos` viaja con todos los ids (antes `null` si no
+    se marcaba ninguno): confirmar que el backend lo trata igual en precio.
+  - En modo "Comparar varias opciones" solo cambian noches y texto; `agregarGrupo` sin `pax_incluidos`.
 
 ## Hallazgos fuera de alcance
--
+- `npm run type-check` ya falla con 47 errores en `main` (fake-backend, portal, rutas).

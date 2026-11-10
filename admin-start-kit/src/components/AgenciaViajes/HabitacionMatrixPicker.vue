@@ -137,6 +137,7 @@
                                     <input type="text" class="form-control text-center" :value="cantidad" readonly>
                                     <button class="btn btn-outline-secondary" type="button" @click="cantidad++">+</button>
                                 </div>
+                                <div v-if="textoNoches" class="small text-secondary mt-1">{{ textoNoches }}</div>
                             </td>
                             <td v-else-if="seleccionadaId && !modoGrupo"></td>
                             <td class="text-end text-nowrap">
@@ -191,6 +192,7 @@
                     <input type="text" class="form-control text-center" :value="cantidad" readonly>
                     <button class="btn btn-outline-secondary" type="button" @click="cantidad++">+</button>
                 </div>
+                <span v-if="textoNoches" class="small text-secondary">{{ textoNoches }}</span>
             </template>
             <span class="small text-secondary">{{ idsGrupo.length }} opción(es) seleccionada(s)</span>
             <button class="btn btn-sm btn-primary" type="button" :disabled="idsGrupo.length < (minimoGrupo ?? 2) || deshabilitarConfirmar"
@@ -276,6 +278,11 @@ const props = defineProps<{
     // viene el precio.
     cantidadLabel?: string;
     cantidadDefault?: number;
+    // T-034 — texto informativo junto al selector ("3 noches (10/12 – 13/12)"). Sin valor, no se muestra.
+    textoNoches?: string;
+    // T-034 — al elegir una habitación quedan marcados todos los pasajeros como ocupantes
+    // (el vendedor desmarca si reparte). Opt-in: solo lo enciende el caller Local/Nacional.
+    marcarTodosLosPasajeros?: boolean;
     // El caller mayorista deshabilita confirmar mientras la OpcionMayorista
     // no esté 'elegida' (el backend ya lo bloquea con 422 — esto solo evita
     // que el usuario llegue al error después de clickear).
@@ -456,7 +463,7 @@ const precioVentaCamaAdicionalSeleccionada = computed(() => {
 const elegir = (id: number) => {
     seleccionadaId.value = id;
     cantidad.value = props.cantidadDefault ?? 1;
-    paxSeleccionados.value = [];
+    paxSeleccionados.value = props.marcarTodosLosPasajeros ? (props.pasajeros ?? []).map((p) => p.id) : [];
     camasAdicionales.value = 0;
 };
 

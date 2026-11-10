@@ -1391,7 +1391,9 @@
                                 :edad-max-nino-cama-adicional="matrizHotelActiva.edadMaxNinoCamaAdicional"
                                 :minimo-grupo="matrizHotelActiva.grupoAbierto || matrizHotelActiva.tarifas.length <= 1 ? 1 : 2"
                                 :iniciar-en-modo-grupo="!!matrizHotelActiva.grupoAbierto"
-                                :cantidad-default="matrizHotelActiva.grupoAbierto?.cantidad"
+                                :cantidad-default="matrizHotelActiva.grupoAbierto?.cantidad ?? nochesHotelDefault.noches"
+                                :texto-noches="matrizHotelActiva.grupoAbierto ? undefined : nochesHotelDefault.texto"
+                                marcar-todos-los-pasajeros
                                 @seleccionar="({ id, cantidad, pax_incluidos, camas_adicionales_nino }) => matrizHotelActiva!.adhoc ? agregarItemHotelAdhocLocal(id, cantidad, pax_incluidos, camas_adicionales_nino) : agregarItemProveedorHotel(id, cantidad, pax_incluidos, camas_adicionales_nino)"
                                 @agregar-grupo="({ ids, cantidad }) => matrizHotelActiva!.adhoc ? agregarGrupoHotelAdhocLocal(ids, cantidad) : agregarGrupoProveedorHotel(ids, cantidad)" />
                         </template>
@@ -1487,7 +1489,7 @@ import { servicioService } from '@/services/admin/servicioService';
 import { bibliotecaCotizadorService, type BibliotecaTipo } from '@/services/admin/bibliotecaCotizadorService';
 import { reservaService } from '@/services/admin/reservaService';
 import { useAgenciaViajesCatalogosStore } from '@/stores/agenciaViajesCatalogos';
-import { formatDiaCorto, formatFecha, formatFechaHora, hoyPeru, partesFechaHoraPeru, sumarDiasISO } from '@/helpers/fecha';
+import { diferenciaDiasISO, formatDiaCorto, formatFecha, formatFechaHora, hoyPeru, partesFechaHoraPeru, sumarDiasISO } from '@/helpers/fecha';
 import { guiaService } from '@/services/admin/guiaService';
 import { tipoCambioAgenciaService } from '@/services/admin/tipoCambioAgenciaService';
 import type { Cotizacion, Alternativa, AlternativaItem, ProveedorTarifa, OpcionMayorista, OpcionMayoristaTour, OpcionMayoristaOpcional, OpcionHotelTarifa, Proveedor, ProveedorTipo, BibliotecaResultado, ConfiguracionAgencia, DestinoServicio, GuiaTarifa, Servicio, TipAfeIgv, DestinoTributario, TemporadaDesactualizada } from '@/types/agencia-viajes';
@@ -3087,6 +3089,22 @@ const calcularVistaPreviaCombo = (idsTourOrigen: Set<number>) => {
     const dias = new Set([...grupos.values()].map((g) => g.dia));
     return dias.size > 1 ? [...grupos.values()].sort((a, b) => a.dia - b.dia) : null;
 };
+
+// T-034 — noches por defecto del hotel Local/Nacional: las del destino activo (si tiene ambas
+// fechas), si no las de la cotización, si no 1. Si sale ≤ 0 (fechas al revés), 1.
+// Fechas "YYYY-MM-DD" sin zona horaria (diferenciaDiasISO). El texto solo existe si hubo fechas.
+const nochesHotelDefault = computed<{ noches: number; texto?: string }>(() => {
+    const destino = alternativaDestinos.value.find((d) => d.id === destinoActivoId.value);
+    const cot = cotizacion.value;
+    const delDestino = !!(destino?.fecha_inicio && destino?.fecha_fin);
+    const desde = delDestino ? destino!.fecha_inicio : cot?.fecha_viaje_desde;
+    const hasta = delDestino ? destino!.fecha_fin : cot?.fecha_viaje_hasta;
+    if (!desde || !hasta) return { noches: 1 };
+    const noches = diferenciaDiasISO(desde, hasta);
+    if (noches <= 0) return { noches: 1 };
+    const corto = (f: string) => `${f.slice(8, 10)}/${f.slice(5, 7)}`;
+    return { noches, texto: `${noches} ${noches === 1 ? 'noche' : 'noches'} (${corto(desde)} – ${corto(hasta)})` };
+});
 
 const matrizHotelActiva = ref<{
     tarifas: Array<{ id: number; tipo_habitacion: string; precio: number; precioVentaCamaAdicional: number | null }>;
