@@ -197,7 +197,7 @@
             <span class="small text-secondary">{{ idsGrupo.length }} opción(es) seleccionada(s)</span>
             <button class="btn btn-sm btn-primary" type="button" :disabled="idsGrupo.length < (minimoGrupo ?? 2) || deshabilitarConfirmar"
                 :title="deshabilitarConfirmar ? motivoDeshabilitado : ''" @click="confirmarGrupo">
-                <i class="fas fa-check me-1"></i>{{ idsGrupo.length === 1 ? 'Sumar a la comparación' : `Agregar ${idsGrupo.length} opciones como grupo` }}
+                <i class="fas fa-check me-1"></i>{{ idsGrupo.length === 1 ? (props.iniciarEnModoGrupo || (minimoGrupo ?? 2) > 1 ? 'Sumar a la comparación' : 'Empezar comparación') : `Agregar ${idsGrupo.length} opciones como grupo` }}
             </button>
         </div>
 
@@ -308,9 +308,9 @@ const props = defineProps<{
     // persistida") — cuando ya existe un grupo sin resolver para el día
     // activo y el vendedor suma OTRO hotel a esa misma comparación, alcanza
     // con elegir 1 sola habitación de este hotel (las 2+ ya están cubiertas
-    // por lo cargado antes). Sin este prop, el mínimo sigue siendo 2 — ni
-    // mayorista ni la primera vez que se arma un grupo en Local cambian de
-    // comportamiento.
+    // por lo cargado antes). Local/Nacional (T-019) pasa 1 siempre, también
+    // en el primer hotel: permite empezar comparando "matrimonial A vs B".
+    // Sin este prop (mayorista) el mínimo sigue siendo 2.
     minimoGrupo?: number;
     // Mismo caso: si ya hay una comparación en curso, el picker de este
     // segundo hotel arranca directo en modo "Comparar varias opciones" —

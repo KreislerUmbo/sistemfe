@@ -1398,7 +1398,7 @@
                                 mostrar-cantidad-en-grupo
                                 :edad-max-infante-gratis="matrizHotelActiva.edadMaxInfanteGratis"
                                 :edad-max-nino-cama-adicional="matrizHotelActiva.edadMaxNinoCamaAdicional"
-                                :minimo-grupo="matrizHotelActiva.grupoAbierto || matrizHotelActiva.tarifas.length <= 1 ? 1 : 2"
+                                :minimo-grupo="1"
                                 :iniciar-en-modo-grupo="!!matrizHotelActiva.grupoAbierto"
                                 :cantidad-default="matrizHotelActiva.grupoAbierto?.cantidad ?? nochesHotelDefault.noches"
                                 :texto-noches="matrizHotelActiva.grupoAbierto ? undefined : nochesHotelDefault.texto"
