@@ -66,7 +66,7 @@ cd admin-start-kit && npm run type-check && npm run build
 
 ## Resultado
 - **Commits:** ver `git log feat/T-036-mayorista-claro` (un commit: `feat(agencia): mayorista con etiquetas, primera opción elegida sola y "solo adultos" a la vista (T-036)`).
-- **Tests:** `OpcionMayoristaCrudTest::test_la_primera_opcion_de_mayorista_queda_elegida_y_la_segunda_no` (CA1). Suite completa del backend: 2128 passed (8509 assertions). `vue-tsc`: 47 errores antes y 47 después, ninguno en `editar.vue` ni `OpcionMayoristaForm.vue`; `build-only` compila.
+- **Tests:** `OpcionMayoristaCrudTest::test_la_primera_opcion_de_mayorista_queda_elegida_y_la_segunda_no` (CA1); `test_con_varios_destinos_la_primera_del_segundo_destino_queda_candidata` (desviación por alternativa, agregado en la revisión). Suite completa del backend: 2128 passed (8509 assertions). `vue-tsc`: 47 errores antes y 47 después, ninguno en `editar.vue` ni `OpcionMayoristaForm.vue`; `build-only` compila.
 - **Prueba funcional (Playwright, agencia-demo, cotización 79 con 2 adultos + 1 niño temporal):**
   CA2 ✓ etiquetas visibles; CA1 ✓ la primera opción nace "Elegida" y con Hoteles abierto; aviso "Adultos: precio por adulto…" en la matriz ✓;
   CA3 ✓ lienzo y panel dicen "× 2 adultos" y el total dice "Total (el paquete de mayorista no incluye niños)";

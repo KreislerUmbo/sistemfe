@@ -6,6 +6,7 @@ use Tests\Feature\AgenciaViajes\Concerns\ConAccesoATodasLasReservas;
 use App\Http\Controllers\AgenciaViajes\OpcionHotelController;
 use App\Http\Controllers\AgenciaViajes\OpcionMayoristaController;
 use App\Models\AgenciaViajes\Alternativa;
+use App\Models\AgenciaViajes\AlternativaDestino;
 use App\Models\AgenciaViajes\AlternativaItem;
 use App\Models\AgenciaViajes\OpcionHotel;
 use App\Models\AgenciaViajes\OpcionHotelTarifa;
@@ -284,6 +285,29 @@ class OpcionMayoristaCrudTest extends TestCase
         $this->assertSame('elegida', OpcionMayorista::find($primera['id'])->estado);
         $this->assertSame('candidata', OpcionMayorista::find($segunda['id'])->estado);
         $this->assertSame(1, OpcionMayorista::where('alternativa_id', $alternativa->id)->where('estado', 'elegida')->count());
+    }
+
+    // Varios destinos: la elección es por alternativa (índice único
+    // opcion_mayorista_alternativa_elegida_unique). La primera opción del
+    // destino 2 queda candidata si el destino 1 ya tiene una elegida.
+    // Cuando 12g borre ese índice, esto pasa a decidirse por destino.
+    public function test_con_varios_destinos_la_primera_del_segundo_destino_queda_candidata(): void
+    {
+        $alternativa = $this->crearAlternativa();
+        $destino1 = AlternativaDestino::create(['alternativa_id' => $alternativa->id, 'destino_texto' => 'Panamá', 'orden' => 1]);
+        $destino2 = AlternativaDestino::create(['alternativa_id' => $alternativa->id, 'destino_texto' => 'Cancún', 'orden' => 2]);
+        $proveedor = $this->crearProveedorMayorista();
+        $c = app(OpcionMayoristaController::class);
+        $alta = fn (AlternativaDestino $d) => $c->store(new Request([
+            'proveedor_id' => $proveedor->id, 'moneda' => 'USD', 'alternativa_destino_id' => $d->id,
+        ]), (string) $alternativa->id)->getData(true)['opcion_mayorista'];
+
+        $enDestino1 = $alta($destino1);
+        $enDestino2 = $alta($destino2);
+
+        $this->assertSame('elegida', OpcionMayorista::find($enDestino1['id'])->estado);
+        $this->assertSame($destino2->id, OpcionMayorista::find($enDestino2['id'])->alternativa_destino_id);
+        $this->assertSame('candidata', OpcionMayorista::find($enDestino2['id'])->estado);
     }
 
     // ── T-030 (H8): con la alternativa aceptada, el mayorista no cambia por API ──
