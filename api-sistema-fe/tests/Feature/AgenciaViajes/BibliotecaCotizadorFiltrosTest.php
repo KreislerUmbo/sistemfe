@@ -109,8 +109,8 @@ class BibliotecaCotizadorFiltrosTest extends TestCase
         $this->assertCount(1, $ids);
     }
 
-    // T-035 (CA4): "Servicios de la agencia" no lista tours solo itinerario ni internacionales.
-    public function test_no_lista_tours_solo_itinerario_ni_internacionales(): void
+    // T-035 (CA4): no lista tours solo itinerario; un internacional de venta sí (decisión del 10-nov).
+    public function test_no_lista_tours_solo_itinerario_pero_si_internacionales_de_venta(): void
     {
         $cusco = DestinoAtractivo::create(['nombre' => 'Cusco', 'tipo' => 'zona']);
         $venta = PaquetePlantilla::create([
@@ -133,7 +133,7 @@ class BibliotecaCotizadorFiltrosTest extends TestCase
 
             $this->assertContains($venta->id, $ids);
             $this->assertNotContains($soloItinerario->id, $ids);
-            $this->assertNotContains($internacional->id, $ids);
+            $this->assertContains($internacional->id, $ids);
         }
     }
 
