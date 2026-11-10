@@ -935,7 +935,7 @@
                                      tours/paquetes del resultado si cualquiera está activo). -->
                                 <div class="row g-2 mb-2">
                                     <div class="col-12 col-md-4">
-                                        <DestinoTreeSelect v-model="filtroDestinoId" nivel-max="lugar" placeholder="Zona o destino..." />
+                                        <DestinoTreeSelect v-model="filtroDestinoId" nivel-max="lugar" placeholder="Zona o destino..." @update:label="filtroDestinoTexto = $event" />
                                     </div>
                                     <div class="col-6 col-md-4">
                                         <select class="form-select form-select-sm" v-model="filtroServicioId">
@@ -946,6 +946,13 @@
                                     <div class="col-6 col-md-4">
                                         <ProveedorBuscador v-model="filtroProveedorId" placeholder="Cualquier proveedor" />
                                     </div>
+                                </div>
+                                <!-- T-035 (R3): qué destino está filtrando la lista; la ✕ lo quita. -->
+                                <div v-if="filtroDestinoId" class="small mb-2" data-test="biblioteca-filtro-destino">
+                                    <span class="badge bg-primary-subtle text-primary border d-inline-flex align-items-center gap-2 px-2 py-1">
+                                        Mostrando: {{ filtroDestinoTexto || 'destino elegido' }} y sus lugares
+                                        <button type="button" class="btn-close btn-close-sm" style="font-size:.6rem" aria-label="Quitar filtro de destino" @click="filtroDestinoId = null"></button>
+                                    </span>
                                 </div>
 
                                 <div class="biblioteca-grid">
@@ -2877,6 +2884,7 @@ let bibliotecaTimeout: any = null;
 // ahí. servicio_id/proveedor_id excluyen tours/paquetes del resultado (no
 // aplican a ese tipo, ver BibliotecaCotizadorController en el backend).
 const filtroDestinoId = ref<number | null>(null);
+const filtroDestinoTexto = ref('');
 const filtroServicioId = ref<number | null>(null);
 const filtroProveedorId = ref<number | null>(null);
 const serviciosFiltro = ref<Servicio[]>([]);
@@ -3958,6 +3966,21 @@ const drawerBibliotecaAbierto = ref(false);
 const abrirDrawerBiblioteca = () => {
     drawerBibliotecaAbierto.value = true;
 };
+
+// T-035 (R3): cada vez que se abre la biblioteca, el filtro vuelve al destino activo de la
+// alternativa (el chip seleccionado; sin catálogo → sin filtro). Mientras siga abierta se respeta
+// lo que el vendedor cambie. Cubre todas las formas de abrirla (botón, edición de ítem manual…).
+watch(drawerBibliotecaAbierto, (abierto) => {
+    if (!abierto) return;
+    const destino = alternativaDestinos.value.find((d) => d.id === destinoActivoId.value);
+    const nuevoId = destino?.destino_atractivo_id ?? null;
+    filtroDestinoTexto.value = nuevoId ? (destino?.destino_texto ?? '') : '';
+    if (filtroDestinoId.value !== nuevoId) {
+        filtroDestinoId.value = nuevoId; // el watch del filtro recarga la lista
+    } else {
+        cargarBiblioteca();
+    }
+});
 
 const cerrarDrawerBiblioteca = () => {
     drawerBibliotecaAbierto.value = false;

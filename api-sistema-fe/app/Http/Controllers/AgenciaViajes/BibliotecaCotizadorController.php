@@ -71,6 +71,12 @@ class BibliotecaCotizadorController extends Controller
             $query->where('tipo', PaquetePlantilla::TIPO_PAQUETE_COMBO);
         }
 
+        // T-035 (R3): en "Servicios de la agencia" no se ofrece lo que no se puede cargar ahí: los tours
+        // "solo itinerario" (solo prestan itinerario a un paquete de mayorista) ni los internacionales.
+        // Se excluye en la consulta, no en el frontend, para que el tope y la paginación cuenten bien.
+        $query->where(fn ($q) => $q->whereNull('uso')->orWhere('uso', '!=', PaquetePlantilla::USO_SOLO_ITINERARIO))
+            ->where(fn ($q) => $q->whereNull('categoria')->orWhere('categoria', '!=', 'internacional'));
+
         if ($destinoIds) {
             $query->whereIn('destino_atractivo_id', $destinoIds);
         }
