@@ -196,13 +196,19 @@
 
         <!-- Pestañas de alternativas -->
         <div class="d-flex align-items-center gap-2 mb-3 flex-wrap" v-if="cotizacion">
-            <span v-for="alt in cotizacion.alternativas" :key="alt.id" class="alt-pill badge rounded-pill px-3 py-2 d-inline-flex align-items-center gap-2"
-                :class="alt.id === alternativaActivaId ? 'bg-primary' : 'bg-light text-dark border'"
+            <span v-for="alt in cotizacion.alternativas" :key="alt.id" class="alt-pill position-relative badge rounded-pill px-3 py-2 d-inline-flex align-items-center gap-2"
+                :class="[alt.id === alternativaActivaId ? 'bg-primary' : 'bg-light text-dark border', { 'alt-pill-reservada': alt.estado === 'aceptada' }]"
                 style="cursor:pointer" @click="seleccionarAlternativa(alt.id)">
+                <!-- T-080: indicador en la esquina, visible activa o no (el ✓ interno heredaba el color de la pestaña). -->
+                <span v-if="alt.estado === 'aceptada'" class="badge rounded-pill bg-success position-absolute top-0 start-100 translate-middle alt-pill-marca" title="Alternativa reservada">
+                    <i class="fas fa-check"></i>
+                </span>
+                <span v-else-if="alt.estado === 'reemplazada'" class="badge rounded-pill bg-secondary position-absolute top-0 start-100 translate-middle alt-pill-marca" title="Alternativa reemplazada por una modificación">
+                    <i class="fas fa-history"></i>
+                </span>
                 <span>
                     {{ alt.nombre }} · {{ alt.moneda_cotizacion }} {{ Number(alt.total).toFixed(0) }}
                     <span v-if="alt.estado === 'aceptada' || alt.estado === 'reemplazada'" class="ms-1">
-                        <i class="fas fa-check-circle"></i>
                         <template v-if="reservaDeAlternativa(alt)">
                             {{ alt.estado === 'reemplazada' ? 'Reemplazada' : 'Reservada' }} ·
                             <router-link :to="`/agencia-viajes/reservas/${reservaDeAlternativa(alt)!.id}`" class="text-reset fw-semibold" @click.stop>{{ reservaDeAlternativa(alt)!.codigo ?? `#${reservaDeAlternativa(alt)!.id}` }}</router-link>
@@ -1940,7 +1946,10 @@ const cargarCotizacion = async () => {
     cotizacion.value = res.cotizacion;
     modificacionInfo.value = res.modificacion ?? null;
     if (!alternativaActivaId.value && cotizacion.value.alternativas?.length) {
-        alternativaActivaId.value = cotizacion.value.alternativas[0].id;
+        // T-080: solo la primera carga; abre la reservada, si no la reemplazada, si no la primera.
+        const alts = cotizacion.value.alternativas;
+        const inicial = alts.find((a: any) => a.estado === 'aceptada') ?? alts.find((a: any) => a.estado === 'reemplazada') ?? alts[0];
+        alternativaActivaId.value = inicial.id;
     }
     inicializarEdicionItems();
     resolverDestinoActivo();
@@ -4644,6 +4653,10 @@ onUnmounted(() => {
    saturar la fila cuando hay varias alternativas (Parte B). */
 .alt-pill-delete { opacity: 0; transition: opacity .15s; }
 .alt-pill:hover .alt-pill-delete { opacity: 1; }
+
+/* T-080: pestaña de la alternativa reservada — borde verde de 2px aunque esté activa. */
+.alt-pill-reservada { border: 2px solid var(--bs-success, #198754) !important; }
+.alt-pill-marca { width: 1.4rem; height: 1.4rem; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: .65rem; }
 
 /* Lápiz de renombrar — mismo criterio de visibilidad que el tacho de
    arriba, separados con un poco de margen para no quedar pegados. */
