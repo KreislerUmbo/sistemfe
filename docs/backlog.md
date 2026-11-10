@@ -55,7 +55,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 | T-029 | AGE | Tour clásico desde plantilla: cada servicio nace con su tratamiento tributario; costo sin infantes (H18, H19) | por hacer: desbloqueada el 07-nov (D-AGE-035: el guía toma el valor por defecto de la agencia) | — | |
 | T-031 | AGE | Servicio de tour sin precio de niño: el niño paga como adulto; hoteles no cambian (H7) | por hacer | — | |
 | T-032 | AGE | Cotizador: actualizar solo lo que cambió + indicadores de carga (R5, R4, H13) | por hacer | — | |
-| T-035 | AGE | Biblioteca filtrada por el destino activo; sin tours "solo itinerario" en Local (R3) | por hacer | — | |
+| T-035 | AGE | Biblioteca filtrada por el destino activo; sin tours "solo itinerario" en Local (R3) | en revisión | — | |
 | T-036 | AGE | Mayorista: etiquetas, primera opción elegida sola, "solo adultos" a la vista (R6, H22) | por hacer | — | |
 | T-091 | AGE | Facturar una reserva con gravado y exonerado en el mismo comprobante, sin confirmar la Amazonía ítem por ítem (P7 del tributario) | por hacer | — | |
 | T-048 | AGE + CAJ | Venta directa: "Crear y cobrar" con boleta o factura (H45) | por hacer: reescrita el 07-nov sin la confirmación de la Amazonía (D-AGE-035) | T-047, T-011, T-091 | |
