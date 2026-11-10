@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatDiaCorto, formatFechaHora, hoyPeru, soloFechaISO, sumarDiasISO } from './fecha'
+import { diferenciaDiasISO, formatDiaCorto, formatFechaHora, hoyPeru, soloFechaISO, sumarDiasISO } from './fecha'
 
 // Regla única de fechas (08-oct-2026): todo se muestra en hora de Perú, sin depender de la
 // zona horaria de la PC. Los casos van de 19:00 a 24:00 de Perú, donde UTC ya es el día siguiente.
@@ -69,3 +69,14 @@ describe('formatDiaCorto', () => {
     expect(formatDiaCorto('mañana')).toBe('')
   })
 })
+
+describe('diferenciaDiasISO', () => {
+  it('caso normal', () => expect(diferenciaDiasISO('2026-12-10', '2026-12-13')).toBe(3));
+  it('cambio de mes', () => expect(diferenciaDiasISO('2026-10-30', '2026-11-02')).toBe(3));
+  it('cambio de año', () => expect(diferenciaDiasISO('2026-12-30', '2027-01-02')).toBe(3));
+  it('fechas iguales', () => expect(diferenciaDiasISO('2026-12-10', '2026-12-10')).toBe(0));
+  it('acepta timestamps ISO y hasta anterior da negativo', () => {
+    expect(diferenciaDiasISO('2026-12-10T00:00:00.000000Z', '2026-12-13')).toBe(3);
+    expect(diferenciaDiasISO('2026-12-13', '2026-12-10')).toBe(-3);
+  });
+});

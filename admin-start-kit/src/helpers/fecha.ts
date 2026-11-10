@@ -66,6 +66,16 @@ export function sumarDiasISO(ymd: string, dias: number): string {
 }
 
 /**
+ * Días de calendario entre dos "YYYY-MM-DD" (hasta - desde). Aritmética pura en UTC, sin zona
+ * horaria, como sumarDiasISO(). Negativo si hasta es anterior a desde.
+ */
+export function diferenciaDiasISO(desde: string, hasta: string): number {
+  const [a1, m1, d1] = desde.slice(0, 10).split('-').map(Number);
+  const [a2, m2, d2] = hasta.slice(0, 10).split('-').map(Number);
+  return Math.round((Date.UTC(a2, m2 - 1, d2) - Date.UTC(a1, m1 - 1, d1)) / 86400000);
+}
+
+/**
  * Instante ISO con zona ("...Z") partido en fecha "YYYY-MM-DD" y hora "HH:mm" de Perú — para
  * cargar un instante guardado en UTC en un par CampoFecha + CampoHora. Vacío si no hay valor.
  */
