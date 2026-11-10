@@ -33,10 +33,10 @@ riesgo de cotizar 1 noche por olvido.
 - `admin-start-kit/src/helpers/fecha.ts` (diferencia en días entre dos fechas `YYYY-MM-DD`, con su test)
 
 ## Criterios de aceptación
-- [ ] **CA1** — Cotización del 10/12 al 13/12: al elegir una habitación, noches = 3 y los 3 pasajeros marcados. → prueba funcional
-- [ ] **CA2** — Con 2 destinos con fechas propias, usa las noches del destino activo. → prueba funcional
-- [ ] **CA3** — Sin fechas: noches = 1. → prueba funcional
-- [ ] **CA4** — Función de diferencia de días con su test (incluido cambio de mes). → Vitest
+- [x] **CA1** — Cotización del 10/12 al 13/12: al elegir una habitación, noches = 3 y los 3 pasajeros marcados. → prueba funcional
+- [x] **CA2** — Con 2 destinos con fechas propias, usa las noches del destino activo. → prueba funcional
+- [x] **CA3** — Sin fechas: noches = 1. → prueba funcional
+- [x] **CA4** — Función de diferencia de días con su test (incluido cambio de mes). → Vitest
 - [ ] **CA5** — `type-check`, `build` y Vitest sin errores.
 
 ## Seguridad y correctitud
@@ -62,8 +62,17 @@ cd admin-start-kit && npx vitest run src/helpers/fecha.test.ts && npm run type-c
 - **Tests:** Vitest `fecha.test.ts` 15/15 (CA4: normal, cambio de mes, cambio de año, iguales, negativo).
   `build` OK. `type-check`: 47 errores, **los mismos con y sin mis cambios** (fake-backend, portal,
   rutas); ninguno en los archivos tocados.
-  **CA1–CA3 NO probados en el navegador** (sin sesión de agencia-demo en este turno): quedan
-  pendientes de prueba manual.
+  **CA1–CA3 probados en el navegador (Playwright, agencia-demo, 09-nov):** cotización nueva
+  CDKM-1126-0000011 (id 90, Tarapoto 10/12–13/12, 3 adultos, Hotel Rio Sol):
+  - CA1: Triple → noches 3, texto "3 noches (10/12 – 13/12)", 3 pasajeros marcados. Al agregar:
+    `cantidad 3`, `pax_incluidos [125,126,127]`, PEN 340 × 3 = 1020.00 en el total.
+  - CA2: segundo destino Lamas 14/12–16/12 activo → 2 noches, "2 noches (14/12 – 16/12)"; volviendo
+    a Tarapoto → 3 noches. "Comparar varias opciones" muestra lo mismo junto a "Noches".
+  - CA3: CDKM-1126-0000007 (sin fechas) → noches 1, sin texto, pasajeros marcados (no se agregó nada).
+  - Consola sin errores.
+  - `pax_incluidos`: el hotel es `tarifa_fija`, el precio no depende de los pasajeros (solo la cama
+    adicional, que ahora tiene con quién validar). Diferencia con `null`: la lista queda fija, un
+    pasajero agregado después a la cotización no entra solo a esa habitación.
 - **Desviaciones de la tarea y por qué:**
   - Prop nuevo `textoNoches` y `marcarTodosLosPasajeros` (opt-in) en el picker; mayorista no los usa.
   - Si hay comparación abierta (`grupoAbierto`), se usa su cantidad y no se muestra el texto de noches.
@@ -73,3 +82,8 @@ cd admin-start-kit && npx vitest run src/helpers/fecha.test.ts && npm run type-c
 
 ## Hallazgos fuera de alcance
 - `npm run type-check` ya falla con 47 errores en `main` (fake-backend, portal, rutas).
+- Cosmético (revisión 09-nov), **corregido en la misma rama**: en la fila individual el
+  `input-group` de noches no tenía ancho fijo (en el modo comparar sí, `width:110px`); con el texto
+  de noches la celda se ensanchaba y el selector − / + se estiraba. Ahora `width:110px` + `mx-auto`,
+  verificado en el navegador.
+- Dato de prueba: la cotización CDKM-1126-0000011 (id 90) de agencia-demo se creó para esta prueba.

@@ -132,7 +132,7 @@
                             </td>
                             <td class="text-end">{{ moneda }} {{ fila.data.precio.toFixed(2) }}</td>
                             <td class="text-center" v-if="seleccionadaId === fila.data.id && !modoGrupo">
-                                <div class="input-group input-group-sm">
+                                <div class="input-group input-group-sm mx-auto" style="width:110px">
                                     <button class="btn btn-outline-secondary" type="button" @click="cantidad = Math.max(1, cantidad - 1)">-</button>
                                     <input type="text" class="form-control text-center" :value="cantidad" readonly>
                                     <button class="btn btn-outline-secondary" type="button" @click="cantidad++">+</button>
