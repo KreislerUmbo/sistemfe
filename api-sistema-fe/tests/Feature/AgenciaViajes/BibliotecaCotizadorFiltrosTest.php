@@ -109,6 +109,34 @@ class BibliotecaCotizadorFiltrosTest extends TestCase
         $this->assertCount(1, $ids);
     }
 
+    // T-035 (CA4): no lista tours solo itinerario; un internacional de venta sí (decisión del 10-nov).
+    public function test_no_lista_tours_solo_itinerario_pero_si_internacionales_de_venta(): void
+    {
+        $cusco = DestinoAtractivo::create(['nombre' => 'Cusco', 'tipo' => 'zona']);
+        $venta = PaquetePlantilla::create([
+            'codigo' => 'T-OK', 'categoria' => 'nacional', 'nombre' => 'Tour Cusco',
+            'destino_atractivo_id' => $cusco->id, 'duracion_horas' => 4, 'activo' => true,
+        ]);
+        $soloItinerario = PaquetePlantilla::create([
+            'codigo' => 'T-SI', 'categoria' => 'nacional', 'nombre' => 'Tour itinerario',
+            'destino_atractivo_id' => $cusco->id, 'duracion_horas' => 4, 'activo' => true,
+            'uso' => PaquetePlantilla::USO_SOLO_ITINERARIO,
+        ]);
+        $internacional = PaquetePlantilla::create([
+            'codigo' => 'T-INT', 'categoria' => 'internacional', 'nombre' => 'Tour Panamá',
+            'destino_atractivo_id' => $cusco->id, 'duracion_horas' => 4, 'activo' => true,
+        ]);
+
+        foreach (['todos', 'tour'] as $tipo) {
+            $respuesta = app(BibliotecaCotizadorController::class)->index(new Request(['tipo' => $tipo]));
+            $ids = collect($respuesta->getData(true)['resultados'])->pluck('id');
+
+            $this->assertContains($venta->id, $ids);
+            $this->assertNotContains($soloItinerario->id, $ids);
+            $this->assertContains($internacional->id, $ids);
+        }
+    }
+
     public function test_filtro_servicio_excluye_paquetes_del_resultado(): void
     {
         $ica = DestinoAtractivo::create(['nombre' => 'Ica', 'tipo' => 'zona']);

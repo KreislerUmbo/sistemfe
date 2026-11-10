@@ -71,6 +71,12 @@ class BibliotecaCotizadorController extends Controller
             $query->where('tipo', PaquetePlantilla::TIPO_PAQUETE_COMBO);
         }
 
+        // T-035 (R3): no se ofrecen los tours "solo itinerario": solo prestan itinerario a un paquete de
+        // mayorista y no se cargan ni se venden. Se excluye en la consulta, no en el frontend, para que el
+        // tope y la paginación cuenten bien. Un tour internacional de venta sí se ofrece (decisión del
+        // 10-nov): es la única vía para vender uno propio de la agencia, acá y en Venta directa.
+        $query->where(fn ($q) => $q->whereNull('uso')->orWhere('uso', '!=', PaquetePlantilla::USO_SOLO_ITINERARIO));
+
         if ($destinoIds) {
             $query->whereIn('destino_atractivo_id', $destinoIds);
         }
