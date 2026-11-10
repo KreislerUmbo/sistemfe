@@ -69,9 +69,9 @@ de Alojamiento que tengan matrimonial; revertir los datos de prueba al terminar.
 ---
 
 ## Resultado
-- **Commits:**
-- **Tests:**
-- **Desviaciones de la tarea y por qué:**
+- **Commits:** en la rama `fix/T-019-comparar-hoteles-1-habitacion` (`fix(agencia): empezar la comparación de hoteles con 1 sola habitación (T-019)` + este de documentación).
+- **Tests:** CA6 — `npm run build` OK. `npm run type-check` falla con 47 errores previos (fake-backend.ts y otros), ninguno en `editar.vue` ni `HabitacionMatrixPicker.vue`. Sin cambios de backend, no se corrió la suite PHP. **CA1-CA5 (pruebas funcionales en agencia-demo, incl. PDF y aceptar) NO se hicieron**: quedan para la revisión.
+- **Desviaciones de la tarea y por qué:** el rótulo "Empezar comparación" se decide dentro del picker con `iniciarEnModoGrupo` y `minimoGrupo` (sin prop nueva): aparece solo con 1 marcada, mínimo 1 y sin comparación en curso, así mayorista (mínimo 2) y el segundo hotel ("Sumar a la comparación") no cambian. Verificado por lectura que `grupoHotelAbiertoDiaActivo` y `agregarGrupo*HotelLocal` no exigen mínimo, por lo que un grupo de 1 fila se detecta y el siguiente hotel se suma al mismo `grupo_opcion_id`.
 
 ## Hallazgos fuera de alcance
 -
