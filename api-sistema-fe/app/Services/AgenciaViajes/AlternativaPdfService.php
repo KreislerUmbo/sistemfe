@@ -250,9 +250,58 @@ class AlternativaPdfService
             'hayDescuento' => $descuentoMonto > 0.01,
         ]);
 
-        $nombreArchivo = 'Cotizacion-' . ($alternativa->cotizacion->codigo ?? $alternativa->cotizacion_id) . '-' . \Illuminate\Support\Str::slug($alternativa->nombre) . '.pdf';
+        $nombreArchivo = $this->nombreArchivo($alternativa);
 
         return [$pdf, $nombreArchivo];
+    }
+
+    // T-037 (R8) — "{codigo} - {cliente corto} - {alternativa}.pdf". Único lugar
+    // que arma el nombre: lo usan la descarga (Content-Disposition, que el
+    // frontend respeta) y el adjunto del correo.
+    private function nombreArchivo(Alternativa $alternativa): string
+    {
+        $cotizacion = $alternativa->cotizacion;
+        $partes = [
+            $cotizacion->codigo ?? $alternativa->cotizacion_id,
+            $this->clienteCorto($cotizacion->cliente),
+            $alternativa->nombre,
+        ];
+
+        $partes = array_filter(array_map(fn ($p) => $this->limpiarParteNombreArchivo((string) $p), $partes));
+
+        return implode(' - ', $partes) . '.pdf';
+    }
+
+    // Persona: primer apellido ("Rivera Pérez" → "Rivera"); sin apellido, la
+    // última palabra del nombre completo. Empresa: nombre comercial o razón social.
+    private function clienteCorto($cliente): string
+    {
+        if (! $cliente) {
+            return '';
+        }
+
+        if ((int) $cliente->type_client === 2) {
+            return (string) ($cliente->name_comerc ?: $cliente->full_name);
+        }
+
+        $apellido = preg_split('/\s+/', trim((string) $cliente->surname), -1, PREG_SPLIT_NO_EMPTY);
+        if ($apellido) {
+            return $apellido[0];
+        }
+
+        $palabras = preg_split('/\s+/', trim((string) $cliente->full_name), -1, PREG_SPLIT_NO_EMPTY);
+
+        return $palabras ? end($palabras) : '';
+    }
+
+    // Quita los caracteres no válidos en nombres de archivo (/ \ : * ? " < > |) y
+    // los de control, junta espacios y acota el largo.
+    private function limpiarParteNombreArchivo(string $texto): string
+    {
+        $texto = preg_replace('/[\/\\\\:*?"<>|\x00-\x1F]+/u', ' ', $texto);
+        $texto = trim(preg_replace('/\s+/u', ' ', $texto), ' .');
+
+        return mb_substr($texto, 0, 40);
     }
 
     // Si TODOS los ítems de la alternativa comparten el mismo tour_origen_id
@@ -649,7 +698,13 @@ class AlternativaPdfService
                     ? (float) $item->precio_convertido
                     : (float) $item->total_convertido;
 
-                $filasPorHotel[$idHotel] ??= ['hotel' => $hotel, 'precios' => [], 'elegida' => false, 'tipo_elegido' => null, 'opcion_hotel_id' => $item->opcionHotelTarifa?->opcion_hotel_id];
+                // T-037 (H20) — rótulo según de dónde viene el precio (ver arriba).
+                $noches = max(1, (int) $item->cantidad);
+                $rotulo = $item->origen_tipo === AlternativaItem::ORIGEN_MAYORISTA
+                    ? 'precio del paquete por persona'
+                    : 'precio por habitación, ' . $noches . ($noches === 1 ? ' noche' : ' noches');
+
+                $filasPorHotel[$idHotel] ??= ['hotel' => $hotel, 'rotulo' => $rotulo, 'precios' => [], 'elegida' => false, 'tipo_elegido' => null, 'opcion_hotel_id' => $item->opcionHotelTarifa?->opcion_hotel_id];
                 $filasPorHotel[$idHotel]['precios'][$tipoHabitacion] = $precio;
                 if ($item->opcion_elegida) {
                     $filasPorHotel[$idHotel]['elegida'] = true;
@@ -682,6 +737,11 @@ class AlternativaPdfService
                 'grupo_opcion_id' => $grupo['grupo_opcion_id'],
                 'tipos_habitacion' => $tiposHabitacion,
                 'filas' => array_values($filasPorHotel),
+                // Un solo rótulo para el título si todas las filas coinciden;
+                // si se mezclan (no debería), null y cada fila lleva el suyo.
+                'rotulo' => count(array_unique(array_column($filasPorHotel, 'rotulo'))) === 1
+                    ? array_values($filasPorHotel)[0]['rotulo']
+                    : null,
                 'resuelto' => collect($filasPorHotel)->contains('elegida', true),
             ];
         })->filter(fn (array $g) => count($g['filas']) > 0)->values()->all();

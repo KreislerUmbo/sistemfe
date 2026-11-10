@@ -447,6 +447,91 @@ class SesionM5OpcionesHotelesPdfTest extends TestCase
         }
     }
 
+    // T-037 (H20) — el rótulo de la tabla dice de dónde viene el precio.
+    public function test_rotulo_local_nacional_dice_por_habitacion_y_noches(): void
+    {
+        $alternativa = $this->crearAlternativa();
+        $grupo = (string) Str::uuid();
+        $this->crearItemHotel($alternativa, $grupo, false, 'Hotel A', 'doble', 340, cantidad: 3);
+        $this->crearItemHotel($alternativa, $grupo, false, 'Hotel B', 'doble', 300, cantidad: 3);
+
+        $this->assertSame('precio por habitación, 3 noches', $this->invocar($alternativa)[0]['rotulo']);
+    }
+
+    public function test_rotulo_una_noche_va_en_singular(): void
+    {
+        $alternativa = $this->crearAlternativa();
+        $grupo = (string) Str::uuid();
+        $this->crearItemHotel($alternativa, $grupo, false, 'Hotel A', 'doble', 340);
+        $this->crearItemHotel($alternativa, $grupo, false, 'Hotel B', 'doble', 300);
+
+        $this->assertSame('precio por habitación, 1 noche', $this->invocar($alternativa)[0]['rotulo']);
+    }
+
+    public function test_rotulo_mayorista_dice_paquete_por_persona(): void
+    {
+        $alternativa = $this->crearAlternativa();
+        $grupo = (string) Str::uuid();
+        $opcion = OpcionMayorista::create([
+            'alternativa_id' => $alternativa->id,
+            'proveedor_id' => Proveedor::create(['razon_social' => 'Mayorista T037', 'estado' => true])->id,
+            'moneda' => 'PEN', 'estado' => 'elegida',
+        ]);
+        $this->crearItemHotelMayorista($alternativa, $opcion, $grupo, false, 'Hotel P1', 'doble', 850, cantidad: 2);
+        $this->crearItemHotelMayorista($alternativa, $opcion, $grupo, false, 'Hotel P2', 'doble', 900, cantidad: 2);
+
+        $this->assertSame('precio del paquete por persona', $this->invocar($alternativa)[0]['rotulo']);
+    }
+
+    public function test_rotulo_mezclado_se_rotula_por_fila(): void
+    {
+        $alternativa = $this->crearAlternativa();
+        $grupo = (string) Str::uuid();
+        $opcion = OpcionMayorista::create([
+            'alternativa_id' => $alternativa->id,
+            'proveedor_id' => Proveedor::create(['razon_social' => 'Mayorista T037', 'estado' => true])->id,
+            'moneda' => 'PEN', 'estado' => 'elegida',
+        ]);
+        $this->crearItemHotelMayorista($alternativa, $opcion, $grupo, false, 'Hotel P1', 'doble', 850, cantidad: 2);
+        $this->crearItemHotel($alternativa, $grupo, false, 'Hotel L1', 'doble', 340, cantidad: 3);
+
+        $grupoHoteles = $this->invocar($alternativa)[0];
+        $this->assertNull($grupoHoteles['rotulo']);
+        $this->assertEqualsCanonicalizing(
+            ['precio del paquete por persona', 'precio por habitación, 3 noches'],
+            collect($grupoHoteles['filas'])->pluck('rotulo')->all()
+        );
+    }
+
+    // T-037 (R8) — nombre del archivo: código - cliente corto - alternativa.
+    public function test_nombre_del_pdf_lleva_codigo_cliente_y_alternativa(): void
+    {
+        $alternativa = $this->crearAlternativa();
+        DB::table('clients')->where('id', $alternativa->cotizacion->cliente_id)
+            ->update(['name' => 'Luis', 'surname' => 'Rivera Pérez', 'full_name' => 'Luis Rivera Pérez']);
+        DB::table('cotizaciones')->where('id', $alternativa->cotizacion_id)->update(['codigo' => 'CDKM-1026-0000015']);
+        $alternativa->update(['nombre' => 'Alternativa A']);
+
+        $nombre = app(AlternativaPdfService::class)->contenido((string) $alternativa->id)['nombre'];
+
+        $this->assertSame('CDKM-1026-0000015 - Rivera - Alternativa A.pdf', $nombre);
+    }
+
+    public function test_nombre_del_pdf_sanea_caracteres_no_validos(): void
+    {
+        $alternativa = $this->crearAlternativa();
+        DB::table('clients')->where('id', $alternativa->cotizacion->cliente_id)
+            ->update(['surname' => 'Ríos', 'full_name' => 'Ana Ríos']);
+        DB::table('cotizaciones')->where('id', $alternativa->cotizacion_id)->update(['codigo' => 'CDKM-1026-0000016']);
+        $alternativa->update(['nombre' => 'Opción: 3/4 "Selva" <económica>?']);
+
+        $nombre = app(AlternativaPdfService::class)->contenido((string) $alternativa->id)['nombre'];
+
+        $this->assertDoesNotMatchRegularExpression('/[\/\\\\:*?"<>|]/', $nombre);
+        $this->assertStringStartsWith('CDKM-1026-0000016 - Ríos - Opción', $nombre);
+        $this->assertStringEndsWith('.pdf', $nombre);
+    }
+
     public function test_generar_no_rechaza_sin_grupos_de_opciones(): void
     {
         $alternativa = $this->crearAlternativa();

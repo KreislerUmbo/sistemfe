@@ -2179,12 +2179,24 @@ const duplicarAlternativa = async () => {
 const descargandoPdf = ref(false);
 const descargandoCondiciones = ref(false);
 
+// T-037: el servidor arma el nombre del PDF (código - cliente - alternativa);
+// se lee de Content-Disposition (filename*=UTF-8'' o filename="").
+const nombreDeContentDisposition = (cabecera?: string): string | null => {
+    if (!cabecera) return null;
+    const utf8 = /filename\*\s*=\s*UTF-8''([^;]+)/i.exec(cabecera);
+    if (utf8) {
+        try { return decodeURIComponent(utf8[1].trim()); } catch { /* cae al filename simple */ }
+    }
+    const simple = /filename\s*=\s*"?([^";]+)"?/i.exec(cabecera);
+    return simple ? simple[1].trim() : null;
+};
+
 const descargarArchivo = async (url: string, nombreSugerido: string) => {
     const response = await httpClient.get(url, { responseType: 'blob' });
     const blobUrl = window.URL.createObjectURL(new Blob([response.data]));
     const link = document.createElement('a');
     link.href = blobUrl;
-    link.setAttribute('download', nombreSugerido);
+    link.setAttribute('download', nombreDeContentDisposition(response.headers?.['content-disposition']) ?? nombreSugerido);
     document.body.appendChild(link);
     link.click();
     link.remove();
