@@ -114,12 +114,25 @@ class OpcionMayoristaController extends Controller
         // pertenece a esta alternativa, ya validado arriba), si no el
         // primer destino por defecto — nunca por separado de
         // alternativa_id, para no desincronizarlos (§20 de la auditoría).
-        $opcion = OpcionMayorista::create($validado + [
-            'alternativa_id' => $alternativa->id,
-            'alternativa_destino_id' => $alternativaDestinoId ?? $alternativa->destinos()->value('id'),
-            ...$this->resolverSnapshotContenidoTour($contenidoTourId),
-            'estado' => 'candidata',
-        ]);
+        // T-036 (R6): la primera opción de un destino queda elegida sola. Bloqueo de
+        // la alternativa para que dos altas simultáneas no se pisen, y solo si no hay
+        // ya una elegida en la alternativa (índice único parcial
+        // opcion_mayorista_alternativa_elegida_unique: una elegida por alternativa).
+        $opcion = DB::transaction(function () use ($alternativa, $validado, $alternativaDestinoId, $contenidoTourId) {
+            Alternativa::whereKey($alternativa->id)->lockForUpdate()->first();
+            $destinoId = $alternativaDestinoId ?? $alternativa->destinos()->value('id');
+
+            $hayOtraEnElDestino = OpcionMayorista::where('alternativa_id', $alternativa->id)
+                ->where('alternativa_destino_id', $destinoId)->exists();
+            $hayElegida = OpcionMayorista::where('alternativa_id', $alternativa->id)->where('estado', 'elegida')->exists();
+
+            return OpcionMayorista::create($validado + [
+                'alternativa_id' => $alternativa->id,
+                'alternativa_destino_id' => $destinoId,
+                ...$this->resolverSnapshotContenidoTour($contenidoTourId),
+                'estado' => (! $hayOtraEnElDestino && ! $hayElegida) ? 'elegida' : 'candidata',
+            ]);
+        });
 
         return response()->json(['code' => 200, 'message' => 'Opción de mayorista agregada correctamente', 'opcion_mayorista' => $opcion]);
     }
