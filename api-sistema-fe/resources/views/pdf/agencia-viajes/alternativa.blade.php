@@ -638,7 +638,9 @@
             <div class="seccion">
                 <div class="seccion-titulo">
                     Opciones de hoteles
-                    <span class="hoteles-elegida-nota">— tarifa por persona</span>
+                    @if ($grupoHotel['rotulo'])
+                        <span class="hoteles-elegida-nota">— {{ $grupoHotel['rotulo'] }}</span>
+                    @endif
                     @if ($grupoHotel['resuelto'])
                         <span class="hoteles-elegida-nota">— opción confirmada resaltada</span>
                     @endif
@@ -652,7 +654,7 @@
                     </tr>
                     @foreach ($grupoHotel['filas'] as $fila)
                         <tr class="{{ !$loop->even ? '' : 'fila-par' }}">
-                            <td>{{ $fila['hotel'] }}</td>
+                            <td>{{ $fila['hotel'] }}@if (! $grupoHotel['rotulo'])<br><span class="hoteles-elegida-nota">{{ $fila['rotulo'] }}</span>@endif</td>
                             @foreach ($grupoHotel['tipos_habitacion'] as $tipo)
                                 @if (isset($fila['precios'][$tipo]))
                                     <td class="precio-col{{ $fila['tipo_elegido'] === $tipo ? ' precio-elegido' : '' }}">

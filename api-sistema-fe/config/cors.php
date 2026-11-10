@@ -25,7 +25,7 @@ return [
 
     'allowed_headers' => ['*'],
 
-    'exposed_headers' => [],
+    'exposed_headers' => ['Content-Disposition'], // T-037: el frontend lee el nombre del PDF
 
     // Antes de este archivo, config/cors.php no existía — Laravel mergeaba
     // el default del framework en caliente (mismo valor que el resto de
