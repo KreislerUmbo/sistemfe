@@ -515,7 +515,7 @@
                                 </div>
                                 <div v-for="it in fila.items" :key="it.id" class="d-flex justify-content-between align-items-center py-1 border-top" :data-item-id="it.id" :class="[{ 'opacity-50': !it.opcion_elegida }, claseResaltado([it.id])]">
                                     <span>
-                                        <i class="fas fa-bed me-1 text-primary"></i>{{ etiquetaItem(it) }}
+                                        <i class="fas fa-bed me-1 text-primary"></i>{{ etiquetaItem(it) }}<span v-if="textoAdultosMayorista(it)" class="text-muted"> {{ textoAdultosMayorista(it) }}</span>
                                         <span class="text-muted"> — {{ alternativaActiva.moneda_cotizacion }} {{ Number(it.precio_convertido).toFixed(2) }}</span>
                                     </span>
                                     <span class="d-flex align-items-center gap-2">
@@ -544,7 +544,8 @@
                                     <span class="canvas-item-nombre">
                                         <i class="fas me-2 text-primary" :class="iconoItem(fila.item)"></i>
                                         {{ etiquetaItem(fila.item) }}
-                                        <span v-if="fila.item.cantidad > 1 && fila.item.modo_precio === 'tarifa_fija'" class="text-muted"> × {{ fila.item.cantidad }}</span>
+                                        <span v-if="textoAdultosMayorista(fila.item)" class="text-muted"> {{ textoAdultosMayorista(fila.item) }}</span>
+                                        <span v-else-if="fila.item.cantidad > 1 && fila.item.modo_precio === 'tarifa_fija'" class="text-muted"> × {{ fila.item.cantidad }}</span>
                                         <span v-if="idsParaRevisar.has(fila.item.id)" class="badge bg-warning text-dark ms-2" style="font-size:10px">Para revisar</span>
                                         <button v-if="idsParaRevisarConfirmables.has(fila.item.id)" type="button" class="btn btn-primary btn-sm py-0 ms-1" style="font-size:11px"
                                             @click="confirmarRevisados([fila.item.id])">Revisado</button>
@@ -745,7 +746,7 @@
                                     <template v-else>
                                         <div v-for="item in filasResumen(grupo.items)" :key="item.id" class="d-flex justify-content-between gap-2 mb-1">
                                             <span class="text-muted" style="word-break:break-word;">
-                                                {{ etiquetaItem(item) }}
+                                                {{ etiquetaItem(item) }}<span v-if="textoAdultosMayorista(item)"> {{ textoAdultosMayorista(item) }}</span>
                                                 <span v-if="item.grupo_opcion_id && !item.opcion_elegida" class="text-muted" style="font-size:10px">(desde, sin resolver)</span>
                                                 <span v-if="badgeTratamientoTributario(item)" class="badge ms-1"
                                                     :class="badgeTratamientoTributario(item)!.clase" style="font-size:9px">{{ badgeTratamientoTributario(item)!.texto }}</span>
@@ -791,7 +792,7 @@
 
                         <hr>
                         <div class="d-flex justify-content-between align-items-baseline">
-                            <span class="small text-secondary">Total {{ resumenPaxTotal }}</span>
+                            <span class="small text-secondary">Total <template v-if="notaMayoristaSinNinos">(el paquete de mayorista no incluye niños)</template><template v-else>{{ resumenPaxTotal }}</template></span>
                             <span class="fs-4 fw-semibold">{{ alternativaActiva.moneda_cotizacion }} {{ totalLocal.toFixed(2) }}</span>
                         </div>
                         <div v-if="itemsAjuste.length" class="small text-muted mt-2">
@@ -1189,6 +1190,7 @@
                                              hoteles dos veces, en dos formatos). permitir-gestion-hoteles
                                              agrupa las filas por hotel con edición/borrado inline, en el
                                              mismo lugar donde ya se elige la habitación. -->
+                                        <p class="small text-muted mb-1"><strong>Adultos:</strong> precio por adulto. Los niños no están incluidos: si el mayorista los cobra, agrégalos como servicio aparte.</p>
                                         <HabitacionMatrixPicker
                                             :tarifas="tarifasHotelPlanas(op)" :moneda="op.moneda"
                                             cantidad-label="Adultos" :cantidad-default="cantidadAdultosCotizacion"
@@ -1756,6 +1758,20 @@ const resumenPaxTotal = computed(() => {
         return `${n} ${n === 1 ? singular : plural}`;
     });
     return partes.length ? `(${partes.join(' + ')})` : '';
+});
+
+// T-036 (H22): el paquete de mayorista se cotiza solo por adultos. Se hace visible:
+// la línea dice "× N adultos" y, si hay niños/infantes, el total lo avisa (sin bloquear).
+const esItemPaqueteMayorista = (item: AlternativaItem) => item.origen_tipo === 'mayorista' && !!item.opcion_hotel_tarifa_id;
+const textoAdultosMayorista = (item: AlternativaItem) => {
+    if (!esItemPaqueteMayorista(item)) return '';
+    const n = Number(item.cantidad) || 1;
+    return `× ${n} ${n === 1 ? 'adulto' : 'adultos'}`;
+};
+const notaMayoristaSinNinos = computed(() => {
+    const hayPaquete = (alternativaActiva.value?.items ?? []).some(esItemPaqueteMayorista);
+    const hayNinos = (cotizacion.value?.pasajeros ?? []).some((p) => p.tipo_pax !== 'adulto');
+    return hayPaquete && hayNinos;
 });
 
 // Punto 1 (ronda mayoristas) — el precio de cada tipo de habitación de una
@@ -3760,10 +3776,12 @@ const abrirFormEditarOpcionMayorista = (op: OpcionMayorista) => {
 
 // Compartido por OpcionMayoristaForm inline (edición) y el de "agregar
 // nueva" al final de la lista — cierra el que esté abierto y refresca.
-const onOpcionMayoristaGuardada = async () => {
+const onOpcionMayoristaGuardada = async (opcion?: OpcionMayorista) => {
     mostrarFormMayorista.value = false;
     opcionMayoristaEnEdicionId.value = null;
     await cargarOpcionesMayorista();
+    // T-036 (R6): la primera opción nace elegida (backend) → su sección de hoteles queda abierta.
+    if (opcion?.estado === 'elegida') opcionHotelesActivaId.value = opcion.id;
 };
 
 const guardandoOpcional = ref(false);

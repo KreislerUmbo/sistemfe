@@ -1,10 +1,13 @@
 <template>
     <div class="card border p-2 small">
+        <label class="form-label mb-0 small text-secondary">Proveedor mayorista</label>
         <ProveedorBuscador v-model="form.proveedor_id" :tipo-id="props.tipoMayoristaId" class="mb-1" placeholder="Buscar proveedor mayorista…" />
+        <label class="form-label mb-0 small text-secondary">Moneda</label>
         <select class="form-select form-select-sm mb-1" v-model="form.moneda">
             <option value="USD">USD</option>
             <option value="PEN">PEN</option>
         </select>
+        <label class="form-label mb-0 small text-secondary">Aerolínea</label>
         <AerolineaSelect v-model="form.vuelo_aerolinea" class="mb-1" placeholder="Vuelo (aerolínea)" />
         <!-- Simulación Panamá (04-sep-2026) — itinerario del vuelo (fechas/
              horarios/equipaje permitido), impreso en el PDF junto a la
@@ -12,17 +15,20 @@
              "Vuelo"). Antes se capturaba (columna ya existía) pero no había
              ningún input para cargarlo. -->
         <div class="mb-1">
+            <label class="form-label mb-0 small text-secondary">Detalle del vuelo</label>
             <RichTextEditor v-model="form.vuelo_detalle" placeholder="Detalle del vuelo (fechas, horarios, equipaje...)" />
         </div>
         <!-- Fix C1 (02-sep-2026) — lo único que resolverNombreItemPdf() puede
              imprimir en el PDF comercial para esta opción; el nombre del
              mayorista/proveedor nunca llega a ese documento. -->
+        <label class="form-label mb-0 small text-secondary">Descripción para el cliente</label>
         <input type="text" class="form-control form-control-sm mb-1" placeholder="Descripción para el cliente (ej. Paquete Panamá 6D/5N)"
             v-model="form.descripcion_publica">
 
         <!-- Sesión 12e — buscador de contenido reutilizable, "buscar antes de
              crear" para no ensuciar la biblioteca con duplicados (§23.1.9). -->
         <div class="position-relative mb-1">
+            <label class="form-label mb-0 small text-secondary">Contenido reutilizable (opcional)</label>
             <input type="text" class="form-control form-control-sm" placeholder="Buscar contenido reutilizable (ej. 'City Tour Panamá')..."
                 v-model="contenidoTourSearch" @input="onContenidoTourSearchInput">
             <div v-if="contenidoTourResultados.length" class="list-group position-absolute w-100" style="z-index: 10;">
@@ -42,6 +48,7 @@
         </div>
 
         <div class="mb-1">
+            <label class="form-label mb-0 small text-secondary">Incluye</label>
             <RichTextEditor v-model="form.incluye" placeholder="Incluye..." />
         </div>
         <!-- Simulación Panamá (04-sep-2026) — "No incluye" del paquete base
@@ -49,6 +56,7 @@
              mismo campo por cada tour opcional (ver formOpcional en
              editar.vue), pero faltaba acá para el paquete completo. -->
         <div class="mb-1">
+            <label class="form-label mb-0 small text-secondary">No incluye</label>
             <RichTextEditor v-model="form.no_incluye" placeholder="No incluye..." />
         </div>
         <div class="d-flex gap-2">

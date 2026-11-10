@@ -269,6 +269,23 @@ class OpcionMayoristaCrudTest extends TestCase
         $this->assertSame('Tour Test Orden', $tour->fresh()->nombre);
     }
 
+    // ── T-036 (R6): la primera opción de mayorista queda elegida sola ──
+
+    public function test_la_primera_opcion_de_mayorista_queda_elegida_y_la_segunda_no(): void
+    {
+        $alternativa = $this->crearAlternativa();
+        $proveedor = $this->crearProveedorMayorista();
+        $c = app(OpcionMayoristaController::class);
+        $alta = fn () => $c->store(new Request(['proveedor_id' => $proveedor->id, 'moneda' => 'USD']), (string) $alternativa->id);
+
+        $primera = $alta()->getData(true)['opcion_mayorista'];
+        $segunda = $alta()->getData(true)['opcion_mayorista'];
+
+        $this->assertSame('elegida', OpcionMayorista::find($primera['id'])->estado);
+        $this->assertSame('candidata', OpcionMayorista::find($segunda['id'])->estado);
+        $this->assertSame(1, OpcionMayorista::where('alternativa_id', $alternativa->id)->where('estado', 'elegida')->count());
+    }
+
     // ── T-030 (H8): con la alternativa aceptada, el mayorista no cambia por API ──
 
     public function test_con_la_alternativa_aceptada_no_se_cambia_el_mayorista(): void
