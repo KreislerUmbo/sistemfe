@@ -71,9 +71,14 @@ alternativa aceptada no sea la primera y otra con una reserva modificada (altern
 ---
 
 ## Resultado
-- **Commits:**
-- **Tests:**
-- **Desviaciones de la tarea y por qué:**
+- **Commits:** ver `git log feat/T-080-pestana-reservada` (solo `cotizador/editar.vue` y esta tarea).
+- **Tests:** sin tests automáticos (cambio visual). `npm run build` OK; `type-check` con los 47 errores previos y ninguno en `editar.vue`. Manual con Playwright en agencia-demo:
+  - CA1 ✔ CDKM-1126-0000010 (reservada «Avianca», la segunda): círculo verde con ✓ y borde de 2px, activa e inactiva, en claro y oscuro.
+  - CA2 ✔ CDKM-1126-0000003: círculo gris con ícono de historial.
+  - CA3 ✔ ambas cotizaciones abren en la pestaña reservada / reemplazada.
+  - CA4 ⚠ no probado en pantalla: es la guarda `!alternativaActivaId.value` que ya existía; los recargos no la tocan.
+  - CA5 ⚠ no probado en pantalla: queda el fallback `alternativas[0]`; no busqué una cotización sin reservas.
+- **Desviaciones de la tarea y por qué:** se quitó el ✓ interno (`fa-check-circle`) del texto «Reservada · código», porque el círculo de la esquina lo reemplaza. En el tema, `success` es un verde azulado cercano al `primary` verde: sobre la pestaña activa el borde de 2px casi no se distingue; el círculo sí.
 
 ## Hallazgos fuera de alcance
 -
