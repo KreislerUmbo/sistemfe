@@ -218,7 +218,9 @@ const nombrePorId = computed(() => new Map(store.aerolineas.map((a) => [a.id, a.
                   <strong>Unir "{{ a.nombre }}" en…</strong>
                   <div class="small mb-2">
                     "{{ a.nombre }}" queda inactiva y la aerolínea elegida es la que se ofrece a las agencias.
-                    Lo ya guardado en cada agencia se corrige aparte, con un comando.
+                    Lo ya guardado en cada agencia se corrige aparte: correr
+                    <code>php artisan agencia-viajes:normalizar-aerolineas &lt;tenant&gt;</code> por cada agencia
+                    (con <code>--simular</code> primero).
                   </div>
                   <div class="d-flex gap-2 align-items-center">
                     <select v-model="mergeTargetId" class="form-select form-select-sm w-auto">

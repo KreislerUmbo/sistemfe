@@ -11,6 +11,7 @@ declare module 'vue' {
     AccionesCredito: typeof import('./src/components/Creditos/AccionesCredito.vue')['default']
     AccionesPendientes: typeof import('./src/components/Clientes/AccionesPendientes.vue')['default']
     AceptarAlternativaModal: typeof import('./src/components/AgenciaViajes/AceptarAlternativaModal.vue')['default']
+    AerolineaSelect: typeof import('./src/components/AgenciaViajes/AerolineaSelect.vue')['default']
     AnotarContacto: typeof import('./src/components/Clientes/AnotarContacto.vue')['default']
     ApexChart: typeof import('./src/components/ApexChart.vue')['default']
     AppMenu: typeof import('./src/components/AppMenu/index.vue')['default']

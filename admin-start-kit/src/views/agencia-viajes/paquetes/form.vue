@@ -128,7 +128,7 @@
                 <div v-if="form.vuelo_incluido" class="row g-3">
                     <div class="col-12 col-md-4">
                         <label class="form-label mb-1 small fw-semibold text-secondary">Aerolínea</label>
-                        <input type="text" class="form-control form-control-sm" v-model="form.vuelo_aerolinea">
+                        <AerolineaSelect v-model="form.vuelo_aerolinea" />
                     </div>
                     <div class="col-12 col-md-8">
                         <label class="form-label mb-1 small fw-semibold text-secondary">Detalle (tramos, fechas, equipaje...)</label>
@@ -205,6 +205,7 @@ import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import Swal from 'sweetalert2/dist/sweetalert2.js';
 import DestinoTreeSelect from '@/components/AgenciaViajes/DestinoTreeSelect.vue';
 import RichTextEditor from '@/components/RichTextEditor.vue';
+import AerolineaSelect from '@/components/AgenciaViajes/AerolineaSelect.vue';
 import TourPrecioVentaCampos from '@/components/AgenciaViajes/TourPrecioVentaCampos.vue';
 import { paquetePlantillaService } from '@/services/admin/paquetePlantillaService';
 import type { PaquetePlantilla, TourCostoEstimado } from '@/types/agencia-viajes';

@@ -202,7 +202,7 @@
                         <div v-if="formDatos.vuelo_incluido" class="row g-3">
                             <div class="col-12 col-md-4">
                                 <label class="form-label mb-1 small fw-semibold text-secondary">Aerolínea</label>
-                                <b-form-input size="sm" v-model="formDatos.vuelo_aerolinea" />
+                                <AerolineaSelect v-model="formDatos.vuelo_aerolinea" />
                             </div>
                             <div class="col-12 col-md-8">
                                 <label class="form-label mb-1 small fw-semibold text-secondary">Detalle (tramos, fechas, equipaje...)</label>
@@ -784,6 +784,7 @@ import { escaparHtml } from '@/helpers/escaparHtml';
 import CampoHora from '@/components/CampoHora.vue';
 import ProveedorBuscador from '@/components/AgenciaViajes/ProveedorBuscador.vue';
 import GuiaBuscador from '@/components/AgenciaViajes/GuiaBuscador.vue';
+import AerolineaSelect from '@/components/AgenciaViajes/AerolineaSelect.vue';
 import CampoFecha from '@/components/CampoFecha.vue';
 import { ref, computed, onMounted, nextTick, watch } from 'vue';
 import Sortable from 'sortablejs';

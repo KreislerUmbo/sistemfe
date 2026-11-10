@@ -40,6 +40,10 @@ class AerolineaController extends Controller
                 $q->where('nombre_normalizado', 'like', '%'.self::escaparLike($termino).'%')
                     ->orWhereRaw('lower(codigo_iata) = ?', [$termino]);
             });
+            // Primero las que empiezan con lo escrito ("lat" → LATAM antes que "Atlantic").
+            $consulta->reorder()
+                ->orderByRaw('case when nombre_normalizado like ? then 0 else 1 end', [self::escaparLike($termino).'%'])
+                ->orderBy('nombre');
         }
 
         return response()->json([

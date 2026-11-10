@@ -145,6 +145,18 @@ class AerolineaCatalogoTest extends TestCase
         $this->assertSame([], $this->nombres('zzzz-no-existe'));
     }
 
+    // T-016 — las que empiezan con lo escrito van antes que las que solo lo contienen.
+    public function test_buscar_prioriza_las_que_empiezan_con_lo_escrito(): void
+    {
+        $this->crear('Aaa Latinoamerica Air');   // lo contiene, pero alfabéticamente iría primero
+        $this->crear('Latitud Air');
+
+        $nombres = $this->nombres('lat');
+
+        $this->assertLessThan(array_search('Aaa Latinoamerica Air', $nombres), array_search('LATAM', $nombres));
+        $this->assertLessThan(array_search('Aaa Latinoamerica Air', $nombres), array_search('Latitud Air', $nombres));
+    }
+
     public function test_buscar_devuelve_maximo_20(): void
     {
         for ($i = 1; $i <= 25; $i++) {
@@ -267,7 +279,7 @@ class AerolineaCatalogoTest extends TestCase
             $ruta = collect(Route::getRoutes()->getRoutes())
                 ->first(fn ($r) => $r->uri() === 'api/aerolineas' && in_array($metodo, $r->methods(), true));
             $this->assertNotNull($ruta, "Falta la ruta $metodo api/aerolineas");
-            $this->assertContains('permission:cotizaciones.editar|reservas.editar', $ruta->gatherMiddleware());
+            $this->assertContains('permission:cotizaciones.editar|reservas.editar|agencia.paquetes', $ruta->gatherMiddleware());
         }
 
         $sinPermiso = User::factory()->create(['email' => 'u-'.uniqid().'@agencia.test', 'state' => 1]);
