@@ -505,7 +505,8 @@ export type AlternativaItem = {
   // eliminar en ese caso (destroy()/actualizarManual()/
   // actualizarPasajeAereo()); esto le permite al frontend avisarlo ANTES
   // de que el vendedor intente la acción y se encuentre con un 422.
-  reserva_item?: { id: number } | null;
+  // T-100: con su reserva, para decir cuál lo tomó y si está cancelada (igual lo bloquea).
+  reserva_item?: { id: number; reserva?: { id: number; codigo: string | null; estado: string } | null } | null;
   // Fila 13, fase 1b — línea de tour (origen_tipo='tour'). Las líneas de una
   // misma carga (una por grupo de IGV) comparten carga_tour; las de un combo,
   // carga_combo.

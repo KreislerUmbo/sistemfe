@@ -23,6 +23,7 @@
                 </button>
             </template>
         </ul>
+        <small v-if="aviso" class="text-danger d-block mt-1">{{ aviso }}</small>
     </div>
 </template>
 
@@ -47,10 +48,14 @@ const texto = ref(props.modelValue ?? '');
 const resultados = ref<AerolineaCatalogo[]>([]);
 const abierto = ref(false);
 const buscando = ref(false);
+// T-100: por qué no se pudo agregar (p. ej. una aerolínea que soporte retiró del catálogo).
+const aviso = ref('');
 const inputRef = ref<HTMLInputElement | null>(null);
 const { estilo: estiloLista } = useListaFlotante(inputRef, abierto);
 let pausa: ReturnType<typeof setTimeout> | null = null;
 let ultimaBusqueda = 0;
+// Texto para el que se trajeron los `resultados` actuales.
+let consultaDeResultados: string | null = null;
 
 watch(() => props.modelValue, (v) => { texto.value = v ?? ''; });
 
@@ -59,24 +64,30 @@ const normalizar = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').rep
 
 // Lo escrito cuenta como búsqueda solo si cambió respecto del valor elegido.
 const consulta = computed(() => (texto.value === (props.modelValue ?? '') ? '' : texto.value.replace(/\s+/g, ' ').trim()));
+// T-100: "Agregar" solo si ninguna sugerencia EMPIEZA con lo escrito («lat» con LATAM en la lista
+// no ofrece agregar «Lat»): el catálogo es común a todas las agencias.
 const puedeAgregar = computed(() =>
-    consulta.value.length >= 2 && !resultados.value.some((a) => normalizar(a.nombre) === normalizar(consulta.value)));
+    consulta.value.length >= 2 && !resultados.value.some((a) => normalizar(a.nombre).startsWith(normalizar(consulta.value))));
+const coincidenciaExacta = (lista: AerolineaCatalogo[], escrito: string) =>
+    lista.find((a) => normalizar(a.nombre) === normalizar(escrito));
 
 const buscar = async () => {
     const id = ++ultimaBusqueda;
+    const q = consulta.value;
     buscando.value = true;
     abierto.value = true;
     try {
-        const lista = await aerolineaService.buscar(consulta.value);
-        if (id === ultimaBusqueda) resultados.value = lista;
+        const lista = await aerolineaService.buscar(q);
+        if (id === ultimaBusqueda) { resultados.value = lista; consultaDeResultados = q; }
     } catch {
-        if (id === ultimaBusqueda) resultados.value = [];
+        if (id === ultimaBusqueda) { resultados.value = []; consultaDeResultados = null; }
     } finally {
         if (id === ultimaBusqueda) buscando.value = false;
     }
 };
 
 const buscarConPausa = () => {
+    aviso.value = '';
     if (pausa) clearTimeout(pausa);
     pausa = setTimeout(buscar, 300);
 };
@@ -87,6 +98,7 @@ const alEnfocar = (e: FocusEvent) => {
 };
 
 const elegir = (nombre: string) => {
+    aviso.value = '';
     texto.value = nombre;
     abierto.value = false;
     emit('update:modelValue', nombre);
@@ -96,25 +108,44 @@ const agregar = async () => {
     try {
         const res = await aerolineaService.agregar(consulta.value);
         elegir(res.data.nombre);
-    } catch {
-        // Sin permiso o sin conexión: el campo vuelve al valor anterior al salir.
+    } catch (e: unknown) {
+        // El campo vuelve al valor anterior al salir; el aviso queda bajo el campo.
+        const respuesta = (e as { response?: { status?: number; data?: { message?: string } } }).response;
+        aviso.value = respuesta?.status === 422 && respuesta.data?.message
+            ? respuesta.data.message
+            : 'No se pudo agregar la aerolínea.';
+        abierto.value = false;
     }
 };
 
 // Enter: elige la única sugerencia o la coincidencia exacta; si no, agrega lo escrito.
 const alEnter = () => {
     if (buscando.value || !consulta.value) return;
-    const exacta = resultados.value.find((a) => normalizar(a.nombre) === normalizar(consulta.value));
+    const exacta = coincidenciaExacta(resultados.value, consulta.value);
     if (exacta) elegir(exacta.nombre);
     else if (resultados.value.length === 1) elegir(resultados.value[0].nombre);
     else if (puedeAgregar.value) agregar();
 };
 
-// Al salir sin elegir, vuelve el valor que ya estaba.
+// Al salir sin elegir: si lo escrito es exactamente una del catálogo (sin importar mayúsculas ni
+// tildes), se elige (T-100); si no, vuelve el valor que ya estaba. Si la búsqueda de lo escrito
+// todavía no llegó (se salió antes de la pausa), se consulta en el momento.
 const cerrarLuego = () => {
-    setTimeout(() => {
+    const escrito = consulta.value;
+    setTimeout(async () => {
         abierto.value = false;
-        texto.value = props.modelValue ?? '';
+        if (pausa) clearTimeout(pausa);
+        let exacta = escrito ? coincidenciaExacta(resultados.value, escrito) : undefined;
+        if (escrito && !exacta && consultaDeResultados !== escrito) {
+            try {
+                exacta = coincidenciaExacta(await aerolineaService.buscar(escrito), escrito);
+            } catch {
+                exacta = undefined;
+            }
+        }
+        // Solo si no se volvió a escribir otra cosa mientras tanto.
+        if (exacta && texto.value.replace(/\s+/g, ' ').trim() === escrito) elegir(exacta.nombre);
+        else texto.value = props.modelValue ?? '';
     }, 150);
 };
 </script>

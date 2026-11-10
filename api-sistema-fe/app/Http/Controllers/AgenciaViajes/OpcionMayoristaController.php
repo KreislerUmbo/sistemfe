@@ -244,11 +244,8 @@ class OpcionMayoristaController extends Controller
 
         $itemIds = AlternativaItem::where('opcion_mayorista_id', $opcion->id)->pluck('id');
 
-        if (ReservaItem::whereIn('alternativa_item_id', $itemIds)->exists()) {
-            return response()->json([
-                'code' => 422,
-                'message' => 'No se puede eliminar: uno o más ítems de esta opción ya tienen una reserva generada. Cancelá la reserva primero si corresponde.',
-            ], 422);
+        if ($bloqueo = ReservaItem::mensajeBloqueo($itemIds, 'eliminar esta opción')) {
+            return response()->json(['code' => 422, 'message' => $bloqueo], 422);
         }
 
         DB::transaction(function () use ($opcion, $itemIds) {

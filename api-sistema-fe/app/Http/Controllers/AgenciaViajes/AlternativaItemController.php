@@ -249,11 +249,8 @@ class AlternativaItemController extends Controller
         $this->autorizarCotizacion('update', $item);
         $alternativa = $item->alternativa;
 
-        if (ReservaItem::where('alternativa_item_id', $item->id)->exists()) {
-            return response()->json([
-                'code' => 422,
-                'message' => 'No se puede eliminar: este servicio ya tiene una reserva generada (por ejemplo, vía Venta Directa). Cancelá la reserva primero si corresponde.',
-            ], 422);
+        if ($bloqueo = ReservaItem::mensajeBloqueo([$item->id], 'eliminar')) {
+            return response()->json(['code' => 422, 'message' => $bloqueo], 422);
         }
 
         // Fila 13, fase 1b: una línea de tour se quita con toda su carga (las
@@ -306,11 +303,8 @@ class AlternativaItemController extends Controller
             ], 422);
         }
 
-        if (ReservaItem::whereIn('alternativa_item_id', $items->pluck('id'))->exists()) {
-            return response()->json([
-                'code' => 422,
-                'message' => 'No se puede eliminar: alguna de estas opciones ya tiene una reserva generada (por ejemplo, vía Venta Directa). Cancelá la reserva primero si corresponde.',
-            ], 422);
+        if ($bloqueo = ReservaItem::mensajeBloqueo($items->pluck('id'), 'eliminar estas opciones')) {
+            return response()->json(['code' => 422, 'message' => $bloqueo], 422);
         }
 
         DB::transaction(function () use ($items) {
@@ -659,11 +653,8 @@ class AlternativaItemController extends Controller
         if ($items->isEmpty()) {
             return response()->json(['code' => 404, 'message' => 'No se encontró ese tour en esta alternativa.'], 404);
         }
-        if (ReservaItem::whereIn('alternativa_item_id', $items->pluck('id'))->exists()) {
-            return response()->json([
-                'code' => 422,
-                'message' => 'No se puede quitar: este tour ya tiene una reserva generada. Cancelá la reserva primero si corresponde.',
-            ], 422);
+        if ($bloqueo = ReservaItem::mensajeBloqueo($items->pluck('id'), 'quitar este tour')) {
+            return response()->json(['code' => 422, 'message' => $bloqueo], 422);
         }
 
         DB::transaction(function () use ($items, $alternativa) {
@@ -714,11 +705,8 @@ class AlternativaItemController extends Controller
             if ($tourOrigen->count() !== 1 || $tourOrigen->first() === null || $items->contains(fn ($i) => $i->carga_tour !== null)) {
                 return response()->json(['code' => 422, 'message' => 'Estos servicios no forman un solo tour.'], 422);
             }
-            if (ReservaItem::whereIn('alternativa_item_id', $items->pluck('id'))->exists()) {
-                return response()->json([
-                    'code' => 422,
-                    'message' => 'No se puede quitar: este tour ya tiene una reserva generada. Cancelá la reserva primero si corresponde.',
-                ], 422);
+            if ($bloqueo = ReservaItem::mensajeBloqueo($items->pluck('id'), 'quitar este tour')) {
+                return response()->json(['code' => 422, 'message' => $bloqueo], 422);
             }
 
             $aereos = $items->where('origen_tipo', AlternativaItem::ORIGEN_PASAJE_AEREO)->pluck('id');
@@ -1337,11 +1325,8 @@ class AlternativaItemController extends Controller
             return response()->json(['code' => 422, 'message' => 'Solo se puede editar así un pasaje aéreo suelto.'], 422);
         }
 
-        if (ReservaItem::where('alternativa_item_id', $item->id)->exists()) {
-            return response()->json([
-                'code' => 422,
-                'message' => 'No se puede editar: este servicio ya tiene una reserva generada. Cancelá la reserva primero si corresponde.',
-            ], 422);
+        if ($bloqueo = ReservaItem::mensajeBloqueo([$item->id], 'editar')) {
+            return response()->json(['code' => 422, 'message' => $bloqueo], 422);
         }
 
         $alternativa = $item->alternativa;
@@ -1617,11 +1602,8 @@ class AlternativaItemController extends Controller
             return response()->json(['code' => 422, 'message' => 'Solo se puede editar así un ítem manual.'], 422);
         }
 
-        if (ReservaItem::where('alternativa_item_id', $item->id)->exists()) {
-            return response()->json([
-                'code' => 422,
-                'message' => 'No se puede editar: este servicio ya tiene una reserva generada. Cancelá la reserva primero si corresponde.',
-            ], 422);
+        if ($bloqueo = ReservaItem::mensajeBloqueo([$item->id], 'editar')) {
+            return response()->json(['code' => 422, 'message' => $bloqueo], 422);
         }
 
         $validator = Validator::make($request->all(), [

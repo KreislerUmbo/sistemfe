@@ -230,11 +230,8 @@ class OpcionHotelController extends Controller
         $this->autorizarCotizacion('update', $hotel);
         $tarifaIds = $hotel->opcionesHotelTarifas->pluck('id');
 
-        if (self::tieneReservaGenerada($tarifaIds)) {
-            return response()->json([
-                'code' => 422,
-                'message' => 'No se puede eliminar: este hotel ya tiene una reserva generada sobre alguna de sus tarifas. Cancelá la reserva primero si corresponde.',
-            ], 422);
+        if ($bloqueo = self::mensajeReservaGenerada($tarifaIds, 'eliminar este hotel')) {
+            return response()->json(['code' => 422, 'message' => $bloqueo], 422);
         }
 
         $alternativaIds = AlternativaItem::whereIn('opcion_hotel_tarifa_id', $tarifaIds)->pluck('alternativa_id')->unique();
@@ -303,11 +300,8 @@ class OpcionHotelController extends Controller
         $tarifa = OpcionHotelTarifa::findOrFail($id);
         $this->autorizarCotizacion('update', $tarifa);
 
-        if (self::tieneReservaGenerada(collect([$tarifa->id]))) {
-            return response()->json([
-                'code' => 422,
-                'message' => 'No se puede eliminar: esta tarifa ya tiene una reserva generada. Cancelá la reserva primero si corresponde.',
-            ], 422);
+        if ($bloqueo = self::mensajeReservaGenerada(collect([$tarifa->id]), 'eliminar esta tarifa')) {
+            return response()->json(['code' => 422, 'message' => $bloqueo], 422);
         }
 
         $alternativaIds = AlternativaItem::where('opcion_hotel_tarifa_id', $tarifa->id)->pluck('alternativa_id')->unique();
@@ -327,11 +321,12 @@ class OpcionHotelController extends Controller
     // el ítem ya generó una reserva real (Venta Directa puede crear
     // alternativa→reserva→reserva_items en el mismo request, no solo al
     // aceptar la cotización completa).
-    private static function tieneReservaGenerada(\Illuminate\Support\Collection $tarifaIds): bool
+    // T-100: null si ninguna reserva tomó estas tarifas; si no, el mensaje (ver ReservaItem::mensajeBloqueo()).
+    private static function mensajeReservaGenerada(\Illuminate\Support\Collection $tarifaIds, string $accion): ?string
     {
         $itemIds = AlternativaItem::whereIn('opcion_hotel_tarifa_id', $tarifaIds)->pluck('id');
 
-        return ReservaItem::whereIn('alternativa_item_id', $itemIds)->exists();
+        return ReservaItem::mensajeBloqueo($itemIds, $accion);
     }
 
     // Compartido por destroy()/eliminarTarifa() — un hotel/tarifa ad-hoc

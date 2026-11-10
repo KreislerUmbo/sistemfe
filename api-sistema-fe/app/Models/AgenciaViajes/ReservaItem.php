@@ -86,6 +86,36 @@ class ReservaItem extends Model
         return $this->belongsTo(Reserva::class, 'reserva_id');
     }
 
+    /**
+     * T-100 — Mensaje para cuando un servicio de la cotización no se puede editar ni eliminar
+     * porque lo tomó una reserva, o null si ninguna lo tomó. Una reserva CANCELADA tampoco lo
+     * libera: lee el servicio de la cotización para mostrar su historial, así que se cambia
+     * duplicando la alternativa. Si hay varias, manda la que no está cancelada.
+     *
+     * @param  iterable<int>  $alternativaItemIds
+     */
+    public static function mensajeBloqueo(iterable $alternativaItemIds, string $accion): ?string
+    {
+        $items = self::whereIn('alternativa_item_id', collect($alternativaItemIds))
+            ->with('reserva:id,codigo,estado')
+            ->get();
+        if ($items->isEmpty()) {
+            return null;
+        }
+
+        $reservas = $items->map->reserva->filter();
+        if ($reservas->isEmpty()) {
+            return "No se puede {$accion}: este servicio ya tiene una reserva generada.";
+        }
+
+        $reserva = $reservas->first(fn ($r) => $r->estado !== 'cancelada') ?? $reservas->first();
+        $codigo = $reserva->codigo ?? "#{$reserva->id}";
+
+        return $reserva->estado === 'cancelada'
+            ? "No se puede {$accion}: lo tomó la reserva {$codigo} (cancelada), que lo conserva en su historial. Para cambiarlo, duplica la alternativa."
+            : "No se puede {$accion}: lo tomó la reserva {$codigo}. Para cambiarlo, usa Modificar reserva.";
+    }
+
     public function alternativaItem()
     {
         return $this->belongsTo(AlternativaItem::class, 'alternativa_item_id');

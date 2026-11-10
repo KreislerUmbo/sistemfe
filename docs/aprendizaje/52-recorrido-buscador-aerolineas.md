@@ -135,3 +135,26 @@ frontend de uno del backend.
    `php artisan agencia-viajes:normalizar-aerolineas dakamu --simular`, revisar la lista y después
    correrlo sin `--simular`. Los valores «sin coincidencia» que sean aerolíneas reales se agregan al
    catálogo desde el panel central y se vuelve a correr.
+
+## 7. Ajustes posteriores (T-100, 09-nov-2026)
+
+Lo que la revisión de T-016 dejó abierto, decidido con el usuario:
+
+1. **Aerolínea retirada.** Si soporte desactivó la aerolínea (o la de destino de una unida),
+   `POST aerolineas` ya no la devuelve: responde 422 con ««X» fue retirada del catálogo de
+   aerolíneas. Elige otra o avisa a soporte.» (`AerolineaController::responderExistente()`), y
+   `AerolineaSelect` muestra ese texto bajo el campo, no en un Swal.
+2. **Salir del campo.** Si lo escrito coincide **exacto** con una del catálogo (sin importar
+   mayúsculas ni tildes), se elige al salir. Si la búsqueda todavía no había llegado, se consulta
+   en ese momento (`cerrarLuego()`). Si no coincide con ninguna, vuelve el valor anterior.
+3. **«Agregar».** Aparece solo si ninguna sugerencia **empieza** con lo escrito: con «lat» y LATAM
+   en la lista no se ofrece agregar «Lat». El catálogo es común a todas las agencias.
+4. **Servicio tomado por una reserva cancelada.** Sigue bloqueado a propósito, porque la reserva
+   cancelada lee el servicio de la cotización para mostrar su historial. `ReservaItem::mensajeBloqueo()`
+   arma el mensaje («lo tomó la reserva X (cancelada)… duplica la alternativa» o «…usa Modificar
+   reserva») y lo usan los 9 guards de ítems, hoteles, tarifas, tours y opciones de mayorista.
+   El cotizador muestra el mismo texto arriba del formulario (`avisoItemReservado()` en
+   `cotizador/editar.vue`), para lo cual la API carga `reservaItem.reserva:id,codigo,estado`.
+
+Tests: `AerolineaCatalogoTest::test_agregar_una_desactivada_responde_422_con_aviso` y
+`AlternativaItemPasajeAereoTest::test_pasaje_de_reserva_cancelada_sigue_bloqueado_con_mensaje_claro`.
