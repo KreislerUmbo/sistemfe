@@ -22,6 +22,9 @@ alternativa, y multiplica por `cantidad` también los ítems `por_persona` (cuyo
 total de la línea). `$descuentoMonto = $totalOriginal - $total` y `hayDescuento = > 0.01`, así
 que el PDF puede decir "Incluye descuento aplicado: -S/ 1,200" (o "descuento de temporada") sin
 que exista ningún descuento. Confirmado leyendo el código; reproducir con un test antes de corregir.
+**Reproducido en vivo (10-nov, revisión de T-019, agencia-demo):** grupo resuelto Cumbaza doble
+(PEN 300) vs. Rio Sol doble (PEN 560, elegida), sin descuento → total PEN 560 correcto, pero el PDF
+dijo "Incluye descuento de temporada aplicado" (descuento calculado: 860 − 560 = 300). Es el caso de CA1.
 
 ## Alcance
 - **Quitar el bloqueo** del PDF con grupos abiertos (`validarGruposResueltos()` deja de lanzar;
