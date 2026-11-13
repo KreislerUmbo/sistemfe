@@ -4,7 +4,7 @@
 |---|---|
 | **Módulo** | AGE |
 | **Depende de** | **T-028** y T-050 (el botón "Enviar" donde se muestra la revisión) (vínculo `version_anterior_id` y scope de "vigente"); si T-001 ya está hecha, "Actualizar al precio nuevo" respeta su bloqueo de alternativa aceptada |
-| **Reglas** | — |
+| **Reglas** | Un solo mínimo de la agencia (T-087): `configuracion_agencia.margen_minimo_aceptable_pct`, que es un **markup** (sobre el costo) — `admin-start-kit/src/utils/margenes.ts`, `MargenEnVivo.vue` |
 | **Decisiones** | `docs/requerimientos/observaciones-pruebas-usuario.md` → punto 8 (respuestas 1-6, D2, "Diseño — solo lo crítico") |
 | **Rama** | `feat/T-022-revision-antes-de-enviar` |
 
@@ -21,8 +21,11 @@ construcción aparece la tentación de agregar otra revisión, **no**: anotarla 
   revisiones** (ver la tabla del requerimiento):
   1. sin servicios → `bloquea`;
   2. servicio con precio de venta nulo o 0 → `bloquea` (en grupos de hoteles, cada fila);
-  3. venta por debajo del costo (siempre) o margen bajo `configuracion_agencia.margen_minimo_alerta_pct`
-     (si está vacío, no se avisa margen) → `aviso`;
+  3. venta por debajo del costo (siempre) o **markup** ((venta − costo) ÷ costo, como
+     `utils/margenes.ts::markupPct`) por debajo de `configuracion_agencia.margen_minimo_aceptable_pct`
+     → `aviso`. Es el mismo mínimo que ya avisan las tarifas, tours y combos (T-087); no se crea
+     otro. La columna no admite vacío (default 20): con mínimo **0** no se avisa markup bajo, solo
+     venta bajo costo. Sin costo (0 o nulo) no se evalúa el markup;
   4. tarifa del servicio con **versión siguiente activa** (precio nuevo), o que **no vale para la
      fecha del viaje** (vencida por `vigente_hasta`, `activo=false`, o su `temporada_id` no tiene
      ocurrencia que cubra la fecha) → `aviso`;
@@ -37,6 +40,11 @@ construcción aparece la tentación de agregar otra revisión, **no**: anotarla 
 - `GET alternativas/{id}/revision` (misma Policy/permiso que ver la cotización).
 - `CotizacionEnvioController::enviar()`: correr la revisión y responder 422 con la lista si hay
   algún `bloquea` (aunque se llame a la API directo). `preparar()` devuelve la revisión para el formulario.
+- `CotizacionActividadController::marcarEnviada()` (`POST alternativas/{id}/marcar-enviada`, el
+  camino de WhatsApp y "ya la envié por otro medio" de T-050): **la misma regla**, 422 con la lista
+  si hay algún `bloquea`, después de validar y del chequeo de `ESTADOS_SIN_ENVIO`, y sin registrar
+  la actividad CRM ni cambiar el estado. Una sola función que decida «¿se puede enviar?» para los
+  dos endpoints (no copiar el chequeo). Agregado el 12-nov-2026.
 - **Vínculo de versiones:** lo construye **T-028** (`proveedor_tarifas.version_anterior_id` y el
   scope de "vigente"). Acá solo se usa: "precio nuevo" = existe una tarifa vigente cuyo
   `version_anterior_id` es la del servicio. Versiones de antes de T-028 no avisan "precio nuevo";
@@ -46,8 +54,9 @@ construcción aparece la tentación de agregar otra revisión, **no**: anotarla 
   la alternativa como al agregar un ítem; conserva `descuento_pct` y cantidad), recalcula el total
   de la alternativa (`recalcularTotalAlternativa()`). 422 si la alternativa está aceptada o si ya no
   hay versión siguiente. Reusar el armado de precios que ya usa el alta del ítem (no duplicarlo).
-- `configuracion_agencia.margen_minimo_alerta_pct` (decimal 5,2, nullable) + campo en Configuración
-  de Agencia.
+- Sin columnas nuevas ni migraciones: el mínimo es `margen_minimo_aceptable_pct` (corregido el
+  12-nov-2026; la versión anterior de esta tarea pedía una columna `margen_minimo_alerta_pct`
+  aparte, que T-087 dejó sin sentido al unificar el mínimo).
 
 **Frontend (`cotizador/editar.vue` + componente nuevo `RevisionAlternativa.vue`)**
 - Junto a los botones de envío: ✓ "Lista para el cliente" si no hay nada; si hay, insignia
@@ -63,7 +72,8 @@ construcción aparece la tentación de agregar otra revisión, **no**: anotarla 
   muestra al elegir **cualquiera** de los tres caminos, no solo el correo; con `bloquea`, ese camino
   queda deshabilitado con el motivo; con solo avisos, el botón dice "Enviar igual". (Ajustado el
   27-oct-2026: T-050 reemplazó el envío solo por correo.)
-- Configuración de Agencia: campo "Margen mínimo para avisar (%)".
+- Configuración de Agencia: **sin cambios** (el campo del mínimo ya existe).
+- El aviso de la revisión dice «markup», igual que `MargenEnVivo` (no «margen»).
 
 ## Fuera de alcance
 - Cualquier revisión que no sea una de las 6 (ítem manual, referencial, edades, tipo de cambio…).
@@ -76,16 +86,23 @@ construcción aparece la tentación de agregar otra revisión, **no**: anotarla 
 - `api-sistema-fe/app/Http/Controllers/AgenciaViajes/AlternativaController.php` o uno nuevo para `revision`
 - `api-sistema-fe/app/Http/Controllers/AgenciaViajes/AlternativaItemController.php` (`actualizarTarifa`)
 - `api-sistema-fe/app/Http/Controllers/AgenciaViajes/CotizacionEnvioController.php`
-- `api-sistema-fe/app/Http/Controllers/AgenciaViajes/ProveedorTarifaController.php`, `ConfiguracionAgenciaController.php`
-- migraciones en `tenant/verticals/agencia-viajes/`
-- `admin-start-kit/src/components/AgenciaViajes/RevisionAlternativa.vue`, `EnviarCorreoCotizacion.vue`
-- `admin-start-kit/src/views/agencia-viajes/cotizador/editar.vue`, pantalla de Configuración de Agencia
+- `api-sistema-fe/app/Http/Controllers/AgenciaViajes/CotizacionActividadController.php` (`marcarEnviada`)
+- `api-sistema-fe/app/Http/Controllers/AgenciaViajes/ProveedorTarifaController.php`
+- `api-sistema-fe/app/Models/AgenciaViajes/ConfiguracionAgencia.php` (solo lectura del mínimo)
+- `admin-start-kit/src/components/AgenciaViajes/RevisionAlternativa.vue` (nuevo), `EnviarAlternativa.vue`
+  (el botón "Enviar" de T-050, con los tres caminos; se usa en `editar.vue` ~línea 851),
+  `EnviarCorreoCotizacion.vue`
+- `admin-start-kit/src/views/agencia-viajes/cotizador/editar.vue`
 
 ## Criterios de aceptación
 - [ ] **CA1** — Alternativa sin ítems → `bloquea`; `POST enviar-correo` → 422. → test
+- [ ] **CA1b** — Alternativa sin ítems → `POST marcar-enviada` (canal WhatsApp y canal otro) → 422,
+  sin `crm_actividades` nueva y con el estado de la alternativa sin cambiar; con solo avisos → 200
+  y se registra como hoy. → test
 - [ ] **CA2** — Ítem con precio 0 → `bloquea` con su `item_id`. → test
-- [ ] **CA3** — Venta < costo → aviso aunque no haya margen configurado; margen 5% con mínimo 10% →
-  aviso; sin mínimo configurado → sin aviso de margen. → test
+- [ ] **CA3** — Venta < costo → aviso aunque el mínimo sea 0; costo 100 y venta 105 (markup 5 %)
+  con `margen_minimo_aceptable_pct` = 10 → aviso; con mínimo 0 → sin aviso de markup; costo 100 y
+  venta 125 con mínimo 20 → sin aviso (lo que se compara es el markup 25 %, no el margen 20 %). → test
 - [ ] **CA4** — Editar el precio de una tarifa usada crea la versión con `version_anterior_id`; la
   revisión de la alternativa muestra "precio nuevo" con precio actual y nuevo. → test
 - [ ] **CA5** — `actualizar-tarifa` re-engancha a la versión nueva, conserva el descuento y el total
@@ -115,11 +132,10 @@ construcción aparece la tentación de agregar otra revisión, **no**: anotarla 
   `fecha_vencimiento` son instantes en UTC
 - [ ] Tributario: `actualizar-tarifa` copia `tip_afe_igv`/destino de la versión nueva como el alta
 - [ ] `v-html`: no (mensajes como texto)
-- [ ] Migraciones: nuevas en `verticals/agencia-viajes/`; `tenants:migrate-verticales`
+- [ ] Migraciones: no aplica (el mínimo ya existe)
 
 ## Cómo verificar
 ```
-php artisan tenants:migrate-verticales
 php artisan test --filter=Revision
 php artisan test   # suite completa, contra PostgreSQL
 cd admin-start-kit && npm run type-check && npm run build
