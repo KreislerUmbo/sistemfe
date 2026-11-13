@@ -8,21 +8,25 @@
     <template v-if="correoDisponible || puedeMarcar">
         <button class="btn btn-outline-primary btn-sm w-100" :disabled="ocupado" @click="opcionesAbiertas = !opcionesAbiertas">
             <span v-if="ocupado" class="spinner-border spinner-border-sm me-1"></span>
-            <i v-else class="fas fa-paper-plane me-1"></i>Enviar al cliente
+            <i v-else class="fas fa-paper-plane me-1"></i>{{ soloAvisos ? 'Enviar igual' : 'Enviar al cliente' }}
             <i class="fas ms-1" :class="opcionesAbiertas ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
         </button>
         <div v-if="opcionesAbiertas" class="list-group list-group-flush border rounded small">
+            <!-- T-022: con un bloqueo de la revisión ningún medio sale; con solo avisos, "Enviar igual". -->
+            <div v-if="bloqueos.length" class="list-group-item py-2 text-danger">
+                <i class="fas fa-ban me-1"></i>No se puede enviar todavía: {{ bloqueos.map((b) => b.mensaje).join(' ') }}
+            </div>
             <!-- T-051: la llamada que se agenda al enviar, por cualquiera de los tres medios. -->
             <ProximaAccionPropuesta v-model="proximaAccion" />
-            <button v-if="correoDisponible" type="button" class="list-group-item list-group-item-action py-2" :disabled="ocupado" @click="porCorreo">
+            <button v-if="correoDisponible" type="button" class="list-group-item list-group-item-action py-2" :disabled="ocupado || bloqueado" @click="porCorreo">
                 <i class="fas fa-envelope me-2 text-primary"></i>Por correo
             </button>
             <template v-if="puedeMarcar">
-                <button type="button" class="list-group-item list-group-item-action py-2" :disabled="ocupado" @click="porWhatsapp">
+                <button type="button" class="list-group-item list-group-item-action py-2" :disabled="ocupado || bloqueado" @click="porWhatsapp">
                     <i class="fab fa-whatsapp me-2 text-success"></i>Por WhatsApp
                     <span v-if="!telefonoCliente" class="d-block text-muted">El cliente no tiene teléfono: eliges el contacto en WhatsApp.</span>
                 </button>
-                <button type="button" class="list-group-item list-group-item-action py-2" :disabled="ocupado" @click="abrirOtroMedio">
+                <button type="button" class="list-group-item list-group-item-action py-2" :disabled="ocupado || bloqueado" @click="abrirOtroMedio">
                     <i class="fas fa-check me-2 text-secondary"></i>Ya la envié por otro medio
                 </button>
             </template>
@@ -70,6 +74,7 @@ import { crmActividadService } from '@/services/admin/crmActividadService';
 import { crmAccionService, fechaPropuesta, type ProximaAccion } from '@/services/admin/crmAccionService';
 import ProximaAccionPropuesta from '@/components/Clientes/ProximaAccionPropuesta.vue';
 import type { Alternativa } from '@/types/agencia-viajes';
+import type { RevisionEntrada } from '@/services/admin/revisionAlternativaService';
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
 
@@ -82,6 +87,8 @@ const props = defineProps<{
     descargarPdf: () => Promise<boolean>;
     /** T-051: la cotización ya tiene una acción pendiente; al reenviar no se propone otra. */
     hayAccionesPendientes?: boolean;
+    /** T-022: la revisión de la alternativa (la pide RevisionAlternativa.vue). */
+    revision?: RevisionEntrada[];
 }>();
 
 const emit = defineEmits<{
@@ -99,6 +106,10 @@ const correoDisponible = computed(() => Boolean(correoRef.value?.disponible));
 // WhatsApp y otro medio = editar la cotización; una aceptada, descartada o reemplazada ya no se envía.
 const puedeMarcar = computed(() =>
     auth.isPermitedRoute('cotizaciones.editar') && ['borrador', 'enviada'].includes(props.alternativa.estado));
+
+const bloqueos = computed(() => (props.revision ?? []).filter((r) => r.nivel === 'bloquea'));
+const bloqueado = computed(() => bloqueos.value.length > 0);
+const soloAvisos = computed(() => !bloqueado.value && (props.revision ?? []).length > 0);
 
 const telefonoCliente = computed(() => props.cliente?.phone?.trim() || null);
 

@@ -139,6 +139,7 @@ declare module 'vue' {
     ProveedorBuscador: typeof import('./src/components/AgenciaViajes/ProveedorBuscador.vue')['default']
     ProximaAccionPropuesta: typeof import('./src/components/Clientes/ProximaAccionPropuesta.vue')['default']
     ResumenCronograma: typeof import('./src/components/Creditos/ResumenCronograma.vue')['default']
+    RevisionAlternativa: typeof import('./src/components/AgenciaViajes/RevisionAlternativa.vue')['default']
     RichTextEditor: typeof import('./src/components/RichTextEditor.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']

@@ -10,6 +10,7 @@ use App\Models\Client\CrmActividad;
 use App\Services\AgenciaViajes\AlternativaPdfService;
 use App\Services\AgenciaViajes\CondicionesGeneralesPdfService;
 use App\Services\AgenciaViajes\CorreoAgenciaService;
+use App\Services\AgenciaViajes\RevisionAlternativaService;
 use App\Services\Crm\AccionesCrm;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -35,6 +36,7 @@ class CotizacionEnvioController extends Controller
         private AlternativaPdfService $alternativaPdf,
         private CondicionesGeneralesPdfService $condicionesPdf,
         private AccionesCrm $acciones,
+        private RevisionAlternativaService $revision,
     ) {
     }
 
@@ -61,6 +63,8 @@ class CotizacionEnvioController extends Controller
             'adjuntar_condiciones' => (bool) $config->adjuntar_condiciones_por_defecto,
             'estado_alternativa' => $alternativa->estado,
             'puede_marcar_enviada' => $alternativa->estado === 'borrador',
+            // T-022: el formulario muestra los bloqueos (deshabilita) y avisos ("Enviar igual").
+            'revision' => $this->revision->revisar($alternativa),
         ]);
     }
 
@@ -116,6 +120,11 @@ class CotizacionEnvioController extends Controller
 
         if ($alternativa->estado === 'descartada') {
             return response()->json(['code' => 422, 'message' => 'Esta alternativa está descartada: no se puede enviar.'], 422);
+        }
+
+        // T-022: los bloqueos de la revisión se respetan aunque se llame a la API directo.
+        if ($bloqueo = $this->revision->bloqueoDeEnvio($alternativa)) {
+            return response()->json($bloqueo, 422);
         }
 
         if ($this->correo->enviadosHoy() >= $this->correo->limiteDiario()) {

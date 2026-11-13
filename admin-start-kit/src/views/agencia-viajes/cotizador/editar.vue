@@ -848,9 +848,13 @@
                             </div>
                             <ExtenderVigenciaModal v-if="extendiendoVigencia" :alternativa-id="alternativaActiva.id" :nombre="alternativaActiva.nombre"
                                 :dias-vigencia="configAgencia?.dias_vigencia_cotizacion" @cerrar="extendiendoVigencia = false" @extendida="onVigenciaExtendida" />
+                            <!-- T-022: "¿lista para el cliente?" junto a los botones de envío. -->
+                            <RevisionAlternativa v-if="!modificacionInfo" :alternativa-id="alternativaActiva.id" :moneda="alternativaActiva.moneda_cotizacion"
+                                :refrescar="claveRevision" :nombre-de-item="nombreItemRevision"
+                                @cambio="revisionActual = $event" @ir="irARevision" @actualizada="cargarCotizacion" />
                             <EnviarAlternativa v-if="!modificacionInfo" :alternativa="alternativaActiva" :cliente="cotizacion?.cliente ?? null"
                                 :destino="cotizacion?.destino ?? ''" :total="totalLocal" :descargar-pdf="descargarPdfAlternativa"
-                                :hay-acciones-pendientes="(accionesRef?.cantidad ?? 0) > 0"
+                                :hay-acciones-pendientes="(accionesRef?.cantidad ?? 0) > 0" :revision="revisionActual"
                                 @enviada="onAlternativaEnviada" @registrada="historialRef?.recargar(); accionesRef?.recargar()" />
                             <AccionesPendientes v-if="cotizacion?.cliente_id" ref="accionesRef" :cliente-id="cotizacion.cliente_id"
                                 referencia-tipo="cotizacion" :referencia-id="cotizacion.id" @cambio="historialRef?.recargar()" />
@@ -1475,6 +1479,8 @@ import PromoverHotelProveedorModal from '@/components/AgenciaViajes/PromoverHote
 import DestinoTreeSelect from '@/components/AgenciaViajes/DestinoTreeSelect.vue';
 import CalculadoraTipoCambioModal from '@/components/AgenciaViajes/CalculadoraTipoCambioModal.vue';
 import EnviarAlternativa from '@/components/AgenciaViajes/EnviarAlternativa.vue';
+import RevisionAlternativa from '@/components/AgenciaViajes/RevisionAlternativa.vue';
+import type { RevisionEntrada } from '@/services/admin/revisionAlternativaService';
 import HistorialActividadesCotizacion from '@/components/AgenciaViajes/HistorialActividadesCotizacion.vue';
 import AccionesPendientes from '@/components/Clientes/AccionesPendientes.vue';
 import CerrarComoPerdidaModal from '@/components/AgenciaViajes/CerrarComoPerdidaModal.vue';
@@ -1586,6 +1592,30 @@ const irAItem = async (id: number) => {
     await nextTick();
     document.querySelector(`[data-item-id~="${id}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     setTimeout(() => { if (itemResaltadoId.value === id) itemResaltadoId.value = null; }, 3000);
+};
+
+// ── T-022: revisión antes de enviar ──────────────────────────────────
+// RevisionAlternativa.vue pide la lista al backend; acá solo se guarda (para los botones de
+// envío) y se navega al servicio o formulario donde se corrige.
+const revisionActual = ref<RevisionEntrada[]>([]);
+// Cambia cuando la alternativa cambia (mismo momento en que se refresca el total): el componente
+// espera medio segundo antes de volver a pedir, para no llamar en cada tecla.
+// cargarCotizacion() reemplaza `cotizacion` tras cada guardado; el total local cubre las ediciones en vivo.
+const versionCotizacion = ref(0);
+watch(cotizacion, () => { versionCotizacion.value++; });
+const claveRevision = computed(() => `${versionCotizacion.value}|${alternativaActivaId.value}|${totalLocal.value}`);
+const nombreItemRevision = (id: number): string => {
+    const item = itemsSinAjuste.value.find((i) => i.id === id);
+    return item ? etiquetaItem(item) : 'Servicio';
+};
+const irARevision = (entrada: RevisionEntrada, itemId: number | null) => {
+    if (itemId !== null) {
+        void irAItem(itemId);
+    } else if (entrada.destino.seccion === 'datos_cotizacion') {
+        extendiendoVigencia.value = true;
+    } else if (entrada.destino.seccion === 'lienzo') {
+        drawerBibliotecaAbierto.value = true;
+    }
 };
 
 const confirmarRevisados = async (ids: number[]) => {

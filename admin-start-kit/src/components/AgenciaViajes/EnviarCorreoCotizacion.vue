@@ -12,6 +12,13 @@
                         <button class="btn-close" :disabled="enviando" @click="cerrar"></button>
                     </div>
                     <div v-if="borrador" class="modal-body">
+                        <!-- T-022: los bloqueos impiden enviar; los avisos se ven y se puede "Enviar igual". -->
+                        <div v-if="bloqueos.length" class="alert alert-danger py-2 small mb-3">
+                            <div v-for="r in bloqueos" :key="r.codigo"><i class="fas fa-ban me-1"></i>{{ r.mensaje }}</div>
+                        </div>
+                        <div v-if="avisos.length" class="alert alert-warning py-2 small mb-3">
+                            <div v-for="r in avisos" :key="r.codigo"><i class="fas fa-exclamation-circle me-1"></i>{{ r.mensaje }}</div>
+                        </div>
                         <div class="alert py-2 small mb-3" :class="borrador.remitente.modo === 'dominio_agencia' ? 'alert-light border' : 'alert-warning'">
                             <div>
                                 Se enviará desde: <strong>{{ borrador.remitente.nombre }} &lt;{{ borrador.remitente.email }}&gt;</strong>
@@ -66,9 +73,9 @@
                     </div>
                     <div class="modal-footer">
                         <button class="btn btn-outline-secondary btn-sm" :disabled="enviando" @click="cerrar">Cancelar</button>
-                        <button class="btn btn-primary btn-sm" :disabled="enviando || !puedeConfirmar" @click="enviar">
+                        <button class="btn btn-primary btn-sm" :disabled="enviando || !puedeConfirmar || bloqueos.length > 0" @click="enviar">
                             <span v-if="enviando" class="spinner-border spinner-border-sm me-1"></span>
-                            <i v-else class="fas fa-paper-plane me-1"></i>Enviar
+                            <i v-else class="fas fa-paper-plane me-1"></i>{{ avisos.length ? 'Enviar igual' : 'Enviar' }}
                         </button>
                     </div>
                 </div>
@@ -128,6 +135,9 @@ const form = reactive({
 
 const separarCorreos = (texto: string): string[] =>
     texto.split(/[,;\s]+/).map((c) => c.trim()).filter((c) => c.length > 0);
+
+const bloqueos = computed(() => (borrador.value?.revision ?? []).filter((r) => r.nivel === 'bloquea'));
+const avisos = computed(() => (borrador.value?.revision ?? []).filter((r) => r.nivel === 'aviso'));
 
 const puedeConfirmar = computed(() =>
     separarCorreos(form.para).length > 0

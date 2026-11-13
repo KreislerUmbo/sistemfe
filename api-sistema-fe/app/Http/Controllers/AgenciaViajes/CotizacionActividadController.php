@@ -9,6 +9,7 @@ use App\Models\AgenciaViajes\Alternativa;
 use App\Models\AgenciaViajes\Cotizacion;
 use App\Models\AgenciaViajes\CotizacionEnvio;
 use App\Models\Client\CrmActividad;
+use App\Services\AgenciaViajes\RevisionAlternativaService;
 use App\Services\Crm\AccionesCrm;
 use App\Services\HoraPeru;
 use Carbon\CarbonImmutable;
@@ -28,8 +29,10 @@ class CotizacionActividadController extends Controller
     // reemplazada quedaron fuera de la oferta.
     private const ESTADOS_SIN_ENVIO = ['aceptada', 'descartada', Alternativa::ESTADO_REEMPLAZADA];
 
-    public function __construct(private readonly AccionesCrm $acciones)
-    {
+    public function __construct(
+        private readonly AccionesCrm $acciones,
+        private readonly RevisionAlternativaService $revision,
+    ) {
     }
 
     // POST alternativas/{id}/marcar-enviada — WhatsApp o "ya la envié por otro medio".
@@ -58,6 +61,11 @@ class CotizacionActividadController extends Controller
                 'code' => 422,
                 'message' => "Esta alternativa está {$alternativa->estado}: ya no se envía.",
             ], 422);
+        }
+
+        // T-022: la misma regla que enviar-correo (una sola función decide si se puede enviar).
+        if ($bloqueo = $this->revision->bloqueoDeEnvio($alternativa)) {
+            return response()->json($bloqueo, 422);
         }
 
         $datos = $validator->validated();

@@ -2,6 +2,8 @@
 
 namespace App\Services\AgenciaViajes;
 
+use App\Models\AgenciaViajes\AlternativaItem;
+use App\Models\AgenciaViajes\CotizacionPasajero;
 use App\Models\AgenciaViajes\ProveedorTarifa;
 use App\Services\HoraPeru;
 
@@ -230,6 +232,72 @@ class PriceEngineService
         }
 
         return ['venta' => (float) $tarifa->precio_venta_adulto, 'costo' => $costo];
+    }
+
+    // Cuenta los pasajeros de la cotización por tipo (adulto/niño/infante), solo los
+    // `pax_incluidos` si el ítem los limita. Punto único: el alta del ítem y T-022 lo usan.
+    public function contarPasajerosPorTipo(int $cotizacionId, ?array $paxIncluidosIds): array
+    {
+        $query = CotizacionPasajero::where('cotizacion_id', $cotizacionId);
+        if ($paxIncluidosIds) {
+            $query->whereIn('id', $paxIncluidosIds);
+        }
+        $pasajeros = $query->get();
+
+        return [
+            'adulto' => $pasajeros->where('tipo_pax', 'adulto')->count(),
+            'nino' => $pasajeros->where('tipo_pax', 'nino')->count(),
+            'infante' => $pasajeros->where('tipo_pax', 'infante')->count(),
+        ];
+    }
+
+    // T-022 — el precio que tendría un ítem de proveedor re-enganchado a otra versión de su
+    // tarifa, armado con las mismas piezas del alta (ventaYCostoDeTarifa + convertirMoneda).
+    // Conserva el descuento y la cantidad del ítem. Las camas adicionales del alta no se guardan
+    // como dato: su número se deduce de lo que el snapshot tenía por encima del precio de la
+    // tarifa anterior, y se cobran al precio de cama de la versión nueva (solo tarifa_fija).
+    //
+    // @return array{venta: float, costo: float, moneda_costo: string, precio_convertido: float, total_convertido: float}
+    public function precioDeItemConTarifa(AlternativaItem $item, ProveedorTarifa $nueva, ProveedorTarifa $anterior): array
+    {
+        $alternativa = $item->alternativa;
+        $porPersona = $item->modo_precio === 'por_persona';
+
+        $conteo = $porPersona
+            ? $this->contarPasajerosPorTipo($alternativa->cotizacion_id, $item->pax_incluidos)
+            : ['adulto' => 0, 'nino' => 0, 'infante' => 0];
+
+        ['venta' => $venta, 'costo' => $costo] = $this->ventaYCostoDeTarifa($nueva, $conteo, $item->modo_precio);
+
+        if (! $porPersona) {
+            ['venta' => $ventaAnterior, 'costo' => $costoAnterior] = $this->ventaYCostoDeTarifa($anterior, $conteo, $item->modo_precio);
+            $extraVenta = max(0, (float) $item->precio_venta_snapshot - $ventaAnterior);
+            $extraCosto = max(0, (float) $item->costo_snapshot - $costoAnterior);
+            $camaAnterior = (float) $anterior->precio_venta_cama_adicional;
+
+            // El precio de la cama adicional vive EN la tarifa: se deduce cuántas camas tenía el
+            // ítem y se cobran al precio de la versión nueva (revisión de T-022). Si no se puede
+            // deducir, o la versión nueva no tiene precio de cama, se conserva el monto anterior.
+            $camas = $camaAnterior > 0 ? (int) round($extraVenta / $camaAnterior) : 0;
+            if ($camas > 0 && $nueva->precio_venta_cama_adicional !== null && $nueva->precio_costo_cama_adicional !== null) {
+                $venta += $camas * (float) $nueva->precio_venta_cama_adicional;
+                $costo += $camas * (float) $nueva->precio_costo_cama_adicional;
+            } else {
+                $venta += $extraVenta;
+                $costo += $extraCosto;
+            }
+        }
+
+        $listaConvertida = $this->convertirMoneda($venta, $nueva->moneda, $alternativa->moneda_cotizacion, (float) $alternativa->tipo_cambio_aplicado);
+        $precioConvertido = round($listaConvertida * (1 - (float) $item->descuento_pct / 100), 2);
+
+        return [
+            'venta' => $venta,
+            'costo' => $costo,
+            'moneda_costo' => $nueva->moneda,
+            'precio_convertido' => $precioConvertido,
+            'total_convertido' => $porPersona ? $precioConvertido : round($precioConvertido * $item->cantidad, 2),
+        ];
     }
 
     // T-045 — total de una línea: lo mismo que AlternativaItem::
