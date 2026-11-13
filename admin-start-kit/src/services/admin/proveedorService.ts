@@ -1,6 +1,6 @@
 // src/services/admin/proveedorService.ts — Sesión 11a (agencia de viajes)
 import httpClient from '@/helpers/http-client'
-import type { ProveedorTipo, Proveedor, ProveedorServicio, ProveedorTarifa } from '@/types/agencia-viajes'
+import type { FotoProveedor, ProveedorTipo, Proveedor, ProveedorServicio, ProveedorTarifa } from '@/types/agencia-viajes'
 
 export const proveedorTipoService = {
   async listar() {
@@ -38,6 +38,15 @@ export const proveedorService = {
   async eliminar(id: number) {
     const response = await httpClient.delete(`/proveedores/${id}`)
     return response.data
+  },
+  // T-020 — galería: tipo de foto (fachada/habitación/otra) y borrar una foto.
+  async actualizarTipoFoto(id: number, path: string, tipo_foto: FotoProveedor['tipo_foto']) {
+    const response = await httpClient.put(`/proveedores/${id}/fotos/tipo`, { path, tipo_foto })
+    return response.data as { proveedor: Proveedor }
+  },
+  async eliminarFoto(id: number, path: string) {
+    const response = await httpClient.delete(`/proveedores/${id}/fotos`, { data: { path } })
+    return response.data as { proveedor: Proveedor }
   },
 
   // ── Servicios asociados (proveedor_servicios) ──────────────────────

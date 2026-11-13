@@ -63,8 +63,8 @@
                     </div>
                     <div class="col-12" v-if="(proveedor.fotos?.length ?? 0) > 0">
                         <strong>Fotos:</strong>
-                        <div class="d-flex flex-wrap gap-2 mt-1">
-                            <img v-for="(foto, i) in proveedor.fotos" :key="foto" :src="foto" class="img-thumbnail" style="width:110px;height:110px;object-fit:cover;cursor:zoom-in;" @click="verFotoGrande(proveedor.fotos ?? [], i)">
+                        <div class="mt-1">
+                            <GaleriaFotosProveedor :proveedor-id="proveedor.id" :fotos="proveedor.fotos ?? []" :con-tipo="esHotel" @actualizado="(f) => { if (proveedor) proveedor.fotos = f; }" @ver="verFotoGrande" />
                         </div>
                     </div>
                 </div>
@@ -381,9 +381,11 @@
 
 <script setup lang="ts">
 import { sanearHtml } from '@/helpers/sanearHtml';
+import { escaparHtml } from '@/helpers/escaparHtml';
 import { destinoParaIgvAgencia, IGV_EXONERADO, NOTA_EXONERADO_AGENCIA } from '@/helpers/tratamientoTributarioAgencia';
 import CampoFecha from '@/components/CampoFecha.vue';
 import MargenEnVivo from '@/components/AgenciaViajes/MargenEnVivo.vue';
+import GaleriaFotosProveedor from '@/components/AgenciaViajes/GaleriaFotosProveedor.vue';
 import { ref, computed, watch, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';
@@ -487,7 +489,7 @@ const verFotoGrande = (fotos: string[], indexInicial: number) => {
         html: `
             <div style="position:relative;display:flex;align-items:center;justify-content:center;">
                 ${fotos.length > 1 ? '<button id="swal-foto-prev" type="button" style="position:absolute;left:0;background:rgba(0,0,0,0.5);color:#fff;border:none;border-radius:50%;width:40px;height:40px;font-size:18px;cursor:pointer;">‹</button>' : ''}
-                <img id="swal-foto-grande" src="${fotos[index]}" style="max-width:100%;max-height:75vh;border-radius:4px;">
+                <img id="swal-foto-grande" src="${escaparHtml(fotos[index])}" style="max-width:100%;max-height:75vh;border-radius:4px;">
                 ${fotos.length > 1 ? '<button id="swal-foto-next" type="button" style="position:absolute;right:0;background:rgba(0,0,0,0.5);color:#fff;border:none;border-radius:50%;width:40px;height:40px;font-size:18px;cursor:pointer;">›</button>' : ''}
             </div>
             ${fotos.length > 1 ? `<div id="swal-foto-contador" style="color:#fff;margin-top:0.5rem;font-size:13px;">${index + 1} / ${fotos.length}</div>` : ''}

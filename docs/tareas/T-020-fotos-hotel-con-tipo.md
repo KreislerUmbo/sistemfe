@@ -102,9 +102,39 @@ cd admin-start-kit && npm run type-check && npm run build
 ---
 
 ## Resultado
-- **Commits:**
-- **Tests:**
+- **Commits:** en la rama `feat/T-020-fotos-hotel-con-tipo` (`git log main..`): decisiones del 13-nov, tests (CA1-CA5), backend y front.
+- **Tests:** `ProveedorFotosTipoTest` (11, cubre CA1-CA5; se escribieron primero y fallaron por código
+  faltante). Suite completa contra PostgreSQL: **2185 pasaron, 0 fallos** (incluye los tests de
+  `opciones_hotel`, CA6). Front: `type-check` con los 47 errores previos (T-101), ninguno en los
+  archivos tocados; `build` OK. Migración aplicada en `agencia-demo` con `tenants:migrate-verticales`.
 - **Desviaciones de la tarea y por qué:**
+  - **Picker de Local:** no se activó `permitir-gestion-hoteles` en el drawer de `matrizHotel`. Ese flag
+    también habilita renombrar/borrar el hotel y editar tarifas, y para un hotel no registrado no hay
+    endpoint de recarga: los botones quedarían muertos. En su lugar, `editar.vue` muestra un bloque
+    "Fotos del hotel" (subir fachada/habitación y borrar) que usa los mismos endpoints y servicio
+    (`POST/DELETE opciones-hotel/{id}/fotos`) y se actualiza con la respuesta. Para un hotel Proveedor,
+    enlace "Fotos en la ficha del proveedor" (abre en pestaña nueva).
+  - Componente nuevo `GaleriaFotosProveedor.vue` (galería con tipo y borrado) compartido por la ficha y el
+    formulario, en vez de duplicar la lógica en ambos. Cada cambio de tipo o borrado se guarda al instante
+    (no espera al "Guardar" del formulario); la confirmación de borrar lo dice.
+  - Las fotos de `OpcionHotel` solo admiten `fachada`/`habitacion`; `otra` existe únicamente en proveedores.
+    Quien las lea (T-021, el PDF) debe tratar `otra` como relleno.
+- **CA7 (prueba funcional en `agencia-demo`) — NO ejecutada**; pasos para correrla:
+  1. Entrar a `agencia-demo` como `admin@agencia-demo.test`; abrir un proveedor de tipo Alojamiento con
+     fotos (o subirle 2-3 desde Editar). Ficha → cada foto debe tener un selector y, al elegir "Fachada",
+     la insignia "Fachada" aparece; marcar otra como fachada pasa la anterior a "Otra".
+  2. Borrar una foto (confirmar): desaparece y el archivo ya no carga. Repetir en Editar (`form.vue`).
+  3. Abrir un proveedor que NO sea Alojamiento: sin selector de tipo, pero sí botón de borrar.
+  4. Cotizador (alternativa Local/Nacional) → "+ Agregar hotel no registrado" → guardar: en el drawer
+     subir una fachada y una habitación; el input de fachada queda deshabilitado; borrar una.
+  5. Elegir un hotel Proveedor desde la biblioteca: debe verse "Fotos en la ficha del proveedor".
+  6. Revertir: borrar las fotos y el hotel de prueba, y los proveedores/fotos subidos.
 
 ## Hallazgos fuera de alcance
--
+- `AlternativaCopiaService` (líneas ~92 y ~265) copia `opciones_hotel.fotos` tal cual al duplicar una
+  alternativa: los hoteles copiados **comparten los paths** y, como `eliminarFoto()` borra el archivo,
+  borrar una foto en uno rompe la del otro (mismo problema que T-020 resolvió en `promover()`).
+- `ProveedorController::index()` ahora devuelve `fotos` como `{path, tipo_foto, url}[]` (antes URLs). Solo la
+  ficha y el formulario las leen (verificado con grep en `admin-start-kit/src`); si el portal e-commerce, que
+  vive fuera de este workspace, lee `proveedor.fotos`, hay que revisarlo.
+- `components.d.ts` se regeneró solo (registro del componente nuevo).

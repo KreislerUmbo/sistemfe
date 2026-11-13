@@ -206,9 +206,7 @@
             <div class="card-body py-3">
                 <div v-if="fotosExistentes.length > 0" class="mb-3">
                     <small class="text-muted d-block mb-2">Fotos guardadas</small>
-                    <div class="d-flex flex-wrap gap-2">
-                        <img v-for="(path, i) in fotosExistentes" :key="path" :src="path" class="img-thumbnail" style="width:100px;height:100px;object-fit:cover;cursor:zoom-in;" @click="verFotoGrande(fotosExistentes, i)">
-                    </div>
+                    <GaleriaFotosProveedor :proveedor-id="proveedorId" :fotos="fotosExistentes" :con-tipo="esAlojamiento" :tamano="100" @actualizado="(f) => (fotosExistentes = f)" @ver="verFotoGrande" />
                 </div>
 
                 <div v-if="archivosNuevos.length > 0" class="mb-3">
@@ -285,7 +283,8 @@ import httpClient from '@/helpers/http-client';
 import { proveedorService, proveedorTipoService } from '@/services/admin/proveedorService';
 import { amenidadService } from '@/services/admin/amenidadService';
 import { configuracionAgenciaService } from '@/services/admin/configuracionAgenciaService';
-import type { Proveedor, ProveedorTipo, Amenidad, ConfiguracionAgencia } from '@/types/agencia-viajes';
+import type { FotoProveedor, Proveedor, ProveedorTipo, Amenidad, ConfiguracionAgencia } from '@/types/agencia-viajes';
+import GaleriaFotosProveedor from '@/components/AgenciaViajes/GaleriaFotosProveedor.vue';
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
 type ArchivoPendiente = { file: File; previewUrl: string };
@@ -337,7 +336,7 @@ const formAlojamiento = ref<{
     edad_max_infante_gratis: number | null; edad_max_nino_cama_adicional: number | null;
 }>({ hora_checkin: null, hora_checkout: null, edad_max_infante_gratis: null, edad_max_nino_cama_adicional: null });
 
-const fotosExistentes = ref<string[]>([]);
+const fotosExistentes = ref<FotoProveedor[]>([]);
 const archivosNuevos = ref<ArchivoPendiente[]>([]);
 const totalFotos = computed(() => fotosExistentes.value.length + archivosNuevos.value.length);
 const limiteFotosAlcanzado = computed(() => totalFotos.value >= MAX_FOTOS);
