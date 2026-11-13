@@ -3,6 +3,7 @@
 // Configuración de Agencia.
 import httpClient from '@/helpers/http-client'
 import type { ProximaAccion } from '@/services/admin/crmAccionService'
+import type { RevisionEntrada } from '@/services/admin/revisionAlternativaService'
 
 export type RemitenteCorreo = {
   email: string
@@ -26,6 +27,8 @@ export type BorradorEnvio = EstadoCorreo & {
   adjuntar_condiciones: boolean
   estado_alternativa: string
   puede_marcar_enviada: boolean
+  /** T-022: la revisión de la alternativa al abrir el formulario. */
+  revision: RevisionEntrada[]
 }
 
 export type ConfiguracionCorreo = {
