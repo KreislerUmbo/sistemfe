@@ -759,6 +759,11 @@ Route::group([
 
     Route::post("proveedores/{id}", [ProveedorController::class, 'update'])
         ->middleware('permission:agencia.proveedores');
+    // T-020 — tipo de foto (fachada/habitación/otra) y borrar una foto de la galería.
+    Route::put("proveedores/{id}/fotos/tipo", [ProveedorController::class, 'actualizarTipoFoto'])
+        ->middleware('permission:agencia.proveedores');
+    Route::delete("proveedores/{id}/fotos", [ProveedorController::class, 'eliminarFoto'])
+        ->middleware('permission:agencia.proveedores');
     // T-092: sin create/edit (es una API; registrarlas daba 500 por método inexistente).
     Route::resource("proveedores", ProveedorController::class)
         ->except(['create', 'edit'])

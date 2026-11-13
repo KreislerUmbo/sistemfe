@@ -9,6 +9,9 @@ export type ProveedorTipo = {
   habilitado: boolean;
 };
 
+// T-020 — foto de la galería de un proveedor, ya resuelta por el backend (FotosConTipo).
+export type FotoProveedor = { path: string; tipo_foto: 'fachada' | 'habitacion' | 'otra'; url: string };
+
 export type Proveedor = {
   id: number;
   codigo?: string | null;
@@ -29,7 +32,8 @@ export type Proveedor = {
   tiktok?: string | null;
   linkedin?: string | null;
   logo?: string | null;
-  fotos?: string[] | null;
+  // T-020 — {path, tipo_foto, url} (antes string[]). Tipo: la fachada es única.
+  fotos?: FotoProveedor[] | null;
   observaciones?: string | null;
   estado: boolean;
   tipo_id: number;

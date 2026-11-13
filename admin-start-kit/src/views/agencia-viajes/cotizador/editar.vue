@@ -1396,6 +1396,30 @@
                                 <i class="fas fa-layer-group me-1"></i>
                                 Sumando este hotel a la comparación en curso ({{ matrizHotelActiva.grupoAbierto.hoteles }} hotel(es) ya cargado(s) para este día) — elige 1 o más habitaciones para agregarlas a la misma comparación.
                             </div>
+                            <!-- T-020 — fotos del hotel (el PDF usa la fachada primero). Hotel no registrado:
+                                 se suben/borran acá (mismas rutas opciones-hotel/{id}/fotos que mayorista).
+                                 Hotel Proveedor: la galería vive en su ficha. -->
+                            <div v-if="matrizHotelActiva.adhoc && matrizHotelActiva.hotelId" class="border rounded p-2 mb-2">
+                                <small class="fw-semibold d-block mb-1"><i class="fas fa-images me-1"></i>Fotos del hotel (salen en el PDF)</small>
+                                <div v-if="(matrizHotelActiva.fotos ?? []).length" class="d-flex flex-wrap gap-2 mb-2">
+                                    <div v-for="foto in matrizHotelActiva.fotos" :key="foto.path" class="position-relative">
+                                        <img :src="foto.url" style="width:56px;height:56px;object-fit:cover;border:1px solid #ccc;border-radius:3px;">
+                                        <span class="badge bg-dark position-absolute" style="bottom:-4px;left:0;right:0;font-size:8px;">{{ foto.tipo_foto === 'fachada' ? 'Fachada' : 'Hab.' }}</span>
+                                        <i class="fas fa-times-circle text-danger position-absolute" style="top:-6px;right:-6px;cursor:pointer;background:#fff;border-radius:50%" title="Eliminar foto" @click="onEliminarFotoHotelAdhoc(foto.path)"></i>
+                                    </div>
+                                </div>
+                                <div class="d-flex gap-2">
+                                    <label class="form-label mb-0 small text-secondary">Fachada
+                                        <input type="file" accept="image/*" class="form-control form-control-sm" :disabled="subiendoFotoHotelAdhoc || (matrizHotelActiva.fotos ?? []).filter((f) => f.tipo_foto === 'fachada').length >= 1" @change="onSubirFotoHotelAdhoc($event, 'fachada')">
+                                    </label>
+                                    <label class="form-label mb-0 small text-secondary">Habitación
+                                        <input type="file" accept="image/*" class="form-control form-control-sm" :disabled="subiendoFotoHotelAdhoc || (matrizHotelActiva.fotos ?? []).filter((f) => f.tipo_foto === 'habitacion').length >= 2" @change="onSubirFotoHotelAdhoc($event, 'habitacion')">
+                                    </label>
+                                </div>
+                            </div>
+                            <p v-else-if="!matrizHotelActiva.adhoc && matrizHotelActiva.proveedorId" class="small mb-2">
+                                <router-link :to="`/agencia-viajes/proveedores/${matrizHotelActiva.proveedorId}`" target="_blank"><i class="fas fa-images me-1"></i>Fotos en la ficha del proveedor</router-link>
+                            </p>
                             <HabitacionMatrixPicker :tarifas="matrizHotelActiva.tarifas" :moneda="matrizHotelActiva.moneda"
                                 :pasajeros="cotizacion?.pasajeros ?? []"
                                 permitir-cama-adicional
@@ -3160,6 +3184,7 @@ const nochesHotelDefault = computed<{ noches: number; texto?: string }>(() => {
     return { noches, texto: `${noches} ${noches === 1 ? 'noche' : 'noches'} (${corto(desde)} – ${corto(hasta)})` };
 });
 
+type FotoHotelAdhoc = { path: string; tipo_foto: 'fachada' | 'habitacion'; url: string };
 const matrizHotelActiva = ref<{
     tarifas: Array<{ id: number; tipo_habitacion: string; precio: number; precioVentaCamaAdicional: number | null }>;
     moneda: string;
@@ -3173,6 +3198,11 @@ const matrizHotelActiva = ref<{
     // seleccionar/agregar-grupo (agregarItemHotelAdhocLocal() en vez de
     // agregarItemProveedorHotel()).
     adhoc?: boolean;
+    // T-020 — hotel no registrado: su id y sus fotos (se suben/borran desde el drawer);
+    // hotel Proveedor: su id, para el enlace a la galería de la ficha.
+    hotelId?: number;
+    fotos?: FotoHotelAdhoc[];
+    proveedorId?: number | null;
     // Comparación de varios hoteles Local/Nacional — poblado cuando ya
     // existe un grupo sin resolver para el día activo (ver
     // grupoHotelAbiertoDiaActivo más abajo): este hotel se suma a ESE
@@ -3246,6 +3276,7 @@ const clicBibliotecaItem = async (tarifa: ProveedorTarifa) => {
             nombreProveedor: tarifa.proveedor_servicio?.proveedor?.nombre_comercial ?? tarifa.proveedor_servicio?.proveedor?.razon_social ?? '',
             edadMaxInfanteGratis: alojamiento?.edad_max_infante_gratis,
             edadMaxNinoCamaAdicional: alojamiento?.edad_max_nino_cama_adicional,
+            proveedorId: tarifa.proveedor_servicio?.proveedor?.id ?? null,
             grupoAbierto: grupoHotelAbiertoDiaActivo.value,
         };
         return;
@@ -3342,6 +3373,8 @@ const guardarHotelLocal = async () => {
             moneda: res.opcion_hotel.moneda,
             nombreProveedor: res.opcion_hotel.nombre_hotel,
             adhoc: true,
+            hotelId: res.opcion_hotel.id,
+            fotos: res.opcion_hotel.fotos ?? [],
             grupoAbierto: grupoHotelAbiertoDiaActivo.value,
         };
         formHotelLocal.value = {
@@ -3662,6 +3695,37 @@ const onEliminarFotoHotelMatrix = async (payload: { hotelId: number; path: strin
     try {
         await opcionMayoristaService.eliminarFotoHotel(payload.hotelId, payload.path);
         await cargarOpcionesMayorista();
+    } catch (error: any) {
+        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo eliminar la foto', 'error');
+    }
+};
+
+// T-020 — fotos del hotel no registrado (Local/Nacional), desde el drawer de la matriz. Mismas
+// rutas y servicio que el picker de mayorista; el backend devuelve las fotos ya resueltas.
+const subiendoFotoHotelAdhoc = ref(false);
+const onSubirFotoHotelAdhoc = async (event: Event, tipoFoto: 'fachada' | 'habitacion') => {
+    const input = event.target as HTMLInputElement;
+    const archivo = input.files?.[0];
+    input.value = '';
+    const hotelId = matrizHotelActiva.value?.hotelId;
+    if (!archivo || !hotelId) return;
+    subiendoFotoHotelAdhoc.value = true;
+    try {
+        const res = await opcionMayoristaService.agregarFotoHotel(hotelId, archivo, tipoFoto);
+        if (matrizHotelActiva.value) matrizHotelActiva.value.fotos = res.opcion_hotel.fotos ?? [];
+    } catch (error: any) {
+        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo agregar la foto', 'error');
+    } finally {
+        subiendoFotoHotelAdhoc.value = false;
+    }
+};
+
+const onEliminarFotoHotelAdhoc = async (path: string) => {
+    const hotelId = matrizHotelActiva.value?.hotelId;
+    if (!hotelId) return;
+    try {
+        const res = await opcionMayoristaService.eliminarFotoHotel(hotelId, path);
+        if (matrizHotelActiva.value) matrizHotelActiva.value.fotos = res.opcion_hotel.fotos ?? [];
     } catch (error: any) {
         (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo eliminar la foto', 'error');
     }

@@ -70,7 +70,7 @@ class ProveedorController extends Controller
         $proveedores = $query->orderBy('razon_social')->paginate($perPage);
 
         $proveedores->getCollection()->transform(function (Proveedor $proveedor) {
-            $proveedor->setAttribute('fotos', StorageUrl::resolveMuchas($proveedor->fotos ?? []));
+            $proveedor->setAttribute('fotos', Proveedor::fotosResueltas($proveedor->fotos ?? []));
 
             return $proveedor;
         });
@@ -101,7 +101,8 @@ class ProveedorController extends Controller
             } catch (ValidationException $e) {
                 return response()->json(['code' => 422, 'message' => $e->getMessage()], 422);
             }
-            $validado['fotos'] = $resultado['paths'];
+            // T-020: las fotos nuevas entran como 'otra'; el tipo se cambia después (actualizarTipoFoto).
+            $validado['fotos'] = array_map(fn (string $p) => ['path' => $p, 'tipo_foto' => 'otra'], $resultado['paths']);
             $rechazadas = $resultado['rechazadas'];
         }
 
@@ -116,7 +117,7 @@ class ProveedorController extends Controller
         });
 
         $proveedor->load('alojamientoDetalle');
-        $proveedor->setAttribute('fotos', StorageUrl::resolveMuchas($proveedor->fotos ?? []));
+        $proveedor->setAttribute('fotos', Proveedor::fotosResueltas($proveedor->fotos ?? []));
         $proveedor->setAttribute('amenidades', $proveedor->amenidades());
 
         return response()->json([
@@ -135,7 +136,7 @@ class ProveedorController extends Controller
             'alojamientoDetalle',
         ])->findOrFail($id);
 
-        $proveedor->setAttribute('fotos', StorageUrl::resolveMuchas($proveedor->fotos ?? []));
+        $proveedor->setAttribute('fotos', Proveedor::fotosResueltas($proveedor->fotos ?? []));
         $proveedor->setAttribute('amenidades', $proveedor->amenidades());
 
         return response()->json(['proveedor' => $proveedor]);
@@ -193,7 +194,10 @@ class ProveedorController extends Controller
             } catch (ValidationException $e) {
                 return response()->json(['code' => 422, 'message' => $e->getMessage()], 422);
             }
-            $validado['fotos'] = array_merge($proveedor->fotos ?? [], $resultado['paths']);
+            $validado['fotos'] = array_merge(
+                Proveedor::normalizarFotos($proveedor->fotos ?? []),
+                array_map(fn (string $p) => ['path' => $p, 'tipo_foto' => 'otra'], $resultado['paths'])
+            );
             $rechazadas = $resultado['rechazadas'];
         }
 
@@ -206,7 +210,7 @@ class ProveedorController extends Controller
         });
 
         $proveedor->load('alojamientoDetalle');
-        $proveedor->setAttribute('fotos', StorageUrl::resolveMuchas($proveedor->fotos ?? []));
+        $proveedor->setAttribute('fotos', Proveedor::fotosResueltas($proveedor->fotos ?? []));
         $proveedor->setAttribute('amenidades', $proveedor->amenidades());
 
         return response()->json([
@@ -215,6 +219,74 @@ class ProveedorController extends Controller
             'proveedor' => $proveedor,
             'fotos_rechazadas' => $rechazadas,
         ]);
+    }
+
+    // PUT proveedores/{id}/fotos/tipo — T-020. Body: {path, tipo_foto}. Marcar 'fachada'
+    // pasa la fachada anterior a 'otra' (máx. 1). Acepta el path o la URL resuelta.
+    public function actualizarTipoFoto(Request $request, string $id)
+    {
+        $proveedor = Proveedor::findOrFail($id);
+
+        $validator = Validator::make($request->all(), [
+            'path' => 'required|string',
+            'tipo_foto' => 'required|in:'.implode(',', Proveedor::TIPOS_FOTO),
+        ]);
+        if ($validator->fails()) {
+            return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
+        }
+
+        $path = StorageUrl::relativo($request->get('path'));
+        $tipo = $request->get('tipo_foto');
+        $fotos = Proveedor::normalizarFotos($proveedor->fotos ?? []);
+
+        if (! collect($fotos)->contains('path', $path)) {
+            return response()->json(['code' => 422, 'message' => 'La foto indicada no pertenece a este proveedor.'], 422);
+        }
+
+        $proveedor->fotos = array_map(function (array $f) use ($path, $tipo) {
+            if ($f['path'] === $path) {
+                $f['tipo_foto'] = $tipo;
+            } elseif ($tipo === 'fachada' && ($f['tipo_foto'] ?? null) === 'fachada') {
+                $f['tipo_foto'] = 'otra';
+            }
+
+            return $f;
+        }, $fotos);
+        $proveedor->save();
+
+        $proveedor->setAttribute('fotos', Proveedor::fotosResueltas($proveedor->fotos));
+
+        return response()->json(['code' => 200, 'message' => 'Tipo de foto actualizado', 'proveedor' => $proveedor]);
+    }
+
+    // DELETE proveedores/{id}/fotos — T-020. Body: {path}. Saca UNA foto y borra el archivo
+    // (mismo patrón que DestinoAtractivoController/OpcionHotelController::eliminarFoto()).
+    public function eliminarFoto(Request $request, string $id)
+    {
+        $proveedor = Proveedor::findOrFail($id);
+
+        $validator = Validator::make($request->all(), ['path' => 'required|string']);
+        if ($validator->fails()) {
+            return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
+        }
+
+        $path = StorageUrl::relativo($request->get('path'));
+        $fotos = Proveedor::normalizarFotos($proveedor->fotos ?? []);
+
+        if (! collect($fotos)->contains('path', $path)) {
+            return response()->json(['code' => 422, 'message' => 'La foto indicada no pertenece a este proveedor.'], 422);
+        }
+
+        if (Storage::disk('public')->exists($path)) {
+            Storage::disk('public')->delete($path);
+        }
+
+        $proveedor->fotos = collect($fotos)->reject(fn (array $f) => $f['path'] === $path)->values()->all();
+        $proveedor->save();
+
+        $proveedor->setAttribute('fotos', Proveedor::fotosResueltas($proveedor->fotos));
+
+        return response()->json(['code' => 200, 'message' => 'Foto eliminada correctamente', 'proveedor' => $proveedor]);
     }
 
     public function destroy(string $id)

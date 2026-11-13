@@ -2,6 +2,7 @@
 
 namespace App\Models\AgenciaViajes;
 
+use App\Models\AgenciaViajes\Concerns\FotosConTipo;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 
@@ -11,6 +12,8 @@ use Illuminate\Support\Facades\DB;
 // Servicio::tipo_proveedor_id.
 class Proveedor extends Model
 {
+    use FotosConTipo;
+
     protected $table = 'proveedores';
 
     protected $fillable = [
@@ -51,6 +54,12 @@ class Proveedor extends Model
         'es_referencial' => 'boolean',
         'fotos' => 'array',
     ];
+
+    // T-020 — las fotos sueltas (forma vieja) quedan como 'otra'; la fachada se marca a mano.
+    protected static function tipoFotoPorDefecto(): string
+    {
+        return 'otra';
+    }
 
     public function proveedorServicios()
     {
