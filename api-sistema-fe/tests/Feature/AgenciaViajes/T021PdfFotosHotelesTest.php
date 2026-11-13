@@ -227,6 +227,37 @@ class T021PdfFotosHotelesTest extends TestCase
         $this->assertCount(3, $lista[0]['fotos']);
     }
 
+    // Hotel de la comparación ligado a un proveedor: si la ficha del proveedor no tiene fotos,
+    // salen las propias del hotel; si las tiene, mandan las del proveedor. Nunca se repite.
+    public function test_hotel_ligado_a_proveedor_sin_fotos_usa_las_propias(): void
+    {
+        $alternativa = $this->crearAlternativa();
+        $item = $this->itemMayorista($alternativa, 'Hotel Ligado', ['fachada', 'habitacion']);
+        $proveedor = Proveedor::create(['razon_social' => 'Proveedor Sin Fotos', 'estado' => true]);
+        $item->opcionHotelTarifa->opcionHotel->update(['proveedor_id' => $proveedor->id]);
+
+        $lista = $this->hoteles($alternativa);
+
+        $this->assertCount(1, $lista);
+        $this->assertSame('Proveedor Sin Fotos', $lista[0]['nombre']);
+        $this->assertCount(2, $lista[0]['fotos']);
+    }
+
+    public function test_hotel_ligado_a_proveedor_con_fotos_usa_las_del_proveedor(): void
+    {
+        $alternativa = $this->crearAlternativa();
+        $item = $this->itemMayorista($alternativa, 'Hotel Ligado', ['fachada', 'habitacion']);
+        $ps = $this->crearProveedorHotel('Proveedor Con Fotos', ['fachada']);
+        $proveedorId = DB::table('proveedor_servicios')->where('id', $ps)->value('proveedor_id');
+        $item->opcionHotelTarifa->opcionHotel->update(['proveedor_id' => $proveedorId]);
+        $this->itemProveedor($alternativa, $ps); // el mismo hotel también como ítem de catálogo
+
+        $lista = $this->hoteles($alternativa);
+
+        $this->assertCount(1, $lista);
+        $this->assertCount(1, $lista[0]['fotos']);
+    }
+
     public function test_grupo_resuelto_tambien_muestra_los_hoteles_no_elegidos(): void
     {
         $alternativa = $this->crearAlternativa();

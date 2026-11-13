@@ -904,15 +904,20 @@ class AlternativaPdfService
                 $entrada = $id ? ['tipo' => 'proveedor', 'id' => (int) $id] : null;
             } elseif ($item->opcion_hotel_tarifa_id && $item->opcionHotelTarifa?->opcionHotel) {
                 $hotel = $item->opcionHotelTarifa->opcionHotel;
+                // Ligado a un proveedor: se identifica como ese proveedor (no se repite), pero se
+                // guarda el OpcionHotel como respaldo de fotos por si la ficha del proveedor no
+                // tiene ninguna (las fotos propias del hotel no se pierden del PDF).
                 $entrada = $hotel->proveedor_id
-                    ? ['tipo' => 'proveedor', 'id' => (int) $hotel->proveedor_id]
+                    ? ['tipo' => 'proveedor', 'id' => (int) $hotel->proveedor_id, 'respaldo' => (int) $hotel->id]
                     : ['tipo' => 'adhoc', 'id' => (int) $hotel->id];
             } else {
                 continue;
             }
 
             if ($entrada) {
-                $orden[$entrada['tipo'].':'.$entrada['id']] ??= $entrada;
+                $clave = $entrada['tipo'].':'.$entrada['id'];
+                $orden[$clave] ??= $entrada;
+                $orden[$clave]['respaldo'] ??= $entrada['respaldo'] ?? null;
             }
         }
 
@@ -922,7 +927,8 @@ class AlternativaPdfService
 
         $idsDe = fn (string $tipo) => collect($orden)->where('tipo', $tipo)->pluck('id')->all();
         $proveedores = Proveedor::with('alojamientoDetalle')->whereIn('id', $idsDe('proveedor'))->get()->keyBy('id');
-        $opcionHoteles = OpcionHotel::with('proveedor.alojamientoDetalle')->whereIn('id', $idsDe('adhoc'))->get()->keyBy('id');
+        $idsOpcionHotel = array_merge($idsDe('adhoc'), collect($orden)->pluck('respaldo')->filter()->all());
+        $opcionHoteles = OpcionHotel::with('proveedor.alojamientoDetalle')->whereIn('id', $idsOpcionHotel)->get()->keyBy('id');
 
         $lista = [];
         foreach ($orden as $entrada) {
@@ -933,6 +939,10 @@ class AlternativaPdfService
                 }
                 $nombre = $proveedor->nombre_comercial ?: $proveedor->razon_social;
                 $fotos = Proveedor::normalizarFotos($proveedor->fotos ?? []);
+                $respaldo = $opcionHoteles->get($entrada['respaldo'] ?? 0);
+                if ($fotos === [] && $respaldo) {
+                    $fotos = OpcionHotel::normalizarFotos($respaldo->fotos ?? []);
+                }
                 $detalle = $proveedor->alojamientoDetalle;
             } else {
                 $hotel = $opcionHoteles->get($entrada['id']);

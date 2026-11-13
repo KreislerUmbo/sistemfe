@@ -92,7 +92,9 @@ php artisan test   # suite completa, contra PostgreSQL
   - Grupo resuelto: salen **también los hoteles no elegidos**, igual que la tabla "Opciones de hoteles".
   - Es hotel: ítem con `proveedor_tarifa.tipo_habitacion` (mismo criterio que
     `ReservaController::resolverNombreItem`) o con `opcion_hotel_tarifa_id`. Un `OpcionHotel` con
-    `proveedor_id` se identifica como ese proveedor y usa las fotos de la ficha del proveedor.
+    `proveedor_id` se identifica como ese proveedor y usa las fotos de la ficha del proveedor;
+    si la ficha no tiene ninguna, usa las fotos propias del hotel (decisión del usuario en la
+    revisión, 13-nov; tests `hotel_ligado_a_proveedor_*`).
   - Una sola sección, después de las tablas de opciones. `page-break-before` solo si hay tabla de
     opciones arriba; con hoteles sueltos no se fuerza (evita una página en blanco).
   - Interruptor: `mostrar_fotos_tour` es solo de tours y hoy las fotos de hotel no lo respetan; no
