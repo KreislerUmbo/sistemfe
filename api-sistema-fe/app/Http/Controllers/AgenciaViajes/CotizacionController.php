@@ -219,6 +219,9 @@ class CotizacionController extends Controller
         $cotizacion = Cotizacion::with([
             'cliente',
             'pasajeros',
+            // Las relaciones `alternativas.items.*` de abajo están copiadas en
+            // AlternativaItemController::RELACIONES_LIENZO (el ítem recién creado debe llegar a la
+            // pantalla igual de completo que uno cargado acá). Si cambias una lista, cambia la otra.
             // .proveedorServicio.proveedor/.destinoServicio.servicio: sin esto, el
             // frontend (etiquetaItem() en editar.vue) no tiene forma de mostrar el
             // nombre del proveedor ni la categoría del servicio de cada ítem — solo
