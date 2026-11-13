@@ -294,6 +294,33 @@ class EnvioCorreoCotizacionTest extends TestCase
         $this->assertSame('borrador', $alternativa->fresh()->estado);
     }
 
+    // T-023 (CA7) — con una comparación de hoteles abierta el envío ya NO falla: sale con el PDF
+    // real adjunto (acá se usa el AlternativaPdfService de verdad, no el doble del setUp).
+    public function test_envio_con_comparacion_de_hoteles_abierta_sale_con_el_pdf_adjunto(): void
+    {
+        $this->tenant();
+        $this->usuario();
+        $alternativa = $this->alternativa();
+        foreach ([300, 560] as $precio) {
+            AlternativaItem::create([
+                'alternativa_id' => $alternativa->id, 'origen_tipo' => AlternativaItem::ORIGEN_MANUAL,
+                'descripcion_manual' => 'Hotel '.$precio, 'grupo_opcion_id' => (string) \Illuminate\Support\Str::uuid(),
+                'opcion_elegida' => false, 'modo_precio' => 'tarifa_fija', 'cantidad' => 1, 'moneda_costo' => 'PEN',
+                'costo_snapshot' => 80, 'precio_venta_snapshot' => $precio, 'precio_convertido' => $precio,
+            ]);
+        }
+        $this->app->bind(AlternativaPdfService::class, fn ($app) => $app->build(AlternativaPdfService::class));
+        Mail::fake();
+
+        $respuesta = $this->controller()->enviar($this->payload(), (string) $alternativa->id);
+
+        $this->assertSame(200, $respuesta->getStatusCode(), json_encode($respuesta->getData(true)));
+        Mail::assertSent(CotizacionClienteMail::class, fn (CotizacionClienteMail $mail) => count($mail->attachments()) === 2);
+        $this->assertSame('enviado', CotizacionEnvio::sole()->estado);
+        $this->assertStringEndsWith('.pdf', CotizacionEnvio::sole()->adjuntos[0]['nombre']);
+        $this->assertGreaterThan(1000, CotizacionEnvio::sole()->adjuntos[0]['bytes']); // PDF real, no el doble
+    }
+
     public function test_alternativa_que_no_se_puede_imprimir_no_envia_y_deja_fila_fallida(): void
     {
         $this->tenant();

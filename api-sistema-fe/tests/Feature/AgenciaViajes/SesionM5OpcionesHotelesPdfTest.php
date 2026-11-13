@@ -406,29 +406,19 @@ class SesionM5OpcionesHotelesPdfTest extends TestCase
         $this->assertEquals([120.0, 130.0], $precios->all());
     }
 
-    // Guardrail (19-sep-2026, hallazgo del usuario) — generar() rechaza con
-    // 422 si hay un grupo de opciones sin resolver, para no mandarle al
-    // cliente un PDF cuyo total ya asumió en silencio la opción más barata
-    // (AlternativaItem::calcularTotalEfectivo()) sin que la tabla lo marque.
-    // La validación corre ANTES de armar el resto del PDF (Company/
-    // ConfiguracionAgencia/etc. no hacen falta en el fixture).
-    public function test_generar_rechaza_si_hay_un_grupo_sin_resolver(): void
+    // T-023 — antes (guardrail del 19-sep-2026) generar() rechazaba con 422 un grupo sin resolver.
+    // Ahora el PDF se genera y el bloque "Precio" dice el total de cada opción
+    // (T023PdfComparacionAbiertaTest). Acá solo se confirma que ya no lanza.
+    public function test_generar_ya_no_rechaza_si_hay_un_grupo_sin_resolver(): void
     {
         $alternativa = $this->crearAlternativa();
         $grupo = (string) Str::uuid();
         $this->crearItemHotel($alternativa, $grupo, false, 'Hotel Rio Sol', 'simple', 120);
         $this->crearItemHotel($alternativa, $grupo, false, 'Cumbaza Hotel y Convenciones', 'simple', 90);
 
-        $service = app(AlternativaPdfService::class);
+        $pdf = app(AlternativaPdfService::class)->contenido((string) $alternativa->id);
 
-        try {
-            $service->generar((string) $alternativa->id);
-            $this->fail('Se esperaba ValidationException por grupo sin resolver.');
-        } catch (\Illuminate\Validation\ValidationException $e) {
-            $mensaje = $e->errors()['grupo_opcion'][0];
-            $this->assertStringContainsString('Hotel Rio Sol', $mensaje);
-            $this->assertStringContainsString('Cumbaza Hotel y Convenciones', $mensaje);
-        }
+        $this->assertNotEmpty($pdf['bytes']);
     }
 
     public function test_generar_no_rechaza_si_el_grupo_ya_esta_resuelto(): void

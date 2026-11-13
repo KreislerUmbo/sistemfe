@@ -11,7 +11,7 @@ use App\Models\AgenciaViajes\OpcionHotel;
 use App\Models\AgenciaViajes\PaquetePlantilla;
 use App\Models\AgenciaViajes\Proveedor;
 use App\Services\TextoFormatoService;
-use Illuminate\Validation\ValidationException;
+use Illuminate\Support\Collection;
 
 // Extraído de AlternativaController (09-sep-2026, auditoría de
 // mantenibilidad project_agencia_viajes_auditoria_mantenibilidad_2026-09-05)
@@ -42,6 +42,8 @@ class AlternativaPdfService
         private ImagenRecorteService $imagenRecorte,
         // Membrete compartido con las condiciones generales (09-oct-2026).
         private MembreteAgenciaPdfService $membrete,
+        // T-023: convierte precios de lista a la moneda de la alternativa (misma regla que el total).
+        private PriceEngineService $priceEngine,
     ) {
     }
 
@@ -55,9 +57,8 @@ class AlternativaPdfService
     }
 
     // Bytes y nombre del PDF, sin respuesta HTTP — para adjuntarlo a un correo
-    // (plan-modulo-envio-correo-cotizacion.md §5.1). Lanza la misma
-    // ValidationException que generar() si la alternativa no se puede imprimir
-    // (un grupo de hotel sin opción elegida, ver validarGruposResueltos()).
+    // (plan-modulo-envio-correo-cotizacion.md §5.1). T-023: una comparación de hoteles
+    // abierta ya no impide imprimir; el bloque "Precio" dice qué total corresponde a cada opción.
     public function contenido(string $id): array
     {
         [$pdf, $nombreArchivo] = $this->construir($id);
@@ -97,8 +98,6 @@ class AlternativaPdfService
         // T-072 (R-AGE-04): el "Ajuste — <servicio>" ya está dentro del precio del servicio que
         // ajusta en la versión vigente; listarlo o sumarlo contaría la diferencia dos veces.
         $alternativa->setRelation('items', $alternativa->items->whereNull('ajuste_de_item_id')->values());
-
-        $this->validarGruposResueltos($alternativa);
 
         $config = \App\Models\AgenciaViajes\ConfiguracionAgencia::first();
         $cuentasBancarias = \App\Models\AgenciaViajes\CuentaBancaria::where('activo', true)
@@ -175,11 +174,12 @@ class AlternativaPdfService
         // calculándose igual que antes, solo que ya no viaja un $items con
         // precio por fila a la vista — la tabla de "Precio" quedó reducida
         // al bloque de totales.
-        $totalOriginal = $alternativa->items->sum(
-            fn (AlternativaItem $item) => (float) $item->precio_venta_snapshot * (float) $item->cantidad
-        );
         $total = (float) $alternativa->total;
+        // H10 (T-023): "antes del descuento" con la MISMA regla que el total (un solo cálculo,
+        // calcularTotalEfectivo) pero sobre precios de lista convertidos a la moneda de la alternativa.
+        $totalOriginal = AlternativaItem::calcularTotalEfectivo($this->conPrecioLista($alternativa->items, $alternativa))['total'];
         $descuentoMonto = round($totalOriginal - $total, 2);
+        $precioPorOpcion = $this->precioPorOpcion($alternativa);
 
         // Mejora del PDF de cotización (plan-mejora-pdf-cotizacion-cliente.md)
         // — marca por agencia, fotos de portada/galería/hoteles, cinta de
@@ -249,6 +249,7 @@ class AlternativaPdfService
             'totalOriginal' => $totalOriginal,
             'descuentoMonto' => $descuentoMonto,
             'hayDescuento' => $descuentoMonto > 0.01,
+            'precioPorOpcion' => $precioPorOpcion,
         ]);
 
         $nombreArchivo = $this->nombreArchivo($alternativa);
@@ -613,41 +614,89 @@ class AlternativaPdfService
         return $nombres !== [] ? $nombres : [$tour->nombre];
     }
 
-    // Guardrail (19-sep-2026, hallazgo del usuario) — antes se podía generar
-    // el PDF que se manda al cliente con un grupo de opciones (matriz de
-    // hoteles) todavía "sin resolver" (ninguna marcada como elegida).
-    // AlternativaItem::calcularTotalEfectivo() ya arma el total en ese caso
-    // con la opción MÁS BARATA del grupo, en silencio — el cliente veía un
-    // total que en realidad ya asumía un hotel puntual, sin que la tabla de
-    // "Opciones de hoteles" lo marcara como tal (ninguna fila queda
-    // resaltada). Bloquear acá, antes de generar, en vez de solo avisar en
-    // el PDF: es más seguro que confiar en que el vendedor se acuerde de
-    // resolverlo cada vez, y evita mandarle al cliente un precio que
-    // después hay que corregir si termina eligiendo la opción más cara.
-    private function validarGruposResueltos(Alternativa $alternativa): void
+    // Copia en memoria de los ítems con precio_convertido = precio de LISTA convertido a la moneda
+    // de la alternativa (sin descuento). No guarda nada. Misma conversión que
+    // AlternativaController::aplicarDescuentoGlobal() (priceEngine->convertirMoneda).
+    private function conPrecioLista(Collection $items, Alternativa $alternativa): Collection
     {
-        $grupos = AlternativaItem::agruparPorGrupoOpcion($alternativa->items)['grupos'];
+        return $items->map(function (AlternativaItem $item) use ($alternativa) {
+            $copia = $item->replicate();
+            $copia->precio_convertido = $this->priceEngine->convertirMoneda(
+                (float) $item->precio_venta_snapshot,
+                $item->moneda_costo,
+                $alternativa->moneda_cotizacion,
+                (float) $alternativa->tipo_cambio_aplicado
+            );
 
-        $gruposSinResolver = $grupos->reject(
-            fn (array $grupo) => $grupo['items']->contains('opcion_elegida', true)
-        );
+            return $copia;
+        })->values();
+    }
 
-        if ($gruposSinResolver->isEmpty()) {
-            return;
+    // T-023 (H4) — bloque "Precio" con comparaciones de hotel abiertas (ninguna fila elegida).
+    // Antes el PDF se bloqueaba; ahora dice qué total corresponde a cada opción:
+    //  - sin grupos abiertos → modo 'ninguno' (el PDF sale como siempre);
+    //  - un grupo abierto → un total por opción, calculado como si esa fila fuera la elegida
+    //    (calcularTotalEfectivo sobre una copia en memoria; la elegida recibe el descuento global,
+    //    igual que lo recibiría en aplicarDescuentoGlobal());
+    //  - dos o más → "Desde": el total si se eligieran las más baratas de cada grupo abierto (con
+    //    el descuento global, igual que el modo anterior; el total guardado NO sirve: las filas de
+    //    un grupo abierto están a precio de lista, sin el %).
+    private function precioPorOpcion(Alternativa $alternativa): array
+    {
+        $items = $alternativa->items;
+        $abiertos = AlternativaItem::agruparPorGrupoOpcion($items)['grupos']
+            ->reject(fn (array $grupo) => $grupo['items']->contains('opcion_elegida', true))
+            ->values();
+
+        if ($abiertos->isEmpty()) {
+            return ['modo' => 'ninguno'];
         }
 
-        $nombresPorGrupo = $gruposSinResolver->map(
-            fn (array $grupo) => $grupo['items']
-                ->map(fn (AlternativaItem $item) => explode(' · ', ReservaController::resolverNombreItem($item, null, 'cliente'), 2)[0])
-                ->unique()
-                ->implode(' / ')
-        );
+        $pct = (float) $alternativa->descuento_global_pct;
 
-        throw ValidationException::withMessages([
-            'grupo_opcion' => 'No se puede generar el PDF: falta elegir una opción en '
-                .($nombresPorGrupo->count() > 1 ? 'estos grupos de hotel' : 'este grupo de hotel')
-                .' — '.$nombresPorGrupo->implode('; ').'. Marcá una opción como elegida antes de enviar la cotización al cliente.',
-        ]);
+        if ($abiertos->count() > 1) {
+            $masBaratas = $abiertos->map(fn (array $grupo) => $grupo['items']->sortBy(fn (AlternativaItem $i) => $i->total_convertido)->first());
+
+            return ['modo' => 'desde', 'desde' => $this->totalSiSeEligen($items, $masBaratas, $pct)];
+        }
+
+        $opciones = [];
+
+        foreach ($abiertos->first()['items'] as $fila) {
+            [$hotel, $habitacion] = array_pad(explode(' · ', ReservaController::resolverNombreItem($fila, null, 'cliente'), 2), 2, null);
+            $opciones[] = [
+                'hotel' => $hotel,
+                'habitacion' => $habitacion,
+                'total' => $this->totalSiSeEligen($items, collect([$fila]), $pct),
+            ];
+        }
+
+        return ['modo' => 'por_opcion', 'opciones' => $opciones];
+    }
+
+    // Total de la alternativa si se marcaran como elegidas estas filas (una por grupo abierto), sin
+    // guardar nada: copia en memoria + calcularTotalEfectivo(). Cada fila marcada recibe el % global,
+    // como en aplicarDescuentoGlobal() (que se reaplica al marcar la elegida); el resto de su grupo
+    // queda a precio de lista y no suma.
+    private function totalSiSeEligen(Collection $items, Collection $filas, float $pct): float
+    {
+        $copias = $items->map(function (AlternativaItem $item) use ($filas, $pct) {
+            $copia = $item->replicate();
+            $filaDelGrupo = $item->grupo_opcion_id === null
+                ? null
+                : $filas->first(fn (AlternativaItem $f) => $f->grupo_opcion_id === $item->grupo_opcion_id);
+
+            if ($filaDelGrupo) {
+                $copia->opcion_elegida = $item->is($filaDelGrupo);
+                if ($copia->opcion_elegida) {
+                    $copia->precio_convertido = round((float) $item->precio_convertido * (1 - $pct / 100), 2);
+                }
+            }
+
+            return $copia;
+        });
+
+        return AlternativaItem::calcularTotalEfectivo($copias)['total'];
     }
 
     private function opcionesHoteles(Alternativa $alternativa): array
