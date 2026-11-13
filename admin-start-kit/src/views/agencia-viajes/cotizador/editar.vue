@@ -458,7 +458,8 @@
                                             <div class="input-group input-group-sm" style="width:auto">
                                                 <span class="input-group-text">{{ alternativaActiva.moneda_cotizacion }}</span>
                                                 <input type="number" step="0.01" min="0" class="form-control" style="max-width:120px"
-                                                    :value="subtotalGrupo(bloque.items).toFixed(2)" :disabled="lineaTourBloqueada(bloque) || guardandoPrecioCarga === bloque.carga"
+                                                    :value="borradorPrecioCarga[bloque.carga ?? ''] ?? subtotalGrupo(bloque.items).toFixed(2)" :disabled="lineaTourBloqueada(bloque) || guardandoPrecioCarga === bloque.carga"
+                                                    @input="borradorPrecioCarga[bloque.carga ?? ''] = ($event.target as HTMLInputElement).value"
                                                     @change="onPrecioCarga(bloque, $event)">
                                                 <span v-if="guardandoPrecioCarga === bloque.carga" class="input-group-text"><span class="spinner-border spinner-border-sm"></span></span>
                                             </div>
@@ -624,6 +625,7 @@
                                                 style="max-width:110px"
                                                 :class="{ 'border-danger text-danger': alertasPiso[fila.item.id] }"
                                                 v-model.number="edicionItems[fila.item.id].precio_convertido" :disabled="alternativaSoloLectura" @input="onEditarPrecio(fila.item)">
+                                            <span v-if="guardandoEdicion.includes(fila.item.id)" class="input-group-text"><span class="spinner-border spinner-border-sm"></span></span>
                                         </div>
                                     </div>
                                     <div v-else-if="configAgencia?.modo_descuento_item === 'monto'" class="d-flex flex-column">
@@ -634,6 +636,7 @@
                                                 style="max-width:110px"
                                                 :class="{ 'border-danger text-danger': alertasPiso[fila.item.id] }"
                                                 v-model.number="edicionItems[fila.item.id].monto_descuento" :disabled="alternativaSoloLectura" @input="onEditarMontoDescuentoItem(fila.item)">
+                                            <span v-if="guardandoEdicion.includes(fila.item.id)" class="input-group-text"><span class="spinner-border spinner-border-sm"></span></span>
                                         </div>
                                     </div>
                                     <div v-else class="d-flex flex-column">
@@ -643,6 +646,7 @@
                                                 style="max-width:80px"
                                                 :class="{ 'border-danger text-danger': alertasPiso[fila.item.id] }"
                                                 v-model.number="edicionItems[fila.item.id].descuento_pct" :disabled="alternativaSoloLectura" @input="onEditarDescuentoPct(fila.item)">
+                                            <span v-if="guardandoEdicion.includes(fila.item.id)" class="input-group-text"><span class="spinner-border spinner-border-sm"></span></span>
                                             <span class="input-group-text">%</span>
                                         </div>
                                     </div>
@@ -775,13 +779,15 @@
                                 <div class="input-group input-group-sm" style="max-width:160px">
                                     <span class="input-group-text">{{ alternativaActiva.moneda_cotizacion }}</span>
                                     <input type="number" min="0" class="form-control"
-                                        v-model.number="descuentoGlobalMontoLocal" :disabled="alternativaSoloLectura" @change="onEditarDescuentoGlobalMonto">
+                                        v-model.number="descuentoGlobalMontoLocal" :disabled="alternativaSoloLectura || aplicandoDescuentoGlobal" @change="onEditarDescuentoGlobalMonto">
+                                    <span v-if="aplicandoDescuentoGlobal" class="input-group-text"><span class="spinner-border spinner-border-sm"></span></span>
                                 </div>
                             </template>
                             <template v-else>
                                 <div class="input-group input-group-sm" style="max-width:160px">
                                     <input type="number" min="0" max="100" class="form-control"
-                                        v-model.number="descuentoGlobalLocal" :disabled="alternativaSoloLectura" @change="onEditarDescuentoGlobal">
+                                        v-model.number="descuentoGlobalLocal" :disabled="alternativaSoloLectura || aplicandoDescuentoGlobal" @change="onEditarDescuentoGlobal">
+                                    <span v-if="aplicandoDescuentoGlobal" class="input-group-text"><span class="spinner-border spinner-border-sm"></span></span>
                                     <span class="input-group-text">%</span>
                                 </div>
                             </template>
@@ -960,7 +966,8 @@
                                     </span>
                                 </div>
 
-                                <div class="biblioteca-grid">
+                                <div class="biblioteca-grid position-relative" :style="cargandoBiblioteca ? 'opacity:.45;pointer-events:none' : ''" :aria-busy="cargandoBiblioteca">
+                                    <div v-if="cargandoBiblioteca" class="position-absolute top-0 start-50 translate-middle-x mt-2" style="z-index:2;grid-column:1 / -1"><span class="spinner-border spinner-border-sm text-primary"></span></div>
                                     <div v-for="fila in filasBibliotecaPagina" :key="fila.kind + '-' + fila.data.id"
                                         class="border rounded p-2 small lib-item"
                                         :style="cargandoFilaBibliotecaId === (fila.kind + '-' + fila.data.id) ? 'cursor:wait;opacity:.6' : 'cursor:pointer'"
@@ -2038,6 +2045,52 @@ const cargarCotizacion = async () => {
     if (modificacionInfo.value?.estado === 'abierta') void modificacion.cargar();
 };
 
+// ── T-032 (R5): actualización parcial ─────────────────────────────────
+// Las acciones que devuelven el ítem o la alternativa ya actualizados llaman SOLO a estos dos
+// helpers en vez de cargarCotizacion(); ninguna arma el reemplazo por su cuenta. Van juntos en
+// este bloque porque T-094 los moverá enteros a un composable.
+// Devuelven false si no pudieron aplicar (respuesta sin lo necesario, alternativa que ya no está):
+// la acción cae entonces a cargarCotizacion(), que sigue siendo la red de seguridad.
+const despuesDeAplicarParcial = () => {
+    versionCotizacion.value++; // el watch de `cotizacion` no ve cambios internos: avisa a la revisión
+    inicializarEdicionItems();
+    inicializarDias();
+    // La diferencia de una modificación de reserva depende de los ítems: se vuelve a pedir igual.
+    if (modificacionInfo.value?.estado === 'abierta') void modificacion.cargar();
+};
+
+// Una alternativa devuelta por el backend (columnas, y `items` cuando cambian varios): se mezcla
+// sobre la que ya está en memoria, conservando las relaciones que la respuesta no trae.
+const aplicarAlternativaActualizada = (nueva: Partial<Alternativa> | null | undefined): boolean => {
+    const actual = cotizacion.value?.alternativas?.find((a) => a.id === nueva?.id);
+    if (!nueva || !actual) return false;
+    const { items, ...columnas } = nueva;
+    Object.assign(actual, columnas);
+    if (items) {
+        const previos = new Map((actual.items ?? []).map((i) => [i.id, i]));
+        actual.items = items.map((i) => Object.assign(previos.get(i.id) ?? {}, i)) as AlternativaItem[];
+    }
+    despuesDeAplicarParcial();
+    return true;
+};
+
+// Un ítem devuelto por el backend: reemplaza al que tiene su mismo id o, si es nuevo, se agrega.
+// `alternativa` (sin ítems) trae el total vigente de la alternativa.
+const aplicarItemActualizado = (item: AlternativaItem | null | undefined, alternativa?: Partial<Alternativa> | null): boolean => {
+    const alt = cotizacion.value?.alternativas?.find((a) => a.id === item?.alternativa_id);
+    if (!item || !alt) return false;
+    const lista = alt.items ?? (alt.items = []);
+    const existente = lista.find((i) => i.id === item.id);
+    if (existente) Object.assign(existente, item);
+    else lista.push(item);
+    if (alternativa) {
+        const { items: _omitidos, ...columnas } = alternativa;
+        Object.assign(alt, columnas);
+    }
+    despuesDeAplicarParcial();
+    return true;
+};
+
 // Envío al cliente (EnviarAlternativa.vue, T-050: correo, WhatsApp u otro medio): el backend
 // puede haberla pasado de borrador a enviada; se refleja sin recargar toda la cotización.
 const historialRef = ref<InstanceType<typeof HistorialActividadesCotizacion> | null>(null);
@@ -2676,12 +2729,18 @@ const toggleIncluye = (carga: string) => {
 };
 
 const guardandoPrecioCarga = ref<string | null>(null);
+// H13 (T-032): lo que se está escribiendo en el precio de un tour. Vue vuelve a fijar el `value` de
+// un campo en cada re-render; sin este borrador, guardar otro ítem borraba el texto a medio escribir.
+// Se descarta al confirmar el campo (@change), se guarde o no.
+const borradorPrecioCarga = ref<Record<string, string>>({});
 const onPrecioCarga = async (bloque: BloqueItem, event: Event) => {
     const precio = Number((event.target as HTMLInputElement).value);
+    if (bloque.carga) delete borradorPrecioCarga.value[bloque.carga];
     if (!alternativaActiva.value || !bloque.carga || Number.isNaN(precio) || precio < 0) return;
     if (Math.abs(precio - subtotalGrupo(bloque.items)) < 0.005) return;
 
     guardandoPrecioCarga.value = bloque.carga;
+    borradorPrecioCarga.value[bloque.carga] = String(precio); // se muestra lo confirmado mientras guarda
     try {
         await alternativaItemService.precioCarga(alternativaActiva.value.id, bloque.carga, precio);
         await cargarCotizacion();
@@ -2689,6 +2748,7 @@ const onPrecioCarga = async (bloque: BloqueItem, event: Event) => {
     } catch (error: any) {
         (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo cambiar el precio', 'error');
     } finally {
+        if (bloque.carga) delete borradorPrecioCarga.value[bloque.carga];
         guardandoPrecioCarga.value = null;
     }
 };
@@ -2804,8 +2864,8 @@ const eligiendoGrupoItemId = ref<number | null>(null);
 const elegirGrupoDesdeLienzo = async (item: AlternativaItem) => {
     eligiendoGrupoItemId.value = item.id;
     try {
-        await alternativaItemService.elegirGrupo(item.id);
-        await cargarCotizacion();
+        const res = await alternativaItemService.elegirGrupo(item.id);
+        if (!aplicarAlternativaActualizada(res.alternativa)) await cargarCotizacion();
     } catch (error: any) {
         (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo marcar la opción elegida', 'error');
     } finally {
@@ -2957,17 +3017,28 @@ const filtroServicioId = ref<number | null>(null);
 const filtroProveedorId = ref<number | null>(null);
 const serviciosFiltro = ref<Servicio[]>([]);
 
+// T-032 (R4): mientras llega la respuesta la lista se atenúa y no se puede hacer clic en ella.
+// Solo cuenta la última petición: una respuesta vieja que llega tarde se descarta.
+const cargandoBiblioteca = ref(false);
+let bibliotecaPeticion = 0;
 const cargarBiblioteca = async () => {
-    const res = await bibliotecaCotizadorService.buscar({
-        tipo: chipActivoState.value.tipo,
-        proveedor_tipo_id: chipActivoState.value.proveedorTipoId ?? undefined,
-        search: bibliotecaSearch.value || undefined,
-        destino_atractivo_id: filtroDestinoId.value ?? undefined,
-        servicio_id: filtroServicioId.value ?? undefined,
-        proveedor_id: filtroProveedorId.value ?? undefined,
-    });
-    bibliotecaResultados.value = res.resultados;
-    bibliotecaPaginaActual.value = 1;
+    const miPeticion = ++bibliotecaPeticion;
+    cargandoBiblioteca.value = true;
+    try {
+        const res = await bibliotecaCotizadorService.buscar({
+            tipo: chipActivoState.value.tipo,
+            proveedor_tipo_id: chipActivoState.value.proveedorTipoId ?? undefined,
+            search: bibliotecaSearch.value || undefined,
+            destino_atractivo_id: filtroDestinoId.value ?? undefined,
+            servicio_id: filtroServicioId.value ?? undefined,
+            proveedor_id: filtroProveedorId.value ?? undefined,
+        });
+        if (miPeticion !== bibliotecaPeticion) return;
+        bibliotecaResultados.value = res.resultados;
+        bibliotecaPaginaActual.value = 1;
+    } finally {
+        if (miPeticion === bibliotecaPeticion) cargandoBiblioteca.value = false;
+    }
 };
 
 const onBibliotecaSearch = () => {
@@ -3295,7 +3366,7 @@ const confirmarModoPrecio = async (modoPrecio: 'tarifa_fija' | 'por_persona') =>
             dia_referencial: diaActivoParaAgregar.value,
             alternativa_destino_id: destinoActivoId.value,
         });
-        await onServicioSueltoAgregado(res.alternativa_item);
+        await onServicioSueltoAgregado(res.alternativa_item, res.alternativa);
     } catch (error: any) {
         (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo agregar', 'error');
     } finally {
@@ -3321,7 +3392,7 @@ const agregarItemProveedorHotel = async (
             camas_adicionales_nino: camasAdicionalesNino,
             alternativa_destino_id: destinoActivoId.value,
         });
-        await onServicioSueltoAgregado(res.alternativa_item);
+        await onServicioSueltoAgregado(res.alternativa_item, res.alternativa);
     } catch (error: any) {
         (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo agregar', 'error');
     }
@@ -3403,7 +3474,7 @@ const agregarItemHotelAdhocLocal = async (
             camas_adicionales_nino: camasAdicionalesNino,
             alternativa_destino_id: destinoActivoId.value,
         });
-        await onServicioSueltoAgregado(res.alternativa_item);
+        await onServicioSueltoAgregado(res.alternativa_item, res.alternativa);
     } catch (error: any) {
         (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo agregar', 'error');
     }
@@ -3946,7 +4017,7 @@ const agregarItemMayorista = async (op: OpcionMayorista, opcionHotelTarifaId: nu
             dia_referencial: diaActivoParaAgregar.value,
             alternativa_destino_id: destinoActivoId.value,
         });
-        await onServicioSueltoAgregado(res.alternativa_item);
+        await onServicioSueltoAgregado(res.alternativa_item, res.alternativa);
     } catch (error: any) {
         (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo agregar', 'error');
     }
@@ -3971,7 +4042,7 @@ const agregarOpcionalAlLienzo = async (op: OpcionMayorista, opl: OpcionMayorista
             dia_referencial: diaActivoParaAgregar.value,
             alternativa_destino_id: destinoActivoId.value,
         });
-        await onServicioSueltoAgregado(res.alternativa_item);
+        await onServicioSueltoAgregado(res.alternativa_item, res.alternativa);
         toast.success(`"${opl.nombre}" agregado al lienzo`);
     } catch (error: any) {
         (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo agregar el opcional', 'error');
@@ -4062,7 +4133,7 @@ const agregarItemGuiaCotizador = async () => {
         });
         guiaTarifaSeleccionadaCotizador.value = null;
         cantidadDiasGuia.value = 1;
-        await onServicioSueltoAgregado(res.alternativa_item);
+        await onServicioSueltoAgregado(res.alternativa_item, res.alternativa);
     } catch (error: any) {
         (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo agregar el guía', 'error');
     } finally {
@@ -4175,10 +4246,10 @@ const onProveedorPromovido = async (_res: any) => {
 // hotel, modo de precio, manual, mayorista) — el drawer NUNCA se cierra acá
 // (a diferencia de clicResultadoPlantilla), solo vuelve al paso "grid" para
 // que el vendedor pueda seguir agregando de una.
-const onServicioSueltoAgregado = async (_item: AlternativaItem) => {
+const onServicioSueltoAgregado = async (item: AlternativaItem, alternativa?: Partial<Alternativa> | null) => {
     volverAGridDrawer();
     toast.success('Servicio agregado');
-    await cargarCotizacion();
+    if (!alternativa || !aplicarItemActualizado(item, alternativa)) await cargarCotizacion();
 };
 
 // Sesión 11q — edición estructural de un ítem manual (ItemManualForm.vue en
@@ -4194,10 +4265,10 @@ const onServicioSueltoActualizado = async (_item: AlternativaItem) => {
 
 // Pasaje aéreo suelto vive fuera del drawer (no es parte de la biblioteca
 // de proveedores/tours) — mismo criterio de siempre, solo renombrado.
-const onPasajeAereoAgregado = async (_item: AlternativaItem) => {
+const onPasajeAereoAgregado = async (item: AlternativaItem, alternativa?: Partial<Alternativa> | null) => {
     mostrarFormPasajeAereo.value = false;
     toast.success('Pasaje aéreo agregado');
-    await cargarCotizacion();
+    if (!alternativa || !aplicarItemActualizado(item, alternativa)) await cargarCotizacion();
 };
 
 // Auditoría del módulo Reservas/Cotizador (2026-08-27) — antes de esto no
@@ -4245,9 +4316,10 @@ const eliminarItem = async (item: AlternativaItem) => {
 
     eliminandoItemId.value = item.id;
     try {
-        await alternativaItemService.eliminar(item.id);
+        const res = await alternativaItemService.eliminar(item.id);
         toast.success('Ítem eliminado');
-        await cargarCotizacion();
+        // Una línea de tour se quita con toda su carga y esa respuesta no trae la alternativa: recarga completa.
+        if (!aplicarAlternativaActualizada(res.alternativa)) await cargarCotizacion();
     } catch (error: any) {
         (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo eliminar el ítem', 'error');
     } finally {
@@ -4292,6 +4364,22 @@ const eliminarGrupoLienzo = async (fila: { grupoId: string; items: AlternativaIt
 const edicionItems = ref<Record<number, { descuento_pct: number; precio_convertido: number; monto_descuento: number }>>({});
 const alertasPiso = ref<Record<number, boolean>>({});
 const edicionTimeouts: Record<number, any> = {};
+// H13 (T-032): ítems con una edición escrita que todavía no se envió (o se está enviando). Ni la
+// recarga ni la respuesta de otro guardado pisan lo que el vendedor tiene en esos campos.
+const edicionPendiente = new Set<number>();
+// R4/H13: ítems cuyo guardado está en vuelo (indicador junto al campo; el campo sigue editable).
+// Hasta que el servidor responde, un refresco de otro ítem tampoco pisa lo que se escribió.
+const guardandoEdicion = ref<number[]>([]);
+const programarEnvioEdicion = (itemId: number, payload: () => { descuento_pct?: number; precio_convertido?: number }) => {
+    clearTimeout(edicionTimeouts[itemId]);
+    edicionPendiente.add(itemId);
+    edicionTimeouts[itemId] = setTimeout(() => { void enviarEdicion(itemId, payload()); }, 400);
+};
+// El ítem cuya fila tiene el foco (las filas llevan data-item-id): tampoco se pisa.
+const itemConFoco = (): number[] => {
+    const fila = document.activeElement instanceof HTMLElement ? document.activeElement.closest('[data-item-id]') : null;
+    return (fila?.getAttribute('data-item-id') ?? '').split(/\s+/).map(Number).filter(Boolean);
+};
 
 // Mismo PriceEngineService::convertirMoneda() del backend, replicado acá
 // SOLO para poder inicializar/previsualizar en el cliente — precio_convertido
@@ -4310,7 +4398,9 @@ const precioListaConvertidoDe = (item: AlternativaItem) => {
 };
 
 const inicializarEdicionItems = () => {
+    const conFoco = itemConFoco();
     (itemsSinAjuste.value).forEach((item) => {
+        if (edicionPendiente.has(item.id) || guardandoEdicion.value.includes(item.id) || conFoco.includes(item.id)) return; // H13
         const precioConvertido = Number(item.precio_convertido);
         const precioLista = precioListaConvertidoDe(item);
         edicionItems.value[item.id] = {
@@ -4459,14 +4549,21 @@ const calcularMontoGlobalEquivalente = () => {
     return Math.round(sumaListaTotal * (pct / 100) * 100) / 100;
 };
 
+// T-032 (R4): el descuento global recalcula todas las líneas; mientras tanto el campo queda
+// deshabilitado con su indicador.
+const aplicandoDescuentoGlobal = ref(false);
 const onEditarDescuentoGlobal = async () => {
     if (!alternativaActiva.value) return;
+    aplicandoDescuentoGlobal.value = true;
     try {
         const res = await alternativaService.actualizar(alternativaActiva.value.id, { descuento_global_pct: descuentoGlobalLocal.value });
+        if (!aplicarAlternativaActualizada(res.alternativa)) await cargarCotizacion();
+        // Después de aplicar: la aplicación reinicia `lineasFueraDePiso` y debe quedar el aviso nuevo.
         lineasFueraDePiso.value = res.lineas_fuera_de_piso ?? [];
-        await cargarCotizacion();
     } catch (error: any) {
         (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo aplicar el descuento global', 'error');
+    } finally {
+        aplicandoDescuentoGlobal.value = false;
     }
 };
 
@@ -4476,12 +4573,16 @@ const onEditarDescuentoGlobal = async () => {
 // piso de cada línea exactamente igual que la versión en %).
 const onEditarDescuentoGlobalMonto = async () => {
     if (!alternativaActiva.value) return;
+    aplicandoDescuentoGlobal.value = true;
     try {
         const res = await alternativaService.actualizar(alternativaActiva.value.id, { descuento_global_monto: descuentoGlobalMontoLocal.value });
+        if (!aplicarAlternativaActualizada(res.alternativa)) await cargarCotizacion();
+        // Después de aplicar: la aplicación reinicia `lineasFueraDePiso` y debe quedar el aviso nuevo.
         lineasFueraDePiso.value = res.lineas_fuera_de_piso ?? [];
-        await cargarCotizacion();
     } catch (error: any) {
         (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo aplicar el descuento global', 'error');
+    } finally {
+        aplicandoDescuentoGlobal.value = false;
     }
 };
 
@@ -4494,8 +4595,7 @@ const onEditarDescuentoGlobalMonto = async () => {
 // permitir_descuento_item=false → "Precio de venta": edición directa,
 // mismo comportamiento que la Sesión 1.
 const onEditarPrecio = (item: AlternativaItem) => {
-    clearTimeout(edicionTimeouts[item.id]);
-    edicionTimeouts[item.id] = setTimeout(() => enviarEdicion(item.id, { precio_convertido: edicionItems.value[item.id].precio_convertido }), 400);
+    programarEnvioEdicion(item.id, () => ({ precio_convertido: edicionItems.value[item.id].precio_convertido }));
 };
 
 // permitir_descuento_item=true && modo_descuento_item='porcentaje' — el
@@ -4508,8 +4608,7 @@ const onEditarDescuentoPct = (item: AlternativaItem) => {
     edicion.precio_convertido = Math.round(precioLista * (1 - edicion.descuento_pct / 100) * 100) / 100;
     edicion.monto_descuento = Math.round((precioLista - edicion.precio_convertido) * 100) / 100;
 
-    clearTimeout(edicionTimeouts[item.id]);
-    edicionTimeouts[item.id] = setTimeout(() => enviarEdicion(item.id, { descuento_pct: edicion.descuento_pct }), 400);
+    programarEnvioEdicion(item.id, () => ({ descuento_pct: edicion.descuento_pct }));
 };
 
 // permitir_descuento_item=true && modo_descuento_item='monto' — el
@@ -4523,25 +4622,36 @@ const onEditarMontoDescuentoItem = (item: AlternativaItem) => {
     edicion.precio_convertido = Math.round((precioLista - edicion.monto_descuento) * 100) / 100;
     edicion.descuento_pct = precioLista > 0 ? Math.round((1 - edicion.precio_convertido / precioLista) * 10000) / 100 : 0;
 
-    clearTimeout(edicionTimeouts[item.id]);
-    edicionTimeouts[item.id] = setTimeout(() => enviarEdicion(item.id, { precio_convertido: edicion.precio_convertido }), 400);
+    programarEnvioEdicion(item.id, () => ({ precio_convertido: edicion.precio_convertido }));
 };
 
 const enviarEdicion = async (itemId: number, payload: { descuento_pct?: number; precio_convertido?: number }) => {
+    edicionPendiente.delete(itemId);
+    guardandoEdicion.value.push(itemId);
     try {
         const res = await alternativaItemService.actualizar(itemId, payload);
         alertasPiso.value[itemId] = !!res.alerta_piso;
-        const item = alternativaActiva.value?.items?.find((i) => i.id === itemId);
-        const precioConvertido = Number(res.alternativa_item.precio_convertido);
-        const precioLista = item ? precioListaConvertidoDe(item) : precioConvertido;
-        edicionItems.value[itemId] = {
-            descuento_pct: Number(res.alternativa_item.descuento_pct ?? 0),
-            precio_convertido: precioConvertido,
-            monto_descuento: Math.round((precioLista - precioConvertido) * 100) / 100,
-        };
-        await cargarCotizacion();
+        // R5: se actualiza solo este ítem y el total de la alternativa. Si mientras tanto el
+        // vendedor volvió a escribir en este ítem (H13), sus campos quedan como están.
+        if (!aplicarItemActualizado(res.alternativa_item, res.alternativa)) await cargarCotizacion();
+        // Los campos de ESTE ítem toman lo que quedó guardado (p. ej. 100.555 → 100.56), salvo que
+        // el vendedor haya vuelto a escribir o haya otro guardado suyo en vuelo: ahí manda lo escrito.
+        const otroGuardadoEnVuelo = guardandoEdicion.value.filter((id) => id === itemId).length > 1;
+        if (!edicionPendiente.has(itemId) && !otroGuardadoEnVuelo) {
+            const item = alternativaActiva.value?.items?.find((i) => i.id === itemId);
+            const precioConvertido = Number(res.alternativa_item.precio_convertido);
+            const precioLista = item ? precioListaConvertidoDe(item) : precioConvertido;
+            edicionItems.value[itemId] = {
+                descuento_pct: Number(res.alternativa_item.descuento_pct ?? 0),
+                precio_convertido: precioConvertido,
+                monto_descuento: Math.round((precioLista - precioConvertido) * 100) / 100,
+            };
+        }
     } catch (error: any) {
         (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo actualizar', 'error');
+    } finally {
+        const i = guardandoEdicion.value.indexOf(itemId);
+        if (i !== -1) guardandoEdicion.value.splice(i, 1);
     }
 };
 

@@ -122,7 +122,7 @@ const props = defineProps<{
     destinoTributarioDefault?: DestinoTributario;
 }>();
 const emit = defineEmits<{
-    (e: 'agregado', payload: any): void;
+    (e: 'agregado', payload: any, alternativa?: any): void;
     (e: 'actualizado', payload: any): void;
 }>();
 
@@ -204,7 +204,7 @@ const agregar = async () => {
             emit('actualizado', res.alternativa_item);
         } else {
             const res = await alternativaItemService.agregarManual(props.alternativaId, { ...payload, alternativa_destino_id: props.alternativaDestinoId ?? null });
-            emit('agregado', res.alternativa_item);
+            emit('agregado', res.alternativa_item, res.alternativa);
             resetearCampos();
         }
     } catch (error: any) {
