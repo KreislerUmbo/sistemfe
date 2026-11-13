@@ -151,20 +151,27 @@ cd admin-start-kit && npm run type-check && npm run build
   Suite completa contra PostgreSQL: 2168 pasan; falló solo el intermitente conocido
   `Fila13Fase1cFacturacionTest::descuento_del_combo…` (pasa solo, 32/32). `type-check`: 47 errores, los mismos
   previos (T-101), ninguno en archivos tocados. `build`: sin errores.
-- **CA12 (prueba funcional en `agencia-demo`): NO corrida.** Pasos para hacerla (`admin@agencia-demo.test`;
-  contraseña en la memoria del proyecto), anotando cualquier dato que se cree para borrarlo al final:
-  1. Abrir una cotización con una alternativa completa (servicios con precio, markup ≥ mínimo, tarifas vigentes):
-     debe verse solo el ✓ «Lista para el cliente», sin insignia.
-  2. Dejarla sin servicios (alternativa nueva): insignia «1 pendiente» en rojo; «Enviar al cliente» muestra
-     «No se puede enviar todavía…» y los tres medios deshabilitados. Clic en la línea → abre la biblioteca.
-  3. Poner a un servicio venta menor al costo: «1 pendiente» (aviso); el botón dice «Enviar igual». Clic en la
-     línea → va al servicio y lo resalta; con 2+ servicios, cada clic va al siguiente.
-  4. En Proveedores editar el precio de una tarifa ya usada → volver a la cotización: «N servicios con precio
-     nuevo»; desplegar → «Actualizar» → confirmación «Precio actual X → nuevo Y. ¿Actualizar?» → aplica, el total
-     cambia y la línea desaparece. (Restaurar el precio de la tarifa: crea otra versión; borrar esos datos al terminar.)
-  5. «Ver PDF» funciona siempre (también con bloqueo).
-  6. «Por correo» con bloqueo: el modal muestra el motivo y «Enviar» deshabilitado; con solo avisos: «Enviar igual»
-     y sale el correo (usar un destinatario propio).
+- **CA12 (prueba funcional en `agencia-demo`, Opus con Playwright, 13-nov):**
+  1. Cotización 90 (alternativa 124, hotel 3 × 340, costo 280): ✓ «Lista para el cliente», sin insignia.
+  2. Cotización 92 (alternativa 126, sin servicios): «1 pendiente» → «La propuesta no tiene servicios»; «Enviar al
+     cliente» muestra «No se puede enviar todavía…» y WhatsApp / otro medio deshabilitados. Clic en la línea → abre
+     «Agregar servicio».
+  3. Versión nueva de la tarifa 58 a S/ 300 (creada a mano con `version_anterior_id`): «1 servicio con precio nuevo
+     en su tarifa · S/ 1,020.00 → S/ 900.00», botón «Enviar igual». «Actualizar» → confirmación «Precio actual
+     S/ 1,020.00 → nuevo S/ 900.00» → total PEN 900, la línea desaparece y aparece el aviso de markup bajo el
+     mínimo (20 %), porque 300 sobre 280 es 7 %. Clic en esa línea → va al hotel y lo resalta.
+  4. «Ver PDF» descarga el PDF con el aviso activo. Con solo avisos, WhatsApp y otro medio quedan habilitados (no
+     se envió nada, para no dejar actividad CRM).
+  - **No probado en pantalla:** «Por correo», porque en local no hay Brevo configurado y el medio no aparece (igual
+    que antes de esta tarea); lo cubren CA1 y CA10 en tests. La cotización 89 (alternativa 123) es una modificación
+    de reserva: ahí la revisión y el envío no se muestran, a propósito.
+  - **Datos revertidos:** ítem 522 de vuelta a la tarifa 58 con sus valores y su `updated_at` originales, versión 63
+    borrada, total de la alternativa 124 en 1020.
+- **Corrección en la revisión (Opus):** «Actualizar» en un hotel con cama adicional cobraba la cama al precio de la
+  versión **vieja**. El precio de la cama vive en la tarifa (`precio_venta/costo_cama_adicional`), así que
+  `precioDeItemConTarifa()` ahora deduce cuántas camas tenía el ítem y las cobra al precio nuevo. Test
+  `test_ca5_actualizar_tarifa_de_hotel_con_cama_adicional_usa_la_cama_de_la_version_nueva` (daba 270 en vez de 280
+  antes del fix).
 - **Desviaciones de la tarea y por qué:**
   - `contarPasajerosPorTipo` pasó de `AlternativaItemController` (privado) a `PriceEngineService` (público): es la
     pieza que el alta del ítem y «Actualizar al precio nuevo» necesitan compartir; el controlador delega.
