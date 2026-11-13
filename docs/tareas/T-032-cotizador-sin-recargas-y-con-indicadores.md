@@ -86,10 +86,14 @@ Recorridos de la obs. 9 en `agencia-demo` con Playwright; borrar los datos de pr
     | Elegir opción de grupo | 1154 | 768 | 1 → 0 |
     | Eliminar ítem (desde «Sí, eliminar») | 1791 | 1382 | 1 → 0 |
 - **Desviaciones de la tarea y por qué:**
-  - **CA6:** se midieron las 4 acciones que T-032 toca, no los 3 recorridos completos de la obs. 9 (~80 acciones y mezclan mejoras de T-033, T-034 y T-019, que no se pueden separar de T-032). No se midió «agregar ítem» (pasa por el drawer de varios pasos); se comprobó solo que no recarga (CA2).
+  - **CA6:** se midieron las 4 acciones que T-032 toca, no los 3 recorridos completos de la obs. 9: son ~80 acciones y T-032 cambia la espera de cada acción, que es lo que se midió (T-033, T-034 y T-019 ya estaban en `main`, así que el «antes» las incluía; corregido en la revisión, 13-nov). No se midió «agregar ítem» (pasa por el drawer de varios pasos); se comprobó solo que no recarga (CA2).
   - **R4 en el lienzo:** ya tenían indicador eliminar ítem, eliminar grupo, elegir opción y eliminar/precio de una línea de tour. Se agregaron el **descuento global** (campo deshabilitado con spinner) y el **guardado del precio de cada ítem** (spinner junto al campo, que sigue editable para no perder lo escrito). No queda acción del lienzo sin indicador.
   - Siguen con `cargarCotizacion()`: altas en bucle (comparación de hoteles), quitar una línea de tour o un grupo (esa respuesta no trae la alternativa) y los cambios de estructura (alternativa, pasajeros, destinos, aceptar).
   - `itemConFoco()` tenía el bug `split(/s+/)` (corregido). H13 ahora también protege a un ítem con el guardado en vuelo.
+  - **Corregido en la revisión (13-nov):** al proteger el ítem en vuelo, sus propios campos ya no tomaban lo guardado
+    (escribir 340.555 dejaba 340.555 a la vista; el servidor guarda 340.56). `enviarEdicion()` vuelve a poner los
+    valores del servidor en ese ítem, salvo que el vendedor haya vuelto a escribir o haya otro guardado suyo en vuelo.
+    Probado en el navegador (agencia-demo, ítem 522): campo 340.56 con el foco puesto, sin recargar; dato restaurado.
 
 ## Hallazgos fuera de alcance
 - 500 intermitente de Apache (`fe_sendauth: no password supplied`, ya conocido) apareció 3 veces durante las pruebas; no tiene relación con esta tarea.

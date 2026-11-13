@@ -4634,6 +4634,19 @@ const enviarEdicion = async (itemId: number, payload: { descuento_pct?: number; 
         // R5: se actualiza solo este ítem y el total de la alternativa. Si mientras tanto el
         // vendedor volvió a escribir en este ítem (H13), sus campos quedan como están.
         if (!aplicarItemActualizado(res.alternativa_item, res.alternativa)) await cargarCotizacion();
+        // Los campos de ESTE ítem toman lo que quedó guardado (p. ej. 100.555 → 100.56), salvo que
+        // el vendedor haya vuelto a escribir o haya otro guardado suyo en vuelo: ahí manda lo escrito.
+        const otroGuardadoEnVuelo = guardandoEdicion.value.filter((id) => id === itemId).length > 1;
+        if (!edicionPendiente.has(itemId) && !otroGuardadoEnVuelo) {
+            const item = alternativaActiva.value?.items?.find((i) => i.id === itemId);
+            const precioConvertido = Number(res.alternativa_item.precio_convertido);
+            const precioLista = item ? precioListaConvertidoDe(item) : precioConvertido;
+            edicionItems.value[itemId] = {
+                descuento_pct: Number(res.alternativa_item.descuento_pct ?? 0),
+                precio_convertido: precioConvertido,
+                monto_descuento: Math.round((precioLista - precioConvertido) * 100) / 100,
+            };
+        }
     } catch (error: any) {
         (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo actualizar', 'error');
     } finally {
