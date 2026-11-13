@@ -153,8 +153,8 @@ class CotizacionEnvioController extends Controller
             'cuerpo' => $mensaje,
         ];
 
-        // Los PDFs se generan ANTES de enviar: si la alternativa no se puede
-        // imprimir (grupo de hotel sin opción elegida), no sale nada.
+        // Los PDFs se generan ANTES de enviar: si alguno no se puede generar, no sale nada.
+        // (T-023: una comparación de hoteles abierta ya NO lo impide.)
         try {
             $adjuntos = [];
             if ($datos['adjuntar_cotizacion']) {

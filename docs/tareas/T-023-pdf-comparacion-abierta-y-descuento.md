@@ -98,9 +98,34 @@ php artisan test   # suite completa, contra PostgreSQL
 ---
 
 ## Resultado
-- **Commits:**
-- **Tests:**
+- **Commits:** en la rama `feat/T-023-pdf-comparacion-abierta` (ver `git log`).
+- **Tests:** `T023PdfComparacionAbiertaTest` (9: CA1, CA2 ×2, CA3, CA4 ×2, CA5, CA6, escape del nombre),
+  CA7 en `EnvioCorreoCotizacionTest` (PDF real adjunto con grupo abierto). CA1, CA2 y CA3 **fallaron
+  antes del fix** (`hayDescuento` true sin descuento; `totalOriginal` 1600 en vez de 400 con ítem
+  `por_persona`; 1300 en vez de 1000 en el caso del 10 %). El test viejo
+  `test_generar_rechaza_si_hay_un_grupo_sin_resolver` pasó a `…ya_no_rechaza…`. CA8 sin cambios
+  (`aceptar()` no se tocó).
+- **CA9:** PDF real de `agencia-demo` (alt. 106), abierta y resuelta, rasterizado con Ghostscript: los dos
+  totales por opción se leen bien y la caja no desborda. Efecto lateral: la caja de Precio crece y la
+  tabla "Datos de pago" queda partida en el salto de página (encabezado en la pág. 6, fila en la 7).
+- **Cómo se resolvió:**
+  - H10: `totalOriginal` = `calcularTotalEfectivo()` sobre copias en memoria de los ítems con
+    `precio_convertido` = precio de lista convertido (`PriceEngineService::convertirMoneda`); un solo
+    cálculo, sin fórmula paralela.
+  - Un grupo abierto: por cada fila se arma una copia de los ítems con esa fila elegida y
+    `calcularTotalEfectivo()`. El descuento global se aplica a la fila "elegida" usando
+    `alternativas.descuento_global_pct` (la columna que escribe `update()`/`aplicarDescuentoGlobalMonto()`),
+    igual que `aplicarDescuentoGlobal()`; los ítems sin grupo ya traen su `precio_convertido` descontado.
+  - Dos o más grupos abiertos: "Desde" = `calcularTotalEfectivo()` vigente (mínimo de cada grupo).
 - **Desviaciones de la tarea y por qué:**
+  - Con comparación abierta no se muestra la nota "Incluye descuento…" (el monto "antes del descuento"
+    no tiene un único valor cuando hay varios totales por opción).
+  - Se mantuvo el `catch (ValidationException)` de `CotizacionEnvioController::enviar()` (solo se
+    actualizó el comentario): sigue cubriendo cualquier otro fallo de generación de PDF.
 
 ## Hallazgos fuera de alcance
--
+- El hallazgo de T-021 (título "Opciones de hoteles" solo al pie de la pág. 1 y pág. 2 casi vacía,
+  alt. 106) **sigue igual**: ocurre con la comparación abierta y con la resuelta; este cambio solo toca
+  el bloque de Precio, que va después.
+- Con comparación abierta, la caja de Precio más alta puede partir la tabla "Datos de pago" entre dos
+  páginas (visto en la alt. 106 de agencia-demo). Posible `page-break-inside: avoid` en esa tabla.

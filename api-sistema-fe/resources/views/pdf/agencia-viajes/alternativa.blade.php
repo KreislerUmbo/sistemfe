@@ -936,7 +936,13 @@
                     <tr>
                         <td style="vertical-align:middle;">
                             <div class="precio-destacado-titulo">TOTAL {{ $resumenPaxMayus }}</div>
-                            @if ($hayDescuento)
+                            {{-- T-023 (H4): con la comparación de hoteles abierta el total depende de la
+                                 opción que elija el cliente; se dice claramente en vez de bloquear el PDF. --}}
+                            @if ($precioPorOpcion['modo'] === 'por_opcion')
+                                <div class="precio-destacado-nota">El total depende del hotel que elijas:</div>
+                            @elseif ($precioPorOpcion['modo'] === 'desde')
+                                <div class="precio-destacado-nota">Con las opciones más económicas; el total final depende de los hoteles que elijas</div>
+                            @elseif ($hayDescuento)
                                 <div class="precio-destacado-nota">
                                     @if ($config?->mostrar_descuento_como_linea)
                                         Incluye descuento aplicado: -{{ $alternativa->moneda_cotizacion }} {{ number_format($descuentoMonto, 2) }}
@@ -946,11 +952,29 @@
                                 </div>
                             @endif
                         </td>
-                        <td style="vertical-align:middle; text-align:right; width:170px;">
-                            <span class="precio-destacado-monto">{{ $alternativa->moneda_cotizacion }}</span>
-                            <span class="precio-destacado-monto precio-destacado-monto-num">{{ number_format($total, 2) }}</span>
-                        </td>
+                        @if ($precioPorOpcion['modo'] !== 'por_opcion')
+                            <td style="vertical-align:middle; text-align:right; width:170px;">
+                                @if ($precioPorOpcion['modo'] === 'desde')
+                                    <span class="precio-destacado-nota">Desde</span>
+                                @endif
+                                <span class="precio-destacado-monto">{{ $alternativa->moneda_cotizacion }}</span>
+                                <span class="precio-destacado-monto precio-destacado-monto-num">{{ number_format($precioPorOpcion['modo'] === 'desde' ? $precioPorOpcion['desde'] : $total, 2) }}</span>
+                            </td>
+                        @endif
                     </tr>
+                    @if ($precioPorOpcion['modo'] === 'por_opcion')
+                        @foreach ($precioPorOpcion['opciones'] as $opcionPrecio)
+                            <tr>
+                                <td style="padding-top:4px;">
+                                    <span class="precio-destacado-nota">Con {{ $opcionPrecio['hotel'] }}{{ $opcionPrecio['habitacion'] ? ' ('.$opcionPrecio['habitacion'].')' : '' }}:</span>
+                                </td>
+                                <td style="text-align:right; width:170px; padding-top:4px;">
+                                    <span class="precio-destacado-monto">{{ $alternativa->moneda_cotizacion }}</span>
+                                    <span class="precio-destacado-monto precio-destacado-monto-num">{{ number_format($opcionPrecio['total'], 2) }}</span>
+                                </td>
+                            </tr>
+                        @endforeach
+                    @endif
                 </table>
             </div>
         </div>
