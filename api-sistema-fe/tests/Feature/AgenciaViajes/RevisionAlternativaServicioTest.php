@@ -399,6 +399,38 @@ class RevisionAlternativaServicioTest extends TestCase
         $this->assertNull($this->entrada($this->revisar($alt), 'tarifa_precio_nuevo'));
     }
 
+    // Revisión de T-022 (Opus): hotel por habitación con 1 cama adicional, 2 noches. La cama
+    // adicional tiene su precio EN la tarifa (precio_venta/costo_cama_adicional), así que si la
+    // versión nueva lo cambia, el ítem actualizado tiene que cobrar la cama al precio nuevo.
+    public function test_ca5_actualizar_tarifa_de_hotel_con_cama_adicional_usa_la_cama_de_la_version_nueva(): void
+    {
+        $alt = $this->alternativa();
+        $v1 = $this->tarifa([
+            'tipo_habitacion' => 'doble', 'precio_costo' => 150, 'precio_venta_adulto' => 200,
+            'precio_costo_cama_adicional' => 30, 'precio_venta_cama_adicional' => 50,
+        ]);
+        // Alta con 1 cama adicional: snapshot = habitación + cama (200 + 50; costo 150 + 30).
+        $item = $this->item($alt, 180, 250, [
+            'origen_tipo' => AlternativaItem::ORIGEN_PROVEEDOR, 'proveedor_tarifa_id' => $v1->id, 'cantidad' => 2,
+        ]);
+        $alt->update(['total' => 500]);
+        $v2 = $this->tarifa([
+            'proveedor_servicio_id' => $v1->proveedor_servicio_id, 'version_anterior_id' => $v1->id,
+            'tipo_habitacion' => 'doble', 'precio_costo' => 160, 'precio_venta_adulto' => 220,
+            'precio_costo_cama_adicional' => 40, 'precio_venta_cama_adicional' => 60,
+        ]);
+
+        $respuesta = app(AlternativaItemController::class)->actualizarTarifa(new Request(), (string) $item->id);
+
+        $this->assertSame(200, $respuesta->getStatusCode(), json_encode($respuesta->getData(true)));
+        $item = $item->fresh();
+        $this->assertSame($v2->id, $item->proveedor_tarifa_id);
+        $this->assertEqualsWithDelta(280.0, (float) $item->precio_venta_snapshot, 0.001); // 220 + 60
+        $this->assertEqualsWithDelta(200.0, (float) $item->costo_snapshot, 0.001);        // 160 + 40
+        $this->assertEqualsWithDelta(280.0, (float) $item->precio_convertido, 0.001);
+        $this->assertEqualsWithDelta(560.0, (float) $alt->fresh()->total, 0.001);         // × 2 noches
+    }
+
     public function test_ca5_actualizar_tarifa_en_alternativa_aceptada_da_422(): void
     {
         $alt = $this->alternativa('aceptada');

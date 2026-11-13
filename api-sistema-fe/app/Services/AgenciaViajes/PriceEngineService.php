@@ -254,8 +254,8 @@ class PriceEngineService
     // T-022 — el precio que tendría un ítem de proveedor re-enganchado a otra versión de su
     // tarifa, armado con las mismas piezas del alta (ventaYCostoDeTarifa + convertirMoneda).
     // Conserva el descuento y la cantidad del ítem. Las camas adicionales del alta no se guardan
-    // como dato: se infieren como lo que el snapshot tenía por encima del precio de la tarifa
-    // anterior, y se suman a la nueva (solo tarifa_fija).
+    // como dato: su número se deduce de lo que el snapshot tenía por encima del precio de la
+    // tarifa anterior, y se cobran al precio de cama de la versión nueva (solo tarifa_fija).
     //
     // @return array{venta: float, costo: float, moneda_costo: string, precio_convertido: float, total_convertido: float}
     public function precioDeItemConTarifa(AlternativaItem $item, ProveedorTarifa $nueva, ProveedorTarifa $anterior): array
@@ -271,8 +271,21 @@ class PriceEngineService
 
         if (! $porPersona) {
             ['venta' => $ventaAnterior, 'costo' => $costoAnterior] = $this->ventaYCostoDeTarifa($anterior, $conteo, $item->modo_precio);
-            $venta += max(0, (float) $item->precio_venta_snapshot - $ventaAnterior);
-            $costo += max(0, (float) $item->costo_snapshot - $costoAnterior);
+            $extraVenta = max(0, (float) $item->precio_venta_snapshot - $ventaAnterior);
+            $extraCosto = max(0, (float) $item->costo_snapshot - $costoAnterior);
+            $camaAnterior = (float) $anterior->precio_venta_cama_adicional;
+
+            // El precio de la cama adicional vive EN la tarifa: se deduce cuántas camas tenía el
+            // ítem y se cobran al precio de la versión nueva (revisión de T-022). Si no se puede
+            // deducir, o la versión nueva no tiene precio de cama, se conserva el monto anterior.
+            $camas = $camaAnterior > 0 ? (int) round($extraVenta / $camaAnterior) : 0;
+            if ($camas > 0 && $nueva->precio_venta_cama_adicional !== null && $nueva->precio_costo_cama_adicional !== null) {
+                $venta += $camas * (float) $nueva->precio_venta_cama_adicional;
+                $costo += $camas * (float) $nueva->precio_costo_cama_adicional;
+            } else {
+                $venta += $extraVenta;
+                $costo += $extraCosto;
+            }
         }
 
         $listaConvertida = $this->convertirMoneda($venta, $nueva->moneda, $alternativa->moneda_cotizacion, (float) $alternativa->tipo_cambio_aplicado);
