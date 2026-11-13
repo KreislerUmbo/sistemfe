@@ -213,7 +213,7 @@ class PriceEngineService
     // crearItemProveedor()). $conteo = ['adulto'=>n,'nino'=>n,'infante'=>n].
     // Devuelve el precio de venta y el costo del snapshot SIN camas
     // adicionales (esas las suma quien las use).
-    //  - por_persona: venta = Σ conteo × precio por tipo (vacío = 0); costo
+    //  - por_persona: venta = Σ conteo × precio por tipo (niño vacío = adulto en tour, 0 en hotel; infante vacío = 0); costo
     //    = total de la línea sin infantes (E2, fila 13).
     //  - tarifa_fija: un solo precio, el del adulto; costo unitario.
     public function ventaYCostoDeTarifa(ProveedorTarifa $tarifa, array $conteo, string $modoPrecio): array
@@ -223,7 +223,7 @@ class PriceEngineService
         if ($modoPrecio === 'por_persona') {
             return [
                 'venta' => $conteo['adulto'] * (float) $tarifa->precio_venta_adulto
-                    + $conteo['nino'] * (float) ($tarifa->precio_venta_nino ?? 0)
+                    + $conteo['nino'] * $tarifa->precioVentaNinoEfectivo()
                     + $conteo['infante'] * (float) ($tarifa->precio_venta_infante ?? 0),
                 'costo' => round($costo * ($conteo['adulto'] + $conteo['nino']), 2),
             ];

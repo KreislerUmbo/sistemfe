@@ -329,7 +329,7 @@ class ComboExplosionService
                 'venta' => $venta,
                 'precio_costo' => $tarifa ? (float) $tarifa->precio_costo : null,
                 'precio_venta_adulto' => $tarifa ? (float) $tarifa->precio_venta_adulto : null,
-                'precio_venta_nino' => $tarifa ? (float) ($tarifa->precio_venta_nino ?? 0) : null,
+                'precio_venta_nino' => $tarifa ? $tarifa->precioVentaNinoEfectivo() : null,
                 'precio_venta_infante' => $tarifa ? (float) ($tarifa->precio_venta_infante ?? 0) : null,
             ];
         }

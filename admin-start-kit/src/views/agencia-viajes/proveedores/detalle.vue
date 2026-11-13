@@ -306,7 +306,7 @@
                             </div>
                             <div class="col-6 col-md-4">
                                 <label class="form-label mb-1 small fw-semibold text-secondary">Precio venta niño</label>
-                                <input type="number" step="0.01" class="form-control form-control-sm" v-model.number="formTarifa.precio_venta_nino" @input="tocadoNino = true">
+                                <input type="number" step="0.01" class="form-control form-control-sm" v-model.number="formTarifa.precio_venta_nino" :placeholder="esHotel ? undefined : 'Vacío = adulto'" @input="tocadoNino = true">
                             </div>
                             <div class="col-6 col-md-4">
                                 <label class="form-label mb-1 small fw-semibold text-secondary">Precio venta infante</label>
