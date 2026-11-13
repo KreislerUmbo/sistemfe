@@ -70,9 +70,14 @@ Recorridos de la obs. 9 en `agencia-demo` con Playwright; borrar los datos de pr
 ---
 
 ## Resultado
-- **Commits:**
-- **Tests:**
-- **Desviaciones de la tarea y por qué:**
+- **Commits:** (sin commitear; rama `feat/T-032-cotizador-sin-recargas`)
+- **Tests:** `T032RespuestasParaActualizacionParcialTest` (4) + 61 existentes del controller en verde. `type-check` sin errores en los archivos tocados; `build` ok.
+- **Prueba funcional (Playwright, `agencia-demo`, cotización 92, datos borrados al terminar):**
+  CA1 editar precio: PUT sin GET posterior. CA2 agregar (manual) y eliminar: POST/DELETE sin GET posterior.
+  CA4 biblioteca: durante la carga `aria-busy`, opacidad y `pointer-events:none`; al terminar vuelve y queda el chip correcto.
+  CA5 total en pantalla = total del backend (115.72 y 80.00).
+  **Sin probar en navegador:** CA3 (escribir mientras se guarda otro ítem), CA6 (medición de segundos de los 3 recorridos de la obs. 9).
+- **Desviaciones de la tarea y por qué:** las altas en bucle (comparación de hoteles), quitar una línea de tour y quitar un grupo siguen con `cargarCotizacion()` (traen varios ítems o su respuesta no trae la alternativa). Pasaje aéreo suelto y servicio manual ya usan la actualización parcial.
 
 ## Hallazgos fuera de alcance
 -

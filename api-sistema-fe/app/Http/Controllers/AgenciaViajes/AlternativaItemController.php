@@ -80,13 +80,50 @@ class AlternativaItemController extends Controller
             ], 422);
         }
 
-        return match ($origenTipo) {
+        $respuesta = match ($origenTipo) {
             AlternativaItem::ORIGEN_PROVEEDOR => $this->crearItemProveedor($request, $alternativa),
             AlternativaItem::ORIGEN_MAYORISTA => $this->crearItemMayorista($request, $alternativa),
             AlternativaItem::ORIGEN_PASAJE_AEREO => $this->crearItemPasajeAereo($request, $alternativa),
             AlternativaItem::ORIGEN_MANUAL => $this->crearItemManual($request, $alternativa),
             AlternativaItem::ORIGEN_GUIA => $this->crearItemGuia($request, $alternativa),
         };
+
+        return $this->conItemCompletoYAlternativa($respuesta, $alternativa);
+    }
+
+    // T-032 (R5): relaciones que el lienzo del cotizador lee de cada ítem (las mismas que carga
+    // CotizacionController::show()). El ítem recién creado las lleva para que la pantalla lo
+    // agregue en memoria sin volver a pedir toda la cotización.
+    private const RELACIONES_LIENZO = [
+        'proveedorTarifa.proveedorServicio.proveedor',
+        'proveedorTarifa.proveedorServicio.destinoServicio.servicio',
+        'proveedorTarifa.proveedorServicio.destinoServicio.destinoAtractivo',
+        'opcionMayorista.proveedor',
+        'opcionMayorista.tours.paquetePlantilla',
+        'opcionHotelTarifa.opcionHotel',
+        'opcionMayoristaOpcional',
+        'guiaTarifa.guia',
+        'guiaTarifa.destino',
+        'cotizacionPasajeAereo',
+        'tourOrigen',
+        'reservaItem.reserva:id,codigo,estado',
+    ];
+
+    // Solo agrega datos a una respuesta de alta que ya salió bien: el ítem con sus relaciones y la
+    // alternativa con su total vigente. No cambia lo que la respuesta ya traía.
+    private function conItemCompletoYAlternativa(JsonResponse $respuesta, Alternativa $alternativa): JsonResponse
+    {
+        if ($respuesta->getStatusCode() !== 200) {
+            return $respuesta;
+        }
+        $datos = $respuesta->getData(true);
+        $itemId = $datos['alternativa_item']['id'] ?? null;
+        if ($itemId) {
+            $datos['alternativa_item'] = AlternativaItem::with(self::RELACIONES_LIENZO)->find($itemId)?->toArray() ?? $datos['alternativa_item'];
+            $datos['alternativa'] = $alternativa->fresh()?->toArray();
+        }
+
+        return $respuesta->setData($datos);
     }
 
     // Edición en vivo de descuento_pct O precio_convertido — §3.1. El
@@ -180,6 +217,7 @@ class AlternativaItemController extends Controller
             'code' => 200,
             'message' => 'Ítem actualizado correctamente',
             'alternativa_item' => $item->fresh(),
+            'alternativa' => $alternativa->fresh(),
             'precio_minimo_permitido' => $precioMinimoPermitido,
             'alerta_piso' => $alertaPiso,
         ]);
@@ -329,7 +367,7 @@ class AlternativaItemController extends Controller
 
         $this->recalcularTotalAlternativa($alternativa);
 
-        return response()->json(['code' => 200, 'message' => 'Ítem eliminado correctamente']);
+        return response()->json(['code' => 200, 'message' => 'Ítem eliminado correctamente', 'alternativa' => $alternativa->fresh('items')]);
     }
 
     // Sesión UX2 (04-sep-2026) — hallazgo del usuario: nada impedía repetir
