@@ -458,7 +458,8 @@
                                             <div class="input-group input-group-sm" style="width:auto">
                                                 <span class="input-group-text">{{ alternativaActiva.moneda_cotizacion }}</span>
                                                 <input type="number" step="0.01" min="0" class="form-control" style="max-width:120px"
-                                                    :value="subtotalGrupo(bloque.items).toFixed(2)" :disabled="lineaTourBloqueada(bloque) || guardandoPrecioCarga === bloque.carga"
+                                                    :value="borradorPrecioCarga[bloque.carga ?? ''] ?? subtotalGrupo(bloque.items).toFixed(2)" :disabled="lineaTourBloqueada(bloque) || guardandoPrecioCarga === bloque.carga"
+                                                    @input="borradorPrecioCarga[bloque.carga ?? ''] = ($event.target as HTMLInputElement).value"
                                                     @change="onPrecioCarga(bloque, $event)">
                                                 <span v-if="guardandoPrecioCarga === bloque.carga" class="input-group-text"><span class="spinner-border spinner-border-sm"></span></span>
                                             </div>
@@ -2728,12 +2729,18 @@ const toggleIncluye = (carga: string) => {
 };
 
 const guardandoPrecioCarga = ref<string | null>(null);
+// H13 (T-032): lo que se está escribiendo en el precio de un tour. Vue vuelve a fijar el `value` de
+// un campo en cada re-render; sin este borrador, guardar otro ítem borraba el texto a medio escribir.
+// Se descarta al confirmar el campo (@change), se guarde o no.
+const borradorPrecioCarga = ref<Record<string, string>>({});
 const onPrecioCarga = async (bloque: BloqueItem, event: Event) => {
     const precio = Number((event.target as HTMLInputElement).value);
+    if (bloque.carga) delete borradorPrecioCarga.value[bloque.carga];
     if (!alternativaActiva.value || !bloque.carga || Number.isNaN(precio) || precio < 0) return;
     if (Math.abs(precio - subtotalGrupo(bloque.items)) < 0.005) return;
 
     guardandoPrecioCarga.value = bloque.carga;
+    borradorPrecioCarga.value[bloque.carga] = String(precio); // se muestra lo confirmado mientras guarda
     try {
         await alternativaItemService.precioCarga(alternativaActiva.value.id, bloque.carga, precio);
         await cargarCotizacion();
@@ -2741,6 +2748,7 @@ const onPrecioCarga = async (bloque: BloqueItem, event: Event) => {
     } catch (error: any) {
         (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo cambiar el precio', 'error');
     } finally {
+        if (bloque.carga) delete borradorPrecioCarga.value[bloque.carga];
         guardandoPrecioCarga.value = null;
     }
 };
@@ -4359,7 +4367,8 @@ const edicionTimeouts: Record<number, any> = {};
 // H13 (T-032): ítems con una edición escrita que todavía no se envió (o se está enviando). Ni la
 // recarga ni la respuesta de otro guardado pisan lo que el vendedor tiene en esos campos.
 const edicionPendiente = new Set<number>();
-// R4: ítems cuyo guardado está en vuelo (indicador junto al campo; el campo sigue editable).
+// R4/H13: ítems cuyo guardado está en vuelo (indicador junto al campo; el campo sigue editable).
+// Hasta que el servidor responde, un refresco de otro ítem tampoco pisa lo que se escribió.
 const guardandoEdicion = ref<number[]>([]);
 const programarEnvioEdicion = (itemId: number, payload: () => { descuento_pct?: number; precio_convertido?: number }) => {
     clearTimeout(edicionTimeouts[itemId]);
@@ -4391,7 +4400,7 @@ const precioListaConvertidoDe = (item: AlternativaItem) => {
 const inicializarEdicionItems = () => {
     const conFoco = itemConFoco();
     (itemsSinAjuste.value).forEach((item) => {
-        if (edicionPendiente.has(item.id) || conFoco.includes(item.id)) return; // H13
+        if (edicionPendiente.has(item.id) || guardandoEdicion.value.includes(item.id) || conFoco.includes(item.id)) return; // H13
         const precioConvertido = Number(item.precio_convertido);
         const precioLista = precioListaConvertidoDe(item);
         edicionItems.value[item.id] = {
