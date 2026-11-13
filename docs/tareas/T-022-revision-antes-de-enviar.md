@@ -144,9 +144,55 @@ cd admin-start-kit && npm run type-check && npm run build
 ---
 
 ## Resultado
-- **Commits:**
-- **Tests:**
+- **Commits:** en la rama `feat/T-022-revision-antes-de-enviar` (ver `git log main..`): el de la tarea
+  corregida (12-nov), el de backend con sus tests y el de frontend.
+- **Tests:** 36 nuevos (`RevisionAlternativaServicioTest`: CA1, CA2–CA9, CA11, CA5; `RevisionAlternativaEnvioTest`:
+  CA1, CA1b, CA10, `GET revision`, `preparar`). Se escribieron primero y se confirmó que fallaban (clase inexistente).
+  Suite completa contra PostgreSQL: 2168 pasan; falló solo el intermitente conocido
+  `Fila13Fase1cFacturacionTest::descuento_del_combo…` (pasa solo, 32/32). `type-check`: 47 errores, los mismos
+  previos (T-101), ninguno en archivos tocados. `build`: sin errores.
+- **CA12 (prueba funcional en `agencia-demo`): NO corrida.** Pasos para hacerla (`admin@agencia-demo.test`;
+  contraseña en la memoria del proyecto), anotando cualquier dato que se cree para borrarlo al final:
+  1. Abrir una cotización con una alternativa completa (servicios con precio, markup ≥ mínimo, tarifas vigentes):
+     debe verse solo el ✓ «Lista para el cliente», sin insignia.
+  2. Dejarla sin servicios (alternativa nueva): insignia «1 pendiente» en rojo; «Enviar al cliente» muestra
+     «No se puede enviar todavía…» y los tres medios deshabilitados. Clic en la línea → abre la biblioteca.
+  3. Poner a un servicio venta menor al costo: «1 pendiente» (aviso); el botón dice «Enviar igual». Clic en la
+     línea → va al servicio y lo resalta; con 2+ servicios, cada clic va al siguiente.
+  4. En Proveedores editar el precio de una tarifa ya usada → volver a la cotización: «N servicios con precio
+     nuevo»; desplegar → «Actualizar» → confirmación «Precio actual X → nuevo Y. ¿Actualizar?» → aplica, el total
+     cambia y la línea desaparece. (Restaurar el precio de la tarifa: crea otra versión; borrar esos datos al terminar.)
+  5. «Ver PDF» funciona siempre (también con bloqueo).
+  6. «Por correo» con bloqueo: el modal muestra el motivo y «Enviar» deshabilitado; con solo avisos: «Enviar igual»
+     y sale el correo (usar un destinatario propio).
 - **Desviaciones de la tarea y por qué:**
+  - `contarPasajerosPorTipo` pasó de `AlternativaItemController` (privado) a `PriceEngineService` (público): es la
+    pieza que el alta del ítem y «Actualizar al precio nuevo» necesitan compartir; el controlador delega.
+  - El armado del precio nuevo vive en `PriceEngineService::precioDeItemConTarifa()` (usa `ventaYCostoDeTarifa` y
+    `convertirMoneda`, no las duplica). Las **camas adicionales** del alta no se guardan como dato: se infieren como
+    lo que el snapshot tenía por encima del precio de la tarifa anterior y se suman a la nueva (solo `tarifa_fija`).
+  - «Precio nuevo» sigue la cadena `version_anterior_id` (v1 → v2 → v3) hasta la versión vigente; la tarea decía la
+    versión inmediata. Una versión programada a futuro todavía no avisa.
+  - Si un servicio tiene precio nuevo **y** su versión vieja ya venció, solo se avisa el precio nuevo (el aviso útil).
+  - Un servicio sin precio (bloquea) no se repite como «venta bajo el costo».
+  - Los ítems «Ajuste — …» (T-072) no se revisan: son de la reserva.
+  - Códigos de `revision`: `sin_servicios`, `precio_cero`, `markup_bajo`, `tarifa_precio_nuevo`, `tarifa_no_vigente`,
+    `pasaje_tarifa_vencida`, `propuesta_vencida` (la revisión 4 produce dos códigos). La respuesta 422 de envío trae
+    `message` y la lista completa en `revision`.
+  - Los tests de envío existentes (`EnvioCorreoCotizacionTest`, `CrmActividadCotizacionTest`, `CrmAccionTest`) crean
+    ahora una alternativa **con un ítem**: sin servicios la regla nueva (CA1) las bloquea.
+  - `RevisionAlternativaServicioTest` crea las tablas centrales `temporadas`/`temporada_ocurrencias` en la base de
+    pruebas si faltan (mismo recurso que `AerolineaCatalogoTest`).
+  - `components.d.ts` cambió solo por el registro automático del componente nuevo.
+  - La revisión del front se recalcula con un `watch` sobre la cotización recargada, la alternativa activa y el
+    total local (con espera de 500 ms); backlog no tocado.
 
 ## Hallazgos fuera de alcance
--
+- Un servicio con **descuento del 100 %** (cortesía a propósito) queda con precio 0 y **bloquea** el envío. Decidir si
+  una cortesía debe poder enviarse.
+- La vigencia/temporada de la tarifa se compara con `fecha_viaje_desde` para todos los servicios, no con el día en
+  que cae cada uno (`dia_referencial`): un tour del día 3 con tarifa vigente hasta el día 2 no avisa.
+- «Precio nuevo» solo cubre `proveedor_tarifas`. Las tarifas de guía (`guia_tarifas` también tiene
+  `version_anterior_id`), las opciones de mayorista y los tours-línea no tienen este aviso.
+- `preparar()` ya hacía una revisión; con `enviar()` y `marcar-enviada` son tres cálculos por envío (baratos, pero el
+  de `preparar` + `enviar` podría compartirse si la lista crece).
