@@ -97,7 +97,7 @@ class RecalculoPorPersonaService
                 $conteo = $this->contarPasajerosPorTipo($alternativa->cotizacion_id, $item->pax_incluidos);
                 $nuevoPrecioVentaSnapshot = round(
                     $conteo['adulto'] * (float) $tarifa->precio_venta_adulto
-                        + $conteo['nino'] * (float) ($tarifa->precio_venta_nino ?? 0)
+                        + $conteo['nino'] * $tarifa->precioVentaNinoEfectivo()
                         + $conteo['infante'] * (float) ($tarifa->precio_venta_infante ?? 0),
                     2
                 );

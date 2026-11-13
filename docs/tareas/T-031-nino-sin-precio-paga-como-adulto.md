@@ -16,18 +16,20 @@ actividades: tarifas sin `tipo_habitacion`), vacío = paga como adulto. **Las ta
 (`tipo_habitacion` no nulo) no cambian**: tienen sus propias tarifas por habitación y cama
 adicional. El infante no cambia en ningún caso (vacío = sin costo).
 
-Lugares donde hoy vacío vale 0:
-- `AlternativaItemController::crearItemProveedor()` (alta por persona)
-- `AlternativaItemController::crearItemClasicoDesdeEntrada()` (tour clásico desde plantilla, vía la
-  entrada de `ComboExplosionService`)
-- `CotizacionController::recalcularItemsPorPersona()` (recálculo al cambiar pasajeros)
+Lugares donde hoy vacío vale 0 (verificados el 12-nov-2026, después de T-045):
+- `PriceEngineService::ventaYCostoDeTarifa()` (alta por persona; reemplaza a `crearItemProveedor`)
+- `AlternativaItemController::crearItemClasicoDesdeEntrada()` (tour clásico desde plantilla; usa el
+  precio de niño de la entrada de `ComboExplosionService`)
+- `RecalculoPorPersonaService::recalcular()` (recálculo al cambiar pasajeros; reemplaza a
+  `CotizacionController::recalcularItemsPorPersona`)
 - `ComboExplosionService` (arma `precio_venta_nino` de la entrada con `?? 0`)
+- `VentaDirectaController::desglose()` y `totalTourClasico()` (vista previa y total de Venta directa)
 
 ## Alcance
 - Un solo punto que resuelva el precio de venta de niño de una tarifa (por ejemplo
   `ProveedorTarifa::precioVentaNinoEfectivo()`): si es tarifa de hotel (`tipo_habitacion` no nulo),
   `precio_venta_nino ?? 0` (igual que hoy); si no, `precio_venta_nino ?? precio_venta_adulto`.
-  Usarlo en los 4 lugares. Infante sin cambios.
+  Usarlo en los 6 puntos (ver lista). Infante sin cambios.
 - Aplica igual si el servicio de tour se agrega suelto o dentro de un tour cargado desde plantilla.
 - `ComboExplosionService`: la entrada lleva el precio de niño efectivo.
 - Pantalla de tarifas del proveedor (`proveedores/detalle.vue`): placeholder "Vacío = adulto" en el
@@ -81,9 +83,30 @@ cd admin-start-kit && npm run type-check && npm run build
 ---
 
 ## Resultado
-- **Commits:**
-- **Tests:**
+- **Commits:** ver `git log fix/T-031-nino-paga-como-adulto`.
+- **Tests:** `NinoSinPrecioPagaComoAdultoTest` (8 tests: CA1, CA2, CA2b niño en 0 explícito, CA3, CA3b,
+  CA4, CA5 y Venta directa vista previa = total guardado). Antes del fix fallaban CA1, CA3 (porque
+  usa niño vacío = 300), CA4, CA5 y Venta directa; pasaban CA2, CA2b y CA3b. Después: carpeta
+  `tests/Feature/AgenciaViajes` 1203 pasan; suite completa 2137 pasan (PostgreSQL). Front: `build` OK;
+  `type-check` da los mismos 47 errores de `fake-backend.ts` que hay sin mis cambios (ninguno en `detalle.vue`).
+  Ningún test existente asumía niño = 0, así que no hubo que actualizar ninguno.
+- **Qué se hizo:** `ProveedorTarifa::precioVentaNinoEfectivo()` (hotel → `?? 0`; resto → `?? adulto`;
+  un 0 escrito a propósito sigue siendo gratis). Se usa en `PriceEngineService`,
+  `RecalculoPorPersonaService`, `ComboExplosionService` y `VentaDirectaController::desglose()`.
+  `crearItemClasicoDesdeEntrada()` y `totalTourClasico()` leen el precio de niño de la entrada, que
+  ahora ya viene efectivo desde `ComboExplosionService`; se quitó su `?? 0`. `grep` sobre `app/`:
+  no queda ningún `precio_venta_nino ?? 0`. Front: placeholder «Vacío = adulto» en el precio de niño
+  de `proveedores/detalle.vue` solo si el proveedor no es hotel; el autocálculo costo × factor no se tocó.
+- **Cotizaciones ya armadas:** no cambian (precio guardado). Solo se reprecian al cambiar pasajeros
+  (alternativas en borrador/enviada), y ahí aplica la regla nueva: un servicio de tour sin precio de
+  niño pasa de 0 a precio de adulto para ese niño.
 - **Desviaciones de la tarea y por qué:**
+  - La lista «Lugares donde hoy vacío vale 0» estaba desactualizada (T-045 movió la fórmula a
+    servicios): corregida arriba, ahora con 6 puntos.
+  - **Venta directa entra en el alcance** (`desglose()` y `totalTourClasico()`): la vista previa y el
+    total tienen que coincidir con el cotizador; se agregó su test.
 
 ## Hallazgos fuera de alcance
--
+- `RecalculoPorPersonaService::recalcular()` repite la fórmula de `PriceEngineService::ventaYCostoDeTarifa()`
+  en vez de llamarla; hoy dan lo mismo, pero son dos copias que pueden volver a divergir.
+- Pasaje aéreo (`tarifa_base_nino` vacío = 0): sin tocar, como pedía la tarea; revisar con datos reales.

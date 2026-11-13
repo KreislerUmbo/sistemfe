@@ -502,7 +502,7 @@ class AlternativaItemController extends Controller
             if ($entrada['modalidad'] === 'compartido' && $tarifa->tipo_habitacion === null) {
                 $conteo = $this->contarPasajerosPorTipo($alternativa->cotizacion_id, null);
                 $ventaPorPersona = $conteo['adulto'] * ($entrada['precio_venta_adulto'] ?? 0)
-                    + $conteo['nino'] * ($entrada['precio_venta_nino'] ?? 0)
+                    + $conteo['nino'] * $entrada['precio_venta_nino']
                     + $conteo['infante'] * ($entrada['precio_venta_infante'] ?? 0);
                 $costoPorPersona = ($entrada['precio_costo'] ?? 0)
                     * ($conteo['adulto'] + $conteo['nino'] + $conteo['infante']);

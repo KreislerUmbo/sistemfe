@@ -465,7 +465,7 @@ class VentaDirectaController extends Controller
     {
         $precios = [
             'adulto' => (float) $tarifa->precio_venta_adulto,
-            'nino' => (float) ($tarifa->precio_venta_nino ?? 0),
+            'nino' => $tarifa->precioVentaNinoEfectivo(),
             'infante' => (float) ($tarifa->precio_venta_infante ?? 0),
         ];
         $desglose = [];
@@ -726,7 +726,7 @@ class VentaDirectaController extends Controller
             if ($entrada['proveedor_tarifa_id']) {
                 $tarifa = ProveedorTarifa::findOrFail($entrada['proveedor_tarifa_id']);
                 $total += ($entrada['modalidad'] === 'compartido' && $tarifa->tipo_habitacion === null)
-                    ? $conteo['adulto'] * ($entrada['precio_venta_adulto'] ?? 0) + $conteo['nino'] * ($entrada['precio_venta_nino'] ?? 0) + $conteo['infante'] * ($entrada['precio_venta_infante'] ?? 0)
+                    ? $conteo['adulto'] * ($entrada['precio_venta_adulto'] ?? 0) + $conteo['nino'] * $entrada['precio_venta_nino'] + $conteo['infante'] * ($entrada['precio_venta_infante'] ?? 0)
                     : $entrada['venta'];
             } elseif ($entrada['guia_tarifa_id'] && GuiaTarifa::find($entrada['guia_tarifa_id'])) {
                 $total += $entrada['venta'];

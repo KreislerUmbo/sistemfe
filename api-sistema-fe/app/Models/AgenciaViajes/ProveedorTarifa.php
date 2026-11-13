@@ -98,6 +98,20 @@ class ProveedorTarifa extends Model
             && ($this->vigente_hasta === null || $this->vigente_hasta->toDateString() >= $dia);
     }
 
+    // T-031 — ÚNICA regla del precio de venta de un niño en una tarifa.
+    // Servicio de tour (sin tipo_habitacion): vacío = paga como adulto (misma
+    // regla que los tours). Hotel (con tipo_habitacion): tiene sus propias
+    // tarifas por habitación y cama adicional, vacío = 0. Un 0 escrito a
+    // propósito es gratis (no es vacío). El infante no pasa por acá.
+    public function precioVentaNinoEfectivo(): float
+    {
+        if ($this->precio_venta_nino !== null) {
+            return (float) $this->precio_venta_nino;
+        }
+
+        return $this->tipo_habitacion !== null ? 0.0 : (float) $this->precio_venta_adulto;
+    }
+
     public function proveedorServicio()
     {
         return $this->belongsTo(ProveedorServicio::class, 'proveedor_servicio_id');
