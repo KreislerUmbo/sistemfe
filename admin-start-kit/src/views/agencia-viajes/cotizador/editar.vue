@@ -2282,13 +2282,11 @@ const descargarArchivo = async (url: string, nombreSugerido: string) => {
     window.URL.revokeObjectURL(blobUrl);
 };
 
-// Guardrail (19-sep-2026) — AlternativaPdfService::generar() ahora rechaza
-// con 422 si hay un grupo de opciones de hotel sin resolver (ver
-// validarGruposResueltos()), para no dejar salir al cliente un total que en
-// silencio ya asumía la opción más barata. descargarArchivo() pide
+// Mensaje real de un error al descargar el PDF. descargarArchivo() pide
 // responseType:'blob' SIEMPRE (necesario para el PDF binario), así que un
-// error 422 también llega como Blob en vez de JSON — hay que leerlo aparte
-// para mostrar el mensaje real en vez del genérico.
+// error (422, 404…) también llega como Blob en vez de JSON — hay que leerlo
+// aparte para mostrar el mensaje real en vez del genérico. (T-023: una
+// comparación de hoteles abierta ya no da 422; el PDF sale con un total por opción.)
 const leerMensajeErrorBlob = async (error: any, fallback: string): Promise<string> => {
     const data = error?.response?.data;
     if (data instanceof Blob && data.type === 'application/json') {

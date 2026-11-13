@@ -116,7 +116,11 @@ php artisan test   # suite completa, contra PostgreSQL
     `calcularTotalEfectivo()`. El descuento global se aplica a la fila "elegida" usando
     `alternativas.descuento_global_pct` (la columna que escribe `update()`/`aplicarDescuentoGlobalMonto()`),
     igual que `aplicarDescuentoGlobal()`; los ítems sin grupo ya traen su `precio_convertido` descontado.
-  - Dos o más grupos abiertos: "Desde" = `calcularTotalEfectivo()` vigente (mínimo de cada grupo).
+  - Dos o más grupos abiertos: "Desde" = total si se eligieran las filas más baratas de cada grupo
+    abierto, con el descuento global aplicado a ellas (mismo `totalSiSeEligen()` que el modo por opción).
+    **Corregido en la revisión (13-nov):** al principio usaba el total guardado, cuyas filas de grupo
+    abierto están a precio de lista sin el %; con 10 % daba 2250 en vez de 2070
+    (`test_ca5_con_descuento_global_…`, falló antes del fix).
 - **Desviaciones de la tarea y por qué:**
   - Con comparación abierta no se muestra la nota "Incluye descuento…" (el monto "antes del descuento"
     no tiene un único valor cuando hay varios totales por opción).

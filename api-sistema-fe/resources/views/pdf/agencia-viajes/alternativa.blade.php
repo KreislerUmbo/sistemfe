@@ -934,7 +934,8 @@
             <div class="precio-destacado">
                 <table style="width:100%;">
                     <tr>
-                        <td style="vertical-align:middle;">
+                        {{-- Sin la celda del monto (modo por opción), el título ocupa las dos columnas. --}}
+                        <td style="vertical-align:middle;" @if ($precioPorOpcion['modo'] === 'por_opcion') colspan="2" @endif>
                             <div class="precio-destacado-titulo">TOTAL {{ $resumenPaxMayus }}</div>
                             {{-- T-023 (H4): con la comparación de hoteles abierta el total depende de la
                                  opción que elija el cliente; se dice claramente en vez de bloquear el PDF. --}}

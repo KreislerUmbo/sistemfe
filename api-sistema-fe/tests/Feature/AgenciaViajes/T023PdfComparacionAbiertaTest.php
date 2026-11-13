@@ -276,6 +276,38 @@ class T023PdfComparacionAbiertaTest extends TestCase
         $this->assertStringNotContainsString('Con Hotel A', $html);
     }
 
+    // CA5 con descuento global (hallazgo de la revisión, 13-nov): las filas de un grupo abierto
+    // guardan precio de lista sin el %; "Desde" debe ser lo que costaría elegir las más baratas.
+    public function test_ca5_con_descuento_global_desde_aplica_el_descuento_a_las_mas_baratas(): void
+    {
+        $alternativa = $this->crearAlternativa();
+        $g1 = (string) Str::uuid();
+        $g2 = (string) Str::uuid();
+        $this->hotel($alternativa, 'Hotel A', 1000, $g1);
+        $this->hotel($alternativa, 'Hotel B', 1200, $g1);
+        $this->hotel($alternativa, 'Hotel C', 800, $g2);
+        $this->hotel($alternativa, 'Hotel D', 900, $g2);
+        $this->servicio($alternativa, 500);
+        $this->recalcular($alternativa, 10);
+
+        [$datos] = $this->pdf($alternativa);
+
+        // (1000 + 800) * 0.9 + 500 * 0.9 = 2070 (antes del fix daba 2250: hoteles sin el %).
+        $this->assertEquals(2070.0, $datos['precioPorOpcion']['desde']);
+
+        // Es lo que da el sistema al elegir de verdad A y C.
+        $real = $this->crearAlternativa();
+        $r1 = (string) Str::uuid();
+        $r2 = (string) Str::uuid();
+        $this->hotel($real, 'Hotel A', 1000, $r1, true);
+        $this->hotel($real, 'Hotel B', 1200, $r1);
+        $this->hotel($real, 'Hotel C', 800, $r2, true);
+        $this->hotel($real, 'Hotel D', 900, $r2);
+        $this->servicio($real, 500);
+        $this->recalcular($real, 10);
+        $this->assertEquals($datos['precioPorOpcion']['desde'], (float) $real->fresh()->total);
+    }
+
     // CA6 — grupo resuelto: un solo total y la elegida resaltada, como siempre.
     public function test_ca6_grupo_resuelto_sale_como_antes(): void
     {

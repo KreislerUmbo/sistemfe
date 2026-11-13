@@ -638,7 +638,9 @@ class AlternativaPdfService
     //  - un grupo abierto → un total por opción, calculado como si esa fila fuera la elegida
     //    (calcularTotalEfectivo sobre una copia en memoria; la elegida recibe el descuento global,
     //    igual que lo recibiría en aplicarDescuentoGlobal());
-    //  - dos o más → "Desde": el total vigente (mínimo de cada grupo).
+    //  - dos o más → "Desde": el total si se eligieran las más baratas de cada grupo abierto (con
+    //    el descuento global, igual que el modo anterior; el total guardado NO sirve: las filas de
+    //    un grupo abierto están a precio de lista, sin el %).
     private function precioPorOpcion(Alternativa $alternativa): array
     {
         $items = $alternativa->items;
@@ -650,35 +652,51 @@ class AlternativaPdfService
             return ['modo' => 'ninguno'];
         }
 
+        $pct = (float) $alternativa->descuento_global_pct;
+
         if ($abiertos->count() > 1) {
-            return ['modo' => 'desde', 'desde' => AlternativaItem::calcularTotalEfectivo($items)['total']];
+            $masBaratas = $abiertos->map(fn (array $grupo) => $grupo['items']->sortBy(fn (AlternativaItem $i) => $i->total_convertido)->first());
+
+            return ['modo' => 'desde', 'desde' => $this->totalSiSeEligen($items, $masBaratas, $pct)];
         }
 
-        $pct = (float) $alternativa->descuento_global_pct;
         $opciones = [];
 
         foreach ($abiertos->first()['items'] as $fila) {
-            $copias = $items->map(function (AlternativaItem $item) use ($fila) {
-                $copia = $item->replicate();
-                if ($item->grupo_opcion_id === $fila->grupo_opcion_id) {
-                    $copia->opcion_elegida = $item->is($fila);
-                }
-
-                return $copia;
-            });
-            // Un ítem de grupo abierto está a precio de lista; la elegida recibiría el % global.
-            $elegida = $copias->first(fn (AlternativaItem $c) => $c->grupo_opcion_id === $fila->grupo_opcion_id && $c->opcion_elegida);
-            $elegida->precio_convertido = round((float) $elegida->precio_convertido * (1 - $pct / 100), 2);
-
             [$hotel, $habitacion] = array_pad(explode(' · ', ReservaController::resolverNombreItem($fila, null, 'cliente'), 2), 2, null);
             $opciones[] = [
                 'hotel' => $hotel,
                 'habitacion' => $habitacion,
-                'total' => AlternativaItem::calcularTotalEfectivo($copias)['total'],
+                'total' => $this->totalSiSeEligen($items, collect([$fila]), $pct),
             ];
         }
 
         return ['modo' => 'por_opcion', 'opciones' => $opciones];
+    }
+
+    // Total de la alternativa si se marcaran como elegidas estas filas (una por grupo abierto), sin
+    // guardar nada: copia en memoria + calcularTotalEfectivo(). Cada fila marcada recibe el % global,
+    // como en aplicarDescuentoGlobal() (que se reaplica al marcar la elegida); el resto de su grupo
+    // queda a precio de lista y no suma.
+    private function totalSiSeEligen(Collection $items, Collection $filas, float $pct): float
+    {
+        $copias = $items->map(function (AlternativaItem $item) use ($filas, $pct) {
+            $copia = $item->replicate();
+            $filaDelGrupo = $item->grupo_opcion_id === null
+                ? null
+                : $filas->first(fn (AlternativaItem $f) => $f->grupo_opcion_id === $item->grupo_opcion_id);
+
+            if ($filaDelGrupo) {
+                $copia->opcion_elegida = $item->is($filaDelGrupo);
+                if ($copia->opcion_elegida) {
+                    $copia->precio_convertido = round((float) $item->precio_convertido * (1 - $pct / 100), 2);
+                }
+            }
+
+            return $copia;
+        });
+
+        return AlternativaItem::calcularTotalEfectivo($copias)['total'];
     }
 
     private function opcionesHoteles(Alternativa $alternativa): array
