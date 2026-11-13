@@ -119,7 +119,14 @@ cd admin-start-kit && npm run type-check && npm run build
     (no espera al "Guardar" del formulario); la confirmación de borrar lo dice.
   - Las fotos de `OpcionHotel` solo admiten `fachada`/`habitacion`; `otra` existe únicamente en proveedores.
     Quien las lea (T-021, el PDF) debe tratar `otra` como relleno.
-- **CA7 (prueba funcional en `agencia-demo`) — NO ejecutada**; pasos para correrla:
+- **CA7 — pasó (revisión del 13-nov, Playwright en `agencia-demo`).** Proveedor 11 (alojamiento): 3 fotos
+  subidas desde Editar quedan "Otra"; marcar fachada la 1 y luego la 2 → la 1 vuelve a "Otra" y la insignia
+  sigue a la 2; borrar desde la ficha y desde Editar (con confirmación) saca la foto y el archivo del disco;
+  borrar la fachada deja sin insignia. Proveedor 10 (transporte): sin selector, con borrar. Cotizador
+  (T061-PRUEBA-2) → "Hotel sin catálogo": subir fachada + habitación, el campo Fachada se deshabilita y se
+  rehabilita al borrarla; hotel de biblioteca (Sui Sui) → enlace a `/agencia-viajes/proveedores/19` en
+  pestaña nueva. Datos de prueba borrados (fotos de los proveedores 10/11 y el hotel no registrado 57).
+  Pasos usados:
   1. Entrar a `agencia-demo` como `admin@agencia-demo.test`; abrir un proveedor de tipo Alojamiento con
      fotos (o subirle 2-3 desde Editar). Ficha → cada foto debe tener un selector y, al elegir "Fachada",
      la insignia "Fachada" aparece; marcar otra como fachada pasa la anterior a "Otra".
@@ -138,3 +145,7 @@ cd admin-start-kit && npm run type-check && npm run build
   ficha y el formulario las leen (verificado con grep en `admin-start-kit/src`); si el portal e-commerce, que
   vive fuera de este workspace, lee `proveedor.fotos`, hay que revisarlo.
 - `components.d.ts` se regeneró solo (registro del componente nuevo).
+- (Revisión) En el drawer del cotizador, borrar una foto del hotel no registrado no pide confirmación
+  (igual que el picker de mayorista, `onEliminarFotoHotelMatrix`), y borra el archivo al instante.
+- (Revisión) Si `promover()` falla después de copiar las fotos, la transacción se revierte pero los
+  archivos copiados a `proveedores/` quedan huérfanos en el disco. Bajo impacto.
