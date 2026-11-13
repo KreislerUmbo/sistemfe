@@ -98,6 +98,27 @@ class ProveedorTarifa extends Model
             && ($this->vigente_hasta === null || $this->vigente_hasta->toDateString() >= $dia);
     }
 
+    // T-022 — la versión vigente a la que esta tarifa fue reemplazada, siguiendo la cadena
+    // version_anterior_id (v1 → v2 → v3). null = no tiene versión siguiente vigente (las
+    // versiones de antes de T-028 no tienen vínculo, y una versión programada a futuro todavía no vale).
+    public function siguienteVersionVigente(?string $dia = null): ?self
+    {
+        $actual = $this;
+
+        for ($salto = 0; $salto < 20; $salto++) {
+            $actual = self::where('version_anterior_id', $actual->id)->first();
+
+            if ($actual === null) {
+                return null;
+            }
+            if ($actual->estaVigente($dia)) {
+                return $actual;
+            }
+        }
+
+        return null;
+    }
+
     // T-031 — ÚNICA regla del precio de venta de un niño en una tarifa.
     // Servicio de tour (sin tipo_habitacion): vacío = paga como adulto (misma
     // regla que los tours). Hotel (con tipo_habitacion): tiene sus propias

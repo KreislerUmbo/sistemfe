@@ -2,6 +2,8 @@
 
 namespace App\Services\AgenciaViajes;
 
+use App\Models\AgenciaViajes\AlternativaItem;
+use App\Models\AgenciaViajes\CotizacionPasajero;
 use App\Models\AgenciaViajes\ProveedorTarifa;
 use App\Services\HoraPeru;
 
@@ -230,6 +232,59 @@ class PriceEngineService
         }
 
         return ['venta' => (float) $tarifa->precio_venta_adulto, 'costo' => $costo];
+    }
+
+    // Cuenta los pasajeros de la cotización por tipo (adulto/niño/infante), solo los
+    // `pax_incluidos` si el ítem los limita. Punto único: el alta del ítem y T-022 lo usan.
+    public function contarPasajerosPorTipo(int $cotizacionId, ?array $paxIncluidosIds): array
+    {
+        $query = CotizacionPasajero::where('cotizacion_id', $cotizacionId);
+        if ($paxIncluidosIds) {
+            $query->whereIn('id', $paxIncluidosIds);
+        }
+        $pasajeros = $query->get();
+
+        return [
+            'adulto' => $pasajeros->where('tipo_pax', 'adulto')->count(),
+            'nino' => $pasajeros->where('tipo_pax', 'nino')->count(),
+            'infante' => $pasajeros->where('tipo_pax', 'infante')->count(),
+        ];
+    }
+
+    // T-022 — el precio que tendría un ítem de proveedor re-enganchado a otra versión de su
+    // tarifa, armado con las mismas piezas del alta (ventaYCostoDeTarifa + convertirMoneda).
+    // Conserva el descuento y la cantidad del ítem. Las camas adicionales del alta no se guardan
+    // como dato: se infieren como lo que el snapshot tenía por encima del precio de la tarifa
+    // anterior, y se suman a la nueva (solo tarifa_fija).
+    //
+    // @return array{venta: float, costo: float, moneda_costo: string, precio_convertido: float, total_convertido: float}
+    public function precioDeItemConTarifa(AlternativaItem $item, ProveedorTarifa $nueva, ProveedorTarifa $anterior): array
+    {
+        $alternativa = $item->alternativa;
+        $porPersona = $item->modo_precio === 'por_persona';
+
+        $conteo = $porPersona
+            ? $this->contarPasajerosPorTipo($alternativa->cotizacion_id, $item->pax_incluidos)
+            : ['adulto' => 0, 'nino' => 0, 'infante' => 0];
+
+        ['venta' => $venta, 'costo' => $costo] = $this->ventaYCostoDeTarifa($nueva, $conteo, $item->modo_precio);
+
+        if (! $porPersona) {
+            ['venta' => $ventaAnterior, 'costo' => $costoAnterior] = $this->ventaYCostoDeTarifa($anterior, $conteo, $item->modo_precio);
+            $venta += max(0, (float) $item->precio_venta_snapshot - $ventaAnterior);
+            $costo += max(0, (float) $item->costo_snapshot - $costoAnterior);
+        }
+
+        $listaConvertida = $this->convertirMoneda($venta, $nueva->moneda, $alternativa->moneda_cotizacion, (float) $alternativa->tipo_cambio_aplicado);
+        $precioConvertido = round($listaConvertida * (1 - (float) $item->descuento_pct / 100), 2);
+
+        return [
+            'venta' => $venta,
+            'costo' => $costo,
+            'moneda_costo' => $nueva->moneda,
+            'precio_convertido' => $precioConvertido,
+            'total_convertido' => $porPersona ? $precioConvertido : round($precioConvertido * $item->cantidad, 2),
+        ];
     }
 
     // T-045 — total de una línea: lo mismo que AlternativaItem::

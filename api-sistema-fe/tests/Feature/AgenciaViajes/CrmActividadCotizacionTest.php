@@ -7,6 +7,7 @@ use App\Http\Controllers\AgenciaViajes\CotizacionEnvioController;
 use App\Http\Controllers\Client\CrmActividadController;
 use App\Mail\AgenciaViajes\CotizacionClienteMail;
 use App\Models\AgenciaViajes\Alternativa;
+use App\Models\AgenciaViajes\AlternativaItem;
 use App\Models\AgenciaViajes\ConfiguracionAgencia;
 use App\Models\Central\TenantDominioCorreo;
 use App\Models\Client\CrmActividad;
@@ -115,10 +116,19 @@ class CrmActividadCotizacionTest extends TestCase
             'created_at' => now(), 'updated_at' => now(),
         ]);
 
-        return Alternativa::create([
+        $alternativa = Alternativa::create([
             'cotizacion_id' => $cotizacionId, 'nombre' => 'Opción 1', 'estado' => $estado,
             'moneda_cotizacion' => 'PEN', 'tipo_cambio_aplicado' => 1, 'tipo_cambio_origen' => 'dia',
         ]);
+        // T-022: una propuesta sin servicios no se envía; estos tests prueban otras reglas.
+        AlternativaItem::create([
+            'alternativa_id' => $alternativa->id, 'origen_tipo' => AlternativaItem::ORIGEN_MANUAL,
+            'modo_precio' => 'tarifa_fija', 'cantidad' => 1, 'moneda_costo' => 'PEN',
+            'costo_snapshot' => 80, 'precio_venta_snapshot' => 100, 'precio_convertido' => 100,
+            'tip_afe_igv' => '10', 'destino_tributario' => 'nacional',
+        ]);
+
+        return $alternativa;
     }
 
     private function marcarEnviada(Alternativa $alternativa, array $datos = ['canal' => 'otro'])

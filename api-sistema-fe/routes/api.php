@@ -14,6 +14,7 @@ use App\Http\Controllers\AgenciaViajes\ConfiguracionCorreoController;
 use App\Http\Controllers\AgenciaViajes\CotizacionActividadController;
 use App\Http\Controllers\AgenciaViajes\ConsultaController;
 use App\Http\Controllers\AgenciaViajes\CotizacionEnvioController;
+use App\Http\Controllers\AgenciaViajes\RevisionAlternativaController;
 use App\Http\Controllers\AgenciaViajes\ContenidoTourController;
 use App\Http\Controllers\AgenciaViajes\CotizacionController;
 use App\Http\Controllers\AgenciaViajes\CotizacionResultadoController;
@@ -1048,6 +1049,9 @@ Route::group([
     // controller; el interruptor por tenant, el propio controller.
     Route::get("correo-cotizaciones/estado", [CotizacionEnvioController::class, 'estado'])
         ->middleware('permission:cotizaciones.enviar_correo');
+    // T-022: "¿lista para el cliente?" (mismo permiso que ver la cotización; la regla de fila, en el controller).
+    Route::get("alternativas/{id}/revision", [RevisionAlternativaController::class, 'mostrar'])
+        ->middleware('permission:cotizaciones.ver|cotizaciones.ver_todas');
     Route::get("alternativas/{id}/envio-correo", [CotizacionEnvioController::class, 'preparar'])
         ->middleware('permission:cotizaciones.enviar_correo');
     Route::post("alternativas/{id}/enviar-correo", [CotizacionEnvioController::class, 'enviar'])
@@ -1087,6 +1091,9 @@ Route::group([
         ->middleware('permission:cotizaciones.editar');
     // Sesión M4 — resuelve un grupo de opciones de hotel (M1).
     Route::put("alternativa-items/{id}/elegir-grupo", [AlternativaItemController::class, 'elegirOpcionGrupo'])
+        ->middleware('permission:cotizaciones.editar');
+    // T-022: "Actualizar al precio nuevo" (re-engancha a la versión siguiente de la tarifa).
+    Route::put("alternativa-items/{id}/actualizar-tarifa", [AlternativaItemController::class, 'actualizarTarifa'])
         ->middleware('permission:cotizaciones.editar');
     // Sesión 11q — ítem manual flexible: edición estructural completa
     // (descripción/proveedor/costo/cantidad/pax) y promoción a proveedor real.

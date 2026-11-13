@@ -185,6 +185,66 @@ class AlternativaItemController extends Controller
         ]);
     }
 
+    // PUT alternativa-items/{id}/actualizar-tarifa — T-022, "Actualizar al precio nuevo".
+    // Re-engancha el ítem a la versión siguiente vigente de SU tarifa (se busca acá, en el
+    // servidor: el frontend no manda ningún id de tarifa), con el costo y precio de esa versión
+    // convertidos a la moneda de la alternativa como en el alta. Conserva descuento y cantidad.
+    public function actualizarTarifa(Request $request, string $id): JsonResponse
+    {
+        $item = AlternativaItem::findOrFail($id);
+        $this->autorizarCotizacion('update', $item);
+
+        $rechazo = DB::transaction(function () use ($item) {
+            // Mismo bloqueo que los demás cambios de precio: dos vendedores no pisan el total.
+            $alternativa = Alternativa::whereKey($item->alternativa_id)->lockForUpdate()->firstOrFail();
+            $item = AlternativaItem::whereKey($item->id)->lockForUpdate()->firstOrFail();
+
+            // T-001 (R-AGE-11): la alternativa aceptada ya generó su reserva.
+            if ($alternativa->estado === 'aceptada') {
+                return response()->json(['code' => 422, 'message' => 'Esta alternativa ya fue aceptada y generó una reserva — el precio ya no se cambia desde acá.'], 422);
+            }
+
+            $actual = $item->origen_tipo === AlternativaItem::ORIGEN_PROVEEDOR ? $item->proveedorTarifa : null;
+            if (! $actual) {
+                return response()->json(['code' => 422, 'message' => 'Este servicio no usa una tarifa de proveedor.'], 422);
+            }
+
+            $nueva = $actual->siguienteVersionVigente();
+            if (! $nueva) {
+                return response()->json(['code' => 422, 'message' => 'Esta tarifa ya no tiene un precio nuevo para aplicar.'], 422);
+            }
+
+            $item->setRelation('alternativa', $alternativa);
+            $precio = $this->priceEngine->precioDeItemConTarifa($item, $nueva, $actual);
+            $tratamiento = self::resolverTratamientoTributario($nueva->tip_afe_igv, $nueva->destino_tributario);
+
+            $item->update([
+                'proveedor_tarifa_id' => $nueva->id,
+                'moneda_costo' => $precio['moneda_costo'],
+                'costo_snapshot' => $precio['costo'],
+                'precio_venta_snapshot' => $precio['venta'],
+                'precio_convertido' => $precio['precio_convertido'],
+                'tip_afe_igv' => $tratamiento['tip_afe_igv'],
+                'destino_tributario' => $tratamiento['destino_tributario'],
+            ]);
+
+            $this->recalcularTotalAlternativa($alternativa);
+
+            return null;
+        });
+
+        if ($rechazo) {
+            return $rechazo;
+        }
+
+        return response()->json([
+            'code' => 200,
+            'message' => 'Servicio actualizado al precio nuevo',
+            'alternativa_item' => $item->fresh(),
+            'total' => (float) Alternativa::whereKey($item->alternativa_id)->value('total'),
+        ]);
+    }
+
     // PUT alternativa-items/{id}/elegir-grupo — Sesión M4 (Ronda 2/P6, P9).
     // Resuelve un grupo de opciones de hotel de M1: marca ESTA fila como
     // opcion_elegida=true, desmarca las demás del mismo grupo_opcion_id
@@ -1773,17 +1833,8 @@ class AlternativaItemController extends Controller
 
     private function contarPasajerosPorTipo(int $cotizacionId, ?array $paxIncluidosIds): array
     {
-        $query = CotizacionPasajero::where('cotizacion_id', $cotizacionId);
-        if ($paxIncluidosIds) {
-            $query->whereIn('id', $paxIncluidosIds);
-        }
-        $pasajeros = $query->get();
-
-        return [
-            'adulto' => $pasajeros->where('tipo_pax', 'adulto')->count(),
-            'nino' => $pasajeros->where('tipo_pax', 'nino')->count(),
-            'infante' => $pasajeros->where('tipo_pax', 'infante')->count(),
-        ];
+        // T-022: movido a PriceEngineService para que "Actualizar al precio nuevo" cuente igual.
+        return $this->priceEngine->contarPasajerosPorTipo($cotizacionId, $paxIncluidosIds);
     }
 
     // Sesión M1 — calcularTotalEfectivo() respeta grupos de opciones de
