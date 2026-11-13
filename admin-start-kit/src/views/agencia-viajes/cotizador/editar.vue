@@ -624,6 +624,7 @@
                                                 style="max-width:110px"
                                                 :class="{ 'border-danger text-danger': alertasPiso[fila.item.id] }"
                                                 v-model.number="edicionItems[fila.item.id].precio_convertido" :disabled="alternativaSoloLectura" @input="onEditarPrecio(fila.item)">
+                                            <span v-if="guardandoEdicion.includes(fila.item.id)" class="input-group-text"><span class="spinner-border spinner-border-sm"></span></span>
                                         </div>
                                     </div>
                                     <div v-else-if="configAgencia?.modo_descuento_item === 'monto'" class="d-flex flex-column">
@@ -634,6 +635,7 @@
                                                 style="max-width:110px"
                                                 :class="{ 'border-danger text-danger': alertasPiso[fila.item.id] }"
                                                 v-model.number="edicionItems[fila.item.id].monto_descuento" :disabled="alternativaSoloLectura" @input="onEditarMontoDescuentoItem(fila.item)">
+                                            <span v-if="guardandoEdicion.includes(fila.item.id)" class="input-group-text"><span class="spinner-border spinner-border-sm"></span></span>
                                         </div>
                                     </div>
                                     <div v-else class="d-flex flex-column">
@@ -643,6 +645,7 @@
                                                 style="max-width:80px"
                                                 :class="{ 'border-danger text-danger': alertasPiso[fila.item.id] }"
                                                 v-model.number="edicionItems[fila.item.id].descuento_pct" :disabled="alternativaSoloLectura" @input="onEditarDescuentoPct(fila.item)">
+                                            <span v-if="guardandoEdicion.includes(fila.item.id)" class="input-group-text"><span class="spinner-border spinner-border-sm"></span></span>
                                             <span class="input-group-text">%</span>
                                         </div>
                                     </div>
@@ -775,13 +778,15 @@
                                 <div class="input-group input-group-sm" style="max-width:160px">
                                     <span class="input-group-text">{{ alternativaActiva.moneda_cotizacion }}</span>
                                     <input type="number" min="0" class="form-control"
-                                        v-model.number="descuentoGlobalMontoLocal" :disabled="alternativaSoloLectura" @change="onEditarDescuentoGlobalMonto">
+                                        v-model.number="descuentoGlobalMontoLocal" :disabled="alternativaSoloLectura || aplicandoDescuentoGlobal" @change="onEditarDescuentoGlobalMonto">
+                                    <span v-if="aplicandoDescuentoGlobal" class="input-group-text"><span class="spinner-border spinner-border-sm"></span></span>
                                 </div>
                             </template>
                             <template v-else>
                                 <div class="input-group input-group-sm" style="max-width:160px">
                                     <input type="number" min="0" max="100" class="form-control"
-                                        v-model.number="descuentoGlobalLocal" :disabled="alternativaSoloLectura" @change="onEditarDescuentoGlobal">
+                                        v-model.number="descuentoGlobalLocal" :disabled="alternativaSoloLectura || aplicandoDescuentoGlobal" @change="onEditarDescuentoGlobal">
+                                    <span v-if="aplicandoDescuentoGlobal" class="input-group-text"><span class="spinner-border spinner-border-sm"></span></span>
                                     <span class="input-group-text">%</span>
                                 </div>
                             </template>
@@ -4354,6 +4359,8 @@ const edicionTimeouts: Record<number, any> = {};
 // H13 (T-032): ítems con una edición escrita que todavía no se envió (o se está enviando). Ni la
 // recarga ni la respuesta de otro guardado pisan lo que el vendedor tiene en esos campos.
 const edicionPendiente = new Set<number>();
+// R4: ítems cuyo guardado está en vuelo (indicador junto al campo; el campo sigue editable).
+const guardandoEdicion = ref<number[]>([]);
 const programarEnvioEdicion = (itemId: number, payload: () => { descuento_pct?: number; precio_convertido?: number }) => {
     clearTimeout(edicionTimeouts[itemId]);
     edicionPendiente.add(itemId);
@@ -4533,8 +4540,12 @@ const calcularMontoGlobalEquivalente = () => {
     return Math.round(sumaListaTotal * (pct / 100) * 100) / 100;
 };
 
+// T-032 (R4): el descuento global recalcula todas las líneas; mientras tanto el campo queda
+// deshabilitado con su indicador.
+const aplicandoDescuentoGlobal = ref(false);
 const onEditarDescuentoGlobal = async () => {
     if (!alternativaActiva.value) return;
+    aplicandoDescuentoGlobal.value = true;
     try {
         const res = await alternativaService.actualizar(alternativaActiva.value.id, { descuento_global_pct: descuentoGlobalLocal.value });
         if (!aplicarAlternativaActualizada(res.alternativa)) await cargarCotizacion();
@@ -4542,6 +4553,8 @@ const onEditarDescuentoGlobal = async () => {
         lineasFueraDePiso.value = res.lineas_fuera_de_piso ?? [];
     } catch (error: any) {
         (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo aplicar el descuento global', 'error');
+    } finally {
+        aplicandoDescuentoGlobal.value = false;
     }
 };
 
@@ -4551,6 +4564,7 @@ const onEditarDescuentoGlobal = async () => {
 // piso de cada línea exactamente igual que la versión en %).
 const onEditarDescuentoGlobalMonto = async () => {
     if (!alternativaActiva.value) return;
+    aplicandoDescuentoGlobal.value = true;
     try {
         const res = await alternativaService.actualizar(alternativaActiva.value.id, { descuento_global_monto: descuentoGlobalMontoLocal.value });
         if (!aplicarAlternativaActualizada(res.alternativa)) await cargarCotizacion();
@@ -4558,6 +4572,8 @@ const onEditarDescuentoGlobalMonto = async () => {
         lineasFueraDePiso.value = res.lineas_fuera_de_piso ?? [];
     } catch (error: any) {
         (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo aplicar el descuento global', 'error');
+    } finally {
+        aplicandoDescuentoGlobal.value = false;
     }
 };
 
@@ -4602,6 +4618,7 @@ const onEditarMontoDescuentoItem = (item: AlternativaItem) => {
 
 const enviarEdicion = async (itemId: number, payload: { descuento_pct?: number; precio_convertido?: number }) => {
     edicionPendiente.delete(itemId);
+    guardandoEdicion.value.push(itemId);
     try {
         const res = await alternativaItemService.actualizar(itemId, payload);
         alertasPiso.value[itemId] = !!res.alerta_piso;
@@ -4610,6 +4627,9 @@ const enviarEdicion = async (itemId: number, payload: { descuento_pct?: number; 
         if (!aplicarItemActualizado(res.alternativa_item, res.alternativa)) await cargarCotizacion();
     } catch (error: any) {
         (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo actualizar', 'error');
+    } finally {
+        const i = guardandoEdicion.value.indexOf(itemId);
+        if (i !== -1) guardandoEdicion.value.splice(i, 1);
     }
 };
 
