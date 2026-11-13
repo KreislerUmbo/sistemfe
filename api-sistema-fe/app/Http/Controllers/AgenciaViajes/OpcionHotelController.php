@@ -20,6 +20,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 // Sesión M3 — hotel ad-hoc LOCAL, sin depender de un proveedor
@@ -407,6 +408,8 @@ class OpcionHotelController extends Controller
                 'numero_documento' => $v['numero_documento'] ?? null,
                 'tipo_id' => $tipoId,
                 'estado' => true,
+                // T-020: las fotos del hotel pasan al proveedor con su tipo, en archivos propios.
+                'fotos' => $this->copiarFotosAProveedor($hotel),
             ]);
 
             $proveedorServicio = ProveedorServicio::create([
@@ -448,6 +451,29 @@ class OpcionHotelController extends Controller
             'proveedor' => $proveedor,
             'proveedor_tarifas' => $tarifas,
         ]);
+    }
+
+    // T-020 — copia el archivo físico de cada foto del hotel a proveedores/ y devuelve
+    // {path, tipo_foto}[] con los paths NUEVOS. No se comparten paths: eliminarFoto() del hotel
+    // y del proveedor borran el archivo, y compartirlo rompería la foto del otro.
+    // Una foto cuyo archivo ya no existe se omite (no hay nada que copiar).
+    private function copiarFotosAProveedor(OpcionHotel $hotel): array
+    {
+        $disco = Storage::disk('public');
+        $copiadas = [];
+
+        foreach (OpcionHotel::normalizarFotos($hotel->fotos ?? []) as $foto) {
+            if (! $disco->exists($foto['path'])) {
+                continue;
+            }
+
+            $extension = pathinfo($foto['path'], PATHINFO_EXTENSION);
+            $nuevo = 'proveedores/'.Str::uuid().($extension !== '' ? '.'.$extension : '');
+            $disco->copy($foto['path'], $nuevo);
+            $copiadas[] = ['path' => $nuevo, 'tipo_foto' => $foto['tipo_foto'] ?? 'habitacion'];
+        }
+
+        return $copiadas;
     }
 
     // Mismo criterio que AlternativaItemController::resolverTratamientoTributario()
