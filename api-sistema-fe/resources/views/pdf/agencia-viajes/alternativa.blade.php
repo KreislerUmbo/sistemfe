@@ -670,55 +670,48 @@
                         </tr>
                     @endforeach
                 </table>
-
-                {{-- Mejora del PDF de cotización (plan §4.5) — sección nueva
-                     "Fotos referenciales de los hoteles", después de la
-                     tabla de precios (que sigue compacta, sin fotos, para
-                     comparar de un vistazo). Mismo patrón que los 3
-                     documentos reales de la agencia (nombre + tira de fotos
-                     + check-in/check-out). Un hotel sin fotos cargadas
-                     (hotelesInfo no trae su id) no imprime bloque — nunca
-                     un casillero en blanco ni 3 fotos estiradas a partir de
-                     una sola. --}}
-                @php
-                    $filasConFotos = collect($grupoHotel['filas'])->filter(
-                        fn ($fila) => isset($fila['opcion_hotel_id']) && isset($hotelesInfo[$fila['opcion_hotel_id']])
-                    );
-                @endphp
-                @if ($filasConFotos->isNotEmpty())
-                    {{-- Bug real (07-sep-2026): al pasar a Poppins (ocupa un
-                         poco más de alto por línea que Arial), esta sección
-                         terminaba pisando la última fila de la tabla de
-                         precios cuando ambas no entraban juntas en lo que
-                         quedaba de página — page-break-inside:avoid en la
-                         tabla y en este bloque no alcanzó a resolverlo de
-                         forma confiable (dompdf calculando mal cuánto
-                         espacio quedaba). page-break-before:always es más
-                         tosco (puede dejar un resto de página en blanco
-                         arriba) pero garantiza que nunca más se solape con
-                         la tabla. --}}
-                    <div class="seccion-titulo" style="margin-top:10px; page-break-before: always;">Fotos referenciales de los hoteles</div>
-                    @foreach ($filasConFotos as $fila)
-                        @php $info = $hotelesInfo[$fila['opcion_hotel_id']]; @endphp
-                        <div class="hotel-fotos-bloque">
-                            <div class="hotel-fotos-nombre">{{ $fila['hotel'] }}</div>
-                            <div class="hotel-fotos-tira">
-                                @foreach ($info['fotos'] as $foto)
-                                    <img src="{{ $foto }}" width="640" height="480">
-                                @endforeach
-                            </div>
-                            @if ($info['check_in'] || $info['check_out'])
-                                <div class="hotel-fotos-datos">
-                                    @if ($info['check_in'])Check-in: {{ substr($info['check_in'], 0, 5) }}@endif
-                                    @if ($info['check_in'] && $info['check_out']) &nbsp;·&nbsp; @endif
-                                    @if ($info['check_out'])Check-out: {{ substr($info['check_out'], 0, 5) }}@endif
-                                </div>
-                            @endif
-                        </div>
-                    @endforeach
-                @endif
             </div>
         @endforeach
+
+        {{-- ══════════════ FOTOS REFERENCIALES DE LOS HOTELES (plan §4.5, T-021) ══════════════ --}}
+        {{-- Una sola sección para TODOS los hoteles de la alternativa (de una
+             comparación o sueltos), sin repetir; $hotelesParaPdf ya viene
+             filtrado (un hotel sin fotos no trae bloque, nunca un casillero
+             en blanco ni 3 fotos estiradas a partir de una sola) y con la
+             tira armada: fachada, hasta 2 de habitación, relleno con 'otra'.
+             Si ningún hotel tiene fotos, la sección no sale. --}}
+        @if (count($hotelesParaPdf) > 0)
+            <div class="seccion">
+                {{-- Bug real (07-sep-2026): al pasar a Poppins (ocupa un poco más
+                     de alto por línea que Arial), esta sección terminaba pisando
+                     la última fila de la tabla de precios cuando ambas no entraban
+                     juntas en lo que quedaba de página — page-break-inside:avoid
+                     no alcanzó (dompdf calculando mal cuánto espacio quedaba).
+                     page-break-before:always es más tosco (puede dejar un resto de
+                     página en blanco) pero garantiza que nunca más se solape con
+                     la tabla. Solo hace falta si hay tabla de opciones arriba; con
+                     hoteles sueltos no hay nada que pisar y se evita la página
+                     en blanco. --}}
+                <div class="seccion-titulo" style="margin-top:10px;{{ count($opcionesHoteles) > 0 ? ' page-break-before: always;' : '' }}">Fotos referenciales de los hoteles</div>
+                @foreach ($hotelesParaPdf as $hotelPdf)
+                    <div class="hotel-fotos-bloque">
+                        <div class="hotel-fotos-nombre">{{ $hotelPdf['nombre'] }}</div>
+                        <div class="hotel-fotos-tira">
+                            @foreach ($hotelPdf['fotos'] as $foto)
+                                <img src="{{ $foto }}" width="640" height="480">
+                            @endforeach
+                        </div>
+                        @if ($hotelPdf['check_in'] || $hotelPdf['check_out'])
+                            <div class="hotel-fotos-datos">
+                                @if ($hotelPdf['check_in'])Check-in: {{ substr($hotelPdf['check_in'], 0, 5) }}@endif
+                                @if ($hotelPdf['check_in'] && $hotelPdf['check_out']) &nbsp;·&nbsp; @endif
+                                @if ($hotelPdf['check_out'])Check-out: {{ substr($hotelPdf['check_out'], 0, 5) }}@endif
+                            </div>
+                        @endif
+                    </div>
+                @endforeach
+            </div>
+        @endif
 
         {{-- ══════════════════ ITINERARIO ══════════════════ --}}
         {{-- 12f-3 — $itinerario es un array de BLOQUES (uno por destino con

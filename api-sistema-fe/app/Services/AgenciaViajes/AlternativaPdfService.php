@@ -9,6 +9,7 @@ use App\Models\AgenciaViajes\AlternativaItem;
 use App\Models\AgenciaViajes\ConfiguracionAgenciaPdf;
 use App\Models\AgenciaViajes\OpcionHotel;
 use App\Models\AgenciaViajes\PaquetePlantilla;
+use App\Models\AgenciaViajes\Proveedor;
 use App\Services\TextoFormatoService;
 use Illuminate\Validation\ValidationException;
 
@@ -203,7 +204,7 @@ class AlternativaPdfService
         // contenido.
         $colorCategoriaTinte = $this->tintClaro($colorCategoria);
         [$fotoPortadaPrincipal, $fotosPortadaSecundarias] = $this->fotosTourParaPdf($alternativa, $configPdf);
-        $hotelesInfo = $this->hotelesInfoParaPdf($opcionesHoteles);
+        $hotelesParaPdf = $this->hotelesParaPdf($alternativa);
 
         // Pedido del usuario (06-sep-2026) — Poppins en vez de Arial. Se
         // registra ANTES de loadView(), no después: confirmado con el PDF
@@ -231,7 +232,7 @@ class AlternativaPdfService
             'colorCategoriaTinte' => $colorCategoriaTinte,
             'fotoPortadaPrincipal' => $fotoPortadaPrincipal,
             'fotosPortadaSecundarias' => $fotosPortadaSecundarias,
-            'hotelesInfo' => $hotelesInfo,
+            'hotelesParaPdf' => $hotelesParaPdf,
             'cuentasBancarias' => $cuentasBancarias,
             'pasajeros' => $pasajeros,
             'itinerario' => $itinerario,
@@ -879,34 +880,71 @@ class AlternativaPdfService
         ];
     }
 
-    // plan §4.5 — sección "Fotos referenciales de los hoteles": por cada
-    // hotel YA listado en la tabla de precios (opcionesHoteles(), que ahora
-    // lleva 'opcion_hotel_id' por fila), su tira fachada+habitación(es) +
-    // check-in/check-out si el hotel está ligado a un Proveedor real con
-    // ProveedorAlojamientoDetalle cargado. Un hotel sin ninguna foto no
-    // entra al mapa — el blade omite su bloque por completo (plan: "nunca
-    // se deja un casillero en blanco").
-    private function hotelesInfoParaPdf(array $opcionesHoteles): array
+    // plan §4.5 + T-021 — sección "Fotos referenciales de los hoteles": UN bloque por hotel
+    // de la alternativa (el cliente ve dónde se aloja y puede pedir otra opción), sin importar
+    // si el hotel viene de una comparación (grupo de opciones) o suelto. Recorre TODOS los
+    // ítems, igual que la tabla "Opciones de hoteles": un grupo resuelto también muestra los
+    // hoteles no elegidos, así que acá también salen.
+    //
+    // Es hotel el ítem con tarifa de catálogo con tipo_habitacion (mismo criterio que
+    // ReservaController::resolverNombreItem) o el de la matriz de un mayorista / hotel no
+    // registrado (opcion_hotel_tarifa_id). Identidad, para no repetir un hotel que aparece en
+    // dos destinos o dos filas: Proveedor real → 'proveedor:ID' (también un OpcionHotel ligado
+    // a un proveedor); hotel no registrado → 'adhoc:ID'. Nunca el nombre (ver guardrail del
+    // 18-sep-2026 en opcionesHoteles()).
+    //
+    // Un hotel sin ninguna foto no entra a la lista (el blade no imprime casillero vacío).
+    private function hotelesParaPdf(Alternativa $alternativa): array
     {
-        $idsHotel = collect($opcionesHoteles)
-            ->flatMap(fn (array $grupo) => collect($grupo['filas'])->pluck('opcion_hotel_id'))
-            ->filter()
-            ->unique()
-            ->values();
+        $orden = []; // clave => ['tipo' => 'proveedor'|'adhoc', 'id' => int], en orden de aparición
 
-        if ($idsHotel->isEmpty()) {
+        foreach ($alternativa->items as $item) {
+            if ($item->proveedor_tarifa_id && $item->proveedorTarifa?->tipo_habitacion) {
+                $id = $item->proveedorTarifa->proveedorServicio?->proveedor_id;
+                $entrada = $id ? ['tipo' => 'proveedor', 'id' => (int) $id] : null;
+            } elseif ($item->opcion_hotel_tarifa_id && $item->opcionHotelTarifa?->opcionHotel) {
+                $hotel = $item->opcionHotelTarifa->opcionHotel;
+                $entrada = $hotel->proveedor_id
+                    ? ['tipo' => 'proveedor', 'id' => (int) $hotel->proveedor_id]
+                    : ['tipo' => 'adhoc', 'id' => (int) $hotel->id];
+            } else {
+                continue;
+            }
+
+            if ($entrada) {
+                $orden[$entrada['tipo'].':'.$entrada['id']] ??= $entrada;
+            }
+        }
+
+        if ($orden === []) {
             return [];
         }
 
-        $hoteles = OpcionHotel::with('proveedor.alojamientoDetalle')->whereIn('id', $idsHotel)->get();
+        $idsDe = fn (string $tipo) => collect($orden)->where('tipo', $tipo)->pluck('id')->all();
+        $proveedores = Proveedor::with('alojamientoDetalle')->whereIn('id', $idsDe('proveedor'))->get()->keyBy('id');
+        $opcionHoteles = OpcionHotel::with('proveedor.alojamientoDetalle')->whereIn('id', $idsDe('adhoc'))->get()->keyBy('id');
 
-        $info = [];
-        foreach ($hoteles as $hotel) {
-            $fotos = collect($hotel->fotos ?? []);
-            $fachada = $fotos->firstWhere('tipo_foto', 'fachada');
-            $habitaciones = $fotos->where('tipo_foto', 'habitacion')->take(2);
+        $lista = [];
+        foreach ($orden as $entrada) {
+            if ($entrada['tipo'] === 'proveedor') {
+                $proveedor = $proveedores->get($entrada['id']);
+                if (! $proveedor) {
+                    continue;
+                }
+                $nombre = $proveedor->nombre_comercial ?: $proveedor->razon_social;
+                $fotos = Proveedor::normalizarFotos($proveedor->fotos ?? []);
+                $detalle = $proveedor->alojamientoDetalle;
+            } else {
+                $hotel = $opcionHoteles->get($entrada['id']);
+                if (! $hotel) {
+                    continue;
+                }
+                $nombre = $hotel->nombre_hotel;
+                $fotos = OpcionHotel::normalizarFotos($hotel->fotos ?? []);
+                $detalle = $hotel->proveedor?->alojamientoDetalle;
+            }
 
-            $tira = collect([$fachada])->filter()->concat($habitaciones)
+            $tira = collect($this->seleccionarFotosDeHotel($fotos))
                 ->map(fn (array $f) => $this->imagenRecorte->recortar4x3ParaPdf($f['path']))
                 ->filter()
                 ->values();
@@ -915,15 +953,26 @@ class AlternativaPdfService
                 continue;
             }
 
-            $detalle = $hotel->proveedor?->alojamientoDetalle;
-
-            $info[$hotel->id] = [
+            $lista[] = [
+                'nombre' => $nombre,
                 'fotos' => $tira->all(),
                 'check_in' => $detalle?->hora_checkin,
                 'check_out' => $detalle?->hora_checkout,
             ];
         }
 
-        return $info;
+        return $lista;
+    }
+
+    // T-021: fachada primero, después hasta 2 de habitación; si faltan, se completa con 'otra'
+    // (solo existe en proveedores, es relleno) hasta 3 en total.
+    private function seleccionarFotosDeHotel(array $fotos): array
+    {
+        $fotos = collect($fotos);
+        $tira = collect([$fotos->firstWhere('tipo_foto', 'fachada')])->filter()
+            ->concat($fotos->where('tipo_foto', 'habitacion')->take(2));
+
+        return $tira->concat($fotos->where('tipo_foto', 'otra')->take(3 - $tira->count()))
+            ->values()->all();
     }
 }

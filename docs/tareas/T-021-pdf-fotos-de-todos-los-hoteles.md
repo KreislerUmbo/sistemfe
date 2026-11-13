@@ -77,9 +77,28 @@ php artisan test   # suite completa, contra PostgreSQL
 ---
 
 ## Resultado
-- **Commits:**
-- **Tests:**
+- **Commits:** rama `feat/T-021-pdf-fotos-hoteles` (ver `git log`).
+- **Tests:** `tests/Feature/AgenciaViajes/T021PdfFotosHotelesTest.php` (11 tests: CA1-CA4, CA6, CA5
+  por el camino de mayorista, grupo resuelto, hotel sin fotos, escapado del nombre). Suite completa
+  contra PostgreSQL: 2195 passed. `SesionM5OpcionesHotelesPdfTest` sigue en verde.
+  CA7: PDF real de `agencia-demo` (alt. 92 con hotel suelto y alt. 106 con comparación de 2 hoteles),
+  rasterizado con Ghostscript: sin solapes, fotos sin deformar, fachada primera, check-in/out
+  impreso. Las fotos de prueba se pusieron dentro de una transacción con rollback y se borraron: la
+  base y el disco de `agencia-demo` quedaron como estaban.
 - **Desviaciones de la tarea y por qué:**
+  - `hotelesInfoParaPdf($opcionesHoteles)` se reemplazó por `hotelesParaPdf($alternativa)`: recorre los
+    ítems de la alternativa en vez de las filas de la tabla (la tabla solo tiene los de grupos).
+    Variable del view: `hotelesInfo` (mapa por `opcion_hotel_id`) → `hotelesParaPdf` (lista).
+  - Grupo resuelto: salen **también los hoteles no elegidos**, igual que la tabla "Opciones de hoteles".
+  - Es hotel: ítem con `proveedor_tarifa.tipo_habitacion` (mismo criterio que
+    `ReservaController::resolverNombreItem`) o con `opcion_hotel_tarifa_id`. Un `OpcionHotel` con
+    `proveedor_id` se identifica como ese proveedor y usa las fotos de la ficha del proveedor.
+  - Una sola sección, después de las tablas de opciones. `page-break-before` solo si hay tabla de
+    opciones arriba; con hoteles sueltos no se fuerza (evita una página en blanco).
+  - Interruptor: `mostrar_fotos_tour` es solo de tours y hoy las fotos de hotel no lo respetan; no
+    agregué uno nuevo (la tarea pide consultar). Si se quiere uno para hoteles, es tarea aparte.
 
 ## Hallazgos fuera de alcance
--
+- En el PDF de la comparación (alt. 106) el título "Opciones de hoteles" quedó al pie de la página 1
+  y su tabla en la 2, con página 2 casi vacía por el salto antes de las fotos. No se tocó (la tabla
+  y su título no cambiaron en esta tarea); candidato a "Por analizar".
