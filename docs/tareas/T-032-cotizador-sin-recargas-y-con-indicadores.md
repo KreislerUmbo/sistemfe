@@ -70,14 +70,26 @@ Recorridos de la obs. 9 en `agencia-demo` con Playwright; borrar los datos de pr
 ---
 
 ## Resultado
-- **Commits:** (sin commitear; rama `feat/T-032-cotizador-sin-recargas`)
+- **Commits:** rama `feat/T-032-cotizador-sin-recargas` (sin unir a `main`; la tarea sigue en revisión).
 - **Tests:** `T032RespuestasParaActualizacionParcialTest` (4) + 61 existentes del controller en verde. `type-check` sin errores en los archivos tocados; `build` ok.
-- **Prueba funcional (Playwright, `agencia-demo`, cotización 92, datos borrados al terminar):**
-  CA1 editar precio: PUT sin GET posterior. CA2 agregar (manual) y eliminar: POST/DELETE sin GET posterior.
-  CA4 biblioteca: durante la carga `aria-busy`, opacidad y `pointer-events:none`; al terminar vuelve y queda el chip correcto.
-  CA5 total en pantalla = total del backend (115.72 y 80.00).
-  **Sin probar en navegador:** CA3 (escribir mientras se guarda otro ítem), CA6 (medición de segundos de los 3 recorridos de la obs. 9).
-- **Desviaciones de la tarea y por qué:** las altas en bucle (comparación de hoteles), quitar una línea de tour y quitar un grupo siguen con `cargarCotizacion()` (traen varios ítems o su respuesta no trae la alternativa). Pasaje aéreo suelto y servicio manual ya usan la actualización parcial.
+- **Prueba funcional (Playwright, `agencia-demo`; los datos de prueba se borraron y la configuración de la agencia quedó como estaba):**
+  - CA1 editar precio: PUT sin GET posterior. CA2 agregar (manual) y eliminar: POST/DELETE sin GET posterior.
+  - CA3 (H13): escribir en el ítem A mientras se guarda B conserva lo escrito, con el campo enfocado, en vuelo y desenfocado. En un bloque de tour **falló** (el precio del tour volvía al valor guardado porque Vue vuelve a fijar el `value`); se corrigió con un borrador y se repitió: ya conserva lo escrito y no envía nada al restaurar.
+  - CA4 biblioteca: durante la carga `aria-busy`, opacidad y `pointer-events:none`; al terminar vuelve y queda el chip correcto.
+  - CA5: pantalla = backend (precio de cada ítem, precio del tour y total) con descuento global **en monto y en %** (la agencia usa monto; el % se probó cambiando el modo un momento y restaurándolo) y con un grupo de hoteles: descuento global, luego elegir la otra opción. Sin recargas de la cotización y con spinner en cada acción.
+  - CA6 (medición, `agencia-demo`, alternativa de 2 hoteles + 1 ítem manual; «antes» = frontend de `main` en un worktree, «después» = la rama; mismo backend y datos; **una corrida por árbol**, el servidor local varía): milisegundos hasta la última respuesta de red.
+
+    | Acción | Antes | Después | Recargas de la cotización |
+    |---|---|---|---|
+    | Editar precio (incluye 400 ms de espera por escritura) | 2147 | 1127 | 1 → 0 |
+    | Descuento global | 1189 | 681 | 1 → 0 |
+    | Elegir opción de grupo | 1154 | 768 | 1 → 0 |
+    | Eliminar ítem (desde «Sí, eliminar») | 1791 | 1382 | 1 → 0 |
+- **Desviaciones de la tarea y por qué:**
+  - **CA6:** se midieron las 4 acciones que T-032 toca, no los 3 recorridos completos de la obs. 9 (~80 acciones y mezclan mejoras de T-033, T-034 y T-019, que no se pueden separar de T-032). No se midió «agregar ítem» (pasa por el drawer de varios pasos); se comprobó solo que no recarga (CA2).
+  - **R4 en el lienzo:** ya tenían indicador eliminar ítem, eliminar grupo, elegir opción y eliminar/precio de una línea de tour. Se agregaron el **descuento global** (campo deshabilitado con spinner) y el **guardado del precio de cada ítem** (spinner junto al campo, que sigue editable para no perder lo escrito). No queda acción del lienzo sin indicador.
+  - Siguen con `cargarCotizacion()`: altas en bucle (comparación de hoteles), quitar una línea de tour o un grupo (esa respuesta no trae la alternativa) y los cambios de estructura (alternativa, pasajeros, destinos, aceptar).
+  - `itemConFoco()` tenía el bug `split(/s+/)` (corregido). H13 ahora también protege a un ítem con el guardado en vuelo.
 
 ## Hallazgos fuera de alcance
--
+- 500 intermitente de Apache (`fe_sendauth: no password supplied`, ya conocido) apareció 3 veces durante las pruebas; no tiene relación con esta tarea.
