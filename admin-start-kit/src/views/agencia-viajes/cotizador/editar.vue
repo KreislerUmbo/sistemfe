@@ -4362,7 +4362,7 @@ const programarEnvioEdicion = (itemId: number, payload: () => { descuento_pct?: 
 // El ítem cuya fila tiene el foco (las filas llevan data-item-id): tampoco se pisa.
 const itemConFoco = (): number[] => {
     const fila = document.activeElement instanceof HTMLElement ? document.activeElement.closest('[data-item-id]') : null;
-    return (fila?.getAttribute('data-item-id') ?? '').split(/s+/).map(Number).filter(Boolean);
+    return (fila?.getAttribute('data-item-id') ?? '').split(/\s+/).map(Number).filter(Boolean);
 };
 
 // Mismo PriceEngineService::convertirMoneda() del backend, replicado acá
