@@ -94,16 +94,12 @@
                             :tipo-cambio-sugerido="preview.tipo_cambio_sugerido" :serie-resuelta="preview.serie_resuelta" />
 
                         <!-- F1 (23-oct-2026): qué entra y cuánto, también con bloqueo. -->
-                        <DetalleComprobantePreview :preview="preview" :anticipo-aplicado="anticipoAplicado" seleccionable @alternar="alternarServicio" />
-                        <div v-if="(preview.items_por_destino_tributario?.length ?? 0) > 0" class="mb-2 small">
-                            <span class="text-muted d-block mb-1">Tratamiento tributario de lo seleccionado:</span>
-                            <span v-for="it in preview.items_por_destino_tributario" :key="it.reserva_item_id"
-                                class="badge bg-light text-dark border me-1 mb-1">
-                                {{ it.nombre }}: {{ etiquetaTipAfeIgv(it.tip_afe_igv) }}
-                            </span>
-                        </div>
+                        <!-- T-091: con la columna «Afectación» (D-AGE-037). -->
+                        <DetalleComprobantePreview :preview="preview" :anticipo-aplicado="anticipoAplicado" seleccionable @alternar="alternarServicio"
+                            con-afectacion :guardando-afectacion="afectacion.guardando.value" :version-afectacion="afectacion.version.value"
+                            @cambiar-afectacion="afectacion.cambiar" />
 
-                        <!-- Guardia tributario: este grupo mezcla tratamientos distintos. -->
+                        <!-- Guardia tributario: solo exportación/extranjero sigue bloqueado (T-091). -->
                         <div v-if="preview.bloqueado_tributario" class="alert alert-danger mb-0">
                             <i class="fas fa-triangle-exclamation me-2"></i>
                             <strong>No se puede facturar este grupo así todavía.</strong>
@@ -113,11 +109,6 @@
                                     {{ it.nombre }} — <span class="fw-semibold">{{ it.destino_tributario }}</span>
                                 </li>
                             </ul>
-                            <button v-if="(preview.items_sin_confirmar_ids?.length ?? 0) > 0" type="button"
-                                class="btn btn-sm btn-outline-danger mt-2"
-                                @click="emit('confirmar-tributario', preview.items_sin_confirmar_ids ?? [])">
-                                Confirmar tratamiento tributario
-                            </button>
                             <!-- F1 (23-oct-2026): que se vea que hay más pasos detrás del bloqueo. -->
                             <p class="small mb-0 mt-2 text-body-secondary">
                                 Cuando lo resuelvas, aquí aparecen el tipo de comprobante (factura o boleta), el total y los anticipos para descontar.
@@ -222,11 +213,11 @@ import type { CuotaCronograma } from '@/components/CronogramaCuotasCampos.vue';
 import { validarCondicionPago, payloadCondicionPago, type CondicionPago } from '@/helpers/condicionPago';
 import { hoyPeru } from '@/helpers/fecha';
 import { useOpcionesFacturacion } from '@/composables/agencia-viajes/useOpcionesFacturacion';
+import { useAfectacionFactura } from '@/composables/agencia-viajes/useAfectacionFactura';
 import { useToast } from '@/composables/useToast';
-import { etiquetaTipAfeIgv } from '@/helpers/tratamientoTributarioAgencia';
 import { nombrePasajero, pasajeroIdsParaFacturar } from '@/helpers/reservaPasajero';
 import { reservaFacturacionService, type AnticipoDisponiblePreview, type PrepararFacturaResponse } from '@/services/admin/reservaFacturacionService';
-import type { Reserva, ReservaPasajero } from '@/types/agencia-viajes';
+import type { Reserva, ReservaDetalleResponse, ReservaPasajero } from '@/types/agencia-viajes';
 
 const props = defineProps<{
     reserva: Reserva;
@@ -238,7 +229,8 @@ const props = defineProps<{
 
 const emit = defineEmits<{
     cerrar: [];
-    'confirmar-tributario': [itemIds: number[]];
+    // La pantalla toma la reserva actualizada (insignias de afectación).
+    'afectacion-cambiada': [respuesta: ReservaDetalleResponse];
 }>();
 
 const toast = useToast();
@@ -336,6 +328,12 @@ const refrescarPreview = async () => {
 };
 
 const opciones = useOpcionesFacturacion(toRef(props, 'moneda'), refrescarPreview);
+
+// Columna «Afectación» (T-091): guarda el cambio y recalcula los totales sin cerrar el modal.
+const afectacion = useAfectacionFactura(() => props.reserva.id, async (respuesta) => {
+    if (respuesta) emit('afectacion-cambiada', respuesta);
+    await refrescarPreview();
+});
 
 watch(
     () => [form.value.pasajero_ids, form.value.reserva_item_ids_manual, form.value.reserva_item_ids_excluidos],
@@ -450,8 +448,6 @@ const confirmar = async () => {
     }
 };
 
-// La pantalla lo llama tras confirmar el tratamiento tributario de un servicio.
-defineExpose({ refrescarPreview });
 
 onMounted(() => {
     empezar(pasajeroIdsParaFacturar(props.reserva.pasajeros ?? [], props.pasajerosPendientes));

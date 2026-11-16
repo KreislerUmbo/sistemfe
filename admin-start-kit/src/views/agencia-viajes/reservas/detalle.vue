@@ -430,22 +430,16 @@
                                         :title="it.motivo_reasignacion_mayorista ?? ''">
                                         <i class="fas fa-right-left me-1"></i>Mayorista reasignado {{ it.veces_reasignado_mayorista }}x
                                     </span>
-                                    <!-- 2026-09-23 — antes esto solo se descubría al chocar con el
-                                         bloqueo de "mezcla tributaria" al intentar facturar. -->
                                     <!-- Un tour con IGV mezclado muestra el tratamiento de cada línea. -->
                                     <span v-for="badge in badgesDeTarjeta(it)" :key="`igv-${it.id}-${badge.texto}`" class="badge ms-2"
                                         :class="badge.clase" title="Tratamiento tributario de este servicio">
                                         <i class="fas fa-file-invoice-dollar me-1"></i>{{ badge.texto }}
                                     </span>
-                                    <!-- Caso 3 Amazonía (2026-09-24) — un servicio con destino≠nacional
-                                         no se puede facturar hasta que alguien lo confirme a mano
-                                         (ver overrideTratamientoTributario()). -->
-                                    <span v-if="lineasSinConfirmar(it).length > 0" class="badge bg-warning-subtle text-warning-emphasis border ms-2">
-                                        Sin confirmar
-                                    </span>
-                                    <button v-if="reserva.estado === 'activa' && lineasSinConfirmar(it).length > 0" type="button"
-                                        class="btn btn-sm btn-link p-0 ms-2" @click="abrirModalConfirmarTributario(lineasSinConfirmar(it))">
-                                        Confirmar tratamiento tributario
+                                    <!-- T-091: ya no se confirma la Amazonía; se corrige si hace falta
+                                         (un tour, todas sus líneas juntas). Lo facturado no se toca. -->
+                                    <button v-if="reserva.estado === 'activa' && !lineasDeTarjeta(it).some((l) => itemsFacturadosIds.includes(l.id))" type="button"
+                                        class="btn btn-sm btn-link p-0 ms-2" @click="abrirModalCorregirTributario(lineasDeTarjeta(it))">
+                                        Corregir tratamiento
                                     </button>
                                 </div>
                                 <button v-if="reserva.estado === 'activa' && !lineasDeTarjeta(it).some((l) => itemsFacturadosIds.includes(l.id))" type="button"
@@ -872,58 +866,62 @@
             </div>
         </div>
 
-        <!-- Modal confirmar tratamiento tributario — Caso 3 Amazonía
-             (2026-09-24). Un servicio con destino≠nacional no se puede
-             facturar hasta que un humano lo confirme a mano, con motivo
-             obligatorio (auditable) — ver overrideTratamientoTributario()
-             en el backend.
-             z-index 1065 (24-oct-2026, reportado por el usuario): se abre
-             también desde los modales de facturar (1055, el de Bootstrap) y
-             tiene que verse encima de ellos; antes quedaba tapado. -->
-        <div class="modal fade" tabindex="-1" :class="{ show: mostrarModalConfirmarTributario, 'd-block': mostrarModalConfirmarTributario }"
-            style="background:rgba(0,0,0,.5); z-index:1065" v-if="mostrarModalConfirmarTributario">
+        <!-- Modal «Corregir tratamiento» (T-091; antes "Confirmar tratamiento
+             tributario", Caso 3 Amazonía). Ya no hace falta para facturar
+             (D-AGE-035): corrige la afectación de un servicio o de las líneas
+             de un tour, con motivo opcional — ver overrideTratamientoTributario()
+             en el backend. Los servicios sueltos también se corrigen en la
+             columna «Afectación» al facturar.
+             z-index 1065: tiene que verse encima de los modales de facturar. -->
+        <div class="modal fade" tabindex="-1" :class="{ show: mostrarModalCorregirTributario, 'd-block': mostrarModalCorregirTributario }"
+            style="background:rgba(0,0,0,.5); z-index:1065" v-if="mostrarModalCorregirTributario">
             <div class="modal-dialog">
                 <div class="modal-content">
                     <div class="modal-header">
-                        <h6 class="modal-title fw-bold">Confirmar tratamiento tributario</h6>
-                        <button class="btn-close" @click="mostrarModalConfirmarTributario = false"></button>
+                        <h6 class="modal-title fw-bold">Corregir tratamiento</h6>
+                        <button class="btn-close" @click="mostrarModalCorregirTributario = false"></button>
                     </div>
                     <div class="modal-body">
                         <p class="small text-muted">
-                            Un servicio con tratamiento ≠ nacional (ej. Amazonía) no se puede facturar hasta confirmarlo
-                            a mano — esto queda registrado con el motivo, no se puede deshacer sin dejar rastro.
+                            Cambia la afectación con la que se va a facturar. El precio no cambia: solo cómo se desglosa el IGV.
                         </p>
-                        <label class="form-label small fw-semibold text-secondary">Servicios a confirmar</label>
-                        <ul class="mb-3 small ps-3">
-                            <li v-for="it in confirmarTributarioForm.items" :key="it.id">{{ nombreItem(it) }}</li>
-                        </ul>
+                        <label class="form-label small fw-semibold text-secondary">Servicios a corregir</label>
+                        <div class="mb-3 small">
+                            <div v-for="it in corregirTributarioForm.items" :key="it.id" class="form-check">
+                                <input :id="`corregir-trib-${it.id}`" v-model="corregirTributarioForm.seleccionados" type="checkbox" class="form-check-input" :value="it.id"
+                                    :disabled="corregirTributarioForm.items.length === 1">
+                                <label :for="`corregir-trib-${it.id}`" class="form-check-label">
+                                    {{ nombreItem(it) }} <span class="text-muted">— hoy: {{ etiquetaTipAfeIgv(tipAfeIgvItem(it)) }}</span>
+                                </label>
+                            </div>
+                        </div>
                         <div class="row g-2 mb-2">
                             <div class="col-6">
+                                <label class="form-label small fw-semibold text-secondary">Tratamiento IGV</label>
+                                <select class="form-select form-select-sm" v-model="corregirTributarioForm.tip_afe_igv"
+                                    @change="corregirTributarioForm.destino_tributario = corregirTributarioForm.tip_afe_igv === IGV_EXONERADO ? 'amazonia' : 'nacional'">
+                                    <option value="10">Gravado (IGV 18%)</option>
+                                    <option value="20">Exonerado – Amazonía</option>
+                                    <option value="30">Inafecto</option>
+                                </select>
+                            </div>
+                            <div class="col-6">
                                 <label class="form-label small fw-semibold text-secondary">Destino tributario</label>
-                                <select class="form-select form-select-sm" v-model="confirmarTributarioForm.destino_tributario" :disabled="confirmarTributarioForm.tip_afe_igv === IGV_EXONERADO">
+                                <select class="form-select form-select-sm" v-model="corregirTributarioForm.destino_tributario" :disabled="corregirTributarioForm.tip_afe_igv === IGV_EXONERADO">
                                     <option value="amazonia">Amazonía</option>
                                     <option value="nacional">Nacional</option>
                                 </select>
                             </div>
-                            <div class="col-6">
-                                <label class="form-label small fw-semibold text-secondary">Tratamiento IGV</label>
-                                <select class="form-select form-select-sm" v-model="confirmarTributarioForm.tip_afe_igv"
-                                    @change="confirmarTributarioForm.destino_tributario = destinoParaIgvAgencia(confirmarTributarioForm.tip_afe_igv, confirmarTributarioForm.destino_tributario)">
-                                    <option value="20">Exonerado</option>
-                                    <option value="30">Inafecto</option>
-                                    <option value="10">Gravado (IGV 18%)</option>
-                                </select>
-                            </div>
                         </div>
-                        <label class="form-label small fw-semibold text-secondary">Motivo (obligatorio)</label>
-                        <textarea class="form-control form-control-sm" rows="2" v-model="confirmarTributarioForm.motivo"
-                            placeholder="Ej. Servicio confirmado en zona Amazonía por el operador, exonerado según Ley 27037."></textarea>
+                        <label class="form-label small fw-semibold text-secondary">Motivo (opcional)</label>
+                        <textarea class="form-control form-control-sm" rows="2" v-model="corregirTributarioForm.motivo"
+                            placeholder="Ej. El operador presta el servicio en Cusco: va gravado."></textarea>
                     </div>
                     <div class="modal-footer">
-                        <button class="btn btn-outline-secondary btn-sm" @click="mostrarModalConfirmarTributario = false">Cancelar</button>
-                        <button class="btn btn-primary btn-sm" :disabled="confirmandoTributario || !confirmarTributarioForm.motivo"
-                            @click="confirmarTratamientoTributario">
-                            <span v-if="confirmandoTributario" class="spinner-border spinner-border-sm me-1"></span>Confirmar
+                        <button class="btn btn-outline-secondary btn-sm" @click="mostrarModalCorregirTributario = false">Cancelar</button>
+                        <button class="btn btn-primary btn-sm" :disabled="corrigiendoTributario || corregirTributarioForm.seleccionados.length === 0"
+                            @click="corregirTratamientoTributario">
+                            <span v-if="corrigiendoTributario" class="spinner-border spinner-border-sm me-1"></span>Guardar
                         </button>
                     </div>
                 </div>
@@ -932,9 +930,9 @@
 
         <!-- Facturación especial: por grupo de pasajeros o solo servicios, a un
              cliente elegido (components/AgenciaViajes/FacturarReservaEspecialModal.vue). -->
-        <FacturarReservaEspecialModal v-if="mostrarModalFacturarEspecial && reserva" ref="modalFacturarEspecial" :reserva="reserva" :moneda="moneda"
+        <FacturarReservaEspecialModal v-if="mostrarModalFacturarEspecial && reserva" :reserva="reserva" :moneda="moneda"
             :pasajeros-pendientes="pasajerosPendientesFacturar" :recargar="cargarReserva"
-            @cerrar="mostrarModalFacturarEspecial = false" @confirmar-tributario="confirmarTributarioDesdeFacturar" />
+            @cerrar="mostrarModalFacturarEspecial = false" @afectacion-cambiada="aplicarRespuestaDetalle" />
 
         <!-- Registrar cliente rápido (2026-09-24) — mismo componente que ya
              usa Venta Directa (ClientFormQuick: búsqueda de RUC/DNI vía
@@ -958,9 +956,9 @@
 
         <!-- Facturar: toda la reserva pendiente en un comprobante, al cliente
              de la cotización (components/AgenciaViajes/FacturarReservaSimpleModal.vue). -->
-        <FacturarReservaSimpleModal v-if="mostrarModalFacturarSimple && reserva" ref="modalFacturarSimple" :reserva="reserva" :cabecera="cabecera"
+        <FacturarReservaSimpleModal v-if="mostrarModalFacturarSimple && reserva" :reserva="reserva" :cabecera="cabecera"
             :moneda="moneda" :pasajeros-pendientes="pasajerosPendientesFacturar" :items-pendientes-count="itemsPendientesDeFacturarCount"
-            :recargar="cargarReserva" @cerrar="mostrarModalFacturarSimple = false" @confirmar-tributario="confirmarTributarioDesdeFacturar" />
+            :recargar="cargarReserva" @cerrar="mostrarModalFacturarSimple = false" @afectacion-cambiada="aplicarRespuestaDetalle" />
 
         <!-- Facturación externa por tenant + por reserva -->
         <div class="modal fade" tabindex="-1" :class="{ show: mostrarModalFacturacionExterna, 'd-block': mostrarModalFacturacionExterna }"
@@ -1059,7 +1057,7 @@
 </template>
 
 <script setup lang="ts">
-import { destinoParaIgvAgencia, etiquetaTipAfeIgv, IGV_EXONERADO } from '@/helpers/tratamientoTributarioAgencia';
+import { etiquetaTipAfeIgv, IGV_EXONERADO } from '@/helpers/tratamientoTributarioAgencia';
 import { etiquetaTipoPax } from '@/helpers/reservaPasajero';
 import CampoHora from '@/components/CampoHora.vue';
 import AerolineaSelect from '@/components/AgenciaViajes/AerolineaSelect.vue';
@@ -1658,21 +1656,15 @@ const destinoTributarioItem = (it: ReservaItem): string =>
     it.destino_tributario ?? it.proveedor_tarifa?.destino_tributario ?? 'nacional';
 
 const tipAfeIgvItem = (it: ReservaItem): string => {
+    // T-091: una línea corregida a mano gana, también sobre el pasaje aéreo.
+    if (it.fecha_override_tributario && it.tip_afe_igv) {
+        return it.tip_afe_igv;
+    }
     if (it.alternativa_item?.origen_tipo === 'pasaje_aereo' && it.alternativa_item.cotizacion_pasaje_aereo?.tip_afe_igv) {
         return it.alternativa_item.cotizacion_pasaje_aereo.tip_afe_igv;
     }
     return it.tip_afe_igv ?? it.proveedor_tarifa?.tip_afe_igv ?? '10';
 };
-
-// Caso 3 Amazonía (2026-09-24) — mismo criterio que
-// ReservaFacturacionController::detectarMezclaTributaria(): solo
-// 'amazonia' se puede confirmar acá (extranjero sigue bloqueado sin
-// excepción, no tiene sentido ofrecer "confirmar" para ese caso).
-const requiereConfirmacionTributaria = (it: ReservaItem): boolean =>
-    destinoTributarioItem(it) === 'amazonia' && !it.motivo_override_tributario;
-
-const itemsPorIds = (ids: number[]): ReservaItem[] =>
-    (reserva.value?.items ?? []).filter((it) => ids.includes(it.id));
 
 const badgeTratamientoTributario = (it: ReservaItem): { texto: string; clase: string } => {
     const destino = destinoTributarioItem(it);
@@ -1733,7 +1725,6 @@ const itemsPorTarjeta = computed(() => {
         return true;
     });
 });
-const lineasSinConfirmar = (it: ReservaItem) => lineasDeTarjeta(it).filter((l) => requiereConfirmacionTributaria(l));
 // Un distintivo por tratamiento distinto (dos líneas iguales no se repiten).
 const badgesDeTarjeta = (it: ReservaItem) => {
     const vistos = new Set<string>();
@@ -2244,50 +2235,56 @@ const confirmarReasignarHotel = async () => {
     }
 };
 
-// ── Confirmar tratamiento tributario — Caso 3 Amazonía (2026-09-24) ──
-const mostrarModalConfirmarTributario = ref(false);
-const confirmandoTributario = ref(false);
-const confirmarTributarioForm = ref<{
+// ── Corregir tratamiento (T-091; antes "Confirmar", Caso 3 Amazonía) ──
+// Ya no es requisito para facturar: corrige la afectación de un servicio o de
+// algunas líneas de un tour, con motivo opcional.
+const mostrarModalCorregirTributario = ref(false);
+const corrigiendoTributario = ref(false);
+const corregirTributarioForm = ref<{
     items: ReservaItem[];
+    seleccionados: number[];
     destino_tributario: 'amazonia' | 'nacional' | 'extranjero';
     tip_afe_igv: '10' | '20' | '30';
     motivo: string;
-}>({ items: [], destino_tributario: 'amazonia', tip_afe_igv: '20', motivo: '' });
+}>({ items: [], seleccionados: [], destino_tributario: 'nacional', tip_afe_igv: '10', motivo: '' });
 
-const abrirModalConfirmarTributario = (items: ReservaItem[]) => {
-    confirmarTributarioForm.value = {
+const abrirModalCorregirTributario = (items: ReservaItem[]) => {
+    corregirTributarioForm.value = {
         items,
-        destino_tributario: (destinoTributarioItem(items[0]) as 'amazonia' | 'nacional' | 'extranjero') ?? 'amazonia',
-        tip_afe_igv: (tipAfeIgvItem(items[0]) as '10' | '20' | '30') ?? '20',
+        seleccionados: items.map((it) => it.id),
+        destino_tributario: (destinoTributarioItem(items[0]) as 'amazonia' | 'nacional' | 'extranjero') ?? 'nacional',
+        tip_afe_igv: (tipAfeIgvItem(items[0]) as '10' | '20' | '30') ?? '10',
         motivo: '',
     };
-    mostrarModalConfirmarTributario.value = true;
+    mostrarModalCorregirTributario.value = true;
 };
 
-const confirmarTratamientoTributario = async () => {
+// La reserva actualizada que devuelve el backend tras corregir una afectación
+// (aquí o desde la columna «Afectación» de los modales de facturar).
+const aplicarRespuestaDetalle = (res: ReservaDetalleResponse) => {
+    reserva.value = res.reserva;
+    resumen.value = res.resumen;
+    total.value = res.total;
+    cabecera.value = res.cabecera;
+};
+
+const corregirTratamientoTributario = async () => {
     if (!reserva.value) return;
-    confirmandoTributario.value = true;
+    corrigiendoTributario.value = true;
     try {
         const res = await reservaService.overrideTratamientoTributario(reserva.value.id, {
-            reserva_item_ids: confirmarTributarioForm.value.items.map((it) => it.id),
-            destino_tributario: confirmarTributarioForm.value.destino_tributario,
-            tip_afe_igv: confirmarTributarioForm.value.tip_afe_igv,
-            motivo: confirmarTributarioForm.value.motivo,
+            reserva_item_ids: corregirTributarioForm.value.seleccionados,
+            destino_tributario: corregirTributarioForm.value.destino_tributario,
+            tip_afe_igv: corregirTributarioForm.value.tip_afe_igv,
+            motivo: corregirTributarioForm.value.motivo.trim() || null,
         });
-        reserva.value = res.reserva;
-        resumen.value = res.resumen;
-        total.value = res.total;
-        cabecera.value = res.cabecera;
-        mostrarModalConfirmarTributario.value = false;
+        aplicarRespuestaDetalle(res);
+        mostrarModalCorregirTributario.value = false;
         toast.success(res.message);
-        // Si se confirmó desde un modal de facturar, que quite el bloqueo y
-        // muestre el resto sin tener que cerrarlo (24-oct-2026).
-        modalFacturarSimple.value?.refrescarPreview();
-        modalFacturarEspecial.value?.refrescarPreview();
     } catch (error: any) {
-        toast.error(error.response?.data?.message ?? 'No se pudo confirmar el tratamiento tributario');
+        toast.error(error.response?.data?.message ?? 'No se pudo corregir el tratamiento');
     } finally {
-        confirmandoTributario.value = false;
+        corrigiendoTributario.value = false;
     }
 };
 
@@ -2297,14 +2294,6 @@ const confirmarTratamientoTributario = async () => {
 // pantalla solo los abre y les pasa la reserva. ──
 const mostrarModalFacturarSimple = ref(false);
 const mostrarModalFacturarEspecial = ref(false);
-// Para pedirle al modal abierto que recalcule su vista previa (refrescarPreview).
-const modalFacturarSimple = ref<InstanceType<typeof FacturarReservaSimpleModal> | null>(null);
-const modalFacturarEspecial = ref<InstanceType<typeof FacturarReservaEspecialModal> | null>(null);
-
-// Un modal pide confirmar servicios de la Amazonía antes de poder emitir.
-const confirmarTributarioDesdeFacturar = (itemIds: number[]) => {
-    abrirModalConfirmarTributario(itemsPorIds(itemIds));
-};
 
 // Cliente nuevo sin salir del modal de anticipo (2026-09-24): mismo
 // componente que Venta Directa. Si lo escrito parece un RUC (11 dígitos), se

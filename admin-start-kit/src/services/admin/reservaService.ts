@@ -108,16 +108,15 @@ export const reservaService = {
       costo_nuevo: number | null
     }
   },
-  // Caso 3 Amazonía confirmado con el usuario (2026-09-24) — confirma/
-  // corrige a mano el tratamiento tributario real de uno o varios
-  // servicios, con motivo obligatorio (auditable). Requisito para poder
-  // facturar un servicio con destino_tributario='amazonia' — ver
-  // items_sin_confirmar_ids en PrepararFacturaResponse.
+  // Corrige a mano la afectación de uno o varios servicios: la columna
+  // «Afectación» de los modales de facturar y «Corregir tratamiento» del
+  // detalle (T-091). Motivo y destino opcionales: sin destino, el backend lo
+  // deriva del código (20 ⇒ amazonia; si no, nacional).
   async overrideTratamientoTributario(id: number, payload: {
     reserva_item_ids: number[]
-    destino_tributario: 'amazonia' | 'nacional' | 'extranjero'
+    destino_tributario?: 'amazonia' | 'nacional' | 'extranjero'
     tip_afe_igv: '10' | '20' | '30'
-    motivo: string
+    motivo?: string | null
   }) {
     const response = await httpClient.post(`/reservas/${id}/override-tratamiento-tributario`, payload)
     return response.data as ReservaDetalleResponse & { code: number; message: string }

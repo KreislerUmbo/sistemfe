@@ -89,13 +89,12 @@ export type AnticipoDisponiblePreview = {
   moneda: 'PEN' | 'USD'
 }
 
-// Guardia tributario (2026-08-20): si el subconjunto a facturar mezcla
-// ítems con distinto destino_tributario (ej. exonerado Amazonía + gravado
-// nacional), ni el preview ni el POST real dejan facturar en un solo
-// comprobante — riesgo de emitir un comprobante SUNAT con la exoneración
-// mal calculada. Se evalúa por Sale (subconjunto elegido), no por reserva
-// completa — dos pasajeros distintos pueden terminar en Sales con
-// distinto destino_tributario cada uno.
+// Guardia tributario: desde T-091 (D-AGE-035) gravado, exonerado e inafecto
+// van en un mismo comprobante; solo exportación/extranjero bloquea
+// (bloqueado_tributario). La afectación de cada fila se ve y se corrige en la
+// columna «Afectación» (AfectacionLineasFactura.vue, D-AGE-037).
+export type AfectacionFila = '10' | '20' | '30' | 'mixto'
+
 export type DetalleComprobantePreview = {
   reserva_item_ids: number[]
   nombre: string
@@ -108,6 +107,12 @@ export type DetalleComprobantePreview = {
   pasajeros_total: number | null
   // Desmarcado por el vendedor: se muestra (con su monto) pero no suma.
   excluido?: boolean
+  // T-091: afectación de la fila ('mixto' = tour con líneas distintas), si se
+  // puede cambiar ahí mismo (no tour, no excluida, nada facturado) y si ya
+  // se cambió a mano (fecha_override_tributario).
+  tip_afe_igv: AfectacionFila
+  editable: boolean
+  cambiado: boolean
 }
 
 export type PrepararFacturaResponse = {
@@ -122,11 +127,6 @@ export type PrepararFacturaResponse = {
   // era true), para que el vendedor vea el tratamiento de lo que seleccionó
   // sin tener que chocar con un bloqueo primero.
   items_por_destino_tributario?: Array<{ reserva_item_id: number; nombre: string; destino_tributario: string; tip_afe_igv: string }>
-  // 2026-09-24 — Caso 3 Amazonía: servicios homogéneos en Amazonía que
-  // TODAVÍA no fueron confirmados uno por uno (ver reservaService.
-  // overrideTratamientoTributario()). Solo viene poblado en ese motivo
-  // específico de bloqueo, nunca junto con mezcla o extranjero.
-  items_sin_confirmar_ids?: number[]
   // Facturar en otra moneda (2026-09-24) — moneda_cotizacion_original es
   // siempre la de la reserva; moneda_facturacion es la que se está
   // previsualizando (default = la misma, si no se pidió otra en el
