@@ -32,8 +32,12 @@
 | P5 | Grilla de facturar con casilla de afectación | **Ya** (con el bloqueo de mezcla todavía) |
 | P6 | El precio no cambia, cambia el desglose | **Ya** (es lo que hace hoy; C6 lo confirma) |
 | P7 | Comprobante mixto y sin confirmación por ítem | **Ya** (07-nov: C4 sí se mezcla; C5 se quita la confirmación). Va antes de T-048 |
-| P8 | Series por afectación × moneda | Espera **C11, C12** y la pregunta al usuario U1 |
+| P8 | ~~Series por afectación × moneda~~ | **Descartada el 16-nov (D-AGE-036):** series solo por moneda, el mixto en la serie normal |
 | P9 | Expediente de sustento por reserva | Espera **C15** |
+
+**16-nov:** D-AGE-037: sin configuración nueva; la afectación de cada línea (Gravado / Exonerado –
+Amazonía / Inafecto) se ve y se corrige al facturar, en la misma tarea que P7 (T-091). D-AGE-036
+descarta P8.
 
 **C1 en revisión (07-nov):** el contador respondió que decide **quién opera** el servicio (§2.7),
 pero la norma y los informes de SUNAT revisados apuntan a lo contrario cuando la agencia
@@ -192,7 +196,7 @@ Fuentes: [Informe 056-2003](https://www.sunat.gob.pe/legislacion/oficios/2003/of
 | P5 | **Grilla de facturar con columna "Afectación"** | Casilla por línea, prellenada y editable; la fila cambiada muestra "✎ cambiado" y se guarda en `reserva_items` con usuario y fecha. Resumen a la vista: op. gravadas / exoneradas / IGV / total. "Serie a emitir" en vivo. Lo ya facturado queda bloqueado. Un solo componente para Facturar simple, Facturación especial y Venta directa. |
 | P6 | **Precio** | Sigue siendo final, con todo incluido. Cambiar la afectación cambia el **desglose**, no el total ("El IGV sale del precio; el cliente sigue pagando S/ X"). |
 | P7 | **Comprobante mixto por línea** | Se quita el bloqueo de mezcla (y la excepción de `carga_tour`) y la **confirmación obligatoria de la Amazonía** (el modal y "Sin confirmar"); su función pasa a la casilla de P5. Queda solo el bloqueo de exportación. |
-| P8 | **Series por afectación × moneda** | Exonerado / Gravado / **Mixto** × PEN / USD, en facturas **y boletas** (12 por sucursal), elegidas solas según las líneas. Opcional por empresa; al activarlo se crean todas juntas. Migración nueva para el índice único; `resolverSerie()` recibe la afectación desde `SaleController::store()`, `AdvanceController`, facturación de reservas y Venta directa. NC/ND según C12. |
+| P8 | ~~**Series por afectación × moneda**~~ (descartada, D-AGE-036) | Exonerado / Gravado / **Mixto** × PEN / USD, en facturas **y boletas** (12 por sucursal), elegidas solas según las líneas. Opcional por empresa; al activarlo se crean todas juntas. Migración nueva para el índice único; `resolverSerie()` recibe la afectación desde `SaleController::store()`, `AdvanceController`, facturación de reservas y Venta directa. NC/ND según C12. |
 | P9 | **Expediente de sustento por reserva** (fila F2, opcional) | Un PDF por reserva con itinerario, pasajeros y órdenes de servicio, para respaldar ante SUNAT que el servicio se prestó en la zona. Solo si el contador lo pide (C15). |
 
 Ejemplo de series: F001/B001 exonerado PEN · F002/B002 gravado PEN · F003/B003 exonerado USD ·
@@ -319,9 +323,23 @@ exonerada o inafecta). Lo que ya deja preparado esta propuesta: el interruptor d
 (P2), el comprobante mixto (P7) y la afectación por línea (P5). Lo que faltaría: partir un pasaje en
 varias líneas (tarifa + asiento / TUA) y los valores por defecto de una empresa no calificada.
 
-**Pendiente del usuario:**
-- **U1.** ¿Las series por afectación (P8) son **solo para Agencia** o también para las **ventas de
-  retail** de cualquier giro? (El pedido del contador vino por la agencia.)
+**16-nov-2026 — series** (decisión del usuario, D-AGE-036): se sigue con las series como están,
+separadas solo por moneda. No hay series de gravado, exonerado ni mixto, ni en facturas ni en
+boletas; el comprobante mixto va en la serie normal. El contador separa por columnas del Registro
+de Ventas. P8 se descarta; U1 ya no aplica.
+
+**16-nov-2026 — criterio sin acuerdo de los contadores** (D-AGE-037): otra opinión que transmitió
+el usuario: *"No me sentiría cómodo afirmando, solo con la información actual, que un paquete
+ejecutado íntegramente en Cusco pueda revenderse exonerado únicamente porque la agencia vendedora
+está en Tarapoto."* Primero se propuso un segundo valor por defecto (fuera de la zona = Gravado);
+el usuario lo descartó: *más configuración confunde y alarga el camino*. Queda **sin configuración
+nueva**: el valor por defecto de la agencia y la afectación de cada tarifa siguen como hoy, y la
+grilla de facturar muestra cada línea con tres opciones, Gravado, Exonerado – Amazonía e
+**Inafecto** (recordado por el usuario), editable sin motivo. Quien factura cambia a Gravado lo
+que corresponda. P5 (versión simple) va en la misma tarea que P7 (T-091), porque la columna
+reemplaza a la confirmación que P7 quita.
+
+~~**U1.**~~ Ya no aplica (D-AGE-036).
 
 ### 2.8 Preguntas para el contador (ordenadas por importancia)
 
@@ -353,6 +371,9 @@ se apoya.
   ¿aplica la **prorrata** del crédito fiscal (art. 23 de la Ley del IGV) para el IGV de sus compras
   y gastos? Cambia el costo real de cada venta (va con C14).
 - **C21.** Tour propio que sale de la Amazonía: confirmar que todo lo de adentro (también lo de terceros) va gravado (es la C1c, que el usuario ya respondió; se repite para los otros contadores).
+- **C23** (16-nov). ¿Qué conceptos que cobra la agencia van **inafectos**: TUA, entradas a áreas
+  naturales protegidas, boleto de Machu Picchu, penalidades por cancelación? ¿Van como línea del
+  comprobante o como reembolso fuera de él?
 - **C22.** Si una empresa **fuera de la Amazonía** usara el sistema: en un pasaje aéreo, ¿la
   **TUA** va exonerada o inafecta, y la tarifa y el asiento gravados?
 
@@ -392,11 +413,8 @@ se apoya.
   LA AMAZONÍA REGIÓN SELVA PARA SER CONSUMIDOS EN LA MISMA") o el de hoy ("OPERACIÓN EXONERADA DEL
   IGV — LEY N° 27037")?
 
-**C. Series**
-- **C11.** Un comprobante mixto, ¿va en una **serie propia** (F005/F006) o en la gravada?
-  *Recomendado: propia.*
-- **C12.** Las **notas de crédito y débito**, ¿también llevan series separadas por afectación y
-  moneda?
+**C. Series** — ~~C11 y C12~~ **decididas por el usuario el 16-nov (D-AGE-036):** series solo por
+moneda; el mixto y las notas van en la serie normal. Se le comunica al contador, no se pregunta.
 
 **D. Otros**
 - **C13.** ¿Las facturas a empresas llevan **detracción** (comisión mercantil, 10 %, desde
@@ -432,17 +450,23 @@ se apoya.
 
 ### 2.10 Orden sugerido
 
+> 16-nov (D-AGE-037): P5 (versión simple) va junto con P7 en T-091, sin configuración nueva; el
+> segundo valor por defecto de P2 queda descartado. P8 descartada (D-AGE-036).
+
 1. **Ya, sin el contador:** P1 → P2 + P3 + P4 simple → P5 + P6. (Y H19 fuera de T-029.)
 2. **P7** (C4 y C5 ya respondidas) → T-048 (ya reescrita).
-3. **Con C11, C12 y U1:** P8.
+3. ~~**Con C11, C12 y U1:** P8.~~ Descartada (D-AGE-036).
 4. **Con C15:** P9.
 5. **Después:** distrito o zona en P4, exportación, gratuitos, exonerado no Amazonía, y **empresa
    fuera de la Amazonía** (pasaje partido en gravado + TUA, valores por defecto gravados; §2.7).
 
 ## 3. Resultado
 
-- **Hoja para los contadores:** la parte A0 (C16-C22, la duda de fondo con su sustento legal) arriba, y luego C1-C15 (sin C5, que decidió el usuario); actualizada el 07-nov-2026,
+- **Hoja para los contadores:** la parte A0 (C16-C22, la duda de fondo con su sustento legal) arriba, y luego C1-C15 (sin C5, que decidió el usuario), C23 (inafectos) y la parte C ya como decisión (D-AGE-036); actualizada el 16-nov-2026,
   https://claude.ai/artifact/7VXN8CKdjoPesnxp6BDRSP. Sus respuestas se pasan a §2.7.
 - **Decisiones:** D-AGE-035 (07-nov-2026): comprobante mixto y sin confirmar (firmes); "quién opera" (punto 1) en revisión,
   mientras tanto criterio conservador (§2.4b); reemplaza el punto 2 de D-AGE-034.
-- **Tareas:** T-091 (P7, 07-nov-2026); T-048 reescrita sobre ella.
+  D-AGE-036 (16-nov-2026): series solo por moneda, P8 descartada. D-AGE-037 (16-nov-2026): sin
+  configuración nueva, columna «Afectación» al facturar con tres afectaciones.
+- **Tareas:** T-091 (P5 simple + P7, reescrita el 16-nov-2026); T-048
+  reescrita sobre ella.
