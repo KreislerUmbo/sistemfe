@@ -279,16 +279,19 @@ class VentaDirectaLineasTest extends TestCase
         $this->assertSame($cotizaciones, Cotizacion::count());
     }
 
-    // CA7 — Amazonía + gravado: no se puede facturar junto, con el MISMO
-    // motivo que daría facturar esa reserva. Solo Amazonía: se podrá, tras confirmar.
-    public function test_ca7_amazonia_mas_gravado_no_es_facturable_con_el_mismo_motivo_que_la_facturacion(): void
+    // T-091 / CA9 (antes: test_ca7_amazonia_mas_gravado_no_es_facturable_con_el_mismo_motivo_que_la_facturacion).
+    // Amazonía + gravado se factura junto (D-AGE-035, C4), igual que lo dice la
+    // facturación de esa reserva, y sin pedir confirmar la Amazonía (C5).
+    public function test_ca9_amazonia_mas_gravado_es_facturable_igual_que_en_la_facturacion(): void
     {
         $amazonia = $this->crearTarifa(['tip_afe_igv' => '20', 'destino_tributario' => 'amazonia'], 'Tour Amazonía');
         $lineas = [$this->lineaTarifa($amazonia), $this->lineaTarifa($this->crearTarifa(), 2)];
 
         $previa = $this->vistaPrevia($lineas);
 
-        $this->assertFalse($previa['facturable']['ok']);
+        $this->assertTrue($previa['facturable']['ok']);
+        $this->assertNull($previa['facturable']['motivo']);
+        $this->assertArrayNotHasKey('requiere_confirmar_amazonia', $previa['facturable']);
         $this->assertSame('amazonia', $previa['lineas'][0]['destino_tributario']);
         $this->assertSame('20', $previa['lineas'][0]['tip_afe_igv']);
 
@@ -302,11 +305,11 @@ class VentaDirectaLineasTest extends TestCase
                 'reserva_item_ids_manual' => ReservaItem::where('reserva_id', $creada['reserva']['id'])->pluck('id')->all(),
             ]), (string) $creada['reserva']['id'])->getData(true);
 
-        $this->assertTrue($factura['bloqueado_tributario'] ?? false, json_encode($factura));
-        $this->assertSame($factura['motivo'], $previa['facturable']['motivo']);
+        $this->assertFalse($factura['bloqueado_tributario'] ?? true, json_encode($factura));
     }
 
-    public function test_ca7_solo_amazonia_es_facturable_pero_pide_confirmar(): void
+    // T-091 (antes: test_ca7_solo_amazonia_es_facturable_pero_pide_confirmar).
+    public function test_solo_amazonia_es_facturable_sin_confirmar(): void
     {
         $amazonia = $this->crearTarifa(['tip_afe_igv' => '20', 'destino_tributario' => 'amazonia'], 'Tour Amazonía');
 
@@ -314,15 +317,27 @@ class VentaDirectaLineasTest extends TestCase
 
         $this->assertTrue($previa['facturable']['ok']);
         $this->assertNull($previa['facturable']['motivo']);
-        $this->assertTrue($previa['facturable']['requiere_confirmar_amazonia']);
+        $this->assertArrayNotHasKey('requiere_confirmar_amazonia', $previa['facturable']);
     }
 
-    public function test_solo_gravado_es_facturable_y_no_pide_confirmar(): void
+    // T-091 (antes: test_solo_gravado_es_facturable_y_no_pide_confirmar).
+    public function test_solo_gravado_es_facturable(): void
     {
         $previa = $this->vistaPrevia([$this->lineaTarifa($this->crearTarifa()), $this->lineaLibre(2)]);
 
         $this->assertTrue($previa['facturable']['ok']);
-        $this->assertFalse($previa['facturable']['requiere_confirmar_amazonia']);
+        $this->assertArrayNotHasKey('requiere_confirmar_amazonia', $previa['facturable']);
+    }
+
+    // T-091: exportación sigue sin poder facturarse, con el mensaje de la facturación.
+    public function test_exportacion_no_es_facturable(): void
+    {
+        $extranjero = $this->crearTarifa(['tip_afe_igv' => '10', 'destino_tributario' => 'extranjero'], 'Tour exportación');
+
+        $previa = $this->vistaPrevia([$this->lineaTarifa($extranjero), $this->lineaTarifa($this->crearTarifa(), 2)]);
+
+        $this->assertFalse($previa['facturable']['ok']);
+        $this->assertSame(\App\Services\AgenciaViajes\CriterioTributarioService::MENSAJE_TRATAMIENTO_TRIBUTARIO_EXTRANJERO, $previa['facturable']['motivo']);
     }
 
     public function test_destino_atractivo_pone_su_nombre_como_destino_de_la_cotizacion(): void

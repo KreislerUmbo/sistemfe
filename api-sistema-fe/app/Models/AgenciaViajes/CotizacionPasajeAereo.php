@@ -9,10 +9,10 @@ use Illuminate\Database\Eloquent\Model;
 // CentralConnection). aerolinea es texto libre a propósito, sin FK (ver
 // comentario de la migración).
 //
-// tip_afe_igv aplica SOLO sobre fee_agencia_monto — tarifa_base_* + cargos
-// son pass-through del costo de terceros (aerolínea/aeropuerto), no
-// ingreso propio de la agencia. Fácil de malinterpretar como aplicando al
-// costo_total/precio_venta_total completo: NO es así.
+// tip_afe_igv es la afectación del pasaje: la factura la aplica al precio
+// completo (tarifa + cargos + fee), porque la agencia revende el boleto
+// completo (D-AGE-035). Una corrección a mano en el reserva_item
+// (fecha_override_tributario) gana sobre este valor al facturar (T-091).
 class CotizacionPasajeAereo extends Model
 {
     protected $table = 'cotizacion_pasaje_aereo';

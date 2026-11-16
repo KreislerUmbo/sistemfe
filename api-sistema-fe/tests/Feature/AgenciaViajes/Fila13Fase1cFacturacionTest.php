@@ -98,7 +98,6 @@ class Fila13Fase1cFacturacionTest extends TestCase
         $alternativa = $this->crearAlternativa([['adulto', 30], ['adulto', 28]]);
         $this->cargar($alternativa, $this->tourMezclado());
         $reserva = $this->aceptar($alternativa);
-        $this->confirmarAmazonia($reserva);
 
         $preview = $this->preview($reserva);
 
@@ -121,7 +120,10 @@ class Fila13Fase1cFacturacionTest extends TestCase
         $this->assertSame('amazonia', $venta->destino);
     }
 
-    public function test_tour_mezclado_sigue_exigiendo_confirmar_la_linea_amazonia(): void
+    // T-091 (antes: test_tour_mezclado_sigue_exigiendo_confirmar_la_linea_amazonia).
+    // La Amazonía ya no se confirma (D-AGE-035, C5). El tour es una sola fila
+    // «Mixto», de solo lectura en la columna «Afectación» (CA4).
+    public function test_tour_mezclado_se_factura_sin_confirmar_y_su_fila_es_mixta(): void
     {
         $alternativa = $this->crearAlternativa([['adulto', 30]]);
         $this->cargar($alternativa, $this->tourMezclado());
@@ -129,16 +131,16 @@ class Fila13Fase1cFacturacionTest extends TestCase
 
         $preview = $this->preview($reserva);
 
-        $this->assertTrue($preview['bloqueado_tributario']);
-        $this->assertStringContainsString('Amazonía', $preview['motivo']);
-        // F1: aunque esté bloqueado, el detalle muestra el tour (una fila con
-        // sus dos líneas de IGV) y su monto.
+        $this->assertFalse($preview['bloqueado_tributario'], json_encode($preview));
+        $this->assertArrayNotHasKey('items_sin_confirmar_ids', $preview);
         $this->assertCount(1, $preview['detalle']);
         $this->assertEqualsWithDelta(100.0, $preview['detalle'][0]['monto'], 0.001);
         $this->assertCount(2, $preview['detalle'][0]['reserva_item_ids']);
-        // Solo la línea Amazonía pide confirmación; la gravada nacional no.
-        $amazonia = ReservaItem::where('reserva_id', $reserva->id)->where('destino_tributario', 'amazonia')->pluck('id')->all();
-        $this->assertSame($amazonia, $preview['items_sin_confirmar_ids']);
+        $this->assertSame('mixto', $preview['detalle'][0]['tip_afe_igv']);
+        $this->assertFalse($preview['detalle'][0]['editable']);
+        $this->assertFalse($preview['detalle'][0]['cambiado']);
+
+        $this->assertSame(200, $this->facturar($reserva)->getStatusCode());
     }
 
     public function test_tour_mezclado_junto_a_un_servicio_suelto_nacional_se_permite(): void
@@ -147,7 +149,6 @@ class Fila13Fase1cFacturacionTest extends TestCase
         $this->cargar($alternativa, $this->tourMezclado());
         $this->servicioSuelto($alternativa, 'nacional', '10', 50);
         $reserva = $this->aceptar($alternativa);
-        $this->confirmarAmazonia($reserva);
 
         $preview = $this->preview($reserva);
 
@@ -155,45 +156,46 @@ class Fila13Fase1cFacturacionTest extends TestCase
         $this->assertEqualsWithDelta(150.0, (float) $preview['total'], 0.001);
     }
 
-    public function test_servicios_sueltos_de_distinto_destino_siguen_bloqueados(): void
+    // T-091 (antes: …_siguen_bloqueados). C4: gravado y exonerado sueltos van
+    // en un comprobante, cada línea con su afectación.
+    public function test_servicios_sueltos_de_distinto_destino_van_en_un_comprobante(): void
     {
         $alternativa = $this->crearAlternativa([['adulto', 30]]);
         $this->servicioSuelto($alternativa, 'amazonia', '20', 50);
         $this->servicioSuelto($alternativa, 'nacional', '10', 50);
         $reserva = $this->aceptar($alternativa);
-        $this->confirmarAmazonia($reserva);
 
-        $preview = $this->preview($reserva);
-
-        $this->assertTrue($preview['bloqueado_tributario']);
-        $this->assertStringContainsString('Solo un mismo tour', $preview['motivo']);
-        $this->assertSame(422, $this->facturar($reserva)->getStatusCode());
+        $venta = $this->assertFacturaEnUnComprobante($reserva, 100.0);
+        $this->assertEqualsWithDelta(50.0, (float) $venta->mto_oper_exoneradas, 0.001);
+        $this->assertEqualsWithDelta(42.37, (float) $venta->mto_oper_gravadas, 0.001);
+        $this->assertEqualsWithDelta(7.63, (float) $venta->igv, 0.001);
     }
 
-    public function test_tour_mezclado_con_sueltos_de_los_dos_destinos_sigue_bloqueado(): void
+    // T-091 (antes: …_sigue_bloqueado).
+    public function test_tour_mezclado_con_sueltos_de_los_dos_destinos_va_en_un_comprobante(): void
     {
         $alternativa = $this->crearAlternativa([['adulto', 30]]);
         $this->cargar($alternativa, $this->tourMezclado());
         $this->servicioSuelto($alternativa, 'amazonia', '20', 50);
         $this->servicioSuelto($alternativa, 'nacional', '10', 50);
         $reserva = $this->aceptar($alternativa);
-        $this->confirmarAmazonia($reserva);
 
-        $this->assertBloqueadoPorMezcla($reserva);
+        $this->assertFacturaEnUnComprobante($reserva, 200.0);
     }
 
-    public function test_dos_cargas_mezcladas_en_un_comprobante_siguen_bloqueadas(): void
+    // T-091 (antes: …_siguen_bloqueadas).
+    public function test_dos_cargas_mezcladas_van_en_un_comprobante(): void
     {
         $alternativa = $this->crearAlternativa([['adulto', 30]]);
         $this->cargar($alternativa, $this->tourMezclado());
         $this->cargar($alternativa, $this->tourMezclado('Cascadas de Ahuashiyacu'), 2);
         $reserva = $this->aceptar($alternativa);
-        $this->confirmarAmazonia($reserva);
 
-        $this->assertBloqueadoPorMezcla($reserva);
+        $this->assertFacturaEnUnComprobante($reserva, 200.0);
     }
 
-    public function test_combo_de_un_tour_exonerado_y_otro_gravado_no_cuenta_como_una_carga(): void
+    // T-091 (antes: …_no_cuenta_como_una_carga, que esperaba el bloqueo).
+    public function test_combo_de_un_tour_exonerado_y_otro_gravado_va_en_un_comprobante(): void
     {
         // D5: cada tour del combo es su propia carga_tour, aunque compartan carga_combo.
         $exonerado = $this->crearTour(['nombre' => 'Laguna Azul', 'tip_afe_igv' => '20', 'destino_tributario' => 'amazonia']);
@@ -201,12 +203,13 @@ class Fila13Fase1cFacturacionTest extends TestCase
         $alternativa = $this->crearAlternativa([['adulto', 30]]);
         $this->cargar($alternativa, $this->crearCombo([$exonerado, $gravado]));
         $reserva = $this->aceptar($alternativa);
-        $this->confirmarAmazonia($reserva);
 
         $items = ReservaItem::where('reserva_id', $reserva->id)->get();
         $this->assertCount(1, $items->pluck('carga_combo')->unique());
         $this->assertCount(2, $items->pluck('carga_tour')->unique());
-        $this->assertBloqueadoPorMezcla($reserva);
+        $venta = $this->assertFacturaEnUnComprobante($reserva);
+        $this->assertGreaterThan(0, (float) $venta->mto_oper_exoneradas);
+        $this->assertGreaterThan(0, (float) $venta->mto_oper_gravadas);
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -326,7 +329,6 @@ class Fila13Fase1cFacturacionTest extends TestCase
         $alternativa = $this->crearAlternativa([['adulto', 40], ['adulto', 38]]);
         $this->cargar($alternativa, $this->tourMezclado());
         $reserva = $this->aceptar($alternativa);
-        $this->confirmarAmazonia($reserva);
         [$a] = $this->pasajeros($reserva);
 
         $venta = $this->facturarOk($reserva, [$a]);
@@ -345,7 +347,6 @@ class Fila13Fase1cFacturacionTest extends TestCase
         $this->cargar($alternativa, $this->tourMezclado());
         $this->fijarVendidoDeLasLineas($alternativa, ['20' => 203.23, '10' => 96.77]);
         $reserva = $this->aceptar($alternativa);
-        $this->confirmarAmazonia($reserva);
         [$a, $b] = $this->pasajeros($reserva);
 
         $previewA = $this->preview($reserva, [$a]);
@@ -399,7 +400,6 @@ class Fila13Fase1cFacturacionTest extends TestCase
         $alternativa = $this->crearAlternativa([['adulto', 40]]);
         $this->cargar($alternativa, $this->tourMezclado());
         $reserva = $this->aceptar($alternativa);
-        $this->confirmarAmazonia($reserva);
         $lineas = ReservaItem::where('reserva_id', $reserva->id)->whereNotNull('carga_tour')->pluck('id');
         $this->assertCount(2, $lineas);
 
@@ -925,15 +925,6 @@ class Fila13Fase1cFacturacionTest extends TestCase
         return $reserva;
     }
 
-    // Lo que hace el vendedor en la reserva antes de facturar un servicio de la
-    // Amazonía (ReservaController::overrideTratamientoTributario()).
-    private function confirmarAmazonia(Reserva $reserva): void
-    {
-        ReservaItem::where('reserva_id', $reserva->id)
-            ->where('destino_tributario', 'amazonia')
-            ->update(['motivo_override_tributario' => 'Confirmado en test: servicio prestado en la Amazonía']);
-    }
-
     // Sin $pasajeroIds: todos. Las líneas de tour entran solas con la parte de
     // esos pasajeros; los servicios sueltos sin pasajero asignado se agregan
     // a mano, como en "Facturar".
@@ -959,13 +950,21 @@ class Fila13Fase1cFacturacionTest extends TestCase
         return $respuesta->getData(true);
     }
 
-    // Bloqueado por la mezcla de destinos, no por otra regla (por ejemplo, un
-    // ítem Amazonía sin confirmar).
-    private function assertBloqueadoPorMezcla(Reserva $reserva): void
+    // T-091: una mezcla de afectaciones sale en UN comprobante, con la leyenda
+    // de la Amazonía (destino 'amazonia') porque hay monto exonerado.
+    private function assertFacturaEnUnComprobante(Reserva $reserva, ?float $total = null): Sale
     {
         $preview = $this->preview($reserva);
-        $this->assertTrue($preview['bloqueado_tributario']);
-        $this->assertStringContainsString('Solo un mismo tour', $preview['motivo']);
+        $this->assertFalse($preview['bloqueado_tributario'], json_encode($preview));
+
+        $venta = $this->facturarOk($reserva);
+        $this->assertSame(1, ReservaVenta::where('reserva_id', $reserva->id)->count());
+        $this->assertSame('amazonia', $venta->destino);
+        if ($total !== null) {
+            $this->assertEqualsWithDelta($total, (float) $venta->total, 0.001);
+        }
+
+        return $venta;
     }
 
     private function facturarOk(Reserva $reserva, ?array $pasajeroIds = null, array $extra = []): Sale

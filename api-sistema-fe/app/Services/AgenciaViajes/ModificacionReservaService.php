@@ -359,7 +359,9 @@ class ModificacionReservaService
         if ($reservaItem->opcion_mayorista_original_id === null) {
             $cambios['opcion_mayorista_id'] = $nuevo->opcion_mayorista_id;
         }
-        if ($reservaItem->motivo_override_tributario === null) {
+        // «Corregido a mano» = fecha_override_tributario no nula: desde T-091 el
+        // motivo es opcional (columna «Afectación» al facturar).
+        if ($reservaItem->fecha_override_tributario === null) {
             $cambios['tip_afe_igv'] = $nuevo->tip_afe_igv;
             $cambios['destino_tributario'] = $nuevo->destino_tributario;
         }
