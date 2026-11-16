@@ -1040,9 +1040,10 @@ export type ReservaItem = {
   // esa es la fuente de verdad, esto solo la refleja para el badge.
   tip_afe_igv?: TipAfeIgv | null;
   destino_tributario?: DestinoTributario | null;
-  // Caso 3 Amazonía (2026-09-24) — confirmación explícita por ítem, ver
-  // reservaService.overrideTratamientoTributario(). No nulo = un humano ya
-  // revisó y confirmó este tratamiento tributario a mano.
+  // Corrección a mano de la afectación (columna «Afectación» al facturar o
+  // «Corregir tratamiento», ver reservaService.overrideTratamientoTributario()).
+  // T-091: el motivo es opcional; «corregido a mano» = fecha_override_tributario
+  // no nula. Ya no hace falta confirmar la Amazonía para facturar (D-AGE-035).
   motivo_override_tributario?: string | null;
   fecha_override_tributario?: string | null;
 };

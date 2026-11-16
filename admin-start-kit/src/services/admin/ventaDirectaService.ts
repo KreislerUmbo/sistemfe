@@ -88,8 +88,9 @@ export type VistaPreviaVentaDirecta = {
   total: number | null
   fecha_viaje_hasta: string | null
   lineas: VistaPreviaLinea[]
-  // Mismo criterio que la facturación de reservas (backend).
-  facturable: { ok: boolean; motivo: string | null; requiere_confirmar_amazonia: boolean }
+  // Mismo criterio que la facturación de reservas (backend): desde T-091
+  // solo exportación la deja en false.
+  facturable: { ok: boolean; motivo: string | null }
 }
 
 export const ventaDirectaService = {

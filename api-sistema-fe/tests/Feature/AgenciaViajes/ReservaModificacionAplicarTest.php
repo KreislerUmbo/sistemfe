@@ -655,7 +655,9 @@ class ReservaModificacionAplicarTest extends TestCase
         $traslado->update([
             'fecha' => '2026-11-12', 'fecha_origen' => 'manual',
             'proveedor_tarifa_original_id' => $traslado->proveedor_tarifa_id, 'proveedor_tarifa_id' => $otraTarifa->id,
-            'tip_afe_igv' => '20', 'destino_tributario' => 'amazonia', 'motivo_override_tributario' => 'Confirmado con el cliente',
+            'tip_afe_igv' => '20', 'destino_tributario' => 'amazonia',
+            // T-091 (CA6): cambiada desde la columna «Afectación», sin motivo.
+            'fecha_override_tributario' => now(), 'motivo_override_tributario' => null,
         ]);
         // Check-in de Carla en el taller; en la versión nueva se suma el pasajero nuevo al taller.
         $taller = $this->ri($reserva, 'solo_carla');

@@ -45,12 +45,12 @@ class ReservaItem extends Model
         'salida_operativa_id',
         'tip_afe_igv',
         'destino_tributario',
-        // Confirmación explícita por ítem antes de poder facturar un
-        // tratamiento tributario ≠ nacional (Caso 3 Amazonía, ver
-        // ReservaController::overrideTratamientoTributario() y
-        // ReservaFacturacionController::detectarMezclaTributaria()) —
-        // nunca se confía en destino_tributario/tip_afe_igv tal como
-        // llegó copiado de la tarifa sin que un humano lo revise.
+        // Corrección a mano de la afectación de la línea (columna «Afectación»
+        // al facturar o «Corregir tratamiento», ver ReservaController::
+        // overrideTratamientoTributario()). El motivo es opcional (T-091);
+        // «corregido a mano» = fecha_override_tributario no nula, y entonces
+        // una modificación de la reserva no la pisa. Ya no hace falta
+        // confirmar la Amazonía para facturar (D-AGE-035).
         'motivo_override_tributario',
         'fecha_override_tributario',
         'opcion_mayorista_id',

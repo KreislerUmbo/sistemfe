@@ -12,7 +12,9 @@
                 <thead class="table-light">
                     <tr>
                         <th v-if="seleccionable" style="width:32px"></th>
-                        <th :class="{ 'ps-2': !seleccionable }">Servicio</th><th>Fecha</th><th class="text-end pe-2">Monto</th>
+                        <th :class="{ 'ps-2': !seleccionable }">Servicio</th><th>Fecha</th>
+                        <th v-if="conAfectacion">Afectación</th>
+                        <th class="text-end pe-2">Monto</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -31,20 +33,24 @@
                             </div>
                         </td>
                         <td class="text-nowrap">{{ fila.fecha ? formatFecha(fila.fecha) : '—' }}</td>
+                        <td v-if="conAfectacion">
+                            <AfectacionLineasFactura :key="`${fila.reserva_item_ids.join('-')}-${versionAfectacion}`" :fila="fila"
+                                :deshabilitado="guardandoAfectacion" @cambiar="(tip) => emit('cambiar-afectacion', fila.reserva_item_ids, tip)" />
+                        </td>
                         <td class="text-end pe-2 text-nowrap" :class="{ 'text-decoration-line-through': fila.excluido }">{{ dinero(fila.monto) }}</td>
                     </tr>
                 </tbody>
                 <tfoot>
                     <tr class="fw-semibold">
-                        <td class="ps-2" :colspan="seleccionable ? 3 : 2">Total</td>
+                        <td class="ps-2" :colspan="columnasAntesDelMonto">Total</td>
                         <td class="text-end pe-2 text-nowrap">{{ dinero(totalDetalle) }}</td>
                     </tr>
                     <tr v-if="anticipoAplicado > 0">
-                        <td class="ps-2" :colspan="seleccionable ? 3 : 2">Anticipos que se descuentan</td>
+                        <td class="ps-2" :colspan="columnasAntesDelMonto">Anticipos que se descuentan</td>
                         <td class="text-end pe-2 text-nowrap">− {{ dinero(anticipoAplicado) }}</td>
                     </tr>
                     <tr v-if="anticipoAplicado > 0" class="fw-semibold">
-                        <td class="ps-2" :colspan="seleccionable ? 3 : 2">Saldo a cobrar</td>
+                        <td class="ps-2" :colspan="columnasAntesDelMonto">Saldo a cobrar</td>
                         <td class="text-end pe-2 text-nowrap">{{ dinero(Math.max(0, totalDetalle - anticipoAplicado)) }}</td>
                     </tr>
                 </tfoot>
@@ -57,6 +63,17 @@
             <span v-for="(g, k) in preview.grupos_propuestos" :key="k" class="me-2">
                 <strong>{{ g.categoria }}</strong> {{ etiquetaIgv(g.tip_afe_igv) }}: {{ g.total.toFixed(2) }}<span v-if="g.igv > 0"> (IGV {{ g.igv.toFixed(2) }})</span>
             </span>
+        </div>
+        <!-- T-091: totales por afectación del comprobante (en su moneda), a la vista al cambiar una línea. -->
+        <div v-if="conAfectacion && resumen" class="border rounded px-2 py-1 small bg-light mt-2">
+            <div class="d-flex flex-wrap column-gap-3">
+                <span>Op. gravadas: <strong>{{ dineroComprobante(resumen.gravadas) }}</strong></span>
+                <span>Op. exoneradas: <strong>{{ dineroComprobante(resumen.exoneradas) }}</strong></span>
+                <span>Op. inafectas: <strong>{{ dineroComprobante(resumen.inafectas) }}</strong></span>
+                <span>IGV: <strong>{{ dineroComprobante(resumen.igv) }}</strong></span>
+                <span>Total: <strong>{{ dineroComprobante(resumen.total) }}</strong></span>
+            </div>
+            <div class="text-muted"><i class="fas fa-info-circle me-1"></i>El IGV sale del precio: el cliente paga lo mismo.</div>
         </div>
         <div v-if="monedaDistinta" class="small text-muted mt-1">
             Montos en {{ preview.moneda_cotizacion_original }}; el comprobante sale en {{ preview.moneda_facturacion }} (ver el total convertido abajo).
@@ -71,7 +88,11 @@
 // 24-oct-2026: con `seleccionable` (Facturación especial) cada servicio tiene
 // su casilla; desmarcarlo lo deja pendiente para otro comprobante. El modal
 // decide qué hacer con el aviso `alternar`.
+// T-091 (D-AGE-037): con `conAfectacion`, la columna «Afectación» de cada fila
+// (AfectacionLineasFactura) y el resumen por afectación. El modal guarda el
+// cambio (aviso `cambiar-afectacion`) y vuelve a pedir la vista previa.
 import { computed } from 'vue';
+import AfectacionLineasFactura from '@/components/AgenciaViajes/AfectacionLineasFactura.vue';
 import { formatFecha } from '@/helpers/fecha';
 import type { PrepararFacturaResponse } from '@/services/admin/reservaFacturacionService';
 
@@ -80,12 +101,41 @@ const props = withDefaults(defineProps<{
     // Anticipos marcados para descontar (en la moneda del comprobante).
     anticipoAplicado?: number;
     seleccionable?: boolean;
-}>(), { anticipoAplicado: 0, seleccionable: false });
+    conAfectacion?: boolean;
+    guardandoAfectacion?: boolean;
+    // Sube tras cada intento de cambio: la lista vuelve a mostrar lo guardado.
+    versionAfectacion?: number;
+}>(), { anticipoAplicado: 0, seleccionable: false, conAfectacion: false, guardandoAfectacion: false, versionAfectacion: 0 });
 
 const emit = defineEmits<{
     // Los ids de la fila (un tour puede tener varias líneas) y si ahora entra.
     alternar: [reservaItemIds: number[], entra: boolean];
+    'cambiar-afectacion': [reservaItemIds: number[], tipAfeIgv: '10' | '20' | '30'];
 }>();
+
+const columnasAntesDelMonto = computed(() => 2 + (props.seleccionable ? 1 : 0) + (props.conAfectacion ? 1 : 0));
+
+// Op. gravadas / exoneradas / inafectas: suma del valor de venta (sin IGV) de
+// las líneas del comprobante, como store() arma mto_oper_* (mismo criterio).
+const resumen = computed(() => {
+    const grupos = props.preview.grupos_propuestos ?? [];
+    if (props.preview.bloqueado_tributario || grupos.length === 0) return null;
+    const suma = (codigo: string) => Math.round(grupos
+        .filter((g) => (g.tip_afe_igv ?? '10') === codigo)
+        .reduce((s, g) => s + g.subtotal, 0) * 100) / 100;
+    const gravadas = Math.round(grupos
+        .filter((g) => !['20', '30'].includes(g.tip_afe_igv ?? '10'))
+        .reduce((s, g) => s + g.subtotal, 0) * 100) / 100;
+    return {
+        gravadas,
+        exoneradas: suma('20'),
+        inafectas: suma('30'),
+        igv: Number(props.preview.igv ?? 0),
+        total: Number(props.preview.total ?? 0),
+    };
+});
+const simboloComprobante = computed(() => ((props.preview.moneda_facturacion ?? props.preview.moneda_cotizacion_original) === 'USD' ? 'US$' : 'S/'));
+const dineroComprobante = (n: number) => `${simboloComprobante.value} ${n.toFixed(2)}`;
 
 const detalle = computed(() => props.preview.detalle ?? []);
 // Solo suma lo que entra: los servicios desmarcados se ven, pero no se cobran aquí.

@@ -386,19 +386,15 @@ class VentaDirectaController extends Controller
         ]);
     }
 
-    // ¿Se podrá facturar lo armado en un solo comprobante? Mismo criterio que
-    // el guardia de la facturación de reservas. La confirmación de la
-    // Amazonía no se pide acá (la hace el cobro, T-048): todo cuenta como
-    // confirmado, y `requiere_confirmar_amazonia` avisa que hará falta.
+    // ¿Se podrá facturar lo armado? Mismo criterio que el guardia de la
+    // facturación de reservas: desde T-091 gravado, exonerado e inafecto van
+    // en un comprobante y la Amazonía no se confirma; solo exportación bloquea.
     private function facturable(array $lineas): array
     {
-        // Un tour de IGV mezclado son varias líneas de la MISMA carga (T-047): sí pueden ir juntas.
         $neutrales = collect($lineas)->flatMap(fn (array $l, int $i) => collect($l['tratamientos'] ?? [$l['tratamiento']])
             ->map(fn (array $t, int $g) => [
                 'id' => "{$i}.{$g}",
                 'destino' => $t['destino_tributario'],
-                'carga_tour' => $l['origen_tipo'] === 'tour' ? "tour-{$i}" : null,
-                'confirmado' => true,
             ]))->values();
 
         $bloqueo = app(CriterioTributarioService::class)->evaluar($neutrales);
@@ -406,7 +402,6 @@ class VentaDirectaController extends Controller
         return [
             'ok' => $bloqueo === null,
             'motivo' => $bloqueo['motivo'] ?? null,
-            'requiere_confirmar_amazonia' => $neutrales->contains(fn (array $l) => $l['destino'] === 'amazonia'),
         ];
     }
 

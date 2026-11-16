@@ -35,9 +35,9 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
 // 8a/9b, sin ningún controller que las usara).
 //
 // Guardia tributario (2026-08-20, complemento a la fase A —
-// PEGAR-EN-CLAUDE-CODE-facturar-reserva-guardia-tributario.md): un único
-// Sale no puede reflejar dos tratamientos tributarios distintos a la vez
-// — se detecta y bloquea la mezcla (nunca se resuelve automáticamente).
+// PEGAR-EN-CLAUDE-CODE-facturar-reserva-guardia-tributario.md). Desde
+// T-091 (D-AGE-035) un Sale sí lleva líneas gravadas, exoneradas e
+// inafectas a la vez; el guardia solo bloquea exportación/extranjero.
 //
 // Facturación múltiple por grupo de pasajeros (2026-08-20, mismo día,
 // PEGAR-EN-CLAUDE-CODE-facturacion-multiple-pasajeros.md): la Fase A
@@ -110,8 +110,8 @@ class ReservaFacturacionController extends Controller
 
     private const DESTINO_TRIBUTARIO_DEFAULT = 'nacional';
 
-    // Los mensajes del guardia tributario (mezcla, extranjero, Amazonía sin
-    // confirmar) viven en CriterioTributarioService (T-085).
+    // El mensaje del guardia tributario (exportación/extranjero, lo único que
+    // sigue bloqueado desde T-091) vive en CriterioTributarioService.
 
     // Facturación externa por tenant (PEGAR-EN-CLAUDE-CODE-facturacion-externa-
     // tenant.md §3.1) — doble capa: el frontend ya oculta el botón "Facturar"
@@ -211,7 +211,7 @@ class ReservaFacturacionController extends Controller
             'tipo_cambio_aplicado' => $infoMoneda['tipo_cambio'],
             'serie_resuelta' => $this->resolverSeriePreview($request, $validado, $infoMoneda['moneda_facturacion']),
             // F1 (23-oct-2026): qué entra y cuánto, también con bloqueo.
-            'detalle' => $this->detallePreview($items, $partesTour, $itemsExcluidos, $partesExcluidas),
+            'detalle' => $this->detallePreview($items, $partesTour, ReservaVenta::itemIdsDe($reserva->ventas), $itemsExcluidos, $partesExcluidas),
         ]);
 
         // Preview de solo lectura: se mantiene siempre 200, con
@@ -220,7 +220,7 @@ class ReservaFacturacionController extends Controller
         // del propio modal (ver detalle.vue) en vez de un toast genérico.
         // store() sí lanza HttpException para el mismo bloqueo (abajo),
         // porque ahí SÍ es un intento real de escritura que debe abortar.
-        $bloqueo = $this->detectarMezclaTributaria($items);
+        $bloqueo = $this->detectarBloqueoTributario($items);
         if ($bloqueo !== null) {
             return response()->json(array_merge(['code' => 200], $bloqueo, $contexto));
         }
@@ -409,7 +409,7 @@ class ReservaFacturacionController extends Controller
             ], 422);
         }
 
-        $bloqueo = $this->detectarMezclaTributaria($items);
+        $bloqueo = $this->detectarBloqueoTributario($items);
         if ($bloqueo !== null) {
             return response()->json(array_merge(['code' => 422, 'message' => $bloqueo['motivo']], $bloqueo), 422);
         }
@@ -547,7 +547,7 @@ class ReservaFacturacionController extends Controller
                     throw new HttpException(422, 'No hay ningún ítem disponible para facturar con esta selección.');
                 }
 
-                $bloqueoBajoLock = $this->detectarMezclaTributaria($itemsBajoLock);
+                $bloqueoBajoLock = $this->detectarBloqueoTributario($itemsBajoLock);
                 if ($bloqueoBajoLock !== null) {
                     throw new HttpException(422, $bloqueoBajoLock['motivo']);
                 }
@@ -592,8 +592,8 @@ class ReservaFacturacionController extends Controller
                     };
                 }
 
-                // Fila 13, 1c: con un tour de IGV mezclado ya no hay un solo
-                // destino — ver resolverDestinoVenta().
+                // Un comprobante mixto no tiene un solo destino — ver
+                // resolverDestinoVenta().
                 $destinoTributarioVenta = $this->resolverDestinoVenta($itemsBajoLock);
 
                 $venta = Sale::create([
@@ -1237,27 +1237,34 @@ class ReservaFacturacionController extends Controller
     // la moneda de la cotización (antes de convertir, si se factura en otra).
     // Los servicios desmarcados (24-oct-2026) también salen, con
     // 'excluido' => true, para poder volver a marcarlos; no suman al total.
-    private function detallePreview(Collection $items, array $partesTour, ?Collection $itemsExcluidos = null, array $partesExcluidas = []): array
+    // T-091 (columna «Afectación», D-AGE-037): cada fila trae además su
+    // tip_afe_igv ('mixto' en un tour con líneas de afectación distinta),
+    // si se puede cambiar ahí mismo (editable) y si ya se cambió a mano.
+    private function detallePreview(Collection $items, array $partesTour, Collection $itemIdsFacturados, ?Collection $itemsExcluidos = null, array $partesExcluidas = []): array
     {
-        return collect($this->filasDetalle($items, $partesTour, false))
-            ->concat($this->filasDetalle($itemsExcluidos ?? collect(), $partesExcluidas, true))
+        return collect($this->filasDetalle($items, $partesTour, false, $itemIdsFacturados))
+            ->concat($this->filasDetalle($itemsExcluidos ?? collect(), $partesExcluidas, true, $itemIdsFacturados))
             ->sortBy(fn (array $fila) => $fila['reserva_item_ids']->min())
             ->values()
             ->all();
     }
 
-    private function filasDetalle(Collection $items, array $partesTour, bool $excluido): array
+    private function filasDetalle(Collection $items, array $partesTour, bool $excluido, Collection $itemIdsFacturados): array
     {
         $partes = collect($partesTour)->keyBy('reserva_item_id');
+        $facturados = $itemIdsFacturados->map(fn ($id) => (int) $id)->all();
 
         return $items
             ->groupBy(fn (ReservaItem $it) => $it->carga_tour ?? 'item_'.$it->id)
-            ->map(function (Collection $lineas) use ($partes, $excluido) {
+            ->map(function (Collection $lineas) use ($partes, $excluido, $facturados) {
                 $primera = $lineas->first();
                 $esTour = $primera->alternativaItem?->esLineaTour() ?? false;
                 $parte = $partes->get($primera->id);
                 $total = round($lineas->sum(fn (ReservaItem $it) => (float) $it->alternativaItem->total_convertido), 2);
                 $monto = round($lineas->sum(fn (ReservaItem $it) => (float) ($partes->get($it->id)['monto'] ?? $it->alternativaItem->total_convertido)), 2);
+                $afectaciones = $lineas->map(fn (ReservaItem $it) => self::resolverTipAfeIgvItem($it))->unique()->values();
+                $algunoFacturado = $lineas->contains(fn (ReservaItem $it) => in_array((int) $it->id, $facturados, true));
+                $esFilaTour = $esTour || $primera->carga_tour !== null;
 
                 return [
                     'reserva_item_ids' => $lineas->pluck('id')->values(),
@@ -1271,6 +1278,11 @@ class ReservaFacturacionController extends Controller
                     'pasajeros_grupo' => $parte['pasajeros_grupo'] ?? null,
                     'pasajeros_total' => $parte['pasajeros_total'] ?? null,
                     'excluido' => $excluido,
+                    'tip_afe_igv' => $afectaciones->count() > 1 ? 'mixto' : $afectaciones->first(),
+                    // Un tour se corrige en el tour o con «Corregir tratamiento»
+                    // de la reserva; lo excluido o ya facturado, no se toca acá.
+                    'editable' => ! $esFilaTour && ! $excluido && ! $algunoFacturado,
+                    'cambiado' => $lineas->contains(fn (ReservaItem $it) => $it->fecha_override_tributario !== null),
                 ];
             })
             ->values()
@@ -1456,14 +1468,22 @@ class ReservaFacturacionController extends Controller
     // más fino (tip_afe_igv puede variar dentro de un mismo destino
     // homogéneo — ej. dos ítems 'nacional' donde uno está exonerado por
     // Apéndice II sin relación con Amazonía). pasaje_aereo es la única
-    // excepción: cotizacion_pasaje_aereo.tip_afe_igv (solo sobre
-    // fee_agencia_monto, ver docblock de CotizacionPasajeAereo) es más
-    // específico que el campo genérico de alternativa_items y tiene
-    // prioridad cuando está presente. '10' es el mismo fallback legado de
-    // siempre para reserva_items de antes de este fix sin ningún dato.
+    // excepción: cotizacion_pasaje_aereo.tip_afe_igv (la factura lo aplica al
+    // precio completo del pasaje, D-AGE-035) es más específico que el campo
+    // genérico de alternativa_items y tiene prioridad cuando está presente.
+    // '10' es el mismo fallback legado de siempre para reserva_items de antes
+    // de este fix sin ningún dato.
+    // T-091: una línea corregida a mano (fecha_override_tributario no nula,
+    // desde la columna «Afectación» al facturar o «Corregir tratamiento»)
+    // gana sobre todo, también sobre el pasaje aéreo: si no, el cambio no
+    // tendría efecto en la factura.
     // public static — mismo motivo que resolverDestinoTributario() arriba.
     public static function resolverTipAfeIgvItem(ReservaItem $item): string
     {
+        if ($item->fecha_override_tributario !== null && $item->tip_afe_igv !== null) {
+            return $item->tip_afe_igv;
+        }
+
         $alternativaItem = $item->alternativaItem;
 
         if ($alternativaItem?->origen_tipo === AlternativaItem::ORIGEN_PASAJE_AEREO
@@ -1476,20 +1496,17 @@ class ReservaFacturacionController extends Controller
             ?? '10';
     }
 
-    // Guardia tributario: null si todos los ítems comparten el mismo
-    // destino_tributario efectivo (caso normal, la mayoría de las
-    // reservas reales); si no, la estructura de bloqueo lista para la
-    // respuesta HTTP (sin el wrapper code/message, cada caller decide
-    // status). Se evalúa siempre sobre el subconjunto final a facturar en
-    // ESTE Sale — dos pasajeros distintos pueden terminar en Sales con
-    // distinto destino_tributario cada uno, mientras cada Sale individual
-    // sea homogéneo.
+    // Guardia tributario: null si se puede facturar (cualquier mezcla de
+    // gravado, exonerado e inafecto en un comprobante, T-091); si no
+    // (exportación), la estructura de bloqueo lista para la respuesta HTTP
+    // (sin el wrapper code/message, cada caller decide status). Se evalúa
+    // siempre sobre el subconjunto final a facturar en ESTE Sale.
     // Hallazgo de auditoría (2026-09-23) + pedido del usuario (2026-09-24,
     // "debo poder ver lo que he seleccionado si fue gravado o exonerado"):
     // antes esto solo se calculaba/devolvía cuando el bloqueo tributario ya
     // había disparado — antes de eso, el vendedor elegía pasajeros/ítems a
     // ciegas sin saber el tratamiento hasta chocar con el error. Un solo
-    // mapeo, usado tanto por detectarMezclaTributaria() (bloqueado) como
+    // mapeo, usado tanto por detectarBloqueoTributario() (bloqueado) como
     // por prepararFactura() en el camino OK (siempre visible).
     private function mapearItemsPorTratamientoTributario(Collection $items): Collection
     {
@@ -1501,17 +1518,16 @@ class ReservaFacturacionController extends Controller
         ])->values();
     }
 
-    private function detectarMezclaTributaria(Collection $items): ?array
+    private function detectarBloqueoTributario(Collection $items): ?array
     {
         // El criterio vive en CriterioTributarioService (lo comparte la vista
         // previa de Venta directa, T-085); acá solo se traducen los ReservaItem
         // a su lista neutral y se arma la estructura de bloqueo de la respuesta.
+        // Desde T-091 solo bloquea exportación/extranjero.
         $bloqueo = app(CriterioTributarioService::class)->evaluar(
             $items->map(fn (ReservaItem $it) => [
                 'id' => $it->id,
                 'destino' => self::resolverDestinoTributario($it),
-                'carga_tour' => $it->carga_tour,
-                'confirmado' => $it->motivo_override_tributario !== null,
             ])
         );
 
@@ -1526,15 +1542,11 @@ class ReservaFacturacionController extends Controller
             'items_por_destino_tributario' => $this->mapearItemsPorTratamientoTributario($items),
         ];
 
-        if (isset($bloqueo['sin_confirmar_ids'])) {
-            $respuesta['items_sin_confirmar_ids'] = collect($bloqueo['sin_confirmar_ids']);
-        }
-
         return $respuesta;
     }
 
-    // Destino que se guarda en sales.destino. Con una mezcla permitida (un
-    // tour con IGV mezclado) queda 'amazonia' si alguna línea lo es: ese campo
+    // Destino que se guarda en sales.destino. Con un comprobante mixto (T-091)
+    // queda 'amazonia' si alguna línea lo es: ese campo
     // solo decide la leyenda de la Ley 27037 en el PDF, y Sale ya la muestra
     // únicamente si hay monto exonerado (Sale::muestra_leyenda_amazonia).
     private function resolverDestinoVenta(Collection $items): string

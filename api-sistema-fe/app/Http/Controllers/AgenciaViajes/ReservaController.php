@@ -1206,18 +1206,16 @@ class ReservaController extends Controller
         ));
     }
 
-    // POST reservas/{id}/override-tratamiento-tributario — confirmación
-    // explícita por ítem del tratamiento tributario real (Caso 3 Amazonía,
-    // conversación con el usuario 2026-09-24). destino_tributario/
-    // tip_afe_igv YA existen como columna propia de reserva_item (copiada
-    // de la proveedor_tarifa al aceptar) y ya tienen prioridad en
-    // ReservaFacturacionController::resolverDestinoTributario()/
-    // resolverTipAfeIgvItem() — este endpoint solo los deja corregir/
-    // confirmar a mano, con motivo obligatorio (mismo patrón de auditoría
-    // que reasignarMayorista()/reasignarHotel()). motivo_override_tributario
-    // no nulo es lo que detectarMezclaTributaria() exige antes de dejar
-    // facturar un servicio con destino='amazonia' — un dato de proveedor
-    // sin revisar nunca alcanza solo, tiene que confirmarlo un humano.
+    // POST reservas/{id}/override-tratamiento-tributario — corrige a mano la
+    // afectación de uno o más ítems. destino_tributario/tip_afe_igv son
+    // columna propia de reserva_item (copiada de la tarifa al aceptar) y
+    // tienen prioridad en ReservaFacturacionController::
+    // resolverDestinoTributario()/resolverTipAfeIgvItem().
+    // T-091 (D-AGE-037): lo usan la columna «Afectación» de los modales de
+    // facturar y «Corregir tratamiento» del detalle. Motivo y destino son
+    // opcionales: sin destino, se deriva del código (20 ⇒ amazonia, si no
+    // nacional; en Agencia exonerado = Amazonía, ExoneradoEsAmazonia).
+    // Ya no hace falta confirmar la Amazonía para facturar (D-AGE-035).
     public function overrideTratamientoTributario(Request $request, string $id)
     {
         $reserva = Reserva::findOrFail($id);
@@ -1230,9 +1228,9 @@ class ReservaController extends Controller
         $validator = Validator::make($request->all(), [
             'reserva_item_ids' => 'required|array|min:1',
             'reserva_item_ids.*' => ['integer', Rule::exists('reserva_items', 'id')->where('reserva_id', $reserva->id)],
-            'destino_tributario' => 'required|string|in:amazonia,nacional,extranjero',
+            'destino_tributario' => 'nullable|string|in:amazonia,nacional,extranjero',
             'tip_afe_igv' => 'required|string|in:10,20,30',
-            'motivo' => 'required|string|max:500',
+            'motivo' => 'nullable|string|max:500',
         ]);
 
         if ($validator->fails()) {
@@ -1240,6 +1238,9 @@ class ReservaController extends Controller
         }
 
         $validado = $validator->validated();
+        // 'extranjero' explícito se respeta (exportación sigue bloqueada al facturar).
+        $validado['destino_tributario'] = ($validado['destino_tributario'] ?? null)
+            ?: ($validado['tip_afe_igv'] === '20' ? 'amazonia' : 'nacional');
 
         $items = ReservaItem::whereIn('id', $validado['reserva_item_ids'])->get();
 
@@ -1264,7 +1265,7 @@ class ReservaController extends Controller
                     $item->update([
                         'destino_tributario' => $validado['destino_tributario'],
                         'tip_afe_igv' => $validado['tip_afe_igv'],
-                        'motivo_override_tributario' => $validado['motivo'],
+                        'motivo_override_tributario' => ($validado['motivo'] ?? null) ?: null,
                         'fecha_override_tributario' => now(),
                     ]);
                 }
@@ -1276,7 +1277,7 @@ class ReservaController extends Controller
         $reserva->load(self::RELACIONES_DETALLE);
 
         return response()->json(array_merge(
-            ['code' => 200, 'message' => 'Tratamiento tributario confirmado correctamente'],
+            ['code' => 200, 'message' => 'Afectación actualizada'],
             $this->respuestaDetalle($reserva)
         ));
     }

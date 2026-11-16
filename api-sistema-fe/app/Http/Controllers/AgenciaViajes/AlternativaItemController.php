@@ -1552,9 +1552,9 @@ class AlternativaItemController extends Controller
             'montos_por_pasajero' => 'nullable|boolean',
             'tua_incluida_en_tarifa' => 'nullable|boolean',
             'fee_agencia_monto' => 'nullable|numeric|min:0',
-            // Este campo queda EXCLUSIVAMENTE sobre fee_agencia_monto
-            // (cotizacion_pasaje_aereo.tip_afe_igv, ver docblock del
-            // modelo) — no se toca. 'destino_tributario' es nuevo, a nivel
+            // cotizacion_pasaje_aereo.tip_afe_igv: la afectación del pasaje,
+            // que la factura aplica al precio completo (D-AGE-035, ver
+            // docblock del modelo). 'destino_tributario' es nuevo, a nivel
             // de alternativa_items (junto con una copia genérica de
             // tip_afe_igv), ver resolverTratamientoTributario().
             'tip_afe_igv' => 'nullable|string|max:2',

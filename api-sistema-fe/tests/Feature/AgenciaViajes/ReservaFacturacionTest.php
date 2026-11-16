@@ -1339,62 +1339,22 @@ class ReservaFacturacionTest extends TestCase
         $this->assertSame(0, Sale::count());
     }
 
-    public function test_bloquea_facturar_reserva_con_destino_tributario_mezclado(): void
+    // ── T-091: comprobante mixto, sin confirmar la Amazonía (D-AGE-035/037) ──
+
+    // CA1 (antes: test_bloquea_facturar_reserva_con_destino_tributario_mezclado).
+    public function test_factura_mixta_gravado_y_exonerado_en_un_comprobante(): void
     {
-        [$branch, ] = $this->branchConSerie('01', 'F001');
+        [$branch, $serie] = $this->branchConSerie('01', 'F001');
         $this->usuarioConPermisos($branch->id, ['emitir_factura']);
 
-        [$reserva, $itemAmazonia, $itemNacional, $pasajeroA, $pasajeroB] = $this->crearReservaConMezclaTributaria();
-        $cliente = Client::factory()->create();
+        [$reserva, , $pasajeros] = $this->crearReservaConServicios([
+            ['nombre' => 'Hotel Tarapoto', 'precio' => 300, 'tip' => '20', 'pax' => 0],
+            ['nombre' => 'Traslado aeropuerto', 'precio' => 118, 'tip' => '10', 'pax' => 0],
+        ], 1);
 
-        // Guardia real: server-side en POST facturar, sin pasar por
-        // prepararFactura() — nunca confía en que el frontend ya filtró.
         $response = $this->facturarCobrando(new Request([
-            'pasajero_ids' => [$pasajeroA->id, $pasajeroB->id],
-            'reserva_item_ids_manual' => [], // ambos ítems tienen pasajero vinculado
-            'client_id' => $cliente->id,
-            'tipo_comprobante_codigo' => '01',
-        ]), (string) $reserva->id);
-
-        $body = $response->getData(true);
-        $this->assertSame(422, $response->getStatusCode());
-        $this->assertTrue($body['bloqueado_tributario']);
-        $this->assertEqualsCanonicalizing(['amazonia', 'nacional'], $body['destinos_tributarios_detectados']);
-        $this->assertSame(0, Sale::count(), 'no debe crear nada a medias');
-
-        // Hallazgo de auditoría (2026-09-23): antes solo se devolvían los
-        // VALORES distintos, sin decir qué servicio es cuál — el frontend
-        // recibía el dato y lo descartaba. Ahora viene el mapeo completo.
-        $itemsPorDestino = collect($body['items_por_destino_tributario'])->keyBy('reserva_item_id');
-        $this->assertSame('amazonia', $itemsPorDestino[$itemAmazonia->id]['destino_tributario']);
-        $this->assertSame('nacional', $itemsPorDestino[$itemNacional->id]['destino_tributario']);
-
-        // Preview: mismo bloqueo, sin necesidad de intentar el POST.
-        $preview = app(ReservaFacturacionController::class)->prepararFactura(new Request([
-            'pasajero_ids' => [$pasajeroA->id, $pasajeroB->id],
-        ]), (string) $reserva->id);
-        $previewBody = $preview->getData(true);
-        $this->assertSame(200, $preview->getStatusCode());
-        $this->assertTrue($previewBody['bloqueado_tributario']);
-        $this->assertArrayNotHasKey('grupos_propuestos', $previewBody);
-        $this->assertCount(2, $previewBody['items_por_destino_tributario']);
-    }
-
-    public function test_guardia_tributario_es_por_subgrupo_no_por_reserva_completa(): void
-    {
-        [$branch, ] = $this->branchConSerie('01', 'F001');
-        $this->usuarioConPermisos($branch->id, ['emitir_factura']);
-
-        [$reserva, $itemAmazonia, $itemNacional, $pasajeroA, $pasajeroB] = $this->crearReservaConMezclaTributaria();
-        $cliente = Client::factory()->empresa()->create();
-
-        // Facturar solo a pasajeroB (su ítem 'nacional' solo) — no hay
-        // mezcla ni tratamiento no-nacional dentro de ESTE Sale, debe
-        // pasar sin problema aunque la reserva completa mezcle
-        // tratamientos entre sus pasajeros.
-        $response = $this->facturarCobrando(new Request([
-            'pasajero_ids' => [$pasajeroB->id],
-            'client_id' => $cliente->id,
+            'pasajero_ids' => [$pasajeros[0]->id],
+            'client_id' => Client::factory()->empresa()->create()->id,
             'tipo_comprobante_codigo' => '01',
         ]), (string) $reserva->id);
 
@@ -1402,64 +1362,258 @@ class ReservaFacturacionTest extends TestCase
         $this->assertSame(200, $body['code'], json_encode($body));
         $this->assertSame(1, Sale::count());
 
-        // pasajeroA (su ítem 'amazonia' solo) sigue bloqueado — no por
-        // mezcla (es homogéneo dentro de este subgrupo), sino por el
-        // guard "tratamiento no nacional pausado" (fix tributario
-        // 2026-08-24, ver detectarMezclaTributaria()): confirma que el
-        // guardia evalúa el SUBGRUPO elegido, no la reserva completa —
-        // pasajeroB pasa, pasajeroA de la misma reserva no.
-        $responseA = $this->facturarCobrando(new Request([
-            'pasajero_ids' => [$pasajeroA->id],
-            'client_id' => $cliente->id,
-            'tipo_comprobante_codigo' => '01',
-        ]), (string) $reserva->id);
-        $bodyA = $responseA->getData(true);
-        $this->assertSame(422, $responseA->getStatusCode());
-        $this->assertTrue($bodyA['bloqueado_tributario']);
-        $this->assertSame(1, Sale::count(), 'el intento bloqueado no debe crear nada');
+        $venta = Sale::find($body['sale_id']);
+        $this->assertSame($serie->serie, $venta->serie, 'el mixto va en la serie normal (D-AGE-036)');
+        $this->assertCount(2, SaleDetail::where('sale_id', $venta->id)->get());
+        $this->assertEqualsWithDelta(300.0, (float) $venta->mto_oper_exoneradas, 0.001);
+        $this->assertEqualsWithDelta(100.0, (float) $venta->mto_oper_gravadas, 0.001);
+        $this->assertEqualsWithDelta(18.0, (float) $venta->igv, 0.001);
+        $this->assertEqualsWithDelta(418.0, (float) $venta->total, 0.001);
+        $this->assertSame('amazonia', $venta->destino);
+        // Lo que lee el PDF para imprimir la leyenda de la Ley 27037.
+        $this->assertTrue($venta->resumenImpresion()['muestra_leyenda_amazonia']);
     }
 
-    // ── overrideTratamientoTributario() — Caso 3 Amazonía (2026-09-24) ──
-
-    public function test_override_confirma_amazonia_y_permite_facturar(): void
+    // CA2 (antes: test_guardia_tributario_es_por_subgrupo_no_por_reserva_completa,
+    // que esperaba el 422 de "Amazonía sin confirmar").
+    public function test_amazonia_sin_confirmar_se_factura(): void
     {
         [$branch, ] = $this->branchConSerie('01', 'F001');
         $this->usuarioConPermisos($branch->id, ['emitir_factura']);
 
         [$reserva, $itemAmazonia, , $pasajeroA] = $this->crearReservaConMezclaTributaria();
+        $this->assertNull($itemAmazonia->motivo_override_tributario);
+        $this->assertNull($itemAmazonia->fecha_override_tributario);
+
+        $response = $this->facturarCobrando(new Request([
+            'pasajero_ids' => [$pasajeroA->id],
+            'client_id' => Client::factory()->empresa()->create()->id,
+            'tipo_comprobante_codigo' => '01',
+        ]), (string) $reserva->id);
+
+        $body = $response->getData(true);
+        $this->assertSame(200, $body['code'], json_encode($body));
+        $venta = Sale::find($body['sale_id']);
+        $this->assertEqualsWithDelta(60.0, (float) $venta->mto_oper_exoneradas, 0.001);
+        $this->assertSame(0.0, (float) $venta->igv, 'exonerado no debe generar IGV');
+    }
+
+    // CA3: exportación sigue bloqueada, sola o con otros, con el mensaje de hoy.
+    public function test_exportacion_sigue_bloqueada_sola_o_mezclada(): void
+    {
+        [$branch, ] = $this->branchConSerie('01', 'F001');
+        $this->usuarioConPermisos($branch->id, ['emitir_factura']);
+
+        [$reserva, , $itemNacional, $pasajeroA, $pasajeroB] = $this->crearReservaConMezclaTributaria();
+        DB::table('reserva_items')->where('id', $itemNacional->id)->update(['destino_tributario' => 'extranjero']);
         $cliente = Client::factory()->empresa()->create();
 
-        // Antes de confirmar, sigue bloqueado — mismo criterio que
-        // test_guardia_tributario_es_por_subgrupo_no_por_reserva_completa().
-        $antes = $this->facturarCobrando(new Request([
-            'pasajero_ids' => [$pasajeroA->id],
-            'client_id' => $cliente->id,
-            'tipo_comprobante_codigo' => '01',
+        foreach ([[$pasajeroA->id, $pasajeroB->id], [$pasajeroB->id]] as $pasajeroIds) {
+            $response = $this->facturarCobrando(new Request([
+                'pasajero_ids' => $pasajeroIds,
+                'client_id' => $cliente->id,
+                'tipo_comprobante_codigo' => '01',
+            ]), (string) $reserva->id);
+            $body = $response->getData(true);
+            $this->assertSame(422, $response->getStatusCode());
+            $this->assertTrue($body['bloqueado_tributario']);
+            $this->assertSame(\App\Services\AgenciaViajes\CriterioTributarioService::MENSAJE_TRATAMIENTO_TRIBUTARIO_EXTRANJERO, $body['motivo']);
+        }
+        $this->assertSame(0, Sale::count(), 'no debe crear nada a medias');
+
+        $preview = app(ReservaFacturacionController::class)->prepararFactura(new Request([
+            'pasajero_ids' => [$pasajeroA->id, $pasajeroB->id],
+        ]), (string) $reserva->id)->getData(true);
+        $this->assertTrue($preview['bloqueado_tributario']);
+        $this->assertArrayNotHasKey('items_sin_confirmar_ids', $preview);
+    }
+
+    // CA4: vista previa de una reserva mixta, con la afectación de cada fila.
+    public function test_preparar_factura_mixta_trae_la_afectacion_de_cada_fila(): void
+    {
+        [$reserva, $itemAmazonia, $itemNacional, $pasajeroA, $pasajeroB] = $this->crearReservaConMezclaTributaria();
+        $pedir = fn () => app(ReservaFacturacionController::class)->prepararFactura(new Request([
+            'pasajero_ids' => [$pasajeroA->id, $pasajeroB->id],
+        ]), (string) $reserva->id)->getData(true);
+
+        $preview = $pedir();
+        $this->assertFalse($preview['bloqueado_tributario'], json_encode($preview));
+        $this->assertArrayNotHasKey('items_sin_confirmar_ids', $preview);
+        $filas = collect($preview['detalle'])->keyBy(fn (array $f) => $f['reserva_item_ids'][0]);
+        $this->assertSame('20', $filas[$itemAmazonia->id]['tip_afe_igv']);
+        $this->assertSame('10', $filas[$itemNacional->id]['tip_afe_igv']);
+        $this->assertTrue($filas[$itemAmazonia->id]['editable']);
+        $this->assertTrue($filas[$itemNacional->id]['editable']);
+        $this->assertFalse($filas[$itemNacional->id]['cambiado']);
+
+        // Cambiada desde la columna: se ve «cambiado» y su nueva afectación.
+        app(ReservaController::class)->overrideTratamientoTributario(new Request([
+            'reserva_item_ids' => [$itemNacional->id], 'tip_afe_igv' => '30',
         ]), (string) $reserva->id);
-        $this->assertSame(422, $antes->getStatusCode());
-        $this->assertStringContainsString('confirmados', $antes->getData(true)['motivo']);
+        $filas = collect($pedir()['detalle'])->keyBy(fn (array $f) => $f['reserva_item_ids'][0]);
+        $this->assertSame('30', $filas[$itemNacional->id]['tip_afe_igv']);
+        $this->assertTrue($filas[$itemNacional->id]['cambiado']);
+        $this->assertFalse($filas[$itemAmazonia->id]['cambiado']);
+
+        // Un ítem que ya está en una venta de la reserva no se edita. (Desde
+        // "Facturar" no vuelve a entrar un servicio suelto ya facturado, así
+        // que se prueba la regla de la fila directamente.)
+        $filasDetalle = new \ReflectionMethod(ReservaFacturacionController::class, 'filasDetalle');
+        $conFacturado = $filasDetalle->invoke(app(ReservaFacturacionController::class),
+            ReservaItem::whereIn('id', [$itemAmazonia->id, $itemNacional->id])->get(), [], false, collect([$itemNacional->id]));
+        $conFacturado = collect($conFacturado)->keyBy(fn (array $f) => $f['reserva_item_ids'][0]);
+        $this->assertFalse($conFacturado[$itemNacional->id]['editable']);
+        $this->assertTrue($conFacturado[$itemAmazonia->id]['editable']);
+        // Lo excluido (desmarcado) tampoco se edita.
+        $excluidas = $filasDetalle->invoke(app(ReservaFacturacionController::class),
+            ReservaItem::whereIn('id', [$itemAmazonia->id])->get(), [], true, collect());
+        $this->assertFalse($excluidas[0]['editable']);
+    }
+
+    // CA8: facturación por grupo de pasajeros — cada comprobante sale mixto
+    // solo si su grupo mezcla.
+    public function test_facturacion_por_grupo_cada_comprobante_sale_mixto_si_su_grupo_mezcla(): void
+    {
+        [$branch, ] = $this->branchConSerie('01', 'F001');
+        $this->usuarioConPermisos($branch->id, ['emitir_factura']);
+
+        [$reserva, , $pasajeros] = $this->crearReservaConServicios([
+            ['nombre' => 'Hotel Tarapoto', 'precio' => 300, 'tip' => '20', 'pax' => 0],
+            ['nombre' => 'Traslado aeropuerto', 'precio' => 118, 'tip' => '10', 'pax' => 0],
+            ['nombre' => 'Traslado aeropuerto', 'precio' => 118, 'tip' => '10', 'pax' => 1],
+        ], 2);
+
+        $facturar = fn (int $pasajeroId) => Sale::find($this->facturarCobrando(new Request([
+            'pasajero_ids' => [$pasajeroId],
+            'client_id' => Client::factory()->empresa()->create()->id,
+            'tipo_comprobante_codigo' => '01',
+        ]), (string) $reserva->id)->getData(true)['sale_id']);
+
+        $mixta = $facturar($pasajeros[0]->id);
+        $this->assertEqualsWithDelta(300.0, (float) $mixta->mto_oper_exoneradas, 0.001);
+        $this->assertEqualsWithDelta(100.0, (float) $mixta->mto_oper_gravadas, 0.001);
+        $this->assertEqualsWithDelta(418.0, (float) $mixta->total, 0.001);
+        $this->assertSame('amazonia', $mixta->destino);
+
+        $gravada = $facturar($pasajeros[1]->id);
+        $this->assertSame(0.0, (float) $gravada->mto_oper_exoneradas);
+        $this->assertEqualsWithDelta(100.0, (float) $gravada->mto_oper_gravadas, 0.001);
+        $this->assertSame('nacional', $gravada->destino);
+        $this->assertSame(2, Sale::count());
+    }
+
+    // ── overrideTratamientoTributario() — columna «Afectación» (T-091) ──
+
+    // CA5 (antes: test_override_confirma_amazonia_y_permite_facturar y
+    // test_override_exige_motivo): sin motivo ni destino, el destino sale del código.
+    public function test_override_sin_motivo_ni_destino_deriva_el_destino(): void
+    {
+        [$reserva, , $itemNacional] = $this->crearReservaConMezclaTributaria();
+        $cambiar = fn (array $datos) => app(ReservaController::class)->overrideTratamientoTributario(
+            new Request(['reserva_item_ids' => [$itemNacional->id]] + $datos), (string) $reserva->id);
+
+        $response = $cambiar(['tip_afe_igv' => '30']);
+        $this->assertSame(200, $response->getStatusCode(), json_encode($response->getData(true)));
+        $this->assertSame('Afectación actualizada', $response->getData(true)['message']);
+        $item = $itemNacional->fresh();
+        $this->assertSame('30', $item->tip_afe_igv);
+        $this->assertSame('nacional', $item->destino_tributario);
+        $this->assertNull($item->motivo_override_tributario);
+        $this->assertNotNull($item->fecha_override_tributario);
+
+        $cambiar(['tip_afe_igv' => '20']);
+        $this->assertSame('amazonia', $itemNacional->fresh()->destino_tributario);
+
+        // De vuelta a gravado sin destino: no se queda en 'amazonia'.
+        $cambiar(['tip_afe_igv' => '10']);
+        $this->assertSame('nacional', $itemNacional->fresh()->destino_tributario);
+
+        // 'extranjero' explícito se respeta (y la facturación lo bloquea, CA3).
+        $cambiar(['tip_afe_igv' => '10', 'destino_tributario' => 'extranjero', 'motivo' => 'Cliente no domiciliado']);
+        $this->assertSame('extranjero', $itemNacional->fresh()->destino_tributario);
+        $this->assertSame('Cliente no domiciliado', $itemNacional->fresh()->motivo_override_tributario);
+    }
+
+    // CA5: sin ReservaPolicy::update (ni vendedor ni reservas.ver_todas), 403.
+    public function test_override_sin_permiso_sobre_la_reserva_da_403(): void
+    {
+        [$reserva, , $itemNacional] = $this->crearReservaConMezclaTributaria();
+        Auth::guard('api')->setUser(User::factory()->create([
+            'role_id' => Role::create(['name' => 'rol-sin-reservas-'.uniqid(), 'guard_name' => 'api'])->id,
+        ]));
+
+        try {
+            app(ReservaController::class)->overrideTratamientoTributario(new Request([
+                'reserva_item_ids' => [$itemNacional->id], 'tip_afe_igv' => '30',
+            ]), (string) $reserva->id);
+            $this->fail('Se esperaba 403.');
+        } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
+            $this->assertSame(403, $e->status() ?? 403);
+        }
+        $this->assertNull($itemNacional->fresh()->fecha_override_tributario);
+    }
+
+    // CA7: una entrada pasada a Inafecto desde la columna → factura con
+    // exonerado + inafecto, y el XML (sin enviar a SUNAT) con una línea 20 y otra 30.
+    public function test_linea_pasada_a_inafecto_sale_en_la_factura_y_en_el_xml(): void
+    {
+        [$branch, ] = $this->branchConSerie('01', 'F001');
+        $this->usuarioConPermisos($branch->id, ['emitir_factura']);
+
+        [$reserva, $items, $pasajeros] = $this->crearReservaConServicios([
+            ['nombre' => 'Hotel Tarapoto', 'precio' => 300, 'tip' => '20', 'pax' => 0],
+            ['nombre' => 'Entrada a museo', 'precio' => 30, 'tip' => '10', 'pax' => 0],
+        ], 1);
 
         $override = app(ReservaController::class)->overrideTratamientoTributario(new Request([
-            'reserva_item_ids' => [$itemAmazonia->id],
-            'destino_tributario' => 'amazonia',
-            'tip_afe_igv' => '20',
-            'motivo' => 'Servicio confirmado en zona Amazonía por el operador, exonerado según Ley 27037.',
+            'reserva_item_ids' => [$items[1]->id], 'tip_afe_igv' => '30',
         ]), (string) $reserva->id);
-        $this->assertSame(200, $override->getStatusCode(), json_encode($override->getData(true)));
-        $this->assertNotNull($itemAmazonia->fresh()->motivo_override_tributario);
-        $this->assertNotNull($itemAmazonia->fresh()->fecha_override_tributario);
+        $this->assertSame(200, $override->getStatusCode());
 
-        $despues = $this->facturarCobrando(new Request([
-            'pasajero_ids' => [$pasajeroA->id],
-            'client_id' => $cliente->id,
+        $body = $this->facturarCobrando(new Request([
+            'pasajero_ids' => [$pasajeros[0]->id],
+            'client_id' => Client::factory()->empresa()->create()->id,
             'tipo_comprobante_codigo' => '01',
-        ]), (string) $reserva->id);
-        $bodyDespues = $despues->getData(true);
-        $this->assertSame(200, $bodyDespues['code'], json_encode($bodyDespues));
+        ]), (string) $reserva->id)->getData(true);
+        $this->assertSame(200, $body['code'], json_encode($body));
 
-        $venta = Sale::find($bodyDespues['sale_id']);
-        $this->assertGreaterThan(0, (float) $venta->mto_oper_exoneradas, 'debe salir como operación exonerada, no gravada');
-        $this->assertSame(0.0, (float) $venta->igv, 'exonerado no debe generar IGV');
+        $venta = Sale::find($body['sale_id']);
+        $this->assertEqualsWithDelta(300.0, (float) $venta->mto_oper_exoneradas, 0.001);
+        $this->assertEqualsWithDelta(30.0, (float) $venta->mto_oper_inafectas, 0.001);
+        $this->assertSame(0.0, (float) $venta->mto_oper_gravadas);
+        $this->assertSame(0.0, (float) $venta->igv);
+        $this->assertEqualsWithDelta(330.0, (float) $venta->total, 0.001);
+
+        // XML como lo arma el envío a SUNAT, sin firmar ni enviar.
+        $facturacion = app(\App\Http\Controllers\Sale\FacturacionElectronicaController::class);
+        $datos = $facturacion->armarLeyendas($facturacion->calcularTotalesComprobante($venta), $venta->currency) + [
+            'tipo_operacion' => '0101', 'tipo_doc' => '01', 'serie' => $venta->serie,
+            'correlativo' => '1', 'tipo_moneda' => $venta->currency,
+        ];
+        $empresa = Company::create(['razon_social' => 'Agencia Test SAC', 'razon_social_comercial' => 'Agencia Test', 'n_document' => '20123456789']);
+        $invoice = app(GreenterService::class)->getInvoice($datos, $empresa, $venta);
+        $xml = (new \Greenter\Xml\Builder\InvoiceBuilder())->build($invoice);
+
+        $this->assertSame(1, substr_count($xml, '<cbc:TaxExemptionReasonCode>20</cbc:TaxExemptionReasonCode>'), $xml);
+        $this->assertSame(1, substr_count($xml, '<cbc:TaxExemptionReasonCode>30</cbc:TaxExemptionReasonCode>'), $xml);
+        $this->assertStringNotContainsString('<cbc:TaxExemptionReasonCode>10</cbc:TaxExemptionReasonCode>', $xml);
+    }
+
+    // T-091 (decisión del usuario, 16-nov): la afectación del pasaje aéreo
+    // viene de cotizacion_pasaje_aereo, salvo que la línea se haya corregido a
+    // mano (fecha_override_tributario): ahí gana el reserva_item, si no el
+    // cambio en la columna «Afectación» no tendría efecto.
+    public function test_correccion_a_mano_gana_sobre_la_afectacion_del_pasaje_aereo(): void
+    {
+        $alternativaItem = new AlternativaItem(['origen_tipo' => AlternativaItem::ORIGEN_PASAJE_AEREO]);
+        $alternativaItem->setRelation('cotizacionPasajeAereo', new \App\Models\AgenciaViajes\CotizacionPasajeAereo(['tip_afe_igv' => '20']));
+        $item = new ReservaItem(['tip_afe_igv' => '10']);
+        $item->setRelation('alternativaItem', $alternativaItem);
+
+        $this->assertSame('20', ReservaFacturacionController::resolverTipAfeIgvItem($item));
+
+        $item->fecha_override_tributario = now();
+        $this->assertSame('10', ReservaFacturacionController::resolverTipAfeIgvItem($item));
     }
 
     public function test_override_rechaza_reserva_no_activa(): void
@@ -1470,19 +1624,6 @@ class ReservaFacturacionTest extends TestCase
         $response = app(ReservaController::class)->overrideTratamientoTributario(new Request([
             'reserva_item_ids' => [$itemAmazonia->id],
             'destino_tributario' => 'amazonia', 'tip_afe_igv' => '20', 'motivo' => 'x',
-        ]), (string) $reserva->id);
-
-        $this->assertSame(422, $response->getStatusCode());
-        $this->assertNull($itemAmazonia->fresh()->motivo_override_tributario);
-    }
-
-    public function test_override_exige_motivo(): void
-    {
-        [$reserva, $itemAmazonia] = $this->crearReservaConMezclaTributaria();
-
-        $response = app(ReservaController::class)->overrideTratamientoTributario(new Request([
-            'reserva_item_ids' => [$itemAmazonia->id],
-            'destino_tributario' => 'amazonia', 'tip_afe_igv' => '20',
         ]), (string) $reserva->id);
 
         $this->assertSame(422, $response->getStatusCode());
@@ -1632,7 +1773,7 @@ class ReservaFacturacionTest extends TestCase
     // (uno gravado y otro sin IGV). Antes de este fix se fusionaban en una
     // sola línea de SaleDetail con 18% fijo para todo — el que no lleva IGV
     // terminaba pagándolo igual, sin que ninguna guardia lo detectara
-    // (detectarMezclaTributaria() solo mira destino_tributario, nunca
+    // (el guardia tributario solo mira destino_tributario, nunca
     // tip_afe_igv).
     // Fila 13 (22-oct-2026): el ejemplo era "exonerado + nacional" (Apéndice
     // II). En Agencia el exonerado solo viene de la Amazonía (regla del
@@ -1870,6 +2011,83 @@ class ReservaFacturacionTest extends TestCase
             ReservaItem::where('alternativa_item_id', $itemNacional->id)->first(),
             $pasajeros[0],
             $pasajeros[1],
+        ];
+    }
+
+    // T-091: reserva con los servicios sueltos que pida cada test. Cada
+    // servicio: nombre, precio final, tip ('10'/'20'/'30'; 20 ⇒ amazonia) y
+    // pax (índice del pasajero que lo usa). Devuelve [reserva, items, pasajeros].
+    private function crearReservaConServicios(array $servicios, int $cantidadPasajeros): array
+    {
+        $clienteId = DB::table('clients')->insertGetId([
+            'type_document' => 'DNI', 'n_document' => (string) random_int(10_000_000, 99_999_999), 'full_name' => 'Cliente Test T-091',
+            'type_client' => 1, 'cod_tipo_doc_sunat' => '1',
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $cotizacionId = DB::table('cotizaciones')->insertGetId([
+            'codigo_prefijo' => 'TEST', 'codigo' => 'TEST-2026-0910-' . uniqid(), 'cliente_id' => $clienteId,
+            'destino' => 'Tarapoto', 'fecha_viaje_desde' => '2026-12-01',
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $alternativa = Alternativa::create([
+            'cotizacion_id' => $cotizacionId, 'nombre' => 'Alternativa 1', 'estado' => 'borrador',
+            'moneda_cotizacion' => 'PEN', 'tipo_cambio_aplicado' => 1, 'tipo_cambio_origen' => 'dia',
+        ]);
+
+        $cotizacionPasajeros = [];
+        for ($i = 0; $i < $cantidadPasajeros; $i++) {
+            $cotizacionPasajeros[] = DB::table('cotizacion_pasajeros')->insertGetId([
+                'cotizacion_id' => $cotizacionId, 'tipo_pax' => 'adulto', 'edad' => 30 + $i,
+                'created_at' => now(), 'updated_at' => now(),
+            ]);
+        }
+
+        $destinoAtractivoId = DB::table('destinos_atractivos')->insertGetId([
+            'nombre' => 'Tarapoto', 'tipo' => 'lugar', 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $proveedorId = DB::table('proveedores')->insertGetId([
+            'razon_social' => 'Operador Test T-091 SAC', 'estado' => true, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        $alternativaItems = [];
+        foreach ($servicios as $servicio) {
+            $destino = $servicio['tip'] === '20' ? 'amazonia' : 'nacional';
+            $servicioId = DB::table('servicios')->insertGetId([
+                'nombre' => $servicio['nombre'], 'created_at' => now(), 'updated_at' => now(),
+            ]);
+            $destinoServicioId = DB::table('destino_servicio')->insertGetId([
+                'destino_atractivo_id' => $destinoAtractivoId, 'servicio_id' => $servicioId,
+                'created_at' => now(), 'updated_at' => now(),
+            ]);
+            $proveedorServicioId = DB::table('proveedor_servicios')->insertGetId([
+                'proveedor_id' => $proveedorId, 'destino_servicio_id' => $destinoServicioId,
+                'created_at' => now(), 'updated_at' => now(),
+            ]);
+            $costo = round($servicio['precio'] * 0.8, 2);
+            $tarifaId = DB::table('proveedor_tarifas')->insertGetId([
+                'proveedor_servicio_id' => $proveedorServicioId,
+                'tipo_tarifa' => 'publica', 'modalidad' => 'privado', 'moneda' => 'PEN',
+                'precio_costo' => $costo, 'margen_tipo' => 'fijo', 'margen_valor' => $servicio['precio'] - $costo,
+                'precio_venta_adulto' => $servicio['precio'],
+                'vigente_desde' => '2026-01-01', 'tip_afe_igv' => $servicio['tip'], 'destino_tributario' => $destino,
+                'created_at' => now(), 'updated_at' => now(),
+            ]);
+            $alternativaItems[] = AlternativaItem::create([
+                'alternativa_id' => $alternativa->id, 'origen_tipo' => 'proveedor',
+                'proveedor_tarifa_id' => $tarifaId, 'dia_referencial' => 1,
+                'pax_incluidos' => [$cotizacionPasajeros[$servicio['pax']]],
+                'modo_precio' => 'tarifa_fija', 'cantidad' => 1, 'moneda_costo' => 'PEN',
+                'costo_snapshot' => $costo, 'precio_venta_snapshot' => $servicio['precio'], 'precio_convertido' => $servicio['precio'],
+                'tip_afe_igv' => $servicio['tip'], 'destino_tributario' => $destino,
+            ]);
+        }
+
+        [$reserva] = app(ReservaController::class)->crearReservaDesdeAlternativa($alternativa->fresh());
+
+        return [
+            $reserva,
+            collect($alternativaItems)->map(fn (AlternativaItem $ai) => ReservaItem::where('alternativa_item_id', $ai->id)->first())->all(),
+            ReservaPasajero::where('reserva_id', $reserva->id)->orderBy('id')->get()->all(),
         ];
     }
 }

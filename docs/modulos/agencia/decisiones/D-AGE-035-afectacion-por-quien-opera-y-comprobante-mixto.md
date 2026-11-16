@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Fecha** | 2026-11-07 |
-| **Estado** | aceptada en los puntos 2, 3 y 4 (mezcla, sin confirmación, alcance), que reemplazan el punto 2 de D-AGE-034. **El punto 1 ("quién opera") queda en revisión desde el 07-nov**: la norma y SUNAT apuntan a otra cosa cuando la agencia revende (`agencia-tributario-simplificado.md` §2.4b); mientras tanto se usa el criterio conservador (lo ejecutado fuera de la Amazonía nace gravado). Una decisión nueva cerrará el punto 1 con las respuestas de la parte A0 |
+| **Estado** | aceptada en los puntos 2, 3 y 4 (mezcla, sin confirmación, alcance), que reemplazan el punto 2 de D-AGE-034. **El punto 1 ("quién opera") queda en revisión desde el 07-nov**: la norma y SUNAT apuntan a otra cosa cuando la agencia revende (`agencia-tributario-simplificado.md` §2.4b); mientras tanto se usa el criterio conservador (lo ejecutado fuera de la Amazonía nace gravado). Una decisión nueva cerrará el punto 1 con las respuestas de la parte A0. **16-nov: el punto 1 lo reemplaza D-AGE-037** (criterio conservador como valor de Configuración) |
 | **Reglas que afecta** | — (el tributario de Agencia todavía no tiene reglas en `reglas.md`; lo usarán P2, P4, P5 y P7 de `agencia-tributario-simplificado.md`) |
 | **Decidió** | usuario (con Claude), con las respuestas del contador que transmitió el usuario |
 
