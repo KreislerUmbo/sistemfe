@@ -895,23 +895,15 @@
                                 </label>
                             </div>
                         </div>
-                        <div class="row g-2 mb-2">
-                            <div class="col-6">
-                                <label class="form-label small fw-semibold text-secondary">Tratamiento IGV</label>
-                                <select class="form-select form-select-sm" v-model="corregirTributarioForm.tip_afe_igv"
-                                    @change="corregirTributarioForm.destino_tributario = corregirTributarioForm.tip_afe_igv === IGV_EXONERADO ? 'amazonia' : 'nacional'">
-                                    <option value="10">Gravado (IGV 18%)</option>
-                                    <option value="20">Exonerado – Amazonía</option>
-                                    <option value="30">Inafecto</option>
-                                </select>
-                            </div>
-                            <div class="col-6">
-                                <label class="form-label small fw-semibold text-secondary">Destino tributario</label>
-                                <select class="form-select form-select-sm" v-model="corregirTributarioForm.destino_tributario" :disabled="corregirTributarioForm.tip_afe_igv === IGV_EXONERADO">
-                                    <option value="amazonia">Amazonía</option>
-                                    <option value="nacional">Nacional</option>
-                                </select>
-                            </div>
+                        <!-- Sin destino: el backend lo saca del código (20 ⇒ Amazonía; si no,
+                             Nacional), así nunca se guarda «10 + amazonia» (revisión de T-091). -->
+                        <div class="mb-2">
+                            <label class="form-label small fw-semibold text-secondary">Tratamiento IGV</label>
+                            <select class="form-select form-select-sm" v-model="corregirTributarioForm.tip_afe_igv">
+                                <option value="10">Gravado (IGV 18%)</option>
+                                <option value="20">Exonerado – Amazonía</option>
+                                <option value="30">Inafecto</option>
+                            </select>
                         </div>
                         <label class="form-label small fw-semibold text-secondary">Motivo (opcional)</label>
                         <textarea class="form-control form-control-sm" rows="2" v-model="corregirTributarioForm.motivo"
@@ -1057,7 +1049,7 @@
 </template>
 
 <script setup lang="ts">
-import { etiquetaTipAfeIgv, IGV_EXONERADO } from '@/helpers/tratamientoTributarioAgencia';
+import { etiquetaTipAfeIgv } from '@/helpers/tratamientoTributarioAgencia';
 import { etiquetaTipoPax } from '@/helpers/reservaPasajero';
 import CampoHora from '@/components/CampoHora.vue';
 import AerolineaSelect from '@/components/AgenciaViajes/AerolineaSelect.vue';
@@ -2243,16 +2235,14 @@ const corrigiendoTributario = ref(false);
 const corregirTributarioForm = ref<{
     items: ReservaItem[];
     seleccionados: number[];
-    destino_tributario: 'amazonia' | 'nacional' | 'extranjero';
     tip_afe_igv: '10' | '20' | '30';
     motivo: string;
-}>({ items: [], seleccionados: [], destino_tributario: 'nacional', tip_afe_igv: '10', motivo: '' });
+}>({ items: [], seleccionados: [], tip_afe_igv: '10', motivo: '' });
 
 const abrirModalCorregirTributario = (items: ReservaItem[]) => {
     corregirTributarioForm.value = {
         items,
         seleccionados: items.map((it) => it.id),
-        destino_tributario: (destinoTributarioItem(items[0]) as 'amazonia' | 'nacional' | 'extranjero') ?? 'nacional',
         tip_afe_igv: (tipAfeIgvItem(items[0]) as '10' | '20' | '30') ?? '10',
         motivo: '',
     };
@@ -2274,7 +2264,6 @@ const corregirTratamientoTributario = async () => {
     try {
         const res = await reservaService.overrideTratamientoTributario(reserva.value.id, {
             reserva_item_ids: corregirTributarioForm.value.seleccionados,
-            destino_tributario: corregirTributarioForm.value.destino_tributario,
             tip_afe_igv: corregirTributarioForm.value.tip_afe_igv,
             motivo: corregirTributarioForm.value.motivo.trim() || null,
         });
