@@ -1,6 +1,6 @@
 <template>
     <!-- Celda «Afectación» de una fila de "Qué entra en este comprobante"
-         (T-091, D-AGE-037). Editable: lista Gravado / Exonerado – Amazonía /
+         (T-091, D-AGE-037) o de una línea de Venta directa (T-048). Editable: lista Gravado / Exonerado – Amazonía /
          Inafecto. Si no (tour, servicio desmarcado o ya facturado): el texto,
          o «Mixto» en un tour con líneas de afectación distinta. -->
     <div class="text-nowrap">
@@ -19,11 +19,12 @@
 
 <script setup lang="ts">
 // Solo dibuja y avisa: quien guarda es el modal (useAfectacionFactura), que
-// vuelve a pedir la vista previa para refrescar los totales.
-import type { AfectacionFila, DetalleComprobantePreview } from '@/services/admin/reservaFacturacionService';
+// vuelve a pedir la vista previa para refrescar los totales. T-048: también la
+// usa Venta directa, que manda el cambio en su vista previa (no guarda nada aparte).
+import type { AfectacionFila, FilaAfectacion } from '@/services/admin/reservaFacturacionService';
 
 defineProps<{
-    fila: DetalleComprobantePreview;
+    fila: FilaAfectacion;
     // Mientras se guarda un cambio, ninguna lista se puede tocar.
     deshabilitado?: boolean;
 }>();

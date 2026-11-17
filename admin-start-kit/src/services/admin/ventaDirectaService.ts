@@ -1,6 +1,10 @@
 // src/services/admin/ventaDirectaService.ts — Sesión 11c, atajo §4.1; T-085: varias líneas
 import httpClient from '@/helpers/http-client'
 import type { ReservaDetalleResponse } from '@/types/agencia-viajes'
+import type { FormaPagoCobro, MonedaCobro } from '@/helpers/cobroFactura'
+
+// T-048 (D-AGE-037): la afectación elegida en la columna «Afectación» (un tour no la lleva).
+export type AfectacionElegida = '10' | '20' | '30'
 
 export type MonedaVenta = 'PEN' | 'USD'
 
@@ -13,6 +17,7 @@ export type LineaVentaDirecta =
       proveedor_tarifa_id: number
       modo_precio: 'por_persona' | 'tarifa_fija' | null
       cantidad: number
+      tip_afe_igv?: AfectacionElegida
     }
   | {
       // T-047: un tour del catálogo (el backend lo agrega como el cotizador).
@@ -27,6 +32,7 @@ export type LineaVentaDirecta =
       precio_venta_snapshot: number
       costo_snapshot: number
       cantidad: number
+      tip_afe_igv?: AfectacionElegida
     }
 
 export type ResidenciaPasajero = 'nacional' | 'extranjero'
@@ -51,6 +57,11 @@ export type VentaDirectaPayload = {
   // El cliente (persona natural) va de primer adulto; false si el vendedor lo quitó.
   cliente_viaja?: boolean
   lineas: LineaVentaDirecta[]
+  // T-048 — «Crear y cobrar»: factura la reserva completa al contado y registra el cobro.
+  cobrar?: boolean
+  tipo_comprobante_codigo?: '01' | '03'
+  pagos?: Array<{ method_payment: string; moneda_pago: MonedaCobro; monto_pagado: number; tipo_cambio?: number; nro_operacion?: string }>
+  vuelto_moneda?: MonedaCobro
 }
 
 // POST venta-directa/vista-previa — total en vivo (T-045) y afectación por línea (T-085).
@@ -65,6 +76,11 @@ export type VistaPreviaLinea = {
   fecha_salida: string | null
   tip_afe_igv: string
   destino_tributario: 'nacional' | 'amazonia' | 'extranjero'
+  // T-048: columna «Afectación». Un tour no se edita; cambiado = la eligió el vendedor.
+  editable: boolean
+  cambiado: boolean
+  // Lo que aporta la línea a cada afectación (un tour, por grupo).
+  montos: Array<{ tip_afe_igv: string; monto: number }>
   // null = en una tarifa sin hotel todavía no se eligió el modo de cobro.
   total: number | null
   por_persona?: {
@@ -91,12 +107,20 @@ export type VistaPreviaVentaDirecta = {
   // Mismo criterio que la facturación de reservas (backend): desde T-091
   // solo exportación la deja en false.
   facturable: { ok: boolean; motivo: string | null }
+  // T-048: op. gravadas / exoneradas / inafectas e IGV (null mientras falte un total).
+  resumen: { gravadas: number; exoneradas: number; inafectas: number; igv: number; total: number } | null
+  // T-048: el bloque de cobro de «Crear y cobrar» (el mismo de facturar una reserva).
+  cobro: { cobro_habilitado: boolean; caja_abierta: boolean; formas_pago: FormaPagoCobro[]; tipo_cambio_dia: number | string | null }
 }
 
 export const ventaDirectaService = {
   async crear(data: VentaDirectaPayload) {
     const response = await httpClient.post('/venta-directa', data)
-    return response.data as ReservaDetalleResponse & { code: number; message: string; avisos_salida_cancelada?: string[]; avisos?: string[] }
+    return response.data as ReservaDetalleResponse & {
+      code: number; message: string; avisos_salida_cancelada?: string[]; avisos?: string[]
+      // T-048: con «Crear y cobrar», el comprobante emitido.
+      sale_id: number | null; serie: string | null
+    }
   },
 
   // T-046: rangos de edad de la agencia para los contadores (mismo permiso que la venta directa).
