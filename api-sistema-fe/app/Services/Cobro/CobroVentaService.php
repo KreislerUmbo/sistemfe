@@ -290,6 +290,36 @@ class CobroVentaService
     }
 
     /**
+     * Lo que una pantalla necesita para dibujar el bloque de cobro (CobroFacturaCampos.vue): si el
+     * cobro al facturar está encendido, si el usuario tiene la caja abierta, las formas de pago
+     * activas y el tipo de cambio del día. Salió de ReservaFacturacionController::prepararFactura()
+     * (T-048) para que Venta directa muestre lo mismo.
+     *
+     * El tipo de cambio va como número: la columna es decimal y Eloquent la entrega como texto
+     * («3.3600»), y CobroFacturaCampos.vue espera un número.
+     *
+     * @return array{cobro_habilitado: bool, caja_abierta: bool, formas_pago: \Illuminate\Support\Collection, tipo_cambio_dia: ?float}
+     */
+    public function datosDelBloqueDeCobro(?User $usuario): array
+    {
+        $tipoCambio = app(\App\Services\TipoCambio\TipoCambioSunatResolver::class)->resolverParaFecha(HoraPeru::ahora())?->venta;
+
+        return [
+            'cobro_habilitado' => (bool) config('agencia.cobro_al_facturar'),
+            'caja_abierta' => $usuario !== null && CashSession::where('opened_by', $usuario->id)->where('status', 'open')->exists(),
+            'formas_pago' => PaymentMethod::where('is_active', true)
+                ->orderBy('sort_order')->orderBy('id')->get()
+                ->map(fn ($m) => [
+                    'code' => $m->code,
+                    'name' => $m->name,
+                    'monedas' => $m->monedas ?? ['PEN', 'USD'],
+                    'affects_cash_count' => (bool) $m->affects_cash_count,
+                ])->values(),
+            'tipo_cambio_dia' => $tipoCambio === null ? null : (float) $tipoCambio,
+        ];
+    }
+
+    /**
      * Dentro de la transacción: los pagos de la venta, sus movimientos de caja y, si hay, el vuelto.
      */
     public function registrar(Sale $venta, array $pagosPreparados, CashSession $sesion, User $usuario, ?array $vuelto = null): void

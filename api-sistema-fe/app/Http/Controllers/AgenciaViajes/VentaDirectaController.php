@@ -4,6 +4,7 @@ namespace App\Http\Controllers\AgenciaViajes;
 
 use App\Http\Controllers\Controller;
 use App\Models\AgenciaViajes\Alternativa;
+use App\Models\AgenciaViajes\AlternativaItem;
 use App\Models\AgenciaViajes\ConfiguracionAgencia;
 use App\Models\AgenciaViajes\ConfiguracionCodigo;
 use App\Models\AgenciaViajes\Cotizacion;
@@ -17,13 +18,17 @@ use App\Services\AgenciaViajes\ComboExplosionService;
 use App\Services\AgenciaViajes\TourLineaException;
 use App\Services\AgenciaViajes\TourLineaService;
 use App\Services\AgenciaViajes\CodigoGeneradorService;
+use App\Models\AgenciaViajes\Reserva;
+use App\Models\AgenciaViajes\ReservaItem;
 use App\Models\AgenciaViajes\ReservaPasajero;
 use App\Models\Client\Client;
+use App\Services\Cobro\CobroVentaService;
 use App\Services\AgenciaViajes\CriterioTributarioService;
 use App\Services\AgenciaViajes\PasajeroCatalogoService;
 use App\Services\AgenciaViajes\PriceEngineService;
 use App\Services\Crm\AccionesCrm;
 use Carbon\Carbon;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -87,7 +92,17 @@ class VentaDirectaController extends Controller
             'pax.*.nombre' => 'nullable|string|max:250',
             'pax.*.documento' => 'nullable|string|max:50',
             'cliente_viaja' => 'nullable|boolean',
-        ] + $this->reglasLineas($legacy));
+            // T-048 — «Crear y cobrar»: la reserva se factura completa al contado y se cobra en el
+            // mismo paso. Boleta o factura, sin nota de venta (D-AGE-034). Los pagos los valida
+            // ReservaFacturacionController::store() (CobroVentaService), como al facturar.
+            'cobrar' => 'nullable|boolean',
+            'tipo_comprobante_codigo' => 'nullable|string|in:01,03',
+            'branch_id' => 'nullable|integer',
+            'pagos' => 'nullable|array',
+            'vuelto_moneda' => 'nullable|string|in:PEN,USD',
+        ] + $this->reglasLineas($legacy), [
+            'tipo_comprobante_codigo.in' => 'El comprobante de una venta directa es boleta o factura.',
+        ]);
 
         if ($validator->fails()) {
             return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
@@ -95,6 +110,28 @@ class VentaDirectaController extends Controller
 
         $validado = $validator->validated();
         [$edadMaxInfante, $edadMaxNino] = $this->umbralesEdad();
+
+        $cobrar = (bool) ($validado['cobrar'] ?? false);
+        if ($cobrar) {
+            if (! config('agencia.cobro_al_facturar')) {
+                return response()->json(['code' => 422, 'message' => 'El cobro al facturar todavía no está habilitado: usa «Crear sin cobrar».'], 422);
+            }
+            if (empty($validado['tipo_comprobante_codigo'])) {
+                return response()->json(['code' => 422, 'message' => 'Elige el comprobante: boleta o factura.'], 422);
+            }
+            // Facturar una reserva pide reservas.editar (ruta reservas/{id}/facturar); acá se
+            // llama al controller directo, así que se revisa a mano.
+            if (! auth('api')->user()?->can('reservas.editar')) {
+                return response()->json(['code' => 403, 'message' => 'No tienes permiso para facturar reservas: usa «Crear sin cobrar».'], 403);
+            }
+        }
+        // Todo lo que manda el bloque de cobro, tal cual, para ReservaFacturacionController::store().
+        $datosCobro = $cobrar ? array_filter([
+            'tipo_comprobante_codigo' => $validado['tipo_comprobante_codigo'],
+            'branch_id' => $validado['branch_id'] ?? null,
+            'pagos' => $request->input('pagos'),
+            'vuelto_moneda' => $validado['vuelto_moneda'] ?? null,
+        ], fn ($v) => $v !== null) : null;
 
         try {
             $inicio = Carbon::parse($validado['fecha_servicio'])->startOfDay();
@@ -114,7 +151,7 @@ class VentaDirectaController extends Controller
             // T-046: el cliente viaja salvo que el vendedor lo haya quitado.
             $clienteViaja = (bool) ($validado['cliente_viaja'] ?? true);
 
-            [$reserva, $alertaCupoExcedido, $alternativa, $avisos] = DB::transaction(function () use ($validado, $lineas, $moneda, $inicio, $hasta, $destino, $edadMaxInfante, $edadMaxNino, $clienteViaja) {
+            [$reserva, $alertaCupoExcedido, $alternativa, $avisos, $factura] = DB::transaction(function () use ($validado, $lineas, $moneda, $inicio, $hasta, $destino, $edadMaxInfante, $edadMaxNino, $clienteViaja, $datosCobro) {
                 $codigo = app(CodigoGeneradorService::class)->generar('venta_directa');
                 $prefijo = ConfiguracionCodigo::where('tipo', 'venta_directa')->value('prefijo');
 
@@ -163,6 +200,7 @@ class VentaDirectaController extends Controller
                 // reserva_items.fecha queda NULL y el servicio no aparece en
                 // el Reporte Operativo ni se engancha a una Salida Operativa.
                 $avisos = [];
+                $afectacionCambiada = []; // alternativa_item_id => tratamiento elegido (T-048)
                 foreach ($lineas as $linea) {
                     // T-047: un tour entra por desdePlantilla() (el camino del cotizador).
                     $itemResponse = $linea['origen_tipo'] === 'tour'
@@ -172,6 +210,10 @@ class VentaDirectaController extends Controller
 
                     if (($itemPayload['code'] ?? null) !== 200) {
                         abort(422, $itemPayload['message'] ?? 'No se pudo crear el ítem de la venta directa.');
+                    }
+
+                    if ($linea['cambiado']) {
+                        $afectacionCambiada[$itemPayload['alternativa_item']['id']] = $linea['tratamiento'];
                     }
 
                     $avisos = array_merge($avisos, $itemPayload['avisos'] ?? []);
@@ -195,7 +237,20 @@ class VentaDirectaController extends Controller
 
                 $this->guardarNombres($reserva, $cotizacionPasajeros, $validado['pax']);
 
-                return [$reserva, $alertaCupoExcedido, $alternativa->fresh(), $avisos];
+                // T-048 (D-AGE-037): la afectación elegida en la columna queda en el reserva_item
+                // como «corregida a mano» (fecha_override_tributario, T-091): la respetan
+                // resolverTipAfeIgvItem() al facturar y repuntar() al modificar la reserva.
+                foreach ($afectacionCambiada as $alternativaItemId => $tratamiento) {
+                    ReservaItem::where('reserva_id', $reserva->id)->where('alternativa_item_id', $alternativaItemId)->update([
+                        'tip_afe_igv' => $tratamiento['tip_afe_igv'],
+                        'destino_tributario' => $tratamiento['destino_tributario'],
+                        'fecha_override_tributario' => now(),
+                    ]);
+                }
+
+                $factura = $datosCobro !== null ? $this->facturarYCobrar($reserva, (int) $validado['cliente_id'], $datosCobro) : null;
+
+                return [$reserva, $alertaCupoExcedido, $alternativa->fresh(), $avisos, $factura];
             });
         } catch (HttpException $e) {
             // El error real lo lanzó una validación de arriba o
@@ -206,6 +261,10 @@ class VentaDirectaController extends Controller
             $status = $e->getStatusCode();
 
             return response()->json(['code' => $status, 'message' => $e->getMessage() ?: 'No se pudo crear la venta directa.'], $status);
+        } catch (AuthorizationException) {
+            // T-048: «Crear y cobrar» pasa por ReservaPolicy (authorize('update') en
+            // ReservaFacturacionController::store()); la transacción ya se deshizo.
+            return response()->json(['code' => 403, 'message' => 'No tienes permiso para facturar esta reserva: usa «Crear sin cobrar».'], 403);
         }
 
         $reserva->load([
@@ -216,7 +275,10 @@ class VentaDirectaController extends Controller
 
         return response()->json([
             'code' => 200,
-            'message' => 'Venta directa creada correctamente',
+            'message' => $factura ? 'Venta directa creada, facturada y cobrada' : 'Venta directa creada correctamente',
+            // T-048: con «Crear y cobrar», el comprobante emitido (el envío a SUNAT sigue manual).
+            'sale_id' => $factura['sale_id'] ?? null,
+            'serie' => $factura['serie'] ?? null,
             'reserva' => $reserva,
             'alternativa' => $alternativa,
             'alerta_cupo_excedido' => $alertaCupoExcedido,
@@ -225,6 +287,38 @@ class VentaDirectaController extends Controller
             // T-047: avisos del tour (p. ej. sin costo estimado).
             'avisos' => $avisos,
         ]);
+    }
+
+    // T-048 — «Crear y cobrar»: factura la reserva recién creada completa (todos sus pasajeros y
+    // servicios), al contado, a nombre del cliente de la venta, y registra el cobro. Reusa
+    // ReservaFacturacionController::store() entero (guardia tributario, serie, cobro con
+    // CobroVentaService, lock de la reserva), como este controller ya reusa
+    // AlternativaItemController y ReservaController: nada se copia. Corre DENTRO de la
+    // transacción de store(): cualquier rechazo (422/403) se lanza como excepción y no queda ni
+    // reserva, ni venta, ni movimientos de caja.
+    private function facturarYCobrar(Reserva $reserva, int $clienteId, array $datosCobro): array
+    {
+        // Servicios sin pasajero vinculado: van como «sin asignar», como en «Facturar» de la
+        // reserva (pasajeroIdsParaFacturar + items_sin_asignar_disponibles). Una reserva recién
+        // creada no tiene nada facturado; los tours los reparte partesDeTour().
+        $sinAsignar = ReservaItem::where('reserva_id', $reserva->id)
+            ->whereDoesntHave('pasajeros')
+            ->whereHas('alternativaItem', fn ($q) => $q->where('origen_tipo', '!=', AlternativaItem::ORIGEN_TOUR))
+            ->pluck('id')->all();
+
+        $respuesta = app(ReservaFacturacionController::class)->store(Request::create('/', 'POST', $datosCobro + [
+            'pasajero_ids' => ReservaPasajero::where('reserva_id', $reserva->id)->orderBy('id')->pluck('id')->all(),
+            'reserva_item_ids_manual' => $sinAsignar,
+            'client_id' => $clienteId,
+            'condicion_pago' => 'contado',
+        ]), (string) $reserva->id);
+        $cuerpo = $respuesta->getData(true);
+
+        if ($respuesta->getStatusCode() !== 200) {
+            throw new HttpException($respuesta->getStatusCode(), $cuerpo['message'] ?? 'No se pudo facturar la venta directa.');
+        }
+
+        return ['sale_id' => $cuerpo['sale_id'], 'serie' => $cuerpo['serie']];
     }
 
     private function tieneDatos(array $pax): bool
@@ -338,6 +432,9 @@ class VentaDirectaController extends Controller
                     : null,
                 'tip_afe_igv' => $linea['tratamiento']['tip_afe_igv'],
                 'destino_tributario' => $linea['tratamiento']['destino_tributario'],
+                // T-048: la columna «Afectación» (un tour, de solo lectura).
+                'editable' => $linea['origen_tipo'] !== 'tour',
+                'cambiado' => $linea['cambiado'],
                 'total' => null,
             ];
 
@@ -368,6 +465,9 @@ class VentaDirectaController extends Controller
                 };
             }
 
+            // Lo que aporta la línea a cada afectación (un tour, por grupo): para el resumen.
+            $fila['montos'] ??= $fila['total'] === null ? [] : [['tip_afe_igv' => $fila['tip_afe_igv'], 'monto' => (float) $fila['total']]];
+
             $totalCompleto = $totalCompleto && $fila['total'] !== null;
             $total += (float) ($fila['total'] ?? 0);
             $salida[] = $fila;
@@ -383,7 +483,36 @@ class VentaDirectaController extends Controller
             'fecha_viaje_hasta' => $inicio ? $this->fechaViajeHasta($lineas, $inicio)->toDateString() : null,
             'lineas' => $salida,
             'facturable' => $this->facturable($lineas),
+            // T-048: op. gravadas / exoneradas / inafectas e IGV, como saldrán en el comprobante.
+            'resumen' => $totalCompleto ? $this->resumenTributario($salida, $total) : null,
+            // T-048: el bloque de cobro de «Crear y cobrar» (el mismo de facturar una reserva).
+            'cobro' => app(CobroVentaService::class)->datosDelBloqueDeCobro(auth('api')->user()),
         ]);
+    }
+
+    // T-048 — mismo criterio que ReservaFacturacionController::store() con los mto_oper_*: el
+    // precio ya incluye el IGV; 20 va a exoneradas, 30 a inafectas y el resto a gravadas. La
+    // factura calcula el IGV por línea (categoría y afectación); acá, sobre el total gravado:
+    // puede diferir en un céntimo si hay gravados de varias categorías.
+    private function resumenTributario(array $filas, float $total): array
+    {
+        $suma = ['10' => 0.0, '20' => 0.0, '30' => 0.0];
+        foreach ($filas as $fila) {
+            foreach ($fila['montos'] as $m) {
+                $codigo = in_array($m['tip_afe_igv'], ['20', '30'], true) ? $m['tip_afe_igv'] : '10';
+                $suma[$codigo] += $m['monto'];
+            }
+        }
+        $conIgv = round($suma['10'], 2);
+        $gravadas = round($conIgv / 1.18, 2);
+
+        return [
+            'gravadas' => $gravadas,
+            'exoneradas' => round($suma['20'], 2),
+            'inafectas' => round($suma['30'], 2),
+            'igv' => round($conIgv - $gravadas, 2),
+            'total' => round($total, 2),
+        ];
     }
 
     // ¿Se podrá facturar lo armado? Mismo criterio que el guardia de la
@@ -505,7 +634,31 @@ class VentaDirectaController extends Controller
             'lineas.*.costo_snapshot' => $manual.'|numeric|min:0',
             // Con `lineas` la moneda es la de la venta; solo el payload viejo la manda por línea.
             'lineas.*.moneda_costo' => ($legacy ? $manual : 'nullable').'|in:PEN,USD',
+            // T-048 (D-AGE-037): la afectación elegida en la columna «Afectación». En un tour, 422.
+            'lineas.*.tip_afe_igv' => 'nullable|in:10,20,30',
         ];
+    }
+
+    // T-048 (D-AGE-037): la columna «Afectación» reemplaza el tratamiento de la línea, con el
+    // destino sacado del código como ReservaController::overrideTratamientoTributario() (20 ⇒
+    // amazonia; si no, nacional). Elegir lo mismo que ya tenía no cuenta como cambio. Un tour no
+    // se corrige acá: sus grupos pueden tener afectaciones distintas.
+    private function conAfectacionElegida(array $resuelta, array $linea): array
+    {
+        $elegida = $linea['tip_afe_igv'] ?? null;
+        if ($elegida === null || $elegida === '') {
+            return $resuelta + ['cambiado' => false];
+        }
+        if ($resuelta['origen_tipo'] === 'tour') {
+            abort(422, 'La afectación de un tour se corrige en el tour.');
+        }
+        if ($elegida === $resuelta['tratamiento']['tip_afe_igv']) {
+            return $resuelta + ['cambiado' => false];
+        }
+
+        $resuelta['tratamiento'] = ['tip_afe_igv' => $elegida, 'destino_tributario' => $elegida === '20' ? 'amazonia' : 'nacional'];
+
+        return $resuelta + ['cambiado' => true];
     }
 
     // Normaliza las líneas ya validadas: resuelve la tarifa, detecta el hotel,
@@ -520,7 +673,7 @@ class VentaDirectaController extends Controller
 
         foreach ($lineas as $linea) {
             if ($linea['origen_tipo'] === 'tour') {
-                $resueltas[] = $this->resolverTour($linea, $inicio);
+                $resueltas[] = $this->conAfectacionElegida($this->resolverTour($linea, $inicio), $linea);
 
                 continue;
             }
@@ -557,7 +710,7 @@ class VentaDirectaController extends Controller
                 }
 
                 $item += ['proveedor_tarifa_id' => $tarifa->id, 'modo_precio' => $modo, 'cantidad' => $cantidad];
-                $resueltas[] = [
+                $resueltas[] = $this->conAfectacionElegida([
                     'origen_tipo' => 'proveedor',
                     'dia' => (int) $linea['dia'],
                     'tarifa' => $tarifa,
@@ -568,14 +721,14 @@ class VentaDirectaController extends Controller
                     'moneda' => $tarifa->moneda,
                     'tratamiento' => AlternativaItemController::resolverTratamientoTributario($tarifa->tip_afe_igv, $tarifa->destino_tributario),
                     'payload' => $item,
-                ];
+                ], $linea);
             } else {
                 $item += [
                     'descripcion_manual' => $linea['descripcion_manual'],
                     'precio_venta_snapshot' => $linea['precio_venta_snapshot'],
                     'costo_snapshot' => $linea['costo_snapshot'],
                 ];
-                $resueltas[] = [
+                $resueltas[] = $this->conAfectacionElegida([
                     'origen_tipo' => 'manual',
                     'dia' => (int) $linea['dia'],
                     'tarifa' => null,
@@ -588,7 +741,7 @@ class VentaDirectaController extends Controller
                     // El concepto libre toma el tratamiento por defecto de la agencia, como hoy.
                     'tratamiento' => AlternativaItemController::resolverTratamientoTributario(null, null),
                     'payload' => $item,
-                ];
+                ], $linea);
             }
         }
 
@@ -690,7 +843,13 @@ class VentaDirectaController extends Controller
         ];
 
         if ($linea['modo'] === 'clasico') {
-            return $fila + ['total' => round($this->totalTourClasico($linea['tour'], $linea['entradas'], $conteo), 2), 'tour' => ['detalle' => [], 'temporada' => null]];
+            $montos = $this->montosTourClasico($linea['tour'], $linea['entradas'], $conteo, $linea['tratamientos']);
+
+            return $fila + [
+                'total' => round(array_sum(array_column($montos, 'monto')), 2),
+                'montos' => $montos,
+                'tour' => ['detalle' => [], 'temporada' => null],
+            ];
         }
 
         $spec = $linea['spec'];
@@ -709,26 +868,41 @@ class VentaDirectaController extends Controller
             }
         }
 
-        return $fila + ['total' => round((float) $calculo['precio'], 2), 'tour' => ['detalle' => $detalle, 'temporada' => $spec['temporada_nombre']]];
+        // T-048: cada grupo del tour (una línea de su carga) con su parte del precio.
+        $montos = array_map(fn (array $l, int $g) => ['tip_afe_igv' => $linea['tratamientos'][$g]['tip_afe_igv'], 'monto' => (float) $l['precio']], $calculo['lineas'], array_keys($calculo['lineas']));
+
+        return $fila + ['total' => round((float) $calculo['precio'], 2), 'montos' => $montos, 'tour' => ['detalle' => $detalle, 'temporada' => $spec['temporada_nombre']]];
     }
 
     // Modo clásico: la misma cuenta que AlternativaItemController::crearItemClasicoDesdeEntrada()
     // (un servicio compartido se cobra por pasajero real) más el ajuste de redondeo del tour.
-    private function totalTourClasico(PaquetePlantilla $tour, array $entradas, array $conteo): float
+    // T-048: devuelve lo de cada servicio con su afectación ($tratamientos, en el orden de
+    // resolverTour()); el ajuste de redondeo es un ítem manual con el tratamiento por defecto.
+    private function montosTourClasico(PaquetePlantilla $tour, array $entradas, array $conteo, array $tratamientos): array
     {
-        $total = 0.0;
+        $montos = [];
         foreach ($entradas as $entrada) {
             if ($entrada['proveedor_tarifa_id']) {
                 $tarifa = ProveedorTarifa::findOrFail($entrada['proveedor_tarifa_id']);
-                $total += ($entrada['modalidad'] === 'compartido' && $tarifa->tipo_habitacion === null)
+                $monto = ($entrada['modalidad'] === 'compartido' && $tarifa->tipo_habitacion === null)
                     ? $conteo['adulto'] * ($entrada['precio_venta_adulto'] ?? 0) + $conteo['nino'] * $entrada['precio_venta_nino'] + $conteo['infante'] * ($entrada['precio_venta_infante'] ?? 0)
                     : $entrada['venta'];
             } elseif ($entrada['guia_tarifa_id'] && GuiaTarifa::find($entrada['guia_tarifa_id'])) {
-                $total += $entrada['venta'];
+                $monto = $entrada['venta'];
+            } else {
+                continue;
             }
+            $montos[] = ['tip_afe_igv' => $tratamientos[count($montos)]['tip_afe_igv'], 'monto' => (float) $monto];
         }
 
-        return $total + (float) ($tour->ajuste_redondeo ?? 0);
+        if ((float) ($tour->ajuste_redondeo ?? 0) != 0.0) {
+            $montos[] = [
+                'tip_afe_igv' => AlternativaItemController::resolverTratamientoTributario(null, null)['tip_afe_igv'],
+                'monto' => (float) $tour->ajuste_redondeo,
+            ];
+        }
+
+        return $montos;
     }
 
     private function nombreDeTarifa(ProveedorTarifa $tarifa): string

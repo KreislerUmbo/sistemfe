@@ -95,6 +95,16 @@ export type AnticipoDisponiblePreview = {
 // columna «Afectación» (AfectacionLineasFactura.vue, D-AGE-037).
 export type AfectacionFila = '10' | '20' | '30' | 'mixto'
 
+// T-048: lo mínimo que necesita la celda «Afectación» (AfectacionLineasFactura.vue). Lo cumplen
+// una fila de "Qué entra en este comprobante" (reservas) y una línea de Venta directa.
+export type FilaAfectacion = {
+  nombre: string
+  tip_afe_igv: AfectacionFila
+  editable: boolean
+  cambiado: boolean
+  excluido?: boolean
+}
+
 export type DetalleComprobantePreview = {
   reserva_item_ids: number[]
   nombre: string

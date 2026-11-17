@@ -175,7 +175,13 @@
                                             <select class="form-select form-select-sm w-auto py-0" v-model.number="l.dia" :aria-label="`Fecha de ${nombreLinea(l)}`">
                                                 <option v-for="d in DIAS" :key="d" :value="d">{{ esHotel(l) ? 'Entra el ' : '' }}{{ etiquetaDia(d) }}</option>
                                             </select>
-                                            <span v-for="a in afectacionesDe(i)" :key="a.texto" class="badge" :class="a.clase">{{ a.texto }}</span>
+                                            <!-- T-048 (D-AGE-037): la afectación de la línea, editable como al facturar (un tour, de solo lectura). -->
+                                            <template v-if="filaAfectacion(l, i)">
+                                                <span class="small text-muted ms-2">Afectación</span>
+                                                <AfectacionLineasFactura :key="`${l.uid}-${filaAfectacion(l, i)!.tip_afe_igv}`" :fila="filaAfectacion(l, i)!"
+                                                    :deshabilitado="calculando" @cambiar="(tip) => (l.afectacion = tip)" />
+                                            </template>
+                                            <span v-for="a in avisosAfectacion(i)" :key="a.texto" class="badge" :class="a.clase">{{ a.texto }}</span>
                                         </div>
                                         <div v-if="detalleLinea(l, i)" class="small mt-1">{{ detalleLinea(l, i) }}</div>
                                     </div>
@@ -352,25 +358,72 @@
                             </div>
                         </div>
 
-                        <div class="d-flex justify-content-between border-top pt-2 mb-3 fs-6 fw-bold">
+                        <div class="d-flex justify-content-between border-top pt-2 mb-2 fs-6 fw-bold">
                             <span>Total</span>
                             <span>{{ totalGeneralTexto }}</span>
+                        </div>
+
+                        <!-- T-048: cómo sale en el comprobante, como en «Facturar» de la reserva. -->
+                        <div v-if="resumenTributario" class="border rounded px-2 py-1 bg-light mb-3">
+                            <div class="d-flex justify-content-between"><span>Op. gravadas</span><span>{{ dinero(resumenTributario.gravadas) }}</span></div>
+                            <div class="d-flex justify-content-between"><span>Op. exoneradas</span><span>{{ dinero(resumenTributario.exoneradas) }}</span></div>
+                            <div class="d-flex justify-content-between"><span>Op. inafectas</span><span>{{ dinero(resumenTributario.inafectas) }}</span></div>
+                            <div class="d-flex justify-content-between"><span>IGV</span><span>{{ dinero(resumenTributario.igv) }}</span></div>
+                            <div class="text-muted mt-1"><i class="fas fa-info-circle me-1"></i>El IGV sale del precio: el cliente paga lo mismo.</div>
                         </div>
 
                         <div v-if="faltante" class="alert alert-warning py-2 px-3 mb-2"><i class="fas fa-circle-info me-1"></i>{{ faltante }}</div>
                         <template v-else>
                             <div v-if="avisoTributario" class="alert alert-warning py-2 px-3 mb-2">
                                 <i class="fas fa-triangle-exclamation me-1"></i>{{ avisoTributario }}
-                                <div class="mt-1">Puedes usar «Crear» y facturar en dos comprobantes desde la reserva, o quitar una línea.</div>
+                                <div class="mt-1">Puedes usar «{{ puedeCrearYCobrar ? 'Crear sin cobrar' : 'Crear' }}» y facturar desde la reserva, o quitar una línea.</div>
                             </div>
-                            <div v-else class="alert alert-success py-2 px-3 mb-2"><i class="fas fa-circle-check me-1"></i>Listo</div>
+                            <div v-else class="alert alert-success py-2 px-3 mb-2"><i class="fas fa-circle-check me-1"></i>{{ puedeCrearYCobrar ? 'Listo para cobrar.' : 'Listo' }}</div>
                         </template>
 
-                        <button class="btn btn-primary fw-semibold w-100" @click="crear" :disabled="creando || !!faltante">
-                            <span v-if="creando" class="spinner-border spinner-border-sm me-2"></span>
-                            <i v-else class="fas fa-check me-2"></i>
-                            Crear venta directa<template v-if="totalBoton"> · {{ totalBoton }}</template>
-                        </button>
+                        <!-- T-048 — maqueta aprobada (D-AGE-034): «Crear y cobrar» arriba; el de siempre pasa a «Crear sin cobrar». -->
+                        <template v-if="fase === 'armar'">
+                            <template v-if="puedeCrearYCobrar">
+                                <button class="btn btn-primary fw-semibold w-100" :disabled="creando || !!faltante || !!avisoTributario" @click="fase = 'cobro'">
+                                    <i class="fas fa-cash-register me-2"></i>Crear y cobrar<template v-if="totalBoton"> · {{ totalBoton }}</template>
+                                </button>
+                                <button class="btn btn-outline-primary w-100 mt-2" @click="crear()" :disabled="creando || !!faltante">
+                                    <span v-if="creando" class="spinner-border spinner-border-sm me-2"></span>Crear sin cobrar
+                                </button>
+                                <div class="text-muted text-center mt-1">«Crear sin cobrar»: a crédito, si el pago llega después o para facturar desde la reserva.</div>
+                            </template>
+                            <button v-else class="btn btn-primary fw-semibold w-100" @click="crear()" :disabled="creando || !!faltante">
+                                <span v-if="creando" class="spinner-border spinner-border-sm me-2"></span>
+                                <i v-else class="fas fa-check me-2"></i>
+                                Crear venta directa<template v-if="totalBoton"> · {{ totalBoton }}</template>
+                            </button>
+                        </template>
+
+                        <!-- T-048: el cobro, con el bloque de T-011 (el mismo de facturar una reserva). -->
+                        <div v-else class="border rounded p-2">
+                            <div class="d-flex align-items-center justify-content-between mb-2">
+                                <span class="fw-semibold">Cobro</span>
+                                <button type="button" class="btn btn-sm btn-link p-0" :disabled="creando" @click="cerrarCobro">Cancelar</button>
+                            </div>
+                            <label class="form-label small fw-semibold text-secondary mb-1">Comprobante</label>
+                            <div class="d-flex gap-2 mb-1">
+                                <button v-for="t in tiposPermitidos" :key="t" type="button" class="btn btn-sm flex-fill"
+                                    :class="tipoComprobante === t ? 'btn-primary' : 'btn-outline-secondary'" :aria-pressed="tipoComprobante === t"
+                                    :disabled="t === '01' && !clienteTieneRuc" @click="tipoComprobante = t">
+                                    {{ t === '01' ? 'Factura' : 'Boleta' }}
+                                </button>
+                            </div>
+                            <div v-if="tiposPermitidos.includes('01') && !clienteTieneRuc" class="text-muted mb-2">Este cliente no tiene RUC — solo puede recibir boleta.</div>
+                            <CobroFacturaCampos v-if="vistaPrevia" v-model:pagos="pagosCobro" v-model:vuelto-moneda="vueltoMoneda" compacto
+                                :habilitado="true" condicion="contado" :saldo="totalACobrar" :moneda="moneda"
+                                :formas-pago="vistaPrevia.cobro.formas_pago" :tipo-cambio-dia="vistaPrevia.cobro.tipo_cambio_dia"
+                                :caja-abierta="vistaPrevia.cobro.caja_abierta" />
+                            <div v-if="motivoEmitir" class="text-warning-emphasis mb-1"><i class="fas fa-circle-info me-1"></i>{{ motivoEmitir }}</div>
+                            <button class="btn btn-primary fw-semibold w-100" :disabled="creando || !!motivoEmitir" @click="crearYCobrar">
+                                <span v-if="creando" class="spinner-border spinner-border-sm me-2"></span>{{ totalBoton ? `Emitir y cobrar ${totalBoton}` : 'Emitir y cobrar' }}
+                            </button>
+                            <div class="text-muted mt-1">Crea la reserva, emite el comprobante y registra el cobro en caja en un solo paso. El envío a SUNAT sigue siendo manual.</div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -404,15 +457,22 @@ import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import Swal from 'sweetalert2/dist/sweetalert2.js';
 import httpClient from '@/helpers/http-client';
 import ClientFormQuick from '@/components/Sales/ClientFormQuick.vue';
+import AfectacionLineasFactura from '@/components/AgenciaViajes/AfectacionLineasFactura.vue';
+import CobroFacturaCampos from '@/components/AgenciaViajes/CobroFacturaCampos.vue';
+import { diferencia, payloadCobro, validarCobro, type FilaCobro, type MonedaCobro } from '@/helpers/cobroFactura';
+import type { AfectacionFila, FilaAfectacion } from '@/services/admin/reservaFacturacionService';
+import { useAuthStore } from '@/stores/auth';
 import { proveedorService } from '@/services/admin/proveedorService';
 import { bibliotecaCotizadorService } from '@/services/admin/bibliotecaCotizadorService';
 import {
     ventaDirectaService,
     type LineaVentaDirecta,
+    type AfectacionElegida,
     type MonedaVenta,
     type TipoPaxVistaPrevia,
     type VistaPreviaLinea,
     type VistaPreviaVentaDirecta,
+    type VentaDirectaPayload,
 } from '@/services/admin/ventaDirectaService';
 import type { Client } from '@/types/clients';
 import type { PaquetePlantilla, ProveedorTarifa } from '@/types/agencia-viajes';
@@ -421,6 +481,7 @@ type TVueSwalInstance = typeof Swal & typeof Swal.fire;
 
 const router = useRouter();
 const toast = useToast();
+const authStore = useAuthStore();
 
 const NOMBRE_MONEDA: Record<MonedaVenta, string> = { PEN: 'soles', USD: 'dólares' };
 const DIAS = Array.from({ length: 14 }, (_, i) => i + 1);
@@ -613,6 +674,8 @@ type Linea = {
     descripcion: string;
     precio: number | null;
     costo: number | null; // 0 si no tiene
+    // T-048: la afectación elegida en la columna; null = la que trae (tarifa o valor de la agencia).
+    afectacion: AfectacionElegida | null;
 };
 
 const lineas = ref<Linea[]>([]);
@@ -645,7 +708,7 @@ const refsLinea = new Map<number, HTMLElement>();
 const guardarRefLinea = (uid: number, el: any) => { if (el) refsLinea.set(uid, el as HTMLElement); else refsLinea.delete(uid); };
 
 const nuevaLinea = (parcial: Partial<Linea> & Pick<Linea, 'origen'>): Linea => ({
-    uid: siguienteUid++, dia: 1, cantidad: 1, modoPrecio: null, descripcion: '', precio: null, costo: 0, ...parcial,
+    uid: siguienteUid++, dia: 1, cantidad: 1, modoPrecio: null, descripcion: '', precio: null, costo: 0, afectacion: null, ...parcial,
 });
 
 const resaltar = async (uid: number) => {
@@ -816,6 +879,8 @@ const motivoMoneda = computed<string>(() => {
         : '';
 });
 
+// T-048: la afectación elegida viaja con la línea (vista previa y crear); un tour nunca la lleva.
+const afectacionDe = (l: Linea) => (l.afectacion ? { tip_afe_igv: l.afectacion } : {});
 const payloadLineas = (): LineaVentaDirecta[] => lineas.value.map((l) => l.origen === 'tour'
     ? { origen_tipo: 'tour', dia: l.dia, paquete_plantilla_id: l.tour!.id }
     : l.origen === 'proveedor'
@@ -823,10 +888,12 @@ const payloadLineas = (): LineaVentaDirecta[] => lineas.value.map((l) => l.orige
         origen_tipo: 'proveedor', dia: l.dia, proveedor_tarifa_id: l.tarifa!.id,
         modo_precio: esHotel(l) ? 'tarifa_fija' : l.modoPrecio,
         cantidad: !esHotel(l) && l.modoPrecio === 'por_persona' ? 1 : l.cantidad,
+        ...afectacionDe(l),
     }
     : {
         origen_tipo: 'manual', dia: l.dia, descripcion_manual: l.descripcion.trim(),
         precio_venta_snapshot: l.precio!, costo_snapshot: l.costo ?? 0, cantidad: l.cantidad,
+        ...afectacionDe(l),
     });
 
 // Hay un cálculo en espera (debounce) o en vuelo: los totales en pantalla
@@ -867,7 +934,7 @@ const pedirVistaPrevia = () => {
 
 // Todo lo que cambia el cálculo en una sola firma.
 watch(
-    () => JSON.stringify([fechaInicio.value, moneda.value, pax.value.map((p) => [p.edad, p.residencia]), lineas.value.map((l) => [l.uid, l.dia, l.cantidad, l.modoPrecio, l.descripcion, l.precio, l.costo])]),
+    () => JSON.stringify([fechaInicio.value, moneda.value, pax.value.map((p) => [p.edad, p.residencia]), lineas.value.map((l) => [l.uid, l.dia, l.cantidad, l.modoPrecio, l.descripcion, l.precio, l.costo, l.afectacion])]),
     pedirVistaPrevia,
 );
 
@@ -936,6 +1003,23 @@ const afectacionesDe = (i: number) => {
     if (!totalesAlDia.value || !lp) return [];
     const etiquetas = (lp.afectaciones?.length ? lp.afectaciones : [lp]).map(ETIQUETA_AFECTACION);
     return etiquetas.filter((e, k) => etiquetas.findIndex((x) => x.texto === e.texto) === k);
+};
+// T-048: la columna «Afectación» muestra gravado / exonerado / inafecto; la etiqueta queda solo
+// para la exportación, que bloquea «Crear y cobrar».
+const avisosAfectacion = (i: number) => afectacionesDe(i).filter((a) => a.texto === 'Exportación');
+
+// T-048: la fila que dibuja AfectacionLineasFactura (la misma celda que al facturar una reserva).
+// Un tour con grupos de afectación distinta dice «Mixto», como en la facturación.
+const filaAfectacion = (l: Linea, i: number): FilaAfectacion | null => {
+    const lp = vistaPrevia.value?.lineas[i];
+    if (!totalesAlDia.value || !lp) return null;
+    const codigos = [...new Set((lp.afectaciones?.length ? lp.afectaciones : [lp]).map((a) => a.tip_afe_igv))];
+    return {
+        nombre: nombreLinea(l),
+        tip_afe_igv: (codigos.length > 1 ? 'mixto' : lp.tip_afe_igv) as AfectacionFila,
+        editable: lp.editable,
+        cambiado: lp.cambiado,
+    };
 };
 
 // ── Resumen ────────────────────────────────────────────────────────────
@@ -1006,7 +1090,63 @@ const onClientCreated = (client: Client) => {
     showQuickClientModal.value = false;
 };
 
-const crear = async () => {
+// ── «Crear y cobrar» (T-048) ───────────────────────────────────────────
+// Aparece solo con el cobro al facturar encendido (AGENCIA_COBRO_AL_FACTURAR) y si el usuario
+// puede facturar una reserva (reservas.editar) y emitir boleta o factura. El backend lo revalida.
+const resumenTributario = computed(() => (totalesAlDia.value ? vistaPrevia.value!.resumen : null));
+const tiposPermitidos = computed<Array<'01' | '03'>>(() =>
+    (['03', '01'] as const).filter((t) => authStore.isPermitedRoute(t === '01' ? 'emitir_factura' : 'emitir_boleta')));
+const puedeCrearYCobrar = computed<boolean>(() => !!vistaPrevia.value?.cobro.cobro_habilitado
+    && authStore.isPermitedRoute('reservas.editar') && tiposPermitidos.value.length > 0);
+
+const fase = ref<'armar' | 'cobro'>('armar');
+// Sin valor por defecto: el vendedor elige boleta o factura cada vez.
+const tipoComprobante = ref<'01' | '03' | null>(null);
+const pagosCobro = ref<FilaCobro[]>([]);
+const vueltoMoneda = ref<MonedaCobro>('PEN');
+watch(moneda, (m) => { vueltoMoneda.value = m; });
+
+// Factura ('01') exige RUC (catálogo 06 SUNAT, '6'); el backend también lo valida.
+const clienteTieneRuc = computed(() => clienteSeleccionado.value?.cod_tipo_doc_sunat === '6');
+watch(clienteTieneRuc, (conRuc) => { if (!conRuc && tipoComprobante.value === '01') tipoComprobante.value = null; });
+
+const totalACobrar = computed<number>(() => (totalesAlDia.value ? Number(vistaPrevia.value!.total ?? 0) : 0));
+
+// Por qué todavía no se puede emitir (un solo motivo, el más urgente).
+const motivoEmitir = computed<string>(() => {
+    if (faltante.value) return faltante.value;
+    if (avisoTributario.value) return avisoTributario.value;
+    if (!tipoComprobante.value) return 'Elige el comprobante: boleta o factura.';
+    if (!vistaPrevia.value?.cobro.caja_abierta) return 'Abre tu caja para cobrar.';
+    return '';
+});
+
+const cerrarCobro = () => {
+    fase.value = 'armar';
+    tipoComprobante.value = null;
+    pagosCobro.value = [];
+};
+
+const crearYCobrar = async () => {
+    if (motivoEmitir.value) {
+        toast.error(motivoEmitir.value);
+        return;
+    }
+    const formas = vistaPrevia.value!.cobro.formas_pago;
+    const error = validarCobro(pagosCobro.value, totalACobrar.value, moneda.value, formas);
+    if (error) {
+        toast.error(error);
+        return;
+    }
+    await crear({
+        cobrar: true,
+        tipo_comprobante_codigo: tipoComprobante.value!,
+        ...payloadCobro('contado', totalACobrar.value, true, pagosCobro.value, vueltoMoneda.value,
+            Math.max(0, -diferencia(pagosCobro.value, totalACobrar.value, moneda.value))),
+    });
+};
+
+const crear = async (cobro: Partial<VentaDirectaPayload> = {}) => {
     if (faltante.value || !clienteSeleccionado.value || !destinoId.value) {
         (Swal as TVueSwalInstance).fire('Error', faltante.value || 'Completa los datos de la venta.', 'error');
         return;
@@ -1023,10 +1163,13 @@ const crear = async () => {
             pax: paxParaCrear(),
             cliente_viaja: clienteViajaEnvio.value,
             lineas: payloadLineas(),
+            ...cobro,
         });
 
         // T-047: salida del tour cancelada (T-042) o avisos del tour, como al aceptar en el cotizador.
         [...(res.avisos_salida_cancelada ?? []), ...(res.avisos ?? [])].forEach((aviso) => toast.warning(aviso));
+        // T-048: la ficha de la reserva muestra el comprobante con su botón de imprimir.
+        if (res.sale_id) toast.success(`${res.message} (serie ${res.serie}). El envío a SUNAT se hace desde Ventas.`);
         router.push(`/agencia-viajes/reservas/${res.reserva.id}`);
     } catch (error: any) {
         (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo crear la venta directa', 'error');

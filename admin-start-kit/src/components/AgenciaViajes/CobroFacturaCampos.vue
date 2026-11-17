@@ -32,31 +32,31 @@
 
             <div v-for="(fila, i) in pagos" :key="i" class="border rounded p-2 mb-2">
                 <div class="row g-2 align-items-end">
-                    <div class="col-6 col-md-3">
+                    <div :class="compacto ? 'col-6' : 'col-6 col-md-3'">
                         <label class="form-label mb-1 small text-secondary">Forma de pago</label>
                         <select class="form-select form-select-sm" v-model="fila.method_payment"
                             @change="ajustarMoneda(fila)">
                             <option v-for="f in formasPago" :key="f.code" :value="f.code">{{ f.name }}</option>
                         </select>
                     </div>
-                    <div class="col-6 col-md-2">
+                    <div :class="compacto ? 'col-6' : 'col-6 col-md-2'">
                         <label class="form-label mb-1 small text-secondary">Moneda</label>
                         <select class="form-select form-select-sm" v-model="fila.moneda_pago"
                             @change="alCambiarMoneda(fila)">
                             <option v-for="m in monedasDe(fila)" :key="m" :value="m">{{ m === 'USD' ? 'Dólares' : 'Soles' }}</option>
                         </select>
                     </div>
-                    <div class="col-6 col-md-2">
+                    <div :class="compacto ? 'col-6' : 'col-6 col-md-2'">
                         <label class="form-label mb-1 small text-secondary">Monto</label>
                         <input type="number" min="0" step="0.01" class="form-control form-control-sm"
                             v-model.number="fila.monto_pagado" @input="tocado = true" />
                     </div>
-                    <div class="col-6 col-md-2" v-if="fila.moneda_pago !== moneda">
+                    <div :class="compacto ? 'col-6' : 'col-6 col-md-2'" v-if="fila.moneda_pago !== moneda">
                         <label class="form-label mb-1 small text-secondary">Tipo de cambio</label>
                         <input type="number" min="0" step="0.001" class="form-control form-control-sm"
                             v-model.number="fila.tipo_cambio" />
                     </div>
-                    <div class="col-6 col-md-2">
+                    <div :class="compacto ? 'col-6' : 'col-6 col-md-2'">
                         <label class="form-label mb-1 small text-secondary">N.º operación</label>
                         <input type="text" maxlength="50" class="form-control form-control-sm" v-model="fila.nro_operacion"
                             placeholder="Opcional" />
@@ -117,6 +117,8 @@ const props = defineProps<{
     tipoCambioDia: number | null;
     cajaAbierta: boolean;
     traspasosDisponibles?: TraspasoDisponible[];
+    // T-048: en una columna angosta (el resumen de Venta directa), dos campos por fila.
+    compacto?: boolean;
 }>();
 
 const pagos = defineModel<FilaCobro[]>('pagos', { required: true });
