@@ -5,7 +5,7 @@
 | **Módulo** | AGE + CAJ |
 | **Depende de** | T-047 (la pantalla completa), T-011 (y por ella T-010) y **T-091** (comprobante mixto y sin confirmación de la Amazonía) |
 | **Reglas** | las de cobro de T-010/T-011 |
-| **Decisiones** | `docs/requerimientos/observaciones-pruebas-usuario.md` → obs. 12, H45 y respuestas 1-2 (27-oct-2026: también por transferencia; comprobante elegido cada vez); D-AGE-034 (sin nota de venta); `agencia-tributario-simplificado.md` §2.7, C4 y C5 (07-nov-2026: se mezclan gravadas y exoneradas; **sin confirmación de la Amazonía**, reemplaza el punto 2 de D-AGE-034) |
+| **Decisiones** | `docs/requerimientos/observaciones-pruebas-usuario.md` → obs. 12, H45 y respuestas 1-2 (27-oct-2026: también por transferencia; comprobante elegido cada vez); D-AGE-034 (sin nota de venta); `agencia-tributario-simplificado.md` §2.7, C4 y C5 (07-nov-2026: se mezclan gravadas y exoneradas; **sin confirmación de la Amazonía**, reemplaza el punto 2 de D-AGE-034); D-AGE-036 (series solo por moneda); D-AGE-037 (columna «Afectación» editable, el mismo componente que al facturar; decidido para Venta directa el 16-nov) |
 | **Rama** | `feat/T-048-venta-directa-crear-cobrar` |
 
 ## Contexto
@@ -22,10 +22,30 @@ venta que se paga en el momento, en la oficina o por transferencia.
   formas de pago con Yape/Plin, moneda, n.º de operación, pago mixto, vuelto) y el **tipo de
   comprobante sin valor por defecto**: **boleta o factura**, según los permisos de emisión del
   usuario. **Sin nota de venta** (D-AGE-034: facturar una reserva solo emite 01 y 03).
-- **Afectación** (de la vista previa de T-085, `facturable`, ya con P7):
-  - Cada línea muestra su afectación (Exonerado / Gravado) y el resumen, op. exoneradas, op.
-    gravadas, IGV y total. Gravadas y exoneradas van **en el mismo comprobante** (C4).
-  - **Sin confirmación de la Amazonía** ni `motivo_override_tributario` (C5).
+- **Afectación** (vista previa de T-085, `facturable` ya con P7 desde T-091; recorrido 65):
+  - Gravado, exonerado e inafecto van **en el mismo comprobante** (C4). **Sin confirmación de la
+    Amazonía** ni motivo (C5).
+  - **Columna «Afectación» editable por línea** (16-nov, D-AGE-037), con el mismo componente que
+    al facturar: `components/AgenciaViajes/AfectacionLineasFactura.vue`. Hoy su prop es el tipo
+    `DetalleComprobantePreview` de reservas; generalizarla a un tipo mínimo (`nombre`,
+    `tip_afe_igv`, `editable`, `cambiado`, `excluido?`) sin cambiar lo que ven los modales de
+    facturar. **No** reusar `useAfectacionFactura` (guarda sobre una reserva que acá no existe).
+  - Línea de proveedor o concepto libre: lista Gravado / Exonerado – Amazonía / Inafecto,
+    prellenada con el tratamiento que hoy resuelve `resolverLineas()`
+    (`AlternativaItemController::resolverTratamientoTributario()`). Línea de **tour**: solo
+    lectura (su afectación, o «Mixto» si sus grupos difieren, como en la facturación). La línea
+    cambiada muestra «✎ cambiado».
+  - El cambio **no se guarda aparte**: viaja como `lineas.*.tip_afe_igv` (nuevo, `nullable|in:10,20,30`;
+    en una línea `tour` → 422 «La afectación de un tour se corrige en el tour», nunca ignorarlo en silencio) en
+    `vista-previa` y en `store`. En `vista-previa` reemplaza el tratamiento de la línea (con el
+    destino sacado del código: 20 ⇒ `amazonia`, si no `nacional`, como
+    `ReservaController::overrideTratamientoTributario()`) y el resumen se recalcula.
+  - Al crear: el `reserva_item` de esa línea queda con ese `tip_afe_igv`, el destino derivado y
+    `fecha_override_tributario = now()` (= «corregido a mano», T-091: lo respetan
+    `resolverTipAfeIgvItem()` y `repuntar()`), dentro de la misma transacción. Sin cambiar
+    `tip_afe_igv`, la línea queda como hoy (sin fecha de override).
+  - Resumen a la vista: op. gravadas, exoneradas, **inafectas**, IGV y total, y la línea «El IGV
+    sale del precio: el cliente paga lo mismo» (como en `DetalleComprobantePreview.vue`).
   - `ok = false` solo por exportación: «Crear y cobrar» deshabilitado con el motivo; «Crear sin
     cobrar» sigue habilitado.
 - Backend: crea la venta directa y, **en la misma transacción**, factura la reserva completa al
@@ -44,12 +64,16 @@ venta que se paga en el momento, en la oficina o por transferencia.
   reserva).
 - Nota de venta (D-AGE-034).
 - Emitir dos comprobantes en el mismo paso: con la mezcla permitida (C4) no hace falta.
-- Series por afectación (P8): se usa la serie que resuelva `SerieComprobanteService` en ese momento.
+- Series por afectación: descartadas (D-AGE-036). La serie es la normal, por sucursal + tipo + moneda.
+- Cambiar la afectación de un servicio **dentro de un tour** desde Venta directa (fila de solo
+  lectura, como al facturar).
 
 ## Archivos probables
 - `api-sistema-fe/app/Http/Controllers/AgenciaViajes/VentaDirectaController.php`
 - `api-sistema-fe/app/Http/Controllers/AgenciaViajes/ReservaFacturacionController.php`
 - `admin-start-kit/src/views/agencia-viajes/venta-directa.vue` + el componente de cobro de T-011
+- `VentaDirectaController::reglasLineas()`, `resolverLineas()`, `vistaPrevia()` y `store()` (el `tip_afe_igv` por línea)
+- `admin-start-kit/src/components/AgenciaViajes/AfectacionLineasFactura.vue` (generalizar la prop) y `services/admin/ventaDirectaService.ts`
 
 ## Criterios de aceptación
 - [ ] **CA1** — Crear y cobrar con boleta, efectivo S/ 120 → reserva, venta pagada, 1 pago y 1 movimiento de caja. → test
@@ -68,12 +92,18 @@ venta que se paga en el momento, en la oficina o por transferencia.
   422. → test + prueba funcional
 - [ ] **CA10** — De punta a punta en agencia-demo (tour + traslado, crear y cobrar con Yape,
   imprimir). → prueba funcional
-- [ ] **CA11** — Suite completa en verde; `type-check` sin errores nuevos.
+- [ ] **CA12** — Columna «Afectación»: un traslado gravado de S/ 118 pasado a Inafecto en la vista
+  previa → resumen con op. inafectas 118 e IGV 0, mismo total; al crear y cobrar, su `reserva_item`
+  queda 30 / `nacional` con `fecha_override_tributario`, y la factura con `mto_oper_inafectas` 118.
+  Una línea sin cambiar queda sin fecha de override. Un tour no muestra la lista. → test + prueba funcional
+- [ ] **CA13** — Los modales de facturar una reserva siguen igual con la prop generalizada
+  (columna, «✎ cambiado», resumen). → prueba funcional rápida
+- [ ] **CA11** — Suite completa en verde (con T-103 ya hecha); `type-check` sin errores nuevos.
 
 ## Seguridad y correctitud
 - [ ] Permisos / Policy en rutas nuevas: crear venta directa + facturar reserva + permiso de emisión del tipo de comprobante
 - [ ] Aislamiento de tenant: no aplica
-- [ ] Validación de entrada / archivos: las de T-011
+- [ ] Validación de entrada / archivos: las de T-011; `lineas.*.tip_afe_igv` `nullable|in:10,20,30`
 - [ ] Concurrencia (`lockForUpdate`): correlativo con `SerieComprobanteService`, todo en una transacción
 - [ ] Dinero en centavos: como en T-011
 - [ ] Fechas con `HoraPeru`: fecha de emisión `HoraPeru::hoyTexto()`
