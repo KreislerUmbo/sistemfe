@@ -15,7 +15,7 @@ Archivos:
 - `api-sistema-fe/app/Http/Controllers/AgenciaViajes/VentaDirectaController.php` (`vistaPrevia()`, `resumenTributario()`, `conAfectacionElegida()`, `store()`, `facturarYCobrar()`)
 - `api-sistema-fe/app/Http/Controllers/AgenciaViajes/ReservaFacturacionController.php` (`prepararFactura()` usa el bloque extraído; `store()` sin cambios)
 - `api-sistema-fe/app/Services/Cobro/CobroVentaService.php` (`datosDelBloqueDeCobro()`, nuevo)
-- Tests: `T048VentaDirectaCrearYCobrarTest` (20) y 3 nuevos en `VentaDirectaTourTest`
+- Tests: `T048VentaDirectaCrearYCobrarTest` (22: 20 de la construcción + 2 de la revisión) y 3 nuevos en `VentaDirectaTourTest`
 
 **Al desplegar:** nada (sin migraciones). «Crear y cobrar» aparece solo con `AGENCIA_COBRO_AL_FACTURAR`
 encendido, como el cobro de T-011. Frontend y backend juntos: la pantalla nueva espera `editable`,
@@ -249,7 +249,7 @@ Antes lo armaba `prepararFactura()` en línea; ahora lo comparten los modales de
 
 ## 6. Cómo se probó
 
-- `T048VentaDirectaCrearYCobrarTest` (20): CA1 (boleta, efectivo S/ 120: reserva, venta pagada, 1 pago,
+- `T048VentaDirectaCrearYCobrarTest` (22: 20 de la construcción + 2 de la revisión): CA1 (boleta, efectivo S/ 120: reserva, venta pagada, 1 pago,
   1 movimiento, `reserva_ventas`), CA2 (n.º de operación), CA3, CA4 (dos casos), CA5, factura con RUC, CA6,
   permisos (emisión, `reservas.editar`, Policy en español), CA7 (Amazonía sin confirmar, con leyenda), CA8 (un
   comprobante gravado + exonerado), CA8b, CA9, bloque de cobro en la vista previa, T.C. como número, CA12 (S/ 118
