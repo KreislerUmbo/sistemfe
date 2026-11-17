@@ -16,6 +16,7 @@ use App\Models\Sale\Sale;
 use App\Models\Sale\SaleDetail;
 use App\Models\Sale\SalePayment;
 use App\Models\Sale\SerieComprobante;
+use App\Models\TipoCambio\TipoCambioSunat;
 use App\Models\User;
 use App\Services\HoraPeru;
 use Illuminate\Http\Request;
@@ -293,6 +294,21 @@ class T048VentaDirectaCrearYCobrarTest extends TestCase
         $this->assertSame($antes, $this->conteos());
     }
 
+    // Revisión de T-048: si ReservaPolicy niega facturar la reserva recién creada, 403 en el
+    // formato {code, message} de esta API (no el render en inglés de Laravel) y no queda nada.
+    public function test_si_la_policy_niega_facturar_responde_403_en_espanol_y_no_crea_nada(): void
+    {
+        \Illuminate\Support\Facades\Gate::before(fn ($usuario, string $habilidad, array $args) =>
+            $habilidad === 'update' && ($args[0] ?? null) instanceof Reserva ? false : null);
+        $antes = $this->conteos();
+
+        $body = $this->crear([$this->linea($this->tarifa(120))], $this->cobrar('03', [['method_payment' => 'EFECTIVO', 'monto_pagado' => 120]]));
+
+        $this->assertSame(403, $body['status']);
+        $this->assertStringContainsString('No tienes permiso para facturar esta reserva', $body['message']);
+        $this->assertSame($antes, $this->conteos());
+    }
+
     // CA7
     public function test_ca7_linea_de_la_amazonia_sin_confirmar_sale_exonerada_con_leyenda(): void
     {
@@ -366,6 +382,18 @@ class T048VentaDirectaCrearYCobrarTest extends TestCase
         $this->assertTrue($cobro['cobro_habilitado']);
         $this->assertTrue($cobro['caja_abierta']);
         $this->assertContains('YAPE', array_column($cobro['formas_pago'], 'code'));
+    }
+
+    // Revisión de T-048: la columna es decimal (Eloquent la da como «3.8500»); el bloque de cobro
+    // la espera como número, en Venta directa y en los modales de facturar una reserva.
+    public function test_el_tipo_de_cambio_del_bloque_de_cobro_llega_como_numero(): void
+    {
+        TipoCambioSunat::create(['fecha' => HoraPeru::hoyTexto(), 'compra' => 3.8, 'venta' => 3.85, 'fuente' => 'test', 'consultado_en' => now()]);
+
+        $tc = $this->vistaPrevia([$this->linea($this->tarifa(120))])['cobro']['tipo_cambio_dia'];
+
+        $this->assertIsFloat($tc);
+        $this->assertSame(3.85, $tc);
     }
 
     // CA12

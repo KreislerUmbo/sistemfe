@@ -28,6 +28,7 @@ use App\Services\AgenciaViajes\PasajeroCatalogoService;
 use App\Services\AgenciaViajes\PriceEngineService;
 use App\Services\Crm\AccionesCrm;
 use Carbon\Carbon;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -260,6 +261,10 @@ class VentaDirectaController extends Controller
             $status = $e->getStatusCode();
 
             return response()->json(['code' => $status, 'message' => $e->getMessage() ?: 'No se pudo crear la venta directa.'], $status);
+        } catch (AuthorizationException) {
+            // T-048: «Crear y cobrar» pasa por ReservaPolicy (authorize('update') en
+            // ReservaFacturacionController::store()); la transacción ya se deshizo.
+            return response()->json(['code' => 403, 'message' => 'No tienes permiso para facturar esta reserva: usa «Crear sin cobrar».'], 403);
         }
 
         $reserva->load([

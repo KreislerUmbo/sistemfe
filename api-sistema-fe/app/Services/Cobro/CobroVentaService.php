@@ -295,10 +295,15 @@ class CobroVentaService
      * activas y el tipo de cambio del día. Salió de ReservaFacturacionController::prepararFactura()
      * (T-048) para que Venta directa muestre lo mismo.
      *
-     * @return array{cobro_habilitado: bool, caja_abierta: bool, formas_pago: \Illuminate\Support\Collection, tipo_cambio_dia: mixed}
+     * El tipo de cambio va como número: la columna es decimal y Eloquent la entrega como texto
+     * («3.3600»), y CobroFacturaCampos.vue espera un número.
+     *
+     * @return array{cobro_habilitado: bool, caja_abierta: bool, formas_pago: \Illuminate\Support\Collection, tipo_cambio_dia: ?float}
      */
     public function datosDelBloqueDeCobro(?User $usuario): array
     {
+        $tipoCambio = app(\App\Services\TipoCambio\TipoCambioSunatResolver::class)->resolverParaFecha(HoraPeru::ahora())?->venta;
+
         return [
             'cobro_habilitado' => (bool) config('agencia.cobro_al_facturar'),
             'caja_abierta' => $usuario !== null && CashSession::where('opened_by', $usuario->id)->where('status', 'open')->exists(),
@@ -310,7 +315,7 @@ class CobroVentaService
                     'monedas' => $m->monedas ?? ['PEN', 'USD'],
                     'affects_cash_count' => (bool) $m->affects_cash_count,
                 ])->values(),
-            'tipo_cambio_dia' => app(\App\Services\TipoCambio\TipoCambioSunatResolver::class)->resolverParaFecha(HoraPeru::ahora())?->venta,
+            'tipo_cambio_dia' => $tipoCambio === null ? null : (float) $tipoCambio,
         ];
     }
 

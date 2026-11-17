@@ -416,7 +416,7 @@
                             <div v-if="tiposPermitidos.includes('01') && !clienteTieneRuc" class="text-muted mb-2">Este cliente no tiene RUC — solo puede recibir boleta.</div>
                             <CobroFacturaCampos v-if="vistaPrevia" v-model:pagos="pagosCobro" v-model:vuelto-moneda="vueltoMoneda" compacto
                                 :habilitado="true" condicion="contado" :saldo="totalACobrar" :moneda="moneda"
-                                :formas-pago="vistaPrevia.cobro.formas_pago" :tipo-cambio-dia="tipoCambioDia"
+                                :formas-pago="vistaPrevia.cobro.formas_pago" :tipo-cambio-dia="vistaPrevia.cobro.tipo_cambio_dia"
                                 :caja-abierta="vistaPrevia.cobro.caja_abierta" />
                             <div v-if="motivoEmitir" class="text-warning-emphasis mb-1"><i class="fas fa-circle-info me-1"></i>{{ motivoEmitir }}</div>
                             <button class="btn btn-primary fw-semibold w-100" :disabled="creando || !!motivoEmitir" @click="crearYCobrar">
@@ -1110,11 +1110,6 @@ watch(moneda, (m) => { vueltoMoneda.value = m; });
 const clienteTieneRuc = computed(() => clienteSeleccionado.value?.cod_tipo_doc_sunat === '6');
 watch(clienteTieneRuc, (conRuc) => { if (!conRuc && tipoComprobante.value === '01') tipoComprobante.value = null; });
 
-// La columna decimal llega como texto («3.3600»); el bloque de cobro espera un número.
-const tipoCambioDia = computed<number | null>(() => {
-    const tc = vistaPrevia.value?.cobro.tipo_cambio_dia;
-    return tc === null || tc === undefined ? null : Number(tc);
-});
 const totalACobrar = computed<number>(() => (totalesAlDia.value ? Number(vistaPrevia.value!.total ?? 0) : 0));
 
 // Por qué todavía no se puede emitir (un solo motivo, el más urgente).

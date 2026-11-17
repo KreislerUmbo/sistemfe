@@ -110,7 +110,7 @@ export type VistaPreviaVentaDirecta = {
   // T-048: op. gravadas / exoneradas / inafectas e IGV (null mientras falte un total).
   resumen: { gravadas: number; exoneradas: number; inafectas: number; igv: number; total: number } | null
   // T-048: el bloque de cobro de «Crear y cobrar» (el mismo de facturar una reserva).
-  cobro: { cobro_habilitado: boolean; caja_abierta: boolean; formas_pago: FormaPagoCobro[]; tipo_cambio_dia: number | string | null }
+  cobro: { cobro_habilitado: boolean; caja_abierta: boolean; formas_pago: FormaPagoCobro[]; tipo_cambio_dia: number | null }
 }
 
 export const ventaDirectaService = {

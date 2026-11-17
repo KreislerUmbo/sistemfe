@@ -190,10 +190,12 @@ cd admin-start-kit && npm run type-check
     columna del resumen; sin ella se ve igual que antes en los modales.
 
 ## Hallazgos fuera de alcance
-- `prepararFactura()` (y ahora la vista previa de Venta directa) manda `tipo_cambio_dia` como texto
-  («3.3600», columna decimal), y `CobroFacturaCampos` espera un número: aviso de Vue en consola al
-  abrir «Facturar» de una reserva. En Venta directa se convierte en la pantalla; en los modales de
-  facturar sigue el aviso. Arreglo de una línea (castear en `datosDelBloqueDeCobro()` o en los modales).
+- ~~`tipo_cambio_dia` llegaba como texto («3.3600»)~~: resuelto en la revisión (16-nov):
+  `datosDelBloqueDeCobro()` lo castea a número, para Venta directa y los modales de facturar
+  (test `test_el_tipo_de_cambio_del_bloque_de_cobro_llega_como_numero`).
+- Revisión (16-nov): un rechazo de `ReservaPolicy` dentro de «Crear y cobrar» salía como el 403 en
+  inglés de Laravel; ahora `store()` lo atrapa y responde `{code: 403, message}` en español
+  (test `test_si_la_policy_niega_facturar_responde_403_en_espanol_y_no_crea_nada`).
 - El número de un comprobante sin enviar se muestra «B001-0000null» en «Comprobantes emitidos» de la
   reserva (el correlativo se asigna al enviar a SUNAT): ya pasaba con las facturas de reserva.
 - Al abrir Venta directa apareció una vez un 500 en `/api/destinos-atractivos`: es el intermitente
