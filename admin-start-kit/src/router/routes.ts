@@ -921,6 +921,17 @@ const comercialRoutes = [
     },
     component: () => import("@/views/agencia-viajes/seguimiento/index.vue"),
   },
+  // T-062 (CRM C6b): embudo, origen, vendedor, motivos y tiempo de respuesta.
+  {
+    path: "/agencia-viajes/reportes-comerciales",
+    name: "agencia.reportesComerciales",
+    meta: {
+      title: setTitle("Reportes comerciales"),
+      authRequired: true,
+      permission: 'reportes_comerciales.ver',
+    },
+    component: () => import("@/views/agencia-viajes/reportes-comerciales/index.vue"),
+  },
   {
     path: "/agencia-viajes/cotizador/:id",
     name: "agencia.cotizador.editar",

@@ -37,6 +37,7 @@ use App\Http\Controllers\AgenciaViajes\ProveedorTarifaController;
 use App\Http\Controllers\AgenciaViajes\AerolineaController;
 use App\Http\Controllers\AgenciaViajes\ProveedorTipoConfigController;
 use App\Http\Controllers\AgenciaViajes\ReservaAnticipoController;
+use App\Http\Controllers\AgenciaViajes\ReporteComercialController;
 use App\Http\Controllers\AgenciaViajes\ReporteOperativoController;
 use App\Http\Controllers\AgenciaViajes\ReservaController;
 use App\Http\Controllers\AgenciaViajes\ReservaFacturacionController;
@@ -549,6 +550,14 @@ Route::group([
     // "De todos" o de otro responsable: cotizaciones.ver_todas (en el controller).
     Route::get("crm/pendientes", [CrmPendientesController::class, 'index'])
         ->middleware('permission:cotizaciones.ver|cotizaciones.ver_todas');
+    // T-062 (CRM C6b, solo Agencia: 404 en otro giro): reportes comerciales y su Excel. Sin
+    // cotizaciones.ver_todas, cada uno ve solo sus cotizaciones (ReporteComercial).
+    Route::get("reportes-comerciales", [ReporteComercialController::class, 'index'])
+        ->middleware('permission:reportes_comerciales.ver');
+    Route::get("reportes-comerciales/opciones", [ReporteComercialController::class, 'opciones'])
+        ->middleware('permission:reportes_comerciales.ver');
+    Route::get("reportes-comerciales/export", [ReporteComercialController::class, 'export'])
+        ->middleware('permission:reportes_comerciales.ver');
     // T-060 (CRM C5, solo Agencia: 404 en otro giro): resumen y línea de tiempo de la ficha (ver el
     // cliente; qué cotizaciones/reservas entran lo deciden los scopes de las Policy) y preferencias
     // del viajero (leerlas también desde el cotizador; guardarlas, editar el cliente).

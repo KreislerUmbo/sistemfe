@@ -50,6 +50,8 @@ class AgenciaViajesRolesSeeder extends Seeder implements RolesCatalogProvider
         'cotizaciones.ver', 'cotizaciones.ver_todas', 'cotizaciones.crear', 'cotizaciones.editar',
         // Envío de cotizaciones por correo (plan-modulo-envio-correo-cotizacion.md, 14-oct-2026).
         'cotizaciones.enviar_correo',
+        // T-062 — pantalla «Reportes comerciales» (CRM C6b); solo para Administrador.
+        'reportes_comerciales.ver',
         'reservas.ver', 'reservas.ver_todas', 'reservas.crear', 'reservas.editar', 'reservas.modificar',
         'roles.administrar',
 
@@ -81,6 +83,7 @@ class AgenciaViajesRolesSeeder extends Seeder implements RolesCatalogProvider
     private const ROLES = [
         'Administrador de agencia' => [
             'cotizaciones.ver', 'cotizaciones.ver_todas', 'cotizaciones.crear', 'cotizaciones.editar', 'cotizaciones.enviar_correo', 'agencia.cotizaciones',
+            'reportes_comerciales.ver',
             'reservas.ver', 'reservas.ver_todas', 'reservas.crear', 'reservas.editar', 'reservas.modificar', 'agencia.reservas',
             'agencia.proveedores', 'agencia.destinos', 'agencia.temporadas', 'agencia.guias', 'agencia.paquetes', 'agencia.configuracion',
             'nota_electronica', 'list_nota_electronica',
