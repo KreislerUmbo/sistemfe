@@ -59,9 +59,46 @@ cd admin-start-kit && npm run type-check
 ---
 
 ## Resultado
-- **Commits:**
-- **Tests:** (nuevos / suite completa)
+- **Commits:** `08da7caa` (backend: servicio `ReporteComercial`, `ReporteComercialController`,
+  `ReporteComercialExport`, permiso, rol, menú, tests), `0d15a156` (pantalla
+  `reportes-comerciales/index.vue`, `reporteComercialService.ts`, ruta), más el de este resultado.
+- **Tests:** 14 nuevos en `ReportesComercialesTest` (77 aserciones): CA1 embudo 4/3/3; día de Perú
+  en el borde del rango; venta directa y modificación fuera; anulada; reserva modificada (monto de
+  la versión nueva); CA2 origen y vendedor suman lo del embudo (incluye inactivo, origen
+  desactivado, sin origen y sin vendedor); filtros; CA3 montos PEN/USD; CA4 mismas consultas con 5
+  que con 25 cotizaciones (≤ 4); motivos con «Sin motivo»; mediana; sin `ver_todas` solo lo propio;
+  rango > 12 meses, invertido o mal escrito → 422; permiso en la ruta y 404 en retail; Excel
+  (secciones, ceros escritos, negritas). `MenuGirosTest` actualizado con el ítem nuevo.
+  Suite completa: 2240 tests, 2236 en verde; fallan solo los 4 conocidos (3 de T-103 y el
+  intermitente del combo). `type-check`: los mismos 47 errores previos, ninguno en archivos tocados.
+- **Prueba funcional (CA5):** agencia-demo con Playwright como «Admin Agencia Demo»: ítem en
+  VENTAS, pantalla con datos de noviembre (13 consultas: 4 ganadas, 9 abiertas; coincide con
+  `estadoResumen()` del listado), filtro por origen y Excel descargado y leído (ahí salieron los dos
+  defectos del Excel que se corrigieron antes del commit: ceros vacíos y negritas corridas).
+- **Decisiones tomadas con el usuario (16-nov-2026), antes de codificar:**
+  1. Ganada con la reserva cancelada = **«Anuladas»**, fila propia del embudo; no suma al monto.
+     La conversión es ganadas / consultas (sin anuladas).
+  2. Sin `cotizaciones.ver_todas`, el reporte muestra solo las cotizaciones propias
+     (`Cotizacion::propias()`), también en la lista de vendedores del filtro.
+  3. Toda ganada (o anulada) cuenta como **enviada**, aunque se haya aceptado desde borrador. El
+     tiempo de respuesta usa solo la primera `fecha_envio` real.
+  4. % de motivos sobre el total del tipo, con fila «Sin motivo». Los motivos de ganancia cuentan
+     las ganadas y las anuladas (las dos se ganaron).
 - **Desviaciones de la tarea y por qué:**
+  - El embudo tiene una etapa más (Anuladas): decisión 1, para que las etapas sumen las consultas.
+  - Monto de una reserva modificada: el total de la alternativa a la que apunta **hoy** la reserva
+    (la versión nueva), no el de la alternativa original (`reemplazada`); es lo que se vendió.
+  - El ítem de menú lo agrega `MenuItemsSeeder` (como Seguimiento en T-051), no una migración: la
+    única migración es la del permiso.
+  - Rango por defecto: el mes en curso. Filtros `vendedor_id` / `origen_contacto_id` aceptan `sin`.
+- **Al desplegar:** 1 migración en Agencia → `tenants:migrate-verticales` (revisar la salida);
+  luego `php artisan roles:sync-permisos-nuevos "Database\Seeders\AgenciaViajesRolesSeeder"`
+  (`deploy.sh` no lo corre; el Propietario lo recibe solo con `roles:sync-propietario`). Los
+  usuarios tienen que volver a iniciar sesión para ver la pantalla (ver hallazgo).
+- **Datos en agencia-demo:** ninguno creado; se aplicó la migración, el permiso al rol y el menú.
 
 ## Hallazgos fuera de alcance
-- 
+- PLA: el router del frontend toma los permisos guardados al iniciar sesión y, si falta uno, manda
+  a `/auth/error-500` («Error 500») en vez de un aviso de permiso. Tras un deploy con permiso
+  nuevo, quien entra por el menú sin volver a iniciar sesión ve «Error 500»
+  (`admin-start-kit/src/router/index.ts`, línea ~80).
