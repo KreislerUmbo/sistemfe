@@ -19,6 +19,8 @@ use App\Http\Controllers\AgenciaViajes\ContenidoTourController;
 use App\Http\Controllers\AgenciaViajes\CotizacionController;
 use App\Http\Controllers\AgenciaViajes\CotizacionResultadoController;
 use App\Http\Controllers\AgenciaViajes\CrmMotivoResultadoController;
+use App\Http\Controllers\AgenciaViajes\CrmTipoViajeController;
+use App\Http\Controllers\AgenciaViajes\ClientePerfilViajeroController;
 use App\Http\Controllers\AgenciaViajes\CuentaBancariaController;
 use App\Http\Controllers\AgenciaViajes\DestinoAtractivoController;
 use App\Http\Controllers\AgenciaViajes\DestinoServicioController;
@@ -74,6 +76,7 @@ use App\Http\Controllers\Central\TenantSubscriptionController;
 use App\Http\Controllers\Central\TenantSunatController;
 use App\Http\Controllers\Client\ClientController;
 use App\Http\Controllers\Client\CrmActividadController;
+use App\Http\Controllers\Client\ClienteLineaTiempoController;
 use App\Http\Controllers\Client\CrmAccionController;
 use App\Http\Controllers\Client\CrmPendientesController;
 use App\Http\Controllers\Client\CrmOrigenContactoController;
@@ -546,6 +549,17 @@ Route::group([
     // "De todos" o de otro responsable: cotizaciones.ver_todas (en el controller).
     Route::get("crm/pendientes", [CrmPendientesController::class, 'index'])
         ->middleware('permission:cotizaciones.ver|cotizaciones.ver_todas');
+    // T-060 (CRM C5, solo Agencia: 404 en otro giro): resumen y línea de tiempo de la ficha (ver el
+    // cliente; qué cotizaciones/reservas entran lo deciden los scopes de las Policy) y preferencias
+    // del viajero (leerlas también desde el cotizador; guardarlas, editar el cliente).
+    Route::get("clients/{id}/resumen-agencia", [ClienteLineaTiempoController::class, 'resumen'])->whereNumber('id')
+        ->middleware('permission:list_client|edit_client');
+    Route::get("clients/{id}/linea-tiempo", [ClienteLineaTiempoController::class, 'index'])->whereNumber('id')
+        ->middleware('permission:list_client|edit_client');
+    Route::get("clients/{id}/perfil-viajero", [ClientePerfilViajeroController::class, 'show'])->whereNumber('id')
+        ->middleware('permission:list_client|edit_client|cotizaciones.ver|cotizaciones.ver_todas|cotizaciones.editar');
+    Route::put("clients/{id}/perfil-viajero", [ClientePerfilViajeroController::class, 'update'])->whereNumber('id')
+        ->middleware('permission:edit_client');
     Route::resource("clients", ClientController::class)
         ->middlewareFor('store', 'permission:register_client')
         ->middlewareFor('update', 'permission:edit_client')
@@ -871,6 +885,14 @@ Route::group([
     Route::post("crm-origenes-contacto", [CrmOrigenContactoController::class, 'store'])
         ->middleware('permission:agencia.configuracion');
     Route::put("crm-origenes-contacto/{id}", [CrmOrigenContactoController::class, 'update'])
+        ->middleware('permission:agencia.configuracion');
+    // T-060 (CRM C5): tipos de viaje de las preferencias del viajero. Sin DELETE: se desactivan. La
+    // lectura la usan también la ficha del cliente y el recuadro del cotizador.
+    Route::get("crm-tipos-viaje", [CrmTipoViajeController::class, 'index'])
+        ->middleware('permission:agencia.configuracion|list_client|edit_client|cotizaciones.ver|cotizaciones.ver_todas');
+    Route::post("crm-tipos-viaje", [CrmTipoViajeController::class, 'store'])
+        ->middleware('permission:agencia.configuracion');
+    Route::put("crm-tipos-viaje/{id}", [CrmTipoViajeController::class, 'update'])
         ->middleware('permission:agencia.configuracion');
 
     // Envío de cotizaciones por correo (plan-modulo-envio-correo-cotizacion.md

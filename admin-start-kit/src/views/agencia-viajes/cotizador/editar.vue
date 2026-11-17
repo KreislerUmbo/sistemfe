@@ -24,6 +24,7 @@
                         <i class="fas fa-circle-xmark me-1"></i>Perdida: {{ cotizacion.resultado_motivo?.nombre ?? 'sin motivo' }}<template v-if="cotizacion.resultado_detalle"> — {{ cotizacion.resultado_detalle }}</template>
                         · {{ formatFechaHora(cotizacion.perdida_en) }}<template v-if="cotizacion.perdida_por"> ({{ cotizacion.perdida_por.name }})</template>
                     </div>
+                    <PreferenciasViajeroResumen :cliente-id="cotizacion.cliente_id ?? null" />
                 </div>
                 <div class="d-flex flex-wrap gap-2">
                     <template v-if="puedeCambiarResultado">
@@ -1514,6 +1515,7 @@ import RevisionAlternativa from '@/components/AgenciaViajes/RevisionAlternativa.
 import type { RevisionEntrada } from '@/services/admin/revisionAlternativaService';
 import HistorialActividadesCotizacion from '@/components/AgenciaViajes/HistorialActividadesCotizacion.vue';
 import AccionesPendientes from '@/components/Clientes/AccionesPendientes.vue';
+import PreferenciasViajeroResumen from '@/components/AgenciaViajes/PreferenciasViajeroResumen.vue';
 import CerrarComoPerdidaModal from '@/components/AgenciaViajes/CerrarComoPerdidaModal.vue';
 import ExtenderVigenciaModal from '@/components/AgenciaViajes/ExtenderVigenciaModal.vue';
 import AceptarAlternativaModal from '@/components/AgenciaViajes/AceptarAlternativaModal.vue';

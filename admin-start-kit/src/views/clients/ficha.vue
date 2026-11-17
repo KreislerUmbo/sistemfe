@@ -14,6 +14,10 @@
 
     <form v-else novalidate @submit.prevent="guardar">
       <div class="row g-3">
+        <!-- T-060 (CRM C5, solo Agencia): resumen arriba; preferencias y línea de tiempo debajo de los datos. -->
+        <div v-if="esAgencia && clienteId" class="col-12">
+          <ResumenClienteAgencia ref="resumenAgencia" :cliente-id="clienteId" />
+        </div>
         <!-- Secciones -->
         <div class="col-12 col-lg-8">
           <div class="card border-0 shadow-sm mb-3">
@@ -24,6 +28,12 @@
               <ClienteDatosBase v-model="form" id="ficha" :errores="errores" completo :tributarios="!contexto.creditos" />
             </div>
           </div>
+
+          <template v-if="esAgencia && clienteId">
+            <PreferenciasViajero :cliente-id="clienteId" :puede-editar="puede('edit_client')" />
+            <LineaTiempoCliente ref="lineaTiempo" :cliente-id="clienteId" :puede-anotar="puede('edit_client')"
+              @cambio="resumenAgencia?.recargar()" />
+          </template>
 
           <template v-if="contexto.creditos">
             <div class="card border-0 shadow-sm mb-3">
@@ -258,7 +268,7 @@
             <!-- T-051 (CRM C2, solo Agencia por ahora): todas las acciones pendientes del cliente. -->
             <div v-if="contexto.giro === 'agencia_viajes' && clienteId" class="card border-0 shadow-sm mb-0">
               <div class="card-body py-2">
-                <AccionesPendientes :cliente-id="clienteId" />
+                <AccionesPendientes :cliente-id="clienteId" @cambio="lineaTiempo?.recargar(); resumenAgencia?.recargar()" />
               </div>
             </div>
           </div>
@@ -293,6 +303,9 @@ import MapaUbicacion, { type Coordenadas } from '@/components/Clientes/MapaUbica
 import DocumentosCliente from '@/components/Clientes/DocumentosCliente.vue'
 import SaldoAFavorCliente from '@/components/Clientes/SaldoAFavorCliente.vue'
 import AccionesPendientes from '@/components/Clientes/AccionesPendientes.vue'
+import ResumenClienteAgencia from '@/components/Clientes/ResumenClienteAgencia.vue'
+import PreferenciasViajero from '@/components/Clientes/PreferenciasViajero.vue'
+import LineaTiempoCliente from '@/components/Clientes/LineaTiempoCliente.vue'
 import { useToast } from '@/composables/useToast'
 import { usePermisosCredito } from '@/composables/creditos/usePermisosCredito'
 import { interpretarErrorCredito } from '@/composables/creditos/errorCredito'
@@ -348,6 +361,10 @@ const origenContactoId = ref<number | null>(null)
 const origenesVisibles = computed(() => origenes.value.filter((o) => o.activo || o.id === origenContactoId.value))
 
 const puedeEditar = computed(() => puede(clienteId.value ? 'edit_client' : 'register_client'))
+// T-060: secciones del CRM, solo en Agencia (en retail la ficha queda como estaba).
+const esAgencia = computed(() => contexto.value.giro === 'agencia_viajes')
+const resumenAgencia = ref<InstanceType<typeof ResumenClienteAgencia> | null>(null)
+const lineaTiempo = ref<InstanceType<typeof LineaTiempoCliente> | null>(null)
 const asesorCobra = computed(() => cartera.asesor_cobra)
 const titulo = computed(() => (clienteId.value ? nombreCompleto(form.value) || 'Cliente' : 'Nuevo cliente'))
 const subtitulo = computed(() => {
