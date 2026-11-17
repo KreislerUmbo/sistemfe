@@ -299,6 +299,52 @@ class VentaDirectaTourTest extends TestCase
         $this->assertEqualsWithDelta(100.0, $this->totalCreado($body), 0.001);
     }
 
+    // T-048 (CA12): la fila de un tour no se edita; su resumen reparte el precio por grupo.
+    public function test_un_tour_mezclado_es_de_solo_lectura_y_el_resumen_separa_sus_grupos(): void
+    {
+        $tour = $this->crearTour(['precio_venta_final' => 100]);
+        $this->incluye($tour, 30, '20', 'amazonia');
+        $this->incluye($tour, 30, '10', 'nacional');
+
+        $previa = $this->vistaPrevia([$this->lineaTour($tour)], [['edad' => 30]]);
+
+        $this->assertFalse($previa['lineas'][0]['editable']);
+        $this->assertFalse($previa['lineas'][0]['cambiado']);
+        // Costos iguales: 50 exonerado + 50 gravado (42.37 + IGV 7.63).
+        $this->assertEquals(['gravadas' => 42.37, 'exoneradas' => 50.0, 'inafectas' => 0.0, 'igv' => 7.63, 'total' => 100.0], $previa['resumen']);
+    }
+
+    // T-048: la afectación de un tour no se cambia desde Venta directa (nunca se ignora en silencio).
+    public function test_un_tour_con_afectacion_elegida_responde_422(): void
+    {
+        $tour = $this->crearTour(['precio_venta_final' => 100]);
+        $linea = $this->lineaTour($tour) + ['tip_afe_igv' => '10'];
+
+        $previa = app(VentaDirectaController::class)->vistaPrevia(new Request([
+            'fecha_servicio' => self::INICIO, 'pax' => [['edad' => 30]], 'lineas' => [$linea],
+        ]));
+        $this->assertSame(422, $previa->getStatusCode());
+        $this->assertSame('La afectación de un tour se corrige en el tour.', $previa->getData(true)['message']);
+
+        $body = $this->crear([$linea], [['edad' => 30]]);
+        $this->assertSame(422, $body['code']);
+        $this->assertSame('La afectación de un tour se corrige en el tour.', $body['message']);
+    }
+
+    // T-048: en modo clásico el resumen suma lo mismo que el total del tour.
+    public function test_modo_clasico_el_resumen_cuadra_con_el_total(): void
+    {
+        ConfiguracionAgencia::first()->update(['modo_tours' => 'clasico']);
+        $tour = $this->crearTour(['ajuste_redondeo' => 5]);
+        PaquetePlantillaItem::create(['paquete_plantilla_id' => $tour->id, 'proveedor_tarifa_id' => $this->tarifaCompartida(20, 50)->id, 'orden' => 1]);
+
+        $previa = $this->vistaPrevia([$this->lineaTour($tour)], [['edad' => 30], ['edad' => 40]]);
+
+        $r = $previa['resumen'];
+        $this->assertEqualsWithDelta(105.0, $previa['total'], 0.001);
+        $this->assertEqualsWithDelta($previa['total'], $r['gravadas'] + $r['igv'] + $r['exoneradas'] + $r['inafectas'], 0.001);
+    }
+
     public function test_un_tour_en_otra_moneda_no_se_mezcla(): void
     {
         $tour = $this->crearTour(['moneda' => 'USD', 'precio_venta_final' => 50]);

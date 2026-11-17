@@ -297,18 +297,9 @@ class ReservaFacturacionController extends Controller
             'anticipos_disponibles' => $anticiposDisponibles,
             'anticipo_que_se_aplica' => $anticipoQueSeAplica,
             'saldo_a_cobrar' => round(max(0, $total - $anticipoQueSeAplica), 2),
-            // T-011: lo que el modal necesita para el bloque de cobro al contado.
-            'cobro_habilitado' => (bool) config('agencia.cobro_al_facturar'),
-            'caja_abierta' => \App\Models\Cash\CashSession::where('opened_by', auth('api')->id())->where('status', 'open')->exists(),
-            'formas_pago' => \App\Models\Cash\PaymentMethod::where('is_active', true)
-                ->orderBy('sort_order')->orderBy('id')->get()
-                ->map(fn ($m) => [
-                    'code' => $m->code,
-                    'name' => $m->name,
-                    'monedas' => $m->monedas ?? ['PEN', 'USD'],
-                    'affects_cash_count' => (bool) $m->affects_cash_count,
-                ])->values(),
-            'tipo_cambio_dia' => $this->tipoCambioSunatResolver->resolverParaFecha(\App\Services\HoraPeru::ahora())?->venta,
+        ],
+        // T-011: lo que el modal necesita para el bloque de cobro al contado (T-048: lo comparte Venta directa).
+        $this->cobro->datosDelBloqueDeCobro(auth('api')->user()), [
             // T-012: cobro de comprobantes anulados con NC que se puede usar en esta factura.
             'traspasos_disponibles' => config('agencia.cobro_al_facturar')
                 ? array_values($this->cobro->disponiblesParaTraspasar((int) $reserva->id, $infoMoneda['moneda_facturacion']))
