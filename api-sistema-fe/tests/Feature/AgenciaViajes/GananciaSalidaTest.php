@@ -81,12 +81,12 @@ class GananciaSalidaTest extends TestCase
         return array_map(fn ($i) => ['adulto', 30 + $i], range(0, $n - 1));
     }
 
-    // Dos reservas de 2 adultos cada una en la misma salida (15-nov-2026).
-    private function salidaConCuatro(): array
+    // Dos reservas de 2 adultos cada una en la misma salida (por defecto el 15-nov-2026).
+    private function salidaConCuatro(string $desde = '2026-11-15'): array
     {
         $this->escenarioBase();
-        $a = $this->reservaConTour($this->tour, $this->adultos(2));
-        $b = $this->reservaConTour($this->tour, $this->adultos(2));
+        $a = $this->reservaConTour($this->tour, $this->adultos(2), desde: $desde);
+        $b = $this->reservaConTour($this->tour, $this->adultos(2), desde: $desde);
         $salida = $this->salidaDe($a);
         $this->assertSame($salida->id, $this->salidaDe($b)->id);
 
@@ -166,7 +166,9 @@ class GananciaSalidaTest extends TestCase
     // CA5
     public function test_tarifa_de_temporada(): void
     {
-        [$salida] = $this->salidaConCuatro();
+        // La tarifa de temporada nace vigente desde hoy y se busca vigente el día de la
+        // salida: la salida tiene que ser futura (T-103).
+        [$salida] = $this->salidaConCuatro(HoraPeru::hoy()->addDays(7)->toDateString());
         $this->tarifaPrivada('Movilidad alta', 400, [
             'proveedor_servicio_id' => $this->movilidad->proveedor_servicio_id,
             'temporada_id' => 9001,

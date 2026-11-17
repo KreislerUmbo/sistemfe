@@ -116,11 +116,13 @@ trait SalidasFixtures
     }
 
     /**
-     * Cotización que empieza el 15-nov-2026 con el tour cargado el día $dia, y su reserva aceptada.
+     * Cotización que empieza el $desde (por defecto el 15-nov-2026) con el tour cargado el día
+     * $dia, y su reserva aceptada. Un test que necesita la salida en el futuro pasa una fecha
+     * relativa a HoraPeru::hoy(): una fija vence (T-103).
      *
      * @param  array<int, array{0: string, 1: int, 2?: string}>  $pasajeros  [tipo, edad, residencia]
      */
-    private function reservaConTour(PaquetePlantilla $tour, array $pasajeros, int $dia = 1): Reserva
+    private function reservaConTour(PaquetePlantilla $tour, array $pasajeros, int $dia = 1, string $desde = '2026-11-15'): Reserva
     {
         $clienteId = DB::table('clients')->insertGetId([
             'type_document' => 'DNI', 'n_document' => (string) random_int(10000000, 99999999), 'full_name' => 'Cliente Test Salidas',
@@ -128,7 +130,7 @@ trait SalidasFixtures
         ]);
         $cotizacionId = DB::table('cotizaciones')->insertGetId([
             'codigo_prefijo' => 'TEST', 'codigo' => 'TEST-F2-'.uniqid(), 'cliente_id' => $clienteId,
-            'destino' => 'Tarapoto', 'fecha_viaje_desde' => '2026-11-15', 'created_at' => now(), 'updated_at' => now(),
+            'destino' => 'Tarapoto', 'fecha_viaje_desde' => $desde, 'created_at' => now(), 'updated_at' => now(),
         ]);
         foreach ($pasajeros as $p) {
             CotizacionPasajero::create(['cotizacion_id' => $cotizacionId, 'tipo_pax' => $p[0], 'edad' => $p[1], 'residencia' => $p[2] ?? 'nacional']);

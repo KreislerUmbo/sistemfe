@@ -88,14 +88,14 @@ class Fila13Fase2aSalidasTest extends TestCase
 
     public function test_estados_avanzan_un_paso_y_realizada_no_puede_ser_futura(): void
     {
-        $salida = $this->salidaDe($this->reservaConTour($this->crearTour(), [['adulto', 40]]));
+        $salida = $this->salidaDe($this->reservaConTour($this->crearTour(), [['adulto', 40]], desde: $this->enUnaSemana()));
         $controller = app(SalidaOperativaController::class);
         $cambiar = fn (string $estado) => $controller->cambiarEstado(new Request(['estado' => $estado]), (string) $salida->id);
 
         // De programada no se salta a realizada.
         $this->assertSame(422, $cambiar('realizada')->getStatusCode());
         $this->assertSame(200, $cambiar('confirmada')->getStatusCode());
-        // La salida es del 15-nov-2026, en el futuro: todavía no puede estar realizada.
+        // La salida es dentro de una semana: todavía no puede estar realizada.
         $this->assertSame(422, $cambiar('realizada')->getStatusCode());
 
         $salida->update(['fecha' => HoraPeru::hoyTexto()]);
@@ -108,7 +108,8 @@ class Fila13Fase2aSalidasTest extends TestCase
     // sola por tour y fecha, las reservas nuevas de ese día caían en ella.
     public function test_una_salida_cancelada_se_reactiva_y_sus_servicios_vuelven_a_por_reservar(): void
     {
-        $salida = $this->salidaDe($this->reservaConTour($this->crearTour(), [['adulto', 40]]));
+        // Futura: una salida que ya pasó no se reactiva (lo prueba el test siguiente).
+        $salida = $this->salidaDe($this->reservaConTour($this->crearTour(), [['adulto', 40]], desde: $this->enUnaSemana()));
         $servicio = SalidaServicio::create([
             'salida_operativa_id' => $salida->id, 'nombre' => 'Almuerzo', 'estado' => SalidaServicio::ESTADO_RESERVADO, 'orden' => 1,
         ]);
@@ -223,5 +224,10 @@ class Fila13Fase2aSalidasTest extends TestCase
             ->getData(true);
         $fila = collect($respuesta['filas'])->firstWhere('reserva_item_id', $item->id);
         $this->assertSame('Salida cancelada', $fila['motivo_pendiente']);
+    }
+
+    private function enUnaSemana(): string
+    {
+        return HoraPeru::hoy()->addDays(7)->toDateString();
     }
 }
