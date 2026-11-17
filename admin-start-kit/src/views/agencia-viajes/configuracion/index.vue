@@ -621,6 +621,7 @@
             <ConfiguracionCorreoSeccion />
             <MotivosResultadoSeccion />
             <OrigenesContactoSeccion />
+            <TiposViajeSeccion />
         </template>
     </DefaultLayout>
 </template>
@@ -633,6 +634,7 @@ import RichTextEditor from '@/components/RichTextEditor.vue';
 import ConfiguracionCorreoSeccion from '@/components/AgenciaViajes/ConfiguracionCorreoSeccion.vue';
 import MotivosResultadoSeccion from '@/components/AgenciaViajes/MotivosResultadoSeccion.vue';
 import OrigenesContactoSeccion from '@/components/AgenciaViajes/OrigenesContactoSeccion.vue';
+import TiposViajeSeccion from '@/components/AgenciaViajes/TiposViajeSeccion.vue';
 import Swal from 'sweetalert2/dist/sweetalert2.js';
 import { configuracionAgenciaService } from '@/services/admin/configuracionAgenciaService';
 import { cuentaBancariaService } from '@/services/admin/cuentaBancariaService';
