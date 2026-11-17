@@ -239,15 +239,20 @@ const mensajeDeError = async (e: any, porDefecto: string): Promise<string> => {
     return data?.message ?? porDefecto;
 };
 
+// La última petición gana: si se cambian dos filtros seguidos y la primera respuesta llega
+// después, no pisa los números de los filtros actuales.
+let peticion = 0;
 const cargar = async () => {
     if (!filtros.value.desde || !filtros.value.hasta) return;
+    const esta = ++peticion;
     cargando.value = true;
     try {
-        datos.value = await reporteComercialService.obtener(filtros.value);
+        const respuesta = await reporteComercialService.obtener(filtros.value);
+        if (esta === peticion) datos.value = respuesta;
     } catch (e: any) {
-        toast.error(await mensajeDeError(e, 'No se pudo cargar el reporte.'));
+        if (esta === peticion) toast.error(await mensajeDeError(e, 'No se pudo cargar el reporte.'));
     } finally {
-        cargando.value = false;
+        if (esta === peticion) cargando.value = false;
     }
 };
 
