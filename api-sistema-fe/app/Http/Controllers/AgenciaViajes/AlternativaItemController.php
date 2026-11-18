@@ -21,6 +21,7 @@ use App\Models\AgenciaViajes\ProveedorTarifa;
 use App\Models\AgenciaViajes\ProveedorTipoConfig;
 use App\Models\AgenciaViajes\ReservaItem;
 use App\Services\AgenciaViajes\AltaItem\AltaItemException;
+use App\Services\AgenciaViajes\AltaItem\AltaManual;
 use App\Services\AgenciaViajes\ComboExplosionService;
 use App\Services\AgenciaViajes\PriceEngineService;
 use App\Services\AgenciaViajes\TourLineaException;
@@ -44,7 +45,8 @@ class AlternativaItemController extends Controller
     public function __construct(
         private PriceEngineService $priceEngine,
         private ComboExplosionService $comboExplosion,
-        private TourLineaService $tourLinea
+        private TourLineaService $tourLinea,
+        private AltaManual $altaManual
     ) {
     }
 
@@ -68,7 +70,7 @@ class AlternativaItemController extends Controller
                 AlternativaItem::ORIGEN_PROVEEDOR => [$this->crearItemProveedor($request, $alternativa), 'Ítem agregado correctamente'],
                 AlternativaItem::ORIGEN_MAYORISTA => [$this->crearItemMayorista($request, $alternativa), 'Ítem de mayorista agregado correctamente'],
                 AlternativaItem::ORIGEN_PASAJE_AEREO => [$this->crearItemPasajeAereo($request, $alternativa), 'Pasaje aéreo agregado correctamente'],
-                AlternativaItem::ORIGEN_MANUAL => [$this->crearItemManual($request, $alternativa), 'Ítem manual agregado correctamente'],
+                AlternativaItem::ORIGEN_MANUAL => [$this->altaManual->crear($alternativa, $request->all()), 'Ítem manual agregado correctamente'],
                 AlternativaItem::ORIGEN_GUIA => [$this->crearItemGuia($request, $alternativa), 'Ítem de guía agregado correctamente'],
             };
         } catch (AltaItemException $e) {
@@ -1600,53 +1602,6 @@ class AlternativaItemController extends Controller
     // crearReservaDesdeAlternativa()). proveedor_sugerido_manual es dato
     // interno (nunca visible al cliente), solo para prellenar el nombre al
     // promover este ítem a un proveedor real (ver promoverAProveedor()).
-    private function crearItemManual(Request $request, Alternativa $alternativa): AlternativaItem
-    {
-        $validator = Validator::make($request->all(), [
-            'descripcion_manual' => 'required|string|max:500',
-            'proveedor_sugerido_manual' => 'nullable|string|max:250',
-            'costo_snapshot' => 'required|numeric|min:0',
-            'precio_venta_snapshot' => 'required|numeric|min:0',
-            'moneda_costo' => 'required|in:PEN,USD',
-            'cantidad' => 'required|integer|min:1',
-            'pax_incluidos' => 'nullable|array',
-            'pax_incluidos.*' => 'integer|exists:cotizacion_pasajeros,id',
-            'dia_referencial' => 'nullable|integer|min:1',
-            'tip_afe_igv' => 'nullable|string|in:10,20,30',
-            'destino_tributario' => 'nullable|string|in:amazonia,nacional,extranjero',
-            'alternativa_destino_id' => ['nullable', 'integer', $alternativa->reglaDestinoId()],
-        ]);
-
-        if ($validator->fails()) {
-            throw new AltaItemException($validator->errors()->first());
-        }
-
-        $validado = $validator->validated();
-        $tratamientoTributario = ConfiguracionAgencia::completarTratamientoTributario($validado['tip_afe_igv'] ?? null, $validado['destino_tributario'] ?? null);
-
-        $item = AlternativaItem::create([
-            'alternativa_id' => $alternativa->id,
-            'alternativa_destino_id' => $alternativa->destinoIdODefault($validado['alternativa_destino_id'] ?? null),
-            'origen_tipo' => AlternativaItem::ORIGEN_MANUAL,
-            'descripcion_manual' => $validado['descripcion_manual'],
-            'proveedor_sugerido_manual' => $validado['proveedor_sugerido_manual'] ?? null,
-            'modo_precio' => 'tarifa_fija',
-            'cantidad' => $validado['cantidad'],
-            'pax_incluidos' => $validado['pax_incluidos'] ?? null,
-            'costo_snapshot' => $validado['costo_snapshot'],
-            'moneda_costo' => $validado['moneda_costo'],
-            'precio_venta_snapshot' => $validado['precio_venta_snapshot'],
-            'precio_convertido' => $this->priceEngine->convertirMoneda((float) $validado['precio_venta_snapshot'], $validado['moneda_costo'], $alternativa->moneda_cotizacion, (float) $alternativa->tipo_cambio_aplicado),
-            'dia_referencial' => $validado['dia_referencial'] ?? null,
-            'tip_afe_igv' => $tratamientoTributario['tip_afe_igv'],
-            'destino_tributario' => $tratamientoTributario['destino_tributario'],
-        ]);
-
-        $alternativa->recalcularTotal();
-
-        return $item;
-    }
-
     // Edición estructural de un ítem manual (descripción/proveedor/costo/
     // cantidad/pax) — separado de update() (que solo maneja
     // descuento_pct/precio_convertido para CUALQUIER origen_tipo, ese flujo
