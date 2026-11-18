@@ -118,14 +118,8 @@
  */
 import HabitacionMatrixPicker from '@/components/AgenciaViajes/HabitacionMatrixPicker.vue';
 import ItemManualForm from '@/components/AgenciaViajes/ItemManualForm.vue';
-import OpcionMayoristaForm from '@/components/AgenciaViajes/OpcionMayoristaForm.vue';
-import ProveedorBuscador from '@/components/AgenciaViajes/ProveedorBuscador.vue';
-import RichTextEditor from '@/components/RichTextEditor.vue';
-import TourIncluidoForm from '@/components/AgenciaViajes/TourIncluidoForm.vue';
-import { textoPlano } from '@/helpers/agencia-viajes/cotizador/presentacionItem';
 import {
-    CLAVE_NUCLEO, CLAVE_PASAJEROS, CLAVE_DESTINOS, CLAVE_DIAS, CLAVE_DRAWER, CLAVE_HOTELES_LOCALES,
-    CLAVE_OPCIONES_MAYORISTA, CLAVE_HOTELES_MAYORISTA, CLAVE_OPCIONALES_MAYORISTA, CLAVE_ITEMS_SUELTOS,
+    CLAVE_NUCLEO, CLAVE_DESTINOS, CLAVE_DIAS, CLAVE_DRAWER, CLAVE_HOTELES_LOCALES, CLAVE_ITEMS_SUELTOS,
     CLAVE_PAGINA, inyectar,
 } from '@/composables/agencia-viajes/cotizador/claves';
 import BibliotecaLocal from '@/components/AgenciaViajes/cotizador/BibliotecaLocal.vue';
@@ -133,8 +127,7 @@ import BibliotecaGuia from '@/components/AgenciaViajes/cotizador/BibliotecaGuia.
 import ComparadorMayoristas from '@/components/AgenciaViajes/cotizador/ComparadorMayoristas.vue';
 
 const { alternativaActiva, alternativaSoloLectura, configAgencia, cotizacion } = inyectar(CLAVE_NUCLEO);
-const { cantidadAdultosCotizacion } = inyectar(CLAVE_PASAJEROS);
-const { destinoActivoId, destinoAtractivoIdActivo } = inyectar(CLAVE_DESTINOS);
+const { destinoActivoId } = inyectar(CLAVE_DESTINOS);
 const { diaActivoParaAgregar } = inyectar(CLAVE_DIAS);
 const {
     cerrarDrawerBiblioteca, drawerBibliotecaAbierto, onServicioSueltoAgregado, volverAGridDrawer,
@@ -146,28 +139,7 @@ const {
     subiendoFotoHotelAdhoc,
 } = inyectar(CLAVE_HOTELES_LOCALES);
 const {
-    abrirFormEditarOpcionMayorista, agregarGrupoMayorista, agregarItemMayorista, descartandoOpcionId,
-    descartarOpcion, elegirOpcion, eligiendoOpcionId, eliminandoOpcionMayoristaId, eliminarOpcionMayorista,
-    mostrarFormMayorista, onOpcionMayoristaGuardada, opcionHotelesActivaId, opcionMayoristaEnEdicionId,
-    opcionesMayorista, reactivandoOpcionId, reactivarOpcion, verHoteles,
-} = inyectar(CLAVE_OPCIONES_MAYORISTA);
-const {
-    formHotel, fotosHotelNuevo, guardandoHotelMayorista, guardarHotel, mostrarFormHotel,
-    onAgregarFotosHotelMatrix, onAgregarTarifaMatrix, onCambiarProveedorHotel, onElegirTarifaRegistrada,
-    onEliminarFotoHotelMatrix, onEliminarHotelMatrix, onEliminarTarifaMatrix, onFotosHotelNuevoSeleccionadas,
-    onGuardarHotelMatrix, onGuardarTarifaMatrix, onPromoverHotelMatrix, quitarFotoHotelNuevo,
-    tarifasHotelParaTipo, tarifasHotelPlanas,
-} = inyectar(CLAVE_HOTELES_MAYORISTA);
-const {
-    abrirEdicionOpcional, abrirEdicionTour, agregandoOpcionalAlLienzoId, agregarOpcionalAlLienzo,
-    eliminandoOpcionalId, eliminarOpcionalCargado, formEdicionOpcional, formOpcional,
-    guardandoEdicionOpcional, guardandoOpcional, guardarEdicionOpcional, guardarOpcional,
-    mostrarFormOpcional, mostrarFormTourIncluido, mostrarOpcionalesId, mostrarToursId,
-    onTourIncluidoActualizado, onTourIncluidoAgregado, opcionalEnEdicionId, quitarTourIncluido,
-    tourEnEdicionId, verOpcionales, verTours,
-} = inyectar(CLAVE_OPCIONALES_MAYORISTA);
-const {
     avisoItemReservado, formManualSoloLectura, itemManualEnEdicion, onServicioSueltoActualizado,
 } = inyectar(CLAVE_ITEMS_SUELTOS);
-const { modo, pasoDrawer, tipoHotelId, tipoMayoristaId, tituloDrawer } = inyectar(CLAVE_PAGINA);
+const { modo, pasoDrawer, tituloDrawer } = inyectar(CLAVE_PAGINA);
 </script>

@@ -176,7 +176,10 @@ mano en la misma pantalla. **Al desplegar:** nada (solo frontend).
   `PanelPrecio` · `293d5415` lienzo (`LienzoCotizador`, `CargaTourLienzo`, `GrupoOpcionesLienzo`,
   `ItemLienzo`) · `b14c6bfa` drawer (`DrawerBiblioteca`, `BibliotecaLocal`, `BibliotecaGuia`) ·
   `815df6c2` mayoristas (`ComparadorMayoristas`, `OpcionMayoristaTarjeta`,
-  `HotelesOpcionMayorista`, `OpcionalesOpcionMayorista`) · `0808b89a` limpieza.
+  `HotelesOpcionMayorista`, `OpcionalesOpcionMayorista`) · `0808b89a` limpieza · un commit de
+  la revisión: `DrawerBiblioteca` dejaba de usar, desde el paso 6, las inyecciones de mayoristas
+  (opciones, hoteles, opcionales), `cantidadAdultosCotizacion`, `destinoAtractivoIdActivo`,
+  `tipoHotelId`/`tipoMayoristaId` y 5 imports; se quitaron (vitest, `type-check` y `build` iguales).
 - **Tests:**
   - CA1: Playwright `--comparar resultados/base.json` igual a la base en los 28 pasos después de
     cada paso (la base de T-094 sirvió: corrida sobre `main` igual). En el paso 5 una corrida
