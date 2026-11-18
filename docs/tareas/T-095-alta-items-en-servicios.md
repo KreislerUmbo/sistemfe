@@ -216,9 +216,37 @@ Tamaño: grande, en 8 commits → la construye Sonnet en otra sesión (`docs/pro
 
 ## Resultado
 <!-- Lo completa quien construye, al terminar. -->
-- **Commits:**
-- **Tests:** (nuevos / suite completa)
+- **Commits** (rama `refactor/T-095-alta-items-servicios`, uno por paso):
+  `4939abdc` paso 0 (caracterización) · `b68b0ca8` paso 1 (base común) · `ebb23338` paso 2 (`AltaManual`) ·
+  `bdabf2da` paso 3 (`AltaGuia`) · `2d21a57e` paso 4 (`AltaMayorista`) · `f6f3db4f` paso 5 (`AltaPasajeAereo`) ·
+  `8afa26ad` paso 6 (`AltaProveedor`) · `616a4fc6` paso 7 (comentarios). Más este commit de docs.
+- **Tests:** nuevos: 13 de caracterización (`T095AltaItemCaracterizacionTest`, 13 archivos dorados en
+  `tests/Feature/AgenciaViajes/fixtures/T095/`) + 54 de servicios (`tests/Feature/AgenciaViajes/AltaItem/`:
+  `AltaManualTest` 8, `AltaGuiaTest` 9, `AltaMayoristaTest` 9, `AltaPasajeAereoTest` 11, `AltaProveedorTest` 17, con
+  la fixture compartida `Concerns/PreparaAltaItem`). Suite completa del backend contra Postgres: **2332 pasan, 0 fallan**.
+  `git diff main --diff-filter=M -- api-sistema-fe/tests` no muestra nada: solo archivos nuevos (CA2). El test de
+  caracterización tiene un solo commit (CA1).
+- **Resultados de los criterios:** CA4 — `store()` ocupa 34 líneas; el controller pasó de 1.888 a **1.235** líneas;
+  `grep` de los nombres borrados y de `AlternativaItemController::resolverTratamientoTributario` sin resultados en
+  `app/`. CA5 — el `grep` de la tarea sin resultados en el controller ni en `AltaItem/`.
 - **Desviaciones de la tarea y por qué:**
+  - **Los dorados son archivos JSON, no valores en el código del test.** La tarea pide «comparar el JSON completo»;
+    como no había un valor previo contra el cual comparar, los grabé una vez desde el código de `main`
+    (`T095_GRABAR=1`) y el test los compara normalizando ids y marcas de tiempo. Quien cambie a propósito lo que
+    devuelve el alta debe regrabarlos.
+  - **`AltaItemBase::validar()` se llama `validarReglas()`.** La decisión 2 pedía `validar(array $datos, array $reglas)`
+    en la base y la 5 pedía `AltaPasajeAereo::validar()` público con otra firma (`$datos, Alternativa`): PHP no
+    permite las dos. Elegí renombrar el de la base.
+  - **Paso 1:** para que `store()` tuviera ya su forma final con `try/catch`, convertí en ese mismo commit los
+    `crearItem*` privados para que lancen `AltaItemException` y devuelvan el ítem (en vez de un `JsonResponse`); se
+    movieron tal cual a los servicios en los pasos 2-6.
+  - Los dorados fijan `alternativa_destino_id` en `null` (la fixture de alternativa no crea destinos, como los
+    tests existentes); el destino por defecto y el explícito se prueban en los tests de cada servicio.
+  - Los comentarios con nombres de métodos movidos se actualizaron también en `CotizacionController`,
+    `GuiaTarifaController`, `OpcionHotelController`, `OpcionMayoristaController`, `VentaDirectaController`,
+    `AlternativaItem`, `AlternativaCopiaService`, `AlternativaPdfService`, `PriceEngineService` y
+    `RecalculoPorPersonaService` (solo comentarios).
+  - Backlog: T-095 pasó de «por hacer» a «en revisión».
 
 ## Hallazgos fuera de alcance
 <!-- Problemas vistos y NO arreglados. Se convierten en tareas o en "Por analizar". -->
@@ -234,4 +262,11 @@ Tamaño: grande, en 8 commits → la construye Sonnet en otra sesión (`docs/pro
   (~277), `PenalidadPasajeroService` (~130) y `RecalculoPorPersonaService` (~147): podrían usar
   `Alternativa::recalcularTotal()`. Y `OpcionHotelController::resolverTratamientoTributario()`
   (~483) es copia del que esta tarea muda a `ConfiguracionAgencia`.
-- 
+- `AltaPasajeAereo` llama a `AerolineaController::formatearNombre()` (un servicio que depende de un controller): ese
+  método estático podría vivir en un servicio o en el modelo de aerolíneas.
+- El `grep` de CA5 con `Sesi[oó]n` no encuentra nada en un shell con locale C (la clase `[oó]` es multibyte): hay
+  que correrlo con `grep -P` o con `Sesi.n`. Con la forma de la tarea parece limpio aunque no lo esté.
+- `AlternativaItemController` conserva otros comentarios de historia que el `grep` de CA5 no cubre (p. ej. «Fila 13,
+  fase 1b», «Fix …» en `desdePlantilla()`); dejé los que remiten a un plan vigente.
+- `AlternativaItem.php` (~26) y otros modelos/servicios aún tienen comentarios del estilo «antes de esta sesión…»:
+  cubiertos por la línea de «Por analizar» de comentarios con citas rotas.

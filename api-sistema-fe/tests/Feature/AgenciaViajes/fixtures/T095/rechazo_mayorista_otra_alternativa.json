@@ -1,0 +1,9 @@
+{
+    "http": 422,
+    "respuesta": {
+        "code": 422,
+        "message": "La opción de mayorista no pertenece a esta alternativa."
+    },
+    "items_de_la_alternativa": 0,
+    "total": "0.00"
+}

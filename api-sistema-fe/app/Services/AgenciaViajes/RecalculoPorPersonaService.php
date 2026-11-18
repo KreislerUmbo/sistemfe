@@ -81,7 +81,7 @@ class RecalculoPorPersonaService
             foreach ($alternativa->items()->where('modo_precio', 'por_persona')->where('origen_tipo', '!=', AlternativaItem::ORIGEN_TOUR)->get() as $item) {
                 // Único caso de alta confianza: origen_tipo=proveedor con
                 // una proveedor_tarifa real detrás — mismo cálculo exacto
-                // que AlternativaItemController::crearItemProveedor().
+                // que AltaProveedor.
                 if ($motivo = $this->motivoSinRepreciar($item)) {
                     $itemsParaRevisar[] = [
                         'alternativa_item_id' => $item->id,

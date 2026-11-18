@@ -8,18 +8,20 @@ use App\Models\AgenciaViajes\Alternativa;
 use App\Models\AgenciaViajes\AlternativaItem;
 use App\Models\AgenciaViajes\ConfiguracionAgencia;
 use App\Models\AgenciaViajes\CotizacionPasajeAereo;
-use App\Models\AgenciaViajes\CotizacionPasajero;
 use App\Models\AgenciaViajes\DestinoServicio;
 use App\Models\AgenciaViajes\GuiaTarifa;
-use App\Models\AgenciaViajes\OpcionHotelTarifa;
-use App\Models\AgenciaViajes\OpcionMayorista;
-use App\Models\AgenciaViajes\OpcionMayoristaOpcional;
 use App\Models\AgenciaViajes\PaquetePlantilla;
 use App\Models\AgenciaViajes\Proveedor;
 use App\Models\AgenciaViajes\ProveedorServicio;
 use App\Models\AgenciaViajes\ProveedorTarifa;
 use App\Models\AgenciaViajes\ProveedorTipoConfig;
 use App\Models\AgenciaViajes\ReservaItem;
+use App\Services\AgenciaViajes\AltaItem\AltaGuia;
+use App\Services\AgenciaViajes\AltaItem\AltaItemException;
+use App\Services\AgenciaViajes\AltaItem\AltaManual;
+use App\Services\AgenciaViajes\AltaItem\AltaMayorista;
+use App\Services\AgenciaViajes\AltaItem\AltaPasajeAereo;
+use App\Services\AgenciaViajes\AltaItem\AltaProveedor;
 use App\Services\AgenciaViajes\ComboExplosionService;
 use App\Services\AgenciaViajes\PriceEngineService;
 use App\Services\AgenciaViajes\TourLineaException;
@@ -29,13 +31,10 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
-use Illuminate\Validation\Rule;
 
-// El corazón de la Sesión 11b — plan-modulo-cotizaciones-reservas.md §3.
-// store() se ramifica en 4 según origen_tipo (proveedor/mayorista/
-// pasaje_aereo/manual), cada uno con su propia forma de resolver
-// costo_snapshot/precio_venta_snapshot. update() es la edición en vivo de
-// descuento_pct/precio_convertido con validación de piso.
+// Ítems de una alternativa del cotizador. store() delega el alta en un servicio por origen_tipo
+// (Services/AgenciaViajes/AltaItem); update() es la edición en vivo de descuento_pct/precio_convertido
+// con validación de piso.
 class AlternativaItemController extends Controller
 {
     use AutorizaCotizacion;
@@ -43,34 +42,21 @@ class AlternativaItemController extends Controller
     public function __construct(
         private PriceEngineService $priceEngine,
         private ComboExplosionService $comboExplosion,
-        private TourLineaService $tourLinea
+        private TourLineaService $tourLinea,
+        private AltaManual $altaManual,
+        private AltaGuia $altaGuia,
+        private AltaMayorista $altaMayorista,
+        private AltaPasajeAereo $altaPasajeAereo,
+        private AltaProveedor $altaProveedor
     ) {
     }
 
-    // Sesión 12f-1 — un solo punto de escritura para resolver
-    // alternativa_destino_id en los 9 puntos de creación de este archivo
-    // (mismo riesgo de desincronización que la auditoría marca en §20).
-    // Sin UI de selección de destino todavía (eso es 12f-2), $explicito
-    // siempre llega null por ahora — el fallback (primer destino de la
-    // alternativa, orderBy orden/id) es el comportamiento correcto hoy
-    // (sigue habiendo 1 destino real por alternativa en la práctica).
-    private function reglaAlternativaDestinoId(Alternativa $alternativa)
-    {
-        return Rule::exists('alternativa_destinos', 'id')->where('alternativa_id', $alternativa->id);
-    }
-
-    private function resolverAlternativaDestinoId(Alternativa $alternativa, ?int $explicito): ?int
-    {
-        return $explicito ?? $alternativa->destinos()->value('id');
-    }
-
+    // POST alternativas/{id}/items: cada origen_tipo tiene su servicio de alta (Services/AgenciaViajes/AltaItem).
+    // input() y no get(): get() no lee el cuerpo JSON.
     public function store(Request $request, string $alternativaId)
     {
         $alternativa = Alternativa::findOrFail($alternativaId);
         $this->autorizarCotizacion('update', $alternativa);
-        // input(), NO get() — get() es el ParameterBag de Symfony (query
-        // string/route/POST-form), no lee body JSON crudo. Bug real
-        // encontrado corriendo la verificación de esta sesión.
         $origenTipo = $request->input('origen_tipo');
 
         if (! in_array($origenTipo, AlternativaItem::ORIGENES, true)) {
@@ -80,15 +66,26 @@ class AlternativaItemController extends Controller
             ], 422);
         }
 
-        $respuesta = match ($origenTipo) {
-            AlternativaItem::ORIGEN_PROVEEDOR => $this->crearItemProveedor($request, $alternativa),
-            AlternativaItem::ORIGEN_MAYORISTA => $this->crearItemMayorista($request, $alternativa),
-            AlternativaItem::ORIGEN_PASAJE_AEREO => $this->crearItemPasajeAereo($request, $alternativa),
-            AlternativaItem::ORIGEN_MANUAL => $this->crearItemManual($request, $alternativa),
-            AlternativaItem::ORIGEN_GUIA => $this->crearItemGuia($request, $alternativa),
-        };
+        try {
+            [$item, $mensaje] = match ($origenTipo) {
+                AlternativaItem::ORIGEN_PROVEEDOR => [$this->altaProveedor->crear($alternativa, $request->all()), 'Ítem agregado correctamente'],
+                AlternativaItem::ORIGEN_MAYORISTA => [$this->altaMayorista->crear($alternativa, $request->all()), 'Ítem de mayorista agregado correctamente'],
+                AlternativaItem::ORIGEN_PASAJE_AEREO => [$this->altaPasajeAereo->crear($alternativa, $request->all()), 'Pasaje aéreo agregado correctamente'],
+                AlternativaItem::ORIGEN_MANUAL => [$this->altaManual->crear($alternativa, $request->all()), 'Ítem manual agregado correctamente'],
+                AlternativaItem::ORIGEN_GUIA => [$this->altaGuia->crear($alternativa, $request->all()), 'Ítem de guía agregado correctamente'],
+            };
+        } catch (AltaItemException $e) {
+            return response()->json(['code' => 422, 'message' => $e->getMessage()], 422);
+        }
 
-        return $this->conItemCompletoYAlternativa($respuesta, $alternativa);
+        // El ítem con las relaciones del lienzo y la alternativa recargada (no la que está en memoria:
+        // puede traer relaciones cargadas por el camino y la respuesta cambiaría).
+        return response()->json([
+            'code' => 200,
+            'message' => $mensaje,
+            'alternativa_item' => AlternativaItem::with(self::RELACIONES_LIENZO)->find($item->id)->toArray(),
+            'alternativa' => $alternativa->fresh()->toArray(),
+        ]);
     }
 
     // T-032 (R5): relaciones que el lienzo del cotizador lee de cada ítem (las mismas que carga
@@ -108,23 +105,6 @@ class AlternativaItemController extends Controller
         'tourOrigen',
         'reservaItem.reserva:id,codigo,estado',
     ];
-
-    // Solo agrega datos a una respuesta de alta que ya salió bien: el ítem con sus relaciones y la
-    // alternativa con su total vigente. No cambia lo que la respuesta ya traía.
-    private function conItemCompletoYAlternativa(JsonResponse $respuesta, Alternativa $alternativa): JsonResponse
-    {
-        if ($respuesta->getStatusCode() !== 200) {
-            return $respuesta;
-        }
-        $datos = $respuesta->getData(true);
-        $itemId = $datos['alternativa_item']['id'] ?? null;
-        if ($itemId) {
-            $datos['alternativa_item'] = AlternativaItem::with(self::RELACIONES_LIENZO)->find($itemId)?->toArray() ?? $datos['alternativa_item'];
-            $datos['alternativa'] = $alternativa->fresh()?->toArray();
-        }
-
-        return $respuesta->setData($datos);
-    }
 
     // Edición en vivo de descuento_pct O precio_convertido — §3.1. El
     // backend siempre recalcula el que falta y devuelve AMBOS, más
@@ -211,7 +191,7 @@ class AlternativaItemController extends Controller
             'precio_manual' => $item->esLineaTour() ? true : $item->precio_manual,
         ]);
 
-        $this->recalcularTotalAlternativa($alternativa);
+        $alternativa->recalcularTotal();
 
         return response()->json([
             'code' => 200,
@@ -254,7 +234,7 @@ class AlternativaItemController extends Controller
 
             $item->setRelation('alternativa', $alternativa);
             $precio = $this->priceEngine->precioDeItemConTarifa($item, $nueva, $actual);
-            $tratamiento = self::resolverTratamientoTributario($nueva->tip_afe_igv, $nueva->destino_tributario);
+            $tratamiento = ConfiguracionAgencia::completarTratamientoTributario($nueva->tip_afe_igv, $nueva->destino_tributario);
 
             $item->update([
                 'proveedor_tarifa_id' => $nueva->id,
@@ -266,7 +246,7 @@ class AlternativaItemController extends Controller
                 'destino_tributario' => $tratamiento['destino_tributario'],
             ]);
 
-            $this->recalcularTotalAlternativa($alternativa);
+            $alternativa->recalcularTotal();
 
             return null;
         });
@@ -283,8 +263,7 @@ class AlternativaItemController extends Controller
         ]);
     }
 
-    // PUT alternativa-items/{id}/elegir-grupo — Sesión M4 (Ronda 2/P6, P9).
-    // Resuelve un grupo de opciones de hotel de M1: marca ESTA fila como
+    // PUT alternativa-items/{id}/elegir-grupo — resuelve un grupo de opciones de hotel de M1: marca ESTA fila como
     // opcion_elegida=true, desmarca las demás del mismo grupo_opcion_id
     // (mismo patrón de exclusividad que OpcionMayoristaController::elegir()).
     // El vendedor puede cambiar de elegida después llamando de nuevo a este
@@ -316,13 +295,12 @@ class AlternativaItemController extends Controller
             // Reaplica el descuento global vigente sobre la fila recién
             // elegida — sin esto, quedaría a precio de lista hasta que el
             // vendedor vuelva a tocar el campo de descuento a mano (mismo
-            // motor que AlternativaController::update(), ya idempotente:
-            // confirmado en Sesión M1 que reaplicar el mismo % mueve el
-            // descuento a la nueva elegida sin quedar pegado a la anterior).
+            // motor que AlternativaController::update(), idempotente: reaplicar el mismo %
+            // mueve el descuento a la nueva elegida sin quedar pegado a la anterior).
             if ($alternativa->descuento_global_pct !== null && (float) $alternativa->descuento_global_pct > 0) {
                 app(AlternativaController::class)->aplicarDescuentoGlobal($alternativa, (float) $alternativa->descuento_global_pct);
             } else {
-                $this->recalcularTotalAlternativa($alternativa);
+                $alternativa->recalcularTotal();
             }
         });
 
@@ -365,16 +343,13 @@ class AlternativaItemController extends Controller
             $item->delete();
         });
 
-        $this->recalcularTotalAlternativa($alternativa);
+        $alternativa->recalcularTotal();
 
         return response()->json(['code' => 200, 'message' => 'Ítem eliminado correctamente', 'alternativa' => $alternativa->fresh('items')]);
     }
 
-    // Sesión UX2 (04-sep-2026) — hallazgo del usuario: nada impedía repetir
-    // "Comparar varias opciones" con el mismo set de hoteles, dejando varios
-    // bloques "N opciones de hotel" idénticos en el lienzo, y borrarlos fila
-    // por fila (con destroy() de arriba, uno por uno) no era intuitivo. Borra
-    // TODAS las filas de un mismo grupo_opcion_id de una sola vez — mismo
+    // Borra TODAS las filas de un mismo grupo_opcion_id de una sola vez (repetir "Comparar varias
+    // opciones" deja bloques "N opciones de hotel" idénticos y borrarlos fila por fila no es intuitivo) — mismo
     // guard de reserva que destroy(), evaluado sobre el grupo completo antes
     // de borrar cualquier fila (todo o nada).
     //
@@ -414,12 +389,12 @@ class AlternativaItemController extends Controller
             }
         });
 
-        $this->recalcularTotalAlternativa($alternativa);
+        $alternativa->recalcularTotal();
 
         return response()->json(['code' => 200, 'message' => 'Grupo eliminado correctamente']);
     }
 
-    // Sesión 11b3 (Parte A) — "cargar desde plantilla": explota TODOS los
+    // "Cargar desde plantilla": explota TODOS los
     // ítems de un tour_simple/paquete_combo en la alternativa activa,
     // resueltos en vivo contra su proveedor_tarifa real (nunca copia
     // precio_venta_final del catálogo como un solo número — mismo criterio
@@ -429,12 +404,10 @@ class AlternativaItemController extends Controller
     // en el catálogo (paquetes/detalle.vue), así que el total acá siempre
     // coincide con el que ya vio ahí.
     //
-    // 14-oct-2026 (diseño, sin implementar): con modo_tours='nuevo' el tour
-    // entra como UNA línea con su propio precio por persona y por temporada, en
-    // vez de desarmarse en servicios; este camino queda como modo 'clasico'.
-    // Ver plan-tours-venta-simple-costo-real.md (N6, §3.12, §5b). Hallazgos
-    // conocidos de este método: no consulta la temporada, y el ajuste de
-    // redondeo (más abajo) no se multiplica por pasajero.
+    // Con modo_tours='nuevo' el tour entra como UNA línea con su propio precio por persona y por
+    // temporada (desdePlantillaModoNuevo()); este camino es el modo 'clasico'. Ver
+    // plan-tours-venta-simple-costo-real.md (N6, §3.12, §5b). Este método no consulta la
+    // temporada, y el ajuste de redondeo (más abajo) no se multiplica por pasajero.
     public function desdePlantilla(Request $request, string $alternativaId)
     {
         $alternativa = Alternativa::findOrFail($alternativaId);
@@ -443,7 +416,7 @@ class AlternativaItemController extends Controller
         $validator = Validator::make($request->all(), [
             'paquete_plantilla_id' => 'required|integer|exists:paquetes_plantilla,id',
             'dia_referencial' => 'required|integer|min:1',
-            'alternativa_destino_id' => ['nullable', 'integer', $this->reglaAlternativaDestinoId($alternativa)],
+            'alternativa_destino_id' => ['nullable', 'integer', $alternativa->reglaDestinoId()],
         ]);
 
         if ($validator->fails()) {
@@ -454,7 +427,7 @@ class AlternativaItemController extends Controller
         $paquete = PaquetePlantilla::findOrFail($validado['paquete_plantilla_id']);
         // Resuelto UNA sola vez por request — todos los ítems de una misma
         // carga de plantilla van al mismo destino (§0/§3 del brief 12f-1).
-        $alternativaDestinoId = $this->resolverAlternativaDestinoId($alternativa, $validado['alternativa_destino_id'] ?? null);
+        $alternativaDestinoId = $alternativa->destinoIdODefault($validado['alternativa_destino_id'] ?? null);
 
         // Fila 13, fase 1b (§5b): con modo_tours='nuevo' el tour entra como
         // línea propia (TourLineaService); todo lo de abajo es el camino
@@ -471,7 +444,7 @@ class AlternativaItemController extends Controller
         // mismo offset que ComboExplosionService::itinerarioDerivado() ya usa
         // para el itinerario derivado (tour_itinerario_items.dia_relativo
         // máximo de cada tour), no un solo día plano para todo el combo.
-        // dia_final_combo (Sesión 11m, red de seguridad del cotizador): el
+        // dia_final_combo: el
         // último día que este combo ocupa, contando incluso un tour-hijo sin
         // itinerario cargado (?? 1 — ocupa igual el día en que arranca,
         // nunca "desaparece" del rango de días). Sin esto, un tour sin
@@ -495,10 +468,8 @@ class AlternativaItemController extends Controller
                 $offsetDia += $diasDelTourActual;
             }
 
-            // Fix ítems sueltos del combo (2026-08-18): un hotel/guía
-            // agregado DIRECTO al combo (sin envolverlo en un tour-hijo) se
-            // perdía por completo acá — este bucle antes solo miraba
-            // toursDelCombo(). Ocupan el día de inicio del combo (no tienen
+            // Ítems sueltos del combo: un hotel/guía agregado DIRECTO al combo (sin envolverlo en un
+            // tour-hijo) no sale de toursDelCombo(). Ocupan el día de inicio del combo (no tienen
             // tour propio del que derivar un día/offset).
             foreach ($this->comboExplosion->explotarItemsSueltos($paquete) as $entrada) {
                 $entrada['dia_referencial'] = $validado['dia_referencial'];
@@ -515,17 +486,12 @@ class AlternativaItemController extends Controller
             }
         }
 
-        // Fix ajuste de redondeo (2026-08-18): la suma real de ítems casi
-        // nunca da un número redondo (ej. S/93.66) pero el negocio quiere
-        // cobrar S/100 — ajuste_redondeo (positivo o negativo) es la única
-        // palanca hoy para eso, y sin esto SOLO afectaba el catálogo
-        // (totalesTour()/totalesCombo()), nunca la cotización real del
-        // cliente, que seguía sumando el número no redondo (mismo síntoma
-        // ya diagnosticado para precio_venta_final antes de este fix). Se
-        // refleja como UN AlternativaItem manual adicional, auditable (no un
-        // número mágico) — mismo patrón que "ítem manual flexible" (Sesión
-        // 11q), costo=0 porque es un ajuste de precio de venta, no un
-        // servicio nuevo con costo de proveedor. Solo el ajuste_redondeo del
+        // Ajuste de redondeo: la suma real de ítems casi nunca da un número redondo (ej. S/93.66) pero
+        // el negocio quiere cobrar S/100. ajuste_redondeo (positivo o negativo) es la palanca, y tiene
+        // que llegar a la cotización real del cliente, no solo al catálogo (totalesTour()/
+        // totalesCombo()). Se refleja como UN AlternativaItem manual adicional, auditable (no un
+        // número mágico), con costo=0 porque es un ajuste de precio de venta, no un servicio nuevo
+        // con costo de proveedor. Solo el ajuste_redondeo del
         // paquete de nivel superior (el que se está cargando) aplica — el de
         // un tour-hijo dentro de un combo NO se propaga acá: cada
         // paquete_plantilla corrige su PROPIO total final, no el de su
@@ -561,7 +527,7 @@ class AlternativaItemController extends Controller
                 ]);
             }
 
-            $this->recalcularTotalAlternativa($alternativa);
+            $alternativa->recalcularTotal();
         });
 
         return response()->json([
@@ -587,9 +553,9 @@ class AlternativaItemController extends Controller
         if ($entrada['proveedor_tarifa_id']) {
             $tarifa = ProveedorTarifa::findOrFail($entrada['proveedor_tarifa_id']);
 
-            // Sesión 11o: 'compartido' se cobra por pasajero REAL de
+            // 'compartido' se cobra por pasajero REAL de
             // la cotización (no un adulto plano) — mismo cálculo que
-            // crearItemProveedor() ya usa para modo_precio=
+            // AltaProveedor usa para modo_precio=
             // 'por_persona' (contarPasajerosPorTipo()). 'privado' (o
             // sin modalidad, ej. guía suelto que igual cae acá si
             // algún día tuviera proveedor_tarifa_id) sigue con
@@ -616,7 +582,7 @@ class AlternativaItemController extends Controller
                     // cantidad NOT NULL en BD (default 1) — sin
                     // efecto real acá, el accessor total() no
                     // multiplica para 'por_persona' (mismo criterio
-                    // que crearItemProveedor() ya usa).
+                    // que AltaProveedor usa).
                     'cantidad' => 1,
                     'moneda_costo' => $tarifa->moneda,
                     'costo_snapshot' => $costoPorPersona,
@@ -648,7 +614,7 @@ class AlternativaItemController extends Controller
             // reserva_items.guia_id). Lo nuevo es el AlternativaItem
             // real de abajo: costo/venta ya vienen resueltos por
             // ComboExplosionService::resolverCostoVentaItem() (mismo
-            // cálculo que crearItemGuia() usa para un guía suelto),
+            // cálculo que AltaGuia usa para un guía suelto),
             // así que el costo SÍ entra al total desde que se carga
             // el combo, aunque el guía puntual siga sin asignar.
             $guiaTarifa = GuiaTarifa::with(['guia', 'destino'])->find($entrada['guia_tarifa_id']);
@@ -706,7 +672,7 @@ class AlternativaItemController extends Controller
                     }
                 }
 
-                $this->recalcularTotalAlternativa($alternativa);
+                $alternativa->recalcularTotal();
 
                 return $resultado;
             });
@@ -757,7 +723,7 @@ class AlternativaItemController extends Controller
 
         DB::transaction(function () use ($items, $alternativa) {
             AlternativaItem::whereIn('id', $items->pluck('id'))->delete();
-            $this->recalcularTotalAlternativa($alternativa);
+            $alternativa->recalcularTotal();
         });
 
         return response()->json(['code' => 200, 'message' => 'Tour quitado correctamente']);
@@ -812,7 +778,7 @@ class AlternativaItemController extends Controller
                 CotizacionPasajeAereo::whereIn('alternativa_item_id', $aereos)->delete();
             }
             AlternativaItem::whereIn('id', $items->pluck('id'))->delete();
-            $this->recalcularTotalAlternativa($alternativa);
+            $alternativa->recalcularTotal();
 
             return null;
         });
@@ -891,7 +857,7 @@ class AlternativaItemController extends Controller
 
         DB::transaction(function () use ($lineas, $alternativa, $validator) {
             $this->tourLinea->fijarPrecio($lineas, $alternativa, (float) $validator->validated()['precio']);
-            $this->recalcularTotalAlternativa($alternativa);
+            $alternativa->recalcularTotal();
         });
 
         return response()->json(['code' => 200, 'message' => 'Precio actualizado correctamente', 'alternativa' => $alternativa->fresh('items')]);
@@ -920,7 +886,7 @@ class AlternativaItemController extends Controller
 
         $resultado = DB::transaction(function () use ($alternativa) {
             $resultado = $this->tourLinea->recalcularTemporadas($alternativa);
-            $this->recalcularTotalAlternativa($alternativa);
+            $alternativa->recalcularTotal();
 
             return $resultado;
         });
@@ -928,7 +894,7 @@ class AlternativaItemController extends Controller
         return response()->json(['code' => 200, 'message' => 'Precios por temporada recalculados'] + $resultado + ['alternativa' => $alternativa->fresh('items')]);
     }
 
-    // Sesión 11b3 — reasignar el día de un ítem SUELTO (sin tour_origen_id).
+    // Reasigna el día de un ítem SUELTO (sin tour_origen_id).
     // Los ítems que pertenecen a un bloque de tour se mueven juntos, ver
     // moverBloque() — separado de update() (piso/descuento) a propósito: es
     // otro concern y no debía arriesgar esa validación ya verificada.
@@ -945,13 +911,9 @@ class AlternativaItemController extends Controller
             return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
         }
 
-        // Fase 2 del fix Cotización↔Reserva (2026-08-19): una alternativa
-        // 'aceptada' ya generó una reserva a partir de un snapshot de
-        // dia_referencial — mover el día acá después desincroniza en
-        // silencio esa reserva ya congelada (el mismo síntoma de fondo que
-        // motivó todo este fix, ver plan-hoja-de-ruta-ejecucion.md fila
-        // 11r/11s). El punto de corrección correcto para una reserva ya
-        // aceptada es ReservaController::reprogramar(), no este endpoint.
+        // Una alternativa 'aceptada' ya generó una reserva a partir de un snapshot de dia_referencial:
+        // mover el día acá desincroniza en silencio esa reserva ya congelada. El punto de corrección
+        // para una reserva ya aceptada es ReservaController::reprogramar(), no este endpoint.
         if ($item->alternativa->estado === 'aceptada') {
             return response()->json([
                 'code' => 422,
@@ -988,8 +950,7 @@ class AlternativaItemController extends Controller
             return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
         }
 
-        // Fase 2 del fix Cotización↔Reserva (2026-08-19) — mismo guard que
-        // reasignarDia(), ver comentario ahí.
+        // Mismo guard que reasignarDia(), ver comentario ahí.
         if ($alternativa->estado === 'aceptada') {
             return response()->json([
                 'code' => 422,
@@ -1017,403 +978,28 @@ class AlternativaItemController extends Controller
         return response()->json(['code' => 200, 'message' => 'Bloque movido correctamente']);
     }
 
-    // ── origen_tipo=proveedor ─────────────────────────────────────────
-    private function crearItemProveedor(Request $request, Alternativa $alternativa): JsonResponse
-    {
-        $validator = Validator::make($request->all(), [
-            'proveedor_tarifa_id' => 'nullable|integer|exists:proveedor_tarifas,id',
-            // Sesión M3 — hotel ad-hoc LOCAL (matriz de habitación sin
-            // ProveedorTarifa real, ver OpcionHotelController::store()).
-            // Mutuamente excluyente con proveedor_tarifa_id, mismo
-            // criterio de "3 vías" que ya extiende moneda_costo/
-            // precio_venta_snapshot más abajo.
-            'opcion_hotel_tarifa_id' => 'nullable|integer|exists:opciones_hotel_tarifas,id',
-            'modo_precio' => 'required|in:por_persona,tarifa_fija',
-            'cantidad' => 'nullable|integer|min:1',
-            'pax_incluidos' => 'nullable|array',
-            'pax_incluidos.*' => 'integer|exists:cotizacion_pasajeros,id',
-            // Solo si NO hay proveedor_tarifa_id NI opcion_hotel_tarifa_id —
-            // precio de referencia (§3, caso 2).
-            'moneda_costo' => 'required_without_all:proveedor_tarifa_id,opcion_hotel_tarifa_id|nullable|in:PEN,USD',
-            'precio_venta_snapshot' => 'required_without_all:proveedor_tarifa_id,opcion_hotel_tarifa_id|nullable|numeric|min:0',
-            'costo_snapshot' => 'nullable|numeric|min:0',
-            // Solo tiene efecto si NO hay proveedor_tarifa_id — con tarifa
-            // real, el tratamiento tributario SIEMPRE viene de ella (ver
-            // resolverTratamientoTributario() más abajo).
-            'tip_afe_igv' => 'nullable|string|in:10,20,30',
-            'destino_tributario' => 'nullable|string|in:amazonia,nacional,extranjero',
-            // Día activo del lienzo al momento de agregar — Sesión 11b3 (§7.1).
-            'dia_referencial' => 'nullable|integer|min:1',
-            // Consolidación de hoteles — cantidad de camas adicionales
-            // necesarias (0 = ninguna, sin default a favor de cobrar de
-            // más). Solo tiene efecto real con modo_precio='tarifa_fija' y
-            // una tarifa de un proveedor con detalle de alojamiento
-            // configurado (antes vivía solo en el hotel de un
-            // paquete_plantilla, ver crearItemHotelPlantilla(), eliminado).
-            'camas_adicionales_nino' => 'nullable|integer|min:0',
-            'alternativa_destino_id' => ['nullable', 'integer', $this->reglaAlternativaDestinoId($alternativa)],
-            // Sesión M4 — el picker (HabitacionMatrixPicker.vue) genera el
-            // UUID una sola vez cliente-side y lo manda igual en cada
-            // llamada de "Agregar N opciones como grupo" (M1: agrupador
-            // liviano, sin tabla propia — ver AlternativaItem::
-            // agruparPorGrupoOpcion()). Todas las filas de un grupo nuevo
-            // nacen sin elegir — resolverlo es una acción aparte
-            // (elegirOpcionGrupo() más abajo).
-            'grupo_opcion_id' => 'nullable|uuid',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
-        }
-
-        $validado = $validator->validated();
-        $tarifa = ! empty($validado['proveedor_tarifa_id']) ? ProveedorTarifa::findOrFail($validado['proveedor_tarifa_id']) : null;
-        $opcionHotelTarifa = ! empty($validado['opcion_hotel_tarifa_id']) ? OpcionHotelTarifa::findOrFail($validado['opcion_hotel_tarifa_id']) : null;
-        $cantidad = $validado['cantidad'] ?? 1;
-        $paxIncluidos = $validado['pax_incluidos'] ?? null;
-
-        // 26-ago-2026: biblioteca() ya excluye tarifas desactivadas de la
-        // búsqueda, pero esto es lo que de verdad decide si un ítem nuevo
-        // se puede crear — sin este check, un proveedor_tarifa_id ya
-        // desactivado (ej. de una pestaña vieja) igual se podía usar. No
-        // aplica a ítems ya existentes (el precio ya está congelado, no se
-        // re-valida al editar cantidad/pax_incluidos de un ítem viejo).
-        // T-045: el motivo (retirada / fuera de vigencia) vive en
-        // PriceEngineService, compartido con la vista previa de Venta directa.
-        $motivoNoUsable = $tarifa ? $this->priceEngine->motivoTarifaNoUsable($tarifa) : null;
-        if ($motivoNoUsable) {
-            return response()->json(['code' => 422, 'message' => $motivoNoUsable], 422);
-        }
-
-        if ($tarifa) {
-            $monedaCosto = $tarifa->moneda;
-
-            // T-045: fórmula única en PriceEngineService (E2, fila 13: el
-            // costo por persona es el TOTAL de la línea, sin infantes).
-            $conteo = $validado['modo_precio'] === 'por_persona'
-                ? $this->contarPasajerosPorTipo($alternativa->cotizacion_id, $paxIncluidos)
-                : ['adulto' => 0, 'nino' => 0, 'infante' => 0];
-            ['venta' => $precioVentaSnapshot, 'costo' => $costoSnapshot] = $this->priceEngine
-                ->ventaYCostoDeTarifa($tarifa, $conteo, $validado['modo_precio']);
-
-            if ($validado['modo_precio'] !== 'por_persona') {
-                // tarifa_fija (hotel por habitación, transporte privado por vehículo):
-                // un solo precio, no diferenciado por tipo de pasajero.
-                $camasAdicionales = $validado['camas_adicionales_nino'] ?? 0;
-                if ($camasAdicionales > 0) {
-                    $resultadoCama = $this->aplicarCamaAdicional($alternativa, $tarifa, $paxIncluidos, $camasAdicionales);
-                    if ($resultadoCama instanceof JsonResponse) {
-                        return $resultadoCama;
-                    }
-
-                    $costoSnapshot += $resultadoCama['costo'];
-                    $precioVentaSnapshot += $resultadoCama['venta'];
-                }
-            }
-        } elseif ($opcionHotelTarifa) {
-            // Sesión M3 — hotel ad-hoc LOCAL, mismo criterio de snapshot
-            // que AlternativaItemController::crearItemMayorista() para el
-            // camino internacional: siempre por habitación, sin cama
-            // adicional (esa mecánica depende de proveedorServicio->
-            // proveedor->alojamientoDetalle, que un hotel ad-hoc no tiene).
-            $monedaCosto = $opcionHotelTarifa->opcionHotel?->moneda ?? 'PEN';
-            $costoSnapshot = (float) $opcionHotelTarifa->precio_costo;
-            $precioVentaSnapshot = (float) $opcionHotelTarifa->precio_venta;
-        } else {
-            $monedaCosto = $validado['moneda_costo'];
-            // costo_snapshot es NOT NULL — sin tarifa real de la que
-            // derivarlo, 0 es el sentinel (mismo criterio que items manuales).
-            $costoSnapshot = $validado['costo_snapshot'] ?? 0;
-            $precioVentaSnapshot = (float) $validado['precio_venta_snapshot'];
-        }
-
-        $tratamientoTributario = match (true) {
-            (bool) $tarifa => $this->resolverTratamientoTributario($tarifa->tip_afe_igv, $tarifa->destino_tributario),
-            (bool) $opcionHotelTarifa => $this->resolverTratamientoTributario($opcionHotelTarifa->tip_afe_igv, $opcionHotelTarifa->destino_tributario),
-            default => $this->resolverTratamientoTributario($validado['tip_afe_igv'] ?? null, $validado['destino_tributario'] ?? null),
-        };
-
-        $item = AlternativaItem::create([
-            'alternativa_id' => $alternativa->id,
-            'alternativa_destino_id' => $this->resolverAlternativaDestinoId($alternativa, $validado['alternativa_destino_id'] ?? null),
-            'origen_tipo' => AlternativaItem::ORIGEN_PROVEEDOR,
-            'proveedor_tarifa_id' => $tarifa?->id,
-            'opcion_hotel_tarifa_id' => $opcionHotelTarifa?->id,
-            'grupo_opcion_id' => $validado['grupo_opcion_id'] ?? null,
-            // Un hotel ad-hoc siempre es por habitación, sin importar qué
-            // vino en el request — mismo criterio hardcodeado que
-            // crearItemMayorista() para su equivalente internacional.
-            'modo_precio' => $opcionHotelTarifa ? 'tarifa_fija' : $validado['modo_precio'],
-            'cantidad' => $cantidad,
-            'pax_incluidos' => $paxIncluidos,
-            'moneda_costo' => $monedaCosto,
-            'costo_snapshot' => $costoSnapshot,
-            'precio_venta_snapshot' => $precioVentaSnapshot,
-            'precio_convertido' => $this->priceEngine->convertirMoneda($precioVentaSnapshot, $monedaCosto, $alternativa->moneda_cotizacion, (float) $alternativa->tipo_cambio_aplicado),
-            'dia_referencial' => $validado['dia_referencial'] ?? null,
-            'tip_afe_igv' => $tratamientoTributario['tip_afe_igv'],
-            'destino_tributario' => $tratamientoTributario['destino_tributario'],
-        ]);
-
-        $this->recalcularTotalAlternativa($alternativa);
-
-        return response()->json(['code' => 200, 'message' => 'Ítem agregado correctamente', 'alternativa_item' => $item]);
-    }
-
-    // Consolidación de hoteles — extraído de lo que antes era
-    // crearItemHotelPlantilla() (Sesión 11o): valida y calcula el costo/venta
-    // extra de N camas adicionales para una tarifa_fija de proveedor. Edad
-    // REAL del pasajero (cotizacion_pasajeros.edad), nunca tipo_pax — un
-    // pasajero de 10 años puede tener tipo_pax='adulto' por el umbral
-    // general de la agencia y aun así caer dentro del tramo de cama
-    // adicional propio de ESTE proveedor. Devuelve el JsonResponse de error
-    // (422) tal cual para que el caller lo retorne sin envolver de nuevo.
-    private function aplicarCamaAdicional(Alternativa $alternativa, ProveedorTarifa $tarifa, ?array $paxIncluidos, int $camasAdicionales): array|JsonResponse
-    {
-        $alojamiento = $tarifa->proveedorServicio?->proveedor?->alojamientoDetalle;
-
-        if (! $alojamiento) {
-            return response()->json([
-                'code' => 422,
-                'message' => 'Este proveedor no tiene configurado el detalle de alojamiento (tramo de edad para cama adicional).',
-            ], 422);
-        }
-
-        $tienePaxEnTramo = CotizacionPasajero::where('cotizacion_id', $alternativa->cotizacion_id)
-            ->when(
-                ! empty($paxIncluidos),
-                fn ($query) => $query->whereIn('id', $paxIncluidos),
-                fn ($query) => $query->whereRaw('1 = 0')
-            )
-            ->where('edad', '>', $alojamiento->edad_max_infante_gratis)
-            ->where('edad', '<=', $alojamiento->edad_max_nino_cama_adicional)
-            ->exists();
-
-        if (! $tienePaxEnTramo) {
-            return response()->json([
-                'code' => 422,
-                'message' => 'Cama adicional solo aplica si pax_incluidos tiene al menos un pasajero dentro del tramo de edad de cama adicional de este proveedor.',
-            ], 422);
-        }
-
-        if ($tarifa->precio_costo_cama_adicional === null || $tarifa->precio_venta_cama_adicional === null) {
-            return response()->json([
-                'code' => 422,
-                'message' => 'Esta tarifa no tiene precio de cama adicional configurado.',
-            ], 422);
-        }
-
-        return [
-            'costo' => $camasAdicionales * (float) $tarifa->precio_costo_cama_adicional,
-            'venta' => $camasAdicionales * (float) $tarifa->precio_venta_cama_adicional,
-        ];
-    }
-
-    // ── origen_tipo=mayorista ─────────────────────────────────────────
-    // 07-sep-2026 — acepta EXACTAMENTE una de dos fuentes de precio:
-    // opcion_hotel_tarifa_id (matriz de habitación, comportamiento de
-    // siempre) u opcion_mayorista_opcional_id (un tour opcional —San Blas,
-    // Taboga, Colón— que el cliente eligió agregar de verdad al lienzo,
-    // hueco real documentado desde 04-sep-2026: hasta ahora un opcional
-    // solo existía como info de referencia en el PDF, sin sumar nunca al
-    // total). Ambas comparten toda la validación de la OpcionMayorista
-    // (pertenece a esta alternativa, está 'elegida') y el tratamiento
-    // tributario — solo difiere de dónde sale costo_snapshot/precio_venta_snapshot.
-    private function crearItemMayorista(Request $request, Alternativa $alternativa): JsonResponse
-    {
-        $validator = Validator::make($request->all(), [
-            'opcion_mayorista_id' => 'required|integer|exists:opcion_mayorista,id',
-            'opcion_hotel_tarifa_id' => 'required_without:opcion_mayorista_opcional_id|nullable|integer|exists:opciones_hotel_tarifas,id',
-            'opcion_mayorista_opcional_id' => 'required_without:opcion_hotel_tarifa_id|nullable|integer|exists:opcion_mayorista_opcionales,id',
-            'cantidad' => 'nullable|integer|min:1',
-            'pax_incluidos' => 'nullable|array',
-            'dia_referencial' => 'nullable|integer|min:1',
-            'tip_afe_igv' => 'nullable|string|in:10,20,30',
-            'destino_tributario' => 'nullable|string|in:amazonia,nacional,extranjero',
-            'alternativa_destino_id' => ['nullable', 'integer', $this->reglaAlternativaDestinoId($alternativa)],
-            // Sesión M4 — ver mismo campo en crearItemProveedor().
-            'grupo_opcion_id' => 'nullable|uuid',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
-        }
-
-        $validado = $validator->validated();
-        $opcion = OpcionMayorista::findOrFail($validado['opcion_mayorista_id']);
-
-        if ($opcion->alternativa_id !== $alternativa->id) {
-            return response()->json(['code' => 422, 'message' => 'La opción de mayorista no pertenece a esta alternativa.'], 422);
-        }
-        if ($opcion->estado !== 'elegida') {
-            return response()->json(['code' => 422, 'message' => 'Marcá la opción de mayorista como elegida antes de agregarla al ítem.'], 422);
-        }
-
-        $tarifaHotel = null;
-        $opcional = null;
-
-        if (isset($validado['opcion_hotel_tarifa_id'])) {
-            $tarifaHotel = OpcionHotelTarifa::with('opcionHotel')->findOrFail($validado['opcion_hotel_tarifa_id']);
-            if ($tarifaHotel->opcionHotel?->opcion_mayorista_id !== $opcion->id) {
-                return response()->json(['code' => 422, 'message' => 'Esa tarifa de habitación no pertenece a la opción de mayorista indicada.'], 422);
-            }
-        } else {
-            $opcional = OpcionMayoristaOpcional::findOrFail($validado['opcion_mayorista_opcional_id']);
-            if ($opcional->opcion_mayorista_id !== $opcion->id) {
-                return response()->json(['code' => 422, 'message' => 'Ese opcional no pertenece a la opción de mayorista indicada.'], 422);
-            }
-        }
-
-        $tratamientoTributario = $this->resolverTratamientoTributario($validado['tip_afe_igv'] ?? null, $validado['destino_tributario'] ?? null);
-
-        // Un opcional (OpcionMayoristaOpcional) no tiene columna de costo —
-        // solo el precio que se le cobra al cliente (nunca se cargó margen
-        // para estos, a diferencia de hoteles/proveedores). costo_snapshot
-        // en 0 es honesto (no inventa un costo que nadie registró), no un
-        // valor "de relleno".
-        $precioVenta = $tarifaHotel?->precio_venta ?? $opcional->precio_por_persona;
-        $costo = $tarifaHotel?->precio_costo ?? 0;
-
-        $item = AlternativaItem::create([
-            'alternativa_id' => $alternativa->id,
-            'alternativa_destino_id' => $this->resolverAlternativaDestinoId($alternativa, $validado['alternativa_destino_id'] ?? null),
-            'origen_tipo' => AlternativaItem::ORIGEN_MAYORISTA,
-            'opcion_mayorista_id' => $opcion->id,
-            // Sesión M2 — gap real heredado: esta columna existía desde
-            // antes pero ningún código la escribía (confirmado por 2
-            // auditorías independientes). Sin esto, la trazabilidad hacia
-            // la reserva/reporte operativo/PDF nunca puede resolver QUÉ
-            // fila de la matriz de habitación fijó este precio.
-            'opcion_hotel_tarifa_id' => $tarifaHotel?->id,
-            'opcion_mayorista_opcional_id' => $opcional?->id,
-            'grupo_opcion_id' => $validado['grupo_opcion_id'] ?? null,
-            'modo_precio' => 'tarifa_fija', // paquete internacional, siempre por habitación
-            'cantidad' => $validado['cantidad'] ?? 1,
-            'pax_incluidos' => $validado['pax_incluidos'] ?? null,
-            'moneda_costo' => $opcional?->moneda ?? $opcion->moneda,
-            'costo_snapshot' => $costo,
-            'precio_venta_snapshot' => $precioVenta,
-            'precio_convertido' => $this->priceEngine->convertirMoneda((float) $precioVenta, $opcional?->moneda ?? $opcion->moneda, $alternativa->moneda_cotizacion, (float) $alternativa->tipo_cambio_aplicado),
-            'dia_referencial' => $validado['dia_referencial'] ?? null,
-            'tip_afe_igv' => $tratamientoTributario['tip_afe_igv'],
-            'destino_tributario' => $tratamientoTributario['destino_tributario'],
-        ]);
-
-        $this->recalcularTotalAlternativa($alternativa);
-
-        return response()->json(['code' => 200, 'message' => 'Ítem de mayorista agregado correctamente', 'alternativa_item' => $item]);
-    }
-
-    // ── origen_tipo=guia ─────────────────────────────────────────────────
-    // Fix guia-como-item-real: hasta esta sesión un guía nunca generaba un
-    // AlternativaItem real — ni cargado suelto, ni al explotar un combo
-    // (desdePlantilla() solo lo avisaba en guiasPendientes, sin costo). Usa
-    // EXACTAMENTE el mismo cálculo que ComboExplosionService::
-    // resolverCostoVentaItem() ya aplica para guia_tarifa_id — costo_diario
-    // es un monto fijo del día, no se reparte por pasajero, mismo criterio
-    // que transporte privado/hotel (modo_precio='tarifa_fija').
-    private function crearItemGuia(Request $request, Alternativa $alternativa): JsonResponse
-    {
-        $validator = Validator::make($request->all(), [
-            'guia_tarifa_id' => 'required|integer|exists:guia_tarifas,id',
-            'cantidad' => 'nullable|integer|min:1',
-            'pax_incluidos' => 'nullable|array',
-            'pax_incluidos.*' => 'integer|exists:cotizacion_pasajeros,id',
-            'dia_referencial' => 'nullable|integer|min:1',
-            'tip_afe_igv' => 'nullable|string|in:10,20,30',
-            'destino_tributario' => 'nullable|string|in:amazonia,nacional,extranjero',
-            'alternativa_destino_id' => ['nullable', 'integer', $this->reglaAlternativaDestinoId($alternativa)],
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
-        }
-
-        $validado = $validator->validated();
-        $guiaTarifa = GuiaTarifa::findOrFail($validado['guia_tarifa_id']);
-
-        // 29-ago-2026, mismo criterio que crearItemProveedor(): el picker
-        // de GuiaController::show() ya excluye tarifas desactivadas, pero
-        // esto es lo que de verdad decide si un ítem nuevo se puede crear
-        // — sin este check, un guia_tarifa_id ya desactivado (ej. de una
-        // pestaña vieja) igual se podía usar.
-        if (! $guiaTarifa->activo) {
-            return response()->json([
-                'code' => 422,
-                'message' => 'Esta tarifa fue retirada del catálogo activo — no se puede usar en un ítem nuevo.',
-            ], 422);
-        }
-
-        // Como en crearItemProveedor() (T-028): una versión vieja (cerrada) o futura
-        // no se cotiza; hay que usar la versión vigente.
-        if (! $guiaTarifa->estaVigente()) {
-            $mensaje = $guiaTarifa->vigente_desde->toDateString() > \App\Services\HoraPeru::hoyTexto()
-                ? 'Esta tarifa todavía no está vigente (desde '.$guiaTarifa->vigente_desde->format('d/m/Y').').'
-                : 'Esta tarifa ya no está vigente: usa la versión actual.';
-
-            return response()->json(['code' => 422, 'message' => $mensaje], 422);
-        }
-
-        $calculo = $this->priceEngine->calcular(
-            (float) $guiaTarifa->costo_diario,
-            [],
-            $guiaTarifa->tipo_margen,
-            (float) $guiaTarifa->margen_valor,
-            null,
-            null
-        );
-
-        $tratamientoTributario = $this->resolverTratamientoTributario($validado['tip_afe_igv'] ?? null, $validado['destino_tributario'] ?? null);
-
-        $item = AlternativaItem::create([
-            'alternativa_id' => $alternativa->id,
-            'alternativa_destino_id' => $this->resolverAlternativaDestinoId($alternativa, $validado['alternativa_destino_id'] ?? null),
-            'origen_tipo' => AlternativaItem::ORIGEN_GUIA,
-            'guia_tarifa_id' => $guiaTarifa->id,
-            'modo_precio' => 'tarifa_fija',
-            'cantidad' => $validado['cantidad'] ?? 1,
-            'pax_incluidos' => $validado['pax_incluidos'] ?? null,
-            'moneda_costo' => $guiaTarifa->moneda,
-            'costo_snapshot' => $calculo['costo_total'],
-            'precio_venta_snapshot' => $calculo['venta_total'],
-            'precio_convertido' => $this->priceEngine->convertirMoneda($calculo['venta_total'], $guiaTarifa->moneda, $alternativa->moneda_cotizacion, (float) $alternativa->tipo_cambio_aplicado),
-            'dia_referencial' => $validado['dia_referencial'] ?? null,
-            'tip_afe_igv' => $tratamientoTributario['tip_afe_igv'],
-            'destino_tributario' => $tratamientoTributario['destino_tributario'],
-        ]);
-
-        $this->recalcularTotalAlternativa($alternativa);
-
-        return response()->json(['code' => 200, 'message' => 'Ítem de guía agregado correctamente', 'alternativa_item' => $item]);
-    }
-
-    // Recalculo en vivo del formulario de pasaje aéreo (PasajeAereoForm.vue)
-    // — misma validación y misma llamada a PriceEngineService que
-    // crearItemPasajeAereo(), pero sin persistir nada. "No reimplementes la
-    // suma en el frontend, pedísela al backend" (spec de esta sesión).
+    // Recalculo en vivo del formulario de pasaje aéreo (PasajeAereoForm.vue): la misma validación y el
+    // mismo cálculo que el alta, sin persistir nada. El frontend no reimplementa la suma.
     public function previewPasajeAereo(Request $request, string $alternativaId)
     {
         $alternativa = Alternativa::findOrFail($alternativaId);
         $this->autorizarCotizacion('view', $alternativa);
 
-        $validado = $this->validarPasajeAereo($request, $alternativa);
-        if ($validado instanceof JsonResponse) {
-            return $validado;
+        try {
+            $validado = $this->altaPasajeAereo->validar($request->all(), $alternativa);
+        } catch (AltaItemException $e) {
+            return response()->json(['code' => 422, 'message' => $e->getMessage()], 422);
         }
 
-        $resultado = $this->calcularPasajeAereo($alternativa, $validado);
+        $resultado = $this->altaPasajeAereo->calcular($alternativa, $validado);
 
         return response()->json(['code' => 200, 'resultado' => $resultado]);
     }
 
-    // PUT alternativa-items/{id}/pasaje-aereo — edición estructural completa
-    // de un pasaje aéreo suelto (auditoría del módulo Reservas/Cotizador,
-    // 2026-08-27: antes de esto no existía NINGUNA forma de ver/corregir el
-    // detalle de un pasaje aéreo ya cargado, solo borrar y recrear desde
-    // cero). Calcado de actualizarManual() — mismo guard de "no editar si ya
-    // generó una reserva", y reusa validarPasajeAereo()/calcularPasajeAereo()
-    // (las MISMAS que usa el alta y el preview) para que nunca haya una
-    // segunda fórmula que se pueda desincronizar de la primera.
+    // PUT alternativa-items/{id}/pasaje-aereo — edición estructural completa de un pasaje aéreo
+    // suelto. Calcado de actualizarManual() — mismo guard de "no editar si ya generó una reserva", y
+    // reusa AltaPasajeAereo::validar()/calcular() (las MISMAS que usa el alta y el preview) para que
+    // nunca haya una segunda fórmula que se pueda desincronizar de la primera.
     public function actualizarPasajeAereo(Request $request, string $id): JsonResponse
     {
         $item = AlternativaItem::with(['alternativa', 'cotizacionPasajeAereo'])->findOrFail($id);
@@ -1428,13 +1014,14 @@ class AlternativaItemController extends Controller
         }
 
         $alternativa = $item->alternativa;
-        $validado = $this->validarPasajeAereo($request, $alternativa);
-        if ($validado instanceof JsonResponse) {
-            return $validado;
+        try {
+            $validado = $this->altaPasajeAereo->validar($request->all(), $alternativa);
+        } catch (AltaItemException $e) {
+            return response()->json(['code' => 422, 'message' => $e->getMessage()], 422);
         }
         // T-076: un pasaje anterior mantiene su fórmula salvo que el vendedor pida pasarlo a la nueva.
         $validado['montos_por_pasajero'] ??= (bool) $item->cotizacionPasajeAereo->montos_por_pasajero;
-        $resultado = $this->calcularPasajeAereo($alternativa, $validado);
+        $resultado = $this->altaPasajeAereo->calcular($alternativa, $validado);
         // Si no manda valor nuevo, conserva el que ya tenía el ítem (mismo
         // criterio que actualizarManual() — el default de agencia solo
         // aplica al crear, no se recalcula al editar).
@@ -1470,219 +1057,10 @@ class AlternativaItemController extends Controller
             ]);
         });
 
-        $this->recalcularTotalAlternativa($alternativa);
+        $alternativa->recalcularTotal();
         $item->load('cotizacionPasajeAereo');
 
         return response()->json(['code' => 200, 'message' => 'Pasaje aéreo actualizado correctamente', 'alternativa_item' => $item->fresh(['cotizacionPasajeAereo'])]);
-    }
-
-    // ── origen_tipo=pasaje_aereo ────────────────────────────────────────
-    private function crearItemPasajeAereo(Request $request, Alternativa $alternativa): JsonResponse
-    {
-        $validado = $this->validarPasajeAereo($request, $alternativa);
-        if ($validado instanceof JsonResponse) {
-            return $validado;
-        }
-
-        $resultado = $this->calcularPasajeAereo($alternativa, $validado);
-        $tratamientoTributario = $this->resolverTratamientoTributario($validado['tip_afe_igv'] ?? null, $validado['destino_tributario'] ?? null);
-
-        $item = DB::transaction(function () use ($alternativa, $validado, $resultado, $tratamientoTributario) {
-            $item = AlternativaItem::create([
-                'alternativa_id' => $alternativa->id,
-                'alternativa_destino_id' => $this->resolverAlternativaDestinoId($alternativa, $validado['alternativa_destino_id'] ?? null),
-                'origen_tipo' => AlternativaItem::ORIGEN_PASAJE_AEREO,
-                'modo_precio' => 'por_persona', // el reparto adulto/niño/infante ya está resuelto en venta_total
-                'cantidad' => 1,
-                'pax_incluidos' => $validado['pax_incluidos'] ?? null,
-                'moneda_costo' => $validado['moneda'],
-                'costo_snapshot' => $resultado['costo_total'],
-                'precio_venta_snapshot' => $resultado['venta_total'],
-                'precio_convertido' => $this->priceEngine->convertirMoneda($resultado['venta_total'], $validado['moneda'], $alternativa->moneda_cotizacion, (float) $alternativa->tipo_cambio_aplicado),
-                'dia_referencial' => $validado['dia_referencial'] ?? null,
-                'tip_afe_igv' => $tratamientoTributario['tip_afe_igv'],
-                'destino_tributario' => $tratamientoTributario['destino_tributario'],
-            ]);
-
-            CotizacionPasajeAereo::create([
-                'alternativa_item_id' => $item->id,
-                'aerolinea' => $validado['aerolinea'],
-                'itinerario' => $validado['itinerario'] ?? null,
-                'moneda' => $validado['moneda'],
-                'tarifa_base_adulto' => $validado['tarifa_base_adulto'],
-                'tarifa_base_nino' => $validado['tarifa_base_nino'] ?? null,
-                'tarifa_base_infante' => $validado['tarifa_base_infante'] ?? null,
-                'cargos' => $validado['cargos'] ?? [],
-                'tua_incluida_en_tarifa' => $validado['tua_incluida_en_tarifa'] ?? false,
-                'fee_agencia_monto' => $validado['fee_agencia_monto'] ?? 0,
-                'montos_por_pasajero' => $validado['montos_por_pasajero'] ?? true,
-                'tip_afe_igv' => $validado['tip_afe_igv'] ?? null,
-                'fecha_cotizado' => now(),
-                'tarifa_valida_hasta' => $validado['tarifa_valida_hasta'],
-                'costo_total' => $resultado['costo_total'],
-                'precio_venta_total' => $resultado['venta_total'],
-            ]);
-
-            return $item;
-        });
-
-        $this->recalcularTotalAlternativa($alternativa);
-        $item->load('cotizacionPasajeAereo');
-
-        return response()->json(['code' => 200, 'message' => 'Pasaje aéreo agregado correctamente', 'alternativa_item' => $item]);
-    }
-
-    private function validarPasajeAereo(Request $request, Alternativa $alternativa): array|JsonResponse
-    {
-        $validator = Validator::make($request->all(), [
-            'aerolinea' => 'required|string|max:150',
-            'itinerario' => 'nullable|string',
-            'moneda' => 'required|in:PEN,USD',
-            'tarifa_base_adulto' => 'required|numeric|min:0',
-            'tarifa_base_nino' => 'nullable|numeric|min:0',
-            'tarifa_base_infante' => 'nullable|numeric|min:0',
-            'cargos' => 'nullable|array',
-            'cargos.*.nombre' => 'required_with:cargos|string',
-            'cargos.*.monto' => 'required_with:cargos|numeric',
-            'cargos.*.tipo' => 'nullable|in:impuesto,tasa_aeropuerto,fee_agencia',
-            // T-076: el cargo no se cobra a los infantes (solo con montos por pasajero).
-            'cargos.*.no_aplica_infante' => 'nullable|boolean',
-            // T-076: true = cargos y fee por pasajero. Sin valor: los pasajes nuevos nacen con
-            // true y la edición de uno existente conserva su fórmula (ver actualizarPasajeAereo()).
-            'montos_por_pasajero' => 'nullable|boolean',
-            'tua_incluida_en_tarifa' => 'nullable|boolean',
-            'fee_agencia_monto' => 'nullable|numeric|min:0',
-            // cotizacion_pasaje_aereo.tip_afe_igv: la afectación del pasaje,
-            // que la factura aplica al precio completo (D-AGE-035, ver
-            // docblock del modelo). 'destino_tributario' es nuevo, a nivel
-            // de alternativa_items (junto con una copia genérica de
-            // tip_afe_igv), ver resolverTratamientoTributario().
-            'tip_afe_igv' => 'nullable|string|max:2',
-            'destino_tributario' => 'nullable|string|in:amazonia,nacional,extranjero',
-            'pax_incluidos' => 'nullable|array',
-            'pax_incluidos.*' => 'integer|exists:cotizacion_pasajeros,id',
-            'dia_referencial' => 'nullable|integer|min:1',
-            // Sesión 12f-1 — solo tiene efecto real en la creación
-            // (crearItemPasajeAereo()); actualizarPasajeAereo() no lo lee,
-            // el destino de un ítem ya existente no se mueve por acá.
-            'alternativa_destino_id' => ['nullable', 'integer', $this->reglaAlternativaDestinoId($alternativa)],
-            // Vigencia de la tarifa aérea (09-oct-2026): fecha-hora límite que
-            // da la aerolínea, escrita en hora de Perú; se guarda en UTC.
-            'tarifa_valida_hasta' => 'nullable|date_format:Y-m-d H:i',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
-        }
-
-        $validado = $validator->validated();
-        $validado['tarifa_valida_hasta'] = \App\Services\HoraPeru::aUtc($validado['tarifa_valida_hasta'] ?? null);
-        // 29-ago-2026 — capitalización tipo título, solo hacia adelante. T-016: misma regla que
-        // el catálogo común (solo si viene todo en minúsculas), para no pasar "LATAM" a "Latam".
-        $validado['aerolinea'] = AerolineaController::formatearNombre($validado['aerolinea']);
-        // T-007: un pasaje aéreo es un boleto por persona y guarda a quiénes cubre. Con null
-        // ("todos") un pasajero agregado después quedaba dentro de un boleto que no se le cobró.
-        if (empty($validado['pax_incluidos'])) {
-            $validado['pax_incluidos'] = CotizacionPasajero::where('cotizacion_id', $alternativa->cotizacion_id)
-                ->orderBy('id')->pluck('id')->all() ?: null;
-        }
-
-        return $validado;
-    }
-
-    private function calcularPasajeAereo(Alternativa $alternativa, array $validado): array
-    {
-        $conteo = $this->contarPasajerosPorTipo($alternativa->cotizacion_id, $validado['pax_incluidos'] ?? null);
-
-        // tarifa_base_* se reparte por tipo de pasajero, igual que el
-        // reparto por_persona de proveedor_tarifas (§3).
-        $costoBaseTarifas = $conteo['adulto'] * (float) $validado['tarifa_base_adulto']
-            + $conteo['nino'] * (float) ($validado['tarifa_base_nino'] ?? 0)
-            + $conteo['infante'] * (float) ($validado['tarifa_base_infante'] ?? 0);
-
-        $cargos = $validado['cargos'] ?? [];
-        $fee = (float) ($validado['fee_agencia_monto'] ?? 0);
-
-        // T-076: cargos y fee son POR PASAJERO. Un cargo con «no aplica a infantes» se multiplica
-        // solo por adultos y niños; el fee, por todos los marcados (el infante paga fee). Un
-        // pasaje anterior (montos_por_pasajero=false) conserva su fórmula: montos del grupo, una vez.
-        if ($validado['montos_por_pasajero'] ?? true) {
-            $total = $conteo['adulto'] + $conteo['nino'] + $conteo['infante'];
-            $sinInfantes = $conteo['adulto'] + $conteo['nino'];
-            $cargos = array_map(function (array $cargo) use ($total, $sinInfantes) {
-                $cargo['monto'] = (float) $cargo['monto'] * (! empty($cargo['no_aplica_infante']) ? $sinInfantes : $total);
-
-                return $cargo;
-            }, $cargos);
-            $fee *= $total;
-        }
-
-        // fee_agencia_monto es lo único que la agencia realmente vende
-        // (§2.5) — se modela como margen 'fijo' del motor de precios, no
-        // como un cargo más (los cargos son pass-through de terceros).
-        return $this->priceEngine->calcular(
-            costoBase: $costoBaseTarifas,
-            cargos: $cargos,
-            margenTipo: 'fijo',
-            margenValor: $fee,
-            descuentoMaximoPct: null,
-            margenMinimoPct: null,
-        );
-    }
-
-    // ── origen_tipo=manual ──────────────────────────────────────────────
-    // Sesión 11q: costo/cantidad/pax_incluidos dejaron de ser sentinels sin
-    // efecto — costo_snapshot ahora es real (obligatorio), cantidad SÍ
-    // multiplica (ver AlternativaItem::getTotalAttribute()), y pax_incluidos
-    // se propaga a reserva_item_pasajero al aceptar (ver ReservaController::
-    // crearReservaDesdeAlternativa()). proveedor_sugerido_manual es dato
-    // interno (nunca visible al cliente), solo para prellenar el nombre al
-    // promover este ítem a un proveedor real (ver promoverAProveedor()).
-    private function crearItemManual(Request $request, Alternativa $alternativa): JsonResponse
-    {
-        $validator = Validator::make($request->all(), [
-            'descripcion_manual' => 'required|string|max:500',
-            'proveedor_sugerido_manual' => 'nullable|string|max:250',
-            'costo_snapshot' => 'required|numeric|min:0',
-            'precio_venta_snapshot' => 'required|numeric|min:0',
-            'moneda_costo' => 'required|in:PEN,USD',
-            'cantidad' => 'required|integer|min:1',
-            'pax_incluidos' => 'nullable|array',
-            'pax_incluidos.*' => 'integer|exists:cotizacion_pasajeros,id',
-            'dia_referencial' => 'nullable|integer|min:1',
-            'tip_afe_igv' => 'nullable|string|in:10,20,30',
-            'destino_tributario' => 'nullable|string|in:amazonia,nacional,extranjero',
-            'alternativa_destino_id' => ['nullable', 'integer', $this->reglaAlternativaDestinoId($alternativa)],
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
-        }
-
-        $validado = $validator->validated();
-        $tratamientoTributario = $this->resolverTratamientoTributario($validado['tip_afe_igv'] ?? null, $validado['destino_tributario'] ?? null);
-
-        $item = AlternativaItem::create([
-            'alternativa_id' => $alternativa->id,
-            'alternativa_destino_id' => $this->resolverAlternativaDestinoId($alternativa, $validado['alternativa_destino_id'] ?? null),
-            'origen_tipo' => AlternativaItem::ORIGEN_MANUAL,
-            'descripcion_manual' => $validado['descripcion_manual'],
-            'proveedor_sugerido_manual' => $validado['proveedor_sugerido_manual'] ?? null,
-            'modo_precio' => 'tarifa_fija',
-            'cantidad' => $validado['cantidad'],
-            'pax_incluidos' => $validado['pax_incluidos'] ?? null,
-            'costo_snapshot' => $validado['costo_snapshot'],
-            'moneda_costo' => $validado['moneda_costo'],
-            'precio_venta_snapshot' => $validado['precio_venta_snapshot'],
-            'precio_convertido' => $this->priceEngine->convertirMoneda((float) $validado['precio_venta_snapshot'], $validado['moneda_costo'], $alternativa->moneda_cotizacion, (float) $alternativa->tipo_cambio_aplicado),
-            'dia_referencial' => $validado['dia_referencial'] ?? null,
-            'tip_afe_igv' => $tratamientoTributario['tip_afe_igv'],
-            'destino_tributario' => $tratamientoTributario['destino_tributario'],
-        ]);
-
-        $this->recalcularTotalAlternativa($alternativa);
-
-        return response()->json(['code' => 200, 'message' => 'Ítem manual agregado correctamente', 'alternativa_item' => $item]);
     }
 
     // Edición estructural de un ítem manual (descripción/proveedor/costo/
@@ -1743,7 +1121,7 @@ class AlternativaItemController extends Controller
             'destino_tributario' => $validado['destino_tributario'] ?? $item->destino_tributario,
         ]);
 
-        $this->recalcularTotalAlternativa($alternativa);
+        $alternativa->recalcularTotal();
 
         return response()->json(['code' => 200, 'message' => 'Ítem manual actualizado correctamente', 'alternativa_item' => $item->fresh()]);
     }
@@ -1802,10 +1180,10 @@ class AlternativaItemController extends Controller
 
         $margenValor = round($v['precio_venta_adulto'] - $v['costo'], 2);
         // Ya no se hardcodea '10'/'nacional' — usa lo que el ítem manual ya
-        // tiene capturado (crearItemManual()/actualizarManual()), con
+        // tiene capturado (AltaManual/actualizarManual()), con
         // fallback al default de agencia solo si el ítem es de antes de
         // este fix y nunca lo tuvo.
-        $tratamientoTributario = $this->resolverTratamientoTributario($item->tip_afe_igv, $item->destino_tributario);
+        $tratamientoTributario = ConfiguracionAgencia::completarTratamientoTributario($item->tip_afe_igv, $item->destino_tributario);
 
         [$proveedor, $tarifa] = DB::transaction(function () use ($item, $v, $destinoServicio, $tipoId, $margenValor, $tratamientoTributario) {
             $proveedor = Proveedor::create([
@@ -1848,41 +1226,10 @@ class AlternativaItemController extends Controller
         ]);
     }
 
-    // Análisis de impuestos (28-ago-2026) — resuelve el tratamiento
-    // tributario final de un ítem sin proveedor_tarifa propia (mayorista/
-    // guia/pasaje_aereo/manual, y el caso "proveedor sin tarifa" de precio
-    // de referencia): usa lo que mandó el usuario si vino completo, y
-    // rellena con el default de la agencia (configuracion_agencia) solo lo
-    // que falte. Snapshot en creación — el default de agencia NO se
-    // recalcula después si cambia (mismo criterio que costo_snapshot).
-    public static function resolverTratamientoTributario(?string $tipAfeIgv, ?string $destinoTributario): array
-    {
-        if ($tipAfeIgv !== null && $destinoTributario !== null) {
-            return ['tip_afe_igv' => $tipAfeIgv, 'destino_tributario' => $destinoTributario];
-        }
-
-        $default = ConfiguracionAgencia::tratamientoTributarioDefault();
-
-        return [
-            'tip_afe_igv' => $tipAfeIgv ?? $default['tip_afe_igv'],
-            'destino_tributario' => $destinoTributario ?? $default['destino_tributario'],
-        ];
-    }
-
     private function contarPasajerosPorTipo(int $cotizacionId, ?array $paxIncluidosIds): array
     {
         // T-022: movido a PriceEngineService para que "Actualizar al precio nuevo" cuente igual.
         return $this->priceEngine->contarPasajerosPorTipo($cotizacionId, $paxIncluidosIds);
-    }
-
-    // Sesión M1 — calcularTotalEfectivo() respeta grupos de opciones de
-    // hotel (solo la elegida de un grupo resuelto suma; el mínimo de un
-    // grupo abierto suma una sola vez, ver AlternativaItem::
-    // calcularTotalEfectivo()). Sin grupos, se comporta idéntico a antes.
-    private function recalcularTotalAlternativa(Alternativa $alternativa): void
-    {
-        $total = AlternativaItem::calcularTotalEfectivo($alternativa->items()->get())['total'];
-        $alternativa->update(['total' => $total]);
     }
 
 }

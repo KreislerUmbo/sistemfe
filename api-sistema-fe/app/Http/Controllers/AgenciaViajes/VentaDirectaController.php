@@ -630,7 +630,7 @@ class VentaDirectaController extends Controller
             'lineas.*.cantidad' => 'nullable|integer|min:1',
             'lineas.*.descripcion_manual' => $manual.'|string|max:500',
             'lineas.*.precio_venta_snapshot' => $manual.'|numeric|min:0',
-            // crearItemManual() lo exige desde la Sesión 11q.
+            // AltaManual lo exige.
             'lineas.*.costo_snapshot' => $manual.'|numeric|min:0',
             // Con `lineas` la moneda es la de la venta; solo el payload viejo la manda por línea.
             'lineas.*.moneda_costo' => ($legacy ? $manual : 'nullable').'|in:PEN,USD',
@@ -719,7 +719,7 @@ class VentaDirectaController extends Controller
                     'modo_precio' => $modo,
                     'cantidad' => $cantidad,
                     'moneda' => $tarifa->moneda,
-                    'tratamiento' => AlternativaItemController::resolverTratamientoTributario($tarifa->tip_afe_igv, $tarifa->destino_tributario),
+                    'tratamiento' => ConfiguracionAgencia::completarTratamientoTributario($tarifa->tip_afe_igv, $tarifa->destino_tributario),
                     'payload' => $item,
                 ], $linea);
             } else {
@@ -739,7 +739,7 @@ class VentaDirectaController extends Controller
                     'moneda' => $linea['moneda_costo'] ?? null, // null = la de la venta
                     'precio_venta' => (float) $linea['precio_venta_snapshot'],
                     // El concepto libre toma el tratamiento por defecto de la agencia, como hoy.
-                    'tratamiento' => AlternativaItemController::resolverTratamientoTributario(null, null),
+                    'tratamiento' => ConfiguracionAgencia::completarTratamientoTributario(null, null),
                     'payload' => $item,
                 ], $linea);
             }
@@ -816,10 +816,10 @@ class VentaDirectaController extends Controller
             if ($entrada['proveedor_tarifa_id']) {
                 $tarifa = ProveedorTarifa::findOrFail($entrada['proveedor_tarifa_id']);
                 $monedas[] = $tarifa->moneda;
-                $tratamientos[] = AlternativaItemController::resolverTratamientoTributario($tarifa->tip_afe_igv, $tarifa->destino_tributario);
+                $tratamientos[] = ConfiguracionAgencia::completarTratamientoTributario($tarifa->tip_afe_igv, $tarifa->destino_tributario);
             } elseif ($entrada['guia_tarifa_id'] && ($guia = GuiaTarifa::find($entrada['guia_tarifa_id']))) {
                 $monedas[] = $guia->moneda;
-                $tratamientos[] = AlternativaItemController::resolverTratamientoTributario(null, null);
+                $tratamientos[] = ConfiguracionAgencia::completarTratamientoTributario(null, null);
             }
         }
         if ($tratamientos === []) {
@@ -897,7 +897,7 @@ class VentaDirectaController extends Controller
 
         if ((float) ($tour->ajuste_redondeo ?? 0) != 0.0) {
             $montos[] = [
-                'tip_afe_igv' => AlternativaItemController::resolverTratamientoTributario(null, null)['tip_afe_igv'],
+                'tip_afe_igv' => ConfiguracionAgencia::completarTratamientoTributario(null, null)['tip_afe_igv'],
                 'monto' => (float) $tour->ajuste_redondeo,
             ];
         }

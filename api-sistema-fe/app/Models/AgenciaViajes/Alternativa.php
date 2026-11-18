@@ -5,6 +5,7 @@ namespace App\Models\AgenciaViajes;
 use App\Models\Client\CrmActividad;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Validation\Rule;
 
 // Alternativa de cotización (combinación completa de paquete) —
 // plan-modulo-cotizaciones-reservas.md §3.1/§3.2. Tenant (sin
@@ -157,5 +158,25 @@ class Alternativa extends Model
     public function destinos()
     {
         return $this->hasMany(AlternativaDestino::class, 'alternativa_id')->orderBy('orden')->orderBy('id');
+    }
+
+    // Regla de validación: un alternativa_destino_id explícito tiene que ser de esta alternativa.
+    public function reglaDestinoId()
+    {
+        return Rule::exists('alternativa_destinos', 'id')->where('alternativa_id', $this->id);
+    }
+
+    // El destino explícito o, sin él, el primero de la alternativa (orden/id).
+    public function destinoIdODefault(?int $explicito): ?int
+    {
+        return $explicito ?? $this->destinos()->value('id');
+    }
+
+    // Recalcula alternativas.total respetando los grupos de opciones de hotel: solo la elegida de un
+    // grupo resuelto suma y el mínimo de un grupo abierto suma una sola vez
+    // (AlternativaItem::calcularTotalEfectivo()).
+    public function recalcularTotal(): void
+    {
+        $this->update(['total' => AlternativaItem::calcularTotalEfectivo($this->items()->get())['total']]);
     }
 }

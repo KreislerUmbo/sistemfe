@@ -1,0 +1,9 @@
+{
+    "http": 422,
+    "respuesta": {
+        "code": 422,
+        "message": "Esa tarifa de habitación no pertenece a la opción de mayorista indicada."
+    },
+    "items_de_la_alternativa": 0,
+    "total": "0.00"
+}

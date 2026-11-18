@@ -378,7 +378,7 @@ class CotizacionController extends Controller
     // para siempre, sin ningún aviso. Se recalcula automáticamente SOLO
     // para el caso de alta confianza (origen_tipo=proveedor con una
     // proveedor_tarifa real — mismo cálculo exacto que
-    // AlternativaItemController::crearItemProveedor()) y únicamente en
+    // AltaProveedor) y únicamente en
     // alternativas 'borrador'/'enviada'. El resto (pasaje_aereo, mayorista,
     // guía, o un ítem sin tarifa real detrás) no se adivina — se informa
     // en items_para_revisar para que el vendedor lo reprecie a mano, mismo
