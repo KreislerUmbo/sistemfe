@@ -171,10 +171,64 @@ mano en la misma pantalla. **Al desplegar:** nada (solo frontend).
 
 ## Resultado
 <!-- Lo completa quien construye, al terminar. -->
-- **Commits:**
-- **Tests:** (nuevos / suite completa)
+- **Commits** (rama `refactor/T-105-cotizador-componentes`, uno por paso): `21381460` claves e
+  `inyectar` · `eb2bc2b0` cabecera, avisos, pasajeros, alternativas y destinos · `c55dcf65`
+  `PanelPrecio` · `293d5415` lienzo (`LienzoCotizador`, `CargaTourLienzo`, `GrupoOpcionesLienzo`,
+  `ItemLienzo`) · `b14c6bfa` drawer (`DrawerBiblioteca`, `BibliotecaLocal`, `BibliotecaGuia`) ·
+  `815df6c2` mayoristas (`ComparadorMayoristas`, `OpcionMayoristaTarjeta`,
+  `HotelesOpcionMayorista`, `OpcionalesOpcionMayorista`) · `0808b89a` limpieza.
+- **Tests:**
+  - CA1: Playwright `--comparar resultados/base.json` igual a la base en los 28 pasos después de
+    cada paso (la base de T-094 sirvió: corrida sobre `main` igual). En el paso 5 una corrida
+    falló entera por el 500 intermitente de `/api/proveedor-tipos` al montar; repetida sin
+    cambios, igual. Huellas en `e2e/resultados/t105-*.json`.
+  - CA2: `editar.vue` 1.849 → **317 líneas**.
+  - CA3: el grep sobre `components/AgenciaViajes/cotizador/` no encuentra nada.
+  - CA4: `claves.test.ts` (2 tests: devuelve el objeto; lanza «pagina usado fuera de la pantalla
+    del cotizador»).
+  - CA5 (script de Playwright sobre una cotización de prueba, borrada al final): «Agendar acción»
+    en el panel → la cabecera muestra «Próxima acción: llamar el vie 20/11 (Admin)»; cerrar como
+    perdida → historial y acciones se recargan (el backend cierra la acción pendiente, el panel
+    pasa a 0 y la cabecera la deja de mostrar); reabrir → el historial suma «Cotización
+    reabierta». Sin errores de consola.
+  - CA6: la única modificación abierta de agencia-demo (#89) no tiene ítems para revisar. Se
+    simuló **solo en el navegador** un bloqueo `para_revisar` sobre el ítem 520: borde amarillo
+    en el lienzo, «Ver en el lienzo» del panel hace scroll (ítem centrado), aplica
+    `.resaltado-item` (sombra amarilla, regla `scoped` del componente) y la quita a los 3 s.
+    También se llamó a `irAItem` del objeto publicado con `provide`. Sin errores de consola.
+  - CA7: vitest 307/307 (305 + 2); `type-check` 47 errores, los mismos de T-101, ninguno en
+    archivos del cotizador; `build` sin errores.
 - **Desviaciones de la tarea y por qué:**
+  - **`v-if="alternativaActiva"` repetido en la raíz** de `PanelPrecio`, `LienzoCotizador`,
+    `ItemLienzo` y `GrupoOpcionesLienzo` (y `<template v-if>` envolviendo las dos raíces de
+    `CargaTourLienzo`). Dentro de un componente se pierde el estrechamiento de tipo del `v-if` del
+    `div.row` de la página (`type-check` subía a 63). No cambia el DOM. Decisión del usuario.
+  - **`ItemLienzo` recibe `bloque` además de `item`**: el selector de día lee
+    `bloque.tourOrigenId`. Es dato del bucle (regla 3) y el template queda igual.
+  - **Las cadenas `v-if`/`v-else` y los `v-for` quedaron en los tags**: `GrupoOpcionesLienzo
+    v-if` / `ItemLienzo v-else`; `BibliotecaLocal v-if` / `BibliotecaGuia v-else-if` /
+    `ComparadorMayoristas v-else` (su `<template v-if>` envoltorio se descartó dentro del
+    componente); `OpcionMayoristaTarjeta v-for`. Mismo DOM.
+  - **`.resaltado-item` también en `LienzoCotizador`**: además del ítem y del grupo, la usa el
+    `div` de cada bloque de tour (`claseResaltado` sobre la carga). `.canvas-item-nombre` solo
+    está en `ItemLienzo` (el grupo no la usa).
+  - Rangos reales distintos de la tabla: `PanelPrecio` 675–873 (874 cierra el `div.row`, que se
+    queda en la página); el `div v-else` del ítem empezaba en 229.
+  - En la página, los objetos se llaman `opcionesDeMayorista` (choca con la ref
+    `opcionesMayorista`), `destinosAlternativa` y `modificacionCotizador` (`modificacion` es lo
+    que devuelve el composable).
+  - Los componentes que usan a otros del cotizador los importan explícitos, aunque
+    `unplugin-vue-components` ya los resuelve solo; `components.d.ts` lo regenera ese plugin y va
+    commiteado.
+  - No se tocó ningún composable ni helper: `claves.ts` solo necesitó `PasoDrawer`, que ya se
+    exportaba.
 
 ## Hallazgos fuera de alcance
 <!-- Problemas vistos y NO arreglados. Se convierten en tareas o en "Por analizar". -->
-- 
+- agencia-demo no tiene ninguna modificación de reserva con ítems «para revisar»: CA6 tuvo que
+  simularse en el navegador y el recorrido de Playwright no cubre ese resaltado. Un dato de prueba
+  fijo (o un paso del recorrido que lo cree) lo dejaría comprobable.
+- `admin-start-kit` no tiene configuración de ESLint para la versión instalada (ESLint 10 pide
+  `eslint.config.*`): `npx eslint` no corre.
+- `unplugin-vue-components` resuelve cualquier componente de `src/components` sin import, así que
+  un import faltante no se nota en `type-check` ni en `build`.
