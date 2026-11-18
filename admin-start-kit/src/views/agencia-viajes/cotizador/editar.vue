@@ -1530,16 +1530,14 @@ import { cotizacionService } from '@/services/admin/cotizacionService';
 import { alternativaService } from '@/services/admin/alternativaService';
 import { alternativaItemService } from '@/services/admin/alternativaItemService';
 import { opcionMayoristaService } from '@/services/admin/opcionMayoristaService';
-import { opcionHotelService } from '@/services/admin/opcionHotelService';
 import { proveedorService } from '@/services/admin/proveedorService';
 import { servicioService } from '@/services/admin/servicioService';
-import { bibliotecaCotizadorService, type BibliotecaTipo } from '@/services/admin/bibliotecaCotizadorService';
 import { reservaService } from '@/services/admin/reservaService';
 import { useAgenciaViajesCatalogosStore } from '@/stores/agenciaViajesCatalogos';
-import { diferenciaDiasISO, formatDiaCorto, formatFecha, formatFechaHora, hoyPeru, partesFechaHoraPeru } from '@/helpers/fecha';
+import { formatDiaCorto, formatFecha, formatFechaHora, hoyPeru, partesFechaHoraPeru } from '@/helpers/fecha';
 import { guiaService } from '@/services/admin/guiaService';
 import { tipoCambioAgenciaService } from '@/services/admin/tipoCambioAgenciaService';
-import type { Alternativa, AlternativaItem, ProveedorTarifa, OpcionMayorista, OpcionMayoristaTour, OpcionMayoristaOpcional, OpcionHotelTarifa, Proveedor, ProveedorTipo, BibliotecaResultado, GuiaTarifa, Servicio, TipAfeIgv, DestinoTributario } from '@/types/agencia-viajes';
+import type { Alternativa, AlternativaItem, ProveedorTarifa, OpcionMayorista, OpcionMayoristaTour, OpcionMayoristaOpcional, Proveedor, GuiaTarifa, TipAfeIgv, DestinoTributario } from '@/types/agencia-viajes';
 import type { Client } from '@/types/clients';
 import type { AvisoSalida } from '@/helpers/avisosProveedores';
 import { filasDelBloque } from '@/helpers/agencia-viajes/cotizador/bloquesLienzo';
@@ -1554,6 +1552,10 @@ import { useDestinosAlternativa } from '@/composables/agencia-viajes/cotizador/u
 import { useDiasLienzo } from '@/composables/agencia-viajes/cotizador/useDiasLienzo';
 import { useLineaTour } from '@/composables/agencia-viajes/cotizador/useLineaTour';
 import { useBloquesLienzo } from '@/composables/agencia-viajes/cotizador/useBloquesLienzo';
+import { useDrawerBiblioteca, pasoDrawerDe } from '@/composables/agencia-viajes/cotizador/useDrawerBiblioteca';
+import { useHotelesLocales } from '@/composables/agencia-viajes/cotizador/useHotelesLocales';
+import { useBibliotecaCotizador } from '@/composables/agencia-viajes/cotizador/useBibliotecaCotizador';
+import { generarUuidGrupo } from '@/helpers/agencia-viajes/cotizador/grupoOpcion';
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
 
@@ -2357,601 +2359,32 @@ const {
     alternativaDestinos, itemsVisiblesLienzo, diaActivo,
 });
 
-// ── Biblioteca unificada (Sesión 11b3, §7.1) — un único endpoint decide
-// contra qué tabla(s) consulta según el chip activo, ver
-// BibliotecaCotizadorController en el backend. "Todos"/"Tour"/"Paquete" son
-// fijos; el resto de chips sale del catálogo real de proveedor_tipos (NO
-// una lista hardcodeada — ese catálogo cambia por tenant/sesión).
-const proveedorTipos = ref<ProveedorTipo[]>([]);
-
-type ChipBiblioteca = { tipo: BibliotecaTipo; proveedorTipoId: number | null; nombre: string; icono: string };
-
-// Sesión 11j — orden fijo confirmado con el usuario: Todos/Tours/Paquetes +
-// los 4 proveedor_tipos de mayor uso (identificados por slug, no por id —
-// el id cambia por tenant/catálogo). El resto del catálogo (Guía,
-// Atractivos, Operador Turismo, Agencia Mayorista, y cualquier
-// proveedor_tipo nuevo) sigue cayendo en "Más ▾".
-const SLUGS_CHIPS_FIJOS_PROVEEDOR: Array<{ slug: string; nombre: string; icono: string }> = [
-    { slug: 'alojamiento-hoteles', nombre: 'Alojamiento', icono: 'fa-bed' },
-    { slug: 'transporte', nombre: 'Transporte', icono: 'fa-bus' },
-    { slug: 'alimentacion', nombre: 'Alimentación', icono: 'fa-utensils' },
-    { slug: 'actividades', nombre: 'Actividades', icono: 'fa-hiking' },
-];
-
-const chipsFijos = computed<ChipBiblioteca[]>(() => [
-    { tipo: 'todos', proveedorTipoId: null, nombre: 'Todos', icono: 'fa-th' },
-    { tipo: 'tour', proveedorTipoId: null, nombre: 'Tours', icono: 'fa-route' },
-    { tipo: 'paquete', proveedorTipoId: null, nombre: 'Paquetes', icono: 'fa-suitcase-rolling' },
-    ...SLUGS_CHIPS_FIJOS_PROVEEDOR.flatMap((def) => {
-        const tipo = proveedorTipos.value.find((t) => t.slug === def.slug);
-        return tipo ? [{ tipo: 'proveedor' as BibliotecaTipo, proveedorTipoId: tipo.id, nombre: def.nombre, icono: def.icono }] : [];
-    }),
-]);
-
-// "Más ▾" — cola larga: todo proveedor_tipo que no tenga ya su chip fijo arriba.
-const chipsProveedores = computed<ChipBiblioteca[]>(() => {
-    const slugsFijos = new Set(SLUGS_CHIPS_FIJOS_PROVEEDOR.map((d) => d.slug));
-    return proveedorTipos.value
-        .filter((t) => !slugsFijos.has(t.slug))
-        .map((t) => ({ tipo: 'proveedor' as BibliotecaTipo, proveedorTipoId: t.id, nombre: t.nombre, icono: 'fa-ellipsis-h' }));
+// ── Drawer de biblioteca, hoteles Local/Nacional y biblioteca ─────────
+// El drawer va primero: los hoteles (y más abajo el ítem manual) registran en él su reinicio al
+// volver al grid. Los hoteles van antes que la biblioteca porque ella les pasa el clic en una tarifa.
+const {
+    drawerBibliotecaAbierto, abrirDrawerBiblioteca, cerrarDrawerBiblioteca, volverAGridDrawer, alVolverAGrid,
+    onServicioSueltoAgregado,
+} = useDrawerBiblioteca({ aplicarItemActualizado, cargarCotizacion });
+const {
+    nochesHotelDefault, matrizHotelActiva, modoPrecioPendiente, grupoHotelAbiertoDiaActivo, clicBibliotecaItem,
+    confirmandoModoPrecio, confirmarModoPrecio, agregarItemProveedorHotel, mostrarFormHotelLocal, tarifaHotelLocalVacia,
+    formHotelLocal, guardandoHotelLocal, guardarHotelLocal, agregarItemHotelAdhocLocal, agregarGrupoHotelAdhocLocal,
+    agregarGrupoProveedorHotel, subiendoFotoHotelAdhoc, onSubirFotoHotelAdhoc, onEliminarFotoHotelAdhoc,
+} = useHotelesLocales({
+    cotizacion, alternativaActiva, itemsSinAjuste, configAgencia, alternativaDestinos, destinoActivoId,
+    diaActivoParaAgregar, alVolverAGrid, onServicioSueltoAgregado,
 });
-
-const mostrarMasChips = ref(false);
-const chipMasActivo = computed(() => chipsProveedores.value.find((c) => chipActivo(c)) ?? null);
-
-// icono agregado (07-sep-2026, auditoría de mantenibilidad 05-sep-2026) —
-// faltaba pese a ser requerido por ChipBiblioteca (tipo mal declarado, sin
-// efecto en runtime ya que nada lee icono desde este ref, pero rompía el
-// type-check). Mismo valor que el chip "todos" real de chipsFijos arriba.
-const chipActivoState = ref<ChipBiblioteca>({ tipo: 'todos', proveedorTipoId: null, nombre: 'Todos', icono: 'fa-th' });
-const chipActivo = (chip: ChipBiblioteca) => chip.tipo === chipActivoState.value.tipo && chip.proveedorTipoId === chipActivoState.value.proveedorTipoId;
-
-const seleccionarChip = (chip: ChipBiblioteca) => {
-    chipActivoState.value = chip;
-    cargarBiblioteca();
-};
-
-const bibliotecaSearch = ref('');
-const bibliotecaResultados = ref<BibliotecaResultado[]>([]);
-let bibliotecaTimeout: any = null;
-
-// 27-ago-2026 — mismos filtros combinables que ya tenía la biblioteca de
-// paquetes/detalle.vue (destino/servicio/proveedor), antes solo disponibles
-// ahí. servicio_id/proveedor_id excluyen tours/paquetes del resultado (no
-// aplican a ese tipo, ver BibliotecaCotizadorController en el backend).
-const filtroDestinoId = ref<number | null>(null);
-const filtroDestinoTexto = ref('');
-const filtroServicioId = ref<number | null>(null);
-const filtroProveedorId = ref<number | null>(null);
-const serviciosFiltro = ref<Servicio[]>([]);
-
-// T-032 (R4): mientras llega la respuesta la lista se atenúa y no se puede hacer clic en ella.
-// Solo cuenta la última petición: una respuesta vieja que llega tarde se descarta.
-const cargandoBiblioteca = ref(false);
-let bibliotecaPeticion = 0;
-const cargarBiblioteca = async () => {
-    const miPeticion = ++bibliotecaPeticion;
-    cargandoBiblioteca.value = true;
-    try {
-        const res = await bibliotecaCotizadorService.buscar({
-            tipo: chipActivoState.value.tipo,
-            proveedor_tipo_id: chipActivoState.value.proveedorTipoId ?? undefined,
-            search: bibliotecaSearch.value || undefined,
-            destino_atractivo_id: filtroDestinoId.value ?? undefined,
-            servicio_id: filtroServicioId.value ?? undefined,
-            proveedor_id: filtroProveedorId.value ?? undefined,
-        });
-        if (miPeticion !== bibliotecaPeticion) return;
-        bibliotecaResultados.value = res.resultados;
-        bibliotecaPaginaActual.value = 1;
-    } finally {
-        if (miPeticion === bibliotecaPeticion) cargandoBiblioteca.value = false;
-    }
-};
-
-const onBibliotecaSearch = () => {
-    clearTimeout(bibliotecaTimeout);
-    bibliotecaTimeout = setTimeout(cargarBiblioteca, 300);
-};
-
-watch([filtroDestinoId, filtroServicioId, filtroProveedorId], onBibliotecaSearch);
-
-const etiquetaCategoriaPaquete = (c: string) => ({ local: 'Local', nacional: 'Nacional', internacional: 'Internacional' } as Record<string, string>)[c] ?? c;
-
-const bibliotecaToursPaquetes = computed(() =>
-    bibliotecaResultados.value.filter((r) => r.tipo_resultado === 'tour' || r.tipo_resultado === 'paquete') as Array<
-        Extract<BibliotecaResultado, { tipo_resultado: 'tour' | 'paquete' }>
-    >
-);
-
-// Agrupa SOLO las tarifas de hotel (con tipo_habitacion) por proveedor_servicio_id —
-// un hotel con 4 tipos de habitación aparecía 4 veces en la biblioteca con el mismo
-// nombre de proveedor. Se queda con la fila de menor precio_venta_adulto como
-// representativa (clicBibliotecaItem ya sabe pedir la matriz completa de ese
-// proveedor_servicio_id, no hace falta tocarla). Tarifas sin tipo_habitacion (tour,
-// transporte, restaurante, etc.) se listan una por una, igual que antes.
-type BibliotecaFila = ProveedorTarifa & { _rangoHabitaciones?: boolean };
-
-const bibliotecaProveedorAgrupada = computed<BibliotecaFila[]>(() => {
-    const tarifas = bibliotecaResultados.value.filter((r) => r.tipo_resultado === 'proveedor_tarifa') as ProveedorTarifa[];
-
-    const gruposPorServicio = new Map<number, ProveedorTarifa[]>();
-    for (const t of tarifas) {
-        if (!t.tipo_habitacion) continue;
-        const grupo = gruposPorServicio.get(t.proveedor_servicio_id) ?? [];
-        grupo.push(t);
-        gruposPorServicio.set(t.proveedor_servicio_id, grupo);
-    }
-
-    const vistos = new Set<number>();
-    const filas: BibliotecaFila[] = [];
-
-    for (const t of tarifas) {
-        if (!t.tipo_habitacion) {
-            filas.push(t);
-            continue;
-        }
-        if (vistos.has(t.proveedor_servicio_id)) continue;
-        vistos.add(t.proveedor_servicio_id);
-
-        const grupo = gruposPorServicio.get(t.proveedor_servicio_id)!;
-        const representativa = grupo.reduce((min, cur) =>
-            Number(cur.precio_venta_adulto) < Number(min.precio_venta_adulto) ? cur : min
-        );
-        filas.push({ ...representativa, _rangoHabitaciones: grupo.length > 1 });
-    }
-
-    return filas;
+const {
+    proveedorTipos, chipsFijos, chipsProveedores, mostrarMasChips, chipMasActivo, chipActivo, seleccionarChip,
+    bibliotecaSearch, filtroDestinoId, filtroDestinoTexto, filtroServicioId, filtroProveedorId, serviciosFiltro,
+    cargandoBiblioteca, cargarBiblioteca, onBibliotecaSearch, etiquetaCategoriaPaquete, bibliotecaPaginaActual,
+    bibliotecaTotalPaginas, filasBibliotecaPagina, cargandoFilaBibliotecaId, onClicFilaBiblioteca, vistaPreviaCombo,
+    modoToursNuevo,
+} = useBibliotecaCotizador({
+    alternativaActiva, itemsSinAjuste, configAgencia, cargarCotizacion, alternativaDestinos, destinoActivoId,
+    diaActivoParaAgregar, diasCreados, diasDesdeCombo, drawerBibliotecaAbierto, volverAGridDrawer, clicBibliotecaItem,
 });
-
-// Punto A — grilla unificada (proveedor_tarifa + tour/paquete) con
-// paginación 100% en el cliente: el endpoint ya trae como mucho ~150 filas
-// (limit 50/100 en BibliotecaCotizadorController), así que paginar acá
-// evita tocar el backend para algo puramente de presentación (mismo
-// criterio "frontend-first" del proyecto).
-type FilaBibliotecaProveedor = { kind: 'proveedor'; data: BibliotecaFila };
-type FilaBibliotecaPlantilla = { kind: 'plantilla'; data: Extract<BibliotecaResultado, { tipo_resultado: 'tour' | 'paquete' }> };
-type FilaBiblioteca = FilaBibliotecaProveedor | FilaBibliotecaPlantilla;
-
-const filasBibliotecaUnificadas = computed<FilaBiblioteca[]>(() => [
-    ...bibliotecaProveedorAgrupada.value.map((data): FilaBiblioteca => ({ kind: 'proveedor', data })),
-    ...bibliotecaToursPaquetes.value.map((data): FilaBiblioteca => ({ kind: 'plantilla', data })),
-]);
-
-const BIBLIOTECA_POR_PAGINA = 12; // grilla de 3 columnas × 4 filas
-const bibliotecaPaginaActual = ref(1);
-const bibliotecaTotalPaginas = computed(() => Math.max(1, Math.ceil(filasBibliotecaUnificadas.value.length / BIBLIOTECA_POR_PAGINA)));
-const filasBibliotecaPagina = computed(() => {
-    const inicio = (bibliotecaPaginaActual.value - 1) * BIBLIOTECA_POR_PAGINA;
-    return filasBibliotecaUnificadas.value.slice(inicio, inicio + BIBLIOTECA_POR_PAGINA);
-});
-
-const cargandoFilaBibliotecaId = ref<string | null>(null);
-const onClicFilaBiblioteca = async (fila: FilaBiblioteca) => {
-    const clave = `${fila.kind}-${fila.data.id}`;
-    cargandoFilaBibliotecaId.value = clave;
-    try {
-        if (fila.kind === 'proveedor') await clicBibliotecaItem(fila.data);
-        else await clicResultadoPlantilla(fila.data);
-    } finally {
-        cargandoFilaBibliotecaId.value = null;
-    }
-};
-
-// Punto C — franja de vista previa cuando el tour/paquete recién cargado
-// ocupa más de un día (solo paquete_combo puede — un tour_simple siempre
-// cae entero en el día activo, ver AlternativaItemController::desdePlantilla()).
-const vistaPreviaCombo = ref<Array<{ tourOrigenId: number; dia: number; nombre: string; total: number }> | null>(null);
-
-// Click en una tarjeta de tour/paquete — explota TODOS sus ítems en la
-// alternativa activa (AlternativaItemController::desdePlantilla()). Sin
-// modal de confirmación intermedio: el badge de cantidad de ítems, visible
-// ANTES del click en la tarjeta, ya es el requisito explícito de la spec
-// para que el vendedor anticipe cuántas líneas va a inyectar. Punto A: a
-// diferencia de un ítem suelto, esto SÍ cierra el drawer — el vendedor debe
-// ver el resultado (lienzo + vista previa) antes de seguir agregando.
-const modoToursNuevo = computed(() => configAgencia.value?.modo_tours === 'nuevo');
-
-
-
-//clicResultadoPlantilla es una funcion que sirve para cargar un tour o paquete desde la biblioteca
-const clicResultadoPlantilla = async (p: Extract<BibliotecaResultado, { tipo_resultado: 'tour' | 'paquete' }>) => {
-    if (!alternativaActiva.value) return;//esta validacion es para evitar que se cargue un tour o paquete sin una alternativa activa
-    // Fila 13, fase 1b (N15): en modo nuevo un tour solo de itinerario no
-    // se carga (el backend también lo rechaza con 422).
-    if (modoToursNuevo.value && p.tipo_resultado === 'tour' && p.uso === 'solo_itinerario') {//
-        toast.warning('Es un tour solo de itinerario (de mayorista): no se carga en la cotización.');
-        return;
-    }
-    const diaInicioCarga = diaActivoParaAgregar.value;
-    try {
-        const res = await alternativaItemService.cargarDesdePlantilla(alternativaActiva.value.id, {
-            paquete_plantilla_id: p.id,
-            dia_referencial: diaInicioCarga,
-            alternativa_destino_id: destinoActivoId.value,
-        });
-        if (res.guias_pendientes.length) {
-            const lista = res.guias_pendientes
-                .map((g) => `<li>${escaparHtml(g.guia_nombre ?? 'Guía')} — ${escaparHtml(g.tour_origen_nombre)}${g.destino_nombre ? ` (${escaparHtml(g.destino_nombre)})` : ''}</li>`)
-                .join('');
-            await (Swal as TVueSwalInstance).fire({
-                title: 'Guías pendientes de asignar',
-                html: `<p class="text-start mb-1">El costo ya se sumó al total — falta confirmar cuál guía puntual queda asignado (eso se hace recién al reservar):</p><ul class="text-start">${lista}</ul>`,
-                icon: 'info',
-            });
-        }
-
-        // Fila 13, fase 1b — avisos del modo nuevo (sin fecha: precio base;
-        // tour sin costo estimado; tour del combo desactivado).
-        if (res.avisos?.length) {
-            res.avisos.forEach((aviso) => toast.warning(aviso));
-        }
-
-        const idsTourOrigen = new Set(res.items_agregados.map((i) => i.tour_origen_id).filter((id): id is number => id != null));
-
-        await cargarCotizacion();
-        drawerBibliotecaAbierto.value = false;
-        volverAGridDrawer();
-
-        // Red de seguridad: inicializarDias() (vía alRefrescar, al recargar la
-        // cotización) solo ve días con ítems reales — un tour-hijo
-        // sin Incluye no genera ningún ítem y su día quedaría sin pestaña.
-        if (res.dia_final_combo > diasCreados.value.length) {
-            diasCreados.value = Array.from({ length: res.dia_final_combo }, (_, i) => i + 1);
-        }
-        for (let d = diaInicioCarga; d <= res.dia_final_combo; d++) {
-            diasDesdeCombo.value.add(d);
-        }
-
-        vistaPreviaCombo.value = calcularVistaPreviaCombo(idsTourOrigen);
-    } catch (error: any) {
-        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo cargar la plantilla', 'error');
-    }
-};
-
-const calcularVistaPreviaCombo = (idsTourOrigen: Set<number>) => {
-    if (idsTourOrigen.size < 2) return null;
-
-    const grupos = new Map<number, { tourOrigenId: number; dia: number; nombre: string; total: number }>();
-    for (const item of itemsSinAjuste.value) {
-        if (!item.tour_origen_id || !idsTourOrigen.has(item.tour_origen_id)) continue;
-        const existente = grupos.get(item.tour_origen_id);
-        if (existente) {
-            existente.total += Number(item.total_convertido);
-        } else {
-            grupos.set(item.tour_origen_id, {
-                tourOrigenId: item.tour_origen_id,
-                dia: item.dia_referencial ?? 0,
-                nombre: item.tour_origen?.nombre ?? 'Tour',
-                total: Number(item.total_convertido),
-            });
-        }
-    }
-
-    const dias = new Set([...grupos.values()].map((g) => g.dia));
-    return dias.size > 1 ? [...grupos.values()].sort((a, b) => a.dia - b.dia) : null;
-};
-
-// T-034 — noches por defecto del hotel Local/Nacional: las del destino activo (si tiene ambas
-// fechas), si no las de la cotización, si no 1. Si sale ≤ 0 (fechas al revés), 1.
-// Fechas "YYYY-MM-DD" sin zona horaria (diferenciaDiasISO). El texto solo existe si hubo fechas.
-const nochesHotelDefault = computed<{ noches: number; texto?: string }>(() => {
-    const destino = alternativaDestinos.value.find((d) => d.id === destinoActivoId.value);
-    const cot = cotizacion.value;
-    const delDestino = !!(destino?.fecha_inicio && destino?.fecha_fin);
-    const desde = delDestino ? destino!.fecha_inicio : cot?.fecha_viaje_desde;
-    const hasta = delDestino ? destino!.fecha_fin : cot?.fecha_viaje_hasta;
-    if (!desde || !hasta) return { noches: 1 };
-    const noches = diferenciaDiasISO(desde, hasta);
-    if (noches <= 0) return { noches: 1 };
-    const corto = (f: string) => `${f.slice(8, 10)}/${f.slice(5, 7)}`;
-    return { noches, texto: `${noches} ${noches === 1 ? 'noche' : 'noches'} (${corto(desde)} – ${corto(hasta)})` };
-});
-
-type FotoHotelAdhoc = { path: string; tipo_foto: 'fachada' | 'habitacion'; url: string };
-const matrizHotelActiva = ref<{
-    tarifas: Array<{ id: number; tipo_habitacion: string; precio: number; precioVentaCamaAdicional: number | null }>;
-    moneda: string;
-    nombreProveedor: string;
-    edadMaxInfanteGratis?: number;
-    edadMaxNinoCamaAdicional?: number;
-    // Sesión M4 — true cuando estas tarifas vienen de un OpcionHotel ad-hoc
-    // (botón "+ Agregar hotel no registrado" de la pestaña Local, ver
-    // guardarHotelLocal()) en vez de un proveedor_tarifa real — el picker
-    // es el mismo componente/UI, solo cambia a qué función se manda el
-    // seleccionar/agregar-grupo (agregarItemHotelAdhocLocal() en vez de
-    // agregarItemProveedorHotel()).
-    adhoc?: boolean;
-    // T-020 — hotel no registrado: su id y sus fotos (se suben/borran desde el drawer);
-    // hotel Proveedor: su id, para el enlace a la galería de la ficha.
-    hotelId?: number;
-    fotos?: FotoHotelAdhoc[];
-    proveedorId?: number | null;
-    // Comparación de varios hoteles Local/Nacional — poblado cuando ya
-    // existe un grupo sin resolver para el día activo (ver
-    // grupoHotelAbiertoDiaActivo más abajo): este hotel se suma a ESE
-    // grupo en vez de arrancar uno nuevo. "cantidad" viaja acá para que el
-    // picker arranque con la misma cantidad de noches que el resto del
-    // grupo, en vez de resetear a 1.
-    grupoAbierto?: { id: string; hoteles: number; cantidad: number } | null;
-} | null>(null);
-const modoPrecioPendiente = ref<{ id: number; nombre: string } | null>(null);
-
-// Comparación de varios hoteles en Local/Nacional — el "estás comparando"
-// vive 100% en datos reales (AlternativaItem.grupo_opcion_id), nunca en
-// estado de sesión: cerrar el drawer y volver no pierde nada (decisión de
-// diseño explícita, ver conversación). Un grupo cuenta como "abierto" solo
-// si NINGUNA de sus filas tiene opcion_elegida=true — bug real encontrado
-// en la verificación en vivo: filtrar solo por opcion_elegida=false no
-// alcanza, porque un grupo YA resuelto deja sus filas no-elegidas con
-// opcion_elegida=false para siempre (M1: exactamente 1 elegida, el resto
-// se desmarca) — sin este chequeo, el banner seguía apareciendo después de
-// resolver la comparación. "Una sola canasta a la vez" (decisión
-// explícita): si hubiera más de un grupo abierto para el mismo día, se
-// toma el primero encontrado.
-const grupoHotelAbiertoDiaActivo = computed<{ id: string; hoteles: number; cantidad: number } | null>(() => {
-    const itemsHotelDelDia = (itemsSinAjuste.value).filter((item) =>
-        item.origen_tipo === 'proveedor'
-        && !!item.grupo_opcion_id
-        && item.dia_referencial === diaActivoParaAgregar.value
-        && (item.proveedor_tarifa?.tipo_habitacion || item.opcion_hotel_tarifa),
-    );
-
-    const porGrupo = new Map<string, AlternativaItem[]>();
-    for (const item of itemsHotelDelDia) {
-        const lista = porGrupo.get(item.grupo_opcion_id!) ?? [];
-        lista.push(item);
-        porGrupo.set(item.grupo_opcion_id!, lista);
-    }
-
-    for (const [grupoId, items] of porGrupo) {
-        if (items.some((i) => i.opcion_elegida === true)) continue; // ya resuelto
-
-        // Hotel real = mismo proveedor_servicio_id; ad-hoc = mismo
-        // opcion_hotel_id (NO opcion_hotel_tarifa_id, que es por fila/tipo
-        // de habitación — dos tipos del mismo hotel ad-hoc no son "2 hoteles").
-        const hotelesIds = new Set(items.map((i) =>
-            i.proveedor_tarifa?.proveedor_servicio_id ?? `adhoc-${i.opcion_hotel_tarifa?.opcion_hotel_id}`,
-        ));
-        return { id: grupoId, hoteles: hotelesIds.size, cantidad: items[0].cantidad };
-    }
-
-    return null;
-});
-
-const clicBibliotecaItem = async (tarifa: ProveedorTarifa) => {
-    if (tarifa.tipo_habitacion) {
-        // Hotel: matriz completa de habitaciones de ESE proveedor_servicio.
-        const res = await proveedorService.listarTarifas(tarifa.proveedor_servicio_id, { solo_vigentes: true });
-        // Consolidación de hoteles — tramo de edad para cama adicional, ahora
-        // a nivel de proveedor (proveedor_alojamiento_detalle), no del hotel
-        // de un paquete_plantilla (eliminado). Sin la fila configurada, el
-        // picker simplemente no ofrece cama adicional (permitirCamaAdicional
-        // en el componente exige ambos números presentes).
-        const alojamiento = tarifa.proveedor_servicio?.proveedor?.alojamiento_detalle;
-        matrizHotelActiva.value = {
-            tarifas: res.proveedor_tarifas.map((t) => ({
-                id: t.id,
-                tipo_habitacion: t.tipo_habitacion ?? '—',
-                precio: Number(t.precio_venta_adulto),
-                precioVentaCamaAdicional: t.precio_venta_cama_adicional != null ? Number(t.precio_venta_cama_adicional) : null,
-            })),
-            moneda: tarifa.moneda,
-            nombreProveedor: tarifa.proveedor_servicio?.proveedor?.nombre_comercial ?? tarifa.proveedor_servicio?.proveedor?.razon_social ?? '',
-            edadMaxInfanteGratis: alojamiento?.edad_max_infante_gratis,
-            edadMaxNinoCamaAdicional: alojamiento?.edad_max_nino_cama_adicional,
-            proveedorId: tarifa.proveedor_servicio?.proveedor?.id ?? null,
-            grupoAbierto: grupoHotelAbiertoDiaActivo.value,
-        };
-        return;
-    }
-
-    modoPrecioPendiente.value = { id: tarifa.id, nombre: tarifa.proveedor_servicio?.destino_servicio?.servicio?.nombre ?? 'este ítem' };
-};
-
-const confirmandoModoPrecio = ref<'tarifa_fija' | 'por_persona' | null>(null);
-const confirmarModoPrecio = async (modoPrecio: 'tarifa_fija' | 'por_persona') => {
-    if (!modoPrecioPendiente.value || !alternativaActiva.value) return;
-    confirmandoModoPrecio.value = modoPrecio;
-    try {
-        const res = await alternativaItemService.agregarProveedor(alternativaActiva.value.id, {
-            proveedor_tarifa_id: modoPrecioPendiente.value.id,
-            modo_precio: modoPrecio,
-            cantidad: 1,
-            dia_referencial: diaActivoParaAgregar.value,
-            alternativa_destino_id: destinoActivoId.value,
-        });
-        await onServicioSueltoAgregado(res.alternativa_item, res.alternativa);
-    } catch (error: any) {
-        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo agregar', 'error');
-    } finally {
-        modoPrecioPendiente.value = null;
-        confirmandoModoPrecio.value = null;
-    }
-};
-
-const agregarItemProveedorHotel = async (
-    proveedorTarifaId: number,
-    cantidad: number,
-    paxIncluidos: number[] | null = null,
-    camasAdicionalesNino: number = 0,
-) => {
-    if (!alternativaActiva.value) return;
-    try {
-        const res = await alternativaItemService.agregarProveedor(alternativaActiva.value.id, {
-            proveedor_tarifa_id: proveedorTarifaId,
-            modo_precio: 'tarifa_fija',
-            cantidad,
-            dia_referencial: diaActivoParaAgregar.value,
-            pax_incluidos: paxIncluidos,
-            camas_adicionales_nino: camasAdicionalesNino,
-            alternativa_destino_id: destinoActivoId.value,
-        });
-        await onServicioSueltoAgregado(res.alternativa_item, res.alternativa);
-    } catch (error: any) {
-        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo agregar', 'error');
-    }
-};
-
-// Sesión M4/M3 — "+ Agregar hotel no registrado" (pestaña Local): crea un
-// OpcionHotel ad-hoc standalone (sin opcion_mayorista_id, ver
-// OpcionHotelController::store()) y abre el mismo picker de matriz que ya
-// usan los hoteles registrados — agregarItemHotelAdhocLocal()/
-// agregarGrupoHotelAdhocLocal() son sus equivalentes, distinguidos en el
-// template por matrizHotelActiva.adhoc.
-const mostrarFormHotelLocal = ref(false);
-// 09-oct-2026 (hallazgo del usuario) — antes cada tipo de habitación nacía
-// fijo en Gravado/Nacional, ignorando el tratamiento tributario por defecto
-// de Configuración de Agencia (mismo default que ya usaban guía, ítem
-// manual y pasaje aéreo).
-const tarifaHotelLocalVacia = () => ({
-    tipo_habitacion: 'doble', precio_costo: 0, precio_venta: 0,
-    tip_afe_igv: configAgencia.value?.tip_afe_igv_default ?? '10',
-    destino_tributario: configAgencia.value?.destino_tributario_default ?? 'nacional',
-});
-// El form se arma antes de que cargue configAgencia: al abrirlo, si nadie
-// tocó todavía la fila inicial, se rearma con el default ya cargado.
-watch(mostrarFormHotelLocal, (abierto) => {
-    const f = formHotelLocal.value;
-    const intacto = !f.nombre_hotel && f.tarifas.length === 1 && !f.tarifas[0].precio_costo && !f.tarifas[0].precio_venta;
-    if (abierto && intacto) f.tarifas = [tarifaHotelLocalVacia()];
-});
-const formHotelLocal = ref<{
-    nombre_hotel: string; moneda: 'PEN' | 'USD'; proveedor_id: number | null;
-    tarifas: Array<{ tipo_habitacion: string; precio_costo: number; precio_venta: number; tip_afe_igv: string; destino_tributario: string }>;
-}>({
-    nombre_hotel: '', moneda: 'PEN', proveedor_id: null,
-    tarifas: [tarifaHotelLocalVacia()],
-});
-const guardandoHotelLocal = ref(false);
-
-const guardarHotelLocal = async () => {
-    guardandoHotelLocal.value = true;
-    try {
-        const res = await opcionHotelService.crear(formHotelLocal.value);
-        mostrarFormHotelLocal.value = false;
-        matrizHotelActiva.value = {
-            tarifas: (res.opcion_hotel.opciones_hotel_tarifas ?? []).map((t: OpcionHotelTarifa) => ({
-                id: t.id, tipo_habitacion: t.tipo_habitacion, precio: Number(t.precio_venta), precioVentaCamaAdicional: null,
-            })),
-            moneda: res.opcion_hotel.moneda,
-            nombreProveedor: res.opcion_hotel.nombre_hotel,
-            adhoc: true,
-            hotelId: res.opcion_hotel.id,
-            fotos: res.opcion_hotel.fotos ?? [],
-            grupoAbierto: grupoHotelAbiertoDiaActivo.value,
-        };
-        formHotelLocal.value = {
-            nombre_hotel: '', moneda: 'PEN', proveedor_id: null,
-            tarifas: [tarifaHotelLocalVacia()],
-        };
-    } catch (error: any) {
-        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo guardar el hotel', 'error');
-    } finally {
-        guardandoHotelLocal.value = false;
-    }
-};
-
-const agregarItemHotelAdhocLocal = async (
-    opcionHotelTarifaId: number,
-    cantidad: number,
-    paxIncluidos: number[] | null = null,
-    camasAdicionalesNino: number = 0,
-) => {
-    if (!alternativaActiva.value) return;
-    try {
-        const res = await alternativaItemService.agregarProveedor(alternativaActiva.value.id, {
-            opcion_hotel_tarifa_id: opcionHotelTarifaId,
-            modo_precio: 'tarifa_fija',
-            cantidad,
-            dia_referencial: diaActivoParaAgregar.value,
-            pax_incluidos: paxIncluidos,
-            camas_adicionales_nino: camasAdicionalesNino,
-            alternativa_destino_id: destinoActivoId.value,
-        });
-        await onServicioSueltoAgregado(res.alternativa_item, res.alternativa);
-    } catch (error: any) {
-        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo agregar', 'error');
-    }
-};
-
-// Sesión M4 — crypto.randomUUID() exige "secure context" (HTTPS o
-// localhost); en dev el tenant se navega por http://*.sistemafe.test, un
-// origen no-seguro, donde el navegador ni siquiera expone la función
-// (bug real encontrado en verificación en vivo contra agencia-demo, no
-// solo un caso raro de navegador viejo). El id es solo un agrupador
-// liviano client-side (§M1: sin tabla propia) — no necesita ser
-// criptográficamente fuerte, así que un fallback con Math.random() alcanza.
-const generarUuidGrupo = (): string => {
-    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-        const r = (Math.random() * 16) | 0;
-        const v = c === 'x' ? r : (r & 0x3) | 0x8;
-        return v.toString(16);
-    });
-};
-
-// Bug real (07-sep-2026): "cantidad" quedaba hardcodeada en 1 sin importar
-// las noches reales que el vendedor eligiera — el total de la alternativa
-// salía mal (mismo bug que agregarGrupoMayorista() ya había corregido el
-// 04-sep-2026 para "Adultos", nunca aplicado acá). HabitacionMatrixPicker
-// ahora expone un stepper "Noches" en modo grupo (mostrar-cantidad-en-grupo)
-// y lo manda en el emit — se usa ese valor real en vez de 1.
-const agregarGrupoHotelAdhocLocal = async (ids: number[], cantidad: number) => {
-    if (!alternativaActiva.value) return;
-    // Si ya hay una comparación de hoteles en curso para este día (ver
-    // grupoHotelAbiertoDiaActivo), este hotel se suma a ESE grupo — nunca
-    // arranca uno nuevo mientras el anterior siga sin resolver.
-    const grupoOpcionId = matrizHotelActiva.value?.grupoAbierto?.id ?? generarUuidGrupo();
-    try {
-        let ultimoItem: AlternativaItem | null = null;
-        for (const opcionHotelTarifaId of ids) {
-            const res = await alternativaItemService.agregarProveedor(alternativaActiva.value.id, {
-                opcion_hotel_tarifa_id: opcionHotelTarifaId,
-                modo_precio: 'tarifa_fija',
-                cantidad,
-                dia_referencial: diaActivoParaAgregar.value,
-                alternativa_destino_id: destinoActivoId.value,
-                grupo_opcion_id: grupoOpcionId,
-            });
-            ultimoItem = res.alternativa_item;
-        }
-        if (ultimoItem) await onServicioSueltoAgregado(ultimoItem);
-    } catch (error: any) {
-        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo agregar el grupo', 'error');
-    }
-};
-
-// Sesión M4 — "comparar varias opciones": crea N ítems (uno por tarifa
-// elegida en el picker) compartiendo un mismo grupo_opcion_id generado acá.
-// Ninguno nace opcion_elegida=true — el vendedor resuelve el grupo después
-// desde el lienzo (ver elegirGrupoDesdeLienzo()), y ReservaController::aceptar()
-// bloquea con 422 mientras quede algún grupo sin resolver.
-// "cantidad" real (07-sep-2026) — mismo bug/fix que agregarGrupoHotelAdhocLocal()
-// de arriba, ver ese comentario.
-const agregarGrupoProveedorHotel = async (ids: number[], cantidad: number) => {
-    if (!alternativaActiva.value) return;
-    // Ídem agregarGrupoHotelAdhocLocal() — reusa el grupo abierto en vez de
-    // generar uno nuevo cuando corresponde.
-    const grupoOpcionId = matrizHotelActiva.value?.grupoAbierto?.id ?? generarUuidGrupo();
-    try {
-        let ultimoItem: AlternativaItem | null = null;
-        for (const proveedorTarifaId of ids) {
-            const res = await alternativaItemService.agregarProveedor(alternativaActiva.value.id, {
-                proveedor_tarifa_id: proveedorTarifaId,
-                modo_precio: 'tarifa_fija',
-                cantidad,
-                dia_referencial: diaActivoParaAgregar.value,
-                alternativa_destino_id: destinoActivoId.value,
-                grupo_opcion_id: grupoOpcionId,
-            });
-            ultimoItem = res.alternativa_item;
-        }
-        if (ultimoItem) await onServicioSueltoAgregado(ultimoItem);
-    } catch (error: any) {
-        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo agregar el grupo', 'error');
-    }
-};
 
 // ── Comparador de mayoristas ──────────────────────────────────────────
 const opcionesMayorista = ref<OpcionMayorista[]>([]);
@@ -3159,37 +2592,6 @@ const onEliminarFotoHotelMatrix = async (payload: { hotelId: number; path: strin
     try {
         await opcionMayoristaService.eliminarFotoHotel(payload.hotelId, payload.path);
         await cargarOpcionesMayorista();
-    } catch (error: any) {
-        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo eliminar la foto', 'error');
-    }
-};
-
-// T-020 — fotos del hotel no registrado (Local/Nacional), desde el drawer de la matriz. Mismas
-// rutas y servicio que el picker de mayorista; el backend devuelve las fotos ya resueltas.
-const subiendoFotoHotelAdhoc = ref(false);
-const onSubirFotoHotelAdhoc = async (event: Event, tipoFoto: 'fachada' | 'habitacion') => {
-    const input = event.target as HTMLInputElement;
-    const archivo = input.files?.[0];
-    input.value = '';
-    const hotelId = matrizHotelActiva.value?.hotelId;
-    if (!archivo || !hotelId) return;
-    subiendoFotoHotelAdhoc.value = true;
-    try {
-        const res = await opcionMayoristaService.agregarFotoHotel(hotelId, archivo, tipoFoto);
-        if (matrizHotelActiva.value) matrizHotelActiva.value.fotos = res.opcion_hotel.fotos ?? [];
-    } catch (error: any) {
-        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo agregar la foto', 'error');
-    } finally {
-        subiendoFotoHotelAdhoc.value = false;
-    }
-};
-
-const onEliminarFotoHotelAdhoc = async (path: string) => {
-    const hotelId = matrizHotelActiva.value?.hotelId;
-    if (!hotelId) return;
-    try {
-        const res = await opcionMayoristaService.eliminarFotoHotel(hotelId, path);
-        if (matrizHotelActiva.value) matrizHotelActiva.value.fotos = res.opcion_hotel.fotos ?? [];
     } catch (error: any) {
         (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo eliminar la foto', 'error');
     }
@@ -3536,58 +2938,6 @@ const agregarItemGuiaCotizador = async () => {
     }
 };
 
-// ── Drawer de biblioteca (Punto A) ─────────────────────────────────────
-const drawerBibliotecaAbierto = ref(false);
-
-const abrirDrawerBiblioteca = () => {
-    drawerBibliotecaAbierto.value = true;
-};
-
-// T-035 (R3): cada vez que se abre la biblioteca, el filtro vuelve al destino activo de la
-// alternativa (el chip seleccionado; sin catálogo → sin filtro). Mientras siga abierta se respeta
-// lo que el vendedor cambie. Cubre todas las formas de abrirla (botón, edición de ítem manual…).
-watch(drawerBibliotecaAbierto, async (abierto) => {
-    if (!abierto) return;
-    const destino = alternativaDestinos.value.find((d) => d.id === destinoActivoId.value);
-    const nuevoId = destino?.destino_atractivo_id ?? null;
-    filtroDestinoTexto.value = nuevoId ? (destino?.destino_texto ?? '') : '';
-    filtroDestinoId.value = nuevoId;
-    // Cambiar el filtro dispara el watch de filtros, que recarga con 300 ms de espera (pensada para
-    // cuando se escribe). Al abrir no hay nada que esperar: tras nextTick ese watch ya agendó su
-    // recarga; se cancela y se carga ya, para que la banda y la lista no queden desfasadas.
-    await nextTick();
-    clearTimeout(bibliotecaTimeout);
-    cargarBiblioteca();
-});
-
-const cerrarDrawerBiblioteca = () => {
-    drawerBibliotecaAbierto.value = false;
-    volverAGridDrawer();
-};
-
-const volverAGridDrawer = () => {
-    matrizHotelActiva.value = null;
-    modoPrecioPendiente.value = null;
-    mostrarFormManual.value = false;
-    itemManualEnEdicion.value = null;
-};
-
-const pasoDrawer = computed<'grid' | 'matrizHotel' | 'modoPrecio' | 'manual'>(() => {
-    if (matrizHotelActiva.value) return 'matrizHotel';
-    if (modoPrecioPendiente.value) return 'modoPrecio';
-    if (mostrarFormManual.value) return 'manual';
-    return 'grid';
-});
-
-const tituloDrawer = computed(() => {
-    switch (pasoDrawer.value) {
-        case 'matrizHotel': return 'Elegí la habitación';
-        case 'modoPrecio': return 'Cómo se cobra';
-        case 'manual': return 'Agregar servicio sin catálogo';
-        default: return 'Agregar servicio';
-    }
-});
-
 // ── Ítem manual / pasaje aéreo ────────────────────────────────────────
 const mostrarFormManual = ref(false);
 const mostrarFormPasajeAereo = ref(false);
@@ -3598,6 +2948,11 @@ const itemPasajeAereoEnEdicion = ref<AlternativaItem | null>(null);
 // Sesión 11q — item manual en edición (null = modo alta). ItemManualForm.vue
 // se prellena solo cuando esto viene poblado, ver su watch(itemExistente).
 const itemManualEnEdicion = ref<AlternativaItem | null>(null);
+alVolverAGrid(() => {
+    mostrarFormManual.value = false;
+    itemManualEnEdicion.value = null;
+});
+const { pasoDrawer, tituloDrawer } = pasoDrawerDe({ matrizHotelActiva, modoPrecioPendiente, mostrarFormManual });
 // Fix post-verificación: el drawer completo vive en un <Teleport> gateado
 // por drawerBibliotecaAbierto (línea ~411) — asignar solo
 // itemManualEnEdicion/mostrarFormManual no lo abría, el link "Editar" no
@@ -3635,16 +2990,6 @@ const onProveedorPromovido = async (_res: any) => {
     itemParaPromover.value = null;
     toast.success('Proveedor creado correctamente');
     await cargarCotizacion();
-};
-
-// Cualquier ítem SUELTO agregado desde el drawer (biblioteca, matriz de
-// hotel, modo de precio, manual, mayorista) — el drawer NUNCA se cierra acá
-// (a diferencia de clicResultadoPlantilla), solo vuelve al paso "grid" para
-// que el vendedor pueda seguir agregando de una.
-const onServicioSueltoAgregado = async (item: AlternativaItem, alternativa?: Partial<Alternativa> | null) => {
-    volverAGridDrawer();
-    toast.success('Servicio agregado');
-    if (!alternativa || !aplicarItemActualizado(item, alternativa)) await cargarCotizacion();
 };
 
 // Sesión 11q — edición estructural de un ítem manual (ItemManualForm.vue en
