@@ -171,6 +171,21 @@ Cambios:
 - **Quién dio cada servicio (pedido del usuario, 14-oct):** pestaña "Proveedores" de la salida, por servicio del Incluye y por vehículo: **asignado** (planificado en la salida) contra **facturado** (proveedor de las compras asignadas a ese servicio de la salida, §3.9b). Marca ⚠️ si el que facturó es otro proveedor, o si un servicio no tiene ninguna factura (falta cargarla). Más adelante suma el check del guía (§3.10) como confirmación de que el servicio se dio. **Ficha del proveedor:** historial de salidas y reservas atendidas, monto facturado por periodo y, cuando exista, calificación promedio.
 - **Reporte Operativo:** muestra los tours **por salida** (una fila por salida con sus servicios, vehículos y guía) y los sueltos **por línea**, como hoy.
 
+### 3.6b Agencia que no opera sus tours (17-nov-2026)
+
+**Caso del usuario:** una agencia que **nunca** opera sus tours (siempre los endosa a un
+operador) no usa las Salidas Operativas, pero sí el Reporte Operativo.
+
+**Ya encaja hoy:** el Reporte Operativo (`ReporteOperativoController`) se arma desde los
+servicios de cada reserva (`reserva_items`), no desde las salidas; la salida es opcional. En
+esta agencia el **proveedor del tour es el operador** que recibe a los pasajeros, así que no
+hace falta el endoso de `plan-endoso-pasajeros.md` (pensado para quien endosa *a veces*,
+moviendo pasajeros de su salida a la de un tercero).
+
+**Lo que se agrega:**
+- Opción por agencia **"Opera sus propios tours: sí/no"** (`configuracion_agencia`). Con "no": se ocultan Salidas Operativas del menú y del Inicio, y los tours no generan salida.
+- **Reporte Operativo:** lista de viajes por fecha con **pasajero, destino, mayorista o proveedor, agente que vendió y observaciones**. Hoy ya tiene pasajero, destino, fecha, proveedor y las observaciones del pasajero (alimentación, discapacidad, vuelo propio). **Faltan:** el **agente** (`cotizaciones.vendedor_id` de la reserva), el **nombre del mayorista** en los paquetes de mayorista (`reserva.mayorista_elegida_id`) y las **observaciones de la reserva** (verificar si existe el campo). Agrupar u ordenar por operador, para enviar a cada uno su lista del día.
+
 ### 3.7 Compras y gastos (N9)
 
 **Compras es un módulo del sistema base**, para todos los giros: es el módulo "Compras" que ya
@@ -420,6 +435,69 @@ facturo"**, para proponer el camino correcto.
 
 En ambas formas, la rentabilidad por reserva lo refleja.
 
+**Paquete armado por partes (caso del usuario, 17-nov):** la agencia compra tours, actividades
+y hoteles a un **mayorista** y los vuelos a una **aerolínea**, y a los dos les paga en cuotas
+para ese viaje. Encaja en la estructura de arriba: la reserva tiene **una obligación por
+proveedor** (mayorista y aerolínea), cada una con sus cuotas.
+- **Hueco:** hoy la aerolínea es **texto libre** (`cotizacion_pasaje_aereo.aerolinea`, decidido el 28-jul) y no un proveedor, así que no hay a quién cargarle la deuda. Se agrega el tipo de proveedor **Aerolínea / Consolidador** en `proveedor_tipos` y un vínculo **opcional** del pasaje a un proveedor (el texto queda para lo existente).
+- La **primera cuota del pandero** (§3.7e) paga los pasajes: la vista "cobrado contra pagado" avisa si vence el pago a la aerolínea y el cliente no pagó su prepago.
+- Abierto: P8 y P9 (§7).
+
+### 3.7e Programas de pago: cobro en cuotas al cliente antes del viaje (17/18-nov-2026)
+
+**Caso del usuario:** el cliente elige un paquete con sus fechas y lo paga en cuotas
+mensuales; viaja cuando completa. Cada cliente paga su propia reserva (no hay sorteo ni fondo
+común). La agencia lo llama **"Pandero de viaje"**, pero puede tener otros programas con la
+misma mecánica: **Viaje de promoción**, **Luna de miel**, etc. (18-nov).
+
+**Catálogo de programas de pago (por agencia, editable):** el nombre no va en el código.
+Cada programa (`programas_pago`) tiene:
+- **nombre** ("Pandero de viaje", "Viaje de promoción", "Luna de miel"…) y activo sí/no;
+- **días antes del viaje** en que debe quedar pagado (por defecto 30);
+- **la primera cuota es prepago aéreo** sí/no;
+- **reembolsable** sí/no (el pandero: no);
+- **plantilla de contrato** asociada (cada programa con su propio texto);
+- cantidad de cuotas sugerida y frecuencia (mensual por defecto), siempre editables en cada plan.
+
+Al armar el plan de una reserva se elige el programa y el cronograma se precarga con esas
+reglas. Las reglas de abajo son las del **Pandero** (el caso real); otro programa puede tener
+otros valores.
+
+**Reglas del negocio:**
+- Nace al **aceptar la reserva**. Se arma un **contrato** con el detalle del paquete y el cronograma de cuotas.
+- **Primera cuota = prepago de los pasajes aéreos.** Con ese dinero se compran los tickets; con las siguientes se reservan los demás servicios.
+- **El paquete debe quedar pagado 1 mes antes del viaje.** La última cuota vence como tarde en `fecha_viaje_desde − 30 días`; el sistema no deja armar un cronograma que termine después.
+- **Pagos no reembolsables** (cláusula del contrato).
+
+**Estructura (espejo de `ObligacionProveedor`, §3.7d):**
+```
+ProgramaPago         catálogo de la agencia (Pandero, Promoción, Luna de miel…)
+PlanCobro            programa + reserva + cliente que paga: total, moneda, fecha límite, estado
+  └ CuotaCobro       nro, concepto (prepago aéreo / cuota), monto, vencimiento
+Advance (existente)  cada pago real, con su boleta de anticipo
+  └ aplicado a una o varias cuotas
+```
+- **Reserva no es venta:** la reserva es el compromiso; las ventas (`Sale`) son los comprobantes. Cada pago es un **Adelanto** con su **boleta de anticipo** (venta `type='advance'`, ya declarada a SUNAT), asignado a la reserva (`reserva_anticipos`) y a la cuota que paga. Ningún mecanismo SUNAT nuevo.
+- Estado de cada cuota: pendiente / parcial / pagada / **vencida**. Estado del plan: al día / atrasado / completo / retirado.
+- Al cerrar el file se emite la boleta o factura final, que descuenta todos los anticipos (`PrepaidPayment`, como hoy).
+- **Retiro del cliente:** la boleta final no se emite y los anticipos nunca se aplican. Hoy quedarían como **saldo a favor del cliente**, y eso está mal porque no se devuelven. Se agrega el estado **"retenido por retiro"** del adelanto (se cierra sin aplicarse ni devolverse); la reserva pasa a cancelada por retiro y el plan a "retirado". El tratamiento tributario lo define el contador (punto a).
+
+**Contrato desde el sistema:**
+- **Plantilla por agencia, editable** (Configuración de la agencia), a partir del modelo de contrato que entrega el usuario. Texto con **variables** que el sistema llena: cliente y documento, pasajeros, paquete, destino, fechas, total y moneda, **tabla de cuotas**, fecha límite de pago y cláusula de no reembolso.
+- PDF generado desde la reserva (mismo camino que el PDF de cotización, DomPDF).
+- **Cada contrato emitido guarda copia del texto** con el que se generó: cambiar la plantilla no altera contratos ya firmados. Si cambia el cronograma, se emite una versión nueva del contrato y queda la anterior.
+
+**Pantallas:**
+- En la reserva: cronograma, pagos y saldo; "Cobrar cuota" (crea el adelanto ya asignado); "Generar contrato".
+- Listado **Programas de pago**, filtrable por programa: clientes con plan activo, avance (%), próxima cuota y atrasados.
+- **Viaje grupal (promoción):** varios pagadores en una misma reserva (cada alumno o padre paga su parte). El modelo lo admite porque `PlanCobro` lleva **el cliente que paga**: una reserva puede tener varios planes, uno por pagador.
+- **Grupo de viaje (P12, resuelta 18-nov):** caso real del usuario: se apuntaron 20 y días después 15 más, con **otro precio** pero en la misma promoción, y se hizo otra reserva. Se evaluó (A) una sola reserva para todo el grupo, que obliga a mezclar dos precios en una reserva, y (B) una reserva por familia, demasiada carga y sin vista del grupo. **Decisión (C): una reserva por tanda + `grupos_viaje`**, una etiqueta que une reservas ("Promoción San José 2027"), **sin precio ni dinero propio**: el dinero vive en cada reserva y en sus planes de cobro. Da la vista del grupo (pasajeros totales, cobrado y pendiente sumando sus reservas, atrasados), "Agregar reserva al grupo" (copia paquete y fechas, precio nuevo) y el filtro por grupo en el Reporte Operativo. Un pago al mayorista por todo el grupo ya entra como pago consolidado (§3.7d). Sirve también fuera de los programas de pago (boda, empresa en dos fechas). El retiro de un pagador afecta solo a su plan; si sube o no el precio a los demás de la tanda es una decisión comercial, no una regla del sistema.
+- Avisos en la bandeja (§3.14): cuota por vencer, cuota vencida, reserva a menos de 30 días sin pagar completo.
+
+**A confirmar con el contador:**
+- **(a)** Cliente que se retira; sus pagos no son reembolsables y cada uno ya tiene su boleta de anticipo. ¿Basta con esas boletas, o hay que convertir lo retenido en una **penalidad** (NC de los anticipos + comprobante nuevo, posiblemente con otro tratamiento de IGV)? El estado "retenido por retiro" hace falta en los dos casos.
+- **(b)** Alternativa de **recibo digital interno y boleta al cerrar el file**: un anticipo cobrado normalmente obliga a emitir el comprobante al cobrar. **Por defecto, boleta de anticipo por cuota** (lo que indicó el contador); el recibo interno solo se construye si él lo confirma por escrito.
+
 ### 3.8 Registros para el contador (N10)
 
 Por periodo (mes), con exportación a Excel y al formato que pide SUNAT:
@@ -638,6 +716,10 @@ Cada pendiente enlaza a la pantalla donde se resuelve y desaparece solo al resol
 | **Hoteles de Local/Nacional** (matriz) | Sin cambios; siguen como líneas aparte (§3.4) |
 | Factura mensual de un proveedor | Se reparte entre salidas en `compra_asignaciones` |
 | Gasto sin comprobante | Cuenta para rentabilidad, no para el Registro de Compras |
+| Agencia que nunca opera sus tours | "Opera sus propios tours: no": sin Salidas; el proveedor del tour es el operador; Reporte Operativo con agente, mayorista y observaciones (§3.6b) |
+| Paquete armado por partes (mayorista + aerolínea en cuotas) | Una obligación por proveedor en la reserva, cada una con sus cuotas; la aerolínea pasa a ser proveedor (§3.7d) |
+| Pandero de viaje (y otros programas: promoción, luna de miel) | Programa de pago del catálogo de la agencia + plan de cobro en cuotas sobre la reserva; cada pago es un adelanto con boleta de anticipo; pagado 1 mes antes del viaje; no reembolsable; contrato desde plantilla editable (§3.7e) |
+| Retiro del cliente del pandero | Adelantos "retenidos por retiro" (no quedan como saldo a favor); tratamiento tributario según el contador (§3.7e, a) |
 
 ## 5b. Plan de reversa (cómo volver atrás si no sale como se pensó)
 
@@ -882,7 +964,7 @@ adelante la importación SIRE (los comprobantes llegan solos y solo hay que asig
 |---|---|---|
 | 1 | **Tour simple:** columnas de §3.1 (incluido `uso`, N15, con su backfill y el bloqueo de carga en el cotizador para `solo_itinerario`), Incluye estructurado (con costo e IGV por servicio), calculadora, una línea por tipo de IGV cuando hay mezcla (N14), extranjeros (residencia en cotización), cotización con línea de tour, combos (una línea por tour, descuento E3), facturación con la línea de tour, retiro de `ajuste_redondeo`, conversión de los tours existentes con confirmación del usuario.  Además (§5c): desglose de precio por pasajero para facturar por subgrupo (C1), Incluye del PDF desde la lista del tour (C5), permisos y menú. **Precio por temporada (§3.12, N16)**. | 6.5–7.5 días |
 | 2 | **Salida como centro:** agrupación por línea de tour, servicios a reservar, varios vehículos, guía, mínimo, estados, Reporte Operativo con los dos tipos.  Además (§5c): Inicio y `AsignacionOperativa` con salidas de tour (C3), `reprogramar()` mueve líneas de tour (C4), permisos y menú. **Mejoras de operación (§3.13):** órdenes de servicio a proveedores, avisos al cancelar, reprogramar salida completa. **Bandeja de pendientes (§3.14)** con los avisos de salidas. **Al terminar: pausa para evaluar con uso real antes de la fase 3.** | 8.5–9.5 días |
-| 3 | **Compras (sistema base):** registro de comprobantes, contado o crédito, pagos parciales vía Caja, cuentas por pagar, gastos sin comprobante con respaldo, RUC automático, validación SUNAT, adjuntos, tabla única de proveedores al inicio de la fase (§3.7c). Mayoristas (§3.7d): cronograma de pagos por reserva con condiciones por defecto del proveedor, pagos a cuenta sin factura y su aplicación a la factura posterior, USD con tipo de cambio, retiro de `cronograma_pago_proveedor`/`pago_proveedor`. Comisiones (§3.7d): configuración por proveedor, notas de crédito recibidas, factura de comisión al proveedor (cliente creado desde el proveedor) repartida entre reservas, compensación con el pago al proveedor.  Además (§5c): pagos con origen Caja o **Banco sin sesión de caja** y `cuentas_bancarias` al sistema base (C2), migraciones probadas en todos los giros (C8), módulo activable por tenant, permisos y menú. Avisos de pagos por vencer en la bandeja (§3.14). | 10–11 días |
+| 3 | **Compras (sistema base):** registro de comprobantes, contado o crédito, pagos parciales vía Caja, cuentas por pagar, gastos sin comprobante con respaldo, RUC automático, validación SUNAT, adjuntos, tabla única de proveedores al inicio de la fase (§3.7c). Mayoristas (§3.7d): cronograma de pagos por reserva con condiciones por defecto del proveedor, pagos a cuenta sin factura y su aplicación a la factura posterior, USD con tipo de cambio, retiro de `cronograma_pago_proveedor`/`pago_proveedor`. Comisiones (§3.7d): configuración por proveedor, notas de crédito recibidas, factura de comisión al proveedor (cliente creado desde el proveedor) repartida entre reservas, compensación con el pago al proveedor.  Además (§5c): pagos con origen Caja o **Banco sin sesión de caja** y `cuentas_bancarias` al sistema base (C2), migraciones probadas en todos los giros (C8), módulo activable por tenant, permisos y menú. Avisos de pagos por vencer en la bandeja (§3.14). **Casos del 17-nov (decisión del usuario: van con esta fase, en orden, no se adelantan):** aerolínea / consolidador como proveedor y obligaciones por proveedor en el paquete armado por partes (§3.7d); **programas de pago** (§3.7e: catálogo editable —Pandero, Promoción, Luna de miel…—, plan de cobro con cuotas sobre Adelantos, estado "retenido por retiro", listado Pandero, contrato desde plantilla editable con copia por contrato emitido); opción "Opera sus propios tours" y columnas nuevas del Reporte Operativo (§3.6b). | 10–11 días + ~5 días de los casos del 17-nov (a afinar al empezar) |
 | 3b | **Rendiciones (§3.7b):** entrega a rendir desde Caja, gastos contra la rendición (reusa Compras y gastos sin comprobante), liquidación con vuelto o reembolso, aprobación y cierre, listado de rendiciones abiertas. Depende de la fase 3. | 2–3 días |
 | 4 | **Centro de costo + Rentabilidad:** asignaciones (con reparto de un comprobante), reportes por salida, reserva y tour, estimado contra real. Vista "cobrado contra pagado" por reserva (§3.7d).  Además (§5c): ingreso de la salida = precio vendido neto de NC (C6, C7), aviso "faltan gastos por registrar", permisos y menú. Avisos de facturas faltantes, rendiciones abiertas y costos desactualizados en la bandeja (§3.14). | 4.5–5.5 días |
 | 5 | **Registros de Ventas y Compras** para el contador (Excel + formato SUNAT), con la configuración por tenant de régimen y "lleva registros electrónicos".  Permisos y menú. | 2.5–3.5 días |
@@ -928,6 +1010,11 @@ Si en dakamu hay tours vinculados a mayoristas **con** precio, la regla N15 los 
 - ~~P5 — Guía~~ **Resuelta (14-oct):** usuario propio, vinculado al guía existente (`guias.user_id`), creado desde la ficha del guía con rol "Guía"; la tabla `guias` no se reemplaza. → §3.10.
 - ~~P6 — Factura mensual~~ **Resuelta (14-oct):** reparto propuesto **según el costo estimado** de cada salida para ese servicio, con las salidas sugeridas automáticamente; otros criterios y edición manual disponibles. → §3.7 ("Reparto de un comprobante").
 - ~~P7 — Comisiones e incentivos~~ **Resuelta (14-oct):** existen las dos formas según el proveedor → configuración por proveedor; el tipo de IGV de la factura de comisión y si el monto incluye IGV son **valores por defecto configurables por proveedor**, con todas las opciones siempre disponibles al emitir (§3.7d, punto 0). El contador solo indica qué valor dejar en cada proveedor; no bloquea el desarrollo.
+- **P8 — Vuelos (17-nov, abierta):** ¿la agencia paga los pasajes directo a la aerolínea o a través de un consolidador? Define a qué proveedor va la obligación (§3.7d).
+- **P9 — Cronograma de pagos al proveedor (17-nov, abierta):** ¿las cuotas las fija el proveedor (condiciones por defecto en su ficha) o las decide la agencia en cada viaje? El diseño soporta las dos; define qué se precarga.
+- **P10 — Contador, pandero (17-nov, abierta):** puntos (a) y (b) de §3.7e. No bloquea el diseño: por defecto, boleta de anticipo por cuota.
+- **P11 — Modelo de contrato (17-nov, abierta):** el usuario entrega el modelo de contrato del pandero para armar la plantilla y sus variables (§3.7e). Cada programa de pago puede tener el suyo.
+- ~~P12 — Viaje de promoción~~ **Resuelta (18-nov):** una reserva por tanda (cada una con su precio) unidas por un **grupo de viaje**; varios planes de cobro por reserva, uno por pagador (§3.7e). Queda a confirmar con el contador si al cerrar se emite una boleta final por pagador con sus propios anticipos (es lo esperado, porque cada anticipo ya está a nombre de quien pagó).
 
 ---
 
