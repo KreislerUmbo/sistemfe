@@ -2969,8 +2969,8 @@ const clicResultadoPlantilla = async (p: Extract<BibliotecaResultado, { tipo_res
         drawerBibliotecaAbierto.value = false;
         volverAGridDrawer();
 
-        // Sesión 11m — red de seguridad: inicializarDias() (dentro de
-        // cargarCotizacion()) solo ve días con ítems reales — un tour-hijo
+        // Red de seguridad: inicializarDias() (vía alRefrescar, al recargar la
+        // cotización) solo ve días con ítems reales — un tour-hijo
         // sin Incluye no genera ningún ítem y su día quedaría sin pestaña.
         if (res.dia_final_combo > diasCreados.value.length) {
             diasCreados.value = Array.from({ length: res.dia_final_combo }, (_, i) => i + 1);

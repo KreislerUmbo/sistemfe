@@ -1,13 +1,6 @@
 import { computed, ref, watch } from 'vue';
-import { cotizacionService } from '@/services/admin/cotizacionService';
+import { cotizacionService, type ModificacionDeCotizacion } from '@/services/admin/cotizacionService';
 import type { Alternativa, AlternativaItem, ConfiguracionAgencia, Cotizacion } from '@/types/agencia-viajes';
-
-export type ModificacionInfo = {
-    id: number;
-    estado: 'abierta' | 'aplicada' | 'descartada';
-    reserva_id: number;
-    reserva_codigo: string | null;
-};
 
 /**
  * 'completo': tras cargarCotizacion() (la cotización entera se reemplazó).
@@ -30,7 +23,7 @@ export function useCotizacionEditor(cotizacionId: number) {
     const configAgencia = ref<ConfiguracionAgencia | null>(null);
 
     // Cotización de una modificación de reserva (origen='modificacion'); null en las demás.
-    const modificacionInfo = ref<ModificacionInfo | null>(null);
+    const modificacionInfo = ref<ModificacionDeCotizacion | null>(null);
 
     const alternativaActiva = computed<Alternativa | null>(() =>
         cotizacion.value?.alternativas?.find((a) => a.id === alternativaActivaId.value) ?? null

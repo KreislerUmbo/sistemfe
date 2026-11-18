@@ -2,6 +2,14 @@
 import httpClient from '@/helpers/http-client'
 import type { Cotizacion, CotizacionPasajero, TemporadaDesactualizada } from '@/types/agencia-viajes'
 
+// Modificación de reserva a la que pertenece una cotización (T-007); null en las demás.
+export type ModificacionDeCotizacion = {
+  id: number
+  estado: 'abierta' | 'aplicada' | 'descartada'
+  reserva_id: number
+  reserva_codigo: string | null
+}
+
 export const cotizacionService = {
   async listar(params: {
     page?: number
@@ -21,7 +29,7 @@ export const cotizacionService = {
   async obtener(id: number) {
     const response = await httpClient.get(`/cotizaciones/${id}`)
     // modificacion: solo si es una cotización de modificación de reserva (T-007).
-    return response.data as { cotizacion: Cotizacion; modificacion?: { id: number; estado: 'abierta' | 'aplicada' | 'descartada'; reserva_id: number; reserva_codigo: string | null } | null }
+    return response.data as { cotizacion: Cotizacion; modificacion?: ModificacionDeCotizacion | null }
   },
   async crear(data: {
     cliente_id: number

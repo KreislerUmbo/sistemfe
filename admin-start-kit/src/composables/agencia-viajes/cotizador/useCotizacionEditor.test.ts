@@ -1,5 +1,5 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { effectScope, nextTick } from 'vue'
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
+import { effectScope, nextTick, type EffectScope } from 'vue'
 
 const obtener = vi.fn()
 vi.mock('@/services/admin/cotizacionService', () => ({ cotizacionService: { obtener: (...a: unknown[]) => obtener(...a) } }))
@@ -14,13 +14,18 @@ const respuesta = (alternativas: any[], modificacion: any = null) => ({
   modificacion,
 })
 
+// Los scopes creados en cada test se cierran al terminarlo (detiene el watch del núcleo).
+const scopes: EffectScope[] = []
+
 function crear() {
   const scope = effectScope()
+  scopes.push(scope)
   const nucleo = scope.run(() => useCotizacionEditor(7))!
   return { scope, nucleo }
 }
 
 beforeEach(() => obtener.mockReset())
+afterEach(() => { scopes.splice(0).forEach((s) => s.stop()) })
 
 describe('cargarCotizacion', () => {
   it('pide la cotización por id y guarda la modificación', async () => {
