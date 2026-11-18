@@ -20,6 +20,7 @@ use App\Models\AgenciaViajes\ProveedorServicio;
 use App\Models\AgenciaViajes\ProveedorTarifa;
 use App\Models\AgenciaViajes\ProveedorTipoConfig;
 use App\Models\AgenciaViajes\ReservaItem;
+use App\Services\AgenciaViajes\AltaItem\AltaItemException;
 use App\Services\AgenciaViajes\ComboExplosionService;
 use App\Services\AgenciaViajes\PriceEngineService;
 use App\Services\AgenciaViajes\TourLineaException;
@@ -47,30 +48,12 @@ class AlternativaItemController extends Controller
     ) {
     }
 
-    // Sesión 12f-1 — un solo punto de escritura para resolver
-    // alternativa_destino_id en los 9 puntos de creación de este archivo
-    // (mismo riesgo de desincronización que la auditoría marca en §20).
-    // Sin UI de selección de destino todavía (eso es 12f-2), $explicito
-    // siempre llega null por ahora — el fallback (primer destino de la
-    // alternativa, orderBy orden/id) es el comportamiento correcto hoy
-    // (sigue habiendo 1 destino real por alternativa en la práctica).
-    private function reglaAlternativaDestinoId(Alternativa $alternativa)
-    {
-        return Rule::exists('alternativa_destinos', 'id')->where('alternativa_id', $alternativa->id);
-    }
-
-    private function resolverAlternativaDestinoId(Alternativa $alternativa, ?int $explicito): ?int
-    {
-        return $explicito ?? $alternativa->destinos()->value('id');
-    }
-
+    // POST alternativas/{id}/items: cada origen_tipo tiene su servicio de alta (Services/AgenciaViajes/AltaItem).
+    // input() y no get(): get() no lee el cuerpo JSON.
     public function store(Request $request, string $alternativaId)
     {
         $alternativa = Alternativa::findOrFail($alternativaId);
         $this->autorizarCotizacion('update', $alternativa);
-        // input(), NO get() — get() es el ParameterBag de Symfony (query
-        // string/route/POST-form), no lee body JSON crudo. Bug real
-        // encontrado corriendo la verificación de esta sesión.
         $origenTipo = $request->input('origen_tipo');
 
         if (! in_array($origenTipo, AlternativaItem::ORIGENES, true)) {
@@ -80,15 +63,26 @@ class AlternativaItemController extends Controller
             ], 422);
         }
 
-        $respuesta = match ($origenTipo) {
-            AlternativaItem::ORIGEN_PROVEEDOR => $this->crearItemProveedor($request, $alternativa),
-            AlternativaItem::ORIGEN_MAYORISTA => $this->crearItemMayorista($request, $alternativa),
-            AlternativaItem::ORIGEN_PASAJE_AEREO => $this->crearItemPasajeAereo($request, $alternativa),
-            AlternativaItem::ORIGEN_MANUAL => $this->crearItemManual($request, $alternativa),
-            AlternativaItem::ORIGEN_GUIA => $this->crearItemGuia($request, $alternativa),
-        };
+        try {
+            [$item, $mensaje] = match ($origenTipo) {
+                AlternativaItem::ORIGEN_PROVEEDOR => [$this->crearItemProveedor($request, $alternativa), 'Ítem agregado correctamente'],
+                AlternativaItem::ORIGEN_MAYORISTA => [$this->crearItemMayorista($request, $alternativa), 'Ítem de mayorista agregado correctamente'],
+                AlternativaItem::ORIGEN_PASAJE_AEREO => [$this->crearItemPasajeAereo($request, $alternativa), 'Pasaje aéreo agregado correctamente'],
+                AlternativaItem::ORIGEN_MANUAL => [$this->crearItemManual($request, $alternativa), 'Ítem manual agregado correctamente'],
+                AlternativaItem::ORIGEN_GUIA => [$this->crearItemGuia($request, $alternativa), 'Ítem de guía agregado correctamente'],
+            };
+        } catch (AltaItemException $e) {
+            return response()->json(['code' => 422, 'message' => $e->getMessage()], 422);
+        }
 
-        return $this->conItemCompletoYAlternativa($respuesta, $alternativa);
+        // El ítem con las relaciones del lienzo y la alternativa recargada (no la que está en memoria:
+        // puede traer relaciones cargadas por el camino y la respuesta cambiaría).
+        return response()->json([
+            'code' => 200,
+            'message' => $mensaje,
+            'alternativa_item' => AlternativaItem::with(self::RELACIONES_LIENZO)->find($item->id)->toArray(),
+            'alternativa' => $alternativa->fresh()->toArray(),
+        ]);
     }
 
     // T-032 (R5): relaciones que el lienzo del cotizador lee de cada ítem (las mismas que carga
@@ -108,23 +102,6 @@ class AlternativaItemController extends Controller
         'tourOrigen',
         'reservaItem.reserva:id,codigo,estado',
     ];
-
-    // Solo agrega datos a una respuesta de alta que ya salió bien: el ítem con sus relaciones y la
-    // alternativa con su total vigente. No cambia lo que la respuesta ya traía.
-    private function conItemCompletoYAlternativa(JsonResponse $respuesta, Alternativa $alternativa): JsonResponse
-    {
-        if ($respuesta->getStatusCode() !== 200) {
-            return $respuesta;
-        }
-        $datos = $respuesta->getData(true);
-        $itemId = $datos['alternativa_item']['id'] ?? null;
-        if ($itemId) {
-            $datos['alternativa_item'] = AlternativaItem::with(self::RELACIONES_LIENZO)->find($itemId)?->toArray() ?? $datos['alternativa_item'];
-            $datos['alternativa'] = $alternativa->fresh()?->toArray();
-        }
-
-        return $respuesta->setData($datos);
-    }
 
     // Edición en vivo de descuento_pct O precio_convertido — §3.1. El
     // backend siempre recalcula el que falta y devuelve AMBOS, más
@@ -211,7 +188,7 @@ class AlternativaItemController extends Controller
             'precio_manual' => $item->esLineaTour() ? true : $item->precio_manual,
         ]);
 
-        $this->recalcularTotalAlternativa($alternativa);
+        $alternativa->recalcularTotal();
 
         return response()->json([
             'code' => 200,
@@ -254,7 +231,7 @@ class AlternativaItemController extends Controller
 
             $item->setRelation('alternativa', $alternativa);
             $precio = $this->priceEngine->precioDeItemConTarifa($item, $nueva, $actual);
-            $tratamiento = self::resolverTratamientoTributario($nueva->tip_afe_igv, $nueva->destino_tributario);
+            $tratamiento = ConfiguracionAgencia::completarTratamientoTributario($nueva->tip_afe_igv, $nueva->destino_tributario);
 
             $item->update([
                 'proveedor_tarifa_id' => $nueva->id,
@@ -266,7 +243,7 @@ class AlternativaItemController extends Controller
                 'destino_tributario' => $tratamiento['destino_tributario'],
             ]);
 
-            $this->recalcularTotalAlternativa($alternativa);
+            $alternativa->recalcularTotal();
 
             return null;
         });
@@ -322,7 +299,7 @@ class AlternativaItemController extends Controller
             if ($alternativa->descuento_global_pct !== null && (float) $alternativa->descuento_global_pct > 0) {
                 app(AlternativaController::class)->aplicarDescuentoGlobal($alternativa, (float) $alternativa->descuento_global_pct);
             } else {
-                $this->recalcularTotalAlternativa($alternativa);
+                $alternativa->recalcularTotal();
             }
         });
 
@@ -365,7 +342,7 @@ class AlternativaItemController extends Controller
             $item->delete();
         });
 
-        $this->recalcularTotalAlternativa($alternativa);
+        $alternativa->recalcularTotal();
 
         return response()->json(['code' => 200, 'message' => 'Ítem eliminado correctamente', 'alternativa' => $alternativa->fresh('items')]);
     }
@@ -414,7 +391,7 @@ class AlternativaItemController extends Controller
             }
         });
 
-        $this->recalcularTotalAlternativa($alternativa);
+        $alternativa->recalcularTotal();
 
         return response()->json(['code' => 200, 'message' => 'Grupo eliminado correctamente']);
     }
@@ -443,7 +420,7 @@ class AlternativaItemController extends Controller
         $validator = Validator::make($request->all(), [
             'paquete_plantilla_id' => 'required|integer|exists:paquetes_plantilla,id',
             'dia_referencial' => 'required|integer|min:1',
-            'alternativa_destino_id' => ['nullable', 'integer', $this->reglaAlternativaDestinoId($alternativa)],
+            'alternativa_destino_id' => ['nullable', 'integer', $alternativa->reglaDestinoId()],
         ]);
 
         if ($validator->fails()) {
@@ -454,7 +431,7 @@ class AlternativaItemController extends Controller
         $paquete = PaquetePlantilla::findOrFail($validado['paquete_plantilla_id']);
         // Resuelto UNA sola vez por request — todos los ítems de una misma
         // carga de plantilla van al mismo destino (§0/§3 del brief 12f-1).
-        $alternativaDestinoId = $this->resolverAlternativaDestinoId($alternativa, $validado['alternativa_destino_id'] ?? null);
+        $alternativaDestinoId = $alternativa->destinoIdODefault($validado['alternativa_destino_id'] ?? null);
 
         // Fila 13, fase 1b (§5b): con modo_tours='nuevo' el tour entra como
         // línea propia (TourLineaService); todo lo de abajo es el camino
@@ -561,7 +538,7 @@ class AlternativaItemController extends Controller
                 ]);
             }
 
-            $this->recalcularTotalAlternativa($alternativa);
+            $alternativa->recalcularTotal();
         });
 
         return response()->json([
@@ -706,7 +683,7 @@ class AlternativaItemController extends Controller
                     }
                 }
 
-                $this->recalcularTotalAlternativa($alternativa);
+                $alternativa->recalcularTotal();
 
                 return $resultado;
             });
@@ -757,7 +734,7 @@ class AlternativaItemController extends Controller
 
         DB::transaction(function () use ($items, $alternativa) {
             AlternativaItem::whereIn('id', $items->pluck('id'))->delete();
-            $this->recalcularTotalAlternativa($alternativa);
+            $alternativa->recalcularTotal();
         });
 
         return response()->json(['code' => 200, 'message' => 'Tour quitado correctamente']);
@@ -812,7 +789,7 @@ class AlternativaItemController extends Controller
                 CotizacionPasajeAereo::whereIn('alternativa_item_id', $aereos)->delete();
             }
             AlternativaItem::whereIn('id', $items->pluck('id'))->delete();
-            $this->recalcularTotalAlternativa($alternativa);
+            $alternativa->recalcularTotal();
 
             return null;
         });
@@ -891,7 +868,7 @@ class AlternativaItemController extends Controller
 
         DB::transaction(function () use ($lineas, $alternativa, $validator) {
             $this->tourLinea->fijarPrecio($lineas, $alternativa, (float) $validator->validated()['precio']);
-            $this->recalcularTotalAlternativa($alternativa);
+            $alternativa->recalcularTotal();
         });
 
         return response()->json(['code' => 200, 'message' => 'Precio actualizado correctamente', 'alternativa' => $alternativa->fresh('items')]);
@@ -920,7 +897,7 @@ class AlternativaItemController extends Controller
 
         $resultado = DB::transaction(function () use ($alternativa) {
             $resultado = $this->tourLinea->recalcularTemporadas($alternativa);
-            $this->recalcularTotalAlternativa($alternativa);
+            $alternativa->recalcularTotal();
 
             return $resultado;
         });
@@ -1018,7 +995,7 @@ class AlternativaItemController extends Controller
     }
 
     // ── origen_tipo=proveedor ─────────────────────────────────────────
-    private function crearItemProveedor(Request $request, Alternativa $alternativa): JsonResponse
+    private function crearItemProveedor(Request $request, Alternativa $alternativa): AlternativaItem
     {
         $validator = Validator::make($request->all(), [
             'proveedor_tarifa_id' => 'nullable|integer|exists:proveedor_tarifas,id',
@@ -1051,7 +1028,7 @@ class AlternativaItemController extends Controller
             // configurado (antes vivía solo en el hotel de un
             // paquete_plantilla, ver crearItemHotelPlantilla(), eliminado).
             'camas_adicionales_nino' => 'nullable|integer|min:0',
-            'alternativa_destino_id' => ['nullable', 'integer', $this->reglaAlternativaDestinoId($alternativa)],
+            'alternativa_destino_id' => ['nullable', 'integer', $alternativa->reglaDestinoId()],
             // Sesión M4 — el picker (HabitacionMatrixPicker.vue) genera el
             // UUID una sola vez cliente-side y lo manda igual en cada
             // llamada de "Agregar N opciones como grupo" (M1: agrupador
@@ -1063,7 +1040,7 @@ class AlternativaItemController extends Controller
         ]);
 
         if ($validator->fails()) {
-            return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
+            throw new AltaItemException($validator->errors()->first());
         }
 
         $validado = $validator->validated();
@@ -1082,7 +1059,7 @@ class AlternativaItemController extends Controller
         // PriceEngineService, compartido con la vista previa de Venta directa.
         $motivoNoUsable = $tarifa ? $this->priceEngine->motivoTarifaNoUsable($tarifa) : null;
         if ($motivoNoUsable) {
-            return response()->json(['code' => 422, 'message' => $motivoNoUsable], 422);
+            throw new AltaItemException($motivoNoUsable);
         }
 
         if ($tarifa) {
@@ -1102,9 +1079,6 @@ class AlternativaItemController extends Controller
                 $camasAdicionales = $validado['camas_adicionales_nino'] ?? 0;
                 if ($camasAdicionales > 0) {
                     $resultadoCama = $this->aplicarCamaAdicional($alternativa, $tarifa, $paxIncluidos, $camasAdicionales);
-                    if ($resultadoCama instanceof JsonResponse) {
-                        return $resultadoCama;
-                    }
 
                     $costoSnapshot += $resultadoCama['costo'];
                     $precioVentaSnapshot += $resultadoCama['venta'];
@@ -1128,14 +1102,14 @@ class AlternativaItemController extends Controller
         }
 
         $tratamientoTributario = match (true) {
-            (bool) $tarifa => $this->resolverTratamientoTributario($tarifa->tip_afe_igv, $tarifa->destino_tributario),
-            (bool) $opcionHotelTarifa => $this->resolverTratamientoTributario($opcionHotelTarifa->tip_afe_igv, $opcionHotelTarifa->destino_tributario),
-            default => $this->resolverTratamientoTributario($validado['tip_afe_igv'] ?? null, $validado['destino_tributario'] ?? null),
+            (bool) $tarifa => ConfiguracionAgencia::completarTratamientoTributario($tarifa->tip_afe_igv, $tarifa->destino_tributario),
+            (bool) $opcionHotelTarifa => ConfiguracionAgencia::completarTratamientoTributario($opcionHotelTarifa->tip_afe_igv, $opcionHotelTarifa->destino_tributario),
+            default => ConfiguracionAgencia::completarTratamientoTributario($validado['tip_afe_igv'] ?? null, $validado['destino_tributario'] ?? null),
         };
 
         $item = AlternativaItem::create([
             'alternativa_id' => $alternativa->id,
-            'alternativa_destino_id' => $this->resolverAlternativaDestinoId($alternativa, $validado['alternativa_destino_id'] ?? null),
+            'alternativa_destino_id' => $alternativa->destinoIdODefault($validado['alternativa_destino_id'] ?? null),
             'origen_tipo' => AlternativaItem::ORIGEN_PROVEEDOR,
             'proveedor_tarifa_id' => $tarifa?->id,
             'opcion_hotel_tarifa_id' => $opcionHotelTarifa?->id,
@@ -1155,9 +1129,9 @@ class AlternativaItemController extends Controller
             'destino_tributario' => $tratamientoTributario['destino_tributario'],
         ]);
 
-        $this->recalcularTotalAlternativa($alternativa);
+        $alternativa->recalcularTotal();
 
-        return response()->json(['code' => 200, 'message' => 'Ítem agregado correctamente', 'alternativa_item' => $item]);
+        return $item;
     }
 
     // Consolidación de hoteles — extraído de lo que antes era
@@ -1168,15 +1142,12 @@ class AlternativaItemController extends Controller
     // general de la agencia y aun así caer dentro del tramo de cama
     // adicional propio de ESTE proveedor. Devuelve el JsonResponse de error
     // (422) tal cual para que el caller lo retorne sin envolver de nuevo.
-    private function aplicarCamaAdicional(Alternativa $alternativa, ProveedorTarifa $tarifa, ?array $paxIncluidos, int $camasAdicionales): array|JsonResponse
+    private function aplicarCamaAdicional(Alternativa $alternativa, ProveedorTarifa $tarifa, ?array $paxIncluidos, int $camasAdicionales): array
     {
         $alojamiento = $tarifa->proveedorServicio?->proveedor?->alojamientoDetalle;
 
         if (! $alojamiento) {
-            return response()->json([
-                'code' => 422,
-                'message' => 'Este proveedor no tiene configurado el detalle de alojamiento (tramo de edad para cama adicional).',
-            ], 422);
+            throw new AltaItemException('Este proveedor no tiene configurado el detalle de alojamiento (tramo de edad para cama adicional).');
         }
 
         $tienePaxEnTramo = CotizacionPasajero::where('cotizacion_id', $alternativa->cotizacion_id)
@@ -1190,17 +1161,11 @@ class AlternativaItemController extends Controller
             ->exists();
 
         if (! $tienePaxEnTramo) {
-            return response()->json([
-                'code' => 422,
-                'message' => 'Cama adicional solo aplica si pax_incluidos tiene al menos un pasajero dentro del tramo de edad de cama adicional de este proveedor.',
-            ], 422);
+            throw new AltaItemException('Cama adicional solo aplica si pax_incluidos tiene al menos un pasajero dentro del tramo de edad de cama adicional de este proveedor.');
         }
 
         if ($tarifa->precio_costo_cama_adicional === null || $tarifa->precio_venta_cama_adicional === null) {
-            return response()->json([
-                'code' => 422,
-                'message' => 'Esta tarifa no tiene precio de cama adicional configurado.',
-            ], 422);
+            throw new AltaItemException('Esta tarifa no tiene precio de cama adicional configurado.');
         }
 
         return [
@@ -1219,7 +1184,7 @@ class AlternativaItemController extends Controller
     // total). Ambas comparten toda la validación de la OpcionMayorista
     // (pertenece a esta alternativa, está 'elegida') y el tratamiento
     // tributario — solo difiere de dónde sale costo_snapshot/precio_venta_snapshot.
-    private function crearItemMayorista(Request $request, Alternativa $alternativa): JsonResponse
+    private function crearItemMayorista(Request $request, Alternativa $alternativa): AlternativaItem
     {
         $validator = Validator::make($request->all(), [
             'opcion_mayorista_id' => 'required|integer|exists:opcion_mayorista,id',
@@ -1230,23 +1195,23 @@ class AlternativaItemController extends Controller
             'dia_referencial' => 'nullable|integer|min:1',
             'tip_afe_igv' => 'nullable|string|in:10,20,30',
             'destino_tributario' => 'nullable|string|in:amazonia,nacional,extranjero',
-            'alternativa_destino_id' => ['nullable', 'integer', $this->reglaAlternativaDestinoId($alternativa)],
+            'alternativa_destino_id' => ['nullable', 'integer', $alternativa->reglaDestinoId()],
             // Sesión M4 — ver mismo campo en crearItemProveedor().
             'grupo_opcion_id' => 'nullable|uuid',
         ]);
 
         if ($validator->fails()) {
-            return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
+            throw new AltaItemException($validator->errors()->first());
         }
 
         $validado = $validator->validated();
         $opcion = OpcionMayorista::findOrFail($validado['opcion_mayorista_id']);
 
         if ($opcion->alternativa_id !== $alternativa->id) {
-            return response()->json(['code' => 422, 'message' => 'La opción de mayorista no pertenece a esta alternativa.'], 422);
+            throw new AltaItemException('La opción de mayorista no pertenece a esta alternativa.');
         }
         if ($opcion->estado !== 'elegida') {
-            return response()->json(['code' => 422, 'message' => 'Marcá la opción de mayorista como elegida antes de agregarla al ítem.'], 422);
+            throw new AltaItemException('Marcá la opción de mayorista como elegida antes de agregarla al ítem.');
         }
 
         $tarifaHotel = null;
@@ -1255,16 +1220,16 @@ class AlternativaItemController extends Controller
         if (isset($validado['opcion_hotel_tarifa_id'])) {
             $tarifaHotel = OpcionHotelTarifa::with('opcionHotel')->findOrFail($validado['opcion_hotel_tarifa_id']);
             if ($tarifaHotel->opcionHotel?->opcion_mayorista_id !== $opcion->id) {
-                return response()->json(['code' => 422, 'message' => 'Esa tarifa de habitación no pertenece a la opción de mayorista indicada.'], 422);
+                throw new AltaItemException('Esa tarifa de habitación no pertenece a la opción de mayorista indicada.');
             }
         } else {
             $opcional = OpcionMayoristaOpcional::findOrFail($validado['opcion_mayorista_opcional_id']);
             if ($opcional->opcion_mayorista_id !== $opcion->id) {
-                return response()->json(['code' => 422, 'message' => 'Ese opcional no pertenece a la opción de mayorista indicada.'], 422);
+                throw new AltaItemException('Ese opcional no pertenece a la opción de mayorista indicada.');
             }
         }
 
-        $tratamientoTributario = $this->resolverTratamientoTributario($validado['tip_afe_igv'] ?? null, $validado['destino_tributario'] ?? null);
+        $tratamientoTributario = ConfiguracionAgencia::completarTratamientoTributario($validado['tip_afe_igv'] ?? null, $validado['destino_tributario'] ?? null);
 
         // Un opcional (OpcionMayoristaOpcional) no tiene columna de costo —
         // solo el precio que se le cobra al cliente (nunca se cargó margen
@@ -1276,7 +1241,7 @@ class AlternativaItemController extends Controller
 
         $item = AlternativaItem::create([
             'alternativa_id' => $alternativa->id,
-            'alternativa_destino_id' => $this->resolverAlternativaDestinoId($alternativa, $validado['alternativa_destino_id'] ?? null),
+            'alternativa_destino_id' => $alternativa->destinoIdODefault($validado['alternativa_destino_id'] ?? null),
             'origen_tipo' => AlternativaItem::ORIGEN_MAYORISTA,
             'opcion_mayorista_id' => $opcion->id,
             // Sesión M2 — gap real heredado: esta columna existía desde
@@ -1299,9 +1264,9 @@ class AlternativaItemController extends Controller
             'destino_tributario' => $tratamientoTributario['destino_tributario'],
         ]);
 
-        $this->recalcularTotalAlternativa($alternativa);
+        $alternativa->recalcularTotal();
 
-        return response()->json(['code' => 200, 'message' => 'Ítem de mayorista agregado correctamente', 'alternativa_item' => $item]);
+        return $item;
     }
 
     // ── origen_tipo=guia ─────────────────────────────────────────────────
@@ -1312,7 +1277,7 @@ class AlternativaItemController extends Controller
     // resolverCostoVentaItem() ya aplica para guia_tarifa_id — costo_diario
     // es un monto fijo del día, no se reparte por pasajero, mismo criterio
     // que transporte privado/hotel (modo_precio='tarifa_fija').
-    private function crearItemGuia(Request $request, Alternativa $alternativa): JsonResponse
+    private function crearItemGuia(Request $request, Alternativa $alternativa): AlternativaItem
     {
         $validator = Validator::make($request->all(), [
             'guia_tarifa_id' => 'required|integer|exists:guia_tarifas,id',
@@ -1322,11 +1287,11 @@ class AlternativaItemController extends Controller
             'dia_referencial' => 'nullable|integer|min:1',
             'tip_afe_igv' => 'nullable|string|in:10,20,30',
             'destino_tributario' => 'nullable|string|in:amazonia,nacional,extranjero',
-            'alternativa_destino_id' => ['nullable', 'integer', $this->reglaAlternativaDestinoId($alternativa)],
+            'alternativa_destino_id' => ['nullable', 'integer', $alternativa->reglaDestinoId()],
         ]);
 
         if ($validator->fails()) {
-            return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
+            throw new AltaItemException($validator->errors()->first());
         }
 
         $validado = $validator->validated();
@@ -1338,10 +1303,7 @@ class AlternativaItemController extends Controller
         // — sin este check, un guia_tarifa_id ya desactivado (ej. de una
         // pestaña vieja) igual se podía usar.
         if (! $guiaTarifa->activo) {
-            return response()->json([
-                'code' => 422,
-                'message' => 'Esta tarifa fue retirada del catálogo activo — no se puede usar en un ítem nuevo.',
-            ], 422);
+            throw new AltaItemException('Esta tarifa fue retirada del catálogo activo — no se puede usar en un ítem nuevo.');
         }
 
         // Como en crearItemProveedor() (T-028): una versión vieja (cerrada) o futura
@@ -1351,7 +1313,7 @@ class AlternativaItemController extends Controller
                 ? 'Esta tarifa todavía no está vigente (desde '.$guiaTarifa->vigente_desde->format('d/m/Y').').'
                 : 'Esta tarifa ya no está vigente: usa la versión actual.';
 
-            return response()->json(['code' => 422, 'message' => $mensaje], 422);
+            throw new AltaItemException($mensaje);
         }
 
         $calculo = $this->priceEngine->calcular(
@@ -1363,11 +1325,11 @@ class AlternativaItemController extends Controller
             null
         );
 
-        $tratamientoTributario = $this->resolverTratamientoTributario($validado['tip_afe_igv'] ?? null, $validado['destino_tributario'] ?? null);
+        $tratamientoTributario = ConfiguracionAgencia::completarTratamientoTributario($validado['tip_afe_igv'] ?? null, $validado['destino_tributario'] ?? null);
 
         $item = AlternativaItem::create([
             'alternativa_id' => $alternativa->id,
-            'alternativa_destino_id' => $this->resolverAlternativaDestinoId($alternativa, $validado['alternativa_destino_id'] ?? null),
+            'alternativa_destino_id' => $alternativa->destinoIdODefault($validado['alternativa_destino_id'] ?? null),
             'origen_tipo' => AlternativaItem::ORIGEN_GUIA,
             'guia_tarifa_id' => $guiaTarifa->id,
             'modo_precio' => 'tarifa_fija',
@@ -1382,9 +1344,9 @@ class AlternativaItemController extends Controller
             'destino_tributario' => $tratamientoTributario['destino_tributario'],
         ]);
 
-        $this->recalcularTotalAlternativa($alternativa);
+        $alternativa->recalcularTotal();
 
-        return response()->json(['code' => 200, 'message' => 'Ítem de guía agregado correctamente', 'alternativa_item' => $item]);
+        return $item;
     }
 
     // Recalculo en vivo del formulario de pasaje aéreo (PasajeAereoForm.vue)
@@ -1470,27 +1432,27 @@ class AlternativaItemController extends Controller
             ]);
         });
 
-        $this->recalcularTotalAlternativa($alternativa);
+        $alternativa->recalcularTotal();
         $item->load('cotizacionPasajeAereo');
 
         return response()->json(['code' => 200, 'message' => 'Pasaje aéreo actualizado correctamente', 'alternativa_item' => $item->fresh(['cotizacionPasajeAereo'])]);
     }
 
     // ── origen_tipo=pasaje_aereo ────────────────────────────────────────
-    private function crearItemPasajeAereo(Request $request, Alternativa $alternativa): JsonResponse
+    private function crearItemPasajeAereo(Request $request, Alternativa $alternativa): AlternativaItem
     {
         $validado = $this->validarPasajeAereo($request, $alternativa);
         if ($validado instanceof JsonResponse) {
-            return $validado;
+            throw new AltaItemException($validado->getData(true)['message']);
         }
 
         $resultado = $this->calcularPasajeAereo($alternativa, $validado);
-        $tratamientoTributario = $this->resolverTratamientoTributario($validado['tip_afe_igv'] ?? null, $validado['destino_tributario'] ?? null);
+        $tratamientoTributario = ConfiguracionAgencia::completarTratamientoTributario($validado['tip_afe_igv'] ?? null, $validado['destino_tributario'] ?? null);
 
         $item = DB::transaction(function () use ($alternativa, $validado, $resultado, $tratamientoTributario) {
             $item = AlternativaItem::create([
                 'alternativa_id' => $alternativa->id,
-                'alternativa_destino_id' => $this->resolverAlternativaDestinoId($alternativa, $validado['alternativa_destino_id'] ?? null),
+                'alternativa_destino_id' => $alternativa->destinoIdODefault($validado['alternativa_destino_id'] ?? null),
                 'origen_tipo' => AlternativaItem::ORIGEN_PASAJE_AEREO,
                 'modo_precio' => 'por_persona', // el reparto adulto/niño/infante ya está resuelto en venta_total
                 'cantidad' => 1,
@@ -1526,10 +1488,10 @@ class AlternativaItemController extends Controller
             return $item;
         });
 
-        $this->recalcularTotalAlternativa($alternativa);
+        $alternativa->recalcularTotal();
         $item->load('cotizacionPasajeAereo');
 
-        return response()->json(['code' => 200, 'message' => 'Pasaje aéreo agregado correctamente', 'alternativa_item' => $item]);
+        return $item;
     }
 
     private function validarPasajeAereo(Request $request, Alternativa $alternativa): array|JsonResponse
@@ -1565,7 +1527,7 @@ class AlternativaItemController extends Controller
             // Sesión 12f-1 — solo tiene efecto real en la creación
             // (crearItemPasajeAereo()); actualizarPasajeAereo() no lo lee,
             // el destino de un ítem ya existente no se mueve por acá.
-            'alternativa_destino_id' => ['nullable', 'integer', $this->reglaAlternativaDestinoId($alternativa)],
+            'alternativa_destino_id' => ['nullable', 'integer', $alternativa->reglaDestinoId()],
             // Vigencia de la tarifa aérea (09-oct-2026): fecha-hora límite que
             // da la aerolínea, escrita en hora de Perú; se guarda en UTC.
             'tarifa_valida_hasta' => 'nullable|date_format:Y-m-d H:i',
@@ -1638,7 +1600,7 @@ class AlternativaItemController extends Controller
     // crearReservaDesdeAlternativa()). proveedor_sugerido_manual es dato
     // interno (nunca visible al cliente), solo para prellenar el nombre al
     // promover este ítem a un proveedor real (ver promoverAProveedor()).
-    private function crearItemManual(Request $request, Alternativa $alternativa): JsonResponse
+    private function crearItemManual(Request $request, Alternativa $alternativa): AlternativaItem
     {
         $validator = Validator::make($request->all(), [
             'descripcion_manual' => 'required|string|max:500',
@@ -1652,19 +1614,19 @@ class AlternativaItemController extends Controller
             'dia_referencial' => 'nullable|integer|min:1',
             'tip_afe_igv' => 'nullable|string|in:10,20,30',
             'destino_tributario' => 'nullable|string|in:amazonia,nacional,extranjero',
-            'alternativa_destino_id' => ['nullable', 'integer', $this->reglaAlternativaDestinoId($alternativa)],
+            'alternativa_destino_id' => ['nullable', 'integer', $alternativa->reglaDestinoId()],
         ]);
 
         if ($validator->fails()) {
-            return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
+            throw new AltaItemException($validator->errors()->first());
         }
 
         $validado = $validator->validated();
-        $tratamientoTributario = $this->resolverTratamientoTributario($validado['tip_afe_igv'] ?? null, $validado['destino_tributario'] ?? null);
+        $tratamientoTributario = ConfiguracionAgencia::completarTratamientoTributario($validado['tip_afe_igv'] ?? null, $validado['destino_tributario'] ?? null);
 
         $item = AlternativaItem::create([
             'alternativa_id' => $alternativa->id,
-            'alternativa_destino_id' => $this->resolverAlternativaDestinoId($alternativa, $validado['alternativa_destino_id'] ?? null),
+            'alternativa_destino_id' => $alternativa->destinoIdODefault($validado['alternativa_destino_id'] ?? null),
             'origen_tipo' => AlternativaItem::ORIGEN_MANUAL,
             'descripcion_manual' => $validado['descripcion_manual'],
             'proveedor_sugerido_manual' => $validado['proveedor_sugerido_manual'] ?? null,
@@ -1680,9 +1642,9 @@ class AlternativaItemController extends Controller
             'destino_tributario' => $tratamientoTributario['destino_tributario'],
         ]);
 
-        $this->recalcularTotalAlternativa($alternativa);
+        $alternativa->recalcularTotal();
 
-        return response()->json(['code' => 200, 'message' => 'Ítem manual agregado correctamente', 'alternativa_item' => $item]);
+        return $item;
     }
 
     // Edición estructural de un ítem manual (descripción/proveedor/costo/
@@ -1743,7 +1705,7 @@ class AlternativaItemController extends Controller
             'destino_tributario' => $validado['destino_tributario'] ?? $item->destino_tributario,
         ]);
 
-        $this->recalcularTotalAlternativa($alternativa);
+        $alternativa->recalcularTotal();
 
         return response()->json(['code' => 200, 'message' => 'Ítem manual actualizado correctamente', 'alternativa_item' => $item->fresh()]);
     }
@@ -1805,7 +1767,7 @@ class AlternativaItemController extends Controller
         // tiene capturado (crearItemManual()/actualizarManual()), con
         // fallback al default de agencia solo si el ítem es de antes de
         // este fix y nunca lo tuvo.
-        $tratamientoTributario = $this->resolverTratamientoTributario($item->tip_afe_igv, $item->destino_tributario);
+        $tratamientoTributario = ConfiguracionAgencia::completarTratamientoTributario($item->tip_afe_igv, $item->destino_tributario);
 
         [$proveedor, $tarifa] = DB::transaction(function () use ($item, $v, $destinoServicio, $tipoId, $margenValor, $tratamientoTributario) {
             $proveedor = Proveedor::create([
@@ -1848,41 +1810,10 @@ class AlternativaItemController extends Controller
         ]);
     }
 
-    // Análisis de impuestos (28-ago-2026) — resuelve el tratamiento
-    // tributario final de un ítem sin proveedor_tarifa propia (mayorista/
-    // guia/pasaje_aereo/manual, y el caso "proveedor sin tarifa" de precio
-    // de referencia): usa lo que mandó el usuario si vino completo, y
-    // rellena con el default de la agencia (configuracion_agencia) solo lo
-    // que falte. Snapshot en creación — el default de agencia NO se
-    // recalcula después si cambia (mismo criterio que costo_snapshot).
-    public static function resolverTratamientoTributario(?string $tipAfeIgv, ?string $destinoTributario): array
-    {
-        if ($tipAfeIgv !== null && $destinoTributario !== null) {
-            return ['tip_afe_igv' => $tipAfeIgv, 'destino_tributario' => $destinoTributario];
-        }
-
-        $default = ConfiguracionAgencia::tratamientoTributarioDefault();
-
-        return [
-            'tip_afe_igv' => $tipAfeIgv ?? $default['tip_afe_igv'],
-            'destino_tributario' => $destinoTributario ?? $default['destino_tributario'],
-        ];
-    }
-
     private function contarPasajerosPorTipo(int $cotizacionId, ?array $paxIncluidosIds): array
     {
         // T-022: movido a PriceEngineService para que "Actualizar al precio nuevo" cuente igual.
         return $this->priceEngine->contarPasajerosPorTipo($cotizacionId, $paxIncluidosIds);
-    }
-
-    // Sesión M1 — calcularTotalEfectivo() respeta grupos de opciones de
-    // hotel (solo la elegida de un grupo resuelto suma; el mínimo de un
-    // grupo abierto suma una sola vez, ver AlternativaItem::
-    // calcularTotalEfectivo()). Sin grupos, se comporta idéntico a antes.
-    private function recalcularTotalAlternativa(Alternativa $alternativa): void
-    {
-        $total = AlternativaItem::calcularTotalEfectivo($alternativa->items()->get())['total'];
-        $alternativa->update(['total' => $total]);
     }
 
 }

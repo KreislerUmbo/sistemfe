@@ -55,7 +55,7 @@ class ConfiguracionAgencia extends Model
         // Análisis de impuestos (28-ago-2026) — default para prellenar el
         // tratamiento tributario de ítems sin proveedor_tarifa propia
         // (manual/mayorista/guia/pasaje_aereo). Ver
-        // AlternativaItemController::resolverTratamientoTributarioDefault().
+        // ConfiguracionAgencia::completarTratamientoTributario().
         'tip_afe_igv_default',
         'destino_tributario_default',
         // Fila 13, fase 1b (§5b): update() de la pantalla no lo valida ni lo
@@ -83,6 +83,23 @@ class ConfiguracionAgencia extends Model
         return [
             'tip_afe_igv' => $config->tip_afe_igv_default ?? '10',
             'destino_tributario' => $config->destino_tributario_default ?? 'nacional',
+        ];
+    }
+
+    // Tratamiento tributario final de un ítem sin tarifa propia: lo que mandó el usuario si vino
+    // completo y, de lo que falte, el default de la agencia. Es un snapshot al crear: si el default
+    // cambia después, el ítem no se recalcula (igual que costo_snapshot).
+    public static function completarTratamientoTributario(?string $tipAfeIgv, ?string $destinoTributario): array
+    {
+        if ($tipAfeIgv !== null && $destinoTributario !== null) {
+            return ['tip_afe_igv' => $tipAfeIgv, 'destino_tributario' => $destinoTributario];
+        }
+
+        $default = static::tratamientoTributarioDefault();
+
+        return [
+            'tip_afe_igv' => $tipAfeIgv ?? $default['tip_afe_igv'],
+            'destino_tributario' => $destinoTributario ?? $default['destino_tributario'],
         ];
     }
 

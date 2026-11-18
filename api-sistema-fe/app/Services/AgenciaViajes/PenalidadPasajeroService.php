@@ -56,7 +56,7 @@ class PenalidadPasajeroService
             $item = AlternativaItem::create([
                 'alternativa_id' => $alternativa->id,
                 // Primer destino de la alternativa, como un ítem manual del cotizador
-                // (AlternativaItemController::resolverAlternativaDestinoId()).
+                // (Alternativa::destinoIdODefault()).
                 'alternativa_destino_id' => $alternativa->destinos()->value('id'),
                 'origen_tipo' => AlternativaItem::ORIGEN_MANUAL,
                 'modo_precio' => 'tarifa_fija',
@@ -122,7 +122,7 @@ class PenalidadPasajeroService
         return ReservaPasajero::where('reserva_id', $pasajero->reserva_id)->where('id', '<=', $pasajero->id)->count();
     }
 
-    // Mismo cálculo que AlternativaItemController::recalcularTotalAlternativa().
+    // Mismo cálculo que Alternativa::recalcularTotal().
     private function recalcularTotal(ReservaModificacion $modificacion): void
     {
         $alternativa = $modificacion->alternativaNueva()->firstOrFail();
