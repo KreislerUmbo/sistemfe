@@ -1529,15 +1529,13 @@ import { useToast } from '@/composables/useToast';
 import { cotizacionService } from '@/services/admin/cotizacionService';
 import { alternativaService } from '@/services/admin/alternativaService';
 import { alternativaItemService } from '@/services/admin/alternativaItemService';
-import { opcionMayoristaService } from '@/services/admin/opcionMayoristaService';
-import { proveedorService } from '@/services/admin/proveedorService';
 import { servicioService } from '@/services/admin/servicioService';
 import { reservaService } from '@/services/admin/reservaService';
 import { useAgenciaViajesCatalogosStore } from '@/stores/agenciaViajesCatalogos';
 import { formatDiaCorto, formatFecha, formatFechaHora, hoyPeru, partesFechaHoraPeru } from '@/helpers/fecha';
 import { guiaService } from '@/services/admin/guiaService';
 import { tipoCambioAgenciaService } from '@/services/admin/tipoCambioAgenciaService';
-import type { Alternativa, AlternativaItem, ProveedorTarifa, OpcionMayorista, OpcionMayoristaTour, OpcionMayoristaOpcional, Proveedor, GuiaTarifa, TipAfeIgv, DestinoTributario } from '@/types/agencia-viajes';
+import type { Alternativa, AlternativaItem, Proveedor, GuiaTarifa, TipAfeIgv, DestinoTributario } from '@/types/agencia-viajes';
 import type { Client } from '@/types/clients';
 import type { AvisoSalida } from '@/helpers/avisosProveedores';
 import { filasDelBloque } from '@/helpers/agencia-viajes/cotizador/bloquesLienzo';
@@ -1555,7 +1553,9 @@ import { useBloquesLienzo } from '@/composables/agencia-viajes/cotizador/useBloq
 import { useDrawerBiblioteca, pasoDrawerDe } from '@/composables/agencia-viajes/cotizador/useDrawerBiblioteca';
 import { useHotelesLocales } from '@/composables/agencia-viajes/cotizador/useHotelesLocales';
 import { useBibliotecaCotizador } from '@/composables/agencia-viajes/cotizador/useBibliotecaCotizador';
-import { generarUuidGrupo } from '@/helpers/agencia-viajes/cotizador/grupoOpcion';
+import { useOpcionesMayorista } from '@/composables/agencia-viajes/cotizador/useOpcionesMayorista';
+import { useHotelesMayorista } from '@/composables/agencia-viajes/cotizador/useHotelesMayorista';
+import { useOpcionalesMayorista } from '@/composables/agencia-viajes/cotizador/useOpcionalesMayorista';
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
 
@@ -2387,501 +2387,39 @@ const {
 });
 
 // ── Comparador de mayoristas ──────────────────────────────────────────
-const opcionesMayorista = ref<OpcionMayorista[]>([]);
-// T-039: los mayoristas y hoteles se buscan en el servidor (ProveedorBuscador
-// con tipo-id); acá solo queda el id de cada tipo del catálogo real.
+// T-039: los mayoristas y hoteles se buscan en el servidor (ProveedorBuscador con tipo-id); acá
+// solo queda el id de cada tipo del catálogo real, que se llena en onMounted.
 const tipoMayoristaId = ref<number | null>(null);
 const tipoHotelId = ref<number | null>(null);
-const opcionHotelesActivaId = ref<number | null>(null);
-const mostrarFormMayorista = ref(false);
-const opcionMayoristaEnEdicionId = ref<number | null>(null);
-const mostrarFormHotel = ref<number | null>(null);
-const mostrarOpcionalesId = ref<number | null>(null);
-const mostrarFormOpcional = ref<number | null>(null);
-const formOpcional = ref({
-    nombre: '', precio_por_persona: 0, moneda: 'USD' as 'PEN' | 'USD', incluye: '', no_incluye: '',
-});
-// Simulación Panamá (04-sep-2026) — tours incluidos con itinerario real.
-const mostrarToursId = ref<number | null>(null);
-const mostrarFormTourIncluido = ref<number | null>(null);
 
-const formHotel = ref<{
-    nombre_hotel: string; proveedor_id: number | null;
-    tarifas: Array<{ tipo_habitacion: string; precio_costo: number; precio_venta: number; proveedor_tarifa_id?: number | null }>;
-}>({
-    nombre_hotel: '', proveedor_id: null, tarifas: [{ tipo_habitacion: 'doble', precio_costo: 0, precio_venta: 0, proveedor_tarifa_id: null }],
+const {
+    opcionesMayorista, opcionHotelesActivaId, mostrarFormMayorista, opcionMayoristaEnEdicionId,
+    cargarOpcionesMayorista, verHoteles, eliminandoOpcionMayoristaId, eliminarOpcionMayorista,
+    eligiendoOpcionId, elegirOpcion, descartandoOpcionId, descartarOpcion, reactivandoOpcionId, reactivarOpcion,
+    abrirFormEditarOpcionMayorista, onOpcionMayoristaGuardada, agregarItemMayorista, agregarGrupoMayorista,
+} = useOpcionesMayorista({
+    alternativaActiva, cargarCotizacion, alternativaDestinos, destinoActivoId, mostrarChipsDestino,
+    diaActivoParaAgregar, cantidadAdultosCotizacion, onServicioSueltoAgregado,
 });
 
-// 05-sep-2026 — hasta 3 fotos por hotel, pedido del usuario. El hotel recién
-// creado todavía no tiene id mientras se completa este form, así que las
-// fotos se guardan como Files pendientes y se suben DESPUÉS de crearHotel()
-// (ver guardarHotel()), contra el mismo endpoint que usa la edición.
-// tipoFoto default 'habitacion' — el vendedor lo corrige con el select
-// inline si la foto es de fachada (mejora del PDF de cotización, máx. 1
-// fachada + 2 habitación, mismo tope que valida el backend al subir).
-const fotosHotelNuevo = ref<Array<{ file: File; previewUrl: string; tipoFoto: 'fachada' | 'habitacion' }>>([]);
-const onFotosHotelNuevoSeleccionadas = (event: Event) => {
-    const input = event.target as HTMLInputElement;
-    const archivos = Array.from(input.files ?? []);
-    input.value = '';
-    const disponibles = 3 - fotosHotelNuevo.value.length;
-    if (disponibles <= 0) {
-        (Swal as TVueSwalInstance).fire('Límite alcanzado', 'Ya tienes el máximo de 3 fotos por hotel.', 'warning');
-        return;
-    }
-    archivos.slice(0, disponibles).forEach((file) => fotosHotelNuevo.value.push({ file, previewUrl: URL.createObjectURL(file), tipoFoto: 'habitacion' }));
-};
-const quitarFotoHotelNuevo = (idx: number) => {
-    URL.revokeObjectURL(fotosHotelNuevo.value[idx].previewUrl);
-    fotosHotelNuevo.value.splice(idx, 1);
-};
+const {
+    mostrarFormHotel, formHotel, fotosHotelNuevo, onFotosHotelNuevoSeleccionadas, quitarFotoHotelNuevo,
+    onCambiarProveedorHotel, tarifasHotelParaTipo, onElegirTarifaRegistrada, guardandoHotelMayorista, guardarHotel,
+    onGuardarHotelMatrix, onEliminarHotelMatrix, onAgregarFotosHotelMatrix, onEliminarFotoHotelMatrix,
+    hotelParaPromover, onPromoverHotelMatrix, onHotelPromovido, onGuardarTarifaMatrix, onEliminarTarifaMatrix,
+    onAgregarTarifaMatrix, tarifasHotelPlanas,
+} = useHotelesMayorista({ cargarCotizacion, cargarOpcionesMayorista });
 
-// Sesión 11k, Fix 9 — proveedores tipo Hotel (para "usar tarifa registrada")
-// + sus tarifas Hotel una vez elegido uno. Mismo patrón que detalle.vue.
-const tarifasHotelProveedorSeleccionado = ref<ProveedorTarifa[]>([]);
-
-const onCambiarProveedorHotel = async () => {
-    formHotel.value.tarifas.forEach((tf) => { tf.proveedor_tarifa_id = null; });
-    tarifasHotelProveedorSeleccionado.value = formHotel.value.proveedor_id
-        ? (await proveedorService.tarifasHotel(formHotel.value.proveedor_id)).proveedor_tarifas
-        : [];
-};
-
-const tarifasHotelParaTipo = (tipoHabitacion: string) => {
-    return tarifasHotelProveedorSeleccionado.value.filter((t) => t.tipo_habitacion === tipoHabitacion);
-};
-
-const onElegirTarifaRegistrada = (tf: { precio_costo: number; precio_venta: number; proveedor_tarifa_id?: number | null }, event: Event) => {
-    const id = Number((event.target as HTMLSelectElement).value) || null;
-    tf.proveedor_tarifa_id = id;
-    const tarifa = tarifasHotelProveedorSeleccionado.value.find((t) => t.id === id);
-    if (tarifa) {
-        tf.precio_costo = Number(tarifa.precio_costo);
-        tf.precio_venta = Number(tarifa.precio_venta_adulto);
-    }
-};
-
-const cargarOpcionesMayorista = async () => {
-    if (!alternativaActiva.value) return;
-    const res = await opcionMayoristaService.listar(alternativaActiva.value.id);
-    // Sesión 12f-2, §7.1 punto 3 — el comparador actúa sobre el destino
-    // activo, no toda la alternativa. Filtro client-side (sin endpoint
-    // nuevo): alternativa_destino_id ya viene en cada opción desde 12d.
-    const primerDestinoId = alternativaDestinos.value[0]?.id ?? null;
-    opcionesMayorista.value = mostrarChipsDestino.value
-        ? res.opciones_mayorista.filter((op: OpcionMayorista) => (op.alternativa_destino_id ?? primerDestinoId) === destinoActivoId.value)
-        : res.opciones_mayorista;
-};
-
-const verHoteles = (op: OpcionMayorista) => {
-    opcionHotelesActivaId.value = opcionHotelesActivaId.value === op.id ? null : op.id;
-};
-
-const verOpcionales = (op: OpcionMayorista) => {
-    mostrarOpcionalesId.value = mostrarOpcionalesId.value === op.id ? null : op.id;
-};
-
-// Simulación Panamá (04-sep-2026) — tours incluidos con itinerario real.
-const verTours = (op: OpcionMayorista) => {
-    mostrarToursId.value = mostrarToursId.value === op.id ? null : op.id;
-};
-
-const onTourIncluidoAgregado = async (op: OpcionMayorista, _tour: OpcionMayoristaTour) => {
-    mostrarFormTourIncluido.value = null;
-    await cargarOpcionesMayorista();
-};
-
-const quitarTourIncluido = async (tour: OpcionMayoristaTour, op: OpcionMayorista) => {
-    try {
-        await opcionMayoristaService.quitarTour(tour.id);
-        await cargarOpcionesMayorista();
-    } catch (error: any) {
-        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo quitar el tour', 'error');
-    }
-};
-
-// Modo edición de un tour incluido (04-sep-2026) — mismo TourIncluidoForm
-// de alta, con :tour-existente puesto. abrirEdicionTour() cierra el form de
-// alta si estaba abierto (y viceversa, ver template) para no mostrar los
-// dos a la vez.
-const tourEnEdicionId = ref<number | null>(null);
-const abrirEdicionTour = (tour: OpcionMayoristaTour) => {
-    mostrarFormTourIncluido.value = null;
-    tourEnEdicionId.value = tour.id;
-};
-const onTourIncluidoActualizado = async (_tour: OpcionMayoristaTour) => {
-    tourEnEdicionId.value = null;
-    await cargarOpcionesMayorista();
-};
-
-// ── Eliminar bloque completo de una opción de mayorista (04-sep-2026) ───
-// Distinto de descartarOpcion() (solo oculta) — borrado real, con el mismo
-// aviso fuerte que ya usa eliminarAlternativa() cuando hay ítems en juego.
-// El backend ya bloquea con 422 si algún ítem de esta opción tiene una
-// reserva generada, o si la alternativa ya fue aceptada — ambos casos se
-// muestran tal cual llegan del backend.
-const eliminandoOpcionMayoristaId = ref<number | null>(null);
-const eliminarOpcionMayorista = async (op: OpcionMayorista) => {
-    const confirmacion = await (Swal as TVueSwalInstance).fire({
-        title: '¿Eliminar esta opción de mayorista?',
-        text: 'Se eliminan también sus hoteles, opcionales y tours vinculados (el contenido real de los tours no se borra, solo el vínculo), y cualquier ítem ya agregado al lienzo desde esta opción. Esta acción no se puede deshacer.',
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonText: 'Sí, eliminar',
-        cancelButtonText: 'Cancelar',
-    });
-    if (!confirmacion.isConfirmed) return;
-
-    eliminandoOpcionMayoristaId.value = op.id;
-    try {
-        await opcionMayoristaService.eliminar(op.id);
-        toast.success('Opción de mayorista eliminada');
-        await Promise.all([cargarCotizacion(), cargarOpcionesMayorista()]);
-    } catch (error: any) {
-        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo eliminar la opción', 'error');
-    } finally {
-        eliminandoOpcionMayoristaId.value = null;
-    }
-};
-
-// ── Editar/eliminar hoteles y sus tarifas ya cargados ────────────────────
-// 04-sep-2026 — vive inline en HabitacionMatrixPicker (permitir-gestion-
-// hoteles) desde el hallazgo de duplicación del usuario: la tabla de
-// "elegir" y una lista de gestión aparte mostraban los mismos hoteles dos
-// veces. El picker ya junta los datos de cada mini-form y emite el
-// payload — estos handlers solo llaman al servicio real y refrescan.
-const onGuardarHotelMatrix = async (payload: { id: number; nombre_hotel: string }) => {
-    try {
-        await opcionMayoristaService.actualizarHotel(payload.id, { nombre_hotel: payload.nombre_hotel });
-        await cargarOpcionesMayorista();
-    } catch (error: any) {
-        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo actualizar el hotel', 'error');
-    }
-};
-
-const onEliminarHotelMatrix = async (hotelId: number) => {
-    const confirmacion = await (Swal as TVueSwalInstance).fire({
-        title: '¿Eliminar este hotel?', text: 'Se eliminan también todos sus tipos de habitación cargados. Esta acción no se puede deshacer.',
-        icon: 'warning', showCancelButton: true, confirmButtonText: 'Sí, eliminar', cancelButtonText: 'Cancelar',
-    });
-    if (!confirmacion.isConfirmed) return;
-
-    try {
-        await opcionMayoristaService.eliminarHotel(hotelId);
-        toast.success('Hotel eliminado');
-        await Promise.all([cargarCotizacion(), cargarOpcionesMayorista()]);
-    } catch (error: any) {
-        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo eliminar el hotel', 'error');
-    }
-};
-
-// 05-sep-2026 — hasta 3 fotos por hotel, pedido del usuario. Inmediatos
-// (sin "guardar" que las agrupe), mismo criterio que eliminarFotoExistente()
-// de destinos/form.vue. Una por vez con su tipo desde la mejora del PDF de
-// cotización (plan-mejora-pdf-cotizacion-cliente.md §4.5).
-const onAgregarFotosHotelMatrix = async (payload: { hotelId: number; archivo: File; tipoFoto: 'fachada' | 'habitacion' }) => {
-    try {
-        await opcionMayoristaService.agregarFotoHotel(payload.hotelId, payload.archivo, payload.tipoFoto);
-        await cargarOpcionesMayorista();
-    } catch (error: any) {
-        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo agregar la foto', 'error');
-    }
-};
-
-const onEliminarFotoHotelMatrix = async (payload: { hotelId: number; path: string }) => {
-    try {
-        await opcionMayoristaService.eliminarFotoHotel(payload.hotelId, payload.path);
-        await cargarOpcionesMayorista();
-    } catch (error: any) {
-        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo eliminar la foto', 'error');
-    }
-};
-
-// 05-sep-2026 — conecta OpcionHotelController::promover(), construido junto
-// con el resto del CRUD de hoteles pero nunca enganchado a ningún botón
-// (hallazgo del usuario). Mismo patrón que itemParaPromover/
-// abrirPromoverProveedor de arriba (ítems manuales) — modal propio, fuera
-// del drawer.
-const hotelParaPromover = ref<{ id: number; nombre_hotel: string } | null>(null);
-const onPromoverHotelMatrix = (payload: { hotelId: number; hotelNombre: string }) => {
-    hotelParaPromover.value = { id: payload.hotelId, nombre_hotel: payload.hotelNombre };
-};
-const onHotelPromovido = async (_res: any) => {
-    hotelParaPromover.value = null;
-    toast.success('Proveedor creado correctamente');
-    await cargarOpcionesMayorista();
-};
-
-const onGuardarTarifaMatrix = async (payload: { id: number; tipo_habitacion: string; precio_costo: number; precio_venta: number }) => {
-    try {
-        await opcionMayoristaService.actualizarTarifaHotel(payload.id, payload);
-        await cargarOpcionesMayorista();
-    } catch (error: any) {
-        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo actualizar la tarifa', 'error');
-    }
-};
-
-const onEliminarTarifaMatrix = async (tarifaId: number) => {
-    const confirmacion = await (Swal as TVueSwalInstance).fire({
-        title: '¿Eliminar este tipo de habitación?', text: 'Esta acción no se puede deshacer.',
-        icon: 'warning', showCancelButton: true, confirmButtonText: 'Sí, eliminar', cancelButtonText: 'Cancelar',
-    });
-    if (!confirmacion.isConfirmed) return;
-
-    try {
-        await opcionMayoristaService.eliminarTarifaHotel(tarifaId);
-        toast.success('Tipo de habitación eliminado');
-        await Promise.all([cargarCotizacion(), cargarOpcionesMayorista()]);
-    } catch (error: any) {
-        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo eliminar', 'error');
-    }
-};
-
-const onAgregarTarifaMatrix = async (payload: { hotelId: number; tipo_habitacion: string; precio_costo: number; precio_venta: number }) => {
-    try {
-        await opcionMayoristaService.agregarTarifaHotel(payload.hotelId, payload);
-        await cargarOpcionesMayorista();
-    } catch (error: any) {
-        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo agregar el tipo de habitación', 'error');
-    }
-};
-
-// ── Editar/eliminar tours opcionales ya cargados ─────────────────────────
-const opcionalEnEdicionId = ref<number | null>(null);
-const formEdicionOpcional = ref({ nombre: '', precio_por_persona: 0, moneda: 'USD' as 'PEN' | 'USD', incluye: '', no_incluye: '' });
-const abrirEdicionOpcional = (opl: OpcionMayoristaOpcional) => {
-    opcionalEnEdicionId.value = opcionalEnEdicionId.value === opl.id ? null : opl.id;
-    formEdicionOpcional.value = {
-        nombre: opl.nombre, precio_por_persona: Number(opl.precio_por_persona), moneda: opl.moneda,
-        incluye: opl.incluye ?? '', no_incluye: opl.no_incluye ?? '',
-    };
-};
-const guardandoEdicionOpcional = ref(false);
-const guardarEdicionOpcional = async (opl: OpcionMayoristaOpcional) => {
-    guardandoEdicionOpcional.value = true;
-    try {
-        await opcionMayoristaService.actualizarOpcional(opl.id, formEdicionOpcional.value);
-        opcionalEnEdicionId.value = null;
-        await cargarOpcionesMayorista();
-    } catch (error: any) {
-        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo actualizar el opcional', 'error');
-    } finally {
-        guardandoEdicionOpcional.value = false;
-    }
-};
-
-const eliminandoOpcionalId = ref<number | null>(null);
-const eliminarOpcionalCargado = async (opl: OpcionMayoristaOpcional) => {
-    const confirmacion = await (Swal as TVueSwalInstance).fire({
-        title: '¿Eliminar este opcional?', text: 'Esta acción no se puede deshacer.',
-        icon: 'warning', showCancelButton: true, confirmButtonText: 'Sí, eliminar', cancelButtonText: 'Cancelar',
-    });
-    if (!confirmacion.isConfirmed) return;
-
-    eliminandoOpcionalId.value = opl.id;
-    try {
-        await opcionMayoristaService.eliminarOpcional(opl.id);
-        toast.success('Opcional eliminado');
-        await cargarOpcionesMayorista();
-    } catch (error: any) {
-        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo eliminar el opcional', 'error');
-    } finally {
-        eliminandoOpcionalId.value = null;
-    }
-};
-
-const eligiendoOpcionId = ref<number | null>(null);
-const elegirOpcion = async (op: OpcionMayorista) => {
-    eligiendoOpcionId.value = op.id;
-    try {
-        await opcionMayoristaService.elegir(op.id);
-        await cargarOpcionesMayorista();
-    } catch (error: any) {
-        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo elegir esta opción', 'error');
-    } finally {
-        eligiendoOpcionId.value = null;
-    }
-};
-
-const descartandoOpcionId = ref<number | null>(null);
-const descartarOpcion = async (op: OpcionMayorista) => {
-    descartandoOpcionId.value = op.id;
-    try {
-        await opcionMayoristaService.descartar(op.id);
-        await cargarOpcionesMayorista();
-    } catch (error: any) {
-        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo descartar esta opción', 'error');
-    } finally {
-        descartandoOpcionId.value = null;
-    }
-};
-
-const reactivandoOpcionId = ref<number | null>(null);
-const reactivarOpcion = async (op: OpcionMayorista) => {
-    reactivandoOpcionId.value = op.id;
-    try {
-        await opcionMayoristaService.reactivar(op.id);
-        await cargarOpcionesMayorista();
-    } catch (error: any) {
-        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo reactivar esta opción', 'error');
-    } finally {
-        reactivandoOpcionId.value = null;
-    }
-};
-
-const abrirFormEditarOpcionMayorista = (op: OpcionMayorista) => {
-    opcionMayoristaEnEdicionId.value = op.id;
-    mostrarFormMayorista.value = false;
-};
-
-// Compartido por OpcionMayoristaForm inline (edición) y el de "agregar
-// nueva" al final de la lista — cierra el que esté abierto y refresca.
-const onOpcionMayoristaGuardada = async (opcion?: OpcionMayorista) => {
-    mostrarFormMayorista.value = false;
-    opcionMayoristaEnEdicionId.value = null;
-    await cargarOpcionesMayorista();
-    // T-036 (R6): la primera opción nace elegida (backend) → su sección de hoteles queda abierta.
-    if (opcion?.estado === 'elegida') opcionHotelesActivaId.value = opcion.id;
-};
-
-const guardandoOpcional = ref(false);
-const guardarOpcional = async (op: OpcionMayorista) => {
-    if (!formOpcional.value.nombre.trim()) return;
-    guardandoOpcional.value = true;
-    try {
-        await opcionMayoristaService.crearOpcional(op.id, { ...formOpcional.value });
-        mostrarFormOpcional.value = null;
-        formOpcional.value = { nombre: '', precio_por_persona: 0, moneda: 'USD', incluye: '', no_incluye: '' };
-        await cargarOpcionesMayorista();
-    } catch (error: any) {
-        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo agregar el opcional', 'error');
-    } finally {
-        guardandoOpcional.value = false;
-    }
-};
-
-const guardandoHotelMayorista = ref(false);
-const guardarHotel = async (op: OpcionMayorista) => {
-    guardandoHotelMayorista.value = true;
-    try {
-        const res = await opcionMayoristaService.crearHotel(op.id, formHotel.value);
-        // Secuencial (no Promise.all): el backend valida el tope por tipo
-        // (1 fachada/2 habitación) contra lo YA guardado en cada request —
-        // en paralelo, dos fotos de fachada podrían leer "0 fachadas
-        // existentes" al mismo tiempo y las dos pasarían el guard.
-        for (const foto of fotosHotelNuevo.value) {
-            await opcionMayoristaService.agregarFotoHotel(res.opcion_hotel.id, foto.file, foto.tipoFoto);
-        }
-        mostrarFormHotel.value = null;
-        formHotel.value = { nombre_hotel: '', proveedor_id: null, tarifas: [{ tipo_habitacion: 'doble', precio_costo: 0, precio_venta: 0, proveedor_tarifa_id: null }] };
-        fotosHotelNuevo.value.forEach((f) => URL.revokeObjectURL(f.previewUrl));
-        fotosHotelNuevo.value = [];
-        tarifasHotelProveedorSeleccionado.value = [];
-        await cargarOpcionesMayorista();
-    } catch (error: any) {
-        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo guardar', 'error');
-    } finally {
-        guardandoHotelMayorista.value = false;
-    }
-};
-
-// hotelId/hotelNombre/precioCosto (04-sep-2026) — para la vista agrupada
-// del picker (permitir-gestion-hoteles): la cabecera de cada grupo ya
-// muestra el nombre del hotel, así que acá tipo_habitacion queda SOLO el
-// tipo de habitación (antes traía "{hotel} · {tipo}" repetido, redundante
-// con la nueva cabecera).
-const tarifasHotelPlanas = (op: OpcionMayorista) => {
-    const filas: Array<{ id: number; tipo_habitacion: string; precio: number; registrada: boolean; hotelId: number; hotelNombre: string; precioCosto: number; hotelFotos: Array<{ path: string; tipo_foto: 'fachada' | 'habitacion'; url: string }>; hotelProveedorId: number | null }> = [];
-    (op.opciones_hotel ?? []).forEach((h) => {
-        (h.opciones_hotel_tarifas ?? []).forEach((t) => {
-            filas.push({
-                id: t.id, tipo_habitacion: t.tipo_habitacion, precio: Number(t.precio_venta), registrada: !!t.proveedor_tarifa_id,
-                hotelId: h.id, hotelNombre: h.nombre_hotel, precioCosto: Number(t.precio_costo), hotelFotos: h.fotos ?? [],
-                hotelProveedorId: h.proveedor_id ?? null,
-            });
-        });
-    });
-    return filas;
-};
-
-const agregarItemMayorista = async (op: OpcionMayorista, opcionHotelTarifaId: number, cantidad: number) => {
-    if (!alternativaActiva.value) return;
-    try {
-        const res = await alternativaItemService.agregarMayorista(alternativaActiva.value.id, {
-            opcion_mayorista_id: op.id,
-            opcion_hotel_tarifa_id: opcionHotelTarifaId,
-            cantidad,
-            dia_referencial: diaActivoParaAgregar.value,
-            alternativa_destino_id: destinoActivoId.value,
-        });
-        await onServicioSueltoAgregado(res.alternativa_item, res.alternativa);
-    } catch (error: any) {
-        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo agregar', 'error');
-    }
-};
-
-// Hueco real documentado desde 04-sep-2026 (opcionales de mayorista):
-// hasta ahora un OpcionMayoristaOpcional (San Blas, Taboga, Colón...) solo
-// existía como info de referencia en el PDF — sin forma de que el cliente
-// lo elija de verdad y sume al total. Mismo endpoint que agregarItemMayorista()
-// (crearItemMayorista() en el backend ahora acepta opcion_mayorista_opcional_id
-// como fuente de precio alternativa a opcion_hotel_tarifa_id), misma
-// cantidad "por persona" que ya usa el hotel de la matriz mayorista.
-const agregandoOpcionalAlLienzoId = ref<number | null>(null);
-const agregarOpcionalAlLienzo = async (op: OpcionMayorista, opl: OpcionMayoristaOpcional) => {
-    if (!alternativaActiva.value) return;
-    agregandoOpcionalAlLienzoId.value = opl.id;
-    try {
-        const res = await alternativaItemService.agregarMayorista(alternativaActiva.value.id, {
-            opcion_mayorista_id: op.id,
-            opcion_mayorista_opcional_id: opl.id,
-            cantidad: cantidadAdultosCotizacion.value,
-            dia_referencial: diaActivoParaAgregar.value,
-            alternativa_destino_id: destinoActivoId.value,
-        });
-        await onServicioSueltoAgregado(res.alternativa_item, res.alternativa);
-        toast.success(`"${opl.nombre}" agregado al lienzo`);
-    } catch (error: any) {
-        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo agregar el opcional', 'error');
-    } finally {
-        agregandoOpcionalAlLienzoId.value = null;
-    }
-};
-
-// Sesión M4 — mismo atajo que agregarGrupoProveedorHotel(), para el flujo
-// mayorista (Internacional).
-// Bug real encontrado por el usuario (04-sep-2026, simulación Panamá): acá
-// "cantidad: 1" quedaba hardcodeado sin importar cuántos adultos viajan —
-// el "Adultos" que sí se ve y se usa en agregarItemMayorista() (flujo
-// "Elegir" una sola habitación) nunca llegaba a este flujo de comparación
-// en grupo, así que el Total de un grupo agregado acá salía por la mitad
-// (o menos) del precio real. precio_venta ya es "por persona", así que
-// multiplicar por el total de adultos de la cotización da el total
-// correcto para comparar varios hoteles pensados para TODO el grupo de
-// viajeros — repartir el grupo en habitaciones de distinta capacidad
-// (ej. 4 personas → 1 matrimonial + 1 simple) sigue sin tener herramienta
-// propia, eso queda fuera de este fix.
-const agregarGrupoMayorista = async (op: OpcionMayorista, opcionHotelTarifaIds: number[]) => {
-    if (!alternativaActiva.value) return;
-    const grupoOpcionId = generarUuidGrupo();
-    try {
-        let ultimoItem: AlternativaItem | null = null;
-        for (const opcionHotelTarifaId of opcionHotelTarifaIds) {
-            const res = await alternativaItemService.agregarMayorista(alternativaActiva.value.id, {
-                opcion_mayorista_id: op.id,
-                opcion_hotel_tarifa_id: opcionHotelTarifaId,
-                cantidad: cantidadAdultosCotizacion.value,
-                dia_referencial: diaActivoParaAgregar.value,
-                alternativa_destino_id: destinoActivoId.value,
-                grupo_opcion_id: grupoOpcionId,
-            });
-            ultimoItem = res.alternativa_item;
-        }
-        if (ultimoItem) await onServicioSueltoAgregado(ultimoItem);
-    } catch (error: any) {
-        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo agregar el grupo', 'error');
-    }
-};
+const {
+    mostrarOpcionalesId, mostrarFormOpcional, formOpcional, verOpcionales, guardandoOpcional, guardarOpcional,
+    opcionalEnEdicionId, formEdicionOpcional, abrirEdicionOpcional, guardandoEdicionOpcional, guardarEdicionOpcional,
+    eliminandoOpcionalId, eliminarOpcionalCargado, agregandoOpcionalAlLienzoId, agregarOpcionalAlLienzo,
+    mostrarToursId, mostrarFormTourIncluido, tourEnEdicionId, verTours, onTourIncluidoAgregado, quitarTourIncluido,
+    abrirEdicionTour, onTourIncluidoActualizado,
+} = useOpcionalesMayorista({
+    alternativaActiva, destinoActivoId, diaActivoParaAgregar, cantidadAdultosCotizacion,
+    cargarOpcionesMayorista, onServicioSueltoAgregado,
+});
 
 // ── Guías (Fix guia-como-item-real) ─────────────────────────────────────
 // Mismo patrón ya usado en paquetes/detalle.vue: elegir el guía primero,
