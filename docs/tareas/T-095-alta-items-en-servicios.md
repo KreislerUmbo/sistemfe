@@ -270,4 +270,3 @@ Tamaño: grande, en 8 commits → la construye Sonnet en otra sesión (`docs/pro
   fase 1b», «Fix …» en `desdePlantilla()`); dejé los que remiten a un plan vigente.
 - `AlternativaItem.php` (~26) y otros modelos/servicios aún tienen comentarios del estilo «antes de esta sesión…»:
   cubiertos por la línea de «Por analizar» de comentarios con citas rotas.
-- 

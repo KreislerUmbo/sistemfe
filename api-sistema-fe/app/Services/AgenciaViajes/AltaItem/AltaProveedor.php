@@ -32,7 +32,7 @@ class AltaProveedor extends AltaItemBase
             'moneda_costo' => 'required_without_all:proveedor_tarifa_id,opcion_hotel_tarifa_id|nullable|in:PEN,USD',
             'precio_venta_snapshot' => 'required_without_all:proveedor_tarifa_id,opcion_hotel_tarifa_id|nullable|numeric|min:0',
             'costo_snapshot' => 'nullable|numeric|min:0',
-            // Solo tiene efecto sin proveedor_tarifa_id: con tarifa real el tributario sale de ella.
+            // Solo tiene efecto con precio de referencia: con tarifa real o hotel ad-hoc el tributario sale de ellos.
             'tip_afe_igv' => 'nullable|string|in:10,20,30',
             'destino_tributario' => 'nullable|string|in:amazonia,nacional,extranjero',
             'dia_referencial' => 'nullable|integer|min:1',
