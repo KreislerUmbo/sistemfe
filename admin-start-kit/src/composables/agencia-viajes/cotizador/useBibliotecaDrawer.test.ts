@@ -57,7 +57,7 @@ function armar(opciones: { items?: any[]; destinos?: any[]; cotizacion?: any; co
     const biblioteca = useBibliotecaCotizador({
       alternativaActiva, itemsSinAjuste, configAgencia, cargarCotizacion, alternativaDestinos, destinoActivoId,
       diaActivoParaAgregar, diasCreados, diasDesdeCombo, drawerBibliotecaAbierto: drawer.drawerBibliotecaAbierto,
-      volverAGridDrawer: drawer.volverAGridDrawer, clicBibliotecaItem: hoteles.clicBibliotecaItem,
+      cerrarDrawerBiblioteca: drawer.cerrarDrawerBiblioteca, clicBibliotecaItem: hoteles.clicBibliotecaItem,
     })
     return {
       drawer, hoteles, biblioteca, alternativa, cotizacion, configAgencia, destinoActivoId, dia, diasCreados,
@@ -114,7 +114,7 @@ describe('useHotelesLocales', () => {
   it('un grupo con alguna opción elegida ya no está abierto; los hoteles se cuentan por hotel, no por habitación', () => {
     const items = [
       hotel(1, 100, 'resuelto', { opcion_elegida: true }), hotel(2, 101, 'resuelto'),
-      hotel(3, 200, 'abierto'), hotel(4, 200, 'abierto', { cantidad: 1 }),
+      hotel(3, 200, 'abierto'), hotel(4, 200, 'abierto'),
       item(5, { grupo_opcion_id: 'abierto', opcion_hotel_tarifa: { opcion_hotel_id: 9 } }),
       hotel(6, 300, 'otro-dia', { dia_referencial: 2 }),
     ]
@@ -146,7 +146,7 @@ describe('useHotelesLocales', () => {
   })
 
   it('comparar hoteles: todas las tarifas van con un mismo grupo y las noches elegidas; si hay grupo abierto, se suma a él', async () => {
-    const { hoteles, aplicarItemActualizado } = armar()
+    const { hoteles, aplicarItemActualizado, cargarCotizacion } = armar()
     itemSvc.agregarProveedor.mockImplementation(async (_alt: number, datos: any) => ({ alternativa_item: item(datos.proveedor_tarifa_id ?? datos.opcion_hotel_tarifa_id) }))
 
     await hoteles.agregarGrupoProveedorHotel([11, 12], 3)
@@ -156,6 +156,7 @@ describe('useHotelesLocales', () => {
     expect(a.grupo_opcion_id).toBeTruthy()
     // Solo el último ítem se avisa, sin alternativa: recarga completa.
     expect(aplicarItemActualizado).not.toHaveBeenCalled()
+    expect(cargarCotizacion).toHaveBeenCalledTimes(1)
 
     itemSvc.agregarProveedor.mockClear()
     hoteles.matrizHotelActiva.value = { tarifas: [], moneda: 'PEN', nombreProveedor: 'X', adhoc: true, grupoAbierto: { id: 'g-abierto', hoteles: 1, cantidad: 2 } }

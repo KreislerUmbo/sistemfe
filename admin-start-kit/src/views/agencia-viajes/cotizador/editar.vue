@@ -2383,7 +2383,7 @@ const {
     modoToursNuevo,
 } = useBibliotecaCotizador({
     alternativaActiva, itemsSinAjuste, configAgencia, cargarCotizacion, alternativaDestinos, destinoActivoId,
-    diaActivoParaAgregar, diasCreados, diasDesdeCombo, drawerBibliotecaAbierto, volverAGridDrawer, clicBibliotecaItem,
+    diaActivoParaAgregar, diasCreados, diasDesdeCombo, drawerBibliotecaAbierto, cerrarDrawerBiblioteca, clicBibliotecaItem,
 });
 
 // ── Comparador de mayoristas ──────────────────────────────────────────
@@ -2948,15 +2948,13 @@ const itemPasajeAereoEnEdicion = ref<AlternativaItem | null>(null);
 // Sesión 11q — item manual en edición (null = modo alta). ItemManualForm.vue
 // se prellena solo cuando esto viene poblado, ver su watch(itemExistente).
 const itemManualEnEdicion = ref<AlternativaItem | null>(null);
+// El formulario manual es un paso del drawer: volver al grid lo cierra.
 alVolverAGrid(() => {
     mostrarFormManual.value = false;
     itemManualEnEdicion.value = null;
 });
 const { pasoDrawer, tituloDrawer } = pasoDrawerDe({ matrizHotelActiva, modoPrecioPendiente, mostrarFormManual });
-// Fix post-verificación: el drawer completo vive en un <Teleport> gateado
-// por drawerBibliotecaAbierto (línea ~411) — asignar solo
-// itemManualEnEdicion/mostrarFormManual no lo abría, el link "Editar" no
-// hacía nada visible. Mismo criterio que abrirDrawerBiblioteca().
+
 // «Ver detalle» de un ítem ya reservado abre el mismo formulario con los campos deshabilitados.
 const formManualSoloLectura = computed(() => alternativaSoloLectura.value || !!itemManualEnEdicion.value?.reserva_item);
 const formPasajeSoloLectura = computed(() => alternativaSoloLectura.value || !!itemPasajeAereoEnEdicion.value?.reserva_item);
@@ -2975,6 +2973,7 @@ const avisoItemReservado = (item: AlternativaItem | null | undefined): string | 
         : `Lo tomó la reserva ${codigo}. Para cambiarlo, usa Modificar reserva.`;
 };
 
+// El drawer solo se ve con drawerBibliotecaAbierto: pasar al paso 'manual' no alcanza, hay que abrirlo.
 const abrirEdicionManual = (item: AlternativaItem) => {
     itemManualEnEdicion.value = item;
     mostrarFormManual.value = true;
@@ -3114,8 +3113,7 @@ watch(alternativaActivaId, () => {
     cargarTemporadasTours();
     inicializarDias();
     vistaPreviaCombo.value = null;
-    drawerBibliotecaAbierto.value = false;
-    volverAGridDrawer();
+    cerrarDrawerBiblioteca();
     if (modo.value === 'intl') cargarOpcionesMayorista();
 });
 

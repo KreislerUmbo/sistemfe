@@ -195,16 +195,16 @@ export function useHotelesLocales(deps: DependenciasHotelesLocales) {
         tip_afe_igv: configAgencia.value?.tip_afe_igv_default ?? '10',
         destino_tributario: configAgencia.value?.destino_tributario_default ?? 'nacional',
     });
+    const formHotelLocal = ref<{ nombre_hotel: string; moneda: 'PEN' | 'USD'; proveedor_id: number | null; tarifas: TarifaHotelLocal[] }>({
+        nombre_hotel: '', moneda: 'PEN', proveedor_id: null,
+        tarifas: [tarifaHotelLocalVacia()],
+    });
     // El form se arma antes de que cargue configAgencia: al abrirlo, si nadie tocó todavía la fila
     // inicial, se rearma con el default ya cargado.
     watch(mostrarFormHotelLocal, (abierto) => {
         const f = formHotelLocal.value;
         const intacto = !f.nombre_hotel && f.tarifas.length === 1 && !f.tarifas[0].precio_costo && !f.tarifas[0].precio_venta;
         if (abierto && intacto) f.tarifas = [tarifaHotelLocalVacia()];
-    });
-    const formHotelLocal = ref<{ nombre_hotel: string; moneda: 'PEN' | 'USD'; proveedor_id: number | null; tarifas: TarifaHotelLocal[] }>({
-        nombre_hotel: '', moneda: 'PEN', proveedor_id: null,
-        tarifas: [tarifaHotelLocalVacia()],
     });
     const guardandoHotelLocal = ref(false);
 

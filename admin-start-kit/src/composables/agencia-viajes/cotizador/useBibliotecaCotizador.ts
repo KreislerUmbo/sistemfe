@@ -22,7 +22,7 @@ export interface DependenciasBiblioteca {
     diasCreados: Ref<number[]>;
     diasDesdeCombo: Ref<Set<number>>;
     drawerBibliotecaAbierto: Ref<boolean>;
-    volverAGridDrawer: () => void;
+    cerrarDrawerBiblioteca: () => void;
     /** Clic en una tarifa de proveedor (hotel → matriz; otro servicio → modo de precio). */
     clicBibliotecaItem: (tarifa: ProveedorTarifa) => Promise<void>;
 }
@@ -57,7 +57,7 @@ const BIBLIOTECA_POR_PAGINA = 12; // grilla de 3 columnas × 4 filas
 export function useBibliotecaCotizador(deps: DependenciasBiblioteca) {
     const {
         alternativaActiva, itemsSinAjuste, configAgencia, cargarCotizacion, alternativaDestinos, destinoActivoId,
-        diaActivoParaAgregar, diasCreados, diasDesdeCombo, drawerBibliotecaAbierto, volverAGridDrawer, clicBibliotecaItem,
+        diaActivoParaAgregar, diasCreados, diasDesdeCombo, drawerBibliotecaAbierto, cerrarDrawerBiblioteca, clicBibliotecaItem,
     } = deps;
     const toast = useToast();
 
@@ -255,8 +255,7 @@ export function useBibliotecaCotizador(deps: DependenciasBiblioteca) {
             const idsTourOrigen = new Set(res.items_agregados.map((i) => i.tour_origen_id).filter((id): id is number => id != null));
 
             await cargarCotizacion();
-            drawerBibliotecaAbierto.value = false;
-            volverAGridDrawer();
+            cerrarDrawerBiblioteca();
 
             // Al recargar, los días salen solo de los ítems reales: un tour hijo sin Incluye no genera
             // ningún ítem y su día quedaría sin pestaña.
