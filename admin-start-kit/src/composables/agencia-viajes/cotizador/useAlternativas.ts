@@ -214,11 +214,9 @@ export function useAlternativas(deps: DependenciasAlternativas) {
         }
     };
 
-    // Aceptar no solo cambia el estado: dispara la creación real de la Reserva
-    // (ReservaController::aceptar()) y redirige a su pantalla de detalle. Es irreversible (crea una
-    // Reserva real, descarta las demás alternativas), por eso confirma antes (incidente real del
-    // 07-sep-2026: un click sin querer generaba la reserva). T-052: la confirmación es un modal
-    // propio (AceptarAlternativaModal) con la pregunta opcional «¿Qué decidió la venta?».
+    // Aceptar dispara la creación real de la Reserva (ReservaController::aceptar()) y redirige a su
+    // detalle. Es irreversible (crea una Reserva real y descarta las demás alternativas), por eso
+    // confirma antes: AceptarAlternativaModal (T-052), con la pregunta opcional «¿Qué decidió la venta?».
     const marcandoAceptada = ref(false);
     const aceptandoAlternativa = ref(false);
     const marcarAceptada = () => {

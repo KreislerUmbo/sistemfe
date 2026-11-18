@@ -1491,7 +1491,7 @@
 <script setup lang="ts">
 import { destinoParaIgvAgencia, IGV_EXONERADO } from '@/helpers/tratamientoTributarioAgencia';
 import CampoFecha from '@/components/CampoFecha.vue';
-import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue';
+import { ref, onMounted, onUnmounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import { useLayoutStore } from '@/stores/layout';
@@ -1510,7 +1510,6 @@ import DestinoTreeSelect from '@/components/AgenciaViajes/DestinoTreeSelect.vue'
 import CalculadoraTipoCambioModal from '@/components/AgenciaViajes/CalculadoraTipoCambioModal.vue';
 import EnviarAlternativa from '@/components/AgenciaViajes/EnviarAlternativa.vue';
 import RevisionAlternativa from '@/components/AgenciaViajes/RevisionAlternativa.vue';
-import type { RevisionEntrada } from '@/services/admin/revisionAlternativaService';
 import HistorialActividadesCotizacion from '@/components/AgenciaViajes/HistorialActividadesCotizacion.vue';
 import AccionesPendientes from '@/components/Clientes/AccionesPendientes.vue';
 import PreferenciasViajeroResumen from '@/components/AgenciaViajes/PreferenciasViajeroResumen.vue';
@@ -1519,19 +1518,12 @@ import ExtenderVigenciaModal from '@/components/AgenciaViajes/ExtenderVigenciaMo
 import AceptarAlternativaModal from '@/components/AgenciaViajes/AceptarAlternativaModal.vue';
 import ModificacionDiferenciaPanel from '@/components/AgenciaViajes/ModificacionDiferenciaPanel.vue';
 import PenalidadPasajeroModal from '@/components/AgenciaViajes/PenalidadPasajeroModal.vue';
-import { useModificacionReserva, mensajeDeError, centavosATexto, motivoDePenalidad, textoMonto } from '@/composables/agencia-viajes/useModificacionReserva';
-import { reservaModificacionService, type PenalidadPayload, type PasajeroEdadEstimada } from '@/services/admin/reservaModificacionService';
-import { imprimirComprobante } from '@/composables/usePrintComprobante';
 import ClientFormQuick from '@/components/Sales/ClientFormQuick.vue';
 import { useToast } from '@/composables/useToast';
-import { alternativaItemService } from '@/services/admin/alternativaItemService';
 import { servicioService } from '@/services/admin/servicioService';
 import { useAgenciaViajesCatalogosStore } from '@/stores/agenciaViajesCatalogos';
 import { formatDiaCorto, formatFecha, formatFechaHora, hoyPeru } from '@/helpers/fecha';
-import { guiaService } from '@/services/admin/guiaService';
-import type { Alternativa, AlternativaItem, Proveedor, GuiaTarifa, TipAfeIgv, DestinoTributario } from '@/types/agencia-viajes';
-import type { Client } from '@/types/clients';
-import type { AvisoSalida } from '@/helpers/avisosProveedores';
+import type { AlternativaItem } from '@/types/agencia-viajes';
 import { filasDelBloque } from '@/helpers/agencia-viajes/cotizador/bloquesLienzo';
 import {
     badgeTratamientoTributario, desglosePasajerosTexto as desglosePasajerosTextoDe, descripcionDestinoServicio, etiquetaItem,
@@ -1553,6 +1545,10 @@ import { usePasajerosCotizacion } from '@/composables/agencia-viajes/cotizador/u
 import { useCabeceraCotizacion } from '@/composables/agencia-viajes/cotizador/useCabeceraCotizacion';
 import { useResultadoCotizacion } from '@/composables/agencia-viajes/cotizador/useResultadoCotizacion';
 import { useAlternativas } from '@/composables/agencia-viajes/cotizador/useAlternativas';
+import { useModificacionEnCotizador } from '@/composables/agencia-viajes/cotizador/useModificacionEnCotizador';
+import { useRevisionAlternativa } from '@/composables/agencia-viajes/cotizador/useRevisionAlternativa';
+import { useGuiaCotizador } from '@/composables/agencia-viajes/cotizador/useGuiaCotizador';
+import { useItemsSueltos } from '@/composables/agencia-viajes/cotizador/useItemsSueltos';
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
 
@@ -1577,208 +1573,6 @@ const {
     onEditarDescuentoGlobalMonto, onEditarPrecio, onEditarDescuentoPct, onEditarMontoDescuentoItem,
 } = useEdicionPrecios({ alternativaActiva, itemsSinAjuste, cargarCotizacion, aplicarItemActualizado, aplicarAlternativaActualizada });
 const modo = ref<'local' | 'intl' | 'guia'>('local');
-
-// ── T-007: modificación de reserva ───────────────────────────────────
-// La cotización de una modificación (origen='modificacion') trabaja con el panel «Diferencia».
-// El panel solo muestra lo que calcula el backend; aplicar manda la huella que se vio.
-const reservaIdModificacion = computed(() => modificacionInfo.value?.reserva_id ?? null);
-const modificacion = useModificacionReserva(reservaIdModificacion);
-const avisoEdadEstimada = ref<PasajeroEdadEstimada[]>([]);
-const procesandoModificacion = ref(false);
-const descargandoPdfModificacion = ref(false);
-
-const idsParaRevisar = computed(() => new Set(
-    (modificacion.diferencia.value?.bloqueos ?? [])
-        .filter((b) => (b.tipo === 'para_revisar' || b.tipo === 'servicio_sin_pasajeros') && b.alternativa_item_id)
-        .map((b) => b.alternativa_item_id as number)
-));
-// «Revisado» solo donde el backend deja confirmar (las «sin pasajeros» se arreglan en el lienzo).
-const idsParaRevisarConfirmables = computed(() => new Set(
-    (modificacion.diferencia.value?.bloqueos ?? [])
-        .filter((b) => b.tipo === 'para_revisar' && b.alternativa_item_id)
-        .map((b) => b.alternativa_item_id as number)
-));
-
-const itemResaltadoId = ref<number | null>(null);
-const claseResaltado = (ids: number[]) => ({
-    'border-warning bg-warning-subtle': ids.some((id) => idsParaRevisar.value.has(id)),
-    'resaltado-item': itemResaltadoId.value !== null && ids.includes(itemResaltadoId.value),
-});
-
-// Lleva al ítem: cambia al destino y día donde está, lo resalta unos segundos y hace scroll.
-const irAItem = async (id: number) => {
-    const item = itemsSinAjuste.value.find((i) => i.id === id);
-    if (!item) return;
-    if (mostrarChipsDestino.value) destinoActivoId.value = item.alternativa_destino_id ?? alternativaDestinos.value[0]?.id ?? null;
-    if (mostrarTabsDia.value) diaActivo.value = item.dia_referencial ?? 0;
-    itemResaltadoId.value = id;
-    await nextTick();
-    document.querySelector(`[data-item-id~="${id}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    setTimeout(() => { if (itemResaltadoId.value === id) itemResaltadoId.value = null; }, 3000);
-};
-
-// ── T-022: revisión antes de enviar ──────────────────────────────────
-// RevisionAlternativa.vue pide la lista al backend; acá solo se guarda (para los botones de
-// envío) y se navega al servicio o formulario donde se corrige.
-const revisionActual = ref<RevisionEntrada[]>([]);
-// Cambia cuando la alternativa cambia (mismo momento en que se refresca el total): el componente
-// espera medio segundo antes de volver a pedir, para no llamar en cada tecla.
-// versionCotizacion (núcleo) cambia tras cada guardado; el total local cubre las ediciones en vivo.
-const claveRevision = computed(() => `${versionCotizacion.value}|${alternativaActivaId.value}|${totalLocal.value}`);
-const nombreItemRevision = (id: number): string => {
-    const item = itemsSinAjuste.value.find((i) => i.id === id);
-    return item ? etiquetaItem(item) : 'Servicio';
-};
-const irARevision = (entrada: RevisionEntrada, itemId: number | null) => {
-    if (itemId !== null) {
-        void irAItem(itemId);
-    } else if (entrada.destino.seccion === 'datos_cotizacion') {
-        extendiendoVigencia.value = true;
-    } else if (entrada.destino.seccion === 'lienzo') {
-        drawerBibliotecaAbierto.value = true;
-    }
-};
-
-const confirmarRevisados = async (ids: number[]) => {
-    try {
-        await modificacion.confirmarRevisados(ids);
-    } catch (error: any) {
-        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo confirmar', 'error');
-        await modificacion.cargar();
-    }
-};
-
-const abrirComprobanteBloqueo = (saleId: number) => { void imprimirComprobante(saleId); };
-
-// Penalidad por pasajero quitado (R-AGE-05): IGV y destino empiezan vacíos.
-const penalidadPasajero = ref<{ reserva_pasajero_id: number; nombre: string | null } | null>(null);
-const penalidadItemId = ref<number | null>(null);
-const penalidadInicial = ref<{ monto: string; motivo: string; tip_afe_igv: string | null; destino_tributario: string | null } | null>(null);
-const guardandoPenalidad = ref(false);
-const errorPenalidad = ref<string | null>(null);
-
-const abrirPenalidad = (reservaPasajeroId: number) => {
-    const dif = modificacion.diferencia.value;
-    const pasajero = dif?.pasajeros.find((p) => p.reserva_pasajero_id === reservaPasajeroId);
-    if (!dif || !pasajero) return;
-    const linea = pasajero.penalidad_alternativa_item_id
-        ? dif.lineas.find((l) => l.alternativa_item_id === pasajero.penalidad_alternativa_item_id)
-        : undefined;
-    penalidadItemId.value = pasajero.penalidad_alternativa_item_id;
-    penalidadInicial.value = linea
-        ? { monto: centavosATexto(linea.nuevo_centavos), motivo: motivoDePenalidad(linea.descripcion), tip_afe_igv: linea.tip_afe_igv, destino_tributario: linea.destino_tributario }
-        : null;
-    errorPenalidad.value = null;
-    penalidadPasajero.value = { reserva_pasajero_id: reservaPasajeroId, nombre: pasajero.nombre };
-};
-
-const guardarPenalidad = async (payload: PenalidadPayload) => {
-    if (!penalidadPasajero.value) return;
-    guardandoPenalidad.value = true;
-    errorPenalidad.value = null;
-    try {
-        await modificacion.guardarPenalidad(penalidadPasajero.value.reserva_pasajero_id, payload, penalidadItemId.value);
-        penalidadPasajero.value = null;
-        await cargarCotizacion();
-    } catch (error: any) {
-        errorPenalidad.value = error.response?.data?.message ?? 'No se pudo guardar la penalidad';
-    } finally {
-        guardandoPenalidad.value = false;
-    }
-};
-
-const borrarPenalidad = async (itemId: number) => {
-    const confirmacion = await (Swal as TVueSwalInstance).fire({ title: '¿Borrar la penalidad?', icon: 'question', showCancelButton: true, confirmButtonText: 'Sí, borrar', cancelButtonText: 'Cancelar' });
-    if (!confirmacion.isConfirmed) return;
-    try {
-        await modificacion.borrarPenalidad(itemId);
-        await cargarCotizacion();
-    } catch (error: any) {
-        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo borrar la penalidad', 'error');
-    }
-};
-
-const descargarPdfModificacion = async () => {
-    if (!modificacionInfo.value) return;
-    descargandoPdfModificacion.value = true;
-    try {
-        const blob = await reservaModificacionService.pdf(modificacionInfo.value.reserva_id);
-        const blobUrl = window.URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = blobUrl;
-        link.setAttribute('download', `modificacion-${modificacionInfo.value.reserva_codigo ?? modificacionInfo.value.reserva_id}.pdf`);
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-        window.URL.revokeObjectURL(blobUrl);
-    } catch (error: any) {
-        (Swal as TVueSwalInstance).fire('No se pudo generar el PDF', await mensajeDeError(error, 'No se pudo generar el PDF'), 'warning');
-    } finally {
-        descargandoPdfModificacion.value = false;
-    }
-};
-
-// Mensaje para la reserva (se muestra al volver): aplicar, descartar.
-const dejarMensajeParaReserva = (reservaId: number, datos: { mensaje: string; alerta_cupo_excedido?: boolean; avisos_salidas?: AvisoSalida[] }) => {
-    try { sessionStorage.setItem(`modificacion-resultado-${reservaId}`, JSON.stringify(datos)); } catch { /* sin storage: no se muestra el mensaje */ }
-};
-
-const descartarModificacion = async () => {
-    if (!modificacionInfo.value) return;
-    const reservaId = modificacionInfo.value.reserva_id;
-    const confirmacion = await (Swal as TVueSwalInstance).fire({
-        title: '¿Descartar la modificación?', text: 'La reserva no cambia. Se pierde lo que armaste en esta versión.', icon: 'warning',
-        showCancelButton: true, confirmButtonText: 'Sí, descartar', cancelButtonText: 'Seguir editando',
-    });
-    if (!confirmacion.isConfirmed) return;
-    procesandoModificacion.value = true;
-    try {
-        const res = await reservaModificacionService.descartar(reservaId);
-        dejarMensajeParaReserva(reservaId, { mensaje: res.message });
-        router.push(`/agencia-viajes/reservas/${reservaId}`);
-    } catch (error: any) {
-        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo descartar', 'error');
-        await cargarCotizacion();
-    } finally {
-        procesandoModificacion.value = false;
-    }
-};
-
-const aplicarModificacion = async () => {
-    const dif = modificacion.diferencia.value;
-    if (!modificacionInfo.value || !dif) return;
-    const reservaId = modificacionInfo.value.reserva_id;
-    const confirmacion = await (Swal as TVueSwalInstance).fire({
-        title: '¿Aplicar a la reserva?',
-        text: `Diferencia: ${textoMonto(dif.totales.diferencia, dif.moneda)}. La reserva pasa a la versión nueva y no se puede deshacer.`,
-        icon: 'question', showCancelButton: true, confirmButtonText: 'Sí, aplicar', cancelButtonText: 'Cancelar',
-    });
-    if (!confirmacion.isConfirmed) return;
-    procesandoModificacion.value = true;
-    try {
-        const res = await modificacion.aplicar();
-        dejarMensajeParaReserva(reservaId, { mensaje: res.message, alerta_cupo_excedido: res.alerta_cupo_excedido, avisos_salidas: res.avisos_salidas });
-        router.push(`/agencia-viajes/reservas/${reservaId}`);
-    } catch (error: any) {
-        const mensaje: string = error.response?.data?.message ?? 'No se pudo aplicar la modificación';
-        const estado = error.response?.status;
-        if (estado === 404 || mensaje.startsWith('Esta modificación ya no está abierta')) {
-            // Se aplicó o descartó en otra pestaña: se recarga para ver el estado real.
-            await (Swal as TVueSwalInstance).fire('La reserva cambió', 'Esta modificación ya no está abierta (se aplicó o descartó en otro lugar).', 'warning');
-            await cargarCotizacion();
-        } else if (mensaje.startsWith('La reserva cambió')) {
-            await modificacion.cargar();
-            await (Swal as TVueSwalInstance).fire('La reserva cambió', `${mensaje} Ya se volvió a calcular la diferencia.`, 'warning');
-        } else if (mensaje.includes('cambia el mayorista')) {
-            await (Swal as TVueSwalInstance).fire('No se puede aplicar desde aquí', mensaje, 'warning');
-        } else {
-            await modificacion.cargar();
-            await (Swal as TVueSwalInstance).fire('No se pudo aplicar', mensaje, 'warning');
-        }
-    } finally {
-        procesandoModificacion.value = false;
-    }
-};
 
 const {
     resumenPax, resumenPaxTotal, esItemPaqueteMayorista, textoAdultosMayorista, notaMayoristaSinNinos,
@@ -1901,217 +1695,39 @@ const {
     cargarOpcionesMayorista, onServicioSueltoAgregado,
 });
 
-// ── Guías (Fix guia-como-item-real) ─────────────────────────────────────
-// Mismo patrón ya usado en paquetes/detalle.vue: elegir el guía primero,
-// después su lista de tarifas (una por destino/modalidad) — "filtrado por
-// destino" en la práctica, cada tarifa ya trae su propio destino. No hay
-// endpoint de búsqueda unificada para guías (guiaService no lo tiene, a
-// diferencia de bibliotecaCotizadorService para proveedores/tours), así
-// que esta sección vive aparte del grid de biblioteca, igual que el
-// comparador de mayoristas ya vive aparte (toggle "Local / Nacional" vs
-// "Internacional" — acá se suma un tercer modo, "Guías").
-const guiaSeleccionadaIdCotizador = ref<number | null>(null);
-const tarifasGuiaCotizador = ref<GuiaTarifa[]>([]);
-const guiaTarifaSeleccionadaCotizador = ref<GuiaTarifa | null>(null);
-const cantidadDiasGuia = ref(1);
-const agregandoGuia = ref(false);
-// Análisis de impuestos (28-ago-2026) — prellenado con el default de la
-// agencia apenas está disponible; editable antes de agregar el ítem.
-const tipAfeIgvGuia = ref<TipAfeIgv>('10');
-const destinoTributarioGuia = ref<DestinoTributario>('nacional');
-watch(configAgencia, (c) => {
-    if (c) {
-        tipAfeIgvGuia.value = c.tip_afe_igv_default;
-        destinoTributarioGuia.value = c.destino_tributario_default;
-    }
-}, { immediate: true });
+// ── Modificación de reserva (T-007) y revisión antes de enviar (T-022) ─
+const {
+    modificacion, avisoEdadEstimada, procesandoModificacion, descargandoPdfModificacion, idsParaRevisar,
+    idsParaRevisarConfirmables, claseResaltado, irAItem, confirmarRevisados, abrirComprobanteBloqueo,
+    penalidadPasajero, penalidadInicial, guardandoPenalidad, errorPenalidad, abrirPenalidad, guardarPenalidad,
+    borrarPenalidad, descargarPdfModificacion, descartarModificacion, aplicarModificacion,
+} = useModificacionEnCotizador({
+    modificacionInfo, itemsSinAjuste, cargarCotizacion, navegar: (ruta) => { router.push(ruta); },
+    alternativaDestinos, destinoActivoId, mostrarChipsDestino, diaActivo, mostrarTabsDia,
+});
+const { revisionActual, claveRevision, nombreItemRevision, irARevision } = useRevisionAlternativa({
+    versionCotizacion, alternativaActivaId, totalLocal, itemsSinAjuste, irAItem, extendiendoVigencia,
+    drawerBibliotecaAbierto,
+});
 
-const cargarTarifasGuiaCotizador = async () => {
-    guiaTarifaSeleccionadaCotizador.value = null;
-    tarifasGuiaCotizador.value = [];
-    if (!guiaSeleccionadaIdCotizador.value) return;
-    const res = await guiaService.obtener(guiaSeleccionadaIdCotizador.value);
-    tarifasGuiaCotizador.value = res.guia.guia_tarifas ?? [];
-};
+// ── Guías ─────────────────────────────────────────────────────────────
+const {
+    guiaSeleccionadaIdCotizador, tarifasGuiaCotizador, guiaTarifaSeleccionadaCotizador, cantidadDiasGuia,
+    agregandoGuia, tipAfeIgvGuia, destinoTributarioGuia, cargarTarifasGuiaCotizador, agregarItemGuiaCotizador,
+} = useGuiaCotizador({ alternativaActiva, configAgencia, diaActivoParaAgregar, destinoActivoId, onServicioSueltoAgregado });
 
-const agregarItemGuiaCotizador = async () => {
-    if (!alternativaActiva.value || !guiaTarifaSeleccionadaCotizador.value) return;
-    agregandoGuia.value = true;
-    try {
-        const res = await alternativaItemService.agregarGuia(alternativaActiva.value.id, {
-            guia_tarifa_id: guiaTarifaSeleccionadaCotizador.value.id,
-            cantidad: cantidadDiasGuia.value || 1,
-            dia_referencial: diaActivoParaAgregar.value,
-            tip_afe_igv: tipAfeIgvGuia.value,
-            destino_tributario: destinoTributarioGuia.value,
-            alternativa_destino_id: destinoActivoId.value,
-        });
-        guiaTarifaSeleccionadaCotizador.value = null;
-        cantidadDiasGuia.value = 1;
-        await onServicioSueltoAgregado(res.alternativa_item, res.alternativa);
-    } catch (error: any) {
-        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo agregar el guía', 'error');
-    } finally {
-        agregandoGuia.value = false;
-    }
-};
-
-// ── Ítem manual / pasaje aéreo ────────────────────────────────────────
-const mostrarFormManual = ref(false);
-const mostrarFormPasajeAereo = ref(false);
-// Auditoría del módulo Reservas/Cotizador (2026-08-27) — edición
-// estructural de un pasaje aéreo suelto, mismo patrón que
-// itemManualEnEdicion (null = modo alta).
-const itemPasajeAereoEnEdicion = ref<AlternativaItem | null>(null);
-// Sesión 11q — item manual en edición (null = modo alta). ItemManualForm.vue
-// se prellena solo cuando esto viene poblado, ver su watch(itemExistente).
-const itemManualEnEdicion = ref<AlternativaItem | null>(null);
-// El formulario manual es un paso del drawer: volver al grid lo cierra.
-alVolverAGrid(() => {
-    mostrarFormManual.value = false;
-    itemManualEnEdicion.value = null;
+// ── Ítem manual / pasaje aéreo / eliminar ítems ───────────────────────
+const {
+    mostrarFormManual, mostrarFormPasajeAereo, itemPasajeAereoEnEdicion, itemManualEnEdicion,
+    formManualSoloLectura, formPasajeSoloLectura, avisoItemReservado, abrirEdicionManual, itemParaPromover,
+    abrirPromoverProveedor, onProveedorPromovido, onServicioSueltoActualizado, onPasajeAereoAgregado,
+    abrirEdicionPasajeAereo, toggleFormPasajeAereo, onPasajeAereoActualizado, eliminandoItemId, eliminarItem,
+    eliminandoGrupoId, eliminarGrupoLienzo,
+} = useItemsSueltos({
+    alternativaSoloLectura, cargarCotizacion, aplicarItemActualizado, aplicarAlternativaActualizada,
+    drawerBibliotecaAbierto, alVolverAGrid,
 });
 const { pasoDrawer, tituloDrawer } = pasoDrawerDe({ matrizHotelActiva, modoPrecioPendiente, mostrarFormManual });
-
-// «Ver detalle» de un ítem ya reservado abre el mismo formulario con los campos deshabilitados.
-const formManualSoloLectura = computed(() => alternativaSoloLectura.value || !!itemManualEnEdicion.value?.reserva_item);
-const formPasajeSoloLectura = computed(() => alternativaSoloLectura.value || !!itemPasajeAereoEnEdicion.value?.reserva_item);
-
-// T-100 — Por qué un servicio está en solo lectura: lo tomó una reserva. Una cancelada tampoco lo
-// libera (lo lee para su historial): se cambia duplicando la alternativa. Mismo texto que
-// ReservaItem::mensajeBloqueo() en el backend.
-const avisoItemReservado = (item: AlternativaItem | null | undefined): string | null => {
-    const ri = item?.reserva_item;
-    if (!ri) return null;
-    const r = ri.reserva;
-    const codigo = r?.codigo ?? (r ? `#${r.id}` : null);
-    if (!codigo) return 'Este servicio ya tiene una reserva generada.';
-    return r?.estado === 'cancelada'
-        ? `Lo tomó la reserva ${codigo} (cancelada), que lo conserva en su historial. Para cambiarlo, duplica la alternativa.`
-        : `Lo tomó la reserva ${codigo}. Para cambiarlo, usa Modificar reserva.`;
-};
-
-// El drawer solo se ve con drawerBibliotecaAbierto: pasar al paso 'manual' no alcanza, hay que abrirlo.
-const abrirEdicionManual = (item: AlternativaItem) => {
-    itemManualEnEdicion.value = item;
-    mostrarFormManual.value = true;
-    drawerBibliotecaAbierto.value = true;
-};
-// Sesión 11q — "promover a proveedor real" vive en su propio modal, fuera
-// del drawer (no es un paso más de pasoDrawer).
-const itemParaPromover = ref<AlternativaItem | null>(null);
-const abrirPromoverProveedor = (item: AlternativaItem) => {
-    itemParaPromover.value = item;
-};
-const onProveedorPromovido = async (_res: any) => {
-    itemParaPromover.value = null;
-    toast.success('Proveedor creado correctamente');
-    await cargarCotizacion();
-};
-
-// Sesión 11q — edición estructural de un ítem manual (ItemManualForm.vue en
-// modo edición). Mismo patrón que onServicioSueltoAgregado, pero sin volver
-// a "grid" primero (ya estamos en el paso 'manual' del drawer, solo hay que
-// cerrarlo).
-const onServicioSueltoActualizado = async (_item: AlternativaItem) => {
-    mostrarFormManual.value = false;
-    itemManualEnEdicion.value = null;
-    toast.success('Ítem manual actualizado');
-    await cargarCotizacion();
-};
-
-// Pasaje aéreo suelto vive fuera del drawer (no es parte de la biblioteca
-// de proveedores/tours) — mismo criterio de siempre, solo renombrado.
-const onPasajeAereoAgregado = async (item: AlternativaItem, alternativa?: Partial<Alternativa> | null) => {
-    mostrarFormPasajeAereo.value = false;
-    toast.success('Pasaje aéreo agregado');
-    if (!alternativa || !aplicarItemActualizado(item, alternativa)) await cargarCotizacion();
-};
-
-// Auditoría del módulo Reservas/Cotizador (2026-08-27) — antes de esto no
-// existía NINGUNA forma de ver/corregir un pasaje aéreo ya cargado, solo
-// borrar y recrear. A diferencia del ítem manual, este form vive fuera del
-// drawer (no hay Teleport que gatear), así que alcanza con abrir el toggle.
-const abrirEdicionPasajeAereo = (item: AlternativaItem) => {
-    itemPasajeAereoEnEdicion.value = item;
-    mostrarFormPasajeAereo.value = true;
-};
-
-// El botón "Cerrar"/"Pasaje aéreo suelto" también debe limpiar el modo
-// edición — sin esto, cerrar mientras se editaba un ítem y volver a abrir
-// para AGREGAR uno nuevo reabriría el form todavía prellenado con el
-// anterior.
-const toggleFormPasajeAereo = () => {
-    mostrarFormPasajeAereo.value = !mostrarFormPasajeAereo.value;
-    if (!mostrarFormPasajeAereo.value) itemPasajeAereoEnEdicion.value = null;
-};
-
-const onPasajeAereoActualizado = async (_item: AlternativaItem) => {
-    mostrarFormPasajeAereo.value = false;
-    itemPasajeAereoEnEdicion.value = null;
-    toast.success('Pasaje aéreo actualizado');
-    await cargarCotizacion();
-};
-
-// Antes de esta sesión no había confirmación ni try/catch acá — un ítem
-// cuya alternativa ya generó una reserva (por ejemplo vía Venta Directa)
-// tira 422 desde AlternativaItemController::destroy() (antes era un 500
-// crudo, mismo bug que ya se había corregido una vez en
-// eliminarAlternativa()/AlternativaController::destroy()); sin captura,
-// el botón parecía "no hacer nada".
-const eliminandoItemId = ref<number | null>(null);
-const eliminarItem = async (item: AlternativaItem) => {
-    const confirmacion = await (Swal as TVueSwalInstance).fire({
-        title: '¿Eliminar este ítem?',
-        text: 'Esta acción no se puede deshacer.',
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonText: 'Sí, eliminar',
-        cancelButtonText: 'Cancelar',
-    });
-    if (!confirmacion.isConfirmed) return;
-
-    eliminandoItemId.value = item.id;
-    try {
-        const res = await alternativaItemService.eliminar(item.id);
-        toast.success('Ítem eliminado');
-        // Una línea de tour se quita con toda su carga y esa respuesta no trae la alternativa: recarga completa.
-        if (!aplicarAlternativaActualizada(res.alternativa)) await cargarCotizacion();
-    } catch (error: any) {
-        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo eliminar el ítem', 'error');
-    } finally {
-        eliminandoItemId.value = null;
-    }
-};
-
-// Sesión UX2 (04-sep-2026) — hallazgo del usuario: nada impedía crear varios
-// bloques "N opciones de hotel" idénticos (repetir "Comparar varias
-// opciones" con el mismo set), y borrarlos fila por fila con eliminarItem()
-// de arriba no era intuitivo. Mismo patrón de confirmación/try-catch, pero
-// contra el endpoint que borra el grupo_opcion_id completo de una sola vez.
-const eliminandoGrupoId = ref<string | null>(null);
-const eliminarGrupoLienzo = async (fila: { grupoId: string; items: AlternativaItem[] }) => {
-    const confirmacion = await (Swal as TVueSwalInstance).fire({
-        title: '¿Eliminar todo este bloque?',
-        text: `Se van a eliminar las ${fila.items.length} opciones de hotel de este grupo. Esta acción no se puede deshacer.`,
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonText: 'Sí, eliminar todo',
-        cancelButtonText: 'Cancelar',
-    });
-    if (!confirmacion.isConfirmed) return;
-
-    eliminandoGrupoId.value = fila.grupoId;
-    try {
-        await alternativaItemService.eliminarGrupo(fila.items[0].alternativa_id, fila.grupoId);
-        toast.success('Grupo eliminado');
-        await cargarCotizacion();
-    } catch (error: any) {
-        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo eliminar el grupo', 'error');
-    } finally {
-        eliminandoGrupoId.value = null;
-    }
-};
 
 const desglosePasajerosTexto = (item: AlternativaItem) => desglosePasajerosTextoDe(item, cotizacion.value?.pasajeros ?? []);
 
@@ -2121,9 +1737,8 @@ watch(alternativaDestinos, (destinos) => {
 }, { immediate: true });
 
 watch(modo, (m) => { if (m === 'intl') cargarOpcionesMayorista(); });
-// Sesión 12f-2 — cambiar de chip re-filtra el comparador (§7.1 punto 3),
-// sin re-pedirlo al backend (opcionesMayorista ya trae TODAS las opciones
-// de la alternativa, el filtro es client-side dentro de cargarOpcionesMayorista()).
+// Cambiar de chip re-filtra el comparador sin pedirlo al backend: opcionesMayorista ya trae todas
+// las opciones de la alternativa y el filtro es del lado del cliente (cargarOpcionesMayorista()).
 watch(destinoActivoId, () => { if (modo.value === 'intl') cargarOpcionesMayorista(); });
 watch(alternativaActivaId, () => {
     inicializarEdicionItems();
@@ -2152,55 +1767,32 @@ const layoutStore = useLayoutStore();
 
 onMounted(async () => {
     try {
-        // Más espacio horizontal para el lienzo del cotizador — se revierte a
-        // 'default' en onUnmounted, no debe quedar colapsado en el resto del
-        // sistema al salir de esta pantalla.
+        // Más espacio horizontal para el lienzo; onUnmounted lo devuelve a 'default'.
         layoutStore.setLeftSideBarSize('collapsed');
 
-        // 27-ago-2026 — catálogos de servicios/proveedores para los filtros
-        // nuevos de la biblioteca (destino/servicio/proveedor), en paralelo
-        // (no bloquean la carga) — mismo patrón que paquetes/detalle.vue.
+        // Servicios para los filtros de la biblioteca; en paralelo, no bloquean la carga.
         servicioService.listar({ per_page: 200 }).then((res) => { serviciosFiltro.value = res.servicios ?? []; });
 
-        // proveedor_tipos: catálogo real (editable desde el panel superadmin,
-        // NO los 4 valores del seeder original) — alimenta tanto los chips de
-        // la biblioteca (Sesión 11b3) como la búsqueda de proveedores
-        // mayoristas de acá abajo (sin duplicar la llamada). No depende de
-        // configuracion-agencia ni viceversa — en paralelo. Cacheados (TTL
-        // 60s, compartidos con paquetes/detalle.vue — ver
-        // src/stores/agenciaViajesCatalogos.ts) en vez de pedirlos de cero en
-        // cada mount de esta pantalla.
+        // proveedor_tipos es el catálogo real (editable desde el panel superadmin, no los 4 valores
+        // del seeder): alimenta los chips de la biblioteca y la búsqueda de mayoristas. No depende de
+        // configuracion-agencia: en paralelo. Vienen cacheados (TTL 60 s, ver agenciaViajesCatalogos.ts).
         const catalogos = useAgenciaViajesCatalogosStore();
-        // Guardrail (19-sep-2026, hallazgo real del usuario) — configAgencia
-        // decide con qué SÍMBOLO se interpreta "Descuento global" (USD vs
-        // %), no es un dato cosmético — el TTL de 60s (o una pestaña de
-        // cotizador que ya llevaba un rato abierta cuando alguien cambió el
-        // modo desde Configuración de Agencia en otra pestaña) podía dejar
-        // esta pantalla mostrando "%" mientras la config real ya decía
-        // "Monto fijo", justo el campo donde una lectura vieja hace que el
-        // vendedor tipee un número pensando que es plata y el sistema lo
-        // trate como porcentaje (o viceversa). invalidar() antes de pedirlo
-        // fuerza que ESTA pantalla siempre traiga la config real del
-        // momento, sin tocar el TTL normal que sigue sirviendo a
-        // paquetes/detalle.vue.
+        // configAgencia decide si "Descuento global" se lee como % o como monto fijo: una copia vieja
+        // del caché haría que el vendedor tipee un monto que el sistema trate como porcentaje (o al
+        // revés). Se invalida antes de pedirla para que esta pantalla siempre traiga la real.
         catalogos.invalidarConfigAgencia();
         const [tiposList, config] = await Promise.all([
             catalogos.obtenerProveedorTipos(),
             catalogos.obtenerConfigAgencia(),
         ]);
         proveedorTipos.value = tiposList;
-        // inicializarEdicionItems() (vía alRefrescar, al cargar la cotización abajo)
-        // necesita configAgencia.value ya resuelto para derivar
-        // monto_descuento por ítem (Punto B) — por eso cargarCotizacion()
-        // recién se dispara después de esta línea, no antes.
+        // inicializarEdicionItems() (vía alRefrescar, al cargar la cotización) necesita configAgencia
+        // resuelto para derivar el monto de descuento por ítem: por eso cargarCotizacion() va después.
         configAgencia.value = config;
 
-        // slug='agencia-mayorista' es el slug REAL del catálogo proveedor_tipos
-        // (cambiado a mano en producción) — NO 'mayorista', mismo criterio que
-        // 'alojamiento-hoteles' (Sesión 11k, Fix 9 — proveedores tipo Hotel,
-        // para "usar tarifa registrada" al armar un hotel de opcion_mayorista;
-        // ver mismo hallazgo documentado en ProveedorController::tarifasHotel(),
-        // backend — 'hotel' no matchea nada).
+        // Los slugs reales de proveedor_tipos son 'agencia-mayorista' y 'alojamiento-hoteles' (los
+        // hoteles sirven para "usar tarifa registrada" en una opción de mayorista); 'mayorista' y
+        // 'hotel' no matchean nada (ver ProveedorController::tarifasHotel()).
         tipoMayoristaId.value = tiposList.find((t) => t.slug === 'agencia-mayorista')?.id ?? null;
         tipoHotelId.value = tiposList.find((t) => t.slug === 'alojamiento-hoteles')?.id ?? null;
 
