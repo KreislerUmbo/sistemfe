@@ -1531,19 +1531,18 @@ import { alternativaService } from '@/services/admin/alternativaService';
 import { alternativaItemService } from '@/services/admin/alternativaItemService';
 import { opcionMayoristaService } from '@/services/admin/opcionMayoristaService';
 import { opcionHotelService } from '@/services/admin/opcionHotelService';
-import { alternativaDestinoService } from '@/services/admin/alternativaDestinoService';
 import { proveedorService } from '@/services/admin/proveedorService';
 import { servicioService } from '@/services/admin/servicioService';
 import { bibliotecaCotizadorService, type BibliotecaTipo } from '@/services/admin/bibliotecaCotizadorService';
 import { reservaService } from '@/services/admin/reservaService';
 import { useAgenciaViajesCatalogosStore } from '@/stores/agenciaViajesCatalogos';
-import { diferenciaDiasISO, formatDiaCorto, formatFecha, formatFechaHora, hoyPeru, partesFechaHoraPeru, sumarDiasISO } from '@/helpers/fecha';
+import { diferenciaDiasISO, formatDiaCorto, formatFecha, formatFechaHora, hoyPeru, partesFechaHoraPeru } from '@/helpers/fecha';
 import { guiaService } from '@/services/admin/guiaService';
 import { tipoCambioAgenciaService } from '@/services/admin/tipoCambioAgenciaService';
-import type { Alternativa, AlternativaItem, ProveedorTarifa, OpcionMayorista, OpcionMayoristaTour, OpcionMayoristaOpcional, OpcionHotelTarifa, Proveedor, ProveedorTipo, BibliotecaResultado, GuiaTarifa, Servicio, TipAfeIgv, DestinoTributario, TemporadaDesactualizada } from '@/types/agencia-viajes';
+import type { Alternativa, AlternativaItem, ProveedorTarifa, OpcionMayorista, OpcionMayoristaTour, OpcionMayoristaOpcional, OpcionHotelTarifa, Proveedor, ProveedorTipo, BibliotecaResultado, GuiaTarifa, Servicio, TipAfeIgv, DestinoTributario } from '@/types/agencia-viajes';
 import type { Client } from '@/types/clients';
 import type { AvisoSalida } from '@/helpers/avisosProveedores';
-import { agruparPorTour, filasDelBloque, type BloqueItem } from '@/helpers/agencia-viajes/cotizador/bloquesLienzo';
+import { filasDelBloque } from '@/helpers/agencia-viajes/cotizador/bloquesLienzo';
 import {
     badgeTratamientoTributario, desglosePasajerosTexto as desglosePasajerosTextoDe, descripcionDestinoServicio, etiquetaItem,
     iconoItem, nombreMayoristaDeGrupo, tarifaAereaVencida, textoPlano, toursDeGrupo,
@@ -1551,6 +1550,10 @@ import {
 import { descargarArchivo, leerMensajeErrorBlob } from '@/helpers/descargarArchivo';
 import { useCotizacionEditor } from '@/composables/agencia-viajes/cotizador/useCotizacionEditor';
 import { useEdicionPrecios } from '@/composables/agencia-viajes/cotizador/useEdicionPrecios';
+import { useDestinosAlternativa } from '@/composables/agencia-viajes/cotizador/useDestinosAlternativa';
+import { useDiasLienzo } from '@/composables/agencia-viajes/cotizador/useDiasLienzo';
+import { useLineaTour } from '@/composables/agencia-viajes/cotizador/useLineaTour';
+import { useBloquesLienzo } from '@/composables/agencia-viajes/cotizador/useBloquesLienzo';
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
 
@@ -2329,416 +2332,30 @@ const eliminarAlternativa = async () => {
     }
 };
 
-// ── Chips de destino (Sesión 12f-2, §7.1 punto 1) ──────────────────────
-// Siempre al menos 1 destino por alternativa (garantía de 12b/12c). Con
-// 1 solo destino (el caso de casi todos los datos reales hoy) los chips
-// no se muestran y ningún computed de acá abajo cambia de comportamiento
-// — mismo criterio que mostrarTabsDia ya usa para "sin ruido visual
-// quando no hace falta".
-const alternativaDestinos = computed(() => alternativaActiva.value?.destinos ?? []);
-const destinoActivoId = ref<number | null>(null);
-const mostrarChipsDestino = computed(() => alternativaDestinos.value.length > 1);
-
-// Simulación Panamá (04-sep-2026) — destinoActivoId de arriba es el id de la
-// FILA alternativa_destinos (lo que OpcionMayoristaForm necesita para
-// alternativa_destino_id). TourIncluidoForm en cambio necesita el
-// destino_atractivo_id REAL (para el árbol de DestinoTreeSelect) — son dos
-// IDs de dos tablas distintas que comparten nombre casual "destino".
-const destinoAtractivoIdActivo = computed(() => {
-    return alternativaDestinos.value.find((d) => d.id === destinoActivoId.value)?.destino_atractivo_id ?? null;
+// ── Lienzo: destinos, días, línea de tour y bloques ──────────────────
+const {
+    alternativaDestinos, destinoActivoId, mostrarChipsDestino, destinoAtractivoIdActivo, resolverDestinoActivo,
+    itemsDelDestinoActivo, guardandoDestino, mostrarFormDestino, destinoEnEdicionId, nuevoDestinoAtractivoId,
+    nuevoDestinoTexto, nuevoDestinoFechaInicio, nuevoDestinoFechaFin, abrirFormDestino, abrirFormEditarDestinoActivo,
+    guardarNuevoDestino, eliminarDestinoActivo,
+} = useDestinosAlternativa({ alternativaActiva, itemsSinAjuste, cargarCotizacion });
+const {
+    diaActivo, diasCreados, diasDesdeCombo, inicializarDias, diaSiguiente, diaActivoParaAgregar, agregarDia,
+    itemsSinDia, mostrarTabsDia, itemsDelDiaActivo, itemsVisiblesLienzo,
+} = useDiasLienzo({ itemsDelDestinoActivo });
+const {
+    lineaTourBloqueada, temporadaDeCarga, desglosePrecioTour, incluyeDeCarga, incluyeAbierto, toggleIncluye,
+    guardandoPrecioCarga, borradorPrecioCarga, onPrecioCarga, onMoverCarga, eliminandoCarga, eliminarCargaTour,
+    temporadasDesactualizadas, cargarTemporadasTours, recalculandoTemporadas, recalcularTemporadas,
+} = useLineaTour({ cotizacion, alternativaActiva, alternativaSoloLectura, cargarCotizacion, subtotalGrupo, diaActivo });
+const {
+    bloquesLienzo, gruposPrecioPanel, gruposPrecioPorDestino, eligiendoGrupoItemId, elegirGrupoDesdeLienzo,
+    onReasignarDiaItem, onMoverBloque, eliminandoBloqueId, eliminarBloque, gruposExpandido, toggleGrupoExpandido,
+    destinosExpandido, toggleDestinoExpandido,
+} = useBloquesLienzo({
+    alternativaActiva, itemsSinAjuste, cargarCotizacion, aplicarAlternativaActualizada, totalEfectivoLocal,
+    alternativaDestinos, itemsVisiblesLienzo, diaActivo,
 });
-
-// Llamada explícita (NO un watch) desde alRefrescar() (núcleo)/el watch de
-// alternativaActivaId — inicializarDias() lee itemsDelDestinoActivo justo
-// después, y un watch propio de alternativaDestinos no alcanza a correr a
-// tiempo en el mismo tick (flush diferido de Vue). Si el destino activo
-// dejó de existir en la lista (alternativa recién cargada, o el destino
-// activo se acaba de borrar), cae al primero.
-const resolverDestinoActivo = () => {
-    const destinos = alternativaDestinos.value;
-    if (!destinos.some((d) => d.id === destinoActivoId.value)) {
-        destinoActivoId.value = destinos[0]?.id ?? null;
-    }
-};
-
-// Un ítem con alternativa_destino_id=null (stragglers de antes de 12c/
-// 12f-1, cada vez más raros) se trata como perteneciente al PRIMER
-// destino — nunca se oculta un ítem real por no tener el campo resuelto.
-const itemsDelDestinoActivo = computed(() => {
-    const items = itemsSinAjuste.value;
-    if (!mostrarChipsDestino.value) return items;
-    const primerDestinoId = alternativaDestinos.value[0]?.id ?? null;
-    return items.filter((i) => (i.alternativa_destino_id ?? primerDestinoId) === destinoActivoId.value);
-});
-
-const guardandoDestino = ref(false);
-const mostrarFormDestino = ref(false);
-// null = creando uno nuevo; con id = editando ese destino existente
-// (§3.1 del brief: "el chip activo permite renombrar/editar fechas").
-const destinoEnEdicionId = ref<number | null>(null);
-const nuevoDestinoAtractivoId = ref<number | null>(null);
-const nuevoDestinoTexto = ref('');
-const nuevoDestinoFechaInicio = ref('');
-const nuevoDestinoFechaFin = ref('');
-
-const abrirFormDestino = () => {
-    destinoEnEdicionId.value = null;
-    // Sugerencia editable (§7.1 punto 1: "autocalcula: fin del anterior +
-    // 1, editable") — nunca bloquea si el vendedor la cambia.
-    const ultimo = alternativaDestinos.value[alternativaDestinos.value.length - 1];
-    if (ultimo?.fecha_fin) {
-        nuevoDestinoFechaInicio.value = sumarDiasISO(ultimo.fecha_fin, 1);
-    } else {
-        nuevoDestinoFechaInicio.value = '';
-    }
-    nuevoDestinoAtractivoId.value = null;
-    nuevoDestinoTexto.value = '';
-    nuevoDestinoFechaFin.value = '';
-    mostrarFormDestino.value = true;
-};
-
-const abrirFormEditarDestinoActivo = () => {
-    const destino = alternativaDestinos.value.find((d) => d.id === destinoActivoId.value);
-    if (!destino) return;
-    destinoEnEdicionId.value = destino.id;
-    nuevoDestinoAtractivoId.value = destino.destino_atractivo_id ?? null;
-    nuevoDestinoTexto.value = destino.destino_texto;
-    nuevoDestinoFechaInicio.value = destino.fecha_inicio ?? '';
-    nuevoDestinoFechaFin.value = destino.fecha_fin ?? '';
-    mostrarFormDestino.value = true;
-};
-
-const guardarNuevoDestino = async () => {
-    if (!alternativaActiva.value || !nuevoDestinoTexto.value.trim()) return;
-    guardandoDestino.value = true;
-    try {
-        const payload = {
-            destino_atractivo_id: nuevoDestinoAtractivoId.value,
-            destino_texto: nuevoDestinoTexto.value.trim(),
-            fecha_inicio: nuevoDestinoFechaInicio.value || null,
-            fecha_fin: nuevoDestinoFechaFin.value || null,
-        };
-        const destino = destinoEnEdicionId.value
-            ? await alternativaDestinoService.actualizar(alternativaActiva.value.id, destinoEnEdicionId.value, payload)
-            : await alternativaDestinoService.crear(alternativaActiva.value.id, payload);
-        mostrarFormDestino.value = false;
-        await cargarCotizacion();
-        destinoActivoId.value = destino.id;
-    } catch (error: any) {
-        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo guardar el destino', 'error');
-    } finally {
-        guardandoDestino.value = false;
-    }
-};
-
-const eliminarDestinoActivo = async () => {
-    if (!alternativaActiva.value || destinoActivoId.value === null) return;
-    const confirmado = await Swal.fire({
-        title: '¿Eliminar este destino?', text: 'Esta acción no se puede deshacer.',
-        icon: 'warning', showCancelButton: true, confirmButtonText: 'Sí, eliminar', cancelButtonText: 'Cancelar',
-    });
-    if (!confirmado.isConfirmed) return;
-    try {
-        await alternativaDestinoService.eliminar(alternativaActiva.value.id, destinoActivoId.value);
-        await cargarCotizacion();
-    } catch (error: any) {
-        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo eliminar el destino', 'error');
-    }
-};
-
-// ── Lienzo día-por-día (Sesión 11b3/11h, §7.1) ─────────────────────────
-// diaActivo=0 es el sentinel "Sin día" (bucket de solo-lectura para ítems
-// creados antes de esta sesión, dia_referencial=null) — NO es un día real,
-// nunca se manda al backend como destino (reasignarDia/desde-plantilla
-// exigen min:1). diaActivoParaAgregar resuelve ese caso a un día real.
-const diaActivo = ref(1);
-const diasCreados = ref<number[]>([1]);
-
-// Sesión 11m — días que vinieron de un combo cargado desde plantilla
-// (clicResultadoPlantilla), para poder avisar si alguno quedó sin ítems
-// (tour-hijo sin Incluye) en vez de mostrar el mismo "Agregá un servicio"
-// genérico que un día agregado a mano con "+ Agregar otro día".
-const diasDesdeCombo = ref<Set<number>>(new Set());
-
-const inicializarDias = () => {
-    // Sesión 12f-2 — scopeado al destino activo (itemsDelDestinoActivo,
-    // no alternativaActiva.value.items): dia_referencial se reinicia por
-    // destino (decisión ya cerrada desde el inicio del bloque 12a-12h).
-    const items = itemsDelDestinoActivo.value;
-    const maxDia = items.reduce((max, it) => Math.max(max, it.dia_referencial ?? 0), 1);
-    diasCreados.value = Array.from({ length: maxDia }, (_, i) => i + 1);
-    if (!diasCreados.value.includes(diaActivo.value) && diaActivo.value !== 0) {
-        diaActivo.value = diasCreados.value[0] ?? 1;
-    }
-};
-
-const diaSiguiente = computed(() => (diasCreados.value.length ? Math.max(...diasCreados.value) : 0) + 1);
-const diaActivoParaAgregar = computed(() => (diaActivo.value === 0 ? (diasCreados.value[0] ?? 1) : diaActivo.value));
-
-// Sesión 11h — fix incidental encontrado al construir el "+ Agregar otro
-// día" del modo simple (Punto B): diaSiguiente.value se leía DOS veces, y
-// la segunda lectura ya veía el push recién hecho (diasCreados invalida el
-// computed apenas se muta el array reactivo), así que diaActivo terminaba
-// apuntando a un día que no existía en diasCreados (ej. push(2) pero
-// diaActivo=3). Capturar el valor una sola vez antes de mutar lo corrige.
-const agregarDia = () => {
-    const nuevoDia = diaSiguiente.value;
-    diasCreados.value.push(nuevoDia);
-    diaActivo.value = nuevoDia;
-};
-
-const itemsSinDia = computed(() => itemsDelDestinoActivo.value.filter((i) => i.dia_referencial == null));
-
-// Punto B — con un solo día real y sin ítems legado "sin día", las pestañas
-// no aportan nada (todo cae en el mismo bucket) y se ocultan del todo.
-const mostrarTabsDia = computed(() => diasCreados.value.length > 1 || itemsSinDia.value.length > 0);
-
-const itemsDelDiaActivo = computed(() => {
-    const items = itemsDelDestinoActivo.value;
-    return diaActivo.value === 0
-        ? items.filter((i) => i.dia_referencial == null)
-        : items.filter((i) => i.dia_referencial === diaActivo.value);
-});
-
-// Sin pestañas (modo simple), el lienzo muestra TODOS los ítems de la
-// alternativa de una — no tiene sentido filtrar por día cuando no hay
-// navegación de día visible.
-const itemsVisiblesLienzo = computed(() => (mostrarTabsDia.value ? itemsDelDiaActivo.value : itemsDelDestinoActivo.value));
-
-// ── Línea de tour (fila 13, fase 1b) ─────────────────────────────────────
-const lineaTourBloqueada = (bloque: BloqueItem) =>
-    alternativaSoloLectura.value || bloque.items.some((i) => !!i.reserva_item);
-
-// Temporada aplicada a la carga (null = precio base).
-const temporadaDeCarga = (bloque: BloqueItem) => bloque.items[0]?.tour_linea?.temporada_nombre ?? null;
-
-// "2 adultos × PEN 150.00 + 1 niño × PEN 130.00", con los precios con que se
-// cotizó la línea (tour_linea.precios) y la residencia de cada pasajero.
-const desglosePrecioTour = (bloque: BloqueItem): string | null => {
-    const linea = bloque.items[0];
-    const precios = linea?.tour_linea?.precios;
-    if (!precios) return null;
-
-    const pax = cotizacion.value?.pasajeros ?? [];
-    const moneda = linea.moneda_costo;
-    const tipos: Array<{ clave: 'adulto' | 'nino' | 'adulto_ext' | 'nino_ext'; tipo: 'adulto' | 'nino'; ext: boolean; etiqueta: string }> = [
-        { clave: 'adulto', tipo: 'adulto', ext: false, etiqueta: 'adulto' },
-        { clave: 'nino', tipo: 'nino', ext: false, etiqueta: 'niño' },
-        { clave: 'adulto_ext', tipo: 'adulto', ext: true, etiqueta: 'adulto extranjero' },
-        { clave: 'nino_ext', tipo: 'nino', ext: true, etiqueta: 'niño extranjero' },
-    ];
-    const partes = tipos.flatMap((t) => {
-        const n = pax.filter((p) => p.tipo_pax === t.tipo && (p.residencia === 'extranjero') === t.ext).length;
-        return n > 0 ? [`${n} ${t.etiqueta}${n > 1 ? 's' : ''} × ${moneda} ${Number(precios[t.clave]).toFixed(2)}`] : [];
-    });
-    const infantes = pax.filter((p) => p.tipo_pax === 'infante').length;
-    if (infantes) partes.push(`${infantes} infante${infantes > 1 ? 's' : ''} sin costo`);
-
-    return partes.length ? partes.join(' + ') : null;
-};
-
-// Incluye del tour con el costo por persona copiado al cotizar.
-const incluyeDeCarga = (bloque: BloqueItem) => bloque.items.flatMap((i) => i.desglose_costo_snapshot ?? []);
-const incluyeAbierto = ref<Set<string>>(new Set());
-const toggleIncluye = (carga: string) => {
-    if (incluyeAbierto.value.has(carga)) incluyeAbierto.value.delete(carga);
-    else incluyeAbierto.value.add(carga);
-};
-
-const guardandoPrecioCarga = ref<string | null>(null);
-// H13 (T-032): lo que se está escribiendo en el precio de un tour. Vue vuelve a fijar el `value` de
-// un campo en cada re-render; sin este borrador, guardar otro ítem borraba el texto a medio escribir.
-// Se descarta al confirmar el campo (@change), se guarde o no.
-const borradorPrecioCarga = ref<Record<string, string>>({});
-const onPrecioCarga = async (bloque: BloqueItem, event: Event) => {
-    const precio = Number((event.target as HTMLInputElement).value);
-    if (bloque.carga) delete borradorPrecioCarga.value[bloque.carga];
-    if (!alternativaActiva.value || !bloque.carga || Number.isNaN(precio) || precio < 0) return;
-    if (Math.abs(precio - subtotalGrupo(bloque.items)) < 0.005) return;
-
-    guardandoPrecioCarga.value = bloque.carga;
-    borradorPrecioCarga.value[bloque.carga] = String(precio); // se muestra lo confirmado mientras guarda
-    try {
-        await alternativaItemService.precioCarga(alternativaActiva.value.id, bloque.carga, precio);
-        await cargarCotizacion();
-        toast.success('Precio del tour actualizado');
-    } catch (error: any) {
-        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo cambiar el precio', 'error');
-    } finally {
-        if (bloque.carga) delete borradorPrecioCarga.value[bloque.carga];
-        guardandoPrecioCarga.value = null;
-    }
-};
-
-// Un combo se mueve entero (conserva la distancia entre sus días).
-const onMoverCarga = async (bloque: BloqueItem, event: Event) => {
-    const valor = Number((event.target as HTMLSelectElement).value);
-    const carga = bloque.cargaCombo ?? bloque.carga;
-    if (!alternativaActiva.value || !carga || !valor || valor === diaActivo.value) return;
-    try {
-        await alternativaItemService.moverCarga(alternativaActiva.value.id, { carga, dia_referencial: valor });
-        await cargarCotizacion();
-    } catch (error: any) {
-        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo mover el tour', 'error');
-    }
-};
-
-const eliminandoCarga = ref<string | null>(null);
-const eliminarCargaTour = async (bloque: BloqueItem) => {
-    if (!alternativaActiva.value || !bloque.carga) return;
-
-    const confirmacion = await (Swal as TVueSwalInstance).fire({
-        title: `¿Quitar "${bloque.tourNombre ?? 'este tour'}"?`,
-        text: bloque.cargaCombo ? `Es parte del combo "${bloque.comboNombre}": puedes quitar solo este tour o el combo entero.` : 'Se quita el tour de esta alternativa.',
-        icon: 'warning',
-        showCancelButton: true,
-        showDenyButton: !!bloque.cargaCombo,
-        confirmButtonText: bloque.cargaCombo ? 'Solo este tour' : 'Sí, quitar',
-        denyButtonText: 'Todo el combo',
-        cancelButtonText: 'Cancelar',
-    });
-    if (!confirmacion.isConfirmed && !confirmacion.isDenied) return;
-
-    const carga = confirmacion.isDenied ? bloque.cargaCombo! : bloque.carga;
-    eliminandoCarga.value = bloque.carga;
-    try {
-        await alternativaItemService.eliminarCarga(alternativaActiva.value.id, carga);
-        toast.success('Tour quitado');
-    } catch (error: any) {
-        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo quitar el tour', 'error');
-    } finally {
-        eliminandoCarga.value = null;
-        await cargarCotizacion();
-    }
-};
-
-// §3.12 — tours cuya temporada ya no es la de su día (cambió la fecha de la
-// cotización o se movió el tour de día). Solo aviso; recalcular es a pedido
-// del vendedor.
-const temporadasDesactualizadas = ref<TemporadaDesactualizada[]>([]);
-const cargarTemporadasTours = async () => {
-    const alt = alternativaActiva.value;
-    if (!alt || !['borrador', 'enviada'].includes(alt.estado) || !(alt.items ?? []).some((i) => i.origen_tipo === 'tour')) {
-        temporadasDesactualizadas.value = [];
-        return;
-    }
-    try {
-        temporadasDesactualizadas.value = (await alternativaItemService.temporadasTours(alt.id)).temporadas_desactualizadas;
-    } catch {
-        temporadasDesactualizadas.value = [];
-    }
-};
-const recalculandoTemporadas = ref(false);
-const recalcularTemporadas = async () => {
-    if (!alternativaActiva.value) return;
-    recalculandoTemporadas.value = true;
-    try {
-        const res = await alternativaItemService.recalcularTemporadas(alternativaActiva.value.id);
-        await cargarCotizacion();
-        if (res.omitidas.length) {
-            (Swal as TVueSwalInstance).fire({
-                icon: 'info',
-                title: `${res.recalculadas} tour(s) recalculado(s)`,
-                html: `<p class="text-start mb-1">No se tocaron:</p><ul class="text-start small mb-0">${res.omitidas.map((o) => `<li>${escaparHtml(o)}</li>`).join('')}</ul>`,
-            });
-        } else {
-            toast.success('Precios por temporada recalculados');
-        }
-    } catch (error: any) {
-        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo recalcular', 'error');
-    } finally {
-        recalculandoTemporadas.value = false;
-    }
-};
-
-const eligiendoGrupoItemId = ref<number | null>(null);
-const elegirGrupoDesdeLienzo = async (item: AlternativaItem) => {
-    eligiendoGrupoItemId.value = item.id;
-    try {
-        const res = await alternativaItemService.elegirGrupo(item.id);
-        if (!aplicarAlternativaActualizada(res.alternativa)) await cargarCotizacion();
-    } catch (error: any) {
-        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo marcar la opción elegida', 'error');
-    } finally {
-        eligiendoGrupoItemId.value = null;
-    }
-};
-
-const bloquesLienzo = computed<BloqueItem[]>(() => agruparPorTour(itemsVisiblesLienzo.value));
-// Sin chips (1 destino), el panel de precio sigue mostrando TODOS los
-// ítems de la alternativa agrupados por tour, sin el nivel extra — cero
-// cambio visual respecto a antes de 12f-2.
-const gruposPrecioPanel = computed<BloqueItem[]>(() => agruparPorTour(itemsSinAjuste.value));
-
-// Sesión 12f-2, §7.1 punto 4 — "subtotal colapsable por destino, además
-// del total general". Solo se usa (en el template) cuando
-// mostrarChipsDestino es true; con 1 destino gruposPrecioPanel de arriba
-// sigue siendo lo que se renderiza. El total general (totalLocal) NO
-// cambia de cálculo en ningún caso — sigue sumando TODOS los ítems.
-type BloqueDestino = { destinoId: number; destinoTexto: string; subtotal: number; grupos: BloqueItem[] };
-const gruposPrecioPorDestino = computed<BloqueDestino[]>(() => {
-    const primerDestinoId = alternativaDestinos.value[0]?.id ?? null;
-    return alternativaDestinos.value.map((destino) => {
-        const items = (itemsSinAjuste.value).filter((i) => (i.alternativa_destino_id ?? primerDestinoId) === destino.id);
-        return {
-            destinoId: destino.id,
-            destinoTexto: destino.destino_texto,
-            subtotal: totalEfectivoLocal(items),
-            grupos: agruparPorTour(items),
-        };
-    });
-});
-
-const onReasignarDiaItem = async (item: AlternativaItem, event: Event) => {
-    const valor = Number((event.target as HTMLSelectElement).value);
-    if (!valor) return;
-    try {
-        await alternativaItemService.reasignarDia(item.id, valor);
-        await cargarCotizacion();
-    } catch (error: any) {
-        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo mover el ítem', 'error');
-    }
-};
-
-const onMoverBloque = async (bloque: BloqueItem, event: Event) => {
-    const valor = Number((event.target as HTMLSelectElement).value);
-    if (!bloque.tourOrigenId || !alternativaActiva.value || !valor || valor === diaActivo.value) return;
-    try {
-        await alternativaItemService.moverBloque(alternativaActiva.value.id, { tour_origen_id: bloque.tourOrigenId, dia_referencial: valor });
-        await cargarCotizacion();
-    } catch (error: any) {
-        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo mover el bloque', 'error');
-    }
-};
-
-// Punto D — elimina TODOS los ítems del bloque (mismo tour_origen_id) en una
-// sola operación atómica (T-027): un DELETE por ítem en paralelo dejaba el
-// total de la alternativa mal guardado.
-const eliminandoBloqueId = ref<number | null>(null);
-const eliminarBloque = async (bloque: BloqueItem) => {
-    if (!bloque.tourOrigenId || !alternativaActiva.value) return;
-
-    const confirmacion = await (Swal as TVueSwalInstance).fire({
-        title: `¿Eliminar "${bloque.tourNombre ?? 'este tour'}"?`,
-        text: `Se eliminarán sus ${bloque.items.length} ítem(s).`,
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonText: 'Sí, eliminar',
-        cancelButtonText: 'Cancelar',
-    });
-    if (!confirmacion.isConfirmed) return;
-
-    eliminandoBloqueId.value = bloque.tourOrigenId;
-    try {
-        await alternativaItemService.eliminarBloque(alternativaActiva.value.id, bloque.items.map((i) => i.id));
-        toast.success('Tour eliminado');
-    } catch (error: any) {
-        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo eliminar el tour', 'error');
-    } finally {
-        eliminandoBloqueId.value = null;
-        await cargarCotizacion();
-    }
-};
 
 // ── Biblioteca unificada (Sesión 11b3, §7.1) — un único endpoint decide
 // contra qué tabla(s) consulta según el chip activo, ver
@@ -4136,21 +3753,7 @@ const eliminarGrupoLienzo = async (fila: { grupoId: string; items: AlternativaIt
 
 const desglosePasajerosTexto = (item: AlternativaItem) => desglosePasajerosTextoDe(item, cotizacion.value?.pasajeros ?? []);
 
-// ── Panel de precio — grupos colapsables por tour ──────────────────────
-const gruposExpandido = ref<Set<number>>(new Set());
-const toggleGrupoExpandido = (tourOrigenId: number) => {
-    if (gruposExpandido.value.has(tourOrigenId)) gruposExpandido.value.delete(tourOrigenId);
-    else gruposExpandido.value.add(tourOrigenId);
-};
-
-// Sesión 12f-2 — mismo patrón, un nivel arriba (colapsable por destino,
-// §7.1 punto 4). Todos expandidos por defecto la primera vez que se ve
-// cada uno (el vendedor colapsa los que no le interesan).
-const destinosExpandido = ref<Set<number>>(new Set());
-const toggleDestinoExpandido = (destinoId: number) => {
-    if (destinosExpandido.value.has(destinoId)) destinosExpandido.value.delete(destinoId);
-    else destinosExpandido.value.add(destinoId);
-};
+// Panel de precio: cada destino arranca expandido (el vendedor colapsa los que no le interesan).
 watch(alternativaDestinos, (destinos) => {
     for (const d of destinos) destinosExpandido.value.add(d.id);
 }, { immediate: true });
