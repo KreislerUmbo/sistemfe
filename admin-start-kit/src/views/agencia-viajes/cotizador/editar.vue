@@ -1519,7 +1519,6 @@ import AceptarAlternativaModal from '@/components/AgenciaViajes/AceptarAlternati
 import ModificacionDiferenciaPanel from '@/components/AgenciaViajes/ModificacionDiferenciaPanel.vue';
 import PenalidadPasajeroModal from '@/components/AgenciaViajes/PenalidadPasajeroModal.vue';
 import ClientFormQuick from '@/components/Sales/ClientFormQuick.vue';
-import { useToast } from '@/composables/useToast';
 import { servicioService } from '@/services/admin/servicioService';
 import { useAgenciaViajesCatalogosStore } from '@/stores/agenciaViajesCatalogos';
 import { formatDiaCorto, formatFecha, formatFechaHora, hoyPeru } from '@/helpers/fecha';
@@ -1555,7 +1554,6 @@ type TVueSwalInstance = typeof Swal & typeof Swal.fire;
 const route = useRoute();
 const router = useRouter();
 const cotizacionId = Number(route.params.id);
-const toast = useToast();
 
 const cargandoPagina = ref(true);
 
@@ -1575,7 +1573,7 @@ const {
 const modo = ref<'local' | 'intl' | 'guia'>('local');
 
 const {
-    resumenPax, resumenPaxTotal, esItemPaqueteMayorista, textoAdultosMayorista, notaMayoristaSinNinos,
+    resumenPax, resumenPaxTotal, textoAdultosMayorista, notaMayoristaSinNinos,
     cantidadAdultosCotizacion, hayAlternativaAceptada, editandoPasajeros, formPasajeros, guardandoPasajeros,
     tipoPorEdadEdicion, abrirEdicionPasajeros, agregarPaxEdicion, guardarPasajeros,
 } = usePasajerosCotizacion({ cotizacion, alternativaActiva, cargarCotizacion });

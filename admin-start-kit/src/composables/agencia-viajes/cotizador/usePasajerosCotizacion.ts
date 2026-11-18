@@ -128,7 +128,7 @@ export function usePasajerosCotizacion(deps: DependenciasPasajeros) {
     };
 
     return {
-        resumenPax, resumenPaxTotal, esItemPaqueteMayorista, textoAdultosMayorista, notaMayoristaSinNinos,
+        resumenPax, resumenPaxTotal, textoAdultosMayorista, notaMayoristaSinNinos,
         cantidadAdultosCotizacion, hayAlternativaAceptada, editandoPasajeros, formPasajeros, guardandoPasajeros,
         tipoPorEdadEdicion, abrirEdicionPasajeros, agregarPaxEdicion, guardarPasajeros,
     };

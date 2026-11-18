@@ -16,7 +16,7 @@ export interface DependenciasGuia {
 }
 
 /**
- * Guías como ítem (fix guia-como-item-real). Mismo patrón que paquetes/detalle.vue: elegir el guía
+ * Guías como ítem. Mismo patrón que paquetes/detalle.vue: elegir el guía
  * primero y después su lista de tarifas (una por destino/modalidad; cada tarifa ya trae su propio
  * destino). No hay endpoint de búsqueda unificada para guías (guiaService no lo tiene, a diferencia
  * de bibliotecaCotizadorService), así que vive aparte del grid de biblioteca, como el comparador de
