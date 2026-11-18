@@ -1540,7 +1540,7 @@ import { useAgenciaViajesCatalogosStore } from '@/stores/agenciaViajesCatalogos'
 import { diferenciaDiasISO, formatDiaCorto, formatFecha, formatFechaHora, hoyPeru, partesFechaHoraPeru, sumarDiasISO } from '@/helpers/fecha';
 import { guiaService } from '@/services/admin/guiaService';
 import { tipoCambioAgenciaService } from '@/services/admin/tipoCambioAgenciaService';
-import type { Cotizacion, Alternativa, AlternativaItem, ProveedorTarifa, OpcionMayorista, OpcionMayoristaTour, OpcionMayoristaOpcional, OpcionHotelTarifa, Proveedor, ProveedorTipo, BibliotecaResultado, ConfiguracionAgencia, GuiaTarifa, Servicio, TipAfeIgv, DestinoTributario, TemporadaDesactualizada } from '@/types/agencia-viajes';
+import type { Alternativa, AlternativaItem, ProveedorTarifa, OpcionMayorista, OpcionMayoristaTour, OpcionMayoristaOpcional, OpcionHotelTarifa, Proveedor, ProveedorTipo, BibliotecaResultado, GuiaTarifa, Servicio, TipAfeIgv, DestinoTributario, TemporadaDesactualizada } from '@/types/agencia-viajes';
 import type { Client } from '@/types/clients';
 import type { AvisoSalida } from '@/helpers/avisosProveedores';
 import { convertirMonedaLocal, filasResumen as filasResumenDe, sumaPorGrupos, totalDeLinea, totalEfectivo } from '@/helpers/agencia-viajes/cotizador/totales';
@@ -1550,6 +1550,7 @@ import {
     iconoItem, nombreMayoristaDeGrupo, tarifaAereaVencida, textoPlano, toursDeGrupo,
 } from '@/helpers/agencia-viajes/cotizador/presentacionItem';
 import { descargarArchivo, leerMensajeErrorBlob } from '@/helpers/descargarArchivo';
+import { useCotizacionEditor } from '@/composables/agencia-viajes/cotizador/useCotizacionEditor';
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
 
@@ -1560,29 +1561,17 @@ const toast = useToast();
 
 const cargandoPagina = ref(true);
 
-const cotizacion = ref<Cotizacion | null>(null);
-const alternativaActivaId = ref<number | null>(null);
+// Núcleo: cotización, alternativa activa y refrescos (el registro de alRefrescar está al final).
+const {
+    cotizacion, alternativaActivaId, alternativaActiva, itemsSinAjuste, itemsAjuste, configAgencia,
+    modificacionInfo, alternativaSoloLectura, versionCotizacion, cargarCotizacion,
+    aplicarItemActualizado, aplicarAlternativaActualizada, alRefrescar,
+} = useCotizacionEditor(cotizacionId);
 const modo = ref<'local' | 'intl' | 'guia'>('local');
-
-// Sesión 11i — descuento configurable por agencia (Puntos B/C). Se carga
-// una sola vez al montar (singleton por tenant, no cambia mientras el
-// vendedor está cotizando) y gobierna qué input(s) se muestran en el
-// lienzo y en el resumen.
-const configAgencia = ref<ConfiguracionAgencia | null>(null);
-
-const alternativaActiva = computed<Alternativa | null>(() =>
-    cotizacion.value?.alternativas?.find((a) => a.id === alternativaActivaId.value) ?? null
-);
-
-// Los «Ajuste — …» (T-005/T-072) no se suman ni se listan en el lienzo: el precio ya está en el
-// servicio que ajustan. Se muestran aparte, sin sumar (itemsAjuste).
-const itemsSinAjuste = computed(() => (alternativaActiva.value?.items ?? []).filter((i) => !i.ajuste_de_item_id));
-const itemsAjuste = computed(() => (alternativaActiva.value?.items ?? []).filter((i) => !!i.ajuste_de_item_id));
 
 // ── T-007: modificación de reserva ───────────────────────────────────
 // La cotización de una modificación (origen='modificacion') trabaja con el panel «Diferencia».
 // El panel solo muestra lo que calcula el backend; aplicar manda la huella que se vio.
-const modificacionInfo = ref<{ id: number; estado: 'abierta' | 'aplicada' | 'descartada'; reserva_id: number; reserva_codigo: string | null } | null>(null);
 const reservaIdModificacion = computed(() => modificacionInfo.value?.reserva_id ?? null);
 const modificacion = useModificacionReserva(reservaIdModificacion);
 const avisoEdadEstimada = ref<PasajeroEdadEstimada[]>([]);
@@ -1625,9 +1614,7 @@ const irAItem = async (id: number) => {
 const revisionActual = ref<RevisionEntrada[]>([]);
 // Cambia cuando la alternativa cambia (mismo momento en que se refresca el total): el componente
 // espera medio segundo antes de volver a pedir, para no llamar en cada tecla.
-// cargarCotizacion() reemplaza `cotizacion` tras cada guardado; el total local cubre las ediciones en vivo.
-const versionCotizacion = ref(0);
-watch(cotizacion, () => { versionCotizacion.value++; });
+// versionCotizacion (núcleo) cambia tras cada guardado; el total local cubre las ediciones en vivo.
 const claveRevision = computed(() => `${versionCotizacion.value}|${alternativaActivaId.value}|${totalLocal.value}`);
 const nombreItemRevision = (id: number): string => {
     const item = itemsSinAjuste.value.find((i) => i.id === id);
@@ -1957,12 +1944,6 @@ const guardarCabecera = async () => {
 // creada. El backend ahora bloquea el guardado si ya hay una alternativa
 // aceptada (reserva real generada) — hayAlternativaAceptada refleja el
 // mismo candado acá para no dejar el ícono habilitado sin sentido.
-// T-074 — la alternativa reservada (aceptada, o reemplazada por una modificación) no se toca desde
-// el lienzo: solo cambia por Modificar reserva, que trabaja sobre una versión nueva en borrador.
-// La versión borrador de una modificación abierta sí es editable. El backend ya lo bloquea.
-const alternativaSoloLectura = computed(() =>
-    ['aceptada', 'reemplazada'].includes(alternativaActiva.value?.estado ?? '') && modificacionInfo.value?.estado !== 'abierta');
-
 // Reserva a la que enlaza la pestaña de una alternativa: la suya si está aceptada, o la que la
 // reemplazó (modificacionAplicada.reserva) si quedó 'reemplazada'.
 const reservaDeAlternativa = (alt: Alternativa) =>
@@ -2019,70 +2000,6 @@ const guardarPasajeros = async () => {
     } finally {
         guardandoPasajeros.value = false;
     }
-};
-
-const cargarCotizacion = async () => {
-    const res = await cotizacionService.obtener(cotizacionId);
-    cotizacion.value = res.cotizacion;
-    modificacionInfo.value = res.modificacion ?? null;
-    if (!alternativaActivaId.value && cotizacion.value.alternativas?.length) {
-        // T-080: solo la primera carga; abre la reservada, si no la reemplazada, si no la primera.
-        const alts = cotizacion.value.alternativas;
-        const inicial = alts.find((a: any) => a.estado === 'aceptada') ?? alts.find((a: any) => a.estado === 'reemplazada') ?? alts[0];
-        alternativaActivaId.value = inicial.id;
-    }
-    inicializarEdicionItems();
-    resolverDestinoActivo();
-    cargarTemporadasTours();
-    inicializarDias();
-    // T-007: cada vez que se guarda algo, la diferencia se vuelve a pedir (sin frenar la pantalla).
-    if (modificacionInfo.value?.estado === 'abierta') void modificacion.cargar();
-};
-
-// ── T-032 (R5): actualización parcial ─────────────────────────────────
-// Las acciones que devuelven el ítem o la alternativa ya actualizados llaman SOLO a estos dos
-// helpers en vez de cargarCotizacion(); ninguna arma el reemplazo por su cuenta. Van juntos en
-// este bloque porque T-094 los moverá enteros a un composable.
-// Devuelven false si no pudieron aplicar (respuesta sin lo necesario, alternativa que ya no está):
-// la acción cae entonces a cargarCotizacion(), que sigue siendo la red de seguridad.
-const despuesDeAplicarParcial = () => {
-    versionCotizacion.value++; // el watch de `cotizacion` no ve cambios internos: avisa a la revisión
-    inicializarEdicionItems();
-    inicializarDias();
-    // La diferencia de una modificación de reserva depende de los ítems: se vuelve a pedir igual.
-    if (modificacionInfo.value?.estado === 'abierta') void modificacion.cargar();
-};
-
-// Una alternativa devuelta por el backend (columnas, y `items` cuando cambian varios): se mezcla
-// sobre la que ya está en memoria, conservando las relaciones que la respuesta no trae.
-const aplicarAlternativaActualizada = (nueva: Partial<Alternativa> | null | undefined): boolean => {
-    const actual = cotizacion.value?.alternativas?.find((a) => a.id === nueva?.id);
-    if (!nueva || !actual) return false;
-    const { items, ...columnas } = nueva;
-    Object.assign(actual, columnas);
-    if (items) {
-        const previos = new Map((actual.items ?? []).map((i) => [i.id, i]));
-        actual.items = items.map((i) => Object.assign(previos.get(i.id) ?? {}, i)) as AlternativaItem[];
-    }
-    despuesDeAplicarParcial();
-    return true;
-};
-
-// Un ítem devuelto por el backend: reemplaza al que tiene su mismo id o, si es nuevo, se agrega.
-// `alternativa` (sin ítems) trae el total vigente de la alternativa.
-const aplicarItemActualizado = (item: AlternativaItem | null | undefined, alternativa?: Partial<Alternativa> | null): boolean => {
-    const alt = cotizacion.value?.alternativas?.find((a) => a.id === item?.alternativa_id);
-    if (!item || !alt) return false;
-    const lista = alt.items ?? (alt.items = []);
-    const existente = lista.find((i) => i.id === item.id);
-    if (existente) Object.assign(existente, item);
-    else lista.push(item);
-    if (alternativa) {
-        const { items: _omitidos, ...columnas } = alternativa;
-        Object.assign(alt, columnas);
-    }
-    despuesDeAplicarParcial();
-    return true;
 };
 
 // Envío al cliente (EnviarAlternativa.vue, T-050: correo, WhatsApp u otro medio): el backend
@@ -2424,7 +2341,7 @@ const destinoAtractivoIdActivo = computed(() => {
     return alternativaDestinos.value.find((d) => d.id === destinoActivoId.value)?.destino_atractivo_id ?? null;
 });
 
-// Llamada explícita (NO un watch) desde cargarCotizacion()/el watch de
+// Llamada explícita (NO un watch) desde alRefrescar() (núcleo)/el watch de
 // alternativaActivaId — inicializarDias() lee itemsDelDestinoActivo justo
 // después, y un watch propio de alternativaDestinos no alcanza a correr a
 // tiempo en el mismo tick (flush diferido de Vue). Si el destino activo
@@ -4435,6 +4352,19 @@ watch(alternativaActivaId, () => {
     if (modo.value === 'intl') cargarOpcionesMayorista();
 });
 
+// Qué se reinicia tras recargar la cotización ('completo') o aplicar un ítem/alternativa
+// devueltos por el backend ('parcial'), en este orden.
+alRefrescar((tipo) => {
+    inicializarEdicionItems();
+    if (tipo === 'completo') {
+        resolverDestinoActivo();
+        cargarTemporadasTours();
+    }
+    inicializarDias();
+    // T-007: la diferencia de una modificación depende de los ítems: se vuelve a pedir (sin frenar la pantalla).
+    if (modificacionInfo.value?.estado === 'abierta') void modificacion.cargar();
+});
+
 const layoutStore = useLayoutStore();
 
 onMounted(async () => {
@@ -4476,7 +4406,7 @@ onMounted(async () => {
             catalogos.obtenerConfigAgencia(),
         ]);
         proveedorTipos.value = tiposList;
-        // inicializarEdicionItems() (dentro de cargarCotizacion(), abajo)
+        // inicializarEdicionItems() (vía alRefrescar, al cargar la cotización abajo)
         // necesita configAgencia.value ya resuelto para derivar
         // monto_descuento por ítem (Punto B) — por eso cargarCotizacion()
         // recién se dispara después de esta línea, no antes.
