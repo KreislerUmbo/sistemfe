@@ -1543,7 +1543,6 @@ import { tipoCambioAgenciaService } from '@/services/admin/tipoCambioAgenciaServ
 import type { Alternativa, AlternativaItem, ProveedorTarifa, OpcionMayorista, OpcionMayoristaTour, OpcionMayoristaOpcional, OpcionHotelTarifa, Proveedor, ProveedorTipo, BibliotecaResultado, GuiaTarifa, Servicio, TipAfeIgv, DestinoTributario, TemporadaDesactualizada } from '@/types/agencia-viajes';
 import type { Client } from '@/types/clients';
 import type { AvisoSalida } from '@/helpers/avisosProveedores';
-import { convertirMonedaLocal, filasResumen as filasResumenDe, sumaPorGrupos, totalDeLinea, totalEfectivo } from '@/helpers/agencia-viajes/cotizador/totales';
 import { agruparPorTour, filasDelBloque, type BloqueItem } from '@/helpers/agencia-viajes/cotizador/bloquesLienzo';
 import {
     badgeTratamientoTributario, desglosePasajerosTexto as desglosePasajerosTextoDe, descripcionDestinoServicio, etiquetaItem,
@@ -1551,6 +1550,7 @@ import {
 } from '@/helpers/agencia-viajes/cotizador/presentacionItem';
 import { descargarArchivo, leerMensajeErrorBlob } from '@/helpers/descargarArchivo';
 import { useCotizacionEditor } from '@/composables/agencia-viajes/cotizador/useCotizacionEditor';
+import { useEdicionPrecios } from '@/composables/agencia-viajes/cotizador/useEdicionPrecios';
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
 
@@ -1567,6 +1567,13 @@ const {
     modificacionInfo, alternativaSoloLectura, versionCotizacion, cargarCotizacion,
     aplicarItemActualizado, aplicarAlternativaActualizada, alRefrescar,
 } = useCotizacionEditor(cotizacionId);
+// Precios: edición por ítem (debounce, H13), descuento global, piso y totales de vista previa.
+const {
+    edicionItems, alertasPiso, guardandoEdicion, inicializarEdicionItems, totalConvertidoLocal,
+    totalEfectivoLocal, subtotalGrupo, filasResumen, totalLocal, descuentoGlobalLocal,
+    descuentoGlobalMontoLocal, lineasFueraDePiso, aplicandoDescuentoGlobal, onEditarDescuentoGlobal,
+    onEditarDescuentoGlobalMonto, onEditarPrecio, onEditarDescuentoPct, onEditarMontoDescuentoItem,
+} = useEdicionPrecios({ alternativaActiva, itemsSinAjuste, cargarCotizacion, aplicarItemActualizado, aplicarAlternativaActualizada });
 const modo = ref<'local' | 'intl' | 'guia'>('local');
 
 // ── T-007: modificación de reserva ───────────────────────────────────
@@ -4124,194 +4131,6 @@ const eliminarGrupoLienzo = async (fila: { grupoId: string; items: AlternativaIt
         (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo eliminar el grupo', 'error');
     } finally {
         eliminandoGrupoId.value = null;
-    }
-};
-
-// ── Edición en vivo (descuento_pct / precio_convertido) ────────────────
-// Punto B (Sesión 11i) — monto_descuento se agrega SOLO para inicializar/
-// mostrar el input cuando modo_descuento_item='monto' (derivado de
-// precioListaConvertido - precio_convertido, nunca al revés): precio_convertido
-// sigue siendo el único campo real que se manda al backend, igual que antes.
-const edicionItems = ref<Record<number, { descuento_pct: number; precio_convertido: number; monto_descuento: number }>>({});
-const alertasPiso = ref<Record<number, boolean>>({});
-const edicionTimeouts: Record<number, any> = {};
-// H13 (T-032): ítems con una edición escrita que todavía no se envió (o se está enviando). Ni la
-// recarga ni la respuesta de otro guardado pisan lo que el vendedor tiene en esos campos.
-const edicionPendiente = new Set<number>();
-// R4/H13: ítems cuyo guardado está en vuelo (indicador junto al campo; el campo sigue editable).
-// Hasta que el servidor responde, un refresco de otro ítem tampoco pisa lo que se escribió.
-const guardandoEdicion = ref<number[]>([]);
-const programarEnvioEdicion = (itemId: number, payload: () => { descuento_pct?: number; precio_convertido?: number }) => {
-    clearTimeout(edicionTimeouts[itemId]);
-    edicionPendiente.add(itemId);
-    edicionTimeouts[itemId] = setTimeout(() => { void enviarEdicion(itemId, payload()); }, 400);
-};
-// El ítem cuya fila tiene el foco (las filas llevan data-item-id): tampoco se pisa.
-const itemConFoco = (): number[] => {
-    const fila = document.activeElement instanceof HTMLElement ? document.activeElement.closest('[data-item-id]') : null;
-    return (fila?.getAttribute('data-item-id') ?? '').split(/\s+/).map(Number).filter(Boolean);
-};
-
-const precioListaConvertidoDe = (item: AlternativaItem) => {
-    if (!alternativaActiva.value) return Number(item.precio_venta_snapshot);
-    return convertirMonedaLocal(Number(item.precio_venta_snapshot), item.moneda_costo, alternativaActiva.value.moneda_cotizacion, Number(alternativaActiva.value.tipo_cambio_aplicado));
-};
-
-const inicializarEdicionItems = () => {
-    const conFoco = itemConFoco();
-    (itemsSinAjuste.value).forEach((item) => {
-        if (edicionPendiente.has(item.id) || guardandoEdicion.value.includes(item.id) || conFoco.includes(item.id)) return; // H13
-        const precioConvertido = Number(item.precio_convertido);
-        const precioLista = precioListaConvertidoDe(item);
-        edicionItems.value[item.id] = {
-            descuento_pct: Number(item.descuento_pct ?? 0),
-            precio_convertido: precioConvertido,
-            monto_descuento: Math.round((precioLista - precioConvertido) * 100) / 100,
-        };
-    });
-    descuentoGlobalLocal.value = Number(alternativaActiva.value?.descuento_global_pct ?? 0);
-    descuentoGlobalMontoLocal.value = calcularMontoGlobalEquivalente();
-    lineasFueraDePiso.value = [];
-};
-
-// Vista previa mientras se edita: el precio que se está escribiendo pesa antes que el guardado.
-const totalConvertidoLocal = (item: AlternativaItem) =>
-    totalDeLinea(edicionItems.value[item.id]?.precio_convertido ?? Number(item.precio_convertido), item);
-const totalEfectivoLocal = (todos: AlternativaItem[]) => totalEfectivo(todos, totalConvertidoLocal);
-const subtotalGrupo = (items: AlternativaItem[]) => totalEfectivoLocal(items);
-const filasResumen = (items: AlternativaItem[]) => filasResumenDe(items, totalConvertidoLocal);
-
-const totalLocal = computed(() => totalEfectivoLocal(itemsSinAjuste.value));
-
-// ── Descuento global (Parte B, punto 3.1 del plan de dominio) — reparte el
-// % a CADA alternativa_item respetando su piso individual
-// (AlternativaController::aplicarDescuentoGlobal(), mismo PriceEngineService
-// que ya usa la edición por ítem — NUNCA se recalcula acá, el backend
-// siempre manda el resultado final). Antes de esta sesión el campo se
-// guardaba pero no se aplicaba a ningún ítem — gap real cerrado en 11b3.
-const descuentoGlobalLocal = ref(0);
-// Sesión 11i — modo_descuento_global='monto'. No se persiste como monto
-// (ver aplicarDescuentoGlobalMonto() en el backend — se resuelve a un %
-// efectivo y ESE es el que se guarda en alternativas.descuento_global_pct),
-// así que al recargar se reconstruye desde ese % efectivo para que el
-// input muestre algo consistente en vez de volver a 0.
-const descuentoGlobalMontoLocal = ref(0);
-const lineasFueraDePiso = ref<Array<{ alternativa_item_id: number; precio_minimo_permitido: number | null }>>([]);
-
-// Mismo criterio de grupos que el total, para que monto → % → monto sea estable al recargar.
-const precioListaTotalDe = (item: AlternativaItem) => totalDeLinea(precioListaConvertidoDe(item), item);
-const sumaPreciosListaLocal = (items: AlternativaItem[]) => sumaPorGrupos(items, precioListaTotalDe);
-
-const calcularMontoGlobalEquivalente = () => {
-    const pct = Number(alternativaActiva.value?.descuento_global_pct ?? 0);
-    if (!pct) return 0;
-    const sumaListaTotal = sumaPreciosListaLocal(itemsSinAjuste.value);
-    return Math.round(sumaListaTotal * (pct / 100) * 100) / 100;
-};
-
-// T-032 (R4): el descuento global recalcula todas las líneas; mientras tanto el campo queda
-// deshabilitado con su indicador.
-const aplicandoDescuentoGlobal = ref(false);
-const onEditarDescuentoGlobal = async () => {
-    if (!alternativaActiva.value) return;
-    aplicandoDescuentoGlobal.value = true;
-    try {
-        const res = await alternativaService.actualizar(alternativaActiva.value.id, { descuento_global_pct: descuentoGlobalLocal.value });
-        if (!aplicarAlternativaActualizada(res.alternativa)) await cargarCotizacion();
-        // Después de aplicar: la aplicación reinicia `lineasFueraDePiso` y debe quedar el aviso nuevo.
-        lineasFueraDePiso.value = res.lineas_fuera_de_piso ?? [];
-    } catch (error: any) {
-        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo aplicar el descuento global', 'error');
-    } finally {
-        aplicandoDescuentoGlobal.value = false;
-    }
-};
-
-// Sesión 11i — versión en monto de lo de arriba: mismo endpoint, campo
-// distinto (descuento_global_monto — ver AlternativaController::update()/
-// aplicarDescuentoGlobalMonto(), que reparte proporcionalmente y valida el
-// piso de cada línea exactamente igual que la versión en %).
-const onEditarDescuentoGlobalMonto = async () => {
-    if (!alternativaActiva.value) return;
-    aplicandoDescuentoGlobal.value = true;
-    try {
-        const res = await alternativaService.actualizar(alternativaActiva.value.id, { descuento_global_monto: descuentoGlobalMontoLocal.value });
-        if (!aplicarAlternativaActualizada(res.alternativa)) await cargarCotizacion();
-        // Después de aplicar: la aplicación reinicia `lineasFueraDePiso` y debe quedar el aviso nuevo.
-        lineasFueraDePiso.value = res.lineas_fuera_de_piso ?? [];
-    } catch (error: any) {
-        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo aplicar el descuento global', 'error');
-    } finally {
-        aplicandoDescuentoGlobal.value = false;
-    }
-};
-
-// Punto B/D — 3 caminos según configuracion_agencia, todos con el mismo
-// debounce ~400ms y el mismo endpoint (alternativaItemService.actualizar):
-// solo cambia qué campo se manda y cómo se deriva el otro para la vista
-// previa local (edicionItems ya deja precio_convertido actualizado al
-// instante, que es lo único que totalConvertidoLocal() necesita leer).
-
-// permitir_descuento_item=false → "Precio de venta": edición directa,
-// mismo comportamiento que la Sesión 1.
-const onEditarPrecio = (item: AlternativaItem) => {
-    programarEnvioEdicion(item.id, () => ({ precio_convertido: edicionItems.value[item.id].precio_convertido }));
-};
-
-// permitir_descuento_item=true && modo_descuento_item='porcentaje' — el
-// vendedor edita el % directo, se manda descuento_pct (el backend deriva
-// precio_convertido). Acá se recalcula precio_convertido de una para la
-// vista previa local, con la MISMA fórmula que usa el backend.
-const onEditarDescuentoPct = (item: AlternativaItem) => {
-    const edicion = edicionItems.value[item.id];
-    const precioLista = precioListaConvertidoDe(item);
-    edicion.precio_convertido = Math.round(precioLista * (1 - edicion.descuento_pct / 100) * 100) / 100;
-    edicion.monto_descuento = Math.round((precioLista - edicion.precio_convertido) * 100) / 100;
-
-    programarEnvioEdicion(item.id, () => ({ descuento_pct: edicion.descuento_pct }));
-};
-
-// permitir_descuento_item=true && modo_descuento_item='monto' — el
-// vendedor edita el monto de descuento; precio_convertido se deriva acá
-// (precio de lista - monto) y ES ese el que se manda — el backend deriva
-// descuento_pct% de vuelta solo para guardarlo internamente (nunca se
-// muestra como "%" en este modo, salvo el badge informativo del template).
-const onEditarMontoDescuentoItem = (item: AlternativaItem) => {
-    const edicion = edicionItems.value[item.id];
-    const precioLista = precioListaConvertidoDe(item);
-    edicion.precio_convertido = Math.round((precioLista - edicion.monto_descuento) * 100) / 100;
-    edicion.descuento_pct = precioLista > 0 ? Math.round((1 - edicion.precio_convertido / precioLista) * 10000) / 100 : 0;
-
-    programarEnvioEdicion(item.id, () => ({ precio_convertido: edicion.precio_convertido }));
-};
-
-const enviarEdicion = async (itemId: number, payload: { descuento_pct?: number; precio_convertido?: number }) => {
-    edicionPendiente.delete(itemId);
-    guardandoEdicion.value.push(itemId);
-    try {
-        const res = await alternativaItemService.actualizar(itemId, payload);
-        alertasPiso.value[itemId] = !!res.alerta_piso;
-        // R5: se actualiza solo este ítem y el total de la alternativa. Si mientras tanto el
-        // vendedor volvió a escribir en este ítem (H13), sus campos quedan como están.
-        if (!aplicarItemActualizado(res.alternativa_item, res.alternativa)) await cargarCotizacion();
-        // Los campos de ESTE ítem toman lo que quedó guardado (p. ej. 100.555 → 100.56), salvo que
-        // el vendedor haya vuelto a escribir o haya otro guardado suyo en vuelo: ahí manda lo escrito.
-        const otroGuardadoEnVuelo = guardandoEdicion.value.filter((id) => id === itemId).length > 1;
-        if (!edicionPendiente.has(itemId) && !otroGuardadoEnVuelo) {
-            const item = alternativaActiva.value?.items?.find((i) => i.id === itemId);
-            const precioConvertido = Number(res.alternativa_item.precio_convertido);
-            const precioLista = item ? precioListaConvertidoDe(item) : precioConvertido;
-            edicionItems.value[itemId] = {
-                descuento_pct: Number(res.alternativa_item.descuento_pct ?? 0),
-                precio_convertido: precioConvertido,
-                monto_descuento: Math.round((precioLista - precioConvertido) * 100) / 100,
-            };
-        }
-    } catch (error: any) {
-        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo actualizar', 'error');
-    } finally {
-        const i = guardandoEdicion.value.indexOf(itemId);
-        if (i !== -1) guardandoEdicion.value.splice(i, 1);
     }
 };
 
