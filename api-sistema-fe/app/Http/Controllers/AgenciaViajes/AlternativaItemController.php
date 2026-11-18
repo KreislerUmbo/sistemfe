@@ -51,7 +51,8 @@ class AlternativaItemController extends Controller
         private ComboExplosionService $comboExplosion,
         private TourLineaService $tourLinea,
         private AltaManual $altaManual,
-        private AltaGuia $altaGuia
+        private AltaGuia $altaGuia,
+        private AltaMayorista $altaMayorista
     ) {
     }
 
@@ -73,7 +74,7 @@ class AlternativaItemController extends Controller
         try {
             [$item, $mensaje] = match ($origenTipo) {
                 AlternativaItem::ORIGEN_PROVEEDOR => [$this->crearItemProveedor($request, $alternativa), 'Ítem agregado correctamente'],
-                AlternativaItem::ORIGEN_MAYORISTA => [$this->crearItemMayorista($request, $alternativa), 'Ítem de mayorista agregado correctamente'],
+                AlternativaItem::ORIGEN_MAYORISTA => [$this->altaMayorista->crear($alternativa, $request->all()), 'Ítem de mayorista agregado correctamente'],
                 AlternativaItem::ORIGEN_PASAJE_AEREO => [$this->crearItemPasajeAereo($request, $alternativa), 'Pasaje aéreo agregado correctamente'],
                 AlternativaItem::ORIGEN_MANUAL => [$this->altaManual->crear($alternativa, $request->all()), 'Ítem manual agregado correctamente'],
                 AlternativaItem::ORIGEN_GUIA => [$this->altaGuia->crear($alternativa, $request->all()), 'Ítem de guía agregado correctamente'],
@@ -1179,101 +1180,6 @@ class AlternativaItemController extends Controller
             'costo' => $camasAdicionales * (float) $tarifa->precio_costo_cama_adicional,
             'venta' => $camasAdicionales * (float) $tarifa->precio_venta_cama_adicional,
         ];
-    }
-
-    // ── origen_tipo=mayorista ─────────────────────────────────────────
-    // 07-sep-2026 — acepta EXACTAMENTE una de dos fuentes de precio:
-    // opcion_hotel_tarifa_id (matriz de habitación, comportamiento de
-    // siempre) u opcion_mayorista_opcional_id (un tour opcional —San Blas,
-    // Taboga, Colón— que el cliente eligió agregar de verdad al lienzo,
-    // hueco real documentado desde 04-sep-2026: hasta ahora un opcional
-    // solo existía como info de referencia en el PDF, sin sumar nunca al
-    // total). Ambas comparten toda la validación de la OpcionMayorista
-    // (pertenece a esta alternativa, está 'elegida') y el tratamiento
-    // tributario — solo difiere de dónde sale costo_snapshot/precio_venta_snapshot.
-    private function crearItemMayorista(Request $request, Alternativa $alternativa): AlternativaItem
-    {
-        $validator = Validator::make($request->all(), [
-            'opcion_mayorista_id' => 'required|integer|exists:opcion_mayorista,id',
-            'opcion_hotel_tarifa_id' => 'required_without:opcion_mayorista_opcional_id|nullable|integer|exists:opciones_hotel_tarifas,id',
-            'opcion_mayorista_opcional_id' => 'required_without:opcion_hotel_tarifa_id|nullable|integer|exists:opcion_mayorista_opcionales,id',
-            'cantidad' => 'nullable|integer|min:1',
-            'pax_incluidos' => 'nullable|array',
-            'dia_referencial' => 'nullable|integer|min:1',
-            'tip_afe_igv' => 'nullable|string|in:10,20,30',
-            'destino_tributario' => 'nullable|string|in:amazonia,nacional,extranjero',
-            'alternativa_destino_id' => ['nullable', 'integer', $alternativa->reglaDestinoId()],
-            // Sesión M4 — ver mismo campo en crearItemProveedor().
-            'grupo_opcion_id' => 'nullable|uuid',
-        ]);
-
-        if ($validator->fails()) {
-            throw new AltaItemException($validator->errors()->first());
-        }
-
-        $validado = $validator->validated();
-        $opcion = OpcionMayorista::findOrFail($validado['opcion_mayorista_id']);
-
-        if ($opcion->alternativa_id !== $alternativa->id) {
-            throw new AltaItemException('La opción de mayorista no pertenece a esta alternativa.');
-        }
-        if ($opcion->estado !== 'elegida') {
-            throw new AltaItemException('Marcá la opción de mayorista como elegida antes de agregarla al ítem.');
-        }
-
-        $tarifaHotel = null;
-        $opcional = null;
-
-        if (isset($validado['opcion_hotel_tarifa_id'])) {
-            $tarifaHotel = OpcionHotelTarifa::with('opcionHotel')->findOrFail($validado['opcion_hotel_tarifa_id']);
-            if ($tarifaHotel->opcionHotel?->opcion_mayorista_id !== $opcion->id) {
-                throw new AltaItemException('Esa tarifa de habitación no pertenece a la opción de mayorista indicada.');
-            }
-        } else {
-            $opcional = OpcionMayoristaOpcional::findOrFail($validado['opcion_mayorista_opcional_id']);
-            if ($opcional->opcion_mayorista_id !== $opcion->id) {
-                throw new AltaItemException('Ese opcional no pertenece a la opción de mayorista indicada.');
-            }
-        }
-
-        $tratamientoTributario = ConfiguracionAgencia::completarTratamientoTributario($validado['tip_afe_igv'] ?? null, $validado['destino_tributario'] ?? null);
-
-        // Un opcional (OpcionMayoristaOpcional) no tiene columna de costo —
-        // solo el precio que se le cobra al cliente (nunca se cargó margen
-        // para estos, a diferencia de hoteles/proveedores). costo_snapshot
-        // en 0 es honesto (no inventa un costo que nadie registró), no un
-        // valor "de relleno".
-        $precioVenta = $tarifaHotel?->precio_venta ?? $opcional->precio_por_persona;
-        $costo = $tarifaHotel?->precio_costo ?? 0;
-
-        $item = AlternativaItem::create([
-            'alternativa_id' => $alternativa->id,
-            'alternativa_destino_id' => $alternativa->destinoIdODefault($validado['alternativa_destino_id'] ?? null),
-            'origen_tipo' => AlternativaItem::ORIGEN_MAYORISTA,
-            'opcion_mayorista_id' => $opcion->id,
-            // Sesión M2 — gap real heredado: esta columna existía desde
-            // antes pero ningún código la escribía (confirmado por 2
-            // auditorías independientes). Sin esto, la trazabilidad hacia
-            // la reserva/reporte operativo/PDF nunca puede resolver QUÉ
-            // fila de la matriz de habitación fijó este precio.
-            'opcion_hotel_tarifa_id' => $tarifaHotel?->id,
-            'opcion_mayorista_opcional_id' => $opcional?->id,
-            'grupo_opcion_id' => $validado['grupo_opcion_id'] ?? null,
-            'modo_precio' => 'tarifa_fija', // paquete internacional, siempre por habitación
-            'cantidad' => $validado['cantidad'] ?? 1,
-            'pax_incluidos' => $validado['pax_incluidos'] ?? null,
-            'moneda_costo' => $opcional?->moneda ?? $opcion->moneda,
-            'costo_snapshot' => $costo,
-            'precio_venta_snapshot' => $precioVenta,
-            'precio_convertido' => $this->priceEngine->convertirMoneda((float) $precioVenta, $opcional?->moneda ?? $opcion->moneda, $alternativa->moneda_cotizacion, (float) $alternativa->tipo_cambio_aplicado),
-            'dia_referencial' => $validado['dia_referencial'] ?? null,
-            'tip_afe_igv' => $tratamientoTributario['tip_afe_igv'],
-            'destino_tributario' => $tratamientoTributario['destino_tributario'],
-        ]);
-
-        $alternativa->recalcularTotal();
-
-        return $item;
     }
 
     // Recalculo en vivo del formulario de pasaje aéreo (PasajeAereoForm.vue)
