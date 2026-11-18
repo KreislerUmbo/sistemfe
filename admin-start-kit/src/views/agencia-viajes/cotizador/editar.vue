@@ -5,332 +5,17 @@
         </div>
 
         <template v-else>
-        <div v-if="cotizacion" class="mb-3">
-            <div class="d-flex align-items-start justify-content-between flex-wrap gap-2">
-                <div>
-                    <h5 v-if="modificacionInfo" class="fw-bold mb-1">
-                        <i class="fas fa-pen-to-square me-2 text-primary"></i>Modificación de la reserva {{ modificacionInfo.reserva_codigo ?? `#${modificacionInfo.reserva_id}` }}
-                        <span v-if="modificacionInfo.estado !== 'abierta'" class="badge bg-secondary ms-2">{{ modificacionInfo.estado === 'aplicada' ? 'Aplicada' : 'Descartada' }}</span>
-                    </h5>
-                    <h5 v-else class="fw-bold mb-1"><i class="fas fa-route me-2 text-primary"></i>Cotización {{ cotizacion.codigo }}</h5>
-                    <div class="fw-semibold text-dark mb-2"><i class="fas fa-user me-2 text-muted" style="font-size:12px"></i>{{ cotizacion.cliente?.full_name ?? 'Sin cliente' }}</div>
-                    <!-- T-051: la próxima acción pendiente de la cotización (la lista está en el panel de la alternativa). -->
-                    <div v-if="proximaAccion" class="small mb-2" :class="proximaAccion.fecha < hoyPeru() ? 'text-danger' : 'text-muted'">
-                        <i class="fas fa-tasks me-1"></i>Próxima acción: {{ proximaAccion.tipo_etiqueta.toLowerCase() }} el
-                        {{ formatDiaCorto(proximaAccion.fecha) }} ({{ proximaAccion.responsable.nombre.split(' ')[0] }})
-                    </div>
-                    <!-- T-052: cerrada como perdida (motivo y detalle como texto, nunca v-html). -->
-                    <div v-if="cotizacionPerdida" class="small text-danger mb-2">
-                        <i class="fas fa-circle-xmark me-1"></i>Perdida: {{ cotizacion.resultado_motivo?.nombre ?? 'sin motivo' }}<template v-if="cotizacion.resultado_detalle"> — {{ cotizacion.resultado_detalle }}</template>
-                        · {{ formatFechaHora(cotizacion.perdida_en) }}<template v-if="cotizacion.perdida_por"> ({{ cotizacion.perdida_por.name }})</template>
-                    </div>
-                    <PreferenciasViajeroResumen :cliente-id="cotizacion.cliente_id ?? null" />
-                </div>
-                <div class="d-flex flex-wrap gap-2">
-                    <template v-if="puedeCambiarResultado">
-                        <button v-if="cotizacionPerdida" class="btn btn-outline-primary btn-sm" :disabled="reabriendo" @click="reabrirCotizacion">
-                            <span v-if="reabriendo" class="spinner-border spinner-border-sm me-1"></span>
-                            <i v-else class="fas fa-rotate-left me-1"></i>Reabrir
-                        </button>
-                        <button v-else class="btn btn-outline-danger btn-sm" @click="cerrandoComoPerdida = true">
-                            <i class="fas fa-circle-xmark me-1"></i>Cerrar como perdida
-                        </button>
-                    </template>
-                    <router-link v-if="modificacionInfo" :to="`/agencia-viajes/reservas/${modificacionInfo.reserva_id}`" class="btn btn-outline-secondary btn-sm">
-                        <i class="fas fa-arrow-left me-2"></i>Volver a la reserva
-                    </router-link>
-                    <router-link v-else to="/agencia-viajes/cotizador" class="btn btn-outline-secondary btn-sm">
-                        <i class="fas fa-arrow-left me-2"></i>Volver
-                    </router-link>
-                </div>
-            </div>
-            <CerrarComoPerdidaModal v-if="cerrandoComoPerdida" :cotizacion-id="cotizacion.id" :codigo="cotizacion.codigo"
-                @cerrar="cerrandoComoPerdida = false" @cerrada="onResultadoCambiado('Cotización cerrada como perdida.')" />
-            <AceptarAlternativaModal v-if="aceptandoAlternativa && alternativaActiva" :alternativa-nombre="alternativaActiva.nombre"
-                :procesando="marcandoAceptada" @cerrar="aceptandoAlternativa = false" @confirmar="confirmarAceptada" />
-            <div class="d-flex flex-wrap align-items-center gap-2">
-                <span class="badge bg-light text-dark border fw-normal"><i class="fas fa-map-marker-alt me-1 text-primary"></i>{{ cotizacion.destino }}</span>
-                <span class="badge bg-light text-dark border fw-normal"><i class="fas fa-calendar me-1 text-primary"></i>{{ textoFechasViaje }}</span>
-                <span class="badge bg-light text-dark border fw-normal"><i class="fas fa-users me-1 text-primary"></i>{{ resumenPax }}</span>
-                <i class="fas fa-pen text-primary" style="cursor:pointer;font-size:12px" title="Corregir cliente/destino/fecha" @click="abrirEdicionCabecera"></i>
-                <i v-if="!hayAlternativaAceptada" class="fas fa-user-edit text-primary" style="cursor:pointer;font-size:12px" title="Agregar o quitar pasajeros" @click="abrirEdicionPasajeros"></i>
-                <i v-else class="fas fa-user-lock text-muted" style="font-size:12px" title="Esta cotización ya tiene una alternativa aceptada (con reserva generada) — los pasajeros ya no se pueden modificar desde acá."></i>
-            </div>
-        </div>
+        <CabeceraCotizacion />
 
-        <!-- T-007 — modificación de reserva: aviso de edades estimadas, panel de diferencia. -->
-        <div v-if="avisoEdadEstimada.length" class="alert alert-warning py-2 px-3 small mb-3 d-flex justify-content-between gap-2">
-            <span>
-                <i class="fas fa-triangle-exclamation me-1"></i><strong>Edad estimada:</strong>
-                estos pasajeros de la reserva no tienen fecha de nacimiento; se usó una edad según su tipo. Corrígela si cambia el precio:
-                <span v-for="(p, i) in avisoEdadEstimada" :key="p.reserva_pasajero_id">{{ i > 0 ? ', ' : ' ' }}{{ p.nombre || 'Pasajero' }} ({{ p.edad_estimada }} años)</span>.
-            </span>
-            <button class="btn-close" @click="avisoEdadEstimada = []"></button>
-        </div>
-        <div v-if="modificacionInfo && modificacionInfo.estado !== 'abierta'" class="alert alert-secondary py-2 small mb-3">
-            Esta modificación ya está {{ modificacionInfo.estado === 'aplicada' ? 'aplicada a la reserva' : 'descartada' }}: solo se puede consultar.
-        </div>
-        <ModificacionDiferenciaPanel v-if="modificacionInfo?.estado === 'abierta'"
-            :diferencia="modificacion.diferencia.value" :cargando="modificacion.cargando.value" :error="modificacion.error.value"
-            :procesando="procesandoModificacion" :descargando-pdf="descargandoPdfModificacion"
-            @refrescar="modificacion.cargar()" @pdf="descargarPdfModificacion" @descartar="descartarModificacion" @aplicar="aplicarModificacion"
-            @ir-a-item="irAItem" @confirmar="confirmarRevisados" @abrir-comprobante="abrirComprobanteBloqueo"
-            @abrir-penalidad="abrirPenalidad" @borrar-penalidad="borrarPenalidad" />
-        <PenalidadPasajeroModal v-if="penalidadPasajero" :pasajero="penalidadPasajero" :moneda="modificacion.diferencia.value?.moneda ?? ''"
-            :guardando="guardandoPenalidad" :error-mensaje="errorPenalidad" :inicial="penalidadInicial"
-            @cerrar="penalidadPasajero = null" @guardar="guardarPenalidad" />
+        <AvisosModificacion />
 
-        <!-- Agregar/quitar pasajeros — gap real: el endpoint existía en el
-             backend desde Sesión 7a pero nunca tuvo control en pantalla.
-             Bloqueado (ícono de arriba deshabilitado) si ya hay una
-             alternativa aceptada, ver hayAlternativaAceptada. -->
-        <div v-if="editandoPasajeros" class="card border-0 shadow-sm mb-3">
-            <div class="card-body py-3">
-                <div class="d-flex gap-2 mb-3">
-                    <button class="btn btn-sm btn-outline-primary" @click="agregarPaxEdicion(30)"><i class="fas fa-plus me-1"></i>Adulto</button>
-                    <button class="btn btn-sm btn-outline-primary" @click="agregarPaxEdicion(8)"><i class="fas fa-plus me-1"></i>Niño</button>
-                    <button class="btn btn-sm btn-outline-primary" @click="agregarPaxEdicion(1)"><i class="fas fa-plus me-1"></i>Infante</button>
-                </div>
-                <div v-if="formPasajeros.length === 0" class="text-muted small fst-italic mb-2">Agregá al menos un pasajero.</div>
-                <div class="d-flex flex-column gap-2 mb-3">
-                    <div v-for="(pax, idx) in formPasajeros" :key="pax.id ?? `nuevo-${idx}`" class="d-flex align-items-center gap-2 border rounded p-2 small">
-                        <span class="badge" :class="tipoPorEdadEdicion(pax.edad).clase" style="min-width:70px">{{ tipoPorEdadEdicion(pax.edad).label }}</span>
-                        <label class="text-muted mb-0">Edad</label>
-                        <input type="number" class="form-control form-control-sm" style="max-width:80px" v-model.number="pax.edad" min="0" max="120">
-                        <!-- Fila 13, fase 1b (§3.3): residencia, solo para el precio del tour. -->
-                        <select class="form-select form-select-sm" style="max-width:130px" v-model="pax.residencia" title="Residencia (precio del tour)">
-                            <option value="nacional">Nacional</option>
-                            <option value="extranjero">Extranjero</option>
-                        </select>
-                        <span v-if="!pax.id" class="badge bg-info-subtle text-info">nuevo</span>
-                        <i class="fas fa-times text-danger ms-auto" style="cursor:pointer" @click="formPasajeros.splice(idx, 1)"></i>
-                    </div>
-                </div>
-                <div class="alert alert-warning py-2 px-3 small mb-3">
-                    <i class="fas fa-triangle-exclamation me-1"></i>Si esta cotización ya tiene ítems cargados que se cobran "por persona", al guardar sus precios se recalculan automáticamente con la nueva cantidad de pasajeros — los que no se puedan recalcular solos (ej. pasajes aéreos, paquetes de mayorista) quedan avisados para revisar el precio a mano.
-                </div>
-                <div class="d-flex gap-2">
-                    <button class="btn btn-primary btn-sm" @click="guardarPasajeros" :disabled="guardandoPasajeros || formPasajeros.length === 0">
-                        <span v-if="guardandoPasajeros" class="spinner-border spinner-border-sm me-1"></span>
-                        <span v-else><i class="fas fa-check me-1"></i>Guardar</span>
-                    </button>
-                    <button class="btn btn-outline-secondary btn-sm" @click="editandoPasajeros = false">Cancelar</button>
-                </div>
-            </div>
-        </div>
+        <EdicionPasajeros />
 
-        <!-- Corregir cliente/destino/fecha (me equivoqué al crear la cotización) -->
-        <div v-if="editandoCabecera" class="card border-0 shadow-sm mb-3">
-            <div class="card-body py-3">
-                <div class="row g-2">
-                    <div class="col-12 col-md-5 position-relative">
-                        <label class="form-label mb-1 small fw-semibold text-secondary">Cliente</label>
-                        <div class="input-group input-group-sm">
-                            <input type="text" class="form-control" v-model="clientSearchText"
-                                placeholder="Buscar por DNI, RUC o nombre..." @input="onClientSearchInput"
-                                @focus="showClientSuggestions = true" @blur="onClientSearchBlur" autocomplete="off">
-                            <button v-if="clienteEditado" class="btn btn-outline-primary" type="button" title="Editar datos del cliente" @click="abrirEdicionCliente">
-                                <i class="fas fa-pen"></i>
-                            </button>
-                            <button v-if="clienteEditado" class="btn btn-outline-danger" type="button" @click="limpiarClienteEditado">
-                                <i class="fas fa-times"></i>
-                            </button>
-                            <button v-else class="btn btn-outline-primary" type="button" @click="abrirNuevoCliente" title="Registrar cliente nuevo">
-                                <i class="fas fa-user-plus"></i>
-                            </button>
-                        </div>
-                        <div v-if="showClientSuggestions && clientSuggestions.length > 0 && !clienteEditado"
-                            class="list-group mt-1 position-absolute"
-                            style="max-height:220px;overflow-y:auto;z-index:1050;width:calc(100% - 2px);box-shadow:0 4px 8px rgba(0,0,0,.1)">
-                            <button type="button" class="list-group-item list-group-item-action" v-for="c in clientSuggestions" :key="c.id"
-                                @mousedown.prevent="seleccionarClienteEditado(c)">
-                                <div class="d-flex justify-content-between">
-                                    <span>{{ c.full_name }}</span>
-                                    <small class="text-muted">{{ c.n_document }}</small>
-                                </div>
-                            </button>
-                        </div>
-                    </div>
-                    <div class="col-12 col-md-4">
-                        <label class="form-label mb-1 small fw-semibold text-secondary">Destino</label>
-                        <input type="text" class="form-control form-control-sm" v-model="formCabecera.destino">
-                    </div>
-                    <div class="col-6 col-md-3 d-flex align-items-end gap-1">
-                        <button class="btn btn-primary btn-sm w-100" @click="guardarCabecera" :disabled="guardandoCabecera">
-                            <span v-if="guardandoCabecera" class="spinner-border spinner-border-sm"></span>
-                            <span v-else><i class="fas fa-check me-1"></i>Guardar</span>
-                        </button>
-                        <button class="btn btn-outline-secondary btn-sm" @click="editandoCabecera = false"><i class="fas fa-times"></i></button>
-                    </div>
-                    <div class="col-6 col-md-3">
-                        <label class="form-label mb-1 small fw-semibold text-secondary">Fecha desde</label>
-                        <CampoFecha v-model="formCabecera.fecha_viaje_desde" />
-                    </div>
-                    <div class="col-6 col-md-3">
-                        <label class="form-label mb-1 small fw-semibold text-secondary">Fecha hasta</label>
-                        <CampoFecha v-model="formCabecera.fecha_viaje_hasta" />
-                    </div>
-                </div>
-            </div>
-        </div>
+        <EdicionCabecera />
 
-        <div class="modal fade" tabindex="-1" :class="{ show: showQuickClientModal, 'd-block': showQuickClientModal }"
-            style="background:rgba(0,0,0,.5)" v-if="showQuickClientModal">
-            <div class="modal-dialog modal-lg">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h6 class="modal-title">{{ modoEdicionCliente ? 'Editar Cliente' : 'Registrar Cliente Rápido' }}</h6>
-                        <button class="btn-close" @click="showQuickClientModal = false"></button>
-                    </div>
-                    <div class="modal-body">
-                        <ClientFormQuick :initial-data="modoEdicionCliente ? clienteEditado : null"
-                            :cliente-id="modoEdicionCliente ? clienteEditado?.id ?? null : null"
-                            @saved="onClientCreated" @cancel="showQuickClientModal = false" />
-                    </div>
-                </div>
-            </div>
-        </div>
+        <PestanasAlternativas />
 
-        <CalculadoraTipoCambioModal v-if="mostrarCalculadoraTipoCambio && alternativaActiva"
-            :moneda-cotizacion="alternativaActiva.moneda_cotizacion" :total-alternativa="totalLocal"
-            @close="mostrarCalculadoraTipoCambio = false" />
-
-        <!-- Pestañas de alternativas -->
-        <div class="d-flex align-items-center gap-2 mb-3 flex-wrap" v-if="cotizacion">
-            <span v-for="alt in cotizacion.alternativas" :key="alt.id" class="alt-pill position-relative badge rounded-pill px-3 py-2 d-inline-flex align-items-center gap-2"
-                :class="[alt.id === alternativaActivaId ? 'bg-primary' : 'bg-light text-dark border', { 'alt-pill-reservada': alt.estado === 'aceptada' }]"
-                style="cursor:pointer" @click="seleccionarAlternativa(alt.id)">
-                <!-- T-080: indicador en la esquina, visible activa o no (el ✓ interno heredaba el color de la pestaña). -->
-                <span v-if="alt.estado === 'aceptada'" class="badge rounded-pill bg-success position-absolute top-0 start-100 translate-middle alt-pill-marca" title="Alternativa reservada">
-                    <i class="fas fa-check"></i>
-                </span>
-                <span v-else-if="alt.estado === 'reemplazada'" class="badge rounded-pill bg-secondary position-absolute top-0 start-100 translate-middle alt-pill-marca" title="Alternativa reemplazada por una modificación">
-                    <i class="fas fa-history"></i>
-                </span>
-                <span>
-                    {{ alt.nombre }} · {{ alt.moneda_cotizacion }} {{ Number(alt.total).toFixed(0) }}
-                    <span v-if="alt.estado === 'aceptada' || alt.estado === 'reemplazada'" class="ms-1">
-                        <template v-if="reservaDeAlternativa(alt)">
-                            {{ alt.estado === 'reemplazada' ? 'Reemplazada' : 'Reservada' }} ·
-                            <router-link :to="`/agencia-viajes/reservas/${reservaDeAlternativa(alt)!.id}`" class="text-reset fw-semibold" @click.stop>{{ reservaDeAlternativa(alt)!.codigo ?? `#${reservaDeAlternativa(alt)!.id}` }}</router-link>
-                        </template>
-                        <template v-else>{{ alt.estado === 'reemplazada' ? 'Reemplazada' : 'Reservada' }}</template>
-                    </span>
-                    <span v-else-if="alt.estado === 'descartada'" class="ms-1 opacity-50"><i class="fas fa-times-circle"></i></span>
-                </span>
-                <i v-if="alt.id === alternativaActivaId" class="fas fa-pen alt-pill-edit" title="Renombrar esta alternativa" @click.stop="renombrarAlternativa(alt)"></i>
-                <!-- T-033: la moneda se cambia solo mientras la alternativa no tenga servicios. -->
-                <select v-if="alt.id === alternativaActivaId && !modificacionInfo && !alternativaSoloLectura" class="form-select form-select-sm py-0 ps-2 pe-4 w-auto"
-                    style="font-size:.75rem" :value="alt.moneda_cotizacion" :disabled="(alt.items?.length ?? 0) > 0 || cambiandoMoneda"
-                    :title="(alt.items?.length ?? 0) > 0 ? 'Con servicios no se cambia la moneda: quítalos o crea otra alternativa' : 'Moneda de la alternativa'"
-                    @click.stop @change="cambiarMonedaAlternativa(alt, ($event.target as HTMLSelectElement).value as 'PEN' | 'USD')">
-                    <option value="PEN">PEN</option>
-                    <option value="USD">USD</option>
-                </select>
-                <span v-if="alt.id === alternativaActivaId && eliminandoAlternativa" class="spinner-border spinner-border-sm alt-pill-delete" style="opacity:1"></span>
-                <!-- Una alternativa reservada o reemplazada ya generó su reserva: el servidor no la elimina. -->
-                <i v-else-if="alt.id === alternativaActivaId && !['aceptada', 'reemplazada'].includes(alt.estado)" class="fas fa-trash alt-pill-delete" title="Eliminar esta alternativa" @click.stop="eliminarAlternativa"></i>
-            </span>
-            <!-- Punto F — siempre visible; deshabilitado con motivo al llegar al tope,
-                 en vez de desaparecer sin explicación. -->
-            <span v-if="!modificacionInfo && !cotizacionPerdida" class="badge rounded-pill px-3 py-2"
-                :class="alcanzoLimiteAlternativas ? 'bg-light text-muted border opacity-50' : 'bg-light text-dark border'"
-                :style="alcanzoLimiteAlternativas ? 'cursor:not-allowed;border-style:dashed' : 'cursor:pointer;border-style:dashed'"
-                :title="alcanzoLimiteAlternativas ? 'Máximo 5 alternativas por cotización' : ''"
-                @click="!alcanzoLimiteAlternativas && (mostrarFormAlternativa = true)">
-                <i class="fas fa-plus me-1"></i>Nueva
-            </span>
-        </div>
-
-        <!-- Form nueva alternativa -->
-        <div v-if="mostrarFormAlternativa" class="card border-0 shadow-sm mb-3">
-            <div class="card-body py-2">
-                <div class="row g-2 align-items-end">
-                    <div class="col-6 col-md-3">
-                        <label class="form-label mb-1 small fw-semibold text-secondary">Nombre</label>
-                        <input type="text" class="form-control form-control-sm" :class="{ 'is-invalid': erroresAlternativa.nombre }"
-                            v-model="formAlternativa.nombre" :placeholder="nombreSugeridoAlternativa">
-                        <div v-if="erroresAlternativa.nombre" class="invalid-feedback">{{ erroresAlternativa.nombre }}</div>
-                    </div>
-                    <div class="col-6 col-md-2">
-                        <label class="form-label mb-1 small fw-semibold text-secondary">Moneda</label>
-                        <select class="form-select form-select-sm" :class="{ 'is-invalid': erroresAlternativa.moneda_cotizacion }" v-model="formAlternativa.moneda_cotizacion">
-                            <option value="PEN">Soles</option>
-                            <option value="USD">Dólares</option>
-                        </select>
-                    </div>
-                    <div class="col-6 col-md-3">
-                        <label class="form-label mb-1 small fw-semibold text-secondary">Tipo de cambio</label>
-                        <select class="form-select form-select-sm" v-model="formAlternativa.tipo_cambio_origen">
-                            <option value="dia">Del día</option>
-                            <option value="agencia">De la agencia</option>
-                        </select>
-                    </div>
-                    <div class="col-6 col-md-2">
-                        <label class="form-label mb-1 small fw-semibold text-secondary">Valor nuevo (opcional)</label>
-                        <input type="number" step="0.0001" class="form-control form-control-sm" :class="{ 'is-invalid': erroresAlternativa.tipo_cambio_valor }" v-model.number="formAlternativa.tipo_cambio_valor">
-                        <div v-if="erroresAlternativa.tipo_cambio_valor" class="invalid-feedback">{{ erroresAlternativa.tipo_cambio_valor }}</div>
-                        <small v-if="sugerenciaTipoCambioSunat && formAlternativa.tipo_cambio_origen === 'dia'" class="text-muted d-block">
-                            Sugerido SUNAT ({{ sugerenciaTipoCambioSunat.fecha }}): {{ sugerenciaTipoCambioSunat.valor }}
-                        </small>
-                    </div>
-                    <div class="col-12 col-md-2 d-flex gap-2">
-                        <button class="btn btn-primary btn-sm w-100" @click="crearAlternativa()" :disabled="creandoAlternativa">
-                            <span v-if="creandoAlternativa" class="spinner-border spinner-border-sm me-1"></span>Crear
-                        </button>
-                        <button class="btn btn-outline-secondary btn-sm" @click="mostrarFormAlternativa = false"><i class="fas fa-times"></i></button>
-                    </div>
-                </div>
-                <div v-if="erroresAlternativa.general" class="text-danger small mt-2">{{ erroresAlternativa.general }}</div>
-            </div>
-        </div>
-
-        <!-- Sesión 12f-2, §7.1 punto 1 — chips de destino, un nivel arriba de
-             las pestañas de día. Ocultos con 1 solo destino (Punto B, mismo
-             criterio que mostrarTabsDia) — el "+ Agregar destino" queda
-             visible igual, es el único camino para pasar a 2. -->
-        <div v-if="alternativaActiva" class="d-flex align-items-center gap-2 mb-2 flex-wrap ms-2">
-            <i v-if="mostrarChipsDestino" class="fas fa-angle-right text-muted" style="font-size:11px"></i>
-            <template v-if="mostrarChipsDestino">
-                <span v-for="d in alternativaDestinos" :key="d.id" class="destino-chip badge rounded-pill px-2 py-1 d-inline-flex align-items-center gap-2"
-                    :class="destinoActivoId === d.id ? 'bg-primary' : 'bg-light text-dark border'"
-                    style="cursor:pointer" @click="destinoActivoId = d.id">
-                    <span style="font-size:12px"><i class="fas fa-map-marker-alt me-1"></i>{{ d.destino_texto }}</span>
-                    <template v-if="destinoActivoId === d.id">
-                        <i class="fas fa-pen destino-chip-action" title="Editar este destino" @click.stop="abrirFormEditarDestinoActivo"></i>
-                        <i class="fas fa-trash destino-chip-action" title="Eliminar este destino" @click.stop="eliminarDestinoActivo"></i>
-                    </template>
-                </span>
-            </template>
-            <span class="badge rounded-pill px-2 py-1 bg-light text-dark border" style="cursor:pointer;border-style:dashed" @click="abrirFormDestino">
-                <i class="fas fa-plus me-1"></i>Agregar destino
-            </span>
-        </div>
-
-        <div v-if="mostrarFormDestino" class="card border-0 shadow-sm mb-2">
-            <div class="card-body py-2">
-                <div class="row g-2 align-items-end">
-                    <div class="col-12 col-md-4">
-                        <label class="form-label mb-1 small fw-semibold text-secondary">Destino</label>
-                        <DestinoTreeSelect v-model="nuevoDestinoAtractivoId" @update:label="nuevoDestinoTexto = $event" />
-                    </div>
-                    <div class="col-6 col-md-3">
-                        <label class="form-label mb-1 small fw-semibold text-secondary">Fecha desde</label>
-                        <CampoFecha v-model="nuevoDestinoFechaInicio" />
-                    </div>
-                    <div class="col-6 col-md-3">
-                        <label class="form-label mb-1 small fw-semibold text-secondary">Fecha hasta</label>
-                        <CampoFecha v-model="nuevoDestinoFechaFin" />
-                    </div>
-                    <div class="col-12 col-md-2 d-flex gap-2">
-                        <button class="btn btn-primary btn-sm w-100" @click="guardarNuevoDestino" :disabled="guardandoDestino || !nuevoDestinoTexto.trim()">
-                            <span v-if="guardandoDestino" class="spinner-border spinner-border-sm me-1"></span>{{ destinoEnEdicionId ? 'Guardar' : 'Agregar' }}
-                        </button>
-                        <button class="btn btn-outline-secondary btn-sm" @click="mostrarFormDestino = false"><i class="fas fa-times"></i></button>
-                    </div>
-                </div>
-            </div>
-        </div>
+        <ChipsDestino />
 
         <div class="row g-3" v-if="alternativaActiva">
             <!-- ═══ LIENZO ═══ -->
@@ -1554,6 +1239,12 @@ import {
     CLAVE_BIBLIOTECA, CLAVE_OPCIONES_MAYORISTA, CLAVE_HOTELES_MAYORISTA, CLAVE_OPCIONALES_MAYORISTA,
     CLAVE_MODIFICACION, CLAVE_REVISION, CLAVE_GUIA, CLAVE_ITEMS_SUELTOS, CLAVE_PAGINA,
 } from '@/composables/agencia-viajes/cotizador/claves';
+import CabeceraCotizacion from '@/components/AgenciaViajes/cotizador/CabeceraCotizacion.vue';
+import AvisosModificacion from '@/components/AgenciaViajes/cotizador/AvisosModificacion.vue';
+import EdicionPasajeros from '@/components/AgenciaViajes/cotizador/EdicionPasajeros.vue';
+import EdicionCabecera from '@/components/AgenciaViajes/cotizador/EdicionCabecera.vue';
+import PestanasAlternativas from '@/components/AgenciaViajes/cotizador/PestanasAlternativas.vue';
+import ChipsDestino from '@/components/AgenciaViajes/cotizador/ChipsDestino.vue';
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
 
@@ -1867,25 +1558,6 @@ onUnmounted(() => {
 .lib-item:hover { background: #eef2ff; border-color: #6366f1 !important; }
 .canvas-item-nombre { white-space: normal; word-break: break-word; }
 .resaltado-item { box-shadow: 0 0 0 3px rgba(255, 193, 7, .6); transition: box-shadow .3s; }
-
-/* Tacho de la alternativa activa — oculto hasta hover del pill, para no
-   saturar la fila cuando hay varias alternativas (Parte B). */
-.alt-pill-delete { opacity: 0; transition: opacity .15s; }
-.alt-pill:hover .alt-pill-delete { opacity: 1; }
-
-/* T-080: pestaña de la alternativa reservada — borde verde de 2px aunque esté activa. */
-.alt-pill-reservada { border: 2px solid var(--bs-success, #198754) !important; }
-.alt-pill-marca { width: 1.4rem; height: 1.4rem; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: .65rem; }
-
-/* Lápiz de renombrar — mismo criterio de visibilidad que el tacho de
-   arriba, separados con un poco de margen para no quedar pegados. */
-.alt-pill-edit { opacity: 0; transition: opacity .15s; margin-left: 2px; }
-.alt-pill:hover .alt-pill-edit { opacity: 1; }
-
-/* Íconos de editar/eliminar del chip de destino activo — mismo patrón de
-   hover-reveal que .alt-pill-edit/.alt-pill-delete arriba. */
-.destino-chip-action { opacity: 0; transition: opacity .15s; }
-.destino-chip:hover .destino-chip-action { opacity: 1; }
 
 .biblioteca-grid {
     display: grid;
