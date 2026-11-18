@@ -53,7 +53,8 @@ class AlternativaItemController extends Controller
         private AltaManual $altaManual,
         private AltaGuia $altaGuia,
         private AltaMayorista $altaMayorista,
-        private AltaPasajeAereo $altaPasajeAereo
+        private AltaPasajeAereo $altaPasajeAereo,
+        private AltaProveedor $altaProveedor
     ) {
     }
 
@@ -74,7 +75,7 @@ class AlternativaItemController extends Controller
 
         try {
             [$item, $mensaje] = match ($origenTipo) {
-                AlternativaItem::ORIGEN_PROVEEDOR => [$this->crearItemProveedor($request, $alternativa), 'Ítem agregado correctamente'],
+                AlternativaItem::ORIGEN_PROVEEDOR => [$this->altaProveedor->crear($alternativa, $request->all()), 'Ítem agregado correctamente'],
                 AlternativaItem::ORIGEN_MAYORISTA => [$this->altaMayorista->crear($alternativa, $request->all()), 'Ítem de mayorista agregado correctamente'],
                 AlternativaItem::ORIGEN_PASAJE_AEREO => [$this->altaPasajeAereo->crear($alternativa, $request->all()), 'Pasaje aéreo agregado correctamente'],
                 AlternativaItem::ORIGEN_MANUAL => [$this->altaManual->crear($alternativa, $request->all()), 'Ítem manual agregado correctamente'],
@@ -1001,186 +1002,6 @@ class AlternativaItemController extends Controller
         }
 
         return response()->json(['code' => 200, 'message' => 'Bloque movido correctamente']);
-    }
-
-    // ── origen_tipo=proveedor ─────────────────────────────────────────
-    private function crearItemProveedor(Request $request, Alternativa $alternativa): AlternativaItem
-    {
-        $validator = Validator::make($request->all(), [
-            'proveedor_tarifa_id' => 'nullable|integer|exists:proveedor_tarifas,id',
-            // Sesión M3 — hotel ad-hoc LOCAL (matriz de habitación sin
-            // ProveedorTarifa real, ver OpcionHotelController::store()).
-            // Mutuamente excluyente con proveedor_tarifa_id, mismo
-            // criterio de "3 vías" que ya extiende moneda_costo/
-            // precio_venta_snapshot más abajo.
-            'opcion_hotel_tarifa_id' => 'nullable|integer|exists:opciones_hotel_tarifas,id',
-            'modo_precio' => 'required|in:por_persona,tarifa_fija',
-            'cantidad' => 'nullable|integer|min:1',
-            'pax_incluidos' => 'nullable|array',
-            'pax_incluidos.*' => 'integer|exists:cotizacion_pasajeros,id',
-            // Solo si NO hay proveedor_tarifa_id NI opcion_hotel_tarifa_id —
-            // precio de referencia (§3, caso 2).
-            'moneda_costo' => 'required_without_all:proveedor_tarifa_id,opcion_hotel_tarifa_id|nullable|in:PEN,USD',
-            'precio_venta_snapshot' => 'required_without_all:proveedor_tarifa_id,opcion_hotel_tarifa_id|nullable|numeric|min:0',
-            'costo_snapshot' => 'nullable|numeric|min:0',
-            // Solo tiene efecto si NO hay proveedor_tarifa_id — con tarifa
-            // real, el tratamiento tributario SIEMPRE viene de ella (ver
-            // resolverTratamientoTributario() más abajo).
-            'tip_afe_igv' => 'nullable|string|in:10,20,30',
-            'destino_tributario' => 'nullable|string|in:amazonia,nacional,extranjero',
-            // Día activo del lienzo al momento de agregar — Sesión 11b3 (§7.1).
-            'dia_referencial' => 'nullable|integer|min:1',
-            // Consolidación de hoteles — cantidad de camas adicionales
-            // necesarias (0 = ninguna, sin default a favor de cobrar de
-            // más). Solo tiene efecto real con modo_precio='tarifa_fija' y
-            // una tarifa de un proveedor con detalle de alojamiento
-            // configurado (antes vivía solo en el hotel de un
-            // paquete_plantilla, ver crearItemHotelPlantilla(), eliminado).
-            'camas_adicionales_nino' => 'nullable|integer|min:0',
-            'alternativa_destino_id' => ['nullable', 'integer', $alternativa->reglaDestinoId()],
-            // Sesión M4 — el picker (HabitacionMatrixPicker.vue) genera el
-            // UUID una sola vez cliente-side y lo manda igual en cada
-            // llamada de "Agregar N opciones como grupo" (M1: agrupador
-            // liviano, sin tabla propia — ver AlternativaItem::
-            // agruparPorGrupoOpcion()). Todas las filas de un grupo nuevo
-            // nacen sin elegir — resolverlo es una acción aparte
-            // (elegirOpcionGrupo() más abajo).
-            'grupo_opcion_id' => 'nullable|uuid',
-        ]);
-
-        if ($validator->fails()) {
-            throw new AltaItemException($validator->errors()->first());
-        }
-
-        $validado = $validator->validated();
-        $tarifa = ! empty($validado['proveedor_tarifa_id']) ? ProveedorTarifa::findOrFail($validado['proveedor_tarifa_id']) : null;
-        $opcionHotelTarifa = ! empty($validado['opcion_hotel_tarifa_id']) ? OpcionHotelTarifa::findOrFail($validado['opcion_hotel_tarifa_id']) : null;
-        $cantidad = $validado['cantidad'] ?? 1;
-        $paxIncluidos = $validado['pax_incluidos'] ?? null;
-
-        // 26-ago-2026: biblioteca() ya excluye tarifas desactivadas de la
-        // búsqueda, pero esto es lo que de verdad decide si un ítem nuevo
-        // se puede crear — sin este check, un proveedor_tarifa_id ya
-        // desactivado (ej. de una pestaña vieja) igual se podía usar. No
-        // aplica a ítems ya existentes (el precio ya está congelado, no se
-        // re-valida al editar cantidad/pax_incluidos de un ítem viejo).
-        // T-045: el motivo (retirada / fuera de vigencia) vive en
-        // PriceEngineService, compartido con la vista previa de Venta directa.
-        $motivoNoUsable = $tarifa ? $this->priceEngine->motivoTarifaNoUsable($tarifa) : null;
-        if ($motivoNoUsable) {
-            throw new AltaItemException($motivoNoUsable);
-        }
-
-        if ($tarifa) {
-            $monedaCosto = $tarifa->moneda;
-
-            // T-045: fórmula única en PriceEngineService (E2, fila 13: el
-            // costo por persona es el TOTAL de la línea, sin infantes).
-            $conteo = $validado['modo_precio'] === 'por_persona'
-                ? $this->contarPasajerosPorTipo($alternativa->cotizacion_id, $paxIncluidos)
-                : ['adulto' => 0, 'nino' => 0, 'infante' => 0];
-            ['venta' => $precioVentaSnapshot, 'costo' => $costoSnapshot] = $this->priceEngine
-                ->ventaYCostoDeTarifa($tarifa, $conteo, $validado['modo_precio']);
-
-            if ($validado['modo_precio'] !== 'por_persona') {
-                // tarifa_fija (hotel por habitación, transporte privado por vehículo):
-                // un solo precio, no diferenciado por tipo de pasajero.
-                $camasAdicionales = $validado['camas_adicionales_nino'] ?? 0;
-                if ($camasAdicionales > 0) {
-                    $resultadoCama = $this->aplicarCamaAdicional($alternativa, $tarifa, $paxIncluidos, $camasAdicionales);
-
-                    $costoSnapshot += $resultadoCama['costo'];
-                    $precioVentaSnapshot += $resultadoCama['venta'];
-                }
-            }
-        } elseif ($opcionHotelTarifa) {
-            // Sesión M3 — hotel ad-hoc LOCAL, mismo criterio de snapshot
-            // que AlternativaItemController::crearItemMayorista() para el
-            // camino internacional: siempre por habitación, sin cama
-            // adicional (esa mecánica depende de proveedorServicio->
-            // proveedor->alojamientoDetalle, que un hotel ad-hoc no tiene).
-            $monedaCosto = $opcionHotelTarifa->opcionHotel?->moneda ?? 'PEN';
-            $costoSnapshot = (float) $opcionHotelTarifa->precio_costo;
-            $precioVentaSnapshot = (float) $opcionHotelTarifa->precio_venta;
-        } else {
-            $monedaCosto = $validado['moneda_costo'];
-            // costo_snapshot es NOT NULL — sin tarifa real de la que
-            // derivarlo, 0 es el sentinel (mismo criterio que items manuales).
-            $costoSnapshot = $validado['costo_snapshot'] ?? 0;
-            $precioVentaSnapshot = (float) $validado['precio_venta_snapshot'];
-        }
-
-        $tratamientoTributario = match (true) {
-            (bool) $tarifa => ConfiguracionAgencia::completarTratamientoTributario($tarifa->tip_afe_igv, $tarifa->destino_tributario),
-            (bool) $opcionHotelTarifa => ConfiguracionAgencia::completarTratamientoTributario($opcionHotelTarifa->tip_afe_igv, $opcionHotelTarifa->destino_tributario),
-            default => ConfiguracionAgencia::completarTratamientoTributario($validado['tip_afe_igv'] ?? null, $validado['destino_tributario'] ?? null),
-        };
-
-        $item = AlternativaItem::create([
-            'alternativa_id' => $alternativa->id,
-            'alternativa_destino_id' => $alternativa->destinoIdODefault($validado['alternativa_destino_id'] ?? null),
-            'origen_tipo' => AlternativaItem::ORIGEN_PROVEEDOR,
-            'proveedor_tarifa_id' => $tarifa?->id,
-            'opcion_hotel_tarifa_id' => $opcionHotelTarifa?->id,
-            'grupo_opcion_id' => $validado['grupo_opcion_id'] ?? null,
-            // Un hotel ad-hoc siempre es por habitación, sin importar qué
-            // vino en el request — mismo criterio hardcodeado que
-            // crearItemMayorista() para su equivalente internacional.
-            'modo_precio' => $opcionHotelTarifa ? 'tarifa_fija' : $validado['modo_precio'],
-            'cantidad' => $cantidad,
-            'pax_incluidos' => $paxIncluidos,
-            'moneda_costo' => $monedaCosto,
-            'costo_snapshot' => $costoSnapshot,
-            'precio_venta_snapshot' => $precioVentaSnapshot,
-            'precio_convertido' => $this->priceEngine->convertirMoneda($precioVentaSnapshot, $monedaCosto, $alternativa->moneda_cotizacion, (float) $alternativa->tipo_cambio_aplicado),
-            'dia_referencial' => $validado['dia_referencial'] ?? null,
-            'tip_afe_igv' => $tratamientoTributario['tip_afe_igv'],
-            'destino_tributario' => $tratamientoTributario['destino_tributario'],
-        ]);
-
-        $alternativa->recalcularTotal();
-
-        return $item;
-    }
-
-    // Consolidación de hoteles — extraído de lo que antes era
-    // crearItemHotelPlantilla() (Sesión 11o): valida y calcula el costo/venta
-    // extra de N camas adicionales para una tarifa_fija de proveedor. Edad
-    // REAL del pasajero (cotizacion_pasajeros.edad), nunca tipo_pax — un
-    // pasajero de 10 años puede tener tipo_pax='adulto' por el umbral
-    // general de la agencia y aun así caer dentro del tramo de cama
-    // adicional propio de ESTE proveedor. Devuelve el JsonResponse de error
-    // (422) tal cual para que el caller lo retorne sin envolver de nuevo.
-    private function aplicarCamaAdicional(Alternativa $alternativa, ProveedorTarifa $tarifa, ?array $paxIncluidos, int $camasAdicionales): array
-    {
-        $alojamiento = $tarifa->proveedorServicio?->proveedor?->alojamientoDetalle;
-
-        if (! $alojamiento) {
-            throw new AltaItemException('Este proveedor no tiene configurado el detalle de alojamiento (tramo de edad para cama adicional).');
-        }
-
-        $tienePaxEnTramo = CotizacionPasajero::where('cotizacion_id', $alternativa->cotizacion_id)
-            ->when(
-                ! empty($paxIncluidos),
-                fn ($query) => $query->whereIn('id', $paxIncluidos),
-                fn ($query) => $query->whereRaw('1 = 0')
-            )
-            ->where('edad', '>', $alojamiento->edad_max_infante_gratis)
-            ->where('edad', '<=', $alojamiento->edad_max_nino_cama_adicional)
-            ->exists();
-
-        if (! $tienePaxEnTramo) {
-            throw new AltaItemException('Cama adicional solo aplica si pax_incluidos tiene al menos un pasajero dentro del tramo de edad de cama adicional de este proveedor.');
-        }
-
-        if ($tarifa->precio_costo_cama_adicional === null || $tarifa->precio_venta_cama_adicional === null) {
-            throw new AltaItemException('Esta tarifa no tiene precio de cama adicional configurado.');
-        }
-
-        return [
-            'costo' => $camasAdicionales * (float) $tarifa->precio_costo_cama_adicional,
-            'venta' => $camasAdicionales * (float) $tarifa->precio_venta_cama_adicional,
-        ];
     }
 
     // Recalculo en vivo del formulario de pasaje aéreo (PasajeAereoForm.vue): la misma validación y el
