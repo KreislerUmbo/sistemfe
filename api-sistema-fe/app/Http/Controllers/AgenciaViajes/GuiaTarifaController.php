@@ -189,7 +189,7 @@ class GuiaTarifaController extends Controller
 
     // Retira la tarifa del catálogo activo — deja de ofrecerse en el
     // picker de GuiaController::show() y no se puede elegir para ítems
-    // nuevos (AlternativaItemController::crearItemGuia()), pero no toca
+    // nuevos (AltaGuia), pero no toca
     // ningún registro histórico. Sin guard de uso — a diferencia de
     // borrar, desactivar nunca rompe nada.
     public function desactivar(string $id)

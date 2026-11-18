@@ -23,7 +23,7 @@ use App\Models\AgenciaViajes\Concerns\ExoneradoEsAmazonia;
 // estar muerta. Se usa para ítems origen_tipo=mayorista cuyo precio viene
 // de la matriz hotel×habitación de un OpcionMayorista
 // (opciones_hotel/opciones_hotel_tarifas), no de un ProveedorTarifa real
-// — ver AlternativaItemController::crearItemMayorista(). Antes de esta
+// — ver AltaMayorista. Antes de esta
 // sesión la columna existía pero ningún código la escribía (gap real,
 // confirmado por 2 auditorías independientes antes de M1/M2).
 class AlternativaItem extends Model

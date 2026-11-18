@@ -326,7 +326,7 @@ class OpcionMayoristaController extends Controller
                 'proveedor_id' => $validado['proveedor_id'] ?? null,
                 // OpcionHotel.moneda es un campo nuevo (Fix 9); para un
                 // hotel de mayorista se sincroniza con la moneda de la
-                // propia opción — crearItemMayorista() sigue usando
+                // propia opción — AltaMayorista sigue usando
                 // $opcion->moneda como fuente real de conversión, esto es
                 // solo para que el dato quede consistente en el registro.
                 'moneda' => $opcion->moneda,

@@ -8,12 +8,8 @@ use App\Models\AgenciaViajes\Alternativa;
 use App\Models\AgenciaViajes\AlternativaItem;
 use App\Models\AgenciaViajes\ConfiguracionAgencia;
 use App\Models\AgenciaViajes\CotizacionPasajeAereo;
-use App\Models\AgenciaViajes\CotizacionPasajero;
 use App\Models\AgenciaViajes\DestinoServicio;
 use App\Models\AgenciaViajes\GuiaTarifa;
-use App\Models\AgenciaViajes\OpcionHotelTarifa;
-use App\Models\AgenciaViajes\OpcionMayorista;
-use App\Models\AgenciaViajes\OpcionMayoristaOpcional;
 use App\Models\AgenciaViajes\PaquetePlantilla;
 use App\Models\AgenciaViajes\Proveedor;
 use App\Models\AgenciaViajes\ProveedorServicio;
@@ -35,13 +31,10 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
-use Illuminate\Validation\Rule;
 
-// El corazón de la Sesión 11b — plan-modulo-cotizaciones-reservas.md §3.
-// store() se ramifica en 4 según origen_tipo (proveedor/mayorista/
-// pasaje_aereo/manual), cada uno con su propia forma de resolver
-// costo_snapshot/precio_venta_snapshot. update() es la edición en vivo de
-// descuento_pct/precio_convertido con validación de piso.
+// Ítems de una alternativa del cotizador. store() delega el alta en un servicio por origen_tipo
+// (Services/AgenciaViajes/AltaItem); update() es la edición en vivo de descuento_pct/precio_convertido
+// con validación de piso.
 class AlternativaItemController extends Controller
 {
     use AutorizaCotizacion;
@@ -270,8 +263,7 @@ class AlternativaItemController extends Controller
         ]);
     }
 
-    // PUT alternativa-items/{id}/elegir-grupo — Sesión M4 (Ronda 2/P6, P9).
-    // Resuelve un grupo de opciones de hotel de M1: marca ESTA fila como
+    // PUT alternativa-items/{id}/elegir-grupo — resuelve un grupo de opciones de hotel de M1: marca ESTA fila como
     // opcion_elegida=true, desmarca las demás del mismo grupo_opcion_id
     // (mismo patrón de exclusividad que OpcionMayoristaController::elegir()).
     // El vendedor puede cambiar de elegida después llamando de nuevo a este
@@ -303,9 +295,8 @@ class AlternativaItemController extends Controller
             // Reaplica el descuento global vigente sobre la fila recién
             // elegida — sin esto, quedaría a precio de lista hasta que el
             // vendedor vuelva a tocar el campo de descuento a mano (mismo
-            // motor que AlternativaController::update(), ya idempotente:
-            // confirmado en Sesión M1 que reaplicar el mismo % mueve el
-            // descuento a la nueva elegida sin quedar pegado a la anterior).
+            // motor que AlternativaController::update(), idempotente: reaplicar el mismo %
+            // mueve el descuento a la nueva elegida sin quedar pegado a la anterior).
             if ($alternativa->descuento_global_pct !== null && (float) $alternativa->descuento_global_pct > 0) {
                 app(AlternativaController::class)->aplicarDescuentoGlobal($alternativa, (float) $alternativa->descuento_global_pct);
             } else {
@@ -357,11 +348,8 @@ class AlternativaItemController extends Controller
         return response()->json(['code' => 200, 'message' => 'Ítem eliminado correctamente', 'alternativa' => $alternativa->fresh('items')]);
     }
 
-    // Sesión UX2 (04-sep-2026) — hallazgo del usuario: nada impedía repetir
-    // "Comparar varias opciones" con el mismo set de hoteles, dejando varios
-    // bloques "N opciones de hotel" idénticos en el lienzo, y borrarlos fila
-    // por fila (con destroy() de arriba, uno por uno) no era intuitivo. Borra
-    // TODAS las filas de un mismo grupo_opcion_id de una sola vez — mismo
+    // Borra TODAS las filas de un mismo grupo_opcion_id de una sola vez (repetir "Comparar varias
+    // opciones" deja bloques "N opciones de hotel" idénticos y borrarlos fila por fila no es intuitivo) — mismo
     // guard de reserva que destroy(), evaluado sobre el grupo completo antes
     // de borrar cualquier fila (todo o nada).
     //
@@ -406,7 +394,7 @@ class AlternativaItemController extends Controller
         return response()->json(['code' => 200, 'message' => 'Grupo eliminado correctamente']);
     }
 
-    // Sesión 11b3 (Parte A) — "cargar desde plantilla": explota TODOS los
+    // "Cargar desde plantilla": explota TODOS los
     // ítems de un tour_simple/paquete_combo en la alternativa activa,
     // resueltos en vivo contra su proveedor_tarifa real (nunca copia
     // precio_venta_final del catálogo como un solo número — mismo criterio
@@ -416,12 +404,10 @@ class AlternativaItemController extends Controller
     // en el catálogo (paquetes/detalle.vue), así que el total acá siempre
     // coincide con el que ya vio ahí.
     //
-    // 14-oct-2026 (diseño, sin implementar): con modo_tours='nuevo' el tour
-    // entra como UNA línea con su propio precio por persona y por temporada, en
-    // vez de desarmarse en servicios; este camino queda como modo 'clasico'.
-    // Ver plan-tours-venta-simple-costo-real.md (N6, §3.12, §5b). Hallazgos
-    // conocidos de este método: no consulta la temporada, y el ajuste de
-    // redondeo (más abajo) no se multiplica por pasajero.
+    // Con modo_tours='nuevo' el tour entra como UNA línea con su propio precio por persona y por
+    // temporada (desdePlantillaModoNuevo()); este camino es el modo 'clasico'. Ver
+    // plan-tours-venta-simple-costo-real.md (N6, §3.12, §5b). Este método no consulta la
+    // temporada, y el ajuste de redondeo (más abajo) no se multiplica por pasajero.
     public function desdePlantilla(Request $request, string $alternativaId)
     {
         $alternativa = Alternativa::findOrFail($alternativaId);
@@ -458,7 +444,7 @@ class AlternativaItemController extends Controller
         // mismo offset que ComboExplosionService::itinerarioDerivado() ya usa
         // para el itinerario derivado (tour_itinerario_items.dia_relativo
         // máximo de cada tour), no un solo día plano para todo el combo.
-        // dia_final_combo (Sesión 11m, red de seguridad del cotizador): el
+        // dia_final_combo: el
         // último día que este combo ocupa, contando incluso un tour-hijo sin
         // itinerario cargado (?? 1 — ocupa igual el día en que arranca,
         // nunca "desaparece" del rango de días). Sin esto, un tour sin
@@ -482,10 +468,8 @@ class AlternativaItemController extends Controller
                 $offsetDia += $diasDelTourActual;
             }
 
-            // Fix ítems sueltos del combo (2026-08-18): un hotel/guía
-            // agregado DIRECTO al combo (sin envolverlo en un tour-hijo) se
-            // perdía por completo acá — este bucle antes solo miraba
-            // toursDelCombo(). Ocupan el día de inicio del combo (no tienen
+            // Ítems sueltos del combo: un hotel/guía agregado DIRECTO al combo (sin envolverlo en un
+            // tour-hijo) no sale de toursDelCombo(). Ocupan el día de inicio del combo (no tienen
             // tour propio del que derivar un día/offset).
             foreach ($this->comboExplosion->explotarItemsSueltos($paquete) as $entrada) {
                 $entrada['dia_referencial'] = $validado['dia_referencial'];
@@ -502,17 +486,12 @@ class AlternativaItemController extends Controller
             }
         }
 
-        // Fix ajuste de redondeo (2026-08-18): la suma real de ítems casi
-        // nunca da un número redondo (ej. S/93.66) pero el negocio quiere
-        // cobrar S/100 — ajuste_redondeo (positivo o negativo) es la única
-        // palanca hoy para eso, y sin esto SOLO afectaba el catálogo
-        // (totalesTour()/totalesCombo()), nunca la cotización real del
-        // cliente, que seguía sumando el número no redondo (mismo síntoma
-        // ya diagnosticado para precio_venta_final antes de este fix). Se
-        // refleja como UN AlternativaItem manual adicional, auditable (no un
-        // número mágico) — mismo patrón que "ítem manual flexible" (Sesión
-        // 11q), costo=0 porque es un ajuste de precio de venta, no un
-        // servicio nuevo con costo de proveedor. Solo el ajuste_redondeo del
+        // Ajuste de redondeo: la suma real de ítems casi nunca da un número redondo (ej. S/93.66) pero
+        // el negocio quiere cobrar S/100. ajuste_redondeo (positivo o negativo) es la palanca, y tiene
+        // que llegar a la cotización real del cliente, no solo al catálogo (totalesTour()/
+        // totalesCombo()). Se refleja como UN AlternativaItem manual adicional, auditable (no un
+        // número mágico), con costo=0 porque es un ajuste de precio de venta, no un servicio nuevo
+        // con costo de proveedor. Solo el ajuste_redondeo del
         // paquete de nivel superior (el que se está cargando) aplica — el de
         // un tour-hijo dentro de un combo NO se propaga acá: cada
         // paquete_plantilla corrige su PROPIO total final, no el de su
@@ -574,9 +553,9 @@ class AlternativaItemController extends Controller
         if ($entrada['proveedor_tarifa_id']) {
             $tarifa = ProveedorTarifa::findOrFail($entrada['proveedor_tarifa_id']);
 
-            // Sesión 11o: 'compartido' se cobra por pasajero REAL de
+            // 'compartido' se cobra por pasajero REAL de
             // la cotización (no un adulto plano) — mismo cálculo que
-            // crearItemProveedor() ya usa para modo_precio=
+            // AltaProveedor usa para modo_precio=
             // 'por_persona' (contarPasajerosPorTipo()). 'privado' (o
             // sin modalidad, ej. guía suelto que igual cae acá si
             // algún día tuviera proveedor_tarifa_id) sigue con
@@ -603,7 +582,7 @@ class AlternativaItemController extends Controller
                     // cantidad NOT NULL en BD (default 1) — sin
                     // efecto real acá, el accessor total() no
                     // multiplica para 'por_persona' (mismo criterio
-                    // que crearItemProveedor() ya usa).
+                    // que AltaProveedor usa).
                     'cantidad' => 1,
                     'moneda_costo' => $tarifa->moneda,
                     'costo_snapshot' => $costoPorPersona,
@@ -635,7 +614,7 @@ class AlternativaItemController extends Controller
             // reserva_items.guia_id). Lo nuevo es el AlternativaItem
             // real de abajo: costo/venta ya vienen resueltos por
             // ComboExplosionService::resolverCostoVentaItem() (mismo
-            // cálculo que crearItemGuia() usa para un guía suelto),
+            // cálculo que AltaGuia usa para un guía suelto),
             // así que el costo SÍ entra al total desde que se carga
             // el combo, aunque el guía puntual siga sin asignar.
             $guiaTarifa = GuiaTarifa::with(['guia', 'destino'])->find($entrada['guia_tarifa_id']);
@@ -915,7 +894,7 @@ class AlternativaItemController extends Controller
         return response()->json(['code' => 200, 'message' => 'Precios por temporada recalculados'] + $resultado + ['alternativa' => $alternativa->fresh('items')]);
     }
 
-    // Sesión 11b3 — reasignar el día de un ítem SUELTO (sin tour_origen_id).
+    // Reasigna el día de un ítem SUELTO (sin tour_origen_id).
     // Los ítems que pertenecen a un bloque de tour se mueven juntos, ver
     // moverBloque() — separado de update() (piso/descuento) a propósito: es
     // otro concern y no debía arriesgar esa validación ya verificada.
@@ -932,13 +911,9 @@ class AlternativaItemController extends Controller
             return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
         }
 
-        // Fase 2 del fix Cotización↔Reserva (2026-08-19): una alternativa
-        // 'aceptada' ya generó una reserva a partir de un snapshot de
-        // dia_referencial — mover el día acá después desincroniza en
-        // silencio esa reserva ya congelada (el mismo síntoma de fondo que
-        // motivó todo este fix, ver plan-hoja-de-ruta-ejecucion.md fila
-        // 11r/11s). El punto de corrección correcto para una reserva ya
-        // aceptada es ReservaController::reprogramar(), no este endpoint.
+        // Una alternativa 'aceptada' ya generó una reserva a partir de un snapshot de dia_referencial:
+        // mover el día acá desincroniza en silencio esa reserva ya congelada. El punto de corrección
+        // para una reserva ya aceptada es ReservaController::reprogramar(), no este endpoint.
         if ($item->alternativa->estado === 'aceptada') {
             return response()->json([
                 'code' => 422,
@@ -975,8 +950,7 @@ class AlternativaItemController extends Controller
             return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
         }
 
-        // Fase 2 del fix Cotización↔Reserva (2026-08-19) — mismo guard que
-        // reasignarDia(), ver comentario ahí.
+        // Mismo guard que reasignarDia(), ver comentario ahí.
         if ($alternativa->estado === 'aceptada') {
             return response()->json([
                 'code' => 422,
@@ -1022,14 +996,10 @@ class AlternativaItemController extends Controller
         return response()->json(['code' => 200, 'resultado' => $resultado]);
     }
 
-    // PUT alternativa-items/{id}/pasaje-aereo — edición estructural completa
-    // de un pasaje aéreo suelto (auditoría del módulo Reservas/Cotizador,
-    // 2026-08-27: antes de esto no existía NINGUNA forma de ver/corregir el
-    // detalle de un pasaje aéreo ya cargado, solo borrar y recrear desde
-    // cero). Calcado de actualizarManual() — mismo guard de "no editar si ya
-    // generó una reserva", y reusa validarPasajeAereo()/calcularPasajeAereo()
-    // (las MISMAS que usa el alta y el preview) para que nunca haya una
-    // segunda fórmula que se pueda desincronizar de la primera.
+    // PUT alternativa-items/{id}/pasaje-aereo — edición estructural completa de un pasaje aéreo
+    // suelto. Calcado de actualizarManual() — mismo guard de "no editar si ya generó una reserva", y
+    // reusa AltaPasajeAereo::validar()/calcular() (las MISMAS que usa el alta y el preview) para que
+    // nunca haya una segunda fórmula que se pueda desincronizar de la primera.
     public function actualizarPasajeAereo(Request $request, string $id): JsonResponse
     {
         $item = AlternativaItem::with(['alternativa', 'cotizacionPasajeAereo'])->findOrFail($id);
@@ -1093,14 +1063,6 @@ class AlternativaItemController extends Controller
         return response()->json(['code' => 200, 'message' => 'Pasaje aéreo actualizado correctamente', 'alternativa_item' => $item->fresh(['cotizacionPasajeAereo'])]);
     }
 
-    // ── origen_tipo=manual ──────────────────────────────────────────────
-    // Sesión 11q: costo/cantidad/pax_incluidos dejaron de ser sentinels sin
-    // efecto — costo_snapshot ahora es real (obligatorio), cantidad SÍ
-    // multiplica (ver AlternativaItem::getTotalAttribute()), y pax_incluidos
-    // se propaga a reserva_item_pasajero al aceptar (ver ReservaController::
-    // crearReservaDesdeAlternativa()). proveedor_sugerido_manual es dato
-    // interno (nunca visible al cliente), solo para prellenar el nombre al
-    // promover este ítem a un proveedor real (ver promoverAProveedor()).
     // Edición estructural de un ítem manual (descripción/proveedor/costo/
     // cantidad/pax) — separado de update() (que solo maneja
     // descuento_pct/precio_convertido para CUALQUIER origen_tipo, ese flujo
@@ -1218,7 +1180,7 @@ class AlternativaItemController extends Controller
 
         $margenValor = round($v['precio_venta_adulto'] - $v['costo'], 2);
         // Ya no se hardcodea '10'/'nacional' — usa lo que el ítem manual ya
-        // tiene capturado (crearItemManual()/actualizarManual()), con
+        // tiene capturado (AltaManual/actualizarManual()), con
         // fallback al default de agencia solo si el ítem es de antes de
         // este fix y nunca lo tuvo.
         $tratamientoTributario = ConfiguracionAgencia::completarTratamientoTributario($item->tip_afe_igv, $item->destino_tributario);

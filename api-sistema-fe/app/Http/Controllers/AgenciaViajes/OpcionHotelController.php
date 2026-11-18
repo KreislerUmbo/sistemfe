@@ -40,7 +40,7 @@ class OpcionHotelController extends Controller
     // POST opciones-hotel — alta de un hotel ad-hoc + su matriz de
     // precios por tipo de habitación, tipeado a mano desde la pestaña
     // Local del cotizador (consumido por
-    // AlternativaItemController::crearItemProveedor() vía
+    // AltaProveedor vía
     // opcion_hotel_tarifa_id, ver esa sesión). Sin FK propia hacia la
     // alternativa a propósito — se referencia hacia adelante solo a
     // través de los alternativa_items que lo usan, igual que cualquier
@@ -476,7 +476,7 @@ class OpcionHotelController extends Controller
         return $copiadas;
     }
 
-    // Mismo criterio que AlternativaItemController::resolverTratamientoTributario()
+    // Mismo criterio que ConfiguracionAgencia::completarTratamientoTributario()
     // (privado ahí, replicado acá — misma familia de 6 líneas que ya se
     // repite en 2-3 lugares del vertical, no amerita una clase compartida
     // por esto solo).

@@ -345,7 +345,7 @@ class AlternativaPdfService
 
     // 07-sep-2026 — un opcional ya agregado de verdad al lienzo (sección
     // "Opcionales" del cotizador, ver AlternativaItemController::
-    // crearItemMayorista()) deja de ser "algo que el cliente puede agregar
+    // AltaMayorista) deja de ser "algo que el cliente puede agregar
     // aparte": ya está cobrado, sumado al total de "Precio". Si siguiera
     // listado acá igual que los demás, el PDF le diría al cliente que
     // puede agregarlo por separado cuando en realidad ya lo está pagando

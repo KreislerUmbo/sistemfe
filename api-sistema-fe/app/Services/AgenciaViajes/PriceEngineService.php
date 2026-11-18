@@ -190,7 +190,7 @@ class PriceEngineService
     }
 
     // T-045 — motivo por el que una tarifa de proveedor no se puede usar en
-    // un ítem NUEVO (null = se puede). Antes vivía en crearItemProveedor();
+    // un ítem NUEVO (null = se puede). Lo usa AltaProveedor;
     // ahora lo comparte con la vista previa de Venta directa para que ambos
     // respondan el mismo mensaje.
     public function motivoTarifaNoUsable(ProveedorTarifa $tarifa): ?string
@@ -212,7 +212,7 @@ class PriceEngineService
 
     // T-045 — fórmula única de venta/costo de una línea de tarifa de
     // proveedor (antes inline en AlternativaItemController::
-    // crearItemProveedor()). $conteo = ['adulto'=>n,'nino'=>n,'infante'=>n].
+    // AltaProveedor). $conteo = ['adulto'=>n,'nino'=>n,'infante'=>n].
     // Devuelve el precio de venta y el costo del snapshot SIN camas
     // adicionales (esas las suma quien las use).
     //  - por_persona: venta = Σ conteo × precio por tipo (niño vacío = adulto en tour, 0 en hotel; infante vacío = 0); costo

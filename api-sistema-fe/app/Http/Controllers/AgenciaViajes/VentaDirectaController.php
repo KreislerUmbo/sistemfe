@@ -630,7 +630,7 @@ class VentaDirectaController extends Controller
             'lineas.*.cantidad' => 'nullable|integer|min:1',
             'lineas.*.descripcion_manual' => $manual.'|string|max:500',
             'lineas.*.precio_venta_snapshot' => $manual.'|numeric|min:0',
-            // crearItemManual() lo exige desde la Sesión 11q.
+            // AltaManual lo exige.
             'lineas.*.costo_snapshot' => $manual.'|numeric|min:0',
             // Con `lineas` la moneda es la de la venta; solo el payload viejo la manda por línea.
             'lineas.*.moneda_costo' => ($legacy ? $manual : 'nullable').'|in:PEN,USD',

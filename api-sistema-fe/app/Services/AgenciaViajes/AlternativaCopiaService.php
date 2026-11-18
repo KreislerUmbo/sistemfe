@@ -234,7 +234,7 @@ class AlternativaCopiaService
                 ]);
                 // 07-sep-2026 — mismo criterio que $tarifasHotelClonadas:
                 // un ítem real agregado desde este opcional (ver
-                // AlternativaItemController::crearItemMayorista()) debe
+                // AltaMayorista) debe
                 // remapear a la copia, no seguir apuntando al opcional
                 // del original.
                 $opcionalesClonados[$opcional->id] = $nuevoOpcional->id;
@@ -304,7 +304,7 @@ class AlternativaCopiaService
                 $cambios['opcion_hotel_tarifa_id'] = $tarifasHotelClonadas[$itemOriginal->opcion_hotel_tarifa_id];
             }
             // 07-sep-2026 — mismo criterio, para un ítem que materializa
-            // un OpcionMayoristaOpcional elegido (ver crearItemMayorista()).
+            // un OpcionMayoristaOpcional elegido (ver AltaMayorista).
             if ($itemOriginal->opcion_mayorista_opcional_id !== null && isset($opcionalesClonados[$itemOriginal->opcion_mayorista_opcional_id])) {
                 $cambios['opcion_mayorista_opcional_id'] = $opcionalesClonados[$itemOriginal->opcion_mayorista_opcional_id];
             }
