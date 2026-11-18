@@ -1496,8 +1496,6 @@ import { useRoute, useRouter } from 'vue-router';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import { useLayoutStore } from '@/stores/layout';
 import Swal from 'sweetalert2/dist/sweetalert2.js';
-import httpClient from '@/helpers/http-client';
-import { escaparHtml } from '@/helpers/escaparHtml';
 import RichTextEditor from '@/components/RichTextEditor.vue';
 import HabitacionMatrixPicker from '@/components/AgenciaViajes/HabitacionMatrixPicker.vue';
 import ProveedorBuscador from '@/components/AgenciaViajes/ProveedorBuscador.vue';
@@ -1526,15 +1524,11 @@ import { reservaModificacionService, type PenalidadPayload, type PasajeroEdadEst
 import { imprimirComprobante } from '@/composables/usePrintComprobante';
 import ClientFormQuick from '@/components/Sales/ClientFormQuick.vue';
 import { useToast } from '@/composables/useToast';
-import { cotizacionService } from '@/services/admin/cotizacionService';
-import { alternativaService } from '@/services/admin/alternativaService';
 import { alternativaItemService } from '@/services/admin/alternativaItemService';
 import { servicioService } from '@/services/admin/servicioService';
-import { reservaService } from '@/services/admin/reservaService';
 import { useAgenciaViajesCatalogosStore } from '@/stores/agenciaViajesCatalogos';
-import { formatDiaCorto, formatFecha, formatFechaHora, hoyPeru, partesFechaHoraPeru } from '@/helpers/fecha';
+import { formatDiaCorto, formatFecha, formatFechaHora, hoyPeru } from '@/helpers/fecha';
 import { guiaService } from '@/services/admin/guiaService';
-import { tipoCambioAgenciaService } from '@/services/admin/tipoCambioAgenciaService';
 import type { Alternativa, AlternativaItem, Proveedor, GuiaTarifa, TipAfeIgv, DestinoTributario } from '@/types/agencia-viajes';
 import type { Client } from '@/types/clients';
 import type { AvisoSalida } from '@/helpers/avisosProveedores';
@@ -1543,7 +1537,6 @@ import {
     badgeTratamientoTributario, desglosePasajerosTexto as desglosePasajerosTextoDe, descripcionDestinoServicio, etiquetaItem,
     iconoItem, nombreMayoristaDeGrupo, tarifaAereaVencida, textoPlano, toursDeGrupo,
 } from '@/helpers/agencia-viajes/cotizador/presentacionItem';
-import { descargarArchivo, leerMensajeErrorBlob } from '@/helpers/descargarArchivo';
 import { useCotizacionEditor } from '@/composables/agencia-viajes/cotizador/useCotizacionEditor';
 import { useEdicionPrecios } from '@/composables/agencia-viajes/cotizador/useEdicionPrecios';
 import { useDestinosAlternativa } from '@/composables/agencia-viajes/cotizador/useDestinosAlternativa';
@@ -1556,6 +1549,10 @@ import { useBibliotecaCotizador } from '@/composables/agencia-viajes/cotizador/u
 import { useOpcionesMayorista } from '@/composables/agencia-viajes/cotizador/useOpcionesMayorista';
 import { useHotelesMayorista } from '@/composables/agencia-viajes/cotizador/useHotelesMayorista';
 import { useOpcionalesMayorista } from '@/composables/agencia-viajes/cotizador/useOpcionalesMayorista';
+import { usePasajerosCotizacion } from '@/composables/agencia-viajes/cotizador/usePasajerosCotizacion';
+import { useCabeceraCotizacion } from '@/composables/agencia-viajes/cotizador/useCabeceraCotizacion';
+import { useResultadoCotizacion } from '@/composables/agencia-viajes/cotizador/useResultadoCotizacion';
+import { useAlternativas } from '@/composables/agencia-viajes/cotizador/useAlternativas';
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
 
@@ -1783,556 +1780,39 @@ const aplicarModificacion = async () => {
     }
 };
 
-// Punto F — el "+ Nueva" y "Duplicar alternativa" comparten el mismo tope.
-const alcanzoLimiteAlternativas = computed(() => (cotizacion.value?.alternativas?.length ?? 0) >= 5);
-
-const resumenPax = computed(() => {
-    const pax = cotizacion.value?.pasajeros ?? [];
-    const counts: Record<string, number> = {};
-    pax.forEach((p) => { counts[p.tipo_pax] = (counts[p.tipo_pax] ?? 0) + 1; });
-    return Object.entries(counts).map(([t, n]) => `${n} ${t}`).join(', ') || 'sin pasajeros';
-});
-
-// Pedido del usuario (07-sep-2026) — el Total del panel no dejaba claro
-// para cuántas personas ya estaba calculado ese monto. Mismo criterio de
-// texto que "TOTAL {N ADULTOS}" del PDF (alternativa.blade.php), pero en
-// minúscula/entre paréntesis porque acá es un subtítulo, no el título de
-// una caja destacada.
-const etiquetasPaxResumen: Record<string, [string, string]> = {
-    adulto: ['adulto', 'adultos'],
-    nino: ['niño', 'niños'],
-    infante: ['infante', 'infantes'],
-};
-const resumenPaxTotal = computed(() => {
-    const pax = cotizacion.value?.pasajeros ?? [];
-    const counts: Record<string, number> = {};
-    pax.forEach((p) => { counts[p.tipo_pax] = (counts[p.tipo_pax] ?? 0) + 1; });
-    const partes = Object.entries(counts).map(([tipo, n]) => {
-        const [singular, plural] = etiquetasPaxResumen[tipo] ?? [tipo, `${tipo}s`];
-        return `${n} ${n === 1 ? singular : plural}`;
-    });
-    return partes.length ? `(${partes.join(' + ')})` : '';
-});
-
-// T-036 (H22): el paquete de mayorista se cotiza solo por adultos. Se hace visible:
-// la línea dice "× N adultos" y, si hay niños/infantes, el total lo avisa (sin bloquear).
-const esItemPaqueteMayorista = (item: AlternativaItem) => item.origen_tipo === 'mayorista' && !!item.opcion_hotel_tarifa_id;
-const textoAdultosMayorista = (item: AlternativaItem) => {
-    if (!esItemPaqueteMayorista(item)) return '';
-    const n = Number(item.cantidad) || 1;
-    return `× ${n} ${n === 1 ? 'adulto' : 'adultos'}`;
-};
-const notaMayoristaSinNinos = computed(() => {
-    const hayPaquete = (alternativaActiva.value?.items ?? []).some(esItemPaqueteMayorista);
-    const hayNinos = (cotizacion.value?.pasajeros ?? []).some((p) => p.tipo_pax !== 'adulto');
-    return hayPaquete && hayNinos;
-});
-
-// Punto 1 (ronda mayoristas) — el precio de cada tipo de habitación de una
-// OpcionMayorista ya es el total del paquete por persona (aéreo + tours +
-// hotel, no solo hospedaje), así que la cantidad por defecto debe ser la
-// cantidad de pasajeros ADULTOS de la cotización, no 1 (que tenía sentido
-// como "noches" en el flujo de hotel local, no acá).
-const cantidadAdultosCotizacion = computed(() => {
-    const n = (cotizacion.value?.pasajeros ?? []).filter((p) => p.tipo_pax === 'adulto').length;
-    return n > 0 ? n : 1;
-});
-
-// Antes: cada lado se formateaba por separado ("sin fecha — sin fecha" con
-// ambas vacías, o peor si alguna venía como string vacío en vez de null).
-// Un único mensaje cuando falta cualquiera de las dos fechas es más claro
-// que dos placeholders pegados con un guion.
-const textoFechasViaje = computed(() => {
-    const desde = cotizacion.value?.fecha_viaje_desde;
-    const hasta = cotizacion.value?.fecha_viaje_hasta;
-    if (!desde || !hasta) return 'Fecha por confirmar';
-    return `${formatFecha(desde)} — ${formatFecha(hasta)}`;
-});
-
-// ── Corregir cliente/destino/fecha (me equivoqué al crear la cotización) ──
-const editandoCabecera = ref(false);
-const formCabecera = ref({ destino: '', fecha_viaje_desde: '' as string | null, fecha_viaje_hasta: '' as string | null });
-const clienteEditado = ref<Client | null>(null);
-const guardandoCabecera = ref(false);
-
-const clientSearchText = ref('');
-const clientSuggestions = ref<Client[]>([]);
-const showClientSuggestions = ref(false);
-const showQuickClientModal = ref(false);
-const mostrarCalculadoraTipoCambio = ref(false);
-const modoEdicionCliente = ref(false);
-let clientSearchTimeout: any = null;
-
-const abrirEdicionCabecera = () => {
-    if (!cotizacion.value) return;
-    // El backend devuelve fecha_viaje_desde/hasta como timestamp ISO
-    // completo ('2026-08-20T00:00:00.000000Z', ver comentario de
-    // formatFecha() en helpers/fecha.ts) — un <input type="date"> solo
-    // acepta 'YYYY-MM-DD' exacto, así que sin este slice el campo queda
-    // en blanco al reabrir el panel aunque la fecha sí esté guardada
-    // (bug real reportado por el usuario: "las fechas se guardan pero no
-    // se muestran").
-    formCabecera.value = {
-        destino: cotizacion.value.destino,
-        fecha_viaje_desde: cotizacion.value.fecha_viaje_desde ? cotizacion.value.fecha_viaje_desde.slice(0, 10) : '',
-        fecha_viaje_hasta: cotizacion.value.fecha_viaje_hasta ? cotizacion.value.fecha_viaje_hasta.slice(0, 10) : '',
-    };
-    clienteEditado.value = cotizacion.value.cliente
-        ? { id: cotizacion.value.cliente.id, full_name: cotizacion.value.cliente.full_name, n_document: cotizacion.value.cliente.n_document } as Client
-        : null;
-    clientSearchText.value = cotizacion.value.cliente?.full_name ?? '';
-    editandoCabecera.value = true;
-};
-
-const onClientSearchInput = () => {
-    clearTimeout(clientSearchTimeout);
-    clientSearchTimeout = setTimeout(buscarClientesEditar, 300);
-};
-
-const buscarClientesEditar = async () => {
-    if (clientSearchText.value.trim().length < 2) { clientSuggestions.value = []; return; }
-    const res = await httpClient.get('/clients', { params: { search: clientSearchText.value } });
-    // ClientController::index() envuelve el listado en ClientCollection
-    // ({ data: [...] }) — clients.data, no clients directo.
-    clientSuggestions.value = res.data.clients?.data ?? [];
-};
-
-const seleccionarClienteEditado = (c: Client) => {
-    clienteEditado.value = c;
-    clientSearchText.value = c.full_name;
-    showClientSuggestions.value = false;
-};
-
-const limpiarClienteEditado = () => {
-    clienteEditado.value = null;
-    clientSearchText.value = '';
-};
-
-const abrirNuevoCliente = () => {
-    modoEdicionCliente.value = false;
-    showQuickClientModal.value = true;
-};
-
-const abrirEdicionCliente = () => {
-    if (!clienteEditado.value) return;
-    modoEdicionCliente.value = true;
-    showQuickClientModal.value = true;
-};
-
-const onClientSearchBlur = () => { setTimeout(() => { showClientSuggestions.value = false; }, 150); };
-
-const onClientCreated = (client: Client) => {
-    seleccionarClienteEditado(client);
-    showQuickClientModal.value = false;
-};
-
-const guardarCabecera = async () => {
-    if (!cotizacion.value) return;
-    if (!clienteEditado.value) { (Swal as TVueSwalInstance).fire('Error', 'Seleccioná un cliente.', 'error'); return; }
-    if (!formCabecera.value.destino.trim()) { (Swal as TVueSwalInstance).fire('Error', 'Ingresá un destino.', 'error'); return; }
-
-    guardandoCabecera.value = true;
-    try {
-        await cotizacionService.actualizar(cotizacion.value.id, {
-            cliente_id: clienteEditado.value.id,
-            destino: formCabecera.value.destino.trim(),
-            fecha_viaje_desde: formCabecera.value.fecha_viaje_desde || null,
-            fecha_viaje_hasta: formCabecera.value.fecha_viaje_hasta || null,
-        });
-        editandoCabecera.value = false;
-        await cargarCotizacion();
-    } catch (error: any) {
-        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo actualizar la cotización', 'error');
-    } finally {
-        guardandoCabecera.value = false;
-    }
-};
-
-// ── Agregar/quitar pasajeros ─────────────────────────────────────────
-// Gap real señalado por el usuario (14-ago-2026): cotizacionService.
-// actualizarPasajeros() y su endpoint (PUT cotizaciones/{id}/pasajeros)
-// existían desde Sesión 7a pero nunca se conectaron a ninguna pantalla —
-// no había forma de aumentar/quitar pasajeros de una cotización ya
-// creada. El backend ahora bloquea el guardado si ya hay una alternativa
-// aceptada (reserva real generada) — hayAlternativaAceptada refleja el
-// mismo candado acá para no dejar el ícono habilitado sin sentido.
-// Reserva a la que enlaza la pestaña de una alternativa: la suya si está aceptada, o la que la
-// reemplazó (modificacionAplicada.reserva) si quedó 'reemplazada'.
-const reservaDeAlternativa = (alt: Alternativa) =>
-    (alt.estado === 'reemplazada' ? alt.modificacion_aplicada?.reserva : alt.reserva) ?? null;
-
-const hayAlternativaAceptada = computed(() => (cotizacion.value?.alternativas ?? []).some((a) => a.estado === 'aceptada'));
-
-const editandoPasajeros = ref(false);
-const formPasajeros = ref<Array<{ id?: number; edad: number; residencia: 'nacional' | 'extranjero' }>>([]);
-const guardandoPasajeros = ref(false);
-
-const tipoPorEdadEdicion = (edad: number) => {
-    if (edad <= 2) return { label: 'Infante', clase: 'bg-info-subtle text-info' };
-    if (edad <= 12) return { label: 'Niño', clase: 'bg-warning-subtle text-warning' };
-    return { label: 'Adulto', clase: 'bg-success-subtle text-success' };
-};
-
-const abrirEdicionPasajeros = () => {
-    if (!cotizacion.value) return;
-    formPasajeros.value = (cotizacion.value.pasajeros ?? []).map((p) => ({ id: p.id, edad: p.edad, residencia: p.residencia ?? 'nacional' }));
-    editandoPasajeros.value = true;
-};
-
-const agregarPaxEdicion = (edadSugerida: number) => {
-    formPasajeros.value.push({ edad: edadSugerida, residencia: 'nacional' });
-};
-
-const guardarPasajeros = async () => {
-    if (!cotizacion.value || formPasajeros.value.length === 0) return;
-
-    guardandoPasajeros.value = true;
-    try {
-        const res = await cotizacionService.actualizarPasajeros(cotizacion.value.id, formPasajeros.value);
-        editandoPasajeros.value = false;
-        await cargarCotizacion();
-
-        const recalculados: number = res.items_recalculados ?? 0;
-        const paraRevisar: Array<{ alternativa_nombre: string; motivo: string }> = res.items_para_revisar ?? [];
-
-        if (paraRevisar.length > 0) {
-            const listaHtml = paraRevisar.map((it) => `<li>${escaparHtml(it.alternativa_nombre)}: ${escaparHtml(it.motivo)}</li>`).join('');
-            (Swal as TVueSwalInstance).fire({
-                icon: 'warning',
-                title: 'Pasajeros actualizados',
-                html: `${recalculados} ítem(s) recalculado(s) automáticamente.<br><br><b>${paraRevisar.length} ítem(s) necesitan revisión manual de precio:</b><ul class="text-start small mb-0">${listaHtml}</ul>`,
-            });
-        } else if (recalculados > 0) {
-            toast.success(`Pasajeros actualizados — ${recalculados} ítem(s) recalculado(s) automáticamente.`);
-        } else {
-            toast.success('Pasajeros actualizados correctamente.');
-        }
-    } catch (error: any) {
-        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo actualizar los pasajeros', 'error');
-    } finally {
-        guardandoPasajeros.value = false;
-    }
-};
-
-// Envío al cliente (EnviarAlternativa.vue, T-050: correo, WhatsApp u otro medio): el backend
-// puede haberla pasado de borrador a enviada; se refleja sin recargar toda la cotización.
-const historialRef = ref<InstanceType<typeof HistorialActividadesCotizacion> | null>(null);
-// T-051: próximas acciones de la cotización (la llamada propuesta al enviar, las agendadas).
-const accionesRef = ref<InstanceType<typeof AccionesPendientes> | null>(null);
-const proximaAccion = computed(() => accionesRef.value?.proxima ?? null);
-// T-052 (CRM C3): «Cerrar como perdida» / «Reabrir». No aplica a una modificación de reserva ni a
-// una cotización ya vendida (aceptada o reemplazada); el backend lo vuelve a revisar.
-const cotizacionPerdida = computed(() => !!cotizacion.value?.perdida_en);
-const puedeCambiarResultado = computed(() => !modificacionInfo.value
-    && !(cotizacion.value?.alternativas ?? []).some((a) => ['aceptada', 'reemplazada'].includes(a.estado)));
-const cerrandoComoPerdida = ref(false);
-const reabriendo = ref(false);
-
-const onResultadoCambiado = async (mensaje: string) => {
-    cerrandoComoPerdida.value = false;
-    await cargarCotizacion();
-    historialRef.value?.recargar();
-    accionesRef.value?.recargar();
-    toast.success(mensaje);
-};
-
-const reabrirCotizacion = async () => {
-    if (!cotizacion.value) return;
-    reabriendo.value = true;
-    try {
-        await cotizacionService.reabrir(cotizacion.value.id);
-        await onResultadoCambiado('Cotización reabierta: las alternativas volvieron a su estado.');
-    } catch (error: any) {
-        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo reabrir la cotización', 'error');
-    } finally {
-        reabriendo.value = false;
-    }
-};
-
-const onAlternativaEnviada = (estado: string, fechaVencimiento?: string | null) => {
-    const alternativa = cotizacion.value?.alternativas?.find((a: any) => a.id === alternativaActivaId.value);
-    if (alternativa && estado) alternativa.estado = estado as typeof alternativa.estado;
-    if (alternativa && fechaVencimiento !== undefined) alternativa.fecha_vencimiento = fechaVencimiento;
-};
-
-// T-053 — «Vigente hasta el 10/11» / «Vencida el 03/11». Extender guarda el inicio del día
-// siguiente en Perú (vigente todo el día elegido): el día que se muestra es el del segundo anterior.
-const vigenciaActiva = computed(() => {
-    const vence = alternativaActiva.value?.fecha_vencimiento;
-    const instante = vence ? Date.parse(vence) : NaN;
-    if (isNaN(instante)) return null;
-    const { fecha } = partesFechaHoraPeru(new Date(instante - 1000).toISOString());
-    return { dia: formatFecha(fecha).slice(0, 5), vencida: instante <= Date.now() };
-});
-const extendiendoVigencia = ref(false);
-
-const onVigenciaExtendida = (fechaVencimiento: string, mensaje: string) => {
-    extendiendoVigencia.value = false;
-    onAlternativaEnviada('enviada', fechaVencimiento);
-    historialRef.value?.recargar();
-    toast.success(mensaje);
-};
+const {
+    resumenPax, resumenPaxTotal, esItemPaqueteMayorista, textoAdultosMayorista, notaMayoristaSinNinos,
+    cantidadAdultosCotizacion, hayAlternativaAceptada, editandoPasajeros, formPasajeros, guardandoPasajeros,
+    tipoPorEdadEdicion, abrirEdicionPasajeros, agregarPaxEdicion, guardarPasajeros,
+} = usePasajerosCotizacion({ cotizacion, alternativaActiva, cargarCotizacion });
+const {
+    textoFechasViaje, editandoCabecera, formCabecera, clienteEditado, guardandoCabecera, clientSearchText,
+    clientSuggestions, showClientSuggestions, showQuickClientModal, modoEdicionCliente, abrirEdicionCabecera,
+    onClientSearchInput, seleccionarClienteEditado, limpiarClienteEditado, abrirNuevoCliente,
+    abrirEdicionCliente, onClientSearchBlur, onClientCreated, guardarCabecera,
+} = useCabeceraCotizacion({ cotizacion, cargarCotizacion });
+const {
+    historialRef, accionesRef, proximaAccion, cotizacionPerdida, puedeCambiarResultado, cerrandoComoPerdida,
+    reabriendo, onResultadoCambiado, reabrirCotizacion, onAlternativaEnviada, vigenciaActiva,
+    extendiendoVigencia, onVigenciaExtendida,
+} = useResultadoCotizacion({ cotizacion, alternativaActiva, alternativaActivaId, modificacionInfo, cargarCotizacion });
 
 const seleccionarAlternativa = (id: number) => {
     alternativaActivaId.value = id;
     if (modo.value === 'intl') cargarOpcionesMayorista();
 };
 
-// ── Nueva alternativa ─────────────────────────────────────────────────
-const mostrarFormAlternativa = ref(false);
-const formAlternativa = ref({ nombre: '', moneda_cotizacion: 'PEN' as 'PEN' | 'USD', tipo_cambio_origen: 'dia' as 'dia' | 'agencia', tipo_cambio_valor: null as number | null });
-
-// Fase 5 (opcional) del plan de Tipo de Cambio SUNAT — prellena "Valor
-// nuevo" con la sugerencia SUNAT/SBS solo cuando el origen es "Del día" y
-// el usuario no tipeó nada todavía. Nunca sobreescribe un valor ya
-// tipeado a mano, y el campo sigue siendo editable después de prellenado.
-const sugerenciaTipoCambioSunat = ref<{ valor: number; fecha: string } | null>(null);
-watch(mostrarFormAlternativa, async (abierto) => {
-    if (!abierto) return;
-    try {
-        const res = await tipoCambioAgenciaService.obtenerSugerenciaSunat();
-        sugerenciaTipoCambioSunat.value = res.sugerencia ? { valor: Number(res.sugerencia.valor), fecha: res.sugerencia.fecha } : null;
-        if (sugerenciaTipoCambioSunat.value && formAlternativa.value.tipo_cambio_origen === 'dia' && !formAlternativa.value.tipo_cambio_valor) {
-            formAlternativa.value.tipo_cambio_valor = sugerenciaTipoCambioSunat.value.valor;
-        }
-    } catch {
-        // sin bloquear el form — el usuario igual puede tipear el valor a mano
-        sugerenciaTipoCambioSunat.value = null;
-    }
+const {
+    alcanzoLimiteAlternativas, reservaDeAlternativa, mostrarFormAlternativa, formAlternativa,
+    mostrarCalculadoraTipoCambio, sugerenciaTipoCambioSunat, nombreSugeridoAlternativa, erroresAlternativa,
+    creandoAlternativa, crearAlternativa, cambiandoMoneda, cambiarMonedaAlternativa, renombrarAlternativa,
+    duplicando, duplicarAlternativa, descargandoPdf, descargandoCondiciones, descargarPdfAlternativa,
+    descargarCondicionesGenerales, marcandoAceptada, aceptandoAlternativa, marcarAceptada, confirmarAceptada,
+    eliminandoAlternativa, eliminarAlternativa,
+} = useAlternativas({
+    cotizacionId, cotizacion, alternativaActiva, alternativaActivaId, cargarCotizacion,
+    navegar: (ruta) => { router.push(ruta); },
 });
-watch(() => formAlternativa.value.tipo_cambio_origen, (origen) => {
-    if (origen === 'dia' && sugerenciaTipoCambioSunat.value && !formAlternativa.value.tipo_cambio_valor) {
-        formAlternativa.value.tipo_cambio_valor = sugerenciaTipoCambioSunat.value.valor;
-    }
-});
-
-// T-033 — mismo criterio que AlternativaCreacionService::nombreSugerido(): la letra por cantidad,
-// saltando las ya usadas. Si el nombre queda vacío, el backend usa este mismo.
-const nombreSugeridoAlternativa = computed(() => {
-    const usados = (cotizacion.value?.alternativas ?? []).map((a) => a.nombre.trim().toLowerCase());
-    for (let i = usados.length; i < 26; i++) {
-        const nombre = `Alternativa ${String.fromCharCode(65 + i)}`;
-        if (!usados.includes(nombre.toLowerCase())) return nombre;
-    }
-    return `Alternativa ${usados.length + 1}`;
-});
-// T-033 (R7) — errores del form "+ Nueva" junto a cada campo, no en ventana.
-const erroresAlternativa = ref<Record<string, string>>({});
-watch(mostrarFormAlternativa, () => { erroresAlternativa.value = {}; });
-
-const creandoAlternativa = ref(false);
-const crearAlternativa = async (confirmado = false) => {
-    creandoAlternativa.value = true;
-    erroresAlternativa.value = {};
-    try {
-        const res = await alternativaService.crear(cotizacionId, { ...formAlternativa.value, tipo_cambio_confirmado: confirmado });
-        mostrarFormAlternativa.value = false;
-        formAlternativa.value.nombre = '';
-        await cargarCotizacion();
-        alternativaActivaId.value = res.alternativa.id;
-    } catch (error: any) {
-        // El backend pide un segundo paso consciente cuando
-        // tipo_cambio_valor cae fuera del rango de sanidad (2.0-6.0
-        // USD/PEN) — no bloquea, solo exige confirmar que no es un tipeo.
-        if (error.response?.status === 422 && error.response?.data?.requiere_confirmacion) {
-            creandoAlternativa.value = false;
-            const confirmacion = await (Swal as TVueSwalInstance).fire({
-                icon: 'warning',
-                title: 'Tipo de cambio fuera de lo esperado',
-                text: error.response.data.message,
-                showCancelButton: true,
-                confirmButtonText: 'Crear igual',
-                cancelButtonText: 'Corregir',
-            });
-            if (confirmacion.isConfirmed) {
-                await crearAlternativa(true);
-            }
-            return;
-        }
-        const data = error.response?.data ?? {};
-        if (data.errors) {
-            erroresAlternativa.value = Object.fromEntries(
-                Object.entries(data.errors as Record<string, string[]>).map(([campo, msgs]) => [campo, msgs[0]])
-            );
-        } else if (data.requiere_tipo_cambio) {
-            erroresAlternativa.value = { tipo_cambio_valor: data.message };
-        } else {
-            erroresAlternativa.value = { general: data.message ?? 'No se pudo crear' };
-        }
-    } finally {
-        creandoAlternativa.value = false;
-    }
-};
-
-// T-033 — cambiar la moneda de la alternativa activa (solo sin servicios; el backend lo vuelve a
-// comprobar y toma el tipo de cambio del día).
-const cambiandoMoneda = ref(false);
-const cambiarMonedaAlternativa = async (alt: Alternativa, moneda: 'PEN' | 'USD') => {
-    if (moneda === alt.moneda_cotizacion) return;
-    cambiandoMoneda.value = true;
-    try {
-        await alternativaService.actualizar(alt.id, { moneda_cotizacion: moneda });
-        await cargarCotizacion();
-        toast.success(`Moneda cambiada a ${moneda}`);
-    } catch (error: any) {
-        await cargarCotizacion();
-        toast.error(error.response?.data?.message ?? 'No se pudo cambiar la moneda');
-    } finally {
-        cambiandoMoneda.value = false;
-    }
-};
-
-// Gap real señalado por el usuario (14-ago-2026): el input "Nombre" solo
-// existía en el form de CREAR una alternativa — una vez creada, no había
-// forma de corregirle el nombre. El backend ya aceptaba 'nombre' en
-// PUT alternativas/{id} desde siempre (AlternativaController::update()),
-// solo faltaba el control en pantalla.
-const renombrarAlternativa = async (alt: Alternativa) => {
-    const { value: nuevoNombre } = await (Swal as TVueSwalInstance).fire({
-        title: 'Renombrar alternativa',
-        input: 'text',
-        inputValue: alt.nombre,
-        inputValidator: (value: string) => (!value || !value.trim() ? 'Ingresá un nombre.' : undefined),
-        showCancelButton: true,
-        confirmButtonText: 'Guardar',
-        cancelButtonText: 'Cancelar',
-    });
-
-    if (!nuevoNombre || !nuevoNombre.trim() || nuevoNombre.trim() === alt.nombre) return;
-
-    try {
-        await alternativaService.actualizar(alt.id, { nombre: nuevoNombre.trim() });
-        await cargarCotizacion();
-        toast.success('Alternativa renombrada');
-    } catch (error: any) {
-        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo renombrar la alternativa', 'error');
-    }
-};
-
-// Sesión 11h — clona la alternativa activa completa (ver AlternativaController::
-// duplicar()) en una alternativa nueva de la misma cotización, y salta a ella.
-const duplicando = ref(false);
-const duplicarAlternativa = async () => {
-    if (!alternativaActiva.value) return;
-    duplicando.value = true;
-    try {
-        const res = await alternativaService.duplicar(alternativaActiva.value.id);
-        await cargarCotizacion();
-        alternativaActivaId.value = res.alternativa.id;
-        toast.success('Alternativa duplicada');
-    } catch (error: any) {
-        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo duplicar la alternativa', 'error');
-    } finally {
-        duplicando.value = false;
-    }
-};
-
-// Sesión pdf-cotizacion — descarga de los 2 PDFs (ver AlternativaController::
-// pdf()/CondicionesGeneralesController::pdf()): el comercial de la
-// alternativa activa y el de condiciones generales (aparte, mismo contenido
-// para toda cotización del tenant).
-const descargandoPdf = ref(false);
-const descargandoCondiciones = ref(false);
-
-// T-050: devuelve si se descargó (el envío por WhatsApp no sigue sin el PDF).
-const descargarPdfAlternativa = async (): Promise<boolean> => {
-    if (!alternativaActiva.value) return false;
-    descargandoPdf.value = true;
-    try {
-        await descargarArchivo(`/alternativas/${alternativaActiva.value.id}/pdf`, `cotizacion-${alternativaActiva.value.nombre}.pdf`);
-        return true;
-    } catch (error: any) {
-        const mensaje = await leerMensajeErrorBlob(error, 'No se pudo generar el PDF');
-        (Swal as TVueSwalInstance).fire('No se pudo generar el PDF', mensaje, 'warning');
-        return false;
-    } finally {
-        descargandoPdf.value = false;
-    }
-};
-
-const descargarCondicionesGenerales = async () => {
-    descargandoCondiciones.value = true;
-    try {
-        await descargarArchivo('/condiciones-generales/pdf', 'condiciones-generales.pdf');
-    } catch (error: any) {
-        toast.error('No se pudo generar el PDF');
-    } finally {
-        descargandoCondiciones.value = false;
-    }
-};
-
-// Sesión 11c: aceptar ya no solo cambia el estado (AlternativaController::
-// update()) — dispara la creación real de la Reserva
-// (ReservaController::aceptar()) y redirige a su pantalla de detalle, en
-// vez de quedarse en el cotizador.
-const marcandoAceptada = ref(false);
-// Confirmación agregada (07-sep-2026, incidente real reportado por el
-// usuario): un click sin querer en "Aceptado por cliente" generaba la
-// reserva de inmediato, sin ningún paso intermedio para frenarlo — a
-// diferencia de eliminarAlternativa()/eliminarOpcionalCargado() y el
-// resto de acciones destructivas/irreversibles del cotizador, que sí
-// confirman antes. Aceptar es igual de irreversible (crea una Reserva
-// real, descarta las demás alternativas) — mismo criterio.
-// T-052: la confirmación es un modal propio (AceptarAlternativaModal) con la pregunta opcional
-// «¿Qué decidió la venta?».
-const aceptandoAlternativa = ref(false);
-const marcarAceptada = () => {
-    if (!alternativaActiva.value) return;
-    aceptandoAlternativa.value = true;
-};
-
-const confirmarAceptada = async (resultado: { resultado_motivo_id: number | null; resultado_detalle: string | null }) => {
-    if (!alternativaActiva.value) return;
-
-    marcandoAceptada.value = true;
-    try {
-        const res = await reservaService.aceptarAlternativa(alternativaActiva.value.id, undefined, resultado);
-        aceptandoAlternativa.value = false;
-        if (res.alerta_cupo_excedido) {
-            await (Swal as TVueSwalInstance).fire('Cupo excedido', 'La salida de mayorista elegida ya superó su cupo total — la reserva se creó igual, es solo un aviso.', 'warning');
-        }
-        // T-042: un tour de un día con la salida cancelada (la reserva se crea igual).
-        (res.avisos_salida_cancelada ?? []).forEach((aviso: string) => toast.warning(aviso));
-        router.push(`/agencia-viajes/reservas/${res.reserva.id}`);
-    } catch (error: any) {
-        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo aceptar la alternativa', 'error');
-    } finally {
-        marcandoAceptada.value = false;
-    }
-};
-
-// Antes de esta sesión no había try/catch acá — si el backend rechazaba el
-// borrado (ya generó una reserva) o si tenía ítems (ahora se cascadea, ver
-// AlternativaController::destroy()), un error sin capturar dejaba el botón
-// "sin hacer nada" a los ojos del usuario. Ahora: confirmación previa
-// (borra ítems junto con la alternativa) + error visible si el backend
-// rechaza el borrado.
-const eliminandoAlternativa = ref(false);
-const eliminarAlternativa = async () => {
-    if (!alternativaActiva.value) return;
-
-    const tieneItems = (alternativaActiva.value.items?.length ?? 0) > 0;
-    const confirmacion = await (Swal as TVueSwalInstance).fire({
-        title: '¿Eliminar esta alternativa?',
-        text: tieneItems ? 'Tiene ítems agregados — se eliminarán junto con la alternativa.' : 'Esta acción no se puede deshacer.',
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonText: 'Sí, eliminar',
-        cancelButtonText: 'Cancelar',
-    });
-    if (!confirmacion.isConfirmed) return;
-
-    eliminandoAlternativa.value = true;
-    try {
-        await alternativaService.eliminar(alternativaActiva.value.id);
-        alternativaActivaId.value = null;
-        await cargarCotizacion();
-    } catch (error: any) {
-        (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo eliminar la alternativa', 'error');
-    } finally {
-        eliminandoAlternativa.value = false;
-    }
-};
 
 // ── Lienzo: destinos, días, línea de tour y bloques ──────────────────
 const {
