@@ -1,0 +1,12 @@
+{
+  "name": "recorridos-e2e",
+  "private": true,
+  "type": "module",
+  "description": "Recorridos de Playwright fuera de la app: dependencias propias, no entran al build ni al deploy.",
+  "scripts": {
+    "cotizador": "node recorrido-cotizador.mjs"
+  },
+  "devDependencies": {
+    "playwright-core": "1.64.1"
+  }
+}
