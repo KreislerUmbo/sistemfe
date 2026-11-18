@@ -119,6 +119,9 @@ import {
     CLAVE_NUCLEO, CLAVE_ALTERNATIVAS, CLAVE_DESTINOS, CLAVE_DIAS, CLAVE_LINEA_TOUR, CLAVE_BLOQUES,
     CLAVE_DRAWER, CLAVE_BIBLIOTECA, CLAVE_MODIFICACION, CLAVE_ITEMS_SUELTOS, inyectar,
 } from '@/composables/agencia-viajes/cotizador/claves';
+import CargaTourLienzo from '@/components/AgenciaViajes/cotizador/CargaTourLienzo.vue';
+import GrupoOpcionesLienzo from '@/components/AgenciaViajes/cotizador/GrupoOpcionesLienzo.vue';
+import ItemLienzo from '@/components/AgenciaViajes/cotizador/ItemLienzo.vue';
 
 const { alternativaActiva, alternativaSoloLectura, configAgencia, cotizacion } = inyectar(CLAVE_NUCLEO);
 const { reservaDeAlternativa } = inyectar(CLAVE_ALTERNATIVAS);
