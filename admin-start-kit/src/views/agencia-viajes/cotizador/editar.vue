@@ -1491,7 +1491,7 @@
 <script setup lang="ts">
 import { destinoParaIgvAgencia, IGV_EXONERADO } from '@/helpers/tratamientoTributarioAgencia';
 import CampoFecha from '@/components/CampoFecha.vue';
-import { ref, onMounted, onUnmounted, watch } from 'vue';
+import { ref, onMounted, onUnmounted, watch, provide } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import { useLayoutStore } from '@/stores/layout';
@@ -1548,6 +1548,12 @@ import { useModificacionEnCotizador } from '@/composables/agencia-viajes/cotizad
 import { useRevisionAlternativa } from '@/composables/agencia-viajes/cotizador/useRevisionAlternativa';
 import { useGuiaCotizador } from '@/composables/agencia-viajes/cotizador/useGuiaCotizador';
 import { useItemsSueltos } from '@/composables/agencia-viajes/cotizador/useItemsSueltos';
+import {
+    CLAVE_NUCLEO, CLAVE_PRECIOS, CLAVE_PASAJEROS, CLAVE_CABECERA, CLAVE_RESULTADO, CLAVE_ALTERNATIVAS,
+    CLAVE_DESTINOS, CLAVE_DIAS, CLAVE_LINEA_TOUR, CLAVE_BLOQUES, CLAVE_DRAWER, CLAVE_HOTELES_LOCALES,
+    CLAVE_BIBLIOTECA, CLAVE_OPCIONES_MAYORISTA, CLAVE_HOTELES_MAYORISTA, CLAVE_OPCIONALES_MAYORISTA,
+    CLAVE_MODIFICACION, CLAVE_REVISION, CLAVE_GUIA, CLAVE_ITEMS_SUELTOS, CLAVE_PAGINA,
+} from '@/composables/agencia-viajes/cotizador/claves';
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
 
@@ -1558,42 +1564,57 @@ const cotizacionId = Number(route.params.id);
 const cargandoPagina = ref(true);
 
 // Núcleo: cotización, alternativa activa y refrescos (el registro de alRefrescar está al final).
+const nucleo = useCotizacionEditor(cotizacionId);
+provide(CLAVE_NUCLEO, nucleo);
 const {
     cotizacion, alternativaActivaId, alternativaActiva, itemsSinAjuste, itemsAjuste, configAgencia,
     modificacionInfo, alternativaSoloLectura, versionCotizacion, cargarCotizacion,
     aplicarItemActualizado, aplicarAlternativaActualizada, alRefrescar,
-} = useCotizacionEditor(cotizacionId);
+} = nucleo;
 // Precios: edición por ítem (debounce, H13), descuento global, piso y totales de vista previa.
+const precios = useEdicionPrecios({ alternativaActiva, itemsSinAjuste, cargarCotizacion, aplicarItemActualizado, aplicarAlternativaActualizada });
+provide(CLAVE_PRECIOS, precios);
 const {
     edicionItems, alertasPiso, guardandoEdicion, inicializarEdicionItems, totalConvertidoLocal,
     totalEfectivoLocal, subtotalGrupo, filasResumen, totalLocal, descuentoGlobalLocal,
     descuentoGlobalMontoLocal, lineasFueraDePiso, aplicandoDescuentoGlobal, onEditarDescuentoGlobal,
     onEditarDescuentoGlobalMonto, onEditarPrecio, onEditarDescuentoPct, onEditarMontoDescuentoItem,
-} = useEdicionPrecios({ alternativaActiva, itemsSinAjuste, cargarCotizacion, aplicarItemActualizado, aplicarAlternativaActualizada });
+} = precios;
 const modo = ref<'local' | 'intl' | 'guia'>('local');
 
+const pasajeros = usePasajerosCotizacion({ cotizacion, alternativaActiva, cargarCotizacion });
+provide(CLAVE_PASAJEROS, pasajeros);
 const {
     resumenPax, resumenPaxTotal, textoAdultosMayorista, notaMayoristaSinNinos,
     cantidadAdultosCotizacion, hayAlternativaAceptada, editandoPasajeros, formPasajeros, guardandoPasajeros,
     tipoPorEdadEdicion, abrirEdicionPasajeros, agregarPaxEdicion, guardarPasajeros,
-} = usePasajerosCotizacion({ cotizacion, alternativaActiva, cargarCotizacion });
+} = pasajeros;
+const cabecera = useCabeceraCotizacion({ cotizacion, cargarCotizacion });
+provide(CLAVE_CABECERA, cabecera);
 const {
     textoFechasViaje, editandoCabecera, formCabecera, clienteEditado, guardandoCabecera, clientSearchText,
     clientSuggestions, showClientSuggestions, showQuickClientModal, modoEdicionCliente, abrirEdicionCabecera,
     onClientSearchInput, seleccionarClienteEditado, limpiarClienteEditado, abrirNuevoCliente,
     abrirEdicionCliente, onClientSearchBlur, onClientCreated, guardarCabecera,
-} = useCabeceraCotizacion({ cotizacion, cargarCotizacion });
+} = cabecera;
+const resultado = useResultadoCotizacion({ cotizacion, alternativaActiva, alternativaActivaId, modificacionInfo, cargarCotizacion });
+provide(CLAVE_RESULTADO, resultado);
 const {
     historialRef, accionesRef, proximaAccion, cotizacionPerdida, puedeCambiarResultado, cerrandoComoPerdida,
     reabriendo, onResultadoCambiado, reabrirCotizacion, onAlternativaEnviada, vigenciaActiva,
     extendiendoVigencia, onVigenciaExtendida,
-} = useResultadoCotizacion({ cotizacion, alternativaActiva, alternativaActivaId, modificacionInfo, cargarCotizacion });
+} = resultado;
 
 const seleccionarAlternativa = (id: number) => {
     alternativaActivaId.value = id;
     if (modo.value === 'intl') cargarOpcionesMayorista();
 };
 
+const alternativas = useAlternativas({
+    cotizacionId, cotizacion, alternativaActiva, alternativaActivaId, cargarCotizacion,
+    navegar: (ruta) => { router.push(ruta); },
+});
+provide(CLAVE_ALTERNATIVAS, alternativas);
 const {
     alcanzoLimiteAlternativas, reservaDeAlternativa, mostrarFormAlternativa, formAlternativa,
     mostrarCalculadoraTipoCambio, sugerenciaTipoCambioSunat, nombreSugeridoAlternativa, erroresAlternativa,
@@ -1601,62 +1622,73 @@ const {
     duplicando, duplicarAlternativa, descargandoPdf, descargandoCondiciones, descargarPdfAlternativa,
     descargarCondicionesGenerales, marcandoAceptada, aceptandoAlternativa, marcarAceptada, confirmarAceptada,
     eliminandoAlternativa, eliminarAlternativa,
-} = useAlternativas({
-    cotizacionId, cotizacion, alternativaActiva, alternativaActivaId, cargarCotizacion,
-    navegar: (ruta) => { router.push(ruta); },
-});
+} = alternativas;
 
 // ── Lienzo: destinos, días, línea de tour y bloques ──────────────────
+const destinosAlternativa = useDestinosAlternativa({ alternativaActiva, itemsSinAjuste, cargarCotizacion });
+provide(CLAVE_DESTINOS, destinosAlternativa);
 const {
     alternativaDestinos, destinoActivoId, mostrarChipsDestino, destinoAtractivoIdActivo, resolverDestinoActivo,
     itemsDelDestinoActivo, guardandoDestino, mostrarFormDestino, destinoEnEdicionId, nuevoDestinoAtractivoId,
     nuevoDestinoTexto, nuevoDestinoFechaInicio, nuevoDestinoFechaFin, abrirFormDestino, abrirFormEditarDestinoActivo,
     guardarNuevoDestino, eliminarDestinoActivo,
-} = useDestinosAlternativa({ alternativaActiva, itemsSinAjuste, cargarCotizacion });
+} = destinosAlternativa;
+const dias = useDiasLienzo({ itemsDelDestinoActivo });
+provide(CLAVE_DIAS, dias);
 const {
     diaActivo, diasCreados, diasDesdeCombo, inicializarDias, diaSiguiente, diaActivoParaAgregar, agregarDia,
     itemsSinDia, mostrarTabsDia, itemsDelDiaActivo, itemsVisiblesLienzo,
-} = useDiasLienzo({ itemsDelDestinoActivo });
+} = dias;
+const lineaTour = useLineaTour({ cotizacion, alternativaActiva, alternativaSoloLectura, cargarCotizacion, subtotalGrupo, diaActivo });
+provide(CLAVE_LINEA_TOUR, lineaTour);
 const {
     lineaTourBloqueada, temporadaDeCarga, desglosePrecioTour, incluyeDeCarga, incluyeAbierto, toggleIncluye,
     guardandoPrecioCarga, borradorPrecioCarga, onPrecioCarga, onMoverCarga, eliminandoCarga, eliminarCargaTour,
     temporadasDesactualizadas, cargarTemporadasTours, recalculandoTemporadas, recalcularTemporadas,
-} = useLineaTour({ cotizacion, alternativaActiva, alternativaSoloLectura, cargarCotizacion, subtotalGrupo, diaActivo });
+} = lineaTour;
+const bloques = useBloquesLienzo({
+    alternativaActiva, itemsSinAjuste, cargarCotizacion, aplicarAlternativaActualizada, totalEfectivoLocal,
+    alternativaDestinos, itemsVisiblesLienzo, diaActivo,
+});
+provide(CLAVE_BLOQUES, bloques);
 const {
     bloquesLienzo, gruposPrecioPanel, gruposPrecioPorDestino, eligiendoGrupoItemId, elegirGrupoDesdeLienzo,
     onReasignarDiaItem, onMoverBloque, eliminandoBloqueId, eliminarBloque, gruposExpandido, toggleGrupoExpandido,
     destinosExpandido, toggleDestinoExpandido,
-} = useBloquesLienzo({
-    alternativaActiva, itemsSinAjuste, cargarCotizacion, aplicarAlternativaActualizada, totalEfectivoLocal,
-    alternativaDestinos, itemsVisiblesLienzo, diaActivo,
-});
+} = bloques;
 
 // ── Drawer de biblioteca, hoteles Local/Nacional y biblioteca ─────────
 // El drawer va primero: los hoteles (y más abajo el ítem manual) registran en él su reinicio al
 // volver al grid. Los hoteles van antes que la biblioteca porque ella les pasa el clic en una tarifa.
+const drawer = useDrawerBiblioteca({ aplicarItemActualizado, cargarCotizacion });
+provide(CLAVE_DRAWER, drawer);
 const {
     drawerBibliotecaAbierto, abrirDrawerBiblioteca, cerrarDrawerBiblioteca, volverAGridDrawer, alVolverAGrid,
     onServicioSueltoAgregado,
-} = useDrawerBiblioteca({ aplicarItemActualizado, cargarCotizacion });
+} = drawer;
+const hotelesLocales = useHotelesLocales({
+    cotizacion, alternativaActiva, itemsSinAjuste, configAgencia, alternativaDestinos, destinoActivoId,
+    diaActivoParaAgregar, alVolverAGrid, onServicioSueltoAgregado,
+});
+provide(CLAVE_HOTELES_LOCALES, hotelesLocales);
 const {
     nochesHotelDefault, matrizHotelActiva, modoPrecioPendiente, grupoHotelAbiertoDiaActivo, clicBibliotecaItem,
     confirmandoModoPrecio, confirmarModoPrecio, agregarItemProveedorHotel, mostrarFormHotelLocal, tarifaHotelLocalVacia,
     formHotelLocal, guardandoHotelLocal, guardarHotelLocal, agregarItemHotelAdhocLocal, agregarGrupoHotelAdhocLocal,
     agregarGrupoProveedorHotel, subiendoFotoHotelAdhoc, onSubirFotoHotelAdhoc, onEliminarFotoHotelAdhoc,
-} = useHotelesLocales({
-    cotizacion, alternativaActiva, itemsSinAjuste, configAgencia, alternativaDestinos, destinoActivoId,
-    diaActivoParaAgregar, alVolverAGrid, onServicioSueltoAgregado,
+} = hotelesLocales;
+const biblioteca = useBibliotecaCotizador({
+    alternativaActiva, itemsSinAjuste, configAgencia, cargarCotizacion, alternativaDestinos, destinoActivoId,
+    diaActivoParaAgregar, diasCreados, diasDesdeCombo, drawerBibliotecaAbierto, cerrarDrawerBiblioteca, clicBibliotecaItem,
 });
+provide(CLAVE_BIBLIOTECA, biblioteca);
 const {
     proveedorTipos, chipsFijos, chipsProveedores, mostrarMasChips, chipMasActivo, chipActivo, seleccionarChip,
     bibliotecaSearch, filtroDestinoId, filtroDestinoTexto, filtroServicioId, filtroProveedorId, serviciosFiltro,
     cargandoBiblioteca, cargarBiblioteca, onBibliotecaSearch, etiquetaCategoriaPaquete, bibliotecaPaginaActual,
     bibliotecaTotalPaginas, filasBibliotecaPagina, cargandoFilaBibliotecaId, onClicFilaBiblioteca, vistaPreviaCombo,
     modoToursNuevo,
-} = useBibliotecaCotizador({
-    alternativaActiva, itemsSinAjuste, configAgencia, cargarCotizacion, alternativaDestinos, destinoActivoId,
-    diaActivoParaAgregar, diasCreados, diasDesdeCombo, drawerBibliotecaAbierto, cerrarDrawerBiblioteca, clicBibliotecaItem,
-});
+} = biblioteca;
 
 // ── Comparador de mayoristas ──────────────────────────────────────────
 // T-039: los mayoristas y hoteles se buscan en el servidor (ProveedorBuscador con tipo-id); acá
@@ -1664,70 +1696,87 @@ const {
 const tipoMayoristaId = ref<number | null>(null);
 const tipoHotelId = ref<number | null>(null);
 
+const opcionesDeMayorista = useOpcionesMayorista({
+    alternativaActiva, cargarCotizacion, alternativaDestinos, destinoActivoId, mostrarChipsDestino,
+    diaActivoParaAgregar, cantidadAdultosCotizacion, onServicioSueltoAgregado,
+});
+provide(CLAVE_OPCIONES_MAYORISTA, opcionesDeMayorista);
 const {
     opcionesMayorista, opcionHotelesActivaId, mostrarFormMayorista, opcionMayoristaEnEdicionId,
     cargarOpcionesMayorista, verHoteles, eliminandoOpcionMayoristaId, eliminarOpcionMayorista,
     eligiendoOpcionId, elegirOpcion, descartandoOpcionId, descartarOpcion, reactivandoOpcionId, reactivarOpcion,
     abrirFormEditarOpcionMayorista, onOpcionMayoristaGuardada, agregarItemMayorista, agregarGrupoMayorista,
-} = useOpcionesMayorista({
-    alternativaActiva, cargarCotizacion, alternativaDestinos, destinoActivoId, mostrarChipsDestino,
-    diaActivoParaAgregar, cantidadAdultosCotizacion, onServicioSueltoAgregado,
-});
+} = opcionesDeMayorista;
 
+const hotelesMayorista = useHotelesMayorista({ cargarCotizacion, cargarOpcionesMayorista });
+provide(CLAVE_HOTELES_MAYORISTA, hotelesMayorista);
 const {
     mostrarFormHotel, formHotel, fotosHotelNuevo, onFotosHotelNuevoSeleccionadas, quitarFotoHotelNuevo,
     onCambiarProveedorHotel, tarifasHotelParaTipo, onElegirTarifaRegistrada, guardandoHotelMayorista, guardarHotel,
     onGuardarHotelMatrix, onEliminarHotelMatrix, onAgregarFotosHotelMatrix, onEliminarFotoHotelMatrix,
     hotelParaPromover, onPromoverHotelMatrix, onHotelPromovido, onGuardarTarifaMatrix, onEliminarTarifaMatrix,
     onAgregarTarifaMatrix, tarifasHotelPlanas,
-} = useHotelesMayorista({ cargarCotizacion, cargarOpcionesMayorista });
+} = hotelesMayorista;
 
+const opcionalesMayorista = useOpcionalesMayorista({
+    alternativaActiva, destinoActivoId, diaActivoParaAgregar, cantidadAdultosCotizacion,
+    cargarOpcionesMayorista, onServicioSueltoAgregado,
+});
+provide(CLAVE_OPCIONALES_MAYORISTA, opcionalesMayorista);
 const {
     mostrarOpcionalesId, mostrarFormOpcional, formOpcional, verOpcionales, guardandoOpcional, guardarOpcional,
     opcionalEnEdicionId, formEdicionOpcional, abrirEdicionOpcional, guardandoEdicionOpcional, guardarEdicionOpcional,
     eliminandoOpcionalId, eliminarOpcionalCargado, agregandoOpcionalAlLienzoId, agregarOpcionalAlLienzo,
     mostrarToursId, mostrarFormTourIncluido, tourEnEdicionId, verTours, onTourIncluidoAgregado, quitarTourIncluido,
     abrirEdicionTour, onTourIncluidoActualizado,
-} = useOpcionalesMayorista({
-    alternativaActiva, destinoActivoId, diaActivoParaAgregar, cantidadAdultosCotizacion,
-    cargarOpcionesMayorista, onServicioSueltoAgregado,
-});
+} = opcionalesMayorista;
 
 // ── Modificación de reserva (T-007) y revisión antes de enviar (T-022) ─
+const modificacionCotizador = useModificacionEnCotizador({
+    modificacionInfo, itemsSinAjuste, cargarCotizacion, navegar: (ruta) => { router.push(ruta); },
+    alternativaDestinos, destinoActivoId, mostrarChipsDestino, diaActivo, mostrarTabsDia,
+});
+provide(CLAVE_MODIFICACION, modificacionCotizador);
 const {
     modificacion, avisoEdadEstimada, procesandoModificacion, descargandoPdfModificacion, idsParaRevisar,
     idsParaRevisarConfirmables, claseResaltado, irAItem, confirmarRevisados, abrirComprobanteBloqueo,
     penalidadPasajero, penalidadInicial, guardandoPenalidad, errorPenalidad, abrirPenalidad, guardarPenalidad,
     borrarPenalidad, descargarPdfModificacion, descartarModificacion, aplicarModificacion,
-} = useModificacionEnCotizador({
-    modificacionInfo, itemsSinAjuste, cargarCotizacion, navegar: (ruta) => { router.push(ruta); },
-    alternativaDestinos, destinoActivoId, mostrarChipsDestino, diaActivo, mostrarTabsDia,
-});
-const { revisionActual, claveRevision, nombreItemRevision, irARevision } = useRevisionAlternativa({
+} = modificacionCotizador;
+const revision = useRevisionAlternativa({
     versionCotizacion, alternativaActivaId, totalLocal, itemsSinAjuste, irAItem, extendiendoVigencia,
     drawerBibliotecaAbierto,
 });
+provide(CLAVE_REVISION, revision);
+const { revisionActual, claveRevision, nombreItemRevision, irARevision } = revision;
 
 // ── Guías ─────────────────────────────────────────────────────────────
+const guia = useGuiaCotizador({ alternativaActiva, configAgencia, diaActivoParaAgregar, destinoActivoId, onServicioSueltoAgregado });
+provide(CLAVE_GUIA, guia);
 const {
     guiaSeleccionadaIdCotizador, tarifasGuiaCotizador, guiaTarifaSeleccionadaCotizador, cantidadDiasGuia,
     agregandoGuia, tipAfeIgvGuia, destinoTributarioGuia, cargarTarifasGuiaCotizador, agregarItemGuiaCotizador,
-} = useGuiaCotizador({ alternativaActiva, configAgencia, diaActivoParaAgregar, destinoActivoId, onServicioSueltoAgregado });
+} = guia;
 
 // ── Ítem manual / pasaje aéreo / eliminar ítems ───────────────────────
+const itemsSueltos = useItemsSueltos({
+    alternativaSoloLectura, cargarCotizacion, aplicarItemActualizado, aplicarAlternativaActualizada,
+    drawerBibliotecaAbierto, alVolverAGrid,
+});
+provide(CLAVE_ITEMS_SUELTOS, itemsSueltos);
 const {
     mostrarFormManual, mostrarFormPasajeAereo, itemPasajeAereoEnEdicion, itemManualEnEdicion,
     formManualSoloLectura, formPasajeSoloLectura, avisoItemReservado, abrirEdicionManual, itemParaPromover,
     abrirPromoverProveedor, onProveedorPromovido, onServicioSueltoActualizado, onPasajeAereoAgregado,
     abrirEdicionPasajeAereo, toggleFormPasajeAereo, onPasajeAereoActualizado, eliminandoItemId, eliminarItem,
     eliminandoGrupoId, eliminarGrupoLienzo,
-} = useItemsSueltos({
-    alternativaSoloLectura, cargarCotizacion, aplicarItemActualizado, aplicarAlternativaActualizada,
-    drawerBibliotecaAbierto, alVolverAGrid,
-});
+} = itemsSueltos;
 const { pasoDrawer, tituloDrawer } = pasoDrawerDe({ matrizHotelActiva, modoPrecioPendiente, mostrarFormManual });
 
 const desglosePasajerosTexto = (item: AlternativaItem) => desglosePasajerosTextoDe(item, cotizacion.value?.pasajeros ?? []);
+provide(CLAVE_PAGINA, {
+    modo, seleccionarAlternativa, tipoMayoristaId, tipoHotelId, desglosePasajerosTexto, pasoDrawer, tituloDrawer,
+});
 
 // Panel de precio: cada destino arranca expandido (el vendedor colapsa los que no le interesan).
 watch(alternativaDestinos, (destinos) => {
