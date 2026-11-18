@@ -1,0 +1,9 @@
+{
+    "http": 422,
+    "respuesta": {
+        "code": 422,
+        "message": "The descripcion manual field is required."
+    },
+    "items_de_la_alternativa": 0,
+    "total": "0.00"
+}

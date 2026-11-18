@@ -1,0 +1,9 @@
+{
+    "http": 422,
+    "respuesta": {
+        "code": 422,
+        "message": "Marcá la opción de mayorista como elegida antes de agregarla al ítem."
+    },
+    "items_de_la_alternativa": 0,
+    "total": "0.00"
+}
