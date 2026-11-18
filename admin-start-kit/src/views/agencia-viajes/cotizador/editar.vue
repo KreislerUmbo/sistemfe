@@ -1540,26 +1540,18 @@ import { useAgenciaViajesCatalogosStore } from '@/stores/agenciaViajesCatalogos'
 import { diferenciaDiasISO, formatDiaCorto, formatFecha, formatFechaHora, hoyPeru, partesFechaHoraPeru, sumarDiasISO } from '@/helpers/fecha';
 import { guiaService } from '@/services/admin/guiaService';
 import { tipoCambioAgenciaService } from '@/services/admin/tipoCambioAgenciaService';
-import type { Cotizacion, Alternativa, AlternativaItem, ProveedorTarifa, OpcionMayorista, OpcionMayoristaTour, OpcionMayoristaOpcional, OpcionHotelTarifa, Proveedor, ProveedorTipo, BibliotecaResultado, ConfiguracionAgencia, DestinoServicio, GuiaTarifa, Servicio, TipAfeIgv, DestinoTributario, TemporadaDesactualizada } from '@/types/agencia-viajes';
+import type { Cotizacion, Alternativa, AlternativaItem, ProveedorTarifa, OpcionMayorista, OpcionMayoristaTour, OpcionMayoristaOpcional, OpcionHotelTarifa, Proveedor, ProveedorTipo, BibliotecaResultado, ConfiguracionAgencia, GuiaTarifa, Servicio, TipAfeIgv, DestinoTributario, TemporadaDesactualizada } from '@/types/agencia-viajes';
 import type { Client } from '@/types/clients';
 import type { AvisoSalida } from '@/helpers/avisosProveedores';
+import { convertirMonedaLocal, filasResumen as filasResumenDe, sumaPorGrupos, totalDeLinea, totalEfectivo } from '@/helpers/agencia-viajes/cotizador/totales';
+import { agruparPorTour, filasDelBloque, type BloqueItem } from '@/helpers/agencia-viajes/cotizador/bloquesLienzo';
+import {
+    badgeTratamientoTributario, desglosePasajerosTexto as desglosePasajerosTextoDe, descripcionDestinoServicio, etiquetaItem,
+    iconoItem, nombreMayoristaDeGrupo, tarifaAereaVencida, textoPlano, toursDeGrupo,
+} from '@/helpers/agencia-viajes/cotizador/presentacionItem';
+import { descargarArchivo, leerMensajeErrorBlob } from '@/helpers/descargarArchivo';
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
-
-// Vigencia de la tarifa aérea (09-oct-2026) — instante UTC ya pasado = vencida.
-const tarifaAereaVencida = (iso: string) => new Date(iso).getTime() < Date.now();
-
-// Vista previa como texto plano (07-sep-2026) — bug real reportado por el
-// usuario: incluye/vuelo_detalle ahora puede ser HTML real
-// (RichTextEditor/Quill, ver OpcionMayoristaForm.vue), pero las tarjetas
-// resumen de abajo (comparador de mayoristas, lista de opcionales) usan
-// interpolación {{ }} que escapa HTML — mostraban las etiquetas crudas
-// como texto literal ("<ul><li>..."). Son vistas previas compactas dentro
-// de una tarjeta chica, no el editor completo — mejor texto plano limpio
-// que renderizar la lista real (bullets reales ahí se verían enormes).
-// Reemplaza cada etiqueta por un espacio (no vacío) para no pegar
-// palabras de líneas/ítems distintos entre sí, luego colapsa espacios.
-const textoPlano = (html: string) => html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
 
 const route = useRoute();
 const router = useRouter();
@@ -2313,50 +2305,6 @@ const duplicarAlternativa = async () => {
 const descargandoPdf = ref(false);
 const descargandoCondiciones = ref(false);
 
-// T-037: el servidor arma el nombre del PDF (código - cliente - alternativa);
-// se lee de Content-Disposition (filename*=UTF-8'' o filename="").
-const nombreDeContentDisposition = (cabecera?: string): string | null => {
-    if (!cabecera) return null;
-    const utf8 = /filename\*\s*=\s*UTF-8''([^;]+)/i.exec(cabecera);
-    if (utf8) {
-        try { return decodeURIComponent(utf8[1].trim()); } catch { /* cae al filename simple */ }
-    }
-    const simple = /filename\s*=\s*"?([^";]+)"?/i.exec(cabecera);
-    return simple ? simple[1].trim() : null;
-};
-
-const descargarArchivo = async (url: string, nombreSugerido: string) => {
-    const response = await httpClient.get(url, { responseType: 'blob' });
-    const blobUrl = window.URL.createObjectURL(new Blob([response.data]));
-    const link = document.createElement('a');
-    link.href = blobUrl;
-    link.setAttribute('download', nombreDeContentDisposition(response.headers?.['content-disposition']) ?? nombreSugerido);
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    window.URL.revokeObjectURL(blobUrl);
-};
-
-// Mensaje real de un error al descargar el PDF. descargarArchivo() pide
-// responseType:'blob' SIEMPRE (necesario para el PDF binario), así que un
-// error (422, 404…) también llega como Blob en vez de JSON — hay que leerlo
-// aparte para mostrar el mensaje real en vez del genérico. (T-023: una
-// comparación de hoteles abierta ya no da 422; el PDF sale con un total por opción.)
-const leerMensajeErrorBlob = async (error: any, fallback: string): Promise<string> => {
-    const data = error?.response?.data;
-    if (data instanceof Blob && data.type === 'application/json') {
-        try {
-            const texto = await data.text();
-            const json = JSON.parse(texto);
-            const primerError = json.errors ? Object.values(json.errors)[0] : null;
-            return (Array.isArray(primerError) ? primerError[0] : null) ?? json.message ?? fallback;
-        } catch {
-            return fallback;
-        }
-    }
-    return error?.response?.data?.message ?? fallback;
-};
-
 // T-050: devuelve si se descargó (el envío por WhatsApp no sigue sin el PDF).
 const descargarPdfAlternativa = async (): Promise<boolean> => {
     if (!alternativaActiva.value) return false;
@@ -2633,63 +2581,6 @@ const itemsDelDiaActivo = computed(() => {
 // navegación de día visible.
 const itemsVisiblesLienzo = computed(() => (mostrarTabsDia.value ? itemsDelDiaActivo.value : itemsDelDestinoActivo.value));
 
-// Agrupa por tour_origen_id (Sesión 11b4a) — mismo patrón visual que
-// paquetes/detalle.vue::itemsPorTourAgrupados. Los ítems sin tour_origen_id
-// ("sueltos") van en un bloque final sin encabezado. Compartido por el
-// lienzo (solo el día activo, o todo en modo simple) y por el panel de
-// precio (siempre TODOS los días) — un solo lugar que arma el agrupamiento.
-// Fila 13, fase 1b: la línea de tour del modo nuevo (origen_tipo='tour') se
-// agrupa por su carga (carga_tour: una carga = un tour cargado, con una línea
-// por grupo de IGV), no por tour_origen_id — dos cargas del mismo tour son dos
-// bloques, y un bloque clásico del mismo tour no se mezcla con la línea nueva.
-// clave: identificador estable para :key (antes tourOrigenId, que ahora puede
-// repetirse entre un bloque clásico y una carga).
-type BloqueItem = {
-    clave: string;
-    tourOrigenId: number | null;
-    tourNombre: string | null;
-    items: AlternativaItem[];
-    carga: string | null;
-    cargaCombo: string | null;
-    comboNombre: string | null;
-};
-
-const agruparPorTour = (items: AlternativaItem[]): BloqueItem[] => {
-    const bloques = new Map<string, BloqueItem>();
-    const sueltos: AlternativaItem[] = [];
-
-    for (const item of items) {
-        if (item.origen_tipo === 'tour' && item.carga_tour) {
-            const clave = `carga-${item.carga_tour}`;
-            if (!bloques.has(clave)) {
-                bloques.set(clave, {
-                    clave,
-                    tourOrigenId: item.tour_origen_id ?? null,
-                    tourNombre: item.tour_origen?.nombre ?? item.tour_linea?.tour_nombre ?? null,
-                    items: [],
-                    carga: item.carga_tour,
-                    cargaCombo: item.carga_combo ?? null,
-                    comboNombre: item.tour_linea?.combo?.nombre ?? null,
-                });
-            }
-            bloques.get(clave)!.items.push(item);
-        } else if (item.tour_origen_id) {
-            const clave = `tour-${item.tour_origen_id}`;
-            if (!bloques.has(clave)) {
-                bloques.set(clave, { clave, tourOrigenId: item.tour_origen_id, tourNombre: item.tour_origen?.nombre ?? null, items: [], carga: null, cargaCombo: null, comboNombre: null });
-            }
-            bloques.get(clave)!.items.push(item);
-        } else {
-            sueltos.push(item);
-        }
-    }
-
-    const resultado = Array.from(bloques.values());
-    if (sueltos.length) resultado.push({ clave: 'sueltos', tourOrigenId: null, tourNombre: null, items: sueltos, carga: null, cargaCombo: null, comboNombre: null });
-
-    return resultado;
-};
-
 // ── Línea de tour (fila 13, fase 1b) ─────────────────────────────────────
 const lineaTourBloqueada = (bloque: BloqueItem) =>
     alternativaSoloLectura.value || bloque.items.some((i) => !!i.reserva_item);
@@ -2834,32 +2725,6 @@ const recalcularTemporadas = async () => {
     } finally {
         recalculandoTemporadas.value = false;
     }
-};
-
-// Sesión M4 — dentro de un bloque, N ítems consecutivos que comparten
-// grupo_opcion_id se renderizan como UNA tarjeta ("comparar varias
-// opciones") en vez de N tarjetas de ítem sueltas. Asume adyacencia (los
-// ítems de un mismo grupo se crean en un solo lote y quedan con ids
-// consecutivos, ver el fix de orden real de AlternativaItem::items() —
-// un grupo separado por otro ítem en medio es un caso no contemplado,
-// documentado como pendiente).
-type FilaLienzo =
-    | { esGrupo: false; item: AlternativaItem }
-    | { esGrupo: true; grupoId: string; items: AlternativaItem[] };
-
-const filasDelBloque = (items: AlternativaItem[]): FilaLienzo[] => {
-    const filas: FilaLienzo[] = [];
-    for (const item of items) {
-        const ultima = filas[filas.length - 1];
-        if (item.grupo_opcion_id && ultima?.esGrupo && ultima.grupoId === item.grupo_opcion_id) {
-            ultima.items.push(item);
-        } else if (item.grupo_opcion_id) {
-            filas.push({ esGrupo: true, grupoId: item.grupo_opcion_id, items: [item] });
-        } else {
-            filas.push({ esGrupo: false, item });
-        }
-    }
-    return filas;
 };
 
 const eligiendoGrupoItemId = ref<number | null>(null);
@@ -3051,19 +2916,6 @@ const onBibliotecaSearch = () => {
 watch([filtroDestinoId, filtroServicioId, filtroProveedorId], onBibliotecaSearch);
 
 const etiquetaCategoriaPaquete = (c: string) => ({ local: 'Local', nacional: 'Nacional', internacional: 'Internacional' } as Record<string, string>)[c] ?? c;
-
-// Mismo problema y misma solución que paquetes/detalle.vue
-// (descripcionDestinoServicio) — duplicada a propósito acá, no hay
-// composable compartido para algo tan chico (mismo criterio que
-// BibliotecaCotizadorController::buscarProveedorTarifas() ya usa contra
-// ProveedorTarifaController::biblioteca()). destino_atractivo puede venir
-// null (no todo servicio está atado a un destino) — en ese caso solo el
-// nombre del servicio, sin romper el render.
-const descripcionDestinoServicio = (ds?: DestinoServicio) => {
-    const destino = ds?.destino_atractivo?.nombre;
-    const servicio = ds?.servicio?.nombre ?? '';
-    return destino ? `${destino} · ${servicio}` : servicio;
-};
 
 const bibliotecaToursPaquetes = computed(() =>
     bibliotecaResultados.value.filter((r) => r.tipo_resultado === 'tour' || r.tipo_resultado === 'paquete') as Array<
@@ -4383,17 +4235,6 @@ const itemConFoco = (): number[] => {
     return (fila?.getAttribute('data-item-id') ?? '').split(/\s+/).map(Number).filter(Boolean);
 };
 
-// Mismo PriceEngineService::convertirMoneda() del backend, replicado acá
-// SOLO para poder inicializar/previsualizar en el cliente — precio_convertido
-// que persiste siempre lo calcula y devuelve el servidor, esto nunca es la
-// fuente de verdad.
-const convertirMonedaLocal = (monto: number, monedaOrigen: string, monedaDestino: string, tipoCambio: number) => {
-    if (monedaOrigen === monedaDestino) return Math.round(monto * 100) / 100;
-    return monedaOrigen === 'USD' && monedaDestino === 'PEN'
-        ? Math.round(monto * tipoCambio * 100) / 100
-        : Math.round((monto / tipoCambio) * 100) / 100;
-};
-
 const precioListaConvertidoDe = (item: AlternativaItem) => {
     if (!alternativaActiva.value) return Number(item.precio_venta_snapshot);
     return convertirMonedaLocal(Number(item.precio_venta_snapshot), item.moneda_costo, alternativaActiva.value.moneda_cotizacion, Number(alternativaActiva.value.tipo_cambio_aplicado));
@@ -4416,80 +4257,12 @@ const inicializarEdicionItems = () => {
     lineasFueraDePiso.value = [];
 };
 
-// Punto D — mismo multiplicador que AlternativaItem::getTotalConvertidoAttribute()
-// en el backend (tarifa_fija multiplica por cantidad, por_persona ya viene
-// resuelto): se replica acá SOLO para poder mostrar el total localmente
-// mientras se edita, con el valor todavía sin confirmar por el servidor —
-// nunca se usa para decidir nada, el backend sigue siendo la única fuente de
-// verdad una vez que responde. Sesión 11q: 'manual' dejó de ser una
-// excepción (ver mismo cambio en el backend).
-const totalConvertidoLocal = (item: AlternativaItem) => {
-    const precio = edicionItems.value[item.id]?.precio_convertido ?? Number(item.precio_convertido);
-    if (item.modo_precio === 'tarifa_fija') return precio * item.cantidad;
-    return precio;
-};
-
-// Sesión M4 — bug real encontrado en verificación en vivo: cualquier suma
-// de "total_convertido en bruto" sobre una lista de ítems (escrita antes
-// de M1) no conocía grupo_opcion_id/opcion_elegida y sumaba TODAS las
-// filas de un grupo como si fueran ítems sueltos — mostraba PEN 280
-// (120+160) en vez de PEN 120 apenas se resolvía un grupo de 2 opciones,
-// mientras el backend (AlternativaItem::calcularTotalEfectivo(), misma
-// regla acá) ya tenía el total correcto guardado. Mismo criterio que el
-// backend: fuera de grupo suma normal; dentro de un grupo RESUELTO solo
-// cuenta la elegida; ABIERTO (sin elegida) cuenta el mínimo de la lista,
-// igual que hace `Alternativa.tieneGruposSinResolver()`. Un solo helper
-// compartido por subtotalGrupo() (subtotal por tour/bloque en el panel) y
-// totalLocal() (total general) para no repetir la regla dos veces.
-const totalEfectivoLocal = (todos: AlternativaItem[]): number => {
-    // T-072: el «Ajuste — …» (ajuste_de_item_id) ya está dentro del precio del servicio que ajusta;
-    // mismo criterio que AlternativaItem::calcularTotalEfectivo() del backend.
-    const items = todos.filter((item) => !item.ajuste_de_item_id);
-    const sinGrupo = items.filter((item) => !item.grupo_opcion_id);
-    const grupos = new Map<string, AlternativaItem[]>();
-    for (const item of items) {
-        if (!item.grupo_opcion_id) continue;
-        if (!grupos.has(item.grupo_opcion_id)) grupos.set(item.grupo_opcion_id, []);
-        grupos.get(item.grupo_opcion_id)!.push(item);
-    }
-
-    let total = sinGrupo.reduce((sum, item) => sum + totalConvertidoLocal(item), 0);
-    for (const itemsDelGrupo of grupos.values()) {
-        const elegida = itemsDelGrupo.find((item) => item.opcion_elegida);
-        total += elegida
-            ? totalConvertidoLocal(elegida)
-            : Math.min(...itemsDelGrupo.map((item) => totalConvertidoLocal(item)));
-    }
-    return total;
-};
-
+// Vista previa mientras se edita: el precio que se está escribiendo pesa antes que el guardado.
+const totalConvertidoLocal = (item: AlternativaItem) =>
+    totalDeLinea(edicionItems.value[item.id]?.precio_convertido ?? Number(item.precio_convertido), item);
+const totalEfectivoLocal = (todos: AlternativaItem[]) => totalEfectivo(todos, totalConvertidoLocal);
 const subtotalGrupo = (items: AlternativaItem[]) => totalEfectivoLocal(items);
-
-// Hallazgo del usuario (04-sep-2026): totalEfectivoLocal()/subtotalGrupo()
-// de arriba ya calculaban bien el NÚMERO (elegida, o el mínimo del grupo
-// mientras no se resuelva) — pero la lista de líneas del resumen (debajo
-// del subtotal) seguía iterando TODOS los ítems sueltos tal cual, sin
-// aplicar el mismo criterio: un grupo de 3 opciones de hotel salía como 3
-// líneas idénticas ("Paquete mayorista", repetido), sin poder saber cuál
-// de las 3 pesaba en el total. Mismo criterio que totalEfectivoLocal(): 1
-// sola línea por grupo (la elegida, o la de menor precio si sigue abierto).
-const filasResumen = (items: AlternativaItem[]): AlternativaItem[] => {
-    const sueltos = items.filter((item) => !item.grupo_opcion_id);
-    const grupos = new Map<string, AlternativaItem[]>();
-    for (const item of items) {
-        if (!item.grupo_opcion_id) continue;
-        if (!grupos.has(item.grupo_opcion_id)) grupos.set(item.grupo_opcion_id, []);
-        grupos.get(item.grupo_opcion_id)!.push(item);
-    }
-
-    const representantes = Array.from(grupos.values()).map((itemsDelGrupo) => {
-        const elegida = itemsDelGrupo.find((item) => item.opcion_elegida);
-        if (elegida) return elegida;
-        return itemsDelGrupo.reduce((min, item) => (totalConvertidoLocal(item) < totalConvertidoLocal(min) ? item : min));
-    });
-
-    return [...sueltos, ...representantes];
-};
+const filasResumen = (items: AlternativaItem[]) => filasResumenDe(items, totalConvertidoLocal);
 
 const totalLocal = computed(() => totalEfectivoLocal(itemsSinAjuste.value));
 
@@ -4508,41 +4281,9 @@ const descuentoGlobalLocal = ref(0);
 const descuentoGlobalMontoLocal = ref(0);
 const lineasFueraDePiso = ref<Array<{ alternativa_item_id: number; precio_minimo_permitido: number | null }>>([]);
 
-// Guardrail (19-sep-2026, hallazgo real del usuario) — antes sumaba
-// precioListaConvertidoDe() de TODOS los ítems tal cual: ni multiplicaba
-// por cantidad (mismo bug que se corrigió en el backend,
-// AlternativaController::aplicarDescuentoGlobalMonto()) ni respetaba
-// grupos de opciones (sumaba las 6 opciones de hotel de una comparación,
-// no solo la elegida o el mínimo del grupo abierto). El resultado: al
-// guardar un monto y recargar la cotización, este cálculo "inverso"
-// (% persistido → monto equivalente para mostrar) no coincidía con el
-// monto que el vendedor acababa de tipear — escribías "1" y el campo
-// terminaba mostrando "3". Ahora replica EXACTAMENTE el mismo criterio de
-// agrupación que totalEfectivoLocal()/el backend, para que el redondeo
-// ida-y-vuelta (monto → % → monto) sea estable.
-const precioListaTotalDe = (item: AlternativaItem) => {
-    const precio = precioListaConvertidoDe(item);
-    return item.modo_precio === 'tarifa_fija' ? precio * item.cantidad : precio;
-};
-
-const sumaPreciosListaLocal = (items: AlternativaItem[]): number => {
-    const sinGrupo = items.filter((item) => !item.grupo_opcion_id);
-    const grupos = new Map<string, AlternativaItem[]>();
-    for (const item of items) {
-        if (!item.grupo_opcion_id) continue;
-        if (!grupos.has(item.grupo_opcion_id)) grupos.set(item.grupo_opcion_id, []);
-        grupos.get(item.grupo_opcion_id)!.push(item);
-    }
-
-    let total = sinGrupo.reduce((sum, item) => sum + precioListaTotalDe(item), 0);
-    for (const itemsDelGrupo of grupos.values()) {
-        const elegida = itemsDelGrupo.find((item) => item.opcion_elegida);
-        total += elegida
-            ? precioListaTotalDe(elegida)
-            : Math.min(...itemsDelGrupo.map((item) => precioListaTotalDe(item)));
-    }
-    return total;
-};
+// Mismo criterio de grupos que el total, para que monto → % → monto sea estable al recargar.
+const precioListaTotalDe = (item: AlternativaItem) => totalDeLinea(precioListaConvertidoDe(item), item);
+const sumaPreciosListaLocal = (items: AlternativaItem[]) => sumaPorGrupos(items, precioListaTotalDe);
 
 const calcularMontoGlobalEquivalente = () => {
     const pct = Number(alternativaActiva.value?.descuento_global_pct ?? 0);
@@ -4657,158 +4398,7 @@ const enviarEdicion = async (itemId: number, payload: { descuento_pct?: number; 
     }
 };
 
-const iconoItem = (item: AlternativaItem) => {
-    if (item.origen_tipo === 'tour') return 'fa-route';
-    if (item.origen_tipo === 'pasaje_aereo') return 'fa-plane';
-    if (item.origen_tipo === 'mayorista') return 'fa-plane-departure';
-    if (item.origen_tipo === 'manual') return 'fa-pen';
-    if (item.origen_tipo === 'guia') return 'fa-user-tie';
-    if (item.proveedor_tarifa?.tipo_habitacion || item.opcion_hotel_tarifa) return 'fa-bed';
-    return 'fa-concierge-bell';
-};
-
-// Hallazgo del usuario (04-sep-2026): el grupo de comparación de hoteles
-// en el lienzo solo decía "3 opciones de hotel" — el vendedor no podía ver
-// a qué mayorista corresponde sin abrir el drawer. Todos los ítems de un
-// mismo grupo comparten opcion_mayorista_id, así que con el primero alcanza.
-const nombreMayoristaDeGrupo = (items: AlternativaItem[]): string | null => {
-    const op = items[0]?.opcion_mayorista;
-    return op?.proveedor?.nombre_comercial ?? op?.proveedor?.razon_social ?? null;
-};
-
-// Pedido del usuario (05-sep-2026) — itinerario incluido del mayorista de
-// este ítem/grupo, para mostrarlo en el lienzo sin precio (ya está
-// prorrateado en el paquete). Mismo `items[0]?.opcion_mayorista` que
-// nombreMayoristaDeGrupo() de arriba — todos los ítems de un mismo grupo
-// comparten la misma OpcionMayorista, así que alcanza con el primero.
-const toursDeGrupo = (items: AlternativaItem[]): OpcionMayoristaTour[] => {
-    return items[0]?.opcion_mayorista?.tours ?? [];
-};
-
-const etiquetaItem = (item: AlternativaItem) => {
-    if (item.origen_tipo === 'manual') return item.descripcion_manual ?? 'Servicio sin catálogo';
-    // Fila 13, fase 1b — mismo criterio que ReservaController::resolverNombreItem().
-    if (item.origen_tipo === 'tour') {
-        const nombre = item.tour_origen?.nombre ?? item.tour_linea?.tour_nombre ?? 'Tour';
-        const sufijo: Record<string, string> = { '10': ' (gravado)', '20': ' (exonerado)', '30': ' (inafecto)' };
-        return (item.tour_linea?.n_grupos ?? 1) > 1 ? nombre + (sufijo[item.tip_afe_igv ?? ''] ?? '') : nombre;
-    }
-    if (item.origen_tipo === 'pasaje_aereo') return item.cotizacion_pasaje_aereo?.aerolinea ?? 'Pasaje aéreo';
-    // Hallazgo del usuario (04-sep-2026): esta función es una copia en el
-    // frontend del mismo resolver que se corrigió hoy en el backend
-    // (ReservaController::resolverNombreItem()) — tenía el mismo bug:
-    // origen_tipo=mayorista con opcion_hotel_tarifa (viene de la matriz de
-    // hoteles) caía acá y mostraba "Paquete mayorista" en vez de
-    // "hotel · tipo_habitación", tanto en el lienzo como en el resumen.
-    // Ahora solo cae acá cuando NO es un ítem de la matriz de hoteles
-    // (paquete "tarifa fija" sin habitación propia).
-    // 07-sep-2026 — un opcional elegido (San Blas, Taboga, Colón...)
-    // agregado de verdad al lienzo: nombre propio, no el genérico "Paquete
-    // mayorista"/proveedor de la rama de abajo (mismo criterio que ya
-    // aplica opcion_hotel_tarifa arriba). Tiene que ir ANTES del `if` de
-    // opcion_hotel_tarifa — un opcional nunca tiene tarifa de habitación.
-    if (item.origen_tipo === 'mayorista' && item.opcion_mayorista_opcional) {
-        return item.opcion_mayorista_opcional.nombre;
-    }
-    if (item.origen_tipo === 'mayorista' && !item.opcion_hotel_tarifa) {
-        return item.opcion_mayorista?.proveedor?.nombre_comercial ?? item.opcion_mayorista?.proveedor?.razon_social ?? 'Paquete mayorista';
-    }
-    if (item.origen_tipo === 'guia') {
-        const nombreGuia = item.guia_tarifa?.guia?.nombre ?? 'Guía';
-        return `Guía: ${nombreGuia}${item.guia_tarifa?.destino?.nombre ? ` — ${item.guia_tarifa.destino.nombre}` : ''}`;
-    }
-    if (item.proveedor_tarifa?.tipo_habitacion) {
-        // Hotel: la categoría genérica del servicio ("Alojamiento") no dice nada útil
-        // acá — mismo formato "Proveedor · tipo_habitación" que ya usa clicBibliotecaItem.
-        const proveedor = item.proveedor_tarifa.proveedor_servicio?.proveedor?.nombre_comercial ?? item.proveedor_tarifa.proveedor_servicio?.proveedor?.razon_social ?? 'Hotel';
-        return `${proveedor} · ${item.proveedor_tarifa.tipo_habitacion}`;
-    }
-    // Sesión M2/M4 — hotel de la matriz de un OpcionMayorista (o, desde M3,
-    // un hotel ad-hoc del flujo Local), sin ProveedorTarifa real. Mismo
-    // criterio ya usado en reservas/detalle.vue::nombreItem().
-    if (item.opcion_hotel_tarifa) {
-        const nombreHotel = item.opcion_hotel_tarifa.opcion_hotel?.nombre_hotel ?? 'Hotel';
-        return `${nombreHotel} · ${item.opcion_hotel_tarifa.tipo_habitacion}`;
-    }
-    return descripcionDestinoServicio(item.proveedor_tarifa?.proveedor_servicio?.destino_servicio) || 'Servicio';
-};
-
-// Punto D — desglose de pasajeros bajo cada línea por_persona ("3 adultos ×
-// PEN 70 + 1 niño × PEN 45"). Es UI sobre datos ya cargados (cotizacion.
-// pasajeros + item.pax_incluidos + los precios por tipo que ya trae el
-// item) — NO reimplementa el cálculo de precio, solo lo muestra desglosado
-// con el mismo criterio de conteo que AlternativaItemController::
-// contarPasajerosPorTipo() ya aplica en el backend.
-const contarPasajerosDeItem = (item: AlternativaItem) => {
-    const pax = cotizacion.value?.pasajeros ?? [];
-    const filtrados = item.pax_incluidos && item.pax_incluidos.length
-        ? pax.filter((p) => item.pax_incluidos!.includes(p.id))
-        : pax;
-    const conteo: Record<'adulto' | 'nino' | 'infante', number> = { adulto: 0, nino: 0, infante: 0 };
-    filtrados.forEach((p) => { conteo[p.tipo_pax] += 1; });
-    return conteo;
-};
-
-// Análisis de impuestos (28-ago-2026) — visibilidad del tratamiento
-// tributario ya resuelto en el ítem, para que no sea sorpresa recién al
-// facturar la reserva (ver ReservaFacturacionController::
-// resolverTipAfeIgvItem()/resolverDestinoTributario() en el backend, misma
-// cascada). null si el ítem todavía no tiene nada capturado (dato de antes
-// de este fix).
-const badgeTratamientoTributario = (item: AlternativaItem): { texto: string; clase: string } | null => {
-    if (!item.tip_afe_igv) return null;
-
-    const etiquetaTipo: Record<string, { texto: string; clase: string }> = {
-        '10': { texto: 'Gravado', clase: 'bg-secondary-subtle text-secondary' },
-        '20': { texto: 'Exonerado', clase: 'bg-success-subtle text-success' },
-        '30': { texto: 'Inafecto', clase: 'bg-info-subtle text-info' },
-    };
-    const base = etiquetaTipo[item.tip_afe_igv] ?? { texto: item.tip_afe_igv, clase: 'bg-light text-dark' };
-
-    if (item.destino_tributario && item.destino_tributario !== 'nacional') {
-        const etiquetaDestino = item.destino_tributario === 'amazonia' ? 'Amazonía' : 'Extranjero';
-        return { texto: `${base.texto} · ${etiquetaDestino}`, clase: base.clase };
-    }
-
-    return base;
-};
-
-const desglosePasajerosTexto = (item: AlternativaItem): string | null => {
-    // Sesión 11q — un ítem manual con pax_incluidos parcial no reparte
-    // precio por tipo de pasajero (sigue siendo tarifa_fija), pero sí vale
-    // mostrar a quiénes aplica.
-    if (item.origen_tipo === 'manual' && item.pax_incluidos && item.pax_incluidos.length) {
-        const total = cotizacion.value?.pasajeros?.length ?? 0;
-        return `Aplica a: ${item.pax_incluidos.length} de ${total} pasajeros`;
-    }
-
-    if (item.modo_precio !== 'por_persona') return null;
-
-    const precios = item.origen_tipo === 'pasaje_aereo' && item.cotizacion_pasaje_aereo
-        ? {
-            adulto: item.cotizacion_pasaje_aereo.tarifa_base_adulto,
-            nino: item.cotizacion_pasaje_aereo.tarifa_base_nino,
-            infante: item.cotizacion_pasaje_aereo.tarifa_base_infante,
-        }
-        : item.proveedor_tarifa
-            ? {
-                adulto: item.proveedor_tarifa.precio_venta_adulto,
-                nino: item.proveedor_tarifa.precio_venta_nino,
-                infante: item.proveedor_tarifa.precio_venta_infante,
-            }
-            : null;
-
-    if (!precios) return null;
-
-    const conteo = contarPasajerosDeItem(item);
-    const etiquetas: Record<'adulto' | 'nino' | 'infante', string> = { adulto: 'adulto', nino: 'niño', infante: 'infante' };
-
-    const partes = (['adulto', 'nino', 'infante'] as const)
-        .filter((t) => conteo[t] > 0 && precios[t] != null)
-        .map((t) => `${conteo[t]} ${etiquetas[t]}${conteo[t] > 1 ? 's' : ''} × ${item.moneda_costo} ${Number(precios[t]).toFixed(0)}`);
-
-    return partes.length ? partes.join(' + ') : null;
-};
+const desglosePasajerosTexto = (item: AlternativaItem) => desglosePasajerosTextoDe(item, cotizacion.value?.pasajeros ?? []);
 
 // ── Panel de precio — grupos colapsables por tour ──────────────────────
 const gruposExpandido = ref<Set<number>>(new Set());
