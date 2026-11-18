@@ -14,7 +14,7 @@ class AltaManual extends AltaItemBase
 {
     public function crear(Alternativa $alternativa, array $datos): AlternativaItem
     {
-        $validado = $this->validar($datos, [
+        $validado = $this->validarReglas($datos, [
             'descripcion_manual' => 'required|string|max:500',
             'proveedor_sugerido_manual' => 'nullable|string|max:250',
             'costo_snapshot' => 'required|numeric|min:0',

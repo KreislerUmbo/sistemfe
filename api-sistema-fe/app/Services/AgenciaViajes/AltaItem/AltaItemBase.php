@@ -18,7 +18,7 @@ abstract class AltaItemBase
     abstract public function crear(Alternativa $alternativa, array $datos): AlternativaItem;
 
     /** Valida $datos con $reglas; si falla lanza AltaItemException con el primer error. */
-    public function validar(array $datos, array $reglas): array
+    public function validarReglas(array $datos, array $reglas): array
     {
         $validator = Validator::make($datos, $reglas);
 

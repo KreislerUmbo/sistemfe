@@ -52,7 +52,8 @@ class AlternativaItemController extends Controller
         private TourLineaService $tourLinea,
         private AltaManual $altaManual,
         private AltaGuia $altaGuia,
-        private AltaMayorista $altaMayorista
+        private AltaMayorista $altaMayorista,
+        private AltaPasajeAereo $altaPasajeAereo
     ) {
     }
 
@@ -75,7 +76,7 @@ class AlternativaItemController extends Controller
             [$item, $mensaje] = match ($origenTipo) {
                 AlternativaItem::ORIGEN_PROVEEDOR => [$this->crearItemProveedor($request, $alternativa), 'Ítem agregado correctamente'],
                 AlternativaItem::ORIGEN_MAYORISTA => [$this->altaMayorista->crear($alternativa, $request->all()), 'Ítem de mayorista agregado correctamente'],
-                AlternativaItem::ORIGEN_PASAJE_AEREO => [$this->crearItemPasajeAereo($request, $alternativa), 'Pasaje aéreo agregado correctamente'],
+                AlternativaItem::ORIGEN_PASAJE_AEREO => [$this->altaPasajeAereo->crear($alternativa, $request->all()), 'Pasaje aéreo agregado correctamente'],
                 AlternativaItem::ORIGEN_MANUAL => [$this->altaManual->crear($alternativa, $request->all()), 'Ítem manual agregado correctamente'],
                 AlternativaItem::ORIGEN_GUIA => [$this->altaGuia->crear($alternativa, $request->all()), 'Ítem de guía agregado correctamente'],
             };
@@ -1182,21 +1183,20 @@ class AlternativaItemController extends Controller
         ];
     }
 
-    // Recalculo en vivo del formulario de pasaje aéreo (PasajeAereoForm.vue)
-    // — misma validación y misma llamada a PriceEngineService que
-    // crearItemPasajeAereo(), pero sin persistir nada. "No reimplementes la
-    // suma en el frontend, pedísela al backend" (spec de esta sesión).
+    // Recalculo en vivo del formulario de pasaje aéreo (PasajeAereoForm.vue): la misma validación y el
+    // mismo cálculo que el alta, sin persistir nada. El frontend no reimplementa la suma.
     public function previewPasajeAereo(Request $request, string $alternativaId)
     {
         $alternativa = Alternativa::findOrFail($alternativaId);
         $this->autorizarCotizacion('view', $alternativa);
 
-        $validado = $this->validarPasajeAereo($request, $alternativa);
-        if ($validado instanceof JsonResponse) {
-            return $validado;
+        try {
+            $validado = $this->altaPasajeAereo->validar($request->all(), $alternativa);
+        } catch (AltaItemException $e) {
+            return response()->json(['code' => 422, 'message' => $e->getMessage()], 422);
         }
 
-        $resultado = $this->calcularPasajeAereo($alternativa, $validado);
+        $resultado = $this->altaPasajeAereo->calcular($alternativa, $validado);
 
         return response()->json(['code' => 200, 'resultado' => $resultado]);
     }
@@ -1223,13 +1223,14 @@ class AlternativaItemController extends Controller
         }
 
         $alternativa = $item->alternativa;
-        $validado = $this->validarPasajeAereo($request, $alternativa);
-        if ($validado instanceof JsonResponse) {
-            return $validado;
+        try {
+            $validado = $this->altaPasajeAereo->validar($request->all(), $alternativa);
+        } catch (AltaItemException $e) {
+            return response()->json(['code' => 422, 'message' => $e->getMessage()], 422);
         }
         // T-076: un pasaje anterior mantiene su fórmula salvo que el vendedor pida pasarlo a la nueva.
         $validado['montos_por_pasajero'] ??= (bool) $item->cotizacionPasajeAereo->montos_por_pasajero;
-        $resultado = $this->calcularPasajeAereo($alternativa, $validado);
+        $resultado = $this->altaPasajeAereo->calcular($alternativa, $validado);
         // Si no manda valor nuevo, conserva el que ya tenía el ítem (mismo
         // criterio que actualizarManual() — el default de agencia solo
         // aplica al crear, no se recalcula al editar).
@@ -1269,160 +1270,6 @@ class AlternativaItemController extends Controller
         $item->load('cotizacionPasajeAereo');
 
         return response()->json(['code' => 200, 'message' => 'Pasaje aéreo actualizado correctamente', 'alternativa_item' => $item->fresh(['cotizacionPasajeAereo'])]);
-    }
-
-    // ── origen_tipo=pasaje_aereo ────────────────────────────────────────
-    private function crearItemPasajeAereo(Request $request, Alternativa $alternativa): AlternativaItem
-    {
-        $validado = $this->validarPasajeAereo($request, $alternativa);
-        if ($validado instanceof JsonResponse) {
-            throw new AltaItemException($validado->getData(true)['message']);
-        }
-
-        $resultado = $this->calcularPasajeAereo($alternativa, $validado);
-        $tratamientoTributario = ConfiguracionAgencia::completarTratamientoTributario($validado['tip_afe_igv'] ?? null, $validado['destino_tributario'] ?? null);
-
-        $item = DB::transaction(function () use ($alternativa, $validado, $resultado, $tratamientoTributario) {
-            $item = AlternativaItem::create([
-                'alternativa_id' => $alternativa->id,
-                'alternativa_destino_id' => $alternativa->destinoIdODefault($validado['alternativa_destino_id'] ?? null),
-                'origen_tipo' => AlternativaItem::ORIGEN_PASAJE_AEREO,
-                'modo_precio' => 'por_persona', // el reparto adulto/niño/infante ya está resuelto en venta_total
-                'cantidad' => 1,
-                'pax_incluidos' => $validado['pax_incluidos'] ?? null,
-                'moneda_costo' => $validado['moneda'],
-                'costo_snapshot' => $resultado['costo_total'],
-                'precio_venta_snapshot' => $resultado['venta_total'],
-                'precio_convertido' => $this->priceEngine->convertirMoneda($resultado['venta_total'], $validado['moneda'], $alternativa->moneda_cotizacion, (float) $alternativa->tipo_cambio_aplicado),
-                'dia_referencial' => $validado['dia_referencial'] ?? null,
-                'tip_afe_igv' => $tratamientoTributario['tip_afe_igv'],
-                'destino_tributario' => $tratamientoTributario['destino_tributario'],
-            ]);
-
-            CotizacionPasajeAereo::create([
-                'alternativa_item_id' => $item->id,
-                'aerolinea' => $validado['aerolinea'],
-                'itinerario' => $validado['itinerario'] ?? null,
-                'moneda' => $validado['moneda'],
-                'tarifa_base_adulto' => $validado['tarifa_base_adulto'],
-                'tarifa_base_nino' => $validado['tarifa_base_nino'] ?? null,
-                'tarifa_base_infante' => $validado['tarifa_base_infante'] ?? null,
-                'cargos' => $validado['cargos'] ?? [],
-                'tua_incluida_en_tarifa' => $validado['tua_incluida_en_tarifa'] ?? false,
-                'fee_agencia_monto' => $validado['fee_agencia_monto'] ?? 0,
-                'montos_por_pasajero' => $validado['montos_por_pasajero'] ?? true,
-                'tip_afe_igv' => $validado['tip_afe_igv'] ?? null,
-                'fecha_cotizado' => now(),
-                'tarifa_valida_hasta' => $validado['tarifa_valida_hasta'],
-                'costo_total' => $resultado['costo_total'],
-                'precio_venta_total' => $resultado['venta_total'],
-            ]);
-
-            return $item;
-        });
-
-        $alternativa->recalcularTotal();
-        $item->load('cotizacionPasajeAereo');
-
-        return $item;
-    }
-
-    private function validarPasajeAereo(Request $request, Alternativa $alternativa): array|JsonResponse
-    {
-        $validator = Validator::make($request->all(), [
-            'aerolinea' => 'required|string|max:150',
-            'itinerario' => 'nullable|string',
-            'moneda' => 'required|in:PEN,USD',
-            'tarifa_base_adulto' => 'required|numeric|min:0',
-            'tarifa_base_nino' => 'nullable|numeric|min:0',
-            'tarifa_base_infante' => 'nullable|numeric|min:0',
-            'cargos' => 'nullable|array',
-            'cargos.*.nombre' => 'required_with:cargos|string',
-            'cargos.*.monto' => 'required_with:cargos|numeric',
-            'cargos.*.tipo' => 'nullable|in:impuesto,tasa_aeropuerto,fee_agencia',
-            // T-076: el cargo no se cobra a los infantes (solo con montos por pasajero).
-            'cargos.*.no_aplica_infante' => 'nullable|boolean',
-            // T-076: true = cargos y fee por pasajero. Sin valor: los pasajes nuevos nacen con
-            // true y la edición de uno existente conserva su fórmula (ver actualizarPasajeAereo()).
-            'montos_por_pasajero' => 'nullable|boolean',
-            'tua_incluida_en_tarifa' => 'nullable|boolean',
-            'fee_agencia_monto' => 'nullable|numeric|min:0',
-            // cotizacion_pasaje_aereo.tip_afe_igv: la afectación del pasaje,
-            // que la factura aplica al precio completo (D-AGE-035, ver
-            // docblock del modelo). 'destino_tributario' es nuevo, a nivel
-            // de alternativa_items (junto con una copia genérica de
-            // tip_afe_igv), ver resolverTratamientoTributario().
-            'tip_afe_igv' => 'nullable|string|max:2',
-            'destino_tributario' => 'nullable|string|in:amazonia,nacional,extranjero',
-            'pax_incluidos' => 'nullable|array',
-            'pax_incluidos.*' => 'integer|exists:cotizacion_pasajeros,id',
-            'dia_referencial' => 'nullable|integer|min:1',
-            // Sesión 12f-1 — solo tiene efecto real en la creación
-            // (crearItemPasajeAereo()); actualizarPasajeAereo() no lo lee,
-            // el destino de un ítem ya existente no se mueve por acá.
-            'alternativa_destino_id' => ['nullable', 'integer', $alternativa->reglaDestinoId()],
-            // Vigencia de la tarifa aérea (09-oct-2026): fecha-hora límite que
-            // da la aerolínea, escrita en hora de Perú; se guarda en UTC.
-            'tarifa_valida_hasta' => 'nullable|date_format:Y-m-d H:i',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
-        }
-
-        $validado = $validator->validated();
-        $validado['tarifa_valida_hasta'] = \App\Services\HoraPeru::aUtc($validado['tarifa_valida_hasta'] ?? null);
-        // 29-ago-2026 — capitalización tipo título, solo hacia adelante. T-016: misma regla que
-        // el catálogo común (solo si viene todo en minúsculas), para no pasar "LATAM" a "Latam".
-        $validado['aerolinea'] = AerolineaController::formatearNombre($validado['aerolinea']);
-        // T-007: un pasaje aéreo es un boleto por persona y guarda a quiénes cubre. Con null
-        // ("todos") un pasajero agregado después quedaba dentro de un boleto que no se le cobró.
-        if (empty($validado['pax_incluidos'])) {
-            $validado['pax_incluidos'] = CotizacionPasajero::where('cotizacion_id', $alternativa->cotizacion_id)
-                ->orderBy('id')->pluck('id')->all() ?: null;
-        }
-
-        return $validado;
-    }
-
-    private function calcularPasajeAereo(Alternativa $alternativa, array $validado): array
-    {
-        $conteo = $this->contarPasajerosPorTipo($alternativa->cotizacion_id, $validado['pax_incluidos'] ?? null);
-
-        // tarifa_base_* se reparte por tipo de pasajero, igual que el
-        // reparto por_persona de proveedor_tarifas (§3).
-        $costoBaseTarifas = $conteo['adulto'] * (float) $validado['tarifa_base_adulto']
-            + $conteo['nino'] * (float) ($validado['tarifa_base_nino'] ?? 0)
-            + $conteo['infante'] * (float) ($validado['tarifa_base_infante'] ?? 0);
-
-        $cargos = $validado['cargos'] ?? [];
-        $fee = (float) ($validado['fee_agencia_monto'] ?? 0);
-
-        // T-076: cargos y fee son POR PASAJERO. Un cargo con «no aplica a infantes» se multiplica
-        // solo por adultos y niños; el fee, por todos los marcados (el infante paga fee). Un
-        // pasaje anterior (montos_por_pasajero=false) conserva su fórmula: montos del grupo, una vez.
-        if ($validado['montos_por_pasajero'] ?? true) {
-            $total = $conteo['adulto'] + $conteo['nino'] + $conteo['infante'];
-            $sinInfantes = $conteo['adulto'] + $conteo['nino'];
-            $cargos = array_map(function (array $cargo) use ($total, $sinInfantes) {
-                $cargo['monto'] = (float) $cargo['monto'] * (! empty($cargo['no_aplica_infante']) ? $sinInfantes : $total);
-
-                return $cargo;
-            }, $cargos);
-            $fee *= $total;
-        }
-
-        // fee_agencia_monto es lo único que la agencia realmente vende
-        // (§2.5) — se modela como margen 'fijo' del motor de precios, no
-        // como un cargo más (los cargos son pass-through de terceros).
-        return $this->priceEngine->calcular(
-            costoBase: $costoBaseTarifas,
-            cargos: $cargos,
-            margenTipo: 'fijo',
-            margenValor: $fee,
-            descuentoMaximoPct: null,
-            margenMinimoPct: null,
-        );
     }
 
     // ── origen_tipo=manual ──────────────────────────────────────────────

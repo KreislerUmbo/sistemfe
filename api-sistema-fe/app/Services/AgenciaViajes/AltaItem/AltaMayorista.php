@@ -18,7 +18,7 @@ class AltaMayorista extends AltaItemBase
 {
     public function crear(Alternativa $alternativa, array $datos): AlternativaItem
     {
-        $validado = $this->validar($datos, [
+        $validado = $this->validarReglas($datos, [
             'opcion_mayorista_id' => 'required|integer|exists:opcion_mayorista,id',
             'opcion_hotel_tarifa_id' => 'required_without:opcion_mayorista_opcional_id|nullable|integer|exists:opciones_hotel_tarifas,id',
             'opcion_mayorista_opcional_id' => 'required_without:opcion_hotel_tarifa_id|nullable|integer|exists:opcion_mayorista_opcionales,id',

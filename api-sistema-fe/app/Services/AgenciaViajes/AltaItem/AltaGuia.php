@@ -15,7 +15,7 @@ class AltaGuia extends AltaItemBase
 {
     public function crear(Alternativa $alternativa, array $datos): AlternativaItem
     {
-        $validado = $this->validar($datos, [
+        $validado = $this->validarReglas($datos, [
             'guia_tarifa_id' => 'required|integer|exists:guia_tarifas,id',
             'cantidad' => 'nullable|integer|min:1',
             'pax_incluidos' => 'nullable|array',
