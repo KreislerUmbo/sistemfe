@@ -34,6 +34,8 @@ export type SaleDetail = {
     subtotal: number,
     igv: number,
     description?: string,
+    /** T-108: texto que reemplaza al nombre del catálogo en el comprobante (null = sale el nombre). */
+    descripcion_linea?: string | null,
 
     mto_valor_venta: number,
     mto_base_igv: number,

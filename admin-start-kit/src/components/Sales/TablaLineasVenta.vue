@@ -22,13 +22,20 @@
                     <template v-for="(item, i) in items" :key="item.uid ?? i">
                         <tr :ref="(el) => fijarFila(i, el as HTMLElement | null)" :class="{ recien: i === resaltado }">
                             <td>
-                                <div class="fw-medium">{{ item.product.title }}</div>
+                                <!-- T-108: la descripción editada REEMPLAZA al nombre (texto plano, nunca v-html) -->
+                                <div v-if="tieneDescripcionEditada(item)" class="fw-medium descripcion-editada">{{ item.descripcion_linea }}</div>
+                                <div v-else class="fw-medium">{{ item.product.title }}</div>
+                                <div v-if="tieneDescripcionEditada(item)" class="small text-muted">
+                                    <span class="badge bg-secondary-subtle text-secondary">Descripción editada</span>
+                                    catálogo: {{ item.product.title }}
+                                </div>
                                 <div class="small text-muted d-flex flex-wrap gap-1 align-items-center">
                                     <span>{{ item.product.sku }}</span>
                                     <span v-if="esServicio(item)" class="badge bg-success-subtle text-success">Servicio</span>
                                     <span v-if="sinStock(item)" class="badge bg-danger">Solo hay {{ item.product.stock }}</span>
                                     <span v-else-if="pocoStock(item)" class="badge bg-warning-subtle text-warning">Quedan {{ item.product.stock }}</span>
                                     <span v-if="Number(item.discount_percent) > 0" class="badge bg-success-subtle text-success">−{{ item.discount_percent }}%</span>
+                                    <button type="button" class="btn btn-link btn-sm p-0" @click="editarDescripcion(i)">Editar descripción</button>
                                     <button v-if="item.product.is_discount == 2" type="button" class="btn btn-link btn-sm p-0"
                                         @click="descuentoAbierto = descuentoAbierto === i ? null : i">
                                         {{ Number(item.discount_percent) > 0 ? 'Cambiar descuento' : 'Descuento' }}
@@ -99,6 +106,8 @@
                 </tbody>
             </table>
         </div>
+        <ModalDescripcionLinea v-model="modalDescripcion" :titulo-catalogo="lineaDescripcion?.product.title ?? ''"
+            :descripcion-actual="lineaDescripcion?.descripcion_linea" @aplicar="aplicarDescripcion" />
         <div v-if="items.length" class="d-flex justify-content-between small text-muted px-3 py-2 border-top">
             <span>{{ items.length }} línea{{ items.length > 1 ? 's' : '' }} · {{ unidades }} unidad{{ unidades === 1 ? '' : 'es' }}</span>
             <span v-if="items.length > 8">Desplázate dentro de la lista para ver todo</span>
@@ -114,6 +123,7 @@
 import { computed, ref, watch } from 'vue';
 import type { SaleDetail } from '@/types/sales';
 import type { Product } from '@/types/products';
+import ModalDescripcionLinea from '@/components/Sales/ModalDescripcionLinea.vue';
 import { admiteDecimales, controlaStock as productoControlaStock, normalizarCantidad, precioCatalogoPorCliente } from '@/helpers/ventaRetail';
 
 export type LineaVenta = SaleDetail & { uid?: number; precio_manual?: boolean };
@@ -202,6 +212,20 @@ const cambiarDescuento = (it: LineaVenta, i: number, e: Event) => {
     emit('cambio', i);
 };
 
+// T-108: «Editar descripción». El texto vive en la línea (descripcion_linea) y viaja en el payload de store();
+// no cambia importes, así que no hace falta recalcular.
+const lineaEnEdicion = ref<number | null>(null);
+const modalDescripcion = ref(false);
+const tieneDescripcionEditada = (it: LineaVenta) => !!it.descripcion_linea?.trim();
+const editarDescripcion = (i: number) => {
+    lineaEnEdicion.value = i;
+    modalDescripcion.value = true;
+};
+const lineaDescripcion = computed(() => (lineaEnEdicion.value === null ? undefined : props.items[lineaEnEdicion.value]));
+const aplicarDescripcion = (descripcion: string | null) => {
+    if (lineaDescripcion.value) lineaDescripcion.value.descripcion_linea = descripcion;
+};
+
 // Lleva la línea resaltada a la vista dentro de la lista con desplazamiento.
 const filas: Record<number, HTMLElement | null> = {};
 const fijarFila = (i: number, el: HTMLElement | null) => { filas[i] = el; };
@@ -215,6 +239,7 @@ watch(() => props.resaltado, (i) => {
 .tabla-lineas { max-height: max(300px, calc(100vh - 380px)); overflow: auto; }
 .tabla-lineas thead th { position: sticky; top: 0; z-index: 2; background: var(--bs-body-bg, #fff); }
 .precio { max-width: 92px; }
+.descripcion-editada { white-space: pre-line; overflow-wrap: anywhere; }
 .afe { min-width: 140px; font-size: .8rem; }
 .afe.cambiada { border-color: var(--bs-warning); background: var(--bs-warning-bg-subtle); font-weight: 600; }
 tr.recien td { background: var(--bs-success-bg-subtle); }

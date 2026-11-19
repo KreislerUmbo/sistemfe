@@ -2,6 +2,7 @@
 
 namespace App\Models\Sale;
 
+use App\Models\Concerns\ConDescripcionLinea;
 use App\Models\Product\Categorie;
 use App\Models\Product\Product;
 use Carbon\Carbon;
@@ -13,6 +14,7 @@ class SaleDetail extends Model
 {
     use HasFactory;
     use SoftDeletes;
+    use ConDescripcionLinea;
     protected $table = "sale_details";
     protected $fillable = [
         "sale_id",
@@ -60,6 +62,9 @@ class SaleDetail extends Model
         // Sesión 9a. Distinto de "description" (arriba), que existe desde
         // el schema original pero está muerta en la práctica.
         "descripcion_detalle",
+
+        // T-108: texto que REEMPLAZA al título del producto (máx. 500). NULL = sale el título.
+        "descripcion_linea",
     ];
 
     public function sale()
@@ -82,8 +87,16 @@ class SaleDetail extends Model
     // siempre. Reserva de Agencia: el título más el detalle (los servicios con
     // su fecha, o el "Texto para este comprobante" que escribió el vendedor).
     // SUNAT acepta hasta 500 caracteres en la descripción de una línea.
+    //
+    // T-108 — si el vendedor editó la descripción de la línea (descripcion_linea),
+    // ESA es la descripción, sola: reemplaza al título y al detalle de Agencia.
     public function descripcionParaSunat(): string
     {
+        $propia = $this->descripcionLineaLimpia();
+        if ($propia !== null) {
+            return $propia;
+        }
+
         $titulo = (string) ($this->product?->title ?? '');
         $detalle = trim((string) $this->descripcion_detalle);
 

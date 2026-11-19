@@ -644,6 +644,7 @@ class NotaElectronicaController extends Controller
                 'isc'             => $d->isc,
                 'unidad_medida'   => $d->unidad_medida,
                 'description'     => $d->description,
+                'descripcion_linea' => $d->descripcion_linea,
             ];
         });
     }

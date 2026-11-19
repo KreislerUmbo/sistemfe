@@ -145,6 +145,7 @@ declare module 'vue' {
     MenuItemWithChildren: typeof import('./src/components/AppMenu/MenuItemWithChildren.vue')['default']
     MiCreditoCliente: typeof import('./src/components/Creditos/MiCreditoCliente.vue')['default']
     MisPendientesHoy: typeof import('./src/components/Clientes/MisPendientesHoy.vue')['default']
+    ModalDescripcionLinea: typeof import('./src/components/Sales/ModalDescripcionLinea.vue')['default']
     ModificacionDiferenciaPanel: typeof import('./src/components/AgenciaViajes/ModificacionDiferenciaPanel.vue')['default']
     MotivosResultadoSeccion: typeof import('./src/components/AgenciaViajes/MotivosResultadoSeccion.vue')['default']
     NavbarPortal: typeof import('./src/components/portal/NavbarPortal.vue')['default']

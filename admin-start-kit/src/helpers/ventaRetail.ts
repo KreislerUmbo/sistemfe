@@ -119,3 +119,17 @@ export const motivoBloqueoCobro = (e: EntradaMotivoCobro): string => {
 /** Un producto controla stock si es un bien y no está marcado «venta sin stock» (disponiblidad 1). */
 export const controlaStock = (p: { tipo_bien_servicio?: string; disponiblidad?: number }): boolean =>
     p.tipo_bien_servicio !== 'SERVICIO' && p.disponiblidad !== 1;
+
+/** SUNAT acepta hasta 500 caracteres en la descripción de una línea (T-108). */
+export const MAX_DESCRIPCION_LINEA = 500;
+
+/**
+ * Qué se guarda como descripción editada de la línea (T-108): `null` si el texto queda vacío o igual
+ * al nombre del catálogo (la línea sale con el nombre de siempre); si no, el texto sin espacios en los
+ * extremos y con tope de 500 caracteres.
+ */
+export const descripcionAGuardar = (texto: string, tituloCatalogo: string): string | null => {
+    const limpio = texto.replace(/\r\n?/g, '\n').trim();
+    if (limpio === '' || limpio === tituloCatalogo.trim()) return null;
+    return limpio.slice(0, MAX_DESCRIPCION_LINEA);
+};
