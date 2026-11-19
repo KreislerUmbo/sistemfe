@@ -177,6 +177,7 @@ declare module 'vue' {
     SeccionProductos: typeof import('./src/components/portal/SeccionProductos.vue')['default']
     SeccionServicios: typeof import('./src/components/portal/SeccionServicios.vue')['default']
     SeccionSistemasEmpresariales: typeof import('./src/components/portal/SeccionSistemasEmpresariales.vue')['default']
+    SelectorDireccionComprobante: typeof import('./src/components/Clientes/SelectorDireccionComprobante.vue')['default']
     TarjetaResumenCliente: typeof import('./src/components/Creditos/TarjetaResumenCliente.vue')['default']
     TiposViajeSeccion: typeof import('./src/components/AgenciaViajes/TiposViajeSeccion.vue')['default']
     TourIncluidoForm: typeof import('./src/components/AgenciaViajes/TourIncluidoForm.vue')['default']

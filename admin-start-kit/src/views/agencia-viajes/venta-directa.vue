@@ -50,6 +50,8 @@
                                 <div v-if="clienteSeleccionado" class="small text-success mt-1">
                                     <i class="fas fa-circle-check me-1"></i>{{ clienteSeleccionado.full_name }} ({{ clienteSeleccionado.n_document }})
                                 </div>
+                                <SelectorDireccionComprobante v-model="clientAddressId" :cliente-id="clienteSeleccionado?.id"
+                                    :direccion-fiscal="clienteSeleccionado?.address" class="mt-1" />
                                 <!-- T-046 (maqueta): el cliente persona natural viaja de primer pasajero. -->
                                 <div v-if="datosClientePasajero" class="form-text">
                                     <template v-if="clienteViaja">
@@ -475,6 +477,7 @@ import {
     type VentaDirectaPayload,
 } from '@/services/admin/ventaDirectaService';
 import type { Client } from '@/types/clients';
+import SelectorDireccionComprobante from '@/components/Clientes/SelectorDireccionComprobante.vue';
 import type { PaquetePlantilla, ProveedorTarifa } from '@/types/agencia-viajes';
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
@@ -490,6 +493,7 @@ const DIAS = Array.from({ length: 14 }, (_, i) => i + 1);
 const clientSearchText = ref<string>('');
 const clientSuggestions = ref<Client[]>([]);
 const clienteSeleccionado = ref<Client | null>(null);
+const clientAddressId = ref<number | null>(null); // T-107: null = dirección fiscal
 const showClientSuggestions = ref<boolean>(false);
 const showQuickClientModal = ref<boolean>(false);
 let clientSearchTimeout: any = null;
@@ -1156,6 +1160,7 @@ const crear = async (cobro: Partial<VentaDirectaPayload> = {}) => {
     try {
         const res = await ventaDirectaService.crear({
             cliente_id: clienteSeleccionado.value.id,
+            client_address_id: clientAddressId.value,
             destino: destinoTexto.value,
             destino_atractivo_id: destinoId.value,
             fecha_servicio: fechaInicio.value,

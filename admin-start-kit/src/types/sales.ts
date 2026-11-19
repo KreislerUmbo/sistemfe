@@ -80,6 +80,7 @@ export type Sale = {
         full_name: string,
     },
     client_id: string,
+    client_address_id?: number | null,
     client: {
         id: string,
         full_name: string,

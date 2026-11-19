@@ -137,6 +137,8 @@
                             </label>
                             <b-form-input type="text" id="client-address" v-model="client_address"
                                 placeholder="Dirección del cliente" size="sm" />
+                            <SelectorDireccionComprobante v-model="client_address_id" :cliente-id="client_selected?.id"
+                                :direccion-fiscal="client_selected?.address" class="mt-1" />
                         </div>
                     </div>
 
@@ -769,6 +771,7 @@ import type { Product } from '@/types/products';
 import ClientFormQuick from '@/components/Sales/ClientFormQuick.vue';
 import ProductFormQuick from '@/components/Sales/ProductFormQuick.vue';
 import CronogramaCuotasCampos from '@/components/CronogramaCuotasCampos.vue';
+import SelectorDireccionComprobante from '@/components/Clientes/SelectorDireccionComprobante.vue';
 import { imprimirComprobante } from '@/composables/usePrintComprobante';
 import { getPrecioBaseSinIgv } from '@/composables/useProductPricing';
 import { useAuthStore } from '@/stores/auth';
@@ -810,6 +813,7 @@ const productSelected = ref<Product | undefined>(undefined);
 const clientSearchText = ref<string>('');
 const clientSuggestions = ref<Client[]>([]);
 const client_address = ref<string>('');
+const client_address_id = ref<number | null>(null); // T-107: null = dirección fiscal
 let clientSearchTimeout: any = null;
 const clientNotFound = ref<boolean>(false);
 
@@ -1118,6 +1122,7 @@ const clearClientSelection = () => {
     clientSuggestions.value = [];
     client_address.value = '';
     clientNotFound.value = false;
+    client_address_id.value = null;
     tipo_comprobante_codigo.value = '03'; // resetear a boleta por defecto
     availableAdvances.value = [];
 };
@@ -1686,6 +1691,7 @@ const store = async () => {
 
         // Cliente
         client_id: client_selected.value.id,
+        client_address_id: client_address_id.value,
         type_client: client_selected.value.type_client,
         // Tipo de documento según Catálogo 06 SUNAT — ya calculado en el cliente
         cod_tipo_doc_cliente: client_selected.value.cod_tipo_doc_sunat ?? '1',
@@ -1813,6 +1819,7 @@ const resetData = () => {
     clientSuggestions.value = [];
     client_address.value = '';
     clientNotFound.value = false;
+    client_address_id.value = null;
     productSearchText.value = '';
     productSuggestions.value = [];
     productNotFound.value = false;

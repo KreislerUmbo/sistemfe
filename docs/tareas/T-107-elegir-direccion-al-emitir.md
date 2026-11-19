@@ -74,9 +74,14 @@ Verificar el PDF A4 de cada comprobante (Ghostscript solo al final).
 ---
 
 ## Resultado
-- **Commits:**
-- **Tests:** (nuevos / suite completa)
-- **Desviaciones de la tarea y por qué:**
+- **Commits:** ver `git log feat/T-107-elegir-direccion-al-emitir` (un commit).
+- **Tests:** nuevo `test_t107_la_nota_con_client_address_id_null_…` en `DireccionClienteTest`; `DireccionClienteTest` completo en verde (13). **No corrí la suite completa** ni Vitest del selector (no se extrajo lógica aparte); `type-check`: sin errores nuevos (queda el previo de `edit.vue` ~1788, `selectClient(sale.client)`).
+- **Prueba funcional (agencia-demo):** CA1 (sin otras direcciones solo sale «Agregar dirección»), CA3 (agregar desde anticipo → queda elegida y la venta 26 guardó `client_address_id` y `direccion_cliente`), CA4 propuesta (NC de esa venta abre con «Sucursal Tarapoto»), y en `register.vue` el selector aparece con fiscal + sucursal. **Pendiente de probar a mano:** PDF A4 de cada comprobante, edición de venta retail (`edit.vue`), factura de reserva simple/especial, venta directa con cobro, CA6 (usuario sin `edit_client`), y todo en umbo (sin credencial; no se reseteó nada).
+- **Desviaciones de la tarea y por qué (backend mínimo, la tarea decía solo frontend):**
+  1. `SaleResource` no exponía `client_address_id`; sin él `edit.vue` no podía cargar ni reenviar el valor guardado.
+  2. `NotaElectronicaController::store()` usaba `filled()`: un `null` explícito se trataba como «no enviado» y la NC heredaba la sucursal, así que no se podía pasar a la fiscal (CA4). Ahora `has()`: null = fiscal (texto = `clients.address` actual). Además se acepta la misma dirección de la venta aunque se haya desactivado después (si no, proponerla daba 422).
+  3. `components.d.ts` se regeneró solo (registra el selector).
+- **Detalles de diseño:** el selector solo vuelve a `null` cuando cambia de un cliente a otro (no en la primera carga), para respetar el valor hidratado al editar; muestra la dirección ya elegida aunque esté desactivada. En `register.vue`/`edit.vue` solo hay el uso del componente, la variable y el campo del payload.
 
 ## Hallazgos fuera de alcance
-- 
+- La NC con «fiscal» usa la dirección fiscal **actual** del cliente, no la que tuviera al emitir la venta.

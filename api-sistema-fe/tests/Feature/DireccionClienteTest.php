@@ -286,6 +286,28 @@ class DireccionClienteTest extends CreditosTestCase
         $this->assertSame('Av. Sucursal Yurimaguas 500', $nota2->direccion_cliente);
     }
 
+    // T-107 CA4: la pantalla manda siempre el campo; null = fiscal (no es lo mismo que no mandarlo),
+    // y proponer la dirección de la venta aunque se haya desactivado después no se rechaza.
+    public function test_t107_la_nota_con_client_address_id_null_sale_con_la_fiscal_y_acepta_la_de_la_venta_desactivada(): void
+    {
+        $this->emisor();
+        $cliente = $this->empresa();
+        $tarapoto = $this->sucursal($cliente);
+        $adelanto = Sale::find($this->anticipo($cliente, $tarapoto->id)['sale_id']);
+        Sale::where('id', $adelanto->id)->update(['correlativo' => 1, 'n_operacion' => 'F001-00000001', 'xml' => '<x/>', 'cdr' => 'cdr']);
+
+        $fiscal = $this->notaDe($adelanto, ['client_address_id' => null]);
+        $this->assertSame(200, $fiscal->getStatusCode(), json_encode($fiscal->getData(true)));
+        $nota = Note::find($fiscal->getData(true)['note']['id']);
+        $this->assertNull($nota->client_address_id);
+        $this->assertSame(self::FISCAL, $nota->direccion_cliente);
+
+        $tarapoto->update(['activo' => false]);
+        $misma = $this->notaDe($adelanto, ['client_address_id' => $tarapoto->id]);
+        $this->assertSame(200, $misma->getStatusCode(), json_encode($misma->getData(true)));
+        $this->assertSame($tarapoto->id, Note::find($misma->getData(true)['note']['id'])->client_address_id);
+    }
+
     // CA5 (anticipo; la factura de reserva está en Fila13Fase1cFacturacionTest)
     public function test_ca5_el_anticipo_con_direccion_elegida_la_copia(): void
     {

@@ -77,6 +77,7 @@ class SaleResource extends JsonResource
 
             // ── Cliente — incluye todos los campos que usa el edit ─
             'client_id' => $this->resource->client_id,
+            'client_address_id' => $this->resource->client_address_id, // T-107: edit.vue la reenvía tal cual
             'client'    => $this->resource->client ? [
                 'id'                  => $this->resource->client->id,
                 'n_document'          => $this->resource->client->n_document,

@@ -239,11 +239,17 @@ class NotaElectronicaController extends Controller
         $clienteDeLaVenta = $sale->datosClienteImpresos();
 
         // T-065: sin client_address_id la nota hereda la dirección de la venta (y su texto, que ya
-        // viene en la copia); con uno, debe ser una dirección activa del cliente de la venta.
+        // viene en la copia); con uno, debe ser una dirección activa del cliente de la venta
+        // (o la misma de la venta, aunque se haya desactivado después).
+        // T-107: el campo enviado en null = «la fiscal» (la pantalla lo manda siempre); distinto de no enviarlo.
         $direccionNotaId = $sale->client_address_id;
-        if ($request->filled('client_address_id')) {
-            $direccionNotaId = DireccionDelComprobante::validar($request->input('client_address_id'), $sale->client_id);
-            $clienteDeLaVenta['direccion'] = ClientAddress::findOrFail($direccionNotaId)->direccion;
+        if ($request->has('client_address_id')) {
+            $direccionNotaId = DireccionDelComprobante::validar(
+                $request->input('client_address_id'), $sale->client_id, $sale->client_address_id
+            );
+            $clienteDeLaVenta['direccion'] = $direccionNotaId
+                ? ClientAddress::findOrFail($direccionNotaId)->direccion
+                : ($sale->client?->address ?? $clienteDeLaVenta['direccion'] ?? null);
         }
 
         $nota = DB::transaction(function () use (

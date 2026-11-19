@@ -63,6 +63,8 @@
                             {{ clientSelected.cod_tipo_doc_sunat === '6' ? 'RUC → Factura' : 'DNI → Boleta' }}
                         </span>
                     </div>
+                    <SelectorDireccionComprobante v-model="clientAddressId" :cliente-id="clientSelected?.id"
+                        :direccion-fiscal="clientSelected?.address" class="mt-2" />
                 </div>
 
                 <!-- Monto / Moneda / Medio de pago -->
@@ -134,6 +136,7 @@ import httpClient from "@/helpers/http-client";
 import type { AxiosResponse } from "axios";
 import type { Client } from "@/types/clients";
 import type { AdvanceResponse } from "@/types/advances";
+import SelectorDireccionComprobante from '@/components/Clientes/SelectorDireccionComprobante.vue';
 import type { PaymentMethod, PaymentMethods } from "@/types/cash";
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
@@ -143,6 +146,7 @@ const router = useRouter();
 const clientSearchText = ref("");
 const clientSuggestions = ref<Client[]>([]);
 const clientSelected = ref<Client | undefined>(undefined);
+const clientAddressId = ref<number | null>(null); // T-107: null = dirección fiscal
 let clientSearchTimeout: ReturnType<typeof setTimeout> | undefined;
 
 const amount = ref<number>(0);
@@ -211,6 +215,7 @@ const crear = async () => {
     try {
         const { data }: { data: AdvanceResponse } = await httpClient.post("advances", {
             client_id: clientSelected.value.id,
+            client_address_id: clientAddressId.value,
             amount: amount.value,
             currency: currency.value,
             payment_method: paymentMethod.value,
