@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-    admiteDecimales, atajosEfectivo, calcularEfectivo, motivoBloqueoCobro, normalizarCantidad,
+    MAX_DESCRIPCION_LINEA, admiteDecimales, atajosEfectivo, calcularEfectivo, descripcionAGuardar, motivoBloqueoCobro, normalizarCantidad,
     precioCatalogoPorCliente, type EntradaMotivoCobro,
 } from './ventaRetail';
 
@@ -74,5 +74,24 @@ describe('motivo del botón Cobrar (CA5)', () => {
         expect(motivoBloqueoCobro({ ...base, sobraCobrar: 48.7 })).toMatch(/superan el total en S\/ 48.70/);
         expect(motivoBloqueoCobro({ ...base, esCredito: true, sobraCobrar: 10 })).toMatch(/superan el total/);
         expect(motivoBloqueoCobro({ ...base, sobraCobrar: 0.004 })).toBe('');
+    });
+});
+
+describe('descripcionAGuardar (T-108)', () => {
+    const titulo = 'Antivirus ESET NOD32 1 PC 1 año';
+
+    it('vacío o solo espacios = sin descripción editada', () => {
+        expect(descripcionAGuardar('', titulo)).toBeNull();
+        expect(descripcionAGuardar('  \n ', titulo)).toBeNull();
+    });
+    it('igual al nombre del catálogo = sin descripción editada (aunque tenga espacios alrededor)', () => {
+        expect(descripcionAGuardar(titulo, titulo)).toBeNull();
+        expect(descripcionAGuardar(`  ${titulo}\n`, titulo)).toBeNull();
+    });
+    it('un texto distinto se guarda limpio y conserva los saltos de línea', () => {
+        expect(descripcionAGuardar(`  Equipo SALA-01\r\nVence 18/11/2027 `, titulo)).toBe('Equipo SALA-01\nVence 18/11/2027');
+    });
+    it('se corta en 500 caracteres', () => {
+        expect(descripcionAGuardar('a'.repeat(600), titulo)).toHaveLength(MAX_DESCRIPCION_LINEA);
     });
 });
