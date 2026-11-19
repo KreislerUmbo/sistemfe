@@ -1,0 +1,73 @@
+import { describe, expect, it } from 'vitest';
+import {
+    admiteDecimales, atajosEfectivo, calcularEfectivo, motivoBloqueoCobro, normalizarCantidad,
+    precioCatalogoPorCliente, type EntradaMotivoCobro,
+} from './ventaRetail';
+
+const base: EntradaMotivoCobro = {
+    lineas: 1, sinStock: null, hayCliente: true, tipoComprobante: '03',
+    clienteTipoDocumento: 'DNI', clienteNDocumento: '45050926', total: 100, moneda: 'PEN',
+    esCredito: false, cajaAbierta: true, cobraAhora: true, faltaCobrar: 0, efectivoRepetido: false,
+    adelantosExceden: false, detraccionSinCodigo: false, creditoSinCronograma: false,
+    creditoNoCalza: false, moraSinTasa: false,
+};
+
+describe('efectivo y vuelto (CA4)', () => {
+    it('vacío cobra exacto', () => {
+        expect(calcularEfectivo(151.3, null)).toEqual({ vuelto: 0, falta: 0, pagoQueSeEnvia: 151.3 });
+    });
+    it('170 sobre 151.30: vuelto 18.70 y se envía 151.30', () => {
+        expect(calcularEfectivo(151.3, 170)).toEqual({ vuelto: 18.7, falta: 0, pagoQueSeEnvia: 151.3 });
+    });
+    it('100 sobre 151.30: falta 51.30', () => {
+        const r = calcularEfectivo(151.3, 100);
+        expect(r.falta).toBe(51.3);
+        expect(r.pagoQueSeEnvia).toBe(100);
+    });
+    it('atajos: el siguiente billete que cubre, máximo 4', () => {
+        expect(atajosEfectivo(151.3)).toEqual([160, 200]);
+        expect(atajosEfectivo(8).length).toBeLessThanOrEqual(4);
+        expect(atajosEfectivo(8)[0]).toBe(10);
+    });
+});
+
+describe('cantidades', () => {
+    it('solo unidades de peso/volumen aceptan decimales', () => {
+        expect(admiteDecimales('KGM')).toBe(true);
+        expect(admiteDecimales('NIU')).toBe(false);
+        expect(normalizarCantidad('1,250', 'KGM')).toBe(1.25);
+        expect(normalizarCantidad('1.7', 'NIU')).toBe(2);
+        expect(normalizarCantidad('abc', 'NIU')).toBe(1);
+    });
+});
+
+describe('precio por cliente (CA3)', () => {
+    const p = { price_general: 21.9, price_company: 19.5 };
+    it('empresa usa precio empresa; el resto, general', () => {
+        expect(precioCatalogoPorCliente(p, 2)).toEqual({ valor: 19.5, nombre: 'Empresa' });
+        expect(precioCatalogoPorCliente(p, 1)).toEqual({ valor: 21.9, nombre: 'General' });
+        expect(precioCatalogoPorCliente({ price_general: 5, price_company: 0 }, 2).nombre).toBe('General');
+    });
+});
+
+describe('motivo del botón Cobrar (CA5)', () => {
+    it('sin motivo cuando todo está bien', () => expect(motivoBloqueoCobro(base)).toBe(''));
+    it('sin productos', () => expect(motivoBloqueoCobro({ ...base, lineas: 0 })).toMatch(/al menos un producto/));
+    it('sin stock', () => expect(motivoBloqueoCobro({ ...base, sinStock: 'Aceite' })).toMatch(/stock suficiente de «Aceite»/));
+    it('sin cliente', () => expect(motivoBloqueoCobro({ ...base, hayCliente: false })).toMatch(/cliente/));
+    it('factura sin RUC', () =>
+        expect(motivoBloqueoCobro({ ...base, tipoComprobante: '01' })).toMatch(/RUC/));
+    it('boleta > 700 sin DNI', () =>
+        expect(motivoBloqueoCobro({ ...base, clienteNDocumento: '00000000', total: 701 })).toMatch(/DNI/));
+    it('boleta ≤ 700 sin DNI pasa', () =>
+        expect(motivoBloqueoCobro({ ...base, clienteNDocumento: '00000000', total: 700 })).toBe(''));
+    it('crédito sin cliente identificado', () =>
+        expect(motivoBloqueoCobro({ ...base, esCredito: true, clienteNDocumento: '' })).toMatch(/identificado/));
+    it('caja cerrada solo bloquea si hay que cobrar', () => {
+        expect(motivoBloqueoCobro({ ...base, cajaAbierta: false })).toMatch(/caja/);
+        expect(motivoBloqueoCobro({ ...base, cajaAbierta: false, cobraAhora: false, esCredito: true, creditoSinCronograma: true })).toMatch(/cronograma/);
+        expect(motivoBloqueoCobro({ ...base, cajaAbierta: null })).toBe('');
+    });
+    it('falta dinero', () =>
+        expect(motivoBloqueoCobro({ ...base, faltaCobrar: 51.3 })).toMatch(/Falta S\/ 51.30/));
+});
