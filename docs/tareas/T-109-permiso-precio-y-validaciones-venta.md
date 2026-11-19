@@ -81,9 +81,72 @@ Usuario vendedor sin el permiso y Propietario, en un tenant retail.
 ---
 
 ## Resultado
-- **Commits:**
-- **Tests:**
+- **Commits:** rama `feat/T-109-permiso-precio-validaciones` (ver `git log main..`).
+- **Tests:** `tests/Feature/Ventas/T109PrecioYValidacionesVentaTest.php` (13 tests: CA1-CA7, más
+  igv incluido con tolerancia, boleta en USD y cotización no convertible) y 1 caso nuevo en
+  `ventaRetail.test.ts` (boleta en USD). Suite completa del backend: 2374 pasan y 1 falla
+  (`Fila13Fase2cOperacionTest › en un viaje de varios dias solo se mueve el tour`, 422 en vez de 200);
+  falla igual sin mis cambios, así que es previo (ver Hallazgos). Type-check:
+  sin errores en los archivos tocados (los errores que quedan son previos, p. ej. `fake-backend.ts`).
+  No hice prueba visual en navegador de la pantalla: queda para la revisión.
 - **Desviaciones de la tarea y por qué:**
+  - **Boleta en dólares:** el payload no trae tipo de cambio, así que (decisión del usuario, 19-nov)
+    se convierte con el último T.C. SUNAT a hoy (`TipoCambioSunatResolver`, columna `venta`); si no
+    hay ninguno cargado, no se bloquea. `GET sales/config` ahora devuelve `tipo_cambio_venta` y
+    `motivoBloqueoCobro` lo usa, para que pantalla y backend coincidan (antes la pantalla solo
+    bloqueaba en PEN).
+  - **Cómo se calcula `price_base` hoy** (verificado en `register.vue` ~396, no ~1192): precio
+    `price_company` solo si `type_client = 2` y `price_company > 0`, si no `price_general`; con
+    `include_igv` se divide entre 1 + tasa (IVAP si `is_ivap = 2`, 0 si el producto es 20/30, IGV
+    general en el resto); sin conversión de moneda; sin redondear. `PrecioVentaValidator` repite
+    la cuenta con `BigDecimal` y tolerancia de S/ 0,01. El tipo de cliente se toma de la BD
+    (`client_id`), no del payload.
+  - El precio de la línea de cotización se compara tal cual contra `price_base` (el front lo pone
+    sin convertir), y vale cualquiera de las líneas de esa cotización con el mismo producto.
+  - La cotización solo se considera en `store()`; en `update()` no (la tarea lo dice así).
+  - El 422 es un `HttpException` con `message` (como el resto de validadores del controlador), no
+    un error por campo.
+  - Fixture de `SaleControllerSerieComprobanteTest`: su producto tenía precio de catálogo 10 y
+    vendía a 50; ahora el catálogo es 50 (la regla nueva lo habría rechazado).
+- **Efecto a tener en cuenta:** la pantalla vieja `sale/edit.vue` deja editar el precio libremente;
+  sin el permiso, el backend ahora rechaza ese cambio en `update()`. Se resuelve con T-110.
+- **Al desplegar:** `tenants:migrate-verticales` y `roles:sync-propietario`.
+
+## Revisión (Opus, 19-nov-2026) — cambios pedidos, decididos por el usuario
+Lo construido está bien (13 tests en verde; la cuenta de `PrecioVentaValidator` coincide con
+`register.vue`). Antes de aprobar, en la misma rama:
+
+0. **Commitear** lo que ya está (hoy nada está commiteado), y después cada punto de abajo.
+1. **Precio de catálogo 0 = precio libre.** Si el precio de catálogo que corresponde (general o
+   empresa) es 0, la línea no se valida: es un producto «a precio variable». Caso real: en Agencia
+   los genéricos (Boleto Aéreo, Tour / Actividad turística, Servicio de Hotelería, Transporte, Otros
+   Servicios Turísticos) tienen `price_general = 0` y siempre se venden con precio a mano; sin esto
+   ningún vendedor podría venderlos. En pantalla, sin el permiso, esas líneas sí dejan escribir el
+   precio. Test: sin el permiso, producto con catálogo 0 a S/ 100 → 200.
+2. **Roles administradores también reciben el permiso.** En producción el rol Propietario no tiene
+   usuarios todavía (T-078), así que «solo Propietario» dejaría sin el permiso a todos salvo soporte.
+   La migración se lo asigna además a los roles administradores **que existan** en el tenant
+   (sin crearlos): ver los nombres reales en los seeders (`AgenciaViajesRolesSeeder` y los de
+   retail/créditos); conocidos: `Admin-General`, `Administrador de agencia`, `Admin Empresario`
+   (dakamu). Vendedores, cajeros y demás, no. Actualizar CA5 y el test.
+3. **Coherencia de importes (sin el permiso).** `store()`/`update()` guardan `price_final`,
+   `subtotal`, `mto_valor_venta`, `mto_base_igv` e `igv` tal como llegan: con un request armado se
+   puede mandar el `price_base` correcto y montos menores. Sin el permiso, validar también que
+   esos campos de cada línea sean los que salen de `price_base`, cantidad y descuento con la
+   **misma cuenta de `updateItem()`** (`register.vue` ~530): leerla entera antes y cubrir gratuita
+   (11), exonerada/inafecta (20/30), IVAP, ISC e ICBPER. Tolerancia de céntimos (por línea, no por
+   unidad). Si algún caso no se puede reproducir con seguridad, preguntar antes de dejarlo pasar.
+   Con el permiso no cambia nada. Tests: un caso por afectación y uno con `subtotal` rebajado → 422.
+4. Pasar a «Por analizar» del backlog el hallazgo de `es_default` (abajo); los demás hallazgos ya
+   están ahí.
+5. **Al desplegar** (actualizar en Resultado): antes del deploy, listar en producción los roles con
+   usuarios de market, dakamu y credishirley para confirmar que los nombres del punto 2 coinciden.
 
 ## Hallazgos fuera de alcance
--
+- `Fila13Fase2cOperacionTest › en un viaje de varios dias solo se mueve el tour` falla en `main`
+  (422 en vez de 200), sin relación con T-109. Sin analizar.
+- `SaleController::config()` no devuelve `es_default` de `tax_configs`, así que
+  `getIgvGeneralTasa()` de `register.vue` nunca encuentra el IGV «default» y usa siempre 18 de
+  respaldo. Hoy coincide con la tasa real; si el IGV general cambiara, el front calcularía mal el
+  precio sin IGV y el backend (que sí lee `es_default`) lo rechazaría. Conviene agregar la columna
+  al `get([...])` de `config()`.

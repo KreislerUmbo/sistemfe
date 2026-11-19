@@ -54,7 +54,8 @@
                         @crear="openQuickProductModal" />
                 </div>
                 <TablaLineasVenta :items="sale_details" :moneda="currency" :afe-defecto="resolverTipAfeIgv"
-                    :tipo-cliente="tipoClienteElegido" :resaltado="lineaResaltada" @cambio="updateItem"
+                    :tipo-cliente="tipoClienteElegido" :puede-cambiar-precio="puedeCambiarPrecio"
+                    :resaltado="lineaResaltada" @cambio="updateItem"
                     @quitar="removeItem" @elegir-precio="elegirPrecioLinea" />
                 <div class="p-3 border-top">
                     <label class="form-label small fw-semibold text-secondary mb-1" for="venta-obs">Observaciones</label>
@@ -230,6 +231,10 @@ const branches = ref<Branch[]>([]);
 const branch_id_seleccionado = ref<number | undefined>(undefined);
 
 const puedeCambiarSucursal = computed(() => authStore.isPermitedRoute('can_switch_branch'));
+// T-109: sin este permiso el precio de cada línea es el del sistema (el backend lo valida igual).
+const puedeCambiarPrecio = computed(() => authStore.isPermitedRoute('cambiar_precio_venta'));
+// Último T.C. SUNAT (venta) para avisar de la boleta en USD > S/ 700 sin DNI; null si no hay.
+const tipoCambioVenta = ref<number | null>(null);
 
 // Solo lo que el catálogo marca disponible para crear series
 // (activo_greenter=true O 'NV', ya filtrado por el backend en
@@ -946,6 +951,8 @@ const store = async () => {
 
         // Cliente
         client_id: client_selected.value.id,
+        // T-109: de qué cotización sale la venta; el backend acepta sus precios sin el permiso de precio.
+        commercial_quote_id: commercial_quote_id_origen.value,
         client_address_id: client_address_id.value,
         type_client: client_selected.value.type_client,
         // Tipo de documento según Catálogo 06 SUNAT — ya calculado en el cliente
@@ -1160,6 +1167,8 @@ const config = async () => {
         // Cargar parámetros tributarios desde BD — no hardcode
         parametros_tributarios.value = (res.data as any).parametros_tributarios ?? {};
         codigos_detraccion.value = (res.data as any).codigos_detraccion ?? [];
+        const tc = Number((res.data as any).tipo_cambio_venta);
+        tipoCambioVenta.value = tc > 0 ? tc : null;
 
         // Inicializar tasas de regímenes desde BD
         porcentaje_retencion_sel.value = getRetencionTasa();
@@ -1412,6 +1421,7 @@ const motivoCobro = computed(() => {
         clienteNDocumento: client_selected.value?.n_document ?? null,
         total: sale_total.value,
         moneda: currency.value,
+        tipoCambioVenta: tipoCambioVenta.value,
         esCredito: esCredito.value,
         cajaAbierta: cajaAbierta.value,
         cobraAhora: esCredito.value ? total_payments.value > 0 : totalAPagar.value > 0,

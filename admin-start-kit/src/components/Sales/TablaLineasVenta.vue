@@ -57,13 +57,14 @@
                             <td class="text-end">
                                 <div class="input-group input-group-sm flex-nowrap justify-content-end">
                                     <input type="number" step="0.01" min="0" class="form-control text-end precio"
-                                        :value="item.price_base" aria-label="Precio sin IGV" @change="cambiarPrecio(item, i, $event)" />
-                                    <button v-if="tienePreciosAlternos(item)" class="btn btn-outline-secondary" type="button"
+                                        :value="item.price_base" aria-label="Precio sin IGV" :readonly="!props.puedeCambiarPrecio"
+                                        @change="cambiarPrecio(item, i, $event)" />
+                                    <button v-if="props.puedeCambiarPrecio && tienePreciosAlternos(item)" class="btn btn-outline-secondary" type="button"
                                         title="Elegir otro precio" aria-label="Elegir otro precio"
                                         @click="preciosAbierto = preciosAbierto === i ? null : i">▾</button>
                                 </div>
                                 <div class="small" :class="item.precio_manual ? 'text-warning fw-semibold' : 'text-muted'">
-                                    {{ item.precio_manual ? 'Precio manual' : nombrePrecio(item) }}
+                                    {{ item.precio_manual ? (props.puedeCambiarPrecio ? 'Precio manual' : 'Precio de la cotización') : nombrePrecio(item) }}
                                 </div>
                             </td>
                             <td>
@@ -135,6 +136,8 @@ const props = defineProps<{
     afeDefecto: (producto: Product) => string;
     /** type_client del cliente elegido (2 = empresa). */
     tipoCliente?: number | string | null;
+    /** Permiso cambiar_precio_venta (T-109): sin él la casilla es de solo lectura y no hay ▾. */
+    puedeCambiarPrecio?: boolean;
     /** Índice de la línea recién agregada: se resalta y se lleva a la vista. */
     resaltado?: number | null;
 }>();

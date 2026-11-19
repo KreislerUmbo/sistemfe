@@ -215,8 +215,8 @@ class SaleControllerSerieComprobanteTest extends TestCase
             'title' => 'Producto Test',
             'sku' => 'SKU-TEST-' . uniqid(),
             'categorie_id' => $categoria->id,
-            'price_general' => 10,
-            'price_company' => 10,
+            'price_general' => 50, // T-109: el precio de la línea (50) tiene que ser el del catálogo
+            'price_company' => 50,
             'state' => 1,
             'unidad_medida' => 'NIU',
             'stock' => 50,
