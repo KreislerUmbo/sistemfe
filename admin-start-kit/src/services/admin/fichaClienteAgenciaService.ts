@@ -57,6 +57,8 @@ export type EventoLineaTiempo = {
   monto?: number
   moneda?: string
   enviado?: boolean
+  /** T-104: comprobante emitido a este cliente en una reserva que cotizó otro (sub-factura). */
+  reserva_de?: string | null
   traspaso?: boolean
   nro_operacion?: string | null
   canal?: string | null
