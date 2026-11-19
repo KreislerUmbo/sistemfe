@@ -7,7 +7,7 @@ import {
 const base: EntradaMotivoCobro = {
     lineas: 1, sinStock: null, hayCliente: true, tipoComprobante: '03',
     clienteTipoDocumento: 'DNI', clienteNDocumento: '45050926', total: 100, moneda: 'PEN',
-    esCredito: false, cajaAbierta: true, cobraAhora: true, faltaCobrar: 0, efectivoRepetido: false,
+    esCredito: false, cajaAbierta: true, cobraAhora: true, faltaCobrar: 0, sobraCobrar: 0, efectivoRepetido: false,
     adelantosExceden: false, detraccionSinCodigo: false, creditoSinCronograma: false,
     creditoNoCalza: false, moraSinTasa: false,
 };
@@ -70,4 +70,9 @@ describe('motivo del botón Cobrar (CA5)', () => {
     });
     it('falta dinero', () =>
         expect(motivoBloqueoCobro({ ...base, faltaCobrar: 51.3 })).toMatch(/Falta S\/ 51.30/));
+    it('pagos de más (contado o pago inicial a crédito)', () => {
+        expect(motivoBloqueoCobro({ ...base, sobraCobrar: 48.7 })).toMatch(/superan el total en S\/ 48.70/);
+        expect(motivoBloqueoCobro({ ...base, esCredito: true, sobraCobrar: 10 })).toMatch(/superan el total/);
+        expect(motivoBloqueoCobro({ ...base, sobraCobrar: 0.004 })).toBe('');
+    });
 });

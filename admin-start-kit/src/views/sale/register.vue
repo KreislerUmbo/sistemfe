@@ -1416,6 +1416,7 @@ const motivoCobro = computed(() => {
         cajaAbierta: cajaAbierta.value,
         cobraAhora: esCredito.value ? total_payments.value > 0 : totalAPagar.value > 0,
         faltaCobrar: esCredito.value ? 0 : Math.max(0, redondear2(totalAPagar.value - total_payments.value)),
+        sobraCobrar: Math.max(0, redondear2(total_payments.value - totalAPagar.value)),
         efectivoRepetido: sale_payments.value.filter(p => p.method_payment === 'EFECTIVO').length > 1,
         adelantosExceden: adelantosExceden.value,
         detraccionSinCodigo: condicion_especial.value === '2' && !codigo_detraccion_sel.value,

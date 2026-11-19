@@ -73,6 +73,8 @@ export type EntradaMotivoCobro = {
     /** Hay algo que cobrar ahora (contado, o pago inicial a crédito). */
     cobraAhora: boolean;
     faltaCobrar: number;
+    /** Lo que los pagos superan al total a cobrar (revisión T-106: la pantalla anterior lo impedía; el backend da 422). */
+    sobraCobrar: number;
     /** Solo un pago en efectivo por venta. */
     efectivoRepetido: boolean;
     adelantosExceden: boolean;
@@ -101,6 +103,9 @@ export const motivoBloqueoCobro = (e: EntradaMotivoCobro): string => {
     if (e.adelantosExceden) return 'Los adelantos aplicados superan el total de la venta.';
     if (e.cobraAhora && e.cajaAbierta === false) return 'Abre tu caja para cobrar.';
     if (e.efectivoRepetido) return 'Solo puede haber un pago en efectivo.';
+    if (e.sobraCobrar > 0.009) {
+        return `Los pagos superan el total en ${e.moneda === 'USD' ? 'US$' : 'S/'} ${e.sobraCobrar.toFixed(2)}.`;
+    }
     if (e.esCredito) {
         if (e.creditoSinCronograma) return 'Genera el cronograma de cuotas.';
         if (e.creditoNoCalza) return 'La suma de las cuotas no calza con el monto a financiar.';

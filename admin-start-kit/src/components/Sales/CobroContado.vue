@@ -45,6 +45,9 @@
                 </select>
                 <input v-model.number="x.monto" type="number" step="0.10" min="0" class="form-control form-control-sm" aria-label="Monto" />
                 <button type="button" class="btn btn-sm btn-link text-muted fs-5 py-0" aria-label="Quitar" @click="quitarExtra(i)">×</button>
+                <!-- Revisión T-106: cada pago que no es efectivo lleva su n.º de operación, como en la pantalla anterior. -->
+                <input v-if="x.codigo !== CODIGO_EFECTIVO" v-model="x.nro" maxlength="50" class="form-control form-control-sm extra-nro"
+                    placeholder="N.º de operación (opcional)" aria-label="N.º de operación" />
             </div>
             <button type="button" class="btn btn-link btn-sm p-0 align-self-start" @click="agregarExtra">+ Pagar con dos métodos</button>
         </template>
@@ -72,7 +75,7 @@ const CODIGO_EFECTIVO = 'EFECTIVO';
 const metodo = ref<string>('');
 const recibido = ref<number | null>(null);
 const nroOperacion = ref('');
-const extras = ref<{ codigo: string; monto: number }[]>([]);
+const extras = ref<{ codigo: string; monto: number; nro: string }[]>([]);
 
 // Método inicial: Efectivo si existe en el catálogo; si no, el primero.
 watch(() => props.metodos, (lista) => {
@@ -94,7 +97,7 @@ const cambiarRecibido = (e: Event) => {
 };
 const agregarExtra = () => {
     const otro = props.metodos.find((m) => m.code !== metodo.value);
-    extras.value.push({ codigo: otro?.code ?? metodo.value, monto: 0 });
+    extras.value.push({ codigo: otro?.code ?? metodo.value, monto: 0, nro: '' });
     recibido.value = null;
 };
 const quitarExtra = (i: number) => { extras.value.splice(i, 1); recibido.value = null; };
@@ -112,7 +115,12 @@ watchEffect(() => {
     }
     for (const x of extras.value) {
         if ((Number(x.monto) || 0) > 0) {
-            lista.push({ method_payment: x.codigo, amount: redondear2(Number(x.monto)), date_payment: '', nro_operacion: null });
+            lista.push({
+                method_payment: x.codigo,
+                amount: redondear2(Number(x.monto)),
+                date_payment: '',
+                nro_operacion: x.codigo === CODIGO_EFECTIVO ? null : (x.nro.trim() || null),
+            });
         }
     }
     pagos.value = lista;
@@ -122,4 +130,5 @@ watchEffect(() => {
 <style scoped>
 .metodos { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
 .extra { display: grid; grid-template-columns: 1fr 100px auto; gap: 6px; align-items: center; }
+.extra-nro { grid-column: 1 / span 2; }
 </style>
