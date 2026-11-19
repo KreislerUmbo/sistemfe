@@ -31,7 +31,8 @@
                     <div class="mb-3">
                         <label class="form-label small fw-semibold text-secondary">¿A nombre de quién sale el comprobante?</label>
                         <ClienteComprobanteSelector v-model="cliente" @nuevo="abrirClienteRapido" />
-                        <small class="text-muted">Los pasajeros marcados deciden qué servicios entran; el cliente decide a nombre de quién (DNI o RUC).</small>
+                        <small class="text-muted d-block">Los pasajeros marcados deciden qué servicios entran; el cliente decide a nombre de quién (DNI o RUC).</small>
+                        <SelectorDireccionComprobante v-model="clientAddressId" :cliente-id="cliente?.id" class="mt-2" />
                     </div>
 
                     <div v-if="cargando" class="small text-muted mb-2">
@@ -203,6 +204,7 @@
 // servicios marcados) a un cliente elegido, con anticipos opcionales.
 import { computed, onMounted, ref, toRef, watch } from 'vue';
 import ClientFormQuick from '@/components/Sales/ClientFormQuick.vue';
+import SelectorDireccionComprobante from '@/components/Clientes/SelectorDireccionComprobante.vue';
 import ClienteComprobanteSelector, { type ClienteComprobante } from '@/components/AgenciaViajes/ClienteComprobanteSelector.vue';
 import DetalleComprobantePreview from '@/components/AgenciaViajes/DetalleComprobantePreview.vue';
 import OpcionesFacturacionCampos from '@/components/AgenciaViajes/OpcionesFacturacionCampos.vue';
@@ -257,6 +259,7 @@ const cobraAhora = computed(() => cobroHabilitado.value && condicionPago.value =
 // Si lo traspasado cubre todo, no hay pagos nuevos y no hace falta caja.
 const sinCajaParaCobrar = computed(() => cobraAhora.value && !cajaAbierta.value && pagosCobro.value.length > 0);
 const cliente = ref<ClienteComprobante | null>(null);
+const clientAddressId = ref<number | null>(null); // T-107: null = dirección fiscal
 
 type Formulario = {
     pasajero_ids: number[];
@@ -398,6 +401,7 @@ const empezar = (pasajeroIds: number[]) => {
     preview.value = null;
     anticipos.value = [];
     cliente.value = null;
+    clientAddressId.value = null;
     opciones.resetear();
     condicionPago.value = 'contado';
     pagosCobro.value = [];
@@ -424,6 +428,7 @@ const confirmar = async () => {
             reserva_item_ids_excluidos: form.value.reserva_item_ids_excluidos,
             tipo_comprobante_codigo: form.value.tipo_comprobante_codigo,
             client_id: cliente.value.id,
+            client_address_id: clientAddressId.value,
             texto_personalizado: form.value.texto_personalizado || null,
             advance_applications: anticiposAplicados.length > 0 ? anticiposAplicados : undefined,
             ...payloadCondicionPago(condicionPago.value, cronograma.value),

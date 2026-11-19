@@ -119,6 +119,12 @@
                     </div>
                 </div>
 
+                <!-- T-107: dirección del comprobante; propone la de la venta (null = fiscal) -->
+                <div class="mb-3">
+                    <SelectorDireccionComprobante v-model="clientAddressId" :cliente-id="sale?.client ? Number(sale.client.id) : null"
+                        :direccion-fiscal="sale?.client?.address" />
+                </div>
+
                 <!-- Motivo -->
                 <div class="mb-3">
                     <label class="form-label fw-semibold">Motivo</label>
@@ -320,6 +326,7 @@
 
 <script setup lang="ts">
 import DefaultLayout from "@/layouts/DefaultLayout.vue";
+import SelectorDireccionComprobante from "@/components/Clientes/SelectorDireccionComprobante.vue";
 import { computed, onMounted, ref } from "vue";
 import { useRoute } from "vue-router";
 import Swal from "sweetalert2/dist/sweetalert2.js";
@@ -349,6 +356,7 @@ let buscarTimeout: ReturnType<typeof setTimeout> | undefined;
 
 const loading = ref(true);
 const sale = ref<Sale | null>(null);
+const clientAddressId = ref<number | null>(null); // T-107: null = dirección fiscal
 const config = ref<NoteConfig | null>(null);
 
 const tipoDoc = ref<"07" | "08">("07");
@@ -536,6 +544,7 @@ async function crearNota() {
             des_motivo: desMotivo.value,
             tipo_afectacion: tipoAfectacion.value,
             reponer_stock: reponerStock.value,
+            client_address_id: clientAddressId.value, // siempre: null = fiscal
         };
         if (esDescuentoGlobal.value) {
             payload.descuento_global = descuentoGlobal.value;
@@ -687,6 +696,7 @@ async function cargarVenta() {
     try {
         const { data } = await httpClient.get(`sales/${saleId.value}`);
         sale.value = data.sale ?? data;
+        clientAddressId.value = sale.value?.client_address_id ?? null; // propone la de la venta
 
         lineasSeleccionables.value = (sale.value?.sale_details ?? []).map((detalle) => ({
             detalle,

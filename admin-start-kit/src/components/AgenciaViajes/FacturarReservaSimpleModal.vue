@@ -17,6 +17,7 @@
                         <strong>{{ cabecera?.cliente?.full_name ?? 'Sin cliente' }}</strong>{{ cabecera?.cliente?.n_document ? ` — ${cabecera.cliente.n_document}` : '' }}
                         <span class="text-muted">(cliente de la cotización; para otro DNI o RUC usa <strong>Facturación especial</strong>)</span>
                     </div>
+                    <SelectorDireccionComprobante v-model="clientAddressId" :cliente-id="cabecera?.cliente?.id" class="mb-3" />
                     <div v-if="cargando" class="small text-muted mb-2">
                         <span class="spinner-border spinner-border-sm me-1"></span>Calculando...
                     </div>
@@ -114,6 +115,7 @@ import { useOpcionesFacturacion } from '@/composables/agencia-viajes/useOpciones
 import { useAfectacionFactura } from '@/composables/agencia-viajes/useAfectacionFactura';
 import { useToast } from '@/composables/useToast';
 import { pasajeroIdsParaFacturar } from '@/helpers/reservaPasajero';
+import SelectorDireccionComprobante from '@/components/Clientes/SelectorDireccionComprobante.vue';
 import { reservaFacturacionService, type PrepararFacturaResponse } from '@/services/admin/reservaFacturacionService';
 import type { Reserva, ReservaCabecera, ReservaDetalleResponse, ReservaPasajero } from '@/types/agencia-viajes';
 
@@ -159,6 +161,7 @@ const sinCajaParaCobrar = computed(() => cobraAhora.value && !cajaAbierta.value 
 
 // Factura ('01') exige RUC (catálogo 06 SUNAT, '6'); el backend también lo valida.
 const clienteTieneRuc = computed(() => props.cabecera?.cliente?.cod_tipo_doc_sunat === '6');
+const clientAddressId = ref<number | null>(null); // T-107: null = dirección fiscal
 const tipoComprobante = ref<'01' | '03'>(clienteTieneRuc.value ? '01' : '03');
 
 const pasajeroIds = () => pasajeroIdsParaFacturar(props.reserva.pasajeros ?? [], props.pasajerosPendientes);
@@ -210,6 +213,7 @@ const confirmar = async () => {
             reserva_item_ids_manual: (preview.value?.items_sin_asignar_disponibles ?? []).map((it) => it.reserva_item_id),
             tipo_comprobante_codigo: tipoComprobante.value,
             client_id: props.cabecera.cliente.id,
+            client_address_id: clientAddressId.value,
             ...opciones.payload(),
             ...payloadCondicionPago(condicionPago.value, cronograma.value),
             ...payloadCobro(condicionPago.value, saldoACobrar.value, cobroHabilitado.value, pagosCobro.value, vueltoMoneda.value,

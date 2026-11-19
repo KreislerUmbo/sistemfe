@@ -4,7 +4,7 @@
 `docs/requerimientos/observaciones-pruebas-usuario.md` (decisión del 27-oct-2026) y las decisiones
 D1-D3 del 18-nov-2026: se copia solo la línea de dirección, igual que la fiscal; `principal` y `state`
 se borran; agregar una dirección lo puede quien emite. El selector en las pantallas de emisión es
-**T-107** (todavía no está).
+**T-107** (19-nov-2026, §3.4).
 Archivos:
 - Migración `database/migrations/tenant/core/2026_11_18_100000_adapt_client_addresses_and_add_client_address_id.php`
 - `api-sistema-fe/app/Models/Client/ClientAddress.php` (nuevo) y `Client::direcciones()`
@@ -16,6 +16,10 @@ Archivos:
 - `admin-start-kit/src/components/Clientes/OtrasDireccionesCliente.vue` y `DireccionClienteModal.vue` (nuevos),
   `views/clients/ficha.vue`, `services/admin/clienteService.ts`
 - Tests: `tests/Feature/DireccionClienteTest.php` y 2 en `tests/Feature/AgenciaViajes/Fila13Fase1cFacturacionTest.php`
+- T-107: `admin-start-kit/src/components/Clientes/SelectorDireccionComprobante.vue` (nuevo), usado en
+  `views/sale/register.vue`, `edit.vue`, `nota-create.vue`, `views/advances/create.vue`,
+  `views/agencia-viajes/venta-directa.vue` y `components/AgenciaViajes/FacturarReserva{Simple,Especial}Modal.vue`;
+  `SaleResource` expone `client_address_id`
 
 **Al desplegar:** 1 migración de `core/` → `php artisan tenants:migrate-verticales` y revisar su
 salida. **Antes**, contar las filas de `client_addresses` en cada tenant de producción: si alguno
@@ -102,7 +106,7 @@ request.client_address_id
 | Factura de reserva | `ReservaFacturacionController::store()` | responde el 422 en JSON, como el resto del método |
 | Venta directa con cobro | `VentaDirectaController::store()` | solo reenvía el campo a la factura de reserva |
 | Anticipo | `AdvanceController::store()` | `corregir()` conserva la dirección del comprobante que corrige |
-| Nota de crédito/débito | `NotaElectronicaController::store()` | sin campo, hereda la de la venta; con uno, debe ser del cliente de la venta |
+| Nota de crédito/débito | `NotaElectronicaController::store()` | ver §3.5 |
 
 ### 3.1 Por qué la dirección elegida no se pierde
 
@@ -130,11 +134,44 @@ deja de coincidir con lo enviado a SUNAT.
 `activo` solo filtra lo que se puede **elegir**. Un comprobante sin enviar que ya tenía esa dirección
 la sigue imprimiendo, también al enviarlo.
 
+### 3.4 En pantalla: «Dirección del comprobante» (T-107)
+
+`SelectorDireccionComprobante.vue` es el **único** campo de dirección al emitir (decisión del usuario,
+19-nov: antes la venta tenía además un texto «Dirección» editable que no se enviaba al backend; se quitó).
+
+| Situación | Qué muestra |
+|---|---|
+| Sin cliente | deshabilitado, «Elige un cliente» |
+| Cliente sin otras direcciones | «Fiscal — <clients.address>» y «+ Agregar dirección» |
+| Cliente con sucursales | la fiscal (elegida por defecto) y cada sucursal activa como «<nombre> — <dirección>» |
+| Editar una venta | la que tenía guardada, aunque se haya desactivado después («(desactivada)») |
+
+- `v-model` = `client_address_id`; `null` = la fiscal. Al **cambiar** de un cliente a otro vuelve a `null`;
+  en la primera carga (editar una venta) respeta el valor guardado.
+- «+ Agregar dirección» abre `DireccionClienteModal.vue` (el mismo de la ficha) y deja elegida la nueva.
+- En los modales de factura de reserva la primera opción dice solo «Fiscal»: el cliente que reciben no
+  trae su dirección.
+
+### 3.5 La nota de crédito o débito
+
+`nota-create.vue` propone la dirección de la venta que modifica y manda **siempre** el campo. En
+`NotaElectronicaController::store()`:
+
+| Se elige | `direccion_cliente` de la nota |
+|---|---|
+| La **misma** que la venta (fiscal = fiscal, o la misma sucursal) | el texto copiado en la venta (T-064), aunque el cliente o la sucursal se hayan editado después |
+| Otra sucursal del cliente | el texto de esa sucursal |
+| De sucursal a la fiscal | la fiscal **actual** del cliente (la venta nunca tuvo la fiscal copiada) |
+| No se manda el campo (API) | hereda la de la venta |
+
+La primera fila es la importante: una NC hecha desde la pantalla no debe imprimir una dirección distinta
+de la factura que modifica solo porque alguien corrigió el cliente (fue una regresión encontrada en la
+revisión de T-107).
+
 ## 4. Qué NO hace
 
 - La dirección **no va al XML** (decisión del 27-oct: basta con el PDF). `GreenterService::getCliente()` no cambió.
 - El ticket de 80 mm no imprime dirección, ni antes ni ahora.
-- Sin selector en las pantallas de emisión hasta T-107: hoy la dirección solo se elige por API.
 
 ## 5. Para probarlo
 

@@ -46,6 +46,8 @@ export type PasajeroVentaDirecta = {
 
 export type VentaDirectaPayload = {
   cliente_id: number
+  // T-107: dirección elegida del cliente para la factura (con cobro); null = la fiscal.
+  client_address_id?: number | null
   destino: string
   destino_atractivo_id?: number | null
   // Fecha de INICIO del viaje; cada línea suma su día.

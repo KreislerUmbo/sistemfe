@@ -132,11 +132,9 @@
                             </div>
                         </div>
                         <div class="col-12 col-md-4">
-                            <label for="client-address" class="form-label mb-1 small fw-semibold text-secondary">
-                                <i class="fas fa-map-marker-alt me-1"></i>Dirección
-                            </label>
-                            <b-form-input type="text" id="client-address" v-model="client_address"
-                                placeholder="Dirección del cliente" size="sm" />
+                            <!-- T-107: un solo campo; el texto «Dirección» que había no se enviaba al backend. -->
+                            <SelectorDireccionComprobante v-model="client_address_id" :cliente-id="client_selected?.id"
+                                :direccion-fiscal="client_selected?.address" />
                         </div>
                     </div>
 
@@ -750,6 +748,7 @@ import type { Product } from '@/types/products';
 import ClientFormQuick from '@/components/Sales/ClientFormQuick.vue';
 import ProductFormQuick from '@/components/Sales/ProductFormQuick.vue';
 import CronogramaCuotasCampos from '@/components/CronogramaCuotasCampos.vue';
+import SelectorDireccionComprobante from '@/components/Clientes/SelectorDireccionComprobante.vue';
 import { imprimirComprobante } from '@/composables/usePrintComprobante';
 import { getPrecioBaseSinIgv } from '@/composables/useProductPricing';
 import { useAuthStore } from '@/stores/auth';
@@ -788,7 +787,7 @@ const productSelected = ref<Product | undefined>(undefined);
 // ── Búsqueda de clientes ──────────────────────────────────────────
 const clientSearchText = ref<string>('');
 const clientSuggestions = ref<Client[]>([]);
-const client_address = ref<string>('');
+const client_address_id = ref<number | null>(null); // T-107: null = dirección fiscal
 let clientSearchTimeout: any = null;
 const clientNotFound = ref<boolean>(false);
 
@@ -1046,7 +1045,6 @@ const selectClient = (client: Client) => {
     client_selected.value = client;
     clientSearchText.value = client.full_name || client.name_comerc || client.name || '';
     clientSuggestions.value = [];
-    client_address.value = client.address || '';
     clientNotFound.value = false;
 
     // ── Autocompletar tipo de documento según tipo de documento del cliente ──
@@ -1073,7 +1071,6 @@ const clearClientSelection = () => {
     client_selected.value = undefined;
     clientSearchText.value = '';
     clientSuggestions.value = [];
-    client_address.value = '';
     clientNotFound.value = false;
     if (!yaReservoCorrelativo.value) {
         tipo_comprobante_codigo.value = '03'; // resetear a boleta por defecto
@@ -1645,6 +1642,7 @@ const store = async () => {
 
         // Cliente
         client_id: client_selected.value.id,
+        client_address_id: client_address_id.value,
         type_client: client_selected.value.type_client,
         // Tipo de documento según Catálogo 06 SUNAT — ya calculado en el cliente
         cod_tipo_doc_cliente: client_selected.value.cod_tipo_doc_sunat ?? '1',
@@ -1782,6 +1780,8 @@ console.log(res);
         if (sale.client) {
             selectClient(sale.client);
         }
+        // T-107: se reenvía tal cual la dirección guardada (el backend la acepta aunque se haya desactivado).
+        client_address_id.value = sale.client_address_id ?? null;
 
         // Módulo de series de comprobantes — hidratar DESPUÉS de
         // selectClient() para que el valor real persistido gane sobre

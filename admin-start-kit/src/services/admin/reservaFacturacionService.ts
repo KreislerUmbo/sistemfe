@@ -22,6 +22,8 @@ export type FacturarReservaPayload = {
   reserva_item_ids_excluidos?: number[]
   tipo_comprobante_codigo: '01' | '03'
   client_id: number
+  // T-107: dirección elegida del cliente; null/omitida = la fiscal.
+  client_address_id?: number | null
   texto_personalizado?: string | null
   // 2026-09-24 — solo tiene efecto si el usuario tiene can_switch_branch
   // (mismo criterio que sale/register.vue); sin ese permiso el backend lo
