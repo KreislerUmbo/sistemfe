@@ -8,7 +8,7 @@
 
 Cada línea: ID · qué · estado · depende de · rama o commit. El detalle está en
 `docs/tareas/T-…md` (se borra al cerrar; para una tarea hecha, el commit es la referencia).
-Próximo ID libre: **T-106**.
+Próximo ID libre: **T-111**.
 
 ## Orden de construcción (27-oct-2026)
 
@@ -49,6 +49,10 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 | T-029 | AGE | Tour clásico desde plantilla: cada servicio nace con su tratamiento tributario; costo sin infantes (H18, H19) | por hacer: desbloqueada el 07-nov (D-AGE-035: el guía toma el valor por defecto de la agencia) | — | |
 | T-102 | AGE | `RecalculoPorPersonaService::recalcular()` repite la fórmula de venta por persona de `PriceEngineService::ventaYCostoDeTarifa()` en vez de llamarla (hallazgo de T-031: hubo que corregir las dos copias). Hacer que llame al motor, con los tests de `NinoSinPrecioPagaComoAdultoTest` y `ActualizarPasajeros` en verde. Sin archivo de tarea todavía (tarea chica) | por hacer | — | |
 | T-107 | VEN + AGE + ADE + NOT | Selector «Dirección del comprobante» y «+ Agregar dirección» en venta, edición, factura de reserva, venta directa con cobro, anticipo y nota (H61) | por hacer | T-065 | |
+| T-106 | VEN | Pantalla nueva de registro de venta retail: productos a la izquierda con lista desplazable, cobro fijo a la derecha (vuelto, atajos, crédito, adelantos), «Datos de la venta» arriba, afectación por línea, precio por cliente recalculado, motivos en el botón Cobrar. Maqueta aprobada: `docs/maquetas/venta-retail.html` | por hacer | T-107 | |
+| T-108 | VEN + NOT | Descripción editable de una línea de venta que **reemplaza** al nombre del catálogo en XML, PDF, ticket y notas (Agencia sigue agregando su detalle) | por hacer | T-106 | |
+| T-109 | VEN + PLA | Permiso `cambiar_precio_venta` (sin él: precio del sistema, sin ▾ ni precio a mano) validado en el backend; 422 en boleta > S/ 700 sin DNI y en crédito a cliente sin documento | por hacer | T-106 | |
+| T-110 | VEN | Pantalla de edición de venta con los componentes de T-106, mismo payload de `PUT sales/{id}` | por hacer | T-106, T-108, T-109 | |
 | T-104 | CLI + AGE | Con «Facturación múltiple por grupo», la sub-factura de una reserva emitida a otra empresa no aparece en ninguna ficha: la del que cotizó la excluye a propósito (no es una compra suya, aceptado en la revisión de T-060) y la empresa no tiene reservas propias. Mostrarla en la ficha de la empresa a la que se emitió (historial, pagos y total comprado), con «Reserva de <quien cotizó>», solo si el usuario puede ver la reserva (misma regla que T-060, decidido el 18-nov) | por hacer | T-060 | |
 
 ## Por analizar
