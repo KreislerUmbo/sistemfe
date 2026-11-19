@@ -57,14 +57,14 @@
                             <td class="text-end">
                                 <div class="input-group input-group-sm flex-nowrap justify-content-end">
                                     <input type="number" step="0.01" min="0" class="form-control text-end precio"
-                                        :value="item.price_base" aria-label="Precio sin IGV" :readonly="!props.puedeCambiarPrecio"
+                                        :value="item.price_base" aria-label="Precio sin IGV" :readonly="!precioEditable(item)"
                                         @change="cambiarPrecio(item, i, $event)" />
-                                    <button v-if="props.puedeCambiarPrecio && tienePreciosAlternos(item)" class="btn btn-outline-secondary" type="button"
+                                    <button v-if="precioEditable(item) && tienePreciosAlternos(item)" class="btn btn-outline-secondary" type="button"
                                         title="Elegir otro precio" aria-label="Elegir otro precio"
                                         @click="preciosAbierto = preciosAbierto === i ? null : i">▾</button>
                                 </div>
                                 <div class="small" :class="item.precio_manual ? 'text-warning fw-semibold' : 'text-muted'">
-                                    {{ item.precio_manual ? (props.puedeCambiarPrecio ? 'Precio manual' : 'Precio de la cotización') : nombrePrecio(item) }}
+                                    {{ item.precio_manual ? (precioEditable(item) ? 'Precio manual' : 'Precio de la cotización') : nombrePrecio(item) }}
                                 </div>
                             </td>
                             <td>
@@ -175,6 +175,9 @@ const importe = (it: LineaVenta) => (Number(it.subtotal) || 0) + (Number(it.tota
 
 const precioBruto = (it: LineaVenta) => precioCatalogoPorCliente(it.product, props.tipoCliente);
 const nombrePrecio = (it: LineaVenta) => precioBruto(it).nombre;
+// Con el permiso, siempre. Sin él, solo los productos «a precio variable» (catálogo en 0): el backend
+// no compara contra nada en ese caso (PrecioVentaValidator).
+const precioEditable = (it: LineaVenta) => !!props.puedeCambiarPrecio || precioBruto(it).valor === 0;
 const tienePreciosAlternos = (it: LineaVenta) =>
     Number(it.product.price_company) > 0 && Number(it.product.price_company) !== Number(it.product.price_general);
 const opcionesPrecio = (it: LineaVenta) => {

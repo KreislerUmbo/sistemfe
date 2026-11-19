@@ -60,7 +60,10 @@ class PrecioVentaValidator
                 continue; // un producto inexistente lo rechaza el resto del flujo
             }
 
-            if ($this->coincide($enviado, $this->precioBaseCatalogo($producto, $cliente), self::TOLERANCIA)) {
+            $catalogo = $this->precioBaseCatalogo($producto, $cliente);
+            // Catálogo en 0 = producto «a precio variable» (p. ej. los genéricos de Agencia): el
+            // precio siempre se escribe a mano, no hay precio del sistema contra el cual comparar.
+            if ($catalogo->isZero() || $this->coincide($enviado, $catalogo, self::TOLERANCIA)) {
                 continue;
             }
             foreach ($preciosCotizados[$producto->id] ?? [] as $cotizado) {

@@ -170,6 +170,14 @@ final class T109PrecioYValidacionesVentaTest extends CreditosTestCase
         $this->assertRechazo($this->payload($producto, $cliente, 118), 'No tienes permiso');
     }
 
+    public function test_sin_el_permiso_un_producto_con_catalogo_en_cero_se_vende_a_precio_libre(): void
+    {
+        $this->entrarComo(['emitir_nota_venta']);
+        $generico = $this->producto(['price_general' => 0, 'price_company' => 0]);
+
+        $this->assertSame(200, $this->guardar($this->payload($generico, $this->clienteT109(), 100))['code']);
+    }
+
     // ── CA2 ───────────────────────────────────────────────────────────
 
     public function test_con_el_permiso_cualquier_precio_pasa(): void
