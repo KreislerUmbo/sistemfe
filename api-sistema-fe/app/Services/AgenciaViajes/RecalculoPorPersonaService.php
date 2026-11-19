@@ -5,7 +5,6 @@ namespace App\Services\AgenciaViajes;
 use App\Models\AgenciaViajes\AlternativaItem;
 use App\Models\AgenciaViajes\ConfiguracionAgencia;
 use App\Models\AgenciaViajes\Cotizacion;
-use App\Models\AgenciaViajes\CotizacionPasajero;
 use Illuminate\Support\Collection;
 
 // Reprecia los ítems "por persona" de una cotización contra su lista actual de
@@ -94,13 +93,11 @@ class RecalculoPorPersonaService
 
                 $tarifa = $item->proveedorTarifa;
 
-                $conteo = $this->contarPasajerosPorTipo($alternativa->cotizacion_id, $item->pax_incluidos);
-                $nuevoPrecioVentaSnapshot = round(
-                    $conteo['adulto'] * (float) $tarifa->precio_venta_adulto
-                        + $conteo['nino'] * $tarifa->precioVentaNinoEfectivo()
-                        + $conteo['infante'] * (float) ($tarifa->precio_venta_infante ?? 0),
-                    2
-                );
+                // T-102: la venta y el costo por persona salen del motor (la misma fórmula del alta del
+                // ítem), no de una copia: antes había que corregir las dos (hallazgo de T-031).
+                $conteo = $this->priceEngine->contarPasajerosPorTipo($alternativa->cotizacion_id, $item->pax_incluidos);
+                ['venta' => $venta, 'costo' => $costo] = $this->priceEngine->ventaYCostoDeTarifa($tarifa, $conteo, 'por_persona');
+                $nuevoPrecioVentaSnapshot = round($venta, 2);
 
                 $precioListaConvertido = $this->priceEngine->convertirMoneda(
                     $nuevoPrecioVentaSnapshot,
@@ -118,9 +115,8 @@ class RecalculoPorPersonaService
 
                 // E2 (fila 13, fase 1b; decisión del usuario 14-oct-2026):
                 // el costo también sigue a los pasajeros — total de la línea,
-                // sin infantes. Antes solo se actualizaba la venta y el margen
-                // quedaba inflado o desinflado.
-                $nuevoCostoSnapshot = round((float) $tarifa->precio_costo * ($conteo['adulto'] + $conteo['nino']), 2);
+                // sin infantes (lo calcula el motor, arriba).
+                $nuevoCostoSnapshot = round($costo, 2);
 
                 // precio_venta_snapshot es decimal:2 (Eloquent lo entrega
                 // como string) — comparar como float con round(2) en ambos
@@ -203,20 +199,5 @@ class RecalculoPorPersonaService
         }
 
         return null;
-    }
-
-    private function contarPasajerosPorTipo(int $cotizacionId, ?array $paxIncluidosIds): array
-    {
-        $query = CotizacionPasajero::where('cotizacion_id', $cotizacionId);
-        if ($paxIncluidosIds) {
-            $query->whereIn('id', $paxIncluidosIds);
-        }
-        $pasajeros = $query->get();
-
-        return [
-            'adulto' => $pasajeros->where('tipo_pax', 'adulto')->count(),
-            'nino' => $pasajeros->where('tipo_pax', 'nino')->count(),
-            'infante' => $pasajeros->where('tipo_pax', 'infante')->count(),
-        ];
     }
 }
