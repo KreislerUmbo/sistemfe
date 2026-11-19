@@ -75,9 +75,12 @@ descripciones (CA6) y un bien con stock bajo en dos filas (CA5).
 ---
 
 ## Resultado
-- **Commits:**
-- **Tests:**
+- **Commits:** ver `git log feat/T-112-fila-nueva-linea-personalizada` (1 commit: `feat(ventas): …(T-112)`).
+- **Tests:** `npx vitest run src/helpers/ventaRetail.test.ts` → 29 pasan (7 nuevos: CA1-CA5 y servicio sin stock). `vue-tsc --noEmit` sin errores. **No hecho:** `build`, prueba manual en navegador (CA1-CA6 manual, incl. el PDF de CA6): pendiente en la revisión.
 - **Desviaciones de la tarea y por qué:**
+  - Se agregó `productoSinStock()` además de `indiceLineaIntacta()`/`cantidadEnVenta()`, para que `motivoCobro` use la suma por producto.
+  - Si `agregarProducto()` recibe `opciones.precio` (ítems de una cotización), siempre abre fila propia: ese precio es «a mano» y no calza con una línea intacta. Antes sumaba a la línea existente ignorando el precio.
+  - El aviso de stock ahora se evalúa antes de decidir fila (suma de todas las líneas + lo que se agrega).
 
 ## Hallazgos fuera de alcance
--
+- La insignia «Solo hay N» de cada fila (`TablaLineasVenta.vue::sinStock`) sigue comparando por línea: con 3+2 y stock 5 no sale en ninguna fila, aunque el aviso y el motivo de Cobrar sí cuentan la suma. Cosmético; tarea aparte si se quiere.
