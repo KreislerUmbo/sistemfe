@@ -1121,7 +1121,7 @@ de sus sucursales?
 2. **Varias direcciones por cliente** (fiscal + sucursales con nombre), en `client_addresses`. (H61)
    → T-065
 3. **Elegir la dirección al emitir** (por defecto la fiscal; elegir otra o agregarla en el
-   momento): venta, factura de reserva, nota. → T-065
+   momento): venta, factura de reserva, nota. → T-065 (backend) y T-107 (pantallas)
 4. **Dirección en el XML** (Greenter lo permite): **no por ahora** (decisión del usuario,
    27-oct-2026: basta con que salga en el PDF). T-066 se retiró sin construir; se retoma solo si
    un cliente lo exige.
