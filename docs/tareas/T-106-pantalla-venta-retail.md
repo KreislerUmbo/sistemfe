@@ -113,9 +113,55 @@ cerrada. Comparar el payload en DevTools contra `main` para los casos de CA1.
 ---
 
 ## Resultado
-- **Commits:**
-- **Tests:**
+- **Commits:** rama `feat/T-106-pantalla-venta-retail` (ver `git log main..`): helpers + tests, componentes
+  de `components/Sales/`, y `register.vue` como orquestador.
+- **Tests:** `npx vitest run` 323/323 (16 nuevos en `helpers/ventaRetail.test.ts`: vuelto, atajos, cantidades,
+  precio por cliente, motivos del botón). `vite build` ok. `vue-tsc`: 47 errores antes y 47 después, ninguno en
+  los archivos tocados (CA7). Backend sin cambios (no se corrió su suite).
+- **Prueba funcional (agencia-demo, Playwright, `POST sales` interceptado donde se indica):**
+  - CA1: boleta contado → el JSON es **idéntico** al de la pantalla vieja (capturado antes y después, mismos
+    campos y valores; `uid` y `precio_manual` se quitan de `sale_details`). Crédito con cuotas: mismas claves
+    (`credit_type`, `cronograma`, `aplica_mora`, `tasa_mora`, `tipo_mora`, `debt`, `payments`). **Sin comparar
+    JSON antes/después:** factura a RUC, adelanto y detracción (agencia-demo casi no tiene datos para armarlos;
+    sus cálculos no se tocaron). Falta correrlos en umbo.
+  - CA2: afectación cambiada se marca ámbar con «restaurar» y vuelve al valor por defecto.
+  - CA3 (con productos/clientes simulados): general 18.56 → empresa 16.53 al elegir cliente empresa → vuelve; la
+    línea con precio manual no cambia; avisa «Se actualizó el precio de N productos».
+  - CA4: total 151.30, «170» → vuelto 18.70 y `payments[0].amount = 151.3`; «100» → «Falta S/ 51.30» y botón
+    deshabilitado.
+  - CA5: motivos probados: sin productos, sin cliente, factura sin RUC, caja cerrada (contado), crédito sin
+    cronograma, detracción sin código, falta dinero. Sin stock y boleta > S/ 700 solo con tests unitarios.
+  - CA6: con 30 líneas (simuladas en el DOM) la página no crece (1326 px antes y después) y la lista se desplaza
+    por dentro (300 px visibles).
+  - Dirección: con una sucursal elegida la venta guarda `client_address_id = 4` y el PDF A4 imprime esa dirección.
+  - Guardar: imprime directo en el formato por defecto, deja la pantalla limpia con foco en el buscador y muestra
+    «Boleta de Venta B001 guardada…» con Reimprimir / Ver PDF A4.
+  - Datos de prueba que quedaron en agencia-demo: venta id 28 (boleta, S/ 100) y la dirección «Sucursal Tarapoto
+    T106» de la cliente KAREN YARITZA RIVERA GRANDEZ.
 - **Desviaciones de la tarea y por qué:**
+  - **«Clientes varios» no existe** (ni en código ni en migraciones) y `store()` exige cliente: se mantuvo el
+    cliente obligatorio («Elige un cliente» como motivo del botón). Decisión del usuario en esta sesión.
+  - **Destino por defecto**: no hay configuración de dónde leerlo; sigue `amazonia` fijo en el front, como hoy.
+    Decisión del usuario en esta sesión (ver hallazgos).
+  - **Aviso al guardar** muestra la serie («B001 guardada»), no el número: el correlativo de un documento fiscal
+    recién se asigna al enviarlo a SUNAT (`SaleController::store()`).
+  - **Columna de precio** rotulada «Precio s/ IGV» y el importe de la línea incluye IGV: el sistema guarda el
+    precio base sin IGV (la maqueta lo muestra con IGV). El cálculo no cambió.
+  - **«Abrir caja»** abre la pantalla de caja en otra pestaña (para no perder la venta armada) y al volver se
+    consulta de nuevo la sesión.
+  - Si el usuario no tiene acceso a `cash/status`, el estado de caja queda «desconocido» y no se bloquea
+    (lo valida el backend).
+  - Boleta > S/ 700 sin DNI solo se valida en soles; el criterio en dólares queda para T-109.
+  - Buscar un cliente por DNI/RUC ahora consulta `clients?search=` en vez de la lista completa que traía
+    `sales/config` (que sigue enviándose: `register.vue` aún la guarda en `clients`).
+  - `ProductFormQuick.vue` ganó una prop opcional `initialData` (nombre inicial desde el buscador).
+  - `usePrintComprobante.ts`: nuevas `imprimirDirecto()` y `verPdfComprobante()` (sin diálogo de formato).
 
 ## Hallazgos fuera de alcance
--
+- Falta crear el cliente genérico «Clientes varios» por tenant (backend + migración) para poder vender sin
+  identificar al cliente; hoy se necesita un cliente con documento.
+- Falta un campo de configuración para el destino por defecto (`amazonia`/`nacional`) en la empresa.
+- `sales/config` devuelve todos los clientes y productos activos: ya no hacen falta para esta pantalla
+  (buscan por API); sirve recortarlo cuando `edit.vue` (T-110) use los mismos componentes.
+- `vue-tsc` tiene 47 errores previos en otros archivos (no de esta tarea).
+- `sale_details` se manda con el objeto `product` completo (como siempre): se puede aligerar en T-109/T-110.
