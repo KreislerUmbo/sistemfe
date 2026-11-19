@@ -76,7 +76,8 @@
 
                     <div class="p-3 border-bottom">
                         <TotalesVenta v-model:descuento-global="discount_global" :filas="filasTotales"
-                            :total="totalAPagar" :simbolo="simbolo" :etiqueta-total="etiquetaTotal" />
+                            :total="totalAPagar" :simbolo="simbolo" :etiqueta-total="etiquetaTotal"
+                            :puede-descuento-global="puedeCambiarPrecio" />
                     </div>
 
                     <div v-if="condicion_especial === 'anticipo'" class="p-3 border-bottom">

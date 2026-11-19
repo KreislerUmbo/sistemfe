@@ -367,10 +367,55 @@ final class T109PrecioYValidacionesVentaTest extends CreditosTestCase
         $this->assertSame(200, $this->guardar($this->ventaConImportes($producto, ['subtotal' => 40, 'mto_base_igv' => 40]))['code']);
     }
 
+    // ── Descuento global (revisión 2, punto 1) ────────────────────────
+
+    public function test_sin_el_permiso_el_descuento_global_da_422(): void
+    {
+        $this->entrarComo(['emitir_nota_venta']);
+        $producto = $this->producto();
+        $cliente = $this->clienteT109();
+
+        $this->assertRechazo($this->payload($producto, $cliente, 10, ['discount_global' => 5]), 'descuento global');
+        $this->assertSame(0, Sale::count());
+
+        // En cero (o sin mandarlo) la venta pasa.
+        $this->assertSame(200, $this->guardar($this->payload($producto, $cliente, 10, ['discount_global' => 0]))['code']);
+    }
+
+    public function test_con_el_permiso_el_descuento_global_pasa(): void
+    {
+        $this->entrarComo(['emitir_nota_venta', 'cambiar_precio_venta']);
+
+        $this->assertSame(200, $this->guardar($this->payload($this->producto(), $this->clienteT109(), 10, ['discount_global' => 5]))['code']);
+    }
+
+    public function test_al_editar_sin_el_permiso_un_descuento_global_que_no_cambio_pasa_y_uno_nuevo_no(): void
+    {
+        $this->entrarComo(['emitir_nota_venta', 'edit_sale', 'cambiar_precio_venta']);
+        $producto = $this->producto();
+        $cliente = $this->clienteT109();
+        $idVenta = $this->guardar($this->payload($producto, $cliente, 10, ['discount_global' => 5]))['sale_id'];
+        $idLinea = SaleDetail::where('sale_id', $idVenta)->value('id');
+
+        $this->entrarComo(['emitir_nota_venta', 'edit_sale']);
+        $igual = $this->payload($producto, $cliente, 10, ['discount_global' => 5]);
+        $igual['sale_details'][0]['id'] = $idLinea;
+        $this->assertSame(200, $this->actualizar($idVenta, $igual)['code']);
+
+        $mayor = $this->payload($producto, $cliente, 10, ['discount_global' => 8]);
+        $mayor['sale_details'][0]['id'] = $idLinea;
+        try {
+            $this->actualizar($idVenta, $mayor);
+            $this->fail('Se esperaba 422.');
+        } catch (HttpException $e) {
+            $this->assertSame(422, $e->getStatusCode());
+            $this->assertStringContainsString('descuento global', $e->getMessage());
+        }
+    }
     public function test_el_descuento_no_puede_pasar_del_maximo_del_producto(): void
     {
         $this->entrarComo(['emitir_nota_venta']);
-        $producto = $this->producto(['price_general' => 50, 'max_discount' => 10]);
+        $producto = $this->producto(['price_general' => 50, 'max_discount' => 10, 'is_discount' => 2]);
 
         // 10 % de 100 = 10: base 90, IGV 16,20, price_final 53,10.
         $diezPorCiento = ['discount' => 10, 'subtotal' => 90, 'mto_base_igv' => 90, 'igv' => 16.2, 'total_impuestos' => 16.2, 'price_final' => 53.1];

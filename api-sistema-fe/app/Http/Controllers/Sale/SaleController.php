@@ -380,6 +380,14 @@ class SaleController extends Controller
             return;
         }
 
+        // Rebajar el total con el descuento global es otra forma de cambiar el precio: mismo permiso.
+        // En update(), si no cambió respecto de lo guardado, pasa (igual que las líneas).
+        $global = BigDecimal::of(is_numeric($request->discount_global) ? (string) $request->discount_global : '0');
+        $guardado = BigDecimal::of((string) ($venta?->discount_global ?? 0));
+        if (!$global->isZero() && $global->minus($guardado)->abs()->isGreaterThan('0.0001')) {
+            throw new HttpException(422, 'No tienes permiso para aplicar un descuento global.');
+        }
+
         $validador = app(PrecioVentaValidator::class);
         $cliente = Client::find($request->client_id);
         // La cotización solo vale al crear la venta (decisión del 19-nov); en update() no.

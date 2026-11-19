@@ -8,9 +8,9 @@
             </div>
         </div>
 
-        <button v-if="!verDescuento && !(descuentoGlobal > 0)" type="button" class="btn btn-link btn-sm p-0 align-self-start"
+        <button v-if="puedeDescuentoGlobal && !verDescuento && !(descuentoGlobal > 0)" type="button" class="btn btn-link btn-sm p-0 align-self-start"
             @click="verDescuento = true">+ Descuento global</button>
-        <div v-else>
+        <div v-else-if="puedeDescuentoGlobal">
             <label class="form-label small fw-semibold text-secondary mb-1" for="tv-desc">Descuento global (sobre el total)</label>
             <div class="input-group input-group-sm" style="max-width:200px">
                 <span class="input-group-text">{{ simbolo }}</span>
@@ -31,12 +31,14 @@
 // Recibe los números ya calculados por register.vue; no calcula nada.
 import { ref } from 'vue';
 
-defineProps<{
+withDefaults(defineProps<{
     filas: { etiqueta: string; valor: string; clase?: string }[];
     total: number;
     simbolo: string;
     etiquetaTotal?: string;
-}>();
+    /** Permiso cambiar_precio_venta (T-109): sin él no hay descuento global; el backend también lo rechaza. */
+    puedeDescuentoGlobal?: boolean;
+}>(), { puedeDescuentoGlobal: true });
 
 const descuentoGlobal = defineModel<number>('descuentoGlobal', { default: 0 });
 const verDescuento = ref(false);
