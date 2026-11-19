@@ -291,6 +291,9 @@ const anticiposMarcados = () => anticipos.value
     .filter((a) => a.seleccionado && a.monto_aplicado > 0)
     .map((a) => ({ advance_id: a.advance_id, amount: a.monto_aplicado }));
 
+// Pasajeros (ids ordenados) para los que ya se ofreció el cliente sugerido.
+let sugerenciaUsadaPara: string | null = null;
+
 const refrescarPreview = async () => {
     if (form.value.pasajero_ids.length === 0) {
         preview.value = null;
@@ -318,9 +321,15 @@ const refrescarPreview = async () => {
             const previo = previos.get(a.advance_id);
             return { ...a, seleccionado: previo?.seleccionado ?? false, monto_aplicado: previo?.monto_aplicado ?? 0 };
         });
-        // Si el pasajero elegido ya tiene perfil de cliente, se propone (no obliga).
-        if (preview.value.cliente_sugerido && !cliente.value) {
-            cliente.value = preview.value.cliente_sugerido;
+        // Si el pasajero elegido ya tiene perfil de cliente, se propone (no obliga): una sola vez
+        // por selección de pasajeros. T-111: antes se reponía en cada vista previa, y «Cambiar»
+        // (cliente vacío → nueva vista previa) lo volvía a poner, así que no se podía elegir otro.
+        const clave = [...form.value.pasajero_ids].sort((a, b) => a - b).join(',');
+        if (clave !== sugerenciaUsadaPara) {
+            sugerenciaUsadaPara = clave;
+            if (preview.value.cliente_sugerido && !cliente.value) {
+                cliente.value = preview.value.cliente_sugerido;
+            }
         }
     } catch (error: any) {
         toast.error(error.response?.data?.message ?? 'No se pudo calcular la vista previa de la factura');
@@ -401,6 +410,7 @@ const empezar = (pasajeroIds: number[]) => {
     preview.value = null;
     anticipos.value = [];
     cliente.value = null;
+    sugerenciaUsadaPara = null;
     clientAddressId.value = null;
     opciones.resetear();
     condicionPago.value = 'contado';
